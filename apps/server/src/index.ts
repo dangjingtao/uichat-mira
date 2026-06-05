@@ -1,9 +1,14 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import swagger from "@fastify/swagger";
+import swaggerUi from "@fastify/swagger-ui";
 import fs from "node:fs/promises";
 import path from "node:path";
 import healthRoute from "./routes/health";
 import dbHealthRoute from "./routes/dbHealth";
+import loginRoute from "./routes/login";
+import meRoute from "./routes/me";
+import { initializeAuthDatabase } from "./auth";
 
 const app = Fastify({ logger: true });
 
@@ -12,8 +17,39 @@ app.register(cors, {
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 });
 
+app.register(swagger, {
+  openapi: {
+    info: {
+      title: "RAG Demo Server API",
+      description: "Backend APIs for RAG Demo desktop/server integration",
+      version: "0.1.0",
+    },
+    servers: [{ url: "http://127.0.0.1:8787" }],
+    tags: [{ name: "System" }, { name: "Auth" }],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
+        },
+      },
+    },
+  },
+});
+
+app.register(swaggerUi, {
+  routePrefix: "/docs",
+  uiConfig: {
+    docExpansion: "list",
+    deepLinking: true,
+  },
+});
+
 app.register(healthRoute);
 app.register(dbHealthRoute);
+app.register(loginRoute);
+app.register(meRoute);
 
 const ensureDefaultDatabaseUrl = async () => {
   if (process.env.DATABASE_URL) {
@@ -42,6 +78,7 @@ const isExistingBackendHealthy = async (port: number): Promise<boolean> => {
 const start = async () => {
   try {
     await ensureDefaultDatabaseUrl();
+    await initializeAuthDatabase();
 
     const port = Number(process.env.PORT ?? 8787);
     await app.listen({ host: "0.0.0.0", port });
