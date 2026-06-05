@@ -1,0 +1,54 @@
+{
+  "name": "@ui-chat-rag-tester/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron desktop shell for UI chat RAG tester.",
+  "author": "GitHub Copilot",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "dev:no-backend": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron . --no-backend\"",
+    "build": "vite build",
+    "start": "electron .",
+    "dist": "pnpm build && pnpm --filter @ui-chat-rag-tester/server build && electron-builder",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.5.0",
+    "concurrently": "^9.0.1",
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.uichatragtester.desktop",
+    "productName": "UI Chat RAG Tester",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron-backend/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "electron-backend/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    }
+  }
+}

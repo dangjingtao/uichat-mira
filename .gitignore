@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.vite/
+.env
+.env.*
+*.log
+.DS_Store
+coverage/
+apps/desktop/release/
+apps/desktop/release-*/
+apps/desktop/electron-backend/
+apps/server/data/
