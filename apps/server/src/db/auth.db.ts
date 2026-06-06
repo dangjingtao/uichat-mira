@@ -97,19 +97,20 @@ export const initializeAuthDatabase = async () => {
           DO UPDATE SET
             password_hash = excluded.password_hash,
             role = excluded.role,
-            is_active = 1
-        `,
+            is_active = 1`,
         seed.username,
         hashPassword(seed.password),
         seed.role,
       );
     }
+
+    console.log("✅ Auth database initialized");
   } finally {
     await db.close();
   }
 };
 
-export const verifyUserCredentials = async (
+export const authenticateUser = async (
   username: string,
   password: string,
 ): Promise<AuthenticatedUser | null> => {
@@ -117,11 +118,7 @@ export const verifyUserCredentials = async (
 
   try {
     const user = await db.get<DbUserRecord>(
-      `
-        SELECT id, username, role, password_hash
-        FROM users
-        WHERE username = ? AND is_active = 1
-      `,
+      "SELECT * FROM users WHERE username = ? AND is_active = 1",
       username,
     );
 
@@ -129,9 +126,7 @@ export const verifyUserCredentials = async (
       return null;
     }
 
-    const expectedHash = hashPassword(password);
-
-    if (!isSameHash(user.password_hash, expectedHash)) {
+    if (!isSameHash(user.password_hash, hashPassword(password))) {
       return null;
     }
 
@@ -145,49 +140,27 @@ export const verifyUserCredentials = async (
   }
 };
 
-export const issueAccessToken = (user: AuthenticatedUser) => {
-  const jwtSecret = process.env.JWT_SECRET ?? "rag-demo-dev-secret";
+const JWT_SECRET =
+  process.env.JWT_SECRET || "uichat-rag-test-secret-key-change-in-production";
+const JWT_EXPIRES_IN = "7d";
 
+export const createAccessToken = (user: AuthenticatedUser): string => {
   return jwt.sign(
     {
       sub: String(user.id),
       username: user.username,
       role: user.role,
     },
-    jwtSecret,
-    {
-      expiresIn: "8h",
-      issuer: "ui-chat-rag-tester-server",
-    },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN },
   );
 };
 
-const sendUnauthorized = (reply: FastifyReply, message: string) =>
-  reply.code(401).send({
-    ok: false,
-    message,
-  });
-
 export const verifyAccessToken = (token: string): AuthenticatedUser | null => {
-  const jwtSecret = process.env.JWT_SECRET ?? "rag-demo-dev-secret";
-
   try {
-    const decoded = jwt.verify(token, jwtSecret, {
-      issuer: "ui-chat-rag-tester-server",
-    }) as jwt.JwtPayload & AccessTokenPayload;
-
-    const userId = Number(decoded.sub);
-
-    if (
-      !Number.isInteger(userId) ||
-      !decoded.username ||
-      (decoded.role !== "admin" && decoded.role !== "user")
-    ) {
-      return null;
-    }
-
+    const decoded = jwt.verify(token, JWT_SECRET) as AccessTokenPayload;
     return {
-      id: userId,
+      id: Number(decoded.sub),
       username: decoded.username,
       role: decoded.role,
     };
@@ -200,23 +173,18 @@ export const requireAuth: preHandlerHookHandler = async (
   request: FastifyRequest,
   reply: FastifyReply,
 ) => {
-  const rawAuthorization = request.headers.authorization;
+  const authHeader = request.headers.authorization;
 
-  if (!rawAuthorization) {
-    return sendUnauthorized(reply, "Missing Authorization header");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return reply.code(401).send({ ok: false, message: "Missing auth token" });
   }
 
-  const [scheme, token] = rawAuthorization.split(" ");
+  const token = authHeader.slice(7);
+  const user = verifyAccessToken(token);
 
-  if (scheme !== "Bearer" || !token) {
-    return sendUnauthorized(reply, "Invalid Authorization header format");
+  if (!user) {
+    return reply.code(401).send({ ok: false, message: "Invalid auth token" });
   }
 
-  const authUser = verifyAccessToken(token);
-
-  if (!authUser) {
-    return sendUnauthorized(reply, "Token is invalid or expired");
-  }
-
-  request.authUser = authUser;
+  request.authUser = user;
 };

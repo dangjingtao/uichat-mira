@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from "fastify";
-import { issueAccessToken, verifyUserCredentials } from "../auth";
+import { authenticateUser, createAccessToken } from "@/db/auth.db";
 
 type LoginBody = {
   user: string;
@@ -88,7 +88,7 @@ const loginRoute: FastifyPluginAsync = async (app) => {
         });
       }
 
-      const found = await verifyUserCredentials(payload.user, payload.password);
+      const found = await authenticateUser(payload.user, payload.password);
 
       if (!found) {
         return reply.code(401).send({
@@ -97,7 +97,7 @@ const loginRoute: FastifyPluginAsync = async (app) => {
         });
       }
 
-      const token = issueAccessToken(found);
+      const token = createAccessToken(found);
 
       return {
         ok: true,

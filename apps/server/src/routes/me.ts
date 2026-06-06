@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from "fastify";
-import { requireAuth } from "../auth";
+import { requireAuth } from "@/db/auth.db";
 
 const meRoute: FastifyPluginAsync = async (app) => {
   app.get(

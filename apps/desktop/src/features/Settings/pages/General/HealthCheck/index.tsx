@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import Card from "../../../components/Card";
 
-function App() {
+function HealthCheck() {
   const desktopApi = globalThis.window?.desktopApi;
   const [backendState, setBackendState] = useState<{
     status: "unknown" | "running" | "stopped";
@@ -107,56 +108,68 @@ function App() {
   }
 
   return (
-    <main className="mx-auto mt-10 max-w-3xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-      <h1 className="m-0 text-3xl font-semibold tracking-tight text-slate-900">
-        UI Chat RAG Tester
-      </h1>
-      <p className="mt-3 text-slate-700">
-        桌面端初始化完成。下一步可接入 Electron Shell 与知识库流程。
-      </p>
-      <p className="mt-2 text-slate-700">
-        运行环境:{" "}
-        {desktopApi ? `Electron (${desktopApi.platform})` : "Browser Preview"}
-      </p>
-      <section
-        className="mt-4 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"
-        aria-label="后端状态"
-      >
-        <div
-          className={`h-3 w-3 flex-none rounded-full shadow-[0_0_0_6px_rgba(15,23,42,0.04)] ${statusColorClass}`}
+    <div className="w-full pb-4">
+      {/* 顶部说明 */}
+      <div className="space-y-2">
+        <h3 className="text-md font-semibold tracking-tight text-gray-900 dark:text-white">
+          环境检查
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          一个面向企业知识库验证的 Electron
+          桌面应用初始化项目，支持本地和远程模型、向量数据库双模式切换。
+        </p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          运行环境：
+          {desktopApi ? (
+            <span className="text-gray-700 dark:text-gray-300">
+              Electron ({desktopApi.platform})
+            </span>
+          ) : (
+            <span className="text-amber-600 dark:text-amber-400">
+              Browser Preview
+            </span>
+          )}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+        {/* 后端状态 */}
+        <Card
+          label={
+            <span>
+              <span
+                className={`
+                  inline-block
+        mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full
+        ${statusColorClass}
+        animate-pulse
+      `}
+              />
+              &nbsp;&nbsp; 本地服务状态：{statusLabel}
+            </span>
+          }
+          value={backendState.detail}
         />
-        <div>
-          <div className="font-semibold text-slate-900">
-            后端状态: {statusLabel}
-          </div>
-          <div className="mt-1 text-sm text-slate-600">
-            {backendState.detail}
-          </div>
-        </div>
-      </section>
-      <section
-        className="mt-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"
-        aria-label="数据库状态"
-      >
-        <div
-          className={`h-3 w-3 flex-none rounded-full shadow-[0_0_0_6px_rgba(15,23,42,0.04)] ${dbStatusColorClass}`}
+
+        <Card
+          label={
+            <span>
+              <span
+                className={`
+                  inline-block
+        mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full
+        ${dbStatusColorClass}
+        animate-pulse
+      `}
+              />
+              &nbsp;&nbsp; 数据库状态：{dbStatusLabel}
+            </span>
+          }
+          value={databaseState.detail}
         />
-        <div>
-          <div className="font-semibold text-slate-900">
-            数据库状态: {dbStatusLabel}
-          </div>
-          <div className="mt-1 text-sm text-slate-600">
-            {databaseState.detail}
-          </div>
-        </div>
-      </section>
-      <ul className="mt-4 list-disc space-y-1 pl-5 text-slate-700">
-        <li>模型: DeepSeek 远程 / 本地模型</li>
-        <li>向量库: 本地 sqlite-vec / 远程 pgvector</li>
-        <li>服务: 本地 Node.js API</li>
-      </ul>
-    </main>
+      </div>
+    </div>
   );
 }
 
-export default App;
+export default HealthCheck;

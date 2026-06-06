@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=../desktop/electron-backend/server.cjs",
+    "build": "node build.js",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
