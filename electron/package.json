@@ -8,7 +8,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "concurrently -k \"pnpm --filter @ui-chat-rag-tester/server dev\" \"pnpm --filter @ui-chat-rag-tester/desktop dev\" \"wait-on tcp:5173 && electron .\"",
-    "build": "electron-builder"
+    "build": "echo 'Electron build is handled by the root dist:win script'"
   },
   "devDependencies": {
     "electron": "31.7.7",

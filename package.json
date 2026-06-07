@@ -10,13 +10,13 @@
     "dev": "pnpm --filter @ui-chat-rag-tester/electron dev",
     "dev:server": "pnpm --filter @ui-chat-rag-tester/server dev",
     "dev:desktop": "pnpm --filter @ui-chat-rag-tester/desktop dev",
-    "build": "pnpm build:desktop && pnpm build:server && pnpm build:electron",
+    "build": "pnpm build:desktop && pnpm build:server",
     "build:desktop": "pnpm --filter @ui-chat-rag-tester/desktop build",
     "build:server": "pnpm --filter @ui-chat-rag-tester/server build",
-    "build:electron": "pnpm --filter @ui-chat-rag-tester/electron build",
-    "dist:mac": "pnpm build && electron-builder --mac",
+    "dist:mac": "node scripts/build-dist.js mac",
     "dist:win": "node scripts/build-dist.js",
-    "check": "pnpm -r typecheck"
+    "check": "pnpm -r typecheck",
+    "version:sync": "node scripts/sync-version.js"
   },
   "engines": {
     "node": ">=20.0.0"

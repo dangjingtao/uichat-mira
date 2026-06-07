@@ -3,13 +3,13 @@ import {
   modelConfigService,
   ModelConfigResponse,
 } from "@/services/model-config.service.js";
-import { ModelType } from "@/db/model-config.db.js";
+import type { ModelType } from "@/db/schema.js";
 import { success, error, ErrorCodes } from "@/utils/index.js";
 
 export async function modelConfigRoutes(fastify: FastifyInstance) {
   fastify.get("/models", async (request, reply) => {
     try {
-      const configs = await modelConfigService.getAllDefaultConfigs();
+      const configs = modelConfigService.getAllDefaultConfigs();
       return success(configs);
     } catch (err) {
       fastify.log.error(err);
@@ -37,9 +37,7 @@ export async function modelConfigRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       try {
         const { type } = request.params;
-        const config = await modelConfigService.getDefaultConfig(
-          type as ModelType,
-        );
+        const config = modelConfigService.getDefaultConfig(type as ModelType);
 
         if (!config) {
           return reply
@@ -88,7 +86,7 @@ export async function modelConfigRoutes(fastify: FastifyInstance) {
         const { type } = request.params;
         const { name, params } = request.body;
 
-        const config = await modelConfigService.updateDefaultConfig(
+        const config = modelConfigService.updateDefaultConfig(
           type as ModelType,
           {
             name,
@@ -117,7 +115,7 @@ export async function modelConfigRoutes(fastify: FastifyInstance) {
   }>("/models/param-templates", async (request, reply) => {
     try {
       const { type } = request.query;
-      const templates = await modelConfigService.getParamTemplates(
+      const templates = modelConfigService.getParamTemplates(
         type as ModelType | undefined,
       );
       return success(templates);
@@ -136,7 +134,7 @@ export async function modelConfigRoutes(fastify: FastifyInstance) {
   }>("/models/configs", async (request, reply) => {
     try {
       const { type } = request.query;
-      const configs = await modelConfigService.getAllConfigs(
+      const configs = modelConfigService.getAllConfigs(
         type as ModelType | undefined,
       );
       return success(configs);
@@ -172,11 +170,7 @@ export async function modelConfigRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       try {
         const { type, name, params } = request.body;
-        const config = await modelConfigService.createConfig(
-          type,
-          name,
-          params,
-        );
+        const config = modelConfigService.createConfig(type, name, params);
         return reply.code(201).send(success(config, "Config created"));
       } catch (err) {
         fastify.log.error(err);
@@ -192,7 +186,7 @@ export async function modelConfigRoutes(fastify: FastifyInstance) {
   }>("/models/configs/:id", async (request, reply) => {
     try {
       const { id } = request.params;
-      const deleted = await modelConfigService.deleteConfig(id);
+      const deleted = modelConfigService.deleteConfig(id);
 
       if (!deleted) {
         return reply

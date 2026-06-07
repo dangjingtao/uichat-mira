@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createHashRouter } from "react-router-dom";
 import App from "../App";
 import { GuestOnly } from "./route-guards/GuestOnly";
 import { RequireAuth } from "./route-guards/RequireAuth";
@@ -12,7 +12,7 @@ import AccountSettings from "@/features/Settings/pages/Account/index";
 import KnowledgeBaseSettings from "@/features/Settings/pages/KnowledgeBase/index";
 import ModelSettings from "@/features/Settings/pages/ModelSetting";
 
-export const router = createBrowserRouter([
+export const router = createHashRouter([
   {
     path: "/",
     element: <App />,

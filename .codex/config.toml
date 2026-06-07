@@ -1,0 +1,10 @@
+# Codex CLI project config
+model = "codex-mini"
+approval_policy = "on-request"
+
+[mcp]
+servers = []
+
+[features]
+search_tool = true
+multi_agent = false

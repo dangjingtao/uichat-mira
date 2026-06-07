@@ -5,23 +5,47 @@ type RuntimeState = {
   detail: string;
 };
 
+const createInitialState = (
+  isDesktopRuntime: boolean,
+  readyDetail: string,
+  browserDetail: string,
+): RuntimeState => ({
+  status: isDesktopRuntime ? "unknown" : "stopped",
+  detail: isDesktopRuntime ? readyDetail : browserDetail,
+});
+
 export function useRuntimeHealth() {
   const desktopApi = globalThis.window?.desktopApi;
+  const isDesktopRuntime = Boolean(desktopApi?.backendUrl);
 
-  const [backendState, setBackendState] = useState<RuntimeState>({
-    status: desktopApi ? "unknown" : "stopped",
-    detail: desktopApi ? "等待后端健康检查" : "浏览器预览未连接本地后端",
-  });
+  const [backendState, setBackendState] = useState<RuntimeState>(() =>
+    createInitialState(
+      isDesktopRuntime,
+      "等待后端健康检查",
+      "浏览器预览未连接本地后端",
+    ),
+  );
 
-  const [databaseState, setDatabaseState] = useState<RuntimeState>({
-    status: desktopApi ? "unknown" : "stopped",
-    detail: desktopApi
-      ? "等待数据库联通检查"
-      : "浏览器预览未连接本地数据库检查",
-  });
+  const [databaseState, setDatabaseState] = useState<RuntimeState>(() =>
+    createInitialState(
+      isDesktopRuntime,
+      "等待数据库连通检查",
+      "浏览器预览未连接本地数据库检查",
+    ),
+  );
 
   useEffect(() => {
-    if (!desktopApi?.checkBackendHealth) {
+    if (!isDesktopRuntime || !desktopApi) {
+      setBackendState(
+        createInitialState(false, "等待后端健康检查", "浏览器预览未连接本地后端"),
+      );
+      setDatabaseState(
+        createInitialState(
+          false,
+          "等待数据库连通检查",
+          "浏览器预览未连接本地数据库检查",
+        ),
+      );
       return;
     }
 
@@ -41,14 +65,6 @@ export function useRuntimeHealth() {
           : (result.error ?? `健康检查失败 · HTTP ${result.statusCode || 0}`),
       });
 
-      if (!desktopApi.checkDatabaseHealth) {
-        setDatabaseState({
-          status: "stopped",
-          detail: "当前桌面桥接未提供数据库健康检查能力",
-        });
-        return;
-      }
-
       const dbResult = await desktopApi.checkDatabaseHealth();
 
       if (cancelled) {
@@ -56,10 +72,10 @@ export function useRuntimeHealth() {
       }
 
       setDatabaseState({
-        status: dbResult.success ? "running" : "stopped",
-        detail: dbResult.success
-          ? `数据库联通正常 · ${dbResult.detail}`
-          : (dbResult.detail ?? "健康检查失败"),
+        status: dbResult.success && dbResult.ok ? "running" : "stopped",
+        detail:
+          dbResult.detail ??
+          (dbResult.success ? "数据库健康检查返回异常状态" : "健康检查失败"),
       });
     };
 
@@ -73,10 +89,10 @@ export function useRuntimeHealth() {
       cancelled = true;
       globalThis.clearInterval(timer);
     };
-  }, [desktopApi]);
+  }, [desktopApi, isDesktopRuntime]);
 
   return {
-    desktopApi,
+    desktopApi: isDesktopRuntime ? desktopApi : undefined,
     backendState,
     databaseState,
   };

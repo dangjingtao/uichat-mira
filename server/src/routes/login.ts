@@ -51,7 +51,7 @@ const loginRoute: FastifyPluginAsync = async (app) => {
           .send(error("Invalid request payload", ErrorCodes.VALIDATION_ERROR));
       }
 
-      const found = await authenticateUser(payload.username, payload.password);
+      const found = authenticateUser(payload.username, payload.password);
 
       if (!found) {
         return reply

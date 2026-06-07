@@ -1,5 +1,3 @@
-import { success } from "@/utils/index.js";
-
 declare global {
   interface Window {
     desktopApi?: {
@@ -13,9 +11,13 @@ declare global {
       }>;
       checkDatabaseHealth: () => Promise<{
         success: boolean;
+        ok: boolean;
         configured: boolean;
+        mode: string;
         detail: string;
       }>;
     };
   }
 }
+
+export {};

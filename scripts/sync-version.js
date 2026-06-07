@@ -1,32 +1,45 @@
-
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const rootDir = path.resolve(__dirname, "..");
 
-const rootDir = path.resolve(__dirname, '..');
-
-const rootPkgPath = path.join(rootDir, 'package.json');
-const rootPkg = JSON.parse(fs.readFileSync(rootPkgPath, 'utf-8'));
-const version = rootPkg.version;
-
-console.log(`Syncing version ${version} to all packages...`);
-
-const packages = [
-  path.join(rootDir, 'apps', 'desktop', 'package.json'),
-  path.join(rootDir, 'apps', 'server', 'package.json')
+const packagePaths = [
+  path.join(rootDir, "package.json"),
+  path.join(rootDir, "desktop", "package.json"),
+  path.join(rootDir, "server", "package.json"),
 ];
 
-packages.forEach(pkgPath => {
-  if (fs.existsSync(pkgPath)) {
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-    pkg.version = version;
-    fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-    console.log(`Updated ${pkgPath}`);
+function readJson(filePath) {
+  return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+}
+
+function writeJson(filePath, value) {
+  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+const rootPackage = readJson(packagePaths[0]);
+const version = rootPackage.version;
+
+console.log(`Syncing workspace package versions to ${version}...`);
+
+for (const packagePath of packagePaths.slice(1)) {
+  if (!fs.existsSync(packagePath)) {
+    console.warn(`Skipped missing package file: ${packagePath}`);
+    continue;
   }
-});
 
-console.log('Version sync complete!');
+  const packageJson = readJson(packagePath);
+  if (packageJson.version === version) {
+    console.log(`Already up to date: ${packagePath}`);
+    continue;
+  }
 
+  packageJson.version = version;
+  writeJson(packagePath, packageJson);
+  console.log(`Updated ${packagePath}`);
+}
+
+console.log("Version sync complete.");

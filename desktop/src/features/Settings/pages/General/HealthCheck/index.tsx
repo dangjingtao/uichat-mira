@@ -1,124 +1,35 @@
-import { useEffect, useState } from "react";
 import Card from "@/shared/ui/Card";
-// import { apiClient } from "@/shared/lib/request";
+import { useRuntimeHealth } from "@/features/system/hooks/useRuntimeHealth";
+
+const statusTextMap = {
+  unknown: "检测中",
+  running: "运行中",
+  stopped: "未启动",
+} as const;
+
+const databaseStatusTextMap = {
+  unknown: "检测中",
+  running: "正常",
+  stopped: "未联通",
+} as const;
+
+const statusColorMap = {
+  unknown: "bg-amber-500",
+  running: "bg-green-600",
+  stopped: "bg-red-600",
+} as const;
 
 function HealthCheck() {
-  const desktopApi = globalThis.window?.desktopApi;
-
-  const [backendState, setBackendState] = useState<{
-    status: "unknown" | "running" | "stopped";
-    detail: string;
-  }>({
-    status: desktopApi ? "unknown" : "stopped",
-    detail: desktopApi ? "等待后端健康检查" : "浏览器预览未连接本地后端",
-  });
-  const [databaseState, setDatabaseState] = useState<{
-    status: "unknown" | "running" | "stopped";
-    detail: string;
-  }>({
-    status: desktopApi ? "unknown" : "stopped",
-    detail: desktopApi
-      ? "等待数据库联通检查"
-      : "浏览器预览未连接本地数据库检查",
-  });
-
-  useEffect(() => {
-    if (!desktopApi?.checkBackendHealth) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const pollBackend = async () => {
-      const result = await desktopApi.checkBackendHealth();
-
-      if (cancelled) {
-        return;
-      }
-
-      setBackendState({
-        status: result.success ? "running" : "stopped",
-        detail: result.success
-          ? `后端已启动 · ${desktopApi.backendUrl}`
-          : (result.error ?? `健康检查失败 · HTTP ${result.statusCode || 0}`),
-      });
-
-      if (!desktopApi.checkDatabaseHealth) {
-        setDatabaseState({
-          status: "stopped",
-          detail: "当前桌面桥接未提供数据库健康检查能力",
-        });
-        return;
-      }
-
-      const dbResult = await desktopApi.checkDatabaseHealth();
-
-      if (cancelled) {
-        return;
-      }
-
-      setDatabaseState({
-        status: dbResult.success ? "running" : "stopped",
-        detail: dbResult.success
-          ? `数据库联通正常 · ${dbResult.detail}`
-          : (dbResult.detail ?? "健康检查失败"),
-      });
-    };
-
-    void pollBackend();
-
-    const timer = globalThis.setInterval(() => {
-      void pollBackend();
-    }, 3000);
-
-    return () => {
-      cancelled = true;
-      globalThis.clearInterval(timer);
-    };
-  }, [desktopApi]);
-
-  let statusLabel = "检测中";
-
-  if (backendState.status === "running") {
-    statusLabel = "运行中";
-  } else if (backendState.status === "stopped") {
-    statusLabel = "未启动";
-  }
-
-  let statusColorClass = "bg-amber-500";
-
-  if (backendState.status === "running") {
-    statusColorClass = "bg-green-600";
-  } else if (backendState.status === "stopped") {
-    statusColorClass = "bg-red-600";
-  }
-
-  let dbStatusLabel = "检测中";
-
-  if (databaseState.status === "running") {
-    dbStatusLabel = "正常";
-  } else if (databaseState.status === "stopped") {
-    dbStatusLabel = "未联通";
-  }
-
-  let dbStatusColorClass = "bg-amber-500";
-
-  if (databaseState.status === "running") {
-    dbStatusColorClass = "bg-green-600";
-  } else if (databaseState.status === "stopped") {
-    dbStatusColorClass = "bg-red-600";
-  }
+  const { desktopApi, backendState, databaseState } = useRuntimeHealth();
 
   return (
     <div className="w-full pb-4">
-      {/* 顶部说明 */}
       <div className="space-y-2">
         <h3 className="text-md font-semibold tracking-tight text-gray-900 dark:text-white">
           环境检查
         </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          一个面向企业知识库验证的 Electron
-          桌面应用初始化项目，支持本地和远程模型、向量数据库双模式切换。
+          当前页面用于确认桌面端是否已成功拉起本地服务，以及数据库是否处于可访问状态。
         </p>
         <p className="text-sm text-gray-500 dark:text-gray-400">
           运行环境：
@@ -134,20 +45,14 @@ function HealthCheck() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-        {/* 后端状态 */}
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Card
           label={
             <span>
               <span
-                className={`
-                  inline-block
-        mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full
-        ${statusColorClass}
-        animate-pulse
-      `}
+                className={`inline-block mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full animate-pulse ${statusColorMap[backendState.status]}`}
               />
-              &nbsp;&nbsp; 本地服务状态：{statusLabel}
+              &nbsp;&nbsp; 本地服务状态：{statusTextMap[backendState.status]}
             </span>
           }
           value={backendState.detail}
@@ -157,14 +62,10 @@ function HealthCheck() {
           label={
             <span>
               <span
-                className={`
-                  inline-block
-        mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full
-        ${dbStatusColorClass}
-        animate-pulse
-      `}
+                className={`inline-block mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full animate-pulse ${statusColorMap[databaseState.status]}`}
               />
-              &nbsp;&nbsp; 数据库状态：{dbStatusLabel}
+              &nbsp;&nbsp; 数据库状态：
+              {databaseStatusTextMap[databaseState.status]}
             </span>
           }
           value={databaseState.detail}

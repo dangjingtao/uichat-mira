@@ -75,7 +75,7 @@ function HomePage() {
         桌面端初始化完成。下一步可接入 Electron Shell 与知识库流程。
       </p>
       <p className="mt-2 text-slate-700">
-        运行环境:
+        运行环境：
         {desktopApi ? ` Electron (${desktopApi.platform})` : " Browser Preview"}
       </p>
       <section
@@ -87,7 +87,7 @@ function HomePage() {
         />
         <div>
           <div className="font-semibold text-slate-900">
-            后端状态: {backendStatusLabel}
+            后端状态：{backendStatusLabel}
           </div>
           <div className="mt-1 text-sm text-slate-600">
             {backendState.detail}
@@ -103,7 +103,7 @@ function HomePage() {
         />
         <div>
           <div className="font-semibold text-slate-900">
-            数据库状态: {databaseStatusLabel}
+            数据库状态：{databaseStatusLabel}
           </div>
           <div className="mt-1 text-sm text-slate-600">
             {databaseState.detail}
@@ -111,9 +111,9 @@ function HomePage() {
         </div>
       </section>
       <ul className="mt-4 list-disc space-y-1 pl-5 text-slate-700">
-        <li>模型: DeepSeek 远程 / 本地模型</li>
-        <li>向量库: 本地 sqlite-vec / 远程 pgvector</li>
-        <li>服务: 本地 Node.js API</li>
+        <li>模型：DeepSeek 远程 / 本地模型</li>
+        <li>向量库：本地 sqlite-vec / 远程 pgvector</li>
+        <li>服务：本地 Node.js API</li>
       </ul>
     </main>
   );
