@@ -1,12 +1,54 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow } = require("electron");
 const path = require("path");
-const { fork } = require("child_process");
+const fs = require("fs");
+const { spawn } = require("child_process");
 
 let mainWindow;
 let backendProcess;
 
-// 更可靠的开发环境判断
 const isDev = !app.isPackaged;
+const runtimeConfig = loadRuntimeConfig();
+
+function loadRuntimeConfig() {
+  const candidates = [
+    path.join(__dirname, "runtime.config.cjs"),
+    path.join(__dirname, "..", "runtime.config.cjs"),
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return require(candidate);
+    }
+  }
+
+  throw new Error(`Unable to locate runtime config. Checked: ${candidates.join(", ")}`);
+}
+
+function getBackendUrl() {
+  return `http://${runtimeConfig.backend.host}:${runtimeConfig.backend.port}`;
+}
+
+function resolveRendererEntry() {
+  const candidates = [
+    path.join(app.getAppPath(), "desktop", "dist", "index.html"),
+    path.join(app.getAppPath(), "dist", "index.html"),
+    path.join(__dirname, "desktop", "dist", "index.html"),
+    path.join(__dirname, "dist", "index.html"),
+    path.join(process.resourcesPath, "app.asar", "desktop", "dist", "index.html"),
+    path.join(process.resourcesPath, "app.asar", "dist", "index.html"),
+  ];
+
+  for (const candidate of candidates) {
+    console.log("Checking renderer entry:", candidate, fs.existsSync(candidate));
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  throw new Error(
+    `Unable to locate renderer entry. Checked: ${candidates.join(", ")}`,
+  );
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -14,6 +56,7 @@ function createWindow() {
     height: 800,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
+      sandbox: false,
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -21,51 +64,73 @@ function createWindow() {
 
   if (isDev) {
     mainWindow.loadURL("http://localhost:5173");
-  } else {
-    mainWindow.loadFile(path.join(__dirname, "../desktop/dist/index.html"));
+    mainWindow.webContents.openDevTools();
+    return;
   }
 
-  mainWindow.webContents.openDevTools();
+  const indexPath = resolveRendererEntry();
+  console.log("Loading renderer from:", indexPath);
+  mainWindow.loadFile(indexPath);
 }
 
 function startBackend() {
-  // 在开发环境下，后端服务器已经通过 concurrently 启动了
   if (isDev) {
     console.log("Dev mode: backend server already started via concurrently");
     return;
   }
 
-  let backendPath;
-  let cwd;
-
-  backendPath = path.join(process.resourcesPath, "server", "server.cjs");
-  cwd = path.join(process.resourcesPath, "server");
+  const backendPath = path.join(process.resourcesPath, "server", "server.cjs");
+  const cwd = path.join(process.resourcesPath, "server");
+  const bundledNodePath = path.join(process.resourcesPath, "node-runtime", "node.exe");
+  const backendRuntime = fs.existsSync(bundledNodePath)
+    ? bundledNodePath
+    : process.execPath;
+  const usesBundledNode = backendRuntime === bundledNodePath;
 
   console.log("Starting backend from:", backendPath);
   console.log("Working directory:", cwd);
+  console.log("Backend runtime:", backendRuntime);
 
-  backendProcess = fork(backendPath, [], {
-    cwd: cwd,
-    env: { ...process.env, NODE_ENV: "production" },
-    silent: false,
+  backendProcess = spawn(backendRuntime, [backendPath], {
+    cwd,
+    env: {
+      ...process.env,
+      ...(usesBundledNode ? {} : { ELECTRON_RUN_AS_NODE: "1" }),
+      NODE_ENV: "production",
+      HOST: runtimeConfig.backend.host,
+      PORT: String(runtimeConfig.backend.port),
+      UI_CHAT_BACKEND_URL: getBackendUrl(),
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
   });
 
-  backendProcess.stdout.on("data", (data) => {
-    console.log(`Backend: ${data}`);
-  });
+  if (backendProcess.stdout) {
+    backendProcess.stdout.on("data", (data) => {
+      console.log(`Backend: ${data}`);
+    });
+  }
 
-  backendProcess.stderr.on("data", (data) => {
-    console.error(`Backend error: ${data}`);
-  });
+  if (backendProcess.stderr) {
+    backendProcess.stderr.on("data", (data) => {
+      console.error(`Backend error: ${data}`);
+    });
+  }
 
   backendProcess.on("close", (code) => {
     console.log(`Backend process exited with code ${code}`);
+  });
+
+  backendProcess.on("error", (error) => {
+    console.error("Failed to start backend process:", error);
   });
 }
 
 app.whenReady().then(() => {
   console.log("App ready, isDev:", isDev);
   console.log("__dirname:", __dirname);
+  console.log("app.getAppPath():", app.getAppPath());
+  console.log("process.resourcesPath:", process.resourcesPath);
 
   if (!process.argv.includes("--no-backend")) {
     startBackend();

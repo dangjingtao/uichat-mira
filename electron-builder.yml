@@ -1,18 +1,37 @@
 appId: com.tomz.uichat
 productName: UIChat
 
+win:
+  signAndEditExecutable: false
+  target: nsis
+  icon: icons/icon.ico
+
 directories:
   output: ../release
+  buildResources: icons
 
 files:
-  - ./backend/**/*        
-  - ./main.cjs
-  - ./preload.cjs
-  - ./package.json
-  - ../desktop/dist/**/*
+  - backend/**/*
+  - desktop/dist/**/*
+  - main.cjs
+  - preload.cjs
+  - runtime.config.cjs
+  - package.json
 
 extraResources:
+  - from: ./runtime.config.cjs
+    to: runtime.config.cjs
+  - from: ./node-runtime
+    to: node-runtime
   - from: ./backend
     to: server
   - from: ../server/data
     to: server/data
+
+mac:
+  target: dmg
+  icon: icons/icon.icns
+
+linux:
+  target: AppImage
+  icon: icons/icon_512.png

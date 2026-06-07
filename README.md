@@ -1,90 +1,94 @@
-# UI Chat RAG Tester
+﻿# UI Chat RAG Tester
 
-一个面向企业知识库验证的 Electron 桌面应用初始化项目，支持本地和远程模型、向量数据库双模式切换。
+Electron + React + Fastify desktop app for local RAG testing and model configuration.
 
-## 目标功能
+## Runtime Model
 
-- Electron 主进程与桌面应用壳
-- 桌面端界面（React + Vite）
-- 本地 Node.js 服务（Fastify）
-- 桌面应用启动时自动拉起本地 Node 后端
-- 健康检查接口：`GET /health`
-- 统一模型配置：DeepSeek 远程 / 本地模型（Ollama、vLLM 等）
-- 统一向量库配置：本地 sqlite-vec / 远程 pgvector
-- 共享类型包，用于前后端配置协议统一
+- Renderer: React + Vite, loaded by Electron.
+- Backend: Fastify server bundled as `server.cjs`.
+- Production startup: Electron main process starts the bundled Node runtime from `resources/node-runtime/node.exe`, then runs `resources/server/server.cjs`.
+- Backend binding: local only, using the host and port from `runtime.config.cjs`.
+- Renderer access: production reads `window.desktopApi.backendUrl`; development uses Vite proxy.
 
-## 技术栈
+## Request Rules
 
-- 桌面端：Electron + React + Vite + TypeScript
-- 本地服务：Node.js + Fastify + Zod
-- 共享包：TypeScript declarations
-- 包管理：pnpm workspace
-- 运行形态：
-  - 本地服务 + 本地模型 + 本地向量库
-  - 本地服务 + DeepSeek + 远程 pgvector
-  - Electron 桌面壳自动启动本地服务
+- Development renderer requests use `/api/xxx`.
+- `/api` exists only as the Vite proxy prefix.
+- Backend routes never include `/api`, in either development or production.
+- Production renderer requests use the backend origin directly, for example `${backendUrl}/login` or `${backendUrl}/models`.
+- Backend host and port are configured in `runtime.config.cjs`; do not hardcode them elsewhere.
 
-## 项目结构
+## Important Files
 
-```text
-ui-chat-rag-tester/
-  apps/
-    desktop/          # 前端界面
-    server/           # 本地 Node.js 服务
-  packages/
-    core/             # 共享类型与协议
-  package.json
-  pnpm-workspace.yaml
-  tsconfig.base.json
-```
+- `runtime.config.cjs`: single source for backend host, backend port, and dev proxy prefix.
+- `desktop/vite.config.ts`: reads runtime config and proxies `/api` to the backend without the prefix.
+- `desktop/src/shared/lib/request.ts`: selects `/api` in development and `window.desktopApi.backendUrl` in production.
+- `electron/main.cjs`: starts the bundled backend process in production.
+- `electron/preload.cjs`: exposes `desktopApi.backendUrl` and health check helpers.
+- `server/src/config/index.ts`: reads host and port from env or `runtime.config.cjs`.
+- `scripts/build-dist.js`: builds renderer/server, copies backend assets, Node runtime, and runtime config, runs electron-builder, then prunes old release outputs.
 
-## 快速开始
+## Development
 
-1. 安装依赖
+Install dependencies:
 
 ```bash
 pnpm install
 ```
 
-2. 启动开发模式（默认由 Electron 自动拉起后端）
+Start all development services:
 
 ```bash
 pnpm dev
 ```
 
-如需同时独立启动所有子项目，可使用：
+Useful individual commands:
 
 ```bash
-pnpm dev:all
+pnpm dev:desktop
+pnpm dev:server
+pnpm build
+pnpm check
 ```
 
-如果只启动桌面壳：
+In development, frontend code should request `/api/...`; Vite rewrites it to the backend route without `/api`.
+
+## Packaging
+
+Build a Windows package:
 
 ```bash
-pnpm --filter @ui-chat-rag-tester/desktop dev
+pnpm dist:win
 ```
 
-3. 默认地址
+The output is written to `release/v<version>_<date>_<time>/`.
 
-- Desktop (Electron shell + Vite): http://localhost:5173
-- Server (Fastify): http://localhost:8787
-- Health Check: http://localhost:8787/health
+Release retention:
 
-4. 开发代理与跨域
+- By default, only the most recent `3` release directories are kept.
+- Override this with `RELEASE_KEEP_COUNT`.
+- Example: `RELEASE_KEEP_COUNT=5 pnpm dist:win`
+- Locked directories are skipped and cleaned on a later run when Windows releases the file handle.
 
-- 开发环境：Vite 已配置 `/api` 代理到 `http://127.0.0.1:8787`，前端可直接请求 `/api/*`。
-- 生产环境：Fastify 已开启 CORS（`@fastify/cors`），用于 Electron 运行时和其他跨域访问场景。
+The packaged app includes:
 
-5. 打包 Windows 安装包
+- `resources/app.asar`: Electron main/preload and renderer assets.
+- `resources/server`: Fastify backend bundle, database seed/data, and native Node dependencies.
+- `resources/node-runtime/node.exe`: Node runtime used to start the backend.
+- `resources/runtime.config.cjs`: runtime backend host/port configuration.
+
+## Health Checks
+
+Backend health:
 
 ```bash
-pnpm --filter @ui-chat-rag-tester/desktop dist
+curl http://<backend-host>:<backend-port>/health
 ```
 
-打包时会先构建桌面前端，再把后端 bundle 到桌面应用资源里，由 Electron 主进程自动拉起。
+Database health:
 
-## 下一步
+```bash
+curl http://<backend-host>:<backend-port>/db/health
+```
 
-- 增加文档上传、切分、向量化入库流程
-- 增加 RAG 查询链路（检索 + 重排 + 生成）
-- 增加 token 统计与成本控制面板
+Use the actual values from `runtime.config.cjs`.

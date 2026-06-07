@@ -1,8 +1,10 @@
+/**
+ * 认证模块
+ */
 import { createHash, timingSafeEqual } from "node:crypto";
 import { FastifyReply, FastifyRequest, preHandlerHookHandler } from "fastify";
-import { open } from "sqlite";
-import sqlite3 from "sqlite3";
 import jwt from "jsonwebtoken";
+import { getSqlite, userRepository } from "@/db";
 
 export type AuthenticatedUser = {
   id: number;
@@ -21,10 +23,6 @@ declare module "fastify" {
     authUser?: AuthenticatedUser;
   }
 }
-
-type DbUserRecord = AuthenticatedUser & {
-  password_hash: string;
-};
 
 const SEED_USERS: Array<{
   username: string;
@@ -49,35 +47,12 @@ const isSameHash = (leftHex: string, rightHex: string) => {
   return timingSafeEqual(left, right);
 };
 
-const resolveDatabasePath = (): string => {
-  const databaseUrl = process.env.DATABASE_URL;
-
-  if (!databaseUrl) {
-    throw new Error("DATABASE_URL is not set");
-  }
-
-  if (databaseUrl.startsWith("file:")) {
-    return databaseUrl.slice(5);
-  }
-
-  if (databaseUrl.endsWith(".db") || databaseUrl.endsWith(".sqlite")) {
-    return databaseUrl;
-  }
-
-  throw new Error("Only SQLite DATABASE_URL is supported for auth");
-};
-
-const openDatabase = async () =>
-  open({
-    filename: resolveDatabasePath(),
-    driver: sqlite3.Database,
-  });
-
-export const initializeAuthDatabase = async () => {
-  const db = await openDatabase();
-
+export const initializeAuthDatabase = (): void => {
   try {
-    await db.exec(`
+    const sqlite = getSqlite();
+
+    // 创建用户表
+    sqlite.exec(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL UNIQUE,
@@ -88,56 +63,56 @@ export const initializeAuthDatabase = async () => {
       )
     `);
 
+    // 创建索引
+    sqlite.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username)
+    `);
+
+    // 插入或更新种子用户
     for (const seed of SEED_USERS) {
-      await db.run(
-        `
-          INSERT INTO users (username, password_hash, role, is_active)
-          VALUES (?, ?, ?, 1)
-          ON CONFLICT(username)
-          DO UPDATE SET
-            password_hash = excluded.password_hash,
-            role = excluded.role,
-            is_active = 1`,
-        seed.username,
-        hashPassword(seed.password),
-        seed.role,
-      );
+      const existing = userRepository.findByUsername(seed.username);
+      if (existing) {
+        userRepository.update(existing.id, {
+          passwordHash: hashPassword(seed.password),
+          role: seed.role,
+          isActive: true,
+        });
+      } else {
+        userRepository.create({
+          username: seed.username,
+          passwordHash: hashPassword(seed.password),
+          role: seed.role,
+          isActive: true,
+        });
+      }
     }
 
     console.log("✅ Auth database initialized");
-  } finally {
-    await db.close();
+  } catch (err) {
+    console.error("❌ Failed to initialize auth database:", err);
+    throw err;
   }
 };
 
-export const authenticateUser = async (
+export const authenticateUser = (
   username: string,
   password: string,
-): Promise<AuthenticatedUser | null> => {
-  const db = await openDatabase();
+): AuthenticatedUser | null => {
+  const user = userRepository.findActiveByUsername(username);
 
-  try {
-    const user = await db.get<DbUserRecord>(
-      "SELECT * FROM users WHERE username = ? AND is_active = 1",
-      username,
-    );
-
-    if (!user) {
-      return null;
-    }
-
-    if (!isSameHash(user.password_hash, hashPassword(password))) {
-      return null;
-    }
-
-    return {
-      id: user.id,
-      username: user.username,
-      role: user.role,
-    };
-  } finally {
-    await db.close();
+  if (!user) {
+    return null;
   }
+
+  if (!isSameHash(user.passwordHash, hashPassword(password))) {
+    return null;
+  }
+
+  return {
+    id: user.id,
+    username: user.username,
+    role: user.role,
+  };
 };
 
 const JWT_SECRET =

@@ -52,6 +52,15 @@ export class ApiError extends Error {
   }
 }
 
+function redirectToLogin() {
+  if (window.location.protocol === "file:") {
+    window.location.hash = "#/login";
+    return;
+  }
+
+  window.location.href = "/login";
+}
+
 // ==================== 响应拦截器 ====================
 
 // 处理成功响应
@@ -68,7 +77,7 @@ function handleSuccessResponse<T>(
   // 处理特定错误码
   if (apiError.code === ErrorCodes.UNAUTHORIZED) {
     clearSessionFromStorage();
-    window.location.href = "/login";
+    redirectToLogin();
   }
 
   throw apiError;
@@ -96,7 +105,7 @@ function handleErrorResponse(error: unknown): never {
     // 处理特定错误码
     if (apiError.code === ErrorCodes.UNAUTHORIZED) {
       clearSessionFromStorage();
-      window.location.href = "/login";
+      redirectToLogin();
     }
 
     throw apiError;
@@ -113,6 +122,9 @@ const getBaseURL = (): string => {
     return (import.meta as any).env.VITE_API_URL;
   }
   // 开发环境默认使用 Vite 代理
+  if (window.location.protocol === "file:") {
+    return window.desktopApi?.backendUrl ?? "";
+  }
   return "/api";
 };
 

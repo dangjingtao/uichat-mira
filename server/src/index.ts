@@ -15,12 +15,17 @@ import CONFIG from "@/config";
 import { getLoggerConfig } from "@/logger";
 
 const app = Fastify({ logger: getLoggerConfig() });
+const enableSwagger = process.env.NODE_ENV !== "production";
 
 const setupPlugins = async () => {
   await app.register(cors, {
     origin: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
+
+  if (!enableSwagger) {
+    return;
+  }
 
   await app.register(swagger, {
     openapi: {
@@ -74,10 +79,8 @@ const setupDatabase = async () => {
     app.log.info(`Database initialized at ${dbPath}`);
   }
 
-  await Promise.all([
-    initializeAuthDatabase(),
-    initializeModelConfigDatabase(),
-  ]);
+  initializeAuthDatabase();
+  initializeModelConfigDatabase();
 };
 
 const isExistingBackendHealthy = async (port: number): Promise<boolean> => {
@@ -92,9 +95,11 @@ const isExistingBackendHealthy = async (port: number): Promise<boolean> => {
 const startServer = async () => {
   await app.listen({ host: CONFIG.HOST, port: CONFIG.PORT });
   app.log.info(`Server running on http://${CONFIG.HOST}:${CONFIG.PORT}`);
-  app.log.info(
-    `API docs available at http://127.0.0.1:${CONFIG.PORT}${CONFIG.SWAGGER_PREFIX}`,
-  );
+  if (enableSwagger) {
+    app.log.info(
+      `API docs available at http://127.0.0.1:${CONFIG.PORT}${CONFIG.SWAGGER_PREFIX}`,
+    );
+  }
 };
 
 const start = async () => {
