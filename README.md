@@ -83,7 +83,7 @@ pnpm --filter @ui-chat-rag-tester/desktop dist
 
 打包时会先构建桌面前端，再把后端 bundle 到桌面应用资源里，由 Electron 主进程自动拉起。
 
-## 下一步建议
+## 下一步
 
 - 增加文档上传、切分、向量化入库流程
 - 增加 RAG 查询链路（检索 + 重排 + 生成）
