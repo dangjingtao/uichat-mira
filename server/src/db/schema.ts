@@ -160,8 +160,181 @@ export const providerModels = sqliteTable(
 export type ProviderModel = typeof providerModels.$inferSelect;
 export type NewProviderModel = typeof providerModels.$inferInsert;
 
+export const knowledgeBases = sqliteTable(
+  "knowledge_bases",
+  {
+    id: text("id").primaryKey().default(sql`(lower(hex(randomblob(16))))`),
+    name: text("name").notNull(),
+    description: text("description"),
+    status: text("status", { enum: ["active", "archived"] })
+      .notNull()
+      .default("active"),
+    embeddingModelConfigId: text("embedding_model_config_id").references(
+      () => modelConfigs.id,
+      { onDelete: "set null" },
+    ),
+    chunkingConfigJson: text("chunking_config_json").notNull().default("{}"),
+    createdAt: text("created_at").notNull().default("CURRENT_TIMESTAMP"),
+    updatedAt: text("updated_at").notNull().default("CURRENT_TIMESTAMP"),
+  },
+  (table) => ({
+    statusIdx: index("idx_knowledge_bases_status").on(table.status),
+  }),
+);
+
+export const knowledgeBasesRelations = relations(knowledgeBases, ({ many, one }) => ({
+  documents: many(documents),
+  embeddingModelConfig: one(modelConfigs, {
+    fields: [knowledgeBases.embeddingModelConfigId],
+    references: [modelConfigs.id],
+  }),
+  vectorIndexes: many(knowledgeBaseVectorIndexes),
+}));
+
+export type KnowledgeBase = typeof knowledgeBases.$inferSelect;
+export type NewKnowledgeBase = typeof knowledgeBases.$inferInsert;
+
+export const documents = sqliteTable(
+  "documents",
+  {
+    id: text("id").primaryKey().default(sql`(lower(hex(randomblob(16))))`),
+    knowledgeBaseId: text("knowledge_base_id")
+      .notNull()
+      .references(() => knowledgeBases.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    sourceType: text("source_type", { enum: ["upload", "sync", "api"] })
+      .notNull()
+      .default("upload"),
+    sourceLabel: text("source_label"),
+    fileExt: text("file_ext").notNull(),
+    mimeType: text("mime_type"),
+    fileSize: integer("file_size"),
+    contentText: text("content_text").notNull().default(""),
+    indexStatus: text("index_status", {
+      enum: ["processing", "ready", "failed"],
+    })
+      .notNull()
+      .default("processing"),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    chunkCount: integer("chunk_count").notNull().default(0),
+    charCount: integer("char_count").notNull().default(0),
+    tokenCount: integer("token_count"),
+    errorMessage: text("error_message"),
+    createdAt: text("created_at").notNull().default("CURRENT_TIMESTAMP"),
+    updatedAt: text("updated_at").notNull().default("CURRENT_TIMESTAMP"),
+  },
+  (table) => ({
+    knowledgeBaseIdx: index("idx_documents_knowledge_base").on(table.knowledgeBaseId),
+    statusIdx: index("idx_documents_index_status").on(table.indexStatus),
+    enabledIdx: index("idx_documents_enabled").on(table.enabled),
+    createdAtIdx: index("idx_documents_created_at").on(table.createdAt),
+  }),
+);
+
+export const documentsRelations = relations(documents, ({ one, many }) => ({
+  knowledgeBase: one(knowledgeBases, {
+    fields: [documents.knowledgeBaseId],
+    references: [knowledgeBases.id],
+  }),
+  chunks: many(documentChunks),
+}));
+
+export type Document = typeof documents.$inferSelect;
+export type NewDocument = typeof documents.$inferInsert;
+
+export const documentChunks = sqliteTable(
+  "document_chunks",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    knowledgeBaseId: text("knowledge_base_id")
+      .notNull()
+      .references(() => knowledgeBases.id, { onDelete: "cascade" }),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    chunkIndex: integer("chunk_index").notNull(),
+    content: text("content").notNull(),
+    charCount: integer("char_count").notNull().default(0),
+    tokenCount: integer("token_count"),
+    startOffset: integer("start_offset"),
+    endOffset: integer("end_offset"),
+    createdAt: text("created_at").notNull().default("CURRENT_TIMESTAMP"),
+  },
+  (table) => ({
+    documentChunkUniqueIdx: uniqueIndex("idx_document_chunks_document_index").on(
+      table.documentId,
+      table.chunkIndex,
+    ),
+    knowledgeBaseIdx: index("idx_document_chunks_knowledge_base").on(table.knowledgeBaseId),
+    documentIdx: index("idx_document_chunks_document").on(table.documentId),
+  }),
+);
+
+export const documentChunksRelations = relations(documentChunks, ({ one }) => ({
+  knowledgeBase: one(knowledgeBases, {
+    fields: [documentChunks.knowledgeBaseId],
+    references: [knowledgeBases.id],
+  }),
+  document: one(documents, {
+    fields: [documentChunks.documentId],
+    references: [documents.id],
+  }),
+}));
+
+export type DocumentChunk = typeof documentChunks.$inferSelect;
+export type NewDocumentChunk = typeof documentChunks.$inferInsert;
+
+export const knowledgeBaseVectorIndexes = sqliteTable(
+  "knowledge_base_vector_indexes",
+  {
+    id: text("id").primaryKey().default(sql`(lower(hex(randomblob(16))))`),
+    knowledgeBaseId: text("knowledge_base_id")
+      .notNull()
+      .references(() => knowledgeBases.id, { onDelete: "cascade" }),
+    tableName: text("table_name").notNull(),
+    embeddingModelConfigId: text("embedding_model_config_id").references(
+      () => modelConfigs.id,
+      { onDelete: "set null" },
+    ),
+    dimensions: integer("dimensions").notNull(),
+    distanceMetric: text("distance_metric", {
+      enum: ["cosine", "l2", "inner_product"],
+    })
+      .notNull()
+      .default("cosine"),
+    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    createdAt: text("created_at").notNull().default("CURRENT_TIMESTAMP"),
+    updatedAt: text("updated_at").notNull().default("CURRENT_TIMESTAMP"),
+  },
+  (table) => ({
+    tableNameUniqueIdx: uniqueIndex("idx_kb_vector_indexes_table_name").on(table.tableName),
+    knowledgeBaseIdx: index("idx_kb_vector_indexes_knowledge_base").on(table.knowledgeBaseId),
+  }),
+);
+
+export const knowledgeBaseVectorIndexesRelations = relations(
+  knowledgeBaseVectorIndexes,
+  ({ one }) => ({
+    knowledgeBase: one(knowledgeBases, {
+      fields: [knowledgeBaseVectorIndexes.knowledgeBaseId],
+      references: [knowledgeBases.id],
+    }),
+    embeddingModelConfig: one(modelConfigs, {
+      fields: [knowledgeBaseVectorIndexes.embeddingModelConfigId],
+      references: [modelConfigs.id],
+    }),
+  }),
+);
+
+export type KnowledgeBaseVectorIndex = typeof knowledgeBaseVectorIndexes.$inferSelect;
+export type NewKnowledgeBaseVectorIndex = typeof knowledgeBaseVectorIndexes.$inferInsert;
+
 export type ModelType = "llm" | "embedding" | "rerank";
 export type UserRole = "admin" | "user";
 export type ParamType = "number" | "select" | "boolean";
 export type ProviderCode = "ollama" | "lmstudio" | "openai";
 export type ProviderStatus = "idle" | "syncing" | "connected" | "error";
+export type KnowledgeBaseStatus = "active" | "archived";
+export type DocumentSourceType = "upload" | "sync" | "api";
+export type DocumentIndexStatus = "processing" | "ready" | "failed";
+export type VectorDistanceMetric = "cosine" | "l2" | "inner_product";

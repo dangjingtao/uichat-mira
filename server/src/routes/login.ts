@@ -1,6 +1,11 @@
 import { FastifyPluginAsync } from "fastify";
 import { authenticateUser, createAccessToken } from "@/db/auth.db.js";
-import { success, error, ErrorCodes } from "@/utils/index.js";
+import {
+  success,
+  error,
+  ErrorCodes,
+  handleValidationError,
+} from "@/utils/index.js";
 
 type LoginBody = {
   username: string;
@@ -15,7 +20,9 @@ const loginRoute: FastifyPluginAsync = async (app) => {
       schema: {
         tags: ["Auth"],
         summary: "Login and issue JWT access token",
-        description: "Authenticate a local user and return a JWT access token for subsequent API requests.",
+        operationId: "login",
+        description:
+          "Authenticate a local user and return a JWT access token for subsequent API requests.",
         body: {
           type: "object",
           additionalProperties: false,
@@ -78,20 +85,9 @@ const loginRoute: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      if (request.validationError) {
-        const validationError = request.validationError as {
-          validation?: unknown[];
-        };
-
-        return reply
-          .code(400)
-          .send(
-            error(
-              "Invalid request payload",
-              ErrorCodes.VALIDATION_ERROR,
-              validationError.validation,
-            ),
-          );
+      const validationResponse = handleValidationError(request, reply);
+      if (validationResponse) {
+        return validationResponse;
       }
 
       const payload = request.body;

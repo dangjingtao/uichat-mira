@@ -12,18 +12,26 @@ import {
 
 const hasColumn = (tableName: string, columnName: string) => {
   const sqlite = getSqlite();
-  const rows = sqlite.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{
+  const rows = sqlite
+    .prepare(`PRAGMA table_info(${tableName})`)
+    .all() as Array<{
     name: string;
   }>;
   return rows.some((row) => row.name === columnName);
 };
 
-const ensureColumn = (tableName: string, columnName: string, definition: string) => {
+const ensureColumn = (
+  tableName: string,
+  columnName: string,
+  definition: string,
+) => {
   const sqlite = getSqlite();
   if (hasColumn(tableName, columnName)) {
     return;
   }
-  sqlite.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  sqlite.exec(
+    `ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`,
+  );
 };
 
 export const initializeModelConfigDatabase = (): void => {

@@ -50,6 +50,7 @@ root/
 - The frontend UI interface design specifications and component documentation are located at `./desktop/src/shared/ui`. 
 - When I ask you to implement an interface, you should prioritize using existing pure UI components. Only if they do not exist should you consider abstracting frequently used UI components (excluding business logic).
 - You can modify or add components within, but their functionality must be backward compatible. Any modification to the component library requires updating both the design specifications and the component documentation.
+- The chat interface for this project was created by assistant-ui. For any related questions, please first refer to the `docs/assistant-ui.md` documentation.
 
 ## Verification
 

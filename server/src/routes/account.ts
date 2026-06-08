@@ -1,6 +1,11 @@
 import { FastifyPluginAsync } from "fastify";
 import { changeUserPassword, requireAuth } from "@/db/auth.db.js";
-import { error, ErrorCodes, success } from "@/utils/index.js";
+import {
+  error,
+  ErrorCodes,
+  success,
+  handleValidationError,
+} from "@/utils/index.js";
 
 type ChangePasswordBody = {
   currentPassword: string;
@@ -16,7 +21,9 @@ const accountRoute: FastifyPluginAsync = async (app) => {
       schema: {
         tags: ["Auth"],
         summary: "Change current user password",
-        description: "Validate the current password and update the authenticated user's password.",
+        operationId: "changePassword",
+        description:
+          "Validate the current password and update the authenticated user's password.",
         security: [{ bearerAuth: [] }],
         body: {
           type: "object",
@@ -77,20 +84,9 @@ const accountRoute: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      if (request.validationError) {
-        const validationError = request.validationError as {
-          validation?: unknown[];
-        };
-
-        return reply
-          .code(400)
-          .send(
-            error(
-              "Invalid request payload",
-              ErrorCodes.VALIDATION_ERROR,
-              validationError.validation,
-            ),
-          );
+      const validationResponse = handleValidationError(request, reply);
+      if (validationResponse) {
+        return validationResponse;
       }
 
       const authUser = request.authUser;
@@ -122,18 +118,22 @@ const accountRoute: FastifyPluginAsync = async (app) => {
         if (result.reason === "INVALID_CURRENT_PASSWORD") {
           return reply
             .code(401)
-            .send(error("Current password is incorrect", ErrorCodes.UNAUTHORIZED));
+            .send(
+              error("Current password is incorrect", ErrorCodes.UNAUTHORIZED),
+            );
         }
 
         return reply
           .code(400)
-          .send(error("New password must be different", ErrorCodes.VALIDATION_ERROR));
+          .send(
+            error(
+              "New password must be different",
+              ErrorCodes.VALIDATION_ERROR,
+            ),
+          );
       }
 
-      return success(
-        { user: result.user },
-        "Password updated successfully",
-      );
+      return success({ user: result.user }, "Password updated successfully");
     },
   );
 };

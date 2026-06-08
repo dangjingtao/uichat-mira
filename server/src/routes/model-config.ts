@@ -1,4 +1,4 @@
-import { FastifyInstance } from "fastify";
+import { FastifyPluginAsync } from "fastify";
 import { modelConfigService } from "@/services/model-config.service.js";
 import type { ModelType } from "@/db/schema.js";
 import { success, error, ErrorCodes } from "@/utils/index.js";
@@ -90,8 +90,8 @@ const paramTemplateItemSchema = {
   },
 } as const;
 
-export async function modelConfigRoutes(fastify: FastifyInstance) {
-  fastify.get(
+const modelConfigRoute: FastifyPluginAsync = async (app) => {
+  app.get(
     "/models",
     {
       schema: {
@@ -114,7 +114,7 @@ export async function modelConfigRoutes(fastify: FastifyInstance) {
         const configs = modelConfigService.getAllDefaultConfigs();
         return success(configs);
       } catch (err) {
-        fastify.log.error(err);
+        app.log.error(err);
         return reply
           .code(500)
           .send(error("Failed to get models", ErrorCodes.INTERNAL_ERROR));
@@ -122,7 +122,7 @@ export async function modelConfigRoutes(fastify: FastifyInstance) {
     },
   );
 
-  fastify.get<{
+  app.get<{
     Params: { type: string };
   }>(
     "/models/:type/config",
@@ -159,7 +159,7 @@ export async function modelConfigRoutes(fastify: FastifyInstance) {
 
         return success(config);
       } catch (err) {
-        fastify.log.error(err);
+        app.log.error(err);
         return reply
           .code(500)
           .send(error("Failed to get config", ErrorCodes.INTERNAL_ERROR));
@@ -167,7 +167,7 @@ export async function modelConfigRoutes(fastify: FastifyInstance) {
     },
   );
 
-  fastify.put<{
+  app.put<{
     Params: { type: string };
     Body: {
       name?: string;
@@ -209,10 +209,13 @@ export async function modelConfigRoutes(fastify: FastifyInstance) {
         const { type } = request.params;
         const { name, params } = request.body;
 
-        const config = modelConfigService.updateDefaultConfig(type as ModelType, {
-          name,
-          params,
-        });
+        const config = modelConfigService.updateDefaultConfig(
+          type as ModelType,
+          {
+            name,
+            params,
+          },
+        );
 
         if (!config) {
           return reply
@@ -222,7 +225,7 @@ export async function modelConfigRoutes(fastify: FastifyInstance) {
 
         return success(config, "Config updated successfully");
       } catch (err) {
-        fastify.log.error(err);
+        app.log.error(err);
         return reply
           .code(500)
           .send(error("Failed to update config", ErrorCodes.INTERNAL_ERROR));
@@ -230,7 +233,7 @@ export async function modelConfigRoutes(fastify: FastifyInstance) {
     },
   );
 
-  fastify.get<{
+  app.get<{
     Querystring: { type?: string };
   }>(
     "/models/param-templates",
@@ -269,13 +272,15 @@ export async function modelConfigRoutes(fastify: FastifyInstance) {
         );
         return success(templates);
       } catch (err) {
-        fastify.log.error(err);
+        app.log.error(err);
         return reply
           .code(500)
-          .send(error("Failed to get param templates", ErrorCodes.INTERNAL_ERROR));
+          .send(
+            error("Failed to get param templates", ErrorCodes.INTERNAL_ERROR),
+          );
       }
     },
   );
-}
+};
 
-export default modelConfigRoutes;
+export default modelConfigRoute;

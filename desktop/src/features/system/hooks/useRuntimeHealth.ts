@@ -45,7 +45,11 @@ export function useRuntimeHealth() {
   useEffect(() => {
     if (!isDesktopRuntime || !desktopApi) {
       setBackendState(
-        createInitialState(false, "等待后端健康检查", "浏览器预览未连接本地后端"),
+        createInitialState(
+          false,
+          "等待后端健康检查",
+          "浏览器预览未连接本地后端",
+        ),
       );
       setDatabaseState(
         createInitialState(
@@ -77,7 +81,7 @@ export function useRuntimeHealth() {
         status: result.success ? "running" : "stopped",
         detail: result.success
           ? `后端已启动 · ${desktopApi.backendUrl}`
-          : result.error ?? `健康检查失败 · HTTP ${result.statusCode || 0}`,
+          : (result.error ?? `健康检查失败 · HTTP ${result.statusCode || 0}`),
       });
 
       const dbResult = await desktopApi.checkDatabaseHealth();
@@ -106,7 +110,7 @@ export function useRuntimeHealth() {
 
     const timer = globalThis.setInterval(() => {
       void pollRuntime();
-    }, 3000);
+    }, 30000);
 
     return () => {
       cancelled = true;

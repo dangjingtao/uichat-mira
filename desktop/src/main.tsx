@@ -8,12 +8,6 @@ import "@assistant-ui/react-ui/styles/themes/default.css";
 import "./styles.css";
 import { MessageProvider } from "./shared/ui/Message";
 import { ModalProvider } from "./shared/ui/Modal";
-import { AssistantRuntimeProvider } from "@assistant-ui/react";
-import {
-  useChatRuntime,
-  AssistantChatTransport,
-} from "@assistant-ui/react-ai-sdk";
-
 const root = document.getElementById("root");
 
 if (!root) {
@@ -21,19 +15,11 @@ if (!root) {
 }
 
 const Main = () => {
-  const runtime = useChatRuntime({
-    transport: new AssistantChatTransport({
-      api: "/api/chat",
-    }),
-  });
-
   return (
     <React.StrictMode>
       <ModalProvider>
         <MessageProvider>
-          {/* <AssistantRuntimeProvider runtime={runtime}> */}
           <RouterProvider router={router} />
-          {/* </AssistantRuntimeProvider> */}
         </MessageProvider>
       </ModalProvider>
     </React.StrictMode>

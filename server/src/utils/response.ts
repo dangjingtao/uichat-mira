@@ -61,3 +61,22 @@ export const ErrorCodes = {
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
+
+export function handleValidationError(request: any, reply: any) {
+  if (request.validationError) {
+    const validationError = request.validationError as {
+      validation?: unknown[];
+    };
+
+    return reply
+      .code(400)
+      .send(
+        error(
+          "Invalid request payload",
+          ErrorCodes.VALIDATION_ERROR,
+          validationError.validation,
+        ),
+      );
+  }
+  return null;
+}
