@@ -115,6 +115,46 @@ export const authenticateUser = (
   };
 };
 
+export type ChangePasswordResult =
+  | { ok: true; user: AuthenticatedUser }
+  | { ok: false; reason: "USER_NOT_FOUND" | "INVALID_CURRENT_PASSWORD" | "PASSWORD_UNCHANGED" };
+
+export const changeUserPassword = (
+  userId: number,
+  currentPassword: string,
+  nextPassword: string,
+): ChangePasswordResult => {
+  const user = userRepository.findById(userId);
+
+  if (!user || !user.isActive) {
+    return { ok: false, reason: "USER_NOT_FOUND" };
+  }
+
+  const currentPasswordHash = hashPassword(currentPassword);
+  const nextPasswordHash = hashPassword(nextPassword);
+
+  if (!isSameHash(user.passwordHash, currentPasswordHash)) {
+    return { ok: false, reason: "INVALID_CURRENT_PASSWORD" };
+  }
+
+  if (isSameHash(user.passwordHash, nextPasswordHash)) {
+    return { ok: false, reason: "PASSWORD_UNCHANGED" };
+  }
+
+  userRepository.update(user.id, {
+    passwordHash: nextPasswordHash,
+  });
+
+  return {
+    ok: true,
+    user: {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+    },
+  };
+};
+
 const JWT_SECRET =
   process.env.JWT_SECRET || "uichat-rag-test-secret-key-change-in-production";
 const JWT_EXPIRES_IN = "7d";

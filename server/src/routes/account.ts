@@ -1,28 +1,30 @@
 import { FastifyPluginAsync } from "fastify";
-import { authenticateUser, createAccessToken } from "@/db/auth.db.js";
-import { success, error, ErrorCodes } from "@/utils/index.js";
+import { changeUserPassword, requireAuth } from "@/db/auth.db.js";
+import { error, ErrorCodes, success } from "@/utils/index.js";
 
-type LoginBody = {
-  username: string;
-  password: string;
+type ChangePasswordBody = {
+  currentPassword: string;
+  newPassword: string;
 };
 
-const loginRoute: FastifyPluginAsync = async (app) => {
-  app.post<{ Body: LoginBody }>(
-    "/login",
+const accountRoute: FastifyPluginAsync = async (app) => {
+  app.post<{ Body: ChangePasswordBody }>(
+    "/account/change-password",
     {
+      preHandler: requireAuth,
       attachValidation: true,
       schema: {
         tags: ["Auth"],
-        summary: "Login and issue JWT access token",
-        description: "Authenticate a local user and return a JWT access token for subsequent API requests.",
+        summary: "Change current user password",
+        description: "Validate the current password and update the authenticated user's password.",
+        security: [{ bearerAuth: [] }],
         body: {
           type: "object",
           additionalProperties: false,
-          required: ["username", "password"],
+          required: ["currentPassword", "newPassword"],
           properties: {
-            username: { type: "string", minLength: 1 },
-            password: { type: "string", minLength: 1 },
+            currentPassword: { type: "string", minLength: 1 },
+            newPassword: { type: "string", minLength: 6 },
           },
         },
         response: {
@@ -33,11 +35,8 @@ const loginRoute: FastifyPluginAsync = async (app) => {
               success: { type: "boolean", const: true },
               data: {
                 type: "object",
-                required: ["tokenType", "token", "user", "expiresIn"],
+                required: ["user"],
                 properties: {
-                  tokenType: { type: "string" },
-                  token: { type: "string" },
-                  expiresIn: { type: "string" },
                   user: {
                     type: "object",
                     required: ["id", "username", "role"],
@@ -94,35 +93,49 @@ const loginRoute: FastifyPluginAsync = async (app) => {
           );
       }
 
+      const authUser = request.authUser;
       const payload = request.body;
 
-      if (!payload.username.trim() || !payload.password.trim()) {
+      if (!authUser) {
+        return reply
+          .code(401)
+          .send(error("Unauthorized", ErrorCodes.UNAUTHORIZED));
+      }
+
+      if (
+        !payload.currentPassword.trim() ||
+        !payload.newPassword.trim() ||
+        payload.currentPassword === payload.newPassword
+      ) {
         return reply
           .code(400)
           .send(error("Invalid request payload", ErrorCodes.VALIDATION_ERROR));
       }
 
-      const found = authenticateUser(payload.username, payload.password);
+      const result = changeUserPassword(
+        authUser.id,
+        payload.currentPassword,
+        payload.newPassword,
+      );
 
-      if (!found) {
+      if (!result.ok) {
+        if (result.reason === "INVALID_CURRENT_PASSWORD") {
+          return reply
+            .code(401)
+            .send(error("Current password is incorrect", ErrorCodes.UNAUTHORIZED));
+        }
+
         return reply
-          .code(401)
-          .send(error("Invalid username or password", ErrorCodes.UNAUTHORIZED));
+          .code(400)
+          .send(error("New password must be different", ErrorCodes.VALIDATION_ERROR));
       }
 
-      const token = createAccessToken(found);
-
       return success(
-        {
-          tokenType: "Bearer",
-          token,
-          user: found,
-          expiresIn: "8h",
-        },
-        "Login successful",
+        { user: result.user },
+        "Password updated successfully",
       );
     },
   );
 };
 
-export default loginRoute;
+export default accountRoute;

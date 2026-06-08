@@ -6,7 +6,7 @@ function NavItem({
   children,
 }: {
   readonly to: string;
-  readonly icon: any;
+  readonly icon: React.ReactNode;
   readonly children: React.ReactNode;
 }) {
   return (
@@ -14,20 +14,28 @@ function NavItem({
       to={to}
       className={({ isActive }) =>
         `
-        flex items-center gap-3
+        flex items-center gap-2.5
         rounded-xl
         px-3 py-2.5
         text-sm
-        transition
+        font-medium
+        transition-all
+        duration-150
+        ease-out
+        focus-visible:outline-none
+        focus-visible:ring-2
+        focus-visible:ring-primary/20
+        focus-visible:ring-offset-2
+        focus-visible:ring-offset-surface-primary
         ${
           isActive
-            ? "bg-gray-100 dark:bg-white/10 font-medium text-gray-900 dark:text-white"
-            : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5"
+            ? "bg-primary/10 text-text-primary"
+            : "text-text-secondary hover:bg-surface-secondary hover:text-text-primary"
         }
         `
       }
     >
-      <>{icon}</>
+      {icon}
       {children}
     </NavLink>
   );

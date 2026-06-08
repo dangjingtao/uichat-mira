@@ -1,23 +1,126 @@
 import { FastifyInstance } from "fastify";
-import {
-  modelConfigService,
-  ModelConfigResponse,
-} from "@/services/model-config.service.js";
+import { modelConfigService } from "@/services/model-config.service.js";
 import type { ModelType } from "@/db/schema.js";
 import { success, error, ErrorCodes } from "@/utils/index.js";
 
+const modelTypeEnum = ["llm", "embedding", "rerank"] as const;
+
+const modelConfigSchema = {
+  type: "object",
+  required: [
+    "id",
+    "type",
+    "name",
+    "providerCode",
+    "remoteModelId",
+    "params",
+    "isDefault",
+    "createdAt",
+    "updatedAt",
+  ],
+  properties: {
+    id: { type: "string" },
+    type: { type: "string", enum: modelTypeEnum },
+    name: { type: "string" },
+    providerCode: {
+      anyOf: [
+        { type: "string", enum: ["ollama", "lmstudio", "openai"] },
+        { type: "null" },
+      ],
+    },
+    remoteModelId: {
+      anyOf: [{ type: "string" }, { type: "null" }],
+    },
+    params: {
+      type: "object",
+      additionalProperties: true,
+    },
+    isDefault: { type: "boolean" },
+    createdAt: { type: "string", format: "date-time" },
+    updatedAt: { type: "string", format: "date-time" },
+  },
+} as const;
+
+const successEnvelope = (dataSchema: Record<string, unknown>) => ({
+  type: "object",
+  required: ["success", "data", "timestamp"],
+  properties: {
+    success: { type: "boolean", const: true },
+    data: dataSchema,
+    message: { type: "string" },
+    timestamp: { type: "string", format: "date-time" },
+  },
+});
+
+const errorEnvelope = {
+  type: "object",
+  required: ["success", "message", "timestamp"],
+  properties: {
+    success: { type: "boolean", const: false },
+    message: { type: "string" },
+    code: { type: "string" },
+    errors: {
+      type: "array",
+      items: {},
+    },
+    timestamp: { type: "string", format: "date-time" },
+  },
+} as const;
+
+const paramTemplateItemSchema = {
+  type: "object",
+  required: ["key", "label", "type", "defaultValue"],
+  properties: {
+    key: { type: "string" },
+    label: { type: "string" },
+    type: { type: "string", enum: ["number", "select", "boolean"] },
+    step: { type: "number" },
+    options: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["value", "label"],
+        properties: {
+          value: { type: "string" },
+          label: { type: "string" },
+        },
+      },
+    },
+    defaultValue: {},
+  },
+} as const;
+
 export async function modelConfigRoutes(fastify: FastifyInstance) {
-  fastify.get("/models", async (request, reply) => {
-    try {
-      const configs = modelConfigService.getAllDefaultConfigs();
-      return success(configs);
-    } catch (err) {
-      fastify.log.error(err);
-      return reply
-        .code(500)
-        .send(error("Failed to get models", ErrorCodes.INTERNAL_ERROR));
-    }
-  });
+  fastify.get(
+    "/models",
+    {
+      schema: {
+        tags: ["Model Settings"],
+        summary: "Get active role model configs",
+        description:
+          "Return the current effective default configs for llm, embedding, and rerank.",
+        operationId: "getActiveRoleModelConfigs",
+        response: {
+          200: successEnvelope({
+            type: "array",
+            items: modelConfigSchema,
+          }),
+          500: errorEnvelope,
+        },
+      },
+    },
+    async (_request, reply) => {
+      try {
+        const configs = modelConfigService.getAllDefaultConfigs();
+        return success(configs);
+      } catch (err) {
+        fastify.log.error(err);
+        return reply
+          .code(500)
+          .send(error("Failed to get models", ErrorCodes.INTERNAL_ERROR));
+      }
+    },
+  );
 
   fastify.get<{
     Params: { type: string };
@@ -25,12 +128,21 @@ export async function modelConfigRoutes(fastify: FastifyInstance) {
     "/models/:type/config",
     {
       schema: {
+        tags: ["Model Settings"],
+        summary: "Get active config by role",
+        description: "Return the current effective config for a specific role.",
+        operationId: "getActiveRoleModelConfigByType",
         params: {
           type: "object",
           properties: {
-            type: { type: "string", enum: ["llm", "embedding", "rerank"] },
+            type: { type: "string", enum: modelTypeEnum },
           },
           required: ["type"],
+        },
+        response: {
+          200: successEnvelope(modelConfigSchema),
+          404: errorEnvelope,
+          500: errorEnvelope,
         },
       },
     },
@@ -59,25 +171,36 @@ export async function modelConfigRoutes(fastify: FastifyInstance) {
     Params: { type: string };
     Body: {
       name?: string;
-      params?: Record<string, any>;
+      params?: Record<string, unknown>;
     };
   }>(
     "/models/:type/config",
     {
       schema: {
+        tags: ["Model Settings"],
+        summary: "Update active config params by role",
+        description:
+          "Update the current effective role config. Typically used by the main settings page to save params.",
+        operationId: "updateActiveRoleModelConfigByType",
         params: {
           type: "object",
           properties: {
-            type: { type: "string", enum: ["llm", "embedding", "rerank"] },
+            type: { type: "string", enum: modelTypeEnum },
           },
           required: ["type"],
         },
         body: {
           type: "object",
+          additionalProperties: false,
           properties: {
             name: { type: "string" },
-            params: { type: "object" },
+            params: { type: "object", additionalProperties: true },
           },
+        },
+        response: {
+          200: successEnvelope(modelConfigSchema),
+          404: errorEnvelope,
+          500: errorEnvelope,
         },
       },
     },
@@ -86,13 +209,10 @@ export async function modelConfigRoutes(fastify: FastifyInstance) {
         const { type } = request.params;
         const { name, params } = request.body;
 
-        const config = modelConfigService.updateDefaultConfig(
-          type as ModelType,
-          {
-            name,
-            params,
-          },
-        );
+        const config = modelConfigService.updateDefaultConfig(type as ModelType, {
+          name,
+          params,
+        });
 
         if (!config) {
           return reply
@@ -112,101 +232,50 @@ export async function modelConfigRoutes(fastify: FastifyInstance) {
 
   fastify.get<{
     Querystring: { type?: string };
-  }>("/models/param-templates", async (request, reply) => {
-    try {
-      const { type } = request.query;
-      const templates = modelConfigService.getParamTemplates(
-        type as ModelType | undefined,
-      );
-      return success(templates);
-    } catch (err) {
-      fastify.log.error(err);
-      return reply
-        .code(500)
-        .send(
-          error("Failed to get param templates", ErrorCodes.INTERNAL_ERROR),
-        );
-    }
-  });
-
-  fastify.get<{
-    Querystring: { type?: string };
-  }>("/models/configs", async (request, reply) => {
-    try {
-      const { type } = request.query;
-      const configs = modelConfigService.getAllConfigs(
-        type as ModelType | undefined,
-      );
-      return success(configs);
-    } catch (err) {
-      fastify.log.error(err);
-      return reply
-        .code(500)
-        .send(error("Failed to get configs", ErrorCodes.INTERNAL_ERROR));
-    }
-  });
-
-  fastify.post<{
-    Body: {
-      type: ModelType;
-      name: string;
-      params: Record<string, any>;
-    };
   }>(
-    "/models/configs",
+    "/models/param-templates",
     {
       schema: {
-        body: {
+        tags: ["Model Settings"],
+        summary: "Get param templates",
+        description:
+          "Return backend-defined parameter templates for llm, embedding, and rerank.",
+        operationId: "getRoleModelParamTemplates",
+        querystring: {
           type: "object",
           properties: {
-            type: { type: "string", enum: ["llm", "embedding", "rerank"] },
-            name: { type: "string" },
-            params: { type: "object" },
+            type: { type: "string", enum: modelTypeEnum },
           },
-          required: ["type", "name", "params"],
+        },
+        response: {
+          200: successEnvelope({
+            type: "object",
+            required: ["llm", "embedding", "rerank"],
+            properties: {
+              llm: { type: "array", items: paramTemplateItemSchema },
+              embedding: { type: "array", items: paramTemplateItemSchema },
+              rerank: { type: "array", items: paramTemplateItemSchema },
+            },
+          }),
+          500: errorEnvelope,
         },
       },
     },
     async (request, reply) => {
       try {
-        const { type, name, params } = request.body;
-        const config = modelConfigService.createConfig(type, name, params);
-        return reply.code(201).send(success(config, "Config created"));
+        const { type } = request.query;
+        const templates = modelConfigService.getParamTemplates(
+          type as ModelType | undefined,
+        );
+        return success(templates);
       } catch (err) {
         fastify.log.error(err);
         return reply
           .code(500)
-          .send(error("Failed to create config", ErrorCodes.INTERNAL_ERROR));
+          .send(error("Failed to get param templates", ErrorCodes.INTERNAL_ERROR));
       }
     },
   );
-
-  fastify.delete<{
-    Params: { id: string };
-  }>("/models/configs/:id", async (request, reply) => {
-    try {
-      const { id } = request.params;
-      const deleted = modelConfigService.deleteConfig(id);
-
-      if (!deleted) {
-        return reply
-          .code(404)
-          .send(
-            error(
-              "Config not found or is default config",
-              ErrorCodes.NOT_FOUND,
-            ),
-          );
-      }
-
-      return success({ deleted: true }, "Config deleted");
-    } catch (err) {
-      fastify.log.error(err);
-      return reply
-        .code(500)
-        .send(error("Failed to delete config", ErrorCodes.INTERNAL_ERROR));
-    }
-  });
 }
 
 export default modelConfigRoutes;

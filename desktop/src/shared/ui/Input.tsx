@@ -1,31 +1,69 @@
-// OpenAI 风格的精致输入框组件
-
-// 基础输入框样式
-const inputBaseClass =
-  "w-full px-2 py-1.5 bg-transparent border border-gray-200 dark:border-gray-700 rounded-md text-xs text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400/50 focus:border-gray-400 dark:focus:border-gray-500";
-const inputInteractiveClass =
-  "hover:border-gray-300 dark:hover:border-gray-600";
-const inputDisabledClass =
-  "opacity-50 cursor-not-allowed hover:border-gray-200 dark:hover:border-gray-700";
+import React, { useId } from "react";
+import { ChevronDown } from "lucide-react";
 
 interface InputWrapperProps {
   label: string;
   children: React.ReactNode;
   disabled?: boolean;
+  error?: string;
+  inputId: string;
+  describedById?: string;
+  compact?: boolean;
 }
 
 const InputWrapper: React.FC<InputWrapperProps> = ({
   label,
   children,
   disabled,
+  error,
+  inputId,
+  describedById,
+  compact = false,
 }) => (
-  <div className="space-y-1">
-    <label className="text-[12px] font-medium text-gray-500 dark:text-gray-400">
+  <div className={compact ? "space-y-1" : "space-y-2"}>
+    <label
+      htmlFor={inputId}
+      className={`text-xs font-medium ${disabled ? "text-text-tertiary" : "text-text-secondary"}`}
+    >
       {label}
     </label>
     {children}
+    {error ? (
+      <span id={describedById} className="text-xs text-danger">
+        {error}
+      </span>
+    ) : null}
   </div>
 );
+
+const inputBaseClassName = `
+  w-full
+  rounded-lg
+  border
+  border-border
+  bg-surface-primary
+  px-3.5
+  text-sm
+  text-text-primary
+  shadow-shadow-sm
+  transition-[background-color,border-color,box-shadow]
+  duration-150
+  ease-out
+  placeholder:text-text-tertiary
+  focus:outline-none
+  focus:ring-2
+  focus:ring-primary/20
+  focus:border-primary
+  disabled:cursor-not-allowed
+  disabled:bg-surface-secondary
+  disabled:text-text-tertiary
+`;
+
+const getInputSizeClassName = (compact?: boolean) =>
+  compact ? "h-8 px-2.5 py-1.5 text-[13px]" : "h-10 px-3.5 text-sm";
+
+const getTextAreaSizeClassName = (compact?: boolean) =>
+  compact ? "min-h-[72px] px-2.5 py-1.5 text-[13px]" : "min-h-[96px] py-2.5 text-sm";
 
 interface NumberInputProps {
   label: string;
@@ -33,6 +71,8 @@ interface NumberInputProps {
   onChange: (value: number) => void;
   step?: number;
   disabled?: boolean;
+  error?: string;
+  compact?: boolean;
 }
 
 export const NumberInput: React.FC<NumberInputProps> = ({
@@ -41,20 +81,140 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   onChange,
   step,
   disabled,
+  error,
+  compact,
 }) => {
-  const inputClass = disabled
-    ? `${inputBaseClass} ${inputDisabledClass}`
-    : `${inputBaseClass} ${inputInteractiveClass}`;
+  const inputId = useId();
+  const describedById = error ? `${inputId}-error` : undefined;
 
   return (
-    <InputWrapper label={label} disabled={disabled}>
+    <InputWrapper
+      label={label}
+      disabled={disabled}
+      error={error}
+      inputId={inputId}
+      describedById={describedById}
+      compact={compact}
+    >
       <input
+        id={inputId}
         type="number"
         step={step}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
         disabled={disabled}
-        className={inputClass}
+        aria-invalid={Boolean(error)}
+        aria-describedby={describedById}
+        className={`
+          ${inputBaseClassName}
+          ${getInputSizeClassName(compact)}
+          ${error ? "border-danger" : ""}
+        `}
+      />
+    </InputWrapper>
+  );
+};
+
+interface TextInputProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  error?: string;
+  type?: string;
+  compact?: boolean;
+}
+
+export const TextInput: React.FC<TextInputProps> = ({
+  label,
+  value,
+  onChange,
+  placeholder,
+  disabled,
+  error,
+  type = "text",
+  compact,
+}) => {
+  const inputId = useId();
+  const describedById = error ? `${inputId}-error` : undefined;
+
+  return (
+    <InputWrapper
+      label={label}
+      disabled={disabled}
+      error={error}
+      inputId={inputId}
+      describedById={describedById}
+      compact={compact}
+    >
+      <input
+        id={inputId}
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+        aria-invalid={Boolean(error)}
+        aria-describedby={describedById}
+        className={`
+          ${inputBaseClassName}
+          ${getInputSizeClassName(compact)}
+          ${error ? "border-danger" : ""}
+        `}
+      />
+    </InputWrapper>
+  );
+};
+
+interface TextAreaProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  error?: string;
+  rows?: number;
+  compact?: boolean;
+}
+
+export const TextArea: React.FC<TextAreaProps> = ({
+  label,
+  value,
+  onChange,
+  placeholder,
+  disabled,
+  error,
+  rows = 4,
+  compact,
+}) => {
+  const inputId = useId();
+  const describedById = error ? `${inputId}-error` : undefined;
+
+  return (
+    <InputWrapper
+      label={label}
+      disabled={disabled}
+      error={error}
+      inputId={inputId}
+      describedById={describedById}
+      compact={compact}
+    >
+      <textarea
+        id={inputId}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+        rows={rows}
+        aria-invalid={Boolean(error)}
+        aria-describedby={describedById}
+        className={`
+          resize-y
+          ${inputBaseClassName}
+          ${getTextAreaSizeClassName(compact)}
+          ${error ? "border-danger" : ""}
+        `}
       />
     </InputWrapper>
   );
@@ -66,6 +226,8 @@ interface SelectInputProps {
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
   disabled?: boolean;
+  error?: string;
+  compact?: boolean;
 }
 
 export const SelectInput: React.FC<SelectInputProps> = ({
@@ -74,25 +236,46 @@ export const SelectInput: React.FC<SelectInputProps> = ({
   onChange,
   options,
   disabled,
+  error,
+  compact,
 }) => {
-  const inputClass = disabled
-    ? `${inputBaseClass} ${inputDisabledClass}`
-    : `${inputBaseClass} ${inputInteractiveClass}`;
+  const inputId = useId();
+  const describedById = error ? `${inputId}-error` : undefined;
 
   return (
-    <InputWrapper label={label} disabled={disabled}>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-        className={inputClass}
-      >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
+    <InputWrapper
+      label={label}
+      disabled={disabled}
+      error={error}
+      inputId={inputId}
+      describedById={describedById}
+      compact={compact}
+    >
+      <div className="relative">
+        <select
+          id={inputId}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          aria-invalid={Boolean(error)}
+          aria-describedby={describedById}
+          className={`
+            cursor-pointer
+            appearance-none
+            pr-10
+            ${inputBaseClassName}
+            ${getInputSizeClassName(compact)}
+            ${error ? "border-danger" : ""}
+          `}
+        >
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-icon-secondary" />
+      </div>
     </InputWrapper>
   );
 };

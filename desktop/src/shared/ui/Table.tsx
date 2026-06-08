@@ -1,6 +1,3 @@
-// src/components/MinimalTable.tsx
-
-// src/components/table/types.ts
 export type ColumnAlign = "left" | "center" | "right";
 
 interface ColumnMeta<TData extends object, TValue = unknown> {
@@ -32,18 +29,15 @@ export function MinimalTable<T extends object>({ data, columns }: Props<T>) {
   });
 
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden">
+    <div className="overflow-hidden rounded-xl border border-border bg-surface-primary shadow-shadow-sm">
       <table className="w-full">
         <thead>
           {table.getHeaderGroups().map((hg) => (
-            <tr
-              key={hg.id}
-              className="bg-gray-50 dark:bg-white/[0.03] border-b border-gray-200 dark:border-white/10"
-            >
+            <tr key={hg.id} className="border-b border-border bg-surface-secondary">
               {hg.headers.map((h) => (
                 <th
                   key={h.id}
-                  className="px-4 py-2.5 text-left text-sm font-medium text-gray-700 dark:text-gray-400 uppercase tracking-wider"
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary"
                   style={{
                     width: h.getSize(),
                     minWidth: h.column.columnDef.minSize,
@@ -57,17 +51,17 @@ export function MinimalTable<T extends object>({ data, columns }: Props<T>) {
         </thead>
 
         <tbody>
-          {table.getRowModel().rows.map((row, i) => (
+          {table.getRowModel().rows.map((row, index) => (
             <tr
               key={row.id}
-              className={`${
-                i % 2 === 0 ? "" : "bg-gray-50/50 dark:bg-white/[0.01]"
-              } hover:bg-gray-100 dark:hover:bg-white/[0.04] transition-colors`}
+              className={`transition-colors duration-150 hover:bg-surface-secondary/80 ${
+                index > 0 ? "border-t border-border" : ""
+              }`}
             >
               {row.getVisibleCells().map((cell) => (
                 <td
                   key={cell.id}
-                  className="px-4 py-2.5 border-t border-gray-100 dark:border-white/[0.06] text-sm text-gray-900 dark:text-white whitespace-nowrap"
+                  className="whitespace-nowrap px-4 py-3 text-sm text-text-primary"
                 >
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </td>

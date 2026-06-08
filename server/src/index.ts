@@ -8,9 +8,12 @@ import healthRoute from "@/routes/health";
 import dbHealthRoute from "@/routes/dbHealth";
 import loginRoute from "@/routes/login";
 import meRoute from "@/routes/me";
+import accountRoute from "@/routes/account";
 import modelConfigRoute from "@/routes/model-config";
+import providerSettingsRoute from "@/routes/provider-settings";
 import { initializeAuthDatabase } from "@/db/auth.db";
 import { initializeModelConfigDatabase } from "@/db/model-config.db";
+import { initializeVectorStore } from "@/db";
 import CONFIG from "@/config";
 import { getLoggerConfig } from "@/logger";
 
@@ -36,7 +39,15 @@ const setupPlugins = async () => {
         version: "0.0.2",
       },
       servers: [{ url: `http://127.0.0.1:${CONFIG.PORT}` }],
-      tags: [{ name: "System" }, { name: "Auth" }, { name: "Models" }],
+      tags: [
+        { name: "System", description: "系统与健康检查接口" },
+        { name: "Auth", description: "认证与当前用户接口" },
+        { name: "Model Settings", description: "当前生效模型配置与参数接口" },
+        {
+          name: "Provider Settings",
+          description: "服务商平台连接、模型同步与默认模型选择接口",
+        },
+      ],
       components: {
         securitySchemes: {
           bearerAuth: {
@@ -63,7 +74,9 @@ const setupRoutes = async () => {
   await app.register(dbHealthRoute);
   await app.register(loginRoute);
   await app.register(meRoute);
+  await app.register(accountRoute);
   await app.register(modelConfigRoute);
+  await app.register(providerSettingsRoute);
 };
 
 const setupDatabase = async () => {
@@ -81,6 +94,24 @@ const setupDatabase = async () => {
 
   initializeAuthDatabase();
   initializeModelConfigDatabase();
+
+  const vectorStoreHealth = initializeVectorStore();
+  if (vectorStoreHealth.ok) {
+    app.log.info(
+      {
+        provider: vectorStoreHealth.provider,
+        extensionPath: vectorStoreHealth.extensionPath,
+      },
+      vectorStoreHealth.detail,
+    );
+  } else {
+    app.log.warn(
+      {
+        provider: vectorStoreHealth.provider,
+      },
+      vectorStoreHealth.detail,
+    );
+  }
 };
 
 const isExistingBackendHealthy = async (port: number): Promise<boolean> => {

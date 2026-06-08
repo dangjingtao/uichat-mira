@@ -1,36 +1,127 @@
-// src/components/models/DefaultModelCard.tsx
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Layers3, Settings2 } from "lucide-react";
+import { Button } from "@/shared/ui/Button";
+import Card from "@/shared/ui/Card";
+import { Modal } from "@/shared/ui/Modal";
+import { message } from "@/shared/ui/Message";
+import {
+  getRoleModelConfigs,
+  type RoleModelConfig,
+} from "@/shared/api/modelSettings";
 import ModelConfig from "./ModelConfig";
+import PlatformConfigModal from "./PlatformConfigModal";
 
-/**
- * 默认模型配置卡片
- * 展示和配置三种类型的默认模型：LLM、Embedding、Rerank
- */
 const DefaultModelCard: React.FC = () => {
-  return (
-    <div className="flex flex-col border rounded-2xl gap-6 w-full max-w-full mx-auto p-4 bg-white dark:bg-[#171717]">
-      {/* 头部 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg">
-            D
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              默认模型配置
-            </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              配置不同任务使用的默认模型
-            </p>
-          </div>
-        </div>
-      </div>
+  const [configs, setConfigs] = useState<RoleModelConfig[]>([]);
+  const [loading, setLoading] = useState(true);
 
-      <div className="space-y-4">
-        <ModelConfig modelType="llm" />
-        <ModelConfig modelType="embedding" />
-        <ModelConfig modelType="reRank" />
+  const loadConfigs = useCallback(async () => {
+    try {
+      setLoading(true);
+      const nextConfigs = await getRoleModelConfigs();
+      setConfigs(nextConfigs);
+    } catch (err) {
+      const messageText = err instanceof Error ? err.message : "加载模型配置失败";
+      message.error(messageText);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadConfigs();
+  }, [loadConfigs]);
+
+  const configMap = useMemo(() => {
+    return {
+      llm: configs.find((item) => item.type === "llm") ?? null,
+      embedding: configs.find((item) => item.type === "embedding") ?? null,
+      rerank: configs.find((item) => item.type === "rerank") ?? null,
+    };
+  }, [configs]);
+
+  const handleConfigUpdated = (updated: RoleModelConfig) => {
+    setConfigs((prev) =>
+      prev.map((item) => (item.type === updated.type ? updated : item)),
+    );
+  };
+
+  const openPlatformSettings = () => {
+    let modalKey = "";
+
+    modalKey = Modal.show({
+      title: "平台模型设置",
+      width: 940,
+      height: 560,
+      onClose: () => {
+        void loadConfigs();
+      },
+      footer: (
+        <>
+          <Button variant="ghost" size="sm" onClick={() => Modal.close(modalKey)}>
+            关闭
+          </Button>
+          <Button size="sm" onClick={() => Modal.close(modalKey)}>
+            完成
+          </Button>
+        </>
+      ),
+      content: <PlatformConfigModal onRoleConfigUpdated={loadConfigs} />,
+    });
+  };
+
+  return (
+    <Card className="p-3.5">
+      <div className="space-y-3">
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Layers3 className="h-4.5 w-4.5" />
+            </div>
+            <div className="space-y-0.5">
+              <div className="text-sm font-semibold text-text-primary">
+                默认模型配置
+              </div>
+              <div className="max-w-2xl text-xs leading-4 text-text-secondary">
+                平台侧负责连接与模型同步，这里只展示当前生效的角色配置，并允许直接保存调用参数。
+              </div>
+            </div>
+          </div>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={openPlatformSettings}
+            className="gap-2 self-start"
+          >
+            <Settings2 className="h-4 w-4" />
+            打开平台配置
+          </Button>
+        </div>
+
+        <div className="space-y-2.5">
+          <ModelConfig
+            modelType="llm"
+            config={configMap.llm}
+            onUpdated={handleConfigUpdated}
+          />
+          <ModelConfig
+            modelType="embedding"
+            config={configMap.embedding}
+            onUpdated={handleConfigUpdated}
+          />
+          <ModelConfig
+            modelType="rerank"
+            config={configMap.rerank}
+            onUpdated={handleConfigUpdated}
+          />
+        </div>
+
+        {loading ? (
+          <div className="text-xs text-text-secondary">正在同步模型配置...</div>
+        ) : null}
       </div>
-    </div>
+    </Card>
   );
 };
 

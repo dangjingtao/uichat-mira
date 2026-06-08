@@ -36,54 +36,53 @@ function Sidebar({ children }: { children: React.ReactNode }) {
 
   return (
     <aside
-      className={`h-full w-64 shrink-0 border-r bg-zinc-50 dark:bg-zinc-900 flex flex-col ${
+      className={`h-full w-64 shrink-0 border-r border-border bg-surface-secondary flex flex-col ${
         open ? "" : "hidden md:flex"
       }`}
     >
       {/* 顶部 Logo / 标题区 */}
-      <div className="px-3 py-3 font-semibold text-lg border-b flex items-center">
+      <div className="px-4 py-4 font-semibold text-base border-b border-border flex items-center">
         <img
           src="https://uichat.tomz.io/assets/logoIcon.BiG6rto6.png"
           alt="Logo"
-          className="inline-block mr-2 h-6"
+          className="inline-block mr-2.5 h-6"
         />{" "}
-        <div>RAG Tester</div>
+        <span className="text-text-primary">RAG Tester</span>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pt-2">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3">
         {children}
       </div>
 
-      <div className="flex items-center justify-between rounded-xs border border-slate-200 bg-white px-4 py-2 shadow-sm">
-        <div className="flex items-center gap-1 text-sm text-slate-600">
-          <span>
-            <span className="font-semibold text-slate-900">
-              {session?.user.username || "未知用户"}
-            </span>
-          </span>
-          <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
-            {session?.user.role}
-          </span>
-          <span className="flex items-center gap-2">
-            <span
-              className={`h-2.5 w-2.5 rounded-full ${backendStatusColorClass}`}
-            />
-          </span>
-        </div>
-        <div className="flex items-center gap-x-1">
-          <button
-            onClick={() => toSettings("/settings/general")}
-            className="rounded-lg  px-2 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100"
-          >
-            <SettingsIcon className="h-4 w-4" />
-          </button>
+      <div className="border-t border-border bg-surface-primary px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="flex gap-1.5 flex-row">
+              <div className="text-sm  text-text-primary">
+                {session?.user.username || "未知用户"}
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span
+                className={`h-2 w-2 rounded-full ${backendStatusColorClass}`}
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => toSettings("/settings/general")}
+              className="rounded-lg px-2 py-1.5 text-text-secondary transition-all hover:bg-surface-tertiary hover:text-text-primary"
+            >
+              <SettingsIcon className="h-4 w-4" />
+            </button>
 
-          <button
-            onClick={() => logout()}
-            className="rounded-lg  px-2 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100"
-          >
-            <LogOutIcon className="h-4 w-4" />
-          </button>
+            <button
+              onClick={() => logout()}
+              className="rounded-lg px-2 py-1.5 text-text-secondary transition-all hover:bg-surface-tertiary hover:text-text-primary"
+            >
+              <LogOutIcon className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
     </aside>

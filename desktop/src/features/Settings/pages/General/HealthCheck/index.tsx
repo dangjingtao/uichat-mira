@@ -1,77 +1,114 @@
 import Card from "@/shared/ui/Card";
+import { StatusIndicator } from "@/shared/ui/StatusIndicator";
 import { useRuntimeHealth } from "@/features/system/hooks/useRuntimeHealth";
-
-const statusTextMap = {
-  unknown: "检测中",
-  running: "运行中",
-  stopped: "未启动",
-} as const;
-
-const databaseStatusTextMap = {
-  unknown: "检测中",
-  running: "正常",
-  stopped: "未联通",
-} as const;
-
-const statusColorMap = {
-  unknown: "bg-amber-500",
-  running: "bg-green-600",
-  stopped: "bg-red-600",
-} as const;
+import { Database, MonitorCog, Server } from "lucide-react";
 
 function HealthCheck() {
-  const { desktopApi, backendState, databaseState } = useRuntimeHealth();
+  const { desktopApi, backendState, databaseState, vectorState } =
+    useRuntimeHealth();
 
   return (
-    <div className="w-full pb-4">
+    <section className="space-y-4">
       <div className="space-y-2">
-        <h3 className="text-md font-semibold tracking-tight text-gray-900 dark:text-white">
-          环境检查
-        </h3>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          当前页面用于确认桌面端是否已成功拉起本地服务，以及数据库是否处于可访问状态。
-        </p>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          运行环境：
-          {desktopApi ? (
-            <span className="text-gray-700 dark:text-gray-300">
-              Electron ({desktopApi.platform})
-            </span>
-          ) : (
-            <span className="text-amber-600 dark:text-amber-400">
-              Browser Preview
-            </span>
-          )}
-        </p>
+        <div className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+          Runtime Health
+        </div>
+        <div className="space-y-1">
+          <h3 className="text-xl font-semibold text-text-primary">环境检查</h3>
+          <p className="max-w-2xl text-sm leading-6 text-text-secondary">
+            用于确认当前桌面端是否已经拉起本地后端服务，以及数据库与向量数据库是否处于可访问状态。
+          </p>
+        </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Card
-          label={
-            <span>
-              <span
-                className={`inline-block mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full animate-pulse ${statusColorMap[backendState.status]}`}
-              />
-              &nbsp;&nbsp; 本地服务状态：{statusTextMap[backendState.status]}
-            </span>
-          }
-          value={backendState.detail}
-        />
+      <Card className="bg-surface-primary">
+        <div className="flex items-start gap-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-secondary">
+            <MonitorCog className="h-5 w-5 text-icon-primary" />
+          </div>
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+              当前运行环境
+            </div>
+            <div className="text-sm font-medium text-text-primary">
+              {desktopApi
+                ? `Electron · ${desktopApi.platform}`
+                : "Browser Preview"}
+            </div>
+            <div className="text-sm text-text-secondary">
+              {desktopApi
+                ? "桌面运行时已接入本地健康检查能力。"
+                : "当前为浏览器预览模式，无法直接访问本地桌面运行时能力。"}
+            </div>
+          </div>
+        </div>
+      </Card>
 
-        <Card
-          label={
-            <span>
-              <span
-                className={`inline-block mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full animate-pulse ${statusColorMap[databaseState.status]}`}
-              />
-              &nbsp;&nbsp; 数据库状态：
-              {databaseStatusTextMap[databaseState.status]}
-            </span>
-          }
-          value={databaseState.detail}
-        />
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Card interactive className="h-full">
+          <div className="space-y-4">
+            <div className="flex items-start gap-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-secondary">
+                <Server className="h-5 w-5 text-icon-primary" />
+              </div>
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <h4 className="text-base font-semibold text-text-primary">
+                    Server
+                  </h4>
+                  <StatusIndicator status={backendState.status} />
+                </div>
+                <p className="text-sm leading-6 text-text-secondary">
+                  {backendState.detail}
+                </p>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card interactive className="h-full">
+          <div className="space-y-4">
+            <div className="flex items-start gap-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-secondary">
+                <Database className="h-5 w-5 text-icon-primary" />
+              </div>
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <h4 className="text-base font-semibold text-text-primary">
+                    SQLite
+                  </h4>
+                  <StatusIndicator status={databaseState.status} />
+                </div>
+                <p className="text-sm leading-6 text-text-secondary">
+                  {databaseState.detail}
+                </p>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card interactive className="h-full">
+          <div className="space-y-4">
+            <div className="flex items-start gap-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-secondary">
+                <Database className="h-5 w-5 text-icon-primary" />
+              </div>
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <h4 className="text-base font-semibold text-text-primary">
+                    SQLite-vec
+                  </h4>
+                  <StatusIndicator status={vectorState.status} />
+                </div>
+                <p className="text-sm leading-6 text-text-secondary">
+                  {vectorState.detail}
+                </p>
+              </div>
+            </div>
+          </div>
+        </Card>
       </div>
-    </div>
+    </section>
   );
 }
 

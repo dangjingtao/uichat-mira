@@ -88,42 +88,39 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({
     destroy,
   };
 
-  if (!globalMessageApi) {
-    globalMessageApi = api;
-  }
+  globalMessageApi = api;
 
   const getIcon = (type: MessageType) => {
     switch (type) {
       case "success":
-        return <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />;
+        return <CheckCircle className="h-5 w-5 flex-shrink-0 text-success" />;
       case "error":
-        return <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />;
+        return <XCircle className="h-5 w-5 flex-shrink-0 text-danger" />;
       case "warning":
-        return (
-          <AlertCircle className="w-5 h-5 text-yellow-500 flex-shrink-0" />
-        );
+        return <AlertCircle className="h-5 w-5 flex-shrink-0 text-warning" />;
       case "info":
-        return <Info className="w-5 h-5 text-blue-500 flex-shrink-0" />;
+        return <Info className="h-5 w-5 flex-shrink-0 text-info" />;
       case "loading":
-        return (
-          <Loader2 className="w-5 h-5 text-blue-500 animate-spin flex-shrink-0" />
-        );
+        return <Loader2 className="h-5 w-5 flex-shrink-0 animate-spin text-info" />;
     }
   };
 
   return (
     <MessageContext.Provider value={api}>
       {children}
-      <div className="fixed top-8 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-none">
+      <div
+        className="pointer-events-none fixed top-4 left-1/2 z-[220] flex -translate-x-1/2 flex-col items-center gap-2"
+        aria-live="polite"
+        aria-atomic="true"
+      >
         {messages.map((msg) => (
           <div
             key={msg.key}
-            className="pointer-events-auto bg-white dark:bg-gray-800 shadow-lg rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center gap-3 min-w-[300px] max-w-[500px] animate-in fade-in slide-in-from-top-2 duration-200"
+            className="pointer-events-auto flex min-w-[280px] max-w-[520px] items-center gap-3 rounded-xl border border-border bg-surface-elevated/95 px-4 py-3 text-left shadow-shadow-lg backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-200"
+            role="status"
           >
             {getIcon(msg.type)}
-            <div className="flex-1 text-sm text-gray-800 dark:text-gray-200">
-              {msg.content}
-            </div>
+            <div className="flex-1 text-sm text-text-primary">{msg.content}</div>
           </div>
         ))}
       </div>
@@ -141,39 +138,25 @@ export const useMessage = (): MessageContextType => {
 
 const createStaticApi = (): MessageContextType => ({
   open: (config) => {
-    if (globalMessageApi) {
-      globalMessageApi.open(config);
-    }
+    globalMessageApi?.open(config);
   },
   success: (content, duration) => {
-    if (globalMessageApi) {
-      globalMessageApi.success(content, duration);
-    }
+    globalMessageApi?.success(content, duration);
   },
   error: (content, duration) => {
-    if (globalMessageApi) {
-      globalMessageApi.error(content, duration);
-    }
+    globalMessageApi?.error(content, duration);
   },
   warning: (content, duration) => {
-    if (globalMessageApi) {
-      globalMessageApi.warning(content, duration);
-    }
+    globalMessageApi?.warning(content, duration);
   },
   info: (content, duration) => {
-    if (globalMessageApi) {
-      globalMessageApi.info(content, duration);
-    }
+    globalMessageApi?.info(content, duration);
   },
   loading: (content, duration) => {
-    if (globalMessageApi) {
-      globalMessageApi.loading(content, duration);
-    }
+    globalMessageApi?.loading(content, duration);
   },
   destroy: () => {
-    if (globalMessageApi) {
-      globalMessageApi.destroy();
-    }
+    globalMessageApi?.destroy();
   },
 });
 

@@ -1,6 +1,5 @@
-// src/components/models/ModelRow.tsx
 import React, { useState } from "react";
-import { GripVertical, Edit, Settings, Trash2 } from "lucide-react";
+import { Edit, GripVertical, Power, Trash2 } from "lucide-react";
 import { IconButton } from "@/shared/ui/Button";
 import Tooltip from "@/shared/ui/Tooltip";
 
@@ -18,10 +17,6 @@ interface ModelRowProps {
   onToggleStatus: (id: string) => void;
 }
 
-/**
- * 模型行组件
- * 显示单个模型的信息，支持编辑、删除和拖拽排序
- */
 const ModelRow: React.FC<ModelRowProps> = ({
   model,
   onEdit,
@@ -37,14 +32,12 @@ const ModelRow: React.FC<ModelRowProps> = ({
   };
 
   return (
-    <div className="group flex items-center justify-between py-2.5 px-3 rounded-md hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        {/* 拖拽手柄 */}
-        <GripVertical className="w-4 h-4 text-gray-400 cursor-grab" />
+    <div className="group flex items-center justify-between rounded-lg px-2 py-1.5 transition-colors hover:bg-surface-primary">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <GripVertical className="h-4 w-4 cursor-grab text-icon-secondary" />
 
-        {/* 模型名称和编辑输入 */}
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-xs font-bold text-gray-600 dark:text-gray-300 shrink-0">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-surface-primary text-[10px] font-semibold text-text-secondary">
             {model.icon || "M"}
           </div>
           {isEditing ? (
@@ -54,35 +47,49 @@ const ModelRow: React.FC<ModelRowProps> = ({
               onChange={(e) => setEditValue(e.target.value)}
               onBlur={handleUpdate}
               onKeyDown={(e) => e.key === "Enter" && handleUpdate()}
-              className="bg-transparent text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-black px-1 py-0.5 rounded border border-gray-200 dark:border-gray-700 min-w-[120px]"
+              className="min-w-[116px] rounded-md border border-border bg-surface-primary px-2 py-1 text-[12px] text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
               autoFocus
             />
           ) : (
-            <span className="text-sm text-gray-900 dark:text-white truncate">
-              {model.name}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="truncate text-[13px] text-text-primary">
+                {model.name}
+              </span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                  model.enabled
+                    ? "bg-success/10 text-success"
+                    : "bg-surface-tertiary text-text-secondary"
+                }`}
+              >
+                {model.enabled ? "启用" : "禁用"}
+              </span>
+            </div>
           )}
         </div>
       </div>
 
-      {/* 操作按钮 */}
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
         <Tooltip text="编辑">
-          <IconButton onClick={() => setIsEditing(true)}>
-            <Edit className="w-4 h-4" />
+          <IconButton onClick={() => setIsEditing(true)} ariaLabel="编辑模型">
+            <Edit className="h-4 w-4" />
           </IconButton>
         </Tooltip>
-        <Tooltip text="设置">
-          <IconButton>
-            <Settings className="w-4 h-4" />
+        <Tooltip text={model.enabled ? "禁用" : "启用"}>
+          <IconButton
+            onClick={() => onToggleStatus(model.id)}
+            ariaLabel={model.enabled ? "禁用模型" : "启用模型"}
+          >
+            <Power className="h-4 w-4" />
           </IconButton>
         </Tooltip>
         <Tooltip text="删除">
           <IconButton
             onClick={() => onDelete(model.id)}
-            className="text-red-500 hover:text-red-700"
+            className="text-danger hover:text-danger"
+            ariaLabel="删除模型"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="h-4 w-4" />
           </IconButton>
         </Tooltip>
       </div>

@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from "fastify";
 import fs from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
+import { getVectorStoreHealth } from "@/db";
 import { success } from "@/utils/index.js";
 
 const DEFAULT_PORT_TIMEOUT = 1500;
@@ -13,6 +14,12 @@ interface DatabaseHealthData {
   configured: boolean;
   mode: string;
   detail: string;
+  vectorStore: {
+    ok: boolean;
+    provider: "sqlite-vec";
+    detail: string;
+    extensionPath?: string;
+  };
 }
 
 const tryTcpConnect = (
@@ -45,24 +52,15 @@ const buildHealthData = (
   configured,
   mode,
   detail,
+  vectorStore: getVectorStoreHealth(),
 });
 
 const checkSqliteFile = async (filePath: string) => {
   try {
     await fs.access(filePath);
-    return buildHealthData(
-      true,
-      true,
-      "sqlite",
-      `SQLite æ–‡ä»¶å¯è®¿é—®: ${filePath}`,
-    );
+    return buildHealthData(true, true, "sqlite", `SQLite ÎÄ¼ş¿É·ÃÎÊ: ${filePath}`);
   } catch {
-    return buildHealthData(
-      false,
-      true,
-      "sqlite",
-      `SQLite æ–‡ä»¶ä¸å¯è®¿é—®: ${filePath}`,
-    );
+    return buildHealthData(false, true, "sqlite", `SQLite ÎÄ¼ş²»¿É·ÃÎÊ: ${filePath}`);
   }
 };
 
@@ -91,14 +89,25 @@ const dbHealthRoute: FastifyPluginAsync = async (app) => {
               success: { type: "boolean", const: true },
               data: {
                 type: "object",
-                required: ["ok", "configured", "mode", "detail"],
+                required: ["ok", "configured", "mode", "detail", "vectorStore"],
                 properties: {
                   ok: { type: "boolean" },
                   configured: { type: "boolean" },
                   mode: { type: "string" },
                   detail: { type: "string" },
+                  vectorStore: {
+                    type: "object",
+                    required: ["ok", "provider", "detail"],
+                    properties: {
+                      ok: { type: "boolean" },
+                      provider: { type: "string", const: "sqlite-vec" },
+                      detail: { type: "string" },
+                      extensionPath: { type: "string" },
+                    },
+                  },
                 },
               },
+              message: { type: "string" },
               timestamp: { type: "string", format: "date-time" },
             },
           },
@@ -114,21 +123,19 @@ const dbHealthRoute: FastifyPluginAsync = async (app) => {
             false,
             false,
             "unconfigured",
-            "DATABASE_URL æœªé…ç½®ï¼ˆæœåŠ¡å¯åŠ¨åä¼šé»˜è®¤ä½¿ç”¨æœ¬åœ° SQLiteï¼‰",
+            "DATABASE_URL Î´ÅäÖÃ£¨·şÎñÆô¶¯ºó»áÄ¬ÈÏÊ¹ÓÃ±¾µØ SQLite£©",
           ),
         );
       }
 
       if (databaseUrl.startsWith("file:")) {
         const filePath = databaseUrl.replace("file:", "");
-        const data = await checkSqliteFile(filePath);
-        return success(data);
+        return success(await checkSqliteFile(filePath));
       }
 
       if (databaseUrl.endsWith(".db") || databaseUrl.endsWith(".sqlite")) {
         const dbPath = path.resolve(databaseUrl);
-        const data = await checkSqliteFile(dbPath);
-        return success(data);
+        return success(await checkSqliteFile(dbPath));
       }
 
       try {
@@ -136,7 +143,7 @@ const dbHealthRoute: FastifyPluginAsync = async (app) => {
         const host = parsed.hostname;
 
         if (!host) {
-          throw new Error("ç¼ºå°‘ä¸»æœºå");
+          throw new Error("È±ÉÙÖ÷»úÃû");
         }
 
         let port = Number(parsed.port);
@@ -150,33 +157,20 @@ const dbHealthRoute: FastifyPluginAsync = async (app) => {
               false,
               true,
               parsed.protocol.replace(":", ""),
-              `æ— æ³•æ¨æ–­ç«¯å£: ${databaseUrl}`,
+              `ÎŞ·¨ÍÆ¶Ï¶Ë¿Ú: ${databaseUrl}`,
             ),
           );
         }
 
         const reachable = await tryTcpConnect(host, port);
-
-        console.log(
-          buildHealthData(
-            reachable,
-            true,
-            parsed.protocol.replace(":", ""),
-            reachable
-              ? `æ•°æ®åº“åœ°å€å¯è¿æ¥: ${host}:${port}`
-              : `æ•°æ®åº“åœ°å€ä¸å¯è¾¾: ${host}:${port}`,
-          ),
-          "<=================",
-        );
-
         return success(
           buildHealthData(
             reachable,
             true,
             parsed.protocol.replace(":", ""),
             reachable
-              ? `æ•°æ®åº“åœ°å€å¯è¿æ¥: ${host}:${port}`
-              : `æ•°æ®åº“åœ°å€ä¸å¯è¾¾: ${host}:${port}`,
+              ? `Êı¾İ¿âµØÖ·¿ÉÁ¬½Ó: ${host}:${port}`
+              : `Êı¾İ¿âµØÖ·²»¿É´ï: ${host}:${port}`,
           ),
         );
       } catch (error) {
@@ -186,8 +180,8 @@ const dbHealthRoute: FastifyPluginAsync = async (app) => {
             true,
             "unknown",
             error instanceof Error
-              ? `æ•°æ®åº“ URL è§£æå¤±è´¥: ${error.message}`
-              : "æ•°æ®åº“ URL è§£æå¤±è´¥",
+              ? `Êı¾İ¿â URL ½âÎöÊ§°Ü: ${error.message}`
+              : "Êı¾İ¿â URL ½âÎöÊ§°Ü",
           ),
         );
       }

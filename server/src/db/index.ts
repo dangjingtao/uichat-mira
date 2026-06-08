@@ -1,14 +1,9 @@
-/**
- * 统一的数据库连接管理
- */
-import Database from "better-sqlite3";
+﻿import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
+import * as sqliteVec from "sqlite-vec";
 import * as schema from "./schema";
 
-// Re-export schema
 export * from "./schema";
-
-// Re-export repositories
 export * from "./repositories";
 
 const resolveDatabasePath = (): string => {
@@ -32,9 +27,19 @@ const resolveDatabasePath = (): string => {
 let sqlite: Database.Database | null = null;
 let db: ReturnType<typeof drizzle> | null = null;
 
-/**
- * 获取原生 SQLite 数据库连接（用于执行原始 SQL）
- */
+export interface VectorStoreHealth {
+  ok: boolean;
+  provider: "sqlite-vec";
+  detail: string;
+  extensionPath?: string;
+}
+
+let vectorStoreHealth: VectorStoreHealth = {
+  ok: false,
+  provider: "sqlite-vec",
+  detail: "sqlite-vec 尚未初始化",
+};
+
 export const getSqlite = (): Database.Database => {
   if (!sqlite) {
     sqlite = new Database(resolveDatabasePath(), {
@@ -45,12 +50,38 @@ export const getSqlite = (): Database.Database => {
   return sqlite;
 };
 
-/**
- * 获取 Drizzle 数据库实例
- */
 export const getDb = () => {
   if (!db) {
     db = drizzle(getSqlite(), { schema });
   }
   return db;
 };
+
+export const initializeVectorStore = (): VectorStoreHealth => {
+  try {
+    const extensionPath = sqliteVec.getLoadablePath();
+    const sqliteInstance = getSqlite();
+    sqliteVec.load(sqliteInstance);
+
+    vectorStoreHealth = {
+      ok: true,
+      provider: "sqlite-vec",
+      detail: "sqlite-vec 扩展已加载",
+      extensionPath,
+    };
+  } catch (error) {
+    vectorStoreHealth = {
+      ok: false,
+      provider: "sqlite-vec",
+      detail:
+        error instanceof Error
+          ? `sqlite-vec 扩展加载失败: ${error.message}`
+          : "sqlite-vec 扩展加载失败",
+    };
+  }
+
+  return vectorStoreHealth;
+};
+
+export const getVectorStoreHealth = (): VectorStoreHealth => vectorStoreHealth;
+

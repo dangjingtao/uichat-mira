@@ -7,7 +7,7 @@
   "author": "Tomz Dang <dangjingtao@163.com>",
   "scripts": {
     "start": "electron .",
-    "dev": "concurrently -k \"pnpm --filter @ui-chat-rag-tester/server dev\" \"pnpm --filter @ui-chat-rag-tester/desktop dev\" \"wait-on tcp:5173 && electron .\"",
+    "dev": "node dev-launcher.cjs",
     "build": "echo 'Electron build is handled by the root dist:win script'"
   },
   "devDependencies": {

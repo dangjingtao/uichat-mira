@@ -4,8 +4,8 @@ type FullPageStatusProps = {
 
 export function FullPageStatus({ message }: FullPageStatusProps) {
   return (
-    <main className="mx-auto mt-10 max-w-md rounded-xl border border-slate-200 bg-white p-6 text-slate-700 shadow-sm">
-      {message}
+    <main className="mx-auto mt-16 flex max-w-lg items-center justify-center rounded-xl border border-border bg-surface-primary px-6 py-5 text-sm text-text-secondary shadow-shadow-sm">
+      <span className="font-medium text-text-primary">{message}</span>
     </main>
   );
 }
