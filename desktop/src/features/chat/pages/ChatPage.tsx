@@ -5,10 +5,10 @@ import {
   AssistantRuntimeImpl,
   LocalRuntimeCore,
 } from "@assistant-ui/core/internal";
-import { useAuth } from "../../../app/providers/AuthProvider";
-import { useRuntimeHealth } from "../../system/hooks/useRuntimeHealth";
-import { localChatModel } from "../lib/localChatModel";
-import { ChatProvider } from "../Providers";
+import { useAuth } from "@/app/providers/AuthProvider";
+import { useRuntimeHealth } from "@/features/system/hooks/useRuntimeHealth";
+import { localChatModel } from "../../../app/layouts/lib/localChatModel";
+
 import { ThreadListSidebar } from "../components/ThreadListSidebar";
 
 const statusTextMap = {
@@ -63,25 +63,23 @@ function ChatPage() {
 
   return (
     <div>
-      <ChatProvider>
-        <ThreadListSidebar />
-        <div className="flex-1 min-w-0">
-          <Thread
-            // runtime={runtime}
-            welcome={{
-              message: "你好，我是 UI Chat RAG 助手。请输入你的问题。",
-              suggestions: defaultSuggestions,
-            }}
-            strings={{
-              composer: {
-                input: {
-                  placeholder: "输入问题，回车发送...",
-                },
+      {/* <ThreadListSidebar /> */}
+      <div className="flex-1 min-w-0">
+        <Thread
+          // runtime={runtime}
+          welcome={{
+            message: "你好，我是 UI Chat RAG 助手。请输入你的问题。",
+            suggestions: defaultSuggestions,
+          }}
+          strings={{
+            composer: {
+              input: {
+                placeholder: "输入问题，回车发送...",
               },
-            }}
-          />
-        </div>
-      </ChatProvider>
+            },
+          }}
+        />
+      </div>
     </div>
   );
 }

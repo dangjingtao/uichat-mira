@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import { FastifyPluginAsync } from "fastify";
 import { providerSettingsService } from "@/services/provider-settings.service.js";
 import type { ModelType, ProviderCode } from "@/db/schema.js";
 import { ErrorCodes, error, success } from "@/utils/index.js";
@@ -119,14 +119,15 @@ const roleModelConfigSchema = {
   },
 } as const;
 
-export async function providerSettingsRoutes(fastify: FastifyInstance) {
-  fastify.get(
+const providerSettingsRoute: FastifyPluginAsync = async (app) => {
+  app.get(
     "/providers",
     {
       schema: {
         tags: ["Provider Settings"],
         summary: "List provider summaries",
-        description: "Return the configured provider platforms with connection status and assigned roles.",
+        description:
+          "Return the configured provider platforms with connection status and assigned roles.",
         operationId: "listProviderSummaries",
         response: {
           200: successEnvelope({
@@ -141,7 +142,7 @@ export async function providerSettingsRoutes(fastify: FastifyInstance) {
       try {
         return success(providerSettingsService.getProviderSummaries());
       } catch (err) {
-        fastify.log.error(err);
+        app.log.error(err);
         return reply
           .code(500)
           .send(error("Failed to get providers", ErrorCodes.INTERNAL_ERROR));
@@ -149,7 +150,7 @@ export async function providerSettingsRoutes(fastify: FastifyInstance) {
     },
   );
 
-  fastify.get<{
+  app.get<{
     Params: { providerCode: ProviderCode };
   }>(
     "/providers/:providerCode",
@@ -157,7 +158,8 @@ export async function providerSettingsRoutes(fastify: FastifyInstance) {
       schema: {
         tags: ["Provider Settings"],
         summary: "Get provider detail",
-        description: "Return one provider's saved connection config, synced model list, and role assignments.",
+        description:
+          "Return one provider's saved connection config, synced model list, and role assignments.",
         operationId: "getProviderDetail",
         params: {
           type: "object",
@@ -195,7 +197,10 @@ export async function providerSettingsRoutes(fastify: FastifyInstance) {
                   },
                   lastError: { anyOf: [{ type: "string" }, { type: "null" }] },
                   lastSyncedAt: {
-                    anyOf: [{ type: "string", format: "date-time" }, { type: "null" }],
+                    anyOf: [
+                      { type: "string", format: "date-time" },
+                      { type: "null" },
+                    ],
                   },
                 },
               },
@@ -228,18 +233,22 @@ export async function providerSettingsRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       try {
         return success(
-          providerSettingsService.getProviderDetail(request.params.providerCode),
+          providerSettingsService.getProviderDetail(
+            request.params.providerCode,
+          ),
         );
       } catch (err) {
-        fastify.log.error(err);
+        app.log.error(err);
         return reply
           .code(500)
-          .send(error("Failed to get provider detail", ErrorCodes.INTERNAL_ERROR));
+          .send(
+            error("Failed to get provider detail", ErrorCodes.INTERNAL_ERROR),
+          );
       }
     },
   );
 
-  fastify.put<{
+  app.put<{
     Params: { providerCode: ProviderCode };
     Body: { baseUrl: string; apiKey: string };
   }>(
@@ -248,7 +257,8 @@ export async function providerSettingsRoutes(fastify: FastifyInstance) {
       schema: {
         tags: ["Provider Settings"],
         summary: "Save provider connection config",
-        description: "Persist base URL and API key for a provider. This does not sync models yet.",
+        description:
+          "Persist base URL and API key for a provider. This does not sync models yet.",
         operationId: "saveProviderConnectionConfig",
         params: {
           type: "object",
@@ -291,7 +301,10 @@ export async function providerSettingsRoutes(fastify: FastifyInstance) {
               },
               lastError: { anyOf: [{ type: "string" }, { type: "null" }] },
               lastSyncedAt: {
-                anyOf: [{ type: "string", format: "date-time" }, { type: "null" }],
+                anyOf: [
+                  { type: "string", format: "date-time" },
+                  { type: "null" },
+                ],
               },
               createdAt: { type: "string", format: "date-time" },
               updatedAt: { type: "string", format: "date-time" },
@@ -309,15 +322,17 @@ export async function providerSettingsRoutes(fastify: FastifyInstance) {
         );
         return success(connection, "Provider config saved");
       } catch (err) {
-        fastify.log.error(err);
+        app.log.error(err);
         return reply
           .code(500)
-          .send(error("Failed to save provider config", ErrorCodes.INTERNAL_ERROR));
+          .send(
+            error("Failed to save provider config", ErrorCodes.INTERNAL_ERROR),
+          );
       }
     },
   );
 
-  fastify.post<{
+  app.post<{
     Params: { providerCode: ProviderCode };
   }>(
     "/providers/:providerCode/sync-models",
@@ -325,7 +340,8 @@ export async function providerSettingsRoutes(fastify: FastifyInstance) {
       schema: {
         tags: ["Provider Settings"],
         summary: "Sync provider models",
-        description: "Use the backend to fetch models from the provider and refresh the local provider model cache.",
+        description:
+          "Use the backend to fetch models from the provider and refresh the local provider model cache.",
         operationId: "syncProviderModels",
         params: {
           type: "object",
@@ -365,17 +381,15 @@ export async function providerSettingsRoutes(fastify: FastifyInstance) {
         );
         return success(data, "Models synced successfully");
       } catch (err) {
-        fastify.log.error(err);
+        app.log.error(err);
         const message =
           err instanceof Error ? err.message : "Failed to sync provider models";
-        return reply
-          .code(400)
-          .send(error(message, ErrorCodes.DATABASE_ERROR));
+        return reply.code(400).send(error(message, ErrorCodes.DATABASE_ERROR));
       }
     },
   );
 
-  fastify.put<{
+  app.put<{
     Params: { providerCode: ProviderCode; role: ModelType };
     Body: { remoteModelId: string };
   }>(
@@ -384,7 +398,8 @@ export async function providerSettingsRoutes(fastify: FastifyInstance) {
       schema: {
         tags: ["Provider Settings"],
         summary: "Select default model for role",
-        description: "Assign a provider model to llm, embedding, or rerank and reset that role's params to backend defaults.",
+        description:
+          "Assign a provider model to llm, embedding, or rerank and reset that role's params to backend defaults.",
         operationId: "selectDefaultProviderModelForRole",
         params: {
           type: "object",
@@ -418,13 +433,13 @@ export async function providerSettingsRoutes(fastify: FastifyInstance) {
 
         return success(config, "Default model updated");
       } catch (err) {
-        fastify.log.error(err);
+        app.log.error(err);
         const message =
           err instanceof Error ? err.message : "Failed to select default model";
         return reply.code(400).send(error(message, ErrorCodes.NOT_FOUND));
       }
     },
   );
-}
+};
 
-export default providerSettingsRoutes;
+export default providerSettingsRoute;

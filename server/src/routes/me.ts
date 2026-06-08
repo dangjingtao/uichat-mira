@@ -10,6 +10,7 @@ const meRoute: FastifyPluginAsync = async (app) => {
       schema: {
         tags: ["Auth"],
         summary: "Get current authenticated user",
+        operationId: "getMe",
         description: "Return the authenticated user associated with the bearer token.",
         security: [{ bearerAuth: [] }],
         response: {

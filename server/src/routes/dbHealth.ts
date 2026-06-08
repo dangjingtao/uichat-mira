@@ -58,9 +58,9 @@ const buildHealthData = (
 const checkSqliteFile = async (filePath: string) => {
   try {
     await fs.access(filePath);
-    return buildHealthData(true, true, "sqlite", `SQLite ÎÄ¼þ¿É·ÃÎÊ: ${filePath}`);
+    return buildHealthData(true, true, "sqlite", `SQLite ï¿½Ä¼ï¿½ï¿½É·ï¿½ï¿½ï¿½: ${filePath}`);
   } catch {
-    return buildHealthData(false, true, "sqlite", `SQLite ÎÄ¼þ²»¿É·ÃÎÊ: ${filePath}`);
+    return buildHealthData(false, true, "sqlite", `SQLite ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½É·ï¿½ï¿½ï¿½: ${filePath}`);
   }
 };
 
@@ -81,6 +81,7 @@ const dbHealthRoute: FastifyPluginAsync = async (app) => {
       schema: {
         tags: ["System"],
         summary: "Database connectivity health check",
+        operationId: "getDatabaseHealth",
         response: {
           200: {
             type: "object",
@@ -123,7 +124,7 @@ const dbHealthRoute: FastifyPluginAsync = async (app) => {
             false,
             false,
             "unconfigured",
-            "DATABASE_URL Î´ÅäÖÃ£¨·þÎñÆô¶¯ºó»áÄ¬ÈÏÊ¹ÓÃ±¾µØ SQLite£©",
+            "DATABASE_URL Î´ï¿½ï¿½ï¿½Ã£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¬ï¿½ï¿½Ê¹ï¿½Ã±ï¿½ï¿½ï¿½ SQLiteï¿½ï¿½",
           ),
         );
       }
@@ -143,7 +144,7 @@ const dbHealthRoute: FastifyPluginAsync = async (app) => {
         const host = parsed.hostname;
 
         if (!host) {
-          throw new Error("È±ÉÙÖ÷»úÃû");
+          throw new Error("È±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½");
         }
 
         let port = Number(parsed.port);
@@ -157,7 +158,7 @@ const dbHealthRoute: FastifyPluginAsync = async (app) => {
               false,
               true,
               parsed.protocol.replace(":", ""),
-              `ÎÞ·¨ÍÆ¶Ï¶Ë¿Ú: ${databaseUrl}`,
+              `ï¿½Þ·ï¿½ï¿½Æ¶Ï¶Ë¿ï¿½: ${databaseUrl}`,
             ),
           );
         }
@@ -169,8 +170,8 @@ const dbHealthRoute: FastifyPluginAsync = async (app) => {
             true,
             parsed.protocol.replace(":", ""),
             reachable
-              ? `Êý¾Ý¿âµØÖ·¿ÉÁ¬½Ó: ${host}:${port}`
-              : `Êý¾Ý¿âµØÖ·²»¿É´ï: ${host}:${port}`,
+              ? `ï¿½ï¿½ï¿½Ý¿ï¿½ï¿½Ö·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½: ${host}:${port}`
+              : `ï¿½ï¿½ï¿½Ý¿ï¿½ï¿½Ö·ï¿½ï¿½ï¿½É´ï¿½: ${host}:${port}`,
           ),
         );
       } catch (error) {
@@ -180,8 +181,8 @@ const dbHealthRoute: FastifyPluginAsync = async (app) => {
             true,
             "unknown",
             error instanceof Error
-              ? `Êý¾Ý¿â URL ½âÎöÊ§°Ü: ${error.message}`
-              : "Êý¾Ý¿â URL ½âÎöÊ§°Ü",
+              ? `ï¿½ï¿½ï¿½Ý¿ï¿½ URL ï¿½ï¿½ï¿½ï¿½Ê§ï¿½ï¿½: ${error.message}`
+              : "ï¿½ï¿½ï¿½Ý¿ï¿½ URL ï¿½ï¿½ï¿½ï¿½Ê§ï¿½ï¿½",
           ),
         );
       }

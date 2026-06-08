@@ -4,7 +4,7 @@ import { GuestOnly } from "./route-guards/GuestOnly";
 import { RequireAuth } from "./route-guards/RequireAuth";
 import ChatPage from "../features/chat/pages/ChatPage";
 import LoginPage from "../features/auth/pages/LoginPage";
-import BaseLayout from "@/app/Layouts/BaseLayout";
+import BaseLayout from "@/app/layouts/BaseLayout";
 import HomePage from "@/features/dashboard/pages/HomePage";
 import About from "@/features/Settings/pages/About/index";
 import GeneralSettings from "@/features/Settings/pages/General/index";
@@ -39,8 +39,14 @@ export const router = createHashRouter([
               { path: "account", element: <AccountSettings /> },
               { path: "about", element: <About /> },
               { path: "knowledge-base", element: <KnowledgeBaseSettings /> },
-              { path: "knowledge-base/add", element: <KnowledgeBaseAddWizard /> },
-              { path: "knowledge-base/detail", element: <KnowledgeBaseDetail /> },
+              {
+                path: "knowledge-base/add",
+                element: <KnowledgeBaseAddWizard />,
+              },
+              {
+                path: "knowledge-base/detail",
+                element: <KnowledgeBaseDetail />,
+              },
               { path: "model-setting", element: <ModelSettings /> },
             ],
           },

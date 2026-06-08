@@ -19,7 +19,7 @@ const statusConfig = {
   unknown: {
     color: "bg-warning",
     ring: "ring-warning/20",
-    label: "检测中",
+    label: "处理中",
   },
 };
 
@@ -32,9 +32,8 @@ export function StatusIndicator({ status, size = "md" }: StatusIndicatorProps) {
       <span
         className={`${sizeClass} rounded-full ${config.color} ring-4 ${config.ring}`}
       />
-      {/* <span className="text-xs font-medium text-text-secondary">
-        {config.label}
-      </span> */}
     </span>
   );
 }
+
+export default StatusIndicator;

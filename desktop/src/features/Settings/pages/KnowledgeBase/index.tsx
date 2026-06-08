@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowDownUp,
@@ -7,33 +7,79 @@ import {
   Ellipsis,
   ExternalLink,
   FilePlus2,
-  FileSpreadsheet,
   Filter,
   Search,
   Settings2,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/shared/ui/Button";
 import Card from "@/shared/ui/Card";
+import { FileIcon } from "@/shared/ui/FileIcon";
+import { FullPageStatus } from "@/shared/ui/FullPageStatus";
+import IconButton from "@/shared/ui/IconButton";
 import { message } from "@/shared/ui/Message";
 import { Modal } from "@/shared/ui/Modal";
 import { StatusIndicator } from "@/shared/ui/StatusIndicator";
+import Switch from "@/shared/ui/Switch";
 import Tooltip from "@/shared/ui/Tooltip";
 import {
-  type FilterKey,
+  deleteKnowledgeBaseDocument,
+  getKnowledgeBase,
+  listKnowledgeBaseDocuments,
+  updateKnowledgeBaseDocument,
   type KnowledgeBaseDocument,
-  type SegmentMode,
+  type KnowledgeBaseSummary,
+} from "@/shared/api/knowledgeBase";
+import {
+  DEFAULT_SEGMENT_MODE,
+  type FilterKey,
   type SortKey,
   filterOptions,
   formatCompactNumber,
   getTypeBadge,
-  mockDocuments,
   sortOptions,
 } from "./mockData";
 
 const inputClassName =
-  "h-10 w-full rounded-xl border border-border bg-surface-primary pl-10 pr-3 text-sm text-text-primary shadow-shadow-sm transition-[background-color,border-color,box-shadow] duration-150 placeholder:text-text-tertiary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
+  "h-9 w-full rounded-xl border border-border bg-surface-primary pl-9 pr-3 text-sm text-text-primary shadow-shadow-sm transition-[background-color,border-color,box-shadow] duration-150 placeholder:text-text-tertiary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
 
-function SegmentBadge({ mode }: { mode: SegmentMode }) {
+type DocumentRow = {
+  id: string;
+  name: string;
+  type: string;
+  segmentMode: typeof DEFAULT_SEGMENT_MODE;
+  charCount: number;
+  hits: number;
+  uploadedAt: string;
+  availability: "enabled" | "disabled";
+  syncState: "ready" | "indexing";
+  chunkCount: number;
+  source: string;
+  updatedAt: string;
+  indexStatus: KnowledgeBaseDocument["indexStatus"];
+  raw: KnowledgeBaseDocument;
+};
+
+function toDocumentRow(document: KnowledgeBaseDocument): DocumentRow {
+  return {
+    id: document.id,
+    name: document.name,
+    type: document.fileExt,
+    segmentMode: DEFAULT_SEGMENT_MODE,
+    charCount: document.charCount,
+    hits: 0,
+    uploadedAt: document.createdAt.replace("T", " ").slice(0, 16),
+    availability: document.enabled ? "enabled" : "disabled",
+    syncState: document.indexStatus === "processing" ? "indexing" : "ready",
+    chunkCount: document.chunkCount,
+    source: document.sourceLabel || document.sourceType,
+    updatedAt: document.updatedAt.replace("T", " ").slice(0, 16),
+    indexStatus: document.indexStatus,
+    raw: document,
+  };
+}
+
+function SegmentBadge({ mode }: { mode: typeof DEFAULT_SEGMENT_MODE }) {
   return (
     <span className="inline-flex items-center rounded-full border border-border bg-surface-secondary px-2.5 py-1 text-xs font-medium text-text-secondary">
       {mode}
@@ -41,94 +87,79 @@ function SegmentBadge({ mode }: { mode: SegmentMode }) {
   );
 }
 
-function Toggle({
-  checked,
-  onChange,
-  disabled,
-}: {
-  checked: boolean;
-  onChange: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={onChange}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary disabled:cursor-not-allowed disabled:opacity-50 ${
-        checked ? "bg-primary" : "bg-surface-tertiary"
-      }`}
-    >
-      <span
-        className={`inline-block h-5 w-5 rounded-full bg-white shadow-shadow-sm transition-transform duration-150 ${
-          checked ? "translate-x-5" : "translate-x-0.5"
-        }`}
-      />
-    </button>
-  );
-}
-
 export default function KnowledgeBaseSettings() {
   const navigate = useNavigate();
-  const [documents, setDocuments] = useState(mockDocuments);
+  const [knowledgeBase, setKnowledgeBase] = useState<KnowledgeBaseSummary | null>(null);
+  const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [sortKey, setSortKey] = useState<SortKey>("uploadedAt");
   const [sortDescending, setSortDescending] = useState(true);
   const [searchText, setSearchText] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadKnowledgeBase = useCallback(async () => {
+    const data = await getKnowledgeBase();
+    setKnowledgeBase(data);
+  }, []);
+
+  const loadDocuments = useCallback(async () => {
+    setLoading(true);
+    try {
+      const sortBy =
+        sortKey === "uploadedAt"
+          ? "createdAt"
+          : sortKey === "charCount"
+            ? "charCount"
+            : undefined;
+      const data = await listKnowledgeBaseDocuments({
+        search: searchText.trim() || undefined,
+        enabled:
+          filter === "enabled" ? true : filter === "disabled" ? false : undefined,
+        sortBy,
+        sortOrder: sortDescending ? "desc" : "asc",
+      });
+      setDocuments(data.map(toDocumentRow));
+    } finally {
+      setLoading(false);
+    }
+  }, [filter, searchText, sortDescending, sortKey]);
+
+  useEffect(() => {
+    void loadKnowledgeBase();
+  }, [loadKnowledgeBase]);
+
+  useEffect(() => {
+    void loadDocuments();
+  }, [loadDocuments]);
 
   const filteredDocuments = useMemo(() => {
-    const normalizedSearch = searchText.trim().toLowerCase();
+    if (sortKey !== "hits") {
+      return documents;
+    }
 
-    return documents
-      .filter((document) => {
-        if (filter === "enabled") {
-          return document.availability === "enabled";
-        }
-
-        if (filter === "disabled") {
-          return document.availability === "disabled";
-        }
-
-        return true;
-      })
-      .filter((document) => {
-        if (!normalizedSearch) {
-          return true;
-        }
-
-        return (
-          document.name.toLowerCase().includes(normalizedSearch) ||
-          document.source.toLowerCase().includes(normalizedSearch) ||
-          document.owner.toLowerCase().includes(normalizedSearch)
-        );
-      })
-      .sort((left, right) => {
-        const direction = sortDescending ? -1 : 1;
-
-        if (sortKey === "uploadedAt") {
-          return (
-            (new Date(left.uploadedAt).getTime() - new Date(right.uploadedAt).getTime()) *
-            direction
-          );
-        }
-
-        return (left[sortKey] - right[sortKey]) * direction;
-      });
-  }, [documents, filter, searchText, sortDescending, sortKey]);
+    return [...documents].sort((left, right) =>
+      (left.hits - right.hits) * (sortDescending ? -1 : 1),
+    );
+  }, [documents, sortDescending, sortKey]);
 
   const visibleIds = filteredDocuments.map((document) => document.id);
   const allVisibleSelected =
     visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
-  const selectedDocuments = documents.filter((document) =>
+  const selectedDocuments = filteredDocuments.filter((document) =>
     selectedIds.includes(document.id),
   );
-  const enabledCount = documents.filter(
+  const enabledCount = filteredDocuments.filter(
     (document) => document.availability === "enabled",
   ).length;
-  const totalHits = documents.reduce((sum, document) => sum + document.hits, 0);
+  const totalChunks = filteredDocuments.reduce(
+    (sum, document) => sum + document.chunkCount,
+    0,
+  );
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([loadKnowledgeBase(), loadDocuments()]);
+  }, [loadDocuments, loadKnowledgeBase]);
 
   const toggleSelection = (id: string) => {
     setSelectedIds((current) =>
@@ -144,16 +175,7 @@ export default function KnowledgeBaseSettings() {
     );
   };
 
-  const updateDocument = (
-    id: string,
-    updater: (document: KnowledgeBaseDocument) => KnowledgeBaseDocument,
-  ) => {
-    setDocuments((current) =>
-      current.map((document) => (document.id === id ? updater(document) : document)),
-    );
-  };
-
-  const goToDetail = (document: KnowledgeBaseDocument) => {
+  const goToDetail = (document: DocumentRow) => {
     navigate(`/settings/knowledge-base/detail?id=${encodeURIComponent(document.id)}`);
   };
 
@@ -164,12 +186,24 @@ export default function KnowledgeBaseSettings() {
       content: (
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-3">
-            <Card label="文档总数" value={`${documents.length}`} description="当前假数据集" />
-            <Card label="可用文档" value={`${enabledCount}`} description="正在参与召回" />
-            <Card label="总召回次数" value={`${totalHits}`} description="用于展示交互效果" />
+            <Card
+              label="文档总数"
+              value={`${knowledgeBase?.documentCount ?? documents.length}`}
+              description="当前知识库中的文档数"
+            />
+            <Card
+              label="可用文档"
+              value={`${knowledgeBase?.enabledDocumentCount ?? enabledCount}`}
+              description="正在参与检索"
+            />
+            <Card
+              label="总文本分块"
+              value={`${totalChunks}`}
+              description="基于当前文档切分结果"
+            />
           </div>
           <div className="rounded-xl border border-border bg-surface-secondary p-4 text-sm leading-6 text-text-secondary">
-            这里先用假数据演示知识库元数据、分段信息和同步来源。后续接真实接口时，可以把统计、标签、同步状态和检索质量指标接进来。
+            当前已经接入真实知识库接口。后续可以继续补充向量索引状态、检索质量指标和引用统计。
           </div>
         </div>
       ),
@@ -180,7 +214,7 @@ export default function KnowledgeBaseSettings() {
     navigate("/settings/knowledge-base/add?step=1");
   };
 
-  const openDocumentSettings = (document: KnowledgeBaseDocument) => {
+  const openDocumentSettings = (document: DocumentRow) => {
     const modalKey = Modal.show({
       title: `文档设置 · ${document.name}`,
       width: 680,
@@ -188,12 +222,12 @@ export default function KnowledgeBaseSettings() {
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <Card label="分段模式" value={document.segmentMode} description={`${document.chunkCount} 个分段`} />
-            <Card label="同步来源" value={document.source} description={`维护人：${document.owner}`} />
-            <Card label="字符数" value={formatCompactNumber(document.charCount)} description="当前展示值为假数据" />
-            <Card label="召回次数" value={`${document.hits}`} description="可用于后续质量评估" />
+            <Card label="同步来源" value={document.source} description={`状态：${document.indexStatus}`} />
+            <Card label="字符数" value={formatCompactNumber(document.charCount)} description="当前已入库字符数" />
+            <Card label="文件类型" value={document.type.toUpperCase()} description={`创建于 ${document.uploadedAt}`} />
           </div>
           <div className="rounded-xl border border-border bg-surface-secondary p-4 text-sm leading-6 text-text-secondary">
-            这里可以继续扩展分段策略、重建索引、召回阈值、标签管理等配置。当前先保留交互壳子，方便你后续接真实接口。
+            当前 MVP 已支持文档启停、重命名和删除。更细的分段策略与索引配置后续可以继续接入。
           </div>
         </div>
       ),
@@ -203,9 +237,18 @@ export default function KnowledgeBaseSettings() {
             关闭
           </Button>
           <Button
-            onClick={() => {
-              Modal.close(modalKey);
-              message.success(`已保存 ${document.name} 的模拟配置`);
+            onClick={async () => {
+              try {
+                await updateKnowledgeBaseDocument(document.id, {
+                  name: document.name,
+                });
+                Modal.close(modalKey);
+                message.success(`已保存 ${document.name} 的配置`);
+              } catch (error) {
+                message.error(
+                  error instanceof Error ? error.message : "保存文档配置失败",
+                );
+              }
             }}
           >
             保存设置
@@ -215,7 +258,7 @@ export default function KnowledgeBaseSettings() {
     });
   };
 
-  const openMoreActions = (document: KnowledgeBaseDocument) => {
+  const openMoreActions = (document: DocumentRow) => {
     const modalKey = Modal.show({
       title: `更多操作 · ${document.name}`,
       width: 560,
@@ -225,17 +268,13 @@ export default function KnowledgeBaseSettings() {
             type="button"
             className="flex w-full items-center justify-between rounded-xl border border-border bg-surface-primary px-4 py-3 text-left transition-all duration-150 hover:bg-surface-secondary"
             onClick={() => {
-              updateDocument(document.id, (current) => ({
-                ...current,
-                syncState: "indexing",
-              }));
               Modal.close(modalKey);
-              message.info(`已开始重建 ${document.name} 的模拟索引`);
+              message.info(`重建索引接口将在下一步接入，当前文档为 ${document.name}`);
             }}
           >
             <div>
               <div className="text-sm font-medium text-text-primary">重建索引</div>
-              <div className="text-sm text-text-secondary">用于演示知识库重新分段与入库</div>
+              <div className="text-sm text-text-secondary">后续用于重新分段与重新向量化</div>
             </div>
             <ArrowDownUp className="h-4 w-4 text-icon-secondary" />
           </button>
@@ -243,16 +282,47 @@ export default function KnowledgeBaseSettings() {
           <button
             type="button"
             className="flex w-full items-center justify-between rounded-xl border border-border bg-surface-primary px-4 py-3 text-left transition-all duration-150 hover:bg-surface-secondary"
-            onClick={() => {
-              Modal.close(modalKey);
-              message.success(`已复制 ${document.name} 的模拟链接`);
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(
+                  `${window.location.origin}${window.location.pathname}#/settings/knowledge-base/detail?id=${document.id}`,
+                );
+                Modal.close(modalKey);
+                message.success(`已复制 ${document.name} 的详情链接`);
+              } catch {
+                message.error("复制链接失败");
+              }
             }}
           >
             <div>
               <div className="text-sm font-medium text-text-primary">复制外链</div>
-              <div className="text-sm text-text-secondary">模拟复制共享地址</div>
+              <div className="text-sm text-text-secondary">复制当前文档的详情页地址</div>
             </div>
             <ExternalLink className="h-4 w-4 text-icon-secondary" />
+          </button>
+
+          <button
+            type="button"
+            className="flex w-full items-center justify-between rounded-xl border border-danger/20 bg-danger/5 px-4 py-3 text-left transition-all duration-150 hover:bg-danger/10"
+            onClick={async () => {
+              try {
+                await deleteKnowledgeBaseDocument(document.id);
+                Modal.close(modalKey);
+                message.success(`已删除 ${document.name}`);
+                setSelectedIds((current) => current.filter((item) => item !== document.id));
+                await refreshAll();
+              } catch (error) {
+                message.error(
+                  error instanceof Error ? error.message : "删除文档失败",
+                );
+              }
+            }}
+          >
+            <div>
+              <div className="text-sm font-medium text-danger">删除文档</div>
+              <div className="text-sm text-text-secondary">会同时删除该文档的分块数据</div>
+            </div>
+            <Trash2 className="h-4 w-4 text-danger" />
           </button>
         </div>
       ),
@@ -260,21 +330,28 @@ export default function KnowledgeBaseSettings() {
     });
   };
 
+  if (loading && documents.length === 0) {
+    return <FullPageStatus message="正在加载知识库文档..." />;
+  }
+
   return (
-    <div className="flex w-full flex-col gap-5 px-5 py-6">
-      <section className="space-y-2">
+    <div className="flex w-full flex-col gap-4 px-4 py-5">
+      <section className="space-y-1.5">
         <div className="text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
           Knowledge Base
         </div>
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-          <div className="space-y-2">
-            <h1 className="text-2xl font-semibold text-text-primary">知识库</h1>
+        <div className="flex flex-col gap-2.5 xl:flex-row xl:items-end xl:justify-between">
+          <div className="space-y-1.5">
+            <h1 className="text-xl font-semibold text-text-primary">
+              {knowledgeBase?.name ?? "知识库"}
+            </h1>
             <p className="max-w-3xl text-sm leading-6 text-text-secondary">
-              知识库中的所有文件会展示在这里。双击任意数据行可进入详情页，点击添加文件会进入分步上传表单。
+              {knowledgeBase?.description ||
+                "知识库中的所有文件会展示在这里。双击任意数据行可进入详情页，点击添加文件会进入分步上传表单。"}
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             <Button variant="secondary" onClick={openMetadataModal}>
               <DatabaseZap className="h-4 w-4" />
               元数据
@@ -287,16 +364,16 @@ export default function KnowledgeBaseSettings() {
         </div>
       </section>
 
-      <Card className="space-y-4 p-4">
+      <Card className="space-y-3 p-3.5 md:p-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex flex-1 flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="flex flex-1 flex-col gap-2.5 lg:flex-row lg:items-center">
             <div className="inline-flex rounded-xl border border-border bg-surface-secondary p-1">
               {filterOptions.map((option) => (
                 <button
                   key={option.key}
                   type="button"
                   onClick={() => setFilter(option.key)}
-                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 ${
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150 ${
                     filter === option.key
                       ? "bg-surface-primary text-text-primary shadow-shadow-sm"
                       : "text-text-secondary hover:text-text-primary"
@@ -307,8 +384,8 @@ export default function KnowledgeBaseSettings() {
               ))}
             </div>
 
-            <div className="relative min-w-[280px] flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-icon-secondary" />
+            <div className="relative min-w-[260px] flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-icon-secondary" />
               <input
                 value={searchText}
                 onChange={(event) => setSearchText(event.target.value)}
@@ -318,11 +395,11 @@ export default function KnowledgeBaseSettings() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
               onClick={() => setSortDescending((current) => !current)}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-surface-primary px-3 text-sm text-text-secondary shadow-shadow-sm transition-all duration-150 hover:bg-surface-secondary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary"
+              className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-surface-primary px-3 text-sm text-text-secondary shadow-shadow-sm transition-all duration-150 hover:bg-surface-secondary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary"
             >
               <Filter className="h-4 w-4" />
               排序：
@@ -336,7 +413,7 @@ export default function KnowledgeBaseSettings() {
               <select
                 value={sortKey}
                 onChange={(event) => setSortKey(event.target.value as SortKey)}
-                className="h-10 min-w-[124px] appearance-none rounded-xl border border-border bg-surface-primary pl-3 pr-9 text-sm text-text-primary shadow-shadow-sm transition-all duration-150 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="h-9 min-w-[124px] appearance-none rounded-xl border border-border bg-surface-primary pl-3 pr-9 text-sm text-text-primary shadow-shadow-sm transition-all duration-150 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
               >
                 {sortOptions.map((option) => (
                   <option key={option.key} value={option.key}>
@@ -350,7 +427,7 @@ export default function KnowledgeBaseSettings() {
         </div>
 
         {selectedIds.length > 0 ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface-secondary px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-xl border border-border bg-surface-secondary px-4 py-2.5">
             <div className="text-sm text-text-secondary">
               已选择
               <span className="mx-1 font-semibold text-text-primary">{selectedIds.length}</span>
@@ -373,7 +450,7 @@ export default function KnowledgeBaseSettings() {
                     title: "批量操作",
                     content: (
                       <div className="space-y-3 text-sm text-text-secondary">
-                        <p>当前为假数据交互页，已选文档如下：</p>
+                        <p>当前已接入真实列表接口，已选文档如下：</p>
                         <div className="rounded-xl border border-border bg-surface-secondary p-3 text-text-primary">
                           {selectedDocuments.map((document) => document.name).join("、")}
                         </div>
@@ -392,7 +469,7 @@ export default function KnowledgeBaseSettings() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border bg-surface-secondary">
-                <th className="w-12 px-4 py-3 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                <th className="w-12 px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
                   <input
                     type="checkbox"
                     aria-label="全选当前列表"
@@ -401,28 +478,28 @@ export default function KnowledgeBaseSettings() {
                     className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
                   />
                 </th>
-                <th className="w-12 px-4 py-3 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                <th className="w-12 px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
                   #
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
                   名称
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
                   分段模式
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
                   字符数
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
                   召回次数
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
                   上传时间
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
                   状态
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                <th className="px-4 py-2.5 text-right text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
                   操作
                 </th>
               </tr>
@@ -430,6 +507,12 @@ export default function KnowledgeBaseSettings() {
             <tbody>
               {filteredDocuments.map((document, index) => {
                 const badge = getTypeBadge(document.type);
+                const status =
+                  document.syncState === "indexing"
+                    ? { indicator: "unknown" as const, label: "同步中" }
+                    : document.availability === "enabled"
+                      ? { indicator: "running" as const, label: "可用" }
+                      : { indicator: "stopped" as const, label: "停用" };
 
                 return (
                   <tr
@@ -439,7 +522,7 @@ export default function KnowledgeBaseSettings() {
                       index > 0 ? "border-t border-border" : ""
                     }`}
                   >
-                    <td className="px-4 py-3 text-sm text-text-primary">
+                    <td className="px-4 py-2.5 text-sm text-text-primary">
                       <input
                         type="checkbox"
                         aria-label={`选择 ${document.name}`}
@@ -449,18 +532,22 @@ export default function KnowledgeBaseSettings() {
                         className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
                       />
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-text-secondary">
+                    <td className="whitespace-nowrap px-4 py-2.5 text-sm text-text-secondary">
                       {index + 1}
                     </td>
-                    <td className="px-4 py-3 text-sm text-text-primary">
-                      <div className="flex min-w-[280px] items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-surface-secondary">
-                          <FileSpreadsheet className="h-4 w-4 text-icon-primary" />
+                    <td className="px-4 py-2.5 text-sm text-text-primary">
+                      <div className="flex min-w-[260px] items-center gap-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-secondary">
+                          <FileIcon extension={document.type} className="h-4 w-4" />
                         </div>
                         <div className="min-w-0 space-y-1">
-                          <div className="truncate font-medium text-text-primary">{document.name}</div>
+                          <div className="truncate font-medium text-text-primary">
+                            {document.name}
+                          </div>
                           <div className="flex items-center gap-2">
-                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.className}`}>
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.className}`}
+                            >
                               {badge.label}
                             </span>
                             <span className="text-xs text-text-tertiary">{document.source}</span>
@@ -468,40 +555,35 @@ export default function KnowledgeBaseSettings() {
                         </div>
                       </div>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-text-primary">
+                    <td className="whitespace-nowrap px-4 py-2.5 text-sm text-text-primary">
                       <SegmentBadge mode={document.segmentMode} />
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-text-primary">
+                    <td className="whitespace-nowrap px-4 py-2.5 text-sm text-text-primary">
                       {formatCompactNumber(document.charCount)}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-text-primary">
+                    <td className="whitespace-nowrap px-4 py-2.5 text-sm text-text-primary">
                       {document.hits}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-text-primary">
+                    <td className="whitespace-nowrap px-4 py-2.5 text-sm text-text-primary">
                       {document.uploadedAt}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-text-primary">
+                    <td className="whitespace-nowrap px-4 py-2.5 text-sm text-text-primary">
                       <div className="inline-flex items-center gap-2">
-                        <StatusIndicator
-                          status={document.availability === "enabled" ? "running" : "stopped"}
-                          size="sm"
-                        />
+                        <StatusIndicator status={status.indicator} size="sm" />
                         <span
                           className={`text-sm font-medium ${
-                            document.availability === "enabled"
+                            status.indicator === "running"
                               ? "text-success"
-                              : "text-text-secondary"
+                              : status.indicator === "unknown"
+                                ? "text-warning"
+                                : "text-text-secondary"
                           }`}
                         >
-                          {document.syncState === "indexing"
-                            ? "同步中"
-                            : document.availability === "enabled"
-                              ? "可用"
-                              : "停用"}
+                          {status.label}
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-text-primary">
+                    <td className="px-4 py-2.5 text-sm text-text-primary">
                       <div
                         className="flex items-center justify-end gap-2"
                         onClick={(event) => event.stopPropagation()}
@@ -512,43 +594,47 @@ export default function KnowledgeBaseSettings() {
                           placement="top"
                         >
                           <div>
-                            <Toggle
+                            <Switch
                               checked={document.availability === "enabled"}
                               disabled={document.syncState === "indexing"}
-                              onChange={() => {
-                                updateDocument(document.id, (current) => ({
-                                  ...current,
-                                  availability:
-                                    current.availability === "enabled" ? "disabled" : "enabled",
-                                }));
-                                message.success(
-                                  document.availability === "enabled"
-                                    ? `已停用 ${document.name}`
-                                    : `已启用 ${document.name}`,
-                                );
+                              ariaLabel={document.availability === "enabled" ? "停用文档" : "启用文档"}
+                              onChange={async () => {
+                                try {
+                                  await updateKnowledgeBaseDocument(document.id, {
+                                    enabled: document.availability !== "enabled",
+                                  });
+                                  message.success(
+                                    document.availability === "enabled"
+                                      ? `已停用 ${document.name}`
+                                      : `已启用 ${document.name}`,
+                                  );
+                                  await refreshAll();
+                                } catch (error) {
+                                  message.error(
+                                    error instanceof Error ? error.message : "更新文档状态失败",
+                                  );
+                                }
                               }}
                             />
                           </div>
                         </Tooltip>
 
                         <Tooltip text="文档设置" placement="top">
-                          <button
-                            type="button"
+                          <IconButton
                             onClick={() => openDocumentSettings(document)}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-transparent text-text-secondary transition-all duration-150 hover:bg-surface-secondary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary"
+                            ariaLabel={`打开 ${document.name} 的文档设置`}
                           >
                             <Settings2 className="h-4 w-4" />
-                          </button>
+                          </IconButton>
                         </Tooltip>
 
                         <Tooltip text="更多操作" placement="top">
-                          <button
-                            type="button"
+                          <IconButton
                             onClick={() => openMoreActions(document)}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-transparent text-text-secondary transition-all duration-150 hover:bg-surface-secondary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary"
+                            ariaLabel={`打开 ${document.name} 的更多操作`}
                           >
                             <Ellipsis className="h-4 w-4" />
-                          </button>
+                          </IconButton>
                         </Tooltip>
                       </div>
                     </td>
@@ -559,18 +645,22 @@ export default function KnowledgeBaseSettings() {
           </table>
         </div>
 
-        <div className="rounded-xl border border-dashed border-border bg-surface-secondary/60 px-4 py-3 text-sm text-text-secondary">
+        <div className="rounded-xl border border-dashed border-border bg-surface-secondary/60 px-4 py-2.5 text-sm text-text-secondary">
           提示：双击任意数据行可进入文档详情页，点击“添加文件”会进入分步上传表单。
         </div>
 
-        <div className="flex flex-col gap-2 text-sm text-text-secondary sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-1.5 text-sm text-text-secondary sm:flex-row sm:items-center sm:justify-between">
           <div>
-            共 <span className="font-medium text-text-primary">{documents.length}</span> 个文档，
-            当前显示 <span className="font-medium text-text-primary">{filteredDocuments.length}</span> 个
+            共{" "}
+            <span className="font-medium text-text-primary">
+              {knowledgeBase?.documentCount ?? documents.length}
+            </span>{" "}
+            个文档，当前显示{" "}
+            <span className="font-medium text-text-primary">{filteredDocuments.length}</span> 个
           </div>
           <div>
             可用文档 <span className="font-medium text-text-primary">{enabledCount}</span> 个 ·
-            总召回 <span className="font-medium text-text-primary">{totalHits}</span> 次
+            总分块 <span className="font-medium text-text-primary">{totalChunks}</span> 个
           </div>
         </div>
       </Card>

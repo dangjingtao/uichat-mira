@@ -8,10 +8,14 @@ import healthRoute from "@/routes/health";
 import dbHealthRoute from "@/routes/dbHealth";
 import loginRoute from "@/routes/login";
 import meRoute from "@/routes/me";
+// Proxy Ollama chat endpoint
+import proxyOllamaRoute from "@/routes/proxy-ollama";
 import accountRoute from "@/routes/account";
+import knowledgeBaseRoute from "@/routes/knowledge-base";
 import modelConfigRoute from "@/routes/model-config";
 import providerSettingsRoute from "@/routes/provider-settings";
 import { initializeAuthDatabase } from "@/db/auth.db";
+import { initializeKnowledgeBaseDatabase } from "@/db/knowledge-base.db";
 import { initializeModelConfigDatabase } from "@/db/model-config.db";
 import { initializeVectorStore } from "@/db";
 import CONFIG from "@/config";
@@ -40,12 +44,17 @@ const setupPlugins = async () => {
       },
       servers: [{ url: `http://127.0.0.1:${CONFIG.PORT}` }],
       tags: [
-        { name: "System", description: "ÏµÍ³Óë½¡¿µ¼ì²é½Ó¿Ú" },
-        { name: "Auth", description: "ÈÏÖ¤Óëµ±Ç°ÓÃ»§½Ó¿Ú" },
-        { name: "Model Settings", description: "µ±Ç°ÉúÐ§Ä£ÐÍÅäÖÃÓë²ÎÊý½Ó¿Ú" },
+        { name: "System", description: "ç³»ç»Ÿå¥åº·æ£€æŸ¥ä¸ŽçŠ¶æ€" },
+        { name: "Auth", description: "ç”¨æˆ·é‰´æƒä¸Žè´¦æˆ·ç®¡ç†" },
+        { name: "Knowledge Base", description: "çŸ¥è¯†åº“ä¸Žæ–‡æ¡£ç®¡ç†" },
+        { name: "Model Settings", description: "æ¨¡åž‹é…ç½®ä¸Žå‚æ•°æ¨¡æ¿" },
         {
           name: "Provider Settings",
-          description: "·þÎñÉÌÆ½Ì¨Á¬½Ó¡¢Ä£ÐÍÍ¬²½ÓëÄ¬ÈÏÄ£ÐÍÑ¡Ôñ½Ó¿Ú",
+          description: "æœåŠ¡å•†è¿žæŽ¥ä¸Žæ¨¡åž‹åŒæ­¥",
+        },
+        {
+          name: "Proxy Ollama",
+          description: "ä»£ç†èŠå¤©æŽ¥å£ï¼ˆOllama / OpenAI å…¼å®¹ï¼‰",
         },
       ],
       components: {
@@ -70,11 +79,13 @@ const setupPlugins = async () => {
 };
 
 const setupRoutes = async () => {
+  await app.register(proxyOllamaRoute);
   await app.register(healthRoute);
   await app.register(dbHealthRoute);
   await app.register(loginRoute);
   await app.register(meRoute);
   await app.register(accountRoute);
+  await app.register(knowledgeBaseRoute);
   await app.register(modelConfigRoute);
   await app.register(providerSettingsRoute);
 };
@@ -94,6 +105,7 @@ const setupDatabase = async () => {
 
   initializeAuthDatabase();
   initializeModelConfigDatabase();
+  initializeKnowledgeBaseDatabase();
 
   const vectorStoreHealth = initializeVectorStore();
   if (vectorStoreHealth.ok) {

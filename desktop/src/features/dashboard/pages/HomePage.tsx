@@ -51,9 +51,6 @@ function HomePage() {
                   <h1 className="text-[28px] font-semibold leading-tight text-text-primary">
                     欢迎回来，{session.user.username}
                   </h1>
-                  <p className="max-w-xl text-sm leading-6 text-text-secondary">
-                    这里保留当前应用最核心的启动信息：运行环境、后端状态、数据库状态，以及进入聊天测试的主入口。
-                  </p>
                 </div>
               </div>
 
@@ -75,7 +72,7 @@ function HomePage() {
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button onClick={toChat} className="gap-2">
                 <MessageSquare className="h-4 w-4" />
-                进入聊天
+                开始测试
                 <ArrowRight className="h-4 w-4" />
               </Button>
               <Button
@@ -150,23 +147,6 @@ function HomePage() {
               </div>
             </div>
           </Card>
-        </section>
-
-        <section className="rounded-xl border border-border bg-surface-primary px-6 py-5 shadow-shadow-sm">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1">
-              <h2 className="text-base font-semibold text-text-primary">
-                下一步
-              </h2>
-              <p className="text-sm leading-6 text-text-secondary">
-                如果后端和数据库状态正常，就可以直接进入聊天页测试模型、知识库与对话链路。
-              </p>
-            </div>
-            <Button onClick={toChat} className="gap-2 self-start sm:self-auto">
-              <MessageSquare className="h-4 w-4" />
-              开始测试
-            </Button>
-          </div>
         </section>
       </main>
     </div>

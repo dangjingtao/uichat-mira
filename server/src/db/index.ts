@@ -46,6 +46,8 @@ export const getSqlite = (): Database.Database => {
       readonly: false,
       fileMustExist: false,
     });
+    sqlite.pragma("foreign_keys = ON");
+    sqlite.pragma("journal_mode = WAL");
   }
   return sqlite;
 };
