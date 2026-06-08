@@ -83,3 +83,17 @@ release/.../win-unpacked/resources/
 3. Production uses direct backend origin from preload instead of Vite proxy.
 4. The backend is run with the bundled Node runtime to avoid Electron/Node native module ABI mismatch.
 5. Port values should not be repeated in code; update `runtime.config.cjs` instead.
+
+## Model Settings Contract
+
+- The backend persists provider connection settings for `ollama`, `lmstudio`, and `openai`.
+- Provider model discovery is always server-side. The renderer never calls provider APIs directly.
+- The main settings page reads active role configs from `GET /models`.
+- Saving role parameters uses `PUT /models/:type/config`.
+- Provider modal workflows use:
+  - `GET /providers`
+  - `GET /providers/:providerCode`
+  - `PUT /providers/:providerCode`
+  - `POST /providers/:providerCode/sync-models`
+  - `PUT /providers/:providerCode/select-model/:role`
+- Selecting a new default model for a role replaces the previous role config and resets that role's params to backend defaults.

@@ -48,6 +48,11 @@ contextBridge.exposeInMainWorld("desktopApi", {
           configured: false,
           mode: "unknown",
           detail: payload.message,
+          vectorStore: {
+            ok: false,
+            provider: "sqlite-vec",
+            detail: payload.message,
+          },
         };
       }
       return { success: true, ...payload.data };
@@ -58,6 +63,11 @@ contextBridge.exposeInMainWorld("desktopApi", {
         configured: false,
         mode: "unknown",
         detail: err.message,
+        vectorStore: {
+          ok: false,
+          provider: "sqlite-vec",
+          detail: err.message,
+        },
       };
     }
   },

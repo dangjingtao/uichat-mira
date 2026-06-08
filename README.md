@@ -1,4 +1,4 @@
-﻿# UI Chat RAG Tester
+# UI Chat RAG Tester
 
 Electron + React + Fastify desktop app for local RAG testing and model configuration.
 
@@ -76,6 +76,12 @@ The packaged app includes:
 - `resources/server`: Fastify backend bundle, database seed/data, and native Node dependencies.
 - `resources/node-runtime/node.exe`: Node runtime used to start the backend.
 - `resources/runtime.config.cjs`: runtime backend host/port configuration.
+
+Vector extension packaging:
+
+- The backend loads `sqlite-vec` on startup.
+- Windows packaging includes both `sqlite-vec` and `sqlite-vec-windows-x64` under `resources/server/node_modules`.
+- `Settings -> General` and `/db/health` expose the current `sqlite-vec` load status.
 
 ## Health Checks
 

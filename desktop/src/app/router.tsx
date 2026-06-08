@@ -10,6 +10,8 @@ import About from "@/features/Settings/pages/About/index";
 import GeneralSettings from "@/features/Settings/pages/General/index";
 import AccountSettings from "@/features/Settings/pages/Account/index";
 import KnowledgeBaseSettings from "@/features/Settings/pages/KnowledgeBase/index";
+import KnowledgeBaseAddWizard from "@/features/Settings/pages/KnowledgeBase/Add";
+import KnowledgeBaseDetail from "@/features/Settings/pages/KnowledgeBase/Detail";
 import ModelSettings from "@/features/Settings/pages/ModelSetting";
 
 export const router = createHashRouter([
@@ -37,6 +39,8 @@ export const router = createHashRouter([
               { path: "account", element: <AccountSettings /> },
               { path: "about", element: <About /> },
               { path: "knowledge-base", element: <KnowledgeBaseSettings /> },
+              { path: "knowledge-base/add", element: <KnowledgeBaseAddWizard /> },
+              { path: "knowledge-base/detail", element: <KnowledgeBaseDetail /> },
               { path: "model-setting", element: <ModelSettings /> },
             ],
           },

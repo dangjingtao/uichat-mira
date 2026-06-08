@@ -12,8 +12,7 @@ import {
   readSessionFromStorage,
   writeSessionToStorage,
 } from "@/shared/lib/sessionStorage";
-import { SessionState, SessionUser } from "@/shared/types/auth";
-import { get, ApiError } from "@/shared/lib/request";
+import { SessionState } from "@/shared/types/auth";
 import { getCurrentUser } from "@/shared/api/auth";
 
 type AuthContextValue = {
@@ -67,7 +66,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       try {
-        // 使用封装好的 API 调用
         const { user } = await getCurrentUser();
 
         if (mounted) {
@@ -76,7 +74,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             user,
           });
         }
-      } catch (error) {
+      } catch {
         if (mounted) {
           logout("登录状态已过期，请重新登录。");
         }

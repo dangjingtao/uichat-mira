@@ -1,127 +1,174 @@
-// src/components/config/ApiConfigCard.tsx
 import React from "react";
-import { RotateCcw, MoreHorizontal, LinkIcon, Eye } from "lucide-react";
+import { AlertCircle, Loader2, RotateCcw } from "lucide-react";
 import { Button, IconButton } from "@/shared/ui/Button";
-import Tooltip from "@/shared/ui/Tooltip";
+import { SelectInput, TextInput } from "@/shared/ui/Input";
+import type {
+  ProviderDetail,
+  RoleModelType,
+} from "@/shared/api/modelSettings";
 
 interface ApiConfigCardProps {
-  platformName: string;
-  apiKey: string;
-  apiUrl: string;
-  models: Array<{ id: string; name: string; enabled: boolean }>;
+  detail: ProviderDetail | null;
+  selectedModelId: string;
+  loading?: boolean;
+  syncing?: boolean;
+  assigningRole?: RoleModelType | null;
+  syncError?: string | null;
   onApiKeyChange: (value: string) => void;
   onApiUrlChange: (value: string) => void;
-  onSetDefaultLLM: () => void;
-  onSetDefaultEmbedding: () => void;
-  onSetDefaultRerank: () => void;
+  onSelectedModelChange: (value: string) => void;
+  onTestConnection: () => void;
+  onSetDefaultRole: (role: RoleModelType) => void;
 }
 
-/**
- * API 配置卡片
- * 配置平台的 API 密钥、地址和模型选择
- */
+const statusLabelMap = {
+  idle: "待连接",
+  syncing: "同步中",
+  connected: "已连接",
+  error: "异常",
+} as const;
+
 const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
-  platformName,
-  apiKey,
-  apiUrl,
-  models,
+  detail,
+  selectedModelId,
+  loading = false,
+  syncing = false,
+  assigningRole = null,
+  syncError = null,
   onApiKeyChange,
   onApiUrlChange,
-  onSetDefaultLLM,
-  onSetDefaultEmbedding,
-  onSetDefaultRerank,
-}) => (
-  <div className="flex-1">
-    {/* 标题 */}
-    <div className="flex items-center justify-between mb-4">
-      <div className="flex items-center gap-2">
-        <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-          {platformName}
-        </h1>
-        <IconButton>
-          <LinkIcon className="w-4 h-4" />
-        </IconButton>
+  onSelectedModelChange,
+  onTestConnection,
+  onSetDefaultRole,
+}) => {
+  if (!detail) {
+    return (
+      <div className="flex h-full flex-1 items-center justify-center rounded-2xl border border-border bg-surface-primary p-4 text-sm text-text-secondary">
+        请选择左侧平台。
       </div>
-    </div>
+    );
+  }
 
-    {/* API 密钥 */}
-    <div className="mb-3">
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-        API 密钥
-      </label>
-      <div className="relative">
-        <input
-          type="password"
-          value={apiKey}
-          onChange={(e) => onApiKeyChange(e.target.value)}
-          placeholder="API 密钥"
-          className="w-full px-3 py-2 pr-10 bg-white dark:bg-[#242424] border border-gray-300 dark:border-gray-700 rounded-md text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-black/50"
-        />
-        <button className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-          <Eye className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
+  const modelOptions =
+    detail.models.length > 0
+      ? [
+          { value: "", label: "选择模型..." },
+          ...detail.models.map((model) => ({
+            value: model.id,
+            label: model.name,
+          })),
+        ]
+      : [
+          {
+            value: "",
+            label: syncError ? "fetch failed" : "暂无模型，请先同步",
+          },
+        ];
 
-    {/* API 地址和模型选择 */}
-    <div className="mb-3">
-      <div className="flex items-center justify-between mb-1.5">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-          API 地址
-        </label>
-        <div className="flex gap-1">
-          <Tooltip text="测试连接">
-            <IconButton>
-              <RotateCcw className="w-4 h-4" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip text="复制">
-            <IconButton>
-              <MoreHorizontal className="w-4 h-4" />
-            </IconButton>
-          </Tooltip>
-        </div>
-      </div>
-      <div className="flex gap-3">
-        <div className="relative flex-1">
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-            <LinkIcon className="w-4 h-4" />
+  const isBusy = loading || syncing;
+
+  return (
+    <div className="flex h-full flex-1 flex-col rounded-2xl border border-border bg-surface-primary p-3 shadow-shadow-sm">
+      <div className="mb-2.5 flex items-start justify-between gap-2.5">
+        <div className="space-y-0.5">
+          <div className="text-sm font-semibold text-text-primary">
+            {detail.provider.displayName}
           </div>
-          <input
-            type="text"
-            value={apiUrl}
-            onChange={(e) => onApiUrlChange(e.target.value)}
-            placeholder="http://localhost:11434"
-            className="w-full pl-10 pr-3 py-2 bg-white dark:bg-[#242424] border border-gray-300 dark:border-gray-700 rounded-md text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-black/50"
-          />
+          <div className="text-xs leading-4 text-text-secondary">
+            保存连接配置后，通过服务端同步模型列表；同步成功即代表平台链路可用。
+          </div>
         </div>
-        <select className="px-3 py-2 bg-white dark:bg-[#242424] border border-gray-300 dark:border-gray-700 rounded-md text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-black/50 min-w-[140px]">
-          <option>选择模型...</option>
-          {models
-            .filter((m) => m.enabled)
-            .map((model) => (
-              <option key={model.id}>{model.name}</option>
-            ))}
-        </select>
-      </div>
-      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-        预览: http://localhost:11434/api/chat
-      </p>
-    </div>
 
-    {/* 设为默认按钮组 */}
-    <div className="flex gap-2 mt-4">
-      <Button size="small" variant="secondary" onClick={onSetDefaultLLM}>
-        设为默认 LLM
-      </Button>
-      <Button size="small" variant="secondary" onClick={onSetDefaultEmbedding}>
-        设为默认 Embedding
-      </Button>
-      <Button size="small" variant="secondary" onClick={onSetDefaultRerank}>
-        设为默认 ReRank
-      </Button>
+        <div className="inline-flex items-center gap-2 rounded-full bg-surface-secondary px-3 py-1 text-xs text-text-secondary">
+          {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+          {statusLabelMap[detail.provider.status]}
+        </div>
+      </div>
+
+      <div
+        className={`flex min-h-0 flex-1 flex-col space-y-2.5 ${
+          loading ? "pointer-events-none opacity-60" : ""
+        }`}
+      >
+        <TextInput
+          label="API 密钥"
+          type="password"
+          value={detail.provider.apiKey}
+          onChange={onApiKeyChange}
+          placeholder="输入 API 密钥"
+          compact
+        />
+
+        <div className="grid grid-cols-1 gap-1.5">
+          <TextInput
+            label="API 地址"
+            value={detail.provider.baseUrl}
+            onChange={onApiUrlChange}
+            placeholder="输入 API 地址"
+            compact
+          />
+          <p className="text-xs leading-4 text-text-secondary">
+            预览请求地址：{detail.provider.baseUrl}/api/chat
+          </p>
+        </div>
+
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+          <SelectInput
+            label="当前模型"
+            value={selectedModelId}
+            onChange={onSelectedModelChange}
+            options={modelOptions}
+            compact
+            error={syncError ?? undefined}
+          />
+          <div className="flex items-end">
+            <IconButton
+              ariaLabel="保存配置并同步模型"
+              className="h-8 w-8"
+              onClick={onTestConnection}
+              disabled={isBusy}
+            >
+              <RotateCcw className="h-4 w-4" />
+            </IconButton>
+          </div>
+        </div>
+
+        {detail.provider.lastError ? (
+          <div className="flex items-start gap-2 rounded-lg border border-danger/20 bg-danger/5 px-3 py-2 text-xs text-danger">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+            <span>{detail.provider.lastError}</span>
+          </div>
+        ) : null}
+
+        <div className="flex flex-wrap gap-1.5">
+          <Button
+            size="small"
+            variant="secondary"
+            onClick={() => onSetDefaultRole("llm")}
+            disabled={!selectedModelId || assigningRole === "llm"}
+          >
+            {assigningRole === "llm" ? "设置中..." : "设为默认 LLM"}
+          </Button>
+          <Button
+            size="small"
+            variant="secondary"
+            onClick={() => onSetDefaultRole("embedding")}
+            disabled={!selectedModelId || assigningRole === "embedding"}
+          >
+            {assigningRole === "embedding" ? "设置中..." : "设为默认 Embedding"}
+          </Button>
+          <Button
+            size="small"
+            variant="secondary"
+            onClick={() => onSetDefaultRole("rerank")}
+            disabled={!selectedModelId || assigningRole === "rerank"}
+          >
+            {assigningRole === "rerank" ? "设置中..." : "设为默认 ReRank"}
+          </Button>
+        </div>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default ApiConfigCard;

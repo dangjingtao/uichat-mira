@@ -1,23 +1,53 @@
+import React from "react";
+
+interface CardProps {
+  label?: React.ReactNode;
+  value?: React.ReactNode;
+  description?: React.ReactNode;
+  children?: React.ReactNode;
+  interactive?: boolean;
+  className?: string;
+}
+
 function Card({
   label,
   value,
-}: {
-  label: string | React.ReactNode;
-  value: string;
-}) {
+  description,
+  children,
+  interactive = false,
+  className = "",
+}: CardProps) {
   return (
     <div
-      className="
+      className={`
         rounded-xl
-        bg-gray-50 dark:bg-white/5
-        border border-gray-200 dark:border-white/10
-        px-4 py-3
-      "
+        border border-border
+        bg-surface-primary
+        p-4
+        shadow-shadow-sm
+        transition-all
+        duration-150
+        ${interactive ? "hover:-translate-y-0.5 hover:shadow-shadow-md" : ""}
+        ${className}
+      `}
     >
-      <div className="text-sm font-medium text-gray-900 dark:text-white">
-        {label}
-      </div>
-      <div className="text-xs text-gray-500 dark:text-gray-400">{value}</div>
+      {children ? (
+        children
+      ) : (
+        <div className="space-y-1.5">
+          {label ? (
+            <div className="text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+              {label}
+            </div>
+          ) : null}
+          {value ? (
+            <div className="text-base font-semibold text-text-primary">{value}</div>
+          ) : null}
+          {description ? (
+            <div className="text-sm text-text-secondary">{description}</div>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }

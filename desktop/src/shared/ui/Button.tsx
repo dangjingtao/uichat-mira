@@ -1,82 +1,130 @@
-// src/components/ui/Button.tsx
 import React from "react";
 
-type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
-type ButtonSize = "default" | "small";
+type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "danger";
+type ButtonSize = "sm" | "md" | "lg" | "small" | "medium" | "large";
 
-interface ButtonProps {
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children: React.ReactNode;
-  onClick: () => void;
   variant?: ButtonVariant;
   size?: ButtonSize;
   className?: string;
-  disabled?: boolean;
 }
 
-/**
- * 通用按钮组件
- * 支持多种样式变体和尺寸
- */
+const normalizeButtonSize = (size: ButtonSize): "sm" | "md" | "lg" => {
+  if (size === "small") return "sm";
+  if (size === "medium") return "md";
+  if (size === "large") return "lg";
+  return size;
+};
+
 export const Button: React.FC<ButtonProps> = ({
   children,
-  onClick,
   variant = "secondary",
-  size = "default",
+  size = "md",
   className = "",
   disabled = false,
+  type = "button",
+  ...buttonProps
 }) => {
-  const baseClasses =
-    "font-medium rounded-lg transition-colors focus:outline-none";
+  const normalizedSize = normalizeButtonSize(size);
 
   const sizeClasses = {
-    default: "px-4 py-2 text-sm",
-    small: "px-3 py-1.5 text-xs",
+    sm: "h-8 px-3 text-xs",
+    md: "h-10 px-4 text-sm",
+    lg: "h-11 px-5 text-sm",
   };
 
   const variantClasses = {
     primary:
-      "bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200",
+      "border-transparent bg-primary text-white shadow-shadow-sm hover:bg-primary-hover active:scale-[0.99]",
     secondary:
-      "bg-white dark:bg-[#242424] text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800",
-    danger: "bg-red-600 text-white hover:bg-red-700",
+      "border-border bg-surface-primary text-text-primary shadow-shadow-sm hover:bg-surface-secondary active:scale-[0.99]",
+    outline:
+      "border-border bg-transparent text-text-primary hover:bg-surface-secondary active:scale-[0.99]",
     ghost:
-      "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800",
+      "border-transparent bg-transparent text-text-secondary hover:bg-surface-secondary hover:text-text-primary active:scale-[0.99]",
+    danger:
+      "border-transparent bg-danger text-white shadow-shadow-sm hover:bg-danger/90 active:scale-[0.99]",
   };
 
   return (
     <button
-      onClick={onClick}
+      type={type}
       disabled={disabled}
-      className={`${baseClasses} ${sizeClasses[size]} ${variantClasses[variant]} ${className}`}
+      {...buttonProps}
+      className={`
+        inline-flex
+        items-center
+        justify-center
+        gap-2
+        whitespace-nowrap
+        rounded-lg
+        border
+        font-medium
+        transition-all
+        duration-150
+        ease-out
+        focus-visible:outline-none
+        focus-visible:ring-2
+        focus-visible:ring-primary/20
+        focus-visible:ring-offset-2
+        focus-visible:ring-offset-surface-primary
+        disabled:cursor-not-allowed
+        disabled:opacity-50
+        ${sizeClasses[normalizedSize]}
+        ${variantClasses[variant]}
+        ${className}
+      `}
     >
       {children}
     </button>
   );
 };
 
-interface IconButtonProps {
+interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children: React.ReactNode;
-  onClick?: () => void;
   className?: string;
-  disabled?: boolean;
+  ariaLabel?: string;
 }
 
-/**
- * 图标按钮组件
- * 用于操作图标的小按钮，支持禁用状态
- */
 export const IconButton: React.FC<IconButtonProps> = ({
   children,
-  onClick,
   className = "",
   disabled = false,
+  ariaLabel,
+  type = "button",
+  ...buttonProps
 }) => (
   <button
-    onClick={onClick}
+    type={type}
     disabled={disabled}
-    className={`p-1 rounded text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition ${className} ${
-      disabled ? "opacity-50 cursor-not-allowed" : ""
-    }`}
+    aria-label={ariaLabel}
+    {...buttonProps}
+    className={`
+      inline-flex
+      h-9
+      w-9
+      items-center
+      justify-center
+      rounded-lg
+      border
+      border-transparent
+      bg-transparent
+      text-text-secondary
+      transition-all
+      duration-150
+      ease-out
+      hover:bg-surface-secondary
+      hover:text-text-primary
+      focus-visible:outline-none
+      focus-visible:ring-2
+      focus-visible:ring-primary/20
+      focus-visible:ring-offset-2
+      focus-visible:ring-offset-surface-primary
+      disabled:cursor-not-allowed
+      disabled:opacity-50
+      ${className}
+    `}
   >
     {children}
   </button>

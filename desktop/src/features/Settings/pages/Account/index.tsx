@@ -1,160 +1,233 @@
-// src/pages/SettingsAccount.tsx
-import { Camera, LogOut, KeyRound, Bell, Trash2 } from "lucide-react";
-import Divider from "../../components/Divider";
+import { FormEvent, useMemo, useState } from "react";
+import { CheckCircle2, KeyRound, LogOut, ShieldCheck, UserRound } from "lucide-react";
+import { useAuth } from "@/app/providers/AuthProvider";
+import { changePassword } from "@/shared/api";
+import { ApiError } from "@/shared/lib/request";
+import { Button } from "@/shared/ui/Button";
+import Card from "@/shared/ui/Card";
+import { TextInput } from "@/shared/ui/Input";
+
+type PasswordFormState = {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+};
+
+const initialFormState: PasswordFormState = {
+  currentPassword: "",
+  newPassword: "",
+  confirmPassword: "",
+};
 
 export default function SettingsAccount() {
-  return (
-    <div className="mx-auto max-w-2xl px-4 py-6">
-      {/* 单张大卡片 */}
-      <div
-        className="
-          rounded-2xl
-          bg-white dark:bg-[#171717]
-          border border-gray-200 dark:border-white/10
-          overflow-hidden
-        "
-      >
-        {/* ===== 用户信息区域 ===== */}
-        <div className="px-5 pt-5 pb-4">
-          <div className="flex items-start gap-4">
-            {/* 用户信息 */}
-            <div className="flex-1 min-w-0 pt-0.5">
-              <div className="text-base font-medium text-gray-900 dark:text-white truncate">
-                用户名
-              </div>
-              <div className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                user@example.com
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                一个面向企业知识库验证的 Electron
-                桌面应用初始化项目，支持本地和远程模型、向量数据库双模式切换。一个面向企业知识库验证的
-                Electron
-                桌面应用初始化项目，支持本地和远程模型、向量数据库双模式切换。
-                一个面向企业知识库验证的 Electron
-                桌面应用初始化项目，支持本地和远程模型、向量数据库双模式切换。一个面向企业知识库验证的
-                Electron
-                桌面应用初始化项目，支持本地和远程模型、向量数据库双模式切换。
-              </p>
-            </div>
-          </div>
-        </div>
+  const { session, logout } = useAuth();
+  const [form, setForm] = useState<PasswordFormState>(initialFormState);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
-        <Divider />
+  const passwordMismatch = useMemo(() => {
+    if (!form.confirmPassword) {
+      return false;
+    }
 
-        {/* ===== 设置项列表 ===== */}
-        <div className="divide-y divide-gray-100 dark:divide-white/5">
-          {/* 修改密码 */}
-          <SettingItem
-            icon={<KeyRound className="w-4 h-4" />}
-            title="修改密码"
-            description="定期更改密码以保护账号安全"
-            action={<Button variant="secondary">修改</Button>}
-          />
+    return form.newPassword !== form.confirmPassword;
+  }, [form.confirmPassword, form.newPassword]);
 
-          {/* 通知 */}
-          <SettingItem
-            icon={<Bell className="w-4 h-4" />}
-            title="通知"
-            description="管理邮件和系统通知偏好"
-            action={<Toggle checked />}
-          />
+  const canSubmit =
+    form.currentPassword.trim().length > 0 &&
+    form.newPassword.trim().length >= 6 &&
+    form.confirmPassword.trim().length > 0 &&
+    !passwordMismatch &&
+    form.currentPassword !== form.newPassword;
 
-          {/* 注销账号 */}
-          <SettingItem
-            icon={
-              <Trash2 className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-            }
-            title="注销账号"
-            description="永久删除账号及所有数据，不可恢复"
-            action={
-              <Button variant="destructive" outline>
-                注销
-              </Button>
-            }
-          />
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setErrorMessage("");
+    setSuccessMessage("");
 
-          {/* 退出登录 */}
-          <SettingItem
-            icon={<LogOut className="w-4 h-4" />}
-            title="退出登录"
-            description="从当前设备登出"
-            action={<Button variant="ghost">退出</Button>}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
+    if (!canSubmit) {
+      setErrorMessage("请检查密码输入后再提交。");
+      return;
+    }
 
-/* ===== 子组件 ===== */
+    setIsSubmitting(true);
 
-function SettingItem({
-  icon,
-  title,
-  description,
-  action,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  action: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center justify-between px-5 py-3 hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
-      <div className="flex items-center gap-3.5">
-        <div className="text-gray-400 dark:text-gray-500">{icon}</div>
-        <div>
-          <div className="text-sm font-medium text-gray-900 dark:text-white">
-            {title}
-          </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">
-            {description}
-          </div>
-        </div>
-      </div>
-      {action}
-    </div>
-  );
-}
+    try {
+      await changePassword({
+        currentPassword: form.currentPassword,
+        newPassword: form.newPassword,
+      });
 
-function Button({
-  children,
-  variant = "secondary",
-  outline = false,
-}: {
-  children: React.ReactNode;
-  variant?: "primary" | "secondary" | "destructive" | "ghost";
-  outline?: boolean;
-}) {
-  const base = "px-3 py-1.5 text-xs font-medium rounded-lg transition-colors";
-
-  const styles = {
-    primary:
-      "bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100",
-    secondary:
-      "bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10",
-    destructive: outline
-      ? "border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900/20"
-      : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700",
-    ghost:
-      "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5",
+      setForm(initialFormState);
+      setSuccessMessage("密码已更新，请使用新密码进行后续登录。");
+    } catch (requestError) {
+      if (requestError instanceof ApiError) {
+        setErrorMessage(requestError.message);
+      } else {
+        setErrorMessage("修改密码失败，请稍后重试。");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  return <button className={`${base} ${styles[variant]}`}>{children}</button>;
-}
-
-function Toggle({ checked }: { checked: boolean }) {
   return (
-    <button
-      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-        checked ? "bg-gray-900 dark:bg-white" : "bg-gray-200 dark:bg-gray-700"
-      }`}
-    >
-      <span
-        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${
-          checked ? "translate-x-5" : "translate-x-1"
-        }`}
-      />
-    </button>
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6">
+      <section className="space-y-2">
+        <div className="text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+          Account
+        </div>
+        <h1 className="text-2xl font-semibold text-text-primary">账号设置</h1>
+        <p className="max-w-2xl text-sm leading-6 text-text-secondary">
+          保留当前已落地的账号能力：查看当前登录身份、修改密码、退出登录。
+        </p>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-2">
+        <Card className="p-5">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-secondary">
+              <UserRound className="h-5 w-5 text-icon-primary" />
+            </div>
+            <div className="space-y-3">
+              <div>
+                <div className="text-sm text-text-secondary">当前账号</div>
+                <div className="text-lg font-semibold text-text-primary">
+                  {session?.user.username ?? "-"}
+                </div>
+              </div>
+              <div className="text-sm text-text-secondary">
+                用户 ID：{session?.user.id ?? "-"}
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-secondary">
+              <ShieldCheck className="h-5 w-5 text-icon-primary" />
+            </div>
+            <div className="space-y-3">
+              <div>
+                <div className="text-sm text-text-secondary">权限角色</div>
+                <div className="text-lg font-semibold capitalize text-text-primary">
+                  {session?.user.role ?? "-"}
+                </div>
+              </div>
+              <div className="text-sm text-text-secondary">
+                密码修改后立即生效，不保留旧密码。
+              </div>
+            </div>
+          </div>
+        </Card>
+      </section>
+
+      <Card className="p-5">
+        <div className="mb-5 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-secondary">
+            <KeyRound className="h-5 w-5 text-icon-primary" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-text-primary">修改密码</h2>
+            <p className="text-sm text-text-secondary">
+              新密码至少 6 位，且不能与当前密码相同。
+            </p>
+          </div>
+        </div>
+
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          <div className="grid gap-4 md:grid-cols-2">
+            <TextInput
+              label="当前密码"
+              type="password"
+              value={form.currentPassword}
+              onChange={(currentPassword) =>
+                setForm((previous) => ({ ...previous, currentPassword }))
+              }
+              placeholder="请输入当前密码"
+              disabled={isSubmitting}
+            />
+            <TextInput
+              label="新密码"
+              type="password"
+              value={form.newPassword}
+              onChange={(newPassword) =>
+                setForm((previous) => ({ ...previous, newPassword }))
+              }
+              placeholder="请输入新密码"
+              disabled={isSubmitting}
+            />
+          </div>
+
+          <TextInput
+            label="确认新密码"
+            type="password"
+            value={form.confirmPassword}
+            onChange={(confirmPassword) =>
+              setForm((previous) => ({ ...previous, confirmPassword }))
+            }
+            placeholder="请再次输入新密码"
+            disabled={isSubmitting}
+            error={passwordMismatch ? "两次输入的新密码不一致" : undefined}
+          />
+
+          {form.currentPassword &&
+          form.newPassword &&
+          form.currentPassword === form.newPassword ? (
+            <div className="rounded-lg border border-danger/20 bg-danger/5 px-3.5 py-3 text-sm text-danger">
+              新密码不能与当前密码相同。
+            </div>
+          ) : null}
+
+          {errorMessage ? (
+            <div className="rounded-lg border border-danger/20 bg-danger/5 px-3.5 py-3 text-sm text-danger">
+              {errorMessage}
+            </div>
+          ) : null}
+
+          {successMessage ? (
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-sm text-emerald-700">
+              <CheckCircle2 className="h-4 w-4" />
+              <span>{successMessage}</span>
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="submit" disabled={!canSubmit || isSubmitting}>
+              {isSubmitting ? "保存中..." : "更新密码"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setForm(initialFormState);
+                setErrorMessage("");
+                setSuccessMessage("");
+              }}
+              disabled={isSubmitting}
+            >
+              重置
+            </Button>
+          </div>
+        </form>
+      </Card>
+
+      <Card className="p-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-text-primary">退出登录</h2>
+            <p className="text-sm text-text-secondary">
+              结束当前设备上的登录状态并返回登录页。
+            </p>
+          </div>
+          <Button variant="outline" onClick={() => logout()}>
+            <LogOut className="h-4 w-4" />
+            退出登录
+          </Button>
+        </div>
+      </Card>
+    </div>
   );
 }

@@ -15,6 +15,12 @@ declare global {
         configured: boolean;
         mode: string;
         detail: string;
+        vectorStore: {
+          ok: boolean;
+          provider: "sqlite-vec";
+          detail: string;
+          extensionPath?: string;
+        };
       }>;
     };
   }

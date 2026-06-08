@@ -6,6 +6,8 @@ import "@assistant-ui/react-ui/styles/index.css";
 import "@assistant-ui/react-ui/styles/markdown.css";
 import "@assistant-ui/react-ui/styles/themes/default.css";
 import "./styles.css";
+import { MessageProvider } from "./shared/ui/Message";
+import { ModalProvider } from "./shared/ui/Modal";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import {
   useChatRuntime,
@@ -27,9 +29,13 @@ const Main = () => {
 
   return (
     <React.StrictMode>
-      {/* <AssistantRuntimeProvider runtime={runtime}> */}
-      <RouterProvider router={router} />
-      {/* </AssistantRuntimeProvider> */}
+      <ModalProvider>
+        <MessageProvider>
+          {/* <AssistantRuntimeProvider runtime={runtime}> */}
+          <RouterProvider router={router} />
+          {/* </AssistantRuntimeProvider> */}
+        </MessageProvider>
+      </ModalProvider>
     </React.StrictMode>
   );
 };

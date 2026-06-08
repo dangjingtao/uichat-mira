@@ -1,149 +1,153 @@
-// src/pages/About.tsx
-import { Info, Code, ExternalLink, GitBranch, Users } from "lucide-react";
+import {
+  Code2,
+  ExternalLink,
+  GitBranch,
+  Info,
+  Layers3,
+  UserRound,
+} from "lucide-react";
+import Card from "@/shared/ui/Card";
+
+const techStack = [
+  { label: "Vite", value: "Build tool" },
+  { label: "React + TypeScript", value: "Frontend" },
+  { label: "Tailwind CSS", value: "Design tokens & styling" },
+  { label: "assistant-ui", value: "Chat experience" },
+  { label: "Ollama / Custom API", value: "LLM backend" },
+  { label: "React Router", value: "Routing" },
+];
+
+const links = [
+  {
+    icon: GitBranch,
+    label: "GitHub Repository",
+    href: "https://github.com/dangjingtao/ui-chat-rag-tester",
+  },
+  {
+    icon: UserRound,
+    label: "Contributors",
+    href: "https://github.com/dangjingtao",
+  },
+];
 
 function About() {
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10 space-y-8">
-      {/* 标题 */}
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
-          About this project
-        </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          A lightweight LLM chat interface built with modern web tech.
-        </p>
-      </div>
+    <div className="mx-auto max-w-4xl space-y-4 px-4 py-6">
+      <section className="rounded-xl border border-border bg-surface-primary px-5 py-5 shadow-shadow-sm sm:px-6 sm:py-6">
+        <div className="space-y-3">
+          <div className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+            About this project
+          </div>
 
-      {/* 项目简介 */}
-      <Card
-        icon={<Info className="w-5 h-5" />}
-        title="Overview"
-        description="An initialization project for an Electron desktop application aimed at enterprise knowledge base verification, supporting dual-mode switching between local and remote models and vector databases."
-      />
-
-      {/* 技术栈 */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-          Tech Stack
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <TechCard label="Vite" value="Build tool" />
-          <TechCard label="React + TS" value="Frontend" />
-          <TechCard label="Tailwind CSS" value="Styling" />
-          <TechCard label="assistant-ui" value="Chat components" />
-          <TechCard label="Ollama / Custom API" value="LLM backend" />
-          <TechCard label="React Router" value="Routing" />
+          <div className="space-y-1.5">
+            <h1 className="text-2xl font-semibold leading-tight text-text-primary">
+              UI Chat RAG Tester
+            </h1>
+            <p className="max-w-2xl text-sm leading-6 text-text-secondary">
+              一个面向企业知识库验证场景的 Electron 桌面应用初始化项目，支持本地与远程模型、向量数据库和聊天测试工作流。
+            </p>
+          </div>
         </div>
       </section>
 
-      {/* 链接 */}
+      <Card>
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-secondary">
+              <Info className="h-4 w-4 text-icon-primary" />
+            </div>
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+              Overview
+            </div>
+            <div className="text-base font-semibold text-text-primary">
+              项目概览
+            </div>
+            <p className="text-sm leading-6 text-text-secondary">
+              当前项目聚焦在桌面端 AI/RAG 验证体验：连接模型、检查运行时健康、验证数据库连通性，并通过统一聊天入口完成对话链路测试。
+            </p>
+          </div>
+        </div>
+      </Card>
+
       <section className="space-y-3">
-        <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-          Links
-        </h2>
-        <div className="space-y-2">
-          <LinkRow
-            icon={<GitBranch className="w-4 h-4" />}
-            label="GitHub Repository"
-            href="https://github.com/dangjingtao/ui-chat-rag-tester"
-          />
-          <LinkRow
-            icon={<Users className="w-4 h-4" />}
-            label="Contributors"
-            href="https://github.com/dangjingtao"
-          />
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-primary shadow-shadow-sm border border-border">
+            <Layers3 className="h-4 w-4 text-icon-primary" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-text-primary">
+              Tech Stack
+            </h2>
+            <p className="text-sm text-text-secondary">
+              构成当前桌面端体验的核心技术组件。
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {techStack.map((item) => (
+            <Card key={item.label}>
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-secondary">
+                  <Code2 className="h-4 w-4 text-icon-primary" />
+                </div>
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <div className="text-sm font-medium text-text-primary">
+                    {item.label}
+                  </div>
+                  <div className="text-sm text-text-secondary">
+                    {item.value}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-base font-semibold text-text-primary">Links</h2>
+          <p className="text-sm text-text-secondary">
+            项目仓库与作者相关链接。
+          </p>
+        </div>
+
+        <div className="space-y-2.5">
+          {links.map((item) => {
+            const Icon = item.icon;
+
+            return (
+              <a
+                key={item.label}
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block rounded-xl border border-border bg-surface-primary px-4 py-3.5 shadow-shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:bg-surface-secondary hover:shadow-shadow-md"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-secondary">
+                      <Icon className="h-4 w-4 text-icon-primary" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-text-primary">
+                        {item.label}
+                      </div>
+                      <div className="truncate text-sm text-text-secondary">
+                        {item.href}
+                      </div>
+                    </div>
+                  </div>
+                  <ExternalLink className="h-4 w-4 flex-shrink-0 text-icon-secondary" />
+                </div>
+              </a>
+            );
+          })}
         </div>
       </section>
     </div>
   );
 }
-
-/* ===== 子组件 ===== */
-
-function Card({
-  icon,
-  title,
-  description,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div
-      className="
-        flex gap-4
-        rounded-2xl
-        bg-gray-50 dark:bg-white/5
-        border border-gray-200 dark:border-white/10
-        p-5
-      "
-    >
-      <div className="mt-0.5 text-gray-500 dark:text-gray-400">{icon}</div>
-      <div className="space-y-1">
-        <div className="text-sm font-medium text-gray-900 dark:text-white">
-          {title}
-        </div>
-        <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-          {description}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function TechCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div
-      className="
-        rounded-xl
-        bg-gray-50 dark:bg-white/5
-        border border-gray-200 dark:border-white/10
-        px-4 py-3
-      "
-    >
-      <div className="text-sm font-medium text-gray-900 dark:text-white">
-        {label}
-      </div>
-      <div className="text-xs text-gray-500 dark:text-gray-400">{value}</div>
-    </div>
-  );
-}
-
-function LinkRow({
-  icon,
-  label,
-  href,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  href: string;
-}) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="
-        flex items-center justify-between
-        rounded-xl
-        bg-gray-50 dark:bg-white/5
-        border border-gray-200 dark:border-white/10
-        px-4 py-3
-        text-sm
-        text-gray-700 dark:text-gray-300
-        hover:bg-gray-100 dark:hover:bg-white/10
-        transition
-      "
-    >
-      <div className="flex items-center gap-3">
-        {icon}
-        {label}
-      </div>
-      <ExternalLink className="w-4 h-4 opacity-60" />
-    </a>
-  );
-}
-interface AboutProps {}
 
 export default About;

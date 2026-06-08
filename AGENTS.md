@@ -32,6 +32,7 @@ root/
 ## Backend Startup
 
 - Development: start the backend with `pnpm dev:server` or through the root `pnpm dev` workflow.
+- Do not refactor or replace the existing `pnpm dev` / Electron dev startup chain unless you verify the full flow end-to-end. In particular, avoid changing the backend launch path, watch mode, or workspace invocation style without confirming that `pnpm dev` still brings up Vite, backend health (`/health`), and Electron together on Windows.
 - Production: Electron main starts `resources/node-runtime/node.exe` with `resources/server/server.cjs`.
 - Native dependencies for the backend are copied into `resources/server/node_modules` during packaging.
 
@@ -43,6 +44,12 @@ root/
 - Keep backend route paths prefix-free unless the server itself explicitly registers a route prefix.
 - Update docs when changing runtime networking, packaging, or backend route contracts.
 - Keep release retention behavior centralized in `scripts/build-dist.js`; do not hardcode release cleanup in unrelated scripts.
+
+## UI
+
+- The frontend UI interface design specifications and component documentation are located at `./desktop/src/shared/ui`. 
+- When I ask you to implement an interface, you should prioritize using existing pure UI components. Only if they do not exist should you consider abstracting frequently used UI components (excluding business logic).
+- You can modify or add components within, but their functionality must be backward compatible. Any modification to the component library requires updating both the design specifications and the component documentation.
 
 ## Verification
 

@@ -8,6 +8,7 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.join(__dirname, "..");
 const outputDir = path.join(projectRoot, "electron", "backend");
 const outputNodeModules = path.join(outputDir, "node_modules");
+const pnpmStore = path.join(projectRoot, "node_modules", ".pnpm");
 
 function readPackageJson(packageDir) {
   return JSON.parse(
@@ -15,14 +16,16 @@ function readPackageJson(packageDir) {
   );
 }
 
+function resolveInstalledPackageDir(packageName) {
+  return fs
+    .readdirSync(pnpmStore)
+    .find((name) => name.startsWith(`${packageName}@`));
+}
+
 function copyPackage(packageName) {
   const serverPackage = readPackageJson(__dirname);
   const version = serverPackage.dependencies?.[packageName];
-
-  const pnpmStore = path.join(projectRoot, "node_modules", ".pnpm");
-  const packageDirName = fs
-    .readdirSync(pnpmStore)
-    .find((name) => name.startsWith(`${packageName}@`));
+  const packageDirName = resolveInstalledPackageDir(packageName);
 
   if (!packageDirName) {
     const suffix = version ? `@${version}` : "";
@@ -43,13 +46,31 @@ function copyPackage(packageName) {
 
 function writeBackendPackageJson() {
   const serverPackage = readPackageJson(__dirname);
+  const sqliteVecPackageDirName = resolveInstalledPackageDir("sqlite-vec");
+  const sqliteVecPackage = sqliteVecPackageDirName
+    ? JSON.parse(
+        fs.readFileSync(
+          path.join(
+            pnpmStore,
+            sqliteVecPackageDirName,
+            "node_modules",
+            "sqlite-vec",
+            "package.json",
+          ),
+          "utf-8",
+        ),
+      )
+    : null;
+
   const backendPackage = {
     private: true,
     type: "commonjs",
     dependencies: {
       "better-sqlite3": serverPackage.dependencies["better-sqlite3"],
+      "sqlite-vec": serverPackage.dependencies["sqlite-vec"],
       bindings: "^1.5.0",
       "file-uri-to-path": "^1.0.0",
+      ...(sqliteVecPackage?.optionalDependencies ?? {}),
     },
   };
 
@@ -71,11 +92,13 @@ build({
   format: "cjs",
   outfile: path.join(outputDir, "server.cjs"),
   absWorkingDir: __dirname,
-  external: ["better-sqlite3"],
+  external: ["better-sqlite3", "sqlite-vec"],
 })
   .then(() => {
     console.log("Server bundle completed, copying native modules...");
     copyPackage("better-sqlite3");
+    copyPackage("sqlite-vec");
+    copyPackage("sqlite-vec-windows-x64");
     copyPackage("bindings");
     copyPackage("file-uri-to-path");
     console.log("Server build completed successfully");

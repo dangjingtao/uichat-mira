@@ -1,230 +1,35 @@
-/**
- * 模型配置数据库
- */
 import {
   getSqlite,
   modelConfigRepository,
   modelParamTemplateRepository,
+  providerConnectionRepository,
 } from "@/db";
-import type { ModelType, ParamType } from "@/db/schema";
+import {
+  DEFAULT_PROVIDER_CONNECTIONS,
+  DEFAULT_ROLE_CONFIGS,
+  PARAM_TEMPLATES,
+} from "@/services/model-config.defaults.js";
 
-/** 模型配置响应类型 */
-export interface ModelConfigResponse {
-  id: string;
-  type: ModelType;
-  name: string;
-  params: Record<string, any>;
-  isDefault: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+const hasColumn = (tableName: string, columnName: string) => {
+  const sqlite = getSqlite();
+  const rows = sqlite.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{
+    name: string;
+  }>;
+  return rows.some((row) => row.name === columnName);
+};
 
-/** 参数模板响应类型 */
-export interface ParamTemplateResponse {
-  key: string;
-  label: string;
-  type: ParamType;
-  step?: number;
-  options?: { value: string; label: string }[];
-  defaultValue: number | string | boolean;
-}
+const ensureColumn = (tableName: string, columnName: string, definition: string) => {
+  const sqlite = getSqlite();
+  if (hasColumn(tableName, columnName)) {
+    return;
+  }
+  sqlite.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+};
 
-/** 默认配置数据 */
-const DEFAULT_CONFIGS = [
-  {
-    type: "llm" as ModelType,
-    name: "gemma4:e4b",
-    params: {
-      enabled: true,
-      temperature: 0.7,
-      topP: 0.9,
-      topK: 40,
-      maxTokens: 2048,
-      frequencyPenalty: 0,
-      presencePenalty: 0,
-    },
-  },
-  {
-    type: "embedding" as ModelType,
-    name: "nomic-embed-text",
-    params: {
-      enabled: true,
-      dimensions: 768,
-      batchSize: 32,
-      normalize: true,
-      chunkSize: 512,
-      chunkOverlap: 64,
-    },
-  },
-  {
-    type: "rerank" as ModelType,
-    name: "",
-    params: {
-      enabled: false,
-      topN: 5,
-      scoreThreshold: 0.5,
-      windowSize: 3,
-      strategy: "cross-encoder",
-    },
-  },
-];
-
-/** 参数模板数据 */
-const PARAM_TEMPLATES = [
-  // LLM 参数
-  {
-    model_type: "llm" as ModelType,
-    param_key: "temperature",
-    param_label: "Temperature",
-    param_type: "number" as ParamType,
-    step: 0.1,
-    options: null,
-    default_value: 0.7,
-  },
-  {
-    model_type: "llm" as ModelType,
-    param_key: "topP",
-    param_label: "Top P",
-    param_type: "number" as ParamType,
-    step: 0.1,
-    options: null,
-    default_value: 0.9,
-  },
-  {
-    model_type: "llm" as ModelType,
-    param_key: "topK",
-    param_label: "Top K",
-    param_type: "number" as ParamType,
-    step: null,
-    options: null,
-    default_value: 40,
-  },
-  {
-    model_type: "llm" as ModelType,
-    param_key: "maxTokens",
-    param_label: "Max Tokens",
-    param_type: "number" as ParamType,
-    step: null,
-    options: null,
-    default_value: 2048,
-  },
-  {
-    model_type: "llm" as ModelType,
-    param_key: "frequencyPenalty",
-    param_label: "Frequency Penalty",
-    param_type: "number" as ParamType,
-    step: 0.1,
-    options: null,
-    default_value: 0,
-  },
-  {
-    model_type: "llm" as ModelType,
-    param_key: "presencePenalty",
-    param_label: "Presence Penalty",
-    param_type: "number" as ParamType,
-    step: 0.1,
-    options: null,
-    default_value: 0,
-  },
-  // Embedding 参数
-  {
-    model_type: "embedding" as ModelType,
-    param_key: "dimensions",
-    param_label: "Dimensions",
-    param_type: "number" as ParamType,
-    step: null,
-    options: null,
-    default_value: 768,
-  },
-  {
-    model_type: "embedding" as ModelType,
-    param_key: "batchSize",
-    param_label: "Batch Size",
-    param_type: "number" as ParamType,
-    step: null,
-    options: null,
-    default_value: 32,
-  },
-  {
-    model_type: "embedding" as ModelType,
-    param_key: "normalize",
-    param_label: "Normalize",
-    param_type: "select" as ParamType,
-    step: null,
-    options: [
-      { value: "true", label: "True" },
-      { value: "false", label: "False" },
-    ],
-    default_value: "true",
-  },
-  {
-    model_type: "embedding" as ModelType,
-    param_key: "chunkSize",
-    param_label: "Chunk Size",
-    param_type: "number" as ParamType,
-    step: null,
-    options: null,
-    default_value: 512,
-  },
-  {
-    model_type: "embedding" as ModelType,
-    param_key: "chunkOverlap",
-    param_label: "Chunk Overlap",
-    param_type: "number" as ParamType,
-    step: null,
-    options: null,
-    default_value: 64,
-  },
-  // ReRank 参数
-  {
-    model_type: "rerank" as ModelType,
-    param_key: "topN",
-    param_label: "Top N",
-    param_type: "number" as ParamType,
-    step: null,
-    options: null,
-    default_value: 5,
-  },
-  {
-    model_type: "rerank" as ModelType,
-    param_key: "scoreThreshold",
-    param_label: "Score Threshold",
-    param_type: "number" as ParamType,
-    step: 0.1,
-    options: null,
-    default_value: 0.5,
-  },
-  {
-    model_type: "rerank" as ModelType,
-    param_key: "windowSize",
-    param_label: "Window Size",
-    param_type: "number" as ParamType,
-    step: null,
-    options: null,
-    default_value: 3,
-  },
-  {
-    model_type: "rerank" as ModelType,
-    param_key: "strategy",
-    param_label: "Strategy",
-    param_type: "select" as ParamType,
-    step: null,
-    options: [
-      { value: "cross-encoder", label: "Cross-Encoder" },
-      { value: "bi-encoder", label: "Bi-Encoder" },
-    ],
-    default_value: "cross-encoder",
-  },
-];
-
-/**
- * 初始化模型配置数据库
- */
 export const initializeModelConfigDatabase = (): void => {
   try {
     const sqlite = getSqlite();
 
-    // 创建模型配置表
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS model_configs (
         id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
@@ -238,7 +43,13 @@ export const initializeModelConfigDatabase = (): void => {
       )
     `);
 
-    // 创建参数模板表
+    ensureColumn(
+      "model_configs",
+      "provider_code",
+      "TEXT CHECK (provider_code IN ('ollama', 'lmstudio', 'openai'))",
+    );
+    ensureColumn("model_configs", "remote_model_id", "TEXT");
+
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS model_param_templates (
         id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
@@ -254,24 +65,67 @@ export const initializeModelConfigDatabase = (): void => {
       )
     `);
 
-    // 创建索引
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS provider_connections (
+        provider_code TEXT PRIMARY KEY CHECK (provider_code IN ('ollama', 'lmstudio', 'openai')),
+        display_name TEXT NOT NULL,
+        base_url TEXT NOT NULL DEFAULT '',
+        api_key_encrypted TEXT,
+        is_enabled INTEGER NOT NULL DEFAULT 1,
+        status TEXT NOT NULL DEFAULT 'idle' CHECK (status IN ('idle', 'syncing', 'connected', 'error')),
+        last_error TEXT,
+        last_synced_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS provider_models (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        provider_code TEXT NOT NULL CHECK (provider_code IN ('ollama', 'lmstudio', 'openai')),
+        remote_model_id TEXT NOT NULL,
+        model_name TEXT NOT NULL,
+        raw_payload_json TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        synced_at TEXT NOT NULL,
+        UNIQUE(provider_code, remote_model_id)
+      )
+    `);
+
     sqlite.exec(`
       CREATE INDEX IF NOT EXISTS idx_model_configs_type ON model_configs(type);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_model_configs_type_default ON model_configs(type, is_default);
       CREATE INDEX IF NOT EXISTS idx_model_param_templates_type ON model_param_templates(model_type);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_model_param_templates_type_key ON model_param_templates(model_type, param_key);
+      CREATE INDEX IF NOT EXISTS idx_provider_connections_status ON provider_connections(status);
+      CREATE INDEX IF NOT EXISTS idx_provider_models_provider ON provider_models(provider_code);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_provider_models_provider_remote ON provider_models(provider_code, remote_model_id);
     `);
 
-    // 插入或更新默认配置
-    for (const config of DEFAULT_CONFIGS) {
+    for (const provider of DEFAULT_PROVIDER_CONNECTIONS) {
+      providerConnectionRepository.upsert({
+        providerCode: provider.providerCode,
+        displayName: provider.displayName,
+        baseUrl: provider.baseUrl,
+        apiKeyEncrypted: null,
+        isEnabled: true,
+        status: "idle",
+        lastError: null,
+        lastSyncedAt: null,
+      });
+    }
+
+    for (const config of DEFAULT_ROLE_CONFIGS) {
       modelConfigRepository.upsertDefault({
         type: config.type,
         name: config.name,
         params: JSON.stringify(config.params),
+        providerCode: config.providerCode,
+        remoteModelId: config.remoteModelId,
       });
     }
 
-    // 插入或更新参数模板
     for (const template of PARAM_TEMPLATES) {
       modelParamTemplateRepository.upsert({
         modelType: template.model_type,
@@ -283,10 +137,8 @@ export const initializeModelConfigDatabase = (): void => {
         defaultValue: JSON.stringify(template.default_value),
       });
     }
-
-    console.log("✅ Model config database initialized");
   } catch (err) {
-    console.error("❌ Failed to initialize model config database:", err);
+    console.error("Failed to initialize model config database:", err);
     throw err;
   }
 };

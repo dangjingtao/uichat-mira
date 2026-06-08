@@ -34,6 +34,14 @@ export function useRuntimeHealth() {
     ),
   );
 
+  const [vectorState, setVectorState] = useState<RuntimeState>(() =>
+    createInitialState(
+      isDesktopRuntime,
+      "等待向量数据库检查",
+      "浏览器预览未连接本地向量数据库检查",
+    ),
+  );
+
   useEffect(() => {
     if (!isDesktopRuntime || !desktopApi) {
       setBackendState(
@@ -44,6 +52,13 @@ export function useRuntimeHealth() {
           false,
           "等待数据库连通检查",
           "浏览器预览未连接本地数据库检查",
+        ),
+      );
+      setVectorState(
+        createInitialState(
+          false,
+          "等待向量数据库检查",
+          "浏览器预览未连接本地向量数据库检查",
         ),
       );
       return;
@@ -62,7 +77,7 @@ export function useRuntimeHealth() {
         status: result.success ? "running" : "stopped",
         detail: result.success
           ? `后端已启动 · ${desktopApi.backendUrl}`
-          : (result.error ?? `健康检查失败 · HTTP ${result.statusCode || 0}`),
+          : result.error ?? `健康检查失败 · HTTP ${result.statusCode || 0}`,
       });
 
       const dbResult = await desktopApi.checkDatabaseHealth();
@@ -76,6 +91,14 @@ export function useRuntimeHealth() {
         detail:
           dbResult.detail ??
           (dbResult.success ? "数据库健康检查返回异常状态" : "健康检查失败"),
+      });
+
+      setVectorState({
+        status:
+          dbResult.success && dbResult.vectorStore.ok ? "running" : "stopped",
+        detail: dbResult.vectorStore.extensionPath
+          ? `${dbResult.vectorStore.detail} · ${dbResult.vectorStore.extensionPath}`
+          : dbResult.vectorStore.detail,
       });
     };
 
@@ -95,5 +118,6 @@ export function useRuntimeHealth() {
     desktopApi: isDesktopRuntime ? desktopApi : undefined,
     backendState,
     databaseState,
+    vectorState,
   };
 }
