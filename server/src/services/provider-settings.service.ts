@@ -14,6 +14,8 @@ import {
   DEFAULT_PROVIDER_CONNECTIONS,
   buildDefaultParams,
 } from "@/services/model-config.defaults.js";
+import { listCloudflareModels } from "@/services/cloudflare-provider.js";
+import { listOpenAICompatibleModels } from "@/services/openai-compatible-provider.js";
 import { decryptSecret, encryptSecret } from "@/utils/crypto.js";
 
 export interface ProviderSummaryResponse {
@@ -63,14 +65,6 @@ const providerDefaults = Object.fromEntries(
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 
-const normalizeOpenAICompatibleBaseUrl = (baseUrl: string) => {
-  const normalized = trimTrailingSlash(baseUrl);
-  if (normalized.endsWith("/v1")) {
-    return normalized;
-  }
-  return `${normalized}/v1`;
-};
-
 const fetchJson = async <T>(url: string, init?: RequestInit): Promise<T> => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
@@ -108,24 +102,11 @@ const listProviderModels = async (
     }));
   }
 
-  const normalizedBaseUrl = normalizeOpenAICompatibleBaseUrl(baseUrl);
-  const url = `${normalizedBaseUrl}/models`;
-  const headers: HeadersInit = {};
-
-  if (apiKey) {
-    headers.Authorization = `Bearer ${apiKey}`;
+  if (providerCode === "cloudflare") {
+    return listCloudflareModels(baseUrl, apiKey);
   }
 
-  const result = await fetchJson<{ data?: Array<{ id: string; object?: string }> }>(
-    url,
-    { headers },
-  );
-
-  return (result.data ?? []).map((model) => ({
-    id: model.id,
-    name: model.id,
-    raw: model,
-  }));
+  return listOpenAICompatibleModels(baseUrl, apiKey);
 };
 
 const toProviderSummary = (
@@ -329,7 +310,10 @@ export const providerSettingsService = {
       type: role,
       name: providerModel.modelName,
       providerCode,
-      remoteModelId: providerModel.remoteModelId,
+      remoteModelId:
+        providerCode === "cloudflare"
+          ? providerModel.modelName
+          : providerModel.remoteModelId,
       params: JSON.stringify(buildDefaultParams(role)),
     });
 

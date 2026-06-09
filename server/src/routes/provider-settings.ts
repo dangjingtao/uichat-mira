@@ -5,7 +5,7 @@ import { ErrorCodes, error, success } from "@/utils/index.js";
 
 const providerCodeSchema = {
   type: "string",
-  enum: ["ollama", "lmstudio", "openai"],
+  enum: ["ollama", "lmstudio", "openai", "cloudflare"],
 } as const;
 
 const modelTypeSchema = {

@@ -10,6 +10,190 @@ import {
   PARAM_TEMPLATES,
 } from "@/services/model-config.defaults.js";
 
+const tableDefinitionSupportsCloudflare = (tableName: string) => {
+  const sqlite = getSqlite();
+  const row = sqlite
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1")
+    .get(tableName) as { sql?: string } | undefined;
+
+  return row?.sql?.includes("'cloudflare'") ?? false;
+};
+
+const recreateModelConfigsTable = () => {
+  const sqlite = getSqlite();
+
+  sqlite.exec(`
+    ALTER TABLE model_configs RENAME TO model_configs__legacy;
+
+    CREATE TABLE model_configs (
+      id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+      type TEXT NOT NULL CHECK (type IN ('llm', 'embedding', 'rerank')),
+      name TEXT NOT NULL DEFAULT '',
+      provider_code TEXT CHECK (provider_code IN ('ollama', 'lmstudio', 'openai', 'cloudflare')),
+      remote_model_id TEXT,
+      params TEXT NOT NULL DEFAULT '{}',
+      is_default INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(type, is_default)
+    );
+
+    INSERT INTO model_configs (
+      id,
+      type,
+      name,
+      provider_code,
+      remote_model_id,
+      params,
+      is_default,
+      created_at,
+      updated_at
+    )
+    SELECT
+      id,
+      type,
+      name,
+      provider_code,
+      remote_model_id,
+      params,
+      is_default,
+      created_at,
+      updated_at
+    FROM model_configs__legacy;
+
+    DROP TABLE model_configs__legacy;
+  `);
+};
+
+const recreateProviderConnectionsTable = () => {
+  const sqlite = getSqlite();
+
+  sqlite.exec(`
+    ALTER TABLE provider_connections RENAME TO provider_connections__legacy;
+
+    CREATE TABLE provider_connections (
+      provider_code TEXT PRIMARY KEY CHECK (provider_code IN ('ollama', 'lmstudio', 'openai', 'cloudflare')),
+      display_name TEXT NOT NULL,
+      base_url TEXT NOT NULL DEFAULT '',
+      api_key_encrypted TEXT,
+      is_enabled INTEGER NOT NULL DEFAULT 1,
+      status TEXT NOT NULL DEFAULT 'idle' CHECK (status IN ('idle', 'syncing', 'connected', 'error')),
+      last_error TEXT,
+      last_synced_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    INSERT INTO provider_connections (
+      provider_code,
+      display_name,
+      base_url,
+      api_key_encrypted,
+      is_enabled,
+      status,
+      last_error,
+      last_synced_at,
+      created_at,
+      updated_at
+    )
+    SELECT
+      provider_code,
+      display_name,
+      base_url,
+      api_key_encrypted,
+      is_enabled,
+      status,
+      last_error,
+      last_synced_at,
+      created_at,
+      updated_at
+    FROM provider_connections__legacy;
+
+    DROP TABLE provider_connections__legacy;
+  `);
+};
+
+const recreateProviderModelsTable = () => {
+  const sqlite = getSqlite();
+
+  sqlite.exec(`
+    ALTER TABLE provider_models RENAME TO provider_models__legacy;
+
+    CREATE TABLE provider_models (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      provider_code TEXT NOT NULL CHECK (provider_code IN ('ollama', 'lmstudio', 'openai', 'cloudflare')),
+      remote_model_id TEXT NOT NULL,
+      model_name TEXT NOT NULL,
+      raw_payload_json TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      synced_at TEXT NOT NULL,
+      UNIQUE(provider_code, remote_model_id)
+    );
+
+    INSERT INTO provider_models (
+      id,
+      provider_code,
+      remote_model_id,
+      model_name,
+      raw_payload_json,
+      is_active,
+      synced_at
+    )
+    SELECT
+      id,
+      provider_code,
+      remote_model_id,
+      model_name,
+      raw_payload_json,
+      is_active,
+      synced_at
+    FROM provider_models__legacy;
+
+    DROP TABLE provider_models__legacy;
+  `);
+};
+
+const migrateProviderSchemaForCloudflare = () => {
+  const sqlite = getSqlite();
+  const needsModelConfigsMigration =
+    hasColumn("model_configs", "provider_code") &&
+    !tableDefinitionSupportsCloudflare("model_configs");
+  const needsProviderConnectionsMigration =
+    hasColumn("provider_connections", "provider_code") &&
+    !tableDefinitionSupportsCloudflare("provider_connections");
+  const needsProviderModelsMigration =
+    hasColumn("provider_models", "provider_code") &&
+    !tableDefinitionSupportsCloudflare("provider_models");
+
+  if (
+    !needsModelConfigsMigration &&
+    !needsProviderConnectionsMigration &&
+    !needsProviderModelsMigration
+  ) {
+    return;
+  }
+
+  sqlite.pragma("foreign_keys = OFF");
+
+  try {
+    const tx = sqlite.transaction(() => {
+      if (needsModelConfigsMigration) {
+        recreateModelConfigsTable();
+      }
+      if (needsProviderConnectionsMigration) {
+        recreateProviderConnectionsTable();
+      }
+      if (needsProviderModelsMigration) {
+        recreateProviderModelsTable();
+      }
+    });
+
+    tx();
+  } finally {
+    sqlite.pragma("foreign_keys = ON");
+  }
+};
+
 const hasColumn = (tableName: string, columnName: string) => {
   const sqlite = getSqlite();
   const rows = sqlite
@@ -54,9 +238,11 @@ export const initializeModelConfigDatabase = (): void => {
     ensureColumn(
       "model_configs",
       "provider_code",
-      "TEXT CHECK (provider_code IN ('ollama', 'lmstudio', 'openai'))",
+      "TEXT CHECK (provider_code IN ('ollama', 'lmstudio', 'openai', 'cloudflare'))",
     );
     ensureColumn("model_configs", "remote_model_id", "TEXT");
+
+    migrateProviderSchemaForCloudflare();
 
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS model_param_templates (
@@ -75,7 +261,7 @@ export const initializeModelConfigDatabase = (): void => {
 
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS provider_connections (
-        provider_code TEXT PRIMARY KEY CHECK (provider_code IN ('ollama', 'lmstudio', 'openai')),
+        provider_code TEXT PRIMARY KEY CHECK (provider_code IN ('ollama', 'lmstudio', 'openai', 'cloudflare')),
         display_name TEXT NOT NULL,
         base_url TEXT NOT NULL DEFAULT '',
         api_key_encrypted TEXT,
@@ -91,7 +277,7 @@ export const initializeModelConfigDatabase = (): void => {
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS provider_models (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        provider_code TEXT NOT NULL CHECK (provider_code IN ('ollama', 'lmstudio', 'openai')),
+        provider_code TEXT NOT NULL CHECK (provider_code IN ('ollama', 'lmstudio', 'openai', 'cloudflare')),
         remote_model_id TEXT NOT NULL,
         model_name TEXT NOT NULL,
         raw_payload_json TEXT,

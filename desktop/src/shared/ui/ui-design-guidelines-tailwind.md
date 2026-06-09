@@ -20,6 +20,7 @@
 - 卡片优先轻边框、轻阴影
 - 表格优先用边框和留白建立结构，不做厚重报表风格
 - Tooltip、Toast、Modal 都保持克制，不抢主任务视觉
+- Tooltip 允许长文本换行，并应限制最大宽度，避免路径或错误详情溢出视口
 - 尽量避免大面积高饱和色块
 
 ## 4. 交互约束
@@ -49,3 +50,7 @@
 
 - `desktop/src/shared/ui/COMPONENTS.md`
 - `desktop/src/shared/ui/ui-design-guidelines-tailwind.md`
+
+- FileUploadDropzone 在前置业务条件未满足时应支持 disabled 状态，禁用点击并给出明确说明。
+
+- Modal 默认应优先内容自适应，仅在复杂表单或长内容场景下再显式传入 height / maxHeight。

@@ -191,3 +191,28 @@ message.destroy();
 
 - `desktop/src/shared/ui/COMPONENTS.md`
 - `desktop/src/shared/ui/ui-design-guidelines-tailwind.md`
+
+## Tooltip
+
+用于承载补充说明、路径、状态原因等次级信息。
+
+### 设计约束
+
+- 默认用于短说明，不替代主文案
+- 长文本允许换行，避免超出视口
+- 优先作为图标、截断文案或状态点的补充说明
+- 不在 Tooltip 中承载主操作
+
+## Modal
+
+用于承载确认、设置和说明类弹窗。
+### Props
+
+| 属性 | 类型 | 说明 |
+| --- | --- | --- |
+| width | 
+umber \| string | 弹窗宽度，支持像素或 CSS 尺寸值 |
+| height | 
+umber \| string | 显式固定高度；不传时按内容自适应 |
+| maxHeight | 
+umber \| string | 最大高度，默认限制在视口内 |

@@ -40,6 +40,7 @@ export const knowledgeBaseRepository = {
     }
 
     const db = getDb();
+    const now = new Date().toISOString();
     return db
       .insert(knowledgeBases)
       .values({
@@ -47,6 +48,8 @@ export const knowledgeBaseRepository = {
         name: DEFAULT_KNOWLEDGE_BASE_NAME,
         status: "active",
         chunkingConfigJson: "{}",
+        createdAt: now,
+        updatedAt: now,
       })
       .returning()
       .get();
@@ -140,9 +143,14 @@ export const documentRepository = {
     const sqlite = getSqlite();
     const tx = sqlite.transaction(() => {
       const db = getDb();
+      const now = new Date().toISOString();
       const created = db
         .insert(documents)
-        .values(params.document)
+        .values({
+          ...params.document,
+          createdAt: now,
+          updatedAt: now,
+        })
         .returning()
         .get();
 
@@ -158,6 +166,7 @@ export const documentRepository = {
               tokenCount: chunk.tokenCount ?? null,
               startOffset: chunk.startOffset ?? null,
               endOffset: chunk.endOffset ?? null,
+              createdAt: now,
             })),
           )
           .run();

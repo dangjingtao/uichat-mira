@@ -1,12 +1,16 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
+  AlertCircle,
   ArrowLeft,
   ArrowRight,
+  Bot,
   CircleHelp,
+  Cpu,
   Eye,
   FileSearch,
   LoaderCircle,
+  ScanSearch,
   PartyPopper,
   RotateCcw,
   Search,
@@ -25,6 +29,11 @@ import {
   type RoleModelConfig,
 } from "@/shared/api/modelSettings";
 import {
+  getGlobalModelAccessStatus,
+  resolveGlobalModelAccessStatus,
+  type GlobalModelAccessStatus,
+} from "@/shared/business/modelAccess";
+import {
   createKnowledgeBaseDocument,
   type KnowledgeBaseDocumentDetail,
 } from "@/shared/api/knowledgeBase";
@@ -42,7 +51,6 @@ type UploadFileItem = {
   name: string;
   extension: string;
   size: number;
-  mockContent?: string;
 };
 
 type RetrievalMode = "vector" | "fulltext";
@@ -56,31 +64,7 @@ const initialSettings: ChunkSettings = {
   useQaSplit: false,
 };
 
-const sampleText = `AI 赋能招商方案强调从企业画像、政策标签、产业链关系和历史项目经验中提取核心信息，并在聊天界面中为用户返回结构化的招商建议。系统需要支持知识文档的导入、文本切分、向量检索与引用片段展示，帮助业务人员快速理解项目背景。
-
-在第一阶段，我们优先支持 Markdown 与 TXT 文档。每份文档在入库前执行基础清洗，包括连续空格替换、换行规整、可选 URL 删除等步骤，然后按固定长度切分为文本块。每个文本块会被单独索引，用于后续检索与引用。
-
-知识库在聊天中的作用是提供可靠上下文。用户提问后，系统先召回相关片段，再将命中内容拼接到 prompt 中，引导模型基于知识文本输出答案，并返回命中片段作为引用依据。`;
-
-const initialFiles: UploadFileItem[] = [
-  {
-    id: "seed-1",
-    file: new File([], "AI赋能招商方案0603.md"),
-    name: "AI赋能招商方案0603.md",
-    extension: "MD",
-    size: 22.96 * 1024,
-    mockContent: sampleText,
-  },
-  {
-    id: "seed-2",
-    file: new File([], "党涛涛-简历.txt"),
-    name: "党涛涛-简历.txt",
-    extension: "TXT",
-    size: 12.08 * 1024,
-    mockContent:
-      "项目经历：负责 React + Node.js 企业应用开发，搭建前端工程化规范，参与知识库问答与后台管理系统建设。具备文本处理、检索增强生成、组件设计与接口联调经验。",
-  },
-];
+const initialFiles: UploadFileItem[] = [];
 
 const steps = [
   { step: 1 as UploadStep, label: "选择数据源" },
@@ -97,6 +81,24 @@ const splitterHints = {
   useQaSplit: "优先识别 Q:/A:、问:/答: 这类结构，再进行长度切分，适合 FAQ 文档。",
 } as const;
 
+function ModelAccessStatusPill({
+  label,
+  connected,
+}: {
+  label: string;
+  connected: boolean;
+}) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
+        connected ? "bg-success/10 text-success" : "bg-danger/10 text-danger"
+      }`}
+    >
+      {label}：{connected ? "已接入" : "未接入"}
+    </span>
+  );
+}
+
 function resolveStep(value: string | null): UploadStep {
   if (value === "2") return 2;
   if (value === "3") return 3;
@@ -108,20 +110,27 @@ function ModelStatusCard({
   description,
   config,
   required = false,
+  icon,
 }: {
   title: string;
   description: string;
   config: RoleModelConfig | null;
   required?: boolean;
+  icon: React.ReactNode;
 }) {
   const configured = Boolean(config?.providerCode && config?.remoteModelId);
 
   return (
-    <div className="rounded-xl border border-border bg-surface-secondary p-4">
+    <div className="rounded-xl border border-border bg-gradient-to-br from-surface-primary to-surface-secondary p-4">
       <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            {icon}
+          </div>
+          <div>
           <div className="text-sm font-semibold text-text-primary">{title}</div>
           <div className="mt-1 text-sm leading-6 text-text-secondary">{description}</div>
+        </div>
         </div>
         <span
           className={`rounded-full px-2.5 py-1 text-xs font-medium ${
@@ -132,10 +141,17 @@ function ModelStatusCard({
         </span>
       </div>
 
-      <div className="rounded-lg border border-border bg-surface-primary px-3 py-3 text-sm">
-        <div className="text-text-primary font-medium">{config?.name ?? "尚未选择模型"}</div>
-        <div className="mt-1 text-text-secondary">
-          {config?.providerCode ? `Provider: ${config.providerCode}` : "请前往模型设置页配置"}
+      <div className="rounded-xl border border-border bg-surface-primary px-3.5 py-3 text-sm shadow-shadow-sm">
+        <div className="truncate font-medium text-text-primary">{config?.name ?? "尚未选择模型"}</div>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+          <span className="rounded-full bg-surface-secondary px-2.5 py-1 text-text-secondary">
+            {config?.providerCode ? `Provider · ${config.providerCode}` : "未选择提供商"}
+          </span>
+          {config?.remoteModelId ? (
+            <span className="rounded-full bg-primary/5 px-2.5 py-1 text-primary">
+              默认模型
+            </span>
+          ) : null}
         </div>
       </div>
     </div>
@@ -149,9 +165,12 @@ export default function KnowledgeBaseAddWizard() {
   const [files, setFiles] = useState<UploadFileItem[]>(initialFiles);
   const [settings, setSettings] = useState<ChunkSettings>(initialSettings);
   const [previewChunks, setPreviewChunks] = useState<PreviewChunk[]>([]);
-  const [previewFileId, setPreviewFileId] = useState<string>(initialFiles[0]?.id ?? "");
+  const [previewFileId, setPreviewFileId] = useState<string>("");
   const [retrievalMode, setRetrievalMode] = useState<RetrievalMode>("fulltext");
   const [roleConfigs, setRoleConfigs] = useState<RoleModelConfig[]>([]);
+  const [modelAccessStatus, setModelAccessStatus] = useState<GlobalModelAccessStatus | null>(
+    null,
+  );
   const [loadingConfigs, setLoadingConfigs] = useState(false);
   const [processingProgress, setProcessingProgress] = useState(0);
   const [processingDone, setProcessingDone] = useState(false);
@@ -165,20 +184,29 @@ export default function KnowledgeBaseAddWizard() {
   const canProceedStep2 = Boolean(
     llmConfig?.providerCode && llmConfig?.remoteModelId && embeddingConfig?.providerCode && embeddingConfig?.remoteModelId,
   );
+  const canUploadDocument = modelAccessStatus?.embeddingConnected ?? false;
 
   const helperText = useMemo(
-    () => "已支持 MARKDOWN、TXT，每批最多 5 个文件，每个文件不超过 15 MB。",
+    () => "已支持 MARKDOWN、TXT，一次只能上传 1 个文件，每个文件不超过 15 MB。",
     [],
   );
   const activeFile = files.find((item) => item.id === previewFileId) ?? files[0] ?? null;
-  const effectivePreviewChunks = useMemo(() => {
-    if (previewChunks.length > 0) {
-      return previewChunks;
-    }
+  const effectivePreviewChunks = useMemo(
+    () => (previewChunks.length > 0 ? previewChunks : []),
+    [previewChunks],
+  );
 
-    const fallbackText = activeFile?.mockContent ?? sampleText;
-    return splitTextIntoChunks(fallbackText, settings);
-  }, [activeFile, previewChunks, settings]);
+  useEffect(() => {
+    void (async () => {
+      try {
+        const status = await getGlobalModelAccessStatus();
+        setModelAccessStatus(status);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "加载模型接入状态失败";
+        message.error(errorMessage);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     if (currentStep !== 2) {
@@ -190,6 +218,7 @@ export default function KnowledgeBaseAddWizard() {
         setLoadingConfigs(true);
         const configs = await getRoleModelConfigs();
         setRoleConfigs(configs);
+        setModelAccessStatus(resolveGlobalModelAccessStatus(configs));
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "加载模型配置失败";
         message.error(errorMessage);
@@ -224,11 +253,11 @@ export default function KnowledgeBaseAddWizard() {
             return;
           }
 
-          const rawText = file.mockContent ?? (await file.file.text()) ?? sampleText;
+          const rawText = await file.file.text();
           const document = await createKnowledgeBaseDocument({
             name: file.name,
             fileExt: file.extension.toLowerCase(),
-            contentText: rawText || sampleText,
+            contentText: rawText,
             mimeType: file.file.type || "text/plain",
             fileSize: file.size,
             sourceType: "upload",
@@ -269,13 +298,23 @@ export default function KnowledgeBaseAddWizard() {
     }
 
     void (async () => {
-      const rawText = activeFile.mockContent ?? (await activeFile.file.text());
-      setPreviewChunks(splitTextIntoChunks(rawText || sampleText, settings));
+      const rawText = await activeFile.file.text();
+      setPreviewChunks(splitTextIntoChunks(rawText, settings));
     })();
   }, [activeFile, previewChunks.length, settings]);
 
   const appendFiles = (selectedFiles: FileList | null) => {
     if (!selectedFiles || selectedFiles.length === 0) {
+      return;
+    }
+
+    if (selectedFiles.length > 1) {
+      message.warning("一次只能上传 1 个文件");
+      return;
+    }
+
+    if (files.length >= 1) {
+      message.warning("一次只能上传 1 个文件，请先移除当前文件");
       return;
     }
 
@@ -287,29 +326,16 @@ export default function KnowledgeBaseAddWizard() {
       size: file.size,
     }));
 
-    let addedCount = 0;
-    let skippedCount = 0;
-
     setFiles((current) => {
-      const merged = [...current];
-      for (const item of nextFiles) {
-        if (merged.some((existing) => existing.id === item.id) || merged.length >= 5) {
-          skippedCount++;
-          continue;
-        }
-        merged.push(item);
-        addedCount++;
+      if (current.some((existing) => existing.id === nextFiles[0]?.id)) {
+        return current;
       }
-      return merged;
+      return [...current, ...nextFiles];
     });
 
-    if (addedCount > 0) {
-      setPreviewFileId(nextFiles[0]?.id ?? previewFileId);
-      message.success(`${addedCount} 个文件已添加到上传列表`);
-    }
-
-    if (skippedCount > 0) {
-      message.warning(`已跳过 ${skippedCount} 个文件`);
+    if (nextFiles[0]) {
+      setPreviewFileId(nextFiles[0].id);
+      message.success("文件已添加到上传列表");
     }
   };
 
@@ -336,8 +362,8 @@ export default function KnowledgeBaseAddWizard() {
       return;
     }
 
-    const rawText = activeFile.mockContent ?? (await activeFile.file.text());
-    const chunks = splitTextIntoChunks(rawText || sampleText, settings);
+    const rawText = await activeFile.file.text();
+    const chunks = splitTextIntoChunks(rawText, settings);
     setPreviewChunks(chunks);
     message.success(`已生成 ${chunks.length} 个文本分块预览`);
   };
@@ -347,15 +373,34 @@ export default function KnowledgeBaseAddWizard() {
       <div className="space-y-1.5">
         <h1 className="text-base font-semibold text-text-primary">上传文本文件</h1>
         <p className="text-sm text-text-secondary">
-          先选择需要导入知识库的文件。当前页面使用假数据和前端交互来模拟上传流程。
+          先选择需要导入知识库的文件。
         </p>
       </div>
 
+      {modelAccessStatus && !modelAccessStatus.embeddingConnected ? (
+        <div className="flex items-start gap-3 rounded-xl border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger">
+          <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+          <div className="space-y-2">
+            <div className="font-medium">当前未接入默认向量模型，暂时无法上传知识库文件。</div>
+            <div className="flex flex-wrap gap-2">
+              <ModelAccessStatusPill label="向量模型" connected={modelAccessStatus.embeddingConnected} />
+              <ModelAccessStatusPill label="LLM 模型" connected={modelAccessStatus.llmConnected} />
+              <ModelAccessStatusPill label="Rerank 模型" connected={modelAccessStatus.rerankConnected} />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <FileUploadDropzone
         onSelectFiles={appendFiles}
-        helperText={helperText}
-        maxCount={5}
+        helperText={
+          canUploadDocument
+            ? helperText
+            : "请先在模型设置中接入默认 Embedding 模型，随后再上传知识库文件。"
+        }
+        maxCount={1}
         accept=".md,.txt"
+        disabled={!canUploadDocument}
       />
 
       <div className="space-y-2.5">
@@ -373,7 +418,10 @@ export default function KnowledgeBaseAddWizard() {
       </div>
 
       <div className="flex justify-end">
-        <Button disabled={!canProceedStep1} onClick={() => canProceedStep1 && goToStep(2)}>
+        <Button
+          disabled={!canProceedStep1 || !canUploadDocument}
+          onClick={() => canProceedStep1 && canUploadDocument && goToStep(2)}
+        >
           下一步
           <ArrowRight className="h-4 w-4" />
         </Button>
@@ -382,9 +430,10 @@ export default function KnowledgeBaseAddWizard() {
   );
 
   const renderStepTwo = () => (
-    <div className="space-y-5">
-      <div className="grid gap-5 xl:grid-cols-[1.6fr_0.9fr]">
-        <div className="space-y-4">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="grid min-h-0 flex-1 gap-5 overflow-hidden xl:grid-cols-[1.6fr_0.9fr]">
+        <div className="min-h-0 overflow-y-auto pr-1">
+          <div className="space-y-4 pb-4">
           <section className="space-y-2.5">
             <div className="text-base font-semibold text-text-primary">分段设置</div>
             <Card className="p-4">
@@ -568,17 +617,20 @@ export default function KnowledgeBaseAddWizard() {
                 description="用于回答生成。当前步骤要求已经配置默认 LLM。"
                 config={llmConfig}
                 required
+                icon={<Bot className="h-5 w-5" />}
               />
               <ModelStatusCard
                 title="Embedding 模型"
                 description="用于向量化和语义检索。当前步骤要求已经配置默认 Embedding。"
                 config={embeddingConfig}
                 required
+                icon={<Cpu className="h-5 w-5" />}
               />
               <ModelStatusCard
                 title="ReRank 模型"
                 description="用于结果重排。当前为可选配置，不影响继续下一步。"
                 config={rerankConfig}
+                icon={<ScanSearch className="h-5 w-5" />}
               />
             </div>
 
@@ -635,10 +687,11 @@ export default function KnowledgeBaseAddWizard() {
               </button>
             </div>
           </section>
+          </div>
         </div>
 
         <div className="min-h-0">
-          <Card className="sticky top-0 flex h-[720px] flex-col p-0">
+          <Card className="flex h-full min-h-0 flex-col p-0">
             <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
               <div>
                 <div className="text-sm font-semibold text-text-primary">预览</div>
@@ -676,7 +729,7 @@ export default function KnowledgeBaseAddWizard() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex shrink-0 items-center justify-between border-t border-border bg-surface-primary pt-4">
         <Button variant="ghost" onClick={() => goToStep(1)}>
           <ArrowLeft className="h-4 w-4" />
           上一步
@@ -846,7 +899,7 @@ export default function KnowledgeBaseAddWizard() {
               </div>
               <div className="mt-4 text-xl font-semibold text-text-primary">接下来做什么</div>
               <p className="mt-2.5 text-sm leading-6 text-text-secondary">
-                当前仅模拟上传与嵌入流程。处理结束后，你可以返回知识库管理页查看文档状态，也可以继续进入聊天流程验证检索命中片段。
+                处理结束后，你可以返回知识库管理页查看文档状态，也可以继续进入聊天流程验证检索命中片段。
               </p>
             </div>
           </Card>
@@ -856,20 +909,30 @@ export default function KnowledgeBaseAddWizard() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5">
-      <div className="flex items-center justify-between gap-3">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-col gap-5 overflow-hidden px-4 py-5">
+      <div className="shrink-0 flex items-center justify-between gap-3">
         <Button variant="ghost" onClick={() => navigate("/settings/knowledge-base") }>
           <ArrowLeft className="h-4 w-4" />
           返回知识库
         </Button>
       </div>
 
-      <StepIndicator currentStep={currentStep} steps={steps} />
+      <div className="shrink-0">
+        <StepIndicator currentStep={currentStep} steps={steps} />
+      </div>
 
-      <div className="rounded-xl border border-border bg-surface-primary px-5 py-6 shadow-shadow-sm">
-        {currentStep === 1 ? renderStepOne() : null}
-        {currentStep === 2 ? renderStepTwo() : null}
-        {currentStep === 3 ? renderStepThree() : null}
+      <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-surface-primary px-5 py-6 shadow-shadow-sm">
+        <div
+          className={
+            currentStep === 2
+              ? "h-full min-h-0 overflow-hidden"
+              : "h-full min-h-0 overflow-y-auto"
+          }
+        >
+          {currentStep === 1 ? renderStepOne() : null}
+          {currentStep === 2 ? renderStepTwo() : null}
+          {currentStep === 3 ? renderStepThree() : null}
+        </div>
       </div>
     </div>
   );

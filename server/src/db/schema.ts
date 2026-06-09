@@ -16,7 +16,7 @@ export const users = sqliteTable(
     passwordHash: text("password_hash").notNull(),
     role: text("role", { enum: ["admin", "user"] }).notNull(),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-    createdAt: text("created_at").notNull().default("CURRENT_TIMESTAMP"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
     usernameIdx: uniqueIndex("idx_users_username").on(table.username),
@@ -36,7 +36,7 @@ export const sessions = sqliteTable("sessions", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   expiresAt: text("expires_at").notNull(),
-  createdAt: text("created_at").notNull().default("CURRENT_TIMESTAMP"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -56,13 +56,13 @@ export const modelConfigs = sqliteTable(
     type: text("type", { enum: ["llm", "embedding", "rerank"] }).notNull(),
     name: text("name").notNull().default(""),
     providerCode: text("provider_code", {
-      enum: ["ollama", "lmstudio", "openai"],
+      enum: ["ollama", "lmstudio", "openai", "cloudflare"],
     }),
     remoteModelId: text("remote_model_id"),
     params: text("params").notNull().default("{}"),
     isDefault: integer("is_default", { mode: "boolean" }).notNull().default(true),
-    createdAt: text("created_at").notNull().default("CURRENT_TIMESTAMP"),
-    updatedAt: text("updated_at").notNull().default("CURRENT_TIMESTAMP"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
     typeIdx: index("idx_model_configs_type").on(table.type),
@@ -93,7 +93,7 @@ export const modelParamTemplates = sqliteTable(
     step: real("step"),
     options: text("options"),
     defaultValue: text("default_value").notNull(),
-    createdAt: text("created_at").notNull().default("CURRENT_TIMESTAMP"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
     modelTypeParamKeyIdx: uniqueIndex("idx_model_param_templates_type_key").on(
@@ -113,7 +113,7 @@ export const providerConnections = sqliteTable(
   "provider_connections",
   {
     providerCode: text("provider_code", {
-      enum: ["ollama", "lmstudio", "openai"],
+      enum: ["ollama", "lmstudio", "openai", "cloudflare"],
     }).primaryKey(),
     displayName: text("display_name").notNull(),
     baseUrl: text("base_url").notNull().default(""),
@@ -124,8 +124,8 @@ export const providerConnections = sqliteTable(
     }).notNull().default("idle"),
     lastError: text("last_error"),
     lastSyncedAt: text("last_synced_at"),
-    createdAt: text("created_at").notNull().default("CURRENT_TIMESTAMP"),
-    updatedAt: text("updated_at").notNull().default("CURRENT_TIMESTAMP"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
     providerStatusIdx: index("idx_provider_connections_status").on(table.status),
@@ -140,7 +140,7 @@ export const providerModels = sqliteTable(
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     providerCode: text("provider_code", {
-      enum: ["ollama", "lmstudio", "openai"],
+      enum: ["ollama", "lmstudio", "openai", "cloudflare"],
     }).notNull(),
     remoteModelId: text("remote_model_id").notNull(),
     modelName: text("model_name").notNull(),
@@ -174,8 +174,8 @@ export const knowledgeBases = sqliteTable(
       { onDelete: "set null" },
     ),
     chunkingConfigJson: text("chunking_config_json").notNull().default("{}"),
-    createdAt: text("created_at").notNull().default("CURRENT_TIMESTAMP"),
-    updatedAt: text("updated_at").notNull().default("CURRENT_TIMESTAMP"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
     statusIdx: index("idx_knowledge_bases_status").on(table.status),
@@ -220,8 +220,8 @@ export const documents = sqliteTable(
     charCount: integer("char_count").notNull().default(0),
     tokenCount: integer("token_count"),
     errorMessage: text("error_message"),
-    createdAt: text("created_at").notNull().default("CURRENT_TIMESTAMP"),
-    updatedAt: text("updated_at").notNull().default("CURRENT_TIMESTAMP"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
     knowledgeBaseIdx: index("idx_documents_knowledge_base").on(table.knowledgeBaseId),
@@ -258,7 +258,7 @@ export const documentChunks = sqliteTable(
     tokenCount: integer("token_count"),
     startOffset: integer("start_offset"),
     endOffset: integer("end_offset"),
-    createdAt: text("created_at").notNull().default("CURRENT_TIMESTAMP"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
     documentChunkUniqueIdx: uniqueIndex("idx_document_chunks_document_index").on(
@@ -303,8 +303,8 @@ export const knowledgeBaseVectorIndexes = sqliteTable(
       .notNull()
       .default("cosine"),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-    createdAt: text("created_at").notNull().default("CURRENT_TIMESTAMP"),
-    updatedAt: text("updated_at").notNull().default("CURRENT_TIMESTAMP"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
     tableNameUniqueIdx: uniqueIndex("idx_kb_vector_indexes_table_name").on(table.tableName),
@@ -332,7 +332,7 @@ export type NewKnowledgeBaseVectorIndex = typeof knowledgeBaseVectorIndexes.$inf
 export type ModelType = "llm" | "embedding" | "rerank";
 export type UserRole = "admin" | "user";
 export type ParamType = "number" | "select" | "boolean";
-export type ProviderCode = "ollama" | "lmstudio" | "openai";
+export type ProviderCode = "ollama" | "lmstudio" | "openai" | "cloudflare";
 export type ProviderStatus = "idle" | "syncing" | "connected" | "error";
 export type KnowledgeBaseStatus = "active" | "archived";
 export type DocumentSourceType = "upload" | "sync" | "api";

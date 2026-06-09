@@ -31,6 +31,7 @@ const PROVIDER_LABELS = {
   ollama: "Ollama",
   lmstudio: "LM Studio",
   openai: "OpenAI",
+  cloudflare: "Cloudflare",
 } as const;
 
 const MODEL_META: Record<RoleModelType, ModelMeta> = {

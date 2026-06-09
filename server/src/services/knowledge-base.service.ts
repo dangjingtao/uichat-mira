@@ -1,21 +1,8 @@
-import {
-  DEFAULT_KNOWLEDGE_BASE_ID,
-  DEFAULT_KNOWLEDGE_BASE_NAME,
-} from "@/db/knowledge-base.db";
-import {
-  documentRepository,
-  knowledgeBaseRepository,
-  type DocumentListFilters,
-} from "@/db/repositories";
-import type {
-  Document,
-  DocumentIndexStatus,
-  DocumentSourceType,
-} from "@/db/schema";
-import {
-  splitDocumentText,
-  type ChunkingConfig,
-} from "@/services/knowledge-base.splitter";
+import { documentRepository, knowledgeBaseRepository, type DocumentListFilters } from "@/db/repositories";
+import type { Document, DocumentIndexStatus, DocumentSourceType } from "@/db/schema";
+import { splitDocumentText, type ChunkingConfig } from "@/services/knowledge-base.splitter";
+import { knowledgeBaseVectorStore } from "@/services/knowledge-base.vector-store.js";
+import { providerProxyService } from "@/services/provider-proxy.service.js";
 
 export interface KnowledgeBaseSummaryResponse {
   id: string;
@@ -82,7 +69,11 @@ export interface UpdateDocumentInput {
   chunkingConfig?: Partial<ChunkingConfig> | null;
 }
 
-const toDocumentResponse = (document: Document): KnowledgeBaseDocumentResponse => ({
+const DEFAULT_UPLOAD_SOURCE_LABEL = "本地上传";
+
+const toDocumentResponse = (
+  document: Document,
+): KnowledgeBaseDocumentResponse => ({
   id: document.id,
   knowledgeBaseId: document.knowledgeBaseId,
   name: document.name,
@@ -100,6 +91,58 @@ const toDocumentResponse = (document: Document): KnowledgeBaseDocumentResponse =
   createdAt: document.createdAt,
   updatedAt: document.updatedAt,
 });
+
+const embedDocumentChunks = async (
+  knowledgeBaseId: string,
+  chunks: KnowledgeBaseDocumentDetailResponse["chunks"],
+) => {
+  if (chunks.length === 0) {
+    return;
+  }
+
+  const embeddingResult = await providerProxyService.createEmbeddings(
+    "default",
+    chunks.map((chunk) => chunk.content),
+  );
+
+  const vectorIndex = knowledgeBaseVectorStore.ensureDefaultVectorIndex({
+    knowledgeBaseId,
+    embeddingModelConfigId: embeddingResult.modelConfigId,
+    model: embeddingResult.model,
+    dimensions: embeddingResult.dimensions,
+  });
+
+  knowledgeBaseVectorStore.upsertChunkEmbeddings({
+    tableName: vectorIndex.tableName,
+    rows: chunks.map((chunk, index) => ({
+      chunkId: chunk.id,
+      embedding: embeddingResult.embeddings[index] ?? [],
+    })),
+  });
+};
+
+const cleanupDocumentArtifacts = (
+  document: Pick<
+    KnowledgeBaseDocumentDetailResponse,
+    "id" | "knowledgeBaseId" | "chunks"
+  > | null,
+) => {
+  if (!document) {
+    return;
+  }
+
+  if (document.chunks.length > 0) {
+    const tableNames = knowledgeBaseVectorStore.listVectorIndexTableNames(
+      document.knowledgeBaseId,
+    );
+    knowledgeBaseVectorStore.deleteChunkEmbeddings({
+      tableNames,
+      chunkIds: document.chunks.map((chunk) => chunk.id),
+    });
+  }
+
+  documentRepository.deleteById(document.id);
+};
 
 export const knowledgeBaseService = {
   getDefaultKnowledgeBase(): KnowledgeBaseSummaryResponse {
@@ -147,7 +190,9 @@ export const knowledgeBaseService = {
     };
   },
 
-  createDocument(input: CreateDocumentInput): KnowledgeBaseDocumentDetailResponse {
+  async createDocument(
+    input: CreateDocumentInput,
+  ): Promise<KnowledgeBaseDocumentDetailResponse> {
     const kb = knowledgeBaseRepository.ensureDefault();
     const splitResult = splitDocumentText(input.contentText, input.chunkingConfig);
 
@@ -156,12 +201,12 @@ export const knowledgeBaseService = {
         knowledgeBaseId: kb.id,
         name: input.name.trim(),
         sourceType: input.sourceType ?? "upload",
-        sourceLabel: input.sourceLabel?.trim() || "本地上传",
+        sourceLabel: input.sourceLabel?.trim() || DEFAULT_UPLOAD_SOURCE_LABEL,
         fileExt: input.fileExt.trim().toLowerCase(),
         mimeType: input.mimeType?.trim() || null,
         fileSize: input.fileSize ?? null,
         contentText: splitResult.normalizedText,
-        indexStatus: "ready",
+        indexStatus: "processing",
         enabled: input.enabled ?? true,
         chunkCount: splitResult.chunks.length,
         charCount: splitResult.normalizedText.length,
@@ -179,17 +224,40 @@ export const knowledgeBaseService = {
       })),
     });
 
+    const detail = this.getDocumentById(created.id)!;
+
+    try {
+      await embedDocumentChunks(kb.id, detail.chunks);
+      documentRepository.updateById(created.id, {
+        indexStatus: "ready",
+        errorMessage: null,
+      });
+    } catch (error) {
+      cleanupDocumentArtifacts(detail);
+
+      throw error instanceof Error
+        ? error
+        : new Error("Failed to generate embeddings");
+    }
+
     return this.getDocumentById(created.id)!;
   },
 
-  updateDocument(id: string, input: UpdateDocumentInput): KnowledgeBaseDocumentDetailResponse | null {
+  async updateDocument(
+    id: string,
+    input: UpdateDocumentInput,
+  ): Promise<KnowledgeBaseDocumentDetailResponse | null> {
     const existing = documentRepository.findById(id);
     if (!existing) {
       return null;
     }
 
     if (typeof input.contentText === "string") {
-      const splitResult = splitDocumentText(input.contentText, input.chunkingConfig);
+      const previousDetail = this.getDocumentById(id);
+      const splitResult = splitDocumentText(
+        input.contentText,
+        input.chunkingConfig,
+      );
 
       const updated = documentRepository.replaceChunks({
         documentId: existing.id,
@@ -198,7 +266,7 @@ export const knowledgeBaseService = {
         chunkCount: splitResult.chunks.length,
         charCount: splitResult.normalizedText.length,
         tokenCount: null,
-        indexStatus: "ready",
+        indexStatus: "processing",
         errorMessage: null,
         chunks: splitResult.chunks.map((chunk) => ({
           chunkIndex: chunk.chunkIndex,
@@ -214,26 +282,53 @@ export const knowledgeBaseService = {
         return null;
       }
 
-      if (
-        typeof input.name === "string" ||
-        typeof input.enabled === "boolean" ||
-        "sourceLabel" in input
-      ) {
+      try {
+        if (previousDetail?.chunks.length) {
+          const tableNames = knowledgeBaseVectorStore.listVectorIndexTableNames(
+            previousDetail.knowledgeBaseId,
+          );
+          knowledgeBaseVectorStore.deleteChunkEmbeddings({
+            tableNames,
+            chunkIds: previousDetail.chunks.map((chunk) => chunk.id),
+          });
+        }
+
+        const nextDetail = this.getDocumentById(id)!;
+        await embedDocumentChunks(existing.knowledgeBaseId, nextDetail.chunks);
+
         documentRepository.updateById(id, {
-          name: typeof input.name === "string" ? input.name.trim() || updated.name : undefined,
+          name:
+            typeof input.name === "string"
+              ? input.name.trim() || updated.name
+              : undefined,
           enabled: typeof input.enabled === "boolean" ? input.enabled : undefined,
           sourceLabel:
             typeof input.sourceLabel === "string"
               ? input.sourceLabel.trim() || null
               : undefined,
+          indexStatus: "ready",
+          errorMessage: null,
         });
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Failed to generate embeddings";
+
+        documentRepository.updateById(id, {
+          indexStatus: "failed",
+          errorMessage,
+        });
+
+        throw error;
       }
 
       return this.getDocumentById(id);
     }
 
     const updated = documentRepository.updateById(id, {
-      name: typeof input.name === "string" ? input.name.trim() || existing.name : undefined,
+      name:
+        typeof input.name === "string"
+          ? input.name.trim() || existing.name
+          : undefined,
       enabled: typeof input.enabled === "boolean" ? input.enabled : undefined,
       sourceLabel:
         typeof input.sourceLabel === "string"
@@ -245,6 +340,17 @@ export const knowledgeBaseService = {
   },
 
   deleteDocument(id: string): boolean {
+    const detail = this.getDocumentById(id);
+    if (detail?.chunks.length) {
+      const tableNames = knowledgeBaseVectorStore.listVectorIndexTableNames(
+        detail.knowledgeBaseId,
+      );
+      knowledgeBaseVectorStore.deleteChunkEmbeddings({
+        tableNames,
+        chunkIds: detail.chunks.map((chunk) => chunk.id),
+      });
+    }
+
     return documentRepository.deleteById(id);
   },
 };

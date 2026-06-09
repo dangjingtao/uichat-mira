@@ -6,28 +6,54 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import healthRoute from "@/routes/health";
 import dbHealthRoute from "@/routes/dbHealth";
+import logsRoute from "@/routes/logs";
 import loginRoute from "@/routes/login";
 import meRoute from "@/routes/me";
-// Proxy Ollama chat endpoint
-import proxyOllamaRoute from "@/routes/proxy-ollama";
+import proxyProviderRoute from "@/routes/proxy-provider";
 import accountRoute from "@/routes/account";
 import knowledgeBaseRoute from "@/routes/knowledge-base";
 import modelConfigRoute from "@/routes/model-config";
 import providerSettingsRoute from "@/routes/provider-settings";
-import { initializeAuthDatabase } from "@/db/auth.db";
+import { getAuthUserFromRequest, initializeAuthDatabase } from "@/db/auth.db";
 import { initializeKnowledgeBaseDatabase } from "@/db/knowledge-base.db";
 import { initializeModelConfigDatabase } from "@/db/model-config.db";
 import { initializeVectorStore } from "@/db";
+import { repairLiteralCurrentTimestampValues } from "@/db/timestamp-repair";
 import CONFIG from "@/config";
 import { getLoggerConfig } from "@/logger";
 
 const app = Fastify({ logger: getLoggerConfig() });
 const enableSwagger = process.env.NODE_ENV !== "production";
 
+const isAuthExemptPath = (url: string) => {
+  const pathname = url.split("?")[0] || "/";
+  return pathname === "/login";
+};
+
 const setupPlugins = async () => {
   await app.register(cors, {
     origin: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  });
+
+  app.addHook("preHandler", async (request, reply) => {
+    if (request.method === "OPTIONS" || isAuthExemptPath(request.url)) {
+      return;
+    }
+
+    const user = getAuthUserFromRequest(request);
+    if (!user) {
+      const authHeader = request.headers.authorization;
+      return reply.code(401).send({
+        ok: false,
+        message:
+          authHeader && authHeader.startsWith("Bearer ")
+            ? "Invalid auth token"
+            : "Missing auth token",
+      });
+    }
+
+    request.authUser = user;
   });
 
   if (!enableSwagger) {
@@ -53,8 +79,8 @@ const setupPlugins = async () => {
           description: "服务商连接与模型同步",
         },
         {
-          name: "Proxy Ollama",
-          description: "代理聊天接口（Ollama / OpenAI 兼容）",
+          name: "Provider Proxy",
+          description: "Provider chat and embeddings proxy endpoints",
         },
       ],
       components: {
@@ -79,9 +105,10 @@ const setupPlugins = async () => {
 };
 
 const setupRoutes = async () => {
-  await app.register(proxyOllamaRoute);
+  await app.register(proxyProviderRoute);
   await app.register(healthRoute);
   await app.register(dbHealthRoute);
+  await app.register(logsRoute);
   await app.register(loginRoute);
   await app.register(meRoute);
   await app.register(accountRoute);
@@ -106,6 +133,7 @@ const setupDatabase = async () => {
   initializeAuthDatabase();
   initializeModelConfigDatabase();
   initializeKnowledgeBaseDatabase();
+  repairLiteralCurrentTimestampValues();
 
   const vectorStoreHealth = initializeVectorStore();
   if (vectorStoreHealth.ok) {
@@ -129,7 +157,7 @@ const setupDatabase = async () => {
 const isExistingBackendHealthy = async (port: number): Promise<boolean> => {
   try {
     const response = await fetch(`http://127.0.0.1:${port}/health`);
-    return response.ok;
+    return response.ok || response.status === 401;
   } catch {
     return false;
   }

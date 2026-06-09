@@ -5,13 +5,13 @@ import fs from "node:fs";
 import path from "node:path";
 
 // 确保 logs 目录存在
-const LOG_DIR = path.resolve(process.cwd(), "logs");
+export const LOG_DIR = path.resolve(process.cwd(), "logs");
 try {
   fs.mkdirSync(LOG_DIR, { recursive: true });
 } catch {}
 
-const LOG_FILE = path.join(LOG_DIR, "server.log");
-const ERROR_LOG_FILE = path.join(LOG_DIR, "error.log");
+export const LOG_FILE = path.join(LOG_DIR, "server.log");
+export const ERROR_LOG_FILE = path.join(LOG_DIR, "error.log");
 
 /**
  * 创建日志流

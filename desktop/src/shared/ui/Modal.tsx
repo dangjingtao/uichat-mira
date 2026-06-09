@@ -18,6 +18,7 @@ export interface ModalShowOptions {
   footer?: ReactNode | null;
   width?: number | string;
   height?: number | string;
+  maxHeight?: number | string;
   closable?: boolean;
   maskClosable?: boolean;
   showCloseButton?: boolean;
@@ -39,6 +40,7 @@ interface ModalShellProps {
   title?: ReactNode;
   width?: number | string;
   height?: number | string;
+  maxHeight?: number | string;
   closable?: boolean;
   maskClosable?: boolean;
   showCloseButton?: boolean;
@@ -59,12 +61,12 @@ const resolveWidthStyle = (width?: number | string) => {
   return width ?? "560px";
 };
 
-const resolveHeightStyle = (height?: number | string) => {
-  if (typeof height === "number") {
-    return `${height}px`;
+const resolveSizeStyle = (value?: number | string) => {
+  if (typeof value === "number") {
+    return `${value}px`;
   }
 
-  return height ?? "min(720px, calc(100vh - 2rem))";
+  return value;
 };
 
 export const ModalShell: React.FC<ModalShellProps> = ({
@@ -72,6 +74,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({
   title,
   width,
   height,
+  maxHeight,
   closable = true,
   maskClosable = true,
   showCloseButton = true,
@@ -101,8 +104,8 @@ export const ModalShell: React.FC<ModalShellProps> = ({
         className="relative z-[101] flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-surface-elevated shadow-shadow-xl animate-in fade-in duration-200"
         style={{
           maxWidth: resolveWidthStyle(width),
-          height: resolveHeightStyle(height),
-          maxHeight: "calc(100vh - 2rem)",
+          height: resolveSizeStyle(height),
+          maxHeight: resolveSizeStyle(maxHeight) ?? "calc(100vh - 2rem)",
         }}
       >
         {(title || showCloseButton) && (
@@ -222,6 +225,7 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({
           title={modal.title}
           width={modal.width}
           height={modal.height}
+          maxHeight={modal.maxHeight}
           closable={modal.closable}
           maskClosable={modal.maskClosable}
           showCloseButton={modal.showCloseButton}

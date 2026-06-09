@@ -30,9 +30,9 @@ const Tooltip: React.FC<TooltipProps> = ({
       {children}
       <div
         role="tooltip"
-        className={`pointer-events-none absolute z-50 whitespace-nowrap opacity-0 transition duration-150 ease-out group-hover:opacity-100 group-focus-within:opacity-100 ${placementClasses[placement]}`}
+        className={`pointer-events-none absolute z-50 opacity-0 transition duration-150 ease-out group-hover:opacity-100 group-focus-within:opacity-100 ${placementClasses[placement]}`}
       >
-        <div className="rounded-lg bg-text-primary px-2.5 py-1.5 text-xs text-text-inverted shadow-shadow-lg">
+        <div className="max-w-[min(24rem,calc(100vw-2rem))] whitespace-normal break-words rounded-lg bg-text-primary px-2.5 py-1.5 text-left text-xs leading-5 text-text-inverted shadow-shadow-lg">
           {text}
           <div className={`absolute ${arrowClasses[placement]}`}></div>
         </div>

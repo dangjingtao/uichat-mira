@@ -4,12 +4,12 @@ declare global {
       platform: string;
       isPackaged: boolean;
       backendUrl: string;
-      checkBackendHealth: () => Promise<{
+      checkBackendHealth: (token?: string) => Promise<{
         success: boolean;
         statusCode: number;
         error?: string;
       }>;
-      checkDatabaseHealth: () => Promise<{
+      checkDatabaseHealth: (token?: string) => Promise<{
         success: boolean;
         ok: boolean;
         configured: boolean;

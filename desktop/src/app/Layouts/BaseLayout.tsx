@@ -26,10 +26,10 @@ import {
 
 const getChatApiUrl = () => {
   if (window.location.protocol === "file:") {
-    return `${window.desktopApi?.backendUrl ?? ""}/proxy/ollama/chat`;
+    return `${window.desktopApi?.backendUrl ?? ""}/proxy/chat/default`;
   }
 
-  return "/api/proxy/ollama/chat";
+  return "/api/proxy/chat/default";
 };
 
 const defaultSuggestions: SuggestionConfig[] = [
@@ -110,8 +110,12 @@ const BaseLayout: FunctionComponent<BaseLayoutProps> = ({ mode, children }) => {
         </Sidebar>
 
         {/* 主区域：子路由渲染到这里 */}
-        <main className="mx-auto flex h-screen w-full flex-col px-0 border border-slate-200 overflow-y-auto bg-white">
-          <section className="flex min-h-0 flex-1 rounded-xl  shadow-sm ">
+        <main
+          className={`mx-auto flex h-screen w-full flex-col border border-slate-200 bg-white px-0 ${
+            mode === "settings" ? "overflow-hidden" : "overflow-y-auto"
+          }`}
+        >
+          <section className="flex min-h-0 flex-1 rounded-xl shadow-sm">
             <div
               style={{ display: mode === "chat" ? "block" : "none" }}
               className="w-full"

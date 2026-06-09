@@ -98,3 +98,10 @@ curl http://<backend-host>:<backend-port>/db/health
 ```
 
 Use the actual values from `runtime.config.cjs`.
+
+## todo
+
+- [x] 支持 Cloudflare 模型
+- [ ] 给 updateDocument 做真正的回滚策略：
+  先保留旧 chunk 和旧向量引用, 新 embedding 成功后再切换, 失败则恢复旧内容和旧向量状态
+- [ ] 支持tauri打包

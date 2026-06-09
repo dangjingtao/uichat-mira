@@ -16,6 +16,19 @@ const hasTable = (tableName: string) => {
   return Boolean(row);
 };
 
+const hasLegacyModelConfigForeignKey = (tableName: string) => {
+  if (!hasTable(tableName)) {
+    return false;
+  }
+
+  const sqlite = getSqlite();
+  const rows = sqlite
+    .prepare(`PRAGMA foreign_key_list(${tableName})`)
+    .all() as Array<{ table: string }>;
+
+  return rows.some((row) => row.table === "model_configs__legacy");
+};
+
 const ensureDocumentChunkFts = () => {
   const sqlite = getSqlite();
 
@@ -77,6 +90,7 @@ export const ensureChunkEmbeddingVectorTable = ({
     sqlite.exec(`
       CREATE VIRTUAL TABLE ${tableName}
       USING vec0(
+        chunk_id INTEGER PRIMARY KEY,
         embedding FLOAT[${dimensions}]
       );
     `);
@@ -84,7 +98,11 @@ export const ensureChunkEmbeddingVectorTable = ({
   }
 
   const expectedToken = `FLOAT[${dimensions}]`;
-  if (!existingDefinition.sql?.toUpperCase().includes(expectedToken)) {
+  const normalizedSql = existingDefinition.sql?.toUpperCase() ?? "";
+  if (
+    !normalizedSql.includes(expectedToken) ||
+    !normalizedSql.includes("CHUNK_ID INTEGER PRIMARY KEY")
+  ) {
     throw new Error(
       `Existing vector table ${tableName} does not match expected dimensions ${dimensions}`,
     );
@@ -163,6 +181,163 @@ const ensureKnowledgeBaseTables = () => {
   `);
 };
 
+const rebuildKnowledgeBaseTablesForModelConfigForeignKeys = () => {
+  const sqlite = getSqlite();
+
+  sqlite.pragma("foreign_keys = OFF");
+
+  try {
+    const tx = sqlite.transaction(() => {
+      sqlite.exec(`
+        DROP TRIGGER IF EXISTS document_chunks_ai;
+        DROP TRIGGER IF EXISTS document_chunks_ad;
+        DROP TRIGGER IF EXISTS document_chunks_au;
+        DROP TABLE IF EXISTS document_chunks_fts;
+
+        ALTER TABLE document_chunks RENAME TO document_chunks__legacy;
+        ALTER TABLE documents RENAME TO documents__legacy;
+        ALTER TABLE knowledge_base_vector_indexes RENAME TO knowledge_base_vector_indexes__legacy;
+        ALTER TABLE knowledge_bases RENAME TO knowledge_bases__legacy;
+      `);
+
+      ensureKnowledgeBaseTables();
+
+      sqlite.exec(`
+        INSERT INTO knowledge_bases (
+          id,
+          name,
+          description,
+          status,
+          embedding_model_config_id,
+          chunking_config_json,
+          created_at,
+          updated_at
+        )
+        SELECT
+          id,
+          name,
+          description,
+          status,
+          embedding_model_config_id,
+          chunking_config_json,
+          created_at,
+          updated_at
+        FROM knowledge_bases__legacy;
+
+        INSERT INTO documents (
+          id,
+          knowledge_base_id,
+          name,
+          source_type,
+          source_label,
+          file_ext,
+          mime_type,
+          file_size,
+          content_text,
+          index_status,
+          enabled,
+          chunk_count,
+          char_count,
+          token_count,
+          error_message,
+          created_at,
+          updated_at
+        )
+        SELECT
+          id,
+          knowledge_base_id,
+          name,
+          source_type,
+          source_label,
+          file_ext,
+          mime_type,
+          file_size,
+          content_text,
+          index_status,
+          enabled,
+          chunk_count,
+          char_count,
+          token_count,
+          error_message,
+          created_at,
+          updated_at
+        FROM documents__legacy;
+
+        INSERT INTO document_chunks (
+          id,
+          knowledge_base_id,
+          document_id,
+          chunk_index,
+          content,
+          char_count,
+          token_count,
+          start_offset,
+          end_offset,
+          created_at
+        )
+        SELECT
+          id,
+          knowledge_base_id,
+          document_id,
+          chunk_index,
+          content,
+          char_count,
+          token_count,
+          start_offset,
+          end_offset,
+          created_at
+        FROM document_chunks__legacy;
+
+        INSERT INTO knowledge_base_vector_indexes (
+          id,
+          knowledge_base_id,
+          table_name,
+          embedding_model_config_id,
+          dimensions,
+          distance_metric,
+          is_active,
+          created_at,
+          updated_at
+        )
+        SELECT
+          id,
+          knowledge_base_id,
+          table_name,
+          embedding_model_config_id,
+          dimensions,
+          distance_metric,
+          is_active,
+          created_at,
+          updated_at
+        FROM knowledge_base_vector_indexes__legacy;
+
+        DROP TABLE knowledge_base_vector_indexes__legacy;
+        DROP TABLE document_chunks__legacy;
+        DROP TABLE documents__legacy;
+        DROP TABLE knowledge_bases__legacy;
+      `);
+    });
+
+    tx();
+  } finally {
+    sqlite.pragma("foreign_keys = ON");
+  }
+
+  ensureDocumentChunkFts();
+};
+
+const repairKnowledgeBaseTablesIfNeeded = () => {
+  const needsRepair =
+    hasLegacyModelConfigForeignKey("knowledge_bases") ||
+    hasLegacyModelConfigForeignKey("knowledge_base_vector_indexes");
+
+  if (!needsRepair) {
+    return;
+  }
+
+  rebuildKnowledgeBaseTablesForModelConfigForeignKeys();
+};
+
 const ensureDefaultKnowledgeBase = () => {
   const db = getDb();
   const existing = db
@@ -200,6 +375,7 @@ export const initializeKnowledgeBaseDatabase = () => {
     sqlite.pragma("journal_mode = WAL");
 
     ensureKnowledgeBaseTables();
+    repairKnowledgeBaseTablesIfNeeded();
     ensureDocumentChunkFts();
     ensureDefaultKnowledgeBase();
   } catch (error) {

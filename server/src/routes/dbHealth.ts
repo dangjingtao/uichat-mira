@@ -58,9 +58,9 @@ const buildHealthData = (
 const checkSqliteFile = async (filePath: string) => {
   try {
     await fs.access(filePath);
-    return buildHealthData(true, true, "sqlite", `SQLite �ļ��ɷ���: ${filePath}`);
+    return buildHealthData(true, true, "sqlite", `SQLite 文件可访问: ${filePath}`);
   } catch {
-    return buildHealthData(false, true, "sqlite", `SQLite �ļ����ɷ���: ${filePath}`);
+    return buildHealthData(false, true, "sqlite", `SQLite 文件不可访问: ${filePath}`);
   }
 };
 
@@ -124,7 +124,7 @@ const dbHealthRoute: FastifyPluginAsync = async (app) => {
             false,
             false,
             "unconfigured",
-            "DATABASE_URL δ���ã������������Ĭ��ʹ�ñ��� SQLite��",
+            "DATABASE_URL 未设置，当前未配置数据库连接。",
           ),
         );
       }
@@ -144,7 +144,7 @@ const dbHealthRoute: FastifyPluginAsync = async (app) => {
         const host = parsed.hostname;
 
         if (!host) {
-          throw new Error("ȱ��������");
+          throw new Error("数据库地址缺少主机名");
         }
 
         let port = Number(parsed.port);
@@ -158,7 +158,7 @@ const dbHealthRoute: FastifyPluginAsync = async (app) => {
               false,
               true,
               parsed.protocol.replace(":", ""),
-              `�޷��ƶ϶˿�: ${databaseUrl}`,
+              `数据库地址缺少端口: ${databaseUrl}`,
             ),
           );
         }
@@ -170,8 +170,8 @@ const dbHealthRoute: FastifyPluginAsync = async (app) => {
             true,
             parsed.protocol.replace(":", ""),
             reachable
-              ? `���ݿ��ַ������: ${host}:${port}`
-              : `���ݿ��ַ���ɴ�: ${host}:${port}`,
+              ? `数据库连接正常: ${host}:${port}`
+              : `数据库无法访问: ${host}:${port}`,
           ),
         );
       } catch (error) {
@@ -181,8 +181,8 @@ const dbHealthRoute: FastifyPluginAsync = async (app) => {
             true,
             "unknown",
             error instanceof Error
-              ? `���ݿ� URL ����ʧ��: ${error.message}`
-              : "���ݿ� URL ����ʧ��",
+              ? `数据库 URL 解析失败: ${error.message}`
+              : "数据库 URL 解析失败",
           ),
         );
       }

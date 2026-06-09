@@ -59,21 +59,23 @@ export default function KnowledgeBaseDetail() {
 
   if (notFound || !document) {
     return (
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-5">
-        <Button
-          variant="ghost"
-          className="w-fit"
-          onClick={() => navigate("/settings/knowledge-base")}
-        >
-          <ArrowLeft className="h-4 w-4" />
-          返回知识库
-        </Button>
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-5xl flex-col gap-4 overflow-hidden px-4 py-5">
+        <div className="shrink-0">
+          <Button
+            variant="ghost"
+            className="w-fit"
+            onClick={() => navigate("/settings/knowledge-base")}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            返回知识库
+          </Button>
+        </div>
 
         <Card className="p-5">
           <div className="space-y-1.5">
             <div className="text-base font-semibold text-text-primary">未找到对应文档</div>
             <p className="text-sm leading-6 text-text-secondary">
-              当前 query 参数中的 `id` 无法匹配到实际数据，请从列表页重新进入。
+              当前地址中的 `id` 没有匹配到实际文档，请从知识库列表重新进入。
             </p>
           </div>
         </Card>
@@ -84,19 +86,19 @@ export default function KnowledgeBaseDetail() {
   const badge = getTypeBadge(document.fileExt);
   const status =
     document.indexStatus === "processing"
-      ? { indicator: "unknown" as const, label: "同步中" }
+      ? { indicator: "unknown" as const, label: "处理中" }
       : document.enabled
         ? { indicator: "running" as const, label: "可用" }
         : { indicator: "stopped" as const, label: "停用" };
   const summary =
     previewChunks[0]?.content ||
     document.contentText.slice(0, 160) ||
-    "当前文档暂无可展示的内容摘要。";
+    "当前文档暂时没有可展示的内容摘要。";
   const tags = [document.fileExt.toUpperCase(), document.sourceType, document.indexStatus];
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-5">
-      <section className="flex flex-col gap-3">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-col gap-4 overflow-hidden px-4 py-5">
+      <section className="shrink-0 space-y-3">
         <Button
           variant="ghost"
           className="w-fit"
@@ -141,7 +143,7 @@ export default function KnowledgeBaseDetail() {
           <div className="flex flex-wrap items-center gap-2.5">
             <Button
               variant="secondary"
-              onClick={() => message.info(`重建索引接口将在下一步接入：${document.name}`)}
+              onClick={() => message.info(`重建索引能力稍后接入：${document.name}`)}
             >
               <RefreshCcw className="h-4 w-4" />
               重建索引
@@ -154,21 +156,21 @@ export default function KnowledgeBaseDetail() {
         </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.3fr_0.9fr]">
-        <div className="space-y-4">
-          <Card className="p-4">
-            <div className="mb-3 flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-surface-secondary">
-                <Layers3 className="h-4.5 w-4.5 text-icon-primary" />
-              </div>
-              <div>
-                <h2 className="text-base font-semibold text-text-primary">文档分段预览</h2>
-                <p className="text-sm text-text-secondary">
-                  当前已展示后端真实切分结果，可直接用于后续引用片段和检索验证。
-                </p>
-              </div>
+      <section className="grid min-h-0 flex-1 gap-4 overflow-hidden xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.9fr)]">
+        <Card className="flex min-h-0 flex-col overflow-hidden p-4">
+          <div className="mb-3 flex shrink-0 items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-surface-secondary">
+              <Layers3 className="h-4.5 w-4.5 text-icon-primary" />
             </div>
+            <div>
+              <h2 className="text-base font-semibold text-text-primary">文档分段预览</h2>
+              <p className="text-sm text-text-secondary">
+                这里展示真实的切分结果，方便直接核对入库后的片段内容。
+              </p>
+            </div>
+          </div>
 
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
             <div className="space-y-2.5">
               {previewChunks.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border bg-surface-secondary p-4 text-sm text-text-secondary">
@@ -188,79 +190,81 @@ export default function KnowledgeBaseDetail() {
                 ))
               )}
             </div>
-          </Card>
-        </div>
+          </div>
+        </Card>
 
-        <div className="space-y-4">
-          <Card className="p-4">
-            <div className="mb-3 text-base font-semibold text-text-primary">基础信息</div>
-            <div className="grid gap-2.5">
-              <div className="rounded-xl border border-border bg-surface-secondary p-3.5">
-                <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                  <Hash className="h-3.5 w-3.5" />
-                  文档 ID
+        <div className="min-h-0 overflow-y-auto pr-1">
+          <div className="space-y-4">
+            <Card className="p-4">
+              <div className="mb-3 text-base font-semibold text-text-primary">基础信息</div>
+              <div className="grid gap-2.5">
+                <div className="rounded-xl border border-border bg-surface-secondary p-3.5">
+                  <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                    <Hash className="h-3.5 w-3.5" />
+                    文档 ID
+                  </div>
+                  <div className="break-all text-sm font-medium text-text-primary">{document.id}</div>
                 </div>
-                <div className="text-sm font-medium text-text-primary">{document.id}</div>
+                <div className="rounded-xl border border-border bg-surface-secondary p-3.5">
+                  <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                    <UserRound className="h-3.5 w-3.5" />
+                    来源 / 类型
+                  </div>
+                  <div className="text-sm font-medium text-text-primary">
+                    {document.sourceLabel || document.sourceType} · {document.fileExt.toUpperCase()}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border bg-surface-secondary p-3.5">
+                  <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                    <Clock3 className="h-3.5 w-3.5" />
+                    创建 / 更新
+                  </div>
+                  <div className="text-sm font-medium text-text-primary">
+                    {document.createdAt.replace("T", " ").slice(0, 16)} ·{" "}
+                    {document.updatedAt.replace("T", " ").slice(0, 16)}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border bg-surface-secondary p-3.5">
+                  <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                    <Tags className="h-3.5 w-3.5" />
+                    标签
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="rounded-full border border-border bg-surface-primary px-2.5 py-1 text-xs font-medium text-text-secondary"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <div className="rounded-xl border border-border bg-surface-secondary p-3.5">
-                <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                  <UserRound className="h-3.5 w-3.5" />
-                  来源 / 类型
-                </div>
-                <div className="text-sm font-medium text-text-primary">
-                  {document.sourceLabel || document.sourceType} · {document.fileExt.toUpperCase()}
-                </div>
-              </div>
-              <div className="rounded-xl border border-border bg-surface-secondary p-3.5">
-                <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                  <Clock3 className="h-3.5 w-3.5" />
-                  创建 / 更新时间
-                </div>
-                <div className="text-sm font-medium text-text-primary">
-                  {document.createdAt.replace("T", " ").slice(0, 16)} ·{" "}
-                  {document.updatedAt.replace("T", " ").slice(0, 16)}
-                </div>
-              </div>
-              <div className="rounded-xl border border-border bg-surface-secondary p-3.5">
-                <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                  <Tags className="h-3.5 w-3.5" />
-                  标签
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="rounded-full border border-border bg-surface-primary px-2.5 py-1 text-xs font-medium text-text-secondary"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
+            </Card>
+
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              <Card
+                label="字符数"
+                value={formatCompactNumber(document.charCount)}
+                description="当前文档已入库的字符规模"
+              />
+              <Card
+                label="分段数"
+                value={`${document.chunkCount}`}
+                description="基于真实切分结果统计"
+              />
+              <Card
+                label="文件大小"
+                value={document.fileSize ? formatCompactNumber(document.fileSize) : "--"}
+                description="上传时记录的原始大小"
+              />
+              <Card
+                label="状态"
+                value={status.label}
+                description="当前文档索引可用状态"
+              />
             </div>
-          </Card>
-
-          <div className="grid gap-2.5 sm:grid-cols-2">
-            <Card
-              label="字符数"
-              value={formatCompactNumber(document.charCount)}
-              description="当前文档已入库字符规模"
-            />
-            <Card
-              label="分段数"
-              value={`${document.chunkCount}`}
-              description="来源于真实切分结果"
-            />
-            <Card
-              label="文件大小"
-              value={document.fileSize ? formatCompactNumber(document.fileSize) : "--"}
-              description="上传时记录的原始大小"
-            />
-            <Card
-              label="状态"
-              value={status.label}
-              description="来源于当前文档索引状态"
-            />
           </div>
         </div>
       </section>
