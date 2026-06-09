@@ -40,6 +40,11 @@ export const DEFAULT_PROVIDER_CONNECTIONS: DefaultProviderConnection[] = [
     displayName: "OpenAI",
     baseUrl: "https://api.openai.com/v1",
   },
+  {
+    providerCode: "cloudflare",
+    displayName: "Cloudflare",
+    baseUrl: "https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/ai/v1",
+  },
 ];
 
 export const DEFAULT_ROLE_CONFIGS: DefaultRoleConfig[] = [
@@ -60,9 +65,9 @@ export const DEFAULT_ROLE_CONFIGS: DefaultRoleConfig[] = [
   },
   {
     type: "embedding",
-    name: "nomic-embed-text",
+    name: "bge-large:latest",
     providerCode: "ollama",
-    remoteModelId: "nomic-embed-text",
+    remoteModelId: "bge-large:latest",
     params: {
       enabled: true,
       dimensions: 768,

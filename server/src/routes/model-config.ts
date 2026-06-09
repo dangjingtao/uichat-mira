@@ -24,7 +24,7 @@ const modelConfigSchema = {
     name: { type: "string" },
     providerCode: {
       anyOf: [
-        { type: "string", enum: ["ollama", "lmstudio", "openai"] },
+        { type: "string", enum: ["ollama", "lmstudio", "openai", "cloudflare"] },
         { type: "null" },
       ],
     },

@@ -1,27 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  AlertCircle,
   ArrowDownUp,
   ChevronDown,
   DatabaseZap,
   Ellipsis,
-  ExternalLink,
   FilePlus2,
   Filter,
+  RotateCcw,
   Search,
-  Settings2,
   Trash2,
 } from "lucide-react";
 import { Button } from "@/shared/ui/Button";
 import Card from "@/shared/ui/Card";
-import { FileIcon } from "@/shared/ui/FileIcon";
 import { FullPageStatus } from "@/shared/ui/FullPageStatus";
 import IconButton from "@/shared/ui/IconButton";
 import { message } from "@/shared/ui/Message";
 import { Modal } from "@/shared/ui/Modal";
 import { StatusIndicator } from "@/shared/ui/StatusIndicator";
 import Switch from "@/shared/ui/Switch";
-import Tooltip from "@/shared/ui/Tooltip";
 import {
   deleteKnowledgeBaseDocument,
   getKnowledgeBase,
@@ -30,6 +28,10 @@ import {
   type KnowledgeBaseDocument,
   type KnowledgeBaseSummary,
 } from "@/shared/api/knowledgeBase";
+import {
+  getGlobalModelAccessStatus,
+  type GlobalModelAccessStatus,
+} from "@/shared/business/modelAccess";
 import {
   DEFAULT_SEGMENT_MODE,
   type FilterKey,
@@ -91,12 +93,37 @@ export default function KnowledgeBaseSettings() {
   const navigate = useNavigate();
   const [knowledgeBase, setKnowledgeBase] = useState<KnowledgeBaseSummary | null>(null);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
+  const [modelAccessStatus, setModelAccessStatus] = useState<GlobalModelAccessStatus | null>(
+    null,
+  );
   const [filter, setFilter] = useState<FilterKey>("all");
   const [sortKey, setSortKey] = useState<SortKey>("uploadedAt");
   const [sortDescending, setSortDescending] = useState(true);
   const [searchText, setSearchText] = useState("");
+  const [debouncedSearchText, setDebouncedSearchText] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+
+      if (target.closest("[data-kb-action-menu]")) {
+        return;
+      }
+
+      setOpenActionMenuId(null);
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, []);
 
   const loadKnowledgeBase = useCallback(async () => {
     const data = await getKnowledgeBase();
@@ -113,9 +140,8 @@ export default function KnowledgeBaseSettings() {
             ? "charCount"
             : undefined;
       const data = await listKnowledgeBaseDocuments({
-        search: searchText.trim() || undefined,
-        enabled:
-          filter === "enabled" ? true : filter === "disabled" ? false : undefined,
+        search: debouncedSearchText.trim() || undefined,
+        enabled: filter === "enabled" ? true : filter === "disabled" ? false : undefined,
         sortBy,
         sortOrder: sortDescending ? "desc" : "asc",
       });
@@ -123,11 +149,21 @@ export default function KnowledgeBaseSettings() {
     } finally {
       setLoading(false);
     }
-  }, [filter, searchText, sortDescending, sortKey]);
+  }, [debouncedSearchText, filter, sortDescending, sortKey]);
 
   useEffect(() => {
     void loadKnowledgeBase();
   }, [loadKnowledgeBase]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedSearchText(searchText);
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [searchText]);
 
   useEffect(() => {
     void loadDocuments();
@@ -158,8 +194,23 @@ export default function KnowledgeBaseSettings() {
   );
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([loadKnowledgeBase(), loadDocuments()]);
+    await Promise.all([
+      loadKnowledgeBase(),
+      loadDocuments(),
+      getGlobalModelAccessStatus().then(setModelAccessStatus),
+    ]);
   }, [loadDocuments, loadKnowledgeBase]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const status = await getGlobalModelAccessStatus();
+        setModelAccessStatus(status);
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : "加载模型接入状态失败");
+      }
+    })();
+  }, []);
 
   const toggleSelection = (id: string) => {
     setSelectedIds((current) =>
@@ -189,121 +240,82 @@ export default function KnowledgeBaseSettings() {
             <Card
               label="文档总数"
               value={`${knowledgeBase?.documentCount ?? documents.length}`}
-              description="当前知识库中的文档数"
+              description="当前知识库中的文档数量"
             />
             <Card
               label="可用文档"
               value={`${knowledgeBase?.enabledDocumentCount ?? enabledCount}`}
-              description="正在参与检索"
+              description="当前可参与检索的文档"
             />
             <Card
-              label="总文本分块"
+              label="总分段数"
               value={`${totalChunks}`}
-              description="基于当前文档切分结果"
+              description="基于当前文档切分结果统计"
             />
           </div>
           <div className="rounded-xl border border-border bg-surface-secondary p-4 text-sm leading-6 text-text-secondary">
-            当前已经接入真实知识库接口。后续可以继续补充向量索引状态、检索质量指标和引用统计。
+            当前页面已经接入真实知识库接口，后续还可以继续补充索引质量、引用次数和检索表现等统计。
           </div>
         </div>
       ),
     });
   };
 
-  const openAddDocumentModal = () => {
-    navigate("/settings/knowledge-base/add?step=1");
-  };
-
-  const openDocumentSettings = (document: DocumentRow) => {
+  const confirmRebuildIndex = (document: DocumentRow) => {
     const modalKey = Modal.show({
-      title: `文档设置 · ${document.name}`,
-      width: 680,
+      title: "确认重建索引",
+      width: 460,
       content: (
-        <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Card label="分段模式" value={document.segmentMode} description={`${document.chunkCount} 个分段`} />
-            <Card label="同步来源" value={document.source} description={`状态：${document.indexStatus}`} />
-            <Card label="字符数" value={formatCompactNumber(document.charCount)} description="当前已入库字符数" />
-            <Card label="文件类型" value={document.type.toUpperCase()} description={`创建于 ${document.uploadedAt}`} />
-          </div>
-          <div className="rounded-xl border border-border bg-surface-secondary p-4 text-sm leading-6 text-text-secondary">
-            当前 MVP 已支持文档启停、重命名和删除。更细的分段策略与索引配置后续可以继续接入。
+        <div className="space-y-3 text-sm text-text-secondary">
+          <p>
+            即将为 <span className="font-medium text-text-primary">{document.name}</span>{" "}
+            重新执行分段、向量化和索引写入。
+          </p>
+          <div className="rounded-xl border border-border bg-surface-secondary px-3.5 py-3">
+            该能力当前仍在接入中，确认后会先给出占位提示。
           </div>
         </div>
       ),
       footer: (
         <>
           <Button variant="ghost" onClick={() => Modal.close(modalKey)}>
-            关闭
+            取消
           </Button>
           <Button
-            onClick={async () => {
-              try {
-                await updateKnowledgeBaseDocument(document.id, {
-                  name: document.name,
-                });
-                Modal.close(modalKey);
-                message.success(`已保存 ${document.name} 的配置`);
-              } catch (error) {
-                message.error(
-                  error instanceof Error ? error.message : "保存文档配置失败",
-                );
-              }
+            onClick={() => {
+              Modal.close(modalKey);
+              message.info(`重建索引能力稍后接入，当前文档：${document.name}`);
             }}
           >
-            保存设置
+            确认重建
           </Button>
         </>
       ),
     });
   };
 
-  const openMoreActions = (document: DocumentRow) => {
+  const confirmDeleteDocument = (document: DocumentRow) => {
     const modalKey = Modal.show({
-      title: `更多操作 · ${document.name}`,
-      width: 560,
+      title: "确认删除文档",
+      width: 460,
       content: (
-        <div className="space-y-3">
-          <button
-            type="button"
-            className="flex w-full items-center justify-between rounded-xl border border-border bg-surface-primary px-4 py-3 text-left transition-all duration-150 hover:bg-surface-secondary"
-            onClick={() => {
-              Modal.close(modalKey);
-              message.info(`重建索引接口将在下一步接入，当前文档为 ${document.name}`);
-            }}
-          >
-            <div>
-              <div className="text-sm font-medium text-text-primary">重建索引</div>
-              <div className="text-sm text-text-secondary">后续用于重新分段与重新向量化</div>
-            </div>
-            <ArrowDownUp className="h-4 w-4 text-icon-secondary" />
-          </button>
-
-          <button
-            type="button"
-            className="flex w-full items-center justify-between rounded-xl border border-border bg-surface-primary px-4 py-3 text-left transition-all duration-150 hover:bg-surface-secondary"
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(
-                  `${window.location.origin}${window.location.pathname}#/settings/knowledge-base/detail?id=${document.id}`,
-                );
-                Modal.close(modalKey);
-                message.success(`已复制 ${document.name} 的详情链接`);
-              } catch {
-                message.error("复制链接失败");
-              }
-            }}
-          >
-            <div>
-              <div className="text-sm font-medium text-text-primary">复制外链</div>
-              <div className="text-sm text-text-secondary">复制当前文档的详情页地址</div>
-            </div>
-            <ExternalLink className="h-4 w-4 text-icon-secondary" />
-          </button>
-
-          <button
-            type="button"
-            className="flex w-full items-center justify-between rounded-xl border border-danger/20 bg-danger/5 px-4 py-3 text-left transition-all duration-150 hover:bg-danger/10"
+        <div className="space-y-3 text-sm text-text-secondary">
+          <p>
+            删除后，<span className="font-medium text-text-primary">{document.name}</span>{" "}
+            以及相关分块、索引数据都会被移除。
+          </p>
+          <div className="rounded-xl border border-danger/20 bg-danger/5 px-3.5 py-3 text-danger">
+            此操作不可撤销，请确认后继续。
+          </div>
+        </div>
+      ),
+      footer: (
+        <>
+          <Button variant="ghost" onClick={() => Modal.close(modalKey)}>
+            取消
+          </Button>
+          <Button
+            variant="danger"
             onClick={async () => {
               try {
                 await deleteKnowledgeBaseDocument(document.id);
@@ -312,31 +324,34 @@ export default function KnowledgeBaseSettings() {
                 setSelectedIds((current) => current.filter((item) => item !== document.id));
                 await refreshAll();
               } catch (error) {
-                message.error(
-                  error instanceof Error ? error.message : "删除文档失败",
-                );
+                message.error(error instanceof Error ? error.message : "删除文档失败");
               }
             }}
           >
-            <div>
-              <div className="text-sm font-medium text-danger">删除文档</div>
-              <div className="text-sm text-text-secondary">会同时删除该文档的分块数据</div>
-            </div>
-            <Trash2 className="h-4 w-4 text-danger" />
-          </button>
-        </div>
+            确认删除
+          </Button>
+        </>
       ),
-      footer: null,
     });
+  };
+
+  const openAddDocumentModal = () => {
+    if (!modelAccessStatus?.embeddingConnected) {
+      message.warning("请先接入默认 Embedding 模型，再上传知识库文件");
+      return;
+    }
+    navigate("/settings/knowledge-base/add?step=1");
   };
 
   if (loading && documents.length === 0) {
     return <FullPageStatus message="正在加载知识库文档..." />;
   }
 
+  const canUploadDocument = modelAccessStatus?.embeddingConnected ?? false;
+
   return (
-    <div className="flex w-full flex-col gap-4 px-4 py-5">
-      <section className="space-y-1.5">
+    <div className="flex h-full min-h-0 w-full flex-col gap-4 overflow-hidden px-4 py-5">
+      <section className="shrink-0 space-y-1.5">
         <div className="text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
           Knowledge Base
         </div>
@@ -347,7 +362,7 @@ export default function KnowledgeBaseSettings() {
             </h1>
             <p className="max-w-3xl text-sm leading-6 text-text-secondary">
               {knowledgeBase?.description ||
-                "知识库中的所有文件会展示在这里。双击任意数据行可进入详情页，点击添加文件会进入分步上传表单。"}
+                "这里集中展示当前知识库中的全部文档。双击任意一行可以进入详情页，点击添加文件则会进入分步上传流程。"}
             </p>
           </div>
 
@@ -356,7 +371,7 @@ export default function KnowledgeBaseSettings() {
               <DatabaseZap className="h-4 w-4" />
               元数据
             </Button>
-            <Button onClick={openAddDocumentModal}>
+            <Button disabled={!canUploadDocument} onClick={openAddDocumentModal}>
               <FilePlus2 className="h-4 w-4" />
               添加文件
             </Button>
@@ -364,240 +379,277 @@ export default function KnowledgeBaseSettings() {
         </div>
       </section>
 
-      <Card className="space-y-3 p-3.5 md:p-4">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex flex-1 flex-col gap-2.5 lg:flex-row lg:items-center">
-            <div className="inline-flex rounded-xl border border-border bg-surface-secondary p-1">
-              {filterOptions.map((option) => (
-                <button
-                  key={option.key}
-                  type="button"
-                  onClick={() => setFilter(option.key)}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150 ${
-                    filter === option.key
-                      ? "bg-surface-primary text-text-primary shadow-shadow-sm"
-                      : "text-text-secondary hover:text-text-primary"
+      {modelAccessStatus && !modelAccessStatus.embeddingConnected ? (
+        <div className="shrink-0 rounded-xl border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <div className="space-y-2">
+              <div className="font-medium">
+                当前未接入默认向量模型，知识库文件上传入口已暂时禁用。
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full bg-danger/10 px-2.5 py-1">
+                  向量模型：{modelAccessStatus.embeddingConnected ? "已接入" : "未接入"}
+                </span>
+                <span
+                  className={`rounded-full px-2.5 py-1 ${
+                    modelAccessStatus.llmConnected
+                      ? "bg-success/10 text-success"
+                      : "bg-danger/10 text-danger"
                   }`}
                 >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="relative min-w-[260px] flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-icon-secondary" />
-              <input
-                value={searchText}
-                onChange={(event) => setSearchText(event.target.value)}
-                placeholder="搜索文档名称、来源或维护人"
-                className={inputClassName}
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5">
-            <button
-              type="button"
-              onClick={() => setSortDescending((current) => !current)}
-              className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-surface-primary px-3 text-sm text-text-secondary shadow-shadow-sm transition-all duration-150 hover:bg-surface-secondary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary"
-            >
-              <Filter className="h-4 w-4" />
-              排序：
-              <span className="font-medium text-text-primary">
-                {sortOptions.find((option) => option.key === sortKey)?.label}
-              </span>
-              <ArrowDownUp className="h-4 w-4" />
-            </button>
-
-            <div className="relative">
-              <select
-                value={sortKey}
-                onChange={(event) => setSortKey(event.target.value as SortKey)}
-                className="h-9 min-w-[124px] appearance-none rounded-xl border border-border bg-surface-primary pl-3 pr-9 text-sm text-text-primary shadow-shadow-sm transition-all duration-150 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-              >
-                {sortOptions.map((option) => (
-                  <option key={option.key} value={option.key}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-icon-secondary" />
+                  LLM 模型：{modelAccessStatus.llmConnected ? "已接入" : "未接入"}
+                </span>
+                <span
+                  className={`rounded-full px-2.5 py-1 ${
+                    modelAccessStatus.rerankConnected
+                      ? "bg-success/10 text-success"
+                      : "bg-danger/10 text-danger"
+                  }`}
+                >
+                  Rerank 模型：{modelAccessStatus.rerankConnected ? "已接入" : "未接入"}
+                </span>
+              </div>
             </div>
           </div>
         </div>
+      ) : null}
 
-        {selectedIds.length > 0 ? (
-          <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-xl border border-border bg-surface-secondary px-4 py-2.5">
-            <div className="text-sm text-text-secondary">
-              已选择
-              <span className="mx-1 font-semibold text-text-primary">{selectedIds.length}</span>
-              个文档
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setSelectedIds([]);
-                  message.info("已清空选择");
-                }}
-              >
-                取消选择
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  Modal.show({
-                    title: "批量操作",
-                    content: (
-                      <div className="space-y-3 text-sm text-text-secondary">
-                        <p>当前已接入真实列表接口，已选文档如下：</p>
-                        <div className="rounded-xl border border-border bg-surface-secondary p-3 text-text-primary">
-                          {selectedDocuments.map((document) => document.name).join("、")}
-                        </div>
-                      </div>
-                    ),
-                  });
-                }}
-              >
-                批量操作
-              </Button>
-            </div>
-          </div>
-        ) : null}
-
-        <div className="overflow-hidden rounded-xl border border-border bg-surface-primary shadow-shadow-sm">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border bg-surface-secondary">
-                <th className="w-12 px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                  <input
-                    type="checkbox"
-                    aria-label="全选当前列表"
-                    checked={allVisibleSelected}
-                    onChange={toggleAllVisible}
-                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
-                  />
-                </th>
-                <th className="w-12 px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                  #
-                </th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                  名称
-                </th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                  分段模式
-                </th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                  字符数
-                </th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                  召回次数
-                </th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                  上传时间
-                </th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                  状态
-                </th>
-                <th className="px-4 py-2.5 text-right text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                  操作
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredDocuments.map((document, index) => {
-                const badge = getTypeBadge(document.type);
-                const status =
-                  document.syncState === "indexing"
-                    ? { indicator: "unknown" as const, label: "同步中" }
-                    : document.availability === "enabled"
-                      ? { indicator: "running" as const, label: "可用" }
-                      : { indicator: "stopped" as const, label: "停用" };
-
-                return (
-                  <tr
-                    key={document.id}
-                    onDoubleClick={() => goToDetail(document)}
-                    className={`cursor-pointer transition-colors duration-150 hover:bg-surface-secondary/80 ${
-                      index > 0 ? "border-t border-border" : ""
+      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-3.5 md:p-4">
+        <div className="shrink-0 space-y-3">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-1 flex-col gap-2.5 lg:flex-row lg:items-center">
+              <div className="inline-flex rounded-xl border border-border bg-surface-secondary p-1">
+                {filterOptions.map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => setFilter(option.key)}
+                    className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-150 ${
+                      filter === option.key
+                        ? "bg-surface-primary text-text-primary shadow-shadow-sm"
+                        : "text-text-secondary hover:text-text-primary"
                     }`}
                   >
-                    <td className="px-4 py-2.5 text-sm text-text-primary">
-                      <input
-                        type="checkbox"
-                        aria-label={`选择 ${document.name}`}
-                        checked={selectedIds.includes(document.id)}
-                        onClick={(event) => event.stopPropagation()}
-                        onChange={() => toggleSelection(document.id)}
-                        className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
-                      />
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-sm text-text-secondary">
-                      {index + 1}
-                    </td>
-                    <td className="px-4 py-2.5 text-sm text-text-primary">
-                      <div className="flex min-w-[260px] items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-secondary">
-                          <FileIcon extension={document.type} className="h-4 w-4" />
-                        </div>
-                        <div className="min-w-0 space-y-1">
-                          <div className="truncate font-medium text-text-primary">
-                            {document.name}
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative min-w-[260px] flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-icon-secondary" />
+                <input
+                  value={searchText}
+                  onChange={(event) => setSearchText(event.target.value)}
+                  placeholder="搜索文档名称、来源或状态"
+                  className={inputClassName}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setSortDescending((current) => !current)}
+                className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-surface-primary px-3 text-sm text-text-secondary shadow-shadow-sm transition-all duration-150 hover:bg-surface-secondary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary"
+              >
+                <Filter className="h-4 w-4" />
+                排序：
+                <span className="font-medium text-text-primary">
+                  {sortOptions.find((option) => option.key === sortKey)?.label}
+                </span>
+                <ArrowDownUp className="h-4 w-4" />
+              </button>
+
+              <div className="relative">
+                <select
+                  value={sortKey}
+                  onChange={(event) => setSortKey(event.target.value as SortKey)}
+                  className="h-9 min-w-[124px] appearance-none rounded-xl border border-border bg-surface-primary pl-3 pr-9 text-sm text-text-primary shadow-shadow-sm transition-all duration-150 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  {sortOptions.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-icon-secondary" />
+              </div>
+            </div>
+          </div>
+
+          {selectedIds.length > 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-xl border border-border bg-surface-secondary px-4 py-2.5">
+              <div className="text-sm text-text-secondary">
+                已选择
+                <span className="mx-1 font-semibold text-text-primary">{selectedIds.length}</span>
+                个文档
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setSelectedIds([]);
+                    message.info("已清空选择");
+                  }}
+                >
+                  取消选择
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    Modal.show({
+                      title: "批量操作",
+                      content: (
+                        <div className="space-y-3 text-sm text-text-secondary">
+                          <p>当前已选中文档如下：</p>
+                          <div className="rounded-xl border border-border bg-surface-secondary p-3 text-text-primary">
+                            {selectedDocuments.map((document) => document.name).join("、")}
                           </div>
-                          <div className="flex items-center gap-2">
+                        </div>
+                      ),
+                    });
+                  }}
+                >
+                  批量操作
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="mt-3 min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-surface-primary shadow-shadow-sm">
+          <div className="h-full overflow-auto">
+            <table className="w-full min-w-[1040px]">
+              <thead className="sticky top-0 z-10 bg-surface-secondary">
+                <tr className="border-b border-border">
+                  <th className="w-12 px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                    <input
+                      type="checkbox"
+                      aria-label="全选当前列表"
+                      checked={allVisibleSelected}
+                      onChange={toggleAllVisible}
+                      className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
+                    />
+                  </th>
+                  <th className="w-12 px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                    #
+                  </th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                    名称
+                  </th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                    分段模式
+                  </th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                    字符数
+                  </th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                    召回次数
+                  </th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                    上传时间
+                  </th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                    状态
+                  </th>
+                  <th className="w-[110px] px-4 py-2.5 text-right text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                    操作
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredDocuments.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-10 text-center text-sm text-text-secondary">
+                      当前还没有知识库文件，点击“添加文件”开始上传。
+                    </td>
+                  </tr>
+                ) : (
+                  filteredDocuments.map((document, index) => {
+                    const badge = getTypeBadge(document.type);
+                    const status =
+                      document.syncState === "indexing"
+                        ? { indicator: "unknown" as const, label: "处理中" }
+                        : document.availability === "enabled"
+                          ? { indicator: "running" as const, label: "可用" }
+                          : { indicator: "stopped" as const, label: "停用" };
+
+                    return (
+                      <tr
+                        key={document.id}
+                        onDoubleClick={() => goToDetail(document)}
+                        className={`cursor-pointer transition-colors duration-150 hover:bg-surface-secondary/80 ${
+                          index > 0 ? "border-t border-border" : ""
+                        }`}
+                      >
+                        <td className="px-4 py-2.5 text-sm text-text-primary">
+                          <input
+                            type="checkbox"
+                            aria-label={`选择 ${document.name}`}
+                            checked={selectedIds.includes(document.id)}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={() => toggleSelection(document.id)}
+                            className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
+                          />
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-sm text-text-secondary">
+                          {index + 1}
+                        </td>
+                        <td className="px-4 py-2.5 text-sm text-text-primary">
+                          <div className="flex min-w-[260px] items-center gap-2">
                             <span
-                              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.className}`}
+                              className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.className}`}
                             >
                               {badge.label}
                             </span>
-                            <span className="text-xs text-text-tertiary">{document.source}</span>
+                            <div className="truncate font-medium text-text-primary">
+                              {document.name}
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-sm text-text-primary">
-                      <SegmentBadge mode={document.segmentMode} />
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-sm text-text-primary">
-                      {formatCompactNumber(document.charCount)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-sm text-text-primary">
-                      {document.hits}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-sm text-text-primary">
-                      {document.uploadedAt}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-sm text-text-primary">
-                      <div className="inline-flex items-center gap-2">
-                        <StatusIndicator status={status.indicator} size="sm" />
-                        <span
-                          className={`text-sm font-medium ${
-                            status.indicator === "running"
-                              ? "text-success"
-                              : status.indicator === "unknown"
-                                ? "text-warning"
-                                : "text-text-secondary"
-                          }`}
-                        >
-                          {status.label}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-2.5 text-sm text-text-primary">
-                      <div
-                        className="flex items-center justify-end gap-2"
-                        onClick={(event) => event.stopPropagation()}
-                        onDoubleClick={(event) => event.stopPropagation()}
-                      >
-                        <Tooltip
-                          text={document.availability === "enabled" ? "停用文档" : "启用文档"}
-                          placement="top"
-                        >
-                          <div>
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-sm text-text-primary">
+                          <SegmentBadge mode={document.segmentMode} />
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-sm text-text-primary">
+                          {formatCompactNumber(document.charCount)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-sm text-text-primary">
+                          {document.hits}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-sm text-text-primary">
+                          {document.uploadedAt}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-sm text-text-primary">
+                          <div className="inline-flex items-center gap-2">
+                            <StatusIndicator status={status.indicator} size="sm" />
+                            <span
+                              className={`text-sm font-medium ${
+                                status.indicator === "running"
+                                  ? "text-success"
+                                  : status.indicator === "unknown"
+                                    ? "text-warning"
+                                    : "text-text-secondary"
+                              }`}
+                            >
+                              {status.label}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2.5 text-sm text-text-primary">
+                          <div
+                            className="relative flex items-center justify-end gap-1.5"
+                            onClick={(event) => event.stopPropagation()}
+                            onDoubleClick={(event) => event.stopPropagation()}
+                            data-kb-action-menu
+                          >
                             <Switch
                               checked={document.availability === "enabled"}
+                              size="sm"
                               disabled={document.syncState === "indexing"}
-                              ariaLabel={document.availability === "enabled" ? "停用文档" : "启用文档"}
+                              ariaLabel={
+                                document.availability === "enabled" ? "停用文档" : "启用文档"
+                              }
                               onChange={async () => {
                                 try {
                                   await updateKnowledgeBaseDocument(document.id, {
@@ -616,40 +668,68 @@ export default function KnowledgeBaseSettings() {
                                 }
                               }}
                             />
+
+                            <div className="relative" data-kb-action-menu>
+                              <IconButton
+                                className="h-8 w-8 rounded-md"
+                                onClick={() =>
+                                  setOpenActionMenuId((current) =>
+                                    current === document.id ? null : document.id,
+                                  )
+                                }
+                                ariaLabel={`打开 ${document.name} 的更多操作`}
+                              >
+                                <Ellipsis className="h-4 w-4" />
+                              </IconButton>
+
+                              <div
+                                className={`absolute right-0 top-full z-20 mt-1.5 min-w-[144px] rounded-xl border border-border bg-surface-primary p-1.5 shadow-shadow-md transition-all duration-150 ${
+                                  openActionMenuId === document.id
+                                    ? "visible opacity-100"
+                                    : "invisible opacity-0 pointer-events-none"
+                                }`}
+                                data-kb-action-menu
+                              >
+                                <button
+                                  type="button"
+                                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-surface-secondary"
+                                  onClick={() => {
+                                    setOpenActionMenuId(null);
+                                    confirmRebuildIndex(document);
+                                  }}
+                                >
+                                  <RotateCcw className="h-4 w-4 text-icon-secondary" />
+                                  重建索引
+                                </button>
+                                <button
+                                  type="button"
+                                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-danger transition-colors hover:bg-danger/5"
+                                  onClick={() => {
+                                    setOpenActionMenuId(null);
+                                    confirmDeleteDocument(document);
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  删除
+                                </button>
+                              </div>
+                            </div>
                           </div>
-                        </Tooltip>
-
-                        <Tooltip text="文档设置" placement="top">
-                          <IconButton
-                            onClick={() => openDocumentSettings(document)}
-                            ariaLabel={`打开 ${document.name} 的文档设置`}
-                          >
-                            <Settings2 className="h-4 w-4" />
-                          </IconButton>
-                        </Tooltip>
-
-                        <Tooltip text="更多操作" placement="top">
-                          <IconButton
-                            onClick={() => openMoreActions(document)}
-                            ariaLabel={`打开 ${document.name} 的更多操作`}
-                          >
-                            <Ellipsis className="h-4 w-4" />
-                          </IconButton>
-                        </Tooltip>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        <div className="rounded-xl border border-dashed border-border bg-surface-secondary/60 px-4 py-2.5 text-sm text-text-secondary">
-          提示：双击任意数据行可进入文档详情页，点击“添加文件”会进入分步上传表单。
+        <div className="mt-3 shrink-0 rounded-xl border border-dashed border-border bg-surface-secondary/60 px-4 py-2.5 text-sm text-text-secondary">
+          提示：双击任意一行可以进入文档详情页，点击“添加文件”会进入分步上传流程。
         </div>
 
-        <div className="flex flex-col gap-1.5 text-sm text-text-secondary sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-3 shrink-0 flex flex-col gap-1.5 text-sm text-text-secondary sm:flex-row sm:items-center sm:justify-between">
           <div>
             共{" "}
             <span className="font-medium text-text-primary">
@@ -660,7 +740,7 @@ export default function KnowledgeBaseSettings() {
           </div>
           <div>
             可用文档 <span className="font-medium text-text-primary">{enabledCount}</span> 个 ·
-            总分块 <span className="font-medium text-text-primary">{totalChunks}</span> 个
+            总分段 <span className="font-medium text-text-primary">{totalChunks}</span> 个
           </div>
         </div>
       </Card>

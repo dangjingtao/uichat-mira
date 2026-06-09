@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@9.12.0",
-  "author": "Dang Jingtao <dangjingtao@163.com>",
+  "author": "Tomz Dang <dangjingtao@gmail.com>",
   "description": "An initialization project for an Electron desktop application aimed at enterprise knowledge base verification, supporting dual-mode switching between local and remote models and vector databases.",
   "scripts": {
     "dev": "pnpm --filter @ui-chat-rag-tester/electron dev",

@@ -326,7 +326,7 @@ const knowledgeBaseRoute: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       try {
-        const result = knowledgeBaseService.createDocument(request.body);
+        const result = await knowledgeBaseService.createDocument(request.body);
         return success(result, "Document created");
       } catch (err) {
         app.log.error(err);
@@ -387,7 +387,7 @@ const knowledgeBaseRoute: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       try {
-        const result = knowledgeBaseService.updateDocument(
+        const result = await knowledgeBaseService.updateDocument(
           request.params.id,
           request.body,
         );

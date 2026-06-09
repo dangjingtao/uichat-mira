@@ -184,20 +184,31 @@ export const verifyAccessToken = (token: string): AuthenticatedUser | null => {
   }
 };
 
+export const getAuthUserFromRequest = (
+  request: FastifyRequest,
+): AuthenticatedUser | null => {
+  const authHeader = request.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const token = authHeader.slice(7);
+  return verifyAccessToken(token);
+};
+
 export const requireAuth: preHandlerHookHandler = async (
   request: FastifyRequest,
   reply: FastifyReply,
 ) => {
-  const authHeader = request.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return reply.code(401).send({ ok: false, message: "Missing auth token" });
-  }
-
-  const token = authHeader.slice(7);
-  const user = verifyAccessToken(token);
+  const user = getAuthUserFromRequest(request);
 
   if (!user) {
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return reply.code(401).send({ ok: false, message: "Missing auth token" });
+    }
+
     return reply.code(401).send({ ok: false, message: "Invalid auth token" });
   }
 
