@@ -5,7 +5,7 @@ import React, { FunctionComponent, ReactNode } from "react";
 import Sidebar from "./Sidebar";
 
 import { useMemo } from "react";
-import { Thread, type SuggestionConfig } from "@assistant-ui/react-ui";
+import { type SuggestionConfig } from "@assistant-ui/react-ui";
 import type { AssistantRuntime } from "@assistant-ui/react";
 import {
   AssistantRuntimeImpl,
@@ -14,10 +14,12 @@ import {
 import { useAuth } from "@/app/providers/AuthProvider";
 import { useRuntimeHealth } from "@/features/system/hooks/useRuntimeHealth";
 import { localChatModel } from "./lib/localChatModel";
-import { AssistantRuntimeProvider } from "@assistant-ui/react";
-
+import { AssistantCloud, AssistantRuntimeProvider } from "@assistant-ui/react";
+import { getSession } from "@/shared/lib/sessionStorage";
 import { ChatProvider } from "@/app/providers/ChatProvider";
 import { ThreadListSidebar } from "./components/ThreadListSidebar";
+import MarkdownText from "@/shared/ui/MarkdownText";
+import Thread from "@/shared/ui/Thread";
 
 import {
   useChatRuntime,
@@ -83,9 +85,14 @@ const BaseLayout: FunctionComponent<BaseLayoutProps> = ({ mode, children }) => {
       })
     );
 
+  const session = getSession();
+
   const runtime = useChatRuntime({
     transport: new AssistantChatTransport({
       api: getChatApiUrl(),
+      headers: {
+        Authorization: `Bearer ${session?.token}`,
+      },
     }),
   });
 
@@ -121,17 +128,26 @@ const BaseLayout: FunctionComponent<BaseLayoutProps> = ({ mode, children }) => {
               className="w-full"
             >
               <Thread
-                welcome={{
-                  message: "你好，我是 UI Chat RAG 助手。请输入你的问题。",
-                  suggestions: defaultSuggestions,
-                }}
-                strings={{
-                  composer: {
-                    input: {
-                      placeholder: "输入问题，回车发送...",
-                    },
-                  },
-                }}
+              //  {
+              //   Root: ({ children }) => (
+              //     <div className="my-4 rounded-xl border bg-muted p-4">
+              //       {children}
+              //     </div>
+              //   ),
+              //   // Content: MarkdownText,
+              // },
+
+              // welcome={{
+              //   message: "你好，我是 UI Chat RAG 助手。请输入你的问题。",
+              //   suggestions: defaultSuggestions,
+              // }}
+              // strings={{
+              //   composer: {
+              //     input: {
+              //       placeholder: "输入问题，回车发送...",
+              //     },
+              //   },
+              // }}
               />
             </div>
             {mode === "settings" && <Outlet />}

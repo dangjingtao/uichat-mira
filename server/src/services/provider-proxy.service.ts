@@ -12,6 +12,10 @@ import {
   streamOpenAICompatibleChat,
 } from "@/services/openai-compatible-provider.js";
 import { decryptSecret } from "@/utils/crypto.js";
+import {
+  getProviderDefinition,
+  isCallableModelId,
+} from "@/providers/catalog.js";
 
 export interface UIMessagePart {
   type?: string;
@@ -181,15 +185,15 @@ const resolveProviderModelIdentifier = (
     throw new Error(`No ${roleType.toUpperCase()} model configured`);
   }
 
-  if (providerCode !== "cloudflare") {
+  if (!getProviderDefinition(providerCode).callableModelIdPrefix) {
     return modelConfig.remoteModelId;
   }
 
-  if (modelConfig.remoteModelId.startsWith("@cf/")) {
+  if (isCallableModelId(providerCode, modelConfig.remoteModelId)) {
     return modelConfig.remoteModelId;
   }
 
-  if (modelConfig.name.startsWith("@cf/")) {
+  if (isCallableModelId(providerCode, modelConfig.name)) {
     return modelConfig.name;
   }
 
@@ -198,12 +202,12 @@ const resolveProviderModelIdentifier = (
     modelConfig.remoteModelId,
   );
 
-  if (providerModel?.modelName.startsWith("@cf/")) {
+  if (providerModel?.modelName && isCallableModelId(providerCode, providerModel.modelName)) {
     return providerModel.modelName;
   }
 
   throw new Error(
-    `Cloudflare ${roleType} model "${modelConfig.remoteModelId}" is not a callable Workers AI model identifier`,
+    `${getProviderDefinition(providerCode).displayName} ${roleType} model "${modelConfig.remoteModelId}" is not a callable model identifier`,
   );
 };
 
@@ -380,7 +384,7 @@ export const providerProxyService = {
     const resolved = resolveProviderForRole("llm", requestedProvider);
 
     return createUiMessageStream(() => {
-      switch (resolved.providerCode) {
+      switch (getProviderDefinition(resolved.providerCode).chatAdapter) {
         case "ollama":
           return streamOllamaChat({
             baseUrl: resolved.baseUrl,
@@ -389,9 +393,7 @@ export const providerProxyService = {
             messages,
             params: resolved.params,
           });
-        case "lmstudio":
-        case "openai":
-        case "cloudflare":
+        case "openai-compatible":
           return streamOpenAICompatibleChat({
             baseUrl: resolved.baseUrl,
             apiKey: resolved.apiKey,
@@ -426,7 +428,7 @@ export const providerProxyService = {
 
     let embeddings: number[][] = [];
 
-    switch (resolved.providerCode) {
+    switch (getProviderDefinition(resolved.providerCode).embeddingAdapter) {
       case "ollama": {
         await assertOllamaModelAvailable({
           baseUrl: resolved.baseUrl,
@@ -456,9 +458,7 @@ export const providerProxyService = {
         });
         break;
       }
-      case "lmstudio":
-      case "openai":
-      {
+      case "openai-compatible": {
         embeddings = await createOpenAICompatibleEmbeddings({
           baseUrl: resolved.baseUrl,
           apiKey: resolved.apiKey,

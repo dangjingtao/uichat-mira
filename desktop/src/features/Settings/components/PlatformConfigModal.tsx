@@ -10,6 +10,7 @@ import {
   type ProviderSummary,
   type RoleModelType,
 } from "@/shared/api/modelSettings";
+import { DEFAULT_PROVIDER_CODE } from "@/shared/providerCatalog";
 import { message } from "@/shared/ui/Message";
 import ApiConfigCard from "./ApiConfigCard";
 import PlatformCard from "./PlatformCard";
@@ -17,8 +18,6 @@ import PlatformCard from "./PlatformCard";
 interface PlatformConfigModalProps {
   onRoleConfigUpdated?: () => void | Promise<void>;
 }
-
-const DEFAULT_PROVIDER_CODE: ProviderCode = "ollama";
 
 const PlatformConfigModal: React.FC<PlatformConfigModalProps> = ({
   onRoleConfigUpdated,

@@ -7,6 +7,12 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 import { relations, sql } from "drizzle-orm";
+import {
+  PROVIDER_CODE_VALUES,
+  PROVIDER_STATUS_VALUES,
+  type ProviderCodeValue,
+  type ProviderStatusValue,
+} from "@/providers/codes.js";
 
 export const users = sqliteTable(
   "users",
@@ -16,7 +22,9 @@ export const users = sqliteTable(
     passwordHash: text("password_hash").notNull(),
     role: text("role", { enum: ["admin", "user"] }).notNull(),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
     usernameIdx: uniqueIndex("idx_users_username").on(table.username),
@@ -36,7 +44,9 @@ export const sessions = sqliteTable("sessions", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   expiresAt: text("expires_at").notNull(),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -52,17 +62,25 @@ export type NewSession = typeof sessions.$inferInsert;
 export const modelConfigs = sqliteTable(
   "model_configs",
   {
-    id: text("id").primaryKey().default(sql`(lower(hex(randomblob(16))))`),
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
     type: text("type", { enum: ["llm", "embedding", "rerank"] }).notNull(),
     name: text("name").notNull().default(""),
     providerCode: text("provider_code", {
-      enum: ["ollama", "lmstudio", "openai", "cloudflare"],
+      enum: PROVIDER_CODE_VALUES,
     }),
     remoteModelId: text("remote_model_id"),
     params: text("params").notNull().default("{}"),
-    isDefault: integer("is_default", { mode: "boolean" }).notNull().default(true),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    isDefault: integer("is_default", { mode: "boolean" })
+      .notNull()
+      .default(true),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
     typeIdx: index("idx_model_configs_type").on(table.type),
@@ -81,7 +99,9 @@ export type NewModelConfig = typeof modelConfigs.$inferInsert;
 export const modelParamTemplates = sqliteTable(
   "model_param_templates",
   {
-    id: text("id").primaryKey().default(sql`(lower(hex(randomblob(16))))`),
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
     modelType: text("model_type", {
       enum: ["llm", "embedding", "rerank"],
     }).notNull(),
@@ -93,7 +113,9 @@ export const modelParamTemplates = sqliteTable(
     step: real("step"),
     options: text("options"),
     defaultValue: text("default_value").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
     modelTypeParamKeyIdx: uniqueIndex("idx_model_param_templates_type_key").on(
@@ -104,7 +126,10 @@ export const modelParamTemplates = sqliteTable(
   }),
 );
 
-export const modelParamTemplatesRelations = relations(modelParamTemplates, () => ({}));
+export const modelParamTemplatesRelations = relations(
+  modelParamTemplates,
+  () => ({}),
+);
 
 export type ModelParamTemplate = typeof modelParamTemplates.$inferSelect;
 export type NewModelParamTemplate = typeof modelParamTemplates.$inferInsert;
@@ -113,22 +138,32 @@ export const providerConnections = sqliteTable(
   "provider_connections",
   {
     providerCode: text("provider_code", {
-      enum: ["ollama", "lmstudio", "openai", "cloudflare"],
+      enum: PROVIDER_CODE_VALUES,
     }).primaryKey(),
     displayName: text("display_name").notNull(),
     baseUrl: text("base_url").notNull().default(""),
     apiKeyEncrypted: text("api_key_encrypted"),
-    isEnabled: integer("is_enabled", { mode: "boolean" }).notNull().default(true),
+    isEnabled: integer("is_enabled", { mode: "boolean" })
+      .notNull()
+      .default(true),
     status: text("status", {
-      enum: ["idle", "syncing", "connected", "error"],
-    }).notNull().default("idle"),
+      enum: PROVIDER_STATUS_VALUES,
+    })
+      .notNull()
+      .default("idle"),
     lastError: text("last_error"),
     lastSyncedAt: text("last_synced_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
-    providerStatusIdx: index("idx_provider_connections_status").on(table.status),
+    providerStatusIdx: index("idx_provider_connections_status").on(
+      table.status,
+    ),
   }),
 );
 
@@ -140,7 +175,7 @@ export const providerModels = sqliteTable(
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     providerCode: text("provider_code", {
-      enum: ["ollama", "lmstudio", "openai", "cloudflare"],
+      enum: PROVIDER_CODE_VALUES,
     }).notNull(),
     remoteModelId: text("remote_model_id").notNull(),
     modelName: text("model_name").notNull(),
@@ -149,11 +184,12 @@ export const providerModels = sqliteTable(
     syncedAt: text("synced_at").notNull(),
   },
   (table) => ({
-    providerModelUniqueIdx: uniqueIndex("idx_provider_models_provider_remote").on(
+    providerModelUniqueIdx: uniqueIndex(
+      "idx_provider_models_provider_remote",
+    ).on(table.providerCode, table.remoteModelId),
+    providerModelIdx: index("idx_provider_models_provider").on(
       table.providerCode,
-      table.remoteModelId,
     ),
-    providerModelIdx: index("idx_provider_models_provider").on(table.providerCode),
   }),
 );
 
@@ -163,7 +199,9 @@ export type NewProviderModel = typeof providerModels.$inferInsert;
 export const knowledgeBases = sqliteTable(
   "knowledge_bases",
   {
-    id: text("id").primaryKey().default(sql`(lower(hex(randomblob(16))))`),
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
     name: text("name").notNull(),
     description: text("description"),
     status: text("status", { enum: ["active", "archived"] })
@@ -174,22 +212,29 @@ export const knowledgeBases = sqliteTable(
       { onDelete: "set null" },
     ),
     chunkingConfigJson: text("chunking_config_json").notNull().default("{}"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
     statusIdx: index("idx_knowledge_bases_status").on(table.status),
   }),
 );
 
-export const knowledgeBasesRelations = relations(knowledgeBases, ({ many, one }) => ({
-  documents: many(documents),
-  embeddingModelConfig: one(modelConfigs, {
-    fields: [knowledgeBases.embeddingModelConfigId],
-    references: [modelConfigs.id],
+export const knowledgeBasesRelations = relations(
+  knowledgeBases,
+  ({ many, one }) => ({
+    documents: many(documents),
+    embeddingModelConfig: one(modelConfigs, {
+      fields: [knowledgeBases.embeddingModelConfigId],
+      references: [modelConfigs.id],
+    }),
+    vectorIndexes: many(knowledgeBaseVectorIndexes),
   }),
-  vectorIndexes: many(knowledgeBaseVectorIndexes),
-}));
+);
 
 export type KnowledgeBase = typeof knowledgeBases.$inferSelect;
 export type NewKnowledgeBase = typeof knowledgeBases.$inferInsert;
@@ -197,7 +242,9 @@ export type NewKnowledgeBase = typeof knowledgeBases.$inferInsert;
 export const documents = sqliteTable(
   "documents",
   {
-    id: text("id").primaryKey().default(sql`(lower(hex(randomblob(16))))`),
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
     knowledgeBaseId: text("knowledge_base_id")
       .notNull()
       .references(() => knowledgeBases.id, { onDelete: "cascade" }),
@@ -220,11 +267,17 @@ export const documents = sqliteTable(
     charCount: integer("char_count").notNull().default(0),
     tokenCount: integer("token_count"),
     errorMessage: text("error_message"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
-    knowledgeBaseIdx: index("idx_documents_knowledge_base").on(table.knowledgeBaseId),
+    knowledgeBaseIdx: index("idx_documents_knowledge_base").on(
+      table.knowledgeBaseId,
+    ),
     statusIdx: index("idx_documents_index_status").on(table.indexStatus),
     enabledIdx: index("idx_documents_enabled").on(table.enabled),
     createdAtIdx: index("idx_documents_created_at").on(table.createdAt),
@@ -258,14 +311,17 @@ export const documentChunks = sqliteTable(
     tokenCount: integer("token_count"),
     startOffset: integer("start_offset"),
     endOffset: integer("end_offset"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
-    documentChunkUniqueIdx: uniqueIndex("idx_document_chunks_document_index").on(
-      table.documentId,
-      table.chunkIndex,
+    documentChunkUniqueIdx: uniqueIndex(
+      "idx_document_chunks_document_index",
+    ).on(table.documentId, table.chunkIndex),
+    knowledgeBaseIdx: index("idx_document_chunks_knowledge_base").on(
+      table.knowledgeBaseId,
     ),
-    knowledgeBaseIdx: index("idx_document_chunks_knowledge_base").on(table.knowledgeBaseId),
     documentIdx: index("idx_document_chunks_document").on(table.documentId),
   }),
 );
@@ -287,7 +343,9 @@ export type NewDocumentChunk = typeof documentChunks.$inferInsert;
 export const knowledgeBaseVectorIndexes = sqliteTable(
   "knowledge_base_vector_indexes",
   {
-    id: text("id").primaryKey().default(sql`(lower(hex(randomblob(16))))`),
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
     knowledgeBaseId: text("knowledge_base_id")
       .notNull()
       .references(() => knowledgeBases.id, { onDelete: "cascade" }),
@@ -303,12 +361,20 @@ export const knowledgeBaseVectorIndexes = sqliteTable(
       .notNull()
       .default("cosine"),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
-    tableNameUniqueIdx: uniqueIndex("idx_kb_vector_indexes_table_name").on(table.tableName),
-    knowledgeBaseIdx: index("idx_kb_vector_indexes_knowledge_base").on(table.knowledgeBaseId),
+    tableNameUniqueIdx: uniqueIndex("idx_kb_vector_indexes_table_name").on(
+      table.tableName,
+    ),
+    knowledgeBaseIdx: index("idx_kb_vector_indexes_knowledge_base").on(
+      table.knowledgeBaseId,
+    ),
   }),
 );
 
@@ -326,14 +392,16 @@ export const knowledgeBaseVectorIndexesRelations = relations(
   }),
 );
 
-export type KnowledgeBaseVectorIndex = typeof knowledgeBaseVectorIndexes.$inferSelect;
-export type NewKnowledgeBaseVectorIndex = typeof knowledgeBaseVectorIndexes.$inferInsert;
+export type KnowledgeBaseVectorIndex =
+  typeof knowledgeBaseVectorIndexes.$inferSelect;
+export type NewKnowledgeBaseVectorIndex =
+  typeof knowledgeBaseVectorIndexes.$inferInsert;
 
 export type ModelType = "llm" | "embedding" | "rerank";
 export type UserRole = "admin" | "user";
 export type ParamType = "number" | "select" | "boolean";
-export type ProviderCode = "ollama" | "lmstudio" | "openai" | "cloudflare";
-export type ProviderStatus = "idle" | "syncing" | "connected" | "error";
+export type ProviderCode = ProviderCodeValue;
+export type ProviderStatus = ProviderStatusValue;
 export type KnowledgeBaseStatus = "active" | "archived";
 export type DocumentSourceType = "upload" | "sync" | "api";
 export type DocumentIndexStatus = "processing" | "ready" | "failed";

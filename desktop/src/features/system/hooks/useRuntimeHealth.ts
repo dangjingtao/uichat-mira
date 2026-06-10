@@ -13,8 +13,6 @@ type RuntimeHealthSnapshot = {
   vectorState: RuntimeState;
 };
 
-const HEALTH_POLL_INTERVAL_MS = 30000;
-
 const createRuntimeState = (
   status: RuntimeState["status"],
   detail: string,
@@ -52,8 +50,8 @@ const createInitialSnapshot = (): RuntimeHealthSnapshot => {
 };
 
 let snapshot: RuntimeHealthSnapshot = createInitialSnapshot();
-let pollingTimer: number | null = null;
-let pollingPromise: Promise<void> | null = null;
+let fetchPromise: Promise<void> | null = null;
+let hasFetched = false;
 const listeners = new Set<(next: RuntimeHealthSnapshot) => void>();
 
 const emitSnapshot = () => {
@@ -67,23 +65,17 @@ const setSnapshot = (next: RuntimeHealthSnapshot) => {
   emitSnapshot();
 };
 
-const stopPolling = () => {
-  if (pollingTimer !== null) {
-    globalThis.clearInterval(pollingTimer);
-    pollingTimer = null;
-  }
-};
-
-const pollRuntimeHealth = async () => {
-  if (pollingPromise) {
-    return pollingPromise;
+const fetchRuntimeHealth = async () => {
+  if (fetchPromise) {
+    return fetchPromise;
   }
 
-  pollingPromise = (async () => {
+  fetchPromise = (async () => {
     const desktopApi = getDesktopApi();
 
     if (!desktopApi?.backendUrl) {
       setSnapshot(createInitialSnapshot());
+      hasFetched = true;
       return;
     }
 
@@ -118,34 +110,29 @@ const pollRuntimeHealth = async () => {
       databaseState: nextDatabaseState,
       vectorState: nextVectorState,
     });
+    hasFetched = true;
   })().finally(() => {
-    pollingPromise = null;
+    fetchPromise = null;
   });
 
-  return pollingPromise;
+  return fetchPromise;
 };
 
-const ensurePolling = () => {
-  if (pollingTimer !== null) {
+const ensureFetchedOnce = () => {
+  if (hasFetched) {
     return;
   }
 
-  void pollRuntimeHealth();
-  pollingTimer = globalThis.setInterval(() => {
-    void pollRuntimeHealth();
-  }, HEALTH_POLL_INTERVAL_MS);
+  void fetchRuntimeHealth();
 };
 
 const subscribe = (listener: (next: RuntimeHealthSnapshot) => void) => {
   listeners.add(listener);
   listener(snapshot);
-  ensurePolling();
+  ensureFetchedOnce();
 
   return () => {
     listeners.delete(listener);
-    if (listeners.size === 0) {
-      stopPolling();
-    }
   };
 };
 

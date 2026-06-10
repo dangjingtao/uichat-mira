@@ -9,7 +9,7 @@ const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 
 export const normalizeOpenAICompatibleBaseUrl = (baseUrl: string) => {
   const normalized = trimTrailingSlash(baseUrl.trim());
-  if (normalized.endsWith("/v1")) {
+  if (normalized.match(/\/v\d+$/)) {
     return normalized;
   }
   return `${normalized}/v1`;

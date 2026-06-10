@@ -54,3 +54,10 @@
 - FileUploadDropzone 在前置业务条件未满足时应支持 disabled 状态，禁用点击并给出明确说明。
 
 - Modal 默认应优先内容自适应，仅在复杂表单或长内容场景下再显式传入 height / maxHeight。
+
+## 8. Chat / Thread
+
+- Keep the chat surface quiet and spacious; avoid heavy card stacking
+- Prefer a light assistant container for long answers and a higher-contrast user bubble
+- If the composer is docked, keep the fade and background transition smooth against the page
+- Do not overload the thread with extra controls before message readability and input focus are solid
