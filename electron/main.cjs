@@ -54,6 +54,8 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    show: false,
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       sandbox: false,
@@ -62,15 +64,31 @@ function createWindow() {
     },
   });
 
+  mainWindow.once("ready-to-show", () => {
+    mainWindow?.show();
+    mainWindow?.focus();
+  });
+
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+  });
+
   if (isDev) {
-    mainWindow.loadURL("http://localhost:5173");
-    mainWindow.webContents.openDevTools();
+    void mainWindow
+      .loadURL("http://localhost:5173")
+      .then(() => {
+        mainWindow?.webContents.openDevTools({ mode: "detach" });
+      })
+      .catch((error) => {
+        console.error("Failed to load dev renderer:", error);
+      });
     return;
   }
 
   const indexPath = resolveRendererEntry();
-  console.log("Loading renderer from:", indexPath);
-  mainWindow.loadFile(indexPath);
+  void mainWindow.loadFile(indexPath).catch((error) => {
+    console.error("Failed to load packaged renderer:", error);
+  });
 }
 
 function startBackend() {

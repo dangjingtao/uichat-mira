@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from "fastify";
 import { modelConfigService } from "@/services/model-config.service.js";
 import type { ModelType } from "@/db/schema.js";
 import { success, error, ErrorCodes } from "@/utils/index.js";
+import { PROVIDER_CODE_ENUM } from "@/providers/catalog.js";
 
 const modelTypeEnum = ["llm", "embedding", "rerank"] as const;
 
@@ -23,10 +24,7 @@ const modelConfigSchema = {
     type: { type: "string", enum: modelTypeEnum },
     name: { type: "string" },
     providerCode: {
-      anyOf: [
-        { type: "string", enum: ["ollama", "lmstudio", "openai", "cloudflare"] },
-        { type: "null" },
-      ],
+      anyOf: [{ type: "string", enum: PROVIDER_CODE_ENUM }, { type: "null" }],
     },
     remoteModelId: {
       anyOf: [{ type: "string" }, { type: "null" }],

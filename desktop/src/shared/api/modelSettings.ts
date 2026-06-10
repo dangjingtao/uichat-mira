@@ -1,6 +1,7 @@
 import { get, post, put } from "../lib/request";
+import type { ProviderCode } from "../providerCatalog";
 
-export type ProviderCode = "ollama" | "lmstudio" | "openai" | "cloudflare";
+export type { ProviderCode } from "../providerCatalog";
 export type RoleModelType = "llm" | "embedding" | "rerank";
 export type ProviderStatus = "idle" | "syncing" | "connected" | "error";
 

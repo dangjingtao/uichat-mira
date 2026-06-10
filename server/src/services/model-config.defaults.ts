@@ -1,17 +1,13 @@
 import type { ModelType, ParamType, ProviderCode } from "@/db/schema";
 
+export { DEFAULT_PROVIDER_CONNECTIONS } from "@/providers/catalog.js";
+
 export interface DefaultRoleConfig {
   type: ModelType;
   name: string;
   providerCode: ProviderCode | null;
   remoteModelId: string | null;
   params: Record<string, unknown>;
-}
-
-export interface DefaultProviderConnection {
-  providerCode: ProviderCode;
-  displayName: string;
-  baseUrl: string;
 }
 
 export interface ParamTemplateSeed {
@@ -23,29 +19,6 @@ export interface ParamTemplateSeed {
   options: Array<{ value: string; label: string }> | null;
   default_value: number | string | boolean;
 }
-
-export const DEFAULT_PROVIDER_CONNECTIONS: DefaultProviderConnection[] = [
-  {
-    providerCode: "ollama",
-    displayName: "Ollama",
-    baseUrl: "http://localhost:11434",
-  },
-  {
-    providerCode: "lmstudio",
-    displayName: "LM Studio",
-    baseUrl: "http://127.0.0.1:1234/v1",
-  },
-  {
-    providerCode: "openai",
-    displayName: "OpenAI",
-    baseUrl: "https://api.openai.com/v1",
-  },
-  {
-    providerCode: "cloudflare",
-    displayName: "Cloudflare",
-    baseUrl: "https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/ai/v1",
-  },
-];
 
 export const DEFAULT_ROLE_CONFIGS: DefaultRoleConfig[] = [
   {

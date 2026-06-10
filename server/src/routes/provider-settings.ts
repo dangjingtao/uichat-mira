@@ -2,11 +2,10 @@ import { FastifyPluginAsync } from "fastify";
 import { providerSettingsService } from "@/services/provider-settings.service.js";
 import type { ModelType, ProviderCode } from "@/db/schema.js";
 import { ErrorCodes, error, success } from "@/utils/index.js";
-
-const providerCodeSchema = {
-  type: "string",
-  enum: ["ollama", "lmstudio", "openai", "cloudflare"],
-} as const;
+import {
+  PROVIDER_CODE_ENUM,
+  providerCodeSchema,
+} from "@/providers/catalog.js";
 
 const modelTypeSchema = {
   type: "string",
@@ -52,7 +51,7 @@ const providerSummarySchema = {
     "assignedRoles",
   ],
   properties: {
-    code: providerCodeSchema,
+    code: { type: "string", enum: PROVIDER_CODE_ENUM },
     displayName: { type: "string" },
     baseUrl: { type: "string" },
     hasApiKey: { type: "boolean" },
@@ -77,7 +76,7 @@ const roleAssignmentSchema = {
       type: "object",
       required: ["providerCode", "remoteModelId", "modelName"],
       properties: {
-        providerCode: providerCodeSchema,
+        providerCode: { type: "string", enum: PROVIDER_CODE_ENUM },
         remoteModelId: { type: "string" },
         modelName: { type: "string" },
       },
@@ -104,7 +103,7 @@ const roleModelConfigSchema = {
     type: modelTypeSchema,
     name: { type: "string" },
     providerCode: {
-      anyOf: [providerCodeSchema, { type: "null" }],
+      anyOf: [{ type: "string", enum: PROVIDER_CODE_ENUM }, { type: "null" }],
     },
     remoteModelId: {
       anyOf: [{ type: "string" }, { type: "null" }],

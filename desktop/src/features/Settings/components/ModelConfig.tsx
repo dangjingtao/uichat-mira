@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/shared/ui/Button";
 import { NumberInput, SelectInput } from "@/shared/ui/Input";
 import { message } from "@/shared/ui/Message";
@@ -7,6 +7,7 @@ import {
   type RoleModelType,
   updateRoleModelConfigParams,
 } from "@/shared/api/modelSettings";
+import { getProviderLabel } from "@/shared/providerCatalog";
 
 interface ParamMeta {
   key: string;
@@ -27,13 +28,6 @@ interface ModelMeta {
 type ConfigValue = number | string | boolean;
 type ConfigState = Record<string, ConfigValue>;
 
-const PROVIDER_LABELS = {
-  ollama: "Ollama",
-  lmstudio: "LM Studio",
-  openai: "OpenAI",
-  cloudflare: "Cloudflare",
-} as const;
-
 const MODEL_META: Record<RoleModelType, ModelMeta> = {
   llm: {
     title: "LLM",
@@ -51,7 +45,7 @@ const MODEL_META: Record<RoleModelType, ModelMeta> = {
   },
   embedding: {
     title: "Embedding",
-    subtitle: "用于向量化和语义搜索",
+    subtitle: "鐢ㄤ簬鍚戦噺鍖栧拰璇箟鎼滅储",
     badgeText: "EM",
     badgeClassName: "bg-success/10 text-success",
     params: [
@@ -72,7 +66,7 @@ const MODEL_META: Record<RoleModelType, ModelMeta> = {
   },
   rerank: {
     title: "ReRank",
-    subtitle: "用于结果重排和相关性评分",
+    subtitle: "用于结果重排和相关性评估",
     badgeText: "RE",
     badgeClassName: "bg-surface-tertiary text-text-secondary",
     params: [
@@ -125,7 +119,7 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
 
   const isConfigured = Boolean(config?.providerCode && config?.remoteModelId);
   const providerLabel = config?.providerCode
-    ? PROVIDER_LABELS[config.providerCode]
+    ? getProviderLabel(config.providerCode)
     : "未配置";
 
   const handleChange = (key: string, value: ConfigValue) => {
@@ -146,7 +140,7 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
       message.success("参数已保存");
       setIsChanged(false);
     } catch (err) {
-      const messageText = err instanceof Error ? err.message : "保存参数失败";
+      const messageText = err instanceof Error ? err.message : "淇濆瓨鍙傛暟澶辫触";
       message.error(messageText);
     } finally {
       setIsSaving(false);
@@ -189,23 +183,23 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
           disabled={!isConfigured || !isChanged || isSaving}
           onClick={handleSave}
         >
-          {isSaving ? "保存中..." : "保存"}
+          {isSaving ? "淇濆瓨涓?.." : "淇濆瓨"}
         </Button>
       </div>
 
       <div className="mb-2.5 grid grid-cols-1 gap-2 md:grid-cols-2">
         <div className="rounded-lg border border-border bg-surface-secondary px-3 py-2">
           <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-text-tertiary">
-            当前平台
+            褰撳墠骞冲彴
           </div>
           <div className="mt-1 text-sm text-text-primary">{providerLabel}</div>
         </div>
         <div className="rounded-lg border border-border bg-surface-secondary px-3 py-2">
           <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-text-tertiary">
-            当前模型
+            褰撳墠妯″瀷
           </div>
           <div className="mt-1 truncate text-sm text-text-primary">
-            {config?.name || "请在平台模型设置中选择"}
+            {config?.name || "璇峰湪骞冲彴妯″瀷璁剧疆涓€夋嫨"}
           </div>
         </div>
       </div>
@@ -251,3 +245,6 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
 };
 
 export default ModelConfig;
+
+
+

@@ -14,3 +14,4 @@ server/data/*.db-shm
 server/data/*.db-wal
 release-*/
 release/
+data/

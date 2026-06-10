@@ -11,12 +11,15 @@ import type {
   ProviderStatus,
 } from "@/db/schema";
 import {
-  DEFAULT_PROVIDER_CONNECTIONS,
   buildDefaultParams,
 } from "@/services/model-config.defaults.js";
 import { listCloudflareModels } from "@/services/cloudflare-provider.js";
 import { listOpenAICompatibleModels } from "@/services/openai-compatible-provider.js";
 import { decryptSecret, encryptSecret } from "@/utils/crypto.js";
+import {
+  DEFAULT_PROVIDER_CONNECTIONS,
+  getProviderDefinition,
+} from "@/providers/catalog.js";
 
 export interface ProviderSummaryResponse {
   code: ProviderCode;
@@ -91,22 +94,26 @@ const listProviderModels = async (
   baseUrl: string,
   apiKey: string,
 ) => {
-  if (providerCode === "ollama") {
-    const url = `${trimTrailingSlash(baseUrl)}/api/tags`;
-    const result = await fetchJson<{ models?: Array<{ name: string }> }>(url);
+  const provider = getProviderDefinition(providerCode);
 
-    return (result.models ?? []).map((model) => ({
-      id: model.name,
-      name: model.name,
-      raw: model,
-    }));
+  switch (provider.syncAdapter) {
+    case "ollama": {
+      const url = `${trimTrailingSlash(baseUrl)}/api/tags`;
+      const result = await fetchJson<{ models?: Array<{ name: string }> }>(url);
+
+      return (result.models ?? []).map((model) => ({
+        id: model.name,
+        name: model.name,
+        raw: model,
+      }));
+    }
+    case "cloudflare":
+      return listCloudflareModels(baseUrl, apiKey);
+    case "openai-compatible":
+      return listOpenAICompatibleModels(baseUrl, apiKey);
+    default:
+      return listOpenAICompatibleModels(baseUrl, apiKey);
   }
-
-  if (providerCode === "cloudflare") {
-    return listCloudflareModels(baseUrl, apiKey);
-  }
-
-  return listOpenAICompatibleModels(baseUrl, apiKey);
 };
 
 const toProviderSummary = (
@@ -324,7 +331,7 @@ export const providerSettingsService = {
       providerCode: updated.providerCode ?? null,
       remoteModelId: updated.remoteModelId ?? null,
       params: JSON.parse(updated.params),
-      isDefault: updated.isDefault,
+      isDefault: Boolean(updated.isDefault),
       createdAt: updated.createdAt,
       updatedAt: updated.updatedAt,
     };

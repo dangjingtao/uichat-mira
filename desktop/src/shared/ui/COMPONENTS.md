@@ -21,6 +21,7 @@
 - `StepIndicator`
 - `Switch`
 - `Table`
+- `Thread`
 - `Tooltip`
 
 ## 设计约束
@@ -216,3 +217,18 @@ umber \| string | 弹窗宽度，支持像素或 CSS 尺寸值 |
 umber \| string | 显式固定高度；不传时按内容自适应 |
 | maxHeight | 
 umber \| string | 最大高度，默认限制在视口内 |
+
+## Thread
+
+Used for the main chat thread, composed from `assistant-ui` primitives in a calmer, OpenAI-inspired style.
+### Current behavior
+
+- `assistant` messages use a light card surface for long-form reading
+- `user` messages stay right-aligned with a higher-contrast bubble
+- the composer stays docked at the bottom to preserve reading continuity
+- colors and elevation should rely on `surface-*`, `text-*`, and `border` tokens
+
+### Usage notes
+
+- Prefer it for primary chat pages and single-thread AI conversation views
+- When extending attachments, tool calls, or retry actions, keep changes inside the current primitive structure for backward compatibility

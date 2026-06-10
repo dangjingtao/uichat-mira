@@ -9,8 +9,10 @@ import {
   providerProxyService,
   type ProxyProviderParam,
 } from "@/services/provider-proxy.service.js";
-
-const proxyProviderEnum = ["default", "ollama", "lmstudio", "openai", "cloudflare"] as const;
+import {
+  PROVIDER_CODE_ENUM,
+  proxyProviderSchema,
+} from "@/providers/catalog.js";
 
 const errorEnvelope = {
   type: "object",
@@ -62,7 +64,7 @@ const proxyProviderRoute: FastifyPluginAsync = async (app) => {
           type: "object",
           required: ["provider"],
           properties: {
-            provider: { type: "string", enum: proxyProviderEnum },
+            provider: proxyProviderSchema,
           },
         },
         body: {
@@ -148,7 +150,7 @@ const proxyProviderRoute: FastifyPluginAsync = async (app) => {
           type: "object",
           required: ["provider"],
           properties: {
-            provider: { type: "string", enum: proxyProviderEnum },
+            provider: proxyProviderSchema,
           },
         },
         body: {
@@ -172,7 +174,10 @@ const proxyProviderRoute: FastifyPluginAsync = async (app) => {
             type: "object",
             required: ["providerCode", "model", "dimensions", "embeddings"],
             properties: {
-              providerCode: { type: "string", enum: ["ollama", "lmstudio", "openai", "cloudflare"] },
+              providerCode: {
+                type: "string",
+                enum: PROVIDER_CODE_ENUM,
+              },
               model: { type: "string" },
               modelConfigId: { type: "string" },
               dimensions: { type: "number" },
