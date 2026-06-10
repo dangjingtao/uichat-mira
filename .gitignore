@@ -15,3 +15,4 @@ server/data/*.db-wal
 release-*/
 release/
 data/
+.codex/
