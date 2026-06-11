@@ -11,15 +11,20 @@ import type {
   ProviderStatus,
 } from "@/db/schema";
 import {
+  DEFAULT_PROVIDER_CONNECTIONS,
   buildDefaultParams,
 } from "@/services/model-config.defaults.js";
 import { listCloudflareModels } from "@/services/cloudflare-provider.js";
 import { listOpenAICompatibleModels } from "@/services/openai-compatible-provider.js";
 import { decryptSecret, encryptSecret } from "@/utils/crypto.js";
 import {
-  DEFAULT_PROVIDER_CONNECTIONS,
-  getProviderDefinition,
-} from "@/providers/catalog.js";
+  FAILED_UPDATE_PROVIDER_STATUS_MESSAGE,
+  PROVIDER_CONNECTION_NOT_FOUND_MESSAGE,
+  PROVIDER_MODEL_NOT_FOUND_MESSAGE,
+  getErrorMessage,
+} from "@/utils/errors.js";
+import { fetchJsonWithTimeout } from "@/utils/http.js";
+import { nowIso } from "@/utils/time.js";
 
 export interface ProviderSummaryResponse {
   code: ProviderCode;
@@ -68,52 +73,29 @@ const providerDefaults = Object.fromEntries(
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 
-const fetchJson = async <T>(url: string, init?: RequestInit): Promise<T> => {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
-
-  try {
-    const response = await fetch(url, {
-      ...init,
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || `Request failed with status ${response.status}`);
-    }
-
-    return (await response.json()) as T;
-  } finally {
-    clearTimeout(timeout);
-  }
-};
-
 const listProviderModels = async (
   providerCode: ProviderCode,
   baseUrl: string,
   apiKey: string,
 ) => {
-  const provider = getProviderDefinition(providerCode);
+  if (providerCode === "ollama") {
+    const url = `${trimTrailingSlash(baseUrl)}/api/tags`;
+    const result = await fetchJsonWithTimeout<{ models?: Array<{ name: string }> }>(
+      url,
+    );
 
-  switch (provider.syncAdapter) {
-    case "ollama": {
-      const url = `${trimTrailingSlash(baseUrl)}/api/tags`;
-      const result = await fetchJson<{ models?: Array<{ name: string }> }>(url);
-
-      return (result.models ?? []).map((model) => ({
-        id: model.name,
-        name: model.name,
-        raw: model,
-      }));
-    }
-    case "cloudflare":
-      return listCloudflareModels(baseUrl, apiKey);
-    case "openai-compatible":
-      return listOpenAICompatibleModels(baseUrl, apiKey);
-    default:
-      return listOpenAICompatibleModels(baseUrl, apiKey);
+    return (result.models ?? []).map((model) => ({
+      id: model.name,
+      name: model.name,
+      raw: model,
+    }));
   }
+
+  if (providerCode === "cloudflare") {
+    return listCloudflareModels(baseUrl, apiKey);
+  }
+
+  return listOpenAICompatibleModels(baseUrl, apiKey);
 };
 
 const toProviderSummary = (
@@ -136,6 +118,9 @@ const getAssignments = () => {
   return {
     llm:
       defaults.find((config) => config.type === "llm" && config.providerCode && config.remoteModelId) ??
+      null,
+    task:
+      defaults.find((config) => config.type === "task" && config.providerCode && config.remoteModelId) ??
       null,
     embedding:
       defaults.find(
@@ -206,6 +191,14 @@ export const providerSettingsService = {
                 modelName: assignments.llm.name,
               }
             : null,
+        task:
+          assignments.task?.providerCode === providerCode && assignments.task.remoteModelId
+            ? {
+                providerCode,
+                remoteModelId: assignments.task.remoteModelId,
+                modelName: assignments.task.name,
+              }
+            : null,
         embedding:
           assignments.embedding?.providerCode === providerCode &&
           assignments.embedding.remoteModelId
@@ -249,7 +242,7 @@ export const providerSettingsService = {
     const connection = providerConnectionRepository.findByCode(providerCode);
 
     if (!connection) {
-      throw new Error("Provider connection not found");
+      throw new Error(PROVIDER_CONNECTION_NOT_FOUND_MESSAGE);
     }
 
     providerConnectionRepository.updateStatus(providerCode, "syncing", null, connection.lastSyncedAt);
@@ -260,7 +253,7 @@ export const providerSettingsService = {
         connection.baseUrl,
         decryptSecret(connection.apiKeyEncrypted),
       );
-      const syncedAt = new Date().toISOString();
+      const syncedAt = nowIso();
 
       providerModelRepository.replaceForProvider(
         providerCode,
@@ -282,7 +275,7 @@ export const providerSettingsService = {
       );
 
       if (!updatedConnection) {
-        throw new Error("Failed to update provider status");
+        throw new Error(FAILED_UPDATE_PROVIDER_STATUS_MESSAGE);
       }
 
       return {
@@ -293,7 +286,7 @@ export const providerSettingsService = {
         })),
       };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Unknown sync error";
+      const errorMessage = getErrorMessage(err, "Unknown sync error");
       providerConnectionRepository.updateStatus(providerCode, "error", errorMessage, connection.lastSyncedAt);
       throw err;
     }
@@ -310,7 +303,7 @@ export const providerSettingsService = {
     );
 
     if (!providerModel) {
-      throw new Error("Provider model not found");
+      throw new Error(PROVIDER_MODEL_NOT_FOUND_MESSAGE);
     }
 
     const updated = modelConfigRepository.upsertDefault({
@@ -331,7 +324,7 @@ export const providerSettingsService = {
       providerCode: updated.providerCode ?? null,
       remoteModelId: updated.remoteModelId ?? null,
       params: JSON.parse(updated.params),
-      isDefault: Boolean(updated.isDefault),
+      isDefault: updated.isDefault,
       createdAt: updated.createdAt,
       updatedAt: updated.updatedAt,
     };

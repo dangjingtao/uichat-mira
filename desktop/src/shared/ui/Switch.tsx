@@ -17,7 +17,9 @@ export function Switch({
     size === "sm"
       ? {
           track: "h-5 w-9",
-          thumb: checked ? "h-4 w-4 translate-x-4.5" : "h-4 w-4 translate-x-0.5",
+          thumb: checked
+            ? "h-4 w-4 translate-x-4"
+            : "h-4 w-4 translate-x-0.5",
         }
       : {
           track: "h-6 w-11",

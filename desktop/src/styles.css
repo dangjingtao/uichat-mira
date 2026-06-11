@@ -132,6 +132,15 @@
   .slide-in-from-top-2 {
     animation: slideInFromTop 0.2s ease-out;
   }
+
+  .route-content-transition {
+    animation: routeContentFade 0.26s ease;
+    will-change: opacity, transform;
+  }
+
+  .stable-scrollbar {
+    scrollbar-gutter: stable;
+  }
 }
 
 @keyframes animateIn {
@@ -160,5 +169,16 @@
   to {
     transform: translateY(0);
     opacity: 1;
+  }
+}
+
+@keyframes routeContentFade {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

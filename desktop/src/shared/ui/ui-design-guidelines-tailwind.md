@@ -59,5 +59,7 @@
 
 - Keep the chat surface quiet and spacious; avoid heavy card stacking
 - Prefer a light assistant container for long answers and a higher-contrast user bubble
+- Show assistant runtime states inside the active assistant bubble when useful, especially distinguishing "waiting for first token" from "already streaming text"
 - If the composer is docked, keep the fade and background transition smooth against the page
 - Do not overload the thread with extra controls before message readability and input focus are solid
+- Favor a centered reading column with soft neutral bubbles, subtle avatars, and a frosted composer shell

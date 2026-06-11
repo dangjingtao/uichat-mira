@@ -29,7 +29,7 @@ async function migrateDatabase() {
       -- 创建临时表带唯一约束
       CREATE TABLE model_configs_new (
         id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-        type TEXT NOT NULL CHECK (type IN ('llm', 'embedding', 'rerank')),
+        type TEXT NOT NULL CHECK (type IN ('llm', 'embedding', 'rerank', 'task')),
         name TEXT NOT NULL DEFAULT '',
         params TEXT NOT NULL DEFAULT '{}',
         is_default INTEGER NOT NULL DEFAULT 1,

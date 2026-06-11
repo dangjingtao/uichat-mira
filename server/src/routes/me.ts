@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from "fastify";
 import { requireAuth } from "@/db/auth.db.js";
 import { success } from "@/utils/index.js";
+import { errorEnvelope, successEnvelope, userSchema } from "@/routes/schema-helpers.js";
 
 const meRoute: FastifyPluginAsync = async (app) => {
   app.get(
@@ -14,37 +15,14 @@ const meRoute: FastifyPluginAsync = async (app) => {
         description: "Return the authenticated user associated with the bearer token.",
         security: [{ bearerAuth: [] }],
         response: {
-          200: {
+          200: successEnvelope({
             type: "object",
-            required: ["success", "data", "timestamp"],
+            required: ["user"],
             properties: {
-              success: { type: "boolean", const: true },
-              data: {
-                type: "object",
-                required: ["user"],
-                properties: {
-                  user: {
-                    type: "object",
-                    required: ["id", "username", "role"],
-                    properties: {
-                      id: { type: "number" },
-                      username: { type: "string" },
-                      role: { type: "string", enum: ["admin", "user"] },
-                    },
-                  },
-                },
-              },
-              message: { type: "string" },
-              timestamp: { type: "string", format: "date-time" },
+              user: userSchema,
             },
-          },
-          401: {
-            type: "object",
-            properties: {
-              ok: { type: "boolean" },
-              message: { type: "string" },
-            },
-          },
+          }),
+          401: errorEnvelope,
         },
       },
     },

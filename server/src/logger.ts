@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
+import CONFIG from "@/config";
 
-export const LOG_DIR = path.resolve(process.cwd(), "logs");
+export const LOG_DIR = path.resolve(process.cwd(), CONFIG.LOG_DIR);
 try {
   fs.mkdirSync(LOG_DIR, { recursive: true });
 } catch {}

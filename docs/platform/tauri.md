@@ -1,6 +1,9 @@
 # Tauri Desktop App
 
-This folder contains the Tauri configuration for building the desktop application as an alternative to Electron.
+This document covers the Tauri configuration used to build the desktop application as an alternative to Electron.
+
+Tauri and Electron are expected to share the same staged desktop build inputs from the root `.artifacts/` directory.
+That includes the frontend production bundle, backend bundle, icons, runtime config, and bundled Node runtime.
 
 ## Project Structure
 
@@ -19,31 +22,46 @@ tauri/
 ## Prerequisites
 
 1. Install Rust: https://www.rust-lang.org/tools/install
-2. Install Tauri CLI: `cargo install tauri-cli --version "^2.0.0"`
+2. Install Tauri CLI: `pnpm add -Dw @tauri-apps/cli@latest`
 3. Install frontend dependencies: `pnpm install`
 4. Install Tauri API in desktop: `cd desktop && pnpm add @tauri-apps/api`
 
 ## Development
 
 ```bash
-# Start Tauri development mode (automatically starts Vite dev server)
-cd tauri
-cargo tauri dev
+# Start Tauri development mode from the workspace root
+pnpm dev:tauri:win
 ```
+
+The workspace script pins `CARGO_BUILD_JOBS=1` and `CARGO_INCREMENTAL=0` to reduce Windows-side `rustc` crashes during development.
+It also starts both the Vite renderer and the Fastify backend before launching the Tauri window.
 
 ## Building
 
 ```bash
-# Build the desktop application
-cd tauri
-cargo tauri build
+# Build the desktop application from the workspace root
+pnpm package:tauri:win
+
+# Run the Rust-side compile check with the same low-concurrency settings
+pnpm check:tauri
 
 # Output location: tauri/target/release/bundle/
 ```
 
+During `pnpm package:tauri:win` or `pnpm check:tauri`, the internal Tauri prepare flow refreshes:
+
+- `.artifacts/desktop/dist`
+- `.artifacts/server-bundle`
+- `.artifacts/server-data`
+- `.artifacts/icons`
+- `.artifacts/runtime.config.cjs`
+- `.artifacts/node-runtime`
+
+After a successful `pnpm package:tauri:win`, the workspace automatically clears `.artifacts/`.
+
 ## Key Features
 
-- **Minimal IPC**: Only 3 commands exposed (backend URL, health checks)
+- **Shared backend config**: Backend host and port are resolved from the root `runtime.config.cjs`
 - **Backend Process Management**: Automatically starts Node.js backend in production
 - **Compatible with Existing Code**: Frontend code requires minimal changes
 - **Cross-platform**: Supports Windows, macOS, and Linux

@@ -4,6 +4,7 @@ Cargo.lock
 
 # Tauri build artifacts
 /src-tauri/target/
+/resources/
 
 # IDE
 .vscode/

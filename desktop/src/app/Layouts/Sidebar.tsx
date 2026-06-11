@@ -50,7 +50,7 @@ function Sidebar({ children }: { children: React.ReactNode }) {
         <span className="text-text-primary">RAG Tester</span>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3">
+      <div className="stable-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3">
         {children}
       </div>
 

@@ -3,6 +3,11 @@
 ## Overview
 
 The backend exposes a provider-agnostic proxy layer for chat and embeddings.
+The public proxy route metadata is centralized in `server/src/config/public-api.ts`
+and mounted into Swagger through the Fastify route schemas.
+
+Swagger UI is available at `/docs` in non-production mode and can be accessed
+without a bearer token.
 
 - Chat stream endpoint: `POST /proxy/chat/:provider`
 - Embeddings endpoint: `POST /proxy/embeddings/:provider`
@@ -82,4 +87,3 @@ Knowledge-base document ingestion does not require the frontend to call the embe
 5. document status update to `ready` or `failed`
 
 This keeps provider-specific behavior inside the backend service layer.
-

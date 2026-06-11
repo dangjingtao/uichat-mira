@@ -1,5 +1,14 @@
 import { useEffect, useState } from "react";
-import { getSession } from "@/shared/lib/sessionStorage";
+import {
+  getDatabaseHealth,
+  getServiceHealth,
+  type DatabaseHealthData,
+} from "@/shared/api/system";
+import {
+  getDesktopRuntime,
+  isDesktopShell,
+  type DesktopRuntimeInfo,
+} from "@/shared/platform/desktopRuntime";
 
 type RuntimeState = {
   status: "unknown" | "running" | "stopped";
@@ -7,7 +16,7 @@ type RuntimeState = {
 };
 
 type RuntimeHealthSnapshot = {
-  desktopApi: Window["desktopApi"];
+  runtime: DesktopRuntimeInfo;
   backendState: RuntimeState;
   databaseState: RuntimeState;
   vectorState: RuntimeState;
@@ -21,28 +30,20 @@ const createRuntimeState = (
   detail,
 });
 
-const getDesktopApi = () => globalThis.window?.desktopApi;
-
 const createInitialSnapshot = (): RuntimeHealthSnapshot => {
-  const desktopApi = getDesktopApi();
+  const runtime = getDesktopRuntime();
 
-  if (!desktopApi?.backendUrl) {
+  if (isDesktopShell(runtime) && !runtime.backendUrl) {
     return {
-      desktopApi: undefined,
-      backendState: createRuntimeState("stopped", "浏览器预览模式未连接本地后端"),
-      databaseState: createRuntimeState(
-        "stopped",
-        "浏览器预览模式未连接本地数据库检查",
-      ),
-      vectorState: createRuntimeState(
-        "stopped",
-        "浏览器预览模式未连接本地向量数据库检查",
-      ),
+      runtime,
+      backendState: createRuntimeState("stopped", "桌面运行时未连接本地后端"),
+      databaseState: createRuntimeState("stopped", "桌面运行时未连接数据库检查"),
+      vectorState: createRuntimeState("stopped", "桌面运行时未连接向量数据库检查"),
     };
   }
 
   return {
-    desktopApi,
+    runtime,
     backendState: createRuntimeState("unknown", "等待后端健康检查"),
     databaseState: createRuntimeState("unknown", "等待数据库连通检查"),
     vectorState: createRuntimeState("unknown", "等待向量数据库检查"),
@@ -65,51 +66,59 @@ const setSnapshot = (next: RuntimeHealthSnapshot) => {
   emitSnapshot();
 };
 
+const createDatabaseState = (dbResult: DatabaseHealthData): RuntimeState =>
+  createRuntimeState(
+    dbResult.ok ? "running" : "stopped",
+    dbResult.detail || "数据库健康检查返回异常状态",
+  );
+
+const createVectorState = (dbResult: DatabaseHealthData): RuntimeState =>
+  createRuntimeState(
+    dbResult.vectorStore.ok ? "running" : "stopped",
+    dbResult.vectorStore.extensionPath
+      ? `${dbResult.vectorStore.detail} · ${dbResult.vectorStore.extensionPath}`
+      : dbResult.vectorStore.detail,
+  );
+
 const fetchRuntimeHealth = async () => {
   if (fetchPromise) {
     return fetchPromise;
   }
 
   fetchPromise = (async () => {
-    const desktopApi = getDesktopApi();
+    const runtime = getDesktopRuntime();
 
-    if (!desktopApi?.backendUrl) {
+    if (isDesktopShell(runtime) && !runtime.backendUrl) {
       setSnapshot(createInitialSnapshot());
       hasFetched = true;
       return;
     }
 
-    const token = getSession()?.token;
-    const backendResult = await desktopApi.checkBackendHealth(token);
+    try {
+      await getServiceHealth();
 
-    const nextBackendState = createRuntimeState(
-      backendResult.success ? "running" : "stopped",
-      backendResult.success
-        ? `后端已启动 · ${desktopApi.backendUrl}`
-        : backendResult.error ?? `健康检查失败 · HTTP ${backendResult.statusCode || 0}`,
-    );
+      const dbResult = await getDatabaseHealth();
 
-    const dbResult = await desktopApi.checkDatabaseHealth(token);
+      setSnapshot({
+        runtime,
+        backendState: createRuntimeState(
+          "running",
+          `后端已启动 · ${runtime.backendUrl || window.location.origin}`,
+        ),
+        databaseState: createDatabaseState(dbResult),
+        vectorState: createVectorState(dbResult),
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "健康检查失败";
 
-    const nextDatabaseState = createRuntimeState(
-      dbResult.success && dbResult.ok ? "running" : "stopped",
-      dbResult.detail ??
-        (dbResult.success ? "数据库健康检查返回异常状态" : "健康检查失败"),
-    );
+      setSnapshot({
+        runtime,
+        backendState: createRuntimeState("stopped", detail),
+        databaseState: createRuntimeState("stopped", "后端不可访问，无法检查数据库状态"),
+        vectorState: createRuntimeState("stopped", "后端不可访问，无法检查向量扩展状态"),
+      });
+    }
 
-    const nextVectorState = createRuntimeState(
-      dbResult.success && dbResult.vectorStore.ok ? "running" : "stopped",
-      dbResult.vectorStore.extensionPath
-        ? `${dbResult.vectorStore.detail} · ${dbResult.vectorStore.extensionPath}`
-        : dbResult.vectorStore.detail,
-    );
-
-    setSnapshot({
-      desktopApi,
-      backendState: nextBackendState,
-      databaseState: nextDatabaseState,
-      vectorState: nextVectorState,
-    });
     hasFetched = true;
   })().finally(() => {
     fetchPromise = null;

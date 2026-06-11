@@ -2,13 +2,42 @@
 
 Electron + React + Fastify desktop app for local RAG testing and model configuration.
 
+## Documentation
+
+Primary project docs now live under `docs/`.
+
+- `docs/README.md`: documentation index and recommended reading order
+- `docs/architecture/README.md`: architecture, runtime boundaries, and networking contract
+- `docs/architecture/ipc-and-preload.md`: preload and IPC guidance
+- `docs/platform/tauri.md`: Tauri desktop runtime overview
+- `docs/platform/tauri-setup.md`: Tauri setup and troubleshooting
+- `docs/assistant-ui.md`: assistant-ui reference entry
+- `desktop/src/shared/ui/COMPONENTS.md`: source-adjacent shared UI component documentation
+- `desktop/src/shared/ui/ui-design-guidelines-tailwind.md`: source-adjacent UI design guidelines
+
+## Workspace Layout
+
+```text
+root/
+  desktop/          # React renderer
+  electron/         # Electron main/preload and shell package
+  server/           # Fastify backend source and build script
+  packages/         # Shared workspace packages
+  scripts/          # Build and packaging helpers
+  docs/             # Central project documentation
+  tauri/            # Tauri app sources and config
+  .artifacts/       # Temporary shared build artifacts (ignored)
+  release/          # electron-builder output
+  runtime.config.cjs
+```
+
 ## Runtime Model
 
 - Renderer: React + Vite, loaded by Electron.
 - Backend: Fastify server bundled as `server.cjs`.
 - Production startup: Electron main process starts the bundled Node runtime from `resources/node-runtime/node.exe`, then runs `resources/server/server.cjs`.
 - Backend binding: local only, using the host and port from `runtime.config.cjs`.
-- Renderer access: production reads `window.desktopApi.backendUrl`; development uses Vite proxy.
+- Renderer access: production resolves the backend origin through the shared desktop runtime adapter; development uses Vite proxy.
 
 ## Request Rules
 
@@ -22,11 +51,14 @@ Electron + React + Fastify desktop app for local RAG testing and model configura
 
 - `runtime.config.cjs`: single source for backend host, backend port, and dev proxy prefix.
 - `desktop/vite.config.ts`: reads runtime config and proxies `/api` to the backend without the prefix.
-- `desktop/src/shared/lib/request.ts`: selects `/api` in development and `window.desktopApi.backendUrl` in production.
+- `desktop/src/shared/lib/request.ts`: selects `/api` in development and the desktop runtime backend origin in packaged desktop shells.
+- `desktop/src/shared/platform/desktopRuntime.ts`: central desktop host abstraction used by renderer code to resolve runtime kind and backend base URL.
 - `electron/main.cjs`: starts the bundled backend process in production.
-- `electron/preload.cjs`: exposes `desktopApi.backendUrl` and health check helpers.
+- `electron/preload.cjs`: exposes `desktopApi.backendUrl` and runtime metadata.
+- `server/build.js`: outputs the shared desktop backend bundle to `.artifacts/server-bundle`.
 - `server/src/config/index.ts`: reads host and port from env or `runtime.config.cjs`.
-- `scripts/build-dist.js`: builds renderer/server, copies backend assets, Node runtime, and runtime config, runs electron-builder, then prunes old release outputs.
+- `scripts/build-dist.js`: builds renderer/server, copies shared backend assets into Electron packaging inputs, copies the Node runtime and runtime config, runs electron-builder, then prunes old release outputs.
+- Production packaging cleans `.artifacts/` after a successful build so intermediate desktop inputs do not accumulate in the repository root.
 
 ## Development
 
@@ -39,16 +71,20 @@ pnpm install
 Start all development services:
 
 ```bash
-pnpm dev
+pnpm dev:electron:win
 ```
 
-Useful individual commands:
+Start Tauri development services:
 
 ```bash
-pnpm dev:desktop
-pnpm dev:server
-pnpm build
+pnpm dev:tauri:win
+```
+
+Useful shared commands:
+
+```bash
 pnpm check
+pnpm clean:artifacts
 ```
 
 In development, frontend code should request `/api/...`; Vite rewrites it to the backend route without `/api`.
@@ -58,7 +94,7 @@ In development, frontend code should request `/api/...`; Vite rewrites it to the
 Build a Windows package:
 
 ```bash
-pnpm dist:win
+pnpm package:electron:win
 ```
 
 The output is written to `release/v<version>_<date>_<time>/`.
@@ -67,8 +103,15 @@ Release retention:
 
 - By default, only the most recent `3` release directories are kept.
 - Override this with `RELEASE_KEEP_COUNT`.
-- Example: `RELEASE_KEEP_COUNT=5 pnpm dist:win`
-- Locked directories are skipped and cleaned on a later run when Windows releases the file handle.
+- Example: `RELEASE_KEEP_COUNT=5 pnpm package:electron:win`
+
+Build a Tauri Windows package:
+
+```bash
+pnpm package:tauri:win
+```
+
+Locked directories are skipped and cleaned on a later run when Windows releases the file handle.
 
 The packaged app includes:
 

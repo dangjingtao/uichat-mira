@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "identifier": "com.tomz.uichat",
   "build": {
-    "beforeDevCommand": "pnpm --filter @ui-chat-rag-tester/desktop dev",
+    "beforeDevCommand": "pnpm internal:dev:tauri:services",
     "devUrl": "http://localhost:5173",
-    "beforeBuildCommand": "pnpm --filter @ui-chat-rag-tester/desktop build",
-    "frontendDist": "../desktop/dist"
+    "beforeBuildCommand": "pnpm internal:prepare:tauri",
+    "frontendDist": "../.artifacts/desktop/dist"
   },
   "app": {
     "windows": [
@@ -27,16 +27,15 @@
     "active": true,
     "targets": "all",
     "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
+      "../.artifacts/icons/icon_512.png",
+      "../.artifacts/icons/icon_1024.png",
+      "../.artifacts/icons/icon.icns",
+      "../.artifacts/icons/icon.ico"
     ],
     "resources": [
-      "../runtime.config.cjs",
-      "../server/data",
-      "../electron/backend"
+      "resources/runtime.config.cjs",
+      "resources/server",
+      "resources/node-runtime"
     ]
   },
   "plugins": {}

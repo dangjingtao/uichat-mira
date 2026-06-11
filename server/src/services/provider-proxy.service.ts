@@ -12,6 +12,8 @@ import {
   streamOpenAICompatibleChat,
 } from "@/services/openai-compatible-provider.js";
 import { decryptSecret } from "@/utils/crypto.js";
+import { getErrorMessage } from "@/utils/errors.js";
+import { fetchJsonWithTimeout } from "@/utils/http.js";
 import {
   getProviderDefinition,
   isCallableModelId,
@@ -57,27 +59,6 @@ const parseModelParams = (paramsJson: string) => {
     return parsed && typeof parsed === "object" ? parsed : {};
   } catch {
     return {};
-  }
-};
-
-const fetchJson = async <T>(url: string, init?: RequestInit): Promise<T> => {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
-
-  try {
-    const response = await fetch(url, {
-      ...init,
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || `Request failed with status ${response.status}`);
-    }
-
-    return (await response.json()) as T;
-  } finally {
-    clearTimeout(timeout);
   }
 };
 
@@ -319,13 +300,39 @@ const createUiMessageStream = (streamText: () => AsyncIterable<string>) =>
         yield toSseChunk({ type: "finish-step" });
         yield toSseChunk({ type: "finish", finishReason: "stop" });
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Unknown error";
+        const message = getErrorMessage(err);
         yield toSseChunk({ type: "error", errorText: message });
         yield toSseChunk({ type: "finish-step" });
         yield toSseChunk({ type: "finish", finishReason: "error" });
       }
     })(),
   );
+
+const streamResolvedChat = (
+  resolved: ProviderResolution,
+  messages: NormalizedChatMessage[],
+) => {
+  switch (getProviderDefinition(resolved.providerCode).chatAdapter) {
+    case "ollama":
+      return streamOllamaChat({
+        baseUrl: resolved.baseUrl,
+        apiKey: resolved.apiKey,
+        model: resolved.model,
+        messages,
+        params: resolved.params,
+      });
+    case "openai-compatible":
+      return streamOpenAICompatibleChat({
+        baseUrl: resolved.baseUrl,
+        apiKey: resolved.apiKey,
+        model: resolved.model,
+        messages,
+        params: toOpenAICompatibleChatOptions(resolved.params),
+      });
+    default:
+      throw new Error(`Unsupported provider "${resolved.providerCode}"`);
+  }
+};
 
 const createOllamaClient = (baseUrl: string, apiKey: string) => {
   const options: ConstructorParameters<typeof Ollama>[0] = {
@@ -352,9 +359,10 @@ const assertOllamaModelAvailable = async (params: {
     headers.Authorization = `Bearer ${params.apiKey}`;
   }
 
-  const result = await fetchJson<{ models?: Array<{ name: string }> }>(
+  const result = await fetchJsonWithTimeout<{ models?: Array<{ name: string }> }>(
     `${params.baseUrl.replace(/\/+$/, "")}/api/tags`,
     { headers },
+    10_000,
   );
 
   const availableModels = (result.models ?? []).map((item) => item.name);
@@ -377,34 +385,32 @@ export const providerProxyService = {
 
   createUiMessageStream,
 
-  streamChat(
+  streamChatText(
     requestedProvider: ProxyProviderParam,
     messages: NormalizedChatMessage[],
   ) {
     const resolved = resolveProviderForRole("llm", requestedProvider);
 
-    return createUiMessageStream(() => {
-      switch (getProviderDefinition(resolved.providerCode).chatAdapter) {
-        case "ollama":
-          return streamOllamaChat({
-            baseUrl: resolved.baseUrl,
-            apiKey: resolved.apiKey,
-            model: resolved.model,
-            messages,
-            params: resolved.params,
-          });
-        case "openai-compatible":
-          return streamOpenAICompatibleChat({
-            baseUrl: resolved.baseUrl,
-            apiKey: resolved.apiKey,
-            model: resolved.model,
-            messages,
-            params: toOpenAICompatibleChatOptions(resolved.params),
-          });
-        default:
-          throw new Error(`Unsupported provider "${resolved.providerCode}"`);
-      }
-    });
+    return streamResolvedChat(resolved, messages);
+  },
+
+  streamChat(
+    requestedProvider: ProxyProviderParam,
+    messages: NormalizedChatMessage[],
+  ) {
+    return createUiMessageStream(() =>
+      this.streamChatText(requestedProvider, messages),
+    );
+  },
+
+  streamTaskChatText(messages: NormalizedChatMessage[]) {
+    const resolved = resolveProviderForRole("task", "default");
+
+    return streamResolvedChat(resolved, messages);
+  },
+
+  streamTaskChat(messages: NormalizedChatMessage[]) {
+    return createUiMessageStream(() => this.streamTaskChatText(messages));
   },
 
   async createEmbeddings(

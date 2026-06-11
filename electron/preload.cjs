@@ -21,74 +21,19 @@ const runtimeConfig = loadRuntimeConfig();
 const backendUrl =
   process.env.UI_CHAT_BACKEND_URL ||
   `http://${runtimeConfig.backend.host}:${runtimeConfig.backend.port}`;
-
-function buildAuthHeaders(token) {
-  if (!token || !token.trim()) {
-    return undefined;
-  }
-
-  return {
-    Authorization: `Bearer ${token.trim()}`,
-  };
-}
-
-contextBridge.exposeInMainWorld("desktopApi", {
+const desktopRuntime = {
+  hostKind: "electron",
   platform: process.platform,
   isPackaged: process.env.NODE_ENV !== "development",
   backendUrl,
+};
 
-  async checkBackendHealth(token) {
-    try {
-      const response = await fetch(`${backendUrl}/health`, {
-        headers: buildAuthHeaders(token),
-      });
-      const payload = await response.json();
-      return {
-        success: payload.success,
-        statusCode: response.status,
-        error: payload?.message,
-      };
-    } catch (err) {
-      return { success: false, statusCode: 0, error: err.message };
-    }
-  },
+contextBridge.exposeInMainWorld("desktopRuntime", desktopRuntime);
 
-  async checkDatabaseHealth(token) {
-    try {
-      const response = await fetch(`${backendUrl}/db/health`, {
-        headers: buildAuthHeaders(token),
-      });
-      const payload = await response.json();
-      if (!payload.success) {
-        return {
-          success: false,
-          ok: false,
-          configured: false,
-          mode: "unknown",
-          detail: payload.message,
-          vectorStore: {
-            ok: false,
-            provider: "sqlite-vec",
-            detail: payload.message,
-          },
-        };
-      }
-      return { success: true, ...payload.data };
-    } catch (err) {
-      return {
-        success: false,
-        ok: false,
-        configured: false,
-        mode: "unknown",
-        detail: err.message,
-        vectorStore: {
-          ok: false,
-          provider: "sqlite-vec",
-          detail: err.message,
-        },
-      };
-    }
-  },
+contextBridge.exposeInMainWorld("desktopApi", {
+  platform: desktopRuntime.platform,
+  isPackaged: desktopRuntime.isPackaged,
+  backendUrl,
 });
 
 contextBridge.exposeInMainWorld("electronAPI", {

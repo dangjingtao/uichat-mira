@@ -6,6 +6,8 @@ Renderer code is untrusted. Native capabilities and runtime configuration should
 
 This project currently uses HTTP for backend API calls. IPC is reserved for desktop/native capabilities and for exposing runtime information.
 
+Renderer code should read host/runtime details through a single adapter layer instead of branching directly on `window.desktopApi`, Tauri globals, or `file:` URL checks.
+
 ## Current Preload Contract
 
 `electron/preload.cjs` exposes `window.desktopApi`:
@@ -15,20 +17,10 @@ interface DesktopApi {
   platform: string;
   isPackaged: boolean;
   backendUrl: string;
-  checkBackendHealth: () => Promise<{
-    success: boolean;
-    statusCode: number;
-    error?: string;
-  }>;
-  checkDatabaseHealth: () => Promise<{
-    success: boolean;
-    configured: boolean;
-    detail: string;
-  }>;
 }
 ```
 
-Renderer request code should use `desktopApi.backendUrl` in production and `/api` in development.
+Renderer request code should use HTTP directly: `desktopApi.backendUrl` in production and `/api` in development. Health checks are ordinary backend routes and should not go through IPC/preload helpers.
 
 ## Request Routing
 

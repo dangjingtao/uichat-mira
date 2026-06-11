@@ -5,6 +5,11 @@ import {
   providerConnectionRepository,
 } from "@/db";
 import {
+  applySqliteConnectionPragmas,
+  withSqliteForeignKeysDisabled,
+} from "@/db/init-utils";
+import { getSqliteTableSql, hasSqliteColumn } from "@/db/sqlite-utils";
+import {
   DEFAULT_PROVIDER_CONNECTIONS,
   DEFAULT_ROLE_CONFIGS,
   PARAM_TEMPLATES,
@@ -15,18 +20,26 @@ const providerCodeSqlValues = toSqlEnumValues(PROVIDER_CODE_VALUES);
 
 const tableDefinitionSupportsLatestProviders = (tableName: string) => {
   const sqlite = getSqlite();
-  const row = sqlite
-    .prepare(
-      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
-    )
-    .get(tableName) as { sql?: string } | undefined;
+  const tableSql = getSqliteTableSql(sqlite, tableName);
   return (
-    row?.sql?.includes("'cloudflare'") &&
-    row?.sql?.includes("'volcengine'") &&
-    row?.sql?.includes("'openai'") &&
-    row?.sql?.includes("'ollama'") &&
-    row?.sql?.includes("'lmstudio'")
-  ) ?? false;
+    (tableSql?.includes("'cloudflare'") &&
+      tableSql?.includes("'volcengine'") &&
+      tableSql?.includes("'openai'") &&
+      tableSql?.includes("'ollama'") &&
+      tableSql?.includes("'lmstudio'")) ??
+    false
+  );
+};
+
+const tableDefinitionSupportsTaskType = (tableName: string) => {
+  const sqlite = getSqlite();
+  return getSqliteTableSql(sqlite, tableName)?.includes("'task'") ?? false;
+};
+
+const hasLegacyModelConfigDefaultUniqueness = () => {
+  const sqlite = getSqlite();
+  const normalizedSql = getSqliteTableSql(sqlite, "model_configs")?.toUpperCase() ?? "";
+  return normalizedSql.includes("UNIQUE(TYPE, IS_DEFAULT)");
 };
 
 const recreateModelConfigsTable = () => {
@@ -37,15 +50,14 @@ const recreateModelConfigsTable = () => {
 
     CREATE TABLE model_configs (
       id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-      type TEXT NOT NULL CHECK (type IN ('llm', 'embedding', 'rerank')),
+      type TEXT NOT NULL CHECK (type IN ('llm', 'embedding', 'rerank', 'task')),
       name TEXT NOT NULL DEFAULT '',
       provider_code TEXT CHECK (provider_code IN (${providerCodeSqlValues})),
       remote_model_id TEXT,
       params TEXT NOT NULL DEFAULT '{}',
       is_default INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      UNIQUE(type, is_default)
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
     INSERT INTO model_configs (
@@ -72,6 +84,10 @@ const recreateModelConfigsTable = () => {
     FROM model_configs__legacy;
 
     DROP TABLE model_configs__legacy;
+
+    CREATE UNIQUE INDEX idx_model_configs_type_default
+    ON model_configs(type)
+    WHERE is_default = 1;
   `);
 };
 
@@ -163,29 +179,79 @@ const recreateProviderModelsTable = () => {
   `);
 };
 
+const recreateModelParamTemplatesTable = () => {
+  const sqlite = getSqlite();
+
+  sqlite.exec(`
+    ALTER TABLE model_param_templates RENAME TO model_param_templates__legacy;
+
+    CREATE TABLE model_param_templates (
+      id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+      model_type TEXT NOT NULL CHECK (model_type IN ('llm', 'embedding', 'rerank', 'task')),
+      param_key TEXT NOT NULL,
+      param_label TEXT NOT NULL,
+      param_type TEXT NOT NULL CHECK (param_type IN ('number', 'select', 'boolean')),
+      step REAL,
+      options TEXT,
+      default_value TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(model_type, param_key)
+    );
+
+    INSERT INTO model_param_templates (
+      id,
+      model_type,
+      param_key,
+      param_label,
+      param_type,
+      step,
+      options,
+      default_value,
+      created_at
+    )
+    SELECT
+      id,
+      model_type,
+      param_key,
+      param_label,
+      param_type,
+      step,
+      options,
+      default_value,
+      created_at
+    FROM model_param_templates__legacy;
+
+    DROP TABLE model_param_templates__legacy;
+  `);
+};
+
 const migrateProviderSchemaForProviders = () => {
   const sqlite = getSqlite();
   const needsModelConfigsMigration =
     hasColumn("model_configs", "provider_code") &&
-    !tableDefinitionSupportsLatestProviders("model_configs");
+    (!tableDefinitionSupportsLatestProviders("model_configs") ||
+      !tableDefinitionSupportsTaskType("model_configs") ||
+      hasLegacyModelConfigDefaultUniqueness());
   const needsProviderConnectionsMigration =
     hasColumn("provider_connections", "provider_code") &&
     !tableDefinitionSupportsLatestProviders("provider_connections");
   const needsProviderModelsMigration =
     hasColumn("provider_models", "provider_code") &&
     !tableDefinitionSupportsLatestProviders("provider_models");
+  const needsModelParamTemplatesMigration =
+    hasColumn("model_param_templates", "model_type") &&
+    !tableDefinitionSupportsTaskType("model_param_templates");
 
   if (
     !needsModelConfigsMigration &&
     !needsProviderConnectionsMigration &&
-    !needsProviderModelsMigration
+    !needsProviderModelsMigration &&
+    !needsModelParamTemplatesMigration
   ) {
     return;
   }
 
-  sqlite.pragma("foreign_keys = OFF");
-
-  try {
+  withSqliteForeignKeysDisabled(sqlite, () => {
     const tx = sqlite.transaction(() => {
       if (needsModelConfigsMigration) {
         recreateModelConfigsTable();
@@ -196,23 +262,17 @@ const migrateProviderSchemaForProviders = () => {
       if (needsProviderModelsMigration) {
         recreateProviderModelsTable();
       }
+      if (needsModelParamTemplatesMigration) {
+        recreateModelParamTemplatesTable();
+      }
     });
 
     tx();
-  } finally {
-    sqlite.pragma("foreign_keys = ON");
-  }
+  });
 };
 
-const hasColumn = (tableName: string, columnName: string) => {
-  const sqlite = getSqlite();
-  const rows = sqlite
-    .prepare(`PRAGMA table_info(${tableName})`)
-    .all() as Array<{
-    name: string;
-  }>;
-  return rows.some((row) => row.name === columnName);
-};
+const hasColumn = (tableName: string, columnName: string) =>
+  hasSqliteColumn(getSqlite(), tableName, columnName);
 
 const ensureColumn = (
   tableName: string,
@@ -231,18 +291,24 @@ const ensureColumn = (
 export const initializeModelConfigDatabase = (): void => {
   try {
     const sqlite = getSqlite();
+    applySqliteConnectionPragmas(sqlite);
 
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS model_configs (
         id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-        type TEXT NOT NULL CHECK (type IN ('llm', 'embedding', 'rerank')),
+        type TEXT NOT NULL CHECK (type IN ('llm', 'embedding', 'rerank', 'task')),
         name TEXT NOT NULL DEFAULT '',
         params TEXT NOT NULL DEFAULT '{}',
         is_default INTEGER NOT NULL DEFAULT 1,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-        UNIQUE(type, is_default)
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
       )
+    `);
+
+    sqlite.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_model_configs_type_default
+      ON model_configs(type)
+      WHERE is_default = 1
     `);
 
     ensureColumn(
@@ -257,7 +323,7 @@ export const initializeModelConfigDatabase = (): void => {
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS model_param_templates (
         id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-        model_type TEXT NOT NULL CHECK (model_type IN ('llm', 'embedding', 'rerank')),
+        model_type TEXT NOT NULL CHECK (model_type IN ('llm', 'embedding', 'rerank', 'task')),
         param_key TEXT NOT NULL,
         param_label TEXT NOT NULL,
         param_type TEXT NOT NULL CHECK (param_type IN ('number', 'select', 'boolean')),
@@ -299,7 +365,6 @@ export const initializeModelConfigDatabase = (): void => {
 
     sqlite.exec(`
       CREATE INDEX IF NOT EXISTS idx_model_configs_type ON model_configs(type);
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_model_configs_type_default ON model_configs(type, is_default);
       CREATE INDEX IF NOT EXISTS idx_model_param_templates_type ON model_param_templates(model_type);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_model_param_templates_type_key ON model_param_templates(model_type, param_key);
       CREATE INDEX IF NOT EXISTS idx_provider_connections_status ON provider_connections(status);

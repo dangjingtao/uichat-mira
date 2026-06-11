@@ -1,42 +1,24 @@
 import { FastifyPluginAsync } from "fastify";
 import { providerSettingsService } from "@/services/provider-settings.service.js";
 import type { ModelType, ProviderCode } from "@/db/schema.js";
-import { ErrorCodes, error, success } from "@/utils/index.js";
+import {
+  ErrorCodes,
+  error,
+  FAILED_SELECT_DEFAULT_MODEL_MESSAGE,
+  FAILED_SYNC_PROVIDER_MODELS_MESSAGE,
+  getErrorMessage,
+  success,
+} from "@/utils/index.js";
 import {
   PROVIDER_CODE_ENUM,
   providerCodeSchema,
 } from "@/providers/catalog.js";
-
-const modelTypeSchema = {
-  type: "string",
-  enum: ["llm", "embedding", "rerank"],
-} as const;
-
-const errorEnvelope = {
-  type: "object",
-  required: ["success", "message", "timestamp"],
-  properties: {
-    success: { type: "boolean", const: false },
-    message: { type: "string" },
-    code: { type: "string" },
-    errors: {
-      type: "array",
-      items: {},
-    },
-    timestamp: { type: "string", format: "date-time" },
-  },
-} as const;
-
-const successEnvelope = (dataSchema: Record<string, unknown>) => ({
-  type: "object",
-  required: ["success", "data", "timestamp"],
-  properties: {
-    success: { type: "boolean", const: true },
-    data: dataSchema,
-    message: { type: "string" },
-    timestamp: { type: "string", format: "date-time" },
-  },
-});
+import {
+  errorEnvelope,
+  modelTypeSchema,
+  providerStatusSchema,
+  successEnvelope,
+} from "@/routes/schema-helpers.js";
 
 const providerSummarySchema = {
   type: "object",
@@ -55,10 +37,7 @@ const providerSummarySchema = {
     displayName: { type: "string" },
     baseUrl: { type: "string" },
     hasApiKey: { type: "boolean" },
-    status: {
-      type: "string",
-      enum: ["idle", "syncing", "connected", "error"],
-    },
+    status: providerStatusSchema,
     lastError: { anyOf: [{ type: "string" }, { type: "null" }] },
     lastSyncedAt: {
       anyOf: [{ type: "string", format: "date-time" }, { type: "null" }],
@@ -190,10 +169,7 @@ const providerSettingsRoute: FastifyPluginAsync = async (app) => {
                   baseUrl: { type: "string" },
                   apiKey: { type: "string" },
                   hasApiKey: { type: "boolean" },
-                  status: {
-                    type: "string",
-                    enum: ["idle", "syncing", "connected", "error"],
-                  },
+                  status: providerStatusSchema,
                   lastError: { anyOf: [{ type: "string" }, { type: "null" }] },
                   lastSyncedAt: {
                     anyOf: [
@@ -216,11 +192,12 @@ const providerSettingsRoute: FastifyPluginAsync = async (app) => {
               },
               assignments: {
                 type: "object",
-                required: ["llm", "embedding", "rerank"],
+                required: ["llm", "embedding", "rerank", "task"],
                 properties: {
                   llm: roleAssignmentSchema,
                   embedding: roleAssignmentSchema,
                   rerank: roleAssignmentSchema,
+                  task: roleAssignmentSchema,
                 },
               },
             },
@@ -294,10 +271,7 @@ const providerSettingsRoute: FastifyPluginAsync = async (app) => {
                 anyOf: [{ type: "string" }, { type: "null" }],
               },
               isEnabled: { type: "boolean" },
-              status: {
-                type: "string",
-                enum: ["idle", "syncing", "connected", "error"],
-              },
+              status: providerStatusSchema,
               lastError: { anyOf: [{ type: "string" }, { type: "null" }] },
               lastSyncedAt: {
                 anyOf: [
@@ -381,8 +355,10 @@ const providerSettingsRoute: FastifyPluginAsync = async (app) => {
         return success(data, "Models synced successfully");
       } catch (err) {
         app.log.error(err);
-        const message =
-          err instanceof Error ? err.message : "Failed to sync provider models";
+        const message = getErrorMessage(
+          err,
+          FAILED_SYNC_PROVIDER_MODELS_MESSAGE,
+        );
         return reply.code(400).send(error(message, ErrorCodes.DATABASE_ERROR));
       }
     },
@@ -433,8 +409,10 @@ const providerSettingsRoute: FastifyPluginAsync = async (app) => {
         return success(config, "Default model updated");
       } catch (err) {
         app.log.error(err);
-        const message =
-          err instanceof Error ? err.message : "Failed to select default model";
+        const message = getErrorMessage(
+          err,
+          FAILED_SELECT_DEFAULT_MODEL_MESSAGE,
+        );
         return reply.code(400).send(error(message, ErrorCodes.NOT_FOUND));
       }
     },

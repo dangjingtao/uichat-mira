@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "../index";
 import { modelConfigs, modelParamTemplates } from "../schema";
+import { nowIso } from "@/utils/time.js";
 import type {
   ModelConfig,
   ModelParamTemplate,
@@ -56,7 +57,7 @@ export const modelConfigRepository = {
       .update(modelConfigs)
       .set({
         ...data,
-        updatedAt: new Date().toISOString(),
+        updatedAt: nowIso(),
       })
       .where(and(eq(modelConfigs.type, type), eq(modelConfigs.isDefault, true)))
       .returning()
@@ -81,7 +82,7 @@ export const modelConfigRepository = {
           params: data.params,
           providerCode: data.providerCode ?? null,
           remoteModelId: data.remoteModelId ?? null,
-          updatedAt: new Date().toISOString(),
+          updatedAt: nowIso(),
         })
         .where(eq(modelConfigs.id, existing.id))
         .returning()

@@ -132,7 +132,7 @@
 
 ### 场景一：只是新增一个 OpenAI Compatible 平台
 
-比如新增一个和 OpenAI / 火山引擎 / LM Studio 类似的 provider。
+比如新增一个和 OpenAI / OpenAI兼容服务商 / LM Studio 类似的 provider。
 
 通常只需要：
 
@@ -197,5 +197,5 @@ pnpm check
 
 ```bash
 pnpm build
-pnpm dist:win
+pnpm package:electron:win
 ```

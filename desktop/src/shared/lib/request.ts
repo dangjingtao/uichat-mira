@@ -6,6 +6,10 @@ import axios, {
   AxiosError,
 } from "axios";
 import { getSession, clearSessionFromStorage } from "./sessionStorage";
+import {
+  getApiBaseUrl,
+  isDesktopShell,
+} from "@/shared/platform/desktopRuntime";
 
 // ==================== 类型定义 ====================
 
@@ -53,7 +57,7 @@ export class ApiError extends Error {
 }
 
 function redirectToLogin() {
-  if (window.location.protocol === "file:") {
+  if (isDesktopShell()) {
     window.location.hash = "#/login";
     return;
   }
@@ -116,23 +120,11 @@ function handleErrorResponse(error: unknown): never {
 
 // ==================== API 客户端封装 ====================
 
-// 从环境变量获取 API 基础 URL，默认使用代理
-const getBaseURL = (): string => {
-  if ((import.meta as any).env.VITE_API_URL) {
-    return (import.meta as any).env.VITE_API_URL;
-  }
-  // 开发环境默认使用 Vite 代理
-  if (window.location.protocol === "file:") {
-    return window.desktopApi?.backendUrl ?? "";
-  }
-  return "/api";
-};
-
 // 创建封装的 API 客户端
 const createApiClient = () => {
   // 创建原生 axios 实例
   const client = axios.create({
-    baseURL: getBaseURL(),
+    baseURL: getApiBaseUrl(),
     timeout: 30000,
     headers: {
       "Content-Type": "application/json",

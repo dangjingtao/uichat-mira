@@ -1,8 +1,13 @@
 import { documentRepository, knowledgeBaseRepository, type DocumentListFilters } from "@/db/repositories";
 import type { Document, DocumentIndexStatus, DocumentSourceType } from "@/db/schema";
+import { DEFAULT_UPLOAD_SOURCE_LABEL } from "@/constants/knowledge-base.js";
 import { splitDocumentText, type ChunkingConfig } from "@/services/knowledge-base.splitter";
 import { knowledgeBaseVectorStore } from "@/services/knowledge-base.vector-store.js";
 import { providerProxyService } from "@/services/provider-proxy.service.js";
+import {
+  FAILED_GENERATE_EMBEDDINGS_MESSAGE,
+  getErrorMessage,
+} from "@/utils/errors.js";
 
 export interface KnowledgeBaseSummaryResponse {
   id: string;
@@ -68,8 +73,6 @@ export interface UpdateDocumentInput {
   contentText?: string;
   chunkingConfig?: Partial<ChunkingConfig> | null;
 }
-
-const DEFAULT_UPLOAD_SOURCE_LABEL = "本地上传";
 
 const toDocumentResponse = (
   document: Document,
@@ -237,7 +240,7 @@ export const knowledgeBaseService = {
 
       throw error instanceof Error
         ? error
-        : new Error("Failed to generate embeddings");
+        : new Error(FAILED_GENERATE_EMBEDDINGS_MESSAGE);
     }
 
     return this.getDocumentById(created.id)!;
@@ -310,8 +313,10 @@ export const knowledgeBaseService = {
           errorMessage: null,
         });
       } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : "Failed to generate embeddings";
+        const errorMessage = getErrorMessage(
+          error,
+          FAILED_GENERATE_EMBEDDINGS_MESSAGE,
+        );
 
         documentRepository.updateById(id, {
           indexStatus: "failed",

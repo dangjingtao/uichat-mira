@@ -6,6 +6,7 @@ dist/
 *.log
 .DS_Store
 coverage/
+.artifacts/
 apps/desktop/release/
 apps/desktop/release-*/
 apps/desktop/electron-backend/

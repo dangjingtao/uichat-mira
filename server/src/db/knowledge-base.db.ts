@@ -1,32 +1,37 @@
+import {
+  DEFAULT_CHUNKING_CONFIG,
+  DEFAULT_KNOWLEDGE_BASE_DESCRIPTION,
+  DEFAULT_KNOWLEDGE_BASE_ID,
+  DEFAULT_KNOWLEDGE_BASE_NAME,
+} from "@/constants/knowledge-base.js";
 import { eq } from "drizzle-orm";
 import { getDb, getSqlite, knowledgeBases } from "@/db";
+import {
+  applySqliteConnectionPragmas,
+  withSqliteForeignKeysDisabled,
+} from "@/db/init-utils";
+import {
+  assertSqliteIdentifier,
+  getSqliteTableSql,
+  hasSqliteForeignKeyReference,
+  hasSqliteTable,
+} from "@/db/sqlite-utils";
 
-export const DEFAULT_KNOWLEDGE_BASE_ID = "default";
-export const DEFAULT_KNOWLEDGE_BASE_NAME = "默认知识库";
 export const DEFAULT_VECTOR_TABLE_NAME = "document_chunk_embeddings_vec";
 
-const hasTable = (tableName: string) => {
-  const sqlite = getSqlite();
-  const row = sqlite
-    .prepare(
-      "SELECT name FROM sqlite_master WHERE type IN ('table', 'view', 'virtual table') AND name = ? LIMIT 1",
-    )
-    .get(tableName);
-
-  return Boolean(row);
-};
-
 const hasLegacyModelConfigForeignKey = (tableName: string) => {
-  if (!hasTable(tableName)) {
+  const sqlite = getSqlite();
+
+  if (!hasSqliteTable(sqlite, tableName)) {
     return false;
   }
 
-  const sqlite = getSqlite();
-  const rows = sqlite
-    .prepare(`PRAGMA foreign_key_list(${tableName})`)
-    .all() as Array<{ table: string }>;
-
-  return rows.some((row) => row.table === "model_configs__legacy");
+  return hasSqliteForeignKeyReference(
+    sqlite,
+    tableName,
+    "embedding_model_config_id",
+    "model_configs__legacy",
+  );
 };
 
 const ensureDocumentChunkFts = () => {
@@ -64,6 +69,30 @@ const ensureDocumentChunkFts = () => {
   `);
 };
 
+export const rebuildDocumentChunkFts = () => {
+  const sqlite = getSqlite();
+
+  const tx = sqlite.transaction(() => {
+    sqlite.exec(`
+      DROP TRIGGER IF EXISTS document_chunks_ai;
+      DROP TRIGGER IF EXISTS document_chunks_ad;
+      DROP TRIGGER IF EXISTS document_chunks_au;
+      DROP TABLE IF EXISTS document_chunks_fts;
+    `);
+
+    ensureDocumentChunkFts();
+
+    sqlite.exec(`
+      INSERT INTO document_chunks_fts(rowid, content)
+      SELECT id, content
+      FROM document_chunks;
+    `);
+    sqlite.exec(`INSERT INTO document_chunks_fts(document_chunks_fts) VALUES ('optimize');`);
+  });
+
+  tx();
+};
+
 export const ensureChunkEmbeddingVectorTable = ({
   dimensions,
   tableName = DEFAULT_VECTOR_TABLE_NAME,
@@ -75,18 +104,12 @@ export const ensureChunkEmbeddingVectorTable = ({
     throw new Error("Vector dimensions must be a positive integer");
   }
 
-  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(tableName)) {
-    throw new Error("Invalid vector table name");
-  }
+  assertSqliteIdentifier(tableName, "Invalid vector table name");
 
   const sqlite = getSqlite();
-  const existingDefinition = sqlite
-    .prepare(
-      "SELECT sql FROM sqlite_master WHERE name = ? AND type = 'table' LIMIT 1",
-    )
-    .get(tableName) as { sql?: string } | undefined;
+  const existingSql = getSqliteTableSql(sqlite, tableName);
 
-  if (!existingDefinition) {
+  if (!existingSql) {
     sqlite.exec(`
       CREATE VIRTUAL TABLE ${tableName}
       USING vec0(
@@ -98,7 +121,7 @@ export const ensureChunkEmbeddingVectorTable = ({
   }
 
   const expectedToken = `FLOAT[${dimensions}]`;
-  const normalizedSql = existingDefinition.sql?.toUpperCase() ?? "";
+  const normalizedSql = existingSql.toUpperCase();
   if (
     !normalizedSql.includes(expectedToken) ||
     !normalizedSql.includes("CHUNK_ID INTEGER PRIMARY KEY")
@@ -184,9 +207,7 @@ const ensureKnowledgeBaseTables = () => {
 const rebuildKnowledgeBaseTablesForModelConfigForeignKeys = () => {
   const sqlite = getSqlite();
 
-  sqlite.pragma("foreign_keys = OFF");
-
-  try {
+  withSqliteForeignKeysDisabled(sqlite, () => {
     const tx = sqlite.transaction(() => {
       sqlite.exec(`
         DROP TRIGGER IF EXISTS document_chunks_ai;
@@ -319,9 +340,7 @@ const rebuildKnowledgeBaseTablesForModelConfigForeignKeys = () => {
     });
 
     tx();
-  } finally {
-    sqlite.pragma("foreign_keys = ON");
-  }
+  });
 
   ensureDocumentChunkFts();
 };
@@ -354,16 +373,9 @@ const ensureDefaultKnowledgeBase = () => {
     .values({
       id: DEFAULT_KNOWLEDGE_BASE_ID,
       name: DEFAULT_KNOWLEDGE_BASE_NAME,
-      description: "单知识库 MVP 默认实例",
+      description: DEFAULT_KNOWLEDGE_BASE_DESCRIPTION,
       status: "active",
-      chunkingConfigJson: JSON.stringify({
-        separator: "\\n\\n",
-        maxLength: 1024,
-        overlap: 50,
-        replaceWhitespace: true,
-        removeUrls: false,
-        useQaSplit: false,
-      }),
+      chunkingConfigJson: JSON.stringify(DEFAULT_CHUNKING_CONFIG),
     })
     .run();
 };
@@ -371,8 +383,7 @@ const ensureDefaultKnowledgeBase = () => {
 export const initializeKnowledgeBaseDatabase = () => {
   try {
     const sqlite = getSqlite();
-    sqlite.pragma("foreign_keys = ON");
-    sqlite.pragma("journal_mode = WAL");
+    applySqliteConnectionPragmas(sqlite);
 
     ensureKnowledgeBaseTables();
     repairKnowledgeBaseTablesIfNeeded();
@@ -384,10 +395,17 @@ export const initializeKnowledgeBaseDatabase = () => {
   }
 };
 
-export const getKnowledgeBaseDatabaseHealth = () => ({
-  hasKnowledgeBasesTable: hasTable("knowledge_bases"),
-  hasDocumentsTable: hasTable("documents"),
-  hasDocumentChunksTable: hasTable("document_chunks"),
-  hasChunkFtsTable: hasTable("document_chunks_fts"),
-  hasVectorIndexRegistryTable: hasTable("knowledge_base_vector_indexes"),
-});
+export const getKnowledgeBaseDatabaseHealth = () => {
+  const sqlite = getSqlite();
+
+  return {
+    hasKnowledgeBasesTable: hasSqliteTable(sqlite, "knowledge_bases"),
+    hasDocumentsTable: hasSqliteTable(sqlite, "documents"),
+    hasDocumentChunksTable: hasSqliteTable(sqlite, "document_chunks"),
+    hasChunkFtsTable: hasSqliteTable(sqlite, "document_chunks_fts"),
+    hasVectorIndexRegistryTable: hasSqliteTable(
+      sqlite,
+      "knowledge_base_vector_indexes",
+    ),
+  };
+};

@@ -1,3 +1,6 @@
+import { fetchJsonWithTimeout } from "@/utils/http.js";
+import { CLOUDFLARE_ACCOUNT_BASE_URL_GUIDE } from "@/providers/catalog.js";
+
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 
 const CLOUDFLARE_ACCOUNT_URL_PATTERN =
@@ -22,27 +25,6 @@ const isCloudflareApiEnvelope = <T>(
   value !== null &&
   ("result" in value || "success" in value || "errors" in value);
 
-const fetchJson = async <T>(url: string, init?: RequestInit): Promise<T> => {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
-
-  try {
-    const response = await fetch(url, {
-      ...init,
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || `Request failed with status ${response.status}`);
-    }
-
-    return (await response.json()) as T;
-  } finally {
-    clearTimeout(timeout);
-  }
-};
-
 export const isCloudflareBaseUrl = (baseUrl: string) =>
   CLOUDFLARE_ACCOUNT_URL_PATTERN.test(trimTrailingSlash(baseUrl.trim()));
 
@@ -52,7 +34,7 @@ const resolveCloudflareAccountUrl = (baseUrl: string) => {
 
   if (!match?.[1] || !match[2]) {
     throw new Error(
-      'Cloudflare baseUrl 格式不正确。请使用 "https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/ai"',
+      `Cloudflare baseUrl 格式不正确。请使用 "${CLOUDFLARE_ACCOUNT_BASE_URL_GUIDE}"`,
     );
   }
 
@@ -95,7 +77,7 @@ export const listCloudflareModels = async (baseUrl: string, apiKey: string) => {
     headers.Authorization = `Bearer ${apiKey.trim()}`;
   }
 
-  const response = await fetchJson<{
+  const response = await fetchJsonWithTimeout<{
     result?: Array<Record<string, unknown>>;
   }>(resolveCloudflareModelSearchUrl(baseUrl), { headers });
 
@@ -144,7 +126,7 @@ export const createCloudflareEmbeddings = async ({
     headers.Authorization = `Bearer ${apiKey.trim()}`;
   }
 
-  const response = await fetchJson<
+  const response = await fetchJsonWithTimeout<
     CloudflareApiEnvelope<CloudflareEmbeddingResult> | CloudflareEmbeddingResult
   >(resolveCloudflareRunUrl(baseUrl, model), {
     method: "POST",
