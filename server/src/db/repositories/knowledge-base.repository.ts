@@ -1,9 +1,11 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { getDb, getSqlite } from "@/db";
+import { rebuildDocumentChunkFts } from "@/db/knowledge-base.db";
 import {
+  DEFAULT_CHUNKING_CONFIG,
   DEFAULT_KNOWLEDGE_BASE_ID,
   DEFAULT_KNOWLEDGE_BASE_NAME,
-} from "@/db/knowledge-base.db";
+} from "@/constants/knowledge-base.js";
 import {
   documentChunks,
   documents,
@@ -13,6 +15,7 @@ import {
   type KnowledgeBase,
   type NewDocument,
 } from "@/db/schema";
+import { nowIso } from "@/utils/time.js";
 
 export interface DocumentListFilters {
   search?: string;
@@ -40,14 +43,14 @@ export const knowledgeBaseRepository = {
     }
 
     const db = getDb();
-    const now = new Date().toISOString();
+    const now = nowIso();
     return db
       .insert(knowledgeBases)
       .values({
         id: DEFAULT_KNOWLEDGE_BASE_ID,
         name: DEFAULT_KNOWLEDGE_BASE_NAME,
         status: "active",
-        chunkingConfigJson: "{}",
+        chunkingConfigJson: JSON.stringify(DEFAULT_CHUNKING_CONFIG),
         createdAt: now,
         updatedAt: now,
       })
@@ -143,7 +146,7 @@ export const documentRepository = {
     const sqlite = getSqlite();
     const tx = sqlite.transaction(() => {
       const db = getDb();
-      const now = new Date().toISOString();
+      const now = nowIso();
       const created = db
         .insert(documents)
         .values({
@@ -187,7 +190,7 @@ export const documentRepository = {
       .update(documents)
       .set({
         ...data,
-        updatedAt: new Date().toISOString(),
+        updatedAt: nowIso(),
       })
       .where(eq(documents.id, id))
       .returning()
@@ -244,7 +247,7 @@ export const documentRepository = {
           tokenCount: params.tokenCount ?? null,
           indexStatus: params.indexStatus,
           errorMessage: params.errorMessage ?? null,
-          updatedAt: new Date().toISOString(),
+          updatedAt: nowIso(),
         })
         .where(eq(documents.id, params.documentId))
         .returning()
@@ -256,7 +259,21 @@ export const documentRepository = {
 
   deleteById(id: string): boolean {
     const db = getDb();
-    const result = db.delete(documents).where(eq(documents.id, id)).run();
-    return result.changes > 0;
+    try {
+      const result = db.delete(documents).where(eq(documents.id, id)).run();
+      return result.changes > 0;
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "SQLITE_CORRUPT_VTAB"
+      ) {
+        rebuildDocumentChunkFts();
+        const retried = db.delete(documents).where(eq(documents.id, id)).run();
+        return retried.changes > 0;
+      }
+
+      throw error;
+    }
   },
 };

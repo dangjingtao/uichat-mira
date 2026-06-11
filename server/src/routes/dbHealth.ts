@@ -4,6 +4,7 @@ import net from "node:net";
 import path from "node:path";
 import { getVectorStoreHealth } from "@/db";
 import { success } from "@/utils/index.js";
+import { successEnvelope } from "@/routes/schema-helpers.js";
 
 const DEFAULT_PORT_TIMEOUT = 1500;
 const DEFAULT_POSTGRES_PORT = 5432;
@@ -83,35 +84,26 @@ const dbHealthRoute: FastifyPluginAsync = async (app) => {
         summary: "Database connectivity health check",
         operationId: "getDatabaseHealth",
         response: {
-          200: {
+          200: successEnvelope({
             type: "object",
-            required: ["success", "data", "timestamp"],
+            required: ["ok", "configured", "mode", "detail", "vectorStore"],
             properties: {
-              success: { type: "boolean", const: true },
-              data: {
+              ok: { type: "boolean" },
+              configured: { type: "boolean" },
+              mode: { type: "string" },
+              detail: { type: "string" },
+              vectorStore: {
                 type: "object",
-                required: ["ok", "configured", "mode", "detail", "vectorStore"],
+                required: ["ok", "provider", "detail"],
                 properties: {
                   ok: { type: "boolean" },
-                  configured: { type: "boolean" },
-                  mode: { type: "string" },
+                  provider: { type: "string", const: "sqlite-vec" },
                   detail: { type: "string" },
-                  vectorStore: {
-                    type: "object",
-                    required: ["ok", "provider", "detail"],
-                    properties: {
-                      ok: { type: "boolean" },
-                      provider: { type: "string", const: "sqlite-vec" },
-                      detail: { type: "string" },
-                      extensionPath: { type: "string" },
-                    },
-                  },
+                  extensionPath: { type: "string" },
                 },
               },
-              message: { type: "string" },
-              timestamp: { type: "string", format: "date-time" },
             },
-          },
+          }),
         },
       },
     },

@@ -1,6 +1,7 @@
-﻿import Database from "better-sqlite3";
+import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as sqliteVec from "sqlite-vec";
+import { applySqliteConnectionPragmas } from "./init-utils";
 import * as schema from "./schema";
 
 export * from "./schema";
@@ -46,8 +47,7 @@ export const getSqlite = (): Database.Database => {
       readonly: false,
       fileMustExist: false,
     });
-    sqlite.pragma("foreign_keys = ON");
-    sqlite.pragma("journal_mode = WAL");
+    applySqliteConnectionPragmas(sqlite);
   }
   return sqlite;
 };
@@ -55,6 +55,7 @@ export const getSqlite = (): Database.Database => {
 export const getDb = () => {
   if (!db) {
     db = drizzle(getSqlite(), { schema });
+    console.log("[Database] ✅ Drizzle database client initialized");
   }
   return db;
 };
@@ -86,4 +87,3 @@ export const initializeVectorStore = (): VectorStoreHealth => {
 };
 
 export const getVectorStoreHealth = (): VectorStoreHealth => vectorStoreHealth;
-

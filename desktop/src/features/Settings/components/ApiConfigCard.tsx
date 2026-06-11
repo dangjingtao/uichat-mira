@@ -165,6 +165,14 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
           >
             {assigningRole === "rerank" ? "设置中..." : "设为默认 ReRank"}
           </Button>
+          <Button
+            size="small"
+            variant="secondary"
+            onClick={() => onSetDefaultRole("task")}
+            disabled={!selectedModelId || assigningRole === "task"}
+          >
+            {assigningRole === "task" ? "设置中..." : "设为默认 Task"}
+          </Button>
         </div>
       </div>
     </div>

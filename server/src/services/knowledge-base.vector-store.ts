@@ -6,16 +6,17 @@ import {
 } from "@/db";
 import { and, ne } from "drizzle-orm";
 import {
+  assertSqliteIdentifier,
+  hasSqliteTable,
+} from "@/db/sqlite-utils";
+import {
   DEFAULT_VECTOR_TABLE_NAME,
   ensureChunkEmbeddingVectorTable,
 } from "@/db/knowledge-base.db";
+import { nowIso } from "@/utils/time.js";
 
 const sanitizeTableName = (tableName: string) => {
-  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(tableName)) {
-    throw new Error("Invalid vector table name");
-  }
-
-  return tableName;
+  return assertSqliteIdentifier(tableName, "Invalid vector table name");
 };
 
 const toVectorPrimaryKey = (chunkId: number) => {
@@ -24,17 +25,6 @@ const toVectorPrimaryKey = (chunkId: number) => {
   }
 
   return BigInt(chunkId);
-};
-
-const hasSqliteTable = (tableName: string) => {
-  const sqlite = getSqlite();
-  const row = sqlite
-    .prepare(
-      "SELECT name FROM sqlite_master WHERE type IN ('table', 'view', 'virtual table') AND name = ? LIMIT 1",
-    )
-    .get(tableName);
-
-  return Boolean(row);
 };
 
 const toVectorTableName = (params: {
@@ -77,6 +67,7 @@ export const knowledgeBaseVectorStore = {
     dimensions: number;
     tableName?: string;
   }) {
+    const now = nowIso();
     const tableName = sanitizeTableName(
       params.tableName ??
         toVectorTableName({
@@ -103,7 +94,7 @@ export const knowledgeBaseVectorStore = {
     db.update(knowledgeBaseVectorIndexes)
       .set({
         isActive: false,
-        updatedAt: new Date().toISOString(),
+        updatedAt: now,
       })
       .where(
         and(
@@ -119,14 +110,14 @@ export const knowledgeBaseVectorStore = {
           embeddingModelConfigId: params.embeddingModelConfigId,
           dimensions: params.dimensions,
           isActive: true,
-          updatedAt: new Date().toISOString(),
+          updatedAt: now,
         })
         .where(eq(knowledgeBaseVectorIndexes.id, existing.id))
         .run();
 
       return {
         tableName,
-        dimensions: existing.dimensions,
+        dimensions: params.dimensions,
       };
     }
 
@@ -207,7 +198,7 @@ export const knowledgeBaseVectorStore = {
     ).map((tableName) => sanitizeTableName(tableName));
 
     const statements = tableNames
-      .filter((tableName) => hasSqliteTable(tableName))
+      .filter((tableName) => hasSqliteTable(sqlite, tableName))
       .map((tableName) =>
       sqlite.prepare(`DELETE FROM ${tableName} WHERE chunk_id = ?`),
       );

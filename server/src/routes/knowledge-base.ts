@@ -1,32 +1,17 @@
 import type { FastifyPluginAsync } from "fastify";
 import { knowledgeBaseService } from "@/services/knowledge-base.service.js";
-import { error, ErrorCodes, success } from "@/utils/index.js";
-
-const successEnvelope = (dataSchema: Record<string, unknown>) => ({
-  type: "object",
-  required: ["success", "data", "timestamp"],
-  properties: {
-    success: { type: "boolean", const: true },
-    data: dataSchema,
-    message: { type: "string" },
-    timestamp: { type: "string", format: "date-time" },
-  },
-});
-
-const errorEnvelope = {
-  type: "object",
-  required: ["success", "message", "timestamp"],
-  properties: {
-    success: { type: "boolean", const: false },
-    message: { type: "string" },
-    code: { type: "string" },
-    errors: {
-      type: "array",
-      items: {},
-    },
-    timestamp: { type: "string", format: "date-time" },
-  },
-} as const;
+import {
+  DOCUMENT_NOT_FOUND_MESSAGE,
+  error,
+  ErrorCodes,
+  success,
+} from "@/utils/index.js";
+import {
+  deletedResponseSchema,
+  errorEnvelope,
+  idParamsSchema,
+  successEnvelope,
+} from "@/routes/schema-helpers.js";
 
 const chunkingConfigSchema = {
   type: "object",
@@ -243,13 +228,7 @@ const knowledgeBaseRoute: FastifyPluginAsync = async (app) => {
         tags: ["Knowledge Base"],
         summary: "Get document detail",
         operationId: "getKnowledgeBaseDocument",
-        params: {
-          type: "object",
-          required: ["id"],
-          properties: {
-            id: { type: "string" },
-          },
-        },
+        params: idParamsSchema,
         response: {
           200: successEnvelope(documentDetailSchema),
           404: errorEnvelope,
@@ -263,7 +242,7 @@ const knowledgeBaseRoute: FastifyPluginAsync = async (app) => {
         if (!result) {
           return reply
             .code(404)
-            .send(error("Document not found", ErrorCodes.NOT_FOUND));
+            .send(error(DOCUMENT_NOT_FOUND_MESSAGE, ErrorCodes.NOT_FOUND));
         }
 
         return success(result);
@@ -360,13 +339,7 @@ const knowledgeBaseRoute: FastifyPluginAsync = async (app) => {
         tags: ["Knowledge Base"],
         summary: "Update document metadata or re-chunk content",
         operationId: "updateKnowledgeBaseDocument",
-        params: {
-          type: "object",
-          required: ["id"],
-          properties: {
-            id: { type: "string" },
-          },
-        },
+        params: idParamsSchema,
         body: {
           type: "object",
           additionalProperties: false,
@@ -394,7 +367,7 @@ const knowledgeBaseRoute: FastifyPluginAsync = async (app) => {
         if (!result) {
           return reply
             .code(404)
-            .send(error("Document not found", ErrorCodes.NOT_FOUND));
+            .send(error(DOCUMENT_NOT_FOUND_MESSAGE, ErrorCodes.NOT_FOUND));
         }
 
         return success(result, "Document updated");
@@ -416,21 +389,9 @@ const knowledgeBaseRoute: FastifyPluginAsync = async (app) => {
         tags: ["Knowledge Base"],
         summary: "Delete document",
         operationId: "deleteKnowledgeBaseDocument",
-        params: {
-          type: "object",
-          required: ["id"],
-          properties: {
-            id: { type: "string" },
-          },
-        },
+        params: idParamsSchema,
         response: {
-          200: successEnvelope({
-            type: "object",
-            required: ["deleted"],
-            properties: {
-              deleted: { type: "boolean" },
-            },
-          }),
+          200: successEnvelope(deletedResponseSchema),
           404: errorEnvelope,
           500: errorEnvelope,
         },
@@ -442,7 +403,7 @@ const knowledgeBaseRoute: FastifyPluginAsync = async (app) => {
         if (!deleted) {
           return reply
             .code(404)
-            .send(error("Document not found", ErrorCodes.NOT_FOUND));
+            .send(error(DOCUMENT_NOT_FOUND_MESSAGE, ErrorCodes.NOT_FOUND));
         }
 
         return success({ deleted: true }, "Document deleted");

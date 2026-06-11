@@ -1,4 +1,6 @@
 import { getSqlite } from "@/db";
+import { hasSqliteTable } from "@/db/sqlite-utils";
+import { nowIso } from "@/utils/time.js";
 
 const TABLES_WITH_BOTH_TIMESTAMPS = [
   "model_configs",
@@ -6,6 +8,7 @@ const TABLES_WITH_BOTH_TIMESTAMPS = [
   "knowledge_bases",
   "documents",
   "knowledge_base_vector_indexes",
+  "threads",
 ] as const;
 
 const TABLES_WITH_CREATED_ONLY = [
@@ -13,26 +16,16 @@ const TABLES_WITH_CREATED_ONLY = [
   "sessions",
   "model_param_templates",
   "document_chunks",
+  "messages",
 ] as const;
-
-const hasTable = (tableName: string) => {
-  const sqlite = getSqlite();
-  const row = sqlite
-    .prepare(
-      "SELECT name FROM sqlite_master WHERE type IN ('table', 'view', 'virtual table') AND name = ? LIMIT 1",
-    )
-    .get(tableName);
-
-  return Boolean(row);
-};
 
 export const repairLiteralCurrentTimestampValues = () => {
   const sqlite = getSqlite();
-  const now = new Date().toISOString();
+  const now = nowIso();
 
   const tx = sqlite.transaction(() => {
     for (const tableName of TABLES_WITH_BOTH_TIMESTAMPS) {
-      if (!hasTable(tableName)) {
+      if (!hasSqliteTable(sqlite, tableName)) {
         continue;
       }
 
@@ -60,7 +53,7 @@ export const repairLiteralCurrentTimestampValues = () => {
     }
 
     for (const tableName of TABLES_WITH_CREATED_ONLY) {
-      if (!hasTable(tableName)) {
+      if (!hasSqliteTable(sqlite, tableName)) {
         continue;
       }
 

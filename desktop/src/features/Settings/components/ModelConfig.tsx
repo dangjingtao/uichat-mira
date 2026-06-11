@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/shared/ui/Button";
 import { NumberInput, SelectInput } from "@/shared/ui/Input";
 import { message } from "@/shared/ui/Message";
@@ -39,13 +39,47 @@ const MODEL_META: Record<RoleModelType, ModelMeta> = {
       { key: "topP", label: "Top P", type: "number", step: 0.1 },
       { key: "topK", label: "Top K", type: "number" },
       { key: "maxTokens", label: "Max Tokens", type: "number" },
-      { key: "frequencyPenalty", label: "Frequency Penalty", type: "number", step: 0.1 },
-      { key: "presencePenalty", label: "Presence Penalty", type: "number", step: 0.1 },
+      {
+        key: "frequencyPenalty",
+        label: "Frequency Penalty",
+        type: "number",
+        step: 0.1,
+      },
+      {
+        key: "presencePenalty",
+        label: "Presence Penalty",
+        type: "number",
+        step: 0.1,
+      },
+    ],
+  },
+  task: {
+    title: "任务模型配置",
+    subtitle: "用于任务执行和流程编排",
+    badgeText: "TSK",
+    badgeClassName: "bg-warning/10 text-warning",
+    params: [
+      { key: "temperature", label: "Temperature", type: "number", step: 0.1 },
+      { key: "topP", label: "Top P", type: "number", step: 0.1 },
+      { key: "topK", label: "Top K", type: "number" },
+      { key: "maxTokens", label: "Max Tokens", type: "number" },
+      {
+        key: "frequencyPenalty",
+        label: "Frequency Penalty",
+        type: "number",
+        step: 0.1,
+      },
+      {
+        key: "presencePenalty",
+        label: "Presence Penalty",
+        type: "number",
+        step: 0.1,
+      },
     ],
   },
   embedding: {
     title: "Embedding",
-    subtitle: "鐢ㄤ簬鍚戦噺鍖栧拰璇箟鎼滅储",
+    subtitle: "用于向量化和语义检索",
     badgeText: "EM",
     badgeClassName: "bg-success/10 text-success",
     params: [
@@ -71,7 +105,12 @@ const MODEL_META: Record<RoleModelType, ModelMeta> = {
     badgeClassName: "bg-surface-tertiary text-text-secondary",
     params: [
       { key: "topN", label: "Top N", type: "number" },
-      { key: "scoreThreshold", label: "Score Threshold", type: "number", step: 0.1 },
+      {
+        key: "scoreThreshold",
+        label: "Score Threshold",
+        type: "number",
+        step: 0.1,
+      },
       { key: "windowSize", label: "Window Size", type: "number" },
       {
         key: "strategy",
@@ -86,7 +125,9 @@ const MODEL_META: Record<RoleModelType, ModelMeta> = {
   },
 };
 
-const normalizeConfigState = (config: RoleModelConfig | null | undefined): ConfigState => {
+const normalizeConfigState = (
+  config: RoleModelConfig | null | undefined,
+): ConfigState => {
   const params = (config?.params ?? {}) as Record<string, ConfigValue>;
   return {
     enabled: Boolean(config?.remoteModelId),
@@ -140,7 +181,7 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
       message.success("参数已保存");
       setIsChanged(false);
     } catch (err) {
-      const messageText = err instanceof Error ? err.message : "淇濆瓨鍙傛暟澶辫触";
+      const messageText = err instanceof Error ? err.message : "保存参数失败";
       message.error(messageText);
     } finally {
       setIsSaving(false);
@@ -173,7 +214,9 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
                 {isConfigured ? "已配置" : "未配置"}
               </span>
             </div>
-            <div className="text-xs leading-4 text-text-secondary">{meta.subtitle}</div>
+            <div className="text-xs leading-4 text-text-secondary">
+              {meta.subtitle}
+            </div>
           </div>
         </div>
 
@@ -183,23 +226,23 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
           disabled={!isConfigured || !isChanged || isSaving}
           onClick={handleSave}
         >
-          {isSaving ? "淇濆瓨涓?.." : "淇濆瓨"}
+          {isSaving ? "保存中..." : "保存"}
         </Button>
       </div>
 
       <div className="mb-2.5 grid grid-cols-1 gap-2 md:grid-cols-2">
         <div className="rounded-lg border border-border bg-surface-secondary px-3 py-2">
           <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-text-tertiary">
-            褰撳墠骞冲彴
+            当前平台
           </div>
           <div className="mt-1 text-sm text-text-primary">{providerLabel}</div>
         </div>
         <div className="rounded-lg border border-border bg-surface-secondary px-3 py-2">
           <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-text-tertiary">
-            褰撳墠妯″瀷
+            当前模型
           </div>
           <div className="mt-1 truncate text-sm text-text-primary">
-            {config?.name || "璇峰湪骞冲彴妯″瀷璁剧疆涓€夋嫨"}
+            {config?.name || "请在平台模型设置中选择"}
           </div>
         </div>
       </div>
@@ -213,11 +256,17 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
               <SelectInput
                 key={field.key}
                 label={field.label}
-                value={typeof value === "boolean" ? value.toString() : String(value ?? "")}
+                value={
+                  typeof value === "boolean"
+                    ? value.toString()
+                    : String(value ?? "")
+                }
                 onChange={(nextValue) =>
                   handleChange(
                     field.key,
-                    field.key === "normalize" ? nextValue === "true" : nextValue,
+                    field.key === "normalize"
+                      ? nextValue === "true"
+                      : nextValue,
                   )
                 }
                 options={field.options ?? []}
@@ -245,6 +294,3 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
 };
 
 export default ModelConfig;
-
-
-

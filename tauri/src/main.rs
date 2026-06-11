@@ -1,16 +1,96 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::path::PathBuf;
+#[cfg(not(debug_assertions))]
 use std::process::Command;
+#[cfg(not(debug_assertions))]
 use std::sync::Mutex;
-use tauri::Manager;
+use std::sync::OnceLock;
+#[cfg(not(debug_assertions))]
+use std::path::Path;
+#[cfg(not(debug_assertions))]
+use uuid::Uuid;
+use regex::Regex;
+use serde_json::Value;
+#[cfg(not(debug_assertions))]
+use tauri::{Manager, RunEvent};
 
+#[cfg(not(debug_assertions))]
 struct BackendProcess(Mutex<Option<std::process::Child>>);
+
+#[cfg(not(debug_assertions))]
+fn stop_backend_process<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    let backend_process = app.state::<BackendProcess>();
+    let mut process_guard = backend_process.0.lock().unwrap();
+
+    if let Some(mut child) = process_guard.take() {
+        match child.try_wait() {
+            Ok(Some(_status)) => {
+                return;
+            }
+            Ok(None) => {}
+            Err(error) => {
+                eprintln!("Failed to query backend process state: {}", error);
+            }
+        }
+
+        if let Err(error) = child.kill() {
+            eprintln!("Failed to stop backend process: {}", error);
+            return;
+        }
+
+        if let Err(error) = child.wait() {
+            eprintln!("Failed to wait for backend process shutdown: {}", error);
+        }
+    }
+}
+
+#[cfg(not(debug_assertions))]
+fn ensure_secret_file(secret_path: &Path, secret_name: &str) -> Result<String, String> {
+    if secret_path.exists() {
+        let secret = std::fs::read_to_string(secret_path)
+            .map_err(|error| format!("Failed to read {} {:?}: {}", secret_name, secret_path, error))?;
+        let secret = secret.trim().to_string();
+
+        if !secret.is_empty() {
+            return Ok(secret);
+        }
+    }
+
+    if let Some(parent) = secret_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("Failed to create {} directory {:?}: {}", secret_name, parent, error))?;
+    }
+
+    let secret = Uuid::new_v4().to_string();
+    std::fs::write(secret_path, &secret)
+        .map_err(|error| format!("Failed to write {} {:?}: {}", secret_name, secret_path, error))?;
+
+    Ok(secret)
+}
+
+#[derive(Clone, Debug)]
+struct RuntimeConfig {
+    backend_host: String,
+    backend_port: u16,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopRuntimePayload {
+    host_kind: &'static str,
+    platform: &'static str,
+    is_packaged: bool,
+    backend_url: String,
+}
+
+static RUNTIME_CONFIG: OnceLock<RuntimeConfig> = OnceLock::new();
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct HealthCheckResult {
     success: bool,
-    statusCode: u16,
+    #[serde(rename = "statusCode")]
+    status_code: u16,
     error: Option<String>,
 }
 
@@ -21,7 +101,8 @@ struct DatabaseHealthResult {
     configured: bool,
     mode: String,
     detail: String,
-    vectorStore: VectorStoreInfo,
+    #[serde(rename = "vectorStore")]
+    vector_store: VectorStoreInfo,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -29,27 +110,128 @@ struct VectorStoreInfo {
     ok: bool,
     provider: String,
     detail: String,
-    extensionPath: Option<String>,
+    #[serde(rename = "extensionPath")]
+    extension_path: Option<String>,
 }
 
+#[cfg(not(debug_assertions))]
+fn get_packaged_resources_root() -> PathBuf {
+    let mut exe_path = std::env::current_exe()
+        .expect("Failed to get current exe path");
+    exe_path.pop();
+    exe_path.join("resources")
+}
+
+#[cfg(not(debug_assertions))]
 fn get_resource_path() -> PathBuf {
+    get_packaged_resources_root().join("server")
+}
+
+fn get_runtime_config() -> &'static RuntimeConfig {
+    RUNTIME_CONFIG.get_or_init(|| {
+        load_runtime_config().unwrap_or_else(|error| {
+            panic!("Failed to load runtime.config.cjs: {}", error);
+        })
+    })
+}
+
+fn load_runtime_config() -> Result<RuntimeConfig, String> {
+    let config_path = runtime_config_candidates()
+        .into_iter()
+        .find(|candidate| candidate.exists())
+        .ok_or_else(|| "Unable to locate runtime.config.cjs".to_string())?;
+
+    let contents = std::fs::read_to_string(&config_path)
+        .map_err(|error| format!("Failed to read {:?}: {}", config_path, error))?;
+
+    parse_runtime_config(&contents)
+}
+
+fn runtime_config_candidates() -> Vec<PathBuf> {
     #[cfg(debug_assertions)]
     {
-        PathBuf::from("..").join("server")
+        vec![
+            PathBuf::from("..").join("runtime.config.cjs"),
+            PathBuf::from("runtime.config.cjs"),
+        ]
     }
 
     #[cfg(not(debug_assertions))]
     {
-        let mut path = std::env::current_exe()
-            .expect("Failed to get current exe path");
-        path.pop();
-        path.pop();
-        path.join("resources").join("server")
+        let resources_root = get_packaged_resources_root();
+        let resources_parent = resources_root
+            .parent()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| resources_root.clone());
+
+        vec![
+            resources_root.join("runtime.config.cjs"),
+            resources_parent.join("runtime.config.cjs"),
+        ]
     }
 }
 
+fn parse_runtime_config(contents: &str) -> Result<RuntimeConfig, String> {
+    let host_regex = Regex::new(r#"host\s*:\s*"([^"]+)""#)
+        .map_err(|error| format!("Failed to compile host regex: {}", error))?;
+    let port_regex = Regex::new(r#"port\s*:\s*(\d+)"#)
+        .map_err(|error| format!("Failed to compile port regex: {}", error))?;
+
+    let backend_host = host_regex
+        .captures(contents)
+        .and_then(|capture| capture.get(1))
+        .map(|value| value.as_str().to_string())
+        .ok_or_else(|| "backend.host is missing from runtime.config.cjs".to_string())?;
+
+    let backend_port = port_regex
+        .captures(contents)
+        .and_then(|capture| capture.get(1))
+        .and_then(|value| value.as_str().parse::<u16>().ok())
+        .ok_or_else(|| "backend.port is missing from runtime.config.cjs".to_string())?;
+
+    Ok(RuntimeConfig {
+        backend_host,
+        backend_port,
+    })
+}
+
 fn get_backend_url() -> String {
-    "http://127.0.0.1:8787".to_string()
+    if let Ok(backend_url) = std::env::var("UI_CHAT_BACKEND_URL") {
+        if !backend_url.trim().is_empty() {
+            return backend_url;
+        }
+    }
+
+    let runtime_config = get_runtime_config();
+
+    format!(
+        "http://{}:{}",
+        runtime_config.backend_host, runtime_config.backend_port
+    )
+}
+
+fn desktop_runtime_payload() -> DesktopRuntimePayload {
+    DesktopRuntimePayload {
+        host_kind: "tauri",
+        platform: std::env::consts::OS,
+        is_packaged: !cfg!(debug_assertions),
+        backend_url: get_backend_url(),
+    }
+}
+
+fn desktop_runtime_initialization_script() -> String {
+    let payload = serde_json::to_string(&desktop_runtime_payload())
+        .expect("Failed to serialize desktop runtime payload");
+
+    format!(
+        r#"
+          Object.defineProperty(window, "desktopRuntime", {{
+            value: {payload},
+            configurable: false,
+            writable: false
+          }});
+        "#
+    )
 }
 
 async fn check_backend_health(token: Option<String>) -> Result<HealthCheckResult, String> {
@@ -65,32 +247,32 @@ async fn check_backend_health(token: Option<String>) -> Result<HealthCheckResult
     match request.send().await {
         Ok(response) => {
             let status = response.status().as_u16();
-            match response.json().await {
+            match response.json::<Value>().await {
                 Ok(payload) => {
                     if status == 200 {
                         Ok(HealthCheckResult {
                             success: true,
-                            statusCode: status,
+                            status_code: status,
                             error: None,
                         })
                     } else {
                         Ok(HealthCheckResult {
                             success: false,
-                            statusCode: status,
+                            status_code: status,
                             error: Some(payload["message"].as_str().unwrap_or("Unknown error").to_string()),
                         })
                     }
                 }
                 Err(e) => Ok(HealthCheckResult {
                     success: false,
-                    statusCode: status,
+                    status_code: status,
                     error: Some(e.to_string()),
                 })
             }
         }
         Err(e) => Ok(HealthCheckResult {
             success: false,
-            statusCode: 0,
+            status_code: 0,
             error: Some(e.to_string()),
         })
     }
@@ -108,7 +290,7 @@ async fn check_database_health(token: Option<String>) -> Result<DatabaseHealthRe
 
     match request.send().await {
         Ok(response) => {
-            match response.json().await {
+            match response.json::<Value>().await {
                 Ok(payload) => {
                     if payload["success"].as_bool().unwrap_or(false) {
                         let data = payload["data"].as_object().unwrap();
@@ -119,11 +301,11 @@ async fn check_database_health(token: Option<String>) -> Result<DatabaseHealthRe
                             configured: data["configured"].as_bool().unwrap_or(false),
                             mode: data["mode"].as_str().unwrap_or("unknown").to_string(),
                             detail: data["detail"].as_str().unwrap_or("").to_string(),
-                            vectorStore: VectorStoreInfo {
+                            vector_store: VectorStoreInfo {
                                 ok: vector_store["ok"].as_bool().unwrap_or(false),
                                 provider: vector_store["provider"].as_str().unwrap_or("sqlite-vec").to_string(),
                                 detail: vector_store["detail"].as_str().unwrap_or("").to_string(),
-                                extensionPath: vector_store["extensionPath"].as_str().map(|s| s.to_string()),
+                                extension_path: vector_store["extensionPath"].as_str().map(|s| s.to_string()),
                             },
                         })
                     } else {
@@ -133,11 +315,11 @@ async fn check_database_health(token: Option<String>) -> Result<DatabaseHealthRe
                             configured: false,
                             mode: "unknown".to_string(),
                             detail: payload["message"].as_str().unwrap_or("Health check failed").to_string(),
-                            vectorStore: VectorStoreInfo {
+                            vector_store: VectorStoreInfo {
                                 ok: false,
                                 provider: "sqlite-vec".to_string(),
                                 detail: payload["message"].as_str().unwrap_or("Health check failed").to_string(),
-                                extensionPath: None,
+                                extension_path: None,
                             },
                         })
                     }
@@ -148,11 +330,11 @@ async fn check_database_health(token: Option<String>) -> Result<DatabaseHealthRe
                     configured: false,
                     mode: "unknown".to_string(),
                     detail: e.to_string(),
-                    vectorStore: VectorStoreInfo {
+                    vector_store: VectorStoreInfo {
                         ok: false,
                         provider: "sqlite-vec".to_string(),
                         detail: e.to_string(),
-                        extensionPath: None,
+                        extension_path: None,
                     },
                 })
             }
@@ -163,11 +345,11 @@ async fn check_database_health(token: Option<String>) -> Result<DatabaseHealthRe
             configured: false,
             mode: "unknown".to_string(),
             detail: e.to_string(),
-            vectorStore: VectorStoreInfo {
+            vector_store: VectorStoreInfo {
                 ok: false,
                 provider: "sqlite-vec".to_string(),
                 detail: e.to_string(),
-                extensionPath: None,
+                extension_path: None,
             },
         })
     }
@@ -188,13 +370,13 @@ async fn check_database_health_command(token: Option<String>) -> Result<Database
     check_database_health(token).await
 }
 
-fn start_backend_process() -> Option<std::process::Child> {
-    #[cfg(debug_assertions)]
-    {
-        println!("Dev mode: backend should be started separately");
-        return None;
-    }
-
+#[cfg(not(debug_assertions))]
+fn start_backend_process(
+    data_dir: &Path,
+    log_dir: &Path,
+    jwt_secret: &str,
+    settings_secret: &str,
+) -> Option<std::process::Child> {
     let server_path = get_resource_path().join("server.cjs");
     let cwd = get_resource_path();
 
@@ -211,50 +393,70 @@ fn start_backend_process() -> Option<std::process::Child> {
     Command::new(&node_exe)
         .arg(&server_path)
         .current_dir(&cwd)
-        .env("HOST", "127.0.0.1")
-        .env("PORT", "8787")
+        .env("HOST", &get_runtime_config().backend_host)
+        .env("PORT", get_runtime_config().backend_port.to_string())
         .env("NODE_ENV", "production")
+        .env("JWT_SECRET", jwt_secret)
+        .env("SETTINGS_SECRET", settings_secret)
+        .env("UI_CHAT_ALLOW_DEFAULT_BOOTSTRAP", "1")
         .env("UI_CHAT_BACKEND_URL", get_backend_url())
+        .env("UI_CHAT_DATABASE_DIR", data_dir)
+        .env("UI_CHAT_LOG_DIR", log_dir)
         .spawn()
         .ok()
 }
 
+#[cfg(not(debug_assertions))]
 fn find_node_executable() -> PathBuf {
-    #[cfg(debug_assertions)]
-    {
-        if let Ok(node) = which::which("node") {
-            return node;
-        }
-    }
-
-    let mut exe_path = std::env::current_exe()
-        .expect("Failed to get current exe path");
-    exe_path.pop();
-    exe_path.pop();
-    exe_path.join("resources").join("node-runtime").join("node.exe")
+    get_packaged_resources_root().join("node-runtime").join("node.exe")
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
+        .append_invoke_initialization_script(desktop_runtime_initialization_script())
         .plugin(tauri_plugin_shell::init())
-        .manage(BackendProcess(Mutex::new(None)))
-        .setup(|app| {
-            #[cfg(not(debug_assertions))]
-            {
-                let process = start_backend_process();
-                *app.state::<BackendProcess>().0.lock().unwrap() = process;
-            }
-
-            Ok(())
-        })
         .invoke_handler(tauri::generate_handler![
             get_backend_url_command,
             check_backend_health_command,
             check_database_health_command
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        ]);
+
+    #[cfg(not(debug_assertions))]
+    let builder = builder
+        .manage(BackendProcess(Mutex::new(None)))
+        .setup(|app| {
+            let app_data_dir = app
+                .path()
+                .app_local_data_dir()
+                .map_err(|error| format!("Failed to resolve app data directory: {}", error))?;
+            let data_dir = app_data_dir.join("data");
+            let log_dir = app_data_dir.join("logs");
+            let secrets_dir = app_data_dir.join("secrets");
+            let jwt_secret = ensure_secret_file(&secrets_dir.join("jwt-secret.txt"), "JWT secret")?;
+            let settings_secret = ensure_secret_file(&secrets_dir.join("settings-secret.txt"), "settings secret")?;
+
+            std::fs::create_dir_all(&data_dir)
+                .map_err(|error| format!("Failed to create data directory {:?}: {}", data_dir, error))?;
+            std::fs::create_dir_all(&log_dir)
+                .map_err(|error| format!("Failed to create log directory {:?}: {}", log_dir, error))?;
+
+            let process = start_backend_process(&data_dir, &log_dir, &jwt_secret, &settings_secret);
+            *app.state::<BackendProcess>().0.lock().unwrap() = process;
+            Ok(())
+        });
+
+    let app = builder
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app
+        .run(|_app_handle, _event| {
+            #[cfg(not(debug_assertions))]
+            if matches!(_event, RunEvent::ExitRequested { .. } | RunEvent::Exit) {
+                stop_backend_process(_app_handle);
+            }
+        });
 }
 
 fn main() {

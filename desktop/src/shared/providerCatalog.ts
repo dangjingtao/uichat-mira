@@ -15,7 +15,7 @@ export const PROVIDER_LABELS: Record<ProviderCode, string> = {
   lmstudio: "LM Studio",
   openai: "OpenAI",
   cloudflare: "Cloudflare",
-  volcengine: "火山引擎",
+  volcengine: "OpenAI兼容服务商",
 };
 
 export const getProviderLabel = (providerCode: ProviderCode) =>

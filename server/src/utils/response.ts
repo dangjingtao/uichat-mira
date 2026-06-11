@@ -1,6 +1,8 @@
 /**
  * 统一 API 响应规范
  */
+import { nowIso } from "@/utils/time.js";
+import { INVALID_REQUEST_PAYLOAD_MESSAGE } from "@/utils/errors.js";
 
 export interface ApiSuccessResponse<T = any> {
   success: true;
@@ -27,7 +29,7 @@ export function success<T>(data: T, message?: string): ApiSuccessResponse<T> {
     success: true,
     data,
     message,
-    timestamp: new Date().toISOString(),
+    timestamp: nowIso(),
   };
 }
 
@@ -44,7 +46,7 @@ export function error(
     message,
     code,
     errors,
-    timestamp: new Date().toISOString(),
+    timestamp: nowIso(),
   };
 }
 
@@ -72,7 +74,7 @@ export function handleValidationError(request: any, reply: any) {
       .code(400)
       .send(
         error(
-          "Invalid request payload",
+          INVALID_REQUEST_PAYLOAD_MESSAGE,
           ErrorCodes.VALIDATION_ERROR,
           validationError.validation,
         ),

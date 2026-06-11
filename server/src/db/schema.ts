@@ -8,6 +8,12 @@ import {
 } from "drizzle-orm/sqlite-core";
 import { relations, sql } from "drizzle-orm";
 import {
+  MESSAGE_ROLE_VALUES,
+  MODEL_TYPE_VALUES,
+  THREAD_STATUS_VALUES,
+  USER_ROLE_VALUES,
+} from "@/constants/domain.js";
+import {
   PROVIDER_CODE_VALUES,
   PROVIDER_STATUS_VALUES,
   type ProviderCodeValue,
@@ -20,7 +26,7 @@ export const users = sqliteTable(
     id: integer("id").primaryKey({ autoIncrement: true }),
     username: text("username").notNull().unique(),
     passwordHash: text("password_hash").notNull(),
-    role: text("role", { enum: ["admin", "user"] }).notNull(),
+    role: text("role", { enum: USER_ROLE_VALUES }).notNull(),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
     createdAt: text("created_at")
       .notNull()
@@ -65,7 +71,7 @@ export const modelConfigs = sqliteTable(
     id: text("id")
       .primaryKey()
       .default(sql`(lower(hex(randomblob(16))))`),
-    type: text("type", { enum: ["llm", "embedding", "rerank"] }).notNull(),
+    type: text("type", { enum: MODEL_TYPE_VALUES }).notNull(),
     name: text("name").notNull().default(""),
     providerCode: text("provider_code", {
       enum: PROVIDER_CODE_VALUES,
@@ -84,10 +90,9 @@ export const modelConfigs = sqliteTable(
   },
   (table) => ({
     typeIdx: index("idx_model_configs_type").on(table.type),
-    typeDefaultIdx: uniqueIndex("idx_model_configs_type_default").on(
-      table.type,
-      table.isDefault,
-    ),
+    typeDefaultIdx: uniqueIndex("idx_model_configs_type_default")
+      .on(table.type)
+      .where(sql`${table.isDefault} = 1`),
   }),
 );
 
@@ -103,7 +108,7 @@ export const modelParamTemplates = sqliteTable(
       .primaryKey()
       .default(sql`(lower(hex(randomblob(16))))`),
     modelType: text("model_type", {
-      enum: ["llm", "embedding", "rerank"],
+      enum: MODEL_TYPE_VALUES,
     }).notNull(),
     paramKey: text("param_key").notNull(),
     paramLabel: text("param_label").notNull(),
@@ -397,7 +402,81 @@ export type KnowledgeBaseVectorIndex =
 export type NewKnowledgeBaseVectorIndex =
   typeof knowledgeBaseVectorIndexes.$inferInsert;
 
-export type ModelType = "llm" | "embedding" | "rerank";
+export const threads = sqliteTable(
+  "threads",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull().default(""),
+    modelName: text("model_name"),
+    ragEnabled: integer("rag_enabled", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    status: text("status", { enum: THREAD_STATUS_VALUES })
+      .notNull()
+      .default("active"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    userIdIdx: index("idx_threads_user_id").on(table.userId),
+    statusIdx: index("idx_threads_status").on(table.status),
+    updatedAtIdx: index("idx_threads_updated_at").on(table.updatedAt),
+  }),
+);
+
+export const threadsRelations = relations(threads, ({ many, one }) => ({
+  messages: many(messages),
+  user: one(users, {
+    fields: [threads.userId],
+    references: [users.id],
+  }),
+}));
+
+export type Thread = typeof threads.$inferSelect;
+export type NewThread = typeof threads.$inferInsert;
+
+export const messages = sqliteTable(
+  "messages",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    threadId: text("thread_id")
+      .notNull()
+      .references(() => threads.id, { onDelete: "cascade" }),
+    role: text("role", { enum: MESSAGE_ROLE_VALUES }).notNull(),
+    content: text("content").notNull(),
+    metadata: text("metadata").default("{}"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    threadIdIdx: index("idx_messages_thread_id").on(table.threadId),
+    createdAtIdx: index("idx_messages_created_at").on(table.createdAt),
+  }),
+);
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  thread: one(threads, {
+    fields: [messages.threadId],
+    references: [threads.id],
+  }),
+}));
+
+export type Message = typeof messages.$inferSelect;
+export type NewMessage = typeof messages.$inferInsert;
+
+export type ModelType = "llm" | "embedding" | "rerank" | "task";
 export type UserRole = "admin" | "user";
 export type ParamType = "number" | "select" | "boolean";
 export type ProviderCode = ProviderCodeValue;
@@ -406,3 +485,5 @@ export type KnowledgeBaseStatus = "active" | "archived";
 export type DocumentSourceType = "upload" | "sync" | "api";
 export type DocumentIndexStatus = "processing" | "ready" | "failed";
 export type VectorDistanceMetric = "cosine" | "l2" | "inner_product";
+export type ThreadStatus = "active" | "archived" | "deleted";
+export type MessageRole = "user" | "assistant" | "system";

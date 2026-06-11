@@ -104,6 +104,7 @@ export const modelConfigService = {
       llm: [],
       embedding: [],
       rerank: [],
+      task: [],
     };
 
     for (const row of rows) {

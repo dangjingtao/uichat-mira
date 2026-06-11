@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { getDb, getSqlite } from "../index";
 import { providerConnections, providerModels } from "../schema";
+import { nowIso } from "@/utils/time.js";
 import type {
   NewProviderConnection,
   NewProviderModel,
@@ -43,7 +44,7 @@ export const providerConnectionRepository = {
           status: data.status ?? existing.status,
           lastError: data.lastError ?? null,
           lastSyncedAt: data.lastSyncedAt ?? existing.lastSyncedAt,
-          updatedAt: new Date().toISOString(),
+          updatedAt: nowIso(),
         })
         .where(eq(providerConnections.providerCode, data.providerCode))
         .returning()
@@ -73,7 +74,7 @@ export const providerConnectionRepository = {
         status,
         lastError,
         lastSyncedAt: lastSyncedAt ?? null,
-        updatedAt: new Date().toISOString(),
+        updatedAt: nowIso(),
       })
       .where(eq(providerConnections.providerCode, providerCode))
       .returning()

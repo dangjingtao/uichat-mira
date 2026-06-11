@@ -1,11 +1,18 @@
 import { FormEvent, useMemo, useState } from "react";
-import { CheckCircle2, KeyRound, LogOut, ShieldCheck, UserRound } from "lucide-react";
+import {
+  CheckCircle2,
+  KeyRound,
+  LogOut,
+  ShieldCheck,
+  UserRound,
+} from "lucide-react";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { changePassword } from "@/shared/api";
 import { ApiError } from "@/shared/lib/request";
 import { Button } from "@/shared/ui/Button";
 import Card from "@/shared/ui/Card";
 import { TextInput } from "@/shared/ui/Input";
+import Header from "../../components/Header";
 
 type PasswordFormState = {
   currentPassword: string;
@@ -73,15 +80,13 @@ export default function SettingsAccount() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6">
+    <div className="mx-auto flex w-full  flex-col gap-6 px-4 pb-6">
       <section className="space-y-2">
-        <div className="text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-          Account
-        </div>
-        <h1 className="text-2xl font-semibold text-text-primary">账号设置</h1>
-        <p className="max-w-2xl text-sm leading-6 text-text-secondary">
-          保留当前已落地的账号能力：查看当前登录身份、修改密码、退出登录。
-        </p>
+        <Header
+          miniTitle="Account"
+          title="账号设置"
+          description="保留当前已落地的账号能力：查看当前登录身份、修改密码、退出登录。"
+        />
       </section>
 
       <section className="grid gap-4 md:grid-cols-2">
@@ -130,7 +135,9 @@ export default function SettingsAccount() {
             <KeyRound className="h-5 w-5 text-icon-primary" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-text-primary">修改密码</h2>
+            <h2 className="text-lg font-semibold text-text-primary">
+              修改密码
+            </h2>
             <p className="text-sm text-text-secondary">
               新密码至少 6 位，且不能与当前密码相同。
             </p>
@@ -217,7 +224,9 @@ export default function SettingsAccount() {
       <Card className="p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-text-primary">退出登录</h2>
+            <h2 className="text-lg font-semibold text-text-primary">
+              退出登录
+            </h2>
             <p className="text-sm text-text-secondary">
               结束当前设备上的登录状态并返回登录页。
             </p>

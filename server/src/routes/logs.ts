@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { error, success } from "@/utils/index.js";
 import { logFilesService } from "@/services/log-files.service.js";
+import { errorEnvelope, successEnvelope } from "@/routes/schema-helpers.js";
 
 const logsRoute: FastifyPluginAsync = async (app) => {
   app.get(
@@ -39,33 +40,25 @@ const logsRoute: FastifyPluginAsync = async (app) => {
         summary: "Clear backend log files",
         operationId: "clearBackendLogs",
         response: {
-          200: {
+          200: successEnvelope({
             type: "object",
-            required: ["success", "data", "timestamp"],
+            required: ["directory", "clearedFiles"],
             properties: {
-              success: { type: "boolean", const: true },
-              data: {
-                type: "object",
-                required: ["directory", "clearedFiles"],
-                properties: {
-                  directory: { type: "string" },
-                  clearedFiles: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      required: ["name", "previousSize"],
-                      properties: {
-                        name: { type: "string" },
-                        previousSize: { type: "number" },
-                      },
-                    },
+              directory: { type: "string" },
+              clearedFiles: {
+                type: "array",
+                items: {
+                  type: "object",
+                  required: ["name", "previousSize"],
+                  properties: {
+                    name: { type: "string" },
+                    previousSize: { type: "number" },
                   },
                 },
               },
-              message: { type: "string" },
-              timestamp: { type: "string", format: "date-time" },
             },
-          },
+          }),
+          500: errorEnvelope,
         },
       },
     },

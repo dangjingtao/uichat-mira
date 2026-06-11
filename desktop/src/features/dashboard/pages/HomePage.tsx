@@ -13,23 +13,26 @@ import { useRuntimeHealth } from "../../system/hooks/useRuntimeHealth";
 import { Button } from "@/shared/ui/Button";
 import Card from "@/shared/ui/Card";
 import { StatusIndicator } from "@/shared/ui/StatusIndicator";
+import {
+  getRuntimeDescription,
+  getRuntimeDisplayLabel,
+} from "@/shared/platform/desktopRuntime";
 
 function HomePage() {
   const { session, logout } = useAuth();
-  const { desktopApi, backendState, databaseState } = useRuntimeHealth();
+  const { runtime, backendState, databaseState } = useRuntimeHealth();
   const navigate = useNavigate();
 
   const runtimeLabel = useMemo(() => {
-    if (desktopApi) {
-      return `Electron · ${desktopApi.platform}`;
-    }
-
-    return "Browser Preview";
-  }, [desktopApi]);
+    return getRuntimeDisplayLabel(runtime);
+  }, [runtime]);
+  const runtimeDescription = useMemo(() => {
+    return getRuntimeDescription(runtime);
+  }, [runtime]);
 
   const backendSummary = useMemo(() => {
-    return desktopApi?.backendUrl ?? backendState.detail;
-  }, [backendState.detail, desktopApi?.backendUrl]);
+    return runtime.backendUrl || backendState.detail;
+  }, [backendState.detail, runtime.backendUrl]);
 
   const toChat = () => navigate("/chat");
 
@@ -140,9 +143,7 @@ function HomePage() {
                   Runtime
                 </div>
                 <div className="mt-1 text-sm text-text-primary">
-                  {desktopApi
-                    ? "桌面运行时健康检查已启用"
-                    : "当前为浏览器预览模式"}
+                  {runtimeDescription}
                 </div>
               </div>
             </div>

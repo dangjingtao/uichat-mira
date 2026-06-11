@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.join(__dirname, "..");
-const outputDir = path.join(projectRoot, "electron", "backend");
+const outputDir = path.join(projectRoot, ".artifacts", "server-bundle");
 const outputNodeModules = path.join(outputDir, "node_modules");
 const pnpmStore = path.join(projectRoot, "node_modules", ".pnpm");
 

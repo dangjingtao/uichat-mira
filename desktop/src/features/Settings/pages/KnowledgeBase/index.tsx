@@ -519,7 +519,7 @@ export default function KnowledgeBaseSettings() {
         </div>
 
         <div className="mt-3 min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-surface-primary shadow-shadow-sm">
-          <div className="h-full overflow-auto">
+          <div className="stable-scrollbar h-full overflow-auto">
             <table className="w-full min-w-[1040px]">
               <thead className="sticky top-0 z-10 bg-surface-secondary">
                 <tr className="border-b border-border">

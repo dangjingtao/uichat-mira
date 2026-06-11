@@ -1,6 +1,9 @@
 import type { ProviderCode } from "@/db/schema.js";
 import { PROVIDER_CODE_VALUES } from "@/providers/codes.js";
 
+export const CLOUDFLARE_ACCOUNT_BASE_URL_GUIDE =
+  "https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/ai";
+
 export type ProviderSyncAdapter =
   | "ollama"
   | "openai-compatible"
@@ -60,7 +63,7 @@ export const PROVIDER_DEFINITIONS = {
   },
   volcengine: {
     code: "volcengine",
-    displayName: "火山引擎",
+    displayName: "OpenAI兼容服务商",
     defaultBaseUrl: "https://ark.cn-beijing.volces.com/api/coding/v3",
     syncAdapter: "openai-compatible",
     chatAdapter: "openai-compatible",

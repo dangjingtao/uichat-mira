@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from "fastify";
 import { success } from "@/utils/index.js";
+import { successEnvelope } from "@/routes/schema-helpers.js";
 
 const healthRoute: FastifyPluginAsync = async (app) => {
   app.get(
@@ -10,22 +11,13 @@ const healthRoute: FastifyPluginAsync = async (app) => {
         summary: "Service health check",
         operationId: "getServiceHealth",
         response: {
-          200: {
+          200: successEnvelope({
             type: "object",
-            required: ["success", "data", "timestamp"],
+            required: ["service"],
             properties: {
-              success: { type: "boolean", const: true },
-              data: {
-                type: "object",
-                required: ["service"],
-                properties: {
-                  service: { type: "string" },
+              service: { type: "string" },
             },
-          },
-          message: { type: "string" },
-          timestamp: { type: "string", format: "date-time" },
-        },
-      },
+          }),
         },
       },
     },

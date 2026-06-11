@@ -15,10 +15,22 @@ root/
   server/           # Fastify backend source and build script
   packages/         # Shared workspace packages
   scripts/          # Build and packaging helpers
-  docs/             # Project documentation
+  docs/             # Central project documentation
+  tauri/            # Tauri app sources and config
+  .artifacts/       # Temporary shared build artifacts (ignored)
   release/          # electron-builder output
   runtime.config.cjs
 ```
+
+## Reading Guide
+
+- Start with `README.md` for project overview, development entry points, and packaging commands.
+- Use `docs/README.md` as the central documentation index.
+- Read `docs/architecture/README.md` before changing runtime boundaries, networking, or packaging flow.
+- Read `docs/architecture/ipc-and-preload.md` before changing preload exposure, renderer/native boundaries, or IPC design.
+- For Tauri-related work, read `docs/platform/tauri.md` first and `docs/platform/tauri-setup.md` for setup and troubleshooting.
+- For chat UI work, read `docs/assistant-ui.md` first.
+- Shared UI component docs remain source-adjacent in `desktop/src/shared/ui/COMPONENTS.md` and `desktop/src/shared/ui/ui-design-guidelines-tailwind.md`.
 
 ## Networking Rules
 
@@ -31,8 +43,8 @@ root/
 
 ## Backend Startup
 
-- Development: start the backend with `pnpm dev:server` or through the root `pnpm dev` workflow.
-- Do not refactor or replace the existing `pnpm dev` / Electron dev startup chain unless you verify the full flow end-to-end. In particular, avoid changing the backend launch path, watch mode, or workspace invocation style without confirming that `pnpm dev` still brings up Vite, backend health (`/health`), and Electron together on Windows.
+- Development: start desktop workflows through the root `pnpm dev:electron:win` or `pnpm dev:tauri:win` commands.
+- Do not refactor or replace the existing desktop dev startup chains unless you verify the full flow end-to-end. In particular, avoid changing the backend launch path, watch mode, or workspace invocation style without confirming that the relevant dev command still brings up Vite, backend health (`/health`), and the desktop shell together on Windows.
 - Production: Electron main starts `resources/node-runtime/node.exe` with `resources/server/server.cjs`.
 - Native dependencies for the backend are copied into `resources/server/node_modules` during packaging.
 
@@ -58,13 +70,12 @@ Run these before considering packaging/runtime changes complete:
 
 ```bash
 pnpm check
-pnpm build
-pnpm dist:win
+pnpm package:electron:win
 ```
 
 Packaging notes:
 
-- `pnpm dist:win` keeps the most recent `3` release directories by default.
+- `pnpm package:electron:win` keeps the most recent `3` release directories by default.
 - Use `RELEASE_KEEP_COUNT` to change the retention count for a run.
 - If an old release directory is locked by Windows, cleanup is skipped instead of failing the build.
 

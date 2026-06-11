@@ -1,10 +1,14 @@
 import { FastifyPluginAsync } from "fastify";
 import { modelConfigService } from "@/services/model-config.service.js";
 import type { ModelType } from "@/db/schema.js";
-import { success, error, ErrorCodes } from "@/utils/index.js";
+import {
+  success,
+  error,
+  ErrorCodes,
+  MODEL_CONFIG_NOT_FOUND_MESSAGE,
+} from "@/utils/index.js";
 import { PROVIDER_CODE_ENUM } from "@/providers/catalog.js";
-
-const modelTypeEnum = ["llm", "embedding", "rerank"] as const;
+import { modelTypeSchema, successEnvelope, errorEnvelope } from "@/routes/schema-helpers.js";
 
 const modelConfigSchema = {
   type: "object",
@@ -21,7 +25,7 @@ const modelConfigSchema = {
   ],
   properties: {
     id: { type: "string" },
-    type: { type: "string", enum: modelTypeEnum },
+    type: modelTypeSchema,
     name: { type: "string" },
     providerCode: {
       anyOf: [{ type: "string", enum: PROVIDER_CODE_ENUM }, { type: "null" }],
@@ -36,32 +40,6 @@ const modelConfigSchema = {
     isDefault: { type: "boolean" },
     createdAt: { type: "string", format: "date-time" },
     updatedAt: { type: "string", format: "date-time" },
-  },
-} as const;
-
-const successEnvelope = (dataSchema: Record<string, unknown>) => ({
-  type: "object",
-  required: ["success", "data", "timestamp"],
-  properties: {
-    success: { type: "boolean", const: true },
-    data: dataSchema,
-    message: { type: "string" },
-    timestamp: { type: "string", format: "date-time" },
-  },
-});
-
-const errorEnvelope = {
-  type: "object",
-  required: ["success", "message", "timestamp"],
-  properties: {
-    success: { type: "boolean", const: false },
-    message: { type: "string" },
-    code: { type: "string" },
-    errors: {
-      type: "array",
-      items: {},
-    },
-    timestamp: { type: "string", format: "date-time" },
   },
 } as const;
 
@@ -133,7 +111,7 @@ const modelConfigRoute: FastifyPluginAsync = async (app) => {
         params: {
           type: "object",
           properties: {
-            type: { type: "string", enum: modelTypeEnum },
+            type: modelTypeSchema,
           },
           required: ["type"],
         },
@@ -152,7 +130,7 @@ const modelConfigRoute: FastifyPluginAsync = async (app) => {
         if (!config) {
           return reply
             .code(404)
-            .send(error("Config not found", ErrorCodes.NOT_FOUND));
+            .send(error(MODEL_CONFIG_NOT_FOUND_MESSAGE, ErrorCodes.NOT_FOUND));
         }
 
         return success(config);
@@ -183,7 +161,7 @@ const modelConfigRoute: FastifyPluginAsync = async (app) => {
         params: {
           type: "object",
           properties: {
-            type: { type: "string", enum: modelTypeEnum },
+            type: modelTypeSchema,
           },
           required: ["type"],
         },
@@ -218,7 +196,7 @@ const modelConfigRoute: FastifyPluginAsync = async (app) => {
         if (!config) {
           return reply
             .code(404)
-            .send(error("Config not found", ErrorCodes.NOT_FOUND));
+            .send(error(MODEL_CONFIG_NOT_FOUND_MESSAGE, ErrorCodes.NOT_FOUND));
         }
 
         return success(config, "Config updated successfully");
@@ -245,17 +223,18 @@ const modelConfigRoute: FastifyPluginAsync = async (app) => {
         querystring: {
           type: "object",
           properties: {
-            type: { type: "string", enum: modelTypeEnum },
+            type: modelTypeSchema,
           },
         },
         response: {
           200: successEnvelope({
             type: "object",
-            required: ["llm", "embedding", "rerank"],
+            required: ["llm", "embedding", "rerank", "task"],
             properties: {
               llm: { type: "array", items: paramTemplateItemSchema },
               embedding: { type: "array", items: paramTemplateItemSchema },
               rerank: { type: "array", items: paramTemplateItemSchema },
+              task: { type: "array", items: paramTemplateItemSchema },
             },
           }),
           500: errorEnvelope,

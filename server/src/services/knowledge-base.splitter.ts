@@ -1,3 +1,5 @@
+import { DEFAULT_CHUNKING_CONFIG as KNOWLEDGE_BASE_DEFAULT_CHUNKING_CONFIG } from "@/constants/knowledge-base.js";
+
 export interface ChunkingConfig {
   separator: string;
   maxLength: number;
@@ -15,14 +17,8 @@ export interface SplitChunk {
   endOffset: number | null;
 }
 
-export const DEFAULT_CHUNKING_CONFIG: ChunkingConfig = {
-  separator: "\\n\\n",
-  maxLength: 1024,
-  overlap: 50,
-  replaceWhitespace: true,
-  removeUrls: false,
-  useQaSplit: false,
-};
+export const DEFAULT_CHUNKING_CONFIG: ChunkingConfig =
+  KNOWLEDGE_BASE_DEFAULT_CHUNKING_CONFIG;
 
 const decodeSeparator = (separator: string) =>
   separator.replace(/\\n/g, "\n").replace(/\\r/g, "\r").replace(/\\t/g, "\t");

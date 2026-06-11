@@ -1,151 +1,175 @@
 import {
-  Code2,
+  BookOpen,
   ExternalLink,
-  GitBranch,
-  Info,
-  Layers3,
+  Rocket,
   UserRound,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import Card from "@/shared/ui/Card";
+import { getAppMeta, type AppMetaData } from "@/shared/api/system";
+import { isDesktopShell } from "@/shared/platform/desktopRuntime";
+import Header from "../../components/Header";
 
-const techStack = [
-  { label: "Vite", value: "Build tool" },
-  { label: "React + TypeScript", value: "Frontend" },
-  { label: "Tailwind CSS", value: "Design tokens & styling" },
-  { label: "assistant-ui", value: "Chat experience" },
-  { label: "Ollama / Custom API", value: "LLM backend" },
-  { label: "React Router", value: "Routing" },
-];
+const fallbackAppMeta: AppMetaData = {
+  name: "ui-chat-rag-tester",
+  version: "0.0.0",
+};
 
-const links = [
+const versionHistory = [
   {
-    icon: GitBranch,
-    label: "GitHub Repository",
-    href: "https://github.com/dangjingtao/ui-chat-rag-tester",
+    version: "0.1.0",
+    summary: "桌面聊天、模型配置、知识库与健康检查主流程成型",
   },
   {
-    icon: UserRound,
-    label: "Contributors",
+    version: "0.0.9",
+    summary: "补齐设置页结构，统一桌面运行时接入方式",
+  },
+  {
+    version: "0.0.8",
+    summary: "初版 RAG 测试工作台与对话线程能力",
+  },
+] as const;
+
+const changelog = [
+  "关于页改为软件信息与维护记录布局，减少冗余说明",
+  "明确区分 Electron / Tauri 运行版本",
+  "保留版本历史、作者与文档入口",
+] as const;
+
+const infoLinks = [
+  {
+    label: "作者",
+    value: "Tomz Dang",
     href: "https://github.com/dangjingtao",
   },
-];
+  {
+    label: "组件文档",
+    value: "assistant-ui / 内部 UI 组件",
+    href: "https://www.assistant-ui.com/",
+  },
+  {
+    label: "项目文档",
+    value: "README / docs/README / docs/assistant-ui.md",
+    href: "https://github.com/dangjingtao/ui-chat-rag-tester/tree/main/docs",
+  },
+] as const;
+
+function formatAppName(name: string) {
+  return name
+    .split(/[-_]/g)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
 
 function About() {
+  const [appMeta, setAppMeta] = useState<AppMetaData>(fallbackAppMeta);
+
+  useEffect(() => {
+    if (!isDesktopShell()) {
+      setAppMeta(fallbackAppMeta);
+      return;
+    }
+
+    let cancelled = false;
+
+    void getAppMeta()
+      .then((data) => {
+        if (!cancelled) {
+          setAppMeta(data);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAppMeta(fallbackAppMeta);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
-    <div className="mx-auto max-w-4xl space-y-4 px-4 py-6">
-      <section className="rounded-xl border border-border bg-surface-primary px-5 py-5 shadow-shadow-sm sm:px-6 sm:py-6">
-        <div className="space-y-3">
-          <div className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-            About this project
-          </div>
+    <div className="mx-auto flex w-full flex-col gap-4 px-4 pb-6">
+      <Header
+        miniTitle="About"
+        title={`${formatAppName(appMeta.name)} ${appMeta.version}`}
+        description="这是一个用于 RAG 场景联调与验证的桌面应用，重点覆盖桌面聊天、模型角色配置、知识库管理和本地运行时健康检查。"
+      />
 
-          <div className="space-y-1.5">
-            <h1 className="text-2xl font-semibold leading-tight text-text-primary">
-              UI Chat RAG Tester
-            </h1>
-            <p className="max-w-2xl text-sm leading-6 text-text-secondary">
-              一个面向企业知识库验证场景的 Electron 桌面应用初始化项目，支持本地与远程模型、向量数据库和聊天测试工作流。
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <Card>
-          <div className="flex items-start gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-secondary">
-              <Info className="h-4 w-4 text-icon-primary" />
-            </div>
-          <div className="min-w-0 flex-1 space-y-1.5">
-            <div className="text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-              Overview
-            </div>
-            <div className="text-base font-semibold text-text-primary">
-              项目概览
-            </div>
-            <p className="text-sm leading-6 text-text-secondary">
-              当前项目聚焦在桌面端 AI/RAG 验证体验：连接模型、检查运行时健康、验证数据库连通性，并通过统一聊天入口完成对话链路测试。
-            </p>
-          </div>
-        </div>
-      </Card>
-
-      <section className="space-y-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-primary shadow-shadow-sm border border-border">
-            <Layers3 className="h-4 w-4 text-icon-primary" />
-          </div>
-          <div>
-            <h2 className="text-base font-semibold text-text-primary">
-              Tech Stack
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Card className="space-y-3">
+          <div className="flex items-center gap-2">
+            <BookOpen className="h-4 w-4 text-icon-primary" />
+            <h2 className="text-sm font-semibold text-text-primary">
+              Changelog
             </h2>
-            <p className="text-sm text-text-secondary">
-              构成当前桌面端体验的核心技术组件。
-            </p>
           </div>
-        </div>
+          <div className="space-y-2">
+            {changelog.map((item) => (
+              <div
+                key={item}
+                className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2 text-sm leading-6 text-text-secondary"
+              >
+                {item}
+              </div>
+            ))}
+          </div>
+        </Card>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {techStack.map((item) => (
-            <Card key={item.label}>
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-secondary">
-                  <Code2 className="h-4 w-4 text-icon-primary" />
+        <Card className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Rocket className="h-4 w-4 text-icon-primary" />
+            <h2 className="text-sm font-semibold text-text-primary">
+              版本历史
+            </h2>
+          </div>
+          <div className="space-y-2">
+            {versionHistory.map((item) => (
+              <div
+                key={item.version}
+                className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2"
+              >
+                <div className="text-sm font-semibold text-text-primary">
+                  {item.version}
                 </div>
-                <div className="min-w-0 flex-1 space-y-0.5">
-                  <div className="text-sm font-medium text-text-primary">
-                    {item.label}
-                  </div>
-                  <div className="text-sm text-text-secondary">
-                    {item.value}
-                  </div>
+                <div className="mt-0.5 text-sm leading-6 text-text-secondary">
+                  {item.summary}
                 </div>
               </div>
-            </Card>
-          ))}
-        </div>
-      </section>
+            ))}
+          </div>
+        </Card>
 
-      <section className="space-y-3">
-        <div>
-          <h2 className="text-base font-semibold text-text-primary">Links</h2>
-          <p className="text-sm text-text-secondary">
-            项目仓库与作者相关链接。
-          </p>
-        </div>
-
-        <div className="space-y-2.5">
-          {links.map((item) => {
-            const Icon = item.icon;
-
-            return (
+        <Card className="space-y-3">
+          <div className="flex items-center gap-2">
+            <UserRound className="h-4 w-4 text-icon-primary" />
+            <h2 className="text-sm font-semibold text-text-primary">
+              作者与文档
+            </h2>
+          </div>
+          <div className="space-y-2">
+            {infoLinks.map((item) => (
               <a
                 key={item.label}
                 href={item.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block rounded-xl border border-border bg-surface-primary px-4 py-3.5 shadow-shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:bg-surface-secondary hover:shadow-shadow-md"
+                className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2 transition-colors hover:bg-surface-secondary"
               >
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-secondary">
-                      <Icon className="h-4 w-4 text-icon-primary" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-text-primary">
-                        {item.label}
-                      </div>
-                      <div className="truncate text-sm text-text-secondary">
-                        {item.href}
-                      </div>
-                    </div>
+                <div className="min-w-0">
+                  <div className="text-xs text-text-tertiary">{item.label}</div>
+                  <div className="truncate text-sm font-medium text-text-primary">
+                    {item.value}
                   </div>
-                  <ExternalLink className="h-4 w-4 flex-shrink-0 text-icon-secondary" />
                 </div>
+                <ExternalLink className="h-4 w-4 shrink-0 text-icon-secondary" />
               </a>
-            );
-          })}
-        </div>
-      </section>
+            ))}
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }

@@ -36,6 +36,7 @@ file:// app                  http://<backend-host>:<backend-port>
 - Backend routes never include `/api`.
 - Production frontend requests use `window.desktopApi.backendUrl` with no prefix.
 - Backend host and port come from `runtime.config.cjs` or environment variables set by Electron main.
+- App metadata such as the current version is served by the backend through `GET /app/meta`.
 
 ## Runtime Configuration
 
@@ -48,6 +49,7 @@ Consumers:
 - `electron/preload.cjs` reads it to expose `desktopApi.backendUrl`.
 - `server/src/config/index.ts` reads it as the default server host/port.
 - `scripts/build-dist.js` copies it into the packaged app and prunes old release directories after a successful package build.
+- `server/build.js` writes the shared backend bundle into `.artifacts/server-bundle` for desktop packagers to consume.
 
 ## Package Layout
 
@@ -64,7 +66,7 @@ release/.../win-unpacked/resources/
 ## Release Retention
 
 - Packaged outputs are written into timestamped directories under `release/`.
-- After a successful `pnpm dist:win`, the build script keeps the newest `3` release directories by default.
+- After a successful `pnpm package:electron:win`, the build script keeps the newest `3` release directories by default.
 - Override the retention count with `RELEASE_KEEP_COUNT`.
 - If Windows still holds a lock on an old release directory, the cleanup step skips it and continues.
 

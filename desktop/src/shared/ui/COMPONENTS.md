@@ -223,12 +223,15 @@ umber \| string | 最大高度，默认限制在视口内 |
 Used for the main chat thread, composed from `assistant-ui` primitives in a calmer, OpenAI-inspired style.
 ### Current behavior
 
-- `assistant` messages use a light card surface for long-form reading
-- `user` messages stay right-aligned with a higher-contrast bubble
-- the composer stays docked at the bottom to preserve reading continuity
+- `assistant` messages use a light card surface with a compact avatar and wide reading column
+- `user` messages stay right-aligned with a softer neutral bubble instead of a heavy dark block
+- when an assistant message is `running` before the first text part arrives, the same message bubble renders a `机器输入中...` placeholder; once text starts streaming, that bubble switches to the live response content
+- the viewport uses generous top/bottom breathing room to mimic a quiet OpenAI-style chat surface
+- the composer stays docked at the bottom with a frosted container and clear keyboard hints
 - colors and elevation should rely on `surface-*`, `text-*`, and `border` tokens
 
 ### Usage notes
 
 - Prefer it for primary chat pages and single-thread AI conversation views
 - When extending attachments, tool calls, or retry actions, keep changes inside the current primitive structure for backward compatibility
+- Keep message density low and preserve a centered reading column so long answers remain easy to scan

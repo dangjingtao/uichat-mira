@@ -1,10 +1,12 @@
 import { FastifyPluginAsync } from "fastify";
 import { changeUserPassword, requireAuth } from "@/db/auth.db.js";
+import { successEnvelope, errorEnvelope, userSchema } from "@/routes/schema-helpers.js";
 import {
   error,
   ErrorCodes,
   success,
   handleValidationError,
+  INVALID_REQUEST_PAYLOAD_MESSAGE,
 } from "@/utils/index.js";
 
 type ChangePasswordBody = {
@@ -35,51 +37,15 @@ const accountRoute: FastifyPluginAsync = async (app) => {
           },
         },
         response: {
-          200: {
+          200: successEnvelope({
             type: "object",
-            required: ["success", "data", "timestamp"],
+            required: ["user"],
             properties: {
-              success: { type: "boolean", const: true },
-              data: {
-                type: "object",
-                required: ["user"],
-                properties: {
-                  user: {
-                    type: "object",
-                    required: ["id", "username", "role"],
-                    properties: {
-                      id: { type: "number" },
-                      username: { type: "string" },
-                      role: { type: "string", enum: ["admin", "user"] },
-                    },
-                  },
-                },
-              },
-              message: { type: "string" },
-              timestamp: { type: "string", format: "date-time" },
+              user: userSchema,
             },
-          },
-          400: {
-            type: "object",
-            required: ["success", "message", "timestamp"],
-            properties: {
-              success: { type: "boolean", const: false },
-              message: { type: "string" },
-              code: { type: "string" },
-              errors: { type: "array", items: {} },
-              timestamp: { type: "string", format: "date-time" },
-            },
-          },
-          401: {
-            type: "object",
-            required: ["success", "message", "timestamp"],
-            properties: {
-              success: { type: "boolean", const: false },
-              message: { type: "string" },
-              code: { type: "string" },
-              timestamp: { type: "string", format: "date-time" },
-            },
-          },
+          }),
+          400: errorEnvelope,
+          401: errorEnvelope,
         },
       },
     },
@@ -105,7 +71,12 @@ const accountRoute: FastifyPluginAsync = async (app) => {
       ) {
         return reply
           .code(400)
-          .send(error("Invalid request payload", ErrorCodes.VALIDATION_ERROR));
+          .send(
+            error(
+              INVALID_REQUEST_PAYLOAD_MESSAGE,
+              ErrorCodes.VALIDATION_ERROR,
+            ),
+          );
       }
 
       const result = changeUserPassword(

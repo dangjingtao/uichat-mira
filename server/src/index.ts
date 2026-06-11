@@ -5,6 +5,7 @@ import swaggerUi from "@fastify/swagger-ui";
 import fs from "node:fs/promises";
 import path from "node:path";
 import healthRoute from "@/routes/health";
+import appMetaRoute from "@/routes/app-meta";
 import dbHealthRoute from "@/routes/dbHealth";
 import logsRoute from "@/routes/logs";
 import loginRoute from "@/routes/login";
@@ -14,26 +15,32 @@ import accountRoute from "@/routes/account";
 import knowledgeBaseRoute from "@/routes/knowledge-base";
 import modelConfigRoute from "@/routes/model-config";
 import providerSettingsRoute from "@/routes/provider-settings";
+import threadRoute from "@/routes/thread";
+import chatRagRoute from "@/routes/chat-rag";
 import { getAuthUserFromRequest, initializeAuthDatabase } from "@/db/auth.db";
 import { initializeKnowledgeBaseDatabase } from "@/db/knowledge-base.db";
 import { initializeModelConfigDatabase } from "@/db/model-config.db";
+import { initializeThreadDatabase } from "@/db/thread.db";
 import { initializeVectorStore } from "@/db";
 import { repairLiteralCurrentTimestampValues } from "@/db/timestamp-repair";
 import CONFIG from "@/config";
+import { isAuthExemptPath, OPENAPI_PUBLIC_TAGS } from "@/config/public-api.js";
 import { getLoggerConfig } from "@/logger";
+import { error, ErrorCodes, getAppMeta } from "@/utils/index.js";
 
-const app = Fastify({ logger: getLoggerConfig() });
+const app = Fastify({
+  logger: getLoggerConfig(),
+  serializerOpts: { encoding: "utf8" },
+});
 const enableSwagger = process.env.NODE_ENV !== "production";
 
-const isAuthExemptPath = (url: string) => {
-  const pathname = url.split("?")[0] || "/";
-  return pathname === "/login";
-};
-
 const setupPlugins = async () => {
+  const appMeta = getAppMeta();
+
   await app.register(cors, {
     origin: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    exposedHeaders: ["Content-Disposition", "Content-Length"],
   });
 
   app.addHook("preHandler", async (request, reply) => {
@@ -44,13 +51,16 @@ const setupPlugins = async () => {
     const user = getAuthUserFromRequest(request);
     if (!user) {
       const authHeader = request.headers.authorization;
-      return reply.code(401).send({
-        ok: false,
-        message:
-          authHeader && authHeader.startsWith("Bearer ")
-            ? "Invalid auth token"
-            : "Missing auth token",
-      });
+      return reply
+        .code(401)
+        .send(
+          error(
+            authHeader && authHeader.startsWith("Bearer ")
+              ? "Invalid auth token"
+              : "Missing auth token",
+            ErrorCodes.UNAUTHORIZED,
+          ),
+        );
     }
 
     request.authUser = user;
@@ -66,7 +76,7 @@ const setupPlugins = async () => {
         title: "UIChat Rag Tester Server API",
         description:
           "Backend APIs for UIChat Rag Tester desktop/server integration",
-        version: "0.0.2",
+        version: appMeta.version,
       },
       servers: [{ url: `http://127.0.0.1:${CONFIG.PORT}` }],
       tags: [
@@ -78,10 +88,9 @@ const setupPlugins = async () => {
           name: "Provider Settings",
           description: "服务商连接与模型同步",
         },
-        {
-          name: "Provider Proxy",
-          description: "Provider chat and embeddings proxy endpoints",
-        },
+        ...OPENAPI_PUBLIC_TAGS,
+        { name: "Thread", description: "对话会话与消息管理" },
+        { name: "Chat", description: "RAG 增强聊天与检索" },
       ],
       components: {
         securitySchemes: {
@@ -107,6 +116,7 @@ const setupPlugins = async () => {
 const setupRoutes = async () => {
   await app.register(proxyProviderRoute);
   await app.register(healthRoute);
+  await app.register(appMetaRoute);
   await app.register(dbHealthRoute);
   await app.register(logsRoute);
   await app.register(loginRoute);
@@ -115,6 +125,8 @@ const setupRoutes = async () => {
   await app.register(knowledgeBaseRoute);
   await app.register(modelConfigRoute);
   await app.register(providerSettingsRoute);
+  await app.register(threadRoute);
+  await app.register(chatRagRoute);
 };
 
 const setupDatabase = async () => {
@@ -133,6 +145,7 @@ const setupDatabase = async () => {
   initializeAuthDatabase();
   initializeModelConfigDatabase();
   initializeKnowledgeBaseDatabase();
+  initializeThreadDatabase();
   repairLiteralCurrentTimestampValues();
 
   const vectorStoreHealth = initializeVectorStore();

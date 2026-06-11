@@ -253,11 +253,10 @@ export default function KnowledgeBaseAddWizard() {
             return;
           }
 
-          const rawText = await file.file.text();
           const document = await createKnowledgeBaseDocument({
             name: file.name,
             fileExt: file.extension.toLowerCase(),
-            contentText: rawText,
+            contentText: await file.file.text(),
             mimeType: file.file.type || "text/plain",
             fileSize: file.size,
             sourceType: "upload",
@@ -303,7 +302,7 @@ export default function KnowledgeBaseAddWizard() {
     })();
   }, [activeFile, previewChunks.length, settings]);
 
-  const appendFiles = (selectedFiles: FileList | null) => {
+  const appendFiles = async (selectedFiles: FileList | null) => {
     if (!selectedFiles || selectedFiles.length === 0) {
       return;
     }
@@ -318,13 +317,15 @@ export default function KnowledgeBaseAddWizard() {
       return;
     }
 
-    const nextFiles = Array.from(selectedFiles).map((file) => ({
-      id: `${file.name}-${file.lastModified}`,
-      file,
-      name: file.name,
-      extension: file.name.split(".").pop()?.toUpperCase() ?? "FILE",
-      size: file.size,
-    }));
+    const nextFiles = await Promise.all(
+      Array.from(selectedFiles).map(async (file) => ({
+        id: `${file.name}-${file.lastModified}`,
+        file,
+        name: file.name,
+        extension: file.name.split(".").pop()?.toUpperCase() ?? "FILE",
+        size: file.size,
+      })),
+    );
 
     setFiles((current) => {
       if (current.some((existing) => existing.id === nextFiles[0]?.id)) {

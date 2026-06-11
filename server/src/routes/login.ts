@@ -1,10 +1,12 @@
 import { FastifyPluginAsync } from "fastify";
 import { authenticateUser, createAccessToken } from "@/db/auth.db.js";
+import { successEnvelope, errorEnvelope, userSchema } from "@/routes/schema-helpers.js";
 import {
   success,
   error,
   ErrorCodes,
   handleValidationError,
+  INVALID_REQUEST_PAYLOAD_MESSAGE,
 } from "@/utils/index.js";
 
 type LoginBody = {
@@ -33,54 +35,18 @@ const loginRoute: FastifyPluginAsync = async (app) => {
           },
         },
         response: {
-          200: {
+          200: successEnvelope({
             type: "object",
-            required: ["success", "data", "timestamp"],
+            required: ["tokenType", "token", "user", "expiresIn"],
             properties: {
-              success: { type: "boolean", const: true },
-              data: {
-                type: "object",
-                required: ["tokenType", "token", "user", "expiresIn"],
-                properties: {
-                  tokenType: { type: "string" },
-                  token: { type: "string" },
-                  expiresIn: { type: "string" },
-                  user: {
-                    type: "object",
-                    required: ["id", "username", "role"],
-                    properties: {
-                      id: { type: "number" },
-                      username: { type: "string" },
-                      role: { type: "string", enum: ["admin", "user"] },
-                    },
-                  },
-                },
-              },
-              message: { type: "string" },
-              timestamp: { type: "string", format: "date-time" },
+              tokenType: { type: "string" },
+              token: { type: "string" },
+              expiresIn: { type: "string" },
+              user: userSchema,
             },
-          },
-          400: {
-            type: "object",
-            required: ["success", "message", "timestamp"],
-            properties: {
-              success: { type: "boolean", const: false },
-              message: { type: "string" },
-              code: { type: "string" },
-              errors: { type: "array", items: {} },
-              timestamp: { type: "string", format: "date-time" },
-            },
-          },
-          401: {
-            type: "object",
-            required: ["success", "message", "timestamp"],
-            properties: {
-              success: { type: "boolean", const: false },
-              message: { type: "string" },
-              code: { type: "string" },
-              timestamp: { type: "string", format: "date-time" },
-            },
-          },
+          }),
+          400: errorEnvelope,
+          401: errorEnvelope,
         },
       },
     },
@@ -95,7 +61,12 @@ const loginRoute: FastifyPluginAsync = async (app) => {
       if (!payload.username.trim() || !payload.password.trim()) {
         return reply
           .code(400)
-          .send(error("Invalid request payload", ErrorCodes.VALIDATION_ERROR));
+          .send(
+            error(
+              INVALID_REQUEST_PAYLOAD_MESSAGE,
+              ErrorCodes.VALIDATION_ERROR,
+            ),
+          );
       }
 
       const found = authenticateUser(payload.username, payload.password);
