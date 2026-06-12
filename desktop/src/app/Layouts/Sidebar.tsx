@@ -1,6 +1,7 @@
 // src/assistant/ThreadListSidebar.tsx
 import { useState, useMemo } from "react";
 import { useAuth } from "@/app/providers/AuthProvider";
+import logoIcon from "@/assets/branding/uichat-logo-icon.png";
 import { useRuntimeHealth } from "@/features/system/hooks/useRuntimeHealth";
 import { LogOutIcon, SettingsIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -43,7 +44,7 @@ function Sidebar({ children }: { children: React.ReactNode }) {
       {/* 顶部 Logo / 标题区 */}
       <div className="px-4 py-4 font-semibold text-base border-b border-border flex items-center">
         <img
-          src="https://uichat.tomz.io/assets/logoIcon.BiG6rto6.png"
+          src={logoIcon}
           alt="Logo"
           className="inline-block mr-2.5 h-6"
         />{" "}

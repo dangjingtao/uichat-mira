@@ -3,6 +3,7 @@ import {
   getDb,
   getSqlite,
   knowledgeBaseVectorIndexes,
+  type KnowledgeBaseVectorIndex,
 } from "@/db";
 import { and, ne } from "drizzle-orm";
 import {
@@ -60,6 +61,15 @@ const toVectorTableName = (params: {
 };
 
 export const knowledgeBaseVectorStore = {
+  toExpectedVectorTableName(params: {
+    knowledgeBaseId: string;
+    embeddingModelConfigId: string;
+    model: string;
+    dimensions: number;
+  }) {
+    return toVectorTableName(params);
+  },
+
   ensureDefaultVectorIndex(params: {
     knowledgeBaseId: string;
     embeddingModelConfigId: string;
@@ -136,6 +146,51 @@ export const knowledgeBaseVectorStore = {
       tableName,
       dimensions: params.dimensions,
     };
+  },
+
+  findVectorIndexes(knowledgeBaseId: string): KnowledgeBaseVectorIndex[] {
+    const db = getDb();
+    return db
+      .select()
+      .from(knowledgeBaseVectorIndexes)
+      .where(eq(knowledgeBaseVectorIndexes.knowledgeBaseId, knowledgeBaseId))
+      .all();
+  },
+
+  findActiveVectorIndex(knowledgeBaseId: string): KnowledgeBaseVectorIndex | undefined {
+    const db = getDb();
+    return db
+      .select()
+      .from(knowledgeBaseVectorIndexes)
+      .where(
+        and(
+          eq(knowledgeBaseVectorIndexes.knowledgeBaseId, knowledgeBaseId),
+          eq(knowledgeBaseVectorIndexes.isActive, true),
+        ),
+      )
+      .limit(1)
+      .get();
+  },
+
+  activateVectorIndex(indexId: string, knowledgeBaseId: string) {
+    const db = getDb();
+    const now = nowIso();
+
+    db.update(knowledgeBaseVectorIndexes)
+      .set({
+        isActive: false,
+        updatedAt: now,
+      })
+      .where(eq(knowledgeBaseVectorIndexes.knowledgeBaseId, knowledgeBaseId))
+      .run();
+
+    db.update(knowledgeBaseVectorIndexes)
+      .set({
+        isActive: true,
+        updatedAt: now,
+      })
+      .where(eq(knowledgeBaseVectorIndexes.id, indexId))
+      .run();
   },
 
   listVectorIndexTableNames(knowledgeBaseId: string): string[] {

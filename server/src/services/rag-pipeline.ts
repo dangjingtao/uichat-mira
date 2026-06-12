@@ -26,6 +26,24 @@ export interface RAGPipelineStepOutput {
   data: unknown;
 }
 
+export interface AssistantStreamCompletePayload {
+  messageId: string;
+  answer: string;
+  sources: RetrievedChunk[];
+  finishReason: "stop" | "error";
+}
+
+const toSseChunk = (data: unknown) => `data: ${JSON.stringify(data)}\n\n`;
+
+const toUiRagSources = (sources: RetrievedChunk[]) =>
+  sources.map((source) => ({
+    chunkId: source.chunkId,
+    documentId: source.documentId,
+    documentName: source.documentName,
+    score: source.score,
+    content: source.content,
+  }));
+
 /**
  * RAG Pipeline
  * 组合各节点实现完整的 RAG 流程：
@@ -51,26 +69,19 @@ export const ragPipeline = {
     return Readable.from(
       (async function* () {
         try {
+          yield `data: ${JSON.stringify({ type: "start" })}\n\n`;
+          yield `data: ${JSON.stringify({ type: "start-step" })}\n\n`;
           yield `data: ${JSON.stringify({ type: "step", step: "embed", status: "start" })}\n\n`;
           const stream = await ragGraph.streamEvents(input);
-          let generateStarted = false;
           let textStarted = false;
           let sawGenerateDelta = false;
 
-          const ensureGenerateStarted = () => {
+          const ensureTextStarted = () => {
             const events: string[] = [];
-            if (!generateStarted) {
-              generateStarted = true;
-              events.push(
-                `data: ${JSON.stringify({ type: "start" })}\n\n`,
-                `data: ${JSON.stringify({ type: "step", step: "generate", status: "start" })}\n\n`,
-                `data: ${JSON.stringify({ type: "start-step" })}\n\n`,
-              );
-            }
-
             if (!textStarted) {
               textStarted = true;
               events.push(
+                `data: ${JSON.stringify({ type: "step", step: "generate", status: "start" })}\n\n`,
                 `data: ${JSON.stringify({ type: "text-start", id: "text-1" })}\n\n`,
               );
             }
@@ -94,7 +105,7 @@ export const ragPipeline = {
                 continue;
               }
 
-              for (const event of ensureGenerateStarted()) {
+              for (const event of ensureTextStarted()) {
                 yield event;
               }
 
@@ -138,7 +149,7 @@ export const ragPipeline = {
               if (retrievedChunks.length > 0) {
                 yield `data: ${JSON.stringify({ type: "step", step: "rerank", status: "start" })}\n\n`;
               } else {
-                for (const event of ensureGenerateStarted()) {
+                for (const event of ensureTextStarted()) {
                   yield event;
                 }
               }
@@ -159,7 +170,7 @@ export const ragPipeline = {
                   })),
                 },
               })}\n\n`;
-              for (const event of ensureGenerateStarted()) {
+              for (const event of ensureTextStarted()) {
                 yield event;
               }
               continue;
@@ -167,7 +178,7 @@ export const ragPipeline = {
 
             if ("generate" in update && update.generate) {
               const sources = update.generate.sources ?? [];
-              for (const event of ensureGenerateStarted()) {
+              for (const event of ensureTextStarted()) {
                 yield event;
               }
 
@@ -201,6 +212,172 @@ export const ragPipeline = {
           yield `data: ${JSON.stringify({ type: "finish", finishReason: "error" })}\n\n`;
         }
       })()
+    );
+  },
+
+  /**
+   * 执行兼容 assistant-ui / AI SDK transport 的纯文本流。
+   * 仅输出标准 text 事件，避免自定义 step 事件导致客户端提前断流。
+   */
+  assistantStream(
+    input: RAGPipelineInput,
+    options?: {
+      messageId?: string;
+      onComplete?: (
+        payload: AssistantStreamCompletePayload,
+      ) => Promise<void> | void;
+    },
+  ): Readable {
+    return Readable.from(
+      (async function* () {
+        const messageId = options?.messageId ?? crypto.randomUUID();
+        const usage = {
+          inputTokens: 0,
+          outputTokens: 0,
+        };
+        let answer = "";
+        let sources: RetrievedChunk[] = [];
+        let textStarted = false;
+        let textEnded = false;
+        let sawGenerateDelta = false;
+
+        const ensureTextStarted = function* () {
+          if (textStarted) {
+            return;
+          }
+
+          textStarted = true;
+          yield toSseChunk({ type: "start", messageId });
+          yield toSseChunk({ type: "text-start", id: "text-1" });
+        };
+
+        const ensureTextEnded = function* () {
+          if (!textStarted || textEnded) {
+            return;
+          }
+
+          textEnded = true;
+          yield toSseChunk({ type: "text-end", id: "text-1" });
+        };
+
+        try {
+          const stream = await ragGraph.streamEvents(input);
+
+          for await (const chunk of stream) {
+            if (!Array.isArray(chunk) || chunk.length < 2) {
+              continue;
+            }
+
+            const [mode, payload] = chunk as [
+              "updates" | "custom",
+              RAGGraphStreamUpdate | RAGGraphCustomStreamChunk,
+            ];
+
+            if (mode === "custom") {
+              const customChunk = payload as RAGGraphCustomStreamChunk;
+              if (customChunk.type !== "generate-delta" || !customChunk.delta) {
+                continue;
+              }
+
+              sawGenerateDelta = true;
+              answer += customChunk.delta;
+              yield* ensureTextStarted();
+              yield toSseChunk({
+                type: "text-delta",
+                id: "text-1",
+                delta: customChunk.delta,
+              });
+              continue;
+            }
+
+            const update = payload as RAGGraphStreamUpdate;
+            if (
+              "generate" in update &&
+              update.generate &&
+              !sawGenerateDelta &&
+              update.generate.answer
+            ) {
+              answer = update.generate.answer;
+              sources = update.generate.sources ?? [];
+              yield* ensureTextStarted();
+              yield toSseChunk({
+                type: "text-delta",
+                id: "text-1",
+                delta: update.generate.answer,
+              });
+              continue;
+            }
+
+            if ("generate" in update && update.generate) {
+              sources = update.generate.sources ?? [];
+            }
+          }
+
+          yield* ensureTextStarted();
+          yield* ensureTextEnded();
+
+          if (sources.length > 0) {
+            yield toSseChunk({
+              type: "data-rag-sources",
+              data: toUiRagSources(sources),
+            });
+          }
+
+          await options?.onComplete?.({
+            messageId,
+            answer,
+            sources,
+            finishReason: "stop",
+          });
+
+          yield toSseChunk({
+            type: "finish-step",
+            finishReason: "stop",
+            usage,
+            isContinued: false,
+          });
+          yield toSseChunk({
+            type: "finish",
+            finishReason: "stop",
+            usage,
+          });
+          yield "data: [DONE]\n\n";
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+
+          if (sources.length > 0) {
+            yield toSseChunk({
+              type: "data-rag-sources",
+              data: toUiRagSources(sources),
+            });
+          }
+
+          await options?.onComplete?.({
+            messageId,
+            answer,
+            sources,
+            finishReason: "error",
+          });
+
+          yield* ensureTextEnded();
+          yield toSseChunk({
+            type: "error",
+            errorText: message,
+          });
+          yield toSseChunk({
+            type: "finish-step",
+            finishReason: "error",
+            usage,
+            isContinued: false,
+          });
+          yield toSseChunk({
+            type: "finish",
+            finishReason: "error",
+            usage,
+          });
+          yield "data: [DONE]\n\n";
+        }
+      })(),
     );
   },
 

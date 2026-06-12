@@ -1,7 +1,6 @@
 import os from "os";
 import path from "path";
 import fs from "fs";
-import { fileURLToPath } from "url";
 
 export * from "./response.js";
 export * from "./errors.js";
@@ -25,53 +24,209 @@ export interface EnvironmentInfo {
 export interface AppMeta {
   name: string;
   version: string;
+  displayName: string;
+  author: string;
+  description: string;
+  repositoryUrl: string;
+  homepageUrl: string;
+  changelog: string[];
+  versionHistory: Array<{
+    version: string;
+    summary: string;
+  }>;
+  links: Array<{
+    label: string;
+    value: string;
+    href: string;
+  }>;
 }
 
-const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const currentDir = path.dirname(process.argv[1] || process.cwd());
 
-function readJsonIfExists(filePath: string): Record<string, unknown> | null {
+type PackageJsonLike = Record<string, unknown>;
+
+function readJsonIfExists(filePath: string): PackageJsonLike | null {
   try {
     if (!fs.existsSync(filePath)) {
       return null;
     }
 
-    return JSON.parse(fs.readFileSync(filePath, "utf-8")) as Record<
-      string,
-      unknown
-    >;
+    return JSON.parse(fs.readFileSync(filePath, "utf-8")) as PackageJsonLike;
   } catch {
     return null;
   }
 }
 
 function resolveAppMeta(): AppMeta {
-  const packageCandidates = [
-    path.resolve(currentDir, "../../package.json"),
+  const appMetaCandidates = [
+    path.resolve(currentDir, "app-meta.json"),
+    path.resolve(currentDir, "../app-meta.json"),
+  ];
+
+  for (const candidate of appMetaCandidates) {
+    const appMetaJson = readJsonIfExists(candidate);
+
+    if (!appMetaJson) {
+      continue;
+    }
+
+    return normalizeAppMeta(appMetaJson);
+  }
+
+  const rootPackageCandidates = [
+    path.resolve(process.cwd(), "package.json"),
+    path.resolve(process.cwd(), "../package.json"),
     path.resolve(currentDir, "../../../package.json"),
     path.resolve(currentDir, "../../../../package.json"),
   ];
 
-  for (const candidate of packageCandidates) {
-    const packageJson = readJsonIfExists(candidate);
+  for (const candidate of rootPackageCandidates) {
+    const rootPackageJson = readJsonIfExists(candidate);
 
-    if (!packageJson) {
+    if (!rootPackageJson) {
       continue;
     }
 
-    const name =
-      typeof packageJson.name === "string"
-        ? packageJson.name
-        : "ui-chat-rag-tester";
-    const version =
-      typeof packageJson.version === "string" ? packageJson.version : "0.0.0";
+    if (!isTopLevelAppPackage(rootPackageJson)) {
+      continue;
+    }
 
-    return { name, version };
+    return normalizeAppMeta(rootPackageJson);
   }
 
   return {
     name: "ui-chat-rag-tester",
     version: "0.0.0",
+    displayName: "Ui Chat Rag Tester",
+    author: "",
+    description: "",
+    repositoryUrl: "",
+    homepageUrl: "",
+    changelog: [],
+    versionHistory: [],
+    links: [],
   };
+}
+
+function isTopLevelAppPackage(packageJson: PackageJsonLike) {
+  return (
+    packageJson.name === "ui-chat-rag-tester" ||
+    (!!packageJson.appMeta && typeof packageJson.appMeta === "object")
+  );
+}
+
+function normalizeAppMeta(packageJson: PackageJsonLike): AppMeta {
+  const name =
+    typeof packageJson.name === "string"
+      ? packageJson.name
+      : "ui-chat-rag-tester";
+  const version =
+    typeof packageJson.version === "string" ? packageJson.version : "0.0.0";
+  const author = typeof packageJson.author === "string" ? packageJson.author : "";
+  const description =
+    typeof packageJson.description === "string" ? packageJson.description : "";
+  const repositoryUrl = resolveRepositoryUrl(packageJson.repository);
+  const homepageUrl =
+    typeof packageJson.homepage === "string" ? packageJson.homepage : "";
+  const customMeta = readCustomAppMeta(packageJson.appMeta);
+
+  return {
+    name,
+    version,
+    displayName: formatAppDisplayName(name),
+    author,
+    description,
+    repositoryUrl,
+    homepageUrl,
+    changelog: customMeta.changelog,
+    versionHistory: customMeta.versionHistory,
+    links: customMeta.links,
+  };
+}
+
+function readCustomAppMeta(appMeta: unknown) {
+  const metaObject =
+    appMeta && typeof appMeta === "object"
+      ? (appMeta as Record<string, unknown>)
+      : {};
+
+  const changelog = Array.isArray(metaObject.changelog)
+    ? metaObject.changelog.filter((item): item is string => typeof item === "string")
+    : [];
+
+  const versionHistory = Array.isArray(metaObject.versionHistory)
+    ? metaObject.versionHistory
+        .filter(
+          (
+            item,
+          ): item is {
+            version: string;
+            summary: string;
+          } =>
+            !!item &&
+            typeof item === "object" &&
+            typeof (item as { version?: unknown }).version === "string" &&
+            typeof (item as { summary?: unknown }).summary === "string",
+        )
+        .map((item) => ({
+          version: item.version,
+          summary: item.summary,
+        }))
+    : [];
+
+  const links = Array.isArray(metaObject.links)
+    ? metaObject.links
+        .filter(
+          (
+            item,
+          ): item is {
+            label: string;
+            value: string;
+            href: string;
+          } =>
+            !!item &&
+            typeof item === "object" &&
+            typeof (item as { label?: unknown }).label === "string" &&
+            typeof (item as { value?: unknown }).value === "string" &&
+            typeof (item as { href?: unknown }).href === "string",
+        )
+        .map((item) => ({
+          label: item.label,
+          value: item.value,
+          href: item.href,
+        }))
+    : [];
+
+  return {
+    changelog,
+    versionHistory,
+    links,
+  };
+}
+
+function formatAppDisplayName(name: string) {
+  return name
+    .split(/[-_]/g)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
+function resolveRepositoryUrl(repository: unknown) {
+  if (typeof repository === "string") {
+    return repository;
+  }
+
+  if (
+    repository &&
+    typeof repository === "object" &&
+    "url" in repository &&
+    typeof (repository as { url?: unknown }).url === "string"
+  ) {
+    return (repository as { url: string }).url;
+  }
+
+  return "";
 }
 
 function getPackageVersion(): string {

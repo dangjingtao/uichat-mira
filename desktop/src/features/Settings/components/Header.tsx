@@ -11,7 +11,7 @@ export default function Header({
   slot?: React.ReactNode;
 }) {
   return (
-    <div className="sticky top-0 z-10 space-y-2 pt-6 bg-white">
+    <div className="space-y-2 pt-6 bg-white">
       <div className="text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
         {miniTitle}
       </div>

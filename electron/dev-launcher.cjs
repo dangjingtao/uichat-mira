@@ -222,7 +222,7 @@ async function main() {
     console.log(`Reusing existing backend at ${backendHealthUrl}`);
   } else {
     console.log("Starting backend dev server...");
-    backendReady = spawnManagedProcess("server", serverDir, "pnpm exec tsx src/index.ts", {
+    backendReady = spawnManagedProcess("server", serverDir, "pnpm dev", {
       readyWhen: (_text, combined) =>
         combined.includes(`Server running on http://${backendHost}:${backendPort}`),
     }).ready;

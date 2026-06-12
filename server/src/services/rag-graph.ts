@@ -23,6 +23,9 @@ const RAGGraphState = Annotation.Root({
   systemPrompt: Annotation<string | undefined>,
   conversationHistory: Annotation<NormalizedChatMessage[] | undefined>,
   embedding: Annotation<number[] | undefined>,
+  embeddingDimensions: Annotation<number | undefined>,
+  embeddingModel: Annotation<string | undefined>,
+  embeddingModelConfigId: Annotation<string | undefined>,
   retrievedChunks: Annotation<RetrievedChunk[] | undefined>,
   rerankedChunks: Annotation<RetrievedChunk[] | undefined>,
   answer: Annotation<string | undefined>,
@@ -48,7 +51,14 @@ export interface RAGGraphOutput {
 }
 
 export type RAGGraphStreamUpdate =
-  | { embed?: { embedding: number[] | undefined } }
+  | {
+      embed?: {
+        embedding: number[] | undefined;
+        dimensions: number | undefined;
+        model: string | undefined;
+        modelConfigId: string | undefined;
+      };
+    }
   | { retrieve?: { retrievedChunks: RetrievedChunk[] | undefined } }
   | {
       rerank?: {
@@ -69,13 +79,21 @@ export interface RAGGraphCustomStreamChunk {
 }
 
 const embedNode = async (state: RAGGraphStateType) => {
-  const embedding = await embedService.embedSingle(state.question);
-  return { embedding };
+  const result = await embedService.embedSingle(state.question);
+  return {
+    embedding: result.embedding,
+    embeddingDimensions: result.dimensions,
+    embeddingModel: result.model,
+    embeddingModelConfigId: result.modelConfigId,
+  };
 };
 
 const retrieveNode = async (state: RAGGraphStateType) => {
   const result = await retrieveService.retrieve({
     embedding: state.embedding ?? [],
+    embeddingDimensions: state.embeddingDimensions,
+    embeddingModel: state.embeddingModel,
+    embeddingModelConfigId: state.embeddingModelConfigId,
     knowledgeBaseId: state.knowledgeBaseId,
     topK: state.topK ?? 10,
   });

@@ -13,41 +13,40 @@ import KnowledgeBaseSettings from "@/features/Settings/pages/KnowledgeBase/index
 import KnowledgeBaseAddWizard from "@/features/Settings/pages/KnowledgeBase/Add";
 import KnowledgeBaseDetail from "@/features/Settings/pages/KnowledgeBase/Detail";
 import ModelSettings from "@/features/Settings/pages/ModelSetting";
+import { RouteErrorBoundary } from "@/shared/ui/ErrorBoundary";
 
 export const router = createHashRouter([
   {
     path: "/",
     element: <App />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         element: <RequireAuth />,
         children: [
           { index: true, element: <HomePage /> },
           {
-            path: "chat",
-            element: (
-              <BaseLayout mode="chat">
-                <ChatPage />
-              </BaseLayout>
-            ),
-          },
-          {
-            path: "settings",
-            element: <BaseLayout mode="settings" />,
+            element: <BaseLayout />,
             children: [
-              { path: "general", element: <GeneralSettings /> },
-              { path: "account", element: <AccountSettings /> },
-              { path: "about", element: <About /> },
-              { path: "knowledge-base", element: <KnowledgeBaseSettings /> },
+              { path: "chat", element: <ChatPage /> },
               {
-                path: "knowledge-base/add",
-                element: <KnowledgeBaseAddWizard />,
+                path: "settings",
+                children: [
+                  { path: "general", element: <GeneralSettings /> },
+                  { path: "account", element: <AccountSettings /> },
+                  { path: "about", element: <About /> },
+                  { path: "knowledge-base", element: <KnowledgeBaseSettings /> },
+                  {
+                    path: "knowledge-base/add",
+                    element: <KnowledgeBaseAddWizard />,
+                  },
+                  {
+                    path: "knowledge-base/detail",
+                    element: <KnowledgeBaseDetail />,
+                  },
+                  { path: "model-setting", element: <ModelSettings /> },
+                ],
               },
-              {
-                path: "knowledge-base/detail",
-                element: <KnowledgeBaseDetail />,
-              },
-              { path: "model-setting", element: <ModelSettings /> },
             ],
           },
         ],

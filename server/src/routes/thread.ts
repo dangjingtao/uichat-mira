@@ -49,12 +49,16 @@ const threadSchema = {
 const messageSchema = {
   type: "object",
   required: ["id", "threadId", "role", "content", "createdAt"],
+  additionalProperties: false,
   properties: {
     id: { type: "string" },
     threadId: { type: "string" },
     role: { type: "string", enum: MESSAGE_ROLE_VALUES },
     content: { type: "string" },
-    metadata: { type: "object" },
+    metadata: {
+      type: "object",
+      additionalProperties: true,
+    },
     createdAt: { type: "string", format: "date-time" },
   },
 } as const;
@@ -445,7 +449,10 @@ const threadRoute: FastifyPluginAsync = async (app) => {
               maxLength: MAX_MESSAGE_CONTENT_LENGTH,
               description: `Maximum content length is ${MAX_MESSAGE_CONTENT_LENGTH} characters`,
             },
-            metadata: { type: "object" },
+            metadata: {
+              type: "object",
+              additionalProperties: true,
+            },
           },
         },
         response: {

@@ -6,6 +6,54 @@
   "packageManager": "pnpm@9.12.0",
   "author": "Tomz Dang <dangjingtao@gmail.com>",
   "description": "An initialization project for an Electron desktop application aimed at enterprise knowledge base verification, supporting dual-mode switching between local and remote models and vector databases.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dangjingtao/ui-chat-rag-tester.git"
+  },
+  "homepage": "https://github.com/dangjingtao/ui-chat-rag-tester",
+  "appMeta": {
+    "links": [
+      {
+        "label": "作者",
+        "value": "Tomz Dang <dangjingtao@gmail.com>",
+        "href": "https://github.com/dangjingtao"
+      },
+      {
+        "label": "项目仓库",
+        "value": "https://github.com/dangjingtao/ui-chat-rag-tester.git",
+        "href": "https://github.com/dangjingtao/ui-chat-rag-tester"
+      },
+      {
+        "label": "项目主页",
+        "value": "https://github.com/dangjingtao/ui-chat-rag-tester",
+        "href": "https://github.com/dangjingtao/ui-chat-rag-tester"
+      },
+      {
+        "label": "组件文档",
+        "value": "assistant-ui / 内部 UI 组件",
+        "href": "https://www.assistant-ui.com/"
+      }
+    ],
+    "changelog": [
+      "关于页改为软件信息与维护记录布局，减少冗余说明",
+      "明确区分 Electron / Tauri 运行版本",
+      "保留版本历史、作者与文档入口"
+    ],
+    "versionHistory": [
+      {
+        "version": "0.1.0",
+        "summary": "桌面聊天、模型配置、知识库与健康检查主流程成型"
+      },
+      {
+        "version": "0.0.9",
+        "summary": "补齐设置页结构，统一桌面运行时接入方式"
+      },
+      {
+        "version": "0.0.8",
+        "summary": "初版 RAG 测试工作台与对话线程能力"
+      }
+    ]
+  },
   "scripts": {
     "dev:electron:win": "pnpm --filter @ui-chat-rag-tester/electron dev",
     "dev:tauri:win": "cross-env CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 pnpm tauri dev --config tauri/tauri.conf.json",

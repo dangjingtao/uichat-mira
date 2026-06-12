@@ -23,9 +23,9 @@ export interface ParamTemplateSeed {
 export const DEFAULT_ROLE_CONFIGS: DefaultRoleConfig[] = [
   {
     type: "llm",
-    name: "gemma4:e4b",
+    name: "qwen2.5:latest",
     providerCode: "ollama",
-    remoteModelId: "gemma4:e4b",
+    remoteModelId: "qwen2.5:latest",
     params: {
       enabled: true,
       temperature: 0.7,
@@ -38,11 +38,11 @@ export const DEFAULT_ROLE_CONFIGS: DefaultRoleConfig[] = [
   },
   {
     type: "task",
-    name: "",
-    providerCode: null,
-    remoteModelId: null,
+    name: "qwen2.5:1.5b",
+    providerCode: "ollama",
+    remoteModelId: "qwen2.5:1.5b",
     params: {
-      enabled: false,
+      enabled: true,
       temperature: 0.7,
       topP: 0.9,
       topK: 40,

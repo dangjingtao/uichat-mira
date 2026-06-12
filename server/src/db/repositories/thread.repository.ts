@@ -73,7 +73,7 @@ export const threadRepository = {
     const lastMessageSubquery = sql<string | null>`(
       SELECT content FROM messages 
       WHERE ${messages.threadId} = ${threads.id}
-      ORDER BY created_at DESC LIMIT 1
+      ORDER BY created_at DESC, rowid DESC LIMIT 1
     )`;
 
     // 手动映射结果，避免类型转换问题
@@ -131,7 +131,7 @@ export const threadRepository = {
       .select()
       .from(messages)
       .where(eq(messages.threadId, id))
-      .orderBy(asc(messages.createdAt))
+      .orderBy(asc(messages.createdAt), sql`rowid asc`)
       .all();
 
     return { thread, messages: messagesResult };
@@ -193,7 +193,7 @@ export const messageRepository = {
       .select()
       .from(messages)
       .where(eq(messages.threadId, threadId))
-      .orderBy(asc(messages.createdAt))
+      .orderBy(asc(messages.createdAt), sql`rowid asc`)
       .all();
   },
 

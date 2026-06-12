@@ -8,6 +8,7 @@
 
 - `Button`
 - `Card`
+- `ErrorBoundary`
 - `FileIcon`
 - `FileListItem`
 - `FileUploadDropzone`
@@ -52,6 +53,17 @@
 
 - 必须提供 `ariaLabel`
 - 默认保持轻量，不承担主操作角色
+
+## ErrorBoundary
+
+用于捕获渲染树中的未处理异常，并提供简洁的恢复界面。
+
+### 当前行为
+
+- 渲染错误时展示全页级兜底界面
+- 提供 `重试` 与 `刷新应用` 两个恢复操作
+- 保留错误详情折叠区，方便本地排查
+- 视觉上遵循低噪音卡片式反馈，不抢主任务焦点
 
 ## Card
 

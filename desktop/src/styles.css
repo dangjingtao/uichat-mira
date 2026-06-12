@@ -141,6 +141,10 @@
   .stable-scrollbar {
     scrollbar-gutter: stable;
   }
+
+  .stable-scrollbar-both-edges {
+    scrollbar-gutter: stable both-edges;
+  }
 }
 
 @keyframes animateIn {

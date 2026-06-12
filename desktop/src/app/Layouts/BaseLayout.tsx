@@ -1,7 +1,7 @@
 "use client";
 
 import { Outlet, useLocation } from "react-router-dom";
-import React, { FunctionComponent, ReactNode } from "react";
+import React, { ReactNode } from "react";
 import Sidebar from "./Sidebar";
 import {
   AssistantRuntimeProvider,
@@ -28,11 +28,6 @@ import {
   getChatApiUrl,
 } from "@/shared/platform/desktopRuntime";
 
-interface BaseLayoutProps {
-  children?: ReactNode;
-  mode: "chat" | "settings";
-}
-
 const settingNavItems = [
   { label: "通用", path: "/settings/general", icon: <Bolt size={16} /> },
   {
@@ -52,18 +47,17 @@ const settingNavItems = [
 const threadListAdapter = new BackendThreadListAdapter();
 
 function LayoutFrame({
-  mode,
+  sidebarContents,
+  showBackToChat,
   contents,
-  children,
 }: {
-  mode: BaseLayoutProps["mode"];
+  sidebarContents: ReactNode;
+  showBackToChat: boolean;
   contents: ReactNode;
-  children?: ReactNode;
 }) {
-  const location = useLocation();
-
   return (
     <div
+      className="w-full min-w-0"
       style={{
         display: "grid",
         gridTemplateColumns: "240px 1fr",
@@ -71,32 +65,27 @@ function LayoutFrame({
       }}
     >
       <Sidebar>
-        {mode !== "chat" && (
+        {showBackToChat && (
           <NavItem to="/chat" icon={<ArrowLeft size={16} />}>
             返回聊天
           </NavItem>
         )}
 
-        <>{contents}</>
+        <>{sidebarContents}</>
       </Sidebar>
 
       <main
-        className="mx-auto flex h-screen w-full flex-col overflow-y-auto border border-slate-200 bg-white px-0"
+        className="flex h-screen w-full min-w-0 flex-col overflow-hidden border-l border-slate-200 bg-white px-0"
       >
-        <section className="flex min-h-0 flex-1 rounded-xl shadow-sm">
-          <div
-            key={`${mode}:${location.pathname}`}
-            className="route-content-transition flex min-h-0 flex-1"
-          >
-            {children}
-          </div>
+        <section className="flex min-h-0 flex-1 shadow-sm">
+          <div className="flex min-h-0 min-w-0 flex-1">{contents}</div>
         </section>
       </main>
     </div>
   );
 }
 
-function ChatLayout() {
+function ChatRuntimeShell({ showChat }: { showChat: boolean }) {
   const { session } = useAuth();
 
   const useChatRuntimeHook = () => {
@@ -120,9 +109,13 @@ function ChatLayout() {
       key={session?.token ?? "anonymous"}
       runtime={runtime}
     >
-      <LayoutFrame mode="chat" contents={<ThreadListSidebar />}>
-        <Thread />
-      </LayoutFrame>
+      <div className={showChat ? "flex min-h-0 flex-1" : "hidden"}>
+        <LayoutFrame
+          showBackToChat={false}
+          sidebarContents={<ChatSidebar />}
+          contents={<Thread />}
+        />
+      </div>
     </AssistantRuntimeProvider>
   );
 }
@@ -137,14 +130,54 @@ function SettingsLayout() {
   });
 
   return (
-    <LayoutFrame mode="settings" contents={contents}>
-      <Outlet />
-    </LayoutFrame>
+    <>
+      <div className="stable-scrollbar flex min-h-0 min-w-0 flex-1 overflow-y-scroll overflow-x-hidden">
+        <Outlet />
+      </div>
+    </>
   );
 }
 
-const BaseLayout: FunctionComponent<BaseLayoutProps> = ({ mode }) => {
-  return mode === "chat" ? <ChatLayout /> : <SettingsLayout />;
-};
+function SettingsPanel({ showSettings }: { showSettings: boolean }) {
+  if (!showSettings) {
+    return null;
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1">
+      <LayoutFrame
+        showBackToChat
+        sidebarContents={<SettingsSidebar />}
+        contents={<SettingsLayout />}
+      />
+    </div>
+  );
+}
+
+function ChatSidebar() {
+  return <ThreadListSidebar />;
+}
+
+function SettingsSidebar() {
+  return settingNavItems.map((item) => {
+    return (
+      <NavItem key={item.path} to={item.path} icon={item.icon}>
+        {item.label}
+      </NavItem>
+    );
+  });
+}
+
+function BaseLayout() {
+  const location = useLocation();
+  const isSettingsRoute = location.pathname.startsWith("/settings");
+
+  return (
+    <>
+      <ChatRuntimeShell showChat={!isSettingsRoute} />
+      <SettingsPanel showSettings={isSettingsRoute} />
+    </>
+  );
+}
 
 export default BaseLayout;
