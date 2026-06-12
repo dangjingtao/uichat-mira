@@ -6,6 +6,7 @@ import "@assistant-ui/react-ui/styles/index.css";
 import "@assistant-ui/react-ui/styles/markdown.css";
 import "@assistant-ui/react-ui/styles/themes/default.css";
 import "./styles.css";
+import { ErrorBoundary } from "./shared/ui/ErrorBoundary";
 import { MessageProvider } from "./shared/ui/Message";
 import { ModalProvider } from "./shared/ui/Modal";
 const root = document.getElementById("root");
@@ -17,11 +18,13 @@ if (!root) {
 const Main = () => {
   return (
     <React.StrictMode>
-      <ModalProvider>
-        <MessageProvider>
-          <RouterProvider router={router} />
-        </MessageProvider>
-      </ModalProvider>
+      <ErrorBoundary>
+        <ModalProvider>
+          <MessageProvider>
+            <RouterProvider router={router} />
+          </MessageProvider>
+        </ModalProvider>
+      </ErrorBoundary>
     </React.StrictMode>
   );
 };

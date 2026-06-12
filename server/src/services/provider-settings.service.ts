@@ -135,6 +135,37 @@ const getAssignments = () => {
   };
 };
 
+const getEmbeddingDimensionsFromProviderModel = (
+  providerModel: ProviderModel,
+): number | undefined => {
+  try {
+    const raw = providerModel.rawPayloadJson
+      ? JSON.parse(providerModel.rawPayloadJson)
+      : null;
+
+    const candidates = [
+      raw?.details?.embedding_length,
+      raw?.embedding_length,
+      raw?.dimensions,
+      raw?.dim,
+    ];
+
+    for (const candidate of candidates) {
+      if (
+        typeof candidate === "number" &&
+        Number.isInteger(candidate) &&
+        candidate > 0
+      ) {
+        return candidate;
+      }
+    }
+  } catch {
+    // Ignore malformed provider payloads and fall back to static defaults.
+  }
+
+  return undefined;
+};
+
 export const providerSettingsService = {
   getProviderSummaries(): ProviderSummaryResponse[] {
     const connections = providerConnectionRepository.findAll();
@@ -306,6 +337,16 @@ export const providerSettingsService = {
       throw new Error(PROVIDER_MODEL_NOT_FOUND_MESSAGE);
     }
 
+    const params = buildDefaultParams(role);
+    const embeddingDimensions =
+      role === "embedding"
+        ? getEmbeddingDimensionsFromProviderModel(providerModel)
+        : undefined;
+
+    if (role === "embedding" && embeddingDimensions) {
+      params.dimensions = embeddingDimensions;
+    }
+
     const updated = modelConfigRepository.upsertDefault({
       type: role,
       name: providerModel.modelName,
@@ -314,7 +355,7 @@ export const providerSettingsService = {
         providerCode === "cloudflare"
           ? providerModel.modelName
           : providerModel.remoteModelId,
-      params: JSON.stringify(buildDefaultParams(role)),
+      params: JSON.stringify(params),
     });
 
     return {

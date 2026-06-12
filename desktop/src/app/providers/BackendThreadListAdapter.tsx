@@ -72,7 +72,96 @@ type PersistedHistoryMessage = {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
+  metadata?: Record<string, unknown>;
   createdAt: string;
+};
+
+type PersistedRagSource = {
+  chunkId?: string | number;
+  documentId?: string;
+  documentName?: string;
+  score?: number;
+  content?: string;
+};
+
+const sortPersistedMessages = (messages: PersistedHistoryMessage[]) => {
+  return [...messages].sort((left, right) => {
+    const createdAtCompare = left.createdAt.localeCompare(right.createdAt);
+    if (createdAtCompare !== 0) {
+      return createdAtCompare;
+    }
+
+    return left.id.localeCompare(right.id);
+  });
+};
+
+const getPersistedRagSources = (
+  metadata: Record<string, unknown> | undefined,
+): PersistedRagSource[] => {
+  const rag = metadata?.rag;
+  if (!rag || typeof rag !== "object" || !("sources" in rag)) {
+    return [];
+  }
+
+  const sources = (rag as { sources?: unknown }).sources;
+  return Array.isArray(sources) ? (sources as PersistedRagSource[]) : [];
+};
+
+const toAiSdkMessageParts = (message: PersistedHistoryMessage) => {
+  const textParts = [{ type: "text", text: message.content }];
+  const sourceParts = getPersistedRagSources(message.metadata).map(
+    (source) => ({
+      type: "source-document" as const,
+      sourceId: String(
+        source.chunkId ??
+          source.documentId ??
+          source.documentName ??
+          crypto.randomUUID(),
+      ),
+      mediaType: "text/plain",
+      title: source.documentName || "Knowledge Base Document",
+      ...(source.documentName ? { filename: source.documentName } : {}),
+      providerMetadata: {
+        rag: {
+          chunkId: source.chunkId ?? null,
+          documentId: source.documentId ?? null,
+          score: source.score ?? null,
+          content: source.content ?? "",
+        },
+      },
+    }),
+  );
+
+  return [...textParts, ...sourceParts];
+};
+
+const toThreadMessageContent = (message: PersistedHistoryMessage) => {
+  const textParts = [{ type: "text" as const, text: message.content }];
+  const sourceParts = getPersistedRagSources(message.metadata).map(
+    (source) => ({
+      type: "source" as const,
+      sourceType: "document" as const,
+      id: String(
+        source.chunkId ??
+          source.documentId ??
+          source.documentName ??
+          crypto.randomUUID(),
+      ),
+      title: source.documentName || "Knowledge Base Document",
+      mediaType: "text/plain",
+      ...(source.documentName ? { filename: source.documentName } : {}),
+      providerMetadata: {
+        rag: {
+          chunkId: source.chunkId ?? null,
+          documentId: source.documentId ?? null,
+          score: source.score ?? null,
+          content: source.content ?? "",
+        },
+      },
+    }),
+  );
+
+  return [...textParts, ...sourceParts];
 };
 
 const toBranchableHistory = (messages: PersistedHistoryMessage[]) =>
@@ -82,14 +171,20 @@ const toBranchableHistory = (messages: PersistedHistoryMessage[]) =>
       message: {
         id: msg.id,
         role: msg.role,
-        content: msg.content,
+        content: toThreadMessageContent(msg),
         createdAt: new Date(msg.createdAt),
+        metadata: msg.metadata ?? { custom: {} },
       },
     })),
     {
       headId: messages.at(-1)?.id ?? null,
     },
   );
+
+const shouldPersistMessage = async (threadId: string) => {
+  const thread = await getThreadById(threadId);
+  return !thread.ragEnabled;
+};
 
 export class BackendThreadListAdapter implements RemoteThreadListAdapter {
   async list(): Promise<{
@@ -274,7 +369,7 @@ export class BackendThreadListAdapter implements RemoteThreadListAdapter {
           }
 
           try {
-            const messages = await getMessages(remoteId);
+            const messages = sortPersistedMessages(await getMessages(remoteId));
             return toBranchableHistory(messages) as any;
           } catch (error) {
             console.error("[ThreadAdapter] Failed to load messages:", error);
@@ -287,6 +382,13 @@ export class BackendThreadListAdapter implements RemoteThreadListAdapter {
           const message = item.message as any;
 
           try {
+            if (
+              (message.role === "assistant" || message.role === "user") &&
+              !(await shouldPersistMessage(remoteId))
+            ) {
+              return;
+            }
+
             const content =
               typeof message.content === "string"
                 ? message.content
@@ -295,6 +397,7 @@ export class BackendThreadListAdapter implements RemoteThreadListAdapter {
             await createMessage(remoteId, {
               role: message.role as "user" | "assistant" | "system",
               content,
+              metadata: message.metadata,
             });
           } catch (error) {
             console.error("[ThreadAdapter] Failed to append message:", error);
@@ -316,10 +419,8 @@ export class BackendThreadListAdapter implements RemoteThreadListAdapter {
             }
 
             try {
-              const messages = await getMessages(remoteId);
-              console.log(
-                "[ThreadAdapter] Loading messages for remoteId:",
-                messages,
+              const messages = sortPersistedMessages(
+                await getMessages(remoteId),
               );
               return {
                 headId: messages.at(-1)?.id ?? null,
@@ -330,7 +431,8 @@ export class BackendThreadListAdapter implements RemoteThreadListAdapter {
                     format: "ai-sdk/v6",
                     content: {
                       role: msg.role,
-                      parts: [{ type: "text", text: msg.content }],
+                      parts: toAiSdkMessageParts(msg),
+                      metadata: msg.metadata ?? { custom: {} },
                     },
                   } as any),
                 ),
@@ -369,12 +471,27 @@ export class BackendThreadListAdapter implements RemoteThreadListAdapter {
                 return;
               }
 
+              if (
+                (content.role === "assistant" || content.role === "user") &&
+                !(await shouldPersistMessage(remoteId))
+              ) {
+                return;
+              }
+
               await createMessage(remoteId, {
                 role: content.role as "user" | "assistant" | "system",
                 content:
                   content.parts?.map((p) => p.text || "").join("") ||
                   content.content ||
                   "",
+                metadata:
+                  encoded &&
+                  typeof encoded === "object" &&
+                  "metadata" in encoded &&
+                  encoded.metadata &&
+                  typeof encoded.metadata === "object"
+                    ? (encoded.metadata as Record<string, unknown>)
+                    : undefined,
               });
             } catch (error) {
               console.error("[ThreadAdapter] Failed to append message:", error);

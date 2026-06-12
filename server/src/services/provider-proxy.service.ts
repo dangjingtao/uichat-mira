@@ -53,6 +53,36 @@ export interface EmbeddingResult {
   dimensions: number;
 }
 
+const syncResolvedEmbeddingDimensions = (
+  resolved: ProviderResolution,
+  dimensions: number,
+) => {
+  if (!Number.isInteger(dimensions) || dimensions <= 0) {
+    return;
+  }
+
+  const modelConfig = modelConfigRepository.findDefaultByType("embedding");
+  if (
+    !modelConfig ||
+    modelConfig.id !== resolved.modelConfigId ||
+    !modelConfig.params
+  ) {
+    return;
+  }
+
+  const currentParams = parseModelParams(modelConfig.params);
+  if (currentParams.dimensions === dimensions) {
+    return;
+  }
+
+  modelConfigRepository.updateDefault("embedding", {
+    params: JSON.stringify({
+      ...currentParams,
+      dimensions,
+    }),
+  });
+};
+
 const parseModelParams = (paramsJson: string) => {
   try {
     const parsed = JSON.parse(paramsJson || "{}");
@@ -486,6 +516,8 @@ export const providerProxyService = {
     if (dimensions <= 0) {
       throw new Error("Embedding provider returned empty vectors");
     }
+
+    syncResolvedEmbeddingDimensions(resolved, dimensions);
 
     return {
       providerCode: resolved.providerCode,

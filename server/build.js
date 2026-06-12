@@ -16,6 +16,33 @@ function readPackageJson(packageDir) {
   );
 }
 
+function writeAppMetaJson() {
+  const rootPackage = readPackageJson(projectRoot);
+  const appMeta = {
+    name:
+      typeof rootPackage.name === "string"
+        ? rootPackage.name
+        : "ui-chat-rag-tester",
+    version:
+      typeof rootPackage.version === "string" ? rootPackage.version : "0.0.0",
+    author: typeof rootPackage.author === "string" ? rootPackage.author : "",
+    description:
+      typeof rootPackage.description === "string" ? rootPackage.description : "",
+    repository: rootPackage.repository ?? null,
+    homepage:
+      typeof rootPackage.homepage === "string" ? rootPackage.homepage : "",
+    appMeta:
+      rootPackage.appMeta && typeof rootPackage.appMeta === "object"
+        ? rootPackage.appMeta
+        : {},
+  };
+
+  fs.writeFileSync(
+    path.join(outputDir, "app-meta.json"),
+    `${JSON.stringify(appMeta, null, 2)}\n`,
+  );
+}
+
 function resolveInstalledPackageDir(packageName) {
   return fs
     .readdirSync(pnpmStore)
@@ -84,6 +111,7 @@ fs.rmSync(outputDir, { recursive: true, force: true });
 fs.mkdirSync(outputDir, { recursive: true });
 fs.mkdirSync(outputNodeModules, { recursive: true });
 writeBackendPackageJson();
+writeAppMetaJson();
 
 build({
   entryPoints: [path.join(__dirname, "src/index.ts")],

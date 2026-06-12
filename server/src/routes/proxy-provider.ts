@@ -23,6 +23,7 @@ import {
   messageRoleSchema,
   successEnvelope,
 } from "@/routes/schema-helpers.js";
+import type { RetrievedChunk } from "@/services/rag-nodes/index.js";
 
 const createErrorResponse = (reply: FastifyReply, message: string) =>
   reply.code(400).send(error(message, ErrorCodes.VALIDATION_ERROR));
@@ -59,6 +60,22 @@ const prepareEventStreamReply = (reply: FastifyReply) => {
   reply.type("text/event-stream; charset=utf-8");
 };
 
+const prepareDataStreamReply = (reply: FastifyReply) => {
+  reply.raw.setHeader("Cache-Control", "no-cache, no-transform");
+  reply.raw.setHeader("Connection", "keep-alive");
+  reply.raw.setHeader("x-vercel-ai-ui-message-stream", "v1");
+  reply.type("text/plain; charset=utf-8");
+};
+
+const toPersistedRagSources = (sources: RetrievedChunk[]) =>
+  sources.map((source) => ({
+    chunkId: source.chunkId,
+    documentId: source.documentId,
+    documentName: source.documentName,
+    score: source.score,
+    content: source.content,
+  }));
+
 const toRagInput = (messages: NormalizedChatMessage[]) => {
   const latestUserIndex = [...messages]
     .map((message, index) => ({ message, index }))
@@ -82,6 +99,38 @@ const toRagInput = (messages: NormalizedChatMessage[]) => {
     question: latestUserMessage.content,
     conversationHistory,
   };
+};
+
+const cleanGeneratedTitle = (title: string) =>
+  title
+    .trim()
+    .replace(/^["'“”‘’]+|["'“”‘’]+$/g, "")
+    .slice(0, 50);
+
+const generateThreadTitle = async (question: string, answer: string) => {
+  const prompt =
+    "请根据以下对话内容生成一个简短的中文标题（不超过20个字符），只返回标题本身，不要解释。\n\n" +
+    `用户：${question}\n助手：${answer.slice(0, 500)}`;
+
+  let title = "";
+  for await (const delta of providerProxyService.streamTaskChatText([
+    {
+      role: "user",
+      content: prompt,
+    },
+  ])) {
+    title += delta;
+    if (title.length >= 80) {
+      break;
+    }
+  }
+
+  return cleanGeneratedTitle(title) || "新对话";
+};
+
+const shouldGenerateTitle = (title: string | undefined) => {
+  const normalizedTitle = title?.trim();
+  return !normalizedTitle || normalizedTitle === "新对话";
 };
 
 const proxyProviderRoute: FastifyPluginAsync = async (app) => {
@@ -147,6 +196,7 @@ const proxyProviderRoute: FastifyPluginAsync = async (app) => {
     Params: { provider: ProxyProviderParam };
     Body: {
       id?: string;
+      messageId?: string;
       messages: Array<{
         role?: "system" | "user" | "assistant";
         parts?: Array<{ type?: string; text?: string }>;
@@ -193,26 +243,99 @@ const proxyProviderRoute: FastifyPluginAsync = async (app) => {
           return createErrorResponse(reply, "No valid chat messages provided");
         }
 
-        prepareEventStreamReply(reply);
-
         if (request.params.provider === "default") {
           const threadId = request.body.id;
+          const authUser = request.authUser;
           const thread =
-            typeof threadId === "string" && request.authUser
-              ? threadService.getThreadSummaryById(threadId, request.authUser.id)
+            typeof threadId === "string" && authUser
+              ? threadService.getThreadSummaryById(threadId, authUser.id)
               : null;
           const ragInput = toRagInput(messages);
 
-          if (thread?.ragEnabled && ragInput) {
+          if (thread?.ragEnabled && ragInput && typeof threadId === "string" && authUser) {
+            const latestUserMessageId =
+              typeof request.body.messageId === "string" &&
+              request.body.messageId.trim()
+                ? request.body.messageId
+                : crypto.randomUUID();
+            const assistantMessageId = crypto.randomUUID();
+
+            const existingUserMessage = threadService.getMessageById(
+              latestUserMessageId,
+              authUser.id,
+            );
+
+            if (!existingUserMessage) {
+              threadService.createMessage(threadId, authUser.id, {
+                id: latestUserMessageId,
+                role: "user",
+                content: ragInput.question,
+                metadata: { custom: {} },
+              });
+            }
+
+            prepareDataStreamReply(reply);
             return reply.send(
-              ragPipeline.stream({
+              ragPipeline.assistantStream({
                 question: ragInput.question,
                 conversationHistory: ragInput.conversationHistory,
+              }, {
+                messageId: assistantMessageId,
+                onComplete: async ({
+                  answer,
+                  sources,
+                  finishReason,
+                }) => {
+                  if (
+                    finishReason !== "stop" ||
+                    !threadId ||
+                    !answer.trim()
+                  ) {
+                    return;
+                  }
+
+                  threadService.createMessage(threadId, authUser.id, {
+                    id: assistantMessageId,
+                    role: "assistant",
+                    content: answer,
+                    metadata: {
+                      rag: {
+                        enabled: true,
+                        question: ragInput.question,
+                        topK: 10,
+                        topN: 4,
+                        sources: toPersistedRagSources(sources),
+                      },
+                    },
+                  });
+
+                  try {
+                    const latestThread = threadService.getThreadSummaryById(
+                      threadId,
+                      authUser.id,
+                    );
+                    if (shouldGenerateTitle(latestThread?.title)) {
+                      const title = await generateThreadTitle(
+                        ragInput.question,
+                        answer,
+                      );
+                      threadService.updateThread(threadId, authUser.id, {
+                        title,
+                      });
+                    }
+                  } catch (titleError) {
+                    app.log.warn(
+                      { err: titleError, threadId },
+                      "[proxy-provider] failed to generate RAG thread title",
+                    );
+                  }
+                },
               }),
             );
           }
         }
 
+        prepareEventStreamReply(reply);
         return reply.send(
           providerProxyService.streamChat(request.params.provider, messages),
         );

@@ -1,13 +1,24 @@
 // src/assistant/ThreadListSidebar.tsx
 "use client";
+import { useEffect } from "react";
 import { MoreHorizontal } from "lucide-react";
 import {
   ThreadListPrimitive,
   ThreadListItemPrimitive,
   ThreadListItemMorePrimitive,
+  useAui,
 } from "@assistant-ui/react";
+import { subscribeThreadListRefresh } from "@/shared/lib/threadListRefresh";
 
 export function ThreadListSidebar() {
+  const aui = useAui();
+
+  useEffect(() => {
+    return subscribeThreadListRefresh(() => {
+      void aui.threads().reload();
+    });
+  }, [aui]);
+
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-border px-2 pb-2 pt-1">

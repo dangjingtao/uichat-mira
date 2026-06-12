@@ -40,6 +40,7 @@ export interface CreateThreadInput {
 }
 
 export interface CreateMessageInput {
+  id?: string;
   role: MessageRole;
   content: string;
   metadata?: Record<string, unknown>;
@@ -249,6 +250,7 @@ export const threadService = {
     }
 
     const created = messageRepository.create({
+      ...(input.id ? { id: input.id } : {}),
       threadId,
       role: input.role,
       content: input.content.trim(),

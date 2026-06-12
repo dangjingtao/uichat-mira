@@ -29,6 +29,12 @@ Renderer  -- direct HTTP -->  Fastify backend
 file:// app                  http://<backend-host>:<backend-port>
 ```
 
+Development startup notes:
+
+- `pnpm dev:electron:win` starts the renderer through Vite and the backend through the server package's `pnpm dev` script.
+- The backend dev script uses `tsx watch src/index.ts`, so backend source edits should restart the Fastify process automatically when the backend is launched by the Electron dev launcher.
+- If the launcher detects an already-healthy backend on the configured port, it reuses that process instead of starting a watched backend. In that case, code changes will not apply until that reused backend is restarted.
+
 ## Request Contract
 
 - Development frontend requests use `/api/xxx`.

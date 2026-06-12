@@ -11,6 +11,7 @@ export interface EmbedOutput {
   embeddings: number[][];
   dimensions: number;
   model: string;
+  modelConfigId: string;
   providerCode: string;
 }
 
@@ -36,6 +37,7 @@ export const embedService = {
       embeddings: result.embeddings,
       dimensions: result.dimensions,
       model: result.model,
+      modelConfigId: result.modelConfigId,
       providerCode: result.providerCode,
     };
   },
@@ -45,8 +47,20 @@ export const embedService = {
    * @param text 单个文本
    * @returns 单个向量
    */
-  async embedSingle(text: string): Promise<number[]> {
+  async embedSingle(text: string): Promise<{
+    embedding: number[];
+    dimensions: number;
+    model: string;
+    modelConfigId: string;
+    providerCode: string;
+  }> {
     const result = await this.embed({ text });
-    return result.embeddings[0] ?? [];
+    return {
+      embedding: result.embeddings[0] ?? [],
+      dimensions: result.dimensions,
+      model: result.model,
+      modelConfigId: result.modelConfigId,
+      providerCode: result.providerCode,
+    };
   },
 };

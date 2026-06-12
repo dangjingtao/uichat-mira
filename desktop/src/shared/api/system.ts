@@ -7,6 +7,21 @@ export interface ServiceHealthData {
 export interface AppMetaData {
   name: string;
   version: string;
+  displayName: string;
+  author: string;
+  description: string;
+  repositoryUrl: string;
+  homepageUrl: string;
+  changelog: string[];
+  versionHistory: Array<{
+    version: string;
+    summary: string;
+  }>;
+  links: Array<{
+    label: string;
+    value: string;
+    href: string;
+  }>;
 }
 
 export interface DatabaseHealthData {

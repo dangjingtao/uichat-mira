@@ -2,6 +2,7 @@
 import { useNavigate } from "react-router-dom";
 import { LockKeyhole, User2 } from "lucide-react";
 import { useAuth } from "@/app/providers/AuthProvider";
+import logo from "@/assets/branding/uichat-logo.png";
 import { login as apiLogin } from "@/shared/api";
 import { ApiError } from "@/shared/lib/request";
 import { Button } from "@/shared/ui/Button";
@@ -71,7 +72,7 @@ function LoginPage() {
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <img
-                    src="https://uichat.tomz.io/assets/logo.C9Wlp9a2.png"
+                    src={logo}
                     alt="UI Chat RAG Tester"
                     className="h-[30px] w-auto"
                   />

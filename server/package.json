@@ -19,6 +19,7 @@
     "@langchain/langgraph": "^1.4.1",
     "@langchain/openai": "^1.4.7",
     "adm-zip": "^0.5.17",
+    "assistant-stream": "^0.3.21",
     "better-sqlite3": "^12.10.0",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",

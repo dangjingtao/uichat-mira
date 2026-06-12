@@ -1,14 +1,17 @@
 import { and, eq, sql, inArray } from "drizzle-orm";
 import {
   getDb,
-  knowledgeBaseVectorIndexes,
   documentChunks,
   documents,
 } from "@/db";
 import { knowledgeBaseService } from "@/services/knowledge-base.service";
+import { knowledgeBaseVectorStore } from "@/services/knowledge-base.vector-store";
 
 export interface RetrieveInput {
   embedding: number[];
+  embeddingDimensions?: number;
+  embeddingModel?: string;
+  embeddingModelConfigId?: string;
   knowledgeBaseId?: string;
   topK?: number;
 }
@@ -25,6 +28,58 @@ export interface RetrieveOutput {
   chunks: RetrievedChunk[];
   knowledgeBaseId: string;
 }
+
+const resolveVectorIndexForQuery = (input: {
+  knowledgeBaseId: string;
+  embeddingDimensions?: number;
+  embeddingModel?: string;
+  embeddingModelConfigId?: string;
+}) => {
+  const activeIndex = knowledgeBaseVectorStore.findActiveVectorIndex(
+    input.knowledgeBaseId,
+  );
+  const queryDimensions = input.embeddingDimensions;
+
+  if (!queryDimensions || !input.embeddingModel || !input.embeddingModelConfigId) {
+    return activeIndex ?? null;
+  }
+
+  const expectedTableName = knowledgeBaseVectorStore.toExpectedVectorTableName({
+    knowledgeBaseId: input.knowledgeBaseId,
+    embeddingModelConfigId: input.embeddingModelConfigId,
+    model: input.embeddingModel,
+    dimensions: queryDimensions,
+  });
+
+  const indexes = knowledgeBaseVectorStore.findVectorIndexes(input.knowledgeBaseId);
+  const exactIndex = indexes.find((index) => index.tableName === expectedTableName);
+
+  if (exactIndex) {
+    if (!exactIndex.isActive) {
+      knowledgeBaseVectorStore.activateVectorIndex(
+        exactIndex.id,
+        input.knowledgeBaseId,
+      );
+    }
+
+    return exactIndex;
+  }
+
+  if (activeIndex?.dimensions === queryDimensions) {
+    return activeIndex;
+  }
+
+  throw new Error(
+    [
+      `知识库索引与当前默认 Embedding 模型不匹配。`,
+      `当前查询向量: ${input.embeddingModel} (${queryDimensions} 维)。`,
+      activeIndex
+        ? `当前激活索引: ${activeIndex.tableName} (${activeIndex.dimensions} 维)。`
+        : "当前知识库没有激活的向量索引。",
+      "请重建知识库索引，或切换回与现有知识库兼容的 Embedding 模型。",
+    ].join(" "),
+  );
+};
 
 /**
  * 向量检索服务节点
@@ -47,19 +102,12 @@ export const retrieveService = {
     }
 
     const db = getDb();
-
-    // 获取向量索引信息
-    const vectorIndex = db
-      .select()
-      .from(knowledgeBaseVectorIndexes)
-      .where(
-        and(
-          eq(knowledgeBaseVectorIndexes.knowledgeBaseId, kbId),
-          eq(knowledgeBaseVectorIndexes.isActive, true),
-        ),
-      )
-      .limit(1)
-      .get();
+    const vectorIndex = resolveVectorIndexForQuery({
+      knowledgeBaseId: kbId,
+      embeddingDimensions: input.embeddingDimensions,
+      embeddingModel: input.embeddingModel,
+      embeddingModelConfigId: input.embeddingModelConfigId,
+    });
 
     if (!vectorIndex) {
       return { chunks: [], knowledgeBaseId: kbId };
@@ -140,17 +188,6 @@ export const retrieveService = {
    * @returns 向量索引信息或 null
    */
   getVectorIndex(knowledgeBaseId: string) {
-    const db = getDb();
-    return db
-      .select()
-      .from(knowledgeBaseVectorIndexes)
-      .where(
-        and(
-          eq(knowledgeBaseVectorIndexes.knowledgeBaseId, knowledgeBaseId),
-          eq(knowledgeBaseVectorIndexes.isActive, true),
-        ),
-      )
-      .limit(1)
-      .get();
+    return knowledgeBaseVectorStore.findActiveVectorIndex(knowledgeBaseId);
   },
 };
