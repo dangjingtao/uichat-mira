@@ -48,10 +48,10 @@ export const rerankRunnable = RunnableLambda.from(
     chunks: RetrievedChunk[];
     topN?: number;
   }) => {
-    const result = await rerankService.rerank({
+    const result = await rerankService.rerankWithProvider({
       query: input.query,
       chunks: input.chunks,
-      topN: input.topN ?? 4,
+      topN: input.topN,
     });
     return result.chunks;
   },

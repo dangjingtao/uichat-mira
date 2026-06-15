@@ -417,6 +417,49 @@ const providerSettingsRoute: FastifyPluginAsync = async (app) => {
       }
     },
   );
+
+  app.put<{
+    Params: { role: ModelType };
+  }>(
+    "/providers/reset-model/:role",
+    {
+      schema: {
+        tags: ["Provider Settings"],
+        summary: "Reset default model for role",
+        description:
+          "Clear provider and remote model fields for a role while resetting params to backend defaults.",
+        operationId: "resetDefaultProviderModelForRole",
+        params: {
+          type: "object",
+          properties: {
+            role: modelTypeSchema,
+          },
+          required: ["role"],
+        },
+        response: {
+          200: successEnvelope(roleModelConfigSchema),
+          400: errorEnvelope,
+          500: errorEnvelope,
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const config = providerSettingsService.resetRoleModel(
+          request.params.role,
+        );
+
+        return success(config, "Default model reset");
+      } catch (err) {
+        app.log.error(err);
+        const message = getErrorMessage(
+          err,
+          FAILED_SELECT_DEFAULT_MODEL_MESSAGE,
+        );
+        return reply.code(400).send(error(message, ErrorCodes.NOT_FOUND));
+      }
+    },
+  );
 };
 
 export default providerSettingsRoute;

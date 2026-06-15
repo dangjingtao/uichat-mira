@@ -19,6 +19,7 @@ function LoginPage() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const fieldError = error ? "请检查用户名和密码后重试" : undefined;
 
   useEffect(() => {
     if (!authErrorMessage) {
@@ -60,13 +61,13 @@ function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen bg-surface-secondary">
+    <main className="min-h-screen bg-[#fafbf7]">
       <div className="mx-auto flex min-h-screen max-w-5xl items-center px-4 py-8 sm:px-6 lg:px-8">
         <div className="grid w-full gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-          <section className="rounded-xl border border-border bg-surface-primary px-6 py-8 shadow-shadow-sm sm:px-8 sm:py-10">
+          <section className="rounded-[28px] border border-cloudy-3/80 bg-pampas-3/94 px-6 py-8 shadow-[0_10px_28px_rgba(73,52,33,0.045)] sm:px-8 sm:py-10">
             <div className="max-w-2xl space-y-5">
-              <div className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                Desktop AI workspace
+              <div className="inline-flex items-center rounded-full border border-cloudy-3/70 bg-surface-primary/85 px-3 py-1 text-xs font-medium text-primary">
+                桌面 AI 工作台
               </div>
 
               <div className="space-y-3">
@@ -82,47 +83,47 @@ function LoginPage() {
                 </div>
 
                 <h1 className="text-[30px] font-semibold leading-tight text-text-primary">
-                  登录并开始你的 RAG 对话测试
+                  开始你的 RAG 对话测试
                 </h1>
 
                 <p className="max-w-xl text-sm leading-6 text-text-secondary">
-                  登录后你可以继续使用当前桌面端能力，包括模型联调、知识库验证、后端健康检查与聊天测试链路。
+                  登录后即可继续进行模型联调、知识库验证和对话测试。
                 </p>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-border bg-surface-secondary px-4 py-4">
-                  <div className="mb-2 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-surface-primary">
+                <div className="rounded-2xl border border-cloudy-3/70 bg-pampas-2/92 px-4 py-4 shadow-[0_4px_12px_rgba(73,52,33,0.025)]">
+                  <div className="mb-2 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-pampas-4">
                     <User2 className="h-4 w-4 text-icon-primary" />
                   </div>
                   <div className="text-sm font-medium text-text-primary">
-                    统一登录入口
+                    继续当前进度
                   </div>
                   <div className="mt-1 text-sm leading-6 text-text-secondary">
-                    保持当前账号态与路由守卫逻辑一致，不改变既有认证流程。
+                    保持账号状态一致，继续你当前的测试流程。
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-border bg-surface-secondary px-4 py-4">
-                  <div className="mb-2 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-surface-primary">
+                <div className="rounded-2xl border border-cloudy-3/70 bg-pampas-2/92 px-4 py-4 shadow-[0_4px_12px_rgba(73,52,33,0.025)]">
+                  <div className="mb-2 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-pampas-4">
                     <LockKeyhole className="h-4 w-4 text-icon-primary" />
                   </div>
                   <div className="text-sm font-medium text-text-primary">
                     安静的登录体验
                   </div>
                   <div className="mt-1 text-sm leading-6 text-text-secondary">
-                    使用统一 token、标准输入框与按钮风格，减少页面视觉噪音。
+                    保留清晰输入与低噪音界面，把注意力留给任务本身。
                   </div>
                 </div>
               </div>
             </div>
           </section>
 
-          <section className="rounded-xl border border-border bg-surface-primary px-6 py-8 shadow-shadow-sm sm:px-8 sm:py-10">
+          <section className="rounded-[28px] border border-cloudy-3/80 bg-pampas-1/92 px-6 py-8 shadow-[0_12px_32px_rgba(73,52,33,0.055)] ring-1 ring-white/50 sm:px-8 sm:py-10">
             <div className="space-y-6">
               <div className="space-y-2">
                 <div className="text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                  Account Access
+                  欢迎回来
                 </div>
                 <h2 className="text-xl font-semibold text-text-primary">
                   登录
@@ -144,7 +145,7 @@ function LoginPage() {
                   }
                   placeholder="请输入用户名"
                   disabled={isSubmitting}
-                  error={undefined}
+                  error={fieldError}
                 />
 
                 <TextInput
@@ -159,7 +160,7 @@ function LoginPage() {
                   }
                   placeholder="请输入密码"
                   disabled={isSubmitting}
-                  error={undefined}
+                  error={fieldError}
                 />
 
                 {error ? (
@@ -170,6 +171,7 @@ function LoginPage() {
 
                 <Button
                   type="submit"
+                  variant="primary"
                   disabled={
                     isSubmitting ||
                     !form.username.trim() ||

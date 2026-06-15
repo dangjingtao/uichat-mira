@@ -5,6 +5,8 @@ const { spawn } = require("child_process");
 
 let mainWindow;
 let backendProcess;
+const BACKEND_START_TIMEOUT_MS = 15000;
+const BACKEND_START_POLL_INTERVAL_MS = 300;
 
 const isDev = !app.isPackaged;
 const runtimeConfig = loadRuntimeConfig();
@@ -26,6 +28,56 @@ function loadRuntimeConfig() {
 
 function getBackendUrl() {
   return `http://${runtimeConfig.backend.host}:${runtimeConfig.backend.port}`;
+}
+
+function ensureSecretFile(secretPath, secretName) {
+  if (fs.existsSync(secretPath)) {
+    const secret = fs.readFileSync(secretPath, "utf8").trim();
+    if (secret) {
+      return secret;
+    }
+  }
+
+  fs.mkdirSync(path.dirname(secretPath), { recursive: true });
+  const secret = globalThis.crypto?.randomUUID
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  fs.writeFileSync(secretPath, secret);
+  console.log(`Created ${secretName} at: ${secretPath}`);
+  return secret;
+}
+
+async function sleep(ms) {
+  await new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function isBackendHealthy() {
+  try {
+    const response = await fetch(`${getBackendUrl()}/health`);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForBackendReady(timeoutMs = BACKEND_START_TIMEOUT_MS) {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (await isBackendHealthy()) {
+      return true;
+    }
+
+    if (backendProcess?.exitCode != null) {
+      return false;
+    }
+
+    await sleep(BACKEND_START_POLL_INTERVAL_MS);
+  }
+
+  return false;
 }
 
 function resolveRendererEntry() {
@@ -91,10 +143,10 @@ function createWindow() {
   });
 }
 
-function startBackend() {
+async function startBackend() {
   if (isDev) {
     console.log("Dev mode: backend server already started via concurrently");
-    return;
+    return true;
   }
 
   const backendPath = path.join(process.resourcesPath, "server", "server.cjs");
@@ -109,6 +161,22 @@ function startBackend() {
   console.log("Working directory:", cwd);
   console.log("Backend runtime:", backendRuntime);
 
+  const userDataDir = app.getPath("userData");
+  const dataDir = path.join(userDataDir, "data");
+  const logDir = path.join(userDataDir, "logs");
+  const secretsDir = path.join(userDataDir, "secrets");
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.mkdirSync(logDir, { recursive: true });
+
+  const jwtSecret = ensureSecretFile(
+    path.join(secretsDir, "jwt-secret.txt"),
+    "JWT secret",
+  );
+  const settingsSecret = ensureSecretFile(
+    path.join(secretsDir, "settings-secret.txt"),
+    "settings secret",
+  );
+
   backendProcess = spawn(backendRuntime, [backendPath], {
     cwd,
     env: {
@@ -117,7 +185,12 @@ function startBackend() {
       NODE_ENV: "production",
       HOST: runtimeConfig.backend.host,
       PORT: String(runtimeConfig.backend.port),
+      JWT_SECRET: jwtSecret,
+      SETTINGS_SECRET: settingsSecret,
+      UI_CHAT_ALLOW_DEFAULT_BOOTSTRAP: "1",
       UI_CHAT_BACKEND_URL: getBackendUrl(),
+      UI_CHAT_DATABASE_DIR: dataDir,
+      UI_CHAT_LOG_DIR: logDir,
     },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
@@ -142,16 +215,25 @@ function startBackend() {
   backendProcess.on("error", (error) => {
     console.error("Failed to start backend process:", error);
   });
+
+  const backendReady = await waitForBackendReady();
+  if (!backendReady) {
+    console.error(
+      `Backend did not become healthy within ${BACKEND_START_TIMEOUT_MS}ms: ${getBackendUrl()}/health`,
+    );
+  }
+
+  return backendReady;
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   console.log("App ready, isDev:", isDev);
   console.log("__dirname:", __dirname);
   console.log("app.getAppPath():", app.getAppPath());
   console.log("process.resourcesPath:", process.resourcesPath);
 
   if (!process.argv.includes("--no-backend")) {
-    startBackend();
+    await startBackend();
   }
 
   createWindow();

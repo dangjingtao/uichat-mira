@@ -111,16 +111,6 @@ const MODEL_META: Record<RoleModelType, ModelMeta> = {
         type: "number",
         step: 0.1,
       },
-      { key: "windowSize", label: "Window Size", type: "number" },
-      {
-        key: "strategy",
-        label: "Strategy",
-        type: "select",
-        options: [
-          { value: "cross-encoder", label: "Cross-Encoder" },
-          { value: "bi-encoder", label: "Bi-Encoder" },
-        ],
-      },
     ],
   },
 };
@@ -250,6 +240,8 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
       <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
         {fields.map((field) => {
           const value = localConfig[field.key];
+          const isReadonlyDimensions =
+            modelType === "embedding" && field.key === "dimensions";
 
           if (field.type === "select") {
             return (
@@ -281,10 +273,16 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
               key={field.key}
               label={field.label}
               value={Number(value ?? 0)}
-              onChange={(nextValue) => handleChange(field.key, nextValue)}
+              onChange={(nextValue) => {
+                if (isReadonlyDimensions) {
+                  return;
+                }
+
+                handleChange(field.key, nextValue);
+              }}
               step={field.step}
               compact
-              disabled={!isConfigured}
+              disabled={!isConfigured || isReadonlyDimensions}
             />
           );
         })}

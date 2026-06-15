@@ -1,11 +1,16 @@
 import { and, eq, sql, inArray } from "drizzle-orm";
 import {
   getDb,
+  getSqlite,
   documentChunks,
   documents,
 } from "@/db";
 import { knowledgeBaseService } from "@/services/knowledge-base.service";
 import { knowledgeBaseVectorStore } from "@/services/knowledge-base.vector-store";
+import type { RagNodeResult } from "@/services/rag-node-contract";
+import {
+  createRetrievalObservation,
+} from "@/services/rag-node-observation";
 
 export interface RetrieveInput {
   embedding: number[];
@@ -28,6 +33,18 @@ export interface RetrieveOutput {
   chunks: RetrievedChunk[];
   knowledgeBaseId: string;
 }
+
+export interface RetrieveStatePatch {
+  retrievedChunks: RetrievedChunk[];
+}
+
+const toQueryVectorBlob = (embedding: number[]) => {
+  if (!Array.isArray(embedding) || embedding.length === 0) {
+    return null;
+  }
+
+  return new Float32Array(embedding);
+};
 
 const resolveVectorIndexForQuery = (input: {
   knowledgeBaseId: string;
@@ -102,6 +119,7 @@ export const retrieveService = {
     }
 
     const db = getDb();
+    const sqlite = getSqlite();
     const vectorIndex = resolveVectorIndexForQuery({
       knowledgeBaseId: kbId,
       embeddingDimensions: input.embeddingDimensions,
@@ -114,19 +132,25 @@ export const retrieveService = {
     }
 
     // 执行向量搜索（使用 Drizzle raw sql）
-    const embeddingJson = JSON.stringify(input.embedding);
     const tableName = vectorIndex.tableName;
+    const queryVector = toQueryVectorBlob(input.embedding);
 
-    const vectorResults = db
-      .select({
-        chunkId: sql<number>`chunk_id`,
-        distance: sql<number>`distance`,
-      })
-      .from(sql.raw(tableName))
-      .where(sql`embedding MATCH ${embeddingJson}`)
-      .orderBy(sql`distance`)
-      .limit(topK)
-      .all();
+    if (!queryVector) {
+      return { chunks: [], knowledgeBaseId: kbId };
+    }
+
+    const vectorResults = sqlite
+      .prepare(
+        `SELECT chunk_id as chunkId, distance
+         FROM ${tableName}
+         WHERE embedding MATCH ?
+         ORDER BY distance
+         LIMIT ?`,
+      )
+      .all(queryVector, topK) as Array<{
+        chunkId: number;
+        distance: number;
+      }>;
 
     if (vectorResults.length === 0) {
       return { chunks: [], knowledgeBaseId: kbId };
@@ -180,6 +204,64 @@ export const retrieveService = {
     }
 
     return { chunks, knowledgeBaseId: kbId };
+  },
+
+  async runNode(
+    input: RetrieveInput,
+  ): Promise<RagNodeResult<RetrieveStatePatch>> {
+    const startedAtMs = Date.now();
+    const result = await this.retrieve(input);
+    return {
+      state: {
+        retrievedChunks: result.chunks,
+      },
+      observation: createRetrievalObservation({
+        startedAtMs,
+        label: "检索知识库",
+        summary:
+          result.chunks.length > 0
+            ? `已召回 ${result.chunks.length} 个候选片段`
+            : "未命中相关片段，将直接生成回答",
+        details: {
+          count: result.chunks.length,
+          topK: input.topK ?? 10,
+          knowledgeBaseId: result.knowledgeBaseId,
+          sources: result.chunks.slice(0, 5).map((chunk) => ({
+            chunkId: chunk.chunkId,
+            documentId: chunk.documentId,
+            documentName: chunk.documentName,
+            score: chunk.score,
+            contentPreview: Array.from(chunk.content).slice(0, 100).join(""),
+            contentLength: Array.from(chunk.content).length,
+          })),
+        },
+        knowledgeBaseId: result.knowledgeBaseId,
+        topK: input.topK ?? 10,
+        returnedCount: result.chunks.length,
+        result: {
+          success: true,
+          finishReason: result.chunks.length > 0 ? "retrieved" : "no-hit",
+          metrics: {
+            inputCount: input.embedding.length,
+            returnedCount: result.chunks.length,
+          },
+          response: {
+            summary: {
+              knowledgeBaseId: result.knowledgeBaseId,
+              topDocuments: result.chunks.slice(0, 3).map((chunk) => ({
+                documentName: chunk.documentName,
+                score: chunk.score,
+              })),
+            },
+          },
+        },
+        context: {
+          embeddingDimensions: input.embeddingDimensions ?? null,
+          embeddingModel: input.embeddingModel ?? null,
+          embeddingModelConfigId: input.embeddingModelConfigId ?? null,
+        },
+      }),
+    };
   },
 
   /**

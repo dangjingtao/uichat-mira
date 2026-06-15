@@ -113,14 +113,16 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
         </div>
 
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
-          <SelectInput
-            label="当前模型"
-            value={selectedModelId}
-            onChange={onSelectedModelChange}
-            options={modelOptions}
-            compact
-            error={syncError ?? undefined}
-          />
+          <div className="w-full max-w-[600px]">
+            <SelectInput
+              label="当前模型"
+              value={selectedModelId}
+              onChange={onSelectedModelChange}
+              options={modelOptions}
+              compact
+              error={syncError ?? undefined}
+            />
+          </div>
           <div className="flex items-end">
             <IconButton
               ariaLabel="保存配置并同步模型"
@@ -145,7 +147,7 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
             size="small"
             variant="secondary"
             onClick={() => onSetDefaultRole("llm")}
-            disabled={!selectedModelId || assigningRole === "llm"}
+            disabled={assigningRole === "llm" || !selectedModelId}
           >
             {assigningRole === "llm" ? "设置中..." : "设为默认 LLM"}
           </Button>
@@ -153,7 +155,7 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
             size="small"
             variant="secondary"
             onClick={() => onSetDefaultRole("embedding")}
-            disabled={!selectedModelId || assigningRole === "embedding"}
+            disabled={assigningRole === "embedding" || !selectedModelId}
           >
             {assigningRole === "embedding" ? "设置中..." : "设为默认 Embedding"}
           </Button>
@@ -161,7 +163,7 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
             size="small"
             variant="secondary"
             onClick={() => onSetDefaultRole("rerank")}
-            disabled={!selectedModelId || assigningRole === "rerank"}
+            disabled={assigningRole === "rerank" || !selectedModelId}
           >
             {assigningRole === "rerank" ? "设置中..." : "设为默认 ReRank"}
           </Button>
@@ -169,7 +171,7 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
             size="small"
             variant="secondary"
             onClick={() => onSetDefaultRole("task")}
-            disabled={!selectedModelId || assigningRole === "task"}
+            disabled={assigningRole === "task" || !selectedModelId}
           >
             {assigningRole === "task" ? "设置中..." : "设为默认 Task"}
           </Button>

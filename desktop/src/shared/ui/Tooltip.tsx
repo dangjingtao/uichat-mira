@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useId } from "react";
+import { Tooltip as ReactTooltip } from "react-tooltip";
 
 interface TooltipProps {
   children: React.ReactNode;
@@ -6,38 +7,53 @@ interface TooltipProps {
   placement?: "top" | "bottom" | "left" | "right";
 }
 
+const placementMap = {
+  top: "top",
+  bottom: "bottom",
+  left: "left",
+  right: "right",
+} as const;
+
+const tooltipClassName =
+  "z-[120] max-w-[min(24rem,calc(100vw-2rem))] whitespace-normal break-words border border-border bg-surface-primary text-left text-[10.5px] leading-4 text-text-primary shadow-[0_10px_30px_rgba(15,23,42,0.12)]";
+
+const tooltipArrowClassName = "border-border";
+
 const Tooltip: React.FC<TooltipProps> = ({
   children,
   text,
   placement = "right",
 }) => {
-  const placementClasses = {
-    top: "bottom-full mb-2 left-1/2 -translate-x-1/2",
-    bottom: "top-full mt-2 left-1/2 -translate-x-1/2",
-    left: "right-full mr-2 top-1/2 -translate-y-1/2",
-    right: "left-full ml-2 top-1/2 -translate-y-1/2",
-  };
+  const tooltipId = useId();
 
-  const arrowClasses = {
-    top: "top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-text-primary",
-    bottom: "bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-text-primary",
-    left: "right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-text-primary",
-    right: "left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-text-primary",
-  };
+  if (!text.trim()) {
+    return <>{children}</>;
+  }
 
   return (
-    <div className="group relative flex items-center">
-      {children}
-      <div
-        role="tooltip"
-        className={`pointer-events-none absolute z-50 opacity-0 transition duration-150 ease-out group-hover:opacity-100 group-focus-within:opacity-100 ${placementClasses[placement]}`}
+    <>
+      <span
+        data-tooltip-id={tooltipId}
+        data-tooltip-content={text}
+        className="inline-flex items-center"
       >
-        <div className="max-w-[min(24rem,calc(100vw-2rem))] whitespace-normal break-words rounded-lg bg-text-primary px-2.5 py-1.5 text-left text-xs leading-5 text-text-inverted shadow-shadow-lg">
-          {text}
-          <div className={`absolute ${arrowClasses[placement]}`}></div>
-        </div>
-      </div>
-    </div>
+        {children}
+      </span>
+      <ReactTooltip
+        id={tooltipId}
+        place={placementMap[placement]}
+        className={tooltipClassName}
+        classNameArrow={tooltipArrowClassName}
+        opacity={1}
+        offset={8}
+        delayShow={80}
+        noArrow={false}
+        style={{
+          borderRadius: "6px",
+          padding: "2.5px 6.5px",
+        }}
+      />
+    </>
   );
 };
 

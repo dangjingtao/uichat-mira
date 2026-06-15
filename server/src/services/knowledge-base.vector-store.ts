@@ -28,6 +28,14 @@ const toVectorPrimaryKey = (chunkId: number) => {
   return BigInt(chunkId);
 };
 
+const toVectorBlob = (embedding: number[]) => {
+  if (!Array.isArray(embedding) || embedding.length === 0) {
+    throw new Error("Embedding vector must be a non-empty numeric array");
+  }
+
+  return new Float32Array(embedding);
+};
+
 const toVectorTableName = (params: {
   knowledgeBaseId: string;
   embeddingModelConfigId: string;
@@ -227,7 +235,7 @@ export const knowledgeBaseVectorStore = {
         for (const row of rows) {
           statement.run(
             toVectorPrimaryKey(row.chunkId),
-            JSON.stringify(row.embedding),
+            toVectorBlob(row.embedding),
           );
         }
       },

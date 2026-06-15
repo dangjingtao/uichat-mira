@@ -1,5 +1,6 @@
-import React, { useId } from "react";
-import { ChevronDown } from "lucide-react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Check, ChevronDown, CircleHelp } from "lucide-react";
+import Tooltip from "./Tooltip";
 
 interface InputWrapperProps {
   label: string;
@@ -9,6 +10,7 @@ interface InputWrapperProps {
   inputId: string;
   describedById?: string;
   compact?: boolean;
+  labelHelp?: string;
 }
 
 const InputWrapper: React.FC<InputWrapperProps> = ({
@@ -19,13 +21,21 @@ const InputWrapper: React.FC<InputWrapperProps> = ({
   inputId,
   describedById,
   compact = false,
+  labelHelp,
 }) => (
   <div className={compact ? "space-y-1" : "space-y-2"}>
     <label
       htmlFor={inputId}
-      className={`text-xs font-medium ${disabled ? "text-text-tertiary" : "text-text-secondary"}`}
+      className={`flex h-5 items-center gap-1.5 text-xs font-medium ${disabled ? "text-text-tertiary" : "text-text-secondary"}`}
     >
-      {label}
+      <span>{label}</span>
+      {labelHelp ? (
+        <Tooltip text={labelHelp} placement="top">
+          <span className="text-icon-secondary">
+            <CircleHelp className="h-3.5 w-3.5" />
+          </span>
+        </Tooltip>
+      ) : null}
     </label>
     {children}
     {error ? (
@@ -73,6 +83,7 @@ interface NumberInputProps {
   disabled?: boolean;
   error?: string;
   compact?: boolean;
+  labelHelp?: string;
 }
 
 export const NumberInput: React.FC<NumberInputProps> = ({
@@ -83,6 +94,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   disabled,
   error,
   compact,
+  labelHelp,
 }) => {
   const inputId = useId();
   const describedById = error ? `${inputId}-error` : undefined;
@@ -95,6 +107,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
       inputId={inputId}
       describedById={describedById}
       compact={compact}
+      labelHelp={labelHelp}
     >
       <input
         id={inputId}
@@ -124,6 +137,7 @@ interface TextInputProps {
   error?: string;
   type?: string;
   compact?: boolean;
+  labelHelp?: string;
 }
 
 export const TextInput: React.FC<TextInputProps> = ({
@@ -135,6 +149,7 @@ export const TextInput: React.FC<TextInputProps> = ({
   error,
   type = "text",
   compact,
+  labelHelp,
 }) => {
   const inputId = useId();
   const describedById = error ? `${inputId}-error` : undefined;
@@ -147,6 +162,7 @@ export const TextInput: React.FC<TextInputProps> = ({
       inputId={inputId}
       describedById={describedById}
       compact={compact}
+      labelHelp={labelHelp}
     >
       <input
         id={inputId}
@@ -176,6 +192,7 @@ interface TextAreaProps {
   error?: string;
   rows?: number;
   compact?: boolean;
+  labelHelp?: string;
 }
 
 export const TextArea: React.FC<TextAreaProps> = ({
@@ -187,6 +204,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
   error,
   rows = 4,
   compact,
+  labelHelp,
 }) => {
   const inputId = useId();
   const describedById = error ? `${inputId}-error` : undefined;
@@ -199,6 +217,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
       inputId={inputId}
       describedById={describedById}
       compact={compact}
+      labelHelp={labelHelp}
     >
       <textarea
         id={inputId}
@@ -228,6 +247,7 @@ interface SelectInputProps {
   disabled?: boolean;
   error?: string;
   compact?: boolean;
+  labelHelp?: string;
 }
 
 export const SelectInput: React.FC<SelectInputProps> = ({
@@ -238,9 +258,74 @@ export const SelectInput: React.FC<SelectInputProps> = ({
   disabled,
   error,
   compact,
+  labelHelp,
 }) => {
   const inputId = useId();
   const describedById = error ? `${inputId}-error` : undefined;
+  const listboxId = `${inputId}-listbox`;
+  const selectRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const [open, setOpen] = useState(false);
+  const [dropUp, setDropUp] = useState(false);
+
+  const selectedIndex = useMemo(
+    () => options.findIndex((option) => option.value === value),
+    [options, value],
+  );
+  const selectedOption = selectedIndex >= 0 ? options[selectedIndex] : null;
+  const selectedLabel = selectedOption?.label ?? "请选择";
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      if (!selectRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" || event.key === "Tab") {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const triggerRect = triggerRef.current?.getBoundingClientRect();
+    if (triggerRect) {
+      setDropUp(window.innerHeight - triggerRect.bottom < 260 && triggerRect.top > 260);
+    }
+
+    requestAnimationFrame(() => {
+      optionRefs.current[selectedIndex]?.scrollIntoView({
+        block: "nearest",
+      });
+    });
+  }, [open, selectedIndex]);
+
+  const selectOption = (nextValue: string) => {
+    onChange(nextValue);
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
 
   return (
     <InputWrapper
@@ -250,31 +335,115 @@ export const SelectInput: React.FC<SelectInputProps> = ({
       inputId={inputId}
       describedById={describedById}
       compact={compact}
+      labelHelp={labelHelp}
     >
-      <div className="relative">
-        <select
+      <div ref={selectRef} className="relative">
+        <button
           id={inputId}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
+          ref={triggerRef}
+          type="button"
           disabled={disabled}
           aria-invalid={Boolean(error)}
           aria-describedby={describedById}
+          aria-controls={open ? listboxId : undefined}
+          aria-expanded={open}
+          aria-haspopup="listbox"
+          onClick={() => setOpen((current) => !current)}
+          onKeyDown={(event) => {
+            if (disabled) {
+              return;
+            }
+
+            if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              setOpen(true);
+            }
+          }}
           className={`
             cursor-pointer
-            appearance-none
+            text-left
             pr-10
             ${inputBaseClassName}
             ${getInputSizeClassName(compact)}
             ${error ? "border-danger" : ""}
           `}
         >
-          {options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-icon-secondary" />
+          <span className="block truncate">{selectedLabel}</span>
+        </button>
+        <ChevronDown
+          className={`pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-icon-secondary transition-transform duration-150 ${
+            open ? "rotate-180" : ""
+          }`}
+        />
+
+        {open && !disabled ? (
+          <div
+            id={listboxId}
+            role="listbox"
+            aria-labelledby={inputId}
+            className={`
+              absolute
+              left-0
+              z-30
+              max-h-64
+              w-full
+              overflow-y-auto
+              rounded-lg
+              border
+              border-border
+              bg-surface-elevated
+              p-1
+              shadow-shadow-lg
+              outline-none
+              ${dropUp ? "bottom-full mb-1.5" : "top-full mt-1.5"}
+            `}
+          >
+            {options.length > 0 ? (
+              options.map((opt, index) => {
+                const selected = opt.value === value;
+
+                return (
+                  <button
+                    key={opt.value}
+                    ref={(node) => {
+                      optionRefs.current[index] = node;
+                    }}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    onClick={() => selectOption(opt.value)}
+                    className={`
+                      flex
+                      w-full
+                      items-center
+                      gap-2
+                      rounded-md
+                      px-2.5
+                      py-2
+                      text-left
+                      text-sm
+                      transition-colors
+                      duration-150
+                      focus:outline-none
+                      focus-visible:ring-2
+                      focus-visible:ring-primary/20
+                      ${
+                        selected
+                          ? "bg-primary/10 text-primary"
+                          : "text-text-primary hover:bg-surface-secondary"
+                      }
+                    `}
+                  >
+                    <span className="min-w-0 flex-1 truncate">{opt.label}</span>
+                    {selected ? <Check className="h-4 w-4 flex-shrink-0" /> : null}
+                  </button>
+                );
+              })
+            ) : (
+              <div className="px-2.5 py-2 text-sm text-text-tertiary">暂无选项</div>
+            )}
+          </div>
+        ) : null}
       </div>
     </InputWrapper>
   );

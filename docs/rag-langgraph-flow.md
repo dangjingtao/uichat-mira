@@ -19,17 +19,23 @@
 
 ## 入口接口
 
-RAG 相关后端接口当前有三条：
+RAG 相关后端入口当前分为两类：
 
-1. `POST /chat/rag`
+1. `POST /proxy/chat/default`
+   桌面聊天 UI 的实际默认入口。当线程 `rag_enabled = 1` 且本次消息可提取出有效用户问题时，路由会切到 `ragPipeline.assistantStream(...)`。
+   另外，这一层在进入 graph 前还会先检查默认知识库是否存在可用文档：
+   - 若 `enabledDocumentCount = 0`，则不进入 graph，而是直接走固定拒答流式分支
+   - 该分支仍会按 assistant stream 协议输出文本，并正常落库与生成标题
+2. `POST /chat/rag`
    返回非流式最终结果。
-2. `POST /chat/rag/stream`
+3. `POST /chat/rag/stream`
    返回 SSE 流式结果。
-3. `POST /chat/rag/retrieve`
+4. `POST /chat/rag/retrieve`
    仅执行检索与重排，不执行生成。
 
 对应路由文件：
 
+- `server/src/routes/proxy-provider.ts`
 - `server/src/routes/chat-rag.ts`
 
 ## 分层职责
@@ -38,16 +44,368 @@ RAG 相关后端接口当前有三条：
 
 `server/src/services/rag-nodes/` 是最底层的能力节点，负责单步动作：
 
+- `rewrite.service.ts`
+  负责在需要时把用户当前问题改写成更适合知识库检索的查询。
 - `embed.service.ts`
   负责 query 向量化。
 - `retrieve.service.ts`
   负责向量检索与文档过滤。
 - `rerank.service.ts`
-  负责结果重排。
+  负责结果重排；优先调用当前默认的 rerank 模型，未配置或调用失败时回退到原始检索分排序。
 - `generate.service.ts`
   负责基于上下文生成答案，并提供纯文本 token 流。
 
 这一层只关心“单节点能力”，不负责完整流程编排。
+
+## Node Standard IO
+
+当前项目中，每个可观测 RAG 节点都应遵循统一的标准 IO 契约。
+
+相关文件：
+
+- `server/src/services/rag-node-contract.ts`
+- `server/src/services/rag-events.ts`
+- `server/src/services/rag-node-observation.ts`
+
+### 标准输入
+
+节点输入由 graph 负责组织，通常包括：
+
+- 当前节点执行业务所需的最小输入
+- 来自上游节点的状态字段
+- 必要的运行时配置
+
+例如：
+
+- `rewrite` 输入：`question`, `conversationHistory`
+- `embed` 输入：`retrievalQuestion`
+- `retrieve` 输入：`embedding`, `embeddingDimensions`, `embeddingModel`, `knowledgeBaseId`, `topK`
+- `rerank` 输入：`question`, `retrievedChunks`, `topN`
+- `generate` 输入：`question`, `chunks`, `systemPrompt`, `conversationHistory`
+
+### 标准输出
+
+每个节点服务应提供形如 `runNode(...)` 的方法，并返回：
+
+```ts
+type RagNodeResult<TStatePatch> = {
+  state: TStatePatch;
+  observation: {
+    label: string;
+    summary?: string;
+    details?: Record<string, unknown>;
+    sources?: RetrievedChunk[];
+    environment?: {
+      model?: {
+        role?: "task" | "llm" | "embedding" | "rerank" | string;
+        providerCode?: string;
+        providerLabel?: string;
+        protocol?: string;
+        operation?: string;
+        endpoint?: string;
+        model?: string;
+        modelConfigId?: string;
+        params?: Record<string, unknown>;
+        request?: {
+          method?: string;
+          url?: string;
+          body?: Record<string, unknown>;
+        };
+      };
+      result?: {
+        success?: boolean;
+        finishReason?: string;
+        statusCode?: number;
+        error?: {
+          code?: string;
+          type?: string;
+          message: string;
+        };
+        usage?: {
+          inputTokens?: number;
+          outputTokens?: number;
+          totalTokens?: number;
+        };
+        metrics?: {
+          inputCount?: number;
+          outputCount?: number;
+          returnedCount?: number;
+          candidateCount?: number;
+        };
+        response?: {
+          requestId?: string;
+          model?: string;
+          summary?: Record<string, unknown>;
+        };
+      };
+      retrieval?: {
+        knowledgeBaseId?: string | null;
+        topK?: number | null;
+        topN?: number | null;
+        candidateCount?: number | null;
+        returnedCount?: number | null;
+      };
+      timing?: {
+        startedAt: string;
+        finishedAt: string;
+        durationMs: number;
+      };
+      context?: Record<string, unknown>;
+    };
+  };
+};
+```
+
+含义：
+
+- `state`
+  该节点写回 graph 状态的增量字段，只表达业务结果
+- `observation.label`
+  节点的人类可读名称，供前端展示
+- `observation.summary`
+  节点执行结果摘要
+- `observation.details`
+  节点结构化调试信息
+- `observation.sources`
+  节点希望主动广播给前端的引用来源
+- `observation.environment`
+  节点运行环境信息。该字段是前端观测协议的重要组成部分，不应随意省略或改名
+
+### `environment` 约束
+
+所有节点都应尽量返回 `environment`。
+
+最低要求：
+
+- `timing.startedAt`
+- `timing.finishedAt`
+- `timing.durationMs`
+
+涉及模型调用的节点必须返回：
+
+- `environment.model.role`
+- `environment.model.providerCode` 如果可解析
+- `environment.model.providerLabel` 如果可解析
+- `environment.model.protocol` 如果可解析
+- `environment.model.operation` 如果可解析
+- `environment.model.endpoint` 如果可解析
+- `environment.model.model` 如果可解析
+- `environment.model.modelConfigId` 如果可解析
+- `environment.model.params` 如果有明确调用参数
+- `environment.model.request.method`
+- `environment.model.request.url`
+- `environment.model.request.body` 如果可以安全提供请求摘要
+- `environment.result.success`
+- `environment.result.finishReason`
+- `environment.result.metrics`
+- `environment.result.response.summary`
+- `environment.timing.*`
+
+涉及检索行为的节点应返回：
+
+- `environment.retrieval.knowledgeBaseId` 如果适用
+- `environment.retrieval.topK` / `topN` 如果适用
+- `environment.retrieval.candidateCount` / `returnedCount` 如果适用
+
+### 广播规则
+
+graph 不再自行拼装节点展示文案，而是消费节点标准输出并统一广播：
+
+- 节点开始时，graph 发 `rag-node(start)`
+- 节点完成时，graph 读取 `observation` 发 `rag-node(done)`
+- 节点失败时，graph 发 `rag-node(error)`
+- 当 `observation.sources` 存在时，graph 发 `rag-sources`
+
+因此：
+
+- 节点业务结果由 `state` 表达
+- 节点观测结果由 `observation` 表达
+- pipeline 只做协议转发，不承担节点文案拼装责任
+
+### Observation Builder 分层
+
+为了避免节点各自手工拼装相似的观测结构，当前项目提供统一 builder：
+
+- `createObservation(...)`
+  最基础的 observation 构造器，适用于非通用类型节点
+- `createModelCallObservation(...)`
+  适用于涉及模型调用的节点
+- `createRetrievalObservation(...)`
+  适用于以检索行为为主的节点
+- `createModelEnvironment(...)`
+  构造 `environment.model`
+- `createTimedEnvironment(...)`
+  构造带 timing 的 `environment`
+
+使用建议：
+
+- `rewrite`
+  可使用 `createObservation(...)`，因为它既不是标准 embedding 调用，也不是标准 retrieval 节点
+- `embed`
+  使用 `createModelCallObservation(...)`
+- `retrieve`
+  使用 `createRetrievalObservation(...)`
+- `rerank`
+  使用 `createModelCallObservation(...)`
+- `generate`
+  使用 `createModelCallObservation(...)`
+
+原则：
+
+- 优先使用更高层的专用 builder
+- 只有在现有 builder 不能表达节点语义时，才退回 `createObservation(...)`
+- 不要在节点里重复手工拼装 timing、model environment 或 retrieval environment
+
+### 新增节点约束
+
+后续新增节点时，必须满足：
+
+1. 在对应 `*.service.ts` 中实现 `runNode(...)`
+2. `runNode(...)` 返回标准 `RagNodeResult<TStatePatch>`
+3. 节点的展示文案、摘要、详情必须定义在节点输出中，而不是写入 pipeline
+4. graph 只负责接线、路由、广播，不负责节点业务说明文案
+5. 优先复用 `rag-node-observation.ts` 中的 builder，而不是在节点里复制环境拼装逻辑
+
+### 当前节点 IO
+
+#### `rewrite`
+
+输入：
+
+- `question: string`
+- `conversationHistory?: NormalizedChatMessage[]`
+
+输出 `state`：
+
+- `retrievalQuestion: string`
+- `queryRewritten: boolean`
+- `queryRewriteReason: string`
+
+输出 `observation`：
+
+- `label = "准备检索问题"`
+- `summary`
+- `details.rewritten`
+- `details.reason`
+- `details.retrievalQuestion`
+- `environment.model.role = "task"`
+- `environment.timing.*`
+- `environment.context.historyMessageCount`
+- `environment.context.originalQuestionLength`
+
+#### `embed`
+
+输入：
+
+- `retrievalQuestion: string`
+
+输出 `state`：
+
+- `embedding: number[]`
+- `embeddingDimensions: number`
+- `embeddingModel: string`
+- `embeddingModelConfigId: string`
+
+输出 `observation`：
+
+- `label = "生成查询向量"`
+- `summary`
+- `details.dimensions`
+- `details.model`
+- `details.modelConfigId`
+- `environment.model.role = "embedding"`
+- `environment.model.providerCode`
+- `environment.model.model`
+- `environment.model.modelConfigId`
+- `environment.timing.*`
+- `environment.context.inputLength`
+
+#### `retrieve`
+
+输入：
+
+- `embedding: number[]`
+- `embeddingDimensions?: number`
+- `embeddingModel?: string`
+- `embeddingModelConfigId?: string`
+- `knowledgeBaseId?: string`
+- `topK?: number`
+
+输出 `state`：
+
+- `retrievedChunks: RetrievedChunk[]`
+
+输出 `observation`：
+
+- `label = "检索知识库"`
+- `summary`
+- `details.count`
+- `details.topK`
+- `details.knowledgeBaseId`
+- `details.sources`
+- `environment.retrieval.knowledgeBaseId`
+- `environment.retrieval.topK`
+- `environment.retrieval.returnedCount`
+- `environment.timing.*`
+- `environment.context.embeddingDimensions`
+- `environment.context.embeddingModel`
+- `environment.context.embeddingModelConfigId`
+
+#### `rerank`
+
+输入：
+
+- `question: string`
+- `retrievedChunks: RetrievedChunk[]`
+- `topN?: number`
+
+输出 `state`：
+
+- `rerankedChunks: RetrievedChunk[]`
+- `sources: RetrievedChunk[]`
+
+输出 `observation`：
+
+- `label = "重排候选结果"`
+- `summary`
+- `details.count`
+- `details.topN`
+- `details.sources`
+- `environment.model.role = "rerank"`
+- `environment.model.providerCode`
+- `environment.model.model`
+- `environment.model.params`
+- `environment.retrieval.topN`
+- `environment.retrieval.candidateCount`
+- `environment.retrieval.returnedCount`
+- `environment.timing.*`
+
+#### `generate`
+
+输入：
+
+- `question: string`
+- `chunks: RetrievedChunk[]`
+- `systemPrompt?: string`
+- `conversationHistory?: NormalizedChatMessage[]`
+
+输出 `state`：
+
+- `answer: string`
+- `sources: RetrievedChunk[]`
+
+输出 `observation`：
+
+- `label = "组织回答"`
+- `summary`
+- `details.sourceCount`
+- `sources`
+- `environment.model.role = "llm"`
+- `environment.retrieval.candidateCount`
+- `environment.retrieval.returnedCount`
+- `environment.timing.*`
+- `environment.context.conversationHistoryCount`
+- `environment.context.systemPromptProvided`
 
 ### `rag-graph`
 
@@ -62,15 +420,17 @@ RAG 相关后端接口当前有三条：
 
 当前图中的节点顺序是：
 
-1. `embed`
-2. `retrieve`
-3. `rerank` 或直接 `generate`
-4. `generate`
+1. `rewrite`
+2. `embed`
+3. `retrieve`
+4. `rerank`、`fallbackAnswer` 或直接 `fallbackAnswer`
+5. `generate`
 
 其中有一条条件边：
 
 - 当 `retrievedChunks.length > 0` 时，进入 `rerank`
-- 当 `retrievedChunks.length === 0` 时，跳过 `rerank`，直接进入 `generate`
+- 当 `retrievedChunks.length === 0` 时，直接进入 `fallbackAnswer`
+- 当 `rerankedChunks.length === 0` 时，进入 `fallbackAnswer`
 
 ### `rag-pipeline`
 
@@ -80,7 +440,7 @@ RAG 相关后端接口当前有三条：
 
 - 非流式时调用 `ragGraph.run()`
 - 流式时调用 `ragGraph.streamEvents()`
-- 将 graph 原生事件转换为当前前端兼容的 SSE 事件格式
+- 将 graph 广播出来的节点事件和生成事件转发为当前前端兼容的 SSE 事件格式
 
 ### `rag-runables`
 
@@ -110,16 +470,21 @@ flowchart TD
 
     subgraph H["LangGraph StateGraph<br/>server/src/services/rag-graph.ts"]
         H1["START"]
-        H2["embed 节点<br/>embedService.embedSingle(question)"]
-        H3["retrieve 节点<br/>retrieveService.retrieve(embedding, kbId, topK)"]
-        H4{"retrievedChunks > 0 ?"}
-        H5["rerank 节点<br/>rerankService.rerank(question, chunks, topN)"]
-        H6["generate 节点<br/>generateService.streamGenerateText(...)"]
-        H7["END"]
+        H2["rewrite 节点<br/>rewriteService.maybeRewrite(question, history)"]
+        H3["embed 节点<br/>embedService.embedSingle(retrievalQuestion)"]
+        H4["retrieve 节点<br/>retrieveService.retrieve(embedding, kbId, topK)"]
+        H5{"retrievedChunks > 0 ?"}
+        H6["rerank 节点<br/>rerankService.rerankWithProvider(question, chunks, topN)"]
+        H7{"rerankedChunks > 0 ?"}
+        H8["fallbackAnswer 节点<br/>返回固定拒答"]
+        H9["generate 节点<br/>generateService.streamGenerateText(...)"]
+        H10["END"]
 
-        H1 --> H2 --> H3 --> H4
-        H4 -->|是| H5 --> H6 --> H7
-        H4 -->|否| H6 --> H7
+        H1 --> H2 --> H3 --> H4 --> H5
+        H5 -->|是| H6 --> H7
+        H5 -->|否| H8 --> H10
+        H7 -->|是| H9 --> H10
+        H7 -->|否| H8
     end
 
     F --> H
@@ -129,8 +494,8 @@ flowchart TD
 
     I --> J["ragPipeline.run 整理结果<br/>{ answer, sources }"]
 
-    H6 --> K["LangGraph custom stream<br/>generate-delta token"]
-    H --> L["LangGraph updates stream<br/>embed/retrieve/rerank/generate 状态更新"]
+    H9 --> K["LangGraph custom stream<br/>generate-delta token"]
+    H --> L["LangGraph updates stream<br/>rewrite/embed/retrieve/rerank/generate 状态更新"]
 
     K --> M["ragPipeline.stream 转换为 SSE<br/>text-start / text-delta / text-end"]
     L --> N["ragPipeline.stream 转换为 SSE<br/>step:start / step:done / sources"]
@@ -145,12 +510,13 @@ flowchart TD
 ```mermaid
 flowchart LR
     A["输入状态<br/>question, knowledgeBaseId, topK, topN, systemPrompt"]
-    A --> B["embed 后<br/>+ embedding"]
-    B --> C["retrieve 后<br/>+ retrievedChunks"]
-    C --> D["rerank 后<br/>+ rerankedChunks, sources"]
-    C --> E["无召回时直接 generate"]
-    D --> F["generate 后<br/>+ answer, sources"]
-    E --> F
+    A --> B["rewrite 后<br/>+ retrievalQuestion, queryRewritten"]
+    B --> C["embed 后<br/>+ embedding"]
+    C --> D["retrieve 后<br/>+ retrievedChunks"]
+    D --> E["rerank 后<br/>+ rerankedChunks, sources<br/>score 优先使用 rerank relevance_score"]
+    D --> F["无召回时直接 generate"]
+    E --> G["generate 后<br/>+ answer, sources"]
+    F --> G
 ```
 
 ## 非流式链路
@@ -161,7 +527,7 @@ flowchart LR
 2. 调用 `ragPipeline.run(input)`
 3. `ragPipeline.run()` 调用 `ragGraph.run(input)`
 4. `ragGraph.run()` 触发 `StateGraph.invoke(input)`
-5. graph 按顺序执行 `embed -> retrieve -> rerank/generate`
+5. graph 按顺序执行 `rewrite -> embed -> retrieve -> rerank/fallbackAnswer -> generate`
 6. graph 最终产出：
    - `answer`
    - `sources`
@@ -176,6 +542,9 @@ flowchart LR
 - 对外接口简单
 - 内部状态完整
 - 编排逻辑由 LangGraph 统一承担
+- 当默认 rerank 模型已配置且启用时，`sources.score` 使用 rerank 返回的 `relevance_score`
+- 当 rerank 未配置、未启用或外部调用失败时，流程自动回退到原始向量检索排序
+- 当最终可用候选片段数为 `0` 时，后端直接返回固定拒答，不再调用生成模型
 
 ## 流式链路
 
@@ -189,39 +558,37 @@ flowchart LR
 
 这里有两类 graph 事件：
 
-### `updates`
-
-用于表示步骤状态更新，例如：
-
-- `embed` 完成
-- `retrieve` 完成
-- `rerank` 完成
-- `generate` 最终状态写入
-
-这一类事件被转换成前端可识别的：
-
-- `step`
-- `sources`
-
 ### `custom`
 
-用于表示生成阶段的 token 增量。
+当前实现把“节点可观测事件”和“生成阶段 token 增量”都放在 custom stream 中广播。
 
-当前 `generate` 节点内部通过 LangGraph `writer` 发出：
+其中节点自己负责发出：
+
+- `type: "rag-node"`
+  包含 `nodeId`、`nodeType`、`phase`、`label`、`summary`、`details`
+- `type: "rag-sources"`
+  用于广播节点产出的引用来源
+
+生成节点另外发出：
 
 - `type: "generate-delta"`
 
-然后 `ragPipeline.stream()` 再把它转换成当前前端使用的：
+然后 `ragPipeline.stream()` 再把这些 custom 事件转换成前端使用的：
 
+- `data-rag-node`
+- `sources`
 - `text-start`
 - `text-delta`
 - `text-end`
 
 这样做的结果是：
 
-- 步骤编排和状态流由 graph 统一提供
+- 节点自己的可观测信息由节点自己广播
+- pipeline 只负责协议转发，不再拼装节点进度文案
 - token 级流式体验仍然保留
 - 不需要让前端直接理解 LangGraph 原生事件格式
+
+桌面聊天 UI 走 `POST /proxy/chat/default` 时，内部复用的是同一条 graph 主流程，只是外层使用 `ragPipeline.assistantStream()` 转换成 assistant-ui / AI SDK transport 兼容的事件格式。
 
 ## 当前 SSE 事件兼容策略
 
@@ -259,6 +626,27 @@ flowchart LR
 - 但 HTTP 流协议还不是 LangGraph 原生协议
 
 这是当前为了兼容现有前端做的折中，而不是最终极形态。
+
+## 运行时日志
+
+当前可以通过 `server/logs/server.log` 观察 RAG 与 rerank 是否真的执行：
+
+- `scope: "proxy-provider", event: "rag-branch-enter"`
+  表示 `POST /proxy/chat/default` 已命中 RAG 分支。
+- `scope: "rag-graph", event: "retrieve-complete"`
+  表示检索完成，可查看 `retrievedCount`、`topK`、`topN`。
+- `scope: "rag-graph", event: "rerank-enter"` / `event: "rerank-exit"`
+  表示 graph 已进入 rerank 节点并返回结果。
+- `scope: "rag-rerank"`
+  表示 rerank 服务层的实际行为，常见事件包括：
+  - `start`
+  - `success`
+  - `skipped`
+  - `fallback`
+
+如果只看到 `retrieve-complete` 且 `retrievedCount = 0`，说明这次检索没有召回 chunk，所以 graph 会按设计直接跳过 rerank。
+
+如果看到 `rerank-exit` 但 `rerankedCount = 0`，说明重排后没有保留任何候选片段，graph 会直接返回固定拒答，不再调用生成模型。
 
 ## 后续建议
 

@@ -3,6 +3,8 @@
 use std::path::PathBuf;
 #[cfg(not(debug_assertions))]
 use std::process::Command;
+#[cfg(all(windows, not(debug_assertions)))]
+use std::os::windows::process::CommandExt;
 #[cfg(not(debug_assertions))]
 use std::sync::Mutex;
 use std::sync::OnceLock;
@@ -17,6 +19,9 @@ use tauri::{Manager, RunEvent};
 
 #[cfg(not(debug_assertions))]
 struct BackendProcess(Mutex<Option<std::process::Child>>);
+
+#[cfg(all(windows, not(debug_assertions)))]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[cfg(not(debug_assertions))]
 fn stop_backend_process<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
@@ -376,21 +381,25 @@ fn start_backend_process(
     log_dir: &Path,
     jwt_secret: &str,
     settings_secret: &str,
-) -> Option<std::process::Child> {
+) -> Result<std::process::Child, String> {
     let server_path = get_resource_path().join("server.cjs");
     let cwd = get_resource_path();
 
     if !server_path.exists() {
-        eprintln!("Backend server not found at: {:?}", server_path);
-        return None;
+        return Err(format!("Backend server not found at {:?}", server_path));
     }
 
     let node_exe = find_node_executable();
+    if !node_exe.exists() {
+        return Err(format!("Bundled node runtime not found at {:?}", node_exe));
+    }
+
     println!("Starting backend with node: {:?}", node_exe);
     println!("Server path: {:?}", server_path);
     println!("Working directory: {:?}", cwd);
 
-    Command::new(&node_exe)
+    let mut command = Command::new(&node_exe);
+    command
         .arg(&server_path)
         .current_dir(&cwd)
         .env("HOST", &get_runtime_config().backend_host)
@@ -401,9 +410,14 @@ fn start_backend_process(
         .env("UI_CHAT_ALLOW_DEFAULT_BOOTSTRAP", "1")
         .env("UI_CHAT_BACKEND_URL", get_backend_url())
         .env("UI_CHAT_DATABASE_DIR", data_dir)
-        .env("UI_CHAT_LOG_DIR", log_dir)
+        .env("UI_CHAT_LOG_DIR", log_dir);
+
+    #[cfg(all(windows, not(debug_assertions)))]
+    command.creation_flags(CREATE_NO_WINDOW);
+
+    command
         .spawn()
-        .ok()
+        .map_err(|error| format!("Failed to spawn bundled backend: {}", error))
 }
 
 #[cfg(not(debug_assertions))]
@@ -441,8 +455,8 @@ pub fn run() {
             std::fs::create_dir_all(&log_dir)
                 .map_err(|error| format!("Failed to create log directory {:?}: {}", log_dir, error))?;
 
-            let process = start_backend_process(&data_dir, &log_dir, &jwt_secret, &settings_secret);
-            *app.state::<BackendProcess>().0.lock().unwrap() = process;
+            let process = start_backend_process(&data_dir, &log_dir, &jwt_secret, &settings_secret)?;
+            *app.state::<BackendProcess>().0.lock().unwrap() = Some(process);
             Ok(())
         });
 

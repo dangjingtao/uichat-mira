@@ -22,6 +22,35 @@ import {
 import { StatusIndicator } from "@/shared/ui/StatusIndicator";
 import { DEFAULT_SEGMENT_MODE, formatCompactNumber, getTypeBadge } from "./mockData";
 
+const PREVIEW_SAMPLE_COUNT = 10;
+
+const samplePreviewChunks = (
+  chunks: KnowledgeBaseDocumentDetail["chunks"],
+  sampleCount = PREVIEW_SAMPLE_COUNT,
+) => {
+  if (chunks.length <= sampleCount) {
+    return chunks;
+  }
+
+  const indices = new Set<number>();
+  const step = chunks.length / sampleCount;
+
+  for (let index = 0; index < sampleCount; index += 1) {
+    const base = Math.floor(index * step);
+    const jitterWindow = Math.max(1, Math.floor(step / 3));
+    const jitter = Math.floor(Math.random() * jitterWindow);
+    indices.add(Math.min(chunks.length - 1, base + jitter));
+  }
+
+  while (indices.size < sampleCount) {
+    indices.add(Math.floor(Math.random() * chunks.length));
+  }
+
+  return Array.from(indices)
+    .sort((left, right) => left - right)
+    .map((index) => chunks[index]!);
+};
+
 export default function KnowledgeBaseDetail() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -51,7 +80,10 @@ export default function KnowledgeBaseDetail() {
     })();
   }, [documentId]);
 
-  const previewChunks = useMemo(() => document?.chunks ?? [], [document]);
+  const previewChunks = useMemo(
+    () => samplePreviewChunks(document?.chunks ?? []),
+    [document],
+  );
 
   if (loading) {
     return <FullPageStatus message="正在加载文档详情..." />;
@@ -165,7 +197,7 @@ export default function KnowledgeBaseDetail() {
             <div>
               <h2 className="text-base font-semibold text-text-primary">文档分段预览</h2>
               <p className="text-sm text-text-secondary">
-                这里展示真实的切分结果，方便直接核对入库后的片段内容。
+                这里随机展示分布较均匀的 10 条真实切分结果，方便快速核对入库后的片段内容。
               </p>
             </div>
           </div>

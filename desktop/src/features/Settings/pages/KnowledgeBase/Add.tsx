@@ -13,7 +13,6 @@ import {
   ScanSearch,
   PartyPopper,
   RotateCcw,
-  Search,
   Settings2,
   Sparkles,
 } from "lucide-react";
@@ -22,26 +21,20 @@ import { message } from "@/shared/ui/Message";
 import Card from "@/shared/ui/Card";
 import { FileListItem } from "@/shared/ui/FileListItem";
 import { FileUploadDropzone } from "@/shared/ui/FileUploadDropzone";
+import { NumberInput, SelectInput, TextArea, TextInput } from "@/shared/ui/Input";
 import { StepIndicator } from "@/shared/ui/StepIndicator";
+import Switch from "@/shared/ui/Switch";
 import Tooltip from "@/shared/ui/Tooltip";
+import type { RoleModelConfig } from "@/shared/api/modelSettings";
 import {
-  getRoleModelConfigs,
-  type RoleModelConfig,
-} from "@/shared/api/modelSettings";
-import {
-  getGlobalModelAccessStatus,
-  resolveGlobalModelAccessStatus,
-  type GlobalModelAccessStatus,
-} from "@/shared/business/modelAccess";
-import {
-  createKnowledgeBaseDocument,
-  type KnowledgeBaseDocumentDetail,
+  getKnowledgeBaseDocumentStatus,
+  previewKnowledgeBaseChunks,
+  type ChunkPreviewResult,
+  type ChunkingConfig,
+  type KnowledgeBaseDocument,
+  uploadKnowledgeBaseDocument,
 } from "@/shared/api/knowledgeBase";
-import {
-  splitTextIntoChunks,
-  type ChunkSettings,
-  type PreviewChunk,
-} from "./textSplitter";
+import { useRoleModelConfigs } from "@/app/providers/RoleModelConfigProvider";
 
 type UploadStep = 1 | 2 | 3;
 
@@ -53,18 +46,27 @@ type UploadFileItem = {
   size: number;
 };
 
-type RetrievalMode = "vector" | "fulltext";
-
-const initialSettings: ChunkSettings = {
+const initialSettings: ChunkingConfig = {
+  splitterType: "recursive",
+  chunkSize: 1024,
+  chunkOverlap: 50,
+  keepSeparator: true,
   separator: "\\n\\n",
-  maxLength: 1024,
-  overlap: 50,
+  separators: ["\\n\\n", "\\n", " ", ""],
+  presetLanguage: "markdown",
+  encodingName: "cl100k_base",
+  allowedSpecial: [],
+  disallowedSpecial: "all",
+  lengthMetric: "characters",
   replaceWhitespace: true,
   removeUrls: false,
   useQaSplit: false,
 };
 
 const initialFiles: UploadFileItem[] = [];
+const maxUploadFileSize = 100 * 1024 * 1024;
+const pollingIntervalMs = 1500;
+const pollingTimeoutMs = 10 * 60 * 1000;
 
 const steps = [
   { step: 1 as UploadStep, label: "选择数据源" },
@@ -73,13 +75,62 @@ const steps = [
 ];
 
 const splitterHints = {
-  separator: "通常填写 \\n\\n 表示按段落切分；如果文档结构更规整，也可以换成自定义分隔符。",
-  maxLength: "单个分块允许的最大字符数。值越大，上下文更完整；值越小，召回会更细。",
-  overlap: "相邻分块之间保留的重复字符数，用来减少信息被切断的风险。常见范围 30 ~ 100。",
+  splitterType: "选择 LangChain 文本切块器。不同 splitter 会影响 chunk 的结构、边界和语义保持方式。",
+  chunkSize: "单个分块允许的最大长度。值越大，上下文更完整；值越小，召回会更细。",
+  chunkOverlap: "相邻分块之间保留的重叠长度，用来减少信息被切断的风险。",
+  keepSeparator: "保留分隔符通常更利于保留 Markdown、代码或段落边界。",
+  separator: "Character splitter 使用的分隔符，例如 \\n\\n。",
+  separators: "Recursive splitter 的分隔符优先级列表，逗号或换行分隔。",
+  presetLanguage: "Recursive splitter 可以直接套用语言预置分隔规则。",
+  encodingName: "Token splitter 使用的编码器名称。",
+  allowedSpecial: "允许通过的特殊 token，多个值用逗号分隔。",
+  disallowedSpecial: "禁止的特殊 token，默认 all。",
+  lengthMetric: "控制 chunkSize / overlap 的长度单位。",
   replaceWhitespace: "清理多余空格、制表符和连续空行，适合大多数 md/txt 文档。",
   removeUrls: "适合知识正文场景；如果链接本身有意义，建议关闭这一项。",
   useQaSplit: "优先识别 Q:/A:、问:/答: 这类结构，再进行长度切分，适合 FAQ 文档。",
 } as const;
+
+function FieldHelpLabel({
+  label,
+  hint,
+}: {
+  label: string;
+  hint: string;
+}) {
+  return (
+    <div className="mb-1 flex h-5 items-center gap-1.5 text-xs font-medium text-text-secondary">
+      <span>{label}</span>
+      <Tooltip text={hint} placement="top">
+        <span className="text-icon-secondary">
+          <CircleHelp className="h-3.5 w-3.5" />
+        </span>
+      </Tooltip>
+    </div>
+  );
+}
+
+function SwitchField({
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <div className="min-w-0">
+      <FieldHelpLabel label={label} hint={hint} />
+      <div className="flex h-8 items-center justify-between gap-3 rounded-lg border border-border bg-surface-primary px-2.5 text-sm text-text-primary shadow-shadow-sm">
+        <span className="min-w-0 truncate">{label}</span>
+        <Switch checked={checked} onChange={onChange} ariaLabel={label} size="sm" />
+      </div>
+    </div>
+  );
+}
 
 function ModelAccessStatusPill({
   label,
@@ -103,6 +154,13 @@ function resolveStep(value: string | null): UploadStep {
   if (value === "2") return 2;
   if (value === "3") return 3;
   return 1;
+}
+
+function parseListInput(value: string) {
+  return value
+    .split(/[\n,，]/g)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function ModelStatusCard({
@@ -163,31 +221,33 @@ export default function KnowledgeBaseAddWizard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const currentStep = resolveStep(searchParams.get("step"));
   const [files, setFiles] = useState<UploadFileItem[]>(initialFiles);
-  const [settings, setSettings] = useState<ChunkSettings>(initialSettings);
-  const [previewChunks, setPreviewChunks] = useState<PreviewChunk[]>([]);
+  const [settings, setSettings] = useState<ChunkingConfig>(initialSettings);
+  const [previewChunks, setPreviewChunks] = useState<ChunkPreviewResult["sampleChunks"]>([]);
+  const [previewStats, setPreviewStats] = useState<ChunkPreviewResult["stats"] | null>(null);
   const [previewFileId, setPreviewFileId] = useState<string>("");
-  const [retrievalMode, setRetrievalMode] = useState<RetrievalMode>("fulltext");
-  const [roleConfigs, setRoleConfigs] = useState<RoleModelConfig[]>([]);
-  const [modelAccessStatus, setModelAccessStatus] = useState<GlobalModelAccessStatus | null>(
-    null,
-  );
-  const [loadingConfigs, setLoadingConfigs] = useState(false);
   const [processingProgress, setProcessingProgress] = useState(0);
   const [processingDone, setProcessingDone] = useState(false);
   const [processingError, setProcessingError] = useState<string | null>(null);
-  const [createdDocuments, setCreatedDocuments] = useState<KnowledgeBaseDocumentDetail[]>([]);
+  const [createdDocuments, setCreatedDocuments] = useState<KnowledgeBaseDocument[]>([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const {
+    configs: roleConfigs,
+    configMap,
+    modelAccessStatus,
+    refresh,
+  } = useRoleModelConfigs();
 
   const canProceedStep1 = files.length > 0;
-  const llmConfig = roleConfigs.find((item) => item.type === "llm") ?? null;
-  const embeddingConfig = roleConfigs.find((item) => item.type === "embedding") ?? null;
-  const rerankConfig = roleConfigs.find((item) => item.type === "rerank") ?? null;
+  const llmConfig = configMap.llm;
+  const embeddingConfig = configMap.embedding;
+  const rerankConfig = configMap.rerank;
   const canProceedStep2 = Boolean(
     llmConfig?.providerCode && llmConfig?.remoteModelId && embeddingConfig?.providerCode && embeddingConfig?.remoteModelId,
   );
   const canUploadDocument = modelAccessStatus?.embeddingConnected ?? false;
 
   const helperText = useMemo(
-    () => "已支持 MARKDOWN、TXT，一次只能上传 1 个文件，每个文件不超过 15 MB。",
+    () => "已支持 MARKDOWN、TXT，一次只能上传 1 个文件，每个文件不超过 100 MB。",
     [],
   );
   const activeFile = files.find((item) => item.id === previewFileId) ?? files[0] ?? null;
@@ -197,36 +257,12 @@ export default function KnowledgeBaseAddWizard() {
   );
 
   useEffect(() => {
-    void (async () => {
-      try {
-        const status = await getGlobalModelAccessStatus();
-        setModelAccessStatus(status);
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "加载模型接入状态失败";
-        message.error(errorMessage);
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
     if (currentStep !== 2) {
       return;
     }
 
-    void (async () => {
-      try {
-        setLoadingConfigs(true);
-        const configs = await getRoleModelConfigs();
-        setRoleConfigs(configs);
-        setModelAccessStatus(resolveGlobalModelAccessStatus(configs));
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "加载模型配置失败";
-        message.error(errorMessage);
-      } finally {
-        setLoadingConfigs(false);
-      }
-    })();
-  }, [currentStep]);
+    void refresh();
+  }, [currentStep, refresh]);
 
   useEffect(() => {
     if (currentStep !== 3) {
@@ -246,24 +282,49 @@ export default function KnowledgeBaseAddWizard() {
 
     void (async () => {
       try {
-        const created: KnowledgeBaseDocumentDetail[] = [];
+        const created: KnowledgeBaseDocument[] = [];
 
         for (const [index, file] of files.entries()) {
           if (cancelled) {
             return;
           }
 
-          const document = await createKnowledgeBaseDocument({
+          const acceptedDocument = await uploadKnowledgeBaseDocument({
+            file: file.file,
             name: file.name,
             fileExt: file.extension.toLowerCase(),
-            contentText: await file.file.text(),
-            mimeType: file.file.type || "text/plain",
             fileSize: file.size,
             sourceType: "upload",
             sourceLabel: "本地上传",
             enabled: true,
             chunkingConfig: settings,
           });
+
+          if (!cancelled) {
+            setProcessingProgress(
+              Math.max(
+                10,
+                Math.round(((index + 0.35) / files.length) * 100),
+              ),
+            );
+          }
+
+          const startedAt = Date.now();
+          let document = acceptedDocument;
+
+          while (!cancelled && document.indexStatus === "processing") {
+            if (Date.now() - startedAt > pollingTimeoutMs) {
+              throw new Error("知识文档索引超时，请稍后在知识库列表中查看处理状态");
+            }
+
+            await new Promise((resolve) => window.setTimeout(resolve, pollingIntervalMs));
+            document = await getKnowledgeBaseDocumentStatus(acceptedDocument.id);
+          }
+
+          if (document.indexStatus === "failed") {
+            throw new Error(document.errorMessage || "知识文档处理失败");
+          }
+
           created.push(document);
 
           if (!cancelled) {
@@ -292,15 +353,9 @@ export default function KnowledgeBaseAddWizard() {
   }, [currentStep, files, settings]);
 
   useEffect(() => {
-    if (previewChunks.length === 0 || !activeFile) {
-      return;
-    }
-
-    void (async () => {
-      const rawText = await activeFile.file.text();
-      setPreviewChunks(splitTextIntoChunks(rawText, settings));
-    })();
-  }, [activeFile, previewChunks.length, settings]);
+    setPreviewChunks([]);
+    setPreviewStats(null);
+  }, [activeFile?.id, settings]);
 
   const appendFiles = async (selectedFiles: FileList | null) => {
     if (!selectedFiles || selectedFiles.length === 0) {
@@ -309,6 +364,14 @@ export default function KnowledgeBaseAddWizard() {
 
     if (selectedFiles.length > 1) {
       message.warning("一次只能上传 1 个文件");
+      return;
+    }
+
+    const oversizedFile = Array.from(selectedFiles).find(
+      (file) => file.size > maxUploadFileSize,
+    );
+    if (oversizedFile) {
+      message.warning("单个文件大小不能超过 100 MB");
       return;
     }
 
@@ -356,17 +419,48 @@ export default function KnowledgeBaseAddWizard() {
     setSearchParams({ step: `${step}` });
   };
 
-  const handlePreview = async () => {
+  const runPreview = async (successMessage = "已生成文本分块预览") => {
     const activeFile = files.find((item) => item.id === previewFileId) ?? files[0];
     if (!activeFile) {
       message.warning("请先选择一个文件进行预览");
-      return;
+      return false;
     }
 
-    const rawText = await activeFile.file.text();
-    const chunks = splitTextIntoChunks(rawText, settings);
-    setPreviewChunks(chunks);
-    message.success(`已生成 ${chunks.length} 个文本分块预览`);
+    try {
+      setPreviewLoading(true);
+      const result = await previewKnowledgeBaseChunks({
+        file: activeFile.file,
+        name: activeFile.name,
+        fileExt: activeFile.extension.toLowerCase(),
+        fileSize: activeFile.size,
+        sourceType: "upload",
+        sourceLabel: "本地上传",
+        enabled: true,
+        chunkingConfig: settings,
+      });
+      setPreviewChunks(result.sampleChunks);
+      setPreviewStats(result.stats);
+      message.success(
+        successMessage === "已生成文本分块预览"
+          ? `已生成 ${result.totalChunks} 个文本分块预览`
+          : successMessage,
+      );
+      return true;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "预览失败";
+      message.error(errorMessage);
+      return false;
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handlePreview = async () => {
+    await runPreview();
+  };
+
+  const handleResample = async () => {
+    await runPreview("已换一批样本");
   };
 
   const renderStepOne = () => (
@@ -432,13 +526,13 @@ export default function KnowledgeBaseAddWizard() {
 
   const renderStepTwo = () => (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="grid min-h-0 flex-1 gap-5 overflow-hidden xl:grid-cols-[1.6fr_0.9fr]">
-        <div className="min-h-0 overflow-y-auto pr-1">
-          <div className="space-y-4 pb-4">
+      <div className="min-h-0 flex-1 overflow-y-auto pr-1 2xl:grid 2xl:grid-cols-[minmax(0,1.55fr)_minmax(360px,0.82fr)] 2xl:gap-4 2xl:overflow-hidden 2xl:pr-0">
+        <div className="min-w-0 2xl:min-h-0 2xl:overflow-y-auto 2xl:pr-1">
+          <div className="space-y-3.5 pb-4">
           <section className="space-y-2.5">
             <div className="text-base font-semibold text-text-primary">分段设置</div>
             <Card className="p-4">
-              <div className="space-y-4">
+              <div className="space-y-3.5">
                 <div className="flex items-start gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
                     <Settings2 className="h-5 w-5" />
@@ -451,160 +545,256 @@ export default function KnowledgeBaseAddWizard() {
                   </div>
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div>
-                    <div className="mb-2 flex items-center gap-1.5 text-sm font-medium text-text-primary">
-                      分段标识符
-                      <Tooltip text={splitterHints.separator} placement="top">
-                        <span className="text-icon-secondary">
-                          <CircleHelp className="h-3.5 w-3.5" />
-                        </span>
-                      </Tooltip>
-                    </div>
-                    <input
-                      value={settings.separator}
-                      onChange={(event) => setSettings((prev) => ({ ...prev, separator: event.target.value }))}
-                      className="h-10 w-full rounded-xl border border-border bg-surface-primary px-3 text-sm text-text-primary shadow-shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <div className="min-w-0">
+                    <SelectInput
+                      label="切块方式"
+                      labelHelp={splitterHints.splitterType}
+                      value={settings.splitterType}
+                      onChange={(value) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          splitterType: value as ChunkingConfig["splitterType"],
+                        }))
+                      }
+                      options={[
+                        { value: "recursive", label: "RecursiveCharacterTextSplitter" },
+                        { value: "markdown", label: "MarkdownTextSplitter" },
+                        { value: "character", label: "CharacterTextSplitter" },
+                        { value: "token", label: "TokenTextSplitter" },
+                      ]}
+                      compact
                     />
-                    <div className="mt-1.5 text-xs leading-5 text-text-tertiary">
-                      默认按段落切分，适合大多数 Markdown / TXT 文本。
-                    </div>
                   </div>
-                  <div>
-                    <div className="mb-2 flex items-center gap-1.5 text-sm font-medium text-text-primary">
-                      分段最大长度
-                      <Tooltip text={splitterHints.maxLength} placement="top">
-                        <span className="text-icon-secondary">
-                          <CircleHelp className="h-3.5 w-3.5" />
-                        </span>
-                      </Tooltip>
-                    </div>
-                    <div className="flex h-10 items-center rounded-xl border border-border bg-surface-primary pr-3 shadow-shadow-sm">
-                      <input
-                        type="number"
-                        value={settings.maxLength}
-                        min={100}
-                        onChange={(event) => setSettings((prev) => ({ ...prev, maxLength: Number(event.target.value) || 0 }))}
-                        className="h-full w-full rounded-xl bg-transparent px-3 text-sm text-text-primary focus:outline-none"
-                      />
-                      <span className="text-sm text-text-secondary">characters</span>
-                    </div>
+                  <div className="min-w-0">
+                    <NumberInput
+                      label={`最大长度 (${settings.lengthMetric === "utf8Bytes" ? "bytes" : "characters"})`}
+                      labelHelp={splitterHints.chunkSize}
+                      value={settings.chunkSize}
+                      onChange={(value) =>
+                        setSettings((prev) => ({ ...prev, chunkSize: Number(value) || 0 }))
+                      }
+                      compact
+                    />
                     <div className="mt-1.5 text-xs leading-5 text-text-tertiary">
                       推荐先从 `800 ~ 1200` 开始调。
                     </div>
                   </div>
-                  <div>
-                    <div className="mb-2 flex items-center gap-1.5 text-sm font-medium text-text-primary">
-                      分段重叠长度
-                      <Tooltip text={splitterHints.overlap} placement="top">
-                        <span className="text-icon-secondary">
-                          <CircleHelp className="h-3.5 w-3.5" />
-                        </span>
-                      </Tooltip>
-                    </div>
-                    <div className="flex h-10 items-center rounded-xl border border-border bg-surface-primary pr-3 shadow-shadow-sm">
-                      <input
-                        type="number"
-                        value={settings.overlap}
-                        min={0}
-                        onChange={(event) => setSettings((prev) => ({ ...prev, overlap: Number(event.target.value) || 0 }))}
-                        className="h-full w-full rounded-xl bg-transparent px-3 text-sm text-text-primary focus:outline-none"
-                      />
-                      <span className="text-sm text-text-secondary">characters</span>
-                    </div>
+                  <div className="min-w-0">
+                    <NumberInput
+                      label={`重叠长度 (${settings.lengthMetric === "utf8Bytes" ? "bytes" : "characters"})`}
+                      labelHelp={splitterHints.chunkOverlap}
+                      value={settings.chunkOverlap}
+                      onChange={(value) =>
+                        setSettings((prev) => ({ ...prev, chunkOverlap: Number(value) || 0 }))
+                      }
+                      compact
+                    />
                     <div className="mt-1.5 text-xs leading-5 text-text-tertiary">
                       如果文档句子较长，建议保留一定 overlap。
                     </div>
                   </div>
+                  <div className="min-w-0">
+                    <SelectInput
+                      label="长度单位"
+                      labelHelp={splitterHints.lengthMetric}
+                      value={settings.lengthMetric}
+                      onChange={(value) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          lengthMetric: value as ChunkingConfig["lengthMetric"],
+                        }))
+                      }
+                      options={[
+                        { value: "characters", label: "字符数" },
+                        { value: "utf8Bytes", label: "UTF-8 字节数" },
+                      ]}
+                      compact
+                    />
+                  </div>
+                  <SwitchField
+                    label="分隔符保留"
+                    hint={splitterHints.keepSeparator}
+                    checked={settings.keepSeparator}
+                    onChange={() =>
+                      setSettings((prev) => ({ ...prev, keepSeparator: !prev.keepSeparator }))
+                    }
+                  />
+                  {settings.splitterType === "character" ? (
+                    <div className="min-w-0">
+                      <TextInput
+                        label="分隔符"
+                        labelHelp={splitterHints.separator}
+                        value={settings.separator}
+                        onChange={(value) =>
+                          setSettings((prev) => ({ ...prev, separator: value }))
+                        }
+                        compact
+                      />
+                    </div>
+                  ) : null}
+                  {settings.splitterType === "recursive" ? (
+                    <>
+                      <div className="min-w-0">
+                        <SelectInput
+                          label="语言预置"
+                          labelHelp={splitterHints.presetLanguage}
+                          value={settings.presetLanguage ?? ""}
+                          onChange={(value) =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              presetLanguage: value
+                                ? (value as ChunkingConfig["presetLanguage"])
+                                : null,
+                            }))
+                          }
+                          options={[
+                            { value: "", label: "不使用预置" },
+                            { value: "markdown", label: "markdown" },
+                            { value: "html", label: "html" },
+                            { value: "js", label: "js" },
+                            { value: "python", label: "python" },
+                            { value: "cpp", label: "cpp" },
+                            { value: "go", label: "go" },
+                            { value: "java", label: "java" },
+                            { value: "php", label: "php" },
+                            { value: "proto", label: "proto" },
+                            { value: "rst", label: "rst" },
+                            { value: "ruby", label: "ruby" },
+                            { value: "rust", label: "rust" },
+                            { value: "scala", label: "scala" },
+                            { value: "swift", label: "swift" },
+                            { value: "latex", label: "latex" },
+                            { value: "sol", label: "sol" },
+                          ]}
+                          compact
+                        />
+                      </div>
+                      <div className="min-w-0 md:col-span-2 xl:col-span-3">
+                        <TextArea
+                          label="自定义 separators"
+                          labelHelp={splitterHints.separators}
+                          rows={4}
+                          value={settings.separators.join("\n")}
+                          onChange={(value) =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              separators: parseListInput(value),
+                            }))
+                          }
+                          compact
+                        />
+                      </div>
+                    </>
+                  ) : null}
+                  {settings.splitterType === "token" ? (
+                    <>
+                      <div className="min-w-0">
+                        <TextInput
+                          label="encodingName"
+                          labelHelp={splitterHints.encodingName}
+                          value={settings.encodingName}
+                          onChange={(value) =>
+                            setSettings((prev) => ({ ...prev, encodingName: value }))
+                          }
+                          compact
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <TextInput
+                          label="allowedSpecial"
+                          labelHelp={splitterHints.allowedSpecial}
+                          value={Array.isArray(settings.allowedSpecial) ? settings.allowedSpecial.join(", ") : settings.allowedSpecial}
+                          onChange={(value) =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              allowedSpecial:
+                                value.trim() === "all"
+                                  ? "all"
+                                  : parseListInput(value),
+                            }))
+                          }
+                          compact
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <TextInput
+                          label="disallowedSpecial"
+                          labelHelp={splitterHints.disallowedSpecial}
+                          value={Array.isArray(settings.disallowedSpecial) ? settings.disallowedSpecial.join(", ") : settings.disallowedSpecial}
+                          onChange={(value) =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              disallowedSpecial:
+                                value.trim() === "all"
+                                  ? "all"
+                                  : parseListInput(value),
+                            }))
+                          }
+                          compact
+                        />
+                      </div>
+                    </>
+                  ) : null}
                 </div>
 
                 <div className="space-y-2.5 border-t border-border pt-4">
                   <div className="text-sm font-medium text-text-primary">文本预处理规则</div>
-                  <label className="flex items-center gap-3 text-sm text-text-secondary">
-                    <input
-                      type="checkbox"
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    <SwitchField
+                      label="替换连续空白"
+                      hint={splitterHints.replaceWhitespace}
                       checked={settings.replaceWhitespace}
-                      onChange={(event) => setSettings((prev) => ({ ...prev, replaceWhitespace: event.target.checked }))}
-                      className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
+                      onChange={() =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          replaceWhitespace: !prev.replaceWhitespace,
+                        }))
+                      }
                     />
-                    替换掉连续的空格、换行符和制表符
-                    <Tooltip text={splitterHints.replaceWhitespace} placement="top">
-                      <span className="text-icon-secondary">
-                        <CircleHelp className="h-3.5 w-3.5" />
-                      </span>
-                    </Tooltip>
-                  </label>
-                  <label className="flex items-center gap-3 text-sm text-text-secondary">
-                    <input
-                      type="checkbox"
+                    <SwitchField
+                      label="删除 URL 和邮箱"
+                      hint={splitterHints.removeUrls}
                       checked={settings.removeUrls}
-                      onChange={(event) => setSettings((prev) => ({ ...prev, removeUrls: event.target.checked }))}
-                      className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
+                      onChange={() =>
+                        setSettings((prev) => ({ ...prev, removeUrls: !prev.removeUrls }))
+                      }
                     />
-                    删除所有 URL 和电子邮件地址
-                    <Tooltip text={splitterHints.removeUrls} placement="top">
-                      <span className="text-icon-secondary">
-                        <CircleHelp className="h-3.5 w-3.5" />
-                      </span>
-                    </Tooltip>
-                  </label>
-                  <label className="flex items-center gap-3 text-sm text-text-secondary">
-                    <input
-                      type="checkbox"
+                    <SwitchField
+                      label="使用 Q&A 分段"
+                      hint={splitterHints.useQaSplit}
                       checked={settings.useQaSplit}
-                      onChange={(event) => setSettings((prev) => ({ ...prev, useQaSplit: event.target.checked }))}
-                      className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
+                      onChange={() =>
+                        setSettings((prev) => ({ ...prev, useQaSplit: !prev.useQaSplit }))
+                      }
                     />
-                    使用 Q&A 分段，语言 Chinese Simplified
-                    <Tooltip text={splitterHints.useQaSplit} placement="top">
-                      <span className="text-icon-secondary">
-                        <CircleHelp className="h-3.5 w-3.5" />
-                      </span>
-                    </Tooltip>
-                  </label>
+                  </div>
                 </div>
 
                 <div className="rounded-xl border border-dashed border-border bg-surface-secondary/70 px-3.5 py-3 text-xs leading-5 text-text-secondary">
-                  小建议：普通知识文档优先使用 `\\n\\n + 1024 + 50`；FAQ 文档可以尝试开启 Q&A 分段，再观察右侧预览效果。
+                  小建议：Markdown 文档优先尝试 `MarkdownTextSplitter`；通用 TXT 可以从 `RecursiveCharacterTextSplitter + markdown preset` 或自定义 separators 开始调。
                 </div>
 
                 <div className="flex items-center gap-2.5 border-t border-border pt-4">
-                  <Button variant="secondary" onClick={() => void handlePreview()}>
+                  <Button variant="secondary" onClick={() => void handlePreview()} disabled={previewLoading}>
                     <Eye className="h-4 w-4" />
-                    预览块
+                    {previewLoading ? "预览中..." : "预览块"}
+                  </Button>
+                  <Button variant="ghost" onClick={() => void handleResample()} disabled={previewLoading}>
+                    <Sparkles className="h-4 w-4" />
+                    换一批样本
                   </Button>
                   <Button
                     variant="ghost"
                     onClick={() => {
                       setSettings(initialSettings);
                       setPreviewChunks([]);
+                      setPreviewStats(null);
                     }}
                   >
                     <RotateCcw className="h-4 w-4" />
                     重置
                   </Button>
-                </div>
-              </div>
-            </Card>
-          </section>
-
-          <section className="space-y-2.5">
-            <div className="text-base font-semibold text-text-primary">索引方式</div>
-            <Card className="p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-500">
-                  <Sparkles className="h-4 w-4" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-text-primary">
-                    高质量
-                    <span className="rounded-full bg-surface-secondary px-2 py-0.5 text-xs text-text-secondary">
-                      推荐
-                    </span>
-                  </div>
-                  <div className="mt-1 text-sm leading-6 text-text-secondary">
-                    调用嵌入模型处理文档以实现更精确的检索，可以帮助 LLM 生成高质量的答案。
-                  </div>
                 </div>
               </div>
             </Card>
@@ -635,73 +825,21 @@ export default function KnowledgeBaseAddWizard() {
               />
             </div>
 
-            <div className="flex items-center justify-between rounded-xl border border-border bg-surface-secondary px-4 py-3">
-              <div className="text-sm text-text-secondary">
-                {loadingConfigs
-                  ? "正在加载模型配置..."
-                  : canProceedStep2
-                    ? "当前已满足 LLM + Embedding 配置要求。"
-                    : "必须先配置默认 LLM 和 Embedding，才能继续下一步。"}
-              </div>
-              <Button variant="secondary" onClick={() => navigate("/settings/model-setting")}>
-                前往模型设置
-              </Button>
-            </div>
-          </section>
-
-          <section className="space-y-2.5">
-            <div className="text-base font-semibold text-text-primary">检索设置</div>
-            <div className="grid gap-2.5 md:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => setRetrievalMode("vector")}
-                className={`rounded-xl border p-4 text-left transition-all duration-150 ${
-                  retrievalMode === "vector"
-                    ? "border-primary bg-primary/5"
-                    : "border-border bg-surface-primary hover:bg-surface-secondary"
-                }`}
-              >
-                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-text-primary">
-                  <Search className="h-4 w-4" />
-                  向量检索
-                </div>
-                <div className="text-sm leading-6 text-text-secondary">
-                  通过生成查询嵌入并查询与其向量表示最相似的文本分段。
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setRetrievalMode("fulltext")}
-                className={`rounded-xl border p-4 text-left transition-all duration-150 ${
-                  retrievalMode === "fulltext"
-                    ? "border-primary bg-primary/5"
-                    : "border-border bg-surface-primary hover:bg-surface-secondary"
-                }`}
-              >
-                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-text-primary">
-                  <FileSearch className="h-4 w-4" />
-                  全文检索
-                </div>
-                <div className="text-sm leading-6 text-text-secondary">
-                  索引文档中的所有词汇，从而允许用户查询任意词汇，并返回包含这些词汇的文本片段。
-                </div>
-              </button>
-            </div>
           </section>
           </div>
         </div>
 
-        <div className="min-h-0">
-          <Card className="flex h-full min-h-0 flex-col p-0">
+        <div className="min-w-0 2xl:min-h-0">
+          <Card className="flex min-h-[260px] flex-col p-0 2xl:h-full 2xl:min-h-0">
             <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
-              <div>
+              <div className="min-w-0">
                 <div className="text-sm font-semibold text-text-primary">预览</div>
-                <div className="mt-1 text-sm text-text-secondary">
+                <div className="mt-1 truncate text-sm text-text-secondary">
                   {files.find((item) => item.id === previewFileId)?.name ?? files[0]?.name ?? "未选择文件"}
                 </div>
               </div>
-              <span className="rounded-full border border-border bg-surface-secondary px-2.5 py-1 text-xs text-text-secondary">
-                {previewChunks.length} 项预览块
+              <span className="ml-3 shrink-0 rounded-full border border-border bg-surface-secondary px-2.5 py-1 text-xs text-text-secondary">
+                {previewStats ? `${previewChunks.length}/${previewStats.totalChunks} 项样本` : `${previewChunks.length} 项预览块`}
               </span>
             </div>
 
@@ -713,14 +851,24 @@ export default function KnowledgeBaseAddWizard() {
               ) : (
                 <div className="space-y-3">
                   <div className="rounded-xl border border-border bg-surface-secondary/70 px-3.5 py-3 text-xs leading-5 text-text-secondary">
-                    当前预览会优先按段落、句子和 Q&A 结构切分；如果单段仍然过长，才会按最大长度兜底切块。
+                    当前预览来自后端真实 splitter 结果，不会入库。点击“换一批样本”会重新生成一批新的预览样本。
                   </div>
+                  {previewStats ? (
+                    <div className="grid gap-2 rounded-xl border border-border bg-surface-secondary p-3.5 text-xs text-text-secondary md:grid-cols-2">
+                      <div>总块数：{previewStats.totalChunks}</div>
+                      <div>平均长度：{previewStats.averageChunkLength}</div>
+                      <div>最短块：{previewStats.minChunkLength}</div>
+                      <div>最长块：{previewStats.maxChunkLength}</div>
+                    </div>
+                  ) : null}
                   {previewChunks.map((chunk) => (
-                    <div key={chunk.id} className="rounded-xl border border-border bg-surface-secondary p-3.5">
+                    <div key={chunk.id} className="min-w-0 rounded-xl border border-border bg-surface-secondary p-3.5">
                       <div className="mb-2 text-sm font-medium text-primary">
-                        Chunk-{chunk.index} · {chunk.text.length} characters
+                        Chunk-{chunk.index} · {chunk.charCount} characters
                       </div>
-                      <div className="text-sm leading-6 text-text-primary">{chunk.text}</div>
+                      <div className="overflow-hidden break-words text-sm leading-6 text-text-primary">
+                        {chunk.text}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -771,7 +919,7 @@ export default function KnowledgeBaseAddWizard() {
             </p>
 
             <div className="mt-5 rounded-2xl border border-border bg-surface-secondary px-4 py-3.5 text-left">
-              <div className="grid gap-2.5 md:grid-cols-3">
+              <div className="grid gap-2.5 md:grid-cols-2">
                 <div>
                   <div className="text-xs uppercase tracking-wide text-text-tertiary">文件数</div>
                   <div className="mt-1 text-lg font-semibold text-text-primary">{files.length}</div>
@@ -779,12 +927,6 @@ export default function KnowledgeBaseAddWizard() {
                 <div>
                   <div className="text-xs uppercase tracking-wide text-text-tertiary">文本分块</div>
                   <div className="mt-1 text-lg font-semibold text-text-primary">{totalChunks}</div>
-                </div>
-                <div>
-                  <div className="text-xs uppercase tracking-wide text-text-tertiary">检索模式</div>
-                  <div className="mt-1 text-lg font-semibold text-text-primary">
-                    {retrievalMode === "fulltext" ? "全文检索" : "向量检索"}
-                  </div>
                 </div>
               </div>
             </div>
@@ -868,7 +1010,7 @@ export default function KnowledgeBaseAddWizard() {
                   <div className="text-sm font-medium text-text-primary">通用</div>
 
                   <div className="text-sm text-text-secondary">最大分段长度</div>
-                  <div className="text-sm font-medium text-text-primary">{settings.maxLength}</div>
+                  <div className="text-sm font-medium text-text-primary">{settings.chunkSize}</div>
 
                   <div className="text-sm text-text-secondary">文本预处理规则</div>
                   <div className="text-sm font-medium text-text-primary">
@@ -881,13 +1023,6 @@ export default function KnowledgeBaseAddWizard() {
                       .join("，") || "未启用额外规则"}
                   </div>
 
-                  <div className="text-sm text-text-secondary">索引方式</div>
-                  <div className="text-sm font-medium text-text-primary">高质量</div>
-
-                  <div className="text-sm text-text-secondary">检索设置</div>
-                  <div className="text-sm font-medium text-text-primary">
-                    {retrievalMode === "fulltext" ? "全文检索" : "向量检索"}
-                  </div>
                 </div>
               </div>
             </Card>
@@ -910,7 +1045,7 @@ export default function KnowledgeBaseAddWizard() {
   };
 
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-col gap-5 overflow-hidden px-4 py-5">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-[1500px] flex-col gap-4 overflow-hidden px-3 py-4 xl:px-4">
       <div className="shrink-0 flex items-center justify-between gap-3">
         <Button variant="ghost" onClick={() => navigate("/settings/knowledge-base") }>
           <ArrowLeft className="h-4 w-4" />
@@ -922,7 +1057,7 @@ export default function KnowledgeBaseAddWizard() {
         <StepIndicator currentStep={currentStep} steps={steps} />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-surface-primary px-5 py-6 shadow-shadow-sm">
+      <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-surface-primary px-4 py-5 shadow-shadow-sm xl:px-5">
         <div
           className={
             currentStep === 2

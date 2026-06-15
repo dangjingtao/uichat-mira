@@ -1,6 +1,6 @@
 function Divider() {
   return (
-    <hr className="border-0 block h-px bg-gray-200 dark:bg-white/10 my-4" />
+    <hr className="my-4 block h-px border-0 bg-cloudy-3/70" />
   );
 }
 

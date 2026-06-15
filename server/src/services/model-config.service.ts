@@ -4,6 +4,29 @@ import {
 } from "@/db/repositories";
 import type { ModelConfig, ModelParamTemplate, ModelType, ProviderCode } from "@/db/schema";
 
+const sanitizeParamsByType = (
+  type: ModelType,
+  params: Record<string, unknown>,
+): Record<string, unknown> => {
+  if (type !== "rerank") {
+    return params;
+  }
+
+  const sanitized: Record<string, unknown> = {};
+
+  if (typeof params.enabled === "boolean") {
+    sanitized.enabled = params.enabled;
+  }
+  if (typeof params.topN === "number") {
+    sanitized.topN = params.topN;
+  }
+  if (typeof params.scoreThreshold === "number") {
+    sanitized.scoreThreshold = params.scoreThreshold;
+  }
+
+  return sanitized;
+};
+
 export interface ModelConfigResponse {
   id: string;
   type: ModelType;
@@ -31,7 +54,7 @@ const toModelConfigResponse = (row: ModelConfig): ModelConfigResponse => ({
   name: row.name,
   providerCode: row.providerCode ?? null,
   remoteModelId: row.remoteModelId ?? null,
-  params: JSON.parse(row.params),
+  params: sanitizeParamsByType(row.type, JSON.parse(row.params)),
   isDefault: row.isDefault,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
@@ -72,12 +95,15 @@ export const modelConfigService = {
       return null;
     }
 
-    const mergedParams = data.params
-      ? {
-          ...JSON.parse(current.params),
-          ...data.params,
-        }
-      : JSON.parse(current.params);
+    const mergedParams = sanitizeParamsByType(
+      type,
+      data.params
+        ? {
+            ...JSON.parse(current.params),
+            ...data.params,
+          }
+        : JSON.parse(current.params),
+    );
 
     const updated = modelConfigRepository.updateDefault(type, {
       name: data.name ?? current.name,

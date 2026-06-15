@@ -9,6 +9,7 @@ Primary project docs now live under `docs/`.
 - `docs/README.md`: documentation index and recommended reading order
 - `docs/architecture/README.md`: architecture, runtime boundaries, and networking contract
 - `docs/architecture/ipc-and-preload.md`: preload and IPC guidance
+- `docs/architecture/rag-node-development.md`: RAG node standard IO and observability development guide
 - `docs/platform/tauri.md`: Tauri desktop runtime overview
 - `docs/platform/tauri-setup.md`: Tauri setup and troubleshooting
 - `docs/assistant-ui.md`: assistant-ui reference entry
@@ -27,7 +28,7 @@ root/
   docs/             # Central project documentation
   tauri/            # Tauri app sources and config
   .artifacts/       # Temporary shared build artifacts (ignored)
-  release/          # electron-builder output
+  release/          # packaged desktop release outputs
   runtime.config.cjs
 ```
 
@@ -88,6 +89,7 @@ pnpm clean:artifacts
 ```
 
 In development, frontend code should request `/api/...`; Vite rewrites it to the backend route without `/api`.
+By default, the backend development database is created at `server/data/uichat-rag-test.db` because the dev server runs with `server/` as its working directory.
 
 ## Packaging
 
@@ -97,7 +99,7 @@ Build a Windows package:
 pnpm package:electron:win
 ```
 
-The output is written to `release/v<version>_<date>_<time>/`.
+The output is written to `release/v<version>_<date>_<time>/electron/`.
 
 Release retention:
 
@@ -111,6 +113,15 @@ Build a Tauri Windows package:
 pnpm package:tauri:win
 ```
 
+The distributable output is written to `release/v<version>_<date>_<time>/tauri/`.
+The raw Tauri bundle still exists under `tauri/target/release/bundle/`, but that path is treated as an internal build directory rather than the final release handoff location.
+
+Versioning notes:
+
+- Root `package.json` is the single release version source.
+- `pnpm version:sync` syncs that version into workspace package manifests, `tauri/tauri.conf.json`, and `tauri/Cargo.toml`.
+- Both packaging scripts run `pnpm version:sync` before building, so release directory names and Tauri installer filenames stay aligned.
+
 Locked directories are skipped and cleaned on a later run when Windows releases the file handle.
 
 The packaged app includes:
@@ -119,6 +130,12 @@ The packaged app includes:
 - `resources/server`: Fastify backend bundle, database seed/data, and native Node dependencies.
 - `resources/node-runtime/node.exe`: Node runtime used to start the backend.
 - `resources/runtime.config.cjs`: runtime backend host/port configuration.
+
+Packaged desktop startup notes:
+
+- Electron and Tauri now both wait briefly for the bundled backend `GET /health` check before finishing startup.
+- Electron and Tauri both persist `JWT_SECRET` and `SETTINGS_SECRET` under the app-local data directory so packaged logins can issue stable tokens.
+- Electron and Tauri both set `UI_CHAT_ALLOW_DEFAULT_BOOTSTRAP=1` in packaged mode, so the built-in seed users (`Tomz / 123456`, `Dang / 123456`) are created automatically when the auth database is empty.
 
 Vector extension packaging:
 

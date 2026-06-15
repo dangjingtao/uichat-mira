@@ -2,6 +2,10 @@ import {
   providerProxyService,
   type EmbeddingResult,
 } from "@/services/provider-proxy.service";
+import type { RagNodeResult } from "@/services/rag-node-contract";
+import {
+  createModelCallObservation,
+} from "@/services/rag-node-observation";
 
 export interface EmbedInput {
   text: string | string[];
@@ -13,6 +17,13 @@ export interface EmbedOutput {
   model: string;
   modelConfigId: string;
   providerCode: string;
+}
+
+export interface EmbedStatePatch {
+  embedding: number[];
+  embeddingDimensions: number;
+  embeddingModel: string;
+  embeddingModelConfigId: string;
 }
 
 /**
@@ -61,6 +72,61 @@ export const embedService = {
       model: result.model,
       modelConfigId: result.modelConfigId,
       providerCode: result.providerCode,
+    };
+  },
+
+  async runNode(text: string): Promise<RagNodeResult<EmbedStatePatch>> {
+    const startedAtMs = Date.now();
+    const invocation = providerProxyService.describeEmbeddingInvocation(
+      "default",
+      [text],
+    );
+    const result = await this.embedSingle(text);
+    return {
+      state: {
+        embedding: result.embedding,
+        embeddingDimensions: result.dimensions,
+        embeddingModel: result.model,
+        embeddingModelConfigId: result.modelConfigId,
+      },
+      observation: createModelCallObservation({
+        startedAtMs,
+        label: "生成查询向量",
+        summary: `向量生成完成，维度 ${result.dimensions}`,
+        details: {
+          dimensions: result.dimensions,
+          model: result.model,
+          modelConfigId: result.modelConfigId,
+        },
+        role: "embedding",
+        providerCode: result.providerCode,
+        providerLabel: invocation.providerLabel,
+        protocol: invocation.protocol,
+        operation: invocation.operation,
+        endpoint: invocation.endpoint,
+        model: result.model,
+        modelConfigId: result.modelConfigId,
+        params: invocation.params,
+        request: invocation.request,
+        result: {
+          success: true,
+          finishReason: "completed",
+          metrics: {
+            inputCount: 1,
+            outputCount: result.embedding.length,
+          },
+          response: {
+            model: result.model,
+            summary: {
+              dimensions: result.dimensions,
+              vectorCount: 1,
+            },
+          },
+        },
+        context: {
+          inputLength: Array.from(text).length,
+        },
+      }),
     };
   },
 };

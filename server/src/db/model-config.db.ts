@@ -386,12 +386,35 @@ export const initializeModelConfigDatabase = (): void => {
     }
 
     for (const config of DEFAULT_ROLE_CONFIGS) {
+      const existing = modelConfigRepository.findDefaultByType(config.type);
+      if (!existing) {
+        modelConfigRepository.upsertDefault({
+          type: config.type,
+          name: config.name,
+          params: JSON.stringify(config.params),
+          providerCode: config.providerCode,
+          remoteModelId: config.remoteModelId,
+        });
+      }
+    }
+
+    const rerankDefault = DEFAULT_ROLE_CONFIGS.find(
+      (config) => config.type === "rerank",
+    );
+    const existingRerank = modelConfigRepository.findDefaultByType("rerank");
+
+    if (
+      rerankDefault &&
+      existingRerank &&
+      !existingRerank.providerCode &&
+      !existingRerank.remoteModelId
+    ) {
       modelConfigRepository.upsertDefault({
-        type: config.type,
-        name: config.name,
-        params: JSON.stringify(config.params),
-        providerCode: config.providerCode,
-        remoteModelId: config.remoteModelId,
+        type: rerankDefault.type,
+        name: rerankDefault.name,
+        params: JSON.stringify(rerankDefault.params),
+        providerCode: rerankDefault.providerCode,
+        remoteModelId: rerankDefault.remoteModelId,
       });
     }
 

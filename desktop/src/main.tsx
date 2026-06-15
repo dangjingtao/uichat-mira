@@ -5,10 +5,13 @@ import { router } from "./app/router";
 import "@assistant-ui/react-ui/styles/index.css";
 import "@assistant-ui/react-ui/styles/markdown.css";
 import "@assistant-ui/react-ui/styles/themes/default.css";
+import "react-tooltip/dist/react-tooltip.css";
 import "./styles.css";
 import { ErrorBoundary } from "./shared/ui/ErrorBoundary";
 import { MessageProvider } from "./shared/ui/Message";
 import { ModalProvider } from "./shared/ui/Modal";
+import { AuthProvider } from "./app/providers/AuthProvider";
+import { RoleModelConfigProvider } from "./app/providers/RoleModelConfigProvider";
 const root = document.getElementById("root");
 
 if (!root) {
@@ -19,11 +22,15 @@ const Main = () => {
   return (
     <React.StrictMode>
       <ErrorBoundary>
-        <ModalProvider>
-          <MessageProvider>
-            <RouterProvider router={router} />
-          </MessageProvider>
-        </ModalProvider>
+        <AuthProvider>
+          <RoleModelConfigProvider>
+            <ModalProvider>
+              <MessageProvider>
+                <RouterProvider router={router} />
+              </MessageProvider>
+            </ModalProvider>
+          </RoleModelConfigProvider>
+        </AuthProvider>
       </ErrorBoundary>
     </React.StrictMode>
   );

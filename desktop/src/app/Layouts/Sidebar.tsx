@@ -18,7 +18,13 @@ const statusColorMap = {
   stopped: "bg-red-600",
 } as const;
 
-function Sidebar({ children }: { children: React.ReactNode }) {
+function Sidebar({
+  children,
+  footerCenter,
+}: {
+  children: React.ReactNode;
+  footerCenter?: React.ReactNode;
+}) {
   const { session, logout } = useAuth();
   const { backendState } = useRuntimeHealth();
 
@@ -37,29 +43,25 @@ function Sidebar({ children }: { children: React.ReactNode }) {
 
   return (
     <aside
-      className={`h-full w-64 shrink-0 border-r border-border bg-surface-secondary flex flex-col ${
+      className={`h-[100dvh] min-h-0 overflow-hidden w-64 shrink-0 border-r border-cloudy-3 bg-[#FCFCFB] flex flex-col ${
         open ? "" : "hidden md:flex"
       }`}
     >
       {/* 顶部 Logo / 标题区 */}
-      <div className="px-4 py-4 font-semibold text-base border-b border-border flex items-center">
-        <img
-          src={logoIcon}
-          alt="Logo"
-          className="inline-block mr-2.5 h-6"
-        />{" "}
+      <div className="flex items-center px-4 py-4 text-base font-semibold">
+        <img src={logoIcon} alt="Logo" className="inline-block mr-2.5 h-6" />{" "}
         <span className="text-text-primary">RAG Tester</span>
       </div>
 
-      <div className="stable-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden py-2.5 pl-1 pr-2">
         {children}
       </div>
 
-      <div className="border-t border-border bg-surface-primary px-4 py-3">
-        <div className="flex items-center justify-between">
+      <div className="bg-[#FCFCFB] px-3 py-3">
+        <div className="flex items-center justify-between rounded-xl px-1 py-0.5">
           <div className="flex items-center gap-2">
-            <div className="flex gap-1.5 flex-row">
-              <div className="text-sm  text-text-primary">
+            <div className="flex flex-row gap-1.5">
+              <div className="text-sm font-medium text-text-primary">
                 {session?.user.username || "未知用户"}
               </div>
             </div>
@@ -69,17 +71,18 @@ function Sidebar({ children }: { children: React.ReactNode }) {
               />
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 pr-1">
+            {footerCenter}
             <button
               onClick={() => toSettings("/settings/general")}
-              className="rounded-lg px-2 py-1.5 text-text-secondary transition-all hover:bg-surface-tertiary hover:text-text-primary"
+              className="rounded-lg px-2 py-1.5 text-text-secondary transition-all duration-150 hover:bg-pampas-3 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
             >
               <SettingsIcon className="h-4 w-4" />
             </button>
 
             <button
               onClick={() => logout()}
-              className="rounded-lg px-2 py-1.5 text-text-secondary transition-all hover:bg-surface-tertiary hover:text-text-primary"
+              className="rounded-lg px-2 py-1.5 text-text-secondary transition-all duration-150 hover:bg-pampas-3 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
             >
               <LogOutIcon className="h-4 w-4" />
             </button>

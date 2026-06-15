@@ -13,6 +13,8 @@ import KnowledgeBaseSettings from "@/features/Settings/pages/KnowledgeBase/index
 import KnowledgeBaseAddWizard from "@/features/Settings/pages/KnowledgeBase/Add";
 import KnowledgeBaseDetail from "@/features/Settings/pages/KnowledgeBase/Detail";
 import ModelSettings from "@/features/Settings/pages/ModelSetting";
+import EvaluationWorkbench from "@/features/Settings/pages/Evaluation/Workbench";
+import EvaluationCenter from "@/features/Settings/pages/Evaluation/Center";
 import { RouteErrorBoundary } from "@/shared/ui/ErrorBoundary";
 
 export const router = createHashRouter([
@@ -43,6 +45,14 @@ export const router = createHashRouter([
                   {
                     path: "knowledge-base/detail",
                     element: <KnowledgeBaseDetail />,
+                  },
+                  {
+                    path: "evaluation/workbench",
+                    element: <EvaluationWorkbench />,
+                  },
+                  {
+                    path: "evaluation/center",
+                    element: <EvaluationCenter />,
                   },
                   { path: "model-setting", element: <ModelSettings /> },
                 ],

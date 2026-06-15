@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import fs from "node:fs/promises";
@@ -27,6 +28,7 @@ import CONFIG from "@/config";
 import { isAuthExemptPath, OPENAPI_PUBLIC_TAGS } from "@/config/public-api.js";
 import { getLoggerConfig } from "@/logger";
 import { error, ErrorCodes, getAppMeta } from "@/utils/index.js";
+import { MAX_UPLOAD_FILE_BYTES } from "@/constants/knowledge-base.js";
 
 const app = Fastify({
   logger: getLoggerConfig(),
@@ -41,6 +43,13 @@ const setupPlugins = async () => {
     origin: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     exposedHeaders: ["Content-Disposition", "Content-Length"],
+  });
+
+  await app.register(multipart, {
+    limits: {
+      files: 1,
+      fileSize: MAX_UPLOAD_FILE_BYTES,
+    },
   });
 
   app.addHook("preHandler", async (request, reply) => {

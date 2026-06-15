@@ -44,9 +44,16 @@ pnpm package:tauri:win
 
 # Run the Rust-side compile check with the same low-concurrency settings
 pnpm check:tauri
-
-# Output location: tauri/target/release/bundle/
 ```
+
+Release output conventions:
+
+- Root `package.json` is the single release version source.
+- `pnpm version:sync` syncs the root version into workspace packages, `tauri/tauri.conf.json`, and `tauri/Cargo.toml`.
+- Final distributable output: `release/v<version>_<date>_<time>/tauri/`
+- Raw Tauri bundle cache: `tauri/target/release/bundle/`
+- Default retention: keep the newest `3` timestamped directories under `release/`
+- Override retention for one run with `RELEASE_KEEP_COUNT`
 
 During `pnpm package:tauri:win` or `pnpm check:tauri`, the internal Tauri prepare flow refreshes:
 

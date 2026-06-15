@@ -1,6 +1,6 @@
 {
   "name": "@ui-chat-rag-tester/desktop",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Frontend for UI chat RAG tester.",
   "author": "Tomz Dang <dangjing@gmail.com>",
@@ -28,6 +28,7 @@
     "react-dom": "^18.3.1",
     "react-router": "^7.17.0",
     "react-router-dom": "^7.17.0",
+    "react-tooltip": "^6.0.7",
     "streamdown": "^2.5.0"
   },
   "devDependencies": {

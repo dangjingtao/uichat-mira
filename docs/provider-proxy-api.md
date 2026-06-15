@@ -78,12 +78,18 @@ Success response payload:
 
 Knowledge-base document ingestion does not require the frontend to call the embeddings endpoint directly.
 
-`POST /knowledge-base/documents` now performs:
+The desktop upload flow now sends `multipart/form-data` to `POST /knowledge-base/documents/upload`.
+The backend stores the uploaded text first, then indexes it asynchronously.
 
-1. text normalization
-2. chunking
-3. internal embedding generation via the provider proxy service
-4. vector persistence into the SQLite vector table
-5. document status update to `ready` or `failed`
+The ingestion pipeline performs:
+
+1. file upload and UTF-8 text extraction
+2. document row creation with `indexStatus = processing`
+3. background text normalization and chunking
+4. batched internal embedding generation via the provider proxy service
+5. vector persistence into the SQLite vector table
+6. document status update to `ready` or `failed`
+
+The legacy JSON route `POST /knowledge-base/documents` remains available for direct text ingestion, but the desktop UI no longer sends large document bodies through that path.
 
 This keeps provider-specific behavior inside the backend service layer.

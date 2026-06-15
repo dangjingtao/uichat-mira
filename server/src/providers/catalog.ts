@@ -64,7 +64,7 @@ export const PROVIDER_DEFINITIONS = {
   volcengine: {
     code: "volcengine",
     displayName: "OpenAI兼容服务商",
-    defaultBaseUrl: "https://ark.cn-beijing.volces.com/api/coding/v3",
+    defaultBaseUrl: "http://localhost:9997",
     syncAdapter: "openai-compatible",
     chatAdapter: "openai-compatible",
     embeddingAdapter: "openai-compatible",

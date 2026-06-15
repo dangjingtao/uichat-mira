@@ -17,6 +17,7 @@ Most project documentation is centralized under `docs/`. The main exceptions are
 
 - `architecture/README.md`
 - `architecture/ipc-and-preload.md`
+- `architecture/rag-node-development.md`
 - `API-Response-Spec.md`
 - `API_MODEL_CONFIG.md`
 

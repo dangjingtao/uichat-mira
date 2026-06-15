@@ -337,6 +337,7 @@ export const providerSettingsService = {
       throw new Error(PROVIDER_MODEL_NOT_FOUND_MESSAGE);
     }
 
+    const currentDefault = modelConfigRepository.findDefaultByType(role);
     const params = buildDefaultParams(role);
     const embeddingDimensions =
       role === "embedding"
@@ -345,6 +346,18 @@ export const providerSettingsService = {
 
     if (role === "embedding" && embeddingDimensions) {
       params.dimensions = embeddingDimensions;
+    }
+
+    if (role === "rerank") {
+      const currentParams =
+        currentDefault?.params && currentDefault.params.trim()
+          ? JSON.parse(currentDefault.params)
+          : {};
+
+      params.enabled =
+        typeof currentParams.enabled === "boolean"
+          ? currentParams.enabled
+          : true;
     }
 
     const updated = modelConfigRepository.upsertDefault({
@@ -356,6 +369,28 @@ export const providerSettingsService = {
           ? providerModel.modelName
           : providerModel.remoteModelId,
       params: JSON.stringify(params),
+    });
+
+    return {
+      id: updated.id,
+      type: updated.type,
+      name: updated.name,
+      providerCode: updated.providerCode ?? null,
+      remoteModelId: updated.remoteModelId ?? null,
+      params: JSON.parse(updated.params),
+      isDefault: updated.isDefault,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt,
+    };
+  },
+
+  resetRoleModel(role: ModelType) {
+    const updated = modelConfigRepository.upsertDefault({
+      type: role,
+      name: "",
+      providerCode: null,
+      remoteModelId: null,
+      params: JSON.stringify(buildDefaultParams(role)),
     });
 
     return {
