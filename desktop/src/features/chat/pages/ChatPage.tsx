@@ -9,8 +9,6 @@ import { useAuth } from "@/app/providers/AuthProvider";
 import { useRuntimeHealth } from "@/features/system/hooks/useRuntimeHealth";
 import { localChatModel } from "../../../app/layouts/lib/localChatModel";
 
-import { ThreadListSidebar } from "../components/ThreadListSidebar";
-
 const statusTextMap = {
   unknown: "检测中",
   running: "运行中",

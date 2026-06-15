@@ -11,6 +11,9 @@ declare global {
       isPackaged: boolean;
       backendUrl: string;
     };
+    electronAPI?: {
+      invoke: (channel: string, data?: unknown) => Promise<unknown>;
+    };
   }
 }
 

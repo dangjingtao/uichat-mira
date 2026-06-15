@@ -11,23 +11,24 @@ import dbHealthRoute from "@/routes/dbHealth";
 import logsRoute from "@/routes/logs";
 import loginRoute from "@/routes/login";
 import meRoute from "@/routes/me";
-import proxyProviderRoute from "@/routes/proxy-provider";
+import proxyProviderRoute from "@/routes/proxy-provider/index.js";
 import accountRoute from "@/routes/account";
-import knowledgeBaseRoute from "@/routes/knowledge-base";
+import knowledgeBaseRoute from "@/routes/knowledge-base/index.js";
 import modelConfigRoute from "@/routes/model-config";
-import providerSettingsRoute from "@/routes/provider-settings";
-import threadRoute from "@/routes/thread";
+import providerSettingsRoute from "@/routes/provider-settings/index.js";
+import threadRoute from "@/routes/thread/index.js";
 import chatRagRoute from "@/routes/chat-rag";
+import toolsRoute from "@/routes/tools";
 import { getAuthUserFromRequest, initializeAuthDatabase } from "@/db/auth.db";
 import { initializeKnowledgeBaseDatabase } from "@/db/knowledge-base.db";
 import { initializeModelConfigDatabase } from "@/db/model-config.db";
 import { initializeThreadDatabase } from "@/db/thread.db";
 import { initializeVectorStore } from "@/db";
-import { repairLiteralCurrentTimestampValues } from "@/db/timestamp-repair";
 import CONFIG from "@/config";
 import { isAuthExemptPath, OPENAPI_PUBLIC_TAGS } from "@/config/public-api.js";
 import { getLoggerConfig } from "@/logger";
-import { error, ErrorCodes, getAppMeta } from "@/utils/index.js";
+import { getAppMeta } from "@/utils/index.js";
+import { sendRouteError, unauthorized } from "@/utils/route-errors.js";
 import { MAX_UPLOAD_FILE_BYTES } from "@/constants/knowledge-base.js";
 
 const app = Fastify({
@@ -35,6 +36,8 @@ const app = Fastify({
   serializerOpts: { encoding: "utf8" },
 });
 const enableSwagger = process.env.NODE_ENV !== "production";
+
+app.setErrorHandler(sendRouteError);
 
 const setupPlugins = async () => {
   const appMeta = getAppMeta();
@@ -60,16 +63,11 @@ const setupPlugins = async () => {
     const user = getAuthUserFromRequest(request);
     if (!user) {
       const authHeader = request.headers.authorization;
-      return reply
-        .code(401)
-        .send(
-          error(
-            authHeader && authHeader.startsWith("Bearer ")
-              ? "Invalid auth token"
-              : "Missing auth token",
-            ErrorCodes.UNAUTHORIZED,
-          ),
-        );
+      throw unauthorized(
+        authHeader && authHeader.startsWith("Bearer ")
+          ? "Invalid auth token"
+          : "Missing auth token",
+      );
     }
 
     request.authUser = user;
@@ -100,6 +98,7 @@ const setupPlugins = async () => {
         ...OPENAPI_PUBLIC_TAGS,
         { name: "Thread", description: "对话会话与消息管理" },
         { name: "Chat", description: "RAG 增强聊天与检索" },
+        { name: "Tools", description: "Built-in agent tools" },
       ],
       components: {
         securitySchemes: {
@@ -136,6 +135,7 @@ const setupRoutes = async () => {
   await app.register(providerSettingsRoute);
   await app.register(threadRoute);
   await app.register(chatRagRoute);
+  await app.register(toolsRoute);
 };
 
 const setupDatabase = async () => {
@@ -155,7 +155,6 @@ const setupDatabase = async () => {
   initializeModelConfigDatabase();
   initializeKnowledgeBaseDatabase();
   initializeThreadDatabase();
-  repairLiteralCurrentTimestampValues();
 
   const vectorStoreHealth = initializeVectorStore();
   if (vectorStoreHealth.ok) {

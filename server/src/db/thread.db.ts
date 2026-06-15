@@ -1,31 +1,6 @@
 import { getSqlite } from "@/db";
-import {
-  applySqliteConnectionPragmas,
-  withSqliteForeignKeysDisabled,
-} from "@/db/init-utils";
-import {
-  hasSqliteColumn,
-  hasSqliteForeignKeyReference,
-  hasSqliteTable,
-} from "@/db/sqlite-utils";
-
-const hasThreadUserForeignKey = () => {
-  const sqlite = getSqlite();
-  return hasSqliteForeignKeyReference(sqlite, "threads", "user_id", "users");
-};
-
-const getDefaultUserId = () => {
-  const sqlite = getSqlite();
-  const row = sqlite
-    .prepare("SELECT id FROM users ORDER BY id ASC LIMIT 1")
-    .get() as { id: number } | undefined;
-
-  if (!row) {
-    throw new Error("Cannot initialize threads table before at least one user exists");
-  }
-
-  return row.id;
-};
+import { applySqliteConnectionPragmas } from "@/db/init-utils";
+import { hasSqliteColumn, hasSqliteTable } from "@/db/sqlite-utils";
 
 const createThreadTables = () => {
   const sqlite = getSqlite();
@@ -59,106 +34,12 @@ const createThreadTables = () => {
   `);
 };
 
-const rebuildLegacyThreadTables = () => {
-  const sqlite = getSqlite();
-  const defaultUserId = getDefaultUserId();
-  const hasMessages = hasSqliteTable(sqlite, "messages");
-
-  withSqliteForeignKeysDisabled(sqlite, () => {
-    const tx = sqlite.transaction(() => {
-      if (hasMessages) {
-        sqlite.exec("ALTER TABLE messages RENAME TO messages__legacy;");
-      }
-
-      sqlite.exec("ALTER TABLE threads RENAME TO threads__legacy;");
-
-      createThreadTables();
-
-      sqlite
-        .prepare(`
-          INSERT INTO threads (
-            id,
-            user_id,
-            title,
-            model_name,
-            rag_enabled,
-            status,
-            created_at,
-            updated_at
-          )
-          SELECT
-            id,
-            ?,
-            title,
-            model_name,
-            0,
-            status,
-            created_at,
-            updated_at
-          FROM threads__legacy
-        `)
-        .run(defaultUserId);
-
-      if (hasMessages) {
-        sqlite.exec(`
-          INSERT INTO messages (
-            id,
-            thread_id,
-            role,
-            content,
-            metadata,
-            created_at
-          )
-          SELECT
-            id,
-            thread_id,
-            role,
-            content,
-            metadata,
-            created_at
-          FROM messages__legacy;
-        `);
-      }
-
-      if (hasMessages) {
-        sqlite.exec("DROP TABLE messages__legacy;");
-      }
-
-      sqlite.exec("DROP TABLE threads__legacy;");
-    });
-
-    tx();
-  });
-};
-
-const ensureThreadTables = () => {
-  const sqlite = getSqlite();
-
-  if (!hasSqliteTable(sqlite, "threads")) {
-    createThreadTables();
-    return;
-  }
-
-  if (!hasSqliteColumn(sqlite, "threads", "user_id") || !hasThreadUserForeignKey()) {
-    rebuildLegacyThreadTables();
-    return;
-  }
-
-  if (!hasSqliteColumn(sqlite, "threads", "rag_enabled")) {
-    sqlite.exec(
-      "ALTER TABLE threads ADD COLUMN rag_enabled INTEGER NOT NULL DEFAULT 0;",
-    );
-  }
-
-  createThreadTables();
-};
-
 export const initializeThreadDatabase = () => {
   try {
     const sqlite = getSqlite();
     applySqliteConnectionPragmas(sqlite);
 
-    ensureThreadTables();
+    createThreadTables();
   } catch (error) {
     console.error("Failed to initialize thread database:", error);
     throw error;
@@ -169,5 +50,4 @@ export const getThreadDatabaseHealth = () => ({
   hasThreadsTable: hasSqliteTable(getSqlite(), "threads"),
   hasMessagesTable: hasSqliteTable(getSqlite(), "messages"),
   hasThreadUserIdColumn: hasSqliteColumn(getSqlite(), "threads", "user_id"),
-  hasThreadUserForeignKey: hasThreadUserForeignKey(),
 });

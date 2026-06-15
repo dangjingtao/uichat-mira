@@ -43,6 +43,18 @@ function writeAppMetaJson() {
   );
 }
 
+function copyToolsDir() {
+  const toolsSource = path.join(__dirname, "tools");
+  const toolsDest = path.join(outputDir, "tools");
+
+  if (!fs.existsSync(toolsSource)) {
+    return;
+  }
+
+  fs.cpSync(toolsSource, toolsDest, { recursive: true, dereference: true });
+  console.log(`Copied built-in tools: ${toolsDest}`);
+}
+
 function resolveInstalledPackageDir(packageName) {
   return fs
     .readdirSync(pnpmStore)
@@ -112,6 +124,7 @@ fs.mkdirSync(outputDir, { recursive: true });
 fs.mkdirSync(outputNodeModules, { recursive: true });
 writeBackendPackageJson();
 writeAppMetaJson();
+copyToolsDir();
 
 build({
   entryPoints: [path.join(__dirname, "src/index.ts")],

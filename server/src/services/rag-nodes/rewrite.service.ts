@@ -64,6 +64,42 @@ const sanitizeRewrite = (value: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
+const looksLikeValidRewrite = (originalQuestion: string, rewrittenQuestion: string) => {
+  if (!rewrittenQuestion) {
+    return false;
+  }
+
+  const rewrittenLength = Array.from(rewrittenQuestion).length;
+  if (rewrittenLength > 200) {
+    return false;
+  }
+
+  const sentenceLikeSegments = rewrittenQuestion
+    .split(/[。！？!?]+/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+
+  if (sentenceLikeSegments.length > 1) {
+    return false;
+  }
+
+  const suspiciousMarkers = [
+    "根据现有知识库",
+    "无法回答",
+    "答案",
+    "建议",
+    "可以看出",
+    "因此",
+    "总结",
+  ];
+
+  if (suspiciousMarkers.some((marker) => rewrittenQuestion.includes(marker))) {
+    return false;
+  }
+
+  return rewrittenLength <= Math.max(120, Array.from(originalQuestion).length * 3);
+};
+
 const getRecentHistory = (history?: NormalizedChatMessage[]) =>
   (history ?? []).slice(-6);
 
@@ -155,7 +191,7 @@ export const rewriteService = {
       );
 
       const retrievalQuestion =
-        rewrittenQuestion && rewrittenQuestion.length <= 200
+        looksLikeValidRewrite(question, rewrittenQuestion)
           ? rewrittenQuestion
           : question;
       const rewritten = retrievalQuestion !== question;

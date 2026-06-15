@@ -1,10 +1,11 @@
 /**
  * 统一 API 响应规范
  */
+import type { FastifyReply, FastifyRequest } from "fastify";
 import { nowIso } from "@/utils/time.js";
 import { INVALID_REQUEST_PAYLOAD_MESSAGE } from "@/utils/errors.js";
 
-export interface ApiSuccessResponse<T = any> {
+export interface ApiSuccessResponse<T = unknown> {
   success: true;
   data: T;
   message?: string;
@@ -15,11 +16,11 @@ export interface ApiErrorResponse {
   success: false;
   message: string;
   code?: string | number;
-  errors?: any[];
+  errors?: unknown[];
   timestamp: string;
 }
 
-export type ApiResponse<T = any> = ApiSuccessResponse<T> | ApiErrorResponse;
+export type ApiResponse<T = unknown> = ApiSuccessResponse<T> | ApiErrorResponse;
 
 /**
  * 构建成功响应
@@ -36,10 +37,10 @@ export function success<T>(data: T, message?: string): ApiSuccessResponse<T> {
 /**
  * 构建失败响应
  */
-export function error(
+export function errorResponse(
   message: string,
   code?: string | number,
-  errors?: any[],
+  errors?: unknown[],
 ): ApiErrorResponse {
   return {
     success: false,
@@ -64,7 +65,10 @@ export const ErrorCodes = {
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
 
-export function handleValidationError(request: any, reply: any) {
+export function handleValidationError(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
   if (request.validationError) {
     const validationError = request.validationError as {
       validation?: unknown[];
@@ -73,7 +77,7 @@ export function handleValidationError(request: any, reply: any) {
     return reply
       .code(400)
       .send(
-        error(
+        errorResponse(
           INVALID_REQUEST_PAYLOAD_MESSAGE,
           ErrorCodes.VALIDATION_ERROR,
           validationError.validation,

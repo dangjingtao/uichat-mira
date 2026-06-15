@@ -125,7 +125,10 @@ export const ModalShell: React.FC<ModalShellProps> = ({
           </header>
         )}
 
-        <div className="stable-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-3 text-sm text-text-primary">
+        <div
+          data-scroll-container="true"
+          className="stable-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-3 text-sm text-text-primary"
+        >
           {children}
         </div>
 

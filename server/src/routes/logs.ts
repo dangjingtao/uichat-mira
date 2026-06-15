@@ -1,7 +1,8 @@
 import type { FastifyPluginAsync } from "fastify";
-import { error, success } from "@/utils/index.js";
+import { success } from "@/utils/index.js";
 import { logFilesService } from "@/services/log-files.service.js";
 import { errorEnvelope, successEnvelope } from "@/routes/schema-helpers.js";
+import { createRouteError, routeHandler } from "@/utils/route-errors.js";
 
 const logsRoute: FastifyPluginAsync = async (app) => {
   app.get(
@@ -13,23 +14,16 @@ const logsRoute: FastifyPluginAsync = async (app) => {
         operationId: "exportBackendLogs",
       },
     },
-    async (_request, reply) => {
-      try {
-        const archive = await logFilesService.exportLogsArchive();
-        return reply
-          .header("Content-Type", "application/zip")
-          .header(
-            "Content-Disposition",
-            `attachment; filename="${archive.fileName}"`,
-          )
-          .send(archive.buffer);
-      } catch (routeError) {
-        app.log.error({ err: routeError as Error }, "Failed to export logs");
-        return reply
-          .code(500)
-          .send(error("Failed to export backend logs", "LOG_EXPORT_FAILED"));
-      }
-    },
+    routeHandler("Failed to export backend logs", async (_request, reply) => {
+      const archive = await logFilesService.exportLogsArchive();
+      return reply
+        .header("Content-Type", "application/zip")
+        .header(
+          "Content-Disposition",
+          `attachment; filename="${archive.fileName}"`,
+        )
+        .send(archive.buffer);
+    }),
   );
 
   app.delete(
@@ -62,17 +56,10 @@ const logsRoute: FastifyPluginAsync = async (app) => {
         },
       },
     },
-    async (_request, reply) => {
-      try {
-        const result = await logFilesService.clearLogs();
-        return reply.send(success(result, "Backend logs cleared"));
-      } catch (routeError) {
-        app.log.error({ err: routeError as Error }, "Failed to clear logs");
-        return reply
-          .code(500)
-          .send(error("Failed to clear backend logs", "LOG_CLEAR_FAILED"));
-      }
-    },
+    routeHandler("Failed to clear backend logs", async () => {
+      const result = await logFilesService.clearLogs();
+      return success(result, "Backend logs cleared");
+    }),
   );
 };
 

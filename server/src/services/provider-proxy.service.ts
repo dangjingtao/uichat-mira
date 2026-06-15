@@ -1,4 +1,3 @@
-import { Readable } from "node:stream";
 import { Ollama } from "ollama";
 import {
   modelConfigRepository,
@@ -21,6 +20,7 @@ import {
   getProviderDefinition,
   isCallableModelId,
 } from "@/providers/catalog.js";
+import { createAssistantTextStream } from "@/services/assistant-stream-events.js";
 
 export interface UIMessagePart {
   type?: string;
@@ -120,9 +120,6 @@ const parseModelParams = (paramsJson: string) => {
     return {};
   }
 };
-
-const toSseChunk = (data: Record<string, unknown>) =>
-  `data: ${JSON.stringify(data)}\n\n`;
 
 const toOllamaChatOptions = (params: Record<string, unknown>) => {
   const options: Record<string, unknown> = {};
@@ -336,36 +333,10 @@ const streamOllamaChat = async function* ({
 };
 
 const createUiMessageStream = (streamText: () => AsyncIterable<string>) =>
-  Readable.from(
-    (async function* () {
-      yield toSseChunk({ type: "start" });
-      yield toSseChunk({ type: "start-step" });
-      yield toSseChunk({ type: "text-start", id: "text-1" });
-
-      try {
-        for await (const delta of streamText()) {
-          if (!delta) {
-            continue;
-          }
-
-          yield toSseChunk({
-            type: "text-delta",
-            id: "text-1",
-            delta,
-          });
-        }
-
-        yield toSseChunk({ type: "text-end", id: "text-1" });
-        yield toSseChunk({ type: "finish-step" });
-        yield toSseChunk({ type: "finish", finishReason: "stop" });
-      } catch (err) {
-        const message = getErrorMessage(err);
-        yield toSseChunk({ type: "error", errorText: message });
-        yield toSseChunk({ type: "finish-step" });
-        yield toSseChunk({ type: "finish", finishReason: "error" });
-      }
-    })(),
-  );
+  createAssistantTextStream(streamText, {
+    includeStartStep: true,
+    getErrorMessage,
+  });
 
 const streamResolvedChat = (
   resolved: ProviderResolution,

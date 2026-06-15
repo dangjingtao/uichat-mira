@@ -8,6 +8,34 @@ const sanitizeParamsByType = (
   type: ModelType,
   params: Record<string, unknown>,
 ): Record<string, unknown> => {
+  if (type === "task") {
+    const sanitized: Record<string, unknown> = {};
+
+    if (typeof params.enabled === "boolean") {
+      sanitized.enabled = params.enabled;
+    }
+    if (typeof params.temperature === "number") {
+      sanitized.temperature = params.temperature;
+    }
+    if (typeof params.topP === "number") {
+      sanitized.topP = params.topP;
+    }
+    if (typeof params.topK === "number") {
+      sanitized.topK = params.topK;
+    }
+    if (typeof params.maxTokens === "number") {
+      sanitized.maxTokens = params.maxTokens;
+    }
+    if (typeof params.frequencyPenalty === "number") {
+      sanitized.frequencyPenalty = params.frequencyPenalty;
+    }
+    if (typeof params.presencePenalty === "number") {
+      sanitized.presencePenalty = params.presencePenalty;
+    }
+
+    return sanitized;
+  }
+
   if (type !== "rerank") {
     return params;
   }

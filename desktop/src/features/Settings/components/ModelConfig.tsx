@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/shared/ui/Button";
-import { NumberInput, SelectInput } from "@/shared/ui/Input";
+import { NumberInput } from "@/shared/ui/Input";
 import { message } from "@/shared/ui/Message";
+import { Select } from "@/shared/ui/Select";
 import {
   type RoleModelConfig,
   type RoleModelType,
@@ -129,12 +130,14 @@ interface ModelConfigProps {
   modelType: RoleModelType;
   config: RoleModelConfig | null;
   onUpdated: (config: RoleModelConfig) => void;
+  readOnly?: boolean;
 }
 
 const ModelConfig: React.FC<ModelConfigProps> = ({
   modelType,
   config,
   onUpdated,
+  readOnly = false,
 }) => {
   const meta = MODEL_META[modelType];
   const [localConfig, setLocalConfig] = useState<ConfigState>(
@@ -154,6 +157,10 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
     : "未配置";
 
   const handleChange = (key: string, value: ConfigValue) => {
+    if (readOnly) {
+      return;
+    }
+
     setLocalConfig((prev) => ({ ...prev, [key]: value }));
     setIsChanged(true);
   };
@@ -181,7 +188,11 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
   const fields = useMemo(() => meta.params, [meta.params]);
 
   return (
-    <div className="rounded-xl border border-border bg-surface-primary p-3 shadow-shadow-sm">
+    <div
+      className={`rounded-xl border border-border bg-surface-primary p-3 shadow-shadow-sm ${
+        readOnly ? "opacity-70" : ""
+      }`}
+    >
       <div className="mb-2.5 flex items-start justify-between gap-2.5">
         <div className="flex min-w-0 items-start gap-2">
           <div
@@ -210,15 +221,27 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
           </div>
         </div>
 
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={!isConfigured || !isChanged || isSaving}
-          onClick={handleSave}
-        >
-          {isSaving ? "保存中..." : "保存"}
-        </Button>
+        {readOnly ? (
+          <span className="rounded-full bg-surface-tertiary px-2 py-1 text-xs text-text-secondary">
+            系统托管
+          </span>
+        ) : (
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={!isConfigured || !isChanged || isSaving}
+            onClick={handleSave}
+          >
+            {isSaving ? "保存中..." : "保存"}
+          </Button>
+        )}
       </div>
+
+      {readOnly ? (
+        <div className="mb-2.5 rounded-lg border border-border bg-surface-secondary px-3 py-2 text-xs leading-5 text-text-secondary">
+          任务模型的默认绑定可在平台模型设置中调整；参数由系统统一托管，用于检索改写等轻任务调度，当前界面仅展示生效配置。
+        </div>
+      ) : null}
 
       <div className="mb-2.5 grid grid-cols-1 gap-2 md:grid-cols-2">
         <div className="rounded-lg border border-border bg-surface-secondary px-3 py-2">
@@ -245,7 +268,7 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
 
           if (field.type === "select") {
             return (
-              <SelectInput
+              <Select
                 key={field.key}
                 label={field.label}
                 value={
@@ -263,7 +286,7 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
                 }
                 options={field.options ?? []}
                 compact
-                disabled={!isConfigured}
+                disabled={!isConfigured || readOnly}
               />
             );
           }
@@ -282,7 +305,7 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
               }}
               step={field.step}
               compact
-              disabled={!isConfigured || isReadonlyDimensions}
+              disabled={!isConfigured || isReadonlyDimensions || readOnly}
             />
           );
         })}

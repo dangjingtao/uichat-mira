@@ -68,7 +68,7 @@ export const createObservation = (input: {
   ...(input.summary ? { summary: input.summary } : {}),
   ...(input.details ? { details: input.details } : {}),
   ...(input.environment ? { environment: input.environment } : {}),
-  ...(input.sources ? { sources: input.sources } : {}),
+  ...("sources" in input ? { sources: input.sources } : {}),
 });
 
 export const createModelCallObservation = (input: {
@@ -99,7 +99,7 @@ export const createModelCallObservation = (input: {
     label: input.label,
     ...(input.summary ? { summary: input.summary } : {}),
     ...(input.details ? { details: input.details } : {}),
-    ...(input.sources ? { sources: input.sources } : {}),
+    ...("sources" in input ? { sources: input.sources } : {}),
     environment: createTimedEnvironment(input.startedAtMs, {
       ...createModelEnvironment({
         role: input.role,
@@ -137,7 +137,7 @@ export const createRetrievalObservation = (input: {
     label: input.label,
     ...(input.summary ? { summary: input.summary } : {}),
     ...(input.details ? { details: input.details } : {}),
-    ...(input.sources ? { sources: input.sources } : {}),
+    ...("sources" in input ? { sources: input.sources } : {}),
     environment: createTimedEnvironment(input.startedAtMs, {
       retrieval: {
         ...(input.knowledgeBaseId !== undefined

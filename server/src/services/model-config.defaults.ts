@@ -20,6 +20,16 @@ export interface ParamTemplateSeed {
   default_value: number | string | boolean;
 }
 
+export const MANAGED_TASK_PARAMS = {
+  enabled: true,
+  temperature: 0,
+  topP: 1,
+  topK: 20,
+  maxTokens: 128,
+  frequencyPenalty: 0,
+  presencePenalty: 0,
+} as const;
+
 export const DEFAULT_ROLE_CONFIGS: DefaultRoleConfig[] = [
   {
     type: "llm",
@@ -41,15 +51,7 @@ export const DEFAULT_ROLE_CONFIGS: DefaultRoleConfig[] = [
     name: "qwen2.5:1.5b",
     providerCode: "ollama",
     remoteModelId: "qwen2.5:1.5b",
-    params: {
-      enabled: true,
-      temperature: 0.7,
-      topP: 0.9,
-      topK: 40,
-      maxTokens: 2048,
-      frequencyPenalty: 0,
-      presencePenalty: 0,
-    },
+    params: { ...MANAGED_TASK_PARAMS },
   },
   {
     type: "embedding",
@@ -140,7 +142,7 @@ export const PARAM_TEMPLATES: ParamTemplateSeed[] = [
     param_type: "number",
     step: 0.1,
     options: null,
-    default_value: 0.7,
+    default_value: 0,
   },
   {
     model_type: "task",
@@ -149,7 +151,7 @@ export const PARAM_TEMPLATES: ParamTemplateSeed[] = [
     param_type: "number",
     step: 0.1,
     options: null,
-    default_value: 0.9,
+    default_value: 1,
   },
   {
     model_type: "task",
@@ -158,7 +160,7 @@ export const PARAM_TEMPLATES: ParamTemplateSeed[] = [
     param_type: "number",
     step: null,
     options: null,
-    default_value: 40,
+    default_value: 20,
   },
   {
     model_type: "task",
@@ -167,7 +169,7 @@ export const PARAM_TEMPLATES: ParamTemplateSeed[] = [
     param_type: "number",
     step: null,
     options: null,
-    default_value: 2048,
+    default_value: 128,
   },
   {
     model_type: "task",

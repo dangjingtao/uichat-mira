@@ -3,12 +3,11 @@ import { modelConfigService } from "@/services/model-config.service.js";
 import type { ModelType } from "@/db/schema.js";
 import {
   success,
-  error,
-  ErrorCodes,
   MODEL_CONFIG_NOT_FOUND_MESSAGE,
 } from "@/utils/index.js";
 import { PROVIDER_CODE_ENUM } from "@/providers/catalog.js";
 import { modelTypeSchema, successEnvelope, errorEnvelope } from "@/routes/schema-helpers.js";
+import { notFound, routeHandler } from "@/utils/route-errors.js";
 
 const modelConfigSchema = {
   type: "object",
@@ -85,17 +84,8 @@ const modelConfigRoute: FastifyPluginAsync = async (app) => {
         },
       },
     },
-    async (_request, reply) => {
-      try {
-        const configs = modelConfigService.getAllDefaultConfigs();
-        return success(configs);
-      } catch (err) {
-        app.log.error(err);
-        return reply
-          .code(500)
-          .send(error("Failed to get models", ErrorCodes.INTERNAL_ERROR));
-      }
-    },
+    routeHandler("Failed to get models", async () =>
+      success(modelConfigService.getAllDefaultConfigs())),
   );
 
   app.get<{
@@ -122,25 +112,16 @@ const modelConfigRoute: FastifyPluginAsync = async (app) => {
         },
       },
     },
-    async (request, reply) => {
-      try {
-        const { type } = request.params;
-        const config = modelConfigService.getDefaultConfig(type as ModelType);
+    routeHandler("Failed to get config", async (request) => {
+      const { type } = request.params;
+      const config = modelConfigService.getDefaultConfig(type as ModelType);
 
-        if (!config) {
-          return reply
-            .code(404)
-            .send(error(MODEL_CONFIG_NOT_FOUND_MESSAGE, ErrorCodes.NOT_FOUND));
-        }
-
-        return success(config);
-      } catch (err) {
-        app.log.error(err);
-        return reply
-          .code(500)
-          .send(error("Failed to get config", ErrorCodes.INTERNAL_ERROR));
+      if (!config) {
+        throw notFound(MODEL_CONFIG_NOT_FOUND_MESSAGE);
       }
-    },
+
+      return success(config);
+    }),
   );
 
   app.put<{
@@ -180,33 +161,24 @@ const modelConfigRoute: FastifyPluginAsync = async (app) => {
         },
       },
     },
-    async (request, reply) => {
-      try {
-        const { type } = request.params;
-        const { name, params } = request.body;
+    routeHandler("Failed to update config", async (request) => {
+      const { type } = request.params;
+      const { name, params } = request.body;
 
-        const config = modelConfigService.updateDefaultConfig(
-          type as ModelType,
-          {
-            name,
-            params,
-          },
-        );
+      const config = modelConfigService.updateDefaultConfig(
+        type as ModelType,
+        {
+          name,
+          params,
+        },
+      );
 
-        if (!config) {
-          return reply
-            .code(404)
-            .send(error(MODEL_CONFIG_NOT_FOUND_MESSAGE, ErrorCodes.NOT_FOUND));
-        }
-
-        return success(config, "Config updated successfully");
-      } catch (err) {
-        app.log.error(err);
-        return reply
-          .code(500)
-          .send(error("Failed to update config", ErrorCodes.INTERNAL_ERROR));
+      if (!config) {
+        throw notFound(MODEL_CONFIG_NOT_FOUND_MESSAGE);
       }
-    },
+
+      return success(config, "Config updated successfully");
+    }),
   );
 
   app.get<{
@@ -241,22 +213,13 @@ const modelConfigRoute: FastifyPluginAsync = async (app) => {
         },
       },
     },
-    async (request, reply) => {
-      try {
-        const { type } = request.query;
-        const templates = modelConfigService.getParamTemplates(
-          type as ModelType | undefined,
-        );
-        return success(templates);
-      } catch (err) {
-        app.log.error(err);
-        return reply
-          .code(500)
-          .send(
-            error("Failed to get param templates", ErrorCodes.INTERNAL_ERROR),
-          );
-      }
-    },
+    routeHandler("Failed to get param templates", async (request) => {
+      const { type } = request.query;
+      const templates = modelConfigService.getParamTemplates(
+        type as ModelType | undefined,
+      );
+      return success(templates);
+    }),
   );
 };
 

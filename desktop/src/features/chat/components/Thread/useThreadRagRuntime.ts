@@ -1,0 +1,95 @@
+import { useMemo, useState } from "react";
+import type { RagProgressDetail } from "./RagProgressDetailDrawer";
+import {
+  getRagProgressFromContentParts,
+  getRagProgressRow,
+} from "./thread.parsers";
+import type {
+  SelectedRagProgressKey,
+  ThreadMessageLike,
+} from "./thread.types";
+import { usePersistedRagSources } from "./usePersistedRagSources";
+
+type UseThreadRagRuntimeInput = {
+  activeThreadId: string | undefined;
+  isRunning: boolean;
+  ragEnabled: boolean;
+  remoteThreadId: string | null;
+  threadMessages: readonly ThreadMessageLike[];
+};
+
+export function useThreadRagRuntime({
+  activeThreadId,
+  isRunning,
+  ragEnabled,
+  remoteThreadId,
+  threadMessages,
+}: UseThreadRagRuntimeInput) {
+  const [selectedRagProgressKey, setSelectedRagProgressKey] =
+    useState<SelectedRagProgressKey | null>(null);
+
+  const persistedSourcesByMessageId = usePersistedRagSources({
+    activeThreadId,
+    isRunning,
+    ragEnabled,
+    remoteThreadId,
+    threadMessages,
+  });
+
+  const messagesById = useMemo(
+    () =>
+      Object.fromEntries(
+        threadMessages
+          .filter((message) => typeof message.id === "string")
+          .map((message) => [message.id as string, message]),
+      ) as Record<string, ThreadMessageLike>,
+    [threadMessages],
+  );
+
+  const selectedRagProgressDetail = useMemo<RagProgressDetail | null>(() => {
+    if (!selectedRagProgressKey) {
+      return null;
+    }
+
+    const message = messagesById[selectedRagProgressKey.messageId];
+    const step = getRagProgressFromContentParts(message?.content).find(
+      (item) => item.nodeId === selectedRagProgressKey.nodeId,
+    );
+
+    if (!step) {
+      return null;
+    }
+
+    const row = getRagProgressRow(step);
+    if (!row.clickable) {
+      return null;
+    }
+
+    return {
+      messageId: selectedRagProgressKey.messageId,
+      nodeId: row.nodeId,
+      nodeType: row.nodeType,
+      label: row.label,
+      status: row.phase,
+      summary: row.summary,
+      details: row.details,
+      environment: row.environment,
+    };
+  }, [messagesById, selectedRagProgressKey]);
+
+  return {
+    persistedSourcesByMessageId,
+    messagesById,
+    hasRagProgressDrawerOpen: selectedRagProgressDetail !== null,
+    selectedRagProgressDetail,
+    openRagProgressDetail: (detail: RagProgressDetail) => {
+      setSelectedRagProgressKey({
+        messageId: detail.messageId,
+        nodeId: detail.nodeId,
+      });
+    },
+    closeRagProgressDetail: () => {
+      setSelectedRagProgressKey(null);
+    },
+  };
+}

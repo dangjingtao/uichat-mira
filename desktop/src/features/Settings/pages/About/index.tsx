@@ -4,10 +4,11 @@ import {
   Rocket,
   UserRound,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Streamdown } from "streamdown";
 import Card from "@/shared/ui/Card";
 import { getAppMeta, type AppMetaData } from "@/shared/api/system";
+import { message } from "@/shared/ui/Message";
 import { isDesktopShell } from "@/shared/platform/desktopRuntime";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import changelogMarkdown from "../../../../../../docs/CHANGELOG.md?raw";
@@ -66,6 +67,18 @@ const fallbackAppMeta: AppMetaData = {
 
 function About() {
   const [appMeta, setAppMeta] = useState<AppMetaData>(fallbackAppMeta);
+
+  const handleExternalLinkClick = useCallback(
+    async (href: string) => {
+      try {
+        await navigator.clipboard.writeText(href);
+        message.success("链接已复制");
+      } catch {
+        message.error("复制链接失败");
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!isDesktopShell()) {
@@ -133,12 +146,15 @@ function About() {
           </div>
           <div className="space-y-2">
             {appMeta.links.map((item) => (
-              <a
+              <button
                 key={`${item.label}:${item.value}`}
-                href={item.href || undefined}
-                target={item.href ? "_blank" : undefined}
-                rel={item.href ? "noopener noreferrer" : undefined}
-                className={`flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2 transition-colors ${
+                type="button"
+                onClick={() => {
+                  if (item.href) {
+                    handleExternalLinkClick(item.href);
+                  }
+                }}
+                className={`flex w-full items-center justify-between gap-3 rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2 text-left transition-colors ${
                   item.href ? "hover:bg-surface-secondary" : ""
                 }`}
               >
@@ -151,7 +167,7 @@ function About() {
                 {item.href ? (
                   <ExternalLink className="h-4 w-4 shrink-0 text-icon-secondary" />
                 ) : null}
-              </a>
+              </button>
             ))}
           </div>
         </Card>
@@ -165,6 +181,33 @@ function About() {
 
         <div className="mt-3 pt-1">
           <Streamdown
+            components={{
+              a: ({ href, children, ...props }) => {
+                const nextHref = href?.trim() ?? "";
+                const isExternal = /^https?:\/\//i.test(nextHref);
+
+                if (!isExternal) {
+                  return (
+                    <a href={href} {...props}>
+                      {children}
+                    </a>
+                  );
+                }
+
+                return (
+                  <button
+                    type="button"
+                    className="inline cursor-pointer text-primary underline decoration-primary/35 underline-offset-4 transition-colors duration-150 hover:text-primary-hover"
+                    onClick={() => {
+                      void handleExternalLinkClick(nextHref);
+                    }}
+                  >
+                    {children}
+                  </button>
+                );
+              },
+            }}
+            linkSafety={{ enabled: false }}
             className="prose prose-sm max-w-none break-words text-text-primary prose-headings:mb-3 prose-headings:mt-7 prose-headings:text-text-primary prose-h1:mt-0 prose-h1:text-xl prose-h2:border-b prose-h2:border-border prose-h2:pb-2 prose-h2:text-lg prose-h3:text-base prose-p:leading-6 prose-p:text-text-secondary prose-strong:text-text-primary prose-code:rounded prose-code:bg-surface-secondary prose-code:px-1.5 prose-code:py-0.5 prose-code:text-[0.92em] prose-code:text-text-primary prose-pre:rounded-xl prose-pre:border prose-pre:border-border/70 prose-pre:bg-surface-secondary/55 prose-pre:text-text-primary prose-li:text-text-secondary prose-li:marker:text-text-tertiary prose-a:text-text-primary prose-blockquote:border-border prose-blockquote:bg-surface-secondary/35 prose-blockquote:px-4 prose-blockquote:py-2 prose-blockquote:text-text-secondary prose-hr:border-border"
           >
             {changelogMarkdown}

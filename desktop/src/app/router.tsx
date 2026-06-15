@@ -6,16 +6,8 @@ import ChatPage from "../features/chat/pages/ChatPage";
 import LoginPage from "../features/auth/pages/LoginPage";
 import BaseLayout from "@/app/layouts/BaseLayout";
 import HomePage from "@/features/dashboard/pages/HomePage";
-import About from "@/features/Settings/pages/About/index";
-import GeneralSettings from "@/features/Settings/pages/General/index";
-import AccountSettings from "@/features/Settings/pages/Account/index";
-import KnowledgeBaseSettings from "@/features/Settings/pages/KnowledgeBase/index";
-import KnowledgeBaseAddWizard from "@/features/Settings/pages/KnowledgeBase/Add";
-import KnowledgeBaseDetail from "@/features/Settings/pages/KnowledgeBase/Detail";
-import ModelSettings from "@/features/Settings/pages/ModelSetting";
-import EvaluationWorkbench from "@/features/Settings/pages/Evaluation/Workbench";
-import EvaluationCenter from "@/features/Settings/pages/Evaluation/Center";
 import { RouteErrorBoundary } from "@/shared/ui/ErrorBoundary";
+import { settingsRoutes } from "@/app/routes/settingsRoutes";
 
 export const router = createHashRouter([
   {
@@ -33,29 +25,7 @@ export const router = createHashRouter([
               { path: "chat", element: <ChatPage /> },
               {
                 path: "settings",
-                children: [
-                  { path: "general", element: <GeneralSettings /> },
-                  { path: "account", element: <AccountSettings /> },
-                  { path: "about", element: <About /> },
-                  { path: "knowledge-base", element: <KnowledgeBaseSettings /> },
-                  {
-                    path: "knowledge-base/add",
-                    element: <KnowledgeBaseAddWizard />,
-                  },
-                  {
-                    path: "knowledge-base/detail",
-                    element: <KnowledgeBaseDetail />,
-                  },
-                  {
-                    path: "evaluation/workbench",
-                    element: <EvaluationWorkbench />,
-                  },
-                  {
-                    path: "evaluation/center",
-                    element: <EvaluationCenter />,
-                  },
-                  { path: "model-setting", element: <ModelSettings /> },
-                ],
+                children: settingsRoutes,
               },
             ],
           },

@@ -78,6 +78,7 @@ Packaging notes:
 - `pnpm package:electron:win` keeps the most recent `3` release directories by default.
 - Use `RELEASE_KEEP_COUNT` to change the retention count for a run.
 - If an old release directory is locked by Windows, cleanup is skipped instead of failing the build.
+- For GitHub Actions builds, a successful desktop package build is the completion condition; GitHub CI does not need to run a packaged-app smoke test.
 
 For a packaged build, verify:
 

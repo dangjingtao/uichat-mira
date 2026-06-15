@@ -1,0 +1,119 @@
+import { useEffect, useState } from "react";
+import type { LucideIcon } from "lucide-react";
+import { Folder, Globe, Wrench } from "lucide-react";
+import Card from "@/shared/ui/Card";
+import { message } from "@/shared/ui/Message";
+import { getTools, type ToolDefinition } from "@/shared/api/tools";
+import SettingsPageLayout from "../../components/SettingsPageLayout";
+
+const toolIconMap: Record<string, LucideIcon> = {
+  "web-search": Globe,
+  "file-system": Folder,
+};
+
+function ToolCard({
+  name,
+  description,
+  Icon,
+  tags,
+}: {
+  name: string;
+  description: string;
+  Icon: LucideIcon;
+  tags: string[];
+}) {
+  return (
+    <Card className="flex gap-4">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-secondary/60">
+        <Icon className="h-5 w-5 text-icon-primary" />
+      </div>
+
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold text-text-primary">{name}</h3>
+          <p className="text-sm leading-6 text-text-secondary">{description}</p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {tags.map((tag) => (
+            <span
+              key={`${name}-${tag}`}
+              className="inline-flex items-center rounded-full border border-cloudy-3 bg-pampas-2 px-2 py-0.5 text-[11px] font-medium text-text-secondary"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+export default function ToolsSettings() {
+  const [tools, setTools] = useState<ToolDefinition[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setIsLoading(true);
+
+    getTools()
+      .then((data) => {
+        if (cancelled) {
+          return;
+        }
+
+        setTools(data);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return;
+        }
+
+        message.error(error instanceof Error ? error.message : "Failed to load tools");
+      })
+      .finally(() => {
+        if (cancelled) {
+          return;
+        }
+
+        setIsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <SettingsPageLayout
+      miniTitle="Tools"
+      title="Tools"
+      description="Built-in agent tools loaded dynamically from the tools/ and extendTools/ directories."
+      contentClassName="space-y-4 pt-6"
+    >
+      {isLoading ? (
+        <Card className="text-sm text-text-secondary">Loading...</Card>
+      ) : tools.length === 0 ? (
+        <Card className="text-sm text-text-secondary">No tools loaded.</Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          {tools.map((tool) => {
+            const Icon = toolIconMap[tool.id] ?? Wrench;
+
+            return (
+              <ToolCard
+                key={tool.id}
+                name={tool.name}
+                description={tool.description}
+                Icon={Icon}
+                tags={tool.tags}
+              />
+            );
+          })}
+        </div>
+      )}
+    </SettingsPageLayout>
+  );
+}
