@@ -67,15 +67,13 @@ export const DEFAULT_ROLE_CONFIGS: DefaultRoleConfig[] = [
   },
   {
     type: "rerank",
-    name: "",
-    providerCode: null,
-    remoteModelId: null,
+    name: "BAAI/bge-reranker-v2-m3",
+    providerCode: "volcengine",
+    remoteModelId: "BAAI/bge-reranker-v2-m3",
     params: {
-      enabled: false,
+      enabled: true,
       topN: 5,
       scoreThreshold: 0.5,
-      windowSize: 3,
-      strategy: "cross-encoder",
     },
   },
 ];
@@ -254,27 +252,6 @@ export const PARAM_TEMPLATES: ParamTemplateSeed[] = [
     step: 0.1,
     options: null,
     default_value: 0.5,
-  },
-  {
-    model_type: "rerank",
-    param_key: "windowSize",
-    param_label: "Window Size",
-    param_type: "number",
-    step: null,
-    options: null,
-    default_value: 3,
-  },
-  {
-    model_type: "rerank",
-    param_key: "strategy",
-    param_label: "Strategy",
-    param_type: "select",
-    step: null,
-    options: [
-      { value: "cross-encoder", label: "Cross-Encoder" },
-      { value: "bi-encoder", label: "Bi-Encoder" },
-    ],
-    default_value: "cross-encoder",
   },
 ];
 

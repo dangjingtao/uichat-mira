@@ -38,6 +38,10 @@ GET /models/:type/config
 
 `type` can be `llm`, `embedding`, or `rerank`.
 
+`rerank` is optional. When the default rerank config is enabled and has both
+`providerCode` and `remoteModelId`, the RAG pipeline will use it during the
+rerank node; otherwise the pipeline falls back to raw retrieval-score sorting.
+
 Example:
 
 ```bash

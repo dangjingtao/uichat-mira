@@ -33,7 +33,7 @@ const time = [
   pad(now.getSeconds()),
 ].join("");
 const outputDir = `v${version}_${date}_${time}`;
-const fullOutputPath = path.join(releaseRoot, outputDir);
+const fullOutputPath = path.join(releaseRoot, outputDir, "electron");
 const parsedReleaseKeepCount = Number.parseInt(
   process.env.RELEASE_KEEP_COUNT ?? "3",
   10,
@@ -68,7 +68,7 @@ function cleanupOldReleaseOutputs() {
 
 console.log(`Building version: ${version}`);
 console.log(`Platform: ${platform}`);
-console.log(`Output directory: ${outputDir}`);
+console.log(`Output directory: ${path.join(outputDir, "electron")}`);
 console.log(`Release retention count: ${releaseKeepCount}`);
 
 fs.mkdirSync(fullOutputPath, { recursive: true });
@@ -77,6 +77,12 @@ console.log("\n=== Cleaning old build artifacts ===");
 removeDir(electronArtifactsRoot, "old .artifacts/electron-app");
 
 try {
+  console.log("\n=== Syncing versions ===");
+  execSync("pnpm version:sync", {
+    stdio: "inherit",
+    cwd: projectRoot,
+  });
+
   console.log("\n=== Preparing desktop artifacts ===");
   execSync("pnpm internal:prepare:desktop-artifacts", {
     stdio: "inherit",

@@ -14,7 +14,7 @@ function downloadBlob(blob: Blob, fileName: string) {
   URL.revokeObjectURL(objectUrl);
 }
 
-export default function General() {
+export default function LogButtons() {
   const [exportingLogs, setExportingLogs] = useState(false);
   const [clearingLogs, setClearingLogs] = useState(false);
 
@@ -80,9 +80,11 @@ export default function General() {
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-2.5">
+    <div className="flex flex-wrap items-center justify-end gap-2">
       <Button
         variant="secondary"
+        size="sm"
+        className="gap-2 self-start"
         onClick={() => void handleExportLogs()}
         disabled={exportingLogs}
       >
@@ -91,7 +93,8 @@ export default function General() {
       </Button>
       <Button
         variant="ghost"
-        className="text-danger hover:bg-danger/5 hover:text-danger"
+        size="sm"
+        className="gap-2 self-start"
         onClick={handleClearLogs}
         disabled={clearingLogs}
       >

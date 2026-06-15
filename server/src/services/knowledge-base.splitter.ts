@@ -1,9 +1,32 @@
+import {
+  CharacterTextSplitter,
+  MarkdownTextSplitter,
+  RecursiveCharacterTextSplitter,
+  TokenTextSplitter,
+  type SupportedTextSplitterLanguage,
+} from "@langchain/textsplitters";
 import { DEFAULT_CHUNKING_CONFIG as KNOWLEDGE_BASE_DEFAULT_CHUNKING_CONFIG } from "@/constants/knowledge-base.js";
 
+export type SplitterType =
+  | "character"
+  | "recursive"
+  | "markdown"
+  | "token";
+
+export type LengthMetric = "characters" | "utf8Bytes";
+
 export interface ChunkingConfig {
+  splitterType: SplitterType;
+  chunkSize: number;
+  chunkOverlap: number;
+  keepSeparator: boolean;
   separator: string;
-  maxLength: number;
-  overlap: number;
+  separators: string[];
+  presetLanguage: SupportedTextSplitterLanguage | null;
+  encodingName: string;
+  allowedSpecial: "all" | string[];
+  disallowedSpecial: "all" | string[];
+  lengthMetric: LengthMetric;
   replaceWhitespace: boolean;
   removeUrls: boolean;
   useQaSplit: boolean;
@@ -17,8 +40,41 @@ export interface SplitChunk {
   endOffset: number | null;
 }
 
-export const DEFAULT_CHUNKING_CONFIG: ChunkingConfig =
-  KNOWLEDGE_BASE_DEFAULT_CHUNKING_CONFIG;
+export type ChunkingPreviewStats = {
+  totalChunks: number;
+  minChunkLength: number;
+  maxChunkLength: number;
+  averageChunkLength: number;
+  normalizedTextLength: number;
+};
+
+export type ChunkingPreviewResult = {
+  normalizedText: string;
+  chunkingConfig: ChunkingConfig;
+  chunks: SplitChunk[];
+  stats: ChunkingPreviewStats;
+};
+
+type BaseSplitter = {
+  splitText(text: string): Promise<string[]>;
+};
+
+export const DEFAULT_CHUNKING_CONFIG: ChunkingConfig = {
+  splitterType: "recursive",
+  chunkSize: KNOWLEDGE_BASE_DEFAULT_CHUNKING_CONFIG.maxLength,
+  chunkOverlap: KNOWLEDGE_BASE_DEFAULT_CHUNKING_CONFIG.overlap,
+  keepSeparator: true,
+  separator: KNOWLEDGE_BASE_DEFAULT_CHUNKING_CONFIG.separator,
+  separators: ["\n\n", "\n", " ", ""],
+  presetLanguage: "markdown",
+  encodingName: "cl100k_base",
+  allowedSpecial: [],
+  disallowedSpecial: "all",
+  lengthMetric: "characters",
+  replaceWhitespace: KNOWLEDGE_BASE_DEFAULT_CHUNKING_CONFIG.replaceWhitespace,
+  removeUrls: KNOWLEDGE_BASE_DEFAULT_CHUNKING_CONFIG.removeUrls,
+  useQaSplit: KNOWLEDGE_BASE_DEFAULT_CHUNKING_CONFIG.useQaSplit,
+};
 
 const decodeSeparator = (separator: string) =>
   separator.replace(/\\n/g, "\n").replace(/\\r/g, "\r").replace(/\\t/g, "\t");
@@ -65,63 +121,6 @@ const splitBySeparator = (text: string, separator: string) => {
     .split(decoded)
     .map((item) => item.trim())
     .filter(Boolean);
-};
-
-const splitIntoSentences = (text: string) =>
-  text
-    .split(/(?<=[。！？!?\.])\s+|(?<=[:：；;])\s+|\n+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-const splitIntoClauses = (text: string) =>
-  text
-    .split(/(?<=[，,、])/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-const hardSplit = (text: string, maxLength: number, overlap: number) => {
-  const chunks: string[] = [];
-  const safeMaxLength = Math.max(1, maxLength);
-  const safeOverlap = Math.max(0, Math.min(overlap, safeMaxLength - 1));
-  let cursor = 0;
-
-  while (cursor < text.length) {
-    const limit = Math.min(cursor + safeMaxLength, text.length);
-    let end = limit;
-
-    if (limit < text.length) {
-      const windowStart = Math.max(cursor + Math.floor(safeMaxLength * 0.55), cursor);
-      const window = text.slice(windowStart, limit);
-      const localBreak = Math.max(
-        window.lastIndexOf("。"),
-        window.lastIndexOf("！"),
-        window.lastIndexOf("？"),
-        window.lastIndexOf("."),
-        window.lastIndexOf("；"),
-        window.lastIndexOf(";"),
-        window.lastIndexOf("，"),
-        window.lastIndexOf(","),
-        window.lastIndexOf(" "),
-      );
-
-      if (localBreak > -1) {
-        end = windowStart + localBreak + 1;
-      }
-    }
-
-    const piece = text.slice(cursor, end).trim();
-    if (piece) {
-      chunks.push(piece);
-    }
-
-    if (end >= text.length) {
-      break;
-    }
-
-    cursor = Math.max(end - safeOverlap, cursor + 1);
-  }
-
-  return chunks;
 };
 
 const extractQaBlocks = (text: string) => {
@@ -175,31 +174,151 @@ const extractQaBlocks = (text: string) => {
   return blocks.filter(Boolean);
 };
 
-const toUnits = (text: string, settings: ChunkingConfig) => {
-  const qaBlocks = settings.useQaSplit ? extractQaBlocks(text) : [];
-  const baseBlocks = qaBlocks.length > 0 ? qaBlocks : splitBySeparator(text, settings.separator);
-  const units: string[] = [];
-
-  for (const block of baseBlocks) {
-    if (block.length <= settings.maxLength) {
-      units.push(block);
-      continue;
-    }
-
-    const sentences = splitIntoSentences(block);
-    const sentenceUnits = sentences.length > 1 ? sentences : splitIntoClauses(block);
-
-    for (const sentence of sentenceUnits) {
-      if (sentence.length <= settings.maxLength) {
-        units.push(sentence);
-        continue;
-      }
-
-      units.push(...hardSplit(sentence, settings.maxLength, settings.overlap));
-    }
+const lengthOf = async (text: string, metric: LengthMetric) => {
+  if (metric === "utf8Bytes") {
+    return new TextEncoder().encode(text).length;
   }
 
-  return units;
+  return text.length;
+};
+
+const buildLengthFunction = (metric: LengthMetric) => {
+  if (metric === "utf8Bytes") {
+    return async (text: string) => lengthOf(text, metric);
+  }
+
+  return (text: string) => lengthOf(text, metric);
+};
+
+const normalizeStringArray = (value: unknown) => {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+};
+
+const resolveSeparators = (value: unknown) => {
+  const separators = normalizeStringArray(value);
+  return (separators.length > 0 ? separators : DEFAULT_CHUNKING_CONFIG.separators).map(
+    (separator) => decodeSeparator(separator),
+  );
+};
+
+export const normalizeChunkingConfig = (
+  value?: Partial<ChunkingConfig> | null,
+): ChunkingConfig => {
+  const merged = {
+    ...DEFAULT_CHUNKING_CONFIG,
+    ...(value ?? {}),
+  } as Partial<ChunkingConfig> & Record<string, unknown>;
+
+  const fallbackSize =
+    Number(merged.chunkSize ?? merged.maxLength) || DEFAULT_CHUNKING_CONFIG.chunkSize;
+  const safeChunkSize = Math.max(100, fallbackSize);
+  const fallbackOverlap =
+    Number(merged.chunkOverlap ?? merged.overlap) || DEFAULT_CHUNKING_CONFIG.chunkOverlap;
+  const safeChunkOverlap = Math.max(0, Math.min(fallbackOverlap, safeChunkSize - 1));
+  const splitterType = ["character", "recursive", "markdown", "token"].includes(
+    String(merged.splitterType ?? ""),
+  )
+    ? (merged.splitterType as SplitterType)
+    : DEFAULT_CHUNKING_CONFIG.splitterType;
+  const lengthMetric =
+    merged.lengthMetric === "utf8Bytes" ? "utf8Bytes" : DEFAULT_CHUNKING_CONFIG.lengthMetric;
+
+  return {
+    splitterType,
+    chunkSize: safeChunkSize,
+    chunkOverlap: safeChunkOverlap,
+    keepSeparator:
+      typeof merged.keepSeparator === "boolean"
+        ? merged.keepSeparator
+        : DEFAULT_CHUNKING_CONFIG.keepSeparator,
+    separator:
+      typeof merged.separator === "string" && merged.separator.length > 0
+        ? merged.separator
+        : DEFAULT_CHUNKING_CONFIG.separator,
+    separators: resolveSeparators(merged.separators),
+    presetLanguage:
+      typeof merged.presetLanguage === "string" &&
+      ["markdown", "latex", "html", "js", "python", "cpp", "go", "java", "php", "proto", "rst", "ruby", "rust", "scala", "swift", "sol"].includes(
+        merged.presetLanguage,
+      )
+        ? (merged.presetLanguage as SupportedTextSplitterLanguage)
+        : DEFAULT_CHUNKING_CONFIG.presetLanguage,
+    encodingName:
+      typeof merged.encodingName === "string" && merged.encodingName.trim()
+        ? merged.encodingName.trim()
+        : DEFAULT_CHUNKING_CONFIG.encodingName,
+    allowedSpecial:
+      merged.allowedSpecial === "all"
+        ? "all"
+        : normalizeStringArray(merged.allowedSpecial),
+    disallowedSpecial:
+      merged.disallowedSpecial === "all"
+        ? "all"
+        : normalizeStringArray(merged.disallowedSpecial),
+    lengthMetric,
+    replaceWhitespace:
+      typeof merged.replaceWhitespace === "boolean"
+        ? merged.replaceWhitespace
+        : DEFAULT_CHUNKING_CONFIG.replaceWhitespace,
+    removeUrls:
+      typeof merged.removeUrls === "boolean"
+        ? merged.removeUrls
+        : DEFAULT_CHUNKING_CONFIG.removeUrls,
+    useQaSplit:
+      typeof merged.useQaSplit === "boolean"
+        ? merged.useQaSplit
+        : DEFAULT_CHUNKING_CONFIG.useQaSplit,
+  };
+};
+
+const createSplitter = (settings: ChunkingConfig): BaseSplitter => {
+  const common = {
+    chunkSize: settings.chunkSize,
+    chunkOverlap: settings.chunkOverlap,
+    keepSeparator: settings.keepSeparator,
+    lengthFunction: buildLengthFunction(settings.lengthMetric),
+  };
+
+  switch (settings.splitterType) {
+    case "character":
+      return new CharacterTextSplitter({
+        ...common,
+        separator: decodeSeparator(settings.separator),
+      });
+    case "markdown":
+      return new MarkdownTextSplitter(common);
+    case "token":
+      return new TokenTextSplitter({
+        ...common,
+        encodingName: settings.encodingName as never,
+        allowedSpecial: settings.allowedSpecial,
+        disallowedSpecial: settings.disallowedSpecial,
+      });
+    case "recursive":
+    default:
+      if (settings.presetLanguage) {
+        return RecursiveCharacterTextSplitter.fromLanguage(settings.presetLanguage, common);
+      }
+
+      return new RecursiveCharacterTextSplitter({
+        ...common,
+        separators: settings.separators,
+      });
+  }
 };
 
 const takeOverlapText = (text: string, overlap: number) => {
@@ -217,91 +336,106 @@ const takeOverlapText = (text: string, overlap: number) => {
   return tail.trim();
 };
 
-export const normalizeChunkingConfig = (
-  value?: Partial<ChunkingConfig> | null,
-): ChunkingConfig => {
-  const merged = {
-    ...DEFAULT_CHUNKING_CONFIG,
-    ...(value ?? {}),
-  };
-
-  const safeMaxLength = Math.max(100, Number(merged.maxLength) || DEFAULT_CHUNKING_CONFIG.maxLength);
-  const safeOverlap = Math.max(
-    0,
-    Math.min(Number(merged.overlap) || 0, safeMaxLength - 1),
-  );
-
-  return {
-    separator: merged.separator || DEFAULT_CHUNKING_CONFIG.separator,
-    maxLength: safeMaxLength,
-    overlap: safeOverlap,
-    replaceWhitespace: Boolean(merged.replaceWhitespace),
-    removeUrls: Boolean(merged.removeUrls),
-    useQaSplit: Boolean(merged.useQaSplit),
-  };
-};
-
-export const splitDocumentText = (
-  rawText: string,
-  config?: Partial<ChunkingConfig> | null,
+const splitBlockToChunks = async (
+  block: string,
+  settings: ChunkingConfig,
+  baseOffset: number,
+  startIndex: number,
 ) => {
-  const settings = normalizeChunkingConfig(config);
-  const normalizedText = normalizeText(rawText, settings);
-  const units = toUnits(normalizedText, settings);
+  const splitter = createSplitter(settings);
+  const blockChunks = await splitter.splitText(block);
   const chunks: SplitChunk[] = [];
-  let current = "";
+  let cursor = 0;
 
-  const pushChunk = (value: string) => {
-    const textValue = value.trim();
+  for (const chunk of blockChunks) {
+    const textValue = chunk.trim();
     if (!textValue) {
-      return "";
-    }
-
-    const startOffset = normalizedText.indexOf(textValue);
-    const endOffset = startOffset > -1 ? startOffset + textValue.length : null;
-
-    chunks.push({
-      chunkIndex: chunks.length + 1,
-      content: textValue,
-      charCount: textValue.length,
-      startOffset: startOffset > -1 ? startOffset : null,
-      endOffset,
-    });
-
-    return takeOverlapText(textValue, settings.overlap);
-  };
-
-  for (const unit of units) {
-    const nextValue = current ? `${current}\n\n${unit}` : unit;
-
-    if (nextValue.length <= settings.maxLength) {
-      current = nextValue;
       continue;
     }
 
-    const overlapSeed = pushChunk(current);
-    current = overlapSeed ? `${overlapSeed}\n\n${unit}` : unit;
-
-    if (current.length > settings.maxLength) {
-      const hardChunks = hardSplit(current, settings.maxLength, settings.overlap);
-      current = "";
-
-      for (let index = 0; index < hardChunks.length; index += 1) {
-        const piece = hardChunks[index];
-        if (index === hardChunks.length - 1) {
-          current = piece;
-        } else {
-          pushChunk(piece);
-        }
-      }
+    let startOffset = block.indexOf(textValue, cursor);
+    if (startOffset < 0) {
+      startOffset = block.indexOf(textValue);
     }
+    if (startOffset < 0) {
+      startOffset = cursor;
+    }
+
+    const absoluteStart = baseOffset + startOffset;
+    const absoluteEnd = absoluteStart + textValue.length;
+    chunks.push({
+      chunkIndex: startIndex + chunks.length,
+      content: textValue,
+      charCount: textValue.length,
+      startOffset: absoluteStart,
+      endOffset: absoluteEnd,
+    });
+
+    cursor = Math.max(startOffset + textValue.length - settings.chunkOverlap, startOffset + 1);
   }
 
-  pushChunk(current);
+  return chunks;
+};
+
+const splitTextBlocks = (text: string, settings: ChunkingConfig) => {
+  if (!settings.useQaSplit) {
+    return [{ text, baseOffset: 0 }];
+  }
+
+  const blocks = extractQaBlocks(text);
+  if (blocks.length === 0) {
+    return [{ text, baseOffset: 0 }];
+  }
+
+  const result: Array<{ text: string; baseOffset: number }> = [];
+  let cursor = 0;
+
+  for (const block of blocks) {
+    const position = text.indexOf(block, cursor);
+    const baseOffset = position >= 0 ? position : cursor;
+    result.push({ text: block, baseOffset });
+    cursor = Math.max(baseOffset + block.length, cursor + 1);
+  }
+
+  return result;
+};
+
+export const splitDocumentText = async (
+  rawText: string,
+  config?: Partial<ChunkingConfig> | null,
+): Promise<ChunkingPreviewResult> => {
+  const settings = normalizeChunkingConfig(config);
+  const normalizedText = normalizeText(rawText, settings);
+  const blocks = splitTextBlocks(normalizedText, settings);
+  const chunks: SplitChunk[] = [];
+
+  for (const block of blocks) {
+    const blockChunks = await splitBlockToChunks(
+      block.text,
+      settings,
+      block.baseOffset,
+      chunks.length + 1,
+    );
+    chunks.push(...blockChunks);
+  }
+
+  const chunkLengths = chunks.map((chunk) => chunk.charCount);
+  const totalLength = chunkLengths.reduce((sum, value) => sum + value, 0);
 
   return {
     normalizedText,
     chunkingConfig: settings,
     chunks,
+    stats: {
+      totalChunks: chunks.length,
+      minChunkLength: chunkLengths.length ? Math.min(...chunkLengths) : 0,
+      maxChunkLength: chunkLengths.length ? Math.max(...chunkLengths) : 0,
+      averageChunkLength: chunkLengths.length ? Math.round(totalLength / chunkLengths.length) : 0,
+      normalizedTextLength: normalizedText.length,
+    },
   };
 };
+
+export const decodeChunkingConfigSeparators = decodeSeparator;
+
+export const overlapChunkPreviewText = takeOverlapText;

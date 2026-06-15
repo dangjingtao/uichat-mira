@@ -21,6 +21,12 @@ export const createOpenAICompatibleClient = (baseUrl: string, apiKey: string) =>
     apiKey: apiKey.trim() || "not-needed",
   });
 
+export const createOpenAICompatibleChatUrl = (baseUrl: string) =>
+  `${normalizeOpenAICompatibleBaseUrl(baseUrl)}/chat/completions`;
+
+export const createOpenAICompatibleEmbeddingsUrl = (baseUrl: string) =>
+  `${normalizeOpenAICompatibleBaseUrl(baseUrl)}/embeddings`;
+
 export const listOpenAICompatibleModels = async (
   baseUrl: string,
   apiKey: string,
@@ -88,3 +94,6 @@ export const createOpenAICompatibleEmbeddings = async ({
     .map((item) => item.embedding ?? [])
     .filter((embedding) => embedding.length > 0);
 };
+
+export const createOpenAICompatibleRerankUrl = (baseUrl: string) =>
+  `${normalizeOpenAICompatibleBaseUrl(baseUrl)}/rerank`;

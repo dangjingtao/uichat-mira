@@ -1,5 +1,14 @@
 import type { RetrievedChunk } from "./retrieve.service";
+import type { ProviderCode } from "@/db/schema.js";
+import { modelConfigRepository } from "@/db/repositories";
+import { providerProxyService } from "@/services/provider-proxy.service";
 import { fetchJsonWithTimeout } from "@/utils/http";
+import { writeStructuredLog } from "@/logger";
+import type { RagNodeResult } from "@/services/rag-node-contract";
+import {
+  createModelCallObservation,
+} from "@/services/rag-node-observation";
+import { getProviderDefinition } from "@/providers/catalog.js";
 
 export interface RerankInput {
   query: string;
@@ -10,6 +19,25 @@ export interface RerankInput {
 export interface RerankOutput {
   chunks: RetrievedChunk[];
   rerankScores?: number[];
+  execution: {
+    applied: boolean;
+    degraded: boolean;
+    finishReason:
+      | "reranked"
+      | "fallback-no-config"
+      | "fallback-disabled"
+      | "fallback-missing-provider-or-model"
+      | "fallback-provider-call-failed";
+    error?: {
+      type?: string;
+      message: string;
+    };
+  };
+}
+
+export interface RerankStatePatch {
+  rerankedChunks: RetrievedChunk[];
+  sources: RetrievedChunk[];
 }
 
 export interface RerankProviderConfig {
@@ -19,9 +47,67 @@ export interface RerankProviderConfig {
   model?: string;
 }
 
+export interface RerankContext {
+  providerCode: ProviderCode | null;
+  remoteModelId: string | null;
+  enabled?: boolean;
+  topN?: number;
+  scoreThreshold?: number;
+}
+
+const parseRerankParams = (paramsJson?: string) => {
+  try {
+    const parsed = JSON.parse(paramsJson || "{}");
+    return parsed && typeof parsed === "object"
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+};
+
+const getDefaultRerankContext = (): RerankContext | null => {
+  const config = modelConfigRepository.findDefaultByType("rerank");
+  if (!config) {
+    return null;
+  }
+
+  const params = parseRerankParams(config.params);
+  return {
+    providerCode: config.providerCode ?? null,
+    remoteModelId: config.remoteModelId ?? null,
+    enabled: params.enabled === true,
+    topN:
+      typeof params.topN === "number" && params.topN > 0
+        ? params.topN
+        : undefined,
+    scoreThreshold:
+      typeof params.scoreThreshold === "number"
+        ? params.scoreThreshold
+        : undefined,
+  };
+};
+
+const logRerankInfo = (event: string, data: Record<string, unknown>) => {
+  writeStructuredLog("info", {
+    scope: "rag-rerank",
+    event,
+    ...data,
+  });
+};
+
+const logRerankWarn = (event: string, data: Record<string, unknown>) => {
+  writeStructuredLog("warn", {
+    scope: "rag-rerank",
+    event,
+    ...data,
+  });
+};
+
 /**
  * 重排序服务节点
- * 当前使用简单相似度排序，预留外部 Rerank 服务接口
+ * 优先调用已配置的 OpenAI-compatible Rerank 服务；
+ * 未配置、未启用或调用失败时，回退到原始相似度排序
  */
 export const rerankService = {
   /**
@@ -40,6 +126,279 @@ export const rerankService = {
     return {
       chunks: sortedChunks,
       rerankScores: sortedChunks.map((chunk) => chunk.score),
+      execution: {
+        applied: false,
+        degraded: false,
+        finishReason: "fallback-no-config",
+      },
+    };
+  },
+
+  async rerankWithProvider(
+    input: RerankInput,
+    context?: RerankContext,
+  ): Promise<RerankOutput> {
+    const resolvedContext = context ?? getDefaultRerankContext();
+    const topN =
+      input.topN ?? resolvedContext?.topN ?? input.chunks.length;
+    const baseChunks = [...input.chunks].sort((a, b) => b.score - a.score);
+
+    if (
+      !resolvedContext?.enabled ||
+      !resolvedContext.providerCode ||
+      !resolvedContext.remoteModelId
+    ) {
+      logRerankInfo("skipped", {
+        reason: !resolvedContext
+          ? "no-default-config"
+          : !resolvedContext.enabled
+            ? "disabled"
+            : !resolvedContext.providerCode || !resolvedContext.remoteModelId
+              ? "missing-provider-or-model"
+              : "unknown",
+        topN,
+        chunkCount: baseChunks.length,
+        providerCode: resolvedContext?.providerCode ?? null,
+        remoteModelId: resolvedContext?.remoteModelId ?? null,
+      });
+      const fallback = await this.rerank({
+        ...input,
+        topN,
+        chunks: baseChunks,
+      });
+      return {
+        ...fallback,
+        execution: {
+          applied: false,
+          degraded: false,
+          finishReason: !resolvedContext
+            ? "fallback-no-config"
+            : !resolvedContext.enabled
+              ? "fallback-disabled"
+              : "fallback-missing-provider-or-model",
+        },
+      };
+    }
+
+    try {
+      logRerankInfo("start", {
+        providerCode: resolvedContext.providerCode,
+        remoteModelId: resolvedContext.remoteModelId,
+        topN,
+        scoreThreshold: resolvedContext.scoreThreshold ?? null,
+        chunkCount: baseChunks.length,
+      });
+
+      const resolved = providerProxyService.resolveRerankProvider(
+        resolvedContext.providerCode,
+      );
+      const scores = await this.callOpenAICompatibleRerank(
+        {
+          provider: "openai-compatible",
+          endpoint: resolved.endpoint,
+          apiKey: resolved.apiKey,
+          model: resolved.model,
+        },
+        input.query,
+        baseChunks,
+      );
+
+      const rankedChunks = baseChunks
+        .map((chunk, index) => ({
+          chunk,
+          score: scores[index] ?? chunk.score,
+        }))
+        .filter((item) =>
+          typeof resolvedContext.scoreThreshold === "number"
+            ? item.score >= resolvedContext.scoreThreshold
+            : true,
+        )
+        .sort((a, b) => b.score - a.score)
+        .slice(0, topN);
+
+      logRerankInfo("success", {
+        providerCode: resolvedContext.providerCode,
+        remoteModelId: resolvedContext.remoteModelId,
+        requestedChunkCount: baseChunks.length,
+        returnedChunkCount: rankedChunks.length,
+        topN,
+        scoreThreshold: resolvedContext.scoreThreshold ?? null,
+        topScores: rankedChunks.map((item) => item.score).slice(0, 5),
+      });
+
+      return {
+        chunks: rankedChunks.map((item) => ({
+          ...item.chunk,
+          score: item.score,
+        })),
+        rerankScores: rankedChunks.map((item) => item.score),
+        execution: {
+          applied: true,
+          degraded: false,
+          finishReason: "reranked",
+        },
+      };
+    } catch (error) {
+      logRerankWarn("fallback", {
+        reason: "provider-call-failed",
+        providerCode: resolvedContext.providerCode,
+        remoteModelId: resolvedContext.remoteModelId,
+        topN,
+        chunkCount: baseChunks.length,
+        error:
+          error instanceof Error
+            ? {
+                name: error.name,
+                message: error.message,
+              }
+            : String(error),
+      });
+      const fallback = await this.rerank({
+        ...input,
+        topN,
+        chunks: baseChunks,
+      });
+      return {
+        ...fallback,
+        execution: {
+          applied: false,
+          degraded: true,
+          finishReason: "fallback-provider-call-failed",
+          error: {
+            ...(error instanceof Error ? { type: error.name } : {}),
+            message: error instanceof Error ? error.message : String(error),
+          },
+        },
+      };
+    }
+  },
+
+  async runNode(
+    input: RerankInput,
+    context?: RerankContext,
+  ): Promise<RagNodeResult<RerankStatePatch>> {
+    const startedAtMs = Date.now();
+    const result = await this.rerankWithProvider(input, context);
+    const resolvedContext = context ?? getDefaultRerankContext();
+    let resolvedProvider: ReturnType<
+      typeof providerProxyService.resolveRerankProvider
+    > | null = null;
+
+    if (resolvedContext?.providerCode && resolvedContext?.remoteModelId) {
+      try {
+        resolvedProvider = providerProxyService.resolveRerankProvider(
+          resolvedContext.providerCode,
+        );
+      } catch (error) {
+        logRerankWarn("resolve-provider-failed", {
+          providerCode: resolvedContext.providerCode,
+          remoteModelId: resolvedContext.remoteModelId,
+          error:
+            error instanceof Error
+              ? {
+                  name: error.name,
+                  message: error.message,
+                }
+              : String(error),
+        });
+      }
+    }
+    const topN = input.topN ?? resolvedContext?.topN ?? null;
+    const rerankApplied = result.execution.applied;
+    const rerankDegraded = result.execution.degraded;
+    const rerankSummary = rerankApplied
+      ? `已筛选 ${result.chunks.length} 个高相关片段`
+      : rerankDegraded
+        ? "重排服务不可用，已回退原始检索排序"
+        : "未启用重排，已使用原始检索排序";
+
+    return {
+      state: {
+        rerankedChunks: result.chunks,
+        sources: result.chunks,
+      },
+      observation: createModelCallObservation({
+        startedAtMs,
+        label: "重排候选结果",
+        summary: rerankSummary,
+        details: {
+          count: result.chunks.length,
+          topN,
+          rerankApplied,
+          rerankDegraded,
+          finishReason: result.execution.finishReason,
+          error: result.execution.error ?? null,
+          sources: result.chunks.slice(0, 5).map((chunk) => ({
+            documentName: chunk.documentName,
+            score: chunk.score,
+          })),
+        },
+        role: "rerank",
+        providerCode: resolvedContext?.providerCode ?? undefined,
+        providerLabel: resolvedContext?.providerCode
+          ? getProviderDefinition(resolvedContext.providerCode).displayName
+          : undefined,
+        protocol: resolvedProvider
+          ? getProviderDefinition(resolvedProvider.providerCode).chatAdapter
+          : undefined,
+        operation: resolvedProvider ? "rerank" : undefined,
+        endpoint: resolvedProvider?.endpoint,
+        model: resolvedContext?.remoteModelId ?? undefined,
+        modelConfigId: resolvedProvider?.modelConfigId,
+        params: {
+          providerParams: resolvedProvider?.params ?? null,
+          topN,
+          scoreThreshold: resolvedContext?.scoreThreshold ?? null,
+          enabled: resolvedContext?.enabled ?? null,
+        },
+        request: resolvedProvider
+          ? {
+              method: "POST",
+              url: resolvedProvider.endpoint,
+              body: {
+                model: resolvedProvider.model,
+                queryLength: Array.from(input.query).length,
+                documentCount: input.chunks.length,
+                topN: input.topN ?? resolvedContext?.topN ?? input.chunks.length,
+                params: {
+                  scoreThreshold: resolvedContext?.scoreThreshold ?? null,
+                },
+              },
+            }
+          : undefined,
+        result: {
+          success: rerankApplied,
+          finishReason: result.execution.finishReason,
+          ...(result.execution.error
+            ? {
+                error: {
+                  ...(result.execution.error.type
+                    ? { type: result.execution.error.type }
+                    : {}),
+                  message: result.execution.error.message,
+                },
+              }
+            : {}),
+          metrics: {
+            inputCount: input.chunks.length,
+            candidateCount: input.chunks.length,
+            returnedCount: result.chunks.length,
+          },
+          response: {
+            model: resolvedProvider?.model ?? resolvedContext?.remoteModelId ?? undefined,
+            summary: {
+              rerankApplied,
+              rerankDegraded,
+              topScores: result.chunks.slice(0, 5).map((chunk) => chunk.score),
+            },
+          },
+        },
+        retrieval: {
+          topN,
+          candidateCount: input.chunks.length,
+          returnedCount: result.chunks.length,
+        },
+      }),
     };
   },
 

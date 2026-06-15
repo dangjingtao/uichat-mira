@@ -1,15 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Layers3, Settings2 } from "lucide-react";
+import React, { useEffect } from "react";
 import { Button } from "@/shared/ui/Button";
 import { forwardRef, useImperativeHandle } from "react";
 import { Modal } from "@/shared/ui/Modal";
-import { message } from "@/shared/ui/Message";
-import {
-  getRoleModelConfigs,
-  type RoleModelConfig,
-} from "@/shared/api/modelSettings";
+import type { RoleModelConfig } from "@/shared/api/modelSettings";
 import ModelConfig from "./ModelConfig";
 import PlatformConfigModal from "./PlatformConfigModal";
+import { useRoleModelConfigs } from "@/app/providers/RoleModelConfigProvider";
 
 interface DefaultModelCardProps {
   onReady?: () => void;
@@ -21,46 +17,17 @@ interface DefaultModelCardRef {
 
 const DefaultModelCard = forwardRef<DefaultModelCardRef, DefaultModelCardProps>(
   ({ onReady }, ref) => {
-    const [configs, setConfigs] = useState<RoleModelConfig[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { configMap, loading, refresh } = useRoleModelConfigs();
 
     useEffect(() => {
       if (onReady) {
         onReady();
       }
-    }, []);
-
-    const loadConfigs = useCallback(async () => {
-      try {
-        setLoading(true);
-        const nextConfigs = await getRoleModelConfigs();
-        setConfigs(nextConfigs);
-      } catch (err) {
-        const messageText =
-          err instanceof Error ? err.message : "加载模型配置失败";
-        message.error(messageText);
-      } finally {
-        setLoading(false);
-      }
-    }, []);
-
-    useEffect(() => {
-      void loadConfigs();
-    }, [loadConfigs]);
-
-    const configMap = useMemo(() => {
-      return {
-        llm: configs.find((item) => item.type === "llm") ?? null,
-        task: configs.find((item) => item.type === "task") ?? null,
-        embedding: configs.find((item) => item.type === "embedding") ?? null,
-        rerank: configs.find((item) => item.type === "rerank") ?? null,
-      };
-    }, [configs]);
+    }, [onReady]);
 
     const handleConfigUpdated = (updated: RoleModelConfig) => {
-      setConfigs((prev) =>
-        prev.map((item) => (item.type === updated.type ? updated : item)),
-      );
+      void updated;
+      void refresh();
     };
 
     const openPlatformSettings = () => {
@@ -71,7 +38,7 @@ const DefaultModelCard = forwardRef<DefaultModelCardRef, DefaultModelCardProps>(
         width: 940,
         height: 560,
         onClose: () => {
-          void loadConfigs();
+          void refresh();
         },
         footer: (
           <>
@@ -87,7 +54,13 @@ const DefaultModelCard = forwardRef<DefaultModelCardRef, DefaultModelCardProps>(
             </Button>
           </>
         ),
-        content: <PlatformConfigModal onRoleConfigUpdated={loadConfigs} />,
+        content: (
+          <PlatformConfigModal
+            onRoleConfigUpdated={async () => {
+              await refresh();
+            }}
+          />
+        ),
       });
     };
 

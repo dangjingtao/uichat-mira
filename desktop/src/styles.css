@@ -4,56 +4,114 @@
 
 @layer base {
   :root {
-    --color-primary: 16 163 127;
-    --color-primary-hover: 14 140 109;
+    --color-primary: 193 95 60;
+    --color-primary-hover: 168 78 48;
+    --color-primary-1: 250 246 240;
+    --color-primary-2: 244 238 229;
+    --color-primary-3: 236 224 210;
+    --color-primary-4: 224 202 179;
+    --color-primary-5: 208 170 136;
+    --color-primary-6: 193 95 60;
+    --color-primary-7: 168 78 48;
+    --color-primary-8: 138 63 41;
+    --color-primary-9: 105 48 32;
+    --color-cloudy: 177 173 161;
+    --color-cloudy-1: 250 249 247;
+    --color-cloudy-2: 242 240 236;
+    --color-cloudy-3: 229 225 218;
+    --color-cloudy-4: 211 206 197;
+    --color-cloudy-5: 177 173 161;
+    --color-cloudy-6: 148 144 133;
+    --color-cloudy-7: 121 118 108;
+    --color-cloudy-8: 93 90 82;
+    --color-cloudy-9: 67 65 58;
+    --color-pampas: 244 243 238;
+    --color-pampas-1: 255 255 253;
+    --color-pampas-2: 251 250 247;
+    --color-pampas-3: 247 245 241;
+    --color-pampas-4: 244 243 238;
+    --color-pampas-5: 235 232 225;
+    --color-pampas-6: 220 216 208;
+    --color-pampas-7: 198 193 184;
+    --color-pampas-8: 164 159 151;
+    --color-pampas-9: 127 123 116;
     --color-secondary: 100 116 139;
     --color-success: 22 163 74;
     --color-warning: 217 119 6;
     --color-danger: 220 38 38;
     --color-info: 37 99 235;
 
-    --color-surface-primary: 255 255 255;
-    --color-surface-secondary: 247 247 245;
-    --color-surface-tertiary: 236 236 232;
-    --color-surface-elevated: 255 255 255;
+    --color-surface-primary: 255 255 253;
+    --color-surface-secondary: 247 245 241;
+    --color-surface-tertiary: 239 235 227;
+    --color-surface-elevated: 252 250 246;
 
-    --color-border: 229 231 235;
+    --color-border: 224 218 209;
 
-    --color-text-primary: 24 24 27;
-    --color-text-secondary: 82 82 91;
-    --color-text-tertiary: 113 113 122;
+    --color-text-primary: 33 29 25;
+    --color-text-secondary: 96 89 81;
+    --color-text-tertiary: 132 124 115;
     --color-text-inverted: 250 250 250;
 
-    --color-icon-primary: 24 24 27;
-    --color-icon-secondary: 113 113 122;
-    --color-icon-tertiary: 161 161 170;
+    --color-icon-primary: 33 29 25;
+    --color-icon-secondary: 96 89 81;
+    --color-icon-tertiary: 154 145 135;
     --color-icon-inverted: 250 250 250;
   }
 
   .dark {
-    --color-primary: 25 197 159;
-    --color-primary-hover: 20 163 127;
+    --color-primary: 214 130 96;
+    --color-primary-hover: 193 95 60;
+    --color-primary-1: 56 40 34;
+    --color-primary-2: 76 51 42;
+    --color-primary-3: 96 63 50;
+    --color-primary-4: 123 78 58;
+    --color-primary-5: 158 97 67;
+    --color-primary-6: 193 95 60;
+    --color-primary-7: 214 130 96;
+    --color-primary-8: 228 164 132;
+    --color-primary-9: 239 198 173;
+    --color-cloudy: 177 173 161;
+    --color-cloudy-1: 48 46 42;
+    --color-cloudy-2: 64 61 56;
+    --color-cloudy-3: 82 78 72;
+    --color-cloudy-4: 103 99 92;
+    --color-cloudy-5: 124 120 111;
+    --color-cloudy-6: 148 144 133;
+    --color-cloudy-7: 177 173 161;
+    --color-cloudy-8: 205 201 190;
+    --color-cloudy-9: 232 229 222;
+    --color-pampas: 244 243 238;
+    --color-pampas-1: 42 39 35;
+    --color-pampas-2: 54 51 46;
+    --color-pampas-3: 68 64 58;
+    --color-pampas-4: 84 80 73;
+    --color-pampas-5: 108 103 94;
+    --color-pampas-6: 136 130 120;
+    --color-pampas-7: 168 162 151;
+    --color-pampas-8: 205 199 189;
+    --color-pampas-9: 244 243 238;
     --color-secondary: 148 163 184;
     --color-success: 74 222 128;
     --color-warning: 245 158 11;
     --color-danger: 248 113 113;
     --color-info: 96 165 250;
 
-    --color-surface-primary: 23 23 23;
-    --color-surface-secondary: 31 31 31;
-    --color-surface-tertiary: 42 42 42;
-    --color-surface-elevated: 28 28 30;
+    --color-surface-primary: 28 26 24;
+    --color-surface-secondary: 35 33 30;
+    --color-surface-tertiary: 47 44 40;
+    --color-surface-elevated: 32 30 27;
 
-    --color-border: 63 63 70;
+    --color-border: 84 79 73;
 
-    --color-text-primary: 245 245 245;
-    --color-text-secondary: 161 161 170;
-    --color-text-tertiary: 113 113 122;
+    --color-text-primary: 244 243 238;
+    --color-text-secondary: 196 191 182;
+    --color-text-tertiary: 156 149 139;
     --color-text-inverted: 24 24 27;
 
-    --color-icon-primary: 245 245 245;
-    --color-icon-secondary: 161 161 170;
-    --color-icon-tertiary: 113 113 122;
+    --color-icon-primary: 244 243 238;
+    --color-icon-secondary: 196 191 182;
+    --color-icon-tertiary: 156 149 139;
     --color-icon-inverted: 24 24 27;
   }
 
@@ -133,11 +191,6 @@
     animation: slideInFromTop 0.2s ease-out;
   }
 
-  .route-content-transition {
-    animation: routeContentFade 0.26s ease;
-    will-change: opacity, transform;
-  }
-
   .stable-scrollbar {
     scrollbar-gutter: stable;
   }
@@ -173,16 +226,5 @@
   to {
     transform: translateY(0);
     opacity: 1;
-  }
-}
-
-@keyframes routeContentFade {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
   }
 }

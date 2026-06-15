@@ -1,6 +1,10 @@
 import { documentRepository, knowledgeBaseRepository, type DocumentListFilters } from "@/db/repositories";
 import type { Document, DocumentIndexStatus, DocumentSourceType } from "@/db/schema";
-import { DEFAULT_UPLOAD_SOURCE_LABEL } from "@/constants/knowledge-base.js";
+import {
+  DEFAULT_UPLOAD_SOURCE_LABEL,
+  MAX_EMBEDDING_BATCH_CHARS,
+  MAX_EMBEDDING_BATCH_INPUTS,
+} from "@/constants/knowledge-base.js";
 import { splitDocumentText, type ChunkingConfig } from "@/services/knowledge-base.splitter";
 import { knowledgeBaseVectorStore } from "@/services/knowledge-base.vector-store.js";
 import { providerProxyService } from "@/services/provider-proxy.service.js";
@@ -74,6 +78,15 @@ export interface UpdateDocumentInput {
   chunkingConfig?: Partial<ChunkingConfig> | null;
 }
 
+interface IndexDocumentJob {
+  documentId: string;
+  chunkingConfig?: Partial<ChunkingConfig> | null;
+}
+
+const queuedDocumentIds = new Set<string>();
+const indexDocumentQueue: IndexDocumentJob[] = [];
+let isIndexingQueuedDocument = false;
+
 const toDocumentResponse = (
   document: Document,
 ): KnowledgeBaseDocumentResponse => ({
@@ -103,25 +116,68 @@ const embedDocumentChunks = async (
     return;
   }
 
-  const embeddingResult = await providerProxyService.createEmbeddings(
-    "default",
-    chunks.map((chunk) => chunk.content),
-  );
+  const chunkBatches: KnowledgeBaseDocumentDetailResponse["chunks"][] = [];
+  let currentBatch: KnowledgeBaseDocumentDetailResponse["chunks"] = [];
+  let currentChars = 0;
 
-  const vectorIndex = knowledgeBaseVectorStore.ensureDefaultVectorIndex({
-    knowledgeBaseId,
-    embeddingModelConfigId: embeddingResult.modelConfigId,
-    model: embeddingResult.model,
-    dimensions: embeddingResult.dimensions,
-  });
+  for (const chunk of chunks) {
+    const nextChars = currentChars + chunk.content.length;
+    if (
+      currentBatch.length > 0 &&
+      (currentBatch.length >= MAX_EMBEDDING_BATCH_INPUTS ||
+        nextChars > MAX_EMBEDDING_BATCH_CHARS)
+    ) {
+      chunkBatches.push(currentBatch);
+      currentBatch = [];
+      currentChars = 0;
+    }
 
-  knowledgeBaseVectorStore.upsertChunkEmbeddings({
-    tableName: vectorIndex.tableName,
-    rows: chunks.map((chunk, index) => ({
-      chunkId: chunk.id,
-      embedding: embeddingResult.embeddings[index] ?? [],
-    })),
-  });
+    currentBatch.push(chunk);
+    currentChars += chunk.content.length;
+  }
+
+  if (currentBatch.length > 0) {
+    chunkBatches.push(currentBatch);
+  }
+
+  let vectorTableName = "";
+  let vectorModelConfigId = "";
+  let vectorDimensions = 0;
+
+  for (const batch of chunkBatches) {
+    const embeddingResult = await providerProxyService.createEmbeddings(
+      "default",
+      batch.map((chunk) => chunk.content),
+    );
+
+    if (!vectorTableName) {
+      const vectorIndex = knowledgeBaseVectorStore.ensureDefaultVectorIndex({
+        knowledgeBaseId,
+        embeddingModelConfigId: embeddingResult.modelConfigId,
+        model: embeddingResult.model,
+        dimensions: embeddingResult.dimensions,
+      });
+
+      vectorTableName = vectorIndex.tableName;
+      vectorModelConfigId = embeddingResult.modelConfigId;
+      vectorDimensions = embeddingResult.dimensions;
+    } else if (
+      embeddingResult.modelConfigId !== vectorModelConfigId ||
+      embeddingResult.dimensions !== vectorDimensions
+    ) {
+      throw new Error(
+        "Embedding model changed during document indexing; please retry the upload.",
+      );
+    }
+
+    knowledgeBaseVectorStore.upsertChunkEmbeddings({
+      tableName: vectorTableName,
+      rows: batch.map((chunk, index) => ({
+        chunkId: chunk.id,
+        embedding: embeddingResult.embeddings[index] ?? [],
+      })),
+    });
+  }
 };
 
 const cleanupDocumentArtifacts = (
@@ -145,6 +201,107 @@ const cleanupDocumentArtifacts = (
   }
 
   documentRepository.deleteById(document.id);
+};
+
+const processQueuedDocument = async (job: IndexDocumentJob) => {
+  const existing = documentRepository.findById(job.documentId);
+  if (!existing) {
+    return;
+  }
+
+  const previousDetail = knowledgeBaseService.getDocumentById(job.documentId);
+  const splitResult = await splitDocumentText(existing.contentText, job.chunkingConfig);
+
+  const updated = documentRepository.replaceChunks({
+    documentId: existing.id,
+    knowledgeBaseId: existing.knowledgeBaseId,
+    contentText: splitResult.normalizedText,
+    chunkCount: splitResult.chunks.length,
+    charCount: splitResult.normalizedText.length,
+    tokenCount: null,
+    indexStatus: "processing",
+    errorMessage: null,
+    chunks: splitResult.chunks.map((chunk) => ({
+      chunkIndex: chunk.chunkIndex,
+      content: chunk.content,
+      charCount: chunk.charCount,
+      tokenCount: null,
+      startOffset: chunk.startOffset,
+      endOffset: chunk.endOffset,
+    })),
+  });
+
+  if (!updated) {
+    return;
+  }
+
+  try {
+    if (previousDetail?.chunks.length) {
+      const tableNames = knowledgeBaseVectorStore.listVectorIndexTableNames(
+        previousDetail.knowledgeBaseId,
+      );
+      knowledgeBaseVectorStore.deleteChunkEmbeddings({
+        tableNames,
+        chunkIds: previousDetail.chunks.map((chunk) => chunk.id),
+      });
+    }
+
+    const nextDetail = knowledgeBaseService.getDocumentById(job.documentId);
+    if (!nextDetail) {
+      return;
+    }
+
+    await embedDocumentChunks(existing.knowledgeBaseId, nextDetail.chunks);
+    documentRepository.updateById(job.documentId, {
+      indexStatus: "ready",
+      errorMessage: null,
+    });
+  } catch (error) {
+    const errorMessage = getErrorMessage(
+      error,
+      FAILED_GENERATE_EMBEDDINGS_MESSAGE,
+    );
+
+    documentRepository.updateById(job.documentId, {
+      indexStatus: "failed",
+      errorMessage,
+    });
+  }
+};
+
+const runQueuedDocumentIndexing = async () => {
+  if (isIndexingQueuedDocument) {
+    return;
+  }
+
+  isIndexingQueuedDocument = true;
+
+  try {
+    while (indexDocumentQueue.length > 0) {
+      const nextJob = indexDocumentQueue.shift();
+      if (!nextJob) {
+        continue;
+      }
+
+      try {
+        await processQueuedDocument(nextJob);
+      } finally {
+        queuedDocumentIds.delete(nextJob.documentId);
+      }
+    }
+  } finally {
+    isIndexingQueuedDocument = false;
+  }
+};
+
+const enqueueDocumentIndexing = (job: IndexDocumentJob) => {
+  if (queuedDocumentIds.has(job.documentId)) {
+    return;
+  }
+
+  queuedDocumentIds.add(job.documentId);
+  indexDocumentQueue.push(job);
+  void runQueuedDocumentIndexing();
 };
 
 export const knowledgeBaseService = {
@@ -193,11 +350,16 @@ export const knowledgeBaseService = {
     };
   },
 
+  getDocumentSummaryById(id: string): KnowledgeBaseDocumentResponse | null {
+    const document = documentRepository.findById(id);
+    return document ? toDocumentResponse(document) : null;
+  },
+
   async createDocument(
     input: CreateDocumentInput,
   ): Promise<KnowledgeBaseDocumentDetailResponse> {
     const kb = knowledgeBaseRepository.ensureDefault();
-    const splitResult = splitDocumentText(input.contentText, input.chunkingConfig);
+    const splitResult = await splitDocumentText(input.contentText, input.chunkingConfig);
 
     const created = documentRepository.createWithChunks({
       document: {
@@ -246,6 +408,38 @@ export const knowledgeBaseService = {
     return this.getDocumentById(created.id)!;
   },
 
+  async createUploadDocument(
+    input: CreateDocumentInput,
+  ): Promise<KnowledgeBaseDocumentDetailResponse> {
+    const kb = knowledgeBaseRepository.ensureDefault();
+    const created = documentRepository.createWithChunks({
+      document: {
+        knowledgeBaseId: kb.id,
+        name: input.name.trim(),
+        sourceType: input.sourceType ?? "upload",
+        sourceLabel: input.sourceLabel?.trim() || DEFAULT_UPLOAD_SOURCE_LABEL,
+        fileExt: input.fileExt.trim().toLowerCase(),
+        mimeType: input.mimeType?.trim() || null,
+        fileSize: input.fileSize ?? null,
+        contentText: input.contentText,
+        indexStatus: "processing",
+        enabled: input.enabled ?? true,
+        chunkCount: 0,
+        charCount: input.contentText.length,
+        tokenCount: null,
+        errorMessage: null,
+      },
+      chunks: [],
+    });
+
+    enqueueDocumentIndexing({
+      documentId: created.id,
+      chunkingConfig: input.chunkingConfig,
+    });
+
+    return this.getDocumentById(created.id)!;
+  },
+
   async updateDocument(
     id: string,
     input: UpdateDocumentInput,
@@ -257,7 +451,7 @@ export const knowledgeBaseService = {
 
     if (typeof input.contentText === "string") {
       const previousDetail = this.getDocumentById(id);
-      const splitResult = splitDocumentText(
+      const splitResult = await splitDocumentText(
         input.contentText,
         input.chunkingConfig,
       );

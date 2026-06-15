@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import CONFIG from "@/config";
 
 export const LOG_DIR = path.resolve(process.cwd(), CONFIG.LOG_DIR);
@@ -47,6 +48,42 @@ const safeWriteToConsole = (message: string, useStdErr = false) => {
       }
     }
   }
+};
+
+const appendStructuredLog = (line: string, useStdErr: boolean) => {
+  safeWriteToConsole(line, useStdErr);
+
+  try {
+    fs.appendFileSync(LOG_FILE, line);
+    if (useStdErr) {
+      fs.appendFileSync(ERROR_LOG_FILE, line);
+    }
+  } catch {}
+};
+
+export const writeStructuredLog = (
+  level: "info" | "warn" | "error",
+  payload: Record<string, unknown>,
+) => {
+  const useStdErr = level !== "info";
+  const message =
+    typeof payload.msg === "string"
+      ? payload.msg
+      : typeof payload.event === "string"
+        ? payload.event
+        : "log";
+
+  appendStructuredLog(
+    JSON.stringify({
+      level: level === "info" ? 30 : level === "warn" ? 40 : 50,
+      time: Date.now(),
+      pid: process.pid,
+      hostname: os.hostname(),
+      msg: message,
+      ...payload,
+    }) + "\n",
+    useStdErr,
+  );
 };
 
 export const createLogStreams = () => {

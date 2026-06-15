@@ -4,6 +4,10 @@ import {
   type NormalizedChatMessage,
 } from "@/services/provider-proxy.service";
 import type { RetrievedChunk } from "./retrieve.service";
+import type { RagNodeResult } from "@/services/rag-node-contract";
+import {
+  createModelCallObservation,
+} from "@/services/rag-node-observation";
 
 export interface GenerateInput {
   query: string;
@@ -13,6 +17,11 @@ export interface GenerateInput {
 }
 
 export interface GenerateOutput {
+  answer: string;
+  sources: RetrievedChunk[];
+}
+
+export interface GenerateStatePatch {
   answer: string;
   sources: RetrievedChunk[];
 }
@@ -117,6 +126,78 @@ export const generateService = {
     return {
       answer,
       sources: input.chunks,
+    };
+  },
+
+  async runNode(input: GenerateInput): Promise<RagNodeResult<GenerateStatePatch>> {
+    const result = await this.generate(input);
+    return this.toNodeResult(result);
+  },
+
+  toNodeResult(
+    result: GenerateOutput,
+    meta?: {
+      startedAtMs?: number;
+      input?: GenerateInput;
+    },
+  ): RagNodeResult<GenerateStatePatch> {
+    const messages = buildMessages(meta?.input ?? {
+      query: "",
+      chunks: [],
+    });
+    const invocation = providerProxyService.describeChatInvocation(
+      "default",
+      messages,
+    );
+
+    return {
+      state: {
+        answer: result.answer,
+        sources: result.sources,
+      },
+      observation: createModelCallObservation({
+        startedAtMs: meta?.startedAtMs ?? Date.now(),
+        label: "组织回答",
+        summary: result.answer.trim() ? "回答生成完成" : "已完成回答生成",
+        details: {
+          sourceCount: result.sources.length,
+        },
+        sources: result.sources,
+        role: "llm",
+        providerCode: invocation.providerCode,
+        providerLabel: invocation.providerLabel,
+        protocol: invocation.protocol,
+        operation: invocation.operation,
+        endpoint: invocation.endpoint,
+        model: invocation.model,
+        modelConfigId: invocation.modelConfigId,
+        params: invocation.params,
+        request: invocation.request,
+        result: {
+          success: true,
+          finishReason: "stop",
+          metrics: {
+            inputCount: messages.length,
+            outputCount: Array.from(result.answer).length,
+            returnedCount: result.sources.length,
+          },
+          response: {
+            model: invocation.model,
+            summary: {
+              answerLength: Array.from(result.answer).length,
+              sourceCount: result.sources.length,
+            },
+          },
+        },
+        retrieval: {
+          candidateCount: meta?.input?.chunks.length ?? result.sources.length,
+          returnedCount: result.sources.length,
+        },
+        context: {
+          conversationHistoryCount: meta?.input?.conversationHistory?.length ?? null,
+          systemPromptProvided: Boolean(meta?.input?.systemPrompt),
+        },
+      }),
     };
   },
 

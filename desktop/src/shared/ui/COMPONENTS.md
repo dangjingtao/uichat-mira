@@ -8,6 +8,7 @@
 
 - `Button`
 - `Card`
+- `Detail Drawer`
 - `ErrorBoundary`
 - `FileIcon`
 - `FileListItem`
@@ -18,6 +19,7 @@
 - `Message`
 - `Modal`
 - `NavItem`
+- `RagProgressDetailDrawer`
 - `StatusIndicator`
 - `StepIndicator`
 - `Switch`
@@ -29,6 +31,7 @@
 
 - 优先使用语义 token，例如 `bg-surface-primary`、`text-text-secondary`
 - 共享组件内不直接依赖 `gray-*`、`blue-*` 作为主视觉方案
+- 需要主色层级时，优先使用 `primary-1` 到 `primary-9` 这一组主题色阶
 - 可交互组件必须保留 `focus-visible` 态
 - 所有组件都应天然兼容浅色 / 深色主题
 
@@ -74,6 +77,57 @@
 - 信息卡片优先使用 `label + value + description`
 - 复杂区域优先使用 `children`
 - 仅在确实可点击时增加明显 hover
+
+## Detail Drawer
+
+用于从页面右侧滑出展示详情，适合表格行详情、运行记录复盘和保持当前列表上下文的查看场景。
+
+### 使用建议
+
+- 优先用于只读详情，不承担主流程的长表单编辑
+- 抽屉内容应按“摘要 -> 配置 -> 明细 -> 日志”分区组织
+- 保持关闭动作明确，避免在抽屉内堆叠过多主操作
+
+## RagProgressDetailDrawer
+
+用于展示 RAG 节点的标准观测 JSON。
+
+当前展示内容包含：
+
+- 节点基础元信息，如 `nodeId`、`nodeType`、`label`、`status`
+- `summary`
+- `details`
+- `environment`
+
+其中 `environment` 对应后端节点广播标准，可能包含：
+
+- `model`
+- `result`
+- `retrieval`
+- `timing`
+- `context`
+
+其中 `environment.model` 在模型调用节点中应优先包含：
+
+- `providerCode`
+- `providerLabel`
+- `protocol`
+- `operation`
+- `endpoint`
+- `model`
+- `modelConfigId`
+- `params`
+- `request.method`
+- `request.url`
+- `request.body`
+
+用于在线程右侧展示单个 RAG 步骤的摘要 JSON 细节。
+
+### 使用建议
+
+- 优先承载结构化调试信息，不与主消息正文混排
+- 默认展示 prettified JSON，并提供明确复制动作
+- 仅在步骤已有最终摘要数据时开放点击查看，执行中的步骤保持不可点击
 
 ## FileIcon
 
@@ -167,9 +221,31 @@
 
 用于短文本提示，不承载复杂内容。
 
+### 当前实现
+
+- 基于 `react-tooltip` 做统一封装
+- 保持 `text` 与 `placement` 的轻量 API
+- 默认限制最大宽度，并允许长文本换行
+- 适合图标按钮、截断文案和状态补充说明
+
 ## FullPageStatus
 
 用于整页级轻状态，例如空态、加载说明或权限提示。
+
+## Input
+
+用于表单输入，包括文本、数字、多行文本与选择器。
+
+### 通用 Props
+
+- `labelHelp`：可选说明文本，会在 label 旁以 Tooltip 问号图标展示；用于避免业务页手写重复 label 和说明图标
+
+### SelectInput
+
+- 保持 `label`、`value`、`onChange`、`options`、`disabled`、`error`、`compact` 轻量 API
+- 下拉面板使用共享 surface / border / primary token，当前项以主色弱底和勾选图标标识
+- 下拉面板挂在触发器所在的相对容器中，随页面滚动一起移动，不使用固定定位 portal
+- 支持点击外部、`Esc` 与 `Tab` 关闭，并保留触发器的 `focus-visible` 状态
 
 ## Message
 
@@ -238,9 +314,12 @@ Used for the main chat thread, composed from `assistant-ui` primitives in a calm
 - `assistant` messages use a light card surface with a compact avatar and wide reading column
 - `user` messages stay right-aligned with a softer neutral bubble instead of a heavy dark block
 - when an assistant message is `running` before the first text part arrives, the same message bubble renders a `机器输入中...` placeholder; once text starts streaming, that bubble switches to the live response content
+- RAG replies can render a compact `执行过程` row under the assistant bubble, with a single-line summary by default and a lightweight expanded list for `embedding -> retrieve -> rerank -> generate`
+- completed / failed RAG steps can open a right-side detail drawer to inspect the final step standard observation JSON, including `details` and `environment`, without leaving the chat context
 - the viewport uses generous top/bottom breathing room to mimic a quiet OpenAI-style chat surface
 - the composer stays docked at the bottom with a frosted container and clear keyboard hints
 - colors and elevation should rely on `surface-*`, `text-*`, and `border` tokens
+- the empty-state quick action cards may use a warmer cream surface and softer beige borders to create a clearer onboarding focal area without changing the shared thread structure
 
 ### Usage notes
 

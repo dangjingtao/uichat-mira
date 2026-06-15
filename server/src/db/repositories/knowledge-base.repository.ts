@@ -17,6 +17,44 @@ import {
 } from "@/db/schema";
 import { nowIso } from "@/utils/time.js";
 
+const CHUNK_INSERT_BATCH_SIZE = 100;
+
+const insertDocumentChunks = (
+  db: ReturnType<typeof getDb>,
+  params: {
+    knowledgeBaseId: string;
+    documentId: string;
+    chunks: Array<{
+      chunkIndex: number;
+      content: string;
+      charCount: number;
+      tokenCount?: number | null;
+      startOffset?: number | null;
+      endOffset?: number | null;
+    }>;
+    createdAt: string;
+  },
+) => {
+  for (let index = 0; index < params.chunks.length; index += CHUNK_INSERT_BATCH_SIZE) {
+    const batch = params.chunks.slice(index, index + CHUNK_INSERT_BATCH_SIZE);
+    db.insert(documentChunks)
+      .values(
+        batch.map((chunk) => ({
+          knowledgeBaseId: params.knowledgeBaseId,
+          documentId: params.documentId,
+          chunkIndex: chunk.chunkIndex,
+          content: chunk.content,
+          charCount: chunk.charCount,
+          tokenCount: chunk.tokenCount ?? null,
+          startOffset: chunk.startOffset ?? null,
+          endOffset: chunk.endOffset ?? null,
+          createdAt: params.createdAt,
+        })),
+      )
+      .run();
+  }
+};
+
 export interface DocumentListFilters {
   search?: string;
   enabled?: boolean;
@@ -158,21 +196,12 @@ export const documentRepository = {
         .get();
 
       if (params.chunks.length > 0) {
-        db.insert(documentChunks)
-          .values(
-            params.chunks.map((chunk) => ({
-              knowledgeBaseId: created.knowledgeBaseId,
-              documentId: created.id,
-              chunkIndex: chunk.chunkIndex,
-              content: chunk.content,
-              charCount: chunk.charCount,
-              tokenCount: chunk.tokenCount ?? null,
-              startOffset: chunk.startOffset ?? null,
-              endOffset: chunk.endOffset ?? null,
-              createdAt: now,
-            })),
-          )
-          .run();
+        insertDocumentChunks(db, {
+          knowledgeBaseId: created.knowledgeBaseId,
+          documentId: created.id,
+          chunks: params.chunks,
+          createdAt: now,
+        });
       }
 
       return created;
@@ -222,20 +251,12 @@ export const documentRepository = {
       db.delete(documentChunks).where(eq(documentChunks.documentId, params.documentId)).run();
 
       if (params.chunks.length > 0) {
-        db.insert(documentChunks)
-          .values(
-            params.chunks.map((chunk) => ({
-              knowledgeBaseId: params.knowledgeBaseId,
-              documentId: params.documentId,
-              chunkIndex: chunk.chunkIndex,
-              content: chunk.content,
-              charCount: chunk.charCount,
-              tokenCount: chunk.tokenCount ?? null,
-              startOffset: chunk.startOffset,
-              endOffset: chunk.endOffset,
-            })),
-          )
-          .run();
+        insertDocumentChunks(db, {
+          knowledgeBaseId: params.knowledgeBaseId,
+          documentId: params.documentId,
+          chunks: params.chunks,
+          createdAt: nowIso(),
+        });
       }
 
       return db

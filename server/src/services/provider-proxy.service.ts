@@ -8,6 +8,9 @@ import {
 import type { ModelType, ProviderCode } from "@/db/schema.js";
 import { createCloudflareEmbeddings } from "@/services/cloudflare-provider.js";
 import {
+  createOpenAICompatibleChatUrl,
+  createOpenAICompatibleRerankUrl,
+  createOpenAICompatibleEmbeddingsUrl,
   createOpenAICompatibleEmbeddings,
   streamOpenAICompatibleChat,
 } from "@/services/openai-compatible-provider.js";
@@ -51,6 +54,32 @@ export interface EmbeddingResult {
   modelConfigId: string;
   embeddings: number[][];
   dimensions: number;
+}
+
+export interface RerankResolution {
+  providerCode: ProviderCode;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  modelConfigId: string;
+  params: Record<string, unknown>;
+  endpoint: string;
+}
+
+export interface ProviderInvocationMetadata {
+  providerCode: ProviderCode;
+  providerLabel: string;
+  protocol: string;
+  operation: string;
+  endpoint: string;
+  model: string;
+  modelConfigId: string;
+  params: Record<string, unknown>;
+  request: {
+    method: "POST";
+    url: string;
+    body: Record<string, unknown>;
+  };
 }
 
 const syncResolvedEmbeddingDimensions = (
@@ -364,6 +393,90 @@ const streamResolvedChat = (
   }
 };
 
+const getChatInvocationUrl = (resolved: ProviderResolution) => {
+  switch (getProviderDefinition(resolved.providerCode).chatAdapter) {
+    case "ollama":
+      return `${resolved.baseUrl.replace(/\/+$/, "")}/api/chat`;
+    case "openai-compatible":
+      return createOpenAICompatibleChatUrl(resolved.baseUrl);
+    default:
+      throw new Error(`Unsupported provider "${resolved.providerCode}"`);
+  }
+};
+
+const getEmbeddingInvocationUrl = (resolved: ProviderResolution) => {
+  switch (getProviderDefinition(resolved.providerCode).embeddingAdapter) {
+    case "ollama":
+      return `${resolved.baseUrl.replace(/\/+$/, "")}/api/embed`;
+    case "cloudflare":
+    case "openai-compatible":
+      return createOpenAICompatibleEmbeddingsUrl(resolved.baseUrl);
+    default:
+      throw new Error(`Unsupported provider "${resolved.providerCode}"`);
+  }
+};
+
+const createChatInvocationMetadata = (
+  resolved: ProviderResolution,
+  messages: NormalizedChatMessage[],
+  operation: "chat" | "task-chat",
+): ProviderInvocationMetadata => {
+  const protocol = getProviderDefinition(resolved.providerCode).chatAdapter;
+  const endpoint = getChatInvocationUrl(resolved);
+
+  return {
+    providerCode: resolved.providerCode,
+    providerLabel: getProviderDefinition(resolved.providerCode).displayName,
+    protocol,
+    operation,
+    endpoint,
+    model: resolved.model,
+    modelConfigId: resolved.modelConfigId,
+    params: resolved.params,
+    request: {
+      method: "POST",
+      url: endpoint,
+      body: {
+        model: resolved.model,
+        stream: true,
+        messageCount: messages.length,
+        params:
+          protocol === "ollama"
+            ? toOllamaChatOptions(resolved.params)
+            : toOpenAICompatibleChatOptions(resolved.params),
+      },
+    },
+  };
+};
+
+const createEmbeddingInvocationMetadata = (
+  resolved: ProviderResolution,
+  input: string[],
+): ProviderInvocationMetadata => {
+  const protocol = getProviderDefinition(resolved.providerCode).embeddingAdapter;
+  const endpoint = getEmbeddingInvocationUrl(resolved);
+
+  return {
+    providerCode: resolved.providerCode,
+    providerLabel: getProviderDefinition(resolved.providerCode).displayName,
+    protocol,
+    operation: "embeddings",
+    endpoint,
+    model: resolved.model,
+    modelConfigId: resolved.modelConfigId,
+    params: resolved.params,
+    request: {
+      method: "POST",
+      url: endpoint,
+      body: {
+        model: resolved.model,
+        inputCount: input.length,
+        params: toEmbeddingOptions(resolved.params),
+      },
+    },
+  };
+};
+
 const createOllamaClient = (baseUrl: string, apiKey: string) => {
   const options: ConstructorParameters<typeof Ollama>[0] = {
     host: baseUrl || undefined,
@@ -441,6 +554,29 @@ export const providerProxyService = {
 
   streamTaskChat(messages: NormalizedChatMessage[]) {
     return createUiMessageStream(() => this.streamTaskChatText(messages));
+  },
+
+  describeChatInvocation(
+    requestedProvider: ProxyProviderParam,
+    messages: NormalizedChatMessage[],
+  ): ProviderInvocationMetadata {
+    const resolved = resolveProviderForRole("llm", requestedProvider);
+    return createChatInvocationMetadata(resolved, messages, "chat");
+  },
+
+  describeTaskChatInvocation(
+    messages: NormalizedChatMessage[],
+  ): ProviderInvocationMetadata {
+    const resolved = resolveProviderForRole("task", "default");
+    return createChatInvocationMetadata(resolved, messages, "task-chat");
+  },
+
+  describeEmbeddingInvocation(
+    requestedProvider: ProxyProviderParam,
+    input: string[],
+  ): ProviderInvocationMetadata {
+    const resolved = resolveProviderForRole("embedding", requestedProvider);
+    return createEmbeddingInvocationMetadata(resolved, input);
   },
 
   async createEmbeddings(
@@ -525,6 +661,24 @@ export const providerProxyService = {
       modelConfigId: resolved.modelConfigId,
       embeddings,
       dimensions,
+    };
+  },
+
+  resolveRerankProvider(
+    requestedProvider: ProxyProviderParam = "default",
+  ): RerankResolution {
+    const resolved = resolveProviderForRole("rerank", requestedProvider);
+    const providerDefinition = getProviderDefinition(resolved.providerCode);
+
+    if (providerDefinition.chatAdapter !== "openai-compatible") {
+      throw new Error(
+        `Provider "${resolved.providerCode}" does not support the OpenAI-compatible rerank adapter`,
+      );
+    }
+
+    return {
+      ...resolved,
+      endpoint: createOpenAICompatibleRerankUrl(resolved.baseUrl),
     };
   },
 };

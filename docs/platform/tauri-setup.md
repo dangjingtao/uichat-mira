@@ -60,6 +60,9 @@ pnpm check:tauri
 ```
 
 The built application will be in `tauri/target/release/bundle/`
+The final release handoff output is copied to `release/v<version>_<date>_<time>/tauri/`.
+`tauri/target/release/bundle/` remains the internal Tauri build directory.
+`pnpm package:tauri:win` also runs `pnpm version:sync` first, so installer filenames follow the root `package.json` version.
 
 ## Platform-Specific Builds
 
@@ -109,6 +112,7 @@ Before Tauri packaging, the workspace stages all required inputs into `.artifact
 ### Packaged login behavior
 - Packaged Tauri builds now persist `JWT_SECRET` and `SETTINGS_SECRET` under the app local data directory so login tokens remain valid across restarts.
 - Packaged Tauri builds also set `UI_CHAT_ALLOW_DEFAULT_BOOTSTRAP=1`, which allows the built-in seed users (`Tomz / 123456`, `Dang / 123456`) to be created automatically when the auth database is empty.
+- Packaged Tauri waits for the bundled backend `GET /health` check before continuing startup, so `/login` is less likely to fail during the initial backend warm-up window.
 - If you want different initial credentials, set `SEED_ADMIN_USERNAME` / `SEED_ADMIN_PASSWORD` and optional `SEED_USER_USERNAME` / `SEED_USER_PASSWORD` before starting the bundled backend.
 
 ### Frontend not connecting

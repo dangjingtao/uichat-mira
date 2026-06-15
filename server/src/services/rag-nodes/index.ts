@@ -1,4 +1,10 @@
 export {
+  rewriteService,
+  type MaybeRewriteInput,
+  type MaybeRewriteOutput,
+} from "./rewrite.service";
+
+export {
   embedService,
   type EmbedInput,
   type EmbedOutput,

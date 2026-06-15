@@ -104,3 +104,9 @@ export async function selectProviderRoleModel(
     remoteModelId,
   });
 }
+
+export async function resetProviderRoleModel(
+  role: RoleModelType,
+): Promise<RoleModelConfig> {
+  return put<RoleModelConfig>(`/providers/reset-model/${role}`, {});
+}

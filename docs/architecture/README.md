@@ -29,10 +29,17 @@ Renderer  -- direct HTTP -->  Fastify backend
 file:// app                  http://<backend-host>:<backend-port>
 ```
 
+Packaged startup notes:
+
+- Electron and Tauri both start the bundled backend process before the renderer begins normal API work.
+- Packaged shells wait for the backend `/health` endpoint to become reachable, which reduces first-load `/login` failures caused by racing the backend startup.
+- Packaged shells persist runtime secrets locally so auth tokens and encrypted settings remain stable across restarts.
+
 Development startup notes:
 
 - `pnpm dev:electron:win` starts the renderer through Vite and the backend through the server package's `pnpm dev` script.
 - The backend dev script uses `tsx watch src/index.ts`, so backend source edits should restart the Fastify process automatically when the backend is launched by the Electron dev launcher.
+- In development, the backend process runs with `server/` as its working directory, so the default SQLite file is `server/data/uichat-rag-test.db` unless `UI_CHAT_DATABASE_DIR` overrides it.
 - If the launcher detects an already-healthy backend on the configured port, it reuses that process instead of starting a watched backend. In that case, code changes will not apply until that reused backend is restarted.
 
 ## Request Contract
@@ -57,6 +64,11 @@ Consumers:
 - `scripts/build-dist.js` copies it into the packaged app and prunes old release directories after a successful package build.
 - `server/build.js` writes the shared backend bundle into `.artifacts/server-bundle` for desktop packagers to consume.
 
+## Related Architecture Docs
+
+- `ipc-and-preload.md`: renderer and native boundary rules
+- `rag-node-development.md`: RAG node standard IO, observability contract, and node authoring rules
+
 ## Package Layout
 
 ```text
@@ -72,9 +84,12 @@ release/.../win-unpacked/resources/
 ## Release Retention
 
 - Packaged outputs are written into timestamped directories under `release/`.
-- After a successful `pnpm package:electron:win`, the build script keeps the newest `3` release directories by default.
+- `pnpm package:electron:win` writes its final artifacts to `release/v<version>_<date>_<time>/electron/`.
+- `pnpm package:tauri:win` writes its final artifacts to `release/v<version>_<date>_<time>/tauri/`.
+- Both packaging scripts keep the newest `3` release directories by default.
 - Override the retention count with `RELEASE_KEEP_COUNT`.
 - If Windows still holds a lock on an old release directory, the cleanup step skips it and continues.
+- Both packaging scripts sync workspace package versions, `tauri/tauri.conf.json`, and `tauri/Cargo.toml` from the root `package.json` version before building.
 
 ## Boundaries
 

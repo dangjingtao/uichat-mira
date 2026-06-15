@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
+import { Readable } from "node:stream";
 import {
   ErrorCodes,
   error,
@@ -13,6 +14,8 @@ import {
 } from "@/services/provider-proxy.service.js";
 import { ragPipeline } from "@/services/rag-pipeline.js";
 import { threadService } from "@/services/thread.service.js";
+import { knowledgeBaseService } from "@/services/knowledge-base.service.js";
+import { NO_CONTEXT_ANSWER } from "@/services/rag-response-constants.js";
 import {
   PROVIDER_CODE_ENUM,
   proxyProviderSchema,
@@ -132,6 +135,93 @@ const shouldGenerateTitle = (title: string | undefined) => {
   const normalizedTitle = title?.trim();
   return !normalizedTitle || normalizedTitle === "新对话";
 };
+
+const toSseChunk = (data: unknown) => `data: ${JSON.stringify(data)}\n\n`;
+
+const createStaticAssistantStream = (input: {
+  messageId: string;
+  answer: string;
+  ragNode?: {
+    nodeId: string;
+    nodeType: string;
+    label: string;
+    summary: string;
+    details?: Record<string, unknown>;
+    environment?: Record<string, unknown>;
+  };
+  onComplete?: () => Promise<void> | void;
+}) =>
+  Readable.from(
+    (async function* () {
+      try {
+        if (input.ragNode) {
+          yield toSseChunk({
+            type: "data-rag-node",
+            data: {
+              ...input.ragNode,
+              phase: "done",
+            },
+          });
+        }
+
+        yield toSseChunk({ type: "start", messageId: input.messageId });
+        yield toSseChunk({ type: "text-start", id: "text-1" });
+        yield toSseChunk({
+          type: "text-delta",
+          id: "text-1",
+          delta: input.answer,
+        });
+        yield toSseChunk({ type: "text-end", id: "text-1" });
+
+        await input.onComplete?.();
+
+        yield toSseChunk({
+          type: "finish-step",
+          finishReason: "stop",
+          usage: {
+            inputTokens: 0,
+            outputTokens: 0,
+          },
+          isContinued: false,
+        });
+        yield toSseChunk({
+          type: "finish",
+          finishReason: "stop",
+          usage: {
+            inputTokens: 0,
+            outputTokens: 0,
+          },
+        });
+        yield "data: [DONE]\n\n";
+      } catch (streamError) {
+        const message =
+          streamError instanceof Error ? streamError.message : String(streamError);
+
+        yield toSseChunk({
+          type: "error",
+          errorText: message,
+        });
+        yield toSseChunk({
+          type: "finish-step",
+          finishReason: "error",
+          usage: {
+            inputTokens: 0,
+            outputTokens: 0,
+          },
+          isContinued: false,
+        });
+        yield toSseChunk({
+          type: "finish",
+          finishReason: "error",
+          usage: {
+            inputTokens: 0,
+            outputTokens: 0,
+          },
+        });
+        yield "data: [DONE]\n\n";
+      }
+    })(),
+  );
 
 const proxyProviderRoute: FastifyPluginAsync = async (app) => {
   const taskDefaultChatRoute = PUBLIC_API_ROUTES.taskDefaultChat;
@@ -253,6 +343,18 @@ const proxyProviderRoute: FastifyPluginAsync = async (app) => {
           const ragInput = toRagInput(messages);
 
           if (thread?.ragEnabled && ragInput && typeof threadId === "string" && authUser) {
+            app.log.info(
+              {
+                scope: "proxy-provider",
+                event: "rag-branch-enter",
+                threadId,
+                userId: authUser.id,
+                question: ragInput.question,
+                historyCount: ragInput.conversationHistory?.length ?? 0,
+              },
+              "[proxy-provider] starting RAG assistant stream",
+            );
+
             const latestUserMessageId =
               typeof request.body.messageId === "string" &&
               request.body.messageId.trim()
@@ -274,6 +376,132 @@ const proxyProviderRoute: FastifyPluginAsync = async (app) => {
               });
             }
 
+            const persistRagAssistantMessage = async ({
+              answer,
+              sources,
+              finishReason,
+              routeReason,
+            }: {
+              answer: string;
+              sources: RetrievedChunk[];
+              finishReason: "stop" | "error";
+              routeReason?: string;
+            }) => {
+              if (
+                finishReason !== "stop" ||
+                !threadId ||
+                !answer.trim()
+              ) {
+                return;
+              }
+
+              threadService.createMessage(threadId, authUser.id, {
+                id: assistantMessageId,
+                role: "assistant",
+                content: answer,
+                metadata: {
+                  rag: {
+                    enabled: true,
+                    question: ragInput.question,
+                    topK: 10,
+                    topN: 4,
+                    sources: toPersistedRagSources(sources),
+                    ...(routeReason ? { routeReason } : {}),
+                  },
+                },
+              });
+
+              try {
+                const latestThread = threadService.getThreadSummaryById(
+                  threadId,
+                  authUser.id,
+                );
+                if (shouldGenerateTitle(latestThread?.title)) {
+                  const title = await generateThreadTitle(
+                    ragInput.question,
+                    answer,
+                  );
+                  threadService.updateThread(threadId, authUser.id, {
+                    title,
+                  });
+                }
+              } catch (titleError) {
+                app.log.warn(
+                  { err: titleError, threadId },
+                  "[proxy-provider] failed to generate RAG thread title",
+                );
+              }
+            };
+
+            const defaultKnowledgeBase =
+              knowledgeBaseService.getDefaultKnowledgeBase();
+
+            if (defaultKnowledgeBase.enabledDocumentCount === 0) {
+              app.log.info(
+                {
+                  scope: "proxy-provider",
+                  event: "rag-route-empty-knowledge-base",
+                  threadId,
+                  userId: authUser.id,
+                  knowledgeBaseId: defaultKnowledgeBase.id,
+                },
+                "[proxy-provider] knowledge base empty, returning fixed RAG fallback",
+              );
+
+              prepareDataStreamReply(reply);
+              return reply.send(
+                createStaticAssistantStream({
+                  messageId: assistantMessageId,
+                  answer: NO_CONTEXT_ANSWER,
+                  ragNode: {
+                    nodeId: "routeKnowledgeBase",
+                    nodeType: "route",
+                    label: "检查知识库可用性",
+                    summary: "知识库为空，直接返回固定拒答",
+                    details: {
+                      knowledgeBaseId: defaultKnowledgeBase.id,
+                      enabledDocumentCount:
+                        defaultKnowledgeBase.enabledDocumentCount,
+                      documentCount: defaultKnowledgeBase.documentCount,
+                    },
+                    environment: {
+                      result: {
+                        success: true,
+                        finishReason: "knowledge-base-empty",
+                        metrics: {
+                          candidateCount: 0,
+                          returnedCount: 0,
+                        },
+                        response: {
+                          summary: {
+                            answerLength: Array.from(NO_CONTEXT_ANSWER).length,
+                            routeReason: "knowledge-base-empty",
+                          },
+                        },
+                      },
+                      retrieval: {
+                        knowledgeBaseId: defaultKnowledgeBase.id,
+                        candidateCount: 0,
+                        returnedCount: 0,
+                      },
+                      timing: {
+                        startedAt: new Date().toISOString(),
+                        finishedAt: new Date().toISOString(),
+                        durationMs: 0,
+                      },
+                    },
+                  },
+                  onComplete: () =>
+                    persistRagAssistantMessage({
+                      answer: NO_CONTEXT_ANSWER,
+                      sources: [],
+                      finishReason: "stop",
+                      routeReason: "knowledge-base-empty",
+                    }),
+                }),
+              );
+            }
+
             prepareDataStreamReply(reply);
             return reply.send(
               ragPipeline.assistantStream({
@@ -285,51 +513,12 @@ const proxyProviderRoute: FastifyPluginAsync = async (app) => {
                   answer,
                   sources,
                   finishReason,
-                }) => {
-                  if (
-                    finishReason !== "stop" ||
-                    !threadId ||
-                    !answer.trim()
-                  ) {
-                    return;
-                  }
-
-                  threadService.createMessage(threadId, authUser.id, {
-                    id: assistantMessageId,
-                    role: "assistant",
-                    content: answer,
-                    metadata: {
-                      rag: {
-                        enabled: true,
-                        question: ragInput.question,
-                        topK: 10,
-                        topN: 4,
-                        sources: toPersistedRagSources(sources),
-                      },
-                    },
-                  });
-
-                  try {
-                    const latestThread = threadService.getThreadSummaryById(
-                      threadId,
-                      authUser.id,
-                    );
-                    if (shouldGenerateTitle(latestThread?.title)) {
-                      const title = await generateThreadTitle(
-                        ragInput.question,
-                        answer,
-                      );
-                      threadService.updateThread(threadId, authUser.id, {
-                        title,
-                      });
-                    }
-                  } catch (titleError) {
-                    app.log.warn(
-                      { err: titleError, threadId },
-                      "[proxy-provider] failed to generate RAG thread title",
-                    );
-                  }
-                },
+                }) =>
+                  persistRagAssistantMessage({
+                    answer,
+                    sources,
+                    finishReason,
+                  }),
               }),
             );
           }
