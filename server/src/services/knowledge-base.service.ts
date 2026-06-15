@@ -7,6 +7,7 @@ import {
 } from "@/constants/knowledge-base.js";
 import { splitDocumentText, type ChunkingConfig } from "@/services/knowledge-base.splitter";
 import { knowledgeBaseVectorStore } from "@/services/knowledge-base.vector-store.js";
+import { lexicalRetrieveService } from "@/services/rag-nodes/lexical-retrieve.service.js";
 import { providerProxyService } from "@/services/provider-proxy.service.js";
 import {
   FAILED_GENERATE_EMBEDDINGS_MESSAGE,
@@ -203,11 +204,17 @@ const cleanupDocumentArtifacts = (
   documentRepository.deleteById(document.id);
 };
 
+const invalidateLexicalIndex = (knowledgeBaseId: string) => {
+  lexicalRetrieveService.invalidateKnowledgeBase(knowledgeBaseId);
+};
+
 const processQueuedDocument = async (job: IndexDocumentJob) => {
   const existing = documentRepository.findById(job.documentId);
   if (!existing) {
     return;
   }
+
+  invalidateLexicalIndex(existing.knowledgeBaseId);
 
   const previousDetail = knowledgeBaseService.getDocumentById(job.documentId);
   const splitResult = await splitDocumentText(existing.contentText, job.chunkingConfig);
@@ -256,6 +263,7 @@ const processQueuedDocument = async (job: IndexDocumentJob) => {
       indexStatus: "ready",
       errorMessage: null,
     });
+    invalidateLexicalIndex(existing.knowledgeBaseId);
   } catch (error) {
     const errorMessage = getErrorMessage(
       error,
@@ -266,6 +274,7 @@ const processQueuedDocument = async (job: IndexDocumentJob) => {
       indexStatus: "failed",
       errorMessage,
     });
+    invalidateLexicalIndex(existing.knowledgeBaseId);
   }
 };
 
@@ -397,8 +406,10 @@ export const knowledgeBaseService = {
         indexStatus: "ready",
         errorMessage: null,
       });
+      invalidateLexicalIndex(kb.id);
     } catch (error) {
       cleanupDocumentArtifacts(detail);
+      invalidateLexicalIndex(kb.id);
 
       throw error instanceof Error
         ? error
@@ -451,6 +462,7 @@ export const knowledgeBaseService = {
 
     if (typeof input.contentText === "string") {
       const previousDetail = this.getDocumentById(id);
+      invalidateLexicalIndex(existing.knowledgeBaseId);
       const splitResult = await splitDocumentText(
         input.contentText,
         input.chunkingConfig,
@@ -506,6 +518,7 @@ export const knowledgeBaseService = {
           indexStatus: "ready",
           errorMessage: null,
         });
+        invalidateLexicalIndex(existing.knowledgeBaseId);
       } catch (error) {
         const errorMessage = getErrorMessage(
           error,
@@ -516,6 +529,7 @@ export const knowledgeBaseService = {
           indexStatus: "failed",
           errorMessage,
         });
+        invalidateLexicalIndex(existing.knowledgeBaseId);
 
         throw error;
       }
@@ -535,11 +549,21 @@ export const knowledgeBaseService = {
           : undefined,
     });
 
+    if (
+      updated &&
+      (typeof input.name === "string" || typeof input.enabled === "boolean")
+    ) {
+      invalidateLexicalIndex(existing.knowledgeBaseId);
+    }
+
     return updated ? this.getDocumentById(updated.id) : null;
   },
 
   deleteDocument(id: string): boolean {
     const detail = this.getDocumentById(id);
+    if (detail) {
+      invalidateLexicalIndex(detail.knowledgeBaseId);
+    }
     if (detail?.chunks.length) {
       const tableNames = knowledgeBaseVectorStore.listVectorIndexTableNames(
         detail.knowledgeBaseId,

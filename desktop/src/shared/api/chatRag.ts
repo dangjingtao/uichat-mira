@@ -6,6 +6,8 @@ export interface RagRetrievedChunk {
   documentName: string;
   content: string;
   score: number;
+  matchType?: "vector" | "lexical" | "hybrid";
+  hitModes?: Array<"vector" | "lexical">;
 }
 
 export interface RetrieveRagSourcesPayload {

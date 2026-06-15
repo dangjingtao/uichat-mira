@@ -1,7 +1,8 @@
 import type { FastifyPluginAsync } from "fastify";
 import { ragPipeline, type RAGPipelineInput } from "@/services/rag-pipeline";
-import { error, success } from "@/utils/index.js";
+import { success } from "@/utils/index.js";
 import { requireAuth } from "@/db/auth.db.js";
+import { routeHandler } from "@/utils/route-errors.js";
 
 const chatRagRoute: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", requireAuth);
@@ -56,15 +57,10 @@ const chatRagRoute: FastifyPluginAsync = async (app) => {
         },
       },
     },
-    async (request, reply) => {
-      try {
-        const result = await ragPipeline.run(request.body);
-        return reply.send(success(result));
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        return reply.send(error(message));
-      }
-    }
+    routeHandler("Failed to run RAG chat", async (request) => {
+      const result = await ragPipeline.run(request.body);
+      return success(result);
+    })
   );
 
   // RAG 增强聊天（流式）
@@ -90,20 +86,15 @@ const chatRagRoute: FastifyPluginAsync = async (app) => {
         },
       },
     },
-    async (request, reply) => {
-      try {
-        const stream = ragPipeline.stream(request.body);
+    routeHandler("Failed to stream RAG chat", async (request, reply) => {
+      const stream = ragPipeline.stream(request.body);
 
-        reply.header("Content-Type", "text/event-stream");
-        reply.header("Cache-Control", "no-cache");
-        reply.header("Connection", "keep-alive");
+      reply.header("Content-Type", "text/event-stream");
+      reply.header("Cache-Control", "no-cache");
+      reply.header("Connection", "keep-alive");
 
-        return reply.send(stream);
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        return reply.send(error(message));
-      }
-    }
+      return reply.send(stream);
+    })
   );
 
   // 仅检索（不生成）
@@ -149,15 +140,10 @@ const chatRagRoute: FastifyPluginAsync = async (app) => {
         },
       },
     },
-    async (request, reply) => {
-      try {
-        const chunks = await ragPipeline.retrieveOnly(request.body);
-        return reply.send(success(chunks));
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        return reply.send(error(message));
-      }
-    }
+    routeHandler("Failed to retrieve RAG chunks", async (request) => {
+      const chunks = await ragPipeline.retrieveOnly(request.body);
+      return success(chunks);
+    })
   );
 };
 

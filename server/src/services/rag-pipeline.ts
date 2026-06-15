@@ -7,6 +7,21 @@ import {
   type RAGGraphStreamUpdate,
 } from "./rag-graph";
 import { type RagNodeEventPayload } from "./rag-events";
+import {
+  assistantDoneChunk,
+  assistantErrorChunk,
+  assistantFinishChunk,
+  assistantFinishChunks,
+  assistantFinishStepChunk,
+  assistantStartChunk,
+  assistantStartStepChunk,
+  assistantTextDeltaChunk,
+  assistantTextEndChunk,
+  assistantTextStartChunk,
+  assistantTextStartChunks,
+  defaultAssistantStreamUsage,
+  toAssistantSseChunk,
+} from "./assistant-stream-events";
 
 export interface RAGPipelineInput {
   question: string;
@@ -34,8 +49,6 @@ export interface AssistantStreamCompletePayload {
   finishReason: "stop" | "error";
 }
 
-const toSseChunk = (data: unknown) => `data: ${JSON.stringify(data)}\n\n`;
-
 const toUiRagSources = (sources: RetrievedChunk[]) =>
   sources.map((source) => ({
     chunkId: source.chunkId,
@@ -43,10 +56,12 @@ const toUiRagSources = (sources: RetrievedChunk[]) =>
     documentName: source.documentName,
     score: source.score,
     content: source.content,
+    ...(source.matchType ? { matchType: source.matchType } : {}),
+    ...(source.hitModes ? { hitModes: source.hitModes } : {}),
   }));
 
 const toRagNodeChunk = (payload: RagNodeEventPayload) =>
-  toSseChunk({
+  toAssistantSseChunk({
     type: "data-rag-node",
     data: payload,
   });
@@ -76,8 +91,8 @@ export const ragPipeline = {
     return Readable.from(
       (async function* () {
         try {
-          yield `data: ${JSON.stringify({ type: "start" })}\n\n`;
-          yield `data: ${JSON.stringify({ type: "start-step" })}\n\n`;
+          yield assistantStartChunk();
+          yield assistantStartStepChunk();
           const stream = await ragGraph.streamEvents(input);
           let textStarted = false;
           let sawGenerateDelta = false;
@@ -86,9 +101,7 @@ export const ragPipeline = {
             const events: string[] = [];
             if (!textStarted) {
               textStarted = true;
-              events.push(
-                `data: ${JSON.stringify({ type: "text-start", id: "text-1" })}\n\n`,
-              );
+              events.push(assistantTextStartChunk());
             }
 
             return events;
@@ -112,15 +125,17 @@ export const ragPipeline = {
               }
 
               if (customChunk.type === "rag-sources") {
-                yield `data: ${JSON.stringify({
+                yield toAssistantSseChunk({
                   type: "sources",
                   data: customChunk.data.sources.map((c) => ({
                     documentId: c.documentId,
                     documentName: c.documentName,
                     content: c.content.slice(0, 200),
                     score: c.score,
+                    ...(c.matchType ? { matchType: c.matchType } : {}),
+                    ...(c.hitModes ? { hitModes: c.hitModes } : {}),
                   })),
-                })}\n\n`;
+                });
                 continue;
               }
 
@@ -133,11 +148,7 @@ export const ragPipeline = {
               }
 
               sawGenerateDelta = true;
-              yield `data: ${JSON.stringify({
-                type: "text-delta",
-                id: "text-1",
-                delta: customChunk.delta,
-              })}\n\n`;
+              yield assistantTextDeltaChunk(customChunk.delta);
               continue;
             }
 
@@ -149,23 +160,19 @@ export const ragPipeline = {
               }
 
               if (!sawGenerateDelta && update.generate.answer) {
-                yield `data: ${JSON.stringify({
-                  type: "text-delta",
-                  id: "text-1",
-                  delta: update.generate.answer,
-                })}\n\n`;
+                yield assistantTextDeltaChunk(update.generate.answer);
               }
             }
           }
 
-          yield `data: ${JSON.stringify({ type: "text-end", id: "text-1" })}\n\n`;
-          yield `data: ${JSON.stringify({ type: "finish-step" })}\n\n`;
-          yield `data: ${JSON.stringify({ type: "finish", finishReason: "stop" })}\n\n`;
+          yield assistantTextEndChunk();
+          yield assistantFinishStepChunk();
+          yield assistantFinishChunk({ finishReason: "stop" });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          yield `data: ${JSON.stringify({ type: "error", errorText: message })}\n\n`;
-          yield `data: ${JSON.stringify({ type: "finish-step" })}\n\n`;
-          yield `data: ${JSON.stringify({ type: "finish", finishReason: "error" })}\n\n`;
+          yield assistantErrorChunk(message);
+          yield assistantFinishStepChunk();
+          yield assistantFinishChunk({ finishReason: "error" });
         }
       })()
     );
@@ -187,10 +194,7 @@ export const ragPipeline = {
     return Readable.from(
       (async function* () {
         const messageId = options?.messageId ?? crypto.randomUUID();
-        const usage = {
-          inputTokens: 0,
-          outputTokens: 0,
-        };
+        const usage = defaultAssistantStreamUsage;
         let answer = "";
         let sources: RetrievedChunk[] = [];
         let textStarted = false;
@@ -203,8 +207,7 @@ export const ragPipeline = {
           }
 
           textStarted = true;
-          yield toSseChunk({ type: "start", messageId });
-          yield toSseChunk({ type: "text-start", id: "text-1" });
+          yield* assistantTextStartChunks({ messageId });
         };
 
         const ensureTextEnded = function* () {
@@ -213,7 +216,7 @@ export const ragPipeline = {
           }
 
           textEnded = true;
-          yield toSseChunk({ type: "text-end", id: "text-1" });
+          yield assistantTextEndChunk();
         };
 
         try {
@@ -248,11 +251,7 @@ export const ragPipeline = {
               sawGenerateDelta = true;
               answer += customChunk.delta;
               yield* ensureTextStarted();
-              yield toSseChunk({
-                type: "text-delta",
-                id: "text-1",
-                delta: customChunk.delta,
-              });
+              yield assistantTextDeltaChunk(customChunk.delta);
               continue;
             }
 
@@ -266,11 +265,7 @@ export const ragPipeline = {
               answer = update.generate.answer;
               sources = update.generate.sources ?? [];
               yield* ensureTextStarted();
-              yield toSseChunk({
-                type: "text-delta",
-                id: "text-1",
-                delta: update.generate.answer,
-              });
+              yield assistantTextDeltaChunk(update.generate.answer);
               continue;
             }
 
@@ -283,7 +278,7 @@ export const ragPipeline = {
           yield* ensureTextEnded();
 
           if (sources.length > 0) {
-            yield toSseChunk({
+            yield toAssistantSseChunk({
               type: "data-rag-sources",
               data: toUiRagSources(sources),
             });
@@ -296,23 +291,17 @@ export const ragPipeline = {
             finishReason: "stop",
           });
 
-          yield toSseChunk({
-            type: "finish-step",
+          yield* assistantFinishChunks({
             finishReason: "stop",
             usage,
             isContinued: false,
+            includeDone: true,
           });
-          yield toSseChunk({
-            type: "finish",
-            finishReason: "stop",
-            usage,
-          });
-          yield "data: [DONE]\n\n";
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
 
           if (sources.length > 0) {
-            yield toSseChunk({
+            yield toAssistantSseChunk({
               type: "data-rag-sources",
               data: toUiRagSources(sources),
             });
@@ -326,22 +315,14 @@ export const ragPipeline = {
           });
 
           yield* ensureTextEnded();
-          yield toSseChunk({
-            type: "error",
-            errorText: message,
-          });
-          yield toSseChunk({
-            type: "finish-step",
+          yield assistantErrorChunk(message);
+          yield* assistantFinishChunks({
             finishReason: "error",
             usage,
             isContinued: false,
+            includeDone: false,
           });
-          yield toSseChunk({
-            type: "finish",
-            finishReason: "error",
-            usage,
-          });
-          yield "data: [DONE]\n\n";
+          yield assistantDoneChunk();
         }
       })(),
     );

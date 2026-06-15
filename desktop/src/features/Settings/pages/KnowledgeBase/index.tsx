@@ -372,29 +372,6 @@ export default function KnowledgeBaseSettings() {
               <div className="font-medium">
                 当前未接入默认向量模型，知识库文件上传入口已暂时禁用。
               </div>
-              <div className="flex flex-wrap gap-2 text-xs">
-                <span className="rounded-full bg-danger/10 px-2.5 py-1">
-                  向量模型：{modelAccessStatus.embeddingConnected ? "已接入" : "未接入"}
-                </span>
-                <span
-                  className={`rounded-full px-2.5 py-1 ${
-                    modelAccessStatus.llmConnected
-                      ? "bg-success/10 text-success"
-                      : "bg-danger/10 text-danger"
-                  }`}
-                >
-                  LLM 模型：{modelAccessStatus.llmConnected ? "已接入" : "未接入"}
-                </span>
-                <span
-                  className={`rounded-full px-2.5 py-1 ${
-                    modelAccessStatus.rerankConnected
-                      ? "bg-success/10 text-success"
-                      : "bg-danger/10 text-danger"
-                  }`}
-                >
-                  Rerank 模型：{modelAccessStatus.rerankConnected ? "已接入" : "未接入"}
-                </span>
-              </div>
             </div>
           </div>
         </div>

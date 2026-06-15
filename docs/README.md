@@ -6,10 +6,11 @@ Most project documentation is centralized under `docs/`. The main exceptions are
 
 1. `../README.md`: project overview, quick start, and packaging entry points
 2. `architecture/README.md`: architecture, runtime boundaries, and request contract
-3. `architecture/ipc-and-preload.md`: preload exposure and IPC rules
-4. `assistant-ui.md`: assistant-ui reference index for chat UI work
-5. `platform/tauri.md`: Tauri runtime overview
-6. `platform/tauri-setup.md`: Tauri setup, build, and troubleshooting
+3. `CODING_STANDARDS.md`: TypeScript, Fastify route, and documentation conventions
+4. `architecture/ipc-and-preload.md`: preload exposure and IPC rules
+5. `assistant-ui.md`: assistant-ui reference index for chat UI work
+6. `platform/tauri.md`: Tauri runtime overview
+7. `platform/tauri-setup.md`: Tauri setup, build, and troubleshooting
 
 ## Topical Index
 
@@ -37,6 +38,7 @@ Most project documentation is centralized under `docs/`. The main exceptions are
 - `knowledge-base-backend-schema.md`
 - `provider-proxy-api.md`
 - `provider-integration-optimization.md`
+- `tools-protocol.md`
 
 ### Engineering conventions
 

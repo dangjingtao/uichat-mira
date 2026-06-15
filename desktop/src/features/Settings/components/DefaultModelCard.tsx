@@ -81,6 +81,7 @@ const DefaultModelCard = forwardRef<DefaultModelCardRef, DefaultModelCardProps>(
               modelType="task"
               config={configMap.task}
               onUpdated={handleConfigUpdated}
+              readOnly
             />
             <ModelConfig
               modelType="embedding"

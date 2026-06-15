@@ -104,6 +104,57 @@ const logRerankWarn = (event: string, data: Record<string, unknown>) => {
   });
 };
 
+const normalizeScores = (values: number[]) => {
+  if (values.length === 0) {
+    return [];
+  }
+
+  if (values.length === 1) {
+    return [1];
+  }
+
+  const maxValue = Math.max(...values);
+  const minValue = Math.min(...values);
+
+  if (maxValue === minValue) {
+    return values.map((_value, index) => 1 - index / (values.length - 1));
+  }
+
+  return values.map((value) => (value - minValue) / (maxValue - minValue));
+};
+
+const normalizeRerankedChunks = (chunks: RetrievedChunk[]) => {
+  const normalizedScores = normalizeScores(
+    chunks.map((chunk) => chunk.rawScore ?? chunk.score),
+  );
+
+  return chunks.map((chunk, index) => ({
+    ...chunk,
+    score: normalizedScores[index] ?? 0,
+  }));
+};
+
+const toContentSnippet = (content: string, maxChars = 200) =>
+  Array.from(content).slice(0, maxChars).join("");
+
+const toRerankCandidates = (
+  stage: "input" | "output",
+  chunks: RetrievedChunk[],
+) =>
+  chunks.map((chunk, index) => ({
+    stage,
+    rank: index + 1,
+    chunkId: chunk.chunkId,
+    documentId: chunk.documentId,
+    documentName: chunk.documentName,
+    rawScore: chunk.rawScore ?? chunk.score,
+    score: chunk.score,
+    matchType: chunk.matchType ?? null,
+    hitModes: chunk.hitModes ?? [],
+    contentSnippet: toContentSnippet(chunk.content),
+    contentLength: Array.from(chunk.content).length,
+  }));
+
 /**
  * 重排序服务节点
  * 优先调用已配置的 OpenAI-compatible Rerank 服务；
@@ -227,10 +278,13 @@ export const rerankService = {
       });
 
       return {
-        chunks: rankedChunks.map((item) => ({
-          ...item.chunk,
-          score: item.score,
-        })),
+        chunks: normalizeRerankedChunks(
+          rankedChunks.map((item) => ({
+            ...item.chunk,
+            rawScore: item.score,
+            score: item.score,
+          })),
+        ),
         rerankScores: rankedChunks.map((item) => item.score),
         execution: {
           applied: true,
@@ -306,6 +360,7 @@ export const rerankService = {
     const topN = input.topN ?? resolvedContext?.topN ?? null;
     const rerankApplied = result.execution.applied;
     const rerankDegraded = result.execution.degraded;
+    const inputCandidates = [...input.chunks].sort((a, b) => b.score - a.score);
     const rerankSummary = rerankApplied
       ? `已筛选 ${result.chunks.length} 个高相关片段`
       : rerankDegraded
@@ -328,9 +383,31 @@ export const rerankService = {
           rerankDegraded,
           finishReason: result.execution.finishReason,
           error: result.execution.error ?? null,
+          counts: {
+            inputCandidates: inputCandidates.length,
+            outputCandidates: result.chunks.length,
+          },
+          rerankBreakdown: {
+            applied: rerankApplied,
+            degraded: rerankDegraded,
+            finishReason: result.execution.finishReason,
+            counts: {
+              inputCandidates: inputCandidates.length,
+              outputCandidates: result.chunks.length,
+            },
+            candidates: [
+              ...toRerankCandidates("input", inputCandidates),
+              ...toRerankCandidates("output", result.chunks),
+            ],
+          },
           sources: result.chunks.slice(0, 5).map((chunk) => ({
+            chunkId: chunk.chunkId,
             documentName: chunk.documentName,
+            rawScore: chunk.rawScore ?? chunk.score,
             score: chunk.score,
+            matchType: chunk.matchType ?? null,
+            hitModes: chunk.hitModes ?? [],
+            contentPreview: toContentSnippet(chunk.content, 100),
           })),
         },
         role: "rerank",
@@ -389,6 +466,10 @@ export const rerankService = {
             summary: {
               rerankApplied,
               rerankDegraded,
+              counts: {
+                inputCandidates: inputCandidates.length,
+                outputCandidates: result.chunks.length,
+              },
               topScores: result.chunks.slice(0, 5).map((chunk) => chunk.score),
             },
           },

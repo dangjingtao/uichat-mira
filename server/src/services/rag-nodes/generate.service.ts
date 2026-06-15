@@ -8,6 +8,7 @@ import type { RagNodeResult } from "@/services/rag-node-contract";
 import {
   createModelCallObservation,
 } from "@/services/rag-node-observation";
+import { createAssistantTextStream } from "@/services/assistant-stream-events";
 
 export interface GenerateInput {
   query: string;
@@ -68,36 +69,10 @@ const buildMessages = (input: GenerateInput): NormalizedChatMessage[] => {
  * 构建 SSE 响应流
  */
 const createSseStream = (streamText: () => AsyncIterable<string>) =>
-  Readable.from(
-    (async function* () {
-      yield `data: ${JSON.stringify({ type: "start" })}\n\n`;
-      yield `data: ${JSON.stringify({ type: "start-step" })}\n\n`;
-      yield `data: ${JSON.stringify({ type: "text-start", id: "text-1" })}\n\n`;
-
-      try {
-        for await (const delta of streamText()) {
-          if (!delta) {
-            continue;
-          }
-
-          yield `data: ${JSON.stringify({
-            type: "text-delta",
-            id: "text-1",
-            delta,
-          })}\n\n`;
-        }
-
-        yield `data: ${JSON.stringify({ type: "text-end", id: "text-1" })}\n\n`;
-        yield `data: ${JSON.stringify({ type: "finish-step" })}\n\n`;
-        yield `data: ${JSON.stringify({ type: "finish", finishReason: "stop" })}\n\n`;
-      } catch (err) {
-        const message = String(err);
-        yield `data: ${JSON.stringify({ type: "error", errorText: message })}\n\n`;
-        yield `data: ${JSON.stringify({ type: "finish-step" })}\n\n`;
-        yield `data: ${JSON.stringify({ type: "finish", finishReason: "error" })}\n\n`;
-      }
-    })()
-  );
+  createAssistantTextStream(streamText, {
+    includeStartStep: true,
+    getErrorMessage: (error) => String(error),
+  });
 
 /**
  * 生成服务节点

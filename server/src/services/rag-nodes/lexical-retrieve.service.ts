@@ -2,7 +2,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { create, insertMultiple, search } from "@orama/orama";
 import { createTokenizer as createMandarinTokenizer } from "@orama/tokenizers/mandarin";
 import { documentChunks, documents, getDb } from "@/db";
-import { knowledgeBaseService } from "@/services/knowledge-base.service";
+import { knowledgeBaseRepository } from "@/db/repositories";
 import type { RetrievedChunk } from "./retrieve.service";
 
 export interface LexicalRetrieveInput {
@@ -16,8 +16,6 @@ export interface LexicalRetrieveOutput {
   knowledgeBaseId: string;
 }
 
-// Orama 索引结构。
-// id 由 Orama 作为文档唯一标识单独处理，不需要放进 schema。
 const lexicalSearchSchema = {
   chunkId: "number",
   documentId: "string",
@@ -25,8 +23,6 @@ const lexicalSearchSchema = {
   content: "string",
 } as const;
 
-// 写入 Orama 的最小文档结构。
-// 检索结果会直接映射回 RAG 统一使用的 RetrievedChunk。
 type LexicalSearchDocument = {
   id: string;
   chunkId: number;
@@ -35,10 +31,19 @@ type LexicalSearchDocument = {
   content: string;
 };
 
-/**
- * 加载可参与词法检索的知识库分段
- * 仅索引当前知识库中已启用、索引状态为 ready 的文档分段
- */
+type LexicalSearchIndex = Awaited<ReturnType<typeof createSearchIndex>>;
+
+type LexicalIndexCacheEntry = {
+  index: LexicalSearchIndex;
+  documentCount: number;
+  builtAt: number;
+};
+
+const lexicalIndexCache = new Map<string, LexicalIndexCacheEntry>();
+
+const resolveKnowledgeBaseId = (knowledgeBaseId?: string) =>
+  knowledgeBaseId ?? knowledgeBaseRepository.ensureDefault().id;
+
 const loadSearchDocuments = (
   knowledgeBaseId: string,
 ): LexicalSearchDocument[] => {
@@ -71,10 +76,6 @@ const loadSearchDocuments = (
   }));
 };
 
-/**
- * 创建 Orama 词法检索索引
- * 使用 Mandarin tokenizer 提升中文查询和中文分段的匹配效果
- */
 const createSearchIndex = async (searchDocuments: LexicalSearchDocument[]) => {
   const index = create({
     schema: lexicalSearchSchema,
@@ -88,20 +89,48 @@ const createSearchIndex = async (searchDocuments: LexicalSearchDocument[]) => {
   return index;
 };
 
+const buildCachedIndex = async (knowledgeBaseId: string) => {
+  const searchDocuments = loadSearchDocuments(knowledgeBaseId);
+
+  if (searchDocuments.length === 0) {
+    lexicalIndexCache.delete(knowledgeBaseId);
+    return {
+      index: null,
+      documentCount: 0,
+      fromCache: false,
+    } as const;
+  }
+
+  const cached = lexicalIndexCache.get(knowledgeBaseId);
+  if (cached && cached.documentCount === searchDocuments.length) {
+    return {
+      index: cached.index,
+      documentCount: cached.documentCount,
+      fromCache: true,
+    } as const;
+  }
+
+  const index = await createSearchIndex(searchDocuments);
+  lexicalIndexCache.set(knowledgeBaseId, {
+    index,
+    documentCount: searchDocuments.length,
+    builtAt: Date.now(),
+  });
+
+  return {
+    index,
+    documentCount: searchDocuments.length,
+    fromCache: false,
+  } as const;
+};
+
 /**
  * 词法检索服务节点
- * 基于 Orama 的 BM25 全文检索召回知识库分段，可作为向量检索之外的可选检索节点
+ * 基于 Orama 的中文词法检索，并按知识库缓存索引以避免每次请求都全量重建。
  */
 export const lexicalRetrieveService = {
-  /**
-   * 执行词法检索
-   * @param input 用户问题、知识库 ID、返回数量
-   * @returns 词法检索召回的分段结果
-   */
   async retrieve(input: LexicalRetrieveInput): Promise<LexicalRetrieveOutput> {
-    const kbId =
-      input.knowledgeBaseId ??
-      knowledgeBaseService.getDefaultKnowledgeBase().id;
+    const kbId = resolveKnowledgeBaseId(input.knowledgeBaseId);
     const topK = input.topK ?? 4;
     const question = input.question.trim();
 
@@ -109,13 +138,12 @@ export const lexicalRetrieveService = {
       return { chunks: [], knowledgeBaseId: kbId };
     }
 
-    const searchDocuments = loadSearchDocuments(kbId);
+    const { index } = await buildCachedIndex(kbId);
 
-    if (searchDocuments.length === 0) {
+    if (!index) {
       return { chunks: [], knowledgeBaseId: kbId };
     }
 
-    const index = await createSearchIndex(searchDocuments);
     const result = await search(index, {
       term: question,
       properties: ["documentName", "content"],
@@ -136,5 +164,22 @@ export const lexicalRetrieveService = {
       })),
       knowledgeBaseId: kbId,
     };
+  },
+
+  invalidateKnowledgeBase(knowledgeBaseId?: string) {
+    const kbId = resolveKnowledgeBaseId(knowledgeBaseId);
+    lexicalIndexCache.delete(kbId);
+  },
+
+  clearCache() {
+    lexicalIndexCache.clear();
+  },
+
+  getCacheSnapshot() {
+    return Array.from(lexicalIndexCache.entries()).map(([knowledgeBaseId, entry]) => ({
+      knowledgeBaseId,
+      documentCount: entry.documentCount,
+      builtAt: new Date(entry.builtAt).toISOString(),
+    }));
   },
 };

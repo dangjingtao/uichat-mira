@@ -56,27 +56,3 @@ export const getSqliteTableSql = (
 
   return row?.sql ?? null;
 };
-
-export const hasSqliteForeignKeyReference = (
-  sqlite: Database.Database,
-  tableName: string,
-  fromColumn: string,
-  referencedTable: string,
-) => {
-  if (
-    !hasSqliteTable(sqlite, tableName) ||
-    !hasSqliteColumn(sqlite, tableName, fromColumn)
-  ) {
-    return false;
-  }
-
-  assertSqliteIdentifier(tableName);
-
-  const rows = sqlite
-    .prepare(`PRAGMA foreign_key_list(${tableName})`)
-    .all() as Array<{ from: string; table: string }>;
-
-  return rows.some(
-    (row) => row.from === fromColumn && row.table === referencedTable,
-  );
-};

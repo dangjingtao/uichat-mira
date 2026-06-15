@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require("electron");
+const { app, BrowserWindow, ipcMain, shell } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { spawn } = require("child_process");
@@ -142,6 +142,20 @@ function createWindow() {
     console.error("Failed to load packaged renderer:", error);
   });
 }
+
+ipcMain.handle("desktop:open-external", async (_event, url) => {
+  if (typeof url !== "string") {
+    throw new Error("Invalid external URL");
+  }
+
+  const trimmedUrl = url.trim();
+  if (!/^https?:\/\//i.test(trimmedUrl)) {
+    throw new Error("Only http(s) external URLs are allowed");
+  }
+
+  await shell.openExternal(trimmedUrl);
+  return true;
+});
 
 async function startBackend() {
   if (isDev) {

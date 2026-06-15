@@ -103,3 +103,28 @@ export function getRuntimeDescription(runtime = getDesktopRuntime()) {
 
   return "当前为浏览器预览模式，状态检查通过 /api 代理访问后端。";
 }
+
+export async function openExternalUrl(url: string) {
+  const trimmedUrl = url.trim();
+  const runtime = getDesktopRuntime();
+
+  if (!/^https?:\/\//i.test(trimmedUrl)) {
+    throw new Error("仅支持打开 http(s) 外部链接");
+  }
+
+  if (runtime.hostKind === "electron" && globalThis.window?.electronAPI?.invoke) {
+    await globalThis.window.electronAPI.invoke("desktop:open-external", trimmedUrl);
+    return;
+  }
+
+  const tauriOpen =
+    (globalThis.window as any)?.__TAURI__?.shell?.open ??
+    (globalThis.window as any)?.__TAURI_INTERNALS__?.plugins?.shell?.open;
+
+  if (runtime.hostKind === "tauri" && typeof tauriOpen === "function") {
+    await tauriOpen(trimmedUrl);
+    return;
+  }
+
+  globalThis.window?.open(trimmedUrl, "_blank", "noopener,noreferrer");
+}

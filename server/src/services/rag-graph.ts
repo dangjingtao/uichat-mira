@@ -156,8 +156,8 @@ const createObservableNode = <TStatePatch>(
           : {}),
       });
 
-      if (result.observation.sources && result.observation.sources.length > 0) {
-        emitRagSourcesEvent(config, result.observation.sources);
+      if ("sources" in result.observation) {
+        emitRagSourcesEvent(config, result.observation.sources ?? []);
       }
 
       return result.state;
@@ -193,6 +193,7 @@ const embedNode = createObservableNode("embed", async (state) => {
 // 如果调用方没有传 topK，则默认召回 10 条候选片段。
 const retrieveNode = createObservableNode("retrieve", async (state) => {
     const result = await retrieveService.runNode({
+      question: state.retrievalQuestion ?? state.question,
       embedding: state.embedding ?? [],
       embeddingDimensions: state.embeddingDimensions,
       embeddingModel: state.embeddingModel,
@@ -271,6 +272,7 @@ const fallbackAnswerNode = createObservableNode("fallbackAnswer", async (_state,
       observation: {
         label: "返回拒答结果",
         summary: "没有可用候选片段，直接返回固定拒答",
+        sources: [],
         details: {
           reason: "no-context-after-retrieval",
           answer: NO_CONTEXT_ANSWER,

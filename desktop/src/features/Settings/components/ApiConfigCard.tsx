@@ -1,7 +1,8 @@
 import React from "react";
 import { AlertCircle, Loader2, RotateCcw } from "lucide-react";
 import { Button, IconButton } from "@/shared/ui/Button";
-import { SelectInput, TextInput } from "@/shared/ui/Input";
+import { TextInput } from "@/shared/ui/Input";
+import { Select } from "@/shared/ui/Select";
 import type {
   ProviderDetail,
   RoleModelType,
@@ -114,7 +115,7 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
 
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
           <div className="w-full max-w-[600px]">
-            <SelectInput
+            <Select
               label="当前模型"
               value={selectedModelId}
               onChange={onSelectedModelChange}

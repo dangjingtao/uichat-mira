@@ -3,11 +3,10 @@ import { authenticateUser, createAccessToken } from "@/db/auth.db.js";
 import { successEnvelope, errorEnvelope, userSchema } from "@/routes/schema-helpers.js";
 import {
   success,
-  error,
-  ErrorCodes,
   handleValidationError,
   INVALID_REQUEST_PAYLOAD_MESSAGE,
 } from "@/utils/index.js";
+import { badRequest, routeHandler, unauthorized } from "@/utils/route-errors.js";
 
 type LoginBody = {
   username: string;
@@ -50,7 +49,7 @@ const loginRoute: FastifyPluginAsync = async (app) => {
         },
       },
     },
-    async (request, reply) => {
+    routeHandler("Failed to login", async (request, reply) => {
       const validationResponse = handleValidationError(request, reply);
       if (validationResponse) {
         return validationResponse;
@@ -59,22 +58,13 @@ const loginRoute: FastifyPluginAsync = async (app) => {
       const payload = request.body;
 
       if (!payload.username.trim() || !payload.password.trim()) {
-        return reply
-          .code(400)
-          .send(
-            error(
-              INVALID_REQUEST_PAYLOAD_MESSAGE,
-              ErrorCodes.VALIDATION_ERROR,
-            ),
-          );
+        throw badRequest(INVALID_REQUEST_PAYLOAD_MESSAGE);
       }
 
       const found = authenticateUser(payload.username, payload.password);
 
       if (!found) {
-        return reply
-          .code(401)
-          .send(error("Invalid username or password", ErrorCodes.UNAUTHORIZED));
+        throw unauthorized("Invalid username or password");
       }
 
       const token = createAccessToken(found);
@@ -88,7 +78,7 @@ const loginRoute: FastifyPluginAsync = async (app) => {
         },
         "Login successful",
       );
-    },
+    }),
   );
 };
 

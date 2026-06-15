@@ -6,7 +6,7 @@ import { FastifyReply, FastifyRequest, preHandlerHookHandler } from "fastify";
 import jwt from "jsonwebtoken";
 import { getSqlite, userRepository } from "@/db";
 import { applySqliteConnectionPragmas } from "@/db/init-utils";
-import { error, ErrorCodes } from "@/utils/index.js";
+import { errorResponse, ErrorCodes } from "@/utils/index.js";
 
 export type AuthenticatedUser = {
   id: number;
@@ -326,12 +326,12 @@ export const requireAuth: preHandlerHookHandler = async (
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return reply
         .code(401)
-        .send(error("Missing auth token", ErrorCodes.UNAUTHORIZED));
+        .send(errorResponse("Missing auth token", ErrorCodes.UNAUTHORIZED));
     }
 
     return reply
       .code(401)
-      .send(error("Invalid auth token", ErrorCodes.UNAUTHORIZED));
+      .send(errorResponse("Invalid auth token", ErrorCodes.UNAUTHORIZED));
   }
 
   request.authUser = user;

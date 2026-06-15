@@ -2,12 +2,15 @@ import { FastifyPluginAsync } from "fastify";
 import { changeUserPassword, requireAuth } from "@/db/auth.db.js";
 import { successEnvelope, errorEnvelope, userSchema } from "@/routes/schema-helpers.js";
 import {
-  error,
-  ErrorCodes,
   success,
   handleValidationError,
   INVALID_REQUEST_PAYLOAD_MESSAGE,
 } from "@/utils/index.js";
+import {
+  badRequest,
+  routeHandler,
+  unauthorized,
+} from "@/utils/route-errors.js";
 
 type ChangePasswordBody = {
   currentPassword: string;
@@ -49,7 +52,7 @@ const accountRoute: FastifyPluginAsync = async (app) => {
         },
       },
     },
-    async (request, reply) => {
+    routeHandler("Failed to change password", async (request, reply) => {
       const validationResponse = handleValidationError(request, reply);
       if (validationResponse) {
         return validationResponse;
@@ -59,9 +62,7 @@ const accountRoute: FastifyPluginAsync = async (app) => {
       const payload = request.body;
 
       if (!authUser) {
-        return reply
-          .code(401)
-          .send(error("Unauthorized", ErrorCodes.UNAUTHORIZED));
+        throw unauthorized("Unauthorized");
       }
 
       if (
@@ -69,14 +70,7 @@ const accountRoute: FastifyPluginAsync = async (app) => {
         !payload.newPassword.trim() ||
         payload.currentPassword === payload.newPassword
       ) {
-        return reply
-          .code(400)
-          .send(
-            error(
-              INVALID_REQUEST_PAYLOAD_MESSAGE,
-              ErrorCodes.VALIDATION_ERROR,
-            ),
-          );
+        throw badRequest(INVALID_REQUEST_PAYLOAD_MESSAGE);
       }
 
       const result = changeUserPassword(
@@ -87,25 +81,14 @@ const accountRoute: FastifyPluginAsync = async (app) => {
 
       if (!result.ok) {
         if (result.reason === "INVALID_CURRENT_PASSWORD") {
-          return reply
-            .code(401)
-            .send(
-              error("Current password is incorrect", ErrorCodes.UNAUTHORIZED),
-            );
+          throw unauthorized("Current password is incorrect");
         }
 
-        return reply
-          .code(400)
-          .send(
-            error(
-              "New password must be different",
-              ErrorCodes.VALIDATION_ERROR,
-            ),
-          );
+        throw badRequest("New password must be different");
       }
 
       return success({ user: result.user }, "Password updated successfully");
-    },
+    }),
   );
 };
 

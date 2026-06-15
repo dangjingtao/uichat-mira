@@ -25,10 +25,7 @@ export default function SettingsPageLayout({
   containerClassName = "",
   scrollBody = true,
 }: SettingsPageLayoutProps) {
-  const containerClasses = [
-    "mx-auto w-full max-w-[1180px]",
-    containerClassName,
-  ]
+  const containerClasses = ["mx-auto w-full max-w-[1180px]", containerClassName]
     .filter(Boolean)
     .join(" ");
 
