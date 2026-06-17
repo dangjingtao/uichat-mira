@@ -16,19 +16,21 @@ export function useThreadComposerState({
   hasDefaultLlm,
   hasDefaultEmbedding,
 }: UseThreadComposerStateInput): ThreadComposerState {
+  const { t } = useTranslation();
   const isSendDisabled =
     isRunning || !hasDefaultLlm || (ragEnabled && !hasDefaultEmbedding);
 
   const placeholder = isRunning
-    ? "助手正在思考中..."
+    ? t("chat.thread.composer.thinking")
     : !hasDefaultLlm
-      ? "请先配置默认 LLM..."
+      ? t("chat.thread.composer.configureLlm")
       : ragEnabled && !hasDefaultEmbedding
-        ? "启用知识库前请先配置默认 Embedding..."
-        : "输入问题，回车发送...";
+        ? t("chat.thread.composer.configureEmbedding")
+        : t("chat.thread.composer.inputPlaceholder");
 
   return {
     isSendDisabled,
     placeholder,
   };
 }
+import { useTranslation } from "react-i18next";

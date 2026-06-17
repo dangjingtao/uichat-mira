@@ -1,4 +1,5 @@
 import { ChatModelAdapter, ThreadMessage } from "@assistant-ui/react";
+import i18n from "@/shared/i18n";
 
 const getLatestUserText = (messages: readonly ThreadMessage[]) => {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -33,13 +34,13 @@ export const localChatModel: ChatModelAdapter = {
       ? [
           {
             type: "text" as const,
-            text: `已收到：${latestPrompt}\n\n这是 assistant-ui 本地演示回复。你可以继续输入问题，后续可直接替换为真实后端推理接口。`,
+            text: `${i18n.t("chat.localModel.replyPrefix", { prompt: latestPrompt })}\n\n${i18n.t("chat.localModel.replySuffix")}`,
           },
         ]
       : [
           {
             type: "text" as const,
-            text: "你好，我是你的 RAG 助手。请告诉我你想查询的内容。",
+            text: i18n.t("chat.localModel.greeting"),
           },
         ];
 

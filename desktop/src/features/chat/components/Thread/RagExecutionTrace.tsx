@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, Clock3, LoaderCircle } from "lucide-react";
 import type { RagProgressDetail } from "./RagProgressDetailDrawer";
 import type { RagNodeLike } from "./thread.types";
@@ -17,6 +18,7 @@ export function RagExecutionTrace({
   steps: RagNodeLike[];
   onOpenDetail: (detail: RagProgressDetail) => void;
 }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
   if (steps.length === 0) {
@@ -37,7 +39,7 @@ export function RagExecutionTrace({
         </span>
         <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">
           <span className="shrink-0 font-medium text-text-primary">
-            执行过程
+            {t("chat.executionTrace.title")}
           </span>
           <span className="shrink-0 text-text-tertiary">·</span>
           <p className="min-w-0 truncate text-text-secondary">{summary}</p>

@@ -3,7 +3,11 @@ import type { EvaluationRunRecord } from "./types";
 const STORAGE_KEY = "rag_eval_center_runs";
 
 const sortByCompletedAtDesc = (runs: EvaluationRunRecord[]) =>
-  [...runs].sort((left, right) => right.completedAt.localeCompare(left.completedAt));
+  [...runs].sort((left, right) =>
+    (right.completedAt ?? right.startedAt).localeCompare(
+      left.completedAt ?? left.startedAt,
+    ),
+  );
 
 export const readEvaluationRuns = (): EvaluationRunRecord[] => {
   const serialized = globalThis.localStorage.getItem(STORAGE_KEY);

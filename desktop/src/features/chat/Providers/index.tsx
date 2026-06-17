@@ -7,15 +7,11 @@ import {
 } from "@assistant-ui/react";
 import type { ChatModelAdapter } from "@assistant-ui/react";
 import { ReactNode } from "react";
+import i18n from "@/shared/i18n";
 
-/**
- * 这里可以先继续用你之前的 ollamaAdapter / 自己的后端 adapter
- */
 const chatAdapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
-    // TODO: 替换成你 Ollama / 自定义后端的真实 fetch+yield
-    // 下面是个“假流式”占位，让你立刻能看到侧边栏工作
-    const reply = "（你还没接入后端；先占位）";
+    const reply = i18n.t("chat.provider.placeholderReply");
     for (const ch of reply) {
       await new Promise((r) => setTimeout(r, 18));
       yield { content: [{ type: "text", text: ch }] };

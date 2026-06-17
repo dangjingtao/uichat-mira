@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import DefaultModelCard from "../../components/DefaultModelCard";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import { Button } from "@/shared/ui/Button";
@@ -9,6 +10,7 @@ import { useRoleModelConfigs } from "@/app/providers/RoleModelConfigProvider";
 import { useRef, useState } from "react";
 
 export default function ModelSettings() {
+  const { t } = useTranslation();
   const childRef = useRef<{ openPlatformSettings: () => void }>(null);
   const { refresh } = useRoleModelConfigs();
   const [ready, setReady] = useState(false);
@@ -20,20 +22,20 @@ export default function ModelSettings() {
 
   const handleResetAllDefaults = async () => {
     const modalKey = Modal.show({
-      title: "确认重置默认模型",
+      title: t("settings.model.resetModal.title"),
       width: 460,
       content: (
         <div className="space-y-3 text-sm text-text-secondary">
-          <p>将清空 LLM、Embedding、Rerank、Task 四个默认模型，并恢复默认参数。</p>
+          <p>{t("settings.model.resetModal.description")}</p>
           <div className="rounded-xl border border-danger/20 bg-danger/5 px-3.5 py-3 text-danger">
-            该操作会影响当前对话与知识库的默认模型选择。
+            {t("settings.model.resetModal.warning")}
           </div>
         </div>
       ),
       footer: (
         <>
           <Button variant="ghost" onClick={() => Modal.close(modalKey)}>
-            取消
+            {t("common.actions.cancel")}
           </Button>
           <Button
             variant="danger"
@@ -45,15 +47,20 @@ export default function ModelSettings() {
                   resetProviderRoleModel("embedding"),
                   resetProviderRoleModel("rerank"),
                   resetProviderRoleModel("task"),
+                  resetProviderRoleModel("evaluation"),
                 ]);
                 await refresh();
-                message.success("默认模型已重置");
+                message.success(t("settings.model.resetModal.success"));
               } catch (error) {
-                message.error(error instanceof Error ? error.message : "重置失败");
+                message.error(
+                  error instanceof Error
+                    ? error.message
+                    : t("settings.model.resetModal.failed"),
+                );
               }
             }}
           >
-            确认重置
+            {t("settings.model.actions.confirmReset")}
           </Button>
         </>
       ),
@@ -62,31 +69,31 @@ export default function ModelSettings() {
 
   return (
     <SettingsPageLayout
-        miniTitle="Model Settings"
-        title="模型设置"
-        description="在此页面中，您可以选择和配置用于问答的语言模型。平台侧负责连接与模型同步，这里只展示当前生效的角色配置，并允许直接保存调用参数。"
-        slot={
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleResetAllDefaults}
-              className="gap-2 self-start"
-            >
-              <RotateCcw className="h-4 w-4" />
-              重置默认模型
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleClick}
-              className="gap-2 self-start"
-            >
-              <Settings2 className="h-4 w-4" />
-              模型设置
-            </Button>
-          </div>
-        }
+      miniTitle={t("settings.model.page.miniTitle")}
+      title={t("settings.model.page.title")}
+      description={t("settings.model.page.description")}
+      slot={
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleResetAllDefaults}
+            className="gap-2 self-start"
+          >
+            <RotateCcw className="h-4 w-4" />
+            {t("settings.model.actions.resetDefault")}
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleClick}
+            className="gap-2 self-start"
+          >
+            <Settings2 className="h-4 w-4" />
+            {t("settings.model.actions.openSettings")}
+          </Button>
+        </div>
+      }
       contentClassName="pt-6"
     >
       <div className="min-w-0">

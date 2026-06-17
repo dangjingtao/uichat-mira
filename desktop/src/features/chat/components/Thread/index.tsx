@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   BowArrow,
   ChevronDown,
@@ -57,7 +58,7 @@ const assistantAvatarClassName =
   "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/80 bg-surface-primary text-[11px] font-semibold text-text-primary shadow-shadow-sm";
 
 const shellClassName =
-  "relative flex h-full min-h-0 flex-col overflow-hidden bg-[#FAFBF7] text-text-primary";
+  "relative flex h-full min-h-0 flex-col overflow-hidden bg-surface-secondary text-text-primary";
 
 const backdropOrbsClassName =
   "pointer-events-none absolute inset-0 overflow-hidden";
@@ -92,24 +93,6 @@ function PodiumIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
-const welcomeQuickActions = [
-  {
-    icon: FolderSearch,
-    title: "从知识库提问",
-    description: "围绕已有文档发问，快速验证召回和回答效果。",
-  },
-  {
-    icon: FileUp,
-    title: "上传文档开始测试",
-    description: "导入资料后直接发问，观察检索链路和回答质量。",
-  },
-  {
-    icon: MessagesSquare,
-    title: "试一个真实问题",
-    description: "用自然语言提问，看看系统如何组织答案和来源。",
-  },
-] as const;
-
 const modelBadgeMeta = {
   llm: { label: "LLM", icon: EthernetPort },
   task: { label: "Task", icon: MessageCircleCode },
@@ -123,7 +106,7 @@ const isConfiguredModelName = (name: string) => {
     return false;
   }
 
-  return !normalized.startsWith("未配置");
+  return !normalized.startsWith("未配置") && !normalized.startsWith("Unconfigured");
 };
 
 // UserMessage only renders the compact right-aligned bubble and keeps
@@ -159,6 +142,7 @@ const AssistantMessage = ({
   persistedSourcesByMessageId: Record<string, RagSourceLike[]>;
   onOpenRagProgressDetail: (detail: RagProgressDetail) => void;
 }) => {
+  const { t } = useTranslation();
   const messageId = useAuiState((s) => s.message.id);
   const messageContent = useAuiState((s) => s.message.content);
   const [isSourcesOpen, setIsSourcesOpen] = useState(false);
@@ -210,7 +194,7 @@ const AssistantMessage = ({
                         role="status"
                         aria-live="polite"
                       >
-                        助手正在输入回复
+                        {t("chat.thread.assistantTyping")}
                       </span>
                     </div>
                   );
@@ -244,7 +228,7 @@ const AssistantMessage = ({
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.08em] text-primary-8">
                     <FileText className="h-3.5 w-3.5" />
-                    <span>参考来源</span>
+                    <span>{t("chat.thread.sources.title")}</span>
                     <span className="rounded-full border border-primary-3/70 bg-primary-2/95 px-1.5 py-0.5 text-[10px] font-medium text-primary-8">
                       {sources.length}
                     </span>
@@ -288,7 +272,10 @@ const AssistantMessage = ({
                               className="min-w-0 flex-1 truncate text-xs font-semibold text-primary-8"
                             >
                               <div>
-                                {`Document #${index + 1} · ${documentName}`}
+                                {t("chat.thread.sources.document", {
+                                  count: index + 1,
+                                  name: documentName,
+                                })}
                               </div>
                             </OverflowTooltip>
                             <div className="flex shrink-0 items-center gap-1.5">
@@ -298,7 +285,9 @@ const AssistantMessage = ({
                                 {attribution.label}
                               </span>
                               <span className="rounded-full border border-primary-3/70 bg-primary-2/90 px-2 py-0.5 text-[10px] font-medium text-primary-8/90">
-                                相关度 {source.score.toFixed(3)}
+                                {t("chat.thread.sources.score", {
+                                  value: source.score.toFixed(3),
+                                })}
                               </span>
                             </div>
                           </div>
@@ -326,6 +315,7 @@ const AssistantMessage = ({
 // ThreadContent is the page-level shell that composes provider state,
 // assistant-ui primitives, and the RAG runtime hooks into one chat screen.
 function ThreadContent() {
+  const { t } = useTranslation();
   const isThreadEmpty = useAuiState((s) => s.thread.isEmpty);
   const isRunning = useAuiState((s) => s.thread.isRunning);
   const activeThreadId = useAuiState((s) => s.threads.mainThreadId);
@@ -371,13 +361,19 @@ function ThreadContent() {
 
   const modelBadges = useMemo(() => {
     const items = [
-      { key: "llm", name: configMap.llm?.name ?? "未配置LLM" },
-      { key: "task", name: configMap.task?.name ?? "未配置Task" },
+      { key: "llm", name: configMap.llm?.name ?? t("chat.thread.models.llm") },
+      {
+        key: "task",
+        name: configMap.task?.name ?? t("chat.thread.models.task"),
+      },
       {
         key: "embedding",
-        name: configMap.embedding?.name ?? "未配置embedding",
+        name: configMap.embedding?.name ?? t("chat.thread.models.embedding"),
       },
-      { key: "rerank", name: configMap.rerank?.name ?? "未配置rerank" },
+      {
+        key: "rerank",
+        name: configMap.rerank?.name ?? t("chat.thread.models.rerank"),
+      },
     ] as const;
 
     return items
@@ -387,7 +383,7 @@ function ThreadContent() {
         label: modelBadgeMeta[item.key].label,
         icon: modelBadgeMeta[item.key].icon,
       }));
-  }, [configMap]);
+  }, [configMap, t]);
 
   const { isSendDisabled, placeholder } = useThreadComposerState({
     isRunning,
@@ -398,10 +394,27 @@ function ThreadContent() {
   const isRagToggleDisabled =
     currentThreadLoading || (!ragEnabled && !hasEnabledDocuments);
   const ragStatusHint = ragEnabled
-    ? "回答会优先结合知识库内容，并在消息下展示来源与执行过程。"
+    ? t("chat.thread.composer.ragEnabledHint")
     : hasEnabledDocuments
-      ? "关闭后按普通聊天处理；打开后可查看来源和检索过程。"
-      : "当前还没有可用文档，先去知识库上传资料后再开启。";
+      ? t("chat.thread.composer.ragAvailableHint")
+      : t("chat.thread.composer.ragUnavailableHint");
+  const welcomeQuickActions = [
+    {
+      icon: FolderSearch,
+      title: t("chat.thread.welcome.actions.askKnowledgeBase.title"),
+      description: t("chat.thread.welcome.actions.askKnowledgeBase.description"),
+    },
+    {
+      icon: FileUp,
+      title: t("chat.thread.welcome.actions.uploadDocument.title"),
+      description: t("chat.thread.welcome.actions.uploadDocument.description"),
+    },
+    {
+      icon: MessagesSquare,
+      title: t("chat.thread.welcome.actions.askRealQuestion.title"),
+      description: t("chat.thread.welcome.actions.askRealQuestion.description"),
+    },
+  ] as const;
 
   return (
     <div className="w-full">
@@ -413,17 +426,20 @@ function ThreadContent() {
         </div>
 
         <div className="relative flex min-h-0 flex-1">
-          <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-l-[28px] border border-border/70 bg-[#FAFBF7] shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+          <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-l-[28px] border border-border/70 bg-surface-secondary shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
             <ThreadHeader
               title={
-                currentThreadTitle || (isThreadEmpty ? "开始新对话" : "新对话")
+                currentThreadTitle ||
+                (isThreadEmpty
+                  ? t("chat.thread.header.newConversation")
+                  : t("chat.thread.header.untitledConversation"))
               }
               badges={modelBadges}
             />
-            <ThreadPrimitive.Viewport className="stable-scrollbar relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto scroll-smooth bg-[#FAFBF7]">
+            <ThreadPrimitive.Viewport className="stable-scrollbar relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto scroll-smooth bg-surface-secondary">
               <div
                 key={activeThreadId}
-                className="flex min-h-0 flex-1 flex-col pt-14 bg-[#FAFBF7]"
+                className="flex min-h-0 flex-1 flex-col pt-14 bg-surface-secondary"
               >
                 <div
                   className={`${contentColumnClassName} ${
@@ -449,14 +465,18 @@ function ThreadContent() {
                     <div className="space-y-3">
                       <h1 className="text-[28px] font-semibold tracking-tight text-text-primary sm:text-[34px]">
                         <span className="tracking-[0.08em]">
-                          从文档到<span className="text-primary">答案</span>，
+                          {t("chat.thread.welcome.titlePrefix")}
+                          <span className="text-primary">
+                            {t("chat.thread.welcome.titleHighlight")}
+                          </span>
+                          {t("chat.thread.welcome.titleSuffix")}
                         </span>
                         <span className="block tracking-[0.08em] text-text-secondary">
-                          答案有据可查。
+                          {t("chat.thread.welcome.titleLine2")}
                         </span>
                       </h1>
                       <p className="max-w-2xl text-sm leading-6 text-text-secondary">
-                        把文档变成可提问的知识来源，直连真实检索场景。
+                        {t("chat.thread.welcome.description")}
                       </p>
                     </div>
                     <div className="grid w-full gap-3 pt-1 md:grid-cols-3">

@@ -18,8 +18,11 @@ import modelConfigRoute from "@/routes/model-config";
 import providerSettingsRoute from "@/routes/provider-settings/index.js";
 import threadRoute from "@/routes/thread/index.js";
 import chatRagRoute from "@/routes/chat-rag";
+import ragRuntimeRoute from "@/routes/rag-runtime/index.js";
+import evaluationRoute from "@/routes/evaluation/index.js";
 import toolsRoute from "@/routes/tools";
 import { getAuthUserFromRequest, initializeAuthDatabase } from "@/db/auth.db";
+import { initializeEvaluationDatabase } from "@/db/evaluation.db";
 import { initializeKnowledgeBaseDatabase } from "@/db/knowledge-base.db";
 import { initializeModelConfigDatabase } from "@/db/model-config.db";
 import { initializeThreadDatabase } from "@/db/thread.db";
@@ -27,6 +30,7 @@ import { initializeVectorStore } from "@/db";
 import CONFIG from "@/config";
 import { isAuthExemptPath, OPENAPI_PUBLIC_TAGS } from "@/config/public-api.js";
 import { getLoggerConfig } from "@/logger";
+import { evaluationService } from "@/services/evaluation.service.js";
 import { getAppMeta } from "@/utils/index.js";
 import { sendRouteError, unauthorized } from "@/utils/route-errors.js";
 import { MAX_UPLOAD_FILE_BYTES } from "@/constants/knowledge-base.js";
@@ -98,6 +102,7 @@ const setupPlugins = async () => {
         ...OPENAPI_PUBLIC_TAGS,
         { name: "Thread", description: "对话会话与消息管理" },
         { name: "Chat", description: "RAG 增强聊天与检索" },
+        { name: "Evaluation", description: "评测工作台与评测任务" },
         { name: "Tools", description: "Built-in agent tools" },
       ],
       components: {
@@ -135,6 +140,8 @@ const setupRoutes = async () => {
   await app.register(providerSettingsRoute);
   await app.register(threadRoute);
   await app.register(chatRagRoute);
+  await app.register(ragRuntimeRoute);
+  await app.register(evaluationRoute);
   await app.register(toolsRoute);
 };
 
@@ -152,9 +159,11 @@ const setupDatabase = async () => {
   }
 
   initializeAuthDatabase();
+  initializeEvaluationDatabase();
   initializeModelConfigDatabase();
   initializeKnowledgeBaseDatabase();
   initializeThreadDatabase();
+  evaluationService.initializePersistence();
 
   const vectorStoreHealth = initializeVectorStore();
   if (vectorStoreHealth.ok) {

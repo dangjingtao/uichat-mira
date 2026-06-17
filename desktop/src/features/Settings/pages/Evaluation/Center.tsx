@@ -1,20 +1,27 @@
-import { useMemo, useState } from "react";
-import { Search, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Download, RefreshCw, Search, Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import Card from "@/shared/ui/Card";
 import { Button } from "@/shared/ui/Button";
 import MinimalTable from "@/shared/ui/Table";
-import { removeEvaluationRun, writeEvaluationRuns, readEvaluationRuns } from "./storage";
+import { Modal } from "@/shared/ui/Modal";
+import {
+  deleteEvaluationRun,
+  getEvaluationRuns,
+} from "@/shared/api/evaluation";
 import type { EvaluationRunRecord } from "./types";
 import StatusBadge from "../../components/Evaluation/StatusBadge";
 import DetailDrawer from "../../components/Evaluation/DetailDrawer";
 import { message } from "@/shared/ui/Message";
 import type { ColumnDef } from "@tanstack/react-table";
+import { downloadEvaluationRunMarkdown } from "./exportMarkdown";
+import { getAppLanguage } from "@/shared/i18n";
 
 const formatPercent = (value: number) => `${Math.round(value * 100)}%`;
 
 const formatDate = (value: string) =>
-  new Date(value).toLocaleString("zh-CN", {
+  new Date(value).toLocaleString(getAppLanguage(), {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -22,9 +29,120 @@ const formatDate = (value: string) =>
   });
 
 export default function EvaluationCenter() {
-  const [runs, setRuns] = useState<EvaluationRunRecord[]>(() => readEvaluationRuns());
+  const { t } = useTranslation();
+  const [runs, setRuns] = useState<EvaluationRunRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
   const [selectedRun, setSelectedRun] = useState<EvaluationRunRecord | null>(null);
+  const [deletingRunId, setDeletingRunId] = useState<string | null>(null);
+
+  const loadRuns = async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false;
+
+    try {
+      if (silent) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      const nextRuns = await getEvaluationRuns();
+      setRuns(nextRuns);
+      setSelectedRun((current) =>
+        current ? nextRuns.find((run) => run.id === current.id) ?? null : null,
+      );
+    } catch (error) {
+      message.error(
+        error instanceof Error
+          ? error.message
+          : t("settings.evaluation.center.messages.loadFailed"),
+      );
+    } finally {
+      if (silent) {
+        setRefreshing(false);
+      } else {
+        setLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    void loadRuns();
+  }, []);
+
+  const handleDownloadRun = async (run: EvaluationRunRecord) => {
+    try {
+      await downloadEvaluationRunMarkdown(run);
+      message.success(
+        t("settings.evaluation.center.messages.downloadStarted", {
+          name: run.name,
+        }),
+      );
+    } catch (error) {
+      message.error(
+        error instanceof Error
+          ? error.message
+          : t("settings.evaluation.center.messages.exportFailed"),
+      );
+    }
+  };
+
+  const confirmDeleteRun = (run: EvaluationRunRecord) => {
+    const modalKey = Modal.show({
+      title: t("settings.evaluation.center.deleteModal.title"),
+      width: 460,
+      content: (
+        <div className="space-y-3 text-sm text-text-secondary">
+          <p>
+            {t("settings.evaluation.center.deleteModal.description", {
+              name: run.name,
+            })}
+          </p>
+          <div className="rounded-xl border border-danger/20 bg-danger/5 px-3.5 py-3 text-danger">
+            {t("settings.evaluation.center.deleteModal.warning")}
+          </div>
+        </div>
+      ),
+      footer: (
+        <>
+          <Button variant="ghost" onClick={() => Modal.close(modalKey)}>
+            {t("common.actions.cancel")}
+          </Button>
+          <Button
+            variant="danger"
+            disabled={deletingRunId === run.id}
+            onClick={async () => {
+              try {
+                setDeletingRunId(run.id);
+                await deleteEvaluationRun(run.id);
+                Modal.close(modalKey);
+                setRuns((current) => current.filter((item) => item.id !== run.id));
+                setSelectedRun((current) => (current?.id === run.id ? null : current));
+                message.success(
+                  t("settings.evaluation.center.messages.deleted", {
+                    name: run.name,
+                  }),
+                );
+              } catch (error) {
+                message.error(
+                  error instanceof Error
+                    ? error.message
+                    : t("settings.evaluation.center.messages.deleteFailed"),
+                );
+              } finally {
+                setDeletingRunId((current) => (current === run.id ? null : current));
+              }
+            }}
+          >
+            {deletingRunId === run.id
+              ? t("settings.evaluation.center.deleteModal.deleting")
+              : t("settings.evaluation.center.deleteModal.confirm")}
+          </Button>
+        </>
+      ),
+    });
+  };
 
   const filteredRuns = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -42,30 +160,42 @@ export default function EvaluationCenter() {
   const columns = useMemo<ColumnDef<EvaluationRunRecord>[]>(
     () => [
       {
-        header: "任务名",
+        header: t("settings.evaluation.center.table.name"),
         accessorKey: "name",
+        size: 360,
+        minSize: 360,
         cell: ({ row }) => (
-          <div className="min-w-[180px]">
-            <div className="font-medium text-text-primary">{row.original.name}</div>
-            <div className="mt-1 text-xs text-text-secondary">
+          <div className="w-[360px] max-w-[360px] min-w-0">
+            <div className="stable-scrollbar overflow-x-auto overflow-y-hidden pb-1">
+              <div className="w-max whitespace-nowrap font-medium text-text-primary">
+                {row.original.name}
+              </div>
+            </div>
+            <div className="mt-1 truncate text-xs text-text-secondary">
               {row.original.dataset.datasetName}
             </div>
           </div>
         ),
       },
       {
-        header: "状态",
+        header: t("settings.evaluation.center.table.status"),
         accessorKey: "status",
+        size: 120,
+        minSize: 120,
         cell: ({ row }) => <StatusBadge status={row.original.status} />,
       },
       {
-        header: "样本数",
+        header: t("settings.evaluation.center.table.sampleCount"),
         accessorKey: "sampleCount",
+        size: 72,
+        minSize: 72,
         cell: ({ row }) => row.original.dataset.summary.sampleCount,
       },
       {
-        header: "核心指标",
+        header: t("settings.evaluation.center.table.keyMetrics"),
         accessorKey: "metrics",
+        size: 180,
+        minSize: 180,
         cell: ({ row }) => (
           <div className="min-w-[150px] text-sm text-text-primary">
             Hit@K {formatPercent(row.original.metrics.hitAtK)}
@@ -76,107 +206,112 @@ export default function EvaluationCenter() {
         ),
       },
       {
-        header: "完成时间",
+        header: t("settings.evaluation.center.table.completedAt"),
         accessorKey: "completedAt",
-        cell: ({ row }) => formatDate(row.original.completedAt),
+        size: 120,
+        minSize: 120,
+        cell: ({ row }) =>
+          formatDate(row.original.completedAt ?? row.original.startedAt),
       },
       {
-        header: "操作",
+        header: t("settings.evaluation.center.table.actions"),
         id: "actions",
+        size: 220,
+        minSize: 220,
         cell: ({ row }) => (
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center justify-start gap-2">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setSelectedRun(row.original)}
             >
-              查看
+              {t("common.actions.view")}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void handleDownloadRun(row.original)}
+            >
+              <Download className="h-3.5 w-3.5" />
+              {t("common.actions.download")}
             </Button>
             <Button
               variant="ghost"
               size="sm"
               className="text-danger hover:bg-danger/5 hover:text-danger"
-              onClick={() => {
-                removeEvaluationRun(row.original.id);
-                const next = readEvaluationRuns();
-                setRuns(next);
-                if (selectedRun?.id === row.original.id) {
-                  setSelectedRun(null);
-                }
-                message.success("已移除该评测记录");
-              }}
+              disabled={
+                deletingRunId === row.original.id ||
+                row.original.status === "queued" ||
+                row.original.status === "running"
+              }
+              onClick={() => confirmDeleteRun(row.original)}
             >
               <Trash2 className="h-3.5 w-3.5" />
-              删除
+              {t("common.actions.delete")}
             </Button>
           </div>
         ),
       },
     ],
-    [selectedRun?.id],
+    [deletingRunId, t],
   );
 
   return (
     <SettingsPageLayout
-        miniTitle="Evaluation Center"
-        title="评测中心"
-        description="这里集中保存已经完成的评测结果。列表保持精简，只展示核心信息；点击查看后，通过右侧抽屉查看配置、指标、日志与样本明细。"
-        containerClassName="max-w-none"
-        slot={
-          runs.length > 0 ? (
+      miniTitle={t("settings.evaluation.center.page.miniTitle")}
+      title={t("settings.evaluation.center.page.title")}
+      description={t("settings.evaluation.center.page.description")}
+      containerClassName="max-w-none"
+      contentClassName="flex h-full min-h-0 flex-col gap-4 pt-6"
+    >
+      <Card className="flex min-h-0 flex-1 flex-col gap-3 border-0 bg-transparent p-0 shadow-none">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="shrink-0 rounded-xl border border-border bg-surface-secondary px-4 py-2 text-sm font-medium text-text-primary">
+            {t("settings.evaluation.center.recordCount", { count: runs.length })}
+          </div>
+
+          <div className="flex min-w-[320px] flex-1 items-center justify-end gap-2 max-md:w-full">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-icon-secondary" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={t("settings.evaluation.center.searchPlaceholder")}
+                className="h-9 w-full rounded-xl border border-border bg-surface-primary pl-9 pr-3 text-sm text-text-primary shadow-shadow-sm transition-[background-color,border-color,box-shadow] duration-150 placeholder:text-text-tertiary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => {
-                writeEvaluationRuns([]);
-                setRuns([]);
-                setSelectedRun(null);
-                message.success("已清空评测中心记录");
-              }}
-            >
-              清空列表
+              disabled={refreshing}
+              onClick={() => void loadRuns({ silent: true })}
+              >
+                <RefreshCw
+                  className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
+                />
+              {t("common.actions.refresh")}
             </Button>
-          ) : undefined
-        }
-        contentClassName="flex h-full min-h-0 flex-col gap-4 pt-6"
-      >
-
-      <Card className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl border border-border bg-surface-secondary px-3 py-2">
-              <div className="text-xs uppercase tracking-[0.12em] text-text-tertiary">记录数</div>
-              <div className="mt-1 text-base font-semibold text-text-primary">{runs.length}</div>
-            </div>
-            <div className="rounded-xl border border-border bg-surface-secondary px-3 py-2">
-              <div className="text-xs uppercase tracking-[0.12em] text-text-tertiary">最近完成</div>
-              <div className="mt-1 text-base font-semibold text-text-primary">
-                {runs[0] ? formatDate(runs[0].completedAt) : "--"}
-              </div>
-            </div>
-          </div>
-
-          <div className="relative w-full max-w-[320px]">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-icon-secondary" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="搜索任务名或数据集"
-              className="h-9 w-full rounded-xl border border-border bg-surface-primary pl-9 pr-3 text-sm text-text-primary shadow-shadow-sm transition-[background-color,border-color,box-shadow] duration-150 placeholder:text-text-tertiary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-            />
           </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden">
-          {filteredRuns.length > 0 ? (
-            <div className="stable-scrollbar h-full overflow-auto">
-              <MinimalTable data={filteredRuns} columns={columns} />
+          {loading ? (
+            <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-border bg-surface-secondary text-sm text-text-secondary">
+              {t("settings.evaluation.center.loading")}
             </div>
+          ) : filteredRuns.length > 0 ? (
+            <MinimalTable
+              data={filteredRuns}
+              columns={columns}
+              className="stable-scrollbar h-full"
+              stickyHeader
+              stickyFirstColumn
+            />
           ) : (
             <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-border bg-surface-secondary text-sm text-text-secondary">
               {runs.length === 0
-                ? "当前还没有保存的评测结果。回到评测工作台运行一次任务后即可保存到这里。"
-                : "没有匹配当前搜索条件的评测记录。"}
+                ? t("settings.evaluation.center.empty")
+                : t("settings.evaluation.center.noMatch")}
             </div>
           )}
         </div>
@@ -186,6 +321,9 @@ export default function EvaluationCenter() {
         open={Boolean(selectedRun)}
         run={selectedRun}
         onClose={() => setSelectedRun(null)}
+        onDelete={confirmDeleteRun}
+        onDownload={handleDownloadRun}
+        deleting={selectedRun ? deletingRunId === selectedRun.id : false}
       />
     </SettingsPageLayout>
   );

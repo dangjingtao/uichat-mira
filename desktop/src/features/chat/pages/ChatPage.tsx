@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { Thread, type SuggestionConfig } from "@assistant-ui/react-ui";
 import type { AssistantRuntime } from "@assistant-ui/react";
 import {
@@ -9,26 +10,15 @@ import { useAuth } from "@/app/providers/AuthProvider";
 import { useRuntimeHealth } from "@/features/system/hooks/useRuntimeHealth";
 import { localChatModel } from "../../../app/layouts/lib/localChatModel";
 
-const statusTextMap = {
-  unknown: "检测中",
-  running: "运行中",
-  stopped: "未启动",
-} as const;
-
 const statusColorMap = {
   unknown: "bg-amber-500",
   running: "bg-green-600",
   stopped: "bg-red-600",
 } as const;
 
-const defaultSuggestions: SuggestionConfig[] = [
-  { prompt: "帮我总结今天的任务重点" },
-  { prompt: "给我一个 RAG 系统排障清单" },
-  { prompt: "设计一个接口联调计划" },
-];
-
 function ChatPage() {
-  const { session, logout } = useAuth();
+  const { t } = useTranslation();
+  const { session } = useAuth();
   const { backendState } = useRuntimeHealth();
 
   const runtime = useMemo<AssistantRuntime>(() => {
@@ -46,8 +36,22 @@ function ChatPage() {
   }, []);
 
   const backendStatusLabel = useMemo(
-    () => statusTextMap[backendState.status],
-    [backendState.status],
+    () =>
+      backendState.status === "running"
+        ? t("chat.page.statusRunning")
+        : backendState.status === "stopped"
+          ? t("chat.page.statusStopped")
+          : t("chat.page.statusUnknown"),
+    [backendState.status, t],
+  );
+
+  const defaultSuggestions: SuggestionConfig[] = useMemo(
+    () => [
+      { prompt: t("chat.page.suggestion1") },
+      { prompt: t("chat.page.suggestion2") },
+      { prompt: t("chat.page.suggestion3") },
+    ],
+    [t],
   );
 
   const backendStatusColorClass = useMemo(
@@ -66,13 +70,13 @@ function ChatPage() {
         <Thread
           // runtime={runtime}
           welcome={{
-            message: "你好，我是 UI Chat RAG 助手。请输入你的问题。",
+            message: t("chat.page.welcomeMessage"),
             suggestions: defaultSuggestions,
           }}
           strings={{
             composer: {
               input: {
-                placeholder: "输入问题，回车发送...",
+                placeholder: t("chat.page.inputPlaceholder"),
               },
             },
           }}

@@ -410,6 +410,21 @@ export const rerankService = {
             contentPreview: toContentSnippet(chunk.content, 100),
           })),
         },
+        artifacts: {
+          rerankBreakdown: {
+            applied: rerankApplied,
+            degraded: rerankDegraded,
+            finishReason: result.execution.finishReason,
+            counts: {
+              inputCandidates: inputCandidates.length,
+              outputCandidates: result.chunks.length,
+            },
+            candidates: [
+              ...toRerankCandidates("input", inputCandidates),
+              ...toRerankCandidates("output", result.chunks),
+            ],
+          },
+        },
         role: "rerank",
         providerCode: resolvedContext?.providerCode ?? undefined,
         providerLabel: resolvedContext?.providerCode

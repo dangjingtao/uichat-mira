@@ -10,6 +10,7 @@ import React, {
 } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button, IconButton } from "./Button";
 
 export interface ModalShowOptions {
@@ -82,6 +83,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({
   children,
   onClose,
 }) => {
+  const { t } = useTranslation();
   if (!open) {
     return null;
   }
@@ -90,7 +92,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
       <button
         type="button"
-        aria-label="关闭弹窗"
+        aria-label={t("ui.modal.closeAria")}
         className="absolute inset-0 bg-black/45 backdrop-blur-sm"
         onClick={() => {
           if (maskClosable && closable) {
@@ -112,13 +114,17 @@ export const ModalShell: React.FC<ModalShellProps> = ({
           <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-4 py-3">
             <div className="min-w-0 flex-1">
               {title ? (
-                <div className="text-sm font-semibold text-text-primary">
+                <div className="text-md leading-[40px] font-semibold text-text-primary">
                   {title}
                 </div>
               ) : null}
             </div>
             {showCloseButton && closable ? (
-              <IconButton ariaLabel="关闭弹窗" onClick={onClose} className="h-8 w-8">
+              <IconButton
+                ariaLabel={t("ui.modal.closeAria")}
+                onClick={onClose}
+                className="h-8 w-8"
+              >
                 <X className="h-4 w-4" />
               </IconButton>
             ) : null}
@@ -136,7 +142,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({
           <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-4 py-3">
             {footer ?? (
               <Button variant="secondary" onClick={onClose}>
-                关闭
+                {t("common.actions.close")}
               </Button>
             )}
           </footer>

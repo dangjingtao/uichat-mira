@@ -1,16 +1,17 @@
 import { FormEvent, useMemo, useState } from "react";
-import {
-  CheckCircle2,
-  ChevronDown,
-  KeyRound,
-} from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { CheckCircle2, KeyRound } from "lucide-react";
 import { useAuth } from "@/app/providers/AuthProvider";
+import { useLanguagePreferences } from "@/app/providers/LanguageProvider";
 import { changePassword } from "@/shared/api";
 import { ApiError } from "@/shared/lib/request";
+import { useThemePreferences } from "@/app/providers/ThemeProvider";
+import type { ThemePresetId } from "@/shared/theme/colorThemes";
 import { Button } from "@/shared/ui/Button";
 import Card from "@/shared/ui/Card";
 import { TextInput } from "@/shared/ui/Input";
 import { Modal } from "@/shared/ui/Modal";
+import { Select } from "@/shared/ui/Select";
 import Switch from "@/shared/ui/Switch";
 import HealthCheck from "./HealthCheck";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
@@ -48,48 +49,51 @@ function ChangePasswordModal({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onReset: () => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <form className="space-y-4" onSubmit={onSubmit}>
       <div className="space-y-1">
-        <div className="text-sm font-semibold text-text-primary">修改密码</div>
         <p className="text-sm leading-6 text-text-secondary">
-          新密码至少 6 位，且不能与当前密码相同。保存后立即生效。
+          {t("settings.general.password.description")}
         </p>
       </div>
 
       <TextInput
-        label="当前密码"
+        label={t("settings.general.password.current")}
         type="password"
         value={form.currentPassword}
         onChange={(currentPassword) => onChange({ currentPassword })}
-        placeholder="请输入当前密码"
+        placeholder={t("settings.general.password.currentPlaceholder")}
         disabled={isSubmitting}
       />
 
       <TextInput
-        label="新密码"
+        label={t("settings.general.password.next")}
         type="password"
         value={form.newPassword}
         onChange={(newPassword) => onChange({ newPassword })}
-        placeholder="请输入新密码"
+        placeholder={t("settings.general.password.nextPlaceholder")}
         disabled={isSubmitting}
       />
 
       <TextInput
-        label="确认新密码"
+        label={t("settings.general.password.confirm")}
         type="password"
         value={form.confirmPassword}
         onChange={(confirmPassword) => onChange({ confirmPassword })}
-        placeholder="请再次输入新密码"
+        placeholder={t("settings.general.password.confirmPlaceholder")}
         disabled={isSubmitting}
-        error={passwordMismatch ? "两次输入的新密码不一致" : undefined}
+        error={
+          passwordMismatch ? t("settings.general.password.mismatch") : undefined
+        }
       />
 
       {form.currentPassword &&
       form.newPassword &&
       form.currentPassword === form.newPassword ? (
         <div className="rounded-lg border border-danger/20 bg-danger/5 px-3.5 py-3 text-sm text-danger">
-          新密码不能与当前密码相同。
+          {t("settings.general.password.sameAsCurrent")}
         </div>
       ) : null}
 
@@ -107,11 +111,18 @@ function ChangePasswordModal({
       ) : null}
 
       <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
-        <Button type="button" variant="ghost" onClick={onReset} disabled={isSubmitting}>
-          重置
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={onReset}
+          disabled={isSubmitting}
+        >
+          {t("common.actions.reset")}
         </Button>
         <Button type="submit" disabled={!canSubmit || isSubmitting}>
-          {isSubmitting ? "保存中..." : "更新密码"}
+          {isSubmitting
+            ? t("settings.general.password.submitting")
+            : t("settings.general.password.submit")}
         </Button>
       </div>
     </form>
@@ -119,14 +130,52 @@ function ChangePasswordModal({
 }
 
 export default function General() {
+  const { t } = useTranslation();
   const { session } = useAuth();
+  const { language, setLanguage, supportedLanguages } =
+    useLanguagePreferences();
+  const { colorTheme, setColorTheme, themePresets } = useThemePreferences();
   const [form, setForm] = useState<PasswordFormState>(initialFormState);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
-  const [language, setLanguage] = useState("zh-CN");
-  const [colorTheme, setColorTheme] = useState("warm-neutral");
+  const themeMetadata = useMemo(
+    () =>
+      ({
+        "warm-neutral": {
+          label: t("settings.general.theme.presets.warm-neutral.label"),
+          description: t(
+            "settings.general.theme.presets.warm-neutral.description",
+          ),
+        },
+        "knowledge-blue": {
+          label: t("settings.general.theme.presets.knowledge-blue.label"),
+          description: t(
+            "settings.general.theme.presets.knowledge-blue.description",
+          ),
+        },
+        "archive-green": {
+          label: t("settings.general.theme.presets.archive-green.label"),
+          description: t(
+            "settings.general.theme.presets.archive-green.description",
+          ),
+        },
+        "slate-ocean": {
+          label: t("settings.general.theme.presets.slate-ocean.label"),
+          description: t(
+            "settings.general.theme.presets.slate-ocean.description",
+          ),
+        },
+      }) satisfies Record<
+        ThemePresetId,
+        {
+          label: string;
+          description: string;
+        }
+      >,
+    [t],
+  );
 
   const passwordMismatch = useMemo(() => {
     if (!form.confirmPassword) {
@@ -155,7 +204,7 @@ export default function General() {
     setSuccessMessage("");
 
     if (!canSubmit) {
-      setErrorMessage("请检查密码输入后再提交。");
+      setErrorMessage(t("settings.general.password.submitInvalid"));
       return;
     }
 
@@ -168,12 +217,12 @@ export default function General() {
       });
 
       setForm(initialFormState);
-      setSuccessMessage("密码已更新，请使用新密码进行后续登录。");
+      setSuccessMessage(t("settings.general.password.success"));
     } catch (requestError) {
       if (requestError instanceof ApiError) {
         setErrorMessage(requestError.message);
       } else {
-        setErrorMessage("修改密码失败，请稍后重试。");
+        setErrorMessage(t("settings.general.password.failed"));
       }
     } finally {
       setIsSubmitting(false);
@@ -182,7 +231,7 @@ export default function General() {
 
   const openPasswordModal = () => {
     Modal.show({
-      title: "修改密码",
+      title: t("settings.general.password.modalTitle"),
       width: 520,
       content: (
         <ChangePasswordModal
@@ -206,15 +255,17 @@ export default function General() {
 
   return (
     <SettingsPageLayout
-      miniTitle="General"
-      title="通用"
-      description="统一管理当前界面的基础偏好与账户操作。"
+      miniTitle={t("settings.general.page.miniTitle")}
+      title={t("settings.general.page.title")}
+      description={t("settings.general.page.description")}
       contentClassName="space-y-4 pt-6"
     >
       <HealthCheck />
 
       <Card className="space-y-3">
-        <h2 className="text-sm font-semibold text-text-primary">偏好设置</h2>
+        <h2 className="text-sm font-semibold text-text-primary">
+          {t("settings.general.preferences")}
+        </h2>
 
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-4 rounded-lg border border-border/70 bg-surface-secondary/60 px-3.5 py-3">
@@ -230,52 +281,63 @@ export default function General() {
             </div>
             <Button variant="secondary" size="sm" onClick={openPasswordModal}>
               <KeyRound className="h-4 w-4" />
-              修改密码
+              {t("settings.general.account.changePassword")}
             </Button>
           </div>
 
           <div className="flex items-center justify-between gap-4 rounded-lg border border-border/70 bg-surface-secondary/60 px-3.5 py-3">
             <div className="min-w-0">
-              <div className="text-sm font-medium text-text-primary">界面语言</div>
+              <div className="text-sm font-medium text-text-primary">
+                {t("settings.general.language.label")}
+              </div>
             </div>
-            <div className="relative w-full max-w-[168px] shrink-0">
-              <select
+            <div className="w-full max-w-[168px] shrink-0">
+              <Select
                 value={language}
-                onChange={(event) => setLanguage(event.target.value)}
-                className="h-8 w-full appearance-none rounded-lg border border-border bg-surface-primary pl-3 pr-8 text-sm text-text-primary shadow-shadow-sm transition-all duration-150 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-              >
-                <option value="zh-CN">简体中文</option>
-                <option value="en-US">English</option>
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-icon-secondary" />
+                onChange={(value) =>
+                  void setLanguage(value as "zh-CN" | "en-US")
+                }
+                options={supportedLanguages.map((value) => ({
+                  value,
+                  label: t(`settings.general.language.options.${value}`),
+                }))}
+                compact
+              />
             </div>
           </div>
 
           <div className="flex items-center justify-between gap-4 rounded-lg border border-border/70 bg-surface-secondary/60 px-3.5 py-3">
             <div className="min-w-0">
-              <div className="text-sm font-medium text-text-primary">色彩主题</div>
+              <div className="text-sm font-medium text-text-primary">
+                {t("settings.general.theme.label")}
+              </div>
+              <div className="mt-0.5 text-xs leading-5 text-text-secondary">
+                {themeMetadata[colorTheme]?.description}
+              </div>
             </div>
-            <div className="relative w-full max-w-[168px] shrink-0">
-              <select
+            <div className="w-full max-w-[168px] shrink-0">
+              <Select
                 value={colorTheme}
-                onChange={(event) => setColorTheme(event.target.value)}
-                className="h-8 w-full appearance-none rounded-lg border border-border bg-surface-primary pl-3 pr-8 text-sm text-text-primary shadow-shadow-sm transition-all duration-150 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-              >
-                <option value="warm-neutral">暖米色</option>
-                <option value="classic-light">浅色默认</option>
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-icon-secondary" />
+                onChange={(value) => setColorTheme(value as ThemePresetId)}
+                options={themePresets.map((theme) => ({
+                  value: theme.id,
+                  label: themeMetadata[theme.id].label,
+                }))}
+                compact
+              />
             </div>
           </div>
 
           <div className="flex items-center justify-between gap-4 rounded-lg border border-border/70 bg-surface-secondary/60 px-3.5 py-3">
             <div className="min-w-0">
-              <div className="text-sm font-medium text-text-primary">暗黑模式</div>
+              <div className="text-sm font-medium text-text-primary">
+                {t("settings.general.darkMode.label")}
+              </div>
             </div>
             <Switch
               checked={darkModeEnabled}
               onChange={() => setDarkModeEnabled((current) => !current)}
-              ariaLabel="切换暗黑模式"
+              ariaLabel={t("settings.general.darkMode.ariaLabel")}
             />
           </div>
         </div>

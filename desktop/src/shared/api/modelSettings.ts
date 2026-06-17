@@ -2,7 +2,12 @@ import { get, post, put } from "../lib/request";
 import type { ProviderCode } from "../providerCatalog";
 
 export type { ProviderCode } from "../providerCatalog";
-export type RoleModelType = "llm" | "embedding" | "rerank" | "task";
+export type RoleModelType =
+  | "llm"
+  | "embedding"
+  | "rerank"
+  | "task"
+  | "evaluation";
 export type ProviderStatus = "idle" | "syncing" | "connected" | "error";
 
 export interface RoleModelConfig {

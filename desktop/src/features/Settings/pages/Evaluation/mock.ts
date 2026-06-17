@@ -201,16 +201,58 @@ const createSampleResults = (dataset: ParsedDataset): EvaluationSampleResult[] =
     const sourceHit = random() > 0.2;
     const latencyMs = 2800 + Math.round(random() * 3200);
     const faithfulness = 0.68 + random() * 0.28;
+    const answerRelevance = 0.62 + random() * 0.3;
+    const answerCompleteness = 0.58 + random() * 0.32;
+    const goldSources = preview.goldSources;
+    const matchedGoldSources =
+      hit && sourceHit ? goldSources.slice(0, Math.max(1, Math.min(goldSources.length, 2))) : [];
+    const retrievedSources = goldSources.map((documentName, sourceIndex) => ({
+      documentName,
+      chunkId: sourceIndex + 1,
+      score: Number((0.72 + random() * 0.24).toFixed(3)),
+      contentPreview: `${documentName} 命中了与问题“${preview.question.slice(0, 18)}”相关的片段摘要。`,
+    }));
+    const fallbackSource = dataset.documents[(index + 1) % dataset.documents.length];
+    if (!sourceHit && fallbackSource) {
+      retrievedSources.push({
+        documentName: fallbackSource.name,
+        chunkId: retrievedSources.length + 1,
+        score: Number((0.41 + random() * 0.18).toFixed(3)),
+        contentPreview: `${fallbackSource.name} 被检索到，但与标准来源不完全一致。`,
+      });
+    }
+    const attempts = [
+      {
+        attempt: 1,
+        status: success
+          ? ("success" as const)
+          : ("failed" as const),
+        latencyMs,
+        hit,
+        recall: hit ? 0.55 + random() * 0.4 : 0.1 + random() * 0.25,
+        faithfulness,
+        answerRelevance,
+        answerCompleteness,
+        retrievedSources,
+        errorMessage: success ? undefined : "judge timeout",
+      },
+    ];
 
     return {
       id: preview.id,
       question: preview.question,
+      goldSources,
+      matchedGoldSources,
+      retrievedSources,
       status: success ? "success" : "failed",
       hit,
-      recall: hit ? 0.55 + random() * 0.4 : 0.1 + random() * 0.25,
+      recall: attempts[0].recall,
       latencyMs,
       sourceHit,
       faithfulness,
+      answerRelevance,
+      answerCompleteness,
+      attempts,
       errorMessage: success ? undefined : "judge timeout",
     };
   });
@@ -233,6 +275,10 @@ const createMetricSummary = (
       total,
     faithfulness:
       successItems.reduce((sum, item) => sum + item.faithfulness, 0) / successCount,
+    answerRelevance:
+      successItems.reduce((sum, item) => sum + item.answerRelevance, 0) / successCount,
+    answerCompleteness:
+      successItems.reduce((sum, item) => sum + item.answerCompleteness, 0) / successCount,
     sourceHitRate:
       sampleResults.filter((item) => item.sourceHit).length / total,
     averageLatencyMs:

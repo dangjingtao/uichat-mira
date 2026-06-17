@@ -132,6 +132,13 @@ const getAssignments = () => {
         (config) =>
           config.type === "rerank" && config.providerCode && config.remoteModelId,
       ) ?? null,
+    evaluation:
+      defaults.find(
+        (config) =>
+          config.type === "evaluation" &&
+          config.providerCode &&
+          config.remoteModelId,
+      ) ?? null,
   };
 };
 
@@ -246,6 +253,15 @@ export const providerSettingsService = {
                 providerCode,
                 remoteModelId: assignments.rerank.remoteModelId,
                 modelName: assignments.rerank.name,
+              }
+            : null,
+        evaluation:
+          assignments.evaluation?.providerCode === providerCode &&
+          assignments.evaluation.remoteModelId
+            ? {
+                providerCode,
+                remoteModelId: assignments.evaluation.remoteModelId,
+                modelName: assignments.evaluation.name,
               }
             : null,
       },

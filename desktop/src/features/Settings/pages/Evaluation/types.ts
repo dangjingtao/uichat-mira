@@ -1,98 +1,35 @@
-export type EvaluationMode = "retrieve" | "retrieve-generate";
+import type {
+  EvaluationDatasetConfig as ApiEvaluationDatasetConfig,
+  EvaluationDatasetDocument as ApiEvaluationDatasetDocument,
+  EvaluationDatasetRecord as ApiEvaluationDatasetRecord,
+  EvaluationDatasetSample as ApiEvaluationDatasetSample,
+  EvaluationDatasetValidationItem as ApiEvaluationDatasetValidationItem,
+  EvaluationLogEntry as ApiEvaluationLogEntry,
+  EvaluationMetricSummary as ApiEvaluationMetricSummary,
+  EvaluationMode as ApiEvaluationMode,
+  EvaluationRunRecord as ApiEvaluationRunRecord,
+  EvaluationRunStatus,
+  EvaluationSampleResult as ApiEvaluationSampleResult,
+} from "@/shared/api/evaluation";
 
-export type EvaluationJobStatus =
-  | "idle"
-  | "ready"
-  | "running"
-  | "completed"
-  | "failed";
+export type EvaluationMode = ApiEvaluationMode;
 
-export interface ParsedDatasetDocument {
-  id: string;
-  name: string;
-  type: "话术" | "案例" | "规章";
-  sizeLabel: string;
-}
+export type EvaluationJobStatus = "idle" | "ready" | EvaluationRunStatus;
 
-export interface ParsedDatasetSample {
-  id: string;
-  question: string;
-  expectedAnswer: string;
-  goldSources: string[];
-  tags: string[];
-}
+export type ParsedDatasetDocument = ApiEvaluationDatasetDocument;
 
-export interface ParsedDatasetValidationItem {
-  id: string;
-  label: string;
-  status: "pass" | "warning" | "error";
-  detail: string;
-}
+export type ParsedDatasetSample = ApiEvaluationDatasetSample;
 
-export interface ParsedDatasetConfig {
-  mode: EvaluationMode;
-  topK: number;
-  topN: number;
-  repeat: number;
-  concurrency: number;
-  timeoutSeconds: number;
-}
+export type ParsedDatasetValidationItem = ApiEvaluationDatasetValidationItem;
 
-export interface ParsedDataset {
-  id: string;
-  datasetName: string;
-  fileName: string;
-  fileSize: number;
-  uploadedAt: string;
-  summary: {
-    documentCount: number;
-    sampleCount: number;
-    hasReferenceAnswers: boolean;
-    hasGoldSources: boolean;
-  };
-  config: ParsedDatasetConfig;
-  documents: ParsedDatasetDocument[];
-  previewSamples: ParsedDatasetSample[];
-  validations: ParsedDatasetValidationItem[];
-}
+export type ParsedDatasetConfig = ApiEvaluationDatasetConfig;
 
-export interface EvaluationLogEntry {
-  id: string;
-  timestamp: string;
-  level: "info" | "success" | "warning" | "error";
-  text: string;
-}
+export type ParsedDataset = ApiEvaluationDatasetRecord;
 
-export interface EvaluationMetricSummary {
-  hitAtK: number;
-  recallAtK: number;
-  mrr: number;
-  faithfulness: number;
-  sourceHitRate: number;
-  averageLatencyMs: number;
-  failedCount: number;
-}
+export type EvaluationLogEntry = ApiEvaluationLogEntry;
 
-export interface EvaluationSampleResult {
-  id: string;
-  question: string;
-  status: "success" | "failed";
-  hit: boolean;
-  recall: number;
-  latencyMs: number;
-  sourceHit: boolean;
-  faithfulness: number;
-  errorMessage?: string;
-}
+export type EvaluationMetricSummary = ApiEvaluationMetricSummary;
 
-export interface EvaluationRunRecord {
-  id: string;
-  name: string;
-  dataset: ParsedDataset;
-  status: Exclude<EvaluationJobStatus, "idle" | "ready">;
-  startedAt: string;
-  completedAt: string;
-  metrics: EvaluationMetricSummary;
-  logs: EvaluationLogEntry[];
-  sampleResults: EvaluationSampleResult[];
-}
+export type EvaluationSampleResult = ApiEvaluationSampleResult;
+
+export type EvaluationRunRecord = ApiEvaluationRunRecord;

@@ -3,6 +3,7 @@
 import React from "react";
 import { ArrowUp } from "lucide-react";
 import { ComposerPrimitive } from "@assistant-ui/react";
+import { useTranslation } from "react-i18next";
 import Switch from "@/shared/ui/Switch";
 
 type ThreadComposerProps = {
@@ -26,9 +27,10 @@ export default function ThreadComposer({
   ragStatusHint,
   onToggleRag,
 }: ThreadComposerProps) {
+  const { t } = useTranslation();
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20">
-      <div className="bg-gradient-to-t from-[#FAFBF7] via-[#FAFBF7]/95 to-transparent px-4 pb-5 pt-8 sm:px-6 lg:px-8">
+      <div className="bg-gradient-to-t from-surface-secondary via-surface-secondary/95 to-transparent px-4 pb-5 pt-8 sm:px-6 lg:px-8">
         <div
           className={`pointer-events-auto mx-auto w-full ${
             hasRagProgressDrawerOpen
@@ -51,12 +53,12 @@ export default function ThreadComposer({
                   checked={ragEnabled}
                   onChange={onToggleRag}
                   disabled={isRagToggleDisabled}
-                  ariaLabel="启用RAG知识库检索"
+                  ariaLabel={t("chat.thread.composer.ragAria")}
                   size="sm"
                 />
                 <div className="min-w-0">
                   <div className="font-medium text-text-secondary">
-                    启用知识库
+                    {t("chat.thread.composer.enableKnowledgeBase")}
                   </div>
                   <p className="truncate text-[11px] text-text-tertiary">
                     {ragStatusHint}

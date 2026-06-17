@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router";
+import { useTranslation } from "react-i18next";
 import {
   ArrowRight,
   Database,
@@ -19,6 +20,7 @@ import {
 } from "@/shared/platform/desktopRuntime";
 
 function HomePage() {
+  const { t } = useTranslation();
   const { session, logout } = useAuth();
   const { runtime, backendState, databaseState } = useRuntimeHealth();
   const navigate = useNavigate();
@@ -52,7 +54,9 @@ function HomePage() {
                 </div>
                 <div className="space-y-2">
                   <h1 className="text-[28px] font-semibold leading-tight text-text-primary">
-                    欢迎回来，{session.user.username}
+                    {t("dashboard.home.welcomeBack", {
+                      username: session.user.username,
+                    })}
                   </h1>
                 </div>
               </div>
@@ -75,7 +79,7 @@ function HomePage() {
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button onClick={toChat} className="gap-2">
                 <MessageSquare className="h-4 w-4" />
-                开始测试
+                {t("dashboard.home.startTest")}
                 <ArrowRight className="h-4 w-4" />
               </Button>
               <Button
@@ -84,14 +88,18 @@ function HomePage() {
                 className="gap-2"
               >
                 <LogOut className="h-4 w-4" />
-                退出登录
+                {t("dashboard.home.logout")}
               </Button>
             </div>
           </div>
         </section>
 
         <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Card label="后端服务" interactive className="h-full">
+          <Card
+            label={t("dashboard.home.backendService")}
+            interactive
+            className="h-full"
+          >
             <div className="space-y-4">
               <div className="flex items-start gap-4">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-secondary">
@@ -100,7 +108,7 @@ function HomePage() {
                 <div className="min-w-0 flex-1 space-y-2">
                   <div className="flex items-center justify-between gap-3">
                     <h2 className="text-base font-semibold text-text-primary">
-                      后端服务
+                      {t("dashboard.home.backendService")}
                     </h2>
                     <StatusIndicator status={backendState.status} />
                   </div>
@@ -120,7 +128,11 @@ function HomePage() {
             </div>
           </Card>
 
-          <Card label="数据库连接" interactive className="h-full">
+          <Card
+            label={t("dashboard.home.databaseConnection")}
+            interactive
+            className="h-full"
+          >
             <div className="space-y-4">
               <div className="flex items-start gap-4">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-secondary">
@@ -129,7 +141,7 @@ function HomePage() {
                 <div className="min-w-0 flex-1 space-y-2">
                   <div className="flex items-center justify-between gap-3">
                     <h2 className="text-base font-semibold text-text-primary">
-                      数据库连接
+                      {t("dashboard.home.databaseConnection")}
                     </h2>
                     <StatusIndicator status={databaseState.status} />
                   </div>

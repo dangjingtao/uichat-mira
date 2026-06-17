@@ -19,7 +19,7 @@ export default function ThreadHeader({
   badges,
 }: ThreadHeaderProps) {
   return (
-    <div className="absolute inset-x-0 top-0 z-20 border-b border-border/70 bg-[#FAFBF7]">
+    <div className="absolute inset-x-0 top-0 z-20 border-b border-border/70 bg-surface-secondary">
       <div className="flex min-h-10 w-full items-center justify-between gap-3 px-4 py-2 sm:px-6 lg:px-8 xl:px-10">
         <div className="min-w-0">
           <div className="truncate text-sm font-medium text-text-primary">

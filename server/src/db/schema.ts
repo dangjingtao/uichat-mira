@@ -476,7 +476,12 @@ export const messagesRelations = relations(messages, ({ one }) => ({
 export type Message = typeof messages.$inferSelect;
 export type NewMessage = typeof messages.$inferInsert;
 
-export type ModelType = "llm" | "embedding" | "rerank" | "task";
+export type ModelType =
+  | "llm"
+  | "embedding"
+  | "rerank"
+  | "task"
+  | "evaluation";
 export type UserRole = "admin" | "user";
 export type ParamType = "number" | "select" | "boolean";
 export type ProviderCode = ProviderCodeValue;

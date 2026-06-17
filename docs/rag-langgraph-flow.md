@@ -32,11 +32,16 @@ RAG 相关后端入口当前分为两类：
    返回 SSE 流式结果。
 4. `POST /chat/rag/retrieve`
    仅执行检索与重排，不执行生成。
+5. `GET /rag/runs`
+   返回最近的 RAG 运行记录快照，供评测工作台或调试面板读取。
+6. `GET /rag/runs/:runId`
+   返回单次 RAG 运行记录，包含节点级执行状态、摘要、artifacts 与 timing。
 
 对应路由文件：
 
 - `server/src/routes/proxy-provider.ts`
 - `server/src/routes/chat-rag.ts`
+- `server/src/routes/rag-runtime/index.ts`
 
 ## 分层职责
 
@@ -742,6 +747,43 @@ flowchart TD
 如果只看到 `retrieve-complete` 且 `retrievedCount = 0`，说明这次检索没有召回 chunk，所以 graph 会按设计直接跳过 rerank。
 
 如果看到 `rerank-exit` 但 `rerankedCount = 0`，说明重排后没有保留任何候选片段，graph 会直接返回固定拒答，不再调用生成模型。
+
+## 运行记录接口
+
+当前服务端还会把每次 RAG 执行聚合为一份轻量 run record，便于评测工作台按运行回放节点行为。
+
+- `GET /rag/runs`
+  返回最近运行记录列表
+- `GET /rag/runs/:runId`
+  返回单次运行详情
+
+每条 run record 至少包含：
+
+- `runId`
+- `route`
+- `status`
+- `startedAt`
+- `finishedAt`
+- `durationMs`
+- `nodes[]`
+
+每个 `node` 至少包含：
+
+- `nodeId`
+- `nodeType`
+- `label`
+- `status`
+- `summary`
+- `details`
+- `artifacts`
+- `environment`
+
+其中：
+
+- `details`
+  继续保留前端友好的摘要信息
+- `artifacts`
+  用于承载评测工作台更关心的数组产物，例如 `retrievalBreakdown`、`rerankBreakdown`
 
 ## 后续建议
 

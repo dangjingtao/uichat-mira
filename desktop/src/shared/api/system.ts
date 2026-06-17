@@ -4,6 +4,24 @@ export interface ServiceHealthData {
   service: string;
 }
 
+export interface GitCommitInfo {
+  hash: string;
+  shortHash: string;
+  message: string;
+  author: string;
+  date: string;
+}
+
+export interface GitVersionInfo {
+  version: string;
+  commit: GitCommitInfo;
+}
+
+export interface GitInfo {
+  branch: string;
+  versions: GitVersionInfo[];
+}
+
 export interface AppMetaData {
   name: string;
   version: string;
@@ -22,6 +40,7 @@ export interface AppMetaData {
     value: string;
     href: string;
   }>;
+  git?: GitInfo;
 }
 
 export interface DatabaseHealthData {

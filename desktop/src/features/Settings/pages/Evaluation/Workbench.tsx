@@ -1,13 +1,12 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   AlertCircle,
   CheckCircle2,
-  ChevronRight,
   Eye,
   FolderArchive,
+  PackagePlus,
   Play,
-  Save,
   TableProperties,
   X,
 } from "lucide-react";
@@ -16,9 +15,13 @@ import SettingsPageLayout from "../../components/SettingsPageLayout";
 import Card from "@/shared/ui/Card";
 import { Button, IconButton } from "@/shared/ui/Button";
 import { FileUploadDropzone } from "@/shared/ui/FileUploadDropzone";
+import { Modal } from "@/shared/ui/Modal";
 import { message } from "@/shared/ui/Message";
-import { parseEvaluationZipMock, buildEvaluationRunRecord } from "./mock";
-import { saveEvaluationRun } from "./storage";
+import {
+  createEvaluationRun,
+  getEvaluationRun,
+  parseEvaluationDataset,
+} from "@/shared/api/evaluation";
 import type {
   EvaluationJobStatus,
   EvaluationRunRecord,
@@ -26,6 +29,8 @@ import type {
 } from "./types";
 import MetricGrid from "../../components/Evaluation/MetricGrid";
 import StatusBadge from "../../components/Evaluation/StatusBadge";
+import EvaluationPackageGeneratorModal from "../../components/Evaluation/EvaluationPackageGeneratorModal";
+import { getAppLanguage } from "@/shared/i18n";
 
 type ConsoleTab = "log" | "result";
 
@@ -38,18 +43,15 @@ const formatFileSize = (bytes: number) => {
 };
 
 const formatDate = (value: string) =>
-  new Date(value).toLocaleString("zh-CN", {
+  new Date(value).toLocaleString(getAppLanguage(), {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
   });
 
-function ValidationPill({
-  status,
-}: {
-  status: "pass" | "warning" | "error";
-}) {
+function ValidationPill({ status }: { status: "pass" | "warning" | "error" }) {
+  const { t } = useTranslation();
   const statusMap = {
     pass: "bg-success/10 text-success",
     warning: "bg-warning/10 text-warning",
@@ -57,8 +59,14 @@ function ValidationPill({
   } as const;
 
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusMap[status]}`}>
-      {status === "pass" ? "通过" : status === "warning" ? "注意" : "错误"}
+    <span
+      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusMap[status]}`}
+    >
+      {status === "pass"
+        ? t("settings.evaluation.shared.statusPass")
+        : status === "warning"
+          ? t("settings.evaluation.shared.statusWarning")
+          : t("settings.evaluation.shared.statusError")}
     </span>
   );
 }
@@ -72,47 +80,61 @@ function WorkbenchStateBar({
   dataset: ParsedDataset | null;
   runRecord: EvaluationRunRecord | null;
 }) {
+  const { t } = useTranslation();
   const summary = dataset?.summary;
   const sampleCount = summary?.sampleCount ?? 0;
   const completedCount =
     status === "completed" || status === "failed"
-      ? runRecord?.sampleResults.length ?? 0
-      : status === "running"
-        ? Math.max(1, Math.floor(sampleCount * 0.5))
-        : 0;
+      ? (runRecord?.sampleResults.length ?? 0)
+      : status === "queued"
+        ? 0
+        : status === "running"
+          ? (runRecord?.sampleResults.length ?? 0)
+          : 0;
 
   return (
-    <div className="grid gap-2.5 rounded-xl border border-border bg-surface-primary px-3.5 py-3 shadow-shadow-sm md:grid-cols-5">
+    <div className="grid gap-2.5 rounded-xl border border-border bg-surface-primary px-3.5 py-3 shadow-shadow-sm sm:grid-cols-2 xl:grid-cols-5">
       <div>
-        <div className="text-[11px] uppercase tracking-[0.12em] text-text-tertiary">任务状态</div>
+        <div className="text-[11px] uppercase tracking-[0.12em] text-text-tertiary">
+          {t("settings.evaluation.workbench.stateBar.taskStatus")}
+        </div>
         <div className="mt-1 flex items-center gap-2">
           <StatusBadge status={status} />
         </div>
       </div>
       <div>
-        <div className="text-[11px] uppercase tracking-[0.12em] text-text-tertiary">数据集</div>
+        <div className="text-[11px] uppercase tracking-[0.12em] text-text-tertiary">
+          {t("settings.evaluation.workbench.stateBar.dataset")}
+        </div>
         <div className="mt-1 text-sm font-medium text-text-primary">
-          {dataset?.datasetName ?? "等待上传"}
+          {dataset?.datasetName ??
+            t("settings.evaluation.workbench.stateBar.waitingUpload")}
         </div>
       </div>
       <div>
-        <div className="text-[11px] uppercase tracking-[0.12em] text-text-tertiary">进度</div>
+        <div className="text-[11px] uppercase tracking-[0.12em] text-text-tertiary">
+          {t("settings.evaluation.workbench.stateBar.progress")}
+        </div>
         <div className="mt-1 text-sm font-medium text-text-primary">
           {completedCount} / {sampleCount || "--"}
         </div>
       </div>
       <div>
-        <div className="text-[11px] uppercase tracking-[0.12em] text-text-tertiary">模式</div>
+        <div className="text-[11px] uppercase tracking-[0.12em] text-text-tertiary">
+          {t("settings.evaluation.workbench.stateBar.mode")}
+        </div>
         <div className="mt-1 text-sm font-medium text-text-primary">
           {dataset
             ? dataset.config.mode === "retrieve"
-              ? "仅检索"
-              : "检索+生成"
+              ? t("settings.evaluation.shared.modeRetrieve")
+              : t("settings.evaluation.shared.modeRetrieveGenerate")
             : "--"}
         </div>
       </div>
       <div>
-        <div className="text-[11px] uppercase tracking-[0.12em] text-text-tertiary">参数</div>
+        <div className="text-[11px] uppercase tracking-[0.12em] text-text-tertiary">
+          {t("settings.evaluation.workbench.stateBar.params")}
+        </div>
         <div className="mt-1 text-sm font-medium text-text-primary">
           {dataset ? `K${dataset.config.topK} / N${dataset.config.topN}` : "--"}
         </div>
@@ -130,6 +152,7 @@ function DatasetPreviewDrawer({
   dataset: ParsedDataset | null;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   if (!open || !dataset) {
     return null;
   }
@@ -138,27 +161,40 @@ function DatasetPreviewDrawer({
     <div className="fixed inset-0 z-[90]">
       <button
         type="button"
-        aria-label="关闭数据集预览"
+        aria-label={t("settings.evaluation.workbench.preview.closeMask")}
         className="absolute inset-0 bg-black/25"
         onClick={onClose}
       />
       <aside className="absolute right-0 top-0 flex h-full w-full max-w-[560px] flex-col border-l border-border bg-surface-primary shadow-shadow-xl">
         <header className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
           <div>
-            <div className="text-sm font-semibold text-text-primary">数据集随机预览</div>
+            <div className="text-sm font-semibold text-text-primary">
+              {t("settings.evaluation.workbench.preview.title")}
+            </div>
             <div className="mt-1 text-xs text-text-secondary">
-              {dataset.datasetName} · {dataset.summary.sampleCount} 条样本 ·{" "}
-              {dataset.summary.documentCount} 份文档
+              {dataset.datasetName} ·{" "}
+              {t("settings.evaluation.shared.sampleCount", {
+                count: dataset.summary.sampleCount,
+              })}{" "}
+              ·{" "}
+              {t("settings.evaluation.shared.documentCount", {
+                count: dataset.summary.documentCount,
+              })}
             </div>
           </div>
-          <IconButton ariaLabel="关闭预览抽屉" onClick={onClose}>
+          <IconButton
+            ariaLabel={t("settings.evaluation.workbench.preview.closeDrawer")}
+            onClick={onClose}
+          >
             <X className="h-4 w-4" />
           </IconButton>
         </header>
 
         <div className="stable-scrollbar flex-1 space-y-4 overflow-y-auto px-4 py-4">
           <section className="space-y-2">
-            <div className="text-sm font-semibold text-text-primary">样本预览</div>
+            <div className="text-sm font-semibold text-text-primary">
+              {t("settings.evaluation.workbench.preview.samplePreview")}
+            </div>
             <div className="space-y-2">
               {dataset.previewSamples.map((sample) => (
                 <div
@@ -169,16 +205,20 @@ function DatasetPreviewDrawer({
                     <span className="rounded-full bg-surface-primary px-2 py-0.5 text-[11px] font-medium text-text-secondary">
                       {sample.id}
                     </span>
-                    <div className="text-xs text-text-secondary">{sample.tags.join(" · ")}</div>
+                    <div className="text-xs text-text-secondary">
+                      {sample.tags.join(" · ")}
+                    </div>
                   </div>
                   <div className="mt-2 text-sm font-medium text-text-primary">
                     {sample.question}
                   </div>
                   <div className="mt-1 text-xs leading-5 text-text-secondary">
-                    gold sources：{sample.goldSources.join("、")}
+                    {t("settings.evaluation.workbench.preview.goldSources")}：
+                    {sample.goldSources.join("、")}
                   </div>
                   <div className="mt-1 text-xs leading-5 text-text-secondary">
-                    reference：{sample.expectedAnswer}
+                    {t("settings.evaluation.workbench.preview.reference")}：
+                    {sample.expectedAnswer}
                   </div>
                 </div>
               ))}
@@ -186,7 +226,9 @@ function DatasetPreviewDrawer({
           </section>
 
           <section className="space-y-2">
-            <div className="text-sm font-semibold text-text-primary">文档预览</div>
+            <div className="text-sm font-semibold text-text-primary">
+              {t("settings.evaluation.workbench.preview.documentPreview")}
+            </div>
             <div className="space-y-2">
               {dataset.documents.map((document) => (
                 <div
@@ -197,7 +239,9 @@ function DatasetPreviewDrawer({
                     <div className="truncate text-sm font-medium text-text-primary">
                       {document.name}
                     </div>
-                    <div className="mt-1 text-xs text-text-secondary">{document.sizeLabel}</div>
+                    <div className="mt-1 text-xs text-text-secondary">
+                      {document.sizeLabel}
+                    </div>
                   </div>
                   <span className="ml-3 rounded-full bg-surface-primary px-2 py-0.5 text-[11px] font-medium text-text-secondary">
                     {document.type}
@@ -214,7 +258,7 @@ function DatasetPreviewDrawer({
 }
 
 export default function EvaluationWorkbench() {
-  const navigate = useNavigate();
+  const { t } = useTranslation();
   const [dataset, setDataset] = useState<ParsedDataset | null>(null);
   const [status, setStatus] = useState<EvaluationJobStatus>("idle");
   const [parsing, setParsing] = useState(false);
@@ -223,11 +267,50 @@ export default function EvaluationWorkbench() {
   const [savedRunId, setSavedRunId] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
+  const openPackageGenerator = () => {
+    let modalKey = "";
+    modalKey = Modal.show({
+      title: t("settings.evaluation.packageGenerator.title"),
+      width: 820,
+      footer: null,
+      content: (
+        <EvaluationPackageGeneratorModal
+          onClose={() => Modal.close(modalKey)}
+        />
+      ),
+    });
+  };
+
+  useEffect(() => {
+    if (!runRecord) {
+      return;
+    }
+
+    if (runRecord.status === "completed" || runRecord.status === "failed") {
+      return;
+    }
+
+    const timer = window.setInterval(async () => {
+      try {
+        const nextRun = await getEvaluationRun(runRecord.id);
+        setRunRecord(nextRun);
+        setStatus(nextRun.status);
+      } catch {
+        // Keep the last visible state and try again on the next tick.
+      }
+    }, 1500);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [runRecord]);
+
   const canRun = Boolean(
     dataset &&
-      dataset.validations.every((item) => item.status !== "error") &&
-      !parsing &&
-      status !== "running",
+    dataset.validations.every((item) => item.status !== "error") &&
+    !parsing &&
+    status !== "queued" &&
+    status !== "running",
   );
 
   const progressWidth = useMemo(() => {
@@ -235,16 +318,23 @@ export default function EvaluationWorkbench() {
       return 0;
     }
 
+    const sampleCount = dataset.summary.sampleCount || 1;
+    const completedCount = runRecord?.sampleResults.length ?? 0;
+
     if (status === "completed" || status === "failed") {
       return 100;
     }
 
+    if (status === "queued") {
+      return 18;
+    }
+
     if (status === "running") {
-      return 52;
+      return Math.max(24, Math.min(96, (completedCount / sampleCount) * 100));
     }
 
     return status === "ready" ? 8 : 0;
-  }, [dataset, status]);
+  }, [dataset, runRecord?.sampleResults.length, status]);
 
   const handleSelectFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) {
@@ -253,7 +343,7 @@ export default function EvaluationWorkbench() {
 
     const [file] = Array.from(files);
     if (!file || !file.name.toLowerCase().endsWith(".zip")) {
-      message.warning("请上传 dataset.zip 评测包");
+      message.warning(t("settings.evaluation.workbench.messages.uploadZip"));
       return;
     }
 
@@ -263,12 +353,16 @@ export default function EvaluationWorkbench() {
       setRunRecord(null);
       setSavedRunId(null);
       setConsoleTab("log");
-      const parsed = await parseEvaluationZipMock(file);
+      const parsed = await parseEvaluationDataset(file);
       setDataset(parsed);
       setStatus("ready");
-      message.success("评测包已解析，可直接开始评测");
+      message.success(t("settings.evaluation.workbench.messages.parseSuccess"));
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "评测包解析失败");
+      message.error(
+        error instanceof Error
+          ? error.message
+          : t("settings.evaluation.workbench.messages.parseFailed"),
+      );
     } finally {
       setParsing(false);
     }
@@ -276,57 +370,72 @@ export default function EvaluationWorkbench() {
 
   const handleStartEvaluation = async () => {
     if (!dataset) {
-      message.warning("请先上传评测包");
+      message.warning(t("settings.evaluation.workbench.messages.uploadFirst"));
       return;
     }
 
     if (dataset.validations.some((item) => item.status === "error")) {
-      message.error("当前评测包存在校验错误，请修正后重新上传");
+      message.error(t("settings.evaluation.workbench.messages.validationError"));
       return;
     }
 
-    setStatus("running");
-    setSavedRunId(null);
+    setStatus("queued");
     setConsoleTab("log");
-    await new Promise((resolve) => window.setTimeout(resolve, 1200));
-    const nextRun = buildEvaluationRunRecord(dataset);
+    const nextRun = await createEvaluationRun({
+      datasetId: dataset.id,
+    });
     setRunRecord(nextRun);
     setStatus(nextRun.status);
-    setConsoleTab("result");
-    message.success("评测已完成，右侧可查看结果");
-  };
-
-  const handleSaveToCenter = () => {
-    if (!runRecord) {
-      message.warning("当前还没有可保存的评测结果");
-      return;
-    }
-
-    saveEvaluationRun(runRecord);
-    setSavedRunId(runRecord.id);
-    message.success("结果已保存到评测中心");
+    setSavedRunId(nextRun.id);
+    message.success(t("settings.evaluation.workbench.messages.runCreated"));
   };
 
   return (
     <SettingsPageLayout
-        miniTitle="Evaluation Workbench"
-        title="评测工作台"
-        description="上传配置式评测包后，系统会解析 zip 中的数据集与运行参数。左侧只做校验和预览，参数需通过重新生成 zip 调整。"
-        containerClassName="max-w-none"
-        contentClassName="flex flex-col gap-4 pt-6 2xl:h-full"
-      >
-
+      miniTitle={t("settings.evaluation.workbench.page.miniTitle")}
+      title={t("settings.evaluation.workbench.page.title")}
+      description={t("settings.evaluation.workbench.page.description")}
+      slot={
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+          <Button
+            size="sm"
+            className="flex-1 sm:flex-none"
+            onClick={openPackageGenerator}
+          >
+            <PackagePlus className="h-4 w-4" />
+            {t("settings.evaluation.workbench.actions.generatePackage")}
+          </Button>
+          <Button
+            size="sm"
+            className="flex-1 sm:flex-none"
+            disabled={!canRun}
+            onClick={() => {
+              void handleStartEvaluation();
+            }}
+          >
+            <Play className="h-4 w-4" />
+            {t("settings.evaluation.workbench.actions.startEvaluation")}
+          </Button>
+        </div>
+      }
+      containerClassName="max-w-none"
+      contentClassName="flex flex-col gap-4 pt-6 2xl:h-full"
+    >
       <div className="grid gap-4 2xl:min-h-0 2xl:flex-1 2xl:grid-cols-[minmax(340px,1fr)_minmax(0,2fr)]">
         <div className="flex flex-col gap-3 2xl:min-h-0 2xl:overflow-y-auto 2xl:pr-1">
           <Card className="space-y-3 p-3.5">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <div className="text-sm font-semibold text-text-primary">评测包与参数</div>
+                <div className="text-sm font-semibold text-text-primary">
+                  {t("settings.evaluation.workbench.packageCard.title")}
+                </div>
                 <div className="mt-1 text-xs leading-5 text-text-secondary">
-                  上传后自动解析 zip 中的模式、topK、topN 和 N。页面仅展示，不提供修改。
+                  {t("settings.evaluation.workbench.packageCard.description")}
                 </div>
               </div>
-              {dataset ? <StatusBadge status={status === "idle" ? "ready" : status} /> : null}
+              {dataset ? (
+                <StatusBadge status={status === "idle" ? "ready" : status} />
+              ) : null}
             </div>
 
             <FileUploadDropzone
@@ -337,8 +446,8 @@ export default function EvaluationWorkbench() {
               maxCount={1}
               helperText={
                 parsing
-                  ? "正在解析评测包，请稍候..."
-                  : "支持 dataset.zip，重新上传即可替换当前参数。"
+                  ? t("settings.evaluation.workbench.packageCard.parsing")
+                  : t("settings.evaluation.workbench.packageCard.helper")
               }
               className="px-3 py-3"
               disabled={parsing}
@@ -347,33 +456,47 @@ export default function EvaluationWorkbench() {
             {dataset ? (
               <>
                 <div className="rounded-xl border border-border bg-surface-secondary px-3 py-2.5 text-xs leading-5 text-text-secondary">
-                  <div className="font-medium text-text-primary">{dataset.fileName}</div>
+                  <div className="font-medium text-text-primary">
+                    {dataset.fileName}
+                  </div>
                   <div>
-                    {formatFileSize(dataset.fileSize)} · 上传于 {formatDate(dataset.uploadedAt)}
+                    {formatFileSize(dataset.fileSize)} ·{" "}
+                    {t("settings.evaluation.shared.uploadedAt", {
+                      value: formatDate(dataset.uploadedAt),
+                    })}
                   </div>
                 </div>
 
                 <div className="grid gap-2 sm:grid-cols-2">
                   <div className="rounded-xl border border-border bg-surface-secondary px-3 py-2.5">
                     <div className="text-[11px] uppercase tracking-[0.12em] text-text-tertiary">
-                      数据集
+                      {t("settings.evaluation.workbench.packageCard.dataset")}
                     </div>
                     <div className="mt-1 text-sm font-medium text-text-primary">
                       {dataset.datasetName}
                     </div>
                     <div className="mt-1 text-xs text-text-secondary">
-                      {dataset.summary.documentCount} 份文档 · {dataset.summary.sampleCount} 条样本
+                      {t("settings.evaluation.shared.documentCount", {
+                        count: dataset.summary.documentCount,
+                      })}{" "}
+                      ·{" "}
+                      {t("settings.evaluation.shared.sampleCount", {
+                        count: dataset.summary.sampleCount,
+                      })}
                     </div>
                   </div>
                   <div className="rounded-xl border border-border bg-surface-secondary px-3 py-2.5">
                     <div className="text-[11px] uppercase tracking-[0.12em] text-text-tertiary">
-                      运行参数
+                      {t("settings.evaluation.workbench.packageCard.runtimeConfig")}
                     </div>
                     <div className="mt-1 text-sm font-medium text-text-primary">
-                      {dataset.config.mode === "retrieve" ? "仅检索" : "检索+生成"}
+                      {dataset.config.mode === "retrieve"
+                        ? t("settings.evaluation.shared.modeRetrieve")
+                        : t("settings.evaluation.shared.modeRetrieveGenerate")}
                     </div>
                     <div className="mt-1 text-xs text-text-secondary">
-                      topK {dataset.config.topK} · topN {dataset.config.topN} · N {dataset.config.repeat}
+                      topK {dataset.config.topK} · topN {dataset.config.topN} ·
+                      N {dataset.config.repeat}
                     </div>
                   </div>
                 </div>
@@ -385,10 +508,10 @@ export default function EvaluationWorkbench() {
                     onClick={() => setPreviewOpen(true)}
                   >
                     <Eye className="h-4 w-4" />
-                    查看随机预览
+                    {t("settings.evaluation.workbench.packageCard.openPreview")}
                   </Button>
                   <div className="text-xs text-text-secondary">
-                    预览通过抽屉打开，避免主界面被样本列表挤占。
+                    {t("settings.evaluation.workbench.packageCard.previewHint")}
                   </div>
                 </div>
               </>
@@ -396,11 +519,13 @@ export default function EvaluationWorkbench() {
           </Card>
 
           <Card className="space-y-3 p-3.5">
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-sm font-semibold text-text-primary">开始前校验</div>
+            <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm font-semibold text-text-primary">
+                {t("settings.evaluation.workbench.validation.title")}
+              </div>
               {dataset ? (
-                <span className="text-xs text-text-secondary">
-                  类似表单校验，修正方式是更新 zip 后重新上传
+                <span className="max-w-full text-xs text-text-secondary sm:text-right">
+                  {t("settings.evaluation.workbench.validation.hint")}
                 </span>
               ) : null}
             </div>
@@ -412,57 +537,34 @@ export default function EvaluationWorkbench() {
                     className="rounded-xl border border-border bg-surface-secondary px-3 py-2.5"
                   >
                     <div className="flex items-center gap-2">
-                      <div className="text-sm font-medium text-text-primary">{item.label}</div>
+                      <div className="text-sm font-medium text-text-primary">
+                        {item.label}
+                      </div>
                       <ValidationPill status={item.status} />
                     </div>
-                    <div className="mt-1 text-xs leading-5 text-text-secondary">{item.detail}</div>
+                    <div className="mt-1 text-xs leading-5 text-text-secondary">
+                      {item.detail}
+                    </div>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="rounded-xl border border-dashed border-border bg-surface-secondary px-3 py-5 text-sm text-text-secondary">
-                校验区会在解析后展示结构、样本字段和参考数据的检查结果。
+                {t("settings.evaluation.workbench.validation.empty")}
               </div>
             )}
           </Card>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              onClick={() => {
-                void handleStartEvaluation();
-              }}
-              disabled={!canRun}
-              className="min-w-[132px] flex-1 sm:flex-none"
-            >
-              <Play className="h-4 w-4" />
-              开始评测
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={!runRecord}
-              onClick={handleSaveToCenter}
-              className="min-w-[112px]"
-            >
-              <Save className="h-4 w-4" />
-              保存结果
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={!savedRunId}
-              onClick={() => navigate("/settings/evaluation/center")}
-            >
-              <ChevronRight className="h-4 w-4" />
-              去评测中心
-            </Button>
-          </div>
         </div>
 
         <div className="flex min-h-[560px] flex-col gap-3 2xl:min-h-0">
-          <WorkbenchStateBar status={status} dataset={dataset} runRecord={runRecord} />
+          <WorkbenchStateBar
+            status={status}
+            dataset={dataset}
+            runRecord={runRecord}
+          />
 
           <Card className="flex flex-1 flex-col overflow-hidden p-0 2xl:min-h-0">
-            <div className="flex items-center justify-between border-b border-border px-3.5 py-3">
+            <div className="flex flex-col gap-2 border-b border-border px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-1 rounded-xl bg-surface-secondary p-1">
                 <button
                   type="button"
@@ -473,7 +575,7 @@ export default function EvaluationWorkbench() {
                       : "text-text-secondary"
                   }`}
                 >
-                  运行日志
+                  {t("settings.evaluation.workbench.console.log")}
                 </button>
                 <button
                   type="button"
@@ -484,89 +586,129 @@ export default function EvaluationWorkbench() {
                       : "text-text-secondary"
                   }`}
                 >
-                  结果
+                  {t("settings.evaluation.workbench.console.result")}
                 </button>
               </div>
 
-              <div className="text-xs text-text-secondary">
-                {savedRunId ? "本次结果已保存到评测中心" : "结果页支持一键保存到评测中心"}
+              <div className="max-w-full text-xs text-text-secondary sm:text-right">
+                {savedRunId
+                  ? t("settings.evaluation.workbench.console.savedHint")
+                  : t("settings.evaluation.workbench.console.unsavedHint")}
               </div>
             </div>
 
             <div className="flex-1 overflow-hidden 2xl:min-h-0">
               {consoleTab === "log" ? (
-                <div className="flex h-full min-h-[420px] flex-col bg-[#0d1320] 2xl:min-h-0">
-                  <div className="border-b border-slate-800 px-3.5 py-2.5 text-xs text-slate-400">
-                    terminal://rag-eval-runner
-                  </div>
-                  <div className="stable-scrollbar min-h-0 flex-1 overflow-y-auto px-3.5 py-3 font-mono text-xs leading-6 text-slate-200">
-                    {dataset ? (
-                      <>
-                        <div>
-                          <span className="text-slate-500">$</span> load {dataset.fileName}
-                        </div>
-                        <div className="text-emerald-300">
-                          manifest parsed: mode={dataset.config.mode} topK={dataset.config.topK} topN={dataset.config.topN} repeat={dataset.config.repeat}
-                        </div>
-                        <div>
-                          samples={dataset.summary.sampleCount} documents={dataset.summary.documentCount}
-                        </div>
-                        <div className="mt-2 text-slate-400">validation summary</div>
-                        {dataset.validations.map((item) => (
-                          <div key={item.id}>
-                            <span className="text-slate-500">-</span> {item.label} ::{" "}
-                            <span
-                              className={
-                                item.status === "pass"
-                                  ? "text-emerald-300"
-                                  : item.status === "warning"
-                                    ? "text-amber-300"
-                                    : "text-rose-300"
-                              }
-                            >
-                              {item.status}
-                            </span>
-                          </div>
-                        ))}
-                        <div className="mt-2">
-                          <span className="text-slate-500">$</span> ready
-                        </div>
-
-                        {status === "running" ? (
-                          <>
-                            <div className="mt-3 text-slate-400">running evaluation...</div>
-                            <div>stage=retrieve sample=001 latency=3.1s</div>
-                            <div>stage=judge sample=001 faithfulness=0.86</div>
-                            <div>stage=retrieve sample=002 latency=2.9s</div>
-                            <div className="text-amber-300">
-                              stage=judge sample=002 waiting llm response...
-                            </div>
-                          </>
-                        ) : null}
-
-                        {runRecord ? (
-                          <>
-                            <div className="mt-3 text-slate-400">final summary</div>
-                            {runRecord.logs.map((log) => (
-                              <div key={log.id}>
-                                <span className="text-slate-500">[{log.timestamp}]</span> {log.text}
-                              </div>
-                            ))}
-                          </>
-                        ) : null}
-                      </>
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-sm text-slate-400">
-                        上传评测包后，这里会显示解析过程与运行日志。
+                <div className="flex h-full min-h-[320px] flex-col p-2 sm:min-h-[396px] sm:p-3 2xl:min-h-0">
+                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-surface-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_1px_2px_rgba(15,23,42,0.04)]">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface-secondary px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full bg-primary" />
+                        <span className="text-xs font-medium tracking-[0.08em] text-text-secondary">
+                          LOGS
+                        </span>
                       </div>
-                    )}
-                  </div>
-                  <div className="border-t border-slate-800 px-3.5 py-3">
-                    <div className="h-2 overflow-hidden rounded-full bg-slate-800">
-                      <div
-                        className="h-full rounded-full bg-emerald-400 transition-all duration-300"
-                        style={{ width: `${progressWidth}%` }}
-                      />
+                      <div className="rounded-md border border-border bg-surface-primary px-2 py-1 font-mono text-[11px] text-text-secondary shadow-shadow-sm">
+                        rag-eval-runner
+                      </div>
+                    </div>
+                    <div className="border-b border-border bg-surface-primary px-4 py-2 text-[11px] text-text-secondary">
+                      <span className="block sm:inline">Stream:</span>{" "}
+                      <span className="break-all font-mono text-text-primary">
+                        terminal://rag-eval-runner
+                      </span>
+                    </div>
+                    <div className="stable-scrollbar min-h-0 flex-1 overflow-y-auto bg-surface-primary px-4 py-3 font-mono text-[12px] leading-[1.75] text-text-primary">
+                      {dataset ? (
+                        <>
+                          <div className="border-b border-border/60 py-1.5">
+                            <span className="mr-2 text-text-tertiary">$</span>
+                            load {dataset.fileName}
+                          </div>
+                          <div className="border-b border-border/60 py-1.5 text-success">
+                            manifest parsed: mode={dataset.config.mode} topK=
+                            {dataset.config.topK} topN={dataset.config.topN}{" "}
+                            repeat={dataset.config.repeat}
+                          </div>
+                          <div className="border-b border-border/60 py-1.5">
+                            samples={dataset.summary.sampleCount} documents=
+                            {dataset.summary.documentCount}
+                          </div>
+                          <div className="pt-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary">
+                            validation summary
+                          </div>
+                          {dataset.validations.map((item) => (
+                            <div
+                              key={item.id}
+                              className="border-b border-border/60 py-1.5"
+                            >
+                              <span className="mr-2 text-text-tertiary">-</span>
+                              {item.label} ::{" "}
+                              <span
+                                className={
+                                  item.status === "pass"
+                                    ? "text-success"
+                                    : item.status === "warning"
+                                      ? "text-warning"
+                                      : "text-danger"
+                                }
+                              >
+                                {item.status}
+                              </span>
+                            </div>
+                          ))}
+                          <div className="py-1.5 pt-3">
+                            <span className="mr-2 text-text-tertiary">$</span>
+                            ready
+                          </div>
+
+                          {status === "queued" ? (
+                            <>
+                              <div className="pt-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary">
+                                evaluation queued...
+                              </div>
+                              <div className="border-b border-border/60 py-1.5">
+                                waiting for backend worker to pick up this run
+                              </div>
+                            </>
+                          ) : null}
+
+                          {runRecord ? (
+                            <>
+                              <div className="pt-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary">
+                                run summary
+                              </div>
+                              {runRecord.logs.map((log) => (
+                                <div
+                                  key={log.id}
+                                  className="border-b border-border/60 py-1.5"
+                                >
+                                  <span className="mr-2 text-text-tertiary">
+                                    [{log.timestamp}]
+                                  </span>{" "}
+                                  {log.text}
+                                </div>
+                              ))}
+                            </>
+                          ) : null}
+                        </>
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-sm text-text-secondary">
+                          {t("settings.evaluation.workbench.console.emptyLog")}
+                        </div>
+                      )}
+                    </div>
+                    <div className="border-t border-border bg-surface-secondary px-4 py-3">
+                      <div className="mb-2 flex items-center justify-between text-[11px] text-text-secondary">
+                        <span>Progress</span>
+                        <span>{Math.round(progressWidth)}%</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-surface-tertiary">
+                        <div
+                          className="h-full rounded-full bg-primary transition-all duration-300"
+                          style={{ width: `${progressWidth}%` }}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -580,7 +722,21 @@ export default function EvaluationWorkbench() {
                             {runRecord.name}
                           </div>
                           <div className="mt-1 text-xs text-text-secondary">
-                            完成于 {formatDate(runRecord.completedAt)} · {runRecord.sampleResults.length} 条结果已汇总
+                            {runRecord.dataset.config.mode === "retrieve"
+                              ? t("settings.evaluation.shared.modeRetrieve")
+                              : t("settings.evaluation.shared.modeRetrieveGenerate")}{" "}
+                            ·{" "}
+                            {runRecord.completedAt
+                              ? t("settings.evaluation.shared.completedAt", {
+                                  value: formatDate(runRecord.completedAt),
+                                })
+                              : t("settings.evaluation.shared.createdAt", {
+                                  value: formatDate(runRecord.startedAt),
+                                })}{" "}
+                            ·{" "}
+                            {t("settings.evaluation.workbench.console.resultSummary", {
+                              count: runRecord.sampleResults.length,
+                            })}
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -588,7 +744,7 @@ export default function EvaluationWorkbench() {
                           {savedRunId ? (
                             <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-1 text-[11px] font-medium text-success">
                               <CheckCircle2 className="h-3.5 w-3.5" />
-                              已保存
+                              {t("settings.evaluation.status.saved")}
                             </span>
                           ) : null}
                         </div>
@@ -596,38 +752,29 @@ export default function EvaluationWorkbench() {
 
                       <MetricGrid metrics={runRecord.metrics} />
 
-                      <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
-                        <Card className="space-y-2 p-3.5">
-                          <div className="flex items-center gap-2 text-sm font-semibold text-text-primary">
-                            <FolderArchive className="h-4 w-4 text-primary" />
-                            运行配置
-                          </div>
-                          <div className="grid gap-2 text-sm text-text-secondary sm:grid-cols-2">
-                            <div>模式：{dataset?.config.mode === "retrieve" ? "仅检索" : "检索+生成"}</div>
-                            <div>topK：{dataset?.config.topK}</div>
-                            <div>topN：{dataset?.config.topN}</div>
-                            <div>N：{dataset?.config.repeat}</div>
-                          </div>
-                        </Card>
-
+                      <div className="w-full">
                         <Card className="space-y-2 p-3.5">
                           <div className="flex items-center gap-2 text-sm font-semibold text-text-primary">
                             <TableProperties className="h-4 w-4 text-primary" />
-                            明细摘要
+                            {t("settings.evaluation.workbench.console.summary")}
                           </div>
                           <div className="space-y-2">
                             {runRecord.sampleResults.slice(0, 4).map((item) => (
                               <div
                                 key={item.id}
-                                className="flex items-center justify-between rounded-lg border border-border bg-surface-secondary px-3 py-2 text-sm"
+                                className="flex items-start justify-between gap-3 rounded-lg border border-border bg-surface-secondary px-3 py-2 text-sm"
                               >
                                 <div className="min-w-0">
-                                  <div className="truncate text-text-primary">{item.question}</div>
+                                  <div className="whitespace-normal break-all text-text-primary">
+                                    {item.question}
+                                  </div>
                                   <div className="mt-1 text-xs text-text-secondary">
-                                    {item.status === "success" ? "成功" : item.errorMessage}
+                                    {item.status === "success"
+                                      ? t("settings.evaluation.workbench.console.success")
+                                      : item.errorMessage}
                                   </div>
                                 </div>
-                                <div className="ml-3 text-xs font-medium text-text-secondary">
+                                <div className="shrink-0 text-xs font-medium text-text-secondary">
                                   {(item.latencyMs / 1000).toFixed(1)}s
                                 </div>
                               </div>
@@ -643,10 +790,12 @@ export default function EvaluationWorkbench() {
                           <AlertCircle className="h-6 w-6" />
                         </div>
                         <div className="mt-3 text-base font-semibold text-text-primary">
-                          结果区暂时为空
+                          {t("settings.evaluation.workbench.console.emptyResultTitle")}
                         </div>
                         <p className="mt-2 text-sm leading-6 text-text-secondary">
-                          开始评测后，右侧会自动切换到结果 tab，并展示本次任务的汇总指标。
+                          {t(
+                            "settings.evaluation.workbench.console.emptyResultDescription",
+                          )}
                         </p>
                       </div>
                     </div>

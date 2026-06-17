@@ -134,6 +134,10 @@ const createApiClient = () => {
   // 请求拦截器
   client.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
+      if (config.data instanceof FormData) {
+        delete config.headers["Content-Type"];
+      }
+
       // 添加认证 token
       const session = getSession();
       if (session?.token) {

@@ -8,6 +8,7 @@ import type {
   SourcePartLike,
   ThreadMessageLike,
 } from "./thread.types";
+import i18n from "@/shared/i18n";
 
 const isRagSourceLike = (value: unknown): value is RagSourceLike => {
   if (!value || typeof value !== "object") {
@@ -60,7 +61,9 @@ const toRagSourceLike = (value: unknown): RagSourceLike | null => {
     matchType:
       typeof candidate.matchType === "string" ? candidate.matchType : undefined,
     hitModes: Array.isArray(candidate.hitModes)
-      ? candidate.hitModes.filter((item): item is string => typeof item === "string")
+      ? candidate.hitModes.filter(
+          (item): item is string => typeof item === "string",
+        )
       : undefined,
   };
 };
@@ -95,7 +98,7 @@ const toRagNodeLike = (value: unknown): RagNodeLike | null => {
     nodeId: candidate.nodeId ?? "",
     nodeType: candidate.nodeType ?? "unknown",
     phase: candidate.phase as RagProgressStatus,
-    label: candidate.label ?? "未命名节点",
+    label: candidate.label ?? i18n.t("chat.parsers.unnamedNode"),
     summary:
       typeof candidate.summary === "string" ? candidate.summary : undefined,
     details:
@@ -141,7 +144,9 @@ export const getMessageText = (message: ThreadMessageLike | undefined) => {
   return "";
 };
 
-export const getRagSourcesFromContentParts = (content: unknown): RagSourceLike[] => {
+export const getRagSourcesFromContentParts = (
+  content: unknown,
+): RagSourceLike[] => {
   if (!Array.isArray(content)) {
     return [];
   }
@@ -168,7 +173,9 @@ export const getRagSourcesFromContentParts = (content: unknown): RagSourceLike[]
         matchType:
           typeof rag?.matchType === "string" ? rag.matchType : undefined,
         hitModes: Array.isArray(rag?.hitModes)
-          ? rag.hitModes.filter((item): item is string => typeof item === "string")
+          ? rag.hitModes.filter(
+              (item): item is string => typeof item === "string",
+            )
           : undefined,
       };
     });
@@ -254,42 +261,30 @@ export const getRagSourceAttribution = (source: RagSourceLike) => {
     lexicalModeSet.has(mode),
   );
 
-  if (
-    normalizedMatchType === "hybrid" ||
-    (hasVectorMode && hasLexicalMode)
-  ) {
+  if (normalizedMatchType === "hybrid" || (hasVectorMode && hasLexicalMode)) {
     return {
-      label: "双重命中",
-      toneClassName:
-        "border-emerald-200/80 bg-emerald-50/90 text-emerald-700",
+      label: i18n.t("chat.parsers.doubleHit"),
+      toneClassName: "border-emerald-200/80 bg-emerald-50/90 text-emerald-700",
     };
   }
 
-  if (
-    normalizedMatchType &&
-    lexicalModeSet.has(normalizedMatchType)
-  ) {
+  if (normalizedMatchType && lexicalModeSet.has(normalizedMatchType)) {
     return {
-      label: "关键词命中",
+      label: i18n.t("chat.parsers.keywordHit"),
       toneClassName: "border-sky-200/80 bg-sky-50/90 text-sky-700",
     };
   }
 
-  if (
-    normalizedMatchType &&
-    vectorModeSet.has(normalizedMatchType)
-  ) {
+  if (normalizedMatchType && vectorModeSet.has(normalizedMatchType)) {
     return {
-      label: "语义命中",
-      toneClassName:
-        "border-amber-200/80 bg-amber-50/90 text-amber-700",
+      label: i18n.t("chat.parsers.semanticHit"),
+      toneClassName: "border-amber-200/80 bg-amber-50/90 text-amber-700",
     };
   }
 
   return {
-    label: "知识库命中",
-    toneClassName:
-      "border-primary-3/80 bg-primary-2/95 text-primary-8",
+    label: i18n.t("chat.parsers.knowledgeBaseHit"),
+    toneClassName: "border-primary-3/80 bg-primary-2/95 text-primary-8",
   };
 };
 
@@ -299,28 +294,28 @@ export const getDisplayRagStep = (step: RagNodeLike) => {
   switch (step.nodeType) {
     case "rewrite":
       return {
-        label: "整理检索问题",
-        summary: summary ?? "正在将问题改写成更适合检索的表达",
+        label: i18n.t("chat.parsers.rewriteLabel"),
+        summary: summary ?? i18n.t("chat.parsers.rewriteSummary"),
       };
     case "embed":
       return {
-        label: "生成语义向量",
-        summary: summary ?? "正在准备语义检索所需的查询向量",
+        label: i18n.t("chat.parsers.embedLabel"),
+        summary: summary ?? i18n.t("chat.parsers.embedSummary"),
       };
     case "retrieve":
       return {
-        label: "召回候选片段",
-        summary: summary ?? "正在从知识库中筛出相关内容",
+        label: i18n.t("chat.parsers.retrieveLabel"),
+        summary: summary ?? i18n.t("chat.parsers.retrieveSummary"),
       };
     case "rerank":
       return {
-        label: "整理结果优先级",
-        summary: summary ?? "正在对候选片段做进一步排序",
+        label: i18n.t("chat.parsers.rerankLabel"),
+        summary: summary ?? i18n.t("chat.parsers.rerankSummary"),
       };
     case "generate":
       return {
-        label: "组织最终回答",
-        summary: summary ?? "正在结合来源生成最终回复",
+        label: i18n.t("chat.parsers.generateLabel"),
+        summary: summary ?? i18n.t("chat.parsers.generateSummary"),
       };
     default:
       return {
@@ -338,16 +333,21 @@ export const summarizeRagProgress = (steps: RagNodeLike[]) => {
   const runningStep = steps.find((step) => step.phase === "start");
   if (runningStep) {
     const display = getDisplayRagStep(runningStep);
-    return display.summary || `${display.label}中`;
+    return (
+      display.summary ||
+      i18n.t("chat.parsers.inProgress", { label: display.label })
+    );
   }
 
   const errorStep = steps.find((step) => step.phase === "error");
   if (errorStep) {
     const display = getDisplayRagStep(errorStep);
-    return display.summary || `${display.label}失败`;
+    return (
+      display.summary || i18n.t("chat.parsers.failed", { label: display.label })
+    );
   }
 
-  return "已完成检索与回答组织，可展开查看来源和过程";
+  return i18n.t("chat.parsers.completed");
 };
 
 export const getRagProgressRow = (step: RagNodeLike): RagNodeRow => ({

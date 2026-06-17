@@ -6,13 +6,24 @@ module.exports = {
     extend: {
       fontFamily: {
         sans: [
-          "Inter",
+          '"IBM Plex Sans"',
+          '"Noto Sans SC"',
           "ui-sans-serif",
           "system-ui",
           "-apple-system",
           "BlinkMacSystemFont",
           '"Segoe UI"',
           "sans-serif",
+        ],
+        mono: [
+          '"Geist Mono"',
+          "ui-monospace",
+          "SFMono-Regular",
+          '"SF Mono"',
+          "Consolas",
+          '"Liberation Mono"',
+          "Menlo",
+          "monospace",
         ],
       },
       colors: {

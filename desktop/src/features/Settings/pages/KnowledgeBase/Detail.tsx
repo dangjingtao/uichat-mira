@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -52,6 +53,7 @@ const samplePreviewChunks = (
 };
 
 export default function KnowledgeBaseDetail() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const documentId = searchParams.get("id");
@@ -86,7 +88,7 @@ export default function KnowledgeBaseDetail() {
   );
 
   if (loading) {
-    return <FullPageStatus message="正在加载文档详情..." />;
+    return <FullPageStatus message={t("settings.knowledgeBase.messages.loadingDetail")} />;
   }
 
   if (notFound || !document) {
@@ -99,15 +101,17 @@ export default function KnowledgeBaseDetail() {
             onClick={() => navigate("/settings/knowledge-base")}
           >
             <ArrowLeft className="h-4 w-4" />
-            返回知识库
+            {t("settings.knowledgeBase.actions.backToKnowledgeBase")}
           </Button>
         </div>
 
         <Card className="p-5">
           <div className="space-y-1.5">
-            <div className="text-base font-semibold text-text-primary">未找到对应文档</div>
+            <div className="text-base font-semibold text-text-primary">
+              {t("settings.knowledgeBase.detail.notFoundTitle")}
+            </div>
             <p className="text-sm leading-6 text-text-secondary">
-              当前地址中的 `id` 没有匹配到实际文档，请从知识库列表重新进入。
+              {t("settings.knowledgeBase.detail.notFoundDescription")}
             </p>
           </div>
         </Card>
@@ -118,14 +122,23 @@ export default function KnowledgeBaseDetail() {
   const badge = getTypeBadge(document.fileExt);
   const status =
     document.indexStatus === "processing"
-      ? { indicator: "unknown" as const, label: "处理中" }
+      ? {
+          indicator: "unknown" as const,
+          label: t("settings.knowledgeBase.status.processing"),
+        }
       : document.enabled
-        ? { indicator: "running" as const, label: "可用" }
-        : { indicator: "stopped" as const, label: "停用" };
+        ? {
+            indicator: "running" as const,
+            label: t("settings.knowledgeBase.status.enabled"),
+          }
+        : {
+            indicator: "stopped" as const,
+            label: t("settings.knowledgeBase.status.disabled"),
+          };
   const summary =
     previewChunks[0]?.content ||
     document.contentText.slice(0, 160) ||
-    "当前文档暂时没有可展示的内容摘要。";
+    t("settings.knowledgeBase.detail.emptySummary");
   const tags = [document.fileExt.toUpperCase(), document.sourceType, document.indexStatus];
 
   return (
@@ -137,7 +150,7 @@ export default function KnowledgeBaseDetail() {
           onClick={() => navigate("/settings/knowledge-base")}
         >
           <ArrowLeft className="h-4 w-4" />
-          返回知识库
+          {t("settings.knowledgeBase.actions.backToKnowledgeBase")}
         </Button>
 
         <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-primary p-4 shadow-shadow-sm xl:flex-row xl:items-start xl:justify-between">
@@ -175,14 +188,28 @@ export default function KnowledgeBaseDetail() {
           <div className="flex flex-wrap items-center gap-2.5">
             <Button
               variant="secondary"
-              onClick={() => message.info(`重建索引能力稍后接入：${document.name}`)}
+              onClick={() =>
+                message.info(
+                  t("settings.knowledgeBase.messages.rebuildPending", {
+                    name: document.name,
+                  }),
+                )
+              }
             >
               <RefreshCcw className="h-4 w-4" />
-              重建索引
+              {t("settings.knowledgeBase.actions.rebuildIndex")}
             </Button>
-            <Button onClick={() => message.success(`已开始测试 ${document.name} 的检索效果`)}>
+            <Button
+              onClick={() =>
+                message.success(
+                  t("settings.knowledgeBase.messages.retrievalStarted", {
+                    name: document.name,
+                  }),
+                )
+              }
+            >
               <ScanSearch className="h-4 w-4" />
-              立即测试检索
+              {t("settings.knowledgeBase.actions.testRetrieval")}
             </Button>
           </div>
         </div>
@@ -195,9 +222,11 @@ export default function KnowledgeBaseDetail() {
               <Layers3 className="h-4.5 w-4.5 text-icon-primary" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-text-primary">文档分段预览</h2>
+              <h2 className="text-base font-semibold text-text-primary">
+                {t("settings.knowledgeBase.detail.previewTitle")}
+              </h2>
               <p className="text-sm text-text-secondary">
-                这里随机展示分布较均匀的 10 条真实切分结果，方便快速核对入库后的片段内容。
+                {t("settings.knowledgeBase.detail.previewDescription")}
               </p>
             </div>
           </div>
@@ -206,7 +235,7 @@ export default function KnowledgeBaseDetail() {
             <div className="space-y-2.5">
               {previewChunks.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border bg-surface-secondary p-4 text-sm text-text-secondary">
-                  当前文档还没有切分结果。
+                  {t("settings.knowledgeBase.detail.noChunks")}
                 </div>
               ) : (
                 previewChunks.map((chunk) => (
@@ -215,7 +244,9 @@ export default function KnowledgeBaseDetail() {
                     className="rounded-xl border border-border bg-surface-secondary p-3.5"
                   >
                     <div className="mb-1.5 text-sm font-medium text-text-primary">
-                      分段 {chunk.chunkIndex}
+                      {t("settings.knowledgeBase.detail.chunkLabel", {
+                        index: chunk.chunkIndex,
+                      })}
                     </div>
                     <p className="text-sm leading-6 text-text-secondary">{chunk.content}</p>
                   </div>
@@ -228,19 +259,21 @@ export default function KnowledgeBaseDetail() {
         <div className="min-h-0 overflow-y-auto pr-1">
           <div className="space-y-4">
             <Card className="p-4">
-              <div className="mb-3 text-base font-semibold text-text-primary">基础信息</div>
+              <div className="mb-3 text-base font-semibold text-text-primary">
+                {t("settings.knowledgeBase.detail.basicInfo")}
+              </div>
               <div className="grid gap-2.5">
                 <div className="rounded-xl border border-border bg-surface-secondary p-3.5">
                   <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
                     <Hash className="h-3.5 w-3.5" />
-                    文档 ID
+                    {t("settings.knowledgeBase.detail.documentId")}
                   </div>
                   <div className="break-all text-sm font-medium text-text-primary">{document.id}</div>
                 </div>
                 <div className="rounded-xl border border-border bg-surface-secondary p-3.5">
                   <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
                     <UserRound className="h-3.5 w-3.5" />
-                    来源 / 类型
+                    {t("settings.knowledgeBase.detail.sourceType")}
                   </div>
                   <div className="text-sm font-medium text-text-primary">
                     {document.sourceLabel || document.sourceType} · {document.fileExt.toUpperCase()}
@@ -249,7 +282,7 @@ export default function KnowledgeBaseDetail() {
                 <div className="rounded-xl border border-border bg-surface-secondary p-3.5">
                   <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
                     <Clock3 className="h-3.5 w-3.5" />
-                    创建 / 更新
+                    {t("settings.knowledgeBase.detail.createdUpdated")}
                   </div>
                   <div className="text-sm font-medium text-text-primary">
                     {document.createdAt.replace("T", " ").slice(0, 16)} ·{" "}
@@ -259,7 +292,7 @@ export default function KnowledgeBaseDetail() {
                 <div className="rounded-xl border border-border bg-surface-secondary p-3.5">
                   <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
                     <Tags className="h-3.5 w-3.5" />
-                    标签
+                    {t("settings.knowledgeBase.detail.tags")}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {tags.map((tag) => (
@@ -277,24 +310,24 @@ export default function KnowledgeBaseDetail() {
 
             <div className="grid gap-2.5 sm:grid-cols-2">
               <Card
-                label="字符数"
+                label={t("settings.knowledgeBase.detail.charCount")}
                 value={formatCompactNumber(document.charCount)}
-                description="当前文档已入库的字符规模"
+                description={t("settings.knowledgeBase.detail.charCountDescription")}
               />
               <Card
-                label="分段数"
+                label={t("settings.knowledgeBase.detail.chunkCount")}
                 value={`${document.chunkCount}`}
-                description="基于真实切分结果统计"
+                description={t("settings.knowledgeBase.detail.chunkCountDescription")}
               />
               <Card
-                label="文件大小"
+                label={t("settings.knowledgeBase.detail.fileSize")}
                 value={document.fileSize ? formatCompactNumber(document.fileSize) : "--"}
-                description="上传时记录的原始大小"
+                description={t("settings.knowledgeBase.detail.fileSizeDescription")}
               />
               <Card
-                label="状态"
+                label={t("settings.knowledgeBase.detail.statusLabel")}
                 value={status.label}
-                description="当前文档索引可用状态"
+                description={t("settings.knowledgeBase.detail.statusDescription")}
               />
             </div>
           </div>

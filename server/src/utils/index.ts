@@ -1,6 +1,7 @@
 import os from "os";
 import path from "path";
 import fs from "fs";
+import { execSync } from "node:child_process";
 
 export * from "./response.js";
 export * from "./errors.js";
@@ -21,6 +22,24 @@ export interface EnvironmentInfo {
   uptime: number;
 }
 
+export interface GitCommitInfo {
+  hash: string;
+  shortHash: string;
+  message: string;
+  author: string;
+  date: string;
+}
+
+export interface GitVersionInfo {
+  version: string;
+  commit: GitCommitInfo;
+}
+
+export interface GitInfo {
+  branch: string;
+  versions: GitVersionInfo[];
+}
+
 export interface AppMeta {
   name: string;
   version: string;
@@ -39,9 +58,11 @@ export interface AppMeta {
     value: string;
     href: string;
   }>;
+  git?: GitInfo;
 }
 
 const currentDir = path.dirname(process.argv[1] || process.cwd());
+let cachedAppMeta: AppMeta | null = null;
 
 type PackageJsonLike = Record<string, unknown>;
 
@@ -141,7 +162,45 @@ function normalizeAppMeta(packageJson: PackageJsonLike): AppMeta {
     changelog: customMeta.changelog,
     versionHistory: customMeta.versionHistory,
     links: customMeta.links,
+    git: customMeta.git,
   };
+}
+
+function isGitCommitInfoLike(value: unknown): value is GitCommitInfo {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.hash === "string" &&
+    typeof v.shortHash === "string" &&
+    typeof v.message === "string" &&
+    typeof v.author === "string" &&
+    typeof v.date === "string"
+  );
+}
+
+function isGitVersionInfoLike(value: unknown): value is GitVersionInfo {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const v = value as Record<string, unknown>;
+  return typeof v.version === "string" && isGitCommitInfoLike(v.commit);
+}
+
+function isGitInfoLike(value: unknown): value is GitInfo {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.branch === "string" &&
+    Array.isArray(v.versions) &&
+    v.versions.every(isGitVersionInfoLike)
+  );
 }
 
 function readCustomAppMeta(appMeta: unknown) {
@@ -197,10 +256,13 @@ function readCustomAppMeta(appMeta: unknown) {
         }))
     : [];
 
+  const git = isGitInfoLike(metaObject.git) ? metaObject.git : undefined;
+
   return {
     changelog,
     versionHistory,
     links,
+    git,
   };
 }
 
@@ -229,12 +291,148 @@ function resolveRepositoryUrl(repository: unknown) {
   return "";
 }
 
+function findGitRoot(startDir: string): string | null {
+  let dir = path.resolve(startDir);
+
+  while (true) {
+    if (fs.existsSync(path.join(dir, ".git"))) {
+      return dir;
+    }
+
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      return null;
+    }
+
+    dir = parent;
+  }
+}
+
+function runGit(args: string[], cwd: string): string | null {
+  try {
+    return execSync(`git ${args.join(" ")}`, {
+      cwd,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "ignore"],
+      timeout: 5000,
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
+function readPackageVersionAtCommit(
+  commitHash: string,
+  gitRoot: string,
+): string | null {
+  const output = runGit(["show", `${commitHash}:package.json`], gitRoot);
+  if (!output) {
+    return null;
+  }
+
+  try {
+    const pkg = JSON.parse(output) as PackageJsonLike;
+    return typeof pkg.version === "string" ? pkg.version : null;
+  } catch {
+    return null;
+  }
+}
+
+function collectGitInfo(): GitInfo | null {
+  const gitRoot = findGitRoot(currentDir) ?? findGitRoot(process.cwd());
+  if (!gitRoot) {
+    return null;
+  }
+
+  const branch = runGit(["branch", "--show-current"], gitRoot);
+  if (!branch) {
+    return null;
+  }
+
+  const versionCommits = new Map<string, string>();
+
+  const headHash = runGit(["rev-parse", "HEAD"], gitRoot);
+  if (headHash) {
+    const headVersion = readPackageVersionAtCommit(headHash, gitRoot);
+    if (headVersion) {
+      versionCommits.set(headVersion, headHash);
+    }
+  }
+
+  const changeOutput = runGit(
+    ["log", "--format=%H", "--", "package.json"],
+    gitRoot,
+  );
+  const changeHashes = changeOutput
+    ? changeOutput.split("\n").map((h) => h.trim()).filter(Boolean)
+    : [];
+
+  for (const hash of changeHashes) {
+    const parentHash = runGit(["rev-parse", `${hash}~1`], gitRoot);
+    if (!parentHash) {
+      continue;
+    }
+
+    const parentVersion = readPackageVersionAtCommit(parentHash, gitRoot);
+    if (parentVersion && !versionCommits.has(parentVersion)) {
+      versionCommits.set(parentVersion, parentHash);
+    }
+  }
+
+  const versions: GitVersionInfo[] = [];
+
+  for (const [version, commitHash] of versionCommits) {
+    const log = runGit(
+      ["log", "-1", "--format=%H%x00%s%x00%an%x00%aI", commitHash],
+      gitRoot,
+    );
+
+    if (!log) {
+      continue;
+    }
+
+    const [hash, message, author, date] = log.split("\0");
+    if (!hash) {
+      continue;
+    }
+
+    versions.push({
+      version,
+      commit: {
+        hash,
+        shortHash: hash.slice(0, 7),
+        message: message ?? "",
+        author: author ?? "",
+        date: date ?? "",
+      },
+    });
+  }
+
+  versions.sort(
+    (a, b) => new Date(b.commit.date).getTime() - new Date(a.commit.date).getTime(),
+  );
+
+  return { branch, versions };
+}
+
 function getPackageVersion(): string {
   return resolveAppMeta().version;
 }
 
 export function getAppMeta(): AppMeta {
-  return resolveAppMeta();
+  if (cachedAppMeta) {
+    return cachedAppMeta;
+  }
+
+  const meta = resolveAppMeta();
+  if (meta.git) {
+    cachedAppMeta = meta;
+    return cachedAppMeta;
+  }
+
+  const git = collectGitInfo();
+  cachedAppMeta = git ? { ...meta, git } : meta;
+  return cachedAppMeta;
 }
 
 function parseVersion(version: string): {

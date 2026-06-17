@@ -1,4 +1,5 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertCircle,
@@ -21,11 +22,7 @@ import { message } from "@/shared/ui/Message";
 import Card from "@/shared/ui/Card";
 import { FileListItem } from "@/shared/ui/FileListItem";
 import { FileUploadDropzone } from "@/shared/ui/FileUploadDropzone";
-import {
-  NumberInput,
-  TextArea,
-  TextInput,
-} from "@/shared/ui/Input";
+import { NumberInput, TextArea, TextInput } from "@/shared/ui/Input";
 import { Select } from "@/shared/ui/Select";
 import { StepIndicator } from "@/shared/ui/StepIndicator";
 import Switch from "@/shared/ui/Switch";
@@ -72,32 +69,6 @@ const initialFiles: UploadFileItem[] = [];
 const maxUploadFileSize = 100 * 1024 * 1024;
 const pollingIntervalMs = 1500;
 const pollingTimeoutMs = 10 * 60 * 1000;
-
-const steps = [
-  { step: 1 as UploadStep, label: "选择数据源" },
-  { step: 2 as UploadStep, label: "文本分段与清洗" },
-  { step: 3 as UploadStep, label: "处理并完成" },
-];
-
-const splitterHints = {
-  splitterType:
-    "选择 LangChain 文本切块器。不同 splitter 会影响 chunk 的结构、边界和语义保持方式。",
-  chunkSize:
-    "单个分块允许的最大长度。值越大，上下文更完整；值越小，召回会更细。",
-  chunkOverlap: "相邻分块之间保留的重叠长度，用来减少信息被切断的风险。",
-  keepSeparator: "保留分隔符通常更利于保留 Markdown、代码或段落边界。",
-  separator: "Character splitter 使用的分隔符，例如 \\n\\n。",
-  separators: "Recursive splitter 的分隔符优先级列表，逗号或换行分隔。",
-  presetLanguage: "Recursive splitter 可以直接套用语言预置分隔规则。",
-  encodingName: "Token splitter 使用的编码器名称。",
-  allowedSpecial: "允许通过的特殊 token，多个值用逗号分隔。",
-  disallowedSpecial: "禁止的特殊 token，默认 all。",
-  lengthMetric: "控制 chunkSize / overlap 的长度单位。",
-  replaceWhitespace: "清理多余空格、制表符和连续空行，适合大多数 md/txt 文档。",
-  removeUrls: "适合知识正文场景；如果链接本身有意义，建议关闭这一项。",
-  useQaSplit:
-    "优先识别 Q:/A:、问:/答: 这类结构，再进行长度切分，适合 FAQ 文档。",
-} as const;
 
 function FieldHelpLabel({ label, hint }: { label: string; hint: string }) {
   return (
@@ -146,13 +117,17 @@ function ModelAccessStatusPill({
   label: string;
   connected: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <span
       className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
         connected ? "bg-success/10 text-success" : "bg-danger/10 text-danger"
       }`}
     >
-      {label}：{connected ? "已接入" : "未接入"}
+      {label}：
+      {connected
+        ? t("settings.knowledgeBase.add.connected")
+        : t("settings.knowledgeBase.add.notConnected")}
     </span>
   );
 }
@@ -183,6 +158,7 @@ function ModelStatusCard({
   required?: boolean;
   icon: React.ReactNode;
 }) {
+  const { t } = useTranslation();
   const configured = Boolean(config?.providerCode && config?.remoteModelId);
 
   return (
@@ -208,23 +184,27 @@ function ModelStatusCard({
               : "bg-danger/10 text-danger"
           }`}
         >
-          {configured ? "已配置" : required ? "必须配置" : "未配置"}
+          {configured
+            ? t("settings.knowledgeBase.add.configured")
+            : required
+              ? t("settings.knowledgeBase.add.requiredConfig")
+              : t("settings.knowledgeBase.add.notConfigured")}
         </span>
       </div>
 
       <div className="rounded-xl border border-border bg-surface-primary px-3.5 py-3 text-sm shadow-shadow-sm">
         <div className="truncate font-medium text-text-primary">
-          {config?.name ?? "尚未选择模型"}
+          {config?.name ?? t("settings.knowledgeBase.add.noModelSelected")}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
           <span className="rounded-full bg-surface-secondary px-2.5 py-1 text-text-secondary">
             {config?.providerCode
               ? `Provider · ${config.providerCode}`
-              : "未选择提供商"}
+              : t("settings.knowledgeBase.add.noProvider")}
           </span>
           {config?.remoteModelId ? (
             <span className="rounded-full bg-primary/5 px-2.5 py-1 text-primary">
-              默认模型
+              {t("settings.knowledgeBase.add.defaultModel")}
             </span>
           ) : null}
         </div>
@@ -234,9 +214,43 @@ function ModelStatusCard({
 }
 
 export default function KnowledgeBaseAddWizard() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentStep = resolveStep(searchParams.get("step"));
+
+  const steps = useMemo(
+    () => [
+      { step: 1 as UploadStep, label: t("settings.knowledgeBase.add.step1") },
+      { step: 2 as UploadStep, label: t("settings.knowledgeBase.add.step2") },
+      { step: 3 as UploadStep, label: t("settings.knowledgeBase.add.step3") },
+    ],
+    [t],
+  );
+
+  const splitterHints = useMemo(
+    () => ({
+      splitterType: t("settings.knowledgeBase.add.hints.splitterType"),
+      chunkSize: t("settings.knowledgeBase.add.hints.chunkSize"),
+      chunkOverlap: t("settings.knowledgeBase.add.hints.chunkOverlap"),
+      keepSeparator: t("settings.knowledgeBase.add.hints.keepSeparator"),
+      separator: t("settings.knowledgeBase.add.hints.separator"),
+      separators: t("settings.knowledgeBase.add.hints.separators"),
+      presetLanguage: t("settings.knowledgeBase.add.hints.presetLanguage"),
+      encodingName: t("settings.knowledgeBase.add.hints.encodingName"),
+      allowedSpecial: t("settings.knowledgeBase.add.hints.allowedSpecial"),
+      disallowedSpecial: t(
+        "settings.knowledgeBase.add.hints.disallowedSpecial",
+      ),
+      lengthMetric: t("settings.knowledgeBase.add.hints.lengthMetric"),
+      replaceWhitespace: t(
+        "settings.knowledgeBase.add.hints.replaceWhitespace",
+      ),
+      removeUrls: t("settings.knowledgeBase.add.hints.removeUrls"),
+      useQaSplit: t("settings.knowledgeBase.add.hints.useQaSplit"),
+    }),
+    [t],
+  );
   const [files, setFiles] = useState<UploadFileItem[]>(initialFiles);
   const [settings, setSettings] = useState<ChunkingConfig>(initialSettings);
   const [previewChunks, setPreviewChunks] = useState<
@@ -273,9 +287,8 @@ export default function KnowledgeBaseAddWizard() {
   const canUploadDocument = modelAccessStatus?.embeddingConnected ?? false;
 
   const helperText = useMemo(
-    () =>
-      "已支持 MARKDOWN、TXT，一次只能上传 1 个文件，每个文件不超过 100 MB。",
-    [],
+    () => t("settings.knowledgeBase.add.helperText"),
+    [t],
   );
   const activeFile =
     files.find((item) => item.id === previewFileId) ?? files[0] ?? null;
@@ -323,7 +336,7 @@ export default function KnowledgeBaseAddWizard() {
             fileExt: file.extension.toLowerCase(),
             fileSize: file.size,
             sourceType: "upload",
-            sourceLabel: "本地上传",
+            sourceLabel: t("settings.knowledgeBase.add.localUpload"),
             enabled: true,
             chunkingConfig: settings,
           });
@@ -339,9 +352,7 @@ export default function KnowledgeBaseAddWizard() {
 
           while (!cancelled && document.indexStatus === "processing") {
             if (Date.now() - startedAt > pollingTimeoutMs) {
-              throw new Error(
-                "知识文档索引超时，请稍后在知识库列表中查看处理状态",
-              );
+              throw new Error(t("settings.knowledgeBase.add.indexTimeout"));
             }
 
             await new Promise((resolve) =>
@@ -353,7 +364,10 @@ export default function KnowledgeBaseAddWizard() {
           }
 
           if (document.indexStatus === "failed") {
-            throw new Error(document.errorMessage || "知识文档处理失败");
+            throw new Error(
+              document.errorMessage ||
+                t("settings.knowledgeBase.add.processFailed"),
+            );
           }
 
           created.push(document);
@@ -368,14 +382,16 @@ export default function KnowledgeBaseAddWizard() {
 
         if (!cancelled) {
           setProcessingDone(true);
-          message.success("知识文档已完成入库");
+          message.success(t("settings.knowledgeBase.add.uploadSuccess"));
         }
       } catch (error) {
         if (cancelled) {
           return;
         }
         const errorMessage =
-          error instanceof Error ? error.message : "知识文档处理失败";
+          error instanceof Error
+            ? error.message
+            : t("settings.knowledgeBase.add.processFailed");
         setProcessingError(errorMessage);
         message.error(errorMessage);
       }
@@ -397,7 +413,7 @@ export default function KnowledgeBaseAddWizard() {
     }
 
     if (selectedFiles.length > 1) {
-      message.warning("一次只能上传 1 个文件");
+      message.warning(t("settings.knowledgeBase.add.oneFileOnly"));
       return;
     }
 
@@ -405,12 +421,12 @@ export default function KnowledgeBaseAddWizard() {
       (file) => file.size > maxUploadFileSize,
     );
     if (oversizedFile) {
-      message.warning("单个文件大小不能超过 100 MB");
+      message.warning(t("settings.knowledgeBase.add.fileTooLarge"));
       return;
     }
 
     if (files.length >= 1) {
-      message.warning("一次只能上传 1 个文件，请先移除当前文件");
+      message.warning(t("settings.knowledgeBase.add.removeFirst"));
       return;
     }
 
@@ -433,7 +449,7 @@ export default function KnowledgeBaseAddWizard() {
 
     if (nextFiles[0]) {
       setPreviewFileId(nextFiles[0].id);
-      message.success("文件已添加到上传列表");
+      message.success(t("settings.knowledgeBase.add.fileAdded"));
     }
   };
 
@@ -446,18 +462,18 @@ export default function KnowledgeBaseAddWizard() {
       return nextFiles;
     });
     setPreviewChunks([]);
-    message.info("已移除文件");
+    message.info(t("settings.knowledgeBase.add.fileRemoved"));
   };
 
   const goToStep = (step: UploadStep) => {
     setSearchParams({ step: `${step}` });
   };
 
-  const runPreview = async (successMessage = "已生成文本分块预览") => {
+  const runPreview = async (successMessage?: string) => {
     const activeFile =
       files.find((item) => item.id === previewFileId) ?? files[0];
     if (!activeFile) {
-      message.warning("请先选择一个文件进行预览");
+      message.warning(t("settings.knowledgeBase.add.selectFileToPreview"));
       return false;
     }
 
@@ -469,20 +485,24 @@ export default function KnowledgeBaseAddWizard() {
         fileExt: activeFile.extension.toLowerCase(),
         fileSize: activeFile.size,
         sourceType: "upload",
-        sourceLabel: "本地上传",
+        sourceLabel: t("settings.knowledgeBase.add.localUpload"),
         enabled: true,
         chunkingConfig: settings,
       });
       setPreviewChunks(result.sampleChunks);
       setPreviewStats(result.stats);
       message.success(
-        successMessage === "已生成文本分块预览"
-          ? `已生成 ${result.totalChunks} 个文本分块预览`
-          : successMessage,
+        successMessage ??
+          t("settings.knowledgeBase.add.previewSuccess", {
+            count: result.totalChunks,
+          }),
       );
       return true;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "预览失败";
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : t("settings.knowledgeBase.add.previewFailed");
       message.error(errorMessage);
       return false;
     } finally {
@@ -495,17 +515,17 @@ export default function KnowledgeBaseAddWizard() {
   };
 
   const handleResample = async () => {
-    await runPreview("已换一批样本");
+    await runPreview(t("settings.knowledgeBase.add.resampleSuccess"));
   };
 
   const renderStepOne = () => (
     <div className="space-y-4">
       <div className="space-y-1.5">
         <h1 className="text-base font-semibold text-text-primary">
-          上传文本文件
+          {t("settings.knowledgeBase.add.uploadTitle")}
         </h1>
         <p className="text-sm text-text-secondary">
-          先选择需要导入知识库的文件。
+          {t("settings.knowledgeBase.add.uploadDesc")}
         </p>
       </div>
 
@@ -514,19 +534,19 @@ export default function KnowledgeBaseAddWizard() {
           <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
           <div className="space-y-2">
             <div className="font-medium">
-              当前未接入默认向量模型，暂时无法上传知识库文件。
+              {t("settings.knowledgeBase.add.noEmbeddingWarning")}
             </div>
             <div className="flex flex-wrap gap-2">
               <ModelAccessStatusPill
-                label="向量模型"
+                label={t("settings.knowledgeBase.add.embeddingModel")}
                 connected={modelAccessStatus.embeddingConnected}
               />
               <ModelAccessStatusPill
-                label="LLM 模型"
+                label={t("settings.knowledgeBase.add.llmModel")}
                 connected={modelAccessStatus.llmConnected}
               />
               <ModelAccessStatusPill
-                label="Rerank 模型"
+                label={t("settings.knowledgeBase.add.rerankModel")}
                 connected={modelAccessStatus.rerankConnected}
               />
             </div>
@@ -539,7 +559,7 @@ export default function KnowledgeBaseAddWizard() {
         helperText={
           canUploadDocument
             ? helperText
-            : "请先在模型设置中接入默认 Embedding 模型，随后再上传知识库文件。"
+            : t("settings.knowledgeBase.add.helperTextNoEmbedding")
         }
         maxCount={1}
         accept=".md,.txt"
@@ -565,7 +585,7 @@ export default function KnowledgeBaseAddWizard() {
           disabled={!canProceedStep1 || !canUploadDocument}
           onClick={() => canProceedStep1 && canUploadDocument && goToStep(2)}
         >
-          下一步
+          {t("settings.knowledgeBase.add.nextStep")}
           <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
@@ -579,7 +599,7 @@ export default function KnowledgeBaseAddWizard() {
           <div className="space-y-3.5 pb-4">
             <section className="space-y-2.5">
               <div className="text-base font-semibold text-text-primary">
-                分段设置
+                {t("settings.knowledgeBase.add.chunkSettings")}
               </div>
               <Card className="p-4">
                 <div className="space-y-3.5">
@@ -589,10 +609,10 @@ export default function KnowledgeBaseAddWizard() {
                     </div>
                     <div>
                       <div className="text-base font-semibold text-text-primary">
-                        通用
+                        {t("settings.knowledgeBase.add.general")}
                       </div>
                       <div className="text-sm text-text-secondary">
-                        通用文本分块模式，检索和召回的块是相同的。
+                        {t("settings.knowledgeBase.add.generalDesc")}
                       </div>
                     </div>
                   </div>
@@ -600,7 +620,7 @@ export default function KnowledgeBaseAddWizard() {
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                     <div className="min-w-0">
                       <Select
-                        label="切块方式"
+                        label={t("settings.knowledgeBase.add.splitterType")}
                         labelHelp={splitterHints.splitterType}
                         value={settings.splitterType}
                         onChange={(value) =>
@@ -627,7 +647,7 @@ export default function KnowledgeBaseAddWizard() {
                     </div>
                     <div className="min-w-0">
                       <NumberInput
-                        label={`最大长度 (${settings.lengthMetric === "utf8Bytes" ? "bytes" : "characters"})`}
+                        label={`${t("settings.knowledgeBase.add.chunkSize")} (${settings.lengthMetric === "utf8Bytes" ? "bytes" : "characters"})`}
                         labelHelp={splitterHints.chunkSize}
                         value={settings.chunkSize}
                         onChange={(value) =>
@@ -641,7 +661,7 @@ export default function KnowledgeBaseAddWizard() {
                     </div>
                     <div className="min-w-0">
                       <NumberInput
-                        label={`重叠长度 (${settings.lengthMetric === "utf8Bytes" ? "bytes" : "characters"})`}
+                        label={`${t("settings.knowledgeBase.add.chunkOverlap")} (${settings.lengthMetric === "utf8Bytes" ? "bytes" : "characters"})`}
                         labelHelp={splitterHints.chunkOverlap}
                         value={settings.chunkOverlap}
                         onChange={(value) =>
@@ -655,7 +675,7 @@ export default function KnowledgeBaseAddWizard() {
                     </div>
                     <div className="min-w-0">
                       <Select
-                        label="长度单位"
+                        label={t("settings.knowledgeBase.add.lengthMetric")}
                         labelHelp={splitterHints.lengthMetric}
                         value={settings.lengthMetric}
                         onChange={(value) =>
@@ -666,14 +686,20 @@ export default function KnowledgeBaseAddWizard() {
                           }))
                         }
                         options={[
-                          { value: "characters", label: "字符数" },
-                          { value: "utf8Bytes", label: "UTF-8 字节数" },
+                          {
+                            value: "characters",
+                            label: t("settings.knowledgeBase.add.characters"),
+                          },
+                          {
+                            value: "utf8Bytes",
+                            label: t("settings.knowledgeBase.add.utf8Bytes"),
+                          },
                         ]}
                         compact
                       />
                     </div>
                     <SwitchField
-                      label="分隔符保留"
+                      label={t("settings.knowledgeBase.add.keepSeparator")}
                       hint={splitterHints.keepSeparator}
                       checked={settings.keepSeparator}
                       onChange={() =>
@@ -686,7 +712,7 @@ export default function KnowledgeBaseAddWizard() {
                     {settings.splitterType === "character" ? (
                       <div className="min-w-0">
                         <TextInput
-                          label="分隔符"
+                          label={t("settings.knowledgeBase.add.separator")}
                           labelHelp={splitterHints.separator}
                           value={settings.separator}
                           onChange={(value) =>
@@ -703,7 +729,9 @@ export default function KnowledgeBaseAddWizard() {
                       <>
                         <div className="min-w-0">
                           <Select
-                            label="语言预置"
+                            label={t(
+                              "settings.knowledgeBase.add.presetLanguage",
+                            )}
                             labelHelp={splitterHints.presetLanguage}
                             value={settings.presetLanguage ?? ""}
                             onChange={(value) =>
@@ -715,7 +743,10 @@ export default function KnowledgeBaseAddWizard() {
                               }))
                             }
                             options={[
-                              { value: "", label: "不使用预置" },
+                              {
+                                value: "",
+                                label: t("settings.knowledgeBase.add.noPreset"),
+                              },
                               { value: "markdown", label: "markdown" },
                               { value: "html", label: "html" },
                               { value: "js", label: "js" },
@@ -738,7 +769,9 @@ export default function KnowledgeBaseAddWizard() {
                         </div>
                         <div className="min-w-0 md:col-span-2 xl:col-span-3">
                           <TextArea
-                            label="自定义 separators"
+                            label={t(
+                              "settings.knowledgeBase.add.customSeparators",
+                            )}
                             labelHelp={splitterHints.separators}
                             rows={4}
                             value={settings.separators.join("\n")}
@@ -757,7 +790,7 @@ export default function KnowledgeBaseAddWizard() {
                       <>
                         <div className="min-w-0">
                           <TextInput
-                            label="encodingName"
+                            label={t("settings.knowledgeBase.add.encodingName")}
                             labelHelp={splitterHints.encodingName}
                             value={settings.encodingName}
                             onChange={(value) =>
@@ -771,7 +804,9 @@ export default function KnowledgeBaseAddWizard() {
                         </div>
                         <div className="min-w-0">
                           <TextInput
-                            label="allowedSpecial"
+                            label={t(
+                              "settings.knowledgeBase.add.allowedSpecial",
+                            )}
                             labelHelp={splitterHints.allowedSpecial}
                             value={
                               Array.isArray(settings.allowedSpecial)
@@ -792,7 +827,9 @@ export default function KnowledgeBaseAddWizard() {
                         </div>
                         <div className="min-w-0">
                           <TextInput
-                            label="disallowedSpecial"
+                            label={t(
+                              "settings.knowledgeBase.add.disallowedSpecial",
+                            )}
                             labelHelp={splitterHints.disallowedSpecial}
                             value={
                               Array.isArray(settings.disallowedSpecial)
@@ -817,11 +854,13 @@ export default function KnowledgeBaseAddWizard() {
 
                   <div className="space-y-2.5 border-t border-border pt-4">
                     <div className="text-sm font-medium text-text-primary">
-                      文本预处理规则
+                      {t("settings.knowledgeBase.add.preprocessingRules")}
                     </div>
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                       <SwitchField
-                        label="替换连续空白"
+                        label={t(
+                          "settings.knowledgeBase.add.replaceWhitespace",
+                        )}
                         hint={splitterHints.replaceWhitespace}
                         checked={settings.replaceWhitespace}
                         onChange={() =>
@@ -832,7 +871,7 @@ export default function KnowledgeBaseAddWizard() {
                         }
                       />
                       <SwitchField
-                        label="删除 URL 和邮箱"
+                        label={t("settings.knowledgeBase.add.removeUrls")}
                         hint={splitterHints.removeUrls}
                         checked={settings.removeUrls}
                         onChange={() =>
@@ -843,7 +882,7 @@ export default function KnowledgeBaseAddWizard() {
                         }
                       />
                       <SwitchField
-                        label="使用 Q&A 分段"
+                        label={t("settings.knowledgeBase.add.useQaSplit")}
                         hint={splitterHints.useQaSplit}
                         checked={settings.useQaSplit}
                         onChange={() =>
@@ -857,9 +896,7 @@ export default function KnowledgeBaseAddWizard() {
                   </div>
 
                   <div className="rounded-xl border border-dashed border-border bg-surface-secondary/70 px-3.5 py-3 text-xs leading-5 text-text-secondary">
-                    小建议：Markdown 文档优先尝试 `MarkdownTextSplitter`；通用
-                    TXT 可以从 `RecursiveCharacterTextSplitter + markdown
-                    preset` 或自定义 separators 开始调。
+                    {t("settings.knowledgeBase.add.tip")}
                   </div>
 
                   <div className="flex items-center gap-2.5 border-t border-border pt-4">
@@ -869,7 +906,9 @@ export default function KnowledgeBaseAddWizard() {
                       disabled={previewLoading}
                     >
                       <Eye className="h-4 w-4" />
-                      {previewLoading ? "预览中..." : "预览块"}
+                      {previewLoading
+                        ? t("settings.knowledgeBase.add.previewing")
+                        : t("settings.knowledgeBase.add.preview")}
                     </Button>
                     <Button
                       variant="ghost"
@@ -877,7 +916,7 @@ export default function KnowledgeBaseAddWizard() {
                       disabled={previewLoading}
                     >
                       <Sparkles className="h-4 w-4" />
-                      换一批样本
+                      {t("settings.knowledgeBase.add.resample")}
                     </Button>
                     <Button
                       variant="ghost"
@@ -888,7 +927,7 @@ export default function KnowledgeBaseAddWizard() {
                       }}
                     >
                       <RotateCcw className="h-4 w-4" />
-                      重置
+                      {t("settings.knowledgeBase.add.reset")}
                     </Button>
                   </div>
                 </div>
@@ -897,26 +936,26 @@ export default function KnowledgeBaseAddWizard() {
 
             <section className="space-y-2.5">
               <div className="text-base font-semibold text-text-primary">
-                模型配置
+                {t("settings.knowledgeBase.add.modelConfig")}
               </div>
               <div className="space-y-2.5">
                 <ModelStatusCard
-                  title="LLM 模型"
-                  description="用于回答生成。当前步骤要求已经配置默认 LLM。"
+                  title={t("settings.knowledgeBase.add.llmTitle")}
+                  description={t("settings.knowledgeBase.add.llmDesc")}
                   config={llmConfig}
                   required
                   icon={<Bot className="h-5 w-5" />}
                 />
                 <ModelStatusCard
-                  title="Embedding 模型"
-                  description="用于向量化和语义检索。当前步骤要求已经配置默认 Embedding。"
+                  title={t("settings.knowledgeBase.add.embeddingTitle")}
+                  description={t("settings.knowledgeBase.add.embeddingDesc")}
                   config={embeddingConfig}
                   required
                   icon={<Cpu className="h-5 w-5" />}
                 />
                 <ModelStatusCard
-                  title="ReRank 模型"
-                  description="用于结果重排。当前为可选配置，不影响继续下一步。"
+                  title={t("settings.knowledgeBase.add.rerankTitle")}
+                  description={t("settings.knowledgeBase.add.rerankDesc")}
                   config={rerankConfig}
                   icon={<ScanSearch className="h-5 w-5" />}
                 />
@@ -930,34 +969,51 @@ export default function KnowledgeBaseAddWizard() {
             <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
               <div className="min-w-0">
                 <div className="text-sm font-semibold text-text-primary">
-                  预览
+                  {t("settings.knowledgeBase.add.previewTitle")}
                 </div>
                 <div className="mt-1 truncate text-sm text-text-secondary">
                   {files.find((item) => item.id === previewFileId)?.name ??
                     files[0]?.name ??
-                    "未选择文件"}
+                    t("settings.knowledgeBase.add.noFileSelected")}
                 </div>
               </div>
               <span className="ml-3 shrink-0 rounded-full border border-border bg-surface-secondary px-2.5 py-1 text-xs text-text-secondary">
                 {previewStats
-                  ? `${previewChunks.length}/${previewStats.totalChunks} 项样本`
-                  : `${previewChunks.length} 项预览块`}
+                  ? t("settings.knowledgeBase.add.sampleCount", {
+                      current: previewChunks.length,
+                      total: previewStats.totalChunks,
+                    })
+                  : t("settings.knowledgeBase.add.previewCount", {
+                      count: previewChunks.length,
+                    })}
               </span>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3.5">
               {previewChunks.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border bg-surface-secondary px-4 py-10 text-sm leading-6 text-text-secondary">
-                  点击左侧“预览块”后，这里会展示知识文本分块结果。
+                  {t("settings.knowledgeBase.add.previewPlaceholder")}
                 </div>
               ) : (
                 <div className="space-y-3">
                   {previewStats ? (
                     <div className="grid gap-2 rounded-xl border border-border bg-surface-secondary p-3.5 text-xs text-text-secondary md:grid-cols-2">
-                      <div>总块数：{previewStats.totalChunks}</div>
-                      <div>平均长度：{previewStats.averageChunkLength}</div>
-                      <div>最短块：{previewStats.minChunkLength}</div>
-                      <div>最长块：{previewStats.maxChunkLength}</div>
+                      <div>
+                        {t("settings.knowledgeBase.add.totalChunks")}：
+                        {previewStats.totalChunks}
+                      </div>
+                      <div>
+                        {t("settings.knowledgeBase.add.avgLength")}：
+                        {previewStats.averageChunkLength}
+                      </div>
+                      <div>
+                        {t("settings.knowledgeBase.add.minLength")}：
+                        {previewStats.minChunkLength}
+                      </div>
+                      <div>
+                        {t("settings.knowledgeBase.add.maxLength")}：
+                        {previewStats.maxChunkLength}
+                      </div>
                     </div>
                   ) : null}
                   {previewChunks.map((chunk) => (
@@ -983,20 +1039,20 @@ export default function KnowledgeBaseAddWizard() {
       <div className="flex shrink-0 items-center justify-between border-t border-border bg-surface-primary pt-4">
         <Button variant="ghost" onClick={() => goToStep(1)}>
           <ArrowLeft className="h-4 w-4" />
-          上一步
+          {t("settings.knowledgeBase.add.prevStep")}
         </Button>
 
         <Button
           disabled={!canProceedStep2}
           onClick={() => {
             if (!canProceedStep2) {
-              message.warning("请先完成默认 LLM 和 Embedding 模型配置");
+              message.warning(t("settings.knowledgeBase.add.needConfig"));
               return;
             }
             goToStep(3);
           }}
         >
-          下一步
+          {t("settings.knowledgeBase.add.nextStep")}
           <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
@@ -1018,18 +1074,22 @@ export default function KnowledgeBaseAddWizard() {
               <PartyPopper className="h-8 w-8" />
             </div>
             <div className="mt-5 text-2xl font-semibold text-text-primary">
-              知识文档处理完成
+              {t("settings.knowledgeBase.add.processComplete")}
             </div>
             <p className="mx-auto mt-2.5 max-w-xl text-sm leading-6 text-text-secondary">
-              {createdDocuments[0]?.name ?? activeFile?.name ?? "当前文件"}{" "}
-              已完成上传和切分入库，知识片段现在可以在知识库列表中查看，并用于后续检索与问答。
+              {t("settings.knowledgeBase.add.processCompleteDesc", {
+                fileName:
+                  createdDocuments[0]?.name ??
+                  activeFile?.name ??
+                  t("settings.knowledgeBase.add.knowledgeDoc"),
+              })}
             </p>
 
             <div className="mt-5 rounded-2xl border border-border bg-surface-secondary px-4 py-3.5 text-left">
               <div className="grid gap-2.5 md:grid-cols-2">
                 <div>
                   <div className="text-xs uppercase tracking-wide text-text-tertiary">
-                    文件数
+                    {t("settings.knowledgeBase.add.fileCount")}
                   </div>
                   <div className="mt-1 text-lg font-semibold text-text-primary">
                     {files.length}
@@ -1037,7 +1097,7 @@ export default function KnowledgeBaseAddWizard() {
                 </div>
                 <div>
                   <div className="text-xs uppercase tracking-wide text-text-tertiary">
-                    文本分块
+                    {t("settings.knowledgeBase.add.textChunks")}
                   </div>
                   <div className="mt-1 text-lg font-semibold text-text-primary">
                     {totalChunks}
@@ -1051,7 +1111,7 @@ export default function KnowledgeBaseAddWizard() {
                 size="lg"
                 onClick={() => navigate("/settings/knowledge-base")}
               >
-                返回知识库管理
+                {t("settings.knowledgeBase.add.backToManage")}
               </Button>
             </div>
           </div>
@@ -1067,7 +1127,7 @@ export default function KnowledgeBaseAddWizard() {
               <FileSearch className="h-8 w-8" />
             </div>
             <div className="mt-5 text-2xl font-semibold text-text-primary">
-              知识文档处理失败
+              {t("settings.knowledgeBase.add.processFailedTitle")}
             </div>
             <p className="mx-auto mt-2.5 max-w-xl text-sm leading-6 text-text-secondary">
               {processingError}
@@ -1075,10 +1135,10 @@ export default function KnowledgeBaseAddWizard() {
 
             <div className="mt-6 flex justify-center gap-3">
               <Button variant="secondary" onClick={() => goToStep(2)}>
-                返回上一步
+                {t("settings.knowledgeBase.add.backToPrev")}
               </Button>
               <Button onClick={() => navigate("/settings/knowledge-base")}>
-                返回知识库管理
+                {t("settings.knowledgeBase.add.backToManage")}
               </Button>
             </div>
           </div>
@@ -1092,10 +1152,10 @@ export default function KnowledgeBaseAddWizard() {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <h1 className="text-xl font-semibold text-text-primary">
-                文档已上传
+                {t("settings.knowledgeBase.add.documentUploaded")}
               </h1>
               <p className="text-sm text-text-secondary">
-                文档正在上传到知识库并完成切分入库。处理完成后，当前界面会自动切换为成功提示。
+                {t("settings.knowledgeBase.add.uploadingDesc")}
               </p>
             </div>
 
@@ -1103,7 +1163,7 @@ export default function KnowledgeBaseAddWizard() {
               <div className="space-y-3.5">
                 <div className="flex items-center gap-2 text-base font-semibold text-text-primary">
                   <LoaderCircle className="h-5 w-5 animate-spin text-primary" />
-                  文档处理中...
+                  {t("settings.knowledgeBase.add.processing")}
                 </div>
 
                 <div className="rounded-2xl border border-border bg-surface-secondary p-3.5">
@@ -1112,10 +1172,13 @@ export default function KnowledgeBaseAddWizard() {
                       <div className="truncate text-sm font-medium text-text-primary">
                         {files[createdDocuments.length]?.name ??
                           activeFile?.name ??
-                          "知识文档"}
+                          t("settings.knowledgeBase.add.knowledgeDoc")}
                       </div>
                       <div className="mt-1 text-xs text-text-secondary">
-                        已完成 {createdDocuments.length}/{files.length} 个文件
+                        {t("settings.knowledgeBase.add.filesCompleted", {
+                          completed: createdDocuments.length,
+                          total: files.length,
+                        })}
                       </div>
                     </div>
                     <div className="text-sm font-medium text-text-secondary">
@@ -1132,31 +1195,38 @@ export default function KnowledgeBaseAddWizard() {
                 </div>
 
                 <div className="grid gap-y-2.5 border-t border-border pt-3.5 md:grid-cols-[148px_1fr]">
-                  <div className="text-sm text-text-secondary">分段模式</div>
+                  <div className="text-sm text-text-secondary">
+                    {t("settings.knowledgeBase.add.chunkMode")}
+                  </div>
                   <div className="text-sm font-medium text-text-primary">
-                    通用
+                    {t("settings.knowledgeBase.add.general")}
                   </div>
 
                   <div className="text-sm text-text-secondary">
-                    最大分段长度
+                    {t("settings.knowledgeBase.add.maxChunkSize")}
                   </div>
                   <div className="text-sm font-medium text-text-primary">
                     {settings.chunkSize}
                   </div>
 
                   <div className="text-sm text-text-secondary">
-                    文本预处理规则
+                    {t("settings.knowledgeBase.add.preprocessingLabel")}
                   </div>
                   <div className="text-sm font-medium text-text-primary">
                     {[
                       settings.replaceWhitespace
-                        ? "替换掉连续的空格、换行符和制表符"
+                        ? t("settings.knowledgeBase.add.ruleReplaceWhitespace")
                         : null,
-                      settings.removeUrls ? "删除 URL 和电子邮件地址" : null,
-                      settings.useQaSplit ? "启用 Q&A 分段" : null,
+                      settings.removeUrls
+                        ? t("settings.knowledgeBase.add.ruleRemoveUrls")
+                        : null,
+                      settings.useQaSplit
+                        ? t("settings.knowledgeBase.add.ruleQaSplit")
+                        : null,
                     ]
                       .filter(Boolean)
-                      .join("，") || "未启用额外规则"}
+                      .join(", ") ||
+                      t("settings.knowledgeBase.add.noExtraRules")}
                   </div>
                 </div>
               </div>
@@ -1169,10 +1239,10 @@ export default function KnowledgeBaseAddWizard() {
                 <Sparkles className="h-5 w-5" />
               </div>
               <div className="mt-4 text-xl font-semibold text-text-primary">
-                接下来做什么
+                {t("settings.knowledgeBase.add.whatsNext")}
               </div>
               <p className="mt-2.5 text-sm leading-6 text-text-secondary">
-                处理结束后，你可以返回知识库管理页查看文档状态，也可以继续进入聊天流程验证检索命中片段。
+                {t("settings.knowledgeBase.add.whatsNextDesc")}
               </p>
             </div>
           </Card>
@@ -1189,7 +1259,7 @@ export default function KnowledgeBaseAddWizard() {
           onClick={() => navigate("/settings/knowledge-base")}
         >
           <ArrowLeft className="h-4 w-4" />
-          返回知识库
+          {t("settings.knowledgeBase.add.backToKnowledgeBase")}
         </Button>
       </div>
 

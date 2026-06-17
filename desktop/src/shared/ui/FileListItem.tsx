@@ -1,5 +1,6 @@
 import { Trash2 } from "lucide-react";
 import React from "react";
+import { useTranslation } from "react-i18next";
 import Card from "./Card";
 import { FileIcon } from "./FileIcon";
 import { IconButton } from "./Button";
@@ -23,6 +24,7 @@ export function FileListItem({
   active = false,
   className = "",
 }: FileListItemProps) {
+  const { t } = useTranslation();
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return "0 B";
     const k = 1024;
@@ -46,7 +48,9 @@ export function FileListItem({
             <FileIcon extension={extension} className="h-3.5 w-3.5" />
           </div>
           <div className="min-w-0">
-            <div className="truncate text-sm font-medium text-text-primary">{name}</div>
+            <div className="truncate text-sm font-medium text-text-primary">
+              {name}
+            </div>
             <div className="text-xs text-text-secondary">
               {extension} · {formatFileSize(size)}
             </div>
@@ -54,7 +58,10 @@ export function FileListItem({
         </button>
 
         {onRemove ? (
-          <IconButton ariaLabel="删除文件" onClick={onRemove}>
+          <IconButton
+            ariaLabel={t("ui.fileListItem.removeFile")}
+            onClick={onRemove}
+          >
             <Trash2 className="h-3.5 w-3.5" />
           </IconButton>
         ) : null}

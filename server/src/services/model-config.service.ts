@@ -8,7 +8,7 @@ const sanitizeParamsByType = (
   type: ModelType,
   params: Record<string, unknown>,
 ): Record<string, unknown> => {
-  if (type === "task") {
+  if (type === "task" || type === "evaluation") {
     const sanitized: Record<string, unknown> = {};
 
     if (typeof params.enabled === "boolean") {
@@ -159,6 +159,7 @@ export const modelConfigService = {
       embedding: [],
       rerank: [],
       task: [],
+      evaluation: [],
     };
 
     for (const row of rows) {

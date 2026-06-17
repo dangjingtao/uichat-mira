@@ -37,6 +37,7 @@ const emptyConfigMap: RoleModelConfigMap = {
   embedding: null,
   rerank: null,
   task: null,
+  evaluation: null,
 };
 
 const disconnectedModelAccessStatus: GlobalModelAccessStatus = {

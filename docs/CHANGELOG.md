@@ -8,6 +8,55 @@
 
 ---
 
+## [0.5.0] - 2026-06-17
+
+### 新增
+
+#### 桌面端
+- **国际化（i18n）架构** - 新增 i18n 分片机制，支持在各 `features/` 与 `app/` 目录下自建 `i18n/` 翻译文件，通过 `deepMerge` 汇入同一命名空间；新增 Dashboard、Chat、Settings、App 布局、通用 UI 五大模块翻译文件
+- **页面级全面国际化** - `ChatPage`、`ThreadListSidebar`、`RagProgressDetailDrawer`、`HomePage`、`About`、`Tools`、`KnowledgeBase/Add`、`ModelSetting`、`Evaluation/exportMarkdown` 等页面与组件全部接入 `useTranslation`
+- **布局与通用组件国际化** - `Sidebar`、`ErrorBoundary`、`FileUploadDropzone`、`FileListItem`、`StatusIndicator` 接入 `useTranslation`
+- **主题与语言系统** - 新增 `LanguageProvider`、`ThemeProvider` 与 `shared/theme/` 主题体系，支持亮色/暗色切换与语言状态管理
+- **评测工作台** - 新增 `Evaluation/Workbench.tsx`、`Center.tsx` 与配套组件（`DetailDrawer`、`MetricGrid`、`StatusBadge`、`EvaluationPackageGeneratorModal`），支持评测执行、结果查看与报告导出
+- **聊天体验增强** - 新增 `ThreadComposer`、`ThreadHeader`、`thread.parsers` 与 `useThreadComposerState`，重构 `BackendThreadListAdapter` 与 `Thread/` 组件目录
+- **RAG 进度详情** - 新增 `RagProgressDetailDrawer` 与 `RagExecutionTrace`，可视化展示检索与生成流程细节
+- **UI 组件扩展** - 新增 `Modal`、`Select`、`Table` 等共享组件，完善 `COMPONENTS.md` 与 `ui-design-guidelines-tailwind.md`
+
+#### 服务端
+- **评测服务** - 新增 `evaluation.service.ts`、`evaluation-package-generator.service.ts`、`evaluation.db.ts` 与 `evaluation/` 路由，支持评测数据集管理、执行记录存储与 Markdown 报告生成
+- **RAG 运行时观测** - 新增 `rag-runtime-observer.ts` 与 `rag-runtime/` 路由，支持对 RAG Pipeline 执行过程的实时观测与事件推送
+- **RAG 节点增强** - 新增 `retrieve.service.ts`、`rerank.service.ts`，完善 `rag-node-contract.ts` 与 `rag-node-observation.ts`，规范节点输入输出与观测数据
+- **供应商代理增强** - 新增 `provider-proxy.service.ts`，支持 OpenAI 兼容供应商的统一代理与转发
+- **公共 API 配置** - 新增 `public-api.ts`，集中管理对外暴露的服务接口与配置
+- **数据库扩展** - 扩展 `schema.ts` 与相关数据库模块，支撑评测、RAG 观测等新业务表结构
+
+#### 文档
+- **评测工作台文档** - 新增 `docs/evaluation-workbench.md`，说明评测功能的使用方式与指标含义
+- **RAG 流程文档** - 更新 `docs/rag-langgraph-flow.md`，补充运行时观测与节点契约说明
+
+### 变更
+
+#### 桌面端
+- **i18n 配置重构** - 将内联的单一 `resources` 对象拆分为独立的 `zh-CN.ts` 与 `en-US.ts`，提升可维护性
+- **模型与平台配置** - 重构 `ModelSetting`、`ModelConfig`、`ModelRow`、`ApiConfigCard`、`DefaultModelCard`、`PlatformCard`、`PlatformConfigModal` 等组件，优化配置交互与状态同步
+- **设置页面增强** - 优化 `General/index.tsx`、`HealthCheck`、`LogsButtons` 等设置子页面结构与样式
+- **关于页优化** - `fallbackAppMeta` 改为 `getFallbackAppMeta(t)` 函数，使 fallback 元数据随语言切换
+- **知识库页面增强** - 优化 `KnowledgeBase/index.tsx`、`Detail.tsx`、`Add.tsx` 的交互与展示
+
+#### 服务端
+- **模型配置服务** - 重构 `model-config.service.ts`、`model-config.defaults.ts` 与 `model-config.db.ts`，优化默认配置加载与持久化逻辑
+- **供应商设置服务** - 重构 `provider-settings.service.ts` 与相关路由/schema，增强参数校验与错误处理
+- **RAG 流程重构** - 优化 `rag-graph.ts`、嵌入/生成/重排/检索节点，提升 Pipeline 稳定性与可观测性
+- **应用元数据路由** - 更新 `app-meta.ts` 路由，支持返回当前 Git 分支与版本提交记录
+
+### 修复
+
+#### 桌面端
+- **TypeScript 类型错误** - 修复 `zh-CN.ts` 中文引号导致的解析错误，以及 `TFunction` 从 `react-i18next` 错误导入的问题
+- **UI 样式修复** - 修复 `styles.css` 与 `tailwind.config.cjs` 中的样式冲突与配置遗漏
+
+---
+
 ## [0.4.0] - 2026-06-15
 
 ### 新增
@@ -19,6 +68,7 @@
 - **评测模块** - 新增评测相关设置页面与组件入口
 - **RAG 进度详情抽屉** - 新增 `RagProgressDetailDrawer`，用于展示检索与生成流程细节
 - **线程 UI 组件** - 新增 `Thread/` 组件目录，增强对话线程展示能力
+- **关于页 Git 信息** - 在关于页展示当前 Git 分支与基于 tag 的版本提交记录，无数据时自动隐藏
 
 #### 服务端
 - **知识库预览服务** - 新增 `knowledge-base.preview.service.ts`

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/shared/ui/Button";
 import { NumberInput } from "@/shared/ui/Input";
 import { message } from "@/shared/ui/Message";
@@ -19,8 +20,8 @@ interface ParamMeta {
 }
 
 interface ModelMeta {
-  title: string;
-  subtitle: string;
+  titleKey: string;
+  subtitleKey: string;
   badgeText: string;
   badgeClassName: string;
   params: ParamMeta[];
@@ -31,8 +32,8 @@ type ConfigState = Record<string, ConfigValue>;
 
 const MODEL_META: Record<RoleModelType, ModelMeta> = {
   llm: {
-    title: "LLM",
-    subtitle: "用于对话生成和文本理解",
+    titleKey: "settings.model.config.llm.title",
+    subtitleKey: "settings.model.config.llm.subtitle",
     badgeText: "LM",
     badgeClassName: "bg-primary/10 text-primary",
     params: [
@@ -55,8 +56,8 @@ const MODEL_META: Record<RoleModelType, ModelMeta> = {
     ],
   },
   task: {
-    title: "任务模型配置",
-    subtitle: "用于任务执行和流程编排",
+    titleKey: "settings.model.config.task.title",
+    subtitleKey: "settings.model.config.task.subtitle",
     badgeText: "TSK",
     badgeClassName: "bg-warning/10 text-warning",
     params: [
@@ -78,9 +79,33 @@ const MODEL_META: Record<RoleModelType, ModelMeta> = {
       },
     ],
   },
+  evaluation: {
+    titleKey: "settings.model.config.evaluation.title",
+    subtitleKey: "settings.model.config.evaluation.subtitle",
+    badgeText: "EVA",
+    badgeClassName: "bg-primary/10 text-primary",
+    params: [
+      { key: "temperature", label: "Temperature", type: "number", step: 0.1 },
+      { key: "topP", label: "Top P", type: "number", step: 0.1 },
+      { key: "topK", label: "Top K", type: "number" },
+      { key: "maxTokens", label: "Max Tokens", type: "number" },
+      {
+        key: "frequencyPenalty",
+        label: "Frequency Penalty",
+        type: "number",
+        step: 0.1,
+      },
+      {
+        key: "presencePenalty",
+        label: "Presence Penalty",
+        type: "number",
+        step: 0.1,
+      },
+    ],
+  },
   embedding: {
-    title: "Embedding",
-    subtitle: "用于向量化和语义检索",
+    titleKey: "settings.model.config.embedding.title",
+    subtitleKey: "settings.model.config.embedding.subtitle",
     badgeText: "EM",
     badgeClassName: "bg-success/10 text-success",
     params: [
@@ -100,8 +125,8 @@ const MODEL_META: Record<RoleModelType, ModelMeta> = {
     ],
   },
   rerank: {
-    title: "ReRank",
-    subtitle: "用于结果重排和相关性评估",
+    titleKey: "settings.model.config.rerank.title",
+    subtitleKey: "settings.model.config.rerank.subtitle",
     badgeText: "RE",
     badgeClassName: "bg-surface-tertiary text-text-secondary",
     params: [
@@ -139,6 +164,7 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
   onUpdated,
   readOnly = false,
 }) => {
+  const { t } = useTranslation();
   const meta = MODEL_META[modelType];
   const [localConfig, setLocalConfig] = useState<ConfigState>(
     normalizeConfigState(config),
@@ -154,7 +180,7 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
   const isConfigured = Boolean(config?.providerCode && config?.remoteModelId);
   const providerLabel = config?.providerCode
     ? getProviderLabel(config.providerCode)
-    : "未配置";
+    : t("settings.model.config.notConfigured");
 
   const handleChange = (key: string, value: ConfigValue) => {
     if (readOnly) {
@@ -175,10 +201,10 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
       const { enabled: _enabled, ...params } = localConfig;
       const updated = await updateRoleModelConfigParams(modelType, params);
       onUpdated(updated);
-      message.success("参数已保存");
+      message.success(t("settings.model.config.saved"));
       setIsChanged(false);
     } catch (err) {
-      const messageText = err instanceof Error ? err.message : "保存参数失败";
+      const messageText = err instanceof Error ? err.message : t("settings.model.config.saveFailed");
       message.error(messageText);
     } finally {
       setIsSaving(false);
@@ -203,7 +229,7 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
           <div className="min-w-0 space-y-1">
             <div className="flex flex-wrap items-center gap-1.5">
               <div className="text-sm font-semibold text-text-primary">
-                {meta.title}
+                {t(meta.titleKey)}
               </div>
               <span
                 className={`rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -212,18 +238,18 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
                     : "bg-surface-tertiary text-text-secondary"
                 }`}
               >
-                {isConfigured ? "已配置" : "未配置"}
+                {isConfigured ? t("settings.model.config.configured") : t("settings.model.config.notConfigured")}
               </span>
             </div>
             <div className="text-xs leading-4 text-text-secondary">
-              {meta.subtitle}
+              {t(meta.subtitleKey)}
             </div>
           </div>
         </div>
 
         {readOnly ? (
           <span className="rounded-full bg-surface-tertiary px-2 py-1 text-xs text-text-secondary">
-            系统托管
+            {t("settings.model.config.managed")}
           </span>
         ) : (
           <Button
@@ -232,30 +258,30 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
             disabled={!isConfigured || !isChanged || isSaving}
             onClick={handleSave}
           >
-            {isSaving ? "保存中..." : "保存"}
+            {isSaving ? t("settings.model.config.saving") : t("settings.model.config.save")}
           </Button>
         )}
       </div>
 
       {readOnly ? (
         <div className="mb-2.5 rounded-lg border border-border bg-surface-secondary px-3 py-2 text-xs leading-5 text-text-secondary">
-          任务模型的默认绑定可在平台模型设置中调整；参数由系统统一托管，用于检索改写等轻任务调度，当前界面仅展示生效配置。
+          {t("settings.model.config.task.readOnlyHint")}
         </div>
       ) : null}
 
       <div className="mb-2.5 grid grid-cols-1 gap-2 md:grid-cols-2">
         <div className="rounded-lg border border-border bg-surface-secondary px-3 py-2">
           <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-text-tertiary">
-            当前平台
+            {t("settings.model.config.currentPlatform")}
           </div>
           <div className="mt-1 text-sm text-text-primary">{providerLabel}</div>
         </div>
         <div className="rounded-lg border border-border bg-surface-secondary px-3 py-2">
           <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-text-tertiary">
-            当前模型
+            {t("settings.model.config.currentModel")}
           </div>
           <div className="mt-1 truncate text-sm text-text-primary">
-            {config?.name || "请在平台模型设置中选择"}
+            {config?.name || t("settings.model.config.selectModel")}
           </div>
         </div>
       </div>

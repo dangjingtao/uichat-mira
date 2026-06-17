@@ -1,10 +1,16 @@
 import {
   BookOpen,
+  ChevronDown,
+  ChevronUp,
   ExternalLink,
+  GitBranch,
+  GitCommit,
   Rocket,
   UserRound,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import type { TFunction } from "i18next";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Streamdown } from "streamdown";
 import Card from "@/shared/ui/Card";
 import { getAppMeta, type AppMetaData } from "@/shared/api/system";
@@ -13,7 +19,7 @@ import { isDesktopShell } from "@/shared/platform/desktopRuntime";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import changelogMarkdown from "../../../../../../docs/CHANGELOG.md?raw";
 
-const fallbackAppMeta: AppMetaData = {
+const getFallbackAppMeta = (t: TFunction): AppMetaData => ({
   name: "ui-chat-rag-tester",
   version: "0.0.0",
   displayName: "Ui Chat Rag Tester",
@@ -23,66 +29,99 @@ const fallbackAppMeta: AppMetaData = {
   repositoryUrl: "",
   homepageUrl: "",
   changelog: [
-    "关于页改为软件信息与维护记录布局，减少冗余说明",
-    "明确区分 Electron / Tauri 运行版本",
-    "保留版本历史、作者与文档入口",
+    t("settings.about.fallback.changelog.0"),
+    t("settings.about.fallback.changelog.1"),
+    t("settings.about.fallback.changelog.2"),
   ],
   versionHistory: [
     {
       version: "0.1.0",
-      summary: "桌面聊天、模型配置、知识库与健康检查主流程成型",
+      summary: t("settings.about.fallback.versionHistory.0_1_0"),
     },
     {
       version: "0.0.9",
-      summary: "补齐设置页结构，统一桌面运行时接入方式",
+      summary: t("settings.about.fallback.versionHistory.0_0_9"),
     },
     {
       version: "0.0.8",
-      summary: "初版 RAG 测试工作台与对话线程能力",
+      summary: t("settings.about.fallback.versionHistory.0_0_8"),
     },
   ],
   links: [
     {
-      label: "作者",
+      label: t("settings.about.fallback.links.author"),
       value: "Tomz Dang <dangjingtao@gmail.com>",
       href: "https://github.com/dangjingtao",
     },
     {
-      label: "项目仓库",
+      label: t("settings.about.fallback.links.repository"),
       value: "https://github.com/dangjingtao/ui-chat-rag-tester.git",
       href: "https://github.com/dangjingtao/ui-chat-rag-tester",
     },
     {
-      label: "项目主页",
+      label: t("settings.about.fallback.links.homepage"),
       value: "https://github.com/dangjingtao/ui-chat-rag-tester",
       href: "https://github.com/dangjingtao/ui-chat-rag-tester",
     },
     {
-      label: "组件文档",
+      label: t("settings.about.fallback.links.docs"),
       value: "assistant-ui / 内部 UI 组件",
       href: "https://www.assistant-ui.com/",
     },
   ],
-};
+});
+
+const CHANGELOG_PREVIEW_SECTIONS = 2;
+
+function getChangelogPreview(markdown: string, sectionCount: number): string {
+  const normalized = markdown.trim();
+  if (!normalized) {
+    return normalized;
+  }
+
+  const sectionMatches = Array.from(normalized.matchAll(/^##\s+\[.*$/gm));
+  if (sectionMatches.length <= sectionCount) {
+    return normalized;
+  }
+
+  const cutoffIndex = sectionMatches[sectionCount]?.index;
+  if (typeof cutoffIndex !== "number") {
+    return normalized;
+  }
+
+  return normalized.slice(0, cutoffIndex).trimEnd();
+}
+
+function formatCommitDate(isoDate: string): string {
+  try {
+    return new Date(isoDate).toLocaleString();
+  } catch {
+    return isoDate;
+  }
+}
 
 function About() {
-  const [appMeta, setAppMeta] = useState<AppMetaData>(fallbackAppMeta);
+  const { t } = useTranslation();
+  const [appMeta, setAppMeta] = useState<AppMetaData>(() =>
+    getFallbackAppMeta(t),
+  );
+  const [showFullChangelog, setShowFullChangelog] = useState(false);
 
   const handleExternalLinkClick = useCallback(
     async (href: string) => {
       try {
         await navigator.clipboard.writeText(href);
-        message.success("链接已复制");
+        message.success(t("settings.about.linkCopied"));
       } catch {
-        message.error("复制链接失败");
+        message.error(t("settings.about.linkCopyFailed"));
       }
     },
-    [],
+    [t],
   );
 
   useEffect(() => {
     if (!isDesktopShell()) {
-      setAppMeta(fallbackAppMeta);
+      setAppMeta(getFallbackAppMeta(t));
       return;
     }
 
@@ -96,18 +135,29 @@ function About() {
       })
       .catch(() => {
         if (!cancelled) {
-          setAppMeta(fallbackAppMeta);
+          setAppMeta(getFallbackAppMeta(t));
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
+
+  const gitInfo = appMeta.git;
+  const showGitVersions = gitInfo && gitInfo.versions.length > 0;
+  const changelogPreview = useMemo(
+    () => getChangelogPreview(changelogMarkdown, CHANGELOG_PREVIEW_SECTIONS),
+    [],
+  );
+  const displayedChangelog = showFullChangelog
+    ? changelogMarkdown
+    : changelogPreview;
+  const canExpandChangelog = changelogPreview !== changelogMarkdown.trim();
 
   return (
     <SettingsPageLayout
-      miniTitle="About"
+      miniTitle={t("settings.about.miniTitle")}
       title={`${appMeta.displayName} ${appMeta.version}`}
       description={appMeta.description}
       contentClassName="space-y-4 pt-6"
@@ -117,7 +167,7 @@ function About() {
           <div className="flex items-center gap-2">
             <Rocket className="h-4 w-4 text-icon-primary" />
             <h2 className="text-sm font-semibold text-text-primary">
-              版本历史
+              {t("settings.about.versionHistory")}
             </h2>
           </div>
           <div className="space-y-2">
@@ -141,7 +191,7 @@ function About() {
           <div className="flex items-center gap-2">
             <UserRound className="h-4 w-4 text-icon-primary" />
             <h2 className="text-sm font-semibold text-text-primary">
-              作者与文档
+              {t("settings.about.authorDocs")}
             </h2>
           </div>
           <div className="space-y-2">
@@ -173,10 +223,81 @@ function About() {
         </Card>
       </div>
 
+      {gitInfo ? (
+        <Card className="space-y-3">
+          <div className="flex items-center gap-2">
+            <GitBranch className="h-4 w-4 text-icon-primary" />
+            <h2 className="text-sm font-semibold text-text-primary">
+              {t("settings.about.gitInfo")}
+            </h2>
+          </div>
+
+          <div className="space-y-2">
+            <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
+              <div className="text-xs text-text-tertiary">
+                {t("settings.about.currentBranch")}
+              </div>
+              <div className="text-sm font-medium text-text-primary">
+                {gitInfo.branch}
+              </div>
+            </div>
+
+            {showGitVersions ? (
+              <div className="space-y-2">
+                {gitInfo.versions.map((item) => (
+                  <div
+                    key={item.version}
+                    className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <GitCommit className="h-3.5 w-3.5 text-icon-secondary" />
+                      <div className="text-sm font-semibold text-text-primary">
+                        {item.version}
+                      </div>
+                    </div>
+                    <div className="mt-1 text-sm leading-6 text-text-secondary">
+                      {item.commit.message}
+                    </div>
+                    <div className="mt-1 flex items-center gap-2 text-xs text-text-tertiary">
+                      <span>{item.commit.author}</span>
+                      <span>·</span>
+                      <span>{formatCommitDate(item.commit.date)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </Card>
+      ) : null}
+
       <Card className="space-y-0">
-        <div className="flex items-center gap-2">
-          <BookOpen className="h-4 w-4 text-icon-primary" />
-          <h2 className="text-sm font-semibold text-text-primary">Changelog</h2>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <BookOpen className="h-4 w-4 text-icon-primary" />
+            <h2 className="text-sm font-semibold text-text-primary">
+              {t("settings.about.changelogTitle")}
+            </h2>
+          </div>
+          {canExpandChangelog ? (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
+              onClick={() => setShowFullChangelog((current) => !current)}
+            >
+              {showFullChangelog ? (
+                <>
+                  {t("settings.about.changelogCollapse")}
+                  <ChevronUp className="h-3.5 w-3.5" />
+                </>
+              ) : (
+                <>
+                  {t("settings.about.changelogExpand")}
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </>
+              )}
+            </button>
+          ) : null}
         </div>
 
         <div className="mt-3 pt-1">
@@ -210,7 +331,7 @@ function About() {
             linkSafety={{ enabled: false }}
             className="prose prose-sm max-w-none break-words text-text-primary prose-headings:mb-3 prose-headings:mt-7 prose-headings:text-text-primary prose-h1:mt-0 prose-h1:text-xl prose-h2:border-b prose-h2:border-border prose-h2:pb-2 prose-h2:text-lg prose-h3:text-base prose-p:leading-6 prose-p:text-text-secondary prose-strong:text-text-primary prose-code:rounded prose-code:bg-surface-secondary prose-code:px-1.5 prose-code:py-0.5 prose-code:text-[0.92em] prose-code:text-text-primary prose-pre:rounded-xl prose-pre:border prose-pre:border-border/70 prose-pre:bg-surface-secondary/55 prose-pre:text-text-primary prose-li:text-text-secondary prose-li:marker:text-text-tertiary prose-a:text-text-primary prose-blockquote:border-border prose-blockquote:bg-surface-secondary/35 prose-blockquote:px-4 prose-blockquote:py-2 prose-blockquote:text-text-secondary prose-hr:border-border"
           >
-            {changelogMarkdown}
+            {displayedChangelog}
           </Streamdown>
         </div>
       </Card>

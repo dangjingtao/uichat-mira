@@ -62,6 +62,7 @@ export interface RagNodeObservation {
   label: string;
   summary?: string;
   details?: Record<string, unknown>;
+  artifacts?: Record<string, unknown>;
   sources?: RetrievedChunk[];
   environment?: RagNodeEnvironment;
 }
