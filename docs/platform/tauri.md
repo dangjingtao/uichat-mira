@@ -59,7 +59,6 @@ During `pnpm package:tauri:win` or `pnpm check:tauri`, the internal Tauri prepar
 
 - `.artifacts/desktop/dist`
 - `.artifacts/server-bundle`
-- `.artifacts/server-data`
 - `.artifacts/icons`
 - `.artifacts/runtime.config.cjs`
 - `.artifacts/node-runtime`

@@ -8,6 +8,20 @@
 
 ---
 
+## [0.5.1] - 2026-06-17
+
+### 变更
+
+#### 打包与仓库治理
+- **移除开发数据库提交与打包路径** - `server/data/*.db` 改为默认忽略，`server/data/uichat-rag-test.db` 从版本控制中移除，Electron / Tauri 打包准备流程不再拷贝 `server/data` 到构建资源
+- **提交保护** - 新增 `.githooks/pre-commit` 与 `scripts/check-no-db-in-index.js`，阻止 `.db`、`.sqlite`、`.db-wal`、`.db-shm` 文件进入提交
+- **字体资源瘦身** - 删除 `desktop/src/shared/fonts/**/static/` 下未被运行时引用的静态字体文件，仅保留 `styles.css` 中实际使用的可变字体资源
+
+#### 文档
+- **打包说明更新** - 更新 `README.md`、`docs/platform/tauri.md`、`docs/platform/tauri-setup.md`，同步说明构建产物不再包含开发数据库，并补充数据库文件提交约束
+
+---
+
 ## [0.5.0] - 2026-06-17
 
 ### 新增

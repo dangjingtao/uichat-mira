@@ -86,11 +86,13 @@ Useful shared commands:
 
 ```bash
 pnpm check
+pnpm check:no-db-in-index
 pnpm clean:artifacts
 ```
 
 In development, frontend code should request `/api/...`; Vite rewrites it to the backend route without `/api`.
 By default, the backend development database is created at `server/data/uichat-rag-test.db` because the dev server runs with `server/` as its working directory.
+The repository also blocks commits that stage database files such as `.db`, `.sqlite`, `.db-wal`, or `.db-shm`.
 
 ## Packaging
 
@@ -128,7 +130,7 @@ Locked directories are skipped and cleaned on a later run when Windows releases 
 The packaged app includes:
 
 - `resources/app.asar`: Electron main/preload and renderer assets.
-- `resources/server`: Fastify backend bundle, database seed/data, and native Node dependencies.
+- `resources/server`: Fastify backend bundle and native Node dependencies.
 - `resources/node-runtime/node.exe`: Node runtime used to start the backend.
 - `resources/runtime.config.cjs`: runtime backend host/port configuration.
 
