@@ -381,9 +381,9 @@ const enUS = {
               "Keeps the paper-like warmth of the current product, ideal for long reading, configuration, and review sessions.",
           },
           "knowledge-blue": {
-            label: "Knowledge Blue",
+            label: "Iron Ink Purple",
             description:
-              "Emphasizes information structure and clarity, fitting retrieval, evaluation, and admin workflows.",
+              "Uses low-saturation iron-ink purple-gray tones to create a calm, professional, and judgmental interface for retrieval, citations, and long reading sessions.",
           },
           "archive-green": {
             label: "Archive Green",

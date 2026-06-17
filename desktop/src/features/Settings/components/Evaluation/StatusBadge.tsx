@@ -12,19 +12,19 @@ const statusMap: Record<EvaluationJobStatus | "saved", { key: string; className:
   },
   queued: {
     key: "settings.evaluation.status.queued",
-    className: "border-warning/20 bg-warning/10 text-warning",
+    className: "border-warning-border bg-warning-soft text-warning-text",
   },
   running: {
     key: "settings.evaluation.status.running",
-    className: "border-warning/20 bg-warning/10 text-warning",
+    className: "border-warning-border bg-warning-soft text-warning-text",
   },
   completed: {
     key: "settings.evaluation.status.completed",
-    className: "border-success/20 bg-success/10 text-success",
+    className: "border-success-border bg-success-soft text-success-text",
   },
   failed: {
     key: "settings.evaluation.status.failed",
-    className: "border-danger/20 bg-danger/10 text-danger",
+    className: "border-danger-border bg-danger-soft text-danger-text",
   },
   saved: {
     key: "settings.evaluation.status.saved",

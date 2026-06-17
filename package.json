@@ -1,6 +1,6 @@
 {
   "name": "ui-chat-rag-tester",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@9.12.0",
@@ -35,11 +35,15 @@
       }
     ],
     "changelog": [
-      "关于页改为软件信息与维护记录布局，减少冗余说明",
-      "明确区分 Electron / Tauri 运行版本",
-      "保留版本历史、作者与文档入口"
+      "新增主题模式切换，亮色与暗色可随设置即时生效",
+      "统一状态与表单反馈色板，优化设置页和共享组件视觉一致性",
+      "补充 Markdown 工作区模式与产品路线文档索引"
     ],
     "versionHistory": [
+      {
+        "version": "0.5.2",
+        "summary": "主题系统与共享 UI 色板升级，补充新的产品与编辑文档"
+      },
       {
         "version": "0.1.0",
         "summary": "桌面聊天、模型配置、知识库与健康检查主流程成型"

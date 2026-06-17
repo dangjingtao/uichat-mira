@@ -11,17 +11,17 @@ interface StatusIndicatorProps {
 const getStatusConfig = (t: TFunction) => ({
   running: {
     color: "bg-success",
-    ring: "ring-success/20",
+    ring: "ring-success-border/50",
     label: t("ui.statusIndicator.running"),
   },
   stopped: {
     color: "bg-danger",
-    ring: "ring-danger/20",
+    ring: "ring-danger-border/50",
     label: t("ui.statusIndicator.stopped"),
   },
   unknown: {
     color: "bg-warning",
-    ring: "ring-warning/20",
+    ring: "ring-warning-border/50",
     label: t("ui.statusIndicator.unknown"),
   },
 });

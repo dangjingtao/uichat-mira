@@ -6,14 +6,11 @@ import {
   Clock3,
   Hash,
   Layers3,
-  RefreshCcw,
-  ScanSearch,
   Tags,
   UserRound,
 } from "lucide-react";
 import { Button } from "@/shared/ui/Button";
 import Card from "@/shared/ui/Card";
-import { FileIcon } from "@/shared/ui/FileIcon";
 import { FullPageStatus } from "@/shared/ui/FullPageStatus";
 import { message } from "@/shared/ui/Message";
 import {
@@ -21,7 +18,7 @@ import {
   type KnowledgeBaseDocumentDetail,
 } from "@/shared/api/knowledgeBase";
 import { StatusIndicator } from "@/shared/ui/StatusIndicator";
-import { DEFAULT_SEGMENT_MODE, formatCompactNumber, getTypeBadge } from "./mockData";
+import { formatCompactNumber, getTypeBadge } from "./mockData";
 
 const PREVIEW_SAMPLE_COUNT = 10;
 
@@ -52,12 +49,35 @@ const samplePreviewChunks = (
     .map((index) => chunks[index]!);
 };
 
+function DetailField({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-surface-secondary/70 p-3.5">
+      <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </div>
+      <div className="break-words text-sm font-medium text-text-primary">
+        {value}
+      </div>
+    </div>
+  );
+}
+
 export default function KnowledgeBaseDetail() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const documentId = searchParams.get("id");
-  const [document, setDocument] = useState<KnowledgeBaseDocumentDetail | null>(null);
+  const [document, setDocument] =
+    useState<KnowledgeBaseDocumentDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -88,15 +108,20 @@ export default function KnowledgeBaseDetail() {
   );
 
   if (loading) {
-    return <FullPageStatus message={t("settings.knowledgeBase.messages.loadingDetail")} />;
+    return (
+      <FullPageStatus
+        message={t("settings.knowledgeBase.messages.loadingDetail")}
+      />
+    );
   }
 
   if (notFound || !document) {
     return (
-      <div className="mx-auto flex h-full min-h-0 w-full max-w-5xl flex-col gap-4 overflow-hidden px-4 py-5">
+      <div className="stable-scrollbar mx-auto flex h-full min-h-0 w-full max-w-[1180px] flex-col gap-3 overflow-y-auto px-4 py-4">
         <div className="shrink-0">
           <Button
             variant="ghost"
+            size="sm"
             className="w-fit"
             onClick={() => navigate("/settings/knowledge-base")}
           >
@@ -135,17 +160,19 @@ export default function KnowledgeBaseDetail() {
             indicator: "stopped" as const,
             label: t("settings.knowledgeBase.status.disabled"),
           };
-  const summary =
-    previewChunks[0]?.content ||
-    document.contentText.slice(0, 160) ||
-    t("settings.knowledgeBase.detail.emptySummary");
-  const tags = [document.fileExt.toUpperCase(), document.sourceType, document.indexStatus];
+
+  const tags = [
+    document.fileExt.toUpperCase(),
+    document.sourceType,
+    document.indexStatus,
+  ];
 
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-col gap-4 overflow-hidden px-4 py-5">
-      <section className="shrink-0 space-y-3">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-[1180px] flex-col gap-3 overflow-hidden px-4 py-4">
+      <section className="shrink-0 space-y-2.5">
         <Button
           variant="ghost"
+          size="sm"
           className="w-fit"
           onClick={() => navigate("/settings/knowledge-base")}
         >
@@ -153,85 +180,139 @@ export default function KnowledgeBaseDetail() {
           {t("settings.knowledgeBase.actions.backToKnowledgeBase")}
         </Button>
 
-        <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-primary p-4 shadow-shadow-sm xl:flex-row xl:items-start xl:justify-between">
-          <div className="flex min-w-0 items-start gap-3">
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-surface-secondary">
-              <FileIcon extension={document.fileExt} className="h-5 w-5" />
-            </div>
+        <div className="rounded-xl border border-border bg-surface-primary p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.025)]">
+          <div className="flex flex-col gap-3">
             <div className="min-w-0 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 <span
-                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${badge.className}`}
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.className}`}
                 >
                   {badge.label}
                 </span>
-                <span className="rounded-full border border-border bg-surface-secondary px-2.5 py-1 text-xs font-medium text-text-secondary">
-                  {DEFAULT_SEGMENT_MODE}
-                </span>
-                <span className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-secondary px-2.5 py-1 text-xs font-medium text-text-secondary">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-secondary px-2 py-0.5 text-[11px] font-medium text-text-secondary">
                   <StatusIndicator status={status.indicator} size="sm" />
                   {status.label}
                 </span>
               </div>
 
-              <div>
-                <h1 className="break-all text-xl font-semibold text-text-primary">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <h1 className="break-all text-[22px] font-semibold leading-[1.25] text-text-primary">
                   {document.name}
                 </h1>
-                <p className="mt-1.5 max-w-4xl text-sm leading-6 text-text-secondary">
-                  {summary}
-                </p>
+
+                <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      message.info(
+                        t("settings.knowledgeBase.messages.rebuildPending", {
+                          name: document.name,
+                        }),
+                      )
+                    }
+                  >
+                    {t("settings.knowledgeBase.actions.rebuildIndex")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      message.success(
+                        t("settings.knowledgeBase.messages.retrievalStarted", {
+                          name: document.name,
+                        }),
+                      )
+                    }
+                  >
+                    {t("settings.knowledgeBase.actions.testRetrieval")}
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5">
-            <Button
-              variant="secondary"
-              onClick={() =>
-                message.info(
-                  t("settings.knowledgeBase.messages.rebuildPending", {
-                    name: document.name,
-                  }),
-                )
-              }
-            >
-              <RefreshCcw className="h-4 w-4" />
-              {t("settings.knowledgeBase.actions.rebuildIndex")}
-            </Button>
-            <Button
-              onClick={() =>
-                message.success(
-                  t("settings.knowledgeBase.messages.retrievalStarted", {
-                    name: document.name,
-                  }),
-                )
-              }
-            >
-              <ScanSearch className="h-4 w-4" />
-              {t("settings.knowledgeBase.actions.testRetrieval")}
-            </Button>
           </div>
         </div>
       </section>
 
-      <section className="grid min-h-0 flex-1 gap-4 overflow-hidden xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.9fr)]">
-        <Card className="flex min-h-0 flex-col overflow-hidden p-4">
-          <div className="mb-3 flex shrink-0 items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-surface-secondary">
-              <Layers3 className="h-4.5 w-4.5 text-icon-primary" />
+      <section className="stable-scrollbar min-h-0 flex-1 overflow-y-auto xl:overflow-hidden">
+        <div className="grid gap-3 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(300px,0.94fr)_minmax(0,1.36fr)]">
+          <Card className="p-3.5 xl:h-full xl:min-h-0 xl:overflow-y-auto">
+            <div className="mb-2.5">
+              <h2 className="text-[15px] font-semibold text-text-primary">
+                {t("settings.knowledgeBase.detail.basicInfo")}
+              </h2>
             </div>
-            <div>
-              <h2 className="text-base font-semibold text-text-primary">
+
+            <div className="grid gap-2.5">
+              <DetailField
+                icon={Hash}
+                label={t("settings.knowledgeBase.detail.documentId")}
+                value={document.id}
+              />
+              <DetailField
+                icon={UserRound}
+                label={t("settings.knowledgeBase.detail.sourceType")}
+                value={`${document.sourceLabel || document.sourceType} · ${document.fileExt.toUpperCase()}`}
+              />
+              <DetailField
+                icon={Clock3}
+                label={t("settings.knowledgeBase.detail.createdUpdated")}
+                value={`${document.createdAt.replace("T", " ").slice(0, 16)} · ${document.updatedAt.replace("T", " ").slice(0, 16)}`}
+              />
+              <DetailField
+                icon={Tags}
+                label={t("settings.knowledgeBase.detail.tags")}
+                value={
+                  <div className="flex flex-wrap gap-2">
+                    {tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="rounded-full border border-border bg-surface-primary px-2.5 py-1 text-xs font-medium text-text-secondary"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                }
+              />
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                <Card
+                  label={t("settings.knowledgeBase.detail.charCount")}
+                  value={formatCompactNumber(document.charCount)}
+                  description={t("settings.knowledgeBase.detail.charCountDescription")}
+                />
+                <Card
+                  label={t("settings.knowledgeBase.detail.chunkCount")}
+                  value={`${document.chunkCount}`}
+                  description={t("settings.knowledgeBase.detail.chunkCountDescription")}
+                />
+                <Card
+                  label={t("settings.knowledgeBase.detail.fileSize")}
+                  value={
+                    document.fileSize
+                      ? formatCompactNumber(document.fileSize)
+                      : "--"
+                  }
+                  description={t("settings.knowledgeBase.detail.fileSizeDescription")}
+                />
+                <Card
+                  label={t("settings.knowledgeBase.detail.statusLabel")}
+                  value={status.label}
+                  description={t("settings.knowledgeBase.detail.statusDescription")}
+                />
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-3.5 xl:h-full xl:min-h-0 xl:overflow-y-auto">
+            <div className="mb-2.5">
+              <h2 className="text-[15px] font-semibold text-text-primary">
                 {t("settings.knowledgeBase.detail.previewTitle")}
               </h2>
               <p className="text-sm text-text-secondary">
                 {t("settings.knowledgeBase.detail.previewDescription")}
               </p>
             </div>
-          </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
             <div className="space-y-2.5">
               {previewChunks.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border bg-surface-secondary p-4 text-sm text-text-secondary">
@@ -248,89 +329,14 @@ export default function KnowledgeBaseDetail() {
                         index: chunk.chunkIndex,
                       })}
                     </div>
-                    <p className="text-sm leading-6 text-text-secondary">{chunk.content}</p>
+                    <p className="text-sm leading-6 text-text-secondary">
+                      {chunk.content}
+                    </p>
                   </div>
                 ))
               )}
             </div>
-          </div>
-        </Card>
-
-        <div className="min-h-0 overflow-y-auto pr-1">
-          <div className="space-y-4">
-            <Card className="p-4">
-              <div className="mb-3 text-base font-semibold text-text-primary">
-                {t("settings.knowledgeBase.detail.basicInfo")}
-              </div>
-              <div className="grid gap-2.5">
-                <div className="rounded-xl border border-border bg-surface-secondary p-3.5">
-                  <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                    <Hash className="h-3.5 w-3.5" />
-                    {t("settings.knowledgeBase.detail.documentId")}
-                  </div>
-                  <div className="break-all text-sm font-medium text-text-primary">{document.id}</div>
-                </div>
-                <div className="rounded-xl border border-border bg-surface-secondary p-3.5">
-                  <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                    <UserRound className="h-3.5 w-3.5" />
-                    {t("settings.knowledgeBase.detail.sourceType")}
-                  </div>
-                  <div className="text-sm font-medium text-text-primary">
-                    {document.sourceLabel || document.sourceType} · {document.fileExt.toUpperCase()}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-border bg-surface-secondary p-3.5">
-                  <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                    <Clock3 className="h-3.5 w-3.5" />
-                    {t("settings.knowledgeBase.detail.createdUpdated")}
-                  </div>
-                  <div className="text-sm font-medium text-text-primary">
-                    {document.createdAt.replace("T", " ").slice(0, 16)} ·{" "}
-                    {document.updatedAt.replace("T", " ").slice(0, 16)}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-border bg-surface-secondary p-3.5">
-                  <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                    <Tags className="h-3.5 w-3.5" />
-                    {t("settings.knowledgeBase.detail.tags")}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-full border border-border bg-surface-primary px-2.5 py-1 text-xs font-medium text-text-secondary"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </Card>
-
-            <div className="grid gap-2.5 sm:grid-cols-2">
-              <Card
-                label={t("settings.knowledgeBase.detail.charCount")}
-                value={formatCompactNumber(document.charCount)}
-                description={t("settings.knowledgeBase.detail.charCountDescription")}
-              />
-              <Card
-                label={t("settings.knowledgeBase.detail.chunkCount")}
-                value={`${document.chunkCount}`}
-                description={t("settings.knowledgeBase.detail.chunkCountDescription")}
-              />
-              <Card
-                label={t("settings.knowledgeBase.detail.fileSize")}
-                value={document.fileSize ? formatCompactNumber(document.fileSize) : "--"}
-                description={t("settings.knowledgeBase.detail.fileSizeDescription")}
-              />
-              <Card
-                label={t("settings.knowledgeBase.detail.statusLabel")}
-                value={status.label}
-                description={t("settings.knowledgeBase.detail.statusDescription")}
-              />
-            </div>
-          </div>
+          </Card>
         </div>
       </section>
     </div>

@@ -29,7 +29,7 @@
 当前内置 4 套主题预设，定义于 [colorThemes.ts](/D:/workspace/rag-demo/desktop/src/shared/theme/colorThemes.ts)：
 
 - `warm-neutral`：暖陶米色。默认主题，纸张感最强，适合长时间阅读、配置和复盘
-- `knowledge-blue`：知识深蓝。冷白底和蓝灰层次更明显，适合知识检索、结果展示、可信感表达
+- `knowledge-blue`：铁墨紫灰。低饱和紫灰与纸感中性面结合，适合知识检索、引用展示和长时间阅读
 - `archive-green`：档案松绿。偏文档、索引、整理感，适合知识资产管理和档案场景
 - `slate-ocean`：海石灰蓝。更理性克制，适合工作台、配置面板和企业内部工具
 
@@ -135,6 +135,9 @@
 - `warning`
 - `danger`
 - `info`
+- `success-soft` / `warning-soft` / `danger-soft` / `info-soft`
+- `success-border` / `warning-border` / `danger-border` / `info-border`
+- `success-text` / `warning-text` / `danger-text` / `info-text`
 
 用途：
 
@@ -146,7 +149,8 @@
 规则：
 
 - 状态色只用于语义反馈，不做页面主色
-- 大面积状态背景优先使用低透明度，如 `bg-danger/5`、`bg-success/10`
+- 优先使用成组状态 token，而不是临时手写透明度
+- 状态块建议优先 `*-soft + *-border + *-text`
 - 当状态文案较长时，仍以 `surface-* + border-*` 建结构，状态色只做提醒
 
 ## 5. 推荐映射
@@ -164,8 +168,10 @@
 | 普通边框 | `border-border` |
 | 主按钮 | `bg-primary text-white hover:bg-primary-hover` |
 | 选中项 / 轻强调 | `bg-primary/10 text-primary` |
-| 危险提示 | `border-danger/20 bg-danger/5 text-danger` |
-| 成功状态 | `bg-success/10 text-success` |
+| 危险提示 | `border-danger-border bg-danger-soft text-danger-text` |
+| 成功状态 | `border-success-border bg-success-soft text-success-text` |
+| 警告提示 | `border-warning-border bg-warning-soft text-warning-text` |
+| 信息提示 | `border-info-border bg-info-soft text-info-text` |
 
 ## 6. Dos / Don'ts
 

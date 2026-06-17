@@ -45,7 +45,7 @@
 | 结构层级 | `surface-primary`、`surface-secondary`、`surface-elevated`、`border` | 页面、卡片、浮层、描边 |
 | 文本图标 | `text-*`、`icon-*` | 文本与图标层级 |
 | 扩展氛围 | `pampas-*`、`cloudy-*` | 柔和承托、边框灰阶、欢迎区 |
-| 状态反馈 | `success`、`warning`、`danger`、`info` | 校验、结果、风险反馈 |
+| 状态反馈 | `success`、`warning`、`danger`、`info` 及其 `*-soft` / `*-border` / `*-text` | 校验、结果、风险反馈 |
 
 共享组件默认配色规则：
 
@@ -54,6 +54,7 @@
 - 边框统一优先 `border`
 - 焦点和选中优先 `primary`
 - 状态色只做结果反馈，不做主结构色
+- 状态容器优先使用 `*-soft + *-border + *-text`，纯 `success/warning/danger/info` 主要留给点、图标和强调值
 
 ## Button
 
@@ -245,6 +246,11 @@ message.destroy();
 
 - 成功 / 警告 / 错误 / 信息都以语义色为核心
 - 避免让 toast 背景过重，优先保持可读和轻量
+- 需要浅底状态块时，优先：
+  - 成功：`bg-success-soft border-success-border text-success-text`
+  - 警告：`bg-warning-soft border-warning-border text-warning-text`
+  - 错误：`bg-danger-soft border-danger-border text-danger-text`
+  - 信息：`bg-info-soft border-info-border text-info-text`
 
 ## Modal
 
@@ -293,7 +299,8 @@ message.destroy();
 ### 色彩约束
 
 - 点色可分别使用 `success`、`danger`、`warning`
-- 周围 ring 或弱底保持低透明度，避免抢戏
+- 周围 ring 优先使用对应 `*-border`
+- 弱底状态块优先使用对应 `*-soft`
 
 ## StepIndicator
 
