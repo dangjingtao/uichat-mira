@@ -218,23 +218,23 @@ const AssistantMessage = ({
             onOpenDetail={onOpenRagProgressDetail}
           />
           {sources.length > 0 ? (
-            <div className="mt-3 rounded-2xl border border-primary-4/70 bg-primary-1/90 p-2.5 shadow-[0_4px_10px_rgba(170,92,42,0.04)] transition-[border-color,background-color,box-shadow] duration-200">
+            <div className="mt-3 rounded-2xl border border-border/70 bg-surface-elevated/92 p-2.5 shadow-[0_4px_10px_rgba(15,23,42,0.03)] transition-[border-color,background-color,box-shadow] duration-200">
               <button
                 type="button"
                 onClick={() => setIsSourcesOpen((current) => !current)}
-                className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-1 text-left transition-colors hover:bg-primary-2/40"
+                className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-1 text-left transition-colors hover:bg-surface-primary/80"
                 aria-expanded={isSourcesOpen}
               >
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.08em] text-primary-8">
-                    <FileText className="h-3.5 w-3.5" />
+                  <div className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.08em] text-text-secondary">
+                    <FileText className="h-3.5 w-3.5 text-primary" />
                     <span>{t("chat.thread.sources.title")}</span>
-                    <span className="rounded-full border border-primary-3/70 bg-primary-2/95 px-1.5 py-0.5 text-[10px] font-medium text-primary-8">
+                    <span className="rounded-full border border-border/70 bg-surface-primary/90 px-1.5 py-0.5 text-[10px] font-medium text-text-secondary">
                       {sources.length}
                     </span>
                   </div>
                 </div>
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-full  bg-primary-2/90 px-2 py-1 text-[10px] font-medium text-primary-8">
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border/60 bg-surface-primary/90 px-2 py-1 text-[10px] font-medium text-text-secondary">
                   <ChevronDown
                     className={`h-3.5 w-3.5 transition-transform ${
                       isSourcesOpen ? "rotate-180" : ""
@@ -263,13 +263,13 @@ const AssistantMessage = ({
                       return (
                         <div
                           key={`${messageId}-${source.chunkId}`}
-                          className={`px-3 py-2.5 ${isLast ? "" : "border-b border-primary-4/70"}`}
+                          className={`px-3 py-2.5 ${isLast ? "" : "border-b border-border/60"}`}
                         >
                           <div className="flex items-start gap-2">
                             <OverflowTooltip
                               text={documentName}
                               placement="top"
-                              className="min-w-0 flex-1 truncate text-xs font-semibold text-primary-8"
+                              className="min-w-0 flex-1 truncate text-xs font-semibold text-text-primary"
                             >
                               <div>
                                 {t("chat.thread.sources.document", {
@@ -284,7 +284,7 @@ const AssistantMessage = ({
                               >
                                 {attribution.label}
                               </span>
-                              <span className="rounded-full border border-primary-3/70 bg-primary-2/90 px-2 py-0.5 text-[10px] font-medium text-primary-8/90">
+                              <span className="rounded-full border border-border/70 bg-surface-primary/90 px-2 py-0.5 text-[10px] font-medium text-text-secondary">
                                 {t("chat.thread.sources.score", {
                                   value: source.score.toFixed(3),
                                 })}

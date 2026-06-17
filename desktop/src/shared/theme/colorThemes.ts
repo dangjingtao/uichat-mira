@@ -8,6 +8,13 @@ export type ThemePresetId =
 
 type ThemeMode = "light" | "dark";
 
+type StatusSemanticScale = {
+  solid: string;
+  soft: string;
+  border: string;
+  text: string;
+};
+
 type SemanticThemeValues = {
   cloudy: [
     string,
@@ -51,6 +58,12 @@ type SemanticThemeValues = {
     inverted: string;
   };
   secondary: string;
+  status: {
+    success: StatusSemanticScale;
+    warning: StatusSemanticScale;
+    danger: StatusSemanticScale;
+    info: StatusSemanticScale;
+  };
 };
 
 export interface ThemePreset {
@@ -140,7 +153,81 @@ const buildSemanticVariables = (values: SemanticThemeValues) => ({
   "--color-icon-secondary": hexToRgbTriplet(values.icon.secondary),
   "--color-icon-tertiary": hexToRgbTriplet(values.icon.tertiary),
   "--color-icon-inverted": hexToRgbTriplet(values.icon.inverted),
+  "--color-success": hexToRgbTriplet(values.status.success.solid),
+  "--color-success-soft": hexToRgbTriplet(values.status.success.soft),
+  "--color-success-border": hexToRgbTriplet(values.status.success.border),
+  "--color-success-text": hexToRgbTriplet(values.status.success.text),
+  "--color-warning": hexToRgbTriplet(values.status.warning.solid),
+  "--color-warning-soft": hexToRgbTriplet(values.status.warning.soft),
+  "--color-warning-border": hexToRgbTriplet(values.status.warning.border),
+  "--color-warning-text": hexToRgbTriplet(values.status.warning.text),
+  "--color-danger": hexToRgbTriplet(values.status.danger.solid),
+  "--color-danger-soft": hexToRgbTriplet(values.status.danger.soft),
+  "--color-danger-border": hexToRgbTriplet(values.status.danger.border),
+  "--color-danger-text": hexToRgbTriplet(values.status.danger.text),
+  "--color-info": hexToRgbTriplet(values.status.info.solid),
+  "--color-info-soft": hexToRgbTriplet(values.status.info.soft),
+  "--color-info-border": hexToRgbTriplet(values.status.info.border),
+  "--color-info-text": hexToRgbTriplet(values.status.info.text),
 });
+
+const sharedStatusTokens: Record<
+  ThemeMode,
+  SemanticThemeValues["status"]
+> = {
+  light: {
+    success: {
+      solid: "#4C8F63",
+      soft: "#EEF6F1",
+      border: "#C6DDCD",
+      text: "#356B49",
+    },
+    warning: {
+      solid: "#B9892F",
+      soft: "#FBF5E8",
+      border: "#E7D6AE",
+      text: "#7D6224",
+    },
+    danger: {
+      solid: "#C46863",
+      soft: "#FBEEEE",
+      border: "#E4C0BE",
+      text: "#8E4542",
+    },
+    info: {
+      solid: "#5A7E9C",
+      soft: "#EEF4F8",
+      border: "#CBD9E4",
+      text: "#3F607C",
+    },
+  },
+  dark: {
+    success: {
+      solid: "#6FB388",
+      soft: "#1E2A22",
+      border: "#365240",
+      text: "#9AD3AD",
+    },
+    warning: {
+      solid: "#D1A85A",
+      soft: "#2B2417",
+      border: "#5A4A2A",
+      text: "#E4C27E",
+    },
+    danger: {
+      solid: "#D07A75",
+      soft: "#2C1E1D",
+      border: "#5C3634",
+      text: "#E2A19D",
+    },
+    info: {
+      solid: "#7FA5C1",
+      soft: "#1D252C",
+      border: "#38506A",
+      text: "#A9C3D8",
+    },
+  },
+};
 
 const createThemePreset = (
   id: ThemePresetId,
@@ -211,6 +298,7 @@ export const themePresets: ThemePreset[] = [
           inverted: "#fafafa",
         },
         secondary: "#64748b",
+        status: sharedStatusTokens.light,
       },
       dark: {
         cloudy: [
@@ -255,102 +343,105 @@ export const themePresets: ThemePreset[] = [
           inverted: "#18181b",
         },
         secondary: "#94a3b8",
+        status: sharedStatusTokens.dark,
       },
     },
   ),
   createThemePreset(
     "knowledge-blue",
-    "知识深蓝",
-    "把主体背景调成更干净的冷白与蓝灰层次，强化知识检索、可信度和专业感。",
-    "#2F6BFF",
+    "铁墨紫灰",
+    "以低饱和铁墨紫灰建立专业、安静且有判断力的界面气质，适合检索、引用与长时间阅读。",
+    "#6E5E7D",
     {
       light: {
         cloudy: [
-          "#f8fafc",
-          "#eff4fa",
-          "#dfe8f3",
-          "#c7d3e1",
-          "#a5b0bf",
-          "#838f9f",
-          "#667283",
-          "#4b5668",
-          "#343d4c",
+          "#f9f9fb",
+          "#efeff3",
+          "#e1e2e8",
+          "#cbccd6",
+          "#aaabb5",
+          "#888993",
+          "#696a75",
+          "#4d4e58",
+          "#363741",
         ],
         pampas: [
-          "#ffffff",
-          "#f7fafd",
-          "#f1f6fb",
-          "#ecf2f8",
-          "#dfe7f0",
-          "#ced8e4",
-          "#b4c0cf",
-          "#94a3b4",
-          "#6f8092",
+          "#fffefe",
+          "#fbfbfc",
+          "#f5f5f8",
+          "#efeff3",
+          "#e3e4ea",
+          "#d0d2db",
+          "#b5b7c2",
+          "#9799a6",
+          "#747581",
         ],
         surface: {
-          primary: "#ffffff",
-          secondary: "#f6f9fc",
-          tertiary: "#edf3f8",
-          elevated: "#fbfdff",
+          primary: "#fffefe",
+          secondary: "#f8f8fb",
+          tertiary: "#eeeef2",
+          elevated: "#fcfbfe",
         },
-        border: "#d8e2ec",
+        border: "#dadbe4",
         text: {
-          primary: "#1d2530",
-          secondary: "#556372",
-          tertiary: "#7b8896",
-          inverted: "#f8fbff",
+          primary: "#24262f",
+          secondary: "#5f6171",
+          tertiary: "#838695",
+          inverted: "#faf9fd",
         },
         icon: {
-          primary: "#1d2530",
-          secondary: "#556372",
-          tertiary: "#8d9aa8",
-          inverted: "#f8fbff",
+          primary: "#24262f",
+          secondary: "#5f6171",
+          tertiary: "#9193a3",
+          inverted: "#faf9fd",
         },
-        secondary: "#6b7d90",
+        secondary: "#707284",
+        status: sharedStatusTokens.light,
       },
       dark: {
         cloudy: [
-          "#222832",
-          "#28303b",
-          "#333d4a",
-          "#445062",
-          "#5b687b",
-          "#778499",
-          "#99a7b8",
-          "#c1cedb",
-          "#e5edf7",
+          "#26222a",
+          "#2f2b35",
+          "#3b3642",
+          "#4d4758",
+          "#655f70",
+          "#827b8f",
+          "#a49dae",
+          "#cac4d2",
+          "#ede9f1",
         ],
         pampas: [
-          "#1d232c",
-          "#232b35",
-          "#2d3743",
-          "#394553",
-          "#4d5b6c",
-          "#657488",
-          "#8596aa",
-          "#b1c0d1",
-          "#dde8f3",
+          "#1f1b22",
+          "#262129",
+          "#302b34",
+          "#3c3641",
+          "#524b59",
+          "#6c6474",
+          "#8d8697",
+          "#b5afbd",
+          "#ddd9e3",
         ],
         surface: {
-          primary: "#171d26",
-          secondary: "#1d2530",
-          tertiary: "#26313d",
-          elevated: "#1b212a",
+          primary: "#19161d",
+          secondary: "#211d26",
+          tertiary: "#2b2631",
+          elevated: "#1d1921",
         },
-        border: "#3f4d5c",
+        border: "#4d4557",
         text: {
-          primary: "#edf3fb",
-          secondary: "#b8c4d1",
-          tertiary: "#8e9ba9",
-          inverted: "#131922",
+          primary: "#f1edf4",
+          secondary: "#c2bcc9",
+          tertiary: "#978fa1",
+          inverted: "#141117",
         },
         icon: {
-          primary: "#edf3fb",
-          secondary: "#b8c4d1",
-          tertiary: "#8e9ba9",
-          inverted: "#131922",
+          primary: "#f1edf4",
+          secondary: "#c2bcc9",
+          tertiary: "#978fa1",
+          inverted: "#141117",
         },
-        secondary: "#8fa4bb",
+        secondary: "#9b92a8",
+        status: sharedStatusTokens.dark,
       },
     },
   ),
@@ -403,6 +494,7 @@ export const themePresets: ThemePreset[] = [
           inverted: "#f9fcf8",
         },
         secondary: "#6d7d6c",
+        status: sharedStatusTokens.light,
       },
       dark: {
         cloudy: [
@@ -447,6 +539,7 @@ export const themePresets: ThemePreset[] = [
           inverted: "#121612",
         },
         secondary: "#8fa290",
+        status: sharedStatusTokens.dark,
       },
     },
   ),
@@ -499,6 +592,7 @@ export const themePresets: ThemePreset[] = [
           inverted: "#f8fbfc",
         },
         secondary: "#6f848f",
+        status: sharedStatusTokens.light,
       },
       dark: {
         cloudy: [
@@ -543,6 +637,7 @@ export const themePresets: ThemePreset[] = [
           inverted: "#13171a",
         },
         secondary: "#8ea1ab",
+        status: sharedStatusTokens.dark,
       },
     },
   ),

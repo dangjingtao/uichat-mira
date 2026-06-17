@@ -34,9 +34,11 @@ Most project documentation is centralized under `docs/`. The main exceptions are
 - `assistant-ui.md`
 - `chat-system-practices.md`
 - `evaluation-workbench.md`
+- `product-roadmap-priorities.md`
 - `rag-langgraph-flow.md`
 - `knowledge-base-mvp.md`
 - `knowledge-base-backend-schema.md`
+- `markdown-workspace-mode.md`
 - `provider-proxy-api.md`
 - `provider-integration-optimization.md`
 - `tools-protocol.md`

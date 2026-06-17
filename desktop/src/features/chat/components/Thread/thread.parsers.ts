@@ -264,27 +264,27 @@ export const getRagSourceAttribution = (source: RagSourceLike) => {
   if (normalizedMatchType === "hybrid" || (hasVectorMode && hasLexicalMode)) {
     return {
       label: i18n.t("chat.parsers.doubleHit"),
-      toneClassName: "border-emerald-200/80 bg-emerald-50/90 text-emerald-700",
+      toneClassName: "border-emerald-200/70 bg-emerald-50/70 text-emerald-700",
     };
   }
 
   if (normalizedMatchType && lexicalModeSet.has(normalizedMatchType)) {
     return {
       label: i18n.t("chat.parsers.keywordHit"),
-      toneClassName: "border-sky-200/80 bg-sky-50/90 text-sky-700",
+      toneClassName: "border-sky-200/70 bg-sky-50/70 text-sky-700",
     };
   }
 
   if (normalizedMatchType && vectorModeSet.has(normalizedMatchType)) {
     return {
       label: i18n.t("chat.parsers.semanticHit"),
-      toneClassName: "border-amber-200/80 bg-amber-50/90 text-amber-700",
+      toneClassName: "border-amber-200/70 bg-amber-50/70 text-amber-700",
     };
   }
 
   return {
     label: i18n.t("chat.parsers.knowledgeBaseHit"),
-    toneClassName: "border-primary-3/80 bg-primary-2/95 text-primary-8",
+    toneClassName: "border-border/70 bg-surface-secondary/80 text-text-secondary",
   };
 };
 

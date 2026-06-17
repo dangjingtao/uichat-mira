@@ -92,20 +92,20 @@ function ChangePasswordModal({
       {form.currentPassword &&
       form.newPassword &&
       form.currentPassword === form.newPassword ? (
-        <div className="rounded-lg border border-danger/20 bg-danger/5 px-3.5 py-3 text-sm text-danger">
+        <div className="rounded-lg border border-danger-border bg-danger-soft px-3.5 py-3 text-sm text-danger-text">
           {t("settings.general.password.sameAsCurrent")}
         </div>
       ) : null}
 
       {errorMessage ? (
-        <div className="rounded-lg border border-danger/20 bg-danger/5 px-3.5 py-3 text-sm text-danger">
+        <div className="rounded-lg border border-danger-border bg-danger-soft px-3.5 py-3 text-sm text-danger-text">
           {errorMessage}
         </div>
       ) : null}
 
       {successMessage ? (
-        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-sm text-emerald-700">
-          <CheckCircle2 className="h-4 w-4" />
+        <div className="flex items-center gap-2 rounded-lg border border-success-border bg-success-soft px-3.5 py-3 text-sm text-success-text">
+          <CheckCircle2 className="h-4 w-4 text-success" />
           <span>{successMessage}</span>
         </div>
       ) : null}
@@ -134,12 +134,12 @@ export default function General() {
   const { session } = useAuth();
   const { language, setLanguage, supportedLanguages } =
     useLanguagePreferences();
-  const { colorTheme, setColorTheme, themePresets } = useThemePreferences();
+  const { colorTheme, setColorTheme, themeMode, setThemeMode, themePresets } =
+    useThemePreferences();
   const [form, setForm] = useState<PasswordFormState>(initialFormState);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-  const [darkModeEnabled, setDarkModeEnabled] = useState(false);
   const themeMetadata = useMemo(
     () =>
       ({
@@ -335,8 +335,10 @@ export default function General() {
               </div>
             </div>
             <Switch
-              checked={darkModeEnabled}
-              onChange={() => setDarkModeEnabled((current) => !current)}
+              checked={themeMode === "dark"}
+              onChange={() =>
+                setThemeMode(themeMode === "dark" ? "light" : "dark")
+              }
               ariaLabel={t("settings.general.darkMode.ariaLabel")}
             />
           </div>

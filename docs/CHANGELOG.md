@@ -8,6 +8,28 @@
 
 ---
 
+## [0.5.2] - 2026-06-18
+
+### 新增
+
+#### 文档
+- **文档索引补充** - `docs/README.md` 新增 `product-roadmap-priorities.md` 与 `markdown-workspace-mode.md` 入口，便于查阅产品优先级与 Markdown 工作区模式说明
+- **新文档落地** - 新增 `docs/product-roadmap-priorities.md` 与 `docs/markdown-workspace-mode.md`
+
+### 变更
+
+#### 桌面端
+- **主题模式切换落地** - `ThemeProvider` 新增主题模式持久化与文档属性同步，设置页深色模式开关改为直接驱动全局亮/暗主题
+- **共享色板与组件一致性** - 优化 `StatusBadge`、`StatusIndicator`、`Select`、设置页密码提示等组件的语义化颜色使用，统一成功、警告、错误与选中态表现
+- **主题预设扩展** - 调整 `colorThemes.ts`、`styles.css` 与 `tailwind.config.cjs`，完善亮暗主题变量与 Tailwind 语义 token
+- **聊天与知识库界面微调** - 更新 `Thread/index.tsx`、`thread.parsers.ts`、`KnowledgeBase/Detail.tsx` 等页面细节，配合新的视觉层级与状态呈现
+
+#### 国际化与组件文档
+- **文案同步** - 更新 `desktop/src/shared/i18n/en-US.ts` 与 `desktop/src/shared/i18n/zh-CN.ts`
+- **组件文档更新** - 更新 `desktop/src/shared/ui/COMPONENTS.md` 与 `desktop/src/shared/ui/ui-design-guidelines-tailwind.md`，同步新的主题与语义色使用约定
+
+---
+
 ## [0.5.1] - 2026-06-17
 
 ### 变更

@@ -227,7 +227,7 @@ export const Select: React.FC<SelectProps> = ({
                         duration-150
                         data-[highlighted]:bg-primary/10
                         data-[highlighted]:text-text-primary
-                        data-[state=checked]:bg-primary/10
+                        data-[state=checked]:bg-primary/8
                         data-[state=checked]:text-primary
                       `}
                     >
