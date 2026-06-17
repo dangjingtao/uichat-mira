@@ -102,7 +102,6 @@ In production mode, Tauri will try to start the backend automatically. Make sure
 Before Tauri packaging, the workspace stages all required inputs into `.artifacts/`:
 - `.artifacts/desktop/dist`
 - `.artifacts/server-bundle`
-- `.artifacts/server-data`
 - `.artifacts/icons`
 - `.artifacts/runtime.config.cjs`
 - `.artifacts/node-runtime`

@@ -11,6 +11,7 @@ apps/desktop/release/
 apps/desktop/release-*/
 apps/desktop/electron-backend/
 apps/server/data/
+server/data/*.db
 server/data/*.db-shm
 server/data/*.db-wal
 release-*/

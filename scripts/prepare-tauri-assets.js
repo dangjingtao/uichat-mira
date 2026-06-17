@@ -9,7 +9,6 @@ const projectRoot = path.join(__dirname, "..");
 const artifactsRoot = path.join(projectRoot, ".artifacts");
 const desktopArtifactsRoot = path.join(artifactsRoot, "desktop", "dist");
 const serverBundleArtifactsRoot = path.join(artifactsRoot, "server-bundle");
-const serverDataArtifactsRoot = path.join(artifactsRoot, "server-data");
 const nodeRuntimeArtifactsRoot = path.join(artifactsRoot, "node-runtime");
 const tauriResourcesRoot = path.join(projectRoot, "tauri", "resources");
 const tauriServerDir = path.join(tauriResourcesRoot, "server");
@@ -41,11 +40,6 @@ if (!fs.existsSync(runtimeConfigArtifactsPath)) {
 fs.rmSync(tauriResourcesRoot, { recursive: true, force: true });
 fs.mkdirSync(tauriResourcesRoot, { recursive: true });
 fs.cpSync(serverBundleArtifactsRoot, tauriServerDir, { recursive: true });
-if (fs.existsSync(serverDataArtifactsRoot)) {
-  fs.cpSync(serverDataArtifactsRoot, path.join(tauriServerDir, "data"), {
-    recursive: true,
-  });
-}
 
 fs.mkdirSync(nodeRuntimeDir, { recursive: true });
 fs.copyFileSync(

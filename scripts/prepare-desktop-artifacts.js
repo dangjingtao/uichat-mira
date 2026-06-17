@@ -10,7 +10,6 @@ const artifactsRoot = path.join(projectRoot, ".artifacts");
 const desktopArtifactsRoot = path.join(artifactsRoot, "desktop", "dist");
 const legacyServerArtifactsRoot = path.join(artifactsRoot, "server");
 const serverBundleArtifactsRoot = path.join(artifactsRoot, "server-bundle");
-const serverDataArtifactsRoot = path.join(artifactsRoot, "server-data");
 const iconsArtifactsRoot = path.join(artifactsRoot, "icons");
 const runtimeConfigArtifactsPath = path.join(artifactsRoot, "runtime.config.cjs");
 const nodeRuntimeArtifactsRoot = path.join(artifactsRoot, "node-runtime");
@@ -41,18 +40,6 @@ function copyPath(sourcePath, destinationPath, label) {
   }
 
   console.log(`Copied ${label}: ${destinationPath}`);
-}
-
-function ensureOptionalServerData() {
-  const serverDataSource = path.join(projectRoot, "server", "data");
-  const serverDataDest = serverDataArtifactsRoot;
-
-  if (!fs.existsSync(serverDataSource)) {
-    removeDir(serverDataDest, "stale staged server data");
-    return;
-  }
-
-  copyPath(serverDataSource, serverDataDest, "server data");
 }
 
 console.log("Preparing shared desktop artifacts...");
@@ -90,8 +77,6 @@ const nodeRuntimeDest = path.join(
 fs.copyFileSync(process.execPath, nodeRuntimeDest);
 console.log(`Copied Node runtime: ${nodeRuntimeDest}`);
 
-ensureOptionalServerData();
-
 removeDir(electronArtifactsRoot, "old staged Electron app");
 fs.mkdirSync(electronArtifactsRoot, { recursive: true });
 copyPath(
@@ -125,13 +110,6 @@ copyPath(
   electronBackendRoot,
   "staged backend bundle",
 );
-if (fs.existsSync(serverDataArtifactsRoot)) {
-  copyPath(
-    serverDataArtifactsRoot,
-    path.join(electronBackendRoot, "data"),
-    "staged backend data",
-  );
-}
 copyPath(
   runtimeConfigArtifactsPath,
   path.join(electronArtifactsRoot, "runtime.config.cjs"),
