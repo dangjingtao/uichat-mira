@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   getProviderDetail,
   getProviders,
@@ -26,6 +27,7 @@ interface PlatformConfigModalProps {
 const PlatformConfigModal: React.FC<PlatformConfigModalProps> = ({
   onRoleConfigUpdated,
 }) => {
+  const { t } = useTranslation();
   const { refresh: refreshRoleModelConfigs } = useRoleModelConfigs();
   const [providers, setProviders] = useState<ProviderSummary[]>([]);
   const [selectedProviderCode, setSelectedProviderCode] =
@@ -80,11 +82,11 @@ const PlatformConfigModal: React.FC<PlatformConfigModalProps> = ({
         setSelectedProviderCode(initialProvider);
         await loadProviderDetail(initialProvider);
       } catch (err) {
-        const messageText = err instanceof Error ? err.message : "加载平台配置失败";
+        const messageText = err instanceof Error ? err.message : t("settings.model.platformConfig.loadFailed");
         message.error(messageText);
       }
     })();
-  }, [loadProviderDetail, loadProviders, selectedProviderCode]);
+  }, [loadProviderDetail, loadProviders, selectedProviderCode, t]);
 
   const currentDetail = providerDetails[selectedProviderCode] ?? null;
   const currentSelectedModelId = selectedModelIds[selectedProviderCode] ?? "";
@@ -98,7 +100,7 @@ const PlatformConfigModal: React.FC<PlatformConfigModalProps> = ({
         await loadProviderDetail(nextCode);
       } catch (err) {
         const messageText =
-          err instanceof Error ? err.message : "加载平台详情失败";
+          err instanceof Error ? err.message : t("settings.model.platformConfig.loadDetailFailed");
         message.error(messageText);
       }
     }
@@ -139,9 +141,9 @@ const PlatformConfigModal: React.FC<PlatformConfigModalProps> = ({
       await syncProviderModels(selectedProviderCode);
       await loadProviders();
       await loadProviderDetail(selectedProviderCode);
-      message.success("模型同步成功");
+      message.success(t("settings.model.platformConfig.syncSuccess"));
     } catch (err) {
-      const messageText = err instanceof Error ? err.message : "同步模型失败";
+      const messageText = err instanceof Error ? err.message : t("settings.model.platformConfig.syncFailed");
       setSyncErrorByProvider((prev) => ({
         ...prev,
         [selectedProviderCode]: messageText,
@@ -158,7 +160,7 @@ const PlatformConfigModal: React.FC<PlatformConfigModalProps> = ({
 
   const handleSetDefaultRole = async (role: RoleModelType) => {
     if (!currentSelectedModelId) {
-      message.warning("请先选择模型");
+      message.warning(t("settings.model.platformConfig.selectModelFirst"));
       return;
     }
 
@@ -178,9 +180,13 @@ const PlatformConfigModal: React.FC<PlatformConfigModalProps> = ({
       await refreshRoleModelConfigs();
       broadcastRoleModelConfigChanged();
       await onRoleConfigUpdated?.();
-      message.success(`已更新默认 ${role.toUpperCase()} 模型`);
+      message.success(
+        role === "evaluation"
+          ? t("settings.model.platformConfig.updatedEvaluation")
+          : t("settings.model.platformConfig.updatedDefault", { role: role.toUpperCase() }),
+      );
     } catch (err) {
-      const messageText = err instanceof Error ? err.message : "设置默认模型失败";
+      const messageText = err instanceof Error ? err.message : t("settings.model.platformConfig.setDefaultFailed");
       message.error(messageText);
     } finally {
       setAssigningRole(null);

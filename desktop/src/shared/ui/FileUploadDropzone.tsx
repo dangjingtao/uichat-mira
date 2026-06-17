@@ -1,5 +1,6 @@
 import { CloudUpload } from "lucide-react";
 import React from "react";
+import { useTranslation } from "react-i18next";
 import Card from "./Card";
 
 interface FileUploadDropzoneProps {
@@ -19,6 +20,7 @@ export function FileUploadDropzone({
   className = "",
   disabled = false,
 }: FileUploadDropzoneProps) {
+  const { t } = useTranslation();
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -68,8 +70,10 @@ export function FileUploadDropzone({
         </div>
         <div className="min-w-0">
           <div className="text-sm font-medium text-text-primary">
-            拖拽文件或文件夹到此，或者
-            <span className="ml-1 text-primary">选择文件</span>
+            {t("ui.fileUploadDropzone.dragAndDrop")}
+            <span className="ml-1 text-primary">
+              {t("ui.fileUploadDropzone.selectFile")}
+            </span>
           </div>
           {helperText ? (
             <div className="mt-0.5 text-xs leading-5 text-text-secondary">

@@ -2,6 +2,7 @@
 
 import { Outlet, useLocation } from "react-router-dom";
 import React, { ReactNode, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import Sidebar from "../Sidebar";
 import {
   AssistantRuntimeProvider,
@@ -24,7 +25,7 @@ import {
   KnowledgeBaseAvailabilityProvider,
   useKnowledgeBaseAvailability,
 } from "@/app/providers/KnowledgeBaseAvailabilityProvider";
-import { settingsNavigationItems } from "@/app/routes/settingsRoutes";
+import { useSettingsNavigationItems } from "@/app/routes/settingsRoutes";
 
 const threadListAdapter = new BackendThreadListAdapter();
 
@@ -41,6 +42,8 @@ function SidebarLayoutFrame({
   shellClassName?: string;
   contentClassName?: string;
 }) {
+  const { t } = useTranslation();
+
   return (
     <div
       className="w-full min-w-0"
@@ -53,7 +56,7 @@ function SidebarLayoutFrame({
       <Sidebar>
         {showBackToChatLink && (
           <NavItem to="/chat" icon={<ArrowLeft size={16} />}>
-            返回聊天
+            {t("common.actions.backToChat")}
           </NavItem>
         )}
 
@@ -62,7 +65,7 @@ function SidebarLayoutFrame({
 
       <main
         className={`flex h-screen w-full min-w-0 flex-col overflow-hidden px-0 ${
-          shellClassName ?? "rounded-l-[24px] bg-white"
+          shellClassName ?? "rounded-l-[24px] bg-surface-primary"
         }`}
       >
         <section className="flex min-h-0 flex-1">
@@ -111,7 +114,7 @@ function ChatWorkspacePane({ showChatPane }: { showChatPane: boolean }) {
               showBackToChatLink={false}
               sidebarContent={<ThreadListSidebar />}
               mainContent={<Thread />}
-              shellClassName="rounded-l-[24px] bg-white"
+              shellClassName="rounded-l-[24px] bg-surface-primary"
             />
           </div>
         </CurrentThreadProvider>
@@ -122,7 +125,7 @@ function ChatWorkspacePane({ showChatPane }: { showChatPane: boolean }) {
 
 function SettingsLayout() {
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-[#FAFBF7]">
+    <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-surface-secondary">
       <Outlet />
     </div>
   );
@@ -143,7 +146,7 @@ function SettingsWorkspacePane({
         showBackToChatLink
         sidebarContent={<SettingsNavigation />}
         mainContent={<SettingsLayout />}
-        shellClassName="rounded-l-[28px] border border-border/70 bg-[#FAFBF7] shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
+        shellClassName="rounded-l-[28px] border border-border/70 bg-surface-secondary shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
         contentClassName="px-3 sm:px-4 lg:px-5 xl:px-6"
       />
     </div>
@@ -151,6 +154,8 @@ function SettingsWorkspacePane({
 }
 
 function SettingsNavigation() {
+  const settingsNavigationItems = useSettingsNavigationItems();
+
   return settingsNavigationItems.map((item) => {
     const Icon = item.icon;
 

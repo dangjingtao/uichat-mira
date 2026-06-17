@@ -82,6 +82,13 @@ export interface ProviderInvocationMetadata {
   };
 }
 
+export interface ExplicitProviderSelectionInput {
+  providerCode: ProviderCode;
+  remoteModelId: string;
+  messages: NormalizedChatMessage[];
+  params?: Record<string, unknown>;
+}
+
 const syncResolvedEmbeddingDimensions = (
   resolved: ProviderResolution,
   dimensions: number,
@@ -290,6 +297,35 @@ const resolveProviderForRole = (
     model: resolveProviderModelIdentifier(roleType, providerCode, modelConfig),
     modelConfigId: modelConfig.id,
     params: parseModelParams(modelConfig.params),
+  };
+};
+
+const resolveExplicitProviderSelection = (
+  providerCode: ProviderCode,
+  remoteModelId: string,
+  params: Record<string, unknown> = {},
+): ProviderResolution => {
+  const provider = providerConnectionRepository.findByCode(providerCode);
+  if (!provider) {
+    throw new Error(`Provider "${providerCode}" not found`);
+  }
+
+  if (!provider.isEnabled) {
+    throw new Error(`Provider "${providerCode}" is disabled`);
+  }
+
+  const model = remoteModelId.trim();
+  if (!model) {
+    throw new Error("Evaluation model is required");
+  }
+
+  return {
+    providerCode,
+    baseUrl: provider.baseUrl ?? "",
+    apiKey: decryptSecret(provider.apiKeyEncrypted),
+    model,
+    modelConfigId: `manual:${providerCode}:${model}`,
+    params,
   };
 };
 
@@ -651,5 +687,62 @@ export const providerProxyService = {
       ...resolved,
       endpoint: createOpenAICompatibleRerankUrl(resolved.baseUrl),
     };
+  },
+
+  async generateTextWithModelSelection(
+    input: ExplicitProviderSelectionInput,
+  ): Promise<string> {
+    const resolved = resolveExplicitProviderSelection(
+      input.providerCode,
+      input.remoteModelId,
+      input.params ?? {},
+    );
+
+    if (getProviderDefinition(resolved.providerCode).chatAdapter === "ollama") {
+      await assertOllamaModelAvailable({
+        baseUrl: resolved.baseUrl,
+        apiKey: resolved.apiKey,
+        model: resolved.model,
+        role: "llm",
+      });
+    }
+
+    let output = "";
+    for await (const delta of streamResolvedChat(resolved, input.messages)) {
+      output += delta;
+    }
+
+    return output.trim();
+  },
+
+  async generateTextForRole(
+    roleType: ModelType,
+    messages: NormalizedChatMessage[],
+    params?: Record<string, unknown>,
+  ): Promise<string> {
+    const baseResolved = resolveProviderForRole(roleType, "default");
+    const resolved: ProviderResolution = {
+      ...baseResolved,
+      params: {
+        ...baseResolved.params,
+        ...(params ?? {}),
+      },
+    };
+
+    if (getProviderDefinition(resolved.providerCode).chatAdapter === "ollama") {
+      await assertOllamaModelAvailable({
+        baseUrl: resolved.baseUrl,
+        apiKey: resolved.apiKey,
+        model: resolved.model,
+        role: roleType,
+      });
+    }
+
+    let output = "";
+    for await (const delta of streamResolvedChat(resolved, messages)) {
+      output += delta;
+    }
+
+    return output.trim();
   },
 };

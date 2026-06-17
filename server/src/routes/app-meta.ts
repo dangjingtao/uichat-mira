@@ -60,6 +60,34 @@ const appMetaRoute: FastifyPluginAsync = async (app) => {
                   },
                 },
               },
+              git: {
+                type: "object",
+                required: ["branch", "versions"],
+                properties: {
+                  branch: { type: "string" },
+                  versions: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      required: ["version", "commit"],
+                      properties: {
+                        version: { type: "string" },
+                        commit: {
+                          type: "object",
+                          required: ["hash", "shortHash", "message", "author", "date"],
+                          properties: {
+                            hash: { type: "string" },
+                            shortHash: { type: "string" },
+                            message: { type: "string" },
+                            author: { type: "string" },
+                            date: { type: "string" },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
             },
           }),
         },

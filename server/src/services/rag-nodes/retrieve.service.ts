@@ -489,6 +489,30 @@ export const retrieveService = {
             contentLength: Array.from(chunk.content).length,
           })),
         },
+        artifacts: {
+          retrievalBreakdown: {
+            strategy: result.execution.strategy,
+            counts: {
+              embeddingHits: result.execution.vectorCount,
+              lexicalHits: result.execution.lexicalCount,
+              fusedHits: result.execution.fusedCount,
+            },
+            candidates: [
+              ...toStageCandidates(
+                "vector",
+                result.execution.vectorCandidates,
+              ),
+              ...toStageCandidates(
+                "lexical",
+                result.execution.lexicalCandidates,
+              ),
+              ...toStageCandidates(
+                "fused",
+                result.execution.fusedCandidates,
+              ),
+            ],
+          },
+        },
         knowledgeBaseId: result.knowledgeBaseId,
         topK: input.topK ?? 10,
         candidateCount:

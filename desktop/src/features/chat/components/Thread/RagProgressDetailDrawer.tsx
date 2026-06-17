@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Braces, Copy, X } from "lucide-react";
 import { IconButton } from "@/shared/ui/Button";
 import { message } from "@/shared/ui/Message";
@@ -26,6 +27,7 @@ export function RagProgressDetailDrawer({
   detail: RagProgressDetail | null;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const [mounted, setMounted] = useState(open);
   const [visible, setVisible] = useState(open);
   const [cachedDetail, setCachedDetail] = useState<RagProgressDetail | null>(
@@ -92,9 +94,9 @@ export function RagProgressDetailDrawer({
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(formattedJson);
-      message.success("JSON 已复制");
+      message.success(t("chat.ragDrawer.copySuccess"));
     } catch {
-      message.error("复制失败，请重试");
+      message.error(t("chat.ragDrawer.copyFailed"));
     }
   };
 
@@ -128,10 +130,18 @@ export function RagProgressDetailDrawer({
             </div>
 
             <div className="flex shrink-0 items-center gap-0.5">
-              <IconButton ariaLabel="复制 JSON" onClick={handleCopy} className="h-8 w-8">
+              <IconButton
+                ariaLabel={t("chat.ragDrawer.copyJson")}
+                onClick={handleCopy}
+                className="h-8 w-8"
+              >
                 <Copy className="h-3.5 w-3.5" />
               </IconButton>
-              <IconButton ariaLabel="关闭执行过程详情" onClick={onClose} className="h-8 w-8">
+              <IconButton
+                ariaLabel={t("chat.ragDrawer.closeDetail")}
+                onClick={onClose}
+                className="h-8 w-8"
+              >
                 <X className="h-3.5 w-3.5" />
               </IconButton>
             </div>
@@ -155,13 +165,7 @@ export function RagProgressDetailDrawer({
                   "linear-gradient(180deg, rgba(var(--color-surface-primary,255 255 255),0.82) 0%, rgba(var(--color-surface-secondary,247 247 245),0.98) 100%)",
               }}
             >
-              <code
-                className="whitespace-pre-wrap break-all"
-                style={{
-                  fontFamily:
-                    'ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace',
-                }}
-              >
+              <code className="whitespace-pre-wrap break-all font-mono">
                 {formattedJson}
               </code>
             </pre>

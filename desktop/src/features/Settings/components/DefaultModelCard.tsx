@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/shared/ui/Button";
 import { forwardRef, useImperativeHandle } from "react";
 import { Modal } from "@/shared/ui/Modal";
@@ -17,6 +18,7 @@ interface DefaultModelCardRef {
 
 const DefaultModelCard = forwardRef<DefaultModelCardRef, DefaultModelCardProps>(
   ({ onReady }, ref) => {
+    const { t } = useTranslation();
     const { configMap, loading, refresh } = useRoleModelConfigs();
 
     useEffect(() => {
@@ -34,7 +36,7 @@ const DefaultModelCard = forwardRef<DefaultModelCardRef, DefaultModelCardProps>(
       let modalKey = "";
 
       modalKey = Modal.show({
-        title: "平台模型设置",
+        title: t("settings.model.defaultCard.platformSettingsTitle"),
         width: 940,
         height: 560,
         onClose: () => {
@@ -47,10 +49,10 @@ const DefaultModelCard = forwardRef<DefaultModelCardRef, DefaultModelCardProps>(
               size="sm"
               onClick={() => Modal.close(modalKey)}
             >
-              关闭
+              {t("settings.model.defaultCard.close")}
             </Button>
             <Button size="sm" onClick={() => Modal.close(modalKey)}>
-              完成
+              {t("settings.model.defaultCard.done")}
             </Button>
           </>
         ),
@@ -84,6 +86,11 @@ const DefaultModelCard = forwardRef<DefaultModelCardRef, DefaultModelCardProps>(
               readOnly
             />
             <ModelConfig
+              modelType="evaluation"
+              config={configMap.evaluation}
+              onUpdated={handleConfigUpdated}
+            />
+            <ModelConfig
               modelType="embedding"
               config={configMap.embedding}
               onUpdated={handleConfigUpdated}
@@ -97,7 +104,7 @@ const DefaultModelCard = forwardRef<DefaultModelCardRef, DefaultModelCardProps>(
 
           {loading ? (
             <div className="text-xs text-text-secondary">
-              正在同步模型配置...
+              {t("settings.model.defaultCard.syncing")}
             </div>
           ) : null}
         </div>

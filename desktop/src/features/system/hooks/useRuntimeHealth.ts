@@ -12,7 +12,9 @@ import {
 
 type RuntimeState = {
   status: "unknown" | "running" | "stopped";
-  detail: string;
+  detail?: string;
+  detailKey?: string;
+  detailValues?: Record<string, string>;
 };
 
 type RuntimeHealthSnapshot = {
@@ -24,8 +26,20 @@ type RuntimeHealthSnapshot = {
 
 const createRuntimeState = (
   status: RuntimeState["status"],
-  detail: string,
+  detailOrKey: string,
+  detailValues?: Record<string, string>,
+  treatAsKey = true,
 ): RuntimeState => ({
+  status,
+  ...(treatAsKey
+    ? { detailKey: detailOrKey, detailValues }
+    : { detail: detailOrKey }),
+});
+
+const createRawRuntimeState = (
+  status: RuntimeState["status"],
+  detail: string,
+) => ({
   status,
   detail,
 });
@@ -36,17 +50,35 @@ const createInitialSnapshot = (): RuntimeHealthSnapshot => {
   if (isDesktopShell(runtime) && !runtime.backendUrl) {
     return {
       runtime,
-      backendState: createRuntimeState("stopped", "桌面运行时未连接本地后端"),
-      databaseState: createRuntimeState("stopped", "桌面运行时未连接数据库检查"),
-      vectorState: createRuntimeState("stopped", "桌面运行时未连接向量数据库检查"),
+      backendState: createRuntimeState(
+        "stopped",
+        "settings.general.health.details.desktopBackendUnavailable",
+      ),
+      databaseState: createRuntimeState(
+        "stopped",
+        "settings.general.health.details.desktopDatabaseUnavailable",
+      ),
+      vectorState: createRuntimeState(
+        "stopped",
+        "settings.general.health.details.desktopVectorUnavailable",
+      ),
     };
   }
 
   return {
     runtime,
-    backendState: createRuntimeState("unknown", "等待后端健康检查"),
-    databaseState: createRuntimeState("unknown", "等待数据库连通检查"),
-    vectorState: createRuntimeState("unknown", "等待向量数据库检查"),
+    backendState: createRuntimeState(
+      "unknown",
+      "settings.general.health.details.waitingBackend",
+    ),
+    databaseState: createRuntimeState(
+      "unknown",
+      "settings.general.health.details.waitingDatabase",
+    ),
+    vectorState: createRuntimeState(
+      "unknown",
+      "settings.general.health.details.waitingVector",
+    ),
   };
 };
 
@@ -67,13 +99,15 @@ const setSnapshot = (next: RuntimeHealthSnapshot) => {
 };
 
 const createDatabaseState = (dbResult: DatabaseHealthData): RuntimeState =>
-  createRuntimeState(
-    dbResult.ok ? "running" : "stopped",
-    dbResult.detail || "数据库健康检查返回异常状态",
-  );
+  dbResult.detail
+    ? createRawRuntimeState(dbResult.ok ? "running" : "stopped", dbResult.detail)
+    : createRuntimeState(
+        dbResult.ok ? "running" : "stopped",
+        "settings.general.health.details.databaseUnexpected",
+      );
 
 const createVectorState = (dbResult: DatabaseHealthData): RuntimeState =>
-  createRuntimeState(
+  createRawRuntimeState(
     dbResult.vectorStore.ok ? "running" : "stopped",
     dbResult.vectorStore.extensionPath
       ? `${dbResult.vectorStore.detail} · ${dbResult.vectorStore.extensionPath}`
@@ -103,19 +137,34 @@ const fetchRuntimeHealth = async () => {
         runtime,
         backendState: createRuntimeState(
           "running",
-          `后端已启动 · ${runtime.backendUrl || window.location.origin}`,
+          "settings.general.health.details.backendRunning",
+          {
+            url: runtime.backendUrl || window.location.origin,
+          },
         ),
         databaseState: createDatabaseState(dbResult),
         vectorState: createVectorState(dbResult),
       });
     } catch (error) {
-      const detail = error instanceof Error ? error.message : "健康检查失败";
+      const backendState =
+        error instanceof Error
+          ? createRawRuntimeState("stopped", error.message)
+          : createRuntimeState(
+              "stopped",
+              "settings.general.health.details.healthCheckFailed",
+            );
 
       setSnapshot({
         runtime,
-        backendState: createRuntimeState("stopped", detail),
-        databaseState: createRuntimeState("stopped", "后端不可访问，无法检查数据库状态"),
-        vectorState: createRuntimeState("stopped", "后端不可访问，无法检查向量扩展状态"),
+        backendState,
+        databaseState: createRuntimeState(
+          "stopped",
+          "settings.general.health.details.backendUnavailableForDatabase",
+        ),
+        vectorState: createRuntimeState(
+          "stopped",
+          "settings.general.health.details.backendUnavailableForVector",
+        ),
       });
     }
 

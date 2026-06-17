@@ -30,6 +30,16 @@ export const MANAGED_TASK_PARAMS = {
   presencePenalty: 0,
 } as const;
 
+export const DEFAULT_EVALUATION_PARAMS = {
+  enabled: true,
+  temperature: 0.2,
+  topP: 0.9,
+  topK: 40,
+  maxTokens: 512,
+  frequencyPenalty: 0,
+  presencePenalty: 0,
+} as const;
+
 export const DEFAULT_ROLE_CONFIGS: DefaultRoleConfig[] = [
   {
     type: "llm",
@@ -77,6 +87,13 @@ export const DEFAULT_ROLE_CONFIGS: DefaultRoleConfig[] = [
       topN: 5,
       scoreThreshold: 0.5,
     },
+  },
+  {
+    type: "evaluation",
+    name: "",
+    providerCode: null,
+    remoteModelId: null,
+    params: { ...DEFAULT_EVALUATION_PARAMS },
   },
 ];
 
@@ -182,6 +199,60 @@ export const PARAM_TEMPLATES: ParamTemplateSeed[] = [
   },
   {
     model_type: "task",
+    param_key: "presencePenalty",
+    param_label: "Presence Penalty",
+    param_type: "number",
+    step: 0.1,
+    options: null,
+    default_value: 0,
+  },
+  {
+    model_type: "evaluation",
+    param_key: "temperature",
+    param_label: "Temperature",
+    param_type: "number",
+    step: 0.1,
+    options: null,
+    default_value: 0.2,
+  },
+  {
+    model_type: "evaluation",
+    param_key: "topP",
+    param_label: "Top P",
+    param_type: "number",
+    step: 0.1,
+    options: null,
+    default_value: 0.9,
+  },
+  {
+    model_type: "evaluation",
+    param_key: "topK",
+    param_label: "Top K",
+    param_type: "number",
+    step: null,
+    options: null,
+    default_value: 40,
+  },
+  {
+    model_type: "evaluation",
+    param_key: "maxTokens",
+    param_label: "Max Tokens",
+    param_type: "number",
+    step: null,
+    options: null,
+    default_value: 512,
+  },
+  {
+    model_type: "evaluation",
+    param_key: "frequencyPenalty",
+    param_label: "Frequency Penalty",
+    param_type: "number",
+    step: 0.1,
+    options: null,
+    default_value: 0,
+  },
+  {
+    model_type: "evaluation",
     param_key: "presencePenalty",
     param_label: "Presence Penalty",
     param_type: "number",

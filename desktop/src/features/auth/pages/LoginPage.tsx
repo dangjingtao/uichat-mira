@@ -1,5 +1,6 @@
 ﻿import { FormEvent, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { LockKeyhole, User2 } from "lucide-react";
 import { useAuth } from "@/app/providers/AuthProvider";
 import logo from "@/assets/branding/uichat-logo.png";
@@ -9,6 +10,7 @@ import { Button } from "@/shared/ui/Button";
 import { TextInput } from "@/shared/ui/Input";
 
 function LoginPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { authErrorMessage, consumeAuthError, login } = useAuth();
   const isLoggingInRef = useRef(false);
@@ -19,7 +21,7 @@ function LoginPage() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const fieldError = error ? "请检查用户名和密码后重试" : undefined;
+  const fieldError = error ? t("auth.login.fieldError") : undefined;
 
   useEffect(() => {
     if (!authErrorMessage) {
@@ -52,7 +54,7 @@ function LoginPage() {
       if (requestError instanceof ApiError) {
         setError(requestError.message);
       } else {
-        setError("登录请求失败");
+        setError(t("auth.login.requestFailed"));
       }
     } finally {
       setIsSubmitting(false);
@@ -61,13 +63,13 @@ function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#fafbf7]">
+    <main className="min-h-screen bg-surface-secondary">
       <div className="mx-auto flex min-h-screen max-w-5xl items-center px-4 py-8 sm:px-6 lg:px-8">
         <div className="grid w-full gap-6 lg:grid-cols-[1.15fr_0.85fr]">
           <section className="rounded-[28px] border border-cloudy-3/80 bg-pampas-3/94 px-6 py-8 shadow-[0_10px_28px_rgba(73,52,33,0.045)] sm:px-8 sm:py-10">
             <div className="max-w-2xl space-y-5">
               <div className="inline-flex items-center rounded-full border border-cloudy-3/70 bg-surface-primary/85 px-3 py-1 text-xs font-medium text-primary">
-                桌面 AI 工作台
+                {t("auth.login.badge")}
               </div>
 
               <div className="space-y-3">
@@ -83,11 +85,11 @@ function LoginPage() {
                 </div>
 
                 <h1 className="text-[30px] font-semibold leading-tight text-text-primary">
-                  开始你的 RAG 对话测试
+                  {t("auth.login.title")}
                 </h1>
 
                 <p className="max-w-xl text-sm leading-6 text-text-secondary">
-                  登录后即可继续进行模型联调、知识库验证和对话测试。
+                  {t("auth.login.description")}
                 </p>
               </div>
 
@@ -97,10 +99,10 @@ function LoginPage() {
                     <User2 className="h-4 w-4 text-icon-primary" />
                   </div>
                   <div className="text-sm font-medium text-text-primary">
-                    继续当前进度
+                    {t("auth.login.featureContinueTitle")}
                   </div>
                   <div className="mt-1 text-sm leading-6 text-text-secondary">
-                    保持账号状态一致，继续你当前的测试流程。
+                    {t("auth.login.featureContinueDescription")}
                   </div>
                 </div>
 
@@ -109,33 +111,33 @@ function LoginPage() {
                     <LockKeyhole className="h-4 w-4 text-icon-primary" />
                   </div>
                   <div className="text-sm font-medium text-text-primary">
-                    安静的登录体验
+                    {t("auth.login.featureQuietTitle")}
                   </div>
                   <div className="mt-1 text-sm leading-6 text-text-secondary">
-                    保留清晰输入与低噪音界面，把注意力留给任务本身。
+                    {t("auth.login.featureQuietDescription")}
                   </div>
                 </div>
               </div>
             </div>
           </section>
 
-          <section className="rounded-[28px] border border-cloudy-3/80 bg-pampas-1/92 px-6 py-8 shadow-[0_12px_32px_rgba(73,52,33,0.055)] ring-1 ring-white/50 sm:px-8 sm:py-10">
+          <section className="rounded-[28px] border border-cloudy-3/80 bg-pampas-1/92 px-6 py-8 shadow-[0_12px_32px_rgba(73,52,33,0.055)] ring-1 ring-surface-primary/60 sm:px-8 sm:py-10">
             <div className="space-y-6">
               <div className="space-y-2">
                 <div className="text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                  欢迎回来
+                  {t("auth.login.welcomeBack")}
                 </div>
                 <h2 className="text-xl font-semibold text-text-primary">
-                  登录
+                  {t("auth.login.signIn")}
                 </h2>
                 <p className="text-sm leading-6 text-text-secondary">
-                  输入你的账号信息以继续。
+                  {t("auth.login.signInDescription")}
                 </p>
               </div>
 
               <form className="space-y-4" onSubmit={onSubmit}>
                 <TextInput
-                  label="用户名"
+                  label={t("auth.login.username")}
                   value={form.username}
                   onChange={(username) =>
                     setForm((previous) => ({
@@ -143,13 +145,13 @@ function LoginPage() {
                       username,
                     }))
                   }
-                  placeholder="请输入用户名"
+                  placeholder={t("auth.login.usernamePlaceholder")}
                   disabled={isSubmitting}
                   error={fieldError}
                 />
 
                 <TextInput
-                  label="密码"
+                  label={t("auth.login.password")}
                   type="password"
                   value={form.password}
                   onChange={(password) =>
@@ -158,7 +160,7 @@ function LoginPage() {
                       password,
                     }))
                   }
-                  placeholder="请输入密码"
+                  placeholder={t("auth.login.passwordPlaceholder")}
                   disabled={isSubmitting}
                   error={fieldError}
                 />
@@ -179,7 +181,7 @@ function LoginPage() {
                   }
                   className="w-full"
                 >
-                  {isSubmitting ? "登录中..." : "登录"}
+                  {isSubmitting ? t("auth.login.signingIn") : t("auth.login.signIn")}
                 </Button>
               </form>
             </div>

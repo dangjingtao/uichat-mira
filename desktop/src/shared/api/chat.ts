@@ -1,5 +1,6 @@
 import { createAssistantStream } from "assistant-stream";
 import { getSession } from "../lib/sessionStorage";
+import i18n from "@/shared/i18n";
 
 /**
  * 根据消息内容生成标题
@@ -12,7 +13,7 @@ export const generateTitle = async (
   _providerCode?: string,
 ): Promise<string> => {
   if (!messageContents.trim()) {
-    return "新对话";
+    return i18n.t("chat.title.default");
   }
 
   // 构建标题生成提示
@@ -95,11 +96,12 @@ export const generateTitle = async (
     }
 
     // 清理标题
-    const finalTitle = titleGenerated.trim().slice(0, 50) || "新对话";
+    const finalTitle =
+      titleGenerated.trim().slice(0, 50) || i18n.t("chat.title.default");
     return finalTitle;
   } catch (error) {
     console.error("[Chat API] Failed to generate title:", error);
-    return "新对话";
+    return i18n.t("chat.title.default");
   }
 };
 
@@ -115,7 +117,7 @@ export const generateTitleStream = async (
 ): Promise<ReturnType<typeof createAssistantStream>> => {
   if (!messageContents.trim()) {
     return createAssistantStream(async (controller) => {
-      controller.appendText("新对话");
+      controller.appendText(i18n.t("chat.title.default"));
     });
   }
 

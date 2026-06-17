@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   AlertCircle,
   ArrowDownUp,
-  ChevronDown,
   DatabaseZap,
   Ellipsis,
   FilePlus2,
@@ -18,6 +18,7 @@ import { FullPageStatus } from "@/shared/ui/FullPageStatus";
 import IconButton from "@/shared/ui/IconButton";
 import { message } from "@/shared/ui/Message";
 import { Modal } from "@/shared/ui/Modal";
+import { Select } from "@/shared/ui/Select";
 import { StatusIndicator } from "@/shared/ui/StatusIndicator";
 import {
   deleteKnowledgeBaseDocument,
@@ -86,6 +87,7 @@ function SegmentBadge({ mode }: { mode: typeof DEFAULT_SEGMENT_MODE }) {
 }
 
 export default function KnowledgeBaseSettings() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [knowledgeBase, setKnowledgeBase] = useState<KnowledgeBaseSummary | null>(null);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
@@ -213,29 +215,29 @@ export default function KnowledgeBaseSettings() {
 
   const openMetadataModal = () => {
     Modal.show({
-      title: "元数据概览",
+      title: t("settings.knowledgeBase.metadataModal.title"),
       width: 720,
       content: (
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-3">
             <Card
-              label="文档总数"
+              label={t("settings.knowledgeBase.metadataModal.totalDocuments")}
               value={`${knowledgeBase?.documentCount ?? documents.length}`}
-              description="当前知识库中的文档数量"
+              description={t("settings.knowledgeBase.metadataModal.totalDocumentsDescription")}
             />
             <Card
-              label="可用文档"
+              label={t("settings.knowledgeBase.metadataModal.enabledDocuments")}
               value={`${knowledgeBase?.enabledDocumentCount ?? enabledCount}`}
-              description="当前可参与检索的文档"
+              description={t("settings.knowledgeBase.metadataModal.enabledDocumentsDescription")}
             />
             <Card
-              label="总分段数"
+              label={t("settings.knowledgeBase.metadataModal.totalChunks")}
               value={`${totalChunks}`}
-              description="基于当前文档切分结果统计"
+              description={t("settings.knowledgeBase.metadataModal.totalChunksDescription")}
             />
           </div>
           <div className="rounded-xl border border-border bg-surface-secondary p-4 text-sm leading-6 text-text-secondary">
-            当前页面已经接入真实知识库接口，后续还可以继续补充索引质量、引用次数和检索表现等统计。
+            {t("settings.knowledgeBase.metadataModal.summary")}
           </div>
         </div>
       ),
@@ -244,31 +246,36 @@ export default function KnowledgeBaseSettings() {
 
   const confirmRebuildIndex = (document: DocumentRow) => {
     const modalKey = Modal.show({
-      title: "确认重建索引",
+      title: t("settings.knowledgeBase.rebuildModal.title"),
       width: 460,
       content: (
         <div className="space-y-3 text-sm text-text-secondary">
           <p>
-            即将为 <span className="font-medium text-text-primary">{document.name}</span>{" "}
-            重新执行分段、向量化和索引写入。
+            {t("settings.knowledgeBase.rebuildModal.description", {
+              name: document.name,
+            })}
           </p>
           <div className="rounded-xl border border-border bg-surface-secondary px-3.5 py-3">
-            该能力当前仍在接入中，确认后会先给出占位提示。
+            {t("settings.knowledgeBase.rebuildModal.warning")}
           </div>
         </div>
       ),
       footer: (
         <>
           <Button variant="ghost" onClick={() => Modal.close(modalKey)}>
-            取消
+            {t("common.actions.cancel")}
           </Button>
           <Button
             onClick={() => {
               Modal.close(modalKey);
-              message.info(`重建索引能力稍后接入，当前文档：${document.name}`);
+              message.info(
+                t("settings.knowledgeBase.messages.rebuildPending", {
+                  name: document.name,
+                }),
+              );
             }}
           >
-            确认重建
+            {t("settings.knowledgeBase.actions.confirmRebuild")}
           </Button>
         </>
       ),
@@ -277,23 +284,24 @@ export default function KnowledgeBaseSettings() {
 
   const confirmDeleteDocument = (document: DocumentRow) => {
     const modalKey = Modal.show({
-      title: "确认删除文档",
+      title: t("settings.knowledgeBase.actions.deleteDocument"),
       width: 460,
       content: (
         <div className="space-y-3 text-sm text-text-secondary">
           <p>
-            删除后，<span className="font-medium text-text-primary">{document.name}</span>{" "}
-            以及相关分块、索引数据都会被移除。
+            {t("settings.knowledgeBase.deleteModal.description", {
+              name: document.name,
+            })}
           </p>
           <div className="rounded-xl border border-danger/20 bg-danger/5 px-3.5 py-3 text-danger">
-            此操作不可撤销，请确认后继续。
+            {t("settings.knowledgeBase.deleteModal.warning")}
           </div>
         </div>
       ),
       footer: (
         <>
           <Button variant="ghost" onClick={() => Modal.close(modalKey)}>
-            取消
+            {t("common.actions.cancel")}
           </Button>
           <Button
             variant="danger"
@@ -301,15 +309,23 @@ export default function KnowledgeBaseSettings() {
               try {
                 await deleteKnowledgeBaseDocument(document.id);
                 Modal.close(modalKey);
-                message.success(`已删除 ${document.name}`);
+                message.success(
+                  t("settings.knowledgeBase.messages.deleted", {
+                    name: document.name,
+                  }),
+                );
                 setSelectedIds((current) => current.filter((item) => item !== document.id));
                 await refreshAll();
               } catch (error) {
-                message.error(error instanceof Error ? error.message : "删除文档失败");
+                message.error(
+                  error instanceof Error
+                    ? error.message
+                    : t("settings.knowledgeBase.messages.deleteFailed"),
+                );
               }
             }}
           >
-            确认删除
+            {t("settings.knowledgeBase.actions.confirmDelete")}
           </Button>
         </>
       ),
@@ -318,25 +334,25 @@ export default function KnowledgeBaseSettings() {
 
   const openAddDocumentModal = () => {
     if (!modelAccessStatus?.embeddingConnected) {
-      message.warning("请先接入默认 Embedding 模型，再上传知识库文件");
+      message.warning(t("settings.knowledgeBase.messages.uploadRequiresEmbedding"));
       return;
     }
     navigate("/settings/knowledge-base/add?step=1");
   };
 
   if (loading && documents.length === 0) {
-    return <FullPageStatus message="正在加载知识库文档..." />;
+    return <FullPageStatus message={t("settings.knowledgeBase.messages.loadingDocuments")} />;
   }
 
   const canUploadDocument = modelAccessStatus?.embeddingConnected ?? false;
   const headerDescription =
     knowledgeBase?.description ||
-    "这里集中展示当前知识库中的全部文档。双击任意一行可以进入详情页，点击添加文件则会进入分步上传流程。";
+    t("settings.knowledgeBase.page.descriptionFallback");
 
   return (
     <SettingsPageLayout
-      miniTitle="Knowledge Base"
-      title="默认知识库"
+      miniTitle={t("settings.knowledgeBase.page.miniTitle")}
+      title={t("settings.knowledgeBase.page.title")}
       description={headerDescription}
       slot={
         <div className="flex items-center gap-2">
@@ -347,7 +363,7 @@ export default function KnowledgeBaseSettings() {
             className="gap-2 self-start"
           >
             <DatabaseZap className="h-4 w-4" />
-            元数据
+            {t("settings.knowledgeBase.actions.metadata")}
           </Button>
           <Button
             size="sm"
@@ -357,7 +373,7 @@ export default function KnowledgeBaseSettings() {
             className="gap-2 self-start"
           >
             <FilePlus2 className="h-4 w-4" />
-            添加文件
+            {t("settings.knowledgeBase.actions.addFile")}
           </Button>
         </div>
       }
@@ -370,7 +386,7 @@ export default function KnowledgeBaseSettings() {
             <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
             <div className="space-y-2">
               <div className="font-medium">
-                当前未接入默认向量模型，知识库文件上传入口已暂时禁用。
+                {t("settings.knowledgeBase.banner")}
               </div>
             </div>
           </div>
@@ -403,7 +419,7 @@ export default function KnowledgeBaseSettings() {
                 <input
                   value={searchText}
                   onChange={(event) => setSearchText(event.target.value)}
-                  placeholder="搜索文档名称、来源或状态"
+                  placeholder={t("settings.knowledgeBase.filters.searchPlaceholder")}
                   className={inputClassName}
                 />
               </div>
@@ -416,26 +432,23 @@ export default function KnowledgeBaseSettings() {
                 className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-border bg-surface-primary px-2.5 text-sm text-text-secondary shadow-shadow-sm transition-all duration-150 hover:bg-surface-secondary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary"
               >
                 <Filter className="h-4 w-4" />
-                排序：
+                {t("settings.knowledgeBase.filters.sortPrefix")}
                 <span className="font-medium text-text-primary">
                   {sortOptions.find((option) => option.key === sortKey)?.label}
                 </span>
                 <ArrowDownUp className="h-4 w-4" />
               </button>
 
-              <div className="relative">
-                <select
+              <div className="min-w-[116px]">
+                <Select
                   value={sortKey}
-                  onChange={(event) => setSortKey(event.target.value as SortKey)}
-                  className="h-9 min-w-[116px] appearance-none rounded-xl border border-border bg-surface-primary pl-3 pr-8 text-sm text-text-primary shadow-shadow-sm transition-all duration-150 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                >
-                  {sortOptions.map((option) => (
-                    <option key={option.key} value={option.key}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-icon-secondary" />
+                  onChange={(value) => setSortKey(value as SortKey)}
+                  options={sortOptions.map((option) => ({
+                    value: option.key,
+                    label: option.label,
+                  }))}
+                  compact
+                />
               </div>
             </div>
           </div>
@@ -449,7 +462,7 @@ export default function KnowledgeBaseSettings() {
                   <th className="w-12 px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
                     <input
                       type="checkbox"
-                      aria-label="全选当前列表"
+                      aria-label={t("settings.knowledgeBase.filters.selectAllAria")}
                       checked={allVisibleSelected}
                       onChange={toggleAllVisible}
                       className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
@@ -459,25 +472,25 @@ export default function KnowledgeBaseSettings() {
                     #
                   </th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                    名称
+                    {t("settings.knowledgeBase.table.name")}
                   </th>
                   <th className="w-24 px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                    分段模式
+                    {t("settings.knowledgeBase.table.segmentMode")}
                   </th>
                   <th className="w-20 px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                    字符数
+                    {t("settings.knowledgeBase.table.charCount")}
                   </th>
                   <th className="w-24 px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                    召回次数
+                    {t("settings.knowledgeBase.table.hits")}
                   </th>
                   <th className="w-40 px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                    上传时间
+                    {t("settings.knowledgeBase.table.uploadedAt")}
                   </th>
                   <th className="w-24 px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                    状态
+                    {t("settings.knowledgeBase.table.status")}
                   </th>
                   <th className="w-14 pl-2 pr-3 py-2.5 text-right text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                    操作
+                    {t("settings.knowledgeBase.table.actions")}
                   </th>
                 </tr>
               </thead>
@@ -485,7 +498,7 @@ export default function KnowledgeBaseSettings() {
                 {filteredDocuments.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-4 py-10 text-center text-sm text-text-secondary">
-                      当前还没有知识库文件，点击“添加文件”开始上传。
+                      {t("settings.knowledgeBase.table.empty")}
                     </td>
                   </tr>
                 ) : (
@@ -493,10 +506,19 @@ export default function KnowledgeBaseSettings() {
                     const badge = getTypeBadge(document.type);
                     const status =
                       document.syncState === "indexing"
-                        ? { indicator: "unknown" as const, label: "处理中" }
+                        ? {
+                            indicator: "unknown" as const,
+                            label: t("settings.knowledgeBase.status.processing"),
+                          }
                         : document.availability === "enabled"
-                          ? { indicator: "running" as const, label: "可用" }
-                          : { indicator: "stopped" as const, label: "停用" };
+                          ? {
+                              indicator: "running" as const,
+                              label: t("settings.knowledgeBase.status.enabled"),
+                            }
+                          : {
+                              indicator: "stopped" as const,
+                              label: t("settings.knowledgeBase.status.disabled"),
+                            };
 
                     return (
                       <tr
@@ -509,7 +531,9 @@ export default function KnowledgeBaseSettings() {
                         <td className="px-4 py-2.5 text-sm text-text-primary">
                           <input
                             type="checkbox"
-                            aria-label={`选择 ${document.name}`}
+                            aria-label={t("settings.knowledgeBase.filters.rowSelectAria", {
+                              name: document.name,
+                            })}
                             checked={selectedIds.includes(document.id)}
                             onClick={(event) => event.stopPropagation()}
                             onChange={() => toggleSelection(document.id)}
@@ -574,7 +598,10 @@ export default function KnowledgeBaseSettings() {
                                     current === document.id ? null : document.id,
                                   )
                                 }
-                                ariaLabel={`打开 ${document.name} 的更多操作`}
+                                ariaLabel={t(
+                                  "settings.knowledgeBase.filters.moreActionsAria",
+                                  { name: document.name },
+                                )}
                               >
                                 <Ellipsis className="h-4 w-4" />
                               </IconButton>
@@ -596,7 +623,7 @@ export default function KnowledgeBaseSettings() {
                                   }}
                                 >
                                   <RotateCcw className="h-4 w-4 text-icon-secondary" />
-                                  重建索引
+                                  {t("settings.knowledgeBase.actions.rebuildIndex")}
                                 </button>
                                 <button
                                   type="button"
@@ -607,7 +634,7 @@ export default function KnowledgeBaseSettings() {
                                   }}
                                 >
                                   <Trash2 className="h-4 w-4" />
-                                  删除
+                                  {t("common.actions.delete")}
                                 </button>
                               </div>
                             </div>
@@ -623,21 +650,21 @@ export default function KnowledgeBaseSettings() {
         </div>
 
         <div className="mt-3 shrink-0 rounded-xl border border-dashed border-border bg-surface-secondary/60 px-4 py-2.5 text-sm text-text-secondary">
-          提示：双击任意一行可以进入文档详情页，点击“添加文件”会进入分步上传流程。
+          {t("settings.knowledgeBase.table.tip")}
         </div>
 
         <div className="mt-3 shrink-0 flex flex-col gap-1.5 text-sm text-text-secondary sm:flex-row sm:items-center sm:justify-between">
           <div>
-            共{" "}
-            <span className="font-medium text-text-primary">
-              {knowledgeBase?.documentCount ?? documents.length}
-            </span>{" "}
-            个文档，当前显示{" "}
-            <span className="font-medium text-text-primary">{filteredDocuments.length}</span> 个
+            {t("settings.knowledgeBase.table.summary", {
+              total: knowledgeBase?.documentCount ?? documents.length,
+              visible: filteredDocuments.length,
+            })}
           </div>
           <div>
-            可用文档 <span className="font-medium text-text-primary">{enabledCount}</span> 个 ·
-            总分段 <span className="font-medium text-text-primary">{totalChunks}</span> 个
+            {t("settings.knowledgeBase.table.stats", {
+              enabled: enabledCount,
+              chunks: totalChunks,
+            })}
           </div>
         </div>
       </Card>

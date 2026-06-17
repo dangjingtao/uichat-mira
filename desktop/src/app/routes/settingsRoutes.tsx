@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import type { RouteObject } from "react-router-dom";
+import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import type { LucideIcon } from "lucide-react";
 import {
   Blend,
@@ -22,7 +24,7 @@ import EvaluationCenter from "@/features/Settings/pages/Evaluation/Center";
 import ToolsSettings from "@/features/Settings/pages/Tools/index";
 
 type SettingsRouteNavMeta = {
-  label: string;
+  labelKey: string;
   icon: LucideIcon;
 };
 
@@ -43,17 +45,17 @@ const settingsRouteTree: SettingsRouteConfig[] = [
   {
     path: "general",
     element: <GeneralSettings />,
-    nav: { label: "通用", icon: Bolt },
+    nav: { labelKey: "settings.navigation.general", icon: Bolt },
   },
   {
     path: "model-setting",
     element: <ModelSettings />,
-    nav: { label: "模型", icon: Blend },
+    nav: { labelKey: "settings.navigation.model", icon: Blend },
   },
   {
     path: "knowledge-base",
     element: <KnowledgeBaseSettings />,
-    nav: { label: "知识库", icon: LibraryBig },
+    nav: { labelKey: "settings.navigation.knowledgeBase", icon: LibraryBig },
   },
   {
     path: "knowledge-base/add",
@@ -69,24 +71,30 @@ const settingsRouteTree: SettingsRouteConfig[] = [
       {
         path: "workbench",
         element: <EvaluationWorkbench />,
-        nav: { label: "评测工作台", icon: FlaskConical },
+        nav: {
+          labelKey: "settings.navigation.evaluationWorkbench",
+          icon: FlaskConical,
+        },
       },
       {
         path: "center",
         element: <EvaluationCenter />,
-        nav: { label: "评测中心", icon: ListChecks },
+        nav: {
+          labelKey: "settings.navigation.evaluationCenter",
+          icon: ListChecks,
+        },
       },
     ],
   },
   {
     path: "tools",
     element: <ToolsSettings />,
-    nav: { label: "工具", icon: Wrench },
+    nav: { labelKey: "settings.navigation.tools", icon: Wrench },
   },
   {
     path: "about",
     element: <About />,
-    nav: { label: "关于", icon: Info },
+    nav: { labelKey: "settings.navigation.about", icon: Info },
   },
   {
     path: "account",
@@ -106,6 +114,7 @@ function buildSettingsRouteObjects(routes: SettingsRouteConfig[]): RouteObject[]
 
 function buildSettingsNavigationItems(
   routes: SettingsRouteConfig[],
+  translate: (key: string) => string,
   parentPath = "/settings",
 ): SettingsNavigationItem[] {
   return routes.flatMap((route) => {
@@ -113,7 +122,7 @@ function buildSettingsNavigationItems(
     const ownItem = route.nav
       ? [
           {
-            label: route.nav.label,
+            label: translate(route.nav.labelKey),
             icon: route.nav.icon,
             to: currentPath,
           },
@@ -121,7 +130,7 @@ function buildSettingsNavigationItems(
       : [];
 
     const childItems = route.children
-      ? buildSettingsNavigationItems(route.children, currentPath)
+      ? buildSettingsNavigationItems(route.children, translate, currentPath)
       : [];
 
     return [...ownItem, ...childItems];
@@ -131,5 +140,11 @@ function buildSettingsNavigationItems(
 export const settingsRoutes = buildSettingsRouteObjects(settingsRouteTree);
 
 // 设置侧边导航和实际路由共用同一份配置，后续扩展成多级菜单时不需要再维护第二套映射。
-export const settingsNavigationItems =
-  buildSettingsNavigationItems(settingsRouteTree);
+export const useSettingsNavigationItems = () => {
+  const { t } = useTranslation();
+
+  return useMemo(
+    () => buildSettingsNavigationItems(settingsRouteTree, t),
+    [t],
+  );
+};

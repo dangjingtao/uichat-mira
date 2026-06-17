@@ -24,6 +24,7 @@ import {
 import { getRoleModelConfigs } from "@/shared/api/modelSettings";
 import { generateTitle } from "@/shared/api/chat";
 import { ErrorCodes } from "@/shared/lib/request";
+import i18n from "@/shared/i18n";
 
 // 错误类型枚举
 export enum ThreadAdapterErrorType {
@@ -219,7 +220,12 @@ export class BackendThreadListAdapter implements RemoteThreadListAdapter {
       const errorType = getErrorType(error);
       throw new ThreadAdapterError(
         errorType,
-        `获取对话列表失败: ${error instanceof Error ? error.message : "未知错误"}`,
+        i18n.t("chat.adapter.listFailed", {
+          error:
+            error instanceof Error
+              ? error.message
+              : i18n.t("chat.adapter.unknownError"),
+        }),
         isApiError(error) ? error.code : undefined,
       );
     }
@@ -232,7 +238,12 @@ export class BackendThreadListAdapter implements RemoteThreadListAdapter {
       const errorType = getErrorType(error);
       throw new ThreadAdapterError(
         errorType,
-        `重命名对话失败: ${error instanceof Error ? error.message : "未知错误"}`,
+        i18n.t("chat.adapter.renameFailed", {
+          error:
+            error instanceof Error
+              ? error.message
+              : i18n.t("chat.adapter.unknownError"),
+        }),
         isApiError(error) ? error.code : undefined,
       );
     }
@@ -245,7 +256,12 @@ export class BackendThreadListAdapter implements RemoteThreadListAdapter {
       const errorType = getErrorType(error);
       throw new ThreadAdapterError(
         errorType,
-        `归档对话失败: ${error instanceof Error ? error.message : "未知错误"}`,
+        i18n.t("chat.adapter.archiveFailed", {
+          error:
+            error instanceof Error
+              ? error.message
+              : i18n.t("chat.adapter.unknownError"),
+        }),
         isApiError(error) ? error.code : undefined,
       );
     }
@@ -258,7 +274,12 @@ export class BackendThreadListAdapter implements RemoteThreadListAdapter {
       const errorType = getErrorType(error);
       throw new ThreadAdapterError(
         errorType,
-        `取消归档对话失败: ${error instanceof Error ? error.message : "未知错误"}`,
+        i18n.t("chat.adapter.unarchiveFailed", {
+          error:
+            error instanceof Error
+              ? error.message
+              : i18n.t("chat.adapter.unknownError"),
+        }),
         isApiError(error) ? error.code : undefined,
       );
     }
@@ -271,7 +292,12 @@ export class BackendThreadListAdapter implements RemoteThreadListAdapter {
       const errorType = getErrorType(error);
       throw new ThreadAdapterError(
         errorType,
-        `删除对话失败: ${error instanceof Error ? error.message : "未知错误"}`,
+        i18n.t("chat.adapter.deleteFailed", {
+          error:
+            error instanceof Error
+              ? error.message
+              : i18n.t("chat.adapter.unknownError"),
+        }),
         isApiError(error) ? error.code : undefined,
       );
     }
@@ -291,7 +317,12 @@ export class BackendThreadListAdapter implements RemoteThreadListAdapter {
       const errorType = getErrorType(error);
       throw new ThreadAdapterError(
         errorType,
-        `创建对话失败: ${error instanceof Error ? error.message : "未知错误"}`,
+        i18n.t("chat.adapter.createFailed", {
+          error:
+            error instanceof Error
+              ? error.message
+              : i18n.t("chat.adapter.unknownError"),
+        }),
         isApiError(error) ? error.code : undefined,
       );
     }
@@ -354,7 +385,12 @@ export class BackendThreadListAdapter implements RemoteThreadListAdapter {
       const errorType = getErrorType(error);
       throw new ThreadAdapterError(
         errorType,
-        `获取对话详情失败: ${error instanceof Error ? error.message : "未知错误"}`,
+        i18n.t("chat.adapter.fetchFailed", {
+          error:
+            error instanceof Error
+              ? error.message
+              : i18n.t("chat.adapter.unknownError"),
+        }),
         isApiError(error) ? error.code : undefined,
       );
     }
@@ -410,7 +446,12 @@ export class BackendThreadListAdapter implements RemoteThreadListAdapter {
             const errorType = getErrorType(error);
             throw new ThreadAdapterError(
               errorType,
-              `保存消息失败: ${error instanceof Error ? error.message : "未知错误"}`,
+              i18n.t("chat.adapter.saveMessageFailed", {
+                error:
+                  error instanceof Error
+                    ? error.message
+                    : i18n.t("chat.adapter.unknownError"),
+              }),
               isApiError(error) ? error.code : undefined,
             );
           }
@@ -504,7 +545,12 @@ export class BackendThreadListAdapter implements RemoteThreadListAdapter {
               const errorType = getErrorType(error);
               throw new ThreadAdapterError(
                 errorType,
-                `保存消息失败: ${error instanceof Error ? error.message : "未知错误"}`,
+                i18n.t("chat.adapter.saveMessageFailed", {
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : i18n.t("chat.adapter.unknownError"),
+                }),
                 isApiError(error) ? error.code : undefined,
               );
             }

@@ -1,16 +1,11 @@
 // src/assistant/ThreadListSidebar.tsx
 import { useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/app/providers/AuthProvider";
 import logoIcon from "@/assets/branding/uichat-logo-icon.png";
 import { useRuntimeHealth } from "@/features/system/hooks/useRuntimeHealth";
 import { LogOutIcon, SettingsIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-
-const statusTextMap = {
-  unknown: "检测中",
-  running: "运行中",
-  stopped: "未启动",
-} as const;
 
 const statusColorMap = {
   unknown: "bg-amber-500",
@@ -25,6 +20,7 @@ function Sidebar({
   children: React.ReactNode;
   footerCenter?: React.ReactNode;
 }) {
+  const { t } = useTranslation();
   const { session, logout } = useAuth();
   const { backendState } = useRuntimeHealth();
 
@@ -43,26 +39,26 @@ function Sidebar({
 
   return (
     <aside
-      className={`h-[100dvh] min-h-0 overflow-hidden w-64 shrink-0 border-r border-cloudy-3 bg-[#FCFCFB] flex flex-col ${
+      className={`h-[100dvh] min-h-0 overflow-hidden w-64 shrink-0 border-r border-cloudy-3/70 bg-pampas-2 flex flex-col ${
         open ? "" : "hidden md:flex"
       }`}
     >
       {/* 顶部 Logo / 标题区 */}
-      <div className="flex items-center px-4 py-4 text-base font-semibold">
+      <div className="flex items-center bg-pampas-2 px-4 py-4 text-base font-semibold">
         <img src={logoIcon} alt="Logo" className="inline-block mr-2.5 h-6" />{" "}
         <span className="text-text-primary">RAG Tester</span>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden py-2.5 pl-1 pr-2">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-pampas-2 py-2.5 pl-1 pr-2">
         {children}
       </div>
 
-      <div className="bg-[#FCFCFB] px-3 py-3">
+      <div className="bg-pampas-2 px-3 py-3">
         <div className="flex items-center justify-between rounded-xl px-1 py-0.5">
           <div className="flex items-center gap-2">
             <div className="flex flex-row gap-1.5">
               <div className="text-sm font-medium text-text-primary">
-                {session?.user.username || "未知用户"}
+                {session?.user.username || t("app.sidebar.unknownUser")}
               </div>
             </div>
             <div className="flex items-center gap-1.5">

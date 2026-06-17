@@ -15,6 +15,182 @@ import {
 
 export const DEFAULT_VECTOR_TABLE_NAME = "document_chunk_embeddings_vec";
 
+const getForeignKeyTargetTables = (
+  sqlite: ReturnType<typeof getSqlite>,
+  tableName: string,
+) => {
+  try {
+    return sqlite
+      .prepare(`PRAGMA foreign_key_list(${tableName})`)
+      .all() as Array<{ table?: string }>;
+  } catch {
+    return [];
+  }
+};
+
+const referencesLegacyModelConfigTable = (
+  sqlite: ReturnType<typeof getSqlite>,
+  tableName: string,
+) =>
+  getForeignKeyTargetTables(sqlite, tableName).some(
+    (foreignKey) => foreignKey.table === "model_configs_legacy",
+  );
+
+const recreateKnowledgeBaseIndexes = (sqlite: ReturnType<typeof getSqlite>) => {
+  sqlite.exec(`
+    CREATE INDEX IF NOT EXISTS idx_knowledge_bases_status ON knowledge_bases(status);
+    CREATE INDEX IF NOT EXISTS idx_documents_knowledge_base ON documents(knowledge_base_id);
+    CREATE INDEX IF NOT EXISTS idx_documents_index_status ON documents(index_status);
+    CREATE INDEX IF NOT EXISTS idx_documents_enabled ON documents(enabled);
+    CREATE INDEX IF NOT EXISTS idx_documents_created_at ON documents(created_at);
+    CREATE INDEX IF NOT EXISTS idx_document_chunks_knowledge_base ON document_chunks(knowledge_base_id);
+    CREATE INDEX IF NOT EXISTS idx_document_chunks_document ON document_chunks(document_id);
+    CREATE INDEX IF NOT EXISTS idx_kb_vector_indexes_knowledge_base ON knowledge_base_vector_indexes(knowledge_base_id);
+  `);
+};
+
+const repairKnowledgeBaseModelConfigForeignKeys = (
+  sqlite: ReturnType<typeof getSqlite>,
+) => {
+  const knowledgeBasesNeedsRepair =
+    hasSqliteTable(sqlite, "knowledge_bases") &&
+    referencesLegacyModelConfigTable(sqlite, "knowledge_bases");
+  const vectorIndexesNeedsRepair =
+    hasSqliteTable(sqlite, "knowledge_base_vector_indexes") &&
+    referencesLegacyModelConfigTable(sqlite, "knowledge_base_vector_indexes");
+
+  if (!knowledgeBasesNeedsRepair && !vectorIndexesNeedsRepair) {
+    return;
+  }
+
+  const foreignKeysEnabled = sqlite.pragma("foreign_keys", {
+    simple: true,
+  }) as number;
+
+  sqlite.exec("PRAGMA foreign_keys = OFF");
+  sqlite.exec("BEGIN");
+
+  try {
+    sqlite.exec(`
+      DROP INDEX IF EXISTS idx_knowledge_bases_status;
+      DROP INDEX IF EXISTS idx_kb_vector_indexes_knowledge_base;
+    `);
+
+    if (knowledgeBasesNeedsRepair) {
+      sqlite.exec(`
+        CREATE TABLE knowledge_bases__rebuild (
+          id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+          name TEXT NOT NULL,
+          description TEXT,
+          status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),
+          embedding_model_config_id TEXT REFERENCES model_configs(id) ON DELETE SET NULL,
+          chunking_config_json TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        INSERT INTO knowledge_bases__rebuild (
+          id,
+          name,
+          description,
+          status,
+          embedding_model_config_id,
+          chunking_config_json,
+          created_at,
+          updated_at
+        )
+        SELECT
+          id,
+          name,
+          description,
+          status,
+          embedding_model_config_id,
+          chunking_config_json,
+          created_at,
+          updated_at
+        FROM knowledge_bases;
+      `);
+    }
+
+    if (vectorIndexesNeedsRepair) {
+      sqlite.exec(`
+        CREATE TABLE knowledge_base_vector_indexes__backup AS
+        SELECT
+          id,
+          knowledge_base_id,
+          table_name,
+          embedding_model_config_id,
+          dimensions,
+          distance_metric,
+          is_active,
+          created_at,
+          updated_at
+        FROM knowledge_base_vector_indexes;
+
+        DROP TABLE knowledge_base_vector_indexes;
+      `);
+    }
+
+    if (knowledgeBasesNeedsRepair) {
+      sqlite.exec(`
+        DROP TABLE knowledge_bases;
+        ALTER TABLE knowledge_bases__rebuild RENAME TO knowledge_bases;
+      `);
+    }
+
+    if (vectorIndexesNeedsRepair) {
+      sqlite.exec(`
+        CREATE TABLE knowledge_base_vector_indexes (
+          id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+          knowledge_base_id TEXT NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE,
+          table_name TEXT NOT NULL UNIQUE,
+          embedding_model_config_id TEXT REFERENCES model_configs(id) ON DELETE SET NULL,
+          dimensions INTEGER NOT NULL,
+          distance_metric TEXT NOT NULL DEFAULT 'cosine' CHECK (distance_metric IN ('cosine', 'l2', 'inner_product')),
+          is_active INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        INSERT INTO knowledge_base_vector_indexes (
+          id,
+          knowledge_base_id,
+          table_name,
+          embedding_model_config_id,
+          dimensions,
+          distance_metric,
+          is_active,
+          created_at,
+          updated_at
+        )
+        SELECT
+          id,
+          knowledge_base_id,
+          table_name,
+          embedding_model_config_id,
+          dimensions,
+          distance_metric,
+          is_active,
+          created_at,
+          updated_at
+        FROM knowledge_base_vector_indexes__backup;
+
+        DROP TABLE knowledge_base_vector_indexes__backup;
+      `);
+    }
+
+    recreateKnowledgeBaseIndexes(sqlite);
+    sqlite.exec("COMMIT");
+  } catch (error) {
+    sqlite.exec("ROLLBACK");
+    throw error;
+  } finally {
+    if (foreignKeysEnabled) {
+      sqlite.exec("PRAGMA foreign_keys = ON");
+    }
+  }
+};
+
 const ensureDocumentChunkFts = () => {
   const sqlite = getSqlite();
 
@@ -174,15 +350,9 @@ const ensureKnowledgeBaseTables = () => {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
-    CREATE INDEX IF NOT EXISTS idx_knowledge_bases_status ON knowledge_bases(status);
-    CREATE INDEX IF NOT EXISTS idx_documents_knowledge_base ON documents(knowledge_base_id);
-    CREATE INDEX IF NOT EXISTS idx_documents_index_status ON documents(index_status);
-    CREATE INDEX IF NOT EXISTS idx_documents_enabled ON documents(enabled);
-    CREATE INDEX IF NOT EXISTS idx_documents_created_at ON documents(created_at);
-    CREATE INDEX IF NOT EXISTS idx_document_chunks_knowledge_base ON document_chunks(knowledge_base_id);
-    CREATE INDEX IF NOT EXISTS idx_document_chunks_document ON document_chunks(document_id);
-    CREATE INDEX IF NOT EXISTS idx_kb_vector_indexes_knowledge_base ON knowledge_base_vector_indexes(knowledge_base_id);
   `);
+
+  recreateKnowledgeBaseIndexes(sqlite);
 };
 
 const ensureDefaultKnowledgeBase = () => {
@@ -214,6 +384,7 @@ export const initializeKnowledgeBaseDatabase = () => {
     applySqliteConnectionPragmas(sqlite);
 
     ensureKnowledgeBaseTables();
+    repairKnowledgeBaseModelConfigForeignKeys(sqlite);
     ensureDocumentChunkFts();
     ensureDefaultKnowledgeBase();
   } catch (error) {

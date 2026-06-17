@@ -61,12 +61,14 @@ export const createObservation = (input: {
   label: string;
   summary?: string;
   details?: Record<string, unknown>;
+  artifacts?: Record<string, unknown>;
   environment?: RagNodeEnvironment;
   sources?: RagNodeObservation["sources"];
 }): RagNodeObservation => ({
   label: input.label,
   ...(input.summary ? { summary: input.summary } : {}),
   ...(input.details ? { details: input.details } : {}),
+  ...(input.artifacts ? { artifacts: input.artifacts } : {}),
   ...(input.environment ? { environment: input.environment } : {}),
   ...("sources" in input ? { sources: input.sources } : {}),
 });
@@ -76,6 +78,7 @@ export const createModelCallObservation = (input: {
   label: string;
   summary?: string;
   details?: Record<string, unknown>;
+  artifacts?: Record<string, unknown>;
   role: "task" | "llm" | "embedding" | "rerank" | string;
   providerCode?: string;
   providerLabel?: string;
@@ -99,6 +102,7 @@ export const createModelCallObservation = (input: {
     label: input.label,
     ...(input.summary ? { summary: input.summary } : {}),
     ...(input.details ? { details: input.details } : {}),
+    ...(input.artifacts ? { artifacts: input.artifacts } : {}),
     ...("sources" in input ? { sources: input.sources } : {}),
     environment: createTimedEnvironment(input.startedAtMs, {
       ...createModelEnvironment({
@@ -124,6 +128,7 @@ export const createRetrievalObservation = (input: {
   label: string;
   summary?: string;
   details?: Record<string, unknown>;
+  artifacts?: Record<string, unknown>;
   knowledgeBaseId?: string | null;
   topK?: number | null;
   topN?: number | null;
@@ -137,6 +142,7 @@ export const createRetrievalObservation = (input: {
     label: input.label,
     ...(input.summary ? { summary: input.summary } : {}),
     ...(input.details ? { details: input.details } : {}),
+    ...(input.artifacts ? { artifacts: input.artifacts } : {}),
     ...("sources" in input ? { sources: input.sources } : {}),
     environment: createTimedEnvironment(input.startedAtMs, {
       retrieval: {

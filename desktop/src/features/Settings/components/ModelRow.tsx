@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Edit, GripVertical, Power, Trash2 } from "lucide-react";
 import { IconButton } from "@/shared/ui/Button";
 import Tooltip from "@/shared/ui/Tooltip";
@@ -23,6 +24,7 @@ const ModelRow: React.FC<ModelRowProps> = ({
   onDelete,
   onToggleStatus,
 }) => {
+  const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(model.name);
 
@@ -62,7 +64,7 @@ const ModelRow: React.FC<ModelRowProps> = ({
                     : "bg-surface-tertiary text-text-secondary"
                 }`}
               >
-                {model.enabled ? "启用" : "禁用"}
+                {model.enabled ? t("settings.model.modelRow.enabled") : t("settings.model.modelRow.disabled")}
               </span>
             </div>
           )}
@@ -70,24 +72,24 @@ const ModelRow: React.FC<ModelRowProps> = ({
       </div>
 
       <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        <Tooltip text="编辑">
-          <IconButton onClick={() => setIsEditing(true)} ariaLabel="编辑模型">
+        <Tooltip text={t("settings.model.modelRow.edit")}>
+          <IconButton onClick={() => setIsEditing(true)} ariaLabel={t("settings.model.modelRow.editAria")}>
             <Edit className="h-4 w-4" />
           </IconButton>
         </Tooltip>
-        <Tooltip text={model.enabled ? "禁用" : "启用"}>
+        <Tooltip text={model.enabled ? t("settings.model.modelRow.disable") : t("settings.model.modelRow.enable")}>
           <IconButton
             onClick={() => onToggleStatus(model.id)}
-            ariaLabel={model.enabled ? "禁用模型" : "启用模型"}
+            ariaLabel={model.enabled ? t("settings.model.modelRow.disableAria") : t("settings.model.modelRow.enableAria")}
           >
             <Power className="h-4 w-4" />
           </IconButton>
         </Tooltip>
-        <Tooltip text="删除">
+        <Tooltip text={t("settings.model.modelRow.delete")}>
           <IconButton
             onClick={() => onDelete(model.id)}
             className="text-danger hover:text-danger"
-            ariaLabel="删除模型"
+            ariaLabel={t("settings.model.modelRow.deleteAria")}
           >
             <Trash2 className="h-4 w-4" />
           </IconButton>

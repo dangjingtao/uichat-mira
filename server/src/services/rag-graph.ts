@@ -17,8 +17,13 @@ import type { NormalizedChatMessage } from "./provider-proxy.service";
 import { writeStructuredLog } from "@/logger";
 import {
   emitGenerateDelta,
+  emitRagArtifactEvent,
   emitRagNodeEvent,
+  emitRagRunCompletedEvent,
+  emitRagRunStartedEvent,
   emitRagSourcesEvent,
+  createRagRuntimeContext,
+  withRagRuntimeContext,
   type RagCustomStreamChunk,
 } from "./rag-events";
 import type { RagNodeResult } from "./rag-node-contract";
@@ -151,10 +156,21 @@ const createObservableNode = <TStatePatch>(
         ...(result.observation.details
           ? { details: result.observation.details }
           : {}),
+        ...(result.observation.artifacts
+          ? { artifacts: result.observation.artifacts }
+          : {}),
         ...(result.observation.environment
           ? { environment: result.observation.environment }
           : {}),
       });
+
+      if (result.observation.artifacts) {
+        emitRagArtifactEvent(config, {
+          nodeId,
+          nodeType: nodeId,
+          artifacts: result.observation.artifacts,
+        });
+      }
 
       if ("sources" in result.observation) {
         emitRagSourcesEvent(config, result.observation.sources ?? []);
@@ -361,19 +377,86 @@ const ragStateGraph = new StateGraph(RAGGraphState)
 export const ragGraph = {
   // 执行完整 RAG 流程并返回最终回答、引用来源以及中间结果。
   async run(input: RAGGraphInput): Promise<RAGGraphOutput> {
-    const state = await ragStateGraph.invoke(input);
-    return {
-      answer: state.answer ?? "",
-      sources: state.sources ?? [],
-      retrievedChunks: state.retrievedChunks ?? [],
-      rerankedChunks: state.rerankedChunks ?? state.retrievedChunks ?? [],
-    };
+    const runtimeContext = createRagRuntimeContext({
+      route: "run",
+      input: {
+        questionLength: Array.from(input.question).length,
+        knowledgeBaseId: input.knowledgeBaseId ?? null,
+        topK: input.topK ?? null,
+        topN: input.topN ?? null,
+      },
+    });
+    emitRagRunStartedEvent(runtimeContext);
+
+    try {
+      const state = await ragStateGraph.invoke(
+        input,
+        withRagRuntimeContext(runtimeContext),
+      );
+      const output = {
+        answer: state.answer ?? "",
+        sources: state.sources ?? [],
+        retrievedChunks: state.retrievedChunks ?? [],
+        rerankedChunks: state.rerankedChunks ?? state.retrievedChunks ?? [],
+      };
+      emitRagRunCompletedEvent(runtimeContext, {
+        status: "completed",
+        output: {
+          answerLength: Array.from(output.answer).length,
+          sourceCount: output.sources.length,
+          retrievedCount: output.retrievedChunks.length,
+          rerankedCount: output.rerankedChunks.length,
+        },
+      });
+      return output;
+    } catch (error) {
+      emitRagRunCompletedEvent(runtimeContext, {
+        status: "failed",
+        error: {
+          ...(error instanceof Error ? { type: error.name } : {}),
+          message: error instanceof Error ? error.message : String(error),
+        },
+      });
+      throw error;
+    }
   },
 
   // 只关心最终可用上下文片段时使用；仍会执行完整图，因此会经过生成节点。
   async retrieve(input: RAGGraphInput): Promise<RetrievedChunk[]> {
-    const state = await ragStateGraph.invoke(input);
-    return state.rerankedChunks ?? state.retrievedChunks ?? [];
+    const runtimeContext = createRagRuntimeContext({
+      route: "retrieve",
+      input: {
+        questionLength: Array.from(input.question).length,
+        knowledgeBaseId: input.knowledgeBaseId ?? null,
+        topK: input.topK ?? null,
+        topN: input.topN ?? null,
+      },
+    });
+    emitRagRunStartedEvent(runtimeContext);
+
+    try {
+      const state = await ragStateGraph.invoke(
+        input,
+        withRagRuntimeContext(runtimeContext),
+      );
+      const output = state.rerankedChunks ?? state.retrievedChunks ?? [];
+      emitRagRunCompletedEvent(runtimeContext, {
+        status: "completed",
+        output: {
+          returnedCount: output.length,
+        },
+      });
+      return output;
+    } catch (error) {
+      emitRagRunCompletedEvent(runtimeContext, {
+        status: "failed",
+        error: {
+          ...(error instanceof Error ? { type: error.name } : {}),
+          message: error instanceof Error ? error.message : String(error),
+        },
+      });
+      throw error;
+    }
   },
 
   // 以 updates 模式流式返回每个节点产生的局部状态更新。
@@ -392,9 +475,41 @@ export const ragGraph = {
 
   // 同时开启 updates 和 custom：既能看到节点状态更新，也能接收生成阶段的文本 delta。
   async streamEvents(input: RAGGraphInput) {
-    return ragStateGraph.stream(input, {
+    const runtimeContext = createRagRuntimeContext({
+      route: "stream",
+      input: {
+        questionLength: Array.from(input.question).length,
+        knowledgeBaseId: input.knowledgeBaseId ?? null,
+        topK: input.topK ?? null,
+        topN: input.topN ?? null,
+      },
+    });
+    emitRagRunStartedEvent(runtimeContext);
+
+    const stream = await ragStateGraph.stream(input, {
+      ...withRagRuntimeContext(runtimeContext),
       streamMode: ["updates", "custom"],
     });
+
+    return (async function* () {
+      try {
+        for await (const chunk of stream) {
+          yield chunk;
+        }
+        emitRagRunCompletedEvent(runtimeContext, {
+          status: "completed",
+        });
+      } catch (error) {
+        emitRagRunCompletedEvent(runtimeContext, {
+          status: "failed",
+          error: {
+            ...(error instanceof Error ? { type: error.name } : {}),
+            message: error instanceof Error ? error.message : String(error),
+          },
+        });
+        throw error;
+      }
+    })();
   },
 
   // 暴露底层图对象，供需要直接操作 LangGraph 的场景使用。

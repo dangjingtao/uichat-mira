@@ -2,6 +2,7 @@ import { build } from "esbuild";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { execSync } from "node:child_process";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,8 +17,125 @@ function readPackageJson(packageDir) {
   );
 }
 
+function readPackageVersionAtCommit(commitHash) {
+  try {
+    const output = execSync(`git show ${commitHash}:package.json`, {
+      cwd: projectRoot,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "ignore"],
+      timeout: 5000,
+    }).trim();
+
+    const pkg = JSON.parse(output);
+    return typeof pkg.version === "string" ? pkg.version : null;
+  } catch {
+    return null;
+  }
+}
+
+function collectGitInfo() {
+  const gitDir = path.join(projectRoot, ".git");
+  if (!fs.existsSync(gitDir)) {
+    return undefined;
+  }
+
+  try {
+    const branch = execSync("git branch --show-current", {
+      cwd: projectRoot,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "ignore"],
+      timeout: 5000,
+    }).trim();
+
+    const versionCommits = new Map();
+
+    const headHash = execSync("git rev-parse HEAD", {
+      cwd: projectRoot,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "ignore"],
+      timeout: 5000,
+    }).trim();
+
+    const headVersion = readPackageVersionAtCommit(headHash);
+    if (headVersion) {
+      versionCommits.set(headVersion, headHash);
+    }
+
+    const changeOutput = execSync(
+      "git log --format=%H -- package.json",
+      {
+        cwd: projectRoot,
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "ignore"],
+        timeout: 5000,
+      },
+    ).trim();
+
+    const changeHashes = changeOutput
+      .split("\n")
+      .map((hash) => hash.trim())
+      .filter(Boolean);
+
+    for (const hash of changeHashes) {
+      const parentHash = execSync(`git rev-parse ${hash}~1`, {
+        cwd: projectRoot,
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "ignore"],
+        timeout: 5000,
+      }).trim();
+
+      const parentVersion = readPackageVersionAtCommit(parentHash);
+      if (parentVersion && !versionCommits.has(parentVersion)) {
+        versionCommits.set(parentVersion, parentHash);
+      }
+    }
+
+    const versions = [];
+
+    for (const [version, commitHash] of versionCommits) {
+      const log = execSync(
+        `git log -1 --format=%H%x00%s%x00%an%x00%aI ${commitHash}`,
+        {
+          cwd: projectRoot,
+          encoding: "utf-8",
+          stdio: ["pipe", "pipe", "ignore"],
+          timeout: 5000,
+        },
+      ).trim();
+
+      const [hash, message, author, date] = log.split("\0");
+      if (!hash) {
+        continue;
+      }
+
+      versions.push({
+        version,
+        commit: {
+          hash,
+          shortHash: hash.slice(0, 7),
+          message: message ?? "",
+          author: author ?? "",
+          date: date ?? "",
+        },
+      });
+    }
+
+    versions.sort(
+      (a, b) => new Date(b.commit.date).getTime() - new Date(a.commit.date).getTime(),
+    );
+
+    return { branch, versions };
+  } catch {
+    return undefined;
+  }
+}
+
 function writeAppMetaJson() {
   const rootPackage = readPackageJson(projectRoot);
+  const customMeta =
+    rootPackage.appMeta && typeof rootPackage.appMeta === "object"
+      ? rootPackage.appMeta
+      : {};
   const appMeta = {
     name:
       typeof rootPackage.name === "string"
@@ -31,10 +149,10 @@ function writeAppMetaJson() {
     repository: rootPackage.repository ?? null,
     homepage:
       typeof rootPackage.homepage === "string" ? rootPackage.homepage : "",
-    appMeta:
-      rootPackage.appMeta && typeof rootPackage.appMeta === "object"
-        ? rootPackage.appMeta
-        : {},
+    appMeta: {
+      ...customMeta,
+      git: collectGitInfo(),
+    },
   };
 
   fs.writeFileSync(

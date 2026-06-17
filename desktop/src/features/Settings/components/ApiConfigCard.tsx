@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { AlertCircle, Loader2, RotateCcw } from "lucide-react";
 import { Button, IconButton } from "@/shared/ui/Button";
 import { TextInput } from "@/shared/ui/Input";
@@ -22,13 +23,6 @@ interface ApiConfigCardProps {
   onSetDefaultRole: (role: RoleModelType) => void;
 }
 
-const statusLabelMap = {
-  idle: "待连接",
-  syncing: "同步中",
-  connected: "已连接",
-  error: "异常",
-} as const;
-
 const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
   detail,
   selectedModelId,
@@ -42,10 +36,12 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
   onTestConnection,
   onSetDefaultRole,
 }) => {
+  const { t } = useTranslation();
+
   if (!detail) {
     return (
       <div className="flex h-full flex-1 items-center justify-center rounded-2xl border border-border bg-surface-primary p-4 text-sm text-text-secondary">
-        请选择左侧平台。
+        {t("settings.model.api.selectPlatform")}
       </div>
     );
   }
@@ -53,7 +49,7 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
   const modelOptions =
     detail.models.length > 0
       ? [
-          { value: "", label: "选择模型..." },
+          { value: "", label: t("settings.model.api.selectModel") },
           ...detail.models.map((model) => ({
             value: model.id,
             label: model.name,
@@ -62,7 +58,7 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
       : [
           {
             value: "",
-            label: syncError ? "fetch failed" : "暂无模型，请先同步",
+            label: syncError ? "fetch failed" : t("settings.model.api.noModels"),
           },
         ];
 
@@ -76,13 +72,13 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
             {detail.provider.displayName}
           </div>
           <div className="text-xs leading-4 text-text-secondary">
-            保存连接配置后，通过服务端同步模型列表；同步成功即代表平台链路可用。
+            {t("settings.model.api.description")}
           </div>
         </div>
 
         <div className="inline-flex items-center gap-2 rounded-full bg-surface-secondary px-3 py-1 text-xs text-text-secondary">
           {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-          {statusLabelMap[detail.provider.status]}
+          {t(`settings.model.status.${detail.provider.status}`)}
         </div>
       </div>
 
@@ -92,31 +88,31 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
         }`}
       >
         <TextInput
-          label="API 密钥"
+          label={t("settings.model.api.apiKey")}
           type="password"
           value={detail.provider.apiKey}
           onChange={onApiKeyChange}
-          placeholder="输入 API 密钥"
+          placeholder={t("settings.model.api.apiKeyPlaceholder")}
           compact
         />
 
         <div className="grid grid-cols-1 gap-1.5">
           <TextInput
-            label="API 地址"
+            label={t("settings.model.api.apiUrl")}
             value={detail.provider.baseUrl}
             onChange={onApiUrlChange}
-            placeholder="输入 API 地址"
+            placeholder={t("settings.model.api.apiUrlPlaceholder")}
             compact
           />
           <p className="text-xs leading-4 text-text-secondary">
-            预览请求地址：{detail.provider.baseUrl}/api/chat
+            {t("settings.model.api.previewUrl", { url: detail.provider.baseUrl })}
           </p>
         </div>
 
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
           <div className="w-full max-w-[600px]">
             <Select
-              label="当前模型"
+              label={t("settings.model.api.currentModel")}
               value={selectedModelId}
               onChange={onSelectedModelChange}
               options={modelOptions}
@@ -126,7 +122,7 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
           </div>
           <div className="flex items-end">
             <IconButton
-              ariaLabel="保存配置并同步模型"
+              ariaLabel={t("settings.model.api.syncAriaLabel")}
               className="h-8 w-8"
               onClick={onTestConnection}
               disabled={isBusy}
@@ -150,7 +146,7 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
             onClick={() => onSetDefaultRole("llm")}
             disabled={assigningRole === "llm" || !selectedModelId}
           >
-            {assigningRole === "llm" ? "设置中..." : "设为默认 LLM"}
+            {assigningRole === "llm" ? t("settings.model.api.setting") : t("settings.model.api.setDefaultLlm")}
           </Button>
           <Button
             size="small"
@@ -158,7 +154,7 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
             onClick={() => onSetDefaultRole("embedding")}
             disabled={assigningRole === "embedding" || !selectedModelId}
           >
-            {assigningRole === "embedding" ? "设置中..." : "设为默认 Embedding"}
+            {assigningRole === "embedding" ? t("settings.model.api.setting") : t("settings.model.api.setDefaultEmbedding")}
           </Button>
           <Button
             size="small"
@@ -166,7 +162,7 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
             onClick={() => onSetDefaultRole("rerank")}
             disabled={assigningRole === "rerank" || !selectedModelId}
           >
-            {assigningRole === "rerank" ? "设置中..." : "设为默认 ReRank"}
+            {assigningRole === "rerank" ? t("settings.model.api.setting") : t("settings.model.api.setDefaultRerank")}
           </Button>
           <Button
             size="small"
@@ -174,7 +170,17 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
             onClick={() => onSetDefaultRole("task")}
             disabled={assigningRole === "task" || !selectedModelId}
           >
-            {assigningRole === "task" ? "设置中..." : "设为默认 Task"}
+            {assigningRole === "task" ? t("settings.model.api.setting") : t("settings.model.api.setDefaultTask")}
+          </Button>
+          <Button
+            size="small"
+            variant="secondary"
+            onClick={() => onSetDefaultRole("evaluation")}
+            disabled={assigningRole === "evaluation" || !selectedModelId}
+          >
+            {assigningRole === "evaluation"
+              ? t("settings.model.api.setting")
+              : t("settings.model.api.setDefaultEvaluation")}
           </Button>
         </div>
       </div>

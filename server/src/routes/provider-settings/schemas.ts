@@ -308,12 +308,13 @@ export const providerSettingsRouteSchemas = {
           assignments: {
             type: "object",
             description: "Current default model assignment by role.",
-            required: ["llm", "embedding", "rerank", "task"],
+            required: ["llm", "embedding", "rerank", "task", "evaluation"],
             properties: {
               llm: roleAssignmentSchema,
               embedding: roleAssignmentSchema,
               rerank: roleAssignmentSchema,
               task: roleAssignmentSchema,
+              evaluation: roleAssignmentSchema,
             },
           },
         },
@@ -375,7 +376,7 @@ export const providerSettingsRouteSchemas = {
     tags: ["Provider Settings"],
     summary: "Select default model for role",
     description:
-      "Assign a provider model to llm, embedding, or rerank and reset that role's params to backend defaults.",
+      "Assign a provider model to a role and reset that role's params to backend defaults.",
     operationId: "selectDefaultProviderModelForRole",
     params: {
       type: "object",
@@ -427,4 +428,3 @@ export const providerSettingsRouteSchemas = {
     },
   },
 } as const;
-

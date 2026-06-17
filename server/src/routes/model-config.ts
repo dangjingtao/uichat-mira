@@ -73,7 +73,7 @@ const modelConfigRoute: FastifyPluginAsync = async (app) => {
         tags: ["Model Settings"],
         summary: "Get active role model configs",
         description:
-          "Return the current effective default configs for llm, embedding, and rerank.",
+          "Return the current effective default configs for all model roles.",
         operationId: "getActiveRoleModelConfigs",
         response: {
           200: successEnvelope({
@@ -190,7 +190,7 @@ const modelConfigRoute: FastifyPluginAsync = async (app) => {
         tags: ["Model Settings"],
         summary: "Get param templates",
         description:
-          "Return backend-defined parameter templates for llm, embedding, and rerank.",
+          "Return backend-defined parameter templates for all model roles.",
         operationId: "getRoleModelParamTemplates",
         querystring: {
           type: "object",
@@ -201,12 +201,13 @@ const modelConfigRoute: FastifyPluginAsync = async (app) => {
         response: {
           200: successEnvelope({
             type: "object",
-            required: ["llm", "embedding", "rerank", "task"],
+            required: ["llm", "embedding", "rerank", "task", "evaluation"],
             properties: {
               llm: { type: "array", items: paramTemplateItemSchema },
               embedding: { type: "array", items: paramTemplateItemSchema },
               rerank: { type: "array", items: paramTemplateItemSchema },
               task: { type: "array", items: paramTemplateItemSchema },
+              evaluation: { type: "array", items: paramTemplateItemSchema },
             },
           }),
           500: errorEnvelope,

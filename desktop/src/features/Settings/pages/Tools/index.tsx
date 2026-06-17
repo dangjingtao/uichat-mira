@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { Folder, Globe, Wrench } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import Card from "@/shared/ui/Card";
 import { message } from "@/shared/ui/Message";
 import { getTools, type ToolDefinition } from "@/shared/api/tools";
@@ -50,6 +51,7 @@ function ToolCard({
 }
 
 export default function ToolsSettings() {
+  const { t } = useTranslation();
   const [tools, setTools] = useState<ToolDefinition[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -71,7 +73,11 @@ export default function ToolsSettings() {
           return;
         }
 
-        message.error(error instanceof Error ? error.message : "Failed to load tools");
+        message.error(
+          error instanceof Error
+            ? error.message
+            : t("settings.tools.loadFailed"),
+        );
       })
       .finally(() => {
         if (cancelled) {
@@ -84,19 +90,23 @@ export default function ToolsSettings() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   return (
     <SettingsPageLayout
-      miniTitle="Tools"
-      title="Tools"
-      description="Built-in agent tools loaded dynamically from the tools/ and extendTools/ directories."
+      miniTitle={t("settings.tools.miniTitle")}
+      title={t("settings.tools.title")}
+      description={t("settings.tools.description")}
       contentClassName="space-y-4 pt-6"
     >
       {isLoading ? (
-        <Card className="text-sm text-text-secondary">Loading...</Card>
+        <Card className="text-sm text-text-secondary">
+          {t("settings.tools.loading")}
+        </Card>
       ) : tools.length === 0 ? (
-        <Card className="text-sm text-text-secondary">No tools loaded.</Card>
+        <Card className="text-sm text-text-secondary">
+          {t("settings.tools.empty")}
+        </Card>
       ) : (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           {tools.map((tool) => {
