@@ -1,13 +1,33 @@
 import OpenAI from "openai";
+import {
+  isCloudflareBaseUrl,
+  normalizeCloudflareOpenAICompatibleBaseUrl,
+} from "@/services/cloudflare-provider.js";
+
+export type OpenAICompatibleContentPart =
+  | {
+      type: "text";
+      text: string;
+    }
+  | {
+      type: "image_url";
+      image_url: {
+        url: string;
+      };
+    };
 
 export interface OpenAICompatibleChatMessage {
   role: "system" | "user" | "assistant";
-  content: string;
+  content: string | OpenAICompatibleContentPart[];
 }
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 
 export const normalizeOpenAICompatibleBaseUrl = (baseUrl: string) => {
+  if (isCloudflareBaseUrl(baseUrl)) {
+    return normalizeCloudflareOpenAICompatibleBaseUrl(baseUrl);
+  }
+
   const normalized = trimTrailingSlash(baseUrl.trim());
   if (normalized.match(/\/v\d+$/)) {
     return normalized;
@@ -57,7 +77,7 @@ export const streamOpenAICompatibleChat = async function* ({
   const client = createOpenAICompatibleClient(baseUrl, apiKey);
   const stream = await client.chat.completions.create({
     model,
-    messages,
+    messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
     stream: true,
     ...params,
   });

@@ -154,7 +154,7 @@ function normalizeAppMeta(packageJson: PackageJsonLike): AppMeta {
   return {
     name,
     version,
-    displayName: formatAppDisplayName(name),
+    displayName: customMeta.displayName || formatAppDisplayName(name),
     author,
     description,
     repositoryUrl,
@@ -257,8 +257,11 @@ function readCustomAppMeta(appMeta: unknown) {
     : [];
 
   const git = isGitInfoLike(metaObject.git) ? metaObject.git : undefined;
+  const displayName =
+    typeof metaObject.displayName === "string" ? metaObject.displayName : "";
 
   return {
+    displayName,
     changelog,
     versionHistory,
     links,

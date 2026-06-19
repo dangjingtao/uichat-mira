@@ -45,6 +45,24 @@ const PlatformConfigModal: React.FC<PlatformConfigModalProps> = ({
     Partial<Record<ProviderCode, string | null>>
   >({});
 
+  const getErrorMessage = useCallback(
+    (err: unknown, fallbackKey: string) => {
+      if (err instanceof Error) {
+        if (
+          err.name === "AbortError" ||
+          err.message === "This operation was aborted"
+        ) {
+          return t("settings.model.platformConfig.requestAborted");
+        }
+
+        return err.message;
+      }
+
+      return t(fallbackKey);
+    },
+    [t],
+  );
+
   const loadProviders = useCallback(async () => {
     const nextProviders = await getProviders();
     setProviders(nextProviders);
@@ -82,11 +100,19 @@ const PlatformConfigModal: React.FC<PlatformConfigModalProps> = ({
         setSelectedProviderCode(initialProvider);
         await loadProviderDetail(initialProvider);
       } catch (err) {
-        const messageText = err instanceof Error ? err.message : t("settings.model.platformConfig.loadFailed");
+        const messageText = getErrorMessage(
+          err,
+          "settings.model.platformConfig.loadFailed",
+        );
         message.error(messageText);
       }
     })();
-  }, [loadProviderDetail, loadProviders, selectedProviderCode, t]);
+  }, [
+    getErrorMessage,
+    loadProviderDetail,
+    loadProviders,
+    selectedProviderCode,
+  ]);
 
   const currentDetail = providerDetails[selectedProviderCode] ?? null;
   const currentSelectedModelId = selectedModelIds[selectedProviderCode] ?? "";
@@ -99,8 +125,10 @@ const PlatformConfigModal: React.FC<PlatformConfigModalProps> = ({
       try {
         await loadProviderDetail(nextCode);
       } catch (err) {
-        const messageText =
-          err instanceof Error ? err.message : t("settings.model.platformConfig.loadDetailFailed");
+        const messageText = getErrorMessage(
+          err,
+          "settings.model.platformConfig.loadDetailFailed",
+        );
         message.error(messageText);
       }
     }
@@ -143,7 +171,10 @@ const PlatformConfigModal: React.FC<PlatformConfigModalProps> = ({
       await loadProviderDetail(selectedProviderCode);
       message.success(t("settings.model.platformConfig.syncSuccess"));
     } catch (err) {
-      const messageText = err instanceof Error ? err.message : t("settings.model.platformConfig.syncFailed");
+      const messageText = getErrorMessage(
+        err,
+        "settings.model.platformConfig.syncFailed",
+      );
       setSyncErrorByProvider((prev) => ({
         ...prev,
         [selectedProviderCode]: messageText,
@@ -166,14 +197,14 @@ const PlatformConfigModal: React.FC<PlatformConfigModalProps> = ({
 
     setAssigningRole(role);
     try {
-      await saveProviderConfig(selectedProviderCode, {
-        baseUrl: currentDetail?.provider.baseUrl ?? "",
-        apiKey: currentDetail?.provider.apiKey ?? "",
-      });
       await selectProviderRoleModel(
         selectedProviderCode,
         role,
         currentSelectedModelId,
+        {
+          baseUrl: currentDetail?.provider.baseUrl ?? "",
+          apiKey: currentDetail?.provider.apiKey ?? "",
+        },
       );
       await loadProviders();
       await loadProviderDetail(selectedProviderCode);
@@ -186,7 +217,10 @@ const PlatformConfigModal: React.FC<PlatformConfigModalProps> = ({
           : t("settings.model.platformConfig.updatedDefault", { role: role.toUpperCase() }),
       );
     } catch (err) {
-      const messageText = err instanceof Error ? err.message : t("settings.model.platformConfig.setDefaultFailed");
+      const messageText = getErrorMessage(
+        err,
+        "settings.model.platformConfig.setDefaultFailed",
+      );
       message.error(messageText);
     } finally {
       setAssigningRole(null);

@@ -258,6 +258,14 @@ export const initializeModelConfigDatabase = (): void => {
     `);
 
     for (const provider of DEFAULT_PROVIDER_CONNECTIONS) {
+      const existingProvider = providerConnectionRepository.findByCode(
+        provider.providerCode,
+      );
+
+      if (existingProvider) {
+        continue;
+      }
+
       providerConnectionRepository.upsert({
         providerCode: provider.providerCode,
         displayName: provider.displayName,

@@ -1,40 +1,64 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, {
+  type WheelEvent,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import {
+  AlertCircle,
   BowArrow,
-  ChevronDown,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
   EthernetPort,
-  FileText,
+  FileImage,
   FileUp,
   FolderSearch,
   MessageCircleCode,
   MessagesSquare,
-  Sparkles,
+  Paperclip,
+  Pencil,
+  RefreshCw,
 } from "lucide-react";
 import {
+  ActionBarPrimitive,
+  AttachmentPrimitive,
+  ComposerPrimitive,
   MessagePartPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
+  useAui,
+  useAttachment,
   useAuiState,
 } from "@assistant-ui/react";
 import { useKnowledgeBaseAvailability } from "@/app/providers/KnowledgeBaseAvailabilityProvider";
 import { useRoleModelConfigs } from "@/app/providers/RoleModelConfigProvider";
 import { useCurrentThread } from "@/features/chat/Providers/CurrentThreadProvider";
-import Card from "@/shared/ui/Card";
+import { resolveAttachmentUrl } from "@/shared/api/attachments";
 import MarkdownText from "@/shared/ui/MarkdownText";
 import RagProgressDetailDrawer, {
   type RagProgressDetail,
 } from "./RagProgressDetailDrawer";
+import RagSourceDetailDrawer from "./RagSourceDetailDrawer";
 import OverflowTooltip from "./OverflowTooltip";
 import RagExecutionTrace from "./RagExecutionTrace";
 import ThreadComposer from "./ThreadComposer";
 import ThreadHeader from "./ThreadHeader";
+import WelcomeEmptyState from "./WelcomeEmptyState";
 import {
-  getRagSourceAttribution,
+  AssistantAvatar,
+  AssistantBubbleShell,
+  UserBubbleShell,
+} from "./MessageBubbleShells";
+import {
   getRagProgressFromContentParts,
   getRagSourcesFromContentParts,
+  getVisibleRagSources,
   normalizeInlineText,
 } from "./thread.parsers";
 import type { RagSourceLike, ThreadMessageLike } from "./thread.types";
@@ -54,9 +78,6 @@ const typingAnimationStyle = `
   }
 `;
 
-const assistantAvatarClassName =
-  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/80 bg-surface-primary text-[11px] font-semibold text-text-primary shadow-shadow-sm";
-
 const shellClassName =
   "relative flex h-full min-h-0 flex-col overflow-hidden bg-surface-secondary text-text-primary";
 
@@ -64,13 +85,37 @@ const backdropOrbsClassName =
   "pointer-events-none absolute inset-0 overflow-hidden";
 
 const contentColumnClassName =
-  "mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 pb-[12.5rem] pt-4 sm:px-6 lg:px-8 xl:max-w-5xl";
+  "mx-auto flex w-full flex-1 flex-col px-4 pb-[12.5rem] pt-4 sm:px-6 lg:px-8";
 
-const sectionCopyClassName =
-  "mx-auto mb-8 flex w-full max-w-3xl flex-col items-start gap-4 px-1 transition-all duration-500 ease-out";
+const actionButtonClassName =
+  "inline-flex h-7 w-7 items-center justify-center rounded-full border border-border/70 bg-surface-primary/92 text-text-secondary transition-colors hover:border-border hover:bg-surface-primary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20";
 
-const bubbleBaseClassName =
-  "rounded-[20px] px-4 py-3 text-sm leading-7 transition-colors duration-150";
+type ImagePreviewState = {
+  src: string;
+};
+
+type ThreadMessageRuntimeData = {
+  messagesById: Record<string, ThreadMessageLike>;
+  persistedSourcesByMessageId: Record<string, RagSourceLike[]>;
+  onOpenRagProgressDetail: (detail: RagProgressDetail) => void;
+  onOpenRagSourceDetail: (detail: {
+    messageId?: string;
+    sources: RagSourceLike[];
+  }) => void;
+};
+
+const ThreadMessageRuntimeContext =
+  React.createContext<ThreadMessageRuntimeData | null>(null);
+
+function useThreadMessageRuntimeData() {
+  const value = useContext(ThreadMessageRuntimeContext);
+
+  if (!value) {
+    throw new Error("Thread message runtime data is unavailable");
+  }
+
+  return value;
+}
 
 function PodiumIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -106,49 +151,417 @@ const isConfiguredModelName = (name: string) => {
     return false;
   }
 
-  return !normalized.startsWith("未配置") && !normalized.startsWith("Unconfigured");
+  return (
+    !normalized.startsWith("未配置") && !normalized.startsWith("Unconfigured")
+  );
 };
 
-// UserMessage only renders the compact right-aligned bubble and keeps
-// assistant-ui message part handling out of the page shell.
-const UserMessage = () => (
-  <MessagePrimitive.Root className="flex justify-end px-0 py-2 sm:py-2.5">
-    <div
-      className={`${bubbleBaseClassName} max-w-[min(100%,32rem)] rounded-[18px] rounded-tr-md border border-border bg-surface-primary text-text-primary shadow-[0_1px_2px_rgba(15,23,42,0.05)] xl:max-w-[min(100%,34rem)]`}
-    >
-      <MessagePrimitive.Parts>
-        {({ part }) => {
-          if (part.type === "text") {
-            return (
-              <p className="whitespace-pre-wrap break-words">{part.text}</p>
-            );
-          }
+const getStatusMessage = (
+  reason:
+    | "cancelled"
+    | "length"
+    | "content-filter"
+    | "other"
+    | "error"
+    | "tool-calls",
+  t: ReturnType<typeof useTranslation>["t"],
+) => {
+  if (reason === "cancelled") {
+    return t("chat.thread.status.cancelled");
+  }
 
-          return null;
-        }}
-      </MessagePrimitive.Parts>
-    </div>
-  </MessagePrimitive.Root>
-);
+  if (reason === "error") {
+    return t("chat.thread.status.failed");
+  }
 
-// AssistantMessage owns assistant bubble rendering plus all message-local
-// RAG affordances such as sources and execution trace expansion.
-const AssistantMessage = ({
-  messagesById,
-  persistedSourcesByMessageId,
-  onOpenRagProgressDetail,
-}: {
-  messagesById: Record<string, ThreadMessageLike>;
-  persistedSourcesByMessageId: Record<string, RagSourceLike[]>;
-  onOpenRagProgressDetail: (detail: RagProgressDetail) => void;
-}) => {
+  return t("chat.thread.status.stopped");
+};
+
+function ComposerAttachmentItem() {
   const { t } = useTranslation();
+  return (
+    <AttachmentPrimitive.Root className="inline-flex max-w-full items-center gap-2 rounded-2xl border border-border/70 bg-surface-primary/92 px-3 py-2 text-xs text-text-secondary shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+      <AttachmentPrimitive.unstable_Thumb className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-secondary text-[10px] font-medium text-text-secondary" />
+      <span className="min-w-0 flex-1 truncate font-medium text-text-primary">
+        <AttachmentPrimitive.Name />
+      </span>
+      <AttachmentPrimitive.Remove
+        className="inline-flex h-5 w-5 items-center justify-center rounded-full text-text-tertiary transition-colors hover:bg-surface-secondary hover:text-text-primary"
+        title={t("chat.thread.composer.removeAttachment")}
+      >
+        <span className="text-xs leading-none">x</span>
+      </AttachmentPrimitive.Remove>
+    </AttachmentPrimitive.Root>
+  );
+}
+
+function ReadOnlyAttachmentItem() {
+  return (
+    <AttachmentPrimitive.Root className="inline-flex max-w-full items-center gap-2 rounded-2xl border border-border/70 bg-surface-primary/92 px-3 py-2 text-xs text-text-secondary shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+      <AttachmentPrimitive.unstable_Thumb className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-secondary text-[10px] font-medium text-text-secondary" />
+      <span className="min-w-0 flex-1 truncate font-medium text-text-primary">
+        <AttachmentPrimitive.Name />
+      </span>
+    </AttachmentPrimitive.Root>
+  );
+}
+
+function ImagePreviewOverlay({
+  preview,
+  onClose,
+}: {
+  preview: ImagePreviewState | null;
+  onClose: () => void;
+}) {
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    setScale(1);
+  }, [preview?.src]);
+
+  useEffect(() => {
+    if (!preview) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, preview]);
+
+  if (!preview) {
+    return null;
+  }
+
+  const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const direction = event.deltaY < 0 ? 1 : -1;
+    setScale((current) =>
+      Math.min(4, Math.max(0.6, current + direction * 0.16)),
+    );
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/72 p-6 backdrop-blur-sm"
+      onClick={onClose}
+      onWheel={handleWheel}
+      role="dialog"
+      aria-modal="true"
+    >
+      <img
+        src={preview.src}
+        alt=""
+        className="max-h-[88vh] max-w-[88vw] select-none rounded-[16px] object-contain shadow-[0_24px_70px_rgba(0,0,0,0.35)] transition-transform duration-100 ease-out"
+        style={{ transform: `scale(${scale})` }}
+        onClick={(event) => event.stopPropagation()}
+        draggable={false}
+      />
+    </div>
+  );
+}
+
+function ReadOnlyImageAttachmentItem({
+  onPreview,
+}: {
+  onPreview: (preview: ImagePreviewState) => void;
+}) {
+  const attachment = useAttachment();
+  const imagePart = attachment.content?.find(
+    (part): part is { type: "image"; image: string; filename?: string } =>
+      part.type === "image" && typeof part.image === "string",
+  );
+
+  if (!imagePart) {
+    return <ReadOnlyAttachmentItem />;
+  }
+
+  const imageUrl = resolveAttachmentUrl(imagePart.image);
+
+  return (
+    <AttachmentPrimitive.Root
+      className="block max-w-[min(100%,22rem)] overflow-hidden rounded-[14px] border border-border/70 bg-surface-primary shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
+      onClick={() => onPreview({ src: imageUrl })}
+    >
+      <img
+        src={imageUrl}
+        alt=""
+        className="block max-h-[18rem] min-h-24 w-full cursor-zoom-in object-cover"
+        draggable={false}
+      />
+    </AttachmentPrimitive.Root>
+  );
+}
+
+function MessageActions({
+  allowEdit,
+  allowReload,
+  fadeOnHover,
+  inline,
+}: {
+  allowEdit?: boolean;
+  allowReload?: boolean;
+  fadeOnHover?: boolean;
+  inline?: boolean;
+}) {
+  const { t } = useTranslation();
+  const aui = useAui();
+  const { ragEnabled } = useCurrentThread();
+  const canCopy = useAuiState((s) => s.thread.capabilities.unstable_copy);
+  const canEdit = useAuiState((s) => s.thread.capabilities.edit);
+  const canReload = useAuiState((s) => s.thread.capabilities.reload);
+  const isLastMessage = useAuiState((s) => s.message.isLast);
+  const messageId = useAuiState((s) => s.message.id);
+  const messageParentId = useAuiState((s) => s.message.parentId);
+  const messageRole = useAuiState((s) => s.message.role);
+  const lastUserMessageId = useAuiState((s) => {
+    for (let index = s.thread.messages.length - 1; index >= 0; index -= 1) {
+      const candidate = s.thread.messages[index];
+      if (candidate?.role === "user") {
+        return candidate.id;
+      }
+    }
+
+    return null;
+  });
+  const showCopy = canCopy;
+  const showEdit = Boolean(allowEdit && canEdit);
+  const showReload = Boolean(
+    allowReload &&
+    canReload &&
+    ((messageRole === "assistant" && isLastMessage) ||
+      (messageRole === "user" && messageId === lastUserMessageId)),
+  );
+
+  if (!showCopy && !showEdit && !showReload) {
+    return null;
+  }
+
+  return (
+    <div className={inline ? "" : "mt-1 h-6"}>
+      {showCopy || showEdit || showReload ? (
+        <ActionBarPrimitive.Root
+          hideWhenRunning
+          className={`inline-flex items-center gap-2 transition-opacity duration-150 ease-out ${
+            fadeOnHover
+              ? "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+              : "opacity-100"
+          }`}
+        >
+          {showCopy ? (
+            <ActionBarPrimitive.Copy asChild>
+              <button
+                type="button"
+                className={actionButtonClassName}
+                title={t("chat.thread.actions.copy")}
+              >
+                <MessagePrimitive.If copied>
+                  <Check className="h-3.5 w-3.5" />
+                </MessagePrimitive.If>
+                <MessagePrimitive.If copied={false}>
+                  <Copy className="h-3.5 w-3.5" />
+                </MessagePrimitive.If>
+              </button>
+            </ActionBarPrimitive.Copy>
+          ) : null}
+          {showEdit ? (
+            <button
+              type="button"
+              className={actionButtonClassName}
+              title={t("chat.thread.actions.edit")}
+              onClick={() => {
+                aui.composer().beginEdit();
+              }}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+          {showReload ? (
+            <button
+              type="button"
+              className={actionButtonClassName}
+              title={t("chat.thread.actions.regenerate")}
+              onClick={() => {
+                if (messageRole === "assistant") {
+                  if (!ragEnabled) {
+                    aui.thread().startRun({
+                      parentId: messageParentId ?? null,
+                      sourceId: null,
+                    });
+                    return;
+                  }
+
+                  void aui.message().reload();
+                  return;
+                }
+
+                if (messageRole === "user" && messageId) {
+                  aui.thread().startRun({
+                    parentId: messageId,
+                    sourceId: null,
+                  });
+                }
+              }}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+        </ActionBarPrimitive.Root>
+      ) : null}
+    </div>
+  );
+}
+
+function InlineEditComposer() {
+  const { t } = useTranslation();
+  const attachmentSupported = useAuiState(
+    (s) => s.thread.capabilities.attachments,
+  );
+
+  return (
+    <MessagePrimitive.Root className="flex justify-end px-0 py-2 sm:py-2.5">
+      <div className="w-full max-w-[min(100%,34rem)]">
+        <ComposerPrimitive.Root className="overflow-hidden rounded-[18px] border border-primary/20 bg-surface-primary shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
+          <div className="flex flex-wrap gap-2 border-b border-border/70 px-4 py-3 empty:hidden">
+            <ComposerPrimitive.Attachments>
+              {() => <ComposerAttachmentItem />}
+            </ComposerPrimitive.Attachments>
+          </div>
+          <ComposerPrimitive.Input
+            className="min-h-[88px] w-full resize-none bg-transparent px-4 py-3 text-sm leading-7 text-text-primary placeholder:text-text-tertiary focus:outline-none"
+            rows={4}
+          />
+          <div className="flex items-center justify-between gap-2 border-t border-border/70 px-3 py-3">
+            <div className="flex items-center gap-2">
+              {attachmentSupported ? (
+                <ComposerPrimitive.AddAttachment asChild>
+                  <button
+                    type="button"
+                    className={actionButtonClassName}
+                    title={t("chat.thread.composer.attachmentMenu")}
+                    aria-label={t("chat.thread.composer.attachmentMenu")}
+                  >
+                    <Paperclip className="h-3.5 w-3.5" />
+                  </button>
+                </ComposerPrimitive.AddAttachment>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2">
+              <ComposerPrimitive.Cancel className="rounded-full border border-border/70 px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-secondary">
+                {t("common.actions.cancel")}
+              </ComposerPrimitive.Cancel>
+              <ComposerPrimitive.Send className="rounded-full bg-text-primary px-3 py-1.5 text-xs font-medium text-text-inverted transition-colors hover:bg-text-primary/90">
+                {t("common.actions.generate")}
+              </ComposerPrimitive.Send>
+            </div>
+          </div>
+        </ComposerPrimitive.Root>
+      </div>
+    </MessagePrimitive.Root>
+  );
+}
+
+function MessageStatusNotice() {
+  const { t } = useTranslation();
+  const status = useAuiState((s) => s.message.status);
+
+  if (!status || status.type !== "incomplete") {
+    return null;
+  }
+
+  const errorText =
+    typeof status.error === "string"
+      ? status.error
+      : status.error &&
+          typeof status.error === "object" &&
+          "message" in status.error &&
+          typeof status.error.message === "string"
+        ? status.error.message
+        : null;
+
+  return (
+    <div className="mt-2 inline-flex max-w-full items-start gap-2 rounded-2xl border border-warning-border bg-warning-soft px-3 py-2 text-xs text-warning-text">
+      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <div className="min-w-0">
+        <div className="font-medium">{getStatusMessage(status.reason, t)}</div>
+        {errorText ? (
+          <div className="mt-0.5 break-words">{errorText}</div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+const UserMessage = () => {
+  const [preview, setPreview] = useState<ImagePreviewState | null>(null);
+
+  const imageAttachmentComponents = useMemo(
+    () => ({
+      Image: () => <ReadOnlyImageAttachmentItem onPreview={setPreview} />,
+      Attachment: ReadOnlyAttachmentItem,
+      Document: ReadOnlyAttachmentItem,
+      File: ReadOnlyAttachmentItem,
+    }),
+    [],
+  );
+
+  return (
+    <>
+      <MessagePrimitive.Root className="group flex justify-end px-0 py-2 sm:py-2.5">
+        <div className="flex max-w-[min(100%,34rem)] flex-col items-end">
+          <MessagePrimitive.If hasAttachments>
+            <div className="mb-2 flex flex-wrap justify-end gap-2">
+              <MessagePrimitive.Attachments
+                components={imageAttachmentComponents}
+              />
+            </div>
+          </MessagePrimitive.If>
+          <MessagePrimitive.If hasContent>
+            <UserBubbleShell>
+              <MessagePrimitive.Parts>
+                {({ part }) => {
+                  if (part.type === "text") {
+                    return (
+                      <p className="whitespace-pre-wrap break-words">
+                        {part.text}
+                      </p>
+                    );
+                  }
+
+                  return null;
+                }}
+              </MessagePrimitive.Parts>
+            </UserBubbleShell>
+          </MessagePrimitive.If>
+          <MessageActions allowEdit allowReload fadeOnHover />
+        </div>
+      </MessagePrimitive.Root>
+      <ImagePreviewOverlay preview={preview} onClose={() => setPreview(null)} />
+    </>
+  );
+};
+
+const AssistantMessage = () => {
+  const { t } = useTranslation();
+  const { ragEnabled } = useCurrentThread();
+  const {
+    messagesById,
+    persistedSourcesByMessageId,
+    onOpenRagProgressDetail,
+    onOpenRagSourceDetail,
+  } = useThreadMessageRuntimeData();
   const messageId = useAuiState((s) => s.message.id);
   const messageContent = useAuiState((s) => s.message.content);
-  const [isSourcesOpen, setIsSourcesOpen] = useState(false);
   const inlineSources = getRagSourcesFromContentParts(messageContent);
-  const ragProgress = getRagProgressFromContentParts(messageContent);
-  const sources =
+  const ragProgress = ragEnabled
+    ? getRagProgressFromContentParts(messageContent)
+    : [];
+  const allSources =
     inlineSources.length > 0
       ? inlineSources
       : messageId
@@ -156,21 +569,21 @@ const AssistantMessage = ({
           persistedSourcesByMessageId[messageId] ??
           [])
         : [];
-
-  useEffect(() => {
-    setIsSourcesOpen(false);
-  }, [messageId]);
+  const sources = ragEnabled
+    ? getVisibleRagSources(allSources, ragProgress)
+    : [];
 
   return (
-    <MessagePrimitive.Root className="flex justify-start px-0 py-2 sm:py-2.5">
-      <div className="flex w-full max-w-[42rem] items-start gap-2 xl:max-w-[44rem]">
-        <div className={assistantAvatarClassName} aria-hidden="true">
-          <Sparkles className="h-3.5 w-3.5" />
-        </div>
-        <div className="min-w-0 flex-1 pt-0.5">
-          <div
-            className={`${bubbleBaseClassName} inline-block max-w-[min(100%,38rem)] rounded-[18px] rounded-tl-md border border-border/70 bg-surface-primary text-text-primary shadow-[0_1px_2px_rgba(15,23,42,0.03)]`}
-          >
+    <MessagePrimitive.Root className="group flex justify-start px-0 py-2 sm:py-2.5">
+      <div className="flex w-full items-start gap-3">
+        <AssistantAvatar />
+        <div className="min-w-0 flex-1">
+          <RagExecutionTrace
+            messageId={messageId}
+            steps={ragProgress}
+            onOpenDetail={onOpenRagProgressDetail}
+          />
+          <AssistantBubbleShell>
             <MessagePrimitive.Parts
               components={{
                 Empty: ({ status }) => {
@@ -201,7 +614,7 @@ const AssistantMessage = ({
                 },
                 Text: () => (
                   <>
-                    <MarkdownText className="prose prose-sm max-w-none break-words text-text-primary prose-headings:text-text-primary prose-p:text-text-primary prose-strong:text-text-primary prose-code:text-text-primary prose-pre:bg-surface-secondary prose-pre:text-text-primary prose-li:text-text-primary prose-blockquote:border-border prose-blockquote:text-text-secondary" />
+                    <MarkdownText className="prose prose-sm max-w-none break-words text-text-primary prose-headings:text-text-primary prose-headings:font-semibold prose-p:my-0 prose-p:text-text-primary prose-strong:text-text-primary prose-code:text-text-primary prose-pre:rounded-[12px] prose-pre:border prose-pre:border-border/60 prose-pre:bg-surface-secondary/92 prose-pre:text-text-primary prose-li:text-text-primary prose-blockquote:border-border prose-blockquote:text-text-secondary" />
                     <MessagePartPrimitive.InProgress>
                       <span className="ml-1 inline-block align-baseline text-text-tertiary">
                         ●
@@ -211,109 +624,32 @@ const AssistantMessage = ({
                 ),
               }}
             />
-          </div>
-          <RagExecutionTrace
-            messageId={messageId}
-            steps={ragProgress}
-            onOpenDetail={onOpenRagProgressDetail}
-          />
-          {sources.length > 0 ? (
-            <div className="mt-3 rounded-2xl border border-border/70 bg-surface-elevated/92 p-2.5 shadow-[0_4px_10px_rgba(15,23,42,0.03)] transition-[border-color,background-color,box-shadow] duration-200">
+          </AssistantBubbleShell>
+          <MessageStatusNotice />
+          <div className="mt-1 flex items-center gap-2 pl-1">
+            <MessageActions allowReload inline />
+            {sources.length > 0 ? (
               <button
                 type="button"
-                onClick={() => setIsSourcesOpen((current) => !current)}
-                className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-1 text-left transition-colors hover:bg-surface-primary/80"
-                aria-expanded={isSourcesOpen}
+                onClick={() =>
+                  onOpenRagSourceDetail({
+                    messageId,
+                    sources,
+                  })
+                }
+                className="inline-flex h-7 items-center gap-2 rounded-[10px] border border-border/70 bg-surface-primary/92 px-3 text-[12px] text-text-secondary transition-colors hover:border-border hover:bg-surface-primary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
               >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.08em] text-text-secondary">
-                    <FileText className="h-3.5 w-3.5 text-primary" />
-                    <span>{t("chat.thread.sources.title")}</span>
-                    <span className="rounded-full border border-border/70 bg-surface-primary/90 px-1.5 py-0.5 text-[10px] font-medium text-text-secondary">
-                      {sources.length}
-                    </span>
-                  </div>
-                </div>
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border/60 bg-surface-primary/90 px-2 py-1 text-[10px] font-medium text-text-secondary">
-                  <ChevronDown
-                    className={`h-3.5 w-3.5 transition-transform ${
-                      isSourcesOpen ? "rotate-180" : ""
-                    }`}
-                  />
-                </span>
+                <span>{t("chat.thread.sources.title")}</span>
+                <span className="text-text-tertiary">{sources.length}</span>
               </button>
-              <div
-                aria-hidden={!isSourcesOpen}
-                className={`grid overflow-hidden transition-[grid-template-rows,opacity] duration-300 ease-out ${
-                  isSourcesOpen
-                    ? "mt-2 grid-rows-[1fr] opacity-100"
-                    : "mt-0 grid-rows-[0fr] opacity-0"
-                }`}
-              >
-                <div className="min-h-0">
-                  <div className="space-y-1.5">
-                    {sources.map((source, index) => {
-                      const documentName = normalizeInlineText(
-                        source.documentName,
-                      );
-                      const content = normalizeInlineText(source.content);
-                      const attribution = getRagSourceAttribution(source);
-                      const isLast = index === sources.length - 1;
-
-                      return (
-                        <div
-                          key={`${messageId}-${source.chunkId}`}
-                          className={`px-3 py-2.5 ${isLast ? "" : "border-b border-border/60"}`}
-                        >
-                          <div className="flex items-start gap-2">
-                            <OverflowTooltip
-                              text={documentName}
-                              placement="top"
-                              className="min-w-0 flex-1 truncate text-xs font-semibold text-text-primary"
-                            >
-                              <div>
-                                {t("chat.thread.sources.document", {
-                                  count: index + 1,
-                                  name: documentName,
-                                })}
-                              </div>
-                            </OverflowTooltip>
-                            <div className="flex shrink-0 items-center gap-1.5">
-                              <span
-                                className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${attribution.toneClassName}`}
-                              >
-                                {attribution.label}
-                              </span>
-                              <span className="rounded-full border border-border/70 bg-surface-primary/90 px-2 py-0.5 text-[10px] font-medium text-text-secondary">
-                                {t("chat.thread.sources.score", {
-                                  value: source.score.toFixed(3),
-                                })}
-                              </span>
-                            </div>
-                          </div>
-                          <OverflowTooltip
-                            text={content}
-                            placement="top"
-                            className="mt-1.5 text-[11px] leading-5 text-text-secondary"
-                          >
-                            <p className="max-h-10 overflow-hidden">{content}</p>
-                          </OverflowTooltip>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
       </div>
     </MessagePrimitive.Root>
   );
 };
 
-// ThreadContent is the page-level shell that composes provider state,
-// assistant-ui primitives, and the RAG runtime hooks into one chat screen.
 function ThreadContent() {
   const { t } = useTranslation();
   const isThreadEmpty = useAuiState((s) => s.thread.isEmpty);
@@ -335,10 +671,13 @@ function ThreadContent() {
   const {
     persistedSourcesByMessageId,
     messagesById,
-    hasRagProgressDrawerOpen,
+    hasSideDrawerOpen,
     selectedRagProgressDetail,
+    selectedRagSourceDetail,
     openRagProgressDetail,
+    openRagSourceDetail,
     closeRagProgressDetail,
+    closeRagSourceDetail,
   } = useThreadRagRuntime({
     activeThreadId,
     isRunning,
@@ -393,28 +732,37 @@ function ThreadContent() {
   });
   const isRagToggleDisabled =
     currentThreadLoading || (!ragEnabled && !hasEnabledDocuments);
-  const ragStatusHint = ragEnabled
-    ? t("chat.thread.composer.ragEnabledHint")
-    : hasEnabledDocuments
-      ? t("chat.thread.composer.ragAvailableHint")
-      : t("chat.thread.composer.ragUnavailableHint");
-  const welcomeQuickActions = [
-    {
-      icon: FolderSearch,
-      title: t("chat.thread.welcome.actions.askKnowledgeBase.title"),
-      description: t("chat.thread.welcome.actions.askKnowledgeBase.description"),
-    },
-    {
-      icon: FileUp,
-      title: t("chat.thread.welcome.actions.uploadDocument.title"),
-      description: t("chat.thread.welcome.actions.uploadDocument.description"),
-    },
-    {
-      icon: MessagesSquare,
-      title: t("chat.thread.welcome.actions.askRealQuestion.title"),
-      description: t("chat.thread.welcome.actions.askRealQuestion.description"),
-    },
-  ] as const;
+  const ragStatusHint = isRunning
+    ? t("chat.thread.composer.generating")
+    : ragEnabled
+      ? ""
+      : !hasEnabledDocuments
+        ? t("chat.thread.composer.ragUnavailableHint")
+        : "";
+
+  const threadMessageRuntimeData = useMemo(
+    () => ({
+      messagesById,
+      persistedSourcesByMessageId,
+      onOpenRagProgressDetail: openRagProgressDetail,
+      onOpenRagSourceDetail: openRagSourceDetail,
+    }),
+    [
+      messagesById,
+      openRagProgressDetail,
+      openRagSourceDetail,
+      persistedSourcesByMessageId,
+    ],
+  );
+
+  const messageComponents = useMemo(
+    () => ({
+      UserMessage,
+      AssistantMessage,
+      EditComposer: InlineEditComposer,
+    }),
+    [],
+  );
 
   return (
     <div className="w-full">
@@ -439,95 +787,31 @@ function ThreadContent() {
             <ThreadPrimitive.Viewport className="stable-scrollbar relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto scroll-smooth bg-surface-secondary">
               <div
                 key={activeThreadId}
-                className="flex min-h-0 flex-1 flex-col pt-14 bg-surface-secondary"
+                className="flex min-h-0 flex-1 flex-col bg-surface-secondary pt-14"
               >
                 <div
                   className={`${contentColumnClassName} ${
-                    hasRagProgressDrawerOpen ? "xl:max-w-4xl" : "xl:max-w-5xl"
+                    hasSideDrawerOpen
+                      ? "max-w-3xl xl:max-w-3xl"
+                      : "max-w-3xl xl:max-w-4xl"
                   }`}
                 >
-                  <div
-                    key={
-                      isThreadEmpty
-                        ? `welcome-${activeThreadId ?? "empty"}`
-                        : "welcome-hidden"
-                    }
-                    className={`${sectionCopyClassName} ${
-                      isThreadEmpty
-                        ? "animate-in fade-in slide-in-from-top-2 opacity-100 translate-y-0"
-                        : "opacity-0 translate-y-[-10px] pointer-events-none h-0 overflow-hidden"
-                    }`}
+                  <WelcomeEmptyState
+                    activeThreadId={activeThreadId}
+                    isVisible={isThreadEmpty}
+                  />
+
+                  <ThreadMessageRuntimeContext.Provider
+                    value={threadMessageRuntimeData}
                   >
-                    <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-surface-secondary/88 px-3 py-1 text-xs font-medium text-text-secondary">
-                      <Sparkles className="h-3.5 w-3.5" />
-                      <span>RAG Chat Tester</span>
-                    </div>
-                    <div className="space-y-3">
-                      <h1 className="text-[28px] font-semibold tracking-tight text-text-primary sm:text-[34px]">
-                        <span className="tracking-[0.08em]">
-                          {t("chat.thread.welcome.titlePrefix")}
-                          <span className="text-primary">
-                            {t("chat.thread.welcome.titleHighlight")}
-                          </span>
-                          {t("chat.thread.welcome.titleSuffix")}
-                        </span>
-                        <span className="block tracking-[0.08em] text-text-secondary">
-                          {t("chat.thread.welcome.titleLine2")}
-                        </span>
-                      </h1>
-                      <p className="max-w-2xl text-sm leading-6 text-text-secondary">
-                        {t("chat.thread.welcome.description")}
-                      </p>
-                    </div>
-                    <div className="grid w-full gap-3 pt-1 md:grid-cols-3">
-                      {welcomeQuickActions.map((action) => {
-                        const Icon = action.icon;
-
-                        return (
-                          <Card
-                            key={action.title}
-                            className="group rounded-[26px] border-cloudy-3/80 bg-pampas-2/95 p-5 shadow-[0_12px_28px_rgba(73,52,33,0.05)] transition-[transform,border-color,box-shadow,background-color] duration-200 hover:-translate-y-0.5 hover:border-cloudy-5/85 hover:bg-pampas-1/98 hover:shadow-[0_16px_34px_rgba(73,52,33,0.08)]"
-                          >
-                            <div className="flex h-6 w-full items-center gap-2 text-text-primary">
-                              <Icon className="h-4 w-4 text-cloudy-7" />
-                              <div className="text-[15px] font-semibold text-text-primary">
-                                {action.title}
-                              </div>
-                            </div>
-                            <div className="min-w-0">
-                              <p className="mt-2 max-w-[23ch] text-sm leading-6 text-text-secondary">
-                                {action.description}
-                              </p>
-                            </div>
-                          </Card>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <ThreadPrimitive.Messages>
-                    {({ message }) => {
-                      if (message.role === "user") {
-                        return <UserMessage />;
-                      }
-
-                      return (
-                        <AssistantMessage
-                          messagesById={messagesById}
-                          persistedSourcesByMessageId={
-                            persistedSourcesByMessageId
-                          }
-                          onOpenRagProgressDetail={openRagProgressDetail}
-                        />
-                      );
-                    }}
-                  </ThreadPrimitive.Messages>
+                    <ThreadPrimitive.Messages components={messageComponents} />
+                  </ThreadMessageRuntimeContext.Provider>
                 </div>
               </div>
             </ThreadPrimitive.Viewport>
 
             <ThreadComposer
-              hasRagProgressDrawerOpen={hasRagProgressDrawerOpen}
+              hasRagProgressDrawerOpen={hasSideDrawerOpen}
               placeholder={placeholder}
               isSendDisabled={isSendDisabled}
               ragEnabled={ragEnabled}
@@ -541,6 +825,11 @@ function ThreadContent() {
             open={!!selectedRagProgressDetail}
             detail={selectedRagProgressDetail}
             onClose={closeRagProgressDetail}
+          />
+          <RagSourceDetailDrawer
+            open={!!selectedRagSourceDetail}
+            detail={selectedRagSourceDetail}
+            onClose={closeRagSourceDetail}
           />
         </div>
       </ThreadPrimitive.Root>

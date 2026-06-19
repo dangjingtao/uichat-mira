@@ -4,10 +4,7 @@ import { AlertCircle, Loader2, RotateCcw } from "lucide-react";
 import { Button, IconButton } from "@/shared/ui/Button";
 import { TextInput } from "@/shared/ui/Input";
 import { Select } from "@/shared/ui/Select";
-import type {
-  ProviderDetail,
-  RoleModelType,
-} from "@/shared/api/modelSettings";
+import type { ProviderDetail, RoleModelType } from "@/shared/api/modelSettings";
 
 interface ApiConfigCardProps {
   detail: ProviderDetail | null;
@@ -58,7 +55,9 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
       : [
           {
             value: "",
-            label: syncError ? "fetch failed" : t("settings.model.api.noModels"),
+            label: syncError
+              ? "fetch failed"
+              : t("settings.model.api.noModels"),
           },
         ];
 
@@ -104,13 +103,10 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
             placeholder={t("settings.model.api.apiUrlPlaceholder")}
             compact
           />
-          <p className="text-xs leading-4 text-text-secondary">
-            {t("settings.model.api.previewUrl", { url: detail.provider.baseUrl })}
-          </p>
         </div>
 
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
-          <div className="w-full max-w-[600px]">
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
             <Select
               label={t("settings.model.api.currentModel")}
               value={selectedModelId}
@@ -120,10 +116,10 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
               error={syncError ?? undefined}
             />
           </div>
-          <div className="flex items-end">
+          <div className="shrink-0 pt-6">
             <IconButton
               ariaLabel={t("settings.model.api.syncAriaLabel")}
-              className="h-8 w-8"
+              className="h-8 w-8 rounded-md border border-border bg-surface-primary hover:bg-surface-secondary"
               onClick={onTestConnection}
               disabled={isBusy}
             >
@@ -146,7 +142,9 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
             onClick={() => onSetDefaultRole("llm")}
             disabled={assigningRole === "llm" || !selectedModelId}
           >
-            {assigningRole === "llm" ? t("settings.model.api.setting") : t("settings.model.api.setDefaultLlm")}
+            {assigningRole === "llm"
+              ? t("settings.model.api.setting")
+              : t("settings.model.api.setDefaultLlm")}
           </Button>
           <Button
             size="small"
@@ -154,7 +152,9 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
             onClick={() => onSetDefaultRole("embedding")}
             disabled={assigningRole === "embedding" || !selectedModelId}
           >
-            {assigningRole === "embedding" ? t("settings.model.api.setting") : t("settings.model.api.setDefaultEmbedding")}
+            {assigningRole === "embedding"
+              ? t("settings.model.api.setting")
+              : t("settings.model.api.setDefaultEmbedding")}
           </Button>
           <Button
             size="small"
@@ -162,7 +162,9 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
             onClick={() => onSetDefaultRole("rerank")}
             disabled={assigningRole === "rerank" || !selectedModelId}
           >
-            {assigningRole === "rerank" ? t("settings.model.api.setting") : t("settings.model.api.setDefaultRerank")}
+            {assigningRole === "rerank"
+              ? t("settings.model.api.setting")
+              : t("settings.model.api.setDefaultRerank")}
           </Button>
           <Button
             size="small"
@@ -170,7 +172,9 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
             onClick={() => onSetDefaultRole("task")}
             disabled={assigningRole === "task" || !selectedModelId}
           >
-            {assigningRole === "task" ? t("settings.model.api.setting") : t("settings.model.api.setDefaultTask")}
+            {assigningRole === "task"
+              ? t("settings.model.api.setting")
+              : t("settings.model.api.setDefaultTask")}
           </Button>
           <Button
             size="small"

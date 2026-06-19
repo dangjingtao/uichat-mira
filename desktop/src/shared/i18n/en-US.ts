@@ -20,6 +20,7 @@ const enUS = {
       knowledgeBase: "Knowledge Base",
       evaluationWorkbench: "Evaluation Workbench",
       evaluationCenter: "Evaluation Center",
+      evaluationSection: "Evaluation",
       tools: "Tools",
       about: "About",
     },
@@ -546,7 +547,6 @@ const enUS = {
         apiKeyPlaceholder: "Enter API key",
         apiUrl: "API URL",
         apiUrlPlaceholder: "Enter API URL",
-        previewUrl: "Preview request URL: {{url}}/api/chat",
         currentModel: "Current Model",
         syncAriaLabel: "Save configuration and sync models",
         syncSuccess: "Model synchronization successful",
@@ -594,24 +594,56 @@ const enUS = {
         updatedEvaluation: "Default evaluation model updated",
         updatedDefault: "Default {{role}} model updated",
         setDefaultFailed: "Failed to set default model",
+        requestAborted: "The request was canceled. Please try again.",
       },
     },
   },
   auth: {
     login: {
       badge: "Desktop AI Workspace",
-      title: "Start Your RAG Conversation Testing",
+      titlePrefix: "Turn scattered knowledge into ",
+      titleHighlight: "usable insight",
       description:
-        "Sign in to continue model tuning, knowledge base verification, and chat testing.",
-      featureContinueTitle: "Resume Current Progress",
-      featureContinueDescription:
-        "Keep the same account context and continue your current testing flow.",
-      featureQuietTitle: "A Calm Sign-in Experience",
-      featureQuietDescription:
-        "Clear inputs and a low-noise interface keep your attention on the task itself.",
+        "Connect your documents, notes, and knowledge base, then work through conversation.",
+      quotes: {
+        0: "Study without thought is labor lost; thought without study is perilous. Reading alone is not enough, and reflection alone is not enough either. · Confucius",
+        1: "Knowledge is power, but it becomes real power only when it is understood, applied, and carried into the world of action. · Francis Bacon",
+        2: "The important thing is not to stop questioning. Curiosity has its own reason for existing, and a living mind keeps asking why. · Albert Einstein",
+        3: "If I have seen further it is by standing on the shoulders of Giants. Every new insight depends on the long work of those who came before. · Isaac Newton",
+        4: "Nothing in life is to be feared; it is only to be understood. The more we understand, the less we fear, and the more clearly we can act. · Marie Curie",
+        5: "Where is the wisdom we have lost in knowledge? Where is the knowledge we have lost in information? More information does not guarantee deeper judgment. · T. S. Eliot",
+        6: "I know that I know nothing. Real inquiry begins when we stop pretending certainty and make room for what we have not yet understood. · Socrates",
+        7: "The reading of all good books is like a conversation with the finest minds of past centuries. A book is not just text, but a meeting across time. · Rene Descartes",
+        8: "Learning never exhausts the mind. On the contrary, it renews attention, sharpens judgment, and keeps imagination alive. · Leonardo da Vinci",
+        9: "I have always imagined that Paradise will be a kind of library. A place of reading, memory, discovery, and quiet conversation with the world. · Jorge Luis Borges",
+        10: "My life has limits, but knowledge has none. Because our time is finite and understanding is not, every chance to learn becomes more valuable. · Zhuangzi",
+        11: "Knowing others is intelligence; knowing yourself is true wisdom. Understanding the world matters, but self-knowledge gives that understanding its measure. · Lao Tzu",
+        12: "To know what you know and what you do not know, that is true knowledge. Clarity about your limits is closer to wisdom than borrowed certainty. · Confucius",
+        13: "An investment in knowledge pays the best interest. Money can be lost and conditions can change, but understanding continues to shape a life. · Benjamin Franklin",
+        14: "Somewhere, something incredible is waiting to be known. The universe keeps offering mysteries; the question is whether we still choose to look. · Carl Sagan",
+        15: "Knowing is not enough; we must apply. Willing is not enough; we must do. Knowledge that never enters practice remains only a shadow in language. · Johann Wolfgang von Goethe",
+        16: "Science gathers knowledge faster than society gathers wisdom. Our ability to produce answers grows quickly, but our judgment does not always keep pace. · Isaac Asimov",
+        17: "Knowledge has to be improved, challenged, and increased constantly, or it vanishes. What stops growing soon hardens into habit and outdated belief. · Peter Drucker",
+        18: "As long as you live, keep learning how to live. Learning is not only skill or theory, but also judgment, conduct, and how to meet change well. · Seneca",
+        19: "Education is not preparation for life; education is life itself. Real learning is not a rehearsal before reality, but part of reality as we live it. · John Dewey",
+      },
+      capabilities: {
+        local: {
+          label: "Local first",
+          value: "LOCAL",
+        },
+        model: {
+          label: "Model ready",
+          value: "READY",
+        },
+        source: {
+          label: "Traceable",
+          value: "TRACE",
+        },
+      },
       welcomeBack: "Welcome Back",
       signIn: "Sign In",
-      signInDescription: "Enter your account information to continue.",
+      signInDescription: "Your knowledge is here.",
       username: "Username",
       usernamePlaceholder: "Enter your username",
       password: "Password",
@@ -640,40 +672,46 @@ const enUS = {
         titleLine2: "with traceable evidence.",
         description:
           "Turn documents into knowledge you can query directly in real retrieval scenarios.",
-        actions: {
-          askKnowledgeBase: {
-            title: "Ask the Knowledge Base",
-            description:
-              "Question your existing documents to quickly validate retrieval and answer quality.",
-          },
-          uploadDocument: {
-            title: "Upload a Document",
-            description:
-              "Import material and ask questions right away to inspect retrieval flow and answer quality.",
-          },
-          askRealQuestion: {
-            title: "Try a Real Question",
-            description:
-              "Ask naturally and see how the system organizes answers and sources.",
-          },
-        },
       },
       assistantTyping: "Assistant is typing a reply",
       sources: {
         title: "Sources",
         document: "Document #{{count}} · {{name}}",
         score: "Score {{value}}",
+        knowledgeBaseTab: "Knowledge Base",
+        closeDrawer: "Close sources drawer",
+        hitLabel: "Hit:",
+        empty: "No source content to display.",
+      },
+      actions: {
+        copy: "Copy",
+        edit: "Edit",
+        regenerate: "Regenerate",
+        previousBranch: "Previous branch",
+        nextBranch: "Next branch",
+        branchPosition: "{{current}} / {{total}}",
+      },
+      status: {
+        incomplete: "The reply did not finish completely",
+        cancelled: "Generation was cancelled",
+        failed: "Generation failed. Please try again.",
+        stopped: "Generation stopped early",
       },
       composer: {
         ragAria: "Enable RAG knowledge base retrieval",
         enableKnowledgeBase: "Enable Knowledge Base",
+        addAction: "Add action",
+        attachmentMenu: "Upload attachment or file",
+        localFile: "Upload attachment or file",
+        attachFile: "Attach file",
+        removeAttachment: "Remove attachment",
+        cancelGeneration: "Cancel generation",
         ragEnabledHint:
           "Answers will prefer knowledge base content and show sources and execution details below each message.",
-        ragAvailableHint:
-          "Turn it off for normal chat, or enable it to inspect sources and retrieval steps.",
         ragUnavailableHint:
           "No documents are available yet. Upload content in Knowledge Base before enabling this.",
         thinking: "Assistant is thinking...",
+        generating: "Generating a reply. You can cancel at any time.",
         configureLlm: "Please configure a default LLM first...",
         configureEmbedding:
           "Please configure a default embedding model before enabling the knowledge base...",

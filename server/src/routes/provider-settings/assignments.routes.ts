@@ -28,6 +28,10 @@ export const registerProviderAssignmentRoutes = async (
           request.params.providerCode,
           request.params.role,
           request.body.remoteModelId,
+          {
+            baseUrl: request.body.baseUrl,
+            apiKey: request.body.apiKey,
+          },
         );
 
         return success(config, "Default model updated");

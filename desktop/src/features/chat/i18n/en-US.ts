@@ -24,7 +24,13 @@ const chatPending = {
       copyFailed: "Copy failed, please try again",
     },
     executionTrace: {
-      title: "Execution Process",
+      title: "RAG Flow",
+      stepCount: "{{completed}} / {{total}} steps",
+      status: {
+        running: "Running",
+        completed: "Completed",
+        failed: "Failed",
+      },
     },
     threadProvider: {
       defaultTitle: "New Conversation",

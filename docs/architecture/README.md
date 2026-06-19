@@ -41,6 +41,7 @@ Development startup notes:
 - The backend dev script uses `tsx watch src/index.ts`, so backend source edits should restart the Fastify process automatically when the backend is launched by the Electron dev launcher.
 - In development, the backend process runs with `server/` as its working directory, so the default SQLite file is `server/data/uichat-rag-test.db` unless `UI_CHAT_DATABASE_DIR` overrides it.
 - If the launcher detects an already-healthy backend on the configured port, it reuses that process instead of starting a watched backend. In that case, code changes will not apply until that reused backend is restarted.
+- Backend port reuse is development-only. Packaged Electron and Tauri builds do not attach to an already-running backend on the configured port, which prevents them from accidentally talking to the development database.
 
 ## Request Contract
 

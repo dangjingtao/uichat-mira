@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
+import fastifyStatic from "@fastify/static";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import fs from "node:fs/promises";
@@ -11,6 +12,7 @@ import dbHealthRoute from "@/routes/dbHealth";
 import logsRoute from "@/routes/logs";
 import loginRoute from "@/routes/login";
 import meRoute from "@/routes/me";
+import attachmentRoute from "@/routes/attachments";
 import proxyProviderRoute from "@/routes/proxy-provider/index.js";
 import accountRoute from "@/routes/account";
 import knowledgeBaseRoute from "@/routes/knowledge-base/index.js";
@@ -34,12 +36,17 @@ import { evaluationService } from "@/services/evaluation.service.js";
 import { getAppMeta } from "@/utils/index.js";
 import { sendRouteError, unauthorized } from "@/utils/route-errors.js";
 import { MAX_UPLOAD_FILE_BYTES } from "@/constants/knowledge-base.js";
+import {
+  attachmentStorageRoot,
+} from "@/services/attachment-storage.service.js";
 
 const app = Fastify({
+  bodyLimit: MAX_UPLOAD_FILE_BYTES,
   logger: getLoggerConfig(),
   serializerOpts: { encoding: "utf8" },
 });
 const enableSwagger = process.env.NODE_ENV !== "production";
+const allowBackendReuse = process.env.UI_CHAT_ALLOW_BACKEND_REUSE === "1";
 
 app.setErrorHandler(sendRouteError);
 
@@ -56,6 +63,16 @@ const setupPlugins = async () => {
     limits: {
       files: 1,
       fileSize: MAX_UPLOAD_FILE_BYTES,
+    },
+  });
+
+  await fs.mkdir(attachmentStorageRoot, { recursive: true });
+  await app.register(fastifyStatic, {
+    root: attachmentStorageRoot,
+    prefix: "/attachments/",
+    decorateReply: false,
+    setHeaders(response) {
+      response.setHeader("Cache-Control", "private, max-age=31536000, immutable");
     },
   });
 
@@ -134,6 +151,7 @@ const setupRoutes = async () => {
   await app.register(logsRoute);
   await app.register(loginRoute);
   await app.register(meRoute);
+  await app.register(attachmentRoute);
   await app.register(accountRoute);
   await app.register(knowledgeBaseRoute);
   await app.register(modelConfigRoute);
@@ -211,6 +229,7 @@ const start = async () => {
     await startServer();
   } catch (error) {
     if (
+      allowBackendReuse &&
       error instanceof Error &&
       "code" in error &&
       error.code === "EADDRINUSE" &&

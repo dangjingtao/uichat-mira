@@ -101,6 +101,10 @@ function spawnManagedProcess(name, cwd, command, options = {}) {
 
   const child = spawn(shellCommand.file, shellCommand.args, {
     cwd,
+    env: {
+      ...process.env,
+      ...(options.env ?? {}),
+    },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: false,
   });
@@ -223,6 +227,9 @@ async function main() {
   } else {
     console.log("Starting backend dev server...");
     backendReady = spawnManagedProcess("server", serverDir, "pnpm dev", {
+      env: {
+        UI_CHAT_ALLOW_BACKEND_REUSE: "1",
+      },
       readyWhen: (_text, combined) =>
         combined.includes(`Server running on http://${backendHost}:${backendPort}`),
     }).ready;

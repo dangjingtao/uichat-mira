@@ -1,4 +1,4 @@
-import { Ollama } from "ollama";
+import { Ollama, type Message as OllamaMessage } from "ollama";
 import {
   modelConfigRepository,
   providerConnectionRepository,
@@ -7,10 +7,12 @@ import {
 import type { ModelType, ProviderCode } from "@/db/schema.js";
 import { createCloudflareEmbeddings } from "@/services/cloudflare-provider.js";
 import {
+  type OpenAICompatibleContentPart,
   createOpenAICompatibleChatUrl,
   createOpenAICompatibleRerankUrl,
   createOpenAICompatibleEmbeddingsUrl,
   createOpenAICompatibleEmbeddings,
+  type OpenAICompatibleChatMessage,
   streamOpenAICompatibleChat,
 } from "@/services/openai-compatible-provider.js";
 import { decryptSecret } from "@/utils/crypto.js";
@@ -21,20 +23,49 @@ import {
   isCallableModelId,
 } from "@/providers/catalog.js";
 import { createAssistantTextStream } from "@/services/assistant-stream-events.js";
+import { attachmentStorageService } from "@/services/attachment-storage.service.js";
+import { isCloudflareBaseUrl } from "@/services/cloudflare-provider.js";
 
 export interface UIMessagePart {
   type?: string;
   text?: string;
+  image?: string;
+  data?: string;
+  url?: string;
+  filename?: string;
+  mimeType?: string;
+  mediaType?: string;
 }
 
 export interface UIMessage {
+  id?: string;
   role?: "system" | "user" | "assistant";
   parts?: UIMessagePart[];
 }
 
+export type NormalizedChatMessagePart =
+  | {
+      type: "text";
+      text: string;
+    }
+  | {
+      type: "image";
+      url: string;
+      filename?: string;
+      mediaType?: string;
+    }
+  | {
+      type: "file";
+      url: string;
+      filename?: string;
+      mediaType?: string;
+    };
+
 export type NormalizedChatMessage = {
+  id?: string;
   role: "system" | "user" | "assistant";
   content: string;
+  parts?: NormalizedChatMessagePart[];
 };
 
 export type ProxyProviderParam = ProviderCode | "default";
@@ -194,31 +225,156 @@ const toEmbeddingOptions = (params: Record<string, unknown>) => {
   return options;
 };
 
+const toOllamaImage = (url: string) => {
+  const dataUrlMatch = url.match(/^data:image\/[^;]+;base64,(.+)$/);
+  if (dataUrlMatch?.[1]) {
+    return dataUrlMatch[1];
+  }
+
+  return url;
+};
+
+const resolveImageUrlForProvider = async (url: string) =>
+  attachmentStorageService.isInternalAttachmentUrl(url)
+    ? attachmentStorageService.resolveToDataUrl(url)
+    : url;
+
+const resolveImageUrlForOllama = async (url: string) =>
+  toOllamaImage(await resolveImageUrlForProvider(url));
+
+const normalizePartText = (part: UIMessagePart) => {
+  if (part?.type === "text" && typeof part.text === "string") {
+    return part.text.trim();
+  }
+
+  if (part?.type === "image") {
+    return part.filename
+      ? `[Image attachment: ${part.filename}]`
+      : "[Image attachment]";
+  }
+
+  if (part?.type === "file") {
+    const isImage =
+      typeof part.mediaType === "string" &&
+      part.mediaType.startsWith("image/");
+
+    if (isImage) {
+      return part.filename
+        ? `[Image attachment: ${part.filename}]`
+        : "[Image attachment]";
+    }
+
+    return part.filename
+      ? `[File attachment: ${part.filename}]`
+      : "[File attachment]";
+  }
+
+  return "";
+};
+
+const normalizePart = (
+  part: UIMessagePart,
+): NormalizedChatMessagePart | null => {
+  if (part?.type === "text" && typeof part.text === "string") {
+    const text = part.text.trim();
+    return text ? { type: "text", text } : null;
+  }
+
+  if (part?.type === "image") {
+    const url =
+      typeof part.image === "string"
+        ? part.image
+        : typeof part.url === "string"
+          ? part.url
+          : typeof part.data === "string"
+            ? part.data
+            : "";
+
+    if (!url) {
+      return null;
+    }
+
+    return {
+      type: "image",
+      url,
+      ...(part.filename ? { filename: part.filename } : {}),
+      ...(part.mediaType || part.mimeType
+        ? { mediaType: part.mediaType || part.mimeType }
+        : {}),
+    };
+  }
+
+  if (part?.type === "file") {
+    const url =
+      typeof part.url === "string"
+        ? part.url
+        : typeof part.data === "string"
+          ? part.data
+          : "";
+
+    if (!url) {
+      return null;
+    }
+
+    const mediaType = part.mediaType || part.mimeType;
+    if (mediaType?.startsWith("image/")) {
+      return {
+        type: "image",
+        url,
+        ...(part.filename ? { filename: part.filename } : {}),
+        ...(mediaType ? { mediaType } : {}),
+      };
+    }
+
+    return {
+      type: "file",
+      url,
+      ...(part.filename ? { filename: part.filename } : {}),
+      ...(mediaType ? { mediaType } : {}),
+    };
+  }
+
+  return null;
+};
+
 const normalizeMessages = (messages: UIMessage[]): NormalizedChatMessage[] =>
-  messages
-    .map((message) => {
+  messages.reduce<NormalizedChatMessage[]>((result, message) => {
       if (!message.role || !Array.isArray(message.parts)) {
-        return null;
+        return result;
       }
 
-      const content = message.parts
-        .filter(
-          (part) => part?.type === "text" && typeof part.text === "string",
+      const parts = message.parts
+        .map((part) => normalizePart(part))
+        .filter((part): part is NormalizedChatMessagePart => Boolean(part));
+
+      const content = parts
+        .map((part) =>
+          part.type === "text"
+            ? part.text
+            : part.type === "image"
+              ? part.filename
+                ? `[Image attachment: ${part.filename}]`
+                : "[Image attachment]"
+              : part.filename
+                ? `[File attachment: ${part.filename}]`
+                : "[File attachment]",
         )
-        .map((part) => part.text?.trim() ?? "")
         .filter(Boolean)
         .join("\n");
 
-      if (!content) {
-        return null;
+      if (!content || parts.length === 0) {
+        return result;
       }
 
-      return {
+      result.push({
+        ...(typeof message.id === "string" ? { id: message.id } : {}),
         role: message.role,
         content,
-      };
-    })
-    .filter((message): message is NormalizedChatMessage => Boolean(message));
+        parts,
+      });
+
+      return result;
+    }, []);
 
 const resolveProviderModelIdentifier = (
   roleType: ModelType,
@@ -253,6 +409,49 @@ const resolveProviderModelIdentifier = (
   throw new Error(
     `${getProviderDefinition(providerCode).displayName} ${roleType} model "${modelConfig.remoteModelId}" is not a callable model identifier`,
   );
+};
+
+const assertProviderConnectionConfigured = (input: {
+  providerCode: ProviderCode;
+  baseUrl: string;
+  apiKey: string;
+  roleType: ModelType;
+}) => {
+  const providerLabel = getProviderDefinition(input.providerCode).displayName;
+  const normalizedBaseUrl = input.baseUrl.trim();
+  const normalizedApiKey = input.apiKey.trim();
+
+  if (!normalizedBaseUrl) {
+    throw new Error(
+      `${providerLabel} ${input.roleType.toUpperCase()} provider base URL 未配置。请先在提供商设置中完成配置。`,
+    );
+  }
+
+  if (input.providerCode === "cloudflare") {
+    if (
+      normalizedBaseUrl.includes("<ACCOUNT_ID>") ||
+      normalizedBaseUrl.includes("[ACCOUNT_ID]")
+    ) {
+      throw new Error(
+        'Cloudflare base URL 仍是占位符。请改成真实账号地址，例如 "https://api.cloudflare.com/client/v4/accounts/<你的 ACCOUNT_ID>/ai/v1"。',
+      );
+    }
+
+    if (!isCloudflareBaseUrl(normalizedBaseUrl)) {
+      throw new Error(
+        'Cloudflare base URL 格式不正确。请使用 "https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/ai/v1"。',
+      );
+    }
+  }
+
+  if (
+    (input.providerCode === "cloudflare" || input.providerCode === "openai") &&
+    !normalizedApiKey
+  ) {
+    throw new Error(
+      `${providerLabel} API Key 未配置。请先在提供商设置中填写有效的 API Key。`,
+    );
+  }
 };
 
 const resolveProviderForRole = (
@@ -290,10 +489,18 @@ const resolveProviderForRole = (
     throw new Error(`Provider "${providerCode}" is disabled`);
   }
 
+  const decryptedApiKey = decryptSecret(provider.apiKeyEncrypted);
+  assertProviderConnectionConfigured({
+    providerCode,
+    baseUrl: provider.baseUrl ?? "",
+    apiKey: decryptedApiKey,
+    roleType,
+  });
+
   return {
     providerCode,
     baseUrl: provider.baseUrl ?? "",
-    apiKey: decryptSecret(provider.apiKeyEncrypted),
+    apiKey: decryptedApiKey,
     model: resolveProviderModelIdentifier(roleType, providerCode, modelConfig),
     modelConfigId: modelConfig.id,
     params: parseModelParams(modelConfig.params),
@@ -314,6 +521,14 @@ const resolveExplicitProviderSelection = (
     throw new Error(`Provider "${providerCode}" is disabled`);
   }
 
+  const decryptedApiKey = decryptSecret(provider.apiKeyEncrypted);
+  assertProviderConnectionConfigured({
+    providerCode,
+    baseUrl: provider.baseUrl ?? "",
+    apiKey: decryptedApiKey,
+    roleType: "evaluation",
+  });
+
   const model = remoteModelId.trim();
   if (!model) {
     throw new Error("Evaluation model is required");
@@ -322,7 +537,7 @@ const resolveExplicitProviderSelection = (
   return {
     providerCode,
     baseUrl: provider.baseUrl ?? "",
-    apiKey: decryptSecret(provider.apiKeyEncrypted),
+    apiKey: decryptedApiKey,
     model,
     modelConfigId: `manual:${providerCode}:${model}`,
     params,
@@ -353,9 +568,32 @@ const streamOllamaChat = async function* ({
   }
 
   const ollama = new Ollama(ollamaOptions);
+  const ollamaMessages: OllamaMessage[] = [];
+
+  for (const message of messages) {
+    const textParts = (message.parts ?? [])
+      .filter((part) => part.type === "text")
+      .map((part) => part.text);
+    const imageParts: string[] = [];
+
+    for (const part of message.parts ?? []) {
+      if (part.type === "image") {
+        imageParts.push(await resolveImageUrlForOllama(part.url));
+      }
+    }
+
+    ollamaMessages.push({
+      role: message.role,
+      content:
+        textParts.join("\n").trim() ||
+        (imageParts.length > 0 ? message.content : message.content.trim()),
+      ...(imageParts.length > 0 ? { images: imageParts } : {}),
+    });
+  }
+
   const response = await ollama.chat({
     model,
-    messages,
+    messages: ollamaMessages,
     stream: true,
     options: toOllamaChatOptions(params),
   });
@@ -374,27 +612,100 @@ const createUiMessageStream = (streamText: () => AsyncIterable<string>) =>
     getErrorMessage,
   });
 
-const streamResolvedChat = (
+const trimHistoricalAttachments = (
+  messages: NormalizedChatMessage[],
+): NormalizedChatMessage[] => {
+  const latestUserIndex = [...messages]
+    .map((message, index) => ({ message, index }))
+    .reverse()
+    .find((entry) => entry.message.role === "user")?.index;
+
+  if (latestUserIndex === undefined) {
+    return messages;
+  }
+
+  return messages.map((message, index) => {
+    if (index === latestUserIndex) {
+      return message;
+    }
+
+    if (!message.parts?.some((part) => part.type !== "text")) {
+      return message;
+    }
+
+    return {
+      ...message,
+      parts: message.parts.filter((part) => part.type === "text"),
+    };
+  });
+};
+
+const streamResolvedChat = async function* (
   resolved: ProviderResolution,
   messages: NormalizedChatMessage[],
-) => {
+) {
+  const preparedMessages = trimHistoricalAttachments(messages);
+
   switch (getProviderDefinition(resolved.providerCode).chatAdapter) {
     case "ollama":
-      return streamOllamaChat({
+      yield* streamOllamaChat({
         baseUrl: resolved.baseUrl,
         apiKey: resolved.apiKey,
         model: resolved.model,
-        messages,
+        messages: preparedMessages,
         params: resolved.params,
       });
+      return;
     case "openai-compatible":
-      return streamOpenAICompatibleChat({
+      const openAiMessages: OpenAICompatibleChatMessage[] = [];
+
+      for (const message of preparedMessages) {
+        const multimodalParts: OpenAICompatibleContentPart[] = [];
+
+        for (const part of message.parts ?? []) {
+          if (part.type === "text") {
+            multimodalParts.push({ type: "text", text: part.text });
+            continue;
+          }
+
+          if (part.type === "image") {
+            multimodalParts.push({
+              type: "image_url",
+              image_url: {
+                url: await resolveImageUrlForProvider(part.url),
+              },
+            });
+            continue;
+          }
+
+          multimodalParts.push({
+            type: "text",
+            text: part.filename
+              ? `[File attachment: ${part.filename}]`
+              : "[File attachment]",
+          });
+        }
+
+        openAiMessages.push({
+          role: message.role,
+          content:
+            multimodalParts.length === 0
+              ? message.content
+              : multimodalParts.length === 1 &&
+                  multimodalParts[0]?.type === "text"
+                ? multimodalParts[0].text
+                : multimodalParts,
+        });
+      }
+
+      yield* streamOpenAICompatibleChat({
         baseUrl: resolved.baseUrl,
         apiKey: resolved.apiKey,
         model: resolved.model,
-        messages,
+        messages: openAiMessages,
         params: toOpenAICompatibleChatOptions(resolved.params),
       });
+      return;
     default:
       throw new Error(`Unsupported provider "${resolved.providerCode}"`);
   }

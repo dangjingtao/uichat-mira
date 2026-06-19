@@ -40,6 +40,10 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(new RegExp(`^${apiProxyPrefix}`), ""),
       },
+      "/attachments": {
+        target: backendOrigin,
+        changeOrigin: true,
+      },
     },
   },
   resolve: {

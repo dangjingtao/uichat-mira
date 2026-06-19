@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { RagProgressDetail } from "./RagProgressDetailDrawer";
+import type { RagSourceDetail } from "./RagSourceDetailDrawer";
 import {
   getRagProgressFromContentParts,
   getRagProgressRow,
@@ -27,6 +28,8 @@ export function useThreadRagRuntime({
 }: UseThreadRagRuntimeInput) {
   const [selectedRagProgressKey, setSelectedRagProgressKey] =
     useState<SelectedRagProgressKey | null>(null);
+  const [selectedRagSourceDetail, setSelectedRagSourceDetail] =
+    useState<RagSourceDetail | null>(null);
 
   const persistedSourcesByMessageId = usePersistedRagSources({
     activeThreadId,
@@ -80,16 +83,26 @@ export function useThreadRagRuntime({
   return {
     persistedSourcesByMessageId,
     messagesById,
-    hasRagProgressDrawerOpen: selectedRagProgressDetail !== null,
+    hasSideDrawerOpen:
+      selectedRagProgressDetail !== null || selectedRagSourceDetail !== null,
     selectedRagProgressDetail,
+    selectedRagSourceDetail,
     openRagProgressDetail: (detail: RagProgressDetail) => {
+      setSelectedRagSourceDetail(null);
       setSelectedRagProgressKey({
         messageId: detail.messageId,
         nodeId: detail.nodeId,
       });
     },
+    openRagSourceDetail: (detail: RagSourceDetail) => {
+      setSelectedRagProgressKey(null);
+      setSelectedRagSourceDetail(detail);
+    },
     closeRagProgressDetail: () => {
       setSelectedRagProgressKey(null);
+    },
+    closeRagSourceDetail: () => {
+      setSelectedRagSourceDetail(null);
     },
   };
 }

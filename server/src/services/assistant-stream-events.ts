@@ -51,18 +51,9 @@ export const assistantErrorChunk = (errorText: string): string =>
     errorText,
   });
 
-export const assistantFinishStepChunk = (input?: {
-  finishReason?: AssistantStreamFinishReason;
-  usage?: AssistantStreamUsage;
-  isContinued?: boolean;
-}): string =>
+export const assistantFinishStepChunk = (): string =>
   toAssistantSseChunk({
     type: "finish-step",
-    ...(input?.finishReason ? { finishReason: input.finishReason } : {}),
-    ...(input?.usage ? { usage: input.usage } : {}),
-    ...(typeof input?.isContinued === "boolean"
-      ? { isContinued: input.isContinued }
-      : {}),
   });
 
 export const assistantFinishChunk = (input: {
@@ -72,7 +63,6 @@ export const assistantFinishChunk = (input: {
   toAssistantSseChunk({
     type: "finish",
     finishReason: input.finishReason,
-    ...(input.usage ? { usage: input.usage } : {}),
   });
 
 export function* assistantTextStartChunks(input?: {
@@ -92,11 +82,7 @@ export function* assistantFinishChunks(input: {
   isContinued?: boolean;
   includeDone?: boolean;
 }): Generator<string> {
-  yield assistantFinishStepChunk({
-    finishReason: input.finishReason,
-    usage: input.usage,
-    isContinued: input.isContinued,
-  });
+  yield assistantFinishStepChunk();
   yield assistantFinishChunk({
     finishReason: input.finishReason,
     usage: input.usage,
@@ -163,4 +149,3 @@ export const createAssistantTextStream = (
       }
     })(),
   );
-

@@ -20,6 +20,7 @@ import {
   getMessages,
   createMessage,
   ApiError,
+  type CreateMessageInput,
 } from "@/shared/api/thread";
 import { getRoleModelConfigs } from "@/shared/api/modelSettings";
 import { generateTitle } from "@/shared/api/chat";
@@ -87,6 +88,60 @@ type PersistedRagSource = {
   hitModes?: string[];
 };
 
+type PersistedAttachmentContentPart =
+  | {
+      type: "image";
+      image: string;
+      filename?: string;
+    }
+  | {
+      type: "file";
+      data: string;
+      mimeType: string;
+      filename?: string;
+    };
+
+type PersistedAttachment = {
+  id: string;
+  type: "image" | "file";
+  name: string;
+  contentType: string;
+  content: PersistedAttachmentContentPart[];
+};
+
+type PersistedAssistantUiMetadata = {
+  attachments?: PersistedAttachment[];
+  branch?: {
+    parentId?: string | null;
+  };
+  textWasEmpty?: boolean;
+};
+
+type SerializableAttachmentLike = {
+  id?: string;
+  type?: string;
+  name?: string;
+  contentType?: string;
+  content?: Array<
+    | {
+        type?: string;
+        image?: string;
+        data?: string;
+        mimeType?: string;
+        filename?: string;
+      }
+    | undefined
+  >;
+};
+
+type PersistableMessageLike = {
+  id?: string;
+  role?: string;
+  content?: unknown;
+  attachments?: SerializableAttachmentLike[];
+  metadata?: unknown;
+};
+
 const sortPersistedMessages = (messages: PersistedHistoryMessage[]) => {
   return [...messages].sort((left, right) => {
     const createdAtCompare = left.createdAt.localeCompare(right.createdAt);
@@ -96,6 +151,23 @@ const sortPersistedMessages = (messages: PersistedHistoryMessage[]) => {
 
     return left.id.localeCompare(right.id);
   });
+};
+
+const projectLinearMessages = (messages: PersistedHistoryMessage[]) => {
+  const linear: PersistedHistoryMessage[] = [];
+
+  for (const message of sortPersistedMessages(messages)) {
+    const previous = linear.at(-1);
+
+    if (message.role === "assistant" && previous?.role === "assistant") {
+      linear[linear.length - 1] = message;
+      continue;
+    }
+
+    linear.push(message);
+  }
+
+  return linear;
 };
 
 const getPersistedRagSources = (
@@ -110,8 +182,429 @@ const getPersistedRagSources = (
   return Array.isArray(sources) ? (sources as PersistedRagSource[]) : [];
 };
 
+const getPersistedAssistantUiMetadata = (
+  metadata: Record<string, unknown> | undefined,
+): PersistedAssistantUiMetadata => {
+  const assistantUi = metadata?.assistantUi;
+
+  if (!assistantUi || typeof assistantUi !== "object") {
+    return {};
+  }
+
+  return assistantUi as PersistedAssistantUiMetadata;
+};
+
+const getPersistedAttachments = (
+  metadata: Record<string, unknown> | undefined,
+): PersistedAttachment[] => {
+  const attachments = getPersistedAssistantUiMetadata(metadata).attachments;
+  return Array.isArray(attachments) ? attachments : [];
+};
+
+const getPersistedParentId = (
+  metadata: Record<string, unknown> | undefined,
+  fallbackParentId: string | null,
+) => {
+  const parentId = getPersistedAssistantUiMetadata(metadata).branch?.parentId;
+  return typeof parentId === "string" || parentId === null
+    ? parentId
+    : fallbackParentId;
+};
+
+const resolvePersistedParentId = (
+  messages: PersistedHistoryMessage[],
+  index: number,
+) => {
+  const message = messages[index];
+  if (!message) {
+    return null;
+  }
+
+  const fallbackParentId = index > 0 ? messages[index - 1]!.id : null;
+  const persistedParentId = getPersistedParentId(
+    message.metadata,
+    fallbackParentId,
+  );
+
+  if (persistedParentId === null) {
+    return null;
+  }
+
+  const messageIds = new Set(messages.map((entry) => entry.id));
+  if (messageIds.has(persistedParentId)) {
+    return persistedParentId;
+  }
+
+  if (message.role === "assistant") {
+    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+      const candidate = messages[cursor];
+      if (candidate?.role === "user") {
+        return candidate.id;
+      }
+    }
+  }
+
+  return fallbackParentId;
+};
+
+const shouldRenderPersistedText = (
+  message: PersistedHistoryMessage,
+  attachments: PersistedAttachment[],
+) => {
+  const textWasEmpty = getPersistedAssistantUiMetadata(message.metadata).textWasEmpty;
+  return !(textWasEmpty && attachments.length > 0);
+};
+
+const toAiSdkFilePart = (attachment: PersistedAttachment) => {
+  const contentPart = attachment.content[0];
+
+  if (!contentPart) {
+    return null;
+  }
+
+  if (contentPart.type === "image") {
+    return {
+      type: "file" as const,
+      mediaType: attachment.contentType || "image/*",
+      filename: contentPart.filename || attachment.name,
+      url: contentPart.image,
+    };
+  }
+
+  return {
+    type: "file" as const,
+    mediaType: contentPart.mimeType || attachment.contentType || "application/octet-stream",
+    filename: contentPart.filename || attachment.name,
+    url: contentPart.data,
+  };
+};
+
+const toThreadAttachment = (attachment: PersistedAttachment) => ({
+  id: attachment.id,
+  type: attachment.type,
+  name: attachment.name,
+  contentType: attachment.contentType,
+  status: { type: "complete" as const },
+  content: attachment.content,
+});
+
+const serializeAttachmentParts = (
+  parts: Array<{
+    type?: string;
+    mediaType?: string;
+    filename?: string;
+    url?: string;
+  }>,
+): PersistedAttachment[] =>
+  parts
+    .filter((part) => part.type === "file" && typeof part.url === "string")
+    .map((part, index) => {
+      const filename = part.filename || `attachment-${index + 1}`;
+      const mediaType = part.mediaType || "application/octet-stream";
+      const isImage = mediaType.startsWith("image/");
+
+      return {
+        id: `${filename}-${index}`,
+        type: isImage ? "image" : "file",
+        name: filename,
+        contentType: mediaType,
+        content: [
+          isImage
+            ? {
+                type: "image",
+                image: part.url!,
+                ...(part.filename ? { filename: part.filename } : {}),
+              }
+            : {
+                type: "file",
+                data: part.url!,
+                mimeType: mediaType,
+                ...(part.filename ? { filename: part.filename } : {}),
+              },
+        ],
+      };
+    });
+
+const serializeAttachmentEntries = (
+  attachments: SerializableAttachmentLike[],
+): PersistedAttachment[] =>
+  attachments
+    .flatMap((attachment, attachmentIndex) => {
+      const name = attachment.name || `attachment-${attachmentIndex + 1}`;
+      const contentType = attachment.contentType || "application/octet-stream";
+
+      return (attachment.content ?? []).flatMap((part, partIndex) => {
+        if (!part) {
+          return [];
+        }
+
+        if (part.type === "image" && typeof part.image === "string") {
+          return [
+            {
+              id:
+                attachment.id ||
+                `${name}-${attachmentIndex}-${partIndex}`,
+              type: "image" as const,
+              name,
+              contentType,
+              content: [
+                {
+                  type: "image" as const,
+                  image: part.image,
+                  ...(part.filename ? { filename: part.filename } : {}),
+                },
+              ],
+            },
+          ];
+        }
+
+        if (part.type === "file" && typeof part.data === "string") {
+          const mimeType = part.mimeType || contentType;
+
+          return [
+            {
+              id:
+                attachment.id ||
+                `${name}-${attachmentIndex}-${partIndex}`,
+              type: mimeType.startsWith("image/") ? ("image" as const) : ("file" as const),
+              name,
+              contentType: mimeType,
+              content: [
+                mimeType.startsWith("image/")
+                  ? {
+                      type: "image" as const,
+                      image: part.data,
+                      ...(part.filename ? { filename: part.filename } : {}),
+                    }
+                  : {
+                      type: "file" as const,
+                      data: part.data,
+                      mimeType,
+                      ...(part.filename ? { filename: part.filename } : {}),
+                    },
+              ],
+            },
+          ];
+        }
+
+        return [];
+      });
+    });
+
+const dedupePersistedAttachments = (
+  attachments: PersistedAttachment[],
+): PersistedAttachment[] => {
+  const seen = new Set<string>();
+
+  return attachments.filter((attachment) => {
+    const part = attachment.content[0];
+    const sourceValue =
+      part?.type === "image"
+        ? part.image
+        : part?.type === "file"
+          ? part.data
+          : "";
+    const dedupeKey = `${attachment.name}|${attachment.contentType}|${sourceValue}`;
+
+    if (seen.has(dedupeKey)) {
+      return false;
+    }
+
+    seen.add(dedupeKey);
+    return true;
+  });
+};
+
+const collectPersistedAttachments = ({
+  contentParts,
+  attachments,
+}: {
+  contentParts?: Array<{
+    type?: string;
+    mediaType?: string;
+    filename?: string;
+    url?: string;
+  }>;
+  attachments?: SerializableAttachmentLike[];
+}) =>
+  dedupePersistedAttachments([
+    ...serializeAttachmentParts(
+      Array.isArray(contentParts)
+        ? contentParts.filter((part) => part.type === "file")
+        : [],
+    ),
+    ...serializeAttachmentEntries(Array.isArray(attachments) ? attachments : []),
+  ]);
+
+const getPersistedMessageContent = ({
+  textContent,
+  attachments,
+}: {
+  textContent: string;
+  attachments: PersistedAttachment[];
+}) => {
+  const trimmedText = textContent.trim();
+  if (trimmedText) {
+    return trimmedText;
+  }
+
+  const attachmentSummary = attachments
+    .map((attachment) => attachment.name?.trim())
+    .filter((name): name is string => Boolean(name))
+    .join("\n");
+
+  if (attachmentSummary) {
+    return attachmentSummary;
+  }
+
+  if (attachments.length > 0) {
+    return "[attachment]";
+  }
+
+  return "";
+};
+
+const shouldPersistHistoryEntry = ({
+  role,
+  content,
+  attachments,
+}: {
+  role: "user" | "assistant" | "system";
+  content: string;
+  attachments: PersistedAttachment[];
+}) => {
+  if (content.trim().length > 0 || attachments.length > 0) {
+    return true;
+  }
+
+  return role === "system";
+};
+
+const buildPersistedMetadata = ({
+  metadata,
+  attachments,
+  parentId,
+  textWasEmpty,
+}: {
+  metadata?: Record<string, unknown>;
+  attachments: PersistedAttachment[];
+  parentId: string | null;
+  textWasEmpty: boolean;
+}) => {
+  const nextMetadata = { ...(metadata ?? {}) };
+  const assistantUi: PersistedAssistantUiMetadata = {
+    ...getPersistedAssistantUiMetadata(metadata),
+    branch: {
+      parentId,
+    },
+    ...(attachments.length > 0 ? { attachments } : {}),
+    ...(textWasEmpty ? { textWasEmpty: true } : {}),
+  };
+
+  if (attachments.length === 0) {
+    delete assistantUi.attachments;
+  }
+
+  if (!textWasEmpty) {
+    delete assistantUi.textWasEmpty;
+  }
+
+  nextMetadata.assistantUi = assistantUi;
+  return nextMetadata;
+};
+
+const normalizePersistedMetadataInput = (
+  metadata: unknown,
+): Record<string, unknown> | undefined => {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return undefined;
+  }
+
+  const record = metadata as Record<string, unknown>;
+  const custom = record.custom;
+
+  if (custom && typeof custom === "object" && !Array.isArray(custom)) {
+    return { ...(custom as Record<string, unknown>) };
+  }
+
+  return { ...record };
+};
+
+export const toPersistableMessagePayload = ({
+  message,
+  parentId,
+}: {
+  message: PersistableMessageLike;
+  parentId: string | null;
+}): CreateMessageInput | null => {
+  if (
+    message.role !== "assistant" &&
+    message.role !== "user" &&
+    message.role !== "system"
+  ) {
+    return null;
+  }
+
+  const contentParts = Array.isArray(message.content)
+    ? (message.content as Array<{
+        type?: string;
+        text?: string;
+        mediaType?: string;
+        filename?: string;
+        url?: string;
+      }>)
+    : undefined;
+  const attachments = collectPersistedAttachments({
+    contentParts,
+    attachments: Array.isArray(message.attachments)
+      ? message.attachments
+      : undefined,
+  });
+  const textContent =
+    typeof message.content === "string"
+      ? message.content
+      : contentParts
+          ?.filter((part) => part?.type === "text")
+          .map((part) => part.text || "")
+          .join("") || "";
+  const persistedMetadata = buildPersistedMetadata({
+    metadata: normalizePersistedMetadataInput(message.metadata),
+    attachments,
+    parentId,
+    textWasEmpty: textContent.trim().length === 0 && attachments.length > 0,
+  });
+  const persistedContent = getPersistedMessageContent({
+    textContent,
+    attachments,
+  });
+
+  if (
+    !shouldPersistHistoryEntry({
+      role: message.role,
+      content: persistedContent,
+      attachments,
+    })
+  ) {
+    return null;
+  }
+
+  return {
+    ...(typeof message.id === "string" ? { id: message.id } : {}),
+    role: message.role,
+    content: persistedContent,
+    parentId,
+    metadata: persistedMetadata,
+  };
+};
+
 const toAiSdkMessageParts = (message: PersistedHistoryMessage) => {
-  const textParts = [{ type: "text", text: message.content }];
+  const attachments = getPersistedAttachments(message.metadata);
+  const textParts = shouldRenderPersistedText(message, attachments)
+    ? [{ type: "text" as const, text: message.content }]
+    : [];
+  const attachmentParts = attachments
+    .map((attachment) => toAiSdkFilePart(attachment))
+    .filter((part) => part !== null);
   const sourceParts = getPersistedRagSources(message.metadata).map(
     (source) => ({
       type: "source-document" as const,
@@ -137,11 +630,38 @@ const toAiSdkMessageParts = (message: PersistedHistoryMessage) => {
     }),
   );
 
-  return [...textParts, ...sourceParts];
+  return [...textParts, ...attachmentParts, ...sourceParts];
 };
 
-const toThreadMessageContent = (message: PersistedHistoryMessage) => {
-  const textParts = [{ type: "text" as const, text: message.content }];
+const toThreadMessageContent = (
+  message: PersistedHistoryMessage,
+  options?: {
+    includeAttachmentParts?: boolean;
+  },
+) => {
+  const attachments = getPersistedAttachments(message.metadata);
+  const textParts = shouldRenderPersistedText(message, attachments)
+    ? [{ type: "text" as const, text: message.content }]
+    : [];
+  const attachmentParts =
+    options?.includeAttachmentParts === false
+      ? []
+      : attachments
+          .flatMap((attachment) => attachment.content)
+          .map((part) =>
+            part.type === "image"
+              ? ({
+                  type: "image" as const,
+                  image: part.image,
+                  ...(part.filename ? { filename: part.filename } : {}),
+                })
+              : ({
+                  type: "file" as const,
+                  data: part.data,
+                  mimeType: part.mimeType,
+                  ...(part.filename ? { filename: part.filename } : {}),
+                }),
+          );
   const sourceParts = getPersistedRagSources(message.metadata).map(
     (source) => ({
       type: "source" as const,
@@ -168,19 +688,29 @@ const toThreadMessageContent = (message: PersistedHistoryMessage) => {
     }),
   );
 
-  return [...textParts, ...sourceParts];
+  return [...textParts, ...attachmentParts, ...sourceParts];
 };
 
 const toBranchableHistory = (messages: PersistedHistoryMessage[]) =>
   ExportedMessageRepository.fromBranchableArray(
     messages.map((msg, index) => ({
-      parentId: index > 0 ? messages[index - 1]!.id : null,
+      parentId: resolvePersistedParentId(messages, index),
       message: {
         id: msg.id,
         role: msg.role,
-        content: toThreadMessageContent(msg),
+        content: toThreadMessageContent(msg, {
+          includeAttachmentParts: msg.role !== "user",
+        }),
         createdAt: new Date(msg.createdAt),
-        metadata: msg.metadata ?? { custom: {} },
+        ...(msg.role === "user" &&
+        getPersistedAttachments(msg.metadata).length > 0
+          ? {
+              attachments: getPersistedAttachments(msg.metadata).map(
+                toThreadAttachment,
+              ),
+            }
+          : {}),
+        metadata: { custom: msg.metadata ?? {} },
       },
     })),
     {
@@ -352,6 +882,11 @@ export class BackendThreadListAdapter implements RemoteThreadListAdapter {
       .join("\n");
 
     return createAssistantStream(async (controller) => {
+      const thread = await getThreadById(remoteId);
+      if (thread.messageCount === 0) {
+        return;
+      }
+
       // 调用共享的 generateTitle 函数
       const title = await generateTitle(messageContents);
 
@@ -411,7 +946,7 @@ export class BackendThreadListAdapter implements RemoteThreadListAdapter {
           }
 
           try {
-            const messages = sortPersistedMessages(await getMessages(remoteId));
+            const messages = projectLinearMessages(await getMessages(remoteId));
             return toBranchableHistory(messages) as any;
           } catch (error) {
             console.error("[ThreadAdapter] Failed to load messages:", error);
@@ -431,16 +966,16 @@ export class BackendThreadListAdapter implements RemoteThreadListAdapter {
               return;
             }
 
-            const content =
-              typeof message.content === "string"
-                ? message.content
-                : message.content?.map((p: any) => p.text || "").join("") || "";
-
-            await createMessage(remoteId, {
-              role: message.role as "user" | "assistant" | "system",
-              content,
-              metadata: message.metadata,
+            const payload = toPersistableMessagePayload({
+              message,
+              parentId: item.parentId ?? null,
             });
+
+            if (!payload) {
+              return;
+            }
+
+            await createMessage(remoteId, payload);
           } catch (error) {
             console.error("[ThreadAdapter] Failed to append message:", error);
             const errorType = getErrorType(error);
@@ -466,15 +1001,13 @@ export class BackendThreadListAdapter implements RemoteThreadListAdapter {
             }
 
             try {
-              const messages = sortPersistedMessages(
-                await getMessages(remoteId),
-              );
+              const messages = projectLinearMessages(await getMessages(remoteId));
               return {
                 headId: messages.at(-1)?.id ?? null,
                 messages: messages.map((msg, index) =>
                   fmt.decode({
                     id: msg.id,
-                    parent_id: index > 0 ? messages[index - 1]!.id : null,
+                    parent_id: resolvePersistedParentId(messages, index),
                     format: "ai-sdk/v6",
                     content: {
                       role: msg.role,
@@ -506,8 +1039,15 @@ export class BackendThreadListAdapter implements RemoteThreadListAdapter {
               // encoded 本身就是消息内容
               const content = encoded as unknown as {
                 role: string;
-                parts?: Array<{ type: string; text?: string }>;
+                parts?: Array<{
+                  type: string;
+                  text?: string;
+                  mediaType?: string;
+                  filename?: string;
+                  url?: string;
+                }>;
                 content?: string;
+                metadata?: Record<string, unknown>;
               };
 
               if (!content || !content.role) {
@@ -525,21 +1065,39 @@ export class BackendThreadListAdapter implements RemoteThreadListAdapter {
                 return;
               }
 
-              await createMessage(remoteId, {
-                role: content.role as "user" | "assistant" | "system",
-                content:
-                  content.parts?.map((p) => p.text || "").join("") ||
-                  content.content ||
-                  "",
-                metadata:
-                  encoded &&
-                  typeof encoded === "object" &&
-                  "metadata" in encoded &&
-                  encoded.metadata &&
-                  typeof encoded.metadata === "object"
-                    ? (encoded.metadata as Record<string, unknown>)
-                    : undefined,
+              const payload = toPersistableMessagePayload({
+                message: {
+                  id:
+                    item.message &&
+                    typeof item.message === "object" &&
+                    "id" in item.message &&
+                    typeof item.message.id === "string"
+                      ? item.message.id
+                      : undefined,
+                  role: content.role,
+                  content: content.parts ?? content.content,
+                  attachments:
+                    item.message &&
+                    typeof item.message === "object" &&
+                    "attachments" in item.message &&
+                    Array.isArray(item.message.attachments)
+                      ? (item.message.attachments as SerializableAttachmentLike[])
+                      : undefined,
+                  metadata:
+                    item.message &&
+                    typeof item.message === "object" &&
+                    "metadata" in item.message
+                      ? item.message.metadata
+                      : content.metadata,
+                },
+                parentId: item.parentId ?? null,
               });
+
+              if (!payload) {
+                return;
+              }
+
+              await createMessage(remoteId, payload);
             } catch (error) {
               console.error("[ThreadAdapter] Failed to append message:", error);
               const errorType = getErrorType(error);

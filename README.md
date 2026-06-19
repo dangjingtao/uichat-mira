@@ -92,6 +92,7 @@ pnpm clean:artifacts
 
 In development, frontend code should request `/api/...`; Vite rewrites it to the backend route without `/api`.
 By default, the backend development database is created at `server/data/uichat-rag-test.db` because the dev server runs with `server/` as its working directory.
+Packaged Electron and Tauri apps instead start their own backend process and keep database files under the app-local data directory. They will no longer silently reuse an already-running dev backend on the same port.
 The repository also blocks commits that stage database files such as `.db`, `.sqlite`, `.db-wal`, or `.db-shm`.
 
 ## Packaging

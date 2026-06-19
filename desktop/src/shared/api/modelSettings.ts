@@ -104,9 +104,11 @@ export async function selectProviderRoleModel(
   providerCode: ProviderCode,
   role: RoleModelType,
   remoteModelId: string,
+  connectionPayload?: { baseUrl: string; apiKey: string },
 ): Promise<RoleModelConfig> {
   return put<RoleModelConfig>(`/providers/${providerCode}/select-model/${role}`, {
     remoteModelId,
+    ...(connectionPayload ?? {}),
   });
 }
 

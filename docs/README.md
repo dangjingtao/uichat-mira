@@ -33,6 +33,7 @@ Most project documentation is centralized under `docs/`. The main exceptions are
 
 - `assistant-ui.md`
 - `chat-system-practices.md`
+- `defect-log.md`
 - `evaluation-workbench.md`
 - `product-roadmap-priorities.md`
 - `rag-langgraph-flow.md`

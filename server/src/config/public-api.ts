@@ -16,6 +16,7 @@ export const AUTH_EXEMPT_ROUTES: AuthExemptRoute[] = [
   { path: "/login", match: "exact" },
   { path: "/health", match: "exact" },
   { path: "/app/meta", match: "exact" },
+  { path: "/attachments", match: "prefix" },
   { path: CONFIG.SWAGGER_PREFIX, match: "prefix" },
 ];
 

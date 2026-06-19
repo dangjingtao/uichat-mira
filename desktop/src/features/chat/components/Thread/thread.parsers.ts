@@ -358,3 +358,50 @@ export const getRagProgressRow = (step: RagNodeLike): RagNodeRow => ({
     ((!!step.details && Object.keys(step.details).length > 0) ||
       (!!step.environment && Object.keys(step.environment).length > 0)),
 });
+
+const getRagReturnedCount = (step: RagNodeLike) => {
+  const resultReturnedCount = step.environment?.result?.metrics?.returnedCount;
+  if (
+    typeof resultReturnedCount === "number" &&
+    Number.isFinite(resultReturnedCount) &&
+    resultReturnedCount > 0
+  ) {
+    return resultReturnedCount;
+  }
+
+  const retrievalReturnedCount = step.environment?.retrieval?.returnedCount;
+  if (
+    typeof retrievalReturnedCount === "number" &&
+    Number.isFinite(retrievalReturnedCount) &&
+    retrievalReturnedCount > 0
+  ) {
+    return retrievalReturnedCount;
+  }
+
+  return null;
+};
+
+export const getVisibleRagSources = (
+  sources: RagSourceLike[],
+  steps: RagNodeLike[],
+) => {
+  if (sources.length === 0) {
+    return [];
+  }
+
+  const preferredStep =
+    [...steps]
+      .reverse()
+      .find((step) => step.nodeType === "rerank" && step.phase === "done") ??
+    [...steps]
+      .reverse()
+      .find((step) => step.nodeType === "retrieve" && step.phase === "done");
+
+  const returnedCount = preferredStep ? getRagReturnedCount(preferredStep) : null;
+
+  if (!returnedCount) {
+    return sources;
+  }
+
+  return sources.slice(0, Math.min(returnedCount, sources.length));
+};

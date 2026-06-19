@@ -607,7 +607,7 @@ export default function KnowledgeBaseSettings() {
                               </IconButton>
 
                               <div
-                                className={`absolute right-0 top-full z-20 mt-1.5 min-w-[144px] rounded-xl border border-border bg-surface-primary p-1.5 shadow-shadow-md transition-all duration-150 ${
+                                className={`absolute right-0 top-full z-20 mt-1.5 min-w-[144px] rounded-xl border border-border bg-surface-elevated p-1.5 shadow-shadow-md transition-all duration-150 ${
                                   openActionMenuId === document.id
                                     ? "visible opacity-100"
                                     : "invisible opacity-0 pointer-events-none"
@@ -627,7 +627,7 @@ export default function KnowledgeBaseSettings() {
                                 </button>
                                 <button
                                   type="button"
-                                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-danger transition-colors hover:bg-danger/5"
+                                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-danger-text transition-colors hover:bg-danger-soft"
                                   onClick={() => {
                                     setOpenActionMenuId(null);
                                     confirmDeleteDocument(document);

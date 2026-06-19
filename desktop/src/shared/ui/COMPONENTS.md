@@ -17,6 +17,7 @@
 - `IconButton`
 - `Input`
 - `Message`
+- `Markdown / Long-form Content`
 - `Modal`
 - `NavItem`
 - `Select`
@@ -34,6 +35,7 @@
 - `pampas-*` 与 `cloudy-*` 属于扩展氛围色阶，不替代 `surface-*`、`text-*`、`border`
 - 可交互组件必须保留 `focus-visible`
 - 所有组件都应天然兼容浅色 / 深色主题与主题预设切换
+- 组件默认服务于“低噪音、高可读、可回看”的 AI 工作流，不做炫技型视觉
 
 ## 色彩体系速记
 
@@ -55,6 +57,12 @@
 - 焦点和选中优先 `primary`
 - 状态色只做结果反馈，不做主结构色
 - 状态容器优先使用 `*-soft + *-border + *-text`，纯 `success/warning/danger/info` 主要留给点、图标和强调值
+
+共享组件默认排版规则：
+
+- 正文优先清楚和稳定，不追求纤细或花哨字形
+- 长文本、说明、日志、JSON、代码各自使用稳定字体角色
+- 当组件内同时出现标题、正文、辅助说明时，优先靠字号、字重、留白建层，不靠颜色堆层
 
 ## Button
 
@@ -214,6 +222,7 @@
 - 保持 `label`、`value`、`onChange`、`options`、`disabled`、`error`、`compact` 轻量 API
 - 统一接管键盘导航、焦点管理、类型搜索与无障碍语义
 - 下拉面板通过 portal 渲染到顶层，避免在弹窗、抽屉和滚动容器中被裁切
+- 下拉浮层默认使用更高层级，避免被弹窗、抽屉和聊天悬浮区遮挡
 - 为兼容业务层空字符串值，组件内部会对 option value 做编码映射；外部仍保持原始字符串 API
 
 ### 色彩约束
@@ -222,6 +231,7 @@
 - Placeholder：`text-text-tertiary`
 - Focus：`focus:border-primary focus:ring-primary/20`
 - Content：`bg-surface-elevated border-border`
+- Content radius：默认控制在 `10px` 左右，避免过圆的业务浮层
 - Item highlighted：`bg-primary/10`
 - Item checked：`bg-primary/10 text-primary`
 
@@ -246,11 +256,61 @@ message.destroy();
 
 - 成功 / 警告 / 错误 / 信息都以语义色为核心
 - 避免让 toast 背景过重，优先保持可读和轻量
+- loading 和异常提示优先转成用户可理解文案，不直接暴露底层 key 或技术性英文
 - 需要浅底状态块时，优先：
   - 成功：`bg-success-soft border-success-border text-success-text`
   - 警告：`bg-warning-soft border-warning-border text-warning-text`
   - 错误：`bg-danger-soft border-danger-border text-danger-text`
   - 信息：`bg-info-soft border-info-border text-info-text`
+
+### 内容建议
+
+- toast 文案优先一句话说清结果
+- 不把日志、堆栈、原始错误 key 直接塞进全局提示
+- AI 中间过程提示默认弱化，避免反复打断阅读
+
+## Markdown / Long-form Content
+
+用于聊天长回复、知识说明、评测结果摘要、工具调用结果说明等文档型内容。
+
+### 设计目标
+
+- 读起来像结构清楚的文档，而不是一大块聊天气泡
+- 标题、段落、列表、引用、代码块、表格层级必须稳定
+- 长文本优先提升阅读连续性，而不是增加容器装饰
+
+### 约束
+
+- 正文优先 `15px ~ 16px` 与较舒展行高
+- 标题不宜过重，避免压迫
+- 引用、来源、备注使用弱边框和轻底，不做醒目警告色
+- 代码块、日志、JSON 与正文明确区分，但仍保持安静基调
+- 复杂结果优先“摘要 -> 正文 -> 来源/附件 -> 过程细节”的顺序
+
+## Composer Pattern
+
+用于线程底部输入区及其附件、工具、发送、停止等动作。
+
+### 约束
+
+- Composer 是 AI 工作流主舞台，优先保证输入焦点和阅读延续
+- 默认不做过薄输入框
+- 发送按钮清楚但克制，不做强营销感
+- 运行中的停止按钮与发送按钮尺寸应接近，避免布局跳变
+- 附件、知识库、工具入口都属于二级动作，应弱于输入内容本身
+- 底部悬浮外壳可以有轻模糊和渐变承托，但不能抢消息区视觉
+
+## Execution Trace / AI Runtime Block
+
+用于展示计划、执行轨迹、RAG 过程、工具调用、运行中状态和细节展开。
+
+### 约束
+
+- 默认优先紧凑行和单行摘要，不优先厚重卡片
+- 中间态以中性面、轻边框、清楚文案表达，不滥用警告色
+- 详情默认折叠或抽屉展开，避免把主阅读区压碎
+- 结果、错误、可重试动作要分清，但不制造额外焦虑
+- 裸 JSON 只在确有调试价值时显示，并应放在二级层
 
 ## Modal
 

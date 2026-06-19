@@ -43,6 +43,7 @@ const CONFIG = {
   LOG_DIR: process.env.UI_CHAT_LOG_DIR ?? "logs",
   TOOLS_DIR: process.env.UI_CHAT_TOOLS_DIR ?? "tools",
   EXTEND_TOOLS_DIR: process.env.UI_CHAT_EXTEND_TOOLS_DIR ?? "extendTools",
+  ATTACHMENTS_DIR: process.env.UI_CHAT_ATTACHMENTS_DIR ?? "data/attachments",
 };
 
 export default CONFIG;

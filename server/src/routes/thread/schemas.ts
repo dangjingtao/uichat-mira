@@ -127,6 +127,15 @@ const createMessageBodySchema = {
   required: ["role", "content"],
   additionalProperties: false,
   properties: {
+    id: {
+      type: "string",
+      description: "Optional stable message identifier supplied by the client.",
+    },
+    parentId: {
+      description:
+        "Optional parent message identifier used to replace the tail during regenerate/edit flows.",
+      anyOf: [{ type: "string" }, { type: "null" }],
+    },
     role: {
       type: "string",
       description: "Message author role.",
@@ -285,4 +294,3 @@ export const threadRouteSchemas = {
     },
   },
 } as const;
-

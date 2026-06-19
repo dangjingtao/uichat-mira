@@ -98,8 +98,24 @@ export const registerProxyProviderChatRoutes = async (
               userId: authUser.id,
               userMessageId: request.body.messageId,
               ragInput,
+              messages,
               log: app.log,
             }),
+          );
+        }
+
+        if (thread?.ragEnabled) {
+          app.log.warn(
+            {
+              scope: "proxy-provider",
+              event: "rag-branch-skipped",
+              hasThreadId: typeof threadId === "string",
+              hasAuthUser: Boolean(authUser),
+              hasRagInput: Boolean(ragInput),
+              threadFound: Boolean(thread),
+              threadId,
+            },
+            "[proxy-provider] RAG enabled thread skipped RAG branch",
           );
         }
       }
