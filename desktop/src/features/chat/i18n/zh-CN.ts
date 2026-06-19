@@ -23,7 +23,13 @@ const chatPending = {
       copyFailed: "复制失败，请重试",
     },
     executionTrace: {
-      title: "执行过程",
+      title: "RAG 过程",
+      stepCount: "{{completed}} / {{total}} 步",
+      status: {
+        running: "进行中",
+        completed: "已完成",
+        failed: "异常",
+      },
     },
     threadProvider: {
       defaultTitle: "新对话",
@@ -60,7 +66,7 @@ const chatPending = {
       generateSummary: "正在结合来源生成最终回复",
       inProgress: "{{label}}中",
       failed: "{{label}}失败",
-      completed: "已完成检索与回答组织，可展开查看来源和过程",
+      completed: "已完成回答组织",
     },
     title: {
       default: "新对话",

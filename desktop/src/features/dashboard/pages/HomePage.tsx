@@ -3,16 +3,15 @@ import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import {
   ArrowRight,
-  Database,
+  ChevronRight,
   LogOut,
   MessageSquare,
-  Server,
+  Orbit,
   User,
 } from "lucide-react";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { useRuntimeHealth } from "../../system/hooks/useRuntimeHealth";
 import { Button } from "@/shared/ui/Button";
-import Card from "@/shared/ui/Card";
 import { StatusIndicator } from "@/shared/ui/StatusIndicator";
 import {
   getRuntimeDescription,
@@ -38,128 +37,155 @@ function HomePage() {
 
   const toChat = () => navigate("/chat");
 
+  const statusItems = useMemo(
+    () => [
+      {
+        key: "backend",
+        label: t("dashboard.home.backendService"),
+        status: backendState.status,
+        value: backendSummary,
+      },
+      {
+        key: "database",
+        label: t("dashboard.home.databaseConnection"),
+        status: databaseState.status,
+        value: databaseState.detail,
+      },
+      {
+        key: "runtime",
+        label: t("dashboard.home.runtime"),
+        status: backendState.status,
+        value: runtimeDescription,
+      },
+    ],
+    [
+      t,
+      backendState.status,
+      backendSummary,
+      databaseState.status,
+      databaseState.detail,
+      runtimeDescription,
+    ],
+  );
+
   if (!session) {
     return null;
   }
 
   return (
     <div className="min-h-screen bg-surface-secondary">
-      <main className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
-        <section className="rounded-xl border border-border bg-surface-primary shadow-shadow-sm">
-          <div className="flex flex-col gap-6 px-6 py-6 sm:px-8 sm:py-8">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="max-w-2xl space-y-3">
-                <div className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                  {runtimeLabel}
-                </div>
-                <div className="space-y-2">
-                  <h1 className="text-[28px] font-semibold leading-tight text-text-primary">
-                    {t("dashboard.home.welcomeBack", {
-                      username: session.user.username,
-                    })}
-                  </h1>
-                </div>
-              </div>
-
-              <div className="flex w-32 items-center gap-3 self-start rounded-xl border border-border bg-surface-secondary px-3 py-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-primary">
-                  <User className="h-4 w-4 text-icon-secondary" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-text-primary">
-                    {session.user.username}
+      <main className="mx-auto flex max-w-6xl flex-col px-4 py-8 sm:px-6 lg:px-8">
+        <section className="overflow-hidden rounded-[28px] border border-border/80 bg-surface-primary shadow-[0_18px_48px_rgba(68,52,35,0.06)]">
+          <div className="relative">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[linear-gradient(180deg,rgba(var(--color-primary),0.06)_0%,rgba(var(--color-primary),0.015)_52%,transparent_100%)]"
+            />
+            <div className="relative px-6 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
+              <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+                <div className="max-w-3xl space-y-5">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-primary/8 px-3 py-1 text-xs font-medium tracking-[0.08em] text-primary">
+                    <Orbit className="h-3.5 w-3.5" />
+                    <span>{runtimeLabel}</span>
                   </div>
-                  <div className="text-xs text-text-secondary">
-                    {session.user.role}
+
+                  <div className="space-y-3">
+                    <h1 className="max-w-[12ch] text-[34px] font-semibold leading-[1.12] tracking-[-0.03em] text-text-primary sm:text-[42px]">
+                      {t("dashboard.home.welcomeBack", {
+                        username: session.user.username,
+                      })}
+                    </h1>
+                    <p className="max-w-2xl text-[15px] leading-7 text-text-secondary">
+                      {t("dashboard.home.subtitle")}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+                    <Button onClick={toChat} size="lg" className="gap-2.5">
+                      <MessageSquare className="h-4 w-4" />
+                      {t("dashboard.home.startTest")}
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => logout()}
+                      size="lg"
+                      className="gap-2 px-2 text-text-secondary hover:bg-transparent hover:text-text-primary"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      {t("dashboard.home.logout")}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="w-full max-w-sm shrink-0 border-l-0 border-border/70 pt-0 lg:max-w-[280px] lg:border-l lg:pl-8">
+                  <div className="space-y-4">
+                    <div className="inline-flex items-center gap-2 rounded-full bg-surface-secondary px-3 py-1 text-xs font-medium text-text-secondary">
+                      <span>{t("dashboard.home.currentUser")}</span>
+                    </div>
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border/80 bg-surface-primary text-icon-secondary">
+                        <User className="h-4.5 w-4.5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[18px] font-semibold text-text-primary">
+                          {session.user.username}
+                        </div>
+                        <div className="mt-1 text-sm text-text-secondary">
+                          {session.user.role}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="border-t border-border/70 pt-4 text-sm leading-6 text-text-secondary">
+                      {t("dashboard.home.userHint")}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
+          </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button onClick={toChat} className="gap-2">
-                <MessageSquare className="h-4 w-4" />
-                {t("dashboard.home.startTest")}
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() => logout()}
-                className="gap-2"
-              >
-                <LogOut className="h-4 w-4" />
-                {t("dashboard.home.logout")}
-              </Button>
+          <div className="border-t border-border/70 bg-[linear-gradient(180deg,rgba(var(--color-surface-secondary),0.88)_0%,rgba(var(--color-surface-primary),0.94)_100%)] px-6 py-4 sm:px-8 lg:px-10">
+            <div className="grid gap-3 lg:grid-cols-3 lg:gap-6">
+              {statusItems.map((item) => (
+                <div
+                  key={item.key}
+                  className="flex items-start gap-3 border-b border-border/55 py-2 last:border-b-0 lg:border-b-0 lg:border-r lg:border-border/60 lg:pr-6 lg:last:border-r-0"
+                >
+                  <StatusIndicator status={item.status} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-tertiary">
+                      {item.label}
+                    </div>
+                    <div className="mt-1 line-clamp-2 text-sm leading-6 text-text-primary">
+                      {item.value || "—"}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </section>
 
-        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Card
-            label={t("dashboard.home.backendService")}
-            interactive
-            className="h-full"
-          >
-            <div className="space-y-4">
-              <div className="flex items-start gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-secondary">
-                  <Server className="h-5 w-5 text-icon-primary" />
-                </div>
-                <div className="min-w-0 flex-1 space-y-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <h2 className="text-base font-semibold text-text-primary">
-                      {t("dashboard.home.backendService")}
-                    </h2>
-                    <StatusIndicator status={backendState.status} />
-                  </div>
-                  <p className="text-sm leading-6 text-text-secondary">
-                    {backendState.detail}
-                  </p>
-                </div>
+        <section className="mt-8">
+          <div className="flex flex-col gap-3 border-t border-border/70 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-tertiary">
+                {t("dashboard.home.quickStartLabel")}
               </div>
-              <div className="rounded-lg border border-border bg-surface-secondary px-4 py-3">
-                <div className="text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                  Endpoint
-                </div>
-                <div className="mt-1 break-all text-sm text-text-primary">
-                  {backendSummary}
-                </div>
+              <div className="mt-1 text-sm text-text-secondary">
+                {t("dashboard.home.quickStartHint")}
               </div>
             </div>
-          </Card>
-
-          <Card
-            label={t("dashboard.home.databaseConnection")}
-            interactive
-            className="h-full"
-          >
-            <div className="space-y-4">
-              <div className="flex items-start gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-secondary">
-                  <Database className="h-5 w-5 text-icon-primary" />
-                </div>
-                <div className="min-w-0 flex-1 space-y-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <h2 className="text-base font-semibold text-text-primary">
-                      {t("dashboard.home.databaseConnection")}
-                    </h2>
-                    <StatusIndicator status={databaseState.status} />
-                  </div>
-                  <p className="text-sm leading-6 text-text-secondary">
-                    {databaseState.detail}
-                  </p>
-                </div>
-              </div>
-              <div className="rounded-lg border border-border bg-surface-secondary px-4 py-3">
-                <div className="text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
-                  Runtime
-                </div>
-                <div className="mt-1 text-sm text-text-primary">
-                  {runtimeDescription}
-                </div>
-              </div>
-            </div>
-          </Card>
+            <button
+              type="button"
+              onClick={toChat}
+              className="inline-flex items-center gap-2 text-sm font-medium text-text-primary transition-colors duration-150 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+            >
+              <span>{t("dashboard.home.openWorkspace")}</span>
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
         </section>
       </main>
     </div>

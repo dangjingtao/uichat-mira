@@ -5,6 +5,7 @@ const app = {
       running: "运行中",
       stopped: "未启动",
       unknownUser: "未知用户",
+      logout: "退出登录",
     },
   },
 } as const;

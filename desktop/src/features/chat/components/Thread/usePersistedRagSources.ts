@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { getMessages } from "@/shared/api/thread";
 import type { RagSourceLike, ThreadMessageLike } from "./thread.types";
@@ -24,6 +24,19 @@ export function usePersistedRagSources({
     useState<Record<string, RagSourceLike[]>>({});
   const latestSyncSignatureRef = useRef<string | null>(null);
   const previousThreadIdRef = useRef<string | undefined>(undefined);
+  const threadSnapshotKey = useMemo(
+    () =>
+      threadMessages
+        .map((message) => {
+          const contentSize = Array.isArray(message.content)
+            ? message.content.length
+            : 0;
+
+          return `${message.id}:${message.role}:${contentSize}`;
+        })
+        .join("|"),
+    [threadMessages],
+  );
 
   useEffect(() => {
     if (previousThreadIdRef.current !== activeThreadId) {
@@ -84,7 +97,7 @@ export function usePersistedRagSources({
     return () => {
       cancelled = true;
     };
-  }, [isRunning, ragEnabled, remoteThreadId, threadMessages]);
+  }, [isRunning, ragEnabled, remoteThreadId, threadSnapshotKey]);
 
   return persistedSourcesByMessageId;
 }

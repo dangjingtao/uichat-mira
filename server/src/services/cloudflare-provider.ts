@@ -28,7 +28,7 @@ const isCloudflareApiEnvelope = <T>(
 export const isCloudflareBaseUrl = (baseUrl: string) =>
   CLOUDFLARE_ACCOUNT_URL_PATTERN.test(trimTrailingSlash(baseUrl.trim()));
 
-const resolveCloudflareAccountUrl = (baseUrl: string) => {
+export const resolveCloudflareAccountUrl = (baseUrl: string) => {
   const normalized = trimTrailingSlash(baseUrl.trim());
   const match = normalized.match(CLOUDFLARE_ACCOUNT_URL_PATTERN);
 
@@ -42,6 +42,13 @@ const resolveCloudflareAccountUrl = (baseUrl: string) => {
     accountId: match[2],
     accountUrl: match[1],
   };
+};
+
+export const normalizeCloudflareOpenAICompatibleBaseUrl = (
+  baseUrl: string,
+) => {
+  const { accountUrl } = resolveCloudflareAccountUrl(baseUrl);
+  return `${accountUrl}/ai/v1`;
 };
 
 const resolveCloudflareModelSearchUrl = (baseUrl: string) => {

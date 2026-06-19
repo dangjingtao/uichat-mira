@@ -343,7 +343,22 @@ export const providerSettingsService = {
     providerCode: ProviderCode,
     role: ModelType,
     remoteModelId: string,
+    connectionPayload?: {
+      baseUrl?: string;
+      apiKey?: string;
+    },
   ) {
+    if (
+      connectionPayload &&
+      (typeof connectionPayload.baseUrl === "string" ||
+        typeof connectionPayload.apiKey === "string")
+    ) {
+      this.saveProviderConnection(providerCode, {
+        baseUrl: connectionPayload.baseUrl ?? "",
+        apiKey: connectionPayload.apiKey ?? "",
+      });
+    }
+
     const providerModel = providerModelRepository.findByProviderAndRemoteModelId(
       providerCode,
       remoteModelId,

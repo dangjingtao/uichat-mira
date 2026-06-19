@@ -396,6 +396,16 @@ export const providerSettingsRouteSchemas = {
           type: "string",
           description: "Remote model id selected from the provider model cache.",
         },
+        baseUrl: {
+          type: "string",
+          description:
+            "Optional provider base URL to persist together with the role selection.",
+        },
+        apiKey: {
+          type: "string",
+          description:
+            "Optional plain API key to persist together with the role selection.",
+        },
       },
       required: ["remoteModelId"],
     },

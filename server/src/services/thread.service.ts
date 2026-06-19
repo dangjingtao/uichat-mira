@@ -41,10 +41,53 @@ export interface CreateThreadInput {
 
 export interface CreateMessageInput {
   id?: string;
+  parentId?: string | null;
   role: MessageRole;
   content: string;
   metadata?: Record<string, unknown>;
 }
+
+const pruneThreadTail = (
+  threadId: string,
+  anchorMessageId: string | null,
+  preserveMessageId?: string,
+) => {
+  const threadMessages = messageRepository.listByThread(threadId);
+  const anchorIndex =
+    anchorMessageId === null
+      ? -1
+      : threadMessages.findIndex((message) => message.id === anchorMessageId);
+
+  if (anchorMessageId !== null && anchorIndex < 0) {
+    return;
+  }
+
+  const trailingMessages = threadMessages.slice(anchorIndex + 1);
+
+  for (const message of trailingMessages) {
+    if (message.id === preserveMessageId) {
+      continue;
+    }
+
+    messageRepository.deleteById(message.id);
+  }
+};
+
+const getBranchParentIdFromMetadata = (
+  metadata: Record<string, unknown> | undefined,
+) => {
+  const assistantUi =
+    metadata?.assistantUi &&
+    typeof metadata.assistantUi === "object" &&
+    !Array.isArray(metadata.assistantUi)
+      ? (metadata.assistantUi as { branch?: { parentId?: unknown } })
+      : undefined;
+  const parentId = assistantUi?.branch?.parentId;
+
+  return typeof parentId === "string" || parentId === null
+    ? parentId
+    : undefined;
+};
 
 const toThreadResponse = (
   thread: Thread,
@@ -249,12 +292,67 @@ export const threadService = {
       throw new Error(THREAD_ACCESS_ERROR_MESSAGE);
     }
 
+    const normalizedContent = input.content.trim();
+    const normalizedMetadata = input.metadata ? JSON.stringify(input.metadata) : "{}";
+    const existing = input.id ? messageRepository.findById(input.id) : undefined;
+    const effectiveParentId =
+      input.parentId !== undefined
+        ? input.parentId
+        : getBranchParentIdFromMetadata(input.metadata);
+
+    if (existing && existing.threadId !== threadId) {
+      throw new Error("Message id already exists on a different thread");
+    }
+
+    if (effectiveParentId !== undefined) {
+      pruneThreadTail(
+        threadId,
+        existing ? existing.id : effectiveParentId ?? null,
+        existing?.id,
+      );
+    }
+
+    if (existing) {
+      if (
+        existing.role !== input.role ||
+        existing.content !== normalizedContent ||
+        (existing.metadata || "{}") !== normalizedMetadata
+      ) {
+        const updated = messageRepository.updateById(existing.id, {
+          role: input.role,
+          content: normalizedContent,
+          metadata: normalizedMetadata,
+        });
+
+        if (!updated) {
+          throw new Error("Failed to update existing message");
+        }
+
+        threadRepository.updateById(threadId, {});
+        return toMessageResponse(updated);
+      }
+
+      threadRepository.updateById(threadId, {});
+      return toMessageResponse(existing);
+    }
+
+    if (!input.id && input.role === "user") {
+      const existingMessages = messageRepository.listByThread(threadId);
+      if (
+        existingMessages.length === 1 &&
+        existingMessages[0]?.role === "user" &&
+        existingMessages[0]?.content === normalizedContent
+      ) {
+        return toMessageResponse(existingMessages[0]);
+      }
+    }
+
     const created = messageRepository.create({
       ...(input.id ? { id: input.id } : {}),
       threadId,
       role: input.role,
-      content: input.content.trim(),
-      metadata: input.metadata ? JSON.stringify(input.metadata) : "{}",
+      content: normalizedContent,
+      metadata: normalizedMetadata,
     });
 
     // 更新 thread 的 updatedAt

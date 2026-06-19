@@ -22,7 +22,7 @@ import changelogMarkdown from "../../../../../../docs/CHANGELOG.md?raw";
 const getFallbackAppMeta = (t: TFunction): AppMetaData => ({
   name: "ui-chat-rag-tester",
   version: "0.0.0",
-  displayName: "Ui Chat Rag Tester",
+  displayName: "uichat",
   author: "Tomz Dang <dangjingtao@gmail.com>",
   description:
     "An initialization project for an Electron desktop application aimed at enterprise knowledge base verification, supporting dual-mode switching between local and remote models and vector databases.",

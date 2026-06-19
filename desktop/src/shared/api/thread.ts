@@ -38,8 +38,10 @@ export interface CreateThreadInput {
 }
 
 export interface CreateMessageInput {
+  id?: string;
   role: MessageRole;
   content: string;
+  parentId?: string | null;
   metadata?: Record<string, unknown>;
 }
 

@@ -10,7 +10,7 @@ import {
 } from "@/routes/schema-helpers.js";
 
 // Assistant-ui compatible chat body. The provider service owns normalization;
-// this schema keeps transport validation intentionally permissive for parts.
+// this schema keeps transport validation intentionally permissive for mixed parts.
 export const chatMessagesBodySchema = {
   type: "object",
   required: ["messages"],
@@ -28,7 +28,8 @@ export const chatMessagesBodySchema = {
           },
           parts: {
             type: "array",
-            description: "Assistant-ui content parts. Only text parts are used.",
+            description:
+              "Assistant-ui content parts. Text and attachment-like parts are accepted.",
             items: {
               type: "object",
               additionalProperties: true,
@@ -150,4 +151,3 @@ export const proxyProviderRouteSchemas = {
     },
   },
 } as const;
-

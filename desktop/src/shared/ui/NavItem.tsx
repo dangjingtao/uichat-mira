@@ -15,7 +15,7 @@ function NavItem({
       className={({ isActive }) =>
         `
         flex items-center gap-2.5
-        rounded-xl
+        rounded-[10px]
         px-3 py-2.5
         text-sm
         font-medium
@@ -29,8 +29,8 @@ function NavItem({
         focus-visible:ring-offset-surface-primary
         ${
           isActive
-            ? "bg-pampas-3 text-text-primary"
-            : "text-text-secondary hover:bg-surface-secondary hover:text-text-primary"
+            ? "bg-primary/10 text-text-primary"
+            : "text-text-secondary hover:bg-primary/7 hover:text-text-primary"
         }
         `
       }

@@ -10,11 +10,14 @@ import {
 } from "react";
 import { useAui, useAuiState } from "@assistant-ui/react";
 import {
+  createMessage,
   getThreadById,
   updateThread,
   type ThreadWithMessages,
 } from "@/shared/api/thread";
 import { useKnowledgeBaseAvailability } from "@/app/providers/KnowledgeBaseAvailabilityProvider";
+import { toPersistableMessagePayload } from "@/features/chat/adapters/BackendThreadListAdapter";
+import { setCurrentThreadRemoteIdForTransport } from "./threadRuntimeBridge";
 
 const DEFAULT_THREAD_TITLE = "新对话";
 const TITLE_SYNC_POLL_INTERVAL_MS = 600;
@@ -48,12 +51,40 @@ export function CurrentThreadProvider({
   const activeThreadListTitle = useAuiState((s) => s.threadListItem.title);
   const isThreadRunning = useAuiState((s) => s.thread.isRunning);
   const threadMessageCount = useAuiState((s) => s.thread.messages.length);
+  const runtimeThreadMessages = useAuiState(
+    (s) =>
+      s.thread.messages as readonly {
+        id?: string;
+        role?: string;
+        parentId?: string | null;
+        content?: unknown;
+        attachments?: Array<{
+          id?: string;
+          type?: string;
+          name?: string;
+          contentType?: string;
+          content?: Array<{
+            type?: string;
+            image?: string;
+            data?: string;
+            mimeType?: string;
+            filename?: string;
+          }>;
+        }>;
+        metadata?: unknown;
+      }[],
+  );
   const [thread, setThread] = useState<ThreadWithMessages | null>(null);
   const [loading, setLoading] = useState(false);
   const persistedTitle = thread?.title?.trim() ?? "";
   const runtimeTitle = activeThreadListTitle?.trim() ?? "";
   const previousRunningRef = useRef(false);
   const titleSyncAbortRef = useRef(0);
+  const pendingPersistIdsRef = useRef(new Set<string>());
+  const persistedMessageIds = useMemo(
+    () => new Set((thread?.messages ?? []).map((message) => message.id)),
+    [thread?.messages],
+  );
 
   const shouldWaitForGeneratedTitle = useCallback(
     (title: string) => {
@@ -108,6 +139,14 @@ export function CurrentThreadProvider({
   }, [aui, refresh, runtimeTitle, shouldWaitForGeneratedTitle]);
 
   useEffect(() => {
+    setCurrentThreadRemoteIdForTransport(activeThreadRemoteId ?? null);
+
+    return () => {
+      setCurrentThreadRemoteIdForTransport(null);
+    };
+  }, [activeThreadRemoteId]);
+
+  useEffect(() => {
     if (!activeThreadRemoteId) {
       setThread(null);
       return;
@@ -132,6 +171,60 @@ export function CurrentThreadProvider({
     refreshThreadState,
     runtimeTitle,
   ]);
+
+  useEffect(() => {
+    if (!activeThreadRemoteId) {
+      pendingPersistIdsRef.current.clear();
+      return;
+    }
+
+    if (persistedMessageIds.size > 0) {
+      return;
+    }
+
+    const candidates = runtimeThreadMessages.filter((message) => {
+      return (
+        message.role === "user" &&
+        typeof message.id === "string" &&
+        !persistedMessageIds.has(message.id) &&
+        !pendingPersistIdsRef.current.has(message.id)
+      );
+    });
+
+    if (candidates.length === 0) {
+      return;
+    }
+
+    for (const message of candidates) {
+      const payload = toPersistableMessagePayload({
+        message,
+        parentId:
+          typeof message.parentId === "string" || message.parentId === null
+            ? message.parentId
+            : null,
+      });
+
+      if (!payload || !payload.id) {
+        continue;
+      }
+
+      pendingPersistIdsRef.current.add(payload.id);
+
+      void (async () => {
+        try {
+          await createMessage(activeThreadRemoteId, payload);
+        } catch (error) {
+          console.error(
+            "[CurrentThreadProvider] Failed to persist runtime user message:",
+            error,
+          );
+        } finally {
+          pendingPersistIdsRef.current.delete(payload.id!);
+          void refresh();
+        }
+      })();
+    }
+  }, [activeThreadRemoteId, persistedMessageIds, refresh, runtimeThreadMessages]);
 
   useEffect(() => {
     const wasRunning = previousRunningRef.current;

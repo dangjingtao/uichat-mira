@@ -1,6 +1,12 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight, Clock3, LoaderCircle } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  LoaderCircle,
+} from "lucide-react";
 import type { RagProgressDetail } from "./RagProgressDetailDrawer";
 import type { RagNodeLike } from "./thread.types";
 import {
@@ -26,32 +32,48 @@ export function RagExecutionTrace({
   }
 
   const summary = summarizeRagProgress(steps);
+  const runningCount = steps.filter((step) => step.phase === "start").length;
+  const errorCount = steps.filter((step) => step.phase === "error").length;
+  const completedCount = steps.filter((step) => step.phase === "done").length;
+  const overallTone =
+    errorCount > 0
+      ? "border-rose-200/70 bg-[rgba(190,24,93,0.04)] text-rose-700"
+      : runningCount > 0
+        ? "border-amber-200/70 bg-[rgba(180,83,9,0.05)] text-amber-700"
+        : "border-[rgba(var(--color-primary),0.16)] bg-[rgba(var(--color-primary),0.05)] text-primary";
+  const overallLabel =
+    errorCount > 0
+      ? t("chat.executionTrace.status.failed")
+      : runningCount > 0
+        ? t("chat.executionTrace.status.running")
+        : t("chat.executionTrace.status.completed");
 
   return (
-    <div className="mt-2 overflow-hidden rounded-2xl border border-border/70 bg-surface-primary/70 transition-[border-color,background-color] duration-200">
+    <div className="mt-4 border-b border-border/60 pb-2 transition-[border-color] duration-200">
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors duration-150 hover:bg-surface-secondary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+        className="flex w-full items-center gap-2  text-left transition-colors duration-150 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
       >
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border bg-surface-secondary text-text-secondary">
-          <Clock3 className="h-3.5 w-3.5" />
-        </span>
-        <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">
-          <span className="shrink-0 font-medium text-text-primary">
-            {t("chat.executionTrace.title")}
-          </span>
-          <span className="shrink-0 text-text-tertiary">·</span>
+        <div className="min-w-0 flex flex-1 items-center gap-2 overflow-hidden text-sm">
           <p className="min-w-0 truncate text-text-secondary">{summary}</p>
-          <span className="shrink-0 rounded-full bg-surface-secondary px-1.5 py-0.5 text-[10px] font-medium text-text-tertiary">
-            {steps.length}
-          </span>
         </div>
-        {expanded ? (
-          <ChevronDown className="h-4 w-4 shrink-0 text-text-tertiary" />
-        ) : (
-          <ChevronRight className="h-4 w-4 shrink-0 text-text-tertiary" />
-        )}
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <span className="hidden text-[11px] text-text-tertiary sm:inline">
+            {t("chat.executionTrace.stepCount", {
+              completed: completedCount,
+              total: steps.length,
+            })}
+          </span>
+          {runningCount > 0 ? (
+            <LoaderCircle className="h-3.5 w-3.5 shrink-0 animate-spin text-text-tertiary" />
+          ) : null}
+          {expanded ? (
+            <ChevronDown className="h-4 w-4 shrink-0 text-text-tertiary" />
+          ) : (
+            <ChevronRight className="h-4 w-4 shrink-0 text-text-tertiary" />
+          )}
+        </div>
       </button>
 
       <div
@@ -61,7 +83,7 @@ export function RagExecutionTrace({
         }`}
       >
         <div className="min-h-0">
-          <div className="border-t border-border/70 px-3 py-2">
+          <div className="mt-1 border-t border-border/50 pt-1.5">
             {steps.map((step, index) => {
               const row = getRagProgressRow(step);
               const display = getDisplayRagStep(step);
@@ -70,7 +92,13 @@ export function RagExecutionTrace({
                   ? "bg-rose-500/10 text-rose-600"
                   : step.phase === "start"
                     ? "bg-amber-500/10 text-amber-600"
-                    : "bg-emerald-500/10 text-emerald-600";
+                    : "bg-[rgba(var(--color-primary),0.10)] text-primary";
+              const StatusIcon =
+                step.phase === "error"
+                  ? AlertCircle
+                  : step.phase === "start"
+                    ? LoaderCircle
+                    : CheckCircle2;
 
               return (
                 <button
@@ -93,9 +121,9 @@ export function RagExecutionTrace({
                       environment: row.environment,
                     });
                   }}
-                  className={`flex w-full items-center gap-2.5 rounded-xl px-1.5 py-1.5 text-left transition-colors duration-150 ${
+                  className={`flex w-full items-start gap-2.5 px-1 py-1.5 text-left transition-colors duration-150 ${
                     row.clickable
-                      ? "cursor-pointer hover:bg-surface-secondary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+                      ? "cursor-pointer hover:bg-[rgba(var(--color-primary),0.03)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
                       : "cursor-default"
                   }`}
                 >
@@ -108,16 +136,29 @@ export function RagExecutionTrace({
                       <span>{index + 1}</span>
                     )}
                   </div>
-                  <p className="min-w-0 shrink text-sm text-text-primary">
-                    <span className="font-medium">{display.label}</span>
+                  <div className="min-w-0 flex flex-1 items-center gap-2 overflow-hidden">
+                    <p className="shrink-0 text-[13px] font-medium text-text-primary">
+                      {display.label}
+                    </p>
                     {display.summary ? (
-                      <span className="truncate text-text-secondary">
-                        {" · "}
-                        {display.summary}
-                      </span>
+                      <>
+                        <span className="shrink-0 text-text-tertiary">·</span>
+                        <p className="min-w-0 truncate text-[12px] leading-5 text-text-secondary">
+                          {display.summary}
+                        </p>
+                      </>
                     ) : null}
-                  </p>
-                  <div className="ml-auto flex shrink-0 items-center gap-2">
+                  </div>
+                  <div className="ml-auto flex shrink-0 items-center gap-2 pt-0.5">
+                    <StatusIcon
+                      className={`h-3.5 w-3.5 ${
+                        step.phase === "start"
+                          ? "animate-spin text-text-tertiary"
+                          : step.phase === "error"
+                            ? "text-danger-text"
+                            : "text-text-tertiary"
+                      }`}
+                    />
                     {row.clickable ? (
                       <ChevronRight className="h-3.5 w-3.5 text-text-tertiary" />
                     ) : null}

@@ -1,5 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
+import type { Root } from "react-dom/client";
 import { RouterProvider } from "react-router-dom";
 import { router } from "./app/router";
 import "./shared/i18n";
@@ -19,6 +20,12 @@ const root = document.getElementById("root");
 
 if (!root) {
   throw new Error("Root element not found");
+}
+
+declare global {
+  interface Window {
+    __uichatRoot?: Root;
+  }
 }
 
 const Main = () => {
@@ -43,4 +50,6 @@ const Main = () => {
   );
 };
 
-createRoot(root).render(<Main />);
+const appRoot = window.__uichatRoot ?? createRoot(root);
+window.__uichatRoot = appRoot;
+appRoot.render(<Main />);

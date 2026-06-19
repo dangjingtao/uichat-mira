@@ -5,6 +5,7 @@ const app = {
       running: "Running",
       stopped: "Stopped",
       unknownUser: "Unknown user",
+      logout: "Log out",
     },
   },
 } as const;

@@ -185,11 +185,11 @@ export const Select: React.FC<SelectProps> = ({
               sideOffset={6}
               collisionPadding={8}
               className="
-                z-[110]
+                z-[240]
                 max-h-64
                 min-w-[var(--radix-select-trigger-width)]
                 overflow-hidden
-                rounded-lg
+                rounded-[10px]
                 border
                 border-border
                 bg-surface-elevated
@@ -215,7 +215,7 @@ export const Select: React.FC<SelectProps> = ({
                         cursor-default
                         items-center
                         gap-2
-                        rounded-md
+                        rounded-[8px]
                         px-2.5
                         py-2
                         pr-8

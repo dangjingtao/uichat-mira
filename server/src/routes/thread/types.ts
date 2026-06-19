@@ -20,6 +20,10 @@ export interface ThreadMutationBody {
 
 /** Body for creating a persisted message in a thread. */
 export interface CreateMessageBody {
+  /** Optional stable message id from the client/runtime for idempotent persistence. */
+  id?: string;
+  /** Optional parent message id used to linearize regenerate/edit flows. */
+  parentId?: string | null;
   /** Message author role. */
   role: "user" | "assistant" | "system";
   /** Message text. The route enforces the maximum content length. */
@@ -27,4 +31,3 @@ export interface CreateMessageBody {
   /** Free-form message metadata, including RAG source payloads. */
   metadata?: Record<string, unknown>;
 }
-

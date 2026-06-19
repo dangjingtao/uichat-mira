@@ -1,6 +1,6 @@
 {
   "name": "@ui-chat-rag-tester/desktop",
-  "version": "0.5.2",
+  "version": "0.60.0",
   "private": true,
   "description": "Frontend for UI chat RAG tester.",
   "author": "Tomz Dang <dangjing@gmail.com>",
@@ -27,6 +27,7 @@
     "@tanstack/react-table": "^8.21.3",
     "assistant-stream": "^0.3.21",
     "axios": "^1.17.0",
+    "browser-image-compression": "^2.0.2",
     "i18next": "^26.3.1",
     "i18next-browser-languagedetector": "^8.2.1",
     "lucide-react": "^1.17.0",
@@ -38,6 +39,7 @@
     "react-router": "^7.17.0",
     "react-router-dom": "^7.17.0",
     "react-tooltip": "^6.0.7",
+    "react-typewriter-plus": "^1.0.3",
     "streamdown": "^2.5.0"
   },
   "devDependencies": {

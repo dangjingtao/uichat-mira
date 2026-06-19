@@ -24,6 +24,10 @@ export interface SelectRoleModelParams extends ProviderCodeParams {
 export interface SelectRoleModelBody {
   /** Remote model id previously synced from the provider. */
   remoteModelId: string;
+  /** Optional provider base URL to persist together with the default model selection. */
+  baseUrl?: string;
+  /** Optional plain API key to persist together with the default model selection. */
+  apiKey?: string;
 }
 
 /** Path params for clearing a model role assignment. */
@@ -31,4 +35,3 @@ export interface ResetRoleModelParams {
   /** Model role whose provider and remote model fields should be cleared. */
   role: ModelType;
 }
-

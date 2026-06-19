@@ -88,6 +88,8 @@ export interface RagAssistantStreamInput {
   userMessageId?: string;
   /** Latest user question and non-system history. */
   ragInput: NonNullable<ReturnType<typeof toRagInput>>;
+  /** Client-visible linear history used to align persisted RAG messages. */
+  messages: NormalizedChatMessage[];
   /** Logger from the Fastify route, used for route-level observability. */
   log: FastifyBaseLogger;
 }
@@ -102,6 +104,7 @@ export const createRagAssistantStream = (input: RagAssistantStreamInput) => {
     userId,
     userMessageId,
     ragInput,
+    messages,
     log,
   } = input;
 
@@ -117,25 +120,34 @@ export const createRagAssistantStream = (input: RagAssistantStreamInput) => {
     "[proxy-provider] starting RAG assistant stream",
   );
 
+  const latestUserIndex = [...messages]
+    .map((message, index) => ({ message, index }))
+    .reverse()
+    .find((entry) => entry.message.role === "user")?.index;
+  const latestUserMessage = messages[latestUserIndex ?? -1];
+  const previousVisibleMessage =
+    latestUserIndex !== undefined && latestUserIndex > 0
+      ? messages[latestUserIndex - 1]
+      : undefined;
   const latestUserMessageId =
-    typeof userMessageId === "string" && userMessageId.trim()
-      ? userMessageId
-      : crypto.randomUUID();
+    typeof latestUserMessage?.id === "string" && latestUserMessage.id.trim()
+      ? latestUserMessage.id
+      : typeof userMessageId === "string" && userMessageId.trim()
+        ? userMessageId
+        : crypto.randomUUID();
   const assistantMessageId = crypto.randomUUID();
+  const latestUserParentId =
+    typeof previousVisibleMessage?.id === "string"
+      ? previousVisibleMessage.id
+      : null;
 
-  const existingUserMessage = threadService.getMessageById(
-    latestUserMessageId,
-    userId,
-  );
-
-  if (!existingUserMessage) {
-    threadService.createMessage(threadId, userId, {
-      id: latestUserMessageId,
-      role: "user",
-      content: ragInput.question,
-      metadata: { custom: {} },
-    });
-  }
+  threadService.createMessage(threadId, userId, {
+    id: latestUserMessageId,
+    parentId: latestUserParentId,
+    role: "user",
+    content: ragInput.question,
+    metadata: { custom: {} },
+  });
 
   const persistRagAssistantMessage = async ({
     answer,
@@ -154,6 +166,7 @@ export const createRagAssistantStream = (input: RagAssistantStreamInput) => {
 
     threadService.createMessage(threadId, userId, {
       id: assistantMessageId,
+      parentId: latestUserMessageId,
       role: "assistant",
       content: answer,
       metadata: {
