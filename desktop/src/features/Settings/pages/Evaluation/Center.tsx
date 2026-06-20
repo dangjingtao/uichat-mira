@@ -89,58 +89,36 @@ export default function EvaluationCenter() {
   };
 
   const confirmDeleteRun = (run: EvaluationRunRecord) => {
-    const modalKey = Modal.show({
+    Modal.confirm({
       title: t("settings.evaluation.center.deleteModal.title"),
-      width: 460,
-      content: (
-        <div className="space-y-3 text-sm text-text-secondary">
-          <p>
-            {t("settings.evaluation.center.deleteModal.description", {
+      description: `${t("settings.evaluation.center.deleteModal.description", {
+        name: run.name,
+      })} ${t("settings.evaluation.center.deleteModal.warning")}`,
+      width: 440,
+      tone: "danger",
+      confirmText: t("settings.evaluation.center.deleteModal.confirm"),
+      loadingText: t("settings.evaluation.center.deleteModal.deleting"),
+      onConfirm: async () => {
+        try {
+          setDeletingRunId(run.id);
+          await deleteEvaluationRun(run.id);
+          setRuns((current) => current.filter((item) => item.id !== run.id));
+          setSelectedRun((current) => (current?.id === run.id ? null : current));
+          message.success(
+            t("settings.evaluation.center.messages.deleted", {
               name: run.name,
-            })}
-          </p>
-          <div className="rounded-xl border border-danger/20 bg-danger/5 px-3.5 py-3 text-danger">
-            {t("settings.evaluation.center.deleteModal.warning")}
-          </div>
-        </div>
-      ),
-      footer: (
-        <>
-          <Button variant="ghost" onClick={() => Modal.close(modalKey)}>
-            {t("common.actions.cancel")}
-          </Button>
-          <Button
-            variant="danger"
-            disabled={deletingRunId === run.id}
-            onClick={async () => {
-              try {
-                setDeletingRunId(run.id);
-                await deleteEvaluationRun(run.id);
-                Modal.close(modalKey);
-                setRuns((current) => current.filter((item) => item.id !== run.id));
-                setSelectedRun((current) => (current?.id === run.id ? null : current));
-                message.success(
-                  t("settings.evaluation.center.messages.deleted", {
-                    name: run.name,
-                  }),
-                );
-              } catch (error) {
-                message.error(
-                  error instanceof Error
-                    ? error.message
-                    : t("settings.evaluation.center.messages.deleteFailed"),
-                );
-              } finally {
-                setDeletingRunId((current) => (current === run.id ? null : current));
-              }
-            }}
-          >
-            {deletingRunId === run.id
-              ? t("settings.evaluation.center.deleteModal.deleting")
-              : t("settings.evaluation.center.deleteModal.confirm")}
-          </Button>
-        </>
-      ),
+            }),
+          );
+        } catch (error) {
+          throw new Error(
+            error instanceof Error
+              ? error.message
+              : t("settings.evaluation.center.messages.deleteFailed"),
+          );
+        } finally {
+          setDeletingRunId((current) => (current === run.id ? null : current));
+        }
+      },
     });
   };
 

@@ -26,6 +26,7 @@
 - `Switch`
 - `Table`
 - `Tooltip`
+- `TextArea`
 
 ## 设计约束
 
@@ -36,6 +37,9 @@
 - 可交互组件必须保留 `focus-visible`
 - 所有组件都应天然兼容浅色 / 深色主题与主题预设切换
 - 组件默认服务于“低噪音、高可读、可回看”的 AI 工作流，不做炫技型视觉
+- 共享组件优先承接页面重复样式，不鼓励在业务页反复手写同类 `className`
+- 复杂业务页优先抽离可复用组件，减少页面级样式重复和视觉漂移
+- 卡片和大圆角要慎用，默认风格应相对紧凑，靠留白、字号和层级建立结构
 
 ## 色彩体系速记
 
@@ -122,6 +126,8 @@
 - 复杂区域优先使用 `children`
 - 仅在确实可点击时增加明显 hover
 - 优先使用 `bg-surface-primary border-border shadow-shadow-sm`
+- 不要为了分区而无意义增加卡片层
+- 尽量控制圆角和阴影的存在感，默认保持紧凑
 
 ## Detail Drawer
 
@@ -212,6 +218,17 @@
 - focus 使用 `border-primary + ring-primary/20`
 - disabled 回退到 `surface-secondary` 和 `text-text-tertiary`
 - error 文案与错误描边使用 `danger`
+
+## TextArea
+
+用于多行文本输入，例如描述、备注、Prompt、长说明。
+
+### 约束
+
+- 默认跟随 `Input` 的基础语义和状态色
+- 默认高度保持紧凑，不要做成大面积表单块
+- 适合较短多行描述时使用，长文编辑再考虑更专业的编辑器
+- 业务页若需要频繁复用，优先继续收敛到该组件，而不是复制 `textarea` 的 class
 
 ## Select
 
@@ -330,6 +347,9 @@ message.destroy();
 - Header / Footer 固定，Body 滚动
 - 主操作不超过一个
 - 默认优先内容自适应，仅在复杂表单或长内容场景下再显式传入 `height / maxHeight`
+- 涉及删除、清空、不可逆等二次确认，优先使用 `Modal.confirm(...)`
+- `Modal.confirm` 适合紧凑确认，不要在业务页再手写同类危险 footer
+- 确认失败时应保留弹窗并展示错误信息，不要关闭后再额外弹一次信息
 
 ### 色彩建议
 
@@ -401,6 +421,13 @@ message.destroy();
 ## Table
 
 轻量表格容器，适合简单数据行展示。
+
+### 当前能力
+
+- 支持紧凑密度 `compact`
+- 支持空态占位 `emptyState`
+- 支持粘性表头和首列
+- 支持通过 `getRowProps` 注入行级交互，例如双击进入详情
 
 ### 设计约束
 
