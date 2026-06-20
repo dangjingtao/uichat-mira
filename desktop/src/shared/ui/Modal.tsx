@@ -12,6 +12,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button, IconButton } from "./Button";
+import ConfirmDialog, { type ConfirmTone } from "./ConfirmDialog";
 
 export interface ModalShowOptions {
   title?: ReactNode;
@@ -26,12 +27,25 @@ export interface ModalShowOptions {
   onClose?: () => void;
 }
 
+export interface ModalConfirmOptions {
+  title: string;
+  description: string;
+  confirmText?: string;
+  cancelText?: string;
+  tone?: ConfirmTone;
+  width?: number | string;
+  loadingText?: string;
+  onConfirm: () => void | Promise<void>;
+  onCancel?: () => void;
+}
+
 interface ModalItem extends ModalShowOptions {
   key: string;
 }
 
 interface ModalContextValue {
   show: (options: ModalShowOptions) => string;
+  confirm: (options: ModalConfirmOptions) => string;
   close: (key?: string) => void;
   destroy: () => void;
 }
@@ -47,6 +61,10 @@ interface ModalShellProps {
   showCloseButton?: boolean;
   footer?: ReactNode | null;
   children: ReactNode;
+  onClose: () => void;
+}
+
+interface ConfirmModalContentProps extends ModalConfirmOptions {
   onClose: () => void;
 }
 
@@ -68,6 +86,52 @@ const resolveSizeStyle = (value?: number | string) => {
   }
 
   return value;
+};
+
+const ConfirmModalContent: React.FC<ConfirmModalContentProps> = ({
+  title,
+  description,
+  confirmText,
+  cancelText,
+  loadingText,
+  tone,
+  onConfirm,
+  onCancel,
+  onClose,
+}) => {
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | undefined>();
+
+  return (
+    <ConfirmDialog
+      title={title}
+      description={description}
+      confirmText={confirmText}
+      cancelText={cancelText}
+      loadingText={loadingText}
+      errorMessage={errorMessage}
+      tone={tone}
+      loading={loading}
+      onCancel={() => {
+        onCancel?.();
+        onClose();
+      }}
+      onConfirm={async () => {
+        try {
+          setErrorMessage(undefined);
+          setLoading(true);
+          await onConfirm();
+          onClose();
+        } catch (error) {
+          setErrorMessage(
+            error instanceof Error ? error.message : "操作失败，请重试",
+          );
+        } finally {
+          setLoading(false);
+        }
+      }}
+    />
+  );
 };
 
 export const ModalShell: React.FC<ModalShellProps> = ({
@@ -186,6 +250,24 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({
     return key;
   }, []);
 
+  const confirm = useCallback((options: ModalConfirmOptions) => {
+    const key = `modal_${keyRef.current++}`;
+    setModals((prev) => [
+      ...prev,
+      {
+        key,
+        title: undefined,
+        width: options.width ?? 440,
+        maskClosable: false,
+        footer: null,
+        content: (
+          <ConfirmModalContent {...options} onClose={() => close(key)} />
+        ),
+      },
+    ]);
+    return key;
+  }, [close]);
+
   useEffect(() => {
     if (modals.length === 0) {
       return;
@@ -216,10 +298,11 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({
   const api = useMemo<ModalContextValue>(
     () => ({
       show,
+      confirm,
       close,
       destroy,
     }),
-    [show, close, destroy],
+    [show, confirm, close, destroy],
   );
 
   globalModalApi = api;
@@ -265,6 +348,13 @@ const createModalStaticApi = (): ModalContextValue => ({
     }
 
     return globalModalApi.show(options);
+  },
+  confirm: (options) => {
+    if (!globalModalApi) {
+      throw new Error("ModalProvider is not mounted");
+    }
+
+    return globalModalApi.confirm(options);
   },
   close: (key) => {
     globalModalApi?.close(key);

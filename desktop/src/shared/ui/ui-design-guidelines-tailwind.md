@@ -292,6 +292,7 @@
 - Input / Select：默认 `bg-surface-primary border-border text-text-primary`，focus 使用 `primary`
 - Modal / Tooltip / Dropdown：优先 `surface-elevated + border`
 - Table：用 `surface-*`、`border`、`text-*` 建结构，不做厚重报表蓝灰底
+- 紧凑业务表格优先使用共享 `Table` 的 `compact` 模式，先压缩表头和行高，再考虑删列
 - StatusBadge / StatusIndicator：状态色仅在点、边、浅底中使用，避免整块高饱和填充
 - Thread / Chat：优先安静的中性面和轻主色强调，避免聊天区出现大片状态色面板
 
@@ -308,6 +309,7 @@
 - Tooltip 允许长文本换行，并应限制最大宽度，避免路径或错误详情溢出视口
 - 尽量避免大面积高饱和色块
 - Logo、品牌字标、欢迎区视觉元素进入工作流后应主动退后，让位于内容与操作
+- 二次确认组件应保持紧凑，慎用大圆角、厚阴影和厚卡片式边界，默认以清晰文本、轻图标和单一危险主操作表达风险
 
 ## 12. 交互约束
 
@@ -323,6 +325,8 @@
 
 - 输入区优先 `surface-primary`
 - 配置页允许更紧凑密度，但不要牺牲可读性
+- 表单优先复用 `shared/ui` 组件，不要在业务页重复写同一套输入框、文本域、按钮或卡片类名
+- 默认设计应相对紧凑，慎用大圆角、厚阴影和大面积卡片堆叠
 - 工作台类页面允许左右分栏，但左右两侧都应控制信息密度，避免噪音堆积
 - 布尔开关优先使用共享 `Switch`
 - 行内二级操作优先使用共享 `IconButton`
@@ -336,6 +340,8 @@
 - 轻状态展示优先复用 `StatusIndicator`
 - 多步骤流程优先复用 `StepIndicator`
 - 上传流程中的文件条目优先复用 `FileListItem`
+- 知识库描述等多行短文本输入优先复用共享 `TextArea`
+- 二次确认优先复用 `Modal.confirm`，删除、清空、不可逆动作不要在页面里重复拼装确认框
 
 ## 15. Chat / Thread
 
