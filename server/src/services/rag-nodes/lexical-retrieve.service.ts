@@ -2,7 +2,6 @@ import { and, asc, eq } from "drizzle-orm";
 import { create, insertMultiple, search } from "@orama/orama";
 import { createTokenizer as createMandarinTokenizer } from "@orama/tokenizers/mandarin";
 import { documentChunks, documents, getDb } from "@/db";
-import { knowledgeBaseRepository } from "@/db/repositories";
 import type { RetrievedChunk } from "./retrieve.service";
 
 export interface LexicalRetrieveInput {
@@ -41,8 +40,14 @@ type LexicalIndexCacheEntry = {
 
 const lexicalIndexCache = new Map<string, LexicalIndexCacheEntry>();
 
-const resolveKnowledgeBaseId = (knowledgeBaseId?: string) =>
-  knowledgeBaseId ?? knowledgeBaseRepository.ensureDefault().id;
+const requireKnowledgeBaseId = (knowledgeBaseId?: string) => {
+  const normalizedKnowledgeBaseId = knowledgeBaseId?.trim();
+  if (!normalizedKnowledgeBaseId) {
+    throw new Error("Knowledge base id is required for lexical retrieval");
+  }
+
+  return normalizedKnowledgeBaseId;
+};
 
 const loadSearchDocuments = (
   knowledgeBaseId: string,
@@ -130,7 +135,7 @@ const buildCachedIndex = async (knowledgeBaseId: string) => {
  */
 export const lexicalRetrieveService = {
   async retrieve(input: LexicalRetrieveInput): Promise<LexicalRetrieveOutput> {
-    const kbId = resolveKnowledgeBaseId(input.knowledgeBaseId);
+    const kbId = requireKnowledgeBaseId(input.knowledgeBaseId);
     const topK = input.topK ?? 4;
     const question = input.question.trim();
 
@@ -167,7 +172,11 @@ export const lexicalRetrieveService = {
   },
 
   invalidateKnowledgeBase(knowledgeBaseId?: string) {
-    const kbId = resolveKnowledgeBaseId(knowledgeBaseId);
+    const kbId = knowledgeBaseId?.trim();
+    if (!kbId) {
+      return;
+    }
+
     lexicalIndexCache.delete(kbId);
   },
 

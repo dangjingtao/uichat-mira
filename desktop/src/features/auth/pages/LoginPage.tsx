@@ -248,7 +248,7 @@ function LoginPage() {
   return (
     <main className="min-h-screen bg-[rgb(var(--color-surface-auth))]">
       <div className="mx-auto flex min-h-screen max-w-[920px] items-center px-4 py-8 sm:px-6 lg:px-8">
-        <div className="grid w-full overflow-hidden rounded-[16px] border border-border/80 bg-[rgb(var(--color-surface-auth))] shadow-[0_14px_36px_rgba(68,52,35,0.05)] lg:grid-cols-[1fr_0.96fr]">
+        <div className="grid w-full overflow-hidden rounded-[16px] border border-border/80 bg-[rgb(var(--color-surface-auth))] shadow-[0_14px_36px_rgba(68,52,35,0.05)] lg:grid-cols-[1fr_0.75fr]">
           <section className="relative flex flex-col justify-between overflow-hidden border-b border-border/70 px-7 py-8 sm:px-8 sm:py-9 lg:border-b-0 lg:border-r lg:border-border/70">
             <div
               aria-hidden="true"

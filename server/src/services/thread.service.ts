@@ -1,5 +1,6 @@
 import {
   messageRepository,
+  knowledgeBaseRepository,
   threadRepository,
   type ThreadListFilters,
   type ThreadWithMessageCount,
@@ -11,7 +12,7 @@ export interface ThreadResponse {
   id: string;
   title: string;
   modelName: string | null;
-  ragEnabled: boolean;
+  knowledgeBaseId: string | null;
   status: ThreadStatus;
   createdAt: string;
   updatedAt: string;
@@ -24,6 +25,26 @@ export interface MessageResponse {
   threadId: string;
   role: MessageRole;
   content: string;
+  parts: Array<
+    | {
+        type: "text";
+        text: string;
+      }
+    | {
+        type: "image";
+        image: string;
+        filename?: string;
+        fileId?: string;
+        mediaType?: string;
+      }
+    | {
+        type: "file";
+        data: string;
+        filename: string;
+        fileId?: string;
+        mimeType: string;
+      }
+  >;
   metadata: Record<string, unknown>;
   createdAt: string;
 }
@@ -36,7 +57,7 @@ export interface CreateThreadInput {
   userId: number;
   title?: string;
   modelName?: string;
-  ragEnabled?: boolean;
+  knowledgeBaseId?: string | null;
 }
 
 export interface CreateMessageInput {
@@ -44,8 +65,46 @@ export interface CreateMessageInput {
   parentId?: string | null;
   role: MessageRole;
   content: string;
+  parts?: Array<
+    | {
+        type: "text";
+        text: string;
+      }
+    | {
+        type: "image";
+        image: string;
+        filename?: string;
+        fileId?: string;
+        mediaType?: string;
+      }
+    | {
+        type: "file";
+        data: string;
+        filename: string;
+        fileId?: string;
+        mimeType: string;
+      }
+  >;
   metadata?: Record<string, unknown>;
 }
+
+const parsePartsJson = (
+  partsJson: string | null | undefined,
+): MessageResponse["parts"] | null => {
+  if (!partsJson) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(partsJson) as MessageResponse["parts"];
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const serializeParts = (parts: CreateMessageInput["parts"]) =>
+  parts ? JSON.stringify(parts) : undefined;
 
 const pruneThreadTail = (
   threadId: string,
@@ -76,18 +135,27 @@ const pruneThreadTail = (
 const getBranchParentIdFromMetadata = (
   metadata: Record<string, unknown> | undefined,
 ) => {
-  const assistantUi =
-    metadata?.assistantUi &&
-    typeof metadata.assistantUi === "object" &&
-    !Array.isArray(metadata.assistantUi)
-      ? (metadata.assistantUi as { branch?: { parentId?: unknown } })
+  const lineage =
+    metadata?.lineage &&
+    typeof metadata.lineage === "object" &&
+    !Array.isArray(metadata.lineage)
+      ? (metadata.lineage as { parentId?: unknown })
       : undefined;
-  const parentId = assistantUi?.branch?.parentId;
+  const lineageParentId = lineage?.parentId;
+  if (typeof lineageParentId === "string" || lineageParentId === null) {
+    return lineageParentId;
+  }
 
-  return typeof parentId === "string" || parentId === null
-    ? parentId
-    : undefined;
+  return undefined;
 };
+
+const isLegacyAssistantUiTextSuppressed = (
+  metadata: Record<string, unknown>,
+) =>
+  metadata.assistantUi &&
+  typeof metadata.assistantUi === "object" &&
+  !Array.isArray(metadata.assistantUi) &&
+  (metadata.assistantUi as { textWasEmpty?: unknown }).textWasEmpty === true;
 
 const toThreadResponse = (
   thread: Thread,
@@ -103,7 +171,7 @@ const toThreadResponse = (
     id: thread.id,
     title: thread.title || "新对话",
     modelName: thread.modelName ?? null,
-    ragEnabled: thread.ragEnabled,
+    knowledgeBaseId: thread.knowledgeBaseId,
     status: thread.status,
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt,
@@ -125,13 +193,33 @@ const toThreadResponseFromStats = (
     id: thread.id,
     title: thread.title || "新对话",
     modelName: thread.modelName ?? null,
-    ragEnabled: thread.ragEnabled,
+    knowledgeBaseId: thread.knowledgeBaseId,
     status: thread.status,
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt,
     messageCount: thread.messageCount,
     lastMessage,
   };
+};
+
+const toMessageParts = (
+  content: string,
+  metadata: Record<string, unknown>,
+): MessageResponse["parts"] => {
+  const parts: MessageResponse["parts"] = [];
+  const hasContent = content.trim().length > 0;
+  const suppressLegacyText = isLegacyAssistantUiTextSuppressed(metadata);
+
+  // Legacy rows without canonical parts may still carry placeholder content
+  // for image-only messages. Keep honoring that metadata during readback only.
+  if (hasContent && !suppressLegacyText) {
+    parts.push({
+      type: "text",
+      text: content,
+    });
+  }
+
+  return parts;
 };
 
 const toMessageResponse = (message: Message): MessageResponse => {
@@ -148,6 +236,9 @@ const toMessageResponse = (message: Message): MessageResponse => {
     threadId: message.threadId,
     role: message.role,
     content: message.content,
+    parts:
+      parsePartsJson((message as Message & { partsJson?: string | null }).partsJson) ??
+      toMessageParts(message.content, metadata),
     metadata,
     createdAt: message.createdAt,
   };
@@ -190,11 +281,17 @@ export const threadService = {
   },
 
   createThread(input: CreateThreadInput): ThreadResponse {
+    const knowledgeBaseId = input.knowledgeBaseId?.trim();
+
+    if (knowledgeBaseId && !knowledgeBaseRepository.getById(knowledgeBaseId)) {
+      throw new Error("Knowledge base not found");
+    }
+
     const created = threadRepository.create({
       userId: input.userId,
       title: input.title?.trim() || "",
       modelName: input.modelName?.trim() || undefined,
-      ragEnabled: input.ragEnabled ?? false,
+      knowledgeBaseId: knowledgeBaseId ?? null,
       status: "active",
     });
 
@@ -215,7 +312,7 @@ export const threadService = {
     if (
       input.title === undefined &&
       input.modelName === undefined &&
-      input.ragEnabled === undefined
+      input.knowledgeBaseId === undefined
     ) {
       return toThreadResponse(
         existing,
@@ -230,8 +327,20 @@ export const threadService = {
     if (typeof input.modelName === "string") {
       updateData.modelName = input.modelName.trim() || null;
     }
-    if (typeof input.ragEnabled === "boolean") {
-      updateData.ragEnabled = input.ragEnabled;
+    if (typeof input.knowledgeBaseId === "string") {
+      const knowledgeBaseId = input.knowledgeBaseId.trim();
+      if (!knowledgeBaseId) {
+        throw new Error("Knowledge base id is required");
+      }
+
+      if (!knowledgeBaseRepository.getById(knowledgeBaseId)) {
+        throw new Error("Knowledge base not found");
+      }
+
+      updateData.knowledgeBaseId = knowledgeBaseId;
+    }
+    if (input.knowledgeBaseId === null) {
+      updateData.knowledgeBaseId = null;
     }
 
     const updated = threadRepository.updateById(id, updateData);
@@ -292,7 +401,13 @@ export const threadService = {
       throw new Error(THREAD_ACCESS_ERROR_MESSAGE);
     }
 
-    const normalizedContent = input.content.trim();
+    const normalizedContent = input.content;
+    const normalizedParts = input.parts ?? [];
+    const hasTextPart = normalizedParts.some((part) => part.type === "text");
+    const hasAttachmentPart = normalizedParts.some(
+      (part) => part.type === "image" || part.type === "file",
+    );
+    const hasSupportedContent = hasTextPart || hasAttachmentPart;
     const normalizedMetadata = input.metadata ? JSON.stringify(input.metadata) : "{}";
     const existing = input.id ? messageRepository.findById(input.id) : undefined;
     const effectiveParentId =
@@ -313,14 +428,20 @@ export const threadService = {
     }
 
     if (existing) {
-      if (
-        existing.role !== input.role ||
-        existing.content !== normalizedContent ||
-        (existing.metadata || "{}") !== normalizedMetadata
+    if (
+      existing.role !== input.role ||
+      existing.content !== normalizedContent ||
+      (existing.metadata || "{}") !== normalizedMetadata ||
+      JSON.stringify(
+        parsePartsJson(
+            (existing as Message & { partsJson?: string | null }).partsJson,
+          ) ?? [],
+        ) !== JSON.stringify(input.parts ?? [])
       ) {
         const updated = messageRepository.updateById(existing.id, {
           role: input.role,
           content: normalizedContent,
+          partsJson: serializeParts(input.parts),
           metadata: normalizedMetadata,
         });
 
@@ -347,11 +468,16 @@ export const threadService = {
       }
     }
 
+    if (!hasSupportedContent) {
+      throw new Error("Message content is missing");
+    }
+
     const created = messageRepository.create({
       ...(input.id ? { id: input.id } : {}),
       threadId,
       role: input.role,
       content: normalizedContent,
+      partsJson: serializeParts(input.parts),
       metadata: normalizedMetadata,
     });
 
@@ -376,7 +502,7 @@ export const threadService = {
       threadId,
       inputs.map((input) => ({
         role: input.role,
-        content: input.content.trim(),
+        content: input.content,
         metadata: input.metadata ? JSON.stringify(input.metadata) : "{}",
       })),
     );

@@ -6,6 +6,7 @@ import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import fs from "node:fs/promises";
 import path from "node:path";
+import fsSync from "node:fs";
 import healthRoute from "@/routes/health";
 import appMetaRoute from "@/routes/app-meta";
 import dbHealthRoute from "@/routes/dbHealth";
@@ -47,6 +48,7 @@ const app = Fastify({
 });
 const enableSwagger = process.env.NODE_ENV !== "production";
 const allowBackendReuse = process.env.UI_CHAT_ALLOW_BACKEND_REUSE === "1";
+const builtinAvatarRoot = path.resolve(process.cwd(), "static", "avatars");
 
 app.setErrorHandler(sendRouteError);
 
@@ -75,6 +77,17 @@ const setupPlugins = async () => {
       response.setHeader("Cache-Control", "private, max-age=31536000, immutable");
     },
   });
+
+  if (fsSync.existsSync(builtinAvatarRoot)) {
+    await app.register(fastifyStatic, {
+      root: builtinAvatarRoot,
+      prefix: "/assets/avatars/",
+      decorateReply: false,
+      setHeaders(response) {
+        response.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      },
+    });
+  }
 
   app.addHook("preHandler", async (request, reply) => {
     if (request.method === "OPTIONS" || isAuthExemptPath(request.url)) {
@@ -110,7 +123,18 @@ const setupPlugins = async () => {
       tags: [
         { name: "System", description: "系统健康检查与状态" },
         { name: "Auth", description: "用户鉴权与账户管理" },
-        { name: "Knowledge Base", description: "知识库与文档管理" },
+        {
+          name: "Knowledge Base - Collections",
+          description: "知识库集合的创建、查询、更新与删除",
+        },
+        {
+          name: "Knowledge Base - Documents",
+          description: "知识库文档列表、详情、状态与 CRUD",
+        },
+        {
+          name: "Knowledge Base - Upload & Preview",
+          description: "文档上传、分块预览与导入流程",
+        },
         { name: "Model Settings", description: "模型配置与参数模板" },
         {
           name: "Provider Settings",

@@ -59,7 +59,7 @@ function DetailField({
   value: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-surface-secondary/70 p-3.5">
+    <Card variant="subtle" className="bg-surface-secondary/70 p-3.5">
       <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
         <Icon className="h-3.5 w-3.5" />
         {label}
@@ -67,7 +67,7 @@ function DetailField({
       <div className="break-words text-sm font-medium text-text-primary">
         {value}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -76,6 +76,7 @@ export default function KnowledgeBaseDetail() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const documentId = searchParams.get("id");
+  const knowledgeBaseId = searchParams.get("knowledgeBaseId");
   const [document, setDocument] =
     useState<KnowledgeBaseDocumentDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -91,7 +92,10 @@ export default function KnowledgeBaseDetail() {
     void (async () => {
       try {
         setLoading(true);
-        const data = await getKnowledgeBaseDocument(documentId);
+        const data = await getKnowledgeBaseDocument(
+          knowledgeBaseId || documentId,
+          knowledgeBaseId ? documentId : undefined,
+        );
         setDocument(data);
         setNotFound(false);
       } catch {
@@ -106,6 +110,15 @@ export default function KnowledgeBaseDetail() {
     () => samplePreviewChunks(document?.chunks ?? []),
     [document],
   );
+
+  const backToKnowledgeBase = () => {
+    if (knowledgeBaseId) {
+      navigate(`/settings/knowledge-base?knowledgeBaseId=${encodeURIComponent(knowledgeBaseId)}`);
+      return;
+    }
+
+    navigate("/settings/knowledge-base");
+  };
 
   if (loading) {
     return (
@@ -123,7 +136,7 @@ export default function KnowledgeBaseDetail() {
             variant="ghost"
             size="sm"
             className="w-fit"
-            onClick={() => navigate("/settings/knowledge-base")}
+            onClick={backToKnowledgeBase}
           >
             <ArrowLeft className="h-4 w-4" />
             {t("settings.knowledgeBase.actions.backToKnowledgeBase")}
@@ -174,13 +187,13 @@ export default function KnowledgeBaseDetail() {
           variant="ghost"
           size="sm"
           className="w-fit"
-          onClick={() => navigate("/settings/knowledge-base")}
+          onClick={backToKnowledgeBase}
         >
           <ArrowLeft className="h-4 w-4" />
           {t("settings.knowledgeBase.actions.backToKnowledgeBase")}
         </Button>
 
-        <div className="rounded-xl border border-border bg-surface-primary p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.025)]">
+        <Card className="p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.025)]">
           <div className="flex flex-col gap-3">
             <div className="min-w-0 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
@@ -230,7 +243,7 @@ export default function KnowledgeBaseDetail() {
               </div>
             </div>
           </div>
-        </div>
+        </Card>
       </section>
 
       <section className="stable-scrollbar min-h-0 flex-1 overflow-y-auto xl:overflow-hidden">
@@ -315,14 +328,18 @@ export default function KnowledgeBaseDetail() {
 
             <div className="space-y-2.5">
               {previewChunks.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border bg-surface-secondary p-4 text-sm text-text-secondary">
+                <Card
+                  variant="dashed"
+                  className="text-sm text-text-secondary"
+                >
                   {t("settings.knowledgeBase.detail.noChunks")}
-                </div>
+                </Card>
               ) : (
                 previewChunks.map((chunk) => (
-                  <div
+                  <Card
                     key={chunk.id}
-                    className="rounded-xl border border-border bg-surface-secondary p-3.5"
+                    variant="subtle"
+                    className="p-3.5"
                   >
                     <div className="mb-1.5 text-sm font-medium text-text-primary">
                       {t("settings.knowledgeBase.detail.chunkLabel", {
@@ -332,7 +349,7 @@ export default function KnowledgeBaseDetail() {
                     <p className="text-sm leading-6 text-text-secondary">
                       {chunk.content}
                     </p>
-                  </div>
+                  </Card>
                 ))
               )}
             </div>

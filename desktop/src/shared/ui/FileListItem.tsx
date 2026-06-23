@@ -44,7 +44,7 @@ export function FileListItem({
           disabled={!onClick}
           className="flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary disabled:pointer-events-none"
         >
-          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-surface-secondary">
+          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-ui-control bg-surface-secondary">
             <FileIcon extension={extension} className="h-3.5 w-3.5" />
           </div>
           <div className="min-w-0">

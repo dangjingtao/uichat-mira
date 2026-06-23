@@ -60,6 +60,17 @@ export const unauthorized = (message: string) =>
     message,
   });
 
+export const forbidden = (
+  message: string,
+  options?: { cause?: unknown; logMessage?: string },
+) =>
+  createRouteError({
+    statusCode: 403,
+    code: ErrorCodes.FORBIDDEN,
+    message,
+    ...options,
+  });
+
 export const internalError = (
   message: string,
   options?: { cause?: unknown; logMessage?: string },

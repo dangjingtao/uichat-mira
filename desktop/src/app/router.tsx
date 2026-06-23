@@ -2,7 +2,6 @@ import { createHashRouter } from "react-router-dom";
 import App from "../App";
 import { GuestOnly } from "./route-guards/GuestOnly";
 import { RequireAuth } from "./route-guards/RequireAuth";
-import ChatPage from "../features/chat/pages/ChatPage";
 import LoginPage from "../features/auth/pages/LoginPage";
 import BaseLayout from "@/app/layouts/BaseLayout";
 import HomePage from "@/features/dashboard/pages/HomePage";
@@ -20,14 +19,13 @@ export const router = createHashRouter([
         children: [
           { index: true, element: <HomePage /> },
           {
+            path: "chat",
             element: <BaseLayout />,
-            children: [
-              { path: "chat", element: <ChatPage /> },
-              {
-                path: "settings",
-                children: settingsRoutes,
-              },
-            ],
+          },
+          {
+            path: "settings",
+            element: <BaseLayout />,
+            children: settingsRoutes,
           },
         ],
       },

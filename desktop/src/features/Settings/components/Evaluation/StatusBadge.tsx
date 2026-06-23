@@ -8,7 +8,7 @@ const statusMap: Record<EvaluationJobStatus | "saved", { key: string; className:
   },
   ready: {
     key: "settings.evaluation.status.ready",
-    className: "border-primary/20 bg-primary/5 text-primary",
+    className: "border-success-border bg-success-soft text-success-text",
   },
   queued: {
     key: "settings.evaluation.status.queued",

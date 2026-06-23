@@ -7,6 +7,7 @@ import { changePassword } from "@/shared/api";
 import { ApiError } from "@/shared/lib/request";
 import { useThemePreferences } from "@/app/providers/ThemeProvider";
 import type { ThemePresetId } from "@/shared/theme/colorThemes";
+import Badge from "@/shared/ui/Badge";
 import { Button } from "@/shared/ui/Button";
 import Card from "@/shared/ui/Card";
 import { TextInput } from "@/shared/ui/Input";
@@ -14,6 +15,7 @@ import { Modal } from "@/shared/ui/Modal";
 import { Select } from "@/shared/ui/Select";
 import Switch from "@/shared/ui/Switch";
 import HealthCheck from "./HealthCheck";
+import SettingsNotice from "../../components/SettingsNotice";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 
 type PasswordFormState = {
@@ -92,22 +94,24 @@ function ChangePasswordModal({
       {form.currentPassword &&
       form.newPassword &&
       form.currentPassword === form.newPassword ? (
-        <div className="rounded-lg border border-danger-border bg-danger-soft px-3.5 py-3 text-sm text-danger-text">
+        <SettingsNotice tone="danger">
           {t("settings.general.password.sameAsCurrent")}
-        </div>
+        </SettingsNotice>
       ) : null}
 
       {errorMessage ? (
-        <div className="rounded-lg border border-danger-border bg-danger-soft px-3.5 py-3 text-sm text-danger-text">
+        <SettingsNotice tone="danger">
           {errorMessage}
-        </div>
+        </SettingsNotice>
       ) : null}
 
       {successMessage ? (
-        <div className="flex items-center gap-2 rounded-lg border border-success-border bg-success-soft px-3.5 py-3 text-sm text-success-text">
-          <CheckCircle2 className="h-4 w-4 text-success" />
-          <span>{successMessage}</span>
-        </div>
+        <SettingsNotice
+          tone="success"
+          icon={<CheckCircle2 className="h-4 w-4 text-success" />}
+        >
+          {successMessage}
+        </SettingsNotice>
       ) : null}
 
       <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
@@ -268,24 +272,30 @@ export default function General() {
         </h2>
 
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-border/70 bg-surface-secondary/60 px-3.5 py-3">
+          <Card
+            variant="subtle"
+            className="flex items-center justify-between gap-4 border-border/70 bg-surface-secondary/60 px-3.5 py-3"
+          >
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium text-text-primary">
                   {session?.user.username ?? "-"}
                 </span>
-                <span className="inline-flex items-center rounded-full border border-cloudy-3 bg-pampas-2 px-2 py-0.5 text-[11px] font-medium capitalize text-text-secondary">
+                <Badge variant="muted" className="capitalize">
                   {session?.user.role ?? "-"}
-                </span>
+                </Badge>
               </div>
             </div>
             <Button variant="secondary" size="sm" onClick={openPasswordModal}>
               <KeyRound className="h-4 w-4" />
               {t("settings.general.account.changePassword")}
             </Button>
-          </div>
+          </Card>
 
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-border/70 bg-surface-secondary/60 px-3.5 py-3">
+          <Card
+            variant="subtle"
+            className="flex items-center justify-between gap-4 border-border/70 bg-surface-secondary/60 px-3.5 py-3"
+          >
             <div className="min-w-0">
               <div className="text-sm font-medium text-text-primary">
                 {t("settings.general.language.label")}
@@ -300,13 +310,16 @@ export default function General() {
                 options={supportedLanguages.map((value) => ({
                   value,
                   label: t(`settings.general.language.options.${value}`),
-                }))}
+                }))} 
                 compact
               />
             </div>
-          </div>
+          </Card>
 
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-border/70 bg-surface-secondary/60 px-3.5 py-3">
+          <Card
+            variant="subtle"
+            className="flex items-center justify-between gap-4 border-border/70 bg-surface-secondary/60 px-3.5 py-3"
+          >
             <div className="min-w-0">
               <div className="text-sm font-medium text-text-primary">
                 {t("settings.general.theme.label")}
@@ -322,13 +335,16 @@ export default function General() {
                 options={themePresets.map((theme) => ({
                   value: theme.id,
                   label: themeMetadata[theme.id].label,
-                }))}
+                }))} 
                 compact
               />
             </div>
-          </div>
+          </Card>
 
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-border/70 bg-surface-secondary/60 px-3.5 py-3">
+          <Card
+            variant="subtle"
+            className="flex items-center justify-between gap-4 border-border/70 bg-surface-secondary/60 px-3.5 py-3"
+          >
             <div className="min-w-0">
               <div className="text-sm font-medium text-text-primary">
                 {t("settings.general.darkMode.label")}
@@ -341,7 +357,7 @@ export default function General() {
               }
               ariaLabel={t("settings.general.darkMode.ariaLabel")}
             />
-          </div>
+          </Card>
         </div>
       </Card>
     </SettingsPageLayout>

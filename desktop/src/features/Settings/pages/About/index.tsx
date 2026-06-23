@@ -65,13 +65,14 @@ const getFallbackAppMeta = (t: TFunction): AppMetaData => ({
     },
     {
       label: t("settings.about.fallback.links.docs"),
-      value: "assistant-ui / 内部 UI 组件",
-      href: "https://www.assistant-ui.com/",
+      value: "uchat / 项目内部对话框架",
+      href: "https://github.com/dangjingtao/ui-chat-rag-tester",
     },
   ],
 });
 
 const CHANGELOG_PREVIEW_SECTIONS = 2;
+const DEFAULT_GIT_VERSION_PREVIEW_COUNT = 5;
 
 function getChangelogPreview(markdown: string, sectionCount: number): string {
   const normalized = markdown.trim();
@@ -105,6 +106,7 @@ function About() {
   const [appMeta, setAppMeta] = useState<AppMetaData>(() =>
     getFallbackAppMeta(t),
   );
+  const [showAllGitVersions, setShowAllGitVersions] = useState(false);
   const [showFullChangelog, setShowFullChangelog] = useState(false);
 
   const handleExternalLinkClick = useCallback(
@@ -145,7 +147,12 @@ function About() {
   }, [t]);
 
   const gitInfo = appMeta.git;
-  const showGitVersions = gitInfo && gitInfo.versions.length > 0;
+  const gitVersions = gitInfo?.versions ?? [];
+  const visibleGitVersions = showAllGitVersions
+    ? gitVersions
+    : gitVersions.slice(0, DEFAULT_GIT_VERSION_PREVIEW_COUNT);
+  const canExpandGitVersions =
+    gitVersions.length > DEFAULT_GIT_VERSION_PREVIEW_COUNT;
   const changelogPreview = useMemo(
     () => getChangelogPreview(changelogMarkdown, CHANGELOG_PREVIEW_SECTIONS),
     [],
@@ -242,9 +249,9 @@ function About() {
               </div>
             </div>
 
-            {showGitVersions ? (
+            {visibleGitVersions.length > 0 ? (
               <div className="space-y-2">
-                {gitInfo.versions.map((item) => (
+                {visibleGitVersions.map((item) => (
                   <div
                     key={item.version}
                     className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2"
@@ -265,6 +272,27 @@ function About() {
                     </div>
                   </div>
                 ))}
+                {canExpandGitVersions ? (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
+                    onClick={() => setShowAllGitVersions((current) => !current)}
+                  >
+                    {showAllGitVersions ? (
+                      <>
+                        {t("settings.about.gitCollapse")}
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      </>
+                    ) : (
+                      <>
+                        {t("settings.about.gitExpand", {
+                          count: gitVersions.length - DEFAULT_GIT_VERSION_PREVIEW_COUNT,
+                        })}
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </>
+                    )}
+                  </button>
+                ) : null}
               </div>
             ) : null}
           </div>

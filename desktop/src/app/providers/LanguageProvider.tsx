@@ -16,6 +16,12 @@ const LanguageContext = createContext<LanguageContextValue | undefined>(
   undefined,
 );
 
+/**
+ * LanguageProvider is a thin adapter over i18next.
+ *
+ * It should stay presentation-focused and must not take dependencies on chat
+ * runtime state, thread state or backend settings state.
+ */
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {

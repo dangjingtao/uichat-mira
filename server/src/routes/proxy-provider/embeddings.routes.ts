@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { PUBLIC_API_ROUTES } from "@/config/public-api.js";
-import { providerProxyService } from "@/services/provider-proxy.service.js";
+import { providerProxyService } from "@/services/provider-proxy.service/index.js";
 import {
   handleValidationError,
   success,

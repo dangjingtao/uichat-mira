@@ -1,6 +1,6 @@
 import AdmZip from "adm-zip";
 import { knowledgeBaseService } from "@/services/knowledge-base.service.js";
-import { providerProxyService } from "@/services/provider-proxy.service.js";
+import { providerProxyService } from "@/services/provider-proxy.service/index.js";
 import type { GenerateEvaluationPackageBody } from "@/routes/evaluation/types.js";
 import { nowIsoForFileName } from "@/utils/time.js";
 
@@ -78,13 +78,8 @@ const shuffleArray = <T>(items: T[]): T[] => {
 const sanitizeDatasetName = (value: string) =>
   value.trim().replace(/[\\/:*?"<>|]+/g, "-") || "evaluation-package";
 
-const fallbackQuestionFromChunk = (documentName: string, chunkContent: string) => {
-  const excerpt = normalizeWhitespace(chunkContent).slice(0, 36);
-  return `请根据《${documentName}》说明以下内容的关键信息：${excerpt}`;
-};
-
-const fallbackExpectedAnswerFromChunk = (chunkContent: string) =>
-  normalizeWhitespace(chunkContent).slice(0, 180);
+const summarizeModelOutput = (value: string) =>
+  normalizeWhitespace(value).slice(0, 200) || "[empty output]";
 
 const buildPrompt = (input: {
   documentName: string;
@@ -135,6 +130,9 @@ const generateEvalsetItem = async (
         temperature: 0.2,
         topP: 0.9,
         maxTokens: 512,
+        // Ollama reasoning models may stream thinking tokens without content,
+        // which makes evaluation package generation appear as empty output.
+        think: false,
       },
     ),
     timeoutSeconds * 1000,
@@ -146,15 +144,26 @@ const generateEvalsetItem = async (
     expectedAnswer?: string;
     tags?: unknown;
   }>(raw);
+  if (!parsed) {
+    throw new Error(
+      `评测模型返回了无法解析的 JSON：${summarizeModelOutput(raw)}`,
+    );
+  }
 
   const question =
-    typeof parsed?.question === "string" && parsed.question.trim()
-      ? parsed.question.trim()
-      : fallbackQuestionFromChunk(candidate.documentName, candidate.chunkContent);
+    typeof parsed.question === "string" ? parsed.question.trim() : "";
+  if (!question) {
+    throw new Error("评测模型返回缺少有效 question");
+  }
+
   const expectedAnswer =
-    typeof parsed?.expectedAnswer === "string" && parsed.expectedAnswer.trim()
+    typeof parsed.expectedAnswer === "string"
       ? parsed.expectedAnswer.trim()
-      : fallbackExpectedAnswerFromChunk(candidate.chunkContent);
+      : "";
+  if (!expectedAnswer) {
+    throw new Error("评测模型返回缺少有效 expectedAnswer");
+  }
+
   const tags = Array.isArray(parsed?.tags)
     ? parsed.tags.filter((tag): tag is string => typeof tag === "string").slice(0, 3)
     : [];
@@ -198,7 +207,16 @@ export const evaluationPackageGeneratorService = {
   async generateArchive(
     input: GenerateEvaluationPackageBody,
   ): Promise<GeneratedPackageArchive> {
-    const enabledDocuments = knowledgeBaseService.listDocuments({
+    const knowledgeBaseId = input.knowledgeBaseId.trim();
+    const knowledgeBase = knowledgeBaseService.getKnowledgeBaseById(
+      knowledgeBaseId,
+    );
+
+    if (!knowledgeBase) {
+      throw new Error(`知识库 "${knowledgeBaseId}" 不存在，无法生成评测包`);
+    }
+
+    const enabledDocuments = knowledgeBaseService.listDocuments(knowledgeBaseId, {
       enabled: true,
       indexStatus: "ready",
       sortBy: "updatedAt",
@@ -206,7 +224,9 @@ export const evaluationPackageGeneratorService = {
     });
 
     if (enabledDocuments.length === 0) {
-      throw new Error("当前默认知识库没有可用文档，无法生成评测包");
+      throw new Error(
+        `知识库“${knowledgeBase.name}”没有可用文档，无法生成评测包`,
+      );
     }
 
     const documentLimit = clampInteger(input.documentCount, 1, enabledDocuments.length);
@@ -214,58 +234,80 @@ export const evaluationPackageGeneratorService = {
     const sampleLimit = clampInteger(input.sampleCount, 1, 100);
     const concurrencyLimit = clampInteger(input.concurrency, 1, 10);
     const timeoutSeconds = clampInteger(input.timeoutSeconds, 5, 300);
-    const selectedDocuments = shuffleArray(enabledDocuments).slice(0, documentLimit);
-
-    const chunkCandidates = selectedDocuments.flatMap((document) => {
-      const detail = knowledgeBaseService.getDocumentById(document.id);
-      if (!detail || detail.chunks.length === 0) {
-        return [];
-      }
-
-      return shuffleArray(detail.chunks)
-        .slice(0, chunkLimit)
-        .map((chunk) => ({
-          documentName: detail.name,
-          chunkContent: normalizeWhitespace(chunk.content).slice(0, 1200),
-        }));
-    });
-
-    if (chunkCandidates.length === 0) {
-      throw new Error("已选文档没有可用 chunk，无法生成评测包");
-    }
-
     const evalsetItems: GeneratedEvalsetItem[] = [];
     const usedQuestions = new Set<string>();
 
-    const generatedItems = await runWithConcurrency(
-      chunkCandidates,
-      concurrencyLimit,
-      async (candidate) => {
-        try {
-          return await generateEvalsetItem(candidate, timeoutSeconds);
-        } catch {
-          return {
-            question: fallbackQuestionFromChunk(
-              candidate.documentName,
-              candidate.chunkContent,
-            ),
-            expectedAnswer: fallbackExpectedAnswerFromChunk(
-              candidate.chunkContent,
-            ),
-            goldSources: [candidate.documentName],
-            tags: ["fallback"],
-          };
+    const selectedDocumentQueue = shuffleArray(enabledDocuments).slice(
+      0,
+      documentLimit,
+    );
+    const selectedDocumentIds = new Set<string>();
+    const selectedChunkKeys = new Set<string>();
+    const chunkCandidates: ChunkCandidate[] = [];
+
+    while (
+      chunkCandidates.length < sampleLimit &&
+      (selectedDocumentQueue.length > 0 ||
+        selectedDocumentIds.size < enabledDocuments.length)
+    ) {
+      if (selectedDocumentQueue.length === 0) {
+        const remainingDocuments = enabledDocuments.filter(
+          (document) => !selectedDocumentIds.has(document.id),
+        );
+        if (remainingDocuments.length === 0) {
+          break;
         }
-      },
+        selectedDocumentQueue.push(
+          ...shuffleArray(remainingDocuments).slice(0, documentLimit),
+        );
+      }
+
+      const document = selectedDocumentQueue.shift()!;
+      if (selectedDocumentIds.has(document.id)) {
+        continue;
+      }
+      selectedDocumentIds.add(document.id);
+
+      const detail = knowledgeBaseService.getDocumentById(document.id);
+      if (!detail || detail.chunks.length === 0) {
+        continue;
+      }
+
+      const shuffledChunks = shuffleArray(detail.chunks).slice(0, chunkLimit);
+      for (const chunk of shuffledChunks) {
+        const chunkContent = normalizeWhitespace(chunk.content).slice(0, 1200);
+        const chunkKey = `${detail.id}:${chunkContent}`;
+        if (selectedChunkKeys.has(chunkKey)) {
+          continue;
+        }
+        selectedChunkKeys.add(chunkKey);
+        chunkCandidates.push({
+          documentName: detail.name,
+          chunkContent,
+        });
+        if (chunkCandidates.length >= sampleLimit) {
+          break;
+        }
+      }
+    }
+
+    if (chunkCandidates.length < sampleLimit) {
+      throw new Error(
+        `当前知识库可用于生成的 chunk 只有 ${chunkCandidates.length} 个，少于目标样本数 ${sampleLimit}，无法生成评测包`,
+      );
+    }
+
+    const generatedItems = await runWithConcurrency(
+      chunkCandidates.slice(0, sampleLimit),
+      concurrencyLimit,
+      async (candidate) => generateEvalsetItem(candidate, timeoutSeconds),
     );
 
     for (const item of generatedItems) {
-      if (evalsetItems.length >= sampleLimit) {
-        break;
-      }
-
       if (usedQuestions.has(item.question)) {
-        continue;
+        throw new Error(
+          `评测模型生成了重复问题“${item.question}”，无法保证产出 ${sampleLimit} 条不重复样本，请调整参数后重试`,
+        );
       }
 
       usedQuestions.add(item.question);
@@ -277,6 +319,12 @@ export const evaluationPackageGeneratorService = {
 
     if (evalsetItems.length === 0) {
       throw new Error("评测模型没有生成出有效样本，请调整参数后重试");
+    }
+
+    if (evalsetItems.length < sampleLimit) {
+      throw new Error(
+        `评测包只生成了 ${evalsetItems.length} 条样本，少于目标样本数 ${sampleLimit}。请增加可用素材或降低样本数后重试`,
+      );
     }
 
     const datasetName = sanitizeDatasetName(input.datasetName);
@@ -291,7 +339,7 @@ export const evaluationPackageGeneratorService = {
         JSON.stringify(
           {
             datasetName,
-            knowledgeBaseId: "default",
+            knowledgeBaseId,
             config: {
               mode: input.mode,
               topK: clampInteger(input.topK, 1, 50),

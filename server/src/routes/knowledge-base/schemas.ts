@@ -122,8 +122,11 @@ export const knowledgeBaseSummarySchema = {
     "name",
     "description",
     "status",
+    "isSystem",
+    "metadata",
     "documentCount",
     "enabledDocumentCount",
+    "totalChunkCount",
     "createdAt",
     "updatedAt",
   ],
@@ -139,6 +142,29 @@ export const knowledgeBaseSummarySchema = {
       description: "Lifecycle state for the knowledge base.",
       enum: ["active", "archived"],
     },
+    isSystem: {
+      type: "boolean",
+      description: "Whether this knowledge base is system reserved and cannot be deleted.",
+    },
+    metadata: {
+      type: "object",
+      required: ["persona", "scenario", "tags"],
+      properties: {
+        persona: {
+          description: "Optional persona label for this knowledge base.",
+          anyOf: [{ type: "string" }, { type: "null" }],
+        },
+        scenario: {
+          description: "Optional target scenario for this knowledge base.",
+          anyOf: [{ type: "string" }, { type: "null" }],
+        },
+        tags: {
+          type: "array",
+          description: "Lightweight tags for filtering or prompt shaping.",
+          items: { type: "string" },
+        },
+      },
+    },
     documentCount: {
       type: "number",
       description: "Total documents stored in this knowledge base.",
@@ -147,8 +173,67 @@ export const knowledgeBaseSummarySchema = {
       type: "number",
       description: "Documents currently eligible for retrieval.",
     },
+    totalChunkCount: {
+      type: "number",
+      description: "Total chunks stored across all documents in this knowledge base.",
+    },
     createdAt: { type: "string", description: "ISO creation timestamp." },
     updatedAt: { type: "string", description: "ISO last-update timestamp." },
+  },
+} as const;
+
+const knowledgeBaseIdParamsSchema = {
+  type: "object",
+  required: ["knowledgeBaseId"],
+  properties: {
+    knowledgeBaseId: {
+      type: "string",
+      description: "Knowledge-base identifier.",
+    },
+  },
+} as const;
+
+const knowledgeBaseBodySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    name: {
+      type: "string",
+      minLength: 1,
+      description: "Display name shown in knowledge-base lists.",
+    },
+    description: {
+      description: "Optional user-facing knowledge-base description.",
+      anyOf: [{ type: "string" }, { type: "null" }],
+    },
+    status: {
+      type: "string",
+      enum: ["active", "archived"],
+      description: "Lifecycle state for the knowledge base.",
+    },
+    embeddingModelConfigId: {
+      description: "Optional bound embedding model config id.",
+      anyOf: [{ type: "string" }, { type: "null" }],
+    },
+    metadata: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        persona: {
+          description: "Optional persona label for this knowledge base.",
+          anyOf: [{ type: "string" }, { type: "null" }],
+        },
+        scenario: {
+          description: "Optional target scenario for this knowledge base.",
+          anyOf: [{ type: "string" }, { type: "null" }],
+        },
+        tags: {
+          type: "array",
+          description: "Lightweight tags for filtering or prompt shaping.",
+          items: { type: "string" },
+        },
+      },
+    },
   },
 } as const;
 
@@ -358,8 +443,68 @@ export const chunkPreviewResponseSchema = {
 // Route-level OpenAPI schemas are grouped here so route modules can focus on
 // HTTP orchestration and service calls.
 export const knowledgeBaseRouteSchemas = {
+  listKnowledgeBases: {
+    tags: ["Knowledge Base - Collections"],
+    summary: "List knowledge bases",
+    operationId: "listKnowledgeBases",
+    response: {
+      200: successEnvelope({
+        type: "array",
+        items: knowledgeBaseSummarySchema,
+      }),
+      500: errorEnvelope,
+    },
+  },
+  getKnowledgeBaseById: {
+    tags: ["Knowledge Base - Collections"],
+    summary: "Get knowledge base by id",
+    operationId: "getKnowledgeBaseById",
+    params: knowledgeBaseIdParamsSchema,
+    response: {
+      200: successEnvelope(knowledgeBaseSummarySchema),
+      404: errorEnvelope,
+      500: errorEnvelope,
+    },
+  },
+  createKnowledgeBase: {
+    tags: ["Knowledge Base - Collections"],
+    summary: "Create knowledge base",
+    operationId: "createKnowledgeBase",
+    body: {
+      ...knowledgeBaseBodySchema,
+      required: ["name"],
+    },
+    response: {
+      200: successEnvelope(knowledgeBaseSummarySchema),
+      500: errorEnvelope,
+    },
+  },
+  updateKnowledgeBase: {
+    tags: ["Knowledge Base - Collections"],
+    summary: "Update knowledge base",
+    operationId: "updateKnowledgeBase",
+    params: knowledgeBaseIdParamsSchema,
+    body: knowledgeBaseBodySchema,
+    response: {
+      200: successEnvelope(knowledgeBaseSummarySchema),
+      404: errorEnvelope,
+      500: errorEnvelope,
+    },
+  },
+  deleteKnowledgeBase: {
+    tags: ["Knowledge Base - Collections"],
+    summary: "Delete knowledge base",
+    operationId: "deleteKnowledgeBase",
+    params: knowledgeBaseIdParamsSchema,
+    response: {
+      200: successEnvelope(deletedResponseSchema),
+      403: errorEnvelope,
+      404: errorEnvelope,
+      500: errorEnvelope,
+    },
+  },
   getKnowledgeBase: {
-    tags: ["Knowledge Base"],
+    tags: ["Knowledge Base - Collections"],
     summary: "Get default knowledge base",
     operationId: "getKnowledgeBase",
     response: {
@@ -368,7 +513,7 @@ export const knowledgeBaseRouteSchemas = {
     },
   },
   listDocuments: {
-    tags: ["Knowledge Base"],
+    tags: ["Knowledge Base - Documents"],
     summary: "List documents in the default knowledge base",
     operationId: "listKnowledgeBaseDocuments",
     querystring: {
@@ -409,8 +554,52 @@ export const knowledgeBaseRouteSchemas = {
       500: errorEnvelope,
     },
   },
+  listKnowledgeBaseDocuments: {
+    tags: ["Knowledge Base - Documents"],
+    summary: "List documents in a knowledge base",
+    operationId: "listKnowledgeBaseDocumentsById",
+    params: knowledgeBaseIdParamsSchema,
+    querystring: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        search: {
+          type: "string",
+          description: "Fuzzy match against document name or source label.",
+        },
+        enabled: {
+          type: "string",
+          description: "Filter by retrieval eligibility.",
+          enum: ["true", "false"],
+        },
+        indexStatus: {
+          type: "string",
+          description: "Filter by indexing lifecycle state.",
+          enum: ["processing", "ready", "failed"],
+        },
+        sortBy: {
+          type: "string",
+          description: "Document field used for ordering.",
+          enum: ["createdAt", "updatedAt", "charCount", "chunkCount"],
+        },
+        sortOrder: {
+          type: "string",
+          description: "Sort direction. Defaults to descending in the route.",
+          enum: ["asc", "desc"],
+        },
+      },
+    },
+    response: {
+      200: successEnvelope({
+        type: "array",
+        items: documentSchema,
+      }),
+      404: errorEnvelope,
+      500: errorEnvelope,
+    },
+  },
   getDocumentStatus: {
-    tags: ["Knowledge Base"],
+    tags: ["Knowledge Base - Documents"],
     summary: "Get document indexing status",
     operationId: "getKnowledgeBaseDocumentStatus",
     params: idParamsSchema,
@@ -421,7 +610,7 @@ export const knowledgeBaseRouteSchemas = {
     },
   },
   getDocument: {
-    tags: ["Knowledge Base"],
+    tags: ["Knowledge Base - Documents"],
     summary: "Get document detail",
     operationId: "getKnowledgeBaseDocument",
     params: idParamsSchema,
@@ -432,7 +621,7 @@ export const knowledgeBaseRouteSchemas = {
     },
   },
   createDocument: {
-    tags: ["Knowledge Base"],
+    tags: ["Knowledge Base - Documents"],
     summary: "Create document and chunk it",
     operationId: "createKnowledgeBaseDocument",
     body: {
@@ -485,7 +674,7 @@ export const knowledgeBaseRouteSchemas = {
     },
   },
   updateDocument: {
-    tags: ["Knowledge Base"],
+    tags: ["Knowledge Base - Documents"],
     summary: "Update document metadata or re-chunk content",
     operationId: "updateKnowledgeBaseDocument",
     params: idParamsSchema,
@@ -519,7 +708,7 @@ export const knowledgeBaseRouteSchemas = {
     },
   },
   deleteDocument: {
-    tags: ["Knowledge Base"],
+    tags: ["Knowledge Base - Documents"],
     summary: "Delete document",
     operationId: "deleteKnowledgeBaseDocument",
     params: idParamsSchema,
@@ -530,7 +719,7 @@ export const knowledgeBaseRouteSchemas = {
     },
   },
   previewChunks: {
-    tags: ["Knowledge Base"],
+    tags: ["Knowledge Base - Upload & Preview"],
     summary: "Preview document chunks without persisting",
     operationId: "previewKnowledgeBaseChunks",
     consumes: ["multipart/form-data"],
@@ -542,7 +731,7 @@ export const knowledgeBaseRouteSchemas = {
     },
   },
   uploadDocument: {
-    tags: ["Knowledge Base"],
+    tags: ["Knowledge Base - Upload & Preview"],
     summary: "Upload a document and index it asynchronously",
     operationId: "uploadKnowledgeBaseDocument",
     consumes: ["multipart/form-data"],

@@ -8,3 +8,5 @@ export interface RagSettings {
   vectorStoreProvider: VectorStoreProvider;
   databaseUrl?: string;
 }
+
+export * from "./chat-core";

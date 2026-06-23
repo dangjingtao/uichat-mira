@@ -20,6 +20,34 @@ export interface DocumentListQuery {
   sortOrder?: "asc" | "desc";
 }
 
+export interface KnowledgeBaseIdParams {
+  knowledgeBaseId: string;
+}
+
+export interface CreateKnowledgeBaseBody {
+  name: string;
+  description?: string | null;
+  status?: "active" | "archived";
+  embeddingModelConfigId?: string | null;
+  metadata?: {
+    persona?: string | null;
+    scenario?: string | null;
+    tags?: string[];
+  };
+}
+
+export interface UpdateKnowledgeBaseBody {
+  name?: string;
+  description?: string | null;
+  status?: "active" | "archived";
+  embeddingModelConfigId?: string | null;
+  metadata?: {
+    persona?: string | null;
+    scenario?: string | null;
+    tags?: string[];
+  };
+}
+
 /** JSON body for direct document creation, without multipart upload parsing. */
 export interface CreateDocumentBody {
   /** Display name stored with the document and shown in retrieval sources. */

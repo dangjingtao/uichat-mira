@@ -67,6 +67,15 @@ function buildConfigMap(configs: RoleModelConfig[]): RoleModelConfigMap {
   return nextMap;
 }
 
+/**
+ * RoleModelConfigProvider caches default model assignments for chat/runtime
+ * gating and settings display.
+ *
+ * Risk note:
+ * Chat send availability, RAG gating and provider-specific transport behavior
+ * all read from this provider. Treat it as shared runtime state, not a purely
+ * settings-page concern.
+ */
 export function RoleModelConfigProvider({
   children,
 }: {

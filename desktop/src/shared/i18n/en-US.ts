@@ -2,7 +2,9 @@ const enUS = {
   common: {
     actions: {
       cancel: "Cancel",
+      confirm: "Confirm",
       reset: "Reset",
+      save: "Save",
       backToChat: "Back to Chat",
       close: "Close",
       view: "View",
@@ -11,25 +13,30 @@ const enUS = {
       refresh: "Refresh",
       start: "Start",
       generate: "Generate",
+      more: "More",
+      collapse: "Collapse",
     },
   },
   settings: {
     navigation: {
       general: "General",
       model: "Models",
+      workspace: "Workspace",
       knowledgeBase: "Knowledge Base",
-      evaluationWorkbench: "Evaluation Workbench",
+      persona: "Role",
+      roles: "Roles",
+      personas: "Roles",
       evaluationCenter: "Evaluation Center",
-      evaluationSection: "Evaluation",
       tools: "Tools",
       about: "About",
     },
     knowledgeBase: {
       page: {
         miniTitle: "Knowledge Base",
-        title: "Default Knowledge Base",
+        title: "Knowledge Base",
         descriptionFallback:
-          "This page shows every document in the current knowledge base. Double-click any row to open details, or choose Add File to start the step-by-step upload flow.",
+          " Double-click any row to open details, or choose Add File to start the step-by-step upload flow.",
+        emptyTitle: "No knowledge base selected",
       },
       actions: {
         metadata: "Metadata",
@@ -186,6 +193,11 @@ const enUS = {
           uploadFirst: "Please upload an evaluation package first",
           validationError:
             "This evaluation package has validation errors. Please fix them and upload again.",
+          runCreateFailed: "Failed to create the evaluation run",
+          missingKnowledgeBaseId:
+            "This evaluation package is missing a valid knowledge base id. Regenerate it or fix manifest.json before retrying.",
+          unknownKnowledgeBase:
+            "This evaluation package references a knowledge base that no longer exists. Regenerate it or fix the package before retrying.",
           runCreated:
             "Evaluation run created and will appear automatically in the Evaluation Center",
         },
@@ -214,6 +226,7 @@ const enUS = {
           helper:
             "dataset.zip is supported. Upload again to replace the current package.",
           dataset: "Dataset",
+          knowledgeBase: "Knowledge Base",
           runtimeConfig: "Runtime Config",
           openPreview: "Open Preview",
           previewHint:
@@ -255,6 +268,8 @@ const enUS = {
           exportFailed: "Failed to export Markdown",
           deleted: "Deleted evaluation run {{name}}",
           deleteFailed: "Failed to delete evaluation run",
+          bulkDeleted: "Deleted {{count}} evaluation runs",
+          bulkDeleteFailed: "Batch deletion failed",
         },
         deleteModal: {
           title: "Delete Evaluation Run",
@@ -265,8 +280,18 @@ const enUS = {
           confirm: "Delete",
           deleting: "Deleting...",
         },
+        bulkDeleteModal: {
+          title: "Delete Selected Evaluation Runs",
+          description:
+            "You selected {{count}} evaluation runs. Deleting them will remove their results, logs, and sample details.",
+          confirm: "Delete",
+          deleting: "Deleting...",
+          success: "Deleted {{count}} evaluation runs",
+          partialFailed: "Failed to delete {{count}} runs",
+        },
         table: {
           name: "Run Name",
+          knowledgeBase: "Knowledge Base",
           status: "Status",
           sampleCount: "Samples",
           keyMetrics: "Key Metrics",
@@ -274,6 +299,7 @@ const enUS = {
           actions: "Actions",
         },
         searchPlaceholder: "Search run name or dataset",
+        bulkDelete: "Delete Selected",
         recordCount: "Runs: {{count}}",
         loading: "Loading evaluation runs...",
         empty:
@@ -285,6 +311,9 @@ const enUS = {
         closeDrawer: "Close drawer",
         runtimeConfig: "Runtime Config",
         dataset: "Dataset",
+        knowledgeBase: "Knowledge Base",
+        aiAnswer: "AI Answer",
+        referenceAnswer: "Reference Answer",
         modeRepeat: "Mode {{mode}} · Repeat {{count}} times",
         datasetSummary: "Documents {{documents}} · Samples {{samples}}",
         validations: "Validation Results",
@@ -318,6 +347,32 @@ const enUS = {
         model: "Current Evaluation Model",
         notConfigured: "Not Configured",
         configureModelFirst: "Configure it first in Model Settings",
+        preset: "Preset Scheme",
+        presets: {
+          fast: {
+            label: "Quick Validation",
+            description:
+              "8 / 4 / 2, TopK 10, TopN 5. Best for checking whether the flow and output look right.",
+          },
+          balanced: {
+            label: "Balanced Default",
+            description:
+              "12 / 6 / 3, TopK 10, TopN 5. Good for regular generation with a balanced speed/coverage tradeoff.",
+          },
+          strict: {
+            label: "Strict Evaluation",
+            description:
+              "20 / 10 / 3, TopK 15, TopN 5. Best for a more serious evaluation, but it takes longer.",
+          },
+        },
+        sourceKnowledgeBase: "Source Knowledge Base",
+        defaultKnowledgeBase: "Default Knowledge Base",
+        loadingKnowledgeBases: "Loading knowledge bases...",
+        defaultKnowledgeBaseHint:
+          "The default knowledge base can generate evaluation packages like any other knowledge base, but it cannot be deleted.",
+        selectedKnowledgeBaseHint:
+          'The package will be generated from available documents and chunks in "{{name}}".',
+        selectKnowledgeBaseHint: "Select a knowledge base to use as the source for this package.",
         datasetName: "Dataset Name",
         sampleCount: "Sample Count",
         documentCount: "Sampled Documents",
@@ -328,12 +383,27 @@ const enUS = {
         modeRetrieveGenerate: "Retrieve + Generate",
         modeRetrieve: "Retrieve Only",
         summary:
-          "This version samples available documents and chunks from the default knowledge base and uses the configured evaluation model to generate samples. The exported ZIP can be uploaded back into this workbench directly.",
+          "This version samples available documents and chunks from the selected knowledge base and uses the configured evaluation model to generate samples. The exported ZIP can be uploaded back into this workbench directly.",
+        combinedGuidance:
+          "This package first samples documents and chunks from the selected knowledge base, then uses the configured evaluation model to generate samples and export a ZIP. The preset controls the default sampling strength, while the source knowledge base defines the material scope.",
+        checkingAvailability:
+          "Checking available documents in the selected knowledge base...",
+        readyDocumentCount:
+          "Enabled and ready documents available for generation: {{count}}",
+        readyResourceCount:
+          "Enabled and ready documents available for generation: {{documents}} · chunks: {{chunks}}",
+        noReadyDocuments:
+          "The selected knowledge base has no enabled and ready documents, so package generation is unavailable.",
+        noReadyDocumentsForSelected:
+          "The selected knowledge base has no enabled and ready documents, so package generation is unavailable.",
         generating: "Generating...",
         generateAndDownload: "Generate and Download",
         messages: {
           configureEvaluationModel:
             "Please configure a default evaluation model in Model Settings first",
+          noReadyDocuments:
+            "The selected knowledge base has no enabled and ready documents, so package generation is unavailable",
+          selectKnowledgeBase: "Please select a knowledge base first",
           generated: "Evaluation package generated and download started",
           failed: "Failed to generate evaluation package",
         },
@@ -343,7 +413,7 @@ const enUS = {
           sampleCount:
             "How many evaluation samples to generate. For example, 8 will create 8 questions with reference answers.",
           documentCount:
-            "How many documents to sample from the default knowledge base for this package. Larger values spread the source material more widely.",
+            "How many documents to sample from the selected knowledge base for this package. Larger values spread the source material more widely.",
           chunksPerDocument:
             "How many chunks to take from each sampled document as question material. Larger values cover more content per document.",
           mode: "Retrieve Only evaluates retrieval quality. Retrieve + Generate also creates reference Q&A and is better for end-to-end RAG evaluation.",
@@ -467,6 +537,282 @@ const enUS = {
           clearConfirm: "Clear Logs",
           clearSuccess: "Logs cleared, {{size}} KB released",
           clearFailed: "Failed to clear logs",
+        },
+      },
+    },
+    roles: {
+      page: {
+        title: "Roles",
+          description: "Turn roles into a role design workbench.",
+      },
+      actions: {
+        new: "New Role",
+        import: "Import Role",
+        delete: "Delete Role",
+        preview: "Preview",
+        guide: "Field Guide",
+        editContent: "Edit Content",
+        copySuffix: "Copy",
+      },
+      editor: {
+        title: "Edit Role",
+        hint: "Adjust role definition and prompt structure.",
+      },
+        list: {
+          title: "Role List",
+          hint: "Reusable prompt prototypes live here.",
+        },
+        fields: {
+          title: "Core Fields",
+          hint: "Each field opens in its own drawer, while the main surface stays summary-first.",
+          empty: "Not filled yet",
+        },
+        status: {
+          published: "Published",
+          default: "Default",
+          active: "Active",
+          draft: "Draft",
+        },
+      header: {
+        previewOnly: "Prompt prototype",
+      },
+      form: {
+        name: "Name",
+        summary: "Summary",
+        persona: "Role Core",
+        personaHelp: "Defines role identity and tone.",
+        scenario: "Scenario",
+        scenarioHelp: "Defines the usage scenario.",
+        worldview: "Worldview",
+        worldviewHelp: "Defines the role's basic view of the world.",
+        exampleDialogues: "Example Dialogues",
+        exampleDialoguesHelp: "Add representative Q&A snippets.",
+        style: "Writing Style",
+        constraints: "Constraints",
+      },
+      preview: {
+        title: "Prompt Preview",
+        hint: "Inspect the assembled result with knowledge base context.",
+        chat: "Chat",
+        rag: "RAG",
+        testInput: "Test input",
+        stackTitle: "Context Stack",
+        blockTitle: "Prompt Block Preview",
+        mode: "Mode",
+        persona: "Role",
+        roleName: "Role Name",
+        roleSummary: "Role Summary",
+        roleWorldview: "Worldview",
+        rolePersona: "Role Core",
+        roleScenario: "Scenario",
+        roleExamples: "Example Dialogues",
+        roleStyle: "Writing Style",
+        roleConstraints: "Constraints",
+        input: "Input",
+        systemPrompt: "System prompts hold product-wide rules and safety boundaries.",
+        knowledgeInjected: "Knowledge base context is injected before generation.",
+        knowledgeSkipped: "Previewing role only, without knowledge context.",
+        close: "Close preview",
+        closeMask: "Close prompt preview",
+        layers: {
+          system: "System Layer",
+          role: "Role Layer",
+          knowledge: "Knowledge Layer",
+          history: "History Layer",
+        },
+        historyNotice: "History keeps context continuity, but it does not replace role definition.",
+      },
+      prompt: {
+        notice: "Prompt block preview.",
+      },
+      guide: {
+        name: {
+          title: "Name",
+          description: "The quickest way to identify the role.",
+        },
+        worldview: {
+          title: "Worldview",
+          description: "The role's underlying view of the world.",
+        },
+        persona: {
+          title: "Role Core",
+          description: "Identity, tone, and stable behavior.",
+        },
+        scenario: {
+          title: "Scenario",
+          description: "The kind of situation this role works in.",
+        },
+        exampleDialogues: {
+          title: "Example Dialogues",
+          description: "Show how the role usually responds.",
+        },
+        style: {
+          title: "Writing Style",
+          description: "Controls sentence length, tone, and density.",
+        },
+        constraints: {
+          title: "Constraints",
+          description: "Hard boundaries the role should not cross.",
+        },
+      },
+        content: {
+          title: "Role Content",
+          hint: "Compose the core fields here; the main surface only keeps name and summary.",
+          close: "Close editor",
+          closeMask: "Close role content",
+        },
+        fieldDrawer: {
+          close: "Close field editor",
+          closeMask: "Close field editor drawer",
+        },
+        fieldHelp: {
+          syntax: "Suggested Pattern",
+          good: "Good Example",
+          bad: "Avoid",
+        },
+        fieldNotes: {
+          worldview:
+            "Define the role's underlying model of the world and how it reasons through problems. This is the base layer for later judgment, tradeoffs, and framing.",
+          persona:
+            "Define identity, stance, relationship tone, and stable behavior. This decides who the role is and how it tends to respond, rather than describing a temporary task.",
+          scenario:
+            "Limit the role's usual working context, task space, and target boundary. This helps the model decide when to take initiative and when to stay restrained.",
+          exampleDialogues:
+            "Provide a few high-value examples that show how the role responds, advances, refuses, or clarifies. Keep them selective and representative rather than exhaustive.",
+          style:
+            "Constrain expression: sentence shape, pacing, answer length, information density, and tone. This controls how the role speaks, not which facts it uses.",
+          constraints:
+            "State hard boundaries, required rules, and conflict priorities. Use this field for non-negotiable guardrails instead of repeating persona description.",
+        },
+        fieldExamples: {
+          worldview: {
+            syntax:
+              "Cover three things in order:\n- What the role believes\n- How it judges facts and risk\n- What it prioritizes in conflict",
+            good:
+              "You believe conclusions should be grounded in evidence.\nWhen information conflicts, you separate assumptions from verified facts first.\nIf speed and accuracy compete, you protect accuracy before polish.",
+            bad:
+              "You are very wise and deep.\nYou have a good worldview.\nPlease help me finish this report now.",
+          },
+          persona: {
+            syntax:
+              "Write three stable parts:\nRole identity: ...\nAttitude toward {{user}}: ...\nStable behavior: ...",
+            good:
+              "Role identity: You are a restrained product review assistant who leads with the conclusion.\nAttitude toward {{user}}: You stay collaborative and professional without flattery.\nStable behavior: You first decide whether a claim holds, then explain the reason and next step.",
+            bad:
+              "You are kind, smart, and amazing.\nYou can do everything.\nYour task right now is to rewrite my article.",
+          },
+          scenario: {
+            syntax:
+              "Treat this like stage directions:\nPlace or environment: ...\nRelationship: ...\nCurrent situation: ...\nGoal or tone: ...",
+            good:
+              "Place or environment: The team is reviewing a feature that is close to launch.\nRelationship: {{user}} owns the project and you are the reviewer.\nCurrent situation: The proposal is incomplete, but a directional judgment is needed.\nGoal or tone: Keep the exchange professional, restrained, and decision-oriented.",
+            bad:
+              "You grew up in a complicated world.\nYou are a cautious person.\nIn the end everyone succeeds and celebrates.",
+          },
+          exampleDialogues: {
+            syntax:
+              "Use short multi-turn dialogue:\n{{user}}: ...\n{{char}}: ...\n\nEach block should show one clear speaking pattern.",
+            good:
+              "{{user}}: Can this plan ship?\n{{char}}: Yes, but only after the rollback path and exception flow are covered.\n\n{{user}}: Why do you start with risk?\n{{char}}: Because the cost of missing it later is usually higher.",
+            bad:
+              "The role usually analyzes first and then gives advice.\nThis section should feel professional.\nHere are some general product principles: ...",
+          },
+          style: {
+            syntax:
+              "Focus only on expression:\nSentence length: ...\nTone: ...\nStructure: ...\nInformation density: ...",
+            good:
+              "Sentence length: Prefer short sentences, then extend only when needed.\nTone: Calm and direct, without exaggeration.\nStructure: Lead with the conclusion, then expand in bullets.\nInformation density: Keep filler low and preserve the reasoning.",
+            bad:
+              "You are a product expert.\nYou know many industry facts.\nYou help users solve every problem.",
+          },
+          constraints: {
+            syntax:
+              "Use explicit rules with visible priority:\nMust: ...\nMust not: ...\nWhen rules conflict, prioritize: ...",
+            good:
+              "Must: Keep conclusions tied to information the user actually provided.\nMust not: Invent unverified facts or numbers.\nWhen rules conflict, prioritize accuracy before completeness.",
+            bad:
+              "Try to do better.\nDo not be weird.\nAnswer depending on the situation.",
+          },
+        },
+        messages: {
+          created: "Created a new role draft",
+          imported: "Imported role copy",
+          saved: "Role saved",
+          deleted: "Role {{name}} deleted",
+        reset: "Restored current role state",
+      },
+      deleteModal: {
+        title: "Delete Role",
+        description: 'This will delete role "{{name}}".',
+        confirm: "Delete",
+      },
+      defaults: {
+        newName: "Untitled Role",
+        newSummary: "Start from scratch with a prompt structure.",
+        newTag1: "Draft",
+        newTag2: "Unconfigured",
+        newWorldview: "Your worldview is not configured yet.",
+        newPersona: "You are a role waiting to be configured.",
+        newScenario: "Good for authoring a role prompt from scratch.",
+        newExampleDialogues: "Example dialogues have not been written yet.",
+        newStyle: "Keep it concise, editable, and reusable.",
+        newConstraints: "Do not inject extra context yet.",
+        previewInput: "Help me turn this into a conclusion.",
+      },
+      presets: {
+        formalReviewer: {
+          name: "Formal Reviewer",
+          summary: "For reviews, summaries, and structured output.",
+          tags: {
+            strict: "Strict",
+            concise: "Lead with Conclusion",
+            structured: "Structured",
+          },
+          prompt: {
+            worldview: "You believe conclusions should come before elaboration, and facts should come before rhetoric.",
+            persona: "You are a careful, restrained product review assistant that leads with the conclusion.",
+            scenario: "Useful for reviews, summaries, analysis, and evidence-backed suggestions.",
+            exampleDialogues:
+              "{{user}}: Can this plan work?\n{{char}}: Yes, but only after the boundaries and dependencies are made explicit.",
+            style: "Lead with the conclusion, then expand; prefer short sentences and bullets.",
+            constraints: "Do not exaggerate, stay concrete, and avoid unrelated digressions.",
+          },
+        },
+        pilotHelper: {
+          name: "Pilot Helper",
+          summary: "For daily collaboration, task breakdown, and light companionship.",
+          tags: {
+            collaborative: "Collaborative",
+            clear: "Clear",
+            light: "Light",
+          },
+          prompt: {
+            worldview: "You believe complex problems should be broken into small executable steps.",
+            persona: "You are a friendly, clear collaboration assistant who helps break tasks down.",
+            scenario: "Useful for everyday Q&A, task decomposition, project work, and todo organization.",
+            exampleDialogues:
+              "{{user}}: I need to build the role page.\n{{char}}: Start with the fields, then the preview, then the save path.",
+            style: "Natural tone; ask follow-ups when needed; give a concrete next step.",
+            constraints: "Do not overclaim, do not pretend certainty, and avoid heavy formality.",
+          },
+        },
+        archiveGuide: {
+          name: "Archive Guide",
+          summary: "For knowledge browsing, material organization, and archival expression.",
+          tags: {
+            archive: "Archive",
+            retrieval: "Retrieval",
+            order: "Organize",
+          },
+          prompt: {
+            worldview: "You believe information becomes valuable when it is traceable and well organized.",
+            persona: "You are a knowledge assistant good at organizing material and helping users trace history.",
+            scenario: "Useful for knowledge organization, history tracking, summaries, and archiving records.",
+            exampleDialogues:
+              "{{user}}: What matters most in this material?\n{{char}}: I will give you the structure first, then the summary, then the sources.",
+            style: "Prefer citations; stay steady; emphasize traceability.",
+            constraints: "Do not write the summary like marketing copy.",
+          },
         },
       },
     },
@@ -697,6 +1043,14 @@ const enUS = {
         failed: "Generation failed. Please try again.",
         stopped: "Generation stopped early",
       },
+      errors: {
+        generationFailed: "This reply did not complete successfully",
+        generationFailedDetail:
+          "An error occurred while generating the reply. Check the model and service configuration, then try again.",
+        ragPhaseFailed: "RAG failed during {{label}}",
+        ragPhaseFailedDetail:
+          "The {{label}} stage failed. Check the related service and configuration, then try again.",
+      },
       composer: {
         ragAria: "Enable RAG knowledge base retrieval",
         enableKnowledgeBase: "Enable Knowledge Base",
@@ -706,7 +1060,7 @@ const enUS = {
         attachFile: "Attach file",
         removeAttachment: "Remove attachment",
         cancelGeneration: "Cancel generation",
-        ragEnabledHint:
+        knowledgeBaseHint:
           "Answers will prefer knowledge base content and show sources and execution details below each message.",
         ragUnavailableHint:
           "No documents are available yet. Upload content in Knowledge Base before enabling this.",
@@ -720,6 +1074,20 @@ const enUS = {
     },
   },
   ui: {
+    avatarPicker: {
+      title: "Choose Avatar",
+      placeholder: "No avatar selected",
+      triggerHint: "Open the avatar library and choose a built-in avatar.",
+      selectAction: "Select",
+      changeAction: "Change",
+      clearAction: "Clear",
+      searchPlaceholder: "Search avatar names or tags",
+      empty: "No avatars match this search",
+      previewLabel: "Preview",
+      unselected: "Choose an avatar",
+      previewHint:
+        "Pick an avatar from the library on the right. Click the preview card to zoom in.",
+    },
     modal: {
       closeAria: "Close dialog",
     },

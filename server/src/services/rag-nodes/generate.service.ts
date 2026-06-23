@@ -2,13 +2,13 @@ import { Readable } from "node:stream";
 import {
   providerProxyService,
   type NormalizedChatMessage,
-} from "@/services/provider-proxy.service";
+} from "@/services/provider-proxy.service/index.js";
 import type { RetrievedChunk } from "./retrieve.service";
 import type { RagNodeResult } from "@/services/rag-node-contract";
 import {
   createModelCallObservation,
 } from "@/services/rag-node-observation";
-import { createAssistantTextStream } from "@/services/assistant-stream-events";
+import { createAssistantTextStream } from "@/services/chat-stream-events";
 
 export interface GenerateInput {
   query: string;

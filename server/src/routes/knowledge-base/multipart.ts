@@ -1,4 +1,5 @@
 import type { FastifyRequest } from "fastify";
+import iconv from "iconv-lite";
 import path from "node:path";
 import {
   DEFAULT_UPLOAD_SOURCE_LABEL,
@@ -35,9 +36,83 @@ export interface ParsedUpload {
   fileSize: number;
   /** BOM-stripped UTF-8 file text consumed by preview/indexing services. */
   contentText: string;
+  /** Effective text encoding used to decode the uploaded file bytes. */
+  textEncoding: UploadTextEncoding;
   /** Non-file multipart fields kept as raw strings until converted. */
   fields: Record<string, string>;
 }
+
+export type UploadTextEncoding = "utf8" | "gb18030";
+
+const normalizeUploadTextEncoding = (
+  value: unknown,
+): UploadTextEncoding | undefined => {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  if (normalized === "utf8" || normalized === "utf-8") {
+    return "utf8";
+  }
+
+  if (
+    normalized === "gb18030" ||
+    normalized === "gbk" ||
+    normalized === "gb2312"
+  ) {
+    return "gb18030";
+  }
+
+  return undefined;
+};
+
+const stripBom = (value: string) => value.replace(/^\uFEFF/, "");
+
+const decodeUtf8Strict = (buffer: Buffer) => {
+  try {
+    return stripBom(new TextDecoder("utf-8", { fatal: true }).decode(buffer));
+  } catch {
+    return null;
+  }
+};
+
+const resolveUploadText = (input: {
+  buffer: Buffer;
+  fileExt: string;
+  requestedEncoding?: UploadTextEncoding;
+}): { contentText: string; textEncoding: UploadTextEncoding } => {
+  if (input.requestedEncoding) {
+    return {
+      contentText: stripBom(iconv.decode(input.buffer, input.requestedEncoding)),
+      textEncoding: input.requestedEncoding,
+    };
+  }
+
+  const strictUtf8Text = decodeUtf8Strict(input.buffer);
+  if (strictUtf8Text !== null) {
+    return {
+      contentText: strictUtf8Text,
+      textEncoding: "utf8",
+    };
+  }
+
+  // This fallback is intentionally narrow: it only protects the common case
+  // where Chinese TXT files are uploaded without charset metadata and would
+  // otherwise be mis-decoded as UTF-8 before persistence.
+  if (input.fileExt === "txt") {
+    return {
+      contentText: stripBom(iconv.decode(input.buffer, "gb18030")),
+      textEncoding: "gb18030",
+    };
+  }
+
+  return {
+    contentText: stripBom(input.buffer.toString("utf8")),
+    textEncoding: "utf8",
+  };
+};
 
 export const parseOptionalString = (value: unknown) => {
   if (typeof value !== "string") {
@@ -73,6 +148,9 @@ export const parseOptionalNumber = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : undefined;
 };
 
+export const parseOptionalTextEncoding = (value: unknown) =>
+  normalizeUploadTextEncoding(value);
+
 // Multipart fields arrive as strings, so this is the single conversion point
 // from transport payload into the service-layer chunking config shape.
 export const parseChunkingConfig = (value: unknown): Partial<ChunkingConfig> | undefined => {
@@ -100,7 +178,9 @@ export const readSingleTextUpload = async (
   let mimeType: string | null = null;
   let fileSize = 0;
   let contentText = "";
+  let textEncoding: UploadTextEncoding = "utf8";
   const fields: Record<string, string> = {};
+  let uploadedBuffer: Buffer | null = null;
 
   for await (const part of request.parts()) {
     if (part.type === "file") {
@@ -109,11 +189,11 @@ export const readSingleTextUpload = async (
       }
 
       const buffer = await part.toBuffer();
+      uploadedBuffer = buffer;
       fileName = part.filename;
       fileExt = path.extname(part.filename).replace(/^\./, "").toLowerCase();
       mimeType = part.mimetype || "text/plain";
       fileSize = buffer.byteLength;
-      contentText = buffer.toString("utf8").replace(/^\uFEFF/, "");
       continue;
     }
 
@@ -123,6 +203,10 @@ export const readSingleTextUpload = async (
 
   if (!fileName) {
     throw new MultipartValidationError("Please upload a file");
+  }
+
+  if (!uploadedBuffer) {
+    throw new MultipartValidationError("Uploaded file data is missing");
   }
 
   if (
@@ -135,6 +219,21 @@ export const readSingleTextUpload = async (
     );
   }
 
+  const requestedEncoding = parseOptionalTextEncoding(fields.textEncoding);
+  if (fields.textEncoding && !requestedEncoding) {
+    throw new MultipartValidationError(
+      'Unsupported text encoding. Use "utf8" or "gb18030".',
+    );
+  }
+
+  const decoded = resolveUploadText({
+    buffer: uploadedBuffer,
+    fileExt,
+    requestedEncoding,
+  });
+  contentText = decoded.contentText;
+  textEncoding = decoded.textEncoding;
+
   if (!contentText.trim()) {
     throw new MultipartValidationError("Uploaded file is empty");
   }
@@ -145,6 +244,7 @@ export const readSingleTextUpload = async (
     mimeType,
     fileSize,
     contentText,
+    textEncoding,
     fields,
   };
 };
@@ -160,6 +260,7 @@ export const toUploadDocumentInput = (upload: ParsedUpload): CreateDocumentInput
       parseOptionalString(upload.fields.fileExt)?.toLowerCase() ??
       upload.fileExt,
     contentText: upload.contentText,
+    textEncoding: upload.textEncoding,
     mimeType: upload.mimeType,
     fileSize:
       parseOptionalNumber(upload.fields.fileSize) ??

@@ -25,7 +25,7 @@ RAG 相关后端入口当前分为两类：
    桌面聊天 UI 的实际默认入口。当线程 `rag_enabled = 1` 且本次消息可提取出有效用户问题时，路由会切到 `ragPipeline.assistantStream(...)`。
    另外，这一层在进入 graph 前还会先检查默认知识库是否存在可用文档：
    - 若 `enabledDocumentCount = 0`，则不进入 graph，而是直接走固定拒答流式分支
-   - 该分支仍会按 assistant stream 协议输出文本，并正常落库与生成标题
+   - 该分支仍会按当前聊天流协议输出文本，并正常落库与生成标题
 2. `POST /chat/rag`
    返回非流式最终结果。
 3. `POST /chat/rag/stream`
@@ -688,7 +688,7 @@ flowchart TD
 - token 级流式体验仍然保留
 - 不需要让前端直接理解 LangGraph 原生事件格式
 
-桌面聊天 UI 走 `POST /proxy/chat/default` 时，内部复用的是同一条 graph 主流程，只是外层使用 `ragPipeline.assistantStream()` 转换成 assistant-ui / AI SDK transport 兼容的事件格式。
+桌面聊天 UI 走 `POST /proxy/chat/default` 时，内部复用的是同一条 graph 主流程，只是外层使用 `ragPipeline.assistantStream()` 转换成当前桌面 chat runtime 消费的事件格式。
 
 ## 当前 SSE 事件兼容策略
 
@@ -708,6 +708,20 @@ flowchart TD
 - `ragPipeline.stream()` 负责协议兼容
 
 这是当前阶段一个有意保留的边界。
+
+## 与统一聊天协议的关系
+
+2026-06 之后，桌面聊天前后端只保留一套消息请求协议。RAG 默认入口
+`POST /proxy/chat/default` 在进入这里之前，已经完成了以下收口：
+
+- 前端 transport 只发送 `messages[].parts[]`
+- part 只允许：
+  - `text`
+  - `image`
+- 后端 route schema 只接受该协议
+- provider proxy 在 RAG 分支前不再兼容 legacy `content` / `content.parts`
+
+因此本文件描述的 RAG 流程默认建立在“消息协议已经标准化完成”的前提下，而不是一边跑 graph，一边做多套前端 shape 兼容。
 
 ## 当前设计的优点
 

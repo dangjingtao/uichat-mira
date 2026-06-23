@@ -8,7 +8,7 @@ Most project documentation is centralized under `docs/`. The main exceptions are
 2. `architecture/README.md`: architecture, runtime boundaries, and request contract
 3. `CODING_STANDARDS.md`: TypeScript, Fastify route, and documentation conventions
 4. `architecture/ipc-and-preload.md`: preload exposure and IPC rules
-5. `assistant-ui.md`: assistant-ui reference index for chat UI work
+5. `uchat.md`: current app-owned chat runtime architecture and boundaries
 6. `platform/tauri.md`: Tauri runtime overview
 7. `platform/tauri-setup.md`: Tauri setup, build, and troubleshooting
 
@@ -31,18 +31,24 @@ Most project documentation is centralized under `docs/`. The main exceptions are
 
 ### Product and feature docs
 
-- `assistant-ui.md`
+- `uchat.md`
+- `uchat-internal-maintenance.md`
 - `chat-system-practices.md`
 - `defect-log.md`
 - `evaluation-workbench.md`
 - `product-roadmap-priorities.md`
 - `rag-langgraph-flow.md`
-- `knowledge-base-mvp.md`
 - `knowledge-base-backend-schema.md`
+- `knowledge-base-api.md`
 - `markdown-workspace-mode.md`
 - `provider-proxy-api.md`
 - `provider-integration-optimization.md`
+- `provider-api-standards.md`
 - `tools-protocol.md`
+
+### Archived docs
+
+- `archive/knowledge-base-mvp.md`
 
 ### Engineering conventions
 

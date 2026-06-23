@@ -17,12 +17,18 @@
 
 当前版本的目标不是做完整评测平台，而是先把“本地可用、可复盘、可持续迭代”的主链路跑通：
 
-- 支持从默认知识库自动生成评测包
+- 支持从指定知识库生成评测包
 - 支持上传真实评测包 zip 并解析
 - 支持创建真实评测任务并异步执行
 - 支持样本级重复执行、并发执行和超时控制
 - 支持运行中轮询、日志回显和结果汇总
 - 支持评测结果持久化、历史读取、详情查看和 Markdown 导出
+
+当前已知边界：
+
+- 评测包生成器现在必须显式指定 `knowledgeBaseId`，不会再隐式回退到默认知识库
+- 如果所选知识库没有 `enabled + ready` 文档，前端会禁用生成，后端也会拒绝生成请求
+- 历史上未携带 `knowledgeBaseId` 的外部评测包仍可上传解析，但会在校验区直接标记为错误，且后端禁止创建 run
 
 ## 当前能力
 
@@ -58,7 +64,7 @@
 
 前端实现位于：
 
-- [Workbench.tsx](/D:/workspace/rag-demo/desktop/src/features/Settings/pages/Evaluation/Workbench.tsx)
+- [New.tsx](/D:/workspace/rag-demo/desktop/src/features/Settings/pages/Evaluation/New.tsx)
 - [EvaluationPackageGeneratorModal.tsx](/D:/workspace/rag-demo/desktop/src/features/Settings/components/Evaluation/EvaluationPackageGeneratorModal.tsx)
 
 主要分为 4 块：
@@ -181,7 +187,7 @@
 
 当前策略：
 
-- 从默认知识库中选择 `enabled + ready` 的文档
+- 从用户指定的知识库中选择 `enabled + ready` 的文档
 - 随机抽取文档，再随机抽取 chunk
 - 调用 `providerProxyService.generateTextForRole("evaluation")` 生成问答样本
 - 组装 `manifest.json`、`evalset.json` 和 `documents/` 占位文件
@@ -190,6 +196,7 @@
 输入参数包括：
 
 - `datasetName`
+- `knowledgeBaseId`
 - `sampleCount`
 - `documentCount`
 - `chunksPerDocument`
@@ -204,7 +211,56 @@
 
 - `concurrency` 会被限制在 `1~10`
 - `timeoutSeconds` 会被限制在 `5~300`
-- 如果评测模型生成失败，会回退到基于 chunk 内容的 fallback 问题与参考答案
+- 当前生成器必须显式指定知识库；前端会在生成前检查所选知识库是否存在 `enabled + ready` 文档，没有则禁用生成
+- 解析评测包后，后端会新增知识库校验项；缺少 `knowledgeBaseId` 或引用了不存在的知识库时，数据集不能启动评测
+- 如果评测模型超时、返回非 JSON、缺少 `question` 或缺少 `expectedAnswer`，生成接口会直接失败，不再做后端兜底
+
+### 动态推荐算法
+
+评测包生成器的参数不是固定拍脑袋，而是根据当前知识库的可用规模动态推荐。
+
+#### 输入量
+
+- `D`：当前知识库中 `enabled + ready` 的文档数
+- `C`：当前知识库中这些文档的 chunk 总数
+
+#### 语义
+
+- `样本数`：最终希望生成多少条问答样本
+- `抽样文档数`：本次从知识库里抽多少篇文档参与生成
+- `每文档 chunk 数`：每篇被抽中的文档，再取多少个现成 chunk 作为出题素材
+
+注意：这里不会再对 chunk 做二次拆分。`每文档 chunk 数` 只是控制“从一个文档里拿多少个 chunk 来出题”。
+
+#### 约束关系
+
+- 候选素材上限 `candidateMax = min(C, 抽样文档数 × 每文档 chunk 数)`
+- `样本数` 不能超过 `candidateMax`
+- 如果模型输出重复或无效样本，最终可用条数还会继续下降，因此生成器现在会在不足时直接失败
+
+#### 推荐策略
+
+根据知识库规模给出三档预设，目标是让用户优先选择“可稳定完成”的参数，而不是手工猜。
+
+- 小库：`D <= 3`
+  - `抽样文档数 = 1`
+  - `每文档 chunk 数 = min(3, 单文档平均可用 chunk 数)`
+  - `样本数 = min(3, C)`
+- 中库：`4 <= D <= 20`
+  - `抽样文档数 = 2~4`
+  - `每文档 chunk 数 = 2~4`
+  - `样本数 = 6~12`
+- 大库：`D > 20`
+  - `抽样文档数 = 4~8`
+  - `每文档 chunk 数 = 2~3`
+  - `样本数 = 10~20`
+
+#### UI 呈现建议
+
+- 默认展示三档预设：快速验证、均衡默认、严格评测
+- 切换来源知识库时，重新计算推荐值
+- UI 上优先暴露“预设方案”，必要时再展开高级参数
+- 如果当前知识库不足以支撑某个预设，直接标记为不可用，而不是静默降级
 
 ## 校验与预览
 
@@ -550,7 +606,7 @@ Markdown 导出实现位于：
 ### 前端
 
 - [desktop/src/shared/api/evaluation.ts](/D:/workspace/rag-demo/desktop/src/shared/api/evaluation.ts)
-- [desktop/src/features/Settings/pages/Evaluation/Workbench.tsx](/D:/workspace/rag-demo/desktop/src/features/Settings/pages/Evaluation/Workbench.tsx)
+- [desktop/src/features/Settings/pages/Evaluation/New.tsx](/D:/workspace/rag-demo/desktop/src/features/Settings/pages/Evaluation/New.tsx)
 - [desktop/src/features/Settings/pages/Evaluation/Center.tsx](/D:/workspace/rag-demo/desktop/src/features/Settings/pages/Evaluation/Center.tsx)
 - [desktop/src/features/Settings/pages/Evaluation/exportMarkdown.ts](/D:/workspace/rag-demo/desktop/src/features/Settings/pages/Evaluation/exportMarkdown.ts)
 - [desktop/src/features/Settings/components/Evaluation/DetailDrawer.tsx](/D:/workspace/rag-demo/desktop/src/features/Settings/components/Evaluation/DetailDrawer.tsx)

@@ -15,7 +15,7 @@ function NavItem({
       className={({ isActive }) =>
         `
         flex items-center gap-2.5
-        rounded-[10px]
+        rounded-ui-control
         px-3 py-2.5
         text-sm
         font-medium

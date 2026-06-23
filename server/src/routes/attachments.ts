@@ -14,6 +14,67 @@ const isImageUpload = (mimeType: string, fileName: string) =>
 export default async function attachmentRoute(app: FastifyInstance) {
   app.post(
     "/attachments",
+    {
+      schema: {
+        tags: ["Attachments"],
+        summary: "Upload chat attachment",
+        operationId: "uploadAttachment",
+        consumes: ["multipart/form-data"],
+        response: {
+          200: {
+            type: "object",
+            required: ["success", "data", "timestamp"],
+            properties: {
+              success: { type: "boolean", const: true },
+              data: {
+                type: "object",
+                required: ["url", "fileName", "contentType", "size"],
+                properties: {
+                  url: { type: "string", description: "Public attachment URL." },
+                  fileName: { type: "string", description: "Stored file name." },
+                  contentType: { type: "string", description: "Detected MIME type." },
+                  size: { type: "number", description: "Attachment size in bytes." },
+                },
+              },
+              timestamp: { type: "string", format: "date-time" },
+            },
+          },
+          400: {
+            type: "object",
+            required: ["success", "message", "timestamp"],
+            properties: {
+              success: { type: "boolean", const: false },
+              message: { type: "string" },
+              code: { type: "string" },
+              errors: { type: "array", items: {} },
+              timestamp: { type: "string", format: "date-time" },
+            },
+          },
+          401: {
+            type: "object",
+            required: ["success", "message", "timestamp"],
+            properties: {
+              success: { type: "boolean", const: false },
+              message: { type: "string" },
+              code: { type: "string" },
+              errors: { type: "array", items: {} },
+              timestamp: { type: "string", format: "date-time" },
+            },
+          },
+          500: {
+            type: "object",
+            required: ["success", "message", "timestamp"],
+            properties: {
+              success: { type: "boolean", const: false },
+              message: { type: "string" },
+              code: { type: "string" },
+              errors: { type: "array", items: {} },
+              timestamp: { type: "string", format: "date-time" },
+            },
+          },
+        },
+      },
+    },
     routeHandler("Failed to upload attachment", async (request) => {
       const user = getAuthUserFromRequest(request);
       if (!user) {

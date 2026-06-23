@@ -9,7 +9,7 @@ import {
   assistantTextStartChunks,
   defaultAssistantStreamUsage,
   toAssistantSseChunk,
-} from "@/services/assistant-stream-events.js";
+} from "@/services/chat-stream-events.js";
 
 /** Configure a reply for ordinary provider SSE streams. */
 export const prepareEventStreamReply = (reply: FastifyReply): void => {
@@ -18,7 +18,7 @@ export const prepareEventStreamReply = (reply: FastifyReply): void => {
   reply.type("text/event-stream; charset=utf-8");
 };
 
-/** Configure a reply for assistant-ui data streams consumed by the renderer. */
+/** Configure a reply for desktop chat data streams consumed by the renderer. */
 export const prepareDataStreamReply = (reply: FastifyReply): void => {
   reply.raw.setHeader("Cache-Control", "no-cache, no-transform");
   reply.raw.setHeader("Connection", "keep-alive");
@@ -45,7 +45,7 @@ export interface StaticAssistantStreamInput {
 }
 
 /**
- * Build a complete assistant-ui stream for deterministic route-level answers,
+ * Build a complete chat stream for deterministic route-level answers,
  * such as the "empty knowledge base" RAG fallback.
  */
 export const createStaticAssistantStream = (

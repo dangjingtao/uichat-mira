@@ -76,7 +76,7 @@ const chatPending = {
     localModel: {
       replyPrefix: "Received: {{prompt}}",
       replySuffix:
-        "This is an assistant-ui local demo reply. You can continue to enter questions, and later replace it with a real backend inference interface.",
+        "This is a local uchat demo reply. You can continue entering questions, and later replace it with a real backend inference interface.",
       greeting:
         "Hello, I am your RAG assistant. Please tell me what you want to query.",
     },

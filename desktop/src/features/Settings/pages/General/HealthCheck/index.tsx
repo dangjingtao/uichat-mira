@@ -1,3 +1,4 @@
+import Badge from "@/shared/ui/Badge";
 import Card from "@/shared/ui/Card";
 import Tooltip from "@/shared/ui/Tooltip";
 import { StatusIndicator } from "@/shared/ui/StatusIndicator";
@@ -42,7 +43,10 @@ function HealthStatusRow({
   icon: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg border border-border/70 bg-surface-secondary/60 px-3.5 py-3">
+    <Card
+      variant="subtle"
+      className="flex items-center justify-between gap-4 border-border/70 bg-surface-secondary/60 px-3.5 py-3"
+    >
       <div className="flex min-w-0 items-center gap-2">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-primary text-icon-secondary">
           {icon}
@@ -51,7 +55,7 @@ function HealthStatusRow({
         <DetailTooltip text={detail} />
       </div>
       <StatusIndicator status={status} />
-    </div>
+    </Card>
   );
 }
 
@@ -76,9 +80,9 @@ function HealthCheck() {
             <h2 className="text-sm font-semibold text-text-primary">
               {t("settings.general.health.title")}
             </h2>
-            <span className="inline-flex items-center rounded-full border border-cloudy-3 bg-pampas-2 px-2 py-0.5 text-[11px] font-medium text-text-secondary">
+            <Badge variant="muted">
               {getRuntimeDisplayLabel(runtime)}
-            </span>
+            </Badge>
           </div>
           <LogButtons />
         </div>

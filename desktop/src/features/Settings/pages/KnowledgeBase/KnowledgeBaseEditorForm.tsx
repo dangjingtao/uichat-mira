@@ -21,7 +21,6 @@ interface KnowledgeBaseEditorFormProps {
 }
 
 export default function KnowledgeBaseEditorForm({
-  title,
   confirmLabel,
   initialName = "",
   initialDescription = "",
@@ -40,7 +39,6 @@ export default function KnowledgeBaseEditorForm({
 
   return (
     <div className="space-y-4">
-      <div className="text-sm font-medium text-text-primary">{title}</div>
       <div className="space-y-3">
         <TextInput
           label="知识库名称"

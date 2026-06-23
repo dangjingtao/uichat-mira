@@ -1,7 +1,6 @@
 import os from "os";
 import path from "path";
 import fs from "fs";
-import { execSync } from "node:child_process";
 
 export * from "./response.js";
 export * from "./errors.js";
@@ -294,130 +293,6 @@ function resolveRepositoryUrl(repository: unknown) {
   return "";
 }
 
-function findGitRoot(startDir: string): string | null {
-  let dir = path.resolve(startDir);
-
-  while (true) {
-    if (fs.existsSync(path.join(dir, ".git"))) {
-      return dir;
-    }
-
-    const parent = path.dirname(dir);
-    if (parent === dir) {
-      return null;
-    }
-
-    dir = parent;
-  }
-}
-
-function runGit(args: string[], cwd: string): string | null {
-  try {
-    return execSync(`git ${args.join(" ")}`, {
-      cwd,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "ignore"],
-      timeout: 5000,
-    }).trim();
-  } catch {
-    return null;
-  }
-}
-
-function readPackageVersionAtCommit(
-  commitHash: string,
-  gitRoot: string,
-): string | null {
-  const output = runGit(["show", `${commitHash}:package.json`], gitRoot);
-  if (!output) {
-    return null;
-  }
-
-  try {
-    const pkg = JSON.parse(output) as PackageJsonLike;
-    return typeof pkg.version === "string" ? pkg.version : null;
-  } catch {
-    return null;
-  }
-}
-
-function collectGitInfo(): GitInfo | null {
-  const gitRoot = findGitRoot(currentDir) ?? findGitRoot(process.cwd());
-  if (!gitRoot) {
-    return null;
-  }
-
-  const branch = runGit(["branch", "--show-current"], gitRoot);
-  if (!branch) {
-    return null;
-  }
-
-  const versionCommits = new Map<string, string>();
-
-  const headHash = runGit(["rev-parse", "HEAD"], gitRoot);
-  if (headHash) {
-    const headVersion = readPackageVersionAtCommit(headHash, gitRoot);
-    if (headVersion) {
-      versionCommits.set(headVersion, headHash);
-    }
-  }
-
-  const changeOutput = runGit(
-    ["log", "--format=%H", "--", "package.json"],
-    gitRoot,
-  );
-  const changeHashes = changeOutput
-    ? changeOutput.split("\n").map((h) => h.trim()).filter(Boolean)
-    : [];
-
-  for (const hash of changeHashes) {
-    const parentHash = runGit(["rev-parse", `${hash}~1`], gitRoot);
-    if (!parentHash) {
-      continue;
-    }
-
-    const parentVersion = readPackageVersionAtCommit(parentHash, gitRoot);
-    if (parentVersion && !versionCommits.has(parentVersion)) {
-      versionCommits.set(parentVersion, parentHash);
-    }
-  }
-
-  const versions: GitVersionInfo[] = [];
-
-  for (const [version, commitHash] of versionCommits) {
-    const log = runGit(
-      ["log", "-1", "--format=%H%x00%s%x00%an%x00%aI", commitHash],
-      gitRoot,
-    );
-
-    if (!log) {
-      continue;
-    }
-
-    const [hash, message, author, date] = log.split("\0");
-    if (!hash) {
-      continue;
-    }
-
-    versions.push({
-      version,
-      commit: {
-        hash,
-        shortHash: hash.slice(0, 7),
-        message: message ?? "",
-        author: author ?? "",
-        date: date ?? "",
-      },
-    });
-  }
-
-  versions.sort(
-    (a, b) => new Date(b.commit.date).getTime() - new Date(a.commit.date).getTime(),
-  );
-
-  return { branch, versions };
-}
-
 function getPackageVersion(): string {
   return resolveAppMeta().version;
 }
@@ -427,14 +302,7 @@ export function getAppMeta(): AppMeta {
     return cachedAppMeta;
   }
 
-  const meta = resolveAppMeta();
-  if (meta.git) {
-    cachedAppMeta = meta;
-    return cachedAppMeta;
-  }
-
-  const git = collectGitInfo();
-  cachedAppMeta = git ? { ...meta, git } : meta;
+  cachedAppMeta = resolveAppMeta();
   return cachedAppMeta;
 }
 

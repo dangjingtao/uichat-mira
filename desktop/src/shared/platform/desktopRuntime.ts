@@ -63,8 +63,10 @@ export function isDesktopShell(runtime = getDesktopRuntime()) {
 }
 
 export function getApiBaseUrl() {
-  if ((import.meta as any).env.VITE_API_URL) {
-    return (import.meta as any).env.VITE_API_URL as string;
+  const viteApiUrl = (import.meta as { env?: { VITE_API_URL?: string } }).env
+    ?.VITE_API_URL;
+  if (viteApiUrl) {
+    return viteApiUrl;
   }
 
   const runtime = getDesktopRuntime();

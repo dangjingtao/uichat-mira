@@ -2,6 +2,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { AlertCircle, Loader2, RotateCcw } from "lucide-react";
 import { Button, IconButton } from "@/shared/ui/Button";
+import Card from "@/shared/ui/Card";
 import { TextInput } from "@/shared/ui/Input";
 import { Select } from "@/shared/ui/Select";
 import type { ProviderDetail, RoleModelType } from "@/shared/api/modelSettings";
@@ -37,9 +38,11 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
 
   if (!detail) {
     return (
-      <div className="flex h-full flex-1 items-center justify-center rounded-2xl border border-border bg-surface-primary p-4 text-sm text-text-secondary">
+      <Card
+        className="flex h-full flex-1 items-center justify-center text-sm text-text-secondary"
+      >
         {t("settings.model.api.selectPlatform")}
-      </div>
+      </Card>
     );
   }
 
@@ -64,7 +67,7 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
   const isBusy = loading || syncing;
 
   return (
-    <div className="flex h-full flex-1 flex-col rounded-2xl border border-border bg-surface-primary p-3 shadow-shadow-sm">
+    <Card className="flex h-full flex-1 flex-col" padding="sm">
       <div className="mb-2.5 flex items-start justify-between gap-2.5">
         <div className="space-y-0.5">
           <div className="text-sm font-semibold text-text-primary">
@@ -119,7 +122,8 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
           <div className="shrink-0 pt-6">
             <IconButton
               ariaLabel={t("settings.model.api.syncAriaLabel")}
-              className="h-8 w-8 rounded-md border border-border bg-surface-primary hover:bg-surface-secondary"
+              size="sm"
+              styleType="outline"
               onClick={onTestConnection}
               disabled={isBusy}
             >
@@ -129,7 +133,7 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
         </div>
 
         {detail.provider.lastError ? (
-          <div className="flex items-start gap-2 rounded-lg border border-danger/20 bg-danger/5 px-3 py-2 text-xs text-danger">
+          <div className="flex items-start gap-2 rounded-ui-panel border border-danger-border bg-danger-soft px-3 py-2 text-xs text-danger-text">
             <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
             <span>{detail.provider.lastError}</span>
           </div>
@@ -188,7 +192,7 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
           </Button>
         </div>
       </div>
-    </div>
+    </Card>
   );
 };
 

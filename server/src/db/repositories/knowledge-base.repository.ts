@@ -14,6 +14,7 @@ import {
   type DocumentChunk,
   type KnowledgeBase,
   type NewDocument,
+  type NewKnowledgeBase,
 } from "@/db/schema";
 import { nowIso } from "@/utils/time.js";
 
@@ -64,12 +65,31 @@ export interface DocumentListFilters {
 }
 
 export const knowledgeBaseRepository = {
+  list(): KnowledgeBase[] {
+    const db = getDb();
+    return db
+      .select()
+      .from(knowledgeBases)
+      .orderBy(desc(knowledgeBases.updatedAt), desc(knowledgeBases.createdAt))
+      .all();
+  },
+
   getDefault(): KnowledgeBase | undefined {
     const db = getDb();
     return db
       .select()
       .from(knowledgeBases)
       .where(eq(knowledgeBases.id, DEFAULT_KNOWLEDGE_BASE_ID))
+      .limit(1)
+      .get();
+  },
+
+  getById(id: string): KnowledgeBase | undefined {
+    const db = getDb();
+    return db
+      .select()
+      .from(knowledgeBases)
+      .where(eq(knowledgeBases.id, id))
       .limit(1)
       .get();
   },
@@ -94,6 +114,56 @@ export const knowledgeBaseRepository = {
       })
       .returning()
       .get();
+  },
+
+  create(
+    data: Omit<NewKnowledgeBase, "id" | "createdAt" | "updatedAt">,
+  ): KnowledgeBase {
+    const db = getDb();
+    const now = nowIso();
+    return db
+      .insert(knowledgeBases)
+      .values({
+        ...data,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning()
+      .get();
+  },
+
+  updateById(
+    id: string,
+    data: Partial<Omit<NewKnowledgeBase, "id" | "createdAt">>,
+  ): KnowledgeBase | undefined {
+    const db = getDb();
+    return db
+      .update(knowledgeBases)
+      .set({
+        ...data,
+        updatedAt: nowIso(),
+      })
+      .where(eq(knowledgeBases.id, id))
+      .returning()
+      .get();
+  },
+
+  touchById(id: string): KnowledgeBase | undefined {
+    const db = getDb();
+    return db
+      .update(knowledgeBases)
+      .set({
+        updatedAt: nowIso(),
+      })
+      .where(eq(knowledgeBases.id, id))
+      .returning()
+      .get();
+  },
+
+  deleteById(id: string): boolean {
+    const db = getDb();
+    const result = db.delete(knowledgeBases).where(eq(knowledgeBases.id, id)).run();
+    return result.changes > 0;
   },
 };
 

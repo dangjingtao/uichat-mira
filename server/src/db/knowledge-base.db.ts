@@ -10,6 +10,7 @@ import { applySqliteConnectionPragmas } from "@/db/init-utils";
 import {
   assertSqliteIdentifier,
   getSqliteTableSql,
+  hasSqliteColumn,
   hasSqliteTable,
 } from "@/db/sqlite-utils";
 
@@ -77,6 +78,11 @@ const repairKnowledgeBaseModelConfigForeignKeys = (
     `);
 
     if (knowledgeBasesNeedsRepair) {
+      const hasMetadataJsonColumn = hasSqliteColumn(
+        sqlite,
+        "knowledge_bases",
+        "metadata_json",
+      );
       sqlite.exec(`
         CREATE TABLE knowledge_bases__rebuild (
           id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
@@ -85,6 +91,7 @@ const repairKnowledgeBaseModelConfigForeignKeys = (
           status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),
           embedding_model_config_id TEXT REFERENCES model_configs(id) ON DELETE SET NULL,
           chunking_config_json TEXT NOT NULL DEFAULT '{}',
+          metadata_json TEXT NOT NULL DEFAULT '{}',
           created_at TEXT NOT NULL DEFAULT (datetime('now')),
           updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
@@ -96,6 +103,7 @@ const repairKnowledgeBaseModelConfigForeignKeys = (
           status,
           embedding_model_config_id,
           chunking_config_json,
+          metadata_json,
           created_at,
           updated_at
         )
@@ -106,6 +114,7 @@ const repairKnowledgeBaseModelConfigForeignKeys = (
           status,
           embedding_model_config_id,
           chunking_config_json,
+          ${hasMetadataJsonColumn ? "metadata_json" : "'{}'"},
           created_at,
           updated_at
         FROM knowledge_bases;
@@ -226,6 +235,19 @@ const ensureDocumentChunkFts = () => {
   `);
 };
 
+const ensureKnowledgeBaseMetadataColumn = (sqlite: ReturnType<typeof getSqlite>) => {
+  if (!hasSqliteTable(sqlite, "knowledge_bases")) {
+    return;
+  }
+
+  if (!hasSqliteColumn(sqlite, "knowledge_bases", "metadata_json")) {
+    sqlite.exec(`
+      ALTER TABLE knowledge_bases
+      ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}';
+    `);
+  }
+};
+
 export const rebuildDocumentChunkFts = () => {
   const sqlite = getSqlite();
 
@@ -300,6 +322,7 @@ const ensureKnowledgeBaseTables = () => {
       status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),
       embedding_model_config_id TEXT REFERENCES model_configs(id) ON DELETE SET NULL,
       chunking_config_json TEXT NOT NULL DEFAULT '{}',
+      metadata_json TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -384,6 +407,7 @@ export const initializeKnowledgeBaseDatabase = () => {
     applySqliteConnectionPragmas(sqlite);
 
     ensureKnowledgeBaseTables();
+    ensureKnowledgeBaseMetadataColumn(sqlite);
     repairKnowledgeBaseModelConfigForeignKeys(sqlite);
     ensureDocumentChunkFts();
     ensureDefaultKnowledgeBase();

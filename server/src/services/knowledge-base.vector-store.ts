@@ -280,4 +280,34 @@ export const knowledgeBaseVectorStore = {
 
     tx(params.chunkIds);
   },
+
+  deleteVectorIndexes(knowledgeBaseId: string) {
+    const db = getDb();
+    db.delete(knowledgeBaseVectorIndexes)
+      .where(eq(knowledgeBaseVectorIndexes.knowledgeBaseId, knowledgeBaseId))
+      .run();
+  },
+
+  dropVectorTables(tableNames: string[]) {
+    if (tableNames.length === 0) {
+      return;
+    }
+
+    const sqlite = getSqlite();
+    const uniqueTableNames = Array.from(
+      new Set(tableNames.map((tableName) => sanitizeTableName(tableName))),
+    );
+
+    const tx = sqlite.transaction((names: string[]) => {
+      for (const tableName of names) {
+        if (!hasSqliteTable(sqlite, tableName)) {
+          continue;
+        }
+
+        sqlite.exec(`DROP TABLE IF EXISTS ${tableName}`);
+      }
+    });
+
+    tx(uniqueTableNames);
+  },
 };

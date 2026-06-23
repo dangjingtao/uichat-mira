@@ -16,6 +16,7 @@ import {
 import { evaluationRouteSchemas } from "./schemas.js";
 import type {
   CreateEvaluationRunBody,
+  DeleteEvaluationRunsBody,
   GenerateEvaluationPackageBody,
   EvaluationRunListQuery,
 } from "./types.js";
@@ -24,9 +25,8 @@ const evaluationRoute: FastifyPluginAsync = async (app) => {
   app.post<{ Body: GenerateEvaluationPackageBody }>(
     "/evaluation/packages/generate",
     { schema: evaluationRouteSchemas.generatePackage },
-    routeHandler(
-      "Failed to generate evaluation package",
-      async (request, reply) => {
+    routeHandler("Failed to generate evaluation package", async (request, reply) => {
+      try {
         const archive = await evaluationPackageGeneratorService.generateArchive(
           request.body,
         );
@@ -37,8 +37,20 @@ const evaluationRoute: FastifyPluginAsync = async (app) => {
             `attachment; filename="${archive.fileName}"`,
           )
           .send(archive.buffer);
-      },
-    ),
+      } catch (err) {
+        if (err instanceof Error) {
+          throw createRouteError({
+            statusCode: 500,
+            code: "EVALUATION_PACKAGE_GENERATION_FAILED",
+            message: err.message,
+            cause: err,
+            logMessage: "Failed to generate evaluation package",
+          });
+        }
+
+        throw err;
+      }
+    }),
   );
 
   app.post(
@@ -108,6 +120,17 @@ const evaluationRoute: FastifyPluginAsync = async (app) => {
       success(
         evaluationService.deleteRun(request.params.runId),
         "Evaluation run deleted",
+      ),
+    ),
+  );
+
+  app.post<{ Body: DeleteEvaluationRunsBody }>(
+    "/evaluation/runs/batch-delete",
+    { schema: evaluationRouteSchemas.deleteRuns },
+    routeHandler("Failed to delete evaluation runs", async (request) =>
+      success(
+        evaluationService.deleteRuns(request.body.runIds),
+        "Evaluation runs deleted",
       ),
     ),
   );

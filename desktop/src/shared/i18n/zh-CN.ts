@@ -2,7 +2,10 @@ const zhCN = {
   common: {
     actions: {
       cancel: "取消",
+      confirm: "确认",
       reset: "重置",
+      save: "保存",
+      imageAttachment: "图片附件",
       backToChat: "返回聊天",
       close: "关闭",
       view: "查看",
@@ -11,25 +14,30 @@ const zhCN = {
       refresh: "刷新",
       start: "开始",
       generate: "生成",
+      more: "更多",
+      collapse: "收起",
     },
   },
   settings: {
     navigation: {
       general: "通用",
       model: "模型",
+      workspace: "工作区",
       knowledgeBase: "知识库",
-      evaluationWorkbench: "评测工作台",
+      persona: "角色",
+      roles: "角色",
+      personas: "角色",
       evaluationCenter: "评测中心",
-      evaluationSection: "评测",
       tools: "工具",
       about: "关于",
     },
     knowledgeBase: {
       page: {
         miniTitle: "Knowledge Base",
-        title: "默认知识库",
+        title: "知识库",
         descriptionFallback:
-          "这里集中展示当前知识库中的全部文档。双击任意一行可以进入详情页，点击添加文件则会进入分步上传流程。",
+          "双击进入详情页，点击添加文件则会进入分步上传流程。",
+        emptyTitle: "未选择知识库",
       },
       actions: {
         metadata: "元数据",
@@ -173,6 +181,11 @@ const zhCN = {
           parseFailed: "评测包解析失败",
           uploadFirst: "请先上传评测包",
           validationError: "当前评测包存在校验错误，请修正后重新上传",
+          runCreateFailed: "创建评测任务失败",
+          missingKnowledgeBaseId:
+            "当前评测包缺少有效的知识库标识，请重新生成或修正 manifest.json 后再试。",
+          unknownKnowledgeBase:
+            "当前评测包引用的知识库不存在，请确认知识库仍可用后重新生成或修正评测包。",
           runCreated: "评测任务已创建，结果会自动出现在评测中心",
         },
         stateBar: {
@@ -199,6 +212,7 @@ const zhCN = {
           parsing: "正在解析评测包，请稍候...",
           helper: "支持 dataset.zip，重新上传即可替换当前参数。",
           dataset: "数据集",
+          knowledgeBase: "知识库",
           runtimeConfig: "运行参数",
           openPreview: "查看随机预览",
           previewHint: "预览通过抽屉打开，避免主界面被样本列表挤占。",
@@ -236,6 +250,8 @@ const zhCN = {
           exportFailed: "导出 Markdown 失败",
           deleted: "已删除评测记录 {{name}}",
           deleteFailed: "删除评测记录失败",
+          bulkDeleted: "已删除 {{count}} 条评测记录",
+          bulkDeleteFailed: "批量删除失败",
         },
         deleteModal: {
           title: "确认删除评测记录",
@@ -245,8 +261,17 @@ const zhCN = {
           confirm: "确认删除",
           deleting: "删除中...",
         },
+        bulkDeleteModal: {
+          title: "确认批量删除评测记录",
+          description: "你选中了 {{count}} 条评测记录，删除后这些结果、日志和样本都会被移除。",
+          confirm: "确认删除",
+          deleting: "删除中...",
+          success: "已删除 {{count}} 条评测记录",
+          partialFailed: "有 {{count}} 条记录删除失败",
+        },
         table: {
           name: "任务名",
+          knowledgeBase: "知识库",
           status: "状态",
           sampleCount: "样本数",
           keyMetrics: "核心指标",
@@ -254,6 +279,7 @@ const zhCN = {
           actions: "操作",
         },
         searchPlaceholder: "搜索任务名或数据集",
+        bulkDelete: "批量删除",
         recordCount: "记录数：{{count}}",
         loading: "正在加载评测记录...",
         empty:
@@ -265,6 +291,9 @@ const zhCN = {
         closeDrawer: "关闭抽屉",
         runtimeConfig: "运行配置",
         dataset: "数据集",
+        knowledgeBase: "知识库",
+        aiAnswer: "AI 回答",
+        referenceAnswer: "参考回答",
         modeRepeat: "模式 {{mode}} · 重复 {{count}} 次",
         datasetSummary: "文档 {{documents}} 份 · 样本 {{samples}} 条",
         validations: "校验结果",
@@ -298,6 +327,30 @@ const zhCN = {
         model: "当前评测模型",
         notConfigured: "未配置",
         configureModelFirst: "请先到模型设置页配置",
+        preset: "预设方案",
+        presets: {
+          fast: {
+            label: "快速验证",
+            description:
+              "8 / 4 / 2，TopK 10，TopN 5。适合先确认流程和结果是否正常。",
+          },
+          balanced: {
+            label: "均衡默认",
+            description:
+              "12 / 6 / 3，TopK 10，TopN 5。适合常规生成，兼顾速度和覆盖。",
+          },
+          strict: {
+            label: "严格评测",
+            description:
+              "20 / 10 / 3，TopK 15，TopN 5。适合更认真地评估效果，但耗时更长。",
+          },
+        },
+        sourceKnowledgeBase: "来源知识库",
+        defaultKnowledgeBase: "默认知识库",
+        loadingKnowledgeBases: "正在加载知识库列表...",
+        defaultKnowledgeBaseHint: "默认知识库与普通知识库一样可参与评测包生成，但不可删除。",
+        selectedKnowledgeBaseHint: "当前会从“{{name}}”中抽样可用文档和 chunk 生成评测包。",
+        selectKnowledgeBaseHint: "请选择一个知识库作为本次评测包的来源。",
         datasetName: "数据集名",
         sampleCount: "样本数",
         documentCount: "抽样文档数",
@@ -308,22 +361,33 @@ const zhCN = {
         modeRetrieveGenerate: "检索+生成",
         modeRetrieve: "仅检索",
         summary:
-          "当前版本会从默认知识库中抽样可用文档与 chunk，并使用长期配置的评测模型生成样本。导出的 zip 可直接回到当前工作台上传使用。",
+          "当前版本会从所选知识库中抽样可用文档与 chunk，并使用长期配置的评测模型生成样本。导出的 zip 可直接回到当前工作台上传使用。",
+        combinedGuidance:
+          "当前评测包会先从所选知识库抽样文档与 chunk，再用已配置的评测模型生成样本并导出 zip。预设决定默认抽样力度，来源知识库决定素材范围。",
+        checkingAvailability: "正在检查当前知识库可用文档...",
+        readyDocumentCount: "可用于生成的已启用且已就绪文档：{{count}}",
+        readyResourceCount: "可用于生成的已启用且已就绪文档：{{documents}} 份 · chunk：{{chunks}} 个",
+        noReadyDocuments: "默认知识库没有已启用且已就绪的文档，暂时无法生成评测包。",
+        noReadyDocumentsForSelected:
+          "当前所选知识库没有已启用且已就绪的文档，暂时无法生成评测包。",
         generating: "生成中...",
         generateAndDownload: "生成并下载",
         messages: {
           configureEvaluationModel: "请先在模型设置页配置默认评测模型",
+          noReadyDocuments:
+            "当前所选知识库没有已启用且已就绪的文档，暂时无法生成评测包",
+          selectKnowledgeBase: "请先选择一个知识库",
           generated: "评测包已生成并开始下载",
           failed: "生成评测包失败",
         },
         help: {
           datasetName: "生成后的评测包名称，主要用于区分批次，不影响评测逻辑。",
           sampleCount:
-            "最终要生成多少条评测样本。比如填 8，就会产出 8 条可用于评测的问题与参考答案。",
+            "最终希望产出多少条问题。比如填 20，系统会尽量生成 20 条；如果可用素材不够，可能少于 20 条。",
           documentCount:
-            "先从默认知识库中抽多少篇文档参与这次评测包生成。值越大，样本来源越分散。",
+            "本次先从当前知识库里抽多少篇文档。它决定素材覆盖面，不是最终问题条数。",
           chunksPerDocument:
-            "每篇被抽中的文档再取多少个 chunk 作为出题素材。值越大，单篇文档覆盖内容越多。",
+            "每篇被抽中的文档再取多少个 chunk。它决定每篇文档能贡献多少出题素材。",
           mode: "仅检索：只评估检索效果。检索+生成：同时生成参考问答，更适合完整 RAG 链路评测。",
           topK: "评测运行时，每个问题先召回多少条候选 chunk。值大更全，但噪音也可能更多。",
           topN: "在 TopK 结果里，最终保留多少条进入后续评测或生成。通常应小于或等于 TopK。",
@@ -334,6 +398,8 @@ const zhCN = {
           timeoutSeconds:
             "单条样本最多允许执行多久，超时就记失败。本地模型较慢时可以适当调大。",
         },
+        generationRules:
+          "生成器会先抽文档，再从每篇文档取 chunk 作为素材，最后逐个生成并去重。若素材只有 2 个，或生成结果重复/失败，就只能得到 2 条问题。",
       },
     },
     general: {
@@ -432,6 +498,279 @@ const zhCN = {
           clearConfirm: "确认清空",
           clearSuccess: "日志已清空，共释放 {{size}} KB",
           clearFailed: "清空日志失败",
+        },
+      },
+    },
+    roles: {
+      page: {
+        title: "角色",
+          description: "把角色做成提示词工程工作台。",
+      },
+      actions: {
+        new: "新建角色",
+        import: "导入角色",
+        delete: "删除角色",
+        preview: "预览",
+        guide: "字段说明",
+        editContent: "编辑内容",
+        copySuffix: "副本",
+      },
+      editor: {
+        title: "编辑角色",
+        hint: "调整角色定义与提示词结构。",
+      },
+        list: {
+          title: "角色列表",
+          hint: "这里保存的是可复用的提示词原型。",
+        },
+        fields: {
+          title: "核心字段",
+          hint: "每个字段单独进入抽屉编辑，主界面只保留概览。",
+          empty: "尚未填写",
+        },
+        status: {
+          published: "正式",
+          default: "默认",
+          active: "启用",
+          draft: "草稿",
+        },
+      header: {
+        previewOnly: "提示词原型",
+      },
+      form: {
+        name: "名称",
+        summary: "简介",
+        worldview: "世界观",
+        worldviewHelp: "定义角色对世界的基本理解。",
+        persona: "角色核心",
+        personaHelp: "定义角色身份与语气。",
+        scenario: "适用场景",
+        scenarioHelp: "定义使用场景。",
+        exampleDialogues: "示例对话",
+        exampleDialoguesHelp: "放入代表性的问答片段。",
+        style: "表达风格",
+        constraints: "约束规则",
+      },
+      preview: {
+        title: "提示词预览",
+          hint: "查看角色与知识库上下文拼装后的结果。",
+        chat: "普通聊天",
+        rag: "RAG 聊天",
+        testInput: "测试输入",
+        stackTitle: "上下文堆栈",
+        blockTitle: "提示词块预览",
+        mode: "模式",
+        persona: "角色",
+        roleName: "角色名称",
+        roleSummary: "角色简介",
+        roleWorldview: "世界观",
+        rolePersona: "角色核心",
+        personaScenario: "适用场景",
+        roleExamples: "示例对话",
+        roleStyle: "表达风格",
+        roleConstraints: "约束规则",
+        input: "输入",
+        systemPrompt: "系统提示词负责固定规则与安全边界。",
+        knowledgeInjected: "知识库上下文会在生成前注入。",
+          knowledgeSkipped: "当前仅预览角色本体，不注入知识库。",
+        close: "关闭预览",
+        closeMask: "关闭提示词预览",
+        layers: {
+          system: "系统层",
+          role: "角色层",
+          knowledge: "知识层",
+          history: "历史层",
+        },
+        historyNotice: "历史消息会保留语境，但不会替代角色定义。",
+      },
+      prompt: {
+        notice: "提示词块预览。",
+      },
+      guide: {
+        name: {
+          title: "名称",
+          description: "一眼识别这个角色是谁。",
+        },
+        worldview: {
+          title: "世界观",
+          description: "角色对世界的基本理解与判断基底。",
+        },
+        persona: {
+          title: "角色核心",
+          description: "角色身份、气质和稳定行为方式。",
+        },
+        scenario: {
+          title: "适用场景",
+          description: "这个角色通常在什么情境里工作。",
+        },
+        exampleDialogues: {
+          title: "示例对话",
+          description: "让模型看见角色平时怎么接话。",
+        },
+        style: {
+          title: "表达风格",
+          description: "控制句长、语气和表达密度。",
+        },
+        constraints: {
+          title: "约束规则",
+          description: "限制不能越过的边界。",
+        },
+      },
+        content: {
+          title: "角色内容",
+          hint: "在这里编排核心字段，主界面只保留名称和简介。",
+          close: "关闭编辑",
+          closeMask: "关闭角色内容",
+        },
+        fieldDrawer: {
+          close: "关闭字段编辑",
+          closeMask: "关闭字段编辑抽屉",
+        },
+        fieldHelp: {
+          syntax: "推荐写法",
+          good: "正面示例",
+          bad: "反面示例",
+        },
+        fieldNotes: {
+          worldview:
+            "用于定义角色看待世界与问题的方法论。它不是人设装饰，而是后续判断、取舍和解释口径的底层依据。",
+          persona:
+            "用于定义角色身份、立场、关系感与稳定行为。这里决定角色是谁、通常怎么回应，而不是临时任务说明。",
+          scenario:
+            "用于限定角色最常出现的工作场景、任务空间与目标边界。它能帮助模型判断什么时候该主动、什么时候该收住。",
+          exampleDialogues:
+            "用于给出高价值示例，直接示范角色如何接话、推进、拒绝或澄清。示例应少而准，优先保留最能代表风格的轮次。",
+          style:
+            "用于约束表达层，包括句式、节奏、篇幅、信息密度与语气。它控制角色怎么说，而不是说什么事实。",
+          constraints:
+            "用于写清楚不能越过的边界、必须遵守的规则与冲突时的优先级。这里适合放硬约束，而不是重复人设描述。",
+        },
+        fieldExamples: {
+          worldview: {
+            syntax:
+              "可按这个顺序写：\n- 角色相信什么\n- 如何判断事实与风险\n- 面对冲突时优先保什么",
+            good:
+              "你相信判断必须建立在事实和证据上。\n面对争议时，你会先拆清前提，再给出结论。\n如果效率和准确性冲突，你优先保证结论可靠。",
+            bad:
+              "你很厉害，很聪明，很有深度。\n你三观很正。\n你现在帮我做这次汇报。",
+          },
+          persona: {
+            syntax:
+              "建议直接写三类信息：\n角色身份：...\n对 {{user}} 的态度：...\n稳定行为：...",
+            good:
+              "角色身份：你是一个严谨、克制、先给结论的产品评审助手。\n对 {{user}} 的态度：你保持专业合作，不刻意讨好，也不故作强硬。\n稳定行为：你通常先判断问题是否成立，再展开原因和建议。",
+            bad:
+              "你很温柔，很善良，很专业。\n你什么都会。\n你现在的任务是帮我把这篇文章改好。",
+          },
+          scenario: {
+            syntax:
+              "把它当成舞台说明来写：\n地点/环境：...\n角色关系：...\n当前局势：...\n目标或气氛：...",
+            good:
+              "地点/环境：团队正在评审一个准备上线的新功能。\n角色关系：{{user}} 是项目负责人，你负责指出风险和改进点。\n当前局势：方案信息不完整，但需要先给出方向判断。\n目标或气氛：对话保持专业、克制、以决策为导向。",
+            bad:
+              "你从小就生活在一个复杂的世界里。\n你是个很谨慎的人。\n最后你们成功发布并获得一致好评。",
+          },
+          exampleDialogues: {
+            syntax:
+              "直接写多轮短对话：\n{{user}}: ...\n{{char}}: ...\n\n每组只示范一种语气或动作。",
+            good:
+              "{{user}}: 这个方案能上吗？\n{{char}}: 能，但要先补齐异常路径和回滚方案。\n\n{{user}}: 为什么你先看风险？\n{{char}}: 因为上线后的代价通常比现在补一遍高。",
+            bad:
+              "角色会先分析，再给建议。\n这里应该体现专业感。\n以下是产品设计的一般原则：……",
+          },
+          style: {
+            syntax:
+              "聚焦表达层，不写事实内容：\n句长：...\n语气：...\n结构：...\n信息密度：...",
+            good:
+              "句长：以短句为主，必要时再补长句解释。\n语气：平静直接，不夸张，不撒娇。\n结构：先结论，再分点说明。\n信息密度：少废话，优先保留判断依据。",
+            bad:
+              "你是一个产品专家。\n你知道很多行业知识。\n你会帮助用户解决所有问题。",
+          },
+          constraints: {
+            syntax:
+              "用明确规则来写，最好能看出优先级：\n必须：...\n禁止：...\n冲突时优先：...",
+            good:
+              "必须：结论不能脱离用户给出的信息。\n禁止：不要编造未确认的事实或数据。\n冲突时优先：先保证准确，再追求表达完整。",
+            bad:
+              "尽量好一点。\n不要太奇怪。\n看情况回答。",
+          },
+        },
+        messages: {
+          created: "已创建新角色草稿",
+          imported: "已导入角色副本",
+          saved: "角色已保存",
+          deleted: "已删除角色 {{name}}",
+        reset: "已恢复到当前角色状态",
+      },
+      deleteModal: {
+        title: "删除角色",
+        description: "将删除角色“{{name}}”。",
+        confirm: "确认删除",
+      },
+      defaults: {
+        newName: "未命名角色",
+        newSummary: "用于从零开始编辑提示词结构。",
+        newTag1: "草稿",
+        newTag2: "待配置",
+        newWorldview: "你对世界的基本理解尚待配置。",
+        newPersona: "你是一个待配置的角色。",
+        newScenario: "适合从零编写角色提示词。",
+        newExampleDialogues: "示例对话尚待填写。",
+        newStyle: "保持简洁、可编辑、可复用。",
+        newConstraints: "暂时不接入额外上下文。",
+        previewInput: "帮我把这段内容整理成结论。",
+      },
+      presets: {
+        formalReviewer: {
+          name: "Formal Reviewer",
+          summary: "适合评审、归纳和结构化输出。",
+          tags: {
+            strict: "严谨",
+            concise: "先结论",
+            structured: "结构化",
+          },
+          prompt: {
+            worldview: "你相信结论必须先于展开，事实应该先于修辞。",
+            persona: "你是一个严谨、克制、先给结论的产品评审助手。",
+            scenario: "适合评审、总结、分析和给出有依据的建议。",
+            exampleDialogues: "用户：这方案能不能做？\n助手：能，但要先补齐边界与依赖。",
+            style: "先结论后展开；语言短句为主；优先分点回答。",
+            constraints: "不夸张，不空泛，不主动发散到无关话题。",
+          },
+        },
+        pilotHelper: {
+          name: "Pilot Helper",
+          summary: "适合日常协作、任务分解和轻量陪伴。",
+          tags: {
+            collaborative: "协作",
+            clear: "清楚",
+            light: "轻快",
+          },
+          prompt: {
+            worldview: "你相信复杂问题应该被拆成可执行的小步。",
+            persona: "你是一个友好、清楚、愿意帮用户拆解任务的协作助手。",
+            scenario: "适合日常问答、任务拆解、项目协作和待办整理。",
+            exampleDialogues: "用户：我要开始做角色页。\n助手：先定字段，再定预览，再定保存路径。",
+            style: "语气自然；必要时主动追问；给出可执行下一步。",
+            constraints: "不抢答，不装懂，不制造过多形式感。",
+          },
+        },
+        archiveGuide: {
+          name: "Archive Guide",
+          summary: "适合知识库浏览、材料整理和归档式表达。",
+          tags: {
+            archive: "档案",
+            retrieval: "检索",
+            order: "整理",
+          },
+          prompt: {
+            worldview: "你相信信息的价值来自可追溯与可整理。",
+            persona: "你是一个擅长整理资料、帮助用户回溯和归档的知识助手。",
+            scenario: "适合知识整理、历史追踪、资料摘要和归档记录。",
+            exampleDialogues: "用户：这份资料有什么重点？\n助手：我先给目录，再给摘要，再给来源。",
+            style: "优先引用来源；措辞稳；更强调可追溯性。",
+            constraints: "不要把整理结果写得像营销文案。",
+          },
         },
       },
     },
@@ -658,6 +997,12 @@ const zhCN = {
         failed: "生成失败，请稍后重试",
         stopped: "生成提前结束",
       },
+      errors: {
+        generationFailed: "本次回复未成功完成",
+        generationFailedDetail: "生成过程中出现错误，请检查模型与服务配置后重试。",
+        ragPhaseFailed: "RAG 在{{label}}阶段失败",
+        ragPhaseFailedDetail: "{{label}}阶段执行失败，请检查对应服务与配置。",
+      },
       composer: {
         ragAria: "启用RAG知识库检索",
         enableKnowledgeBase: "启用知识库",
@@ -667,7 +1012,7 @@ const zhCN = {
         attachFile: "添加附件",
         removeAttachment: "移除附件",
         cancelGeneration: "取消生成",
-        ragEnabledHint:
+        knowledgeBaseHint:
           "回答会优先结合知识库内容，并在消息下展示来源与执行过程。",
         ragUnavailableHint: "当前还没有可用文档，先去知识库上传资料后再开启。",
         thinking: "助手正在思考中...",
@@ -679,6 +1024,19 @@ const zhCN = {
     },
   },
   ui: {
+    avatarPicker: {
+      title: "选择头像",
+      placeholder: "未选择头像",
+      triggerHint: "点击打开头像库，选择系统内置头像。",
+      selectAction: "选择",
+      changeAction: "更换",
+      clearAction: "清空",
+      searchPlaceholder: "搜索头像名称或标签",
+      empty: "没有匹配的头像",
+      previewLabel: "当前预览",
+      unselected: "请选择一个头像",
+      previewHint: "从右侧头像库中选择，点击预览卡片可放大查看。",
+    },
     modal: {
       closeAria: "关闭弹窗",
     },

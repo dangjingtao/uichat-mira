@@ -6,11 +6,11 @@ import type { LucideIcon } from "lucide-react";
 import {
   Blend,
   Bolt,
-  FlaskConical,
   Info,
   LibraryBig,
   ListChecks,
   Wrench,
+  UserRoundPen,
 } from "lucide-react";
 import About from "@/features/Settings/pages/About/index";
 import GeneralSettings from "@/features/Settings/pages/General/index";
@@ -19,9 +19,10 @@ import KnowledgeBaseSettings from "@/features/Settings/pages/KnowledgeBase/index
 import KnowledgeBaseAddWizard from "@/features/Settings/pages/KnowledgeBase/Add";
 import KnowledgeBaseDetail from "@/features/Settings/pages/KnowledgeBase/Detail";
 import ModelSettings from "@/features/Settings/pages/ModelSetting";
-import EvaluationWorkbench from "@/features/Settings/pages/Evaluation/Workbench";
+import EvaluationNew from "@/features/Settings/pages/Evaluation/New";
 import EvaluationCenter from "@/features/Settings/pages/Evaluation/Center";
 import ToolsSettings from "@/features/Settings/pages/Tools/index";
+import RoleSettings from "@/features/Settings/pages/Personas/index";
 
 type SettingsRouteNavMeta = {
   labelKey: string;
@@ -58,6 +59,11 @@ const settingsRouteTree: SettingsRouteConfig[] = [
     nav: { labelKey: "settings.navigation.knowledgeBase", icon: LibraryBig },
   },
   {
+    path: "roles",
+    element: <RoleSettings />,
+    nav: { labelKey: "settings.navigation.roles", icon: UserRoundPen },
+  },
+  {
     path: "knowledge-base/add",
     element: <KnowledgeBaseAddWizard />,
   },
@@ -69,20 +75,16 @@ const settingsRouteTree: SettingsRouteConfig[] = [
     path: "evaluation",
     children: [
       {
-        path: "workbench",
-        element: <EvaluationWorkbench />,
-        nav: {
-          labelKey: "settings.navigation.evaluationWorkbench",
-          icon: FlaskConical,
-        },
-      },
-      {
         path: "center",
         element: <EvaluationCenter />,
         nav: {
           labelKey: "settings.navigation.evaluationCenter",
           icon: ListChecks,
         },
+      },
+      {
+        path: "center/new",
+        element: <EvaluationNew />,
       },
     ],
   },

@@ -5,7 +5,6 @@ import {
   documentChunks,
   documents,
 } from "@/db";
-import { knowledgeBaseRepository } from "@/db/repositories";
 import { knowledgeBaseVectorStore } from "@/services/knowledge-base.vector-store";
 import { lexicalRetrieveService } from "./lexical-retrieve.service";
 import type { RagNodeResult } from "@/services/rag-node-contract";
@@ -351,9 +350,11 @@ const fuseHybridChunks = (
  */
 export const retrieveService = {
   async retrieve(input: RetrieveInput): Promise<RetrieveOutput> {
-    const kbId =
-      input.knowledgeBaseId ??
-      knowledgeBaseRepository.ensureDefault().id;
+    const kbId = input.knowledgeBaseId?.trim();
+    if (!kbId) {
+      throw new Error("Knowledge base id is required for retrieval");
+    }
+
     const topK = input.topK ?? 4;
     const normalizedQuestion = input.question?.trim() ?? "";
     const vectorChunks = normalizeRetrievedChunks(

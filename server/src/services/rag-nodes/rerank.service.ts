@@ -1,7 +1,7 @@
 import type { RetrievedChunk } from "./retrieve.service";
 import type { ProviderCode } from "@/db/schema.js";
 import { modelConfigRepository } from "@/db/repositories";
-import { providerProxyService } from "@/services/provider-proxy.service";
+import { providerProxyService } from "@/services/provider-proxy.service/index.js";
 import { fetchJsonWithTimeout } from "@/utils/http";
 import { writeStructuredLog } from "@/logger";
 import type { RagNodeResult } from "@/services/rag-node-contract";

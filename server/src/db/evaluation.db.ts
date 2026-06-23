@@ -206,30 +206,33 @@ export const listPersistedEvaluationDatasets = (): Array<{
     .all() as PersistedEvaluationDatasetRow[];
 
   return rows.map((row) => ({
-    dataset: parseJson<EvaluationDatasetRecord>(row.dataset_json, {
-      id: row.id,
-      datasetName: row.dataset_name,
-      fileName: row.file_name,
-      fileSize: row.file_size,
-      uploadedAt: row.uploaded_at,
-      summary: {
-        documentCount: 0,
-        sampleCount: 0,
-        hasReferenceAnswers: false,
-        hasGoldSources: false,
-      },
-      config: {
-        mode: "retrieve",
-        topK: 8,
-        topN: 3,
-        repeat: 1,
-        concurrency: 1,
-        timeoutSeconds: 300,
-      },
-      documents: [],
-      previewSamples: [],
-      validations: [],
-    }),
+    dataset: {
+      ...parseJson<EvaluationDatasetRecord>(row.dataset_json, {
+        id: row.id,
+        datasetName: row.dataset_name,
+        fileName: row.file_name,
+        fileSize: row.file_size,
+        uploadedAt: row.uploaded_at,
+        summary: {
+          documentCount: 0,
+          sampleCount: 0,
+          hasReferenceAnswers: false,
+          hasGoldSources: false,
+        },
+        config: {
+          mode: "retrieve",
+          topK: 8,
+          topN: 3,
+          repeat: 1,
+          concurrency: 1,
+          timeoutSeconds: 300,
+        },
+        documents: [],
+        previewSamples: [],
+        validations: [],
+      }),
+      ...(row.knowledge_base_id ? { knowledgeBaseId: row.knowledge_base_id } : {}),
+    },
     samples: parseJson<EvaluationDatasetSample[]>(row.samples_json, []),
     ...(row.knowledge_base_id
       ? { knowledgeBaseId: row.knowledge_base_id }

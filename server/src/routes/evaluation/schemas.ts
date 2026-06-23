@@ -106,6 +106,10 @@ export const evaluationDatasetSchema = {
   properties: {
     id: { type: "string", description: "Stable dataset identifier." },
     datasetName: { type: "string", description: "User-facing dataset name." },
+    knowledgeBaseId: {
+      type: "string",
+      description: "Knowledge base associated with this dataset when known.",
+    },
     fileName: { type: "string", description: "Uploaded zip filename." },
     fileSize: { type: "number", description: "Uploaded zip size in bytes." },
     uploadedAt: {
@@ -456,6 +460,31 @@ const deleteEvaluationRunResponseSchema = {
   },
 } as const;
 
+const deleteEvaluationRunsBodySchema = {
+  type: "object",
+  required: ["runIds"],
+  additionalProperties: false,
+  properties: {
+    runIds: {
+      type: "array",
+      minItems: 1,
+      items: { type: "string", description: "Evaluation run identifier." },
+    },
+  },
+} as const;
+
+const deleteEvaluationRunsResponseSchema = {
+  type: "object",
+  required: ["deletedIds"],
+  properties: {
+    deletedIds: {
+      type: "array",
+      items: { type: "string" },
+      description: "Deleted evaluation run identifiers.",
+    },
+  },
+} as const;
+
 const createRunBodySchema = {
   type: "object",
   required: ["datasetId"],
@@ -482,6 +511,7 @@ export const evaluationRouteSchemas = {
       additionalProperties: false,
       required: [
         "datasetName",
+        "knowledgeBaseId",
         "sampleCount",
         "documentCount",
         "chunksPerDocument",
@@ -494,6 +524,7 @@ export const evaluationRouteSchemas = {
       ],
       properties: {
         datasetName: { type: "string" },
+        knowledgeBaseId: { type: "string" },
         sampleCount: { type: "number" },
         documentCount: { type: "number" },
         chunksPerDocument: { type: "number" },
@@ -577,6 +608,17 @@ export const evaluationRouteSchemas = {
       200: successEnvelope(deleteEvaluationRunResponseSchema),
       400: errorEnvelope,
       404: errorEnvelope,
+      500: errorEnvelope,
+    },
+  },
+  deleteRuns: {
+    tags: ["Evaluation"],
+    summary: "Delete multiple evaluation runs",
+    operationId: "deleteEvaluationRuns",
+    body: deleteEvaluationRunsBodySchema,
+    response: {
+      200: successEnvelope(deleteEvaluationRunsResponseSchema),
+      400: errorEnvelope,
       500: errorEnvelope,
     },
   },

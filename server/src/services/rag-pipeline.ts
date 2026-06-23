@@ -1,6 +1,6 @@
 import { Readable } from "node:stream";
 import type { RetrievedChunk } from "./rag-nodes";
-import type { NormalizedChatMessage } from "./provider-proxy.service";
+import type { NormalizedChatMessage } from "./provider-proxy.service/index.js";
 import {
   ragGraph,
   type RAGGraphCustomStreamChunk,
@@ -21,7 +21,7 @@ import {
   assistantTextStartChunks,
   defaultAssistantStreamUsage,
   toAssistantSseChunk,
-} from "./assistant-stream-events";
+} from "./chat-stream-events";
 
 export interface RAGPipelineInput {
   question: string;
@@ -179,7 +179,7 @@ export const ragPipeline = {
   },
 
   /**
-   * 执行兼容 assistant-ui / AI SDK transport 的纯文本流。
+   * 执行兼容当前桌面聊天运行时的纯文本流。
    * 仅输出标准 text 事件，避免自定义 step 事件导致客户端提前断流。
    */
   assistantStream(

@@ -123,6 +123,19 @@
     --color-icon-secondary: 87 81 73;
     --color-icon-tertiary: 143 134 124;
     --color-icon-inverted: 250 250 250;
+
+    /* Streamdown / shadcn-style tokens */
+    --background: rgb(var(--color-surface-primary));
+    --foreground: rgb(var(--color-text-primary));
+    --card: rgb(var(--color-surface-primary));
+    --card-foreground: rgb(var(--color-text-primary));
+    --muted: rgb(var(--color-surface-secondary));
+    --muted-foreground: rgb(var(--color-text-secondary));
+    --border-token: rgb(var(--color-border));
+    --input: rgb(var(--color-border));
+    --primary: rgb(var(--color-text-primary));
+    --primary-foreground: rgb(var(--color-text-inverted));
+    --radius: 0.875rem;
   }
 
   .dark {
@@ -192,6 +205,18 @@
     --color-icon-secondary: 199 192 181;
     --color-icon-tertiary: 161 151 140;
     --color-icon-inverted: 24 24 27;
+
+    --background: rgb(var(--color-surface-primary));
+    --foreground: rgb(var(--color-text-primary));
+    --card: rgb(var(--color-surface-primary));
+    --card-foreground: rgb(var(--color-text-primary));
+    --muted: rgb(var(--color-surface-secondary));
+    --muted-foreground: rgb(var(--color-text-secondary));
+    --border-token: rgb(var(--color-border));
+    --input: rgb(var(--color-border));
+    --primary: rgb(var(--color-text-primary));
+    --primary-foreground: rgb(var(--color-text-inverted));
+    --radius: 0.875rem;
   }
 
   html {
@@ -284,6 +309,75 @@
 
   .stable-scrollbar-both-edges {
     scrollbar-gutter: stable both-edges;
+  }
+
+  .hide-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+
+  .role-markdown-editor {
+    height: 100%;
+  }
+
+  .role-markdown-editor > * {
+    display: flex;
+    min-height: 0;
+    height: 100%;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+
+  .role-markdown-editor .milkdown {
+    display: flex;
+    min-height: 0;
+    height: 100%;
+    flex: 1 1 auto;
+    flex-direction: column;
+    background: transparent;
+    color: rgb(var(--color-text-primary));
+  }
+
+  .role-markdown-editor .milkdown > * {
+    display: flex;
+    min-height: 0;
+    height: 100%;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+
+  .role-markdown-editor .milkdown .editor {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    flex: 1 1 auto;
+    width: 100%;
+    background: transparent;
+    overflow: hidden;
+  }
+
+  .role-markdown-editor .milkdown .ProseMirror {
+    min-height: 0;
+    height: 100%;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 20px 22px;
+    border: 0;
+    outline: 0;
+    font-size: 14px;
+    line-height: 1.75;
+    color: rgb(var(--color-text-primary));
+  }
+
+  .role-markdown-editor .milkdown .toolbar,
+  .role-markdown-editor .milkdown .topbar {
+    display: none;
   }
 }
 

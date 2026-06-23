@@ -30,16 +30,34 @@ export function formatCompactNumber(value: number) {
 export function getTypeBadge(type: string) {
   const ext = type.toLowerCase();
   const config = {
-    xlsx: { label: "XLSX", className: "bg-emerald-50 text-emerald-700" },
-    xls: { label: "XLS", className: "bg-emerald-50 text-emerald-700" },
-    pdf: { label: "PDF", className: "bg-rose-50 text-rose-700" },
-    docx: { label: "DOCX", className: "bg-sky-50 text-sky-700" },
-    md: { label: "MD", className: "bg-violet-50 text-violet-700" },
-    txt: { label: "TXT", className: "bg-slate-100 text-slate-700" },
+    xlsx: {
+      label: "XLSX",
+      className: "border border-success-border bg-success-soft text-success-text",
+    },
+    xls: {
+      label: "XLS",
+      className: "border border-success-border bg-success-soft text-success-text",
+    },
+    pdf: {
+      label: "PDF",
+      className: "border border-danger-border bg-danger-soft text-danger-text",
+    },
+    docx: {
+      label: "DOCX",
+      className: "border border-info-border bg-info-soft text-info-text",
+    },
+    md: {
+      label: "MD",
+      className: "border border-border bg-surface-secondary text-text-secondary",
+    },
+    txt: {
+      label: "TXT",
+      className: "border border-border bg-surface-secondary text-text-secondary",
+    },
   } as const;
 
   return config[ext as keyof typeof config] ?? {
     label: ext.toUpperCase(),
-    className: "bg-slate-100 text-slate-700",
+    className: "border border-border bg-surface-secondary text-text-secondary",
   };
 }

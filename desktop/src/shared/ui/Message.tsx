@@ -116,7 +116,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({
         {messages.map((msg) => (
           <div
             key={msg.key}
-            className="pointer-events-auto flex min-w-[280px] max-w-[520px] items-center gap-3 rounded-xl border border-border bg-surface-elevated/95 px-4 py-3 text-left shadow-shadow-lg backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-200"
+            className="pointer-events-auto flex min-w-[280px] max-w-[520px] items-center gap-3 rounded-ui-surface border border-border bg-surface-elevated/95 px-4 py-3 text-left shadow-shadow-lg backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-200"
             role="status"
           >
             {getIcon(msg.type)}

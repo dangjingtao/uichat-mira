@@ -4,7 +4,8 @@ import { threadService } from "@/services/thread.service.js";
 import {
   type ProxyProviderParam,
   providerProxyService,
-} from "@/services/provider-proxy.service.js";
+} from "@/services/provider-proxy.service/index.js";
+import { normalizeProxyChatMessages } from "@/services/provider-proxy.message-protocol.js";
 import {
   handleValidationError,
 } from "@/utils/index.js";
@@ -15,11 +16,157 @@ import {
   prepareDataStreamReply,
   prepareEventStreamReply,
 } from "./stream-protocol.js";
+import {
+  getFallbackThreadTitle,
+  generateThreadTitleFromMessages,
+  getLatestUserTitleSeed,
+  persistAssistantMessage,
+  persistVisibleUserMessage,
+  shouldGenerateTitle,
+} from "./message-persistence.js";
 import type {
   ChatMessagesBody,
   ProviderChatBody,
   ProviderChatParams,
 } from "./types.js";
+
+export const shouldUseThreadRag = (input: {
+  knowledgeBaseId: string | null | undefined;
+  ragInput: ReturnType<typeof toRagInput>;
+  threadId?: string;
+  hasAuthUser: boolean;
+}) =>
+  Boolean(
+    input.knowledgeBaseId &&
+      input.ragInput &&
+      typeof input.threadId === "string" &&
+      input.hasAuthUser,
+  );
+
+const resolveDefaultProviderThread = (
+  threadId: string | undefined,
+  userId: number | undefined,
+) => {
+  if (typeof threadId !== "string" || !userId) {
+    return null;
+  }
+
+  return threadService.getThreadSummaryById(threadId, userId);
+};
+
+const sendRagChatStream = ({
+  app,
+  reply,
+  threadId,
+  authUserId,
+  userMessageId,
+  ragInput,
+  messages,
+}: {
+  app: FastifyInstance;
+  reply: FastifyReply;
+  threadId: string;
+  authUserId: number;
+  userMessageId?: string;
+  ragInput: NonNullable<ReturnType<typeof toRagInput>>;
+  messages: ReturnType<typeof normalizeProxyChatMessages>;
+}) => {
+  prepareDataStreamReply(reply);
+  return reply.send(
+    createRagAssistantStream({
+      threadId,
+      userId: authUserId,
+      userMessageId,
+      ragInput,
+      messages,
+      log: app.log,
+    }),
+  );
+};
+
+const sendPersistedDefaultChatStream = ({
+  app,
+  reply,
+  threadId,
+  authUserId,
+  userMessageId,
+  messages,
+}: {
+  app: FastifyInstance;
+  reply: FastifyReply;
+  threadId: string;
+  authUserId: number;
+  userMessageId?: string;
+  messages: ReturnType<typeof normalizeProxyChatMessages>;
+}) => {
+  const { latestUserMessageId, latestUserMessage } = persistVisibleUserMessage({
+    threadId,
+    userId: authUserId,
+    userMessageId,
+    messages,
+  });
+  const assistantMessageId = crypto.randomUUID();
+
+  prepareDataStreamReply(reply);
+  return reply.send(
+    providerProxyService.createPersistedChatStream({
+      requestedProvider: "default",
+      threadId,
+      userId: authUserId,
+      userMessageId: latestUserMessageId,
+      assistantMessageId,
+      messages,
+      onComplete: async ({ answer, finishReason }) => {
+        if (finishReason !== "stop" || !answer.trim()) {
+          return;
+        }
+
+        persistAssistantMessage({
+          threadId,
+          userId: authUserId,
+          assistantMessageId,
+          parentId: latestUserMessageId,
+          content: answer,
+        });
+
+        try {
+          const currentThread = threadService.getThreadSummaryById(
+            threadId,
+            authUserId,
+          );
+          const latestUserText = getLatestUserTitleSeed(latestUserMessage);
+          if (latestUserText && shouldGenerateTitle(currentThread?.title)) {
+            const title = await generateThreadTitleFromMessages({
+              question: latestUserText,
+              answer,
+              streamTaskChatText: (titleMessages) =>
+                providerProxyService.streamTaskChatText(titleMessages),
+            });
+            threadService.updateThread(threadId, authUserId, {
+              title,
+            });
+          }
+        } catch (titleError) {
+          const fallbackTitle = getFallbackThreadTitle(
+            getLatestUserTitleSeed(latestUserMessage),
+          );
+          if (shouldGenerateTitle(threadService.getThreadSummaryById(
+            threadId,
+            authUserId,
+          )?.title) && fallbackTitle !== "新对话") {
+            threadService.updateThread(threadId, authUserId, {
+              title: fallbackTitle,
+            });
+          }
+          app.log.warn(
+            { err: titleError, threadId, fallbackTitle },
+            "[proxy-provider] failed to generate non-RAG thread title",
+          );
+        }
+      },
+    }),
+  );
+};
 
 export const registerProxyProviderChatRoutes = async (
   app: FastifyInstance,
@@ -39,9 +186,7 @@ export const registerProxyProviderChatRoutes = async (
         return validationResponse;
       }
 
-      const messages = providerProxyService.normalizeMessages(
-        request.body.messages,
-      );
+      const messages = normalizeProxyChatMessages(request.body.messages);
 
       if (messages.length === 0) {
         throw badRequest("No valid task messages provided");
@@ -68,9 +213,7 @@ export const registerProxyProviderChatRoutes = async (
         return validationResponse;
       }
 
-      const messages = providerProxyService.normalizeMessages(
-        request.body.messages,
-      );
+      const messages = normalizeProxyChatMessages(request.body.messages);
 
       if (messages.length === 0) {
         throw badRequest("No valid chat messages provided");
@@ -79,32 +222,28 @@ export const registerProxyProviderChatRoutes = async (
       if (request.params.provider === "default") {
         const threadId = request.body.id;
         const authUser = request.authUser;
-        const thread =
-          typeof threadId === "string" && authUser
-            ? threadService.getThreadSummaryById(threadId, authUser.id)
-            : null;
+        const thread = resolveDefaultProviderThread(threadId, authUser?.id);
         const ragInput = toRagInput(messages);
+        const useThreadRag = shouldUseThreadRag({
+          knowledgeBaseId: thread?.knowledgeBaseId,
+          ragInput,
+          threadId,
+          hasAuthUser: Boolean(authUser),
+        });
 
-        if (
-          thread?.ragEnabled &&
-          ragInput &&
-          typeof threadId === "string" &&
-          authUser
-        ) {
-          prepareDataStreamReply(reply);
-          return reply.send(
-            createRagAssistantStream({
-              threadId,
-              userId: authUser.id,
-              userMessageId: request.body.messageId,
-              ragInput,
-              messages,
-              log: app.log,
-            }),
-          );
+        if (useThreadRag && authUser && ragInput && typeof threadId === "string") {
+          return sendRagChatStream({
+            app,
+            reply,
+            threadId,
+            authUserId: authUser.id,
+            userMessageId: request.body.messageId,
+            ragInput,
+            messages,
+          });
         }
 
-        if (thread?.ragEnabled) {
+        if (thread?.knowledgeBaseId) {
           app.log.warn(
             {
               scope: "proxy-provider",
@@ -113,10 +252,22 @@ export const registerProxyProviderChatRoutes = async (
               hasAuthUser: Boolean(authUser),
               hasRagInput: Boolean(ragInput),
               threadFound: Boolean(thread),
+              knowledgeBaseId: thread.knowledgeBaseId,
               threadId,
             },
-            "[proxy-provider] RAG enabled thread skipped RAG branch",
+            "[proxy-provider] knowledge-base thread skipped RAG branch",
           );
+        }
+
+        if (typeof threadId === "string" && authUser) {
+          return sendPersistedDefaultChatStream({
+            app,
+            reply,
+            threadId,
+            authUserId: authUser.id,
+            userMessageId: request.body.messageId,
+            messages,
+          });
         }
       }
 
