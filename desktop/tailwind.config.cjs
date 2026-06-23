@@ -1,6 +1,13 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ["./index.html", "./src/**/*.{ts,tsx}"],
+  content: [
+    "./index.html",
+    "./src/**/*.{ts,tsx}",
+    "./node_modules/streamdown/dist/**/*.js",
+    "./node_modules/@streamdown/code/dist/**/*.js",
+    "./node_modules/@streamdown/math/dist/**/*.js",
+    "./node_modules/@streamdown/mermaid/dist/**/*.js",
+  ],
   darkMode: "class",
   theme: {
     extend: {
@@ -106,6 +113,11 @@ module.exports = {
         "space-10": "40px",
       },
       borderRadius: {
+        "ui-control": "8px",
+        "ui-surface": "10px",
+        "ui-panel": "12px",
+        "ui-overlay": "16px",
+        "ui-hero": "20px",
         "radius-sm": "8px",
         "radius-md": "10px",
         "radius-lg": "14px",

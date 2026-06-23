@@ -10,6 +10,8 @@ import {
   updateRoleModelConfigParams,
 } from "@/shared/api/modelSettings";
 import { getProviderLabel } from "@/shared/providerCatalog";
+import SettingsNotice from "./SettingsNotice";
+import SettingsStatBlock from "./SettingsStatBlock";
 
 interface ParamMeta {
   key: string;
@@ -204,7 +206,10 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
       message.success(t("settings.model.config.saved"));
       setIsChanged(false);
     } catch (err) {
-      const messageText = err instanceof Error ? err.message : t("settings.model.config.saveFailed");
+      const messageText =
+        err instanceof Error
+          ? err.message
+          : t("settings.model.config.saveFailed");
       message.error(messageText);
     } finally {
       setIsSaving(false);
@@ -238,7 +243,9 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
                     : "bg-surface-tertiary text-text-secondary"
                 }`}
               >
-                {isConfigured ? t("settings.model.config.configured") : t("settings.model.config.notConfigured")}
+                {isConfigured
+                  ? t("settings.model.config.configured")
+                  : t("settings.model.config.notConfigured")}
               </span>
             </div>
             <div className="text-xs leading-4 text-text-secondary">
@@ -258,32 +265,25 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
             disabled={!isConfigured || !isChanged || isSaving}
             onClick={handleSave}
           >
-            {isSaving ? t("settings.model.config.saving") : t("settings.model.config.save")}
+            {isSaving
+              ? t("settings.model.config.saving")
+              : t("settings.model.config.save")}
           </Button>
         )}
       </div>
 
       {readOnly ? (
-        <div className="mb-2.5 rounded-lg border border-border bg-surface-secondary px-3 py-2 text-xs leading-5 text-text-secondary">
+        <SettingsNotice tone="info" size="sm" className="mb-2.5 leading-5">
           {t("settings.model.config.task.readOnlyHint")}
-        </div>
+        </SettingsNotice>
       ) : null}
 
-      <div className="mb-2.5 grid grid-cols-1 gap-2 md:grid-cols-2">
-        <div className="rounded-lg border border-border bg-surface-secondary px-3 py-2">
-          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-text-tertiary">
-            {t("settings.model.config.currentPlatform")}
-          </div>
-          <div className="mt-1 text-sm text-text-primary">{providerLabel}</div>
-        </div>
-        <div className="rounded-lg border border-border bg-surface-secondary px-3 py-2">
-          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-text-tertiary">
-            {t("settings.model.config.currentModel")}
-          </div>
-          <div className="mt-1 truncate text-sm text-text-primary">
-            {config?.name || t("settings.model.config.selectModel")}
-          </div>
-        </div>
+      <div className="mb-2.5">
+        <SettingsStatBlock
+          label={providerLabel}
+          value={config?.name || t("settings.model.config.selectModel")}
+          size="sm"
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">

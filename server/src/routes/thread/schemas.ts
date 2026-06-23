@@ -19,7 +19,6 @@ export const threadSchema = {
     "id",
     "title",
     "modelName",
-    "ragEnabled",
     "status",
     "createdAt",
     "updatedAt",
@@ -30,11 +29,11 @@ export const threadSchema = {
     title: { type: "string", description: "User-facing conversation title." },
     modelName: {
       description: "Display name of the model associated with the thread.",
-      anyOf: [{ type: "string" }, { type: "null" }],
+      type: ["string", "null"],
     },
-    ragEnabled: {
-      type: "boolean",
-      description: "Whether default-provider chat should run through RAG.",
+    knowledgeBaseId: {
+      type: ["string", "null"],
+      description: "Knowledge base bound to this thread.",
     },
     status: {
       type: "string",
@@ -66,7 +65,7 @@ export const threadSchema = {
 // RAG source payloads are stored under `metadata.rag.sources`.
 export const messageSchema = {
   type: "object",
-  required: ["id", "threadId", "role", "content", "createdAt"],
+  required: ["id", "threadId", "role", "content", "parts", "createdAt"],
   additionalProperties: false,
   properties: {
     id: { type: "string", description: "Stable message identifier." },
@@ -80,6 +79,48 @@ export const messageSchema = {
       enum: MESSAGE_ROLE_VALUES,
     },
     content: { type: "string", description: "Persisted message text." },
+    parts: {
+      type: "array",
+      description:
+        "Canonical message parts used by the desktop chat runtime for text and attachments.",
+      items: {
+        anyOf: [
+          {
+            type: "object",
+            required: ["type", "text"],
+            additionalProperties: false,
+            properties: {
+              type: { const: "text" },
+              text: { type: "string" },
+            },
+          },
+          {
+            type: "object",
+            required: ["type", "image"],
+            additionalProperties: false,
+            properties: {
+              type: { const: "image" },
+              image: { type: "string" },
+              filename: { type: "string" },
+              fileId: { type: "string" },
+              mediaType: { type: "string" },
+            },
+          },
+          {
+            type: "object",
+            required: ["type", "data", "filename", "mimeType"],
+            additionalProperties: false,
+            properties: {
+              type: { const: "file" },
+              data: { type: "string" },
+              filename: { type: "string" },
+              fileId: { type: "string" },
+              mimeType: { type: "string" },
+            },
+          },
+        ],
+      },
+    },
     metadata: {
       type: "object",
       description: "Free-form message metadata such as RAG source details.",
@@ -115,9 +156,9 @@ const threadMutationBodySchema = {
       type: "string",
       description: "Display name of the model associated with the thread.",
     },
-    ragEnabled: {
-      type: "boolean",
-      description: "Whether default-provider chat should run through RAG.",
+    knowledgeBaseId: {
+      type: ["string", "null"],
+      description: "Knowledge base bound to this thread.",
     },
   },
 } as const;
@@ -143,9 +184,50 @@ const createMessageBodySchema = {
     },
     content: {
       type: "string",
-      minLength: 1,
       maxLength: MAX_MESSAGE_CONTENT_LENGTH,
       description: `Message text. Maximum content length is ${MAX_MESSAGE_CONTENT_LENGTH} characters.`,
+    },
+    parts: {
+      type: "array",
+      description:
+        "Canonical message parts used to persist text and attachments together.",
+      items: {
+        anyOf: [
+          {
+            type: "object",
+            required: ["type", "text"],
+            additionalProperties: false,
+            properties: {
+              type: { const: "text" },
+              text: { type: "string" },
+            },
+          },
+          {
+            type: "object",
+            required: ["type", "image"],
+            additionalProperties: false,
+            properties: {
+              type: { const: "image" },
+              image: { type: "string" },
+              filename: { type: "string" },
+              fileId: { type: "string" },
+              mediaType: { type: "string" },
+            },
+          },
+          {
+            type: "object",
+            required: ["type", "data", "filename", "mimeType"],
+            additionalProperties: false,
+            properties: {
+              type: { const: "file" },
+              data: { type: "string" },
+              filename: { type: "string" },
+              fileId: { type: "string" },
+              mimeType: { type: "string" },
+            },
+          },
+        ],
+      },
     },
     metadata: {
       type: "object",

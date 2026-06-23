@@ -24,7 +24,7 @@ const encodedValuePrefix = "__radix-select__";
 
 const inputBaseClassName = `
   w-full
-  rounded-lg
+  rounded-ui-control
   border
   border-border
   bg-surface-primary
@@ -156,6 +156,7 @@ export const Select: React.FC<SelectProps> = ({
           className={`
             group
             inline-flex
+            min-w-0
             w-full
             items-center
             justify-between
@@ -167,6 +168,7 @@ export const Select: React.FC<SelectProps> = ({
           `}
         >
           <SelectPrimitive.Value
+            className="min-w-0 flex-1 truncate"
             placeholder={
               <span className="block truncate text-text-tertiary">
                 {hasOptions ? placeholder : t("ui.select.noOptions")}
@@ -189,7 +191,7 @@ export const Select: React.FC<SelectProps> = ({
                 max-h-64
                 min-w-[var(--radix-select-trigger-width)]
                 overflow-hidden
-                rounded-[10px]
+                rounded-ui-surface
                 border
                 border-border
                 bg-surface-elevated
@@ -215,7 +217,7 @@ export const Select: React.FC<SelectProps> = ({
                         cursor-default
                         items-center
                         gap-2
-                        rounded-[8px]
+                        rounded-ui-control
                         px-2.5
                         py-2
                         pr-8

@@ -2,6 +2,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { CheckCircle, Loader2, AlertCircle } from "lucide-react";
 import type { ProviderSummary } from "@/shared/api/modelSettings";
+import Card from "@/shared/ui/Card";
 
 interface PlatformCardProps {
   platforms: ProviderSummary[];
@@ -20,7 +21,11 @@ const PlatformCard: React.FC<PlatformCardProps> = ({
 
   return (
     <div className="flex h-full w-full shrink-0 md:w-56">
-      <div className="flex h-full w-full flex-col rounded-2xl border border-border bg-surface-secondary p-2">
+      <Card
+        variant="subtle"
+        padding="sm"
+        className="flex h-full w-full flex-col"
+      >
         <div className="px-1 py-1 text-xs font-medium uppercase tracking-[0.12em] text-text-tertiary">
           {t("settings.model.platform.title")}
         </div>
@@ -37,7 +42,7 @@ const PlatformCard: React.FC<PlatformCardProps> = ({
                 key={platform.code}
                 type="button"
                 onClick={() => onSelectPlatform(platform.code)}
-                className={`w-full rounded-xl border px-2.5 py-2 text-left transition-all duration-150 ${
+                className={`w-full rounded-ui-panel border px-2.5 py-2 text-left transition-all duration-150 ${
                   isSelected
                     ? "border-primary/20 bg-surface-primary shadow-shadow-sm"
                     : "border-transparent bg-transparent hover:border-border hover:bg-surface-primary"
@@ -82,7 +87,7 @@ const PlatformCard: React.FC<PlatformCardProps> = ({
             );
           })}
         </div>
-      </div>
+      </Card>
     </div>
   );
 };

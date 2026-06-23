@@ -12,7 +12,7 @@ Primary project docs now live under `docs/`.
 - `docs/architecture/rag-node-development.md`: RAG node standard IO and observability development guide
 - `docs/platform/tauri.md`: Tauri desktop runtime overview
 - `docs/platform/tauri-setup.md`: Tauri setup and troubleshooting
-- `docs/assistant-ui.md`: assistant-ui reference entry
+- `docs/uchat.md`: current app-owned chat runtime entry
 - `docs/evaluation-workbench.md`: 评测工作台技术方案、调用链路与联调说明
 - `desktop/src/shared/ui/COMPONENTS.md`: source-adjacent shared UI component documentation
 - `desktop/src/shared/ui/ui-design-guidelines-tailwind.md`: source-adjacent UI design guidelines
@@ -61,6 +61,7 @@ root/
 - `server/src/config/index.ts`: reads host and port from env or `runtime.config.cjs`.
 - `scripts/build-dist.js`: builds renderer/server, copies shared backend assets into Electron packaging inputs, copies the Node runtime and runtime config, runs electron-builder, then prunes old release outputs.
 - Production packaging cleans `.artifacts/` after a successful build so intermediate desktop inputs do not accumulate in the repository root.
+- Built-in avatar assets are served from `GET /assets/avatars/...` and the 128x128 production set currently lives under `server/static/avatars/avatar-pack-16/`.
 
 ## Development
 
@@ -169,3 +170,7 @@ Use the actual values from `runtime.config.cjs`.
 - [ ] 给 updateDocument 做真正的回滚策略：
   先保留旧 chunk 和旧向量引用, 新 embedding 成功后再切换, 失败则恢复旧内容和旧向量状态
 - [ ] 支持tauri打包
+- [ ] 聊天线程生命周期专项：
+  欢迎态草稿与已持久化线程彻底分离，首发发送作为唯一建线程入库时机，并清理由此引出的线程复用 / 误覆盖边界
+- [ ] 开发态动态端口治理专项：
+  启动器负责端口探测、复用或换端口，并把最终运行时地址写入统一解析产物，避免 dev 进程僵死或端口占用导致前后端错连

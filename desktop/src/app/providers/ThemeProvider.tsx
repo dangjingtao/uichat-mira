@@ -62,6 +62,12 @@ const applyThemeToDocument = (themeId: ThemePresetId, mode: ThemeMode) => {
   root.setAttribute("data-theme-mode", mode);
 };
 
+/**
+ * ThemeProvider owns document-level theme variables only.
+ *
+ * It must remain independent from auth/chat/runtime providers so visual changes
+ * do not remount or perturb long-lived application state.
+ */
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {

@@ -65,7 +65,7 @@
 | BUG-005 | 助手消息复制 / 重新生成按钮被用户消息 hover 策略误隐藏 | 0.5.2 | Medium | P1 | Resolved | 0.5.2 |
 | BUG-006 | Provider 连接配置重启后被默认 seed 覆盖 | 0.5.2 | High | P0 | Resolved | 0.5.2 |
 | BUG-007 | RAG 线程发送消息未携带 thread id 导致知识库链路被跳过 | 0.5.2 | High | P0 | Verified | 0.5.2 |
-| BUG-008 | RAG stream finish 事件携带 usage 导致 assistant-ui 校验失败 | 0.5.2 | High | P0 | Verified | 0.5.2 |
+| BUG-008 | RAG stream finish 事件携带 usage 导致旧运行时校验失败 | 0.5.2 | High | P0 | Verified | 0.5.2 |
 | BUG-009 | 助手消息重新生成完成后触发 React removeChild 崩溃 | 0.5.2 | High | P0 | Resolved | 0.5.2 |
 | GAP-001 | Cloudflare 多模态文档核对未完全闭环 | 0.5.2 | Low | P3 | In Progress | 待定 |
 
@@ -168,7 +168,7 @@
   - 明确重新生成与编辑后的消息持久化约束。
 - 已实施修复：
   - 2026-06-19 已补做“线性尾部替换”持久化：
-    - 非 RAG `createMessage` 支持 `parentId` / `metadata.assistantUi.branch.parentId`，服务端在重新生成或编辑后会裁掉旧尾巴再保存。
+    - 非 RAG `createMessage` 支持 `parentId` / `metadata.lineage.parentId`，服务端在重新生成或编辑后会裁掉旧尾巴再保存。
     - RAG `/proxy/chat/default` 分支在 latest user message 上对齐尾部，重新回答不会继续向同一问题后面叠加多条 assistant。
     - 前端历史加载增加连续 assistant 线性投影，旧脏数据下优先显示最后一条有效回答。
 - 验证记录：
@@ -299,7 +299,7 @@
   2. 观察 assistant 消息下方操作区。
   3. 检查 `复制` / `重新生成` 是否可见。
 - 期望结果：
-  - 助手消息下方 `复制` / `重新生成` 默认可见或按 assistant-ui 原有交互稳定显示。
+  - 助手消息下方 `复制` / `重新生成` 默认可见或按原有交互稳定显示。
   - 用户消息下方 `复制` / `编辑` 可继续使用预留高度和 hover 渐显，避免聊天区抖动。
 - 实际结果：
   - 修复前，助手消息按钮被用户消息 hover 策略误隐藏。
@@ -386,7 +386,7 @@
   - 后端 `request.body.id` 缺失时无法查询线程配置，因此直接降级到普通 LLM。
 - 根因 / 假设：
   - `useChatRuntime` 的 `prepareSendMessagesRequest` 只覆盖了 `messages`。
-  - assistant-ui 原始请求体不保证包含本项目后端需要的 remote thread id。
+  - 旧运行时原始请求体不保证包含本项目后端需要的 remote thread id。
   - RAG 分支条件依赖 `request.body.id`，缺失时没有显式 UI 提示，表现为“像普通聊天一样回复”。
 - 临时绕过方案：
   - 无稳定用户侧绕过；只能手动调用带 `id` 的后端接口验证 RAG。
@@ -396,7 +396,7 @@
   - 后端在 RAG 开启但分支被跳过时记录 `rag-branch-skipped`，避免后续静默降级。
 - 解决方案：
   - 保持 transport 请求显式携带 thread id。
-  - 后续可考虑把 thread id 传递改为 assistant-ui 官方上下文能力，减少模块级 bridge。
+  - 后续可考虑把 thread id 传递继续下沉到统一运行时上下文，减少模块级 bridge。
 - 验证记录：
   - 2026-06-19 已确认问题线程 `56c86c3da64fad499d8156bec643ccff` 的 `ragEnabled=true`，但修复前只持久化了 user 消息。
   - 2026-06-19 使用带 `id` 的 `/proxy/chat/default` API 回归，响应开头出现 `data-rag-node`。
@@ -404,7 +404,7 @@
   - 2026-06-19 已通过 `pnpm check`。
   - 2026-06-19 使用内置浏览器新建 RAG 线程并发送消息，日志出现 `rag-branch-enter`，页面出现“执行过程”链路。
 
-### BUG-008 RAG stream finish 事件携带 usage 导致 assistant-ui 校验失败
+### BUG-008 RAG stream finish 事件携带 usage 导致旧运行时校验失败
 
 - 状态：Verified
 - 严重度：High
@@ -414,7 +414,7 @@
 - 现象：
   - 后端已进入 RAG 分支，日志存在 `rag-branch-enter`、`retrieve-complete`、`rerank-enter`。
   - 页面已收到回答文本，但助手消息下方显示“生成失败，请稍后重试”。
-  - 错误详情包含 `Type validation failed`，并指向 `type: "finish"` 事件中的 `usage` 字段不被当前 assistant-ui / AI SDK UI message chunk 校验接受。
+  - 错误详情包含 `Type validation failed`，并指向 `type: "finish"` 事件中的 `usage` 字段不被当前运行时 / AI SDK UI message chunk 校验接受。
 - 复现步骤：
   1. 新建聊天线程。
   2. 开启知识库检索。
@@ -428,8 +428,8 @@
   - 修复前，回答文本显示后被协议校验错误标记为失败。
   - RAG 执行链路未稳定展示，用户感知为“知识库链路没出来”。
 - 根因 / 假设：
-  - `server/src/services/assistant-stream-events.ts` 的 `assistantFinishChunk()` 在 `finish` 事件里附带 `usage`。
-  - 当前本地依赖组合为 `@assistant-ui/react-ai-sdk@1.3.32` 与 `ai@6.0.197`。
+  - `server/src/services/chat-stream-events.ts` 的 `assistantFinishChunk()` 在 `finish` 事件里附带 `usage`。
+  - 当前本地依赖组合中的旧运行时流消费层与 `ai@6.0.197` 在该字段上不兼容。
   - 该 UI message chunk 类型允许 `finishReason` 与 `messageMetadata`，不接受 `usage`。
 - 临时绕过方案：
   - 无稳定用户侧绕过；只能忽略 UI 错误并从后端日志确认 RAG 已执行。
@@ -437,7 +437,7 @@
   - 移除 `finish` stream chunk 中的 `usage` 字段。
   - 保留调用侧 `usage` 参数，减少当前改动面，后续如需 token 统计应走官方支持的 metadata / message metadata 方案。
 - 解决方案：
-  - RAG stream 严格按当前 assistant-ui / AI SDK UI message chunk 兼容字段输出。
+  - RAG stream 严格按当前运行时 / AI SDK UI message chunk 兼容字段输出。
   - 后续新增 stream 字段前需先对照本地依赖版本的类型定义与浏览器回归。
 - 验证记录：
   - 2026-06-19 已通过 `pnpm --filter @ui-chat-rag-tester/server typecheck`。
@@ -470,13 +470,13 @@
   - 同时出现 `ReactDOMClient.createRoot()` 重复创建 root 警告。
   - ErrorBoundary 展示“页面暂时出了点问题”。
 - 根因 / 假设：
-  - 疑似 assistant-ui 重新生成完成后的消息分支替换，与当前自定义 history adapter / `CurrentThreadProvider` 刷新线程状态同时修改消息树，导致 React 删除已被替换的 DOM 节点。
+  - 疑似旧运行时重新生成完成后的消息分支替换，与当前自定义 history adapter / `CurrentThreadProvider` 刷新线程状态同时修改消息树，导致 React 删除已被替换的 DOM 节点。
   - 也可能与重新生成完成后触发标题同步 / thread fetch / history reload 的时序冲突有关。
 - 临时绕过方案：
   - 用户侧只能刷新应用或避免使用重新生成。
 - 解决方案：
   - 收敛重新生成完成后的刷新时序，避免运行时消息树仍在 commit 时强制 reload/thread state 替换。
-  - 复查 `ThreadHistoryAdapter.append/load`、`CurrentThreadProvider.refreshThreadState()` 与 assistant-ui reload 行为的交互。
+  - 复查 `ThreadHistoryAdapter.append/load`、`CurrentThreadProvider.refreshThreadState()` 与旧 reload 行为的交互。
   - 修复后需覆盖普通线程、RAG 线程、取消后重新生成三类回归。
 - 已实施修复：
   - `desktop/src/main.tsx` 复用已有 React root，避免 dev/HMR 或页面重建时对同一容器重复 `createRoot()`。

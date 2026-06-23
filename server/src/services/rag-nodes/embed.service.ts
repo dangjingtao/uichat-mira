@@ -1,7 +1,7 @@
 import {
   providerProxyService,
   type EmbeddingResult,
-} from "@/services/provider-proxy.service";
+} from "@/services/provider-proxy.service/index.js";
 import type { RagNodeResult } from "@/services/rag-node-contract";
 import {
   createModelCallObservation,

@@ -6,6 +6,7 @@ import {
   upsertEvaluationDataset,
   upsertEvaluationRun,
 } from "@/db/evaluation.db.js";
+import { knowledgeBaseService } from "@/services/knowledge-base.service.js";
 import { ragPipeline } from "@/services/rag-pipeline.js";
 import { badRequest, notFound } from "@/utils/route-errors.js";
 import type { RetrievedChunk } from "@/services/rag-nodes/index.js";
@@ -83,6 +84,11 @@ const clampPositiveInteger = (value: number | undefined, fallback: number): numb
 
 const normalizeSourceToken = (value: string): string =>
   value.trim().toLowerCase();
+
+const normalizeKnowledgeBaseId = (value?: string): string | undefined => {
+  const normalized = value?.trim();
+  return normalized ? normalized : undefined;
+};
 
 const normalizeWhitespace = (value: string): string =>
   value.replace(/\s+/g, " ").trim();
@@ -189,6 +195,7 @@ const createValidationReport = (
   samples: EvaluationDatasetSample[],
   hasManifest: boolean,
   documentCount: number,
+  knowledgeBaseId?: string,
 ): EvaluationDatasetValidationItem[] => {
   const sampleCount = samples.length;
   const samplesWithReference = samples.filter((item) =>
@@ -197,6 +204,10 @@ const createValidationReport = (
   const samplesWithGoldSources = samples.filter((item) =>
     item.goldSources.length > 0
   ).length;
+  const normalizedKnowledgeBaseId = normalizeKnowledgeBaseId(knowledgeBaseId);
+  const knowledgeBase = normalizedKnowledgeBaseId
+    ? knowledgeBaseService.getKnowledgeBaseById(normalizedKnowledgeBaseId)
+    : null;
 
   return [
     {
@@ -239,6 +250,20 @@ const createValidationReport = (
         sampleCount === 0
           ? "未识别到可用样本。"
           : `检测到 ${samplesWithGoldSources}/${sampleCount} 条样本包含 gold sources。`,
+    },
+    {
+      id: "knowledgeBase",
+      label: "知识库来源可用于评测",
+      status: normalizedKnowledgeBaseId
+        ? knowledgeBase
+          ? "pass"
+          : "error"
+        : "error",
+      detail: normalizedKnowledgeBaseId
+        ? knowledgeBase
+          ? `当前评测包绑定知识库：${knowledgeBase.name}（${knowledgeBase.id}）。`
+          : `评测包声明的知识库 "${normalizedKnowledgeBaseId}" 不存在。`
+        : "manifest.json 缺少 knowledgeBaseId，当前评测包不能启动评测。",
     },
   ];
 };
@@ -317,10 +342,12 @@ export class EvaluationService {
       manifest?.datasetName?.trim() ||
       input.fileName.replace(/\.zip$/i, "") ||
       "evaluation-dataset";
+    const knowledgeBaseId = normalizeKnowledgeBaseId(manifest?.knowledgeBaseId);
 
     const dataset: EvaluationDatasetRecord = {
       id: createDatasetId(),
       datasetName,
+      ...(knowledgeBaseId ? { knowledgeBaseId } : {}),
       fileName: input.fileName,
       fileSize: input.fileSize,
       uploadedAt: new Date().toISOString(),
@@ -360,16 +387,17 @@ export class EvaluationService {
         samples,
         Boolean(manifestEntryName),
         documents.length,
+        knowledgeBaseId,
       ),
     };
 
     this.datasets.set(dataset.id, dataset);
     this.datasetSamples.set(dataset.id, samples);
-    this.datasetKnowledgeBaseIds.set(dataset.id, manifest?.knowledgeBaseId);
+    this.datasetKnowledgeBaseIds.set(dataset.id, knowledgeBaseId);
     upsertEvaluationDataset({
       dataset,
       samples,
-      knowledgeBaseId: manifest?.knowledgeBaseId,
+      knowledgeBaseId,
     });
     return dataset;
   }
@@ -409,6 +437,39 @@ export class EvaluationService {
     };
   }
 
+  deleteRuns(runIds: string[]): {
+    deletedIds: string[];
+  } {
+    const uniqueRunIds = Array.from(new Set(runIds));
+    const deletedIds: string[] = [];
+
+    for (const runId of uniqueRunIds) {
+      const run = this.runs.get(runId);
+      if (!run) {
+        continue;
+      }
+
+      if (run.status === "queued" || run.status === "running") {
+        throw badRequest("Running evaluation records cannot be deleted");
+      }
+    }
+
+    for (const runId of uniqueRunIds) {
+      const run = this.runs.get(runId);
+      if (!run) {
+        continue;
+      }
+
+      const deleted = deletePersistedEvaluationRun(runId);
+      this.runs.delete(runId);
+      if (deleted) {
+        deletedIds.push(runId);
+      }
+    }
+
+    return { deletedIds };
+  }
+
   createRun(input: CreateEvaluationRunBody): EvaluationRunRecord {
     const dataset = this.datasets.get(input.datasetId);
     if (!dataset) {
@@ -417,6 +478,22 @@ export class EvaluationService {
 
     if (dataset.validations.some((item) => item.status === "error")) {
       throw badRequest("The evaluation dataset still contains validation errors");
+    }
+
+    const knowledgeBaseId = this.datasetKnowledgeBaseIds.get(input.datasetId);
+    if (!knowledgeBaseId) {
+      throw badRequest(
+        "The evaluation dataset is missing a valid knowledgeBaseId",
+      );
+    }
+
+    const knowledgeBase = knowledgeBaseService.getKnowledgeBaseById(
+      knowledgeBaseId,
+    );
+    if (!knowledgeBase) {
+      throw badRequest(
+        `The evaluation dataset references an unknown knowledge base "${knowledgeBaseId}"`,
+      );
     }
 
     const samples = this.datasetSamples.get(input.datasetId) ?? [];
@@ -435,7 +512,10 @@ export class EvaluationService {
       startedAt,
       metrics: emptyMetrics(),
       logs: [
-        this.createLogEntry("info", `已创建评测任务，等待执行：${dataset.datasetName}`),
+        this.createLogEntry(
+          "info",
+          `已创建评测任务，等待执行：${dataset.datasetName}（知识库：${knowledgeBase.name}）`,
+        ),
       ],
       sampleResults: [],
     };

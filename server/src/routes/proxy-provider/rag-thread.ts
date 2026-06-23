@@ -3,12 +3,21 @@ import { knowledgeBaseService } from "@/services/knowledge-base.service.js";
 import {
   type NormalizedChatMessage,
   providerProxyService,
-} from "@/services/provider-proxy.service.js";
+} from "@/services/provider-proxy.service/index.js";
 import { NO_CONTEXT_ANSWER } from "@/services/rag-response-constants.js";
 import type { RetrievedChunk } from "@/services/rag-nodes/index.js";
 import { ragPipeline } from "@/services/rag-pipeline.js";
 import { threadService } from "@/services/thread.service.js";
+import {
+  getFallbackThreadTitle,
+  generateThreadTitleFromMessages,
+  getLatestUserTitleSeed,
+  persistAssistantMessage,
+  persistVisibleUserMessage,
+  shouldGenerateTitle,
+} from "./message-persistence.js";
 import { createStaticAssistantStream } from "./stream-protocol.js";
+import { getNormalizedMessageText } from "@/services/provider-proxy.message-protocol.js";
 
 export const toPersistedRagSources = (sources: RetrievedChunk[]) =>
   sources.map((source) => ({
@@ -33,7 +42,8 @@ export const toRagInput = (messages: NormalizedChatMessage[]) => {
   }
 
   const latestUserMessage = messages[latestUserIndex];
-  if (!latestUserMessage?.content.trim()) {
+  const latestUserText = getNormalizedMessageText(latestUserMessage);
+  if (!latestUserMessage || !latestUserText) {
     return null;
   }
 
@@ -42,41 +52,9 @@ export const toRagInput = (messages: NormalizedChatMessage[]) => {
     .filter((message) => message.role !== "system");
 
   return {
-    question: latestUserMessage.content,
+    question: latestUserText,
     conversationHistory,
   };
-};
-
-const cleanGeneratedTitle = (title: string) =>
-  title
-    .trim()
-    .replace(/^["'“”‘’]+|["'“”‘’]+$/g, "")
-    .slice(0, 50);
-
-const generateThreadTitle = async (question: string, answer: string) => {
-  const prompt =
-    "请根据以下对话内容生成一个简短的中文标题（不超过20个字符），只返回标题本身，不要解释。\n\n" +
-    `用户：${question}\n助手：${answer.slice(0, 500)}`;
-
-  let title = "";
-  for await (const delta of providerProxyService.streamTaskChatText([
-    {
-      role: "user",
-      content: prompt,
-    },
-  ])) {
-    title += delta;
-    if (title.length >= 80) {
-      break;
-    }
-  }
-
-  return cleanGeneratedTitle(title) || "新对话";
-};
-
-const shouldGenerateTitle = (title: string | undefined) => {
-  const normalizedTitle = title?.trim();
-  return !normalizedTitle || normalizedTitle === "新对话";
 };
 
 export interface RagAssistantStreamInput {
@@ -95,8 +73,8 @@ export interface RagAssistantStreamInput {
 }
 
 /**
- * Create the assistant-ui RAG stream and persist user/assistant messages around
- * it. Empty knowledge bases return a deterministic static stream.
+ * Create the RAG chat stream and persist user/assistant messages around it.
+ * Empty knowledge bases return a deterministic static stream.
  */
 export const createRagAssistantStream = (input: RagAssistantStreamInput) => {
   const {
@@ -117,37 +95,21 @@ export const createRagAssistantStream = (input: RagAssistantStreamInput) => {
       question: ragInput.question,
       historyCount: ragInput.conversationHistory?.length ?? 0,
     },
-    "[proxy-provider] starting RAG assistant stream",
+    "[proxy-provider] starting RAG chat stream",
   );
 
-  const latestUserIndex = [...messages]
-    .map((message, index) => ({ message, index }))
-    .reverse()
-    .find((entry) => entry.message.role === "user")?.index;
-  const latestUserMessage = messages[latestUserIndex ?? -1];
-  const previousVisibleMessage =
-    latestUserIndex !== undefined && latestUserIndex > 0
-      ? messages[latestUserIndex - 1]
-      : undefined;
-  const latestUserMessageId =
-    typeof latestUserMessage?.id === "string" && latestUserMessage.id.trim()
-      ? latestUserMessage.id
-      : typeof userMessageId === "string" && userMessageId.trim()
-        ? userMessageId
-        : crypto.randomUUID();
-  const assistantMessageId = crypto.randomUUID();
-  const latestUserParentId =
-    typeof previousVisibleMessage?.id === "string"
-      ? previousVisibleMessage.id
-      : null;
-
-  threadService.createMessage(threadId, userId, {
-    id: latestUserMessageId,
-    parentId: latestUserParentId,
-    role: "user",
-    content: ragInput.question,
-    metadata: { custom: {} },
+  const { latestUserMessageId } = persistVisibleUserMessage({
+    threadId,
+    userId,
+    userMessageId,
+    messages,
   });
+  const latestUserMessage = [...messages]
+    .reverse()
+    .find((message) => message.role === "user");
+  const assistantMessageId = crypto.randomUUID();
+  const latestThread = threadService.getThreadSummaryById(threadId, userId);
+  const knowledgeBaseId = latestThread?.knowledgeBaseId;
 
   const persistRagAssistantMessage = async ({
     answer,
@@ -164,10 +126,11 @@ export const createRagAssistantStream = (input: RagAssistantStreamInput) => {
       return;
     }
 
-    threadService.createMessage(threadId, userId, {
-      id: assistantMessageId,
+    persistAssistantMessage({
+      threadId,
+      userId,
+      assistantMessageId,
       parentId: latestUserMessageId,
-      role: "assistant",
       content: answer,
       metadata: {
         rag: {
@@ -182,31 +145,53 @@ export const createRagAssistantStream = (input: RagAssistantStreamInput) => {
     });
 
     try {
-      const latestThread = threadService.getThreadSummaryById(threadId, userId);
-      if (shouldGenerateTitle(latestThread?.title)) {
-        const title = await generateThreadTitle(ragInput.question, answer);
+      const currentThread = threadService.getThreadSummaryById(threadId, userId);
+      if (shouldGenerateTitle(currentThread?.title)) {
+        const title = await generateThreadTitleFromMessages({
+          question: getLatestUserTitleSeed(latestUserMessage) || ragInput.question,
+          answer,
+          streamTaskChatText: (titleMessages) =>
+            providerProxyService.streamTaskChatText(titleMessages),
+        });
         threadService.updateThread(threadId, userId, {
           title,
         });
       }
     } catch (titleError) {
+      const fallbackTitle = getFallbackThreadTitle(
+        getLatestUserTitleSeed(latestUserMessage) || ragInput.question,
+      );
+      if (
+        shouldGenerateTitle(threadService.getThreadSummaryById(threadId, userId)?.title) &&
+        fallbackTitle !== "新对话"
+      ) {
+        threadService.updateThread(threadId, userId, {
+          title: fallbackTitle,
+        });
+      }
       log.warn(
-        { err: titleError, threadId },
+        { err: titleError, threadId, fallbackTitle },
         "[proxy-provider] failed to generate RAG thread title",
       );
     }
   };
 
-  const defaultKnowledgeBase = knowledgeBaseService.getDefaultKnowledgeBase();
+  const currentKnowledgeBase = knowledgeBaseId
+    ? knowledgeBaseService.getKnowledgeBaseById(knowledgeBaseId)
+    : null;
 
-  if (defaultKnowledgeBase.enabledDocumentCount === 0) {
+  if (!currentKnowledgeBase) {
+    throw new Error("Thread knowledge base is missing or no longer available");
+  }
+
+  if (currentKnowledgeBase.enabledDocumentCount === 0) {
     log.info(
       {
         scope: "proxy-provider",
         event: "rag-route-empty-knowledge-base",
         threadId,
         userId,
-        knowledgeBaseId: defaultKnowledgeBase.id,
+        knowledgeBaseId: currentKnowledgeBase.id,
       },
       "[proxy-provider] knowledge base empty, returning fixed RAG fallback",
     );
@@ -220,9 +205,9 @@ export const createRagAssistantStream = (input: RagAssistantStreamInput) => {
         label: "检查知识库可用性",
         summary: "知识库为空，直接返回固定拒答",
         details: {
-          knowledgeBaseId: defaultKnowledgeBase.id,
-          enabledDocumentCount: defaultKnowledgeBase.enabledDocumentCount,
-          documentCount: defaultKnowledgeBase.documentCount,
+          knowledgeBaseId: currentKnowledgeBase.id,
+          enabledDocumentCount: currentKnowledgeBase.enabledDocumentCount,
+          documentCount: currentKnowledgeBase.documentCount,
         },
         environment: {
           result: {
@@ -240,7 +225,7 @@ export const createRagAssistantStream = (input: RagAssistantStreamInput) => {
             },
           },
           retrieval: {
-            knowledgeBaseId: defaultKnowledgeBase.id,
+            knowledgeBaseId: currentKnowledgeBase.id,
             candidateCount: 0,
             returnedCount: 0,
           },
@@ -265,6 +250,7 @@ export const createRagAssistantStream = (input: RagAssistantStreamInput) => {
     {
       question: ragInput.question,
       conversationHistory: ragInput.conversationHistory,
+      knowledgeBaseId: currentKnowledgeBase.id,
     },
     {
       messageId: assistantMessageId,

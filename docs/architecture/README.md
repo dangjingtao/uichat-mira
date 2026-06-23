@@ -51,6 +51,7 @@ Development startup notes:
 - Production frontend requests use `window.desktopApi.backendUrl` with no prefix.
 - Backend host and port come from `runtime.config.cjs` or environment variables set by Electron main.
 - App metadata such as the current version is served by the backend through `GET /app/meta`.
+- Built-in read-only avatar assets are served by the backend through `GET /assets/avatars/...` so renderer image tags can use direct URLs in both development and packaged shells.
 
 ## Runtime Configuration
 

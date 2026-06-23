@@ -17,6 +17,7 @@ export const AUTH_EXEMPT_ROUTES: AuthExemptRoute[] = [
   { path: "/health", match: "exact" },
   { path: "/app/meta", match: "exact" },
   { path: "/attachments", match: "prefix" },
+  { path: "/assets/avatars", match: "prefix" },
   { path: CONFIG.SWAGGER_PREFIX, match: "prefix" },
 ];
 
@@ -49,6 +50,14 @@ export const OPENAPI_PUBLIC_TAGS = [
   {
     name: "Provider Proxy",
     description: "公开 Provider chat 与 embeddings 代理接口",
+  },
+  {
+    name: "Attachments",
+    description: "聊天附件上传与静态访问接口",
+  },
+  {
+    name: "Built-in Assets",
+    description: "内置只读静态资源，例如系统头像",
   },
 ];
 

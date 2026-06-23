@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Download, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
-import Card from "@/shared/ui/Card";
 import { Button } from "@/shared/ui/Button";
-import MinimalTable from "@/shared/ui/Table";
+import Table from "@/shared/ui/Table";
+import type { ColumnMeta } from "@/shared/ui/Table";
 import { Modal } from "@/shared/ui/Modal";
 import {
   deleteEvaluationRun,
+  deleteEvaluationRuns,
   getEvaluationRuns,
 } from "@/shared/api/evaluation";
+import { listKnowledgeBases } from "@/shared/api/knowledgeBase";
 import type { EvaluationRunRecord } from "./types";
 import StatusBadge from "../../components/Evaluation/StatusBadge";
 import DetailDrawer from "../../components/Evaluation/DetailDrawer";
@@ -17,6 +20,7 @@ import { message } from "@/shared/ui/Message";
 import type { ColumnDef } from "@tanstack/react-table";
 import { downloadEvaluationRunMarkdown } from "./exportMarkdown";
 import { getAppLanguage } from "@/shared/i18n";
+import { formatEvaluationKnowledgeBaseLabel } from "./knowledgeBaseLabel";
 
 const formatPercent = (value: number) => `${Math.round(value * 100)}%`;
 
@@ -30,12 +34,17 @@ const formatDate = (value: string) =>
 
 export default function EvaluationCenter() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [runs, setRuns] = useState<EvaluationRunRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
   const [selectedRun, setSelectedRun] = useState<EvaluationRunRecord | null>(null);
+  const [selectedRunIds, setSelectedRunIds] = useState<string[]>([]);
   const [deletingRunId, setDeletingRunId] = useState<string | null>(null);
+  const [knowledgeBaseNameById, setKnowledgeBaseNameById] = useState<
+    Record<string, string>
+  >({});
 
   const loadRuns = async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
@@ -49,6 +58,9 @@ export default function EvaluationCenter() {
 
       const nextRuns = await getEvaluationRuns();
       setRuns(nextRuns);
+      setSelectedRunIds((current) =>
+        current.filter((id) => nextRuns.some((run) => run.id === id)),
+      );
       setSelectedRun((current) =>
         current ? nextRuns.find((run) => run.id === current.id) ?? null : null,
       );
@@ -69,6 +81,24 @@ export default function EvaluationCenter() {
 
   useEffect(() => {
     void loadRuns();
+  }, []);
+
+  useEffect(() => {
+    const loadKnowledgeBaseNames = async () => {
+      try {
+        const items = await listKnowledgeBases();
+        setKnowledgeBaseNameById(
+          items.reduce<Record<string, string>>((acc, item) => {
+            acc[item.id] = item.name;
+            return acc;
+          }, {}),
+        );
+      } catch {
+        setKnowledgeBaseNameById({});
+      }
+    };
+
+    void loadKnowledgeBaseNames();
   }, []);
 
   const handleDownloadRun = async (run: EvaluationRunRecord) => {
@@ -122,6 +152,54 @@ export default function EvaluationCenter() {
     });
   };
 
+  const confirmBulkDeleteRuns = () => {
+    const selectedRuns = runs.filter((run) => selectedRunIds.includes(run.id));
+    if (selectedRuns.length === 0) {
+      return;
+    }
+
+    Modal.confirm({
+      title: t("settings.evaluation.center.bulkDeleteModal.title"),
+      description: t("settings.evaluation.center.bulkDeleteModal.description", {
+        count: selectedRuns.length,
+      }),
+      width: 460,
+      tone: "danger",
+      confirmText: t("settings.evaluation.center.bulkDeleteModal.confirm"),
+      loadingText: t("settings.evaluation.center.bulkDeleteModal.deleting"),
+      onConfirm: async () => {
+        const { deletedIds } = await deleteEvaluationRuns(
+          selectedRuns.map((run) => run.id),
+        );
+        const deletedIdSet = new Set(deletedIds);
+        const deletedRuns = selectedRuns.filter((run) => deletedIdSet.has(run.id));
+        const failedRuns = selectedRuns.filter((run) => !deletedIdSet.has(run.id));
+
+        setRuns((current) => current.filter((item) => !deletedIdSet.has(item.id)));
+        setSelectedRunIds((current) => current.filter((id) => !deletedIdSet.has(id)));
+        setSelectedRun((current) =>
+          current && deletedIdSet.has(current.id) ? null : current,
+        );
+
+        if (deletedRuns.length > 0) {
+          message.success(
+            t("settings.evaluation.center.bulkDeleteModal.success", {
+              count: deletedRuns.length,
+            }),
+          );
+        }
+
+        if (failedRuns.length > 0) {
+          throw new Error(
+            t("settings.evaluation.center.bulkDeleteModal.partialFailed", {
+              count: failedRuns.length,
+            }),
+          );
+        }
+      },
+    });
+  };
+
   const filteredRuns = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) {
@@ -129,29 +207,53 @@ export default function EvaluationCenter() {
     }
 
     return runs.filter((run) =>
-      [run.name, run.dataset.datasetName].some((value) =>
+      [
+        run.name,
+        run.dataset.datasetName,
+        run.dataset.knowledgeBaseId ?? "",
+        formatEvaluationKnowledgeBaseLabel(
+          run.dataset.knowledgeBaseId,
+          knowledgeBaseNameById[run.dataset.knowledgeBaseId ?? ""],
+        ) ?? "",
+      ].some((value) =>
         value.toLowerCase().includes(normalized),
       ),
     );
-  }, [query, runs]);
+  }, [knowledgeBaseNameById, query, runs]);
 
   const columns = useMemo<ColumnDef<EvaluationRunRecord>[]>(
     () => [
       {
         header: t("settings.evaluation.center.table.name"),
         accessorKey: "name",
-        size: 360,
-        minSize: 360,
+        size: 300,
+        minSize: 240,
+        maxSize: 300,
+        meta: {
+          width: 300,
+          sticky: "left",
+          ellipsisTooltip: true,
+        } satisfies ColumnMeta<EvaluationRunRecord>,
         cell: ({ row }) => (
-          <div className="w-[360px] max-w-[360px] min-w-0">
-            <div className="stable-scrollbar overflow-x-auto overflow-y-hidden pb-1">
-              <div className="w-max whitespace-nowrap font-medium text-text-primary">
-                {row.original.name}
-              </div>
+          <div className="min-w-0 max-w-[300px]">
+            <div className="truncate font-medium text-text-primary">
+              {row.original.name}
             </div>
             <div className="mt-1 truncate text-xs text-text-secondary">
               {row.original.dataset.datasetName}
             </div>
+            {formatEvaluationKnowledgeBaseLabel(
+              row.original.dataset.knowledgeBaseId,
+              knowledgeBaseNameById[row.original.dataset.knowledgeBaseId ?? ""],
+            ) ? (
+              <div className="mt-1 truncate text-[11px] text-text-tertiary">
+                {t("settings.evaluation.center.table.knowledgeBase")} ·{" "}
+                {formatEvaluationKnowledgeBaseLabel(
+                  row.original.dataset.knowledgeBaseId,
+                  knowledgeBaseNameById[row.original.dataset.knowledgeBaseId ?? ""],
+                )}
+              </div>
+            ) : null}
           </div>
         ),
       },
@@ -242,12 +344,8 @@ export default function EvaluationCenter() {
       containerClassName="max-w-none"
       contentClassName="flex h-full min-h-0 flex-col gap-4 pt-6"
     >
-      <Card className="flex min-h-0 flex-1 flex-col gap-3 border-0 bg-transparent p-0 shadow-none">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="shrink-0 rounded-xl border border-border bg-surface-secondary px-4 py-2 text-sm font-medium text-text-primary">
-            {t("settings.evaluation.center.recordCount", { count: runs.length })}
-          </div>
-
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <div className="flex min-w-[320px] flex-1 items-center justify-end gap-2 max-md:w-full">
             <div className="relative min-w-0 flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-icon-secondary" />
@@ -263,41 +361,78 @@ export default function EvaluationCenter() {
               size="sm"
               disabled={refreshing}
               onClick={() => void loadRuns({ silent: true })}
-              >
-                <RefreshCw
-                  className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
-                />
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
+              />
               {t("common.actions.refresh")}
+            </Button>
+            <Button
+              variant="danger-ghost"
+              size="sm"
+              disabled={selectedRunIds.length === 0}
+              onClick={confirmBulkDeleteRuns}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {t("settings.evaluation.center.bulkDelete")}
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => navigate("/settings/evaluation/center/new")}
+            >
+              新建评测
             </Button>
           </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden">
           {loading ? (
-            <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-border bg-surface-secondary text-sm text-text-secondary">
+            <div className="flex h-full items-center justify-center rounded-ui-panel border border-dashed border-border bg-surface-secondary text-sm text-text-secondary">
               {t("settings.evaluation.center.loading")}
             </div>
           ) : filteredRuns.length > 0 ? (
-            <MinimalTable
-              data={filteredRuns}
-              columns={columns}
-              className="stable-scrollbar h-full"
-              stickyHeader
-              stickyFirstColumn
-            />
+            <div className="min-h-0 h-full overflow-hidden rounded-ui-panel border border-border bg-surface-primary">
+              <div className="flex h-full min-h-0 flex-col">
+                <div className="min-h-0 flex-1 overflow-auto">
+                  <Table
+                    data={filteredRuns}
+                    columns={columns}
+                    rowSelection={{
+                      selectedRowIds: selectedRunIds,
+                      onSelectedRowIdsChange: setSelectedRunIds,
+                      getRowId: (row) => row.id,
+                      ariaLabel: (row) => row.name,
+                      selectAllAriaLabel: "Select all evaluation runs",
+                    }}
+                    compact
+                    stickyHeader
+                    className="rounded-none border-0 shadow-none"
+                  />
+                </div>
+                <div className="flex shrink-0 items-center justify-between border-t border-border px-3 py-1.5 text-body-small text-sm text-text-secondary">
+                  <div>共 {filteredRuns.length} 条记录</div>
+                  <div>已选 {selectedRunIds.length} 条</div>
+                </div>
+              </div>
+            </div>
           ) : (
-            <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-border bg-surface-secondary text-sm text-text-secondary">
+            <div className="flex h-full items-center justify-center rounded-ui-panel border border-dashed border-border bg-surface-secondary text-sm text-text-secondary">
               {runs.length === 0
                 ? t("settings.evaluation.center.empty")
                 : t("settings.evaluation.center.noMatch")}
             </div>
           )}
         </div>
-      </Card>
+      </div>
 
       <DetailDrawer
         open={Boolean(selectedRun)}
         run={selectedRun}
+        knowledgeBaseName={
+          selectedRun
+            ? knowledgeBaseNameById[selectedRun.dataset.knowledgeBaseId ?? ""]
+            : undefined
+        }
         onClose={() => setSelectedRun(null)}
         onDelete={confirmDeleteRun}
         onDownload={handleDownloadRun}

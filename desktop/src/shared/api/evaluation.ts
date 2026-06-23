@@ -1,4 +1,12 @@
-import { client, del, get, post } from "@/shared/lib/request";
+import {
+  ApiError,
+  del,
+  get,
+  post,
+  type ApiErrorResponse,
+} from "@/shared/lib/request";
+import { getSession } from "@/shared/lib/sessionStorage";
+import { getApiBaseUrl } from "@/shared/platform/desktopRuntime";
 
 export type EvaluationMode = "retrieve" | "retrieve-generate";
 
@@ -45,6 +53,7 @@ export interface EvaluationDatasetRecord {
   fileName: string;
   fileSize: number;
   uploadedAt: string;
+  knowledgeBaseId?: string | null;
   summary: {
     documentCount: number;
     sampleCount: number;
@@ -136,6 +145,7 @@ export interface CreateEvaluationRunInput {
 
 export interface GenerateEvaluationPackageInput {
   datasetName: string;
+  knowledgeBaseId: string;
   sampleCount: number;
   documentCount: number;
   chunksPerDocument: number;
@@ -154,6 +164,10 @@ export interface EvaluationRunListQuery {
 export interface DeleteEvaluationRunResponse {
   id: string;
   deleted: boolean;
+}
+
+export interface DeleteEvaluationRunsResponse {
+  deletedIds: string[];
 }
 
 export async function parseEvaluationDataset(
@@ -175,17 +189,44 @@ export async function generateEvaluationPackage(
   input: GenerateEvaluationPackageInput,
 ): Promise<{ blob: Blob; fileName: string }> {
   const requestTimeoutMs = Math.max(input.timeoutSeconds, 300) * 1000;
-  const response = await client.post("/evaluation/packages/generate", input, {
-    responseType: "blob",
-    timeout: requestTimeoutMs,
-  });
-  const header = response.headers["content-disposition"] as string | undefined;
-  const fileNameMatch = header?.match(/filename="([^"]+)"/i);
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), requestTimeoutMs);
+  const session = getSession();
 
-  return {
-    blob: response.data as Blob,
-    fileName: fileNameMatch?.[1] ?? "evaluation-package.zip",
-  };
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/evaluation/packages/generate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(session?.token
+          ? { Authorization: `Bearer ${session.token}` }
+          : {}),
+      },
+      body: JSON.stringify(input),
+      signal: controller.signal,
+    });
+
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!response.ok) {
+      if (contentType.includes("application/json")) {
+        const parsed = (await response.json()) as ApiErrorResponse;
+        throw new ApiError(parsed);
+      }
+
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const header = response.headers.get("content-disposition") ?? undefined;
+    const fileNameMatch = header?.match(/filename="([^"]+)"/i);
+
+    return {
+      blob,
+      fileName: fileNameMatch?.[1] ?? "evaluation-package.zip",
+    };
+  } finally {
+    window.clearTimeout(timer);
+  }
 }
 
 export async function getEvaluationRuns(
@@ -212,4 +253,12 @@ export async function deleteEvaluationRun(
   runId: string,
 ): Promise<DeleteEvaluationRunResponse> {
   return del<DeleteEvaluationRunResponse>(`/evaluation/runs/${runId}`);
+}
+
+export async function deleteEvaluationRuns(
+  runIds: string[],
+): Promise<DeleteEvaluationRunsResponse> {
+  return post<DeleteEvaluationRunsResponse>("/evaluation/runs/batch-delete", {
+    runIds,
+  });
 }

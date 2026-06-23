@@ -18,7 +18,11 @@ export interface ConfirmDialogProps {
 
 const toneStyles: Record<
   ConfirmTone,
-  { iconClassName: string; badgeClassName: string; confirmVariant: "secondary" | "danger" }
+  {
+    iconClassName: string;
+    badgeClassName: string;
+    confirmVariant: "secondary" | "danger";
+  }
 > = {
   default: {
     iconClassName: "text-primary",
@@ -53,9 +57,9 @@ export default function ConfirmDialog({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3 mt-2">
         <div
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${styles.badgeClassName}`}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-ui-control ${styles.badgeClassName}`}
         >
           <AlertTriangle className={`h-4 w-4 ${styles.iconClassName}`} />
         </div>
@@ -69,21 +73,22 @@ export default function ConfirmDialog({
       </div>
 
       {errorMessage ? (
-        <div className="rounded-lg border border-danger-border bg-danger-soft px-3 py-2 text-sm leading-6 text-danger-text">
+        <div className="rounded-ui-control border border-danger-border bg-danger-soft px-3 py-2 text-sm leading-6 text-danger-text">
           {errorMessage}
         </div>
       ) : null}
 
       <div className="flex items-center justify-end gap-2 pt-1">
-        <Button variant="ghost" onClick={onCancel} disabled={loading}>
+        <Button size="sm" variant="ghost" onClick={onCancel} disabled={loading}>
           {cancelText}
         </Button>
         <Button
+          size="sm"
           variant={styles.confirmVariant}
           onClick={onConfirm}
           disabled={loading}
         >
-          {loading ? loadingText ?? confirmText : confirmText}
+          {loading ? (loadingText ?? confirmText) : confirmText}
         </Button>
       </div>
     </div>

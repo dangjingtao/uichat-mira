@@ -71,43 +71,41 @@ const DefaultModelCard = forwardRef<DefaultModelCardRef, DefaultModelCardProps>(
     }));
 
     return (
-      <div>
-        <div className="space-y-3">
-          <div className="space-y-2.5">
-            <ModelConfig
-              modelType="llm"
-              config={configMap.llm}
-              onUpdated={handleConfigUpdated}
-            />
-            <ModelConfig
-              modelType="task"
-              config={configMap.task}
-              onUpdated={handleConfigUpdated}
-              readOnly
-            />
-            <ModelConfig
-              modelType="evaluation"
-              config={configMap.evaluation}
-              onUpdated={handleConfigUpdated}
-            />
-            <ModelConfig
-              modelType="embedding"
-              config={configMap.embedding}
-              onUpdated={handleConfigUpdated}
-            />
-            <ModelConfig
-              modelType="rerank"
-              config={configMap.rerank}
-              onUpdated={handleConfigUpdated}
-            />
-          </div>
-
-          {loading ? (
-            <div className="text-xs text-text-secondary">
-              {t("settings.model.defaultCard.syncing")}
-            </div>
-          ) : null}
+      <div className="space-y-3 pb-5">
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          <ModelConfig
+            modelType="llm"
+            config={configMap.llm}
+            onUpdated={handleConfigUpdated}
+          />
+          <ModelConfig
+            modelType="task"
+            config={configMap.task}
+            onUpdated={handleConfigUpdated}
+            readOnly
+          />
+          <ModelConfig
+            modelType="evaluation"
+            config={configMap.evaluation}
+            onUpdated={handleConfigUpdated}
+          />
+          <ModelConfig
+            modelType="embedding"
+            config={configMap.embedding}
+            onUpdated={handleConfigUpdated}
+          />
+          <ModelConfig
+            modelType="rerank"
+            config={configMap.rerank}
+            onUpdated={handleConfigUpdated}
+          />
         </div>
+
+        {loading ? (
+          <div className="text-xs text-text-secondary">
+            {t("settings.model.defaultCard.syncing")}
+          </div>
+        ) : null}
       </div>
     );
   },

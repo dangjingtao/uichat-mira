@@ -7,28 +7,48 @@
 ## 目录
 
 - `Button`
+- `Alert`
+- `AvatarPicker`
+- `Badge`
 - `Card`
-- `Detail Drawer`
+- `CodeBlock`
+- `Drawer`
 - `ErrorBoundary`
+- `Divider`
+- `DropdownMenu`
+- `ExpandableSection`
 - `FileIcon`
 - `FileListItem`
 - `FileUploadDropzone`
 - `FullPageStatus`
+- `ImagePreviewOverlay`
 - `IconButton`
 - `Input`
 - `Message`
+- `MarkdownEditor`
 - `Markdown / Long-form Content`
 - `Modal`
 - `NavItem`
+- `SearchSelectModal`
 - `Select`
+- `SegmentedTabs`
 - `StatusIndicator`
 - `StepIndicator`
 - `Switch`
+- `TabCard`
 - `Table`
 - `Tooltip`
+- `TerminalPanel`
 - `TextArea`
+- `WelcomePanel`
 
 ## 设计约束
+
+> 重要约束：
+>
+> - 默认风格必须保持紧凑，慎用大圆角、厚阴影和大面积卡片堆叠
+> - 业务页不要直接发明 `rounded-2xl`、`rounded-3xl` 这类大圆角默认值
+> - 圆角分层统一使用：`rounded-ui-control`、`rounded-ui-panel`、`rounded-ui-overlay`、`rounded-ui-hero`
 
 - 优先使用语义 token，例如 `bg-surface-primary`、`text-text-secondary`、`border-border`
 - 共享组件内不直接依赖 `gray-*`、`slate-*`、`blue-*` 作为主视觉方案
@@ -40,6 +60,8 @@
 - 共享组件优先承接页面重复样式，不鼓励在业务页反复手写同类 `className`
 - 复杂业务页优先抽离可复用组件，减少页面级样式重复和视觉漂移
 - 卡片和大圆角要慎用，默认风格应相对紧凑，靠留白、字号和层级建立结构
+- 圆角分层建议统一使用：控制 `rounded-ui-control`、内容面板 `rounded-ui-panel`、浮层 `rounded-ui-overlay`、英雄/欢迎区 `rounded-ui-hero`
+- 业务页不要再直接发明新的大圆角值，除非确有独立视觉理由并经过评审
 
 ## 色彩体系速记
 
@@ -77,8 +99,8 @@
 | 属性 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `children` | `React.ReactNode` | - | 按钮内容 |
-| `variant` | `"primary" \| "secondary" \| "outline" \| "ghost" \| "danger"` | `"secondary"` | 视觉变体 |
-| `size` | `"sm" \| "md" \| "lg" \| "small" \| "medium" \| "large"` | `"md"` | 尺寸，兼容旧写法 |
+| `variant` | `"primary" \| "secondary" \| "outline" \| "ghost" \| "success-ghost" \| "info-ghost" \| "danger" \| "danger-ghost" \| "link"` | `"secondary"` | 视觉变体 |
+| `size` | `"xs" \| "sm" \| "md" \| "lg" \| "small" \| "medium" \| "large"` | `"md"` | 尺寸，兼容旧写法 |
 | `disabled` | `boolean` | `false` | 禁用态 |
 
 ### 色彩约束
@@ -87,7 +109,107 @@
 - `secondary`：`bg-surface-primary border-border text-text-primary`
 - `outline`：透明底，仅保留 `border + text`
 - `ghost`：适合轻次级操作，默认 `text-text-secondary`
+- `success-ghost`：轻成功操作，使用 `success-soft + success-text`
+- `info-ghost`：轻信息操作，使用 `info-soft + info-text`
 - `danger`：仅用于危险确认和不可逆操作
+- `danger-ghost`：危险幽灵按钮，默认只用于破坏性次级操作
+- `link`：只用于行内文本动作，不承担主要 CTA，不再额外做按钮壳
+
+## Alert
+
+用于页面内的状态提示、校验结果、风险说明和可回看的系统反馈。
+
+### Props
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `variant` | `"info" \| "success" \| "warning" \| "danger"` | `"info"` | 状态语义 |
+| `title` | `React.ReactNode` | - | 提示标题 |
+| `children` | `React.ReactNode` | - | 提示正文 |
+| `icon` | `React.ReactNode` | 内置图标 | 自定义图标，传 `null` 可隐藏 |
+| `action` | `React.ReactNode` | - | 右侧轻量操作 |
+| `onClose` | `() => void` | - | 提供后显示关闭按钮 |
+| `closeAriaLabel` | `string` | `"Close alert"` | 关闭按钮可访问名称 |
+
+### 色彩约束
+
+- `info`：`border-info-border bg-info-soft text-info-text`
+- `success`：`border-success-border bg-success-soft text-success-text`
+- `warning`：`border-warning-border bg-warning-soft text-warning-text`
+- `danger`：`border-danger-border bg-danger-soft text-danger-text`
+
+### 使用建议
+
+- 用于页面内稳定存在的提示；短暂浮层反馈继续使用 `Message`
+- 状态色只表达语义反馈，不替代页面主结构色
+- 标题与正文仍使用 `text-*` 建立阅读层级，避免整块文字过度染色
+- 操作区域建议放轻量按钮或链接，不承载复杂表单
+
+## AvatarPicker
+
+用于选择系统内置头像，适合“当前值预览 + 打开弹窗挑选”的设置场景。
+
+### Props
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `value` | `string \| null` | - | 当前选中头像 id |
+| `options` | `AvatarPickerOption[]` | - | 可选头像列表，支持直接传服务端图片 URL |
+| `onChange` | `(option) => void` | - | 确认选择后的回调 |
+| `onClear` | `() => void` | - | 清空头像回调 |
+| `label` | `React.ReactNode` | - | 字段标题 |
+| `hint` | `React.ReactNode` | - | 字段说明 |
+| `title` | `React.ReactNode` | 内置文案 | 弹窗标题 |
+| `placeholder` | `React.ReactNode` | 内置文案 | 未选择时的占位文本 |
+| `disabled` | `boolean` | `false` | 禁用态 |
+| `allowClear` | `boolean` | `false` | 是否显示清空动作 |
+| `emptyText` | `React.ReactNode` | 内置文案 | 搜索结果为空时的文案 |
+| `searchPlaceholder` | `string` | 内置文案 | 搜索框占位文案 |
+
+### 使用建议
+
+- 组件本身只消费头像元数据，不感知具体页面业务
+- `options[].src` 直接传服务端地址即可，不要求本地静态资源
+- 适合内置头像选择，不承担上传、裁剪和自定义图片编辑
+
+## ExpandableSection
+
+用于页面内的“更多 / 收起”折叠块，适合承载默认隐藏的辅助说明、示例或附加反馈。
+
+### Props
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `children` | `React.ReactNode` | - | 折叠内容 |
+| `collapsedLabel` | `React.ReactNode` | `"More"` | 收起态触发文案 |
+| `expandedLabel` | `React.ReactNode` | `"Collapse"` | 展开态触发文案 |
+| `defaultExpanded` | `boolean` | `false` | 初始是否展开 |
+| `contentClassName` | `string` | `""` | 内容容器样式 |
+| `triggerClassName` | `string` | `""` | 触发按钮样式 |
+
+### 使用建议
+
+- 默认用于承载次级信息，不要把主要表单或关键校验藏进折叠区
+- 触发文案优先保持简洁，例如“更多 / 收起”“查看示例 / 收起示例”
+- 内容区样式通过 `contentClassName` 传入，避免组件内部写死业务间距
+
+## Badge
+
+用于轻量状态、来源、计数和上下文标签。
+
+### Props
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `variant` | `"neutral" \| "primary" \| "success" \| "warning" \| "danger" \| "muted"` | `"neutral"` | 通用视觉变体 |
+| `size` | `"sm" \| "md"` | `"sm"` | 胶囊尺寸 |
+| `outline` | `boolean` | `false` | 是否使用透明底描边样式 |
+
+### 使用建议
+
+- 只承接通用胶囊视觉，不承接复杂业务状态机
+- 业务语义很强的状态徽章仍放业务域组件中
+- 不要在业务页继续手写大批 `rounded-full + px + text-xs + bg-*`
 
 ## IconButton
 
@@ -97,7 +219,9 @@
 
 - 必须提供 `ariaLabel`
 - 默认保持轻量，不承担主操作角色
-- 默认使用 `text-text-secondary`，hover 再提升到 `text-text-primary`
+- 尺寸统一跟随按钮体系：`xs / sm / md / lg`
+- 视觉统一通过 `styleType` 和 `tone` 组合，而不是业务页自己拼 `className`
+- 默认使用 `ghost + default`，危险图标操作使用 `ghost + danger` 或 `outline + danger`
 
 ## ErrorBoundary
 
@@ -120,6 +244,14 @@
 
 用于信息分组、摘要展示和轻量配置面板。
 
+### Props
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `variant` | `"default" \| "subtle" \| "dashed" \| "ghost"` | `"default"` | 默认面板、浅底分组、虚线空态、无壳容器 |
+| `padding` | `"none" \| "sm" \| "md" \| "lg"` | `"md"` | 统一内边距尺度 |
+| `interactive` | `boolean` | `false` | 是否启用轻 hover 提示 |
+
 ### 使用建议
 
 - 信息卡片优先使用 `label + value + description`
@@ -128,8 +260,9 @@
 - 优先使用 `bg-surface-primary border-border shadow-shadow-sm`
 - 不要为了分区而无意义增加卡片层
 - 尽量控制圆角和阴影的存在感，默认保持紧凑
+- 页面里的浅底信息块、虚线空态、无壳占位优先通过 `variant` 表达，不要重复手写同类容器 class
 
-## Detail Drawer
+## Drawer
 
 用于从页面右侧滑出展示详情，适合表格行详情、运行记录复盘和保持当前列表上下文的查看场景。
 
@@ -139,6 +272,7 @@
 - 抽屉内容应按“摘要 -> 配置 -> 明细 -> 日志”分区组织
 - 保持关闭动作明确，避免在抽屉内堆叠过多主操作
 - 抽屉主体优先 `bg-surface-primary`，避免过强颜色干扰主列表
+- 共享组件只负责遮罩、滑入、滚动锁和头尾壳层；业务内容仍留在 feature 内
 
 ## FileIcon
 
@@ -202,6 +336,16 @@
 
 - 默认使用中性面
 - 警告和错误状态优先通过图标、标题和按钮表达，不用整页高饱和色
+
+## ImagePreviewOverlay
+
+用于图片点击后的遮罩预览和滚轮缩放。
+
+### 使用建议
+
+- 共享组件负责遮罩、居中预览、滚轮缩放和 `Esc` 关闭
+- 业务页只保留图片来源和开关状态，不再重复写浮层预览逻辑
+- 适合单张图片查看，不承担相册、分页和复杂工具栏
 
 ## Input
 
@@ -290,6 +434,16 @@ message.destroy();
 
 用于聊天长回复、知识说明、评测结果摘要、工具调用结果说明等文档型内容。
 
+## MarkdownEditor
+
+用于需要所见即所得 Markdown 编辑的配置场景，例如角色字段、长说明与可复用提示词块。
+
+### 使用建议
+
+- 共享组件内部封装 Milkdown / Crepe，业务页不要直接散落编辑器初始化逻辑
+- 主界面只展示摘要，长文本编辑优先放入抽屉或弹窗
+- 编辑器外层容器仍需沿用 `surface-*`、`border`、`rounded-ui-panel` 体系，避免跳出当前产品视觉
+
 ### 设计目标
 
 - 读起来像结构清楚的文档，而不是一大块聊天气泡
@@ -303,6 +457,57 @@ message.destroy();
 - 引用、来源、备注使用弱边框和轻底，不做醒目警告色
 - 代码块、日志、JSON 与正文明确区分，但仍保持安静基调
 - 复杂结果优先“摘要 -> 正文 -> 来源/附件 -> 过程细节”的顺序
+
+## CodeBlock
+
+用于代码、日志片段、JSON、命令输出等等宽内容块。
+
+### 使用建议
+
+- 通用代码或日志块优先复用该组件，不要在页面里重复写 `font-mono + border + bg`
+- `tone="terminal"` 只用于更像终端的深色输出块
+
+## SegmentedTabs
+
+用于少量并列视图切换，尤其是工作台里的“日志 / 结果”这类胶囊 tab。
+
+### 使用建议
+
+- 只适合 2 到 4 个轻量选项
+- 优先用于局部视图切换，不替代主导航
+- 业务页不要再手写 `p-1 + rounded + active` 那套胶囊切换结构
+
+## TabCard
+
+用于“胶囊 tabs + 右侧辅助说明 + 同卡片内容区”这类工作台型结构。
+
+### 使用建议
+
+- 适合日志/结果、配置/预览、摘要/明细这类 2 到 4 个局部视图切换
+- 头部和内容区属于同一张卡片，不要再在业务页手写 `tabs + 分隔线 + 内容壳`
+- tabs 继续复用 `SegmentedTabs`，`TabCard` 负责统一头部承托与内容区壳层
+- 右上角辅助说明通过 `headerAside` 传入，保持弱信息层级
+
+## TerminalPanel
+
+用于模拟终端、运行日志、命令输出和过程回放面板。
+
+### 使用建议
+
+- 优先用于“标题 / 元信息 / 滚动输出 / footer”结构稳定的终端块
+- 业务页不要再重复拼装同类终端外壳、头部和滚动区
+- `variant="default"` 保留轻边框、圆角和终端壳层，适合独立日志面板
+- `variant="plain"` 去掉外边框、圆角和外层壳，适合嵌入 `TabCard` 或其他已经提供容器结构的区域
+
+## WelcomePanel
+
+用于欢迎页、空态页或起始引导区的大块英雄视觉包装。
+
+### 使用建议
+
+- 共享组件负责外层容器、进入/退出动效和文案区域版式
+- 业务页只传入图片层、徽标、标题和说明，不再重复写整套欢迎区骨架
+- 适合承载单块欢迎视觉，不要继续向里塞复杂交互和业务状态机
 
 ## Composer Pattern
 
@@ -355,6 +560,20 @@ message.destroy();
 
 - 主体内容优先 `surface-primary`
 - 遮罩和弹层都应克制，避免强黑压迫感
+
+## SearchSelectModal
+
+用于“打开后自行请求数据、支持搜索、选择单个目标”的通用弹窗。
+
+### 设计约束
+
+- 通过 `url` 自行请求数据，避免业务层重复写 fetch + 搜索 + 选择外壳
+- 通过 `normalizeItems` 把外部响应收敛成共享 item 结构
+- 顶部搜索框固定，结果列表区域独立滚动
+- `onCheck` 返回 `true` 时关闭弹窗，返回 `false` 时保持打开
+- 默认使用紧凑宽度，适合选择器，不做重型管理面板
+- 默认保持更紧凑的 modal 壳层和列表密度，避免大圆角卡片和过松边距
+- 条目优先单行摘要 + 轻量元信息，描述过长时应被截断，而不是把卡片撑高
 
 ## NavItem
 
@@ -428,6 +647,9 @@ message.destroy();
 - 支持空态占位 `emptyState`
 - 支持粘性表头和首列
 - 支持通过 `getRowProps` 注入行级交互，例如双击进入详情
+- 支持内建选择列 `rowSelection`，启用后 checkbox 列会自动固定在最左侧
+- 支持通过列 `meta` 配置固定宽度、左侧固定列和按需截断 tooltip
+- 表格横向滚动时自动显示左右边缘阴影，提示还有隐藏列
 
 ### 设计约束
 
@@ -435,12 +657,29 @@ message.destroy();
 - 表头弱化，不做厚重报表风格
 - 行 hover 仅做轻提示
 - 当列总宽度超过容器时，允许整表横向滚动，不强行压缩列内容
+- 多个左侧固定列并存时，必须按列宽累积计算 `left` 偏移，避免 selection 列和首列相互覆盖
 
 ### 色彩建议
 
 - 表格主体优先 `bg-surface-primary`
 - 行 hover 优先 `bg-surface-secondary/80`
 - Sticky 列继续使用 `surface-*`，不要额外换一套灰色体系
+- 表头分隔线应落在 `th` 的底边，避免 sticky 表头时边线丢失
+- 表体首行不额外加上边线，分隔线从第二行开始统一出现
+
+### 列级配置
+
+- `meta.width`: 固定列宽，适合文件名、状态等需要稳定布局的列
+- `meta.sticky: "left"`: 左侧固定列，优先用于主标识列
+- `meta.ellipsisTooltip: true`: 单行省略并在真正溢出时显示 Tooltip，不溢出时不显示
+
+### 行选择
+
+- `rowSelection.selectedRowIds`: 当前选中行 id 列表
+- `rowSelection.onSelectedRowIdsChange`: 选中变化回调
+- `rowSelection.getRowId`: 从业务行数据提取稳定 id
+- `rowSelection.ariaLabel`: 每行 checkbox 的无障碍文案
+- `rowSelection.selectAllAriaLabel`: 表头全选 checkbox 的无障碍文案
 
 ## Tooltip
 
@@ -461,11 +700,39 @@ message.destroy();
 - 不在 Tooltip 中承载主操作
 - 浮层优先 `surface-elevated + border-border`
 
+## DropdownMenu
+
+用于轻量菜单、工具入口菜单和带二级子菜单的操作浮层。
+
+### 当前能力
+
+- 基于 Radix Dropdown Menu 原语封装
+- 支持 portal 渲染，避免被滚动容器、底部悬浮输入区和抽屉裁切
+- 支持点击外部关闭、Esc 关闭、键盘导航和子菜单
+- 支持前导图标、尾部说明文本和选中勾选态
+
+### 使用建议
+
+- 适合工具菜单、附件菜单、知识库二级菜单
+- 菜单项文案优先短句，补充信息放 `trailingText` 或 `title`
+- 子菜单只用于一层渐进披露，不要在业务里堆三层以上
+- 菜单承载动作，不要把长说明塞进菜单内容里
+
 ## Chat-specific UI
 
-`Thread` 和 `RagProgressDetailDrawer` 已迁移到 `desktop/src/features/chat/components/Thread`。
+`uchat` 当前主聊天 UI 位于：
 
-这两类组件依赖当前线程状态、RAG 观测数据和 assistant-ui 运行时，不再视为共享 UI 组件。
+- `desktop/src/features/chat/components/UChatThread.tsx`
+- `desktop/src/features/chat/components/UChatThreadListSidebar.tsx`
+- `desktop/src/shared/uchat/ui/*`
+
+这些组件依赖当前线程状态和 RAG 观测数据，不再视为共享 UI 组件。
+
+其中：
+
+- `UChatThread` / `UChatThreadListSidebar` 依赖 `shared/uchat` runtime
+- `shared/uchat/ui/*` 是当前共享的 uchat 展示组件层
+- legacy `components/Thread/*` 已从当前桌面主实现中移除
 
 ## 更新说明
 

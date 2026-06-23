@@ -8,6 +8,8 @@ const settingsPending = {
       authorDocs: "Author & Documentation",
       gitInfo: "Git Repository Info",
       currentBranch: "Current Branch",
+      gitExpand: "Show {{count}} more",
+      gitCollapse: "Collapse",
       changelogTitle: "Changelog",
       changelogCollapse: "Collapse",
       changelogExpand: "View full text",

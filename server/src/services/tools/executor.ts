@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { providerProxyService } from "@/services/provider-proxy.service.js";
+import { providerProxyService } from "@/services/provider-proxy.service/index.js";
 import { internalError } from "@/utils/route-errors.js";
 import { getToolById } from "./registry.js";
 import type {

@@ -22,12 +22,23 @@ export interface ThreadWithMessageCount extends Thread {
   lastMessageContent: string | null;
 }
 
+type MessageRow = Message & { partsJson?: string | null };
+
+const selectMessageColumns = {
+  id: messages.id,
+  threadId: messages.threadId,
+  role: messages.role,
+  content: messages.content,
+  partsJson: messages.partsJson,
+  metadata: messages.metadata,
+  createdAt: messages.createdAt,
+};
+
 export const threadRepository = {
   list(filters: ThreadListFilters): Thread[] {
     const db = getDb();
     const conditions: any[] = [];
 
-    // 用户隔离：必须按 userId 过滤
     conditions.push(eq(threads.userId, filters.userId));
 
     if (filters.status) {
@@ -54,7 +65,6 @@ export const threadRepository = {
     const db = getDb();
     const conditions: any[] = [];
 
-    // 用户隔离：必须按 userId 过滤
     conditions.push(eq(threads.userId, filters.userId));
 
     if (filters.status) {
@@ -82,7 +92,7 @@ export const threadRepository = {
         id: threads.id,
         title: threads.title,
         modelName: threads.modelName,
-        ragEnabled: threads.ragEnabled,
+        knowledgeBaseId: threads.knowledgeBaseId,
         status: threads.status,
         createdAt: threads.createdAt,
         updatedAt: threads.updatedAt,
@@ -104,7 +114,6 @@ export const threadRepository = {
 
     const conditions: any[] = [eq(threads.id, id)];
 
-    // 如果提供了 userId，则添加用户隔离检查
     if (userId !== undefined) {
       conditions.push(eq(threads.userId, userId));
     }
@@ -190,7 +199,7 @@ export const messageRepository = {
   listByThread(threadId: string): Message[] {
     const db = getDb();
     return db
-      .select()
+      .select(selectMessageColumns)
       .from(messages)
       .where(eq(messages.threadId, threadId))
       .orderBy(asc(messages.createdAt), sql`rowid asc`)
@@ -199,7 +208,12 @@ export const messageRepository = {
 
   findById(id: string): Message | undefined {
     const db = getDb();
-    return db.select().from(messages).where(eq(messages.id, id)).limit(1).get();
+    return db
+      .select(selectMessageColumns)
+      .from(messages)
+      .where(eq(messages.id, id))
+      .limit(1)
+      .get();
   },
 
   create(data: Omit<NewMessage, "id" | "createdAt">): Message {
@@ -210,7 +224,7 @@ export const messageRepository = {
         ...data,
         createdAt: nowIso(),
       })
-      .returning()
+      .returning(selectMessageColumns)
       .get();
   },
 
@@ -229,7 +243,7 @@ export const messageRepository = {
           createdAt: now,
         })),
       )
-      .returning()
+      .returning(selectMessageColumns)
       .all();
   },
 
@@ -242,7 +256,7 @@ export const messageRepository = {
       .update(messages)
       .set(data)
       .where(eq(messages.id, id))
-      .returning()
+      .returning(selectMessageColumns)
       .get();
   },
 

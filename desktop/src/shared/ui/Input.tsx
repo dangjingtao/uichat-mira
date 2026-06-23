@@ -3,7 +3,7 @@ import { CircleHelp } from "lucide-react";
 import Tooltip from "./Tooltip";
 
 interface InputWrapperProps {
-  label: string;
+  label?: string;
   children: React.ReactNode;
   disabled?: boolean;
   error?: string;
@@ -24,19 +24,21 @@ const InputWrapper: React.FC<InputWrapperProps> = ({
   labelHelp,
 }) => (
   <div className={compact ? "space-y-1" : "space-y-2"}>
-    <label
-      htmlFor={inputId}
-      className={`flex h-5 items-center gap-1.5 text-xs font-medium ${disabled ? "text-text-tertiary" : "text-text-secondary"}`}
-    >
-      <span>{label}</span>
-      {labelHelp ? (
-        <Tooltip text={labelHelp} placement="top">
-          <span className="text-icon-secondary">
-            <CircleHelp className="h-3.5 w-3.5" />
-          </span>
-        </Tooltip>
-      ) : null}
-    </label>
+    {label ? (
+      <label
+        htmlFor={inputId}
+        className={`flex h-5 items-center gap-1.5 text-xs font-medium ${disabled ? "text-text-tertiary" : "text-text-secondary"}`}
+      >
+        <span>{label}</span>
+        {labelHelp ? (
+          <Tooltip text={labelHelp} placement="top">
+            <span className="text-icon-secondary">
+              <CircleHelp className="h-3.5 w-3.5" />
+            </span>
+          </Tooltip>
+        ) : null}
+      </label>
+    ) : null}
     {children}
     {error ? (
       <span id={describedById} className="text-xs text-danger">
@@ -48,7 +50,7 @@ const InputWrapper: React.FC<InputWrapperProps> = ({
 
 const inputBaseClassName = `
   w-full
-  rounded-lg
+  rounded-ui-control
   border
   border-border
   bg-surface-primary
@@ -73,7 +75,9 @@ const getInputSizeClassName = (compact?: boolean) =>
   compact ? "h-8 px-2.5 py-1.5 text-[13px]" : "h-10 px-3.5 text-sm";
 
 const getTextAreaSizeClassName = (compact?: boolean) =>
-  compact ? "min-h-[72px] px-2.5 py-1.5 text-[13px]" : "min-h-[96px] py-2.5 text-sm";
+  compact
+    ? "min-h-[72px] px-2.5 py-1.5 text-[13px]"
+    : "min-h-[96px] py-2.5 text-sm";
 
 interface NumberInputProps {
   label: string;
@@ -129,7 +133,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
 };
 
 interface TextInputProps {
-  label: string;
+  label?: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;

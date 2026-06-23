@@ -1,6 +1,6 @@
 {
   "name": "ui-chat-rag-tester",
-  "version": "0.60.0",
+  "version": "0.7.1",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@9.12.0",
@@ -31,18 +31,22 @@
       },
       {
         "label": "组件文档",
-        "value": "assistant-ui / 内部 UI 组件",
-        "href": "https://www.assistant-ui.com/"
+        "value": "uchat / 内部 UI 组件",
+        "href": "./docs/uchat.md"
       }
     ],
     "changelog": [
-      "重构聊天与线程体验，补充欢迎态、消息气泡壳层与执行轨迹细节",
-      "扩展附件、RAG 来源与多 Provider 配置能力，完善前后端路由与服务实现",
-      "刷新品牌素材、设置页与文档索引，统一桌面端视觉与产品说明"
+      "新增共享确认弹窗 ConfirmDialog 与命令式 Modal API，支持多弹窗堆叠与二次确认",
+      "知识库页面统一使用弹窗表单与二次确认，新增 KnowledgeBaseEditorForm 组件",
+      "评测中心删除操作接入二次确认，同步更新组件文档与使用约定"
     ],
     "versionHistory": [
       {
-        "version": "0.60.0",
+        "version": "0.7.1",
+        "summary": "新增共享确认弹窗与命令式 Modal API，统一知识库和评测中心的二次确认交互"
+      },
+      {
+        "version": "0.6.0",
         "summary": "聊天工作台、附件与 Provider 配置能力升级，并同步品牌与文档更新"
       },
       {

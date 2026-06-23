@@ -1,7 +1,7 @@
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,6 +14,11 @@ const iconsArtifactsRoot = path.join(artifactsRoot, "icons");
 const runtimeConfigArtifactsPath = path.join(artifactsRoot, "runtime.config.cjs");
 const nodeRuntimeArtifactsRoot = path.join(artifactsRoot, "node-runtime");
 const electronArtifactsRoot = path.join(artifactsRoot, "electron-app");
+const serverAppMetaPath = path.join(projectRoot, "server", "app-meta.json");
+const serverBundleAppMetaPath = path.join(serverBundleArtifactsRoot, "app-meta.json");
+const appMetaGeneratorUrl = pathToFileURL(
+  path.join(projectRoot, "scripts", "app-meta-generator.js"),
+).href;
 
 function removeDir(targetPath, label) {
   if (!fs.existsSync(targetPath)) {
@@ -45,6 +50,10 @@ function copyPath(sourcePath, destinationPath, label) {
 console.log("Preparing shared desktop artifacts...");
 
 removeDir(legacyServerArtifactsRoot, "legacy staged server bundle");
+
+const { writeAppMetaJsons } = await import(appMetaGeneratorUrl);
+
+writeAppMetaJsons(projectRoot, [serverAppMetaPath, serverBundleAppMetaPath]);
 
 execSync("pnpm internal:build:desktop", { cwd: projectRoot, stdio: "inherit" });
 execSync("pnpm internal:build:server", { cwd: projectRoot, stdio: "inherit" });

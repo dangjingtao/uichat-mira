@@ -1,4 +1,3 @@
-// src/assistant/ThreadListSidebar.tsx
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/app/providers/AuthProvider";

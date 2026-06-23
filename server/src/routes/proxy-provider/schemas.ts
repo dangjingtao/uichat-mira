@@ -9,33 +9,103 @@ import {
   successEnvelope,
 } from "@/routes/schema-helpers.js";
 
-// Assistant-ui compatible chat body. The provider service owns normalization;
-// this schema keeps transport validation intentionally permissive for mixed parts.
 export const chatMessagesBodySchema = {
   type: "object",
   required: ["messages"],
   properties: {
     messages: {
       type: "array",
-      description: "Assistant-ui messages sent by the renderer.",
+      description: "Canonical desktop chat messages sent by the renderer.",
       items: {
         type: "object",
         required: ["role", "parts"],
         properties: {
+          id: {
+            type: "string",
+            description: "Optional client-side message id.",
+          },
           role: {
             ...messageRoleSchema,
             description: "Message author role.",
           },
           parts: {
             type: "array",
+            minItems: 1,
             description:
-              "Assistant-ui content parts. Text and attachment-like parts are accepted.",
+              "Canonical message parts. Text, image and file are accepted.",
             items: {
-              type: "object",
-              additionalProperties: true,
+              anyOf: [
+                {
+                  type: "object",
+                  required: ["type", "text"],
+                  additionalProperties: false,
+                  properties: {
+                    type: {
+                      type: "string",
+                      const: "text",
+                    },
+                    text: {
+                      type: "string",
+                    },
+                  },
+                },
+                {
+                  type: "object",
+                  required: ["type", "image"],
+                  additionalProperties: false,
+                  properties: {
+                    type: {
+                      type: "string",
+                      const: "image",
+                    },
+                    image: {
+                      type: "string",
+                      minLength: 1,
+                    },
+                    fileId: {
+                      type: "string",
+                      minLength: 1,
+                    },
+                    filename: {
+                      type: "string",
+                    },
+                    mediaType: {
+                      type: "string",
+                    },
+                  },
+                },
+                {
+                  type: "object",
+                  required: ["type", "data", "filename", "mimeType"],
+                  additionalProperties: false,
+                  properties: {
+                    type: {
+                      type: "string",
+                      const: "file",
+                    },
+                    filename: {
+                      type: "string",
+                      minLength: 1,
+                    },
+                    data: {
+                      type: "string",
+                      minLength: 1,
+                    },
+                    fileId: {
+                      type: "string",
+                      minLength: 1,
+                    },
+                    mimeType: {
+                      type: "string",
+                      minLength: 1,
+                    },
+                  },
+                },
+              ],
             },
           },
         },
+        additionalProperties: false,
       },
     },
   },
@@ -131,7 +201,7 @@ export const proxyProviderRouteSchemas = {
     body: chatMessagesBodySchema,
     response: {
       200: {
-        description: "Server-Sent Events or assistant-ui data stream.",
+        description: "Server-Sent Events or desktop chat data stream.",
         type: "string",
       },
       400: errorEnvelope,

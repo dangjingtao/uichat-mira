@@ -74,7 +74,7 @@ const chatPending = {
     localModel: {
       replyPrefix: "已收到：{{prompt}}",
       replySuffix:
-        "这是 assistant-ui 本地演示回复。你可以继续输入问题，后续可直接替换为真实后端推理接口。",
+        "这是 uchat 本地演示回复。你可以继续输入问题，后续可直接替换为真实后端推理接口。",
       greeting: "你好，我是你的 RAG 助手。请告诉我你想查询的内容。",
     },
   },

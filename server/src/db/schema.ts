@@ -217,6 +217,7 @@ export const knowledgeBases = sqliteTable(
       { onDelete: "set null" },
     ),
     chunkingConfigJson: text("chunking_config_json").notNull().default("{}"),
+    metadataJson: text("metadata_json").notNull().default("{}"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
@@ -413,9 +414,8 @@ export const threads = sqliteTable(
       .references(() => users.id, { onDelete: "cascade" }),
     title: text("title").notNull().default(""),
     modelName: text("model_name"),
-    ragEnabled: integer("rag_enabled", { mode: "boolean" })
-      .notNull()
-      .default(false),
+    knowledgeBaseId: text("knowledge_base_id")
+      .references(() => knowledgeBases.id, { onDelete: "cascade" }),
     status: text("status", { enum: THREAD_STATUS_VALUES })
       .notNull()
       .default("active"),
@@ -428,6 +428,7 @@ export const threads = sqliteTable(
   },
   (table) => ({
     userIdIdx: index("idx_threads_user_id").on(table.userId),
+    knowledgeBaseIdx: index("idx_threads_knowledge_base").on(table.knowledgeBaseId),
     statusIdx: index("idx_threads_status").on(table.status),
     updatedAtIdx: index("idx_threads_updated_at").on(table.updatedAt),
   }),
@@ -435,6 +436,10 @@ export const threads = sqliteTable(
 
 export const threadsRelations = relations(threads, ({ many, one }) => ({
   messages: many(messages),
+  knowledgeBase: one(knowledgeBases, {
+    fields: [threads.knowledgeBaseId],
+    references: [knowledgeBases.id],
+  }),
   user: one(users, {
     fields: [threads.userId],
     references: [users.id],
@@ -455,6 +460,7 @@ export const messages = sqliteTable(
       .references(() => threads.id, { onDelete: "cascade" }),
     role: text("role", { enum: MESSAGE_ROLE_VALUES }).notNull(),
     content: text("content").notNull(),
+    partsJson: text("parts_json"),
     metadata: text("metadata").default("{}"),
     createdAt: text("created_at")
       .notNull()

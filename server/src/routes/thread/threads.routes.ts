@@ -1,4 +1,6 @@
 import type { FastifyInstance } from "fastify";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { threadService } from "@/services/thread.service";
 import {
   success,
@@ -10,6 +12,12 @@ import { threadRouteSchemas } from "./schemas.js";
 import type { ThreadListQuery, ThreadMutationBody } from "./types.js";
 
 export const registerThreadRoutes = async (app: FastifyInstance) => {
+  const debugLogPath = path.resolve(
+    process.cwd(),
+    ".artifacts",
+    "thread-update-debug.log",
+  );
+
   app.get<{ Querystring: ThreadListQuery }>(
     "/threads",
     { schema: threadRouteSchemas.listThreads },
@@ -63,15 +71,76 @@ export const registerThreadRoutes = async (app: FastifyInstance) => {
     { schema: threadRouteSchemas.updateThread },
     routeHandler("Failed to update thread", async (request) => {
       const userId = request.authUser!.id;
-      const result = threadService.updateThread(
-        request.params.id,
-        userId,
-        request.body,
-      );
-      if (!result) {
-        throw notFound(THREAD_NOT_FOUND_MESSAGE);
+      try {
+        request.log.info(
+          {
+            scope: "thread",
+            event: "update-thread-start",
+            threadId: request.params.id,
+            userId,
+            body: request.body,
+          },
+          "[thread] update thread request received",
+        );
+
+        const result = threadService.updateThread(
+          request.params.id,
+          userId,
+          request.body,
+        );
+        if (!result) {
+          throw notFound(THREAD_NOT_FOUND_MESSAGE);
+        }
+
+        request.log.info(
+          {
+            scope: "thread",
+            event: "update-thread-success",
+            threadId: request.params.id,
+            userId,
+            result,
+          },
+          "[thread] update thread request succeeded",
+        );
+
+        return success(result, "Thread updated");
+      } catch (error) {
+        await fs.mkdir(path.dirname(debugLogPath), { recursive: true });
+        await fs.appendFile(
+          debugLogPath,
+          `${JSON.stringify(
+            {
+              at: new Date().toISOString(),
+              threadId: request.params.id,
+              userId,
+              body: request.body,
+              error:
+                error instanceof Error
+                  ? {
+                      name: error.name,
+                      message: error.message,
+                      stack: error.stack,
+                    }
+                  : String(error),
+            },
+            null,
+            2,
+          )}\n`,
+          "utf8",
+        );
+        request.log.error(
+          {
+            scope: "thread",
+            event: "update-thread-error",
+            threadId: request.params.id,
+            userId,
+            body: request.body,
+            err: error,
+          },
+          "[thread] update thread request failed",
+        );
+        throw error;
       }
-      return success(result, "Thread updated");
     }),
   );
 

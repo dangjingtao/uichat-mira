@@ -8,6 +8,8 @@ const settingsPending = {
       authorDocs: "作者与文档",
       gitInfo: "Git 仓库信息",
       currentBranch: "当前分支",
+      gitExpand: "展开其余 {{count}} 条",
+      gitCollapse: "收起",
       changelogTitle: "更新日志",
       changelogCollapse: "收起全文",
       changelogExpand: "查看全文",

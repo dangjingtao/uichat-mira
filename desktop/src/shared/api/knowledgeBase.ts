@@ -43,10 +43,41 @@ export interface KnowledgeBaseSummary {
   name: string;
   description: string | null;
   status: KnowledgeBaseStatus;
+  isSystem: boolean;
+  metadata: {
+    persona: string | null;
+    scenario: string | null;
+    tags: string[];
+  };
   documentCount: number;
   enabledDocumentCount: number;
+  totalChunkCount: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CreateKnowledgeBasePayload {
+  name: string;
+  description?: string | null;
+  status?: KnowledgeBaseStatus;
+  embeddingModelConfigId?: string | null;
+  metadata?: {
+    persona?: string | null;
+    scenario?: string | null;
+    tags?: string[];
+  };
+}
+
+export interface UpdateKnowledgeBasePayload {
+  name?: string;
+  description?: string | null;
+  status?: KnowledgeBaseStatus;
+  embeddingModelConfigId?: string | null;
+  metadata?: {
+    persona?: string | null;
+    scenario?: string | null;
+    tags?: string[];
+  };
 }
 
 export interface KnowledgeBaseDocument {
@@ -149,65 +180,160 @@ export async function getKnowledgeBase(): Promise<KnowledgeBaseSummary> {
   return get<KnowledgeBaseSummary>("/knowledge-base");
 }
 
+export async function listKnowledgeBases(): Promise<KnowledgeBaseSummary[]> {
+  return get<KnowledgeBaseSummary[]>("/knowledge-bases");
+}
+
+export async function getKnowledgeBaseById(
+  knowledgeBaseId: string,
+): Promise<KnowledgeBaseSummary> {
+  return get<KnowledgeBaseSummary>(`/knowledge-bases/${knowledgeBaseId}`);
+}
+
+export async function createKnowledgeBase(
+  payload: CreateKnowledgeBasePayload,
+): Promise<KnowledgeBaseSummary> {
+  return post<KnowledgeBaseSummary>("/knowledge-bases", payload);
+}
+
+export async function updateKnowledgeBase(
+  knowledgeBaseId: string,
+  payload: UpdateKnowledgeBasePayload,
+): Promise<KnowledgeBaseSummary> {
+  return patch<KnowledgeBaseSummary>(
+    `/knowledge-bases/${knowledgeBaseId}`,
+    payload,
+  );
+}
+
+export async function deleteKnowledgeBase(
+  knowledgeBaseId: string,
+): Promise<{ deleted: boolean }> {
+  return del<{ deleted: boolean }>(`/knowledge-bases/${knowledgeBaseId}`);
+}
+
 export async function listKnowledgeBaseDocuments(
+  knowledgeBaseIdOrParams?: string | ListKnowledgeBaseDocumentsParams,
   params?: ListKnowledgeBaseDocumentsParams,
 ): Promise<KnowledgeBaseDocument[]> {
-  return get<KnowledgeBaseDocument[]>("/knowledge-base/documents", {
+  const knowledgeBaseId =
+    typeof knowledgeBaseIdOrParams === "string"
+      ? knowledgeBaseIdOrParams
+      : undefined;
+  const effectiveParams =
+    typeof knowledgeBaseIdOrParams === "string"
+      ? params
+      : knowledgeBaseIdOrParams;
+  const path = knowledgeBaseId
+    ? `/knowledge-bases/${knowledgeBaseId}/documents`
+    : "/knowledge-base/documents";
+
+  return get<KnowledgeBaseDocument[]>(path, {
     params: {
-      ...params,
+      ...effectiveParams,
       enabled:
-        typeof params?.enabled === "boolean" ? String(params.enabled) : undefined,
+        typeof effectiveParams?.enabled === "boolean"
+          ? String(effectiveParams.enabled)
+          : undefined,
     },
   });
 }
 
 export async function getKnowledgeBaseDocument(
-  id: string,
+  knowledgeBaseIdOrId: string,
+  id?: string,
 ): Promise<KnowledgeBaseDocumentDetail> {
-  return get<KnowledgeBaseDocumentDetail>(`/knowledge-base/documents/${id}`);
+  const documentId = id ?? knowledgeBaseIdOrId;
+  const path = id
+    ? `/knowledge-bases/${knowledgeBaseIdOrId}/documents/${documentId}`
+    : `/knowledge-base/documents/${documentId}`;
+  return get<KnowledgeBaseDocumentDetail>(
+    path,
+  );
 }
 
 export async function getKnowledgeBaseDocumentStatus(
-  id: string,
+  knowledgeBaseIdOrId: string,
+  id?: string,
 ): Promise<KnowledgeBaseDocument> {
-  return get<KnowledgeBaseDocument>(`/knowledge-base/documents/${id}/status`);
+  const documentId = id ?? knowledgeBaseIdOrId;
+  const path = id
+    ? `/knowledge-bases/${knowledgeBaseIdOrId}/documents/${documentId}/status`
+    : `/knowledge-base/documents/${documentId}/status`;
+  return get<KnowledgeBaseDocument>(path);
 }
 
 export async function createKnowledgeBaseDocument(
-  payload: CreateKnowledgeBaseDocumentPayload,
+  knowledgeBaseIdOrPayload:
+    | string
+    | CreateKnowledgeBaseDocumentPayload,
+  payload?: CreateKnowledgeBaseDocumentPayload,
 ): Promise<KnowledgeBaseDocumentDetail> {
-  return post<KnowledgeBaseDocumentDetail>("/knowledge-base/documents", payload);
+  const knowledgeBaseId =
+    typeof knowledgeBaseIdOrPayload === "string"
+      ? knowledgeBaseIdOrPayload
+      : undefined;
+  const effectivePayload =
+    typeof knowledgeBaseIdOrPayload === "string"
+      ? payload
+      : knowledgeBaseIdOrPayload;
+  const path = knowledgeBaseId
+    ? `/knowledge-bases/${knowledgeBaseId}/documents`
+    : "/knowledge-base/documents";
+
+  return post<KnowledgeBaseDocumentDetail>(path, effectivePayload);
 }
 
 export async function uploadKnowledgeBaseDocument(
-  payload: UploadKnowledgeBaseDocumentPayload,
+  knowledgeBaseIdOrPayload:
+    | string
+    | UploadKnowledgeBaseDocumentPayload,
+  payload?: UploadKnowledgeBaseDocumentPayload,
 ): Promise<KnowledgeBaseDocument> {
+  const knowledgeBaseId =
+    typeof knowledgeBaseIdOrPayload === "string"
+      ? knowledgeBaseIdOrPayload
+      : undefined;
+  const effectivePayload =
+    typeof knowledgeBaseIdOrPayload === "string"
+      ? (payload as unknown as UploadKnowledgeBaseDocumentPayload)
+      : knowledgeBaseIdOrPayload;
   const formData = new FormData();
-  formData.append("file", payload.file);
+  formData.append("file", effectivePayload.file);
 
-  if (payload.name) {
-    formData.append("name", payload.name);
+  if (effectivePayload.name) {
+    formData.append("name", effectivePayload.name);
   }
-  if (payload.fileExt) {
-    formData.append("fileExt", payload.fileExt);
+  if (effectivePayload.fileExt) {
+    formData.append("fileExt", effectivePayload.fileExt);
   }
-  if (typeof payload.fileSize === "number") {
-    formData.append("fileSize", String(payload.fileSize));
+  if (typeof effectivePayload.fileSize === "number") {
+    formData.append("fileSize", String(effectivePayload.fileSize));
   }
-  if (payload.sourceType) {
-    formData.append("sourceType", payload.sourceType);
+  if (effectivePayload.sourceType) {
+    formData.append("sourceType", effectivePayload.sourceType);
   }
-  if (payload.sourceLabel !== undefined && payload.sourceLabel !== null) {
-    formData.append("sourceLabel", payload.sourceLabel);
+  if (
+    effectivePayload.sourceLabel !== undefined &&
+    effectivePayload.sourceLabel !== null
+  ) {
+    formData.append("sourceLabel", effectivePayload.sourceLabel);
   }
-  if (typeof payload.enabled === "boolean") {
-    formData.append("enabled", String(payload.enabled));
+  if (typeof effectivePayload.enabled === "boolean") {
+    formData.append("enabled", String(effectivePayload.enabled));
   }
-  if (payload.chunkingConfig) {
-    formData.append("chunkingConfig", JSON.stringify(payload.chunkingConfig));
+  if (effectivePayload.chunkingConfig) {
+    formData.append(
+      "chunkingConfig",
+      JSON.stringify(effectivePayload.chunkingConfig),
+    );
   }
 
-  const response = await client.post("/knowledge-base/documents/upload", formData, {
+  const path = knowledgeBaseId
+    ? `/knowledge-bases/${knowledgeBaseId}/documents/upload`
+    : "/knowledge-base/documents/upload";
+
+  const response = await client.post(path, formData, {
     headers: {
       "Content-Type": "multipart/form-data",
     },
@@ -256,6 +382,26 @@ export async function previewKnowledgeBaseChunks(
 }
 
 export async function updateKnowledgeBaseDocument(
+  knowledgeBaseIdOrId: string,
+  idOrPayload:
+    | string
+    | UpdateKnowledgeBaseDocumentPayload,
+  maybePayload?: UpdateKnowledgeBaseDocumentPayload,
+): Promise<KnowledgeBaseDocumentDetail> {
+  const knowledgeBaseId =
+    typeof idOrPayload === "string" ? knowledgeBaseIdOrId : undefined;
+  const documentId =
+    typeof idOrPayload === "string" ? idOrPayload : knowledgeBaseIdOrId;
+  const payload =
+    typeof idOrPayload === "string" ? maybePayload : idOrPayload;
+  const path = knowledgeBaseId
+    ? `/knowledge-bases/${knowledgeBaseId}/documents/${documentId}`
+    : `/knowledge-base/documents/${documentId}`;
+
+  return patch<KnowledgeBaseDocumentDetail>(path, payload);
+}
+
+export async function updateDefaultKnowledgeBaseDocument(
   id: string,
   payload: UpdateKnowledgeBaseDocumentPayload,
 ): Promise<KnowledgeBaseDocumentDetail> {
@@ -263,7 +409,12 @@ export async function updateKnowledgeBaseDocument(
 }
 
 export async function deleteKnowledgeBaseDocument(
-  id: string,
+  knowledgeBaseIdOrId: string,
+  id?: string,
 ): Promise<{ deleted: boolean }> {
-  return del<{ deleted: boolean }>(`/knowledge-base/documents/${id}`);
+  const documentId = id ?? knowledgeBaseIdOrId;
+  const path = id
+    ? `/knowledge-bases/${knowledgeBaseIdOrId}/documents/${documentId}`
+    : `/knowledge-base/documents/${documentId}`;
+  return del<{ deleted: boolean }>(path);
 }

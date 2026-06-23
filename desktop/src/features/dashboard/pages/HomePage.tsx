@@ -1,14 +1,7 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
-import {
-  ArrowRight,
-  ChevronRight,
-  LogOut,
-  MessageSquare,
-  Orbit,
-  User,
-} from "lucide-react";
+import { LaptopMinimal, LogOut, Orbit, TabletSmartphone, User } from "lucide-react";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { useRuntimeHealth } from "../../system/hooks/useRuntimeHealth";
 import { Button } from "@/shared/ui/Button";
@@ -30,12 +23,21 @@ function HomePage() {
   const runtimeDescription = useMemo(() => {
     return getRuntimeDescription(runtime);
   }, [runtime]);
+  const RuntimeIcon = useMemo(() => {
+    if (runtime.hostKind === "electron") {
+      return LaptopMinimal;
+    }
+
+    if (runtime.hostKind === "tauri") {
+      return TabletSmartphone;
+    }
+
+    return Orbit;
+  }, [runtime.hostKind]);
 
   const backendSummary = useMemo(() => {
     return runtime.backendUrl || backendState.detail;
   }, [backendState.detail, runtime.backendUrl]);
-
-  const toChat = () => navigate("/chat");
 
   const statusItems = useMemo(
     () => [
@@ -75,17 +77,17 @@ function HomePage() {
   return (
     <div className="min-h-screen bg-surface-secondary">
       <main className="mx-auto flex max-w-6xl flex-col px-4 py-8 sm:px-6 lg:px-8">
-        <section className="overflow-hidden rounded-[28px] border border-border/80 bg-surface-primary shadow-[0_18px_48px_rgba(68,52,35,0.06)]">
+        <section className="overflow-hidden rounded-ui-panel border border-border/80 bg-surface-primary shadow-[0_18px_48px_rgba(68,52,35,0.06)]">
           <div className="relative">
             <div
               aria-hidden="true"
               className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[linear-gradient(180deg,rgba(var(--color-primary),0.06)_0%,rgba(var(--color-primary),0.015)_52%,transparent_100%)]"
             />
             <div className="relative px-6 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
-              <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
-                <div className="max-w-3xl space-y-5">
+              <div className="flex flex-col gap-8 md:flex-row md:items-start md:justify-between md:gap-6 lg:gap-8">
+                <div className="min-w-0 flex-1 space-y-5">
                   <div className="inline-flex items-center gap-2 rounded-full bg-primary/8 px-3 py-1 text-xs font-medium tracking-[0.08em] text-primary">
-                    <Orbit className="h-3.5 w-3.5" />
+                    <RuntimeIcon className="h-3.5 w-3.5" />
                     <span>{runtimeLabel}</span>
                   </div>
 
@@ -101,16 +103,11 @@ function HomePage() {
                   </div>
 
                   <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-                    <Button onClick={toChat} size="lg" className="gap-2.5">
-                      <MessageSquare className="h-4 w-4" />
-                      {t("dashboard.home.startTest")}
-                      <ArrowRight className="h-4 w-4" />
-                    </Button>
                     <Button
-                      variant="ghost"
+                      variant="danger-outline"
                       onClick={() => logout()}
                       size="lg"
-                      className="gap-2 px-2 text-text-secondary hover:bg-transparent hover:text-text-primary"
+                      className="gap-2"
                     >
                       <LogOut className="h-4 w-4" />
                       {t("dashboard.home.logout")}
@@ -118,7 +115,7 @@ function HomePage() {
                   </div>
                 </div>
 
-                <div className="w-full max-w-sm shrink-0 border-l-0 border-border/70 pt-0 lg:max-w-[280px] lg:border-l lg:pl-8">
+                <div className="w-full shrink-0 border-l-0 border-border/70 pt-0 md:w-[280px] md:border-l md:pl-6 lg:pl-8">
                   <div className="space-y-4">
                     <div className="inline-flex items-center gap-2 rounded-full bg-surface-secondary px-3 py-1 text-xs font-medium text-text-secondary">
                       <span>{t("dashboard.home.currentUser")}</span>
@@ -135,9 +132,6 @@ function HomePage() {
                           {session.user.role}
                         </div>
                       </div>
-                    </div>
-                    <div className="border-t border-border/70 pt-4 text-sm leading-6 text-text-secondary">
-                      {t("dashboard.home.userHint")}
                     </div>
                   </div>
                 </div>
@@ -167,26 +161,6 @@ function HomePage() {
           </div>
         </section>
 
-        <section className="mt-8">
-          <div className="flex flex-col gap-3 border-t border-border/70 pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-tertiary">
-                {t("dashboard.home.quickStartLabel")}
-              </div>
-              <div className="mt-1 text-sm text-text-secondary">
-                {t("dashboard.home.quickStartHint")}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={toChat}
-              className="inline-flex items-center gap-2 text-sm font-medium text-text-primary transition-colors duration-150 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
-            >
-              <span>{t("dashboard.home.openWorkspace")}</span>
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-        </section>
       </main>
     </div>
   );

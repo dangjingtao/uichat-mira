@@ -8,6 +8,7 @@ import {
   routeHandler,
 } from "@/utils/route-errors.js";
 import { knowledgeBaseRouteSchemas } from "./schemas.js";
+import type { KnowledgeBaseIdParams } from "./types.js";
 import {
   isMultipartTooLargeError,
   MultipartValidationError,
@@ -64,6 +65,7 @@ export const registerKnowledgeBaseUploadRoutes = async (
       try {
         const upload = await readSingleTextUpload(request);
         const result = await knowledgeBaseService.createUploadDocument(
+          undefined,
           toUploadDocumentInput(upload),
         );
 
@@ -90,5 +92,44 @@ export const registerKnowledgeBaseUploadRoutes = async (
         throw err;
       }
     }),
+  );
+
+  app.post<{ Params: KnowledgeBaseIdParams }>(
+    "/knowledge-bases/:knowledgeBaseId/documents/upload",
+    { schema: knowledgeBaseRouteSchemas.uploadDocument },
+    routeHandler<{ Params: KnowledgeBaseIdParams }>(
+      "Failed to upload knowledge base document",
+      async (request) => {
+        try {
+          const upload = await readSingleTextUpload(request);
+          const result = await knowledgeBaseService.createUploadDocument(
+            request.params.knowledgeBaseId,
+            toUploadDocumentInput(upload),
+          );
+
+          return success(result, "Document uploaded and indexing started");
+        } catch (err) {
+          if (err instanceof MultipartValidationError) {
+            throw badRequest(err.message, { cause: err });
+          }
+
+          if (isMultipartTooLargeError(err)) {
+            throw createRouteError({
+              statusCode: 413,
+              code: "UPLOAD_TOO_LARGE",
+              message: uploadLimitMessage(),
+              cause: err,
+              logMessage: "Upload exceeds size limit",
+            });
+          }
+
+          if (err instanceof SyntaxError) {
+            throw badRequest("Invalid chunking config payload", { cause: err });
+          }
+
+          throw err;
+        }
+      },
+    ),
   );
 };

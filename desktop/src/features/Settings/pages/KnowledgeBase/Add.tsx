@@ -18,6 +18,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Button } from "@/shared/ui/Button";
+import Badge from "@/shared/ui/Badge";
 import { message } from "@/shared/ui/Message";
 import Card from "@/shared/ui/Card";
 import { FileListItem } from "@/shared/ui/FileListItem";
@@ -37,6 +38,7 @@ import {
   uploadKnowledgeBaseDocument,
 } from "@/shared/api/knowledgeBase";
 import { useRoleModelConfigs } from "@/app/providers/RoleModelConfigProvider";
+import SettingsNotice from "../../components/SettingsNotice";
 
 type UploadStep = 1 | 2 | 3;
 
@@ -97,7 +99,7 @@ function SwitchField({
   return (
     <div className="min-w-0">
       <FieldHelpLabel label={label} hint={hint} />
-      <div className="flex h-8 items-center justify-between gap-3 rounded-lg border border-border bg-surface-primary px-2.5 text-sm text-text-primary shadow-shadow-sm">
+      <Card className="flex h-8 items-center justify-between gap-3 px-2.5 py-0 text-sm text-text-primary">
         <span className="min-w-0 truncate">{label}</span>
         <Switch
           checked={checked}
@@ -105,7 +107,7 @@ function SwitchField({
           ariaLabel={label}
           size="sm"
         />
-      </div>
+      </Card>
     </div>
   );
 }
@@ -119,16 +121,12 @@ function ModelAccessStatusPill({
 }) {
   const { t } = useTranslation();
   return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-        connected ? "bg-success/10 text-success" : "bg-danger/10 text-danger"
-      }`}
-    >
+    <Badge variant={connected ? "success" : "danger"} size="md">
       {label}：
       {connected
         ? t("settings.knowledgeBase.add.connected")
         : t("settings.knowledgeBase.add.notConnected")}
-    </span>
+    </Badge>
   );
 }
 
@@ -160,56 +158,46 @@ function ModelStatusCard({
 }) {
   const { t } = useTranslation();
   const configured = Boolean(config?.providerCode && config?.remoteModelId);
+  const modelSummary = configured
+    ? `${config?.providerCode} · ${config?.name ?? config?.remoteModelId}`
+    : null;
 
   return (
-    <div className="rounded-xl border border-border bg-gradient-to-br from-surface-primary to-surface-secondary p-4">
+    <Card className="bg-gradient-to-br from-surface-primary to-surface-secondary p-4">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
             {icon}
           </div>
           <div>
-            <div className="text-sm font-semibold text-text-primary">
-              {title}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="text-sm font-semibold text-text-primary">
+                {title}
+              </div>
+              {modelSummary ? (
+                <Badge variant="neutral" size="sm">
+                  {modelSummary}
+                </Badge>
+              ) : null}
             </div>
             <div className="mt-1 text-sm leading-6 text-text-secondary">
               {description}
             </div>
           </div>
         </div>
-        <span
-          className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-            configured
-              ? "bg-success/10 text-success"
-              : "bg-danger/10 text-danger"
-          }`}
+        <Badge
+          variant={configured ? "success" : "danger"}
+          size="md"
         >
           {configured
             ? t("settings.knowledgeBase.add.configured")
             : required
               ? t("settings.knowledgeBase.add.requiredConfig")
               : t("settings.knowledgeBase.add.notConfigured")}
-        </span>
+        </Badge>
       </div>
 
-      <div className="rounded-xl border border-border bg-surface-primary px-3.5 py-3 text-sm shadow-shadow-sm">
-        <div className="truncate font-medium text-text-primary">
-          {config?.name ?? t("settings.knowledgeBase.add.noModelSelected")}
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-          <span className="rounded-full bg-surface-secondary px-2.5 py-1 text-text-secondary">
-            {config?.providerCode
-              ? `Provider · ${config.providerCode}`
-              : t("settings.knowledgeBase.add.noProvider")}
-          </span>
-          {config?.remoteModelId ? (
-            <span className="rounded-full bg-primary/5 px-2.5 py-1 text-primary">
-              {t("settings.knowledgeBase.add.defaultModel")}
-            </span>
-          ) : null}
-        </div>
-      </div>
-    </div>
+    </Card>
   );
 }
 
@@ -218,6 +206,7 @@ export default function KnowledgeBaseAddWizard() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentStep = resolveStep(searchParams.get("step"));
+  const knowledgeBaseId = searchParams.get("knowledgeBaseId") || undefined;
 
   const steps = useMemo(
     () => [
@@ -251,8 +240,8 @@ export default function KnowledgeBaseAddWizard() {
     }),
     [t],
   );
-  const [files, setFiles] = useState<UploadFileItem[]>(initialFiles);
   const [settings, setSettings] = useState<ChunkingConfig>(initialSettings);
+  const [files, setFiles] = useState<UploadFileItem[]>(initialFiles);
   const [previewChunks, setPreviewChunks] = useState<
     ChunkPreviewResult["sampleChunks"]
   >([]);
@@ -330,16 +319,27 @@ export default function KnowledgeBaseAddWizard() {
             return;
           }
 
-          const acceptedDocument = await uploadKnowledgeBaseDocument({
-            file: file.file,
-            name: file.name,
-            fileExt: file.extension.toLowerCase(),
-            fileSize: file.size,
-            sourceType: "upload",
-            sourceLabel: t("settings.knowledgeBase.add.localUpload"),
-            enabled: true,
-            chunkingConfig: settings,
-          });
+          const acceptedDocument = knowledgeBaseId
+            ? await uploadKnowledgeBaseDocument(knowledgeBaseId, {
+                file: file.file,
+                name: file.name,
+                fileExt: file.extension.toLowerCase(),
+                fileSize: file.size,
+                sourceType: "upload",
+                sourceLabel: t("settings.knowledgeBase.add.localUpload"),
+                enabled: true,
+                chunkingConfig: settings,
+              })
+            : await uploadKnowledgeBaseDocument({
+                file: file.file,
+                name: file.name,
+                fileExt: file.extension.toLowerCase(),
+                fileSize: file.size,
+                sourceType: "upload",
+                sourceLabel: t("settings.knowledgeBase.add.localUpload"),
+                enabled: true,
+                chunkingConfig: settings,
+              });
 
           if (!cancelled) {
             setProcessingProgress(
@@ -358,9 +358,12 @@ export default function KnowledgeBaseAddWizard() {
             await new Promise((resolve) =>
               window.setTimeout(resolve, pollingIntervalMs),
             );
-            document = await getKnowledgeBaseDocumentStatus(
-              acceptedDocument.id,
-            );
+            document = knowledgeBaseId
+              ? await getKnowledgeBaseDocumentStatus(
+                  knowledgeBaseId,
+                  acceptedDocument.id,
+                )
+              : await getKnowledgeBaseDocumentStatus(acceptedDocument.id);
           }
 
           if (document.indexStatus === "failed") {
@@ -400,7 +403,7 @@ export default function KnowledgeBaseAddWizard() {
     return () => {
       cancelled = true;
     };
-  }, [currentStep, files, settings]);
+  }, [currentStep, files, knowledgeBaseId, settings, t]);
 
   useEffect(() => {
     setPreviewChunks([]);
@@ -466,7 +469,14 @@ export default function KnowledgeBaseAddWizard() {
   };
 
   const goToStep = (step: UploadStep) => {
-    setSearchParams({ step: `${step}` });
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("step", `${step}`);
+    if (knowledgeBaseId) {
+      nextParams.set("knowledgeBaseId", knowledgeBaseId);
+    } else {
+      nextParams.delete("knowledgeBaseId");
+    }
+    setSearchParams(nextParams);
   };
 
   const runPreview = async (successMessage?: string) => {
@@ -530,7 +540,7 @@ export default function KnowledgeBaseAddWizard() {
       </div>
 
       {modelAccessStatus && !modelAccessStatus.embeddingConnected ? (
-        <div className="flex items-start gap-3 rounded-xl border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger">
+        <SettingsNotice tone="danger">
           <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
           <div className="space-y-2">
             <div className="font-medium">
@@ -551,7 +561,7 @@ export default function KnowledgeBaseAddWizard() {
               />
             </div>
           </div>
-        </div>
+        </SettingsNotice>
       ) : null}
 
       <FileUploadDropzone
@@ -941,21 +951,21 @@ export default function KnowledgeBaseAddWizard() {
               <div className="space-y-2.5">
                 <ModelStatusCard
                   title={t("settings.knowledgeBase.add.llmTitle")}
-                  description={t("settings.knowledgeBase.add.llmDesc")}
+                  description="用于回答生成。当前步骤要求已经完成 LLM 配置。"
                   config={llmConfig}
                   required
                   icon={<Bot className="h-5 w-5" />}
                 />
                 <ModelStatusCard
                   title={t("settings.knowledgeBase.add.embeddingTitle")}
-                  description={t("settings.knowledgeBase.add.embeddingDesc")}
+                  description="用于向量化和语义检索。当前步骤要求已经完成 Embedding 配置。"
                   config={embeddingConfig}
                   required
                   icon={<Cpu className="h-5 w-5" />}
                 />
                 <ModelStatusCard
                   title={t("settings.knowledgeBase.add.rerankTitle")}
-                  description={t("settings.knowledgeBase.add.rerankDesc")}
+                  description="用于结果精排，可选配置。"
                   config={rerankConfig}
                   icon={<ScanSearch className="h-5 w-5" />}
                 />
@@ -977,7 +987,7 @@ export default function KnowledgeBaseAddWizard() {
                     t("settings.knowledgeBase.add.noFileSelected")}
                 </div>
               </div>
-              <span className="ml-3 shrink-0 rounded-full border border-border bg-surface-secondary px-2.5 py-1 text-xs text-text-secondary">
+              <Badge variant="neutral" size="md" className="ml-3 shrink-0">
                 {previewStats
                   ? t("settings.knowledgeBase.add.sampleCount", {
                       current: previewChunks.length,
@@ -986,18 +996,24 @@ export default function KnowledgeBaseAddWizard() {
                   : t("settings.knowledgeBase.add.previewCount", {
                       count: previewChunks.length,
                     })}
-              </span>
+              </Badge>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3.5">
               {previewChunks.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border bg-surface-secondary px-4 py-10 text-sm leading-6 text-text-secondary">
+                <Card
+                  variant="dashed"
+                  className="px-4 py-10 text-sm leading-6 text-text-secondary"
+                >
                   {t("settings.knowledgeBase.add.previewPlaceholder")}
-                </div>
+                </Card>
               ) : (
                 <div className="space-y-3">
                   {previewStats ? (
-                    <div className="grid gap-2 rounded-xl border border-border bg-surface-secondary p-3.5 text-xs text-text-secondary md:grid-cols-2">
+                    <Card
+                      variant="subtle"
+                      className="grid gap-2 p-3.5 text-xs text-text-secondary md:grid-cols-2"
+                    >
                       <div>
                         {t("settings.knowledgeBase.add.totalChunks")}：
                         {previewStats.totalChunks}
@@ -1014,12 +1030,13 @@ export default function KnowledgeBaseAddWizard() {
                         {t("settings.knowledgeBase.add.maxLength")}：
                         {previewStats.maxChunkLength}
                       </div>
-                    </div>
+                    </Card>
                   ) : null}
                   {previewChunks.map((chunk) => (
-                    <div
+                    <Card
                       key={chunk.id}
-                      className="min-w-0 rounded-xl border border-border bg-surface-secondary p-3.5"
+                      variant="subtle"
+                      className="min-w-0 p-3.5"
                     >
                       <div className="mb-2 text-sm font-medium text-primary">
                         Chunk-{chunk.index} · {chunk.charCount} characters
@@ -1027,7 +1044,7 @@ export default function KnowledgeBaseAddWizard() {
                       <div className="overflow-hidden break-words text-sm leading-6 text-text-primary">
                         {chunk.text}
                       </div>
-                    </div>
+                    </Card>
                   ))}
                 </div>
               )}
@@ -1069,7 +1086,7 @@ export default function KnowledgeBaseAddWizard() {
     if (processingDone) {
       return (
         <div className="flex min-h-[400px] items-center justify-center">
-          <div className="w-full max-w-2xl rounded-2xl border border-border bg-surface-primary px-6 py-8 text-center shadow-shadow-md">
+          <Card className="w-full max-w-2xl px-6 py-8 text-center shadow-shadow-md">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-success/10 text-success">
               <PartyPopper className="h-8 w-8" />
             </div>
@@ -1085,7 +1102,7 @@ export default function KnowledgeBaseAddWizard() {
               })}
             </p>
 
-            <div className="mt-5 rounded-2xl border border-border bg-surface-secondary px-4 py-3.5 text-left">
+            <Card variant="subtle" className="mt-5 px-4 py-3.5 text-left">
               <div className="grid gap-2.5 md:grid-cols-2">
                 <div>
                   <div className="text-xs uppercase tracking-wide text-text-tertiary">
@@ -1104,17 +1121,14 @@ export default function KnowledgeBaseAddWizard() {
                   </div>
                 </div>
               </div>
-            </div>
+            </Card>
 
             <div className="mt-6 flex justify-center">
-              <Button
-                size="lg"
-                onClick={() => navigate("/settings/knowledge-base")}
-              >
+              <Button size="lg" onClick={() => navigate("/settings/knowledge-base")}>
                 {t("settings.knowledgeBase.add.backToManage")}
               </Button>
             </div>
-          </div>
+          </Card>
         </div>
       );
     }
@@ -1122,7 +1136,7 @@ export default function KnowledgeBaseAddWizard() {
     if (processingError) {
       return (
         <div className="flex min-h-[360px] items-center justify-center">
-          <div className="w-full max-w-2xl rounded-2xl border border-danger/20 bg-surface-primary px-6 py-8 text-center shadow-shadow-md">
+          <Card className="w-full max-w-2xl border-danger-border px-6 py-8 text-center shadow-shadow-md">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-danger/10 text-danger">
               <FileSearch className="h-8 w-8" />
             </div>
@@ -1141,7 +1155,7 @@ export default function KnowledgeBaseAddWizard() {
                 {t("settings.knowledgeBase.add.backToManage")}
               </Button>
             </div>
-          </div>
+          </Card>
         </div>
       );
     }
@@ -1166,7 +1180,7 @@ export default function KnowledgeBaseAddWizard() {
                   {t("settings.knowledgeBase.add.processing")}
                 </div>
 
-                <div className="rounded-2xl border border-border bg-surface-secondary p-3.5">
+                <Card variant="subtle" className="p-3.5">
                   <div className="mb-2.5 flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <div className="truncate text-sm font-medium text-text-primary">
@@ -1192,7 +1206,7 @@ export default function KnowledgeBaseAddWizard() {
                       style={{ width: `${processingProgress}%` }}
                     />
                   </div>
-                </div>
+                </Card>
 
                 <div className="grid gap-y-2.5 border-t border-border pt-3.5 md:grid-cols-[148px_1fr]">
                   <div className="text-sm text-text-secondary">
@@ -1267,7 +1281,7 @@ export default function KnowledgeBaseAddWizard() {
         <StepIndicator currentStep={currentStep} steps={steps} />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-surface-primary px-4 py-5 shadow-shadow-sm xl:px-5">
+      <Card className="min-h-0 flex-1 overflow-hidden px-4 py-5 shadow-shadow-sm xl:px-5">
         <div
           className={
             currentStep === 2
@@ -1279,7 +1293,7 @@ export default function KnowledgeBaseAddWizard() {
           {currentStep === 2 ? renderStepTwo() : null}
           {currentStep === 3 ? renderStepThree() : null}
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

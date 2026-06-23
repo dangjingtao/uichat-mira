@@ -38,54 +38,36 @@ export default function LogButtons() {
   };
 
   const handleClearLogs = () => {
-    const modalKey = Modal.show({
+    Modal.confirm({
       title: t("settings.general.health.logs.clearTitle"),
-      width: 460,
-      content: (
-        <div className="space-y-3 text-sm text-text-secondary">
-          <p>{t("settings.general.health.logs.clearDescription")}</p>
-          <div className="rounded-xl border border-danger/20 bg-danger/5 px-3.5 py-3 text-danger">
-            {t("settings.general.health.logs.clearWarning")}
-          </div>
-        </div>
-      ),
-      footer: (
-        <>
-          <Button variant="ghost" onClick={() => Modal.close(modalKey)}>
-            {t("common.actions.cancel")}
-          </Button>
-          <Button
-            variant="danger"
-            disabled={clearingLogs}
-            onClick={async () => {
-              try {
-                setClearingLogs(true);
-                const result = await clearBackendLogs();
-                Modal.close(modalKey);
-                const clearedBytes = result.clearedFiles.reduce(
-                  (sum, file) => sum + file.previousSize,
-                  0,
-                );
-                message.success(
-                  t("settings.general.health.logs.clearSuccess", {
-                    size: (clearedBytes / 1024).toFixed(1),
-                  }),
-                );
-              } catch (error) {
-                message.error(
-                  error instanceof Error
-                    ? error.message
-                    : t("settings.general.health.logs.clearFailed"),
-                );
-              } finally {
-                setClearingLogs(false);
-              }
-            }}
-          >
-            {t("settings.general.health.logs.clearConfirm")}
-          </Button>
-        </>
-      ),
+      description: t("settings.general.health.logs.clearDescription"),
+      tone: "danger",
+      confirmText: t("settings.general.health.logs.clearConfirm"),
+      cancelText: t("common.actions.cancel"),
+      onConfirm: async () => {
+        try {
+          setClearingLogs(true);
+          const result = await clearBackendLogs();
+          const clearedBytes = result.clearedFiles.reduce(
+            (sum, file) => sum + file.previousSize,
+            0,
+          );
+          message.success(
+            t("settings.general.health.logs.clearSuccess", {
+              size: (clearedBytes / 1024).toFixed(1),
+            }),
+          );
+        } catch (error) {
+          message.error(
+            error instanceof Error
+              ? error.message
+              : t("settings.general.health.logs.clearFailed"),
+          );
+        } finally {
+          setClearingLogs(false);
+        }
+      },
+      onCancel: () => void 0,
     });
   };
 

@@ -20,6 +20,19 @@
 
 ## 现在的结构
 
+### 服务商官方 API 标准参考
+
+当前项目的服务商接入，优先对齐这些官方文档：
+
+- OpenAI API Reference: https://platform.openai.com/docs/api-reference
+- Cloudflare Workers AI OpenAI-compatible endpoints: https://developers.cloudflare.com/workers-ai/configuration/open-ai-compatibility/
+- LM Studio Developer Docs: https://lmstudio.ai/docs/developer
+- LM Studio OpenAI Compatibility: https://lmstudio.ai/docs/developer/openai-compat
+- Ollama API Introduction: https://docs.ollama.com/api/introduction
+- Ollama OpenAI compatibility: https://docs.ollama.com/api/openai-compatibility
+
+当前项目里的 OpenAI-compatible 服务商，包括 `openai`、`cloudflare`、`lmstudio`、`volcengine` 等，默认优先按照 OpenAI 的请求和响应标准校验；Ollama 同时支持自身原生 API 和 OpenAI-compatible 接口。
+
 ### 后端集中配置
 
 #### 1. Provider Code 常量

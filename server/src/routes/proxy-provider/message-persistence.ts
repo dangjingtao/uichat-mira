@@ -1,0 +1,212 @@
+import { threadService } from "@/services/thread.service.js";
+import type { NormalizedChatMessage } from "@/services/provider-proxy.service/index.js";
+import {
+  getNormalizedMessageText,
+  hasNormalizedMessageParts,
+} from "@/services/provider-proxy.message-protocol.js";
+import { toUserMessageMetadata } from "./rag-message-metadata.js";
+
+const cleanGeneratedTitle = (title: string) =>
+  title
+    .trim()
+    .replace(/^["'“”‘’]+|["'“”‘’]+$/g, "")
+    .slice(0, 50);
+
+const trimTitleFallback = (title: string) => cleanGeneratedTitle(title).slice(0, 20);
+
+export const shouldGenerateTitle = (title: string | undefined) => {
+  const normalizedTitle = title?.trim();
+  return !normalizedTitle || normalizedTitle === "新对话";
+};
+
+const describeMessageForTitle = (
+  message: NormalizedChatMessage | undefined,
+) => {
+  const text = getNormalizedMessageText(message);
+  if (text) {
+    return text;
+  }
+
+  const parts = message?.parts ?? [];
+  if (parts.length === 0) {
+    return "";
+  }
+
+  return parts
+    .map((part) => {
+      if (part.type === "text") {
+        return part.text.trim();
+      }
+
+      if (part.type === "image") {
+        return part.filename?.trim()
+          ? `[图片: ${part.filename.trim()}]`
+          : "[图片]";
+      }
+
+      return part.filename.trim()
+        ? `[文件: ${part.filename.trim()}]`
+        : "[文件]";
+    })
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+};
+
+export interface PersistVisibleUserMessageInput {
+  threadId: string;
+  userId: number;
+  userMessageId?: string;
+  messages: NormalizedChatMessage[];
+}
+
+export interface PersistedUserMessageResult {
+  latestUserMessageId: string;
+  latestUserParentId: string | null;
+  latestUserMessage: NormalizedChatMessage | undefined;
+}
+
+export const persistVisibleUserMessage = ({
+  threadId,
+  userId,
+  userMessageId,
+  messages,
+}: PersistVisibleUserMessageInput): PersistedUserMessageResult => {
+  const latestUserIndex = [...messages]
+    .map((message, index) => ({ message, index }))
+    .reverse()
+    .find((entry) => entry.message.role === "user")?.index;
+  const latestUserMessage = messages[latestUserIndex ?? -1];
+  const previousVisibleMessage =
+    latestUserIndex !== undefined && latestUserIndex > 0
+      ? messages[latestUserIndex - 1]
+      : undefined;
+  const latestUserMessageId =
+    typeof latestUserMessage?.id === "string" && latestUserMessage.id.trim()
+      ? latestUserMessage.id
+      : typeof userMessageId === "string" && userMessageId.trim()
+        ? userMessageId
+        : crypto.randomUUID();
+  const latestUserParentId =
+    typeof previousVisibleMessage?.id === "string"
+      ? previousVisibleMessage.id
+      : null;
+
+  if (!latestUserMessage || !hasNormalizedMessageParts(latestUserMessage)) {
+    throw new Error("Latest user message is missing");
+  }
+
+  const latestUserText = getNormalizedMessageText(latestUserMessage);
+
+  threadService.createMessage(threadId, userId, {
+    id: latestUserMessageId,
+    parentId: latestUserParentId,
+    role: "user",
+    content: latestUserText,
+    parts: latestUserMessage.parts,
+    metadata: toUserMessageMetadata(latestUserMessage, latestUserParentId),
+  });
+
+  return {
+    latestUserMessageId,
+    latestUserParentId,
+    latestUserMessage,
+  };
+};
+
+export interface PersistAssistantMessageInput {
+  threadId: string;
+  userId: number;
+  assistantMessageId: string;
+  parentId: string | null;
+  content: string;
+  metadata?: Record<string, unknown>;
+}
+
+export const persistAssistantMessage = ({
+  threadId,
+  userId,
+  assistantMessageId,
+  parentId,
+  content,
+  metadata,
+}: PersistAssistantMessageInput) => {
+  if (!content.trim()) {
+    return;
+  }
+
+  threadService.createMessage(threadId, userId, {
+    id: assistantMessageId,
+    parentId,
+    role: "assistant",
+    content,
+    parts: [
+      {
+        type: "text",
+        text: content,
+      },
+    ],
+    metadata,
+  });
+};
+
+export const generateThreadTitleFromMessages = async ({
+  question,
+  answer,
+  streamTaskChatText,
+}: {
+  question: string;
+  answer: string;
+  streamTaskChatText: (
+    messages: Array<{
+      role: "user";
+      content: string;
+    }>,
+  ) => AsyncIterable<string>;
+}) => {
+  const prompt =
+    "请根据以下对话内容生成一个简短的中文标题（不超过20个字符），只返回标题本身，不要解释。\n\n" +
+    `用户：${question}\n助手：${answer.slice(0, 500)}`;
+
+  let title = "";
+  for await (const delta of streamTaskChatText([
+    {
+      role: "user",
+      content: prompt,
+    },
+  ])) {
+    title += delta;
+    if (title.length >= 80) {
+      break;
+    }
+  }
+
+  return cleanGeneratedTitle(title) || "新对话";
+};
+
+export const getLatestUserTitleSeed = (message: NormalizedChatMessage | undefined) =>
+  describeMessageForTitle(message);
+
+export const getFallbackThreadTitle = (
+  seed: string | undefined,
+) => {
+  const normalizedSeed = seed?.trim();
+  if (!normalizedSeed) {
+    return "新对话";
+  }
+
+  if (/^\[[^\]]+\]$/.test(normalizedSeed)) {
+    return cleanGeneratedTitle(normalizedSeed) || "新对话";
+  }
+
+  const firstSentence =
+    normalizedSeed
+      .split(/[\r\n]+/)
+      .map((line) => line.trim())
+      .find(Boolean)
+      ?.split(/(?<=[。！？!?]|\. )/)
+      .map((segment) => segment.trim())
+      .find(Boolean) ?? normalizedSeed;
+
+  return trimTitleFallback(firstSentence) || "新对话";
+};

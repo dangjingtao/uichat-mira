@@ -1,6 +1,6 @@
 {
   "name": "@ui-chat-rag-tester/server",
-  "version": "0.60.0",
+  "version": "0.7.1",
   "private": true,
   "type": "module",
   "author": "Tomz Dang <dangjing@gmail.com>",
@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "node build.js",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:protocol": "tsx --tsconfig tsconfig.test.json --test src/**/*.test.ts"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",
@@ -24,11 +25,11 @@
     "@orama/orama": "^3.1.18",
     "@orama/tokenizers": "^3.1.18",
     "adm-zip": "^0.5.17",
-    "assistant-stream": "^0.3.21",
     "better-sqlite3": "^12.10.0",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
     "fastify": "^4.28.1",
+    "iconv-lite": "^0.7.2",
     "jsonwebtoken": "^9.0.3",
     "langchain": "^1.4.4",
     "markdown-table": "^3.0.4",

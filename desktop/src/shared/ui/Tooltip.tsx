@@ -15,7 +15,7 @@ const placementMap = {
 } as const;
 
 const tooltipClassName =
-  "z-[120] max-w-[min(24rem,calc(100vw-2rem))] whitespace-normal break-words border border-border bg-surface-primary text-left text-[10.5px] leading-4 text-text-primary shadow-[0_10px_30px_rgba(15,23,42,0.12)]";
+  "z-[120] max-w-[min(24rem,calc(100vw-2rem))] whitespace-normal break-words rounded-ui-control border border-border bg-surface-primary text-left text-[10.5px] leading-4 text-text-primary shadow-[0_10px_30px_rgba(15,23,42,0.12)]";
 
 const tooltipArrowClassName = "border-border";
 
@@ -49,7 +49,6 @@ const Tooltip: React.FC<TooltipProps> = ({
         delayShow={80}
         noArrow={false}
         style={{
-          borderRadius: "6px",
           padding: "2.5px 6.5px",
         }}
       />

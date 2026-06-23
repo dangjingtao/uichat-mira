@@ -3,7 +3,7 @@ import Header from "./Header";
 interface SettingsPageLayoutProps {
   miniTitle: string;
   title: string;
-  description: string;
+  description?: string;
   slot?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
@@ -33,7 +33,7 @@ export default function SettingsPageLayout({
     <div
       className={`mx-auto flex h-full min-h-0 w-full flex-col overflow-hidden ${className}`}
     >
-      <div className={`shrink-0 px-4 ${containerClasses}`}>
+      <div className={`shrink-0 px- ${containerClasses}`}>
         <Header
           miniTitle={miniTitle}
           title={title}
@@ -50,7 +50,7 @@ export default function SettingsPageLayout({
         ].join(" ")}
       >
         <div
-          className={`flex h-full min-h-0 flex-col px-4 pb-6 ${containerClasses} ${contentClassName}`}
+          className={`flex h-full min-h-0 flex-col px-2 pb-6 ${containerClasses} ${contentClassName}`}
         >
           {children}
         </div>

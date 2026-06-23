@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { Folder, Globe, Wrench } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import Badge from "@/shared/ui/Badge";
 import Card from "@/shared/ui/Card";
 import { message } from "@/shared/ui/Message";
 import { getTools, type ToolDefinition } from "@/shared/api/tools";
@@ -37,12 +38,9 @@ function ToolCard({
 
         <div className="flex flex-wrap gap-2">
           {tags.map((tag) => (
-            <span
-              key={`${name}-${tag}`}
-              className="inline-flex items-center rounded-full border border-cloudy-3 bg-pampas-2 px-2 py-0.5 text-[11px] font-medium text-text-secondary"
-            >
+            <Badge key={`${name}-${tag}`} variant="muted">
               {tag}
-            </span>
+            </Badge>
           ))}
         </div>
       </div>

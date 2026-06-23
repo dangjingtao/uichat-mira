@@ -21,49 +21,32 @@ export default function ModelSettings() {
   };
 
   const handleResetAllDefaults = async () => {
-    const modalKey = Modal.show({
+    Modal.confirm({
       title: t("settings.model.resetModal.title"),
-      width: 460,
-      content: (
-        <div className="space-y-3 text-sm text-text-secondary">
-          <p>{t("settings.model.resetModal.description")}</p>
-          <div className="rounded-xl border border-danger/20 bg-danger/5 px-3.5 py-3 text-danger">
-            {t("settings.model.resetModal.warning")}
-          </div>
-        </div>
-      ),
-      footer: (
-        <>
-          <Button variant="ghost" onClick={() => Modal.close(modalKey)}>
-            {t("common.actions.cancel")}
-          </Button>
-          <Button
-            variant="danger"
-            onClick={async () => {
-              try {
-                Modal.close(modalKey);
-                await Promise.all([
-                  resetProviderRoleModel("llm"),
-                  resetProviderRoleModel("embedding"),
-                  resetProviderRoleModel("rerank"),
-                  resetProviderRoleModel("task"),
-                  resetProviderRoleModel("evaluation"),
-                ]);
-                await refresh();
-                message.success(t("settings.model.resetModal.success"));
-              } catch (error) {
-                message.error(
-                  error instanceof Error
-                    ? error.message
-                    : t("settings.model.resetModal.failed"),
-                );
-              }
-            }}
-          >
-            {t("settings.model.actions.confirmReset")}
-          </Button>
-        </>
-      ),
+      description: t("settings.model.resetModal.description"),
+      tone: "danger",
+      confirmText: t("settings.model.actions.confirmReset"),
+      cancelText: t("common.actions.cancel"),
+      onConfirm: async () => {
+        try {
+          await Promise.all([
+            resetProviderRoleModel("llm"),
+            resetProviderRoleModel("embedding"),
+            resetProviderRoleModel("rerank"),
+            resetProviderRoleModel("task"),
+            resetProviderRoleModel("evaluation"),
+          ]);
+          await refresh();
+          message.success(t("settings.model.resetModal.success"));
+        } catch (error) {
+          message.error(
+            error instanceof Error
+              ? error.message
+              : t("settings.model.resetModal.failed"),
+          );
+        }
+      },
+      onCancel: () => void 0,
     });
   };
 
@@ -96,7 +79,7 @@ export default function ModelSettings() {
       }
       contentClassName="pt-6"
     >
-      <div className="min-w-0">
+      <div className="min-w-0 flex">
         <DefaultModelCard onReady={() => setReady(true)} ref={childRef} />
       </div>
     </SettingsPageLayout>

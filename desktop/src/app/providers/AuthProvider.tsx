@@ -30,6 +30,13 @@ type AuthProviderProps = {
   children: ReactNode;
 };
 
+/**
+ * AuthProvider owns persisted login session state.
+ *
+ * It is intentionally the only provider that writes/clears auth session
+ * storage. Other providers should react to `session?.token`, not duplicate
+ * token persistence logic.
+ */
 export function AuthProvider({ children }: AuthProviderProps) {
   const [session, setSession] = useState<SessionState | null>(() =>
     readSessionFromStorage(),

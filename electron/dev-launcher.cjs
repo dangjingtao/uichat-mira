@@ -3,6 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const { spawn } = require("child_process");
 const electronBinary = require("electron");
+const { pathToFileURL } = require("url");
 
 const DESKTOP_PORT = 5173;
 const STARTUP_TIMEOUT_MS = 60000;
@@ -215,6 +216,14 @@ async function main() {
   const workspaceRoot = path.resolve(__dirname, "..");
   const serverDir = path.join(workspaceRoot, "server");
   const desktopDir = path.join(workspaceRoot, "desktop");
+  const { writeAppMetaJsons } = await import(
+    pathToFileURL(path.join(workspaceRoot, "scripts", "app-meta-generator.js")).href
+  );
+
+  writeAppMetaJsons(workspaceRoot, [
+    path.join(serverDir, "app-meta.json"),
+    path.join(workspaceRoot, ".artifacts", "server-bundle", "app-meta.json"),
+  ]);
 
   const desktopAlreadyRunning = await isTcpPortOpen("localhost", DESKTOP_PORT);
   const backendAlreadyHealthy = await isBackendHealthy(backendHealthUrl);

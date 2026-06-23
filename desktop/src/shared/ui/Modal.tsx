@@ -21,9 +21,11 @@ export interface ModalShowOptions {
   width?: number | string;
   height?: number | string;
   maxHeight?: number | string;
+  bodyClassName?: string;
   closable?: boolean;
   maskClosable?: boolean;
   showCloseButton?: boolean;
+  enableEscapeClose?: boolean;
   onClose?: () => void;
 }
 
@@ -56,9 +58,11 @@ interface ModalShellProps {
   width?: number | string;
   height?: number | string;
   maxHeight?: number | string;
+  bodyClassName?: string;
   closable?: boolean;
   maskClosable?: boolean;
   showCloseButton?: boolean;
+  enableEscapeClose?: boolean;
   footer?: ReactNode | null;
   children: ReactNode;
   onClose: () => void;
@@ -140,14 +144,37 @@ export const ModalShell: React.FC<ModalShellProps> = ({
   width,
   height,
   maxHeight,
+  bodyClassName,
   closable = true,
   maskClosable = true,
   showCloseButton = true,
+  enableEscapeClose = true,
   footer,
   children,
   onClose,
 }) => {
   const { t } = useTranslation();
+
+  const showTitle = title || showCloseButton;
+
+  useEffect(() => {
+    if (!open || !closable || !enableEscapeClose) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [closable, enableEscapeClose, onClose, open]);
+
   if (!open) {
     return null;
   }
@@ -157,7 +184,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({
       <button
         type="button"
         aria-label={t("ui.modal.closeAria")}
-        className="absolute inset-0 bg-black/45 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/45 backdrop-blur-sm motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200"
         onClick={() => {
           if (maskClosable && closable) {
             onClose();
@@ -167,18 +194,18 @@ export const ModalShell: React.FC<ModalShellProps> = ({
       <section
         role="dialog"
         aria-modal="true"
-        className="relative z-[101] flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-surface-elevated shadow-shadow-xl animate-in fade-in duration-200"
+        className="relative z-[101] flex w-full flex-col overflow-hidden rounded-ui-panel border border-border bg-surface-elevated shadow-shadow-xl motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-200"
         style={{
           maxWidth: resolveWidthStyle(width),
           height: resolveSizeStyle(height),
           maxHeight: resolveSizeStyle(maxHeight) ?? "calc(100vh - 2rem)",
         }}
       >
-        {(title || showCloseButton) && (
-          <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-4 py-3">
-            <div className="min-w-0 flex-1">
+        {showTitle && (
+          <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-4 py-2.5">
+            <div className={`min-w-0 flex-1`}>
               {title ? (
-                <div className="text-md leading-[40px] font-semibold text-text-primary">
+                <div className="text-[15px] leading-8 font-semibold text-text-primary">
                   {title}
                 </div>
               ) : null}
@@ -197,13 +224,13 @@ export const ModalShell: React.FC<ModalShellProps> = ({
 
         <div
           data-scroll-container="true"
-          className="stable-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-3 text-sm text-text-primary"
+          className={`stable-scrollbar min-h-0 flex-1 overflow-y-auto px-4 ${title ? "py-4" : "py-3"} text-sm text-text-primary ${bodyClassName ?? ""}`}
         >
           {children}
         </div>
 
         {footer !== null ? (
-          <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-4 py-3">
+          <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-4 py-2.5">
             {footer ?? (
               <Button variant="secondary" onClick={onClose}>
                 {t("common.actions.close")}
@@ -250,23 +277,27 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({
     return key;
   }, []);
 
-  const confirm = useCallback((options: ModalConfirmOptions) => {
-    const key = `modal_${keyRef.current++}`;
-    setModals((prev) => [
-      ...prev,
-      {
-        key,
-        title: undefined,
-        width: options.width ?? 440,
-        maskClosable: false,
-        footer: null,
-        content: (
-          <ConfirmModalContent {...options} onClose={() => close(key)} />
-        ),
-      },
-    ]);
-    return key;
-  }, [close]);
+  const confirm = useCallback(
+    (options: ModalConfirmOptions) => {
+      const key = `modal_${keyRef.current++}`;
+      setModals((prev) => [
+        ...prev,
+        {
+          key,
+          title: undefined,
+          width: options.width ?? 440,
+          maskClosable: false,
+          showCloseButton: false,
+          footer: null,
+          content: (
+            <ConfirmModalContent {...options} onClose={() => close(key)} />
+          ),
+        },
+      ]);
+      return key;
+    },
+    [close],
+  );
 
   useEffect(() => {
     if (modals.length === 0) {
@@ -318,9 +349,11 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({
           width={modal.width}
           height={modal.height}
           maxHeight={modal.maxHeight}
+          bodyClassName={modal.bodyClassName}
           closable={modal.closable}
           maskClosable={modal.maskClosable}
           showCloseButton={modal.showCloseButton}
+          enableEscapeClose={false}
           footer={modal.footer}
           onClose={() => close(modal.key)}
         >

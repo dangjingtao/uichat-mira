@@ -26,10 +26,11 @@ root/
 
 - Start with `README.md` for project overview, development entry points, and packaging commands.
 - Use `docs/README.md` as the central documentation index.
+- `docs/archive/` contains archived documents kept for historical reference only; treat them as background material, not current product truth, unless the live code or active docs confirm the same behavior.
 - Read `docs/architecture/README.md` before changing runtime boundaries, networking, or packaging flow.
 - Read `docs/architecture/ipc-and-preload.md` before changing preload exposure, renderer/native boundaries, or IPC design.
 - For Tauri-related work, read `docs/platform/tauri.md` first and `docs/platform/tauri-setup.md` for setup and troubleshooting.
-- For chat UI work, read `docs/assistant-ui.md` first.
+- For chat UI work, read `docs/uchat.md` first.
 - Shared UI component docs remain source-adjacent in `desktop/src/shared/ui/COMPONENTS.md` and `desktop/src/shared/ui/ui-design-guidelines-tailwind.md`.
 
 ## Networking Rules
@@ -50,6 +51,17 @@ root/
 
 ## Editing Rules
 
+- The project core feature set is now mostly settled. Treat any planned refactor or rewrite as high risk and assess its impact on existing behavior first.
+- Before replacing an existing implementation, read the relevant docs and in-code comments first, then obtain explicit approval from the project owner.
+- When handling a bug, first determine whether it is architecture-level or business-level. Do not treat all defects as local implementation issues by default.
+- If a bug is architecture-level, or the likely fix may change runtime boundaries, protocol contracts, state ownership, persistence semantics, or other core structure, you must explicitly tell the project owner that the fix may require core architectural changes and wait for confirmation before proceeding.
+- Never silently repair a bug without first communicating its severity, layer, and expected impact. This includes “small” patch-style fixes: adding an unapproved workaround, compatibility shim, fallback branch, or local patch without explaining the seriousness and tradeoff to the project owner is not allowed.
+- If a bug has already been solved before and a new fix attempt is stuck after multiple rounds, stop re-deriving it from scratch and review the historical branches/commits for the prior solution path.
+- If local source code, local types, local package contents, or git history can verify a behavior, inspect them first. Do not drive code changes from guesses, wording like "maybe/probably", or inferred behavior that has not been checked locally.
+- When debugging a concrete defect, prefer a minimal reproducible check at the failing layer first, then state the cause. Do not keep asking the project owner to retest while the failure has not been pinned to a verified code path.
+- Unless there is already an explicitly confirmed business requirement for compatibility, do not add fallback logic in backend code. If compatibility behavior, downgrade paths, or silent兜底 seem necessary, stop and align on the design with the project owner first.
+- If fallback or compatibility logic is explicitly approved and must remain, add a succinct comment explaining why it exists, which concrete failure mode it protects, and when it should be removed.
+- If you find legacy code that is no longer applicable and does not affect current behavior, remove it during development instead of keeping dead paths around.
 - Do not manually edit `pnpm-lock.yaml`.
 - Keep renderer code free of direct Node APIs.
 - Expose native and runtime details through preload.
@@ -62,7 +74,7 @@ root/
 - The frontend UI interface design specifications and component documentation are located at `./desktop/src/shared/ui`. 
 - When I ask you to implement an interface, you should prioritize using existing pure UI components. Only if they do not exist should you consider abstracting frequently used UI components (excluding business logic).
 - You can modify or add components within, but their functionality must be backward compatible. Any modification to the component library requires updating both the design specifications and the component documentation.
-- The chat interface for this project was created by assistant-ui. For any related questions, please first refer to the `docs/assistant-ui.md` documentation.
+- The chat interface for this project is implemented with the app-owned `uchat` runtime. For related questions, refer to `docs/uchat.md` first.
 
 ## Verification
 

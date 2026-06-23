@@ -43,8 +43,8 @@ function ErrorFallback({
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-surface-secondary px-6 py-10">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(var(--color-primary),0.12),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(var(--color-secondary),0.12),transparent_30%)]" />
 
-      <section className="relative w-full max-w-xl rounded-3xl border border-border/80 bg-surface-primary/95 p-8 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur">
-        <div className="mb-6 inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-surface-secondary text-lg font-semibold text-text-primary">
+      <section className="relative w-full max-w-xl rounded-ui-hero border border-border/80 bg-surface-primary/95 p-8 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur">
+        <div className="mb-6 inline-flex h-12 w-12 items-center justify-center rounded-ui-panel border border-border bg-surface-secondary text-lg font-semibold text-text-primary">
           !
         </div>
 
@@ -74,7 +74,7 @@ function ErrorFallback({
         </div>
 
         {detail ? (
-          <details className="mt-6 rounded-2xl border border-border bg-surface-secondary/80 px-4 py-3 text-sm text-text-secondary">
+          <details className="mt-6 rounded-ui-panel border border-border bg-surface-secondary/80 px-4 py-3 text-sm text-text-secondary">
             <summary className="cursor-pointer list-none font-medium text-text-primary">
               {t("ui.errorBoundary.viewDetails")}
             </summary>

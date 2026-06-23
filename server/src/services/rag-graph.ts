@@ -13,7 +13,7 @@ import {
   retrieveService,
   type RetrievedChunk,
 } from "./rag-nodes";
-import type { NormalizedChatMessage } from "./provider-proxy.service";
+import type { NormalizedChatMessage } from "./provider-proxy.service/index.js";
 import { writeStructuredLog } from "@/logger";
 import {
   emitGenerateDelta,

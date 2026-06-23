@@ -10,7 +10,7 @@ export interface Thread {
   id: string;
   title: string;
   modelName: string | null;
-  ragEnabled: boolean;
+  knowledgeBaseId: string | null;
   status: ThreadStatus;
   createdAt: string;
   updatedAt: string;
@@ -23,6 +23,26 @@ export interface Message {
   threadId: string;
   role: MessageRole;
   content: string;
+  parts: Array<
+    | {
+        type: "text";
+        text: string;
+      }
+    | {
+        type: "image";
+        image: string;
+        filename?: string;
+        fileId?: string;
+        mediaType?: string;
+      }
+    | {
+        type: "file";
+        data: string;
+        filename: string;
+        fileId?: string;
+        mimeType: string;
+      }
+  >;
   metadata: Record<string, unknown>;
   createdAt: string;
 }
@@ -34,7 +54,7 @@ export interface ThreadWithMessages extends Thread {
 export interface CreateThreadInput {
   title?: string;
   modelName?: string;
-  ragEnabled?: boolean;
+  knowledgeBaseId?: string | null;
 }
 
 export interface CreateMessageInput {
@@ -42,6 +62,7 @@ export interface CreateMessageInput {
   role: MessageRole;
   content: string;
   parentId?: string | null;
+  parts?: Message["parts"];
   metadata?: Record<string, unknown>;
 }
 
@@ -71,7 +92,7 @@ export async function getThreadById(id: string): Promise<ThreadWithMessages> {
 
 // 创建新对话
 export async function createThread(input?: CreateThreadInput): Promise<Thread> {
-  return post<Thread>("/threads", input || {});
+  return post<Thread>("/threads", input);
 }
 
 // 更新对话

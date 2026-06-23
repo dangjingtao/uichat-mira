@@ -13,6 +13,12 @@
 
 ## 2. 产品气质
 
+> 重要约束：
+>
+> - 默认设计必须保持紧凑，慎用大圆角、厚阴影和大面积卡片堆叠
+> - 业务页不要直接写 `rounded-2xl`、`rounded-3xl` 作为默认方案
+> - 圆角优先使用统一 token：`rounded-ui-control`、`rounded-ui-panel`、`rounded-ui-overlay`、`rounded-ui-hero`
+
 整体气质保持：
 
 - 冷静、可信、清晰、亲和
@@ -211,6 +217,26 @@
 | 警告提示 | `border-warning-border bg-warning-soft text-warning-text` |
 | 信息提示 | `border-info-border bg-info-soft text-info-text` |
 
+## 7.1 圆角尺度
+
+圆角不要再靠页面临场发挥，优先使用统一 token：
+
+| 场景 | 推荐 token | 说明 |
+| --- | --- | --- |
+| 交互控件 | `rounded-ui-control` | 按钮、输入框、图标按钮、轻量标签 |
+| 内容面板 | `rounded-ui-panel` | 卡片、表格容器、空态块、提示块 |
+| 浮层 | `rounded-ui-overlay` | Modal、下拉、Toast、确认层 |
+| 英雄 / 欢迎区 | `rounded-ui-hero` | 登录页、首页大横幅、强视觉封面 |
+| 圆形元素 | `rounded-full` | 头像、状态点、徽标、少量胶囊 |
+
+补充规则：
+
+- 控件默认不要超过 `ui-control`，否则会显得松散
+- 页面中最常见的容器应停在 `ui-panel`
+- `ui-overlay` 只留给浮层，不要拿来做普通卡片
+- `ui-hero` 只在明确需要更强视觉存在感时使用
+- 不要在业务页继续写 `rounded-2xl`、`rounded-3xl` 作为默认
+
 ## 8. Typography
 
 ### 8.1 字体角色
@@ -288,11 +314,21 @@
 
 ## 10. 组件色彩约束
 
-- Button：`primary` 负责主操作，`secondary` / `outline` 回到 `surface-* + border`
+- Button：`primary` 负责主操作，`secondary` / `outline` 回到 `surface-* + border`，危险幽灵操作优先 `danger-ghost`，`link` 只用于行内文本动作
+- Badge：通用胶囊优先复用共享 `Badge`，只保留少量 `neutral / primary / success / warning / danger / muted` 变体
+- CodeBlock / TerminalPanel：代码块、日志块、模拟终端优先复用共享组件，不要在业务页反复手写 `font-mono + border + bg + scroll`
+- 当日志区已经嵌入 `TabCard`、详情壳或其他主容器时，优先使用 `TerminalPanel` 的轻壳/无壳变体，而不是在业务页重复手写去边框去圆角样式
+- SegmentedTabs：胶囊 tab 优先复用共享 `SegmentedTabs`，不要在业务页重复拼 active / inactive 样式
+- TabCard：当 tabs、辅助说明和内容区属于同一张工作台卡片时，优先复用共享 `TabCard`，不要在业务页重复手写 `tabs + header + body`
 - Input / Select：默认 `bg-surface-primary border-border text-text-primary`，focus 使用 `primary`
 - Modal / Tooltip / Dropdown：优先 `surface-elevated + border`
+- DropdownMenu / Submenu 必须通过 portal 渲染，并显式高于底部悬浮 Composer、抽屉和普通卡片层
+- 搜索选择类弹窗优先使用共享 `SearchSelectModal`，并保持“固定搜索头 + 独立滚动结果区”
+- 搜索选择类弹窗默认走更紧凑的 modal 壳层，列表项应以单行标题、轻量元信息和较小圆角为主，避免大卡片堆叠
 - Table：用 `surface-*`、`border`、`text-*` 建结构，不做厚重报表蓝灰底
 - 紧凑业务表格优先使用共享 `Table` 的 `compact` 模式，先压缩表头和行高，再考虑删列
+- 表头分隔线应由 `th` 承载，sticky 场景下更稳定
+- 表体首行不要再单独补 `border-t`，统一从第二行开始建立分隔节奏
 - StatusBadge / StatusIndicator：状态色仅在点、边、浅底中使用，避免整块高饱和填充
 - Thread / Chat：优先安静的中性面和轻主色强调，避免聊天区出现大片状态色面板
 
@@ -305,11 +341,14 @@
 - Dropdown / Select / Popover 等浮层要显式高于页面抽屉、底部输入悬浮区和普通卡片层
 - 业务型 dropdown 圆角建议收敛到 `8px ~ 10px`，避免浮层边界过软
 - Detail Drawer 应保持右侧上下文感，避免做成全屏打断式交互
+- 抽屉壳层优先复用共享 `Drawer`，业务页不要重复手写 portal、遮罩、滑入动画和 body 滚动锁
+- 图片遮罩预览和滚轮缩放优先复用共享 `ImagePreviewOverlay`，不要在业务页重复拼装黑色遮罩和缩放逻辑
 - ErrorBoundary 等异常兜底界面应优先使用柔和背景、轻量卡片和明确恢复动作，避免制造额外紧张感
 - Tooltip 允许长文本换行，并应限制最大宽度，避免路径或错误详情溢出视口
 - 尽量避免大面积高饱和色块
 - Logo、品牌字标、欢迎区视觉元素进入工作流后应主动退后，让位于内容与操作
 - 二次确认组件应保持紧凑，慎用大圆角、厚阴影和厚卡片式边界，默认以清晰文本、轻图标和单一危险主操作表达风险
+- 欢迎区、空态英雄图这类大视觉包装优先复用共享 `WelcomePanel`，业务组件只保留文案和资源选择
 
 ## 12. 交互约束
 
@@ -327,11 +366,14 @@
 - 配置页允许更紧凑密度，但不要牺牲可读性
 - 表单优先复用 `shared/ui` 组件，不要在业务页重复写同一套输入框、文本域、按钮或卡片类名
 - 默认设计应相对紧凑，慎用大圆角、厚阴影和大面积卡片堆叠
+- 普通配置面板、浅底分组、虚线空态优先复用共享 `Card` 变体，不要在页面里重复拼装 `rounded + border + bg + shadow`
 - 工作台类页面允许左右分栏，但左右两侧都应控制信息密度，避免噪音堆积
 - 布尔开关优先使用共享 `Switch`
 - 行内二级操作优先使用共享 `IconButton`
+- `IconButton` 不再在业务页手写尺寸；统一使用 `xs / sm / md / lg`，默认 `ghost + default`
 - 共享选择器优先使用基于 Radix 原语封装的 `shared/ui/Select`，不要在业务组件内重复手写 listbox
 - 配置型表单默认先展示“当前有效值”和最关键动作，把进阶项放到二级层
+- 长文本富文本编辑优先复用共享 `MarkdownEditor`，不要在业务页直接初始化第三方编辑器实例
 - 异常提示优先翻译成用户可理解文案，不直接展示底层错误 key 或技术性英语
 
 ## 14. 知识库页补充约定

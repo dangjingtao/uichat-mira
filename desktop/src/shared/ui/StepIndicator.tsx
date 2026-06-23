@@ -16,7 +16,7 @@ export function StepIndicator({
 }: StepIndicatorProps) {
   return (
     <div
-      className={`flex flex-wrap items-center justify-center gap-4 rounded-2xl border border-border bg-surface-primary px-6 py-4 shadow-shadow-sm ${className}`}
+      className={`flex flex-wrap items-center justify-center gap-4 rounded-ui-panel border border-border bg-surface-primary px-6 py-4 shadow-shadow-sm ${className}`}
     >
       {steps.map((item, index) => {
         const active = item.step === currentStep;

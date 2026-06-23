@@ -2,6 +2,7 @@ export const DEFAULT_UNKNOWN_ERROR_MESSAGE = "Unknown error";
 export const INVALID_REQUEST_PAYLOAD_MESSAGE = "Invalid request payload";
 export const THREAD_NOT_FOUND_MESSAGE = "Thread not found";
 export const THREAD_ACCESS_ERROR_MESSAGE = "Thread not found or not accessible";
+export const KNOWLEDGE_BASE_NOT_FOUND_MESSAGE = "Knowledge base not found";
 export const DOCUMENT_NOT_FOUND_MESSAGE = "Document not found";
 export const MODEL_CONFIG_NOT_FOUND_MESSAGE = "Config not found";
 export const PROVIDER_CONNECTION_NOT_FOUND_MESSAGE =

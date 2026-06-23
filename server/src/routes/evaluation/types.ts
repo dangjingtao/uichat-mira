@@ -68,6 +68,8 @@ export interface EvaluationDatasetRecord {
   id: string;
   /** User-facing dataset title. */
   datasetName: string;
+  /** Knowledge base used to generate or run this dataset, when known. */
+  knowledgeBaseId?: string;
   /** Original uploaded zip filename. */
   fileName: string;
   /** Uploaded zip file size in bytes. */
@@ -237,6 +239,18 @@ export interface DeleteEvaluationRunResponse {
   deleted: boolean;
 }
 
+/** Body for deleting multiple evaluation run records at once. */
+export interface DeleteEvaluationRunsBody {
+  /** Evaluation run identifiers to remove. */
+  runIds: string[];
+}
+
+/** Response returned after deleting multiple evaluation run records. */
+export interface DeleteEvaluationRunsResponse {
+  /** Deleted run identifiers. */
+  deletedIds: string[];
+}
+
 /** Body for creating a new evaluation run from a parsed dataset. */
 export interface CreateEvaluationRunBody {
   /** Dataset identifier returned by the parse endpoint. */
@@ -249,9 +263,11 @@ export interface CreateEvaluationRunBody {
 export interface GenerateEvaluationPackageBody {
   /** User-facing dataset name embedded in manifest and filename. */
   datasetName: string;
+  /** Knowledge base used as the source for package generation. */
+  knowledgeBaseId: string;
   /** Total sample count requested for the package. */
   sampleCount: number;
-  /** Max number of documents to sample from the default knowledge base. */
+  /** Max number of documents to sample from the selected knowledge base. */
   documentCount: number;
   /** Max chunks sampled from each selected document. */
   chunksPerDocument: number;

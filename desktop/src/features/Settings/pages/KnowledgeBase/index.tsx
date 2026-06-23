@@ -19,6 +19,8 @@ import { Modal } from "@/shared/ui/Modal";
 import { StatusIndicator } from "@/shared/ui/StatusIndicator";
 import Switch from "@/shared/ui/Switch";
 import Table from "@/shared/ui/Table";
+import type { ColumnMeta } from "@/shared/ui/Table";
+import { Select } from "@/shared/ui/Select";
 import {
   createKnowledgeBase,
   deleteKnowledgeBase,
@@ -34,6 +36,7 @@ import {
 import { type FilterKey, filterOptions } from "./mockData";
 import { useRoleModelConfigs } from "@/app/providers/RoleModelConfigProvider";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
+import SettingsNotice from "../../components/SettingsNotice";
 import KnowledgeBaseEditorForm from "./KnowledgeBaseEditorForm";
 import KnowledgeBaseMetadataContent from "./KnowledgeBaseMetadataContent";
 import KnowledgeBaseSidebar from "./KnowledgeBaseSidebar";
@@ -99,16 +102,11 @@ export default function KnowledgeBaseSettings() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const selectedKnowledgeBaseIdFromQuery =
-    searchParams.get("knowledgeBaseId") || null;
-  const [knowledgeBase, setKnowledgeBase] =
-    useState<KnowledgeBaseSummary | null>(null);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseSummary[]>(
     [],
   );
-  const [selectedKnowledgeBaseId, setSelectedKnowledgeBaseId] = useState<
-    string | null
-  >(null);
+  const [knowledgeBase, setKnowledgeBase] =
+    useState<KnowledgeBaseSummary | null>(null);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<FilterKey>("all");
@@ -123,6 +121,17 @@ export default function KnowledgeBaseSettings() {
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
   const { modelAccessStatus, refresh: refreshRoleModelConfigs } =
     useRoleModelConfigs();
+  const selectedKnowledgeBaseId = useMemo(() => {
+    const knowledgeBaseIdFromQuery = searchParams.get("knowledgeBaseId");
+    if (
+      knowledgeBaseIdFromQuery &&
+      knowledgeBases.some((item) => item.id === knowledgeBaseIdFromQuery)
+    ) {
+      return knowledgeBaseIdFromQuery;
+    }
+
+    return knowledgeBases[0]?.id ?? null;
+  }, [knowledgeBases, searchParams]);
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -144,18 +153,15 @@ export default function KnowledgeBaseSettings() {
     };
   }, []);
 
-  const loadKnowledgeBases = useCallback(async () => {
-    const data = await listKnowledgeBases();
-    setKnowledgeBases(data);
-    setSelectedKnowledgeBaseId(
-      (current) =>
-        current ?? selectedKnowledgeBaseIdFromQuery ?? data[0]?.id ?? null,
-    );
-  }, [selectedKnowledgeBaseIdFromQuery]);
-
   const loadKnowledgeBase = useCallback(async (knowledgeBaseId: string) => {
     const data = await getKnowledgeBaseById(knowledgeBaseId);
     setKnowledgeBase(data);
+  }, []);
+
+  const loadKnowledgeBases = useCallback(async () => {
+    const data = await listKnowledgeBases();
+    setKnowledgeBases(data);
+    return data;
   }, []);
 
   const loadDocuments = useCallback(async () => {
@@ -222,7 +228,10 @@ export default function KnowledgeBaseSettings() {
 
   useEffect(() => {
     if (!selectedKnowledgeBaseId) {
-      setKnowledgeBase(null);
+      return;
+    }
+
+    if (searchParams.get("knowledgeBaseId") === selectedKnowledgeBaseId) {
       return;
     }
 
@@ -234,9 +243,16 @@ export default function KnowledgeBaseSettings() {
       },
       { replace: true },
     );
+  }, [searchParams, selectedKnowledgeBaseId, setSearchParams]);
+
+  useEffect(() => {
+    if (!selectedKnowledgeBaseId) {
+      setKnowledgeBase(null);
+      return;
+    }
 
     void loadKnowledgeBase(selectedKnowledgeBaseId);
-  }, [loadKnowledgeBase, selectedKnowledgeBaseId, setSearchParams]);
+  }, [loadKnowledgeBase, selectedKnowledgeBaseId]);
 
   useEffect(() => {
     tableScrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
@@ -257,18 +273,49 @@ export default function KnowledgeBaseSettings() {
   }, [loadDocuments]);
 
   const refreshAll = useCallback(async () => {
+    const nextKnowledgeBases = await loadKnowledgeBases();
+    if (
+      selectedKnowledgeBaseId &&
+      !nextKnowledgeBases.some((item) => item.id === selectedKnowledgeBaseId)
+    ) {
+      const nextKnowledgeBaseId = nextKnowledgeBases[0]?.id;
+      setSearchParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          if (nextKnowledgeBaseId) {
+            next.set("knowledgeBaseId", nextKnowledgeBaseId);
+          } else {
+            next.delete("knowledgeBaseId");
+          }
+          return next;
+        },
+        { replace: true },
+      );
+      return;
+    }
+
     await Promise.all([
-      loadKnowledgeBases(),
       loadDocuments(),
       refreshRoleModelConfigs(),
+      selectedKnowledgeBaseId
+        ? loadKnowledgeBase(selectedKnowledgeBaseId)
+        : Promise.resolve(),
     ]);
-  }, [loadDocuments, loadKnowledgeBases, refreshRoleModelConfigs]);
+  }, [
+    loadKnowledgeBase,
+    loadDocuments,
+    loadKnowledgeBases,
+    refreshRoleModelConfigs,
+    selectedKnowledgeBaseId,
+    setSearchParams,
+  ]);
 
   const visibleDocuments = useMemo(() => documents, [documents]);
   const allVisibleSelected =
     visibleDocuments.length > 0 &&
     visibleDocuments.every((item) => selectedDocumentIds.includes(item.id));
   const selectedDocumentCount = selectedDocumentIds.length;
+  const canDeleteKnowledgeBase = !knowledgeBase?.isSystem;
   const filteredKnowledgeBases = useMemo(() => {
     const keyword = knowledgeBaseSearchText.trim().toLowerCase();
     if (!keyword) {
@@ -279,6 +326,14 @@ export default function KnowledgeBaseSettings() {
       item.name.toLowerCase().includes(keyword),
     );
   }, [knowledgeBaseSearchText, knowledgeBases]);
+  const knowledgeBaseSelectOptions = useMemo(
+    () =>
+      knowledgeBases.map((item) => ({
+        value: item.id,
+        label: item.name,
+      })),
+    [knowledgeBases],
+  );
 
   const resetDocumentViewState = useCallback(() => {
     setFilter("all");
@@ -297,9 +352,16 @@ export default function KnowledgeBaseSettings() {
       }
 
       resetDocumentViewState();
-      setSelectedKnowledgeBaseId(knowledgeBaseId);
+      setSearchParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          next.set("knowledgeBaseId", knowledgeBaseId);
+          return next;
+        },
+        { replace: true },
+      );
     },
-    [resetDocumentViewState, selectedKnowledgeBaseId],
+    [resetDocumentViewState, selectedKnowledgeBaseId, setSearchParams],
   );
 
   const toggleSort = useCallback((nextSortBy: DocumentSortKey) => {
@@ -334,42 +396,15 @@ export default function KnowledgeBaseSettings() {
   const columns = useMemo<ColumnDef<DocumentRow>[]>(
     () => [
       {
-        id: "select",
-        size: 40,
-        header: () => (
-          <input
-            type="checkbox"
-            checked={allVisibleSelected}
-            aria-label="Select all documents"
-            className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
-            onChange={(event) => {
-              setSelectedDocumentIds(
-                event.target.checked
-                  ? visibleDocuments.map((item) => item.id)
-                  : [],
-              );
-            }}
-          />
-        ),
-        cell: ({ row }) => (
-          <input
-            type="checkbox"
-            aria-label={row.original.name}
-            checked={selectedDocumentIds.includes(row.original.id)}
-            className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
-            onClick={(event) => event.stopPropagation()}
-            onChange={(event) => {
-              setSelectedDocumentIds((current) =>
-                event.target.checked
-                  ? [...current, row.original.id]
-                  : current.filter((id) => id !== row.original.id),
-              );
-            }}
-          />
-        ),
-      },
-      {
         accessorKey: "name",
+        size: 200,
+        minSize: 200,
+        maxSize: 200,
+        meta: {
+          width: 200,
+          sticky: "left",
+          ellipsisTooltip: true,
+        } satisfies ColumnMeta<DocumentRow>,
         header: () => (
           <button
             type="button"
@@ -382,13 +417,14 @@ export default function KnowledgeBaseSettings() {
             {renderSortIcon("name")}
           </button>
         ),
+        sortingFn: "alphanumeric",
         cell: ({ row }) => (
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 max-w-[200px] items-center gap-2">
             <FileIcon
               extension={row.original.type}
               className="h-4 w-4 shrink-0"
             />
-            <div className="min-w-0 truncate font-medium text-text-primary">
+            <div className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-medium text-text-primary">
               {row.original.name}
             </div>
           </div>
@@ -518,12 +554,9 @@ export default function KnowledgeBaseSettings() {
       },
     ],
     [
-      allVisibleSelected,
       openActionMenuId,
-      selectedDocumentIds,
       t,
       togglingDocumentIds,
-      visibleDocuments,
     ],
   );
 
@@ -630,7 +663,10 @@ export default function KnowledgeBaseSettings() {
   const handleToggleDocumentEnabled = async (document: DocumentRow) => {
     try {
       setTogglingDocumentIds((current) => [...current, document.id]);
-      await updateKnowledgeBaseDocument(document.id, {
+      if (!selectedKnowledgeBaseId) {
+        throw new Error("当前知识库不存在");
+      }
+      await updateKnowledgeBaseDocument(selectedKnowledgeBaseId, document.id, {
         enabled: !document.enabled,
       });
       message.success(document.enabled ? "文档已停用" : "文档已启用");
@@ -701,7 +737,14 @@ export default function KnowledgeBaseSettings() {
               });
               Modal.close(modalKey);
               await loadKnowledgeBases();
-              setSelectedKnowledgeBaseId(created.id);
+              setSearchParams(
+                (current) => {
+                  const next = new URLSearchParams(current);
+                  next.set("knowledgeBaseId", created.id);
+                  return next;
+                },
+                { replace: true },
+              );
               message.success("知识库已创建");
             } catch (error) {
               message.error(
@@ -775,6 +818,10 @@ export default function KnowledgeBaseSettings() {
     if (!knowledgeBase) {
       return;
     }
+    if (knowledgeBase.isSystem) {
+      message.warning("系统保留知识库不可删除");
+      return;
+    }
 
     Modal.confirm({
       title: "删除知识库",
@@ -784,9 +831,23 @@ export default function KnowledgeBaseSettings() {
       confirmText: "确认删除",
       onConfirm: async () => {
         try {
+          const nextSelectedKnowledgeBaseId =
+            knowledgeBases.find((item) => item.id !== knowledgeBase.id)?.id ?? null;
           await deleteKnowledgeBase(knowledgeBase.id);
           resetDocumentViewState();
           await loadKnowledgeBases();
+          setSearchParams(
+            (current) => {
+              const next = new URLSearchParams(current);
+              if (nextSelectedKnowledgeBaseId) {
+                next.set("knowledgeBaseId", nextSelectedKnowledgeBaseId);
+              } else {
+                next.delete("knowledgeBaseId");
+              }
+              return next;
+            },
+            { replace: true },
+          );
           setKnowledgeBase(null);
           message.success("知识库已删除");
         } catch (error) {
@@ -798,10 +859,10 @@ export default function KnowledgeBaseSettings() {
     });
   };
 
-  if (loading && visibleDocuments.length === 0 && !knowledgeBase) {
-    return (
-      <FullPageStatus
-        message={t("settings.knowledgeBase.messages.loadingDocuments")}
+    if (loading && visibleDocuments.length === 0 && !knowledgeBase) {
+      return (
+        <FullPageStatus
+          message={t("settings.knowledgeBase.messages.loadingDocuments")}
       />
     );
   }
@@ -811,6 +872,16 @@ export default function KnowledgeBaseSettings() {
       miniTitle={t("settings.knowledgeBase.page.miniTitle")}
       title={t("settings.knowledgeBase.page.title")}
       description={t("settings.knowledgeBase.page.descriptionFallback")}
+      slot={
+        <div className="w-[200px] lg:hidden">
+          <Select
+            value={selectedKnowledgeBaseId ?? ""}
+            onChange={handleSelectKnowledgeBase}
+            options={knowledgeBaseSelectOptions}
+            compact
+          />
+        </div>
+      }
       bodyClassName="overflow-hidden"
       containerClassName="max-w-none"
       contentClassName="flex h-full min-h-0 flex-col gap-3 pt-4 px-0"
@@ -818,31 +889,30 @@ export default function KnowledgeBaseSettings() {
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3 border-0 bg-transparent p-0 shadow-none">
         {modelAccessStatus && !modelAccessStatus.embeddingConnected ? (
-          <div className="rounded-lg border border-danger-border bg-danger-soft px-4 py-3 text-sm text-danger-text">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-              <div className="font-medium">
-                {t("settings.knowledgeBase.banner")}
-              </div>
-            </div>
-          </div>
+          <SettingsNotice
+            tone="danger"
+            icon={<AlertCircle className="h-4 w-4" />}
+          >
+            <div className="font-medium">{t("settings.knowledgeBase.banner")}</div>
+          </SettingsNotice>
         ) : null}
 
         <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[240px_minmax(0,1fr)]">
-          <KnowledgeBaseSidebar
-            searchText={knowledgeBaseSearchText}
-            onSearchTextChange={setKnowledgeBaseSearchText}
-            onCreate={handleCreateKnowledgeBase}
-            knowledgeBases={filteredKnowledgeBases}
-            selectedKnowledgeBaseId={selectedKnowledgeBaseId}
-            onSelectKnowledgeBase={handleSelectKnowledgeBase}
-          />
+          <div className="hidden min-h-0 lg:flex lg:h-full lg:flex-col">
+            <KnowledgeBaseSidebar
+              searchText={knowledgeBaseSearchText}
+              onSearchTextChange={setKnowledgeBaseSearchText}
+              onCreate={handleCreateKnowledgeBase}
+              knowledgeBases={filteredKnowledgeBases}
+              selectedKnowledgeBaseId={selectedKnowledgeBaseId}
+              onSelectKnowledgeBase={handleSelectKnowledgeBase}
+            />
+          </div>
           <section className="flex min-h-0 flex-col gap-3">
             <KnowledgeBaseToolbar
-              knowledgeBaseName={knowledgeBase?.name ?? "默认知识库"}
-              knowledgeBaseDescription={knowledgeBase?.description}
               filter={filter}
               selectedDocumentCount={selectedDocumentCount}
+              canDeleteKnowledgeBase={canDeleteKnowledgeBase}
               onDeleteKnowledgeBase={handleDeleteKnowledgeBase}
               onEditKnowledgeBase={handleEditKnowledgeBase}
               onOpenMetadata={openMetadataModal}
@@ -862,6 +932,13 @@ export default function KnowledgeBaseSettings() {
                     key={selectedKnowledgeBaseId ?? "empty"}
                     data={visibleDocuments}
                     columns={columns}
+                    rowSelection={{
+                      selectedRowIds: selectedDocumentIds,
+                      onSelectedRowIdsChange: setSelectedDocumentIds,
+                      getRowId: (row) => row.id,
+                      ariaLabel: (row) => row.name,
+                      selectAllAriaLabel: "Select all documents",
+                    }}
                     compact
                     stickyHeader
                     className="rounded-none border-0 shadow-none"
