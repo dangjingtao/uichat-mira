@@ -30,6 +30,7 @@ export interface RAGPipelineInput {
   topN?: number;
   systemPrompt?: string;
   conversationHistory?: NormalizedChatMessage[];
+  requestContextMessages?: NormalizedChatMessage[];
 }
 
 export interface RAGPipelineOutput {

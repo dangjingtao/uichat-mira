@@ -140,6 +140,7 @@ interface TextInputProps {
   disabled?: boolean;
   error?: string;
   type?: string;
+  step?: string | number;
   compact?: boolean;
   labelHelp?: string;
 }
@@ -152,6 +153,7 @@ export const TextInput: React.FC<TextInputProps> = ({
   disabled,
   error,
   type = "text",
+  step,
   compact,
   labelHelp,
 }) => {
@@ -171,6 +173,7 @@ export const TextInput: React.FC<TextInputProps> = ({
       <input
         id={inputId}
         type={type}
+        step={step}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}

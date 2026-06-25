@@ -35,6 +35,19 @@ export const threadSchema = {
       type: ["string", "null"],
       description: "Knowledge base bound to this thread.",
     },
+    roleId: {
+      type: ["string", "null"],
+      description: "Role bound to this thread.",
+    },
+    contextSummary: {
+      type: ["string", "null"],
+      description: "Persisted thread context summary.",
+    },
+    contextSummaryUpdatedAt: {
+      type: ["string", "null"],
+      format: "date-time",
+      description: "When the thread context summary was last updated.",
+    },
     status: {
       type: "string",
       description: "Thread lifecycle state.",
@@ -159,6 +172,26 @@ const threadMutationBodySchema = {
     knowledgeBaseId: {
       type: ["string", "null"],
       description: "Knowledge base bound to this thread.",
+    },
+    roleId: {
+      type: ["string", "null"],
+      description: "Role bound to this thread.",
+    },
+    contextSummary: {
+      type: ["string", "null"],
+      description: "Replacement thread context summary.",
+    },
+  },
+} as const;
+
+const threadContextSummarySchema = {
+  type: "object",
+  required: ["contextSummary", "contextSummaryUpdatedAt"],
+  properties: {
+    contextSummary: { type: ["string", "null"] },
+    contextSummaryUpdatedAt: {
+      type: ["string", "null"],
+      format: "date-time",
     },
   },
 } as const;
@@ -371,6 +404,17 @@ export const threadRouteSchemas = {
     params: idParamsSchema,
     response: {
       200: successEnvelope(deletedResponseSchema),
+      404: errorEnvelope,
+      500: errorEnvelope,
+    },
+  },
+  generateContextSummary: {
+    tags: ["Thread"],
+    summary: "Generate thread context summary",
+    operationId: "generateThreadContextSummary",
+    params: idParamsSchema,
+    response: {
+      200: successEnvelope(threadContextSummarySchema),
       404: errorEnvelope,
       500: errorEnvelope,
     },

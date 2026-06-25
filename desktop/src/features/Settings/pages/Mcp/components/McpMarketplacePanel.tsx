@@ -1,15 +1,11 @@
-import { Download, RefreshCw, Search } from "lucide-react";
-import Alert from "@/shared/ui/Alert";
+import { Download } from "lucide-react";
 import Badge from "@/shared/ui/Badge";
 import { Button } from "@/shared/ui/Button";
-import { TextInput } from "@/shared/ui/Input";
 import type { McpMarketplaceServer } from "@/shared/api/tools";
 
 type McpMarketplacePanelProps = {
-  error: string | null;
   hasMore: boolean;
   isLoading: boolean;
-  query: string;
   servers: McpMarketplaceServer[];
   sourceUrl: string | null;
   labels: {
@@ -20,18 +16,11 @@ type McpMarketplacePanelProps = {
     install: string;
     loadMore: string;
     loading: string;
-    refresh: string;
-    retry: string;
-    search: string;
-    searchPlaceholder: string;
     title: string;
     transports: string;
   };
   onInstall: (server: McpMarketplaceServer) => void;
   onLoadMore: () => void;
-  onQueryChange: (value: string) => void;
-  onRefresh: () => void;
-  onSearch: () => void;
 };
 
 function formatTransport(transport: McpMarketplaceServer["transports"][number]) {
@@ -51,53 +40,19 @@ function formatTransportSummary(server: McpMarketplaceServer) {
 }
 
 export default function McpMarketplacePanel({
-  error,
   hasMore,
   isLoading,
-  query,
   servers,
   sourceUrl,
   labels,
   onInstall,
   onLoadMore,
-  onQueryChange,
-  onRefresh,
-  onSearch,
 }: McpMarketplacePanelProps) {
   return (
-    <div className="rounded-ui-panel border border-border bg-surface-primary">
-      <div className="border-b border-border px-4 py-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-sm font-medium text-text-primary">{labels.title}</div>
-            <div className="mt-1 text-sm text-text-secondary">{labels.description}</div>
-          </div>
-          <Button variant="outline" size="sm" onClick={onRefresh} disabled={isLoading}>
-            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-            {labels.refresh}
-          </Button>
-        </div>
-
-        <form
-          className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto]"
-          onSubmit={(event) => {
-            event.preventDefault();
-            onSearch();
-          }}
-        >
-          <TextInput
-            value={query}
-            onChange={onQueryChange}
-            placeholder={labels.searchPlaceholder}
-            disabled={isLoading}
-            compact
-          />
-          <Button type="submit" variant="primary" size="sm" disabled={isLoading}>
-            <Search className="h-4 w-4" />
-            {labels.search}
-          </Button>
-        </form>
-
+    <div className="min-h-0">
+      <div className="px-5 py-4">
+        <div className="text-sm font-medium text-text-primary">{labels.title}</div>
+        <div className="mt-1 text-sm text-text-secondary">{labels.description}</div>
         {sourceUrl ? (
           <div className="mt-3 break-all text-xs text-text-tertiary">
             {labels.activeSource}: {sourceUrl}
@@ -105,24 +60,10 @@ export default function McpMarketplacePanel({
         ) : null}
       </div>
 
-      {error ? (
-        <div className="p-4">
-          <Alert
-            variant="warning"
-            title={error}
-            action={
-              <Button variant="outline" size="xs" onClick={onRefresh} disabled={isLoading}>
-                {labels.retry}
-              </Button>
-            }
-          />
-        </div>
-      ) : null}
-
-      {!error && servers.length > 0 ? (
+      {servers.length > 0 ? (
         <div className="divide-y divide-border">
           {servers.map((server) => (
-            <div key={server.id} className="px-4 py-3">
+            <div key={server.id} className="px-5 py-4">
               <div className="flex items-start gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -165,7 +106,7 @@ export default function McpMarketplacePanel({
           ))}
 
           {hasMore ? (
-            <div className="flex justify-center px-4 py-4">
+            <div className="flex justify-center px-5 py-4">
               <Button variant="secondary" size="sm" onClick={onLoadMore} disabled={isLoading}>
                 {isLoading ? labels.loading : labels.loadMore}
               </Button>
@@ -174,8 +115,8 @@ export default function McpMarketplacePanel({
         </div>
       ) : null}
 
-      {!error && servers.length === 0 ? (
-        <div className="px-4 py-8">
+      {servers.length === 0 ? (
+        <div className="px-5 py-8">
           <div className="text-sm font-medium text-text-primary">{labels.emptyTitle}</div>
           <div className="mt-1 text-sm text-text-secondary">
             {isLoading ? labels.loading : labels.emptyDescription}

@@ -11,6 +11,7 @@ interface SegmentedTabsProps<T extends string> {
   value: T;
   onChange: (value: T) => void;
   className?: string;
+  size?: "sm" | "md";
 }
 
 export default function SegmentedTabs<T extends string>({
@@ -18,7 +19,13 @@ export default function SegmentedTabs<T extends string>({
   value,
   onChange,
   className = "",
+  size = "md",
 }: SegmentedTabsProps<T>) {
+  const itemClassName =
+    size === "sm"
+      ? "px-2.5 py-1 text-xs font-medium"
+      : "px-3 py-1.5 text-sm font-medium";
+
   return (
     <Card
       variant="subtle"
@@ -33,7 +40,7 @@ export default function SegmentedTabs<T extends string>({
             key={item.value}
             type="button"
             onClick={() => onChange(item.value)}
-            className={`rounded-ui-control px-3 py-1.5 text-sm font-medium transition-all ${
+            className={`rounded-ui-control transition-all ${itemClassName} ${
               active
                 ? "bg-surface-primary text-text-primary shadow-shadow-sm"
                 : "text-text-secondary"

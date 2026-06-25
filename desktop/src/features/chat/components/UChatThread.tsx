@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   BowArrow,
@@ -18,15 +18,27 @@ import {
 import { useUChatComposerState } from "@/features/chat/core/composerPolicy";
 import { resolveAttachmentSource } from "@/features/chat/core/protocol";
 import type { KnowledgeBaseSummary } from "@/shared/api/knowledgeBase";
+import {
+  getRoleById,
+  listRoles,
+  type RoleSummary,
+} from "@/shared/api/roles";
+import { getBuiltinAvatarPack16Options } from "@/shared/avatars";
 import { UChatThreadView } from "@/shared/uchat/ui";
 import type {
   ChatComposerAction,
   ChatThreadContextTag,
 } from "@/shared/uchat/core";
-import { SearchSelectModal, message } from "@/shared/ui";
+import { Modal, SearchSelectModal, message } from "@/shared/ui";
+import {
+  buildThreadContextTags,
+  formatRoleReplyingLabel,
+  resolveActiveRoleId,
+  resolveRoleAvatarSrc,
+  upsertRoleSummary,
+} from "./roleChatState";
+import ThreadContextSummaryModalContent from "./ThreadContextSummaryModalContent";
 
-// The same badge metadata from the previous thread view is reused so model
-// presentation stays visually consistent while the runtime changes underneath.
 const modelBadgeMeta = {
   llm: { label: "LLM", icon: EthernetPort },
   task: { label: "Task", icon: MessageCircleCode },
@@ -45,9 +57,6 @@ const isConfiguredModelName = (name: string) => {
   );
 };
 
-// UChatThread is the current app-owned thread surface. It keeps the existing
-// runtime wiring and business decisions, while visual rendering now lives in
-// shared/uchat/ui.
 export default function UChatThread() {
   const { t } = useTranslation();
   const runtime = useChatRuntime();
@@ -64,9 +73,16 @@ export default function UChatThread() {
   const { configMap, hasDefaultEmbedding, hasDefaultLlm } =
     useRoleModelConfigs();
   const { knowledgeBases } = useChatKnowledgeBaseState();
-  const { draftKnowledgeBaseId, setDraftKnowledgeBaseId } =
-    useChatThreadDraftState();
+  const {
+    draftKnowledgeBaseId,
+    draftRoleId,
+    setDraftKnowledgeBaseId,
+    setDraftRoleId,
+  } = useChatThreadDraftState();
   const [isKnowledgeBasePickerOpen, setKnowledgeBasePickerOpen] = useState(false);
+  const [isRolePickerOpen, setRolePickerOpen] = useState(false);
+  const [roles, setRoles] = useState<RoleSummary[]>([]);
+  const avatarOptions = useMemo(() => getBuiltinAvatarPack16Options(), []);
 
   const threadKnowledgeBaseId =
     typeof activeThread?.metadata?.knowledgeBaseId === "string" ||
@@ -78,8 +94,12 @@ export default function UChatThread() {
       ? threadKnowledgeBaseId
       : draftKnowledgeBaseId;
   const hasKnowledgeBase = Boolean(activeKnowledgeBaseId);
+  const persistedRoleId =
+    typeof activeThread?.metadata?.roleId === "string" ||
+    activeThread?.metadata?.roleId === null
+      ? activeThread.metadata.roleId
+      : undefined;
 
-  // Composer gating continues to respect the existing model configuration rules.
   const { isSendDisabled, placeholder } = useUChatComposerState({
     isRunning,
     hasKnowledgeBase,
@@ -121,37 +141,150 @@ export default function UChatThread() {
     [activeKnowledgeBaseId, knowledgeBases],
   );
 
-  const threadContextTags = useMemo<ChatThreadContextTag[]>(
-    () =>
-      activeKnowledgeBase
-        ? [
-            {
-              id: `knowledge-base:${activeKnowledgeBase.id}`,
-              kind: "knowledge-base",
-              label: activeKnowledgeBase.name,
-              tooltip: `${activeKnowledgeBase.name} (${activeKnowledgeBase.enabledDocumentCount} enabled documents)`,
-              removable: true,
-            },
-          ]
-        : [],
-    [activeKnowledgeBase],
+  useEffect(() => {
+    let disposed = false;
+
+    const loadRoleList = async () => {
+      try {
+        const nextRoles = await listRoles({
+          status: "active",
+          sortBy: "updatedAt",
+          sortOrder: "desc",
+        });
+        if (!disposed) {
+          setRoles(nextRoles);
+        }
+      } catch (error) {
+        if (!disposed) {
+          message.error(
+            error instanceof Error
+              ? error.message
+              : t("chat.thread.roles.loadFailed"),
+          );
+        }
+      }
+    };
+
+    void loadRoleList();
+
+    return () => {
+      disposed = true;
+    };
+  }, [t]);
+
+  const activeRoleId = resolveActiveRoleId({
+    hasPersistedThread: Boolean(activeThreadId),
+    persistedRoleId,
+    welcomeRoleId: draftRoleId,
+  });
+  const activeRole = useMemo(
+    () => roles.find((item) => item.id === activeRoleId) ?? null,
+    [activeRoleId, roles],
+  );
+  const activeRoleAvatarSrc = useMemo(
+    () => resolveRoleAvatarSrc(activeRole?.avatarId ?? null, avatarOptions),
+    [activeRole?.avatarId, avatarOptions],
+  );
+  const assistantTypingLabel = formatRoleReplyingLabel(
+    activeRole?.name ?? null,
+    t("chat.thread.assistantTyping"),
+    t("chat.thread.roles.replyingSuffix"),
   );
 
-  const handleUpdateThreadKnowledgeBase = async (nextKnowledgeBaseId: string | null) => {
+  const threadContextTags = useMemo<ChatThreadContextTag[]>(
+    () =>
+      buildThreadContextTags({
+        knowledgeBase: activeKnowledgeBase,
+        role: activeRole,
+        roleAvatarSrc: activeRoleAvatarSrc,
+      }),
+    [activeKnowledgeBase, activeRole, activeRoleAvatarSrc],
+  );
+
+  const handleUpdateThreadKnowledgeBase = async (
+    nextKnowledgeBaseId: string | null,
+  ) => {
     if (!activeThreadId || !activeThread) {
       return;
     }
 
     await runtime.updateThread(activeThreadId, {
-      metadata: nextKnowledgeBaseId ? { knowledgeBaseId: nextKnowledgeBaseId } : { knowledgeBaseId: null },
+      metadata: nextKnowledgeBaseId
+        ? { knowledgeBaseId: nextKnowledgeBaseId }
+        : { knowledgeBaseId: null },
     });
     await runtime.refreshThread(activeThreadId);
   };
 
   const handleComposerAction = async (action: ChatComposerAction) => {
+    if (action.id === "role-picker") {
+      setRolePickerOpen(true);
+      return;
+    }
+
     if (action.id === "knowledge-base-picker") {
       setKnowledgeBasePickerOpen(true);
+      return;
     }
+
+    if (action.id === "context-summary") {
+      if (!activeThreadId || !activeThread) {
+        message.error(t("chat.thread.contextSummary.requiresThread"));
+        return;
+      }
+
+      let modalKey = "";
+      modalKey = Modal.show({
+        title: t("chat.thread.contextSummary.modalTitle"),
+        width: 720,
+        content: (
+          <ThreadContextSummaryModalContent
+            threadId={activeThreadId}
+            initialSummary={
+              typeof activeThread.metadata?.contextSummary === "string"
+                ? activeThread.metadata.contextSummary
+                : null
+            }
+            initialUpdatedAt={
+              typeof activeThread.metadata?.contextSummaryUpdatedAt === "string"
+                ? activeThread.metadata.contextSummaryUpdatedAt
+                : null
+            }
+            onSaved={({ contextSummary, contextSummaryUpdatedAt }) => {
+              void runtime.updateThread(activeThreadId, {
+                metadata: {
+                  ...((activeThread.metadata ?? {}) as Record<string, unknown>),
+                  contextSummary,
+                  contextSummaryUpdatedAt,
+                },
+              });
+            }}
+            onClose={() => Modal.close(modalKey)}
+          />
+        ),
+        footer: null,
+      });
+    }
+  };
+
+  const handleSelectRole = async (roleId: string) => {
+    const selectedRole = await getRoleById(roleId);
+    setRoles((currentRoles) => upsertRoleSummary(currentRoles, selectedRole));
+
+    if (activeThreadId) {
+      await runtime.updateThread(activeThreadId, {
+        metadata: {
+          ...((activeThread?.metadata ?? {}) as Record<string, unknown>),
+          roleId,
+        },
+      });
+      await runtime.refreshThread(activeThreadId);
+      setDraftRoleId(null);
+    } else {
+      setDraftRoleId(roleId);
+    }
+
+    return true;
   };
 
   const handleSelectKnowledgeBase = async (knowledgeBaseId: string) => {
@@ -164,7 +297,23 @@ export default function UChatThread() {
     return true;
   };
 
-  const handleRemoveThreadContextTag = async () => {
+  const handleRemoveThreadContextTag = async (tag: ChatThreadContextTag) => {
+    if (tag.kind === "role") {
+      if (activeThreadId) {
+        await runtime.updateThread(activeThreadId, {
+          metadata: {
+            ...((activeThread?.metadata ?? {}) as Record<string, unknown>),
+            roleId: null,
+          },
+        });
+        await runtime.refreshThread(activeThreadId);
+        setDraftRoleId(null);
+      } else {
+        setDraftRoleId(null);
+      }
+      return;
+    }
+
     if (!activeThreadId || !activeThread) {
       setDraftKnowledgeBaseId(null);
       return;
@@ -173,7 +322,6 @@ export default function UChatThread() {
     await handleUpdateThreadKnowledgeBase(null);
   };
 
-  // Sending delegates to uchat runtime after the local draft state is synced.
   const handleSend = async () => {
     if (isSendDisabled) {
       return;
@@ -219,6 +367,34 @@ export default function UChatThread() {
         threadContextTags={threadContextTags}
         onRemoveThreadContextTag={handleRemoveThreadContextTag}
         resolveAttachmentSource={resolveAttachmentSource}
+        assistantAvatarSrc={activeRoleAvatarSrc}
+        assistantDisplayName={activeRole?.name}
+        assistantTypingLabel={assistantTypingLabel}
+      />
+
+      <SearchSelectModal<RoleSummary[]>
+        open={isRolePickerOpen}
+        title={t("chat.thread.roles.title")}
+        url="/roles?status=active&sortBy=updatedAt&sortOrder=desc"
+        width={520}
+        selectedId={activeRoleId}
+        searchPlaceholder={t("chat.thread.roles.searchPlaceholder")}
+        emptyText={t("chat.thread.roles.empty")}
+        loadingText={t("chat.thread.roles.loading")}
+        loadErrorText={t("chat.thread.roles.loadFailed")}
+        normalizeItems={(items) =>
+          items.map((item) => ({
+            id: item.id,
+            label: item.name,
+            description: item.summary,
+            keywords: [item.id, ...item.tags],
+            meta: item.status,
+            title: item.name,
+            leadingAvatarSrc: resolveRoleAvatarSrc(item.avatarId, avatarOptions),
+          }))
+        }
+        onCheck={(item) => handleSelectRole(item.id)}
+        onClose={() => setRolePickerOpen(false)}
       />
 
       <SearchSelectModal<KnowledgeBaseSummary[]>

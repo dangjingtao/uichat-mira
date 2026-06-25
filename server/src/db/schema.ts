@@ -459,6 +459,11 @@ export const threads = sqliteTable(
     modelName: text("model_name"),
     knowledgeBaseId: text("knowledge_base_id")
       .references(() => knowledgeBases.id, { onDelete: "cascade" }),
+    roleId: text("role_id").references(() => roles.id, {
+      onDelete: "set null",
+    }),
+    contextSummary: text("context_summary"),
+    contextSummaryUpdatedAt: text("context_summary_updated_at"),
     status: text("status", { enum: THREAD_STATUS_VALUES })
       .notNull()
       .default("active"),
@@ -472,6 +477,7 @@ export const threads = sqliteTable(
   (table) => ({
     userIdIdx: index("idx_threads_user_id").on(table.userId),
     knowledgeBaseIdx: index("idx_threads_knowledge_base").on(table.knowledgeBaseId),
+    roleIdx: index("idx_threads_role_id").on(table.roleId),
     statusIdx: index("idx_threads_status").on(table.status),
     updatedAtIdx: index("idx_threads_updated_at").on(table.updatedAt),
   }),
@@ -482,6 +488,10 @@ export const threadsRelations = relations(threads, ({ many, one }) => ({
   knowledgeBase: one(knowledgeBases, {
     fields: [threads.knowledgeBaseId],
     references: [knowledgeBases.id],
+  }),
+  role: one(roles, {
+    fields: [threads.roleId],
+    references: [roles.id],
   }),
   user: one(users, {
     fields: [threads.userId],

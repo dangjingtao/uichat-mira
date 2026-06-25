@@ -68,6 +68,8 @@ export interface RagAssistantStreamInput {
   ragInput: NonNullable<ReturnType<typeof toRagInput>>;
   /** Client-visible linear history used to align persisted RAG messages. */
   messages: NormalizedChatMessage[];
+  /** Request-only role/summary system messages derived from thread state. */
+  requestContextMessages?: NormalizedChatMessage[];
   /** Logger from the Fastify route, used for route-level observability. */
   log: FastifyBaseLogger;
 }
@@ -83,6 +85,7 @@ export const createRagAssistantStream = (input: RagAssistantStreamInput) => {
     userMessageId,
     ragInput,
     messages,
+    requestContextMessages,
     log,
   } = input;
 
@@ -251,6 +254,7 @@ export const createRagAssistantStream = (input: RagAssistantStreamInput) => {
       question: ragInput.question,
       conversationHistory: ragInput.conversationHistory,
       knowledgeBaseId: currentKnowledgeBase.id,
+      requestContextMessages,
     },
     {
       messageId: assistantMessageId,

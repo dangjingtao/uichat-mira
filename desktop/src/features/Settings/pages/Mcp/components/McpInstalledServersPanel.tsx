@@ -1,12 +1,9 @@
-import { Loader2, PlugZap, RefreshCw, Radar } from "lucide-react";
-import Alert from "@/shared/ui/Alert";
+import { Loader2, PlugZap, Radar } from "lucide-react";
 import Badge from "@/shared/ui/Badge";
 import { Button } from "@/shared/ui/Button";
 import type { ExternalMcpServerRecord } from "@/shared/api/tools";
 
 type McpInstalledServersPanelProps = {
-  error: string | null;
-  isLoading: boolean;
   servers: ExternalMcpServerRecord[];
   pendingServerId: string | null;
   labels: {
@@ -14,7 +11,6 @@ type McpInstalledServersPanelProps = {
     description: string;
     emptyTitle: string;
     emptyDescription: string;
-    refresh: string;
     connect: string;
     discover: string;
     discovered: string;
@@ -24,11 +20,9 @@ type McpInstalledServersPanelProps = {
     protocol: string;
     endpoint: string;
     projectedId: string;
-    retry: string;
   };
   onConnect: (serverId: string) => void;
   onDiscover: (serverId: string) => void;
-  onRefresh: () => void;
 };
 
 const getStatusLabel = (
@@ -46,57 +40,32 @@ const getStatusLabel = (
 };
 
 export default function McpInstalledServersPanel({
-  error,
-  isLoading,
   servers,
   pendingServerId,
   labels,
   onConnect,
   onDiscover,
-  onRefresh,
 }: McpInstalledServersPanelProps) {
   return (
-    <div className="rounded-ui-panel border border-border bg-surface-primary">
-      <div className="border-b border-border px-4 py-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-sm font-medium text-text-primary">{labels.title}</div>
-            <div className="mt-1 text-sm text-text-secondary">{labels.description}</div>
-          </div>
-          <Button variant="outline" size="sm" onClick={onRefresh} disabled={isLoading}>
-            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-            {labels.refresh}
-          </Button>
-        </div>
+    <div className="min-h-0">
+      <div className="px-5 py-4">
+        <div className="text-sm font-medium text-text-primary">{labels.title}</div>
+        <div className="mt-1 text-sm text-text-secondary">{labels.description}</div>
       </div>
 
-      {error ? (
-        <div className="p-4">
-          <Alert
-            variant="warning"
-            title={error}
-            action={
-              <Button variant="outline" size="xs" onClick={onRefresh} disabled={isLoading}>
-                {labels.retry}
-              </Button>
-            }
-          />
-        </div>
-      ) : null}
-
-      {!error && servers.length === 0 ? (
-        <div className="px-4 py-8">
+      {servers.length === 0 ? (
+        <div className="px-5 py-8">
           <div className="text-sm font-medium text-text-primary">{labels.emptyTitle}</div>
           <div className="mt-1 text-sm text-text-secondary">{labels.emptyDescription}</div>
         </div>
       ) : null}
 
-      {!error && servers.length > 0 ? (
+      {servers.length > 0 ? (
         <div className="divide-y divide-border">
           {servers.map((server) => {
             const isPending = pendingServerId === server.id;
             return (
-              <div key={server.id} className="px-4 py-4">
+              <div key={server.id} className="px-5 py-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">

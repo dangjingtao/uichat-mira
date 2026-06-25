@@ -103,10 +103,11 @@ export interface ChatMessagePresentationHints {
 
 export interface ChatThreadContextTag {
   id: string;
-  kind: "knowledge-base";
+  kind: "knowledge-base" | "role";
   label: string;
   tooltip?: string;
   removable?: boolean;
+  avatarSrc?: string;
 }
 
 // Capabilities let UI consumers hide actions the current app integration does

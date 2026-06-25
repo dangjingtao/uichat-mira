@@ -151,7 +151,7 @@ desktop/src/features/Settings/pages/Personas/
 ## 相关文档
 
 - `README.md`
-- `api.md`
+- `role-api.md`
 - `chat-integration.md`
 - `prompt-injection-design.md`
 

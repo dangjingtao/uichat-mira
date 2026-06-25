@@ -1,96 +1,44 @@
-# Tauri Desktop App
+# Tauri 桌面应用
 
-This document covers the Tauri configuration used to build the desktop application as an alternative to Electron.
+Status: Current
+Owner: platform
+Last verified: 2026-06-25
+Layer: raw-source
+Module: platform
+Doc Type: current-contract
 
-Tauri and Electron are expected to share the same staged desktop build inputs from the root `.artifacts/` directory.
-That includes the frontend production bundle, backend bundle, icons, runtime config, and bundled Node runtime.
+## 单点真相范围
 
-## Project Structure
+这页文档统一说明：
 
-```
-tauri/
-├── Cargo.toml          # Rust project configuration
-├── build.rs            # Build script
-├── tauri.conf.json     # Tauri app configuration
-├── src/
-│   └── main.rs         # Main Rust application code
-└── gen/
-    └── icons/
-        └── icons.json  # Icon configuration
-```
+- Tauri 作为 Electron 替代桌面壳层的定位
+- Tauri 打包时复用的共享构建产物
+- Tauri 专属的开发与打包流程
 
-## Prerequisites
+相关概念：
 
-1. Install Rust: https://www.rust-lang.org/tools/install
-2. Install Tauri CLI: `pnpm add -Dw @tauri-apps/cli@latest`
-3. Install frontend dependencies: `pnpm install`
-4. Install Tauri API in desktop: `cd desktop && pnpm add @tauri-apps/api`
+- [[CONCEPT_PLATFORM]]
+- [[CONCEPT_RUNTIME]]
+- [[AREA_MAP_PLATFORM]]
 
-## Development
+这篇文档说明当前项目如何用 Tauri 作为 Electron 之外的另一套桌面壳层来构建应用。
 
-```bash
-# Start Tauri development mode from the workspace root
-pnpm dev:tauri:win
-```
+Tauri 和 Electron 预期共享根目录 `.artifacts/` 下同一批 staged build inputs，主要包括前端生产包、后端 bundle、图标、runtime config 和打包时使用的 Node runtime。
 
-The workspace script pins `CARGO_BUILD_JOBS=1` and `CARGO_INCREMENTAL=0` to reduce Windows-side `rustc` crashes during development.
-It also starts both the Vite renderer and the Fastify backend before launching the Tauri window.
+## 当前定位
 
-## Building
+- Electron 仍是主要桌面壳层
+- Tauri 是并行维护的替代壳层
+- 两者应尽量共享前端与 backend 构建输入
 
-```bash
-# Build the desktop application from the workspace root
-pnpm package:tauri:win
+## 适合什么时候读
 
-# Run the Rust-side compile check with the same low-concurrency settings
-pnpm check:tauri
-```
+- 改 Tauri 开发流程
+- 改 Tauri 打包流程
+- 评审 Electron / Tauri 共享边界
 
-Release output conventions:
+## 相关文档
 
-- Root `package.json` is the single release version source.
-- `pnpm version:sync` syncs the root version into workspace packages, `tauri/tauri.conf.json`, and `tauri/Cargo.toml`.
-- Final distributable output: `release/v<version>_<date>_<time>/tauri/`
-- Raw Tauri bundle cache: `tauri/target/release/bundle/`
-- Default retention: keep the newest `3` timestamped directories under `release/`
-- Override retention for one run with `RELEASE_KEEP_COUNT`
-
-During `pnpm package:tauri:win` or `pnpm check:tauri`, the internal Tauri prepare flow refreshes:
-
-- `.artifacts/desktop/dist`
-- `.artifacts/server-bundle`
-- `.artifacts/icons`
-- `.artifacts/runtime.config.cjs`
-- `.artifacts/node-runtime`
-
-After a successful `pnpm package:tauri:win`, the workspace automatically clears `.artifacts/`.
-
-## Key Features
-
-- **Shared backend config**: Backend host and port are resolved from the root `runtime.config.cjs`
-- **Backend Process Management**: Automatically starts Node.js backend in production
-- **Compatible with Existing Code**: Frontend code requires minimal changes
-- **Cross-platform**: Supports Windows, macOS, and Linux
-
-## Migration Notes
-
-The Tauri version maintains compatibility with the existing Electron version:
-- Same backend server (Node.js/Fastify)
-- Same frontend (React/Vite)
-- Same API contracts
-- Only the desktop framework changes
-
-## IPC Commands
-
-| Command | Description |
-|---------|-------------|
-| `get_backend_url_command` | Returns the backend server URL |
-| `check_backend_health_command` | Checks backend server health |
-| `check_database_health_command` | Checks database health status |
-
-## Differences from Electron
-
-1. **Smaller bundle size**: Tauri produces much smaller executables
-2. **Better performance**: Rust-based main process
-3. **Simpler IPC**: Fewer commands needed
-4. **Different build process**: Uses Cargo instead of electron-builder
+- `tauri-setup.md`
+- `../architecture/README.md`
+- `../版本管理.md`

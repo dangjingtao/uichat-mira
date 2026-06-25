@@ -12,8 +12,6 @@ try {
 export const LOG_FILE = path.join(LOG_DIR, "server.log");
 export const ERROR_LOG_FILE = path.join(LOG_DIR, "error.log");
 const logLineEmitter = new EventEmitter();
-let logFileWatchAttached = false;
-let watchedLogOffset = 0;
 
 const isBrokenPipeError = (error: unknown): boolean =>
   error instanceof Error && "code" in error && error.code === "EPIPE";
@@ -132,50 +130,6 @@ export const getLoggerConfig = () => {
   };
 };
 
-const ensureLogFileWatch = () => {
-  if (logFileWatchAttached) {
-    return;
-  }
-
-  logFileWatchAttached = true;
-
-  try {
-    watchedLogOffset = fs.existsSync(LOG_FILE) ? fs.statSync(LOG_FILE).size : 0;
-  } catch {
-    watchedLogOffset = 0;
-  }
-
-  fs.watchFile(
-    LOG_FILE,
-    { interval: 500 },
-    (currentStats, previousStats) => {
-      if (currentStats.size <= previousStats.size) {
-        watchedLogOffset = currentStats.size;
-        return;
-      }
-
-      try {
-        const fd = fs.openSync(LOG_FILE, "r");
-        try {
-          const start = Math.max(watchedLogOffset, 0);
-          const length = currentStats.size - start;
-          const buffer = Buffer.alloc(length);
-          fs.readSync(fd, buffer, 0, length, start);
-          watchedLogOffset = currentStats.size;
-
-          for (const line of buffer.toString("utf8").split(/\r?\n/)) {
-            if (line) {
-              logLineEmitter.emit("line", line);
-            }
-          }
-        } finally {
-          fs.closeSync(fd);
-        }
-      } catch {}
-    },
-  );
-};
-
 export const readRecentLogLines = async (limit: number): Promise<string[]> => {
   try {
     const content = await fs.promises.readFile(LOG_FILE, "utf8");
@@ -189,7 +143,6 @@ export const readRecentLogLines = async (limit: number): Promise<string[]> => {
 };
 
 export const subscribeToLogLines = (listener: (line: string) => void) => {
-  ensureLogFileWatch();
   logLineEmitter.on("line", listener);
   return () => {
     logLineEmitter.off("line", listener);

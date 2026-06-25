@@ -64,16 +64,16 @@
       }
     ],
     "git": {
-      "branch": "dev",
+      "branch": "codex/rescue-current-source",
       "versions": [
         {
           "version": "0.7.1",
           "commit": {
-            "hash": "0b92efa9858259b02bbc0d64e5ec5a2a25be0a53",
-            "shortHash": "0b92efa",
-            "message": "refactor: integrate assitant-ui to uchat",
+            "hash": "bc6c3f4df0348bbf80995e8632ee6b56c9fe934e",
+            "shortHash": "bc6c3f4",
+            "message": "rescue: snapshot recovered working tree source",
             "author": "Tomz",
-            "date": "2026-06-23T13:09:28+08:00"
+            "date": "2026-06-25T18:50:43+08:00"
           }
         },
         {

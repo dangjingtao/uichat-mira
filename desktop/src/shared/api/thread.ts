@@ -11,6 +11,9 @@ export interface Thread {
   title: string;
   modelName: string | null;
   knowledgeBaseId: string | null;
+  roleId: string | null;
+  contextSummary: string | null;
+  contextSummaryUpdatedAt: string | null;
   status: ThreadStatus;
   createdAt: string;
   updatedAt: string;
@@ -55,6 +58,8 @@ export interface CreateThreadInput {
   title?: string;
   modelName?: string;
   knowledgeBaseId?: string | null;
+  roleId?: string | null;
+  contextSummary?: string | null;
 }
 
 export interface CreateMessageInput {
@@ -101,6 +106,15 @@ export async function updateThread(
   input: Partial<CreateThreadInput>,
 ): Promise<Thread> {
   return patch<Thread>(`/threads/${id}`, input);
+}
+
+export async function generateThreadContextSummary(
+  id: string,
+): Promise<Pick<Thread, "contextSummary" | "contextSummaryUpdatedAt">> {
+  return post<Pick<Thread, "contextSummary" | "contextSummaryUpdatedAt">>(
+    `/threads/${id}/context-summary`,
+    {},
+  );
 }
 
 // 归档对话

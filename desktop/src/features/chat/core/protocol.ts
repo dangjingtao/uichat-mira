@@ -13,6 +13,7 @@ import {
   createMessage as createThreadMessage,
   createThread,
   deleteThread,
+  generateThreadContextSummary,
   getThreadById,
   getThreads,
   updateThread,
@@ -80,6 +81,9 @@ const normalizeThreadSummary = (thread: ThreadApiSummary): ChatThreadSummary => 
   metadata: {
     modelName: thread.modelName,
     knowledgeBaseId: thread.knowledgeBaseId,
+    roleId: thread.roleId,
+    contextSummary: thread.contextSummary,
+    contextSummaryUpdatedAt: thread.contextSummaryUpdatedAt,
     status: thread.status,
     messageCount: thread.messageCount,
     lastMessage: thread.lastMessage,
@@ -326,12 +330,29 @@ export class DesktopChatRepository implements ChatRepository {
   // Creates a thread using the app's current KB and RAG defaults.
   async createThread(input?: { title?: string; metadata?: Record<string, unknown> }) {
     const createInput = this.getCreateThreadInput();
+    const inputRoleId =
+      input?.metadata && Object.prototype.hasOwnProperty.call(input.metadata, "roleId")
+        ? typeof input.metadata.roleId === "string" || input.metadata.roleId === null
+          ? input.metadata.roleId
+          : undefined
+        : undefined;
+    const nextRoleId =
+      typeof inputRoleId === "string" || inputRoleId === null
+        ? inputRoleId
+        : createInput?.roleId;
     const thread = await createThread({
       ...(typeof createInput?.knowledgeBaseId === "string"
         ? { knowledgeBaseId: createInput.knowledgeBaseId }
         : {}),
+      ...(typeof nextRoleId === "string" || nextRoleId === null
+        ? { roleId: nextRoleId }
+        : {}),
       ...(typeof createInput?.modelName === "string"
         ? { modelName: createInput.modelName }
+        : {}),
+      ...(typeof createInput?.contextSummary === "string" ||
+      createInput?.contextSummary === null
+        ? { contextSummary: createInput.contextSummary }
         : {}),
       ...(input?.title ? { title: input.title } : {}),
     });
@@ -424,11 +445,30 @@ export class DesktopChatRepository implements ChatRepository {
           ? metadata.knowledgeBaseId
           : undefined
         : undefined;
+    const nextRoleId =
+      metadata && Object.prototype.hasOwnProperty.call(metadata, "roleId")
+        ? typeof metadata.roleId === "string" || metadata.roleId === null
+          ? metadata.roleId
+          : undefined
+        : undefined;
+    const nextContextSummary =
+      metadata && Object.prototype.hasOwnProperty.call(metadata, "contextSummary")
+        ? typeof metadata.contextSummary === "string" ||
+          metadata.contextSummary === null
+          ? metadata.contextSummary
+          : undefined
+        : undefined;
     const thread = await updateThread(threadId, {
       ...(typeof input.title === "string" ? { title: input.title } : {}),
       ...(typeof nextKnowledgeBaseId === "string" ||
       nextKnowledgeBaseId === null
         ? { knowledgeBaseId: nextKnowledgeBaseId }
+        : {}),
+      ...(typeof nextRoleId === "string" || nextRoleId === null
+        ? { roleId: nextRoleId }
+        : {}),
+      ...(typeof nextContextSummary === "string" || nextContextSummary === null
+        ? { contextSummary: nextContextSummary }
         : {}),
     });
 
@@ -446,6 +486,10 @@ export class DesktopChatRepository implements ChatRepository {
   // Permanently deletes a thread through the current backend API.
   async deleteThread(threadId: string) {
     await deleteThread(threadId);
+  }
+
+  async generateContextSummary(threadId: string) {
+    return generateThreadContextSummary(threadId);
   }
 }
 

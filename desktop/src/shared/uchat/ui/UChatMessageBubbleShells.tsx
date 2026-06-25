@@ -14,9 +14,16 @@ const pilotAssistantAvatarMap = {
 
 // UChatAssistantAvatar keeps the current brand avatar treatment in the shared
 // UI layer so feature containers do not own any avatar markup.
-export function UChatAssistantAvatar() {
+export function UChatAssistantAvatar({
+  src,
+  name,
+}: {
+  src?: string | null;
+  name?: string;
+}) {
   const { colorTheme } = useThemePreferences();
   const avatarSrc =
+    src ??
     pilotAssistantAvatarMap[colorTheme] ??
     pilotAssistantAvatarMap["warm-neutral"];
 
@@ -27,7 +34,7 @@ export function UChatAssistantAvatar() {
     >
       <img
         src={avatarSrc}
-        alt=""
+        alt={name ?? ""}
         className="h-9 w-9 object-cover"
         draggable={false}
       />

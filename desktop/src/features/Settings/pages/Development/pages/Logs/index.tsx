@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import Alert from "@/shared/ui/Alert";
+import Badge from "@/shared/ui/Badge";
+import TerminalPanel from "@/shared/ui/TerminalPanel";
 import {
   type RuntimeLogStreamEvent,
   streamRuntimeLogs,
@@ -118,49 +121,44 @@ export default function DevelopmentLogs() {
             {t("settings.development.logs.description")}
           </p>
         </div>
-        <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-surface-primary px-3 py-1 text-xs text-text-secondary">
-          <span
-            className={`h-2 w-2 rounded-full ${
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge
+            variant={
               status === "live"
-                ? "bg-emerald-500"
+                ? "success"
                 : status === "error"
-                  ? "bg-rose-500"
-                  : "bg-amber-500"
-            }`}
-          />
-          <span>{statusLabel}</span>
-          <span className="text-text-tertiary">
+                  ? "danger"
+                  : "warning"
+            }
+            outline
+          >
+            {statusLabel}
+          </Badge>
+          <Badge variant="muted" outline>
             {t("settings.development.logs.limit", {
               count: MAX_VISIBLE_LOG_LINES,
             })}
-          </span>
+          </Badge>
         </div>
       </div>
 
       {errorMessage ? (
-        <div className="rounded-[14px] border border-rose-200/70 bg-rose-50/80 px-4 py-3 text-sm text-rose-700">
+        <Alert variant="danger">
           {t("settings.development.logs.errorPrefix")} {errorMessage}
-        </div>
+        </Alert>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-hidden rounded-[18px] border border-border/70 bg-slate-950 text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-        <div className="flex h-full min-h-0 flex-col">
-          <div className="border-b border-white/10 px-4 py-2 text-xs uppercase tracking-[0.18em] text-slate-400">
-            runtime tail
-          </div>
-          <div className="min-h-0 flex-1 overflow-auto px-4 py-3">
-            {entries.length === 0 ? (
-              <p className="text-sm text-slate-400">
-                {t("settings.development.logs.empty")}
-              </p>
-            ) : (
-              <pre className="font-mono text-xs leading-6 text-slate-100 whitespace-pre-wrap break-words">
-                {entries.join("\n")}
-              </pre>
-            )}
-          </div>
-        </div>
-      </div>
+      <TerminalPanel title="runtime tail" meta={statusLabel}>
+        {entries.length === 0 ? (
+          <p className="text-sm text-text-secondary">
+            {t("settings.development.logs.empty")}
+          </p>
+        ) : (
+          <pre className="whitespace-pre-wrap break-words">
+            {entries.join("\n")}
+          </pre>
+        )}
+      </TerminalPanel>
     </div>
   );
 }

@@ -16,6 +16,10 @@ export interface ThreadMutationBody {
   modelName?: string;
   /** Bound knowledge base id for this thread. */
   knowledgeBaseId?: string | null;
+  /** Bound role id for this thread. */
+  roleId?: string | null;
+  /** Optional persisted thread context summary. */
+  contextSummary?: string | null;
 }
 
 /** Body for creating a persisted message in a thread. */

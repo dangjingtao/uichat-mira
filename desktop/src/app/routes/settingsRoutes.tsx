@@ -6,6 +6,8 @@ import type { LucideIcon } from "lucide-react";
 import {
   Blend,
   Bolt,
+  Boxes,
+  Braces,
   Info,
   LibraryBig,
   ListChecks,
@@ -21,6 +23,14 @@ import KnowledgeBaseDetail from "@/features/Settings/pages/KnowledgeBase/Detail"
 import ModelSettings from "@/features/Settings/pages/ModelSetting";
 import EvaluationNew from "@/features/Settings/pages/Evaluation/New";
 import EvaluationCenter from "@/features/Settings/pages/Evaluation/Center";
+import DevelopmentSettings from "@/features/Settings/pages/Development/index";
+import DevelopmentLogsPage from "@/features/Settings/pages/Development/pages/Logs/index";
+import DevelopmentClientTestsPage from "@/features/Settings/pages/Development/pages/ClientTests/index";
+import DevelopmentServerTestsPage from "@/features/Settings/pages/Development/pages/ServerTests/index";
+import DevelopmentDocsPage from "@/features/Settings/pages/Development/pages/Docs/index";
+import DevelopmentApiDocsPage from "@/features/Settings/pages/Development/pages/ApiDocs/index";
+import DevelopmentBaseInformationPage from "@/features/Settings/pages/Development/pages/BaseInformation/index";
+import McpSettings from "@/features/Settings/pages/Mcp/index";
 import ToolsSettings from "@/features/Settings/pages/Tools/index";
 import RoleSettings from "@/features/Settings/pages/Personas/index";
 
@@ -87,6 +97,49 @@ const settingsRouteTree: SettingsRouteConfig[] = [
         element: <EvaluationNew />,
       },
     ],
+  },
+  {
+    path: "development",
+    element: <DevelopmentSettings />,
+    children: [
+      {
+        path: "logs",
+        element: <DevelopmentLogsPage />,
+        nav: {
+          labelKey: "settings.navigation.developmentLogs",
+          icon: Braces,
+        },
+      },
+      {
+        path: "client-tests",
+        element: <DevelopmentClientTestsPage />,
+      },
+      {
+        path: "server-tests",
+        element: <DevelopmentServerTestsPage />,
+      },
+      {
+        path: "docs",
+        element: <DevelopmentDocsPage />,
+      },
+      {
+        path: "api-docs",
+        element: <DevelopmentApiDocsPage />,
+      },
+      {
+        path: "base-information",
+        element: <DevelopmentBaseInformationPage />,
+      },
+    ],
+    nav: {
+      labelKey: "settings.navigation.development",
+      icon: Braces,
+    },
+  },
+  {
+    path: "mcp",
+    element: <McpSettings />,
+    nav: { labelKey: "settings.navigation.mcp", icon: Boxes },
   },
   {
     path: "tools",

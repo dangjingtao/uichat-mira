@@ -29,7 +29,9 @@ import {
 
 type ChatThreadDraftStateValue = {
   draftKnowledgeBaseId: string | null;
+  draftRoleId: string | null;
   setDraftKnowledgeBaseId: (knowledgeBaseId: string | null) => void;
+  setDraftRoleId: (roleId: string | null) => void;
   resetDraft: () => void;
 };
 
@@ -45,14 +47,16 @@ const desktopRuntimeBaseCapabilities = {
 } as const;
 
 export const createStableAppChatRuntime = (
-  getCreateThreadInput: () => { knowledgeBaseId?: string | null } | undefined,
+  getCreateThreadInput: () =>
+    | { knowledgeBaseId?: string | null; roleId?: string | null }
+    | undefined,
 ) =>
   new ChatRuntime({
     repository: new DesktopChatRepository(getCreateThreadInput),
     runDriver: new DesktopChatRunDriver(),
     attachmentDriver: new DesktopChatAttachmentDriver(),
     policies: {
-      threadCreation: createDesktopThreadCreationPolicy(),
+      threadCreation: createDesktopThreadCreationPolicy(getCreateThreadInput),
       threadSelection: desktopThreadSelectionPolicy,
       sendLifecycle: desktopSendLifecyclePolicy,
       composerActions: createDesktopComposerActions({}),
@@ -71,13 +75,17 @@ export function AppChatRuntimeProvider({
   const [draftKnowledgeBaseId, setDraftKnowledgeBaseId] = useState<string | null>(
     null,
   );
+  const [draftRoleId, setDraftRoleId] = useState<string | null>(null);
   const draftKnowledgeBaseIdRef = useRef<string | null>(draftKnowledgeBaseId);
+  const draftRoleIdRef = useRef<string | null>(draftRoleId);
   draftKnowledgeBaseIdRef.current = draftKnowledgeBaseId;
+  draftRoleIdRef.current = draftRoleId;
   const runtimeRef = useRef<ChatRuntime | null>(null);
 
   if (!runtimeRef.current) {
     runtimeRef.current = createStableAppChatRuntime(() => ({
       knowledgeBaseId: draftKnowledgeBaseIdRef.current,
+      roleId: draftRoleIdRef.current,
     }));
   }
 
@@ -103,10 +111,15 @@ export function AppChatRuntimeProvider({
   const draftState = useMemo<ChatThreadDraftStateValue>(
     () => ({
       draftKnowledgeBaseId,
+      draftRoleId,
       setDraftKnowledgeBaseId,
-      resetDraft: () => setDraftKnowledgeBaseId(null),
+      setDraftRoleId,
+      resetDraft: () => {
+        setDraftKnowledgeBaseId(null);
+        setDraftRoleId(null);
+      },
     }),
-    [draftKnowledgeBaseId],
+    [draftKnowledgeBaseId, draftRoleId],
   );
 
   return (

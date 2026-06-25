@@ -177,6 +177,10 @@ const runEphemeralCommand = async (input: {
   signal: AbortSignal;
   pushEvent?: (event: McpStreamEventInput) => void;
 }) => {
+  if (input.signal.aborted) {
+    throw new Error("Terminal session aborted");
+  }
+
   const shell = getDefaultShell();
   const cwd = resolveCommandCwd(input.cwd);
   const child = spawn(shell, buildShellArgs(shell, input.command), {
@@ -192,6 +196,7 @@ const runEphemeralCommand = async (input: {
   const stderrChunks: string[] = [];
   let exitCode: number | null = null;
   let timedOut = false;
+  let settled = false;
 
   child.stdout?.on("data", (chunk: Buffer | string) => {
     const text = chunk.toString();
@@ -214,33 +219,59 @@ const runEphemeralCommand = async (input: {
   });
 
   await new Promise<void>((resolve, reject) => {
+    const finishResolve = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve();
+    };
+
+    const finishReject = (error: Error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      reject(error);
+    };
+
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill();
       input.pushEvent?.({
         type: "invocation:progress",
         message: `Terminal session timed out after ${input.timeoutMs}ms`,
       });
-      resolve();
+      finishResolve();
+      child.kill();
     }, input.timeoutMs);
 
     child.once("error", (error) => {
       clearTimeout(timer);
-      reject(error);
+      finishReject(error instanceof Error ? error : new Error(String(error)));
     });
 
     child.once("close", (code) => {
       clearTimeout(timer);
+      if (settled) {
+        return;
+      }
       exitCode = code;
-      resolve();
+      finishResolve();
     });
+
+    if (input.signal.aborted) {
+      clearTimeout(timer);
+      finishReject(new Error("Terminal session aborted"));
+      child.kill();
+      return;
+    }
 
     input.signal.addEventListener(
       "abort",
       () => {
         clearTimeout(timer);
+        finishReject(new Error("Terminal session aborted"));
         child.kill();
-        reject(new Error("Terminal session aborted"));
       },
       { once: true },
     );
@@ -290,6 +321,10 @@ const runPersistentCommand = async (input: {
   signal: AbortSignal;
   pushEvent?: (event: McpStreamEventInput) => void;
 }) => {
+  if (input.signal.aborted) {
+    throw new Error("Terminal session aborted");
+  }
+
   const session = input.attachSessionId
     ? getTerminalSession(input.attachSessionId)
     : createTerminalSession({
@@ -374,6 +409,16 @@ const runPersistentCommand = async (input: {
       clearTimeout(timer);
       resolve();
     }, 10);
+
+    if (input.signal.aborted) {
+      clearInterval(interval);
+      clearTimeout(timer);
+      if (!reusedSession) {
+        removeTerminalSession(session.id);
+      }
+      reject(new Error("Terminal session aborted"));
+      return;
+    }
 
     input.signal.addEventListener(
       "abort",

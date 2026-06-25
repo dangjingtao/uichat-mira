@@ -12,6 +12,9 @@ const createThreadTables = () => {
       title TEXT NOT NULL DEFAULT '',
       model_name TEXT,
       knowledge_base_id TEXT REFERENCES knowledge_bases(id) ON DELETE CASCADE,
+      role_id TEXT REFERENCES roles(id) ON DELETE SET NULL,
+      context_summary TEXT,
+      context_summary_updated_at TEXT,
       status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived', 'deleted')),
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -56,6 +59,40 @@ const ensureThreadKnowledgeBaseColumn = () => {
   );
 };
 
+const ensureThreadRoleColumn = () => {
+  const sqlite = getSqlite();
+
+  const hasRoleIdColumn = hasSqliteColumn(sqlite, "threads", "role_id");
+  if (!hasRoleIdColumn) {
+    sqlite.exec(`
+      ALTER TABLE threads
+      ADD COLUMN role_id TEXT REFERENCES roles(id) ON DELETE SET NULL;
+    `);
+  }
+
+  sqlite.exec(
+    "CREATE INDEX IF NOT EXISTS idx_threads_role_id ON threads(role_id);",
+  );
+};
+
+const ensureThreadContextSummaryColumns = () => {
+  const sqlite = getSqlite();
+
+  if (!hasSqliteColumn(sqlite, "threads", "context_summary")) {
+    sqlite.exec(`
+      ALTER TABLE threads
+      ADD COLUMN context_summary TEXT;
+    `);
+  }
+
+  if (!hasSqliteColumn(sqlite, "threads", "context_summary_updated_at")) {
+    sqlite.exec(`
+      ALTER TABLE threads
+      ADD COLUMN context_summary_updated_at TEXT;
+    `);
+  }
+};
+
 const ensureMessagePartsJsonColumn = () => {
   const sqlite = getSqlite();
 
@@ -76,6 +113,8 @@ export const initializeThreadDatabase = () => {
 
     createThreadTables();
     ensureThreadKnowledgeBaseColumn();
+    ensureThreadRoleColumn();
+    ensureThreadContextSummaryColumns();
     ensureMessagePartsJsonColumn();
   } catch (error) {
     console.error("Failed to initialize thread database:", error);
@@ -92,4 +131,5 @@ export const getThreadDatabaseHealth = () => ({
     "threads",
     "knowledge_base_id",
   ),
+  hasThreadRoleIdColumn: hasSqliteColumn(getSqlite(), "threads", "role_id"),
 });

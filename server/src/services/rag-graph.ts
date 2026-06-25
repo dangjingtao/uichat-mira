@@ -50,6 +50,8 @@ const RAGGraphState = Annotation.Root({
   systemPrompt: Annotation<string | undefined>,
   // 可选历史对话，用于让生成模型保留上下文语义。
   conversationHistory: Annotation<NormalizedChatMessage[] | undefined>,
+  // 线程级 request-only 上下文，仅供 generate 节点消费。
+  requestContextMessages: Annotation<NormalizedChatMessage[] | undefined>,
   // 问题文本经过 embedding 节点生成的向量。
   embedding: Annotation<number[] | undefined>,
   // embedding 向量维度，用于校验检索索引是否匹配。
@@ -78,6 +80,7 @@ export interface RAGGraphInput {
   topN?: number;
   systemPrompt?: string;
   conversationHistory?: NormalizedChatMessage[];
+  requestContextMessages?: NormalizedChatMessage[];
 }
 
 // RAG 图的完整输出，包含最终回答以及中间检索/重排结果，方便前端展示和调试。
@@ -330,6 +333,7 @@ const generateNode = createObservableNode("generate", async (state, config) => {
       chunks,
       systemPrompt: state.systemPrompt,
       conversationHistory: state.conversationHistory,
+      requestContextMessages: state.requestContextMessages,
     })) {
       if (!delta) {
         continue;
@@ -344,13 +348,14 @@ const generateNode = createObservableNode("generate", async (state, config) => {
       sources: chunks,
     }, {
       startedAtMs,
-      input: {
-        query: state.question,
-        chunks,
-        systemPrompt: state.systemPrompt,
-        conversationHistory: state.conversationHistory,
-      },
-    });
+        input: {
+          query: state.question,
+          chunks,
+          systemPrompt: state.systemPrompt,
+          conversationHistory: state.conversationHistory,
+          requestContextMessages: state.requestContextMessages,
+        },
+      });
   });
 
 // LangGraph 编排定义：

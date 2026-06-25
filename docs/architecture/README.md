@@ -1,124 +1,97 @@
-﻿# Architecture
+# 架构总览
 
-## Stack
+Status: Current
+Owner: runtime
+Last verified: 2026-06-25
+Layer: raw-source
+Module: runtime
+Doc Type: overview
 
-| Layer | Tech |
+## 单点真相范围
+
+这页文档统一说明：
+
+- 桌面端运行时边界
+- 请求与网络契约
+- backend host / port 的归属规则
+- 打包后的进程模型
+
+相关概念：
+
+- [[CONCEPT_RUNTIME]]
+- [[CONCEPT_PLATFORM]]
+- [[CONCEPT_MCP]]
+- [[AREA_MAP_RUNTIME]]
+
+## 技术栈
+
+| 层 | 当前技术 |
 | --- | --- |
-| Renderer | React, Vite, TypeScript |
-| Desktop shell | Electron main + preload |
-| Backend | Fastify bundled as a Node service |
-| Database | SQLite via `better-sqlite3` |
-| Build | pnpm workspace + electron-builder |
+| Renderer | React + Vite + TypeScript |
+| Desktop shell | Electron main + preload，另有 Tauri 壳层 |
+| Backend | Fastify bundled Node service |
+| Database | SQLite (`better-sqlite3`) |
+| Workspace | pnpm workspace |
 
-## Process Model
+## 运行时边界
+
+当前项目是一个“桌面壳层 + 本地 backend”的结构。
+
+- renderer 负责 UI 与用户交互
+- preload 负责暴露少量 native / runtime 信息
+- backend 负责模型代理、线程、知识库、评测和工具运行时
+
+renderer 不应直接持有 native 或 Node 级能力真相。
+
+## 请求契约
+
+当前统一遵守这些规则：
+
+- 开发态 renderer 请求使用 `/api/...`
+- `/api` 只是 Vite proxy 前缀
+- backend route 本身不带 `/api`
+- 生产态 renderer 通过 `window.desktopApi.backendUrl` 访问 backend
+- backend host / port 统一来自 `runtime.config.cjs`
+
+## 进程模型
+
+### 开发态
 
 ```text
-Development
+renderer (Vite dev server) -- /api proxy --> Fastify backend
+desktop shell --------------------------------^
+```
 
-React renderer  -- /api proxy -->  Fastify backend
-localhost:5173                     <backend-host>:<backend-port>
+### 打包态
 
-Production
-
+```text
 UIChat.exe
   ├─ Electron main process
-  ├─ Renderer loaded from app.asar
-  └─ Bundled node.exe runs resources/server/server.cjs
-
-Renderer  -- direct HTTP -->  Fastify backend
-file:// app                  http://<backend-host>:<backend-port>
+  ├─ preload bridge
+  └─ bundled Node backend
 ```
 
-Packaged startup notes:
+Tauri 形态下同样复用前端构建产物和 backend bundle，只是壳层实现不同。
 
-- Electron and Tauri both start the bundled backend process before the renderer begins normal API work.
-- Packaged shells wait for the backend `/health` endpoint to become reachable, which reduces first-load `/login` failures caused by racing the backend startup.
-- Packaged shells persist runtime secrets locally so auth tokens and encrypted settings remain stable across restarts.
+## 当前稳定边界
 
-Development startup notes:
+- backend 是业务契约与运行时真相的主要落点
+- preload 只暴露最小必要面
+- renderer 不直接分支操作 host / port / native runtime
+- 桌面壳层之间共享尽可能多的构建输入
 
-- `pnpm dev:electron:win` starts the renderer through Vite and the backend through the server package's `pnpm dev` script.
-- The backend dev script uses `tsx watch src/index.ts`, so backend source edits should restart the Fastify process automatically when the backend is launched by the Electron dev launcher.
-- In development, the backend process runs with `server/` as its working directory, so the default SQLite file is `server/data/uichat-rag-test.db` unless `UI_CHAT_DATABASE_DIR` overrides it.
-- If the launcher detects an already-healthy backend on the configured port, it reuses that process instead of starting a watched backend. In that case, code changes will not apply until that reused backend is restarted.
-- Backend port reuse is development-only. Packaged Electron and Tauri builds do not attach to an already-running backend on the configured port, which prevents them from accidentally talking to the development database.
+## 适合什么时候读
 
-## Request Contract
+这些场景建议先读这页：
 
-- Development frontend requests use `/api/xxx`.
-- Vite owns the `/api` prefix and strips it before forwarding.
-- Backend routes never include `/api`.
-- Production frontend requests use `window.desktopApi.backendUrl` with no prefix.
-- Backend host and port come from `runtime.config.cjs` or environment variables set by Electron main.
-- App metadata such as the current version is served by the backend through `GET /app/meta`.
-- Built-in read-only avatar assets are served by the backend through `GET /assets/avatars/...` so renderer image tags can use direct URLs in both development and packaged shells.
+- 改请求链路
+- 改 backend host / port 来源
+- 改 preload 暴露面
+- 改 Electron / Tauri 打包边界
 
-## Runtime Configuration
+## 相关文档
 
-`runtime.config.cjs` is the single project-level configuration source for local backend networking.
-
-Consumers:
-
-- `desktop/vite.config.ts` reads it for proxy target and prefix.
-- `electron/main.cjs` reads it before starting the backend process.
-- `electron/preload.cjs` reads it to expose `desktopApi.backendUrl`.
-- `server/src/config/index.ts` reads it as the default server host/port.
-- `scripts/build-dist.js` copies it into the packaged app and prunes old release directories after a successful package build.
-- `server/build.js` writes the shared backend bundle into `.artifacts/server-bundle` for desktop packagers to consume.
-
-## Related Architecture Docs
-
-- `ipc-and-preload.md`: renderer and native boundary rules
-- `rag-node-development.md`: RAG node standard IO, observability contract, and node authoring rules
-
-## Package Layout
-
-```text
-release/.../win-unpacked/resources/
-  app.asar
-  runtime.config.cjs
-  node-runtime/node.exe
-  server/server.cjs
-  server/node_modules/
-  server/data/
-```
-
-## Release Retention
-
-- Packaged outputs are written into timestamped directories under `release/`.
-- `pnpm package:electron:win` writes its final artifacts to `release/v<version>_<date>_<time>/electron/`.
-- `pnpm package:tauri:win` writes its final artifacts to `release/v<version>_<date>_<time>/tauri/`.
-- Both packaging scripts keep the newest `3` release directories by default.
-- Override the retention count with `RELEASE_KEEP_COUNT`.
-- If Windows still holds a lock on an old release directory, the cleanup step skips it and continues.
-- Both packaging scripts sync workspace package versions, `tauri/tauri.conf.json`, and `tauri/Cargo.toml` from the root `package.json` version before building.
-
-## Boundaries
-
-- `desktop/`: renderer-only code. Do not use Node APIs directly.
-- `electron/`: main process and preload bridge. Node APIs allowed.
-- `server/`: Fastify backend. No Electron APIs.
-- `packages/`: shared package workspace.
-- `scripts/`: build and packaging helpers.
-
-## Key Decisions
-
-1. Local HTTP backend is acceptable for this desktop app because it binds to the configured local host only.
-2. `/api` is a development-only proxy prefix, not a backend route namespace.
-3. Production uses direct backend origin from preload instead of Vite proxy.
-4. The backend is run with the bundled Node runtime to avoid Electron/Node native module ABI mismatch.
-5. Port values should not be repeated in code; update `runtime.config.cjs` instead.
-
-## Model Settings Contract
-
-- The backend persists provider connection settings for `ollama`, `lmstudio`, and `openai`.
-- Provider model discovery is always server-side. The renderer never calls provider APIs directly.
-- The main settings page reads active role configs from `GET /models`.
-- Saving role parameters uses `PUT /models/:type/config`.
-- Provider modal workflows use:
-  - `GET /providers`
-  - `GET /providers/:providerCode`
-  - `PUT /providers/:providerCode`
-  - `POST /providers/:providerCode/sync-models`
-  - `PUT /providers/:providerCode/select-model/:role`
-- Selecting a new default model for a role replaces the previous role config and resets that role's params to backend defaults.
+- `ipc-and-preload.md`
+- `api-response-spec.md`
+- `model-config-api.md`
+- `../platform/tauri.md`

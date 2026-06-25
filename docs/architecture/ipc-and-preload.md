@@ -1,74 +1,73 @@
-﻿# IPC and Preload Guide
+# IPC 与 Preload 指南
 
-## Philosophy
+Status: Current
+Owner: runtime
+Last verified: 2026-06-25
+Layer: raw-source
+Module: runtime
+Doc Type: current-contract
 
-Renderer code is untrusted. Native capabilities and runtime configuration should be exposed through preload, not by enabling Node APIs in the renderer.
+## 单点真相范围
 
-This project currently uses HTTP for backend API calls. IPC is reserved for desktop/native capabilities and for exposing runtime information.
+这页文档统一说明：
 
-Renderer code should read host/runtime details through a single adapter layer instead of branching directly on `window.desktopApi`, Tauri globals, or `file:` URL checks.
+- renderer 与 native capability 的边界
+- preload 当前暴露的最小契约
+- 什么情况下该用 IPC，什么情况下该直接走 backend HTTP
 
-## Current Preload Contract
+相关概念：
 
-`electron/preload.cjs` exposes `window.desktopApi`:
+- [[CONCEPT_RUNTIME]]
+- [[CONCEPT_PLATFORM]]
+- [[AREA_MAP_RUNTIME]]
 
-```typescript
-interface DesktopApi {
-  platform: string;
-  isPackaged: boolean;
-  backendUrl: string;
-}
-```
+## 基本原则
 
-Renderer request code should use HTTP directly: `desktopApi.backendUrl` in production and `/api` in development. Health checks are ordinary backend routes and should not go through IPC/preload helpers.
+renderer 代码是不受信任的。native 能力和 runtime 配置应通过 preload 暴露，而不是直接在 renderer 开 Node API。
 
-## Request Routing
+当前项目使用 HTTP 访问 backend API。IPC 只保留给桌面 / native 能力，以及少量 runtime 信息暴露。
 
-Development:
+renderer 应通过单一适配层读取 host / runtime 细节，而不是在业务代码里直接分支判断 `window.desktopApi`、Tauri 全局变量或 `file:` URL。
 
-```text
-renderer -> /api/models -> Vite proxy -> backend /models
-```
+## 当前 preload 契约
 
-Production:
+当前 Electron preload 暴露的核心 runtime 信息包括：
 
-```text
-renderer -> ${window.desktopApi.backendUrl}/models -> backend /models
-```
+- `platform`
+- `isPackaged`
+- `backendUrl`
 
-The backend does not expose `/api` routes.
+这类信息用于让 renderer 判断当前运行上下文，但不应把更多业务逻辑堆回 preload。
 
-## Adding IPC
+## 什么时候该走 HTTP
 
-Use IPC when the renderer needs desktop capabilities, not for ordinary backend HTTP routes.
+这些场景优先走 backend HTTP：
 
-Example preload shape:
+- 业务 API
+- 健康检查
+- 模型配置
+- 线程、消息、知识库、评测等产品能力
 
-```typescript
-contextBridge.exposeInMainWorld("electronAPI", {
-  invoke: (channel: string, data?: unknown) => ipcRenderer.invoke(channel, data),
-});
-```
+一句话说：只要本质上是 backend route，就不该包装成 IPC。
 
-Rules:
+## 什么时候该走 IPC / preload
 
-- Keep `contextIsolation: true`.
-- Keep `nodeIntegration: false`.
-- Validate IPC input in the main process.
-- Pass serializable data only.
-- Remove long-lived listeners on unmount.
-- Do not use IPC channel names as a substitute for backend route names.
+这些场景才适合走 IPC 或 preload：
 
-## Backend Routes
+- 原生窗口能力
+- 本地文件 / shell / 桌面集成
+- runtime 环境信息暴露
+- 不适合直接暴露给 renderer 的 native capability
 
-Backend route examples:
+## 当前禁止事项
 
-```text
-GET /health
-GET /db/health
-POST /login
-GET /me
-GET /models
-GET /models/:type/config
-PUT /models/:type/config
-```
+- renderer 直接访问 Node API
+- 在业务组件里散落读取 `window.desktopApi`
+- 用 IPC 包一层普通 HTTP 路由
+- 把 host / port 常量写死在前端代码里
+
+## 相关文档
+
+- `README.md`
+- `api-response-spec.md`
+- `model-config-api.md`

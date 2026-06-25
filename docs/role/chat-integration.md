@@ -184,7 +184,7 @@ desktop/src/shared/ui/SearchSelectModal.tsx
 ## 相关文档
 
 - `README.md`
-- `api.md`
+- `role-api.md`
 - `page.md`
 - `prompt-injection-design.md`
 

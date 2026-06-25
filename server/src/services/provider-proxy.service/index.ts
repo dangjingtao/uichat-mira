@@ -67,6 +67,7 @@ export interface PersistedChatStreamInput {
   userMessageId: string;
   assistantMessageId: string;
   messages: NormalizedChatMessage[];
+  params?: Record<string, unknown>;
   onComplete?: (input: {
     answer: string;
     finishReason: AssistantStreamFinishReason;
@@ -163,8 +164,16 @@ export const providerProxyService = {
   streamChatText(
     requestedProvider: ProxyProviderParam,
     messages: NormalizedChatMessage[],
+    params?: Record<string, unknown>,
   ) {
-    const resolved = resolveProviderForRole("llm", requestedProvider);
+    const baseResolved = resolveProviderForRole("llm", requestedProvider);
+    const resolved = {
+      ...baseResolved,
+      params: {
+        ...baseResolved.params,
+        ...(params ?? {}),
+      },
+    };
 
     return streamResolvedChat(resolved, messages);
   },
@@ -172,9 +181,10 @@ export const providerProxyService = {
   streamChat(
     requestedProvider: ProxyProviderParam,
     messages: NormalizedChatMessage[],
+    params?: Record<string, unknown>,
   ) {
     return createUiMessageStream(() =>
-      this.streamChatText(requestedProvider, messages),
+      this.streamChatText(requestedProvider, messages, params),
     );
   },
 
@@ -194,6 +204,7 @@ export const providerProxyService = {
           for await (const delta of service.streamChatText(
             input.requestedProvider,
             input.messages,
+            input.params,
           )) {
             if (!delta) {
               continue;

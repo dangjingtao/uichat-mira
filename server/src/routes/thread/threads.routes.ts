@@ -145,6 +145,19 @@ export const registerThreadRoutes = async (app: FastifyInstance) => {
   );
 
   app.post<{ Params: { id: string } }>(
+    "/threads/:id/context-summary",
+    { schema: threadRouteSchemas.generateContextSummary },
+    routeHandler("Failed to generate thread context summary", async (request) => {
+      const userId = request.authUser!.id;
+      const result = await threadService.generateContextSummary(request.params.id, userId);
+      if (!result) {
+        throw notFound(THREAD_NOT_FOUND_MESSAGE);
+      }
+      return success(result, "Thread context summary generated");
+    }),
+  );
+
+  app.post<{ Params: { id: string } }>(
     "/threads/:id/archive",
     { schema: threadRouteSchemas.archiveThread },
     routeHandler("Failed to archive thread", async (request) => {

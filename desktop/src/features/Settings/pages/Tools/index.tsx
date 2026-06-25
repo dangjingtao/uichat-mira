@@ -1,127 +1,148 @@
-import { useEffect, useState } from "react";
-import type { LucideIcon } from "lucide-react";
-import { Folder, Globe, Wrench } from "lucide-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import Badge from "@/shared/ui/Badge";
-import Card from "@/shared/ui/Card";
-import { message } from "@/shared/ui/Message";
-import { getTools, type ToolDefinition } from "@/shared/api/tools";
+import { Button } from "@/shared/ui/Button";
+import { Modal } from "@/shared/ui/Modal";
+import { TextArea } from "@/shared/ui/Input";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
-
-const toolIconMap: Record<string, LucideIcon> = {
-  "web-search": Globe,
-  "file-system": Folder,
-};
-
-function ToolCard({
-  name,
-  description,
-  Icon,
-  tags,
-}: {
-  name: string;
-  description: string;
-  Icon: LucideIcon;
-  tags: string[];
-}) {
-  return (
-    <Card className="flex gap-4">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-secondary/60">
-        <Icon className="h-5 w-5 text-icon-primary" />
-      </div>
-
-      <div className="min-w-0 flex-1 space-y-2">
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold text-text-primary">{name}</h3>
-          <p className="text-sm leading-6 text-text-secondary">{description}</p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {tags.map((tag) => (
-            <Badge key={`${name}-${tag}`} variant="muted">
-              {tag}
-            </Badge>
-          ))}
-        </div>
-      </div>
-    </Card>
-  );
-}
+import ToolsPackagePanel from "./components/ToolsPackagePanel";
+import ToolsSidebar from "./components/ToolsSidebar";
+import ToolsTracePanel from "./components/ToolsTracePanel";
+import ToolsWorkbenchPanel from "./components/ToolsWorkbenchPanel";
+import { useToolsWorkbench } from "./hooks/useToolsWorkbench";
 
 export default function ToolsSettings() {
   const { t } = useTranslation();
-  const [tools, setTools] = useState<ToolDefinition[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    setIsLoading(true);
-
-    getTools()
-      .then((data) => {
-        if (cancelled) {
-          return;
-        }
-
-        setTools(data);
-      })
-      .catch((error: unknown) => {
-        if (cancelled) {
-          return;
-        }
-
-        message.error(
-          error instanceof Error
-            ? error.message
-            : t("settings.tools.loadFailed"),
-        );
-      })
-      .finally(() => {
-        if (cancelled) {
-          return;
-        }
-
-        setIsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [t]);
+  const workbench = useToolsWorkbench();
+  const [isArgsModalOpen, setIsArgsModalOpen] = useState(false);
 
   return (
     <SettingsPageLayout
       miniTitle={t("settings.tools.miniTitle")}
       title={t("settings.tools.title")}
       description={t("settings.tools.description")}
-      contentClassName="space-y-4 pt-6"
+      scrollBody={false}
+      contentClassName="min-h-0 pt-6"
     >
-      {isLoading ? (
-        <Card className="text-sm text-text-secondary">
-          {t("settings.tools.loading")}
-        </Card>
-      ) : tools.length === 0 ? (
-        <Card className="text-sm text-text-secondary">
-          {t("settings.tools.empty")}
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          {tools.map((tool) => {
-            const Icon = toolIconMap[tool.id] ?? Wrench;
+      <div className="grid h-full min-h-0 grid-cols-[260px_minmax(0,1fr)] gap-4 overflow-hidden">
+        <ToolsSidebar
+          activeDomain={workbench.activeDomain}
+          summaries={workbench.domainSummaries}
+          onSelectDomain={workbench.selectDomain}
+        />
 
-            return (
-              <ToolCard
-                key={tool.id}
-                name={tool.name}
-                description={tool.description}
-                Icon={Icon}
-                tags={tool.tags}
+        <div className="grid min-h-0 h-full grid-rows-[auto_minmax(0,1fr)] gap-4 overflow-hidden">
+          <ToolsWorkbenchPanel
+            isSelectingWorkspace={workbench.isSelectingWorkspace}
+            isWorkspaceLoading={workbench.isWorkspaceLoading}
+            workspaceRootInput={workbench.workspaceRootInput}
+            workspaceSelection={workbench.workspaceSelection}
+            onWorkspaceChange={workbench.setWorkspaceRootInput}
+            onWorkspaceApply={() => void workbench.updateWorkspaceRoot()}
+            labels={{
+              applyWorkspace: t("settings.tools.workbench.applyWorkspace"),
+              workspaceCurrent: t("settings.tools.workbench.workspaceCurrent"),
+              workspaceDescription: t("settings.tools.workbench.workspaceDescription"),
+              workspaceRoot: t("settings.tools.workbench.workspaceRoot"),
+              workspaceRootInput: t("settings.tools.workbench.workspaceRootInput"),
+              workspaceRootPlaceholder: t("settings.tools.workbench.workspaceRootPlaceholder"),
+              workspaceUnset: t("settings.tools.workbench.workspaceUnset"),
+            }}
+          />
+
+          <ToolsPackagePanel
+            tools={workbench.filteredTools}
+            selectedTool={workbench.selectedTool}
+            terminalSummary={workbench.terminalSummary}
+            runStatus={workbench.runStatus}
+            isRunning={workbench.isRunning}
+            tracePanel={
+              <ToolsTracePanel
+                activeToolId={workbench.selectedTool?.id ?? null}
+                artifacts={workbench.artifacts}
+                events={workbench.events}
+                emptyPlaceholder={t("settings.tools.workbench.consolePlaceholder")}
+                panelTitle={t("settings.tools.workbench.console")}
+                runError={workbench.runError}
               />
-            );
-          })}
+            }
+            onSelectTool={workbench.selectTool}
+            onOpenArgsModal={() => setIsArgsModalOpen(true)}
+            onRun={() => void workbench.runSelectedTool()}
+            labels={{
+              empty: t("settings.tools.package.empty"),
+              config: t("settings.tools.package.config"),
+              execute: t("settings.tools.workbench.execute"),
+              packageTitle: t("settings.tools.package.title"),
+              packageDescription: t("settings.tools.package.description"),
+              terminalApprovalRequired: t("settings.tools.package.terminalApprovalRequired"),
+              terminalTimeout: t("settings.tools.package.terminalTimeout"),
+              terminalReused: t("settings.tools.package.terminalReused"),
+              terminalExit: (exitCode) =>
+                t("settings.tools.package.terminalExit", { exitCode }),
+            }}
+          />
         </div>
-      )}
+      </div>
+
+      <Modal
+        open={isArgsModalOpen}
+        title={t("settings.tools.package.argsModalTitle")}
+        width={760}
+        maxHeight="80vh"
+        onClose={() => setIsArgsModalOpen(false)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsArgsModalOpen(false)}>
+              {t("common.actions.close")}
+            </Button>
+            <Button variant="primary" onClick={() => setIsArgsModalOpen(false)}>
+              {t("common.actions.confirm")}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          {workbench.selectedTool ? (
+            <div className="rounded-ui-control border border-border bg-surface-secondary px-3 py-3">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-text-primary">
+                    {workbench.selectedTool.title}
+                  </div>
+                  <div className="mt-1 break-all text-xs text-text-tertiary">
+                    {workbench.selectedTool.id}
+                  </div>
+                  {workbench.selectedTool.description ? (
+                    <div className="mt-3 text-sm leading-6 text-text-secondary">
+                      {workbench.selectedTool.description}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-surface-primary px-2 py-0.5 text-xs text-text-secondary">
+                    {workbench.selectedTool.domain}
+                  </span>
+                  {workbench.selectedTool.capabilities.requiresApproval ? (
+                    <span className="rounded-full bg-warning-background px-2 py-0.5 text-xs text-warning-text">
+                      approval
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : null}
+          <div className="text-sm text-text-secondary">
+            {t("settings.tools.package.argsModalDescription")}
+          </div>
+          <TextArea
+            label={t("settings.tools.workbench.args")}
+            value={workbench.argsDraft}
+            onChange={workbench.setArgsDraft}
+            placeholder={t("settings.tools.workbench.argsPlaceholder")}
+            rows={18}
+          />
+        </div>
+      </Modal>
     </SettingsPageLayout>
   );
 }

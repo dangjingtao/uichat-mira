@@ -115,6 +115,10 @@ const settingsPending = {
         argsModalTitle: "Tool Args",
         argsModalDescription:
           "Maintain the current tool's JSON invocation args here. Closing the modal does not reset the draft.",
+        terminalApprovalRequired: "Approval Required",
+        terminalTimeout: "Timed Out",
+        terminalReused: "Reused Session",
+        terminalExit: "Exit {{exitCode}}",
       },
       messages: {
         loadFailed: "Failed to load the tools workbench",
@@ -160,6 +164,8 @@ const settingsPending = {
         emptyDescription:
           "Install a marketplace server with `streamable-http` support to see its lifecycle state here.",
         refresh: "Refresh",
+        search: "Filter",
+        searchPlaceholder: "Filter by name, description, endpoint, or capability ID",
         connect: "Connect",
         discover: "Discover",
         discovered: "Discovered",
@@ -730,7 +736,16 @@ const settingsPending = {
       },
       logs: {
         title: "Runtime Logs",
-        description: "Application runtime logs will appear here.",
+        description: "Live backend log stream with only the latest 100 lines kept.",
+        empty: "Waiting for new log output…",
+        limit: "Latest {{count}} lines",
+        errorPrefix: "Log stream disconnected:",
+        status: {
+          connecting: "Connecting",
+          live: "Live",
+          reconnecting: "Reconnecting",
+          error: "Connection error",
+        },
       },
       clientTests: {
         title: "Client Tests",

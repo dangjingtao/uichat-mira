@@ -15,6 +15,7 @@ export interface GenerateInput {
   chunks: RetrievedChunk[];
   systemPrompt?: string;
   conversationHistory?: NormalizedChatMessage[];
+  requestContextMessages?: NormalizedChatMessage[];
 }
 
 export interface GenerateOutput {
@@ -59,6 +60,7 @@ const buildMessages = (input: GenerateInput): NormalizedChatMessage[] => {
   );
 
   return [
+    ...(input.requestContextMessages ?? []),
     { role: "system", content: systemPrompt },
     ...(input.conversationHistory ?? []),
     { role: "user", content: input.query },

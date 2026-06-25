@@ -51,7 +51,7 @@ export default function ToolsTracePanel({
     if (event.type === "invocation:finish") {
       return `${event.at}  finish  ${event.status}`;
     }
-    return `${event.invocationId}  ${event.type}`;
+    return "";
   });
 
   return (

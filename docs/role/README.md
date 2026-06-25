@@ -30,7 +30,7 @@ Last verified: 2026-06-25
 
 1. `page.md`  
    角色工作台的页面职责、字段语义、状态约定
-2. `api.md`  
+2. `role-api.md`  
    角色 CRUD 接口、数据模型、Swagger 范围
 3. `chat-integration.md`  
    角色如何接入聊天界面、哪些状态只存在前端

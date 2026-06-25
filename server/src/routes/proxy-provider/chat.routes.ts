@@ -2,6 +2,11 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { PUBLIC_API_ROUTES } from "@/config/public-api.js";
 import { threadService } from "@/services/thread.service.js";
 import {
+  roleService,
+  type RoleLlmProfileResponse,
+} from "@/services/role.service.js";
+import { threadRequestContextNode } from "@/services/shared-nodes/thread-request-context.node.js";
+import {
   type ProxyProviderParam,
   providerProxyService,
 } from "@/services/provider-proxy.service/index.js";
@@ -54,6 +59,55 @@ const resolveDefaultProviderThread = (
   return threadService.getThreadSummaryById(threadId, userId);
 };
 
+const collectThreadContextMessages = (
+  threadId: string | undefined,
+  userId: number | undefined,
+) => {
+  if (typeof threadId !== "string" || !userId) {
+    return [];
+  }
+
+  const thread = threadService.getThreadSummaryById(threadId, userId);
+  if (!thread) {
+    return [];
+  }
+
+  return threadRequestContextNode.createRequestMessages(thread, userId);
+};
+
+const resolveThreadRoleLlmParams = (
+  threadId: string | undefined,
+  userId: number | undefined,
+): Record<string, unknown> | undefined => {
+  if (typeof threadId !== "string" || !userId) {
+    return undefined;
+  }
+
+  const thread = threadService.getThreadSummaryById(threadId, userId);
+  if (!thread?.roleId) {
+    return undefined;
+  }
+
+  const role = roleService.getRoleById(thread.roleId, userId);
+  if (!role) {
+    return undefined;
+  }
+
+  const profile = role.llmProfile as RoleLlmProfileResponse;
+  const params = Object.fromEntries(
+    Object.entries({
+      temperature: profile.temperature,
+      topP: profile.topP,
+      topK: profile.topK,
+      maxTokens: profile.maxTokens,
+      frequencyPenalty: profile.frequencyPenalty,
+      presencePenalty: profile.presencePenalty,
+    }).filter(([, value]) => typeof value === "number"),
+  );
+
+  return Object.keys(params).length > 0 ? params : undefined;
+};
+
 const sendRagChatStream = ({
   app,
   reply,
@@ -62,6 +116,7 @@ const sendRagChatStream = ({
   userMessageId,
   ragInput,
   messages,
+  requestContextMessages,
 }: {
   app: FastifyInstance;
   reply: FastifyReply;
@@ -70,8 +125,9 @@ const sendRagChatStream = ({
   userMessageId?: string;
   ragInput: NonNullable<ReturnType<typeof toRagInput>>;
   messages: ReturnType<typeof normalizeProxyChatMessages>;
+  requestContextMessages?: ReturnType<typeof normalizeProxyChatMessages>;
 }) => {
-  prepareDataStreamReply(reply);
+  prepareEventStreamReply(reply);
   return reply.send(
     createRagAssistantStream({
       threadId,
@@ -79,6 +135,7 @@ const sendRagChatStream = ({
       userMessageId,
       ragInput,
       messages,
+      requestContextMessages,
       log: app.log,
     }),
   );
@@ -91,6 +148,7 @@ const sendPersistedDefaultChatStream = ({
   authUserId,
   userMessageId,
   messages,
+  params,
 }: {
   app: FastifyInstance;
   reply: FastifyReply;
@@ -98,6 +156,7 @@ const sendPersistedDefaultChatStream = ({
   authUserId: number;
   userMessageId?: string;
   messages: ReturnType<typeof normalizeProxyChatMessages>;
+  params?: Record<string, unknown>;
 }) => {
   const { latestUserMessageId, latestUserMessage } = persistVisibleUserMessage({
     threadId,
@@ -107,7 +166,7 @@ const sendPersistedDefaultChatStream = ({
   });
   const assistantMessageId = crypto.randomUUID();
 
-  prepareDataStreamReply(reply);
+  prepareEventStreamReply(reply);
   return reply.send(
     providerProxyService.createPersistedChatStream({
       requestedProvider: "default",
@@ -116,6 +175,7 @@ const sendPersistedDefaultChatStream = ({
       userMessageId: latestUserMessageId,
       assistantMessageId,
       messages,
+      params,
       onComplete: async ({ answer, finishReason }) => {
         if (finishReason !== "stop" || !answer.trim()) {
           return;
@@ -223,7 +283,13 @@ export const registerProxyProviderChatRoutes = async (
         const threadId = request.body.id;
         const authUser = request.authUser;
         const thread = resolveDefaultProviderThread(threadId, authUser?.id);
+        const requestContextMessages = collectThreadContextMessages(
+          threadId,
+          authUser?.id,
+        );
+        const defaultChatMessages = [...requestContextMessages, ...messages];
         const ragInput = toRagInput(messages);
+        const roleLlmParams = resolveThreadRoleLlmParams(threadId, authUser?.id);
         const useThreadRag = shouldUseThreadRag({
           knowledgeBaseId: thread?.knowledgeBaseId,
           ragInput,
@@ -240,6 +306,7 @@ export const registerProxyProviderChatRoutes = async (
             userMessageId: request.body.messageId,
             ragInput,
             messages,
+            requestContextMessages,
           });
         }
 
@@ -266,7 +333,8 @@ export const registerProxyProviderChatRoutes = async (
             threadId,
             authUserId: authUser.id,
             userMessageId: request.body.messageId,
-            messages,
+            messages: defaultChatMessages,
+            params: roleLlmParams,
           });
         }
       }

@@ -1,20 +1,41 @@
-# Knowledge Base API
+# 知识库 API
 
-## Swagger Organization
+Status: Current
+Owner: knowledge-base
+Last verified: 2026-06-25
+Layer: raw-source
+Module: knowledge-base
+Doc Type: reference
 
-The current knowledge-base APIs are split into three Swagger groups:
+## 单点真相范围
+
+这页文档统一说明：
+
+- knowledge-base HTTP 接口分组
+- Swagger 标签边界
+- Settings 页面里 knowledge base 选择状态的归属规则
+
+相关概念：
+
+- [[CONCEPT_KNOWLEDGE_BASE]]
+- [[CONCEPT_RUNTIME]]
+- [[AREA_MAP_KNOWLEDGE_BASE]]
+
+## Swagger 分组方式
+
+当前知识库接口拆成三组 Swagger：
 
 - `Knowledge Base - Collections`
 - `Knowledge Base - Documents`
 - `Knowledge Base - Upload & Preview`
 
-This separation matches the current UI usage:
+这样拆是为了和当前 UI 责任划分对齐：
 
-- collection-level management in Settings
-- document-level inspection and CRUD
-- upload wizard and chunk preview
+- Settings 里的知识库集合管理
+- 文档级查看与 CRUD
+- 上传流程与 chunk 预览
 
-## Endpoints
+## 接口列表
 
 ### Collections
 
@@ -23,40 +44,18 @@ This separation matches the current UI usage:
 - `POST /knowledge-bases`
 - `PATCH /knowledge-bases/:knowledgeBaseId`
 - `DELETE /knowledge-bases/:knowledgeBaseId`
-- `GET /knowledge-base`
 
 ### Documents
 
 - `GET /knowledge-base/documents`
 - `GET /knowledge-bases/:knowledgeBaseId/documents`
 - `GET /knowledge-base/documents/:id/status`
-- `GET /knowledge-bases/:knowledgeBaseId/documents/:id/status`
-- `GET /knowledge-base/documents/:id`
-- `GET /knowledge-bases/:knowledgeBaseId/documents/:id`
-- `POST /knowledge-base/documents`
-- `POST /knowledge-bases/:knowledgeBaseId/documents`
-- `PATCH /knowledge-base/documents/:id`
-- `PATCH /knowledge-bases/:knowledgeBaseId/documents/:id`
-- `DELETE /knowledge-base/documents/:id`
-- `DELETE /knowledge-bases/:knowledgeBaseId/documents/:id`
 
 ### Upload & Preview
 
-- `POST /knowledge-base/chunk-preview`
-- `POST /knowledge-base/documents/upload`
-- `POST /knowledge-bases/:knowledgeBaseId/documents/upload`
+- 上传、切分预览、导入确认相关接口归到这一组
 
-## Notes
+## 相关文档
 
-- The old single `Knowledge Base` tag is intentionally replaced by smaller groups.
-- Attachment upload now uses its own `Attachments` Swagger tag.
-- The default knowledge base remains a normal knowledge-base resource in UI and data flow, but it is treated as non-deletable in product rules.
-- The default knowledge base is marked with `isSystem: true` in collection responses. UI should disable delete actions from that field instead of hardcoding `id === "default"`.
-- Knowledge-base archive interaction is still pending UI/product implementation even though the entity model already reserves lifecycle status fields such as `active` and `archived`.
-
-## UI Boundary Rule
-
-- `Settings -> Knowledge Base` is a standalone settings surface. Its selected knowledge base is owned by the settings page itself.
-- Switching knowledge bases in settings must only change the current settings-page state, the URL mirror, and the knowledge-base/document requests for that page.
-- This selection must not be coupled to chat runtime state, chat thread creation defaults, RAG enablement state, or any shared cross-page provider.
-- Which knowledge base a user chats against must be an explicit user decision in the chat flow, not an implicit side effect of visiting or switching the settings knowledge-base page.
+- `knowledge-base-backend-schema.md`
+- `markdown-workspace-mode.md`

@@ -90,6 +90,16 @@ export function SettingsNavigation() {
     (item) => item.to === "/settings/tools" || item.to === "/settings/about",
   );
 
+  const developmentItems = settingsNavigationItems.filter(
+    (item) =>
+      item.to === "/settings/development" ||
+      item.to === "/settings/development/logs",
+  );
+
+  const integrationItems = settingsNavigationItems.filter(
+    (item) => item.to === "/settings/mcp",
+  );
+
   const knowledgeWorkspaceItems = [...knowledgeBaseItems, ...evaluationItems];
   const roleItems = settingsNavigationItems.filter(
     (item) => item.to === "/settings/roles",
@@ -118,6 +128,24 @@ export function SettingsNavigation() {
             <SettingsNavigationGroup
               title={t("settings.navigation.roles")}
               items={roleItems}
+            />
+          </>
+        ) : null}
+        {integrationItems.length > 0 ? (
+          <>
+            <Divider />
+            <SettingsNavigationGroup
+              title={t("settings.navigation.integration")}
+              items={integrationItems}
+            />
+          </>
+        ) : null}
+        {developmentItems.length > 0 ? (
+          <>
+            <Divider />
+            <SettingsNavigationGroup
+              title={t("settings.navigation.developmentGroup")}
+              items={developmentItems}
             />
           </>
         ) : null}

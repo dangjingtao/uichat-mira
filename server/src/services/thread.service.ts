@@ -6,6 +6,7 @@ import {
   type ThreadWithMessageCount,
 } from "@/db/repositories";
 import type { Message, MessageRole, Thread, ThreadStatus } from "@/db/schema";
+import { threadContextSummaryNode } from "@/services/shared-nodes/thread-context-summary.node.js";
 import { THREAD_ACCESS_ERROR_MESSAGE } from "@/utils/errors.js";
 
 export interface ThreadResponse {
@@ -13,6 +14,9 @@ export interface ThreadResponse {
   title: string;
   modelName: string | null;
   knowledgeBaseId: string | null;
+  roleId: string | null;
+  contextSummary: string | null;
+  contextSummaryUpdatedAt: string | null;
   status: ThreadStatus;
   createdAt: string;
   updatedAt: string;
@@ -58,6 +62,8 @@ export interface CreateThreadInput {
   title?: string;
   modelName?: string;
   knowledgeBaseId?: string | null;
+  roleId?: string | null;
+  contextSummary?: string | null;
 }
 
 export interface CreateMessageInput {
@@ -172,6 +178,9 @@ const toThreadResponse = (
     title: thread.title || "新对话",
     modelName: thread.modelName ?? null,
     knowledgeBaseId: thread.knowledgeBaseId,
+    roleId: thread.roleId ?? null,
+    contextSummary: thread.contextSummary ?? null,
+    contextSummaryUpdatedAt: thread.contextSummaryUpdatedAt ?? null,
     status: thread.status,
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt,
@@ -194,6 +203,9 @@ const toThreadResponseFromStats = (
     title: thread.title || "新对话",
     modelName: thread.modelName ?? null,
     knowledgeBaseId: thread.knowledgeBaseId,
+    roleId: thread.roleId ?? null,
+    contextSummary: thread.contextSummary ?? null,
+    contextSummaryUpdatedAt: thread.contextSummaryUpdatedAt ?? null,
     status: thread.status,
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt,
@@ -280,8 +292,33 @@ export const threadService = {
     return toThreadResponse(thread, messageRepository.listByThread(thread.id));
   },
 
+  async generateContextSummary(
+    id: string,
+    userId: number,
+  ): Promise<Pick<ThreadResponse, "contextSummary" | "contextSummaryUpdatedAt"> | null> {
+    const thread = threadRepository.findById(id, userId);
+    if (!thread) {
+      return null;
+    }
+
+    const messages = messageRepository.listByThread(id).map(toMessageResponse);
+    const generated = await threadContextSummaryNode.generate(messages);
+    const updated = threadRepository.updateById(id, {
+      contextSummary: generated.contextSummary || null,
+      contextSummaryUpdatedAt: generated.contextSummaryUpdatedAt,
+    });
+
+    return {
+      contextSummary: updated?.contextSummary ?? generated.contextSummary ?? null,
+      contextSummaryUpdatedAt:
+        updated?.contextSummaryUpdatedAt ?? generated.contextSummaryUpdatedAt ?? null,
+    };
+  },
+
   createThread(input: CreateThreadInput): ThreadResponse {
     const knowledgeBaseId = input.knowledgeBaseId?.trim();
+    const roleId = input.roleId?.trim();
+    const contextSummary = input.contextSummary?.trim();
 
     if (knowledgeBaseId && !knowledgeBaseRepository.getById(knowledgeBaseId)) {
       throw new Error("Knowledge base not found");
@@ -292,6 +329,9 @@ export const threadService = {
       title: input.title?.trim() || "",
       modelName: input.modelName?.trim() || undefined,
       knowledgeBaseId: knowledgeBaseId ?? null,
+      roleId: roleId ?? null,
+      contextSummary: contextSummary || null,
+      contextSummaryUpdatedAt: contextSummary ? new Date().toISOString() : null,
       status: "active",
     });
 
@@ -312,7 +352,9 @@ export const threadService = {
     if (
       input.title === undefined &&
       input.modelName === undefined &&
-      input.knowledgeBaseId === undefined
+      input.knowledgeBaseId === undefined &&
+      input.roleId === undefined &&
+      input.contextSummary === undefined
     ) {
       return toThreadResponse(
         existing,
@@ -341,6 +383,24 @@ export const threadService = {
     }
     if (input.knowledgeBaseId === null) {
       updateData.knowledgeBaseId = null;
+    }
+    if (typeof input.roleId === "string") {
+      const normalizedRoleId = input.roleId.trim();
+      updateData.roleId = normalizedRoleId || null;
+    }
+    if (input.roleId === null) {
+      updateData.roleId = null;
+    }
+    if (typeof input.contextSummary === "string") {
+      const normalizedSummary = input.contextSummary.trim();
+      updateData.contextSummary = normalizedSummary || null;
+      updateData.contextSummaryUpdatedAt = normalizedSummary
+        ? new Date().toISOString()
+        : null;
+    }
+    if (input.contextSummary === null) {
+      updateData.contextSummary = null;
+      updateData.contextSummaryUpdatedAt = null;
     }
 
     const updated = threadRepository.updateById(id, updateData);

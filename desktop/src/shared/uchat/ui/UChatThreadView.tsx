@@ -249,6 +249,9 @@ export function UChatThreadView({
   threadContextTags,
   onRemoveThreadContextTag,
   resolveAttachmentSource,
+  assistantAvatarSrc,
+  assistantDisplayName,
+  assistantTypingLabel,
 }: {
   activeThreadId: string | null;
   title: string;
@@ -283,6 +286,9 @@ export function UChatThreadView({
     tag: ChatThreadContextTag,
   ) => void | Promise<void>;
   resolveAttachmentSource: (value: string) => string;
+  assistantAvatarSrc?: string | null;
+  assistantDisplayName?: string;
+  assistantTypingLabel?: string;
 }) {
   const { t } = useTranslation();
   const isRunning = runStatus.type === "running";
@@ -393,6 +399,9 @@ export function UChatThreadView({
                           key={message.id}
                           message={message}
                           isRunning={isRunning}
+                          assistantAvatarSrc={assistantAvatarSrc}
+                          assistantDisplayName={assistantDisplayName}
+                          assistantTypingLabel={assistantTypingLabel}
                           editingUserMessage={editingUserMessage}
                           messagePresentation={messagePresentation}
                           resolveAttachmentSource={resolveAttachmentSource}
@@ -561,6 +570,9 @@ export function UChatThreadView({
 function UChatMessageRow({
   message,
   isRunning,
+  assistantAvatarSrc,
+  assistantDisplayName,
+  assistantTypingLabel,
   editingUserMessage,
   messagePresentation,
   resolveAttachmentSource,
@@ -577,6 +589,9 @@ function UChatMessageRow({
 }: {
   message: ChatMessage;
   isRunning: boolean;
+  assistantAvatarSrc?: string | null;
+  assistantDisplayName?: string;
+  assistantTypingLabel?: string;
   editingUserMessage: {
     id: string;
     draftText: string;
@@ -740,7 +755,10 @@ function UChatMessageRow({
   return (
     <div className="group flex justify-start px-0 py-2 sm:py-2.5">
       <div className="flex w-full items-start gap-3">
-        <UChatAssistantAvatar />
+        <UChatAssistantAvatar
+          src={assistantAvatarSrc}
+          name={assistantDisplayName}
+        />
         <div className={`min-w-0 ${assistantBubbleWidthClassName}`}>
           <UChatRagExecutionTrace
             messageId={message.id}
@@ -764,7 +782,7 @@ function UChatMessageRow({
                     style={{ animationDelay: "240ms" }}
                   />
                 </span>
-                <span>{t("chat.thread.assistantTyping")}</span>
+                <span>{assistantTypingLabel ?? t("chat.thread.assistantTyping")}</span>
               </div>
             ) : null}
 
@@ -1118,7 +1136,16 @@ function UChatComposerActions({
               size="sm"
               className="gap-1.5 border border-primary/20 bg-primary/10 pr-1 text-primary shadow-none"
             >
-              <LibraryBig className="h-3.5 w-3.5" />
+              {tag.kind === "role" && tag.avatarSrc ? (
+                <img
+                  src={tag.avatarSrc}
+                  alt=""
+                  className="h-4 w-4 rounded-full object-cover"
+                  draggable={false}
+                />
+              ) : (
+                <LibraryBig className="h-3.5 w-3.5" />
+              )}
               <span className="max-w-28 truncate">{tag.label}</span>
               {tag.removable ? (
                 <button
