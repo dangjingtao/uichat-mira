@@ -1,5 +1,5 @@
 {
-  "name": "@ui-chat-rag-tester/electron",
+  "name": "@ui-chat-mira/electron",
   "version": "0.7.1",
   "private": true,
   "description": "Electron shell for UI chat RAG tester",

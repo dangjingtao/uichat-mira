@@ -11,13 +11,22 @@ const desktopArtifactsRoot = path.join(artifactsRoot, "desktop", "dist");
 const legacyServerArtifactsRoot = path.join(artifactsRoot, "server");
 const serverBundleArtifactsRoot = path.join(artifactsRoot, "server-bundle");
 const iconsArtifactsRoot = path.join(artifactsRoot, "icons");
-const runtimeConfigArtifactsPath = path.join(artifactsRoot, "runtime.config.cjs");
+const runtimeConfigArtifactsPath = path.join(
+  artifactsRoot,
+  "runtime.config.cjs",
+);
 const nodeRuntimeArtifactsRoot = path.join(artifactsRoot, "node-runtime");
 const electronArtifactsRoot = path.join(artifactsRoot, "electron-app");
 const serverAppMetaPath = path.join(projectRoot, "server", "app-meta.json");
-const serverBundleAppMetaPath = path.join(serverBundleArtifactsRoot, "app-meta.json");
+const serverBundleAppMetaPath = path.join(
+  serverBundleArtifactsRoot,
+  "app-meta.json",
+);
 const appMetaGeneratorUrl = pathToFileURL(
   path.join(projectRoot, "scripts", "app-meta-generator.js"),
+).href;
+const testReportGeneratorUrl = pathToFileURL(
+  path.join(projectRoot, "scripts", "generate-test-report.js"),
 ).href;
 
 function removeDir(targetPath, label) {
@@ -52,26 +61,46 @@ console.log("Preparing shared desktop artifacts...");
 removeDir(legacyServerArtifactsRoot, "legacy staged server bundle");
 
 const { writeAppMetaJsons } = await import(appMetaGeneratorUrl);
+const { generateFrontendTestReport } = await import(testReportGeneratorUrl);
 
 writeAppMetaJsons(projectRoot, [serverAppMetaPath, serverBundleAppMetaPath]);
 
+const desktopCoverageDir = generateFrontendTestReport();
+
 execSync("pnpm internal:build:desktop", { cwd: projectRoot, stdio: "inherit" });
 execSync("pnpm internal:build:server", { cwd: projectRoot, stdio: "inherit" });
+execSync("pnpm docs:build", { cwd: projectRoot, stdio: "inherit" });
 
 if (!fs.existsSync(serverBundleArtifactsRoot)) {
   throw new Error(`Missing server bundle: ${serverBundleArtifactsRoot}`);
 }
 
 copyPath(
+  desktopCoverageDir,
+  path.join(serverBundleArtifactsRoot, "client-coverage"),
+  "frontend coverage report",
+);
+
+const serverCoverageDir = path.join(projectRoot, "server", "coverage");
+if (fs.existsSync(serverCoverageDir)) {
+  copyPath(
+    serverCoverageDir,
+    path.join(serverBundleArtifactsRoot, "server-coverage"),
+    "server coverage report",
+  );
+}
+copyPath(
+  path.join(projectRoot, "packages", "docs-site", "dist"),
+  path.join(serverBundleArtifactsRoot, "docs-site"),
+  "staged docs site",
+);
+
+copyPath(
   path.join(projectRoot, "desktop", "dist"),
   desktopArtifactsRoot,
   "desktop dist",
 );
-copyPath(
-  path.join(projectRoot, "icons"),
-  iconsArtifactsRoot,
-  "icons",
-);
+copyPath(path.join(projectRoot, "icons"), iconsArtifactsRoot, "icons");
 copyPath(
   path.join(projectRoot, "runtime.config.cjs"),
   runtimeConfigArtifactsPath,

@@ -1,0 +1,594 @@
+# Harness Runtime 设计
+
+Layer: raw-source
+Module: tooling-runtime
+Doc Type: design
+
+Status: In Progress
+Owner: runtime
+Last verified: 2026-06-25
+
+## 当前落地状态
+
+截至 `2026-06-25`，harness 下第一批 `Read` capability 已经不是纯设计状态。
+
+当前已经落地并注册到 harness runtime 的 `Read` 工具包括：
+
+- `read_list`
+- `read_locate`
+- `read_open`
+- `read_extract`
+- `read_slice`
+- `read`
+
+这些能力已经走通：
+
+- harness registry
+- invocation lifecycle
+- SSE 事件流
+- route 暴露
+- 后端类型检查与自动化测试
+
+但这还不等于 harness 整体完成。
+
+当前更准确的判断是：
+
+- harness + `Read` 第一阶段主链：已完成
+- 多 roots、审批持久化、chat 自动工具调用、完整 trace UI：未完成
+
+下一阶段约束也需要提前固定：
+
+- `Search` 第一阶段只做内置 `web_search`
+- `web_search` 第一正式 provider 先只接 `Tavily`
+- 在明确扩容前，不做多 provider UI，也不在 capability 内部堆散落 fallback
+
+当前落地状态：
+
+- `web_search` 已收口为 Tavily-only
+- 对应测试已更新
+- 前端参数草稿已对齐 Tavily API key 模式
+- `edit_file` 已收口到 harness 驱动的 edit runtime
+- `edit_file` 当前阶段支持：
+  - `write_file`
+  - `replace_block`
+- `edit_file` 已补齐当前阶段成功/失败/dry-run/越界的单元测试
+- `terminal_session` 下一步按独立 checklist 推进：
+  - 见 `terminal-capability-checklist.md`
+
+## 单点真相范围
+
+这页定义内置 agent capability 的运行时控制平面。
+
+它讨论的是：
+
+- 谁拥有 roots、权限边界和审批
+- capability 怎样统一注册
+- invocation 生命周期怎样被观察
+- trace、validation、回归夹具该挂在哪一层
+
+它不把 `Read` 当成中心。
+`Read` 只是第一批接入 harness 的 capability。
+
+相关概念：
+
+- [[CONCEPT_RUNTIME]]
+- [[CONCEPT_MCP]]
+- [[AREA_MAP_RUNTIME]]
+
+## 适合什么时候读
+
+你在这些场景里应该先看这页：
+
+- 想把 `read`、`edit`、`terminal` 之类能力做成统一 runtime
+- 想判断权限、审批和 sandbox 到底应该挂在哪一层
+- 准备接入第三方 MCP tool，但不想把执行状态散落到各处
+- 想给工具链补 trace、replay、validation
+
+## 核心定位
+
+`Harness` 是运行时中心，不是某个具体工具。
+
+它应该负责：
+
+- roots 与 scope 边界
+- capability 注册
+- invocation 状态机
+- trace / artifact / replay
+- validation / regression
+
+它不应该退化成：
+
+- 单个 read function
+- 一个 UI 页面
+- 只给 chat 用的 helper
+
+## 设计目标
+
+运行时架构采用 harness 思维，但 capability contract 尽量保持 MCP / OpenAI tool calling 兼容。
+
+也就是：
+
+- 内部 operating model 以 harness 为中心
+- 对外能力定义尽量接近 MCP / tool schema 语义
+
+## 当前建议
+
+项目不应该在 “OpenAI style” 和 “Harness style” 之间二选一。
+
+更稳的做法是：
+
+- harness 做 runtime control plane
+- capability 定义继续保持 MCP / OpenAI-friendly
+
+## 五个核心职责
+
+### 1. 边界控制
+
+harness 持有：
+
+- roots
+- scopes
+- approval policy
+- sandbox 边界
+
+这层必须高于任何单独 capability。
+
+例如：
+
+- `Read` 不该自己决定能读哪些路径
+- 它应当从 harness 收到已经授权过的 root context
+
+### 硬规则
+
+harness 必须执行这条规则：
+
+- 在 active sandbox 和 authorized roots 内的动作，可以按 capability policy 继续
+- 超出 active sandbox 或 authorized roots 的动作，必须显式用户批准
+
+这条规则归 harness，不归单独 capability。
+capability 不能自行绕过、静默降级或自授权。
+
+### 2. Capability Registry
+
+harness 统一注册所有内置 capability。
+
+当前第一批范围：
+
+- `read`
+
+后续能力域：
+
+- `edit`
+- `web_search`
+- `terminal`
+- `preview_action`
+
+每个 capability 至少要注册：
+
+- definition
+- input schema
+- output schema
+- risk metadata
+- execution handler
+- validator hooks
+- approval behavior
+
+当前内置命名约束：
+
+- 内置 capability id 保持短且稳定，例如 `read_open`、`edit_file`、`web_search`
+- 外部 MCP 投影 capability 一律使用 `external:<serverId>:<toolName>`
+
+tool id 也要分清：
+
+- 内置 capability 保留稳定 id，例如 `read_open`
+- 第三方投影 tool 使用 `external:<serverId>:<toolName>`
+
+### 3. Invocation 生命周期
+
+harness 拥有完整执行生命周期。
+
+最低事件：
+
+- `invocation:start`
+- `invocation:progress`
+- `invocation:artifact`
+- `invocation:result`
+- `invocation:error`
+- `invocation:finish`
+
+这套生命周期必须 capability-agnostic。
+
+同时 harness 应继续当“长生命周期执行观察者”，统一跟踪：
+
+- progress
+- status transition
+- retry / fallback
+- final outcome
+
+对 `terminal` 额外要求：
+
+- cwd / env 解析结果要进入统一观察链
+- stdout / stderr 流事件要保持 capability-agnostic 输出格式
+- abort / timeout / cleanup 不能散落在 UI 或 tool 壳里
+- approval wait 不能只在 capability 内部“口头存在”，要进入统一 invocation 状态
+
+当前 terminal phase 2 已落地的部分：
+
+- `timeoutMs` 已进入 runtime
+- `attachSessionId` 已进入 runtime，支持显式复用已有 session
+- `terminal_session` 已可通过 `approvalMode: "require"` 进入 `awaiting_approval`
+- `awaiting_approval` 与 `invocation:approval_required` 已接进 core invocation 执行器
+
+### 4. 可观测性
+
+harness 拥有：
+
+- traces
+- spans
+- execution events
+- replay records
+
+目的不只是给 UI 打 log，而是让 capability 行为可检查、可测试、可回放。
+
+### 5. 验证
+
+harness 拥有：
+
+- fixture execution
+- golden assertion
+- fuzzy assertion
+- regression suite
+- capability-specific validator
+
+没有 validation 的 tool surface，不算稳定 capability。
+
+补充落地约束：
+
+- 每完成一个真实 capability 点，实现与对应自动化测试必须同一变更交付
+- 成功路径、失败路径、边界拒绝、dry-run 或只读预演路径都要覆盖
+- UI-only 页面骨架只有在项目 owner 明确批准时才可以暂时不补测试
+
+## 与 MCP / OpenAI Tooling 的关系
+
+harness 不应该替代 MCP 风格建模，而应该承载它。
+
+推荐关系：
+
+- `roots` 对应 MCP root boundary
+- capability definition 对应 tool definition
+- 可读内容面对应 resource
+- invocation lifecycle 对应 tracing / event system
+
+所以结论是：
+
+- 架构中心：harness
+- 外部契约：MCP / OpenAI-friendly
+
+## Runtime 模型
+
+建议的顶层结构：
+
+```ts
+type HarnessRuntime = {
+  roots: RootRegistry;
+  capabilities: CapabilityRegistry;
+  approvals: ApprovalPolicy;
+  invocations: InvocationRuntime;
+  tracing: TraceRuntime;
+  validation: ValidationRuntime;
+};
+```
+
+## Root 模型
+
+roots 是 harness 真正拥有的能力，不只是 read 的附属字段。
+
+建议结构：
+
+```ts
+type RootSpec = {
+  id: string;
+  uri: string;
+  name: string;
+  scopes: {
+    read: boolean;
+    write: boolean;
+    debug: boolean;
+  };
+  source: "user-selected" | "configured";
+};
+```
+
+要求：
+
+- 支持 multiple roots
+- 用户显式拥有与选择
+- id 稳定
+- per-scope permission
+- root list change events
+- 访问逃出声明 root set 时触发 approval escalation
+
+## Capability Registration 模型
+
+每个 capability 通过统一接口注册进 harness。
+
+建议结构：
+
+```ts
+type CapabilityRegistration = {
+  id: string;
+  domain: "read" | "edit" | "web_search" | "terminal" | "preview_action";
+  title: string;
+  inputSchema: Record<string, unknown>;
+  outputSchema?: Record<string, unknown>;
+  risk: {
+    sideEffect: "none" | "local-write" | "process" | "network";
+    requiresApproval: boolean;
+    rootBound?: boolean;
+    longRunning?: boolean;
+  };
+  approvalPolicy?: {
+    requireUserApprovalOutsideSandbox: boolean;
+  };
+  execute: (context: HarnessExecutionContext) => Promise<unknown>;
+  validators?: CapabilityValidator[];
+};
+```
+
+推荐默认值：
+
+```ts
+approvalPolicy: {
+  requireUserApprovalOutsideSandbox: true
+}
+```
+
+## Invocation 模型
+
+只有 harness 可以创建并追踪 invocation state。
+
+建议结构：
+
+```ts
+type HarnessInvocation = {
+  id: string;
+  capabilityId: string;
+  rootId?: string;
+  args: Record<string, unknown>;
+  status: "running" | "completed" | "failed" | "cancelled";
+  startedAt: string;
+  finishedAt?: string;
+  result?: unknown;
+  error?: { message: string };
+};
+```
+
+## Approval 持久化模型
+
+approval 不该只做 thread 级状态。
+
+thread 绑定有用，但不够。
+
+因为未来会同时出现：
+
+- 单次 invocation 批准
+- session 内重复读取批准
+- conversation / thread 级批准
+- root 范围批准
+- capability 范围批准
+
+建议维度：
+
+- `capabilityId`
+- `rootId`
+- `scope`
+- `threadId` 可选
+- `sessionId` 可选
+- `persistence`
+
+建议结构：
+
+```ts
+type HarnessApprovalGrant = {
+  id: string;
+  capabilityId: string;
+  rootId?: string;
+  scope: "read" | "write" | "debug";
+  threadId?: string;
+  sessionId?: string;
+  persistence: "once" | "session" | "thread" | "root";
+  grantedAt: string;
+  expiresAt?: string;
+};
+```
+
+### 推荐解释
+
+- `once`
+  - 只对一次 invocation 生效
+- `session`
+  - 对当前 harness runtime session 生效
+- `thread`
+  - 对当前 conversation / task thread 生效
+- `root`
+  - 对选中 root 与 capability scope 生效
+
+### 当前建议
+
+在 chat integration 前，先预留：
+
+- `once`
+- `session`
+- `thread`
+
+等 permission model 稳定后，再补 durable `root` approval。
+
+## Trace 模型
+
+harness 应该跨所有 capability domain 发 trace。
+
+建议结构：
+
+```ts
+type HarnessTrace = {
+  traceId: string;
+  invocationId: string;
+  capabilityId: string;
+  startedAt: string;
+  finishedAt?: string;
+  spans: HarnessSpan[];
+};
+
+type HarnessSpan = {
+  spanId: string;
+  parentSpanId?: string;
+  name: string;
+  kind:
+    | "permission_check"
+    | "root_resolution"
+    | "resource_detection"
+    | "adapter_execution"
+    | "fallback"
+    | "normalization"
+    | "validation";
+  startedAt: string;
+  finishedAt?: string;
+  metadata?: Record<string, unknown>;
+};
+```
+
+## 执行观察模型
+
+harness 始终应该维护一条统一 execution observation path。
+
+不一定意味着字面上的 OS thread，而是必须有一个 runtime-owned 监视者负责：
+
+- current invocation status
+- active strategy id
+- fallback transition
+- timeout / cancel state
+- approval wait state
+- final completion state
+
+建议结构：
+
+```ts
+type HarnessExecutionState = {
+  invocationId: string;
+  capabilityId: string;
+  strategyId?: string;
+  status:
+    | "queued"
+    | "running"
+    | "awaiting_approval"
+    | "falling_back"
+    | "completed"
+    | "failed"
+    | "cancelled";
+  updatedAt: string;
+  message?: string;
+};
+```
+
+UI、chat integration、validator 都应消费这条 harness-owned state，而不是各自拼一套状态判断。
+
+## Validation 模型
+
+validator 跑在 capability core logic 之外，但针对同一 contract。
+
+建议类型：
+
+```ts
+type CapabilityValidator =
+  | { kind: "schema" }
+  | { kind: "golden"; fixtureSet: string }
+  | { kind: "fuzzy"; rules: string[] };
+```
+
+验证至少应覆盖：
+
+- 精确 schema 检查
+- deterministic golden 输出
+- 对文本轻微波动更宽容的 semantic 检查
+
+## `Read` 作为第一能力
+
+`Read` 应该是“第一个注册进 harness 的 capability”，而不是“特殊运行时本身”。
+
+这意味着：
+
+- roots 来自 harness
+- invocation id 来自 harness
+- traces 来自 harness
+- validation 通过 harness 跑
+- adapter 只属于 read capability 内部
+
+`Read` 具体设计见：
+
+- `read-skill-design.md`
+
+## 与 UI 的关系
+
+tooling UI 不是 runtime owner。
+
+UI 负责：
+
+- 配 roots
+- 触发 invocation
+- 展示结果
+- 查看 trace
+
+UI 不负责：
+
+- 维护 permission 真相
+- 发明 capability 语义
+- 绕过 harness 生命周期
+
+推荐首版页面结构：
+
+- `Workbench`
+  - 手动 invocation console
+  - 按五大内置域分组
+- `Installed`
+  - 已连接 external server 与 projected tools
+- `Marketplace`
+  - 候选 external server 与 transport metadata
+
+## 分阶段计划
+
+### Phase 1
+
+- harness runtime skeleton
+- root registry
+- capability registry
+- invocation lifecycle
+- trace event model
+- `read` 作为第一能力注册
+
+### Phase 2
+
+- multiple roots
+- approval surface
+- validation runtime
+- replay records
+
+### Phase 3
+
+- 更多 capability registration
+- chat / RAG adapter integration
+- 更丰富的 trace inspection UI
+
+## 当前结论
+
+本项目后续如果继续做工具链，不应该让每个能力各长一套状态机。
+
+更稳的主线是：
+
+- harness 统一持有 roots、审批、trace、validation
+- capability 只负责自己的执行语义
+- chat、tools workbench、external MCP 都复用同一条 invocation 主链
+
+额外硬要求：
+
+- harness 必须是最终安全闸门
+- 任何越出 sandbox 或 authorized roots 的权限请求，都要显式用户批准

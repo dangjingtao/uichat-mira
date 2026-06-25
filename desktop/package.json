@@ -1,5 +1,5 @@
 {
-  "name": "@ui-chat-rag-tester/desktop",
+  "name": "@ui-chat-mira/desktop",
   "version": "0.7.1",
   "private": true,
   "description": "Frontend for UI chat RAG tester.",

@@ -1,0 +1,269 @@
+import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { message } from "@/shared/ui/Message";
+import {
+  executeMcpInvocationStream,
+  getMcpTools,
+  getMcpWorkspaceSelection,
+  selectMcpWorkspaceRoot,
+  type McpArtifact,
+  type McpInvocationEvent,
+  type McpToolDefinition,
+} from "@/shared/api/tools";
+import type { ToolDomainSummary, ToolWorkbenchDomain } from "../types";
+import {
+  buildToolDraft,
+  findPrimaryArtifact,
+  getTerminalResultSummary,
+  TOOL_DOMAIN_ORDER,
+} from "../utils";
+
+export function useToolsWorkbench() {
+  const { t } = useTranslation();
+  const [activeDomain, setActiveDomain] = useState<ToolWorkbenchDomain>("read");
+  const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
+  const [argsDraft, setArgsDraft] = useState("{}");
+  const [tools, setTools] = useState<McpToolDefinition[]>([]);
+  const [workspaceSelection, setWorkspaceSelection] = useState<Awaited<
+    ReturnType<typeof getMcpWorkspaceSelection>
+  > | null>(null);
+  const [workspaceRootInput, setWorkspaceRootInput] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(true);
+  const [isSelectingWorkspace, setIsSelectingWorkspace] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
+  const [events, setEvents] = useState<McpInvocationEvent[]>([]);
+  const [result, setResult] = useState<unknown>(null);
+  const [artifacts, setArtifacts] = useState<McpArtifact[]>([]);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [runStatus, setRunStatus] = useState<
+    "idle" | "completed" | "failed" | "cancelled" | "awaiting_approval"
+  >(
+    "idle",
+  );
+
+  useEffect(() => {
+    let disposed = false;
+
+    const load = async () => {
+      setIsLoading(true);
+      setIsWorkspaceLoading(true);
+      try {
+        const [toolList, workspace] = await Promise.all([
+          getMcpTools(),
+          getMcpWorkspaceSelection(),
+        ]);
+        if (disposed) {
+          return;
+        }
+
+        const sortedTools = [...toolList].sort((left, right) =>
+          left.title.localeCompare(right.title, undefined, { numeric: true }),
+        );
+        setTools(sortedTools);
+        setWorkspaceSelection(workspace);
+        setWorkspaceRootInput(workspace.rootPath ?? "");
+
+        const nextSelectedTool =
+          sortedTools.find((tool) => tool.id === "read_open") ??
+          sortedTools.find((tool) => tool.domain === "read") ??
+          sortedTools[0] ??
+          null;
+        if (nextSelectedTool) {
+          setSelectedToolId(nextSelectedTool.id);
+          setActiveDomain(nextSelectedTool.domain);
+          setArgsDraft(buildToolDraft(nextSelectedTool));
+        }
+      } catch (error) {
+        if (!disposed) {
+          message.error(
+            error instanceof Error ? error.message : t("settings.tools.messages.loadFailed"),
+          );
+        }
+      } finally {
+        if (!disposed) {
+          setIsLoading(false);
+          setIsWorkspaceLoading(false);
+        }
+      }
+    };
+
+    void load();
+
+    return () => {
+      disposed = true;
+    };
+  }, [t]);
+
+  const selectedTool = useMemo(
+    () => tools.find((tool) => tool.id === selectedToolId) ?? null,
+    [selectedToolId, tools],
+  );
+
+  const groupedTools = useMemo(
+    () =>
+      TOOL_DOMAIN_ORDER.map((domain) => ({
+        domain,
+        tools: tools.filter((tool) => tool.domain === domain),
+      })),
+    [tools],
+  );
+
+  const domainSummaries = useMemo<ToolDomainSummary[]>(
+    () =>
+      groupedTools.map(({ domain, tools: domainTools }) => ({
+        id: domain,
+        count: domainTools.length,
+        label: t(`settings.tools.domains.${domain}.label`),
+        description: t(`settings.tools.domains.${domain}.description`),
+      })),
+    [groupedTools, t],
+  );
+
+  const filteredTools = useMemo(
+    () => tools.filter((tool) => tool.domain === activeDomain),
+    [activeDomain, tools],
+  );
+
+  const primaryArtifact = useMemo(() => findPrimaryArtifact(artifacts), [artifacts]);
+
+  const resetRunState = () => {
+    setEvents([]);
+    setResult(null);
+    setArtifacts([]);
+    setRunError(null);
+    setRunStatus("idle");
+  };
+
+  const appendEvent = (event: McpInvocationEvent) => {
+    setEvents((current) => [...current, event]);
+
+    if (event.type === "invocation:artifact") {
+      setArtifacts((current) => [...current, event.artifact]);
+    }
+
+    if (event.type === "invocation:result") {
+      setResult(event.result);
+    }
+
+    if (event.type === "invocation:error") {
+      setRunError(event.message);
+      setRunStatus("failed");
+    }
+
+    if (event.type === "invocation:approval_required") {
+      setRunError(event.message);
+      setRunStatus("awaiting_approval");
+    }
+
+    if (event.type === "invocation:finish") {
+      setRunStatus(event.status);
+    }
+  };
+
+  const selectTool = (tool: McpToolDefinition) => {
+    setSelectedToolId(tool.id);
+    setActiveDomain(tool.domain);
+    setArgsDraft(buildToolDraft(tool));
+    resetRunState();
+  };
+
+  const terminalSummary = useMemo(() => getTerminalResultSummary(result), [result]);
+
+  const updateWorkspaceRoot = async () => {
+    const nextRootPath = workspaceRootInput.trim();
+    if (!nextRootPath) {
+      message.error(t("settings.tools.messages.workspaceRootRequired"));
+      return;
+    }
+
+    setIsSelectingWorkspace(true);
+    try {
+      const nextSelection = await selectMcpWorkspaceRoot(nextRootPath);
+      setWorkspaceSelection(nextSelection);
+      setWorkspaceRootInput(nextSelection.rootPath ?? "");
+      message.success(t("settings.tools.messages.workspaceUpdated"));
+    } catch (error) {
+      message.error(
+        error instanceof Error ? error.message : t("settings.tools.messages.workspaceUpdateFailed"),
+      );
+    } finally {
+      setIsSelectingWorkspace(false);
+    }
+  };
+
+  const runSelectedTool = async () => {
+    if (!selectedTool) {
+      message.error(t("settings.tools.messages.selectToolFirst"));
+      return;
+    }
+
+    let parsedArgs: Record<string, unknown> = {};
+    try {
+      parsedArgs = JSON.parse(argsDraft) as Record<string, unknown>;
+    } catch {
+      message.error(t("settings.tools.messages.invalidArgsJson"));
+      return;
+    }
+
+    resetRunState();
+    setIsRunning(true);
+    try {
+      await executeMcpInvocationStream(
+        {
+          toolId: selectedTool.id,
+          args: parsedArgs,
+        },
+        appendEvent,
+      );
+    } catch (error) {
+      message.error(
+        error instanceof Error ? error.message : t("settings.tools.messages.runFailed"),
+      );
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const selectDomain = (domain: ToolWorkbenchDomain) => {
+    setActiveDomain(domain);
+    const nextTool = tools.find((tool) => tool.domain === domain) ?? null;
+    if (nextTool) {
+      setSelectedToolId(nextTool.id);
+      setArgsDraft(buildToolDraft(nextTool));
+    } else {
+      setSelectedToolId(null);
+      setArgsDraft("{}");
+    }
+    resetRunState();
+  };
+
+  return {
+    activeDomain,
+    argsDraft,
+    artifacts,
+    domainSummaries,
+    events,
+    filteredTools,
+    groupedTools,
+    isLoading,
+    isRunning,
+    isSelectingWorkspace,
+    isWorkspaceLoading,
+    primaryArtifact,
+    result,
+    runError,
+    runStatus,
+    selectedTool,
+    terminalSummary,
+    tools,
+    workspaceRootInput,
+    workspaceSelection,
+    setArgsDraft,
+    setWorkspaceRootInput,
+    runSelectedTool,
+    selectDomain,
+    selectTool,
+    updateWorkspaceRoot,
+  };
+}

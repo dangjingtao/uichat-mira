@@ -1,5 +1,5 @@
 {
-  "name": "@ui-chat-rag-tester/server",
+  "name": "@ui-chat-mira/server",
   "version": "0.7.1",
   "private": true,
   "type": "module",

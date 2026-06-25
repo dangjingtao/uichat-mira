@@ -1,18 +1,18 @@
 {
-  "name": "ui-chat-rag-tester",
+  "name": "ui-chat-mira",
   "version": "0.7.1",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@9.12.0",
   "author": "Tomz Dang <dangjingtao@gmail.com>",
-  "description": "An initialization project for an Electron desktop application aimed at enterprise knowledge base verification, supporting dual-mode switching between local and remote models and vector databases.",
+  "description": "An intelligent agent cabin that starts with a chat and returns to your side.",
   "repository": {
     "type": "git",
     "url": "https://github.com/dangjingtao/ui-chat-rag-tester.git"
   },
   "homepage": "https://github.com/dangjingtao/ui-chat-rag-tester",
   "appMeta": {
-    "displayName": "uichat",
+    "displayName": "UIChat Mira",
     "links": [
       {
         "label": "作者",
@@ -68,8 +68,10 @@
     ]
   },
   "scripts": {
-    "dev:electron:win": "pnpm --filter @ui-chat-rag-tester/electron dev",
+    "dev:electron:win": "node scripts/generate-dev-coverage.js && pnpm --filter @ui-chat-mira/electron dev",
     "dev:tauri:win": "cross-env CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 pnpm tauri dev --config tauri/tauri.conf.json",
+    "docs:dev": "pnpm --filter @ui-chat-mira/docs-site dev",
+    "docs:build": "pnpm --filter @ui-chat-mira/docs-site build",
     "package:electron:win": "node scripts/build-dist.js",
     "package:tauri:win": "node scripts/build-tauri-dist.js",
     "clean:artifacts": "node scripts/cleanup-artifacts.js",
@@ -77,8 +79,8 @@
     "check": "pnpm -r typecheck",
     "check:tauri": "pnpm internal:prepare:tauri && cross-env CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 cargo check --manifest-path tauri/Cargo.toml -j 1",
     "version:sync": "node scripts/sync-version.js",
-    "internal:build:desktop": "pnpm --filter @ui-chat-rag-tester/desktop build",
-    "internal:build:server": "pnpm --filter @ui-chat-rag-tester/server build",
+    "internal:build:desktop": "pnpm --filter @ui-chat-mira/desktop build",
+    "internal:build:server": "pnpm --filter @ui-chat-mira/server build",
     "internal:prepare:desktop-artifacts": "node scripts/prepare-desktop-artifacts.js",
     "internal:prepare:tauri": "node scripts/prepare-tauri-assets.js",
     "internal:dev:tauri:services": "node scripts/tauri-dev-launcher.cjs"

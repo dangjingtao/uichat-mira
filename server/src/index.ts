@@ -19,15 +19,21 @@ import accountRoute from "@/routes/account";
 import knowledgeBaseRoute from "@/routes/knowledge-base/index.js";
 import modelConfigRoute from "@/routes/model-config";
 import providerSettingsRoute from "@/routes/provider-settings/index.js";
+import roleRoute from "@/routes/role/index.js";
 import threadRoute from "@/routes/thread/index.js";
 import chatRagRoute from "@/routes/chat-rag";
 import ragRuntimeRoute from "@/routes/rag-runtime/index.js";
 import evaluationRoute from "@/routes/evaluation/index.js";
-import toolsRoute from "@/routes/tools";
+import mcpRoutes from "@/mcp/routes.js";
+import {
+  initializeExternalMcpDatabase,
+  registerAllExternalMcpCapabilities,
+} from "@/mcp/external.js";
 import { getAuthUserFromRequest, initializeAuthDatabase } from "@/db/auth.db";
 import { initializeEvaluationDatabase } from "@/db/evaluation.db";
 import { initializeKnowledgeBaseDatabase } from "@/db/knowledge-base.db";
 import { initializeModelConfigDatabase } from "@/db/model-config.db";
+import { initializeRoleDatabase } from "@/db/role.db";
 import { initializeThreadDatabase } from "@/db/thread.db";
 import { initializeVectorStore } from "@/db";
 import CONFIG from "@/config";
@@ -37,9 +43,7 @@ import { evaluationService } from "@/services/evaluation.service.js";
 import { getAppMeta } from "@/utils/index.js";
 import { sendRouteError, unauthorized } from "@/utils/route-errors.js";
 import { MAX_UPLOAD_FILE_BYTES } from "@/constants/knowledge-base.js";
-import {
-  attachmentStorageRoot,
-} from "@/services/attachment-storage.service.js";
+import { attachmentStorageRoot } from "@/services/attachment-storage.service.js";
 
 const app = Fastify({
   bodyLimit: MAX_UPLOAD_FILE_BYTES,
@@ -49,6 +53,9 @@ const app = Fastify({
 const enableSwagger = process.env.NODE_ENV !== "production";
 const allowBackendReuse = process.env.UI_CHAT_ALLOW_BACKEND_REUSE === "1";
 const builtinAvatarRoot = path.resolve(process.cwd(), "static", "avatars");
+const clientCoverageRoot = path.resolve(process.cwd(), "client-coverage");
+const serverCoverageRoot = path.resolve(process.cwd(), "server-coverage");
+const docsSiteRoot = path.resolve(process.cwd(), "docs-site");
 
 app.setErrorHandler(sendRouteError);
 
@@ -74,7 +81,10 @@ const setupPlugins = async () => {
     prefix: "/attachments/",
     decorateReply: false,
     setHeaders(response) {
-      response.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+      response.setHeader(
+        "Cache-Control",
+        "private, max-age=31536000, immutable",
+      );
     },
   });
 
@@ -84,8 +94,75 @@ const setupPlugins = async () => {
       prefix: "/assets/avatars/",
       decorateReply: false,
       setHeaders(response) {
-        response.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        response.setHeader(
+          "Cache-Control",
+          "public, max-age=31536000, immutable",
+        );
       },
+    });
+  }
+
+  if (fsSync.existsSync(clientCoverageRoot)) {
+    await app.register(fastifyStatic, {
+      root: clientCoverageRoot,
+      prefix: "/client-coverage/",
+      decorateReply: false,
+      setHeaders(response) {
+        response.setHeader("Cache-Control", "private, no-cache");
+      },
+    });
+  }
+
+  if (fsSync.existsSync(serverCoverageRoot)) {
+    await app.register(fastifyStatic, {
+      root: serverCoverageRoot,
+      prefix: "/server-coverage/",
+      decorateReply: false,
+      setHeaders(response) {
+        response.setHeader("Cache-Control", "private, no-cache");
+      },
+    });
+  }
+
+  if (fsSync.existsSync(docsSiteRoot)) {
+    await app.register(fastifyStatic, {
+      root: docsSiteRoot,
+      prefix: "/docs/",
+      decorateReply: false,
+      wildcard: false,
+      index: ["index.html"],
+      setHeaders(response) {
+        response.setHeader("Cache-Control", "private, no-cache");
+      },
+    });
+
+    app.get("/docs", async (_request, reply) => {
+      return reply.sendFile("index.html");
+    });
+
+    app.get("/docs/*", async (request, reply) => {
+      const docsPath = (request.params as { "*": string })["*"] ?? "";
+      const normalizedPath = path
+        .normalize(docsPath)
+        .replace(/^(\.\.[/\\])+/, "");
+      const candidatePath = path.join(docsSiteRoot, normalizedPath);
+      const withinRoot =
+        candidatePath === docsSiteRoot ||
+        candidatePath.startsWith(`${docsSiteRoot}${path.sep}`);
+
+      if (!withinRoot) {
+        reply.code(403);
+        return reply.send("Forbidden");
+      }
+
+      const existingPath = fsSync.existsSync(candidatePath)
+        ? candidatePath
+        : null;
+      if (existingPath && fsSync.statSync(existingPath).isFile()) {
+        return reply.sendFile(normalizedPath);
+      }
+
+      return reply.sendFile("index.html");
     });
   }
 
@@ -114,9 +191,8 @@ const setupPlugins = async () => {
   await app.register(swagger, {
     openapi: {
       info: {
-        title: "UIChat Rag Tester Server API",
-        description:
-          "Backend APIs for UIChat Rag Tester desktop/server integration",
+        title: "UIChat Mira Server API",
+        description: "Backend APIs for UIChat Mira desktop/server integration",
         version: appMeta.version,
       },
       servers: [{ url: `http://127.0.0.1:${CONFIG.PORT}` }],
@@ -141,6 +217,7 @@ const setupPlugins = async () => {
           description: "服务商连接与模型同步",
         },
         ...OPENAPI_PUBLIC_TAGS,
+        { name: "Role", description: "角色原型与提示词素材管理" },
         { name: "Thread", description: "对话会话与消息管理" },
         { name: "Chat", description: "RAG 增强聊天与检索" },
         { name: "Evaluation", description: "评测工作台与评测任务" },
@@ -180,11 +257,12 @@ const setupRoutes = async () => {
   await app.register(knowledgeBaseRoute);
   await app.register(modelConfigRoute);
   await app.register(providerSettingsRoute);
+  await app.register(roleRoute);
   await app.register(threadRoute);
   await app.register(chatRagRoute);
   await app.register(ragRuntimeRoute);
   await app.register(evaluationRoute);
-  await app.register(toolsRoute);
+  await app.register(mcpRoutes);
 };
 
 const setupDatabase = async () => {
@@ -204,7 +282,10 @@ const setupDatabase = async () => {
   initializeEvaluationDatabase();
   initializeModelConfigDatabase();
   initializeKnowledgeBaseDatabase();
+  initializeRoleDatabase();
   initializeThreadDatabase();
+  initializeExternalMcpDatabase();
+  registerAllExternalMcpCapabilities();
   evaluationService.initializePersistence();
 
   const vectorStoreHealth = initializeVectorStore();
@@ -248,8 +329,8 @@ const startServer = async () => {
 const start = async () => {
   try {
     await setupPlugins();
-    await setupRoutes();
     await setupDatabase();
+    await setupRoutes();
     await startServer();
   } catch (error) {
     if (

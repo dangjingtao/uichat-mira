@@ -1,15 +1,15 @@
 {
-  "name": "ui-chat-rag-tester",
+  "name": "ui-chat-mira",
   "version": "0.7.1",
   "author": "Tomz Dang <dangjingtao@gmail.com>",
-  "description": "An initialization project for an Electron desktop application aimed at enterprise knowledge base verification, supporting dual-mode switching between local and remote models and vector databases.",
+  "description": "An intelligent agent cabin that starts with a chat and returns to your side.",
   "repository": {
     "type": "git",
     "url": "https://github.com/dangjingtao/ui-chat-rag-tester.git"
   },
   "homepage": "https://github.com/dangjingtao/ui-chat-rag-tester",
   "appMeta": {
-    "displayName": "uichat",
+    "displayName": "UIChat Mira",
     "changelog": [
       "新增共享确认弹窗 ConfirmDialog 与命令式 Modal API，支持多弹窗堆叠与二次确认",
       "知识库页面统一使用弹窗表单与二次确认，新增 KnowledgeBaseEditorForm 组件",
@@ -69,28 +69,28 @@
         {
           "version": "0.7.1",
           "commit": {
-            "hash": "fe84d308d21df3485bb504b95b2547113fcc9a06",
-            "shortHash": "fe84d30",
+            "hash": "0b92efa9858259b02bbc0d64e5ec5a2a25be0a53",
+            "shortHash": "0b92efa",
+            "message": "refactor: integrate assitant-ui to uchat",
+            "author": "Tomz",
+            "date": "2026-06-23T13:09:28+08:00"
+          }
+        },
+        {
+          "version": "0.60.0",
+          "commit": {
+            "hash": "5d51e9b4b69a5591ab8a1f13dac3975aa57bf7aa",
+            "shortHash": "5d51e9b",
             "message": "feat: add shared confirm modal",
             "author": "Tomz",
             "date": "2026-06-20T11:26:00+08:00"
           }
         },
         {
-          "version": "0.6.0",
-          "commit": {
-            "hash": "85b31561eb8fa379758a36936f4ff02b83257434",
-            "shortHash": "85b3156",
-            "message": "chore: release 0.60.0",
-            "author": "Tomz",
-            "date": "2026-06-19T22:12:52+08:00"
-          }
-        },
-        {
           "version": "0.5.2",
           "commit": {
-            "hash": "a8240cbae7d10c666cd2ee61b1c9efda382b1f6c",
-            "shortHash": "a8240cb",
+            "hash": "78fd413573d9b6f178e88154876e6da57ea5c697",
+            "shortHash": "78fd413",
             "message": "release 0.5.2",
             "author": "Tomz",
             "date": "2026-06-18T07:04:31+08:00"
@@ -99,8 +99,8 @@
         {
           "version": "0.5.1",
           "commit": {
-            "hash": "16f88176e181543a2e6a9fb4aea56b742f4c7248",
-            "shortHash": "16f8817",
+            "hash": "621c8f8b073017e4d123941fb9717f081ba5e5d1",
+            "shortHash": "621c8f8",
             "message": "chore: release 0.5.1 and trim packaged assets",
             "author": "Tomz",
             "date": "2026-06-17T13:32:51+08:00"
@@ -109,8 +109,8 @@
         {
           "version": "0.5.0",
           "commit": {
-            "hash": "8d822595de7bb5e7e33f05d4fcf61e8b0ae8a838",
-            "shortHash": "8d82259",
+            "hash": "5bc2f0eeb721abe6ae25c6291e88be93b1fc8d30",
+            "shortHash": "5bc2f0e",
             "message": "release: v0.5.0  i18n, evaluation workbench, rag runtime observer, theme system",
             "author": "Tomz",
             "date": "2026-06-17T13:06:14+08:00"
@@ -119,8 +119,8 @@
         {
           "version": "0.4.0",
           "commit": {
-            "hash": "b423564974b8997dfa18d83e8d24dda289e9c281",
-            "shortHash": "b423564",
+            "hash": "b8efbb9771393c6bcbdf691fc013e89769bd0a06",
+            "shortHash": "b8efbb9",
             "message": "refactor: code space",
             "author": "Tomz",
             "date": "2026-06-16T05:47:26+08:00"
@@ -129,8 +129,8 @@
         {
           "version": "0.1.1",
           "commit": {
-            "hash": "7738c39f7547619b17b1dcd1d38fc6becb07da2a",
-            "shortHash": "7738c39",
+            "hash": "68749451c8627db9b004e61776d28369653fe436",
+            "shortHash": "6874945",
             "message": "feat:add chat interface",
             "author": "Tomz",
             "date": "2026-06-12T10:13:32+08:00"
@@ -139,8 +139,8 @@
         {
           "version": "0.1.0",
           "commit": {
-            "hash": "8e35d8e61ee792978650d9766c9c67294aeca5a2",
-            "shortHash": "8e35d8e",
+            "hash": "f0cac757234822a72acdbce90f58e77938169df6",
+            "shortHash": "f0cac75",
             "message": "更新 .gitignore",
             "author": "Tomz",
             "date": "2026-06-10T14:29:09+08:00"

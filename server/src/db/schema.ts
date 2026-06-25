@@ -10,6 +10,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   MESSAGE_ROLE_VALUES,
   MODEL_TYPE_VALUES,
+  ROLE_STATUS_VALUES,
   THREAD_STATUS_VALUES,
   USER_ROLE_VALUES,
 } from "@/constants/domain.js";
@@ -403,6 +404,48 @@ export type KnowledgeBaseVectorIndex =
 export type NewKnowledgeBaseVectorIndex =
   typeof knowledgeBaseVectorIndexes.$inferInsert;
 
+export const roles = sqliteTable(
+  "roles",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    summary: text("summary").notNull().default(""),
+    avatarId: text("avatar_id"),
+    status: text("status", { enum: ROLE_STATUS_VALUES })
+      .notNull()
+      .default("draft"),
+    tagsJson: text("tags_json").notNull().default("[]"),
+    promptJson: text("prompt_json").notNull().default("{}"),
+    llmProfileJson: text("llm_profile_json").notNull().default("{}"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    userIdIdx: index("idx_roles_user_id").on(table.userId),
+    statusIdx: index("idx_roles_status").on(table.status),
+    updatedAtIdx: index("idx_roles_updated_at").on(table.updatedAt),
+  }),
+);
+
+export const rolesRelations = relations(roles, ({ one }) => ({
+  user: one(users, {
+    fields: [roles.userId],
+    references: [users.id],
+  }),
+}));
+
+export type Role = typeof roles.$inferSelect;
+export type NewRole = typeof roles.$inferInsert;
+
 export const threads = sqliteTable(
   "threads",
   {
@@ -496,5 +539,6 @@ export type KnowledgeBaseStatus = "active" | "archived";
 export type DocumentSourceType = "upload" | "sync" | "api";
 export type DocumentIndexStatus = "processing" | "ready" | "failed";
 export type VectorDistanceMetric = "cosine" | "l2" | "inner_product";
+export type RoleStatus = "active" | "draft";
 export type ThreadStatus = "active" | "archived" | "deleted";
 export type MessageRole = "user" | "assistant" | "system";
