@@ -14,12 +14,15 @@ export function compactJson(value: unknown) {
 }
 
 export type TerminalResultSummary = {
+  command?: string;
+  cwd?: string;
   sessionId?: string;
   exitCode?: number | null;
   timedOut?: boolean;
   reusedSession?: boolean;
   sessionMode?: "ephemeral" | "persistent";
   streamMode?: "split" | "merged";
+  stderrSeparated?: boolean;
   stdout?: string;
   stderr?: string;
 };
@@ -39,6 +42,8 @@ export function getTerminalResultSummary(value: unknown): TerminalResultSummary 
   }
 
   return {
+    command: typeof candidate.command === "string" ? candidate.command : undefined,
+    cwd: typeof candidate.cwd === "string" ? candidate.cwd : undefined,
     sessionId: typeof candidate.sessionId === "string" ? candidate.sessionId : undefined,
     exitCode: typeof candidate.exitCode === "number" || candidate.exitCode === null ? (candidate.exitCode as number | null) : undefined,
     timedOut: typeof candidate.timedOut === "boolean" ? candidate.timedOut : undefined,
@@ -52,6 +57,8 @@ export function getTerminalResultSummary(value: unknown): TerminalResultSummary 
       candidate.streamMode === "split" || candidate.streamMode === "merged"
         ? candidate.streamMode
         : undefined,
+    stderrSeparated:
+      typeof candidate.stderrSeparated === "boolean" ? candidate.stderrSeparated : undefined,
     stdout: typeof candidate.stdout === "string" ? candidate.stdout : undefined,
     stderr: typeof candidate.stderr === "string" ? candidate.stderr : undefined,
   };

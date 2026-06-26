@@ -51,6 +51,7 @@ export const terminalSessionTool: McpToolImplementation = {
       environment: context.environment,
       signal: context.signal,
       pushEvent: context.pushEvent,
+      trace: context.trace,
     });
 
     emitArtifacts(context, result.artifacts);

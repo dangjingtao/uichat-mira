@@ -2,7 +2,7 @@
 
 Status: In Progress
 Owner: runtime
-Last verified: 2026-06-25
+Last verified: 2026-06-26
 
 ## 目标
 
@@ -53,8 +53,8 @@ Phase 1 最低测试：
 - [x] timeout 策略进入 runtime
 - [x] cancel / abort 语义和事件模型补齐
 - [x] session reuse / attach 语义明确
-- [ ] stderr / stdout 更清晰分流
-- [ ] 前端执行观察面补齐
+- [x] stderr / stdout 更清晰分流
+- [x] 前端执行观察面补齐
 
 Phase 2 最低测试：
 
@@ -69,12 +69,34 @@ Phase 2 当前实现说明：
 - `attachSessionId` 已支持复用已有 terminal session
 - `approvalMode: "require"` + `approvalGranted` 已可触发 harness 级 `awaiting_approval`
 - 当前 approval 仍是显式调用占位，不是最终持久化审批系统
+- `child_process` 路径保留 `stdout / stderr` 分流
+- `pty` 路径明确暴露 `streamMode: "merged"` 与 `stderrSeparated: false`
+- workbench 已补充 terminal 执行观察面：
+  - `sessionId`
+  - `cwd`
+  - `streamMode`
+  - `stderrSeparated`
+  - approval / timeout / reused session 状态
 
 ## Phase 3
 
-- [ ] replay / trace span 暴露
+- [x] trace span 暴露
 - [ ] 与 debug scope、multiple workspace 结合
 - [ ] 更细的命令风险分层
+
+Phase 3 当前实现说明：
+
+- invocation runtime 已引入统一 trace recorder
+- `terminal_session` 已接入 terminal-specific spans：
+  - `strategy_selection`
+  - `session_acquire`
+  - `process_spawn`
+  - `command_execution`
+  - `artifact_emit`
+  - `result_normalization`
+- 已暴露查询路由：
+  - `GET /mcp/invocations/:id/trace`
+- 当前还没有做真正的 replay 执行，只先把 trace 记录链收口
 
 ## 非目标
 

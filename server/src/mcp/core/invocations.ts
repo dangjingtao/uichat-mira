@@ -10,6 +10,13 @@ import type {
 import { withEventMeta } from "./events.js";
 import { McpApprovalRequiredError, mcpBadRequest, mcpNotFound } from "./errors.js";
 import { getToolImplementation } from "./registry.js";
+import {
+  clearInvocationTraces,
+  createInvocationTrace,
+  finishInvocationTrace,
+  getInvocationTrace,
+  startTraceSpan,
+} from "./traces.js";
 
 const invocationMap = new Map<string, McpInvocationRecord>();
 const invocationEvents = new Map<string, McpStreamEvent[]>();
@@ -29,7 +36,10 @@ export const listInvocationEvents = (invocationId: string) =>
 export const clearInvocations = () => {
   invocationMap.clear();
   invocationEvents.clear();
+  clearInvocationTraces();
 };
+
+export const getInvocationTraceRecord = (invocationId: string) => getInvocationTrace(invocationId);
 
 export interface ExecuteInvocationInput {
   toolId: string;
@@ -58,6 +68,11 @@ export const executeInvocation = async (
   const startedAt = new Date().toISOString();
   const artifacts: McpArtifact[] = [];
   const signal = input.signal ?? new AbortController().signal;
+  const trace = createInvocationTrace({
+    invocationId,
+    toolId: input.toolId,
+    startedAt,
+  });
 
   const record: McpInvocationRecord = {
     id: invocationId,
@@ -65,6 +80,7 @@ export const executeInvocation = async (
     status: "running",
     args,
     artifacts,
+    traceId: trace.traceId,
     ...(input.threadId ? { threadId: input.threadId } : {}),
     ...(input.turnId ? { turnId: input.turnId } : {}),
     startedAt,
@@ -82,6 +98,15 @@ export const executeInvocation = async (
     toolId: input.toolId,
   });
 
+  const invocationSpan = startTraceSpan({
+    invocationId,
+    name: `Invoke ${input.toolId}`,
+    kind: "invocation",
+    metadata: {
+      toolId: input.toolId,
+    },
+  });
+
   try {
     const response = (await tool.execute({
       invocationId,
@@ -92,26 +117,62 @@ export const executeInvocation = async (
         void emit(event);
       },
       addArtifact: (artifact) => {
+        const artifactSpan = startTraceSpan({
+          invocationId,
+          parentSpanId: invocationSpan.spanId,
+          name: `Emit artifact ${artifact.kind}`,
+          kind: "artifact_emit",
+          metadata: {
+            kind: artifact.kind,
+            title: artifact.title,
+          },
+        });
         const next = createArtifact(artifact);
         artifacts.push(next);
         void emit({
           type: "invocation:artifact",
           artifact: next,
         });
+        artifactSpan.end({
+          metadata: {
+            artifactId: next.id,
+          },
+        });
         return next;
+      },
+      trace: {
+        startSpan: (spanInput) =>
+          startTraceSpan({
+            invocationId,
+            ...spanInput,
+          }),
       },
     })) as McpToolExecutionResult;
 
     if (response.result !== undefined) {
+      const resultSpan = startTraceSpan({
+        invocationId,
+        parentSpanId: invocationSpan.spanId,
+        name: "Normalize result",
+        kind: "result_normalization",
+      });
       record.result = response.result;
       await emit({
         type: "invocation:result",
         result: response.result,
       });
+      resultSpan.end();
     }
 
     record.status = signal.aborted ? "cancelled" : "completed";
     record.finishedAt = new Date().toISOString();
+    invocationSpan.end({
+      status: signal.aborted ? "cancelled" : "completed",
+      metadata: {
+        status: record.status,
+      },
+    });
+    finishInvocationTrace(invocationId);
 
     await emit({
       type: "invocation:finish",
@@ -129,6 +190,14 @@ export const executeInvocation = async (
         ...(error.scope ? { scope: error.scope } : {}),
       };
       record.finishedAt = new Date().toISOString();
+      invocationSpan.end({
+        status: "completed",
+        metadata: {
+          status: record.status,
+          approvalScope: error.scope,
+        },
+      });
+      finishInvocationTrace(invocationId);
 
       await emit({
         type: "invocation:approval_required",
@@ -146,6 +215,14 @@ export const executeInvocation = async (
     record.status = signal.aborted ? "cancelled" : "failed";
     record.error = { message };
     record.finishedAt = new Date().toISOString();
+    invocationSpan.end({
+      status: signal.aborted ? "cancelled" : "failed",
+      metadata: {
+        status: record.status,
+        message,
+      },
+    });
+    finishInvocationTrace(invocationId);
 
     await emit({
       type: "invocation:error",

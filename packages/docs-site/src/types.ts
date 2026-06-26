@@ -13,6 +13,9 @@ export interface GeneratedDocument {
     status: string | null;
     owner: string | null;
     lastVerified: string | null;
+    layer: string | null;
+    module: string | null;
+    docType: string | null;
   };
   excerpt: string;
   headings: GeneratedHeading[];
@@ -29,4 +32,19 @@ export interface GeneratedDocsIndex {
   generatedAt: string;
   documents: GeneratedDocument[];
   navigation: NavigationItem[];
+  stats?: {
+    total: number;
+    byLayer: {
+      rawSource: number;
+      wiki: number;
+      schema: number;
+    };
+    byDocType: {
+      currentContract: number;
+      reference: number;
+      overview: number;
+      design: number;
+      plan: number;
+    };
+  };
 }

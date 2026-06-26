@@ -122,7 +122,7 @@ const roleTranslations = {
     roleDescription: "角色描述",
     roleWorldview: "世界观",
     rolePersona: "人格核心",
-    personaScenario: "适用场景",
+    roleScenario: "适用场景",
     roleExamples: "示例对话",
     roleStyle: "表达风格",
     roleConstraints: "约束规则",

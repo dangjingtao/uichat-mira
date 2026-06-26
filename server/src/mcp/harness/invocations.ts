@@ -1,8 +1,13 @@
-import type { McpInvocationRecord, McpStreamEvent } from "../core/definitions.js";
+import type {
+  McpInvocationRecord,
+  McpInvocationTrace,
+  McpStreamEvent,
+} from "../core/definitions.js";
 import {
   clearInvocations,
   executeInvocation,
   getInvocation,
+  getInvocationTraceRecord,
   listInvocationEvents,
   type ExecuteInvocationInput,
 } from "../core/invocations.js";
@@ -22,5 +27,9 @@ export const getHarnessInvocation = (invocationId: string) =>
 export const listHarnessInvocationEvents = (
   invocationId: string,
 ): McpStreamEvent[] => listInvocationEvents(invocationId);
+
+export const getHarnessInvocationTrace = (
+  invocationId: string,
+): McpInvocationTrace | undefined => getInvocationTraceRecord(invocationId);
 
 export const clearHarnessInvocations = () => clearInvocations();

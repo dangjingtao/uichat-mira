@@ -7,6 +7,7 @@ import { initializeHarnessRuntime } from "./bootstrap.js";
 import {
   executeHarnessInvocation,
   getHarnessInvocation,
+  getHarnessInvocationTrace,
   listHarnessInvocationEvents,
 } from "./harness/invocations.js";
 import {
@@ -340,6 +341,26 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
         throw mcpNotFound(`Invocation not found: ${request.params.id}`);
       }
       return success(invocation);
+    }),
+  );
+
+  app.get<{ Params: { id: string } }>(
+    "/mcp/invocations/:id/trace",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Get one MCP invocation trace",
+        response: {
+          200: successEnvelope(objectSchema),
+        },
+      },
+    },
+    routeHandler("Failed to get MCP invocation trace", async (request) => {
+      const trace = getHarnessInvocationTrace(request.params.id);
+      if (!trace) {
+        throw mcpNotFound(`Invocation trace not found: ${request.params.id}`);
+      }
+      return success(trace);
     }),
   );
 

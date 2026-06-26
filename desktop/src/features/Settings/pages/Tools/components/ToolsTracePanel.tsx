@@ -10,6 +10,12 @@ type ToolsTracePanelProps = {
   emptyPlaceholder: string;
   panelTitle: string;
   runError: string | null;
+  runStatus: "idle" | "completed" | "failed" | "cancelled" | "awaiting_approval";
+  terminalSummary?: {
+    sessionId?: string;
+    streamMode?: "split" | "merged";
+    stderrSeparated?: boolean;
+  } | null;
 };
 
 export default function ToolsTracePanel({
@@ -19,6 +25,8 @@ export default function ToolsTracePanel({
   emptyPlaceholder,
   panelTitle,
   runError,
+  runStatus,
+  terminalSummary,
 }: ToolsTracePanelProps) {
   const eventLines = events.map((event) => {
     if (event.type === "invocation:start") {
@@ -63,7 +71,17 @@ export default function ToolsTracePanel({
           <span>{artifacts.length} artifacts</span>
         </div>
       }
-      meta={activeToolId ?? "tool stream"}
+      meta={
+        [
+          activeToolId ?? "tool stream",
+          runStatus,
+          terminalSummary?.sessionId ? `session=${terminalSummary.sessionId}` : null,
+          terminalSummary?.streamMode ? `stream=${terminalSummary.streamMode}` : null,
+          terminalSummary?.stderrSeparated === false ? "stderr=merged" : null,
+        ]
+          .filter(Boolean)
+          .join("  ")
+      }
       className="h-full min-h-0 rounded-ui-control"
     >
       {runError ? (

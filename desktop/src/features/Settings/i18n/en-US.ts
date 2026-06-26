@@ -119,6 +119,11 @@ const settingsPending = {
         terminalTimeout: "Timed Out",
         terminalReused: "Reused Session",
         terminalExit: "Exit {{exitCode}}",
+        terminalStreamMerged: "merged",
+        terminalStreamSplit: "split",
+        terminalPtyMerged: "PTY merged",
+        terminalSession: "Session {{sessionId}}",
+        terminalCwd: "CWD {{cwd}}",
       },
       messages: {
         loadFailed: "Failed to load the tools workbench",

@@ -218,6 +218,8 @@ harness 拥有完整执行生命周期。
 - `attachSessionId` 已进入 runtime，支持显式复用已有 session
 - `terminal_session` 已可通过 `approvalMode: "require"` 进入 `awaiting_approval`
 - `awaiting_approval` 与 `invocation:approval_required` 已接进 core invocation 执行器
+- invocation trace recorder 已落地
+- `terminal_session` 已作为第一批 capability 接入 trace spans
 
 ### 4. 可观测性
 
@@ -229,6 +231,18 @@ harness 拥有：
 - replay records
 
 目的不只是给 UI 打 log，而是让 capability 行为可检查、可测试、可回放。
+
+当前已落地的最小实现：
+
+- per-invocation trace record
+- span list buffering
+- `GET /mcp/invocations/:id/trace`
+
+当前还没有落地：
+
+- replay 执行
+- 跨 invocation trace 检索
+- span UI 结构化展示
 
 ### 5. 验证
 

@@ -70,15 +70,24 @@ const parseMetadata = (content) => {
     status: null,
     owner: null,
     lastVerified: null,
+    layer: null,
+    module: null,
+    docType: null,
   };
 
-  for (const line of lines.slice(0, 12)) {
+  for (const line of lines.slice(0, 16)) {
     if (line.startsWith("Status:")) {
       metadata.status = line.slice("Status:".length).trim();
     } else if (line.startsWith("Owner:")) {
       metadata.owner = line.slice("Owner:".length).trim();
     } else if (line.startsWith("Last verified:")) {
       metadata.lastVerified = line.slice("Last verified:".length).trim();
+    } else if (line.startsWith("Layer:")) {
+      metadata.layer = line.slice("Layer:".length).trim();
+    } else if (line.startsWith("Module:")) {
+      metadata.module = line.slice("Module:".length).trim();
+    } else if (line.startsWith("Doc Type:")) {
+      metadata.docType = line.slice("Doc Type:".length).trim();
     }
   }
 
@@ -96,7 +105,10 @@ const findExcerpt = (content) => {
     .map((line) => line.trim())
     .filter(Boolean)
     .filter((line) => !line.startsWith("#"))
-    .filter((line) => !/^Status:|^Owner:|^Last verified:/.test(line))
+    .filter(
+      (line) =>
+        !/^Status:|^Owner:|^Last verified:|^Layer:|^Module:|^Doc Type:/.test(line),
+    )
     .filter((line) => !line.startsWith("- "))
     .filter((line) => !line.startsWith("|"));
 
@@ -127,6 +139,9 @@ const sortByTitle = (items) =>
   [...items].sort((left, right) => left.title.localeCompare(right.title, "zh-CN"));
 
 const toNavChildren = (items) => sortByTitle(items).map((doc) => ({ title: doc.title, path: doc.id }));
+
+const countBy = (documents, field, value) =>
+  documents.filter((doc) => doc.metadata?.[field] === value).length;
 
 const normalizeWikiLinks = (content, knownPaths) =>
   content.replace(/\[\[([^\]]+)\]\]/g, (_match, rawTarget) => {
@@ -225,6 +240,21 @@ export const writeDocsIndex = () => {
         generatedAt: new Date().toISOString(),
         documents,
         navigation,
+        stats: {
+          total: documents.length,
+          byLayer: {
+            rawSource: countBy(documents, "layer", "raw-source"),
+            wiki: countBy(documents, "layer", "wiki"),
+            schema: countBy(documents, "layer", "schema"),
+          },
+          byDocType: {
+            currentContract: countBy(documents, "docType", "current-contract"),
+            reference: countBy(documents, "docType", "reference"),
+            overview: countBy(documents, "docType", "overview"),
+            design: countBy(documents, "docType", "design"),
+            plan: countBy(documents, "docType", "plan"),
+          },
+        },
       },
       null,
       2,

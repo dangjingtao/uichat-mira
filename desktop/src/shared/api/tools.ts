@@ -115,6 +115,39 @@ export type McpInvocationEvent =
       at: string;
     };
 
+export type McpTraceSpanKind =
+  | "invocation"
+  | "permission_check"
+  | "strategy_selection"
+  | "session_acquire"
+  | "process_spawn"
+  | "command_execution"
+  | "stream_observation"
+  | "artifact_emit"
+  | "result_normalization";
+
+export type McpTraceSpan = {
+  id: string;
+  traceId: string;
+  invocationId: string;
+  parentSpanId?: string;
+  name: string;
+  kind: McpTraceSpanKind;
+  status: "running" | "completed" | "failed" | "cancelled";
+  startedAt: string;
+  finishedAt?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type McpInvocationTrace = {
+  traceId: string;
+  invocationId: string;
+  toolId: string;
+  startedAt: string;
+  finishedAt?: string;
+  spans: McpTraceSpan[];
+};
+
 export type McpWorkspaceSelection = {
   rootPath: string | null;
   source: "selected" | "configured" | "unset";
@@ -236,6 +269,10 @@ export function selectMcpWorkspaceRoot(rootPath: string) {
 
 export function getMcpTools() {
   return get<McpToolDefinition[]>("/mcp/tools");
+}
+
+export function getMcpInvocationTrace(invocationId: string) {
+  return get<McpInvocationTrace>(`/mcp/invocations/${invocationId}/trace`);
 }
 
 const decodeSseEvents = (buffer: string) => {

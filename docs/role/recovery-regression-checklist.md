@@ -2,7 +2,7 @@
 
 Status: Active  
 Owner: role / chat / rag / runtime  
-Last verified: 2026-06-25
+Last verified: 2026-06-26
 
 ## 用途
 
@@ -74,8 +74,23 @@ Last verified: 2026-06-25
 
 - [x] 后端类型检查通过
 - [x] 前端类型检查通过
+- [x] Role CRUD 路由已重新回归
 - [x] 角色设置页入口已从 mock 版恢复为真实 CRUD 容器
+- [x] 默认聊天 request-only `Role + Summary` 注入已重新回归
+- [x] RAG `requestContextMessages -> generate` 已重新回归
 - [x] `docs/role/role-api.md` 已补回
+
+说明：
+
+以上 G 项已在 2026-06-26 重新执行。
+
+本轮本地复测方式：
+
+- `desktop` `tsc --noEmit`
+- `server` `tsc --noEmit`
+- Fastify 注入脚本回归 `Role CRUD`
+- Fastify 注入脚本回归默认聊天 `Role + Summary + llmProfile`
+- Fastify 注入脚本回归 RAG `requestContextMessages`
 
 ## 回归顺序建议
 

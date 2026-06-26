@@ -26,6 +26,11 @@ type ToolsPackagePanelProps = {
     terminalTimeout: string;
     terminalReused: string;
     terminalExit: (exitCode: string) => string;
+    terminalStreamMerged: string;
+    terminalStreamSplit: string;
+    terminalPtyMerged: string;
+    terminalSession: (sessionId: string) => string;
+    terminalCwd: (cwd: string) => string;
   };
 };
 
@@ -85,8 +90,25 @@ export default function ToolsPackagePanel({
 
             {selectedTool?.id === "terminal_session" && terminalSummary ? (
               <div className="flex flex-wrap items-center gap-2 text-[11px] text-text-secondary">
-                <Badge variant="muted">{terminalSummary.streamMode ?? "unknown stream"}</Badge>
+                <Badge variant="muted">
+                  {terminalSummary.streamMode === "merged"
+                    ? labels.terminalStreamMerged
+                    : labels.terminalStreamSplit}
+                </Badge>
                 <Badge variant="muted">{terminalSummary.sessionMode ?? "unknown mode"}</Badge>
+                <Badge variant={terminalSummary.stderrSeparated === false ? "warning" : "muted"}>
+                  {terminalSummary.stderrSeparated === false
+                    ? labels.terminalPtyMerged
+                    : labels.terminalStreamSplit}
+                </Badge>
+                {terminalSummary.sessionId ? (
+                  <Badge variant="muted">
+                    {labels.terminalSession(terminalSummary.sessionId)}
+                  </Badge>
+                ) : null}
+                {terminalSummary.cwd ? (
+                  <Badge variant="muted">{labels.terminalCwd(terminalSummary.cwd)}</Badge>
+                ) : null}
                 {terminalSummary.exitCode !== undefined ? (
                   <Badge variant="muted">
                     {labels.terminalExit(String(terminalSummary.exitCode))}

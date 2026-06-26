@@ -17,6 +17,17 @@ export type McpInvocationStatus =
   | "failed"
   | "cancelled";
 
+export type McpTraceSpanKind =
+  | "invocation"
+  | "permission_check"
+  | "strategy_selection"
+  | "session_acquire"
+  | "process_spawn"
+  | "command_execution"
+  | "stream_observation"
+  | "artifact_emit"
+  | "result_normalization";
+
 export type McpArtifactKind =
   | "text"
   | "markdown"
@@ -143,6 +154,7 @@ export interface McpInvocationRecord {
   toolId: string;
   status: McpInvocationStatus;
   args: Record<string, unknown>;
+  traceId?: string;
   result?: unknown;
   error?: {
     message: string;
@@ -157,6 +169,28 @@ export interface McpInvocationRecord {
   turnId?: string;
   startedAt?: string;
   finishedAt?: string;
+}
+
+export interface McpTraceSpan {
+  id: string;
+  traceId: string;
+  invocationId: string;
+  parentSpanId?: string;
+  name: string;
+  kind: McpTraceSpanKind;
+  status: "running" | "completed" | "failed" | "cancelled";
+  startedAt: string;
+  finishedAt?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface McpInvocationTrace {
+  traceId: string;
+  invocationId: string;
+  toolId: string;
+  startedAt: string;
+  finishedAt?: string;
+  spans: McpTraceSpan[];
 }
 
 export type McpStreamEvent =
@@ -252,6 +286,20 @@ export interface McpInvocationContext {
   args: Record<string, unknown>;
   pushEvent: (event: McpStreamEventInput) => void;
   addArtifact: (artifact: Omit<McpArtifact, "id">) => McpArtifact;
+  trace: {
+    startSpan: (input: {
+      name: string;
+      kind: McpTraceSpanKind;
+      parentSpanId?: string;
+      metadata?: Record<string, unknown>;
+    }) => {
+      spanId: string;
+      end: (input?: {
+        status?: "completed" | "failed" | "cancelled";
+        metadata?: Record<string, unknown>;
+      }) => void;
+    };
+  };
   signal: AbortSignal;
   environment?: McpExecutionEnvironment;
 }

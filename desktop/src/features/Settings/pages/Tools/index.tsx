@@ -63,6 +63,8 @@ export default function ToolsSettings() {
                 emptyPlaceholder={t("settings.tools.workbench.consolePlaceholder")}
                 panelTitle={t("settings.tools.workbench.console")}
                 runError={workbench.runError}
+                runStatus={workbench.runStatus}
+                terminalSummary={workbench.terminalSummary}
               />
             }
             onSelectTool={workbench.selectTool}
@@ -79,6 +81,12 @@ export default function ToolsSettings() {
               terminalReused: t("settings.tools.package.terminalReused"),
               terminalExit: (exitCode) =>
                 t("settings.tools.package.terminalExit", { exitCode }),
+              terminalStreamMerged: t("settings.tools.package.terminalStreamMerged"),
+              terminalStreamSplit: t("settings.tools.package.terminalStreamSplit"),
+              terminalPtyMerged: t("settings.tools.package.terminalPtyMerged"),
+              terminalSession: (sessionId) =>
+                t("settings.tools.package.terminalSession", { sessionId }),
+              terminalCwd: (cwd) => t("settings.tools.package.terminalCwd", { cwd }),
             }}
           />
         </div>

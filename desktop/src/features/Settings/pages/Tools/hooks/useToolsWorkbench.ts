@@ -3,11 +3,13 @@ import { useTranslation } from "react-i18next";
 import { message } from "@/shared/ui/Message";
 import {
   executeMcpInvocationStream,
+  getMcpInvocationTrace,
   getMcpTools,
   getMcpWorkspaceSelection,
   selectMcpWorkspaceRoot,
   type McpArtifact,
   type McpInvocationEvent,
+  type McpInvocationTrace,
   type McpToolDefinition,
 } from "@/shared/api/tools";
 import type { ToolDomainSummary, ToolWorkbenchDomain } from "../types";
@@ -33,6 +35,7 @@ export function useToolsWorkbench() {
   const [isSelectingWorkspace, setIsSelectingWorkspace] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [events, setEvents] = useState<McpInvocationEvent[]>([]);
+  const [trace, setTrace] = useState<McpInvocationTrace | null>(null);
   const [result, setResult] = useState<unknown>(null);
   const [artifacts, setArtifacts] = useState<McpArtifact[]>([]);
   const [runError, setRunError] = useState<string | null>(null);
@@ -129,6 +132,7 @@ export function useToolsWorkbench() {
 
   const resetRunState = () => {
     setEvents([]);
+    setTrace(null);
     setResult(null);
     setArtifacts([]);
     setRunError(null);
@@ -209,13 +213,24 @@ export function useToolsWorkbench() {
     resetRunState();
     setIsRunning(true);
     try {
+      let invocationId = "";
       await executeMcpInvocationStream(
         {
           toolId: selectedTool.id,
           args: parsedArgs,
         },
-        appendEvent,
+        async (event) => {
+          if (!invocationId && event.type === "invocation:start") {
+            invocationId = event.invocationId;
+          }
+          appendEvent(event);
+        },
       );
+
+      if (invocationId) {
+        const nextTrace = await getMcpInvocationTrace(invocationId);
+        setTrace(nextTrace);
+      }
     } catch (error) {
       message.error(
         error instanceof Error ? error.message : t("settings.tools.messages.runFailed"),
@@ -256,6 +271,7 @@ export function useToolsWorkbench() {
     runStatus,
     selectedTool,
     terminalSummary,
+    trace,
     tools,
     workspaceRootInput,
     workspaceSelection,

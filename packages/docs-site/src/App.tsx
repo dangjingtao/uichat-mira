@@ -24,6 +24,9 @@ const counts = {
     ["architecture", "platform", "role"].includes(doc.section),
   ).length,
   promptRules: data.documents.filter((doc) => doc.section === "prompt-manager-rules").length,
+  rawSource: data.stats?.byLayer.rawSource ?? 0,
+  wiki: data.stats?.byLayer.wiki ?? 0,
+  schema: data.stats?.byLayer.schema ?? 0,
 };
 
 const withBase = (value: string) => {
@@ -47,6 +50,30 @@ const findDocument = (docId: string) =>
   data.documents.find(
     (document) => document.id.toLowerCase() === docId.toLowerCase(),
   ) ?? null;
+
+const labelMap: Record<string, string> = {
+  "raw-source": "Raw Source",
+  wiki: "Wiki",
+  schema: "Schema",
+  "current-contract": "Current Contract",
+  reference: "Reference",
+  overview: "Overview",
+  design: "Design",
+  plan: "Plan",
+  checklist: "Checklist",
+  draft: "Draft",
+  "implementation-notes": "Implementation Notes",
+  historical: "Historical",
+  "how-to": "How-To",
+};
+
+const formatMetaValue = (value: string | null) => {
+  if (!value) {
+    return null;
+  }
+
+  return labelMap[value] ?? value;
+};
 
 const SearchIndex = () => {
   const location = useLocation();
@@ -76,6 +103,15 @@ const SearchIndex = () => {
         <div className="search-results">
           {results.map((document) => (
             <article key={document.id} className="search-card">
+              <div className="meta-row">
+                {document.metadata.layer ? (
+                  <span>{formatMetaValue(document.metadata.layer)}</span>
+                ) : null}
+                {document.metadata.module ? <span>{document.metadata.module}</span> : null}
+                {document.metadata.docType ? (
+                  <span>{formatMetaValue(document.metadata.docType)}</span>
+                ) : null}
+              </div>
               <Link to={`/doc/${document.id}`} className="search-title">
                 {document.title}
               </Link>
@@ -129,6 +165,15 @@ const DocumentPage = () => {
         <article className="markdown-body">
           <div className="doc-meta">
             <span className="doc-path">{document.path}</span>
+          </div>
+          <div className="meta-row">
+            {document.metadata.layer ? <span>{formatMetaValue(document.metadata.layer)}</span> : null}
+            {document.metadata.module ? <span>{document.metadata.module}</span> : null}
+            {document.metadata.docType ? (
+              <span>{formatMetaValue(document.metadata.docType)}</span>
+            ) : null}
+            {document.metadata.status ? <span>{document.metadata.status}</span> : null}
+            {document.metadata.owner ? <span>{document.metadata.owner}</span> : null}
           </div>
           <div dangerouslySetInnerHTML={{ __html: withHeadingIds }} />
         </article>
@@ -333,6 +378,27 @@ const HomePage = () => (
             ]}
           />
           <HomeSectionList
+            title="按层阅读"
+            description="这套文档不是只按目录看，而是按 Raw sources / Wiki / Schema 三层来理解。"
+            items={[
+              {
+                title: "Schema 层",
+                path: "WIKI_SYSTEM_SCHEMA",
+                description: "定义三层结构、元数据和 LLM 维护纪律。",
+              },
+              {
+                title: "Wiki 层",
+                path: "VAULT_HOME",
+                description: "从入口页、概念页和区域图进入整理后的知识层。",
+              },
+              {
+                title: "Raw sources 层",
+                path: "architecture/README",
+                description: "查看当前运行时、平台和业务模块的原始事实页。",
+              },
+            ]}
+          />
+          <HomeSectionList
             title="专题入口"
             description="根目录专题页更像一册文档的正文篇章，适合按主题连续读。"
             items={[
@@ -384,6 +450,9 @@ const HomePage = () => (
           <section className="catalog-note">
             <h2>当前收录</h2>
             <ul>
+              <li>Raw sources {counts.rawSource} 篇</li>
+              <li>Wiki {counts.wiki} 篇</li>
+              <li>Schema {counts.schema} 篇</li>
               <li>专题文档 {counts.root} 篇</li>
               <li>区域导航 {counts.maps} 篇</li>
               <li>概念页 {counts.concepts} 篇</li>
@@ -427,11 +496,9 @@ export const App = () => {
       <aside className="sidebar">
         <div className="brand-row">
           <Link to="/" className="brand">
-            <img
-              src="http://127.0.0.1:5173/src/assets/branding/uichat-logo-icon.png"
-              alt="UIChat Logo"
-              className="brand-logo"
-            />
+            <span className="brand-logo brand-logo-fallback" aria-hidden="true">
+              UM
+            </span>
             <div className="brand-text">
               <span>UIChat Mira</span>
               <span className="brand-slogan">从聊天开始</span>

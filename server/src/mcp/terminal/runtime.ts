@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import type {
   McpArtifact,
   McpExecutionEnvironment,
+  McpInvocationContext,
   McpStreamEventInput,
 } from "../core/definitions.js";
 import { createArtifact } from "../core/artifacts.js";
@@ -11,6 +12,7 @@ import {
   createTerminalSession,
   getTerminalSession,
   removeTerminalSession,
+  type TerminalSessionRecord,
   writeTerminalSession,
 } from "../terminal-sessions.js";
 
@@ -20,6 +22,7 @@ type TerminalExecutionContext = {
   environment?: McpExecutionEnvironment;
   signal: AbortSignal;
   pushEvent?: (event: McpStreamEventInput) => void;
+  trace?: McpInvocationContext["trace"];
 };
 
 type TerminalExecutionResult = {
@@ -35,6 +38,7 @@ type TerminalExecutionResult = {
     reusedSession: boolean;
     sessionMode: "ephemeral" | "persistent";
     streamMode: "split" | "merged";
+    stderrSeparated: boolean;
   };
   artifacts: McpArtifact[];
 };
@@ -311,20 +315,12 @@ const buildWrappedCommand = (shell: string, command: string, marker: string) => 
   return `{ ${command}; code=$?; printf '\\n${marker}:%s\\n' "$code"; }`;
 };
 
-const runPersistentCommand = async (input: {
-  invocationId: string;
+const acquirePersistentSession = (input: {
   command: string;
   cwd?: string;
   env?: Record<string, string>;
-  timeoutMs: number;
   attachSessionId?: string;
-  signal: AbortSignal;
-  pushEvent?: (event: McpStreamEventInput) => void;
 }) => {
-  if (input.signal.aborted) {
-    throw new Error("Terminal session aborted");
-  }
-
   const session = input.attachSessionId
     ? getTerminalSession(input.attachSessionId)
     : createTerminalSession({
@@ -337,10 +333,28 @@ const runPersistentCommand = async (input: {
     throw mcpBadRequest(`terminal session not found: ${input.attachSessionId}`);
   }
 
-  const reusedSession = Boolean(input.attachSessionId);
+  return {
+    session,
+    reusedSession: Boolean(input.attachSessionId),
+  };
+};
+
+const runPersistentCommand = async (input: {
+  invocationId: string;
+  command: string;
+  session: TerminalSessionRecord;
+  reusedSession: boolean;
+  timeoutMs: number;
+  signal: AbortSignal;
+  pushEvent?: (event: McpStreamEventInput) => void;
+}) => {
+  if (input.signal.aborted) {
+    throw new Error("Terminal session aborted");
+  }
+
   const marker = buildTerminalCompletionMarker(input.invocationId);
   const markerPattern = new RegExp(`${escapeRegex(marker)}:(-?\\d+)`);
-  const wrappedCommand = buildWrappedCommand(session.shell, input.command, marker);
+  const wrappedCommand = buildWrappedCommand(input.session.shell, input.command, marker);
 
   let rawBuffer = "";
   let streamedOffset = 0;
@@ -366,7 +380,7 @@ const runPersistentCommand = async (input: {
     }
   };
 
-  const dataDisposable = session.process.onData((chunk) => {
+  const dataDisposable = input.session.process.onData((chunk) => {
     rawBuffer += chunk;
     flushVisibleOutput();
 
@@ -377,7 +391,7 @@ const runPersistentCommand = async (input: {
     }
   });
 
-  const exitDisposable = session.process.onExit(({ exitCode: nextExitCode }) => {
+  const exitDisposable = input.session.process.onExit(({ exitCode: nextExitCode }) => {
     if (done) {
       return;
     }
@@ -387,7 +401,7 @@ const runPersistentCommand = async (input: {
     done = true;
   });
 
-  writeTerminalSession(session.id, wrappedCommand);
+  writeTerminalSession(input.session.id, wrappedCommand);
 
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -413,8 +427,8 @@ const runPersistentCommand = async (input: {
     if (input.signal.aborted) {
       clearInterval(interval);
       clearTimeout(timer);
-      if (!reusedSession) {
-        removeTerminalSession(session.id);
+      if (!input.reusedSession) {
+        removeTerminalSession(input.session.id);
       }
       reject(new Error("Terminal session aborted"));
       return;
@@ -425,8 +439,8 @@ const runPersistentCommand = async (input: {
       () => {
         clearInterval(interval);
         clearTimeout(timer);
-        if (!reusedSession) {
-          removeTerminalSession(session.id);
+        if (!input.reusedSession) {
+          removeTerminalSession(input.session.id);
         }
         reject(new Error("Terminal session aborted"));
       },
@@ -440,14 +454,15 @@ const runPersistentCommand = async (input: {
   const stdout = rawBuffer.replace(markerPattern, "").trimEnd();
 
   return {
-    sessionId: session.id,
-    cwd: session.cwd,
+    sessionId: input.session.id,
+    cwd: input.session.cwd,
     exitCode,
     timedOut,
-    reusedSession,
+    reusedSession: input.reusedSession,
     stdout,
     stderr: "",
     output: stdout,
+    stderrSeparated: false,
   };
 };
 
@@ -487,8 +502,19 @@ export const executeTerminalSessionRuntime = async ({
   environment,
   signal,
   pushEvent,
+  trace,
 }: TerminalExecutionContext): Promise<TerminalExecutionResult> => {
   const harnessEnvironment = assertTerminalEnvironment(environment);
+  const planningSpan = trace?.startSpan({
+    name: "Resolve terminal execution plan",
+    kind: "strategy_selection",
+    metadata: {
+      requestedSessionMode:
+        args.sessionMode === "persistent" ? "persistent" : "ephemeral",
+      attachSessionId:
+        typeof args.attachSessionId === "string" ? args.attachSessionId : undefined,
+    },
+  });
   const command = normalizeCommand(args.command);
   const env = normalizeEnv(args.env);
   const timeoutMs = normalizeTimeoutMs(args.timeoutMs);
@@ -510,34 +536,75 @@ export const executeTerminalSessionRuntime = async ({
     type: "invocation:progress",
     message: `Terminal plan: ${capability.id}`,
   });
+  planningSpan?.end({
+    metadata: {
+      capabilityId: capability.id,
+      provider: capability.provider,
+      sessionMode,
+      timeoutMs,
+    },
+  });
 
   if (sessionMode === "persistent") {
+    const acquireSpan = trace?.startSpan({
+      name: attachSessionId ? "Attach persistent session" : "Create persistent session",
+      kind: "session_acquire",
+      metadata: {
+        attachSessionId,
+      },
+    });
+    const { session, reusedSession } = acquirePersistentSession({
+      command,
+      cwd: typeof args.cwd === "string" ? args.cwd : undefined,
+      env,
+      attachSessionId,
+    });
+    acquireSpan?.end({
+      metadata: {
+        sessionId: session.id,
+        reusedSession,
+        cwd: session.cwd,
+      },
+    });
+
     pushEvent?.({
       type: "invocation:progress",
       message: "PTY stream merges stdout and stderr",
     });
+    pushEvent?.({
+      type: "invocation:progress",
+      message: reusedSession
+        ? `Attached terminal session ${session.id}`
+        : `Started terminal session ${session.id}`,
+    });
 
+    const commandSpan = trace?.startSpan({
+      name: "Run persistent terminal command",
+      kind: "command_execution",
+      metadata: {
+        sessionId: session.id,
+        reusedSession,
+        streamMode: "merged",
+      },
+    });
     const result = await runPersistentCommand({
       invocationId,
       command,
-      cwd: typeof args.cwd === "string" ? args.cwd : undefined,
-      env,
+      session,
+      reusedSession,
       timeoutMs,
-      attachSessionId,
       signal,
       pushEvent,
     });
-
-    pushEvent?.({
-      type: "invocation:progress",
-      message: result.reusedSession
-        ? `Attached terminal session ${result.sessionId}`
-        : `Started terminal session ${result.sessionId}`,
+    commandSpan?.end({
+      status: signal.aborted ? "cancelled" : "completed",
+      metadata: {
+        sessionId: result.sessionId,
+        exitCode: result.exitCode,
+        timedOut: result.timedOut,
+        stderrSeparated: false,
+      },
     });
-
-    if (!result.reusedSession && !signal.aborted) {
-      removeTerminalSession(result.sessionId);
-    }
 
     if (result.exitCode !== null) {
       pushEvent?.({
@@ -559,6 +626,7 @@ export const executeTerminalSessionRuntime = async ({
         reusedSession: result.reusedSession,
         sessionMode: "persistent",
         streamMode: "merged",
+        stderrSeparated: false,
       },
       artifacts: [
         createArtifact({
@@ -573,14 +641,22 @@ export const executeTerminalSessionRuntime = async ({
             reusedSession: result.reusedSession,
             sessionMode: "persistent",
             streamMode: "merged",
+            stderrSeparated: false,
             strategyId: capability.id,
             provider: capability.provider,
           },
         }),
       ],
-    };
+      };
   }
 
+  const spawnSpan = trace?.startSpan({
+    name: "Spawn ephemeral shell command",
+    kind: "process_spawn",
+    metadata: {
+      streamMode: "split",
+    },
+  });
   const result = await runEphemeralCommand({
     command,
     cwd: typeof args.cwd === "string" ? args.cwd : undefined,
@@ -588,6 +664,15 @@ export const executeTerminalSessionRuntime = async ({
     timeoutMs,
     signal,
     pushEvent,
+  });
+  spawnSpan?.end({
+    status: signal.aborted ? "cancelled" : "completed",
+    metadata: {
+      exitCode: result.exitCode,
+      timedOut: result.timedOut,
+      stderrSeparated: true,
+      cwd: result.cwd,
+    },
   });
 
   if (result.exitCode !== null) {
@@ -610,6 +695,7 @@ export const executeTerminalSessionRuntime = async ({
       reusedSession: false,
       sessionMode: "ephemeral",
       streamMode: "split",
+      stderrSeparated: true,
     },
     artifacts: [
       createArtifact({
@@ -624,6 +710,7 @@ export const executeTerminalSessionRuntime = async ({
           reusedSession: false,
           sessionMode: "ephemeral",
           streamMode: "split",
+          stderrSeparated: true,
           strategyId: capability.id,
           provider: capability.provider,
         },

@@ -112,6 +112,11 @@ const settingsPending = {
         terminalTimeout: "超时",
         terminalReused: "复用会话",
         terminalExit: "退出码 {{exitCode}}",
+        terminalStreamMerged: "merged",
+        terminalStreamSplit: "split",
+        terminalPtyMerged: "PTY 合流",
+        terminalSession: "会话 {{sessionId}}",
+        terminalCwd: "目录 {{cwd}}",
       },
       messages: {
         loadFailed: "加载工具工作台失败",

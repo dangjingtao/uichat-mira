@@ -39,7 +39,7 @@ const CONFIG = {
     runtimeConfig.backend.host,
   DATABASE_DIR: process.env.UI_CHAT_DATABASE_DIR ?? "data",
   DATABASE_NAME: "uichat-rag-test.db",
-  SWAGGER_PREFIX: "/docs",
+  SWAGGER_PREFIX: "/api-docs",
   LOG_DIR: process.env.UI_CHAT_LOG_DIR ?? "logs",
   TOOLS_DIR: process.env.UI_CHAT_TOOLS_DIR ?? "tools",
   EXTEND_TOOLS_DIR: process.env.UI_CHAT_EXTEND_TOOLS_DIR ?? "extendTools",
