@@ -27,8 +27,7 @@ Doc Type: current-contract
 - `role/`
 - `uchat.md`
 - `uchat-internal-maintenance.md`
-- `knowledge-base-api.md`
-- `knowledge-base-backend-schema.md`
+- `knowledge-base/`
 - `architecture/provider-proxy-api.md`
 - `architecture/provider-api-standards.md`
 - `maps/`
@@ -37,6 +36,10 @@ Doc Type: current-contract
 如果 AI 任务和文档体系本身有关，再额外纳入：
 
 - `knowledge-system/DOCUMENTATION_STANDARDS.md`
+- `knowledge-system/WIKI_SYSTEM_SCHEMA.md`
+- `knowledge-system/DIRECTORY_AND_CLASSIFICATION_RULES.md`
+- `knowledge-system/INDEX_SCHEMA.md`
+- `knowledge-system/OPERATING_MODEL.md`
 - `knowledge-system/VISUALIZATION_AND_AI_ACCESS.md`
 
 ## 默认排除集合
@@ -79,6 +82,17 @@ Doc Type: current-contract
 
 - 默认纳入集合
 - 再按需加 `archive/`、`defect-log.md`、`CHANGELOG.md`
+
+## 默认读取顺序
+
+一般建议先读：
+
+1. `README.md`
+2. `WIKI_SYSTEM_SCHEMA.md`
+3. `DOCUMENTATION_STANDARDS.md`
+4. `DIRECTORY_AND_CLASSIFICATION_RULES.md`
+5. `AI_READING_SCOPE.md`
+6. 具体 area 文档
 
 ## Related Docs
 

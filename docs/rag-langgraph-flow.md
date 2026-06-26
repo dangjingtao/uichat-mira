@@ -1,11 +1,11 @@
-# RAG LangGraph 调用流程
-
 Status: Current
 Owner: runtime
 Last verified: 2026-06-26
 Layer: raw-source
 Module: runtime
 Doc Type: reference
+
+# RAG LangGraph 调用流程
 
 ## 目的
 

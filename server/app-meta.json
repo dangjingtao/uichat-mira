@@ -69,11 +69,11 @@
         {
           "version": "0.7.1",
           "commit": {
-            "hash": "a9ed8d5bd7e64d391c88a63c25cbc0c899488d2f",
-            "shortHash": "a9ed8d5",
-            "message": "fix: wire tools trace state into settings panel",
+            "hash": "0f443b3cd164a5dd38bebd030e0965c6fc97b639",
+            "shortHash": "0f443b3",
+            "message": "chore: checkpoint docs site and settings updates",
             "author": "Tomz",
-            "date": "2026-06-26T09:20:24+08:00"
+            "date": "2026-06-26T12:19:11+08:00"
           }
         },
         {

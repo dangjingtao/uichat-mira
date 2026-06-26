@@ -12,13 +12,14 @@ import { login as apiLogin } from "@/shared/api";
 import { ApiError } from "@/shared/lib/request";
 import { Button } from "@/shared/ui/Button";
 import { TextInput } from "@/shared/ui/Input";
+import { appPackageMeta } from "@/shared/appMeta";
 
 const QUOTE_POOL_STORAGE_KEY = "uichat-login-quote-pool";
 
 const fallbackMeta: AppMetaData = {
-  name: "uichat",
+  name: appPackageMeta.name,
   version: "0.0.0",
-  displayName: "uichat",
+  displayName: appPackageMeta.displayName,
   author: "",
   description: "",
   repositoryUrl: "",
@@ -273,7 +274,7 @@ function LoginPage() {
                   </div>
                   <div className="flex items-baseline gap-2">
                     <span className="pt-0.5 text-[15px] font-medium tracking-[-0.02em] text-text-primary">
-                      {(appMeta.displayName || "uichat").toLowerCase()}
+                      {(appMeta.displayName || appPackageMeta.displayName).toLowerCase()}
                     </span>
                     <span className="text-[11px] text-text-tertiary">
                       v{appMeta.version}

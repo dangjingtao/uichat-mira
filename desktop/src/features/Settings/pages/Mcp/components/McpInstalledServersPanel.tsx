@@ -1,4 +1,4 @@
-import { Loader2, PlugZap, Radar, Trash2 } from "lucide-react";
+import { Loader2, PlugZap, Radar, Settings2, Trash2 } from "lucide-react";
 import Badge from "@/shared/ui/Badge";
 import { Button } from "@/shared/ui/Button";
 import type { ExternalMcpServerRecord } from "@/shared/api/tools";
@@ -10,6 +10,7 @@ type McpInstalledServersPanelProps = {
     title: string;
     emptyTitle: string;
     emptyDescription: string;
+    configure: string;
     connect: string;
     discover: string;
     remove: string;
@@ -19,8 +20,14 @@ type McpInstalledServersPanelProps = {
     failed: string;
     protocol: string;
     endpoint: string;
+    remote: string;
+    capabilities: string;
+    tools: string;
+    resources: string;
+    prompts: string;
     projectedId: string;
   };
+  onConfigure: (server: ExternalMcpServerRecord) => void;
   onConnect: (serverId: string) => void;
   onDiscover: (serverId: string) => void;
   onDelete: (server: ExternalMcpServerRecord) => void;
@@ -44,6 +51,7 @@ export default function McpInstalledServersPanel({
   servers,
   pendingServerId,
   labels,
+  onConfigure,
   onConnect,
   onDiscover,
   onDelete,
@@ -97,9 +105,44 @@ export default function McpInstalledServersPanel({
                       </div>
                     ) : null}
 
+                    {server.remoteServerInfo ? (
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-text-tertiary">
+                        <span>{labels.remote}:</span>
+                        {server.remoteServerInfo.title || server.remoteServerInfo.name ? (
+                          <span>
+                            {server.remoteServerInfo.title ?? server.remoteServerInfo.name}
+                            {server.remoteServerInfo.name &&
+                            server.remoteServerInfo.title &&
+                            server.remoteServerInfo.name !== server.remoteServerInfo.title
+                              ? ` (${server.remoteServerInfo.name})`
+                              : ""}
+                          </span>
+                        ) : null}
+                        {server.remoteServerInfo.version ? <span>v{server.remoteServerInfo.version}</span> : null}
+                      </div>
+                    ) : null}
+
                     <div className="mt-3 text-xs text-text-tertiary">
-                      {labels.endpoint}: {server.transport.url}
+                      {labels.endpoint}:{" "}
+                      {server.transport.kind === "streamable-http"
+                        ? server.transport.url
+                        : `${server.transport.command}${
+                            server.transport.args?.length
+                              ? ` ${server.transport.args.join(" ")}`
+                              : ""
+                          }`}
                     </div>
+
+                    {server.remoteCapabilities ? (
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-text-tertiary">
+                        <span>{labels.capabilities}:</span>
+                        {server.remoteCapabilities.hasTools ? <Badge variant="muted">{labels.tools}</Badge> : null}
+                        {server.remoteCapabilities.hasResources ? (
+                          <Badge variant="muted">{labels.resources}</Badge>
+                        ) : null}
+                        {server.remoteCapabilities.hasPrompts ? <Badge variant="muted">{labels.prompts}</Badge> : null}
+                      </div>
+                    ) : null}
 
                     {server.lastError ? (
                       <div className="mt-3 rounded-ui-control border border-danger/20 bg-danger/5 px-3 py-2 text-xs text-danger">
@@ -127,6 +170,15 @@ export default function McpInstalledServersPanel({
                   </div>
 
                   <div className="flex shrink-0 flex-col gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isPending}
+                      onClick={() => onConfigure(server)}
+                    >
+                      <Settings2 className="h-4 w-4" />
+                      {labels.configure}
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"

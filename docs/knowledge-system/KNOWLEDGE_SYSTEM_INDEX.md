@@ -61,3 +61,17 @@ Doc Type: overview
 
 - `DOCUMENTATION_STANDARDS.md`
 - `WIKI_SYSTEM_SCHEMA.md`
+
+## 统一阅读口径
+
+这组文档不只是目录索引，也是这套知识系统的总入口。
+
+后续如果你要继续推进文档系统，通常优先顺序是：
+
+1. `WIKI_SYSTEM_SCHEMA.md`
+2. `DOCUMENTATION_STANDARDS.md`
+3. `DIRECTORY_AND_CLASSIFICATION_RULES.md`
+4. `INDEX_SCHEMA.md`
+5. `AI_READING_SCOPE.md`
+6. `FULL_MCP_AND_INDEX_ARCHITECTURE.md`
+7. `VISUALIZATION_AND_AI_ACCESS.md`

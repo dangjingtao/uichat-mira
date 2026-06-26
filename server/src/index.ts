@@ -35,6 +35,7 @@ import { initializeKnowledgeBaseDatabase } from "@/db/knowledge-base.db";
 import { initializeModelConfigDatabase } from "@/db/model-config.db";
 import { initializeRoleDatabase } from "@/db/role.db";
 import { initializeThreadDatabase } from "@/db/thread.db";
+import { webSearchSettingsRepository } from "@/db/repositories/web-search-settings.repository.js";
 import { initializeVectorStore } from "@/db";
 import CONFIG from "@/config";
 import { isAuthExemptPath, OPENAPI_PUBLIC_TAGS } from "@/config/public-api.js";
@@ -50,7 +51,6 @@ const app = Fastify({
   logger: getLoggerConfig(),
   serializerOpts: { encoding: "utf8" },
 });
-const enableSwagger = process.env.NODE_ENV !== "production";
 const allowBackendReuse = process.env.UI_CHAT_ALLOW_BACKEND_REUSE === "1";
 const builtinAvatarRoot = path.resolve(process.cwd(), "static", "avatars");
 const clientCoverageRoot = path.resolve(process.cwd(), "client-coverage");
@@ -184,10 +184,6 @@ const setupPlugins = async () => {
     request.authUser = user;
   });
 
-  if (!enableSwagger) {
-    return;
-  }
-
   await app.register(swagger, {
     openapi: {
       info: {
@@ -284,6 +280,7 @@ const setupDatabase = async () => {
   initializeKnowledgeBaseDatabase();
   initializeRoleDatabase();
   initializeThreadDatabase();
+  webSearchSettingsRepository.initialize();
   initializeExternalMcpDatabase();
   registerAllExternalMcpCapabilities();
   evaluationService.initializePersistence();
@@ -319,11 +316,9 @@ const isExistingBackendHealthy = async (port: number): Promise<boolean> => {
 const startServer = async () => {
   await app.listen({ host: CONFIG.HOST, port: CONFIG.PORT });
   app.log.info(`Server running on http://${CONFIG.HOST}:${CONFIG.PORT}`);
-  if (enableSwagger) {
-    app.log.info(
-      `API docs available at http://127.0.0.1:${CONFIG.PORT}${CONFIG.SWAGGER_PREFIX}`,
-    );
-  }
+  app.log.info(
+    `API docs available at http://127.0.0.1:${CONFIG.PORT}${CONFIG.SWAGGER_PREFIX}`,
+  );
 };
 
 const start = async () => {

@@ -7,6 +7,7 @@ import welcomeAstronautHeroArchiveGreen from "@/assets/branding/welcome-astronau
 import welcomeAstronautHeroKnowledgeBlue from "@/assets/branding/welcome-astronaut-hero-knowledge-blue.png";
 import welcomeAstronautHeroSlateOcean from "@/assets/branding/welcome-astronaut-hero-slate-ocean.png";
 import welcomeAstronautHero from "@/assets/branding/welcome-astronaut-hero.png";
+import { appPackageMeta } from "@/shared/appMeta";
 import type { ThemePresetId } from "@/shared/theme/colorThemes";
 import WelcomePanel from "@/shared/ui/WelcomePanel";
 
@@ -71,7 +72,7 @@ export function UChatWelcomeEmptyState({
       badge={
         <div className="inline-flex w-fit items-center gap-2 rounded-full border border-border/70 bg-surface-secondary/88 px-3 py-1 text-xs font-medium text-text-secondary">
           <Sparkles className="h-3.5 w-3.5" />
-          <span>RAG Chat Tester</span>
+          <span>{appPackageMeta.displayName}</span>
         </div>
       }
       title={

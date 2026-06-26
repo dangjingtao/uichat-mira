@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import DevelopmentDatabasePage from "./index";
+import DevelopmentDatabasePage from "../pages/Database/index";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({

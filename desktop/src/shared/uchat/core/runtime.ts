@@ -600,6 +600,35 @@ export class ChatRuntime {
             return;
           }
 
+          if (event.type === "message:tool") {
+            const current = this.getMessage(thread.id, assistantMessageId);
+            if (!current) {
+              return;
+            }
+
+            const tools = Array.isArray(current.metadata?.tools)
+              ? (current.metadata?.tools as unknown[])
+              : [];
+            this.store.getState().patchMessage(thread.id, assistantMessageId, {
+              metadata: mergeMetadata(current.metadata, {
+                tools: [
+                  ...tools,
+                  {
+                    toolCallId: event.toolCallId,
+                    toolName: event.toolName,
+                    status: event.status,
+                    ...(event.input ? { input: event.input } : {}),
+                    ...(Object.prototype.hasOwnProperty.call(event, "output")
+                      ? { output: event.output }
+                      : {}),
+                    ...(event.errorMessage ? { errorMessage: event.errorMessage } : {}),
+                  },
+                ],
+              }),
+            });
+            return;
+          }
+
           if (event.type === "message:error") {
             streamErrorMessage = event.errorMessage;
             this.store.getState().patchMessage(thread.id, assistantMessageId, {

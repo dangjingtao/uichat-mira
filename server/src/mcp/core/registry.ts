@@ -12,6 +12,10 @@ export const registerTool = (tool: McpToolImplementation) => {
   toolMap.set(tool.definition.id, tool);
 };
 
+export const unregisterTool = (toolId: string) => {
+  toolMap.delete(toolId);
+};
+
 export const registerResource = (resource: McpResourceImplementation) => {
   resourceMap.set(resource.definition.id, resource);
 };

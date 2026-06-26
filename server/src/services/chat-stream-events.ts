@@ -7,6 +7,21 @@ export interface AssistantStreamUsage {
   outputTokens: number;
 }
 
+export type AssistantToolEventStatus =
+  | "requested"
+  | "running"
+  | "succeeded"
+  | "failed";
+
+export interface AssistantToolEvent {
+  callId?: string;
+  toolName: string;
+  status: AssistantToolEventStatus;
+  input?: Record<string, unknown>;
+  output?: unknown;
+  errorMessage?: string;
+}
+
 const DEFAULT_TEXT_ID = "text-1";
 
 export const defaultAssistantStreamUsage: AssistantStreamUsage = {
@@ -49,6 +64,12 @@ export const assistantErrorChunk = (errorText: string): string =>
   toAssistantSseChunk({
     type: "error",
     errorText,
+  });
+
+export const assistantToolEventChunk = (event: AssistantToolEvent): string =>
+  toAssistantSseChunk({
+    type: "data-tool-event",
+    data: event,
   });
 
 export const assistantFinishStepChunk = (): string =>

@@ -22,6 +22,7 @@ Doc Type: design
 - 当前 markdown 语料已经支持文件树浏览。
 - 基于链接的可视化，现在就能在 Obsidian 或 Logseq 里做。
 - 真正的结构化图谱可视化，需要额外的图投影层。
+- 图谱层应该消费已分类的文档索引，而不是直接从原始 markdown 胡乱抽边。
 
 ## 可视化层次
 
@@ -104,6 +105,16 @@ Doc Type: design
 - 想快速跳读，用 note graph。
 - 想收敛概念，用 concept map。
 - 只有当关系分析确实重要时，才上 knowledge graph。
+
+## 与 AI 接入的关系
+
+图谱层和 MCP 层都属于派生阅读面。
+
+它们的共同前提是：
+
+- markdown 先完成分层和归类
+- 文档有明确的 module / doc type / status
+- 概念页尽量有 canonical 入口
 
 ## 推荐搭配
 

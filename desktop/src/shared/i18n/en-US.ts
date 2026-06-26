@@ -32,7 +32,7 @@ const enUS = {
       persona: "Role",
       roles: "Roles",
       personas: "Roles",
-      evaluationCenter: "Config Center",
+      evaluationCenter: "Knowledge Evaluation Center",
       development: "Development",
       developmentLogs: "Logs",
       mcp: "MCP",

@@ -13,13 +13,58 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "harness-runtime-design.md",
-                "mode": "source",
+                "file": "knowledge-base-api.md",
+                "mode": "preview",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "harness-runtime-design"
-            }
+              "title": "knowledge-base-api"
+            },
+            "group": "4386a6aec7c4cf7c"
+          }
+        ]
+      },
+      {
+        "id": "cdb5b2e4b39028ac",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "f9328e2bd68dbca2",
+            "type": "leaf",
+            "state": {
+              "type": "localgraph",
+              "state": {
+                "file": "knowledge-base-api.md",
+                "options": {
+                  "collapse-filter": true,
+                  "search": "",
+                  "localJumps": 1,
+                  "localBacklinks": true,
+                  "localForelinks": true,
+                  "localInterlinks": false,
+                  "showTags": false,
+                  "showAttachments": false,
+                  "hideUnresolved": false,
+                  "collapse-color-groups": true,
+                  "colorGroups": [],
+                  "collapse-display": true,
+                  "showArrow": false,
+                  "textFadeMultiplier": 0,
+                  "nodeSizeMultiplier": 1,
+                  "lineSizeMultiplier": 1,
+                  "collapse-forces": true,
+                  "centerStrength": 0.518713248970312,
+                  "repelStrength": 10,
+                  "linkStrength": 1,
+                  "linkDistance": 250,
+                  "scale": 0.9999999999999992,
+                  "close": false
+                }
+              },
+              "icon": "lucide-git-fork",
+              "title": "knowledge-base-api 的关系图"
+            },
+            "group": "4386a6aec7c4cf7c"
           }
         ]
       }
@@ -94,6 +139,7 @@
             "state": {
               "type": "backlink",
               "state": {
+                "file": "knowledge-base-api.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -103,7 +149,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "反向链接"
+              "title": "knowledge-base-api 的反向链接列表"
             }
           },
           {
@@ -166,8 +212,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300,
-    "collapsed": true
+    "width": 300
   },
   "left-ribbon": {
     "hiddenItems": {
@@ -182,6 +227,24 @@
   },
   "active": "6cccbef077f5d5f1",
   "lastOpenFiles": [
+    "concepts/CONCEPT_KNOWLEDGE_BASE.md",
+    "uchat.md",
+    "concepts/CONCEPT_RUNTIME.md",
+    "maps/AREA_MAP_CHAT.md",
+    "concepts/CONCEPT_MCP.md",
+    "architecture/README.md",
+    "maps/AREA_MAP_RUNTIME.md",
+    "architecture/external-mcp-marketplace.md",
+    "chat-tool-integration-checklist.md",
+    "harness-runtime-design.md",
+    "版本管理.md",
+    "未命名.base",
+    "未命名.canvas",
+    "platform/tauri-setup.md",
+    "maps/AREA_MAP_PLATFORM.md",
+    "assets/avatar-pack-16/original/01_formal_reviewer.png",
+    "architecture/model-config-api.md",
+    "API-Response-Spec.md",
     "前端-axios封装说明.md",
     "chat-system-practices.md",
     "role/page.md",

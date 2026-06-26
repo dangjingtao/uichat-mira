@@ -1,12 +1,11 @@
 # 前端国际化约定
 
-Layer: raw-source
-Module: runtime
-Doc Type: current-contract
-
 Status: Current
 Owner: frontend
 Last verified: 2026-06-25
+Layer: raw-source
+Module: runtime
+Doc Type: current-contract
 
 ## 单点真相范围
 

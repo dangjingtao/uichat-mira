@@ -12,10 +12,14 @@ import {
   listToolDefinitions,
   registerResource,
   registerTool,
+  unregisterTool,
 } from "../core/registry.js";
 
 export const registerCapability = (capability: McpToolImplementation) =>
   registerTool(capability);
+
+export const unregisterCapability = (capabilityId: string) =>
+  unregisterTool(capabilityId);
 
 export const registerReadableResource = (resource: McpResourceImplementation) =>
   registerResource(resource);

@@ -281,6 +281,21 @@ const toRunEvent = (payload: Record<string, unknown>): ChatRunEvent | null => {
     };
   }
 
+  if (payload.type === "data-tool-event" && payload.data && typeof payload.data === "object") {
+    const data = payload.data as Record<string, unknown>;
+    if (typeof data.toolName === "string" && typeof data.status === "string") {
+      return {
+        type: "message:tool",
+        ...(typeof data.callId === "string" ? { toolCallId: data.callId } : {}),
+        toolName: data.toolName,
+        status: data.status as "requested" | "running" | "succeeded" | "failed",
+        ...(data.input && typeof data.input === "object" ? { input: data.input as Record<string, unknown> } : {}),
+        ...(Object.prototype.hasOwnProperty.call(data, "output") ? { output: data.output } : {}),
+        ...(typeof data.errorMessage === "string" ? { errorMessage: data.errorMessage } : {}),
+      };
+    }
+  }
+
   if (payload.type === "error" && typeof payload.errorText === "string") {
     return {
       type: "run:error",

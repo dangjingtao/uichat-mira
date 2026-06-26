@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { PackageCheck, RefreshCw, Store } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import Alert from "@/shared/ui/Alert";
@@ -13,11 +13,18 @@ import {
   createExternalMcpServer,
   deleteExternalMcpServer,
   discoverExternalMcpServer,
+  getExternalMcpServerConfig,
+  getExternalMcpServerConfigSchema,
   getExternalMcpServers,
   getMcpMarketplaceServers,
+  updateExternalMcpServerConfig,
+  type ExternalMcpConfigSchemaResolution,
+  type ExternalMcpServerConfigRecord,
   type ExternalMcpServerRecord,
   type McpMarketplaceServer,
 } from "@/shared/api/tools";
+import McpConfigModalContent from "./components/McpConfigModalContent";
+import McpGuideDrawer from "./components/McpGuideDrawer";
 import McpMarketplacePanel from "./components/McpMarketplacePanel";
 import McpInstalledServersPanel from "./components/McpInstalledServersPanel";
 
@@ -29,19 +36,38 @@ export default function McpSettings() {
   const [marketplaceServers, setMarketplaceServers] = useState<McpMarketplaceServer[]>([]);
   const [installedServers, setInstalledServers] = useState<ExternalMcpServerRecord[]>([]);
   const [marketplaceQuery, setMarketplaceQuery] = useState("");
+  const [committedMarketplaceQuery, setCommittedMarketplaceQuery] = useState("");
   const [installedQuery, setInstalledQuery] = useState("");
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [isMarketplaceLoading, setIsMarketplaceLoading] = useState(false);
+  const [isMarketplaceSearching, setIsMarketplaceSearching] = useState(false);
   const [marketplaceError, setMarketplaceError] = useState<string | null>(null);
   const [isInstalledLoading, setIsInstalledLoading] = useState(false);
   const [installedError, setInstalledError] = useState<string | null>(null);
   const [pendingServerId, setPendingServerId] = useState<string | null>(null);
-  const hasBootstrappedMarketplaceQuery = useRef(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const marketplaceRequestControllerRef = useRef<AbortController | null>(null);
+  const marketplaceRequestSerialRef = useRef(0);
 
   const loadServers = useCallback(
-    async (options?: { append?: boolean; cursor?: string | null; query?: string }) => {
-      setIsMarketplaceLoading(true);
+    async (options?: {
+      append?: boolean;
+      cursor?: string | null;
+      query?: string;
+      silent?: boolean;
+    }) => {
+      const isSearchRequest = Boolean((options?.query ?? "").trim()) && !options?.append;
+      const requestId = ++marketplaceRequestSerialRef.current;
+
+      marketplaceRequestControllerRef.current?.abort();
+      const controller = new AbortController();
+      marketplaceRequestControllerRef.current = controller;
+
+      if (!options?.silent) {
+        setIsMarketplaceLoading(true);
+      }
+      setIsMarketplaceSearching(isSearchRequest);
       setMarketplaceError(null);
 
       try {
@@ -49,7 +75,12 @@ export default function McpSettings() {
           limit: 24,
           cursor: options?.cursor ?? undefined,
           query: options?.query ?? "",
+          signal: controller.signal,
         });
+
+        if (requestId !== marketplaceRequestSerialRef.current) {
+          return;
+        }
 
         setMarketplaceServers((current) =>
           options?.append ? [...current, ...result.servers] : result.servers,
@@ -57,13 +88,24 @@ export default function McpSettings() {
         setNextCursor(result.metadata.nextCursor);
         setSourceUrl(result.metadata.sourceUrl);
       } catch (loadError) {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        if (requestId !== marketplaceRequestSerialRef.current) {
+          return;
+        }
+
         setMarketplaceError(
           loadError instanceof Error
             ? loadError.message
             : t("settings.mcp.messages.marketplaceLoadFailed"),
         );
       } finally {
-        setIsMarketplaceLoading(false);
+        if (requestId === marketplaceRequestSerialRef.current) {
+          setIsMarketplaceLoading(false);
+          setIsMarketplaceSearching(false);
+        }
       }
     },
     [t],
@@ -85,37 +127,38 @@ export default function McpSettings() {
   }, [t]);
 
   useEffect(() => {
-    void loadServers({ query: "" });
+    void loadServers({ query: committedMarketplaceQuery });
     void loadInstalledServers();
-  }, [loadInstalledServers, loadServers]);
-
-  useEffect(() => {
-    if (!hasBootstrappedMarketplaceQuery.current) {
-      hasBootstrappedMarketplaceQuery.current = true;
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      void loadServers({ query: marketplaceQuery, cursor: null, append: false });
-    }, 320);
 
     return () => {
-      window.clearTimeout(timeoutId);
+      marketplaceRequestControllerRef.current?.abort();
     };
-  }, [loadServers, marketplaceQuery]);
+  }, [committedMarketplaceQuery, loadInstalledServers, loadServers]);
 
-  const refreshMarketplace = () => loadServers({ query: marketplaceQuery, cursor: null, append: false });
+  const refreshMarketplace = () =>
+    loadServers({ query: committedMarketplaceQuery, cursor: null, append: false });
   const loadMore = () => {
     if (!nextCursor) {
       return;
     }
 
-    void loadServers({ query: marketplaceQuery, cursor: nextCursor, append: true });
+    void loadServers({ query: committedMarketplaceQuery, cursor: nextCursor, append: true });
   };
 
+  const submitMarketplaceSearch = useCallback(() => {
+    const normalizedQuery = marketplaceQuery.trim();
+    if (normalizedQuery === committedMarketplaceQuery) {
+      void loadServers({ query: normalizedQuery, cursor: null, append: false });
+      return;
+    }
+    setCommittedMarketplaceQuery(normalizedQuery);
+  }, [committedMarketplaceQuery, loadServers, marketplaceQuery]);
+
   const installServer = (server: McpMarketplaceServer) => {
-    const transport = server.transports.find((item) => item.kind === "streamable-http");
-    if (!transport || transport.kind !== "streamable-http") {
+    const transport =
+      server.transports.find((item) => item.kind === "streamable-http") ??
+      server.transports.find((item) => item.kind === "stdio");
+    if (!transport) {
       message.error(t("settings.mcp.messages.installUnsupported"));
       return;
     }
@@ -133,10 +176,17 @@ export default function McpSettings() {
           displayName: server.title,
           description: server.description,
           version: server.version ?? undefined,
-          transport: {
-            kind: "streamable-http",
-            url: transport.url,
-          },
+          transport:
+            transport.kind === "streamable-http"
+              ? {
+                  kind: "streamable-http",
+                  url: transport.url,
+                }
+              : {
+                  kind: "stdio",
+                  command: transport.command ?? "",
+                  args: transport.args ?? [],
+                },
           disclaimerAccepted: true,
         });
         message.success(t("settings.mcp.messages.installSucceeded"));
@@ -189,6 +239,127 @@ export default function McpSettings() {
     });
   };
 
+  const openConfig = async (server: ExternalMcpServerRecord) => {
+    let modalKey = "";
+
+    const ConfigModalBody = () => {
+      const [schema, setSchema] = useState<ExternalMcpConfigSchemaResolution | null>(null);
+      const [config, setConfig] = useState<ExternalMcpServerConfigRecord | null>(null);
+      const [isLoading, setIsLoading] = useState(true);
+      const [isSubmitting, setIsSubmitting] = useState(false);
+      const [error, setError] = useState<string | null>(null);
+
+      useEffect(() => {
+        let cancelled = false;
+
+        const load = async () => {
+          setIsLoading(true);
+          setError(null);
+          try {
+            const [nextSchema, nextConfig] = await Promise.all([
+              getExternalMcpServerConfigSchema(server.id),
+              getExternalMcpServerConfig(server.id),
+            ]);
+            if (cancelled) {
+              return;
+            }
+            setSchema(nextSchema);
+            setConfig(nextConfig);
+          } catch (loadError) {
+            if (cancelled) {
+              return;
+            }
+            setError(
+              loadError instanceof Error
+                ? loadError.message
+                : t("settings.mcp.messages.configLoadFailed"),
+            );
+          } finally {
+            if (!cancelled) {
+              setIsLoading(false);
+            }
+          }
+        };
+
+        void load();
+
+        return () => {
+          cancelled = true;
+        };
+      }, []);
+
+      if (isLoading) {
+        return (
+          <div className="flex min-h-[220px] items-center justify-center">
+            <div className="flex items-center gap-2 text-sm text-text-secondary">
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              {t("settings.mcp.config.loading")}
+            </div>
+          </div>
+        );
+      }
+
+      if (!schema || !config) {
+        return (
+          <div className="rounded-ui-control border border-danger/20 bg-danger/5 px-3 py-2 text-sm text-danger">
+            {error ?? t("settings.mcp.messages.configLoadFailed")}
+          </div>
+        );
+      }
+
+      return (
+        <McpConfigModalContent
+          schema={schema}
+          config={config}
+          isSubmitting={isSubmitting}
+          error={error}
+          labels={{
+            endpointUrl: t("settings.mcp.config.endpointUrl"),
+            bearerToken: t("settings.mcp.config.bearerToken"),
+            timeoutMs: t("settings.mcp.config.timeoutMs"),
+            customHeadersJson: t("settings.mcp.config.customHeadersJson"),
+            authType: t("settings.mcp.config.authType"),
+            authTypeNone: t("settings.mcp.config.authTypeNone"),
+            authTypeBearer: t("settings.mcp.config.authTypeBearer"),
+            knownPartial: t("settings.mcp.config.knownPartial"),
+            notesTitle: t("settings.mcp.config.notesTitle"),
+            cancel: t("settings.mcp.config.cancel"),
+            save: t("settings.mcp.config.save"),
+            saveLoading: t("settings.mcp.config.saveLoading"),
+            clearTokenHint: t("settings.mcp.config.clearTokenHint"),
+          }}
+          onCancel={() => Modal.close(modalKey)}
+          onSubmit={async (input) => {
+            setIsSubmitting(true);
+            setError(null);
+            try {
+              const updated = await updateExternalMcpServerConfig(server.id, input);
+              setConfig(updated);
+              message.success(t("settings.mcp.messages.configSaveSucceeded"));
+              Modal.close(modalKey);
+              await loadInstalledServers();
+            } catch (submitError) {
+              setError(
+                submitError instanceof Error
+                  ? submitError.message
+                  : t("settings.mcp.messages.configSaveFailed"),
+              );
+            } finally {
+              setIsSubmitting(false);
+            }
+          }}
+        />
+      );
+    };
+
+    modalKey = Modal.show({
+      title: t("settings.mcp.config.title", { name: server.displayName }),
+      width: 640,
+      content: <ConfigModalBody />,
+      footer: null,
+    });
+  };
+
   const tabs = useMemo(
     () => [
       {
@@ -229,7 +400,9 @@ export default function McpSettings() {
         server.id,
         server.displayName,
         server.description ?? "",
-        server.transport.url,
+        server.transport.kind === "streamable-http"
+          ? server.transport.url
+          : `${server.transport.command} ${(server.transport.args ?? []).join(" ")}`,
         ...server.discoveredTools.map((tool) => `${tool.title} ${tool.projectedCapabilityId}`),
       ];
       return haystacks.some((value) => value.toLowerCase().includes(keyword));
@@ -242,6 +415,18 @@ export default function McpSettings() {
     activeTab === "marketplace"
       ? t("settings.mcp.marketplace.searchPlaceholder")
       : t("settings.mcp.installed.searchPlaceholder");
+
+  const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (activeTab !== "marketplace") {
+      return;
+    }
+    if (event.key !== "Enter") {
+      return;
+    }
+    event.preventDefault();
+    submitMarketplaceSearch();
+  };
+
   const handleRefresh = () => {
     if (activeTab === "marketplace") {
       void refreshMarketplace();
@@ -267,6 +452,7 @@ export default function McpSettings() {
                 <TextInput
                   value={activeQuery}
                   onChange={setActiveQuery}
+                  onKeyDown={handleSearchKeyDown}
                   placeholder={activeSearchPlaceholder}
                   compact
                 />
@@ -274,6 +460,9 @@ export default function McpSettings() {
               <Button variant="outline" size="sm" onClick={handleRefresh} disabled={activeLoading}>
                 <RefreshCw className={`h-4 w-4 ${activeLoading ? "animate-spin" : ""}`} />
                 {t("settings.mcp.installed.refresh")}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setIsGuideOpen(true)}>
+                {t("settings.mcp.guide.open")}
               </Button>
             </div>
           </div>
@@ -298,6 +487,7 @@ export default function McpSettings() {
             <McpMarketplacePanel
               hasMore={Boolean(nextCursor)}
               isLoading={isMarketplaceLoading}
+              isSearching={isMarketplaceSearching}
               servers={marketplaceServers}
               sourceUrl={sourceUrl}
               labels={{
@@ -321,6 +511,7 @@ export default function McpSettings() {
                 title: t("settings.mcp.installed.title"),
                 emptyTitle: t("settings.mcp.installed.emptyTitle"),
                 emptyDescription: t("settings.mcp.installed.emptyDescription"),
+                configure: t("settings.mcp.installed.configure"),
                 connect: t("settings.mcp.installed.connect"),
                 discover: t("settings.mcp.installed.discover"),
                 remove: t("settings.mcp.installed.remove"),
@@ -330,8 +521,14 @@ export default function McpSettings() {
                 failed: t("settings.mcp.installed.failed"),
                 protocol: t("settings.mcp.installed.protocol"),
                 endpoint: t("settings.mcp.installed.endpoint"),
+                remote: t("settings.mcp.installed.remote"),
+                capabilities: t("settings.mcp.installed.capabilities"),
+                tools: t("settings.mcp.installed.tools"),
+                resources: t("settings.mcp.installed.resources"),
+                prompts: t("settings.mcp.installed.prompts"),
                 projectedId: t("settings.mcp.installed.projectedId"),
               }}
+              onConfigure={(server) => void openConfig(server)}
               onConnect={(serverId) => void runServerAction(serverId, "connect")}
               onDiscover={(serverId) => void runServerAction(serverId, "discover")}
               onDelete={removeServer}
@@ -339,6 +536,33 @@ export default function McpSettings() {
           )}
         </div>
       </div>
+
+      <McpGuideDrawer
+        open={isGuideOpen}
+        onClose={() => setIsGuideOpen(false)}
+        labels={{
+          title: t("settings.mcp.guide.title"),
+          intro: t("settings.mcp.guide.intro"),
+          searchTitle: t("settings.mcp.guide.sections.search.title"),
+          searchBody: t("settings.mcp.guide.sections.search.body"),
+          installTitle: t("settings.mcp.guide.sections.install.title"),
+          installBody: t("settings.mcp.guide.sections.install.body"),
+          configTitle: t("settings.mcp.guide.sections.config.title"),
+          configBody: t("settings.mcp.guide.sections.config.body"),
+          connectTitle: t("settings.mcp.guide.sections.connect.title"),
+          connectBody: t("settings.mcp.guide.sections.connect.body"),
+          discoverTitle: t("settings.mcp.guide.sections.discover.title"),
+          discoverBody: t("settings.mcp.guide.sections.discover.body"),
+          inspectTitle: t("settings.mcp.guide.sections.inspect.title"),
+          inspectBody: t("settings.mcp.guide.sections.inspect.body"),
+          boundaryTitle: t("settings.mcp.guide.sections.boundary.title"),
+          boundaryBody: t("settings.mcp.guide.sections.boundary.body"),
+          officialSourceTitle: t("settings.mcp.guide.sections.officialSource.title"),
+          officialSourceBody: t("settings.mcp.guide.sections.officialSource.body"),
+          close: t("settings.mcp.guide.close"),
+          searchHint: t("settings.mcp.guide.searchHint"),
+        }}
+      />
     </SettingsPageLayout>
   );
 }

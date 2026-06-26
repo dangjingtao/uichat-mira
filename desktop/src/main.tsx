@@ -16,6 +16,7 @@ import { AuthProvider } from "./app/providers/AuthProvider";
 import { LanguageProvider } from "./app/providers/LanguageProvider";
 import { RoleModelConfigProvider } from "./app/providers/RoleModelConfigProvider";
 import { ThemeProvider } from "./app/providers/ThemeProvider";
+import { appPackageMeta } from "./shared/appMeta";
 const root = document.getElementById("root");
 
 if (!root) {
@@ -53,3 +54,5 @@ const Main = () => {
 const appRoot = window.__uichatRoot ?? createRoot(root);
 window.__uichatRoot = appRoot;
 appRoot.render(<Main />);
+
+document.title = appPackageMeta.displayName;

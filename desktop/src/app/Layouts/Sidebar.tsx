@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/app/providers/AuthProvider";
 import logoIcon from "@/assets/branding/uichat-logo-icon.png";
+import { appPackageMeta } from "@/shared/appMeta";
 import { useRuntimeHealth } from "@/features/system/hooks/useRuntimeHealth";
 import { LogOutIcon, SettingsIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -44,7 +45,9 @@ function Sidebar({
         className={`flex items-center text-base font-semibold bg-surface-tertiary px-4 py-4`}
       >
         <img src={logoIcon} alt="Logo" className="mr-2.5 inline-block h-8" />
-        <span className="text-text-primary font-semibold">RAG Tester</span>
+        <span className="text-text-primary font-semibold">
+          {appPackageMeta.displayName}
+        </span>
       </div>
 
       <div

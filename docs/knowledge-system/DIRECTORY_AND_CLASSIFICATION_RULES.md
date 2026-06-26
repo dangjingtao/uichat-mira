@@ -97,9 +97,9 @@ Doc Type: current-contract
 | `platform` | `platform/`、`版本管理.md` |
 | `chat` | `uchat.md`、`uchat-internal-maintenance.md`、`chat-system-practices.md` |
 | `role` | `role/`、`role.md`、`role-api.md` |
-| `knowledge-base` | `knowledge-base-api.md`、`knowledge-base-backend-schema.md`、`markdown-workspace-mode.md` |
+| `knowledge-base` | `knowledge-base/README.md`、`knowledge-base/api.md`、`knowledge-base/backend-schema.md`、`knowledge-base/markdown-workspace-mode.md` |
 | `providers` | `architecture/provider-api-standards.md`、`architecture/provider-proxy-api.md`、`architecture/provider-integration-optimization.md` |
-| `tooling-runtime` | `harness-runtime-design.md`、`read-skill-design.md`、`architecture/external-mcp-marketplace.md` |
+| `tooling-runtime` | `tooling-runtime/harness-runtime-design.md`、`tooling-runtime/read-skill-design.md`、`architecture/external-mcp-marketplace.md` |
 | `planning` | `product-roadmap-priorities.md` 以及仍未落地的路线类页面 |
 | `knowledge-system` | `knowledge-system/` 下关于索引、阅读范围、可视化、MCP 暴露的页面 |
 | `historical` | `archive/` 及明确已过期但保留背景价值的页面 |
@@ -131,14 +131,14 @@ Doc Type: current-contract
 
 ## 现在这批容易混的页面
 
-### `harness-runtime-design.md`
+### `tooling-runtime/harness-runtime-design.md`
 
 - 逻辑 area：`tooling-runtime`
 - 当前类型：`planned-design`
 
 原因：它定义方向很关键，但还不是现网稳定 contract。
 
-### `read-skill-design.md`
+### `tooling-runtime/read-skill-design.md`
 
 - 逻辑 area：`tooling-runtime`
 - 当前类型：`planned-design`
@@ -190,6 +190,40 @@ Doc Type: current-contract
 - 把模块归属讲清
 - 把文档角色讲清
 - 让 AI 不靠猜就能理解文档位置与用途
+
+## 当前落地口径
+
+现在每篇活跃文档至少应满足：
+
+- 能说出主模块
+- 能说出文档角色
+- 能说出它属于哪一层
+- 能说出它是 current 还是 historical
+
+如果一篇文档同时像多个模块，不要平均分类，只给一个主模块：
+
+- `chat` 负责聊天系统
+- `role` 负责角色系统
+- `runtime` 负责运行时与链路
+- `knowledge-base` 负责知识库内容与工作区
+- `provider` 负责模型提供商与代理接线
+- `platform` 负责壳层、Tauri、Electron、打包与环境
+- `evaluation` 负责评测与验证
+- `docs-system` 负责文档系统本身
+- `planning` 负责路线图、方案、待办
+- `bugfix` 负责缺陷修复、回归与排障
+
+如果无法稳定决定主模块：
+
+1. 先看这篇文档最终服务哪个功能域
+2. 再看它是不是总纲页、参考页、设计页还是排障页
+3. 最后才考虑目录位置
+
+这套规则的目标不是目录好看，而是让 AI 能稳定回答：
+
+- 这是什么模块
+- 这是哪种文档
+- 这篇是当前真相还是历史背景
 
 这样读者和 AI 都更容易建立稳定路径。
 

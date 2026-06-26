@@ -33,7 +33,7 @@ const zhCN = {
       persona: "角色",
       roles: "角色",
       personas: "角色",
-      evaluationCenter: "配置中心",
+      evaluationCenter: "知识评测中心",
       development: "开发",
       developmentLogs: "日志",
       mcp: "MCP",

@@ -1,8 +1,9 @@
 import { mcpBadRequest, mcpInternalError } from "./core/errors.js";
 
-const DEFAULT_REGISTRY_URL = "https://registry.modelcontextprotocol.io/v0/servers";
+const DEFAULT_REGISTRY_URL = "https://registry.modelcontextprotocol.io/v0.1/servers";
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
+const REGISTRY_TIMEOUT_MS = 8000;
 
 type RegistryTransport = {
   type?: unknown;
@@ -63,6 +64,9 @@ export type FetchMcpMarketplaceServersInput = {
   cursor?: string;
   limit?: number;
   query?: string;
+  version?: "latest";
+  updatedSince?: string;
+  includeDeleted?: boolean;
   sourceUrl?: string;
   fetchImpl?: typeof fetch;
 };
@@ -229,8 +233,26 @@ export const fetchMcpMarketplaceServers = async (
     url.searchParams.set("cursor", input.cursor.trim());
   }
 
+  if (input.query?.trim()) {
+    url.searchParams.set("search", input.query.trim());
+  }
+
+  if (input.version === "latest") {
+    url.searchParams.set("version", "latest");
+  }
+
+  if (input.updatedSince?.trim()) {
+    url.searchParams.set("updated_since", input.updatedSince.trim());
+  }
+
+  if (typeof input.includeDeleted === "boolean") {
+    url.searchParams.set("include_deleted", String(input.includeDeleted));
+  }
+
   const fetchImpl = input.fetchImpl ?? fetch;
-  const response = await fetchImpl(url);
+  const response = await fetchImpl(url, {
+    signal: AbortSignal.timeout(REGISTRY_TIMEOUT_MS),
+  });
   if (!response.ok) {
     throw mcpInternalError(`MCP registry request failed with status ${response.status}`);
   }

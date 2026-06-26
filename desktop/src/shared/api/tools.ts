@@ -1,4 +1,4 @@
-import { del, get, post } from "@/shared/lib/request";
+import { del, get, patch, post, put } from "@/shared/lib/request";
 import { getSession } from "@/shared/lib/sessionStorage";
 import { getApiBaseUrl } from "@/shared/platform/desktopRuntime";
 
@@ -153,6 +153,11 @@ export type McpWorkspaceSelection = {
   source: "selected" | "configured" | "unset";
 };
 
+export type McpWebSearchConfig = {
+  apiKey: string;
+  baseUrl: string;
+};
+
 export type McpMarketplaceTransport =
   | {
       kind: "streamable-http";
@@ -185,10 +190,16 @@ export type ExternalMcpServerRecord = {
   displayName: string;
   description?: string;
   version?: string;
-  transport: {
-    kind: "streamable-http";
-    url: string;
-  };
+  transport:
+    | {
+        kind: "streamable-http";
+        url: string;
+      }
+    | {
+        kind: "stdio";
+        command: string;
+        args?: string[];
+      };
   status: "configured" | "connected" | "failed";
   enabled: boolean;
   disclaimerAcceptedAt?: string;
@@ -199,6 +210,16 @@ export type ExternalMcpServerRecord = {
   lastError?: string;
   sessionId?: string;
   protocolVersion?: string;
+  remoteServerInfo?: {
+    name?: string;
+    title?: string;
+    version?: string;
+  };
+  remoteCapabilities?: {
+    hasTools: boolean;
+    hasResources: boolean;
+    hasPrompts: boolean;
+  };
   discoveredTools: Array<{
     name: string;
     title: string;
@@ -209,10 +230,39 @@ export type ExternalMcpServerRecord = {
   }>;
 };
 
+export type ExternalMcpConfigField = {
+  key: string;
+  label: string;
+  type: "text" | "password" | "url" | "number" | "json";
+  required: boolean;
+  secret?: boolean;
+  placeholder?: string;
+  description?: string;
+  defaultValue?: unknown;
+};
+
+export type ExternalMcpConfigSchemaResolution = {
+  fields: ExternalMcpConfigField[];
+  completeness: "known-partial" | "known-good" | "unknown";
+  sources: Array<"preset" | "marketplace" | "server-self-describe" | "manual">;
+  notes?: string[];
+};
+
+export type ExternalMcpServerConfigRecord = {
+  endpointUrl?: string;
+  command?: string;
+  argsText?: string;
+  authType: "none" | "bearer";
+  timeoutMs: number;
+  customHeadersJson: string;
+  hasBearerToken: boolean;
+};
+
 export function getMcpMarketplaceServers(params?: {
   cursor?: string;
   limit?: number;
   query?: string;
+  signal?: AbortSignal;
 }) {
   const searchParams = new URLSearchParams();
   if (params?.cursor) searchParams.set("cursor", params.cursor);
@@ -226,7 +276,9 @@ export function getMcpMarketplaceServers(params?: {
       nextCursor: string | null;
       sourceUrl: string;
     };
-  }>(`/mcp/marketplace/servers${query ? `?${query}` : ""}`);
+  }>(`/mcp/marketplace/servers${query ? `?${query}` : ""}`, {
+    signal: params?.signal,
+  });
 }
 
 export function getExternalMcpServers() {
@@ -241,10 +293,16 @@ export function createExternalMcpServer(
     displayName: string;
     description?: string;
     version?: string;
-    transport: {
-      kind: "streamable-http";
-      url: string;
-    };
+    transport:
+      | {
+          kind: "streamable-http";
+          url: string;
+        }
+      | {
+          kind: "stdio";
+          command: string;
+          args?: string[];
+        };
     disclaimerAccepted: boolean;
   },
 ) {
@@ -263,8 +321,39 @@ export function deleteExternalMcpServer(id: string) {
   return del<ExternalMcpServerRecord>(`/mcp/external/servers/${id}`);
 }
 
+export function getExternalMcpServerConfigSchema(id: string) {
+  return get<ExternalMcpConfigSchemaResolution>(`/mcp/external/servers/${id}/config-schema`);
+}
+
+export function getExternalMcpServerConfig(id: string) {
+  return get<ExternalMcpServerConfigRecord>(`/mcp/external/servers/${id}/config`);
+}
+
+export function updateExternalMcpServerConfig(
+  id: string,
+  input: {
+    endpointUrl?: string;
+    command?: string;
+    argsText?: string;
+    authType: "none" | "bearer";
+    timeoutMs: number;
+    customHeadersJson: string;
+    bearerToken?: string | null;
+  },
+) {
+  return patch<ExternalMcpServerConfigRecord>(`/mcp/external/servers/${id}/config`, input);
+}
+
 export function getMcpWorkspaceSelection() {
   return get<McpWorkspaceSelection>("/mcp/workspace");
+}
+
+export function getMcpWebSearchConfig() {
+  return get<McpWebSearchConfig>("/mcp/web-search/config");
+}
+
+export function saveMcpWebSearchConfig(input: Partial<McpWebSearchConfig>) {
+  return put<McpWebSearchConfig>("/mcp/web-search/config", input);
 }
 
 export function selectMcpWorkspaceRoot(rootPath: string) {

@@ -1,11 +1,11 @@
-# Provider Proxy API
-
 Status: Historical
 Owner: runtime
 Last verified: 2026-06-26
 Layer: wiki
 Module: provider
 Doc Type: historical
+
+# Provider Proxy API
 
 ## Overview
 

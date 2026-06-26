@@ -33,17 +33,17 @@ const settingsPending = {
       },
       brand: {
         description: "一个从聊天开始，最终回到你身边的智能体工作舱。",
-        title: "UIChat Mira",
+        title: "{{appName}}",
         paragraphs: [
           "一开始，UIChat 只是一小片干净的界面。",
           "那时候的想法很简单：让 AI 好好说话，让界面少些噪音，让它更自然地留在自己的桌面上。",
           "后来它慢慢长大了。",
           "它开始能整理资料，记住线索，承载角色，也陪你进入一些更长的任务。它不再只是一个问答窗口，而像一间慢慢被点亮的小舱室：有书，有工具，有记忆，也有尚未完成的想象。",
-          "于是，UIChat Mira 出现了。",
+          "于是，{{appName}} 出现了。",
           "Mira 不是一个冷冰冰的助手名字。它更像飞船深夜里窗边的一束微光。你打开它的时候，不是登录某个系统，而是回到一个属于自己的工作舱。",
           "在这里，AI 不只是路过你的问题。它可以停在你的世界里，陪你整理、工作、创造，也替你守住那些被认真设定过的角色、资料和线索。",
           "Mira 带着一点“看见”的意思。看见你的资料，看见你的项目，看见散落在对话和记忆里的线索，也看见你真正想完成的东西。",
-          "这就是 UIChat Mira。一个从聊天开始，最终回到你身边的智能体工作舱。",
+          "这就是 {{appName}}。一个从聊天开始，最终回到你身边的智能体工作舱。",
         ],
       },
     },
@@ -104,6 +104,12 @@ const settingsPending = {
         argsModalTitle: "工具参数配置",
         argsModalDescription:
           "这里维护当前工具的 JSON 调用参数。关闭弹窗不会重置草稿。",
+        webSearchTavilyHint: "Tavily 将在配置了 API Key 时可用。",
+        webSearchApiKey: "Tavily API Key",
+        webSearchApiKeyPlaceholder: "填入 Tavily API Key",
+        webSearchSearxngHint: "SearXNG 将在配置了 baseUrl 时可用。",
+        webSearchBaseUrl: "SearXNG Base URL",
+        webSearchBaseUrlPlaceholder: "例如 http://localhost:8080",
         terminalApprovalRequired: "需要审批",
         terminalTimeout: "超时",
         terminalReused: "复用会话",
@@ -121,6 +127,7 @@ const settingsPending = {
         workspaceUpdateFailed: "更新工作区失败",
         selectToolFirst: "请先选择一个工具",
         invalidArgsJson: "调用参数不是合法 JSON",
+        webSearchConfigSaved: "Web Search 配置已保存",
         runFailed: "工具执行失败",
       },
     },
@@ -149,39 +156,109 @@ const settingsPending = {
         emptyTitle: "当前没有可展示的 MCP server",
         emptyDescription: "后端取回市场元数据后，这里会展示候选 server 列表。",
       },
-        installed: {
-          title: "已安装 MCP Server",
-          description: "这里展示已经进入本地 runtime 的 third-party MCP server、连接状态和 discover 结果。",
-          emptyTitle: "还没有已安装的 MCP Server",
-          emptyDescription: "从左侧市场选择支持 `streamable-http` 的 server 进行安装后，这里会显示生命周期状态。",
-          refresh: "刷新",
-          search: "筛选",
-          searchPlaceholder: "筛选名称、描述、Endpoint 或能力 ID",
-          connect: "连接",
-          discover: "Discover",
-          remove: "删除",
-          discovered: "已发现",
-          connected: "已连接",
-          configured: "已配置",
-          failed: "失败",
-          protocol: "协议",
+      installed: {
+        title: "已安装 MCP Server",
+        description:
+          "这里展示已经进入本地 runtime 的 third-party MCP server、连接状态和 discover 结果。",
+        emptyTitle: "还没有已安装的 MCP Server",
+        emptyDescription:
+          "从左侧市场选择支持 `streamable-http` 或 `stdio` 的 server 安装后，这里会显示生命周期状态。",
+        refresh: "刷新",
+        search: "筛选",
+        searchPlaceholder: "筛选名称、描述、Endpoint 或能力 ID",
+        configure: "配置",
+        connect: "连接",
+        discover: "Discover",
+        remove: "删除",
+        discovered: "已发现",
+        connected: "已连接",
+        configured: "已配置",
+        failed: "失败",
+        protocol: "协议",
         endpoint: "Endpoint",
+        remote: "远端",
+        capabilities: "能力",
+        tools: "Tools",
+        resources: "Resources",
+        prompts: "Prompts",
         projectedId: "Projected ID",
         retry: "重试",
       },
-        installDialog: {
-          title: "安装第三方 MCP Server",
-          description:
-            "你将把“{{name}}”接入到本地 MCP runtime。第三方 MCP server 不属于内部核心 Tool，启用前需要自行确认来源、行为和风险。",
-          confirm: "我已知晓并安装",
+      installDialog: {
+        title: "安装第三方 MCP Server",
+        description:
+          "你将把“{{name}}”接入到本地 MCP runtime。第三方 MCP server 不属于内部核心 Tool，启用前需要自行确认来源、行为和风险。",
+        confirm: "我已知晓并安装",
+      },
+      guide: {
+        open: "使用指南",
+        close: "关闭使用指南",
+        title: "MCP 使用指南",
+        intro:
+          "这里帮你快速走完一次完整的 MCP 使用流程：找、装、配、连、发现能力，再确认当前边界。",
+        searchHint:
+          "市场搜索需要回车触发；输入后按 Enter 才会请求官方 registry，上游响应慢时也不会边打字边卡住。",
+        sections: {
+          search: {
+            title: "先找市场",
+            body: "切到“市场”页，输入名称、标题或描述关键词后按回车搜索。结果来自官方 MCP registry。",
+          },
+          install: {
+            title: "再安装",
+            body: "现在支持安装 `streamable-http` 和 `stdio` 两类 server。安装前会做第三方免责确认，安装后会进入本地已安装列表。",
+          },
+          config: {
+            title: "配置参数",
+            body: "点“配置”后，`streamable-http` 主要补 endpoint、Bearer Token、Headers、超时；`stdio` 主要补 command、args、超时。",
+          },
+          connect: {
+            title: "连接 server",
+            body: "配置完成后点“连接”，backend 会按你的配置向远端发 initialize，请求成功后会保存 session 与协议版本。",
+          },
+          discover: {
+            title: "发现能力",
+            body: "再点“Discover”，backend 会读取远端 tools 并投影成本地可调用能力，出现在已安装项和 `/mcp/tools` 里。",
+          },
+          inspect: {
+            title: "查看结果",
+            body: "已安装列表里可以看到 projected ID、远端 serverInfo、能力摘要、错误信息和当前协议状态。",
+          },
+          boundary: {
+            title: "当前边界",
+            body: "MCP 现在还是独立工作台，不接聊天自动调用。Tool 仍然是内部核心概念，MCP 是另一条产品线。",
+          },
+          officialSource: {
+            title: "官方来源",
+            body: "当前市场源默认指向官方 registry。搜索走上游，返回范围更大，但也会受官方响应速度影响。",
+          },
         },
-        deleteDialog: {
-          title: "删除已安装 MCP Server",
-          description: "将删除“{{name}}”的本地安装记录、连接状态和 Discover 结果。",
-          confirm: "确认删除",
-        },
-        notes: {
-          toggle: "说明",
+      },
+      deleteDialog: {
+        title: "删除已安装 MCP Server",
+        description:
+          "将删除“{{name}}”的本地安装记录、连接状态和 Discover 结果。",
+        confirm: "确认删除",
+      },
+      config: {
+        title: "配置 {{name}}",
+        loading: "正在读取当前配置...",
+        endpointUrl: "Endpoint URL",
+        bearerToken: "Bearer Token",
+        timeoutMs: "超时（毫秒）",
+        customHeadersJson: "自定义 Headers JSON",
+        authType: "认证方式",
+        authTypeNone: "无认证",
+        authTypeBearer: "Bearer Token",
+        knownPartial:
+          "当前是配置草案模式。我们先提供已知字段，未覆盖的配置项后续继续扩展。",
+        notesTitle: "备注",
+        cancel: "取消",
+        save: "保存",
+        saveLoading: "保存中...",
+        clearTokenHint: "留空表示保留当前 token；清空并保存可移除 token。",
+      },
+      notes: {
+        toggle: "说明",
         boundaryTitle: "边界",
         boundaryDescription:
           "MCP 能力由后端 harness 托管，renderer 只负责浏览、配置和查看状态。chat 暂不介入。",
@@ -189,17 +266,21 @@ const settingsPending = {
         disclaimerDescription:
           "用户自行安装或连接的第三方 MCP server 后续会在启用时弹出一次免责确认；内部核心 Tool 不走这个流程，未来非核心内置 MCP 包按 MCP 产品策略管理。",
       },
-        messages: {
-          marketplaceLoadFailed: "加载 MCP 市场失败",
-          installedLoadFailed: "加载已安装 MCP server 失败",
-          installUnsupported: "当前 MVP 只支持安装带 `streamable-http` transport 的 MCP server",
-          installSucceeded: "MCP server 已安装",
-          connectSucceeded: "MCP server 已连接",
-          connectFailed: "连接 MCP server 失败",
-          discoverSucceeded: "Discover 完成",
-          discoverFailed: "Discover 失败",
-          deleteSucceeded: "MCP server 已删除",
-        },
+      messages: {
+        marketplaceLoadFailed: "加载 MCP 市场失败",
+        installedLoadFailed: "加载已安装 MCP server 失败",
+        configLoadFailed: "加载 MCP 配置失败",
+        installUnsupported:
+          "当前 MCP server 缺少可安装的 transport 信息",
+        installSucceeded: "MCP server 已安装",
+        connectSucceeded: "MCP server 已连接",
+        connectFailed: "连接 MCP server 失败",
+        discoverSucceeded: "Discover 完成",
+        discoverFailed: "Discover 失败",
+        deleteSucceeded: "MCP server 已删除",
+        configSaveSucceeded: "MCP 配置已保存",
+        configSaveFailed: "保存 MCP 配置失败",
+      },
     },
     knowledgeBase: {
       add: {
@@ -335,6 +416,7 @@ const settingsPending = {
       },
       sidebar: {
         searchPlaceholder: "搜索知识库",
+        empty: "暂无知识库",
         updatedJustNow: "刚刚更新",
         updatedMinutesAgo: "{{minutes}}分钟前更新",
         updatedHoursAgo: "{{hours}}小时前更新",
@@ -746,6 +828,14 @@ const settingsPending = {
         reportNotAvailable: "覆盖率报告暂未生成，请先运行 pnpm test:coverage",
         openFullReport: "打开完整报告",
       },
+      testResults: {
+        title: "测试结果",
+        total: "总用例",
+        passed: "通过",
+        failed: "失败",
+        duration: "耗时",
+        failedTests: "失败的测试",
+      },
       docs: {
         title: "开发文档",
         description: "面向开发者的内部项目文档与说明。",
@@ -756,7 +846,7 @@ const settingsPending = {
       },
       baseInformation: {
         title: "基础信息",
-        description: "应用版本、作者文档、Git 信息与更新日志。",
+        description: "应用版本、作者文档与 Git 信息。",
       },
     },
   },

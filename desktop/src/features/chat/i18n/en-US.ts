@@ -10,8 +10,7 @@ const chatPending = {
       statusUnknown: "Checking",
       statusRunning: "Running",
       statusStopped: "Stopped",
-      welcomeMessage:
-        "Hello, I am the UI Chat RAG assistant. Please enter your question.",
+      welcomeMessage: "Hello, I am {{appName}}. Please enter your question.",
       suggestion1: "Summarize today's task priorities",
       suggestion2: "Give me a RAG system troubleshooting checklist",
       suggestion3: "Design an interface integration plan",

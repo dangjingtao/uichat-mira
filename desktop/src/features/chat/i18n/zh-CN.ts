@@ -10,7 +10,7 @@ const chatPending = {
       statusUnknown: "检测中",
       statusRunning: "运行中",
       statusStopped: "未启动",
-      welcomeMessage: "你好，我是 UI Chat RAG 助手。请输入你的问题。",
+      welcomeMessage: "你好，我是 {{appName}}。请输入你的问题。",
       suggestion1: "帮我总结今天的任务重点",
       suggestion2: "给我一个 RAG 系统排障清单",
       suggestion3: "设计一个接口联调计划",

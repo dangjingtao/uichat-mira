@@ -30,6 +30,7 @@ import {
   listExternalMcpServers,
   updateExternalMcpServerConfig,
 } from "./external.js";
+import { webSearchSettingsRepository } from "@/db/repositories/web-search-settings.repository.js";
 
 const objectSchema = { type: "object", additionalProperties: true } as const;
 
@@ -92,10 +93,16 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
       displayName: string;
       description?: string;
       version?: string;
-      transport: {
-        kind: "streamable-http";
-        url: string;
-      };
+      transport:
+        | {
+            kind: "streamable-http";
+            url: string;
+          }
+        | {
+            kind: "stdio";
+            command: string;
+            args?: string[];
+          };
       disclaimerAccepted: boolean;
       disclaimerTextHash?: string;
     };
@@ -189,7 +196,9 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
   app.patch<{
     Params: { id: string };
     Body: {
-      endpointUrl: string;
+      endpointUrl?: string;
+      command?: string;
+      argsText?: string;
       authType: "none" | "bearer";
       timeoutMs: number;
       customHeadersJson: string;
@@ -231,6 +240,75 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
     },
     routeHandler("Failed to delete external MCP server", async (request) =>
       success(deleteExternalMcpServer(request.params.id))),
+  );
+
+  app.get(
+    "/mcp/web-search/config",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Get persisted web search config",
+        description:
+          "Return the backend-persisted Web Search configuration. The values are stored in the server SQLite database and reused by harness web_search execution.",
+        response: {
+          200: successEnvelope({
+            type: "object",
+            required: ["apiKey", "baseUrl"],
+            properties: {
+              apiKey: { type: "string" },
+              baseUrl: { type: "string" },
+            },
+          }),
+        },
+      },
+    },
+    routeHandler("Failed to get web search config", async () => {
+      const current = webSearchSettingsRepository.get();
+      return success({
+        apiKey: current.tavilyApiKey,
+        baseUrl: current.searxngBaseUrl,
+      });
+    }),
+  );
+
+  app.put<{ Body: { apiKey?: string; baseUrl?: string } }>(
+    "/mcp/web-search/config",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Persist web search config",
+        description:
+          "Persist the Web Search configuration into the server SQLite database. These saved values are later used by harness web_search as the default provider credentials and endpoint.",
+        body: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            apiKey: { type: "string" },
+            baseUrl: { type: "string" },
+          },
+        },
+        response: {
+          200: successEnvelope({
+            type: "object",
+            required: ["apiKey", "baseUrl"],
+            properties: {
+              apiKey: { type: "string" },
+              baseUrl: { type: "string" },
+            },
+          }),
+        },
+      },
+    },
+    routeHandler("Failed to save web search config", async (request) => {
+      const next = webSearchSettingsRepository.update({
+        tavilyApiKey: request.body.apiKey,
+        searxngBaseUrl: request.body.baseUrl,
+      });
+      return success({
+        apiKey: next.tavilyApiKey,
+        baseUrl: next.searxngBaseUrl,
+      });
+    }),
   );
 
   app.get(

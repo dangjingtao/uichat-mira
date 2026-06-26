@@ -5,7 +5,9 @@ import {
   executeMcpInvocationStream,
   getMcpInvocationTrace,
   getMcpTools,
+  getMcpWebSearchConfig,
   getMcpWorkspaceSelection,
+  saveMcpWebSearchConfig,
   selectMcpWorkspaceRoot,
   type McpArtifact,
   type McpInvocationEvent,
@@ -19,6 +21,17 @@ import {
   getTerminalResultSummary,
   TOOL_DOMAIN_ORDER,
 } from "../utils";
+const WEB_SEARCH_DEFAULT_MAX_RESULTS = 5;
+
+type WebSearchConfig = {
+  apiKey: string;
+  baseUrl: string;
+};
+
+const defaultWebSearchConfig: WebSearchConfig = {
+  apiKey: "",
+  baseUrl: "",
+};
 
 export function useToolsWorkbench() {
   const { t } = useTranslation();
@@ -34,6 +47,7 @@ export function useToolsWorkbench() {
   const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(true);
   const [isSelectingWorkspace, setIsSelectingWorkspace] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [webSearchConfig, setWebSearchConfig] = useState<WebSearchConfig>(defaultWebSearchConfig);
   const [events, setEvents] = useState<McpInvocationEvent[]>([]);
   const [trace, setTrace] = useState<McpInvocationTrace | null>(null);
   const [result, setResult] = useState<unknown>(null);
@@ -52,9 +66,10 @@ export function useToolsWorkbench() {
       setIsLoading(true);
       setIsWorkspaceLoading(true);
       try {
-        const [toolList, workspace] = await Promise.all([
+        const [toolList, workspace, persistedWebSearchConfig] = await Promise.all([
           getMcpTools(),
           getMcpWorkspaceSelection(),
+          getMcpWebSearchConfig().catch(() => defaultWebSearchConfig),
         ]);
         if (disposed) {
           return;
@@ -66,6 +81,10 @@ export function useToolsWorkbench() {
         setTools(sortedTools);
         setWorkspaceSelection(workspace);
         setWorkspaceRootInput(workspace.rootPath ?? "");
+        setWebSearchConfig({
+          apiKey: persistedWebSearchConfig.apiKey ?? "",
+          baseUrl: persistedWebSearchConfig.baseUrl ?? "",
+        });
 
         const nextSelectedTool =
           sortedTools.find((tool) => tool.id === "read_open") ??
@@ -210,6 +229,15 @@ export function useToolsWorkbench() {
       return;
     }
 
+    if (selectedTool.id === "web_search") {
+      parsedArgs = {
+        ...parsedArgs,
+        maxResults: WEB_SEARCH_DEFAULT_MAX_RESULTS,
+        ...(webSearchConfig.apiKey.trim() ? { apiKey: webSearchConfig.apiKey.trim() } : {}),
+        ...(webSearchConfig.baseUrl.trim() ? { baseUrl: webSearchConfig.baseUrl.trim() } : {}),
+      };
+    }
+
     resetRunState();
     setIsRunning(true);
     try {
@@ -273,13 +301,23 @@ export function useToolsWorkbench() {
     terminalSummary,
     trace,
     tools,
+    webSearchConfig,
     workspaceRootInput,
     workspaceSelection,
     setArgsDraft,
+    setWebSearchConfig,
     setWorkspaceRootInput,
     runSelectedTool,
     selectDomain,
     selectTool,
     updateWorkspaceRoot,
+    saveWebSearchConfig: async () => {
+      const saved = await saveMcpWebSearchConfig(webSearchConfig);
+      setWebSearchConfig({
+        apiKey: saved.apiKey,
+        baseUrl: saved.baseUrl,
+      });
+      message.success(t("settings.tools.messages.webSearchConfigSaved"));
+    },
   };
 }

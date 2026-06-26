@@ -1,12 +1,11 @@
 # 外部 MCP Marketplace 接入
 
+Status: Planned
+Owner: runtime
+Last verified: 2026-06-26
 Layer: raw-source
 Module: tooling-runtime
 Doc Type: design
-
-Status: Planned
-Owner: runtime
-Last verified: 2026-06-25
 
 ## 单点真相范围
 
@@ -64,7 +63,7 @@ UIChat Mira 将来要怎样消费第三方 MCP server。
 
 1. 打开 `Settings -> MCP`
 2. 在 `市场` 里浏览第三方 MCP server
-3. 选择支持 `streamable-http` 的 server，执行安装
+3. 选择支持 `streamable-http` 或 `stdio` 的 server，执行安装
 4. backend 保存 external MCP server record
 5. 切到 `已安装`
 6. 对目标 server 执行 `连接`
@@ -86,6 +85,7 @@ UIChat Mira 将来要怎样消费第三方 MCP server。
 - external MCP server 安装记录
 - disclaimer 校验
 - `streamable-http` transport
+- `stdio` transport
 - `connect`
 - `Discover`
 - projected capability 注册
@@ -96,7 +96,6 @@ UIChat Mira 将来要怎样消费第三方 MCP server。
 
 - chat 自动调用 MCP capability
 - 复杂 approval 流程
-- `stdio` transport
 - 完整 secret 管理面板
 - 非核心内置 MCP package 管理闭环
 

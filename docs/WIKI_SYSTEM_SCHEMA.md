@@ -184,6 +184,62 @@ docs/
 - 是否可由 LLM 直接维护
 - 是否是当前真相
 
+### 活跃文档最小要求
+
+所有仍在活跃维护区的文档，建议至少明确补齐这四项：
+
+- `Layer`
+- `Module`
+- `Doc Type`
+- `Status`
+
+如果一篇文档还承担事实依据或索引用途，最好再补：
+
+- `Owner`
+- `Last verified`
+- `Canonical`
+- `Derived from`
+- `Related`
+
+### Module 判定优先级
+
+当一篇文档可能跨多个主题时，不要平均分配模块。优先按下面顺序选主模块：
+
+1. 这篇文档主要服务哪个稳定产品域
+2. 这篇文档主要描述哪条运行链路或契约
+3. 这篇文档主要由哪个团队/责任域维护
+4. 如果仍然说不清，才暂归 `docs-system`、`planning` 或 `bugfix`
+
+建议的主模块口径如下：
+
+| Module | 主要含义 | 典型文档 |
+| --- | --- | --- |
+| `docs-system` | 文档系统、schema、索引、阅读规则 | `WIKI_SYSTEM_SCHEMA.md`、`DOCUMENTATION_STANDARDS.md` |
+| `runtime` | 运行时、请求链路、后端执行边界 | `architecture/README.md`、`rag-langgraph-flow.md` |
+| `chat` | 聊天产品域、线程、消息、会话体验 | `uchat.md`、`chat-system-practices.md` |
+| `role` | 角色系统、persona、role API | `role.md`、`role-api.md` |
+| `knowledge-base` | 知识库内容、导入、检索、workspace | `knowledge-base/api.md`、`knowledge-base/markdown-workspace-mode.md` |
+| `provider` | 模型提供商、代理、接线、接口标准 | `provider-api-standards.md`、`provider-proxy-api.md` |
+| `platform` | 桌面壳、Tauri、Electron、打包与环境 | `platform/tauri.md`、`版本管理.md` |
+| `evaluation` | 评测工作台、数据集、评测流程 | `evaluation/workbench.md` |
+| `tooling-runtime` | MCP、工具运行时、读取与暴露机制 | `tooling-runtime/read-skill-design.md`、`external-mcp-marketplace.md` |
+| `planning` | 路线图、规划、待办、设计草案 | `product-roadmap-priorities.md` |
+| `bugfix` | 缺陷记录、修复清单、回归排查 | `defect-log.md`、`chat-remediation-checklist.md` |
+
+### 重叠文档怎么收
+
+如果一篇文档明显跨模块：
+
+- 只给一个 `Module` 作为主归属
+- 其他相关模块放进 `Related`
+- 不要为了“看起来都沾一点”而写多个主模块
+
+判断规则很简单：
+
+- 文档回答“它主要在讲谁”，那是 `Module`
+- 文档回答“它是啥性质的页”，那是 `Doc Type`
+- 文档回答“它属于哪层”，那是 `Layer`
+
 ## Allowed Values
 
 为了避免不同文档各自发明命名，当前 schema 先固定一版推荐值表。

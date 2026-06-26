@@ -136,6 +136,7 @@ interface TextInputProps {
   label?: string;
   value: string;
   onChange: (value: string) => void;
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
   placeholder?: string;
   disabled?: boolean;
   error?: string;
@@ -149,6 +150,7 @@ export const TextInput: React.FC<TextInputProps> = ({
   label,
   value,
   onChange,
+  onKeyDown,
   placeholder,
   disabled,
   error,
@@ -176,6 +178,7 @@ export const TextInput: React.FC<TextInputProps> = ({
         step={step}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onKeyDown}
         placeholder={placeholder}
         disabled={disabled}
         aria-invalid={Boolean(error)}

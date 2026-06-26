@@ -36,17 +36,17 @@ const settingsPending = {
       },
       brand: {
         description: "An intelligent agent cabin that starts with a chat and returns to your side.",
-        title: "UIChat Mira",
+        title: "{{appName}}",
         paragraphs: [
           "At first, UIChat was just a small, clean interface.",
           "The idea was simple: let AI speak clearly, keep the interface quiet, and let it stay more naturally on your own desktop.",
           "Then it slowly grew.",
           "It began to organize materials, remember threads, carry roles, and stay with you through longer tasks. It was no longer just a question-and-answer window, but a small cabin slowly being lit: books, tools, memories, and unfinished ideas all finding their place.",
-          "That is how UIChat Mira appeared.",
+          "That is how {{appName}} appeared.",
           "Mira is not a cold assistant name. It feels more like a faint light by the window of a ship at night. When you open it, you are not logging into a system. You are returning to a workspace of your own.",
           "Here, AI does not just pass by your questions. It can stay in your world, helping you organize, work, and create, while keeping the roles, materials, and clues you once shaped with care.",
           "Mira carries a little of the meaning of seeing: seeing your materials, your projects, the clues scattered through conversations and memories, and what you truly want to finish.",
-          "This is UIChat Mira: an intelligent agent cabin that starts with chat and returns to your side.",
+          "This is {{appName}}: an intelligent agent cabin that starts with chat and returns to your side.",
         ],
       },
     },
@@ -111,6 +111,12 @@ const settingsPending = {
         argsModalTitle: "Tool Args",
         argsModalDescription:
           "Maintain the current tool's JSON invocation args here. Closing the modal does not reset the draft.",
+        webSearchTavilyHint: "Tavily is available when an API key is configured.",
+        webSearchApiKey: "Tavily API Key",
+        webSearchApiKeyPlaceholder: "Enter the Tavily API key",
+        webSearchSearxngHint: "SearXNG is available when a baseUrl is configured.",
+        webSearchBaseUrl: "SearXNG Base URL",
+        webSearchBaseUrlPlaceholder: "For example http://localhost:8080",
         terminalApprovalRequired: "Approval Required",
         terminalTimeout: "Timed Out",
         terminalReused: "Reused Session",
@@ -128,6 +134,7 @@ const settingsPending = {
         workspaceUpdateFailed: "Failed to update workspace",
         selectToolFirst: "Select a tool first",
         invalidArgsJson: "Invocation args must be valid JSON",
+        webSearchConfigSaved: "Web Search config saved",
         runFailed: "Tool execution failed",
       },
     },
@@ -163,10 +170,11 @@ const settingsPending = {
           "This view shows third-party MCP servers already attached to the local runtime, along with connection state and discovery results.",
         emptyTitle: "No installed MCP servers yet",
         emptyDescription:
-          "Install a marketplace server with `streamable-http` support to see its lifecycle state here.",
+          "Install a marketplace server with `streamable-http` or `stdio` support to see its lifecycle state here.",
         refresh: "Refresh",
         search: "Filter",
         searchPlaceholder: "Filter by name, description, endpoint, or capability ID",
+        configure: "Configure",
         connect: "Connect",
         discover: "Discover",
         remove: "Delete",
@@ -176,6 +184,11 @@ const settingsPending = {
         failed: "Failed",
         protocol: "Protocol",
         endpoint: "Endpoint",
+        remote: "Remote",
+        capabilities: "Capabilities",
+        tools: "Tools",
+        resources: "Resources",
+        prompts: "Prompts",
         projectedId: "Projected ID",
         retry: "Retry",
       },
@@ -185,11 +198,80 @@ const settingsPending = {
           'You are about to attach "{{name}}" to the local MCP runtime. Third-party MCP servers are not internal core Tools, so the source, behavior, and risk must be acknowledged before enablement.',
         confirm: "Acknowledge and install",
       },
+      guide: {
+        open: "Guide",
+        close: "Close guide",
+        title: "MCP Guide",
+        intro:
+          "A quick walk-through of the MCP flow: find, install, configure, connect, discover capabilities, and understand the current boundary.",
+        searchHint:
+          "Marketplace search is triggered by Enter. Typing alone will not fire the request, which keeps the UI usable even when the upstream registry is slow.",
+        sections: {
+          search: {
+            title: "Start with marketplace",
+            body:
+              "Use the Marketplace tab, type a name/title/description keyword, then press Enter. Results come from the official MCP registry.",
+          },
+          install: {
+            title: "Install",
+            body:
+              "Both `streamable-http` and `stdio` servers can now be installed. A third-party disclaimer is required before enablement, and the server is then added to the installed list.",
+          },
+          config: {
+            title: "Configure",
+            body:
+              "Use Configure to fill transport-specific runtime fields. `streamable-http` uses endpoint, headers, token, and timeout; `stdio` uses command, args, and timeout.",
+          },
+          connect: {
+            title: "Connect",
+            body:
+              "After configuration, click Connect. The backend will send initialize using your settings and persist the session plus protocol version.",
+          },
+          discover: {
+            title: "Discover capabilities",
+            body:
+              "Then click Discover. The backend fetches remote tools, projects them locally, and they appear in the installed list and `/mcp/tools`.",
+          },
+          inspect: {
+            title: "Inspect results",
+            body:
+              "The installed list shows projected IDs, remote server info, capability summaries, error state, and current protocol status.",
+          },
+          boundary: {
+            title: "Current boundary",
+            body:
+              "MCP is still a standalone workbench and does not connect to chat auto-calling yet. Tools remain the internal core concept.",
+          },
+          officialSource: {
+            title: "Official source",
+            body:
+              "The default marketplace source points at the official registry. Search goes upstream, so the result range is broader but depends on upstream responsiveness.",
+          },
+        },
+      },
       deleteDialog: {
         title: "Delete installed MCP server",
         description:
           'This will remove the local install record, connection state, and discovery results for "{{name}}".',
         confirm: "Confirm delete",
+      },
+      config: {
+        title: "Configure {{name}}",
+        loading: "Loading current configuration...",
+        endpointUrl: "Endpoint URL",
+        bearerToken: "Bearer Token",
+        timeoutMs: "Timeout (ms)",
+        customHeadersJson: "Custom Headers JSON",
+        authType: "Auth Type",
+        authTypeNone: "No Auth",
+        authTypeBearer: "Bearer Token",
+        knownPartial:
+          "This is currently a draft configuration model. We expose the fields we know today and will expand coverage over time.",
+        notesTitle: "Notes",
+        cancel: "Cancel",
+        save: "Save",
+        saveLoading: "Saving...",
+        clearTokenHint: "Leave blank to keep the current token; save an empty value to remove it.",
       },
       notes: {
         toggle: "Notes",
@@ -203,14 +285,17 @@ const settingsPending = {
       messages: {
         marketplaceLoadFailed: "Failed to load MCP marketplace",
         installedLoadFailed: "Failed to load installed MCP servers",
+        configLoadFailed: "Failed to load MCP configuration",
         installUnsupported:
-          "The current MVP can only install MCP servers that expose a `streamable-http` transport",
+          "This MCP server does not expose an installable transport",
         installSucceeded: "MCP server installed",
         connectSucceeded: "MCP server connected",
         connectFailed: "Failed to connect MCP server",
         discoverSucceeded: "Discovery completed",
         discoverFailed: "Discovery failed",
         deleteSucceeded: "MCP server deleted",
+        configSaveSucceeded: "MCP configuration saved",
+        configSaveFailed: "Failed to save MCP configuration",
       },
     },
     knowledgeBase: {
@@ -361,6 +446,7 @@ const settingsPending = {
       },
       sidebar: {
         searchPlaceholder: "Search knowledge base",
+        empty: "No knowledge bases yet",
         updatedJustNow: "Updated just now",
         updatedMinutesAgo: "Updated {{minutes}} minutes ago",
         updatedHoursAgo: "Updated {{hours}} hours ago",
@@ -785,6 +871,14 @@ const settingsPending = {
         reportNotAvailable: "Coverage report is not available. Run pnpm test:coverage first.",
         openFullReport: "Open full report",
       },
+      testResults: {
+        title: "Test Results",
+        total: "Total",
+        passed: "Passed",
+        failed: "Failed",
+        duration: "Duration",
+        failedTests: "Failed Tests",
+      },
       docs: {
         title: "Developer Docs",
         description: "Internal project documentation and notes for developers.",
@@ -796,7 +890,7 @@ const settingsPending = {
       },
       baseInformation: {
         title: "Base Information",
-        description: "App version, author docs, Git info and changelog.",
+        description: "App version, author docs, and Git info.",
       },
     },
   },

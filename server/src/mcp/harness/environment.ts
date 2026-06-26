@@ -2,6 +2,13 @@ import { spawnSync } from "node:child_process";
 import type { McpExecutionEnvironment } from "../core/definitions.js";
 import { getWorkspaceSelection } from "../workspace.js";
 
+export interface HarnessToolConfig {
+  web_search?: {
+    apiKey?: string;
+    baseUrl?: string;
+  };
+}
+
 let cachedRipgrepAvailability: boolean | null = null;
 
 const detectRipgrepAvailability = () => {
@@ -125,6 +132,23 @@ const defaultEditCapabilities: McpExecutionEnvironment["edit"]["capabilities"] =
   },
 ];
 
+const defaultWebSearchCapabilities: McpExecutionEnvironment["web_search"]["capabilities"] = [
+  {
+    id: "tavily-search",
+    kind: "fallback",
+    provider: "tavily",
+    available: true,
+    priority: 100,
+  },
+  {
+    id: "searxng-search",
+    kind: "fallback",
+    provider: "searxng",
+    available: true,
+    priority: 90,
+  },
+];
+
 const defaultTerminalCapabilities: McpExecutionEnvironment["terminal"]["capabilities"] = [
   {
     id: "child-process-shell-command",
@@ -142,8 +166,27 @@ const defaultTerminalCapabilities: McpExecutionEnvironment["terminal"]["capabili
   },
 ];
 
+const defaultTerminalShellProfile: McpExecutionEnvironment["terminal"]["shellProfile"] =
+  process.platform === "win32"
+    ? {
+        shell: "powershell.exe",
+        shellFamily: "powershell",
+        argsMode: "powershell",
+        stdoutEncoding: "utf8",
+        stderrEncoding: "utf8",
+      }
+    : {
+        shell: process.env.SHELL || "bash",
+        shellFamily: "posix",
+        argsMode: "posix",
+        stdoutEncoding: "utf8",
+        stderrEncoding: "utf8",
+      };
+
 export const createHarnessEnvironmentSnapshot = (
-  overrides: Partial<McpExecutionEnvironment> = {},
+  overrides: Partial<McpExecutionEnvironment> & {
+    toolConfig?: HarnessToolConfig;
+  } = {},
 ): McpExecutionEnvironment => {
   const workspace = getWorkspaceSelection();
 
@@ -169,11 +212,18 @@ export const createHarnessEnvironmentSnapshot = (
         overrides.edit?.capabilities?.map((capability) => ({ ...capability })) ??
         defaultEditCapabilities.map((capability) => ({ ...capability })),
     },
+    web_search: {
+      capabilities:
+        overrides.web_search?.capabilities?.map((capability) => ({ ...capability })) ??
+        defaultWebSearchCapabilities.map((capability) => ({ ...capability })),
+    },
     terminal: {
       capabilities:
         overrides.terminal?.capabilities?.map((capability) => ({ ...capability })) ??
         defaultTerminalCapabilities.map((capability) => ({ ...capability })),
+      shellProfile: overrides.terminal?.shellProfile ?? { ...defaultTerminalShellProfile },
     },
+    ...(overrides.toolConfig ? { toolConfig: overrides.toolConfig } : {}),
   };
 };
 

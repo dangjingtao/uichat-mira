@@ -1,26 +1,26 @@
 # 区域图：Knowledge Base
 
+Status: Current
+Owner: docs
+Last verified: 2026-06-24
 Layer: wiki
 Module: knowledge-base
 Doc Type: overview
 
-Status: Current
-Owner: docs
-Last verified: 2026-06-24
-
 ## 入口文档
 
-- [[knowledge-base-api]]
-- [[knowledge-base-backend-schema]]
-- [[markdown-workspace-mode]]
+- [[knowledge-base/README]]
+- [[knowledge-base/api]]
+- [[knowledge-base/backend-schema]]
+- [[knowledge-base/markdown-workspace-mode]]
 - [[knowledge-system/KNOWLEDGE_SYSTEM_FULL_PLAN]]
 - [[knowledge-system/INDEX_SCHEMA]]
 
 ## 单点真相页
 
-- [[knowledge-base-api]]：知识库接口分组、Swagger 暴露面和 Settings 页面边界
-- [[knowledge-base-backend-schema]]：知识库后端实体、表结构和索引生命周期
-- [[markdown-workspace-mode]]：Markdown 工作空间模式的产品边界与 MVP 收敛
+- [[knowledge-base/api]]：知识库接口分组、Swagger 暴露面和 Settings 页面边界
+- [[knowledge-base/backend-schema]]：知识库后端实体、表结构和索引生命周期
+- [[knowledge-base/markdown-workspace-mode]]：Markdown 工作空间模式的产品边界与 MVP 收敛
 
 ## 相关概念
 
@@ -41,8 +41,9 @@ Last verified: 2026-06-24
 
 ## 建议阅读路径
 
-1. [[knowledge-base-api]]
-2. [[knowledge-base-backend-schema]]
-3. [[markdown-workspace-mode]]
-4. [[knowledge-system/KNOWLEDGE_SYSTEM_FULL_PLAN]]
-5. [[knowledge-system/INDEX_SCHEMA]]
+1. [[knowledge-base/README]]
+2. [[knowledge-base/api]]
+3. [[knowledge-base/backend-schema]]
+4. [[knowledge-base/markdown-workspace-mode]]
+5. [[knowledge-system/KNOWLEDGE_SYSTEM_FULL_PLAN]]
+6. [[knowledge-system/INDEX_SCHEMA]]

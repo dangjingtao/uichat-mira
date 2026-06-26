@@ -7,9 +7,11 @@ import {
   assistantDoneChunk,
   assistantErrorChunk,
   assistantFinishChunks,
+  assistantToolEventChunk,
   assistantTextDeltaChunk,
   assistantTextEndChunk,
   assistantTextStartChunks,
+  type AssistantToolEvent,
 } from "@/services/chat-stream-events.js";
 import { createCloudflareEmbeddings } from "@/services/cloudflare-provider.js";
 import {
@@ -68,6 +70,10 @@ export interface PersistedChatStreamInput {
   assistantMessageId: string;
   messages: NormalizedChatMessage[];
   params?: Record<string, unknown>;
+  executeFullAnswer?: (helpers: {
+    emitToolEvent: (event: AssistantToolEvent) => Promise<void>;
+  }) => Promise<string>;
+  onToolEvent?: (event: AssistantToolEvent) => Promise<void> | void;
   onComplete?: (input: {
     answer: string;
     finishReason: AssistantStreamFinishReason;
@@ -194,6 +200,19 @@ export const providerProxyService = {
     return Readable.from(
       (async function* () {
         let answer = "";
+        const toolEventQueue: string[] = [];
+        const flushToolEvents = function* () {
+          while (toolEventQueue.length > 0) {
+            const nextChunk = toolEventQueue.shift();
+            if (nextChunk) {
+              yield nextChunk;
+            }
+          }
+        };
+        const emitToolEvent = async (event: AssistantToolEvent) => {
+          toolEventQueue.push(assistantToolEventChunk(event));
+          await input.onToolEvent?.(event);
+        };
 
         try {
           yield* assistantTextStartChunks({
@@ -201,17 +220,27 @@ export const providerProxyService = {
             includeStartStep: true,
           });
 
-          for await (const delta of service.streamChatText(
-            input.requestedProvider,
-            input.messages,
-            input.params,
-          )) {
-            if (!delta) {
-              continue;
+          if (input.executeFullAnswer) {
+            answer = await input.executeFullAnswer({
+              emitToolEvent,
+            });
+            yield* flushToolEvents();
+            if (answer) {
+              yield assistantTextDeltaChunk(answer);
             }
+          } else {
+            for await (const delta of service.streamChatText(
+              input.requestedProvider,
+              input.messages,
+              input.params,
+            )) {
+              if (!delta) {
+                continue;
+              }
 
-            answer += delta;
-            yield assistantTextDeltaChunk(delta);
+              answer += delta;
+              yield assistantTextDeltaChunk(delta);
+            }
           }
 
           if (!answer.trim()) {
@@ -231,6 +260,7 @@ export const providerProxyService = {
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           yield assistantErrorChunk(message);
+          yield* flushToolEvents();
           yield* assistantFinishChunks({
             finishReason: "error",
             isContinued: false,

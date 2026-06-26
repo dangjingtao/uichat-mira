@@ -1,7 +1,11 @@
+import { getApiBaseUrl } from "@/shared/platform/desktopRuntime";
+
 export default function DevelopmentApiDocs() {
+  const docsUrl = `${getApiBaseUrl()}/api-docs`;
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <iframe src="/api-docs" title="API Docs" className="h-full w-full" />
+      <iframe src={docsUrl} title="API Docs" className="h-full w-full" />
     </div>
   );
 }

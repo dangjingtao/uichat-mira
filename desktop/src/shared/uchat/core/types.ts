@@ -213,6 +213,16 @@ export type ChatRunEvent =
   | { type: "message:part"; messageId?: string; part: ChatMessagePart }
   | { type: "message:replace"; messageId?: string; parts: ChatMessagePart[] }
   | {
+      type: "message:tool";
+      messageId?: string;
+      toolCallId?: string;
+      toolName: string;
+      status: "requested" | "running" | "succeeded" | "failed";
+      input?: Record<string, unknown>;
+      output?: unknown;
+      errorMessage?: string;
+    }
+  | {
       type: "message:metadata";
       messageId?: string;
       metadata: Record<string, unknown>;

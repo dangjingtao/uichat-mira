@@ -6,6 +6,7 @@ import type { McpMarketplaceServer } from "@/shared/api/tools";
 type McpMarketplacePanelProps = {
   hasMore: boolean;
   isLoading: boolean;
+  isSearching: boolean;
   servers: McpMarketplaceServer[];
   sourceUrl: string | null;
   labels: {
@@ -41,6 +42,7 @@ function formatTransportSummary(server: McpMarketplaceServer) {
 export default function McpMarketplacePanel({
   hasMore,
   isLoading,
+  isSearching,
   servers,
   sourceUrl,
   labels,
@@ -123,10 +125,10 @@ export default function McpMarketplacePanel({
                   variant="outline"
                   size="sm"
                   onClick={() => onInstall(server)}
-                  disabled={isLoading || !server.transports.some((item) => item.kind === "streamable-http")}
+                  disabled={server.transports.length === 0}
                   title={formatTransportSummary(server)}
                 >
-                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                  <Download className="h-4 w-4" />
                   {labels.install}
                 </Button>
               </div>
@@ -136,10 +138,20 @@ export default function McpMarketplacePanel({
           {hasMore ? (
             <div className="flex justify-center px-5 py-4">
               <Button variant="secondary" size="sm" onClick={onLoadMore} disabled={isLoading}>
-                {isLoading ? labels.loading : labels.loadMore}
+                {isLoading && !isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {isLoading && !isSearching ? labels.loading : labels.loadMore}
               </Button>
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {isSearching && servers.length > 0 ? (
+        <div className="border-t border-border px-5 py-3">
+          <div className="flex items-center gap-2 text-xs text-text-tertiary">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {labels.loading}
+          </div>
         </div>
       ) : null}
 

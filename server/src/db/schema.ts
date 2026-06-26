@@ -202,6 +202,21 @@ export const providerModels = sqliteTable(
 export type ProviderModel = typeof providerModels.$inferSelect;
 export type NewProviderModel = typeof providerModels.$inferInsert;
 
+export const webSearchSettings = sqliteTable("web_search_settings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  tavilyApiKeyEncrypted: text("tavily_api_key_encrypted"),
+  searxngBaseUrl: text("searxng_base_url").notNull().default(""),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export type WebSearchSettings = typeof webSearchSettings.$inferSelect;
+export type NewWebSearchSettings = typeof webSearchSettings.$inferInsert;
+
 export const knowledgeBases = sqliteTable(
   "knowledge_bases",
   {

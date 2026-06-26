@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/shared/ui/Button";
 import { Modal } from "@/shared/ui/Modal";
-import { TextArea } from "@/shared/ui/Input";
+import { TextArea, TextInput } from "@/shared/ui/Input";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import ToolsPackagePanel from "./components/ToolsPackagePanel";
 import ToolsSidebar from "./components/ToolsSidebar";
@@ -104,7 +104,15 @@ export default function ToolsSettings() {
             <Button variant="secondary" onClick={() => setIsArgsModalOpen(false)}>
               {t("common.actions.close")}
             </Button>
-            <Button variant="primary" onClick={() => setIsArgsModalOpen(false)}>
+            <Button
+              variant="primary"
+              onClick={async () => {
+                if (workbench.selectedTool?.id === "web_search") {
+                  await workbench.saveWebSearchConfig();
+                }
+                setIsArgsModalOpen(false);
+              }}
+            >
               {t("common.actions.confirm")}
             </Button>
           </>
@@ -140,16 +148,91 @@ export default function ToolsSettings() {
               </div>
             </div>
           ) : null}
-          <div className="text-sm text-text-secondary">
-            {t("settings.tools.package.argsModalDescription")}
-          </div>
-          <TextArea
-            label={t("settings.tools.workbench.args")}
-            value={workbench.argsDraft}
-            onChange={workbench.setArgsDraft}
-            placeholder={t("settings.tools.workbench.argsPlaceholder")}
-            rows={18}
-          />
+          {workbench.selectedTool?.id === "web_search" ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-3">
+                <div className="rounded-ui-control border border-border bg-surface-primary px-3 py-3">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src="https://www.tavily.com/logos/tavily-full.svg"
+                      alt="Tavily"
+                      className="h-4 w-auto"
+                    />
+                    <span className="text-xs text-text-tertiary">
+                      {t("settings.tools.package.webSearchTavilyHint")}
+                    </span>
+                  </div>
+                  <div className="mt-3">
+                    <TextInput
+                      label={t("settings.tools.package.webSearchApiKey")}
+                      value={workbench.webSearchConfig.apiKey}
+                      onChange={(value) =>
+                        workbench.setWebSearchConfig((current) => ({
+                          ...current,
+                          apiKey: value,
+                        }))
+                      }
+                      placeholder={t("settings.tools.package.webSearchApiKeyPlaceholder")}
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-ui-control border border-border bg-surface-primary px-3 py-3">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src="https://upload.wikimedia.org/wikipedia/en/a/a3/SearXNG_logo.svg"
+                      alt="SearXNG"
+                      className="h-4 w-auto"
+                    />
+                    <span className="text-xs text-text-tertiary">
+                      {t("settings.tools.package.webSearchSearxngHint")}
+                    </span>
+                  </div>
+                  <div className="mt-3">
+                    <TextInput
+                      label={t("settings.tools.package.webSearchBaseUrl")}
+                      value={workbench.webSearchConfig.baseUrl}
+                      onChange={(value) =>
+                        workbench.setWebSearchConfig((current) => ({
+                          ...current,
+                          baseUrl: value,
+                        }))
+                      }
+                      placeholder={t("settings.tools.package.webSearchBaseUrlPlaceholder")}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-ui-control border border-border bg-surface-secondary px-3 py-3">
+                <div className="text-sm text-text-secondary">
+                  {t("settings.tools.package.argsModalDescription")}
+                </div>
+                <div className="mt-3">
+                  <TextArea
+                    label={t("settings.tools.workbench.args")}
+                    value={workbench.argsDraft}
+                    onChange={workbench.setArgsDraft}
+                    placeholder={t("settings.tools.workbench.argsPlaceholder")}
+                    rows={10}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="text-sm text-text-secondary">
+                {t("settings.tools.package.argsModalDescription")}
+              </div>
+              <TextArea
+                label={t("settings.tools.workbench.args")}
+                value={workbench.argsDraft}
+                onChange={workbench.setArgsDraft}
+                placeholder={t("settings.tools.workbench.argsPlaceholder")}
+                rows={18}
+              />
+            </>
+          )}
         </div>
       </Modal>
     </SettingsPageLayout>

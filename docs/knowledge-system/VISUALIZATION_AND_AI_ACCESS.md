@@ -29,6 +29,7 @@ Doc Type: overview
 - 当前源材料就是普通 markdown + 目录层级
 - 这套系统不要求改写现有 authoring 模式
 - 最低摩擦路径仍然是：markdown 作为唯一真相，在外面叠阅读器与接入层
+- AI 接入、索引、可视化三层都应消费同一套 `Layer / Module / Doc Type / Status` 口径
 
 ## 人类阅读与可视化
 
@@ -95,6 +96,7 @@ Doc Type: overview
 - markdown 继续作为源材料
 - 通过 MCP server 暴露成 resources
 - 按 area 或主题再做聚合 resource
+- 默认应先暴露 current-contract、reference 和 overview，再逐步扩展 planned 或 historical
 
 优点：
 
@@ -144,6 +146,16 @@ Doc Type: overview
 2. 保持 markdown 作为唯一真相
 3. 如果有多 AI 客户端接入需求，再加 MCP resource layer
 4. 只有当 note-link 可视化已经不够用时，才上 graph database
+
+## 统一口径
+
+可视化和 AI 接入都只是读取方式，不是新的写作层。
+
+所以它们应该遵守同一件事：
+
+- 先按模块和文档角色组织
+- 再按资源、图谱或搜索形式暴露
+- 不反过来要求 markdown 改成工具友好的伪结构
 
 ## 约束
 

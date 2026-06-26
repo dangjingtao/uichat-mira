@@ -50,12 +50,16 @@ Doc Type: current-contract
 - `uchat.md`
 - `uchat-internal-maintenance.md`
 - `chat-system-practices.md`
+- `chat-tool-integration-research.md`
+- `chat-tool-integration-poc.md`
+- `chat-tool-integration-checklist.md`
 
 ### 知识库
 
-- `knowledge-base-api.md`
-- `knowledge-base-backend-schema.md`
-- `markdown-workspace-mode.md`
+- `knowledge-base/README.md`
+- `knowledge-base/api.md`
+- `knowledge-base/backend-schema.md`
+- `knowledge-base/markdown-workspace-mode.md`
 
 ### 平台与打包
 
@@ -84,6 +88,19 @@ Doc Type: current-contract
 - 它属于哪一层
 - 它属于哪个模块
 - 它是什么文档角色
+
+从现在开始，活跃文档的默认要求可以直接理解成四个头部字段：
+
+- `Layer`
+- `Module`
+- `Doc Type`
+- `Status`
+
+如果是 current-contract、reference、overview 这类核心页，再尽量补：
+
+- `Owner`
+- `Last verified`
+- `Canonical`
 
 ## 目录说明
 

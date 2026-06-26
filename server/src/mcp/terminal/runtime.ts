@@ -44,6 +44,7 @@ type TerminalExecutionResult = {
 };
 
 type TerminalCapability = McpExecutionEnvironment["terminal"]["capabilities"][number];
+type TerminalShellProfile = McpExecutionEnvironment["terminal"]["shellProfile"];
 
 const DEFAULT_TIMEOUT_MS = 2_000;
 const MIN_TIMEOUT_MS = 100;
@@ -56,6 +57,9 @@ const assertTerminalEnvironment = (environment?: McpExecutionEnvironment) => {
 
   return environment;
 };
+
+const getTerminalShellProfile = (environment: McpExecutionEnvironment) =>
+  environment.terminal.shellProfile;
 
 const sortCapabilities = (environment: McpExecutionEnvironment) =>
   [...environment.terminal.capabilities]
@@ -155,18 +159,12 @@ const selectPersistentCapability = (environment: McpExecutionEnvironment) => {
 
 const toCombinedOutput = (stdout: string, stderr: string) => [stdout, stderr].filter(Boolean).join("\n").trimEnd();
 
-const getDefaultShell = () =>
-  process.platform === "win32"
-    ? process.env.ComSpec || "powershell.exe"
-    : process.env.SHELL || "bash";
-
-const buildShellArgs = (shell: string, command: string) => {
-  const normalizedShell = shell.toLowerCase();
-  if (normalizedShell.includes("powershell")) {
+const buildShellArgs = (profile: TerminalShellProfile, command: string) => {
+  if (profile.argsMode === "powershell") {
     return ["-NoProfile", "-Command", command];
   }
 
-  if (normalizedShell.endsWith("cmd.exe") || normalizedShell === "cmd") {
+  if (profile.argsMode === "cmd") {
     return ["/d", "/s", "/c", command];
   }
 
@@ -179,15 +177,16 @@ const runEphemeralCommand = async (input: {
   env?: Record<string, string>;
   timeoutMs: number;
   signal: AbortSignal;
+  environment: McpExecutionEnvironment;
   pushEvent?: (event: McpStreamEventInput) => void;
 }) => {
   if (input.signal.aborted) {
     throw new Error("Terminal session aborted");
   }
 
-  const shell = getDefaultShell();
+  const shellProfile = getTerminalShellProfile(input.environment);
   const cwd = resolveCommandCwd(input.cwd);
-  const child = spawn(shell, buildShellArgs(shell, input.command), {
+  const child = spawn(shellProfile.shell, buildShellArgs(shellProfile, input.command), {
     cwd,
     env: {
       ...process.env,
@@ -286,7 +285,7 @@ const runEphemeralCommand = async (input: {
 
   return {
     sessionId: input.signal.aborted ? crypto.randomUUID() : crypto.randomUUID(),
-    shell,
+    shell: shellProfile.shell,
     cwd,
     exitCode,
     timedOut,
@@ -301,14 +300,16 @@ const escapeRegex = (input: string) => input.replace(/[.*+?^${}()|[\]\\]/g, "\\$
 const buildTerminalCompletionMarker = (invocationId: string) =>
   `__CODEX_DONE__:${invocationId}:${crypto.randomUUID().replace(/-/g, "")}`;
 
-const buildWrappedCommand = (shell: string, command: string, marker: string) => {
-  const normalizedShell = shell.toLowerCase();
-
-  if (normalizedShell.includes("powershell")) {
+const buildWrappedCommand = (
+  profile: TerminalShellProfile,
+  command: string,
+  marker: string,
+) => {
+  if (profile.argsMode === "powershell") {
     return `& { ${command}; $code = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } else { 0 }; Write-Output "${marker}:$code" }`;
   }
 
-  if (normalizedShell.endsWith("cmd.exe") || normalizedShell === "cmd") {
+  if (profile.argsMode === "cmd") {
     return `(${command}) & echo ${marker}:%errorlevel%`;
   }
 
@@ -343,6 +344,7 @@ const runPersistentCommand = async (input: {
   invocationId: string;
   command: string;
   session: TerminalSessionRecord;
+  shellProfile: TerminalShellProfile;
   reusedSession: boolean;
   timeoutMs: number;
   signal: AbortSignal;
@@ -354,7 +356,7 @@ const runPersistentCommand = async (input: {
 
   const marker = buildTerminalCompletionMarker(input.invocationId);
   const markerPattern = new RegExp(`${escapeRegex(marker)}:(-?\\d+)`);
-  const wrappedCommand = buildWrappedCommand(input.session.shell, input.command, marker);
+  const wrappedCommand = buildWrappedCommand(input.shellProfile, input.command, marker);
 
   let rawBuffer = "";
   let streamedOffset = 0;
@@ -505,6 +507,7 @@ export const executeTerminalSessionRuntime = async ({
   trace,
 }: TerminalExecutionContext): Promise<TerminalExecutionResult> => {
   const harnessEnvironment = assertTerminalEnvironment(environment);
+  const shellProfile = getTerminalShellProfile(harnessEnvironment);
   const planningSpan = trace?.startSpan({
     name: "Resolve terminal execution plan",
     kind: "strategy_selection",
@@ -542,6 +545,8 @@ export const executeTerminalSessionRuntime = async ({
       provider: capability.provider,
       sessionMode,
       timeoutMs,
+      shell: shellProfile.shell,
+      shellFamily: shellProfile.shellFamily,
     },
   });
 
@@ -591,6 +596,7 @@ export const executeTerminalSessionRuntime = async ({
       invocationId,
       command,
       session,
+      shellProfile,
       reusedSession,
       timeoutMs,
       signal,
@@ -663,6 +669,7 @@ export const executeTerminalSessionRuntime = async ({
     env,
     timeoutMs,
     signal,
+    environment: harnessEnvironment,
     pushEvent,
   });
   spawnSpan?.end({

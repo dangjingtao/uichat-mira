@@ -4,7 +4,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>UI Chat RAG Tester</title>
+  <script type="module">
+    import { appPackageMeta } from "/src/shared/appMeta.ts";
+    document.title = appPackageMeta.displayName;
+  </script>
 </head>
 
 <body>

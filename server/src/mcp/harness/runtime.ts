@@ -12,6 +12,7 @@ import {
   initializeExternalMcpDatabase,
   registerAllExternalMcpCapabilities,
 } from "../external.js";
+import { webSearchSettingsRepository } from "@/db/repositories/web-search-settings.repository.js";
 import { registerCapability, registerReadableResource } from "./registry.js";
 
 let initialized = false;
@@ -38,6 +39,7 @@ export const initializeHarnessRuntime = () => {
   if (process.env.DATABASE_URL) {
     initializeExternalMcpDatabase();
     registerAllExternalMcpCapabilities();
+    webSearchSettingsRepository.initialize();
   }
   initialized = true;
 };

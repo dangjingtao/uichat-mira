@@ -44,6 +44,22 @@ Doc Type: reference
 | `content_class` | string | 是 | contract、reference、feature、historical 等 |
 | `updated_at` | string | 是 | 索引更新时间 |
 
+### 字段优先级
+
+索引里最重要的是这四个维度：
+
+1. `layer`
+2. `module`
+3. `doc_type`
+4. `status`
+
+它们决定了：
+
+- 这篇文档属于哪一层
+- 这篇文档主要讲哪个模块
+- 这篇文档是什么文档角色
+- 这篇文档是不是当前真相
+
 ## Section 记录
 
 每个 heading 分隔出的 section 应生成一条 section record：
@@ -83,6 +99,8 @@ Doc Type: reference
 - `status` 在索引里统一小写。
 - 展示字段保留原始标题大小写。
 - id 由规范化路径和 heading anchor 组合生成。
+- `module` 采用 `WIKI_SYSTEM_SCHEMA.md` 中固定的主模块口径。
+- 一篇文档如果跨多个主题，索引只保留一个主 `module`，其余交叉主题放进 `tags` 或 `related`。
 
 ## Related Docs
 

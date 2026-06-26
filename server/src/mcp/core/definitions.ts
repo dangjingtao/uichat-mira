@@ -85,8 +85,24 @@ export interface McpExecutionEnvironment {
   edit: {
     capabilities: McpExecutionEnvironmentCapability[];
   };
+  web_search: {
+    capabilities: McpExecutionEnvironmentCapability[];
+  };
   terminal: {
     capabilities: McpExecutionEnvironmentCapability[];
+    shellProfile: {
+      shell: string;
+      shellFamily: "powershell" | "cmd" | "posix";
+      argsMode: "powershell" | "cmd" | "posix";
+      stdoutEncoding: "utf8";
+      stderrEncoding: "utf8";
+    };
+  };
+  toolConfig?: {
+    web_search?: {
+      apiKey?: string;
+      baseUrl?: string;
+    };
   };
 }
 

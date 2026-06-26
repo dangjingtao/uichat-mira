@@ -1,5 +1,10 @@
-import type { McpToolImplementation } from "../core/definitions.js";
+import type {
+  McpExecutionEnvironment,
+  McpInvocationContext,
+  McpToolImplementation,
+} from "../core/definitions.js";
 import { mcpBadRequest, mcpInternalError } from "../core/errors.js";
+import { webSearchSettingsRepository } from "@/db/repositories/web-search-settings.repository.js";
 
 export interface SearchResult {
   title: string;
@@ -7,24 +12,139 @@ export interface SearchResult {
   snippet: string;
 }
 
+type WebSearchProvider = "tavily" | "searxng";
+
+type TavilyResponse = {
+  results?: Array<{ title?: string; url?: string; content?: string }>;
+};
+
+type SearxngResponse = {
+  results?: Array<{ title?: string; url?: string; content?: string }>;
+};
+
+type WebSearchExecutionContext = Pick<
+  McpInvocationContext,
+  "args" | "environment" | "pushEvent" | "trace"
+>;
+
+type WebSearchProviderPlan = {
+  provider: WebSearchProvider;
+  capabilityId: string;
+  priority: number;
+};
+
 const SEARCH_TIMEOUT_MS = 10_000;
+const DEFAULT_MAX_RESULTS = 5;
 
 const withTimeoutSignal = () => AbortSignal.timeout(SEARCH_TIMEOUT_MS);
+
+const assertWebSearchEnvironment = (environment?: McpExecutionEnvironment) => {
+  if (!environment || environment.source !== "harness") {
+    throw mcpInternalError("Web search requires a harness environment snapshot");
+  }
+
+  return environment;
+};
+
+const normalizeQuery = (value: unknown) => {
+  const query = typeof value === "string" ? value.trim() : "";
+  if (!query) {
+    throw mcpBadRequest("query is required");
+  }
+
+  return query;
+};
+
+const normalizeMaxResults = (value: unknown) => {
+  if (value === undefined) {
+    return DEFAULT_MAX_RESULTS;
+  }
+
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw mcpBadRequest("maxResults must be a finite number");
+  }
+
+  return Math.max(1, Math.trunc(value));
+};
+
+const resolveStoredWebSearchSettings = () => webSearchSettingsRepository.get();
 
 const resolveTavilyApiKey = (args: Record<string, unknown>) =>
   typeof args.apiKey === "string" && args.apiKey.trim()
     ? args.apiKey.trim()
-    : (process.env.TAVILY_API_KEY ?? "").trim();
+    : (
+        resolveStoredWebSearchSettings().tavilyApiKey ||
+        (process.env.TAVILY_API_KEY ?? "")
+      ).trim();
+
+const resolveSearxngBaseUrl = (args: Record<string, unknown>) =>
+  typeof args.baseUrl === "string" && args.baseUrl.trim()
+    ? args.baseUrl.trim().replace(/\/+$/, "")
+    : (
+        resolveStoredWebSearchSettings().searxngBaseUrl ||
+        (process.env.SEARXNG_BASE_URL ?? "")
+      )
+        .trim()
+        .replace(/\/+$/, "");
+
+const resolveToolConfig = (context: WebSearchExecutionContext) => {
+  const toolConfig = context.environment?.toolConfig;
+  if (!toolConfig || typeof toolConfig !== "object" || Array.isArray(toolConfig)) {
+    return null;
+  }
+
+  return toolConfig as {
+    web_search?: {
+      apiKey?: string;
+      baseUrl?: string;
+    };
+  };
+};
+
+const resolveTavilyApiKeyFromContext = (context: WebSearchExecutionContext) =>
+  resolveToolConfig(context)?.web_search?.apiKey ?? undefined;
+
+const resolveSearxngBaseUrlFromContext = (context: WebSearchExecutionContext) =>
+  typeof resolveToolConfig(context)?.web_search?.baseUrl === "string"
+    ? resolveToolConfig(context)?.web_search?.baseUrl?.trim().replace(/\/+$/, "")
+    : undefined;
+
+const resolveWebSearchApiKey = (context: WebSearchExecutionContext) =>
+  resolveTavilyApiKeyFromContext(context) ?? resolveTavilyApiKey(context.args);
+
+const resolveWebSearchBaseUrl = (context: WebSearchExecutionContext) =>
+  resolveSearxngBaseUrlFromContext(context) ?? resolveSearxngBaseUrl(context.args);
+
+const sortProviderPlans = (
+  environment: McpExecutionEnvironment,
+  context: WebSearchExecutionContext,
+): WebSearchProviderPlan[] => {
+  const tavilyApiKey = resolveWebSearchApiKey(context);
+  const searxngBaseUrl = resolveWebSearchBaseUrl(context);
+
+  return [...environment.web_search.capabilities]
+    .filter((capability) => capability.available)
+    .map((capability) => {
+      const provider = capability.provider === "searxng" ? "searxng" : "tavily";
+      return {
+        provider,
+        capabilityId: capability.id,
+        priority: capability.priority,
+      } satisfies WebSearchProviderPlan;
+    })
+    .filter((plan) =>
+      plan.provider === "tavily"
+        ? Boolean(tavilyApiKey)
+        : Boolean(searxngBaseUrl),
+    )
+    .sort((left, right) => right.priority - left.priority || left.provider.localeCompare(right.provider));
+};
 
 const fetchTavilySearch = async (
   query: string,
   maxResults: number,
   apiKey: string,
 ): Promise<SearchResult[]> => {
-  if (!apiKey) {
-    throw mcpInternalError("Tavily apiKey is required");
-  }
-
   const response = await fetch("https://api.tavily.com/search", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -41,9 +161,7 @@ const fetchTavilySearch = async (
     throw mcpInternalError(`Tavily search failed: ${response.status}`);
   }
 
-  const data = (await response.json()) as {
-    results?: Array<{ title?: string; url?: string; content?: string }>;
-  };
+  const data = (await response.json()) as TavilyResponse;
 
   return (data.results ?? []).map((item) => ({
     title: item.title ?? "",
@@ -52,11 +170,99 @@ const fetchTavilySearch = async (
   }));
 };
 
+const buildSearxngSearchUrl = (input: {
+  baseUrl: string;
+  query: string;
+}) => {
+  const searchParams = new URLSearchParams({
+    q: input.query,
+    format: "json",
+    language: "all",
+    safesearch: "0",
+    pageno: "1",
+  });
+
+  return `${input.baseUrl}/search?${searchParams.toString()}`;
+};
+
+const fetchSearxngSearch = async (
+  query: string,
+  maxResults: number,
+  baseUrl: string,
+): Promise<SearchResult[]> => {
+  const response = await fetch(buildSearxngSearchUrl({ baseUrl, query }), {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+    },
+    signal: withTimeoutSignal(),
+  });
+
+  if (!response.ok) {
+    throw mcpInternalError(`SearXNG search failed: ${response.status}`);
+  }
+
+  const data = (await response.json()) as SearxngResponse;
+
+  return (data.results ?? [])
+    .slice(0, maxResults)
+    .map((item) => ({
+      title: item.title ?? "",
+      link: item.url ?? "",
+      snippet: item.content ?? "",
+    }));
+};
+
+const selectWebSearchPlan = ({
+  args,
+  environment,
+  pushEvent,
+  trace,
+}: WebSearchExecutionContext) => {
+  const harnessEnvironment = assertWebSearchEnvironment(environment);
+  const planSpan = trace?.startSpan({
+    name: "Resolve web search provider plan",
+    kind: "strategy_selection",
+  });
+
+  const plans = sortProviderPlans(harnessEnvironment, {
+    args,
+    environment,
+    pushEvent,
+    trace,
+  });
+  const selected = plans[0];
+
+  if (!selected) {
+    planSpan?.end({
+      status: "failed",
+    });
+    throw mcpInternalError(
+      "No web search provider is available. Configure Tavily apiKey or SearXNG baseUrl.",
+    );
+  }
+
+  pushEvent({
+    type: "invocation:progress",
+    message: `Web search plan: ${selected.capabilityId}`,
+  });
+
+  planSpan?.end({
+    metadata: {
+      provider: selected.provider,
+      capabilityId: selected.capabilityId,
+    },
+  });
+
+  return selected;
+};
+
 export const webSearchTool: McpToolImplementation = {
   definition: {
     id: "web_search",
     title: "Web Search",
-    description: "Search the public web through Tavily.",
+    description:
+      "Search the public web through a harness-selected provider such as Tavily or SearXNG.",
     domain: "web_search",
     mode: "sync",
     inputSchema: {
@@ -66,6 +272,7 @@ export const webSearchTool: McpToolImplementation = {
         query: { type: "string" },
         maxResults: { type: "number" },
         apiKey: { type: "string" },
+        baseUrl: { type: "string" },
       },
     },
     tags: ["search", "web"],
@@ -76,21 +283,36 @@ export const webSearchTool: McpToolImplementation = {
     },
   },
   execute: async (context) => {
-    const query = typeof context.args.query === "string" ? context.args.query.trim() : "";
-    if (!query) {
-      throw mcpBadRequest("query is required");
-    }
+    const query = normalizeQuery(context.args.query);
+    const maxResults = normalizeMaxResults(context.args.maxResults);
+  const selected = selectWebSearchPlan(context);
+  const resolvedApiKey = resolveWebSearchApiKey(context);
+  const resolvedBaseUrl = resolveWebSearchBaseUrl(context);
 
-    const maxResults =
-      typeof context.args.maxResults === "number" ? context.args.maxResults : 5;
-    const apiKey = resolveTavilyApiKey(context.args);
+  context.pushEvent({
+    type: "invocation:progress",
+    message: `Searching web with ${selected.provider}`,
+  });
 
-    context.pushEvent({
-      type: "invocation:progress",
-      message: "Searching web with tavily",
+    const executionSpan = context.trace.startSpan({
+      name: `Execute ${selected.provider} search`,
+      kind: "command_execution",
+      metadata: {
+        provider: selected.provider,
+      },
     });
 
-    const results = await fetchTavilySearch(query, maxResults, apiKey);
+    const results =
+      selected.provider === "tavily"
+        ? await fetchTavilySearch(query, maxResults, resolvedApiKey)
+        : await fetchSearxngSearch(query, maxResults, resolvedBaseUrl);
+
+    executionSpan.end({
+      metadata: {
+        provider: selected.provider,
+        resultCount: results.length,
+      },
+    });
 
     context.addArtifact({
       kind: "search-results",
@@ -98,14 +320,20 @@ export const webSearchTool: McpToolImplementation = {
       data: results,
       metadata: {
         query,
-        provider: "tavily",
+        provider: selected.provider,
+        ...(selected.provider === "searxng"
+          ? { baseUrl: resolvedBaseUrl }
+          : {}),
       },
     });
 
     return {
       result: {
         query,
-        provider: "tavily",
+        provider: selected.provider,
+        ...(selected.provider === "searxng"
+          ? { baseUrl: resolvedBaseUrl }
+          : {}),
         results,
       },
     };

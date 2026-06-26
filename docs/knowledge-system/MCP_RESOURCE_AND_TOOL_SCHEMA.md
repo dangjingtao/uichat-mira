@@ -17,6 +17,17 @@ Doc Type: reference
 - 想知道应该暴露哪些资源
 - 想明确 AI 客户端可以依赖哪些工具
 
+## 统一原则
+
+MCP 暴露层不是新的真相源，只是 markdown 语料的标准读取面。
+
+因此它必须遵守：
+
+- 结果可追溯到 source path
+- 默认优先 current 文档
+- 历史材料显式标记
+- 跨模块文档只暴露主模块视图
+
 ## 资源族
 
 ### 索引资源
@@ -36,6 +47,8 @@ Doc Type: reference
 - `kb://areas/knowledge-base`
 - `kb://areas/providers`
 - `kb://areas/prompt-manager`
+- `kb://areas/tooling-runtime`
+- `kb://areas/docs-system`
 
 ### 文档资源
 
@@ -62,6 +75,7 @@ Doc Type: reference
 - `read_section`
 - `read_area_bundle`
 - `read_concept_bundle`
+- `read_status_bundle`
 
 ### 搜索类工具
 
@@ -70,6 +84,7 @@ Doc Type: reference
 - `search_by_status`
 - `search_by_owner`
 - `search_by_code_anchor`
+- `search_by_module`
 
 ### 关系类工具
 
@@ -92,6 +107,11 @@ Doc Type: reference
 | `area` | string | 否 | 逻辑 area |
 | `excerpt` | string | 是 | 可读文本摘要或命中片段 |
 | `score` | number | 否 | 搜索分数 |
+
+建议再附带：
+
+- `module`
+- `doc_type`
 
 ## 访问策略
 

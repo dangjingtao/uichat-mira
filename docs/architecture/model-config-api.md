@@ -1,12 +1,11 @@
 # 模型配置 API
 
+Status: Current
+Owner: runtime
+Last verified: 2026-06-26
 Layer: raw-source
 Module: runtime
 Doc Type: reference
-
-Status: Current
-Owner: runtime
-Last verified: 2026-06-25
 
 ## 单点真相范围
 

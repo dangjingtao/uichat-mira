@@ -21,6 +21,7 @@ import {
   prepareDataStreamReply,
   prepareEventStreamReply,
 } from "./stream-protocol.js";
+import { executeDefaultChatToolLoop } from "./chat-tool-loop.js";
 import {
   getFallbackThreadTitle,
   generateThreadTitleFromMessages,
@@ -149,6 +150,7 @@ const sendPersistedDefaultChatStream = ({
   userMessageId,
   messages,
   params,
+  toolConfig,
 }: {
   app: FastifyInstance;
   reply: FastifyReply;
@@ -157,6 +159,7 @@ const sendPersistedDefaultChatStream = ({
   userMessageId?: string;
   messages: ReturnType<typeof normalizeProxyChatMessages>;
   params?: Record<string, unknown>;
+  toolConfig?: ProviderChatBody["toolConfig"];
 }) => {
   const { latestUserMessageId, latestUserMessage } = persistVisibleUserMessage({
     threadId,
@@ -176,6 +179,23 @@ const sendPersistedDefaultChatStream = ({
       assistantMessageId,
       messages,
       params,
+      executeFullAnswer: async ({ emitToolEvent }) => {
+        const toolLoopResult = await executeDefaultChatToolLoop({
+          requestedProvider: "default",
+          threadId,
+          userId: authUserId,
+          messages,
+          params,
+          toolConfig,
+          onToolEvent: emitToolEvent,
+        });
+
+        if (toolLoopResult) {
+          return toolLoopResult.answer;
+        }
+
+        return providerProxyService.generateTextForRole("llm", messages, params);
+      },
       onComplete: async ({ answer, finishReason }) => {
         if (finishReason !== "stop" || !answer.trim()) {
           return;
@@ -335,6 +355,7 @@ export const registerProxyProviderChatRoutes = async (
             userMessageId: request.body.messageId,
             messages: defaultChatMessages,
             params: roleLlmParams,
+            toolConfig: request.body.toolConfig,
           });
         }
       }

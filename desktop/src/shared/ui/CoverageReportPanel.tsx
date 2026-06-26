@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDownAZ, ArrowUpZA } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import {
+  ArrowDownAZ,
+  ArrowUpZA,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  AlertCircle,
+} from "lucide-react";
 import Card from "./Card";
 
 export interface CoverageMetric {
@@ -19,9 +27,20 @@ export interface CoverageEntry {
 
 export type CoverageSummary = Record<string, CoverageEntry>;
 
+export interface TestResultSummary {
+  total: number;
+  passed: number;
+  failed: number;
+  skipped: number;
+  durationMs: number;
+  failedTests: string[];
+}
+
 export interface CoverageReportPanelProps {
   /** coverage-summary.json 的完整 URL */
   src: string;
+  /** test-results-summary.json 的完整 URL */
+  resultSrc?: string;
   /** 面板标题 */
   title?: React.ReactNode;
   /** 报告不存在时的提示文案 */
@@ -34,6 +53,13 @@ export interface CoverageReportPanelProps {
 type LoadState =
   | { status: "checking" }
   | { status: "ready"; data: CoverageSummary }
+  | { status: "empty" }
+  | { status: "error"; error: string };
+
+type ResultLoadState =
+  | { status: "idle" }
+  | { status: "checking" }
+  | { status: "ready"; data: TestResultSummary }
   | { status: "empty" }
   | { status: "error"; error: string };
 
@@ -80,14 +106,26 @@ function CoveragePctCell({ pct }: { pct: number }) {
   );
 }
 
+function formatDuration(ms: number): string {
+  if (ms < 1000) {
+    return `${ms}ms`;
+  }
+  return `${(ms / 1000).toFixed(2)}s`;
+}
+
 export default function CoverageReportPanel({
   src,
+  resultSrc,
   title,
   emptyText = "覆盖率报告暂不可用",
   errorText = "覆盖率报告加载失败",
   className = "",
 }: CoverageReportPanelProps) {
+  const { t } = useTranslation();
   const [state, setState] = useState<LoadState>({ status: "checking" });
+  const [resultState, setResultState] = useState<ResultLoadState>(
+    resultSrc ? { status: "checking" } : { status: "idle" },
+  );
   const [sortKey, setSortKey] = useState<SortKey>("statements");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
 
@@ -125,6 +163,45 @@ export default function CoverageReportPanel({
       cancelled = true;
     };
   }, [src]);
+
+  useEffect(() => {
+    if (!resultSrc) {
+      return;
+    }
+
+    let cancelled = false;
+    setResultState({ status: "checking" });
+
+    fetch(resultSrc)
+      .then(async (res) => {
+        if (cancelled) {
+          return;
+        }
+        if (!res.ok) {
+          setResultState({ status: "empty" });
+          return;
+        }
+        const data = (await res.json()) as TestResultSummary;
+        if (!data || typeof data !== "object") {
+          setResultState({ status: "empty" });
+          return;
+        }
+        setResultState({ status: "ready", data });
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        setResultState({
+          status: "error",
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resultSrc]);
 
   const total = state.status === "ready" ? state.data.total : null;
 
@@ -231,10 +308,88 @@ export default function CoverageReportPanel({
     );
   }
 
+  const resultSummary =
+    resultState.status === "ready" ? resultState.data : null;
+
   return (
     <Card className={`flex h-full flex-col space-y-4 ${className}`}>
       {title ? (
         <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
+      ) : null}
+
+      {resultSummary ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            {resultSummary.failed > 0 ? (
+              <AlertCircle className="h-4 w-4 text-danger" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4 text-success" />
+            )}
+            <h3 className="text-sm font-semibold text-text-primary">
+              {t("settings.development.testResults.title")}
+            </h3>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
+              <div className="text-xs text-text-tertiary">
+                {t("settings.development.testResults.total")}
+              </div>
+              <div className="text-lg font-semibold text-text-primary">
+                {resultSummary.total}
+              </div>
+            </div>
+            <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
+              <div className="text-xs text-text-tertiary">
+                {t("settings.development.testResults.passed")}
+              </div>
+              <div className="text-lg font-semibold text-success">
+                {resultSummary.passed}
+              </div>
+            </div>
+            <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
+              <div className="text-xs text-text-tertiary">
+                {t("settings.development.testResults.failed")}
+              </div>
+              <div
+                className={`text-lg font-semibold ${
+                  resultSummary.failed > 0 ? "text-danger" : "text-text-primary"
+                }`}
+              >
+                {resultSummary.failed}
+              </div>
+            </div>
+            <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
+              <div className="text-xs text-text-tertiary">
+                {t("settings.development.testResults.duration")}
+              </div>
+              <div className="flex items-center gap-1 text-lg font-semibold text-text-primary">
+                <Clock className="h-3.5 w-3.5 text-icon-tertiary" />
+                {formatDuration(resultSummary.durationMs)}
+              </div>
+            </div>
+          </div>
+
+          {resultSummary.failedTests.length > 0 ? (
+            <div className="rounded-lg border border-danger/20 bg-danger-soft px-3 py-2">
+              <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-danger">
+                <XCircle className="h-3.5 w-3.5" />
+                {t("settings.development.testResults.failedTests")}
+              </div>
+              <ul className="max-h-[120px] overflow-y-auto space-y-1">
+                {resultSummary.failedTests.map((name) => (
+                  <li
+                    key={name}
+                    className="truncate font-mono text-xs text-danger-text"
+                    title={name}
+                  >
+                    {name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

@@ -30,6 +30,9 @@ Doc Type: current-contract
 - `Status`
 - `Owner`
 - `Last verified`
+- `Layer`
+- `Module`
+- `Doc Type`
 
 各 area 的 owner 需要周期性地把 current-contract 文档和代码核对一遍。
 
@@ -49,6 +52,7 @@ Doc Type: current-contract
 - archive 文档不能悄悄重新进入默认 AI 上下文
 - 概念页一旦成型，应尽量稳定并保持 canonical
 - 文档失效后，要么归档，要么显式标记失效
+- 缺少 `Layer / Module / Doc Type / Status` 的活跃文档，不算已完整纳入知识系统
 
 ## 质量信号
 
@@ -65,6 +69,7 @@ Doc Type: current-contract
 - 同一概念在多处被冲突定义
 - graph view 充满孤点或重复节点
 - owner 和 last-verified 长期无人维护
+- 同一主题在多个文件里各自定义一版主模块
 
 ## Related Docs
 

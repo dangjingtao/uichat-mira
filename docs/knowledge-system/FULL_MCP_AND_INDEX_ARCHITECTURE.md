@@ -28,6 +28,7 @@ Doc Type: design
 - Markdown 仍然是唯一真相源。
 - MCP 是接口层，不是存储层。
 - 所有 AI 可见结果都应该保留 source path 级别的可追溯性。
+- 默认暴露面应优先按 `Layer / Module / Doc Type / Status` 过滤，而不是只靠路径前缀猜内容。
 
 ## 核心组件
 
@@ -54,6 +55,11 @@ Doc Type: design
 - 链接到的文档
 - 引用到的代码路径
 - 最近索引时间
+- layer
+- module
+- doc type
+- canonical
+- related
 
 ### Full-Text Index
 
@@ -98,6 +104,12 @@ Doc Type: design
 - `kb://status/current`
 - `kb://status/planned`
 - `kb://status/historical`
+
+资源暴露策略建议：
+
+- current-contract 和 reference 优先
+- historical 默认不进主上下文
+- 跨模块文档只暴露一个主模块视图
 
 ## 工具模型
 
