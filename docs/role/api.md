@@ -1,5 +1,9 @@
 # Role API
 
+Layer: wiki
+Module: role
+Doc Type: historical
+
 `api.md` 现在只保留为兼容入口。
 
 当前生效版本请查看：

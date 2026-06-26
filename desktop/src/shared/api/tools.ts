@@ -1,4 +1,4 @@
-import { get, post } from "@/shared/lib/request";
+import { del, get, post } from "@/shared/lib/request";
 import { getSession } from "@/shared/lib/sessionStorage";
 import { getApiBaseUrl } from "@/shared/platform/desktopRuntime";
 
@@ -257,6 +257,10 @@ export function connectExternalMcpServer(id: string) {
 
 export function discoverExternalMcpServer(id: string) {
   return post<ExternalMcpServerRecord>(`/mcp/external/servers/${id}/discover`);
+}
+
+export function deleteExternalMcpServer(id: string) {
+  return del<ExternalMcpServerRecord>(`/mcp/external/servers/${id}`);
 }
 
 export function getMcpWorkspaceSelection() {

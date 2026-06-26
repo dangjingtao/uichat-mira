@@ -1,4 +1,8 @@
-# Area Map Platform
+# 区域图：Platform
+
+Layer: wiki
+Module: platform
+Doc Type: overview
 
 Status: Current
 Owner: docs

@@ -1,4 +1,12 @@
-# Evaluation Workbench / Evaluation Center
+# 评测工作台与评测中心
+
+Layer: raw-source
+Module: evaluation
+Doc Type: current-contract
+
+Status: Current
+Owner: evaluation
+Last verified: 2026-06-26
 
 评测工作台与评测中心技术文档，覆盖当前实现、页面职责、调用链路、接口契约、持久化结构、联调结论与已知限制。
 

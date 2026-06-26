@@ -1,5 +1,12 @@
 # Provider API Standards
 
+Status: Historical
+Owner: runtime
+Last verified: 2026-06-26
+Layer: wiki
+Module: provider
+Doc Type: historical
+
 ## Official References
 
 Use these vendor docs as the primary API standard references when working on provider integration:
@@ -13,12 +20,4 @@ Use these vendor docs as the primary API standard references when working on pro
 
 ## Project Usage
 
-Current provider integration should follow the closest matching vendor standard:
-
-- `openai`: OpenAI API Reference
-- `cloudflare`: OpenAI-compatible endpoints in Cloudflare Workers AI
-- `lmstudio`: OpenAI-compatible local server API
-- `ollama`: Ollama native API plus OpenAI-compatible endpoints
-- `volcengine`: OpenAI-compatible request/response shape unless a route explicitly documents a different contract
-
-When in doubt, prefer the official vendor docs above over implementation guesses.
+Current provider integration should follow the closest matching vendor standard.

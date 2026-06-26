@@ -1,133 +1,122 @@
-# Tauri Setup Instructions
+# Tauri 安装、构建与排障
 
-## Quick Start
+Status: Current
+Owner: platform
+Last verified: 2026-06-26
+Layer: raw-source
+Module: platform
+Doc Type: how-to
 
-### 1. Install Rust (if not already installed)
+## 单点真相范围
 
-**Windows:**
-```powershell
-# Download and run rustup-init.exe from https://rustup.rs/
-# Or use winget:
-winget install Rustlang.Rustup
-```
+这页文档统一说明：
 
-**macOS/Linux:**
+- Tauri 开发前需要准备什么
+- 当前项目如何启动 Tauri 开发流程
+- 打包前后常见问题怎么排查
+
+相关文档：
+
+- [[platform/tauri]]
+- [[版本管理]]
+- [[AREA_MAP_PLATFORM]]
+
+## 适合什么时候读
+
+这些场景建议先读这页：
+
+- 第一次在本机跑 Tauri
+- Tauri 构建失败
+- 想确认 Tauri 依赖是否装齐
+- 想排查 Rust / Cargo / Tauri CLI 相关问题
+
+## 准备步骤
+
+### 1. 安装 Rust
+
+Windows：
+
+- 从 `https://rustup.rs/` 安装
+- 或使用 `winget install Rustlang.Rustup`
+
+macOS / Linux：
+
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
 ```
 
-### 2. Install Tauri CLI
+### 2. 安装 Tauri CLI
 
 ```bash
 pnpm add -Dw @tauri-apps/cli@latest
 ```
 
-### 3. Install Frontend Dependencies
+### 3. 安装工作区依赖
 
 ```bash
-# From project root
 pnpm install
-
-# Install Tauri API in desktop package
-cd desktop
-pnpm add @tauri-apps/api
-cd ..
 ```
 
-### 4. Development Mode
+## 当前开发命令
+
+从仓库根目录启动：
 
 ```bash
-# From project root
 pnpm dev:tauri:win
 ```
 
-This will:
-- Start the Vite development server on http://localhost:5173
-- Start the Fastify backend on the host and port from `runtime.config.cjs`
-- Launch the Tauri window
-- Connect to the backend started by the shared workspace script
-- Use `CARGO_BUILD_JOBS=1` and `CARGO_INCREMENTAL=0` to reduce Windows `rustc` crashes during dev builds
+当前项目的 Tauri 开发链不是只起一个前端页面，而是要和现有桌面开发流程、共享构建输入一起看。
 
-### 5. Build for Production
+## 当前打包命令
 
 ```bash
-# From project root
 pnpm package:tauri:win
-
-# Optional: validate the Rust side with the same low-concurrency settings
-pnpm check:tauri
 ```
 
-The built application will be in `tauri/target/release/bundle/`
-The final release handoff output is copied to `release/v<version>_<date>_<time>/tauri/`.
-`tauri/target/release/bundle/` remains the internal Tauri build directory.
-`pnpm package:tauri:win` also runs `pnpm version:sync` first, so installer filenames follow the root `package.json` version.
+## 常见排查项
 
-## Platform-Specific Builds
+### Rust / Cargo 不可用
 
-### Windows
+先确认：
+
 ```bash
-pnpm tauri build --config tauri/tauri.conf.json --target x86_64-pc-windows-msvc
+rustc --version
+cargo --version
 ```
 
-### macOS
+### Tauri CLI 不可用
+
+先确认：
+
 ```bash
-pnpm tauri build --config tauri/tauri.conf.json --target x86_64-apple-darwin
-pnpm tauri build --config tauri/tauri.conf.json --target aarch64-apple-darwin  # Apple Silicon
+pnpm tauri --version
 ```
 
-### Linux
+### 构建输入不完整
+
+如果 Tauri 起不来，不要只盯 Rust 侧。还要一起检查：
+
+- 前端生产构建是否存在
+- backend bundle 是否已准备
+- `.artifacts/` 下共享输入是否齐全
+
+### 版本不一致
+
+打包前如果怀疑版本没同步，先看：
+
+- `package.json`
+- `tauri/tauri.conf.json`
+- `tauri/Cargo.toml`
+
+必要时执行：
+
 ```bash
-pnpm tauri build --config tauri/tauri.conf.json --target x86_64-unknown-linux-gnu
+pnpm version:sync
 ```
 
-## Troubleshooting
+## 相关文档
 
-### Rust not found
-Make sure you've added Cargo to your PATH:
-```bash
-# Windows: Add %USERPROFILE%\.cargo\bin to PATH
-# macOS/Linux: Add $HOME/.cargo/bin to PATH in ~/.bashrc or ~/.zshrc
-```
-
-### Node.js backend not starting
-In production mode, Tauri will try to start the backend automatically. Make sure:
-- The backend files are in `resources/server/`
-- Node.js is bundled in `resources/node-runtime/`
-- The backend server path is correct
-- the internal Tauri prepare flow has refreshed the shared staged inputs under `.artifacts/`
-
-### Shared artifact staging
-Before Tauri packaging, the workspace stages all required inputs into `.artifacts/`:
-- `.artifacts/desktop/dist`
-- `.artifacts/server-bundle`
-- `.artifacts/icons`
-- `.artifacts/runtime.config.cjs`
-- `.artifacts/node-runtime`
-
-`tauri.conf.json` then consumes these staged inputs for `frontendDist`, app icons, and packaged runtime resources.
-
-### Packaged login behavior
-- Packaged Tauri builds now persist `JWT_SECRET` and `SETTINGS_SECRET` under the app local data directory so login tokens remain valid across restarts.
-- Packaged Tauri builds also set `UI_CHAT_ALLOW_DEFAULT_BOOTSTRAP=1`, which allows the built-in seed users (`Tomz / 123456`, `Dang / 123456`) to be created automatically when the auth database is empty.
-- Packaged Tauri waits for the bundled backend `GET /health` check before continuing startup, so `/login` is less likely to fail during the initial backend warm-up window.
-- If you want different initial credentials, set `SEED_ADMIN_USERNAME` / `SEED_ADMIN_PASSWORD` and optional `SEED_USER_USERNAME` / `SEED_USER_PASSWORD` before starting the bundled backend.
-
-### Frontend not connecting
-- Ensure the backend is running on the host and port defined in the root `runtime.config.cjs`
-- Check the console for any connection errors
-- Verify the API proxy configuration in Vite
-
-## Next Steps
-
-1. Test the development build: `pnpm dev:tauri:win`
-2. Build a production release: `pnpm package:tauri:win`
-3. Compare bundle size with Electron version
-4. Test all features to ensure compatibility
-
-## Resources
-
-- [Tauri Documentation](https://tauri.app/v1/guides/)
-- [Tauri API Reference](https://tauri.app/v1/api/js/)
-- [Rust Book](https://doc.rust-lang.org/book/)
+- `tauri.md`
+- `../architecture/README.md`
+- `../版本管理.md`

@@ -8,6 +8,7 @@ const DISCLAIMER_TEXT_HASH = "external-mcp-disclaimer-v1";
 
 export type ExternalMcpTransportKind = "streamable-http";
 export type ExternalMcpServerStatus = "configured" | "connected" | "failed";
+export type ExternalMcpAuthType = "none" | "bearer";
 
 export interface ExternalMcpTransportConfig {
   kind: ExternalMcpTransportKind;
@@ -35,6 +36,40 @@ export interface ExternalMcpDiscoveredTool {
   projectedCapabilityId: string;
 }
 
+export interface ExternalMcpConfigField {
+  key: string;
+  label: string;
+  type: "text" | "password" | "url" | "number" | "json";
+  required: boolean;
+  secret?: boolean;
+  placeholder?: string;
+  description?: string;
+  defaultValue?: unknown;
+}
+
+export interface ExternalMcpConfigSchemaResolution {
+  fields: ExternalMcpConfigField[];
+  completeness: "known-partial" | "known-good" | "unknown";
+  sources: Array<"preset" | "marketplace" | "server-self-describe" | "manual">;
+  notes?: string[];
+}
+
+export interface ExternalMcpServerConfigRecord {
+  endpointUrl: string;
+  authType: ExternalMcpAuthType;
+  timeoutMs: number;
+  customHeadersJson: string;
+  hasBearerToken: boolean;
+}
+
+export interface UpdateExternalMcpServerConfigInput {
+  endpointUrl: string;
+  authType: ExternalMcpAuthType;
+  timeoutMs: number;
+  customHeadersJson: string;
+  bearerToken?: string | null;
+}
+
 export interface ExternalMcpServerRecord {
   id: string;
   source: "registry" | "manual";
@@ -55,6 +90,14 @@ export interface ExternalMcpServerRecord {
   sessionId?: string;
   protocolVersion?: string;
   discoveredTools: ExternalMcpDiscoveredTool[];
+}
+
+interface ExternalMcpRuntimeConfig {
+  endpointUrl: string;
+  authType: ExternalMcpAuthType;
+  timeoutMs: number;
+  customHeaders: Record<string, string>;
+  bearerToken?: string;
 }
 
 interface ExternalMcpServerRow {
@@ -78,6 +121,8 @@ interface ExternalMcpServerRow {
   session_id: string | null;
   protocol_version: string | null;
   discovered_tools_json: string;
+  config_json: string;
+  secret_json: string;
 }
 
 interface JsonRpcResponse<T> {
@@ -150,6 +195,61 @@ const parseDiscoveredTools = (value: string): ExternalMcpDiscoveredTool[] => {
   }
 };
 
+const parseConfigJson = (
+  value: string | null | undefined,
+): {
+  authType?: ExternalMcpAuthType;
+  timeoutMs?: number;
+  customHeaders?: Record<string, string>;
+} => {
+  try {
+    const parsed = JSON.parse(value || "{}") as {
+      authType?: ExternalMcpAuthType;
+      timeoutMs?: number;
+      customHeaders?: Record<string, string>;
+    };
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const parseSecretJson = (
+  value: string | null | undefined,
+): {
+  bearerToken?: string;
+} => {
+  try {
+    const parsed = JSON.parse(value || "{}") as {
+      bearerToken?: string;
+    };
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const DEFAULT_TIMEOUT_MS = 30000;
+
+const toRuntimeConfig = (row: ExternalMcpServerRow): ExternalMcpRuntimeConfig => {
+  const config = parseConfigJson(row.config_json);
+  const secret = parseSecretJson(row.secret_json);
+  return {
+    endpointUrl: row.endpoint_url,
+    authType: config.authType === "bearer" ? "bearer" : "none",
+    timeoutMs:
+      typeof config.timeoutMs === "number" && Number.isFinite(config.timeoutMs) && config.timeoutMs > 0
+        ? Math.round(config.timeoutMs)
+        : DEFAULT_TIMEOUT_MS,
+    customHeaders:
+      config.customHeaders && typeof config.customHeaders === "object" ? config.customHeaders : {},
+    ...(secret.bearerToken ? { bearerToken: secret.bearerToken } : {}),
+  };
+};
+
+const serializeHeadersJson = (headers: Record<string, string>) =>
+  Object.keys(headers).length === 0 ? "" : JSON.stringify(headers, null, 2);
+
 const toRecord = (row: ExternalMcpServerRow): ExternalMcpServerRecord => ({
   id: row.id,
   source: row.source,
@@ -198,12 +298,30 @@ export const initializeExternalMcpDatabase = () => {
       last_error TEXT,
       session_id TEXT,
       protocol_version TEXT,
-      discovered_tools_json TEXT NOT NULL DEFAULT '[]'
+      discovered_tools_json TEXT NOT NULL DEFAULT '[]',
+      config_json TEXT NOT NULL DEFAULT '{}',
+      secret_json TEXT NOT NULL DEFAULT '{}'
     );
 
     CREATE INDEX IF NOT EXISTS idx_external_mcp_servers_status
       ON external_mcp_servers(status);
   `);
+
+  const columns = (
+    sqlite.prepare("PRAGMA table_info(external_mcp_servers)").all() as Array<{ name: string }>
+  ).map((column) => column.name);
+
+  if (!columns.includes("config_json")) {
+    sqlite.exec(
+      "ALTER TABLE external_mcp_servers ADD COLUMN config_json TEXT NOT NULL DEFAULT '{}'",
+    );
+  }
+
+  if (!columns.includes("secret_json")) {
+    sqlite.exec(
+      "ALTER TABLE external_mcp_servers ADD COLUMN secret_json TEXT NOT NULL DEFAULT '{}'",
+    );
+  }
 };
 
 const getServerRow = (serverId: string): ExternalMcpServerRow | undefined => {
@@ -235,6 +353,35 @@ export const clearExternalMcpServers = () => {
   getSqlite().prepare("DELETE FROM external_mcp_servers").run();
 };
 
+export const deleteExternalMcpServer = (serverId: string): ExternalMcpServerRecord => {
+  const existing = getRequiredServer(serverId);
+  initializeExternalMcpDatabase();
+  getSqlite()
+    .prepare("DELETE FROM external_mcp_servers WHERE id = ?")
+    .run(serverId);
+  return existing;
+};
+
+const validateCustomHeadersJson = (input: string): Record<string, string> => {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return {};
+  }
+  const parsed = JSON.parse(trimmed) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw mcpBadRequest("Custom headers must be a JSON object");
+  }
+
+  const headers: Record<string, string> = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value !== "string") {
+      throw mcpBadRequest("Custom header values must be strings");
+    }
+    headers[key] = value;
+  }
+  return headers;
+};
+
 export const createExternalMcpServer = (
   input: CreateExternalMcpServerInput,
 ): ExternalMcpServerRecord => {
@@ -257,11 +404,11 @@ export const createExternalMcpServer = (
         INSERT INTO external_mcp_servers (
           id, source, registry_url, package_name, display_name, description, version,
           transport_kind, endpoint_url, status, enabled, disclaimer_accepted_at,
-          disclaimer_text_hash, created_at, updated_at, discovered_tools_json
+          disclaimer_text_hash, created_at, updated_at, discovered_tools_json, config_json, secret_json
         )
         VALUES (@id, @source, @registryUrl, @packageName, @displayName, @description, @version,
           @transportKind, @endpointUrl, 'configured', 1, @disclaimerAcceptedAt,
-          @disclaimerTextHash, @createdAt, @updatedAt, '[]')
+          @disclaimerTextHash, @createdAt, @updatedAt, '[]', '{}', '{}')
       `,
     )
     .run({
@@ -280,6 +427,130 @@ export const createExternalMcpServer = (
       updatedAt: createdAt,
     });
   return getRequiredServer(id);
+};
+
+export const getExternalMcpServerConfigSchema = (
+  serverId: string,
+): ExternalMcpConfigSchemaResolution => {
+  const server = getRequiredServer(serverId);
+  return {
+    fields: [
+      {
+        key: "endpointUrl",
+        label: "Endpoint URL",
+        type: "url",
+        required: true,
+        defaultValue: server.transport.url,
+      },
+      {
+        key: "bearerToken",
+        label: "Bearer Token",
+        type: "password",
+        required: false,
+        secret: true,
+        placeholder: "sk-...",
+        description: "Optional token used as Authorization: Bearer <token>.",
+      },
+      {
+        key: "customHeadersJson",
+        label: "Custom Headers JSON",
+        type: "json",
+        required: false,
+        placeholder: '{\n  "X-Org-Id": "demo"\n}',
+      },
+      {
+        key: "timeoutMs",
+        label: "Timeout (ms)",
+        type: "number",
+        required: true,
+        defaultValue: DEFAULT_TIMEOUT_MS,
+      },
+    ],
+    completeness: "known-partial",
+    sources: server.source === "registry" ? ["marketplace", "manual"] : ["manual"],
+    notes: [
+      "This schema is a known configuration draft for streamable-http MCP servers and may be incomplete.",
+    ],
+  };
+};
+
+export const getExternalMcpServerConfig = (
+  serverId: string,
+): ExternalMcpServerConfigRecord => {
+  const row = getServerRow(serverId);
+  if (!row) {
+    throw mcpNotFound(`External MCP server not found: ${serverId}`);
+  }
+  const runtimeConfig = toRuntimeConfig(row);
+  return {
+    endpointUrl: runtimeConfig.endpointUrl,
+    authType: runtimeConfig.authType,
+    timeoutMs: runtimeConfig.timeoutMs,
+    customHeadersJson: serializeHeadersJson(runtimeConfig.customHeaders),
+    hasBearerToken: Boolean(runtimeConfig.bearerToken),
+  };
+};
+
+export const updateExternalMcpServerConfig = (
+  serverId: string,
+  input: UpdateExternalMcpServerConfigInput,
+): ExternalMcpServerConfigRecord => {
+  const row = getServerRow(serverId);
+  if (!row) {
+    throw mcpNotFound(`External MCP server not found: ${serverId}`);
+  }
+
+  const url = new URL(input.endpointUrl);
+  if (!["http:", "https:"].includes(url.protocol)) {
+    throw mcpBadRequest("External MCP endpoint must be http or https");
+  }
+
+  if (!Number.isFinite(input.timeoutMs) || input.timeoutMs <= 0) {
+    throw mcpBadRequest("Timeout must be a positive number");
+  }
+
+  const customHeaders = validateCustomHeadersJson(input.customHeadersJson);
+  const previousSecret = parseSecretJson(row.secret_json);
+  const nextBearerToken =
+    input.bearerToken === undefined
+      ? previousSecret.bearerToken
+      : input.bearerToken === null || input.bearerToken.trim() === ""
+        ? undefined
+        : input.bearerToken.trim();
+  const nextAuthType =
+    input.authType === "bearer" && nextBearerToken ? "bearer" : "none";
+  const at = nowIso();
+
+  getSqlite()
+    .prepare(
+      `
+        UPDATE external_mcp_servers
+        SET endpoint_url = @endpointUrl,
+            config_json = @configJson,
+            secret_json = @secretJson,
+            status = 'configured',
+            session_id = NULL,
+            protocol_version = NULL,
+            last_error = NULL,
+            updated_at = @at
+        WHERE id = @id
+      `,
+    )
+    .run({
+      id: serverId,
+      endpointUrl: url.toString(),
+      configJson: JSON.stringify({
+        authType: nextAuthType,
+        timeoutMs: Math.round(input.timeoutMs),
+        customHeaders,
+      }),
+      secretJson: JSON.stringify({
+        ...(nextBearerToken ? { bearerToken: nextBearerToken } : {}),
+      }),
+      at,
+    });
+
+  return getExternalMcpServerConfig(serverId);
 };
 
 const parseJsonRpcResponse = async <T>(response: Response): Promise<JsonRpcResponse<T>> => {
@@ -305,19 +576,29 @@ const postJsonRpc = async <T>(
   params: Record<string, unknown>,
   sessionId?: string,
 ): Promise<{ result: T; sessionId?: string; protocolVersion?: string }> => {
+  const row = getServerRow(server.id);
+  if (!row) {
+    throw mcpNotFound(`External MCP server not found: ${server.id}`);
+  }
+  const runtimeConfig = toRuntimeConfig(row);
   const id = crypto.randomUUID();
   const headers: Record<string, string> = {
     Accept: "application/json, text/event-stream",
     "Content-Type": "application/json",
     "MCP-Protocol-Version": server.protocolVersion ?? MCP_PROTOCOL_VERSION,
+    ...runtimeConfig.customHeaders,
   };
+  if (runtimeConfig.authType === "bearer" && runtimeConfig.bearerToken) {
+    headers.Authorization = `Bearer ${runtimeConfig.bearerToken}`;
+  }
   if (sessionId) {
     headers["Mcp-Session-Id"] = sessionId;
   }
 
-  const response = await fetch(server.transport.url, {
+  const response = await fetch(runtimeConfig.endpointUrl, {
     method: "POST",
     headers,
+    signal: AbortSignal.timeout(runtimeConfig.timeoutMs),
     body: JSON.stringify({
       jsonrpc: "2.0",
       id,
@@ -346,17 +627,27 @@ const sendInitializedNotification = async (
   server: ExternalMcpServerRecord,
   sessionId?: string,
 ) => {
+  const row = getServerRow(server.id);
+  if (!row) {
+    throw mcpNotFound(`External MCP server not found: ${server.id}`);
+  }
+  const runtimeConfig = toRuntimeConfig(row);
   const headers: Record<string, string> = {
     Accept: "application/json, text/event-stream",
     "Content-Type": "application/json",
     "MCP-Protocol-Version": server.protocolVersion ?? MCP_PROTOCOL_VERSION,
+    ...runtimeConfig.customHeaders,
   };
+  if (runtimeConfig.authType === "bearer" && runtimeConfig.bearerToken) {
+    headers.Authorization = `Bearer ${runtimeConfig.bearerToken}`;
+  }
   if (sessionId) {
     headers["Mcp-Session-Id"] = sessionId;
   }
-  await fetch(server.transport.url, {
+  await fetch(runtimeConfig.endpointUrl, {
     method: "POST",
     headers,
+    signal: AbortSignal.timeout(runtimeConfig.timeoutMs),
     body: JSON.stringify({
       jsonrpc: "2.0",
       method: "notifications/initialized",

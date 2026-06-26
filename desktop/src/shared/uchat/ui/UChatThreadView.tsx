@@ -8,10 +8,12 @@ import {
   Copy,
   FileUp,
   LibraryBig,
+  MessageSquareText,
   Paperclip,
   Plus,
   PencilLine,
   RefreshCcw,
+  UserRound,
   Square,
   X,
 } from "lucide-react";
@@ -1094,6 +1096,10 @@ function UChatComposerActions({
     disabled: action.disabled,
     leadingIcon: action.id.includes("knowledge-base") ? (
       <LibraryBig className="h-4 w-4" />
+    ) : action.id.includes("role") ? (
+      <UserRound className="h-4 w-4" />
+    ) : action.id.includes("context-summary") ? (
+      <MessageSquareText className="h-4 w-4" />
     ) : action.kind === "attachment" ? (
       <Paperclip className="h-4 w-4" />
     ) : null,

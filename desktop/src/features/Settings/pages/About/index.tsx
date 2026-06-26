@@ -11,8 +11,8 @@ import {
 import type { TFunction } from "i18next";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Streamdown } from "streamdown";
 import Card from "@/shared/ui/Card";
+import MarkdownText from "@/shared/ui/MarkdownText";
 import { getAppMeta, type AppMetaData } from "@/shared/api/system";
 import { message } from "@/shared/ui/Message";
 import { isDesktopShell } from "@/shared/platform/desktopRuntime";
@@ -20,12 +20,12 @@ import SettingsPageLayout from "../../components/SettingsPageLayout";
 import changelogMarkdown from "../../../../../../docs/CHANGELOG.md?raw";
 
 const getFallbackAppMeta = (t: TFunction): AppMetaData => ({
-  name: "ui-chat-rag-tester",
+  name: "ui-chat-mira",
   version: "0.0.0",
-  displayName: "uichat",
+  displayName: "UIChat Mira",
   author: "Tomz Dang <dangjingtao@gmail.com>",
   description:
-    "An initialization project for an Electron desktop application aimed at enterprise knowledge base verification, supporting dual-mode switching between local and remote models and vector databases.",
+    "An intelligent agent cabin that starts with a chat and returns to your side.",
   repositoryUrl: "",
   homepageUrl: "",
   changelog: [
@@ -161,14 +161,42 @@ function About() {
     ? changelogMarkdown
     : changelogPreview;
   const canExpandChangelog = changelogPreview !== changelogMarkdown.trim();
+  const brandStoryParagraphs = t("settings.about.brand.paragraphs", {
+    returnObjects: true,
+  }) as string[];
 
   return (
     <SettingsPageLayout
       miniTitle={t("settings.about.miniTitle")}
       title={`${appMeta.displayName} ${appMeta.version}`}
-      description={appMeta.description}
+      description={t("settings.about.brand.description")}
       contentClassName="space-y-4 pt-6"
     >
+      <Card className="overflow-hidden">
+        <div className="space-y-5">
+          <div className="flex items-center gap-2">
+            <Rocket className="h-4 w-4 text-icon-primary" />
+            <h2 className="text-sm font-semibold text-text-primary">
+              {t("settings.about.brand.title")}
+            </h2>
+          </div>
+          <div className="max-w-3xl space-y-4 text-sm leading-7 text-text-secondary">
+            {brandStoryParagraphs.map((paragraph, index) => (
+              <p
+                key={`${index}:${paragraph.slice(0, 12)}`}
+                className={
+                  index === brandStoryParagraphs.length - 1
+                    ? "font-medium text-text-primary"
+                    : ""
+                }
+              >
+                {paragraph}
+              </p>
+            ))}
+          </div>
+        </div>
+      </Card>
+
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Card className="space-y-3">
           <div className="flex items-center gap-2">
@@ -329,7 +357,8 @@ function About() {
         </div>
 
         <div className="mt-3 pt-1">
-          <Streamdown
+          <MarkdownText
+            features="basic"
             components={{
               a: ({ href, children, ...props }) => {
                 const nextHref = href?.trim() ?? "";
@@ -360,7 +389,7 @@ function About() {
             className="prose prose-sm max-w-none break-words text-text-primary prose-headings:mb-3 prose-headings:mt-7 prose-headings:text-text-primary prose-h1:mt-0 prose-h1:text-xl prose-h2:border-b prose-h2:border-border prose-h2:pb-2 prose-h2:text-lg prose-h3:text-base prose-p:leading-6 prose-p:text-text-secondary prose-strong:text-text-primary prose-code:rounded prose-code:bg-surface-secondary prose-code:px-1.5 prose-code:py-0.5 prose-code:text-[0.92em] prose-code:text-text-primary prose-pre:rounded-xl prose-pre:border prose-pre:border-border/70 prose-pre:bg-surface-secondary/55 prose-pre:text-text-primary prose-li:text-text-secondary prose-li:marker:text-text-tertiary prose-a:text-text-primary prose-blockquote:border-border prose-blockquote:bg-surface-secondary/35 prose-blockquote:px-4 prose-blockquote:py-2 prose-blockquote:text-text-secondary prose-hr:border-border"
           >
             {displayedChangelog}
-          </Streamdown>
+          </MarkdownText>
         </div>
       </Card>
     </SettingsPageLayout>

@@ -2,7 +2,7 @@ import {
   UChatAssistantAvatar,
   UChatAssistantBubbleShell,
   UChatUserBubbleShell,
-} from "@/shared/uchat/ui";
+} from "@/shared/uchat/ui/UChatMessageBubbleShells";
 import { useRoleTranslation } from "../i18n/useRoleTranslation";
 
 interface RolePreviewChatProps {

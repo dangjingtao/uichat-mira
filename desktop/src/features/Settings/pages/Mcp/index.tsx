@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Info, PackageCheck, RefreshCw, Search, Store } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PackageCheck, RefreshCw, Store } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import Alert from "@/shared/ui/Alert";
 import { message } from "@/shared/ui/Message";
@@ -11,6 +11,7 @@ import SettingsPageLayout from "../../components/SettingsPageLayout";
 import {
   connectExternalMcpServer,
   createExternalMcpServer,
+  deleteExternalMcpServer,
   discoverExternalMcpServer,
   getExternalMcpServers,
   getMcpMarketplaceServers,
@@ -36,7 +37,7 @@ export default function McpSettings() {
   const [isInstalledLoading, setIsInstalledLoading] = useState(false);
   const [installedError, setInstalledError] = useState<string | null>(null);
   const [pendingServerId, setPendingServerId] = useState<string | null>(null);
-  const [showNotes, setShowNotes] = useState(false);
+  const hasBootstrappedMarketplaceQuery = useRef(false);
 
   const loadServers = useCallback(
     async (options?: { append?: boolean; cursor?: string | null; query?: string }) => {
@@ -88,8 +89,22 @@ export default function McpSettings() {
     void loadInstalledServers();
   }, [loadInstalledServers, loadServers]);
 
+  useEffect(() => {
+    if (!hasBootstrappedMarketplaceQuery.current) {
+      hasBootstrappedMarketplaceQuery.current = true;
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void loadServers({ query: marketplaceQuery, cursor: null, append: false });
+    }, 320);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [loadServers, marketplaceQuery]);
+
   const refreshMarketplace = () => loadServers({ query: marketplaceQuery, cursor: null, append: false });
-  const searchMarketplace = () => loadServers({ query: marketplaceQuery, cursor: null, append: false });
   const loadMore = () => {
     if (!nextCursor) {
       return;
@@ -158,6 +173,22 @@ export default function McpSettings() {
     }
   };
 
+  const removeServer = (server: ExternalMcpServerRecord) => {
+    Modal.confirm({
+      title: t("settings.mcp.deleteDialog.title"),
+      description: t("settings.mcp.deleteDialog.description", {
+        name: server.displayName,
+      }),
+      confirmText: t("settings.mcp.deleteDialog.confirm"),
+      tone: "danger",
+      onConfirm: async () => {
+        await deleteExternalMcpServer(server.id);
+        message.success(t("settings.mcp.messages.deleteSucceeded"));
+        await loadInstalledServers();
+      },
+    });
+  };
+
   const tabs = useMemo(
     () => [
       {
@@ -211,17 +242,6 @@ export default function McpSettings() {
     activeTab === "marketplace"
       ? t("settings.mcp.marketplace.searchPlaceholder")
       : t("settings.mcp.installed.searchPlaceholder");
-  const activeSearchLabel =
-    activeTab === "marketplace"
-      ? t("settings.mcp.marketplace.search")
-      : t("settings.mcp.installed.search");
-
-  const handleSearchSubmit = () => {
-    if (activeTab === "marketplace") {
-      void searchMarketplace();
-    }
-  };
-
   const handleRefresh = () => {
     if (activeTab === "marketplace") {
       void refreshMarketplace();
@@ -242,57 +262,21 @@ export default function McpSettings() {
         <div className="border-b border-border px-5 py-4">
           <div className="flex flex-wrap items-center gap-3">
             <SegmentedTabs items={tabs} value={activeTab} onChange={setActiveTab} />
-            <form
-              className="flex min-w-0 flex-1 items-center gap-2"
-              onSubmit={(event) => {
-                event.preventDefault();
-                handleSearchSubmit();
-              }}
-            >
+            <div className="flex min-w-0 flex-1 items-center gap-2">
               <div className="min-w-[220px] flex-1">
                 <TextInput
                   value={activeQuery}
                   onChange={setActiveQuery}
                   placeholder={activeSearchPlaceholder}
-                  disabled={activeLoading}
                   compact
                 />
               </div>
-              <Button
-                type={activeTab === "marketplace" ? "submit" : "button"}
-                variant="primary"
-                size="sm"
-                disabled={activeLoading}
-              >
-                <Search className="h-4 w-4" />
-                {activeSearchLabel}
-              </Button>
               <Button variant="outline" size="sm" onClick={handleRefresh} disabled={activeLoading}>
                 <RefreshCw className={`h-4 w-4 ${activeLoading ? "animate-spin" : ""}`} />
                 {t("settings.mcp.installed.refresh")}
               </Button>
-            </form>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowNotes((current) => !current)}
-            >
-              <Info className="h-4 w-4" />
-              {t("settings.mcp.notes.toggle")}
-              {showNotes ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </Button>
-          </div>
-
-          {showNotes ? (
-            <div className="mt-3 grid gap-3 lg:grid-cols-2">
-              <Alert variant="info" title={t("settings.mcp.notes.boundaryTitle")}>
-                {t("settings.mcp.notes.boundaryDescription")}
-              </Alert>
-              <Alert variant="warning" title={t("settings.mcp.notes.disclaimerTitle")}>
-                {t("settings.mcp.notes.disclaimerDescription")}
-              </Alert>
             </div>
-          ) : null}
+          </div>
         </div>
 
         {activeError ? (
@@ -318,7 +302,6 @@ export default function McpSettings() {
               sourceUrl={sourceUrl}
               labels={{
                 activeSource: t("settings.mcp.marketplace.activeSource"),
-                description: t("settings.mcp.marketplace.description"),
                 emptyDescription: t("settings.mcp.marketplace.emptyDescription"),
                 emptyTitle: t("settings.mcp.marketplace.emptyTitle"),
                 install: t("settings.mcp.marketplace.install"),
@@ -336,11 +319,11 @@ export default function McpSettings() {
               servers={filteredInstalledServers}
               labels={{
                 title: t("settings.mcp.installed.title"),
-                description: t("settings.mcp.installed.description"),
                 emptyTitle: t("settings.mcp.installed.emptyTitle"),
                 emptyDescription: t("settings.mcp.installed.emptyDescription"),
                 connect: t("settings.mcp.installed.connect"),
                 discover: t("settings.mcp.installed.discover"),
+                remove: t("settings.mcp.installed.remove"),
                 discovered: t("settings.mcp.installed.discovered"),
                 connected: t("settings.mcp.installed.connected"),
                 configured: t("settings.mcp.installed.configured"),
@@ -351,6 +334,7 @@ export default function McpSettings() {
               }}
               onConnect={(serverId) => void runServerAction(serverId, "connect")}
               onDiscover={(serverId) => void runServerAction(serverId, "discover")}
+              onDelete={removeServer}
             />
           )}
         </div>

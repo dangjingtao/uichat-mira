@@ -1,5 +1,9 @@
 # Role API
 
+Layer: raw-source
+Module: role
+Doc Type: reference
+
 Status: Current  
 Owner: role  
 Last verified: 2026-06-25

@@ -15,10 +15,15 @@ function downloadBlob(blob: Blob, fileName: string) {
   URL.revokeObjectURL(objectUrl);
 }
 
-export default function LogButtons() {
+export default function LogButtons({
+  variant = "default",
+}: {
+  variant?: "default" | "link";
+}) {
   const { t } = useTranslation();
   const [exportingLogs, setExportingLogs] = useState(false);
   const [clearingLogs, setClearingLogs] = useState(false);
+  const isLinkVariant = variant === "link";
 
   const handleExportLogs = async () => {
     try {
@@ -74,9 +79,9 @@ export default function LogButtons() {
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">
       <Button
-        variant="secondary"
-        size="sm"
-        className="gap-2 self-start"
+        variant={isLinkVariant ? "link" : "secondary"}
+        size={isLinkVariant ? "xs" : "sm"}
+        className={`gap-1.5 self-start ${isLinkVariant ? "text-xs text-text-secondary hover:text-text-primary" : ""}`}
         onClick={() => void handleExportLogs()}
         disabled={exportingLogs}
       >
@@ -86,9 +91,9 @@ export default function LogButtons() {
           : t("settings.general.health.logs.export")}
       </Button>
       <Button
-        variant="ghost"
-        size="sm"
-        className="gap-2 self-start"
+        variant={isLinkVariant ? "link" : "ghost"}
+        size={isLinkVariant ? "xs" : "sm"}
+        className={`gap-1.5 self-start ${isLinkVariant ? "text-xs text-danger-text hover:text-danger-text" : ""}`}
         onClick={handleClearLogs}
         disabled={clearingLogs}
       >

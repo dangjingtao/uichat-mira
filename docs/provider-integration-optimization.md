@@ -1,5 +1,12 @@
 # 服务商接入优化说明
 
+Status: Historical
+Owner: runtime
+Last verified: 2026-06-26
+Layer: wiki
+Module: provider
+Doc Type: historical
+
 ## 背景
 
 在这次重构前，新增一个模型服务商通常需要同时修改这些位置：

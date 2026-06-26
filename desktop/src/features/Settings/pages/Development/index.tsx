@@ -1,18 +1,13 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { DatabaseZap, FileCode2, FileText, FlaskConical, Info, ScrollText } from "lucide-react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import {
-  FileCode2,
-  FileText,
-  FlaskConical,
-  Info,
-  ScrollText,
-} from "lucide-react";
 import SettingsPageLayout from "@/features/Settings/components/SettingsPageLayout";
 import SegmentedTabs from "@/shared/ui/SegmentedTabs";
 
 const TAB_VALUES = [
   "logs",
+  "database",
   "client-tests",
   "server-tests",
   "base-information",
@@ -27,7 +22,16 @@ export default function DevelopmentSettings() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
+  useEffect(() => {
+    if (pathname === "/settings/development") {
+      navigate("/settings/development/logs", { replace: true });
+    }
+  }, [navigate, pathname]);
+
   const activeTab = useMemo<TabValue>(() => {
+    if (pathname.includes("/development/database")) {
+      return "database";
+    }
     if (pathname.includes("/development/client-tests")) {
       return "client-tests";
     }
@@ -54,6 +58,15 @@ export default function DevelopmentSettings() {
           <span className="flex items-center gap-1.5">
             <ScrollText className="h-4 w-4" />
             {t("settings.development.tabs.logs")}
+          </span>
+        ),
+      },
+      {
+        value: "database" as const,
+        label: (
+          <span className="flex items-center gap-1.5">
+            <DatabaseZap className="h-4 w-4" />
+            {t("settings.development.tabs.database")}
           </span>
         ),
       },

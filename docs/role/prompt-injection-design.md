@@ -1,5 +1,9 @@
 # Role Prompt 注入设计
 
+Layer: raw-source
+Module: role
+Doc Type: design
+
 Status: Current
 Owner: role / runtime
 Last verified: 2026-06-25

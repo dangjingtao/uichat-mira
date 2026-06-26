@@ -1,5 +1,9 @@
 # Role + RAG 接入清单
 
+Layer: raw-source
+Module: role
+Doc Type: checklist
+
 Status: Accepted
 Owner: role / rag / runtime
 Last verified: 2026-06-25

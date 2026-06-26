@@ -1,4 +1,4 @@
-import { Loader2, PlugZap, Radar } from "lucide-react";
+import { Loader2, PlugZap, Radar, Trash2 } from "lucide-react";
 import Badge from "@/shared/ui/Badge";
 import { Button } from "@/shared/ui/Button";
 import type { ExternalMcpServerRecord } from "@/shared/api/tools";
@@ -8,11 +8,11 @@ type McpInstalledServersPanelProps = {
   pendingServerId: string | null;
   labels: {
     title: string;
-    description: string;
     emptyTitle: string;
     emptyDescription: string;
     connect: string;
     discover: string;
+    remove: string;
     discovered: string;
     connected: string;
     configured: string;
@@ -23,6 +23,7 @@ type McpInstalledServersPanelProps = {
   };
   onConnect: (serverId: string) => void;
   onDiscover: (serverId: string) => void;
+  onDelete: (server: ExternalMcpServerRecord) => void;
 };
 
 const getStatusLabel = (
@@ -45,12 +46,12 @@ export default function McpInstalledServersPanel({
   labels,
   onConnect,
   onDiscover,
+  onDelete,
 }: McpInstalledServersPanelProps) {
   return (
     <div className="min-h-0">
       <div className="px-5 py-4">
         <div className="text-sm font-medium text-text-primary">{labels.title}</div>
-        <div className="mt-1 text-sm text-text-secondary">{labels.description}</div>
       </div>
 
       {servers.length === 0 ? (
@@ -61,11 +62,14 @@ export default function McpInstalledServersPanel({
       ) : null}
 
       {servers.length > 0 ? (
-        <div className="divide-y divide-border">
+        <div>
           {servers.map((server) => {
             const isPending = pendingServerId === server.id;
             return (
-              <div key={server.id} className="px-5 py-4">
+              <div
+                key={server.id}
+                className="border-t border-border px-5 py-4 first:border-t"
+              >
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -140,6 +144,15 @@ export default function McpInstalledServersPanel({
                     >
                       {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radar className="h-4 w-4" />}
                       {labels.discover}
+                    </Button>
+                    <Button
+                      variant="danger-outline"
+                      size="sm"
+                      disabled={isPending}
+                      onClick={() => onDelete(server)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      {labels.remove}
                     </Button>
                   </div>
                 </div>

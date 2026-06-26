@@ -1,5 +1,9 @@
 # Role 页面设计
 
+Layer: raw-source
+Module: role
+Doc Type: current-contract
+
 Status: Current
 Owner: role / frontend
 Last verified: 2026-06-25

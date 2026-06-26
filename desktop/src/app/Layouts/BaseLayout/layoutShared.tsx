@@ -71,38 +71,30 @@ export function SettingsNavigation() {
   const { t } = useTranslation();
   const settingsNavigationItems = useSettingsNavigationItems();
 
-  const primaryItems = settingsNavigationItems.filter(
-    (item) =>
-      item.to === "/settings/general" || item.to === "/settings/model-setting",
+  const generalItems = settingsNavigationItems.filter(
+    (item) => item.to === "/settings/general",
   );
 
-  const knowledgeBaseItems = settingsNavigationItems.filter(
-    (item) => item.to === "/settings/knowledge-base",
+  const basicConfigItems = settingsNavigationItems.filter(
+    (item) =>
+      item.to === "/settings/model-setting" ||
+      item.to === "/settings/tools" ||
+      item.to === "/settings/mcp",
   );
 
-  const evaluationItems = settingsNavigationItems.filter(
+  const knowledgeItems = settingsNavigationItems.filter(
     (item) =>
-      item.to === "/settings/evaluation/center/new" ||
+      item.to === "/settings/knowledge-base" ||
       item.to === "/settings/evaluation/center",
   );
 
-  const utilityItems = settingsNavigationItems.filter(
-    (item) => item.to === "/settings/tools" || item.to === "/settings/about",
-  );
-
-  const developmentItems = settingsNavigationItems.filter(
-    (item) =>
-      item.to === "/settings/development" ||
-      item.to === "/settings/development/logs",
-  );
-
-  const integrationItems = settingsNavigationItems.filter(
-    (item) => item.to === "/settings/mcp",
-  );
-
-  const knowledgeWorkspaceItems = [...knowledgeBaseItems, ...evaluationItems];
-  const roleItems = settingsNavigationItems.filter(
+  const appItems = settingsNavigationItems.filter(
     (item) => item.to === "/settings/roles",
+  );
+
+  const otherItems = settingsNavigationItems.filter(
+    (item) =>
+      item.to === "/settings/development" || item.to === "/settings/about",
   );
 
   return (
@@ -116,41 +108,39 @@ export function SettingsNavigation() {
       </NavLink>
 
       <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-        <SettingsNavigationGroup items={primaryItems} />
+        <SettingsNavigationGroup items={generalItems} />
         <Divider />
         <SettingsNavigationGroup
-          title={t("settings.navigation.workspace")}
-          items={knowledgeWorkspaceItems}
+          title={t("settings.navigation.basicConfig")}
+          items={basicConfigItems}
         />
-        {roleItems.length > 0 ? (
+        {knowledgeItems.length > 0 ? (
           <>
             <Divider />
             <SettingsNavigationGroup
-              title={t("settings.navigation.roles")}
-              items={roleItems}
+              title={t("settings.navigation.knowledgeGroup")}
+              items={knowledgeItems}
             />
           </>
         ) : null}
-        {integrationItems.length > 0 ? (
+        {appItems.length > 0 ? (
           <>
             <Divider />
             <SettingsNavigationGroup
-              title={t("settings.navigation.integration")}
-              items={integrationItems}
+              title={t("settings.navigation.appGroup")}
+              items={appItems}
             />
           </>
         ) : null}
-        {developmentItems.length > 0 ? (
+        {otherItems.length > 0 ? (
           <>
             <Divider />
             <SettingsNavigationGroup
-              title={t("settings.navigation.developmentGroup")}
-              items={developmentItems}
+              title={t("settings.navigation.otherGroup")}
+              items={otherItems}
             />
           </>
         ) : null}
-        <Divider />
-        <SettingsNavigationGroup items={utilityItems} />
       </div>
     </div>
   );

@@ -1,5 +1,9 @@
 # Role Chat 接入
 
+Layer: raw-source
+Module: role
+Doc Type: current-contract
+
 Status: Current
 Owner: role / chat
 Last verified: 2026-06-25

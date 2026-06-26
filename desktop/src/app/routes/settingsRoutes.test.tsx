@@ -4,11 +4,16 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { settingsRoutes, useSettingsNavigationItems } from "./settingsRoutes";
 
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
+vi.mock("react-i18next", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-i18next")>();
+
+  return {
+    ...actual,
+    useTranslation: () => ({
+      t: (key: string) => key,
+    }),
+  };
+});
 
 vi.mock("@/features/Settings/pages/About/index", () => ({
   default: () => null,
@@ -41,6 +46,9 @@ vi.mock("@/features/Settings/pages/Development/index", () => ({
   default: () => null,
 }));
 vi.mock("@/features/Settings/pages/Development/pages/Logs", () => ({
+  default: () => null,
+}));
+vi.mock("@/features/Settings/pages/Development/pages/Database", () => ({
   default: () => null,
 }));
 vi.mock("@/features/Settings/pages/Development/pages/ClientTests", () => ({
@@ -87,12 +95,14 @@ describe("settings routes", () => {
     expect(settingsRoutes.some((route) => route.path === "mcp")).toBe(true);
   });
 
-  it("redirects /settings/development to the logs subpage", () => {
+  it("includes the logs subpage under /settings/development", () => {
     const developmentRoute = settingsRoutes.find(
       (route) => route.path === "development",
     );
 
-    expect(developmentRoute?.children?.some((route) => route.index)).toBe(true);
+    expect(
+      developmentRoute?.children?.some((route) => route.path === "logs"),
+    ).toBe(true);
   });
 
   it("includes mcp route in navigation items", () => {
@@ -107,7 +117,7 @@ describe("settings routes", () => {
     ).toBeInTheDocument();
   });
 
-  it("includes development child routes in navigation items", () => {
+  it("keeps the development route as the only development sidebar navigation item", () => {
     render(
       <MemoryRouter>
         <NavigationProbe />
@@ -115,9 +125,12 @@ describe("settings routes", () => {
     );
 
     expect(
-      screen.getByText(
+      screen.getByText("settings.navigation.development:/settings/development"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
         "settings.navigation.developmentLogs:/settings/development/logs",
       ),
-    ).toBeInTheDocument();
+    ).not.toBeInTheDocument();
   });
 });

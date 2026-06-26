@@ -1,5 +1,9 @@
 # Role 迁移清单
 
+Layer: raw-source
+Module: role
+Doc Type: checklist
+
 Status: Active
 Owner: role / chat / runtime
 Last verified: 2026-06-25

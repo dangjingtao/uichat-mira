@@ -1,5 +1,9 @@
 # 角色系统总览
 
+Layer: raw-source
+Module: role
+Doc Type: current-contract
+
 Status: Current
 Owner: role
 Last verified: 2026-06-25

@@ -1,5 +1,9 @@
 # 内置工具区成熟方案调研
 
+Layer: raw-source
+Module: tooling-runtime
+Doc Type: reference
+
 Status: Current
 Owner: runtime
 Last verified: 2026-06-25

@@ -3,6 +3,14 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import DevelopmentLogs, { pushCappedLogEntries } from "./index";
 
+const streamRuntimeLogsMock = vi.fn(async (_input, onEvent) => {
+  await onEvent({
+    type: "snapshot",
+    entries: Array.from({ length: 105 }, (_, index) => `line-${index + 1}`),
+  });
+  await new Promise(() => {});
+});
+
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, options?: Record<string, unknown>) =>
@@ -11,16 +19,33 @@ vi.mock("react-i18next", () => ({
 }));
 
 vi.mock("@/shared/api/logs", () => ({
-  streamRuntimeLogs: vi.fn(async (_input, onEvent) => {
-    await onEvent({
-      type: "snapshot",
-      entries: Array.from({ length: 105 }, (_, index) => `line-${index + 1}`),
-    });
-    await new Promise(() => {});
-  }),
+  streamRuntimeLogs: (...args: Parameters<typeof streamRuntimeLogsMock>) =>
+    streamRuntimeLogsMock(...args),
+}));
+
+vi.mock("@/features/Settings/pages/General/LogsButtons", () => ({
+  default: ({ variant }: { variant?: string }) => (
+    <div data-testid="log-buttons">{variant ?? "default"}</div>
+  ),
 }));
 
 describe("DevelopmentLogs", () => {
+  it("shows an inline connecting state before the first log snapshot arrives", async () => {
+    streamRuntimeLogsMock.mockImplementationOnce(async () => {
+      await new Promise(() => {});
+    });
+
+    render(<DevelopmentLogs />);
+
+    expect(
+      screen.getByText("[connecting to runtime log stream...]"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("> opening stream channel")).toBeInTheDocument();
+    expect(
+      screen.getByText("> requesting latest runtime snapshot"),
+    ).toBeInTheDocument();
+  });
+
   it("caps appended entries to the latest limit", () => {
     const result = pushCappedLogEntries(
       Array.from({ length: 99 }, (_, index) => `line-${index + 1}`),
@@ -37,8 +62,14 @@ describe("DevelopmentLogs", () => {
     const { container } = render(<DevelopmentLogs />);
 
     expect(
-      await screen.findByText("settings.development.logs.status.live"),
+      await screen.findByText(
+        "settings.development.logs.status.live · settings.development.logs.limit:100",
+      ),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText("settings.development.logs.terminalTitle"),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("log-buttons")).toHaveTextContent("link");
     expect(container.textContent).toContain("line-105");
     expect(container.textContent).toContain("line-6");
     expect(container.textContent).not.toContain("line-1\nline-2\n");

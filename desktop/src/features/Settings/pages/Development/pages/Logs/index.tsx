@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Alert from "@/shared/ui/Alert";
-import Badge from "@/shared/ui/Badge";
+import Card from "@/shared/ui/Card";
 import TerminalPanel from "@/shared/ui/TerminalPanel";
+import LogButtons from "@/features/Settings/pages/General/LogsButtons";
 import {
   type RuntimeLogStreamEvent,
   streamRuntimeLogs,
@@ -10,6 +11,12 @@ import {
 
 const MAX_VISIBLE_LOG_LINES = 100;
 const RETRY_DELAY_MS = 1500;
+const CONNECTING_TERMINAL_LINE = "[connecting to runtime log stream...]";
+const CONNECTING_SKELETON_LINES = [
+  "> opening stream channel",
+  "> requesting latest runtime snapshot",
+  "> waiting for backend log tail",
+];
 
 export const pushCappedLogEntries = (
   current: string[],
@@ -112,47 +119,49 @@ export default function DevelopmentLogs() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold text-text-primary">
-            {t("settings.development.logs.title")}
-          </h2>
-          <p className="mt-1 text-sm text-text-secondary">
-            {t("settings.development.logs.description")}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge
-            variant={
-              status === "live"
-                ? "success"
-                : status === "error"
-                  ? "danger"
-                  : "warning"
-            }
-            outline
-          >
-            {statusLabel}
-          </Badge>
-          <Badge variant="muted" outline>
-            {t("settings.development.logs.limit", {
-              count: MAX_VISIBLE_LOG_LINES,
-            })}
-          </Badge>
-        </div>
-      </div>
-
       {errorMessage ? (
         <Alert variant="danger">
           {t("settings.development.logs.errorPrefix")} {errorMessage}
         </Alert>
       ) : null}
 
-      <TerminalPanel title="runtime tail" meta={statusLabel}>
+      <TerminalPanel
+        title={t("settings.development.logs.terminalTitle")}
+        badge={<LogButtons variant="link" />}
+        meta={`${statusLabel} · ${t("settings.development.logs.limit", {
+          count: MAX_VISIBLE_LOG_LINES,
+        })}`}
+      >
         {entries.length === 0 ? (
-          <p className="text-sm text-text-secondary">
-            {t("settings.development.logs.empty")}
-          </p>
+          status === "connecting" || status === "reconnecting" ? (
+            <div className="space-y-3">
+              <pre className="whitespace-pre-wrap break-words text-text-secondary">
+                {CONNECTING_TERMINAL_LINE}
+              </pre>
+              <div className="space-y-2">
+                {CONNECTING_SKELETON_LINES.map((line) => (
+                  <Card
+                    key={line}
+                    variant="ghost"
+                    padding="sm"
+                    className="border border-dashed border-border/60 bg-surface-secondary/40"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="h-2 w-2 rounded-full bg-primary/70" />
+                      <div className="h-3 w-40 animate-pulse rounded-full bg-surface-secondary" />
+                      <span className="text-[11px] text-text-tertiary">
+                        {line}
+                      </span>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <pre className="whitespace-pre-wrap break-words text-text-secondary">
+              {t("settings.development.logs.empty")}
+            </pre>
+          )
         ) : (
           <pre className="whitespace-pre-wrap break-words">
             {entries.join("\n")}

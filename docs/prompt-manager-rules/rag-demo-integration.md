@@ -1,5 +1,12 @@
 # Prompt Manager Integration for `rag-demo`
 
+Status: Current
+Owner: runtime
+Last verified: 2026-06-26
+Layer: raw-source
+Module: tooling-runtime
+Doc Type: design
+
 ## 1. 目标
 
 本文件回答一个具体问题：

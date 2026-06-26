@@ -1,5 +1,12 @@
 # `rag-demo` Prompt Manager Types Draft
 
+Status: Current
+Owner: runtime
+Last verified: 2026-06-26
+Layer: raw-source
+Module: tooling-runtime
+Doc Type: draft
+
 > 这份文档只做一件事：把后续实现里最容易混掉的概念先定成清晰的类型。
 
 ## 1. 目标

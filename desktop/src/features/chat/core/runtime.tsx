@@ -38,6 +38,8 @@ type ChatThreadDraftStateValue = {
 const ChatThreadDraftStateContext =
   createContext<ChatThreadDraftStateValue | null>(null);
 
+const ACTIVE_THREAD_STORAGE_KEY = "rag-demo-chat-active-thread-id";
+
 const desktopRuntimeBaseCapabilities = {
   renameThread: true,
   archiveThread: true,
@@ -78,6 +80,7 @@ export function AppChatRuntimeProvider({
   const [draftRoleId, setDraftRoleId] = useState<string | null>(null);
   const draftKnowledgeBaseIdRef = useRef<string | null>(draftKnowledgeBaseId);
   const draftRoleIdRef = useRef<string | null>(draftRoleId);
+  const hasBootstrappedActiveThreadRef = useRef(false);
   draftKnowledgeBaseIdRef.current = draftKnowledgeBaseId;
   draftRoleIdRef.current = draftRoleId;
   const runtimeRef = useRef<ChatRuntime | null>(null);
@@ -91,9 +94,59 @@ export function AppChatRuntimeProvider({
 
   const runtime = runtimeRef.current;
 
+  // Persist only the currently selected persisted thread id. Refresh should
+  // restore the active thread surface, including role / KB request context,
+  // but welcome draft state remains ephemeral by design.
+  useEffect(() => {
+    return runtime.store.subscribe((state) => {
+      if (!hasBootstrappedActiveThreadRef.current) {
+        return;
+      }
+
+      if (state.activeThreadId) {
+        globalThis.localStorage.setItem(
+          ACTIVE_THREAD_STORAGE_KEY,
+          state.activeThreadId,
+        );
+        return;
+      }
+
+      globalThis.localStorage.removeItem(ACTIVE_THREAD_STORAGE_KEY);
+    });
+  }, [runtime]);
+
   // Bootstrap the thread list once the provider mounts.
   useEffect(() => {
-    void runtime.loadThreads();
+    let cancelled = false;
+
+    const bootstrap = async () => {
+      const persistedActiveThreadId = globalThis.localStorage.getItem(
+        ACTIVE_THREAD_STORAGE_KEY,
+      );
+      const threads = await runtime.loadThreads();
+      if (cancelled) {
+        return;
+      }
+      if (!persistedActiveThreadId) {
+        hasBootstrappedActiveThreadRef.current = true;
+        return;
+      }
+
+      if (!threads.some((thread) => thread.id === persistedActiveThreadId)) {
+        globalThis.localStorage.removeItem(ACTIVE_THREAD_STORAGE_KEY);
+        hasBootstrappedActiveThreadRef.current = true;
+        return;
+      }
+
+      await runtime.selectThread(persistedActiveThreadId);
+      hasBootstrappedActiveThreadRef.current = true;
+    };
+
+    void bootstrap();
+
+    return () => {
+      cancelled = true;
+    };
   }, [runtime]);
 
   // Knowledge base availability affects only UI-facing composer actions. The

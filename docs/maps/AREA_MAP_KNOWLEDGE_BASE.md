@@ -1,5 +1,9 @@
 # 区域图：Knowledge Base
 
+Layer: wiki
+Module: knowledge-base
+Doc Type: overview
+
 Status: Current
 Owner: docs
 Last verified: 2026-06-24

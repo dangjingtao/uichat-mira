@@ -7,6 +7,7 @@ import type { ComponentProps } from "react";
 
 type MarkdownTextProps = Omit<ComponentProps<typeof Streamdown>, "children"> & {
   children?: string;
+  features?: "full" | "basic";
 };
 
 const defaultMarkdownClassName =
@@ -20,10 +21,11 @@ const defaultMarkdownClassName =
 const MarkdownText = ({
   children = "",
   className,
+  features = "full",
   ...rest
 }: MarkdownTextProps) => (
   <Streamdown
-    plugins={{ code, math, mermaid }}
+    plugins={features === "basic" ? {} : { code, math, mermaid }}
     className={
       className
         ? `${defaultMarkdownClassName} ${className}`

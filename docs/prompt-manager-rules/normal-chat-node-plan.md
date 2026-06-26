@@ -1,5 +1,12 @@
 # 普通聊天最小节点化方案
 
+Status: Current
+Owner: runtime
+Last verified: 2026-06-26
+Layer: raw-source
+Module: tooling-runtime
+Doc Type: plan
+
 ## 1. 这份文档回答什么
 
 这份文档只回答一个现实问题：

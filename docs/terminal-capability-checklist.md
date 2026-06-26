@@ -1,5 +1,9 @@
 # Terminal Capability Checklist
 
+Layer: raw-source
+Module: tooling-runtime
+Doc Type: checklist
+
 Status: In Progress
 Owner: runtime
 Last verified: 2026-06-26

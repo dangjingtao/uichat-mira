@@ -25,6 +25,7 @@ import EvaluationNew from "@/features/Settings/pages/Evaluation/New";
 import EvaluationCenter from "@/features/Settings/pages/Evaluation/Center";
 import DevelopmentSettings from "@/features/Settings/pages/Development/index";
 import DevelopmentLogsPage from "@/features/Settings/pages/Development/pages/Logs/index";
+import DevelopmentDatabasePage from "@/features/Settings/pages/Development/pages/Database/index";
 import DevelopmentClientTestsPage from "@/features/Settings/pages/Development/pages/ClientTests/index";
 import DevelopmentServerTestsPage from "@/features/Settings/pages/Development/pages/ServerTests/index";
 import DevelopmentDocsPage from "@/features/Settings/pages/Development/pages/Docs/index";
@@ -105,10 +106,10 @@ const settingsRouteTree: SettingsRouteConfig[] = [
       {
         path: "logs",
         element: <DevelopmentLogsPage />,
-        nav: {
-          labelKey: "settings.navigation.developmentLogs",
-          icon: Braces,
-        },
+      },
+      {
+        path: "database",
+        element: <DevelopmentDatabasePage />,
       },
       {
         path: "client-tests",

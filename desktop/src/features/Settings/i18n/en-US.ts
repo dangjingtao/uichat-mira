@@ -36,22 +36,18 @@ const settingsPending = {
       },
       brand: {
         description: "An intelligent agent cabin that starts with a chat and returns to your side.",
-        tagline: "A place to stay",
-        taglineSubtitle: "A door, a light. AI is not a visitor from outside — it lives inside the cabin.",
-        narrative1: "At first, it was just a small, clean interface. Then it grew: reading documents, browsing the web, remembering things, wearing different faces.",
-        narrative2: "Like a small cabin slowly being lit — bookshelves emerging from the dark, tools lining the walls, memories finding their place, half-finished imaginations settling in.",
-        narrative3: "Then you realize: what you truly wanted was never a chat app.",
-        miraHeading: "Mira is not an assistant's name",
-        miraBody: "It is a faint light by the window of a ship in deep night. When you open it, you are not logging into a system — you are walking into a cabin of your own: books, tools, memories, and the characters you created, waiting quietly.",
-        appeal1: "The most fascinating thing about AI was never answering questions. It is the shape of a door. Behind it: knowledge, work, and the long-term worlds you could barely sustain alone.",
-        appeal2: "Ordinary windows ask and leave. Here, conversation is just the beginning. It remembers, it tracks, it understands what you are doing — and it guards the things you once created with care.",
-        roleSummary: "It is a tool when you work, a character when you imagine, and the lamp still lit inside the cabin when you are lost.",
-        meaningTitle: "Mira",
-        meaning1: "It carries the meaning of seeing.",
-        meaning2: "Seeing your documents. Seeing your projects. Seeing your roles. Seeing the scattered threads in documents, memories, tools, and conversations.",
-        meaning3: "And seeing what you truly want to accomplish.",
-        closing: "Let AI not just pass by your questions, but stay in your world.",
-        closingSubtitle: "An intelligent agent cabin that starts with a chat and returns to your side.",
+        title: "UIChat Mira",
+        paragraphs: [
+          "At first, UIChat was just a small, clean interface.",
+          "The idea was simple: let AI speak clearly, keep the interface quiet, and let it stay more naturally on your own desktop.",
+          "Then it slowly grew.",
+          "It began to organize materials, remember threads, carry roles, and stay with you through longer tasks. It was no longer just a question-and-answer window, but a small cabin slowly being lit: books, tools, memories, and unfinished ideas all finding their place.",
+          "That is how UIChat Mira appeared.",
+          "Mira is not a cold assistant name. It feels more like a faint light by the window of a ship at night. When you open it, you are not logging into a system. You are returning to a workspace of your own.",
+          "Here, AI does not just pass by your questions. It can stay in your world, helping you organize, work, and create, while keeping the roles, materials, and clues you once shaped with care.",
+          "Mira carries a little of the meaning of seeing: seeing your materials, your projects, the clues scattered through conversations and memories, and what you truly want to finish.",
+          "This is UIChat Mira: an intelligent agent cabin that starts with chat and returns to your side.",
+        ],
       },
     },
     tools: {
@@ -173,6 +169,7 @@ const settingsPending = {
         searchPlaceholder: "Filter by name, description, endpoint, or capability ID",
         connect: "Connect",
         discover: "Discover",
+        remove: "Delete",
         discovered: "Discovered",
         connected: "Connected",
         configured: "Configured",
@@ -187,6 +184,12 @@ const settingsPending = {
         description:
           'You are about to attach "{{name}}" to the local MCP runtime. Third-party MCP servers are not internal core Tools, so the source, behavior, and risk must be acknowledged before enablement.',
         confirm: "Acknowledge and install",
+      },
+      deleteDialog: {
+        title: "Delete installed MCP server",
+        description:
+          'This will remove the local install record, connection state, and discovery results for "{{name}}".',
+        confirm: "Confirm delete",
       },
       notes: {
         toggle: "Notes",
@@ -207,6 +210,7 @@ const settingsPending = {
         connectFailed: "Failed to connect MCP server",
         discoverSucceeded: "Discovery completed",
         discoverFailed: "Discovery failed",
+        deleteSucceeded: "MCP server deleted",
       },
     },
     knowledgeBase: {
@@ -733,6 +737,7 @@ const settingsPending = {
       },
       tabs: {
         logs: "Logs",
+        database: "Database",
         clientTests: "Client Tests",
         serverTests: "Server Tests",
         docs: "Dev Docs",
@@ -743,13 +748,26 @@ const settingsPending = {
         title: "Runtime Logs",
         description: "Live backend log stream with only the latest 100 lines kept.",
         empty: "Waiting for new log output…",
+        connectingInline: "connecting...",
         limit: "Latest {{count}} lines",
         errorPrefix: "Log stream disconnected:",
+        terminalTitle: "runtime tail",
         status: {
           connecting: "Connecting",
           live: "Live",
           reconnecting: "Reconnecting",
           error: "Connection error",
+        },
+      },
+      database: {
+        eyebrow: "Runtime Data Plane",
+        title: "Database Runtime Status",
+        description:
+          "Keep backend, SQLite, and sqlite-vec runtime state inside the development area for faster debugging of connectivity and local vector-extension loading.",
+        rows: {
+          backendEyebrow: "Backend",
+          sqliteEyebrow: "Storage",
+          vectorEyebrow: "Vector Extension",
         },
       },
       clientTests: {

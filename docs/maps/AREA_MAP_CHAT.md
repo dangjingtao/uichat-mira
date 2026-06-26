@@ -1,4 +1,8 @@
-# Area Map Chat
+# 区域图：Chat
+
+Layer: wiki
+Module: chat
+Doc Type: overview
 
 Status: Current
 Owner: docs

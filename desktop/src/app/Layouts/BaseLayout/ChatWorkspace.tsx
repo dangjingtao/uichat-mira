@@ -14,11 +14,15 @@ import {
  * settings workspace is shown/hidden.
  */
 export function ChatWorkspace({ visible }: { visible: boolean }) {
+  if (!visible) {
+    return null;
+  }
+
   return (
     <ChatKnowledgeBaseStateProvider>
       <ChatRouteKnowledgeBaseRefresher />
       <ChatRuntimeProvider>
-        <div className={visible ? "flex min-h-0 flex-1" : "hidden"}>
+        <div className="flex min-h-0 flex-1">
           <WorkspaceShell
             showBackToChatLink={false}
             sidebarContent={<UChatThreadListSidebar />}

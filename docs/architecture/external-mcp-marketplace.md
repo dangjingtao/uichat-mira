@@ -1,5 +1,9 @@
 # 外部 MCP Marketplace 接入
 
+Layer: raw-source
+Module: tooling-runtime
+Doc Type: design
+
 Status: Planned
 Owner: runtime
 Last verified: 2026-06-25
@@ -51,6 +55,50 @@ UIChat Mira 将来要怎样消费第三方 MCP server。
 - renderer 里的 Settings -> Tools workbench
 
 当前缺的不是 invocation 基础设施，而是“第三方 MCP server 生命周期管理”。
+
+## 当前怎么用
+
+当前阶段，这里的 MCP 不是聊天自动调工具系统，而是一个 external MCP server 接入工作台。
+
+它的实际使用主线是：
+
+1. 打开 `Settings -> MCP`
+2. 在 `市场` 里浏览第三方 MCP server
+3. 选择支持 `streamable-http` 的 server，执行安装
+4. backend 保存 external MCP server record
+5. 切到 `已安装`
+6. 对目标 server 执行 `连接`
+7. 对目标 server 执行 `Discover`
+8. backend 把远端 MCP protocol tools 投影为本地 harness capability
+9. 通过现有 `/mcp/invocations` 或 `/mcp/invocations/stream` 做手动调用
+
+换句话说，当前 MCP 走的是：
+
+`市场 -> 安装 -> 连接 -> Discover -> 投影 -> 手动调用`
+
+而不是：
+
+`市场 -> 安装 -> 聊天自动使用`
+
+### 当前已经打通
+
+- marketplace 浏览
+- external MCP server 安装记录
+- disclaimer 校验
+- `streamable-http` transport
+- `connect`
+- `Discover`
+- projected capability 注册
+- 手动 invocation
+- 前端展示已安装 server、连接状态、Discover 结果与 projected capability id
+
+### 当前还没打通
+
+- chat 自动调用 MCP capability
+- 复杂 approval 流程
+- `stdio` transport
+- 完整 secret 管理面板
+- 非核心内置 MCP package 管理闭环
 
 ## 产品概念边界
 
@@ -329,6 +377,126 @@ external_mcp_server_secrets
 ```
 
 如果以后迁移到 Windows Credential Manager 或其他 OS keychain，也应该保留稳定的 `secretRef`，避免 transport / config 模型再次重构。
+
+## 配置表单策略
+
+不能把 external MCP server 的配置问题简化成“给一个 token 输入框”。
+
+现实里一个 server 可能同时需要：
+
+- endpoint URL
+- auth token / API key / custom headers
+- workspace / tenant / org / project
+- region / mode / provider
+- server 自己额外要求的业务字段
+
+而且这些字段不一定都能从 marketplace、MCP 包或 server 自描述里自动拿全。
+
+### 市面上成熟产品的共性
+
+当前主流产品基本都收敛到同一个判断：
+
+- 不假设可以从 MCP 包里自动提取完整安装表单
+- 先接入 server 定义，再逐步补配置
+- secret 和非 secret 字段分开
+- 允许工作区级、用户级、环境变量级配置叠加
+- 给高级用户保留 headers / env / raw config 兜底入口
+
+也就是说，成熟产品做的是：
+
+`server definition + known config + secret inputs + advanced config + validation loop`
+
+而不是：
+
+`自动生成一次性完美表单`
+
+### 本项目应该怎样落
+
+这里推荐把 external MCP 配置理解成多来源合成的“已知配置草案”。
+
+来源通常有四层：
+
+1. 项目内置 preset / adapter
+2. marketplace 元数据
+3. server 自身可发现的声明
+4. 用户手工补充
+
+因此 backend 不应该承诺“返回完整 schema”，只能承诺：
+
+- 返回当前已知的配置字段
+- 标注这些字段来自哪里
+- 标注这份 schema 是否可能不完整
+- 允许用户继续补充高级配置
+
+推荐模型：
+
+```ts
+type ExternalMcpConfigField = {
+  key: string;
+  label: string;
+  type: "text" | "password" | "url" | "select" | "boolean" | "number" | "json";
+  required: boolean;
+  secret?: boolean;
+  placeholder?: string;
+  description?: string;
+  defaultValue?: unknown;
+  options?: Array<{ label: string; value: string }>;
+};
+
+type ExternalMcpConfigSchemaResolution = {
+  fields: ExternalMcpConfigField[];
+  completeness: "known-partial" | "known-good" | "unknown";
+  sources: Array<"preset" | "marketplace" | "server-self-describe" | "manual">;
+  notes?: string[];
+};
+```
+
+### 渐进式配置，而不是一次填完
+
+更现实的交互主线应该是：
+
+1. 用户安装 server
+2. 系统展示“当前已知字段”
+3. 用户填写
+4. backend 尝试 `connect`
+5. 如果失败：
+   - 展示错误
+   - 保留现有配置
+   - 允许继续补字段
+   - 必要时进入高级配置
+
+这意味着配置系统必须支持：
+
+- schema 不完整
+- connect 后再修
+- secret 与普通字段分开保存
+- raw headers / raw JSON 作为高级兜底
+
+### MVP 建议
+
+第一轮不必一步做到全能动态表单，但方向要对。
+
+建议先支持三层：
+
+1. 基础配置
+   - endpoint
+   - transport
+   - display name
+   - timeout
+
+2. 已知字段表单
+   - text
+   - password
+   - boolean
+   - select
+   - json
+
+3. 高级配置
+   - custom headers
+   - extra env / secret refs
+   - raw config JSON
+
+这样可以覆盖大多数 `streamable-http` server，同时不假装我们能自动知道全部业务字段。
 
 ## Marketplace Source 策略
 

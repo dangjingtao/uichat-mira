@@ -9,6 +9,7 @@ const getExternalMcpServersMock = vi.fn();
 const createExternalMcpServerMock = vi.fn();
 const connectExternalMcpServerMock = vi.fn();
 const discoverExternalMcpServerMock = vi.fn();
+const deleteExternalMcpServerMock = vi.fn();
 const modalConfirmMock = vi.fn();
 const messageSuccessMock = vi.fn();
 const messageErrorMock = vi.fn();
@@ -26,6 +27,7 @@ vi.mock("@/shared/api/tools", () => ({
   createExternalMcpServer: (...args: unknown[]) => createExternalMcpServerMock(...args),
   connectExternalMcpServer: (...args: unknown[]) => connectExternalMcpServerMock(...args),
   discoverExternalMcpServer: (...args: unknown[]) => discoverExternalMcpServerMock(...args),
+  deleteExternalMcpServer: (...args: unknown[]) => deleteExternalMcpServerMock(...args),
 }));
 
 vi.mock("@/shared/ui/Modal", () => ({
@@ -48,6 +50,7 @@ describe("McpSettings", () => {
     createExternalMcpServerMock.mockReset();
     connectExternalMcpServerMock.mockReset();
     discoverExternalMcpServerMock.mockReset();
+    deleteExternalMcpServerMock.mockReset();
     modalConfirmMock.mockReset();
     messageSuccessMock.mockReset();
     messageErrorMock.mockReset();
@@ -128,6 +131,58 @@ describe("McpSettings", () => {
           disclaimerAccepted: true,
         }),
       );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("settings.mcp.installed.emptyTitle")).toBeInTheDocument();
+    });
+  });
+
+  it("deletes an installed MCP server from the installed tab", async () => {
+    const user = userEvent.setup();
+
+    getExternalMcpServersMock.mockResolvedValueOnce([
+      {
+        id: "remote-docs",
+        source: "registry",
+        displayName: "Remote Docs",
+        description: "Third-party docs MCP",
+        transport: {
+          kind: "streamable-http",
+          url: "https://remote.example/mcp",
+        },
+        status: "configured",
+        enabled: true,
+        createdAt: "2026-06-25T00:00:00.000Z",
+        updatedAt: "2026-06-25T00:00:00.000Z",
+        discoveredTools: [],
+      },
+    ]);
+    getExternalMcpServersMock.mockResolvedValueOnce([]);
+    deleteExternalMcpServerMock.mockResolvedValue({
+      id: "remote-docs",
+    });
+
+    render(<McpSettings />);
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: /settings\.mcp\.tabs\.installed/i,
+      }),
+    );
+
+    await screen.findByText("Remote Docs");
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "settings.mcp.installed.remove",
+      }),
+    );
+
+    expect(modalConfirmMock).toHaveBeenCalledTimes(1);
+
+    await waitFor(() => {
+      expect(deleteExternalMcpServerMock).toHaveBeenCalledWith("remote-docs");
     });
 
     await waitFor(() => {

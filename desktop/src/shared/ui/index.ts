@@ -17,6 +17,8 @@ export { FullPageStatus } from "./FullPageStatus";
 export { default as ImagePreviewOverlay } from "./ImagePreviewOverlay";
 export { default as MarkdownEditor } from "./MarkdownEditor";
 export { default as MarkdownText } from "./MarkdownText";
+export { default as MicroFrontend } from "./MicroFrontend";
+export { default as CoverageReportPanel } from "./CoverageReportPanel";
 export { message, MessageProvider, useMessage } from "./Message";
 export { Modal, ModalProvider, useModal } from "./Modal";
 export { default as NavItem } from "./NavItem";

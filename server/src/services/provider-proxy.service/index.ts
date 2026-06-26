@@ -214,6 +214,10 @@ export const providerProxyService = {
             yield assistantTextDeltaChunk(delta);
           }
 
+          if (!answer.trim()) {
+            throw new Error("Model returned empty assistant response");
+          }
+
           yield assistantTextEndChunk();
           await input.onComplete?.({
             answer,

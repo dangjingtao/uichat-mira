@@ -23,8 +23,12 @@ import { fetchMcpMarketplaceServers } from "./marketplace.js";
 import {
   connectExternalMcpServer,
   createExternalMcpServer,
+  deleteExternalMcpServer,
   discoverExternalMcpServer,
+  getExternalMcpServerConfig,
+  getExternalMcpServerConfigSchema,
   listExternalMcpServers,
+  updateExternalMcpServerConfig,
 } from "./external.js";
 
 const objectSchema = { type: "object", additionalProperties: true } as const;
@@ -150,6 +154,83 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
     },
     routeHandler("Failed to discover external MCP server capabilities", async (request) =>
       success(await discoverExternalMcpServer(request.params.id))),
+  );
+
+  app.get<{ Params: { id: string } }>(
+    "/mcp/external/servers/:id/config-schema",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Get config schema draft for one external MCP server",
+        response: {
+          200: successEnvelope(objectSchema),
+        },
+      },
+    },
+    routeHandler("Failed to get external MCP server config schema", async (request) =>
+      success(getExternalMcpServerConfigSchema(request.params.id))),
+  );
+
+  app.get<{ Params: { id: string } }>(
+    "/mcp/external/servers/:id/config",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Get current config for one external MCP server",
+        response: {
+          200: successEnvelope(objectSchema),
+        },
+      },
+    },
+    routeHandler("Failed to get external MCP server config", async (request) =>
+      success(getExternalMcpServerConfig(request.params.id))),
+  );
+
+  app.patch<{
+    Params: { id: string };
+    Body: {
+      endpointUrl: string;
+      authType: "none" | "bearer";
+      timeoutMs: number;
+      customHeadersJson: string;
+      bearerToken?: string | null;
+    };
+  }>(
+    "/mcp/external/servers/:id/config",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Update config for one external MCP server",
+        response: {
+          200: successEnvelope(objectSchema),
+        },
+      },
+    },
+    routeHandler("Failed to update external MCP server config", async (request) =>
+      success(
+        updateExternalMcpServerConfig(request.params.id, {
+          endpointUrl: request.body.endpointUrl,
+          authType: request.body.authType,
+          timeoutMs: request.body.timeoutMs,
+          customHeadersJson: request.body.customHeadersJson,
+          bearerToken: request.body.bearerToken,
+        }),
+      )),
+  );
+
+  app.delete<{ Params: { id: string } }>(
+    "/mcp/external/servers/:id",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Delete one external MCP server",
+        response: {
+          200: successEnvelope(objectSchema),
+        },
+      },
+    },
+    routeHandler("Failed to delete external MCP server", async (request) =>
+      success(deleteExternalMcpServer(request.params.id))),
   );
 
   app.get(
