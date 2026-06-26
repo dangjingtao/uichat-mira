@@ -1,6 +1,7 @@
 import { Radar } from "lucide-react";
+import Badge from "@/shared/ui/Badge";
 import TerminalPanel from "@/shared/ui/TerminalPanel";
-import type { McpArtifact, McpInvocationEvent } from "@/shared/api/tools";
+import type { McpArtifact, McpInvocationEvent, McpInvocationTrace } from "@/shared/api/tools";
 import { compactJson } from "../utils";
 
 type ToolsTracePanelProps = {
@@ -11,6 +12,7 @@ type ToolsTracePanelProps = {
   panelTitle: string;
   runError: string | null;
   runStatus: "idle" | "completed" | "failed" | "cancelled" | "awaiting_approval";
+  trace: McpInvocationTrace | null;
   terminalSummary?: {
     sessionId?: string;
     streamMode?: "split" | "merged";
@@ -26,6 +28,7 @@ export default function ToolsTracePanel({
   panelTitle,
   runError,
   runStatus,
+  trace,
   terminalSummary,
 }: ToolsTracePanelProps) {
   const eventLines = events.map((event) => {
@@ -62,6 +65,22 @@ export default function ToolsTracePanel({
     return "";
   });
 
+  const traceLines =
+    trace?.spans.map((span) => {
+      const duration =
+        span.finishedAt
+          ? `${new Date(span.finishedAt).getTime() - new Date(span.startedAt).getTime()}ms`
+          : "running";
+      return {
+        id: span.id,
+        summary: `${span.kind}  ${span.name}  ${span.status}  ${duration}`,
+        metadata:
+          span.metadata && Object.keys(span.metadata).length > 0
+            ? compactJson(span.metadata)
+            : "",
+      };
+    }) ?? [];
+
   return (
     <TerminalPanel
       title={panelTitle}
@@ -87,10 +106,31 @@ export default function ToolsTracePanel({
       {runError ? (
         <div className="whitespace-pre-wrap break-words text-sm text-danger-text">{runError}</div>
       ) : eventLines.length > 0 ? (
-        <div className="space-y-3 whitespace-pre-wrap break-words text-[12px]">
-          {eventLines.map((line, index) => (
-            <div key={`${line}-${index}`}>{line}</div>
-          ))}
+        <div className="space-y-4 whitespace-pre-wrap break-words text-[12px]">
+          {trace ? (
+            <div className="space-y-2 rounded-ui-control border border-border bg-surface-secondary/60 p-3">
+              <div className="flex items-center gap-2">
+                <Badge variant="muted">trace</Badge>
+                <span className="text-[11px] text-text-secondary">{trace.traceId}</span>
+              </div>
+              <div className="space-y-2">
+                {traceLines.map((line) => (
+                  <div key={line.id} className="space-y-1">
+                    <div>{line.summary}</div>
+                    {line.metadata ? (
+                      <div className="pl-3 text-[11px] text-text-secondary">{line.metadata}</div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="space-y-3">
+            {eventLines.map((line, index) => (
+              <div key={`${line}-${index}`}>{line}</div>
+            ))}
+          </div>
         </div>
       ) : (
         <div className="text-sm text-text-secondary">{emptyPlaceholder}</div>
