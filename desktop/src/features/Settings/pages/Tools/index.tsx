@@ -64,6 +64,7 @@ export default function ToolsSettings() {
                 panelTitle={t("settings.tools.workbench.console")}
                 runError={workbench.runError}
                 runStatus={workbench.runStatus}
+                trace={workbench.trace}
                 terminalSummary={workbench.terminalSummary}
               />
             }
