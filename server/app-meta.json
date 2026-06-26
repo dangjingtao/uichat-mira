@@ -69,11 +69,11 @@
         {
           "version": "0.7.1",
           "commit": {
-            "hash": "0f443b3cd164a5dd38bebd030e0965c6fc97b639",
-            "shortHash": "0f443b3",
-            "message": "chore: checkpoint docs site and settings updates",
+            "hash": "b88e103d864febad85f9291a88e1ed1d5af43483",
+            "shortHash": "b88e103",
+            "message": "chore: checkpoint docs and tooling updates",
             "author": "Tomz",
-            "date": "2026-06-26T12:19:11+08:00"
+            "date": "2026-06-26T17:52:45+08:00"
           }
         },
         {

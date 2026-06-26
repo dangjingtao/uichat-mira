@@ -7,6 +7,8 @@ export type {
   ChatMessage,
   ChatMessagePresentationHints,
   ChatMessagePart,
+  ChatToolTraceEntry,
+  ChatToolTraceStatus,
   ChatRepository,
   ChatRole,
   ChatSendLifecyclePolicy,

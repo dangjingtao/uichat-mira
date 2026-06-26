@@ -82,9 +82,14 @@ describe("McpSettings", () => {
           isLatest: true,
           publishedAt: null,
           updatedAt: null,
+          websiteUrl: "https://docs.example.dev/mcp",
+          repositoryUrl: "https://github.com/example/remote-docs",
           transports: [
             {
               kind: "streamable-http",
+              packageType: "remote",
+              installable: true,
+              label: "Remote HTTP",
               url: "https://remote.example/mcp",
             },
           ],
@@ -163,13 +168,17 @@ describe("McpSettings", () => {
 
     await user.click(installButton);
 
-    expect(modalConfirmMock).toHaveBeenCalledTimes(1);
-
     await waitFor(() => {
       expect(createExternalMcpServerMock).toHaveBeenCalledWith(
         expect.objectContaining({
           id: "remote-docs",
+          documentationUrl: "https://docs.example.dev/mcp",
+          repositoryUrl: "https://github.com/example/remote-docs",
           disclaimerAccepted: true,
+          transport: {
+            kind: "streamable-http",
+            url: "https://remote.example/mcp",
+          },
         }),
       );
     });
@@ -188,6 +197,8 @@ describe("McpSettings", () => {
         source: "registry",
         displayName: "Remote Docs",
         description: "Third-party docs MCP",
+        documentationUrl: "https://docs.example.dev/mcp",
+        repositoryUrl: "https://github.com/example/remote-docs",
         transport: {
           kind: "streamable-http",
           url: "https://remote.example/mcp",
@@ -213,6 +224,14 @@ describe("McpSettings", () => {
     );
 
     await screen.findByText("Remote Docs");
+    expect(screen.getByRole("link", { name: "Docs" })).toHaveAttribute(
+      "href",
+      "https://docs.example.dev/mcp",
+    );
+    expect(screen.getByRole("link", { name: "GitHub" })).toHaveAttribute(
+      "href",
+      "https://github.com/example/remote-docs",
+    );
 
     await user.click(
       screen.getByRole("button", {
@@ -325,5 +344,159 @@ describe("McpSettings", () => {
       });
     });
     expect(modalCloseMock).toHaveBeenCalledWith("modal_1");
+  });
+
+  it("renders stdio config fields for installed stdio servers", async () => {
+    const user = userEvent.setup();
+
+    getExternalMcpServersMock.mockResolvedValueOnce([
+      {
+        id: "local-docs",
+        source: "manual",
+        displayName: "Local Docs",
+        description: "stdio server",
+        transport: {
+          kind: "stdio",
+          command: "npx",
+          args: ["-y", "@demo/local-docs-mcp"],
+        },
+        status: "configured",
+        enabled: true,
+        createdAt: "2026-06-25T00:00:00.000Z",
+        updatedAt: "2026-06-25T00:00:00.000Z",
+        discoveredTools: [],
+      },
+    ]);
+    getExternalMcpServersMock.mockResolvedValueOnce([
+      {
+        id: "local-docs",
+        source: "manual",
+        displayName: "Local Docs",
+        description: "stdio server",
+        transport: {
+          kind: "stdio",
+          command: "npx",
+          args: ["-y", "@demo/local-docs-mcp"],
+        },
+        status: "configured",
+        enabled: true,
+        createdAt: "2026-06-25T00:00:00.000Z",
+        updatedAt: "2026-06-25T00:00:00.000Z",
+        discoveredTools: [],
+      },
+    ]);
+    getExternalMcpServerConfigSchemaMock.mockResolvedValueOnce({
+      fields: [
+        { key: "command", label: "Command", type: "text", required: true },
+        { key: "argsText", label: "Args JSON", type: "json", required: false },
+        { key: "timeoutMs", label: "Timeout (ms)", type: "number", required: true },
+      ],
+      completeness: "known-partial",
+      sources: ["manual"],
+      notes: [],
+    });
+    getExternalMcpServerConfigMock.mockResolvedValueOnce({
+      command: "npx",
+      argsText: '[\n  "-y",\n  "@demo/local-docs-mcp"\n]',
+      authType: "none",
+      timeoutMs: 30000,
+      customHeadersJson: "",
+      hasBearerToken: false,
+    });
+    updateExternalMcpServerConfigMock.mockResolvedValueOnce({
+      command: "uvx",
+      argsText: '["mcparmory-github"]',
+      authType: "none",
+      timeoutMs: 30000,
+      customHeadersJson: "",
+      hasBearerToken: false,
+    });
+
+    modalShowMock.mockImplementation((options: { content: JSX.Element }) => {
+      render(options.content);
+      return "modal_1";
+    });
+
+    render(<McpSettings />);
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: /settings\.mcp\.tabs\.installed/i,
+      }),
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "settings.mcp.installed.configure",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Command")).toBeInTheDocument();
+      expect(screen.getByLabelText("Args JSON")).toBeInTheDocument();
+      expect(screen.queryByLabelText("Endpoint URL")).not.toBeInTheDocument();
+    });
+
+    await user.clear(screen.getByLabelText("Command"));
+    await user.type(screen.getByLabelText("Command"), "uvx");
+    await user.clear(screen.getByLabelText("Args JSON"));
+    fireEvent.change(screen.getByLabelText("Args JSON"), {
+      target: {
+        value: '["mcparmory-github"]',
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: "settings.mcp.config.save" }));
+
+    await waitFor(() => {
+      expect(updateExternalMcpServerConfigMock).toHaveBeenCalledWith("local-docs", {
+        command: "uvx",
+        argsText: '["mcparmory-github"]',
+        authType: "none",
+        timeoutMs: 30000,
+        customHeadersJson: "",
+        bearerToken: null,
+      });
+    });
+  });
+
+  it("shows unsupported package transports without allowing install", async () => {
+    getMcpMarketplaceServersMock.mockResolvedValueOnce({
+      servers: [
+        {
+          id: "oci-only",
+          name: "oci-only",
+          title: "OCI Only",
+          description: "Container image MCP",
+          version: "1.0.0",
+          status: "active",
+          isLatest: true,
+          publishedAt: null,
+          updatedAt: null,
+          websiteUrl: null,
+          repositoryUrl: null,
+          transports: [
+            {
+              kind: "package",
+              packageType: "oci",
+              installable: false,
+              label: "OCI image",
+              packageIdentifier: "ghcr.io/example/oci-only:1.0.0",
+            },
+          ],
+        },
+      ],
+      metadata: {
+        count: 1,
+        nextCursor: null,
+        sourceUrl: "https://registry.modelcontextprotocol.io/v0/servers",
+      },
+    });
+
+    render(<McpSettings />);
+
+    await screen.findByText("OCI Only");
+    expect(screen.getByRole("button", { name: "暂不支持" })).toBeDisabled();
+    expect(createExternalMcpServerMock).not.toHaveBeenCalled();
   });
 });

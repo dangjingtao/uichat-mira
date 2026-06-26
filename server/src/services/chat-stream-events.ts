@@ -22,6 +22,18 @@ export interface AssistantToolEvent {
   errorMessage?: string;
 }
 
+export type AssistantExecutionNodePhase = "start" | "done" | "error";
+
+export interface AssistantExecutionNodeEvent {
+  nodeId: string;
+  nodeType: string;
+  phase: AssistantExecutionNodePhase;
+  label: string;
+  summary?: string;
+  details?: Record<string, unknown>;
+  environment?: Record<string, unknown>;
+}
+
 const DEFAULT_TEXT_ID = "text-1";
 
 export const defaultAssistantStreamUsage: AssistantStreamUsage = {
@@ -69,6 +81,14 @@ export const assistantErrorChunk = (errorText: string): string =>
 export const assistantToolEventChunk = (event: AssistantToolEvent): string =>
   toAssistantSseChunk({
     type: "data-tool-event",
+    data: event,
+  });
+
+export const assistantExecutionNodeChunk = (
+  event: AssistantExecutionNodeEvent,
+): string =>
+  toAssistantSseChunk({
+    type: "data-execution-node",
     data: event,
   });
 

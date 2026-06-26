@@ -129,4 +129,31 @@ describe("useToolsWorkbench", () => {
       expect.any(Function),
     );
   });
+
+  it("does not require workspace when running web_search", async () => {
+    getMcpWorkspaceSelectionMock.mockResolvedValueOnce({
+      rootPath: null,
+      source: "unset",
+    });
+
+    const useToolsWorkbench = await importHook();
+    const { result } = renderHook(() => useToolsWorkbench());
+
+    await waitFor(() => {
+      expect(result.current.tools).toHaveLength(1);
+    }, { timeout: 3000 });
+
+    expect(result.current.requiresWorkspace).toBe(false);
+    act(() => {
+      result.current.selectTool(result.current.tools[0]!);
+    });
+    await act(async () => {
+      await result.current.runSelectedTool();
+    });
+
+    expect(executeMcpInvocationStreamMock).toHaveBeenCalled();
+    expect(executeMcpInvocationStreamMock.mock.calls[0]?.[0]).toMatchObject({
+      toolId: "web_search",
+    });
+  });
 });

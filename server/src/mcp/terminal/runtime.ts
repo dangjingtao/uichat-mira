@@ -15,6 +15,7 @@ import {
   type TerminalSessionRecord,
   writeTerminalSession,
 } from "../terminal-sessions.js";
+import { decodeTerminalOutput } from "./encoding.js";
 
 type TerminalExecutionContext = {
   invocationId: string;
@@ -202,7 +203,10 @@ const runEphemeralCommand = async (input: {
   let settled = false;
 
   child.stdout?.on("data", (chunk: Buffer | string) => {
-    const text = chunk.toString();
+    const text = decodeTerminalOutput({
+      chunk,
+      encoding: shellProfile.stdoutEncoding,
+    });
     stdoutChunks.push(text);
     input.pushEvent?.({
       type: "invocation:stdout",
@@ -212,7 +216,10 @@ const runEphemeralCommand = async (input: {
   });
 
   child.stderr?.on("data", (chunk: Buffer | string) => {
-    const text = chunk.toString();
+    const text = decodeTerminalOutput({
+      chunk,
+      encoding: shellProfile.stderrEncoding,
+    });
     stderrChunks.push(text);
     input.pushEvent?.({
       type: "invocation:stdout",
@@ -320,6 +327,7 @@ const acquirePersistentSession = (input: {
   command: string;
   cwd?: string;
   env?: Record<string, string>;
+  shellProfile: TerminalShellProfile;
   attachSessionId?: string;
 }) => {
   const session = input.attachSessionId
@@ -328,6 +336,7 @@ const acquirePersistentSession = (input: {
         command: input.command,
         cwd: input.cwd,
         env: input.env,
+        shellProfile: input.shellProfile,
       });
 
   if (!session) {
@@ -562,6 +571,7 @@ export const executeTerminalSessionRuntime = async ({
       command,
       cwd: typeof args.cwd === "string" ? args.cwd : undefined,
       env,
+      shellProfile,
       attachSessionId,
     });
     acquireSpan?.end({

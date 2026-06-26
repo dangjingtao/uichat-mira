@@ -122,29 +122,6 @@ const providerParamsSchema = {
   },
 } as const;
 
-const webSearchToolConfigSchema = {
-  type: "object",
-  properties: {
-    apiKey: {
-      type: "string",
-      description: "Optional web search api key forwarded from the client tool config.",
-    },
-    baseUrl: {
-      type: "string",
-      description: "Optional SearXNG base URL forwarded from the client tool config.",
-    },
-  },
-  additionalProperties: false,
-} as const;
-
-const toolConfigSchema = {
-  type: "object",
-  properties: {
-    web_search: webSearchToolConfigSchema,
-  },
-  additionalProperties: false,
-} as const;
-
 const embeddingsBodySchema = {
   type: "object",
   required: ["input"],
@@ -221,13 +198,7 @@ export const proxyProviderRouteSchemas = {
     summary: providerChatRoute.summary,
     operationId: "proxyProviderChat",
     params: providerParamsSchema,
-    body: {
-      ...chatMessagesBodySchema,
-      properties: {
-        ...chatMessagesBodySchema.properties,
-        toolConfig: toolConfigSchema,
-      },
-    },
+    body: chatMessagesBodySchema,
     response: {
       200: {
         description: "Server-Sent Events or desktop chat data stream.",

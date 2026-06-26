@@ -22,6 +22,8 @@ type RegistryServer = {
   title?: unknown;
   description?: unknown;
   version?: unknown;
+  websiteUrl?: unknown;
+  repository?: unknown;
   remotes?: unknown;
   packages?: unknown;
 };
@@ -31,12 +33,30 @@ type RegistryEntry = {
   _meta?: Record<string, unknown>;
 };
 
-export type McpMarketplaceTransport = {
-  kind: "stdio" | "streamable-http";
-  url?: string;
-  command?: string;
-  args?: string[];
-};
+export type McpMarketplaceTransport =
+  | {
+      kind: "streamable-http";
+      packageType: "remote";
+      installable: true;
+      label: string;
+      url: string;
+    }
+  | {
+      kind: "stdio";
+      packageType: "npm";
+      installable: true;
+      label: string;
+      command: string;
+      args?: string[];
+      packageIdentifier: string;
+    }
+  | {
+      kind: "package";
+      packageType: "pypi" | "oci" | "unknown";
+      installable: false;
+      label: string;
+      packageIdentifier: string;
+    };
 
 export type McpMarketplaceServer = {
   id: string;
@@ -48,6 +68,8 @@ export type McpMarketplaceServer = {
   isLatest: boolean | null;
   publishedAt: string | null;
   updatedAt: string | null;
+  websiteUrl: string | null;
+  repositoryUrl: string | null;
   transports: McpMarketplaceTransport[];
 };
 
@@ -107,6 +129,9 @@ const normalizeRemoteTransport = (remote: RegistryTransport): McpMarketplaceTran
 
   return {
     kind: "streamable-http",
+    packageType: "remote",
+    installable: true,
+    label: "Remote HTTP",
     url,
   };
 };
@@ -128,13 +153,44 @@ const normalizePackageTransport = (pkg: RegistryPackage): McpMarketplaceTranspor
   }
 
   const registryType = stringOrNull(pkg.registry_type);
-  const command = registryType === "npm" ? "npx" : identifier;
-  const args = registryType === "npm" ? ["-y", identifier] : [];
+  if (registryType === "npm") {
+    return {
+      kind: "stdio",
+      packageType: "npm",
+      installable: true,
+      label: "npm package",
+      command: "npx",
+      args: ["-y", identifier],
+      packageIdentifier: identifier,
+    };
+  }
+
+  if (registryType === "pypi") {
+    return {
+      kind: "package",
+      packageType: "pypi",
+      installable: false,
+      label: "PyPI package",
+      packageIdentifier: identifier,
+    };
+  }
+
+  if (registryType === "oci") {
+    return {
+      kind: "package",
+      packageType: "oci",
+      installable: false,
+      label: "OCI image",
+      packageIdentifier: identifier,
+    };
+  }
 
   return {
-    kind: "stdio",
-    command,
-    args,
+    kind: "package",
+    packageType: "unknown",
+    installable: false,
+    label: "Package",
+    packageIdentifier: identifier,
   };
 };
 
@@ -170,6 +226,7 @@ const normalizeServerEntry = (entry: RegistryEntry): McpMarketplaceServer | null
   const meta = isRecord(entry._meta?.[officialMetaKey])
     ? entry._meta[officialMetaKey]
     : {};
+  const repository = isRecord(server.repository) ? server.repository : null;
 
   return {
     id: name,
@@ -181,6 +238,8 @@ const normalizeServerEntry = (entry: RegistryEntry): McpMarketplaceServer | null
     isLatest: booleanOrNull(meta.isLatest),
     publishedAt: stringOrNull(meta.publishedAt),
     updatedAt: stringOrNull(meta.updatedAt),
+    websiteUrl: stringOrNull(server.websiteUrl),
+    repositoryUrl: repository ? stringOrNull(repository.url) : null,
     transports: normalizeTransports(server),
   };
 };

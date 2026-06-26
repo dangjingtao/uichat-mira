@@ -3,12 +3,14 @@ import path from "node:path";
 import pty from "node-pty";
 import { mcpBadRequest } from "./core/errors.js";
 import { resolveWorkspacePath } from "./workspace.js";
+import type { McpExecutionEnvironment } from "./core/definitions.js";
 
 export interface TerminalSessionRecord {
   id: string;
   command: string;
   cwd: string;
   shell: string;
+  stdoutEncoding: string;
   createdAt: string;
   process: pty.IPty;
 }
@@ -21,6 +23,7 @@ export const listTerminalSessions = () =>
     command: session.command,
     cwd: session.cwd,
     shell: session.shell,
+    stdoutEncoding: session.stdoutEncoding,
     createdAt: session.createdAt,
   }));
 
@@ -48,13 +51,15 @@ export const createTerminalSession = (input: {
   command: string;
   cwd?: string;
   env?: Record<string, string>;
+  shellProfile?: McpExecutionEnvironment["terminal"]["shellProfile"];
 }) => {
+  const shellProfile = input.shellProfile;
   const shell =
-    process.platform === "win32"
-      ? process.env.ComSpec || "powershell.exe"
-      : process.env.SHELL || "bash";
+    shellProfile?.shell ??
+    (process.platform === "win32" ? "powershell.exe" : process.env.SHELL || "bash");
   const cwd = input.cwd ? resolveWorkspacePath(input.cwd) : resolveWorkspacePath(".");
   const sessionId = crypto.randomUUID();
+  const encoding = shellProfile?.stdoutEncoding ?? "utf8";
   const child = pty.spawn(shell, [], {
     name: "xterm-color",
     cwd,
@@ -62,6 +67,7 @@ export const createTerminalSession = (input: {
       ...process.env,
       ...(input.env ?? {}),
     } as Record<string, string>,
+    encoding,
   });
 
   const session: TerminalSessionRecord = {
@@ -69,6 +75,7 @@ export const createTerminalSession = (input: {
     command: input.command,
     cwd,
     shell,
+    stdoutEncoding: encoding,
     createdAt: new Date().toISOString(),
     process: child,
   };

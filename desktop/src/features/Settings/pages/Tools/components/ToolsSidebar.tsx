@@ -1,4 +1,4 @@
-import { Eye, FileSearch, Globe, PencilLine, SquareTerminal } from "lucide-react";
+import { FileSearch, Globe, PencilLine, SquareTerminal } from "lucide-react";
 import Badge from "@/shared/ui/Badge";
 import type { ToolDomainSummary, ToolWorkbenchDomain } from "../types";
 
@@ -7,7 +7,6 @@ const domainIcons: Record<ToolWorkbenchDomain, typeof FileSearch> = {
   edit: PencilLine,
   web_search: Globe,
   terminal: SquareTerminal,
-  browser_action: Eye,
 };
 
 type ToolsSidebarProps = {

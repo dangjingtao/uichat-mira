@@ -6,7 +6,6 @@ export const TOOL_DOMAIN_ORDER: ToolWorkbenchDomain[] = [
   "edit",
   "web_search",
   "terminal",
-  "browser_action",
 ];
 
 export function compactJson(value: unknown) {

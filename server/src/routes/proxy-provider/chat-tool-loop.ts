@@ -2,7 +2,6 @@ import OpenAI from "openai";
 import { createOpenAICompatibleClient } from "@/services/openai-compatible-provider.js";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
 import { executeHarnessInvocation } from "@/mcp/harness/invocations.js";
-import { createHarnessEnvironmentSnapshot } from "@/mcp/harness/environment.js";
 import { resolveProviderForRole } from "@/services/provider-proxy.service/resolution.js";
 import { getProviderDefinition } from "@/providers/catalog.js";
 import { toOpenAICompatibleChatOptions } from "@/services/provider-proxy.service/params.js";
@@ -10,10 +9,13 @@ import {
   resolveChatToolSurface,
   type ChatToolSurfaceDefinition,
 } from "./chat-tool-surface.js";
-import type { AssistantToolEvent } from "@/services/chat-stream-events.js";
-import type { HarnessToolConfig } from "@/mcp/harness/environment.js";
+import type {
+  AssistantExecutionNodeEvent,
+  AssistantToolEvent,
+} from "@/services/chat-stream-events.js";
 
 const MAX_TOOL_LOOP_STEPS = 3;
+const TODAY_DATE_ISO = "2026-06-26";
 
 interface ExecuteChatToolLoopInput {
   requestedProvider: "default";
@@ -21,8 +23,10 @@ interface ExecuteChatToolLoopInput {
   userId: number;
   messages: NormalizedChatMessage[];
   params?: Record<string, unknown>;
-  toolConfig?: HarnessToolConfig;
   onToolEvent?: (event: AssistantToolEvent) => Promise<void> | void;
+  onExecutionNode?: (
+    event: AssistantExecutionNodeEvent,
+  ) => Promise<void> | void;
 }
 
 type OpenAIToolCall = {
@@ -52,6 +56,17 @@ const toOpenAIMessages = (messages: NormalizedChatMessage[]) =>
     role: message.role,
     content: toOpenAIMessageContent(message),
   })) as OpenAI.Chat.Completions.ChatCompletionMessageParam[];
+
+const buildDefaultToolPolicyMessage =
+  (): OpenAI.Chat.Completions.ChatCompletionSystemMessageParam => ({
+    role: "system",
+    content: [
+      `Today is ${TODAY_DATE_ISO}.`,
+      "If the user asks about today's date, current time, latest news, live events, weather, prices, recent developments, or any fact that depends on current real-world information, do not guess from memory.",
+      "Use the available web_search tool first whenever current information is required.",
+      "If a search tool call fails or returns no usable current information, say that the real-time lookup failed instead of pretending to know the answer.",
+    ].join(" "),
+  });
 
 const toOpenAITools = (tools: ChatToolSurfaceDefinition[]) =>
   tools.map((tool) => ({
@@ -104,6 +119,31 @@ const buildAssistantToolCallMessage = (
   })),
 });
 
+const toToolExecutionNodeEvent = (input: {
+  toolCallId?: string;
+  toolName: string;
+  phase: "start" | "done" | "error";
+  summary: string;
+  toolArgs?: Record<string, unknown>;
+  output?: unknown;
+  errorMessage?: string;
+}) => ({
+  nodeId: input.toolCallId ?? `tool-${input.toolName}`,
+  nodeType: "tool",
+  phase: input.phase,
+  label: input.toolName,
+  summary: input.summary,
+  details: {
+    toolName: input.toolName,
+    ...(input.toolCallId ? { callId: input.toolCallId } : {}),
+    ...(input.toolArgs ? { input: input.toolArgs } : {}),
+    ...(Object.prototype.hasOwnProperty.call(input, "output")
+      ? { output: input.output }
+      : {}),
+    ...(input.errorMessage ? { errorMessage: input.errorMessage } : {}),
+  },
+});
+
 /**
  * Minimal Phase 2 normal-chat tool loop.
  *
@@ -130,13 +170,12 @@ export const executeDefaultChatToolLoop = async (
 
   const client = createOpenAICompatibleClient(resolved.baseUrl, resolved.apiKey);
   const openAiMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
-    toOpenAIMessages(input.messages);
+    [buildDefaultToolPolicyMessage(), ...toOpenAIMessages(input.messages)];
   const tools = toOpenAITools(toolSurface);
   const mergedParams = {
     ...resolved.params,
     ...(input.params ?? {}),
   };
-  const mergedToolConfig = input.toolConfig ?? {};
 
   for (let step = 0; step < MAX_TOOL_LOOP_STEPS; step += 1) {
     const completion = await client.chat.completions.create({
@@ -176,19 +215,19 @@ export const executeDefaultChatToolLoop = async (
         status: "running",
         input: toolArgs,
       });
+      await input.onExecutionNode?.(
+        toToolExecutionNodeEvent({
+          toolCallId: toolCall.id,
+          toolName: toolCall.function.name,
+          phase: "start",
+          summary: `Running ${toolCall.function.name}`,
+          toolArgs,
+        }),
+      );
       const invocation = await executeHarnessInvocation({
         toolId: toolCall.function.name,
         args: toolArgs,
         threadId: input.threadId,
-        ...(mergedToolConfig.web_search
-          ? {
-              environment: createHarnessEnvironmentSnapshot({
-                toolConfig: {
-                  web_search: mergedToolConfig.web_search,
-                },
-              }),
-            }
-          : {}),
       });
 
       if (invocation.status !== "completed") {
@@ -201,6 +240,18 @@ export const executeDefaultChatToolLoop = async (
             invocation.error?.message ??
             `Tool invocation failed: ${toolCall.function.name}`,
         });
+        await input.onExecutionNode?.(
+          toToolExecutionNodeEvent({
+            toolCallId: toolCall.id,
+            toolName: toolCall.function.name,
+            phase: "error",
+            summary: `${toolCall.function.name} failed`,
+            toolArgs,
+            errorMessage:
+              invocation.error?.message ??
+              `Tool invocation failed: ${toolCall.function.name}`,
+          }),
+        );
         throw new Error(
           invocation.error?.message ??
             `Tool invocation failed: ${toolCall.function.name}`,
@@ -214,6 +265,16 @@ export const executeDefaultChatToolLoop = async (
         input: toolArgs,
         output: invocation.result ?? null,
       });
+      await input.onExecutionNode?.(
+        toToolExecutionNodeEvent({
+          toolCallId: toolCall.id,
+          toolName: toolCall.function.name,
+          phase: "done",
+          summary: `${toolCall.function.name} completed`,
+          toolArgs,
+          output: invocation.result ?? null,
+        }),
+      );
 
       openAiMessages.push(
         buildToolResultMessage(

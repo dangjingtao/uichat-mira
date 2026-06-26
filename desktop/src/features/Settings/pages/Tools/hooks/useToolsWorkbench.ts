@@ -22,6 +22,7 @@ import {
   TOOL_DOMAIN_ORDER,
 } from "../utils";
 const WEB_SEARCH_DEFAULT_MAX_RESULTS = 5;
+const WORKSPACE_REQUIRED_DOMAINS = new Set<ToolWorkbenchDomain>(["read", "edit", "terminal"]);
 
 type WebSearchConfig = {
   apiKey: string;
@@ -221,6 +222,11 @@ export function useToolsWorkbench() {
       return;
     }
 
+    if (WORKSPACE_REQUIRED_DOMAINS.has(selectedTool.domain) && !workspaceSelection?.rootPath) {
+      message.error(t("settings.tools.messages.workspaceRootRequired"));
+      return;
+    }
+
     let parsedArgs: Record<string, unknown> = {};
     try {
       parsedArgs = JSON.parse(argsDraft) as Record<string, unknown>;
@@ -298,12 +304,17 @@ export function useToolsWorkbench() {
     runError,
     runStatus,
     selectedTool,
+    requiresWorkspace: WORKSPACE_REQUIRED_DOMAINS.has(activeDomain),
     terminalSummary,
     trace,
     tools,
     webSearchConfig,
-    workspaceRootInput,
-    workspaceSelection,
+    workspaceRootInput: WORKSPACE_REQUIRED_DOMAINS.has(activeDomain)
+      ? workspaceRootInput
+      : "",
+    workspaceSelection: WORKSPACE_REQUIRED_DOMAINS.has(activeDomain)
+      ? workspaceSelection
+      : null,
     setArgsDraft,
     setWebSearchConfig,
     setWorkspaceRootInput,

@@ -25,10 +25,14 @@ type McpMarketplacePanelProps = {
 
 function formatTransport(transport: McpMarketplaceServer["transports"][number]) {
   if (transport.kind === "streamable-http") {
-    return "streamable-http";
+    return "remote";
   }
 
-  return `stdio · ${transport.command}`;
+  if (transport.kind === "stdio") {
+    return `npm · ${transport.packageIdentifier}`;
+  }
+
+  return `${transport.packageType} · ${transport.packageIdentifier}`;
 }
 
 function formatTransportSummary(server: McpMarketplaceServer) {
@@ -125,11 +129,11 @@ export default function McpMarketplacePanel({
                   variant="outline"
                   size="sm"
                   onClick={() => onInstall(server)}
-                  disabled={server.transports.length === 0}
+                  disabled={server.transports.length === 0 || !server.transports.some((item) => item.installable)}
                   title={formatTransportSummary(server)}
                 >
                   <Download className="h-4 w-4" />
-                  {labels.install}
+                  {server.transports.some((item) => item.installable) ? labels.install : "暂不支持"}
                 </Button>
               </div>
             </div>

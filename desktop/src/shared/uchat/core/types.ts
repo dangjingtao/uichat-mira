@@ -44,6 +44,21 @@ export type ChatMessageStatus =
   | "cancelled"
   | "error";
 
+export type ChatToolTraceStatus =
+  | "requested"
+  | "running"
+  | "succeeded"
+  | "failed";
+
+export interface ChatToolTraceEntry {
+  toolCallId?: string;
+  toolName: string;
+  status: ChatToolTraceStatus;
+  input?: Record<string, unknown>;
+  output?: unknown;
+  errorMessage?: string;
+}
+
 // ChatMessage is the runtime-owned canonical message model.
 export interface ChatMessage {
   id: string;
@@ -53,6 +68,7 @@ export interface ChatMessage {
   createdAt: string;
   parentId: string | null;
   status: ChatMessageStatus;
+  toolTrace?: ChatToolTraceEntry[];
   metadata?: Record<string, unknown>;
   errorMessage?: string;
 }

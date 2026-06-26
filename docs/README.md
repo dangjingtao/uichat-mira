@@ -68,6 +68,12 @@ Doc Type: current-contract
 - `版本管理.md`
 - `CHANGELOG.md`
 
+### 第三方集成与扩展
+
+- `enterprise-wecom-integration-poc.md`
+- `lark-feishu-integration-poc.md`
+- `wecom-vs-lark-integration-selection.md`
+
 ### 文档系统 schema
 
 - `WIKI_SYSTEM_SCHEMA.md`

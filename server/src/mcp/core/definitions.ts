@@ -94,14 +94,8 @@ export interface McpExecutionEnvironment {
       shell: string;
       shellFamily: "powershell" | "cmd" | "posix";
       argsMode: "powershell" | "cmd" | "posix";
-      stdoutEncoding: "utf8";
-      stderrEncoding: "utf8";
-    };
-  };
-  toolConfig?: {
-    web_search?: {
-      apiKey?: string;
-      baseUrl?: string;
+      stdoutEncoding: string;
+      stderrEncoding: string;
     };
   };
 }

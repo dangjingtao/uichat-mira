@@ -172,8 +172,8 @@ const defaultTerminalShellProfile: McpExecutionEnvironment["terminal"]["shellPro
         shell: "powershell.exe",
         shellFamily: "powershell",
         argsMode: "powershell",
-        stdoutEncoding: "utf8",
-        stderrEncoding: "utf8",
+        stdoutEncoding: "utf16le",
+        stderrEncoding: "utf16le",
       }
     : {
         shell: process.env.SHELL || "bash",

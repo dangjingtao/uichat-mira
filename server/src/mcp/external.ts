@@ -26,6 +26,8 @@ export interface CreateExternalMcpServerInput {
   id?: string;
   registryUrl?: string;
   packageName?: string;
+  documentationUrl?: string;
+  repositoryUrl?: string;
   displayName: string;
   description?: string;
   version?: string;
@@ -98,6 +100,8 @@ export interface ExternalMcpServerRecord {
   source: "registry" | "manual";
   registryUrl?: string;
   packageName?: string;
+  documentationUrl?: string;
+  repositoryUrl?: string;
   displayName: string;
   description?: string;
   version?: string;
@@ -132,6 +136,8 @@ interface ExternalMcpServerRow {
   source: "registry" | "manual";
   registry_url: string | null;
   package_name: string | null;
+  documentation_url: string | null;
+  repository_url: string | null;
   display_name: string;
   description: string | null;
   version: string | null;
@@ -332,6 +338,8 @@ const toRecord = (row: ExternalMcpServerRow): ExternalMcpServerRecord => ({
   source: row.source,
   ...(row.registry_url ? { registryUrl: row.registry_url } : {}),
   ...(row.package_name ? { packageName: row.package_name } : {}),
+  ...(row.documentation_url ? { documentationUrl: row.documentation_url } : {}),
+  ...(row.repository_url ? { repositoryUrl: row.repository_url } : {}),
   displayName: row.display_name,
   ...(row.description ? { description: row.description } : {}),
   ...(row.version ? { version: row.version } : {}),
@@ -382,6 +390,8 @@ export const initializeExternalMcpDatabase = () => {
       source TEXT NOT NULL CHECK(source IN ('registry', 'manual')),
       registry_url TEXT,
       package_name TEXT,
+      documentation_url TEXT,
+      repository_url TEXT,
       display_name TEXT NOT NULL,
       description TEXT,
       version TEXT,
@@ -409,6 +419,124 @@ export const initializeExternalMcpDatabase = () => {
     CREATE INDEX IF NOT EXISTS idx_external_mcp_servers_status
       ON external_mcp_servers(status);
   `);
+
+  const tableSql = (
+    sqlite
+      .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'external_mcp_servers'")
+      .get() as { sql?: string } | undefined
+  )?.sql;
+
+  const requiresLegacyTableMigration =
+    typeof tableSql === "string" &&
+    (tableSql.includes("CHECK(transport_kind IN ('streamable-http'))") ||
+      tableSql.includes("endpoint_url TEXT NOT NULL"));
+
+  if (requiresLegacyTableMigration) {
+    sqlite.exec(`
+      BEGIN;
+
+      ALTER TABLE external_mcp_servers RENAME TO external_mcp_servers_legacy;
+
+      CREATE TABLE external_mcp_servers (
+        id TEXT PRIMARY KEY,
+        source TEXT NOT NULL CHECK(source IN ('registry', 'manual')),
+        registry_url TEXT,
+        package_name TEXT,
+        documentation_url TEXT,
+        repository_url TEXT,
+        display_name TEXT NOT NULL,
+        description TEXT,
+        version TEXT,
+        transport_kind TEXT NOT NULL CHECK(transport_kind IN ('streamable-http', 'stdio')),
+        endpoint_url TEXT,
+        command TEXT,
+        args_json TEXT NOT NULL DEFAULT '[]',
+        status TEXT NOT NULL CHECK(status IN ('configured', 'connected', 'failed')) DEFAULT 'configured',
+        enabled INTEGER NOT NULL DEFAULT 1,
+        disclaimer_accepted_at TEXT,
+        disclaimer_text_hash TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        last_connected_at TEXT,
+        last_error TEXT,
+        session_id TEXT,
+        protocol_version TEXT,
+        remote_server_info_json TEXT NOT NULL DEFAULT 'null',
+        remote_capabilities_json TEXT NOT NULL DEFAULT 'null',
+        discovered_tools_json TEXT NOT NULL DEFAULT '[]',
+        config_json TEXT NOT NULL DEFAULT '{}',
+        secret_json TEXT NOT NULL DEFAULT '{}'
+      );
+
+      INSERT INTO external_mcp_servers (
+        id,
+        source,
+        registry_url,
+        package_name,
+        documentation_url,
+        repository_url,
+        display_name,
+        description,
+        version,
+        transport_kind,
+        endpoint_url,
+        command,
+        args_json,
+        status,
+        enabled,
+        disclaimer_accepted_at,
+        disclaimer_text_hash,
+        created_at,
+        updated_at,
+        last_connected_at,
+        last_error,
+        session_id,
+        protocol_version,
+        remote_server_info_json,
+        remote_capabilities_json,
+        discovered_tools_json,
+        config_json,
+        secret_json
+      )
+      SELECT
+        id,
+        source,
+        registry_url,
+        package_name,
+        NULL,
+        NULL,
+        display_name,
+        description,
+        version,
+        transport_kind,
+        endpoint_url,
+        command,
+        COALESCE(args_json, '[]'),
+        status,
+        enabled,
+        disclaimer_accepted_at,
+        disclaimer_text_hash,
+        created_at,
+        updated_at,
+        last_connected_at,
+        last_error,
+        session_id,
+        protocol_version,
+        COALESCE(remote_server_info_json, 'null'),
+        COALESCE(remote_capabilities_json, 'null'),
+        COALESCE(discovered_tools_json, '[]'),
+        COALESCE(config_json, '{}'),
+        COALESCE(secret_json, '{}')
+      FROM external_mcp_servers_legacy;
+
+      DROP TABLE external_mcp_servers_legacy;
+
+      CREATE INDEX IF NOT EXISTS idx_external_mcp_servers_status
+        ON external_mcp_servers(status);
+
+      COMMIT;
+    `);
+  }
 
   const columns = (
     sqlite.prepare("PRAGMA table_info(external_mcp_servers)").all() as Array<{ name: string }>
@@ -447,6 +575,18 @@ export const initializeExternalMcpDatabase = () => {
   if (!columns.includes("args_json")) {
     sqlite.exec(
       "ALTER TABLE external_mcp_servers ADD COLUMN args_json TEXT NOT NULL DEFAULT '[]'",
+    );
+  }
+
+  if (!columns.includes("documentation_url")) {
+    sqlite.exec(
+      "ALTER TABLE external_mcp_servers ADD COLUMN documentation_url TEXT",
+    );
+  }
+
+  if (!columns.includes("repository_url")) {
+    sqlite.exec(
+      "ALTER TABLE external_mcp_servers ADD COLUMN repository_url TEXT",
     );
   }
 };
@@ -567,12 +707,12 @@ export const createExternalMcpServer = (
     .prepare(
       `
         INSERT INTO external_mcp_servers (
-          id, source, registry_url, package_name, display_name, description, version,
+          id, source, registry_url, package_name, documentation_url, repository_url, display_name, description, version,
           transport_kind, endpoint_url, command, args_json, status, enabled, disclaimer_accepted_at,
           disclaimer_text_hash, created_at, updated_at, remote_server_info_json,
           remote_capabilities_json, discovered_tools_json, config_json, secret_json
         )
-        VALUES (@id, @source, @registryUrl, @packageName, @displayName, @description, @version,
+        VALUES (@id, @source, @registryUrl, @packageName, @documentationUrl, @repositoryUrl, @displayName, @description, @version,
           @transportKind, @endpointUrl, @command, @argsJson, 'configured', 1, @disclaimerAcceptedAt,
           @disclaimerTextHash, @createdAt, @updatedAt, 'null', 'null', '[]', '{}', '{}')
       `,
@@ -582,6 +722,8 @@ export const createExternalMcpServer = (
       source: input.registryUrl ? "registry" : "manual",
       registryUrl: input.registryUrl ?? null,
       packageName: input.packageName ?? null,
+      documentationUrl: input.documentationUrl ?? null,
+      repositoryUrl: input.repositoryUrl ?? null,
       displayName: input.displayName.trim(),
       description: input.description ?? null,
       version: input.version ?? null,
@@ -631,6 +773,9 @@ export const getExternalMcpServerConfigSchema = (
       notes: [
         "This schema is a known configuration draft for stdio MCP servers and may be incomplete.",
         "Args must be entered as a JSON string array.",
+        ...(server.packageName
+          ? [`Installed package hint: ${server.packageName}`]
+          : []),
       ],
     };
   }

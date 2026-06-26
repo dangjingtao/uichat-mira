@@ -23,7 +23,7 @@ const chatPending = {
       copyFailed: "Copy failed, please try again",
     },
     executionTrace: {
-      title: "RAG Flow",
+      title: "Execution Trace",
       stepCount: "{{completed}} / {{total}} steps",
       status: {
         running: "Running",
@@ -64,6 +64,10 @@ const chatPending = {
       rerankSummary: "Reordering candidate fragments",
       generateLabel: "Generating Final Answer",
       generateSummary: "Combining sources to generate final response",
+      toolLabel: "{{name}}",
+      toolRunningSummary: "Running {{name}}",
+      toolCompletedSummary: "{{name}} completed",
+      toolFailedSummary: "{{name}} failed",
       inProgress: "{{label}} in progress",
       failed: "{{label}} failed",
       completed:

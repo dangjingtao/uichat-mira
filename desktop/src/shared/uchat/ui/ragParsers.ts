@@ -109,7 +109,8 @@ export const getRagProgressFromRenderableParts = (
   const events = content
     .filter(
       (part): part is Extract<UChatRenderablePart, { type: "data" }> =>
-        part.type === "data" && part.name === "rag-node",
+        part.type === "data" &&
+        (part.name === "rag-node" || part.name === "execution-node"),
     )
     .map((part) => toRagNodeLike(part.data))
     .filter((part): part is RagNodeLike => part !== null);
@@ -206,6 +207,37 @@ export const getDisplayRagStep = (step: RagNodeLike) => {
       return {
         label: i18n.t("chat.parsers.generateLabel"),
         summary: summary ?? i18n.t("chat.parsers.generateSummary"),
+      };
+    case "tool":
+      if (step.phase === "error") {
+        return {
+          label: i18n.t("chat.parsers.toolLabel", { name: step.label }),
+          summary:
+            summary ??
+            i18n.t("chat.parsers.toolFailedSummary", {
+              name: step.label,
+            }),
+        };
+      }
+
+      if (step.phase === "done") {
+        return {
+          label: i18n.t("chat.parsers.toolLabel", { name: step.label }),
+          summary:
+            summary ??
+            i18n.t("chat.parsers.toolCompletedSummary", {
+              name: step.label,
+            }),
+        };
+      }
+
+      return {
+        label: i18n.t("chat.parsers.toolLabel", { name: step.label }),
+        summary:
+          summary ??
+          i18n.t("chat.parsers.toolRunningSummary", {
+            name: step.label,
+          }),
       };
     default:
       return {

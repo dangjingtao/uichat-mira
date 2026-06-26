@@ -23,7 +23,7 @@ const chatPending = {
       copyFailed: "复制失败，请重试",
     },
     executionTrace: {
-      title: "RAG 过程",
+      title: "执行过程",
       stepCount: "{{completed}} / {{total}} 步",
       status: {
         running: "进行中",
@@ -64,6 +64,10 @@ const chatPending = {
       rerankSummary: "正在对候选片段做进一步排序",
       generateLabel: "组织最终回答",
       generateSummary: "正在结合来源生成最终回复",
+      toolLabel: "{{name}}",
+      toolRunningSummary: "正在调用 {{name}}",
+      toolCompletedSummary: "{{name}} 调用完成",
+      toolFailedSummary: "{{name}} 调用失败",
       inProgress: "{{label}}中",
       failed: "{{label}}失败",
       completed: "已完成回答组织",

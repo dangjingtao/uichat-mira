@@ -30,6 +30,22 @@ const counts = {
   schema: data.stats?.byLayer.schema ?? 0,
 };
 
+const coreEntryPaths = [
+  "README",
+  "VAULT_HOME",
+  "WIKI_SYSTEM_SCHEMA",
+  "knowledge-system/KNOWLEDGE_SYSTEM_INDEX",
+  "knowledge-system/DOCUMENTATION_STANDARDS",
+  "knowledge-system/DIRECTORY_AND_CLASSIFICATION_RULES",
+  "knowledge-system/IMPLEMENTATION_ROADMAP",
+  "maps/AREA_MAP_RUNTIME",
+  "maps/AREA_MAP_KNOWLEDGE_BASE",
+  "architecture/README",
+  "architecture/ipc-and-preload",
+  "platform/tauri",
+  "uchat",
+];
+
 const labelMap: Record<string, string> = {
   "raw-source": "Raw Source",
   wiki: "Wiki",
@@ -55,6 +71,19 @@ const sectionTitleMap: Record<string, string> = {
   platform: "平台",
   role: "角色系统",
   "prompt-manager-rules": "Prompt Rules",
+};
+
+const moduleLabelMap: Record<string, string> = {
+  "docs-system": "Docs System",
+  "knowledge-base": "Knowledge Base",
+  "knowledge-system": "Knowledge System",
+  architecture: "Architecture",
+  platform: "Platform",
+  role: "Role",
+  uchat: "UChat",
+  evaluation: "Evaluation",
+  maps: "Maps",
+  concepts: "Concepts",
 };
 
 const withBase = (value: string) => {
@@ -86,6 +115,33 @@ const formatMetaValue = (value: string | null) => {
 
   return labelMap[value] ?? value;
 };
+
+const getLayerLabel = (layer: string | null) => (layer ? formatMetaValue(layer) ?? layer : "未标注");
+const getModuleLabel = (moduleName: string | null) =>
+  moduleName ? moduleLabelMap[moduleName] ?? moduleName : "未标注";
+const getDocTypeLabel = (docType: string | null) => (docType ? formatMetaValue(docType) ?? docType : "未标注");
+
+const groupedCoreEntries = coreEntryPaths
+  .map((path) => findDocument(path))
+  .filter((doc): doc is NonNullable<typeof doc> => Boolean(doc));
+
+const moduleNames = Array.from(
+  new Set(data.documents.map((doc) => doc.metadata.module).filter((moduleName): moduleName is string => Boolean(moduleName))),
+).sort((left, right) => left.localeCompare(right, "zh-CN"));
+
+const docsByModule = moduleNames.map((moduleName) => ({
+  label: getModuleLabel(moduleName),
+  value: moduleName,
+  items: data.documents
+    .filter((doc) => doc.metadata.module === moduleName)
+    .sort((left, right) => left.title.localeCompare(right.title, "zh-CN")),
+}));
+
+const docsByLayer = ["raw-source", "wiki", "schema"].map((layer) => ({
+  label: getLayerLabel(layer),
+  value: layer,
+  items: data.documents.filter((doc) => doc.metadata.layer === layer),
+}));
 
 const renderNavigation = (items: NavigationItem[]) => (
   <ul className="nav-list">
@@ -255,10 +311,12 @@ const HomeSectionList = ({
   title,
   description,
   items,
+  dense = false,
 }: {
   title: string;
   description: string;
   items: Array<{ title: string; path: string; description: string }>;
+  dense?: boolean;
 }) => (
   <section className="index-section">
     <header className="index-section-header">
@@ -267,7 +325,7 @@ const HomeSectionList = ({
         <p>{description}</p>
       </div>
     </header>
-    <ol className="index-list">
+    <ol className={`index-list${dense ? " index-list-dense" : ""}`}>
       {items.map((item) => {
         const document = findDocument(item.path);
         return (
@@ -291,72 +349,74 @@ const HomePage = () => (
         <p className="eyebrow">Documentation</p>
         <h1>项目文档</h1>
         <p className="home-hero-intro">
-          这套站点直接读取仓库里的 <code>docs/</code>，入口页、区域图、概念页和实现文档会按同一套阅读线组织起来。
+          这套站点直接读取仓库里的 <code>docs/</code>。它不是单纯的文件树，而是把核心目录、三层分类和模块入口并排给人看。
         </p>
       </div>
-      <dl className="home-stats">
-        <div>
-          <dt>文档数</dt>
-          <dd>{counts.total}</dd>
-        </div>
-        <div>
-          <dt>生成时间</dt>
-          <dd>{new Date(data.generatedAt).toLocaleDateString("zh-CN")}</dd>
-        </div>
-        <div>
-          <dt>推荐顺序</dt>
-          <dd>入口页 → 区域图 → 概念页 → 实现页</dd>
-        </div>
-      </dl>
+      <div className="home-hero-note">
+        <span>文档数 {counts.total}</span>
+        <span>Raw sources {counts.rawSource}</span>
+        <span>Wiki {counts.wiki}</span>
+        <span>Schema {counts.schema}</span>
+      </div>
     </header>
     <div className="home-grid">
       <div className="home-main">
         <HomeSectionList
-          title="起步阅读"
-          description="第一次进入这套文档时，先走这条最省脑子的阅读线。"
+          title="核心目录层"
+          description="先读这些总入口，最接近一本书的目录页。"
+          items={groupedCoreEntries.map((document) => ({
+            title: document.title,
+            path: document.id,
+            description:
+              document.excerpt ||
+              `${getLayerLabel(document.metadata.layer)} / ${getModuleLabel(document.metadata.module)} / ${getDocTypeLabel(document.metadata.docType)}`,
+          }))}
+          dense
+        />
+        <HomeSectionList
+          title="总入口"
+          description="先看全局阅读起点。"
           items={[
             {
               title: "Vault 首页",
               path: "VAULT_HOME",
-              description: "从总入口页进入整套知识库阅读路径。",
+              description: "整套知识库的总入口。",
             },
             {
-              title: "运行时区域图",
-              path: "maps/AREA_MAP_RUNTIME",
-              description: "快速建立运行时边界、主链路和请求关系。",
-            },
-            {
-              title: "概念索引",
-              path: "concepts/CONCEPTS_INDEX",
-              description: "从概念入口跳到 Runtime、MCP、UChat 等主概念。",
+              title: "文档总入口",
+              path: "README",
+              description: "查看当前 docs/ 的推荐阅读顺序。",
             },
             {
               title: "知识系统索引",
               path: "knowledge-system/KNOWLEDGE_SYSTEM_INDEX",
-              description: "查看文档体系、AI 接入、索引和可视化方案。",
+              description: "理解三层架构、索引和 AI 接入。",
             },
           ]}
+          dense
         />
         <HomeSectionList
           title="按层阅读"
-          description="这套文档同时按 Raw sources、Wiki、Schema 三层组织。"
-          items={[
-            {
-              title: "Schema 层",
-              path: "WIKI_SYSTEM_SCHEMA",
-              description: "定义三层结构、元数据和 LLM 维护规则。",
-            },
-            {
-              title: "Wiki 层",
-              path: "VAULT_HOME",
-              description: "从入口页、概念页和区域图进入整理后的知识层。",
-            },
-            {
-              title: "Raw sources 层",
-              path: "architecture/README",
-              description: "查看当前运行时、平台和业务模块的原始事实页。",
-            },
-          ]}
+          description="按信息属性进来，看这套文档是怎么分层的。"
+          items={docsByLayer.map((group) => ({
+            title: group.label,
+            path: group.items[0]?.id ?? "README",
+            description:
+              group.value === "raw-source"
+                ? "偏实现事实和边界。"
+                : group.value === "wiki"
+                  ? "偏整理后的知识层。"
+                  : "偏 schema、规则和约束。",
+          }))}
+        />
+        <HomeSectionList
+          title="按模块阅读"
+          description="如果你从业务边界进来，就按模块看。"
+          items={docsByModule.slice(0, 8).map((group) => ({
+            title: group.label,
+            path: group.items[0]?.id ?? "README",
+            description: `${group.items.length} 篇，点开后顺着模块内往下读。`,
+          }))}
         />
         <HomeSectionList
           title="专题入口"
@@ -398,14 +458,15 @@ const HomePage = () => (
             <li>知识系统 {counts.knowledgeSystem} 篇</li>
             <li>实现文档 {counts.implementation} 篇</li>
             <li>Prompt Rules {counts.promptRules} 篇</li>
+            <li>生成于 {new Date(data.generatedAt).toLocaleDateString("zh-CN")}</li>
           </ul>
         </section>
         <section className="aside-section">
           <h2>阅读提示</h2>
           <ul>
-            <li>先看入口，再看区域图。</li>
-            <li>抓边界时优先看概念页。</li>
-            <li>需要落代码时再进实现文档。</li>
+            <li>先目录层，再分类层。</li>
+            <li>先 current-contract，再 plan。</li>
+            <li>归档默认不看。</li>
           </ul>
         </section>
       </aside>

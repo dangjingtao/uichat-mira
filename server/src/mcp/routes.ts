@@ -90,6 +90,8 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
       id?: string;
       registryUrl?: string;
       packageName?: string;
+      documentationUrl?: string;
+      repositoryUrl?: string;
       displayName: string;
       description?: string;
       version?: string;
@@ -123,6 +125,8 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
           id: request.body.id,
           registryUrl: request.body.registryUrl,
           packageName: request.body.packageName,
+          documentationUrl: request.body.documentationUrl,
+          repositoryUrl: request.body.repositoryUrl,
           displayName: request.body.displayName,
           description: request.body.description,
           version: request.body.version,
@@ -219,6 +223,8 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
       success(
         updateExternalMcpServerConfig(request.params.id, {
           endpointUrl: request.body.endpointUrl,
+          command: request.body.command,
+          argsText: request.body.argsText,
           authType: request.body.authType,
           timeoutMs: request.body.timeoutMs,
           customHeadersJson: request.body.customHeadersJson,

@@ -13,6 +13,7 @@ Primary project docs now live under `docs/`.
 - `docs/platform/tauri.md`: Tauri desktop runtime overview
 - `docs/platform/tauri-setup.md`: Tauri setup and troubleshooting
 - `docs/uchat.md`: current app-owned chat runtime entry
+- `packages/docs-site`: current docs reader
 - `docs/evaluation-workbench.md`: 评测工作台技术方案、调用链路与联调说明
 - `desktop/src/shared/ui/COMPONENTS.md`: source-adjacent shared UI component documentation
 - `desktop/src/shared/ui/ui-design-guidelines-tailwind.md`: source-adjacent UI design guidelines

@@ -75,26 +75,19 @@ const settingsPending = {
           description:
             "Command execution, debugging flow, and long-running task observation.",
         },
-        browser_action: {
-          label: "Preview",
-          description: "Page preview, browser actions, and visual inspection.",
-        },
       },
       workbench: {
         description:
           "Run internal core Tools directly and inspect results with the event stream.",
+        execute: "Run",
         workspaceRoot: "Workspace Root",
         workspaceDescription:
-          "Paste an absolute path first and set it as the active workspace root. Read, Edit, and Terminal capabilities all use this boundary.",
+          "Set the workspace root for capability domains that require filesystem context. Web Search does not depend on a workspace.",
         workspaceRootInput: "Workspace Absolute Path",
-        workspaceRootPlaceholder:
-          "For example D:/workspace/rag-demo or C:/docs/project-a",
+        workspaceRootPlaceholder: "For example D:\\workspace\\rag-demo",
         applyWorkspace: "Apply Workspace",
-        workspaceLoading: "Loading current workspace...",
-        workspaceCurrent: "Current workspace",
-        workspaceUnset: "No workspace is currently selected.",
-        workspaceUnsetShort: "workspace unset",
-        execute: "Run",
+        workspaceCurrent: "Current Workspace",
+        workspaceUnset: "Workspace not set",
         args: "Invocation Args",
         argsPlaceholder: 'Enter JSON args, for example {"path":"docs/role.md"}',
         noToolSelected: "No tool selected yet",

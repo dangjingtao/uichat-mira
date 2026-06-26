@@ -9,8 +9,7 @@ export type ToolWorkbenchDomain =
   | "read"
   | "edit"
   | "web_search"
-  | "terminal"
-  | "browser_action";
+  | "terminal";
 
 export type ToolDomainSummary = {
   id: ToolWorkbenchDomain;

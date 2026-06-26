@@ -22,8 +22,7 @@ export type McpToolDomain =
   | "read"
   | "edit"
   | "web_search"
-  | "terminal"
-  | "browser_action";
+  | "terminal";
 
 export type McpToolDefinition = {
   id: string;
@@ -161,12 +160,26 @@ export type McpWebSearchConfig = {
 export type McpMarketplaceTransport =
   | {
       kind: "streamable-http";
+      packageType: "remote";
+      installable: true;
+      label: string;
       url: string;
     }
   | {
       kind: "stdio";
+      packageType: "npm";
+      installable: true;
+      label: string;
       command?: string;
       args?: string[];
+      packageIdentifier: string;
+    }
+  | {
+      kind: "package";
+      packageType: "pypi" | "oci" | "unknown";
+      installable: false;
+      label: string;
+      packageIdentifier: string;
     };
 
 export type McpMarketplaceServer = {
@@ -179,6 +192,8 @@ export type McpMarketplaceServer = {
   isLatest: boolean | null;
   publishedAt: string | null;
   updatedAt: string | null;
+  websiteUrl: string | null;
+  repositoryUrl: string | null;
   transports: McpMarketplaceTransport[];
 };
 
@@ -187,6 +202,8 @@ export type ExternalMcpServerRecord = {
   source: "registry" | "manual";
   registryUrl?: string;
   packageName?: string;
+  documentationUrl?: string;
+  repositoryUrl?: string;
   displayName: string;
   description?: string;
   version?: string;
@@ -290,6 +307,8 @@ export function createExternalMcpServer(
     id?: string;
     registryUrl?: string;
     packageName?: string;
+    documentationUrl?: string;
+    repositoryUrl?: string;
     displayName: string;
     description?: string;
     version?: string;

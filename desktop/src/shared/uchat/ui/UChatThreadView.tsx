@@ -53,6 +53,7 @@ import { UChatRagExecutionTrace } from "./UChatRagExecutionTrace";
 import { UChatRagProgressDetailDrawer } from "./UChatRagProgressDetailDrawer";
 import { UChatRagSourceDetailDrawer } from "./UChatRagSourceDetailDrawer";
 import { UChatThreadHeader } from "./UChatThreadHeader";
+import { UChatToolTrace } from "./UChatToolTrace";
 import { UChatWelcomeEmptyState } from "./UChatWelcomeEmptyState";
 
 const shellClassName =
@@ -643,6 +644,7 @@ function UChatMessageRow({
     message.status === "error"
       ? getRagFailurePresentation(ragProgress, message.errorMessage)
       : null;
+  const toolTraceEntries = message.toolTrace ?? [];
   const preferMarkdownForText =
     messagePresentation.preferMarkdownForText !== false;
   const assistantBubbleWidthClassName = resolveBubbleWidthClassName(
@@ -815,6 +817,10 @@ function UChatMessageRow({
                   ) : null}
                 </div>
               </div>
+            ) : null}
+
+            {toolTraceEntries.length > 0 ? (
+              <UChatToolTrace entries={toolTraceEntries} />
             ) : null}
           </UChatAssistantBubbleShell>
 

@@ -19,13 +19,6 @@ export interface ProviderChatBody extends ChatMessagesBody {
   id?: string;
   /** Client message id for the latest user message. A UUID is generated when absent. */
   messageId?: string;
-  /** Optional chat tool config payloads keyed by tool id. */
-  toolConfig?: {
-    web_search?: {
-      apiKey?: string;
-      baseUrl?: string;
-    };
-  };
 }
 
 /** Embedding route body. Strings are normalized into a one-item input array. */

@@ -10,6 +10,7 @@ import type {
   ChatRunDriver,
   ChatRuntimeCapabilities,
   ChatSendLifecyclePolicy,
+  ChatToolTraceEntry,
   ChatThreadCreationPolicy,
   ChatThreadSelectionPolicy,
   ChatThread,
@@ -118,6 +119,10 @@ const mergeThreadMessagesPreservingRuntimeState = (
         persistedMessage.parts,
         currentMessage.parts,
       ),
+      toolTrace:
+        persistedMessage.toolTrace && persistedMessage.toolTrace.length > 0
+          ? persistedMessage.toolTrace
+          : currentMessage.toolTrace,
       metadata:
         currentMessage.metadata || persistedMessage.metadata
           ? {
@@ -167,6 +172,33 @@ const mergeThreadMessagesPreservingRuntimeState = (
           ]
         : mergedMessages,
   };
+};
+
+const mergeToolTraceEntry = (
+  current: ChatToolTraceEntry | undefined,
+  next: ChatToolTraceEntry,
+): ChatToolTraceEntry => ({
+  ...(current ?? {}),
+  ...next,
+});
+
+const upsertToolTrace = (
+  currentTrace: ChatToolTraceEntry[] | undefined,
+  nextEntry: ChatToolTraceEntry,
+) => {
+  const trace = currentTrace ?? [];
+  const nextKey = `${nextEntry.toolCallId ?? ""}:${nextEntry.toolName}`;
+  const index = trace.findIndex(
+    (entry) => `${entry.toolCallId ?? ""}:${entry.toolName}` === nextKey,
+  );
+
+  if (index < 0) {
+    return [...trace, nextEntry];
+  }
+
+  const nextTrace = [...trace];
+  nextTrace[index] = mergeToolTraceEntry(nextTrace[index], nextEntry);
+  return nextTrace;
 };
 
 // Runtime capabilities are derived once from the configured drivers so UI code
@@ -605,25 +637,16 @@ export class ChatRuntime {
             if (!current) {
               return;
             }
-
-            const tools = Array.isArray(current.metadata?.tools)
-              ? (current.metadata?.tools as unknown[])
-              : [];
             this.store.getState().patchMessage(thread.id, assistantMessageId, {
-              metadata: mergeMetadata(current.metadata, {
-                tools: [
-                  ...tools,
-                  {
-                    toolCallId: event.toolCallId,
-                    toolName: event.toolName,
-                    status: event.status,
-                    ...(event.input ? { input: event.input } : {}),
-                    ...(Object.prototype.hasOwnProperty.call(event, "output")
-                      ? { output: event.output }
-                      : {}),
-                    ...(event.errorMessage ? { errorMessage: event.errorMessage } : {}),
-                  },
-                ],
+              toolTrace: upsertToolTrace(current.toolTrace, {
+                toolCallId: event.toolCallId,
+                toolName: event.toolName,
+                status: event.status,
+                ...(event.input ? { input: event.input } : {}),
+                ...(Object.prototype.hasOwnProperty.call(event, "output")
+                  ? { output: event.output }
+                  : {}),
+                ...(event.errorMessage ? { errorMessage: event.errorMessage } : {}),
               }),
             });
             return;

@@ -5,12 +5,14 @@ import type { ModelType, ProviderCode } from "@/db/schema.js";
 import {
   type AssistantStreamFinishReason,
   assistantDoneChunk,
+  assistantExecutionNodeChunk,
   assistantErrorChunk,
   assistantFinishChunks,
   assistantToolEventChunk,
   assistantTextDeltaChunk,
   assistantTextEndChunk,
   assistantTextStartChunks,
+  type AssistantExecutionNodeEvent,
   type AssistantToolEvent,
 } from "@/services/chat-stream-events.js";
 import { createCloudflareEmbeddings } from "@/services/cloudflare-provider.js";
@@ -72,8 +74,12 @@ export interface PersistedChatStreamInput {
   params?: Record<string, unknown>;
   executeFullAnswer?: (helpers: {
     emitToolEvent: (event: AssistantToolEvent) => Promise<void>;
+    emitExecutionNode: (event: AssistantExecutionNodeEvent) => Promise<void>;
   }) => Promise<string>;
   onToolEvent?: (event: AssistantToolEvent) => Promise<void> | void;
+  onExecutionNode?: (
+    event: AssistantExecutionNodeEvent,
+  ) => Promise<void> | void;
   onComplete?: (input: {
     answer: string;
     finishReason: AssistantStreamFinishReason;
@@ -201,6 +207,7 @@ export const providerProxyService = {
       (async function* () {
         let answer = "";
         const toolEventQueue: string[] = [];
+        let queueWaiter: (() => void) | null = null;
         const flushToolEvents = function* () {
           while (toolEventQueue.length > 0) {
             const nextChunk = toolEventQueue.shift();
@@ -209,9 +216,23 @@ export const providerProxyService = {
             }
           }
         };
+        const notifyQueue = () => {
+          queueWaiter?.();
+          queueWaiter = null;
+        };
+        const waitForQueueSignal = () =>
+          new Promise<void>((resolve) => {
+            queueWaiter = resolve;
+          });
         const emitToolEvent = async (event: AssistantToolEvent) => {
           toolEventQueue.push(assistantToolEventChunk(event));
+          notifyQueue();
           await input.onToolEvent?.(event);
+        };
+        const emitExecutionNode = async (event: AssistantExecutionNodeEvent) => {
+          toolEventQueue.push(assistantExecutionNodeChunk(event));
+          notifyQueue();
+          await input.onExecutionNode?.(event);
         };
 
         try {
@@ -221,10 +242,27 @@ export const providerProxyService = {
           });
 
           if (input.executeFullAnswer) {
-            answer = await input.executeFullAnswer({
-              emitToolEvent,
-            });
-            yield* flushToolEvents();
+            let executeCompleted = false;
+            const answerPromise = input
+              .executeFullAnswer({
+                emitToolEvent,
+                emitExecutionNode,
+              })
+              .finally(() => {
+                executeCompleted = true;
+                notifyQueue();
+              });
+
+            while (!executeCompleted || toolEventQueue.length > 0) {
+              if (toolEventQueue.length === 0) {
+                await waitForQueueSignal();
+                continue;
+              }
+
+              yield* flushToolEvents();
+            }
+
+            answer = await answerPromise;
             if (answer) {
               yield assistantTextDeltaChunk(answer);
             }

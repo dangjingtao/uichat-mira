@@ -27,6 +27,7 @@ import type {
   ChatRepository,
   ChatRunContext,
   ChatRunDriver,
+  ChatToolTraceEntry,
   ChatThread,
   ChatThreadSummary,
 } from "@/shared/uchat/core";
@@ -133,16 +134,55 @@ const normalizeMessage = (
   threadId: string,
   message: ThreadApiMessage,
   previousMessageId: string | null,
-): ChatMessage => ({
-  id: message.id,
-  threadId,
-  role: message.role,
-  parts: normalizeMessageParts(message),
-  createdAt: message.createdAt,
-  parentId: previousMessageId,
-  status: "complete",
-  metadata: message.metadata,
-});
+): ChatMessage => {
+  const legacyTools = Array.isArray(message.metadata?.tools)
+    ? message.metadata.tools
+        .flatMap<ChatToolTraceEntry>((entry) => {
+          if (!entry || typeof entry !== "object") {
+            return [];
+          }
+
+          const candidate = entry as Record<string, unknown>;
+          if (
+            typeof candidate.toolName !== "string" ||
+            typeof candidate.status !== "string"
+          ) {
+            return [];
+          }
+
+          return [
+            {
+              ...(typeof candidate.toolCallId === "string"
+                ? { toolCallId: candidate.toolCallId }
+                : {}),
+              toolName: candidate.toolName,
+              status: candidate.status as ChatToolTraceEntry["status"],
+              ...(candidate.input && typeof candidate.input === "object"
+                ? { input: candidate.input as Record<string, unknown> }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(candidate, "output")
+                ? { output: candidate.output }
+                : {}),
+              ...(typeof candidate.errorMessage === "string"
+                ? { errorMessage: candidate.errorMessage }
+                : {}),
+            },
+          ];
+        })
+    : [];
+
+  return {
+    id: message.id,
+    threadId,
+    role: message.role,
+    parts: normalizeMessageParts(message),
+    createdAt: message.createdAt,
+    parentId: previousMessageId,
+    status: "complete",
+    ...(legacyTools.length > 0 ? { toolTrace: legacyTools } : {}),
+    metadata: message.metadata,
+  };
+};
 
 // Normalizes one backend thread detail payload into the uchat canonical model.
 const normalizeThread = (thread: ThreadWithMessages): ChatThread => {
@@ -275,7 +315,18 @@ const toRunEvent = (payload: Record<string, unknown>): ChatRunEvent | null => {
       type: "message:part",
       part: {
         type: "data",
-        name: "rag-node",
+        name: "execution-node",
+        value: payload.data,
+      },
+    };
+  }
+
+  if (payload.type === "data-execution-node") {
+    return {
+      type: "message:part",
+      part: {
+        type: "data",
+        name: "execution-node",
         value: payload.data,
       },
     };
@@ -314,6 +365,7 @@ const toRunEvent = (payload: Record<string, unknown>): ChatRunEvent | null => {
 };
 
 export const __protocolTestUtils = {
+  normalizeMessage,
   parseEventPayload,
   readSseFrames,
   toRunEvent,

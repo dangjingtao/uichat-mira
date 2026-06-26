@@ -30,6 +30,36 @@ import McpInstalledServersPanel from "./components/McpInstalledServersPanel";
 
 type McpTab = "marketplace" | "installed";
 
+type InstallTransportChoice =
+  | {
+      kind: "streamable-http";
+      url: string;
+    }
+  | {
+      kind: "stdio";
+      command: string;
+      args?: string[];
+    };
+
+const isInstallableTransport = (
+  transport: McpMarketplaceServer["transports"][number],
+): transport is Extract<McpMarketplaceServer["transports"][number], { installable: true }> =>
+  transport.installable;
+
+const getMarketplaceTransportDetail = (
+  transport: McpMarketplaceServer["transports"][number],
+) => {
+  if (transport.kind === "streamable-http") {
+    return transport.url;
+  }
+
+  if (transport.kind === "stdio") {
+    return `${transport.command}${transport.args?.length ? ` ${transport.args.join(" ")}` : ""}`;
+  }
+
+  return transport.packageIdentifier;
+};
+
 export default function McpSettings() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<McpTab>("marketplace");
@@ -69,6 +99,10 @@ export default function McpSettings() {
       }
       setIsMarketplaceSearching(isSearchRequest);
       setMarketplaceError(null);
+      if (!options?.append) {
+        setMarketplaceServers([]);
+        setNextCursor(null);
+      }
 
       try {
         const result = await getMcpMarketplaceServers({
@@ -126,6 +160,40 @@ export default function McpSettings() {
     }
   }, [t]);
 
+  const applyInstall = useCallback(
+    async (server: McpMarketplaceServer, transport: InstallTransportChoice) => {
+      const matchedStdioTransport =
+        transport.kind === "stdio"
+          ? server.transports.find(
+              (item) =>
+                item.kind === "stdio" &&
+                item.command === transport.command &&
+                JSON.stringify(item.args ?? []) === JSON.stringify(transport.args ?? []),
+            )
+          : undefined;
+
+      await createExternalMcpServer({
+        id: server.id,
+        registryUrl: sourceUrl ?? undefined,
+        packageName:
+          matchedStdioTransport && matchedStdioTransport.kind === "stdio"
+            ? matchedStdioTransport.args?.at(-1)
+            : undefined,
+        documentationUrl: server.websiteUrl ?? undefined,
+        repositoryUrl: server.repositoryUrl ?? undefined,
+        displayName: server.title,
+        description: server.description,
+        version: server.version ?? undefined,
+        transport,
+        disclaimerAccepted: true,
+      });
+      message.success(t("settings.mcp.messages.installSucceeded"));
+      setActiveTab("installed");
+      await loadInstalledServers();
+    },
+    [loadInstalledServers, sourceUrl, t],
+  );
+
   useEffect(() => {
     void loadServers({ query: committedMarketplaceQuery });
     void loadInstalledServers();
@@ -133,7 +201,7 @@ export default function McpSettings() {
     return () => {
       marketplaceRequestControllerRef.current?.abort();
     };
-  }, [committedMarketplaceQuery, loadInstalledServers, loadServers]);
+  }, [loadInstalledServers, loadServers]);
 
   const refreshMarketplace = () =>
     loadServers({ query: committedMarketplaceQuery, cursor: null, append: false });
@@ -151,48 +219,148 @@ export default function McpSettings() {
       void loadServers({ query: normalizedQuery, cursor: null, append: false });
       return;
     }
+    void loadServers({ query: normalizedQuery, cursor: null, append: false });
     setCommittedMarketplaceQuery(normalizedQuery);
   }, [committedMarketplaceQuery, loadServers, marketplaceQuery]);
 
   const installServer = (server: McpMarketplaceServer) => {
-    const transport =
-      server.transports.find((item) => item.kind === "streamable-http") ??
-      server.transports.find((item) => item.kind === "stdio");
-    if (!transport) {
+    const transports = server.transports;
+    const installableTransports = transports.filter(isInstallableTransport);
+    if (transports.length === 0 || installableTransports.length === 0) {
       message.error(t("settings.mcp.messages.installUnsupported"));
       return;
     }
 
-    Modal.confirm({
+    const closeInstallPicker = (key: string) => {
+      Modal.close(key);
+    };
+
+    const runInstall = async (transport: InstallTransportChoice) => {
+      await applyInstall(server, transport);
+    };
+
+    if (installableTransports.length === 1) {
+      const [transport] = installableTransports;
+      void runInstall(
+        transport.kind === "streamable-http"
+          ? {
+              kind: "streamable-http",
+              url: transport.url,
+            }
+          : {
+              kind: "stdio",
+              command: transport.command ?? "",
+              args: transport.args ?? [],
+            },
+      );
+      return;
+    }
+
+    const modalKey = Modal.show({
       title: t("settings.mcp.installDialog.title"),
-      description: t("settings.mcp.installDialog.description", {
-        name: server.title,
-      }),
-      confirmText: t("settings.mcp.installDialog.confirm"),
-      onConfirm: async () => {
-        await createExternalMcpServer({
-          id: server.id,
-          registryUrl: sourceUrl ?? undefined,
-          displayName: server.title,
-          description: server.description,
-          version: server.version ?? undefined,
-          transport:
-            transport.kind === "streamable-http"
-              ? {
-                  kind: "streamable-http",
-                  url: transport.url,
-                }
-              : {
-                  kind: "stdio",
-                  command: transport.command ?? "",
-                  args: transport.args ?? [],
-                },
-          disclaimerAccepted: true,
-        });
-        message.success(t("settings.mcp.messages.installSucceeded"));
-        setActiveTab("installed");
-        await loadInstalledServers();
-      },
+      width: 640,
+      footer: null,
+      content: (
+        <div className="space-y-5">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="text-base font-medium text-text-primary">{server.title}</div>
+              {server.version ? (
+                <span className="rounded-full border border-border bg-surface-secondary px-2 py-0.5 text-[11px] text-text-tertiary">
+                  v{server.version}
+                </span>
+              ) : null}
+            </div>
+            <div className="text-sm leading-6 text-text-secondary">
+              {t("settings.mcp.installDialog.description", {
+                name: server.title,
+              })}
+            </div>
+            {server.description ? (
+              <div className="rounded-ui-control border border-border bg-surface-secondary px-3 py-2 text-sm leading-6 text-text-secondary">
+                {server.description}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="space-y-2">
+            {transports.map((transport) => (
+              <button
+                key={`${server.id}-${transport.kind}-${getMarketplaceTransportDetail(transport)}`}
+                type="button"
+                className={`w-full rounded-ui-control border px-4 py-4 text-left transition-colors ${
+                  transport.installable
+                    ? "border-border bg-surface-primary hover:bg-surface-secondary"
+                    : "border-border/70 bg-surface-secondary/40 opacity-80"
+                }`}
+                onClick={() => {
+                  if (!transport.installable) {
+                    return;
+                  }
+                  closeInstallPicker(modalKey);
+                  void runInstall(
+                    transport.kind === "streamable-http"
+                      ? {
+                          kind: "streamable-http",
+                          url: transport.url,
+                        }
+                      : {
+                          kind: "stdio",
+                          command: transport.command ?? "",
+                          args: transport.args ?? [],
+                        },
+                  );
+                }}
+                disabled={!transport.installable}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium text-text-primary">
+                        {transport.label}
+                      </span>
+                      <span className="rounded-full border border-border bg-surface-secondary px-2 py-0.5 text-[11px] text-text-tertiary">
+                        {transport.packageType}
+                      </span>
+                    </div>
+                    <div className="mt-2 break-all font-mono text-xs text-text-tertiary">
+                      {getMarketplaceTransportDetail(transport)}
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-xs text-text-tertiary">
+                    {transport.installable ? t("settings.mcp.marketplace.install") : "暂不支持安装"}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {server.websiteUrl || server.repositoryUrl ? (
+            <div className="flex flex-wrap items-center gap-3 text-xs text-text-tertiary">
+              {server.websiteUrl ? (
+                <a
+                  href={server.websiteUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-text-secondary underline underline-offset-4 hover:text-text-primary"
+                >
+                  Docs
+                </a>
+              ) : null}
+              {server.repositoryUrl ? (
+                <a
+                  href={server.repositoryUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-text-secondary underline underline-offset-4 hover:text-text-primary"
+                >
+                  GitHub
+                </a>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ),
     });
   };
 
@@ -435,6 +603,13 @@ export default function McpSettings() {
     void loadInstalledServers();
   };
 
+  const handleSearchSubmit = () => {
+    if (activeTab !== "marketplace") {
+      return;
+    }
+    submitMarketplaceSearch();
+  };
+
   return (
     <SettingsPageLayout
       miniTitle={t("settings.mcp.miniTitle")}
@@ -457,6 +632,11 @@ export default function McpSettings() {
                   compact
                 />
               </div>
+              {activeTab === "marketplace" ? (
+                <Button variant="secondary" size="sm" onClick={handleSearchSubmit}>
+                  {t("settings.mcp.marketplace.search")}
+                </Button>
+              ) : null}
               <Button variant="outline" size="sm" onClick={handleRefresh} disabled={activeLoading}>
                 <RefreshCw className={`h-4 w-4 ${activeLoading ? "animate-spin" : ""}`} />
                 {t("settings.mcp.installed.refresh")}
@@ -527,6 +707,9 @@ export default function McpSettings() {
                 resources: t("settings.mcp.installed.resources"),
                 prompts: t("settings.mcp.installed.prompts"),
                 projectedId: t("settings.mcp.installed.projectedId"),
+                docs: "Docs",
+                repository: "GitHub",
+                packageName: "Package",
               }}
               onConfigure={(server) => void openConfig(server)}
               onConnect={(serverId) => void runServerAction(serverId, "connect")}

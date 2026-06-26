@@ -1,4 +1,4 @@
-import { Loader2, PlugZap, Radar, Settings2, Trash2 } from "lucide-react";
+import { BookOpenText, ExternalLink, Loader2, PlugZap, Radar, Settings2, Trash2 } from "lucide-react";
 import Badge from "@/shared/ui/Badge";
 import { Button } from "@/shared/ui/Button";
 import type { ExternalMcpServerRecord } from "@/shared/api/tools";
@@ -26,6 +26,9 @@ type McpInstalledServersPanelProps = {
     resources: string;
     prompts: string;
     projectedId: string;
+    docs: string;
+    repository: string;
+    packageName: string;
   };
   onConfigure: (server: ExternalMcpServerRecord) => void;
   onConnect: (serverId: string) => void;
@@ -133,6 +136,12 @@ export default function McpInstalledServersPanel({
                           }`}
                     </div>
 
+                    {server.packageName ? (
+                      <div className="mt-2 text-xs text-text-tertiary">
+                        {labels.packageName}: {server.packageName}
+                      </div>
+                    ) : null}
+
                     {server.remoteCapabilities ? (
                       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-text-tertiary">
                         <span>{labels.capabilities}:</span>
@@ -141,6 +150,33 @@ export default function McpInstalledServersPanel({
                           <Badge variant="muted">{labels.resources}</Badge>
                         ) : null}
                         {server.remoteCapabilities.hasPrompts ? <Badge variant="muted">{labels.prompts}</Badge> : null}
+                      </div>
+                    ) : null}
+
+                    {server.documentationUrl || server.repositoryUrl ? (
+                      <div className="mt-3 flex flex-wrap items-center gap-3">
+                        {server.documentationUrl ? (
+                          <a
+                            href={server.documentationUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs text-text-secondary underline underline-offset-4 hover:text-text-primary"
+                          >
+                            <BookOpenText className="h-3.5 w-3.5" />
+                            {labels.docs}
+                          </a>
+                        ) : null}
+                        {server.repositoryUrl ? (
+                          <a
+                            href={server.repositoryUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs text-text-secondary underline underline-offset-4 hover:text-text-primary"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            {labels.repository}
+                          </a>
+                        ) : null}
                       </div>
                     ) : null}
 

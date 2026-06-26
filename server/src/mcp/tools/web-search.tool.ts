@@ -20,6 +20,7 @@ type TavilyResponse = {
 
 type SearxngResponse = {
   results?: Array<{ title?: string; url?: string; content?: string }>;
+  unresponsive_engines?: Array<[string, string]>;
 };
 
 type WebSearchExecutionContext = Pick<
@@ -31,6 +32,10 @@ type WebSearchProviderPlan = {
   provider: WebSearchProvider;
   capabilityId: string;
   priority: number;
+};
+
+type WebSearchExecutionPlan = WebSearchProviderPlan & {
+  reason?: string;
 };
 
 const SEARCH_TIMEOUT_MS = 10_000;
@@ -87,40 +92,12 @@ const resolveSearxngBaseUrl = (args: Record<string, unknown>) =>
         .trim()
         .replace(/\/+$/, "");
 
-const resolveToolConfig = (context: WebSearchExecutionContext) => {
-  const toolConfig = context.environment?.toolConfig;
-  if (!toolConfig || typeof toolConfig !== "object" || Array.isArray(toolConfig)) {
-    return null;
-  }
-
-  return toolConfig as {
-    web_search?: {
-      apiKey?: string;
-      baseUrl?: string;
-    };
-  };
-};
-
-const resolveTavilyApiKeyFromContext = (context: WebSearchExecutionContext) =>
-  resolveToolConfig(context)?.web_search?.apiKey ?? undefined;
-
-const resolveSearxngBaseUrlFromContext = (context: WebSearchExecutionContext) =>
-  typeof resolveToolConfig(context)?.web_search?.baseUrl === "string"
-    ? resolveToolConfig(context)?.web_search?.baseUrl?.trim().replace(/\/+$/, "")
-    : undefined;
-
-const resolveWebSearchApiKey = (context: WebSearchExecutionContext) =>
-  resolveTavilyApiKeyFromContext(context) ?? resolveTavilyApiKey(context.args);
-
-const resolveWebSearchBaseUrl = (context: WebSearchExecutionContext) =>
-  resolveSearxngBaseUrlFromContext(context) ?? resolveSearxngBaseUrl(context.args);
-
 const sortProviderPlans = (
   environment: McpExecutionEnvironment,
   context: WebSearchExecutionContext,
 ): WebSearchProviderPlan[] => {
-  const tavilyApiKey = resolveWebSearchApiKey(context);
-  const searxngBaseUrl = resolveWebSearchBaseUrl(context);
+  const tavilyApiKey = resolveTavilyApiKey(context.args);
+  const searxngBaseUrl = resolveSearxngBaseUrl(context.args);
 
   return [...environment.web_search.capabilities]
     .filter((capability) => capability.available)
@@ -203,14 +180,24 @@ const fetchSearxngSearch = async (
   }
 
   const data = (await response.json()) as SearxngResponse;
-
-  return (data.results ?? [])
+  const results = (data.results ?? [])
     .slice(0, maxResults)
     .map((item) => ({
       title: item.title ?? "",
       link: item.url ?? "",
       snippet: item.content ?? "",
     }));
+
+  if (results.length === 0 && (data.unresponsive_engines?.length ?? 0) > 0) {
+    const engineSummary = data.unresponsive_engines
+      ?.map(([engine, reason]) => `${engine}: ${reason}`)
+      .join("; ");
+    throw mcpInternalError(
+      `SearXNG returned no results because upstream engines were unavailable. ${engineSummary}`,
+    );
+  }
+
+  return results;
 };
 
 const selectWebSearchPlan = ({
@@ -257,6 +244,20 @@ const selectWebSearchPlan = ({
   return selected;
 };
 
+const executeWebSearchPlan = async (input: {
+  plan: WebSearchProviderPlan;
+  query: string;
+  maxResults: number;
+  apiKey: string;
+  baseUrl: string;
+}) => {
+  if (input.plan.provider === "tavily") {
+    return fetchTavilySearch(input.query, input.maxResults, input.apiKey);
+  }
+
+  return fetchSearxngSearch(input.query, input.maxResults, input.baseUrl);
+};
+
 export const webSearchTool: McpToolImplementation = {
   definition: {
     id: "web_search",
@@ -274,6 +275,7 @@ export const webSearchTool: McpToolImplementation = {
         apiKey: { type: "string" },
         baseUrl: { type: "string" },
       },
+      additionalProperties: false,
     },
     tags: ["search", "web"],
     capabilities: {
@@ -285,34 +287,99 @@ export const webSearchTool: McpToolImplementation = {
   execute: async (context) => {
     const query = normalizeQuery(context.args.query);
     const maxResults = normalizeMaxResults(context.args.maxResults);
-  const selected = selectWebSearchPlan(context);
-  const resolvedApiKey = resolveWebSearchApiKey(context);
-  const resolvedBaseUrl = resolveWebSearchBaseUrl(context);
+    const resolvedApiKey = resolveTavilyApiKey(context.args);
+    const resolvedBaseUrl = resolveSearxngBaseUrl(context.args);
+    const harnessEnvironment = assertWebSearchEnvironment(context.environment);
+    const plans = sortProviderPlans(harnessEnvironment, context);
+    const executionAttempts: WebSearchExecutionPlan[] = [];
 
-  context.pushEvent({
-    type: "invocation:progress",
-    message: `Searching web with ${selected.provider}`,
-  });
+    let results: SearchResult[] | null = null;
+    let selectedProvider: WebSearchProvider | null = null;
+    let selectedCapabilityId = "";
 
-    const executionSpan = context.trace.startSpan({
-      name: `Execute ${selected.provider} search`,
-      kind: "command_execution",
+    const planningSpan = context.trace.startSpan({
+      name: "Resolve web search provider plan",
+      kind: "strategy_selection",
+    });
+    const planSummary = plans[0];
+    if (!planSummary) {
+      planningSpan.end({ status: "failed" });
+      throw mcpInternalError(
+        "No web search provider is available. Configure Tavily apiKey or SearXNG baseUrl.",
+      );
+    }
+
+    context.pushEvent({
+      type: "invocation:progress",
+      message: `Web search plan: ${planSummary.capabilityId}`,
+    });
+
+    planningSpan.end({
       metadata: {
-        provider: selected.provider,
+        provider: planSummary.provider,
+        capabilityId: planSummary.capabilityId,
       },
     });
 
-    const results =
-      selected.provider === "tavily"
-        ? await fetchTavilySearch(query, maxResults, resolvedApiKey)
-        : await fetchSearxngSearch(query, maxResults, resolvedBaseUrl);
+    for (const plan of plans) {
+      context.pushEvent({
+        type: "invocation:progress",
+        message: `Searching web with ${plan.provider}`,
+      });
 
-    executionSpan.end({
-      metadata: {
-        provider: selected.provider,
-        resultCount: results.length,
-      },
-    });
+      const executionSpan = context.trace.startSpan({
+        name: `Execute ${plan.provider} search`,
+        kind: "command_execution",
+        metadata: {
+          provider: plan.provider,
+        },
+      });
+
+      try {
+        const nextResults = await executeWebSearchPlan({
+          plan,
+          query,
+          maxResults,
+          apiKey: resolvedApiKey,
+          baseUrl: resolvedBaseUrl,
+        });
+
+        executionSpan.end({
+          metadata: {
+            provider: plan.provider,
+            resultCount: nextResults.length,
+          },
+        });
+        results = nextResults;
+        selectedProvider = plan.provider;
+        selectedCapabilityId = plan.capabilityId;
+        break;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        executionSpan.end({
+          status: "failed",
+          metadata: {
+            provider: plan.provider,
+            error: message,
+          },
+        });
+        executionAttempts.push({
+          ...plan,
+          reason: message,
+        });
+      }
+    }
+
+    if (!results || !selectedProvider) {
+      const attemptSummary = executionAttempts
+        .map((attempt) => `${attempt.provider}: ${attempt.reason ?? "failed"}`)
+        .join("; ");
+      throw mcpInternalError(
+        attemptSummary
+          ? `Web search failed for all configured providers. ${attemptSummary}`
+          : "No web search provider is available. Configure Tavily apiKey or SearXNG baseUrl.",
+      );
+    }
 
     context.addArtifact({
       kind: "search-results",
@@ -320,8 +387,9 @@ export const webSearchTool: McpToolImplementation = {
       data: results,
       metadata: {
         query,
-        provider: selected.provider,
-        ...(selected.provider === "searxng"
+        provider: selectedProvider,
+        capabilityId: selectedCapabilityId,
+        ...(selectedProvider === "searxng"
           ? { baseUrl: resolvedBaseUrl }
           : {}),
       },
@@ -330,8 +398,9 @@ export const webSearchTool: McpToolImplementation = {
     return {
       result: {
         query,
-        provider: selected.provider,
-        ...(selected.provider === "searxng"
+        provider: selectedProvider,
+        capabilityId: selectedCapabilityId,
+        ...(selectedProvider === "searxng"
           ? { baseUrl: resolvedBaseUrl }
           : {}),
         results,

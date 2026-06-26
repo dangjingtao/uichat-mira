@@ -31,23 +31,25 @@ export default function ToolsSettings() {
         />
 
         <div className="grid min-h-0 h-full grid-rows-[auto_minmax(0,1fr)] gap-4 overflow-hidden">
-          <ToolsWorkbenchPanel
-            isSelectingWorkspace={workbench.isSelectingWorkspace}
-            isWorkspaceLoading={workbench.isWorkspaceLoading}
-            workspaceRootInput={workbench.workspaceRootInput}
-            workspaceSelection={workbench.workspaceSelection}
-            onWorkspaceChange={workbench.setWorkspaceRootInput}
-            onWorkspaceApply={() => void workbench.updateWorkspaceRoot()}
-            labels={{
-              applyWorkspace: t("settings.tools.workbench.applyWorkspace"),
-              workspaceCurrent: t("settings.tools.workbench.workspaceCurrent"),
-              workspaceDescription: t("settings.tools.workbench.workspaceDescription"),
-              workspaceRoot: t("settings.tools.workbench.workspaceRoot"),
-              workspaceRootInput: t("settings.tools.workbench.workspaceRootInput"),
-              workspaceRootPlaceholder: t("settings.tools.workbench.workspaceRootPlaceholder"),
-              workspaceUnset: t("settings.tools.workbench.workspaceUnset"),
-            }}
-          />
+          {workbench.workspaceSelection && workbench.requiresWorkspace ? (
+            <ToolsWorkbenchPanel
+              isSelectingWorkspace={workbench.isSelectingWorkspace}
+              isWorkspaceLoading={workbench.isWorkspaceLoading}
+              workspaceRootInput={workbench.workspaceRootInput}
+              workspaceSelection={workbench.workspaceSelection}
+              onWorkspaceChange={workbench.setWorkspaceRootInput}
+              onWorkspaceApply={() => void workbench.updateWorkspaceRoot()}
+              labels={{
+                applyWorkspace: t("settings.tools.workbench.applyWorkspace"),
+                workspaceCurrent: t("settings.tools.workbench.workspaceCurrent"),
+                workspaceDescription: t("settings.tools.workbench.workspaceDescription"),
+                workspaceRoot: t("settings.tools.workbench.workspaceRoot"),
+                workspaceRootInput: t("settings.tools.workbench.workspaceRootInput"),
+                workspaceRootPlaceholder: t("settings.tools.workbench.workspaceRootPlaceholder"),
+                workspaceUnset: t("settings.tools.workbench.workspaceUnset"),
+              }}
+            />
+          ) : null}
 
           <ToolsPackagePanel
             tools={workbench.filteredTools}
@@ -204,35 +206,21 @@ export default function ToolsSettings() {
                 </div>
               </div>
 
-              <div className="rounded-ui-control border border-border bg-surface-secondary px-3 py-3">
-                <div className="text-sm text-text-secondary">
-                  {t("settings.tools.package.argsModalDescription")}
-                </div>
-                <div className="mt-3">
-                  <TextArea
-                    label={t("settings.tools.workbench.args")}
-                    value={workbench.argsDraft}
-                    onChange={workbench.setArgsDraft}
-                    placeholder={t("settings.tools.workbench.argsPlaceholder")}
-                    rows={10}
-                  />
-                </div>
-              </div>
             </div>
           ) : (
             <>
               <div className="text-sm text-text-secondary">
                 {t("settings.tools.package.argsModalDescription")}
               </div>
-              <TextArea
-                label={t("settings.tools.workbench.args")}
-                value={workbench.argsDraft}
-                onChange={workbench.setArgsDraft}
-                placeholder={t("settings.tools.workbench.argsPlaceholder")}
-                rows={18}
-              />
             </>
           )}
+          <TextArea
+            label={t("settings.tools.workbench.args")}
+            value={workbench.argsDraft}
+            onChange={workbench.setArgsDraft}
+            placeholder={t("settings.tools.workbench.argsPlaceholder")}
+            rows={workbench.selectedTool?.id === "web_search" ? 8 : 18}
+          />
         </div>
       </Modal>
     </SettingsPageLayout>
