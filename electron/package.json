@@ -2,7 +2,7 @@
   "name": "@ui-chat-mira/electron",
   "version": "0.7.1",
   "private": true,
-  "description": "Electron shell for UI chat RAG tester",
+  "description": "Electron shell for UIChat Mira",
   "main": "main.cjs",
   "author": "Tomz Dang <dangjingtao@163.com>",
   "scripts": {

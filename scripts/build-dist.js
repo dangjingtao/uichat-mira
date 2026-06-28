@@ -11,9 +11,27 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const electronArtifactsRoot = path.join(projectRoot, ".artifacts", "electron-app");
-
-const platformArg = process.argv[2] || "win";
+const cliArgs = process.argv.slice(2);
+const skipTests = cliArgs.includes("--notest");
+const platformArg =
+  cliArgs.find((arg) => !arg.startsWith("-")) || "win";
+const childEnv = skipTests
+  ? { ...process.env, UICHAT_MIRA_SKIP_TESTS: "1" }
+  : process.env;
 const platform = platformArg.toLowerCase();
+const electronPlatformFlags = {
+  win: "--win",
+  windows: "--win",
+  mac: "--mac",
+  macos: "--mac",
+};
+const platformFlag = electronPlatformFlags[platform];
+
+if (!platformFlag) {
+  throw new Error(
+    `Unsupported Electron package platform "${platformArg}". Supported values: win, mac.`,
+  );
+}
 
 const packageJson = JSON.parse(
   fs.readFileSync(path.join(projectRoot, "package.json"), "utf-8"),
@@ -87,6 +105,7 @@ try {
   execSync("pnpm internal:prepare:desktop-artifacts", {
     stdio: "inherit",
     cwd: projectRoot,
+    env: childEnv,
   });
 
   if (!fs.existsSync(electronArtifactsRoot)) {
@@ -95,13 +114,12 @@ try {
 
   console.log("\n=== Packaging with electron-builder ===");
   const relativeOutputPath = path.relative(electronArtifactsRoot, fullOutputPath);
-  const platformFlag = platform === "mac" ? "--mac" : "--win";
-  const buildCmd = `electron-builder ${platformFlag} --config.directories.output="${relativeOutputPath}" --publish never`;
+  const buildCmd = `pnpm exec electron-builder ${platformFlag} --projectDir="${electronArtifactsRoot}" --config.directories.output="${relativeOutputPath}" --publish never`;
 
-  console.log(`Running in .artifacts/electron-app with output: ${relativeOutputPath}`);
+  console.log(`Running with projectDir: ${electronArtifactsRoot}`);
   execSync(buildCmd, {
     stdio: "inherit",
-    cwd: electronArtifactsRoot,
+    cwd: projectRoot,
   });
 
   console.log("\nBuild completed successfully.");

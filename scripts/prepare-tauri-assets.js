@@ -17,12 +17,17 @@ const nodeRuntimeDest = path.join(nodeRuntimeDir, path.basename(process.execPath
 const runtimeConfigDest = path.join(tauriResourcesRoot, "runtime.config.cjs");
 
 const runtimeConfigArtifactsPath = path.join(artifactsRoot, "runtime.config.cjs");
+const skipTests =
+  process.env.UICHAT_MIRA_SKIP_TESTS === "1" ||
+  process.env.UICHAT_MIRA_SKIP_TESTS === "true" ||
+  process.argv.includes("--notest");
 
 console.log("Preparing Tauri desktop assets...");
 
 execSync("pnpm internal:prepare:desktop-artifacts", {
   cwd: projectRoot,
   stdio: "inherit",
+  env: skipTests ? { ...process.env, UICHAT_MIRA_SKIP_TESTS: "1" } : process.env,
 });
 
 if (!fs.existsSync(desktopArtifactsRoot)) {

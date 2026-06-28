@@ -124,25 +124,6 @@ function collectGitInfo(projectRoot) {
 function readCustomAppMeta(appMeta) {
   const metaObject = appMeta && typeof appMeta === "object" ? appMeta : {};
 
-  const changelog = Array.isArray(metaObject.changelog)
-    ? metaObject.changelog.filter((item) => typeof item === "string")
-    : [];
-
-  const versionHistory = Array.isArray(metaObject.versionHistory)
-    ? metaObject.versionHistory
-        .filter(
-          (item) =>
-            !!item &&
-            typeof item === "object" &&
-            typeof item.version === "string" &&
-            typeof item.summary === "string",
-        )
-        .map((item) => ({
-          version: item.version,
-          summary: item.summary,
-        }))
-    : [];
-
   const links = Array.isArray(metaObject.links)
     ? metaObject.links
         .filter(
@@ -163,8 +144,6 @@ function readCustomAppMeta(appMeta) {
   return {
     displayName:
       typeof metaObject.displayName === "string" ? metaObject.displayName : "",
-    changelog,
-    versionHistory,
     links,
   };
 }
@@ -209,8 +188,6 @@ function buildAppMeta(projectRoot) {
       displayName:
         customMeta.displayName ||
         formatAppDisplayName(typeof rootPackage.name === "string" ? rootPackage.name : "ui-chat-rag-tester"),
-      changelog: customMeta.changelog,
-      versionHistory: customMeta.versionHistory,
       links: customMeta.links,
       git: collectGitInfo(projectRoot),
     },

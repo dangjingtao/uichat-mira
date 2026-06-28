@@ -2,7 +2,7 @@
   "name": "@ui-chat-mira/desktop",
   "version": "0.7.1",
   "private": true,
-  "description": "Frontend for UI chat RAG tester.",
+  "description": "Frontend for UIChat Mira.",
   "author": "Tomz Dang <dangjing@gmail.com>",
   "type": "module",
   "scripts": {

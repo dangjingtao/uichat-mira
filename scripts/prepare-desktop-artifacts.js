@@ -17,6 +17,14 @@ const runtimeConfigArtifactsPath = path.join(
 );
 const nodeRuntimeArtifactsRoot = path.join(artifactsRoot, "node-runtime");
 const electronArtifactsRoot = path.join(artifactsRoot, "electron-app");
+const brandingSourceIconPath = path.join(
+  projectRoot,
+  "desktop",
+  "src",
+  "assets",
+  "branding",
+  "uichat-logo-icon.png",
+);
 const serverAppMetaPath = path.join(projectRoot, "server", "app-meta.json");
 const serverBundleAppMetaPath = path.join(
   serverBundleArtifactsRoot,
@@ -28,6 +36,13 @@ const appMetaGeneratorUrl = pathToFileURL(
 const testReportGeneratorUrl = pathToFileURL(
   path.join(projectRoot, "scripts", "generate-test-report.js"),
 ).href;
+const iconGeneratorUrl = pathToFileURL(
+  path.join(projectRoot, "scripts", "generate-icons.js"),
+).href;
+const skipTests =
+  process.env.UICHAT_MIRA_SKIP_TESTS === "1" ||
+  process.env.UICHAT_MIRA_SKIP_TESTS === "true" ||
+  process.argv.includes("--notest");
 
 function removeDir(targetPath, label) {
   if (!fs.existsSync(targetPath)) {
@@ -61,11 +76,22 @@ console.log("Preparing shared desktop artifacts...");
 removeDir(legacyServerArtifactsRoot, "legacy staged server bundle");
 
 const { writeAppMetaJsons } = await import(appMetaGeneratorUrl);
-const { generateFrontendTestReport } = await import(testReportGeneratorUrl);
+const { generateReleaseTestReports } = await import(testReportGeneratorUrl);
+const { generateDesktopIcons } = await import(iconGeneratorUrl);
 
 writeAppMetaJsons(projectRoot, [serverAppMetaPath, serverBundleAppMetaPath]);
+generateDesktopIcons(projectRoot, brandingSourceIconPath);
 
-const desktopCoverageDir = generateFrontendTestReport();
+let desktopCoveragePath;
+let serverCoveragePath;
+
+if (skipTests) {
+  console.log("Skipping release test report generation because --notest was set.");
+} else {
+  const reportResult = generateReleaseTestReports();
+  desktopCoveragePath = reportResult.desktopCoverageDir;
+  serverCoveragePath = reportResult.serverCoverageDir;
+}
 
 execSync("pnpm internal:build:desktop", { cwd: projectRoot, stdio: "inherit" });
 execSync("pnpm internal:build:server", { cwd: projectRoot, stdio: "inherit" });
@@ -75,16 +101,15 @@ if (!fs.existsSync(serverBundleArtifactsRoot)) {
   throw new Error(`Missing server bundle: ${serverBundleArtifactsRoot}`);
 }
 
-copyPath(
-  desktopCoverageDir,
-  path.join(serverBundleArtifactsRoot, "client-coverage"),
-  "frontend coverage report",
-);
-
-const serverCoverageDir = path.join(projectRoot, "server", "coverage");
-if (fs.existsSync(serverCoverageDir)) {
+if (!skipTests) {
   copyPath(
-    serverCoverageDir,
+    desktopCoveragePath,
+    path.join(serverBundleArtifactsRoot, "client-coverage"),
+    "frontend coverage report",
+  );
+
+  copyPath(
+    serverCoveragePath,
     path.join(serverBundleArtifactsRoot, "server-coverage"),
     "server coverage report",
   );

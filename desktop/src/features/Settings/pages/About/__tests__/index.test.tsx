@@ -11,8 +11,6 @@ const mockAppMeta = {
   description: "Test app",
   repositoryUrl: "",
   homepageUrl: "",
-  changelog: [],
-  versionHistory: [],
   links: [],
 };
 

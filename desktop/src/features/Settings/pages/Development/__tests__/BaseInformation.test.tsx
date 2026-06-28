@@ -21,8 +21,6 @@ vi.mock("@/shared/api/system", () => ({
     description: "Test app",
     repositoryUrl: "",
     homepageUrl: "",
-    changelog: [],
-    versionHistory: [{ version: "0.7.1", summary: "Test release" }],
     links: [
       {
         label: "Author",
@@ -39,7 +37,6 @@ describe("DevelopmentBaseInformation", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Tomz Dang")).toBeInTheDocument();
-      expect(screen.getByText("Test release")).toBeInTheDocument();
     });
   });
 });

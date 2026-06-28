@@ -12,6 +12,12 @@ const packageJson = JSON.parse(
 );
 const version = packageJson.version;
 const releaseRoot = path.join(projectRoot, "release");
+const supportedPlatform = process.platform === "win32";
+const cliArgs = process.argv.slice(2);
+const skipTests = cliArgs.includes("--notest");
+const childEnv = skipTests
+  ? { ...process.env, UICHAT_MIRA_SKIP_TESTS: "1" }
+  : process.env;
 const tauriBundleRoot = path.join(
   projectRoot,
   "tauri",
@@ -77,6 +83,12 @@ function copyBundleOutputs() {
 }
 
 try {
+  if (!supportedPlatform) {
+    throw new Error(
+      `Tauri release packaging is currently Windows-only. Current platform: ${process.platform}`,
+    );
+  }
+
   console.log(`Building version: ${version}`);
   console.log(`Output directory: ${path.join(releaseRoot, outputDir, "tauri")}`);
   console.log(`Release retention count: ${releaseKeepCount}`);
@@ -95,6 +107,7 @@ try {
     {
       cwd: projectRoot,
       stdio: "inherit",
+      env: childEnv,
     },
   );
 

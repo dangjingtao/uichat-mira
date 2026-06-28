@@ -24,6 +24,9 @@ import threadRoute from "@/routes/thread/index.js";
 import chatRagRoute from "@/routes/chat-rag";
 import ragRuntimeRoute from "@/routes/rag-runtime/index.js";
 import evaluationRoute from "@/routes/evaluation/index.js";
+import integrationsRoute from "@/routes/integrations/index.js";
+import wecomRoute from "@/routes/integrations/wecom.js";
+import agentRoute from "@/agent/routes.js";
 import mcpRoutes from "@/mcp/routes.js";
 import {
   initializeExternalMcpDatabase,
@@ -35,7 +38,10 @@ import { initializeKnowledgeBaseDatabase } from "@/db/knowledge-base.db";
 import { initializeModelConfigDatabase } from "@/db/model-config.db";
 import { initializeRoleDatabase } from "@/db/role.db";
 import { initializeThreadDatabase } from "@/db/thread.db";
+import { integrationCapabilitiesRepository } from "@/db/repositories/integration-capabilities.repository.js";
+import { integrationInstancesRepository } from "@/db/repositories/integration-instances.repository.js";
 import { webSearchSettingsRepository } from "@/db/repositories/web-search-settings.repository.js";
+import { wecomSettingsRepository } from "@/db/repositories/wecom-settings.repository.js";
 import { initializeVectorStore } from "@/db";
 import CONFIG from "@/config";
 import { isAuthExemptPath, OPENAPI_PUBLIC_TAGS } from "@/config/public-api.js";
@@ -258,6 +264,9 @@ const setupRoutes = async () => {
   await app.register(chatRagRoute);
   await app.register(ragRuntimeRoute);
   await app.register(evaluationRoute);
+  await app.register(integrationsRoute);
+  await app.register(wecomRoute);
+  await app.register(agentRoute);
   await app.register(mcpRoutes);
 };
 
@@ -281,6 +290,9 @@ const setupDatabase = async () => {
   initializeRoleDatabase();
   initializeThreadDatabase();
   webSearchSettingsRepository.initialize();
+  wecomSettingsRepository.initialize();
+  integrationInstancesRepository.initialize();
+  integrationCapabilitiesRepository.initialize();
   initializeExternalMcpDatabase();
   registerAllExternalMcpCapabilities();
   evaluationService.initializePersistence();

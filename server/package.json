@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "author": "Tomz Dang <dangjing@gmail.com>",
-  "description": "Backend for UI chat RAG tester.",
+  "description": "Backend for UIChat Mira.",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "node build.js",
@@ -26,6 +26,7 @@
     "@langchain/textsplitters": "^1.0.1",
     "@orama/orama": "^3.1.18",
     "@orama/tokenizers": "^3.1.18",
+    "@wecom/aibot-node-sdk": "^1.0.7",
     "adm-zip": "^0.5.17",
     "better-sqlite3": "^12.10.0",
     "drizzle-kit": "^0.31.10",

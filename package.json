@@ -8,9 +8,9 @@
   "description": "An intelligent agent cabin that starts with a chat and returns to your side.",
   "repository": {
     "type": "git",
-    "url": "https://github.com/dangjingtao/ui-chat-rag-tester.git"
+    "url": "https://github.com/dangjingtao/uichat-mira.git"
   },
-  "homepage": "https://github.com/dangjingtao/ui-chat-rag-tester",
+  "homepage": "https://github.com/dangjingtao/uichat-mira",
   "appMeta": {
     "displayName": "UIChat Mira",
     "links": [
@@ -21,49 +21,18 @@
       },
       {
         "label": "项目仓库",
-        "value": "https://github.com/dangjingtao/ui-chat-rag-tester.git",
-        "href": "https://github.com/dangjingtao/ui-chat-rag-tester"
+        "value": "https://github.com/dangjingtao/uichat-mira.git",
+        "href": "https://github.com/dangjingtao/uichat-mira"
       },
       {
         "label": "项目主页",
-        "value": "https://github.com/dangjingtao/ui-chat-rag-tester",
-        "href": "https://github.com/dangjingtao/ui-chat-rag-tester"
+        "value": "https://github.com/dangjingtao/uichat-mira",
+        "href": "https://github.com/dangjingtao/uichat-mira"
       },
       {
         "label": "组件文档",
         "value": "uchat / 内部 UI 组件",
         "href": "./docs/uchat.md"
-      }
-    ],
-    "changelog": [
-      "新增共享确认弹窗 ConfirmDialog 与命令式 Modal API，支持多弹窗堆叠与二次确认",
-      "知识库页面统一使用弹窗表单与二次确认，新增 KnowledgeBaseEditorForm 组件",
-      "评测中心删除操作接入二次确认，同步更新组件文档与使用约定"
-    ],
-    "versionHistory": [
-      {
-        "version": "0.7.1",
-        "summary": "新增共享确认弹窗与命令式 Modal API，统一知识库和评测中心的二次确认交互"
-      },
-      {
-        "version": "0.6.0",
-        "summary": "聊天工作台、附件与 Provider 配置能力升级，并同步品牌与文档更新"
-      },
-      {
-        "version": "0.5.2",
-        "summary": "主题系统与共享 UI 色板升级，补充新的产品与编辑文档"
-      },
-      {
-        "version": "0.1.0",
-        "summary": "桌面聊天、模型配置、知识库与健康检查主流程成型"
-      },
-      {
-        "version": "0.0.9",
-        "summary": "补齐设置页结构，统一桌面运行时接入方式"
-      },
-      {
-        "version": "0.0.8",
-        "summary": "初版 RAG 测试工作台与对话线程能力"
       }
     ]
   },
