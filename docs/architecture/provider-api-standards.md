@@ -1,7 +1,8 @@
 # Provider API Standards
 
 Layer: raw-source
-Module: provider
+Module: ModelSetting
+Feature: ProviderStandards
 Doc Type: current-contract
 
 Status: Current

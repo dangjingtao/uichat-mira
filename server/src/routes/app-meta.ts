@@ -21,8 +21,6 @@ const appMetaRoute: FastifyPluginAsync = async (app) => {
               "description",
               "repositoryUrl",
               "homepageUrl",
-              "changelog",
-              "versionHistory",
               "links",
             ],
             properties: {
@@ -33,21 +31,6 @@ const appMetaRoute: FastifyPluginAsync = async (app) => {
               description: { type: "string" },
               repositoryUrl: { type: "string" },
               homepageUrl: { type: "string" },
-              changelog: {
-                type: "array",
-                items: { type: "string" },
-              },
-              versionHistory: {
-                type: "array",
-                items: {
-                  type: "object",
-                  required: ["version", "summary"],
-                  properties: {
-                    version: { type: "string" },
-                    summary: { type: "string" },
-                  },
-                },
-              },
               links: {
                 type: "array",
                 items: {

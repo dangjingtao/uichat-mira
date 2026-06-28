@@ -4,8 +4,13 @@ Status: Current
 Owner: runtime
 Last verified: 2026-06-25
 Layer: raw-source
-Module: runtime
+Module: Develoments
+Feature: NativeBridge
 Doc Type: current-contract
+Canonical: true
+Related:
+  - README.md
+  - ../platform/tauri.md
 
 ## 单点真相范围
 

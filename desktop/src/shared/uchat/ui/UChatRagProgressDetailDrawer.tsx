@@ -3,22 +3,22 @@ import { useTranslation } from "react-i18next";
 import { Braces, Copy, X } from "lucide-react";
 import { IconButton } from "@/shared/ui/Button";
 import { message } from "@/shared/ui/Message";
-import type { UChatRagProgressDetail } from "./ragParsers";
+import type { UChatExecutionProgressDetail } from "./executionParsers";
 
-// UChatRagProgressDetailDrawer renders structured RAG node execution metadata.
+// UChatRagProgressDetailDrawer renders structured execution metadata.
 export function UChatRagProgressDetailDrawer({
   open,
   detail,
   onClose,
 }: {
   open: boolean;
-  detail: UChatRagProgressDetail | null;
+  detail: UChatExecutionProgressDetail | null;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(open);
   const [visible, setVisible] = useState(open);
-  const [cachedDetail, setCachedDetail] = useState<UChatRagProgressDetail | null>(
+  const [cachedDetail, setCachedDetail] = useState<UChatExecutionProgressDetail | null>(
     detail,
   );
 

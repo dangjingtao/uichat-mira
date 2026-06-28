@@ -9,6 +9,10 @@ import {
   createModelCallObservation,
 } from "@/services/rag-node-observation";
 import { createAssistantTextStream } from "@/services/chat-stream-events";
+import {
+  contextBudgetService,
+  type ContextBudgetAudit,
+} from "@/services/context-budget/index.js";
 
 export interface GenerateInput {
   query: string;
@@ -26,6 +30,12 @@ export interface GenerateOutput {
 export interface GenerateStatePatch {
   answer: string;
   sources: RetrievedChunk[];
+}
+
+interface PackedGenerateContext {
+  messages: NormalizedChatMessage[];
+  chunks: RetrievedChunk[];
+  audit: ContextBudgetAudit;
 }
 
 const DEFAULT_SYSTEM_PROMPT = `你是一个专业的知识库问答助手。
@@ -52,19 +62,46 @@ const formatContext = (chunks: RetrievedChunk[]): string => {
     .join("\n\n");
 };
 
-const buildMessages = (input: GenerateInput): NormalizedChatMessage[] => {
+const packGenerateContext = (input: GenerateInput): PackedGenerateContext => {
   const context = formatContext(input.chunks);
   const systemPrompt = (input.systemPrompt ?? DEFAULT_SYSTEM_PROMPT).replace(
     "{context}",
-    context
+    context,
   );
+  const packed = contextBudgetService.pack({
+    policy: "rag-chat",
+    roleType: "llm",
+    sections: {
+      prefaceMessages: input.requestContextMessages,
+      instructionMessages: [{ role: "system", content: systemPrompt }],
+      payloads: [
+        {
+          id: "rag-chunks",
+          required: true,
+          maxTokens: 5000,
+          messages: input.chunks.map((chunk, index) => ({
+            role: "system",
+            content: `[${index + 1}] ${chunk.documentName || `文档${index + 1}`}\n${chunk.content}`,
+          })),
+          metadata: {
+            type: "rag-chunks",
+            chunkCount: input.chunks.length,
+          },
+        },
+      ],
+      historyMessages: input.conversationHistory,
+      latestUserMessage: {
+        role: "user",
+        content: input.query,
+      },
+    },
+  });
 
-  return [
-    ...(input.requestContextMessages ?? []),
-    { role: "system", content: systemPrompt },
-    ...(input.conversationHistory ?? []),
-    { role: "user", content: input.query },
-  ];
+  return {
+    messages: packed.messages,
+    chunks: input.chunks,
+    audit: packed.audit,
+  };
 };
 
 /**
@@ -82,7 +119,10 @@ const createSseStream = (streamText: () => AsyncIterable<string>) =>
  */
 export const generateService = {
   streamGenerateText(input: GenerateInput): AsyncIterable<string> {
-    return providerProxyService.streamChatText("default", buildMessages(input));
+    return providerProxyService.streamChatText(
+      "default",
+      packGenerateContext(input).messages,
+    );
   },
 
   /**
@@ -102,7 +142,7 @@ export const generateService = {
 
     return {
       answer,
-      sources: input.chunks,
+      sources: packGenerateContext(input).chunks,
     };
   },
 
@@ -118,10 +158,15 @@ export const generateService = {
       input?: GenerateInput;
     },
   ): RagNodeResult<GenerateStatePatch> {
-    const messages = buildMessages(meta?.input ?? {
+    const packed = packGenerateContext(meta?.input ?? {
       query: "",
       chunks: [],
     });
+    const messages = packed.messages;
+    const outputSources =
+      meta?.input && packed.chunks.length !== meta.input.chunks.length
+        ? packed.chunks
+        : result.sources;
     const invocation = providerProxyService.describeChatInvocation(
       "default",
       messages,
@@ -130,16 +175,20 @@ export const generateService = {
     return {
       state: {
         answer: result.answer,
-        sources: result.sources,
+        sources: outputSources,
       },
       observation: createModelCallObservation({
         startedAtMs: meta?.startedAtMs ?? Date.now(),
         label: "组织回答",
         summary: result.answer.trim() ? "回答生成完成" : "已完成回答生成",
         details: {
-          sourceCount: result.sources.length,
+          sourceCount: outputSources.length,
+          contextBudget: packed.audit,
         },
-        sources: result.sources,
+        artifacts: {
+          contextBudget: packed.audit,
+        },
+        sources: outputSources,
         role: "llm",
         providerCode: invocation.providerCode,
         providerLabel: invocation.providerLabel,
@@ -156,23 +205,24 @@ export const generateService = {
           metrics: {
             inputCount: messages.length,
             outputCount: Array.from(result.answer).length,
-            returnedCount: result.sources.length,
+            returnedCount: outputSources.length,
           },
           response: {
             model: invocation.model,
             summary: {
               answerLength: Array.from(result.answer).length,
-              sourceCount: result.sources.length,
+              sourceCount: outputSources.length,
             },
           },
         },
         retrieval: {
-          candidateCount: meta?.input?.chunks.length ?? result.sources.length,
-          returnedCount: result.sources.length,
+          candidateCount: meta?.input?.chunks.length ?? outputSources.length,
+          returnedCount: outputSources.length,
         },
         context: {
           conversationHistoryCount: meta?.input?.conversationHistory?.length ?? null,
           systemPromptProvided: Boolean(meta?.input?.systemPrompt),
+          contextBudget: packed.audit,
         },
       }),
     };

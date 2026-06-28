@@ -4,8 +4,14 @@ Status: Current
 Owner: platform
 Last verified: 2026-06-25
 Layer: raw-source
-Module: platform
+Module: Develoments
+Feature: PlatformRuntime
 Doc Type: current-contract
+Canonical: true
+Related:
+  - tauri-setup.md
+  - ../architecture/README.md
+  - ../developments/release-management.md
 
 ## 单点真相范围
 
@@ -41,4 +47,4 @@ Tauri 和 Electron 预期共享根目录 `.artifacts/` 下同一批 staged build
 
 - `tauri-setup.md`
 - `../architecture/README.md`
-- `../版本管理.md`
+- `../developments/release-management.md`

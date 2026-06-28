@@ -17,6 +17,7 @@ export type {
   ChatRunDriver,
   ChatRunEvent,
   ChatRunStatus,
+  ChatSidebarEntry,
   ChatRuntimeCapabilities,
   ChatRuntimeState,
   ChatThreadCreationPolicy,

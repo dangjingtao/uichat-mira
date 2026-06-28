@@ -77,12 +77,15 @@ type ProxyMessagePartInput =
 const normalizeThreadSummary = (thread: ThreadApiSummary): ChatThreadSummary => ({
   id: thread.id,
   title: thread.title,
+  workspaceId: thread.workspaceId ?? null,
   createdAt: thread.createdAt,
   updatedAt: thread.updatedAt,
   metadata: {
+    workspaceId: thread.workspaceId,
     modelName: thread.modelName,
     knowledgeBaseId: thread.knowledgeBaseId,
     roleId: thread.roleId,
+    agentEnabled: thread.agentEnabled,
     contextSummary: thread.contextSummary,
     contextSummaryUpdatedAt: thread.contextSummaryUpdatedAt,
     status: thread.status,
@@ -414,6 +417,10 @@ export class DesktopChatRepository implements ChatRepository {
       ...(typeof nextRoleId === "string" || nextRoleId === null
         ? { roleId: nextRoleId }
         : {}),
+      ...(typeof createInput?.agentEnabled === "boolean" ||
+      createInput?.agentEnabled === null
+        ? { agentEnabled: createInput.agentEnabled }
+        : {}),
       ...(typeof createInput?.modelName === "string"
         ? { modelName: createInput.modelName }
         : {}),
@@ -502,9 +509,13 @@ export class DesktopChatRepository implements ChatRepository {
   // Updates mutable thread fields exposed by the current backend.
   async updateThread(
     threadId: string,
-    input: { title?: string; metadata?: Record<string, unknown> },
+    input: { title?: string; workspaceId?: string | null; metadata?: Record<string, unknown> },
   ) {
     const metadata = input.metadata;
+    const nextWorkspaceId =
+      typeof input.workspaceId === "string" || input.workspaceId === null
+        ? input.workspaceId
+        : undefined;
     const nextKnowledgeBaseId =
       metadata && Object.prototype.hasOwnProperty.call(metadata, "knowledgeBaseId")
         ? typeof metadata.knowledgeBaseId === "string" ||
@@ -518,6 +529,13 @@ export class DesktopChatRepository implements ChatRepository {
           ? metadata.roleId
           : undefined
         : undefined;
+    const nextAgentEnabled =
+      metadata && Object.prototype.hasOwnProperty.call(metadata, "agentEnabled")
+        ? typeof metadata.agentEnabled === "boolean" ||
+          metadata.agentEnabled === null
+          ? metadata.agentEnabled
+          : undefined
+        : undefined;
     const nextContextSummary =
       metadata && Object.prototype.hasOwnProperty.call(metadata, "contextSummary")
         ? typeof metadata.contextSummary === "string" ||
@@ -527,12 +545,18 @@ export class DesktopChatRepository implements ChatRepository {
         : undefined;
     const thread = await updateThread(threadId, {
       ...(typeof input.title === "string" ? { title: input.title } : {}),
+      ...(typeof nextWorkspaceId === "string" || nextWorkspaceId === null
+        ? { workspaceId: nextWorkspaceId }
+        : {}),
       ...(typeof nextKnowledgeBaseId === "string" ||
       nextKnowledgeBaseId === null
         ? { knowledgeBaseId: nextKnowledgeBaseId }
         : {}),
       ...(typeof nextRoleId === "string" || nextRoleId === null
         ? { roleId: nextRoleId }
+        : {}),
+      ...(typeof nextAgentEnabled === "boolean" || nextAgentEnabled === null
+        ? { agentEnabled: nextAgentEnabled }
         : {}),
       ...(typeof nextContextSummary === "string" || nextContextSummary === null
         ? { contextSummary: nextContextSummary }
@@ -600,6 +624,9 @@ export class DesktopChatRunDriver implements ChatRunDriver {
         id: context.thread.id,
         messageId: context.message.id,
         messages: toProxyMessages([...context.history, context.message]),
+        ...(typeof context.options?.agentEnabled === "boolean"
+          ? { agentEnabled: context.options.agentEnabled }
+          : {}),
       }),
       signal: context.signal,
     });

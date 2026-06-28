@@ -4,7 +4,8 @@ Status: Current
 Owner: docs
 Last verified: 2026-06-24
 Layer: wiki
-Module: docs-system
+Module: Develoments
+Feature: Concepts
 Doc Type: overview
 
 ## 目的
@@ -13,6 +14,7 @@ Doc Type: overview
 
 ## 核心概念
 
+- [[CONCEPT_AGENT]]
 - [[CONCEPT_RUNTIME]]
 - [[CONCEPT_MCP]]
 - [[CONCEPT_ROLE_SYSTEM]]
@@ -27,3 +29,10 @@ Doc Type: overview
 - [[maps/AREA_MAP_ROLE]]
 - [[maps/AREA_MAP_KNOWLEDGE_BASE]]
 - [[maps/AREA_MAP_PLATFORM]]
+
+## MCP / Tool 入口
+
+- [[concepts/CONCEPT_MCP]]：MCP 产品边界
+- [[tooling-runtime/README]]：Tool 运行时总入口
+- [[tooling-runtime/tools-protocol]]：统一工具协议
+- [[tooling-runtime/harness-runtime-design]]：harness 控制平面

@@ -1,7 +1,8 @@
 # Role 恢复回归清单
 
 Layer: raw-source
-Module: role
+Module: Role
+Feature: Recovery
 Doc Type: checklist
 
 Status: Active  

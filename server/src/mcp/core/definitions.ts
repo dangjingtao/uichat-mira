@@ -3,7 +3,8 @@ export type McpToolDomain =
   | "edit"
   | "web_search"
   | "terminal"
-  | "browser_action";
+  | "browser_action"
+  | "external_mcp";
 
 export type McpToolMode = "sync" | "stream";
 
@@ -136,6 +137,7 @@ export interface McpToolDefinition {
   title: string;
   description: string;
   domain: McpToolDomain;
+  source: "internal" | "external";
   mode: McpToolMode;
   inputSchema: Record<string, unknown>;
   outputSchema?: Record<string, unknown>;
@@ -294,6 +296,9 @@ export type McpStreamEventInput =
 export interface McpInvocationContext {
   invocationId: string;
   args: Record<string, unknown>;
+  userId?: number;
+  threadId?: string;
+  turnId?: string;
   pushEvent: (event: McpStreamEventInput) => void;
   addArtifact: (artifact: Omit<McpArtifact, "id">) => McpArtifact;
   trace: {

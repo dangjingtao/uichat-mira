@@ -2,9 +2,10 @@
 
 Status: Current
 Owner: runtime
-Last verified: 2026-06-26
+Last verified: 2026-06-27
 Layer: raw-source
-Module: tooling-runtime
+Module: Tool
+Feature: ToolsProtocol
 Doc Type: current-contract
 
 ## 这份文档现在定义什么
@@ -32,7 +33,7 @@ Doc Type: current-contract
 
 - 内置工具不是 `server/tools/*` 下的静态清单
 - 内置工具由 `server/src/mcp/harness/runtime.ts` 统一注册
-- 外部工具通过 MCP server 接入，再被投影成统一的工具面
+- 外部工具通过 MCP server 接入，再被投影成 external MCP discovered tools
 
 ## 单点真相
 
@@ -56,17 +57,24 @@ Doc Type: current-contract
 
 内置 capability 由本项目 runtime 自己实现。
 
-当前已落地或已纳入范围的内置域包括：
+当前代码中已经出现过的内置域包括：
 
 - `read`
 - `edit`
 - `web_search`
 - `terminal`
-- `preview_action` 预留
+- `browser_action`
 
 外部工具来自用户接入的 MCP server。
 
-它们不直接替代内置 capability，而是作为外部扩展能力接入同一调试与调用面。
+它们不直接替代内置 capability。
+
+当前边界下：
+
+- 内置 capability 进入 internal tool workbench surface
+- 外部 MCP projected tools 留在 MCP installed server / discovered tools surface
+
+它们共享 Harness 执行主链，但不共享同一个产品展示面。
 
 ### 2. 命名规则
 
@@ -84,16 +92,20 @@ Doc Type: current-contract
 
 外部 MCP projected tool：
 
-- 统一命名为 `external:<serverId>:<toolName>`
+- 当前运行时命名为 `mcp:<serverId>:tool:<toolName>`
 
 示例：
 
-- `external:figma:mcp_search`
-- `external:github:create_issue`
+- `mcp:figma:tool:mcp_search`
+- `mcp:github:tool:create_issue`
 
 这样做的目的只有一个：
 
 - 避免外部 MCP tool 与内置工具重名
+
+注意：
+
+- 文档里如果仍出现 `external:<serverId>:<toolName>`，应视为旧设计口径，不是当前代码真相
 
 ## Harness 是什么
 
@@ -123,7 +135,8 @@ Doc Type: current-contract
 ```ts
 type CapabilityRegistration = {
   id: string;
-  domain: "read" | "edit" | "web_search" | "terminal" | "preview_action";
+  source: "internal" | "external";
+  domain: "read" | "edit" | "web_search" | "terminal" | "browser_action";
   title: string;
   description?: string;
   inputSchema: Record<string, unknown>;
@@ -142,6 +155,10 @@ type CapabilityRegistration = {
 ```
 
 最重要的点不是字段长什么样，而是注册入口必须统一。
+
+当前还要补一条硬规则：
+
+- 任何新 tool definition 都必须显式声明 `source`
 
 ## Roots 与边界协议
 
@@ -336,6 +353,18 @@ artifact 的作用是：
 - approval wait state
 - timeout / abort / attach session 语义
 
+### Browser Action
+
+当前代码里还存在：
+
+- `wecom_notify_send`
+- `wecom_org_lookup`
+- `wecom_robot_notify`
+
+它们目前仍使用 `browser_action` 作为内部 domain。
+
+这不代表它们已经进入当前 Tools workbench 的主能力域，只代表 runtime contract 里这一域尚未完全清理收口。
+
 ## 与外部 MCP 的关系
 
 我们现在不是“另起一套完全不同的协议”。
@@ -350,6 +379,12 @@ artifact 的作用是：
 1. 内部边界、审批、trace 有统一主线
 2. 后续接 chat / agent tool-calling 时不需要再推翻 runtime
 3. 接外部 MCP server 时不会和内置系统打架
+
+但当前还要加一个明确边界：
+
+- `/mcp/tools` 只服务 internal tools
+- external MCP projected tools 不进入 `/mcp/tools`
+- external discovered tools 通过 MCP installed server surface 查看
 
 ## 明确废弃的旧口径
 
@@ -383,7 +418,7 @@ artifact 的作用是：
 现在这套工具协议可以总结成一句话：
 
 - 内置能力由 harness runtime 统一注册与执行
-- 外部扩展通过 MCP 接入并投影成统一工具面
+- 外部扩展通过 MCP 接入并投影到 external discovered tool surface
 - 命名、边界、审批、事件流、artifact、测试约束都必须收口到同一协议
 
 所以这页今后应被看作：

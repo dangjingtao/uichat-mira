@@ -2,12 +2,14 @@ const dashboard = {
   dashboard: {
     home: {
       welcomeBack: "Welcome back, {{username}}",
+      enterMain: "Enter App",
+      openSettings: "Open Settings",
       logout: "Log Out",
       backendService: "Backend Service",
       databaseConnection: "Database Connection",
       runtime: "Runtime",
       subtitle:
-        "Once the system is healthy, move straight into chat testing, retrieval, and review.",
+        "The browser preview is connected to the local runtime. Enter the chat workspace or check settings first.",
       currentUser: "Current User",
     },
   },

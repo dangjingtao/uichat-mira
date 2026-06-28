@@ -15,6 +15,7 @@ export interface GeneratedDocument {
     lastVerified: string | null;
     layer: string | null;
     module: string | null;
+    feature: string | null;
     docType: string | null;
   };
   excerpt: string;
@@ -39,6 +40,8 @@ export interface GeneratedDocsIndex {
       wiki: number;
       schema: number;
     };
+    byModule: Record<string, number>;
+    byFeature: Record<string, number>;
     byDocType: {
       currentContract: number;
       reference: number;

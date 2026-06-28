@@ -4,7 +4,8 @@ Status: Current
 Owner: platform
 Last verified: 2026-06-26
 Layer: raw-source
-Module: platform
+Module: Develoments
+Feature: PlatformRuntime
 Doc Type: how-to
 
 ## 单点真相范围
@@ -18,7 +19,7 @@ Doc Type: how-to
 相关文档：
 
 - [[platform/tauri]]
-- [[版本管理]]
+- [[developments/release-management]]
 - [[AREA_MAP_PLATFORM]]
 
 ## 适合什么时候读
@@ -119,4 +120,4 @@ pnpm version:sync
 
 - `tauri.md`
 - `../architecture/README.md`
-- `../版本管理.md`
+- `../developments/release-management.md`

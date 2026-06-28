@@ -213,6 +213,9 @@ async function main() {
   const backendHost = runtimeConfig.backend.host;
   const backendPort = runtimeConfig.backend.port;
   const backendHealthUrl = `http://${backendHost}:${backendPort}/health`;
+  const temporaryWorkspaceRoot =
+    process.env.UI_CHAT_WORKSPACE_ROOT?.trim() || "D:\\testData";
+  fs.mkdirSync(temporaryWorkspaceRoot, { recursive: true });
 
   const workspaceRoot = path.resolve(__dirname, "..");
   const serverDir = path.join(workspaceRoot, "server");
@@ -242,6 +245,7 @@ async function main() {
     backendReady = spawnManagedProcess("server", serverDir, "pnpm dev", {
       env: {
         UI_CHAT_ALLOW_BACKEND_REUSE: "1",
+        UI_CHAT_WORKSPACE_ROOT: temporaryWorkspaceRoot,
       },
       readyWhen: (_text, combined) =>
         combined.includes(`Server running on http://${backendHost}:${backendPort}`),

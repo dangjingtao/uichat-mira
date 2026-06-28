@@ -19,6 +19,7 @@ export const threadSchema = {
     "id",
     "title",
     "modelName",
+    "workspaceId",
     "status",
     "createdAt",
     "updatedAt",
@@ -31,6 +32,10 @@ export const threadSchema = {
       description: "Display name of the model associated with the thread.",
       type: ["string", "null"],
     },
+    workspaceId: {
+      type: ["string", "null"],
+      description: "Workspace bound to this thread.",
+    },
     knowledgeBaseId: {
       type: ["string", "null"],
       description: "Knowledge base bound to this thread.",
@@ -38,6 +43,10 @@ export const threadSchema = {
     roleId: {
       type: ["string", "null"],
       description: "Role bound to this thread.",
+    },
+    agentEnabled: {
+      type: ["boolean", "null"],
+      description: "Whether built-in agent tools are enabled for this thread.",
     },
     contextSummary: {
       type: ["string", "null"],
@@ -169,6 +178,10 @@ const threadMutationBodySchema = {
       type: "string",
       description: "Display name of the model associated with the thread.",
     },
+    workspaceId: {
+      type: ["string", "null"],
+      description: "Workspace bound to this thread.",
+    },
     knowledgeBaseId: {
       type: ["string", "null"],
       description: "Knowledge base bound to this thread.",
@@ -176,6 +189,10 @@ const threadMutationBodySchema = {
     roleId: {
       type: ["string", "null"],
       description: "Role bound to this thread.",
+    },
+    agentEnabled: {
+      type: ["boolean", "null"],
+      description: "Whether built-in agent tools are enabled for this thread.",
     },
     contextSummary: {
       type: ["string", "null"],
@@ -193,6 +210,22 @@ const threadContextSummarySchema = {
       type: ["string", "null"],
       format: "date-time",
     },
+  },
+} as const;
+
+const chatWorkspaceSchema = {
+  type: "object",
+  required: ["id", "name", "rootPath", "status", "createdAt", "updatedAt"],
+  properties: {
+    id: { type: "string" },
+    name: { type: "string" },
+    rootPath: { type: ["string", "null"] },
+    status: {
+      type: "string",
+      enum: ["active", "archived"],
+    },
+    createdAt: { type: "string", format: "date-time" },
+    updatedAt: { type: "string", format: "date-time" },
   },
 } as const;
 
@@ -415,6 +448,65 @@ export const threadRouteSchemas = {
     params: idParamsSchema,
     response: {
       200: successEnvelope(threadContextSummarySchema),
+      404: errorEnvelope,
+      500: errorEnvelope,
+    },
+  },
+  listChatWorkspaces: {
+    tags: ["Thread"],
+    summary: "List chat workspaces",
+    operationId: "listChatWorkspaces",
+    response: {
+      200: successEnvelope({
+        type: "array",
+        items: chatWorkspaceSchema,
+      }),
+      500: errorEnvelope,
+    },
+  },
+  createChatWorkspace: {
+    tags: ["Thread"],
+    summary: "Create chat workspace",
+    operationId: "createChatWorkspace",
+    body: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        name: { type: "string" },
+        rootPath: { type: ["string", "null"] },
+      },
+    },
+    response: {
+      200: successEnvelope(chatWorkspaceSchema),
+      500: errorEnvelope,
+    },
+  },
+  updateChatWorkspace: {
+    tags: ["Thread"],
+    summary: "Update chat workspace",
+    operationId: "updateChatWorkspace",
+    params: idParamsSchema,
+    body: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        name: { type: "string" },
+        rootPath: { type: ["string", "null"] },
+      },
+    },
+    response: {
+      200: successEnvelope(chatWorkspaceSchema),
+      404: errorEnvelope,
+      500: errorEnvelope,
+    },
+  },
+  deleteChatWorkspace: {
+    tags: ["Thread"],
+    summary: "Delete chat workspace",
+    operationId: "deleteChatWorkspace",
+    params: idParamsSchema,
+    response: {
+      200: successEnvelope(deletedResponseSchema),
       404: errorEnvelope,
       500: errorEnvelope,
     },

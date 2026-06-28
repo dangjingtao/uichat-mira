@@ -1,7 +1,8 @@
 # Role API
 
 Layer: raw-source
-Module: role
+Module: Role
+Feature: RoleAPI
 Doc Type: reference
 
 Status: Current  

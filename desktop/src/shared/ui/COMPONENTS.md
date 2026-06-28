@@ -29,6 +29,7 @@
 - `Markdown / Long-form Content`
 - `Modal`
 - `NavItem`
+- `NavigationCardTabs`
 - `SearchSelectModal`
 - `Select`
 - `SegmentedTabs`
@@ -488,6 +489,18 @@ message.destroy();
 - tabs 继续复用 `SegmentedTabs`，`TabCard` 负责统一头部承托与内容区壳层
 - 右上角辅助说明通过 `headerAside` 传入，保持弱信息层级
 
+## NavigationCardTabs
+
+用于页面顶部的页签导航场景，适合少量入口之间的切换，强调标签本身的压边感和当前选中态。
+
+### 使用建议
+
+- 适合 2 到 5 个入口，不适合复杂表单或长内容
+- 只负责页签切换，不承担内容区和主 CTA
+- 组件本身只输出 tab strip，不再额外包 badge、内容壳或卡片外层
+- tab 选中态优先通过顶部强调线、底边遮盖和轻阴影表达
+- 页面本身是工作台时继续优先用 `TabCard`；页面职责是“需要页签切换”时，用这个组件更合适
+
 ## TerminalPanel
 
 用于模拟终端、运行日志、命令输出和过程回放面板。
@@ -574,6 +587,7 @@ message.destroy();
 - 默认使用紧凑宽度，适合选择器，不做重型管理面板
 - 默认保持更紧凑的 modal 壳层和列表密度，避免大圆角卡片和过松边距
 - 条目优先单行摘要 + 轻量元信息，描述过长时应被截断，而不是把卡片撑高
+- 视觉壳层与数据逻辑分离，当前样式层由 `SearchSelectModalChrome` 承接，便于单独替换弹窗外观而不改搜索流程
 
 ## NavItem
 

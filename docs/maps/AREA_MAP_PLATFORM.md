@@ -1,7 +1,8 @@
 # 区域图：Platform
 
 Layer: wiki
-Module: platform
+Module: Develoments
+Feature: PlatformRuntime
 Doc Type: overview
 
 Status: Current

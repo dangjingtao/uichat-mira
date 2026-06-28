@@ -1,7 +1,8 @@
 # Provider Proxy API
 
 Layer: raw-source
-Module: provider
+Module: ModelSetting
+Feature: ProviderProxy
 Doc Type: current-contract
 
 Status: Current
@@ -212,3 +213,17 @@ knowledge-base 文档导入不要求前端直接调用 embeddings endpoint。
 旧的 JSON 路由 `POST /knowledge-base/documents` 仍保留给直接文本导入，但桌面 UI 已不再通过这条路径发送大段正文。
 
 这样可以把 provider-specific 行为继续封装在后端 service layer 内部。
+
+## Provider 设置流程边界
+
+模型设置页里的“服务商已链接”只表示某个角色已经分配了 `providerCode` 与 `remoteModelId`，不等同于一次实时 provider 健康检查。
+
+当前连接流程仍分三步：
+
+1. 保存 provider 连接配置。
+2. 同步 provider 模型列表到本地缓存。
+3. 从本地缓存中选择默认角色模型。
+
+选择默认模型依赖最近一次同步后的本地模型缓存。修改 `baseUrl` 或 `apiKey` 后，应重新同步模型列表，再选择角色模型；当前后端不在选择阶段隐式重试同步，也不添加旧缓存兼容兜底。
+
+Rerank 是独立能力，不从 Chat 兼容性推断。只有 catalog 中显式声明 `rerankAdapter: "openai-compatible"` 的 provider 会调用 `/v1/rerank`。

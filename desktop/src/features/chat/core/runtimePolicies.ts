@@ -19,6 +19,7 @@ export const createDesktopThreadCreationPolicy =
       | {
           knowledgeBaseId?: string | null;
           roleId?: string | null;
+          agentEnabled?: boolean | null;
         }
       | undefined,
   ): ChatThreadCreationPolicy => ({
@@ -39,6 +40,14 @@ export const createDesktopThreadCreationPolicy =
         (typeof createInput.roleId === "string" || createInput.roleId === null)
       ) {
         metadata.roleId = createInput.roleId;
+      }
+
+      if (
+        createInput &&
+        (typeof createInput.agentEnabled === "boolean" ||
+          createInput.agentEnabled === null)
+      ) {
+        metadata.agentEnabled = createInput.agentEnabled;
       }
 
       return Object.keys(metadata).length > 0 ? { metadata } : undefined;
@@ -74,17 +83,33 @@ export const createDesktopComposerActions = ({
     id: "knowledge-base-picker",
     kind: "command",
     label: "Knowledge base",
-    title:
-      knowledgeBases.length > 0
-        ? "Open knowledge base picker"
-        : "No knowledge bases available",
-    disabled: knowledgeBases.length === 0,
+    title: "Open knowledge base picker",
   },
   {
     id: "context-summary",
     kind: "command",
     label: "Context summary",
     title: "Open thread context summary",
+  },
+  {
+    id: "workspace-actions",
+    kind: "menu",
+    label: "Workspace",
+    title: "Workspace actions",
+    children: [
+      {
+        id: "workspace-add-thread",
+        kind: "command",
+        label: "Add to workspace",
+        title: "Add thread to workspace",
+      },
+      {
+        id: "workspace-create",
+        kind: "command",
+        label: "Create workspace",
+        title: "Create workspace",
+      },
+    ],
   },
 ];
 

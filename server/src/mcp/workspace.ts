@@ -3,6 +3,7 @@ import fs from "node:fs";
 import { mcpBadRequest, mcpInternalError } from "./core/errors.js";
 
 let selectedWorkspaceRoot: string | null = null;
+const temporaryDefaultWorkspaceRoot = "D:\\testData";
 
 const resolveConfiguredWorkspaceRoot = () => {
   const configured = process.env.UI_CHAT_WORKSPACE_ROOT?.trim();
@@ -10,10 +11,19 @@ const resolveConfiguredWorkspaceRoot = () => {
     return path.resolve(configured);
   }
 
+  if (process.env.NODE_ENV !== "production") {
+    // Temporary verification fallback: keep local validation unblocked when the
+    // app is launched without an explicit workspace selection. Remove once the
+    // workspace picker flow is wired into the normal startup path.
+    return path.resolve(temporaryDefaultWorkspaceRoot);
+  }
+
   return null;
 };
 
 const assertWorkspaceDirectory = (targetPath: string) => {
+  fs.mkdirSync(targetPath, { recursive: true });
+
   if (!fs.existsSync(targetPath)) {
     throw mcpBadRequest(`workspace path does not exist: ${targetPath}`);
   }

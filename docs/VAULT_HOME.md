@@ -4,8 +4,14 @@ Status: Current
 Owner: docs
 Last verified: 2026-06-24
 Layer: wiki
-Module: docs-system
+Module: Docs
+Feature: DocsSystem
 Doc Type: overview
+Canonical: true
+Related:
+  - README.md
+  - knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md
+  - knowledge-system/OBSIDIAN_QUICKSTART.md
 
 ## 起点
 

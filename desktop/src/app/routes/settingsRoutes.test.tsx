@@ -95,6 +95,10 @@ describe("settings routes", () => {
     expect(settingsRoutes.some((route) => route.path === "mcp")).toBe(true);
   });
 
+  it("includes the enterprise integrations route", () => {
+    expect(settingsRoutes.some((route) => route.path === "integrations")).toBe(true);
+  });
+
   it("includes the logs subpage under /settings/development", () => {
     const developmentRoute = settingsRoutes.find(
       (route) => route.path === "development",

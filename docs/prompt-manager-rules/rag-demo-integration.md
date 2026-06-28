@@ -4,7 +4,8 @@ Status: Current
 Owner: runtime
 Last verified: 2026-06-26
 Layer: raw-source
-Module: tooling-runtime
+Module: Tool
+Feature: PromptManager
 Doc Type: design
 
 ## 1. 目标

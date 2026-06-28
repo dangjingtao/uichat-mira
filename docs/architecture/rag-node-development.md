@@ -4,7 +4,8 @@ Status: Current
 Owner: runtime
 Last verified: 2026-06-26
 Layer: raw-source
-Module: runtime
+Module: Develoments
+Feature: RagNode
 Doc Type: how-to
 
 ## 目的

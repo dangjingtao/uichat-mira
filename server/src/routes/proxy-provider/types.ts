@@ -19,6 +19,8 @@ export interface ProviderChatBody extends ChatMessagesBody {
   id?: string;
   /** Client message id for the latest user message. A UUID is generated when absent. */
   messageId?: string;
+  /** Per-send Agent mode request from the composer Agent button. */
+  agentEnabled?: boolean;
 }
 
 /** Embedding route body. Strings are normalized into a one-item input array. */

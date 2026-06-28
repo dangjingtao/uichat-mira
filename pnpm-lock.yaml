@@ -300,6 +300,9 @@ importers:
       '@orama/tokenizers':
         specifier: ^3.1.18
         version: 3.1.18
+      '@wecom/aibot-node-sdk':
+        specifier: ^1.0.7
+        version: 1.0.7
       adm-zip:
         specifier: ^0.5.17
         version: 0.5.17
@@ -3487,6 +3490,9 @@ packages:
 
   '@vue/shared@3.5.38':
     resolution: {integrity: sha512-FTW0AFZNaK5/mOqvGBwVfUlNLU38TiQn4+DQgIFUnrBBJQ1crMJ82yeGQLV5jyKFsO8yRukpbuP7x+nRbH6aug==}
+
+  '@wecom/aibot-node-sdk@1.0.7':
+    resolution: {integrity: sha512-51w+sTqunry6GD3HFvmuh0gArMSJDFE418vyvR1wMJHj1N6DaFuGD3HuaY2fazZs3mb9FWeQFX3+vU5t0Qhwmw==}
 
   '@xmldom/xmldom@0.9.10':
     resolution: {integrity: sha512-A9gOqLdi6cV4ibazAjcQufGj0B1y/vDqYrcuP6d/6x8P27gRS8643Dj9o1dEKtB6O7fwxb2FgBmJS2mX7gpvdw==}
@@ -10119,6 +10125,17 @@ snapshots:
       vue: 3.5.38(typescript@5.9.3)
 
   '@vue/shared@3.5.38': {}
+
+  '@wecom/aibot-node-sdk@1.0.7':
+    dependencies:
+      axios: 1.17.0
+      eventemitter3: 5.0.4
+      ws: 8.21.0
+    transitivePeerDependencies:
+      - bufferutil
+      - debug
+      - supports-color
+      - utf-8-validate
 
   '@xmldom/xmldom@0.9.10': {}
 

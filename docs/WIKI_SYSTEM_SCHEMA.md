@@ -4,8 +4,15 @@ Status: Current
 Owner: docs
 Last verified: 2026-06-25
 Layer: schema
-Module: docs-system
+Module: Docs
+Feature: DocsSystem
 Doc Type: current-contract
+Canonical: true
+Related:
+  - knowledge-system/DOCUMENTATION_STANDARDS.md
+  - knowledge-system/DIRECTORY_AND_CLASSIFICATION_RULES.md
+  - knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md
+  - knowledge-system/OPERATING_MODEL.md
 
 ## 单点真相范围
 
@@ -179,6 +186,7 @@ docs/
 每篇文档至少应尽量能回答这几个问题：
 
 - 属于哪个模块
+- 属于哪个功能点
 - 属于哪一层
 - 属于哪种文档角色
 - 是否可由 LLM 直接维护
@@ -190,6 +198,7 @@ docs/
 
 - `Layer`
 - `Module`
+- `Feature`
 - `Doc Type`
 - `Status`
 
@@ -208,23 +217,20 @@ docs/
 1. 这篇文档主要服务哪个稳定产品域
 2. 这篇文档主要描述哪条运行链路或契约
 3. 这篇文档主要由哪个团队/责任域维护
-4. 如果仍然说不清，才暂归 `docs-system`、`planning` 或 `bugfix`
+4. 如果仍然说不清，才暂归 `Develoments` 或 `Docs`
 
 建议的主模块口径如下：
 
 | Module | 主要含义 | 典型文档 |
 | --- | --- | --- |
-| `docs-system` | 文档系统、schema、索引、阅读规则 | `WIKI_SYSTEM_SCHEMA.md`、`DOCUMENTATION_STANDARDS.md` |
-| `runtime` | 运行时、请求链路、后端执行边界 | `architecture/README.md`、`rag-langgraph-flow.md` |
-| `chat` | 聊天产品域、线程、消息、会话体验 | `uchat.md`、`chat-system-practices.md` |
-| `role` | 角色系统、persona、role API | `role.md`、`role-api.md` |
-| `knowledge-base` | 知识库内容、导入、检索、workspace | `knowledge-base/api.md`、`knowledge-base/markdown-workspace-mode.md` |
-| `provider` | 模型提供商、代理、接线、接口标准 | `provider-api-standards.md`、`provider-proxy-api.md` |
-| `platform` | 桌面壳、Tauri、Electron、打包与环境 | `platform/tauri.md`、`版本管理.md` |
-| `evaluation` | 评测工作台、数据集、评测流程 | `evaluation/workbench.md` |
-| `tooling-runtime` | MCP、工具运行时、读取与暴露机制 | `tooling-runtime/read-skill-design.md`、`external-mcp-marketplace.md` |
-| `planning` | 路线图、规划、待办、设计草案 | `product-roadmap-priorities.md` |
-| `bugfix` | 缺陷记录、修复清单、回归排查 | `defect-log.md`、`chat-remediation-checklist.md` |
+| `Chat` | 聊天产品域、线程、消息、会话体验 | `uchat.md`、`chat/chat-system-practices.md` |
+| `ModelSetting` | 模型配置、provider 接线、模型能力与接口约束 | `provider/README.md`、`architecture/model-config-api.md` |
+| `MCP` | 外部 MCP 接入、MCP 市场、MCP 资源与能力暴露 | `external-mcp-marketplace.md`、`CONCEPT_MCP.md` |
+| `Tool` | 内置工具、tool runtime、read/edit/terminal 等工具能力 | `tooling-runtime/tools-protocol.md`、`tooling-runtime/harness-runtime-design.md` |
+| `KnowledgeBase` | 知识库内容、导入、检索、workspace | `knowledge-base/api.md`、`knowledge-base/markdown-workspace-mode.md` |
+| `Role` | 角色系统、persona、role API | `role/README.md`、`role/role-api.md` |
+| `Docs` | 文档系统、schema、索引、AI 阅读规则、知识系统治理 | `WIKI_SYSTEM_SCHEMA.md`、`knowledge-system/DOCUMENTATION_STANDARDS.md`、`knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md` |
+| `Develoments` | 开发支撑域：runtime、platform、evaluation、规划、bugfix、架构与工程约束 | `architecture/README.md`、`platform/tauri.md`、`developments/release-management.md` |
 
 ### 重叠文档怎么收
 
@@ -237,8 +243,33 @@ docs/
 判断规则很简单：
 
 - 文档回答“它主要在讲谁”，那是 `Module`
+- 文档回答“它具体落在哪个功能点”，那是 `Feature`
 - 文档回答“它是啥性质的页”，那是 `Doc Type`
 - 文档回答“它属于哪层”，那是 `Layer`
+
+### Feature 规则
+
+`Feature` 是 `Module` 下面的二级维度。
+
+它回答的问题不是“这篇属于哪个大模块”，而是：
+
+- 这篇文档主要落在哪个具体功能点
+- AI 在同一模块内应该把它和哪些页视作同一簇
+
+当前规则先定成：
+
+- `Feature` 正式存在
+- `Feature` 暂时允许为空
+- 没有稳定功能点名称时，不要硬填
+- 一旦某个功能点已经在项目中稳定存在，后续同类文档应尽量复用同一个 `Feature`
+
+例如：
+
+- `Module: Chat`，`Feature: Thread`
+- `Module: Chat`，`Feature: ToolIntegration`
+- `Module: KnowledgeBase`，`Feature: MarkdownWorkspace`
+- `Module: MCP`，`Feature: ExternalMarketplace`
+- `Module: Docs`，`Feature: DocsSystem`
 
 ## Allowed Values
 
@@ -254,22 +285,23 @@ docs/
 
 当前项目先固定这些模块值：
 
-- `docs-system`
-- `runtime`
-- `chat`
-- `role`
-- `knowledge-base`
-- `provider`
-- `platform`
-- `evaluation`
-- `tooling-runtime`
-- `bugfix`
-- `planning`
+- `Chat`
+- `ModelSetting`
+- `MCP`
+- `Tool`
+- `KnowledgeBase`
+- `Role`
+- `Docs`
+- `Develoments`
 
 说明：
 
-- `bugfix` 先作为工作流型模块存在，便于聚合缺陷与修复资料
-- `planning` 先作为项目级规划模块存在，便于承载跨功能域路线文档
+- 这是当前稳定的顶级功能模块骨架
+- 旧的 `docs-system` 现在应统一并入 `Docs`
+- 旧的 `runtime / platform / evaluation / planning / bugfix` 先统一并入 `Develoments`
+- 旧的 `provider` 先统一并入 `ModelSetting`
+- 旧的 `tooling-runtime` 不再作为长期顶级模块，而是按内容主语拆进 `Tool` 或 `MCP`
+- 版本、请求封装、i18n、工程规范、缺陷与路线类正文，优先下沉到 `developments/`
 
 ### Allowed `Doc Type`
 
@@ -286,9 +318,56 @@ docs/
 - `historical`
 - `how-to`
 
+### Allowed `Status`
+
+当前项目先固定这些状态值：
+
+- `current`
+- `active`
+- `planned`
+- `historical`
+
+站点和 AI 的默认理解口径如下：
+
+| Status | 默认含义 | 典型站点分组 |
+| --- | --- | --- |
+| `current` | 当前有效事实、当前有效契约 | 先读这里 |
+| `active` | 正在推进、仍在执行中的内容 | 正在实施 |
+| `planned` | 已确认方向，但尚未成为现状 | 规划中 |
+| `historical` | 历史材料、过期方案、仅供背景回看 | 历史归档 |
+
+说明：
+
+- `Doc Type` 回答“这篇是什么角色的页”
+- `Status` 回答“它当前处于什么生命周期”
+- 不要再把 `planned / active / historical` 混进模块判断里
+
+### `Doc Type` 到站点状态区块的推荐映射
+
+为了让人类阅读入口和 AI 默认读取顺序保持一致，推荐先用下面这套映射：
+
+| Doc Type | 默认落点 |
+| --- | --- |
+| `current-contract` | 先读这里 |
+| `overview` | 先读这里 |
+| `reference` | 先读这里 |
+| `checklist` | 正在实施 |
+| `plan` | 规划中 |
+| `draft` | 规划中 |
+| `design` | 如果尚未落地则归规划中；如果已成当前契约，则由 `Status` 决定 |
+| `historical` | 历史归档 |
+
+如果 `Doc Type` 和 `Status` 冲突，优先按下面顺序判断：
+
+1. `historical` 永远优先进入历史归档
+2. `active` 可以把 `checklist / implementation-notes` 推进到正在实施
+3. `planned` 可以把 `plan / draft / design` 推进到规划中
+4. `current` 可以把 `current-contract / overview / reference` 推进到先读这里
+
 一句话规则：
 
 - `Module` 回答“这篇在讲谁”
+- `Feature` 回答“它在这个模块里具体是哪一块”
 - `Doc Type` 回答“这篇是干什么的”
 - `Layer` 回答“它属于哪一层”
 
@@ -296,7 +375,8 @@ docs/
 
 ```yaml
 layer: raw-source | wiki | schema
-module: docs-system | runtime | chat | role | knowledge-base | provider | platform | evaluation | tooling-runtime | bugfix | planning
+module: Chat | ModelSetting | MCP | Tool | KnowledgeBase | Role | Docs | Develoments
+feature: <optional feature slug or name>
 doc_type: current-contract | reference | overview | design | plan | checklist | draft | implementation-notes | historical | how-to
 status: current | planned | active | historical
 owner: runtime
@@ -317,6 +397,14 @@ related: [...]
 3. 标注是否需要新建 wiki 页
 4. 标注是否影响已有页面
 
+记录 `Module` 时，优先按当前顶级功能模块写，不再把 `planning`、`bugfix`、`platform` 这类工程域直接当成长期顶级模块。
+
+记录 `Feature` 时：
+
+- 有稳定功能点就写
+- 没有就留空
+- 不要为了“字段完整”发明一次性名字
+
 ### Maintain
 
 维护 wiki 时：
@@ -324,6 +412,49 @@ related: [...]
 - 用 raw sources 作为依据
 - 用 schema 作为规则
 - 不要让 wiki 反过来替代 source
+
+### Controlled Writeback
+
+这套系统不应把“AI 写回”整体禁止掉。
+
+更合理的规则是：
+
+- 允许受控写回
+- 禁止无依据改写
+
+具体口径如下：
+
+#### AI 应该直接写回什么
+
+- schema 层文档
+- wiki 层文档
+- 入口页、索引页、概念页
+- 活跃文档的元数据头部
+- 分类明显错误的文档归属
+- 待归类治理页
+
+#### AI 不应直接改写什么
+
+- raw-source 的事实正文，如果没有明确依据
+- 仍作为 source of truth 的设计原文
+- 只能通过猜测才能得出的实现结论
+
+#### AI 遇到错误时的默认动作
+
+如果 AI 发现：
+
+- `Layer / Module / Doc Type / Status` 明显错误
+- 文档应该归进别的模块
+- 某页本应 historical 却仍被当 current
+- 某页已经是 canonical 入口却没有被入口系统表达出来
+
+默认不应该只是提示，而应该直接在受控范围内修正。
+
+一句话：
+
+- AI 不是只能读
+- AI 是这套文档系统的整理者
+- 但它必须在 schema 约束下写回，而不是无约束改写原始事实
 
 ### Answer
 

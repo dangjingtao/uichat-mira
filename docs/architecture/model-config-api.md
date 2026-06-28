@@ -4,7 +4,8 @@ Status: Current
 Owner: runtime
 Last verified: 2026-06-26
 Layer: raw-source
-Module: runtime
+Module: ModelSetting
+Feature: ModelConfig
 Doc Type: reference
 
 ## 单点真相范围

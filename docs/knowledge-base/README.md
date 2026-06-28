@@ -4,7 +4,8 @@ Status: Current
 Owner: knowledge-base
 Last verified: 2026-06-26
 Layer: wiki
-Module: knowledge-base
+Module: KnowledgeBase
+Feature: Overview
 Doc Type: overview
 
 ## 单点真相范围

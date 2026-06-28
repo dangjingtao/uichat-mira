@@ -24,8 +24,6 @@ const fallbackMeta: AppMetaData = {
   description: "",
   repositoryUrl: "",
   homepageUrl: "",
-  changelog: [],
-  versionHistory: [],
   links: [],
 };
 

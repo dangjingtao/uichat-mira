@@ -12,6 +12,7 @@ type DropdownMenuItemData = {
   leadingIcon?: React.ReactNode;
   trailingText?: string;
   checked?: boolean;
+  tone?: "default" | "danger";
   children?: DropdownMenuItemData[];
 };
 
@@ -27,7 +28,7 @@ const contentClassName =
   "z-[260] min-w-[11rem] overflow-hidden rounded-ui-overlay border border-border bg-surface-elevated p-1 shadow-shadow-lg";
 
 const itemClassName =
-  "group relative flex w-full cursor-default items-center justify-between gap-3 rounded-ui-control px-2.5 py-2 text-left text-sm text-text-primary outline-none transition-colors duration-150 data-[highlighted]:bg-surface-secondary data-[disabled]:pointer-events-none data-[disabled]:opacity-45";
+  "group relative flex w-full cursor-default items-center justify-between gap-3 rounded-ui-control px-2.5 py-2 text-left text-sm outline-none transition-colors duration-150 data-[disabled]:pointer-events-none data-[disabled]:opacity-45";
 
 const submenuContentClassName =
   "z-[270] min-w-[12rem] overflow-hidden rounded-ui-overlay border border-border bg-surface-elevated p-1 shadow-shadow-lg";
@@ -39,12 +40,17 @@ function MenuItem({
   item: DropdownMenuItemData;
   onSelect: (item: DropdownMenuItemData) => void;
 }) {
+  const itemToneClassName =
+    item.tone === "danger"
+      ? "text-danger-text data-[highlighted]:bg-primary/10"
+      : "text-text-primary data-[highlighted]:bg-surface-secondary";
+
   if (item.children?.length) {
     return (
       <DropdownMenuPrimitive.Sub>
         <DropdownMenuPrimitive.SubTrigger
           disabled={item.disabled}
-          className={itemClassName}
+          className={`${itemClassName} ${itemToneClassName}`}
           title={item.title ?? item.label}
         >
           <span className="inline-flex min-w-0 items-center gap-2">
@@ -76,7 +82,7 @@ function MenuItem({
     <DropdownMenuPrimitive.Item
       disabled={item.disabled}
       onSelect={() => onSelect(item)}
-      className={itemClassName}
+      className={`${itemClassName} ${itemToneClassName}`}
       title={item.title ?? item.label}
     >
       <span className="inline-flex min-w-0 items-center gap-2">
@@ -86,7 +92,7 @@ function MenuItem({
         <span className="truncate">{item.label}</span>
       </span>
 
-      <span className="ml-3 inline-flex shrink-0 items-center gap-2 text-[11px] text-text-tertiary">
+      <span className={`ml-3 inline-flex shrink-0 items-center gap-2 text-[11px] ${item.tone === "danger" ? "text-danger-text/80" : "text-text-tertiary"}`}>
         {item.trailingText ? <span>{item.trailingText}</span> : null}
         {item.checked ? <Check className="h-3.5 w-3.5 text-primary" /> : null}
       </span>
@@ -110,7 +116,7 @@ export default function DropdownMenu({
       <DropdownMenuPrimitive.Portal>
         <DropdownMenuPrimitive.Content
           align={align}
-          side="top"
+          side="bottom"
           sideOffset={sideOffset}
           collisionPadding={12}
           className={contentClassName}

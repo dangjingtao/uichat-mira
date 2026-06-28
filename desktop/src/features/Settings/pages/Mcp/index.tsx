@@ -60,6 +60,48 @@ const getMarketplaceTransportDetail = (
   return transport.packageIdentifier;
 };
 
+const toFriendlyMcpActionError = (error: unknown, action: "connect" | "discover") => {
+  const fallback =
+    action === "connect"
+      ? "连接 MCP Server 失败"
+      : "读取 MCP Server 能力失败";
+
+  const raw = error instanceof Error ? error.message : "";
+  if (!raw) {
+    return fallback;
+  }
+
+  if (raw.includes("找不到 npx")) {
+    return "连接失败：当前系统环境里找不到 npx。请确认 Node.js / npm 已正确安装，或把启动命令改成可执行的完整命令。";
+  }
+
+  if (raw.includes("找不到 uvx")) {
+    return "连接失败：当前系统环境里找不到 uvx。请确认 uv 已安装，或把启动命令改成可执行的完整命令。";
+  }
+
+  if (raw.includes("Official MCP marketplace timed out")) {
+    return "MCP 市场暂时超时，请稍后重试。";
+  }
+
+  if (raw.includes("timed out")) {
+    return `连接失败：请求超时。原始错误：${raw}`;
+  }
+
+  if (raw.includes("MCP stdio response did not include result")) {
+    return "连接失败：本地 MCP 进程已启动，但没有按预期返回初始化结果。请检查该 MCP 包是否兼容当前协议。";
+  }
+
+  if (raw.includes("Failed to parse stdio MCP JSON-RPC")) {
+    return "连接失败：本地 MCP 进程输出的 JSON 不合法。请检查该 MCP 包是否真的支持 stdio MCP。";
+  }
+
+  if (raw.includes("External stdio MCP response")) {
+    return "连接失败：本地 MCP 进程输出格式不符合 stdio MCP 协议。";
+  }
+
+  return raw.includes("连接失败") ? raw : `${fallback}：${raw}`;
+};
+
 export default function McpSettings() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<McpTab>("marketplace");
@@ -70,6 +112,11 @@ export default function McpSettings() {
   const [installedQuery, setInstalledQuery] = useState("");
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const [marketplaceCacheInfo, setMarketplaceCacheInfo] = useState<{
+    hit: boolean;
+    stale: boolean;
+    cachedAt: string | null;
+  } | null>(null);
   const [isMarketplaceLoading, setIsMarketplaceLoading] = useState(false);
   const [isMarketplaceSearching, setIsMarketplaceSearching] = useState(false);
   const [marketplaceError, setMarketplaceError] = useState<string | null>(null);
@@ -102,6 +149,7 @@ export default function McpSettings() {
       if (!options?.append) {
         setMarketplaceServers([]);
         setNextCursor(null);
+        setMarketplaceCacheInfo(null);
       }
 
       try {
@@ -121,6 +169,7 @@ export default function McpSettings() {
         );
         setNextCursor(result.metadata.nextCursor);
         setSourceUrl(result.metadata.sourceUrl);
+        setMarketplaceCacheInfo(result.metadata.cache);
       } catch (loadError) {
         if (controller.signal.aborted) {
           return;
@@ -379,13 +428,7 @@ export default function McpSettings() {
       }
       await loadInstalledServers();
     } catch (actionError) {
-      message.error(
-        actionError instanceof Error
-          ? actionError.message
-          : action === "connect"
-            ? t("settings.mcp.messages.connectFailed")
-            : t("settings.mcp.messages.discoverFailed"),
-      );
+      message.error(toFriendlyMcpActionError(actionError, action));
     } finally {
       setPendingServerId(null);
     }
@@ -486,6 +529,8 @@ export default function McpSettings() {
             bearerToken: t("settings.mcp.config.bearerToken"),
             timeoutMs: t("settings.mcp.config.timeoutMs"),
             customHeadersJson: t("settings.mcp.config.customHeadersJson"),
+            cwd: t("settings.mcp.config.cwd"),
+            envJson: t("settings.mcp.config.envJson"),
             authType: t("settings.mcp.config.authType"),
             authTypeNone: t("settings.mcp.config.authTypeNone"),
             authTypeBearer: t("settings.mcp.config.authTypeBearer"),
@@ -670,8 +715,10 @@ export default function McpSettings() {
               isSearching={isMarketplaceSearching}
               servers={marketplaceServers}
               sourceUrl={sourceUrl}
+              cacheInfo={marketplaceCacheInfo}
               labels={{
                 activeSource: t("settings.mcp.marketplace.activeSource"),
+                cachedResult: "官方 MCP 市场暂时不可用，当前显示最近一次成功结果",
                 emptyDescription: t("settings.mcp.marketplace.emptyDescription"),
                 emptyTitle: t("settings.mcp.marketplace.emptyTitle"),
                 install: t("settings.mcp.marketplace.install"),

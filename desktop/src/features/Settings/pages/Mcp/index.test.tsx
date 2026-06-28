@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import McpSettings from "./index";
+import { resolveGithubMirrorUrl } from "@/shared/github";
 
 const getMcpMarketplaceServersMock = vi.fn();
 const getExternalMcpServersMock = vi.fn();
@@ -230,7 +231,7 @@ describe("McpSettings", () => {
     );
     expect(screen.getByRole("link", { name: "GitHub" })).toHaveAttribute(
       "href",
-      "https://github.com/example/remote-docs",
+      resolveGithubMirrorUrl("https://github.com/example/remote-docs"),
     );
 
     await user.click(
@@ -389,6 +390,8 @@ describe("McpSettings", () => {
       fields: [
         { key: "command", label: "Command", type: "text", required: true },
         { key: "argsText", label: "Args JSON", type: "json", required: false },
+        { key: "cwd", label: "Working Directory", type: "text", required: false },
+        { key: "envJson", label: "Env JSON", type: "json", required: false },
         { key: "timeoutMs", label: "Timeout (ms)", type: "number", required: true },
       ],
       completeness: "known-partial",
@@ -398,6 +401,9 @@ describe("McpSettings", () => {
     getExternalMcpServerConfigMock.mockResolvedValueOnce({
       command: "npx",
       argsText: '[\n  "-y",\n  "@demo/local-docs-mcp"\n]',
+      packageName: "@demo/local-docs-mcp",
+      cwd: "D:\\workspace\\rag-demo",
+      envJson: '{\n  "HTTP_PROXY": "http://127.0.0.1:7890"\n}',
       authType: "none",
       timeoutMs: 30000,
       customHeadersJson: "",
@@ -406,6 +412,8 @@ describe("McpSettings", () => {
     updateExternalMcpServerConfigMock.mockResolvedValueOnce({
       command: "uvx",
       argsText: '["mcparmory-github"]',
+      cwd: "D:\\workspace\\rag-demo",
+      envJson: '{\n  "HTTP_PROXY": "http://127.0.0.1:7890"\n}',
       authType: "none",
       timeoutMs: 30000,
       customHeadersJson: "",
@@ -434,7 +442,10 @@ describe("McpSettings", () => {
     await waitFor(() => {
       expect(screen.getByLabelText("Command")).toBeInTheDocument();
       expect(screen.getByLabelText("Args JSON")).toBeInTheDocument();
+      expect(screen.getByLabelText("Working Directory")).toBeInTheDocument();
+      expect(screen.getByLabelText("Env JSON")).toBeInTheDocument();
       expect(screen.queryByLabelText("Endpoint URL")).not.toBeInTheDocument();
+      expect(screen.getByText("@demo/local-docs-mcp")).toBeInTheDocument();
     });
 
     await user.clear(screen.getByLabelText("Command"));
@@ -445,6 +456,16 @@ describe("McpSettings", () => {
         value: '["mcparmory-github"]',
       },
     });
+    fireEvent.change(screen.getByLabelText("Working Directory"), {
+      target: {
+        value: "D:\\workspace\\rag-demo",
+      },
+    });
+    fireEvent.change(screen.getByLabelText("Env JSON"), {
+      target: {
+        value: '{\n  "HTTP_PROXY": "http://127.0.0.1:7890"\n}',
+      },
+    });
 
     await user.click(screen.getByRole("button", { name: "settings.mcp.config.save" }));
 
@@ -452,6 +473,8 @@ describe("McpSettings", () => {
       expect(updateExternalMcpServerConfigMock).toHaveBeenCalledWith("local-docs", {
         command: "uvx",
         argsText: '["mcparmory-github"]',
+        cwd: "D:\\workspace\\rag-demo",
+        envJson: '{\n  "HTTP_PROXY": "http://127.0.0.1:7890"\n}',
         authType: "none",
         timeoutMs: 30000,
         customHeadersJson: "",
@@ -490,6 +513,11 @@ describe("McpSettings", () => {
         count: 1,
         nextCursor: null,
         sourceUrl: "https://registry.modelcontextprotocol.io/v0/servers",
+        cache: {
+          hit: false,
+          stale: false,
+          cachedAt: null,
+        },
       },
     });
 
@@ -498,5 +526,51 @@ describe("McpSettings", () => {
     await screen.findByText("OCI Only");
     expect(screen.getByRole("button", { name: "暂不支持" })).toBeDisabled();
     expect(createExternalMcpServerMock).not.toHaveBeenCalled();
+  });
+
+  it("shows a cached marketplace hint when stale cached results are returned", async () => {
+    getMcpMarketplaceServersMock.mockResolvedValueOnce({
+      servers: [
+        {
+          id: "remote-docs",
+          name: "remote-docs",
+          title: "Remote Docs",
+          description: "Third-party docs MCP",
+          version: "1.0.0",
+          status: "active",
+          isLatest: true,
+          publishedAt: null,
+          updatedAt: null,
+          websiteUrl: "https://docs.example.dev/mcp",
+          repositoryUrl: "https://github.com/example/remote-docs",
+          transports: [
+            {
+              kind: "streamable-http",
+              packageType: "remote",
+              installable: true,
+              label: "Remote HTTP",
+              url: "https://remote.example/mcp",
+            },
+          ],
+        },
+      ],
+      metadata: {
+        count: 1,
+        nextCursor: null,
+        sourceUrl: "https://registry.modelcontextprotocol.io/v0/servers",
+        cache: {
+          hit: true,
+          stale: true,
+          cachedAt: "2026-06-27T01:05:00.000Z",
+        },
+      },
+    });
+
+    render(<McpSettings />);
+
+    await screen.findByText("Remote Docs");
+    expect(
+      screen.getByText(/官方 MCP 市场暂时不可用，当前显示最近一次成功结果/i),
+    ).toBeInTheDocument();
   });
 });

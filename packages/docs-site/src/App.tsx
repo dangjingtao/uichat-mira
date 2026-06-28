@@ -15,14 +15,26 @@ import type { GeneratedDocsIndex, NavigationItem } from "./types";
 const data = docsIndex as GeneratedDocsIndex;
 const appBase = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+const isHistoricalDoc = (document: (typeof data.documents)[number]) =>
+  document.section === "archive" ||
+  document.metadata.docType === "historical" ||
+  document.metadata.status?.toLowerCase() === "historical";
+
+const isPrimaryReadableDoc = (document: (typeof data.documents)[number]) =>
+  !isHistoricalDoc(document) &&
+  ["current-contract", "overview", "reference"].includes(document.metadata.docType ?? "");
+
+const hasCanonicalFlag = (document: (typeof data.documents)[number]) =>
+  /(^|\n)Canonical:\s*true\s*$/im.test(document.content);
+
 const counts = {
   total: data.documents.length,
-  root: data.documents.filter((doc) => doc.section === "root").length,
+  root: data.documents.filter((doc) => doc.section === "root" && !isHistoricalDoc(doc)).length,
   maps: data.documents.filter((doc) => doc.section === "maps").length,
   concepts: data.documents.filter((doc) => doc.section === "concepts").length,
   knowledgeSystem: data.documents.filter((doc) => doc.section === "knowledge-system").length,
   implementation: data.documents.filter((doc) =>
-    ["architecture", "platform", "role"].includes(doc.section),
+    ["architecture", "chat", "platform", "developments", "role"].includes(doc.section),
   ).length,
   promptRules: data.documents.filter((doc) => doc.section === "prompt-manager-rules").length,
   rawSource: data.stats?.byLayer.rawSource ?? 0,
@@ -68,22 +80,23 @@ const sectionTitleMap: Record<string, string> = {
   concepts: "概念索引",
   "knowledge-system": "知识系统",
   architecture: "架构",
+  chat: "对话系统",
   platform: "平台",
+  developments: "开发支撑",
+  integrations: "集成专题",
   role: "角色系统",
   "prompt-manager-rules": "Prompt Rules",
 };
 
 const moduleLabelMap: Record<string, string> = {
-  "docs-system": "Docs System",
-  "knowledge-base": "Knowledge Base",
-  "knowledge-system": "Knowledge System",
-  architecture: "Architecture",
-  platform: "Platform",
-  role: "Role",
-  uchat: "UChat",
-  evaluation: "Evaluation",
-  maps: "Maps",
-  concepts: "Concepts",
+  Chat: "Chat",
+  ModelSetting: "Model Setting",
+  MCP: "MCP",
+  Tool: "Tool",
+  KnowledgeBase: "Knowledge Base",
+  Role: "Role",
+  Docs: "Docs",
+  Develoments: "Develoments",
 };
 
 const withBase = (value: string) => {
@@ -119,7 +132,31 @@ const formatMetaValue = (value: string | null) => {
 const getLayerLabel = (layer: string | null) => (layer ? formatMetaValue(layer) ?? layer : "未标注");
 const getModuleLabel = (moduleName: string | null) =>
   moduleName ? moduleLabelMap[moduleName] ?? moduleName : "未标注";
+const getFeatureLabel = (featureName: string | null) => (featureName ? featureName : "未标注");
 const getDocTypeLabel = (docType: string | null) => (docType ? formatMetaValue(docType) ?? docType : "未标注");
+
+const sortDocsForReading = (items: (typeof data.documents)) =>
+  [...items].sort((left, right) => {
+    const leftHistorical = isHistoricalDoc(left) ? 1 : 0;
+    const rightHistorical = isHistoricalDoc(right) ? 1 : 0;
+    if (leftHistorical !== rightHistorical) {
+      return leftHistorical - rightHistorical;
+    }
+
+    const leftCanonical = hasCanonicalFlag(left) ? 1 : 0;
+    const rightCanonical = hasCanonicalFlag(right) ? 1 : 0;
+    if (leftCanonical !== rightCanonical) {
+      return rightCanonical - leftCanonical;
+    }
+
+    const leftPrimary = isPrimaryReadableDoc(left) ? 1 : 0;
+    const rightPrimary = isPrimaryReadableDoc(right) ? 1 : 0;
+    if (leftPrimary !== rightPrimary) {
+      return rightPrimary - leftPrimary;
+    }
+
+    return left.title.localeCompare(right.title, "zh-CN");
+  });
 
 const groupedCoreEntries = coreEntryPaths
   .map((path) => findDocument(path))
@@ -132,16 +169,181 @@ const moduleNames = Array.from(
 const docsByModule = moduleNames.map((moduleName) => ({
   label: getModuleLabel(moduleName),
   value: moduleName,
-  items: data.documents
-    .filter((doc) => doc.metadata.module === moduleName)
-    .sort((left, right) => left.title.localeCompare(right.title, "zh-CN")),
+  items: sortDocsForReading(
+    data.documents.filter((doc) => doc.metadata.module === moduleName),
+  ),
 }));
+
+const docsByModuleAndFeature = docsByModule.map((group) => {
+  const featureNames = Array.from(
+    new Set(
+      group.items
+        .map((doc) => doc.metadata.feature)
+        .filter((featureName): featureName is string => Boolean(featureName)),
+    ),
+  ).sort((left, right) => left.localeCompare(right, "zh-CN"));
+
+  return {
+    ...group,
+    features: featureNames.map((featureName) => ({
+      label: getFeatureLabel(featureName),
+      value: featureName,
+      items: group.items.filter((doc) => doc.metadata.feature === featureName),
+    })),
+    ungrouped: group.items.filter((doc) => !doc.metadata.feature),
+  };
+});
 
 const docsByLayer = ["raw-source", "wiki", "schema"].map((layer) => ({
   label: getLayerLabel(layer),
   value: layer,
   items: data.documents.filter((doc) => doc.metadata.layer === layer),
 }));
+
+const docsByStatus = [
+  {
+    title: "先读这里",
+    items: sortDocsForReading(
+      data.documents.filter((doc) =>
+        ["current-contract", "overview", "reference"].includes(doc.metadata.docType ?? ""),
+      ),
+    )
+      .filter((doc) => doc.metadata.status?.toLowerCase() !== "historical")
+      .slice(0, 12),
+    description: "当前契约、总纲页和稳定参考页，优先建立整体理解。",
+  },
+  {
+    title: "正在实施",
+    items: sortDocsForReading(
+      data.documents.filter((doc) => doc.metadata.docType === "checklist"),
+    )
+      .slice(0, 12),
+    description: "仍在推进中的实施清单和执行页。",
+  },
+  {
+    title: "规划中",
+    items: sortDocsForReading(
+      data.documents.filter((doc) => ["plan", "draft", "design"].includes(doc.metadata.docType ?? "")),
+    )
+      .slice(0, 12),
+    description: "尚未成为当前契约的规划、草案和设计页。",
+  },
+  {
+    title: "历史归档",
+    items: sortDocsForReading(
+      data.documents.filter(
+        (doc) =>
+          doc.section === "archive" ||
+          doc.metadata.docType === "historical" ||
+          doc.metadata.status?.toLowerCase() === "historical",
+      ),
+    )
+      .slice(0, 12),
+    description: "历史材料和过期方案，默认只做背景参考。",
+  },
+];
+
+const getStatusBucket = (document: (typeof data.documents)[number]) => {
+  const normalizedStatus = document.metadata.status?.toLowerCase() ?? "";
+  const normalizedDocType = document.metadata.docType ?? "";
+
+  if (
+    document.section === "archive" ||
+    normalizedDocType === "historical" ||
+    normalizedStatus === "historical"
+  ) {
+    return "历史归档";
+  }
+
+  if (
+    normalizedDocType === "checklist" ||
+    normalizedStatus === "active"
+  ) {
+    return "正在实施";
+  }
+
+  if (
+    ["plan", "draft", "design"].includes(normalizedDocType) ||
+    normalizedStatus === "planned"
+  ) {
+    return "规划中";
+  }
+
+    return "先读这里";
+};
+
+const unclassifiedRootDocs = sortDocsForReading(
+  data.documents.filter(
+    (doc) =>
+      doc.section === "root" &&
+      !isHistoricalDoc(doc) &&
+      !["README", "VAULT_HOME", ...coreEntryPaths].includes(doc.id) &&
+      ![
+        "Chat",
+        "ModelSetting",
+        "MCP",
+        "Tool",
+        "KnowledgeBase",
+        "Role",
+        "Docs",
+        "Develoments",
+      ].includes(doc.metadata.module ?? ""),
+  ),
+);
+
+const leftRailStatusGroups = docsByStatus
+  .map((group) => ({
+    title: group.title,
+    children: group.items.slice(0, 8).map((doc) => ({ title: doc.title, path: doc.id })),
+  }))
+  .filter((group) => group.children.length);
+
+const leftRailModuleGroups = docsByModule
+  .map((group) => ({
+    title: group.label,
+    children: group.items.slice(0, 8).map((doc) => ({ title: doc.title, path: doc.id })),
+  }))
+  .filter((group) => group.children.length);
+
+const leftRailFeatureGroups = docsByModuleAndFeature
+  .map((group) => ({
+    title: group.label,
+    children: group.features.slice(0, 6).map((featureGroup) => ({
+      title: featureGroup.label,
+      children: sortDocsForReading(featureGroup.items).slice(0, 6).map((doc) => ({ title: doc.title, path: doc.id })),
+    })),
+  }))
+  .filter((group) => group.children.length);
+
+const leftRailFallbackGroups: NavigationItem[] = unclassifiedRootDocs.length
+  ? [
+      {
+        title: "待归类",
+        children: [
+          { title: "待归类文档追踪", path: "knowledge-system/UNCATEGORIZED_TRACKER" },
+          ...unclassifiedRootDocs.slice(0, 12).map((doc) => ({ title: doc.title, path: doc.id })),
+        ],
+      },
+    ]
+  : [];
+
+const leftRailNavigation: NavigationItem[] = [
+  { title: "首页", path: "README" },
+  { title: "Vault", path: "VAULT_HOME" },
+  {
+    title: "按状态",
+    children: leftRailStatusGroups,
+  },
+  {
+    title: "按模块",
+    children: leftRailModuleGroups,
+  },
+  {
+    title: "按功能",
+    children: leftRailFeatureGroups,
+  },
+  ...leftRailFallbackGroups,
+];
 
 const renderNavigation = (items: NavigationItem[]) => (
   <ul className="nav-list">
@@ -178,6 +380,14 @@ const SearchIndex = () => {
           `${document.title}\n${document.excerpt}\n${document.content}`.toLowerCase();
         return haystack.includes(query);
       })
+      .sort((left, right) => {
+        const leftHistorical = isHistoricalDoc(left) ? 1 : 0;
+        const rightHistorical = isHistoricalDoc(right) ? 1 : 0;
+        if (leftHistorical !== rightHistorical) {
+          return leftHistorical - rightHistorical;
+        }
+        return left.title.localeCompare(right.title, "zh-CN");
+      })
       .slice(0, 20);
   }, [query]);
 
@@ -194,11 +404,13 @@ const SearchIndex = () => {
         <div className="search-results">
           {results.map((document) => (
             <article key={document.id} className="search-result-item">
-              <div className="meta-row">
+              <div className={`meta-row${isHistoricalDoc(document) ? " meta-row-historical" : ""}`}>
+                <span>{getStatusBucket(document)}</span>
                 {document.metadata.layer ? (
                   <span>{formatMetaValue(document.metadata.layer)}</span>
                 ) : null}
-                {document.metadata.module ? <span>{document.metadata.module}</span> : null}
+                {document.metadata.module ? <span>{getModuleLabel(document.metadata.module)}</span> : null}
+                {document.metadata.feature ? <span>{getFeatureLabel(document.metadata.feature)}</span> : null}
                 {document.metadata.docType ? (
                   <span>{formatMetaValue(document.metadata.docType)}</span>
                 ) : null}
@@ -206,6 +418,9 @@ const SearchIndex = () => {
               <Link to={`/doc/${document.id}`} className="search-title">
                 {document.title}
               </Link>
+              {isHistoricalDoc(document) ? (
+                <p className="historical-note">历史材料，默认仅作背景参考。</p>
+              ) : null}
               <p>{document.excerpt || "无摘要"}</p>
               <small>{document.path}</small>
             </article>
@@ -267,9 +482,11 @@ const DocumentPage = ({
                 <span className="doc-path">{document.path}</span>
               </div>
               <h1>{document.title}</h1>
-              <div className="meta-row">
+              <div className={`meta-row${isHistoricalDoc(document) ? " meta-row-historical" : ""}`}>
+                <span>{getStatusBucket(document)}</span>
                 {document.metadata.layer ? <span>{formatMetaValue(document.metadata.layer)}</span> : null}
-                {document.metadata.module ? <span>{document.metadata.module}</span> : null}
+                {document.metadata.module ? <span>{getModuleLabel(document.metadata.module)}</span> : null}
+                {document.metadata.feature ? <span>{getFeatureLabel(document.metadata.feature)}</span> : null}
                 {document.metadata.docType ? (
                   <span>{formatMetaValue(document.metadata.docType)}</span>
                 ) : null}
@@ -277,6 +494,12 @@ const DocumentPage = ({
                 {document.metadata.owner ? <span>{document.metadata.owner}</span> : null}
               </div>
             </header>
+            <p className="doc-status-note">
+              当前阅读区块：{getStatusBucket(document)}
+            </p>
+            {isHistoricalDoc(document) ? (
+              <p className="historical-note">这页当前按历史材料处理，默认不作为现状真相入口。</p>
+            ) : null}
             <div className="markdown-body" dangerouslySetInnerHTML={{ __html: withHeadingIds }} />
           </article>
         </div>
@@ -342,6 +565,95 @@ const HomeSectionList = ({
   </section>
 );
 
+const HomeCatalogSection = () => {
+  const readingChapters = [
+    {
+      title: "先读这里",
+      entries: groupedCoreEntries.slice(0, 6).map((document) => ({
+        title: document.title,
+        path: document.id,
+        note: document.excerpt || "建立整体理解的起点。",
+      })),
+    },
+    {
+      title: "按状态读",
+      entries: docsByStatus.map((group) => ({
+        title: group.title,
+        path: group.items[0]?.id ?? "README",
+        note: group.description,
+      })),
+    },
+    {
+      title: "按模块读",
+      entries: docsByModule.slice(0, 8).map((group) => ({
+        title: group.label,
+        path: group.items[0]?.id ?? "README",
+        note: `${group.items.length} 篇，先给当前真相，再往下展开。`,
+      })),
+    },
+  ];
+
+  return (
+    <section className="catalog-panel">
+      {readingChapters.map((chapter) => (
+        <section key={chapter.title} className="catalog-column">
+          <header className="catalog-column-header">
+            <h2>{chapter.title}</h2>
+          </header>
+          <ol className="catalog-list">
+            {chapter.entries.map((entry) => (
+              <li key={`${chapter.title}-${entry.path}`} className="catalog-item">
+                <Link to={`/doc/${entry.path}`} className="catalog-link">
+                  <span className="catalog-title">{entry.title}</span>
+                </Link>
+                <p>{entry.note}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ))}
+    </section>
+  );
+};
+
+const ModuleFeatureSectionList = () => (
+  <section className="index-section">
+    <header className="index-section-header">
+      <div>
+        <h2>模块与功能</h2>
+        <p>先看模块，再看模块内部已经稳定下来的功能点。</p>
+      </div>
+    </header>
+    <div className="module-feature-groups">
+      {docsByModuleAndFeature.map((group) => (
+        <section key={group.value} className="module-feature-group">
+          <header className="module-feature-group-header">
+            <h3>{group.label}</h3>
+            <span>{group.items.length} 篇</span>
+          </header>
+          {group.features.length ? (
+            <ul className="module-feature-list">
+              {group.features.map((featureGroup) => {
+                const firstDoc = featureGroup.items[0];
+                return (
+                  <li key={`${group.value}-${featureGroup.value}`} className="module-feature-item">
+                    <Link to={`/doc/${firstDoc.id}`} className="module-feature-link">
+                      <span className="module-feature-name">{featureGroup.label}</span>
+                      <span className="module-feature-count">{featureGroup.items.length} 篇</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="module-feature-empty">该模块下暂未沉淀稳定 feature。</p>
+          )}
+        </section>
+      ))}
+    </div>
+  </section>
+);
+
 const HomePage = () => (
   <section className="content-surface">
     <header className="home-hero">
@@ -361,18 +673,7 @@ const HomePage = () => (
     </header>
     <div className="home-grid">
       <div className="home-main">
-        <HomeSectionList
-          title="核心目录层"
-          description="先读这些总入口，最接近一本书的目录页。"
-          items={groupedCoreEntries.map((document) => ({
-            title: document.title,
-            path: document.id,
-            description:
-              document.excerpt ||
-              `${getLayerLabel(document.metadata.layer)} / ${getModuleLabel(document.metadata.module)} / ${getDocTypeLabel(document.metadata.docType)}`,
-          }))}
-          dense
-        />
+        <HomeCatalogSection />
         <HomeSectionList
           title="总入口"
           description="先看全局阅读起点。"
@@ -409,41 +710,27 @@ const HomePage = () => (
                   : "偏 schema、规则和约束。",
           }))}
         />
-        <HomeSectionList
-          title="按模块阅读"
-          description="如果你从业务边界进来，就按模块看。"
-          items={docsByModule.slice(0, 8).map((group) => ({
-            title: group.label,
-            path: group.items[0]?.id ?? "README",
-            description: `${group.items.length} 篇，点开后顺着模块内往下读。`,
-          }))}
-        />
-        <HomeSectionList
-          title="专题入口"
-          description="根目录专题页更像正文篇章，适合按主题连续阅读。"
-          items={[
-            {
-              title: "UChat",
-              path: "uchat",
-              description: "当前聊天运行时总纲和边界说明。",
-            },
-            {
-              title: "评测工作台",
-              path: "evaluation-workbench",
-              description: "评测工作台、评测中心与评测包协议。",
-            },
-            {
-              title: "知识库 API",
-              path: "knowledge-base-api",
-              description: "知识库接口、Swagger 分组和 UI 边界规则。",
-            },
-            {
-              title: "对话系统实践",
-              path: "chat-system-practices",
-              description: "线程、消息、RAG 历史恢复和调试顺序。",
-            },
-          ]}
-        />
+        <ModuleFeatureSectionList />
+        {unclassifiedRootDocs.length ? (
+          <HomeSectionList
+            title="待归类"
+            description="这些页面仍在根目录兜底区，后续应继续收进更明确的模块或状态分组。"
+            items={[
+              {
+                title: "待归类文档追踪",
+                path: "knowledge-system/UNCATEGORIZED_TRACKER",
+                description: "集中记录仍在根目录兜底区、尚未完全归并的页面。",
+              },
+              ...unclassifiedRootDocs.slice(0, 12).map((document) => ({
+                title: document.title,
+                path: document.id,
+                description:
+                  document.excerpt ||
+                  `${getLayerLabel(document.metadata.layer)} / ${getModuleLabel(document.metadata.module)} / ${getDocTypeLabel(document.metadata.docType)}`,
+              })),
+            ]}
+          />
+        ) : null}
       </div>
       <aside className="home-aside">
         <section className="aside-section">
@@ -452,7 +739,7 @@ const HomePage = () => (
             <li>Raw sources {counts.rawSource} 篇</li>
             <li>Wiki {counts.wiki} 篇</li>
             <li>Schema {counts.schema} 篇</li>
-            <li>专题文档 {counts.root} 篇</li>
+            <li>根目录活跃页 {counts.root} 篇</li>
             <li>区域导航 {counts.maps} 篇</li>
             <li>概念页 {counts.concepts} 篇</li>
             <li>知识系统 {counts.knowledgeSystem} 篇</li>
@@ -467,6 +754,16 @@ const HomePage = () => (
             <li>先目录层，再分类层。</li>
             <li>先 current-contract，再 plan。</li>
             <li>归档默认不看。</li>
+          </ul>
+        </section>
+        <section className="aside-section">
+          <h2>状态入口</h2>
+          <ul>
+            {docsByStatus.map((group) => (
+              <li key={group.title}>
+                {group.title} {group.items.length} 篇
+              </li>
+            ))}
           </ul>
         </section>
       </aside>
@@ -611,7 +908,7 @@ export const App = () => {
             <span>导航</span>
             <small>{counts.total} 篇</small>
           </div>
-          <nav>{renderNavigation(data.navigation)}</nav>
+          <nav>{renderNavigation(leftRailNavigation)}</nav>
         </div>
       </aside>
       <main className="main-panel">

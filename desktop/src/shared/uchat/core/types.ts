@@ -77,6 +77,7 @@ export interface ChatMessage {
 export interface ChatThread {
   id: string;
   title: string;
+  workspaceId?: string | null;
   createdAt: string;
   updatedAt: string;
   messages: ChatMessage[];
@@ -126,6 +127,14 @@ export interface ChatThreadContextTag {
   avatarSrc?: string;
 }
 
+export interface ChatSidebarEntry {
+  id: string;
+  label: string;
+  description?: string;
+  badge?: string;
+  disabled?: boolean;
+}
+
 // Capabilities let UI consumers hide actions the current app integration does
 // not support, without teaching the core about any concrete UI framework.
 export interface ChatRuntimeCapabilities {
@@ -135,7 +144,9 @@ export interface ChatRuntimeCapabilities {
   editMessage?: boolean;
   regenerate?: boolean;
   attachments?: boolean;
+  agentEnabled?: boolean;
   composerActions?: ChatComposerAction[];
+  sidebarEntries?: ChatSidebarEntry[];
   messagePresentation?: ChatMessagePresentationHints;
 }
 
@@ -157,6 +168,7 @@ export interface ChatRuntimeState {
 export interface ChatThreadSummary {
   id: string;
   title: string;
+  workspaceId?: string | null;
   createdAt: string;
   updatedAt: string;
   metadata?: Record<string, unknown>;
@@ -216,6 +228,7 @@ export interface ChatRepository {
     threadId: string,
     input: {
       title?: string;
+      workspaceId?: string | null;
       metadata?: Record<string, unknown>;
     },
   ): Promise<ChatThread>;
@@ -255,6 +268,9 @@ export interface ChatRunContext {
   message: ChatMessage;
   history: ChatMessage[];
   signal?: AbortSignal;
+  options?: {
+    agentEnabled?: boolean;
+  };
 }
 
 // ChatRunDriver is the assistant execution boundary. It can be implemented by

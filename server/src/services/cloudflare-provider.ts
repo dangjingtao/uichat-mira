@@ -56,7 +56,7 @@ const resolveCloudflareModelSearchUrl = (baseUrl: string) => {
   return `${accountUrl}/ai/models/search`;
 };
 
-const resolveCloudflareRunUrl = (baseUrl: string, model: string) => {
+export const resolveCloudflareRunUrl = (baseUrl: string, model: string) => {
   const { accountUrl } = resolveCloudflareAccountUrl(baseUrl);
   return `${accountUrl}/ai/run/${model.replace(/^\/+/, "")}`;
 };

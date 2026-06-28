@@ -1,7 +1,8 @@
 # Role 页面设计
 
 Layer: raw-source
-Module: role
+Module: Role
+Feature: RolePage
 Doc Type: current-contract
 
 Status: Current

@@ -18,18 +18,17 @@ import {
 import { useUChatComposerState } from "@/features/chat/core/composerPolicy";
 import { resolveAttachmentSource } from "@/features/chat/core/protocol";
 import type { KnowledgeBaseSummary } from "@/shared/api/knowledgeBase";
+import { listRoles, type RoleSummary } from "@/shared/api/roles";
 import {
-  getRoleById,
-  listRoles,
-  type RoleSummary,
-} from "@/shared/api/roles";
+  createChatWorkspace,
+  listChatWorkspaces,
+  updateThread,
+  type ChatWorkspace,
+} from "@/shared/api/thread";
 import { getBuiltinAvatarPack16Options } from "@/shared/avatars";
 import { UChatThreadView } from "@/shared/uchat/ui";
-import type {
-  ChatComposerAction,
-  ChatThreadContextTag,
-} from "@/shared/uchat/core";
-import { Modal, SearchSelectModal, message } from "@/shared/ui";
+import type { ChatComposerAction, ChatThreadContextTag } from "@/shared/uchat/core";
+import { Modal, SearchSelectModal, message, TextInput, Button } from "@/shared/ui";
 import {
   buildThreadContextTags,
   formatRoleReplyingLabel,
@@ -48,12 +47,10 @@ const modelBadgeMeta = {
 
 const isConfiguredModelName = (name: string) => {
   const normalized = name.trim();
-  if (!normalized) {
-    return false;
-  }
-
-  return (
-    !normalized.startsWith("未配置") && !normalized.startsWith("Unconfigured")
+  return Boolean(
+    normalized &&
+      !normalized.startsWith("未配置") &&
+      !normalized.startsWith("Unconfigured"),
   );
 };
 
@@ -82,8 +79,16 @@ export default function UChatThread() {
   const [isKnowledgeBasePickerOpen, setKnowledgeBasePickerOpen] = useState(false);
   const [isRolePickerOpen, setRolePickerOpen] = useState(false);
   const [roles, setRoles] = useState<RoleSummary[]>([]);
+  const [workspaces, setWorkspaces] = useState<ChatWorkspace[]>([]);
+  const [workspacePickerOpen, setWorkspacePickerOpen] = useState(false);
+  const [workspaceCreateOpen, setWorkspaceCreateOpen] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [workspaceRootPath, setWorkspaceRootPath] = useState("");
+  const [workspaceTargetThreadId, setWorkspaceTargetThreadId] = useState<string | null>(null);
   const avatarOptions = useMemo(() => getBuiltinAvatarPack16Options(), []);
 
+  const activeThreadWorkspaceId =
+    activeThread?.workspaceId ?? null;
   const threadKnowledgeBaseId =
     typeof activeThread?.metadata?.knowledgeBaseId === "string" ||
     activeThread?.metadata?.knowledgeBaseId === null
@@ -110,18 +115,9 @@ export default function UChatThread() {
   const modelBadges = useMemo(() => {
     const items = [
       { key: "llm", name: configMap.llm?.name ?? t("chat.thread.models.llm") },
-      {
-        key: "task",
-        name: configMap.task?.name ?? t("chat.thread.models.task"),
-      },
-      {
-        key: "embedding",
-        name: configMap.embedding?.name ?? t("chat.thread.models.embedding"),
-      },
-      {
-        key: "rerank",
-        name: configMap.rerank?.name ?? t("chat.thread.models.rerank"),
-      },
+      { key: "task", name: configMap.task?.name ?? t("chat.thread.models.task") },
+      { key: "embedding", name: configMap.embedding?.name ?? t("chat.thread.models.embedding") },
+      { key: "rerank", name: configMap.rerank?.name ?? t("chat.thread.models.rerank") },
     ] as const;
 
     return items
@@ -156,17 +152,32 @@ export default function UChatThread() {
         }
       } catch (error) {
         if (!disposed) {
-          message.error(
-            error instanceof Error
-              ? error.message
-              : t("chat.thread.roles.loadFailed"),
-          );
+          message.error(error instanceof Error ? error.message : t("chat.thread.roles.loadFailed"));
         }
       }
     };
 
     void loadRoleList();
+    return () => {
+      disposed = true;
+    };
+  }, [t]);
 
+  useEffect(() => {
+    let disposed = false;
+    const loadWorkspaces = async () => {
+      try {
+        setWorkspaces(await listChatWorkspaces());
+      } catch (error) {
+        if (!disposed) {
+          message.error(
+            error instanceof Error ? error.message : t("chat.sidebar.workspaceLoadFailed"),
+          );
+        }
+      }
+    };
+
+    void loadWorkspaces();
     return () => {
       disposed = true;
     };
@@ -201,19 +212,17 @@ export default function UChatThread() {
     [activeKnowledgeBase, activeRole, activeRoleAvatarSrc],
   );
 
-  const handleUpdateThreadKnowledgeBase = async (
-    nextKnowledgeBaseId: string | null,
-  ) => {
-    if (!activeThreadId || !activeThread) {
-      return;
-    }
-
+  const handleUpdateThreadKnowledgeBase = async (nextKnowledgeBaseId: string | null) => {
+    if (!activeThreadId || !activeThread) return;
     await runtime.updateThread(activeThreadId, {
-      metadata: nextKnowledgeBaseId
-        ? { knowledgeBaseId: nextKnowledgeBaseId }
-        : { knowledgeBaseId: null },
+      metadata: nextKnowledgeBaseId ? { knowledgeBaseId: nextKnowledgeBaseId } : { knowledgeBaseId: null },
     });
     await runtime.refreshThread(activeThreadId);
+  };
+
+  const openWorkspacePicker = (threadId: string | null) => {
+    setWorkspaceTargetThreadId(threadId);
+    setWorkspacePickerOpen(true);
   };
 
   const handleComposerAction = async (action: ChatComposerAction) => {
@@ -224,6 +233,18 @@ export default function UChatThread() {
 
     if (action.id === "knowledge-base-picker") {
       setKnowledgeBasePickerOpen(true);
+      return;
+    }
+
+    if (action.id === "workspace-add-thread") {
+      openWorkspacePicker(activeThreadId);
+      return;
+    }
+
+    if (action.id === "workspace-create") {
+      setWorkspaceName("");
+      setWorkspaceRootPath("");
+      setWorkspaceCreateOpen(true);
       return;
     }
 
@@ -268,9 +289,10 @@ export default function UChatThread() {
   };
 
   const handleSelectRole = async (roleId: string) => {
-    const selectedRole = await getRoleById(roleId);
-    setRoles((currentRoles) => upsertRoleSummary(currentRoles, selectedRole));
-
+    const selectedRole = roles.find((item) => item.id === roleId) ?? null;
+    if (selectedRole) {
+      setRoles((currentRoles) => upsertRoleSummary(currentRoles, selectedRole));
+    }
     if (activeThreadId) {
       await runtime.updateThread(activeThreadId, {
         metadata: {
@@ -283,7 +305,6 @@ export default function UChatThread() {
     } else {
       setDraftRoleId(roleId);
     }
-
     return true;
   };
 
@@ -292,7 +313,6 @@ export default function UChatThread() {
       setDraftKnowledgeBaseId(knowledgeBaseId);
       return true;
     }
-
     await handleUpdateThreadKnowledgeBase(knowledgeBaseId);
     return true;
   };
@@ -318,16 +338,47 @@ export default function UChatThread() {
       setDraftKnowledgeBaseId(null);
       return;
     }
-
     await handleUpdateThreadKnowledgeBase(null);
   };
 
-  const handleSend = async () => {
-    if (isSendDisabled) {
+  const handleCreateWorkspace = async () => {
+    const name = workspaceName.trim();
+    if (!name) {
+      message.error(t("chat.sidebar.workspaceNameRequired"));
       return;
     }
+    const rootPath = workspaceRootPath.trim();
+    if (!rootPath) {
+      message.error(t("chat.sidebar.workspaceRootPathRequired"));
+      return;
+    }
+    try {
+      await createChatWorkspace({ name, rootPath });
+      setWorkspaceCreateOpen(false);
+      setWorkspaces(await listChatWorkspaces());
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "";
+      message.error(
+        errorMessage.includes("required")
+          ? t("chat.sidebar.workspaceRootPathRequired")
+          : errorMessage.includes("invalid")
+            ? t("chat.sidebar.workspaceRootPathInvalid")
+            : errorMessage || t("chat.sidebar.workspaceRootPathInvalid"),
+      );
+    }
+  };
 
-    await runtime.send();
+  const handleAssignWorkspace = async (workspaceId: string) => {
+    const targetThreadId = workspaceTargetThreadId ?? activeThreadId;
+    if (!targetThreadId) {
+      message.error(t("chat.sidebar.workspaceSelectThreadFirst"));
+      return;
+    }
+    await updateThread(targetThreadId, { workspaceId });
+    await runtime.refreshThread(targetThreadId);
+    setWorkspacePickerOpen(false);
+    setWorkspaceTargetThreadId(null);
+    setWorkspaces(await listChatWorkspaces());
   };
 
   return (
@@ -336,9 +387,7 @@ export default function UChatThread() {
         activeThreadId={activeThreadId}
         title={
           activeThread?.title ||
-          (messages.length === 0
-            ? t("chat.thread.header.newConversation")
-            : t("chat.thread.header.untitledConversation"))
+          (messages.length === 0 ? t("chat.thread.header.newConversation") : t("chat.thread.header.untitledConversation"))
         }
         badges={modelBadges}
         messages={messages}
@@ -351,18 +400,12 @@ export default function UChatThread() {
         isSendDisabled={isSendDisabled}
         onComposerTextChange={(value) => runtime.setComposerText(value)}
         onComposerAttachmentsChange={(files) => runtime.setComposerAttachments(files)}
-        onComposerAttachmentsAppend={(files) =>
-          runtime.appendComposerAttachments(files)
-        }
-        onComposerAttachmentRemove={(attachmentId) =>
-          runtime.removeComposerAttachment(attachmentId)
-        }
-        onSend={handleSend}
+        onComposerAttachmentsAppend={(files) => runtime.appendComposerAttachments(files)}
+        onComposerAttachmentRemove={(attachmentId) => runtime.removeComposerAttachment(attachmentId)}
+        onSend={() => runtime.send()}
         onCancelSend={() => runtime.cancelSend()}
         onRegenerate={(messageId) => runtime.regenerate(messageId)}
-        onEditUserMessage={(messageId, text, parts) =>
-          runtime.editUserMessage(messageId, text, parts)
-        }
+        onEditUserMessage={(messageId, text, parts) => runtime.editUserMessage(messageId, text, parts)}
         onComposerAction={handleComposerAction}
         threadContextTags={threadContextTags}
         onRemoveThreadContextTag={handleRemoveThreadContextTag}
@@ -399,27 +442,92 @@ export default function UChatThread() {
 
       <SearchSelectModal<KnowledgeBaseSummary[]>
         open={isKnowledgeBasePickerOpen}
-        title="Select knowledge base"
-        url="/knowledge-bases"
+        title={t("chat.thread.knowledgeBase.title")}
+        url="/knowledge-bases?status=active&sortBy=updatedAt&sortOrder=desc"
         width={520}
         selectedId={activeKnowledgeBaseId}
-        searchPlaceholder="Search knowledge bases"
-        emptyText="No knowledge bases found"
-        loadingText="Loading knowledge bases..."
+        searchPlaceholder={t("chat.thread.knowledgeBase.searchPlaceholder")}
+        emptyText={t("chat.thread.knowledgeBase.empty")}
+        loadingText={t("chat.thread.knowledgeBase.loading")}
+        loadErrorText={t("chat.thread.knowledgeBase.loadFailed")}
         normalizeItems={(items) =>
           items.map((item) => ({
             id: item.id,
             label: item.name,
             description: item.description,
-            keywords: [item.id],
-            meta: `${item.enabledDocumentCount} enabled / ${item.documentCount} total`,
+            keywords: [item.id, item.name, item.description ?? ""],
+            meta: item.status,
             title: item.name,
-            disabled: item.enabledDocumentCount === 0,
           }))
         }
         onCheck={(item) => handleSelectKnowledgeBase(item.id)}
         onClose={() => setKnowledgeBasePickerOpen(false)}
       />
+
+      <SearchSelectModal<ChatWorkspace[]>
+        open={workspacePickerOpen}
+        title={t("chat.sidebar.workspaceSelect")}
+        url="/chat-workspaces"
+        width={520}
+        selectedId={activeThreadWorkspaceId}
+        searchPlaceholder={t("chat.sidebar.workspaceSearchPlaceholder")}
+        emptyText={t("chat.sidebar.workspaceEmpty")}
+        loadingText={t("common.status.loading")}
+        loadErrorText={t("chat.sidebar.workspaceLoadFailed")}
+        normalizeItems={(items) =>
+          items.map((item) => ({
+            id: item.id,
+            label: item.name,
+            meta: item.status,
+            title: item.name,
+            keywords: [item.id, item.name],
+            description: item.rootPath ?? undefined,
+          }))
+        }
+        onCheck={(item) => {
+          void handleAssignWorkspace(item.id);
+          return true;
+        }}
+        onClose={() => {
+          setWorkspacePickerOpen(false);
+          setWorkspaceTargetThreadId(null);
+        }}
+      />
+
+      <Modal
+        open={workspaceCreateOpen}
+        title={t("chat.sidebar.workspaceCreate")}
+        footer={null}
+        onClose={() => setWorkspaceCreateOpen(false)}
+      >
+        <div className="space-y-4">
+          <TextInput
+            label={t("chat.sidebar.workspaceName")}
+            value={workspaceName}
+            onChange={setWorkspaceName}
+            placeholder={t("chat.sidebar.workspaceNamePlaceholder")}
+          />
+          <TextInput
+            label={t("chat.sidebar.workspaceRootPath")}
+            value={workspaceRootPath}
+            onChange={setWorkspaceRootPath}
+            placeholder={t("chat.sidebar.workspaceRootPathPlaceholder")}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setWorkspaceCreateOpen(false)}>
+              {t("common.actions.cancel")}
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                void handleCreateWorkspace();
+              }}
+            >
+              {t("chat.sidebar.workspaceCreate")}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </>
   );
 }

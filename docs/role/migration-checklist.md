@@ -1,7 +1,8 @@
 # Role 迁移清单
 
 Layer: raw-source
-Module: role
+Module: Role
+Feature: Migration
 Doc Type: checklist
 
 Status: Active

@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/43</span>
+                <span class='fraction'>0/44</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/43</span>
+                <span class='fraction'>0/44</span>
             </div>
         
             
@@ -131,7 +131,8 @@
 <a name='L66'></a><a href='#L66'>66</a>
 <a name='L67'></a><a href='#L67'>67</a>
 <a name='L68'></a><a href='#L68'>68</a>
-<a name='L69'></a><a href='#L69'>69</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -155,6 +156,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -233,24 +235,25 @@ type ToolsWorkbenchPanelProps = {
 <span class="cstat-no" title="statement not covered" >  labels,</span>
 <span class="cstat-no" title="statement not covered" >}: ToolsWorkbenchPanelProps) {</span>
 <span class="cstat-no" title="statement not covered" >  return (</span>
-<span class="cstat-no" title="statement not covered" >    &lt;div className="rounded-ui-panel border border-border bg-surface-primary p-4"&gt;</span>
-<span class="cstat-no" title="statement not covered" >      &lt;div className="grid grid-cols-1 gap-3 lg:grid-cols-[220px_minmax(0,1fr)_auto]"&gt;</span>
-<span class="cstat-no" title="statement not covered" >        &lt;div className="space-y-1"&gt;</span>
+<span class="cstat-no" title="statement not covered" >    &lt;div className="shrink-0 rounded-ui-panel border border-border bg-surface-primary px-4 py-3"&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;div className="grid grid-cols-[170px_minmax(0,1fr)_auto] items-center gap-3"&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;div className="min-w-0"&gt;</span>
 <span class="cstat-no" title="statement not covered" >          &lt;div className="text-sm font-medium text-text-primary"&gt;{labels.workspaceRoot}&lt;/div&gt;</span>
-<span class="cstat-no" title="statement not covered" >          &lt;div className="text-sm text-text-secondary"&gt;{labels.workspaceDescription}&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;div className="mt-0.5 truncate text-xs text-text-secondary"&gt;{labels.workspaceDescription}&lt;/div&gt;</span>
 <span class="cstat-no" title="statement not covered" >        &lt;/div&gt;</span>
 <span class="cstat-no" title="statement not covered" >        &lt;TextInput</span>
-<span class="cstat-no" title="statement not covered" >          label={labels.workspaceRootInput}</span>
+<span class="cstat-no" title="statement not covered" >          label={undefined}</span>
 <span class="cstat-no" title="statement not covered" >          value={workspaceRootInput}</span>
 <span class="cstat-no" title="statement not covered" >          onChange={onWorkspaceChange}</span>
 <span class="cstat-no" title="statement not covered" >          placeholder={labels.workspaceRootPlaceholder}</span>
 <span class="cstat-no" title="statement not covered" >          disabled={isWorkspaceLoading || isSelectingWorkspace}</span>
+<span class="cstat-no" title="statement not covered" >          compact</span>
 <span class="cstat-no" title="statement not covered" >        /&gt;</span>
-<span class="cstat-no" title="statement not covered" >        &lt;div className="flex items-end gap-2"&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;div className="flex items-center gap-2"&gt;</span>
 <span class="cstat-no" title="statement not covered" >          &lt;Badge variant="muted"&gt;{workspaceSelection?.source ?? "unset"}&lt;/Badge&gt;</span>
 <span class="cstat-no" title="statement not covered" >          &lt;Button</span>
 <span class="cstat-no" title="statement not covered" >            variant="primary"</span>
-<span class="cstat-no" title="statement not covered" >            className="w-full lg:w-auto"</span>
+<span class="cstat-no" title="statement not covered" >            size="sm"</span>
 <span class="cstat-no" title="statement not covered" >            onClick={onWorkspaceApply}</span>
 <span class="cstat-no" title="statement not covered" >            disabled={isWorkspaceLoading || isSelectingWorkspace}</span>
           &gt;
@@ -259,7 +262,7 @@ type ToolsWorkbenchPanelProps = {
 <span class="cstat-no" title="statement not covered" >          &lt;/Button&gt;</span>
 <span class="cstat-no" title="statement not covered" >        &lt;/div&gt;</span>
 <span class="cstat-no" title="statement not covered" >      &lt;/div&gt;</span>
-<span class="cstat-no" title="statement not covered" >      &lt;div className="mt-3 text-xs text-text-secondary"&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;div className="mt-2 truncate text-xs text-text-secondary"&gt;</span>
 <span class="cstat-no" title="statement not covered" >        {workspaceSelection?.rootPath</span>
 <span class="cstat-no" title="statement not covered" >          ? `${labels.workspaceCurrent}: ${workspaceSelection.rootPath}`</span>
 <span class="cstat-no" title="statement not covered" >          : labels.workspaceUnset}</span>
@@ -274,7 +277,7 @@ type ToolsWorkbenchPanelProps = {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-06-24T13:38:07.360Z
+                at 2026-06-28T00:07:06.239Z
             </div>
         <script src="../../../../../../prettify.js"></script>
         <script>

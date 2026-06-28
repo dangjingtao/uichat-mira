@@ -9,6 +9,7 @@ export const terminalSessionTool: McpToolImplementation = {
     title: "Terminal Session",
     description: "Start a PTY-backed terminal session and stream output.",
     domain: "terminal",
+    source: "internal",
     mode: "stream",
     inputSchema: {
       type: "object",
@@ -23,11 +24,6 @@ export const terminalSessionTool: McpToolImplementation = {
           type: "string",
           enum: ["ephemeral", "persistent"],
         },
-        approvalMode: {
-          type: "string",
-          enum: ["auto", "require"],
-        },
-        approvalGranted: { type: "boolean" },
       },
     },
     tags: ["terminal", "pty"],

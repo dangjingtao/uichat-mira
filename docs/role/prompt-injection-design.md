@@ -1,7 +1,8 @@
 # Role Prompt 注入设计
 
 Layer: raw-source
-Module: role
+Module: Role
+Feature: PromptInjection
 Doc Type: design
 
 Status: Current

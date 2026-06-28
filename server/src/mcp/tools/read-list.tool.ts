@@ -9,6 +9,7 @@ export const readListTool: McpToolImplementation = {
     title: "Read List",
     description: "List the directory structure under an authorized workspace path.",
     domain: "read",
+    source: "internal",
     mode: "sync",
     inputSchema: {
       type: "object",

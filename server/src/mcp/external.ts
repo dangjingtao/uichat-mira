@@ -1,5 +1,5 @@
 import { getSqlite } from "@/db";
-import { mcpBadRequest, mcpNotFound } from "./core/errors.js";
+import { mcpBadRequest, mcpInternalError, mcpNotFound } from "./core/errors.js";
 import type { McpToolDefinition, McpToolImplementation } from "./core/definitions.js";
 import { registerCapability, unregisterCapability } from "./harness/registry.js";
 import { StdioMcpSession } from "./stdio-session.js";
@@ -67,6 +67,9 @@ export interface ExternalMcpServerConfigRecord {
   endpointUrl?: string;
   command?: string;
   argsText?: string;
+  packageName?: string;
+  cwd?: string;
+  envJson?: string;
   authType: ExternalMcpAuthType;
   timeoutMs: number;
   customHeadersJson: string;
@@ -89,6 +92,8 @@ export interface UpdateExternalMcpServerConfigInput {
   endpointUrl?: string;
   command?: string;
   argsText?: string;
+  cwd?: string;
+  envJson?: string;
   authType: ExternalMcpAuthType;
   timeoutMs: number;
   customHeadersJson: string;
@@ -125,6 +130,8 @@ interface ExternalMcpRuntimeConfig {
   endpointUrl?: string;
   command?: string;
   args: string[];
+  cwd?: string;
+  env?: Record<string, string>;
   authType: ExternalMcpAuthType;
   timeoutMs: number;
   customHeaders: Record<string, string>;
@@ -145,6 +152,8 @@ interface ExternalMcpServerRow {
   endpoint_url: string | null;
   command: string | null;
   args_json: string | null;
+  cwd: string | null;
+  env_json: string;
   status: ExternalMcpServerStatus;
   enabled: number;
   disclaimer_accepted_at: string | null;
@@ -315,10 +324,29 @@ const toRuntimeConfig = (row: ExternalMcpServerRow): ExternalMcpRuntimeConfig =>
       return [];
     }
   })();
+  const env = (() => {
+    try {
+      const parsed = JSON.parse(row.env_json || "{}") as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return {};
+      }
+      const result: Record<string, string> = {};
+      for (const [key, value] of Object.entries(parsed)) {
+        if (typeof value === "string") {
+          result[key] = value;
+        }
+      }
+      return result;
+    } catch {
+      return {};
+    }
+  })();
   return {
     ...(row.endpoint_url ? { endpointUrl: row.endpoint_url } : {}),
     ...(row.command ? { command: row.command } : {}),
     args,
+    ...(row.cwd ? { cwd: row.cwd } : {}),
+    env,
     authType: config.authType === "bearer" ? "bearer" : "none",
     timeoutMs:
       typeof config.timeoutMs === "number" && Number.isFinite(config.timeoutMs) && config.timeoutMs > 0
@@ -328,6 +356,35 @@ const toRuntimeConfig = (row: ExternalMcpServerRow): ExternalMcpRuntimeConfig =>
       config.customHeaders && typeof config.customHeaders === "object" ? config.customHeaders : {},
     ...(secret.bearerToken ? { bearerToken: secret.bearerToken } : {}),
   };
+};
+
+const formatConnectFailureMessage = (row: ExternalMcpServerRow, error: unknown) => {
+  const raw = error instanceof Error ? error.message : String(error);
+  const command = row.command?.trim() ?? "";
+
+  if (raw.includes("spawn npx ENOENT") || raw.includes("spawn npx.cmd ENOENT")) {
+    return "连接失败：当前系统环境里找不到 npx。请确认 Node.js / npm 已正确安装，或把启动命令改成可执行的完整路径。";
+  }
+
+  if (raw.includes("spawn uvx ENOENT") || raw.includes("spawn uvx.cmd ENOENT")) {
+    return "连接失败：当前系统环境里找不到 uvx。请确认 uv 已安装，或把启动命令改成可执行的完整路径。";
+  }
+
+  if (raw.includes("timeout")) {
+    return `连接失败：请求超时。${raw}`;
+  }
+
+  if (raw.includes("response did not include result")) {
+    return "连接失败：本地 MCP 进程启动了，但没有返回有效的初始化结果。请检查该 MCP 包是否兼容当前协议。";
+  }
+
+  if (raw.includes("Content-Length")) {
+    return "连接失败：本地 MCP 进程输出格式不符合 stdio MCP 协议。";
+  }
+
+  return command
+    ? `连接失败：启动 ${command} 时出错。${raw}`
+    : `连接失败：${raw}`;
 };
 
 const serializeHeadersJson = (headers: Record<string, string>) =>
@@ -451,6 +508,8 @@ export const initializeExternalMcpDatabase = () => {
         endpoint_url TEXT,
         command TEXT,
         args_json TEXT NOT NULL DEFAULT '[]',
+        cwd TEXT,
+        env_json TEXT NOT NULL DEFAULT '{}',
         status TEXT NOT NULL CHECK(status IN ('configured', 'connected', 'failed')) DEFAULT 'configured',
         enabled INTEGER NOT NULL DEFAULT 1,
         disclaimer_accepted_at TEXT,
@@ -512,6 +571,8 @@ export const initializeExternalMcpDatabase = () => {
         endpoint_url,
         command,
         COALESCE(args_json, '[]'),
+        NULL,
+        '{}',
         status,
         enabled,
         disclaimer_accepted_at,
@@ -575,6 +636,16 @@ export const initializeExternalMcpDatabase = () => {
   if (!columns.includes("args_json")) {
     sqlite.exec(
       "ALTER TABLE external_mcp_servers ADD COLUMN args_json TEXT NOT NULL DEFAULT '[]'",
+    );
+  }
+
+  if (!columns.includes("cwd")) {
+    sqlite.exec("ALTER TABLE external_mcp_servers ADD COLUMN cwd TEXT");
+  }
+
+  if (!columns.includes("env_json")) {
+    sqlite.exec(
+      "ALTER TABLE external_mcp_servers ADD COLUMN env_json TEXT NOT NULL DEFAULT '{}'",
     );
   }
 
@@ -703,39 +774,93 @@ export const createExternalMcpServer = (
   }
 
   initializeExternalMcpDatabase();
-  getSqlite()
-    .prepare(
-      `
-        INSERT INTO external_mcp_servers (
-          id, source, registry_url, package_name, documentation_url, repository_url, display_name, description, version,
-          transport_kind, endpoint_url, command, args_json, status, enabled, disclaimer_accepted_at,
-          disclaimer_text_hash, created_at, updated_at, remote_server_info_json,
-          remote_capabilities_json, discovered_tools_json, config_json, secret_json
-        )
-        VALUES (@id, @source, @registryUrl, @packageName, @documentationUrl, @repositoryUrl, @displayName, @description, @version,
-          @transportKind, @endpointUrl, @command, @argsJson, 'configured', 1, @disclaimerAcceptedAt,
-          @disclaimerTextHash, @createdAt, @updatedAt, 'null', 'null', '[]', '{}', '{}')
-      `,
-    )
-    .run({
-      id,
-      source: input.registryUrl ? "registry" : "manual",
-      registryUrl: input.registryUrl ?? null,
-      packageName: input.packageName ?? null,
-      documentationUrl: input.documentationUrl ?? null,
-      repositoryUrl: input.repositoryUrl ?? null,
-      displayName: input.displayName.trim(),
-      description: input.description ?? null,
-      version: input.version ?? null,
-      transportKind: input.transport.kind,
-      endpointUrl,
-      command,
-      argsJson: JSON.stringify(args),
-      disclaimerAcceptedAt: createdAt,
-      disclaimerTextHash: input.disclaimerTextHash ?? DISCLAIMER_TEXT_HASH,
-      createdAt,
-      updatedAt: createdAt,
-    });
+  const existing = getServerRow(id);
+  if (existing) {
+    unregisterExternalMcpServerCapabilities(toRecord(existing));
+    disposeExternalMcpServerSession(id);
+  }
+  const nextRecord = {
+    id,
+    source: input.registryUrl ? "registry" : "manual",
+    registryUrl: input.registryUrl ?? null,
+    packageName: input.packageName ?? null,
+    documentationUrl: input.documentationUrl ?? null,
+    repositoryUrl: input.repositoryUrl ?? null,
+    displayName: input.displayName.trim(),
+    description: input.description ?? null,
+    version: input.version ?? null,
+    transportKind: input.transport.kind,
+    endpointUrl,
+    command,
+    argsJson: JSON.stringify(args),
+    status: "configured" as const,
+    enabled: 1,
+    disclaimerAcceptedAt: createdAt,
+    disclaimerTextHash: input.disclaimerTextHash ?? DISCLAIMER_TEXT_HASH,
+    createdAt: existing?.created_at ?? createdAt,
+    updatedAt: createdAt,
+    lastConnectedAt: null,
+    lastError: null,
+    sessionId: null,
+    protocolVersion: null,
+    remoteServerInfoJson: "null",
+    remoteCapabilitiesJson: "null",
+    discoveredToolsJson: "[]",
+    configJson: existing?.config_json ?? "{}",
+    secretJson: existing?.secret_json ?? "{}",
+  };
+
+  if (existing) {
+    getSqlite()
+      .prepare(
+        `
+          UPDATE external_mcp_servers
+          SET source = @source,
+              registry_url = @registryUrl,
+              package_name = @packageName,
+              documentation_url = @documentationUrl,
+              repository_url = @repositoryUrl,
+              display_name = @displayName,
+              description = @description,
+              version = @version,
+              transport_kind = @transportKind,
+              endpoint_url = @endpointUrl,
+              command = @command,
+              args_json = @argsJson,
+              status = @status,
+              enabled = @enabled,
+              disclaimer_accepted_at = @disclaimerAcceptedAt,
+              disclaimer_text_hash = @disclaimerTextHash,
+              last_connected_at = @lastConnectedAt,
+              last_error = @lastError,
+              session_id = @sessionId,
+              protocol_version = @protocolVersion,
+              remote_server_info_json = @remoteServerInfoJson,
+              remote_capabilities_json = @remoteCapabilitiesJson,
+              discovered_tools_json = @discoveredToolsJson,
+              updated_at = @updatedAt
+          WHERE id = @id
+        `,
+      )
+      .run(nextRecord);
+  } else {
+    getSqlite()
+      .prepare(
+        `
+          INSERT INTO external_mcp_servers (
+            id, source, registry_url, package_name, documentation_url, repository_url, display_name, description, version,
+            transport_kind, endpoint_url, command, args_json, status, enabled, disclaimer_accepted_at,
+            disclaimer_text_hash, created_at, updated_at, remote_server_info_json,
+            remote_capabilities_json, discovered_tools_json, config_json, secret_json
+          )
+          VALUES (@id, @source, @registryUrl, @packageName, @documentationUrl, @repositoryUrl, @displayName, @description, @version,
+            @transportKind, @endpointUrl, @command, @argsJson, @status, @enabled, @disclaimerAcceptedAt,
+            @disclaimerTextHash, @createdAt, @updatedAt, @remoteServerInfoJson,
+            @remoteCapabilitiesJson, @discoveredToolsJson, @configJson, @secretJson)
+        `,
+      )
+      .run(nextRecord);
+  }
   return getRequiredServer(id);
 };
 
@@ -766,6 +891,20 @@ export const getExternalMcpServerConfigSchema = (
           type: "number",
           required: true,
           defaultValue: DEFAULT_TIMEOUT_MS,
+        },
+        {
+          key: "cwd",
+          label: "Working Directory",
+          type: "text",
+          required: false,
+          placeholder: "D:\\workspace\\rag-demo",
+        },
+        {
+          key: "envJson",
+          label: "Env JSON",
+          type: "json",
+          required: false,
+          placeholder: '{\n  "HTTP_PROXY": "http://127.0.0.1:7890"\n}',
         },
       ],
       completeness: "known-partial",
@@ -834,6 +973,9 @@ export const getExternalMcpServerConfig = (
     ...(row.transport_kind === "stdio"
       ? { argsText: JSON.stringify(runtimeConfig.args, null, 2) }
       : {}),
+    ...(row.package_name ? { packageName: row.package_name } : {}),
+    ...(runtimeConfig.cwd ? { cwd: runtimeConfig.cwd } : {}),
+    envJson: JSON.stringify(runtimeConfig.env ?? {}, null, 2),
     authType: runtimeConfig.authType,
     timeoutMs: runtimeConfig.timeoutMs,
     customHeadersJson: serializeHeadersJson(runtimeConfig.customHeaders),
@@ -886,6 +1028,34 @@ export const updateExternalMcpServerConfig = (
     row.transport_kind === "stdio"
       ? validateArgsText(input.argsText ?? JSON.stringify(toRuntimeConfig(row).args))
       : [];
+  const cwd =
+    row.transport_kind === "stdio"
+      ? (() => {
+          const normalized = input.cwd?.trim();
+          return normalized ? normalized : null;
+        })()
+      : null;
+  const env =
+    row.transport_kind === "stdio"
+      ? (() => {
+          const trimmed = (input.envJson ?? "{}").trim();
+          if (!trimmed) {
+            return {};
+          }
+          const parsed = JSON.parse(trimmed) as unknown;
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            throw mcpBadRequest("Env JSON must be a JSON object");
+          }
+          const result: Record<string, string> = {};
+          for (const [key, value] of Object.entries(parsed)) {
+            if (typeof value !== "string") {
+              throw mcpBadRequest("Env JSON values must be strings");
+            }
+            result[key] = value;
+          }
+          return result;
+        })()
+      : {};
 
   disposeExternalMcpServerSession(serverId);
 
@@ -896,6 +1066,8 @@ export const updateExternalMcpServerConfig = (
         SET endpoint_url = @endpointUrl,
             command = @command,
             args_json = @argsJson,
+            cwd = @cwd,
+            env_json = @envJson,
             config_json = @configJson,
             secret_json = @secretJson,
             status = 'configured',
@@ -914,6 +1086,8 @@ export const updateExternalMcpServerConfig = (
       endpointUrl,
       command,
       argsJson: JSON.stringify(args),
+      cwd,
+      envJson: JSON.stringify(env),
       configJson: JSON.stringify({
         authType: nextAuthType,
         timeoutMs: Math.round(input.timeoutMs),
@@ -1104,6 +1278,8 @@ const getOrCreateStdioSession = (serverId: string, row: ExternalMcpServerRow) =>
   const session = new StdioMcpSession({
     command: runtimeConfig.command,
     args: runtimeConfig.args,
+    ...(runtimeConfig.cwd ? { cwd: runtimeConfig.cwd } : {}),
+    ...(runtimeConfig.env ? { env: runtimeConfig.env } : {}),
     onExit: (message) => handleStdioSessionExit(serverId, message),
   });
   stdioSessions.set(serverId, session);
@@ -1122,7 +1298,11 @@ const disposeExternalMcpServerSession = (serverId: string) => {
 export const connectExternalMcpServer = async (
   serverId: string,
 ): Promise<ExternalMcpServerRecord> => {
-  const server = getRequiredServer(serverId);
+  const row = getServerRow(serverId);
+  if (!row) {
+    throw mcpNotFound(`External MCP server not found: ${serverId}`);
+  }
+  const server = toRecord(row);
   try {
     const initialized = await postJsonRpc<InitializeResult>(server, "initialize", {
       protocolVersion: MCP_PROTOCOL_VERSION,
@@ -1185,7 +1365,7 @@ export const connectExternalMcpServer = async (
         lastError: error instanceof Error ? error.message : String(error),
         at,
       });
-    throw error;
+    throw mcpInternalError(formatConnectFailureMessage(row, error), { cause: error });
   }
   return getRequiredServer(serverId);
 };
@@ -1217,7 +1397,8 @@ const registerProjectedTool = (
       id: tool.projectedCapabilityId,
       title: tool.title,
       description: tool.description || `MCP capability ${tool.name} from ${server.displayName}`,
-      domain: "web_search",
+      domain: "external_mcp",
+      source: "external",
       mode: "sync",
       inputSchema: tool.inputSchema,
       outputSchema: tool.outputSchema,

@@ -9,6 +9,7 @@ export const readSliceTool: McpToolImplementation = {
     title: "Read Slice",
     description: "Slice extracted text into a requested window.",
     domain: "read",
+    source: "internal",
     mode: "sync",
     inputSchema: {
       type: "object",

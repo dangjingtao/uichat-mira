@@ -77,7 +77,20 @@ export type RagNodeEnvironment = {
 // assistant messages.
 export type RagNodeLike = {
   nodeId: string;
-  nodeType: "rewrite" | "embed" | "retrieve" | "rerank" | "generate" | string;
+  nodeType:
+    | "rewrite"
+    | "embed"
+    | "retrieve"
+    | "rerank"
+    | "generate"
+    | "plan"
+    | "approval"
+    | "error"
+    | "tool"
+    | "reason"
+    | "memory"
+    | "context"
+    | string;
   phase: RagProgressStatus;
   label: string;
   summary?: string;

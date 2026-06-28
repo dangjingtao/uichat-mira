@@ -57,6 +57,7 @@ describe("useToolsWorkbench", () => {
         title: "Web Search",
         description: "",
         domain: "web_search",
+        source: "internal",
         mode: "sync",
         inputSchema: { type: "object" },
         tags: [],
@@ -74,6 +75,7 @@ describe("useToolsWorkbench", () => {
     getMcpWebSearchConfigMock.mockResolvedValue({
       apiKey: "saved-key",
       baseUrl: "http://localhost:8080",
+      maxResults: 4,
     });
     saveMcpWebSearchConfigMock.mockImplementation(async (payload: unknown) => payload);
     getMcpInvocationTraceMock.mockResolvedValue({
@@ -97,6 +99,7 @@ describe("useToolsWorkbench", () => {
     expect(result.current.webSearchConfig).toEqual({
       apiKey: "saved-key",
       baseUrl: "http://localhost:8080",
+      maxResults: 4,
     });
 
     await act(async () => {
@@ -104,8 +107,9 @@ describe("useToolsWorkbench", () => {
     });
 
     expect(saveMcpWebSearchConfigMock).toHaveBeenCalledWith({
-        apiKey: "saved-key",
-        baseUrl: "http://localhost:8080",
+      apiKey: "saved-key",
+      baseUrl: "http://localhost:8080",
+      maxResults: 4,
     });
 
     act(() => {
@@ -123,7 +127,7 @@ describe("useToolsWorkbench", () => {
           query: "codex",
           apiKey: "saved-key",
           baseUrl: "http://localhost:8080",
-          maxResults: 5,
+          maxResults: 4,
         }),
       }),
       expect.any(Function),

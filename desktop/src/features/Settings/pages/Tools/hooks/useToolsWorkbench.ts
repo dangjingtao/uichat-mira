@@ -14,24 +14,53 @@ import {
   type McpInvocationTrace,
   type McpToolDefinition,
 } from "@/shared/api/tools";
-import type { ToolDomainSummary, ToolWorkbenchDomain } from "../types";
+import type {
+  ToolDomainSummary,
+  ToolWorkbenchDomain,
+  WorkbenchToolDefinition,
+} from "../types";
 import {
   buildToolDraft,
   findPrimaryArtifact,
   getTerminalResultSummary,
   TOOL_DOMAIN_ORDER,
 } from "../utils";
-const WEB_SEARCH_DEFAULT_MAX_RESULTS = 5;
+const WEB_SEARCH_DEFAULT_MAX_RESULTS = 4;
+const WEB_SEARCH_MIN_RESULTS = 1;
+const WEB_SEARCH_MAX_RESULTS = 10;
 const WORKSPACE_REQUIRED_DOMAINS = new Set<ToolWorkbenchDomain>(["read", "edit", "terminal"]);
 
 type WebSearchConfig = {
   apiKey: string;
   baseUrl: string;
+  maxResults: number;
 };
 
 const defaultWebSearchConfig: WebSearchConfig = {
   apiKey: "",
   baseUrl: "",
+  maxResults: WEB_SEARCH_DEFAULT_MAX_RESULTS,
+};
+
+const isWorkbenchDomain = (domain: McpToolDefinition["domain"]): domain is ToolWorkbenchDomain =>
+  domain === "read" ||
+  domain === "edit" ||
+  domain === "web_search" ||
+  domain === "terminal" ||
+  domain === "browser_action";
+
+const isWorkbenchTool = (tool: McpToolDefinition): tool is WorkbenchToolDefinition =>
+  tool.source === "internal" && isWorkbenchDomain(tool.domain);
+
+const normalizeWebSearchMaxResults = (value: unknown) => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return WEB_SEARCH_DEFAULT_MAX_RESULTS;
+  }
+
+  return Math.min(
+    WEB_SEARCH_MAX_RESULTS,
+    Math.max(WEB_SEARCH_MIN_RESULTS, Math.trunc(value)),
+  );
 };
 
 export function useToolsWorkbench() {
@@ -39,7 +68,7 @@ export function useToolsWorkbench() {
   const [activeDomain, setActiveDomain] = useState<ToolWorkbenchDomain>("read");
   const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
   const [argsDraft, setArgsDraft] = useState("{}");
-  const [tools, setTools] = useState<McpToolDefinition[]>([]);
+  const [tools, setTools] = useState<WorkbenchToolDefinition[]>([]);
   const [workspaceSelection, setWorkspaceSelection] = useState<Awaited<
     ReturnType<typeof getMcpWorkspaceSelection>
   > | null>(null);
@@ -76,15 +105,18 @@ export function useToolsWorkbench() {
           return;
         }
 
-        const sortedTools = [...toolList].sort((left, right) =>
+        const sortedTools = [...toolList]
+          .filter(isWorkbenchTool)
+          .sort((left, right) =>
           left.title.localeCompare(right.title, undefined, { numeric: true }),
-        );
+          );
         setTools(sortedTools);
         setWorkspaceSelection(workspace);
         setWorkspaceRootInput(workspace.rootPath ?? "");
         setWebSearchConfig({
           apiKey: persistedWebSearchConfig.apiKey ?? "",
           baseUrl: persistedWebSearchConfig.baseUrl ?? "",
+          maxResults: normalizeWebSearchMaxResults(persistedWebSearchConfig.maxResults),
         });
 
         const nextSelectedTool =
@@ -185,7 +217,7 @@ export function useToolsWorkbench() {
     }
   };
 
-  const selectTool = (tool: McpToolDefinition) => {
+  const selectTool = (tool: WorkbenchToolDefinition) => {
     setSelectedToolId(tool.id);
     setActiveDomain(tool.domain);
     setArgsDraft(buildToolDraft(tool));
@@ -238,7 +270,7 @@ export function useToolsWorkbench() {
     if (selectedTool.id === "web_search") {
       parsedArgs = {
         ...parsedArgs,
-        maxResults: WEB_SEARCH_DEFAULT_MAX_RESULTS,
+        maxResults: normalizeWebSearchMaxResults(webSearchConfig.maxResults),
         ...(webSearchConfig.apiKey.trim() ? { apiKey: webSearchConfig.apiKey.trim() } : {}),
         ...(webSearchConfig.baseUrl.trim() ? { baseUrl: webSearchConfig.baseUrl.trim() } : {}),
       };
@@ -327,6 +359,7 @@ export function useToolsWorkbench() {
       setWebSearchConfig({
         apiKey: saved.apiKey,
         baseUrl: saved.baseUrl,
+        maxResults: normalizeWebSearchMaxResults(saved.maxResults),
       });
       message.success(t("settings.tools.messages.webSearchConfigSaved"));
     },

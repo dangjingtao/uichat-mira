@@ -167,16 +167,11 @@ export const rerankService = {
    * @returns 重排序后的结果
    */
   async rerank(input: RerankInput): Promise<RerankOutput> {
-    const topN = input.topN ?? input.chunks.length;
-
-    // 当前实现：基于原始相似度分数排序
-    const sortedChunks = [...input.chunks]
-      .sort((a, b) => b.score - a.score)
-      .slice(0, topN);
+    const passthroughChunks = [...input.chunks];
 
     return {
-      chunks: sortedChunks,
-      rerankScores: sortedChunks.map((chunk) => chunk.score),
+      chunks: passthroughChunks,
+      rerankScores: passthroughChunks.map((chunk) => chunk.score),
       execution: {
         applied: false,
         degraded: false,
@@ -192,7 +187,7 @@ export const rerankService = {
     const resolvedContext = context ?? getDefaultRerankContext();
     const topN =
       input.topN ?? resolvedContext?.topN ?? input.chunks.length;
-    const baseChunks = [...input.chunks].sort((a, b) => b.score - a.score);
+    const baseChunks = [...input.chunks];
 
     if (
       !resolvedContext?.enabled ||
@@ -212,9 +207,9 @@ export const rerankService = {
         providerCode: resolvedContext?.providerCode ?? null,
         remoteModelId: resolvedContext?.remoteModelId ?? null,
       });
+      // Rerank 不可用时，直接透传 retrieve 阶段结果，避免再次重排改变检索命中顺序。
       const fallback = await this.rerank({
         ...input,
-        topN,
         chunks: baseChunks,
       });
       return {
@@ -307,9 +302,9 @@ export const rerankService = {
               }
             : String(error),
       });
+      // 外部重排服务调用失败时，直接继续使用 retrieve 阶段产出的候选片段。
       const fallback = await this.rerank({
         ...input,
-        topN,
         chunks: baseChunks,
       });
       return {
@@ -364,8 +359,8 @@ export const rerankService = {
     const rerankSummary = rerankApplied
       ? `已筛选 ${result.chunks.length} 个高相关片段`
       : rerankDegraded
-        ? "重排服务不可用，已回退原始检索排序"
-        : "未启用重排，已使用原始检索排序";
+        ? "重排服务不可用，已直接使用检索结果"
+        : "未启用重排，已直接使用检索结果";
 
     return {
       state: {
@@ -431,7 +426,7 @@ export const rerankService = {
           ? getProviderDefinition(resolvedContext.providerCode).displayName
           : undefined,
         protocol: resolvedProvider
-          ? getProviderDefinition(resolvedProvider.providerCode).chatAdapter
+          ? getProviderDefinition(resolvedProvider.providerCode).rerankAdapter
           : undefined,
         operation: resolvedProvider ? "rerank" : undefined,
         endpoint: resolvedProvider?.endpoint,

@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">20% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>5/25</span>
+                <span class='fraction'>0/25</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/0</span>
+                <span class='fraction'>0/1</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/3</span>
+                <span class='fraction'>0/1</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">20% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>5/25</span>
+                <span class='fraction'>0/25</span>
             </div>
         
             
@@ -108,7 +108,7 @@
 <a name='L43'></a><a href='#L43'>43</a>
 <a name='L44'></a><a href='#L44'>44</a>
 <a name='L45'></a><a href='#L45'>45</a>
-<a name='L46'></a><a href='#L46'>46</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<a name='L46'></a><a href='#L46'>46</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -119,12 +119,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -132,12 +126,18 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -147,13 +147,13 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import {
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js"><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ><span class="branch-0 cbranch-no" title="branch not covered" >import {</span></span></span>
   createContext,
   useContext,
   type ReactNode,
@@ -164,10 +164,10 @@ import type { ChatRuntime } from "../core/runtime";
 &nbsp;
 // React bindings are intentionally separate from uchat core so the runtime can
 // stay framework-agnostic and still be convenient for React consumers.
-const UChatRuntimeContext = createContext&lt;ChatRuntime | null&gt;(null);
+<span class="cstat-no" title="statement not covered" >const UChatRuntimeContext = createContext&lt;ChatRuntime | null&gt;(null);</span>
 &nbsp;
 // UChatRuntimeProvider exposes a ChatRuntime instance to React consumers.
-export <span class="fstat-no" title="function not covered" >function UChatRuntimeProvider({</span>
+<span class="cstat-no" title="statement not covered" >export function UChatRuntimeProvider({</span>
 <span class="cstat-no" title="statement not covered" >  runtime,</span>
 <span class="cstat-no" title="statement not covered" >  children,</span>
 <span class="cstat-no" title="statement not covered" >}: {</span>
@@ -182,7 +182,7 @@ export <span class="fstat-no" title="function not covered" >function UChatRuntim
 <span class="cstat-no" title="statement not covered" >}</span>
 &nbsp;
 // useUChatRuntime returns the current React-scoped runtime instance.
-export <span class="fstat-no" title="function not covered" >function useUChatRuntime() {</span>
+<span class="cstat-no" title="statement not covered" >export function useUChatRuntime() {</span>
 <span class="cstat-no" title="statement not covered" >  const runtime = useContext(UChatRuntimeContext);</span>
 <span class="cstat-no" title="statement not covered" >  if (!runtime) {</span>
 <span class="cstat-no" title="statement not covered" >    throw new Error("useUChatRuntime must be used within UChatRuntimeProvider");</span>
@@ -192,7 +192,7 @@ export <span class="fstat-no" title="function not covered" >function useUChatRun
 <span class="cstat-no" title="statement not covered" >}</span>
 &nbsp;
 // useUChatSelector bridges the vanilla Zustand store into React selectors.
-export <span class="fstat-no" title="function not covered" >function useUChatSelector&lt;T&gt;(</span>
+<span class="cstat-no" title="statement not covered" >export function useUChatSelector&lt;T&gt;(</span>
 <span class="cstat-no" title="statement not covered" >  selector: (state: ChatRuntimeState) =&gt; T,</span>
 <span class="cstat-no" title="statement not covered" >) {</span>
 <span class="cstat-no" title="statement not covered" >  const runtime = useUChatRuntime();</span>
@@ -205,7 +205,7 @@ export <span class="fstat-no" title="function not covered" >function useUChatSel
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-06-24T13:38:07.071Z
+                at 2026-06-28T00:07:05.892Z
             </div>
         <script src="../../../../prettify.js"></script>
         <script>

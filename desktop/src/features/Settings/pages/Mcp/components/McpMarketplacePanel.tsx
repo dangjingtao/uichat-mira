@@ -9,8 +9,14 @@ type McpMarketplacePanelProps = {
   isSearching: boolean;
   servers: McpMarketplaceServer[];
   sourceUrl: string | null;
+  cacheInfo: {
+    hit: boolean;
+    stale: boolean;
+    cachedAt: string | null;
+  } | null;
   labels: {
     activeSource: string;
+    cachedResult: string;
     emptyDescription: string;
     emptyTitle: string;
     install: string;
@@ -49,6 +55,7 @@ export default function McpMarketplacePanel({
   isSearching,
   servers,
   sourceUrl,
+  cacheInfo,
   labels,
   onInstall,
   onLoadMore,
@@ -60,6 +67,12 @@ export default function McpMarketplacePanel({
         {sourceUrl ? (
           <div className="mt-2 break-all text-xs text-text-tertiary">
             {labels.activeSource}: {sourceUrl}
+          </div>
+        ) : null}
+        {cacheInfo?.stale ? (
+          <div className="mt-2 text-xs text-amber-700">
+            {labels.cachedResult}
+            {cacheInfo.cachedAt ? ` (${cacheInfo.cachedAt})` : ""}
           </div>
         ) : null}
       </div>

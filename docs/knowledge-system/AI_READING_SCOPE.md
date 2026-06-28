@@ -4,7 +4,8 @@ Status: Current
 Owner: docs
 Last verified: 2026-06-24
 Layer: schema
-Module: docs-system
+Module: Docs
+Feature: DocsSystem
 Doc Type: current-contract
 
 ## 目的
@@ -24,12 +25,12 @@ Doc Type: current-contract
 - `README.md`
 - `architecture/`
 - `platform/`
+- `developments/`
 - `role/`
 - `uchat.md`
 - `uchat-internal-maintenance.md`
 - `knowledge-base/`
-- `architecture/provider-proxy-api.md`
-- `architecture/provider-api-standards.md`
+- `provider/README.md`
 - `maps/`
 - `concepts/`
 
@@ -48,9 +49,9 @@ Doc Type: current-contract
 
 - `archive/`
 - `CHANGELOG.md`
-- `defect-log.md`
-- `product-roadmap-priorities.md`
-- `tools-ecosystem-research.md`
+- `developments/defect-log.md`
+- `developments/product-roadmap-priorities.md`
+- `tooling-runtime/tools-ecosystem-research.md`
 - `assets/`
 
 ## 为什么这样划分
@@ -81,7 +82,7 @@ Doc Type: current-contract
 适合排查旧设计、历史决策和行为演变：
 
 - 默认纳入集合
-- 再按需加 `archive/`、`defect-log.md`、`CHANGELOG.md`
+- 再按需加 `archive/`、`developments/defect-log.md`、`CHANGELOG.md`
 
 ## 默认读取顺序
 

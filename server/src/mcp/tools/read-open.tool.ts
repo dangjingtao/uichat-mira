@@ -9,6 +9,7 @@ export const readOpenTool: McpToolImplementation = {
     title: "Read Open",
     description: "Open an authorized file path and return normalized contents.",
     domain: "read",
+    source: "internal",
     mode: "sync",
     inputSchema: {
       type: "object",

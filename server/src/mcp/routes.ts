@@ -12,7 +12,7 @@ import {
 } from "./harness/invocations.js";
 import {
   getReadableResourceImplementation,
-  listCapabilityDefinitions,
+  listInternalCapabilityDefinitions,
   listReadableResourceDefinitions,
 } from "./harness/registry.js";
 import { getHarnessEnvironmentSnapshot } from "./harness/environment.js";
@@ -31,8 +31,143 @@ import {
   updateExternalMcpServerConfig,
 } from "./external.js";
 import { webSearchSettingsRepository } from "@/db/repositories/web-search-settings.repository.js";
+import { integrationCapabilitiesRepository } from "@/db/repositories/integration-capabilities.repository.js";
+import { integrationInstancesRepository } from "@/db/repositories/integration-instances.repository.js";
+import { wecomSettingsRepository } from "@/db/repositories/wecom-settings.repository.js";
+import { resolveWecomConfig } from "@/integrations/wecom/config.js";
+import { knowledgeBaseService } from "@/services/knowledge-base.service.js";
+import { mcpBadRequest } from "./core/errors.js";
 
 const objectSchema = { type: "object", additionalProperties: true } as const;
+
+const upsertDefaultWecomResources = (input: {
+  corpId?: string;
+  agentId?: string;
+  appSecret?: string;
+  contactsSecret?: string;
+  robotWebhookUrl?: string;
+  robotWebhookSecret?: string;
+  smartRobotBotId?: string;
+  smartRobotSecret?: string;
+  smartRobotKnowledgeBaseId?: string;
+  smartRobotReplyMode?: "stream" | "send";
+}) => {
+  const current = resolveWecomConfig();
+  const next = {
+    corpId: input.corpId?.trim() ?? current.corpId,
+    agentId: input.agentId?.trim() ?? current.agentId,
+    appSecret: input.appSecret?.trim() ?? current.appSecret,
+    contactsSecret: input.contactsSecret?.trim() ?? current.contactsSecret,
+    robotWebhookUrl:
+      input.robotWebhookUrl?.trim() ?? current.robotWebhookUrl,
+    robotWebhookSecret:
+      input.robotWebhookSecret?.trim() ?? current.robotWebhookSecret,
+    smartRobotBotId:
+      input.smartRobotBotId?.trim() ?? current.smartRobotBotId,
+    smartRobotSecret:
+      input.smartRobotSecret?.trim() ?? current.smartRobotSecret,
+    smartRobotKnowledgeBaseId:
+      input.smartRobotKnowledgeBaseId?.trim() ?? current.smartRobotKnowledgeBaseId,
+    smartRobotReplyMode:
+      input.smartRobotReplyMode === "send" || input.smartRobotReplyMode === "stream"
+        ? input.smartRobotReplyMode
+        : current.smartRobotReplyMode,
+  };
+
+  const defaultInstance =
+    integrationInstancesRepository.getDefault("wecom") ??
+    integrationInstancesRepository.create({
+      provider: "wecom",
+      name: "Default WeCom Instance",
+      externalTenantId: next.corpId || null,
+      config: {
+        corpId: next.corpId,
+        agentId: next.agentId,
+        appSecret: next.appSecret,
+        contactsSecret: next.contactsSecret,
+      },
+      enabled: true,
+      isDefault: true,
+    });
+
+  const instance =
+    integrationInstancesRepository.update(defaultInstance.id, {
+      name: defaultInstance.name || "Default WeCom Instance",
+      externalTenantId: next.corpId || null,
+      config: {
+        corpId: next.corpId,
+        agentId: next.agentId,
+        appSecret: next.appSecret,
+        contactsSecret: next.contactsSecret,
+      },
+      enabled: true,
+      isDefault: true,
+    }) ?? defaultInstance;
+
+  const capabilities = integrationCapabilitiesRepository.listByInstance(
+    instance.id,
+  );
+  const webhookCapability = capabilities.find(
+    (item) => item.type === "wecom.webhook_robot",
+  );
+  const smartRobotCapability = capabilities.find(
+    (item) => item.type === "wecom.smart_robot",
+  );
+
+  if (webhookCapability) {
+    integrationCapabilitiesRepository.update(webhookCapability.id, {
+      name: webhookCapability.name || "Default Webhook Robot",
+      enabled: true,
+      config: {
+        webhookUrl: next.robotWebhookUrl,
+        webhookSecret: next.robotWebhookSecret,
+      },
+    });
+  } else {
+    integrationCapabilitiesRepository.create({
+      instanceId: instance.id,
+      provider: "wecom",
+      type: "wecom.webhook_robot",
+      name: "Default Webhook Robot",
+      enabled: true,
+      isDefault: true,
+      config: {
+        webhookUrl: next.robotWebhookUrl,
+        webhookSecret: next.robotWebhookSecret,
+      },
+    });
+  }
+
+  if (smartRobotCapability) {
+    integrationCapabilitiesRepository.update(smartRobotCapability.id, {
+      name: smartRobotCapability.name || "Default Smart Robot",
+      enabled: true,
+      knowledgeBaseId: next.smartRobotKnowledgeBaseId || null,
+      config: {
+        botId: next.smartRobotBotId,
+        secret: next.smartRobotSecret,
+        replyMode: next.smartRobotReplyMode,
+      },
+    });
+  } else {
+    integrationCapabilitiesRepository.create({
+      instanceId: instance.id,
+      provider: "wecom",
+      type: "wecom.smart_robot",
+      name: "Default Smart Robot",
+      enabled: true,
+      isDefault: false,
+      knowledgeBaseId: next.smartRobotKnowledgeBaseId || null,
+      config: {
+        botId: next.smartRobotBotId,
+        secret: next.smartRobotSecret,
+        replyMode: next.smartRobotReplyMode,
+      },
+    });
+  }
+
+  return next;
+};
 
 const mcpRoutes: FastifyPluginAsync = async (app) => {
   initializeHarnessRuntime();
@@ -203,6 +338,8 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
       endpointUrl?: string;
       command?: string;
       argsText?: string;
+      cwd?: string;
+      envJson?: string;
       authType: "none" | "bearer";
       timeoutMs: number;
       customHeadersJson: string;
@@ -225,6 +362,8 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
           endpointUrl: request.body.endpointUrl,
           command: request.body.command,
           argsText: request.body.argsText,
+          cwd: request.body.cwd,
+          envJson: request.body.envJson,
           authType: request.body.authType,
           timeoutMs: request.body.timeoutMs,
           customHeadersJson: request.body.customHeadersJson,
@@ -259,10 +398,11 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
         response: {
           200: successEnvelope({
             type: "object",
-            required: ["apiKey", "baseUrl"],
+            required: ["apiKey", "baseUrl", "maxResults"],
             properties: {
               apiKey: { type: "string" },
               baseUrl: { type: "string" },
+              maxResults: { type: "integer", minimum: 1, maximum: 10 },
             },
           }),
         },
@@ -273,11 +413,12 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
       return success({
         apiKey: current.tavilyApiKey,
         baseUrl: current.searxngBaseUrl,
+        maxResults: current.maxResults,
       });
     }),
   );
 
-  app.put<{ Body: { apiKey?: string; baseUrl?: string } }>(
+  app.put<{ Body: { apiKey?: string; baseUrl?: string; maxResults?: number } }>(
     "/mcp/web-search/config",
     {
       schema: {
@@ -291,15 +432,17 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
           properties: {
             apiKey: { type: "string" },
             baseUrl: { type: "string" },
+            maxResults: { type: "integer", minimum: 1, maximum: 10 },
           },
         },
         response: {
           200: successEnvelope({
             type: "object",
-            required: ["apiKey", "baseUrl"],
+            required: ["apiKey", "baseUrl", "maxResults"],
             properties: {
               apiKey: { type: "string" },
               baseUrl: { type: "string" },
+              maxResults: { type: "integer", minimum: 1, maximum: 10 },
             },
           }),
         },
@@ -309,12 +452,153 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
       const next = webSearchSettingsRepository.update({
         tavilyApiKey: request.body.apiKey,
         searxngBaseUrl: request.body.baseUrl,
+        maxResults: request.body.maxResults,
       });
       return success({
         apiKey: next.tavilyApiKey,
         baseUrl: next.searxngBaseUrl,
+        maxResults: next.maxResults,
       });
     }),
+  );
+
+  app.get(
+    "/mcp/wecom/config",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Get persisted WeCom config",
+        description:
+          "Return the backend-persisted WeCom configuration used by Harness wecom_* tools.",
+        response: {
+          200: successEnvelope({
+            type: "object",
+            required: [
+              "corpId",
+              "agentId",
+              "appSecret",
+              "contactsSecret",
+              "robotWebhookUrl",
+              "robotWebhookSecret",
+              "smartRobotBotId",
+              "smartRobotSecret",
+              "smartRobotKnowledgeBaseId",
+              "smartRobotReplyMode",
+            ],
+            properties: {
+              corpId: { type: "string" },
+              agentId: { type: "string" },
+              appSecret: { type: "string" },
+              contactsSecret: { type: "string" },
+                robotWebhookUrl: { type: "string" },
+                robotWebhookSecret: { type: "string" },
+                smartRobotBotId: { type: "string" },
+                smartRobotSecret: { type: "string" },
+                smartRobotKnowledgeBaseId: { type: "string" },
+                smartRobotReplyMode: { type: "string", enum: ["stream", "send"] },
+              },
+          }),
+        },
+      },
+    },
+    routeHandler("Failed to get WeCom config", async () => {
+      const current = resolveWecomConfig();
+      return success(current);
+    }),
+  );
+
+  app.put<{
+    Body: {
+      corpId?: string;
+      agentId?: string;
+      appSecret?: string;
+      contactsSecret?: string;
+        robotWebhookUrl?: string;
+        robotWebhookSecret?: string;
+        smartRobotBotId?: string;
+        smartRobotSecret?: string;
+        smartRobotKnowledgeBaseId?: string;
+        smartRobotReplyMode?: "stream" | "send";
+      };
+  }>(
+    "/mcp/wecom/config",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Persist WeCom config",
+        description:
+          "Persist the WeCom configuration into the server SQLite database. These saved values are later used by Harness wecom_* tools as the default provider credentials.",
+          body: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              corpId: { type: "string" },
+              agentId: { type: "string" },
+              appSecret: { type: "string" },
+              contactsSecret: { type: "string" },
+              robotWebhookUrl: { type: "string" },
+              robotWebhookSecret: { type: "string" },
+              smartRobotBotId: { type: "string" },
+              smartRobotSecret: { type: "string" },
+              smartRobotKnowledgeBaseId: { type: "string" },
+              smartRobotReplyMode: { type: "string", enum: ["stream", "send"] },
+            },
+          },
+        response: {
+          200: successEnvelope({
+            type: "object",
+            required: [
+              "corpId",
+              "agentId",
+              "appSecret",
+              "contactsSecret",
+              "robotWebhookUrl",
+              "robotWebhookSecret",
+              "smartRobotBotId",
+              "smartRobotSecret",
+              "smartRobotKnowledgeBaseId",
+              "smartRobotReplyMode",
+            ],
+            properties: {
+              corpId: { type: "string" },
+              agentId: { type: "string" },
+              appSecret: { type: "string" },
+              contactsSecret: { type: "string" },
+                robotWebhookUrl: { type: "string" },
+                robotWebhookSecret: { type: "string" },
+                smartRobotBotId: { type: "string" },
+                smartRobotSecret: { type: "string" },
+                smartRobotKnowledgeBaseId: { type: "string" },
+                smartRobotReplyMode: { type: "string", enum: ["stream", "send"] },
+              },
+          }),
+        },
+      },
+    },
+      routeHandler("Failed to save WeCom config", async (request) => {
+        const smartRobotKnowledgeBaseId = request.body.smartRobotKnowledgeBaseId?.trim();
+        if (
+          smartRobotKnowledgeBaseId &&
+          !knowledgeBaseService.getKnowledgeBaseById(smartRobotKnowledgeBaseId)
+        ) {
+          throw mcpBadRequest(`Knowledge base not found: ${smartRobotKnowledgeBaseId}`);
+        }
+
+        const next = upsertDefaultWecomResources({
+          corpId: request.body.corpId,
+          agentId: request.body.agentId,
+          appSecret: request.body.appSecret,
+          contactsSecret: request.body.contactsSecret,
+          robotWebhookUrl: request.body.robotWebhookUrl,
+          robotWebhookSecret: request.body.robotWebhookSecret,
+          smartRobotBotId: request.body.smartRobotBotId,
+          smartRobotSecret: request.body.smartRobotSecret,
+          smartRobotKnowledgeBaseId: request.body.smartRobotKnowledgeBaseId,
+          smartRobotReplyMode: request.body.smartRobotReplyMode,
+        });
+        wecomSettingsRepository.update(next);
+        return success(next);
+      }),
   );
 
   app.get(
@@ -361,7 +645,8 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
         },
       },
     },
-    routeHandler("Failed to list MCP tools", async () => success(listCapabilityDefinitions())),
+    routeHandler("Failed to list MCP tools", async () =>
+      success(listInternalCapabilityDefinitions())),
   );
 
   app.get(
@@ -422,6 +707,7 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
       const result = await executeHarnessInvocation({
         toolId: request.body.toolId,
         args: request.body.args,
+        userId: request.authUser?.id,
       });
       return success(result);
     }),
@@ -456,6 +742,7 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
           const runner = executeHarnessInvocation({
             toolId: request.body.toolId,
             args: request.body.args,
+            userId: request.authUser?.id,
             onEvent(event) {
               invocationId = event.invocationId;
               queue.push(toSseChunk(event));

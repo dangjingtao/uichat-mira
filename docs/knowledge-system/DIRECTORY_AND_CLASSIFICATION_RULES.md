@@ -4,8 +4,15 @@ Status: Current
 Owner: docs
 Last verified: 2026-06-25
 Layer: schema
-Module: docs-system
+Module: Docs
+Feature: DocsSystem
 Doc Type: current-contract
+Canonical: true
+Related:
+  - ../WIKI_SYSTEM_SCHEMA.md
+  - DOCUMENTATION_STANDARDS.md
+  - KNOWLEDGE_SYSTEM_INDEX.md
+  - UNCATEGORIZED_TRACKER.md
 
 ## 单点真相范围
 
@@ -81,11 +88,63 @@ Doc Type: current-contract
 应该分成两轴：
 
 - 第一轴：模块归属
-  - 例如 `chat`、`role`、`runtime`、`knowledge-base`、`platform`
+  - 例如 `Chat`、`Role`、`KnowledgeBase`、`Tool`、`MCP`
+- 第一轴半：功能点归属
+  - 例如 `Thread`、`ToolIntegration`、`MarkdownWorkspace`、`ExternalMarketplace`
 - 第二轴：文档角色
   - 例如 `plan`、`design`、`checklist`、`draft`、`current-contract`、`reference`
 
 这样才更符合 [karpathy/442a6bf555914893e9891c11519de94f](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) 这类长期知识库思路，也更适合 AI 阅读。
+
+其中：
+
+- `Module` 是顶级功能域
+- `Feature` 是模块内的具体功能点
+- `Feature` 当前允许为空，但字段应正式存在
+
+### 站点阅读入口也要分成两轴
+
+文档站不要再只把目录树直接投影成阅读入口。
+
+人类阅读至少要同时看到两套视角：
+
+- 状态维度
+  - 先读这里
+  - 正在实施
+  - 规划中
+  - 历史归档
+- 模块维度
+  - `Chat`
+  - `ModelSetting`
+  - `KnowledgeBase`
+  - `Role`
+  - `Tool`
+  - `MCP`
+  - `Docs`
+  - `Develoments`
+  - 其他稳定业务域
+
+一句话：
+
+- 状态维度回答“现在该怎么看”
+- 模块维度回答“这篇在讲谁”
+
+不要把这两个维度混成一个目录层级。
+
+### `专题文档` 只允许作为待归类兜底
+
+根目录里暂时还没有归进稳定逻辑 area 的文档，可以继续物理存在。
+
+但在逻辑上：
+
+- `专题文档` 不应再被当成正式长期主分类
+- 它更像 `待归类`
+- 后续应持续把其中页面收进更明确的模块或状态分组
+
+也就是说：
+
+- 可以存在根目录散页
+- 但不能让“根目录散页集合”主导人类和 AI 的阅读入口
 
 ## 逻辑 Area 映射
 
@@ -94,15 +153,38 @@ Doc Type: current-contract
 | Area | 典型路径 |
 | --- | --- |
 | `architecture` | `architecture/` 下各页，以及仍在根目录但实际描述运行时设计的页面 |
-| `platform` | `platform/`、`版本管理.md` |
-| `chat` | `uchat.md`、`uchat-internal-maintenance.md`、`chat-system-practices.md` |
-| `role` | `role/`、`role.md`、`role-api.md` |
+| `platform` | `platform/` |
+| `chat` | `chat/README.md`、`uchat.md`、`uchat-internal-maintenance.md`、`chat/chat-system-practices.md` |
+| `role` | `role/README.md`、`role/role-api.md`、`role/page.md` |
 | `knowledge-base` | `knowledge-base/README.md`、`knowledge-base/api.md`、`knowledge-base/backend-schema.md`、`knowledge-base/markdown-workspace-mode.md` |
-| `providers` | `architecture/provider-api-standards.md`、`architecture/provider-proxy-api.md`、`architecture/provider-integration-optimization.md` |
+| `providers` | `provider/README.md`、`architecture/provider-api-standards.md`、`architecture/provider-proxy-api.md`、`architecture/provider-integration-optimization.md` |
 | `tooling-runtime` | `tooling-runtime/harness-runtime-design.md`、`tooling-runtime/read-skill-design.md`、`architecture/external-mcp-marketplace.md` |
-| `planning` | `product-roadmap-priorities.md` 以及仍未落地的路线类页面 |
+| `developments` | `developments/` 下各页，以及仍在迁移中的开发支撑类根目录镜像页 |
+| `planning` | `developments/product-roadmap-priorities.md` 以及仍未落地的路线类页面 |
 | `knowledge-system` | `knowledge-system/` 下关于索引、阅读范围、可视化、MCP 暴露的页面 |
 | `historical` | `archive/` 及明确已过期但保留背景价值的页面 |
+
+上表描述的是逻辑 area，不等于长期顶级 `Module`。当前顶级 `Module` 统一收为：
+
+- `Chat`
+- `ModelSetting`
+- `MCP`
+- `Tool`
+- `KnowledgeBase`
+- `Role`
+- `Docs`
+- `Develoments`
+
+映射口径先固定如下：
+
+- `chat` area -> `Chat`
+- `role` area -> `Role`
+- `knowledge-base` area -> `KnowledgeBase`
+- `provider` 相关页 -> `ModelSetting`
+- `tooling-runtime` 中以内置工具为主的页 -> `Tool`
+- `tooling-runtime` 中以外部 MCP / MCP product 为主的页 -> `MCP`
+- `knowledge-system` -> `Docs`
+- `architecture / platform / evaluation / planning / bugfix / developments` 先统一 -> `Develoments`
 
 ## 内容类型映射
 
@@ -170,6 +252,9 @@ Doc Type: current-contract
 - “这是一次迁移、接线、维护说明”  
   优先放 area 内部，而不是再堆回根目录。
 
+- “这是开发支撑规则、版本、请求封装、i18n、缺陷或路线治理”  
+  优先放 `developments/`，不要继续留在根目录做长期正文。
+
 同时还要再问一遍：
 
 - 这篇属于哪个模块？
@@ -196,22 +281,21 @@ Doc Type: current-contract
 现在每篇活跃文档至少应满足：
 
 - 能说出主模块
+- 能说出主功能点，或者明确暂时为空
 - 能说出文档角色
 - 能说出它属于哪一层
 - 能说出它是 current 还是 historical
 
 如果一篇文档同时像多个模块，不要平均分类，只给一个主模块：
 
-- `chat` 负责聊天系统
-- `role` 负责角色系统
-- `runtime` 负责运行时与链路
-- `knowledge-base` 负责知识库内容与工作区
-- `provider` 负责模型提供商与代理接线
-- `platform` 负责壳层、Tauri、Electron、打包与环境
-- `evaluation` 负责评测与验证
-- `docs-system` 负责文档系统本身
-- `planning` 负责路线图、方案、待办
-- `bugfix` 负责缺陷修复、回归与排障
+- `Chat` 负责聊天系统
+- `Role` 负责角色系统
+- `KnowledgeBase` 负责知识库内容与工作区
+- `ModelSetting` 负责模型配置、provider 与模型接线
+- `Tool` 负责内置工具与工具运行时
+- `MCP` 负责外部 MCP 接入与 MCP 暴露面
+- `Docs` 负责文档系统、schema、索引、阅读规则与知识系统治理
+- `Develoments` 负责 runtime、platform、evaluation、规划、bugfix 与工程支撑
 
 如果无法稳定决定主模块：
 
@@ -222,8 +306,43 @@ Doc Type: current-contract
 这套规则的目标不是目录好看，而是让 AI 能稳定回答：
 
 - 这是什么模块
+- 这是哪个功能点
 - 这是哪种文档
 - 这篇是当前真相还是历史背景
+
+## 站点分组建议
+
+如果文档站要开始稳定消费这套规则，推荐首页至少分成下面几块：
+
+### 状态维度
+
+- 先读这里
+  - `current-contract`
+  - `overview`
+  - `reference`
+  - 入口页 / 总纲页 / canonical truth page
+- 正在实施
+  - `checklist`
+  - 明确仍在 active 状态的实施页
+- 规划中
+  - `plan`
+  - `draft`
+  - 尚未成为当前契约的设计页
+- 历史归档
+  - `historical`
+  - `archive/`
+
+### 模块维度
+
+- 按 `Module` 分组展示
+- 每组优先展示该模块最像入口页或总纲页的那一篇
+- 同一模块下的 `plan / checklist / historical` 不应盖过 `current-contract / overview`
+
+### 待归类
+
+- 只保留为补充区
+- 用来承接仍未稳定归并的根目录页
+- 不再作为主导航第一层
 
 这样读者和 AI 都更容易建立稳定路径。
 

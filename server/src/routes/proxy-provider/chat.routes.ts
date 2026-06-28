@@ -1,11 +1,15 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { PUBLIC_API_ROUTES } from "@/config/public-api.js";
+import { getHarnessEnvironmentSnapshot } from "@/mcp/harness/environment.js";
 import { threadService } from "@/services/thread.service.js";
 import {
   roleService,
   type RoleLlmProfileResponse,
 } from "@/services/role.service.js";
 import { threadRequestContextNode } from "@/services/shared-nodes/thread-request-context.node.js";
+import type { RequestContextExecutionNode } from "@/services/shared-nodes/thread-request-context.types.js";
+import { resolveThreadWebSearchContext } from "@/services/shared-nodes/thread-request-context-web-search.resolver.js";
+import { assistantExecutionNodeChunk } from "@/services/chat-stream-events.js";
 import {
   type ProxyProviderParam,
   providerProxyService,
@@ -22,6 +26,7 @@ import {
   prepareEventStreamReply,
 } from "./stream-protocol.js";
 import { executeDefaultChatToolLoop } from "./chat-tool-loop.js";
+import { createAndRunAgent } from "@/agent/index.js";
 import {
   getFallbackThreadTitle,
   generateThreadTitleFromMessages,
@@ -30,6 +35,7 @@ import {
   persistVisibleUserMessage,
   shouldGenerateTitle,
 } from "./message-persistence.js";
+import { resolveChatToolSurface } from "./chat-tool-surface.js";
 import type {
   ChatMessagesBody,
   ProviderChatBody,
@@ -60,21 +66,61 @@ const resolveDefaultProviderThread = (
   return threadService.getThreadSummaryById(threadId, userId);
 };
 
-const collectThreadContextMessages = (
+const collectThreadRequestContext = (
   threadId: string | undefined,
   userId: number | undefined,
+  options: { agentEnabled?: boolean } = {},
 ) => {
   if (typeof threadId !== "string" || !userId) {
-    return [];
+    return {
+      messages: [],
+      executionNodes: [],
+    };
   }
 
   const thread = threadService.getThreadSummaryById(threadId, userId);
   if (!thread) {
-    return [];
+    return {
+      messages: [],
+      executionNodes: [],
+    };
   }
 
-  return threadRequestContextNode.createRequestMessages(thread, userId);
+  const harnessEnvironment = getHarnessEnvironmentSnapshot();
+  const toolSurface = resolveChatToolSurface({
+    agentEnabled:
+      typeof options.agentEnabled === "boolean"
+        ? options.agentEnabled
+        : Boolean(thread.agentEnabled),
+  });
+
+  return threadRequestContextNode.createRequestContext(
+    {
+      ...thread,
+      executionEnvironment: {
+        platform: process.platform,
+        shellFamily: harnessEnvironment.terminal.shellProfile.shellFamily,
+        shellExecutable: harnessEnvironment.terminal.shellProfile.shell,
+        workspaceRoot: harnessEnvironment.workspace.rootPath,
+        cwd: harnessEnvironment.workspace.rootPath,
+        availableTools: toolSurface.map((tool) => tool.id),
+      },
+    },
+    userId,
+  );
 };
+
+const toAssistantExecutionNodePrelude = (
+  node: RequestContextExecutionNode,
+) =>
+  assistantExecutionNodeChunk({
+    nodeId: node.nodeId,
+    nodeType: node.nodeType,
+    phase: node.phase,
+    label: node.label,
+    ...(node.summary ? { summary: node.summary } : {}),
+    ...(node.details ? { details: node.details } : {}),
+  });
 
 const resolveThreadRoleLlmParams = (
   threadId: string | undefined,
@@ -109,6 +155,18 @@ const resolveThreadRoleLlmParams = (
   return Object.keys(params).length > 0 ? params : undefined;
 };
 
+const resolveThreadAgentEnabled = (
+  threadId: string | undefined,
+  userId: number | undefined,
+) => {
+  if (typeof threadId !== "string" || !userId) {
+    return false;
+  }
+
+  const thread = threadService.getThreadSummaryById(threadId, userId);
+  return Boolean(thread?.agentEnabled);
+};
+
 const sendRagChatStream = ({
   app,
   reply,
@@ -118,6 +176,7 @@ const sendRagChatStream = ({
   ragInput,
   messages,
   requestContextMessages,
+  requestContextPreludeChunks,
 }: {
   app: FastifyInstance;
   reply: FastifyReply;
@@ -127,6 +186,7 @@ const sendRagChatStream = ({
   ragInput: NonNullable<ReturnType<typeof toRagInput>>;
   messages: ReturnType<typeof normalizeProxyChatMessages>;
   requestContextMessages?: ReturnType<typeof normalizeProxyChatMessages>;
+  requestContextPreludeChunks?: string[];
 }) => {
   prepareEventStreamReply(reply);
   return reply.send(
@@ -137,6 +197,7 @@ const sendRagChatStream = ({
       ragInput,
       messages,
       requestContextMessages,
+      requestContextPreludeChunks,
       log: app.log,
     }),
   );
@@ -149,7 +210,12 @@ const sendPersistedDefaultChatStream = ({
   authUserId,
   userMessageId,
   messages,
+  agentMessages,
+  requestContextMessages,
   params,
+  agentEnabled,
+  knowledgeBaseId,
+  preludeChunks,
 }: {
   app: FastifyInstance;
   reply: FastifyReply;
@@ -157,7 +223,12 @@ const sendPersistedDefaultChatStream = ({
   authUserId: number;
   userMessageId?: string;
   messages: ReturnType<typeof normalizeProxyChatMessages>;
+  agentMessages?: ReturnType<typeof normalizeProxyChatMessages>;
+  requestContextMessages?: ReturnType<typeof normalizeProxyChatMessages>;
   params?: Record<string, unknown>;
+  agentEnabled?: boolean;
+  knowledgeBaseId?: string | null;
+  preludeChunks?: string[];
 }) => {
   const { latestUserMessageId, latestUserMessage } = persistVisibleUserMessage({
     threadId,
@@ -166,6 +237,7 @@ const sendPersistedDefaultChatStream = ({
     messages,
   });
   const assistantMessageId = crypto.randomUUID();
+  let agentAssistantMetadata: Record<string, unknown> | undefined;
 
   prepareEventStreamReply(reply);
   return reply.send(
@@ -177,11 +249,51 @@ const sendPersistedDefaultChatStream = ({
       assistantMessageId,
       messages,
       params,
+      ...(preludeChunks ? { preludeChunks } : {}),
       executeFullAnswer: async ({ emitToolEvent, emitExecutionNode }) => {
+        if (agentEnabled) {
+          const goalText = latestUserMessage.content.trim();
+          const { run, output } = await createAndRunAgent({
+            threadId,
+            userId: authUserId,
+            goalText: goalText || "回答用户当前问题",
+            messages: agentMessages ?? messages,
+            requestContextMessages,
+            params,
+            knowledgeBaseId,
+            onExecutionNode: emitExecutionNode,
+          });
+
+          agentAssistantMetadata = {
+            agent: {
+              status: output.status,
+              runId: run.id,
+              traceId: run.traceId,
+              ...(output.pendingApproval
+                ? { pendingApproval: output.pendingApproval }
+                : {}),
+              ...(output.errorMessage ? { errorMessage: output.errorMessage } : {}),
+            },
+          };
+
+          if (output.pendingApproval) {
+            return {
+              answer: "等待审批",
+              isFinal: false,
+            };
+          }
+
+          return {
+            answer: output.answer,
+            isFinal: true,
+          };
+        }
+
         const toolLoopResult = await executeDefaultChatToolLoop({
           requestedProvider: "default",
           threadId,
           userId: authUserId,
+          agentEnabled: false,
           messages,
           params,
           onToolEvent: emitToolEvent,
@@ -205,6 +317,7 @@ const sendPersistedDefaultChatStream = ({
           assistantMessageId,
           parentId: latestUserMessageId,
           content: answer,
+          ...(agentAssistantMetadata ? { metadata: agentAssistantMetadata } : {}),
         });
 
         try {
@@ -301,11 +414,16 @@ export const registerProxyProviderChatRoutes = async (
         const threadId = request.body.id;
         const authUser = request.authUser;
         const thread = resolveDefaultProviderThread(threadId, authUser?.id);
-        const requestContextMessages = collectThreadContextMessages(
+        const agentEnabled =
+          typeof request.body.agentEnabled === "boolean"
+            ? request.body.agentEnabled
+            : resolveThreadAgentEnabled(threadId, authUser?.id);
+        const requestContextContext = collectThreadRequestContext(
           threadId,
           authUser?.id,
+          { agentEnabled },
         );
-        const defaultChatMessages = [...requestContextMessages, ...messages];
+        const requestContextMessages = requestContextContext.messages;
         const ragInput = toRagInput(messages);
         const roleLlmParams = resolveThreadRoleLlmParams(threadId, authUser?.id);
         const useThreadRag = shouldUseThreadRag({
@@ -315,7 +433,7 @@ export const registerProxyProviderChatRoutes = async (
           hasAuthUser: Boolean(authUser),
         });
 
-        if (useThreadRag && authUser && ragInput && typeof threadId === "string") {
+        if (!agentEnabled && useThreadRag && authUser && ragInput && typeof threadId === "string") {
           return sendRagChatStream({
             app,
             reply,
@@ -325,8 +443,31 @@ export const registerProxyProviderChatRoutes = async (
             ragInput,
             messages,
             requestContextMessages,
+            requestContextPreludeChunks: requestContextContext.executionNodes.map(
+              (node) => toAssistantExecutionNodePrelude(node),
+            ),
           });
         }
+
+        const latestQuestion = messages.at(-1)?.content ?? "";
+        const webSearchPrefetch = agentEnabled
+          ? {
+              requestContextMessages,
+              preludeChunks: [],
+            }
+          : await resolveThreadWebSearchContext({
+              question: latestQuestion,
+              threadId: typeof threadId === "string" ? threadId : "",
+              requestContextMessages,
+              requestContextPreludeChunks: requestContextContext.executionNodes.map(
+                (node) => toAssistantExecutionNodePrelude(node),
+              ),
+              log: app.log,
+            });
+        const defaultChatMessages = [
+          ...(webSearchPrefetch.requestContextMessages ?? requestContextMessages),
+          ...messages,
+        ];
 
         if (thread?.knowledgeBaseId) {
           app.log.warn(
@@ -352,7 +493,13 @@ export const registerProxyProviderChatRoutes = async (
             authUserId: authUser.id,
             userMessageId: request.body.messageId,
             messages: defaultChatMessages,
+            agentMessages: messages,
+            requestContextMessages:
+              webSearchPrefetch.requestContextMessages ?? requestContextMessages,
             params: roleLlmParams,
+            agentEnabled,
+            knowledgeBaseId: thread?.knowledgeBaseId ?? null,
+            preludeChunks: webSearchPrefetch.preludeChunks,
           });
         }
       }

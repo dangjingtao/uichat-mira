@@ -19,6 +19,7 @@ export { default as MarkdownEditor } from "./MarkdownEditor";
 export { default as MarkdownText } from "./MarkdownText";
 export { default as MicroFrontend } from "./MicroFrontend";
 export { default as CoverageReportPanel } from "./CoverageReportPanel";
+export { default as NavigationCardTabs } from "./NavigationCardTabs";
 export { message, MessageProvider, useMessage } from "./Message";
 export { Modal, ModalProvider, useModal } from "./Modal";
 export { default as NavItem } from "./NavItem";

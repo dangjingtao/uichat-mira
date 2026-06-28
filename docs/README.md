@@ -1,23 +1,32 @@
-# 文档总入口
+# docs/ 索引
 
 Status: Current
 Owner: docs
 Last verified: 2026-06-25
 Layer: schema
-Module: docs-system
+Module: Docs
+Feature: DocsSystem
 Doc Type: current-contract
+Canonical: true
+Related:
+  - VAULT_HOME.md
+  - WIKI_SYSTEM_SCHEMA.md
+  - knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md
 
-## 单点真相范围
+## 这页干什么
 
-这页是当前 `docs/` 目录的总导航入口。
+`docs/` 的入口页。别把它当说明书，它就是目录。
 
-它主要回答：
+## 先看
 
-- 先读哪几篇最划算
-- 各类文档现在分别放在哪
-- 哪些是当前契约，哪些只是补充或历史材料
-
-如果你准备改运行时、聊天、平台、知识库或文档系统本身，先从这页进。
+- `VAULT_HOME.md`
+- `WIKI_SYSTEM_SCHEMA.md`
+- `knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md`
+- `architecture/README.md`
+- `tooling-runtime/README.md`
+- `concepts/CONCEPT_MCP.md`
+- `uchat.md`
+- `platform/tauri.md`
 
 ## 推荐阅读顺序
 
@@ -25,34 +34,42 @@ Doc Type: current-contract
 2. `VAULT_HOME.md`
 3. `architecture/README.md`
 4. `uchat.md`
-5. `platform/tauri.md`
-6. `knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md`
+5. `tooling-runtime/README.md`
+6. `concepts/CONCEPT_MCP.md`
+7. `platform/tauri.md`
+8. `knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md`
 
-## 核心入口
+## 目录
 
-### 文档系统与阅读导航
+### 文档系统
 
 - `VAULT_HOME.md`
 - `concepts/CONCEPTS_INDEX.md`
+- `concepts/CONCEPT_AGENT.md`
 - `maps/AREA_MAP_RUNTIME.md`
 - `knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md`
 
-### 运行时与架构
+### 运行时
 
 - `architecture/README.md`
 - `architecture/ipc-and-preload.md`
 - `architecture/rag-node-development.md`
+- `architecture/rag-langgraph-flow.md`
 - `architecture/api-response-spec.md`
 - `architecture/model-config-api.md`
+- `architecture/context-budget-runtime.md`
 
-### 对话系统
+### 对话
 
+- `chat/README.md`
 - `uchat.md`
 - `uchat-internal-maintenance.md`
-- `chat-system-practices.md`
-- `chat-tool-integration-research.md`
-- `chat-tool-integration-poc.md`
-- `chat-tool-integration-checklist.md`
+- `chat/chat-system-practices.md`
+- `chat/chat-tool-integration-research.md`
+- `chat/chat-tool-integration-poc.md`
+- `chat/chat-tool-integration-checklist.md`
+- `chat/agent-swot-plan.md`
+- `chat/agent-runtime-design.md`
 
 ### 知识库
 
@@ -61,18 +78,49 @@ Doc Type: current-contract
 - `knowledge-base/backend-schema.md`
 - `knowledge-base/markdown-workspace-mode.md`
 
-### 平台与打包
+### 平台
 
+- `build/README.md`
 - `platform/tauri.md`
 - `platform/tauri-setup.md`
-- `版本管理.md`
 - `CHANGELOG.md`
 
-### 第三方集成与扩展
+### 开发支撑
 
-- `enterprise-wecom-integration-poc.md`
-- `lark-feishu-integration-poc.md`
-- `wecom-vs-lark-integration-selection.md`
+- `developments/README.md`
+- `developments/release-management.md`
+- `developments/request-wrapper.md`
+- `developments/frontend-i18n.md`
+- `developments/coding-standards.md`
+- `developments/defect-log.md`
+- `developments/product-roadmap-priorities.md`
+
+### 集成
+
+- `integrations/wecom-admin-setup-checklist.md`
+- `integrations/wecom-cloudflare-worker-poc.md`
+- `integrations/enterprise-wecom-implementation-checklist.md`
+- `integrations/enterprise-wecom-integration-poc.md`
+- `integrations/wecom-instance-capability-design.md`
+- `integrations/wecom-instance-capability-implementation-checklist.md`
+- `integrations/third-party-integration-backend-design.md`
+- `integrations/wecom-robot-phase-1-retrospective.md`
+- `integrations/lark-feishu-integration-poc.md`
+- `integrations/third-party-integration-architecture.md`
+- `integrations/third-party-integration-frontend-design.md`
+- `integrations/third-party-integration-consumption-model.md`
+- `integrations/wecom-chat-tool-integration-plan.md`
+- `integrations/wecom-mcp-wrapper-design.md`
+- `integrations/wecom-vs-lark-integration-selection.md`
+
+### 工具运行时
+
+- `tooling-runtime/harness-runtime-design.md`
+- `tooling-runtime/read-skill-design.md`
+- `tooling-runtime/terminal-capability-checklist.md`
+- `tooling-runtime/tools-protocol.md`
+- `tooling-runtime/tools-ecosystem-research.md`
+- `tooling-runtime/tool-runtime-retrospective-2026-06-27.md`
 
 ### 文档系统 schema
 
@@ -81,7 +129,7 @@ Doc Type: current-contract
 - `knowledge-system/DIRECTORY_AND_CLASSIFICATION_RULES.md`
 - `knowledge-system/IMPLEMENTATION_ROADMAP.md`
 
-## 当前分类规则
+## 当前规则
 
 当前文档系统以 [karpathy/442a6bf555914893e9891c11519de94f](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) 为上位参考，优先按三层理解：
 
@@ -89,20 +137,20 @@ Doc Type: current-contract
 - Wiki
 - Schema
 
-同时还要尽量让每篇活跃文档回答三件事：
+同时尽量让每篇活跃文档回答三件事：
 
 - 它属于哪一层
 - 它属于哪个模块
 - 它是什么文档角色
 
-从现在开始，活跃文档的默认要求可以直接理解成四个头部字段：
+活跃文档默认看这四个头部字段：
 
 - `Layer`
 - `Module`
 - `Doc Type`
 - `Status`
 
-如果是 current-contract、reference、overview 这类核心页，再尽量补：
+如果是 current-contract、reference、overview 这类核心页，再补：
 
 - `Owner`
 - `Last verified`
@@ -111,20 +159,22 @@ Doc Type: current-contract
 ## 目录说明
 
 - `architecture/`：运行时边界、API 契约、实现边界
-- `platform/`：桌面壳层、构建、打包与环境
+- `build/`：构建、打包、release 产物与测试报告入包规则
+- `platform/`：桌面壳层与平台运行环境
+- `developments/`：版本、请求封装、i18n、工程规范、缺陷台账、路线规划
 - `role/`：角色系统与 persona 相关文档
 - `maps/`：区域阅读地图
 - `concepts/`：概念页
 - `knowledge-system/`：文档系统 schema、索引、AI 接入与可视化规则
 - `archive/`：历史资料，默认不作为当前实现依据
 
-## 阅读原则
+## 阅读顺序
 
 - 先读总纲页，再读细页。
 - 先把 current-contract 和 reference 页读清，再看 design / plan。
 - `archive/` 只在明确需要历史背景时再进。
 
-## 相关文档
+## 相关页
 
 - `WIKI_SYSTEM_SCHEMA.md`
 - `knowledge-system/DOCUMENTATION_STANDARDS.md`

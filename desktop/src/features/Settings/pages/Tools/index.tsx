@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/shared/ui/Button";
 import { Modal } from "@/shared/ui/Modal";
-import { TextArea, TextInput } from "@/shared/ui/Input";
+import { NumberInput, TextArea, TextInput } from "@/shared/ui/Input";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import ToolsPackagePanel from "./components/ToolsPackagePanel";
 import ToolsSidebar from "./components/ToolsSidebar";
@@ -203,6 +203,21 @@ export default function ToolsSettings() {
                       placeholder={t("settings.tools.package.webSearchBaseUrlPlaceholder")}
                     />
                   </div>
+                </div>
+
+                <div className="rounded-ui-control border border-border bg-surface-primary px-3 py-3">
+                  <NumberInput
+                    label={t("settings.tools.package.webSearchMaxResults")}
+                    value={workbench.webSearchConfig.maxResults}
+                    onChange={(value) =>
+                      workbench.setWebSearchConfig((current) => ({
+                        ...current,
+                        maxResults: value,
+                      }))
+                    }
+                    step={1}
+                    labelHelp={t("settings.tools.package.webSearchMaxResultsHint")}
+                  />
                 </div>
               </div>
 

@@ -6,7 +6,7 @@ import type {
   McpStreamEventInput,
 } from "../core/definitions.js";
 import { createArtifact } from "../core/artifacts.js";
-import { McpApprovalRequiredError, mcpBadRequest, mcpInternalError } from "../core/errors.js";
+import { mcpBadRequest, mcpInternalError } from "../core/errors.js";
 import { resolveWorkspacePath } from "../workspace.js";
 import {
   createTerminalSession,
@@ -118,20 +118,6 @@ const normalizeSessionMode = (value: unknown): "ephemeral" | "persistent" => {
   }
 
   return "ephemeral";
-};
-
-const maybeRequireApproval = (args: Record<string, unknown>) => {
-  if (args.approvalMode !== "require") {
-    return;
-  }
-
-  if (args.approvalGranted === true) {
-    return;
-  }
-
-  throw new McpApprovalRequiredError("Terminal command requires explicit approval", {
-    scope: "command",
-  });
 };
 
 const resolveCommandCwd = (cwd?: string) => (cwd ? resolveWorkspacePath(cwd) : resolveWorkspacePath("."));
@@ -532,8 +518,6 @@ export const executeTerminalSessionRuntime = async ({
   const timeoutMs = normalizeTimeoutMs(args.timeoutMs);
   const attachSessionId = normalizeAttachSessionId(args.attachSessionId);
   const sessionMode = attachSessionId ? "persistent" : normalizeSessionMode(args.sessionMode);
-
-  maybeRequireApproval(args);
 
   if (attachSessionId && (args.cwd !== undefined || env !== undefined)) {
     throw mcpBadRequest("attachSessionId cannot be combined with cwd or env overrides");

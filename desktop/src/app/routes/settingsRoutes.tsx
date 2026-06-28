@@ -11,6 +11,7 @@ import {
   Info,
   LibraryBig,
   ListChecks,
+  ShieldCheck,
   Wrench,
   UserRoundPen,
 } from "lucide-react";
@@ -32,6 +33,7 @@ import DevelopmentDocsPage from "@/features/Settings/pages/Development/pages/Doc
 import DevelopmentApiDocsPage from "@/features/Settings/pages/Development/pages/ApiDocs/index";
 import DevelopmentBaseInformationPage from "@/features/Settings/pages/Development/pages/BaseInformation/index";
 import McpSettings from "@/features/Settings/pages/Mcp/index";
+import IntegrationsSettings from "@/features/Settings/pages/Integrations/index";
 import ToolsSettings from "@/features/Settings/pages/Tools/index";
 import RoleSettings from "@/features/Settings/pages/Personas/index";
 
@@ -141,6 +143,11 @@ const settingsRouteTree: SettingsRouteConfig[] = [
     path: "mcp",
     element: <McpSettings />,
     nav: { labelKey: "settings.navigation.mcp", icon: Boxes },
+  },
+  {
+    path: "integrations",
+    element: <IntegrationsSettings />,
+    nav: { labelKey: "settings.navigation.enterpriseIntegrations", icon: ShieldCheck },
   },
   {
     path: "tools",

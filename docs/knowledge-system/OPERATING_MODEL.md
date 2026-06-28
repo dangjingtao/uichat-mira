@@ -4,7 +4,8 @@ Status: Current
 Owner: docs
 Last verified: 2026-06-24
 Layer: schema
-Module: docs-system
+Module: Docs
+Feature: DocsSystem
 Doc Type: current-contract
 
 ## 目的

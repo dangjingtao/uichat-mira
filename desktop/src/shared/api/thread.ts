@@ -10,8 +10,10 @@ export interface Thread {
   id: string;
   title: string;
   modelName: string | null;
+  workspaceId: string | null;
   knowledgeBaseId: string | null;
   roleId: string | null;
+  agentEnabled?: boolean | null;
   contextSummary: string | null;
   contextSummaryUpdatedAt: string | null;
   status: ThreadStatus;
@@ -57,8 +59,10 @@ export interface ThreadWithMessages extends Thread {
 export interface CreateThreadInput {
   title?: string;
   modelName?: string;
+  workspaceId?: string | null;
   knowledgeBaseId?: string | null;
   roleId?: string | null;
+  agentEnabled?: boolean | null;
   contextSummary?: string | null;
 }
 
@@ -75,6 +79,15 @@ export interface ThreadListFilters {
   status?: "active" | "archived";
   sortBy?: "createdAt" | "updatedAt";
   sortOrder?: "asc" | "desc";
+}
+
+export interface ChatWorkspace {
+  id: string;
+  name: string;
+  rootPath: string | null;
+  status: "active" | "archived";
+  createdAt: string;
+  updatedAt: string;
 }
 
 // 获取对话列表
@@ -130,6 +143,28 @@ export async function restoreThread(id: string): Promise<Thread> {
 // 删除对话
 export async function deleteThread(id: string): Promise<{ deleted: boolean }> {
   return del<{ deleted: boolean }>(`/threads/${id}`);
+}
+
+export async function listChatWorkspaces(): Promise<ChatWorkspace[]> {
+  return get<ChatWorkspace[]>("/chat-workspaces");
+}
+
+export async function createChatWorkspace(input: {
+  name: string;
+  rootPath?: string | null;
+}): Promise<ChatWorkspace> {
+  return post<ChatWorkspace>("/chat-workspaces", input);
+}
+
+export async function updateChatWorkspace(
+  id: string,
+  input: Partial<{ name: string; rootPath: string | null }>,
+): Promise<ChatWorkspace> {
+  return patch<ChatWorkspace>(`/chat-workspaces/${id}`, input);
+}
+
+export async function deleteChatWorkspace(id: string): Promise<{ deleted: boolean }> {
+  return del<{ deleted: boolean }>(`/chat-workspaces/${id}`);
 }
 
 // 获取对话消息

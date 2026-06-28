@@ -13,6 +13,7 @@ export type ProviderEmbeddingAdapter =
   | "ollama"
   | "openai-compatible"
   | "cloudflare";
+export type ProviderRerankAdapter = "openai-compatible" | "none";
 
 export interface ProviderDefinition {
   code: ProviderCode;
@@ -21,6 +22,7 @@ export interface ProviderDefinition {
   syncAdapter: ProviderSyncAdapter;
   chatAdapter: ProviderChatAdapter;
   embeddingAdapter: ProviderEmbeddingAdapter;
+  rerankAdapter: ProviderRerankAdapter;
   callableModelIdPrefix?: string;
 }
 
@@ -34,6 +36,7 @@ export const PROVIDER_DEFINITIONS = {
     syncAdapter: "ollama",
     chatAdapter: "ollama",
     embeddingAdapter: "ollama",
+    rerankAdapter: "none",
   },
   lmstudio: {
     code: "lmstudio",
@@ -42,6 +45,7 @@ export const PROVIDER_DEFINITIONS = {
     syncAdapter: "openai-compatible",
     chatAdapter: "openai-compatible",
     embeddingAdapter: "openai-compatible",
+    rerankAdapter: "none",
   },
   openai: {
     code: "openai",
@@ -50,6 +54,7 @@ export const PROVIDER_DEFINITIONS = {
     syncAdapter: "openai-compatible",
     chatAdapter: "openai-compatible",
     embeddingAdapter: "openai-compatible",
+    rerankAdapter: "none",
   },
   cloudflare: {
     code: "cloudflare",
@@ -59,6 +64,7 @@ export const PROVIDER_DEFINITIONS = {
     syncAdapter: "cloudflare",
     chatAdapter: "openai-compatible",
     embeddingAdapter: "cloudflare",
+    rerankAdapter: "none",
     callableModelIdPrefix: "@cf/",
   },
   volcengine: {
@@ -68,6 +74,7 @@ export const PROVIDER_DEFINITIONS = {
     syncAdapter: "openai-compatible",
     chatAdapter: "openai-compatible",
     embeddingAdapter: "openai-compatible",
+    rerankAdapter: "openai-compatible",
   },
 } satisfies Record<ProviderCode, ProviderDefinition>;
 

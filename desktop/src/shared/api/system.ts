@@ -30,11 +30,6 @@ export interface AppMetaData {
   description: string;
   repositoryUrl: string;
   homepageUrl: string;
-  changelog: string[];
-  versionHistory: Array<{
-    version: string;
-    summary: string;
-  }>;
   links: Array<{
     label: string;
     value: string;

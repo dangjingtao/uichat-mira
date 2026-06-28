@@ -44,6 +44,7 @@ export const getInvocationTraceRecord = (invocationId: string) => getInvocationT
 export interface ExecuteInvocationInput {
   toolId: string;
   args?: Record<string, unknown>;
+  userId?: number;
   threadId?: string;
   turnId?: string;
   signal?: AbortSignal;
@@ -111,6 +112,9 @@ export const executeInvocation = async (
     const response = (await tool.execute({
       invocationId,
       args,
+      userId: input.userId,
+      threadId: input.threadId,
+      turnId: input.turnId,
       signal,
       environment: input.environment,
       pushEvent: (event) => {

@@ -108,6 +108,10 @@ export const chatMessagesBodySchema = {
         additionalProperties: false,
       },
     },
+    agentEnabled: {
+      type: "boolean",
+      description: "Per-send Agent mode request from the desktop composer.",
+    },
   },
 } as const;
 

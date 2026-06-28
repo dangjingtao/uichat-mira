@@ -15,12 +15,15 @@ import type {
 } from "@/services/chat-stream-events.js";
 
 const MAX_TOOL_LOOP_STEPS = 3;
-const TODAY_DATE_ISO = "2026-06-26";
+const MAX_TOOL_LOOP_NON_SYSTEM_MESSAGES = 8;
+const TOOL_LOOP_SYNTHESIS_PROMPT =
+  "You already have enough tool results for this turn. Do not call more tools. Write the final answer for the user using the collected evidence, and clearly mention any uncertainty instead of making another tool request.";
 
 interface ExecuteChatToolLoopInput {
   requestedProvider: "default";
   threadId: string;
   userId: number;
+  agentEnabled?: boolean;
   messages: NormalizedChatMessage[];
   params?: Record<string, unknown>;
   onToolEvent?: (event: AssistantToolEvent) => Promise<void> | void;
@@ -57,16 +60,34 @@ const toOpenAIMessages = (messages: NormalizedChatMessage[]) =>
     content: toOpenAIMessageContent(message),
   })) as OpenAI.Chat.Completions.ChatCompletionMessageParam[];
 
-const buildDefaultToolPolicyMessage =
+const buildToolLoopSynthesisMessage =
   (): OpenAI.Chat.Completions.ChatCompletionSystemMessageParam => ({
     role: "system",
-    content: [
-      `Today is ${TODAY_DATE_ISO}.`,
-      "If the user asks about today's date, current time, latest news, live events, weather, prices, recent developments, or any fact that depends on current real-world information, do not guess from memory.",
-      "Use the available web_search tool first whenever current information is required.",
-      "If a search tool call fails or returns no usable current information, say that the real-time lookup failed instead of pretending to know the answer.",
-    ].join(" "),
+    content: TOOL_LOOP_SYNTHESIS_PROMPT,
   });
+
+/**
+ * Tool-loop requests should stay compact.
+ *
+ * We keep all request-only system context intact, but only the most recent
+ * non-system turns. This prevents Agent mode from sending a full thread history
+ * into compact providers like Ollama on the first tool-decision request.
+ */
+const trimToolLoopMessages = (messages: NormalizedChatMessage[]) => {
+  const systemMessages = messages.filter((message) => message.role === "system");
+  const nonSystemMessages = messages.filter(
+    (message) => message.role !== "system",
+  );
+
+  if (nonSystemMessages.length <= MAX_TOOL_LOOP_NON_SYSTEM_MESSAGES) {
+    return messages;
+  }
+
+  return [
+    ...systemMessages,
+    ...nonSystemMessages.slice(-MAX_TOOL_LOOP_NON_SYSTEM_MESSAGES),
+  ];
+};
 
 const toOpenAITools = (tools: ChatToolSurfaceDefinition[]) =>
   tools.map((tool) => ({
@@ -159,23 +180,33 @@ export const executeDefaultChatToolLoop = async (
   const resolved = resolveProviderForRole("llm", input.requestedProvider);
   const providerDefinition = getProviderDefinition(resolved.providerCode);
 
-  if (providerDefinition.chatAdapter !== "openai-compatible") {
+  if (
+    providerDefinition.chatAdapter !== "openai-compatible" &&
+    providerDefinition.chatAdapter !== "ollama"
+  ) {
     return null;
   }
 
-  const toolSurface = resolveChatToolSurface();
+  if (!input.agentEnabled) {
+    return null;
+  }
+
+  const toolSurface = resolveChatToolSurface({
+    agentEnabled: input.agentEnabled,
+  });
   if (toolSurface.length === 0) {
     return null;
   }
 
   const client = createOpenAICompatibleClient(resolved.baseUrl, resolved.apiKey);
   const openAiMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
-    [buildDefaultToolPolicyMessage(), ...toOpenAIMessages(input.messages)];
+    toOpenAIMessages(trimToolLoopMessages(input.messages));
   const tools = toOpenAITools(toolSurface);
   const mergedParams = {
     ...resolved.params,
     ...(input.params ?? {}),
   };
+  let usedToolCount = 0;
 
   for (let step = 0; step < MAX_TOOL_LOOP_STEPS; step += 1) {
     const completion = await client.chat.completions.create({
@@ -209,6 +240,15 @@ export const executeDefaultChatToolLoop = async (
         status: "requested",
         input: toolArgs,
       });
+      await input.onExecutionNode?.(
+        toToolExecutionNodeEvent({
+          toolCallId: toolCall.id,
+          toolName: toolCall.function.name,
+          phase: "start",
+          summary: `Requesting ${toolCall.function.name}`,
+          toolArgs,
+        }),
+      );
       await input.onToolEvent?.({
         callId: toolCall.id,
         toolName: toolCall.function.name,
@@ -227,6 +267,7 @@ export const executeDefaultChatToolLoop = async (
       const invocation = await executeHarnessInvocation({
         toolId: toolCall.function.name,
         args: toolArgs,
+        userId: input.userId,
         threadId: input.threadId,
       });
 
@@ -283,7 +324,25 @@ export const executeDefaultChatToolLoop = async (
           invocation.result ?? null,
         ),
       );
+      usedToolCount += 1;
     }
+  }
+
+  const synthesisCompletion = await client.chat.completions.create({
+    model: resolved.model,
+    messages: [...openAiMessages, buildToolLoopSynthesisMessage()],
+    stream: false,
+    ...toOpenAICompatibleChatOptions(mergedParams),
+  });
+
+  const synthesisChoice = synthesisCompletion.choices[0];
+  const synthesisText = synthesisChoice?.message?.content?.trim() ?? "";
+
+  if (synthesisText) {
+    return {
+      answer: synthesisText,
+      toolCallsUsed: usedToolCount,
+    };
   }
 
   throw new Error("Tool loop exceeded maximum step limit");

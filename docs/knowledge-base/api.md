@@ -4,7 +4,8 @@ Status: Current
 Owner: knowledge-base
 Last verified: 2026-06-26
 Layer: raw-source
-Module: knowledge-base
+Module: KnowledgeBase
+Feature: KnowledgeBaseAPI
 Doc Type: reference
 
 ## 单点真相范围
@@ -18,4 +19,3 @@ Doc Type: reference
 相关概念：
 
 - [[CONCEPT_KNOWLEDGE_BASE]]
-

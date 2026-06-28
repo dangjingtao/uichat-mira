@@ -1,7 +1,8 @@
 # 服务商接入优化说明
 
 Layer: raw-source
-Module: provider
+Module: ModelSetting
+Feature: ProviderIntegration
 Doc Type: design
 
 Status: Current
@@ -78,6 +79,7 @@ Last verified: 2026-06-24
 - 统一维护模型同步适配器
 - 统一维护 Chat 适配器
 - 统一维护 Embedding 适配器
+- 统一维护 Rerank 适配器
 - 统一维护特殊规则，例如 callable model id 前缀
 
 每个服务商现在通过一份定义描述，例如：
@@ -88,6 +90,7 @@ Last verified: 2026-06-24
 - `syncAdapter`
 - `chatAdapter`
 - `embeddingAdapter`
+- `rerankAdapter`
 - `callableModelIdPrefix`（可选）
 
 ### 前端集中配置
@@ -155,9 +158,12 @@ Last verified: 2026-06-24
 
 - `chatAdapter`
 - `embeddingAdapter`
+- `rerankAdapter`
 
 做分发。  
-这意味着同属 OpenAI-compatible 的新平台，通常不需要再加新的业务分支。
+这意味着同属 OpenAI-compatible 的新平台，通常不需要再加新的 Chat / Embedding 业务分支。
+
+Rerank 不从 `chatAdapter` 推断能力。当前只有明确声明 `rerankAdapter: "openai-compatible"` 的服务商会走 `/v1/rerank`；其他服务商即使 Chat 兼容 OpenAI，也不代表可用于 Rerank。
 
 ## 现在如何新增一个服务商
 
@@ -174,6 +180,7 @@ Last verified: 2026-06-24
 - `syncAdapter: "openai-compatible"`
 - `chatAdapter: "openai-compatible"`
 - `embeddingAdapter: "openai-compatible"`
+- `rerankAdapter: "none"`，或在明确支持 `/v1/rerank` 时使用 `"openai-compatible"`
 
 那么通常不需要再改：
 

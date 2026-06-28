@@ -4,7 +4,8 @@ Status: Current
 Owner: runtime
 Last verified: 2026-06-26
 Layer: wiki
-Module: provider
+Module: ModelSetting
+Feature: ProviderIntegration
 Doc Type: overview
 
 ## 单点真相范围

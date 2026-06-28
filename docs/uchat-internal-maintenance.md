@@ -4,8 +4,14 @@ Status: Current
 Owner: chat
 Last verified: 2026-06-25
 Layer: raw-source
-Module: chat
+Module: Chat
+Feature: UChat
 Doc Type: current-contract
+Canonical: true
+Related:
+  - uchat.md
+  - chat/chat-system-practices.md
+  - provider/README.md
 
 ## 单点真相范围
 
@@ -55,4 +61,4 @@ Doc Type: current-contract
 ## 相关文档
 
 - `uchat.md`
-- `chat-system-practices.md`
+- `chat/chat-system-practices.md`

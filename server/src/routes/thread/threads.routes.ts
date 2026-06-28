@@ -9,7 +9,11 @@ import {
 import { notFound, routeHandler } from "@/utils/route-errors.js";
 import { isThreadAccessError } from "./access.js";
 import { threadRouteSchemas } from "./schemas.js";
-import type { ThreadListQuery, ThreadMutationBody } from "./types.js";
+import type {
+  ChatWorkspaceMutationBody,
+  ThreadListQuery,
+  ThreadMutationBody,
+} from "./types.js";
 
 export const registerThreadRoutes = async (app: FastifyInstance) => {
   const debugLogPath = path.resolve(
@@ -200,6 +204,60 @@ export const registerThreadRoutes = async (app: FastifyInstance) => {
         }
         throw err;
       }
+    }),
+  );
+
+  app.get(
+    "/chat-workspaces",
+    { schema: threadRouteSchemas.listChatWorkspaces },
+    routeHandler("Failed to list chat workspaces", async (request) => {
+      return success(threadService.listChatWorkspaces(request.authUser!.id));
+    }),
+  );
+
+  app.post<{ Body: ChatWorkspaceMutationBody }>(
+    "/chat-workspaces",
+    { schema: threadRouteSchemas.createChatWorkspace },
+    routeHandler("Failed to create chat workspace", async (request) => {
+      const result = threadService.createChatWorkspace({
+        userId: request.authUser!.id,
+        name: request.body.name ?? "",
+        rootPath: request.body.rootPath ?? null,
+      });
+      return success(result, "Workspace created");
+    }),
+  );
+
+  app.patch<{ Params: { id: string }; Body: ChatWorkspaceMutationBody }>(
+    "/chat-workspaces/:id",
+    { schema: threadRouteSchemas.updateChatWorkspace },
+    routeHandler("Failed to update chat workspace", async (request) => {
+      const result = threadService.updateChatWorkspace(
+        request.params.id,
+        request.authUser!.id,
+        request.body,
+      );
+      if (!result) {
+        throw notFound(THREAD_NOT_FOUND_MESSAGE);
+      }
+
+      return success(result, "Workspace updated");
+    }),
+  );
+
+  app.delete<{ Params: { id: string } }>(
+    "/chat-workspaces/:id",
+    { schema: threadRouteSchemas.deleteChatWorkspace },
+    routeHandler("Failed to delete chat workspace", async (request) => {
+      const deleted = threadService.deleteChatWorkspace(
+        request.params.id,
+        request.authUser!.id,
+      );
+      if (!deleted) {
+        throw notFound(THREAD_NOT_FOUND_MESSAGE);
+      }
+
+      return success({ deleted: true }, "Workspace deleted");
     }),
   );
 };

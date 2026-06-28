@@ -202,6 +202,7 @@ export const rewriteService = {
         reason,
         question,
         retrievalQuestion,
+        conversationHistoryCount: input.conversationHistory?.length ?? 0,
       });
 
       return {
@@ -216,6 +217,7 @@ export const rewriteService = {
         event: "rewrite-fallback",
         reason,
         question,
+        conversationHistoryCount: input.conversationHistory?.length ?? 0,
         error:
           error instanceof Error
             ? {

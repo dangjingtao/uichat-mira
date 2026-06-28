@@ -4,6 +4,14 @@ import {
   type NormalizedChatMessage,
   providerProxyService,
 } from "@/services/provider-proxy.service/index.js";
+import {
+  assistantDoneChunk,
+  assistantErrorChunk,
+  assistantFinishChunks,
+  assistantTextDeltaChunk,
+  assistantTextEndChunk,
+  assistantTextStartChunks,
+} from "@/services/chat-stream-events.js";
 import { NO_CONTEXT_ANSWER } from "@/services/rag-response-constants.js";
 import type { RetrievedChunk } from "@/services/rag-nodes/index.js";
 import { ragPipeline } from "@/services/rag-pipeline.js";
@@ -18,6 +26,8 @@ import {
 } from "./message-persistence.js";
 import { createStaticAssistantStream } from "./stream-protocol.js";
 import { getNormalizedMessageText } from "@/services/provider-proxy.message-protocol.js";
+import { Readable } from "node:stream";
+import { resolveThreadWebSearchContext } from "@/services/shared-nodes/thread-request-context-web-search.resolver.js";
 
 export const toPersistedRagSources = (sources: RetrievedChunk[]) =>
   sources.map((source) => ({
@@ -70,6 +80,8 @@ export interface RagAssistantStreamInput {
   messages: NormalizedChatMessage[];
   /** Request-only role/summary system messages derived from thread state. */
   requestContextMessages?: NormalizedChatMessage[];
+  /** Pre-rendered request-context execution nodes shared with normal chat. */
+  requestContextPreludeChunks?: string[];
   /** Logger from the Fastify route, used for route-level observability. */
   log: FastifyBaseLogger;
 }
@@ -86,6 +98,7 @@ export const createRagAssistantStream = (input: RagAssistantStreamInput) => {
     ragInput,
     messages,
     requestContextMessages,
+    requestContextPreludeChunks,
     log,
   } = input;
 
@@ -249,21 +262,61 @@ export const createRagAssistantStream = (input: RagAssistantStreamInput) => {
     });
   }
 
-  return ragPipeline.assistantStream(
-    {
-      question: ragInput.question,
-      conversationHistory: ragInput.conversationHistory,
-      knowledgeBaseId: currentKnowledgeBase.id,
-      requestContextMessages,
-    },
-    {
-      messageId: assistantMessageId,
-      onComplete: async ({ answer, sources, finishReason }) =>
-        persistRagAssistantMessage({
-          answer,
-          sources,
-          finishReason,
-        }),
-    },
+  return Readable.from(
+    (async function* () {
+      try {
+        if (requestContextPreludeChunks?.length) {
+          for (const chunk of requestContextPreludeChunks) {
+            yield chunk;
+          }
+        }
+
+        const prefetch = await resolveThreadWebSearchContext({
+          question: ragInput.question,
+          threadId,
+          requestContextMessages,
+          log,
+        });
+
+        for (const chunk of prefetch.preludeChunks) {
+          yield chunk;
+        }
+
+        const ragStream = ragPipeline.assistantStream(
+          {
+            question: ragInput.question,
+            conversationHistory: ragInput.conversationHistory,
+            knowledgeBaseId: currentKnowledgeBase.id,
+            requestContextMessages: prefetch.requestContextMessages,
+          },
+          {
+            messageId: assistantMessageId,
+            onComplete: async ({ answer, sources, finishReason }) =>
+              persistRagAssistantMessage({
+                answer,
+                sources,
+                finishReason,
+              }),
+          },
+        );
+
+        for await (const chunk of ragStream) {
+          yield chunk;
+        }
+      } catch (streamError) {
+        const message =
+          streamError instanceof Error ? streamError.message : String(streamError);
+        yield* assistantTextStartChunks({ messageId: assistantMessageId });
+        yield assistantTextDeltaChunk("");
+        yield assistantTextEndChunk();
+        yield assistantErrorChunk(message);
+        yield* assistantFinishChunks({
+          finishReason: "error",
+          isContinued: false,
+          includeDone: false,
+        });
+        yield assistantDoneChunk();
+      }
+    })(),
   );
 };

@@ -79,7 +79,8 @@ export function SettingsNavigation() {
     (item) =>
       item.to === "/settings/model-setting" ||
       item.to === "/settings/tools" ||
-      item.to === "/settings/mcp",
+      item.to === "/settings/mcp" ||
+      item.to === "/settings/integrations",
   );
 
   const knowledgeItems = settingsNavigationItems.filter(

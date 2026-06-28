@@ -1,0 +1,76 @@
+import { agentGraph } from "./graph.js";
+import { createAgentGoal, createAgentPlan } from "./nodes.js";
+import { agentRunStore } from "./run-store.js";
+import type { AgentGraphInput } from "./types.js";
+
+export const createAndRunAgent = async (
+  input: Omit<AgentGraphInput, "runId" | "goal" | "plan"> & {
+    goalText: string;
+  },
+) => {
+  const goal = createAgentGoal(input.goalText);
+  const plan = createAgentPlan(goal);
+  const run = agentRunStore.create({
+    threadId: input.threadId,
+    userId: input.userId,
+    goal,
+    plan,
+    runtimeInput: {
+      messages: input.messages,
+      requestContextMessages: input.requestContextMessages,
+      params: input.params,
+      knowledgeBaseId: input.knowledgeBaseId,
+      intentConfig: input.intentConfig,
+    },
+  });
+
+  agentRunStore.update(run.id, {
+    status: "running",
+    currentStepId: plan.steps[0]?.id,
+  });
+
+  try {
+    const output = await agentGraph.run({
+      ...input,
+      runId: run.id,
+      goal,
+      plan,
+      approvedToolIds: [],
+    });
+
+    for (const observation of output.observations) {
+      agentRunStore.addObservation(run.id, observation);
+    }
+
+    if (output.pendingApproval) {
+      agentRunStore.update(run.id, {
+        status: "waiting_approval",
+        currentStepId: output.pendingApproval.stepId,
+        pendingApproval: output.pendingApproval,
+      });
+    }
+
+    agentRunStore.complete(run.id, {
+      status: output.status,
+      currentStepId: output.pendingApproval ? output.pendingApproval.stepId : undefined,
+      contextBudget: output.contextBudget,
+      ...(output.pendingApproval
+        ? { pendingApproval: output.pendingApproval }
+        : { pendingApproval: undefined }),
+    });
+
+    return {
+      run: agentRunStore.get(run.id) ?? run,
+      output,
+    };
+  } catch (error) {
+    agentRunStore.update(run.id, {
+      status: "failed",
+      currentStepId: undefined,
+    });
+    throw error;
+  }
+};
+
+export { agentRunStore } from "./run-store.js";
+export type * from "./types.js";

@@ -118,10 +118,11 @@ function generateServerReport() {
 
   console.log("[dev:coverage] Generating server coverage report...");
   execSync(
-    "pnpm exec vitest run --coverage --reporter=default --reporter=json --outputFile=./coverage/test-results.json",
+    `"${serverVitest}" run --coverage --reporter=default --reporter=json --outputFile=./coverage/test-results.json`,
     {
-      cwd: path.join(projectRoot, "server"),
+      cwd: serverDir,
       stdio: "inherit",
+      shell: true,
     },
   );
   buildTestResultsSummary(serverCoverageDir);

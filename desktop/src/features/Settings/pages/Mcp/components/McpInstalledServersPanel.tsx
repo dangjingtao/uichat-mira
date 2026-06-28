@@ -2,6 +2,7 @@ import { BookOpenText, ExternalLink, Loader2, PlugZap, Radar, Settings2, Trash2 
 import Badge from "@/shared/ui/Badge";
 import { Button } from "@/shared/ui/Button";
 import type { ExternalMcpServerRecord } from "@/shared/api/tools";
+import { resolveGithubMirrorUrl } from "@/shared/github";
 
 type McpInstalledServersPanelProps = {
   servers: ExternalMcpServerRecord[];
@@ -168,7 +169,7 @@ export default function McpInstalledServersPanel({
                         ) : null}
                         {server.repositoryUrl ? (
                           <a
-                            href={server.repositoryUrl}
+                            href={resolveGithubMirrorUrl(server.repositoryUrl)}
                             target="_blank"
                             rel="noreferrer"
                             className="inline-flex items-center gap-1.5 text-xs text-text-secondary underline underline-offset-4 hover:text-text-primary"

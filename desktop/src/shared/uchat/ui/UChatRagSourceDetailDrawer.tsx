@@ -3,10 +3,10 @@ import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { IconButton } from "@/shared/ui/Button";
 import {
-  getRagSourceAttribution,
+  getExecutionSourceAttribution,
   normalizeInlineText,
-  type UChatRagSourceDetail,
-} from "./ragParsers";
+  type UChatExecutionSourceDetail,
+} from "./executionParsers";
 import { UChatOverflowTooltip } from "./UChatOverflowTooltip";
 
 // UChatRagSourceDetailDrawer renders normalized source cards reconstructed
@@ -17,13 +17,13 @@ export function UChatRagSourceDetailDrawer({
   onClose,
 }: {
   open: boolean;
-  detail: UChatRagSourceDetail | null;
+  detail: UChatExecutionSourceDetail | null;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(open);
   const [visible, setVisible] = useState(open);
-  const [cachedDetail, setCachedDetail] = useState<UChatRagSourceDetail | null>(
+  const [cachedDetail, setCachedDetail] = useState<UChatExecutionSourceDetail | null>(
     detail,
   );
 
@@ -65,7 +65,7 @@ export function UChatRagSourceDetailDrawer({
         index,
         documentName: normalizeInlineText(source.documentName),
         content: normalizeInlineText(source.content),
-        attribution: getRagSourceAttribution(source),
+        attribution: getExecutionSourceAttribution(source),
       })),
     [cachedDetail],
   );

@@ -1,7 +1,8 @@
 # 角色系统总览
 
 Layer: raw-source
-Module: role
+Module: Role
+Feature: Overview
 Doc Type: current-contract
 
 Status: Current

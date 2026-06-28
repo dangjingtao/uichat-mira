@@ -30,8 +30,10 @@ import {
 type ChatThreadDraftStateValue = {
   draftKnowledgeBaseId: string | null;
   draftRoleId: string | null;
+  draftAgentEnabled: boolean;
   setDraftKnowledgeBaseId: (knowledgeBaseId: string | null) => void;
   setDraftRoleId: (roleId: string | null) => void;
+  setDraftAgentEnabled: (enabled: boolean) => void;
   resetDraft: () => void;
 };
 
@@ -50,7 +52,11 @@ const desktopRuntimeBaseCapabilities = {
 
 export const createStableAppChatRuntime = (
   getCreateThreadInput: () =>
-    | { knowledgeBaseId?: string | null; roleId?: string | null }
+    | {
+        knowledgeBaseId?: string | null;
+        roleId?: string | null;
+        agentEnabled?: boolean | null;
+      }
     | undefined,
 ) =>
   new ChatRuntime({
@@ -78,17 +84,21 @@ export function AppChatRuntimeProvider({
     null,
   );
   const [draftRoleId, setDraftRoleId] = useState<string | null>(null);
+  const [draftAgentEnabled, setDraftAgentEnabled] = useState(false);
   const draftKnowledgeBaseIdRef = useRef<string | null>(draftKnowledgeBaseId);
   const draftRoleIdRef = useRef<string | null>(draftRoleId);
+  const draftAgentEnabledRef = useRef<boolean>(draftAgentEnabled);
   const hasBootstrappedActiveThreadRef = useRef(false);
   draftKnowledgeBaseIdRef.current = draftKnowledgeBaseId;
   draftRoleIdRef.current = draftRoleId;
+  draftAgentEnabledRef.current = draftAgentEnabled;
   const runtimeRef = useRef<ChatRuntime | null>(null);
 
   if (!runtimeRef.current) {
     runtimeRef.current = createStableAppChatRuntime(() => ({
       knowledgeBaseId: draftKnowledgeBaseIdRef.current,
       roleId: draftRoleIdRef.current,
+      agentEnabled: draftAgentEnabledRef.current,
     }));
   }
 
@@ -165,14 +175,17 @@ export function AppChatRuntimeProvider({
     () => ({
       draftKnowledgeBaseId,
       draftRoleId,
+      draftAgentEnabled,
       setDraftKnowledgeBaseId,
       setDraftRoleId,
+      setDraftAgentEnabled,
       resetDraft: () => {
         setDraftKnowledgeBaseId(null);
         setDraftRoleId(null);
+        setDraftAgentEnabled(false);
       },
     }),
-    [draftKnowledgeBaseId, draftRoleId],
+    [draftAgentEnabled, draftKnowledgeBaseId, draftRoleId],
   );
 
   return (

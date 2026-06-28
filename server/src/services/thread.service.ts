@@ -1,4 +1,5 @@
 import {
+  chatWorkspaceRepository,
   messageRepository,
   knowledgeBaseRepository,
   threadRepository,
@@ -7,14 +8,17 @@ import {
 } from "@/db/repositories";
 import type { Message, MessageRole, Thread, ThreadStatus } from "@/db/schema";
 import { threadContextSummaryNode } from "@/services/shared-nodes/thread-context-summary.node.js";
+import { isValidWorkspaceRootPath } from "@/services/workspace-path-validation.js";
 import { THREAD_ACCESS_ERROR_MESSAGE } from "@/utils/errors.js";
 
 export interface ThreadResponse {
   id: string;
   title: string;
   modelName: string | null;
+  workspaceId: string | null;
   knowledgeBaseId: string | null;
   roleId: string | null;
+  agentEnabled: boolean;
   contextSummary: string | null;
   contextSummaryUpdatedAt: string | null;
   status: ThreadStatus;
@@ -61,9 +65,28 @@ export interface CreateThreadInput {
   userId: number;
   title?: string;
   modelName?: string;
+  workspaceId?: string | null;
   knowledgeBaseId?: string | null;
   roleId?: string | null;
+  agentEnabled?: boolean | null;
   contextSummary?: string | null;
+}
+
+const normalizeWorkspaceRootPath = (value: string) => value.trim();
+
+export interface ChatWorkspaceResponse {
+  id: string;
+  name: string;
+  rootPath: string | null;
+  status: "active" | "archived";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateChatWorkspaceInput {
+  userId: number;
+  name: string;
+  rootPath?: string | null;
 }
 
 export interface CreateMessageInput {
@@ -177,8 +200,10 @@ const toThreadResponse = (
     id: thread.id,
     title: thread.title || "新对话",
     modelName: thread.modelName ?? null,
+    workspaceId: thread.workspaceId ?? null,
     knowledgeBaseId: thread.knowledgeBaseId,
     roleId: thread.roleId ?? null,
+    agentEnabled: thread.agentEnabled ?? false,
     contextSummary: thread.contextSummary ?? null,
     contextSummaryUpdatedAt: thread.contextSummaryUpdatedAt ?? null,
     status: thread.status,
@@ -202,8 +227,10 @@ const toThreadResponseFromStats = (
     id: thread.id,
     title: thread.title || "新对话",
     modelName: thread.modelName ?? null,
+    workspaceId: thread.workspaceId ?? null,
     knowledgeBaseId: thread.knowledgeBaseId,
     roleId: thread.roleId ?? null,
+    agentEnabled: thread.agentEnabled ?? false,
     contextSummary: thread.contextSummary ?? null,
     contextSummaryUpdatedAt: thread.contextSummaryUpdatedAt ?? null,
     status: thread.status,
@@ -213,6 +240,24 @@ const toThreadResponseFromStats = (
     lastMessage,
   };
 };
+
+const toChatWorkspaceResponse = (
+  workspace: {
+    id: string;
+    name: string;
+    rootPath: string | null;
+    status: "active" | "archived";
+    createdAt: string;
+    updatedAt: string;
+  },
+): ChatWorkspaceResponse => ({
+  id: workspace.id,
+  name: workspace.name,
+  rootPath: workspace.rootPath ?? null,
+  status: workspace.status,
+  createdAt: workspace.createdAt,
+  updatedAt: workspace.updatedAt,
+});
 
 const toMessageParts = (
   content: string,
@@ -315,10 +360,111 @@ export const threadService = {
     };
   },
 
+  listChatWorkspaces(userId: number): ChatWorkspaceResponse[] {
+    return chatWorkspaceRepository
+      .list({ userId, status: "active" })
+      .map(toChatWorkspaceResponse);
+  },
+
+  createChatWorkspace(input: CreateChatWorkspaceInput): ChatWorkspaceResponse {
+    const name = input.name.trim();
+    if (!name) {
+      throw new Error("Workspace name is required");
+    }
+
+    const rootPath = input.rootPath ? normalizeWorkspaceRootPath(input.rootPath) : "";
+    if (!rootPath) {
+      throw new Error("Workspace root path is required");
+    }
+    if (!isValidWorkspaceRootPath(rootPath)) {
+      throw new Error("Workspace root path format is invalid");
+    }
+    const created = chatWorkspaceRepository.create({
+      userId: input.userId,
+      name,
+      rootPath,
+      status: "active",
+    });
+
+    return toChatWorkspaceResponse(created);
+  },
+
+  updateChatWorkspace(
+    id: string,
+    userId: number,
+    input: {
+      name?: string;
+      rootPath?: string | null;
+    },
+  ): ChatWorkspaceResponse | null {
+    const existing = chatWorkspaceRepository.findById(id, userId);
+    if (!existing) {
+      return null;
+    }
+
+    const updateData: Record<string, unknown> = {};
+
+    if (typeof input.name === "string") {
+      const nextName = input.name.trim();
+      if (!nextName) {
+        throw new Error("Workspace name is required");
+      }
+      updateData.name = nextName;
+    }
+
+    if (typeof input.rootPath === "string") {
+      const nextRootPath = normalizeWorkspaceRootPath(input.rootPath);
+      if (!nextRootPath) {
+        throw new Error("Workspace root path is required");
+      }
+      if (!isValidWorkspaceRootPath(nextRootPath)) {
+        throw new Error("Workspace root path format is invalid");
+      }
+      updateData.rootPath = nextRootPath;
+    }
+
+    if (input.rootPath === null) {
+      updateData.rootPath = null;
+    }
+
+    const updated = chatWorkspaceRepository.updateById(id, updateData);
+    return updated ? toChatWorkspaceResponse(updated) : null;
+  },
+
+  deleteChatWorkspace(id: string, userId: number): boolean {
+    const existing = chatWorkspaceRepository.findById(id, userId);
+    if (!existing) {
+      return false;
+    }
+
+    const activeThreads = threadRepository.list({
+      userId,
+      status: "active",
+      sortBy: "updatedAt",
+      sortOrder: "desc",
+    });
+
+    for (const thread of activeThreads) {
+      if (thread.workspaceId === id) {
+        threadRepository.updateById(thread.id, {
+          workspaceId: null,
+        });
+      }
+    }
+
+    return chatWorkspaceRepository.deleteById(id);
+  },
+
   createThread(input: CreateThreadInput): ThreadResponse {
+    const workspaceId = input.workspaceId?.trim();
     const knowledgeBaseId = input.knowledgeBaseId?.trim();
     const roleId = input.roleId?.trim();
+    const agentEnabled = input.agentEnabled;
     const contextSummary = input.contextSummary?.trim();
+
+    if (workspaceId && !chatWorkspaceRepository.findById(workspaceId, input.userId)) {
+      throw new Error("Workspace not found");
+    }
 
     if (knowledgeBaseId && !knowledgeBaseRepository.getById(knowledgeBaseId)) {
       throw new Error("Knowledge base not found");
@@ -328,8 +474,10 @@ export const threadService = {
       userId: input.userId,
       title: input.title?.trim() || "",
       modelName: input.modelName?.trim() || undefined,
+      workspaceId: workspaceId ?? null,
       knowledgeBaseId: knowledgeBaseId ?? null,
       roleId: roleId ?? null,
+      agentEnabled: typeof agentEnabled === "boolean" ? agentEnabled : false,
       contextSummary: contextSummary || null,
       contextSummaryUpdatedAt: contextSummary ? new Date().toISOString() : null,
       status: "active",
@@ -352,8 +500,10 @@ export const threadService = {
     if (
       input.title === undefined &&
       input.modelName === undefined &&
+      input.workspaceId === undefined &&
       input.knowledgeBaseId === undefined &&
       input.roleId === undefined &&
+      input.agentEnabled === undefined &&
       input.contextSummary === undefined
     ) {
       return toThreadResponse(
@@ -368,6 +518,21 @@ export const threadService = {
     }
     if (typeof input.modelName === "string") {
       updateData.modelName = input.modelName.trim() || null;
+    }
+    if (typeof input.workspaceId === "string") {
+      const workspaceId = input.workspaceId.trim();
+      if (!workspaceId) {
+        throw new Error("Workspace id is required");
+      }
+
+      if (!chatWorkspaceRepository.findById(workspaceId, userId)) {
+        throw new Error("Workspace not found");
+      }
+
+      updateData.workspaceId = workspaceId;
+    }
+    if (input.workspaceId === null) {
+      updateData.workspaceId = null;
     }
     if (typeof input.knowledgeBaseId === "string") {
       const knowledgeBaseId = input.knowledgeBaseId.trim();
@@ -390,6 +555,12 @@ export const threadService = {
     }
     if (input.roleId === null) {
       updateData.roleId = null;
+    }
+    if (typeof input.agentEnabled === "boolean") {
+      updateData.agentEnabled = input.agentEnabled;
+    }
+    if (input.agentEnabled === null) {
+      updateData.agentEnabled = null;
     }
     if (typeof input.contextSummary === "string") {
       const normalizedSummary = input.contextSummary.trim();

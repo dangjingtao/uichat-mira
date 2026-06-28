@@ -13,7 +13,19 @@ export const resolveSummaryContext: RequestContextResolver = ({ thread }) => {
   }
 
   return {
-    role: "system",
-    content: createThreadContextSummaryPrompt(normalized),
+    message: {
+      role: "system",
+      content: createThreadContextSummaryPrompt(normalized),
+    },
+    executionNode: {
+      nodeId: `request-context-summary-${thread.contextSummaryUpdatedAt ?? "unknown"}`,
+      nodeType: "context",
+      phase: "done",
+      label: "上下文摘要",
+      summary: "已注入线程上下文摘要",
+      details: {
+        updatedAt: thread.contextSummaryUpdatedAt,
+      },
+    },
   };
 };

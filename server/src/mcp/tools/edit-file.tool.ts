@@ -9,6 +9,7 @@ export const editFileTool: McpToolImplementation = {
     title: "Edit File",
     description: "Apply write or replace operations to a workspace file.",
     domain: "edit",
+    source: "internal",
     mode: "sync",
     inputSchema: {
       type: "object",

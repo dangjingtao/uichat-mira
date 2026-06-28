@@ -1,10 +1,11 @@
 # Role + RAG 接入清单
 
 Layer: raw-source
-Module: role
-Doc Type: checklist
+Module: Role
+Feature: RagIntegration
+Doc Type: historical
 
-Status: Accepted
+Status: Historical
 Owner: role / rag / runtime
 Last verified: 2026-06-25
 

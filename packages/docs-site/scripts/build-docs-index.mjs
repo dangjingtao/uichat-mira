@@ -72,6 +72,7 @@ const parseMetadata = (content) => {
     lastVerified: null,
     layer: null,
     module: null,
+    feature: null,
     docType: null,
   };
 
@@ -86,6 +87,8 @@ const parseMetadata = (content) => {
       metadata.layer = line.slice("Layer:".length).trim();
     } else if (line.startsWith("Module:")) {
       metadata.module = line.slice("Module:".length).trim();
+    } else if (line.startsWith("Feature:")) {
+      metadata.feature = line.slice("Feature:".length).trim();
     } else if (line.startsWith("Doc Type:")) {
       metadata.docType = line.slice("Doc Type:".length).trim();
     }
@@ -107,7 +110,7 @@ const findExcerpt = (content) => {
     .filter((line) => !line.startsWith("#"))
     .filter(
       (line) =>
-        !/^Status:|^Owner:|^Last verified:|^Layer:|^Module:|^Doc Type:/.test(line),
+        !/^Status:|^Owner:|^Last verified:|^Layer:|^Module:|^Feature:|^Doc Type:/.test(line),
     )
     .filter((line) => !line.startsWith("- "))
     .filter((line) => !line.startsWith("|"));
@@ -123,7 +126,10 @@ const classifyTopLevel = (relativePath) => {
       "concepts",
       "knowledge-system",
       "architecture",
+      "chat",
       "platform",
+      "developments",
+      "integrations",
       "role",
       "archive",
       "prompt-manager-rules",
@@ -142,6 +148,17 @@ const toNavChildren = (items) => sortByTitle(items).map((doc) => ({ title: doc.t
 
 const countBy = (documents, field, value) =>
   documents.filter((doc) => doc.metadata?.[field] === value).length;
+
+const groupCountBy = (documents, field) =>
+  documents.reduce((accumulator, document) => {
+    const value = document.metadata?.[field];
+    if (!value) {
+      return accumulator;
+    }
+
+    accumulator[value] = (accumulator[value] ?? 0) + 1;
+    return accumulator;
+  }, {});
 
 const normalizeWikiLinks = (content, knownPaths) =>
   content.replace(/\[\[([^\]]+)\]\]/g, (_match, rawTarget) => {
@@ -211,9 +228,15 @@ export const writeDocsIndex = () => {
       children: toNavChildren(documents.filter((doc) => doc.section === "knowledge-system")),
     },
     {
+      title: "集成专题",
+      children: toNavChildren(documents.filter((doc) => doc.section === "integrations")),
+    },
+    {
       title: "实现文档",
       children: toNavChildren(
-        documents.filter((doc) => ["architecture", "platform", "role"].includes(doc.section)),
+        documents.filter((doc) =>
+          ["architecture", "chat", "platform", "developments", "role"].includes(doc.section),
+        ),
       ),
     },
     {
@@ -247,6 +270,8 @@ export const writeDocsIndex = () => {
             wiki: countBy(documents, "layer", "wiki"),
             schema: countBy(documents, "layer", "schema"),
           },
+          byModule: groupCountBy(documents, "module"),
+          byFeature: groupCountBy(documents, "feature"),
           byDocType: {
             currentContract: countBy(documents, "docType", "current-contract"),
             reference: countBy(documents, "docType", "reference"),

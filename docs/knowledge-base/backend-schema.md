@@ -4,7 +4,8 @@ Status: Current
 Owner: knowledge-base
 Last verified: 2026-06-26
 Layer: raw-source
-Module: knowledge-base
+Module: KnowledgeBase
+Feature: BackendSchema
 Doc Type: reference
 
 ## 范围
@@ -19,4 +20,3 @@ Doc Type: reference
 相关文档：
 
 - [[knowledge-base-api]]
-

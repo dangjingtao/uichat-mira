@@ -1,5 +1,10 @@
 # Knowledge Base MVP
 
+Layer: raw-source
+Module: KnowledgeBase
+Feature: MvpHistory
+Doc Type: historical
+
 ## 目标
 
 在当前项目中，用最小可行范围实现一套可用的单知识库 RAG 流程：

@@ -11,6 +11,7 @@ import type { RagNodeResult } from "@/services/rag-node-contract";
 import {
   createRetrievalObservation,
 } from "@/services/rag-node-observation";
+import { writeStructuredLog } from "@/logger";
 
 const RRF_K = 60;
 
@@ -434,6 +435,25 @@ export const retrieveService = {
   ): Promise<RagNodeResult<RetrieveStatePatch>> {
     const startedAtMs = Date.now();
     const result = await this.retrieve(input);
+
+    writeStructuredLog("info", {
+      scope: "rag-retrieve",
+      event: "candidates-preview",
+      question: input.question?.trim() ?? "",
+      knowledgeBaseId: result.knowledgeBaseId,
+      strategy: result.execution.strategy,
+      vectorCount: result.execution.vectorCount,
+      lexicalCount: result.execution.lexicalCount,
+      fusedCount: result.execution.fusedCount,
+      topCandidates: result.chunks.slice(0, 3).map((chunk) => ({
+        documentName: chunk.documentName,
+        score: chunk.score,
+        rawScore: chunk.rawScore ?? chunk.score,
+        matchType: chunk.matchType ?? null,
+        hitModes: chunk.hitModes ?? [],
+        contentPreview: toContentSnippet(chunk.content, 80),
+      })),
+    });
 
     return {
       state: {

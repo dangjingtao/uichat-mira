@@ -9,5 +9,10 @@ export function formatFileSize(bytes: number): string {
 }
 
 export function getFileExtension(filename: string): string {
-  return filename.split(".").pop()?.toUpperCase() ?? "FILE";
+  const parts = filename.split(".");
+  const ext = parts.pop();
+  if (parts.length === 0 || ext === "" || ext === undefined) {
+    return "FILE";
+  }
+  return ext.toUpperCase();
 }

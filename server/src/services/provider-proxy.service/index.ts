@@ -15,7 +15,10 @@ import {
   type AssistantExecutionNodeEvent,
   type AssistantToolEvent,
 } from "@/services/chat-stream-events.js";
-import { createCloudflareEmbeddings } from "@/services/cloudflare-provider.js";
+import {
+  createCloudflareEmbeddings,
+  resolveCloudflareRunUrl,
+} from "@/services/cloudflare-provider.js";
 import {
   createOpenAICompatibleEmbeddings,
   createOpenAICompatibleEmbeddingsUrl,
@@ -72,10 +75,11 @@ export interface PersistedChatStreamInput {
   assistantMessageId: string;
   messages: NormalizedChatMessage[];
   params?: Record<string, unknown>;
+  preludeChunks?: string[];
   executeFullAnswer?: (helpers: {
     emitToolEvent: (event: AssistantToolEvent) => Promise<void>;
     emitExecutionNode: (event: AssistantExecutionNodeEvent) => Promise<void>;
-  }) => Promise<string>;
+  }) => Promise<string | { answer: string; isFinal?: boolean }>;
   onToolEvent?: (event: AssistantToolEvent) => Promise<void> | void;
   onExecutionNode?: (
     event: AssistantExecutionNodeEvent,
@@ -116,11 +120,12 @@ const syncResolvedEmbeddingDimensions = (
   });
 };
 
-const getEmbeddingInvocationUrl = (resolved: ProviderResolution) => {
+export const getEmbeddingInvocationUrl = (resolved: ProviderResolution) => {
   switch (getProviderDefinition(resolved.providerCode).embeddingAdapter) {
     case "ollama":
       return `${resolved.baseUrl.replace(/\/+$/, "")}/api/embed`;
     case "cloudflare":
+      return resolveCloudflareRunUrl(resolved.baseUrl, resolved.model);
     case "openai-compatible":
       return createOpenAICompatibleEmbeddingsUrl(resolved.baseUrl);
     default:
@@ -236,6 +241,12 @@ export const providerProxyService = {
         };
 
         try {
+          if (input.preludeChunks?.length) {
+            for (const chunk of input.preludeChunks) {
+              yield chunk;
+            }
+          }
+
           yield* assistantTextStartChunks({
             messageId: input.assistantMessageId,
             includeStartStep: true,
@@ -262,9 +273,31 @@ export const providerProxyService = {
               yield* flushToolEvents();
             }
 
-            answer = await answerPromise;
+            const executionResult = await answerPromise;
+            if (typeof executionResult === "string") {
+              answer = executionResult;
+            } else {
+              answer = executionResult.answer;
+            }
             if (answer) {
               yield assistantTextDeltaChunk(answer);
+            }
+
+            if (
+              typeof executionResult !== "string" &&
+              executionResult.isFinal === false
+            ) {
+              yield assistantTextEndChunk();
+              await input.onComplete?.({
+                answer,
+                finishReason: "stop",
+              });
+              yield* assistantFinishChunks({
+                finishReason: "stop",
+                isContinued: false,
+                includeDone: true,
+              });
+              return;
             }
           } else {
             for await (const delta of service.streamChatText(
@@ -434,7 +467,7 @@ export const providerProxyService = {
     const resolved = resolveProviderForRole("rerank", requestedProvider);
     const providerDefinition = getProviderDefinition(resolved.providerCode);
 
-    if (providerDefinition.chatAdapter !== "openai-compatible") {
+    if (providerDefinition.rerankAdapter !== "openai-compatible") {
       throw new Error(
         `Provider "${resolved.providerCode}" does not support the OpenAI-compatible rerank adapter`,
       );

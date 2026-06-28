@@ -1,5 +1,10 @@
 # 16 个角色头像包说明
 
+Layer: raw-source
+Module: Role
+Feature: AvatarAssets
+Doc Type: reference
+
 ## 文件下载
 
 - 压缩包：`avatar_pack_16.zip`

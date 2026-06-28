@@ -22,13 +22,16 @@ export type McpToolDomain =
   | "read"
   | "edit"
   | "web_search"
-  | "terminal";
+  | "terminal"
+  | "browser_action"
+  | "external_mcp";
 
 export type McpToolDefinition = {
   id: string;
   title: string;
   description: string;
   domain: McpToolDomain;
+  source: "internal" | "external";
   mode: "sync" | "stream";
   inputSchema: Record<string, unknown>;
   outputSchema?: Record<string, unknown>;
@@ -155,6 +158,7 @@ export type McpWorkspaceSelection = {
 export type McpWebSearchConfig = {
   apiKey: string;
   baseUrl: string;
+  maxResults: number;
 };
 
 export type McpMarketplaceTransport =
@@ -269,11 +273,16 @@ export type ExternalMcpServerConfigRecord = {
   endpointUrl?: string;
   command?: string;
   argsText?: string;
+  packageName?: string;
+  cwd?: string;
+  envJson?: string;
   authType: "none" | "bearer";
   timeoutMs: number;
   customHeadersJson: string;
   hasBearerToken: boolean;
 };
+
+const MCP_REQUEST_TIMEOUT_MS = 300000;
 
 export function getMcpMarketplaceServers(params?: {
   cursor?: string;
@@ -292,14 +301,22 @@ export function getMcpMarketplaceServers(params?: {
       count: number;
       nextCursor: string | null;
       sourceUrl: string;
+      cache: {
+        hit: boolean;
+        stale: boolean;
+        cachedAt: string | null;
+      };
     };
   }>(`/mcp/marketplace/servers${query ? `?${query}` : ""}`, {
     signal: params?.signal,
+    timeout: MCP_REQUEST_TIMEOUT_MS,
   });
 }
 
 export function getExternalMcpServers() {
-  return get<ExternalMcpServerRecord[]>("/mcp/external/servers");
+  return get<ExternalMcpServerRecord[]>("/mcp/external/servers", {
+    timeout: MCP_REQUEST_TIMEOUT_MS,
+  });
 }
 
 export function createExternalMcpServer(
@@ -325,27 +342,39 @@ export function createExternalMcpServer(
     disclaimerAccepted: boolean;
   },
 ) {
-  return post<ExternalMcpServerRecord>("/mcp/external/servers", input);
+  return post<ExternalMcpServerRecord>("/mcp/external/servers", input, {
+    timeout: MCP_REQUEST_TIMEOUT_MS,
+  });
 }
 
 export function connectExternalMcpServer(id: string) {
-  return post<ExternalMcpServerRecord>(`/mcp/external/servers/${id}/connect`);
+  return post<ExternalMcpServerRecord>(`/mcp/external/servers/${id}/connect`, undefined, {
+    timeout: MCP_REQUEST_TIMEOUT_MS,
+  });
 }
 
 export function discoverExternalMcpServer(id: string) {
-  return post<ExternalMcpServerRecord>(`/mcp/external/servers/${id}/discover`);
+  return post<ExternalMcpServerRecord>(`/mcp/external/servers/${id}/discover`, undefined, {
+    timeout: MCP_REQUEST_TIMEOUT_MS,
+  });
 }
 
 export function deleteExternalMcpServer(id: string) {
-  return del<ExternalMcpServerRecord>(`/mcp/external/servers/${id}`);
+  return del<ExternalMcpServerRecord>(`/mcp/external/servers/${id}`, {
+    timeout: MCP_REQUEST_TIMEOUT_MS,
+  });
 }
 
 export function getExternalMcpServerConfigSchema(id: string) {
-  return get<ExternalMcpConfigSchemaResolution>(`/mcp/external/servers/${id}/config-schema`);
+  return get<ExternalMcpConfigSchemaResolution>(`/mcp/external/servers/${id}/config-schema`, {
+    timeout: MCP_REQUEST_TIMEOUT_MS,
+  });
 }
 
 export function getExternalMcpServerConfig(id: string) {
-  return get<ExternalMcpServerConfigRecord>(`/mcp/external/servers/${id}/config`);
+  return get<ExternalMcpServerConfigRecord>(`/mcp/external/servers/${id}/config`, {
+    timeout: MCP_REQUEST_TIMEOUT_MS,
+  });
 }
 
 export function updateExternalMcpServerConfig(
@@ -354,13 +383,17 @@ export function updateExternalMcpServerConfig(
     endpointUrl?: string;
     command?: string;
     argsText?: string;
+    cwd?: string;
+    envJson?: string;
     authType: "none" | "bearer";
     timeoutMs: number;
     customHeadersJson: string;
     bearerToken?: string | null;
   },
 ) {
-  return patch<ExternalMcpServerConfigRecord>(`/mcp/external/servers/${id}/config`, input);
+  return patch<ExternalMcpServerConfigRecord>(`/mcp/external/servers/${id}/config`, input, {
+    timeout: MCP_REQUEST_TIMEOUT_MS,
+  });
 }
 
 export function getMcpWorkspaceSelection() {

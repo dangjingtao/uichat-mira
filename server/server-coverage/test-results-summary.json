@@ -1,0 +1,14 @@
+{
+  "total": 250,
+  "passed": 244,
+  "failed": 6,
+  "skipped": 0,
+  "durationMs": 28145.09619140625,
+  "failedTests": [
+    "D:/workspace/rag-demo/server/src/mcp/routes.test.ts",
+    "D:/workspace/rag-demo/server/src/mcp/workspace.test.ts",
+    "D:/workspace/rag-demo/server/src/services/rag-graph.test.ts",
+    "D:/workspace/rag-demo/server/src/services/thread.service.test.ts",
+    "D:/workspace/rag-demo/server/src/services/rag-nodes/generate.service.test.ts"
+  ]
+}

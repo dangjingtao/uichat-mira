@@ -47,11 +47,6 @@ export interface AppMeta {
   description: string;
   repositoryUrl: string;
   homepageUrl: string;
-  changelog: string[];
-  versionHistory: Array<{
-    version: string;
-    summary: string;
-  }>;
   links: Array<{
     label: string;
     value: string;
@@ -122,8 +117,6 @@ function resolveAppMeta(): AppMeta {
     description: "",
     repositoryUrl: "",
     homepageUrl: "",
-    changelog: [],
-    versionHistory: [],
     links: [],
   };
 }
@@ -158,8 +151,6 @@ function normalizeAppMeta(packageJson: PackageJsonLike): AppMeta {
     description,
     repositoryUrl,
     homepageUrl,
-    changelog: customMeta.changelog,
-    versionHistory: customMeta.versionHistory,
     links: customMeta.links,
     git: customMeta.git,
   };
@@ -208,30 +199,6 @@ function readCustomAppMeta(appMeta: unknown) {
       ? (appMeta as Record<string, unknown>)
       : {};
 
-  const changelog = Array.isArray(metaObject.changelog)
-    ? metaObject.changelog.filter((item): item is string => typeof item === "string")
-    : [];
-
-  const versionHistory = Array.isArray(metaObject.versionHistory)
-    ? metaObject.versionHistory
-        .filter(
-          (
-            item,
-          ): item is {
-            version: string;
-            summary: string;
-          } =>
-            !!item &&
-            typeof item === "object" &&
-            typeof (item as { version?: unknown }).version === "string" &&
-            typeof (item as { summary?: unknown }).summary === "string",
-        )
-        .map((item) => ({
-          version: item.version,
-          summary: item.summary,
-        }))
-    : [];
-
   const links = Array.isArray(metaObject.links)
     ? metaObject.links
         .filter(
@@ -261,8 +228,6 @@ function readCustomAppMeta(appMeta: unknown) {
 
   return {
     displayName,
-    changelog,
-    versionHistory,
     links,
     git,
   };

@@ -4,7 +4,8 @@ Status: Planned
 Owner: runtime
 Last verified: 2026-06-26
 Layer: raw-source
-Module: tooling-runtime
+Module: MCP
+Feature: ExternalMarketplace
 Doc Type: design
 
 ## 单点真相范围
@@ -320,6 +321,8 @@ mcp:<server-id>:<capability-kind>:<capability-name>
 
 规则：
 
+- 当前真实已落地的投影只有 tool，因此现网格式是 `mcp:<serverId>:tool:<toolName>`
+
 - 保留外部 MCP capability schema
 - 每次 invocation 都挂上 `serverId`
 - 未知副作用默认按“需要审批”处理
@@ -585,9 +588,9 @@ type ExternalMcpDisclaimerAcceptance = {
 
 也就是说，真正动 chat 之前，还要同步设计这些页面：
 
-- `provider-proxy-api.md`
+- `../provider/README.md`
 - `uchat.md`
-- `harness-runtime-design.md`
+- `../tooling-runtime/harness-runtime-design.md`
 
 ## UI 放置建议
 
@@ -614,6 +617,173 @@ type ExternalMcpDisclaimerAcceptance = {
   - 后续承载已连接 MCP server、非核心内置 MCP 包、discovered capability 与 projected id
 
 这样可以保持产品概念清楚，即使底层都复用同一套 harness / invocation 基座。
+
+## 当前复盘
+
+这一轮 MCP 接入已经暴露出一些足够稳定的经验，后续设计和实现应直接复用，不要再从头试错。
+
+### 1. 先分清产品边界，再谈接入
+
+`Tool` 和 `MCP` 必须继续分开。
+
+- `Tool` 是项目内部核心能力
+- `MCP` 是非核心能力接入域
+- MCP 协议里的 tool / resource 不自动等于产品里的 `Tool`
+
+如果这层边界不先立住，后续 UI、权限、审批、chat 接入都会混乱。
+
+### 2. 真正的复杂度在生命周期，不在协议名词
+
+外部 MCP 接入最麻烦的不是 `initialize`、`tools/list` 这些协议方法本身，而是完整生命周期：
+
+- 市场发现
+- 安装记录
+- transport 差异
+- 配置补全
+- secret 存储
+- connect / discover
+- capability 投影
+- 审批与执行
+- 后续接入 chat runtime
+
+因此实现顺序必须按生命周期推进，不能因为协议打通就误判为“整体完成”。
+
+### 3. “进程启动了”不等于“stdio MCP 可用”
+
+这轮 `slideshot-mcp` 的排查已经证明：
+
+- 子进程能启动
+- banner 能输出
+- 不代表 `initialize` 已经成功
+
+stdio MCP 是否真正可用，必须以：
+
+- 能正确发送 `initialize`
+- 能正确收到 `initialize result`
+- 能继续完成 `notifications/initialized`
+- 能跑 `tools/list`
+
+作为判断标准，而不是只看进程是否拉起。
+
+### 4. stdio transport 必须紧跟当前官方规范
+
+本轮实际故障之一来自 stdio framing 与官方 MCP 当前规范不一致。
+
+经验结论：
+
+- 本项目的 stdio client 实现必须持续对齐官方 MCP transport 规范
+- 不要把过时 framing 当成默认真相
+- 每次升级 protocol / SDK / 上游 MCP server 之后，都要复测至少一条真实 stdio server
+
+推荐保留一条已验证的 stdio 样例作为回归基线，例如：
+
+- `slideshot-mcp`
+
+### 5. marketplace 元数据只能当线索，不能当执行真相
+
+官方 registry 或其他 marketplace 只能告诉我们：
+
+- 有哪些 server
+- 基础 transport / package 元数据
+- 文档和仓库入口
+
+但它不能直接保证：
+
+- 安装参数完整
+- 配置字段完整
+- server 一定能运行
+- 风险一定可接受
+
+所以 marketplace 层永远只是“发现来源”，不是“执行真相”。
+
+### 6. 外部 MCP 配置天然是不完整的
+
+成熟产品的共同点已经很清楚：
+
+- 不假设可以自动拿到完美表单
+- 先给 known config
+- 再让用户补字段
+- connect 失败后继续修
+
+因此本项目对 external MCP config 的正确理解应该是：
+
+`已知配置草案 + 高级兜底入口 + 验证回路`
+
+而不是“安装时一次填完全部必需字段”。
+
+### 7. 严格性应该压在 backend / runtime，而不是压在第一屏体验
+
+经验上应该区分三层：
+
+1. 浏览 / 安装：尽量轻
+2. 连接 / 启用：开始做风险确认
+3. 执行 / chat 调用：严格执行 approval、secret、审计策略
+
+也就是说：
+
+- 产品体验可以轻
+- 运行时策略必须严
+
+不要把所有严格性都提前到安装和浏览阶段。
+
+### 8. chat 接入必须晚于 lifecycle 闭环
+
+如果 external MCP 还没有稳定完成：
+
+- install
+- connect
+- discover
+- projection
+- error reporting
+
+就急着接进 chat runtime，问题只会被埋得更深。
+
+正确顺序仍然应该是：
+
+`市场 -> 已安装 server -> discovered capability -> projected capability -> chat runtime`
+
+### 9. 多 MCP 共存是必需的，但不必过早做重调度
+
+从产品形态看，多个 MCP server 共存是刚需。
+
+但要区分三层：
+
+- 多个已安装：必须支持
+- 多个已连接：应该支持
+- 多个 MCP capability 自动协同与竞争调度：先不要做重
+
+chat 早期更适合消费“已启用 + 已投影”的统一能力池，而不是直接暴露复杂的多 server 竞争模型。
+
+### 10. 当前阶段已经进入“运行时形态正确性”阶段
+
+本轮工作最大的价值不只是页面做出来了，而是已经从“界面像不像”进入到“运行时形态是否正确”。
+
+这意味着后续评估 MCP 工作是否完成，不能只看：
+
+- 页面是否能展示
+- 市场是否能搜到
+- 按钮是否能点
+
+还要看：
+
+- transport 是否真正可用
+- projected capability 是否稳定
+- secret / approval / trace 是否站得住
+- chat runtime 将来是否能无缝消费
+
+这个判断应作为后续 Phase 2 / Phase 3 的设计基线。
+
+## 与 Tool 文档的分工
+
+这页只维护 MCP 产品边界和外部 server 生命周期，不重复写工具协议总纲。
+
+协议真相请优先看：
+
+- `../tooling-runtime/README.md`
+- `../tooling-runtime/tools-protocol.md`
+- `../tooling-runtime/harness-runtime-design.md`
+
+如果这里和 Tool 侧口径冲突，以运行时真相页为准，然后回头修这页的产品表述。
 
 ## 打包注意事项
 
@@ -658,6 +828,150 @@ Electron 打包态通过内置 Node runtime 跑 backend。
 - [x] 产品形态上 `Tool` 与 `MCP` 明确分离，页面入口与文档表述一致
 - [x] 后端可以接入一个 `streamable-http` external MCP server，并完成 connect/discover/invocation 最小闭环
 - [x] third-party external MCP server 在安装前必须接受一次免责声明
+
+### 当前可复现手测用例
+
+以下用例基于 2026-06-27 已接通的 `Settings -> MCP` 页面整理，后续回归优先复用，不要再靠口头回忆。
+
+#### 用例 A：Remote HTTP MCP 安装与连接
+
+目标：
+
+- 验证 marketplace 搜索
+- 验证 `remote / Remote HTTP` 条目安装
+- 验证已安装页的 connect / discover 基本闭环
+
+市场搜索词：
+
+- `tandem`
+
+预期命中的 registry 条目：
+
+- `ac.tandem/docs-mcp`
+
+预期 transport：
+
+- `Remote HTTP`
+- endpoint: `https://tandem.ac/mcp`
+
+手测步骤：
+
+1. 打开 `Settings -> MCP`
+2. 切到 `市场`
+3. 搜索 `tandem`
+4. 确认列表中出现 `ac.tandem/docs-mcp`
+5. 确认 transport 显示为 `remote`
+6. 点击安装
+7. 切到 `已安装`
+8. 确认卡片中能看到：
+   - `Docs`
+   - `GitHub`
+   - `Endpoint: https://tandem.ac/mcp`
+9. 点击 `连接`
+10. 点击 `Discover`
+
+通过标准：
+
+- 能成功安装到 `已安装`
+- `连接` 后不出现持续失败状态
+- `Discover` 后能看到 discovered tools 数量或结果变化
+- 已安装卡片中的 server 信息与 marketplace 条目一致
+
+已知说明：
+
+- 我们已直接验证过 `https://tandem.ac/mcp` 的 `initialize` 与 `tools/list` 可正常返回
+- 如果这里失败，优先怀疑本地配置状态或应用侧错误透传，而不是先怀疑这条 remote 本身失效
+
+#### 用例 B：npm MCP 条目识别与安装参数
+
+目标：
+
+- 验证 marketplace 对官方 registry npm 包字段的解析
+- 验证 npm 条目不再被误判成 `unknown`
+- 验证安装时自动填充 `npx` 启动参数
+
+市场搜索词：
+
+- `pare npm`
+
+预期命中的 registry 条目：
+
+- `io.github.Dave-London/npm`
+
+预期 package 信息：
+
+- npm 包名：`@paretools/npm`
+- transport：`npm package`
+- 安装后默认 launcher：
+  - command: `npx`
+  - args: `["-y", "@paretools/npm"]`
+
+手测步骤：
+
+1. 打开 `Settings -> MCP`
+2. 切到 `市场`
+3. 搜索 `pare npm`
+4. 确认 `io.github.Dave-London/npm` 不再显示为 `unknown`
+5. 确认该条目可安装，而不是 `暂不支持`
+6. 安装后切到 `已安装`
+7. 打开 `配置`
+8. 确认配置表单按 `stdio` 渲染
+9. 确认页面能看到 package / launcher 信息
+10. 确认默认值为：
+    - `Command = npx`
+    - `Args JSON = ["-y","@paretools/npm"]` 或等价格式
+
+通过标准：
+
+- npm 条目可安装
+- transport 展示正确
+- 已安装配置页默认 launcher 正确
+- 不再出现 `Transport unknown · @paretools/npm`
+
+回归背景：
+
+- 官方 MCP registry 当前很多条目返回 `registryType`
+- 我们已经兼容 `registry_type` 与 `registryType`
+
+#### 用例 C：市场上游超时后的缓存回退
+
+目标：
+
+- 验证官方 registry 抖动时，市场页不整页报废
+- 验证“最近一次成功结果”缓存生效
+
+前提：
+
+- 先成功打开一次市场列表，让后端缓存写入
+
+建议搜索词：
+
+- `tandem`
+- 或空搜索直接加载市场首页
+
+手测步骤：
+
+1. 正常进入 `Settings -> MCP -> 市场`
+2. 成功看到一批列表结果
+3. 在官方 registry 不稳定或临时超时时再次点击 `刷新`
+4. 观察页面是否继续显示旧列表
+5. 观察页面头部是否出现缓存提示
+
+预期提示文案：
+
+- `官方 MCP 市场暂时不可用，当前显示最近一次成功结果`
+
+通过标准：
+
+- 上游超时时，列表仍保留最近一次成功结果
+- 页面不会因为一次上游超时变成空白/整页失败
+- 会明确提示当前结果来自缓存
+
+实现说明：
+
+- marketplace 上游超时已从 `8s` 调整到 `20s`
+- 后端缓存为按请求参数分桶的最近成功结果缓存
+- 当前缓存 TTL 为 `5` 分钟
 
 ### 进行中
 

@@ -4,7 +4,8 @@ Status: Current
 Owner: docs
 Last verified: 2026-06-25
 Layer: wiki
-Module: docs-system
+Module: Docs
+Feature: DocsSystem
 Doc Type: how-to
 
 ## 单点真相范围

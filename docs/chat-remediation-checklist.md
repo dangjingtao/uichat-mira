@@ -2,8 +2,9 @@ Status: Historical
 Owner: chat
 Last verified: 2026-06-26
 Layer: raw-source
-Module: chat
-Doc Type: checklist
+Module: Chat
+Feature: UChat
+Doc Type: historical
 
 # Chat Remediation Checklist
 

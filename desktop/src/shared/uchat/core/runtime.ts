@@ -8,6 +8,7 @@ import type {
   ChatMessagePart,
   ChatRepository,
   ChatRunDriver,
+  ChatRunContext,
   ChatRuntimeCapabilities,
   ChatSendLifecyclePolicy,
   ChatToolTraceEntry,
@@ -45,6 +46,7 @@ type SendOverrides = {
   assistantParentId?: string | null;
   assistantMetadata?: Record<string, unknown>;
   skipUserAppend?: boolean;
+  runOptions?: ChatRunContext["options"];
 };
 
 // Metadata merging is shallow by design. App integrations can still nest and
@@ -211,6 +213,7 @@ const deriveCapabilities = (options: ChatRuntimeOptions): ChatRuntimeCapabilitie
   attachments: typeof options.attachmentDriver === "function"
     ? true
     : Boolean(options.attachmentDriver),
+  agentEnabled: false,
   composerActions: options.policies?.composerActions ?? [],
   messagePresentation: options.policies?.messagePresentation ?? {},
 });
@@ -370,6 +373,7 @@ export class ChatRuntime {
     threadId: string,
     input: {
       title?: string;
+      workspaceId?: string | null;
       metadata?: Record<string, unknown>;
     },
   ) {
@@ -598,6 +602,7 @@ export class ChatRuntime {
           message: userMessage,
           history: activeThread.messages,
           signal: this.currentRunController.signal,
+          options: overrides.runOptions,
         },
         async (event) => {
           if (event.type === "message:part") {
@@ -764,8 +769,10 @@ export class ChatRuntime {
     }
   }
 
-  async send() {
-    await this.sendInternal();
+  async send(options?: SendOverrides["runOptions"]) {
+    await this.sendInternal({
+      ...(options ? { runOptions: options } : {}),
+    });
   }
 
   async regenerate(messageId: string) {

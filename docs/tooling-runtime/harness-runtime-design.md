@@ -4,7 +4,8 @@ Status: Current
 Owner: runtime
 Last verified: 2026-06-26
 Layer: raw-source
-Module: tooling-runtime
+Module: Tool
+Feature: HarnessRuntime
 Doc Type: design
 
 ## 当前落地状态
@@ -211,12 +212,12 @@ harness 统一注册所有内置 capability。
 当前内置命名约束：
 
 - 内置 capability id 保持短且稳定，例如 `read_open`、`edit_file`、`web_search`
-- 外部 MCP 投影 capability 一律使用 `external:<serverId>:<toolName>`
+- 外部 MCP 投影 capability 一律使用 `mcp:<serverId>:tool:<toolName>`
 
 tool id 也要分清：
 
 - 内置 capability 保留稳定 id，例如 `read_open`
-- 第三方投影 tool 使用 `external:<serverId>:<toolName>`
+- 第三方投影 tool 使用 `mcp:<serverId>:tool:<toolName>`
 
 ### 3. Invocation 生命周期
 
@@ -245,13 +246,13 @@ harness 拥有完整执行生命周期。
 - cwd / env 解析结果要进入统一观察链
 - stdout / stderr 流事件要保持 capability-agnostic 输出格式
 - abort / timeout / cleanup 不能散落在 UI 或 tool 壳里
-- approval wait 不能只在 capability 内部“口头存在”，要进入统一 invocation 状态
+- approval 不能只在 capability 内部“口头存在”，要进入统一 invocation 状态；当前只做到 `awaiting_approval` / `invocation:approval_required` 的事件承接，真正的 thread / session 级 approval grant 还未落地
 
 当前 terminal phase 2 已落地的部分：
 
 - `timeoutMs` 已进入 runtime
 - `attachSessionId` 已进入 runtime，支持显式复用已有 session
-- `terminal_session` 已可通过 `approvalMode: "require"` 进入 `awaiting_approval`
+- `terminal_session` 的审批还没有完整的持久化 grant 编排，当前只是通过 invocation 状态承接审批分支
 - `awaiting_approval` 与 `invocation:approval_required` 已接进 core invocation 执行器
 - invocation trace recorder 已落地
 - `terminal_session` 已作为第一批 capability 接入 trace spans

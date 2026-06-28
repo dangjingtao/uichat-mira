@@ -14,8 +14,6 @@ const getFallbackAppMeta = (): AppMetaData => ({
   description: appPackageMeta.description,
   repositoryUrl: appPackageMeta.repositoryUrl,
   homepageUrl: appPackageMeta.homepageUrl,
-  changelog: [],
-  versionHistory: [],
   links: [],
 });
 

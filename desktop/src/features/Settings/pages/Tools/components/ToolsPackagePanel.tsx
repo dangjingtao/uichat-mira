@@ -2,18 +2,18 @@ import { LoaderCircle, Play, Settings2, Wrench } from "lucide-react";
 import SegmentedTabs from "@/shared/ui/SegmentedTabs";
 import Badge from "@/shared/ui/Badge";
 import { Button } from "@/shared/ui/Button";
-import type { McpToolDefinition } from "@/shared/api/tools";
 import type { ReactNode } from "react";
+import type { WorkbenchToolDefinition } from "../types";
 import type { TerminalResultSummary } from "../utils";
 
 type ToolsPackagePanelProps = {
-  tools: McpToolDefinition[];
-  selectedTool: McpToolDefinition | null;
+  tools: WorkbenchToolDefinition[];
+  selectedTool: WorkbenchToolDefinition | null;
   terminalSummary: TerminalResultSummary | null;
   runStatus: "idle" | "completed" | "failed" | "cancelled" | "awaiting_approval";
   isRunning: boolean;
   tracePanel: ReactNode;
-  onSelectTool: (tool: McpToolDefinition) => void;
+  onSelectTool: (tool: WorkbenchToolDefinition) => void;
   onOpenArgsModal: () => void;
   onRun: () => void;
   labels: {

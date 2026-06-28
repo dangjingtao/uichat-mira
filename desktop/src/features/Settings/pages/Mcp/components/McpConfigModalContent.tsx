@@ -17,6 +17,8 @@ type McpConfigModalContentProps = {
     bearerToken: string;
     timeoutMs: string;
     customHeadersJson: string;
+    cwd: string;
+    envJson: string;
     authType: string;
     authTypeNone: string;
     authTypeBearer: string;
@@ -32,6 +34,8 @@ type McpConfigModalContentProps = {
     endpointUrl?: string;
     command?: string;
     argsText?: string;
+    cwd?: string;
+    envJson?: string;
     authType: "none" | "bearer";
     timeoutMs: number;
     customHeadersJson: string;
@@ -43,6 +47,9 @@ type FormState = {
   endpointUrl: string;
   command: string;
   argsText: string;
+  packageName: string;
+  cwd: string;
+  envJson: string;
   authType: "none" | "bearer";
   timeoutMs: string;
   customHeadersJson: string;
@@ -81,6 +88,9 @@ export default function McpConfigModalContent({
     endpointUrl: config.endpointUrl ?? "",
     command: config.command ?? "",
     argsText: config.argsText ?? "",
+    packageName: config.packageName ?? "",
+    cwd: config.cwd ?? "",
+    envJson: config.envJson ?? "{}",
     authType: config.authType,
     timeoutMs: String(config.timeoutMs),
     customHeadersJson: config.customHeadersJson,
@@ -92,6 +102,9 @@ export default function McpConfigModalContent({
       endpointUrl: config.endpointUrl ?? "",
       command: config.command ?? "",
       argsText: config.argsText ?? "",
+      packageName: config.packageName ?? "",
+      cwd: config.cwd ?? "",
+      envJson: config.envJson ?? "{}",
       authType: config.authType,
       timeoutMs: String(config.timeoutMs),
       customHeadersJson: config.customHeadersJson,
@@ -101,6 +114,9 @@ export default function McpConfigModalContent({
 
   const fieldKeys = useMemo(() => new Set(schema.fields.map((field) => field.key)), [schema.fields]);
   const showsAuth = fieldKeys.has("bearerToken") || fieldKeys.has("customHeadersJson");
+  const isCommandTransport =
+    fieldKeys.has("command") || fieldKeys.has("argsText") || fieldKeys.has("cwd") || fieldKeys.has("envJson");
+  const packageHint = config.packageName?.trim();
 
   const renderField = (field: ExternalMcpConfigSchemaResolution["fields"][number]) => {
     const label = getFieldLabel(field.key, labels, field.label);
@@ -132,17 +148,34 @@ export default function McpConfigModalContent({
         );
       case "argsText":
       case "customHeadersJson":
+      case "cwd":
         return (
           <TextArea
             key={field.key}
             {...commonProps}
-            value={field.key === "argsText" ? form.argsText : form.customHeadersJson}
+            value={
+              field.key === "argsText"
+                ? form.argsText
+                : field.key === "cwd"
+                  ? form.cwd
+                  : form.customHeadersJson
+            }
             onChange={(value) =>
               setForm((current) => ({
                 ...current,
                 [field.key]: value,
               }))
             }
+            rows={6}
+          />
+        );
+      case "envJson":
+        return (
+          <TextArea
+            key={field.key}
+            {...commonProps}
+            value={form.envJson}
+            onChange={(value) => setForm((current) => ({ ...current, envJson: value }))}
             rows={6}
           />
         );
@@ -189,6 +222,25 @@ export default function McpConfigModalContent({
       <div className="rounded-ui-control border border-border bg-surface-secondary px-3 py-2 text-xs text-text-secondary">
         {labels.knownPartial}
       </div>
+
+      {isCommandTransport ? (
+        <div className="space-y-2 rounded-ui-control border border-border bg-surface-secondary px-3 py-3">
+          <div className="text-xs font-medium text-text-secondary">Launcher</div>
+          <div className="flex flex-wrap items-center gap-2 text-sm text-text-primary">
+            <span className="rounded-full border border-border bg-surface-primary px-2 py-0.5 text-[11px] text-text-tertiary">
+              {form.command || "npx"}
+            </span>
+            {packageHint ? (
+              <span className="rounded-full border border-border bg-surface-primary px-2 py-0.5 text-[11px] text-text-tertiary">
+                {packageHint}
+              </span>
+            ) : null}
+          </div>
+          <div className="text-xs leading-5 text-text-tertiary">
+            {packageHint ? "包启动器" : "本地启动器"}
+          </div>
+        </div>
+      ) : null}
 
       {schema.fields.map(renderField)}
 
@@ -246,6 +298,8 @@ export default function McpConfigModalContent({
               endpointUrl: fieldKeys.has("endpointUrl") ? form.endpointUrl : undefined,
               command: fieldKeys.has("command") ? form.command : undefined,
               argsText: fieldKeys.has("argsText") ? form.argsText : undefined,
+              cwd: fieldKeys.has("cwd") ? form.cwd : undefined,
+              envJson: fieldKeys.has("envJson") ? form.envJson : undefined,
               authType: form.authType,
               timeoutMs: Number(form.timeoutMs || "0"),
               customHeadersJson: fieldKeys.has("customHeadersJson") ? form.customHeadersJson : "",

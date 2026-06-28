@@ -1,7 +1,8 @@
 # Role Chat 接入
 
 Layer: raw-source
-Module: role
+Module: Role
+Feature: ChatIntegration
 Doc Type: current-contract
 
 Status: Current

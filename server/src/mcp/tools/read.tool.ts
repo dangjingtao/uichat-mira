@@ -7,6 +7,7 @@ export const readTool: McpToolImplementation = {
     title: "Read",
     description: "Compatibility alias for read_open.",
     domain: "read",
+    source: "internal",
     mode: "sync",
     inputSchema: readOpenTool.definition.inputSchema,
     outputSchema: readOpenTool.definition.outputSchema,

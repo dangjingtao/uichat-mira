@@ -14,10 +14,14 @@ export interface ThreadMutationBody {
   title?: string;
   /** Optional display name of the selected model for this conversation. */
   modelName?: string;
+  /** Workspace id that groups this thread. */
+  workspaceId?: string | null;
   /** Bound knowledge base id for this thread. */
   knowledgeBaseId?: string | null;
   /** Bound role id for this thread. */
   roleId?: string | null;
+  /** Whether built-in agent tools are enabled for this thread. */
+  agentEnabled?: boolean | null;
   /** Optional persisted thread context summary. */
   contextSummary?: string | null;
 }
@@ -55,4 +59,36 @@ export interface CreateMessageBody {
   >;
   /** Free-form message metadata, including RAG source payloads. */
   metadata?: Record<string, unknown>;
+}
+
+export interface ChatWorkspaceResponse {
+  id: string;
+  name: string;
+  rootPath: string | null;
+  status: "active" | "archived";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChatWorkspaceMutationBody {
+  name?: string;
+  rootPath?: string | null;
+}
+
+/** Workspace summary returned to the sidebar. */
+export interface ChatWorkspaceResponse {
+  id: string;
+  name: string;
+  rootPath: string | null;
+  status: "active" | "archived";
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Body for creating or updating a chat workspace. */
+export interface ChatWorkspaceMutationBody {
+  /** User-facing workspace name. */
+  name?: string;
+  /** Optional workspace root path shown in the UI. */
+  rootPath?: string | null;
 }

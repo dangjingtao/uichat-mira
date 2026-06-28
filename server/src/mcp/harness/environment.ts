@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import path from "node:path";
 import type { McpExecutionEnvironment } from "../core/definitions.js";
 import { getWorkspaceSelection } from "../workspace.js";
 
@@ -10,6 +11,7 @@ export interface HarnessToolConfig {
 }
 
 let cachedRipgrepAvailability: boolean | null = null;
+let cachedWindowsShellPath: string | null = null;
 
 const detectRipgrepAvailability = () => {
   if (cachedRipgrepAvailability !== null) {
@@ -22,6 +24,34 @@ const detectRipgrepAvailability = () => {
   });
   cachedRipgrepAvailability = !result.error && result.status === 0;
   return cachedRipgrepAvailability;
+};
+
+const resolveWindowsShellExecutable = () => {
+  if (cachedWindowsShellPath !== null) {
+    return cachedWindowsShellPath;
+  }
+
+  const systemRoot = process.env.SystemRoot?.trim();
+  if (systemRoot) {
+    const candidate = path.join(
+      systemRoot,
+      "System32",
+      "WindowsPowerShell",
+      "v1.0",
+      "powershell.exe",
+    );
+    const result = spawnSync(candidate, ["-NoProfile", "-Command", "$PSVersionTable.PSVersion.ToString()"], {
+      encoding: "utf-8",
+      windowsHide: true,
+    });
+    if (!result.error && result.status === 0) {
+      cachedWindowsShellPath = candidate;
+      return cachedWindowsShellPath;
+    }
+  }
+
+  cachedWindowsShellPath = "powershell.exe";
+  return cachedWindowsShellPath;
 };
 
 const defaultReadCapabilities: McpExecutionEnvironment["read"]["capabilities"] = [
@@ -169,7 +199,7 @@ const defaultTerminalCapabilities: McpExecutionEnvironment["terminal"]["capabili
 const defaultTerminalShellProfile: McpExecutionEnvironment["terminal"]["shellProfile"] =
   process.platform === "win32"
     ? {
-        shell: "powershell.exe",
+        shell: resolveWindowsShellExecutable(),
         shellFamily: "powershell",
         argsMode: "powershell",
         stdoutEncoding: "utf16le",

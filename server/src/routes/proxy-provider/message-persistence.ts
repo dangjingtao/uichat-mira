@@ -63,7 +63,7 @@ export interface PersistVisibleUserMessageInput {
 export interface PersistedUserMessageResult {
   latestUserMessageId: string;
   latestUserParentId: string | null;
-  latestUserMessage: NormalizedChatMessage | undefined;
+  latestUserMessage: NormalizedChatMessage;
 }
 
 export const persistVisibleUserMessage = ({

@@ -4,8 +4,15 @@ Status: Current
 Owner: docs
 Last verified: 2026-06-25
 Layer: wiki
-Module: docs-system
+Module: Docs
+Feature: DocsSystem
 Doc Type: overview
+Canonical: true
+Related:
+  - ../WIKI_SYSTEM_SCHEMA.md
+  - DOCUMENTATION_STANDARDS.md
+  - DIRECTORY_AND_CLASSIFICATION_RULES.md
+  - INDEX_SCHEMA.md
 
 ## 单点真相范围
 

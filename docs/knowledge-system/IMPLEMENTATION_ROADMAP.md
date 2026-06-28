@@ -4,8 +4,15 @@ Status: Current
 Owner: docs
 Last verified: 2026-06-24
 Layer: schema
-Module: docs-system
+Module: Docs
+Feature: DocsSystem
 Doc Type: plan
+Canonical: true
+Related:
+  - ../WIKI_SYSTEM_SCHEMA.md
+  - DOCUMENTATION_STANDARDS.md
+  - DIRECTORY_AND_CLASSIFICATION_RULES.md
+  - DOCS_REFACTOR_CHECKLIST.md
 
 ## 目的
 

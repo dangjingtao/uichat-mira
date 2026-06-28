@@ -3,7 +3,8 @@ import { mcpBadRequest, mcpInternalError } from "./core/errors.js";
 const DEFAULT_REGISTRY_URL = "https://registry.modelcontextprotocol.io/v0.1/servers";
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
-const REGISTRY_TIMEOUT_MS = 8000;
+const REGISTRY_TIMEOUT_MS = 20000;
+const MARKETPLACE_CACHE_TTL_MS = 5 * 60 * 1000;
 
 type RegistryTransport = {
   type?: unknown;
@@ -12,6 +13,7 @@ type RegistryTransport = {
 
 type RegistryPackage = {
   registry_type?: unknown;
+  registryType?: unknown;
   identifier?: unknown;
   version?: unknown;
   transport?: RegistryTransport;
@@ -79,6 +81,11 @@ export type McpMarketplaceServersResult = {
     count: number;
     nextCursor: string | null;
     sourceUrl: string;
+    cache: {
+      hit: boolean;
+      stale: boolean;
+      cachedAt: string | null;
+    };
   };
 };
 
@@ -94,6 +101,13 @@ export type FetchMcpMarketplaceServersInput = {
 };
 
 const officialMetaKey = "io.modelcontextprotocol.registry/official";
+
+type MarketplaceCacheEntry = {
+  result: McpMarketplaceServersResult;
+  cachedAt: number;
+};
+
+const marketplaceResponseCache = new Map<string, MarketplaceCacheEntry>();
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -152,7 +166,7 @@ const normalizePackageTransport = (pkg: RegistryPackage): McpMarketplaceTranspor
     return null;
   }
 
-  const registryType = stringOrNull(pkg.registry_type);
+  const registryType = stringOrNull(pkg.registry_type) ?? stringOrNull(pkg.registryType);
   if (registryType === "npm") {
     return {
       kind: "stdio",
@@ -277,14 +291,45 @@ export const normalizeMarketplaceServersPayload = (
       count: typeof metadata.count === "number" ? metadata.count : servers.length,
       nextCursor: stringOrNull(metadata.nextCursor),
       sourceUrl,
+      cache: {
+        hit: false,
+        stale: false,
+        cachedAt: null,
+      },
     },
   };
 };
+
+const buildMarketplaceCacheKey = (input: FetchMcpMarketplaceServersInput, sourceUrl: string) =>
+  JSON.stringify({
+    sourceUrl,
+    cursor: input.cursor?.trim() ?? "",
+    limit: normalizeLimit(input.limit),
+    query: input.query?.trim() ?? "",
+    version: input.version ?? "",
+    updatedSince: input.updatedSince?.trim() ?? "",
+    includeDeleted: typeof input.includeDeleted === "boolean" ? input.includeDeleted : "",
+  });
+
+const cloneMarketplaceResult = (
+  result: McpMarketplaceServersResult,
+  cache: McpMarketplaceServersResult["metadata"]["cache"],
+): McpMarketplaceServersResult => ({
+  servers: result.servers.map((server) => ({
+    ...server,
+    transports: server.transports.map((transport) => ({ ...transport })),
+  })),
+  metadata: {
+    ...result.metadata,
+    cache,
+  },
+});
 
 export const fetchMcpMarketplaceServers = async (
   input: FetchMcpMarketplaceServersInput = {},
 ): Promise<McpMarketplaceServersResult> => {
   const sourceUrl = input.sourceUrl ?? DEFAULT_REGISTRY_URL;
+  const cacheKey = buildMarketplaceCacheKey(input, sourceUrl);
   const url = new URL(sourceUrl);
   url.searchParams.set("limit", String(normalizeLimit(input.limit)));
 
@@ -309,13 +354,35 @@ export const fetchMcpMarketplaceServers = async (
   }
 
   const fetchImpl = input.fetchImpl ?? fetch;
-  const response = await fetchImpl(url, {
-    signal: AbortSignal.timeout(REGISTRY_TIMEOUT_MS),
-  });
-  if (!response.ok) {
-    throw mcpInternalError(`MCP registry request failed with status ${response.status}`);
-  }
+  try {
+    const response = await fetchImpl(url, {
+      signal: AbortSignal.timeout(REGISTRY_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      throw mcpInternalError(`MCP registry request failed with status ${response.status}`);
+    }
 
-  const payload = await response.json();
-  return normalizeMarketplaceServersPayload(payload, sourceUrl, input.query);
+    const payload = await response.json();
+    const result = normalizeMarketplaceServersPayload(payload, sourceUrl, input.query);
+    marketplaceResponseCache.set(cacheKey, {
+      result,
+      cachedAt: Date.now(),
+    });
+    return result;
+  } catch (error) {
+    const cached = marketplaceResponseCache.get(cacheKey);
+    if (cached && Date.now() - cached.cachedAt <= MARKETPLACE_CACHE_TTL_MS) {
+      return cloneMarketplaceResult(cached.result, {
+        hit: true,
+        stale: true,
+        cachedAt: new Date(cached.cachedAt).toISOString(),
+      });
+    }
+
+    if (error instanceof Error && error.name === "TimeoutError") {
+      throw mcpInternalError("Official MCP marketplace timed out");
+    }
+
+    throw error;
+  }
 };

@@ -9,6 +9,7 @@ export const readExtractTool: McpToolImplementation = {
     title: "Read Extract",
     description: "Extract readable content from a workspace target.",
     domain: "read",
+    source: "internal",
     mode: "sync",
     inputSchema: {
       type: "object",

@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import {
   AlertCircle,
   ArrowUp,
+  Bot,
   Copy,
   FileUp,
   LibraryBig,
@@ -36,20 +37,20 @@ import { Button } from "@/shared/ui";
 import { copyTextToClipboard } from "@/shared/lib/clipboard";
 import { message as uiMessage } from "@/shared/ui/Message";
 import {
-  getRagFailurePresentation,
-  getRagProgressFromRenderableParts,
-  getVisibleRagSources,
+  getExecutionFailurePresentation,
+  getExecutionProgressFromRenderableParts,
+  getVisibleExecutionSources,
   toUChatRenderableParts,
-  type UChatRagProgressDetail,
-  type UChatRagSourceDetail,
-} from "./ragParsers";
+  type UChatExecutionProgressDetail,
+  type UChatExecutionSourceDetail,
+} from "./executionParsers";
 import type { RagNodeLike, RagSourceLike } from "./ragTypes";
 import {
   UChatAssistantAvatar,
   UChatAssistantBubbleShell,
   UChatUserBubbleShell,
 } from "./UChatMessageBubbleShells";
-import { UChatRagExecutionTrace } from "./UChatRagExecutionTrace";
+import { UChatExecutionTrace } from "./UChatExecutionTrace";
 import { UChatRagProgressDetailDrawer } from "./UChatRagProgressDetailDrawer";
 import { UChatRagSourceDetailDrawer } from "./UChatRagSourceDetailDrawer";
 import { UChatThreadHeader } from "./UChatThreadHeader";
@@ -245,6 +246,7 @@ export function UChatThreadView({
   onComposerAttachmentsAppend,
   onComposerAttachmentRemove,
   onSend,
+  onAgentSend,
   onCancelSend,
   onRegenerate,
   onEditUserMessage,
@@ -255,6 +257,7 @@ export function UChatThreadView({
   assistantAvatarSrc,
   assistantDisplayName,
   assistantTypingLabel,
+  agentEnabled,
 }: {
   activeThreadId: string | null;
   title: string;
@@ -276,6 +279,7 @@ export function UChatThreadView({
   onComposerAttachmentsAppend?: (files: File[]) => void | Promise<void>;
   onComposerAttachmentRemove?: (attachmentId: string) => void | Promise<void>;
   onSend: () => void | Promise<void>;
+  onAgentSend?: () => void | Promise<void>;
   onCancelSend?: () => void | Promise<void>;
   onRegenerate?: (messageId: string) => void | Promise<void>;
   onEditUserMessage?: (
@@ -292,6 +296,7 @@ export function UChatThreadView({
   assistantAvatarSrc?: string | null;
   assistantDisplayName?: string;
   assistantTypingLabel?: string;
+  agentEnabled?: boolean;
 }) {
   const { t } = useTranslation();
   const isRunning = runStatus.type === "running";
@@ -299,9 +304,9 @@ export function UChatThreadView({
     null,
   );
   const [selectedRagProgressDetail, setSelectedRagProgressDetail] =
-    useState<UChatRagProgressDetail | null>(null);
+    useState<UChatExecutionProgressDetail | null>(null);
   const [selectedRagSourceDetail, setSelectedRagSourceDetail] =
-    useState<UChatRagSourceDetail | null>(null);
+    useState<UChatExecutionSourceDetail | null>(null);
   const [editingUserMessage, setEditingUserMessage] = useState<{
     id: string;
     draftText: string;
@@ -527,12 +532,21 @@ export function UChatThreadView({
                           threadContextTags={threadContextTags}
                           isRunning={isRunning}
                           isSendDisabled={isSendDisabled}
+                          agentEnabled={agentEnabled}
                           onComposerAction={onComposerAction}
                           onRemoveThreadContextTag={onRemoveThreadContextTag}
                           onSend={() => {
                             requestScrollToBottom();
                             return onSend();
                           }}
+                          onAgentSend={
+                            onAgentSend
+                              ? () => {
+                                  requestScrollToBottom();
+                                  return onAgentSend();
+                                }
+                              : undefined
+                          }
                           onCancelSend={onCancelSend}
                           onComposerAttachmentsChange={
                             onComposerAttachmentsChange
@@ -603,8 +617,8 @@ function UChatMessageRow({
   messagePresentation: ChatMessagePresentationHints;
   resolveAttachmentSource: (value: string) => string;
   onPreviewImage: (value: ImagePreviewState) => void;
-  onOpenProgressDetail: (detail: UChatRagProgressDetail) => void;
-  onOpenSourceDetail: (detail: UChatRagSourceDetail) => void;
+  onOpenProgressDetail: (detail: UChatExecutionProgressDetail) => void;
+  onOpenSourceDetail: (detail: UChatExecutionSourceDetail) => void;
   onRegenerate?: (messageId: string) => void | Promise<void>;
   onEditUserMessage?: (
     messageId: string,
@@ -620,7 +634,7 @@ function UChatMessageRow({
   const { t } = useTranslation();
   const ragProgress = useMemo(
     () =>
-      getRagProgressFromRenderableParts(
+      getExecutionProgressFromRenderableParts(
         toUChatRenderableParts(message),
       ) as RagNodeLike[],
     [message],
@@ -635,16 +649,27 @@ function UChatMessageRow({
     ? (((message.metadata?.rag as { sources?: unknown }).sources ??
         []) as RagSourceLike[])
     : [];
-  const sources = getVisibleRagSources(metadataSources, ragProgress);
+  const sources = getVisibleExecutionSources(metadataSources, ragProgress);
   const textAndMediaParts = useMemo(
     () => collapseDisplayParts(message.parts),
     [message.parts],
   );
   const failurePresentation =
     message.status === "error"
-      ? getRagFailurePresentation(ragProgress, message.errorMessage)
+    ? getExecutionFailurePresentation(ragProgress, message.errorMessage)
       : null;
   const toolTraceEntries = message.toolTrace ?? [];
+  const agentMetadata =
+    message.metadata?.agent &&
+    typeof message.metadata.agent === "object" &&
+    !Array.isArray(message.metadata.agent)
+      ? (message.metadata.agent as {
+          status?: "waiting_approval" | "blocked" | "completed" | "failed";
+          pendingApproval?: { toolId?: string; reason?: string };
+          errorMessage?: string | null;
+        })
+      : null;
+  const hasExecutionTrace = ragProgress.length > 0;
   const preferMarkdownForText =
     messagePresentation.preferMarkdownForText !== false;
   const assistantBubbleWidthClassName = resolveBubbleWidthClassName(
@@ -764,7 +789,7 @@ function UChatMessageRow({
           name={assistantDisplayName}
         />
         <div className={`min-w-0 ${assistantBubbleWidthClassName}`}>
-          <UChatRagExecutionTrace
+          <UChatExecutionTrace
             messageId={message.id}
             steps={ragProgress}
             onOpenDetail={onOpenProgressDetail}
@@ -819,7 +844,31 @@ function UChatMessageRow({
               </div>
             ) : null}
 
-            {toolTraceEntries.length > 0 ? (
+            {agentMetadata?.status === "waiting_approval" ||
+            agentMetadata?.status === "blocked" ? (
+              <div
+                className={`inline-flex max-w-full items-start gap-2 rounded-2xl px-3 py-2.5 text-sm ${
+                  agentMetadata.status === "blocked"
+                    ? "border border-rose-200 bg-rose-50 text-rose-700"
+                    : "border border-sky-200 bg-sky-50 text-sky-700"
+                }`}
+              >
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <div className="min-w-0">
+                  <div className="font-medium">
+                    {agentMetadata.status === "blocked" ? "Agent 已阻断" : "等待审批"}
+                  </div>
+                  <div className="mt-1 break-words text-xs text-sky-700/90">
+                    {agentMetadata.status === "blocked"
+                      ? agentMetadata.errorMessage ?? "Agent 未能完成本轮执行。"
+                      : agentMetadata.pendingApproval?.reason ??
+                        "Agent 需要人工确认后继续。"}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {toolTraceEntries.length > 0 && !hasExecutionTrace ? (
               <UChatToolTrace entries={toolTraceEntries} />
             ) : null}
           </UChatAssistantBubbleShell>
@@ -1056,9 +1105,11 @@ function UChatComposerActions({
   threadContextTags,
   isRunning,
   isSendDisabled,
+  agentEnabled,
   onComposerAction,
   onRemoveThreadContextTag,
   onSend,
+  onAgentSend,
   onCancelSend,
   onComposerAttachmentsChange,
 }: {
@@ -1066,11 +1117,13 @@ function UChatComposerActions({
   threadContextTags: ChatThreadContextTag[];
   isRunning: boolean;
   isSendDisabled: boolean;
+  agentEnabled?: boolean;
   onComposerAction: (action: ChatComposerAction) => void | Promise<void>;
   onRemoveThreadContextTag?: (
     tag: ChatThreadContextTag,
   ) => void | Promise<void>;
   onSend: () => void | Promise<void>;
+  onAgentSend?: () => void | Promise<void>;
   onCancelSend?: () => void | Promise<void>;
   onComposerAttachmentsChange: (files: File[]) => void;
 }) {
@@ -1114,6 +1167,25 @@ function UChatComposerActions({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-cloudy-4/55 px-4 pb-3.5 pt-3">
       <div className="flex min-w-0 flex-1 items-center gap-2 pl-1 text-xs text-text-tertiary">
+        <button
+          type="button"
+          onClick={() =>
+            void onComposerAction({
+              id: "agent-toggle",
+              kind: "command",
+              label: agentEnabled ? "Agent 开启" : "Agent 关闭",
+              title: agentEnabled ? "Disable built-in agent tools" : "Enable built-in agent tools",
+            })
+          }
+          className={`inline-flex h-8 items-center gap-2 rounded-full border px-3 text-xs transition-colors ${
+            agentEnabled
+              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+              : "border-border/70 bg-surface-primary/90 text-text-secondary"
+          }`}
+        >
+          <Bot className="h-3.5 w-3.5" />
+          <span>{agentEnabled ? "Agent" : "Agent"}</span>
+        </button>
         {composerActions.length > 0 ? (
           <DropdownMenu
             items={menuItems}
@@ -1193,6 +1265,21 @@ function UChatComposerActions({
       </div>
 
       <div className="flex flex-wrap items-center gap-2.5">
+        {onAgentSend ? (
+          <button
+            type="button"
+            disabled={isRunning || isSendDisabled}
+            onClick={() => {
+              void onAgentSend();
+            }}
+            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 text-xs font-medium text-primary transition-all duration-150 hover:border-primary/45 hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Agent run"
+            title="Run this message with Agent"
+          >
+            <Bot className="h-3.5 w-3.5" />
+            <span>Agent</span>
+          </button>
+        ) : null}
         <button
           type="button"
           disabled={!isRunning && isSendDisabled}

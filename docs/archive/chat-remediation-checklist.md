@@ -1,5 +1,10 @@
 # Chat Remediation Checklist
 
+Layer: raw-source
+Module: Chat
+Feature: UChat
+Doc Type: historical
+
 > Archived on 2026-06-23. This file records the completed chat remediation
 > process and is kept for implementation history only. Current runtime rules
 > now live in `docs/uchat.md`, `docs/uchat-internal-maintenance.md`, and

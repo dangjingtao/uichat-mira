@@ -39,7 +39,9 @@ type WebSearchExecutionPlan = WebSearchProviderPlan & {
 };
 
 const SEARCH_TIMEOUT_MS = 10_000;
-const DEFAULT_MAX_RESULTS = 5;
+const DEFAULT_MAX_RESULTS = 4;
+const MIN_MAX_RESULTS = 1;
+const MAX_MAX_RESULTS = 10;
 
 const withTimeoutSignal = () => AbortSignal.timeout(SEARCH_TIMEOUT_MS);
 
@@ -69,7 +71,10 @@ const normalizeMaxResults = (value: unknown) => {
     throw mcpBadRequest("maxResults must be a finite number");
   }
 
-  return Math.max(1, Math.trunc(value));
+  return Math.min(
+    MAX_MAX_RESULTS,
+    Math.max(MIN_MAX_RESULTS, Math.trunc(value)),
+  );
 };
 
 const resolveStoredWebSearchSettings = () => webSearchSettingsRepository.get();
@@ -91,6 +96,11 @@ const resolveSearxngBaseUrl = (args: Record<string, unknown>) =>
       )
         .trim()
         .replace(/\/+$/, "");
+
+const resolveDefaultMaxResults = (args: Record<string, unknown>) =>
+  args.maxResults === undefined
+    ? resolveStoredWebSearchSettings().maxResults
+    : args.maxResults;
 
 const sortProviderPlans = (
   environment: McpExecutionEnvironment,
@@ -265,6 +275,7 @@ export const webSearchTool: McpToolImplementation = {
     description:
       "Search the public web through a harness-selected provider such as Tavily or SearXNG.",
     domain: "web_search",
+    source: "internal",
     mode: "sync",
     inputSchema: {
       type: "object",
@@ -286,7 +297,7 @@ export const webSearchTool: McpToolImplementation = {
   },
   execute: async (context) => {
     const query = normalizeQuery(context.args.query);
-    const maxResults = normalizeMaxResults(context.args.maxResults);
+    const maxResults = normalizeMaxResults(resolveDefaultMaxResults(context.args));
     const resolvedApiKey = resolveTavilyApiKey(context.args);
     const resolvedBaseUrl = resolveSearxngBaseUrl(context.args);
     const harnessEnvironment = assertWebSearchEnvironment(context.environment);

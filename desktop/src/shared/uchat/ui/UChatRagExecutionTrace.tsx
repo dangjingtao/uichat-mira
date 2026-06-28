@@ -8,21 +8,21 @@ import {
   LoaderCircle,
 } from "lucide-react";
 import {
-  getDisplayRagStep,
+  getDisplayExecutionStep,
   summarizeRagProgress,
-  type UChatRagProgressDetail,
-} from "./ragParsers";
+  type UChatExecutionProgressDetail,
+} from "./executionParsers";
 import type { RagNodeLike } from "./ragTypes";
 
-// UChatRagExecutionTrace renders the inline retrieval/generation progress row.
-export function UChatRagExecutionTrace({
+// UChatExecutionTrace renders the inline retrieval/generation progress row.
+export function UChatExecutionTrace({
   messageId,
   steps,
   onOpenDetail,
 }: {
   messageId?: string;
   steps: RagNodeLike[];
-  onOpenDetail: (detail: UChatRagProgressDetail) => void;
+  onOpenDetail: (detail: UChatExecutionProgressDetail) => void;
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
@@ -72,7 +72,7 @@ export function UChatRagExecutionTrace({
         <div className="min-h-0">
           <div className="mt-1 border-t border-border/50 pt-1.5">
             {steps.map((step, index) => {
-              const display = getDisplayRagStep(step);
+              const display = getDisplayExecutionStep(step);
               const clickable =
                 step.phase !== "start" &&
                 ((!!step.details && Object.keys(step.details).length > 0) ||

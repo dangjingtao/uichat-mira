@@ -4,8 +4,14 @@ Status: Current
 Owner: chat
 Last verified: 2026-06-25
 Layer: raw-source
-Module: chat
+Module: Chat
+Feature: UChat
 Doc Type: current-contract
+Canonical: true
+Related:
+  - uchat-internal-maintenance.md
+  - chat/chat-system-practices.md
+  - provider/README.md
 
 `uchat` 是当前项目新的自有对话运行时方案，作为聊天状态和运行时框架的唯一主实现。
 
@@ -29,7 +35,7 @@ Doc Type: current-contract
 当前 chat 运行时规则统一维护在：
 
 - `docs/uchat-internal-maintenance.md`
-- `docs/architecture/provider-proxy-api.md`
+- `docs/provider/README.md`
 
 历史整改记录只作为背景材料阅读，不再作为当前主契约。
 
@@ -50,6 +56,20 @@ Doc Type: current-contract
 
 不要再把 UI、协议和业务规则重新揉回同一层。
 
+## Sidebar 扩展口径
+
+聊天侧边栏历史线程区域上方的功能入口，现已纳入 `uchat` 可扩展能力范围。
+
+- `core` 只定义通用入口描述：`ChatSidebarEntry`
+- `ui` 只负责渲染入口，不绑定具体业务行为
+- `integration` 负责提供入口列表，并处理点击后的真实动作，例如弹出搜索、切换工作空间、后续接更多 chat 工具入口
+
+这意味着：
+
+- 不要在 `UChatSidebarView` 里继续硬编码某个具体功能按钮
+- 新入口应优先通过 `sidebarEntries` 注入
+- 如果未来要新增“收藏线程”“多会话筛选”“Agent 工具台”等入口，优先沿用这条 contract，而不是再开一套 sidebar 私有实现
+
 ## 适合什么时候读
 
 这些场景建议先读这页：
@@ -62,5 +82,5 @@ Doc Type: current-contract
 ## 相关文档
 
 - `uchat-internal-maintenance.md`
-- `chat-system-practices.md`
-- `architecture/provider-proxy-api.md`
+- `chat/chat-system-practices.md`
+- `provider/README.md`

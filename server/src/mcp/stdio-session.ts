@@ -1,4 +1,6 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 
 type JsonRpcMessage = {
   jsonrpc?: "2.0";
@@ -27,7 +29,46 @@ export interface StdioMcpSessionOptions {
   onExit?: (message: string) => void;
 }
 
-const HEADER_DELIMITER = Buffer.from("\r\n\r\n");
+const MESSAGE_DELIMITER = Buffer.from("\n");
+
+const isWindows = () => process.platform === "win32";
+
+const hasPathSeparator = (value: string) => /[\\/]/.test(value);
+
+const ensureLauncherAvailable = (command: string) => {
+  const normalized = command.trim();
+  if (!normalized) {
+    throw new Error("External stdio MCP command is required");
+  }
+
+  if (!isWindows()) {
+    return;
+  }
+
+  if (hasPathSeparator(normalized)) {
+    const resolved = path.resolve(normalized);
+    if (!fs.existsSync(resolved)) {
+      throw new Error(`External stdio MCP launcher not found: ${normalized}`);
+    }
+    return;
+  }
+
+  const probe = spawnSync("where.exe", [normalized], {
+    windowsHide: true,
+    encoding: "utf8",
+    stdio: "pipe",
+  });
+
+  if (probe.status !== 0) {
+    throw new Error(`External stdio MCP launcher not found: ${normalized}`);
+  }
+};
+
+const buildWindowsShellCommand = (command: string, args: string[]) => {
+  const quotedCommand = command.includes(" ") ? `"${command}"` : command;
+  const quotedArgs = args.map((arg) => (arg.includes(" ") ? `"${arg}"` : arg));
+  return [quotedCommand, ...quotedArgs].join(" ");
+};
 
 const normalizeExitMessage = (
   code: number | null,
@@ -61,6 +102,8 @@ export class StdioMcpSession {
       return;
     }
 
+    ensureLauncherAvailable(this.options.command);
+
     this.process = spawn(this.options.command, this.options.args, {
       stdio: "pipe",
       env: {
@@ -69,6 +112,11 @@ export class StdioMcpSession {
       },
       ...(this.options.cwd ? { cwd: this.options.cwd } : {}),
       windowsHide: true,
+      ...(isWindows()
+        ? {
+            shell: true,
+          }
+        : {}),
     });
 
     this.process.stdout.on("data", (chunk: Buffer) => {
@@ -176,43 +224,23 @@ export class StdioMcpSession {
       throw new Error("External stdio MCP session is not available");
     }
 
-    const body = Buffer.from(JSON.stringify(message), "utf8");
-    const header = Buffer.from(`Content-Length: ${body.length}\r\n\r\n`, "utf8");
-    this.process.stdin.write(Buffer.concat([header, body]));
+    const body = Buffer.from(`${JSON.stringify(message)}\n`, "utf8");
+    this.process.stdin.write(body);
   }
 
   private drainFrames() {
     while (true) {
-      const headerIndex = this.stdoutBuffer.indexOf(HEADER_DELIMITER);
-      if (headerIndex === -1) {
+      const newlineIndex = this.stdoutBuffer.indexOf(MESSAGE_DELIMITER);
+      if (newlineIndex === -1) {
         return;
       }
 
-      const headerText = this.stdoutBuffer.subarray(0, headerIndex).toString("utf8");
-      const contentLengthHeader = headerText
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .find((line) => line.toLowerCase().startsWith("content-length:"));
-
-      if (!contentLengthHeader) {
-        this.closeWithError(new Error("External stdio MCP response is missing Content-Length"));
-        return;
+      const line = this.stdoutBuffer.subarray(0, newlineIndex).toString("utf8").replace(/\r$/, "");
+      this.stdoutBuffer = this.stdoutBuffer.subarray(newlineIndex + 1);
+      const body = line.trim();
+      if (!body) {
+        continue;
       }
-
-      const contentLength = Number(contentLengthHeader.split(":")[1]?.trim() ?? "");
-      if (!Number.isInteger(contentLength) || contentLength < 0) {
-        this.closeWithError(new Error("External stdio MCP response has invalid Content-Length"));
-        return;
-      }
-
-      const frameStart = headerIndex + HEADER_DELIMITER.length;
-      const frameEnd = frameStart + contentLength;
-      if (this.stdoutBuffer.length < frameEnd) {
-        return;
-      }
-
-      const body = this.stdoutBuffer.subarray(frameStart, frameEnd).toString("utf8");
-      this.stdoutBuffer = this.stdoutBuffer.subarray(frameEnd);
 
       let message: JsonRpcMessage;
       try {

@@ -27,6 +27,9 @@ export const registerReadableResource = (resource: McpResourceImplementation) =>
 export const listCapabilityDefinitions = (): McpToolDefinition[] =>
   listToolDefinitions();
 
+export const listInternalCapabilityDefinitions = (): McpToolDefinition[] =>
+  listToolDefinitions().filter((definition) => definition.source === "internal");
+
 export const listReadableResourceDefinitions = (): McpResourceDefinition[] =>
   listResourceDefinitions();
 

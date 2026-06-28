@@ -206,6 +206,7 @@ export const webSearchSettings = sqliteTable("web_search_settings", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   tavilyApiKeyEncrypted: text("tavily_api_key_encrypted"),
   searxngBaseUrl: text("searxng_base_url").notNull().default(""),
+  maxResults: integer("max_results").notNull().default(4),
   createdAt: text("created_at")
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
@@ -216,6 +217,142 @@ export const webSearchSettings = sqliteTable("web_search_settings", {
 
 export type WebSearchSettings = typeof webSearchSettings.$inferSelect;
 export type NewWebSearchSettings = typeof webSearchSettings.$inferInsert;
+
+export const wecomSettings = sqliteTable("wecom_settings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  corpId: text("corp_id").notNull().default(""),
+  agentId: text("agent_id").notNull().default(""),
+  appSecretEncrypted: text("app_secret_encrypted"),
+  contactsSecretEncrypted: text("contacts_secret_encrypted"),
+  robotWebhookUrlEncrypted: text("robot_webhook_url_encrypted"),
+  robotWebhookSecretEncrypted: text("robot_webhook_secret_encrypted"),
+  smartRobotBotIdEncrypted: text("smart_robot_bot_id_encrypted"),
+  smartRobotSecretEncrypted: text("smart_robot_secret_encrypted"),
+  smartRobotKnowledgeBaseIdEncrypted: text(
+    "smart_robot_knowledge_base_id_encrypted",
+  ),
+  smartRobotReplyMode: text("smart_robot_reply_mode").notNull().default("stream"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export type WecomSettings = typeof wecomSettings.$inferSelect;
+export type NewWecomSettings = typeof wecomSettings.$inferInsert;
+
+export const integrationInstances = sqliteTable(
+  "integration_instances",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    provider: text("provider").notNull(),
+    name: text("name").notNull().default(""),
+    externalTenantId: text("external_tenant_id"),
+    configJsonEncrypted: text("config_json_encrypted"),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    isDefault: integer("is_default", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    providerIdx: index("idx_integration_instances_provider").on(table.provider),
+    defaultIdx: uniqueIndex("idx_integration_instances_provider_default")
+      .on(table.provider, table.isDefault)
+      .where(sql`${table.isDefault} = 1`),
+    enabledIdx: index("idx_integration_instances_enabled").on(table.enabled),
+  }),
+);
+
+export type IntegrationInstance = typeof integrationInstances.$inferSelect;
+export type NewIntegrationInstance = typeof integrationInstances.$inferInsert;
+
+export const integrationCapabilities = sqliteTable(
+  "integration_capabilities",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    instanceId: text("instance_id")
+      .notNull()
+      .references(() => integrationInstances.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    type: text("type").notNull(),
+    name: text("name").notNull().default(""),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    knowledgeBaseId: text("knowledge_base_id").references(() => knowledgeBases.id, {
+      onDelete: "set null",
+    }),
+    configJsonEncrypted: text("config_json_encrypted"),
+    runtimeJson: text("runtime_json").notNull().default("{}"),
+    isDefault: integer("is_default", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    instanceIdx: index("idx_integration_capabilities_instance").on(table.instanceId),
+    providerIdx: index("idx_integration_capabilities_provider").on(table.provider),
+    typeIdx: index("idx_integration_capabilities_type").on(table.type),
+    instanceDefaultIdx: uniqueIndex(
+      "idx_integration_capabilities_instance_default",
+    )
+      .on(table.instanceId, table.isDefault)
+      .where(sql`${table.isDefault} = 1`),
+  }),
+);
+
+export type IntegrationCapability = typeof integrationCapabilities.$inferSelect;
+export type NewIntegrationCapability = typeof integrationCapabilities.$inferInsert;
+
+export const externalIdentityBindings = sqliteTable(
+  "external_identity_bindings",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    externalUserId: text("external_user_id").notNull(),
+    externalUnionId: text("external_union_id"),
+    bindSource: text("bind_source").notNull().default("manual"),
+    bindStatus: text("bind_status").notNull().default("bound"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    providerUserUniqueIdx: uniqueIndex("idx_external_identity_bindings_provider_user").on(
+      table.provider,
+      table.userId,
+    ),
+    providerExternalUserUniqueIdx: uniqueIndex(
+      "idx_external_identity_bindings_provider_external_user",
+    ).on(table.provider, table.externalUserId),
+    userIdIdx: index("idx_external_identity_bindings_user_id").on(table.userId),
+    providerIdx: index("idx_external_identity_bindings_provider").on(table.provider),
+  }),
+);
+
+export type ExternalIdentityBinding = typeof externalIdentityBindings.$inferSelect;
+export type NewExternalIdentityBinding = typeof externalIdentityBindings.$inferInsert;
 
 export const knowledgeBases = sqliteTable(
   "knowledge_bases",
@@ -461,6 +598,37 @@ export const rolesRelations = relations(roles, ({ one }) => ({
 export type Role = typeof roles.$inferSelect;
 export type NewRole = typeof roles.$inferInsert;
 
+export const chatWorkspaces = sqliteTable(
+  "chat_workspaces",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    rootPath: text("root_path"),
+    status: text("status", { enum: ["active", "archived"] })
+      .notNull()
+      .default("active"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    userIdIdx: index("idx_chat_workspaces_user_id").on(table.userId),
+    statusIdx: index("idx_chat_workspaces_status").on(table.status),
+    updatedAtIdx: index("idx_chat_workspaces_updated_at").on(table.updatedAt),
+  }),
+);
+
+export type ChatWorkspace = typeof chatWorkspaces.$inferSelect;
+export type NewChatWorkspace = typeof chatWorkspaces.$inferInsert;
+
 export const threads = sqliteTable(
   "threads",
   {
@@ -472,11 +640,17 @@ export const threads = sqliteTable(
       .references(() => users.id, { onDelete: "cascade" }),
     title: text("title").notNull().default(""),
     modelName: text("model_name"),
+    workspaceId: text("workspace_id").references(() => chatWorkspaces.id, {
+      onDelete: "set null",
+    }),
     knowledgeBaseId: text("knowledge_base_id")
       .references(() => knowledgeBases.id, { onDelete: "cascade" }),
     roleId: text("role_id").references(() => roles.id, {
       onDelete: "set null",
     }),
+    agentEnabled: integer("agent_enabled", { mode: "boolean" })
+      .notNull()
+      .default(false),
     contextSummary: text("context_summary"),
     contextSummaryUpdatedAt: text("context_summary_updated_at"),
     status: text("status", { enum: THREAD_STATUS_VALUES })
@@ -491,6 +665,7 @@ export const threads = sqliteTable(
   },
   (table) => ({
     userIdIdx: index("idx_threads_user_id").on(table.userId),
+    workspaceIdx: index("idx_threads_workspace_id").on(table.workspaceId),
     knowledgeBaseIdx: index("idx_threads_knowledge_base").on(table.knowledgeBaseId),
     roleIdx: index("idx_threads_role_id").on(table.roleId),
     statusIdx: index("idx_threads_status").on(table.status),
@@ -500,6 +675,10 @@ export const threads = sqliteTable(
 
 export const threadsRelations = relations(threads, ({ many, one }) => ({
   messages: many(messages),
+  workspace: one(chatWorkspaces, {
+    fields: [threads.workspaceId],
+    references: [chatWorkspaces.id],
+  }),
   knowledgeBase: one(knowledgeBases, {
     fields: [threads.knowledgeBaseId],
     references: [knowledgeBases.id],
@@ -516,6 +695,17 @@ export const threadsRelations = relations(threads, ({ many, one }) => ({
 
 export type Thread = typeof threads.$inferSelect;
 export type NewThread = typeof threads.$inferInsert;
+
+export const chatWorkspacesRelations = relations(
+  chatWorkspaces,
+  ({ many, one }) => ({
+    threads: many(threads),
+    user: one(users, {
+      fields: [chatWorkspaces.userId],
+      references: [users.id],
+    }),
+  }),
+);
 
 export const messages = sqliteTable(
   "messages",

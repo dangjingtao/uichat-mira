@@ -4,7 +4,8 @@ Status: Current
 Owner: docs
 Last verified: 2026-06-24
 Layer: wiki
-Module: knowledge-base
+Module: KnowledgeBase
+Feature: Overview
 Doc Type: overview
 
 ## 入口文档

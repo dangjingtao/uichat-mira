@@ -21,6 +21,7 @@ vi.mock("@/app/routes/settingsRoutes", () => ({
     { label: "settings.navigation.model", icon: () => null, to: "/settings/model-setting" },
     { label: "settings.navigation.tools", icon: () => null, to: "/settings/tools" },
     { label: "settings.navigation.mcp", icon: () => null, to: "/settings/mcp" },
+    { label: "settings.navigation.enterpriseIntegrations", icon: () => null, to: "/settings/integrations" },
     { label: "settings.navigation.knowledgeBase", icon: () => null, to: "/settings/knowledge-base" },
     { label: "settings.navigation.evaluationCenter", icon: () => null, to: "/settings/evaluation/center" },
     { label: "settings.navigation.roles", icon: () => null, to: "/settings/roles" },

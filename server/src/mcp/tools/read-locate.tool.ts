@@ -9,6 +9,7 @@ export const readLocateTool: McpToolImplementation = {
     title: "Read Locate",
     description: "Locate files or matching content inside the authorized workspace.",
     domain: "read",
+    source: "internal",
     mode: "sync",
     inputSchema: {
       type: "object",

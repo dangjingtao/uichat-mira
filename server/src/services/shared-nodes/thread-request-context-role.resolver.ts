@@ -70,10 +70,20 @@ export const resolveRoleContext: RequestContextResolver = ({ thread, userId }) =
     return null;
   }
 
-  const message: RequestContextMessage = {
-    role: "system",
-    content,
+  return {
+    message: {
+      role: "system",
+      content,
+    },
+    executionNode: {
+      nodeId: `request-context-role-${thread.roleId}`,
+      nodeType: "memory",
+      phase: "done",
+      label: "角色记忆",
+      summary: "已加载线程绑定角色设定",
+      details: {
+        roleId: thread.roleId,
+      },
+    },
   };
-
-  return message;
 };
