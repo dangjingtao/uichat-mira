@@ -2,6 +2,7 @@ import { Plus, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/shared/ui/Button";
 import Card from "@/shared/ui/Card";
+import Skeleton from "@/shared/ui/Skeleton";
 import type { KnowledgeBaseSummary } from "@/shared/api/knowledgeBase";
 
 interface KnowledgeBaseSidebarProps {
@@ -11,6 +12,7 @@ interface KnowledgeBaseSidebarProps {
   knowledgeBases: KnowledgeBaseSummary[];
   selectedKnowledgeBaseId: string | null;
   onSelectKnowledgeBase: (knowledgeBaseId: string) => void;
+  loading?: boolean;
 }
 
 function formatKnowledgeBaseCount(count: number) {
@@ -61,6 +63,7 @@ export default function KnowledgeBaseSidebar({
   knowledgeBases,
   selectedKnowledgeBaseId,
   onSelectKnowledgeBase,
+  loading = false,
 }: KnowledgeBaseSidebarProps) {
   const { t } = useTranslation();
 
@@ -83,6 +86,28 @@ export default function KnowledgeBaseSidebar({
 
       <div className="stable-scrollbar mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
         <div className="space-y-1">
+          {loading
+            ? Array.from({ length: 6 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="rounded-lg border border-transparent px-3 py-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <Skeleton height={16} width={`${54 + index * 4}%`} />
+                    <Skeleton
+                      height={20}
+                      width={24}
+                      className="ml-auto rounded-md"
+                    />
+                  </div>
+                  <Skeleton
+                    height={12}
+                    width={`${36 + index * 3}%`}
+                    className="mt-2"
+                  />
+                </div>
+              ))
+            : null}
           {knowledgeBases.map((item) => {
             const isActive = item.id === selectedKnowledgeBaseId;
             const updatedAtLabel = formatKnowledgeBaseUpdatedAt(

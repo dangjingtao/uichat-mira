@@ -1,4 +1,4 @@
-import type { McpToolDefinition } from "@/mcp/core/definitions.js";
+import type { HarnessCapabilityProfile } from "@/mcp/harness/capability-profiles.js";
 import type { CapabilityIntentDocument } from "./types.js";
 
 const toCompactJson = (value: unknown) => {
@@ -9,52 +9,33 @@ const toCompactJson = (value: unknown) => {
   }
 };
 
-const summarizeLegacyProjection = (
-  definition: McpToolDefinition,
-) => {
-  const projection = definition.legacyProjection;
-  if (!projection) {
-    return "";
-  }
-
-  return [
-    projection.category,
-    projection.name,
-    projection.author,
-    projection.version,
-  ]
-    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-    .join(" ");
-};
-
 export const toCapabilityIntentDocument = (
-  definition: McpToolDefinition,
+  profile: HarnessCapabilityProfile,
 ): CapabilityIntentDocument => {
-  const schemaText = toCompactJson(definition.inputSchema);
-  const legacyProjectionText = summarizeLegacyProjection(definition);
+  const supportingToolsText = toCompactJson(profile.supportingToolIds);
   const text = [
-    definition.title,
-    definition.id,
-    definition.description,
-    definition.domain,
-    definition.tags.join(" "),
-    legacyProjectionText,
-    schemaText,
+    profile.title,
+    profile.id,
+    profile.description,
+    profile.domain,
+    profile.tags.join(" "),
+    profile.preferredToolId,
+    supportingToolsText,
   ]
     .filter((value) => typeof value === "string" && value.trim().length > 0)
     .join("\n");
 
   return {
-    capabilityId: definition.id,
-    title: definition.title,
+    capabilityId: profile.id,
+    title: profile.title,
     text,
-    source: definition.source,
-    domain: definition.domain,
-    tags: definition.tags,
+    source: profile.source,
+    domain: profile.domain,
+    tags: profile.tags,
   };
 };
 
 export const toCapabilityIntentDocuments = (
-  definitions: McpToolDefinition[],
+  profiles: HarnessCapabilityProfile[],
 ): CapabilityIntentDocument[] =>
-  definitions.map(toCapabilityIntentDocument);
+  profiles.map(toCapabilityIntentDocument);

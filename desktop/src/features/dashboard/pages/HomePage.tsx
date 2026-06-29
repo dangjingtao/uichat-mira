@@ -1,15 +1,10 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
-import { LaptopMinimal, LogOut, Orbit, TabletSmartphone, User } from "lucide-react";
+import { ArrowRight, Circle, LogOut, Settings } from "lucide-react";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { useRuntimeHealth } from "../../system/hooks/useRuntimeHealth";
 import { Button } from "@/shared/ui/Button";
-import { StatusIndicator } from "@/shared/ui/StatusIndicator";
-import {
-  getRuntimeDescription,
-  getRuntimeDisplayLabel,
-} from "@/shared/platform/desktopRuntime";
 
 function HomePage() {
   const { t } = useTranslation();
@@ -17,27 +12,26 @@ function HomePage() {
   const { runtime, backendState, databaseState } = useRuntimeHealth();
   const navigate = useNavigate();
 
-  const runtimeLabel = useMemo(() => {
-    return getRuntimeDisplayLabel(runtime);
-  }, [runtime]);
-  const runtimeDescription = useMemo(() => {
-    return getRuntimeDescription(runtime);
-  }, [runtime]);
-  const RuntimeIcon = useMemo(() => {
-    if (runtime.hostKind === "electron") {
-      return LaptopMinimal;
-    }
-
-    if (runtime.hostKind === "tauri") {
-      return TabletSmartphone;
-    }
-
-    return Orbit;
-  }, [runtime.hostKind]);
-
   const backendSummary = useMemo(() => {
     return runtime.backendUrl || backendState.detail;
   }, [backendState.detail, runtime.backendUrl]);
+
+  const runtimeSummary = useMemo(() => {
+    const hostLabel =
+      runtime.hostKind === "electron"
+        ? "Electron"
+        : runtime.hostKind === "tauri"
+        ? "Tauri"
+        : "Browser";
+    const statusLabel =
+      backendState.status === "running"
+        ? "API 正常"
+        : backendState.status === "stopped"
+        ? "API 异常"
+        : "API 检查中";
+
+    return `${hostLabel} · ${statusLabel}`;
+  }, [backendState.status, runtime.hostKind]);
 
   const statusItems = useMemo(
     () => [
@@ -57,7 +51,7 @@ function HomePage() {
         key: "runtime",
         label: t("dashboard.home.runtime"),
         status: backendState.status,
-        value: runtimeDescription,
+        value: runtimeSummary,
       },
     ],
     [
@@ -66,7 +60,7 @@ function HomePage() {
       backendSummary,
       databaseState.status,
       databaseState.detail,
-      runtimeDescription,
+      runtimeSummary,
     ],
   );
 
@@ -76,91 +70,84 @@ function HomePage() {
 
   return (
     <div className="min-h-screen bg-surface-secondary">
-      <main className="mx-auto flex max-w-6xl flex-col px-4 py-8 sm:px-6 lg:px-8">
-        <section className="overflow-hidden rounded-ui-panel border border-border/80 bg-surface-primary shadow-[0_18px_48px_rgba(68,52,35,0.06)]">
-          <div className="relative">
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[linear-gradient(180deg,rgba(var(--color-primary),0.06)_0%,rgba(var(--color-primary),0.015)_52%,transparent_100%)]"
-            />
-            <div className="relative px-6 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
-              <div className="flex flex-col gap-8 md:flex-row md:items-start md:justify-between md:gap-6 lg:gap-8">
-                <div className="min-w-0 flex-1 space-y-5">
-                  <div className="inline-flex items-center gap-2 rounded-full bg-primary/8 px-3 py-1 text-xs font-medium tracking-[0.08em] text-primary">
-                    <RuntimeIcon className="h-3.5 w-3.5" />
-                    <span>{runtimeLabel}</span>
-                  </div>
-
-                  <div className="space-y-3">
-                    <h1 className="max-w-[12ch] text-[34px] font-semibold leading-[1.12] tracking-[-0.03em] text-text-primary sm:text-[42px]">
-                      {t("dashboard.home.welcomeBack", {
-                        username: session.user.username,
-                      })}
-                    </h1>
-                    <p className="max-w-2xl text-[15px] leading-7 text-text-secondary">
-                      {t("dashboard.home.subtitle")}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-                    <Button
-                      variant="danger-outline"
-                      onClick={() => logout()}
-                      size="lg"
-                      className="gap-2"
-                    >
-                      <LogOut className="h-4 w-4" />
-                      {t("dashboard.home.logout")}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="w-full shrink-0 border-l-0 border-border/70 pt-0 md:w-[280px] md:border-l md:pl-6 lg:pl-8">
-                  <div className="space-y-4">
-                    <div className="inline-flex items-center gap-2 rounded-full bg-surface-secondary px-3 py-1 text-xs font-medium text-text-secondary">
-                      <span>{t("dashboard.home.currentUser")}</span>
-                    </div>
-                    <div className="flex items-start gap-4">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border/80 bg-surface-primary text-icon-secondary">
-                        <User className="h-4.5 w-4.5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[18px] font-semibold text-text-primary">
-                          {session.user.username}
-                        </div>
-                        <div className="mt-1 text-sm text-text-secondary">
-                          {session.user.role}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+      <main className="mx-auto flex max-w-6xl flex-col px-5 py-8 sm:px-6 lg:px-8">
+        <section className="rounded-ui-overlay border border-border bg-surface-primary shadow-shadow-sm">
+          <div className="px-8 py-10 sm:px-10 sm:py-11">
+            <div className="max-w-3xl">
+              <div className="text-caption text-primary">
+                {t("dashboard.home.previewLabel")}
               </div>
-            </div>
-          </div>
 
-          <div className="border-t border-border/70 bg-[linear-gradient(180deg,rgba(var(--color-surface-secondary),0.88)_0%,rgba(var(--color-surface-primary),0.94)_100%)] px-6 py-4 sm:px-8 lg:px-10">
-            <div className="grid gap-3 lg:grid-cols-3 lg:gap-6">
-              {statusItems.map((item) => (
-                <div
-                  key={item.key}
-                  className="flex items-start gap-3 border-b border-border/55 py-2 last:border-b-0 lg:border-b-0 lg:border-r lg:border-border/60 lg:pr-6 lg:last:border-r-0"
+              <h1 className="mt-4 text-[34px] font-semibold leading-[1.18] text-text-primary sm:text-[38px]">
+                {t("dashboard.home.welcomeBack", {
+                  username: session.user.username,
+                })}
+              </h1>
+
+              <p className="mt-4 max-w-2xl text-[15px] leading-7 text-text-secondary">
+                {t("dashboard.home.subtitle")}
+              </p>
+
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={() => navigate("/chat")}
+                  className="min-w-[112px]"
                 >
-                  <StatusIndicator status={item.status} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-tertiary">
-                      {item.label}
-                    </div>
-                    <div className="mt-1 line-clamp-2 text-sm leading-6 text-text-primary">
-                      {item.value || "—"}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  {t("dashboard.home.enterChat")}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={() => navigate("/settings/general")}
+                  className="min-w-[112px]"
+                >
+                  <Settings className="h-4 w-4" />
+                  {t("dashboard.home.checkSettings")}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={() => logout()}
+                  className="min-w-[112px]"
+                >
+                  <ArrowRight className="h-4 w-4" />
+                  {t("dashboard.home.logout")}
+                </Button>
+              </div>
             </div>
           </div>
         </section>
 
+        <section className="mt-4 overflow-hidden rounded-ui-overlay border border-border bg-surface-primary shadow-shadow-sm">
+          <div className="grid md:grid-cols-3">
+            {statusItems.map((item, index) => (
+              <div
+                key={item.key}
+                className={`px-5 py-4 ${
+                  index < statusItems.length - 1 ? "border-b border-border md:border-b-0 md:border-r" : ""
+                }`}
+              >
+                <div className="flex items-center gap-2 text-sm text-text-primary">
+                  <Circle
+                    className={`h-2.5 w-2.5 fill-current ${
+                      item.status === "running"
+                        ? "text-success"
+                        : item.status === "stopped"
+                        ? "text-danger"
+                        : "text-warning"
+                    }`}
+                  />
+                  <span className="font-medium">{item.label}</span>
+                </div>
+                <div className="mt-2 font-mono text-[13px] text-text-secondary">
+                  {item.value || "—"}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       </main>
     </div>
   );

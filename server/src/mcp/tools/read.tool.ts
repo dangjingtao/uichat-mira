@@ -16,6 +16,9 @@ export const readTool: McpToolImplementation = {
       sideEffect: "none",
       requiresApproval: false,
       workspaceBound: true,
+      workspaceBoundary: {
+        argKeys: ["path"],
+      },
     },
   },
   execute: (context) => readOpenTool.execute(context),

@@ -219,6 +219,47 @@ tool id 也要分清：
 - 内置 capability 保留稳定 id，例如 `read_open`
 - 第三方投影 tool 使用 `mcp:<serverId>:tool:<toolName>`
 
+### 2.1 Capability Profile 层
+
+`Harness` 不应把“暴露给 Agent 的识别对象”和“真正执行的 tool id”混成同一层。
+
+建议在 registry 之上再加一层 `Capability Profile`：
+
+- `tool` 是底层可执行单元
+- `capability profile` 是上层被识别、被暴露、被治理的能力单元
+
+一个 capability profile 可以对应：
+
+- 一个 primary tool
+- 多个 supporting tools
+
+例如：
+
+- `workspace_lookup`
+  - primary: `read_locate`
+  - supporting: `read_list` / `read_open` / `read_extract` / `read_slice`
+
+这样做的意义是：
+
+- Agent 不再直接面对原始 tool 洪水
+- 暴露治理、embedding 召回、rerank、风控评分都能以 capability 为单位进行
+- 真正进入执行阶段时，再落到具体 `preferredToolId`
+
+建议结构：
+
+```ts
+type HarnessCapabilityProfile = {
+  id: string;
+  title: string;
+  description: string;
+  domain: string;
+  source: "internal" | "external";
+  tags: string[];
+  preferredToolId: string;
+  supportingToolIds: string[];
+};
+```
+
 ### 3. Invocation 生命周期
 
 harness 拥有完整执行生命周期。
@@ -603,6 +644,128 @@ UI 不负责：
   - 已连接 external server 与 projected tools
 - `Marketplace`
   - 候选 external server 与 transport metadata
+
+## Harness Context System
+
+Harness 不只要“知道工具怎么跑”，还要“知道该给模型喂哪一小段系统上下文”。
+
+这层能力的目标不是全量理解，而是按任务动态构建最小但充分的上下文。
+
+### 三个索引面
+
+- `Module-centric Index`
+  - 负责模块地图
+  - 回答“这件事属于哪个模块、相关代码和文档在哪”
+- `Symbol-centric Navigation`
+  - 负责符号跳转、调用链扩展和局部理解
+  - 回答“应该看哪一个函数、类、配置项”
+- `Task-centric Context`
+  - 负责最终喂给模型的上下文装配
+  - 回答“这次任务应该带哪些代码、文档、历史和日志”
+
+### 必须维护的索引
+
+- 文档索引
+  - 架构、API、UI、MCP、数据模型、模块说明
+- 代码索引
+  - file summary
+  - symbol index
+  - call graph
+  - git history
+- 任务记忆
+  - bug
+  - 决策
+  - TODO
+  - 评审结论
+
+### 实施顺序
+
+推荐按下面三步推进，不能反过来：
+
+#### Step 1: Project Map 自动生成器
+
+必须先做。
+
+没有 Project Map，后面的检索都会变成瞎检索。
+
+它至少要产出：
+
+- modules
+- paths
+- docs
+- keywords
+
+#### Step 2: Context Builder 最小版
+
+只做：
+
+- module
+- doc
+- code chunk
+
+推荐链路：
+
+```text
+classify -> modules -> docs -> code -> compress
+```
+
+#### Step 3: embedding + rerank
+
+最后再加。
+
+它的作用是：
+
+- 提升召回质量
+- 调整当前任务的相关性排序
+
+但它不能替代 Project Map。
+
+### 上下文预算
+
+预算不要写死成绝对常量，但要有默认分配策略：
+
+- 代码
+- 文档
+- 规范
+- 历史
+- 任务
+- 日志
+
+任务类型不同，预算应可偏移：
+
+- 重构偏代码和符号
+- 设计偏文档和规范
+- bug 定位偏日志和历史
+
+### 两个补充维度
+
+- freshness
+  - 新代码、新文档、新决策优先于旧知识
+- confidence
+  - 每段上下文都要能解释“为什么被选中”
+
+### 三大风险
+
+- 只用 embedding 会错召回
+- 只读代码会缺意图
+- 只读文档会过时
+
+### MVP
+
+最小可行系统至少包含：
+
+- project map generator
+- module map
+- doc index
+- code index
+- context builder
+- confidence / freshness 输出
+
+### 不要提前做的事
+
+- 不要先上 embedding 再补项目地图
+- 不要先做复杂 symbol graph 再没有 module map
+- 不要把 rerank 当成基础设施起点
 
 ## 分阶段计划
 

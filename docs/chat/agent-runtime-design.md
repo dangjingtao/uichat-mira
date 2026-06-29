@@ -135,7 +135,7 @@ Harness tools / RAG graph / Provider proxy / Thread context
 
 - 新增 `AgentGraph`，使用 `@langchain/langgraph` 的 `StateGraph` 编排 Agent 主链。
 - 复用现有 `ragGraph` / `ragRunnableSequence` / `retrieveOnlyRunnable`，不要复制 RAG 节点逻辑。
-- 将 Harness invocation 包装成 LangChain `Runnable` 或 graph node。
+- Harness invocation 仍由 Harness 层负责，Agent 只通过 graph/runnable 选择和编排可用能力。
 - 将 Agent graph node event 映射到现有 `data-execution-node`。
 - `AgentRunStore` 只保存业务状态、进度、审批和审计信息，不承载具体图执行逻辑。
 
@@ -145,6 +145,7 @@ Harness tools / RAG graph / Provider proxy / Thread context
 START
   -> prepareContext
   -> plan
+  -> capabilityIntent
   -> routeStep
       -> retrieve
       -> tool
@@ -158,7 +159,7 @@ START
 
 - `prepareContext` 复用 thread context、role context、knowledge base context。
 - `retrieve` 优先复用现有 RAG graph 或 retrieve runnable。
-- `tool` 只执行低风险 Harness capability。
+- `tool` 只负责选择低风险 Harness capability，并把执行交给 Harness 控制平面。
 - `approvalRequired` 不执行高风险工具，只写入 `AgentRun.pendingApproval` 和 trace。
 - `generate` 复用 provider proxy / existing generation 能力。
 - `evaluate` 第一版可以规则化，但作为 graph node 存在，后续可替换成模型评估。
@@ -274,7 +275,7 @@ server/src/agent/
 | `run-store.ts` | 创建、读取、更新 `AgentRun`。第一版可内存态，正式版进 SQLite。 |
 | `graph.ts` | 定义 `AgentGraphState`、LangGraph 节点顺序和条件路由。 |
 | `nodes.ts` | 提供 `prepareContext`、`plan`、`retrieve`、`tool`、`generate`、`evaluate` 等节点实现。 |
-| `runnables.ts` | 将 RAG、Harness、provider 能力包装成 LangChain runnable，便于 graph 复用。 |
+| `runnables.ts` | 将 RAG 和 provider 能力包装成 LangChain runnable，便于 graph 复用。 |
 | `evaluator.ts` | 判断 step / run 是否完成、是否需要 replan、是否要追问。 |
 | `policy.ts` | 根据 risk、tool、scope、approval 决定能否执行。 |
 | `memory.ts` | 处理短期状态和长期记忆写入请求。 |

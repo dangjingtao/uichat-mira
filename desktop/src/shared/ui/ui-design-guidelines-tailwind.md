@@ -325,6 +325,7 @@
 - DropdownMenu / Submenu 必须通过 portal 渲染，并显式高于底部悬浮 Composer、抽屉和普通卡片层
 - 搜索选择类弹窗优先使用共享 `SearchSelectModal`，并保持“固定搜索头 + 独立滚动结果区”
 - 搜索选择类弹窗默认走更紧凑的 modal 壳层，列表项应以单行标题、轻量元信息和较小圆角为主，避免大卡片堆叠
+- 加载占位优先使用共享 `Skeleton`，不要在业务页重复散落 `animate-pulse + bg-surface-secondary + rounded-*`
 - Table：用 `surface-*`、`border`、`text-*` 建结构，不做厚重报表蓝灰底
 - 紧凑业务表格优先使用共享 `Table` 的 `compact` 模式，先压缩表头和行高，再考虑删列
 - 表头分隔线应由 `th` 承载，sticky 场景下更稳定

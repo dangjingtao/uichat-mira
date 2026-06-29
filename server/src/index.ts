@@ -1,3 +1,4 @@
+import "@/bootstrap-env.js";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
@@ -38,6 +39,7 @@ import { initializeKnowledgeBaseDatabase } from "@/db/knowledge-base.db";
 import { initializeModelConfigDatabase } from "@/db/model-config.db";
 import { initializeRoleDatabase } from "@/db/role.db";
 import { initializeThreadDatabase } from "@/db/thread.db";
+import { agentRunRepository } from "@/db/repositories/agent-run.repository.js";
 import { integrationCapabilitiesRepository } from "@/db/repositories/integration-capabilities.repository.js";
 import { integrationInstancesRepository } from "@/db/repositories/integration-instances.repository.js";
 import { webSearchSettingsRepository } from "@/db/repositories/web-search-settings.repository.js";
@@ -51,6 +53,9 @@ import { getAppMeta } from "@/utils/index.js";
 import { sendRouteError, unauthorized } from "@/utils/route-errors.js";
 import { MAX_UPLOAD_FILE_BYTES } from "@/constants/knowledge-base.js";
 import { attachmentStorageRoot } from "@/services/attachment-storage.service.js";
+import { configureAgentRunPersistence } from "@/agent/run-store.js";
+import { agentRunStore } from "@/agent/run-store.js";
+import { configureInvocationRetention } from "@/mcp/core/invocations.js";
 
 const app = Fastify({
   bodyLimit: MAX_UPLOAD_FILE_BYTES,
@@ -62,6 +67,23 @@ const builtinAvatarRoot = path.resolve(process.cwd(), "static", "avatars");
 const clientCoverageRoot = path.resolve(process.cwd(), "client-coverage");
 const serverCoverageRoot = path.resolve(process.cwd(), "server-coverage");
 const docsSiteRoot = path.resolve(process.cwd(), "docs-site");
+const swaggerLogoPath = path.resolve(process.cwd(), "static", "logo.png");
+const workspaceSwaggerLogoPath = path.resolve(
+  process.cwd(),
+  "..",
+  "desktop",
+  "src",
+  "assets",
+  "branding",
+  "uichat-logo-icon.png",
+);
+
+const readSwaggerLogo = async () => {
+  const logoPath = fsSync.existsSync(swaggerLogoPath)
+    ? swaggerLogoPath
+    : workspaceSwaggerLogoPath;
+  return fs.readFile(logoPath);
+};
 
 app.setErrorHandler(sendRouteError);
 
@@ -239,6 +261,10 @@ const setupPlugins = async () => {
 
   await app.register(swaggerUi, {
     routePrefix: CONFIG.SWAGGER_PREFIX,
+    logo: {
+      type: "image/png",
+      content: await readSwaggerLogo(),
+    },
     uiConfig: {
       docExpansion: "list",
       deepLinking: true,
@@ -289,6 +315,23 @@ const setupDatabase = async () => {
   initializeKnowledgeBaseDatabase();
   initializeRoleDatabase();
   initializeThreadDatabase();
+  configureInvocationRetention({
+    maxEntries: CONFIG.HARNESS_RETENTION_MAX_ENTRIES,
+    ttlMs: CONFIG.HARNESS_RETENTION_TTL_MS,
+  });
+  agentRunStore.configureRetention?.({
+    maxEntries: CONFIG.HARNESS_RETENTION_MAX_ENTRIES,
+    ttlMs: CONFIG.HARNESS_RETENTION_TTL_MS,
+  });
+  configureAgentRunPersistence({
+    create: (run) => {
+      agentRunRepository.createPersistedRun(run);
+    },
+    get: agentRunRepository.get.bind(agentRunRepository),
+    update: agentRunRepository.update.bind(agentRunRepository),
+    addObservation: agentRunRepository.addObservation.bind(agentRunRepository),
+    complete: agentRunRepository.complete.bind(agentRunRepository),
+  });
   webSearchSettingsRepository.initialize();
   wecomSettingsRepository.initialize();
   integrationInstancesRepository.initialize();

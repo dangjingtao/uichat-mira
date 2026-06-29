@@ -9,6 +9,7 @@ import {
   type RoleModelType,
   updateRoleModelConfigParams,
 } from "@/shared/api/modelSettings";
+import { getBuiltInLocalModel } from "@/shared/business/localModels";
 import { getProviderLabel } from "@/shared/providerCatalog";
 import SettingsNotice from "./SettingsNotice";
 import SettingsStatBlock from "./SettingsStatBlock";
@@ -168,6 +169,7 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
 }) => {
   const { t } = useTranslation();
   const meta = MODEL_META[modelType];
+  const builtInModel = getBuiltInLocalModel(modelType);
   const [localConfig, setLocalConfig] = useState<ConfigState>(
     normalizeConfigState(config),
   );
@@ -182,7 +184,46 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
   const isConfigured = Boolean(config?.providerCode && config?.remoteModelId);
   const providerLabel = config?.providerCode
     ? getProviderLabel(config.providerCode)
-    : t("settings.model.config.notConfigured");
+    : builtInModel
+      ? t("settings.model.config.builtInLocal")
+      : t("settings.model.config.notConfigured");
+  const modelLabel = isConfigured
+    ? config?.name || t("settings.model.config.selectModel")
+    : builtInModel
+      ? builtInModel.displayName
+      : t("settings.model.config.selectModel");
+  const modelDescription =
+    !isConfigured && builtInModel
+      ? [
+          builtInModel.runtime,
+          builtInModel.dimensions
+            ? t("settings.model.config.dimensions", {
+                count: builtInModel.dimensions,
+              })
+            : null,
+          builtInModel.optional
+            ? t("settings.model.config.optionalBuiltIn")
+            : t("settings.model.config.defaultBuiltIn"),
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : undefined;
+  const builtInModelDescription = builtInModel
+    ? [
+        builtInModel.optional
+          ? t("settings.model.config.optionalBuiltIn")
+          : t("settings.model.config.defaultBuiltIn"),
+        builtInModel.displayName,
+        builtInModel.runtime,
+        builtInModel.dimensions
+          ? t("settings.model.config.dimensions", {
+              count: builtInModel.dimensions,
+            })
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
 
   const handleChange = (key: string, value: ConfigValue) => {
     if (readOnly) {
@@ -245,6 +286,10 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
               >
                 {isConfigured
                   ? t("settings.model.config.configured")
+                  : builtInModel
+                    ? builtInModel.optional
+                      ? t("settings.model.config.optionalBuiltIn")
+                      : t("settings.model.config.builtInReady")
                   : t("settings.model.config.notConfigured")}
               </span>
             </div>
@@ -281,10 +326,17 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
       <div className="mb-2.5">
         <SettingsStatBlock
           label={providerLabel}
-          value={config?.name || t("settings.model.config.selectModel")}
+          value={modelLabel}
+          description={modelDescription}
           size="sm"
         />
       </div>
+
+      {builtInModelDescription ? (
+        <div className="mb-2.5 rounded-lg border border-primary/15 bg-primary/5 px-3 py-2 text-xs leading-5 text-text-secondary">
+          {builtInModelDescription}
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
         {fields.map((field) => {

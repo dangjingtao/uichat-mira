@@ -45,6 +45,9 @@ export interface McpCapabilityMetadata {
   sideEffect: McpToolSideEffect;
   requiresApproval: boolean;
   workspaceBound?: boolean;
+  workspaceBoundary?: {
+    argKeys: string[];
+  };
   networkAccess?: boolean;
   longRunning?: boolean;
 }

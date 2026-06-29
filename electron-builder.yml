@@ -23,6 +23,14 @@ extraResources:
     to: runtime.config.cjs
   - from: ./node-runtime
     to: node-runtime
+  - from: ./model-packs
+    to: model-packs
+    filter:
+      - "**/*"
+  - from: ./model-runtime
+    to: model-runtime
+    filter:
+      - "**/*"
   - from: ./backend
     to: server
 

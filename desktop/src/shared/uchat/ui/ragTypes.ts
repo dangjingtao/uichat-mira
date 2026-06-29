@@ -77,6 +77,10 @@ export type RagNodeEnvironment = {
 // assistant messages.
 export type RagNodeLike = {
   nodeId: string;
+  traceDomain?: "rag" | "agent" | "tool" | "generic";
+  slotKey?: string;
+  attemptKey?: string;
+  iteration?: number;
   nodeType:
     | "rewrite"
     | "embed"

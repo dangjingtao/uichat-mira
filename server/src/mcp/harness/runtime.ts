@@ -10,6 +10,7 @@ import { terminalSessionTool } from "../tools/terminal-session.tool.js";
 import { wecomNotifySendTool } from "../tools/wecom-notify-send.tool.js";
 import { wecomOrgLookupTool } from "../tools/wecom-org-lookup.tool.js";
 import { webSearchTool } from "../tools/web-search.tool.js";
+import { workspaceMutationTool } from "../tools/workspace-mutation.tool.js";
 import {
   initializeExternalMcpDatabase,
   registerAllExternalMcpCapabilities,
@@ -32,6 +33,7 @@ export const initializeHarnessRuntime = () => {
   registerCapability(readSliceTool);
   registerCapability(readTool);
   registerCapability(editFileTool);
+  registerCapability(workspaceMutationTool);
   registerCapability(webSearchTool);
   registerCapability(wecomNotifySendTool);
   registerCapability(wecomOrgLookupTool);

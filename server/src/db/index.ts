@@ -87,3 +87,16 @@ export const initializeVectorStore = (): VectorStoreHealth => {
 };
 
 export const getVectorStoreHealth = (): VectorStoreHealth => vectorStoreHealth;
+
+export const resetDatabaseClients = () => {
+  if (sqlite) {
+    sqlite.close();
+  }
+  sqlite = null;
+  db = null;
+  vectorStoreHealth = {
+    ok: false,
+    provider: "sqlite-vec",
+    detail: "sqlite-vec 尚未初始化",
+  };
+};

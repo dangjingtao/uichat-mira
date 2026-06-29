@@ -1,11 +1,24 @@
 import { agentGraph } from "./graph.js";
 import { createAgentGoal, createAgentPlan } from "./nodes.js";
-import { agentRunStore } from "./run-store.js";
+import { agentRunStore, configureAgentRunPersistence } from "./run-store.js";
 import type { AgentGraphInput } from "./types.js";
+import { agentRunRepository } from "@/db/repositories/agent-run.repository.js";
+
+configureAgentRunPersistence({
+  create: (run) => {
+    agentRunRepository.createPersistedRun(run);
+  },
+  get: agentRunRepository.get.bind(agentRunRepository),
+  update: agentRunRepository.update.bind(agentRunRepository),
+  addObservation: agentRunRepository.addObservation.bind(agentRunRepository),
+  complete: agentRunRepository.complete.bind(agentRunRepository),
+});
 
 export const createAndRunAgent = async (
   input: Omit<AgentGraphInput, "runId" | "goal" | "plan"> & {
     goalText: string;
+    assistantMessageId?: string;
+    assistantParentId?: string | null;
   },
 ) => {
   const goal = createAgentGoal(input.goalText);
@@ -15,6 +28,8 @@ export const createAndRunAgent = async (
     userId: input.userId,
     goal,
     plan,
+    assistantMessageId: input.assistantMessageId,
+    assistantParentId: input.assistantParentId,
     runtimeInput: {
       messages: input.messages,
       requestContextMessages: input.requestContextMessages,
@@ -35,7 +50,7 @@ export const createAndRunAgent = async (
       runId: run.id,
       goal,
       plan,
-      approvedToolIds: [],
+      approvedInvocations: [],
     });
 
     for (const observation of output.observations) {
@@ -47,6 +62,10 @@ export const createAndRunAgent = async (
         status: "waiting_approval",
         currentStepId: output.pendingApproval.stepId,
         pendingApproval: output.pendingApproval,
+        selectedCapabilityId: output.selectedCapabilityId,
+        selectedToolId: output.pendingApproval.toolId,
+        pendingToolCall: output.pendingToolCall,
+        lastToolExecution: output.lastToolExecution,
       });
     }
 
@@ -54,9 +73,16 @@ export const createAndRunAgent = async (
       status: output.status,
       currentStepId: output.pendingApproval ? output.pendingApproval.stepId : undefined,
       contextBudget: output.contextBudget,
+      selectedCapabilityId: output.selectedCapabilityId,
+      selectedToolId: output.selectedToolId ?? output.pendingApproval?.toolId,
+      pendingToolCall: output.pendingToolCall,
+      lastToolExecution: output.lastToolExecution,
       ...(output.pendingApproval
         ? { pendingApproval: output.pendingApproval }
         : { pendingApproval: undefined }),
+      ...(output.errorSourceNodeId
+        ? { currentStepId: output.errorSourceNodeId }
+        : {}),
     });
 
     return {
@@ -73,4 +99,5 @@ export const createAndRunAgent = async (
 };
 
 export { agentRunStore } from "./run-store.js";
+export { configureAgentRunPersistence } from "./run-store.js";
 export type * from "./types.js";

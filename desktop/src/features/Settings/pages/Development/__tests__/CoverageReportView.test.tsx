@@ -14,7 +14,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 describe("CoverageReportView", () => {
-  it("requests client coverage summary", async () => {
+  it("requests client test result summary", async () => {
     globalThis.fetch = vi.fn(
       async () => new Response("Not Found", { status: 404 }),
     );
@@ -23,12 +23,12 @@ describe("CoverageReportView", () => {
 
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
-        "http://127.0.0.1:8787/client-coverage/coverage-summary.json",
+        "http://127.0.0.1:8787/client-coverage/test-results.json",
       );
     });
   });
 
-  it("requests server coverage summary", async () => {
+  it("requests server test result summary", async () => {
     globalThis.fetch = vi.fn(
       async () => new Response("Not Found", { status: 404 }),
     );
@@ -37,7 +37,7 @@ describe("CoverageReportView", () => {
 
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
-        "http://127.0.0.1:8787/server-coverage/coverage-summary.json",
+        "http://127.0.0.1:8787/server-coverage/test-results.json",
       );
     });
   });

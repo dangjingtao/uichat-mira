@@ -707,6 +707,62 @@ export const chatWorkspacesRelations = relations(
   }),
 );
 
+export const agentRuns = sqliteTable(
+  "agent_runs",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    threadId: text("thread_id").notNull(),
+    userId: integer("user_id").notNull(),
+    goalJson: text("goal_json").notNull(),
+    planJson: text("plan_json").notNull(),
+    status: text("status", {
+      enum: [
+        "queued",
+        "running",
+        "waiting_approval",
+        "waiting_user",
+        "completed",
+        "failed",
+        "blocked",
+        "cancelled",
+      ],
+    })
+      .notNull()
+      .default("queued"),
+    observationsJson: text("observations_json").notNull().default("[]"),
+    traceId: text("trace_id").notNull(),
+    currentStepId: text("current_step_id"),
+    pendingApprovalJson: text("pending_approval_json"),
+    approvedInvocationsJson: text("approved_invocations_json").notNull().default("[]"),
+    contextBudgetJson: text("context_budget_json"),
+    selectedCapabilityId: text("selected_capability_id"),
+    selectedToolId: text("selected_tool_id"),
+    pendingToolCallJson: text("pending_tool_call_json"),
+    lastToolExecutionJson: text("last_tool_execution_json"),
+    assistantMessageId: text("assistant_message_id"),
+    assistantParentId: text("assistant_parent_id"),
+    runtimeInputJson: text("runtime_input_json"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    threadIdx: index("idx_agent_runs_thread_id").on(table.threadId),
+    userIdx: index("idx_agent_runs_user_id").on(table.userId),
+    statusIdx: index("idx_agent_runs_status").on(table.status),
+    traceIdx: index("idx_agent_runs_trace_id").on(table.traceId),
+    updatedAtIdx: index("idx_agent_runs_updated_at").on(table.updatedAt),
+  }),
+);
+
+export type AgentRunRow = typeof agentRuns.$inferSelect;
+export type NewAgentRunRow = typeof agentRuns.$inferInsert;
+
 export const messages = sqliteTable(
   "messages",
   {

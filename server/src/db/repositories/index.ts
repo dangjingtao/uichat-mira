@@ -13,3 +13,4 @@ export * from "./knowledge-base.repository";
 export * from "./chat-workspace.repository";
 export * from "./thread.repository";
 export * from "./role.repository";
+export * from "./agent-run.repository";

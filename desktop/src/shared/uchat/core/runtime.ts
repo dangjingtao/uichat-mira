@@ -298,7 +298,13 @@ export class ChatRuntime {
 
   // Ensures there is an active thread to send into. It either hydrates the
   // requested thread or creates a fresh one through the repository boundary.
-  async ensureThread(threadId?: string | null) {
+  async ensureThread(
+    threadId?: string | null,
+    createOverrides?: {
+      title?: string;
+      metadata?: Record<string, unknown>;
+    },
+  ) {
     if (threadId) {
       return this.selectThread(threadId);
     }
@@ -309,10 +315,20 @@ export class ChatRuntime {
       return this.selectThread(reusableThreadId);
     }
 
-    const createInput = this.policies.threadCreation?.buildCreateInput?.(
-      this.getState(),
-    );
-    const created = await this.repository.createThread(createInput);
+    const createInput = this.policies.threadCreation?.buildCreateInput?.(this.getState());
+    const mergedMetadata = {
+      ...(createInput?.metadata ?? {}),
+      ...(createOverrides?.metadata ?? {}),
+    };
+    const created = await this.repository.createThread({
+      ...(typeof createInput?.title === "string" ? { title: createInput.title } : {}),
+      ...(typeof createOverrides?.title === "string"
+        ? { title: createOverrides.title }
+        : {}),
+      ...(Object.keys(mergedMetadata).length > 0
+        ? { metadata: mergedMetadata }
+        : {}),
+    });
     this.store.getState().upsertThread(created);
     this.store.getState().setActiveThreadId(created.id);
     this.store.getState().markHydrated(created.id);

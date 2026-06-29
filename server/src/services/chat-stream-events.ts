@@ -10,6 +10,7 @@ export interface AssistantStreamUsage {
 export type AssistantToolEventStatus =
   | "requested"
   | "running"
+  | "awaiting_approval"
   | "succeeded"
   | "failed";
 
@@ -29,6 +30,10 @@ export interface AssistantExecutionNodeEvent {
   nodeType: string;
   phase: AssistantExecutionNodePhase;
   label: string;
+  traceDomain?: "rag" | "agent" | "tool" | "generic";
+  slotKey?: string;
+  attemptKey?: string;
+  iteration?: number;
   summary?: string;
   details?: Record<string, unknown>;
   environment?: Record<string, unknown>;

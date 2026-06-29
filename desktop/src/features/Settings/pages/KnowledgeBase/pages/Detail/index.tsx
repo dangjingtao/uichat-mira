@@ -4,8 +4,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Clock3, Hash, Tags, UserRound } from "lucide-react";
 import { Button } from "@/shared/ui/Button";
 import Card from "@/shared/ui/Card";
-import { FullPageStatus } from "@/shared/ui/FullPageStatus";
 import { message } from "@/shared/ui/Message";
+import Skeleton from "@/shared/ui/Skeleton";
 import {
   getKnowledgeBaseDocument,
   type KnowledgeBaseDocumentDetail,
@@ -69,9 +69,74 @@ export default function KnowledgeBaseDetail() {
 
   if (loading) {
     return (
-      <FullPageStatus
-        message={t("settings.knowledgeBase.messages.loadingDetail")}
-      />
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-[1180px] flex-col gap-3 overflow-hidden px-4 py-4">
+        <section className="shrink-0 space-y-2.5">
+          <Skeleton height={32} width={112} />
+
+          <Card className="p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.025)]">
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                <Skeleton height={22} width={72} className="rounded-full" />
+                <Skeleton height={22} width={96} className="rounded-full" />
+              </div>
+              <Skeleton height={30} width="56%" />
+              <div className="flex gap-2">
+                <Skeleton height={32} width={98} />
+                <Skeleton height={32} width={98} />
+              </div>
+            </div>
+          </Card>
+        </section>
+
+        <section className="min-h-0 flex-1">
+          <div className="grid gap-3 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(300px,0.94fr)_minmax(0,1.36fr)]">
+            <Card className="p-3.5 xl:h-full xl:min-h-0 xl:overflow-y-auto">
+              <Skeleton height={20} width={92} />
+              <div className="mt-4 grid gap-2.5">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <Card
+                    key={index}
+                    variant="subtle"
+                    className="bg-surface-secondary/70 p-3.5"
+                  >
+                    <Skeleton height={12} width={88} />
+                    <Skeleton
+                      height={16}
+                      width={`${56 + index * 8}%`}
+                      className="mt-3"
+                    />
+                  </Card>
+                ))}
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  {Array.from({ length: 4 }).map((_, index) => (
+                    <Skeleton.Card
+                      key={index}
+                      lines={2}
+                      showMeta={false}
+                      className="shadow-none"
+                    />
+                  ))}
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-3.5 xl:h-full xl:min-h-0 xl:overflow-y-auto">
+              <Skeleton height={20} width={120} />
+              <Skeleton.Text lines={2} className="mt-3" lastLineWidth="72%" />
+              <div className="mt-4 space-y-2.5">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <Skeleton.Card
+                    key={index}
+                    lines={3}
+                    showMeta={false}
+                    className="shadow-none"
+                  />
+                ))}
+              </div>
+            </Card>
+          </div>
+        </section>
+      </div>
     );
   }
 

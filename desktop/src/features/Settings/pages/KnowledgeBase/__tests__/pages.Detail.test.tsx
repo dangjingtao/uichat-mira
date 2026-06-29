@@ -52,11 +52,11 @@ describe("KnowledgeBaseDetail page", () => {
   it("shows loading state", () => {
     getKnowledgeBaseDocument.mockImplementation(() => new Promise(() => {}));
 
-    render(<KnowledgeBaseDetail />);
+    const { container } = render(<KnowledgeBaseDetail />);
 
     expect(
-      screen.getByText("settings.knowledgeBase.messages.loadingDetail"),
-    ).toBeInTheDocument();
+      container.querySelectorAll('[aria-hidden="true"]').length,
+    ).toBeGreaterThan(0);
   });
 
   it("shows not found when documentId is missing", async () => {

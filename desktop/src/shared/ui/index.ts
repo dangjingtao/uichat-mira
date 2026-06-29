@@ -24,6 +24,7 @@ export { message, MessageProvider, useMessage } from "./Message";
 export { Modal, ModalProvider, useModal } from "./Modal";
 export { default as NavItem } from "./NavItem";
 export { default as SearchSelectModal } from "./SearchSelectModal";
+export { default as Skeleton } from "./Skeleton";
 export { Select, SelectInput } from "./Select";
 export { default as SegmentedTabs } from "./SegmentedTabs";
 export { default as StatusIndicator } from "./StatusIndicator";

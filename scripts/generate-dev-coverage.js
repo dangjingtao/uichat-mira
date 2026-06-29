@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.join(__dirname, "..");
+const serverDir = path.join(projectRoot, "server");
 
 const args = process.argv.slice(2);
 const shouldGenerate = args.includes("--test");
@@ -25,16 +26,28 @@ const backendServerCoverageDir = path.join(
 );
 
 function reportExists(coverageDir) {
-  return fs.existsSync(path.join(coverageDir, "index.html"));
+  return fs.existsSync(path.join(coverageDir, "test-results.json"));
 }
 
-function copyDir(sourceDir, targetDir) {
+function copyTestJsonFiles(sourceDir, targetDir, label) {
+  const files = ["test-results.json", "test-results-summary.json"];
+
   if (!fs.existsSync(sourceDir)) {
     throw new Error(`Source directory does not exist: ${sourceDir}`);
   }
 
   fs.rmSync(targetDir, { recursive: true, force: true });
-  fs.cpSync(sourceDir, targetDir, { recursive: true });
+  fs.mkdirSync(targetDir, { recursive: true });
+
+  for (const filename of files) {
+    const sourcePath = path.join(sourceDir, filename);
+    if (!fs.existsSync(sourcePath)) {
+      console.log(`[dev:coverage] Missing ${label} ${filename}: ${sourcePath}`);
+      continue;
+    }
+
+    fs.copyFileSync(sourcePath, path.join(targetDir, filename));
+  }
 }
 
 function buildTestResultsSummary(coverageDir) {
@@ -118,11 +131,10 @@ function generateServerReport() {
 
   console.log("[dev:coverage] Generating server coverage report...");
   execSync(
-    `"${serverVitest}" run --coverage --reporter=default --reporter=json --outputFile=./coverage/test-results.json`,
+    "pnpm exec vitest run --coverage --reporter=default --reporter=json --outputFile=./coverage/test-results.json",
     {
       cwd: serverDir,
       stdio: "inherit",
-      shell: true,
     },
   );
   buildTestResultsSummary(serverCoverageDir);
@@ -134,9 +146,13 @@ function syncReportsToBackend() {
   );
 
   if (fs.existsSync(desktopCoverageDir)) {
-    copyDir(desktopCoverageDir, backendClientCoverageDir);
+    copyTestJsonFiles(
+      desktopCoverageDir,
+      backendClientCoverageDir,
+      "frontend",
+    );
     console.log(
-      `[dev:coverage] Frontend report synced to ${backendClientCoverageDir}`,
+      `[dev:coverage] Frontend test result JSON synced to ${backendClientCoverageDir}`,
     );
   } else {
     console.log(
@@ -145,9 +161,9 @@ function syncReportsToBackend() {
   }
 
   if (fs.existsSync(serverCoverageDir)) {
-    copyDir(serverCoverageDir, backendServerCoverageDir);
+    copyTestJsonFiles(serverCoverageDir, backendServerCoverageDir, "server");
     console.log(
-      `[dev:coverage] Server report synced to ${backendServerCoverageDir}`,
+      `[dev:coverage] Server test result JSON synced to ${backendServerCoverageDir}`,
     );
   } else {
     console.log(

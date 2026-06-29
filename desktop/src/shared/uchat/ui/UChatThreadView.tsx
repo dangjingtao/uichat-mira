@@ -8,6 +8,7 @@ import {
   Bot,
   Copy,
   FileUp,
+  Folder,
   LibraryBig,
   MessageSquareText,
   Paperclip,
@@ -247,6 +248,8 @@ export function UChatThreadView({
   onComposerAttachmentRemove,
   onSend,
   onAgentSend,
+  onApproveAgentRun,
+  onRejectAgentRun,
   onCancelSend,
   onRegenerate,
   onEditUserMessage,
@@ -257,7 +260,10 @@ export function UChatThreadView({
   assistantAvatarSrc,
   assistantDisplayName,
   assistantTypingLabel,
+  isAgentRunning,
   agentEnabled,
+  agentAvailability,
+  onToggleAgentEnabled,
 }: {
   activeThreadId: string | null;
   title: string;
@@ -280,6 +286,8 @@ export function UChatThreadView({
   onComposerAttachmentRemove?: (attachmentId: string) => void | Promise<void>;
   onSend: () => void | Promise<void>;
   onAgentSend?: () => void | Promise<void>;
+  onApproveAgentRun?: (runId: string) => void | Promise<void>;
+  onRejectAgentRun?: (runId: string) => void | Promise<void>;
   onCancelSend?: () => void | Promise<void>;
   onRegenerate?: (messageId: string) => void | Promise<void>;
   onEditUserMessage?: (
@@ -296,7 +304,13 @@ export function UChatThreadView({
   assistantAvatarSrc?: string | null;
   assistantDisplayName?: string;
   assistantTypingLabel?: string;
+  isAgentRunning?: boolean;
   agentEnabled?: boolean;
+  agentAvailability?: {
+    enabled: boolean;
+    disabledReason?: string;
+  };
+  onToggleAgentEnabled?: () => void | Promise<void>;
 }) {
   const { t } = useTranslation();
   const isRunning = runStatus.type === "running";
@@ -307,6 +321,14 @@ export function UChatThreadView({
     useState<UChatExecutionProgressDetail | null>(null);
   const [selectedRagSourceDetail, setSelectedRagSourceDetail] =
     useState<UChatExecutionSourceDetail | null>(null);
+  const [agentRunActionState, setAgentRunActionState] = useState<{
+    runId: string;
+    action: "approve" | "reject";
+  } | null>(null);
+  const [agentRunActionError, setAgentRunActionError] = useState<{
+    runId: string;
+    message: string;
+  } | null>(null);
   const [editingUserMessage, setEditingUserMessage] = useState<{
     id: string;
     draftText: string;
@@ -355,6 +377,7 @@ export function UChatThreadView({
   useEffect(() => {
     setSelectedRagProgressDetail(null);
     setSelectedRagSourceDetail(null);
+    setAgentRunActionError(null);
   }, [activeThreadId]);
 
   useEffect(() => {
@@ -410,6 +433,7 @@ export function UChatThreadView({
                           assistantAvatarSrc={assistantAvatarSrc}
                           assistantDisplayName={assistantDisplayName}
                           assistantTypingLabel={assistantTypingLabel}
+                          isAgentRunning={isAgentRunning}
                           editingUserMessage={editingUserMessage}
                           messagePresentation={messagePresentation}
                           resolveAttachmentSource={resolveAttachmentSource}
@@ -424,6 +448,12 @@ export function UChatThreadView({
                             setSelectedRagSourceDetail(detail);
                           }}
                           onRegenerate={onRegenerate}
+                          onApproveAgentRun={onApproveAgentRun}
+                          onRejectAgentRun={onRejectAgentRun}
+                          agentRunActionState={agentRunActionState}
+                          onAgentRunActionStateChange={setAgentRunActionState}
+                          agentRunActionError={agentRunActionError}
+                          onAgentRunActionErrorChange={setAgentRunActionError}
                           onEditUserMessage={onEditUserMessage}
                           onRequestEditUserMessage={(messageId, text) => {
                             setEditingUserMessage({
@@ -533,8 +563,10 @@ export function UChatThreadView({
                           isRunning={isRunning}
                           isSendDisabled={isSendDisabled}
                           agentEnabled={agentEnabled}
+                          agentAvailability={agentAvailability}
                           onComposerAction={onComposerAction}
                           onRemoveThreadContextTag={onRemoveThreadContextTag}
+                          onToggleAgentEnabled={onToggleAgentEnabled}
                           onSend={() => {
                             requestScrollToBottom();
                             return onSend();
@@ -590,6 +622,7 @@ function UChatMessageRow({
   assistantAvatarSrc,
   assistantDisplayName,
   assistantTypingLabel,
+  isAgentRunning,
   editingUserMessage,
   messagePresentation,
   resolveAttachmentSource,
@@ -597,6 +630,12 @@ function UChatMessageRow({
   onOpenProgressDetail,
   onOpenSourceDetail,
   onRegenerate,
+  onApproveAgentRun,
+  onRejectAgentRun,
+  agentRunActionState,
+  onAgentRunActionStateChange,
+  agentRunActionError,
+  onAgentRunActionErrorChange,
   onEditUserMessage,
   onRequestEditUserMessage,
   onUpdateEditUserMessage,
@@ -609,6 +648,7 @@ function UChatMessageRow({
   assistantAvatarSrc?: string | null;
   assistantDisplayName?: string;
   assistantTypingLabel?: string;
+  isAgentRunning?: boolean;
   editingUserMessage: {
     id: string;
     draftText: string;
@@ -620,6 +660,22 @@ function UChatMessageRow({
   onOpenProgressDetail: (detail: UChatExecutionProgressDetail) => void;
   onOpenSourceDetail: (detail: UChatExecutionSourceDetail) => void;
   onRegenerate?: (messageId: string) => void | Promise<void>;
+  onApproveAgentRun?: (runId: string) => void | Promise<void>;
+  onRejectAgentRun?: (runId: string) => void | Promise<void>;
+  agentRunActionState: {
+    runId: string;
+    action: "approve" | "reject";
+  } | null;
+  onAgentRunActionStateChange: (
+    state: { runId: string; action: "approve" | "reject" } | null,
+  ) => void;
+  agentRunActionError: {
+    runId: string;
+    message: string;
+  } | null;
+  onAgentRunActionErrorChange: (
+    state: { runId: string; message: string } | null,
+  ) => void;
   onEditUserMessage?: (
     messageId: string,
     text: string,
@@ -665,11 +721,41 @@ function UChatMessageRow({
     !Array.isArray(message.metadata.agent)
       ? (message.metadata.agent as {
           status?: "waiting_approval" | "blocked" | "completed" | "failed";
+          runId?: string;
           pendingApproval?: { toolId?: string; reason?: string };
           errorMessage?: string | null;
         })
       : null;
+  const agentStatusTone =
+    agentMetadata?.status === "blocked"
+      ? {
+          containerClassName: "border border-rose-200 bg-rose-50 text-rose-700",
+          detailClassName: "text-rose-700/90",
+        }
+      : agentMetadata?.status === "failed"
+        ? {
+            containerClassName:
+              "border border-amber-200 bg-amber-50 text-amber-700",
+            detailClassName: "text-amber-700/90",
+          }
+        : {
+            containerClassName: "border border-sky-200 bg-sky-50 text-sky-700",
+            detailClassName: "text-sky-700/90",
+          };
   const hasExecutionTrace = ragProgress.length > 0;
+  const isApprovingAgentRun =
+    typeof agentRunActionState?.runId === "string" &&
+    agentRunActionState.runId === agentMetadata?.runId &&
+    agentRunActionState.action === "approve";
+  const isRejectingAgentRun =
+    typeof agentRunActionState?.runId === "string" &&
+    agentRunActionState.runId === agentMetadata?.runId &&
+    agentRunActionState.action === "reject";
+  const agentRunInlineError =
+    typeof agentRunActionError?.runId === "string" &&
+    agentRunActionError.runId === agentMetadata?.runId
+      ? agentRunActionError.message
+      : null;
   const preferMarkdownForText =
     messagePresentation.preferMarkdownForText !== false;
   const assistantBubbleWidthClassName = resolveBubbleWidthClassName(
@@ -811,7 +897,11 @@ function UChatMessageRow({
                     style={{ animationDelay: "240ms" }}
                   />
                 </span>
-                <span>{assistantTypingLabel ?? t("chat.thread.assistantTyping")}</span>
+                <span>
+                  {isAgentRunning
+                    ? t("chat.thread.agent.running")
+                    : assistantTypingLabel ?? t("chat.thread.assistantTyping")}
+                </span>
               </div>
             ) : null}
 
@@ -845,25 +935,106 @@ function UChatMessageRow({
             ) : null}
 
             {agentMetadata?.status === "waiting_approval" ||
-            agentMetadata?.status === "blocked" ? (
+            agentMetadata?.status === "blocked" ||
+            (agentMetadata?.status === "failed" && !failurePresentation) ? (
               <div
-                className={`inline-flex max-w-full items-start gap-2 rounded-2xl px-3 py-2.5 text-sm ${
-                  agentMetadata.status === "blocked"
-                    ? "border border-rose-200 bg-rose-50 text-rose-700"
-                    : "border border-sky-200 bg-sky-50 text-sky-700"
-                }`}
+                className={`inline-flex max-w-full items-start gap-2 rounded-2xl px-3 py-2.5 text-sm ${agentStatusTone.containerClassName}`}
               >
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                 <div className="min-w-0">
                   <div className="font-medium">
-                    {agentMetadata.status === "blocked" ? "Agent 已阻断" : "等待审批"}
-                  </div>
-                  <div className="mt-1 break-words text-xs text-sky-700/90">
                     {agentMetadata.status === "blocked"
-                      ? agentMetadata.errorMessage ?? "Agent 未能完成本轮执行。"
-                      : agentMetadata.pendingApproval?.reason ??
-                        "Agent 需要人工确认后继续。"}
+                      ? t("chat.thread.agent.blockedTitle")
+                      : agentMetadata.status === "failed"
+                        ? t("chat.thread.agent.failedTitle")
+                        : t("chat.thread.agent.waitingApprovalTitle")}
                   </div>
+                  <div
+                    className={`mt-1 break-words text-xs ${agentStatusTone.detailClassName}`}
+                  >
+                    {agentMetadata.status === "blocked"
+                      ? agentMetadata.errorMessage ??
+                        t("chat.thread.agent.blockedDetail")
+                      : agentMetadata.status === "failed"
+                        ? agentMetadata.errorMessage ??
+                          t("chat.thread.agent.failedDetail")
+                        : agentMetadata.pendingApproval?.reason ??
+                          t("chat.thread.agent.waitingApprovalDetail")}
+                  </div>
+                  {agentMetadata.status === "waiting_approval" &&
+                  typeof agentMetadata.runId === "string" ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        className="min-w-[4.5rem] justify-center"
+                        disabled={isApprovingAgentRun || isRejectingAgentRun}
+                        onClick={() => {
+                          onAgentRunActionErrorChange(null);
+                          onAgentRunActionStateChange({
+                            runId: agentMetadata.runId as string,
+                            action: "approve",
+                          });
+                          void Promise.resolve(
+                            onApproveAgentRun?.(agentMetadata.runId as string),
+                          )
+                            .catch((error) => {
+                              onAgentRunActionErrorChange({
+                                runId: agentMetadata.runId as string,
+                                message:
+                                  error instanceof Error
+                                    ? error.message
+                                    : t("chat.thread.agent.approveFailed"),
+                              });
+                            })
+                            .finally(() => {
+                              onAgentRunActionStateChange(null);
+                            });
+                        }}
+                      >
+                        {isApprovingAgentRun
+                          ? t("chat.thread.agent.approving")
+                          : t("common.actions.approve")}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="min-w-[4.5rem] justify-center"
+                        disabled={isApprovingAgentRun || isRejectingAgentRun}
+                        onClick={() => {
+                          onAgentRunActionErrorChange(null);
+                          onAgentRunActionStateChange({
+                            runId: agentMetadata.runId as string,
+                            action: "reject",
+                          });
+                          void Promise.resolve(
+                            onRejectAgentRun?.(agentMetadata.runId as string),
+                          )
+                            .catch((error) => {
+                              onAgentRunActionErrorChange({
+                                runId: agentMetadata.runId as string,
+                                message:
+                                  error instanceof Error
+                                    ? error.message
+                                    : t("chat.thread.agent.rejectFailed"),
+                              });
+                            })
+                            .finally(() => {
+                              onAgentRunActionStateChange(null);
+                            });
+                        }}
+                      >
+                        {isRejectingAgentRun
+                          ? t("chat.thread.agent.rejecting")
+                          : t("common.actions.reject")}
+                      </Button>
+                    </div>
+                  ) : null}
+                  {agentRunInlineError ? (
+                    <div className="mt-2 break-words text-xs text-rose-700/90">
+                      {agentRunInlineError}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ) : null}
@@ -1106,8 +1277,10 @@ function UChatComposerActions({
   isRunning,
   isSendDisabled,
   agentEnabled,
+  agentAvailability,
   onComposerAction,
   onRemoveThreadContextTag,
+  onToggleAgentEnabled,
   onSend,
   onAgentSend,
   onCancelSend,
@@ -1118,10 +1291,15 @@ function UChatComposerActions({
   isRunning: boolean;
   isSendDisabled: boolean;
   agentEnabled?: boolean;
+  agentAvailability?: {
+    enabled: boolean;
+    disabledReason?: string;
+  };
   onComposerAction: (action: ChatComposerAction) => void | Promise<void>;
   onRemoveThreadContextTag?: (
     tag: ChatThreadContextTag,
   ) => void | Promise<void>;
+  onToggleAgentEnabled?: () => void | Promise<void>;
   onSend: () => void | Promise<void>;
   onAgentSend?: () => void | Promise<void>;
   onCancelSend?: () => void | Promise<void>;
@@ -1131,6 +1309,8 @@ function UChatComposerActions({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [pendingAttachmentAction, setPendingAttachmentAction] =
     useState<ChatComposerAction | null>(null);
+  const isAgentToggleDisabled =
+    agentEnabled !== true && agentAvailability?.enabled === false;
 
   const handleAction = (action: ChatComposerAction) => {
     if (action.disabled) {
@@ -1153,10 +1333,27 @@ function UChatComposerActions({
     label: action.label,
     title: action.title,
     disabled: action.disabled,
+    children: action.children?.map((child) => ({
+      id: child.id,
+      label: child.label,
+      title: child.title,
+      disabled: child.disabled,
+      leadingIcon: child.id.includes("knowledge-base") ? (
+        <LibraryBig className="h-4 w-4" />
+      ) : child.id.includes("role") ? (
+        <UserRound className="h-4 w-4" />
+      ) : child.id.includes("context-summary") ? (
+        <MessageSquareText className="h-4 w-4" />
+      ) : child.kind === "attachment" ? (
+        <Paperclip className="h-4 w-4" />
+      ) : null,
+    })),
     leadingIcon: action.id.includes("knowledge-base") ? (
       <LibraryBig className="h-4 w-4" />
     ) : action.id.includes("role") ? (
       <UserRound className="h-4 w-4" />
+    ) : action.id.includes("workspace") ? (
+      <Folder className="h-4 w-4" />
     ) : action.id.includes("context-summary") ? (
       <MessageSquareText className="h-4 w-4" />
     ) : action.kind === "attachment" ? (
@@ -1167,25 +1364,6 @@ function UChatComposerActions({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-cloudy-4/55 px-4 pb-3.5 pt-3">
       <div className="flex min-w-0 flex-1 items-center gap-2 pl-1 text-xs text-text-tertiary">
-        <button
-          type="button"
-          onClick={() =>
-            void onComposerAction({
-              id: "agent-toggle",
-              kind: "command",
-              label: agentEnabled ? "Agent 开启" : "Agent 关闭",
-              title: agentEnabled ? "Disable built-in agent tools" : "Enable built-in agent tools",
-            })
-          }
-          className={`inline-flex h-8 items-center gap-2 rounded-full border px-3 text-xs transition-colors ${
-            agentEnabled
-              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-              : "border-border/70 bg-surface-primary/90 text-text-secondary"
-          }`}
-        >
-          <Bot className="h-3.5 w-3.5" />
-          <span>{agentEnabled ? "Agent" : "Agent"}</span>
-        </button>
         {composerActions.length > 0 ? (
           <DropdownMenu
             items={menuItems}
@@ -1211,6 +1389,36 @@ function UChatComposerActions({
               </button>
             }
           />
+        ) : null}
+        {onToggleAgentEnabled ? (
+          <button
+            type="button"
+            disabled={isAgentToggleDisabled}
+            onClick={() => {
+              void onToggleAgentEnabled();
+            }}
+            className={`inline-flex h-8 items-center gap-2 rounded-full border px-3 text-xs transition-colors ${
+              agentEnabled
+                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                : "border-border/70 bg-surface-primary/90 text-text-secondary"
+            } disabled:cursor-not-allowed disabled:opacity-50`}
+            aria-pressed={agentEnabled ? "true" : "false"}
+            title={
+              isAgentToggleDisabled
+                ? agentAvailability?.disabledReason ?? t("chat.thread.agent.toggleOn")
+                : agentEnabled
+                  ? t("chat.thread.agent.toggleOff")
+                  : t("chat.thread.agent.toggleOn")
+            }
+            aria-label={
+              agentEnabled
+                ? t("chat.thread.agent.toggleOff")
+                : t("chat.thread.agent.toggleOn")
+            }
+          >
+            <Bot className="h-3.5 w-3.5" />
+            <span>Agent</span>
+          </button>
         ) : null}
 
         {threadContextTags.map((tag) => (
@@ -1265,50 +1473,56 @@ function UChatComposerActions({
       </div>
 
       <div className="flex flex-wrap items-center gap-2.5">
-        {onAgentSend ? (
+        <Tooltip
+          text={
+            !isRunning && agentEnabled && agentAvailability?.enabled === false
+              ? agentAvailability.disabledReason ?? ""
+              : ""
+          }
+          placement="top"
+        >
           <button
             type="button"
-            disabled={isRunning || isSendDisabled}
-            onClick={() => {
-              void onAgentSend();
-            }}
-            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 text-xs font-medium text-primary transition-all duration-150 hover:border-primary/45 hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label="Agent run"
-            title="Run this message with Agent"
-          >
-            <Bot className="h-3.5 w-3.5" />
-            <span>Agent</span>
-          </button>
-        ) : null}
-        <button
-          type="button"
-          disabled={!isRunning && isSendDisabled}
-          onClick={() => {
-            if (isRunning) {
-              void onCancelSend?.();
-              return;
+            disabled={
+              !isRunning &&
+              (isSendDisabled || (agentEnabled && agentAvailability?.enabled === false))
             }
+            onClick={() => {
+              if (isRunning) {
+                void onCancelSend?.();
+                return;
+              }
 
-            void onSend();
-          }}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-text-primary text-text-inverted transition-all duration-150 hover:scale-[1.02] hover:bg-text-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary disabled:cursor-not-allowed disabled:opacity-50"
-          aria-label={
-            isRunning
-              ? t("chat.thread.composer.cancelGeneration")
-              : t("chat.thread.actions.send")
-          }
-          title={
-            isRunning
-              ? t("chat.thread.composer.cancelGeneration")
-              : t("chat.thread.actions.send")
-          }
-        >
-          {isRunning ? (
-            <Square className="h-3.5 w-3.5 fill-current" />
-          ) : (
-            <ArrowUp className="h-4 w-4" />
-          )}
-        </button>
+              if (agentEnabled && onAgentSend) {
+                void onAgentSend();
+                return;
+              }
+
+              void onSend();
+            }}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-text-primary text-text-inverted transition-all duration-150 hover:scale-[1.02] hover:bg-text-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label={
+              isRunning
+                ? t("chat.thread.composer.cancelGeneration")
+                : agentEnabled
+                  ? t("chat.thread.agent.run")
+                  : t("chat.thread.actions.send")
+            }
+            title={
+              isRunning
+                ? t("chat.thread.composer.cancelGeneration")
+                : agentEnabled
+                  ? t("chat.thread.agent.run")
+                  : t("chat.thread.actions.send")
+            }
+          >
+            {isRunning ? (
+              <Square className="h-3.5 w-3.5 fill-current" />
+            ) : (
+              <ArrowUp className="h-4 w-4" />
+            )}
+          </button>
+        </Tooltip>
       </div>
     </div>
   );

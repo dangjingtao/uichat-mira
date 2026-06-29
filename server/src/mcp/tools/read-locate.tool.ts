@@ -36,6 +36,9 @@ export const readLocateTool: McpToolImplementation = {
       sideEffect: "none",
       requiresApproval: false,
       workspaceBound: true,
+      workspaceBoundary: {
+        argKeys: ["path"],
+      },
     },
   },
   execute: async (context) => {

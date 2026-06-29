@@ -35,7 +35,9 @@
     "resources": [
       "resources/runtime.config.cjs",
       "resources/server",
-      "resources/node-runtime"
+      "resources/node-runtime",
+      "resources/model-packs",
+      "resources/model-runtime"
     ]
   },
   "plugins": {}

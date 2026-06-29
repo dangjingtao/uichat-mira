@@ -2,6 +2,8 @@ const enUS = {
   common: {
     actions: {
       cancel: "Cancel",
+      approve: "Approve",
+      reject: "Reject",
       confirm: "Confirm",
       reset: "Reset",
       save: "Save",
@@ -989,6 +991,11 @@ const enUS = {
           subtitle: "For result reranking and relevance assessment",
         },
         configured: "Configured",
+        builtInReady: "Built-in Ready",
+        builtInLocal: "Built-in Local Model",
+        defaultBuiltIn: "Default built-in",
+        optionalBuiltIn: "Optional built-in",
+        dimensions: "{{count}} dimensions",
         notConfigured: "Not Configured",
         managed: "System Managed",
         currentPlatform: "Current Platform",

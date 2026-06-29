@@ -7,6 +7,9 @@ export const toAgentExecutionNode = (input: {
   nodeType: string;
   phase: AssistantExecutionNodeEvent["phase"];
   label: string;
+  slotKey?: string;
+  attemptKey?: string;
+  iteration?: number;
   summary?: string;
   details?: Record<string, unknown>;
 }): AssistantExecutionNodeEvent => ({
@@ -14,6 +17,10 @@ export const toAgentExecutionNode = (input: {
   nodeType: input.nodeType,
   phase: input.phase,
   label: input.label,
+  traceDomain: "agent",
+  ...(input.slotKey ? { slotKey: input.slotKey } : {}),
+  ...(input.attemptKey ? { attemptKey: input.attemptKey } : {}),
+  ...(typeof input.iteration === "number" ? { iteration: input.iteration } : {}),
   ...(input.summary ? { summary: input.summary } : {}),
   details: {
     runId: input.runId,

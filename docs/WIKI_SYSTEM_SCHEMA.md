@@ -18,11 +18,12 @@ Related:
 
 这篇文档定义当前项目文档系统的上位 schema。
 
-它明确三层：
+它明确三类主层和一个受控执行层：
 
 - Raw sources
 - Wiki
 - Schema
+- Project control
 
 本 schema 参考：
 
@@ -43,7 +44,7 @@ Related:
 - 想让 AI 按稳定规则 ingest 新资料
 - 想知道文档站和知识库消费哪一层
 
-## 三层定义
+## 四类层定义
 
 ### 1. Raw sources
 
@@ -127,19 +128,50 @@ Schema 是维护规则层。
 - AI 回答问题时优先读哪层
 - LLM 什么时候该写 wiki，什么时候不该动 source
 
-## 三层关系
+### 4. Project control
+
+Project control 是任务控制层。
+
+这一层不是通用知识页，也不是原始事实层。
+
+这一层放的是：
+
+- active workboard
+- task cards
+- review evidence
+- accepted decisions
+- phase archive snapshots
+
+这一层的原则：
+
+- 只服务当前执行与验收
+- 强调任务边界、证据、阻塞和归档
+- 不承担产品说明、架构说明或通用知识沉淀
+- 不让 AI 线程记忆替代 project status truth
+
+这一层适合回答：
+
+- 现在到底在做哪个任务包
+- 哪些文件允许改，哪些不能改
+- 任务当前卡在哪
+- 证据是否足够支撑 DONE
+- 哪些阶段内容已经归档
+
+## 各层关系
 
 推荐的处理顺序是：
 
 1. 先读 raw sources
 2. 再维护 wiki
-3. 最后由 schema 约束整个流程
+3. 再由 schema 约束整个流程
+4. 进入具体执行时再读 project control
 
 也就是说：
 
 - raw sources 提供事实
 - wiki 提供整理后的知识
 - schema 提供维护秩序
+- project control 提供当前执行约束
 
 ## 核心边界
 
@@ -162,6 +194,13 @@ Schema 是维护规则层。
 - 不替代 source
 - 不替代 wiki 页面本身
 
+### Project control 不做什么
+
+- 不承担通用知识库角色
+- 不替代架构总纲或产品说明
+- 不替代源码相邻实现文档
+- 不把 review 直接当 task card
+
 ## 推荐目录模型
 
 当前可先按逻辑层组织，后续再决定是否物理搬目录。
@@ -173,6 +212,7 @@ docs/
   sources/
   wiki/
   schema/
+  project-control/
 ```
 
 如果暂时不搬目录，也至少要在元数据里明确：
@@ -180,6 +220,7 @@ docs/
 - `layer: raw-source`
 - `layer: wiki`
 - `layer: schema`
+- `layer: project-control`
 
 ## 推荐元数据
 
@@ -280,6 +321,7 @@ docs/
 - `raw-source`
 - `wiki`
 - `schema`
+- `project-control`
 
 ### Allowed `Module`
 
@@ -293,6 +335,7 @@ docs/
 - `Role`
 - `Docs`
 - `Develoments`
+- `ProjectControl`
 
 说明：
 
@@ -317,6 +360,12 @@ docs/
 - `implementation-notes`
 - `historical`
 - `how-to`
+- `index`
+- `workboard`
+- `task-card`
+- `review`
+- `decision`
+- `archive-snapshot`
 
 ### Allowed `Status`
 
@@ -326,6 +375,23 @@ docs/
 - `active`
 - `planned`
 - `historical`
+
+说明：
+
+- `Status` 是文档生命周期状态，不是任务执行状态
+- `project-control/tasks/` 中的任务推进状态不要塞进 `Status`
+- 任务推进状态单独使用 `task_state`
+
+### Allowed `Task State`
+
+当前 `project-control` 任务卡和 workboard 先固定这些任务状态值：
+
+- `TODO`
+- `IN_PROGRESS`
+- `BLOCKED`
+- `READY_FOR_REVIEW`
+- `DONE`
+- `DROPPED`
 
 站点和 AI 的默认理解口径如下：
 
@@ -340,6 +406,7 @@ docs/
 
 - `Doc Type` 回答“这篇是什么角色的页”
 - `Status` 回答“它当前处于什么生命周期”
+- `Task State` 回答“任务现在推进到哪一步”
 - 不要再把 `planned / active / historical` 混进模块判断里
 
 ### `Doc Type` 到站点状态区块的推荐映射
@@ -356,6 +423,12 @@ docs/
 | `draft` | 规划中 |
 | `design` | 如果尚未落地则归规划中；如果已成当前契约，则由 `Status` 决定 |
 | `historical` | 历史归档 |
+| `index` | 先读这里 |
+| `workboard` | 正在实施 |
+| `task-card` | 正在实施 |
+| `review` | 先按 `Status` 判断；在 project control 中通常作为实施证据 |
+| `decision` | 先按 `Status` 判断；当前有效决定通常进入先读这里或正在实施入口 |
+| `archive-snapshot` | 历史归档 |
 
 如果 `Doc Type` 和 `Status` 冲突，优先按下面顺序判断：
 
@@ -374,11 +447,12 @@ docs/
 推荐字段：
 
 ```yaml
-layer: raw-source | wiki | schema
-module: Chat | ModelSetting | MCP | Tool | KnowledgeBase | Role | Docs | Develoments
+layer: raw-source | wiki | schema | project-control
+module: Chat | ModelSetting | MCP | Tool | KnowledgeBase | Role | Docs | Develoments | ProjectControl
 feature: <optional feature slug or name>
-doc_type: current-contract | reference | overview | design | plan | checklist | draft | implementation-notes | historical | how-to
+doc_type: current-contract | reference | overview | design | plan | checklist | draft | implementation-notes | historical | how-to | index | workboard | task-card | review | decision | archive-snapshot
 status: current | planned | active | historical
+task_state: TODO | IN_PROGRESS | BLOCKED | READY_FOR_REVIEW | DONE | DROPPED
 owner: runtime
 llm_editable: true | false
 canonical: true | false
@@ -405,6 +479,12 @@ related: [...]
 - 没有就留空
 - 不要为了“字段完整”发明一次性名字
 
+如果新增的是 `project-control` 文件，还要额外判断：
+
+1. 它是不是 current execution control material
+2. 它应该进 `workboard`、`task-card`、`review`、`decision` 还是 `archive-snapshot`
+3. 它是否会和现有 active workboard 争夺当前真相
+
 ### Maintain
 
 维护 wiki 时：
@@ -412,6 +492,12 @@ related: [...]
 - 用 raw sources 作为依据
 - 用 schema 作为规则
 - 不要让 wiki 反过来替代 source
+
+维护 `project-control` 时：
+
+- 用 active task scope 和 review evidence 作为依据
+- 用 schema 约束 task card、workboard、decision、archive 的职责
+- 不要把 project-control 膨胀成通用知识目录
 
 ### Controlled Writeback
 
@@ -428,6 +514,7 @@ related: [...]
 
 - schema 层文档
 - wiki 层文档
+- project-control 层中的 workboard、task card、review、decision、archive snapshot
 - 入口页、索引页、概念页
 - 活跃文档的元数据头部
 - 分类明显错误的文档归属
@@ -438,6 +525,7 @@ related: [...]
 - raw-source 的事实正文，如果没有明确依据
 - 仍作为 source of truth 的设计原文
 - 只能通过猜测才能得出的实现结论
+- 未经 owner 确认就重写 task scope、acceptance criteria 或 forbidden area
 
 #### AI 遇到错误时的默认动作
 
@@ -462,13 +550,15 @@ AI 回答问题时：
 
 - 优先读 wiki 的总览和概念页
 - 必要时回 raw sources 核对
+- 进入具体执行前读 project control
 - 不把历史材料误当成当前事实
 
 ## 判定规则
 
 如果一篇文档主要在做事实记录，它更像 raw source。  
 如果一篇文档主要在做知识整理，它更像 wiki。  
-如果一篇文档主要在约束维护流程，它更像 schema。
+如果一篇文档主要在约束维护流程，它更像 schema。  
+如果一篇文档主要在约束当前任务、证据和归档，它更像 project control。  
 
 一句话记忆：
 

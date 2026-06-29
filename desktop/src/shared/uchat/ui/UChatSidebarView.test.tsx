@@ -202,4 +202,37 @@ describe("UChatSidebarView", () => {
 
     expect(screen.queryByText("Thread A")).not.toBeInTheDocument();
   });
+
+  it("shows the workspace root path in a tooltip on hover", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <I18nextProvider i18n={i18n}>
+        <UChatSidebarView
+          threads={[]}
+          activeThreadId={null}
+          threadListStatus="ready"
+          capabilities={{}}
+          workspaceGroups={[
+            {
+              id: "workspace-1",
+              name: "Project Alpha",
+              rootPath: "D:\\workspace\\project-alpha",
+              threads: [],
+            },
+          ]}
+          onCreateThread={() => {}}
+          onSelectThread={() => {}}
+          onArchiveThread={() => {}}
+          onDeleteThread={() => {}}
+        />
+      </I18nextProvider>,
+    );
+
+    await user.hover(screen.getByText("Project Alpha"));
+
+    expect(
+      await screen.findByText("D:\\workspace\\project-alpha"),
+    ).toBeInTheDocument();
+  });
 });

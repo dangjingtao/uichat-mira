@@ -16,7 +16,8 @@ export type DesktopChatRuntimePolicyOptions = {
 export const createDesktopThreadCreationPolicy =
   (
     getCreateThreadInput?: () =>
-      | {
+        | {
+          workspaceId?: string | null;
           knowledgeBaseId?: string | null;
           roleId?: string | null;
           agentEnabled?: boolean | null;
@@ -26,6 +27,14 @@ export const createDesktopThreadCreationPolicy =
     buildCreateInput() {
       const createInput = getCreateThreadInput?.();
       const metadata: Record<string, unknown> = {};
+
+      if (
+        createInput &&
+        (typeof createInput.workspaceId === "string" ||
+          createInput.workspaceId === null)
+      ) {
+        metadata.workspaceId = createInput.workspaceId;
+      }
 
       if (
         createInput &&
@@ -60,6 +69,32 @@ export const desktopThreadSelectionPolicy: ChatThreadSelectionPolicy = {
 };
 
 export const desktopSendLifecyclePolicy: ChatSendLifecyclePolicy = {};
+
+const windowsAbsolutePathPattern = /^[a-zA-Z]:[\\/](?:.*)?$/;
+const windowsUncPathPattern = /^\\\\[^\\\/]+[\\\/][^\\\/]+/;
+const unixAbsolutePathPattern = /^\//;
+
+export const isValidWorkspaceRootPath = (value: string, platform: string) => {
+  const rootPath = value.trim();
+  if (!rootPath) {
+    return false;
+  }
+
+  const isWindowsAbsolutePath =
+    windowsAbsolutePathPattern.test(rootPath) ||
+    windowsUncPathPattern.test(rootPath);
+  const isUnixAbsolutePath = unixAbsolutePathPattern.test(rootPath);
+
+  if (platform === "win32") {
+    return isWindowsAbsolutePath;
+  }
+
+  if (platform === "browser") {
+    return isWindowsAbsolutePath || isUnixAbsolutePath;
+  }
+
+  return isUnixAbsolutePath;
+};
 
 export const createDesktopComposerActions = ({
   knowledgeBases = [],

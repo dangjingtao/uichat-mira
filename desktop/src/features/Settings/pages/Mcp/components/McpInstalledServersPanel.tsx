@@ -1,6 +1,7 @@
 import { BookOpenText, ExternalLink, Loader2, PlugZap, Radar, Settings2, Trash2 } from "lucide-react";
 import Badge from "@/shared/ui/Badge";
 import { Button } from "@/shared/ui/Button";
+import CollapsiblePanel from "@/shared/ui/CollapsiblePanel";
 import type { ExternalMcpServerRecord } from "@/shared/api/tools";
 import { resolveGithubMirrorUrl } from "@/shared/github";
 
@@ -27,6 +28,7 @@ type McpInstalledServersPanelProps = {
     resources: string;
     prompts: string;
     projectedId: string;
+    discoveredToolsSummary: string;
     docs: string;
     repository: string;
     packageName: string;
@@ -82,26 +84,70 @@ export default function McpInstalledServersPanel({
                 key={server.id}
                 className="border-t border-border px-5 py-4 first:border-t"
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="truncate text-sm font-medium text-text-primary">
-                        {server.displayName}
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="truncate text-sm font-medium text-text-primary">
+                          {server.displayName}
+                        </div>
+                        <Badge variant="muted">{getStatusLabel(server, labels)}</Badge>
+                        {server.discoveredTools.length > 0 ? (
+                          <Badge variant="success">
+                            {labels.discovered}: {server.discoveredTools.length}
+                          </Badge>
+                        ) : null}
+                        {server.protocolVersion ? (
+                          <Badge variant="muted">
+                            {labels.protocol}: {server.protocolVersion}
+                          </Badge>
+                        ) : null}
                       </div>
-                      <Badge variant="muted">{getStatusLabel(server, labels)}</Badge>
-                      {server.discoveredTools.length > 0 ? (
-                        <Badge variant="success">
-                          {labels.discovered}: {server.discoveredTools.length}
-                        </Badge>
-                      ) : null}
-                      {server.protocolVersion ? (
-                        <Badge variant="muted">
-                          {labels.protocol}: {server.protocolVersion}
-                        </Badge>
-                      ) : null}
+
+                      <div className="mt-1 break-all text-xs text-text-tertiary">{server.id}</div>
                     </div>
 
-                    <div className="mt-1 break-all text-xs text-text-tertiary">{server.id}</div>
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={isPending}
+                        onClick={() => onConfigure(server)}
+                      >
+                        <Settings2 className="h-4 w-4" />
+                        {labels.configure}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={isPending}
+                        onClick={() => onConnect(server.id)}
+                      >
+                        {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
+                        {labels.connect}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={isPending}
+                        onClick={() => onDiscover(server.id)}
+                      >
+                        {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radar className="h-4 w-4" />}
+                        {labels.discover}
+                      </Button>
+                      <Button
+                        variant="danger-outline"
+                        size="sm"
+                        disabled={isPending}
+                        onClick={() => onDelete(server)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        {labels.remove}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="min-w-0">
 
                     {server.description ? (
                       <div className="mt-2 text-sm leading-6 text-text-secondary">
@@ -188,11 +234,16 @@ export default function McpInstalledServersPanel({
                     ) : null}
 
                     {server.discoveredTools.length > 0 ? (
-                      <div className="mt-3 space-y-2">
+                      <CollapsiblePanel
+                        className="mt-3"
+                        title={`${labels.discoveredToolsSummary} ${server.discoveredTools.length} ${labels.tools}`}
+                        meta={server.discoveredTools.map((tool) => tool.title).join(" / ")}
+                        contentClassName="space-y-2 border-t border-border px-3 py-3"
+                      >
                         {server.discoveredTools.map((tool) => (
                           <div
                             key={`${server.id}-${tool.projectedCapabilityId}`}
-                            className="rounded-ui-control border border-border bg-surface-secondary px-3 py-2"
+                            className="rounded-ui-control border border-border bg-surface-primary px-3 py-2"
                           >
                             <div className="text-xs font-medium text-text-primary">
                               {tool.title}
@@ -202,47 +253,8 @@ export default function McpInstalledServersPanel({
                             </div>
                           </div>
                         ))}
-                      </div>
+                      </CollapsiblePanel>
                     ) : null}
-                  </div>
-
-                  <div className="flex shrink-0 flex-col gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={isPending}
-                      onClick={() => onConfigure(server)}
-                    >
-                      <Settings2 className="h-4 w-4" />
-                      {labels.configure}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={isPending}
-                      onClick={() => onConnect(server.id)}
-                    >
-                      {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
-                      {labels.connect}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      disabled={isPending}
-                      onClick={() => onDiscover(server.id)}
-                    >
-                      {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radar className="h-4 w-4" />}
-                      {labels.discover}
-                    </Button>
-                    <Button
-                      variant="danger-outline"
-                      size="sm"
-                      disabled={isPending}
-                      onClick={() => onDelete(server)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      {labels.remove}
-                    </Button>
                   </div>
                 </div>
               </div>

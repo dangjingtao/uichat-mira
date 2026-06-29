@@ -1,6 +1,6 @@
 import os from "node:os";
 
-const windowsAbsolutePathPattern = /^[a-zA-Z]:[\\/].+/;
+const windowsAbsolutePathPattern = /^[a-zA-Z]:[\\/](?:.*)?$/;
 const unixAbsolutePathPattern = /^\//;
 
 export const isValidWorkspaceRootPath = (input: string) => {

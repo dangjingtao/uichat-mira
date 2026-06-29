@@ -19,6 +19,7 @@ import type {
   ChunkPreviewResult,
   ChunkingConfig,
 } from "@/shared/api/knowledgeBase";
+import { BUILT_IN_LOCAL_MODELS } from "@/shared/business/localModels";
 import ModelStatusCard from "./ModelStatusCard";
 import SwitchField from "./SwitchField";
 import PreviewPanel from "./PreviewPanel";
@@ -419,6 +420,7 @@ export default function ChunkSettingsStep({
                   title={t("settings.knowledgeBase.add.embeddingTitle")}
                   description={t("settings.knowledgeBase.add.embeddingDesc")}
                   config={embeddingConfig}
+                  builtInModel={BUILT_IN_LOCAL_MODELS.embedding}
                   required
                   icon={<Cpu className="h-5 w-5" />}
                 />
@@ -426,6 +428,7 @@ export default function ChunkSettingsStep({
                   title={t("settings.knowledgeBase.add.rerankTitle")}
                   description={t("settings.knowledgeBase.add.rerankDesc")}
                   config={rerankConfig}
+                  builtInModel={BUILT_IN_LOCAL_MODELS.rerank}
                   icon={<ScanSearch className="h-5 w-5" />}
                 />
               </div>

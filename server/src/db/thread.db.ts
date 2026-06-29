@@ -54,6 +54,121 @@ const createThreadTables = () => {
   `);
 };
 
+const createAgentRunTables = () => {
+  const sqlite = getSqlite();
+
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS agent_runs (
+      id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+      thread_id TEXT NOT NULL,
+      user_id INTEGER NOT NULL,
+      goal_json TEXT NOT NULL,
+      plan_json TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'waiting_approval', 'waiting_user', 'completed', 'failed', 'blocked', 'cancelled')),
+      observations_json TEXT NOT NULL DEFAULT '[]',
+      trace_id TEXT NOT NULL,
+      current_step_id TEXT,
+      pending_approval_json TEXT,
+      approved_invocations_json TEXT NOT NULL DEFAULT '[]',
+      context_budget_json TEXT,
+      selected_capability_id TEXT,
+      selected_tool_id TEXT,
+      pending_tool_call_json TEXT,
+      last_tool_execution_json TEXT,
+      assistant_message_id TEXT,
+      assistant_parent_id TEXT,
+      runtime_input_json TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_agent_runs_thread_id ON agent_runs(thread_id);
+    CREATE INDEX IF NOT EXISTS idx_agent_runs_user_id ON agent_runs(user_id);
+    CREATE INDEX IF NOT EXISTS idx_agent_runs_status ON agent_runs(status);
+    CREATE INDEX IF NOT EXISTS idx_agent_runs_trace_id ON agent_runs(trace_id);
+    CREATE INDEX IF NOT EXISTS idx_agent_runs_updated_at ON agent_runs(updated_at);
+  `);
+};
+
+const hasMessagesForeignKeyToLegacyThreads = () => {
+  const sqlite = getSqlite();
+
+  if (!hasSqliteTable(sqlite, "messages")) {
+    return false;
+  }
+
+  const rows = sqlite
+    .prepare("PRAGMA foreign_key_list(messages)")
+    .all() as Array<{ table: string }>;
+
+  return rows.some((row) => row.table === "threads_legacy");
+};
+
+const rebuildMessagesTableForThreadSupport = () => {
+  const sqlite = getSqlite();
+
+  const hasMessagesTable = hasSqliteTable(sqlite, "messages");
+  const hasPartsJsonColumn = hasSqliteColumn(sqlite, "messages", "parts_json");
+  const hasLegacyThreadForeignKey = hasMessagesForeignKeyToLegacyThreads();
+
+  if (!hasMessagesTable || (hasPartsJsonColumn && !hasLegacyThreadForeignKey)) {
+    return;
+  }
+
+    sqlite.exec("PRAGMA foreign_keys = OFF");
+  sqlite.exec("BEGIN");
+
+  try {
+    sqlite.exec("ALTER TABLE messages RENAME TO messages_legacy");
+
+    sqlite.exec(`
+      CREATE TABLE messages (
+        id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+        thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+        role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+        content TEXT NOT NULL,
+        parts_json TEXT,
+        metadata TEXT DEFAULT '{}',
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `);
+
+    sqlite.exec(`
+      INSERT INTO messages (
+        id,
+        thread_id,
+        role,
+        content,
+        parts_json,
+        metadata,
+        created_at
+      )
+      SELECT
+        id,
+        thread_id,
+        role,
+        content,
+        NULL,
+        COALESCE(metadata, '{}'),
+        created_at
+      FROM messages_legacy;
+    `);
+
+    sqlite.exec(`
+      DROP TABLE messages_legacy;
+      CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id);
+      CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
+    `);
+
+    sqlite.exec("COMMIT");
+  } catch (error) {
+    sqlite.exec("ROLLBACK");
+    throw error;
+  } finally {
+    sqlite.exec("PRAGMA foreign_keys = ON");
+  }
+};
+
 const rebuildThreadsTableForWorkspaceSupport = () => {
   const sqlite = getSqlite();
 
@@ -256,6 +371,56 @@ const ensureMessagePartsJsonColumn = () => {
   }
 };
 
+const ensureAgentRunMessageLinkColumns = () => {
+  const sqlite = getSqlite();
+
+  if (!hasSqliteColumn(sqlite, "agent_runs", "assistant_message_id")) {
+    sqlite.exec(`
+      ALTER TABLE agent_runs
+      ADD COLUMN assistant_message_id TEXT;
+    `);
+  }
+
+  if (!hasSqliteColumn(sqlite, "agent_runs", "assistant_parent_id")) {
+    sqlite.exec(`
+      ALTER TABLE agent_runs
+      ADD COLUMN assistant_parent_id TEXT;
+    `);
+  }
+};
+
+const ensureAgentRunExecutionStateColumns = () => {
+  const sqlite = getSqlite();
+
+  if (!hasSqliteColumn(sqlite, "agent_runs", "approved_invocations_json")) {
+    sqlite.exec(`
+      ALTER TABLE agent_runs
+      ADD COLUMN approved_invocations_json TEXT NOT NULL DEFAULT '[]';
+    `);
+  }
+
+  if (!hasSqliteColumn(sqlite, "agent_runs", "pending_tool_call_json")) {
+    sqlite.exec(`
+      ALTER TABLE agent_runs
+      ADD COLUMN pending_tool_call_json TEXT;
+    `);
+  }
+
+  if (!hasSqliteColumn(sqlite, "agent_runs", "last_tool_execution_json")) {
+    sqlite.exec(`
+      ALTER TABLE agent_runs
+      ADD COLUMN last_tool_execution_json TEXT;
+    `);
+  }
+
+  if (!hasSqliteColumn(sqlite, "agent_runs", "selected_tool_id")) {
+    sqlite.exec(`
+      ALTER TABLE agent_runs
+      ADD COLUMN selected_tool_id TEXT;
+    `);
+  }
+};
+
 export const initializeThreadDatabase = () => {
   try {
     const sqlite = getSqlite();
@@ -263,12 +428,16 @@ export const initializeThreadDatabase = () => {
 
     rebuildThreadsTableForWorkspaceSupport();
     createThreadTables();
+    rebuildMessagesTableForThreadSupport();
     ensureThreadWorkspaceColumn();
     ensureThreadKnowledgeBaseColumn();
     ensureThreadRoleColumn();
     ensureThreadAgentEnabledColumn();
     ensureThreadContextSummaryColumns();
     ensureMessagePartsJsonColumn();
+    createAgentRunTables();
+    ensureAgentRunExecutionStateColumns();
+    ensureAgentRunMessageLinkColumns();
   } catch (error) {
     console.error("Failed to initialize thread database:", error);
     throw error;
@@ -279,6 +448,7 @@ export const getThreadDatabaseHealth = () => ({
   hasChatWorkspacesTable: hasSqliteTable(getSqlite(), "chat_workspaces"),
   hasThreadsTable: hasSqliteTable(getSqlite(), "threads"),
   hasMessagesTable: hasSqliteTable(getSqlite(), "messages"),
+  hasAgentRunsTable: hasSqliteTable(getSqlite(), "agent_runs"),
   hasThreadUserIdColumn: hasSqliteColumn(getSqlite(), "threads", "user_id"),
   hasThreadWorkspaceIdColumn: hasSqliteColumn(
     getSqlite(),

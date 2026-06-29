@@ -45,6 +45,12 @@ const CONFIG = {
   EXTEND_TOOLS_DIR: process.env.UI_CHAT_EXTEND_TOOLS_DIR ?? "extendTools",
   ATTACHMENTS_DIR: process.env.UI_CHAT_ATTACHMENTS_DIR ?? "data/attachments",
   WECOM_BIND_RELAY_BASE_URL: process.env.WECOM_BIND_RELAY_BASE_URL ?? "",
+  HARNESS_RETENTION_MAX_ENTRIES: Number(
+    process.env.UI_CHAT_HARNESS_RETENTION_MAX_ENTRIES ?? 200,
+  ),
+  HARNESS_RETENTION_TTL_MS: Number(
+    process.env.UI_CHAT_HARNESS_RETENTION_TTL_MS ?? 1000 * 60 * 30,
+  ),
 };
 
 export default CONFIG;

@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from "@/mcp/core/definitions.js";
-import { listCapabilityDefinitions } from "@/mcp/harness/registry.js";
+import { resolveHarnessToolExposure } from "@/mcp/harness/exposure.js";
 
 export interface ChatToolSurfaceDefinition {
   id: string;
@@ -50,7 +50,9 @@ const isExternalMcpProjection = (definition: McpToolDefinition) =>
 export const resolveChatToolSurface = (
   input: ResolveChatToolSurfaceInput = {},
 ): ChatToolSurfaceDefinition[] => {
-  const definitions = listCapabilityDefinitions();
+  const definitions = resolveHarnessToolExposure({
+    source: input.agentEnabled ? "tools_list" : "chat_surface",
+  }).visibleDefinitions;
 
   if (input.agentEnabled) {
     return definitions

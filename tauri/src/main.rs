@@ -11,6 +11,10 @@ use std::sync::OnceLock;
 #[cfg(not(debug_assertions))]
 use std::path::Path;
 #[cfg(not(debug_assertions))]
+use std::thread;
+#[cfg(not(debug_assertions))]
+use std::time::{Duration, Instant};
+#[cfg(not(debug_assertions))]
 use uuid::Uuid;
 use regex::Regex;
 use serde_json::Value;
@@ -22,6 +26,10 @@ struct BackendProcess(Mutex<Option<std::process::Child>>);
 
 #[cfg(all(windows, not(debug_assertions)))]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+#[cfg(not(debug_assertions))]
+const BACKEND_START_TIMEOUT_MS: u64 = 15_000;
+#[cfg(not(debug_assertions))]
+const BACKEND_START_POLL_INTERVAL_MS: u64 = 300;
 
 #[cfg(not(debug_assertions))]
 fn stop_backend_process<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
@@ -283,6 +291,49 @@ async fn check_backend_health(token: Option<String>) -> Result<HealthCheckResult
     }
 }
 
+#[cfg(not(debug_assertions))]
+fn wait_for_backend_ready(
+    process: &mut std::process::Child,
+) -> Result<(), String> {
+    let client = reqwest::blocking::Client::new();
+    let health_url = format!("{}/health", get_backend_url());
+    let started_at = Instant::now();
+    let timeout = Duration::from_millis(BACKEND_START_TIMEOUT_MS);
+    let poll_interval = Duration::from_millis(BACKEND_START_POLL_INTERVAL_MS);
+
+    while started_at.elapsed() < timeout {
+        match client.get(&health_url).send() {
+            Ok(response) if response.status().is_success() => {
+                return Ok(());
+            }
+            Ok(_) | Err(_) => {}
+        }
+
+        match process.try_wait() {
+            Ok(Some(status)) => {
+                return Err(format!(
+                    "Bundled backend exited before becoming healthy: {}",
+                    status
+                ));
+            }
+            Ok(None) => {}
+            Err(error) => {
+                return Err(format!(
+                    "Failed to inspect bundled backend state: {}",
+                    error
+                ));
+            }
+        }
+
+        thread::sleep(poll_interval);
+    }
+
+    Err(format!(
+        "Bundled backend did not become healthy within {}ms: {}",
+        BACKEND_START_TIMEOUT_MS, health_url
+    ))
+}
+
 async fn check_database_health(token: Option<String>) -> Result<DatabaseHealthResult, String> {
     let client = reqwest::Client::new();
     let mut request = client.get(&format!("{}/db/health", get_backend_url()));
@@ -384,6 +435,11 @@ fn start_backend_process(
 ) -> Result<std::process::Child, String> {
     let server_path = get_resource_path().join("server.cjs");
     let cwd = get_resource_path();
+    let resources_root = get_packaged_resources_root();
+    let local_model_resource_root = resources_root.join("model-packs");
+    let local_onnx_wasm_root = resources_root
+        .join("model-runtime")
+        .join("onnxruntime-web");
 
     if !server_path.exists() {
         return Err(format!("Backend server not found at {:?}", server_path));
@@ -410,7 +466,10 @@ fn start_backend_process(
         .env("UI_CHAT_ALLOW_DEFAULT_BOOTSTRAP", "1")
         .env("UI_CHAT_BACKEND_URL", get_backend_url())
         .env("UI_CHAT_DATABASE_DIR", data_dir)
-        .env("UI_CHAT_LOG_DIR", log_dir);
+        .env("UI_CHAT_LOG_DIR", log_dir)
+        .env("LOCAL_MODEL_RESOURCE_ROOT", local_model_resource_root)
+        .env("LOCAL_MODEL_USER_DATA_DIR", data_dir.parent().unwrap_or(data_dir))
+        .env("LOCAL_ONNX_WASM_ROOT", local_onnx_wasm_root);
 
     #[cfg(all(windows, not(debug_assertions)))]
     command.creation_flags(CREATE_NO_WINDOW);
@@ -455,7 +514,8 @@ pub fn run() {
             std::fs::create_dir_all(&log_dir)
                 .map_err(|error| format!("Failed to create log directory {:?}: {}", log_dir, error))?;
 
-            let process = start_backend_process(&data_dir, &log_dir, &jwt_secret, &settings_secret)?;
+            let mut process = start_backend_process(&data_dir, &log_dir, &jwt_secret, &settings_secret)?;
+            wait_for_backend_ready(&mut process)?;
             *app.state::<BackendProcess>().0.lock().unwrap() = Some(process);
             Ok(())
         });

@@ -38,6 +38,7 @@ const settingsPending = {
       evaluationCenter: "Evaluation Center",
       development: "Development",
       mcp: "MCP",
+      enterpriseIntegrations: "Enterprise Integrations",
       integrations: "Integrations",
       wecom: "WeCom",
       tools: "Tools",
@@ -367,6 +368,10 @@ const settingsPending = {
         rerankTitle: "ReRank Model",
         rerankDesc:
           "Used for result reranking. Currently optional and does not affect proceeding to the next step.",
+        builtInLocal: "Built-in local model",
+        builtInReady: "Built-in ready",
+        optionalBuiltIn: "Optional built-in",
+        dimensions: "{{count}} dimensions",
         previewTitle: "Preview",
         noFileSelected: "No file selected",
         sampleCount: "{{current}}/{{total}} sample chunks",

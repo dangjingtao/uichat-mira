@@ -36,12 +36,26 @@ function copyToolsDir() {
 function copyStaticDir() {
   const staticSource = path.join(__dirname, "static");
   const staticDest = path.join(outputDir, "static");
+  const brandingLogoSource = path.join(
+    projectRoot,
+    "desktop",
+    "src",
+    "assets",
+    "branding",
+    "uichat-logo-icon.png",
+  );
 
   if (!fs.existsSync(staticSource)) {
-    return;
+    fs.mkdirSync(staticDest, { recursive: true });
+  } else {
+    fs.cpSync(staticSource, staticDest, { recursive: true, dereference: true });
   }
 
-  fs.cpSync(staticSource, staticDest, { recursive: true, dereference: true });
+  if (!fs.existsSync(brandingLogoSource)) {
+    throw new Error(`Missing branding logo: ${brandingLogoSource}`);
+  }
+
+  fs.copyFileSync(brandingLogoSource, path.join(staticDest, "logo.png"));
   console.log(`Copied static assets: ${staticDest}`);
 }
 

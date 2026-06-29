@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { getDesktopRuntime } from "@/shared/platform/desktopRuntime";
 import { useChatRuntime, useChatRuntimeSelector } from "@/features/chat/core/runtime";
 import type { ChatSidebarEntry, ChatThreadSummary } from "@/shared/uchat/core";
 import { UChatSidebarView } from "@/shared/uchat/ui";
-import { message, Modal, TextInput } from "@/shared/ui";
+import { Modal, TextInput } from "@/shared/ui";
 import {
   createChatWorkspace,
   deleteChatWorkspace,
@@ -14,10 +15,12 @@ import {
   type ChatWorkspace,
 } from "@/shared/api/thread";
 import { UChatSidebarToolsModal } from "./UChatSidebarToolsModal";
+import { isValidWorkspaceRootPath } from "../core/runtimePolicies";
 
 type WorkspaceGroup = {
   id: string;
   name: string;
+  rootPath?: string | null;
   threads: ChatThreadSummary[];
 };
 
@@ -35,9 +38,12 @@ export function UChatThreadListSidebar() {
   const [workspaceGroups, setWorkspaceGroups] = useState<WorkspaceGroup[]>([]);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const [workspaceName, setWorkspaceName] = useState("");
+  const [workspaceNameError, setWorkspaceNameError] = useState("");
   const [workspaceRootPath, setWorkspaceRootPath] = useState("");
+  const [workspaceRootPathError, setWorkspaceRootPathError] = useState("");
   const [workspacePickerThreadId, setWorkspacePickerThreadId] = useState<string | null>(null);
   const [toolsModalMode, setToolsModalMode] = useState<"search" | "workspace" | null>(null);
+  const platform = getDesktopRuntime().platform;
 
   const refreshWorkspaces = async () => {
     setWorkspaces(await listChatWorkspaces());
@@ -69,6 +75,7 @@ export function UChatThreadListSidebar() {
     const nextGroups = workspaces.map<WorkspaceGroup>((workspace) => ({
       id: workspace.id,
       name: workspace.name,
+      rootPath: workspace.rootPath,
       threads: [...threads]
         .filter((thread) => thread.workspaceId === workspace.id)
         .sort(sortByUpdatedAtDesc),
@@ -109,19 +116,27 @@ export function UChatThreadListSidebar() {
 
   const handleOpenCreateWorkspace = () => {
     setWorkspaceName("");
+    setWorkspaceNameError("");
     setWorkspaceRootPath("");
+    setWorkspaceRootPathError("");
     setCreateWorkspaceOpen(true);
   };
 
   const handleCreateWorkspace = async () => {
+    setWorkspaceNameError("");
+    setWorkspaceRootPathError("");
     const name = workspaceName.trim();
     if (!name) {
-      message.error(t("chat.sidebar.workspaceNameRequired"));
+      setWorkspaceNameError(t("chat.sidebar.workspaceNameRequired"));
       return;
     }
     const rootPath = workspaceRootPath.trim();
     if (!rootPath) {
-      message.error(t("chat.sidebar.workspaceRootPathRequired"));
+      setWorkspaceRootPathError(t("chat.sidebar.workspaceRootPathRequired"));
+      return;
+    }
+    if (!isValidWorkspaceRootPath(rootPath, platform)) {
+      setWorkspaceRootPathError(t("chat.sidebar.workspaceRootPathInvalid"));
       return;
     }
 
@@ -130,26 +145,28 @@ export function UChatThreadListSidebar() {
       await refreshWorkspaces();
       setCreateWorkspaceOpen(false);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "";
-      message.error(
-        errorMessage.includes("required")
-          ? t("chat.sidebar.workspaceRootPathRequired")
-          : errorMessage.includes("invalid")
-            ? t("chat.sidebar.workspaceRootPathInvalid")
-            : errorMessage || t("chat.sidebar.workspaceRootPathInvalid"),
+      setWorkspaceRootPathError(
+        t("chat.sidebar.workspaceRootPathInvalid"),
       );
     }
   };
 
   const handleWorkspaceDelete = async (workspaceId: string) => {
-    await deleteChatWorkspace(workspaceId);
-    await refreshWorkspaces();
+    Modal.confirm({
+      title: t("chat.sidebar.workspaceDeleteTitle"),
+      description: t("chat.sidebar.workspaceDeleteDescription"),
+      confirmText: t("chat.sidebar.workspaceDeleteConfirm"),
+      tone: "danger",
+      onConfirm: async () => {
+        await deleteChatWorkspace(workspaceId);
+        await refreshWorkspaces();
+      },
+    });
   };
 
   const handleWorkspaceAssign = async (workspaceId: string) => {
     const targetThreadId = workspacePickerThreadId ?? activeThreadId;
     if (!targetThreadId) {
-      message.error(t("chat.sidebar.workspaceSelectThreadFirst"));
       return;
     }
 
@@ -206,12 +223,14 @@ export function UChatThreadListSidebar() {
             value={workspaceName}
             onChange={setWorkspaceName}
             placeholder={t("chat.sidebar.workspaceNamePlaceholder")}
+            error={workspaceNameError || undefined}
           />
           <TextInput
             label={t("chat.sidebar.workspaceRootPath")}
             value={workspaceRootPath}
             onChange={setWorkspaceRootPath}
             placeholder={t("chat.sidebar.workspaceRootPathPlaceholder")}
+            error={workspaceRootPathError || undefined}
           />
           <div className="flex justify-end gap-2">
             <button

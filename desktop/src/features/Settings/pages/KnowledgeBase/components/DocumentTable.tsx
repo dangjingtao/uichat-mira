@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { FileIcon } from "@/shared/ui/FileIcon";
 import IconButton from "@/shared/ui/IconButton";
+import Skeleton from "@/shared/ui/Skeleton";
 import { StatusIndicator } from "@/shared/ui/StatusIndicator";
 import Switch from "@/shared/ui/Switch";
 import Table from "@/shared/ui/Table";
@@ -34,6 +35,7 @@ type DocumentTableProps = {
   emptyState: string;
   selectedKnowledgeBaseId: string | null;
   tableScrollRef: React.RefObject<HTMLDivElement>;
+  loading?: boolean;
 };
 
 function getIndexStatusLabel(
@@ -80,6 +82,7 @@ export default function DocumentTable({
   emptyState,
   selectedKnowledgeBaseId,
   tableScrollRef,
+  loading = false,
 }: DocumentTableProps) {
   const { t } = useTranslation();
 
@@ -281,25 +284,64 @@ export default function DocumentTable({
 
   return (
     <div ref={tableScrollRef} className="min-h-0 flex-1 overflow-auto">
-      <Table
-        key={selectedKnowledgeBaseId ?? "empty"}
-        data={data}
-        columns={columns}
-        rowSelection={{
-          selectedRowIds,
-          onSelectedRowIdsChange,
-          getRowId: (row) => row.id,
-          ariaLabel: (row) => row.name,
-          selectAllAriaLabel: "Select all documents",
-        }}
-        compact
-        stickyHeader
-        className="rounded-none border-0 shadow-none"
-        emptyState={emptyState}
-        getRowProps={(row) => ({
-          onDoubleClick: () => onGoToDetail(row.original),
-        })}
-      />
+      {loading ? (
+        <div className="min-h-full bg-surface-primary">
+          <div className="grid grid-cols-[32px_minmax(200px,1.4fr)_96px_112px_88px] items-center gap-0 border-b border-border px-3 py-2">
+            <Skeleton height={12} width={14} />
+            <Skeleton height={12} width={72} />
+            <Skeleton height={12} width={52} />
+            <Skeleton height={12} width={44} />
+            <Skeleton height={12} width={38} className="justify-self-end" />
+          </div>
+          <div className="px-3 py-2">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <div
+                key={index}
+                className="grid grid-cols-[32px_minmax(200px,1.4fr)_96px_112px_88px] items-center gap-0 border-b border-border/70 py-3 last:border-b-0"
+              >
+                <Skeleton height={14} width={14} />
+                <div className="flex min-w-0 items-center gap-2">
+                  <Skeleton height={16} width={16} className="shrink-0" />
+                  <Skeleton
+                    height={16}
+                    width={`${46 + ((index % 3) + 1) * 10}%`}
+                    className="max-w-[180px]"
+                  />
+                </div>
+                <Skeleton height={14} width={54} />
+                <div className="flex items-center gap-2">
+                  <Skeleton.Circle size={8} />
+                  <Skeleton height={14} width={48} />
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  <Skeleton height={20} width={30} className="rounded-full" />
+                  <Skeleton height={28} width={28} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <Table
+          key={selectedKnowledgeBaseId ?? "empty"}
+          data={data}
+          columns={columns}
+          rowSelection={{
+            selectedRowIds,
+            onSelectedRowIdsChange,
+            getRowId: (row) => row.id,
+            ariaLabel: (row) => row.name,
+            selectAllAriaLabel: "Select all documents",
+          }}
+          compact
+          stickyHeader
+          className="rounded-none border-0 shadow-none"
+          emptyState={emptyState}
+          getRowProps={(row) => ({
+            onDoubleClick: () => onGoToDetail(row.original),
+          })}
+        />
+      )}
     </div>
   );
 }

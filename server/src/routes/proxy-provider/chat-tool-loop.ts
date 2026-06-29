@@ -78,14 +78,28 @@ const trimToolLoopMessages = (messages: NormalizedChatMessage[]) => {
   const nonSystemMessages = messages.filter(
     (message) => message.role !== "system",
   );
+  const sanitizedNonSystemMessages = nonSystemMessages.filter((message) => {
+    if (message.role !== "assistant") {
+      return true;
+    }
 
-  if (nonSystemMessages.length <= MAX_TOOL_LOOP_NON_SYSTEM_MESSAGES) {
-    return messages;
+    const content = message.content.toLowerCase();
+    return !(
+      content.includes("<tool>") ||
+      content.includes("<parameter>") ||
+      content.includes("read_list") ||
+      content.includes("read_locate") ||
+      content.includes("terminal_session")
+    );
+  });
+
+  if (sanitizedNonSystemMessages.length <= MAX_TOOL_LOOP_NON_SYSTEM_MESSAGES) {
+    return [...systemMessages, ...sanitizedNonSystemMessages];
   }
 
   return [
     ...systemMessages,
-    ...nonSystemMessages.slice(-MAX_TOOL_LOOP_NON_SYSTEM_MESSAGES),
+    ...sanitizedNonSystemMessages.slice(-MAX_TOOL_LOOP_NON_SYSTEM_MESSAGES),
   ];
 };
 
@@ -270,6 +284,34 @@ export const executeDefaultChatToolLoop = async (
         userId: input.userId,
         threadId: input.threadId,
       });
+
+      if (invocation.status === "awaiting_approval") {
+        const approvalMessage =
+          invocation.approval?.reason ??
+          `${toolCall.function.name} requires approval before execution.`;
+        await input.onToolEvent?.({
+          callId: toolCall.id,
+          toolName: toolCall.function.name,
+          status: "awaiting_approval",
+          input: toolArgs,
+          errorMessage: approvalMessage,
+        });
+        await input.onExecutionNode?.(
+          toToolExecutionNodeEvent({
+            toolCallId: toolCall.id,
+            toolName: toolCall.function.name,
+            phase: "done",
+            summary: `${toolCall.function.name} is waiting for approval`,
+            toolArgs,
+            errorMessage: approvalMessage,
+          }),
+        );
+        return {
+          answer: approvalMessage,
+          toolCallsUsed: usedToolCount,
+          awaitingApproval: true,
+        };
+      }
 
       if (invocation.status !== "completed") {
         await input.onToolEvent?.({

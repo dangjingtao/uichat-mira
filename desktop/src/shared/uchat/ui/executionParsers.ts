@@ -70,6 +70,19 @@ const toRagNodeLike = (value: unknown): RagNodeLike | null => {
 
   return {
     nodeId: candidate.nodeId,
+    traceDomain:
+      candidate.traceDomain === "rag" ||
+      candidate.traceDomain === "agent" ||
+      candidate.traceDomain === "tool" ||
+      candidate.traceDomain === "generic"
+        ? candidate.traceDomain
+        : undefined,
+    slotKey:
+      typeof candidate.slotKey === "string" ? candidate.slotKey : undefined,
+    attemptKey:
+      typeof candidate.attemptKey === "string" ? candidate.attemptKey : undefined,
+    iteration:
+      typeof candidate.iteration === "number" ? candidate.iteration : undefined,
     nodeType: candidate.nodeType,
     phase: candidate.phase as RagProgressStatus,
     label: candidate.label,
@@ -121,7 +134,7 @@ export const getExecutionProgressFromRenderableParts = (
 
   const deduped = new Map<string, RagNodeLike>();
   for (const event of events) {
-    deduped.set(event.nodeId, event);
+    deduped.set(event.attemptKey ?? event.nodeId, event);
   }
 
   return Array.from(deduped.values());
@@ -341,9 +354,24 @@ export const getExecutionFailurePresentation = (
   if (errorStep) {
     const display = getDisplayExecutionStep(errorStep);
     const normalizedErrorMessage = errorMessage?.trim();
+    const detailErrorMessage =
+      typeof errorStep.details?.errorMessage === "string"
+        ? normalizeInlineText(errorStep.details.errorMessage)
+        : undefined;
     const explicitStepSummary = errorStep.summary
       ? normalizeInlineText(errorStep.summary)
       : undefined;
+    if (errorStep.traceDomain === "agent") {
+      return {
+        title: i18n.t("chat.thread.agent.failedTitle"),
+        detail:
+          detailErrorMessage ||
+          explicitStepSummary ||
+          normalizedErrorMessage ||
+          i18n.t("chat.thread.agent.failedDetail"),
+        rawErrorMessage: normalizedErrorMessage,
+      };
+    }
     return {
       title: i18n.t("chat.thread.errors.ragPhaseFailed", {
         label: display.label,

@@ -400,12 +400,22 @@ export class DesktopChatRepository implements ChatRepository {
   // Creates a thread using the app's current KB and RAG defaults.
   async createThread(input?: { title?: string; metadata?: Record<string, unknown> }) {
     const createInput = this.getCreateThreadInput();
+    const inputWorkspaceId =
+      input?.metadata && Object.prototype.hasOwnProperty.call(input.metadata, "workspaceId")
+        ? typeof input.metadata.workspaceId === "string" || input.metadata.workspaceId === null
+          ? input.metadata.workspaceId
+          : undefined
+        : undefined;
     const inputRoleId =
       input?.metadata && Object.prototype.hasOwnProperty.call(input.metadata, "roleId")
         ? typeof input.metadata.roleId === "string" || input.metadata.roleId === null
           ? input.metadata.roleId
           : undefined
         : undefined;
+    const nextWorkspaceId =
+      typeof inputWorkspaceId === "string" || inputWorkspaceId === null
+        ? inputWorkspaceId
+        : createInput?.workspaceId;
     const nextRoleId =
       typeof inputRoleId === "string" || inputRoleId === null
         ? inputRoleId
@@ -413,6 +423,10 @@ export class DesktopChatRepository implements ChatRepository {
     const thread = await createThread({
       ...(typeof createInput?.knowledgeBaseId === "string"
         ? { knowledgeBaseId: createInput.knowledgeBaseId }
+        : {}),
+      ...(typeof nextWorkspaceId === "string" ||
+      nextWorkspaceId === null
+        ? { workspaceId: nextWorkspaceId }
         : {}),
       ...(typeof nextRoleId === "string" || nextRoleId === null
         ? { roleId: nextRoleId }

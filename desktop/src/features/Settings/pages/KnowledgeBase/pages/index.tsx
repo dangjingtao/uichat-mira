@@ -2,7 +2,6 @@ import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { AlertCircle } from "lucide-react";
-import { FullPageStatus } from "@/shared/ui/FullPageStatus";
 import { message } from "@/shared/ui/Message";
 import { Modal } from "@/shared/ui/Modal";
 import { Select } from "@/shared/ui/Select";
@@ -383,14 +382,6 @@ export default function KnowledgeBaseSettings() {
     });
   };
 
-  if (loading && visibleDocuments.length === 0 && !knowledgeBase) {
-    return (
-      <FullPageStatus
-        message={t("settings.knowledgeBase.messages.loadingDocuments")}
-      />
-    );
-  }
-
   return (
     <SettingsPageLayout
       miniTitle={t("settings.knowledgeBase.page.miniTitle")}
@@ -429,9 +420,10 @@ export default function KnowledgeBaseSettings() {
               searchText={knowledgeBaseSearchText}
               onSearchTextChange={setKnowledgeBaseSearchText}
               onCreate={handleCreateKnowledgeBase}
-              knowledgeBases={filteredKnowledgeBases}
+              knowledgeBases={loading ? [] : filteredKnowledgeBases}
               selectedKnowledgeBaseId={selectedKnowledgeBaseId}
               onSelectKnowledgeBase={handleSelectKnowledgeBase}
+              loading={loading && knowledgeBases.length === 0}
             />
           </div>
           <section className="flex min-h-0 flex-col gap-3">
@@ -446,12 +438,13 @@ export default function KnowledgeBaseSettings() {
               onBatchDelete={confirmBatchDeleteDocuments}
               onFilterChange={setFilter}
               filterOptions={filterOptions}
+              loading={loading && !knowledgeBase}
             />
 
             <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-surface-primary">
               <div className="flex h-full min-h-0 flex-col">
                 <DocumentTable
-                  data={visibleDocuments}
+                  data={loading ? [] : visibleDocuments}
                   selectedRowIds={selectedDocumentIds}
                   onSelectedRowIdsChange={setSelectedDocumentIds}
                   sortBy={sortBy}
@@ -467,6 +460,7 @@ export default function KnowledgeBaseSettings() {
                   emptyState={t("settings.knowledgeBase.table.empty")}
                   selectedKnowledgeBaseId={selectedKnowledgeBaseId}
                   tableScrollRef={tableScrollRef}
+                  loading={loading}
                 />
 
                 <div className="flex shrink-0 items-center justify-between border-t border-border px-3 py-1.5 text-body-small text-sm text-text-secondary">

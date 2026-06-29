@@ -3,14 +3,31 @@ import type {
   McpTraceSpan,
   McpTraceSpanKind,
 } from "./definitions.js";
+import {
+  DEFAULT_RETENTION_CONFIG,
+  sweepRetentionMap,
+  type RetentionConfig,
+} from "@/utils/retention.js";
 
 const traceMap = new Map<string, McpInvocationTrace>();
+let traceRetentionConfig: RetentionConfig = {
+  ...DEFAULT_RETENTION_CONFIG,
+};
+
+const sweepTraces = () => {
+  sweepRetentionMap(traceMap, {
+    config: traceRetentionConfig,
+    getUpdatedAt: (trace) => trace.finishedAt ?? trace.startedAt,
+    keep: (trace) => !trace.finishedAt,
+  });
+};
 
 export const createInvocationTrace = (input: {
   invocationId: string;
   toolId: string;
   startedAt: string;
 }) => {
+  sweepTraces();
   const trace: McpInvocationTrace = {
     traceId: crypto.randomUUID(),
     invocationId: input.invocationId,
@@ -28,6 +45,19 @@ export const clearInvocationTraces = () => {
   traceMap.clear();
 };
 
+export const configureInvocationTraceRetention = (
+  config: Partial<RetentionConfig>,
+) => {
+  traceRetentionConfig = {
+    ...traceRetentionConfig,
+    ...config,
+  };
+};
+
+export const sweepInvocationTraces = () => {
+  sweepTraces();
+};
+
 export const finishInvocationTrace = (invocationId: string) => {
   const trace = traceMap.get(invocationId);
   if (!trace || trace.finishedAt) {
@@ -35,6 +65,7 @@ export const finishInvocationTrace = (invocationId: string) => {
   }
 
   trace.finishedAt = new Date().toISOString();
+  sweepTraces();
   return trace;
 };
 

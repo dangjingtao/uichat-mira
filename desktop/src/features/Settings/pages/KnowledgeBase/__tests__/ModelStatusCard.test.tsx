@@ -74,6 +74,40 @@ describe("ModelStatusCard", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows built-in model state when provider config is missing", () => {
+    render(
+      <ModelStatusCard
+        title="Embedding"
+        description="Vector model"
+        config={null}
+        builtInModel={{
+          role: "embedding",
+          modelId: "multilingual-e5-small",
+          displayName: "multilingual-e5-small",
+          runtime: "onnxruntime-web / WASM",
+          source: "local",
+          dimensions: 384,
+          optional: false,
+        }}
+        required
+        icon={<span />}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "settings.knowledgeBase.add.builtInLocal · multilingual-e5-small",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("settings.knowledgeBase.add.builtInReady"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("onnxruntime-web / WASM")).toBeInTheDocument();
+    expect(
+      screen.getByText("settings.knowledgeBase.add.dimensions"),
+    ).toBeInTheDocument();
+  });
+
   it("falls back to remoteModelId when name is missing", () => {
     render(
       <ModelStatusCard

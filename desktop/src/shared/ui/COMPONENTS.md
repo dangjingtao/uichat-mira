@@ -12,6 +12,7 @@
 - `Badge`
 - `Card`
 - `CodeBlock`
+- `CollapsiblePanel`
 - `Drawer`
 - `ErrorBoundary`
 - `Divider`
@@ -31,6 +32,7 @@
 - `NavItem`
 - `NavigationCardTabs`
 - `SearchSelectModal`
+- `Skeleton`
 - `Select`
 - `SegmentedTabs`
 - `StatusIndicator`
@@ -193,6 +195,28 @@
 - 默认用于承载次级信息，不要把主要表单或关键校验藏进折叠区
 - 触发文案优先保持简洁，例如“更多 / 收起”“查看示例 / 收起示例”
 - 内容区样式通过 `contentClassName` 传入，避免组件内部写死业务间距
+
+## CollapsiblePanel
+
+用于“摘要在上，详情折叠”的信息块，适合工具列表、执行详情、检查结果等需要默认收起的次级内容。
+
+### Props
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `title` | `React.ReactNode` | - | 面板标题 |
+| `meta` | `React.ReactNode` | - | 标题下方的辅助信息 |
+| `children` | `React.ReactNode` | - | 展开后的详情内容 |
+| `defaultExpanded` | `boolean` | `false` | 初始是否展开 |
+| `className` | `string` | `""` | 外层容器样式 |
+| `headerClassName` | `string` | `""` | 头部按钮样式 |
+| `contentClassName` | `string` | `""` | 详情内容样式 |
+
+### 使用建议
+
+- 适合把“数量摘要 + 明细列表”收在一个面板里
+- 标题区域应承担主要摘要，不要只放“展开/收起”
+- 详情默认用于次级信息，避免把关键主操作藏进去
 
 ## Badge
 
@@ -588,6 +612,24 @@ message.destroy();
 - 默认保持更紧凑的 modal 壳层和列表密度，避免大圆角卡片和过松边距
 - 条目优先单行摘要 + 轻量元信息，描述过长时应被截断，而不是把卡片撑高
 - 视觉壳层与数据逻辑分离，当前样式层由 `SearchSelectModalChrome` 承接，便于单独替换弹窗外观而不改搜索流程
+
+## Skeleton
+
+用于加载中的结构占位，适合列表、面板、表单和摘要块的轻量骨架屏。
+
+### 当前能力
+
+- 基础块：`<Skeleton />`
+- 多行文本：`<Skeleton.Text />`
+- 圆形占位：`<Skeleton.Circle />`
+- 卡片占位：`<Skeleton.Card />`
+
+### 使用建议
+
+- 优先表达结构，不模拟过多装饰细节
+- 默认使用 `surface-secondary` 做占位层，不额外引入灰阶色表
+- 适合替代页面里重复手写的 `animate-pulse + rounded + bg-*`
+- 列表或面板加载优先先搭结构节奏，再决定是否需要头像、meta 等细节
 
 ## NavItem
 

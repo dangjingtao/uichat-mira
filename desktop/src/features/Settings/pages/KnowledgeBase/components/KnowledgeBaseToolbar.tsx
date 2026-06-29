@@ -1,6 +1,7 @@
 import { DatabaseZap, FilePlus2, Pencil, Trash2 } from "lucide-react";
 import { Button, IconButton } from "@/shared/ui/Button";
 import Card from "@/shared/ui/Card";
+import Skeleton from "@/shared/ui/Skeleton";
 import Tooltip from "@/shared/ui/Tooltip";
 import { useTranslation } from "react-i18next";
 import type { FilterKey } from "../utils/mockData";
@@ -16,6 +17,7 @@ interface KnowledgeBaseToolbarProps {
   onBatchDelete: () => void;
   onFilterChange: (filter: FilterKey) => void;
   filterOptions: FilterKey[];
+  loading?: boolean;
 }
 
 export default function KnowledgeBaseToolbar({
@@ -29,8 +31,26 @@ export default function KnowledgeBaseToolbar({
   onBatchDelete,
   onFilterChange,
   filterOptions,
+  loading = false,
 }: KnowledgeBaseToolbarProps) {
   const { t } = useTranslation();
+
+  if (loading) {
+    return (
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Card variant="subtle" padding="none" className="inline-flex gap-1 p-1">
+          <Skeleton height={28} width={52} />
+          <Skeleton height={28} width={56} />
+          <Skeleton height={28} width={60} />
+        </Card>
+        <Skeleton height={32} width={32} />
+        <Skeleton height={32} width={108} />
+        <Skeleton height={32} width={32} />
+        <Skeleton height={32} width={124} />
+        <Skeleton height={32} width={32} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">

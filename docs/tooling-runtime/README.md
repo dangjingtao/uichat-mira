@@ -10,6 +10,10 @@ Doc Type: overview
 Canonical: true
 Related:
   - harness-runtime-design.md
+  - harness-assessment-2026-06-28.md
+  - project-map-design.md
+  - context-builder-design.md
+  - ../chat/agent-workspace-context-system.md
   - read-skill-design.md
   - tools-protocol.md
   - tools-ecosystem-research.md
@@ -34,6 +38,9 @@ Related:
 3. `read-skill-design.md`
 4. `terminal-capability-checklist.md`
 5. `tools-ecosystem-research.md`
+6. `project-map-design.md`
+7. `context-builder-design.md`
+8. `../chat/agent-workspace-context-system.md`
 
 ## 当前结构
 
@@ -46,6 +53,10 @@ Related:
 ### 运行时控制平面
 
 - `harness-runtime-design.md`
+- `harness-assessment-2026-06-28.md`
+- `project-map-design.md`
+- `context-builder-design.md`
+- `../chat/agent-workspace-context-system.md`
 
 这页负责定义工具运行时的中心控制平面。
 

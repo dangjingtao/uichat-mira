@@ -2,6 +2,8 @@ const zhCN = {
   common: {
     actions: {
       cancel: "取消",
+      approve: "批准",
+      reject: "拒绝",
       confirm: "确认",
       reset: "重置",
       save: "保存",
@@ -944,6 +946,11 @@ const zhCN = {
           subtitle: "用于结果重排和相关性评估",
         },
         configured: "已配置",
+        builtInReady: "内置可用",
+        builtInLocal: "内置本地模型",
+        defaultBuiltIn: "默认内置",
+        optionalBuiltIn: "可选内置",
+        dimensions: "{{count}} 维",
         notConfigured: "未配置",
         managed: "系统托管",
         currentPlatform: "当前平台",

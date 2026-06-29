@@ -568,6 +568,8 @@ export default function McpSettings() {
     modalKey = Modal.show({
       title: t("settings.mcp.config.title", { name: server.displayName }),
       width: 640,
+      height: 720,
+      bodyClassName: "h-full",
       content: <ConfigModalBody />,
       footer: null,
     });
@@ -754,6 +756,7 @@ export default function McpSettings() {
                 resources: t("settings.mcp.installed.resources"),
                 prompts: t("settings.mcp.installed.prompts"),
                 projectedId: t("settings.mcp.installed.projectedId"),
+                discoveredToolsSummary: "已发现",
                 docs: "Docs",
                 repository: "GitHub",
                 packageName: "Package",

@@ -98,12 +98,33 @@ describe("CoverageReportPanel", () => {
         ok: true,
         json: () =>
           Promise.resolve({
-            total: 10,
-            passed: 8,
-            failed: 2,
-            skipped: 0,
-            durationMs: 1500,
-            failedTests: ["a > b"],
+            numTotalTests: 2,
+            numPassedTests: 1,
+            numFailedTests: 1,
+            testResults: [
+              {
+                name: "src/a.test.ts",
+                status: "failed",
+                startTime: 1000,
+                endTime: 2500,
+                assertionResults: [
+                  {
+                    fullName: "a > passes",
+                    title: "passes",
+                    status: "passed",
+                    duration: 10,
+                    failureMessages: [],
+                  },
+                  {
+                    fullName: "a > b",
+                    title: "b",
+                    status: "failed",
+                    duration: 12,
+                    failureMessages: ["expected true to be false"],
+                  },
+                ],
+              },
+            ],
           }),
       });
     });
@@ -118,9 +139,10 @@ describe("CoverageReportPanel", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("10")).toBeInTheDocument();
+      expect(screen.getByText("2")).toBeInTheDocument();
     });
     expect(screen.getByText("a > b")).toBeInTheDocument();
+    expect(screen.getByText("expected true to be false")).toBeInTheDocument();
   });
 
   it("sorts entries by clicking headers", async () => {

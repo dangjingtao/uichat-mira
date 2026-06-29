@@ -257,6 +257,8 @@ const sendPersistedDefaultChatStream = ({
             threadId,
             userId: authUserId,
             goalText: goalText || "回答用户当前问题",
+            assistantMessageId,
+            assistantParentId: latestUserMessageId,
             messages: agentMessages ?? messages,
             requestContextMessages,
             params,
@@ -320,40 +322,44 @@ const sendPersistedDefaultChatStream = ({
           ...(agentAssistantMetadata ? { metadata: agentAssistantMetadata } : {}),
         });
 
-        try {
-          const currentThread = threadService.getThreadSummaryById(
-            threadId,
-            authUserId,
-          );
-          const latestUserText = getLatestUserTitleSeed(latestUserMessage);
-          if (latestUserText && shouldGenerateTitle(currentThread?.title)) {
-            const title = await generateThreadTitleFromMessages({
-              question: latestUserText,
-              answer,
-              streamTaskChatText: (titleMessages) =>
-                providerProxyService.streamTaskChatText(titleMessages),
-            });
-            threadService.updateThread(threadId, authUserId, {
-              title,
-            });
+        void (async () => {
+          try {
+            const currentThread = threadService.getThreadSummaryById(
+              threadId,
+              authUserId,
+            );
+            const latestUserText = getLatestUserTitleSeed(latestUserMessage);
+            if (latestUserText && shouldGenerateTitle(currentThread?.title)) {
+              const title = await generateThreadTitleFromMessages({
+                question: latestUserText,
+                answer,
+                streamTaskChatText: (titleMessages) =>
+                  providerProxyService.streamTaskChatText(titleMessages),
+              });
+              threadService.updateThread(threadId, authUserId, {
+                title,
+              });
+            }
+          } catch (titleError) {
+            const fallbackTitle = getFallbackThreadTitle(
+              getLatestUserTitleSeed(latestUserMessage),
+            );
+            if (
+              shouldGenerateTitle(
+                threadService.getThreadSummaryById(threadId, authUserId)?.title,
+              ) &&
+              fallbackTitle !== "新对话"
+            ) {
+              threadService.updateThread(threadId, authUserId, {
+                title: fallbackTitle,
+              });
+            }
+            app.log.warn(
+              { err: titleError, threadId, fallbackTitle },
+              "[proxy-provider] failed to generate non-RAG thread title",
+            );
           }
-        } catch (titleError) {
-          const fallbackTitle = getFallbackThreadTitle(
-            getLatestUserTitleSeed(latestUserMessage),
-          );
-          if (shouldGenerateTitle(threadService.getThreadSummaryById(
-            threadId,
-            authUserId,
-          )?.title) && fallbackTitle !== "新对话") {
-            threadService.updateThread(threadId, authUserId, {
-              title: fallbackTitle,
-            });
-          }
-          app.log.warn(
-            { err: titleError, threadId, fallbackTitle },
-            "[proxy-provider] failed to generate non-RAG thread title",
-          );
-        }
+        })();
       },
     }),
   );

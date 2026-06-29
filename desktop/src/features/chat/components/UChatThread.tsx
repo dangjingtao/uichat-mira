@@ -20,12 +20,15 @@ import { resolveAttachmentSource } from "@/features/chat/core/protocol";
 import type { KnowledgeBaseSummary } from "@/shared/api/knowledgeBase";
 import { listRoles, type RoleSummary } from "@/shared/api/roles";
 import {
+  approveAgentRun,
+  rejectAgentRun,
   createChatWorkspace,
   listChatWorkspaces,
   updateThread,
   type ChatWorkspace,
 } from "@/shared/api/thread";
 import { getBuiltinAvatarPack16Options } from "@/shared/avatars";
+import { getDesktopRuntime } from "@/shared/platform/desktopRuntime";
 import { UChatThreadView } from "@/shared/uchat/ui";
 import type { ChatComposerAction, ChatThreadContextTag } from "@/shared/uchat/core";
 import { Modal, SearchSelectModal, message, TextInput, Button } from "@/shared/ui";
@@ -36,6 +39,7 @@ import {
   resolveRoleAvatarSrc,
   upsertRoleSummary,
 } from "./roleChatState";
+import { isValidWorkspaceRootPath } from "../core/runtimePolicies";
 import ThreadContextSummaryModalContent from "./ThreadContextSummaryModalContent";
 
 const modelBadgeMeta = {
@@ -67,14 +71,28 @@ export default function UChatThread() {
     threads.find((thread) => thread.id === activeThreadId) ?? null;
   const messages = activeThread?.messages ?? [];
   const isRunning = runStatus.type === "running";
+  const latestAssistantMessage =
+    [...messages].reverse().find((message) => message.role === "assistant") ?? null;
+  const latestAssistantAgentMetadata =
+    latestAssistantMessage?.metadata?.agent &&
+    typeof latestAssistantMessage.metadata.agent === "object" &&
+    !Array.isArray(latestAssistantMessage.metadata.agent)
+      ? (latestAssistantMessage.metadata.agent as {
+          status?: "waiting_approval" | "blocked" | "completed" | "failed";
+        })
+      : null;
   const { configMap, hasDefaultEmbedding, hasDefaultLlm } =
     useRoleModelConfigs();
   const { knowledgeBases } = useChatKnowledgeBaseState();
   const {
     draftKnowledgeBaseId,
     draftRoleId,
+    draftAgentEnabled,
+    draftWorkspaceId,
     setDraftKnowledgeBaseId,
     setDraftRoleId,
+    setDraftAgentEnabled,
+    setDraftWorkspaceId,
   } = useChatThreadDraftState();
   const [isKnowledgeBasePickerOpen, setKnowledgeBasePickerOpen] = useState(false);
   const [isRolePickerOpen, setRolePickerOpen] = useState(false);
@@ -83,12 +101,34 @@ export default function UChatThread() {
   const [workspacePickerOpen, setWorkspacePickerOpen] = useState(false);
   const [workspaceCreateOpen, setWorkspaceCreateOpen] = useState(false);
   const [workspaceName, setWorkspaceName] = useState("");
+  const [workspaceNameError, setWorkspaceNameError] = useState("");
   const [workspaceRootPath, setWorkspaceRootPath] = useState("");
+  const [workspaceRootPathError, setWorkspaceRootPathError] = useState("");
   const [workspaceTargetThreadId, setWorkspaceTargetThreadId] = useState<string | null>(null);
   const avatarOptions = useMemo(() => getBuiltinAvatarPack16Options(), []);
+  const platform = getDesktopRuntime().platform;
 
   const activeThreadWorkspaceId =
     activeThread?.workspaceId ?? null;
+  const effectiveWorkspaceId = activeThreadId
+    ? activeThreadWorkspaceId
+    : draftWorkspaceId;
+  const hasWorkspaceBound = Boolean(effectiveWorkspaceId);
+  const isThreadAgentEnabled =
+    typeof activeThread?.metadata?.agentEnabled === "boolean"
+      ? activeThread.metadata.agentEnabled
+      : false;
+  const isAgentEnabled = activeThreadId ? isThreadAgentEnabled : draftAgentEnabled;
+  const canRunAgent = hasWorkspaceBound && isAgentEnabled;
+  const isAgentRunning =
+    isRunning &&
+    Boolean(
+      latestAssistantAgentMetadata?.status
+        ? latestAssistantAgentMetadata.status !== "waiting_approval" &&
+          latestAssistantAgentMetadata.status !== "blocked" &&
+          latestAssistantAgentMetadata.status !== "failed"
+        : isThreadAgentEnabled,
+    );
   const threadKnowledgeBaseId =
     typeof activeThread?.metadata?.knowledgeBaseId === "string" ||
     activeThread?.metadata?.knowledgeBaseId === null
@@ -243,7 +283,9 @@ export default function UChatThread() {
 
     if (action.id === "workspace-create") {
       setWorkspaceName("");
+      setWorkspaceNameError("");
       setWorkspaceRootPath("");
+      setWorkspaceRootPathError("");
       setWorkspaceCreateOpen(true);
       return;
     }
@@ -342,14 +384,20 @@ export default function UChatThread() {
   };
 
   const handleCreateWorkspace = async () => {
+    setWorkspaceNameError("");
+    setWorkspaceRootPathError("");
     const name = workspaceName.trim();
     if (!name) {
-      message.error(t("chat.sidebar.workspaceNameRequired"));
+      setWorkspaceNameError(t("chat.sidebar.workspaceNameRequired"));
       return;
     }
     const rootPath = workspaceRootPath.trim();
     if (!rootPath) {
-      message.error(t("chat.sidebar.workspaceRootPathRequired"));
+      setWorkspaceRootPathError(t("chat.sidebar.workspaceRootPathRequired"));
+      return;
+    }
+    if (!isValidWorkspaceRootPath(rootPath, platform)) {
+      setWorkspaceRootPathError(t("chat.sidebar.workspaceRootPathInvalid"));
       return;
     }
     try {
@@ -357,21 +405,25 @@ export default function UChatThread() {
       setWorkspaceCreateOpen(false);
       setWorkspaces(await listChatWorkspaces());
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "";
-      message.error(
-        errorMessage.includes("required")
-          ? t("chat.sidebar.workspaceRootPathRequired")
-          : errorMessage.includes("invalid")
-            ? t("chat.sidebar.workspaceRootPathInvalid")
-            : errorMessage || t("chat.sidebar.workspaceRootPathInvalid"),
-      );
+      setWorkspaceRootPathError(t("chat.sidebar.workspaceRootPathInvalid"));
     }
   };
 
   const handleAssignWorkspace = async (workspaceId: string) => {
     const targetThreadId = workspaceTargetThreadId ?? activeThreadId;
     if (!targetThreadId) {
-      message.error(t("chat.sidebar.workspaceSelectThreadFirst"));
+      const createdThread = await runtime.ensureThread(null, {
+        metadata: {
+          workspaceId,
+        },
+      });
+      if (!createdThread) {
+        throw new Error("Failed to create thread for workspace binding");
+      }
+      await runtime.refreshThread(createdThread.id);
+      setWorkspacePickerOpen(false);
+      setWorkspaceTargetThreadId(null);
+      setDraftWorkspaceId(null);
       return;
     }
     await updateThread(targetThreadId, { workspaceId });
@@ -379,6 +431,73 @@ export default function UChatThread() {
     setWorkspacePickerOpen(false);
     setWorkspaceTargetThreadId(null);
     setWorkspaces(await listChatWorkspaces());
+  };
+
+  const handleAgentSend = async () => {
+    if (!hasWorkspaceBound) {
+      message.error(t("chat.thread.agent.workspaceRequired"));
+      return;
+    }
+    if (!isAgentEnabled) {
+      message.error(t("chat.thread.agent.enableFirst"));
+      return;
+    }
+
+    await runtime.send({ agentEnabled: true });
+  };
+
+  const handleToggleAgentEnabled = async () => {
+    const nextEnabled = !isAgentEnabled;
+    if (nextEnabled && !hasWorkspaceBound) {
+      message.error(t("chat.thread.agent.workspaceRequired"));
+      return;
+    }
+    if (activeThreadId && activeThread) {
+      await runtime.updateThread(activeThreadId, {
+        metadata: {
+          ...((activeThread.metadata ?? {}) as Record<string, unknown>),
+          agentEnabled: nextEnabled,
+        },
+      });
+      await runtime.refreshThread(activeThreadId);
+      return;
+    }
+
+    setDraftAgentEnabled(nextEnabled);
+  };
+
+  const handleApproveAgentRun = async (runId: string) => {
+    try {
+      await approveAgentRun(runId);
+      if (activeThreadId) {
+        await runtime.refreshThread(activeThreadId);
+      }
+      message.success(t("chat.thread.agent.approveSuccess"));
+    } catch (error) {
+      message.error(
+        error instanceof Error
+          ? `${t("chat.thread.agent.approveFailed")}: ${error.message}`
+          : t("chat.thread.agent.approveFailed"),
+      );
+      throw error;
+    }
+  };
+
+  const handleRejectAgentRun = async (runId: string) => {
+    try {
+      await rejectAgentRun(runId);
+      if (activeThreadId) {
+        await runtime.refreshThread(activeThreadId);
+      }
+      message.success(t("chat.thread.agent.rejectSuccess"));
+    } catch (error) {
+      message.error(
+        error instanceof Error
+          ? `${t("chat.thread.agent.rejectFailed")}: ${error.message}`
+          : t("chat.thread.agent.rejectFailed"),
+      );
+      throw error;
+    }
   };
 
   return (
@@ -403,6 +522,9 @@ export default function UChatThread() {
         onComposerAttachmentsAppend={(files) => runtime.appendComposerAttachments(files)}
         onComposerAttachmentRemove={(attachmentId) => runtime.removeComposerAttachment(attachmentId)}
         onSend={() => runtime.send()}
+        onAgentSend={handleAgentSend}
+        onApproveAgentRun={handleApproveAgentRun}
+        onRejectAgentRun={handleRejectAgentRun}
         onCancelSend={() => runtime.cancelSend()}
         onRegenerate={(messageId) => runtime.regenerate(messageId)}
         onEditUserMessage={(messageId, text, parts) => runtime.editUserMessage(messageId, text, parts)}
@@ -413,6 +535,17 @@ export default function UChatThread() {
         assistantAvatarSrc={activeRoleAvatarSrc}
         assistantDisplayName={activeRole?.name}
         assistantTypingLabel={assistantTypingLabel}
+        isAgentRunning={isAgentRunning}
+        agentEnabled={isAgentEnabled}
+        agentAvailability={{
+          enabled: canRunAgent,
+          disabledReason: !hasWorkspaceBound
+            ? t("chat.thread.agent.workspaceRequired")
+            : !isAgentEnabled
+              ? t("chat.thread.agent.enableFirst")
+              : undefined,
+        }}
+        onToggleAgentEnabled={handleToggleAgentEnabled}
       />
 
       <SearchSelectModal<RoleSummary[]>
@@ -506,12 +639,14 @@ export default function UChatThread() {
             value={workspaceName}
             onChange={setWorkspaceName}
             placeholder={t("chat.sidebar.workspaceNamePlaceholder")}
+            error={workspaceNameError || undefined}
           />
           <TextInput
             label={t("chat.sidebar.workspaceRootPath")}
             value={workspaceRootPath}
             onChange={setWorkspaceRootPath}
             placeholder={t("chat.sidebar.workspaceRootPathPlaceholder")}
+            error={workspaceRootPathError || undefined}
           />
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setWorkspaceCreateOpen(false)}>

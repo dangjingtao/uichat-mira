@@ -117,6 +117,59 @@ const getFrameChatId = (frame: unknown) =>
 const normalizeSmartRobotQuestion = (question: string) =>
   question.replace(/^@[\p{L}\p{N}_-]+/u, "").replace(/^@[^\s]+\s*/u, "").trim();
 
+const previewText = (value: string, limit = 800) => {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= limit) {
+    return normalized;
+  }
+  return `${normalized.slice(0, limit)}...`;
+};
+
+const extractIncomingPreview = (frame: unknown) => {
+  const body = (frame as {
+    body?: {
+      msgtype?: string;
+      text?: { content?: string };
+      voice?: { content?: string };
+      mixed?: {
+        msg_item?: Array<{ msgtype?: string; text?: { content?: string } }>;
+      };
+      quote?: {
+        msgtype?: string;
+        text?: { content?: string };
+      };
+    };
+  })?.body;
+
+  const text = body?.text?.content?.trim();
+  if (text) {
+    return text;
+  }
+
+  const voice = body?.voice?.content?.trim();
+  if (voice) {
+    return `[voice] ${voice}`;
+  }
+
+  const mixed = body?.mixed?.msg_item
+    ?.map((item) =>
+      item.msgtype === "text" ? item.text?.content?.trim() ?? "" : `[${item.msgtype ?? "unknown"}]`,
+    )
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  if (mixed) {
+    return mixed;
+  }
+
+  const quoted = body?.quote?.text?.content?.trim();
+  if (quoted) {
+    return `[quote:${body?.quote?.msgtype ?? "unknown"}] ${quoted}`;
+  }
+
+  return "";
+};
+
 const getDefaultSmartRobotCapability = () => {
   const defaultInstance = integrationInstancesRepository.getDefault("wecom");
   if (!defaultInstance) {
@@ -217,6 +270,16 @@ const replyToFrame = async (
     throw new Error("WeCom smart robot client is not connected");
   }
 
+  const meta = getIncomingMeta(frame);
+  writeStructuredLog("info", {
+    msg: "WeCom smart robot preparing reply",
+    capabilityId: capability.capabilityId,
+    replyMode: capability.replyMode,
+    answerLength: Array.from(content).length,
+    answerPreview: previewText(content),
+    ...meta,
+  });
+
   if (capability.replyMode === "send") {
     const chatId = getFrameChatId(frame);
     if (!chatId) {
@@ -229,6 +292,14 @@ const replyToFrame = async (
     await client.sendMessage(chatId, {
       msgtype: "markdown",
       markdown: { content },
+    });
+    writeStructuredLog("info", {
+      msg: "WeCom smart robot send reply dispatched",
+      capabilityId: capability.capabilityId,
+      replyMode: capability.replyMode,
+      answerLength: Array.from(content).length,
+      answerPreview: previewText(content),
+      ...meta,
     });
     return;
   }
@@ -243,6 +314,15 @@ const replyToFrame = async (
   }
 
   await client.replyStream(frame, streamId, content, true);
+  writeStructuredLog("info", {
+    msg: "WeCom smart robot stream reply dispatched",
+    capabilityId: capability.capabilityId,
+    replyMode: capability.replyMode,
+    streamId,
+    answerLength: Array.from(content).length,
+    answerPreview: previewText(content),
+    ...meta,
+  });
 };
 
 const registerRuntimeHandlers = (
@@ -301,6 +381,7 @@ const registerRuntimeHandlers = (
     writeStructuredLog("info", {
       msg: "WeCom smart robot received message frame",
       capabilityId: capability.capabilityId,
+      contentPreview: previewText(extractIncomingPreview(frame) || `[${meta.msgtype ?? "unknown"}]`),
       ...meta,
     });
   });
@@ -340,20 +421,17 @@ const registerRuntimeHandlers = (
         question,
         knowledgeBaseId: capability.knowledgeBaseId ?? undefined,
       });
+      const finalAnswer = result.answer || "我没有检索到可用答案。";
       writeStructuredLog("info", {
         msg: "WeCom smart robot RAG completed",
         capabilityId: capability.capabilityId,
         ...meta,
         question,
-        answerLength: Array.from(result.answer).length,
+        answerLength: Array.from(finalAnswer).length,
+        answerPreview: previewText(finalAnswer),
         knowledgeBaseId: result.knowledgeBaseId,
       });
-      await replyToFrame(
-        entry,
-        capability,
-        frame,
-        result.answer || "我没有检索到可用答案。",
-      );
+      await replyToFrame(entry, capability, frame, finalAnswer);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "RAG 调用失败";
       writeStructuredLog("error", {
@@ -377,6 +455,42 @@ const registerRuntimeHandlers = (
 
   client.on("message.text", handleQuestion);
   client.on("message.mixed", handleQuestion);
+  client.on("message.image", async (frame: unknown) => {
+    const meta = getIncomingMeta(frame);
+    writeStructuredLog("info", {
+      msg: "WeCom smart robot received image message",
+      capabilityId: capability.capabilityId,
+      contentPreview: previewText(extractIncomingPreview(frame) || "[image]"),
+      ...meta,
+    });
+  });
+  client.on("message.voice", async (frame: unknown) => {
+    const meta = getIncomingMeta(frame);
+    writeStructuredLog("info", {
+      msg: "WeCom smart robot received voice message",
+      capabilityId: capability.capabilityId,
+      contentPreview: previewText(extractIncomingPreview(frame) || "[voice]"),
+      ...meta,
+    });
+  });
+  client.on("message.file", async (frame: unknown) => {
+    const meta = getIncomingMeta(frame);
+    writeStructuredLog("info", {
+      msg: "WeCom smart robot received file message",
+      capabilityId: capability.capabilityId,
+      contentPreview: "[file]",
+      ...meta,
+    });
+  });
+  client.on("message.video", async (frame: unknown) => {
+    const meta = getIncomingMeta(frame);
+    writeStructuredLog("info", {
+      msg: "WeCom smart robot received video message",
+      capabilityId: capability.capabilityId,
+      contentPreview: "[video]",
+      ...meta,
+    });
+  });
 };
 
 export const getSmartRobotStatus = (): SmartRobotStatus => {

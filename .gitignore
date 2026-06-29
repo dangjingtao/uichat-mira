@@ -3,10 +3,12 @@ dist/
 .vite/
 .env
 .env.*
+!.env.example
 *.log
 .DS_Store
 coverage/
 .artifacts/
+.local-models/
 apps/desktop/release/
 apps/desktop/release-*/
 apps/desktop/electron-backend/

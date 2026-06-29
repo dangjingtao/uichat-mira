@@ -347,6 +347,70 @@ describe("McpSettings", () => {
     expect(modalCloseMock).toHaveBeenCalledWith("modal_1");
   });
 
+  it("renders discovered MCP tools inside a collapsible panel", async () => {
+    const user = userEvent.setup();
+
+    getExternalMcpServersMock.mockResolvedValueOnce([
+      {
+        id: "slideshot",
+        source: "registry",
+        displayName: "Slideshot",
+        description: "PowerPoint MCP",
+        transport: {
+          kind: "stdio",
+          command: "npx",
+          args: ["-y", "slideshot-mcp"],
+        },
+        status: "connected",
+        enabled: true,
+        createdAt: "2026-06-25T00:00:00.000Z",
+        updatedAt: "2026-06-25T00:00:00.000Z",
+        discoveredTools: [
+          {
+            name: "discover_themes",
+            title: "discover_themes",
+            description: "",
+            inputSchema: { type: "object" },
+            projectedCapabilityId: "mcp:io.github.06ketan-slideshot:tool:discover_themes",
+          },
+          {
+            name: "create_slides",
+            title: "create_slides",
+            description: "",
+            inputSchema: { type: "object" },
+            projectedCapabilityId: "mcp:io.github.06ketan-slideshot:tool:create_slides",
+          },
+        ],
+      },
+    ]);
+
+    render(<McpSettings />);
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: /settings\.mcp\.tabs\.installed/i,
+      }),
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: /已发现 2 settings\.mcp\.installed\.tools/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Projected ID:/i)).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: /已发现 2 settings\.mcp\.installed\.tools/i,
+      }),
+    );
+
+    expect(screen.getByText("discover_themes")).toBeInTheDocument();
+    expect(
+      screen.getByText(/mcp:io\.github\.06ketan-slideshot:tool:discover_themes/i),
+    ).toBeInTheDocument();
+  });
+
   it("renders stdio config fields for installed stdio servers", async () => {
     const user = userEvent.setup();
 

@@ -5,10 +5,12 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ChatSidebarEntry, ChatThreadSummary } from "../core";
 import DropdownMenu from "@/shared/ui/DropdownMenu";
+import Tooltip from "@/shared/ui/Tooltip";
 
 type ChatWorkspaceGroup = {
   id: string;
   name: string;
+  rootPath?: string | null;
   threads: ChatThreadSummary[];
   collapsed?: boolean;
 };
@@ -185,9 +187,14 @@ export function UChatSidebarView({
                         )}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-text-primary">
-                          {workspace.name}
-                        </span>
+                        <Tooltip
+                          text={workspace.rootPath?.trim() || workspace.name}
+                          placement="top"
+                        >
+                          <span className="block truncate text-sm font-medium text-text-primary">
+                            {workspace.name}
+                          </span>
+                        </Tooltip>
                       </span>
                     </button>
 

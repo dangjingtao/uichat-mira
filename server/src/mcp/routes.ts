@@ -15,6 +15,8 @@ import {
   listInternalCapabilityDefinitions,
   listReadableResourceDefinitions,
 } from "./harness/registry.js";
+import { resolveHarnessToolExposure } from "./harness/exposure.js";
+import { resolveHarnessCapabilityDiagnostics } from "./harness/capability-diagnostics.js";
 import { getHarnessEnvironmentSnapshot } from "./harness/environment.js";
 import { toSseChunk } from "./core/events.js";
 import { mcpNotFound } from "./core/errors.js";
@@ -25,6 +27,7 @@ import {
   createExternalMcpServer,
   deleteExternalMcpServer,
   discoverExternalMcpServer,
+  getExternalMcpServer,
   getExternalMcpServerConfig,
   getExternalMcpServerConfigSchema,
   listExternalMcpServers,
@@ -300,6 +303,23 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
     },
     routeHandler("Failed to discover external MCP server capabilities", async (request) =>
       success(await discoverExternalMcpServer(request.params.id))),
+  );
+
+  app.get<{ Params: { id: string } }>(
+    "/mcp/external/servers/:id",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Get one external MCP server",
+        description:
+          "Return one external MCP server with transport, disclaimer, connection, and discovered capability metadata for governance and audit views.",
+        response: {
+          200: successEnvelope(objectSchema),
+        },
+      },
+    },
+    routeHandler("Failed to get external MCP server", async (request) =>
+      success(getExternalMcpServer(request.params.id))),
   );
 
   app.get<{ Params: { id: string } }>(
@@ -631,12 +651,23 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
       success(selectWorkspaceRoot(request.body.rootPath))),
   );
 
-  app.get(
+  app.get<{ Querystring: { query?: string; source?: "tools_list" | "agent_intent" | "chat_surface" } }>(
     "/mcp/tools",
     {
       schema: {
         tags: ["Tools"],
         summary: "List MCP tools",
+        querystring: {
+          type: "object",
+          properties: {
+            query: { type: "string" },
+            source: {
+              type: "string",
+              enum: ["tools_list", "agent_intent", "chat_surface"],
+            },
+          },
+          additionalProperties: false,
+        },
         response: {
           200: successEnvelope({
             type: "array",
@@ -645,8 +676,66 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
         },
       },
     },
-    routeHandler("Failed to list MCP tools", async () =>
-      success(listInternalCapabilityDefinitions())),
+    routeHandler("Failed to list MCP tools", async (request) => {
+      if (!request.query.query && !request.query.source) {
+        return success(listInternalCapabilityDefinitions());
+      }
+
+      const decision = resolveHarnessToolExposure({
+        source: request.query.source ?? "tools_list",
+        query: request.query.query,
+      });
+      return success(decision.visibleDefinitions.filter((definition) => definition.source === "internal"));
+    }),
+  );
+
+  app.get<{
+    Querystring: {
+      query: string;
+      source?: "tools_list" | "agent_intent" | "chat_surface";
+      topK?: number;
+      minScore?: number;
+      selectedTopK?: number;
+      selectedMinScore?: number;
+    };
+  }>(
+    "/mcp/capabilities/diagnostics",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Diagnose Harness capability exposure and selection",
+        querystring: {
+          type: "object",
+          required: ["query"],
+          properties: {
+            query: { type: "string" },
+            source: {
+              type: "string",
+              enum: ["tools_list", "agent_intent", "chat_surface"],
+            },
+            topK: { type: "integer", minimum: 1, maximum: 50 },
+            minScore: { type: "number" },
+            selectedTopK: { type: "integer", minimum: 0, maximum: 20 },
+            selectedMinScore: { type: "number" },
+          },
+          additionalProperties: false,
+        },
+        response: {
+          200: successEnvelope(objectSchema),
+        },
+      },
+    },
+    routeHandler("Failed to resolve Harness capability diagnostics", async (request) =>
+      success(
+        await resolveHarnessCapabilityDiagnostics({
+          query: request.query.query,
+          source: request.query.source,
+          topK: request.query.topK,
+          minScore: request.query.minScore,
+          selectedTopK: request.query.selectedTopK,
+          selectedMinScore: request.query.selectedMinScore,
+        }),
+      )),
   );
 
   app.get(

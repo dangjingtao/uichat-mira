@@ -27,6 +27,9 @@ export const registerReadableResource = (resource: McpResourceImplementation) =>
 export const listCapabilityDefinitions = (): McpToolDefinition[] =>
   listToolDefinitions();
 
+export const listHarnessToolDefinitions = (): McpToolDefinition[] =>
+  listToolDefinitions();
+
 export const listInternalCapabilityDefinitions = (): McpToolDefinition[] =>
   listToolDefinitions().filter((definition) => definition.source === "internal");
 
@@ -35,6 +38,9 @@ export const listReadableResourceDefinitions = (): McpResourceDefinition[] =>
 
 export const getCapabilityImplementation = (capabilityId: string) =>
   getToolImplementation(capabilityId);
+
+export const getHarnessToolImplementation = (toolId: string) =>
+  getToolImplementation(toolId);
 
 export const getReadableResourceImplementation = (resourceId: string) =>
   getResourceImplementation(resourceId);

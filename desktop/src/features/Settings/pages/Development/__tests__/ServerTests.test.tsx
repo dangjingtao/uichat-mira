@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import DevelopmentServerTests from "../pages/ServerTests/index";
 
@@ -14,7 +14,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 describe("DevelopmentServerTests", () => {
-  it("requests the server coverage summary from the backend", async () => {
+  it("requests the server test result summary from the backend", async () => {
     globalThis.fetch = vi.fn(
       async () => new Response("Not Found", { status: 404 }),
     );
@@ -23,7 +23,7 @@ describe("DevelopmentServerTests", () => {
 
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
-        "http://127.0.0.1:8787/server-coverage/coverage-summary.json",
+        "http://127.0.0.1:8787/server-coverage/test-results.json",
       );
     });
   });

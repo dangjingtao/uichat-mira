@@ -31,6 +31,9 @@ export const editFileTool: McpToolImplementation = {
       sideEffect: "local-write",
       requiresApproval: true,
       workspaceBound: true,
+      workspaceBoundary: {
+        argKeys: ["path"],
+      },
     },
   },
   execute: async (context) => {

@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import type {
   McpArtifact,
   McpExecutionEnvironment,
@@ -7,7 +6,6 @@ import type {
 } from "../core/definitions.js";
 import { createArtifact } from "../core/artifacts.js";
 import { mcpBadRequest, mcpInternalError } from "../core/errors.js";
-import { resolveWorkspacePath } from "../workspace.js";
 import {
   createTerminalSession,
   getTerminalSession,
@@ -15,7 +13,10 @@ import {
   type TerminalSessionRecord,
   writeTerminalSession,
 } from "../terminal-sessions.js";
-import { decodeTerminalOutput } from "./encoding.js";
+import {
+  createSandboxShellProfile,
+  executeSandboxedCommand,
+} from "@/sandbox/executor.js";
 
 type TerminalExecutionContext = {
   invocationId: string;
@@ -120,8 +121,6 @@ const normalizeSessionMode = (value: unknown): "ephemeral" | "persistent" => {
   return "ephemeral";
 };
 
-const resolveCommandCwd = (cwd?: string) => (cwd ? resolveWorkspacePath(cwd) : resolveWorkspacePath("."));
-
 const selectEphemeralCapability = (environment: McpExecutionEnvironment) => {
   const selected = sortCapabilities(environment).find(
     (capability) => capability.id === "child-process-shell-command",
@@ -144,20 +143,6 @@ const selectPersistentCapability = (environment: McpExecutionEnvironment) => {
   return selected;
 };
 
-const toCombinedOutput = (stdout: string, stderr: string) => [stdout, stderr].filter(Boolean).join("\n").trimEnd();
-
-const buildShellArgs = (profile: TerminalShellProfile, command: string) => {
-  if (profile.argsMode === "powershell") {
-    return ["-NoProfile", "-Command", command];
-  }
-
-  if (profile.argsMode === "cmd") {
-    return ["/d", "/s", "/c", command];
-  }
-
-  return ["-lc", command];
-};
-
 const runEphemeralCommand = async (input: {
   command: string;
   cwd?: string;
@@ -167,124 +152,46 @@ const runEphemeralCommand = async (input: {
   environment: McpExecutionEnvironment;
   pushEvent?: (event: McpStreamEventInput) => void;
 }) => {
-  if (input.signal.aborted) {
-    throw new Error("Terminal session aborted");
+  const shellProfile = createSandboxShellProfile(getTerminalShellProfile(input.environment));
+  const result = await executeSandboxedCommand({
+    command: input.command,
+    cwd: input.cwd,
+    env: input.env,
+    timeoutMs: input.timeoutMs,
+    signal: input.signal,
+    shellProfile,
+    pushStdout: (chunk) => {
+      input.pushEvent?.({
+        type: "invocation:stdout",
+        chunk,
+        stream: "stdout",
+      });
+    },
+    pushStderr: (chunk) => {
+      input.pushEvent?.({
+        type: "invocation:stdout",
+        chunk,
+        stream: "stderr",
+      });
+    },
+  });
+
+  if (result.timedOut) {
+    input.pushEvent?.({
+      type: "invocation:progress",
+      message: `Terminal session timed out after ${input.timeoutMs}ms`,
+    });
   }
 
-  const shellProfile = getTerminalShellProfile(input.environment);
-  const cwd = resolveCommandCwd(input.cwd);
-  const child = spawn(shellProfile.shell, buildShellArgs(shellProfile, input.command), {
-    cwd,
-    env: {
-      ...process.env,
-      ...(input.env ?? {}),
-    } as Record<string, string>,
-    windowsHide: true,
-  });
-
-  const stdoutChunks: string[] = [];
-  const stderrChunks: string[] = [];
-  let exitCode: number | null = null;
-  let timedOut = false;
-  let settled = false;
-
-  child.stdout?.on("data", (chunk: Buffer | string) => {
-    const text = decodeTerminalOutput({
-      chunk,
-      encoding: shellProfile.stdoutEncoding,
-    });
-    stdoutChunks.push(text);
-    input.pushEvent?.({
-      type: "invocation:stdout",
-      chunk: text,
-      stream: "stdout",
-    });
-  });
-
-  child.stderr?.on("data", (chunk: Buffer | string) => {
-    const text = decodeTerminalOutput({
-      chunk,
-      encoding: shellProfile.stderrEncoding,
-    });
-    stderrChunks.push(text);
-    input.pushEvent?.({
-      type: "invocation:stdout",
-      chunk: text,
-      stream: "stderr",
-    });
-  });
-
-  await new Promise<void>((resolve, reject) => {
-    const finishResolve = () => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      resolve();
-    };
-
-    const finishReject = (error: Error) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      reject(error);
-    };
-
-    const timer = setTimeout(() => {
-      timedOut = true;
-      input.pushEvent?.({
-        type: "invocation:progress",
-        message: `Terminal session timed out after ${input.timeoutMs}ms`,
-      });
-      finishResolve();
-      child.kill();
-    }, input.timeoutMs);
-
-    child.once("error", (error) => {
-      clearTimeout(timer);
-      finishReject(error instanceof Error ? error : new Error(String(error)));
-    });
-
-    child.once("close", (code) => {
-      clearTimeout(timer);
-      if (settled) {
-        return;
-      }
-      exitCode = code;
-      finishResolve();
-    });
-
-    if (input.signal.aborted) {
-      clearTimeout(timer);
-      finishReject(new Error("Terminal session aborted"));
-      child.kill();
-      return;
-    }
-
-    input.signal.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timer);
-        finishReject(new Error("Terminal session aborted"));
-        child.kill();
-      },
-      { once: true },
-    );
-  });
-
-  const stdout = stdoutChunks.join("").trimEnd();
-  const stderr = stderrChunks.join("").trimEnd();
-
   return {
-    sessionId: input.signal.aborted ? crypto.randomUUID() : crypto.randomUUID(),
+    sessionId: crypto.randomUUID(),
     shell: shellProfile.shell,
-    cwd,
-    exitCode,
-    timedOut,
-    stdout,
-    stderr,
-    output: toCombinedOutput(stdout, stderr),
+    cwd: result.cwd,
+    exitCode: result.exitCode,
+    timedOut: result.timedOut,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    output: result.output,
   };
 };
 

@@ -31,9 +31,11 @@ type ChatThreadDraftStateValue = {
   draftKnowledgeBaseId: string | null;
   draftRoleId: string | null;
   draftAgentEnabled: boolean;
+  draftWorkspaceId: string | null;
   setDraftKnowledgeBaseId: (knowledgeBaseId: string | null) => void;
   setDraftRoleId: (roleId: string | null) => void;
   setDraftAgentEnabled: (enabled: boolean) => void;
+  setDraftWorkspaceId: (workspaceId: string | null) => void;
   resetDraft: () => void;
 };
 
@@ -52,11 +54,12 @@ const desktopRuntimeBaseCapabilities = {
 
 export const createStableAppChatRuntime = (
   getCreateThreadInput: () =>
-    | {
-        knowledgeBaseId?: string | null;
-        roleId?: string | null;
-        agentEnabled?: boolean | null;
-      }
+        | {
+          workspaceId?: string | null;
+          knowledgeBaseId?: string | null;
+          roleId?: string | null;
+          agentEnabled?: boolean | null;
+        }
     | undefined,
 ) =>
   new ChatRuntime({
@@ -85,10 +88,13 @@ export function AppChatRuntimeProvider({
   );
   const [draftRoleId, setDraftRoleId] = useState<string | null>(null);
   const [draftAgentEnabled, setDraftAgentEnabled] = useState(false);
+  const [draftWorkspaceId, setDraftWorkspaceId] = useState<string | null>(null);
+  const draftWorkspaceIdRef = useRef<string | null>(draftWorkspaceId);
   const draftKnowledgeBaseIdRef = useRef<string | null>(draftKnowledgeBaseId);
   const draftRoleIdRef = useRef<string | null>(draftRoleId);
   const draftAgentEnabledRef = useRef<boolean>(draftAgentEnabled);
   const hasBootstrappedActiveThreadRef = useRef(false);
+  draftWorkspaceIdRef.current = draftWorkspaceId;
   draftKnowledgeBaseIdRef.current = draftKnowledgeBaseId;
   draftRoleIdRef.current = draftRoleId;
   draftAgentEnabledRef.current = draftAgentEnabled;
@@ -96,6 +102,7 @@ export function AppChatRuntimeProvider({
 
   if (!runtimeRef.current) {
     runtimeRef.current = createStableAppChatRuntime(() => ({
+      workspaceId: draftWorkspaceIdRef.current,
       knowledgeBaseId: draftKnowledgeBaseIdRef.current,
       roleId: draftRoleIdRef.current,
       agentEnabled: draftAgentEnabledRef.current,
@@ -176,16 +183,19 @@ export function AppChatRuntimeProvider({
       draftKnowledgeBaseId,
       draftRoleId,
       draftAgentEnabled,
+      draftWorkspaceId,
       setDraftKnowledgeBaseId,
       setDraftRoleId,
       setDraftAgentEnabled,
+      setDraftWorkspaceId,
       resetDraft: () => {
+        setDraftWorkspaceId(null);
         setDraftKnowledgeBaseId(null);
         setDraftRoleId(null);
         setDraftAgentEnabled(false);
       },
     }),
-    [draftAgentEnabled, draftKnowledgeBaseId, draftRoleId],
+    [draftAgentEnabled, draftKnowledgeBaseId, draftRoleId, draftWorkspaceId],
   );
 
   return (

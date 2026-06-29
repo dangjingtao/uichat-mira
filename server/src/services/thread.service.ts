@@ -377,7 +377,7 @@ export const threadService = {
       throw new Error("Workspace root path is required");
     }
     if (!isValidWorkspaceRootPath(rootPath)) {
-      throw new Error("Workspace root path format is invalid");
+      throw new Error("Workspace root path is invalid");
     }
     const created = chatWorkspaceRepository.create({
       userId: input.userId,
@@ -418,7 +418,7 @@ export const threadService = {
         throw new Error("Workspace root path is required");
       }
       if (!isValidWorkspaceRootPath(nextRootPath)) {
-        throw new Error("Workspace root path format is invalid");
+        throw new Error("Workspace root path is invalid");
       }
       updateData.rootPath = nextRootPath;
     }
@@ -446,9 +446,7 @@ export const threadService = {
 
     for (const thread of activeThreads) {
       if (thread.workspaceId === id) {
-        threadRepository.updateById(thread.id, {
-          workspaceId: null,
-        });
+        threadRepository.deleteById(thread.id);
       }
     }
 

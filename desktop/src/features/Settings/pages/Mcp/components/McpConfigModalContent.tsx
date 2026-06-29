@@ -218,74 +218,76 @@ export default function McpConfigModalContent({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-ui-control border border-border bg-surface-secondary px-3 py-2 text-xs text-text-secondary">
-        {labels.knownPartial}
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="stable-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+        <div className="rounded-ui-control border border-border bg-surface-secondary px-3 py-2 text-xs text-text-secondary">
+          {labels.knownPartial}
+        </div>
+
+        {isCommandTransport ? (
+          <div className="space-y-2 rounded-ui-control border border-border bg-surface-secondary px-3 py-3">
+            <div className="text-xs font-medium text-text-secondary">Launcher</div>
+            <div className="flex flex-wrap items-center gap-2 text-sm text-text-primary">
+              <span className="rounded-full border border-border bg-surface-primary px-2 py-0.5 text-[11px] text-text-tertiary">
+                {form.command || "npx"}
+              </span>
+              {packageHint ? (
+                <span className="rounded-full border border-border bg-surface-primary px-2 py-0.5 text-[11px] text-text-tertiary">
+                  {packageHint}
+                </span>
+              ) : null}
+            </div>
+            <div className="text-xs leading-5 text-text-tertiary">
+              {packageHint ? "包启动器" : "本地启动器"}
+            </div>
+          </div>
+        ) : null}
+
+        {schema.fields.map(renderField)}
+
+        {showsAuth ? (
+          <div className="space-y-2">
+            <div className="text-xs font-medium text-text-secondary">{labels.authType}</div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={form.authType === "none" ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => setForm((current) => ({ ...current, authType: "none" }))}
+                disabled={isSubmitting}
+              >
+                {labels.authTypeNone}
+              </Button>
+              <Button
+                variant={form.authType === "bearer" ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => setForm((current) => ({ ...current, authType: "bearer" }))}
+                disabled={isSubmitting}
+              >
+                {labels.authTypeBearer}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        {schema.notes && schema.notes.length > 0 ? (
+          <div className="space-y-1 rounded-ui-control border border-border bg-surface-secondary px-3 py-3">
+            <div className="text-xs font-medium text-text-secondary">{labels.notesTitle}</div>
+            {schema.notes.map((note) => (
+              <div key={note} className="text-xs text-text-tertiary">
+                {note}
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {error ? (
+          <div className="rounded-ui-control border border-danger/20 bg-danger/5 px-3 py-2 text-xs text-danger">
+            {error}
+          </div>
+        ) : null}
       </div>
 
-      {isCommandTransport ? (
-        <div className="space-y-2 rounded-ui-control border border-border bg-surface-secondary px-3 py-3">
-          <div className="text-xs font-medium text-text-secondary">Launcher</div>
-          <div className="flex flex-wrap items-center gap-2 text-sm text-text-primary">
-            <span className="rounded-full border border-border bg-surface-primary px-2 py-0.5 text-[11px] text-text-tertiary">
-              {form.command || "npx"}
-            </span>
-            {packageHint ? (
-              <span className="rounded-full border border-border bg-surface-primary px-2 py-0.5 text-[11px] text-text-tertiary">
-                {packageHint}
-              </span>
-            ) : null}
-          </div>
-          <div className="text-xs leading-5 text-text-tertiary">
-            {packageHint ? "包启动器" : "本地启动器"}
-          </div>
-        </div>
-      ) : null}
-
-      {schema.fields.map(renderField)}
-
-      {showsAuth ? (
-        <div className="space-y-2">
-          <div className="text-xs font-medium text-text-secondary">{labels.authType}</div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant={form.authType === "none" ? "secondary" : "outline"}
-              size="sm"
-              onClick={() => setForm((current) => ({ ...current, authType: "none" }))}
-              disabled={isSubmitting}
-            >
-              {labels.authTypeNone}
-            </Button>
-            <Button
-              variant={form.authType === "bearer" ? "secondary" : "outline"}
-              size="sm"
-              onClick={() => setForm((current) => ({ ...current, authType: "bearer" }))}
-              disabled={isSubmitting}
-            >
-              {labels.authTypeBearer}
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {schema.notes && schema.notes.length > 0 ? (
-        <div className="space-y-1 rounded-ui-control border border-border bg-surface-secondary px-3 py-3">
-          <div className="text-xs font-medium text-text-secondary">{labels.notesTitle}</div>
-          {schema.notes.map((note) => (
-            <div key={note} className="text-xs text-text-tertiary">
-              {note}
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {error ? (
-        <div className="rounded-ui-control border border-danger/20 bg-danger/5 px-3 py-2 text-xs text-danger">
-          {error}
-        </div>
-      ) : null}
-
-      <div className="flex justify-end gap-2">
+      <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-border pt-4">
         <Button variant="ghost" size="sm" onClick={onCancel} disabled={isSubmitting}>
           {labels.cancel}
         </Button>

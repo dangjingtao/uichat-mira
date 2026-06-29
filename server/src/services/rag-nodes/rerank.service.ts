@@ -76,7 +76,7 @@ const getDefaultRerankContext = (): RerankContext | null => {
   return {
     providerCode: config.providerCode ?? null,
     remoteModelId: config.remoteModelId ?? null,
-    enabled: params.enabled === true,
+    enabled: params.enabled !== false,
     topN:
       typeof params.topN === "number" && params.topN > 0
         ? params.topN

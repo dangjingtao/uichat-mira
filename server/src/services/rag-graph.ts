@@ -280,45 +280,52 @@ const routeAfterRerank = (state: RAGGraphStateType) => {
   return "fallbackAnswer";
 };
 
-const fallbackAnswerNode = createObservableNode("fallbackAnswer", async (_state, config) => {
-    emitGenerateDelta(config, NO_CONTEXT_ANSWER);
+const fallbackAnswerNode = createObservableNode("fallbackAnswer", async (state, config) => {
+    const fallbackChunks: RetrievedChunk[] = [];
+    let answer = "";
+    const startedAtMs = Date.now();
 
-    return {
-      state: {
-        answer: NO_CONTEXT_ANSWER,
-        sources: [],
+    for await (const delta of generateService.streamGenerateText({
+      query: state.question,
+      chunks: fallbackChunks,
+      systemPrompt: state.systemPrompt,
+      conversationHistory: state.conversationHistory,
+      requestContextMessages: state.requestContextMessages,
+    })) {
+      if (!delta) {
+        continue;
+      }
+
+      answer += delta;
+      emitGenerateDelta(config, delta);
+    }
+
+    const finalAnswer = answer.trim()
+      ? answer
+      : state.requestContextMessages?.length
+        ? "我先按当前角色设定简单回应一下：这个问题暂时没有知识库支撑，但我可以继续帮你细化。"
+        : NO_CONTEXT_ANSWER;
+
+    if (!answer.trim()) {
+      emitGenerateDelta(config, finalAnswer);
+    }
+
+    return generateService.toNodeResult(
+      {
+        answer: finalAnswer,
+        sources: fallbackChunks,
       },
-      observation: {
-        label: "返回拒答结果",
-        summary: "没有可用候选片段，直接返回固定拒答",
-        sources: [],
-        details: {
-          reason: "no-context-after-retrieval",
-          answer: NO_CONTEXT_ANSWER,
-        },
-        environment: {
-          result: {
-            success: true,
-            finishReason: "no-context-fallback",
-            metrics: {
-              returnedCount: 0,
-              candidateCount: 0,
-            },
-            response: {
-              summary: {
-                answerLength: Array.from(NO_CONTEXT_ANSWER).length,
-                sourceCount: 0,
-              },
-            },
-          },
-          timing: {
-            startedAt: new Date().toISOString(),
-            finishedAt: new Date().toISOString(),
-            durationMs: 0,
-          },
+      {
+        startedAtMs,
+        input: {
+          query: state.question,
+          chunks: fallbackChunks,
+          systemPrompt: state.systemPrompt,
+          conversationHistory: state.conversationHistory,
+          requestContextMessages: state.requestContextMessages,
         },
       },
-    };
+    );
   });
 
 // generate 节点：使用最终上下文片段调用生成模型，并把回答增量实时写入 custom stream。

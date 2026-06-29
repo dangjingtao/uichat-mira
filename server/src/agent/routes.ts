@@ -7,6 +7,7 @@ import { agentRunStore } from "./run-store.js";
 import { notFound } from "@/utils/route-errors.js";
 import type { AgentRun } from "./types.js";
 import { resumeApprovedAgentRun } from "./resume.js";
+import { getAgentRunById } from "./run-read.js";
 
 const agentApprovalRequestSchema = {
   type: "object",
@@ -21,6 +22,7 @@ const agentApprovalRequestSchema = {
       type: "object",
       additionalProperties: true,
     },
+    inputHash: { type: "string" },
     createdAt: { type: "string" },
   },
 } as const;
@@ -56,6 +58,8 @@ const agentRunSchema = {
     traceId: { type: "string" },
     currentStepId: { type: "string" },
     pendingApproval: agentApprovalRequestSchema,
+    selectedCapabilityId: { type: "string" },
+    selectedToolId: { type: "string" },
     contextBudget: {
       type: "object",
       additionalProperties: true,
@@ -99,7 +103,7 @@ const registerAgentRoutes: FastifyPluginAsync = async (app: FastifyInstance) => 
         throw notFound("Agent run not found");
       }
 
-      const run = agentRunStore.get(request.params.runId);
+      const run = getAgentRunById(request.params.runId);
       const visibleRun = verifyRunOwnership(run, authUser.id);
       if (!visibleRun) {
         throw notFound("Agent run not found");
@@ -128,7 +132,7 @@ const registerAgentRoutes: FastifyPluginAsync = async (app: FastifyInstance) => 
         throw notFound("Agent run not found");
       }
 
-      const run = agentRunStore.get(request.params.runId);
+      const run = getAgentRunById(request.params.runId);
       const visibleRun = verifyRunOwnership(run, authUser.id);
       if (!visibleRun) {
         throw notFound("Agent run not found");
@@ -162,7 +166,7 @@ const registerAgentRoutes: FastifyPluginAsync = async (app: FastifyInstance) => 
         throw notFound("Agent run not found");
       }
 
-      const run = agentRunStore.get(request.params.runId);
+      const run = getAgentRunById(request.params.runId);
       const visibleRun = verifyRunOwnership(run, authUser.id);
       if (!visibleRun) {
         throw notFound("Agent run not found");
@@ -170,6 +174,7 @@ const registerAgentRoutes: FastifyPluginAsync = async (app: FastifyInstance) => 
 
       const next = agentRunStore.complete(visibleRun.id, {
         status: "blocked",
+        currentStepId: undefined,
         pendingApproval: undefined,
       });
 
@@ -196,7 +201,7 @@ const registerAgentRoutes: FastifyPluginAsync = async (app: FastifyInstance) => 
         throw notFound("Agent run not found");
       }
 
-      const run = agentRunStore.get(request.params.runId);
+      const run = getAgentRunById(request.params.runId);
       const visibleRun = verifyRunOwnership(run, authUser.id);
       if (!visibleRun) {
         throw notFound("Agent run not found");
@@ -204,6 +209,7 @@ const registerAgentRoutes: FastifyPluginAsync = async (app: FastifyInstance) => 
 
       const next = agentRunStore.complete(visibleRun.id, {
         status: "cancelled",
+        currentStepId: undefined,
         pendingApproval: undefined,
       });
 

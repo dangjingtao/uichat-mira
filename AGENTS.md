@@ -1,39 +1,60 @@
-﻿# AGENTS.md
+# AGENTS.md
 
 ## Project Identity
 
-UI Chat RAG Tester is an Electron desktop app with a React renderer and a bundled Fastify backend.
+UIChat Mira is a local-first desktop workspace with an Electron shell, a React renderer, and a bundled Fastify backend.
 
 The app is a pnpm workspace using React, Vite, Electron, Fastify, TypeScript, and SQLite.
 
-## Workspace Layout
+If other docs, comments, or legacy files still mention `UI Chat RAG Tester`, treat that as historical naming and verify the current product name against `README.md` and active runtime docs before propagating it further.
 
-```text
-root/
-  desktop/          # React renderer
-  electron/         # Electron main/preload and shell package
-  server/           # Fastify backend source and build script
-  packages/         # Shared workspace packages
-  scripts/          # Build and packaging helpers
-  docs/             # Central project documentation
-  tauri/            # Tauri app sources and config
-  .artifacts/       # Temporary shared build artifacts (ignored)
-  release/          # electron-builder output
-  runtime.config.cjs
-```
-
-## Reading Guide
+## Source Of Truth
 
 - Start with `README.md` for project overview, development entry points, and packaging commands.
 - Use `docs/README.md` as the central documentation index.
-- `docs/archive/` contains archived documents kept for historical reference only; treat them as background material, not current product truth, unless the live code or active docs confirm the same behavior.
+- Treat `docs/archive/` as historical reference only, not current product truth, unless the live code or active docs confirm the same behavior.
 - Read `docs/architecture/README.md` before changing runtime boundaries, networking, or packaging flow.
 - Read `docs/architecture/ipc-and-preload.md` before changing preload exposure, renderer/native boundaries, or IPC design.
 - For Tauri-related work, read `docs/platform/tauri.md` first and `docs/platform/tauri-setup.md` for setup and troubleshooting.
 - For chat UI work, read `docs/uchat.md` first.
 - Shared UI component docs remain source-adjacent in `desktop/src/shared/ui/COMPONENTS.md` and `desktop/src/shared/ui/ui-design-guidelines-tailwind.md`.
 
-## Networking Rules
+## Scope And Boundaries
+
+- AGENTS.md defines global rules only. For concrete implementation work, the active task card defines allowed files, forbidden files, acceptance criteria, and verification steps.
+- Before starting work, restate the target, the files or areas that are allowed to change, the files or areas that are forbidden to change, and the acceptance criteria for the current task package.
+- Work on one task package at a time. Do not merge multiple independent asks into a single execution batch unless the project owner explicitly approves that grouping.
+- Do not modify unrelated modules, files, or architectural layers beyond the approved scope of the current task package.
+- The project core feature set is now mostly settled. Treat any planned refactor or rewrite as high risk and assess its impact on existing behavior first.
+- Before replacing an existing implementation, read the relevant docs and in-code comments first, then obtain explicit approval from the project owner.
+- Keep renderer code free of direct Node APIs.
+- Expose native and runtime details through preload.
+- Keep backend route paths prefix-free unless the server itself explicitly registers a route prefix.
+- Do not manually edit `pnpm-lock.yaml`.
+
+## Working Protocol
+
+- If local source code, local types, local package contents, or git history can verify a behavior, inspect them first. Do not drive code changes from guesses, wording like "maybe/probably", or inferred behavior that has not been checked locally.
+- When handling a bug, first determine whether it is architecture-level or business-level. Do not treat all defects as local implementation issues by default.
+- If a bug is architecture-level, or the likely fix may change runtime boundaries, protocol contracts, state ownership, persistence semantics, or other core structure, explicitly tell the project owner that the fix may require core architectural changes and wait for confirmation before proceeding.
+- Never silently repair a bug without first communicating its severity, layer, and expected impact. This includes “small” patch-style fixes such as unapproved workarounds, compatibility shims, fallback branches, or local patches.
+- When debugging a concrete defect, prefer a minimal reproducible check at the failing layer first, then state the cause. Do not keep asking the project owner to retest while the failure has not been pinned to a verified code path.
+- If a bug has already been solved before and a new fix attempt is stuck after multiple rounds, stop re-deriving it from scratch and review the historical branches or commits for the prior solution path.
+- Unless there is already an explicitly confirmed business requirement for compatibility, do not add fallback logic in backend code. If compatibility behavior, downgrade paths, or silent兜底 seem necessary, stop and align on the design with the project owner first.
+- If fallback or compatibility logic is explicitly approved and must remain, add a succinct comment explaining why it exists, which concrete failure mode it protects, and when it should be removed.
+- If you find legacy code that is no longer applicable and does not affect current behavior, remove it during development instead of keeping dead paths around.
+- Distinguish capability from tool usage precisely: capability is the intent or responsibility layer, while a tool is the concrete execution mechanism. Do not use the two terms interchangeably in specs, reviews, or implementation reasoning.
+
+## Risk Gates
+
+- High-risk operations require explicit confirmation from the project owner before execution. This includes work involving terminal control semantics, approval flow changes, resume logic, file write paths or file write policy changes, and any external send or outbound data transfer behavior.
+- When a high-risk gate is triggered, do not implement any workaround, fallback, compatibility shim, or alternative execution path without explicit project-owner approval.
+- Update docs when changing runtime networking, packaging, or backend route contracts.
+- Keep release retention behavior centralized in `scripts/build-dist.js`; do not hardcode release cleanup in unrelated scripts.
+
+## Runtime And UI Non-Negotiables
+
+### Networking
 
 1. Development renderer requests must use `/api/xxx`.
 2. `/api` is only the Vite proxy prefix.
@@ -42,43 +63,29 @@ root/
 5. Backend host and port come from `runtime.config.cjs`; do not duplicate numeric ports in code.
 6. Backend should bind to a local host only, not a public network interface.
 
-## Backend Startup
+### Backend Startup
 
 - Development: start desktop workflows through the root `pnpm dev:electron:win` or `pnpm dev:tauri:win` commands.
 - Do not refactor or replace the existing desktop dev startup chains unless you verify the full flow end-to-end. In particular, avoid changing the backend launch path, watch mode, or workspace invocation style without confirming that the relevant dev command still brings up Vite, backend health (`/health`), and the desktop shell together on Windows.
 - Production: Electron main starts `resources/node-runtime/node.exe` with `resources/server/server.cjs`.
 - Native dependencies for the backend are copied into `resources/server/node_modules` during packaging.
 
-## Editing Rules
+### UI
 
-- The project core feature set is now mostly settled. Treat any planned refactor or rewrite as high risk and assess its impact on existing behavior first.
-- Before replacing an existing implementation, read the relevant docs and in-code comments first, then obtain explicit approval from the project owner.
-- When handling a bug, first determine whether it is architecture-level or business-level. Do not treat all defects as local implementation issues by default.
-- If a bug is architecture-level, or the likely fix may change runtime boundaries, protocol contracts, state ownership, persistence semantics, or other core structure, you must explicitly tell the project owner that the fix may require core architectural changes and wait for confirmation before proceeding.
-- Never silently repair a bug without first communicating its severity, layer, and expected impact. This includes “small” patch-style fixes: adding an unapproved workaround, compatibility shim, fallback branch, or local patch without explaining the seriousness and tradeoff to the project owner is not allowed.
-- If a bug has already been solved before and a new fix attempt is stuck after multiple rounds, stop re-deriving it from scratch and review the historical branches/commits for the prior solution path.
-- If local source code, local types, local package contents, or git history can verify a behavior, inspect them first. Do not drive code changes from guesses, wording like "maybe/probably", or inferred behavior that has not been checked locally.
-- When debugging a concrete defect, prefer a minimal reproducible check at the failing layer first, then state the cause. Do not keep asking the project owner to retest while the failure has not been pinned to a verified code path.
-- Unless there is already an explicitly confirmed business requirement for compatibility, do not add fallback logic in backend code. If compatibility behavior, downgrade paths, or silent兜底 seem necessary, stop and align on the design with the project owner first.
-- If fallback or compatibility logic is explicitly approved and must remain, add a succinct comment explaining why it exists, which concrete failure mode it protects, and when it should be removed.
-- If you find legacy code that is no longer applicable and does not affect current behavior, remove it during development instead of keeping dead paths around.
-- Do not manually edit `pnpm-lock.yaml`.
-- Keep renderer code free of direct Node APIs.
-- Expose native and runtime details through preload.
-- Keep backend route paths prefix-free unless the server itself explicitly registers a route prefix.
-- Update docs when changing runtime networking, packaging, or backend route contracts.
-- Keep release retention behavior centralized in `scripts/build-dist.js`; do not hardcode release cleanup in unrelated scripts.
-
-## UI
-
-- The frontend UI interface design specifications and component documentation are located at `./desktop/src/shared/ui`. 
-- When I ask you to implement an interface, you should prioritize using existing pure UI components. Only if they do not exist should you consider abstracting frequently used UI components (excluding business logic).
-- You can modify or add components within, but their functionality must be backward compatible. Any modification to the component library requires updating both the design specifications and the component documentation.
+- The frontend UI interface design specifications and component documentation are located at `./desktop/src/shared/ui`.
+- When implementing an interface, prioritize existing pure UI components. Only if they do not exist should you consider abstracting frequently used UI components, excluding business logic.
+- You can modify or add components within the UI library, but the functionality must remain backward compatible. Any modification to the component library requires updating both the design specifications and the component documentation.
 - The chat interface for this project is implemented with the app-owned `uchat` runtime. For related questions, refer to `docs/uchat.md` first.
 
-## Verification
+## Verification And Delivery
 
-Run these before considering packaging/runtime changes complete:
+- Do not claim progress or completion with percentages.
+- Do not say work is “basically done”, “almost done”, or similar soft-completion wording. Report concrete evidence instead, such as changed files, reproduced behavior, command results, or remaining gaps.
+- Do not mark checklist items as done unless each item has concrete evidence such as changed files, relevant code locations, verification results, or documented manual checks.
+- After completing a task package, always provide a diff summary, the test or verification results with evidence, and any unfinished items, risks, or intentionally deferred work.
+- If no test or verification was run, say that explicitly and explain why.
+
+Run these before considering packaging or runtime changes complete:
 
 ```bash
 pnpm check

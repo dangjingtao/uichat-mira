@@ -90,6 +90,38 @@ export interface ChatWorkspace {
   updatedAt: string;
 }
 
+export interface AgentApprovalRequest {
+  id: string;
+  runId: string;
+  stepId: string;
+  toolId: string;
+  reason: string;
+  input?: Record<string, unknown>;
+  inputHash?: string;
+  createdAt: string;
+}
+
+export interface AgentRun {
+  id: string;
+  threadId: string;
+  userId: number;
+  status:
+    | "queued"
+    | "running"
+    | "waiting_approval"
+    | "waiting_user"
+    | "completed"
+    | "failed"
+    | "blocked"
+    | "cancelled";
+  traceId: string;
+  currentStepId?: string;
+  pendingApproval?: AgentApprovalRequest;
+  selectedCapabilityId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // 获取对话列表
 export async function getThreads(
   filters?: ThreadListFilters,
@@ -165,6 +197,22 @@ export async function updateChatWorkspace(
 
 export async function deleteChatWorkspace(id: string): Promise<{ deleted: boolean }> {
   return del<{ deleted: boolean }>(`/chat-workspaces/${id}`);
+}
+
+export async function getAgentRun(runId: string): Promise<AgentRun> {
+  return get<AgentRun>(`/agent/runs/${runId}`);
+}
+
+export async function approveAgentRun(runId: string): Promise<AgentRun> {
+  return post<AgentRun>(`/agent/runs/${runId}/approve`, {});
+}
+
+export async function rejectAgentRun(runId: string): Promise<AgentRun> {
+  return post<AgentRun>(`/agent/runs/${runId}/reject`, {});
+}
+
+export async function cancelAgentRun(runId: string): Promise<AgentRun> {
+  return post<AgentRun>(`/agent/runs/${runId}/cancel`, {});
 }
 
 // 获取对话消息

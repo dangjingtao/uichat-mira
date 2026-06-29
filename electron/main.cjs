@@ -166,6 +166,12 @@ async function startBackend() {
   const backendPath = path.join(process.resourcesPath, "server", "server.cjs");
   const cwd = path.join(process.resourcesPath, "server");
   const bundledNodePath = path.join(process.resourcesPath, "node-runtime", "node.exe");
+  const localModelResourceRoot = path.join(process.resourcesPath, "model-packs");
+  const localOnnxWasmRoot = path.join(
+    process.resourcesPath,
+    "model-runtime",
+    "onnxruntime-web",
+  );
   const backendRuntime = fs.existsSync(bundledNodePath)
     ? bundledNodePath
     : process.execPath;
@@ -205,6 +211,9 @@ async function startBackend() {
       UI_CHAT_BACKEND_URL: getBackendUrl(),
       UI_CHAT_DATABASE_DIR: dataDir,
       UI_CHAT_LOG_DIR: logDir,
+      LOCAL_MODEL_RESOURCE_ROOT: localModelResourceRoot,
+      LOCAL_MODEL_USER_DATA_DIR: userDataDir,
+      LOCAL_ONNX_WASM_ROOT: localOnnxWasmRoot,
     },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,

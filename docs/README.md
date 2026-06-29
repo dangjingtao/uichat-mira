@@ -81,6 +81,7 @@ Related:
 ### 平台
 
 - `build/README.md`
+- `build/local-model-packaging.md`
 - `platform/tauri.md`
 - `platform/tauri-setup.md`
 - `CHANGELOG.md`
@@ -94,6 +95,7 @@ Related:
 - `developments/coding-standards.md`
 - `developments/defect-log.md`
 - `developments/product-roadmap-priorities.md`
+- `project-control/README.md`
 
 ### 集成
 
@@ -121,6 +123,14 @@ Related:
 - `tooling-runtime/tools-protocol.md`
 - `tooling-runtime/tools-ecosystem-research.md`
 - `tooling-runtime/tool-runtime-retrospective-2026-06-27.md`
+
+### Harness
+
+- `harness/README.md`
+- `harness/harness-assessment-2026-06-28.md`
+- `harness/harness-phase-1-implementation-checklist.md`
+- `harness/sandbox-module.md`
+- `harness/agentgraph-harness-protocol.md`
 
 ### 文档系统 schema
 
@@ -162,6 +172,7 @@ Related:
 - `build/`：构建、打包、release 产物与测试报告入包规则
 - `platform/`：桌面壳层与平台运行环境
 - `developments/`：版本、请求封装、i18n、工程规范、缺陷台账、路线规划
+- `project-control/`：任务台账、任务卡、评审、决策与阶段归档
 - `role/`：角色系统与 persona 相关文档
 - `maps/`：区域阅读地图
 - `concepts/`：概念页

@@ -12,19 +12,45 @@ import { McpApprovalRequiredError, mcpBadRequest, mcpNotFound } from "./errors.j
 import { getToolImplementation } from "./registry.js";
 import {
   clearInvocationTraces,
+  configureInvocationTraceRetention,
   createInvocationTrace,
   finishInvocationTrace,
   getInvocationTrace,
   startTraceSpan,
+  sweepInvocationTraces,
 } from "./traces.js";
+import {
+  DEFAULT_RETENTION_CONFIG,
+  sweepRetentionMap,
+  type RetentionConfig,
+} from "@/utils/retention.js";
+import { evaluateInvocationApproval } from "./permissions.js";
+import { createInvocationInputHash } from "@/agent/approval-fingerprint.js";
+import { validateInvocationArgs } from "./schema.js";
 
 const invocationMap = new Map<string, McpInvocationRecord>();
 const invocationEvents = new Map<string, McpStreamEvent[]>();
+let invocationRetentionConfig: RetentionConfig = {
+  ...DEFAULT_RETENTION_CONFIG,
+};
 
 const appendEvent = (invocationId: string, event: McpStreamEvent) => {
   const events = invocationEvents.get(invocationId) ?? [];
   events.push(event);
   invocationEvents.set(invocationId, events);
+};
+
+const sweepInvocations = () => {
+  sweepRetentionMap(invocationMap, {
+    config: invocationRetentionConfig,
+    getUpdatedAt: (record) => record.finishedAt ?? record.startedAt,
+    keep: (record) => !record.finishedAt,
+  });
+  sweepRetentionMap(invocationEvents, {
+    config: invocationRetentionConfig,
+    getUpdatedAt: (_events) => undefined,
+  });
+  sweepInvocationTraces();
 };
 
 export const getInvocation = (invocationId: string) =>
@@ -39,6 +65,20 @@ export const clearInvocations = () => {
   clearInvocationTraces();
 };
 
+export const configureInvocationRetention = (
+  config: Partial<RetentionConfig>,
+) => {
+  invocationRetentionConfig = {
+    ...invocationRetentionConfig,
+    ...config,
+  };
+  configureInvocationTraceRetention(config);
+};
+
+export const sweepStoredInvocations = () => {
+  sweepInvocations();
+};
+
 export const getInvocationTraceRecord = (invocationId: string) => getInvocationTrace(invocationId);
 
 export interface ExecuteInvocationInput {
@@ -49,6 +89,10 @@ export interface ExecuteInvocationInput {
   turnId?: string;
   signal?: AbortSignal;
   environment?: McpExecutionEnvironment;
+  approvedInvocations?: Array<{
+    toolId: string;
+    inputHash: string;
+  }>;
   onEvent?: (event: McpStreamEvent) => void | Promise<void>;
 }
 
@@ -64,8 +108,11 @@ export const executeInvocation = async (
   if (typeof args !== "object" || Array.isArray(args)) {
     throw mcpBadRequest("Invocation args must be an object");
   }
+  validateInvocationArgs(args, tool.definition.inputSchema);
+  const inputHash = createInvocationInputHash(args);
 
   const invocationId = crypto.randomUUID();
+  sweepInvocations();
   const startedAt = new Date().toISOString();
   const artifacts: McpArtifact[] = [];
   const signal = input.signal ?? new AbortController().signal;
@@ -109,6 +156,22 @@ export const executeInvocation = async (
   });
 
   try {
+    const approvalDecision = evaluateInvocationApproval({
+      definition: tool.definition,
+      args,
+      environment: input.environment,
+      approvedInvocations: input.approvedInvocations,
+      inputHash,
+    });
+    if (approvalDecision.type === "require_approval") {
+      throw new McpApprovalRequiredError(
+        approvalDecision.reason ?? `${input.toolId} requires approval.`,
+        {
+          scope: approvalDecision.scope,
+        },
+      );
+    }
+
     const response = (await tool.execute({
       invocationId,
       args,
@@ -182,6 +245,7 @@ export const executeInvocation = async (
       type: "invocation:finish",
       status: record.status,
     });
+    sweepInvocations();
 
     return record;
   } catch (error) {
@@ -212,6 +276,7 @@ export const executeInvocation = async (
         type: "invocation:finish",
         status: record.status,
       });
+      sweepInvocations();
 
       return record;
     }
@@ -236,6 +301,7 @@ export const executeInvocation = async (
       type: "invocation:finish",
       status: record.status,
     });
+    sweepInvocations();
 
     return record;
   }

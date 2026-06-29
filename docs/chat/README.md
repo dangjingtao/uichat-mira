@@ -57,3 +57,5 @@ Related:
 - `agent-phase-1-checklist.md`
 - `agent-phase-2-checklist.md`
 - `agent-phase-3-checklist.md`
+- `agent-workspace-context-system.md`
+- `agent-workspace-context-checklist.md`

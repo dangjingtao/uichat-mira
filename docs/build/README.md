@@ -10,6 +10,7 @@ Doc Type: current-contract
 Canonical: true
 Related:
   - ../../README.md
+  - local-model-packaging.md
   - ../developments/release-management.md
   - ../platform/tauri.md
   - ../../scripts/build-dist.js
@@ -27,6 +28,7 @@ Related:
 - `.artifacts/` 中间产物如何生成
 - 测试报告如何进入 release 包
 - release 输出目录和保留策略
+- 本地模型包和 WASM runtime 资源入包规则
 - 当前平台兼容边界
 - 后续改造方向
 
@@ -58,15 +60,21 @@ pnpm clean:artifacts
 pnpm version:sync
 ```
 
+## 本地模型资源
+
+本地 embedding / rerank 模型包、`onnxruntime-web` WASM runtime、Electron / Tauri resources 复制、首启解压和 checksum 校验规则，见：
+
+- `local-model-packaging.md`
+
 ## Release 构建原则
 
-Release 构建必须强制执行测试并携带本次构建对应的测试报告。
+Release 构建必须强制执行测试并携带本次构建对应的测试结果摘要。
 
 这条规则的含义：
 
-- release 包里的测试报告不能依赖旧的 `coverage/` 目录。
-- client 和 server 测试报告都应来自本次 release 构建。
-- 构建脚本应在报告缺失时失败，而不是静默跳过。
+- release 包里的测试结果不能依赖旧的 `coverage/` 目录。
+- client 和 server 测试结果摘要都应来自本次 release 构建。
+- 构建脚本应在摘要缺失时失败，而不是静默跳过。
 - 开发态可以复用或跳过报告生成，release 态不允许跳过。
 
 当前实现还没有完全达到这条规则：
@@ -185,16 +193,16 @@ scripts/prepare-desktop-artifacts.js
    pnpm docs:build
    ```
 
-6. 把前端 coverage 复制进 backend bundle：
+6. 把前端测试结果摘要复制进 backend bundle：
 
    ```text
-   .artifacts/server-bundle/client-coverage/
+   .artifacts/server-bundle/client-coverage/test-results-summary.json
    ```
 
-7. 把服务端 coverage 复制进 backend bundle：
+7. 把服务端测试结果摘要复制进 backend bundle：
 
    ```text
-   .artifacts/server-bundle/server-coverage/
+   .artifacts/server-bundle/server-coverage/test-results-summary.json
    ```
 
 8. 复制 docs site：
@@ -230,8 +238,8 @@ server/build.js
   tools/
   static/
   node_modules/
-  client-coverage/
-  server-coverage/
+  client-coverage/test-results-summary.json
+  server-coverage/test-results-summary.json
   docs-site/
 ```
 
@@ -252,9 +260,7 @@ server/build.js
 开发页当前读取以下静态文件：
 
 ```text
-/client-coverage/coverage-summary.json
 /client-coverage/test-results-summary.json
-/server-coverage/coverage-summary.json
 /server-coverage/test-results-summary.json
 ```
 
@@ -265,11 +271,11 @@ client-coverage -> GET /client-coverage/
 server-coverage -> GET /server-coverage/
 ```
 
-Release 包内这些目录位于：
+Release 包内这些文件位于：
 
 ```text
-resources/server/client-coverage/
-resources/server/server-coverage/
+resources/server/client-coverage/test-results-summary.json
+resources/server/server-coverage/test-results-summary.json
 ```
 
 当前 release 规则：
@@ -281,15 +287,13 @@ resources/server/server-coverage/
 5. 校验以下文件都存在：
 
    ```text
-   desktop/coverage/coverage-summary.json
    desktop/coverage/test-results.json
    desktop/coverage/test-results-summary.json
-   server/coverage/coverage-summary.json
    server/coverage/test-results.json
    server/coverage/test-results-summary.json
    ```
 
-6. 再复制报告进入 `.artifacts/server-bundle/`。
+6. 再复制测试结果摘要进入 `.artifacts/server-bundle/`。
 
 实现入口：
 

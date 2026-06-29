@@ -79,7 +79,54 @@ export interface AgentApprovalRequest {
   toolId: string;
   reason: string;
   input?: Record<string, unknown>;
+  inputHash?: string;
   createdAt: string;
+}
+
+export interface AgentToolCallRequest {
+  toolId: string;
+  args: Record<string, unknown>;
+  inputHash: string;
+  createdAt: string;
+}
+
+export interface AgentApprovedInvocation {
+  toolId: string;
+  input: Record<string, unknown>;
+  inputHash: string;
+  approvedAt: string;
+  approvalId: string;
+}
+
+export interface AgentToolExecutionResult {
+  toolId: string;
+  args: Record<string, unknown>;
+  invocationId?: string;
+  status: "completed" | "failed" | "awaiting_approval";
+  result?: unknown;
+  errorMessage?: string;
+  approval?: AgentApprovalRequest;
+  startedAt: string;
+  finishedAt: string;
+}
+
+export interface AgentRetrievalEvidence {
+  knowledgeBaseId?: string | null;
+  query: string;
+  chunkCount: number;
+  chunks: Array<{
+    chunkId: string | number;
+    documentName: string;
+    score?: number;
+    content: string;
+  }>;
+  createdAt: string;
+}
+
+export interface AgentEvidencePayload {
+  observations: AgentObservation[];
+  toolExecutions: AgentToolExecutionResult[];
+  retrievals: AgentRetrievalEvidence[];
 }
 
 export interface AgentRun {
@@ -93,8 +140,15 @@ export interface AgentRun {
   traceId: string;
   currentStepId?: string;
   pendingApproval?: AgentApprovalRequest;
-  approvedToolIds?: string[];
+  approvedInvocations?: AgentApprovedInvocation[];
   contextBudget?: ContextBudgetAudit;
+  selectedCapabilityId?: string;
+  selectedToolId?: string;
+  pendingToolCall?: AgentToolCallRequest;
+  lastToolExecution?: AgentToolExecutionResult;
+  evidence?: AgentEvidencePayload;
+  assistantMessageId?: string;
+  assistantParentId?: string | null;
   runtimeInput?: Pick<
     AgentGraphInput,
     | "messages"
@@ -113,6 +167,8 @@ export interface AgentRunStore {
     userId: number;
     goal: AgentGoal;
     plan: AgentPlan;
+    assistantMessageId?: string;
+    assistantParentId?: string | null;
     runtimeInput?: Pick<
       AgentGraphInput,
       | "messages"
@@ -134,6 +190,8 @@ export interface AgentRunStore {
       >;
     },
   ): AgentRun;
+  configureRetention?(config: { maxEntries?: number; ttlMs?: number }): void;
+  sweep?(): void;
   clear(): void;
 }
 
@@ -148,7 +206,13 @@ export interface AgentGraphInput {
   params?: Record<string, unknown>;
   knowledgeBaseId?: string | null;
   intentConfig?: AgentIntentEmbeddingConfig;
-  approvedToolIds?: string[];
+  approvedInvocations?: AgentApprovedInvocation[];
+  selectedCapabilityId?: string;
+  selectedToolId?: string;
+  pendingToolCall?: AgentToolCallRequest;
+  maxIterations?: number;
+  continueIteration?: boolean;
+  postToolReviewPending?: boolean;
   onExecutionNode?: (
     event: AssistantExecutionNodeEvent,
   ) => Promise<void> | void;
@@ -157,10 +221,16 @@ export interface AgentGraphInput {
 export interface AgentGraphOutput {
   answer: string;
   observations: AgentObservation[];
+  evidence: AgentEvidencePayload;
   retrievedChunks: RetrievedChunk[];
   capabilityIntent?: CapabilityIntentResult;
   pendingApproval?: AgentApprovalRequest;
+  selectedCapabilityId?: string;
+  selectedToolId?: string;
+  pendingToolCall?: AgentToolCallRequest;
+  lastToolExecution?: AgentToolExecutionResult;
   errorMessage?: string;
+  errorSourceNodeId?: string;
   contextBudget?: ContextBudgetAudit;
   status: Extract<
     AgentRunStatus,

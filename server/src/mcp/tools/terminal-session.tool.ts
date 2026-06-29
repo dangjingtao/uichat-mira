@@ -31,6 +31,9 @@ export const terminalSessionTool: McpToolImplementation = {
       sideEffect: "process",
       requiresApproval: true,
       workspaceBound: true,
+      workspaceBoundary: {
+        argKeys: ["cwd"],
+      },
       longRunning: true,
     },
   },

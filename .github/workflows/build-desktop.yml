@@ -51,11 +51,26 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-electron-builder-
 
+      - name: Cache local model packs
+        uses: actions/cache@v4
+        with:
+          path: .local-models/raw
+          key: ${{ runner.os }}-local-model-packs-v1-${{ hashFiles('scripts/prepare-local-model-packs.mjs') }}
+          restore-keys: |
+            ${{ runner.os }}-local-model-packs-v1-
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Type check
         run: pnpm check
+
+      - name: Prepare local model packs
+        run: pnpm prepare:local-model-packs
+        env:
+          LOCAL_MODEL_RAW_ROOT: .local-models/raw
+          LOCAL_MODEL_ALLOW_NETWORK: '1'
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
       - name: Build Electron (${{ matrix.platform }})
         run: node scripts/build-dist.js ${{ matrix.platform }}
@@ -99,8 +114,23 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Cache local model packs
+        uses: actions/cache@v4
+        with:
+          path: .local-models/raw
+          key: ${{ runner.os }}-local-model-packs-v1-${{ hashFiles('scripts/prepare-local-model-packs.mjs') }}
+          restore-keys: |
+            ${{ runner.os }}-local-model-packs-v1-
+
       - name: Type check
         run: pnpm check
+
+      - name: Prepare local model packs
+        run: pnpm prepare:local-model-packs
+        env:
+          LOCAL_MODEL_RAW_ROOT: .local-models/raw
+          LOCAL_MODEL_ALLOW_NETWORK: '1'
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
       - name: Build Tauri (Windows)
         run: pnpm package:tauri:win

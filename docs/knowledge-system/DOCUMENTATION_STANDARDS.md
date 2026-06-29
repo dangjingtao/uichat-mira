@@ -53,6 +53,12 @@ Related:
 2. 分类规则首先要让 AI 天然知道“这是哪个模块、哪种文档”
 3. 文档站与可视化层只消费这套结构，不反过来绑架文档本体
 
+如果文档位于 `docs/project-control/`，还要额外遵守：
+
+- 它只能服务任务控制、证据、决策和归档
+- 不能把它写成通用知识库
+- 不能让 review、decision、workboard、task card 互相替代职责
+
 ## 文档类型
 
 每篇文档尽量只承担一个主类型。
@@ -67,6 +73,17 @@ Related:
 | 历史 | 保留旧设计、废弃方案、历史记录 | `docs/archive/` |
 
 如果一篇文档同时承担多种角色，优先拆分。拆不动时，至少在顶部明确“主类型”和“主用途”。
+
+`docs/project-control/` 是特例目录。
+
+它常见的文档角色不是普通说明文，而是：
+
+- `index`
+- `workboard`
+- `task-card`
+- `review`
+- `decision`
+- `archive-snapshot`
 
 ## 必要头部
 
@@ -109,6 +126,19 @@ Last verified: 2026-06-24
 
 当前还没有全量强制，但这是后续最重要的演进方向之一。
 
+如果是 `project-control` 活跃文件，推荐直接使用 YAML 头部，并尽量补齐：
+
+- `status`
+- `module`
+- `feature`
+- `doc_type`
+- `canonical`
+- `related`
+
+如果文件承载任务推进状态，额外使用：
+
+- `task_state`
+
 ## 推荐结构
 
 大多数活跃文档建议按这个顺序组织：
@@ -127,6 +157,12 @@ Last verified: 2026-06-24
 - 它写的是现状、计划，还是历史
 - 真实依据落在代码还是别的文档里
 
+如果是 `project-control` 文件，文档开头至少还要回答：
+
+- 它是在管任务、证据、决策，还是归档
+- 它是否是当前执行真相
+- 它会不会和别的 active file 冲突
+
 ## 书写规则
 
 - 先写结论，再写背景。
@@ -135,6 +171,7 @@ Last verified: 2026-06-24
 - 同一个概念在不同文档里尽量用同一个词。
 - 如果某个概念已经有单点真相页，别在别处重新定义一版。
 - 只要结论依赖实现，就尽量给代码锚点。
+- 在 `project-control` 中，优先写 task boundary、evidence、blocker、decision 和 archive rule，不写泛化背景。
 
 更好的写法：
 
@@ -174,6 +211,12 @@ Last verified: 2026-06-24
 
 迁入归档时，如果有新的替代文档，最好在顶部顺手指一下。
 
+如果是 `docs/project-control/`：
+
+- 阶段结束后，把完成任务移入本目录自己的 `archive/`
+- `workboard.snapshot.md` 保留当时状态
+- archive 默认只作历史参考，不覆盖 live workboard 和 active task card
+
 ## 命名和层级
 
 - 新的跨团队技术文档，优先用英文文件名。
@@ -192,6 +235,9 @@ Last verified: 2026-06-24
 - 后续每篇活跃文档都应尽量能回答两件事：
   - 它属于哪个模块
   - 它是什么文档角色，例如 `plan`、`design`、`checklist`、`current-contract`
+- 如果是 `project-control`，AI 还应直接看出：
+  - 它是否是 current execution control material
+  - 它是否带有 `task_state`
 
 ## 后续元数据方向
 
@@ -221,6 +267,12 @@ Last verified: 2026-06-24
 - `Owner`
 - `Last verified`
 - `Canonical`
+
+如果文档属于 `project-control`，再补一条强约束：
+
+- `Status` 表示文档生命周期
+- 任务推进状态另用 `task_state`
+- 不要用 `Status: active` 代替 `task_state: IN_PROGRESS`
 
 ## 分类决策顺序
 
@@ -253,4 +305,22 @@ Last verified: YYYY-MM-DD
 ## Code Anchors
 
 ## Related Docs
+```
+
+## Project Control 模板
+
+```md
+---
+status: current
+owner: docs
+last_verified:
+layer: project-control
+module: ProjectControl
+feature: <feature>
+doc_type: workboard | task-card | review | decision | archive-snapshot | index
+canonical: true | false
+related:
+  - <path>
+task_state: TODO | IN_PROGRESS | BLOCKED | READY_FOR_REVIEW | DONE | DROPPED
+---
 ```

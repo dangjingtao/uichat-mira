@@ -20,7 +20,9 @@ import {
   planNode,
   policyNode,
   prepareContextNode,
+  routeStepNode,
   retrieveNode,
+  toolNode,
   type EmitAgentExecutionNode,
 } from "./nodes.js";
 import type {
@@ -33,6 +35,7 @@ import type {
 import type { ContextBudgetAudit } from "@/services/context-budget/index.js";
 
 const AGENT_EMIT_CONFIG_KEY = "agent:emitExecutionNode";
+const DEFAULT_AGENT_MAX_ITERATIONS = 3;
 
 const AgentGraphState = Annotation.Root({
   runId: Annotation<string>,
@@ -47,14 +50,23 @@ const AgentGraphState = Annotation.Root({
   intentConfig: Annotation<AgentIntentEmbeddingConfig | undefined>,
   capabilityIntent: Annotation<CapabilityIntentResult | undefined>,
   pendingApproval: Annotation<AgentGraphOutput["pendingApproval"] | undefined>,
+  selectedCapabilityId: Annotation<string | undefined>,
+  selectedToolId: Annotation<string | undefined>,
+  pendingToolCall: Annotation<AgentGraphOutput["pendingToolCall"] | undefined>,
+  lastToolExecution: Annotation<AgentGraphOutput["lastToolExecution"] | undefined>,
   answer: Annotation<string | undefined>,
   retrievedChunks: Annotation<RetrievedChunk[] | undefined>,
   observations: Annotation<AgentObservation[] | undefined>,
+  evidence: Annotation<AgentGraphOutput["evidence"] | undefined>,
   blockedReason: Annotation<string | undefined>,
   contextBudget: Annotation<ContextBudgetAudit | undefined>,
   errorMessage: Annotation<string | undefined>,
   errorSourceNodeId: Annotation<string | undefined>,
-  approvedToolIds: Annotation<string[] | undefined>,
+  approvedInvocations: Annotation<AgentGraphInput["approvedInvocations"] | undefined>,
+  iterationCount: Annotation<number | undefined>,
+  maxIterations: Annotation<number | undefined>,
+  continueIteration: Annotation<boolean | undefined>,
+  postToolReviewPending: Annotation<boolean | undefined>,
 });
 
 type AgentGraphStateType = typeof AgentGraphState.State;
@@ -94,8 +106,30 @@ const routeAfterCapabilityIntent = (state: AgentGraphStateType) => {
     return "error";
   }
 
-  if ((state.capabilityIntent?.selectedCapabilityIds.length ?? 0) > 0) {
+  const selectedToolIds = state.capabilityIntent?.selectedToolIds ?? [];
+  const lastToolId =
+    state.lastToolExecution?.status === "completed"
+      ? state.lastToolExecution.toolId
+      : undefined;
+  const isReviewingSameTool =
+    state.postToolReviewPending &&
+    Boolean(lastToolId) &&
+    selectedToolIds.length > 0 &&
+    selectedToolIds.every((toolId) => toolId === lastToolId);
+
+  if (isReviewingSameTool) {
+    return "generate";
+  }
+
+  if (selectedToolIds.length > 0) {
     return "policyStep";
+  }
+
+  if (
+    state.postToolReviewPending &&
+    state.lastToolExecution?.status === "completed"
+  ) {
+    return "generate";
   }
 
   return "retrieve";
@@ -126,7 +160,39 @@ const routeAfterPolicy = (state: AgentGraphStateType) => {
     return "approval";
   }
 
+  if (state.selectedToolId) {
+    return "tool";
+  }
+
+  if (state.postToolReviewPending) {
+    return "generate";
+  }
+
   return "retrieve";
+};
+
+const routeAfterTool = (state: AgentGraphStateType) => {
+  if (state.errorMessage) {
+    return "error";
+  }
+
+  if (state.pendingApproval) {
+    return "approval";
+  }
+
+  return "routeStep";
+};
+
+const routeAfterRouteStep = (state: AgentGraphStateType) => {
+  if (state.errorMessage) {
+    return "error";
+  }
+
+  if (state.continueIteration) {
+    return "capabilityIntentStep";
+  }
+
+  return "generate";
 };
 
 const routeAfterRetrieve = (state: AgentGraphStateType) => {
@@ -146,8 +212,12 @@ const routeAfterGenerate = (state: AgentGraphStateType) => {
 };
 
 const routeAfterEvaluate = (state: AgentGraphStateType) => {
-  if (state.errorMessage || state.blockedReason) {
+  if (state.errorMessage) {
     return "error";
+  }
+
+  if (state.pendingApproval) {
+    return END;
   }
 
   return END;
@@ -166,8 +236,10 @@ const agentStateGraph = new StateGraph(AgentGraphState)
   .addNode("planStep", createAgentNode("planStep", planNode))
   .addNode("capabilityIntentStep", createAgentNode("capabilityIntentStep", capabilityIntentNode))
   .addNode("policyStep", createAgentNode("policyStep", policyNode))
+  .addNode("routeStep", createAgentNode("routeStep", routeStepNode))
   .addNode("approval", createAgentNode("approval", approvalNode))
   .addNode("retrieve", createAgentNode("retrieve", retrieveNode))
+  .addNode("tool", createAgentNode("tool", toolNode))
   .addNode("generate", createAgentNode("generate", generateNode))
   .addNode("evaluate", createAgentNode("evaluate", evaluateNode))
   .addNode("error", createAgentNode("error", errorNode))
@@ -183,12 +255,30 @@ const agentStateGraph = new StateGraph(AgentGraphState)
   .addConditionalEdges("capabilityIntentStep", routeAfterCapabilityIntent, [
     "policyStep",
     "retrieve",
+    "generate",
     "error",
   ])
-  .addConditionalEdges("policyStep", routeAfterPolicy, ["approval", "retrieve", "error"])
+  .addConditionalEdges("policyStep", routeAfterPolicy, [
+    "approval",
+    "tool",
+    "retrieve",
+    "generate",
+    "error",
+  ])
   .addConditionalEdges("approval", routeAfterApproval, [END, "error"])
   .addEdge("retrieve", "generate")
   .addConditionalEdges("retrieve", routeAfterRetrieve, ["generate", "error"])
+  .addConditionalEdges("tool", routeAfterTool, [
+    "approval",
+    "routeStep",
+    "generate",
+    "error",
+  ])
+  .addConditionalEdges("routeStep", routeAfterRouteStep, [
+    "capabilityIntentStep",
+    "generate",
+    "error",
+  ])
   .addConditionalEdges("generate", routeAfterGenerate, ["evaluate", "error"])
   .addConditionalEdges("evaluate", routeAfterEvaluate, [END, "error"])
   .addEdge("error", END)
@@ -209,8 +299,17 @@ export const agentGraph = {
         knowledgeBaseId: input.knowledgeBaseId,
         intentConfig: input.intentConfig,
         observations: [],
-        approvedToolIds: input.approvedToolIds,
+        approvedInvocations: input.approvedInvocations,
+        selectedCapabilityId: input.selectedCapabilityId,
+        selectedToolId: input.selectedToolId,
+        pendingToolCall: input.pendingToolCall,
+        lastToolExecution: undefined,
+        evidence: undefined,
         pendingApproval: undefined,
+        iterationCount: 0,
+        maxIterations: input.maxIterations ?? DEFAULT_AGENT_MAX_ITERATIONS,
+        continueIteration: false,
+        postToolReviewPending: false,
       },
       {
         configurable: {
@@ -223,16 +322,29 @@ export const agentGraph = {
     return {
       answer,
       observations: state.observations ?? [],
+      evidence: state.evidence ?? {
+        observations: state.observations ?? [],
+        toolExecutions: [],
+        retrievals: [],
+      },
       retrievedChunks: state.retrievedChunks ?? [],
       capabilityIntent: state.capabilityIntent,
       pendingApproval: state.pendingApproval,
+      selectedCapabilityId: state.selectedCapabilityId,
+      selectedToolId:
+        state.selectedToolId ??
+        state.lastToolExecution?.toolId ??
+        state.pendingApproval?.toolId,
+      pendingToolCall: state.pendingToolCall,
+      lastToolExecution: state.lastToolExecution,
       contextBudget: state.contextBudget,
       errorMessage: state.errorMessage,
+      errorSourceNodeId: state.errorSourceNodeId,
       status: state.pendingApproval
         ? "waiting_approval"
         : state.errorMessage
           ? "failed"
-          : answer && !state.blockedReason
+          : answer
             ? "completed"
             : "blocked",
     };

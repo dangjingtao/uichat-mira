@@ -51,6 +51,18 @@ Doc Type: design
 
 - 配好之后如何被业务自动或显式使用
 
+这里需要再提前收口一个判断：
+
+- 第三方集成第一阶段，不是为了把设置页做成平台后台
+- 也不是为了只多接几个通知通道
+- 它的核心目标是让外部平台能够调用我们自己的知识库能力
+
+因此：
+
+- 消息入口是知识库调用的触发方式
+- 通知出口是知识库结果的回传方式
+- 知识库调用本身才是业务主线
+
 ## 核心原则
 
 ### 1. 配置层和消费层分离
@@ -79,6 +91,7 @@ Doc Type: design
 - `identity`
 - `org_sync`
 - `notify`
+- `knowledge_query`
 - `knowledge_source`
 - `workflow_action`
 
@@ -95,6 +108,7 @@ renderer 只负责：
 
 最稳的优先级是：
 
+- 知识库调用
 - 身份
 - 组织
 - 通知
@@ -113,6 +127,7 @@ export type IntegrationCapability =
   | 'identity'
   | 'org_sync'
   | 'notify'
+  | 'knowledge_query'
   | 'knowledge_source'
   | 'workflow_action';
 ```
@@ -125,6 +140,8 @@ export type IntegrationCapability =
   - 部门、用户、岗位等组织信息同步
 - `notify`
   - 通知、提醒、告警、消息推送，优先投递到企业微信机器人等群通知出口
+- `knowledge_query`
+  - 外部平台中的消息入口调用本地知识库问答能力
 - `knowledge_source`
   - 文档、文件、公告等可导入知识源
 - `workflow_action`
@@ -135,11 +152,13 @@ export type IntegrationCapability =
 例如：
 
 - 企业微信
+  - `knowledge_query`
   - `identity`
   - `org_sync`
   - `notify`
   - 其中 `notify` 首期优先落到企业微信机器人 webhook
 - 飞书
+  - `knowledge_query`
   - `identity`
   - `org_sync`
   - `notify`

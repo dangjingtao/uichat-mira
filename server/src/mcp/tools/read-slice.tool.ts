@@ -28,7 +28,6 @@ export const readSliceTool: McpToolImplementation = {
     capabilities: {
       sideEffect: "none",
       requiresApproval: false,
-      workspaceBound: true,
     },
   },
   execute: async (context) => {

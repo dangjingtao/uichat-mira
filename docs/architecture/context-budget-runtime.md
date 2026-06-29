@@ -315,6 +315,142 @@ pnpm --filter @ui-chat-mira/server add gpt-tokenizer
 
 不建议第一版把 LangChain 作为预算核心。LangChain 更适合 text splitter / document transform，而 context budget 需要覆盖 provider messages、system context、history、payload、web_search 等多类输入，应该由项目自己的 runtime contract 主导。
 
+## 本地模型包与打包策略
+
+Context budget 解决的是进入 LLM 前的上下文控制。Embedding / rerank 属于检索质量链路，但它们会影响桌面端安装包体积、离线能力和首次启动体验，因此这里记录当前产品线结论。
+
+### 产品线结论
+
+默认体验应是：
+
+```text
+开箱即用 embedding 检索
+rerank 是高级检索质量开关
+默认运行时使用 onnxruntime-web / WASM
+```
+
+建议分三档：
+
+- 默认内置
+  - embedding：`Xenova/multilingual-e5-small`
+  - rerank：不默认内置
+  - runtime：`onnxruntime-web` / WASM
+  - 目标：主安装包新增资源控制在 50-100MB 以内
+- 轻量增强包
+  - embedding：沿用默认 embedding
+  - rerank：20M-30M 级轻量 cross-encoder，例如 `cross-encoder/ms-marco-MiniLM-L6-v2`
+  - runtime：优先继续使用 WASM
+  - 目标：额外下载 50-150MB
+  - 策略：只 rerank top 10-20
+- 高质量包
+  - embedding：可选更强 BGE / E5 系列
+  - rerank：BGE reranker
+  - runtime：可选 native 性能包
+  - 目标：额外下载 300MB-1GB
+  - 策略：仅作为可选下载，不随主安装包发
+
+### Runtime 选择
+
+默认不引入 `onnxruntime-node`。
+
+当前结论：
+
+```text
+默认内置：
+  onnxruntime-web / WASM
+  embedding 模型
+  无 Windows native binding
+
+可选性能包：
+  onnxruntime-node CPU
+  只下载当前平台版本
+  用于高质量 rerank 或大知识库本地检索
+
+不默认提供：
+  CUDA / DirectML provider
+  多平台 native binaries
+```
+
+原因：
+
+- `onnxruntime-node` 会带 native `.node` binding 和 ONNX Runtime shared library。
+- 当前包体估算显示 native runtime 未压缩可能达到 100MB+，安装包增量也可能达到 30-80MB。
+- 默认 embedding 可以批处理，WASM 性能损失可接受。
+- rerank 对延迟更敏感，因此默认不内置；如启用轻量 rerank，应限制 `rerankTopK` 并支持关闭。
+- native runtime 更适合作为可选性能包，而不是主安装包默认能力。
+
+### 打包归属
+
+本页只记录本地模型的产品线选择和评测结论。
+
+Electron / Tauri resources 入包、模型包压缩、首启解压、checksum 校验、`onnxruntime-web` WASM 文件复制和 userData 路径解析，归 Build 模块维护：
+
+- `../build/local-model-packaging.md`
+
+### 本地模型评测样例
+
+评测脚本：
+
+```bash
+pnpm eval:local-model-runtime
+```
+
+结果文件：
+
+```text
+.artifacts/model-packs/eval/local-model-runtime-eval.json
+```
+
+本轮验证时间：2026-06-28。
+
+模型：
+
+- embedding：`Xenova/multilingual-e5-small`
+- rerank：`Xenova/ms-marco-MiniLM-L-6-v2`
+- runtime：`onnxruntime-web/wasm`
+
+汇总结果：
+
+| 能力 | 通过 | 总数 |
+| --- | ---: | ---: |
+| embedding 分类/召回 | 6 | 6 |
+| rerank 排序 | 2 | 2 |
+
+#### Embedding 场景
+
+这些用例模拟“query -> 多个候选能力/文档/知识片段 -> embedding 相似度排序”的场景。
+
+| 场景 | 中文 query | 预期命中 | 实际 Top1 | Top1 分数 |
+| --- | --- | --- | --- | ---: |
+| 工具意图识别 | 帮我在项目里查找所有调用 providerProxyService 的地方 | 代码搜索工具 | 代码搜索工具 | 0.879846 |
+| 工具意图识别 | 把构建失败的结果发到企业微信机器人 | 企业微信通知工具 | 企业微信通知工具 | 0.931092 |
+| 文档识别 | 这份文档描述接口字段、请求路径和响应结构，应该归到哪里？ | API 契约文档 | API 契约文档 | 0.911365 |
+| 文档识别 | 这篇说明 Electron、Tauri、backend 进程和 preload 边界 | 运行时架构文档 | 运行时架构文档 | 0.920655 |
+| RAG 识别 | context 爆炸时应该优先裁剪历史还是当前用户问题？ | 上下文预算协议 | 上下文预算协议 | 0.920916 |
+| RAG 识别 | 默认安装包应该内置 reranker 吗？ | 本地模型包策略 | 本地模型包策略 | 0.892018 |
+
+观察：
+
+- `multilingual-e5-small` 对中文工具意图、文档分类和 RAG 片段识别都能给出可用 Top1。
+- 分数整体偏高且候选间距不总是很大，因此生产侧不能只看绝对分数；更适合看 TopK、相对排序和 margin。
+- 工具意图识别可以先用 embedding 做召回，再交给策略节点或 LLM 做最终确认。
+
+#### Rerank 场景
+
+这些用例模拟“query + candidate text -> cross-encoder pair scoring -> 重排”的场景。
+
+| 场景 | Query | 预期 Top1 | 实际 Top1 | Top1 score |
+| --- | --- | --- | --- | ---: |
+| 英文对照 | How does context budget prevent long chat context overflow? | 上下文预算 | 上下文预算 | -10.068593 |
+| 中文探针 | context budget 如何避免长对话爆炸？ | 上下文预算 | 上下文预算 | -7.448614 |
+
+观察：
+
+- `ms-marco-MiniLM-L-6-v2` 在这组小样例里能把相关片段排到第一。
+- 该模型偏英文；中文样例虽然排序正确，但概率值很低，不能把 sigmoid 后的绝对值当作“可信度”。
+- 中文主链路不建议依赖“先用 task 模型翻译再 rerank”的补丁，前置翻译会引入 JSON 结构不稳定和语义漂移。
+- 生产策略应限制 `rerankTopK`，默认仍以 embedding 检索为主，rerank 作为高级检索质量开关。
+
 ## 测试要求
 
 当前已覆盖：

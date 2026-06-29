@@ -38,11 +38,11 @@
         {
           "version": "0.7.1",
           "commit": {
-            "hash": "e483eff21f7ed2201148c7f877a5d810521c6aaa",
-            "shortHash": "e483eff",
-            "message": "feat: extend chat trace and integration docs",
+            "hash": "b7b87870ed66565cac867656c1a2078f1527e526",
+            "shortHash": "b7b8787",
+            "message": "chore: snapshot full workspace",
             "author": "Tomz",
-            "date": "2026-06-27T00:20:31+08:00"
+            "date": "2026-06-28T08:37:44+08:00"
           }
         },
         {

@@ -677,6 +677,9 @@ const getRequiredServer = (serverId: string): ExternalMcpServerRecord => {
   return toRecord(row);
 };
 
+export const getExternalMcpServer = (serverId: string): ExternalMcpServerRecord =>
+  getRequiredServer(serverId);
+
 export const listExternalMcpServers = (): ExternalMcpServerRecord[] => {
   initializeExternalMcpDatabase();
   return (
