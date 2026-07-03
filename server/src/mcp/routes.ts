@@ -17,6 +17,7 @@ import {
 } from "./harness/registry.js";
 import { resolveHarnessToolExposure } from "./harness/exposure.js";
 import { resolveHarnessCapabilityDiagnostics } from "./harness/capability-diagnostics.js";
+import { resolveHarnessToolCandidatesForTurn } from "./harness/tool-candidates.js";
 import { getHarnessEnvironmentSnapshot } from "./harness/environment.js";
 import { toSseChunk } from "./core/events.js";
 import { mcpNotFound } from "./core/errors.js";
@@ -685,8 +686,54 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
         source: request.query.source ?? "tools_list",
         query: request.query.query,
       });
-      return success(decision.visibleDefinitions.filter((definition) => definition.source === "internal"));
+      return success(decision.exposedDefinitions.filter((definition) => definition.source === "internal"));
     }),
+  );
+
+  app.get<{
+    Querystring: {
+      query: string;
+      source?: "tools_list" | "agent_intent" | "chat_surface";
+      maxTools?: number;
+      topK?: number;
+      minScore?: number;
+    };
+  }>(
+    "/mcp/tools/candidates",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Resolve Harness tool candidates for the current turn",
+        querystring: {
+          type: "object",
+          required: ["query"],
+          properties: {
+            query: { type: "string" },
+            source: {
+              type: "string",
+              enum: ["tools_list", "agent_intent", "chat_surface"],
+            },
+            maxTools: { type: "integer", minimum: 1, maximum: 50 },
+            topK: { type: "integer", minimum: 1, maximum: 50 },
+            minScore: { type: "number" },
+          },
+          additionalProperties: false,
+        },
+        response: {
+          200: successEnvelope(objectSchema),
+        },
+      },
+    },
+    routeHandler("Failed to resolve Harness tool candidates", async (request) =>
+      success(
+        await resolveHarnessToolCandidatesForTurn({
+          query: request.query.query,
+          source: request.query.source ?? "agent_intent",
+          maxTools: request.query.maxTools,
+          topK: request.query.topK,
+          minScore: request.query.minScore,
+        }),
+      )),
   );
 
   app.get<{

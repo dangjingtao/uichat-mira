@@ -13,6 +13,9 @@ export interface HarnessExposurePolicyInput {
 }
 
 export interface HarnessExposureDecision {
+  exposedToolIds: string[];
+  exposedDefinitions: McpToolDefinition[];
+  reason: string[];
   visibleDefinitions: McpToolDefinition[];
   blockedCapabilityIds: string[];
   reasons: string[];
@@ -70,6 +73,76 @@ const isLowIntentGreeting = (query: string) => {
   return tokens.every((token) => GREETING_TOKENS.has(token) || SMALL_TALK_TOKENS.has(token));
 };
 
+const WORKSPACE_READ_HINTS = [
+  "workspace",
+  "工作区",
+  "工作空间",
+  "file",
+  "files",
+  "folder",
+  "folders",
+  "directory",
+  "directories",
+  "path",
+  "paths",
+  "read_list",
+  "read_locate",
+  "read_open",
+  "文件",
+  "文件夹",
+  "目录",
+  "路径",
+  "列出",
+  "看看",
+] as const;
+
+const WEB_SEARCH_INTENT_HINTS = [
+  "今天",
+  "当前",
+  "现在",
+  "实时",
+  "最新",
+  "联网",
+  "日期",
+  "时间",
+  "news",
+  "latest",
+  "current",
+  "today",
+  "weather",
+  "price",
+] as const;
+
+const querySuggestsWorkspaceRead = (query: string | undefined) => {
+  const normalized = normalizeQuery(query);
+  if (!normalized) {
+    return false;
+  }
+
+  return WORKSPACE_READ_HINTS.some((token) => normalized.includes(token));
+};
+
+const querySuggestsWebSearch = (query: string | undefined) => {
+  const normalized = normalizeQuery(query);
+  if (!normalized) {
+    return false;
+  }
+
+  return WEB_SEARCH_INTENT_HINTS.some((token) => normalized.includes(token));
+};
+
+const shouldExposeWebSearchForQuery = (query: string | undefined) => {
+  if (!query?.trim()) {
+    return true;
+  }
+
+  if (querySuggestsWorkspaceRead(query)) {
+    return false;
+  }
+
+  return querySuggestsWebSearch(query);
+};
+
 const shouldIncludeDefinition = (
   definition: McpToolDefinition,
   input: HarnessExposurePolicyInput,
@@ -90,6 +163,14 @@ const shouldIncludeDefinition = (
     (input.source === "agent_intent" || input.source === "chat_surface") &&
     definition.source === "internal" &&
     INTERNAL_INTENT_ONLY_TOOL_IDS.has(definition.id)
+  ) {
+    return false;
+  }
+
+  if (
+    input.source === "chat_surface" &&
+    definition.id === "web_search" &&
+    !shouldExposeWebSearchForQuery(input.query)
   ) {
     return false;
   }
@@ -121,6 +202,9 @@ export const resolveHarnessToolExposure = (
 
   if (input.source === "agent_intent" && isLowIntentGreeting(input.query ?? "")) {
     return {
+      exposedToolIds: [],
+      exposedDefinitions: [],
+      reason: ["Greeting or low-intent input should stay in pure conversation mode."],
       visibleDefinitions: [],
       blockedCapabilityIds: definitions.map((definition) => definition.id),
       reasons: ["Greeting or low-intent input should stay in pure conversation mode."],
@@ -145,6 +229,9 @@ export const resolveHarnessToolExposure = (
   }
 
   return {
+    exposedToolIds: visibleDefinitions.map((definition) => definition.id),
+    exposedDefinitions: visibleDefinitions,
+    reason: reasons,
     visibleDefinitions,
     blockedCapabilityIds,
     reasons,
@@ -153,4 +240,7 @@ export const resolveHarnessToolExposure = (
 
 export const __exposureTestUtils = {
   isLowIntentGreeting,
+  querySuggestsWorkspaceRead,
+  querySuggestsWebSearch,
+  shouldExposeWebSearchForQuery,
 };

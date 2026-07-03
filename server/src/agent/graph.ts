@@ -9,8 +9,8 @@ import type { NormalizedChatMessage } from "@/services/provider-proxy.message-pr
 import type { RetrievedChunk } from "@/services/rag-nodes";
 import {
   type AgentIntentEmbeddingConfig,
-  type CapabilityIntentResult,
-  capabilitySelectNode,
+  type ToolIntentResult,
+  toolSelectNode,
   toolGuardNode,
 } from "./intent/index.js";
 import {
@@ -49,9 +49,8 @@ const AgentGraphState = Annotation.Root({
   params: Annotation<Record<string, unknown> | undefined>,
   knowledgeBaseId: Annotation<string | null | undefined>,
   intentConfig: Annotation<AgentIntentEmbeddingConfig | undefined>,
-  capabilityIntent: Annotation<CapabilityIntentResult | undefined>,
+  toolIntent: Annotation<ToolIntentResult | undefined>,
   pendingApproval: Annotation<AgentGraphOutput["pendingApproval"] | undefined>,
-  selectedCapabilityId: Annotation<string | undefined>,
   selectedToolId: Annotation<string | undefined>,
   pendingToolCall: Annotation<AgentGraphOutput["pendingToolCall"] | undefined>,
   lastToolExecution: Annotation<AgentGraphOutput["lastToolExecution"] | undefined>,
@@ -69,7 +68,7 @@ const AgentGraphState = Annotation.Root({
   maxIterations: Annotation<number | undefined>,
   continueIteration: Annotation<boolean | undefined>,
   postToolReviewPending: Annotation<boolean | undefined>,
-  reviewDecision: Annotation<"capability" | "generate" | undefined>,
+  reviewDecision: Annotation<"tool" | "generate" | undefined>,
   reviewReason: Annotation<string | undefined>,
 });
 
@@ -105,12 +104,11 @@ const createAgentNode = (
     }
   };
 
-const routeAfterCapabilityIntent = (state: AgentGraphStateType) => {
+const routeAfterToolIntent = (state: AgentGraphStateType) => {
   if (state.errorMessage) {
     return "error";
   }
 
-  const selectedToolIds = state.capabilityIntent?.selectedToolIds ?? [];
   const lastToolId =
     state.lastToolExecution?.status === "completed"
       ? state.lastToolExecution.toolId
@@ -118,14 +116,13 @@ const routeAfterCapabilityIntent = (state: AgentGraphStateType) => {
   const isReviewingSameTool =
     state.postToolReviewPending &&
     Boolean(lastToolId) &&
-    selectedToolIds.length > 0 &&
-    selectedToolIds.every((toolId) => toolId === lastToolId);
+    state.pendingToolCall?.toolId === lastToolId;
 
   if (isReviewingSameTool) {
     return "generate";
   }
 
-  if (selectedToolIds.length > 0) {
+  if (state.pendingToolCall) {
     return "policyStep";
   }
 
@@ -149,10 +146,10 @@ const routeAfterPlanStep = (state: AgentGraphStateType) => {
     return "error";
   }
 
-  return "capabilitySelectStep";
+  return "toolSelectStep";
 };
 
-const routeAfterCapabilitySelect = (state: AgentGraphStateType) => {
+const routeAfterToolSelect = (state: AgentGraphStateType) => {
   if (state.errorMessage) {
     return "error";
   }
@@ -197,8 +194,8 @@ const routeAfterRouteStep = (state: AgentGraphStateType) => {
     return "error";
   }
 
-  if (state.reviewDecision === "capability") {
-    return "capabilitySelectStep";
+  if (state.reviewDecision === "tool") {
+    return "toolSelectStep";
   }
 
   return "generate";
@@ -244,8 +241,8 @@ const agentStateGraph = new StateGraph(AgentGraphState)
   .addNode("prepareContext", createAgentNode("prepareContext", prepareContextNode))
   .addNode("planStep", createAgentNode("planStep", planNode))
   .addNode(
-    "capabilitySelectStep",
-    createAgentNode("capabilitySelectStep", capabilitySelectNode),
+    "toolSelectStep",
+    createAgentNode("toolSelectStep", toolSelectNode),
   )
   .addNode("toolGuardStep", createAgentNode("toolGuardStep", toolGuardNode))
   .addNode("policyStep", createAgentNode("policyStep", policyNode))
@@ -262,14 +259,14 @@ const agentStateGraph = new StateGraph(AgentGraphState)
     "error",
   ])
   .addConditionalEdges("planStep", routeAfterPlanStep, [
-    "capabilitySelectStep",
+    "toolSelectStep",
     "error",
   ])
-  .addConditionalEdges("capabilitySelectStep", routeAfterCapabilitySelect, [
+  .addConditionalEdges("toolSelectStep", routeAfterToolSelect, [
     "toolGuardStep",
     "error",
   ])
-  .addConditionalEdges("toolGuardStep", routeAfterCapabilityIntent, [
+  .addConditionalEdges("toolGuardStep", routeAfterToolIntent, [
     "policyStep",
     "retrieve",
     "generate",
@@ -291,7 +288,7 @@ const agentStateGraph = new StateGraph(AgentGraphState)
     "error",
   ])
   .addConditionalEdges("routeStep", routeAfterRouteStep, [
-    "capabilitySelectStep",
+    "toolSelectStep",
     "generate",
     "error",
   ])
@@ -316,7 +313,6 @@ export const agentGraph = {
         intentConfig: input.intentConfig,
         observations: [],
         approvedInvocations: input.approvedInvocations,
-        selectedCapabilityId: input.selectedCapabilityId,
         selectedToolId: input.selectedToolId,
         pendingToolCall: input.pendingToolCall,
         lastToolExecution: undefined,
@@ -346,9 +342,8 @@ export const agentGraph = {
         retrievals: [],
       },
       retrievedChunks: state.retrievedChunks ?? [],
-      capabilityIntent: state.capabilityIntent,
+      toolIntent: state.toolIntent,
       pendingApproval: state.pendingApproval,
-      selectedCapabilityId: state.selectedCapabilityId,
       selectedToolId:
         state.selectedToolId ??
         state.lastToolExecution?.toolId ??

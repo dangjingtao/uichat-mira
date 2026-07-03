@@ -1,4 +1,8 @@
 import type { ProxyProviderParam } from "@/services/provider-proxy.service/index.js";
+import type {
+  HarnessToolCandidate,
+  HarnessToolExposure,
+} from "@/mcp/harness/tool-candidates.js";
 
 export interface AgentIntentEmbeddingConfig {
   requestedProvider?: ProxyProviderParam;
@@ -20,33 +24,44 @@ export interface CapabilityIntentDocument {
   actionProfileId?: string;
 }
 
-export interface CapabilityIntentCandidate {
-  capabilityId: string;
+export interface ToolIntentCandidate {
+  toolId: string;
   title: string;
+  description: string;
   score: number;
   embeddingScore: number;
   ruleScore: number;
   rerankScore?: number;
   finalScore?: number;
-  preferredToolId: string;
-  supportingToolIds: string[];
   source: "internal" | "external";
   domain: string;
   tags: string[];
   actionProfileId?: string;
+  actionProfileTitle?: string;
+  actionProfileDescription?: string;
+  preferredForQuery?: boolean;
+  reason?: string;
 }
 
-export interface CapabilityIntentResult {
+export interface ToolIntentResult {
   query: string;
-  topCandidates: CapabilityIntentCandidate[];
-  selectedCapabilityIds: string[];
+  topCandidates: ToolIntentCandidate[];
+  toolCandidates: HarnessToolCandidate[];
+  toolExposure: HarnessToolExposure;
   selectedToolIds: string[];
+  candidateToolIds: string[];
   exposureReasons?: string[];
-  decisionSource?: "embedding" | "task-model" | "rule" | "guard";
+  decisionSource?: "task-model" | "rule" | "guard";
   decisionReason?: string;
   retrievalModel?: {
     provider?: string;
     model?: string;
     modelConfigId?: string;
   };
+  rerankModel?: {
+    model?: string;
+    modelConfigId?: string;
+  };
 }
+
+export type CapabilityIntentCandidate = ToolIntentCandidate;

@@ -167,7 +167,6 @@ export const resumeApprovedAgentRun = async (runId: string) => {
     status: "running",
     pendingApproval: undefined,
     approvedInvocations,
-    selectedCapabilityId: run.selectedCapabilityId,
     selectedToolId: pendingToolCall.toolId,
     pendingToolCall,
   });
@@ -185,7 +184,6 @@ export const resumeApprovedAgentRun = async (runId: string) => {
     knowledgeBaseId: runtimeInput.knowledgeBaseId,
     intentConfig: runtimeInput.intentConfig,
     approvedInvocations,
-    selectedCapabilityId: run.selectedCapabilityId,
     selectedToolId: pendingToolCall.toolId,
     pendingToolCall,
     onExecutionNode: (event) => {
@@ -204,7 +202,6 @@ export const resumeApprovedAgentRun = async (runId: string) => {
     blockedReason: output.blockedReason,
     terminalReason: output.terminalReason,
     approvedInvocations,
-    selectedCapabilityId: output.selectedCapabilityId,
     selectedToolId:
       output.selectedToolId ??
       output.pendingApproval?.toolId ??

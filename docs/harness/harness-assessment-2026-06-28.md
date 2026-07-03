@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: runtime
-Last verified: 2026-06-28
+Last verified: 2026-07-03
 Layer: wiki
 Module: Harness
 Feature: HarnessAssessment
@@ -161,6 +161,39 @@ Doc Type: assessment
 - agent 模式会放宽到内置工具集合
 - external MCP projected tool 仍默认不进入普通 chat / agent 的直接可见面
 - 这套裁剪规则现在已经有回归单测覆盖
+
+### 当前新增契约
+
+当前更推荐用下面三层来描述 Harness 输出，而不是继续混用：
+
+- `CapabilityMatch`
+- `ToolExposure`
+- `Invocation`
+
+其中：
+
+- `CapabilityMatch` 是语义匹配结果
+- `ToolExposure` 是当前轮暴露给 LLM 的候选工具面
+- `Invocation` 是真正执行的工具调用
+
+`preferredToolId` 当前明确只应被视为 hint：
+
+- 可用于排序
+- 可用于默认展示顺序
+- 可用于 trace 解释
+- 不可直接视为 executed tool
+
+### 当前真相修正
+
+前一阶段存在一条外层 route 级 `web_search` 预取旁路。  
+这会绕过 Harness 暴露治理，属于越界实现。
+
+当前这条旁路已删除：
+
+- 默认 chat 入口不再在进入主回答前自行执行 `web_search`
+- RAG 入口也不再在进入主回答前自行执行 `web_search`
+- `web_search` 是否可见，应由 Harness 工具暴露治理决定
+- 最终是否调用 `web_search`，应交给编排层
 
 ## 更合理的风控分层
 

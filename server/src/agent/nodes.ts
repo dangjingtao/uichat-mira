@@ -8,20 +8,25 @@ import { agentGenerateTextRunnable, agentRagRunnable } from "./runnables.js";
 import { createInvocationInputHash } from "./approval-fingerprint.js";
 import type {
   AgentIntentEmbeddingConfig,
-  CapabilityIntentResult,
+  ToolIntentResult,
 } from "./intent/index.js";
 import { evaluateAgentToolPolicy } from "./policy.js";
 import { toAgentExecutionNode, toPlanNodeDetails } from "./trace.js";
+export { nextActionPlannerNode } from "./next-action-planner.js";
+export { toolCallNormalizeNode } from "./tool-call-normalize.js";
 import type {
   AgentApprovedInvocation,
   AgentApprovalRequest,
   AgentEvidencePayload,
   AgentGoal,
+  AgentNextAction,
   AgentObservation,
   AgentPlan,
   AgentPlanStep,
   AgentRetrievalEvidence,
+  AgentToolExposureState,
   AgentToolCallRequest,
+  LegacyAgentToolCallRequest,
   AgentToolExecutionResult,
 } from "./types.js";
 
@@ -277,12 +282,16 @@ export interface AgentNodeState {
   userId: number;
   goal: AgentGoal;
   plan: AgentPlan;
+  question?: string;
+  taskFrame?: Record<string, unknown> | string;
   messages: NormalizedChatMessage[];
   requestContextMessages?: NormalizedChatMessage[];
   params?: Record<string, unknown>;
   knowledgeBaseId?: string | null;
   intentConfig?: AgentIntentEmbeddingConfig;
-  capabilityIntent?: CapabilityIntentResult;
+  toolIntent?: ToolIntentResult;
+  toolExposure?: AgentToolExposureState;
+  nextAction?: AgentNextAction;
   answer?: string;
   retrievedChunks?: RetrievedChunk[];
   observations?: AgentObservation[];
@@ -290,7 +299,6 @@ export interface AgentNodeState {
   terminalReason?: string;
   pendingApproval?: AgentApprovalRequest;
   approvedInvocations?: AgentApprovedInvocation[];
-  selectedCapabilityId?: string;
   selectedToolId?: string;
   pendingToolCall?: AgentToolCallRequest;
   lastToolExecution?: AgentToolExecutionResult;
@@ -302,9 +310,11 @@ export interface AgentNodeState {
   maxIterations?: number;
   continueIteration?: boolean;
   postToolReviewPending?: boolean;
-  reviewDecision?: "capability" | "generate";
+  reviewDecision?: "tool" | "generate";
   reviewReason?: string;
 }
+
+export type AgentGraphState = AgentNodeState;
 
 export type EmitAgentExecutionNode = (event: ReturnType<typeof toAgentExecutionNode>) => Promise<void> | void;
 
@@ -476,12 +486,27 @@ const buildToolArgs = (input: {
 const freezeToolCall = (
   toolId: string,
   args: Record<string, unknown>,
+  source: LegacyAgentToolCallRequest["source"],
 ): AgentToolCallRequest => ({
   toolId,
   args,
   inputHash: createInvocationInputHash(args),
+  source,
   createdAt: nowIso(),
 });
+
+export const createPlannerPendingToolCall = (input: {
+  toolId: string;
+  state: AgentNodeState;
+}): AgentToolCallRequest =>
+  freezeToolCall(
+    input.toolId,
+    buildToolArgs({
+      toolId: input.toolId,
+      state: input.state,
+    }),
+    "planner_selection",
+  );
 
 const createPendingApproval = (input: {
   runId: string;
@@ -508,30 +533,6 @@ const hasApprovedInvocation = (
       invocation.toolId === pendingToolCall.toolId &&
       invocation.inputHash === pendingToolCall.inputHash,
   ) ?? false;
-
-const selectToolDefinition = (
-  state: AgentNodeState,
-  toolDefinitions: ReturnType<typeof listCapabilityDefinitions>,
-) => {
-  const selectedCapabilityIds = state.capabilityIntent?.selectedCapabilityIds ?? [];
-  const selectedToolIds = state.capabilityIntent?.selectedToolIds ?? [];
-  if (selectedToolIds.length === 0) {
-    return undefined;
-  }
-
-  const selectedById = new Map(
-    toolDefinitions.map((definition) => [definition.id, definition] as const),
-  );
-
-  for (const toolId of selectedToolIds) {
-    const definition = selectedById.get(toolId);
-    if (definition) {
-      return definition;
-    }
-  }
-
-  return undefined;
-};
 
 export const emitStepNode = async (
   emit: EmitAgentExecutionNode | undefined,
@@ -596,7 +597,7 @@ export const prepareContextNode = async (
     nodeType: "reason",
     phase: "start",
     label: "准备上下文",
-    summary: "正在读取线程上下文和可用能力",
+    summary: "正在读取线程上下文和可用工具",
   });
 
   const toolDefinitions = listCapabilityDefinitions();
@@ -661,19 +662,14 @@ export const policyNode = async (
     nodeType: "reason",
     phase: "start",
     label: "审批策略",
-    summary: "正在判断候选能力是否需要审批",
+    summary: "正在判断候选工具是否需要审批",
   });
 
-  const selectedCapabilityIds = state.capabilityIntent?.selectedCapabilityIds ?? [];
-  const selectedToolIds = state.capabilityIntent?.selectedToolIds ?? [];
-  const selectedCapabilityId = selectedCapabilityIds[0];
-  const toolDefinitions = listCapabilityDefinitions();
-  const selectedDefinition = selectToolDefinition(
-    state,
-    toolDefinitions,
-  );
+  const selectedToolIds = state.toolIntent?.selectedToolIds ?? [];
+  const candidateToolIds = state.toolIntent?.candidateToolIds ?? [];
+  const pendingToolCall = state.pendingToolCall;
 
-  if (!selectedDefinition) {
+  if (!pendingToolCall) {
     await emitStepNode(emit, {
       runId: state.runId,
       nodeId,
@@ -681,25 +677,50 @@ export const policyNode = async (
       nodeType: "reason",
       phase: "done",
       label: "审批策略",
-      summary: "未命中需要审批的能力",
-      details: {
-        selectedCapabilityIds,
-        selectedToolIds,
-      },
-    });
+        summary: "未命中需要审批的工具",
+        details: {
+          selectedToolIds,
+          candidateToolIds,
+        },
+      });
     return {
-      selectedCapabilityId: undefined,
       selectedToolId: undefined,
       pendingToolCall: undefined,
       pendingApproval: undefined,
     };
   }
 
-  const args = buildToolArgs({
-    toolId: selectedDefinition.id,
-    state,
-  });
-  const frozenToolCall = freezeToolCall(selectedDefinition.id, args);
+  const toolDefinitions = listCapabilityDefinitions();
+  const selectedDefinition = toolDefinitions.find(
+    (definition) => definition.id === pendingToolCall.toolId,
+  );
+  if (!selectedDefinition) {
+    const reason = `Pending tool call references unknown tool: ${pendingToolCall.toolId}`;
+    await emitStepNode(emit, {
+      runId: state.runId,
+      nodeId,
+      ...traceAttemptMeta,
+      nodeType: "reason",
+      phase: "done",
+      label: "审批策略",
+      summary: "待执行调用引用了未注册工具，已阻断执行",
+      details: {
+        selectedToolIds,
+        candidateToolIds,
+        toolId: pendingToolCall.toolId,
+        policyDecision: "blocked-unknown-tool",
+      },
+    });
+    return {
+      selectedToolId: undefined,
+      pendingToolCall: undefined,
+      pendingApproval: undefined,
+      blockedReason: reason,
+      errorMessage: reason,
+      errorSourceNodeId: nodeId,
+    };
+  }
+  const args = pendingToolCall.args;
 
   if (
     (selectedDefinition.id === "read_open" || selectedDefinition.id === "read") &&
@@ -713,16 +734,15 @@ export const policyNode = async (
       nodeType: "reason",
       phase: "done",
       label: "审批策略",
-      summary: "读取能力缺少明确目标，跳过直接执行",
-      details: {
-        selectedCapabilityIds,
-        selectedToolIds,
-        capabilityId: selectedDefinition.id,
-        policyDecision: "skip-missing-read-target",
-      },
-    });
+        summary: "读取工具缺少明确目标，跳过直接执行",
+        details: {
+          selectedToolIds,
+          candidateToolIds,
+          toolId: selectedDefinition.id,
+          policyDecision: "skip-missing-read-target",
+        },
+      });
     return {
-      selectedCapabilityId,
       selectedToolId: undefined,
       pendingToolCall: undefined,
       pendingApproval: undefined,
@@ -743,16 +763,15 @@ export const policyNode = async (
         nodeType: "reason",
         phase: "done",
         label: "审批策略",
-        summary: "工作区变更能力缺少可审查的结构化参数，已阻断执行",
+        summary: "工作区变更工具缺少可审查的结构化参数，已阻断执行",
         details: {
-          selectedCapabilityIds,
           selectedToolIds,
-          capabilityId: selectedDefinition.id,
+          candidateToolIds,
+          toolId: selectedDefinition.id,
           policyDecision: "blocked-missing-workspace-mutation-args",
         },
       });
       return {
-        selectedCapabilityId: undefined,
         selectedToolId: undefined,
         pendingToolCall: undefined,
         pendingApproval: undefined,
@@ -772,18 +791,17 @@ export const policyNode = async (
       nodeType: "reason",
       phase: "done",
       label: "审批策略",
-      summary: "终端能力缺少受控参数，已阻断自动执行",
-      details: {
-        selectedCapabilityIds,
-        selectedToolIds,
-        capabilityId: selectedDefinition.id,
-        policyDecision: isHighRiskWorkspaceMutationRequest(question)
-          ? "blocked-high-risk-workspace-mutation"
+        summary: "终端工具缺少受控参数，已阻断自动执行",
+        details: {
+          selectedToolIds,
+          candidateToolIds,
+          toolId: selectedDefinition.id,
+          policyDecision: isHighRiskWorkspaceMutationRequest(question)
+            ? "blocked-high-risk-workspace-mutation"
           : "blocked-missing-terminal-command",
       },
     });
     return {
-      selectedCapabilityId,
       selectedToolId: undefined,
       pendingToolCall: undefined,
       pendingApproval: undefined,
@@ -802,18 +820,18 @@ export const policyNode = async (
       nodeType: "reason",
       phase: "done",
       label: "审批策略",
-      summary: "命中能力可直接执行",
-      details: {
-        selectedCapabilityIds,
-        selectedToolIds,
-        capabilityId: selectedDefinition.id,
-        policyDecision: decision.type,
-      },
-    });
+        summary: "命中工具可直接执行",
+        details: {
+          selectedToolIds,
+          candidateToolIds,
+          toolId: selectedDefinition.id,
+          policyDecision: decision.type,
+          toolCallSource: pendingToolCall.source,
+        },
+      });
     return {
-      selectedCapabilityId,
       selectedToolId: selectedDefinition.id,
-      pendingToolCall: frozenToolCall,
+      pendingToolCall,
     };
   }
 
@@ -825,18 +843,17 @@ export const policyNode = async (
       nodeType: "reason",
       phase: "done",
       label: "审批策略",
-      summary: "命中能力被策略拒绝执行",
+      summary: "命中工具被策略拒绝执行",
       details: {
-        selectedCapabilityIds,
         selectedToolIds,
-        capabilityId: selectedDefinition.id,
+        candidateToolIds,
+        toolId: selectedDefinition.id,
         policyDecision: decision.type,
         denialReason: decision.reason,
       },
     });
 
     return {
-      selectedCapabilityId,
       selectedToolId: undefined,
       pendingToolCall: undefined,
       pendingApproval: undefined,
@@ -846,7 +863,7 @@ export const policyNode = async (
     };
   }
 
-  if (hasApprovedInvocation(state.approvedInvocations, frozenToolCall)) {
+  if (hasApprovedInvocation(state.approvedInvocations, pendingToolCall)) {
     await emitStepNode(emit, {
       runId: state.runId,
       nodeId,
@@ -854,18 +871,18 @@ export const policyNode = async (
       nodeType: "reason",
       phase: "done",
       label: "审批策略",
-      summary: "该能力已获得本轮批准，继续执行",
+      summary: "该工具已获得本轮批准，继续执行",
       details: {
-        selectedCapabilityIds,
         selectedToolIds,
-        capabilityId: selectedDefinition.id,
+        candidateToolIds,
+        toolId: selectedDefinition.id,
         policyDecision: "approved",
+        toolCallSource: pendingToolCall.source,
       },
     });
     return {
-      selectedCapabilityId,
       selectedToolId: selectedDefinition.id,
-      pendingToolCall: frozenToolCall,
+      pendingToolCall,
     };
   }
 
@@ -883,21 +900,21 @@ export const policyNode = async (
     nodeType: "reason",
     phase: "done",
     label: "审批策略",
-    summary: "已命中需要审批的能力",
-    details: {
-      selectedCapabilityIds,
-      selectedToolIds,
-      capabilityId: selectedDefinition.id,
-      policyDecision: decision.type,
-      approvalReason: decision.reason,
-    },
-  });
+      summary: "已命中需要审批的工具",
+      details: {
+        selectedToolIds,
+        candidateToolIds,
+        toolId: selectedDefinition.id,
+        policyDecision: decision.type,
+        approvalReason: decision.reason,
+        toolCallSource: pendingToolCall.source,
+      },
+    });
 
   return {
     pendingApproval,
-    selectedCapabilityId,
     selectedToolId: selectedDefinition.id,
-    pendingToolCall: frozenToolCall,
+    pendingToolCall,
   };
 };
 
@@ -1116,7 +1133,44 @@ export const toolNode = async (
     return {
       observations: [...(state.observations ?? []), observation],
       evidence: appendObservationEvidence(state, observation),
-      selectedCapabilityId: state.selectedCapabilityId,
+      selectedToolId: undefined,
+      pendingToolCall: undefined,
+      errorMessage,
+      blockedReason: errorMessage,
+      errorSourceNodeId: "agent-tool",
+      continueIteration: false,
+      postToolReviewPending: false,
+    };
+  }
+
+  if (state.selectedToolId !== pendingToolCall.toolId) {
+    const errorMessage = `Selected tool id mismatch. selectedToolId=${state.selectedToolId ?? "undefined"} pendingToolCall.toolId=${pendingToolCall.toolId}`;
+    const observation = createObservation({
+      runId: state.runId,
+      stepId: "tool",
+      status: "failed",
+      facts: ["Tool execution was blocked because the selected tool drifted from the frozen tool call."],
+      errorMessage,
+    });
+
+    await emitStepNode(emit, {
+      runId: state.runId,
+      nodeId: "agent-tool",
+      nodeType: "tool",
+      phase: "error",
+      label: "工具选择",
+      summary: "工具选择与冻结调用不一致，已阻断执行",
+      details: {
+        selectedToolId: state.selectedToolId ?? null,
+        pendingToolCallToolId: pendingToolCall.toolId,
+        toolCallSource: pendingToolCall.source,
+        errorMessage,
+      },
+    });
+
+    return {
+      observations: [...(state.observations ?? []), observation],
+      evidence: appendObservationEvidence(state, observation),
       selectedToolId: undefined,
       pendingToolCall: undefined,
       errorMessage,
@@ -1193,7 +1247,6 @@ export const toolNode = async (
 
     return {
       pendingApproval: approval,
-      selectedCapabilityId: state.selectedCapabilityId,
       selectedToolId: undefined,
       pendingToolCall: undefined,
       lastToolExecution: executionRecord,
@@ -1255,7 +1308,6 @@ export const toolNode = async (
         },
         executionRecord,
       ),
-      selectedCapabilityId: state.selectedCapabilityId,
       selectedToolId: undefined,
       pendingToolCall: undefined,
       lastToolExecution: executionRecord,
@@ -1306,7 +1358,6 @@ export const toolNode = async (
       },
       executionRecord,
     ),
-    selectedCapabilityId: state.selectedCapabilityId,
     selectedToolId: undefined,
     pendingToolCall: undefined,
     lastToolExecution: executionRecord,
@@ -1346,7 +1397,7 @@ export const routeStepNode = async (
   const canContinue = remainingReviewBudget > 0;
 
   let continueIteration = false;
-  let reviewDecision: "capability" | "generate" = "generate";
+  let reviewDecision: "tool" | "generate" = "generate";
   let decisionReason =
     "No accumulated evidence requires another planning pass, so the agent will generate a final answer.";
 
@@ -1362,7 +1413,7 @@ export const routeStepNode = async (
       (explicitReadTarget || !wantsDirectoryOverview)
     ) {
       continueIteration = true;
-      reviewDecision = "capability";
+      reviewDecision = "tool";
       decisionReason =
         "The latest tool only discovered workspace targets; the original question still asks for file content, so the agent should plan one more tool step.";
     } else {
@@ -1376,7 +1427,7 @@ export const routeStepNode = async (
     queryMentionsWorkspace(question)
   ) {
     continueIteration = true;
-    reviewDecision = "capability";
+    reviewDecision = "tool";
     decisionReason =
       "Knowledge retrieval produced evidence and the question still mentions workspace content, so the agent should re-check whether a workspace tool is now warranted.";
   } else if (latestRetrieval && latestRetrieval.chunkCount > 0) {

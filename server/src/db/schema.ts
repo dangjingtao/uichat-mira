@@ -805,7 +805,6 @@ export const agentRuns = sqliteTable(
     pendingApprovalJson: text("pending_approval_json"),
     approvedInvocationsJson: text("approved_invocations_json").notNull().default("[]"),
     contextBudgetJson: text("context_budget_json"),
-    selectedCapabilityId: text("selected_capability_id"),
     selectedToolId: text("selected_tool_id"),
     pendingToolCallJson: text("pending_tool_call_json"),
     lastToolExecutionJson: text("last_tool_execution_json"),

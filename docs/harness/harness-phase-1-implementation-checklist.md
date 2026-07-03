@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: runtime
-Last verified: 2026-06-28
+Last verified: 2026-07-03
 Layer: wiki
 Module: Harness
 Feature: Phase1Implementation
@@ -37,6 +37,11 @@ Doc Type: checklist
 - [x] 把“工具暴露策略”从 `chat / agent / route` 的散落逻辑收口为 Harness 内部策略子域
 - [x] 为工具暴露策略补单测
 - [x] 明确内置 tool 与外部 MCP projected tool 的可见面边界
+- [x] 增加 `resolveHarnessToolCandidatesForTurn(...)` 候选工具暴露 API
+- [x] 明确 `CapabilityMatch / ToolExposure / Invocation` 三层命名契约
+- [x] 明确 `preferredToolId` 只是 hint，不是执行选择
+- [x] 明确 Harness 对 Agent 只上抛工具候选与工具元信息，不再上抛可执行 capability 状态
+- [x] 删除外层 route 级越界 `web_search` 预取
 - [ ] 补一份 Harness runtime 真实模块图
 
 ## B. Sandbox 模块 v0.5

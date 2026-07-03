@@ -4,8 +4,9 @@ import type { RetrievedChunk } from "@/services/rag-nodes";
 import type { ContextBudgetAudit } from "@/services/context-budget/index.js";
 import type {
   AgentIntentEmbeddingConfig,
-  CapabilityIntentResult,
+  ToolIntentResult,
 } from "./intent/index.js";
+import type { McpToolDefinition } from "@/mcp/core/definitions.js";
 
 export type AgentRunStatus =
   | "queued"
@@ -83,12 +84,40 @@ export interface AgentApprovalRequest {
   createdAt: string;
 }
 
-export interface AgentToolCallRequest {
+export interface AgentToolMeta {
+  toolId: string;
+  title: string;
+  description: string;
+  inputSchema?: McpToolDefinition["inputSchema"];
+  domain?: McpToolDefinition["domain"];
+  source?: McpToolDefinition["source"];
+  tags?: string[];
+  capabilities?: McpToolDefinition["capabilities"];
+}
+
+export interface PendingToolCall {
+  id: string;
+  toolId: string;
+  args: Record<string, unknown>;
+  reason?: string;
+  inputHash: string;
+  source: "planner";
+  status: "frozen";
+  toolMeta?: AgentToolMeta;
+  createdAt: string;
+}
+
+export interface LegacyAgentToolCallRequest {
   toolId: string;
   args: Record<string, unknown>;
   inputHash: string;
+  source: "planner_selection" | "llm_tool_call";
   createdAt: string;
 }
+
+export type AgentToolCallRequest =
+  | PendingToolCall
+  | LegacyAgentToolCallRequest;
 
 export interface AgentApprovedInvocation {
   toolId: string;
@@ -129,6 +158,37 @@ export interface AgentEvidencePayload {
   retrievals: AgentRetrievalEvidence[];
 }
 
+export type AgentNextAction =
+  | {
+      type: "answer";
+      reason: string;
+    }
+  | {
+      type: "retrieve";
+      query: string;
+      reason: string;
+    }
+  | {
+      type: "use_tool";
+      toolId: string;
+      args: Record<string, unknown>;
+      reason: string;
+    }
+  | {
+      type: "ask_user";
+      question: string;
+      reason: string;
+    }
+  | {
+      type: "error";
+      reason: string;
+    };
+
+export interface AgentToolExposureState {
+  exposedTools: string[];
+  toolMeta: AgentToolMeta[];
+}
+
 export interface AgentRun {
   id: string;
   threadId: string;
@@ -144,7 +204,6 @@ export interface AgentRun {
   pendingApproval?: AgentApprovalRequest;
   approvedInvocations?: AgentApprovedInvocation[];
   contextBudget?: ContextBudgetAudit;
-  selectedCapabilityId?: string;
   selectedToolId?: string;
   pendingToolCall?: AgentToolCallRequest;
   lastToolExecution?: AgentToolExecutionResult;
@@ -209,7 +268,6 @@ export interface AgentGraphInput {
   knowledgeBaseId?: string | null;
   intentConfig?: AgentIntentEmbeddingConfig;
   approvedInvocations?: AgentApprovedInvocation[];
-  selectedCapabilityId?: string;
   selectedToolId?: string;
   pendingToolCall?: AgentToolCallRequest;
   maxIterations?: number;
@@ -225,9 +283,8 @@ export interface AgentGraphOutput {
   observations: AgentObservation[];
   evidence: AgentEvidencePayload;
   retrievedChunks: RetrievedChunk[];
-  capabilityIntent?: CapabilityIntentResult;
+  toolIntent?: ToolIntentResult;
   pendingApproval?: AgentApprovalRequest;
-  selectedCapabilityId?: string;
   selectedToolId?: string;
   pendingToolCall?: AgentToolCallRequest;
   lastToolExecution?: AgentToolExecutionResult;

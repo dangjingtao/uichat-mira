@@ -59,7 +59,6 @@ const rowToRun = (row: AgentRunRow): AgentRun => ({
     [],
   ),
   contextBudget: parseJson(row.contextBudgetJson, undefined),
-  selectedCapabilityId: row.selectedCapabilityId ?? undefined,
   selectedToolId: row.selectedToolId ?? undefined,
   pendingToolCall: parseJson(row.pendingToolCallJson, undefined),
   lastToolExecution: parseJson(row.lastToolExecutionJson, undefined),
@@ -101,9 +100,6 @@ const toPatch = (
         : patch.contextBudget === null
           ? null
           : serializeJson(patch.contextBudget);
-  }
-  if (patch.selectedCapabilityId !== undefined) {
-    next.selectedCapabilityId = patch.selectedCapabilityId;
   }
   if (patch.selectedToolId !== undefined) {
     next.selectedToolId = patch.selectedToolId;
@@ -158,7 +154,6 @@ const createPersistedRun = (run: AgentRun) => {
       pendingApprovalJson: null,
       approvedInvocationsJson: serializeJson([]),
       contextBudgetJson: null,
-      selectedCapabilityId: null,
       selectedToolId: null,
       pendingToolCallJson: null,
       lastToolExecutionJson: null,

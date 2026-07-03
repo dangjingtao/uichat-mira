@@ -1,7 +1,8 @@
-import { resolveHarnessCapabilityDiagnostics } from "@/mcp/harness/capability-diagnostics.js";
+import { resolveHarnessToolCandidatesForTurn } from "@/mcp/harness/tool-candidates.js";
 import type {
   AgentIntentEmbeddingConfig,
-  CapabilityIntentResult,
+  ToolIntentCandidate,
+  ToolIntentResult,
 } from "./types.js";
 
 export const cosineSimilarity = (left: number[], right: number[]) => {
@@ -20,25 +21,33 @@ export const cosineSimilarity = (left: number[], right: number[]) => {
   return dotProduct / (leftMagnitude * rightMagnitude);
 };
 
-export const matchCapabilitiesByEmbedding = async (input: {
+export const matchToolCandidatesByEmbedding = async (input: {
   query: string;
   config?: AgentIntentEmbeddingConfig;
-}): Promise<CapabilityIntentResult> => {
-  const diagnostics = await resolveHarnessCapabilityDiagnostics({
+}): Promise<ToolIntentResult> => {
+  const candidateResolution = await resolveHarnessToolCandidatesForTurn({
     query: input.query,
     source: "agent_intent",
     topK: input.config?.topK,
     minScore: input.config?.minScore,
-    selectedTopK: input.config?.selectedTopK,
-    selectedMinScore: input.config?.selectedMinScore,
   });
+  const topK = Math.max(1, input.config?.topK ?? 10);
+  const topCandidates: ToolIntentCandidate[] = (candidateResolution.toolCandidates ?? [])
+    .slice(0, topK);
 
   return {
-    query: diagnostics.query,
-    topCandidates: diagnostics.candidates,
-    selectedCapabilityIds: diagnostics.selectedCapabilityIds,
+    query: input.query,
+    topCandidates,
+    toolCandidates: candidateResolution.toolCandidates ?? [],
+    toolExposure: candidateResolution.toolExposure,
     selectedToolIds: [],
-    exposureReasons: diagnostics.exposureReasons,
-    retrievalModel: diagnostics.retrievalModel,
+    candidateToolIds: [],
+    exposureReasons: candidateResolution.toolExposure.reason,
+    ...(candidateResolution.retrievalModel
+      ? { retrievalModel: candidateResolution.retrievalModel }
+      : {}),
+    ...(candidateResolution.rerankModel
+      ? { rerankModel: candidateResolution.rerankModel }
+      : {}),
   };
 };

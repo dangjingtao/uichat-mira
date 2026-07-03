@@ -102,7 +102,7 @@ describe("UChatSidebarView", () => {
 
     expect(screen.getByText("Workspaces")).toBeInTheDocument();
     expect(screen.getByText("Project Alpha")).toBeInTheDocument();
-    expect(screen.getByText("Thread A")).toBeInTheDocument();
+    expect(screen.getByText("Thread ...")).toBeInTheDocument();
 
     const workspaceHeader = screen.getByRole("button", { name: "Project Alpha" }).closest(".group");
     const workspaceMoreButtons = workspaceHeader?.querySelectorAll('button[aria-label="More"]');
@@ -141,17 +141,57 @@ describe("UChatSidebarView", () => {
       </I18nextProvider>,
     );
 
-    const threadRow = screen.getByRole("button", { name: "Thread A" }).closest(".group");
+    const threadRow = screen.getByRole("button", { name: "Thread ..." }).closest(".group");
     const historyMoreButton = threadRow?.querySelector('button[aria-label="More"]');
     expect(historyMoreButton).toBeInTheDocument();
 
     await user.click(historyMoreButton as HTMLButtonElement);
-    await user.click(screen.getByRole("button", { name: "Archive" }));
+    await user.click(screen.getByRole("menuitem", { name: "Archive" }));
     expect(onArchiveThread).toHaveBeenCalledWith("thread-1");
 
     await user.click(historyMoreButton as HTMLButtonElement);
-    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete" }));
     expect(onDeleteThread).toHaveBeenCalledWith("thread-1");
+  });
+
+  it("truncates thread titles to seven characters plus ellipsis in every section", () => {
+    render(
+      <I18nextProvider i18n={i18n}>
+        <UChatSidebarView
+          threads={[
+            {
+              id: "history-thread",
+              title: "删除 `222.txt` 文件",
+              updatedAt: "2026-01-02T00:00:00.000Z",
+            },
+          ]}
+          activeThreadId={null}
+          threadListStatus="ready"
+          capabilities={{}}
+          workspaceGroups={[
+            {
+              id: "workspace-1",
+              name: "Project Alpha",
+              threads: [
+                {
+                  id: "workspace-thread",
+                  title: "删除 `222.txt` 文件",
+                  updatedAt: "2026-01-01T00:00:00.000Z",
+                },
+              ],
+            },
+          ]}
+          onCreateThread={() => {}}
+          onCreateWorkspace={() => {}}
+          onSelectThread={() => {}}
+          onArchiveThread={() => {}}
+          onDeleteThread={() => {}}
+        />
+      </I18nextProvider>,
+    );
+
+    expect(screen.getAllByText("删除 `222...")).toHaveLength(2);
+    expect(screen.queryByText("删除 `222.txt` 文件")).toBeNull();
   });
 
   it("opens workspace creation directly from the workspace header plus button", async () => {
@@ -234,7 +274,7 @@ describe("UChatSidebarView", () => {
     );
 
     expect(screen.getByText("History Threads")).toBeInTheDocument();
-    expect(screen.getByText("Thread A")).toBeInTheDocument();
+    expect(screen.getByText("Thread ...")).toBeInTheDocument();
 
     const headerButton = screen.getByRole("button", { name: /History Threads/i });
     const label = screen.getByText("History Threads");
@@ -272,7 +312,7 @@ describe("UChatSidebarView", () => {
     const headerButton = screen.getByRole("button", { name: /History Threads/i });
     await user.click(headerButton);
 
-    const threadButton = screen.getByRole("button", { name: "Thread A" });
+    const threadButton = screen.getByRole("button", { name: "Thread ..." });
     const collapseContainer = threadButton.closest(".grid");
     expect(collapseContainer?.className).toContain("grid-rows-[0fr]");
     expect(collapseContainer?.className).toContain("opacity-0");
@@ -333,11 +373,11 @@ describe("UChatSidebarView", () => {
       </I18nextProvider>,
     );
 
-    expect(screen.getByText("Thread A")).toBeInTheDocument();
+    expect(screen.getByText("Thread ...")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Project Alpha" }));
 
-    const threadButton = screen.getByRole("button", { name: "Thread A" });
+    const threadButton = screen.getByRole("button", { name: "Thread ..." });
     const collapseContainer = threadButton.closest(".grid");
     expect(collapseContainer?.className).toContain("grid-rows-[0fr]");
     expect(collapseContainer?.className).toContain("opacity-0");
@@ -399,7 +439,7 @@ describe("UChatSidebarView", () => {
       </I18nextProvider>,
     );
 
-    const threadButton = screen.getByRole("button", { name: "Thread A" });
+    const threadButton = screen.getByRole("button", { name: "Thread ..." });
     const threadRow = threadButton.closest(".group");
 
     expect(threadRow?.className).toContain("bg-[rgb(var(--color-primary)/0.04)]");
@@ -431,7 +471,7 @@ describe("UChatSidebarView", () => {
       </I18nextProvider>,
     );
 
-    const threadButton = screen.getByRole("button", { name: "Thread A" });
+    const threadButton = screen.getByRole("button", { name: "Thread ..." });
     const threadRow = threadButton.closest(".group");
 
     expect(threadRow?.className).toContain("bg-[rgb(var(--color-primary)/0.04)]");

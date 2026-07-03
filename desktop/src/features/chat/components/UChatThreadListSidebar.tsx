@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getDesktopRuntime } from "@/shared/platform/desktopRuntime";
-import { useChatRuntime, useChatRuntimeSelector } from "@/features/chat/core/runtime";
+import {
+  useChatRuntime,
+  useChatRuntimeSelector,
+  useChatThreadDraftState,
+} from "@/features/chat/core/runtime";
 import type { ChatSidebarEntry, ChatThreadSummary } from "@/shared/uchat/core";
 import { UChatSidebarView } from "@/shared/uchat/ui";
 import { Modal, TextInput } from "@/shared/ui";
@@ -29,6 +33,7 @@ const sortByUpdatedAtDesc = (left: { updatedAt: string }, right: { updatedAt: st
 export function UChatThreadListSidebar() {
   const { t } = useTranslation();
   const runtime = useChatRuntime();
+  const { resetDraft } = useChatThreadDraftState();
   const threads = useChatRuntimeSelector((state) => state.threads);
   const activeThreadId = useChatRuntimeSelector((state) => state.activeThreadId);
   const threadListStatus = useChatRuntimeSelector((state) => state.threadListStatus);
@@ -87,21 +92,28 @@ export function UChatThreadListSidebar() {
   );
 
   const handleCreateThread = () => {
+    resetDraft();
     runtime.enterWelcomeState();
     runtime.store.getState().resetComposer();
   };
 
   const handleSelectThread = async (threadId: string) => {
+    resetDraft();
     await runtime.selectThread(threadId);
   };
 
   const handleArchiveThread = async (threadId: string) => {
     if (!capabilities.archiveThread) return;
+    const wasActive = runtime.getState().activeThreadId === threadId;
     await runtime.archiveThread(threadId);
+    if (wasActive) {
+      runtime.store.getState().setActiveThreadId(null);
+    }
   };
 
   const handleDeleteThread = async (threadId: string) => {
     if (!capabilities.deleteThread) return;
+    const wasActive = runtime.getState().activeThreadId === threadId;
     Modal.confirm({
       title: t("chat.sidebar.threadDeleteTitle"),
       description: t("chat.sidebar.threadDeleteDescription"),
@@ -109,6 +121,9 @@ export function UChatThreadListSidebar() {
       tone: "danger",
       onConfirm: async () => {
         await runtime.deleteThread(threadId);
+        if (wasActive) {
+          runtime.store.getState().setActiveThreadId(null);
+        }
       },
     });
   };

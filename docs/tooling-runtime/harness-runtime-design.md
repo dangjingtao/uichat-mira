@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: runtime
-Last verified: 2026-06-26
+Last verified: 2026-07-03
 Layer: raw-source
 Module: Tool
 Feature: HarnessRuntime
@@ -152,6 +152,13 @@ Doc Type: design
 
 当前代码仍保留 `apiKey` / `baseUrl` 作为 invocation args 参与解析，这属于过渡实现，不是最终治理目标。
 
+补充真相：
+
+- 外层 route 级 `web_search` 预取已移除
+- `web_search` 不再由 chat / rag route 在进入主回答前直接执行
+- 是否暴露 `web_search`，应由 Harness 暴露治理决定
+- 是否真正调用 `web_search`，应由编排层或 Agent 层决定
+
 ## 设计目标
 
 运行时架构采用 harness 思维，但 capability contract 尽量保持 MCP / OpenAI tool calling 兼容。
@@ -264,7 +271,14 @@ tool id 也要分清：
 
 - Agent 不再直接面对原始 tool 洪水
 - 暴露治理、embedding 召回、rerank、风控评分都能以 capability 为单位进行
-- 真正进入执行阶段时，再落到具体 `preferredToolId`
+- 真正进入执行阶段时，再落到具体 tool id
+
+但这里有一个硬边界要明确：
+
+- `preferredToolId` 只是 hint，不是执行决定
+- `preferredToolId` 不得直接生成 pending tool call
+- `preferredToolId` 不得直接等于 executed tool id
+- capability profile id 不得直接传给 invocation 层
 
 建议结构：
 
@@ -281,6 +295,92 @@ type HarnessCapabilityProfile = {
 };
 ```
 
+### 2.2 CapabilityMatch / ToolExposure / Invocation
+
+为避免继续把语义匹配、候选暴露和真实执行混在一起，当前建议统一按三层命名：
+
+```ts
+type HarnessCapabilityMatch = {
+  capabilityId: string;
+  score: number;
+  reason?: string;
+  candidateToolIds: string[];
+  preferredToolId?: string; // hint only
+};
+
+type HarnessToolExposure = {
+  exposedToolIds: string[];
+  exposedDefinitions: McpToolDefinition[];
+  reason: string[];
+};
+```
+
+三层含义必须固定：
+
+- `CapabilityMatch`
+  - Harness 内部语义匹配结果
+- `ToolExposure`
+  - 当前轮暴露给 LLM 的候选工具
+- `Invocation`
+  - 最终执行的具体工具调用
+
+补一条实现级硬规则：
+
+- `CapabilityMatch` 不能直接生成 `pendingToolCall`
+- 只有经过暴露过滤和本地守卫后得到的 `invocationCandidateToolIds`，才允许进入 policy / invocation
+- `policyNode` 只能从明确 `toolId` 候选里挑执行对象，不能把 capability id 当作执行对象
+
+当前代码已经新增：
+
+- `resolveHarnessToolCandidatesForTurn(...)`
+
+它负责：
+
+- 从 registry 和 capability profile 中筛出本轮候选能力
+- 在内部完成 capability 侧匹配和筛选
+- 对外生成 tool-level candidate surface
+- 生成 exposed tool surface
+
+它不负责：
+
+- 选择最终执行的 `toolId`
+- 生成 args
+- 触发审批
+- 执行工具
+
+### 2.3 Agent 编排层边界更新
+
+截至 `2026-07-03`，AgentGraph 已不再把 capability 当作运行态协议字段。
+
+当前边界是：
+
+- Harness 内部：
+  - 可以保留 capability profile
+  - 可以保留 capability match
+  - 可以用 capability 做 rerank、风险解释、工具暴露治理
+- Agent 外部协议：
+  - 只接收 `toolCandidates`
+  - 只维护 `toolIntent`
+  - 只选择 `selectedToolIds`
+  - 只冻结 `pendingToolCall.toolId`
+
+这条边界对应的直接约束是：
+
+- AgentGraph 不再持有 `selectedCapabilityId`
+- Agent 持久化层不再保存 `selectedCapabilityId`
+- `toolSelectNode` 之后进入 `toolGuardNode` / `policyNode` / `toolNode` 的都是明确 `toolId`
+- capability 不再作为 Agent 审批、恢复执行、trace 回看时的主状态字段
+
+这个变化的目的，是避免 Agent 继续维护一条和真实执行对象不一致的状态链。
+
+如果后续还需要展示“为什么暴露这些工具”，应该通过：
+
+- Harness 诊断信息
+- tool candidate 的 action profile / reason
+- 只读解释字段
+
+来表达，而不是把 capability 重新塞回 Agent 主状态。
+
 ### 3. Invocation 生命周期
 
 harness 拥有完整执行生命周期。
@@ -295,6 +395,13 @@ harness 拥有完整执行生命周期。
 - `invocation:finish`
 
 这套生命周期必须 capability-agnostic。
+
+Invocation 层还要维持一个硬边界：
+
+- `executeHarnessInvocation(...)` 只接受明确 `toolId`
+- 它不接受 capability profile id
+- `workspace_lookup` 这类语义 capability 不能直接被执行
+- 除非它被正式注册成一个真实 tool
 
 同时 harness 应继续当“长生命周期执行观察者”，统一跟踪：
 

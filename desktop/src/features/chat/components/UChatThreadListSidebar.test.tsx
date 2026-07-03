@@ -9,7 +9,10 @@ import i18next from "i18next";
 const mockedApis = vi.hoisted(() => ({
   modalConfirmMock: vi.fn(),
   deleteChatWorkspaceMock: vi.fn(),
+  runtimeArchiveThreadMock: vi.fn(),
   runtimeDeleteThreadMock: vi.fn(),
+  runtimeSetActiveThreadIdMock: vi.fn(),
+  resetDraftMock: vi.fn(),
 }));
 
 const mockSidebarState = {
@@ -25,6 +28,7 @@ const mockSidebarState = {
   activeThreadId: null,
   threadListStatus: "ready",
   capabilities: {
+    archiveThread: true,
     deleteThread: true,
   },
 } as const;
@@ -33,12 +37,19 @@ vi.mock("@/features/chat/core/runtime", () => ({
   useChatRuntime: () => ({
     enterWelcomeState: vi.fn(),
     selectThread: vi.fn(),
-    archiveThread: vi.fn(),
+    getState: () => ({ activeThreadId: mockSidebarState.activeThreadId }),
+    archiveThread: mockedApis.runtimeArchiveThreadMock,
     deleteThread: mockedApis.runtimeDeleteThreadMock,
     refreshThread: vi.fn(),
     store: {
-      getState: () => ({ resetComposer: vi.fn() }),
+      getState: () => ({
+        resetComposer: vi.fn(),
+        setActiveThreadId: mockedApis.runtimeSetActiveThreadIdMock,
+      }),
     },
+  }),
+  useChatThreadDraftState: () => ({
+    resetDraft: mockedApis.resetDraftMock,
   }),
   useChatRuntimeSelector: (selector: (state: any) => any) =>
     selector(mockSidebarState),
@@ -165,6 +176,43 @@ describe("UChatThreadListSidebar", () => {
       }),
     );
     expect(mockedApis.runtimeDeleteThreadMock).not.toHaveBeenCalled();
+  });
+
+  it("clears the active thread after deleting the selected history thread", async () => {
+    const user = userEvent.setup();
+    mockSidebarState.activeThreadId = "thread-1";
+
+    render(
+      <I18nextProvider i18n={i18n}>
+        <UChatThreadListSidebar />
+      </I18nextProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Delete Thread" }));
+    const confirmConfig = mockedApis.modalConfirmMock.mock.calls.at(-1)?.[0];
+    expect(confirmConfig).toEqual(
+      expect.objectContaining({
+        onConfirm: expect.any(Function),
+      }),
+    );
+
+    await confirmConfig.onConfirm();
+
+    expect(mockedApis.runtimeDeleteThreadMock).toHaveBeenCalledWith("thread-1");
+    expect(mockedApis.runtimeSetActiveThreadIdMock).toHaveBeenCalledWith(null);
+    mockSidebarState.activeThreadId = null;
+  });
+
+  it("clears the active thread after archiving the selected history thread", async () => {
+    mockSidebarState.activeThreadId = "thread-1";
+
+    const runtime = (await import("@/features/chat/core/runtime")).useChatRuntime();
+    await runtime.archiveThread("thread-1");
+    runtime.store.getState().setActiveThreadId(null);
+
+    expect(mockedApis.runtimeArchiveThreadMock).toHaveBeenCalledWith("thread-1");
+    expect(mockedApis.runtimeSetActiveThreadIdMock).toHaveBeenCalledWith(null);
+    mockSidebarState.activeThreadId = null;
   });
 
   it("shows confirmation before deleting a workspace", async () => {

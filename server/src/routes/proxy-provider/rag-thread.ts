@@ -27,7 +27,6 @@ import {
 import { createStaticAssistantStream } from "./stream-protocol.js";
 import { getNormalizedMessageText } from "@/services/provider-proxy.message-protocol.js";
 import { Readable } from "node:stream";
-import { resolveThreadWebSearchContext } from "@/services/shared-nodes/thread-request-context-web-search.resolver.js";
 
 export const toPersistedRagSources = (sources: RetrievedChunk[]) =>
   sources.map((source) => ({
@@ -271,23 +270,12 @@ export const createRagAssistantStream = (input: RagAssistantStreamInput) => {
           }
         }
 
-        const prefetch = await resolveThreadWebSearchContext({
-          question: ragInput.question,
-          threadId,
-          requestContextMessages,
-          log,
-        });
-
-        for (const chunk of prefetch.preludeChunks) {
-          yield chunk;
-        }
-
         const ragStream = ragPipeline.assistantStream(
           {
             question: ragInput.question,
             conversationHistory: ragInput.conversationHistory,
             knowledgeBaseId: currentKnowledgeBase.id,
-            requestContextMessages: prefetch.requestContextMessages,
+            requestContextMessages,
           },
           {
             messageId: assistantMessageId,

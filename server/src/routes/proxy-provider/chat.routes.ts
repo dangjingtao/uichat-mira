@@ -8,7 +8,6 @@ import {
 } from "@/services/role.service.js";
 import { threadRequestContextNode } from "@/services/shared-nodes/thread-request-context.node.js";
 import type { RequestContextExecutionNode } from "@/services/shared-nodes/thread-request-context.types.js";
-import { resolveThreadWebSearchContext } from "@/services/shared-nodes/thread-request-context-web-search.resolver.js";
 import { assistantExecutionNodeChunk } from "@/services/chat-stream-events.js";
 import {
   type ProxyProviderParam,
@@ -461,23 +460,8 @@ export const registerProxyProviderChatRoutes = async (
           });
         }
 
-        const latestQuestion = messages.at(-1)?.content ?? "";
-        const webSearchPrefetch = agentEnabled
-          ? {
-              requestContextMessages,
-              preludeChunks: [],
-            }
-          : await resolveThreadWebSearchContext({
-              question: latestQuestion,
-              threadId: typeof threadId === "string" ? threadId : "",
-              requestContextMessages,
-              requestContextPreludeChunks: requestContextContext.executionNodes.map(
-                (node) => toAssistantExecutionNodePrelude(node),
-              ),
-              log: app.log,
-            });
         const defaultChatMessages = [
-          ...(webSearchPrefetch.requestContextMessages ?? requestContextMessages),
+          ...requestContextMessages,
           ...messages,
         ];
 
@@ -506,12 +490,11 @@ export const registerProxyProviderChatRoutes = async (
             userMessageId: request.body.messageId,
             messages: defaultChatMessages,
             agentMessages: messages,
-            requestContextMessages:
-              webSearchPrefetch.requestContextMessages ?? requestContextMessages,
+            requestContextMessages,
             params: roleLlmParams,
             agentEnabled,
             knowledgeBaseId: thread?.knowledgeBaseId ?? null,
-            preludeChunks: webSearchPrefetch.preludeChunks,
+            preludeChunks: [],
           });
         }
       }

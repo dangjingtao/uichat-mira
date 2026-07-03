@@ -1,0 +1,222 @@
+import crypto from "node:crypto";
+import { validateInvocationArgs } from "@/mcp/core/schema.js";
+import { toAgentExecutionNode } from "./trace.js";
+import type { EmitAgentExecutionNode, AgentGraphState } from "./nodes.js";
+import type {
+  AgentNextAction,
+  AgentToolMeta,
+  PendingToolCall,
+} from "./types.js";
+
+const nowIso = () => new Date().toISOString();
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+};
+
+const sortJson = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map(sortJson);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, nestedValue]) => [key, sortJson(nestedValue)]),
+    );
+  }
+
+  return value;
+};
+
+const createPendingToolInputHash = (input: {
+  toolId: string;
+  args: Record<string, unknown>;
+  source: PendingToolCall["source"];
+}) =>
+  crypto
+    .createHash("sha256")
+    .update(JSON.stringify(sortJson(input)))
+    .digest("hex");
+
+const emitStepNode = async (
+  emit: EmitAgentExecutionNode | undefined,
+  input: Parameters<typeof toAgentExecutionNode>[0],
+) => {
+  await emit?.(toAgentExecutionNode(input));
+};
+
+const emitNormalizeFailure = async (
+  state: AgentGraphState,
+  emit: EmitAgentExecutionNode | undefined,
+  input: {
+    reason: string;
+    toolId?: string | null;
+    availableToolCount: number;
+  },
+) => {
+  await emitStepNode(emit, {
+    runId: state.runId,
+    nodeId: "agent-tool-call-normalize",
+    nodeType: "tool",
+    phase: "error",
+    label: "工具调用规范化失败",
+    summary: input.reason,
+    details: {
+      reason: input.reason,
+      toolId: input.toolId ?? null,
+      availableToolCount: input.availableToolCount,
+    },
+  });
+};
+
+const findToolMeta = (
+  toolMeta: AgentToolMeta[] | undefined,
+  toolId: string,
+) => toolMeta?.find((item) => item.toolId === toolId);
+
+const getUseToolAction = (
+  nextAction: AgentNextAction | undefined,
+): Extract<AgentNextAction, { type: "use_tool" }> | null => {
+  if (!nextAction) {
+    return null;
+  }
+
+  return nextAction.type === "use_tool" ? nextAction : null;
+};
+
+const failNormalize = async (
+  state: AgentGraphState,
+  emit: EmitAgentExecutionNode | undefined,
+  input: {
+    reason: string;
+    toolId?: string | null;
+  },
+): Promise<Partial<AgentGraphState>> => {
+  await emitNormalizeFailure(state, emit, {
+    reason: input.reason,
+    toolId: input.toolId,
+    availableToolCount: state.toolExposure?.exposedTools.length ?? 0,
+  });
+
+  return {
+    pendingToolCall: undefined,
+    errorMessage: input.reason,
+    errorSourceNodeId: "agent-tool-call-normalize",
+  };
+};
+
+export const toolCallNormalizeNode = async (
+  state: AgentGraphState,
+  emit?: EmitAgentExecutionNode,
+): Promise<Partial<AgentGraphState>> => {
+  const nextAction = state.nextAction;
+  const useToolAction = getUseToolAction(nextAction);
+
+  if (!nextAction) {
+    return failNormalize(state, emit, {
+      reason: "Missing nextAction; cannot normalize tool call.",
+    });
+  }
+
+  if (!useToolAction) {
+    return {
+      pendingToolCall: undefined,
+    };
+  }
+
+  if (typeof useToolAction.toolId !== "string" || !useToolAction.toolId.trim()) {
+    return failNormalize(state, emit, {
+      reason: "Planner use_tool output must include a non-empty toolId.",
+      toolId: typeof useToolAction.toolId === "string" ? useToolAction.toolId : null,
+    });
+  }
+
+  if (!isPlainObject(useToolAction.args)) {
+    return failNormalize(state, emit, {
+      reason: "Planner use_tool args must be a plain object.",
+      toolId: useToolAction.toolId,
+    });
+  }
+
+  const normalizedToolId = useToolAction.toolId.trim();
+  const exposedTools = state.toolExposure?.exposedTools ?? [];
+  if (!exposedTools.includes(normalizedToolId)) {
+    return failNormalize(state, emit, {
+      reason: `Planner selected tool is not exposed: ${normalizedToolId}`,
+      toolId: normalizedToolId,
+    });
+  }
+
+  const toolMeta = findToolMeta(state.toolExposure?.toolMeta, normalizedToolId);
+  if (!toolMeta) {
+    return failNormalize(state, emit, {
+      reason: `Planner selected tool is missing exposure metadata: ${normalizedToolId}`,
+      toolId: normalizedToolId,
+    });
+  }
+
+  if (!toolMeta.inputSchema) {
+    return failNormalize(state, emit, {
+      reason: `Planner selected tool is missing inputSchema: ${normalizedToolId}`,
+      toolId: normalizedToolId,
+    });
+  }
+
+  try {
+    validateInvocationArgs(useToolAction.args, toolMeta.inputSchema);
+  } catch (error) {
+    return failNormalize(state, emit, {
+      reason:
+        error instanceof Error
+          ? error.message
+          : `Planner tool args failed schema validation for ${normalizedToolId}.`,
+      toolId: normalizedToolId,
+    });
+  }
+
+  const pendingToolCall: PendingToolCall = {
+    id: crypto.randomUUID(),
+    toolId: normalizedToolId,
+    args: useToolAction.args,
+    source: "planner",
+    reason: useToolAction.reason,
+    inputHash: createPendingToolInputHash({
+      toolId: normalizedToolId,
+      args: useToolAction.args,
+      source: "planner",
+    }),
+    status: "frozen",
+    toolMeta,
+    createdAt: nowIso(),
+  };
+
+  await emitStepNode(emit, {
+    runId: state.runId,
+    nodeId: "agent-tool-call-normalize",
+    nodeType: "tool",
+    phase: "done",
+    label: "工具调用规范化",
+    summary: `已冻结 ${normalizedToolId} 调用参数`,
+    details: {
+      toolId: normalizedToolId,
+      source: "planner",
+      argKeys: Object.keys(useToolAction.args).sort(),
+      hasToolMeta: Boolean(toolMeta),
+      inputHash: pendingToolCall.inputHash,
+      status: "frozen",
+    },
+  });
+
+  return {
+    pendingToolCall,
+    errorMessage: undefined,
+    errorSourceNodeId: undefined,
+  };
+};

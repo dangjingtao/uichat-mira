@@ -1,16 +1,18 @@
 import type { AgentNodeState, EmitAgentExecutionNode } from "../nodes.js";
 import { listCapabilityDefinitions } from "@/mcp/harness/registry.js";
 import {
+  createPlannerPendingToolCall,
   emitStepNode,
   getIterativeNodeId,
   getLatestUserQuestion,
   getTraceAttemptMeta,
 } from "../nodes.js";
-import { matchCapabilitiesByEmbedding } from "./embedding-capability-matcher.js";
+import { matchToolCandidatesByEmbedding } from "./embedding-capability-matcher.js";
 import {
-  resolveSelectedToolIds,
+  resolveInvocationCandidateToolIds,
+  selectToolWithTaskModel,
 } from "./task-capability-selector.js";
-import type { CapabilityIntentResult } from "./types.js";
+import type { ToolIntentResult } from "./types.js";
 
 const DEFAULT_TOOL_GUARD_CANDIDATE_LIMIT = 10;
 const EXPLICIT_TARGET_READ_TOOLS = new Set(["read_open", "read", "read_slice"]);
@@ -87,79 +89,76 @@ const buildSelectionReviewNotes = (state: AgentNodeState) => {
 
 const applyToolGuard = (input: {
   query: string;
-  capabilityIntent: CapabilityIntentResult;
+  toolIntent: ToolIntentResult;
 }) => {
-  const topCandidates = input.capabilityIntent.topCandidates.slice(
+  const topCandidates = input.toolIntent.topCandidates.slice(
     0,
     DEFAULT_TOOL_GUARD_CANDIDATE_LIMIT,
   );
-  const allowedCapabilityIds = new Set(
-    topCandidates.map((candidate) => candidate.capabilityId),
+  const allowedToolIds = new Set(
+    topCandidates.map((candidate) => candidate.toolId),
   );
-  const selectedCapabilityIds = input.capabilityIntent.selectedCapabilityIds.filter(
-    (capabilityId) => allowedCapabilityIds.has(capabilityId),
+  const selectedToolIds = input.toolIntent.selectedToolIds.filter(
+    (toolId) => allowedToolIds.has(toolId),
   );
-  const selectedToolIds = resolveSelectedToolIds({
+  const candidateToolIds = resolveInvocationCandidateToolIds({
     query: input.query,
     topCandidates,
-    selectedCapabilityIds,
+    selectedToolIds,
   });
-  const selectedPairs = selectedCapabilityIds.map((capabilityId, index) => ({
-    capabilityId,
-    toolId: selectedToolIds[index],
+  const selectedPairs = selectedToolIds.map((toolId, index) => ({
+    selectedToolId: toolId,
+    candidateToolId: candidateToolIds[index],
   }));
   const registeredToolIds = new Set(
     listCapabilityDefinitions().map((definition) => definition.id),
   );
   const invalidSelectedToolIds = selectedPairs
-    .filter(({ toolId }) => !toolId || !registeredToolIds.has(toolId))
-    .map(({ toolId }) => toolId)
+    .filter(({ candidateToolId }) => !candidateToolId || !registeredToolIds.has(candidateToolId))
+    .map(({ candidateToolId }) => candidateToolId)
     .filter((toolId): toolId is string => Boolean(toolId));
   const targetlessReadToolIds = selectedPairs
     .filter(
-      ({ toolId }) =>
-        toolId &&
-        EXPLICIT_TARGET_READ_TOOLS.has(toolId) &&
+      ({ candidateToolId }) =>
+        candidateToolId &&
+        EXPLICIT_TARGET_READ_TOOLS.has(candidateToolId) &&
         !hasExplicitReadTarget(input.query),
     )
-    .map(({ toolId }) => toolId as string);
+    .map(({ candidateToolId }) => candidateToolId as string);
   const validSelectedPairs = selectedPairs.filter(
-    ({ toolId }) =>
-      Boolean(toolId) &&
-      registeredToolIds.has(toolId) &&
+    ({ candidateToolId }) =>
+      Boolean(candidateToolId) &&
+      registeredToolIds.has(candidateToolId) &&
       !(
-        toolId &&
-        EXPLICIT_TARGET_READ_TOOLS.has(toolId) &&
+        candidateToolId &&
+        EXPLICIT_TARGET_READ_TOOLS.has(candidateToolId) &&
         !hasExplicitReadTarget(input.query)
       ),
   );
-  const validSelectedCapabilityIds = validSelectedPairs.map(
-    ({ capabilityId }) => capabilityId,
+  const validSelectedToolIds = validSelectedPairs.map(({ selectedToolId }) => selectedToolId);
+  const validInvocationCandidateToolIds = validSelectedPairs.map(
+    ({ candidateToolId }) => candidateToolId as string,
   );
-  const validSelectedToolIds = validSelectedPairs.map(({ toolId }) => toolId as string);
 
   let decisionReason = "Accepted Harness-selected candidates and passed local guard checks.";
-  if (validSelectedCapabilityIds.length === 0) {
-    decisionReason =
-      "Harness candidate exposure did not yield a selected capability for this turn.";
+  if (validSelectedToolIds.length === 0) {
+    decisionReason = "Harness candidate exposure did not yield a selected tool for this turn.";
   } else if (invalidSelectedToolIds.length > 0) {
     decisionReason =
       "Dropped unregistered tools during local guard checks before invocation.";
   } else if (targetlessReadToolIds.length > 0) {
     decisionReason =
       "Dropped read_open/read selections because the query did not provide an explicit read target.";
-  } else if (
-    input.capabilityIntent.topCandidates.length > DEFAULT_TOOL_GUARD_CANDIDATE_LIMIT
-  ) {
+  } else if (input.toolIntent.topCandidates.length > DEFAULT_TOOL_GUARD_CANDIDATE_LIMIT) {
     decisionReason = `Accepted Harness-selected candidates and trimmed guard context to top ${DEFAULT_TOOL_GUARD_CANDIDATE_LIMIT}.`;
   }
 
   return {
-    resolvedCapabilityIntent: {
-      ...input.capabilityIntent,
+    resolvedToolIntent: {
+      ...input.toolIntent,
       topCandidates,
-      selectedCapabilityIds: validSelectedCapabilityIds,
       selectedToolIds: validSelectedToolIds,
+      candidateToolIds: validInvocationCandidateToolIds,
       decisionSource: "guard" as const,
       decisionReason,
     },
@@ -186,22 +185,35 @@ export const toolGuardNode = async (
     summary: "正在校验上游候选与本轮可调用工具",
   });
 
-  const capabilityIntent: CapabilityIntentResult = state.capabilityIntent ?? {
+  const toolIntent: ToolIntentResult = state.toolIntent ?? {
     query,
     topCandidates: [],
-    selectedCapabilityIds: [],
+    toolCandidates: [],
+    toolExposure: {
+      exposedToolIds: [],
+      exposedDefinitions: [],
+      reason: [],
+      blockedCapabilityIds: [],
+    },
     selectedToolIds: [],
+    candidateToolIds: [],
     decisionSource: "guard",
-    decisionReason: "No upstream capability candidates were provided to the local guard.",
+    decisionReason: "No upstream tool candidates were provided to the local guard.",
   };
   const {
-    resolvedCapabilityIntent,
+    resolvedToolIntent,
     invalidSelectedToolIds,
     targetlessReadToolIds,
   } = applyToolGuard({
     query,
-    capabilityIntent,
+    toolIntent,
   });
+  const pendingToolCall =
+    state.pendingToolCall &&
+    resolvedToolIntent.candidateToolIds.includes(state.pendingToolCall.toolId)
+      ? state.pendingToolCall
+      : undefined;
+  const selectedToolId = pendingToolCall?.toolId;
 
   await emitStepNode(emit, {
     runId: state.runId,
@@ -211,50 +223,50 @@ export const toolGuardNode = async (
     phase: "done",
     label: "调用前守卫",
     summary:
-      resolvedCapabilityIntent.selectedToolIds.length > 0
-        ? `已确认 ${resolvedCapabilityIntent.selectedToolIds.length} 个待调用工具`
-        : resolvedCapabilityIntent.topCandidates.length > 0
+      resolvedToolIntent.candidateToolIds.length > 0
+        ? `已确认 ${resolvedToolIntent.candidateToolIds.length} 个调用候选`
+        : resolvedToolIntent.topCandidates.length > 0
           ? `已完成候选守卫，当前未放行工具调用`
-          : "上游未提供可用候选能力",
+          : "上游未提供可用工具候选",
     details: {
       query,
-      selectedCapabilityIds: resolvedCapabilityIntent.selectedCapabilityIds,
-      selectedToolIds: resolvedCapabilityIntent.selectedToolIds,
+      selectedToolIds: resolvedToolIntent.selectedToolIds,
+      candidateToolIds: resolvedToolIntent.candidateToolIds,
       guardChecks: [
         "candidate-limit-top10",
-        "selected-capability-membership",
+        "selected-tool-membership",
         "registered-tool-membership",
         "explicit-read-target",
       ],
       invalidSelectedToolIds,
       targetlessReadToolIds,
-      selectedCandidates: resolvedCapabilityIntent.topCandidates
+      selectedCandidates: resolvedToolIntent.topCandidates
         .filter((candidate) =>
-          resolvedCapabilityIntent.selectedCapabilityIds.includes(candidate.capabilityId),
+          resolvedToolIntent.selectedToolIds.includes(candidate.toolId),
         )
         .map((candidate) => ({
-          capabilityId: candidate.capabilityId,
-          preferredToolId: candidate.preferredToolId,
-          supportingToolIds: candidate.supportingToolIds,
+          toolId: candidate.toolId,
           embeddingScore: candidate.embeddingScore,
           ruleScore: candidate.ruleScore,
           rerankScore: candidate.rerankScore ?? 0,
           finalScore: candidate.finalScore ?? candidate.score,
         })),
-      topCandidates: resolvedCapabilityIntent.topCandidates,
-      retrievalModel: resolvedCapabilityIntent.retrievalModel,
-      exposureReasons: resolvedCapabilityIntent.exposureReasons,
-      decisionSource: resolvedCapabilityIntent.decisionSource,
-      decisionReason: resolvedCapabilityIntent.decisionReason,
+      topCandidates: resolvedToolIntent.topCandidates,
+      retrievalModel: resolvedToolIntent.retrievalModel,
+      exposureReasons: resolvedToolIntent.exposureReasons,
+      decisionSource: resolvedToolIntent.decisionSource,
+      decisionReason: resolvedToolIntent.decisionReason,
     },
   });
 
   return {
-    capabilityIntent: resolvedCapabilityIntent,
+    toolIntent: resolvedToolIntent,
+    selectedToolId,
+    pendingToolCall,
   };
 };
 
-export const capabilitySelectNode = async (
+export const toolSelectNode = async (
   state: AgentNodeState,
   emit?: EmitAgentExecutionNode,
 ): Promise<Partial<AgentNodeState>> => {
@@ -264,8 +276,8 @@ export const capabilitySelectNode = async (
     reviewNotes.length > 0
       ? `${query}\n\nReview context:\n${reviewNotes.map((note) => `- ${note}`).join("\n")}`
       : query;
-  const nodeId = getIterativeNodeId("agent-capability-select", state);
-  const traceAttemptMeta = getTraceAttemptMeta("agent-capability-select", state);
+  const nodeId = getIterativeNodeId("agent-tool-select", state);
+  const traceAttemptMeta = getTraceAttemptMeta("agent-tool-select", state);
 
   await emitStepNode(emit, {
     runId: state.runId,
@@ -274,13 +286,45 @@ export const capabilitySelectNode = async (
     nodeType: "reason",
     phase: "start",
     label: "候选选择",
-    summary: "正在获取 Harness 候选并选择本轮能力",
+    summary: "正在获取 Harness 候选并选择本轮工具",
   });
 
-  const capabilityIntent = await matchCapabilitiesByEmbedding({
+  const toolIntent = await matchToolCandidatesByEmbedding({
     query: effectiveQuery,
     config: state.intentConfig,
   });
+  const taskSelection =
+    toolIntent.selectedToolIds.length > 0
+      ? {
+          selectedToolIds: toolIntent.selectedToolIds,
+          decisionSource: toolIntent.decisionSource ?? ("task-model" as const),
+          decisionReason: toolIntent.decisionReason ?? "Tool selection was already provided upstream.",
+        }
+      : await selectToolWithTaskModel({
+          query: effectiveQuery,
+          topCandidates: toolIntent.topCandidates,
+          messages: state.messages,
+        });
+  const candidateToolIds = resolveInvocationCandidateToolIds({
+    query,
+    topCandidates: toolIntent.topCandidates,
+    selectedToolIds: taskSelection.selectedToolIds,
+  });
+  const selectedToolId = candidateToolIds[0];
+  const pendingToolCall = selectedToolId
+    ? createPlannerPendingToolCall({
+        toolId: selectedToolId,
+        state,
+      })
+    : undefined;
+  const resolvedToolIntent: ToolIntentResult = {
+    ...toolIntent,
+    query,
+    selectedToolIds: taskSelection.selectedToolIds,
+    candidateToolIds,
+    decisionSource: taskSelection.decisionSource,
+    decisionReason: taskSelection.decisionReason,
+  };
 
   await emitStepNode(emit, {
     runId: state.runId,
@@ -290,33 +334,34 @@ export const capabilitySelectNode = async (
     phase: "done",
     label: "候选选择",
     summary:
-      capabilityIntent.selectedCapabilityIds.length > 0
-        ? `已选出 ${capabilityIntent.selectedCapabilityIds.length} 个能力候选`
-        : capabilityIntent.topCandidates.length > 0
-          ? "已得到候选集合，当前未选中能力"
-          : "未收到可用候选能力",
+      resolvedToolIntent.selectedToolIds.length > 0
+        ? `已选出 ${resolvedToolIntent.selectedToolIds.length} 个工具候选`
+        : resolvedToolIntent.topCandidates.length > 0
+          ? "已得到候选集合，当前未选中工具"
+          : "未收到可用工具候选",
     details: {
       query,
       effectiveQuery,
       reviewNotes,
-      selectedCapabilityIds: capabilityIntent.selectedCapabilityIds,
-      selectedToolIds: capabilityIntent.selectedToolIds,
-      topCandidates: capabilityIntent.topCandidates,
-      retrievalModel: capabilityIntent.retrievalModel,
-      exposureReasons: capabilityIntent.exposureReasons,
-      decisionSource: capabilityIntent.decisionSource,
-      decisionReason: capabilityIntent.decisionReason,
+      selectedToolIds: resolvedToolIntent.selectedToolIds,
+      candidateToolIds: resolvedToolIntent.candidateToolIds,
+      topCandidates: resolvedToolIntent.topCandidates,
+      toolCandidates: resolvedToolIntent.toolCandidates,
+      toolExposure: resolvedToolIntent.toolExposure,
+      retrievalModel: resolvedToolIntent.retrievalModel,
+      exposureReasons: resolvedToolIntent.exposureReasons,
+      decisionSource: resolvedToolIntent.decisionSource,
+      decisionReason: resolvedToolIntent.decisionReason,
     },
   });
 
   return {
-    capabilityIntent: {
-      ...capabilityIntent,
-      query,
-    },
+    toolIntent: resolvedToolIntent,
+    selectedToolId,
+    pendingToolCall,
   };
 };
 
-export const capabilityIntentNode = capabilitySelectNode;
+export const toolIntentNode = toolSelectNode;
 
-export type { CapabilityIntentResult } from "./types.js";
+export type { ToolIntentResult } from "./types.js";

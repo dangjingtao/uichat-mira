@@ -60,7 +60,6 @@ const agentRunSchema = {
     blockedReason: { type: "string" },
     terminalReason: { type: "string" },
     pendingApproval: agentApprovalRequestSchema,
-    selectedCapabilityId: { type: "string" },
     selectedToolId: { type: "string" },
     contextBudget: {
       type: "object",
