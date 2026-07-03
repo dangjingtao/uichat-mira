@@ -10,6 +10,7 @@ import {
   appendRetrievalEvidence,
   getEvidenceCounts,
   getEvidencePayload,
+  getLatestEvidenceSummary,
 } from "./evidence.js";
 import {
   emitStepNode,
@@ -115,6 +116,8 @@ export const createAgentGoal = (text: string): AgentGoal => ({
   riskLevel: "low",
 });
 
+// V1 only keeps a minimal static plan skeleton for trace and run metadata.
+// It is not a completed TaskFrame implementation.
 export const createAgentPlan = (goal: AgentGoal): AgentPlan => ({
   id: crypto.randomUUID(),
   goalId: goal.id,
@@ -265,6 +268,8 @@ export const planNode = async (
   state: AgentNodeState,
   emit?: EmitAgentExecutionNode,
 ): Promise<Partial<AgentNodeState>> => {
+  // planNode is still a placeholder trace node in V1. It does not rewrite the
+  // run plan or produce a completed TaskFrame structure.
   await emitStepNode(emit, {
     runId: state.runId,
     nodeId: "agent-plan",
@@ -410,6 +415,7 @@ export const retrieveNode = async (
       details: {
         sourceNode: "retrieveNode",
         retrievalChunkCount: 0,
+        latestEvidenceSummary: evidence.latestSummary ?? getLatestEvidenceSummary({ evidence }),
         evidenceCounts: getEvidenceCounts({ evidence }),
         iteration: state.iterationCount ?? 0,
         maxIterations: state.maxIterations ?? null,
@@ -482,6 +488,7 @@ export const retrieveNode = async (
       sourceNode: "retrieveNode",
       query: retrievalQuery,
       retrievalChunkCount: retrievedChunks.length,
+      latestEvidenceSummary: evidence.latestSummary ?? getLatestEvidenceSummary({ evidence }),
       evidenceCounts: getEvidenceCounts({ evidence }),
       iteration: (state.iterationCount ?? 0) + 1,
       maxIterations: state.maxIterations ?? null,
@@ -619,6 +626,9 @@ const buildGenerateMessages = (state: AgentNodeState): NormalizedChatMessage[] =
         [
           `#${index + 1}`,
           `toolId: ${execution.toolId}`,
+          // TODO(agent_node_T008): add a generate-stage size guard and compact
+          // summary path so oversized tool results do not get stringified into
+          // the model prompt verbatim.
           `result: ${JSON.stringify(execution.result, null, 2)}`,
         ].join("\n"),
       ),
@@ -711,6 +721,8 @@ const buildGenerateInstructionMessages = (
           [
             `#${index + 1}`,
             `toolId: ${execution.toolId}`,
+            // TODO(agent_node_T008): this path needs the same size guard /
+            // summary contract as buildGenerateMessages().
             `result: ${JSON.stringify(execution.result, null, 2)}`,
           ].join("\n"),
         ),

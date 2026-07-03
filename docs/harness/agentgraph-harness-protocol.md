@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: runtime
-Last verified: 2026-06-28
+Last verified: 2026-07-04
 Layer: wiki
 Module: Harness
 Feature: AgentGraphProtocol
@@ -32,6 +32,34 @@ Related:
 - Harness 仍是 tool registry、tool execution、trace / invocation 的执行面
 - Agent 目前主要在“能力选择、审批判断、结果收口”这层和 Harness 协作
 
+## V1 当前不变量
+
+当前 Agent Decision Loop v1 可以对外确认的，只是下面这组最小不变量：
+
+- Planner 只负责输出 `nextAction`
+- Normalize 只负责把 `nextAction.use_tool` 校验并冻结成 `pendingToolCall`
+- Policy 只审批 frozen `pendingToolCall`
+- ToolNode 只执行 frozen `pendingToolCall`
+- retrieve / tool 完成后，结果必须写回 evidence，再进入下一轮 Planner 或 generate
+- `selectedToolId`、`capabilityIntent.selectedToolIds`、capability 语义都不得作为真实执行入口
+
+当前最小执行链是：
+
+```text
+Planner
+-> Normalize
+-> Policy
+-> ToolNode
+-> Evidence
+-> Planner
+```
+
+这里有三条口径必须说清：
+
+1. `planNode` 当前仍是 placeholder trace 节点，不是完整 `TaskFrame` 实现。
+2. `selectedToolId` 只保留给 UI / trace / diagnostics 或兼容读取，不能驱动真实执行。
+3. `generate` 阶段对超大 `tool result` 的 size guard / summary contract 还没定稿；如果当前代码仍会直接拼接结果体，只能记为待办，不能宣称已经完成。
+
 ## 协议分层
 
 ### 1. 持久化与产品真相层
@@ -49,8 +77,9 @@ Related:
 - `observations`
 - `traceId`
 - `pendingApproval`
-- `approvedToolIds`
-- `selectedCapabilityId`
+- `approvedInvocations`
+- `selectedToolId`
+- `pendingToolCall`
 
 这层负责回答：
 
@@ -82,18 +111,23 @@ Related:
 - `params`
 - `knowledgeBaseId`
 - `intentConfig`
-- `approvedToolIds`
-- `selectedCapabilityId`
+- `approvedInvocations`
+- `selectedToolId`
+- `pendingToolCall`
 - `onExecutionNode`
 
 `AgentGraphOutput` 当前至少包括：
 
 - `answer`
 - `observations`
+- `evidence`
 - `retrievedChunks`
-- `capabilityIntent`
+- `toolIntent`
 - `pendingApproval`
-- `selectedCapabilityId`
+- `policyDecision`
+- `selectedToolId`
+- `pendingToolCall`
+- `lastToolExecution`
 - `contextBudget`
 - `errorMessage`
 - `status`
@@ -138,7 +172,10 @@ AgentGraph 不直接替代这些能力，而是消费它们。
 
 - `prepareContext`
 - `planStep`
+- `toolSelectStep`
 - `toolGuardStep`
+- `nextActionPlanner`
+- `toolCallNormalize`
 - `policyStep`
 - `approval`
 - `retrieve`
@@ -152,9 +189,9 @@ AgentGraph 不直接替代这些能力，而是消费它们。
 - `toolGuardStep`
   - 消费 Harness 已暴露候选，并做本地调用前守卫收口
 - `policyStep`
-  - 根据 tool metadata 判断是否允许直接执行
+  - 只根据 frozen `pendingToolCall` 和 tool metadata 判断是否允许直接执行
 - `tool`
-  - 通过兼容适配层真正调用 Harness invocation
+  - 只执行 frozen `pendingToolCall`，并通过兼容适配层真正调用 Harness invocation
 
 ## 当前审批协议
 
@@ -215,7 +252,7 @@ AgentGraph 不直接替代这些能力，而是消费它们。
 由于 `AgentGraph` 先于这轮 Harness 收口完成，当前实现遵循的是：
 
 - 保持现有 `AgentGraphInput / AgentGraphOutput` 主形状不倒退
-- Harness 去适配 `AgentGraph` 的 `selectedCapabilityId` 驱动方式
+- 旧兼容字段允许保留给 UI / trace / diagnostics，但不得重新变回执行入口
 - `toolNode` 现在已经不是占位节点，而是会真实调用 Harness invocation
 
 当前这层兼容适配已经补上的协议对象包括：
@@ -225,7 +262,7 @@ AgentGraph 不直接替代这些能力，而是消费它们。
 
 其中：
 
-- `pendingToolCall` 表示 AgentGraph 已决定“要调用哪个 capability，以及准备用什么参数调用”
+- `pendingToolCall` 表示 AgentGraph 已决定“要调用哪个 toolId，以及准备用什么参数调用”
 - `lastToolExecution` 表示 Harness 执行后的回填结果，包括：
   - `invocationId`
   - `status`
@@ -250,6 +287,7 @@ AgentGraph 不直接替代这些能力，而是消费它们。
 
 - Agent tool call 和 Harness invocation 之间是否需要独立桥接对象
 - AgentGraph 与 Harness trace 是否统一成同一套跨层 trace id / span contract
+- generate 阶段的大结果 size guard / summary contract
 - replan / ask_user / memory / retry 的高级状态协议
 - 多轮恢复时是否需要更强的 graph checkpoint contract
 

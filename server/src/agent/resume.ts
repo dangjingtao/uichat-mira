@@ -167,6 +167,7 @@ export const resumeApprovedAgentRun = async (runId: string) => {
     status: "running",
     pendingApproval: undefined,
     approvedInvocations,
+    // Resume keeps selectedToolId only for diagnostics / UI continuity.
     selectedToolId: pendingToolCall.toolId,
     pendingToolCall,
   });
@@ -202,6 +203,8 @@ export const resumeApprovedAgentRun = async (runId: string) => {
     blockedReason: output.blockedReason,
     terminalReason: output.terminalReason,
     approvedInvocations,
+    // Resume output follows the same compatibility rule: no execution may be
+    // derived from selectedToolId.
     selectedToolId:
       output.selectedToolId ??
       output.pendingApproval?.toolId ??

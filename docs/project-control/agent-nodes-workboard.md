@@ -16,6 +16,8 @@ related:
   - docs/project-control/tasks/agent_node_T005-tool-node-execute-frozen-pending-tool-call.md
   - docs/project-control/tasks/agent_node_T006-evidence-loop-routing.md
   - docs/project-control/tasks/agent_node_T007-decision-loop-acceptance-regression-guardrails.md
+  - docs/project-control/tasks/agent_node_T008-v1-cleanup-release-hardening.md
+  - docs/project-control/tasks/agent_node_T009-evidence-summary-answer-stop-rule.md
   - docs/chat/agent-runtime-design.md
   - docs/harness/agentgraph-harness-protocol.md
 ---
@@ -47,8 +49,12 @@ Agent node 专属总台账。
 | `agent_node_T005` | `toolNode` 只执行 frozen `pendingToolCall` | `toolNode` 收敛与独立模块拆分已评审通过：它现在只在 `policyDecision.allow` 与 frozen `pendingToolCall` 对齐时执行；执行结果会保留 `toolCallId / inputHash`，成功或失败后会清理 `pendingToolCall`；整仓打包阻断项已明确为非本任务问题 | `DONE` | [agent_node_T005-tool-node-execute-frozen-pending-tool-call.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T005-tool-node-execute-frozen-pending-tool-call.md) |
 | `agent_node_T006` | `evidence` 回流与 Agent loop 路由闭环 | `retrieveNode / toolNode -> evidence -> Planner` 的最小闭环已接通；retrieval / tool evidence 写回、evidence-update trace、去重 helper、`maxIterations` 收口和旧入口阻断都已有定向验证，评审已通过 | `DONE` | [agent_node_T006-evidence-loop-routing.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T006-evidence-loop-routing.md) |
 | `agent_node_T007` | Agent Decision Loop v1 验收测试与回归护栏 | 已补齐当前 commit 专属验收证据：4 个定向测试源码、vitest JSON 报告、typecheck 报告、场景映射、运行时间与剩余风险均已回填到任务卡；当前证据不再引用 `2026-07-03` 的旧失败报告 | `DONE` | [agent_node_T007-decision-loop-acceptance-regression-guardrails.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T007-decision-loop-acceptance-regression-guardrails.md) |
+| `agent_node_T008` | V1 cleanup / release hardening | V1 收尾任务已完成：主分支误留的大型报告与 sqlite 临时文件已清理；`planNode` placeholder、`selectedToolId` 兼容语义、generate 阶段大结果 TODO，以及 V1 当前不变量都已回填到正式代码注释和契约文档；没有把 `TaskFrame` 或 generate size guard 误报成已完成能力 | `DONE` | [agent_node_T008-v1-cleanup-release-hardening.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T008-v1-cleanup-release-hardening.md) |
+| `agent_node_T009` | Evidence Summary + Answer Stop Rule | `AgentEvidenceSummary`、Planner 前置 answer stop rule、`read_list / read_open / web_search / terminal_session` 最小摘要 schema 与 trace 可审计字段已落地；当前闭环可在工具完成后直接基于 summary 收口 answer，不再二次重复调用相同工具 | `DONE` | [agent_node_T009-evidence-summary-answer-stop-rule.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T009-evidence-summary-answer-stop-rule.md) |
 
 ## Current Ground Truth
+
+- `T1-8` 属于 `V1` 内容。
 
 - `nextActionPlannerNode` 当前任务已经明确：
   - 不允许硬编码上下文假设
@@ -100,6 +106,38 @@ Agent node 专属总台账。
   - 必须证明 `capabilityIntent.selectedToolIds`、`selectedToolId`、capabilityId 已不能绕过 `Normalize -> Policy -> Tool`
   - 测试必须 mock provider、retrieve、Harness invocation、trace，不得真实执行外部模型、危险工具或网络请求
   - 除非测试直接暴露实现缺陷，否则不得借机改 Planner、Harness、MCP registry、Provider Gateway 或架构边界
+- `agent_node_T008` 当前任务已经明确：
+  - 这是 V1 收尾与发布加固任务，不是新功能任务
+  - 只允许处理以下 5 项：
+    - 清理 `main` 上的生成报告、coverage、大型 `test-report`、临时 sqlite `-wal / -shm` 文件
+    - 明确 `planNode` 目前仍是 placeholder，不得对外宣称 `TaskFrame` 已完成
+    - 为 `selectedToolId` 增加迁移说明：只供 UI / trace，不得执行
+    - 为 `generate` 阶段增加 tool result size guard / summary TODO
+    - 把 Agent Decision Loop v1 当前架构不变量写入正式文档
+  - 不得借机扩展到 Planner / Harness / UI / Provider / 打包链重构
+  - 不得把“文档已写明”误报成“实现已落地”
+- `agent_node_T009` 当前任务已经明确：
+  - 这是 `Agent V1.5` 的第一张正式任务卡
+  - 只定义 `Evidence Summary` 协议、`Answer Stop Rule`、Planner evidence 摘要输入、4 类工具最小 summary schema 与 trace 要求
+  - 当前真实问题不是工具结果没写回，而是 Planner 能看到的 summary 太弱，无法稳定判断“已经足够回答”
+  - `toolNode` / `retrieveNode` 仍然只负责执行和写 evidence，不直接决定 answer
+  - 不得把 full result JSON 全量塞进 Planner
+  - 不得借机改成 Agent V2、DAG、并发、多智能体、长期记忆或 Harness 大改
+  - `Repeated Tool Guard` 不在 T009，实现边界预留给 `agent_node_T010-repeated-tool-guard`
+  - 当前实现已完成：
+    - `AgentEvidencePayload.latestSummary` 与 item-level `summary` 已接入
+    - `nextActionPlannerNode` 会在 latest summary 可回答时直接触发 answer stop rule
+    - `read_list / read_open / web_search / terminal_session` 已有最小 summary schema
+    - retrieval / tool evidence update trace 已暴露 `latestEvidenceSummary`
+    - `generate / evaluate` observation 不再覆盖最后一条可回答 evidence summary
+
+## 当前 V1 总结
+
+- 代码闭环有条件通过。
+- 前台手测未通过。
+- 阻塞项：`read_list` evidence 未被 Planner 正确用于 `answer` 决策，导致重复工具调用直到失败。
+- 当前下一步不是重写架构，而是先把 `evidence -> Planner -> answer` 的收口协议定义清楚。
+- `T009` 已完成，下一步是 `agent_node_T010-repeated-tool-guard`，专门阻止同一 `toolId + normalized args / inputHash` 的无意义重复调用。
 
 ## Work Rules
 
@@ -159,4 +197,45 @@ Agent node 专属总台账。
     - `pnpm --filter @ui-chat-mira/server test -- src/agent/graph.test.ts src/agent/tool-call-normalize.test.ts src/agent/tool-node.test.ts src/agent/policy.test.ts`
       - 结果：通过，`46 passed`
     - `pnpm --filter @ui-chat-mira/server typecheck`
+      - 结果：通过
+  - 项目 owner 已审查通过，`agent_node_T007` 状态维持 `DONE`
+  - 追加第八个节点任务编号 `agent_node_T008`
+  - 项目 owner 已明确批准本次把 V1 收尾与 release hardening 作为单独任务卡打包管理
+  - 当前任务范围限定为 5 项：
+    - 清理 `main` 中误留的生成报告、coverage、大型测试报告与临时 sqlite `wal/shm`
+    - 校正 `planNode` / `TaskFrame` 的对外口径
+    - 为 `selectedToolId` 增加迁移说明
+    - 为 `generate` 阶段补 `tool result size guard / summary` 待办
+    - 将 V1 架构不变量落入文档
+  - 当前只建立任务卡与总台账条目，状态初始化为 `TODO`
+  - `agent_node_T008` 已完成：
+    - 清理了主分支中被跟踪的大型 `test-report` / coverage 产物和 sqlite `wal/shm`
+    - 在代码与正式文档中明确 `planNode` 当前仍是 placeholder，不宣称 `TaskFrame` 已完成
+    - 为 `selectedToolId` 补齐“只供 UI / trace，不得执行”的迁移说明
+    - 在 generate 组装 tool result 的入口补了 size guard / summary TODO
+    - 在 Harness 当前契约文档中补齐 V1 当前不变量
+  - 本任务没有实现真正的 `TaskFrame`，也没有实现 generate 大结果裁剪；这两项仍保持为后续工作
+  - 追加第九个节点任务编号 `agent_node_T009`
+  - 明确 `T009` 是 `Agent V1.5` 第一张正式任务卡，只定义 `Evidence Summary + Answer Stop Rule`
+  - 当前任务卡已记录真实代码现状：
+    - `toolNode` 与 `retrieveNode` 已把结果写入 evidence
+    - `next-action-planner.ts` 当前只向 Planner 暴露弱摘要，缺少“是否足够回答”的稳定协议
+    - `generateNode` 仍可能吃到 full result JSON，但这不是 Planner 收口协议
+  - 明确 `T009` 非目标：
+    - 不做 Agent V2
+    - 不做 DAG / 并发 / 多智能体 / 长期记忆
+    - 不改 Harness / MCP registry / Provider Gateway / UI / 模型配置
+    - 不让 ToolNode 直接决定 answer
+  - 预留后续任务：`agent_node_T010-repeated-tool-guard`
+  - `agent_node_T009` 已完成：
+    - 在 `server/src/agent/types.ts` 与 `evidence.ts` 接入 `AgentEvidenceSummary`
+    - 在 `next-action-planner.ts` 落地 Planner 前置 answer stop rule
+    - 在 `tool-node.ts` 与 `nodes.ts` 落地 tool / retrieval summary trace
+    - 已补充 `graph.test.ts` 与 `next-action-planner.test.ts` 的 T009 场景覆盖
+  - 定向验证结果：
+    - `pnpm --filter @ui-chat-mira/server test -- src/agent/graph.test.ts src/agent/next-action-planner.test.ts src/agent/tool-node.test.ts src/agent/policy.test.ts src/agent/tool-call-normalize.test.ts`
+      - 结果：通过，`65 passed`
+    - `pnpm --filter @ui-chat-mira/server typecheck`
+      - 结果：通过
+    - `pnpm check`
       - 结果：通过

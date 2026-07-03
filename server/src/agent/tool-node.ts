@@ -108,6 +108,7 @@ const emitEvidenceUpdateNode = async (
     inputHash?: string;
     status: AgentToolExecutionResult["status"];
     evidenceCounts: ReturnType<typeof getEvidenceCounts>;
+    latestEvidenceSummary?: AgentToolExecutionResult["summary"];
     iteration: number;
     maxIterations?: number;
   },
@@ -125,6 +126,7 @@ const emitEvidenceUpdateNode = async (
       toolCallId: input.toolCallId ?? null,
       inputHash: input.inputHash ?? null,
       toolExecutionStatus: input.status,
+      latestEvidenceSummary: input.latestEvidenceSummary ?? null,
       evidenceCounts: input.evidenceCounts,
       iteration: input.iteration,
       maxIterations: input.maxIterations ?? null,
@@ -321,6 +323,7 @@ export const toolNode = async (
       inputHash: pendingToolCall.inputHash,
       status: executionRecord.status,
       evidenceCounts: getEvidenceCounts({ evidence }),
+      latestEvidenceSummary: evidence.latestSummary,
       iteration: state.iterationCount ?? 0,
       maxIterations: state.maxIterations,
     });
@@ -397,6 +400,7 @@ export const toolNode = async (
       inputHash: pendingToolCall.inputHash,
       status: executionRecord.status,
       evidenceCounts: getEvidenceCounts({ evidence }),
+      latestEvidenceSummary: evidence.latestSummary,
       iteration: state.iterationCount ?? 0,
       maxIterations: state.maxIterations,
     });
@@ -468,6 +472,7 @@ export const toolNode = async (
     inputHash: pendingToolCall.inputHash,
     status: executionRecord.status,
     evidenceCounts: getEvidenceCounts({ evidence }),
+    latestEvidenceSummary: evidence.latestSummary,
     iteration: (state.iterationCount ?? 0) + 1,
     maxIterations: state.maxIterations,
   });

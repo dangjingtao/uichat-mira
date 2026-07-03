@@ -70,6 +70,7 @@ export interface AgentObservation {
   facts: string[];
   errorMessage?: string;
   rawRef?: string;
+  summary?: AgentEvidenceSummary;
   createdAt: string;
 }
 
@@ -144,6 +145,7 @@ export interface AgentToolExecutionResult {
   result?: unknown;
   errorMessage?: string;
   approval?: AgentApprovalRequest;
+  summary?: AgentEvidenceSummary;
   startedAt: string;
   finishedAt: string;
 }
@@ -156,8 +158,9 @@ export interface AgentRetrievalEvidence {
     chunkId: string | number;
     documentName: string;
     score?: number;
-    content: string;
+      content: string;
   }>;
+  summary?: AgentEvidenceSummary;
   createdAt: string;
 }
 
@@ -165,6 +168,93 @@ export interface AgentEvidencePayload {
   observations: AgentObservation[];
   toolExecutions: AgentToolExecutionResult[];
   retrievals: AgentRetrievalEvidence[];
+  latestSummary?: AgentEvidenceSummary;
+}
+
+export interface AgentEvidenceAnswerReadiness {
+  canAnswer: boolean;
+  reason: string;
+  missingInfo?: string[];
+}
+
+export interface AgentReadListEvidenceData {
+  kind: "read_list";
+  path: string;
+  entryCount: number;
+  fileCount: number;
+  directoryCount: number;
+  entriesPreview: string[];
+  truncated: boolean;
+  canAnswerDirectoryQuestion: boolean;
+}
+
+export interface AgentReadOpenEvidenceData {
+  kind: "read_open";
+  path: string;
+  contentPreview: string;
+  contentLength: number;
+  truncated: boolean;
+  keySections?: string[];
+  canAnswerFileQuestion: boolean;
+}
+
+export interface AgentWebSearchEvidenceData {
+  kind: "web_search";
+  query: string;
+  resultCount: number;
+  topFindings: string[];
+  citationsPreview: Array<{
+    title: string;
+    link: string;
+  }>;
+  canAnswerSearchQuestion: boolean;
+}
+
+export interface AgentTerminalSessionEvidenceData {
+  kind: "terminal_session";
+  command: string;
+  exitCode: number | null;
+  stdoutPreview: string;
+  stderrPreview: string;
+  timedOut: boolean;
+  canAnswerCommandQuestion: boolean;
+}
+
+export interface AgentRetrievalEvidenceData {
+  kind: "retrieval";
+  query: string;
+  chunkCount: number;
+  documentsPreview: string[];
+}
+
+export interface AgentObservationEvidenceData {
+  kind: "observation";
+  stepId: string;
+  factsPreview: string[];
+}
+
+export type AgentEvidenceSummaryData =
+  | AgentReadListEvidenceData
+  | AgentReadOpenEvidenceData
+  | AgentWebSearchEvidenceData
+  | AgentTerminalSessionEvidenceData
+  | AgentRetrievalEvidenceData
+  | AgentObservationEvidenceData;
+
+export interface AgentEvidenceSummary {
+  source: "tool" | "retrieval" | "observation";
+  status: "completed" | "failed" | "awaiting_approval" | "partial" | "blocked";
+  toolId?: string;
+  inputHash?: string;
+  actionTaken: string;
+  keyFindings: string[];
+  answerReadiness: AgentEvidenceAnswerReadiness;
+  data?: AgentEvidenceSummaryData;
+  rawRef?: {
+    evidenceIndex?: number;
+    toolCallId?: string;
+    invocationId?: string;
+  };
 }
 
 export type AgentNextAction =

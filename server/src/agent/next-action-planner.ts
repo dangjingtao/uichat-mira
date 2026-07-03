@@ -1,9 +1,11 @@
 import { providerProxyService } from "@/services/provider-proxy.service/index.js";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
 import { toAgentExecutionNode } from "./trace.js";
+import { getAnswerStopDecision, getLatestEvidenceSummary } from "./evidence.js";
 import type {
   AgentApprovalRequest,
   AgentEvidencePayload,
+  AgentEvidenceSummary,
   AgentNextAction,
   AgentObservation,
   AgentPlan,
@@ -79,6 +81,7 @@ const summarizePlannerEvidence = (
     latestRetrieval: evidence.retrievals.length > 0
       ? summarizePlannerRetrieval(evidence.retrievals[evidence.retrievals.length - 1]!)
       : undefined,
+    latestEvidenceSummary: evidence.latestSummary,
   };
 };
 
@@ -115,6 +118,7 @@ const buildNextActionPlannerMessages = (input: {
   iteration: number;
   maxIterations: number;
   pendingApproval?: AgentApprovalRequest;
+  latestEvidenceSummary?: AgentEvidenceSummary;
 }): NormalizedChatMessage[] => {
   const evidenceSummary = summarizePlannerEvidence(input.evidence);
 
@@ -132,6 +136,7 @@ const buildNextActionPlannerMessages = (input: {
         '{"type":"error","reason":"..."}',
         "如果你选择 use_tool，toolId 必须来自当前暴露的真实工具列表，args 必须是 JSON object。",
         "不要输出 capabilityId，不要发明未暴露工具，不要输出额外字段。",
+        "如果 latestEvidenceSummary.answerReadiness.canAnswer 为 true，且没有 missingInfo、pendingApproval 或 errorMessage，则下一步必须输出 answer。",
       ].join("\n"),
       parts: [],
     },
@@ -158,6 +163,7 @@ const buildNextActionPlannerMessages = (input: {
                 reason: input.pendingApproval.reason,
               }
             : null,
+          latestEvidenceSummary: input.latestEvidenceSummary ?? null,
         },
         null,
         2,
@@ -261,6 +267,15 @@ export const nextActionPlannerNode = async (
   const question =
     state.question?.trim() || getLatestUserQuestion(state.messages) || state.goal.text;
   const toolExposure = normalizeToolExposure(state);
+  const latestEvidenceSummary = getLatestEvidenceSummary({
+    evidence: state.evidence,
+    observations: state.observations,
+  });
+  const answerStopDecision = getAnswerStopDecision({
+    latestSummary: latestEvidenceSummary,
+    pendingApproval: state.pendingApproval,
+    errorMessage: state.errorMessage,
+  });
 
   await emitStepNode(emit, {
     runId: state.runId,
@@ -273,13 +288,21 @@ export const nextActionPlannerNode = async (
       exposedToolCount: toolExposure.exposedTools.length,
       iteration,
       maxIterations,
+      latestEvidenceSummary: latestEvidenceSummary ?? null,
+      answerStopRuleTriggered: answerStopDecision.shouldAnswer,
+      answerStopRuleReason: answerStopDecision.reason,
     },
   });
 
   let nextAction: AgentNextAction;
   let rawOutput = "";
 
-  if (maxIterations > 0 && iteration >= maxIterations) {
+  if (answerStopDecision.shouldAnswer) {
+    nextAction = {
+      type: "answer",
+      reason: answerStopDecision.reason,
+    };
+  } else if (maxIterations > 0 && iteration >= maxIterations) {
     nextAction = toNextActionFallback(
       "Planner reached the iteration limit and must stop.",
     );
@@ -294,6 +317,7 @@ export const nextActionPlannerNode = async (
       iteration,
       maxIterations,
       pendingApproval: state.pendingApproval,
+      latestEvidenceSummary,
     });
 
     try {
@@ -328,6 +352,9 @@ export const nextActionPlannerNode = async (
       reason: nextAction.reason,
       iteration,
       maxIterations,
+      latestEvidenceSummary: latestEvidenceSummary ?? null,
+      answerStopRuleTriggered: answerStopDecision.shouldAnswer,
+      answerStopRuleReason: answerStopDecision.reason,
       rawOutputPreview: rawOutput ? rawOutput.slice(0, 200) : undefined,
     },
   });

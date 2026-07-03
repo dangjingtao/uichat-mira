@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: runtime
-Last verified: 2026-07-03
+Last verified: 2026-07-04
 Layer: wiki
 Module: Harness
 Feature: Overview
@@ -103,12 +103,19 @@ Related:
 - `toolSelectNode` 只产出工具级候选和 `selectedToolIds`
 - `toolGuardNode` 只保留通过本地守卫后的 `candidateToolIds`
 - `policyNode` 只能基于明确 `toolId` 的 `pendingToolCall` 进入审批和执行
+- `selectedToolId` 只保留给 UI、trace、diagnostics 或兼容读取；不得作为真实执行入口
+- `planNode` 当前仍只是 V1 placeholder trace 节点，不能对外宣称 `TaskFrame` 已完成
 
 这意味着：
 
 - AgentGraph 不再维护伪造的 capability 选择状态
 - `pendingToolCall` 只能从明确 `toolId` 候选生成，不能从 capability match 直接生成
 - trace 与运行态状态机现在也统一按 tool 语义表达
+
+当前还要明确一个未完成项：
+
+- `generate` 阶段目前还没有为超大 `tool result` 建立正式的 size guard / summary contract
+- 现阶段只能把这件事当成已知待办，不能对外说“generate 已经安全处理大结果体”
 
 同时，外层越界的 `web_search` 预取已删除。
 

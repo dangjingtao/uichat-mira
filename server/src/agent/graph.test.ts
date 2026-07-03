@@ -315,7 +315,7 @@ test("agentGraph preserves planner error reason instead of falling back to Unkno
   assert.equal(errorEvent?.details?.sourceNodeId, "agent-next-action-planner");
 });
 
-test("agentGraph routes retrieve evidence back to planner before final generation", async () => {
+test("agentGraph routes retrieve evidence back to planner and answer stop rule without a second planner model call", async () => {
   vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([]);
   vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
     makeToolIntentResult({
@@ -331,9 +331,6 @@ test("agentGraph routes retrieve evidence back to planner before final generatio
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
       yield '{"type":"retrieve","query":"release notes","reason":"Need knowledge evidence first."}';
-    })
-    .mockImplementationOnce(async function* () {
-      yield '{"type":"answer","reason":"The retrieval evidence is enough now."}';
     });
   const ragInvokeSpy = vi
     .spyOn(runnablesModule.agentRagRunnable, "invoke")
@@ -380,11 +377,13 @@ test("agentGraph routes retrieve evidence back to planner before final generatio
 
   assert.equal(result.status, "completed");
   assert.equal(result.answer, "summarized answer");
-  assert.equal(plannerSpy.mock.calls.length, 2);
+  assert.equal(plannerSpy.mock.calls.length, 1);
   assert.equal(ragInvokeSpy.mock.calls.length, 1);
   assert.equal(ragInvokeSpy.mock.calls[0]?.[0]?.question, "release notes");
   assert.equal(result.evidence.retrievals.length, 1);
   assert.equal(result.evidence.retrievals[0]?.query, "release notes");
+  assert.equal(result.evidence.latestSummary?.source, "retrieval");
+  assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, true);
   assert.equal(
     executionNodes.filter((event) => event.nodeId === "agent-next-action-planner").length >= 2,
     true,
@@ -396,7 +395,7 @@ test("agentGraph routes retrieve evidence back to planner before final generatio
   assert.equal(evidenceUpdateEvent?.details?.retrievalChunkCount, 1);
 });
 
-test("agentGraph routes planner use_tool through normalize before policy and tool execution", async () => {
+test("agentGraph routes planner use_tool through normalize and answer stop rule without a second planner model call", async () => {
   const readOpen = makeToolDefinition({
     id: "read_open",
     domain: "read",
@@ -426,9 +425,6 @@ test("agentGraph routes planner use_tool through normalize before policy and too
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
       yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need the file content."}';
-    })
-    .mockImplementationOnce(async function* () {
-      yield '{"type":"answer","reason":"The file content is now available."}';
     });
   const executeHarnessInvocationSpy = vi
     .spyOn(harnessInvocations, "executeHarnessInvocation")
@@ -437,7 +433,14 @@ test("agentGraph routes planner use_tool through normalize before policy and too
       toolId: "read_open",
       status: "completed",
       result: {
-        content: "# README",
+        type: "open",
+        path: "README.md",
+        source: {
+          kind: "text",
+          mimeType: "text/markdown",
+          text: "# README\n\nProject overview",
+          metadata: {},
+        },
       },
       startedAt: "2026-07-04T00:00:00.000Z",
       finishedAt: "2026-07-04T00:00:01.000Z",
@@ -463,7 +466,7 @@ test("agentGraph routes planner use_tool through normalize before policy and too
   });
 
   assert.equal(result.status, "completed");
-  assert.equal(plannerSpy.mock.calls.length, 2);
+  assert.equal(plannerSpy.mock.calls.length, 1);
   assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
   assert.deepEqual(executeHarnessInvocationSpy.mock.calls[0]?.[0], {
     toolId: "read_open",
@@ -475,6 +478,8 @@ test("agentGraph routes planner use_tool through normalize before policy and too
     approvedInvocations: undefined,
   });
   assert.equal(result.evidence.toolExecutions.length, 1);
+  assert.equal(result.evidence.latestSummary?.toolId, "read_open");
+  assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, true);
   assert.equal(result.evidence.toolExecutions[0]?.toolCallId, result.lastToolExecution?.toolCallId);
   assert.equal(result.evidence.toolExecutions[0]?.inputHash, result.lastToolExecution?.inputHash);
   assert.equal(result.lastToolExecution?.toolId, "read_open");
@@ -491,6 +496,263 @@ test("agentGraph routes planner use_tool through normalize before policy and too
     true,
   );
   assert.equal(generateInvokeSpy.mock.calls.length, 1);
+});
+
+test("agentGraph answers after a single read_list execution when the user asked for a workspace listing", async () => {
+  const readList = makeToolDefinition({
+    id: "read_list",
+    domain: "read",
+    inputSchema: {
+      type: "object",
+      required: ["path"],
+      properties: {
+        path: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+  });
+  vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([readList]);
+  vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
+    makeToolIntentResult({
+      query: "看看当前 workspace 有哪些文件",
+      topCandidates: [{ toolId: "read_list", domain: "read" }],
+      exposedDefinitions: [readList],
+    }),
+  );
+  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
+    selectedToolIds: ["read_list"],
+    decisionSource: "task-model",
+    decisionReason: "Directory listing is available.",
+  });
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_list","args":{"path":"."},"reason":"Need the workspace listing."}';
+    });
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-read-list-1",
+      toolId: "read_list",
+      status: "completed",
+      result: {
+        type: "list",
+        path: ".",
+        entries: [
+          { name: "README.md", type: "file" },
+          { name: "server", type: "directory" },
+          { name: "desktop", type: "directory" },
+        ],
+      },
+      startedAt: "2026-07-04T00:00:00.000Z",
+      finishedAt: "2026-07-04T00:00:01.000Z",
+    } as never);
+  const generateInvokeSpy = vi
+    .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
+    .mockResolvedValue("workspace listing answer");
+
+  const result = await agentGraph.run({
+    runId: "run-read-list-answer",
+    threadId: "thread-1",
+    userId: 1,
+    goal: {
+      ...baseGoal,
+      text: "看看当前 workspace 有哪些文件",
+    },
+    plan: basePlan,
+    messages: [makeMessage("看看当前 workspace 有哪些文件")],
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(plannerSpy.mock.calls.length, 1);
+  assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+  assert.equal(generateInvokeSpy.mock.calls.length, 1);
+  assert.equal(result.evidence.latestSummary?.toolId, "read_list");
+  assert.equal(result.evidence.latestSummary?.data?.kind, "read_list");
+  if (result.evidence.latestSummary?.data?.kind === "read_list") {
+    assert.equal(result.evidence.latestSummary.data.entryCount, 3);
+    assert.equal(result.evidence.latestSummary.data.canAnswerDirectoryQuestion, true);
+    assert.equal(result.evidence.latestSummary.data.entriesPreview.length > 0, true);
+  }
+});
+
+test("agentGraph answers after a single web_search execution when search evidence is sufficient", async () => {
+  const webSearch = makeToolDefinition({
+    id: "web_search",
+    domain: "web_search",
+    inputSchema: {
+      type: "object",
+      required: ["query"],
+      properties: {
+        query: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    sideEffect: "network",
+  });
+  vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([webSearch]);
+  vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
+    makeToolIntentResult({
+      query: "search latest release notes",
+      topCandidates: [{ toolId: "web_search", domain: "web_search" }],
+      exposedDefinitions: [webSearch],
+    }),
+  );
+  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
+    selectedToolIds: ["web_search"],
+    decisionSource: "task-model",
+    decisionReason: "Web search is available.",
+  });
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"web_search","args":{"query":"latest release notes"},"reason":"Need current external evidence."}';
+    });
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-web-search-1",
+      toolId: "web_search",
+      status: "completed",
+      result: {
+        query: "latest release notes",
+        provider: "tavily",
+        capabilityId: "web-search-tavily",
+        results: [
+          {
+            title: "Release 2.0",
+            link: "https://example.com/release-2",
+            snippet: "Release 2.0 shipped with new agent runtime updates.",
+          },
+        ],
+      },
+      startedAt: "2026-07-04T00:00:00.000Z",
+      finishedAt: "2026-07-04T00:00:01.000Z",
+    } as never);
+  const generateInvokeSpy = vi
+    .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
+    .mockResolvedValue("web search answer");
+
+  const result = await agentGraph.run({
+    runId: "run-web-search-answer",
+    threadId: "thread-1",
+    userId: 1,
+    goal: {
+      ...baseGoal,
+      text: "search latest release notes",
+    },
+    plan: basePlan,
+    messages: [makeMessage("search latest release notes")],
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(plannerSpy.mock.calls.length, 1);
+  assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+  assert.equal(generateInvokeSpy.mock.calls.length, 1);
+  assert.equal(result.evidence.latestSummary?.toolId, "web_search");
+  assert.equal(result.evidence.latestSummary?.data?.kind, "web_search");
+  if (result.evidence.latestSummary?.data?.kind === "web_search") {
+    assert.equal(result.evidence.latestSummary.data.resultCount, 1);
+    assert.equal(result.evidence.latestSummary.data.canAnswerSearchQuestion, true);
+    assert.equal(result.evidence.latestSummary.data.citationsPreview.length, 1);
+  }
+});
+
+test("agentGraph answers after a single terminal_session execution when command output is sufficient", async () => {
+  const terminalSession = makeToolDefinition({
+    id: "terminal_session",
+    domain: "terminal",
+    inputSchema: {
+      type: "object",
+      required: ["command"],
+      properties: {
+        command: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    sideEffect: "process",
+  });
+  vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([terminalSession]);
+  vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
+    makeToolIntentResult({
+      query: "执行 dir 命令并查看结果",
+      topCandidates: [{ toolId: "terminal_session", domain: "terminal" }],
+      exposedDefinitions: [terminalSession],
+    }),
+  );
+  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
+    selectedToolIds: ["terminal_session"],
+    decisionSource: "task-model",
+    decisionReason: "Terminal execution is available.",
+  });
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"terminal_session","args":{"command":"dir"},"reason":"Need the command output."}';
+    });
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-terminal-1",
+      toolId: "terminal_session",
+      status: "completed",
+      result: {
+        sessionId: "terminal-session-1",
+        command: "dir",
+        cwd: "D:\\workspace\\rag-demo",
+        exitCode: 0,
+        output: "README.md\nserver\n",
+        stdout: "README.md\nserver\n",
+        stderr: "",
+        timedOut: false,
+        reusedSession: false,
+        sessionMode: "ephemeral",
+        streamMode: "split",
+        stderrSeparated: true,
+      },
+      startedAt: "2026-07-04T00:00:00.000Z",
+      finishedAt: "2026-07-04T00:00:01.000Z",
+    } as never);
+  const generateInvokeSpy = vi
+    .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
+    .mockResolvedValue("terminal answer");
+
+  const result = await agentGraph.run({
+    runId: "run-terminal-answer",
+    threadId: "thread-1",
+    userId: 1,
+    goal: {
+      ...baseGoal,
+      text: "执行 dir 命令并查看结果",
+    },
+    plan: basePlan,
+    messages: [makeMessage("执行 dir 命令并查看结果")],
+    approvedInvocations: [
+      {
+        toolId: "terminal_session",
+        input: { command: "dir" },
+        inputHash: createInvocationInputHash({
+          toolId: "terminal_session",
+          args: { command: "dir" },
+          source: "planner",
+        }),
+        approvedAt: "2026-07-04T00:00:00.000Z",
+        approvalId: "approval-terminal-1",
+      },
+    ],
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(plannerSpy.mock.calls.length, 1);
+  assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+  assert.equal(generateInvokeSpy.mock.calls.length, 1);
+  assert.equal(result.evidence.latestSummary?.toolId, "terminal_session");
+  assert.equal(result.evidence.latestSummary?.data?.kind, "terminal_session");
+  if (result.evidence.latestSummary?.data?.kind === "terminal_session") {
+    assert.equal(result.evidence.latestSummary.data.exitCode, 0);
+    assert.equal(result.evidence.latestSummary.data.timedOut, false);
+    assert.equal(result.evidence.latestSummary.data.canAnswerCommandQuestion, true);
+  }
 });
 
 test("agentGraph stops on normalize failure and does not enter policy or tool", async () => {
