@@ -18,6 +18,7 @@ related:
   - docs/project-control/tasks/agent_node_T007-decision-loop-acceptance-regression-guardrails.md
   - docs/project-control/tasks/agent_node_T008-v1-cleanup-release-hardening.md
   - docs/project-control/tasks/agent_node_T009-evidence-summary-answer-stop-rule.md
+  - docs/project-control/tasks/agent_node_T010-next-action-planner-json-contract-hardening.md
   - docs/chat/agent-runtime-design.md
   - docs/harness/agentgraph-harness-protocol.md
 ---
@@ -51,6 +52,7 @@ Agent node 专属总台账。
 | `agent_node_T007` | Agent Decision Loop v1 验收测试与回归护栏 | 已补齐当前 commit 专属验收证据：4 个定向测试源码、vitest JSON 报告、typecheck 报告、场景映射、运行时间与剩余风险均已回填到任务卡；当前证据不再引用 `2026-07-03` 的旧失败报告 | `DONE` | [agent_node_T007-decision-loop-acceptance-regression-guardrails.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T007-decision-loop-acceptance-regression-guardrails.md) |
 | `agent_node_T008` | V1 cleanup / release hardening | V1 收尾任务已完成：主分支误留的大型报告与 sqlite 临时文件已清理；`planNode` placeholder、`selectedToolId` 兼容语义、generate 阶段大结果 TODO，以及 V1 当前不变量都已回填到正式代码注释和契约文档；没有把 `TaskFrame` 或 generate size guard 误报成已完成能力 | `DONE` | [agent_node_T008-v1-cleanup-release-hardening.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T008-v1-cleanup-release-hardening.md) |
 | `agent_node_T009` | Evidence Summary + Answer Stop Rule | `AgentEvidenceSummary`、Planner 前置 answer stop rule、`read_list / read_open / web_search / terminal_session` 最小摘要 schema 与 trace 可审计字段已落地；answer stop rule 命中时可阻止第二次 `nextActionPlanner` task-model 调用和重复 `use_tool / retrieve` 执行，但前台 `2026-07-04` black-box smoke test 在工具执行前失败于 `Planner output was invalid JSON`，当前不能维持 `DONE` | `READY_FOR_REVIEW` | [agent_node_T009-evidence-summary-answer-stop-rule.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T009-evidence-summary-answer-stop-rule.md) |
+| `agent_node_T010` | `nextActionPlannerNode` JSON Contract Hardening | `T010` 是 `T009` 前台 smoke blocker 修复任务：当前已为 planner 增加脏输出提取、schema 校验和 trace 诊断，能处理 fenced JSON / 前缀 JSON / think 后 JSON；`Repeated Tool Guard` 尚未正式派发，本次不做，后续可作为 `T011` 候选任务。但 `2026-07-04` 前台 smoke 仍停在 `Planner output was invalid JSON`，当前只能保持评审态 | `READY_FOR_REVIEW` | [agent_node_T010-next-action-planner-json-contract-hardening.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T010-next-action-planner-json-contract-hardening.md) |
 
 ## Current Ground Truth
 
@@ -151,7 +153,7 @@ Agent node 专属总台账。
 - 前台手测未通过。
 - 当前阻塞项不是重复工具执行，而是 `2026-07-04` 前台 black-box smoke test 在 4 条用例里都停在 `Planner output was invalid JSON; planner must stop instead of pretending an answer is ready.`，失败发生在工具执行前。
 - 因此前台当前无法证明 `read_list / read_open / terminal_session` 的真实单次收口行为。
-- 当前下一步不是扩 T009 范围去改前端，而是先排查并修复前台运行时的 Planner 非法 JSON 问题，再重新执行 T009 smoke test。
+- 当前下一步不是扩 T009 范围去改前端，而是先处理 `T010` 的 Planner JSON Contract Hardening，再重新执行 T009 smoke test。
 - `T009` 当前状态为 `READY_FOR_REVIEW`，不能维持 `DONE`，`T010` 也不应在这个状态下提前作为验收结论推进。
 
 ## Work Rules
@@ -262,3 +264,26 @@ Agent node 专属总台账。
     - `执行 dir 命令看看结果`：`FAIL`
     - 共同现象：均在工具执行前失败于 `Planner output was invalid JSON; planner must stop instead of pretending an answer is ready.`
   - 因此前台验收不成立，`agent_node_T009` 状态更新为 `READY_FOR_REVIEW`
+  - 追加第十个节点任务编号 `agent_node_T010`
+  - 明确 `T010` 是 `T009` 的前台 smoke blocker 修复任务，只处理 `nextActionPlannerNode` 的 JSON 契约加固
+  - 明确 `Repeated Tool Guard` 不是当前正式任务，本次不做；后续可作为 `agent_node_T011-repeated-tool-guard`
+  - `agent_node_T010` 已完成当前后端实现：
+    - planner 支持 fenced JSON、中文前缀 + JSON、`<think>...</think>` + JSON
+    - 多个 JSON object 时直接失败，不猜
+    - schema 非法时直接失败，不猜
+    - trace 已补 `rawOutputPreview / sanitizedOutputPreview / parseErrorReason / allowedActionTypes`
+  - 定向验证结果：
+    - `pnpm --filter @ui-chat-mira/server test -- src/agent/next-action-planner.test.ts`
+      - 结果：通过，`21 passed`
+    - `pnpm --filter @ui-chat-mira/server test -- src/agent/graph.test.ts src/agent/next-action-planner.test.ts src/agent/tool-node.test.ts src/agent/policy.test.ts src/agent/tool-call-normalize.test.ts`
+      - 结果：通过，`70 passed`
+    - `pnpm --filter @ui-chat-mira/server typecheck`
+      - 结果：通过
+    - `pnpm check`
+      - 结果：通过
+  - `2026-07-04` 前台黑盒复测：
+    - `看看当前 workspace 有哪些文件`：`FAIL`
+    - 当前失败阶段仍为 `nextActionPlanner` invalid JSON
+    - 当前页面路径仍停在 `准备上下文 -> 执行计划 -> 候选选择 -> 调用前守卫 -> 执行计划 -> 错误节点`
+    - 尚未进入 `Normalize / Policy / ToolNode`
+  - 因此前台当前仍无法证明 `T010` 已消除真实运行态 blocker，`agent_node_T010` 状态更新为 `READY_FOR_REVIEW`

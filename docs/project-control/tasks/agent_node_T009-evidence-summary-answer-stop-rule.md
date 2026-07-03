@@ -34,7 +34,7 @@ task_state: READY_FOR_REVIEW
 4. `read_list / read_open / web_search / terminal_session` 的最小 summary schema
 5. trace 中“为什么 answer / 为什么继续 / 为什么停止”的可审计表达
 
-本任务只做任务卡，不改实现代码，不改测试，不改 Harness，不改 UI。
+本任务卡定义的是 T009 的实现边界与验收口径；对应实现不得越界到 Harness、UI 或无关模块。
 
 ## Current V1 Invariants
 

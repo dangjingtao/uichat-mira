@@ -1,5 +1,6 @@
 import { providerProxyService } from "@/services/provider-proxy.service/index.js";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
+import { writeStructuredLog } from "@/logger";
 import { toAgentExecutionNode } from "./trace.js";
 import { getAnswerStopDecision, getLatestEvidenceSummary } from "./evidence.js";
 import type {
@@ -17,12 +18,57 @@ import type { AgentGraphState, EmitAgentExecutionNode } from "./nodes.js";
 
 const NEXT_ACTION_PLANNER_FALLBACK_REASON =
   "Planner fallback: unable to safely determine next action.";
+const PLANNER_OUTPUT_PREVIEW_LIMIT = 500;
+const ALLOWED_ACTION_TYPES = ["answer", "retrieve", "use_tool", "error"] as const;
+const INVALID_PLANNER_OUTPUT_REASON =
+  "Planner output was invalid JSON; planner must stop instead of pretending an answer is ready.";
+
+const stripThinkBlocks = (value: string) =>
+  value.replace(/^\s*(?:<think\b[^>]*>[\s\S]*?<\/think>\s*)+/i, "").trim();
 
 const sanitizePlannerJson = (value: string) =>
-  value
+  stripThinkBlocks(value)
     .replace(/```json/gi, "```")
     .replace(/```[\r\n]?/g, "")
     .trim();
+
+const toPreview = (value: string) =>
+  value.trim().slice(0, PLANNER_OUTPUT_PREVIEW_LIMIT);
+
+const logPlannerDecisionDebug = (input: {
+  runId: string;
+  threadId: string;
+  iteration: number;
+  maxIterations: number;
+  answerStopRuleTriggered: boolean;
+  taskModelInvoked: boolean;
+  nextAction: AgentNextAction;
+  rawOutput: string;
+  sanitizedOutput: string;
+  parseErrorReason?: string;
+  parseWarnings?: string[];
+}) => {
+  writeStructuredLog(input.parseErrorReason ? "warn" : "info", {
+    msg: "Planner decision debug",
+    event: "agent-next-action-planner-debug",
+    runId: input.runId,
+    threadId: input.threadId,
+    iteration: input.iteration,
+    maxIterations: input.maxIterations,
+    answerStopRuleTriggered: input.answerStopRuleTriggered,
+    taskModelInvoked: input.taskModelInvoked,
+    selectedActionType: input.nextAction.type,
+    selectedToolId: input.nextAction.type === "use_tool" ? input.nextAction.toolId : null,
+    reason: input.nextAction.reason,
+    parseErrorReason: input.parseErrorReason,
+    parseWarnings: input.parseWarnings,
+    rawOutputPreview: input.rawOutput ? toPreview(input.rawOutput) : undefined,
+    sanitizedOutputPreview: input.sanitizedOutput
+      ? toPreview(input.sanitizedOutput)
+      : undefined,
+    allowedActionTypes: [...ALLOWED_ACTION_TYPES],
+  });
+};
 
 const getLatestUserQuestion = (messages: NormalizedChatMessage[]) => {
   const latest = [...messages].reverse().find((message) => message.role === "user");
@@ -181,81 +227,293 @@ const toNextActionFallback = (reason = NEXT_ACTION_PLANNER_FALLBACK_REASON): Age
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
-const parseNextActionPlannerOutput = (value: string): AgentNextAction | null => {
-  const sanitized = sanitizePlannerJson(value);
-  if (!sanitized) {
-    return null;
-  }
+type PlannerOutputParseResult = {
+  action: AgentNextAction | null;
+  sanitizedOutput: string;
+  parseErrorReason: string | null;
+  parseWarnings: string[];
+};
 
-  try {
-    const parsed = JSON.parse(sanitized) as Record<string, unknown>;
-    if (!isPlainObject(parsed) || typeof parsed.type !== "string") {
-      return null;
-    }
+const MISSING_REASON_DEFAULTED_WARNING = "missing_reason_defaulted";
 
-    if (typeof parsed.reason !== "string" || !parsed.reason.trim()) {
-      return null;
-    }
-
-    switch (parsed.type) {
-      case "answer":
-        return {
-          type: "answer",
-          reason: parsed.reason.trim(),
-        };
-      case "retrieve":
-        if (typeof parsed.query !== "string" || !parsed.query.trim()) {
-          return null;
-        }
-        return {
-          type: "retrieve",
-          query: parsed.query.trim(),
-          reason: parsed.reason.trim(),
-        };
-      case "use_tool":
-        if (
-          typeof parsed.toolId !== "string" ||
-          !parsed.toolId.trim() ||
-          !isPlainObject(parsed.args)
-        ) {
-          return null;
-        }
-        return {
-          type: "use_tool",
-          toolId: parsed.toolId.trim(),
-          args: parsed.args,
-          reason: parsed.reason.trim(),
-        };
-      case "error":
-        return {
-          type: "error",
-          reason: parsed.reason.trim(),
-        };
-      default:
-        return null;
-    }
-  } catch {
-    return null;
+const getDefaultPlannerReason = (
+  type: AgentNextAction["type"],
+  payload: Record<string, unknown>,
+) => {
+  switch (type) {
+    case "answer":
+      return "Planner selected final answer.";
+    case "retrieve":
+      return `Planner requested retrieval for query: ${String(payload.query ?? "").trim()}.`;
+    case "use_tool":
+      return `Planner selected tool ${String(payload.toolId ?? "").trim()}.`;
+    case "error":
+      return "Planner returned an error action without a reason.";
   }
 };
 
+const extractJsonObjectCandidates = (value: string) => {
+  const candidates: string[] = [];
+  let startIndex = -1;
+  let depth = 0;
+  let inString = false;
+  let escaping = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (!char) {
+      continue;
+    }
+
+    if (inString) {
+      if (escaping) {
+        escaping = false;
+        continue;
+      }
+
+      if (char === "\\") {
+        escaping = true;
+        continue;
+      }
+
+      if (char === "\"") {
+        inString = false;
+      }
+
+      continue;
+    }
+
+    if (char === "\"") {
+      inString = true;
+      continue;
+    }
+
+    if (char === "{") {
+      if (depth === 0) {
+        startIndex = index;
+      }
+      depth += 1;
+      continue;
+    }
+
+    if (char === "}" && depth > 0) {
+      depth -= 1;
+      if (depth === 0 && startIndex >= 0) {
+        candidates.push(value.slice(startIndex, index + 1));
+        startIndex = -1;
+      }
+    }
+  }
+
+  return candidates;
+};
+
+const parseNextActionPlannerObject = (
+  parsed: Record<string, unknown>,
+): PlannerOutputParseResult => {
+  if (typeof parsed.type !== "string") {
+    return {
+      action: null,
+      sanitizedOutput: "",
+      parseErrorReason: 'Planner JSON object must include a string "type" field.',
+      parseWarnings: [],
+    };
+  }
+
+  const parseWarnings: string[] = [];
+  const reason: string =
+    typeof parsed.reason === "string" && parsed.reason.trim()
+      ? parsed.reason.trim()
+      : (() => {
+          parseWarnings.push(MISSING_REASON_DEFAULTED_WARNING);
+          return (
+            getDefaultPlannerReason(parsed.type as AgentNextAction["type"], parsed) ??
+            "Planner returned an error action without a reason."
+          );
+        })();
+
+  switch (parsed.type) {
+    case "answer":
+      return {
+        action: {
+          type: "answer",
+          reason,
+        },
+        sanitizedOutput: "",
+        parseErrorReason: null,
+        parseWarnings,
+      };
+    case "retrieve":
+      if (typeof parsed.query !== "string" || !parsed.query.trim()) {
+        return {
+          action: null,
+          sanitizedOutput: "",
+          parseErrorReason:
+            'Planner "retrieve" action must include a non-empty string "query" field.',
+          parseWarnings: [],
+        };
+      }
+      return {
+        action: {
+          type: "retrieve",
+          query: parsed.query.trim(),
+          reason,
+        },
+        sanitizedOutput: "",
+        parseErrorReason: null,
+        parseWarnings,
+      };
+    case "use_tool":
+      if (typeof parsed.toolId !== "string" || !parsed.toolId.trim()) {
+        return {
+          action: null,
+          sanitizedOutput: "",
+          parseErrorReason:
+            'Planner "use_tool" action must include a non-empty string "toolId" field.',
+          parseWarnings: [],
+        };
+      }
+      if (!isPlainObject(parsed.args)) {
+        return {
+          action: null,
+          sanitizedOutput: "",
+          parseErrorReason:
+            'Planner "use_tool" action must include an object-valued "args" field.',
+          parseWarnings: [],
+        };
+      }
+      return {
+        action: {
+          type: "use_tool",
+          toolId: parsed.toolId.trim(),
+          args: parsed.args,
+          reason,
+        },
+        sanitizedOutput: "",
+        parseErrorReason: null,
+        parseWarnings,
+      };
+    case "error":
+      return {
+        action: {
+          type: "error",
+          reason,
+        },
+        sanitizedOutput: "",
+        parseErrorReason: null,
+        parseWarnings,
+      };
+    default:
+      return {
+        action: null,
+        sanitizedOutput: "",
+        parseErrorReason: `Planner action type "${parsed.type}" is not allowed.`,
+        parseWarnings: [],
+      };
+  }
+};
+
+const parseNextActionPlannerOutputWithDiagnostics = (
+  value: string,
+): PlannerOutputParseResult => {
+  const sanitized = sanitizePlannerJson(value);
+  if (!sanitized) {
+    return {
+      action: null,
+      sanitizedOutput: sanitized,
+      parseErrorReason: "Planner output was empty after sanitization.",
+      parseWarnings: [],
+    };
+  }
+
+  const candidates = extractJsonObjectCandidates(sanitized);
+  if (candidates.length === 0) {
+    return {
+      action: null,
+      sanitizedOutput: sanitized,
+      parseErrorReason: "Planner output did not contain a complete JSON object.",
+      parseWarnings: [],
+    };
+  }
+
+  if (candidates.length > 1) {
+    return {
+      action: null,
+      sanitizedOutput: sanitized,
+      parseErrorReason:
+        "Planner output contained multiple JSON objects; planner must return exactly one decision object.",
+      parseWarnings: [],
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(candidates[0]!) as unknown;
+    if (!isPlainObject(parsed)) {
+      return {
+        action: null,
+        sanitizedOutput: sanitized,
+        parseErrorReason: "Planner decision must be a JSON object.",
+        parseWarnings: [],
+      };
+    }
+
+    const result = parseNextActionPlannerObject(parsed);
+    return {
+      action: result.action,
+      sanitizedOutput: sanitized,
+      parseErrorReason: result.parseErrorReason,
+      parseWarnings: result.parseWarnings,
+    };
+  } catch (error) {
+    return {
+      action: null,
+      sanitizedOutput: sanitized,
+      parseErrorReason:
+        error instanceof Error && error.message.trim()
+          ? `Planner JSON parse failed: ${error.message.trim()}`
+          : "Planner JSON parse failed.",
+      parseWarnings: [],
+    };
+  }
+};
+
+export const parseNextActionPlannerOutput = (value: string): AgentNextAction | null =>
+  parseNextActionPlannerOutputWithDiagnostics(value).action;
+
 const validateNextAction = (
-  action: AgentNextAction | null,
+  parseResult: PlannerOutputParseResult,
   exposedTools: string[],
-): AgentNextAction => {
-  if (!action) {
-    return toNextActionFallback(
-      "Planner output was invalid JSON; planner must stop instead of pretending an answer is ready.",
-    );
+): {
+  action: AgentNextAction;
+  parseErrorReason?: string;
+  sanitizedOutput?: string;
+  parseWarnings?: string[];
+} => {
+  if (!parseResult.action) {
+    return {
+      action: toNextActionFallback(INVALID_PLANNER_OUTPUT_REASON),
+      parseErrorReason: parseResult.parseErrorReason ?? INVALID_PLANNER_OUTPUT_REASON,
+      sanitizedOutput: parseResult.sanitizedOutput,
+      parseWarnings: parseResult.parseWarnings,
+    };
   }
 
+  const action = parseResult.action;
   if (action.type === "use_tool" && !exposedTools.includes(action.toolId)) {
-    return toNextActionFallback(
-      "Planner selected a tool that was not exposed for this turn; planner must stop.",
-    );
+    return {
+      action: toNextActionFallback(
+        "Planner selected a tool that was not exposed for this turn; planner must stop.",
+      ),
+      sanitizedOutput: parseResult.sanitizedOutput,
+      parseWarnings: parseResult.parseWarnings,
+    };
   }
 
-  return action;
+  return {
+    action,
+    sanitizedOutput: parseResult.sanitizedOutput,
+    parseWarnings: parseResult.parseWarnings,
+  };
 };
 
 export const nextActionPlannerNode = async (
@@ -296,6 +554,11 @@ export const nextActionPlannerNode = async (
 
   let nextAction: AgentNextAction;
   let rawOutput = "";
+  let sanitizedOutput = "";
+  let parseErrorReason: string | undefined;
+  let parseWarnings: string[] | undefined;
+  const taskModelInvoked =
+    !answerStopDecision.shouldAnswer && !(maxIterations > 0 && iteration >= maxIterations);
 
   if (answerStopDecision.shouldAnswer) {
     nextAction = {
@@ -325,10 +588,14 @@ export const nextActionPlannerNode = async (
         rawOutput += delta;
       }
 
-      nextAction = validateNextAction(
-        parseNextActionPlannerOutput(rawOutput),
+      const validationResult = validateNextAction(
+        parseNextActionPlannerOutputWithDiagnostics(rawOutput),
         toolExposure.exposedTools,
       );
+      nextAction = validationResult.action;
+      sanitizedOutput = validationResult.sanitizedOutput ?? "";
+      parseErrorReason = validationResult.parseErrorReason;
+      parseWarnings = validationResult.parseWarnings;
     } catch (error) {
       nextAction = toNextActionFallback(
         error instanceof Error && error.message.trim()
@@ -337,6 +604,20 @@ export const nextActionPlannerNode = async (
       );
     }
   }
+
+  logPlannerDecisionDebug({
+    runId: state.runId,
+    threadId: state.threadId,
+    iteration,
+    maxIterations,
+    answerStopRuleTriggered: answerStopDecision.shouldAnswer,
+    taskModelInvoked,
+    nextAction,
+    rawOutput,
+    sanitizedOutput,
+    parseErrorReason,
+    parseWarnings,
+  });
 
   await emitStepNode(emit, {
     runId: state.runId,
@@ -355,7 +636,11 @@ export const nextActionPlannerNode = async (
       latestEvidenceSummary: latestEvidenceSummary ?? null,
       answerStopRuleTriggered: answerStopDecision.shouldAnswer,
       answerStopRuleReason: answerStopDecision.reason,
-      rawOutputPreview: rawOutput ? rawOutput.slice(0, 200) : undefined,
+      rawOutputPreview: rawOutput ? toPreview(rawOutput) : undefined,
+      sanitizedOutputPreview: sanitizedOutput ? toPreview(sanitizedOutput) : undefined,
+      parseErrorReason,
+      parseWarnings,
+      allowedActionTypes: [...ALLOWED_ACTION_TYPES],
     },
   });
 

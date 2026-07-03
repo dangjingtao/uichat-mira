@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import { test, vi } from "vitest";
+import { subscribeToLogLines } from "@/logger";
 import { providerProxyService } from "@/services/provider-proxy.service/index.js";
 import type { AgentNodeState } from "./nodes.js";
-import { nextActionPlannerNode } from "./next-action-planner.js";
+import {
+  nextActionPlannerNode,
+  parseNextActionPlannerOutput,
+} from "./next-action-planner.js";
 
 const createState = (
   overrides: Partial<AgentNodeState> = {},
@@ -91,6 +95,126 @@ test("nextActionPlannerNode returns answer action from task model JSON", async (
   } finally {
     streamSpy.mockRestore();
   }
+});
+
+test("parseNextActionPlannerOutput accepts fenced JSON output", () => {
+  assert.deepEqual(
+    parseNextActionPlannerOutput(
+      '```json\n{"type":"answer","reason":"Evidence is already sufficient."}\n```',
+    ),
+    {
+      type: "answer",
+      reason: "Evidence is already sufficient.",
+    },
+  );
+});
+
+test("parseNextActionPlannerOutput accepts prefixed JSON output", () => {
+  assert.deepEqual(
+    parseNextActionPlannerOutput(
+      '好的，下面是 JSON：\n{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need the file content."}',
+    ),
+    {
+      type: "use_tool",
+      toolId: "read_open",
+      args: {
+        path: "README.md",
+      },
+      reason: "Need the file content.",
+    },
+  );
+});
+
+test("parseNextActionPlannerOutput accepts think-prefixed JSON output", () => {
+  assert.deepEqual(
+    parseNextActionPlannerOutput(
+      '<think>Need to inspect the file first.</think>\n{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need file content."}',
+    ),
+    {
+      type: "use_tool",
+      toolId: "read_open",
+      args: {
+        path: "README.md",
+      },
+      reason: "Need file content.",
+    },
+  );
+});
+
+test("parseNextActionPlannerOutput accepts think-prefixed answer JSON output", () => {
+  assert.deepEqual(
+    parseNextActionPlannerOutput(
+      '<think>Evidence is enough.</think>\n{"type":"answer","reason":"Evidence is already sufficient."}',
+    ),
+    {
+      type: "answer",
+      reason: "Evidence is already sufficient.",
+    },
+  );
+});
+
+test("parseNextActionPlannerOutput defaults reason for use_tool read_list output", () => {
+  assert.deepEqual(
+    parseNextActionPlannerOutput(
+      '{"type":"use_tool","toolId":"read_list","args":{"path":"/workspace"}}',
+    ),
+    {
+      type: "use_tool",
+      toolId: "read_list",
+      args: {
+        path: "/workspace",
+      },
+      reason: "Planner selected tool read_list.",
+    },
+  );
+});
+
+test("parseNextActionPlannerOutput defaults reason for use_tool read_open output", () => {
+  assert.deepEqual(
+    parseNextActionPlannerOutput(
+      '{"type":"use_tool","toolId":"read_open","args":{"path":"/README.md"}}',
+    ),
+    {
+      type: "use_tool",
+      toolId: "read_open",
+      args: {
+        path: "/README.md",
+      },
+      reason: "Planner selected tool read_open.",
+    },
+  );
+});
+
+test("parseNextActionPlannerOutput defaults reason for retrieve output", () => {
+  assert.deepEqual(
+    parseNextActionPlannerOutput(
+      '{"type":"retrieve","query":"查看 README.md 的内容"}',
+    ),
+    {
+      type: "retrieve",
+      query: "查看 README.md 的内容",
+      reason: "Planner requested retrieval for query: 查看 README.md 的内容.",
+    },
+  );
+});
+
+test("parseNextActionPlannerOutput defaults reason for answer output", () => {
+  assert.deepEqual(
+    parseNextActionPlannerOutput('{"type":"answer"}'),
+    {
+      type: "answer",
+      reason: "Planner selected final answer.",
+    },
+  );
+});
+
+test("parseNextActionPlannerOutput rejects multiple JSON objects instead of guessing", () => {
+  assert.equal(
+    parseNextActionPlannerOutput(
+      '{"type":"answer","reason":"First."}\n{"type":"error","reason":"Second."}',
+    ),
+    null,
+  );
 });
 
 test("nextActionPlannerNode short-circuits to answer when latest evidence summary is answer-ready", async () => {
@@ -190,6 +314,55 @@ test("nextActionPlannerNode returns use_tool action when toolId is exposed", asy
   }
 });
 
+test("nextActionPlannerNode keeps missing-reason use_tool output as a valid action", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"}}';
+    });
+  const events: Array<Record<string, unknown>> = [];
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState(),
+      async (event) => {
+        events.push({
+          nodeId: event.nodeId,
+          phase: event.phase,
+          details: event.details,
+        });
+      },
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: {
+          path: "README.md",
+        },
+        reason: "Planner selected tool read_open.",
+      },
+    });
+
+    const doneEvent = events.find(
+      (event) =>
+        event.nodeId === "agent-next-action-planner" && event.phase === "done",
+    );
+    assert.ok(doneEvent);
+    assert.deepEqual(
+      (doneEvent?.details as Record<string, unknown>)?.parseWarnings,
+      ["missing_reason_defaulted"],
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.parseErrorReason,
+      undefined,
+    );
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
 test("nextActionPlannerNode treats ask_user output as invalid for the current planner contract", async () => {
   const streamSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
@@ -260,6 +433,159 @@ test("nextActionPlannerNode falls back when task model output is invalid JSON", 
   } finally {
     streamSpy.mockRestore();
   }
+});
+
+test("nextActionPlannerNode writes invalid planner output diagnostics into trace", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"answer","reason":"First."}\n{"type":"error","reason":"Second."}';
+    });
+  const events: Array<Record<string, unknown>> = [];
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState(),
+      async (event) => {
+        events.push({
+          nodeId: event.nodeId,
+          phase: event.phase,
+          details: event.details,
+        });
+      },
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "error",
+        reason:
+          "Planner output was invalid JSON; planner must stop instead of pretending an answer is ready.",
+      },
+      errorMessage:
+        "Planner output was invalid JSON; planner must stop instead of pretending an answer is ready.",
+      blockedReason:
+        "Planner output was invalid JSON; planner must stop instead of pretending an answer is ready.",
+      errorSourceNodeId: "agent-next-action-planner",
+    });
+
+    const doneEvent = events.find(
+      (event) =>
+        event.nodeId === "agent-next-action-planner" && event.phase === "done",
+    );
+    assert.ok(doneEvent);
+    assert.match(
+      String((doneEvent?.details as Record<string, unknown>)?.rawOutputPreview ?? ""),
+      /"type":"answer"/,
+    );
+    assert.match(
+      String(
+        (doneEvent?.details as Record<string, unknown>)?.sanitizedOutputPreview ?? "",
+      ),
+      /"type":"error"/,
+    );
+    assert.match(
+      String((doneEvent?.details as Record<string, unknown>)?.parseErrorReason ?? ""),
+      /multiple JSON objects/i,
+    );
+    assert.deepEqual(
+      (doneEvent?.details as Record<string, unknown>)?.allowedActionTypes,
+      ["answer", "retrieve", "use_tool", "error"],
+    );
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode writes invalid planner output diagnostics into structured logs", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"answer","reason":"First."}\n{"type":"error","reason":"Second."}';
+    });
+  const seen: string[] = [];
+  const unsubscribe = subscribeToLogLines((line) => {
+    seen.push(line);
+  });
+
+  try {
+    await nextActionPlannerNode(
+      createState({
+        runId: "run-log-invalid-json",
+        threadId: "thread-log-invalid-json",
+      }),
+    );
+  } finally {
+    unsubscribe();
+    streamSpy.mockRestore();
+  }
+
+  const debugLine = seen
+    .map((line) => {
+      try {
+        return JSON.parse(line) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    })
+    .find(
+      (entry) =>
+        entry?.event === "agent-next-action-planner-debug" &&
+        entry.runId === "run-log-invalid-json",
+    );
+
+  assert.ok(debugLine);
+  assert.equal(debugLine?.threadId, "thread-log-invalid-json");
+  assert.equal(debugLine?.selectedActionType, "error");
+  assert.match(String(debugLine?.rawOutputPreview ?? ""), /"type":"answer"/);
+  assert.match(String(debugLine?.sanitizedOutputPreview ?? ""), /"type":"error"/);
+  assert.match(String(debugLine?.parseErrorReason ?? ""), /multiple JSON objects/i);
+});
+
+test("nextActionPlannerNode writes missing_reason_defaulted warning into structured logs", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"retrieve","query":"README"}';
+    });
+  const seen: string[] = [];
+  const unsubscribe = subscribeToLogLines((line) => {
+    seen.push(line);
+  });
+
+  try {
+    await nextActionPlannerNode(
+      createState({
+        runId: "run-log-missing-reason",
+        threadId: "thread-log-missing-reason",
+      }),
+    );
+  } finally {
+    unsubscribe();
+    streamSpy.mockRestore();
+  }
+
+  const debugLine = seen
+    .map((line) => {
+      try {
+        return JSON.parse(line) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    })
+    .find(
+      (entry) =>
+        entry?.event === "agent-next-action-planner-debug" &&
+        entry.runId === "run-log-missing-reason",
+    );
+
+  assert.ok(debugLine);
+  assert.equal(debugLine?.selectedActionType, "retrieve");
+  assert.deepEqual(debugLine?.parseWarnings, ["missing_reason_defaulted"]);
+  assert.equal(debugLine?.parseErrorReason, undefined);
+  assert.equal(
+    debugLine?.reason,
+    "Planner requested retrieval for query: README.",
+  );
 });
 
 test("nextActionPlannerNode stops when task model returns an unknown action type", async () => {
