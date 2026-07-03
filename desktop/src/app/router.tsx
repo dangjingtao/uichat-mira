@@ -3,7 +3,7 @@ import App from "../App";
 import { GuestOnly } from "./route-guards/GuestOnly";
 import { RequireAuth } from "./route-guards/RequireAuth";
 import LoginPage from "../features/auth/pages/LoginPage";
-import BaseLayout from "@/app/layouts/BaseLayout";
+import BaseLayout from "@/app/Layouts/BaseLayout";
 import HomePage from "@/features/dashboard/pages/HomePage";
 import { RouteErrorBoundary } from "@/shared/ui/ErrorBoundary";
 import { settingsRoutes } from "@/app/routes/settingsRoutes";

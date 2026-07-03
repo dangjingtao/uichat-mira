@@ -1092,6 +1092,7 @@ export const retrieveNode = async (
       },
       retrievalEvidence,
     ),
+    iterationCount: (state.iterationCount ?? 0) + 1,
   };
 };
 

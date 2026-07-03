@@ -14,6 +14,22 @@ import {
 } from "./task-capability-selector.js";
 import type { ToolIntentResult } from "./types.js";
 
+const toAgentToolExposureState = (
+  toolIntent: ToolIntentResult,
+) => ({
+  exposedTools: toolIntent.toolExposure.exposedToolIds,
+  toolMeta: toolIntent.toolExposure.exposedDefinitions.map((definition) => ({
+    toolId: definition.id,
+    title: definition.title,
+    description: definition.description,
+    inputSchema: definition.inputSchema,
+    domain: definition.domain,
+    source: definition.source,
+    tags: definition.tags,
+    capabilities: definition.capabilities,
+  })),
+});
+
 const DEFAULT_TOOL_GUARD_CANDIDATE_LIMIT = 10;
 const EXPLICIT_TARGET_READ_TOOLS = new Set(["read_open", "read", "read_slice"]);
 
@@ -261,6 +277,7 @@ export const toolGuardNode = async (
 
   return {
     toolIntent: resolvedToolIntent,
+    toolExposure: toAgentToolExposureState(resolvedToolIntent),
     selectedToolId,
     pendingToolCall,
   };
@@ -357,6 +374,7 @@ export const toolSelectNode = async (
 
   return {
     toolIntent: resolvedToolIntent,
+    toolExposure: toAgentToolExposureState(resolvedToolIntent),
     selectedToolId,
     pendingToolCall,
   };

@@ -18,11 +18,12 @@ import {
   approvalNode,
   errorNode,
   generateNode,
+  nextActionPlannerNode,
   planNode,
   policyNode,
   prepareContextNode,
-  routeStepNode,
   retrieveNode,
+  toolCallNormalizeNode,
   toolNode,
   type EmitAgentExecutionNode,
 } from "./nodes.js";
@@ -30,8 +31,10 @@ import type {
   AgentGoal,
   AgentGraphInput,
   AgentGraphOutput,
+  AgentNextAction,
   AgentObservation,
   AgentPlan,
+  AgentToolExposureState,
 } from "./types.js";
 import type { ContextBudgetAudit } from "@/services/context-budget/index.js";
 
@@ -50,6 +53,8 @@ const AgentGraphState = Annotation.Root({
   knowledgeBaseId: Annotation<string | null | undefined>,
   intentConfig: Annotation<AgentIntentEmbeddingConfig | undefined>,
   toolIntent: Annotation<ToolIntentResult | undefined>,
+  toolExposure: Annotation<AgentToolExposureState | undefined>,
+  nextAction: Annotation<AgentNextAction | undefined>,
   pendingApproval: Annotation<AgentGraphOutput["pendingApproval"] | undefined>,
   selectedToolId: Annotation<string | undefined>,
   pendingToolCall: Annotation<AgentGraphOutput["pendingToolCall"] | undefined>,
@@ -104,33 +109,22 @@ const createAgentNode = (
     }
   };
 
-const routeAfterToolIntent = (state: AgentGraphStateType) => {
+const hasFrozenPendingToolCall = (
+  pendingToolCall: AgentGraphStateType["pendingToolCall"],
+) =>
+  Boolean(
+    pendingToolCall &&
+      pendingToolCall.source === "planner" &&
+      "status" in pendingToolCall &&
+      pendingToolCall.status === "frozen",
+  );
+
+const routeAfterToolGuard = (state: AgentGraphStateType) => {
   if (state.errorMessage) {
     return "error";
   }
 
-  const lastToolId =
-    state.lastToolExecution?.status === "completed"
-      ? state.lastToolExecution.toolId
-      : undefined;
-  const isReviewingSameTool =
-    state.postToolReviewPending &&
-    Boolean(lastToolId) &&
-    state.pendingToolCall?.toolId === lastToolId;
-
-  if (isReviewingSameTool) {
-    return "generate";
-  }
-
-  if (state.pendingToolCall) {
-    return "policyStep";
-  }
-
-  if (state.postToolReviewPending) {
-    return "generate";
-  }
-
-  return "retrieve";
+  return "nextActionPlanner";
 };
 
 const routeAfterPrepareContext = (state: AgentGraphStateType) => {
@@ -146,6 +140,10 @@ const routeAfterPlanStep = (state: AgentGraphStateType) => {
     return "error";
   }
 
+  if (hasFrozenPendingToolCall(state.pendingToolCall)) {
+    return "policyStep";
+  }
+
   return "toolSelectStep";
 };
 
@@ -155,6 +153,35 @@ const routeAfterToolSelect = (state: AgentGraphStateType) => {
   }
 
   return "toolGuardStep";
+};
+
+const routeAfterNextAction = (state: AgentGraphStateType) => {
+  if (state.errorMessage) {
+    return "error";
+  }
+
+  switch (state.nextAction?.type) {
+    case "answer":
+      return "generate";
+    case "retrieve":
+      return "retrieve";
+    case "ask_user":
+      return "generate";
+    case "use_tool":
+      return "toolCallNormalize";
+    case "error":
+      return "error";
+    default:
+      return "generate";
+  }
+};
+
+const routeAfterToolCallNormalize = (state: AgentGraphStateType) => {
+  if (state.errorMessage || !state.pendingToolCall) {
+    return "error";
+  }
+
+  return "policyStep";
 };
 
 const routeAfterPolicy = (state: AgentGraphStateType) => {
@@ -170,11 +197,7 @@ const routeAfterPolicy = (state: AgentGraphStateType) => {
     return "tool";
   }
 
-  if (state.postToolReviewPending) {
-    return "generate";
-  }
-
-  return "retrieve";
+  return "generate";
 };
 
 const routeAfterTool = (state: AgentGraphStateType) => {
@@ -186,19 +209,7 @@ const routeAfterTool = (state: AgentGraphStateType) => {
     return "approval";
   }
 
-  return "routeStep";
-};
-
-const routeAfterRouteStep = (state: AgentGraphStateType) => {
-  if (state.errorMessage) {
-    return "error";
-  }
-
-  if (state.reviewDecision === "tool") {
-    return "toolSelectStep";
-  }
-
-  return "generate";
+  return "toolSelectStep";
 };
 
 const routeAfterRetrieve = (state: AgentGraphStateType) => {
@@ -206,7 +217,13 @@ const routeAfterRetrieve = (state: AgentGraphStateType) => {
     return "error";
   }
 
-  return "routeStep";
+  const iterationCount = state.iterationCount ?? 0;
+  const maxIterations = state.maxIterations ?? DEFAULT_AGENT_MAX_ITERATIONS;
+  if (maxIterations > 0 && iterationCount >= maxIterations) {
+    return "generate";
+  }
+
+  return "toolSelectStep";
 };
 
 const routeAfterGenerate = (state: AgentGraphStateType) => {
@@ -245,8 +262,15 @@ const agentStateGraph = new StateGraph(AgentGraphState)
     createAgentNode("toolSelectStep", toolSelectNode),
   )
   .addNode("toolGuardStep", createAgentNode("toolGuardStep", toolGuardNode))
+  .addNode(
+    "nextActionPlanner",
+    createAgentNode("nextActionPlanner", nextActionPlannerNode),
+  )
+  .addNode(
+    "toolCallNormalize",
+    createAgentNode("toolCallNormalize", toolCallNormalizeNode),
+  )
   .addNode("policyStep", createAgentNode("policyStep", policyNode))
-  .addNode("routeStep", createAgentNode("routeStep", routeStepNode))
   .addNode("approval", createAgentNode("approval", approvalNode))
   .addNode("retrieve", createAgentNode("retrieve", retrieveNode))
   .addNode("tool", createAgentNode("tool", toolNode))
@@ -259,6 +283,7 @@ const agentStateGraph = new StateGraph(AgentGraphState)
     "error",
   ])
   .addConditionalEdges("planStep", routeAfterPlanStep, [
+    "policyStep",
     "toolSelectStep",
     "error",
   ])
@@ -266,30 +291,36 @@ const agentStateGraph = new StateGraph(AgentGraphState)
     "toolGuardStep",
     "error",
   ])
-  .addConditionalEdges("toolGuardStep", routeAfterToolIntent, [
+  .addConditionalEdges("toolGuardStep", routeAfterToolGuard, [
     "policyStep",
-    "retrieve",
+    "nextActionPlanner",
+    "error",
+  ])
+  .addConditionalEdges("nextActionPlanner", routeAfterNextAction, [
     "generate",
+    "retrieve",
+    "toolCallNormalize",
+    "error",
+  ])
+  .addConditionalEdges("toolCallNormalize", routeAfterToolCallNormalize, [
+    "policyStep",
     "error",
   ])
   .addConditionalEdges("policyStep", routeAfterPolicy, [
     "approval",
     "tool",
-    "retrieve",
     "generate",
     "error",
   ])
   .addConditionalEdges("approval", routeAfterApproval, [END, "error"])
-  .addConditionalEdges("retrieve", routeAfterRetrieve, ["routeStep", "error"])
-  .addConditionalEdges("tool", routeAfterTool, [
-    "approval",
-    "routeStep",
+  .addConditionalEdges("retrieve", routeAfterRetrieve, [
+    "toolSelectStep",
     "generate",
     "error",
   ])
-  .addConditionalEdges("routeStep", routeAfterRouteStep, [
+  .addConditionalEdges("tool", routeAfterTool, [
+    "approval",
     "toolSelectStep",
-    "generate",
     "error",
   ])
   .addConditionalEdges("generate", routeAfterGenerate, ["evaluate", "error"])
@@ -313,8 +344,10 @@ export const agentGraph = {
         intentConfig: input.intentConfig,
         observations: [],
         approvedInvocations: input.approvedInvocations,
+        toolExposure: undefined,
         selectedToolId: input.selectedToolId,
         pendingToolCall: input.pendingToolCall,
+        nextAction: undefined,
         lastToolExecution: undefined,
         evidence: undefined,
         pendingApproval: undefined,
