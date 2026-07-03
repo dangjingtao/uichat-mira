@@ -2,7 +2,7 @@
 status: current
 priority: P1
 owner: agent-runtime
-last_verified: 2026-07-03
+last_verified: 2026-07-04
 layer: project-control
 module: ProjectControl
 feature: AgentGraphWiring
@@ -14,7 +14,7 @@ related:
   - docs/project-control/tasks/agent_node_T002-tool-call-normalize-node.md
   - docs/chat/agent-runtime-design.md
   - docs/harness/agentgraph-harness-protocol.md
-task_state: TODO
+task_state: DONE
 ---
 
 # agent_node_T003 AgentGraph wiring
@@ -329,20 +329,45 @@ if (state.capabilityIntent?.selectedToolIds?.length > 0) {
 
 ## Verification
 
-- 待具体接线实现后补充命令与结果
-- 至少应包含：
-  - `pnpm --filter @ui-chat-mira/server typecheck`
-  - `vitest` 针对 `AgentGraph` 主链路接线的定向测试
-  - 普通问答、检索任务、工具任务、Normalize 失败、超出 `maxIterations` 的路由验证
-  - 旧入口失效验证：`capabilityIntent.selectedToolIds` 不能再直接触发 `policyNode`
+- `pnpm --filter @ui-chat-mira/server typecheck`
+  - 结果：通过
+- `pnpm exec vitest run src/agent/graph.test.ts src/agent/policy.test.ts src/agent/tool-node.test.ts src/agent/resume.test.ts src/agent/next-action-planner.test.ts src/agent/tool-call-normalize.test.ts`
+  - 执行目录：`server/`
+  - 结果：通过，`6` 个测试文件、`54` 个测试通过
+- `pnpm check`
+  - 结果：通过
+- 定向验收已覆盖：
+  - 普通 `answer` 不进入 `policyNode / toolNode`
+  - `use_tool` 必经 `toolCallNormalizeNode`
+  - normalize 失败不进入 `policyNode / toolNode`
+  - `selectedToolIds` 不能直接触发 `policyNode / toolNode`
+  - `retrieve` 完成后回到下一轮 Planner
+  - `tool` 执行后回到下一轮 Planner
+  - `maxIterations` 后不再进入 `retrieve / toolCallNormalize / policyNode / toolNode`
 
 ## Evidence
 
-- 当前为任务建立阶段，尚无实现证据
-- 当前已确认的设计真相：
-  - `nextActionPlannerNode` 与 `toolCallNormalizeNode` 已经是独立节点任务
-  - 第三个任务只负责把这两个节点接入 `AgentGraph`
-  - 执行入口必须从“能力命中执行”切到“Planner 决策执行”
+- Acceptance 1 / 2 / 3 / 4 / 6 / 8
+  - [server/src/agent/graph.ts](D:/workspace/rag-demo/server/src/agent/graph.ts) 已注册 `nextActionPlanner` 与 `toolCallNormalize`，并通过 `routeAfterNextAction` 把 `answer / retrieve / use_tool / error` 分流到 `generate / retrieve / toolCallNormalize / error`
+  - [server/src/agent/graph.ts](D:/workspace/rag-demo/server/src/agent/graph.ts) 已移除 `toolGuardStep -> policyStep` 的直接执行边，`use_tool` 只能从 `nextAction.use_tool -> toolCallNormalizeNode -> pendingToolCall -> policyNode`
+  - [server/src/agent/graph.test.ts](D:/workspace/rag-demo/server/src/agent/graph.test.ts) 已覆盖普通 `answer`、`use_tool`、normalize 失败、`selectedToolIds` 旧入口失效与 `maxIterations` 截止行为
+
+- Acceptance 2 / 5
+  - [server/src/agent/nodes.ts](D:/workspace/rag-demo/server/src/agent/nodes.ts) 中 `retrieveNode` 已使用 `nextAction.retrieve.query` 作为检索 query，并在写回 evidence 后返回 `toolSelectStep`，进入下一轮 Planner 决策
+  - [server/src/agent/graph.test.ts](D:/workspace/rag-demo/server/src/agent/graph.test.ts) 已验证 `retrieve` 不再直接落到 `generate`
+
+- Acceptance 3 / 5 / 7
+  - [server/src/agent/tool-node.ts](D:/workspace/rag-demo/server/src/agent/tool-node.ts) 继续消费 `pendingToolCall`；工具执行完成后返回 `toolSelectStep`，由下一轮 Planner 再决策
+  - [server/src/agent/policy.test.ts](D:/workspace/rag-demo/server/src/agent/policy.test.ts)、[server/src/agent/tool-node.test.ts](D:/workspace/rag-demo/server/src/agent/tool-node.test.ts)、[server/src/agent/resume.test.ts](D:/workspace/rag-demo/server/src/agent/resume.test.ts) 已共同验证 `pendingToolCall` 是审批与执行主入口，旧的 `selectedToolId / selectedToolIds` 不再决定执行
+
+- Acceptance 6
+  - [server/src/agent/intent/node.ts](D:/workspace/rag-demo/server/src/agent/intent/node.ts) 中 `toolSelectNode / toolGuardNode` 只返回 `toolIntent / toolExposure`，不再写 `selectedToolId` 或 `pendingToolCall`
+  - 旧字段当前只保留给暴露面、trace、diagnostics 和漂移检查，不再作为执行入口
+
+- 当前已确认的实现结论：
+  - 第三个任务已经完成主链路接线：`Planner -> Normalize -> Policy -> Tool -> Evidence -> Planner`
+  - 本任务没有重写 Planner、Normalize、Harness、policyNode、toolNode
+  - `selectedToolIds / selectedToolId` 已退出执行入口，只保留兼容输出与诊断职责
 
 ## Risks / Deferred
 
@@ -352,3 +377,11 @@ if (state.capabilityIntent?.selectedToolIds?.length > 0) {
 - 本任务不处理 `policyNode` / `toolNode` 内部实现重写
 - 本任务不处理审批协议升级
 - 本任务不处理完整 runtime 架构改造
+
+## Review Outcome
+
+- 当前提交结论：评审通过
+- 当前状态：`DONE`
+- 范围说明：
+  - 本次只补 `AgentGraph` 主链路接线证据、定向测试结果和总台账状态
+  - `pendingApproval` 恢复链路问题属于 `agent_node_T004`，不在本任务范围内

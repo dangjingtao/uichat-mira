@@ -14,6 +14,7 @@ import type {
   AgentNextAction,
   AgentObservation,
   AgentPlan,
+  AgentPolicyDecision,
   AgentToolCallRequest,
   AgentToolExecutionResult,
   AgentToolExposureState,
@@ -42,6 +43,7 @@ export interface AgentNodeState {
   terminalReason?: string;
   pendingApproval?: AgentApprovalRequest;
   approvedInvocations?: AgentApprovedInvocation[];
+  policyDecision?: AgentPolicyDecision;
   selectedToolId?: string;
   pendingToolCall?: AgentToolCallRequest;
   lastToolExecution?: AgentToolExecutionResult;

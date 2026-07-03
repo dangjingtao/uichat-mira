@@ -127,8 +127,17 @@ export interface AgentApprovedInvocation {
   approvalId: string;
 }
 
+export interface AgentPolicyDecision {
+  type: "allow" | "require_approval" | "deny" | "skip" | "error";
+  toolId?: string;
+  inputHash?: string;
+  reason: string;
+}
+
 export interface AgentToolExecutionResult {
+  toolCallId?: string;
   toolId: string;
+  inputHash?: string;
   args: Record<string, unknown>;
   invocationId?: string;
   status: "completed" | "failed" | "awaiting_approval";
@@ -203,6 +212,7 @@ export interface AgentRun {
   terminalReason?: string;
   pendingApproval?: AgentApprovalRequest;
   approvedInvocations?: AgentApprovedInvocation[];
+  policyDecision?: AgentPolicyDecision;
   contextBudget?: ContextBudgetAudit;
   selectedToolId?: string;
   pendingToolCall?: AgentToolCallRequest;
@@ -268,6 +278,7 @@ export interface AgentGraphInput {
   knowledgeBaseId?: string | null;
   intentConfig?: AgentIntentEmbeddingConfig;
   approvedInvocations?: AgentApprovedInvocation[];
+  policyDecision?: AgentPolicyDecision;
   selectedToolId?: string;
   pendingToolCall?: AgentToolCallRequest;
   maxIterations?: number;
@@ -285,6 +296,7 @@ export interface AgentGraphOutput {
   retrievedChunks: RetrievedChunk[];
   toolIntent?: ToolIntentResult;
   pendingApproval?: AgentApprovalRequest;
+  policyDecision?: AgentPolicyDecision;
   selectedToolId?: string;
   pendingToolCall?: AgentToolCallRequest;
   lastToolExecution?: AgentToolExecutionResult;

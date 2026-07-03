@@ -1,4 +1,3 @@
-import { executeHarnessInvocation } from "@/mcp/harness/invocations.js";
 import { listCapabilityDefinitions } from "@/mcp/harness/registry.js";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
 import { providerProxyService } from "@/services/provider-proxy.service/index.js";
@@ -6,6 +5,12 @@ import { contextBudgetService, type ContextBudgetAudit } from "@/services/contex
 import type { RetrievedChunk } from "@/services/rag-nodes";
 import { agentGenerateTextRunnable, agentRagRunnable } from "./runnables.js";
 import { evaluateAgentToolPolicy } from "./policy.js";
+import {
+  appendObservationEvidence,
+  appendRetrievalEvidence,
+  getEvidenceCounts,
+  getEvidencePayload,
+} from "./evidence.js";
 import {
   emitStepNode,
   getIterativeNodeId,
@@ -18,6 +23,7 @@ import { toAgentExecutionNode, toPlanNodeDetails } from "./trace.js";
 export { nextActionPlannerNode } from "./next-action-planner.js";
 export { policyNode } from "./policy-node.js";
 export { toolCallNormalizeNode } from "./tool-call-normalize.js";
+export { toolNode } from "./tool-node.js";
 export type {
   AgentGraphState,
   AgentNodeState,
@@ -25,8 +31,6 @@ export type {
 } from "./node-runtime.js";
 export { emitStepNode, getIterativeNodeId, getTraceAttemptMeta } from "./node-runtime.js";
 import type {
-  AgentApprovedInvocation,
-  AgentApprovalRequest,
   AgentEvidencePayload,
   AgentGoal,
   AgentNextAction,
@@ -34,7 +38,6 @@ import type {
   AgentPlan,
   AgentPlanStep,
   AgentRetrievalEvidence,
-  AgentToolCallRequest,
   AgentToolExecutionResult,
 } from "./types.js";
 
@@ -104,47 +107,6 @@ const createObservation = (input: {
   createdAt: nowIso(),
 });
 
-const getEvidencePayload = (
-  state: Pick<AgentNodeState, "observations" | "evidence">,
-): AgentEvidencePayload => ({
-  observations: state.evidence?.observations ?? state.observations ?? [],
-  toolExecutions: state.evidence?.toolExecutions ?? [],
-  retrievals: state.evidence?.retrievals ?? [],
-});
-
-const appendObservationEvidence = (
-  state: Pick<AgentNodeState, "observations" | "evidence">,
-  observation: AgentObservation,
-): AgentEvidencePayload => {
-  const current = getEvidencePayload(state);
-  return {
-    ...current,
-    observations: [...current.observations, observation],
-  };
-};
-
-const appendToolExecutionEvidence = (
-  state: Pick<AgentNodeState, "observations" | "evidence">,
-  execution: AgentToolExecutionResult,
-): AgentEvidencePayload => {
-  const current = getEvidencePayload(state);
-  return {
-    ...current,
-    toolExecutions: [...current.toolExecutions, execution],
-  };
-};
-
-const appendRetrievalEvidence = (
-  state: Pick<AgentNodeState, "observations" | "evidence">,
-  retrieval: AgentRetrievalEvidence,
-): AgentEvidencePayload => {
-  const current = getEvidencePayload(state);
-  return {
-    ...current,
-    retrievals: [...current.retrievals, retrieval],
-  };
-};
-
 export const createAgentGoal = (text: string): AgentGoal => ({
   id: crypto.randomUUID(),
   text,
@@ -198,33 +160,6 @@ export const getLatestUserQuestion = (messages: NormalizedChatMessage[]) => {
   return latest?.content.trim() ?? "";
 };
 
-const createPendingApproval = (input: {
-  runId: string;
-  toolId: string;
-  reason: string;
-  args: Record<string, unknown>;
-  inputHash: string;
-}): AgentApprovalRequest => ({
-  id: crypto.randomUUID(),
-  runId: input.runId,
-  stepId: "approval",
-  toolId: input.toolId,
-  reason: input.reason,
-  input: input.args,
-  inputHash: input.inputHash,
-  createdAt: nowIso(),
-});
-
-const hasApprovedInvocation = (
-  approvedInvocations: AgentApprovedInvocation[] | undefined,
-  pendingToolCall: AgentToolCallRequest,
-): boolean =>
-  approvedInvocations?.some(
-    (invocation) =>
-      invocation.toolId === pendingToolCall.toolId &&
-      invocation.inputHash === pendingToolCall.inputHash,
-  ) ?? false;
-
 const emitNodeError = async (
   emit: EmitAgentExecutionNode | undefined,
   input: {
@@ -269,6 +204,26 @@ const emitApprovalNode = async (
       details: input.details,
     }),
   );
+};
+
+const emitEvidenceUpdateNode = async (
+  emit: EmitAgentExecutionNode | undefined,
+  input: {
+    runId: string;
+    nodeId: string;
+    summary: string;
+    details: Record<string, unknown>;
+  },
+) => {
+  await emitStepNode(emit, {
+    runId: input.runId,
+    nodeId: input.nodeId,
+    nodeType: "reason",
+    phase: "done",
+    label: "证据写回",
+    summary: input.summary,
+    details: input.details,
+  });
 };
 
 export const prepareContextNode = async (
@@ -447,10 +402,23 @@ export const retrieveNode = async (
         retrievedCount: 0,
       },
     });
+    const evidence = appendObservationEvidence(state, observation);
+    await emitEvidenceUpdateNode(emit, {
+      runId: state.runId,
+      nodeId: "agent-evidence-update-retrieve",
+      summary: "检索跳过结果已写入 evidence",
+      details: {
+        sourceNode: "retrieveNode",
+        retrievalChunkCount: 0,
+        evidenceCounts: getEvidenceCounts({ evidence }),
+        iteration: state.iterationCount ?? 0,
+        maxIterations: state.maxIterations ?? null,
+      },
+    });
     return {
       retrievedChunks: [],
       observations: [...(state.observations ?? []), observation],
-      evidence: appendObservationEvidence(state, observation),
+      evidence,
     };
   }
 
@@ -499,257 +467,32 @@ export const retrieveNode = async (
       })),
     },
   });
+  const evidence = appendRetrievalEvidence(
+    {
+      ...state,
+      evidence: appendObservationEvidence(state, observation),
+    },
+    retrievalEvidence,
+  );
+  await emitEvidenceUpdateNode(emit, {
+    runId: state.runId,
+    nodeId: "agent-evidence-update-retrieve",
+    summary: "检索结果已写入 evidence",
+    details: {
+      sourceNode: "retrieveNode",
+      query: retrievalQuery,
+      retrievalChunkCount: retrievedChunks.length,
+      evidenceCounts: getEvidenceCounts({ evidence }),
+      iteration: (state.iterationCount ?? 0) + 1,
+      maxIterations: state.maxIterations ?? null,
+    },
+  });
 
   return {
     retrievedChunks,
     observations: [...(state.observations ?? []), observation],
-    evidence: appendRetrievalEvidence(
-      {
-        ...state,
-        evidence: appendObservationEvidence(state, observation),
-      },
-      retrievalEvidence,
-    ),
+    evidence,
     iterationCount: (state.iterationCount ?? 0) + 1,
-  };
-};
-
-export const toolNode = async (
-  state: AgentNodeState,
-  emit?: EmitAgentExecutionNode,
-): Promise<Partial<AgentNodeState>> => {
-  const pendingToolCall = state.pendingToolCall;
-
-  if (!pendingToolCall) {
-    return {};
-  }
-  const toolId = pendingToolCall.toolId;
-
-  if (
-    typeof state.selectedToolId === "string" &&
-    state.selectedToolId !== pendingToolCall.toolId
-  ) {
-    const errorMessage = `Selected tool id mismatch. selectedToolId=${state.selectedToolId ?? "undefined"} pendingToolCall.toolId=${pendingToolCall.toolId}`;
-    const observation = createObservation({
-      runId: state.runId,
-      stepId: "tool",
-      status: "failed",
-      facts: ["Tool execution was blocked because the selected tool drifted from the frozen tool call."],
-      errorMessage,
-    });
-
-    await emitStepNode(emit, {
-      runId: state.runId,
-      nodeId: "agent-tool",
-      nodeType: "tool",
-      phase: "error",
-      label: "工具选择",
-      summary: "工具选择与冻结调用不一致，已阻断执行",
-      details: {
-        selectedToolId: state.selectedToolId ?? null,
-        pendingToolCallToolId: pendingToolCall.toolId,
-        toolCallSource: pendingToolCall.source,
-        errorMessage,
-      },
-    });
-
-    return {
-      observations: [...(state.observations ?? []), observation],
-      evidence: appendObservationEvidence(state, observation),
-      selectedToolId: undefined,
-      pendingToolCall: undefined,
-      errorMessage,
-      blockedReason: errorMessage,
-      errorSourceNodeId: "agent-tool",
-      continueIteration: false,
-      postToolReviewPending: false,
-    };
-  }
-
-  await emitStepNode(emit, {
-    runId: state.runId,
-    nodeId: "agent-tool",
-    nodeType: "tool",
-    phase: "start",
-    label: "工具选择",
-    summary: `已选择 ${toolId}，准备调用 Harness`,
-    details: {
-      toolId,
-      input: pendingToolCall.args,
-    },
-  });
-
-  const invocation = await executeHarnessInvocation({
-    toolId,
-    args: pendingToolCall.args,
-    userId: state.userId,
-    threadId: state.threadId,
-    approvedInvocations: state.approvedInvocations,
-  });
-
-  const finishedAt = nowIso();
-
-  if (invocation.status === "awaiting_approval") {
-    const approval = createPendingApproval({
-      runId: state.runId,
-      toolId,
-      reason: invocation.approval?.reason ?? `${toolId} requires approval.`,
-      args: pendingToolCall.args,
-      inputHash: pendingToolCall.inputHash,
-    });
-
-    const observation = createObservation({
-      runId: state.runId,
-      stepId: "tool",
-      status: "blocked",
-      facts: [`${toolId} paused for approval before completion.`],
-      errorMessage: approval.reason,
-    });
-
-    await emitStepNode(emit, {
-      runId: state.runId,
-      nodeId: "agent-tool",
-      nodeType: "tool",
-      phase: "done",
-      label: "工具选择",
-      summary: `${toolId} 进入审批等待`,
-      details: {
-        toolId,
-        invocationId: invocation.id,
-        input: pendingToolCall.args,
-        approvalReason: approval.reason,
-      },
-    });
-
-    const executionRecord: AgentToolExecutionResult = {
-      toolId,
-      args: pendingToolCall.args,
-      invocationId: invocation.id,
-      status: "awaiting_approval",
-      approval,
-      startedAt: invocation.startedAt ?? pendingToolCall.createdAt,
-      finishedAt,
-    };
-
-    return {
-      pendingApproval: approval,
-      selectedToolId: undefined,
-      pendingToolCall: undefined,
-      lastToolExecution: executionRecord,
-      observations: [...(state.observations ?? []), observation],
-      evidence: appendToolExecutionEvidence(
-        {
-          ...state,
-          evidence: appendObservationEvidence(state, observation),
-        },
-        executionRecord,
-      ),
-      continueIteration: false,
-      postToolReviewPending: false,
-    };
-  }
-
-  if (invocation.status !== "completed") {
-    const errorMessage =
-      invocation.error?.message ?? `${toolId} failed during Harness execution.`;
-    const observation = createObservation({
-      runId: state.runId,
-      stepId: "tool",
-      status: "failed",
-      facts: [`${toolId} failed during Harness execution.`],
-      errorMessage,
-    });
-
-    await emitStepNode(emit, {
-      runId: state.runId,
-      nodeId: "agent-tool",
-      nodeType: "tool",
-      phase: "error",
-      label: "工具选择",
-      summary: `${toolId} 执行失败`,
-      details: {
-        toolId,
-        invocationId: invocation.id,
-        input: pendingToolCall.args,
-        errorMessage,
-      },
-    });
-
-    const executionRecord: AgentToolExecutionResult = {
-      toolId,
-      args: pendingToolCall.args,
-      invocationId: invocation.id,
-      status: "failed",
-      errorMessage,
-      startedAt: invocation.startedAt ?? pendingToolCall.createdAt,
-      finishedAt,
-    };
-
-    return {
-      observations: [...(state.observations ?? []), observation],
-      evidence: appendToolExecutionEvidence(
-        {
-          ...state,
-          evidence: appendObservationEvidence(state, observation),
-        },
-        executionRecord,
-      ),
-      selectedToolId: undefined,
-      pendingToolCall: undefined,
-      lastToolExecution: executionRecord,
-      errorMessage,
-      errorSourceNodeId: "agent-tool",
-      continueIteration: false,
-      postToolReviewPending: false,
-    };
-  }
-
-  const observation = createObservation({
-    runId: state.runId,
-    stepId: "tool",
-    status: "ok",
-    facts: [`${toolId} completed through Harness.`],
-  });
-  const executionRecord: AgentToolExecutionResult = {
-    toolId,
-    args: pendingToolCall.args,
-    invocationId: invocation.id,
-    status: "completed",
-    result: invocation.result,
-    startedAt: invocation.startedAt ?? pendingToolCall.createdAt,
-    finishedAt,
-  };
-
-  await emitStepNode(emit, {
-    runId: state.runId,
-    nodeId: "agent-tool",
-    nodeType: "tool",
-    phase: "done",
-    label: "工具选择",
-    summary: `${toolId} 已由 Harness 执行完成`,
-    details: {
-      toolId,
-      invocationId: invocation.id,
-      input: pendingToolCall.args,
-      output: invocation.result ?? null,
-    },
-  });
-
-  return {
-    observations: [...(state.observations ?? []), observation],
-    evidence: appendToolExecutionEvidence(
-      {
-        ...state,
-        evidence: appendObservationEvidence(state, observation),
-      },
-      executionRecord,
-    ),
-    selectedToolId: undefined,
-    pendingToolCall: undefined,
-    lastToolExecution: executionRecord,
-    iterationCount: (state.iterationCount ?? 0) + 1,
-    continueIteration: false,
-    postToolReviewPending: false,
   };
 };
 

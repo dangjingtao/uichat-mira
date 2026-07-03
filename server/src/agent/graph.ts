@@ -56,6 +56,7 @@ const AgentGraphState = Annotation.Root({
   toolExposure: Annotation<AgentToolExposureState | undefined>,
   nextAction: Annotation<AgentNextAction | undefined>,
   pendingApproval: Annotation<AgentGraphOutput["pendingApproval"] | undefined>,
+  policyDecision: Annotation<AgentGraphOutput["policyDecision"] | undefined>,
   selectedToolId: Annotation<string | undefined>,
   pendingToolCall: Annotation<AgentGraphOutput["pendingToolCall"] | undefined>,
   lastToolExecution: Annotation<AgentGraphOutput["lastToolExecution"] | undefined>,
@@ -172,7 +173,7 @@ const routeAfterNextAction = (state: AgentGraphStateType) => {
     case "error":
       return "error";
     default:
-      return "generate";
+      return "error";
   }
 };
 
@@ -193,8 +194,16 @@ const routeAfterPolicy = (state: AgentGraphStateType) => {
     return "approval";
   }
 
-  if (state.pendingToolCall) {
+  if (
+    state.policyDecision?.type === "allow" &&
+    state.policyDecision.toolId === state.pendingToolCall?.toolId &&
+    state.policyDecision.inputHash === state.pendingToolCall?.inputHash
+  ) {
     return "tool";
+  }
+
+  if (state.errorMessage) {
+    return "error";
   }
 
   return "generate";
@@ -207,6 +216,12 @@ const routeAfterTool = (state: AgentGraphStateType) => {
 
   if (state.pendingApproval) {
     return "approval";
+  }
+
+  const iterationCount = state.iterationCount ?? 0;
+  const maxIterations = state.maxIterations ?? DEFAULT_AGENT_MAX_ITERATIONS;
+  if (maxIterations > 0 && iterationCount >= maxIterations) {
+    return "generate";
   }
 
   return "toolSelectStep";
@@ -343,6 +358,7 @@ export const agentGraph = {
         intentConfig: input.intentConfig,
         observations: [],
         approvedInvocations: input.approvedInvocations,
+        policyDecision: input.policyDecision,
         toolExposure: undefined,
         selectedToolId: input.selectedToolId,
         pendingToolCall: input.pendingToolCall,
@@ -376,6 +392,7 @@ export const agentGraph = {
       retrievedChunks: state.retrievedChunks ?? [],
       toolIntent: state.toolIntent,
       pendingApproval: state.pendingApproval,
+      policyDecision: state.policyDecision,
       selectedToolId:
         state.selectedToolId ??
         state.lastToolExecution?.toolId ??

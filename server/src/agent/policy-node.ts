@@ -124,6 +124,10 @@ export const policyNode = async (
       },
     });
     return {
+      policyDecision: {
+        type: "skip",
+        reason,
+      },
       selectedToolId: undefined,
       pendingApproval: undefined,
       blockedReason: undefined,
@@ -151,6 +155,12 @@ export const policyNode = async (
       },
     });
     return {
+      policyDecision: {
+        type: "error",
+        toolId: pendingToolCall.toolId,
+        inputHash: pendingToolCall.inputHash,
+        reason,
+      },
       selectedToolId: undefined,
       pendingToolCall: undefined,
       pendingApproval: undefined,
@@ -179,6 +189,12 @@ export const policyNode = async (
       },
     });
     return {
+      policyDecision: {
+        type: "error",
+        toolId: pendingToolCall.toolId,
+        inputHash: pendingToolCall.inputHash,
+        reason,
+      },
       selectedToolId: undefined,
       pendingToolCall: undefined,
       pendingApproval: undefined,
@@ -210,6 +226,12 @@ export const policyNode = async (
       },
     });
     return {
+      policyDecision: {
+        type: "allow",
+        toolId: pendingToolCall.toolId,
+        inputHash: pendingToolCall.inputHash,
+        reason: decision.reason,
+      },
       selectedToolId: pendingToolCall.toolId,
       pendingApproval: undefined,
       pendingToolCall,
@@ -240,6 +262,12 @@ export const policyNode = async (
     });
 
     return {
+      policyDecision: {
+        type: "deny",
+        toolId: pendingToolCall.toolId,
+        inputHash: pendingToolCall.inputHash,
+        reason: decision.reason,
+      },
       selectedToolId: undefined,
       pendingToolCall: undefined,
       pendingApproval: undefined,
@@ -269,6 +297,12 @@ export const policyNode = async (
       },
     });
     return {
+      policyDecision: {
+        type: "allow",
+        toolId: pendingToolCall.toolId,
+        inputHash: pendingToolCall.inputHash,
+        reason: "Frozen tool call already approved for this exact inputHash.",
+      },
       selectedToolId: pendingToolCall.toolId,
       pendingApproval: undefined,
       pendingToolCall,
@@ -306,6 +340,12 @@ export const policyNode = async (
   });
 
   return {
+    policyDecision: {
+      type: "require_approval",
+      toolId: pendingToolCall.toolId,
+      inputHash: pendingToolCall.inputHash,
+      reason: decision.reason,
+    },
     pendingApproval,
     selectedToolId: pendingToolCall.toolId,
     pendingToolCall,

@@ -14,7 +14,7 @@ related:
   - docs/project-control/tasks/agent_node_T003-agent-graph-wiring.md
   - docs/chat/agent-runtime-design.md
   - docs/harness/agentgraph-harness-protocol.md
-task_state: TODO
+task_state: DONE
 ---
 
 # agent_node_T004 policyNode consume pendingToolCall only
@@ -372,3 +372,14 @@ selectCapabilityDefinition(...)
 policyNode 只审 frozen pendingToolCall。
 它不选择工具，不生成参数，不创建工具调用。
 ```
+
+## Delivery Evidence
+
+- `policyNode` 已拆分为独立模块，便于评审与后续维护。
+- `policyNode` 现在只审批 frozen `pendingToolCall`，不再从 `capabilityIntent / query / selectedToolId` 生成工具调用。
+- `toolNode` 在 Harness 返回 `awaiting_approval` 时已保留 frozen `pendingToolCall`，审批恢复链路不再丢失调用对象。
+- 定向验证已覆盖 `policyNode`、`toolNode`、`graph`、`resume` 相关路径，并通过当前本地类型检查。
+
+## Review Result
+
+- `2026-07-04`：评审通过，状态更新为 `DONE`。

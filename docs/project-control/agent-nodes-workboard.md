@@ -13,6 +13,9 @@ related:
   - docs/project-control/tasks/agent_node_T002-tool-call-normalize-node.md
   - docs/project-control/tasks/agent_node_T003-agent-graph-wiring.md
   - docs/project-control/tasks/agent_node_T004-policy-node-consume-pending-tool-call.md
+  - docs/project-control/tasks/agent_node_T005-tool-node-execute-frozen-pending-tool-call.md
+  - docs/project-control/tasks/agent_node_T006-evidence-loop-routing.md
+  - docs/project-control/tasks/agent_node_T007-decision-loop-acceptance-regression-guardrails.md
   - docs/chat/agent-runtime-design.md
   - docs/harness/agentgraph-harness-protocol.md
 ---
@@ -41,6 +44,9 @@ Agent node 专属总台账。
 | `agent_node_T002` | `toolCallNormalizeNode` | 当前只实现 Planner 后的“工具调用规范化/冻结节点”，只负责把 `nextAction.use_tool` 校验并冻结成 `pendingToolCall`；不得顺手改 Harness / policy / toolNode / Planner / 完整 loop | `TODO` | [agent_node_T002-tool-call-normalize-node.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T002-tool-call-normalize-node.md) |
 | `agent_node_T003` | `AgentGraph wiring for planner -> normalize -> policy -> tool loop` | 当前任务只做主链路接线：把 `nextActionPlannerNode` 与 `toolCallNormalizeNode` 接入 `AgentGraph`，并让旧的 `capabilityIntent.selectedToolIds -> policyNode` 执行入口失效；不得借机重写 Planner / Normalize / Harness / policy / toolNode | `TODO` | [agent_node_T003-agent-graph-wiring.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T003-agent-graph-wiring.md) |
 | `agent_node_T004` | `policyNode` 只消费 `pendingToolCall` | 当前任务只收敛 `policyNode`：它只能审批冻结后的 `pendingToolCall`，不得自己造工具调用，不得从 `capabilityIntent / query / selectedToolId` 推导执行对象，也不得把 `capabilityId` 当执行对象 | `TODO` | [agent_node_T004-policy-node-consume-pending-tool-call.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T004-policy-node-consume-pending-tool-call.md) |
+| `agent_node_T005` | `toolNode` 只执行 frozen `pendingToolCall` | 当前实现已提交评审：`toolNode` 已拆分为独立模块，只在 `policyDecision.allow` 与 frozen `pendingToolCall` 对齐时执行；执行结果已保留 `toolCallId / inputHash`，成功或失败后会清理 `pendingToolCall`，但整仓打包仍被非本任务失败项阻断 | `READY_FOR_REVIEW` | [agent_node_T005-tool-node-execute-frozen-pending-tool-call.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T005-tool-node-execute-frozen-pending-tool-call.md) |
+| `agent_node_T006` | `evidence` 回流与 Agent loop 路由闭环 | `retrieveNode / toolNode -> evidence -> Planner` 的最小闭环已接通；retrieval / tool evidence 写回、evidence-update trace、去重 helper、`maxIterations` 收口和旧入口阻断都已有定向验证，等待评审确认 | `READY_FOR_REVIEW` | [agent_node_T006-evidence-loop-routing.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T006-evidence-loop-routing.md) |
+| `agent_node_T007` | Agent Decision Loop v1 验收测试与回归护栏 | 当前任务只做闭环验收、自动化测试和最小护栏，证明 `Planner -> Normalize -> Policy -> Tool -> Evidence -> Planner` 已成立，并证明旧 `selectedToolId / selectedToolIds / capabilityId` 执行路径已经失效；不得借机扩成架构重写 | `TODO` | [agent_node_T007-decision-loop-acceptance-regression-guardrails.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T007-decision-loop-acceptance-regression-guardrails.md) |
 
 ## Current Ground Truth
 
@@ -72,6 +78,28 @@ Agent node 专属总台账。
   - `policyNode` 不得再从 `capabilityIntent.selectedToolIds`、`selectedToolId`、`selectedCapabilityId` 推导执行对象
   - 无 `pendingToolCall` 时必须 `skip` 或进入现有 error flow，不得继续进入 `toolNode`
   - 已审批恢复必须至少校验 `toolId + inputHash`，避免审批对象与真实执行对象错位
+- `agent_node_T005` 当前任务已经明确：
+  - `toolNode` 的唯一执行入口必须是 `state.pendingToolCall`
+  - `toolNode` 只执行 frozen 调用，不选择工具、不生成参数、不审批、不理解 capability
+  - `toolNode` 不得再从 `selectedToolId`、`selectedCapabilityId`、`capabilityIntent.selectedToolIds`、`toolIntent.selectedToolIds` 推导执行对象
+  - 无 `pendingToolCall` 时必须阻断执行并写入明确错误或 trace，不得从旧字段恢复工具
+  - 只有 `policy` 明确 `allow` 时才允许执行；`require_approval / deny / skip / error / missing policy decision` 均不得执行
+  - 工具执行结束后必须清理 `pendingToolCall`，避免下一轮误执行旧调用
+  - 当前代码已拆出独立 `tool-node.ts`，并补齐最小 `policyDecision` 状态与 `toolCallId / inputHash` writeback
+- `agent_node_T006` 当前任务已经明确：
+  - `retrieveNode` 与 `toolNode` 的执行结果必须稳定写入 `state.evidence`
+  - `retrieve` / `tool` 完成后必须回到下一轮 Planner，而不是固定直接 `generate`
+  - Planner 下一轮必须能看到最新 retrieval evidence、tool execution result、iteration / maxIterations、toolExposure、taskFrame / plan
+  - `use_tool` 必须继续走 `nextAction -> toolCallNormalize -> policyNode -> toolNode`，不得从旧 `selectedToolId / selectedToolIds` 入口绕过
+  - `approval pending` 时不得继续进入 `toolNode` 或 Planner loop；必须等待用户审批恢复原 frozen `pendingToolCall`
+  - `maxIterations` 到达后不得继续进入 `retrieve / toolCallNormalize / policyNode / toolNode`
+  - trace 必须能看到 `evidence update`、`iteration` 与关键字段：`nextActionType / toolId / toolCallId / inputHash / policyDecision / retrievalChunkCount / evidenceCounts`
+- `agent_node_T007` 当前任务已经明确：
+  - 只做 Agent Decision Loop v1 的验收测试、回归护栏和必要的最小修复
+  - 必须覆盖 `answer / retrieve / use_tool / normalize reject / policy reject / approval pending / maxIterations` 等关键闭环场景
+  - 必须证明 `capabilityIntent.selectedToolIds`、`selectedToolId`、capabilityId 已不能绕过 `Normalize -> Policy -> Tool`
+  - 测试必须 mock provider、retrieve、Harness invocation、trace，不得真实执行外部模型、危险工具或网络请求
+  - 除非测试直接暴露实现缺陷，否则不得借机改 Planner、Harness、MCP registry、Provider Gateway 或架构边界
 
 ## Work Rules
 
@@ -101,3 +129,21 @@ Agent node 专属总台账。
   - 追加第四个节点任务编号 `agent_node_T004`
   - 明确第四个任务只收敛 `policyNode`：只审批 `pendingToolCall`，不再生成工具调用
   - 补齐 `agent_node_T004` 任务卡链接与当前真相说明
+  - 追加第五个节点任务编号 `agent_node_T005`
+  - 明确第五个任务只收敛 `toolNode`：只执行 frozen `pendingToolCall`，不再从旧字段推导工具或参数
+  - 补齐 `agent_node_T005` 任务卡链接与当前真相说明
+  - `agent_node_T005` 已完成实现并提交评审：`toolNode` 已拆分为独立模块，执行入口只保留 frozen `pendingToolCall`
+  - 定向 `server` typecheck、`tool-node / policy / graph / resume` 测试与 `pnpm check` 已通过
+  - `pnpm package:electron:win` 仍被仓库现有的前端 / server 非本任务失败项阻断，当前状态更新为 `READY_FOR_REVIEW`
+  - 追加第六个节点任务编号 `agent_node_T006`
+  - 明确第六个任务只接通 `evidence` 回流与 Agent loop 路由闭环：`行动 -> 证据 -> 再决策`
+  - 补齐 `agent_node_T006` 任务卡链接、路由约束、`approval pending` 限制与 `maxIterations` 停止条件
+  - `agent_node_T006` 已完成实现并进入 `READY_FOR_REVIEW`
+  - 当前实现已补：
+    - retrieval / tool evidence 写回去重 helper
+    - `agent-evidence-update-retrieve` / `agent-evidence-update-tool` trace 事件
+    - `routeAfterNextAction` 默认错误分支与 `routeAfterTool` 的 `maxIterations` 停止收口
+  - 定向验证已通过：`graph.test.ts`、`tool-node.test.ts`、`server` typecheck、`pnpm check`
+  - 追加第七个节点任务编号 `agent_node_T007`
+  - 把 Agent Decision Loop v1 的验收测试与回归护栏正式纳入 `AgentNodes` 总台账
+  - 明确第七个任务只负责闭环验证、测试覆盖、最小护栏和旧执行路径回流防护
