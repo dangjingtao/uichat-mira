@@ -5,15 +5,25 @@ import { providerProxyService } from "@/services/provider-proxy.service/index.js
 import { contextBudgetService, type ContextBudgetAudit } from "@/services/context-budget/index.js";
 import type { RetrievedChunk } from "@/services/rag-nodes";
 import { agentGenerateTextRunnable, agentRagRunnable } from "./runnables.js";
-import { createInvocationInputHash } from "./approval-fingerprint.js";
-import type {
-  AgentIntentEmbeddingConfig,
-  ToolIntentResult,
-} from "./intent/index.js";
 import { evaluateAgentToolPolicy } from "./policy.js";
+import {
+  emitStepNode,
+  getIterativeNodeId,
+  getTraceAttemptMeta,
+  type AgentGraphState,
+  type AgentNodeState,
+  type EmitAgentExecutionNode,
+} from "./node-runtime.js";
 import { toAgentExecutionNode, toPlanNodeDetails } from "./trace.js";
 export { nextActionPlannerNode } from "./next-action-planner.js";
+export { policyNode } from "./policy-node.js";
 export { toolCallNormalizeNode } from "./tool-call-normalize.js";
+export type {
+  AgentGraphState,
+  AgentNodeState,
+  EmitAgentExecutionNode,
+} from "./node-runtime.js";
+export { emitStepNode, getIterativeNodeId, getTraceAttemptMeta } from "./node-runtime.js";
 import type {
   AgentApprovedInvocation,
   AgentApprovalRequest,
@@ -24,50 +34,11 @@ import type {
   AgentPlan,
   AgentPlanStep,
   AgentRetrievalEvidence,
-  AgentToolExposureState,
   AgentToolCallRequest,
-  LegacyAgentToolCallRequest,
   AgentToolExecutionResult,
 } from "./types.js";
 
 const nowIso = () => new Date().toISOString();
-
-type ExecutionEnvironmentHint = {
-  workspaceRoot?: string;
-  cwd?: string;
-  shellFamily?: "powershell" | "cmd" | "posix";
-};
-
-const parseExecutionEnvironmentHint = (
-  messages: NormalizedChatMessage[] | undefined,
-): ExecutionEnvironmentHint => {
-  const content = messages
-    ?.find(
-      (message) =>
-        message.role === "system" &&
-        message.content.includes("当前执行平台：") &&
-        message.content.includes("当前 shell："),
-    )
-    ?.content.trim();
-
-  if (!content) {
-    return {};
-  }
-
-  const workspaceRoot = content.match(/当前 workspaceRoot：(.+)/)?.[1]?.trim();
-  const cwd = content.match(/当前 cwd：(.+)/)?.[1]?.trim();
-  const shellFamily = content.match(/当前 shell：([^(]+)\s*\(/)?.[1]?.trim();
-
-  return {
-    ...(workspaceRoot && workspaceRoot !== "unknown"
-      ? { workspaceRoot }
-      : {}),
-    ...(cwd && cwd !== "unknown" ? { cwd } : {}),
-    ...(shellFamily === "powershell" || shellFamily === "cmd" || shellFamily === "posix"
-      ? { shellFamily }
-      : {}),
-  };
-};
 
 const HIGH_RISK_WORKSPACE_MUTATION_PATTERNS = [
   /\b(delete|remove|rm|move|mv|rename|write|overwrite|modify|patch|replace)\b/i,
@@ -112,211 +83,10 @@ const extractExplicitPathTarget = (query: string) => {
   return fileNameMatch?.[0] ? cleanTrailingPunctuation(fileNameMatch[0]) : null;
 };
 
-const extractPathAfterVerb = (query: string, pattern: RegExp) => {
-  const match = query.match(pattern);
-  if (!match?.[1]) {
-    return null;
-  }
-
-  return cleanTrailingPunctuation(trimWrappedPath(match[1]));
-};
-
-const extractMovePaths = (query: string) => {
-  const match = query.match(
-    /(?:move|rename|移动|重命名)\s+(.+?)\s+(?:to|into|as|到|为)\s+(.+?)(?:[。．，,；;！!？?]|$)/iu,
-  );
-  if (!match?.[1] || !match?.[2]) {
-    return null;
-  }
-
-  return {
-    targetPath: cleanTrailingPunctuation(trimWrappedPath(match[1])),
-    destinationPath: cleanTrailingPunctuation(trimWrappedPath(match[2])),
-  };
-};
-
-const extractWriteArgs = (query: string) => {
-  const quotedContent = extractQuotedValue(query);
-  const targetPath = extractPathAfterVerb(
-    query,
-    /(?:write|overwrite|save|写入|覆盖|保存)(?:\s+["'`].+?["'`])?\s+(?:to|into|到)?\s*(.+?)(?:[。．，,；;！!？?]|$)/iu,
-  );
-  if (quotedContent && targetPath) {
-    return {
-      operation: "write",
-      targetPath,
-      content: quotedContent,
-      overwrite: true,
-    } as const;
-  }
-
-  const chineseMatch = query.match(
-    /把\s*["'`](.+?)["'`]\s*(?:写入|保存到|覆盖到)\s*(.+?)(?:[。．，,；;！!？?]|$)/u,
-  );
-  if (chineseMatch?.[1] && chineseMatch?.[2]) {
-    return {
-      operation: "write",
-      targetPath: cleanTrailingPunctuation(trimWrappedPath(chineseMatch[2])),
-      content: chineseMatch[1],
-      overwrite: true,
-    } as const;
-  }
-
-  return null;
-};
-
-const buildWorkspaceMutationArgs = (query: string) => {
-  const normalized = query.trim();
-  if (!normalized) {
-    return null;
-  }
-
-  if (/\b(delete|remove|rm)\b/i.test(normalized) || /(删除|移除|删掉)/.test(normalized)) {
-    const targetPath =
-      extractPathAfterVerb(
-        normalized,
-        /(?:delete|remove|rm|删除|移除|删掉)\s+(.+?)(?:[。．，,；;！!？?]|$)/iu,
-      ) ?? extractQuotedValue(normalized);
-    if (!targetPath) {
-      return null;
-    }
-
-    return {
-      operation: "delete",
-      targetPath,
-      recursive: true,
-    } as const;
-  }
-
-  if (/\b(move|rename|mv)\b/i.test(normalized) || /(移动|重命名)/.test(normalized)) {
-    const movePaths = extractMovePaths(normalized);
-    if (!movePaths) {
-      return null;
-    }
-
-    return {
-      operation: "move",
-      targetPath: movePaths.targetPath,
-      destinationPath: movePaths.destinationPath,
-      overwrite: false,
-    } as const;
-  }
-
-  if (/\b(write|overwrite|save)\b/i.test(normalized) || /(写入|覆盖|保存|新建文件)/.test(normalized)) {
-    return extractWriteArgs(normalized);
-  }
-
-  return null;
-};
-
-const resolveReadTargetFromEvidence = (state: AgentNodeState, query: string) => {
-  const explicitTarget = extractExplicitPathTarget(query);
-  if (explicitTarget) {
-    return explicitTarget;
-  }
-
-  const latestCompletedTool = [...(state.evidence?.toolExecutions ?? [])]
-    .reverse()
-    .find((execution) => execution.status === "completed" && execution.result);
-  if (!latestCompletedTool?.result || typeof latestCompletedTool.result !== "object") {
-    return null;
-  }
-
-  const result = latestCompletedTool.result as Record<string, unknown>;
-  const hits = Array.isArray(result.hits) ? result.hits : [];
-  const entries = Array.isArray(result.entries) ? result.entries : [];
-  const queryText = normalizeIntentText(query);
-
-  for (const hit of hits) {
-    if (!hit || typeof hit !== "object") {
-      continue;
-    }
-    const path =
-      typeof (hit as Record<string, unknown>).path === "string"
-        ? ((hit as Record<string, unknown>).path as string)
-        : null;
-    if (!path) {
-      continue;
-    }
-    const fileName = path.split(/[\\/]/).at(-1)?.toLowerCase();
-    if (!fileName || queryText.includes(fileName)) {
-      return path;
-    }
-  }
-
-  for (const entry of entries) {
-    if (typeof entry === "string") {
-      if (queryText.includes(entry.toLowerCase())) {
-        return entry;
-      }
-      continue;
-    }
-
-    if (!entry || typeof entry !== "object") {
-      continue;
-    }
-
-    const value = entry as Record<string, unknown>;
-    const name = typeof value.name === "string" ? value.name : null;
-    const path = typeof value.path === "string" ? value.path : name;
-    if (!path) {
-      continue;
-    }
-    const fileName = path.split(/[\\/]/).at(-1)?.toLowerCase();
-    if (!fileName || queryText.includes(fileName)) {
-      return path;
-    }
-  }
-
-  return null;
-};
-
 const getWorkspaceMutationBlockReason = (query: string) =>
   isHighRiskWorkspaceMutationRequest(query)
     ? "High-risk workspace mutation request could not be converted into reviewed structured parameters."
     : "Workspace mutation execution requires explicit structured parameters.";
-
-export interface AgentNodeState {
-  runId: string;
-  threadId: string;
-  userId: number;
-  goal: AgentGoal;
-  plan: AgentPlan;
-  question?: string;
-  taskFrame?: Record<string, unknown> | string;
-  messages: NormalizedChatMessage[];
-  requestContextMessages?: NormalizedChatMessage[];
-  params?: Record<string, unknown>;
-  knowledgeBaseId?: string | null;
-  intentConfig?: AgentIntentEmbeddingConfig;
-  toolIntent?: ToolIntentResult;
-  toolExposure?: AgentToolExposureState;
-  nextAction?: AgentNextAction;
-  answer?: string;
-  retrievedChunks?: RetrievedChunk[];
-  observations?: AgentObservation[];
-  blockedReason?: string;
-  terminalReason?: string;
-  pendingApproval?: AgentApprovalRequest;
-  approvedInvocations?: AgentApprovedInvocation[];
-  selectedToolId?: string;
-  pendingToolCall?: AgentToolCallRequest;
-  lastToolExecution?: AgentToolExecutionResult;
-  evidence?: AgentEvidencePayload;
-  contextBudget?: ContextBudgetAudit;
-  errorMessage?: string;
-  errorSourceNodeId?: string;
-  iterationCount?: number;
-  maxIterations?: number;
-  continueIteration?: boolean;
-  postToolReviewPending?: boolean;
-  reviewDecision?: "tool" | "generate";
-  reviewReason?: string;
-}
-
-export type AgentGraphState = AgentNodeState;
-
-export type EmitAgentExecutionNode = (event: ReturnType<typeof toAgentExecutionNode>) => Promise<void> | void;
 
 const createObservation = (input: {
   runId: string;
@@ -428,91 +198,12 @@ export const getLatestUserQuestion = (messages: NormalizedChatMessage[]) => {
   return latest?.content.trim() ?? "";
 };
 
-export const getIterativeNodeId = (baseNodeId: string, state: Pick<AgentNodeState, "iterationCount">) =>
-  `${baseNodeId}-${state.iterationCount ?? 0}`;
-
-export const getTraceAttemptMeta = (
-  slotKey: string,
-  state: Pick<AgentNodeState, "iterationCount">,
-) => {
-  const iteration = state.iterationCount ?? 0;
-  return {
-    slotKey,
-    attemptKey: `${slotKey}#${iteration}`,
-    iteration,
-  } as const;
-};
-
-const buildToolArgs = (input: {
-  toolId: string;
-  state: AgentNodeState;
-}): Record<string, unknown> => {
-  const question = getLatestUserQuestion(input.state.messages) || input.state.goal.text;
-  const executionEnvironment = parseExecutionEnvironmentHint(
-    input.state.requestContextMessages,
-  );
-
-  switch (input.toolId) {
-    case "web_search":
-      return {
-        query: question,
-      };
-    case "read_list":
-      return {
-        path: ".",
-      };
-    case "read_locate":
-      return {
-        query: question,
-        searchMode: "auto",
-      };
-    case "read_open":
-    case "read":
-      return (() => {
-        const targetPath = resolveReadTargetFromEvidence(input.state, question);
-        return targetPath ? { path: targetPath } : {};
-      })();
-    case "terminal_session":
-      return {
-        ...(executionEnvironment.cwd?.trim() ? { cwd: executionEnvironment.cwd.trim() } : {}),
-      };
-    case "workspace_mutation":
-      return buildWorkspaceMutationArgs(question) ?? {};
-    default:
-      return {};
-  }
-};
-
-const freezeToolCall = (
-  toolId: string,
-  args: Record<string, unknown>,
-  source: LegacyAgentToolCallRequest["source"],
-): AgentToolCallRequest => ({
-  toolId,
-  args,
-  inputHash: createInvocationInputHash(args),
-  source,
-  createdAt: nowIso(),
-});
-
-export const createPlannerPendingToolCall = (input: {
-  toolId: string;
-  state: AgentNodeState;
-}): AgentToolCallRequest =>
-  freezeToolCall(
-    input.toolId,
-    buildToolArgs({
-      toolId: input.toolId,
-      state: input.state,
-    }),
-    "planner_selection",
-  );
-
 const createPendingApproval = (input: {
   runId: string;
   toolId: string;
   reason: string;
   args: Record<string, unknown>;
+  inputHash: string;
 }): AgentApprovalRequest => ({
   id: crypto.randomUUID(),
   runId: input.runId,
@@ -520,7 +211,7 @@ const createPendingApproval = (input: {
   toolId: input.toolId,
   reason: input.reason,
   input: input.args,
-  inputHash: createInvocationInputHash(input.args),
+  inputHash: input.inputHash,
   createdAt: nowIso(),
 });
 
@@ -533,13 +224,6 @@ const hasApprovedInvocation = (
       invocation.toolId === pendingToolCall.toolId &&
       invocation.inputHash === pendingToolCall.inputHash,
   ) ?? false;
-
-export const emitStepNode = async (
-  emit: EmitAgentExecutionNode | undefined,
-  input: Parameters<typeof toAgentExecutionNode>[0],
-) => {
-  await emit?.(toAgentExecutionNode(input));
-};
 
 const emitNodeError = async (
   emit: EmitAgentExecutionNode | undefined,
@@ -648,276 +332,6 @@ export const planNode = async (
   return {};
 };
 
-export const policyNode = async (
-  state: AgentNodeState,
-  emit?: EmitAgentExecutionNode,
-): Promise<Partial<AgentNodeState>> => {
-  const nodeId = getIterativeNodeId("agent-policy", state);
-  const traceAttemptMeta = getTraceAttemptMeta("agent-policy", state);
-  const question = getLatestUserQuestion(state.messages) || state.goal.text;
-  await emitStepNode(emit, {
-    runId: state.runId,
-    nodeId,
-    ...traceAttemptMeta,
-    nodeType: "reason",
-    phase: "start",
-    label: "审批策略",
-    summary: "正在判断候选工具是否需要审批",
-  });
-
-  const selectedToolIds = state.toolIntent?.selectedToolIds ?? [];
-  const candidateToolIds = state.toolIntent?.candidateToolIds ?? [];
-  const pendingToolCall = state.pendingToolCall;
-
-  if (!pendingToolCall) {
-    await emitStepNode(emit, {
-      runId: state.runId,
-      nodeId,
-      ...traceAttemptMeta,
-      nodeType: "reason",
-      phase: "done",
-      label: "审批策略",
-        summary: "未命中需要审批的工具",
-        details: {
-          selectedToolIds,
-          candidateToolIds,
-        },
-      });
-    return {
-      selectedToolId: undefined,
-      pendingToolCall: undefined,
-      pendingApproval: undefined,
-    };
-  }
-
-  const toolDefinitions = listCapabilityDefinitions();
-  const selectedDefinition = toolDefinitions.find(
-    (definition) => definition.id === pendingToolCall.toolId,
-  );
-  if (!selectedDefinition) {
-    const reason = `Pending tool call references unknown tool: ${pendingToolCall.toolId}`;
-    await emitStepNode(emit, {
-      runId: state.runId,
-      nodeId,
-      ...traceAttemptMeta,
-      nodeType: "reason",
-      phase: "done",
-      label: "审批策略",
-      summary: "待执行调用引用了未注册工具，已阻断执行",
-      details: {
-        selectedToolIds,
-        candidateToolIds,
-        toolId: pendingToolCall.toolId,
-        policyDecision: "blocked-unknown-tool",
-      },
-    });
-    return {
-      selectedToolId: undefined,
-      pendingToolCall: undefined,
-      pendingApproval: undefined,
-      blockedReason: reason,
-      errorMessage: reason,
-      errorSourceNodeId: nodeId,
-    };
-  }
-  const args = pendingToolCall.args;
-
-  if (
-    (selectedDefinition.id === "read_open" || selectedDefinition.id === "read") &&
-    !("path" in args) &&
-    !("uri" in args)
-  ) {
-    await emitStepNode(emit, {
-      runId: state.runId,
-      nodeId,
-      ...traceAttemptMeta,
-      nodeType: "reason",
-      phase: "done",
-      label: "审批策略",
-        summary: "读取工具缺少明确目标，跳过直接执行",
-        details: {
-          selectedToolIds,
-          candidateToolIds,
-          toolId: selectedDefinition.id,
-          policyDecision: "skip-missing-read-target",
-        },
-      });
-    return {
-      selectedToolId: undefined,
-      pendingToolCall: undefined,
-      pendingApproval: undefined,
-    };
-  }
-
-  if (selectedDefinition.id === "workspace_mutation") {
-    if (
-      typeof args.operation !== "string" ||
-      typeof args.targetPath !== "string" ||
-      !args.targetPath.trim()
-    ) {
-      const reason = getWorkspaceMutationBlockReason(question);
-      await emitStepNode(emit, {
-        runId: state.runId,
-        nodeId,
-        ...traceAttemptMeta,
-        nodeType: "reason",
-        phase: "done",
-        label: "审批策略",
-        summary: "工作区变更工具缺少可审查的结构化参数，已阻断执行",
-        details: {
-          selectedToolIds,
-          candidateToolIds,
-          toolId: selectedDefinition.id,
-          policyDecision: "blocked-missing-workspace-mutation-args",
-        },
-      });
-      return {
-        selectedToolId: undefined,
-        pendingToolCall: undefined,
-        pendingApproval: undefined,
-        blockedReason: reason,
-        errorMessage: reason,
-        errorSourceNodeId: nodeId,
-      };
-    }
-  }
-
-  if (selectedDefinition.id === "terminal_session") {
-    const reason = getTerminalAutoExecutionBlockReason(question);
-    await emitStepNode(emit, {
-      runId: state.runId,
-      nodeId,
-      ...traceAttemptMeta,
-      nodeType: "reason",
-      phase: "done",
-      label: "审批策略",
-        summary: "终端工具缺少受控参数，已阻断自动执行",
-        details: {
-          selectedToolIds,
-          candidateToolIds,
-          toolId: selectedDefinition.id,
-          policyDecision: isHighRiskWorkspaceMutationRequest(question)
-            ? "blocked-high-risk-workspace-mutation"
-          : "blocked-missing-terminal-command",
-      },
-    });
-    return {
-      selectedToolId: undefined,
-      pendingToolCall: undefined,
-      pendingApproval: undefined,
-      blockedReason: reason,
-      errorMessage: reason,
-      errorSourceNodeId: nodeId,
-    };
-  }
-
-  const decision = evaluateAgentToolPolicy(selectedDefinition);
-  if (decision.type === "allow") {
-    await emitStepNode(emit, {
-      runId: state.runId,
-      nodeId,
-      ...traceAttemptMeta,
-      nodeType: "reason",
-      phase: "done",
-      label: "审批策略",
-        summary: "命中工具可直接执行",
-        details: {
-          selectedToolIds,
-          candidateToolIds,
-          toolId: selectedDefinition.id,
-          policyDecision: decision.type,
-          toolCallSource: pendingToolCall.source,
-        },
-      });
-    return {
-      selectedToolId: selectedDefinition.id,
-      pendingToolCall,
-    };
-  }
-
-  if (decision.type === "deny") {
-    await emitStepNode(emit, {
-      runId: state.runId,
-      nodeId,
-      ...traceAttemptMeta,
-      nodeType: "reason",
-      phase: "done",
-      label: "审批策略",
-      summary: "命中工具被策略拒绝执行",
-      details: {
-        selectedToolIds,
-        candidateToolIds,
-        toolId: selectedDefinition.id,
-        policyDecision: decision.type,
-        denialReason: decision.reason,
-      },
-    });
-
-    return {
-      selectedToolId: undefined,
-      pendingToolCall: undefined,
-      pendingApproval: undefined,
-      blockedReason: decision.reason,
-      errorMessage: decision.reason,
-      errorSourceNodeId: nodeId,
-    };
-  }
-
-  if (hasApprovedInvocation(state.approvedInvocations, pendingToolCall)) {
-    await emitStepNode(emit, {
-      runId: state.runId,
-      nodeId,
-      ...traceAttemptMeta,
-      nodeType: "reason",
-      phase: "done",
-      label: "审批策略",
-      summary: "该工具已获得本轮批准，继续执行",
-      details: {
-        selectedToolIds,
-        candidateToolIds,
-        toolId: selectedDefinition.id,
-        policyDecision: "approved",
-        toolCallSource: pendingToolCall.source,
-      },
-    });
-    return {
-      selectedToolId: selectedDefinition.id,
-      pendingToolCall,
-    };
-  }
-
-  const pendingApproval = createPendingApproval({
-    runId: state.runId,
-    toolId: selectedDefinition.id,
-    reason: decision.reason,
-    args,
-  });
-
-  await emitStepNode(emit, {
-    runId: state.runId,
-    nodeId,
-    ...traceAttemptMeta,
-    nodeType: "reason",
-    phase: "done",
-    label: "审批策略",
-      summary: "已命中需要审批的工具",
-      details: {
-        selectedToolIds,
-        candidateToolIds,
-        toolId: selectedDefinition.id,
-        policyDecision: decision.type,
-        approvalReason: decision.reason,
-        toolCallSource: pendingToolCall.source,
-      },
-    });
-
-  return {
-    pendingApproval,
-    selectedToolId: selectedDefinition.id,
-    pendingToolCall,
-  };
-};
-
 export const approvalNode = async (
   state: AgentNodeState,
   emit?: EmitAgentExecutionNode,
@@ -999,6 +413,10 @@ export const retrieveNode = async (
   emit?: EmitAgentExecutionNode,
 ): Promise<Partial<AgentNodeState>> => {
   const question = getLatestUserQuestion(state.messages) || state.goal.text;
+  const retrievalQuery =
+    state.nextAction?.type === "retrieve" && state.nextAction.query.trim()
+      ? state.nextAction.query.trim()
+      : question;
   await emitStepNode(emit, {
     runId: state.runId,
     nodeId: "agent-retrieve",
@@ -1037,7 +455,7 @@ export const retrieveNode = async (
   }
 
   const ragResult = await agentRagRunnable.invoke({
-    question,
+    question: retrievalQuery,
     knowledgeBaseId: state.knowledgeBaseId,
     conversationHistory: state.messages,
     requestContextMessages: state.requestContextMessages,
@@ -1045,7 +463,7 @@ export const retrieveNode = async (
   const retrievedChunks = ragResult.sources ?? [];
   const retrievalEvidence: AgentRetrievalEvidence = {
     knowledgeBaseId: state.knowledgeBaseId,
-    query: question,
+    query: retrievalQuery,
     chunkCount: retrievedChunks.length,
     chunks: retrievedChunks.map((chunk) => ({
       chunkId: chunk.chunkId,
@@ -1100,51 +518,17 @@ export const toolNode = async (
   state: AgentNodeState,
   emit?: EmitAgentExecutionNode,
 ): Promise<Partial<AgentNodeState>> => {
-  const toolId = state.selectedToolId;
-
-  if (!toolId) {
-    return {};
-  }
-
   const pendingToolCall = state.pendingToolCall;
 
   if (!pendingToolCall) {
-    const errorMessage = `Missing frozen tool call for ${toolId}. toolNode requires policyNode to freeze the invocation before execution.`;
-    const observation = createObservation({
-      runId: state.runId,
-      stepId: "tool",
-      status: "failed",
-      facts: [`${toolId} execution was blocked because no frozen tool call was available.`],
-      errorMessage,
-    });
-
-    await emitStepNode(emit, {
-      runId: state.runId,
-      nodeId: "agent-tool",
-      nodeType: "tool",
-      phase: "error",
-      label: "工具选择",
-      summary: `${toolId} 缺少冻结调用对象，已阻断执行`,
-      details: {
-        toolId,
-        errorMessage,
-      },
-    });
-
-    return {
-      observations: [...(state.observations ?? []), observation],
-      evidence: appendObservationEvidence(state, observation),
-      selectedToolId: undefined,
-      pendingToolCall: undefined,
-      errorMessage,
-      blockedReason: errorMessage,
-      errorSourceNodeId: "agent-tool",
-      continueIteration: false,
-      postToolReviewPending: false,
-    };
+    return {};
   }
+  const toolId = pendingToolCall.toolId;
 
-  if (state.selectedToolId !== pendingToolCall.toolId) {
+  if (
+    typeof state.selectedToolId === "string" &&
+    state.selectedToolId !== pendingToolCall.toolId
+  ) {
     const errorMessage = `Selected tool id mismatch. selectedToolId=${state.selectedToolId ?? "undefined"} pendingToolCall.toolId=${pendingToolCall.toolId}`;
     const observation = createObservation({
       runId: state.runId,
@@ -1211,6 +595,7 @@ export const toolNode = async (
       toolId,
       reason: invocation.approval?.reason ?? `${toolId} requires approval.`,
       args: pendingToolCall.args,
+      inputHash: pendingToolCall.inputHash,
     });
 
     const observation = createObservation({

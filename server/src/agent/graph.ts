@@ -20,13 +20,13 @@ import {
   generateNode,
   nextActionPlannerNode,
   planNode,
-  policyNode,
   prepareContextNode,
   retrieveNode,
   toolCallNormalizeNode,
   toolNode,
   type EmitAgentExecutionNode,
 } from "./nodes.js";
+import { policyNode } from "./policy-node.js";
 import type {
   AgentGoal,
   AgentGraphInput,
@@ -193,7 +193,7 @@ const routeAfterPolicy = (state: AgentGraphStateType) => {
     return "approval";
   }
 
-  if (state.selectedToolId) {
+  if (state.pendingToolCall) {
     return "tool";
   }
 
@@ -292,7 +292,6 @@ const agentStateGraph = new StateGraph(AgentGraphState)
     "error",
   ])
   .addConditionalEdges("toolGuardStep", routeAfterToolGuard, [
-    "policyStep",
     "nextActionPlanner",
     "error",
   ])

@@ -1,7 +1,7 @@
 ---
 status: current
 owner: agent-runtime
-last_verified: 2026-07-03
+last_verified: 2026-07-04
 layer: project-control
 module: ProjectControl
 feature: AgentNodesWorkboard
@@ -12,6 +12,7 @@ related:
   - docs/project-control/tasks/agent_node_T001-next-action-planner-node.md
   - docs/project-control/tasks/agent_node_T002-tool-call-normalize-node.md
   - docs/project-control/tasks/agent_node_T003-agent-graph-wiring.md
+  - docs/project-control/tasks/agent_node_T004-policy-node-consume-pending-tool-call.md
   - docs/chat/agent-runtime-design.md
   - docs/harness/agentgraph-harness-protocol.md
 ---
@@ -39,7 +40,7 @@ Agent node 专属总台账。
 | `agent_node_T001` | `nextActionPlannerNode` | 节点评审已通过；当前节点只负责 `AgentNextAction` 决策与 `error` 输出，route / normalize 接入前提已确认但不在本节点实现范围内 | `DONE` | [agent_node_T001-next-action-planner-node.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T001-next-action-planner-node.md) |
 | `agent_node_T002` | `toolCallNormalizeNode` | 当前只实现 Planner 后的“工具调用规范化/冻结节点”，只负责把 `nextAction.use_tool` 校验并冻结成 `pendingToolCall`；不得顺手改 Harness / policy / toolNode / Planner / 完整 loop | `TODO` | [agent_node_T002-tool-call-normalize-node.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T002-tool-call-normalize-node.md) |
 | `agent_node_T003` | `AgentGraph wiring for planner -> normalize -> policy -> tool loop` | 当前任务只做主链路接线：把 `nextActionPlannerNode` 与 `toolCallNormalizeNode` 接入 `AgentGraph`，并让旧的 `capabilityIntent.selectedToolIds -> policyNode` 执行入口失效；不得借机重写 Planner / Normalize / Harness / policy / toolNode | `TODO` | [agent_node_T003-agent-graph-wiring.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T003-agent-graph-wiring.md) |
-| `agent_node_T004` | `policyNode` 只消费 `pendingToolCall` | 当前判断：`policyNode` 只能审批冻结后的 `pendingToolCall`，不得自己造工具调用，不得从 `capabilityIntent / query / selectedToolId` 推导执行对象 | `TODO` |  |
+| `agent_node_T004` | `policyNode` 只消费 `pendingToolCall` | 当前任务只收敛 `policyNode`：它只能审批冻结后的 `pendingToolCall`，不得自己造工具调用，不得从 `capabilityIntent / query / selectedToolId` 推导执行对象，也不得把 `capabilityId` 当执行对象 | `TODO` | [agent_node_T004-policy-node-consume-pending-tool-call.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T004-policy-node-consume-pending-tool-call.md) |
 
 ## Current Ground Truth
 
@@ -65,6 +66,12 @@ Agent node 专属总台账。
   - `capabilityIntent.selectedToolIds` 只能继续用于暴露面、trace、diagnostics，不得直接触发执行
   - `toolNode` / `retrieve` 完成后必须回到 Planner 再决策，不能直接默认 `generate`
   - `maxIterations` 到达后不得继续进入 retrieve / normalize / policy / tool
+- `agent_node_T004` 当前任务已经明确：
+  - `policyNode` 的核心入口必须是 `state.pendingToolCall`
+  - `policyNode` 只审批冻结调用，不选择工具、不生成参数、不创建工具调用
+  - `policyNode` 不得再从 `capabilityIntent.selectedToolIds`、`selectedToolId`、`selectedCapabilityId` 推导执行对象
+  - 无 `pendingToolCall` 时必须 `skip` 或进入现有 error flow，不得继续进入 `toolNode`
+  - 已审批恢复必须至少校验 `toolId + inputHash`，避免审批对象与真实执行对象错位
 
 ## Work Rules
 
@@ -90,3 +97,7 @@ Agent node 专属总台账。
   - 追加第三个节点任务编号 `agent_node_T003`
   - 明确第三个任务只做 `AgentGraph` 主链路接线：`Planner -> Normalize -> Policy -> Tool -> Evidence -> Planner`
   - 明确旧执行入口 `capabilityIntent.selectedToolIds -> policyNode` 必须失效，不得继续作为工具执行入口
+- `2026-07-04`
+  - 追加第四个节点任务编号 `agent_node_T004`
+  - 明确第四个任务只收敛 `policyNode`：只审批 `pendingToolCall`，不再生成工具调用
+  - 补齐 `agent_node_T004` 任务卡链接与当前真相说明

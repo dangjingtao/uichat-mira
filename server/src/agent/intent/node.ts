@@ -1,7 +1,6 @@
 import type { AgentNodeState, EmitAgentExecutionNode } from "../nodes.js";
 import { listCapabilityDefinitions } from "@/mcp/harness/registry.js";
 import {
-  createPlannerPendingToolCall,
   emitStepNode,
   getIterativeNodeId,
   getLatestUserQuestion,
@@ -224,12 +223,6 @@ export const toolGuardNode = async (
     query,
     toolIntent,
   });
-  const pendingToolCall =
-    state.pendingToolCall &&
-    resolvedToolIntent.candidateToolIds.includes(state.pendingToolCall.toolId)
-      ? state.pendingToolCall
-      : undefined;
-  const selectedToolId = pendingToolCall?.toolId;
 
   await emitStepNode(emit, {
     runId: state.runId,
@@ -278,8 +271,6 @@ export const toolGuardNode = async (
   return {
     toolIntent: resolvedToolIntent,
     toolExposure: toAgentToolExposureState(resolvedToolIntent),
-    selectedToolId,
-    pendingToolCall,
   };
 };
 
@@ -327,13 +318,6 @@ export const toolSelectNode = async (
     topCandidates: toolIntent.topCandidates,
     selectedToolIds: taskSelection.selectedToolIds,
   });
-  const selectedToolId = candidateToolIds[0];
-  const pendingToolCall = selectedToolId
-    ? createPlannerPendingToolCall({
-        toolId: selectedToolId,
-        state,
-      })
-    : undefined;
   const resolvedToolIntent: ToolIntentResult = {
     ...toolIntent,
     query,
@@ -375,8 +359,6 @@ export const toolSelectNode = async (
   return {
     toolIntent: resolvedToolIntent,
     toolExposure: toAgentToolExposureState(resolvedToolIntent),
-    selectedToolId,
-    pendingToolCall,
   };
 };
 
