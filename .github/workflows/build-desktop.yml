@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
+          - os: windows-2022
             platform: win
           # 如需 macOS 产物，先补齐 server/build.js 中的平台原生依赖拷贝逻辑，
           # 再启用下面两行并确认签名证书配置。
@@ -86,7 +86,7 @@ jobs:
 
   build-tauri:
     name: Build Tauri (Windows)
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
       - name: Checkout
         uses: actions/checkout@v4
