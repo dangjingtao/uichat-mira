@@ -50,7 +50,7 @@ Agent node 专属总台账。
 | `agent_node_T006` | `evidence` 回流与 Agent loop 路由闭环 | `retrieveNode / toolNode -> evidence -> Planner` 的最小闭环已接通；retrieval / tool evidence 写回、evidence-update trace、去重 helper、`maxIterations` 收口和旧入口阻断都已有定向验证，评审已通过 | `DONE` | [agent_node_T006-evidence-loop-routing.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T006-evidence-loop-routing.md) |
 | `agent_node_T007` | Agent Decision Loop v1 验收测试与回归护栏 | 已补齐当前 commit 专属验收证据：4 个定向测试源码、vitest JSON 报告、typecheck 报告、场景映射、运行时间与剩余风险均已回填到任务卡；当前证据不再引用 `2026-07-03` 的旧失败报告 | `DONE` | [agent_node_T007-decision-loop-acceptance-regression-guardrails.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T007-decision-loop-acceptance-regression-guardrails.md) |
 | `agent_node_T008` | V1 cleanup / release hardening | V1 收尾任务已完成：主分支误留的大型报告与 sqlite 临时文件已清理；`planNode` placeholder、`selectedToolId` 兼容语义、generate 阶段大结果 TODO，以及 V1 当前不变量都已回填到正式代码注释和契约文档；没有把 `TaskFrame` 或 generate size guard 误报成已完成能力 | `DONE` | [agent_node_T008-v1-cleanup-release-hardening.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T008-v1-cleanup-release-hardening.md) |
-| `agent_node_T009` | Evidence Summary + Answer Stop Rule | `AgentEvidenceSummary`、Planner 前置 answer stop rule、`read_list / read_open / web_search / terminal_session` 最小摘要 schema 与 trace 可审计字段已落地；当前闭环可在工具完成后直接基于 summary 收口 answer，不再二次重复调用相同工具 | `DONE` | [agent_node_T009-evidence-summary-answer-stop-rule.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T009-evidence-summary-answer-stop-rule.md) |
+| `agent_node_T009` | Evidence Summary + Answer Stop Rule | `AgentEvidenceSummary`、Planner 前置 answer stop rule、`read_list / read_open / web_search / terminal_session` 最小摘要 schema 与 trace 可审计字段已落地；answer stop rule 命中时可阻止第二次 `nextActionPlanner` task-model 调用和重复 `use_tool / retrieve` 执行，但前台 `2026-07-04` black-box smoke test 在工具执行前失败于 `Planner output was invalid JSON`，当前不能维持 `DONE` | `READY_FOR_REVIEW` | [agent_node_T009-evidence-summary-answer-stop-rule.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T009-evidence-summary-answer-stop-rule.md) |
 
 ## Current Ground Truth
 
@@ -122,6 +122,14 @@ Agent node 专属总台账。
   - 当前真实问题不是工具结果没写回，而是 Planner 能看到的 summary 太弱，无法稳定判断“已经足够回答”
   - `toolNode` / `retrieveNode` 仍然只负责执行和写 evidence，不直接决定 answer
   - 不得把 full result JSON 全量塞进 Planner
+  - T009 保证的是：
+    - answer stop rule 命中时，不再二次调用 `nextActionPlanner` 的 task model
+    - 不再二次执行相同工具
+    - 不再进入 `use_tool / retrieve` 的重复执行链路
+  - T009 不保证的是：
+    - 工具完成后完全跳过 `toolSelectStep`
+    - 工具完成后完全跳过 `toolGuardStep`
+    - 前台 trace 中完全不出现候选选择节点
   - 不得借机改成 Agent V2、DAG、并发、多智能体、长期记忆或 Harness 大改
   - `Repeated Tool Guard` 不在 T009，实现边界预留给 `agent_node_T010-repeated-tool-guard`
   - 当前实现已完成：
@@ -130,14 +138,21 @@ Agent node 专属总台账。
     - `read_list / read_open / web_search / terminal_session` 已有最小 summary schema
     - retrieval / tool evidence update trace 已暴露 `latestEvidenceSummary`
     - `generate / evaluate` observation 不再覆盖最后一条可回答 evidence summary
+  - 当前已知限制：
+    - `state.evidence.toolExecutions[n].summary` 已接入
+    - `state.evidence.latestSummary` 已接入
+    - `state.lastToolExecution.summary` 可能仍为空
+    - 该问题当前不阻断 T009，因为 answer stop rule 依赖 `state.evidence.latestSummary`
+  - T009 不修改前端组件、trace UI、状态映射、样式和 i18n；前台展示可读性后续拆到 `T012 / T013`
 
 ## 当前 V1 总结
 
 - 代码闭环有条件通过。
 - 前台手测未通过。
-- 阻塞项：`read_list` evidence 未被 Planner 正确用于 `answer` 决策，导致重复工具调用直到失败。
-- 当前下一步不是重写架构，而是先把 `evidence -> Planner -> answer` 的收口协议定义清楚。
-- `T009` 已完成，下一步是 `agent_node_T010-repeated-tool-guard`，专门阻止同一 `toolId + normalized args / inputHash` 的无意义重复调用。
+- 当前阻塞项不是重复工具执行，而是 `2026-07-04` 前台 black-box smoke test 在 4 条用例里都停在 `Planner output was invalid JSON; planner must stop instead of pretending an answer is ready.`，失败发生在工具执行前。
+- 因此前台当前无法证明 `read_list / read_open / terminal_session` 的真实单次收口行为。
+- 当前下一步不是扩 T009 范围去改前端，而是先排查并修复前台运行时的 Planner 非法 JSON 问题，再重新执行 T009 smoke test。
+- `T009` 当前状态为 `READY_FOR_REVIEW`，不能维持 `DONE`，`T010` 也不应在这个状态下提前作为验收结论推进。
 
 ## Work Rules
 
@@ -227,7 +242,7 @@ Agent node 专属总台账。
     - 不改 Harness / MCP registry / Provider Gateway / UI / 模型配置
     - 不让 ToolNode 直接决定 answer
   - 预留后续任务：`agent_node_T010-repeated-tool-guard`
-  - `agent_node_T009` 已完成：
+  - `agent_node_T009` 已完成后端实现与定向测试：
     - 在 `server/src/agent/types.ts` 与 `evidence.ts` 接入 `AgentEvidenceSummary`
     - 在 `next-action-planner.ts` 落地 Planner 前置 answer stop rule
     - 在 `tool-node.ts` 与 `nodes.ts` 落地 tool / retrieval summary trace
@@ -239,3 +254,11 @@ Agent node 专属总台账。
       - 结果：通过
     - `pnpm check`
       - 结果：通过
+  - `2026-07-04` 前台 black-box smoke test 结果：
+    - 测试入口：内置浏览器，账号 `Tomz`，线程绑定 `T009 Smoke Workspace -> D:\workspace\rag-demo`
+    - `看看当前 workspace 有哪些文件`：`FAIL`
+    - `打开 README.md 看看内容`：`FAIL`
+    - `看看 README.md 的内容`：`FAIL`
+    - `执行 dir 命令看看结果`：`FAIL`
+    - 共同现象：均在工具执行前失败于 `Planner output was invalid JSON; planner must stop instead of pretending an answer is ready.`
+  - 因此前台验收不成立，`agent_node_T009` 状态更新为 `READY_FOR_REVIEW`

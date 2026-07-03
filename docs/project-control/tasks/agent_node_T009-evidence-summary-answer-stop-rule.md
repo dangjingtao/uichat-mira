@@ -19,7 +19,7 @@ related:
   - server/src/agent/tool-node.ts
   - server/src/agent/next-action-planner.ts
   - server/src/agent/tool-call-normalize.ts
-task_state: DONE
+task_state: READY_FOR_REVIEW
 ---
 
 # agent_node_T009 evidence summary and answer stop rule
@@ -309,6 +309,10 @@ Planner 下一轮至少必须看得到：
 
 - 这条规则不是让 ToolNode 直接 `generate`
 - 这条规则是对 Planner 收口的约束，不是替代 Planner
+- 命中 answer stop rule 后，不再二次调用 `nextActionPlanner` 的 task model
+- 命中 answer stop rule 后，不再二次执行相同工具，也不再进入 `use_tool / retrieve` 的重复执行链路
+- 当前 graph 仍可能再次经过 `toolSelectStep / toolGuardStep`
+- 当前前台 trace 仍可能出现候选选择节点；这不属于 T009 失败
 - 如果 `failed / awaiting_approval / blocked`，默认不满足 `canAnswer === true`
 - 若用户问题本身是在问“命令失败了什么”或“为什么审批等待”，后续实现可以允许基于失败状态回答，但必须在任务实现中明确单独规则，不能默认放开
 
@@ -432,7 +436,7 @@ T009 不实现 T010，只预留边界。
 
 ## Delivery Rule
 
-本任务实现已完成。
+本任务是否可标记 `DONE`，取决于后端定向验证与前台 black-box smoke test 是否同时满足。
 
 ## Implementation Result
 
@@ -442,9 +446,105 @@ T009 不实现 T010，只预留边界。
 2. 在 `AgentObservation / AgentRetrievalEvidence / AgentToolExecutionResult` 上补入可审计的 `summary`
 3. 为 `read_list / read_open / web_search / terminal_session` 接入最小 summary schema
 4. 在 `nextActionPlannerNode` 前置接入 answer stop rule
-5. 让 Planner 在 stop rule 命中时直接输出 `answer`，不再二次调用 task model
+5. 让 Planner 在 stop rule 命中时直接输出 `answer`，不再二次调用 `nextActionPlanner` 的 task model
 6. 在 retrieval / tool evidence update trace 中暴露 `latestEvidenceSummary`
 7. 保持 `Planner -> Normalize -> Policy -> ToolNode -> Evidence -> Planner` 边界不变
+
+本任务不修改前端组件、trace UI、状态映射、样式和 i18n。前台展示可读性单独拆到：
+
+- `agent_node_T012-frontend-status-mapping`
+- `agent_node_T013-trace-readability`
+
+## Known Limitation
+
+- `state.evidence.toolExecutions[n].summary` 已接入
+- `state.evidence.latestSummary` 已接入
+- `state.lastToolExecution.summary` 可能仍为空
+- 当前 answer stop rule 依赖 `state.evidence.latestSummary`，不依赖 `state.lastToolExecution.summary`
+- 该问题不阻断 T009，后续可在 `T010 / T011` 或 evidence cleanup 中统一处理
+
+## Manual Smoke Test
+
+### Smoke 1: read_list workspace overview
+
+Input:
+
+```txt
+看看当前 workspace 有哪些文件
+```
+
+Expected:
+
+- final answer generated
+- `read_list` executed once
+- no repeated `read_list`
+- no tool loop until failure
+
+Observed:
+
+- result: `FAIL`
+- evidence source: frontend execution nodes / trace event
+- notes: `2026-07-04` 在 `http://127.0.0.1:5173/#/chat` 前台手测；线程已绑定 `T009 Smoke Workspace -> D:\workspace\rag-demo` 并开启 Agent，但在进入工具执行前即显示 `Planner output was invalid JSON; planner must stop instead of pretending an answer is ready.`。前台步骤停在 `5 / 6`，显示 `准备上下文 -> 执行计划 -> 候选选择 -> 调用前守卫 -> 执行计划 -> 错误节点`，未出现 `read_list` 执行节点，也没有最终回答。
+
+### Smoke 2: read_open file content
+
+Input:
+
+```txt
+打开 README.md 看看内容
+```
+
+Expected:
+
+- final answer generated
+- `read_open` executed once
+- no repeated `read_open`
+
+Observed:
+
+- result: `FAIL`
+- evidence source: frontend execution nodes / trace event
+- notes: 与 Smoke 1 相同，前台在工具执行前失败于 `Planner output was invalid JSON`；未出现 `read_open` 执行节点，没有最终回答。
+
+### Smoke 3: file content should not stop at read_list
+
+Input:
+
+```txt
+看看 README.md 的内容
+```
+
+Expected:
+
+- if `read_list` runs first, it must not be treated as enough
+- agent should continue toward `read_open`, or otherwise explain missing content
+- must not answer as if README content was read when only directory listing exists
+
+Observed:
+
+- result: `FAIL`
+- evidence source: frontend execution nodes / trace event
+- notes: 前台仍在工具执行前失败于 `Planner output was invalid JSON`；既没有错误地把目录列表当成文件内容，也没有继续到 `read_open`，因此该场景当前无法证明 T009 收口链路在前台真实可用。
+
+### Smoke 4: terminal approval waiting
+
+Input:
+
+```txt
+执行 dir 命令看看结果
+```
+
+Expected:
+
+- if terminal requires approval, run enters `waiting_approval`
+- must not continue Planner loop
+- must not generate answer pretending command was executed
+
+Observed:
+
+- result: `FAIL`
+- evidence source: frontend execution nodes / trace event
+- notes: 前台同样在工具执行前失败于 `Planner output was invalid JSON`，没有进入 `terminal_session`，也没有到达 `waiting_approval`。
 
 ## Changed Files
 
@@ -466,8 +566,10 @@ T009 不实现 T010，只预留边界。
   - 结果：通过
 - `pnpm check`
   - 结果：通过
+- 前台 black-box smoke test
+  - 结果：失败，`2026-07-04` 在内置浏览器登录账号 `Tomz` 下执行 4 条手测，线程绑定 `T009 Smoke Workspace -> D:\workspace\rag-demo` 后均在工具执行前失败于 `Planner output was invalid JSON`
 
 ## Review Outcome
 
-- 当前提交结论：实现完成
-- 当前状态：`DONE`
+- 当前提交结论：后端定向实现与测试证据成立，前台 black-box smoke test 未通过
+- 当前状态：`READY_FOR_REVIEW`
