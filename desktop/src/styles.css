@@ -1,0 +1,411 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  @font-face {
+    font-family: "IBM Plex Sans";
+    src: url("./shared/fonts/IBM_Plex_Sans/IBMPlexSans-VariableFont_wdth,wght.ttf")
+      format("truetype");
+    font-style: normal;
+    font-weight: 100 700;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "IBM Plex Sans";
+    src: url("./shared/fonts/IBM_Plex_Sans/IBMPlexSans-Italic-VariableFont_wdth,wght.ttf")
+      format("truetype");
+    font-style: italic;
+    font-weight: 100 700;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Noto Sans SC";
+    src: url("./shared/fonts/Noto_Sans_SC/NotoSansSC-VariableFont_wght.ttf")
+      format("truetype");
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Geist Mono";
+    src: url("./shared/fonts/Geist_Mono/GeistMono-VariableFont_wght.ttf")
+      format("truetype");
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Geist Mono";
+    src: url("./shared/fonts/Geist_Mono/GeistMono-Italic-VariableFont_wght.ttf")
+      format("truetype");
+    font-style: italic;
+    font-weight: 100 900;
+    font-display: swap;
+  }
+
+  :root {
+    --font-sans:
+      "IBM Plex Sans", "Noto Sans SC", "PingFang SC", "Microsoft YaHei UI",
+      "Microsoft YaHei", ui-sans-serif, system-ui, -apple-system,
+      BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono:
+      "Geist Mono", ui-monospace, SFMono-Regular, "SF Mono", Consolas,
+      "Liberation Mono", Menlo, monospace;
+
+    --color-primary: 193 95 60;
+    --color-primary-hover: 168 78 48;
+    --color-primary-1: 250 246 240;
+    --color-primary-2: 244 238 229;
+    --color-primary-3: 236 224 210;
+    --color-primary-4: 224 202 179;
+    --color-primary-5: 208 170 136;
+    --color-primary-6: 193 95 60;
+    --color-primary-7: 168 78 48;
+    --color-primary-8: 138 63 41;
+    --color-primary-9: 105 48 32;
+    --color-cloudy: 177 173 161;
+    --color-cloudy-1: 250 249 247;
+    --color-cloudy-2: 242 240 236;
+    --color-cloudy-3: 229 225 218;
+    --color-cloudy-4: 211 206 197;
+    --color-cloudy-5: 177 173 161;
+    --color-cloudy-6: 148 144 133;
+    --color-cloudy-7: 121 118 108;
+    --color-cloudy-8: 93 90 82;
+    --color-cloudy-9: 67 65 58;
+    --color-pampas: 244 243 238;
+    --color-pampas-1: 255 254 254;
+    --color-pampas-2: 252 251 248;
+    --color-pampas-3: 248 246 241;
+    --color-pampas-4: 242 239 232;
+    --color-pampas-5: 230 225 216;
+    --color-pampas-6: 213 207 196;
+    --color-pampas-7: 187 180 168;
+    --color-pampas-8: 155 148 136;
+    --color-pampas-9: 121 114 100;
+    --color-secondary: 100 116 139;
+    --color-success: 76 143 99;
+    --color-success-soft: 238 246 241;
+    --color-success-border: 198 221 205;
+    --color-success-text: 53 107 73;
+    --color-warning: 185 137 47;
+    --color-warning-soft: 251 245 232;
+    --color-warning-border: 231 214 174;
+    --color-warning-text: 125 98 36;
+    --color-danger: 196 104 99;
+    --color-danger-soft: 251 238 238;
+    --color-danger-border: 228 192 190;
+    --color-danger-text: 142 69 66;
+    --color-info: 90 126 156;
+    --color-info-soft: 238 244 248;
+    --color-info-border: 203 217 228;
+    --color-info-text: 63 96 124;
+
+    --color-surface-primary: 255 255 253;
+    --color-surface-auth: 250 249 245;
+    --color-surface-secondary: 248 248 246;
+    --color-surface-tertiary: 247 247 245;
+    --color-surface-elevated: 253 251 248;
+
+    --color-border: 215 208 197;
+
+    --color-text-primary: 31 27 24;
+    --color-text-secondary: 87 81 73;
+    --color-text-tertiary: 119 111 102;
+    --color-text-inverted: 250 250 250;
+
+    --color-icon-primary: 31 27 24;
+    --color-icon-secondary: 87 81 73;
+    --color-icon-tertiary: 143 134 124;
+    --color-icon-inverted: 250 250 250;
+
+    /* Streamdown / shadcn-style tokens */
+    --background: rgb(var(--color-surface-primary));
+    --foreground: rgb(var(--color-text-primary));
+    --card: rgb(var(--color-surface-primary));
+    --card-foreground: rgb(var(--color-text-primary));
+    --muted: rgb(var(--color-surface-secondary));
+    --muted-foreground: rgb(var(--color-text-secondary));
+    --border-token: rgb(var(--color-border));
+    --input: rgb(var(--color-border));
+    --primary: rgb(var(--color-text-primary));
+    --primary-foreground: rgb(var(--color-text-inverted));
+    --radius: 0.875rem;
+  }
+
+  .dark {
+    --color-primary: 214 130 96;
+    --color-primary-hover: 193 95 60;
+    --color-primary-1: 56 40 34;
+    --color-primary-2: 76 51 42;
+    --color-primary-3: 96 63 50;
+    --color-primary-4: 123 78 58;
+    --color-primary-5: 158 97 67;
+    --color-primary-6: 193 95 60;
+    --color-primary-7: 214 130 96;
+    --color-primary-8: 228 164 132;
+    --color-primary-9: 239 198 173;
+    --color-cloudy: 177 173 161;
+    --color-cloudy-1: 48 46 42;
+    --color-cloudy-2: 64 61 56;
+    --color-cloudy-3: 82 78 72;
+    --color-cloudy-4: 103 99 92;
+    --color-cloudy-5: 124 120 111;
+    --color-cloudy-6: 148 144 133;
+    --color-cloudy-7: 177 173 161;
+    --color-cloudy-8: 205 201 190;
+    --color-cloudy-9: 232 229 222;
+    --color-pampas: 244 243 238;
+    --color-pampas-1: 40 37 33;
+    --color-pampas-2: 51 48 43;
+    --color-pampas-3: 64 59 53;
+    --color-pampas-4: 79 73 66;
+    --color-pampas-5: 101 95 87;
+    --color-pampas-6: 128 121 111;
+    --color-pampas-7: 160 151 140;
+    --color-pampas-8: 200 192 180;
+    --color-pampas-9: 243 239 232;
+    --color-secondary: 148 163 184;
+    --color-success: 111 179 136;
+    --color-success-soft: 30 42 34;
+    --color-success-border: 54 82 64;
+    --color-success-text: 154 211 173;
+    --color-warning: 209 168 90;
+    --color-warning-soft: 43 36 23;
+    --color-warning-border: 90 74 42;
+    --color-warning-text: 228 194 126;
+    --color-danger: 208 122 117;
+    --color-danger-soft: 44 30 29;
+    --color-danger-border: 92 54 52;
+    --color-danger-text: 226 161 157;
+    --color-info: 127 165 193;
+    --color-info-soft: 29 37 44;
+    --color-info-border: 56 80 106;
+    --color-info-text: 169 195 216;
+
+    --color-surface-primary: 24 22 20;
+    --color-surface-auth: 32 29 26;
+    --color-surface-secondary: 32 29 26;
+    --color-surface-tertiary: 42 39 36;
+    --color-surface-elevated: 28 25 23;
+
+    --color-border: 96 89 82;
+
+    --color-text-primary: 243 239 232;
+    --color-text-secondary: 199 192 181;
+    --color-text-tertiary: 161 151 140;
+    --color-text-inverted: 24 24 27;
+
+    --color-icon-primary: 243 239 232;
+    --color-icon-secondary: 199 192 181;
+    --color-icon-tertiary: 161 151 140;
+    --color-icon-inverted: 24 24 27;
+
+    --background: rgb(var(--color-surface-primary));
+    --foreground: rgb(var(--color-text-primary));
+    --card: rgb(var(--color-surface-primary));
+    --card-foreground: rgb(var(--color-text-primary));
+    --muted: rgb(var(--color-surface-secondary));
+    --muted-foreground: rgb(var(--color-text-secondary));
+    --border-token: rgb(var(--color-border));
+    --input: rgb(var(--color-border));
+    --primary: rgb(var(--color-text-primary));
+    --primary-foreground: rgb(var(--color-text-inverted));
+    --radius: 0.875rem;
+  }
+
+  html {
+    font-family: var(--font-sans);
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    margin: 0;
+    background-color: rgb(var(--color-surface-secondary));
+    color: rgb(var(--color-text-primary));
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  code,
+  pre,
+  kbd,
+  samp {
+    font-family: var(--font-mono);
+  }
+
+  #root {
+    height: 100dvh;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(var(--color-secondary), 0.22) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: rgba(var(--color-secondary), 0.18);
+    border: 1.5px solid transparent;
+    border-radius: 9999px;
+    background-clip: padding-box;
+    transition: background-color 0.2s ease;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgba(var(--color-secondary), 0.28);
+    border: 1.5px solid transparent;
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+@layer components {
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  .animate-in {
+    animation: animateIn 0.2s ease-out;
+  }
+
+  .fade-in {
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  .slide-in-from-top-2 {
+    animation: slideInFromTop 0.2s ease-out;
+  }
+
+  .stable-scrollbar {
+    scrollbar-gutter: stable;
+  }
+
+  .stable-scrollbar-both-edges {
+    scrollbar-gutter: stable both-edges;
+  }
+
+  .hide-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+
+  .role-markdown-editor {
+    height: 100%;
+  }
+
+  .role-markdown-editor > * {
+    display: flex;
+    min-height: 0;
+    height: 100%;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+
+  .role-markdown-editor .milkdown {
+    display: flex;
+    min-height: 0;
+    height: 100%;
+    flex: 1 1 auto;
+    flex-direction: column;
+    background: transparent;
+    color: rgb(var(--color-text-primary));
+  }
+
+  .role-markdown-editor .milkdown > * {
+    display: flex;
+    min-height: 0;
+    height: 100%;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+
+  .role-markdown-editor .milkdown .editor {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    flex: 1 1 auto;
+    width: 100%;
+    background: transparent;
+    overflow: hidden;
+  }
+
+  .role-markdown-editor .milkdown .ProseMirror {
+    min-height: 0;
+    height: 100%;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 20px 22px;
+    border: 0;
+    outline: 0;
+    font-size: 14px;
+    line-height: 1.75;
+    color: rgb(var(--color-text-primary));
+  }
+
+  .role-markdown-editor .milkdown .toolbar,
+  .role-markdown-editor .milkdown .topbar {
+    display: none;
+  }
+}
+
+@keyframes animateIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInFromTop {
+  from {
+    transform: translateY(-8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}

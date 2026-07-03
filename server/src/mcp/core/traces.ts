@@ -1,0 +1,135 @@
+import type {
+  McpInvocationTrace,
+  McpTraceSpan,
+  McpTraceSpanKind,
+} from "./definitions.js";
+import {
+  DEFAULT_RETENTION_CONFIG,
+  sweepRetentionMap,
+  type RetentionConfig,
+} from "@/utils/retention.js";
+
+const traceMap = new Map<string, McpInvocationTrace>();
+let traceRetentionConfig: RetentionConfig = {
+  ...DEFAULT_RETENTION_CONFIG,
+};
+
+const sweepTraces = () => {
+  sweepRetentionMap(traceMap, {
+    config: traceRetentionConfig,
+    getUpdatedAt: (trace) => trace.finishedAt ?? trace.startedAt,
+    keep: (trace) => !trace.finishedAt,
+  });
+};
+
+const attachDebugView = (trace: McpInvocationTrace): McpInvocationTrace => {
+  trace.debugView = {
+    invocationId: trace.invocationId,
+    toolId: trace.toolId,
+    traceId: trace.traceId,
+    spanCount: trace.spans.length,
+    runningSpanCount: trace.spans.filter((span) => span.status === "running").length,
+    kinds: [...new Set(trace.spans.map((span) => span.kind))],
+  };
+
+  return trace;
+};
+
+export const createInvocationTrace = (input: {
+  invocationId: string;
+  toolId: string;
+  startedAt: string;
+}) => {
+  sweepTraces();
+  const trace: McpInvocationTrace = {
+    traceId: crypto.randomUUID(),
+    invocationId: input.invocationId,
+    toolId: input.toolId,
+    startedAt: input.startedAt,
+    spans: [],
+  };
+  traceMap.set(input.invocationId, trace);
+  return attachDebugView(trace);
+};
+
+export const getInvocationTrace = (invocationId: string) => {
+  const trace = traceMap.get(invocationId);
+  return trace ? attachDebugView(trace) : trace;
+};
+
+export const clearInvocationTraces = () => {
+  traceMap.clear();
+};
+
+export const configureInvocationTraceRetention = (
+  config: Partial<RetentionConfig>,
+) => {
+  traceRetentionConfig = {
+    ...traceRetentionConfig,
+    ...config,
+  };
+};
+
+export const sweepInvocationTraces = () => {
+  sweepTraces();
+};
+
+export const finishInvocationTrace = (invocationId: string) => {
+  const trace = traceMap.get(invocationId);
+  if (!trace || trace.finishedAt) {
+    return trace;
+  }
+
+  trace.finishedAt = new Date().toISOString();
+  sweepTraces();
+  return attachDebugView(trace);
+};
+
+export const startTraceSpan = (input: {
+  invocationId: string;
+  parentSpanId?: string;
+  name: string;
+  kind: McpTraceSpanKind;
+  metadata?: Record<string, unknown>;
+}) => {
+  const trace = traceMap.get(input.invocationId);
+  if (!trace) {
+    throw new Error(`Trace not found for invocation ${input.invocationId}`);
+  }
+
+  const span: McpTraceSpan = {
+    id: crypto.randomUUID(),
+    traceId: trace.traceId,
+    invocationId: input.invocationId,
+    ...(input.parentSpanId ? { parentSpanId: input.parentSpanId } : {}),
+    name: input.name,
+    kind: input.kind,
+    status: "running",
+    startedAt: new Date().toISOString(),
+    ...(input.metadata ? { metadata: input.metadata } : {}),
+  };
+  trace.spans.push(span);
+  attachDebugView(trace);
+
+  return {
+    spanId: span.id,
+    end: (next?: {
+      status?: "completed" | "failed" | "cancelled";
+      metadata?: Record<string, unknown>;
+    }) => {
+      if (span.finishedAt) {
+        return;
+      }
+
+      span.status = next?.status ?? "completed";
+      span.finishedAt = new Date().toISOString();
+      if (next?.metadata) {
+        span.metadata = {
+          ...(span.metadata ?? {}),
+          ...next.metadata,
+        };
+      }
+      attachDebugView(trace);
+    },
+  };
+};

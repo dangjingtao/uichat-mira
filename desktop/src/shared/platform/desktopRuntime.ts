@@ -1,0 +1,132 @@
+export type DesktopHostKind = "browser" | "electron" | "tauri";
+
+export interface DesktopRuntimeInfo {
+  hostKind: DesktopHostKind;
+  platform: string;
+  isPackaged: boolean;
+  backendUrl: string;
+}
+
+const browserRuntime: DesktopRuntimeInfo = {
+  hostKind: "browser",
+  platform: "browser",
+  isPackaged: false,
+  backendUrl: "",
+};
+
+const isDesktopRuntimeInfo = (
+  value: unknown,
+): value is DesktopRuntimeInfo => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const runtime = value as Partial<DesktopRuntimeInfo>;
+
+  return (
+    (runtime.hostKind === "browser" ||
+      runtime.hostKind === "electron" ||
+      runtime.hostKind === "tauri") &&
+    typeof runtime.platform === "string" &&
+    typeof runtime.isPackaged === "boolean" &&
+    typeof runtime.backendUrl === "string"
+  );
+};
+
+const getLegacyElectronRuntime = (): DesktopRuntimeInfo | null => {
+  const desktopApi = globalThis.window?.desktopApi;
+
+  if (!desktopApi) {
+    return null;
+  }
+
+  return {
+    hostKind: "electron",
+    platform: desktopApi.platform,
+    isPackaged: desktopApi.isPackaged,
+    backendUrl: desktopApi.backendUrl,
+  };
+};
+
+export function getDesktopRuntime(): DesktopRuntimeInfo {
+  const injectedRuntime = globalThis.window?.desktopRuntime;
+
+  if (isDesktopRuntimeInfo(injectedRuntime)) {
+    return injectedRuntime;
+  }
+
+  return getLegacyElectronRuntime() ?? browserRuntime;
+}
+
+export function isDesktopShell(runtime = getDesktopRuntime()) {
+  return runtime.hostKind !== "browser";
+}
+
+export function getApiBaseUrl() {
+  const viteApiUrl = (import.meta as { env?: { VITE_API_URL?: string } }).env
+    ?.VITE_API_URL;
+  if (viteApiUrl) {
+    return viteApiUrl;
+  }
+
+  const runtime = getDesktopRuntime();
+
+  return isDesktopShell(runtime) ? runtime.backendUrl : "/api";
+}
+
+export function getChatApiUrl() {
+  const runtime = getDesktopRuntime();
+
+  return isDesktopShell(runtime)
+    ? `${runtime.backendUrl}/proxy/chat/default`
+    : "/api/proxy/chat/default";
+}
+
+export function getRuntimeDisplayLabel(runtime = getDesktopRuntime()) {
+  if (runtime.hostKind === "electron") {
+    return `Electron · ${runtime.platform}`;
+  }
+
+  if (runtime.hostKind === "tauri") {
+    return `Tauri · ${runtime.platform}`;
+  }
+
+  return "Browser Preview";
+}
+
+export function getRuntimeDescription(runtime = getDesktopRuntime()) {
+  if (runtime.hostKind === "electron") {
+    return "Electron 运行时通过后端 API 检查状态。";
+  }
+
+  if (runtime.hostKind === "tauri") {
+    return "Tauri 运行时通过后端 API 检查状态。";
+  }
+
+  return "当前为浏览器预览模式，状态检查通过 /api 代理访问后端。";
+}
+
+export async function openExternalUrl(url: string) {
+  const trimmedUrl = url.trim();
+  const runtime = getDesktopRuntime();
+
+  if (!/^https?:\/\//i.test(trimmedUrl)) {
+    throw new Error("仅支持打开 http(s) 外部链接");
+  }
+
+  if (runtime.hostKind === "electron" && globalThis.window?.electronAPI?.invoke) {
+    await globalThis.window.electronAPI.invoke("desktop:open-external", trimmedUrl);
+    return;
+  }
+
+  const tauriOpen =
+    (globalThis.window as any)?.__TAURI__?.shell?.open ??
+    (globalThis.window as any)?.__TAURI_INTERNALS__?.plugins?.shell?.open;
+
+  if (runtime.hostKind === "tauri" && typeof tauriOpen === "function") {
+    await tauriOpen(trimmedUrl);
+    return;
+  }
+
+  globalThis.window?.open(trimmedUrl, "_blank", "noopener,noreferrer");
+}

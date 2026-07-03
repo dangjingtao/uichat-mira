@@ -1,0 +1,4548 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-03T05:41:01.683Z",
+  "scope": "server",
+  "summary": {
+    "totalTests": 371,
+    "passedTests": 365,
+    "failedTests": 6,
+    "pendingTests": 0,
+    "todoTests": 0,
+    "totalSuites": 123,
+    "passedSuites": 113,
+    "failedSuites": 10,
+    "pendingSuites": 0,
+    "success": false,
+    "startTime": 1783057223748,
+    "durationMs": 36310.159912109375
+  },
+  "suites": [
+    {
+      "name": "src/bootstrap-env.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/bootstrap-env.test.ts",
+      "status": "failed",
+      "startTime": 1783057225220,
+      "endTime": 1783057225223.2622,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "bootstrap-env"
+          ],
+          "fullName": "bootstrap-env finds the workspace root by walking up to a sentinel file",
+          "title": "finds the workspace root by walking up to a sentinel file",
+          "status": "passed",
+          "duration": 1.521099999999933,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "bootstrap-env"
+          ],
+          "fullName": "bootstrap-env loads root .env values into process.env",
+          "title": "loads root .env values into process.env",
+          "status": "failed",
+          "duration": 1.2621999999998934,
+          "failureMessages": [
+            "AssertionError: expected undefined to be 'D:\\models\\raw' // Object.is equality\n    at D:\\workspace\\rag-demo\\server\\src\\bootstrap-env.test.ts:42:46\n    at file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+          ],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/logger.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/logger.test.ts",
+      "status": "passed",
+      "startTime": 1783057257400,
+      "endTime": 1783057257400.6123,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "writeStructuredLog notifies live subscribers with the written line",
+          "title": "writeStructuredLog notifies live subscribers with the written line",
+          "status": "passed",
+          "duration": 0.6123000000006869,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/agent/graph.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/agent/graph.test.ts",
+      "status": "passed",
+      "startTime": 1783057233267,
+      "endTime": 1783057233449.5945,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "agentGraph blocks terminal auto-execution before approval when no reviewed parameters exist",
+          "title": "agentGraph blocks terminal auto-execution before approval when no reviewed parameters exist",
+          "status": "passed",
+          "duration": 23.453299999999217,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "agentGraph executes low-risk capability through Harness and records tool execution output",
+          "title": "agentGraph executes low-risk capability through Harness and records tool execution output",
+          "status": "passed",
+          "duration": 11.560900000000402,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "agentGraph injects no-evidence guard when no tool or retrieval evidence exists",
+          "title": "agentGraph injects no-evidence guard when no tool or retrieval evidence exists",
+          "status": "passed",
+          "duration": 9.398199999999633,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "agentGraph revisits capability intent once after collecting tool evidence",
+          "title": "agentGraph revisits capability intent once after collecting tool evidence",
+          "status": "passed",
+          "duration": 8.507799999999406,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "agentGraph can continue with a second tool decision when the first tool only discovers a file target",
+          "title": "agentGraph can continue with a second tool decision when the first tool only discovers a file target",
+          "status": "passed",
+          "duration": 12.548099999999977,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "agentGraph does not reopen a review cycle when max iterations is reached",
+          "title": "agentGraph does not reopen a review cycle when max iterations is reached",
+          "status": "passed",
+          "duration": 7.781100000000151,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "agentGraph does not execute read_open without an explicit read target",
+          "title": "agentGraph does not execute read_open without an explicit read target",
+          "status": "passed",
+          "duration": 7.835300000000643,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "agentGraph reports failed status when generation is empty",
+          "title": "agentGraph reports failed status when generation is empty",
+          "status": "passed",
+          "duration": 7.119700000001103,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "agentGraph routes empty generation result into error node and fails",
+          "title": "agentGraph routes empty generation result into error node and fails",
+          "status": "passed",
+          "duration": 6.306599999999889,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "agentGraph exposes structured generate failure details when final answer generation throws",
+          "title": "agentGraph exposes structured generate failure details when final answer generation throws",
+          "status": "passed",
+          "duration": 7.361500000000888,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "agentGraph still reaches generate when no capability is selected",
+          "title": "agentGraph still reaches generate when no capability is selected",
+          "status": "passed",
+          "duration": 6.169700000000375,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "agentGraph completes the happy path and emits execution node phases",
+          "title": "agentGraph completes the happy path and emits execution node phases",
+          "status": "passed",
+          "duration": 6.243099999999686,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "agentGraph executes web_search through the tool node and reaches generate",
+          "title": "agentGraph executes web_search through the tool node and reaches generate",
+          "status": "passed",
+          "duration": 8.710800000000745,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "agentGraph emits capability intent debug details for selected candidates",
+          "title": "agentGraph emits capability intent debug details for selected candidates",
+          "status": "passed",
+          "duration": 10.16190000000097,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "agentGraph can combine retrieval evidence with a follow-up workspace tool step",
+          "title": "agentGraph can combine retrieval evidence with a follow-up workspace tool step",
+          "status": "passed",
+          "duration": 9.841699999999037,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "agentGraph blocks answers that claim observations without real evidence",
+          "title": "agentGraph blocks answers that claim observations without real evidence",
+          "status": "passed",
+          "duration": 6.0129999999990105,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "agentGraph blocks terminal delete requests instead of auto-building terminal commands",
+          "title": "agentGraph blocks terminal delete requests instead of auto-building terminal commands",
+          "status": "passed",
+          "duration": 4.755100000000311,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "agentGraph routes structured workspace deletions through workspace_mutation",
+          "title": "agentGraph routes structured workspace deletions through workspace_mutation",
+          "status": "passed",
+          "duration": 7.251900000001115,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "agentGraph excludes stale assistant tool prose from final generation context",
+          "title": "agentGraph excludes stale assistant tool prose from final generation context",
+          "status": "passed",
+          "duration": 6.636599999999817,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "agentGraph still recalls workspace capability when local embedding runtime is unavailable",
+          "title": "agentGraph still recalls workspace capability when local embedding runtime is unavailable",
+          "status": "passed",
+          "duration": 14.594599999998536,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/agent/nodes.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/agent/nodes.test.ts",
+      "status": "passed",
+      "startTime": 1783057257206,
+      "endTime": 1783057257206.267,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "approvalNode emits error trace when it has no pending approval",
+          "title": "approvalNode emits error trace when it has no pending approval",
+          "status": "passed",
+          "duration": 0.23479999999835854,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "retrieveNode writes retrieval evidence payload when RAG returns sources",
+          "title": "retrieveNode writes retrieval evidence payload when RAG returns sources",
+          "status": "passed",
+          "duration": 0.2669999999998254,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/agent/persistence.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/agent/persistence.test.ts",
+      "status": "passed",
+      "startTime": 1783057231598,
+      "endTime": 1783057232055.635,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "getAgentRunById reads from repository when in-memory run is missing",
+          "title": "getAgentRunById reads from repository when in-memory run is missing",
+          "status": "passed",
+          "duration": 95.22069999999985,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "resumeApprovedAgentRun can continue from repository after in-memory state is lost",
+          "title": "resumeApprovedAgentRun can continue from repository after in-memory state is lost",
+          "status": "passed",
+          "duration": 99.65180000000055,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "resumeApprovedAgentRun fails hard when persisted run misses runtime input",
+          "title": "resumeApprovedAgentRun fails hard when persisted run misses runtime input",
+          "status": "passed",
+          "duration": 90.34760000000006,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "resumeApprovedAgentRun fails hard when run does not exist in memory or repository",
+          "title": "resumeApprovedAgentRun fails hard when run does not exist in memory or repository",
+          "status": "passed",
+          "duration": 84.32730000000083,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "initializeThreadDatabase upgrades legacy agent_runs columns for execution state",
+          "title": "initializeThreadDatabase upgrades legacy agent_runs columns for execution state",
+          "status": "passed",
+          "duration": 87.63500000000022,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/agent/policy.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/agent/policy.test.ts",
+      "status": "passed",
+      "startTime": 1783057249486,
+      "endTime": 1783057249490.2869,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "evaluateAgentToolPolicy allows read and web_search tools in MVP",
+          "title": "evaluateAgentToolPolicy allows read and web_search tools in MVP",
+          "status": "passed",
+          "duration": 0.27260000000023865,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "evaluateAgentToolPolicy requires approval for risky tools",
+          "title": "evaluateAgentToolPolicy requires approval for risky tools",
+          "status": "passed",
+          "duration": 0.10099999999874854,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "evaluateAgentToolPolicy requires approval for external MCP tools",
+          "title": "evaluateAgentToolPolicy requires approval for external MCP tools",
+          "status": "passed",
+          "duration": 0.07749999999941792,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "evaluateAgentToolPolicy keeps terminal, edit, and external MCP approval semantics explicit",
+          "title": "evaluateAgentToolPolicy keeps terminal, edit, and external MCP approval semantics explicit",
+          "status": "passed",
+          "duration": 0.20820000000094296,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "policyNode schedules selected allow capability for execution",
+          "title": "policyNode schedules selected allow capability for execution",
+          "status": "passed",
+          "duration": 0.42379999999684514,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "policyNode raises approval for selected risky capability",
+          "title": "policyNode raises approval for selected risky capability",
+          "status": "passed",
+          "duration": 0.8138999999973748,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "policyNode blocks execution when policy denies a capability",
+          "title": "policyNode blocks execution when policy denies a capability",
+          "status": "passed",
+          "duration": 0.29139999999824795,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "policyNode skips approval for already approved capability",
+          "title": "policyNode skips approval for already approved capability",
+          "status": "passed",
+          "duration": 0.41740000000208966,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "policyNode blocks workspace mutation execution when no structured args can be derived",
+          "title": "policyNode blocks workspace mutation execution when no structured args can be derived",
+          "status": "passed",
+          "duration": 0.5188999999991211,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "policyNode blocks terminal auto-execution even after approval when no reviewed command exists",
+          "title": "policyNode blocks terminal auto-execution even after approval when no reviewed command exists",
+          "status": "passed",
+          "duration": 0.28689999999915017,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "policyNode blocks high-risk workspace mutation requests from falling through terminal_session",
+          "title": "policyNode blocks high-risk workspace mutation requests from falling through terminal_session",
+          "status": "passed",
+          "duration": 0.26450000000113505,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/agent/resume.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/agent/resume.test.ts",
+      "status": "passed",
+      "startTime": 1783057254768,
+      "endTime": 1783057254770.3198,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "resumeApprovedAgentRun resumes a pending run and keeps approval state",
+          "title": "resumeApprovedAgentRun resumes a pending run and keeps approval state",
+          "status": "passed",
+          "duration": 1.6300999999984924,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "resumeApprovedAgentRun updates assistant message when run returns waiting approval again",
+          "title": "resumeApprovedAgentRun updates assistant message when run returns waiting approval again",
+          "status": "passed",
+          "duration": 0.5233000000007451,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "resumeApprovedAgentRun updates assistant message when resumed run fails",
+          "title": "resumeApprovedAgentRun updates assistant message when resumed run fails",
+          "status": "passed",
+          "duration": 0.3198000000011234,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/agent/routes.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/agent/routes.test.ts",
+      "status": "passed",
+      "startTime": 1783057238462,
+      "endTime": 1783057238501.3093,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "agent routes"
+          ],
+          "fullName": "agent routes returns and updates runs",
+          "title": "returns and updates runs",
+          "status": "passed",
+          "duration": 12.274199999999837,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "agent routes"
+          ],
+          "fullName": "agent routes returns 404 for unknown runs",
+          "title": "returns 404 for unknown runs",
+          "status": "passed",
+          "duration": 4.7533000000003085,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "agent routes"
+          ],
+          "fullName": "agent routes approve is idempotent when run is not waiting approval",
+          "title": "approve is idempotent when run is not waiting approval",
+          "status": "passed",
+          "duration": 7.189000000000306,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "agent routes"
+          ],
+          "fullName": "agent routes reject and cancel clear pending approval state",
+          "title": "reject and cancel clear pending approval state",
+          "status": "passed",
+          "duration": 7.57839999999851,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "agent routes"
+          ],
+          "fullName": "agent routes approve returns resumed run state from resume helper",
+          "title": "approve returns resumed run state from resume helper",
+          "status": "passed",
+          "duration": 7.309400000000096,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/agent/run-store.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/agent/run-store.test.ts",
+      "status": "passed",
+      "startTime": 1783057257238,
+      "endTime": 1783057257239.3113,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "InMemoryAgentRunStore creates and updates agent runs",
+          "title": "InMemoryAgentRunStore creates and updates agent runs",
+          "status": "passed",
+          "duration": 0.3311000000030617,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "InMemoryAgentRunStore preserves approval and context budget state",
+          "title": "InMemoryAgentRunStore preserves approval and context budget state",
+          "status": "passed",
+          "duration": 0.23249999999825377,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "InMemoryAgentRunStore appends observations",
+          "title": "InMemoryAgentRunStore appends observations",
+          "status": "passed",
+          "duration": 0.2430000000022119,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "InMemoryAgentRunStore completes runs with final status",
+          "title": "InMemoryAgentRunStore completes runs with final status",
+          "status": "passed",
+          "duration": 0.15020000000367872,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "InMemoryAgentRunStore sweeps completed runs beyond retention limit",
+          "title": "InMemoryAgentRunStore sweeps completed runs beyond retention limit",
+          "status": "passed",
+          "duration": 0.3113000000012107,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/agent/tool-node.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/agent/tool-node.test.ts",
+      "status": "passed",
+      "startTime": 1783057258538,
+      "endTime": 1783057258539.2747,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "toolNode executes the frozen pendingToolCall without rebuilding args",
+          "title": "toolNode executes the frozen pendingToolCall without rebuilding args",
+          "status": "passed",
+          "duration": 0.5190999999977066,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "toolNode blocks execution when pendingToolCall is missing",
+          "title": "toolNode blocks execution when pendingToolCall is missing",
+          "status": "passed",
+          "duration": 0.2745999999970081,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/agent/trace.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/agent/trace.test.ts",
+      "status": "passed",
+      "startTime": 1783057255085,
+      "endTime": 1783057255086.079,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "toAgentExecutionNode prefixes runId into node details",
+          "title": "toAgentExecutionNode prefixes runId into node details",
+          "status": "passed",
+          "duration": 0.15499999999883585,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "toAgentErrorExecutionNode emits error phase",
+          "title": "toAgentErrorExecutionNode emits error phase",
+          "status": "passed",
+          "duration": 0.07109999999738648,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "toAgentApprovalExecutionNode emits approval phase",
+          "title": "toAgentApprovalExecutionNode emits approval phase",
+          "status": "passed",
+          "duration": 0.044799999999668216,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "toPlanNodeDetails preserves tool and approval metadata",
+          "title": "toPlanNodeDetails preserves tool and approval metadata",
+          "status": "passed",
+          "duration": 0.07920000000012806,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/config/public-api.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/config/public-api.test.ts",
+      "status": "passed",
+      "startTime": 1783057258757,
+      "endTime": 1783057258757.3164,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "public api auth exemptions"
+          ],
+          "fullName": "public api auth exemptions treats docs routes as auth exempt",
+          "title": "treats docs routes as auth exempt",
+          "status": "passed",
+          "duration": 0.3165000000008149,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "public api auth exemptions"
+          ],
+          "fullName": "public api auth exemptions treats swagger routes as auth exempt on their dedicated prefix",
+          "title": "treats swagger routes as auth exempt on their dedicated prefix",
+          "status": "passed",
+          "duration": 0.1697000000058324,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "public api auth exemptions"
+          ],
+          "fullName": "public api auth exemptions does not exempt unrelated routes",
+          "title": "does not exempt unrelated routes",
+          "status": "passed",
+          "duration": 0.12150000000110595,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/document-readers.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/document-readers.test.ts",
+      "status": "failed",
+      "startTime": 1783057223748,
+      "endTime": 1783057223748,
+      "message": "Cannot find package 'xlsx' imported from 'D:/workspace/rag-demo/server/src/mcp/document-readers.test.ts'",
+      "assertionResults": []
+    },
+    {
+      "name": "src/mcp/external-connect.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/external-connect.test.ts",
+      "status": "passed",
+      "startTime": 1783057233941,
+      "endTime": 1783057234081.4705,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "external MCP connect"
+          ],
+          "fullName": "external MCP connect surfaces a friendly launcher hint when stdio command is missing",
+          "title": "surfaces a friendly launcher hint when stdio command is missing",
+          "status": "passed",
+          "duration": 98.73320000000058,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "external MCP connect"
+          ],
+          "fullName": "external MCP connect reuses an installed external MCP server id instead of failing on duplicate install",
+          "title": "reuses an installed external MCP server id instead of failing on duplicate install",
+          "status": "passed",
+          "duration": 1.2034999999996217,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "external MCP connect"
+          ],
+          "fullName": "external MCP connect resets prior runtime state when reinstalling the same server id",
+          "title": "resets prior runtime state when reinstalling the same server id",
+          "status": "passed",
+          "duration": 38.89579999999842,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "external MCP connect"
+          ],
+          "fullName": "external MCP connect stores cwd and envJson in stdio config updates",
+          "title": "stores cwd and envJson in stdio config updates",
+          "status": "passed",
+          "duration": 1.4704000000001543,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/marketplace.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/marketplace.test.ts",
+      "status": "passed",
+      "startTime": 1783057254820,
+      "endTime": 1783057254821.3894,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "mcp marketplace"
+          ],
+          "fullName": "mcp marketplace normalizes official registry servers into app-owned DTOs",
+          "title": "normalizes official registry servers into app-owned DTOs",
+          "status": "passed",
+          "duration": 0.3492999999980384,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp marketplace"
+          ],
+          "fullName": "mcp marketplace accepts registryType from the official registry package shape",
+          "title": "accepts registryType from the official registry package shape",
+          "status": "passed",
+          "duration": 0.12409999999727006,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp marketplace"
+          ],
+          "fullName": "mcp marketplace filters normalized results by query without trusting unknown entries",
+          "title": "filters normalized results by query without trusting unknown entries",
+          "status": "passed",
+          "duration": 0.09139999999752035,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp marketplace"
+          ],
+          "fullName": "mcp marketplace fetches registry pages with limit and cursor",
+          "title": "fetches registry pages with limit and cursor",
+          "status": "passed",
+          "duration": 0.3894000000000233,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp marketplace"
+          ],
+          "fullName": "mcp marketplace returns cached marketplace results when the upstream registry times out",
+          "title": "returns cached marketplace results when the upstream registry times out",
+          "status": "passed",
+          "duration": 0.35129999999844586,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/routes.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/routes.test.ts",
+      "status": "passed",
+      "startTime": 1783057227412,
+      "endTime": 1783057227996.912,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "mcp routes"
+          ],
+          "fullName": "mcp routes lists tools/resources and streams invocation events",
+          "title": "lists tools/resources and streams invocation events",
+          "status": "passed",
+          "duration": 134.88679999999977,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp routes"
+          ],
+          "fullName": "mcp routes allows selecting workspace root explicitly",
+          "title": "allows selecting workspace root explicitly",
+          "status": "passed",
+          "duration": 34.878999999999905,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp routes"
+          ],
+          "fullName": "mcp routes persists web search config through mcp routes",
+          "title": "persists web search config through mcp routes",
+          "status": "passed",
+          "duration": 32.45049999999992,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp routes"
+          ],
+          "fullName": "mcp routes persists WeCom config through instance and capability resources",
+          "title": "persists WeCom config through instance and capability resources",
+          "status": "passed",
+          "duration": 51.062299999999595,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp routes"
+          ],
+          "fullName": "mcp routes lists marketplace MCP servers through the registry adapter",
+          "title": "lists marketplace MCP servers through the registry adapter",
+          "status": "passed",
+          "duration": 32.53049999999985,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp routes"
+          ],
+          "fullName": "mcp routes creates, connects, discovers, and invokes an external MCP capability",
+          "title": "creates, connects, discovers, and invokes an external MCP capability",
+          "status": "passed",
+          "duration": 49.75930000000017,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp routes"
+          ],
+          "fullName": "mcp routes updates external MCP config and injects auth, headers, and endpoint into connect",
+          "title": "updates external MCP config and injects auth, headers, and endpoint into connect",
+          "status": "passed",
+          "duration": 56.78489999999965,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp routes"
+          ],
+          "fullName": "mcp routes updates stdio server config with command and args",
+          "title": "updates stdio server config with command and args",
+          "status": "passed",
+          "duration": 27.980000000000018,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp routes"
+          ],
+          "fullName": "mcp routes creates, connects, discovers, and invokes a stdio external MCP capability",
+          "title": "creates, connects, discovers, and invokes a stdio external MCP capability",
+          "status": "passed",
+          "duration": 131.57689999999957,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp routes"
+          ],
+          "fullName": "mcp routes clears projected capabilities after config update and replaces them on rediscover",
+          "title": "clears projected capabilities after config update and replaces them on rediscover",
+          "status": "passed",
+          "duration": 32.91200000000026,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/stdio-session.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/stdio-session.test.ts",
+      "status": "passed",
+      "startTime": 1783057249967,
+      "endTime": 1783057249970.4058,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "stdio session"
+          ],
+          "fullName": "stdio session writes MCP frames and resolves initialize replies",
+          "title": "writes MCP frames and resolves initialize replies",
+          "status": "passed",
+          "duration": 3.405800000000454,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/workspace.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/workspace.test.ts",
+      "status": "passed",
+      "startTime": 1783057242580,
+      "endTime": 1783057242588.974,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "workspace selection"
+          ],
+          "fullName": "workspace selection returns the development fallback workspace root when no workspace root is configured",
+          "title": "returns the development fallback workspace root when no workspace root is configured",
+          "status": "passed",
+          "duration": 0.3642999999974563,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "workspace selection"
+          ],
+          "fullName": "workspace selection selects workspace root explicitly",
+          "title": "selects workspace root explicitly",
+          "status": "passed",
+          "duration": 0.807199999999284,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "workspace selection"
+          ],
+          "fullName": "workspace selection resolves paths inside selected workspace and rejects escaping paths",
+          "title": "resolves paths inside selected workspace and rejects escaping paths",
+          "status": "passed",
+          "duration": 1.1957000000002154,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "workspace selection"
+          ],
+          "fullName": "workspace selection rejects absolute write targets outside the selected workspace",
+          "title": "rejects absolute write targets outside the selected workspace",
+          "status": "passed",
+          "duration": 1.3588999999992666,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "workspace selection"
+          ],
+          "fullName": "workspace selection rejects write targets that traverse a linked directory outside the workspace",
+          "title": "rejects write targets that traverse a linked directory outside the workspace",
+          "status": "passed",
+          "duration": 2.3423000000002503,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "workspace selection"
+          ],
+          "fullName": "workspace selection rejects write targets when the workspace file path is a symlink to an external file",
+          "title": "rejects write targets when the workspace file path is a symlink to an external file",
+          "status": "passed",
+          "duration": 2.9742000000005646,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/providers/catalog.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/providers/catalog.test.ts",
+      "status": "passed",
+      "startTime": 1783057260058,
+      "endTime": 1783057260058.16,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "rerank support is declared independently from chat compatibility",
+          "title": "rerank support is declared independently from chat compatibility",
+          "status": "passed",
+          "duration": 0.15979999999399297,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/sandbox/executor.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/sandbox/executor.test.ts",
+      "status": "passed",
+      "startTime": 1783057242533,
+      "endTime": 1783057242545.3696,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "SandboxExecutor"
+          ],
+          "fullName": "SandboxExecutor rejects cwd outside workspace root",
+          "title": "rejects cwd outside workspace root",
+          "status": "passed",
+          "duration": 1.2791999999972177,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "SandboxExecutor"
+          ],
+          "fullName": "SandboxExecutor limits output size",
+          "title": "limits output size",
+          "status": "passed",
+          "duration": 1.7190000000009604,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "SandboxExecutor"
+          ],
+          "fullName": "SandboxExecutor blocks inline node execution",
+          "title": "blocks inline node execution",
+          "status": "passed",
+          "duration": 0.5792000000001281,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "SandboxExecutor"
+          ],
+          "fullName": "SandboxExecutor blocks git config --global",
+          "title": "blocks git config --global",
+          "status": "passed",
+          "duration": 0.5193999999974039,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "SandboxExecutor"
+          ],
+          "fullName": "SandboxExecutor blocks inline Python execution",
+          "title": "blocks inline Python execution",
+          "status": "passed",
+          "duration": 0.5300999999999476,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "SandboxExecutor"
+          ],
+          "fullName": "SandboxExecutor blocks npm exec",
+          "title": "blocks npm exec",
+          "status": "passed",
+          "duration": 0.5205999999998312,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "SandboxExecutor"
+          ],
+          "fullName": "SandboxExecutor rejects cwd that is not an existing directory",
+          "title": "rejects cwd that is not an existing directory",
+          "status": "passed",
+          "duration": 0.9805000000014843,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "SandboxExecutor"
+          ],
+          "fullName": "SandboxExecutor aborts and rejects active executions",
+          "title": "aborts and rejects active executions",
+          "status": "passed",
+          "duration": 1.4539000000004307,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "SandboxExecutor"
+          ],
+          "fullName": "SandboxExecutor returns timedOut=true when execution exceeds timeout",
+          "title": "returns timedOut=true when execution exceeds timeout",
+          "status": "passed",
+          "duration": 3.1788999999989755,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "SandboxExecutor"
+          ],
+          "fullName": "SandboxExecutor allows workspace-scoped node script execution",
+          "title": "allows workspace-scoped node script execution",
+          "status": "passed",
+          "duration": 1.369699999999284,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/routes/logs.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/routes/logs.test.ts",
+      "status": "passed",
+      "startTime": 1783057237227,
+      "endTime": 1783057237258.8906,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "GET /logs/stream returns snapshot then live append events",
+          "title": "GET /logs/stream returns snapshot then live append events",
+          "status": "passed",
+          "duration": 31.890699999999924,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/evaluation-package-generator.service.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/evaluation-package-generator.service.test.ts",
+      "status": "passed",
+      "startTime": 1783057242697,
+      "endTime": 1783057242706.9116,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "generateArchive fails when candidate chunks cannot satisfy sampleCount",
+          "title": "generateArchive fails when candidate chunks cannot satisfy sampleCount",
+          "status": "passed",
+          "duration": 7.058999999997468,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "generateArchive fails when the model returns duplicate questions",
+          "title": "generateArchive fails when the model returns duplicate questions",
+          "status": "passed",
+          "duration": 2.911500000001979,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/evaluation.service.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/evaluation.service.test.ts",
+      "status": "passed",
+      "startTime": 1783057241351,
+      "endTime": 1783057241359.1729,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "parseDataset marks missing knowledge base id as validation error",
+          "title": "parseDataset marks missing knowledge base id as validation error",
+          "status": "passed",
+          "duration": 4.230300000002899,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "createRun rejects datasets that reference an unknown knowledge base",
+          "title": "createRun rejects datasets that reference an unknown knowledge base",
+          "status": "passed",
+          "duration": 1.0234999999993306,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "createRun succeeds when dataset references an existing knowledge base",
+          "title": "createRun succeeds when dataset references an existing knowledge base",
+          "status": "passed",
+          "duration": 3.172900000001391,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/llm.service.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/llm.service.test.ts",
+      "status": "passed",
+      "startTime": 1783057258629,
+      "endTime": 1783057258630.4402,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "collectLlmText concatenates streamed deltas without trimming",
+          "title": "collectLlmText concatenates streamed deltas without trimming",
+          "status": "passed",
+          "duration": 0.23870000000169966,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "createLlmService streams and describes with merged params",
+          "title": "createLlmService streams and describes with merged params",
+          "status": "passed",
+          "duration": 0.44029999999474967,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/provider-proxy.message-protocol.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/provider-proxy.message-protocol.test.ts",
+      "status": "passed",
+      "startTime": 1783057257288,
+      "endTime": 1783057257290.0952,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "normalizeProxyChatMessages preserves canonical text, image and file parts",
+          "title": "normalizeProxyChatMessages preserves canonical text, image and file parts",
+          "status": "passed",
+          "duration": 0.43690000000060536,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "normalizeProxyChatMessages drops empty parts and empty messages",
+          "title": "normalizeProxyChatMessages drops empty parts and empty messages",
+          "status": "passed",
+          "duration": 0.17880000000150176,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "normalizeProxyChatMessages defaults missing image media type and file mime type",
+          "title": "normalizeProxyChatMessages defaults missing image media type and file mime type",
+          "status": "passed",
+          "duration": 0.17859999999927823,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "normalizeProxyChatMessages preserves leading and trailing whitespace in text payloads",
+          "title": "normalizeProxyChatMessages preserves leading and trailing whitespace in text payloads",
+          "status": "passed",
+          "duration": 0.14149999999790452,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "normalizeProxyChatMessages keeps only supported canonical parts",
+          "title": "normalizeProxyChatMessages keeps only supported canonical parts",
+          "status": "passed",
+          "duration": 0.1992000000027474,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "normalized message helpers cover empty and populated parts",
+          "title": "normalized message helpers cover empty and populated parts",
+          "status": "passed",
+          "duration": 0.19169999999576248,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "normalizeProxyChatMessages returns empty array for unsupported or empty messages",
+          "title": "normalizeProxyChatMessages returns empty array for unsupported or empty messages",
+          "status": "passed",
+          "duration": 0.09520000000338769,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/rag-graph.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/rag-graph.test.ts",
+      "status": "passed",
+      "startTime": 1783057238608,
+      "endTime": 1783057238635.2283,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "ragGraph request context boundaries"
+          ],
+          "fullName": "ragGraph request context boundaries keeps role request context out of rewrite/retrieve/rerank and passes it only to generate",
+          "title": "keeps role request context out of rewrite/retrieve/rerank and passes it only to generate",
+          "status": "passed",
+          "duration": 7.515799999999217,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "ragGraph request context boundaries"
+          ],
+          "fullName": "ragGraph request context boundaries keeps role request context out of retrieve and rerank node inputs",
+          "title": "keeps role request context out of retrieve and rerank node inputs",
+          "status": "passed",
+          "duration": 7.036599999999453,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "ragGraph request context boundaries"
+          ],
+          "fullName": "ragGraph request context boundaries never turns role request context into retrieved chunks or final sources",
+          "title": "never turns role request context into retrieved chunks or final sources",
+          "status": "passed",
+          "duration": 7.948200000000725,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "ragGraph request context boundaries"
+          ],
+          "fullName": "ragGraph request context boundaries uses role-aware generate fallback when retrieval returns no context",
+          "title": "uses role-aware generate fallback when retrieval returns no context",
+          "status": "passed",
+          "duration": 5.2282000000013795,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/role.service.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/role.service.test.ts",
+      "status": "passed",
+      "startTime": 1783057249795,
+      "endTime": 1783057249799.7788,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "role service seeds starter roles for bootstrap users",
+          "title": "role service seeds starter roles for bootstrap users",
+          "status": "passed",
+          "duration": 1.0846000000019558,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "role service creates, updates and deletes user-owned roles",
+          "title": "role service creates, updates and deletes user-owned roles",
+          "status": "passed",
+          "duration": 2.7789000000011583,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/thread.service.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/thread.service.test.ts",
+      "status": "failed",
+      "startTime": 1783057225029,
+      "endTime": 1783057225075.5469,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "createThread stores knowledgeBaseId only when provided",
+          "title": "createThread stores knowledgeBaseId only when provided",
+          "status": "passed",
+          "duration": 2.9033999999999196,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "messages table foreign key targets threads after initialization",
+          "title": "messages table foreign key targets threads after initialization",
+          "status": "passed",
+          "duration": 0.15839999999980137,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "createChatWorkspace validates workspace root paths",
+          "title": "createChatWorkspace validates workspace root paths",
+          "status": "failed",
+          "duration": 5.686500000000024,
+          "failureMessages": [
+            "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /Workspace root path format is invalid/. Input:\n\n'Error: Workspace root path is invalid'\n\n    at D:\\workspace\\rag-demo\\server\\src\\services\\thread.service.test.ts:101:10\n    at file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11\n    at file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26\n    at file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)\n    at runTest (file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at runSuite (file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)\n    at runFiles (file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:1787:3)"
+          ],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "createThread and updateThread persist roleId and allow clearing it",
+          "title": "createThread and updateThread persist roleId and allow clearing it",
+          "status": "passed",
+          "duration": 2.6437000000000808,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "updateThread stores and clears context summary",
+          "title": "updateThread stores and clears context summary",
+          "status": "passed",
+          "duration": 1.3624999999999545,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "thread summary responses do not expose legacy RAG flags",
+          "title": "thread summary responses do not expose legacy RAG flags",
+          "status": "passed",
+          "duration": 0.866800000000012,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "updateThread unbinds and rebinds knowledge base",
+          "title": "updateThread unbinds and rebinds knowledge base",
+          "status": "passed",
+          "duration": 1.8136999999999261,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "deleteChatWorkspace removes threads bound to that workspace",
+          "title": "deleteChatWorkspace removes threads bound to that workspace",
+          "status": "passed",
+          "duration": 2.7215000000001055,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "createMessage uses lineage.parentId for branch pruning",
+          "title": "createMessage uses lineage.parentId for branch pruning",
+          "status": "passed",
+          "duration": 3.475599999999986,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "thread service list and detail views surface canonical parts and summaries",
+          "title": "thread service list and detail views surface canonical parts and summaries",
+          "status": "passed",
+          "duration": 2.7614000000000942,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "thread service createMessage handles empty payloads and updates existing messages",
+          "title": "thread service createMessage handles empty payloads and updates existing messages",
+          "status": "passed",
+          "duration": 1.9153000000001157,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "thread service batch create archive restore delete and deleteMessage work",
+          "title": "thread service batch create archive restore delete and deleteMessage work",
+          "status": "passed",
+          "duration": 3.508299999999963,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "thread service returns null or false for inaccessible resources",
+          "title": "thread service returns null or false for inaccessible resources",
+          "status": "passed",
+          "duration": 1.0717999999999392,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "thread service keeps canonical parts and ignores assistantUi attachment fallback",
+          "title": "thread service keeps canonical parts and ignores assistantUi attachment fallback",
+          "status": "passed",
+          "duration": 2.425299999999879,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "thread service fallback read ignores legacy assistantUi text suppression",
+          "title": "thread service fallback read ignores legacy assistantUi text suppression",
+          "status": "failed",
+          "duration": 5.932099999999991,
+          "failureMessages": [
+            "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n+ []\n- [\n-   {\n-     text: '[Image attachment]',\n-     type: 'text'\n-   }\n- ]\n\n    at D:\\workspace\\rag-demo\\server\\src\\services\\thread.service.test.ts:496:10\n    at file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11\n    at file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26\n    at file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)\n    at runTest (file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at runSuite (file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)\n    at runFiles (file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:1787:3)"
+          ],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "thread service createMessages and getMessageById handle ownership and nulls",
+          "title": "thread service createMessages and getMessageById handle ownership and nulls",
+          "status": "passed",
+          "duration": 3.3019999999999072,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "thread service updateThread with no changes returns current snapshot and deleteMessage updates thread",
+          "title": "thread service updateThread with no changes returns current snapshot and deleteMessage updates thread",
+          "status": "passed",
+          "duration": 3.5469000000000506,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/agent/intent/embedding-capability-matcher.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/agent/intent/embedding-capability-matcher.test.ts",
+      "status": "passed",
+      "startTime": 1783057252371,
+      "endTime": 1783057252373.4092,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "cosineSimilarity returns descending similarity as vectors diverge",
+          "title": "cosineSimilarity returns descending similarity as vectors diverge",
+          "status": "passed",
+          "duration": 0.26850000000194996,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "matchCapabilitiesByEmbedding returns top-k dynamic capability candidates",
+          "title": "matchCapabilitiesByEmbedding returns top-k dynamic capability candidates",
+          "status": "passed",
+          "duration": 0.8786000000000058,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "matchCapabilitiesByEmbedding keeps candidates but returns no selected capability below selected threshold",
+          "title": "matchCapabilitiesByEmbedding keeps candidates but returns no selected capability below selected threshold",
+          "status": "passed",
+          "duration": 0.48280000000158907,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "matchCapabilitiesByEmbedding short-circuits low-intent greeting queries through harness exposure policy",
+          "title": "matchCapabilitiesByEmbedding short-circuits low-intent greeting queries through harness exposure policy",
+          "status": "passed",
+          "duration": 0.24390000000130385,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "matchCapabilitiesByEmbedding keeps workspace candidates when local embedding is unavailable",
+          "title": "matchCapabilitiesByEmbedding keeps workspace candidates when local embedding is unavailable",
+          "status": "passed",
+          "duration": 0.4092000000018743,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/agent/intent/task-capability-selector.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/agent/intent/task-capability-selector.test.ts",
+      "status": "failed",
+      "startTime": 1783057249576,
+      "endTime": 1783057249582.2625,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "selectCapabilityWithTaskModel returns none when task model rejects tool use",
+          "title": "selectCapabilityWithTaskModel returns none when task model rejects tool use",
+          "status": "passed",
+          "duration": 1.0253999999986263,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "selectCapabilityWithTaskModel returns the chosen capability when task model selects one",
+          "title": "selectCapabilityWithTaskModel returns the chosen capability when task model selects one",
+          "status": "passed",
+          "duration": 0.38320000000021537,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "selectCapabilityWithTaskModel keeps workspace hints as model input instead of bypassing task model",
+          "title": "selectCapabilityWithTaskModel keeps workspace hints as model input instead of bypassing task model",
+          "status": "passed",
+          "duration": 0.3352999999988242,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "selectCapabilityWithTaskModel rejects use_capability payloads without capabilityId",
+          "title": "selectCapabilityWithTaskModel rejects use_capability payloads without capabilityId",
+          "status": "passed",
+          "duration": 0.2907000000013795,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "resolveSelectedToolIds picks read_list for directory listing requests",
+          "title": "resolveSelectedToolIds picks read_list for directory listing requests",
+          "status": "passed",
+          "duration": 0.45349999999962165,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "resolveSelectedToolIds demotes read alias behind explicit read tools",
+          "title": "resolveSelectedToolIds demotes read alias behind explicit read tools",
+          "status": "passed",
+          "duration": 0.22299999999813735,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "resolveSelectedToolIds prefers read_extract for explicit range requests",
+          "title": "resolveSelectedToolIds prefers read_extract for explicit range requests",
+          "status": "failed",
+          "duration": 2.3057000000007974,
+          "failureMessages": [
+            "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   'read_open'\n-   'read_extract'\n  ]\n\n    at D:\\workspace\\rag-demo\\server\\src\\agent\\intent\\task-capability-selector.test.ts:289:10\n    at file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11\n    at file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26\n    at file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)\n    at runTest (file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at runSuite (file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)\n    at runFiles (file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:1787:3)"
+          ],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "range detection recognizes explicit read ranges",
+          "title": "range detection recognizes explicit read ranges",
+          "status": "passed",
+          "duration": 0.22190000000045984,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "selectCapabilityWithTaskModel prefers workspace_edit for explicit file creation intent",
+          "title": "selectCapabilityWithTaskModel prefers workspace_edit for explicit file creation intent",
+          "status": "passed",
+          "duration": 0.24059999999735737,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "resolveSelectedToolIds picks edit_file for explicit file creation requests",
+          "title": "resolveSelectedToolIds picks edit_file for explicit file creation requests",
+          "status": "passed",
+          "duration": 0.11319999999977881,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "selectCapabilityWithTaskModel prefers workspace_edit for explicit file write requests",
+          "title": "selectCapabilityWithTaskModel prefers workspace_edit for explicit file write requests",
+          "status": "passed",
+          "duration": 0.3122000000003027,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "resolveSelectedToolIds picks edit_file for explicit file write requests",
+          "title": "resolveSelectedToolIds picks edit_file for explicit file write requests",
+          "status": "passed",
+          "duration": 0.11490000000048894,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "selectCapabilityWithTaskModel does not bypass task model for generic writing requests",
+          "title": "selectCapabilityWithTaskModel does not bypass task model for generic writing requests",
+          "status": "passed",
+          "duration": 0.2625000000007276,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/core/invocations.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/core/invocations.test.ts",
+      "status": "passed",
+      "startTime": 1783057248399,
+      "endTime": 1783057248403.3413,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "mcp invocations"
+          ],
+          "fullName": "mcp invocations records result, artifact and events",
+          "title": "records result, artifact and events",
+          "status": "passed",
+          "duration": 1.2006000000001222,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp invocations"
+          ],
+          "fullName": "mcp invocations records awaiting_approval when preflight approval gating stops execution",
+          "title": "records awaiting_approval when preflight approval gating stops execution",
+          "status": "passed",
+          "duration": 0.41049999999813735,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp invocations"
+          ],
+          "fullName": "mcp invocations requires approval at preflight when capability metadata marks the tool as approval-gated",
+          "title": "requires approval at preflight when capability metadata marks the tool as approval-gated",
+          "status": "passed",
+          "duration": 0.2319999999999709,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp invocations"
+          ],
+          "fullName": "mcp invocations allows preflight approval-gated tool execution when the exact invocation is already approved",
+          "title": "allows preflight approval-gated tool execution when the exact invocation is already approved",
+          "status": "passed",
+          "duration": 0.22880000000077416,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp invocations"
+          ],
+          "fullName": "mcp invocations requires approval again when a reused terminal session changes command input",
+          "title": "requires approval again when a reused terminal session changes command input",
+          "status": "passed",
+          "duration": 0.26269999999931315,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp invocations"
+          ],
+          "fullName": "mcp invocations passes thread context through harness invocation into tool execution",
+          "title": "passes thread context through harness invocation into tool execution",
+          "status": "passed",
+          "duration": 0.30939999999827705,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp invocations"
+          ],
+          "fullName": "mcp invocations rejects invocation args that do not satisfy the declared input schema",
+          "title": "rejects invocation args that do not satisfy the declared input schema",
+          "status": "passed",
+          "duration": 0.21810000000186847,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp invocations"
+          ],
+          "fullName": "mcp invocations uses definition-declared workspace boundary keys instead of implicit path/cwd guessing",
+          "title": "uses definition-declared workspace boundary keys instead of implicit path/cwd guessing",
+          "status": "passed",
+          "duration": 0.2779000000009546,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp invocations"
+          ],
+          "fullName": "mcp invocations sweeps finished invocations beyond retention limit",
+          "title": "sweeps finished invocations beyond retention limit",
+          "status": "passed",
+          "duration": 0.34130000000004657,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/core/schema.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/core/schema.test.ts",
+      "status": "passed",
+      "startTime": 1783057257263,
+      "endTime": 1783057257264.14,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "mcp schema validation"
+          ],
+          "fullName": "mcp schema validation accepts object args that satisfy the declared schema",
+          "title": "accepts object args that satisfy the declared schema",
+          "status": "passed",
+          "duration": 0.3562999999994645,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp schema validation"
+          ],
+          "fullName": "mcp schema validation rejects missing required properties",
+          "title": "rejects missing required properties",
+          "status": "passed",
+          "duration": 0.1397999999971944,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp schema validation"
+          ],
+          "fullName": "mcp schema validation rejects type mismatches from the declared schema",
+          "title": "rejects type mismatches from the declared schema",
+          "status": "passed",
+          "duration": 0.10020000000076834,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "mcp schema validation"
+          ],
+          "fullName": "mcp schema validation rejects enum mismatches from the declared schema",
+          "title": "rejects enum mismatches from the declared schema",
+          "status": "passed",
+          "duration": 0.08619999999791617,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/harness/action-profiles.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/harness/action-profiles.test.ts",
+      "status": "passed",
+      "startTime": 1783057258579,
+      "endTime": 1783057258579.2544,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "resolveHarnessActionProfiles"
+          ],
+          "fullName": "resolveHarnessActionProfiles returns terminal and edit action profiles when the backing runtime tools exist",
+          "title": "returns terminal and edit action profiles when the backing runtime tools exist",
+          "status": "passed",
+          "duration": 0.25450000000273576,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "resolveActionProfileInvocation"
+          ],
+          "fullName": "resolveActionProfileInvocation maps terminal_execute_command to terminal_session",
+          "title": "maps terminal_execute_command to terminal_session",
+          "status": "passed",
+          "duration": 0.15090000000054715,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "resolveActionProfileInvocation"
+          ],
+          "fullName": "resolveActionProfileInvocation maps edit action profiles to edit_file with normalized runtime args",
+          "title": "maps edit action profiles to edit_file with normalized runtime args",
+          "status": "passed",
+          "duration": 0.17970000000059372,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/harness/capability-diagnostics.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/harness/capability-diagnostics.test.ts",
+      "status": "passed",
+      "startTime": 1783057249931,
+      "endTime": 1783057249934.8894,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "resolveHarnessCapabilityDiagnostics"
+          ],
+          "fullName": "resolveHarnessCapabilityDiagnostics returns capability diagnostics with profile grouping and scores",
+          "title": "returns capability diagnostics with profile grouping and scores",
+          "status": "passed",
+          "duration": 1.8627999999989697,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "resolveHarnessCapabilityDiagnostics"
+          ],
+          "fullName": "resolveHarnessCapabilityDiagnostics keeps rule-based workspace candidates when local embedding is unavailable",
+          "title": "keeps rule-based workspace candidates when local embedding is unavailable",
+          "status": "passed",
+          "duration": 1.0790000000015425,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "resolveHarnessCapabilityDiagnostics"
+          ],
+          "fullName": "resolveHarnessCapabilityDiagnostics returns action profile metadata for terminal capability diagnostics",
+          "title": "returns action profile metadata for terminal capability diagnostics",
+          "status": "passed",
+          "duration": 0.889500000001135,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/harness/capability-profiles.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/harness/capability-profiles.test.ts",
+      "status": "passed",
+      "startTime": 1783057258667,
+      "endTime": 1783057258668.1187,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "resolveHarnessCapabilityProfiles"
+          ],
+          "fullName": "resolveHarnessCapabilityProfiles groups read family tools under one workspace capability profile",
+          "title": "groups read family tools under one workspace capability profile",
+          "status": "passed",
+          "duration": 0.23900000000139698,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "resolveHarnessCapabilityProfiles"
+          ],
+          "fullName": "resolveHarnessCapabilityProfiles exposes action profile metadata for terminal and edit capability groups",
+          "title": "exposes action profile metadata for terminal and edit capability groups",
+          "status": "passed",
+          "duration": 0.11869999999908032,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "resolveHarnessCapabilityProfiles"
+          ],
+          "fullName": "resolveHarnessCapabilityProfiles keeps unknown tools as one-to-one fallback profiles",
+          "title": "keeps unknown tools as one-to-one fallback profiles",
+          "status": "passed",
+          "duration": 0.08510000000387663,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/harness/environment.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/harness/environment.test.ts",
+      "status": "passed",
+      "startTime": 1783057259943,
+      "endTime": 1783057259943.2183,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "harness environment"
+          ],
+          "fullName": "harness environment exposes a powershell shell profile on Windows",
+          "title": "exposes a powershell shell profile on Windows",
+          "status": "passed",
+          "duration": 0.21820000000298023,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/harness/exposure.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/harness/exposure.test.ts",
+      "status": "passed",
+      "startTime": 1783057257368,
+      "endTime": 1783057257369.3467,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "resolveHarnessToolExposure"
+          ],
+          "fullName": "resolveHarnessToolExposure keeps the full terminal runtime schema in tools_list exposure",
+          "title": "keeps the full terminal runtime schema in tools_list exposure",
+          "status": "passed",
+          "duration": 0.35059999999793945,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "resolveHarnessToolExposure"
+          ],
+          "fullName": "resolveHarnessToolExposure hides terminal session-management fields from agent_intent exposure",
+          "title": "hides terminal session-management fields from agent_intent exposure",
+          "status": "passed",
+          "duration": 0.3032000000021071,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "resolveHarnessToolExposure"
+          ],
+          "fullName": "resolveHarnessToolExposure hides read fallback aliases from agent_intent exposure while keeping tools_list intact",
+          "title": "hides read fallback aliases from agent_intent exposure while keeping tools_list intact",
+          "status": "passed",
+          "duration": 0.3467000000018743,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/harness/sandbox.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/harness/sandbox.test.ts",
+      "status": "failed",
+      "startTime": 1783057223748,
+      "endTime": 1783057223748,
+      "message": "Cannot find module './sandbox.js' imported from 'D:/workspace/rag-demo/server/src/mcp/harness/sandbox.test.ts'",
+      "assertionResults": []
+    },
+    {
+      "name": "src/mcp/resources/workspace-resource.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/resources/workspace-resource.test.ts",
+      "status": "failed",
+      "startTime": 1783057223748,
+      "endTime": 1783057223748,
+      "message": "Cannot find package 'xlsx' imported from 'D:/workspace/rag-demo/server/src/mcp/resources/workspace-resource.test.ts'",
+      "assertionResults": []
+    },
+    {
+      "name": "src/mcp/tools/edit-file.tool.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/tools/edit-file.tool.test.ts",
+      "status": "passed",
+      "startTime": 1783057237138,
+      "endTime": 1783057237161.3323,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "edit_file tool"
+          ],
+          "fullName": "edit_file tool writes a workspace file through the harness edit capability",
+          "title": "writes a workspace file through the harness edit capability",
+          "status": "passed",
+          "duration": 2.6260000000002037,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "edit_file tool"
+          ],
+          "fullName": "edit_file tool creates an empty workspace file when write_file receives empty content",
+          "title": "creates an empty workspace file when write_file receives empty content",
+          "status": "passed",
+          "duration": 1.6502000000000407,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "edit_file tool"
+          ],
+          "fullName": "edit_file tool escalates existing-file overwrite to dry-run instead of writing immediately",
+          "title": "escalates existing-file overwrite to dry-run instead of writing immediately",
+          "status": "passed",
+          "duration": 1.6357000000007247,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "edit_file tool"
+          ],
+          "fullName": "edit_file tool supports replace_block dry-run without changing the file",
+          "title": "supports replace_block dry-run without changing the file",
+          "status": "passed",
+          "duration": 1.7961000000013883,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "edit_file tool"
+          ],
+          "fullName": "edit_file tool replaces matching content in an existing file",
+          "title": "replaces matching content in an existing file",
+          "status": "passed",
+          "duration": 1.7562999999991007,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "edit_file tool"
+          ],
+          "fullName": "edit_file tool rejects write_file when content is missing",
+          "title": "rejects write_file when content is missing",
+          "status": "passed",
+          "duration": 1.070400000000518,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "edit_file tool"
+          ],
+          "fullName": "edit_file tool rejects replace_block when required fields are missing",
+          "title": "rejects replace_block when required fields are missing",
+          "status": "passed",
+          "duration": 1.0126999999993131,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "edit_file tool"
+          ],
+          "fullName": "edit_file tool rejects replace_block when the expected text does not match",
+          "title": "rejects replace_block when the expected text does not match",
+          "status": "passed",
+          "duration": 1.6210999999984779,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "edit_file tool"
+          ],
+          "fullName": "edit_file tool rejects replace_block when expectedOldText matches more than once",
+          "title": "rejects replace_block when expectedOldText matches more than once",
+          "status": "passed",
+          "duration": 1.6977999999999156,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "edit_file tool"
+          ],
+          "fullName": "edit_file tool rejects unsupported mutation operations such as delete",
+          "title": "rejects unsupported mutation operations such as delete",
+          "status": "passed",
+          "duration": 0.5821999999989202,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "edit_file tool"
+          ],
+          "fullName": "edit_file tool rejects unsupported mutation operations such as move",
+          "title": "rejects unsupported mutation operations such as move",
+          "status": "passed",
+          "duration": 0.5576000000000931,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "edit_file tool"
+          ],
+          "fullName": "edit_file tool rejects directory-style paths to keep workspace mutation separate",
+          "title": "rejects directory-style paths to keep workspace mutation separate",
+          "status": "passed",
+          "duration": 0.5573999999996886,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "edit_file tool"
+          ],
+          "fullName": "edit_file tool rejects existing directory targets to keep workspace mutation separate",
+          "title": "rejects existing directory targets to keep workspace mutation separate",
+          "status": "passed",
+          "duration": 1.393000000000029,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "edit_file tool"
+          ],
+          "fullName": "edit_file tool rejects paths outside the workspace root",
+          "title": "rejects paths outside the workspace root",
+          "status": "passed",
+          "duration": 0.8231999999989057,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "edit_file tool"
+          ],
+          "fullName": "edit_file tool rejects absolute paths outside the workspace root",
+          "title": "rejects absolute paths outside the workspace root",
+          "status": "passed",
+          "duration": 0.8554999999996653,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "edit_file tool"
+          ],
+          "fullName": "edit_file tool rejects writes through linked directories that resolve outside the workspace root",
+          "title": "rejects writes through linked directories that resolve outside the workspace root",
+          "status": "passed",
+          "duration": 1.9122999999999593,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "edit_file tool"
+          ],
+          "fullName": "edit_file tool rejects writes when the workspace target file is a symlink to an external file",
+          "title": "rejects writes when the workspace target file is a symlink to an external file",
+          "status": "passed",
+          "duration": 2.3322000000007392,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/tools/read-extract.tool.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/tools/read-extract.tool.test.ts",
+      "status": "failed",
+      "startTime": 1783057223748,
+      "endTime": 1783057223748,
+      "message": "Cannot find package 'xlsx' imported from 'D:/workspace/rag-demo/server/src/mcp/tools/read-extract.tool.test.ts'",
+      "assertionResults": []
+    },
+    {
+      "name": "src/mcp/tools/read-list.tool.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/tools/read-list.tool.test.ts",
+      "status": "passed",
+      "startTime": 1783057246209,
+      "endTime": 1783057246215.9556,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "read_list tool"
+          ],
+          "fullName": "read_list tool lists workspace directories",
+          "title": "lists workspace directories",
+          "status": "passed",
+          "duration": 4.4333000000005995,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "read_list tool"
+          ],
+          "fullName": "read_list tool rejects missing path",
+          "title": "rejects missing path",
+          "status": "passed",
+          "duration": 2.955599999997503,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/tools/read-locate.tool.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/tools/read-locate.tool.test.ts",
+      "status": "passed",
+      "startTime": 1783057239961,
+      "endTime": 1783057239970.8044,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "read_locate tool"
+          ],
+          "fullName": "read_locate tool locates files by path pattern",
+          "title": "locates files by path pattern",
+          "status": "passed",
+          "duration": 4.380699999999706,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "read_locate tool"
+          ],
+          "fullName": "read_locate tool locates content using the node scan fallback chain",
+          "title": "locates content using the node scan fallback chain",
+          "status": "passed",
+          "duration": 3.546700000000783,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "read_locate tool"
+          ],
+          "fullName": "read_locate tool rejects missing query",
+          "title": "rejects missing query",
+          "status": "passed",
+          "duration": 1.8043999999990774,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/tools/read-open.tool.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/tools/read-open.tool.test.ts",
+      "status": "passed",
+      "startTime": 1783057247285,
+      "endTime": 1783057247290.4167,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "read_open tool"
+          ],
+          "fullName": "read_open tool opens workspace files",
+          "title": "opens workspace files",
+          "status": "passed",
+          "duration": 1.9351999999998952,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "read_open tool"
+          ],
+          "fullName": "read_open tool keeps the compatibility alias behavior through read",
+          "title": "keeps the compatibility alias behavior through read",
+          "status": "passed",
+          "duration": 3.4166999999979453,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/tools/read-slice.tool.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/tools/read-slice.tool.test.ts",
+      "status": "passed",
+      "startTime": 1783057256144,
+      "endTime": 1783057256145.0374,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "read_slice tool"
+          ],
+          "fullName": "read_slice tool slices text by requested lines",
+          "title": "slices text by requested lines",
+          "status": "passed",
+          "duration": 1.037400000001071,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/tools/read.tool.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/tools/read.tool.test.ts",
+      "status": "passed",
+      "startTime": 1783057245049,
+      "endTime": 1783057245054.123,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "read tool"
+          ],
+          "fullName": "read tool reads a workspace file with path-only input",
+          "title": "reads a workspace file with path-only input",
+          "status": "passed",
+          "duration": 1.9724999999998545,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "read tool"
+          ],
+          "fullName": "read tool rejects empty path input",
+          "title": "rejects empty path input",
+          "status": "passed",
+          "duration": 0.6670000000012806,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "read tool"
+          ],
+          "fullName": "read tool behaves as a read_open alias",
+          "title": "behaves as a read_open alias",
+          "status": "passed",
+          "duration": 1.4216000000014901,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "read tool"
+          ],
+          "fullName": "read tool rejects execution without harness environment",
+          "title": "rejects execution without harness environment",
+          "status": "passed",
+          "duration": 1.1231000000007043,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/tools/terminal-session.tool.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/tools/terminal-session.tool.test.ts",
+      "status": "passed",
+      "startTime": 1783057235256,
+      "endTime": 1783057235359.6274,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "terminal_session tool"
+          ],
+          "fullName": "terminal_session tool streams split stdout/stderr for ephemeral terminal execution",
+          "title": "streams split stdout/stderr for ephemeral terminal execution",
+          "status": "passed",
+          "duration": 7.847000000001572,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "terminal_session tool"
+          ],
+          "fullName": "terminal_session tool uses a workspace-bound cwd for ephemeral terminal execution",
+          "title": "uses a workspace-bound cwd for ephemeral terminal execution",
+          "status": "passed",
+          "duration": 2.2476000000006024,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "terminal_session tool"
+          ],
+          "fullName": "terminal_session tool rejects cwd values that escape the workspace root",
+          "title": "rejects cwd values that escape the workspace root",
+          "status": "passed",
+          "duration": 1.5642000000007101,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "terminal_session tool"
+          ],
+          "fullName": "terminal_session tool supports attaching to an existing persistent terminal session",
+          "title": "supports attaching to an existing persistent terminal session",
+          "status": "passed",
+          "duration": 15.269400000001042,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "terminal_session tool"
+          ],
+          "fullName": "terminal_session tool supports creating a persistent terminal session without auto-removing it",
+          "title": "supports creating a persistent terminal session without auto-removing it",
+          "status": "passed",
+          "duration": 15.09689999999864,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "terminal_session tool"
+          ],
+          "fullName": "terminal_session tool records terminal trace spans for persistent execution",
+          "title": "records terminal trace spans for persistent execution",
+          "status": "passed",
+          "duration": 15.21980000000076,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "terminal_session tool"
+          ],
+          "fullName": "terminal_session tool emits persistent session progress before stdout chunks",
+          "title": "emits persistent session progress before stdout chunks",
+          "status": "passed",
+          "duration": 15.882100000000719,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "terminal_session tool"
+          ],
+          "fullName": "terminal_session tool returns a timedOut result when terminal execution exceeds timeout",
+          "title": "returns a timedOut result when terminal execution exceeds timeout",
+          "status": "passed",
+          "duration": 3.7986999999993714,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "terminal_session tool"
+          ],
+          "fullName": "terminal_session tool uses the default timeout when timeoutMs is omitted",
+          "title": "uses the default timeout when timeoutMs is omitted",
+          "status": "passed",
+          "duration": 2.120199999999386,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "terminal_session tool"
+          ],
+          "fullName": "terminal_session tool clamps timeoutMs below the lower bound",
+          "title": "clamps timeoutMs below the lower bound",
+          "status": "passed",
+          "duration": 2.0245000000013533,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "terminal_session tool"
+          ],
+          "fullName": "terminal_session tool clamps timeoutMs above the upper bound",
+          "title": "clamps timeoutMs above the upper bound",
+          "status": "passed",
+          "duration": 2.079200000000128,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "terminal_session tool"
+          ],
+          "fullName": "terminal_session tool rejects empty commands",
+          "title": "rejects empty commands",
+          "status": "passed",
+          "duration": 1.2569000000003143,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "terminal_session tool"
+          ],
+          "fullName": "terminal_session tool filters non-string env entries",
+          "title": "filters non-string env entries",
+          "status": "passed",
+          "duration": 1.944499999999607,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "terminal_session tool"
+          ],
+          "fullName": "terminal_session tool uses harness shell profile for Windows ephemeral pwd commands",
+          "title": "uses harness shell profile for Windows ephemeral pwd commands",
+          "status": "passed",
+          "duration": 2.013700000001336,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "terminal_session tool"
+          ],
+          "fullName": "terminal_session tool decodes Windows terminal output using the harness shell profile encoding",
+          "title": "decodes Windows terminal output using the harness shell profile encoding",
+          "status": "passed",
+          "duration": 9.370899999999892,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "terminal_session tool"
+          ],
+          "fullName": "terminal_session tool rejects attachSessionId combined with cwd or env overrides",
+          "title": "rejects attachSessionId combined with cwd or env overrides",
+          "status": "passed",
+          "duration": 1.437099999999191,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "terminal_session tool"
+          ],
+          "fullName": "terminal_session tool aborts and cleans up ephemeral sessions",
+          "title": "aborts and cleans up ephemeral sessions",
+          "status": "passed",
+          "duration": 2.2408999999988737,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "terminal_session tool"
+          ],
+          "fullName": "terminal_session tool surfaces approval-required requests through harness invocation status",
+          "title": "surfaces approval-required requests through harness invocation status",
+          "status": "passed",
+          "duration": 1.6274999999986903,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/tools/web-search.tool.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/tools/web-search.tool.test.ts",
+      "status": "passed",
+      "startTime": 1783057243934,
+      "endTime": 1783057243941.4893,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "web search tool"
+          ],
+          "fullName": "web search tool does not expose provider configuration fields in the LLM-facing input schema",
+          "title": "does not expose provider configuration fields in the LLM-facing input schema",
+          "status": "passed",
+          "duration": 0.40090000000054715,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "web search tool"
+          ],
+          "fullName": "web search tool queries tavily when api key is available and provider priority prefers tavily",
+          "title": "queries tavily when api key is available and provider priority prefers tavily",
+          "status": "passed",
+          "duration": 0.97269999999844,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "web search tool"
+          ],
+          "fullName": "web search tool uses stored maxResults when args do not provide one",
+          "title": "uses stored maxResults when args do not provide one",
+          "status": "passed",
+          "duration": 0.48289999999906286,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "web search tool"
+          ],
+          "fullName": "web search tool queries searxng when forced and baseUrl is available",
+          "title": "queries searxng when forced and baseUrl is available",
+          "status": "passed",
+          "duration": 0.5322000000014668,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "web search tool"
+          ],
+          "fullName": "web search tool uses searxng when tavily is unavailable but searxng is configured",
+          "title": "uses searxng when tavily is unavailable but searxng is configured",
+          "status": "passed",
+          "duration": 0.4046999999991385,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "web search tool"
+          ],
+          "fullName": "web search tool fails with actionable searxng engine details when no results are returned and upstream engines are unavailable",
+          "title": "fails with actionable searxng engine details when no results are returned and upstream engines are unavailable",
+          "status": "passed",
+          "duration": 0.5774999999994179,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "web search tool"
+          ],
+          "fullName": "web search tool falls back to searxng when tavily search fails",
+          "title": "falls back to searxng when tavily search fails",
+          "status": "passed",
+          "duration": 0.5105000000003201,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "web search tool"
+          ],
+          "fullName": "web search tool surfaces both provider failures when tavily fails and searxng has no responsive engines",
+          "title": "surfaces both provider failures when tavily fails and searxng has no responsive engines",
+          "status": "passed",
+          "duration": 0.5447999999996682,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "web search tool"
+          ],
+          "fullName": "web search tool fails when no provider configuration is available",
+          "title": "fails when no provider configuration is available",
+          "status": "passed",
+          "duration": 0.3305000000000291,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "web search tool"
+          ],
+          "fullName": "web search tool ignores apiKey passed through tool args and uses stored settings instead",
+          "title": "ignores apiKey passed through tool args and uses stored settings instead",
+          "status": "passed",
+          "duration": 0.4050999999999476,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "web search tool"
+          ],
+          "fullName": "web search tool ignores baseUrl passed through tool args and uses stored settings instead",
+          "title": "ignores baseUrl passed through tool args and uses stored settings instead",
+          "status": "passed",
+          "duration": 0.36779999999998836,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "web search tool"
+          ],
+          "fullName": "web search tool prefers trusted runtime tool config over stored settings",
+          "title": "prefers trusted runtime tool config over stored settings",
+          "status": "passed",
+          "duration": 0.47800000000279397,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "web search tool"
+          ],
+          "fullName": "web search tool prefers trusted runtime baseUrl over stored settings",
+          "title": "prefers trusted runtime baseUrl over stored settings",
+          "status": "passed",
+          "duration": 0.3760000000002037,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "web search tool"
+          ],
+          "fullName": "web search tool emits scrubbed search-results artifacts without provider secrets or raw config",
+          "title": "emits scrubbed search-results artifacts without provider secrets or raw config",
+          "status": "passed",
+          "duration": 0.48919999999998254,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/tools/wecom-notify-send.tool.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/tools/wecom-notify-send.tool.test.ts",
+      "status": "passed",
+      "startTime": 1783057251052,
+      "endTime": 1783057251053.2224,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "wecom_notify_send tool"
+          ],
+          "fullName": "wecom_notify_send tool rejects missing content",
+          "title": "rejects missing content",
+          "status": "passed",
+          "duration": 0.4827999999979511,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "wecom_notify_send tool"
+          ],
+          "fullName": "wecom_notify_send tool fails when app config is incomplete",
+          "title": "fails when app config is incomplete",
+          "status": "passed",
+          "duration": 0.27620000000024447,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "wecom_notify_send tool"
+          ],
+          "fullName": "wecom_notify_send tool uses robot webhook when configured",
+          "title": "uses robot webhook when configured",
+          "status": "passed",
+          "duration": 0.26050000000032014,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "wecom_notify_send tool"
+          ],
+          "fullName": "wecom_notify_send tool requires a chat user or thread context",
+          "title": "requires a chat user or thread context",
+          "status": "passed",
+          "duration": 0.18109999999796855,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "wecom_notify_send tool"
+          ],
+          "fullName": "wecom_notify_send tool fails when the current chat thread is not bound to a WeCom user",
+          "title": "fails when the current chat thread is not bound to a WeCom user",
+          "status": "passed",
+          "duration": 0.18409999999857973,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "wecom_notify_send tool"
+          ],
+          "fullName": "wecom_notify_send tool sends a WeCom notification when config and binding are available",
+          "title": "sends a WeCom notification when config and binding are available",
+          "status": "passed",
+          "duration": 0.22229999999763095,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/tools/wecom-org-lookup.tool.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/tools/wecom-org-lookup.tool.test.ts",
+      "status": "passed",
+      "startTime": 1783057253630,
+      "endTime": 1783057253631.2688,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "wecom_org_lookup tool"
+          ],
+          "fullName": "wecom_org_lookup tool rejects invalid mode",
+          "title": "rejects invalid mode",
+          "status": "passed",
+          "duration": 0.4385000000002037,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "wecom_org_lookup tool"
+          ],
+          "fullName": "wecom_org_lookup tool requires query when mode is user",
+          "title": "requires query when mode is user",
+          "status": "passed",
+          "duration": 0.1886000000013155,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "wecom_org_lookup tool"
+          ],
+          "fullName": "wecom_org_lookup tool fails when app config is incomplete",
+          "title": "fails when app config is incomplete",
+          "status": "passed",
+          "duration": 0.21050000000104774,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "wecom_org_lookup tool"
+          ],
+          "fullName": "wecom_org_lookup tool requires a chat user or thread context",
+          "title": "requires a chat user or thread context",
+          "status": "passed",
+          "duration": 0.1481000000021595,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "wecom_org_lookup tool"
+          ],
+          "fullName": "wecom_org_lookup tool fails when self mode has no bound WeCom user",
+          "title": "fails when self mode has no bound WeCom user",
+          "status": "passed",
+          "duration": 0.17459999999846332,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "wecom_org_lookup tool"
+          ],
+          "fullName": "wecom_org_lookup tool returns department summaries when config and binding are available",
+          "title": "returns department summaries when config and binding are available",
+          "status": "passed",
+          "duration": 0.2688000000016473,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/mcp/tools/workspace-mutation.tool.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/mcp/tools/workspace-mutation.tool.test.ts",
+      "status": "passed",
+      "startTime": 1783057241202,
+      "endTime": 1783057241219.9333,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "workspace_mutation tool"
+          ],
+          "fullName": "workspace_mutation tool deletes a workspace file through structured parameters",
+          "title": "deletes a workspace file through structured parameters",
+          "status": "passed",
+          "duration": 3.5825999999979103,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "workspace_mutation tool"
+          ],
+          "fullName": "workspace_mutation tool moves a workspace file with explicit destination parameters",
+          "title": "moves a workspace file with explicit destination parameters",
+          "status": "passed",
+          "duration": 4.702499999999418,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "workspace_mutation tool"
+          ],
+          "fullName": "workspace_mutation tool writes a workspace file with structured content parameters",
+          "title": "writes a workspace file with structured content parameters",
+          "status": "passed",
+          "duration": 3.1674000000020897,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "workspace_mutation tool"
+          ],
+          "fullName": "workspace_mutation tool rejects deletion outside the workspace root",
+          "title": "rejects deletion outside the workspace root",
+          "status": "passed",
+          "duration": 1.2963000000017928,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "workspace_mutation tool"
+          ],
+          "fullName": "workspace_mutation tool rejects directory deletion without recursive=true",
+          "title": "rejects directory deletion without recursive=true",
+          "status": "passed",
+          "duration": 2.067300000002433,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "workspace_mutation tool"
+          ],
+          "fullName": "workspace_mutation tool uses definition-declared boundary keys for move destination approval gating",
+          "title": "uses definition-declared boundary keys for move destination approval gating",
+          "status": "passed",
+          "duration": 2.9332999999969616,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/routes/integrations/index.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/routes/integrations/index.test.ts",
+      "status": "passed",
+      "startTime": 1783057235537,
+      "endTime": 1783057235699.648,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "integrations route"
+          ],
+          "fullName": "integrations route lists providers, instances, and capabilities",
+          "title": "lists providers, instances, and capabilities",
+          "status": "passed",
+          "duration": 68.61299999999937,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "integrations route"
+          ],
+          "fullName": "integrations route creates, updates, and deletes integration resources",
+          "title": "creates, updates, and deletes integration resources",
+          "status": "passed",
+          "duration": 51.98500000000058,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "integrations route"
+          ],
+          "fullName": "integrations route starts, stops, and reports capability runtime status",
+          "title": "starts, stops, and reports capability runtime status",
+          "status": "passed",
+          "duration": 42.647899999999936,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/routes/integrations/wecom.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/routes/integrations/wecom.test.ts",
+      "status": "passed",
+      "startTime": 1783057235996,
+      "endTime": 1783057236036.631,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "wecom route"
+          ],
+          "fullName": "wecom route starts oauth relay, binds manually, and reports status",
+          "title": "starts oauth relay, binds manually, and reports status",
+          "status": "passed",
+          "duration": 22.011099999999715,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "wecom route"
+          ],
+          "fullName": "wecom route reads WeCom status from integration instance and capability config",
+          "title": "reads WeCom status from integration instance and capability config",
+          "status": "passed",
+          "duration": 18.631000000001222,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/routes/knowledge-base/multipart.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/routes/knowledge-base/multipart.test.ts",
+      "status": "passed",
+      "startTime": 1783057240001,
+      "endTime": 1783057240013.0522,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "parseOptionalTextEncoding normalizes supported aliases",
+          "title": "parseOptionalTextEncoding normalizes supported aliases",
+          "status": "passed",
+          "duration": 0.17409999999836145,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "iconv-lite decodes gb18030 chinese text correctly",
+          "title": "iconv-lite decodes gb18030 chinese text correctly",
+          "status": "passed",
+          "duration": 12.052299999999377,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/routes/proxy-provider/chat-tool-loop.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/routes/proxy-provider/chat-tool-loop.test.ts",
+      "status": "passed",
+      "startTime": 1783057242465,
+      "endTime": 1783057242478.8025,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "executeDefaultChatToolLoop trims long non-system history before tool decision",
+          "title": "executeDefaultChatToolLoop trims long non-system history before tool decision",
+          "status": "passed",
+          "duration": 7.07589999999982,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "executeDefaultChatToolLoop removes stale assistant tool prose before tool decision",
+          "title": "executeDefaultChatToolLoop removes stale assistant tool prose before tool decision",
+          "status": "passed",
+          "duration": 1.662899999999354,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "executeDefaultChatToolLoop forces a final synthesis answer after hitting the tool-step limit",
+          "title": "executeDefaultChatToolLoop forces a final synthesis answer after hitting the tool-step limit",
+          "status": "passed",
+          "duration": 3.404499999996915,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "executeDefaultChatToolLoop returns early when Harness requires approval",
+          "title": "executeDefaultChatToolLoop returns early when Harness requires approval",
+          "status": "passed",
+          "duration": 1.8024999999979627,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/routes/proxy-provider/chat-tool-surface.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/routes/proxy-provider/chat-tool-surface.test.ts",
+      "status": "passed",
+      "startTime": 1783057255113,
+      "endTime": 1783057255114.1787,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "chat tool surface"
+          ],
+          "fullName": "chat tool surface exposes the default allowlisted chat tools for normal chat",
+          "title": "exposes the default allowlisted chat tools for normal chat",
+          "status": "passed",
+          "duration": 0.41489999999976135,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "chat tool surface"
+          ],
+          "fullName": "chat tool surface exposes all built-in tools in agent mode",
+          "title": "exposes all built-in tools in agent mode",
+          "status": "passed",
+          "duration": 0.17859999999927823,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "chat tool surface"
+          ],
+          "fullName": "chat tool surface keeps the normal chat surface narrow even when more tools exist",
+          "title": "keeps the normal chat surface narrow even when more tools exist",
+          "status": "passed",
+          "duration": 0.08790000000226428,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "chat tool surface"
+          ],
+          "fullName": "chat tool surface supports a caller-provided allowlist and maxTools cap",
+          "title": "supports a caller-provided allowlist and maxTools cap",
+          "status": "passed",
+          "duration": 0.10660000000279979,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "chat tool surface"
+          ],
+          "fullName": "chat tool surface does not expose external MCP projections in agent mode even when they look tool-like",
+          "title": "does not expose external MCP projections in agent mode even when they look tool-like",
+          "status": "passed",
+          "duration": 0.08339999999952852,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/routes/proxy-provider/chat.routes.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/routes/proxy-provider/chat.routes.test.ts",
+      "status": "passed",
+      "startTime": 1783057230007,
+      "endTime": 1783057230411.988,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "shouldUseThreadRag only depends on knowledgeBaseId and required runtime inputs",
+          "title": "shouldUseThreadRag only depends on knowledgeBaseId and required runtime inputs",
+          "status": "passed",
+          "duration": 0.1724000000003798,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "resolveChatToolSurface exposes only allowlisted safe chat tools by default",
+          "title": "resolveChatToolSurface exposes only allowlisted safe chat tools by default",
+          "status": "passed",
+          "duration": 1.7437999999992826,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "resolveChatToolSurface respects custom allowlist and maxTools trimming",
+          "title": "resolveChatToolSurface respects custom allowlist and maxTools trimming",
+          "status": "passed",
+          "duration": 1.0536000000001877,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "executeDefaultChatToolLoop invokes Harness when the provider returns a tool call",
+          "title": "executeDefaultChatToolLoop invokes Harness when the provider returns a tool call",
+          "status": "passed",
+          "duration": 6.476599999999962,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default routes knowledge-bound threads into the RAG branch",
+          "title": "POST /proxy/chat/default routes knowledge-bound threads into the RAG branch",
+          "status": "passed",
+          "duration": 31.419699999999466,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default passes bound role request context into the RAG branch",
+          "title": "POST /proxy/chat/default passes bound role request context into the RAG branch",
+          "status": "passed",
+          "duration": 17.644600000000537,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default prepends realtime web search context before entering the RAG branch",
+          "title": "POST /proxy/chat/default prepends realtime web search context before entering the RAG branch",
+          "status": "passed",
+          "duration": 15.671400000000176,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default emits execution-node chunks for RAG realtime web search prefetch",
+          "title": "POST /proxy/chat/default emits execution-node chunks for RAG realtime web search prefetch",
+          "status": "passed",
+          "duration": 14.647900000000845,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default routes non-RAG threads into persisted default chat",
+          "title": "POST /proxy/chat/default routes non-RAG threads into persisted default chat",
+          "status": "passed",
+          "duration": 15.741500000000087,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default emits execution-node chunks for realtime default chat prefetch",
+          "title": "POST /proxy/chat/default emits execution-node chunks for realtime default chat prefetch",
+          "status": "passed",
+          "duration": 13.67529999999988,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default skips realtime web search prefetch for workspace questions",
+          "title": "POST /proxy/chat/default skips realtime web search prefetch for workspace questions",
+          "status": "passed",
+          "duration": 16.410299999999552,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default skips realtime web search prefetch when agent mode is enabled",
+          "title": "POST /proxy/chat/default skips realtime web search prefetch when agent mode is enabled",
+          "status": "passed",
+          "duration": 13.193300000000818,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default routes knowledge-bound agent sends through AgentRun instead of the legacy RAG branch",
+          "title": "POST /proxy/chat/default routes knowledge-bound agent sends through AgentRun instead of the legacy RAG branch",
+          "status": "passed",
+          "duration": 14.0641999999998,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default passes agentEnabled true into createAndRunAgent",
+          "title": "POST /proxy/chat/default passes agentEnabled true into createAndRunAgent",
+          "status": "passed",
+          "duration": 13.042300000000068,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default persists agent metadata on completed agent responses",
+          "title": "POST /proxy/chat/default persists agent metadata on completed agent responses",
+          "status": "passed",
+          "duration": 19.234800000000178,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default does not block stream finish on async title generation",
+          "title": "POST /proxy/chat/default does not block stream finish on async title generation",
+          "status": "passed",
+          "duration": 18.66740000000027,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default injects agent execution environment into request-only context",
+          "title": "POST /proxy/chat/default injects agent execution environment into request-only context",
+          "status": "passed",
+          "duration": 17.914099999999962,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default keeps the assistant stream alive when realtime web search fails",
+          "title": "POST /proxy/chat/default keeps the assistant stream alive when realtime web search fails",
+          "status": "passed",
+          "duration": 17.59059999999954,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default prepends thread context summary as a system request message",
+          "title": "POST /proxy/chat/default prepends thread context summary as a system request message",
+          "status": "passed",
+          "duration": 25.699000000000524,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default prepends bound role prompt before visible messages",
+          "title": "POST /proxy/chat/default prepends bound role prompt before visible messages",
+          "status": "passed",
+          "duration": 14.483400000000074,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default applies bound role llmProfile to the default chat invocation",
+          "title": "POST /proxy/chat/default applies bound role llmProfile to the default chat invocation",
+          "status": "passed",
+          "duration": 14.89639999999963,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default persists canonical image parts for default chat threads",
+          "title": "POST /proxy/chat/default persists canonical image parts for default chat threads",
+          "status": "passed",
+          "duration": 13.28859999999986,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default persists assistant answers after image user messages",
+          "title": "POST /proxy/chat/default persists assistant answers after image user messages",
+          "status": "passed",
+          "duration": 15.026100000000042,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default emits an explicit error when default chat returns empty text",
+          "title": "POST /proxy/chat/default emits an explicit error when default chat returns empty text",
+          "status": "passed",
+          "duration": 13.024800000000141,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default does not misroute pure image messages away from persisted default chat on non-RAG threads",
+          "title": "POST /proxy/chat/default does not misroute pure image messages away from persisted default chat on non-RAG threads",
+          "status": "passed",
+          "duration": 13.58640000000014,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default preserves pure image user messages with empty content",
+          "title": "POST /proxy/chat/default preserves pure image user messages with empty content",
+          "status": "passed",
+          "duration": 12.675699999999779,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default generates a thread title for pure image messages",
+          "title": "POST /proxy/chat/default generates a thread title for pure image messages",
+          "status": "passed",
+          "duration": 15.18369999999959,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /proxy/chat/default falls back to the user's first sentence when task title generation fails",
+          "title": "POST /proxy/chat/default falls back to the user's first sentence when task title generation fails",
+          "status": "passed",
+          "duration": 17.988000000000284,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/routes/proxy-provider/rag-message-metadata.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/routes/proxy-provider/rag-message-metadata.test.ts",
+      "status": "passed",
+      "startTime": 1783057242895,
+      "endTime": 1783057242903.185,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "toUserMessageMetadata keeps lineage for mixed media messages",
+          "title": "toUserMessageMetadata keeps lineage for mixed media messages",
+          "status": "passed",
+          "duration": 0.13070000000152504,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "toUserMessageMetadata keeps lineage for image-only messages",
+          "title": "toUserMessageMetadata keeps lineage for image-only messages",
+          "status": "passed",
+          "duration": 0.04889999999795691,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "toUserMessageMetadata writes lineage parentId independently",
+          "title": "toUserMessageMetadata writes lineage parentId independently",
+          "status": "passed",
+          "duration": 0.04539999999906286,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "toUserMessageMetadata omits legacy assistantUi for text-only messages",
+          "title": "toUserMessageMetadata omits legacy assistantUi for text-only messages",
+          "status": "passed",
+          "duration": 0.03299999999944703,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "toUserMessageMetadata maps file parts and image parts without ids",
+          "title": "toUserMessageMetadata maps file parts and image parts without ids",
+          "status": "passed",
+          "duration": 0.04189999999653082,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "persistAssistantMessage stores assistant text as canonical text parts",
+          "title": "persistAssistantMessage stores assistant text as canonical text parts",
+          "status": "passed",
+          "duration": 1.6948999999985972,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "persistAssistantMessage stores assistant execution-node parts when provided",
+          "title": "persistAssistantMessage stores assistant execution-node parts when provided",
+          "status": "passed",
+          "duration": 1.3796000000002095,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "persistAssistantMessage ignores empty assistant content",
+          "title": "persistAssistantMessage ignores empty assistant content",
+          "status": "passed",
+          "duration": 1.0485000000007858,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "persistVisibleUserMessage persists latest user message and parent lineage",
+          "title": "persistVisibleUserMessage persists latest user message and parent lineage",
+          "status": "passed",
+          "duration": 2.466200000002573,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "persistVisibleUserMessage rejects missing user content",
+          "title": "persistVisibleUserMessage rejects missing user content",
+          "status": "passed",
+          "duration": 0.5531000000009954,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "shouldGenerateTitle and generateThreadTitleFromMessages clean and trim model output",
+          "title": "shouldGenerateTitle and generateThreadTitleFromMessages clean and trim model output",
+          "status": "passed",
+          "duration": 0.18500000000130967,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "getLatestUserTitleSeed falls back to image and file labels when text is empty",
+          "title": "getLatestUserTitleSeed falls back to image and file labels when text is empty",
+          "status": "passed",
+          "duration": 0.073500000002241,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "getFallbackThreadTitle prefers the user's first sentence",
+          "title": "getFallbackThreadTitle prefers the user's first sentence",
+          "status": "passed",
+          "duration": 0.10410000000047148,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/routes/role/roles.routes.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/routes/role/roles.routes.test.ts",
+      "status": "passed",
+      "startTime": 1783057238823,
+      "endTime": 1783057238855.8362,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "role routes support create list update delete",
+          "title": "role routes support create list update delete",
+          "status": "passed",
+          "duration": 32.836199999999735,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/routes/thread/threads.routes.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/routes/thread/threads.routes.test.ts",
+      "status": "passed",
+      "startTime": 1783057233704,
+      "endTime": 1783057233858.655,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "PATCH /threads/:id returns 200 when unbinding knowledgeBaseId to null",
+          "title": "PATCH /threads/:id returns 200 when unbinding knowledgeBaseId to null",
+          "status": "passed",
+          "duration": 39.85610000000088,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "PATCH /threads/:id persists roleId and allows clearing it",
+          "title": "PATCH /threads/:id persists roleId and allows clearing it",
+          "status": "passed",
+          "duration": 32.59050000000025,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /threads/:id/messages accepts pure image message parts with empty content",
+          "title": "POST /threads/:id/messages accepts pure image message parts with empty content",
+          "status": "passed",
+          "duration": 52.79670000000078,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "POST /threads/:id/context-summary generates and persists thread context summary",
+          "title": "POST /threads/:id/context-summary generates and persists thread context summary",
+          "status": "passed",
+          "duration": 28.655099999999948,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/context-budget/context-budget.service.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/context-budget/context-budget.service.test.ts",
+      "status": "passed",
+      "startTime": 1783057235742,
+      "endTime": 1783057235870.1533,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "contextBudgetService"
+          ],
+          "fullName": "contextBudgetService keeps the latest user message while trimming long history",
+          "title": "keeps the latest user message while trimming long history",
+          "status": "passed",
+          "duration": 76.47800000000097,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "contextBudgetService"
+          ],
+          "fullName": "contextBudgetService trims payload sections to the configured context budget",
+          "title": "trims payload sections to the configured context budget",
+          "status": "passed",
+          "duration": 51.15339999999924,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/internal-capabilities/local-embedding.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/internal-capabilities/local-embedding.test.ts",
+      "status": "passed",
+      "startTime": 1783057254940,
+      "endTime": 1783057254941.3977,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "executeLocalEmbedding"
+          ],
+          "fullName": "executeLocalEmbedding wraps local embedding shared node for single text input",
+          "title": "wraps local embedding shared node for single text input",
+          "status": "passed",
+          "duration": 0.6641999999992549,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "executeLocalEmbedding"
+          ],
+          "fullName": "executeLocalEmbedding rejects empty embedding input",
+          "title": "rejects empty embedding input",
+          "status": "passed",
+          "duration": 0.3977999999988242,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/internal-capabilities/local-rerank.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/internal-capabilities/local-rerank.test.ts",
+      "status": "passed",
+      "startTime": 1783057254916,
+      "endTime": 1783057254917.461,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "executeLocalRerank"
+          ],
+          "fullName": "executeLocalRerank wraps local rerank shared node",
+          "title": "wraps local rerank shared node",
+          "status": "passed",
+          "duration": 0.8452000000033877,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "executeLocalRerank"
+          ],
+          "fullName": "executeLocalRerank rejects rerank input without query",
+          "title": "rejects rerank input without query",
+          "status": "passed",
+          "duration": 0.4609999999993306,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/local-model-runtime/local-model-runtime.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/local-model-runtime/local-model-runtime.test.ts",
+      "status": "passed",
+      "startTime": 1783057257311,
+      "endTime": 1783057257312.0388,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "localModelRuntime"
+          ],
+          "fullName": "localModelRuntime requires explicit model and wasm resource paths",
+          "title": "requires explicit model and wasm resource paths",
+          "status": "passed",
+          "duration": 1.0387999999948079,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/local-model-runtime/resource-resolver.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/local-model-runtime/resource-resolver.test.ts",
+      "status": "passed",
+      "startTime": 1783057240038,
+      "endTime": 1783057240057.49,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "resolveLocalModelResources"
+          ],
+          "fullName": "resolveLocalModelResources synthesizes a development manifest from a raw model directory",
+          "title": "synthesizes a development manifest from a raw model directory",
+          "status": "passed",
+          "duration": 14.095099999998638,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "resolveLocalModelResources"
+          ],
+          "fullName": "resolveLocalModelResources throws a clear error when a discovered raw model is incomplete",
+          "title": "throws a clear error when a discovered raw model is incomplete",
+          "status": "passed",
+          "duration": 5.489999999999782,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/rag-nodes/generate.service.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/rag-nodes/generate.service.test.ts",
+      "status": "failed",
+      "startTime": 1783057225190,
+      "endTime": 1783057225198.6692,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "generateService LLM delegation"
+          ],
+          "fullName": "generateService LLM delegation builds RAG prompt messages for streamGenerateText",
+          "title": "builds RAG prompt messages for streamGenerateText",
+          "status": "failed",
+          "duration": 4.959100000000035,
+          "failureMessages": [
+            "AssertionError: expected [ { role: 'system', …(1) }, …(3) ] to deeply equal [ ObjectContaining{…}, …(2) ]\n    at D:\\workspace\\rag-demo\\server\\src\\services\\rag-nodes\\generate.service.test.ts:45:42\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+          ],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "generateService LLM delegation"
+          ],
+          "fullName": "generateService LLM delegation prepends thread request context before the RAG guardrail prompt",
+          "title": "prepends thread request context before the RAG guardrail prompt",
+          "status": "passed",
+          "duration": 1.1445999999998548,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "generateService LLM delegation"
+          ],
+          "fullName": "generateService LLM delegation keeps role, summary, and RAG guardrail ordering stable",
+          "title": "keeps role, summary, and RAG guardrail ordering stable",
+          "status": "passed",
+          "duration": 0.570699999999988,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "generateService LLM delegation"
+          ],
+          "fullName": "generateService LLM delegation keeps generate and simpleChat behavior after shared-LLM refactor",
+          "title": "keeps generate and simpleChat behavior after shared-LLM refactor",
+          "status": "failed",
+          "duration": 1.1896999999999025,
+          "failureMessages": [
+            "AssertionError: expected [ { role: 'system', …(1) }, …(2) ] to deeply equal [ ObjectContaining{…}, …(1) ]\n    at D:\\workspace\\rag-demo\\server\\src\\services\\rag-nodes\\generate.service.test.ts:146:42\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///D:/workspace/rag-demo/node_modules/.pnpm/@vitest+runner@3.2.6/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+          ],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "generateService LLM delegation"
+          ],
+          "fullName": "generateService LLM delegation records context budget audit in generate node observation",
+          "title": "records context budget audit in generate node observation",
+          "status": "passed",
+          "duration": 0.6690999999998439,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/provider-proxy.service/chat-adapters.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/provider-proxy.service/chat-adapters.test.ts",
+      "status": "passed",
+      "startTime": 1783057258797,
+      "endTime": 1783057258797.3704,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "trimHistoricalAttachmentsForProvider drops historical pure-image messages after attachment trimming",
+          "title": "trimHistoricalAttachmentsForProvider drops historical pure-image messages after attachment trimming",
+          "status": "passed",
+          "duration": 0.37030000000231666,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "trimHistoricalAttachmentsForProvider keeps historical text when trimming attachments",
+          "title": "trimHistoricalAttachmentsForProvider keeps historical text when trimming attachments",
+          "status": "passed",
+          "duration": 0.1573999999964144,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/provider-proxy.service/index.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/provider-proxy.service/index.test.ts",
+      "status": "passed",
+      "startTime": 1783057254997,
+      "endTime": 1783057254998.3533,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "getEmbeddingInvocationUrl reports Cloudflare native run endpoint",
+          "title": "getEmbeddingInvocationUrl reports Cloudflare native run endpoint",
+          "status": "passed",
+          "duration": 0.2036999999982072,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "createPersistedChatStream emits tool lifecycle events before the final answer",
+          "title": "createPersistedChatStream emits tool lifecycle events before the final answer",
+          "status": "passed",
+          "duration": 0.5407999999988533,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "createPersistedChatStream emits execution node events before the final answer",
+          "title": "createPersistedChatStream emits execution node events before the final answer",
+          "status": "passed",
+          "duration": 0.3533000000024913,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/provider-proxy.service/resolution.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/provider-proxy.service/resolution.test.ts",
+      "status": "passed",
+      "startTime": 1783057260006,
+      "endTime": 1783057260007.109,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "applyRoleSpecificProviderParams disables thinking only for task ollama",
+          "title": "applyRoleSpecificProviderParams disables thinking only for task ollama",
+          "status": "passed",
+          "duration": 0.20920000000478467,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "applyRoleSpecificProviderParams disables thinking only for task volcengine",
+          "title": "applyRoleSpecificProviderParams disables thinking only for task volcengine",
+          "status": "passed",
+          "duration": 0.09429999999701977,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [],
+          "fullName": "applyRoleSpecificProviderParams leaves non-task roles unchanged",
+          "title": "applyRoleSpecificProviderParams leaves non-task roles unchanged",
+          "status": "passed",
+          "duration": 0.10899999999674037,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/shared-nodes/llm.node.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/shared-nodes/llm.node.test.ts",
+      "status": "passed",
+      "startTime": 1783057254886,
+      "endTime": 1783057254887.5276,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "llmSharedNode"
+          ],
+          "fullName": "llmSharedNode delegates stream, generate and describe to llmService",
+          "title": "delegates stream, generate and describe to llmService",
+          "status": "passed",
+          "duration": 0.8827999999994063,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "llmSharedNode"
+          ],
+          "fullName": "llmSharedNode creates a reusable node observation result",
+          "title": "creates a reusable node observation result",
+          "status": "passed",
+          "duration": 0.5276000000012573,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/shared-nodes/local-model.nodes.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/shared-nodes/local-model.nodes.test.ts",
+      "status": "passed",
+      "startTime": 1783057252327,
+      "endTime": 1783057252329.448,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "local model shared nodes"
+          ],
+          "fullName": "local model shared nodes maps local embedding output into a LangGraph-style partial state",
+          "title": "maps local embedding output into a LangGraph-style partial state",
+          "status": "passed",
+          "duration": 0.6265000000021246,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "local model shared nodes"
+          ],
+          "fullName": "local model shared nodes supports custom embedding state selectors and mappers",
+          "title": "supports custom embedding state selectors and mappers",
+          "status": "passed",
+          "duration": 0.37030000000231666,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "local model shared nodes"
+          ],
+          "fullName": "local model shared nodes maps local rerank output into a LangGraph-style partial state",
+          "title": "maps local rerank output into a LangGraph-style partial state",
+          "status": "passed",
+          "duration": 0.35349999999743886,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "local model shared nodes"
+          ],
+          "fullName": "local model shared nodes creates observed node results for execution traces",
+          "title": "creates observed node results for execution traces",
+          "status": "passed",
+          "duration": 0.44809999999779393,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/shared-nodes/thread-request-context-agent.resolver.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/shared-nodes/thread-request-context-agent.resolver.test.ts",
+      "status": "passed",
+      "startTime": 1783057260030,
+      "endTime": 1783057260031.1082,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "resolveAgentContext"
+          ],
+          "fullName": "resolveAgentContext injects execution environment details into the agent prompt",
+          "title": "injects execution environment details into the agent prompt",
+          "status": "passed",
+          "duration": 0.20560000000114087,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "resolveAgentContext"
+          ],
+          "fullName": "resolveAgentContext returns null when agent is disabled",
+          "title": "returns null when agent is disabled",
+          "status": "passed",
+          "duration": 0.10809999999764841,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/shared-nodes/thread-request-context-memory.resolver.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/shared-nodes/thread-request-context-memory.resolver.test.ts",
+      "status": "passed",
+      "startTime": 1783057258821,
+      "endTime": 1783057258822.0928,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "resolveMemoryContext"
+          ],
+          "fullName": "resolveMemoryContext returns null when memory context is missing",
+          "title": "returns null when memory context is missing",
+          "status": "passed",
+          "duration": 0.17639999999664724,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "resolveMemoryContext"
+          ],
+          "fullName": "resolveMemoryContext creates a request-only memory prompt when memory context exists",
+          "title": "creates a request-only memory prompt when memory context exists",
+          "status": "passed",
+          "duration": 0.13639999999577412,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "resolveMemoryContext"
+          ],
+          "fullName": "resolveMemoryContext uses the shared memory prompt builder",
+          "title": "uses the shared memory prompt builder",
+          "status": "passed",
+          "duration": 0.09269999999378342,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/shared-nodes/thread-request-context-role.resolver.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/shared-nodes/thread-request-context-role.resolver.test.ts",
+      "status": "passed",
+      "startTime": 1783057255056,
+      "endTime": 1783057255057.357,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "resolveRoleContext"
+          ],
+          "fullName": "resolveRoleContext returns null when roleId is missing",
+          "title": "returns null when roleId is missing",
+          "status": "passed",
+          "duration": 0.45019999999931315,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "resolveRoleContext"
+          ],
+          "fullName": "resolveRoleContext returns null when the bound role cannot be found",
+          "title": "returns null when the bound role cannot be found",
+          "status": "passed",
+          "duration": 0.30169999999998254,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "resolveRoleContext"
+          ],
+          "fullName": "resolveRoleContext builds one canonical system prompt from role prompt fragments",
+          "title": "builds one canonical system prompt from role prompt fragments",
+          "status": "passed",
+          "duration": 0.3569999999999709,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/shared-nodes/thread-request-context-summary.resolver.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/shared-nodes/thread-request-context-summary.resolver.test.ts",
+      "status": "passed",
+      "startTime": 1783057258729,
+      "endTime": 1783057258729.157,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "resolveSummaryContext"
+          ],
+          "fullName": "resolveSummaryContext returns null when summary is missing or blank",
+          "title": "returns null when summary is missing or blank",
+          "status": "passed",
+          "duration": 0.13629999999830034,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "resolveSummaryContext"
+          ],
+          "fullName": "resolveSummaryContext builds one system message from normalized summary content",
+          "title": "builds one system message from normalized summary content",
+          "status": "passed",
+          "duration": 0.1569999999992433,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/shared-nodes/thread-request-context-web-search.resolver.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/shared-nodes/thread-request-context-web-search.resolver.test.ts",
+      "status": "passed",
+      "startTime": 1783057252298,
+      "endTime": 1783057252300.6597,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "resolveThreadWebSearchContext"
+          ],
+          "fullName": "resolveThreadWebSearchContext returns the original context unchanged for non-realtime questions",
+          "title": "returns the original context unchanged for non-realtime questions",
+          "status": "passed",
+          "duration": 1.0678999999981897,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "resolveThreadWebSearchContext"
+          ],
+          "fullName": "resolveThreadWebSearchContext appends request-only search context and emits start/done chunks on success",
+          "title": "appends request-only search context and emits start/done chunks on success",
+          "status": "passed",
+          "duration": 0.9009000000005472,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "resolveThreadWebSearchContext"
+          ],
+          "fullName": "resolveThreadWebSearchContext keeps the original request context and emits an error chunk when the tool fails",
+          "title": "keeps the original request context and emits an error chunk when the tool fails",
+          "status": "passed",
+          "duration": 0.6597000000001572,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "resolveThreadWebSearchContext"
+          ],
+          "fullName": "resolveThreadWebSearchContext can be forced for shared default-chat prefetch",
+          "title": "can be forced for shared default-chat prefetch",
+          "status": "passed",
+          "duration": 0.6574999999975262,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "name": "src/services/shared-nodes/thread-request-context.node.test.ts",
+      "absoluteName": "D:/workspace/rag-demo/server/src/services/shared-nodes/thread-request-context.node.test.ts",
+      "status": "passed",
+      "startTime": 1783057249880,
+      "endTime": 1783057249882.3457,
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "threadRequestContextNode"
+          ],
+          "fullName": "threadRequestContextNode returns no request messages when neither role nor summary is present",
+          "title": "returns no request messages when neither role nor summary is present",
+          "status": "passed",
+          "duration": 0.47250000000349246,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "threadRequestContextNode"
+          ],
+          "fullName": "threadRequestContextNode resolves role context into the first system message",
+          "title": "resolves role context into the first system message",
+          "status": "passed",
+          "duration": 0.47000000000116415,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "threadRequestContextNode"
+          ],
+          "fullName": "threadRequestContextNode resolves summary context into a system message",
+          "title": "resolves summary context into a system message",
+          "status": "passed",
+          "duration": 0.2912000000033004,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "threadRequestContextNode"
+          ],
+          "fullName": "threadRequestContextNode keeps resolver order stable: role first, summary second",
+          "title": "keeps resolver order stable: role first, summary second",
+          "status": "passed",
+          "duration": 0.2916000000004715,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "threadRequestContextNode"
+          ],
+          "fullName": "threadRequestContextNode keeps resolver order stable when memory is present: role, summary, memory, agent",
+          "title": "keeps resolver order stable when memory is present: role, summary, memory, agent",
+          "status": "passed",
+          "duration": 0.34570000000167056,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "threadRequestContextNode"
+          ],
+          "fullName": "threadRequestContextNode appends agent context after role and summary when enabled",
+          "title": "appends agent context after role and summary when enabled",
+          "status": "passed",
+          "duration": 0.26599999999962165,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,255 @@
+{
+  "main": {
+    "id": "db5f9c3161513a1e",
+    "type": "split",
+    "children": [
+      {
+        "id": "6961d59d2c9125e0",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "6cccbef077f5d5f1",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "knowledge-base-api.md",
+                "mode": "preview",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "knowledge-base-api"
+            },
+            "group": "4386a6aec7c4cf7c"
+          }
+        ]
+      },
+      {
+        "id": "cdb5b2e4b39028ac",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "f9328e2bd68dbca2",
+            "type": "leaf",
+            "state": {
+              "type": "localgraph",
+              "state": {
+                "file": "knowledge-base-api.md",
+                "options": {
+                  "collapse-filter": true,
+                  "search": "",
+                  "localJumps": 1,
+                  "localBacklinks": true,
+                  "localForelinks": true,
+                  "localInterlinks": false,
+                  "showTags": false,
+                  "showAttachments": false,
+                  "hideUnresolved": false,
+                  "collapse-color-groups": true,
+                  "colorGroups": [],
+                  "collapse-display": true,
+                  "showArrow": false,
+                  "textFadeMultiplier": 0,
+                  "nodeSizeMultiplier": 1,
+                  "lineSizeMultiplier": 1,
+                  "collapse-forces": true,
+                  "centerStrength": 0.518713248970312,
+                  "repelStrength": 10,
+                  "linkStrength": 1,
+                  "linkDistance": 250,
+                  "scale": 0.9999999999999992,
+                  "close": false
+                }
+              },
+              "icon": "lucide-git-fork",
+              "title": "knowledge-base-api 的关系图"
+            },
+            "group": "4386a6aec7c4cf7c"
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "b7b880430869c53a",
+    "type": "split",
+    "children": [
+      {
+        "id": "5bad7b1425bb9a1c",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "7b9de85967dd3c32",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "文件列表"
+            }
+          },
+          {
+            "id": "12d9335af4344e9e",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "搜索"
+            }
+          },
+          {
+            "id": "26bfa9d1d08ce5e2",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "书签"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "c98021405aea54ab",
+    "type": "split",
+    "children": [
+      {
+        "id": "3fc392bd473632f3",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "f764d2c5eec906a9",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "knowledge-base-api.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "knowledge-base-api 的反向链接列表"
+            }
+          },
+          {
+            "id": "58474e850daec504",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "出链"
+            }
+          },
+          {
+            "id": "556de10d2a39b3ab",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "标签"
+            }
+          },
+          {
+            "id": "200207143a3884ec",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "添加笔记属性"
+            }
+          },
+          {
+            "id": "937ddc45e5d5b8d2",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "大纲"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:打开快速切换": false,
+      "graph:查看关系图谱": false,
+      "canvas:新建白板": false,
+      "daily-notes:打开/创建今天的日记": false,
+      "templates:插入模板": false,
+      "command-palette:打开命令面板": false,
+      "bases:新建数据库": false
+    }
+  },
+  "active": "6cccbef077f5d5f1",
+  "lastOpenFiles": [
+    "concepts/CONCEPT_KNOWLEDGE_BASE.md",
+    "uchat.md",
+    "concepts/CONCEPT_RUNTIME.md",
+    "maps/AREA_MAP_CHAT.md",
+    "concepts/CONCEPT_MCP.md",
+    "architecture/README.md",
+    "maps/AREA_MAP_RUNTIME.md",
+    "architecture/external-mcp-marketplace.md",
+    "chat-tool-integration-checklist.md",
+    "harness-runtime-design.md",
+    "版本管理.md",
+    "未命名.base",
+    "未命名.canvas",
+    "platform/tauri-setup.md",
+    "maps/AREA_MAP_PLATFORM.md",
+    "assets/avatar-pack-16/original/01_formal_reviewer.png",
+    "architecture/model-config-api.md",
+    "API-Response-Spec.md",
+    "前端-axios封装说明.md",
+    "chat-system-practices.md",
+    "role/page.md",
+    "frontend-i18n.md",
+    "CONCEPTS_INDEX.md",
+    "role/chat-integration.md"
+  ]
+}
