@@ -256,7 +256,7 @@ server/src/agent/__tests__/agent-decision-loop.test.ts
 ### Current Branch And Commit
 
 - branch: `main`
-- commit: `8110b0aaf921e79a4dc20022c31c5f41908d3afc`
+- rerun workspace HEAD: `8110b0aaf921e79a4dc20022c31c5f41908d3afc`
 
 ### Test Source Files
 
@@ -266,6 +266,8 @@ server/src/agent/__tests__/agent-decision-loop.test.ts
 - `server/src/agent/tool-call-normalize.test.ts`
 - `server/src/agent/tool-node.test.ts`
 - `server/src/agent/policy.test.ts`
+
+这四个文件必须作为 git tracked files 提交，不能只停留在本地未跟踪状态。
 
 ### Scenario Coverage Map
 
@@ -329,27 +331,27 @@ pnpm --filter @ui-chat-mira/server typecheck
 ### Current Report Files
 
 - 原始 vitest JSON 报告：
-  - `server/test-report/agent-node-T007-8110b0aa-vitest.json`
+  - `server/test-report/agent-node-T007-vitest.json`
 - vitest 运行时间元数据：
-  - `server/test-report/agent-node-T007-8110b0aa-vitest.meta.txt`
+  - `server/test-report/agent-node-T007-vitest.meta.txt`
 - typecheck 输出报告：
-  - `server/test-report/agent-node-T007-8110b0aa-typecheck.txt`
+  - `server/test-report/agent-node-T007-typecheck.txt`
 - 人可读摘要：
-  - `server/test-report/agent-node-T007-8110b0aa-summary.md`
+  - `server/test-report/agent-node-T007-summary.md`
 
 ### Execution Time And Results
 
 - `pnpm --filter @ui-chat-mira/server test -- src/agent/graph.test.ts src/agent/tool-call-normalize.test.ts src/agent/tool-node.test.ts src/agent/policy.test.ts`
-  - startedAt: `2026-07-04T02:20:40.8485977+08:00`
-  - finishedAt: `2026-07-04T02:20:45.6522973+08:00`
-  - durationMs: `4804`
+  - startedAt: `2026-07-04T02:34:18.4198368+08:00`
+  - finishedAt: `2026-07-04T02:34:23.7801451+08:00`
+  - durationMs: `5360`
   - result: `passed`
   - suites: `4 passed / 0 failed`
   - tests: `46 passed / 0 failed`
 - `pnpm --filter @ui-chat-mira/server typecheck`
-  - startedAt: `2026-07-04T02:20:18.6373874+08:00`
-  - finishedAt: `2026-07-04T02:20:22.3094287+08:00`
-  - durationMs: `3672`
+  - startedAt: `2026-07-04T02:34:18.3796986+08:00`
+  - finishedAt: `2026-07-04T02:34:22.1576552+08:00`
+  - durationMs: `3778`
   - result: `passed`
 
 ### Historical Report Rule

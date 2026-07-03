@@ -151,10 +151,10 @@ Agent node 专属总台账。
   - 明确第七个任务只负责闭环验证、测试覆盖、最小护栏和旧执行路径回流防护
   - `agent_node_T007` 已补齐当前 commit 专属验收证据，状态保持 `DONE`
   - 当前验收只引用以下新报告，不再引用 `2026-07-03` 的旧全量失败报告：
-    - `server/test-report/agent-node-T007-8110b0aa-vitest.json`
-    - `server/test-report/agent-node-T007-8110b0aa-vitest.meta.txt`
-    - `server/test-report/agent-node-T007-8110b0aa-typecheck.txt`
-    - `server/test-report/agent-node-T007-8110b0aa-summary.md`
+    - `server/test-report/agent-node-T007-vitest.json`
+    - `server/test-report/agent-node-T007-vitest.meta.txt`
+    - `server/test-report/agent-node-T007-typecheck.txt`
+    - `server/test-report/agent-node-T007-summary.md`
   - 定向验证结果：
     - `pnpm --filter @ui-chat-mira/server test -- src/agent/graph.test.ts src/agent/tool-call-normalize.test.ts src/agent/tool-node.test.ts src/agent/policy.test.ts`
       - 结果：通过，`46 passed`
