@@ -140,6 +140,16 @@ export const messageSchema = {
               mimeType: { type: "string" },
             },
           },
+          {
+            type: "object",
+            required: ["type", "name", "value"],
+            additionalProperties: false,
+            properties: {
+              type: { const: "data" },
+              name: { type: "string" },
+              value: {},
+            },
+          },
         ],
       },
     },
@@ -290,6 +300,16 @@ const createMessageBodySchema = {
               filename: { type: "string" },
               fileId: { type: "string" },
               mimeType: { type: "string" },
+            },
+          },
+          {
+            type: "object",
+            required: ["type", "name", "value"],
+            additionalProperties: false,
+            properties: {
+              type: { const: "data" },
+              name: { type: "string" },
+              value: {},
             },
           },
         ],

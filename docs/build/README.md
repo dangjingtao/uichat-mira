@@ -68,22 +68,27 @@ pnpm version:sync
 
 ## Release 构建原则
 
-Release 构建必须强制执行测试并携带本次构建对应的测试结果摘要。
+Release 构建必须执行一次完整测试流程，并把这次完整测试生成的官方 JSON 报告随包发布。
 
 这条规则的含义：
 
-- release 包里的测试结果不能依赖旧的 `coverage/` 目录。
-- client 和 server 测试结果摘要都应来自本次 release 构建。
-- 构建脚本应在摘要缺失时失败，而不是静默跳过。
-- 开发态可以复用或跳过报告生成，release 态不允许跳过。
+- release 包里的测试报告不能依赖开发过程中偶然留下的 `coverage/` 临时目录。
+- client 和 server 都要有各自独立的官方报告目录。
+- 日常开发时单独跑某个 test file，不应覆盖官方报告。
+- dev 页面读取的是“最近一次完整测试留下的稳定报告”，不是“刚刚那次临时测试输出”。
+- 如果完整测试连官方 JSON 都生成不出来，构建应直接失败。
 
-当前实现还没有完全达到这条规则：
+当前实现采用两层产物：
 
-- `scripts/prepare-desktop-artifacts.js` 调用 `scripts/generate-test-report.js`，强制生成 client/server coverage。
-- `scripts/generate-test-report.js` 会生成 client/server `test-results-summary.json`。
-- `scripts/generate-test-report.js` 会校验 client/server 的 `coverage-summary.json`、`test-results.json`、`test-results-summary.json`。
+1. `coverage/`
 
-如果测试失败、报告缺失或 summary 生成失败，release artifacts 准备阶段会失败，后续不会继续打包。
+   Vitest 本次运行的临时输出，包含 HTML、lcov、`coverage-summary.json`、`coverage-final.json`、json reporter 输出等。
+
+2. `test-report/`
+
+   当前认可的官方稳定 JSON 报告目录，仅保存前端自定义渲染需要的 JSON 产物。
+
+release 允许“测试有失败，但官方 JSON 已成功生成”这种情况继续打包；这样包内开发页仍然能准确展示失败用例。只有报告缺失或生成中断时才阻断构建。
 
 ## Electron Release 流程
 
@@ -174,7 +179,7 @@ scripts/prepare-desktop-artifacts.js
    .artifacts/server-bundle/app-meta.json
    ```
 
-2. 强制生成 client/server 测试覆盖率报告和测试结果摘要。
+2. 强制生成 client/server 官方测试报告 JSON。
 3. 构建 renderer：
 
    ```bash
@@ -193,16 +198,18 @@ scripts/prepare-desktop-artifacts.js
    pnpm docs:build
    ```
 
-6. 把前端测试结果摘要复制进 backend bundle：
+6. 把前端官方测试报告复制进 backend bundle：
 
    ```text
-   .artifacts/server-bundle/client-coverage/test-results-summary.json
+   .artifacts/server-bundle/client-coverage/test-report.json
+   .artifacts/server-bundle/client-coverage/coverage-report.json
    ```
 
-7. 把服务端测试结果摘要复制进 backend bundle：
+7. 把服务端官方测试报告复制进 backend bundle：
 
    ```text
-   .artifacts/server-bundle/server-coverage/test-results-summary.json
+   .artifacts/server-bundle/server-coverage/test-report.json
+   .artifacts/server-bundle/server-coverage/coverage-report.json
    ```
 
 8. 复制 docs site：
@@ -238,8 +245,10 @@ server/build.js
   tools/
   static/
   node_modules/
-  client-coverage/test-results-summary.json
-  server-coverage/test-results-summary.json
+  client-coverage/test-report.json
+  client-coverage/coverage-report.json
+  server-coverage/test-report.json
+  server-coverage/coverage-report.json
   docs-site/
 ```
 
@@ -260,8 +269,10 @@ server/build.js
 开发页当前读取以下静态文件：
 
 ```text
-/client-coverage/test-results-summary.json
-/server-coverage/test-results-summary.json
+/client-coverage/test-report.json
+/client-coverage/coverage-report.json
+/server-coverage/test-report.json
+/server-coverage/coverage-report.json
 ```
 
 Fastify 后端会在启动时检测并暴露这些目录：
@@ -274,8 +285,10 @@ server-coverage -> GET /server-coverage/
 Release 包内这些文件位于：
 
 ```text
-resources/server/client-coverage/test-results-summary.json
-resources/server/server-coverage/test-results-summary.json
+resources/server/client-coverage/test-report.json
+resources/server/client-coverage/coverage-report.json
+resources/server/server-coverage/test-report.json
+resources/server/server-coverage/coverage-report.json
 ```
 
 当前 release 规则：
@@ -283,17 +296,17 @@ resources/server/server-coverage/test-results-summary.json
 1. 构建前清理 client/server coverage 目录。
 2. 强制运行 client tests with coverage。
 3. 强制运行 server tests with coverage。
-4. 生成 client/server `test-results-summary.json`。
+4. 从这次完整运行生成 client/server 官方 `test-report.json` 和 `coverage-report.json`。
 5. 校验以下文件都存在：
 
    ```text
-   desktop/coverage/test-results.json
-   desktop/coverage/test-results-summary.json
-   server/coverage/test-results.json
-   server/coverage/test-results-summary.json
+   desktop/test-report/test-report.json
+   desktop/test-report/coverage-report.json
+   server/test-report/test-report.json
+   server/test-report/coverage-report.json
    ```
 
-6. 再复制测试结果摘要进入 `.artifacts/server-bundle/`。
+6. 再复制官方测试报告进入 `.artifacts/server-bundle/`。
 
 实现入口：
 
@@ -304,10 +317,128 @@ scripts/generate-test-report.js
 当前脚本职责：
 
 - 清理 `desktop/coverage` 和 `server/coverage`
-- 运行 client coverage + json reporter
-- 运行 server coverage + json reporter
-- 从 `test-results.json` 生成 `test-results-summary.json`
-- 校验报告完整性
+- 运行 client/server 完整测试并生成 coverage 临时产物
+- 从 Vitest json reporter 生成官方 `test-report.json`
+- 从 `coverage-summary.json` + `coverage-final.json` 生成官方 `coverage-report.json`
+- 把官方 JSON 写入 `desktop/test-report` 与 `server/test-report`
+- 校验官方报告完整性
+
+## 官方测试报告目录
+
+前端：
+
+```text
+desktop/test-report/
+  test-report.json
+  coverage-report.json
+```
+
+服务端：
+
+```text
+server/test-report/
+  test-report.json
+  coverage-report.json
+```
+
+这两个目录是开发页和 release 包共同复用的稳定报告源。
+
+### `test-report.json`
+
+用于承载测试结果本体，至少包含：
+
+- 顶层 summary
+- suite 列表
+- case 级 pass / fail / pending / todo
+- duration
+- failure messages
+
+### `coverage-report.json`
+
+用于承载覆盖率本体，至少包含：
+
+- overall summary
+- file 级 summary
+- statement / function / branch / line 命中数据
+- 前端自定义渲染所需的原始 map / hits 信息
+
+这份 JSON 不等于 HTML 报告，但它包含了前端自定义渲染出 Vitest/Istanbul 视图所需的核心结构。
+
+### 当前体积债务
+
+当前官方测试报告 JSON 已能满足开发页渲染和 release 入包，但体积明显偏大。
+
+2026-07-02 本地实测：
+
+- `desktop/test-report/coverage-report.json` 约 `11 MB`
+- `server/test-report/coverage-report.json` 约 `10.8 MB`
+
+同时，当前还会额外复制一份到：
+
+- `server/client-coverage/`
+- `server/server-coverage/`
+
+这意味着测试报告链路目前存在两类可见债务：
+
+1. 单个 `coverage-report.json` 体积过大，已进入 10MB 级别。
+2. 官方报告目录与 backend 静态目录各保留一份，存在重复文件拷贝。
+
+当前阶段先保留现状，原因是：
+
+- 现在这份 JSON 结构已经能稳定支撑前端自定义测试报告页。
+- 先保证“完整测试 -> 生成稳定 JSON -> 开发页复用 -> release 入包”主链稳定，比立即压缩结构更重要。
+
+后续优化方向已明确：
+
+- 用脚本把前后端测试报告合并成单一 JSON 载荷，而不是继续分散成多份平行静态文件。
+- 合并时同步处理重复字段、共享 metadata、scope 分区和可选裁剪策略。
+- 目标是减少磁盘重复拷贝、降低打包体积，并为后续前端按需加载打基础。
+
+在该债务落地前，不要把这批 `test-report.json / coverage-report.json` 视为普通脏产物删除。
+
+如果某次完整测试在失败退出前没有产出 coverage artifacts，脚本仍会生成一个 `coverage-report.json` 占位文件，并显式标记覆盖率明细当前不可用；这样开发页和 release 包至少还能稳定展示该次测试结果本体。
+
+## Dev 同步规则
+
+入口脚本：
+
+```text
+scripts/generate-dev-coverage.js
+```
+
+规则如下：
+
+1. 默认优先复用已有的 `desktop/test-report` 和 `server/test-report`。
+2. 如果官方报告缺失，则自动补跑一次完整测试并生成它们。
+3. 只把官方 JSON 同步到：
+
+   ```text
+   server/client-coverage/
+   server/server-coverage/
+   ```
+
+4. 日常单独执行 `vitest` 不会修改官方报告目录，除非显式运行：
+
+   ```bash
+   node scripts/generate-dev-coverage.js --test
+   ```
+
+5. `pnpm dev:electron:win` 启动前只会同步官方报告，因此开发页看到的是上一次完整测试留下的稳定轨迹。
+
+## Vitest 失败时的覆盖率策略
+
+当前 desktop / server 的 Vitest 配置都显式开启了：
+
+```text
+coverage.reportOnFailure = true
+coverage.reporter 包含 json 与 json-summary
+```
+
+这意味着：
+
+- 测试失败时仍应尽量保留 `coverage-final.json` 与 `coverage-summary.json`
+- `scripts/generate-test-report.js` 会优先把这两份 coverage 原始文件转换成官方 `coverage-report.json`
+- 如果某次运行仍然没有 coverage 明细落盘，脚本才会写入一个“coverage 不可用”的占位 JSON，而不是让前端或打包流程直接断掉
 
 ## Tauri Release 流程
 

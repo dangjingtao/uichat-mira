@@ -23,6 +23,8 @@ const SAFE_CHAT_DOMAINS = new Set<McpToolDefinition["domain"]>([
   "web_search",
 ]);
 
+const INTERNAL_INTENT_ONLY_TOOL_IDS = new Set(["read", "read_slice"]);
+
 const normalizeQuery = (value: string | undefined) => value?.trim().toLowerCase() ?? "";
 
 const GREETING_TOKENS = new Set([
@@ -84,7 +86,30 @@ const shouldIncludeDefinition = (
     return false;
   }
 
+  if (
+    (input.source === "agent_intent" || input.source === "chat_surface") &&
+    definition.source === "internal" &&
+    INTERNAL_INTENT_ONLY_TOOL_IDS.has(definition.id)
+  ) {
+    return false;
+  }
+
   return true;
+};
+
+const applyExposureSchema = (
+  definition: McpToolDefinition,
+  source: HarnessExposureSource,
+): McpToolDefinition => {
+  const exposedInputSchema = definition.inputSchemaByExposure?.[source];
+  if (!exposedInputSchema) {
+    return definition;
+  }
+
+  return {
+    ...definition,
+    inputSchema: exposedInputSchema,
+  };
 };
 
 export const resolveHarnessToolExposure = (
@@ -102,13 +127,15 @@ export const resolveHarnessToolExposure = (
     };
   }
 
-  const visibleDefinitions = definitions.filter((definition) => {
-    const allowed = shouldIncludeDefinition(definition, input);
-    if (!allowed) {
-      blockedCapabilityIds.push(definition.id);
-    }
-    return allowed;
-  });
+  const visibleDefinitions = definitions
+    .filter((definition) => {
+      const allowed = shouldIncludeDefinition(definition, input);
+      if (!allowed) {
+        blockedCapabilityIds.push(definition.id);
+      }
+      return allowed;
+    })
+    .map((definition) => applyExposureSchema(definition, input.source));
 
   if (input.source === "chat_surface") {
     reasons.push("Chat-visible tool surface is restricted to safe built-in domains.");

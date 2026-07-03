@@ -2,7 +2,7 @@
 status: current
 priority: P1
 owner: agent-remediation
-last_verified:
+last_verified: 2026-07-02
 layer: project-control
 module: ProjectControl
 feature: CapabilityToolSeparation
@@ -12,7 +12,7 @@ related:
   - docs/project-control/agent-workboard.md
   - docs/chat/agent-phase-1-global-review.md
   - docs/chat/agent-phase-1-code-review.md
-task_state: READY_FOR_REVIEW
+task_state: DONE
 ---
 
 # T-005 Capability Tool Separation
@@ -65,6 +65,11 @@ task_state: READY_FOR_REVIEW
   - 结果：通过
 - `pnpm --filter @ui-chat-mira/server test -- src/agent/graph.test.ts src/agent/resume.test.ts src/agent/persistence.test.ts src/agent/routes.test.ts`
   - 结果：通过，`31 passed`
+- `2026-07-02` 定向手测：
+  - 读取真实线程 `Codex Resume Trace Handtest` 的最新 assistant 消息详情
+  - execution trace 明确以 `toolId: workspace_mutation` 写回
+  - `assistant.metadata.agent` 与 execution-node details 未再出现旧的执行态 capability/tool 混用问题
+  - 结果：通过
 
 ## Implementation Evidence
 

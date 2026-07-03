@@ -11,6 +11,7 @@ Canonical: true
 Related:
   - harness-assessment-2026-06-28.md
   - harness-phase-1-implementation-checklist.md
+  - harness-gap-review-checklist.md
   - sandbox-module.md
   - agentgraph-harness-protocol.md
 
@@ -28,8 +29,9 @@ Related:
 
 1. `harness-assessment-2026-06-28.md`
 2. `harness-phase-1-implementation-checklist.md`
-3. `sandbox-module.md`
-4. `agentgraph-harness-protocol.md`
+3. `harness-gap-review-checklist.md`
+4. `sandbox-module.md`
+5. `agentgraph-harness-protocol.md`
 
 ## 当前结论
 

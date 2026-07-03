@@ -15,7 +15,8 @@ export default defineConfig({
     fileParallelism: false,
     coverage: {
       provider: "v8",
-      reporter: ["text", "html", "lcov", "json-summary"],
+      reporter: ["text", "html", "lcov", "json", "json-summary"],
+      reportOnFailure: true,
       reportsDirectory: "./coverage",
       include: ["src/**/*.{ts,tsx}"],
       exclude: [

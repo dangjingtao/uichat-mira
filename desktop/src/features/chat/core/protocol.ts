@@ -128,6 +128,16 @@ export const normalizeMessageParts = (
       ];
     }
 
+    if (part.type === "data") {
+      return [
+        {
+          type: "data" as const,
+          name: part.name,
+          value: part.value,
+        },
+      ];
+    }
+
     return [];
   });
 };

@@ -3,6 +3,17 @@ import { mcpBadRequest } from "../core/errors.js";
 import { executeTerminalSessionRuntime } from "../terminal/runtime.js";
 import { emitArtifacts } from "./artifact-utils.js";
 
+const terminalSessionLlmInputSchema = {
+  type: "object",
+  required: ["command"],
+  properties: {
+    command: { type: "string" },
+    cwd: { type: "string" },
+    timeoutMs: { type: "number" },
+  },
+  additionalProperties: false,
+} as const;
+
 export const terminalSessionTool: McpToolImplementation = {
   definition: {
     id: "terminal_session",
@@ -25,6 +36,10 @@ export const terminalSessionTool: McpToolImplementation = {
           enum: ["ephemeral", "persistent"],
         },
       },
+    },
+    inputSchemaByExposure: {
+      agent_intent: terminalSessionLlmInputSchema,
+      chat_surface: terminalSessionLlmInputSchema,
     },
     tags: ["terminal", "pty"],
     capabilities: {

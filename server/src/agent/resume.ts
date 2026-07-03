@@ -8,6 +8,7 @@ import type {
 } from "./types.js";
 import { persistAssistantMessage } from "@/routes/proxy-provider/message-persistence.js";
 import { threadService } from "@/services/thread.service.js";
+import type { AssistantExecutionNodeEvent } from "@/services/chat-stream-events.js";
 
 const buildAssistantMetadata = (input: {
   runId: string;
@@ -22,6 +23,8 @@ const buildAssistantMetadata = (input: {
     inputHash?: string;
     createdAt: string;
   };
+  blockedReason?: string;
+  terminalReason?: string;
   errorMessage?: string;
   errorSourceNodeId?: string;
 }) => ({
@@ -37,6 +40,16 @@ const buildAssistantMetadata = (input: {
     ...(input.errorMessage
       ? {
           errorMessage: input.errorMessage,
+        }
+      : {}),
+    ...(input.blockedReason
+      ? {
+          blockedReason: input.blockedReason,
+        }
+      : {}),
+    ...(input.terminalReason
+      ? {
+          terminalReason: input.terminalReason,
         }
       : {}),
     ...(input.errorSourceNodeId
@@ -57,6 +70,64 @@ const toApprovedInvocation = (input: {
   approvedAt: new Date().toISOString(),
   approvalId: input.pendingApproval.id,
 });
+
+const buildAssistantParts = (input: {
+  content: string;
+  existingParts?: Array<
+    | {
+        type: "text";
+        text: string;
+      }
+    | {
+        type: "image";
+        image: string;
+        filename?: string;
+        fileId?: string;
+        mediaType?: string;
+      }
+    | {
+        type: "file";
+        data: string;
+        filename: string;
+        fileId?: string;
+        mimeType: string;
+      }
+    | {
+        type: "data";
+        name: string;
+        value: unknown;
+      }
+  >;
+  executionNodes: AssistantExecutionNodeEvent[];
+}) => {
+  const baseParts = input.content.trim()
+    ? [
+        {
+          type: "text" as const,
+          text: input.content,
+        },
+      ]
+    : [];
+  const persistedDataParts = (input.existingParts ?? []).filter(
+    (part): part is { type: "data"; name: string; value: unknown } =>
+      part.type === "data",
+  );
+  const appendedDataParts = input.executionNodes.map((node) => ({
+    type: "data" as const,
+    name: "execution-node",
+    value: node,
+  }));
+  const dedupedDataParts = new Map<
+    string,
+    { type: "data"; name: string; value: unknown }
+  >();
+
+  for (const part of [...persistedDataParts, ...appendedDataParts]) {
+    dedupedDataParts.set(`${part.name}:${JSON.stringify(part.value)}`, part);
+  }
+
+  return [...baseParts, ...dedupedDataParts.values()];
+};
 
 export const resumeApprovedAgentRun = async (runId: string) => {
   const run = getAgentRunById(runId);
@@ -101,6 +172,7 @@ export const resumeApprovedAgentRun = async (runId: string) => {
     pendingToolCall,
   });
 
+  const resumedExecutionNodes: AssistantExecutionNodeEvent[] = [];
   const output = await agentGraph.run({
     runId,
     threadId: run.threadId,
@@ -116,6 +188,9 @@ export const resumeApprovedAgentRun = async (runId: string) => {
     selectedCapabilityId: run.selectedCapabilityId,
     selectedToolId: pendingToolCall.toolId,
     pendingToolCall,
+    onExecutionNode: (event) => {
+      resumedExecutionNodes.push(event);
+    },
   });
 
   for (const observation of output.observations) {
@@ -126,6 +201,8 @@ export const resumeApprovedAgentRun = async (runId: string) => {
     status: output.status,
     currentStepId: output.pendingApproval?.stepId ?? output.errorSourceNodeId,
     contextBudget: output.contextBudget,
+    blockedReason: output.blockedReason,
+    terminalReason: output.terminalReason,
     approvedInvocations,
     selectedCapabilityId: output.selectedCapabilityId,
     selectedToolId:
@@ -153,17 +230,25 @@ export const resumeApprovedAgentRun = async (runId: string) => {
       nextRun.userId,
     );
     const content = output.answer.trim() || existingAssistantMessage?.content?.trim() || "";
+    const parts = buildAssistantParts({
+      content,
+      existingParts: existingAssistantMessage?.parts,
+      executionNodes: resumedExecutionNodes,
+    });
     persistAssistantMessage({
       threadId: nextRun.threadId,
       userId: nextRun.userId,
       assistantMessageId: nextRun.assistantMessageId,
       parentId: nextRun.assistantParentId ?? null,
       content,
+      parts,
       metadata: buildAssistantMetadata({
         runId: nextRun.id,
         traceId: nextRun.traceId,
         status: output.status,
         pendingApproval: output.pendingApproval,
+        blockedReason: output.blockedReason,
+        terminalReason: output.terminalReason,
         errorMessage: output.errorMessage,
         errorSourceNodeId: output.errorSourceNodeId,
       }),

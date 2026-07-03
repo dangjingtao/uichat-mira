@@ -637,4 +637,71 @@ describe("McpSettings", () => {
       screen.getByText(/官方 MCP 市场暂时不可用，当前显示最近一次成功结果/i),
     ).toBeInTheDocument();
   });
+
+  it("deduplicates marketplace servers with the same id before rendering", async () => {
+    getMcpMarketplaceServersMock.mockResolvedValueOnce({
+      servers: [
+        {
+          id: "ac.tandem/docs-mcp",
+          name: "docs-mcp",
+          title: "Docs MCP",
+          description: "First entry",
+          version: "1.0.0",
+          status: "active",
+          isLatest: true,
+          publishedAt: null,
+          updatedAt: null,
+          websiteUrl: null,
+          repositoryUrl: null,
+          transports: [
+            {
+              kind: "streamable-http",
+              packageType: "remote",
+              installable: true,
+              label: "Remote HTTP",
+              url: "https://example.com/mcp",
+            },
+          ],
+        },
+        {
+          id: "ac.tandem/docs-mcp",
+          name: "docs-mcp",
+          title: "Docs MCP Duplicate",
+          description: "Duplicate entry",
+          version: "1.0.1",
+          status: "active",
+          isLatest: true,
+          publishedAt: null,
+          updatedAt: null,
+          websiteUrl: null,
+          repositoryUrl: null,
+          transports: [
+            {
+              kind: "streamable-http",
+              packageType: "remote",
+              installable: true,
+              label: "Remote HTTP",
+              url: "https://example.com/mcp-2",
+            },
+          ],
+        },
+      ],
+      metadata: {
+        count: 2,
+        nextCursor: null,
+        sourceUrl: "https://registry.modelcontextprotocol.io/v0/servers",
+        cache: {
+          hit: false,
+          stale: false,
+          cachedAt: null,
+        },
+      },
+    });
+
+    render(<McpSettings />);
+
+    await screen.findByText("Docs MCP");
+    expect(screen.queryByText("Docs MCP Duplicate")).not.toBeInTheDocument();
+    expect(screen.getAllByText("ac.tandem/docs-mcp")).toHaveLength(1);
+  });
 });

@@ -537,6 +537,12 @@ export default function UChatThread() {
         assistantTypingLabel={assistantTypingLabel}
         isAgentRunning={isAgentRunning}
         agentEnabled={isAgentEnabled}
+        agentToggleAvailability={{
+          enabled: hasWorkspaceBound,
+          disabledReason: !hasWorkspaceBound
+            ? t("chat.thread.agent.workspaceRequired")
+            : undefined,
+        }}
         agentAvailability={{
           enabled: canRunAgent,
           disabledReason: !hasWorkspaceBound

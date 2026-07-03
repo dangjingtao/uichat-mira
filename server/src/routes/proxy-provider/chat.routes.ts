@@ -274,6 +274,12 @@ const sendPersistedDefaultChatStream = ({
               ...(output.pendingApproval
                 ? { pendingApproval: output.pendingApproval }
                 : {}),
+              ...(output.blockedReason
+                ? { blockedReason: output.blockedReason }
+                : {}),
+              ...(output.terminalReason
+                ? { terminalReason: output.terminalReason }
+                : {}),
               ...(output.errorMessage ? { errorMessage: output.errorMessage } : {}),
             },
           };

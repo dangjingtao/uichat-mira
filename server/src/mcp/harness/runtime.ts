@@ -7,8 +7,6 @@ import { readOpenTool } from "../tools/read-open.tool.js";
 import { readSliceTool } from "../tools/read-slice.tool.js";
 import { readTool } from "../tools/read.tool.js";
 import { terminalSessionTool } from "../tools/terminal-session.tool.js";
-import { wecomNotifySendTool } from "../tools/wecom-notify-send.tool.js";
-import { wecomOrgLookupTool } from "../tools/wecom-org-lookup.tool.js";
 import { webSearchTool } from "../tools/web-search.tool.js";
 import { workspaceMutationTool } from "../tools/workspace-mutation.tool.js";
 import {
@@ -35,8 +33,6 @@ export const initializeHarnessRuntime = () => {
   registerCapability(editFileTool);
   registerCapability(workspaceMutationTool);
   registerCapability(webSearchTool);
-  registerCapability(wecomNotifySendTool);
-  registerCapability(wecomOrgLookupTool);
   registerCapability(terminalSessionTool);
   // External MCP persistence is optional at bootstrap time. Some callers
   // (notably route-level tests and early app startup before DB wiring) only

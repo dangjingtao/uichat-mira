@@ -71,6 +71,9 @@ export const evaluateInvocationApproval = (input: {
   approvedInvocations?: ApprovedInvocation[];
   inputHash?: string;
 }): InvocationApprovalDecision => {
+  // Approval remains invocation-bound. Reusing a terminal session via
+  // attachSessionId does not authorize a different command unless the exact
+  // new input hash was approved too.
   const isApproved =
     input.inputHash !== undefined &&
     (input.approvedInvocations?.some(

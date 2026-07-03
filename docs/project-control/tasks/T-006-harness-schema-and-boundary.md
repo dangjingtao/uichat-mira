@@ -2,7 +2,7 @@
 status: current
 priority: P1
 owner: agent-remediation
-last_verified:
+last_verified: 2026-07-02
 layer: project-control
 module: ProjectControl
 feature: HarnessSchemaBoundary
@@ -12,7 +12,7 @@ related:
   - docs/project-control/agent-workboard.md
   - docs/chat/agent-phase-1-global-review.md
   - docs/chat/agent-phase-1-code-review.md
-task_state: READY_FOR_REVIEW
+task_state: DONE
 ---
 
 # T-006 Harness Schema And Boundary
@@ -132,6 +132,20 @@ task_state: READY_FOR_REVIEW
 
 - `pnpm check`
 - Result: pass
+
+### Direct Manual Verification
+
+- `2026-07-02` 通过真实 MCP 路由 `POST /mcp/invocations` 手测：
+  - `workspace_mutation` 缺少 `targetPath`
+    - 结果：`400 VALIDATION_ERROR`
+    - 证据：返回 `args.targetPath is required`
+  - `workspace_mutation` 目标路径越出当前 workspace
+    - 结果：进入 `awaiting_approval`
+    - 证据：approval reason 明确为 `outside the current workspace root`
+  - `workspace_mutation` 工作区内合法目标
+    - 结果：进入正常审批
+    - 证据：approval reason 为 `requires explicit approval before execution`
+- 结论：schema 校验与 workspace boundary 校验均已在真实接口层生效
 
 ### Packaging
 

@@ -24,6 +24,7 @@ Related:
 - 版本与发布约束
 - 前端请求封装约束
 - 前端国际化约束
+- 前端路由与导航协议
 - 工程编码规范
 - 缺陷治理台账
 - 产品路线与优先级判断
@@ -33,15 +34,17 @@ Related:
 1. `release-management.md`
 2. `request-wrapper.md`
 3. `frontend-i18n.md`
-4. `coding-standards.md`
-5. `defect-log.md`
-6. `product-roadmap-priorities.md`
+4. `frontend-route-navigation-protocol.md`
+5. `coding-standards.md`
+6. `defect-log.md`
+7. `product-roadmap-priorities.md`
 
 ## 当前入口
 
 - `release-management.md`
 - `request-wrapper.md`
 - `frontend-i18n.md`
+- `frontend-route-navigation-protocol.md`
 - `coding-standards.md`
 - `defect-log.md`
 - `product-roadmap-priorities.md`

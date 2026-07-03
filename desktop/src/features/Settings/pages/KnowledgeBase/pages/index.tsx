@@ -420,7 +420,7 @@ export default function KnowledgeBaseSettings() {
               searchText={knowledgeBaseSearchText}
               onSearchTextChange={setKnowledgeBaseSearchText}
               onCreate={handleCreateKnowledgeBase}
-              knowledgeBases={loading ? [] : filteredKnowledgeBases}
+              knowledgeBases={filteredKnowledgeBases}
               selectedKnowledgeBaseId={selectedKnowledgeBaseId}
               onSelectKnowledgeBase={handleSelectKnowledgeBase}
               loading={loading && knowledgeBases.length === 0}

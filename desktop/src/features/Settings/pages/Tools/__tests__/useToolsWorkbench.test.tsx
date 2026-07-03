@@ -88,7 +88,7 @@ describe("useToolsWorkbench", () => {
     executeMcpInvocationStreamMock.mockImplementation(async () => {});
   });
 
-  it("persists only Tavily apiKey and SearXNG baseUrl while injecting default maxResults at runtime", async () => {
+  it("persists web search settings while keeping provider config out of runtime tool args", async () => {
     const useToolsWorkbench = await importHook();
     const { result } = renderHook(() => useToolsWorkbench());
 
@@ -123,12 +123,10 @@ describe("useToolsWorkbench", () => {
     expect(executeMcpInvocationStreamMock).toHaveBeenCalledWith(
       expect.objectContaining({
         toolId: "web_search",
-        args: expect.objectContaining({
+        args: {
           query: "codex",
-          apiKey: "saved-key",
-          baseUrl: "http://localhost:8080",
           maxResults: 4,
-        }),
+        },
       }),
       expect.any(Function),
     );

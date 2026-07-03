@@ -18,6 +18,7 @@ export type ReadLocateArgs = {
 type LocateProviderCapability = McpExecutionEnvironment["read"]["capabilities"][number];
 
 const DEFAULT_LIMIT = 20;
+const PREVIEW_MAX_LENGTH = 120;
 
 const assertEnvironment = (environment?: McpExecutionEnvironment) => {
   if (!environment || environment.source !== "harness") {
@@ -76,6 +77,15 @@ const matchesExtension = (filePath: string, extensions: string[]) =>
   extensions.length === 0 || extensions.includes(path.extname(filePath).toLowerCase());
 
 const normalizeRelativePath = (filePath: string) => filePath.replace(/\\/g, "/");
+
+const shortenPreview = (value: string) => {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= PREVIEW_MAX_LENGTH) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, PREVIEW_MAX_LENGTH - 3).trimEnd()}...`;
+};
 
 const buildPathPatterns = (query: string) => {
   const escaped = query.replace(/\\/g, "/");
@@ -174,7 +184,7 @@ const locateByRipgrep = ({
       matchType: "content",
       line: Number(data.line_number),
       column: Number(data.submatches?.[0]?.start ?? 0) + 1,
-      preview: String(data.lines.text).trim(),
+      preview: shortenPreview(String(data.lines.text)),
     });
 
     if (matches.length >= limit) {
@@ -242,7 +252,7 @@ const locateByNodeContentScan = ({
       matchType: "content",
       line,
       column,
-      preview: lineText.trim(),
+      preview: shortenPreview(lineText),
     });
   }
 

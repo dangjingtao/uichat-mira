@@ -13,7 +13,11 @@ export default function CoverageReportView({ type }: CoverageReportViewProps) {
   const runtime = getDesktopRuntime();
   const coverageBaseUrl = runtime.backendUrl || "";
   const resultUrl = useMemo(
-    () => `${coverageBaseUrl}/${type}-coverage/test-results.json`,
+    () => `${coverageBaseUrl}/${type}-coverage/test-report.json`,
+    [coverageBaseUrl, type],
+  );
+  const coverageUrl = useMemo(
+    () => `${coverageBaseUrl}/${type}-coverage/coverage-report.json`,
     [coverageBaseUrl, type],
   );
 
@@ -21,6 +25,7 @@ export default function CoverageReportView({ type }: CoverageReportViewProps) {
 
   return (
     <CoverageReportPanel
+      src={coverageUrl}
       resultSrc={resultUrl}
       title={
         <span className="flex items-center gap-2">

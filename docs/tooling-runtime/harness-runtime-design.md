@@ -138,6 +138,20 @@ Doc Type: design
 
 这样做的目的，是把“可用环境”与“执行实现”分开，避免 UI 侧再引入 provider 分叉。
 
+当前治理补充：
+
+- `web_search` 对模型应保持统一工具面，不按 provider 拆工具
+- `Tavily` / `SearXNG` 是 runtime provider，不是 LLM-facing tool
+- 长期目标下，LLM-facing schema 只应暴露：
+  - `query`
+  - `maxResults`
+- `apiKey`、`baseUrl`、`provider` 不应由模型生成
+- `baseUrl` 必须来自可信配置或 allowlist，避免 SSRF / 内网探测风险
+- provider 失败必须结构化返回，不能静默吞掉
+- `search-results` artifact 可以保留，但不得写入敏感配置
+
+当前代码仍保留 `apiKey` / `baseUrl` 作为 invocation args 参与解析，这属于过渡实现，不是最终治理目标。
+
 ## 设计目标
 
 运行时架构采用 harness 思维，但 capability contract 尽量保持 MCP / OpenAI tool calling 兼容。
@@ -198,6 +212,13 @@ harness 统一注册所有内置 capability。
 - `web_search`
 - `terminal`
 - `preview_action`
+
+当前明确不纳入 Harness 内置注册面的内容：
+
+- 企业微信这类第三方内部集成工具
+- 正在接入的飞书 / Lark 集成工具
+
+这些能力可以继续存在于 `integrations/*` 产品线和独立 route / provider 体系里，但默认不进入 Harness 内置 capability registry，也不进入 Harness capability profile 暴露治理主线。
 
 每个 capability 至少要注册：
 

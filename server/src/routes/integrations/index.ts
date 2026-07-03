@@ -2,7 +2,9 @@ import type { FastifyPluginAsync } from "fastify";
 import { requireAuth } from "@/db/auth.db.js";
 import {
   integrationCapabilitiesRepository,
+  integrationCapabilityMicroAppsRepository,
   integrationInstancesRepository,
+  microAppsRepository,
 } from "@/db/repositories/index.js";
 import { deletedResponseSchema, errorEnvelope, idParamsSchema, successEnvelope } from "@/routes/schema-helpers.js";
 import {
@@ -15,6 +17,7 @@ import {
   startWecomSmartRobotByCapability,
   stopWecomSmartRobotByCapability,
 } from "@/integrations/wecom/smart-robot.js";
+import { microAppRuntime, supportsMicroAppBinding } from "@/microapps/runtime.js";
 import { success } from "@/utils/index.js";
 import { badRequest, notFound, routeHandler } from "@/utils/route-errors.js";
 
@@ -45,6 +48,40 @@ const capabilitySchema = {
     config: { type: "object", additionalProperties: true },
     runtime: { type: "object", additionalProperties: true },
     isDefault: { type: "boolean" },
+    createdAt: { type: "string" },
+    updatedAt: { type: "string" },
+  },
+} as const;
+
+const microAppSchema = {
+  type: "object",
+  required: [
+    "id",
+    "type",
+    "name",
+    "description",
+    "supportedAccessPoints",
+    "bindingSchema",
+    "runtimeKey",
+    "enabled",
+    "createdAt",
+    "updatedAt",
+  ],
+  properties: {
+    id: { type: "string" },
+    type: { type: "string", enum: ["knowledge_query"] },
+    name: { type: "string" },
+    description: { type: "string" },
+    supportedAccessPoints: {
+      type: "array",
+      items: { type: "string" },
+    },
+    bindingSchema: {
+      type: "object",
+      additionalProperties: true,
+    },
+    runtimeKey: { type: "string" },
+    enabled: { type: "boolean" },
     createdAt: { type: "string" },
     updatedAt: { type: "string" },
   },
@@ -555,6 +592,268 @@ const integrationsRoute: FastifyPluginAsync = async (app) => {
       }
 
       return success({ capability });
+    }),
+  );
+
+  app.get<{
+    Querystring: {
+      type?: string;
+    };
+  }>(
+    "/integrations/micro-apps",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "List MicroAPPs",
+        security: [{ bearerAuth: [] }],
+        querystring: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            type: { type: "string", enum: ["knowledge_query"] },
+          },
+        },
+        response: {
+          200: successEnvelope({
+            type: "object",
+            required: ["microApps"],
+            properties: {
+              microApps: {
+                type: "array",
+                items: microAppSchema,
+              },
+            },
+          }),
+          401: errorEnvelope,
+        },
+      },
+    },
+    routeHandler("Failed to list MicroAPPs", async (request) =>
+      success({
+        microApps: microAppsRepository.list(
+          request.query.type as "knowledge_query" | undefined,
+        ),
+      }),
+    ),
+  );
+
+  app.patch<{
+    Params: { id: string };
+    Body: {
+      name?: string;
+      description?: string;
+      enabled?: boolean;
+    };
+  }>(
+    "/integrations/micro-apps/:id",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Update MicroAPP",
+        security: [{ bearerAuth: [] }],
+        params: idParamsSchema,
+        body: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            name: { type: "string" },
+            description: { type: "string" },
+            enabled: { type: "boolean" },
+          },
+        },
+        response: {
+          200: successEnvelope({
+            type: "object",
+            required: ["microApp"],
+            properties: {
+              microApp: microAppSchema,
+            },
+          }),
+          400: errorEnvelope,
+          401: errorEnvelope,
+          404: errorEnvelope,
+        },
+      },
+    },
+    routeHandler("Failed to update MicroAPP", async (request) => {
+      const microApp = microAppsRepository.update(request.params.id, {
+        name: request.body.name,
+        description: request.body.description,
+        enabled: request.body.enabled,
+      });
+
+      if (!microApp) {
+        throw notFound(`MicroAPP not found: ${request.params.id}`);
+      }
+
+      return success({ microApp });
+    }),
+  );
+
+  app.get<{
+    Params: { id: string };
+  }>(
+    "/integrations/capabilities/:id/micro-app-binding",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Get bound MicroAPP for integration capability",
+        security: [{ bearerAuth: [] }],
+        params: idParamsSchema,
+        response: {
+          200: successEnvelope({
+            type: "object",
+            required: ["binding", "microApp"],
+            properties: {
+              binding: {
+                anyOf: [
+                  { type: "null" },
+                  {
+                    type: "object",
+                    required: [
+                      "id",
+                      "capabilityId",
+                      "microAppDefinitionId",
+                      "enabled",
+                      "config",
+                      "createdAt",
+                      "updatedAt",
+                    ],
+                    properties: {
+                      id: { type: "string" },
+                      capabilityId: { type: "string" },
+                      microAppDefinitionId: { type: "string" },
+                      enabled: { type: "boolean" },
+                      config: { type: "object", additionalProperties: true },
+                      createdAt: { type: "string" },
+                      updatedAt: { type: "string" },
+                    },
+                  },
+                ],
+              },
+              microApp: {
+                anyOf: [{ type: "null" }, microAppSchema],
+              },
+            },
+          }),
+          401: errorEnvelope,
+          404: errorEnvelope,
+        },
+      },
+    },
+    routeHandler("Failed to get MicroAPP binding", async (request) => {
+      const capability = integrationCapabilitiesRepository.getById(request.params.id);
+      if (!capability) {
+        throw notFound(`Integration capability not found: ${request.params.id}`);
+      }
+
+      const resolvedMicroApp = await microAppRuntime.resolveBoundMicroApp(capability.id);
+      const binding =
+        integrationCapabilityMicroAppsRepository.getByCapabilityId(capability.id);
+
+      return success({
+        binding,
+        microApp: resolvedMicroApp?.microApp ?? null,
+      });
+    }),
+  );
+
+  app.put<{
+    Params: { id: string };
+    Body: {
+      microAppId: string | null;
+      enabled?: boolean;
+      config?: Record<string, unknown>;
+    };
+  }>(
+    "/integrations/capabilities/:id/micro-app-binding",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Bind integration capability to MicroAPP",
+        security: [{ bearerAuth: [] }],
+        params: idParamsSchema,
+        body: {
+          type: "object",
+          additionalProperties: false,
+          required: ["microAppId"],
+          properties: {
+            microAppId: { type: ["string", "null"] },
+            enabled: { type: "boolean" },
+            config: { type: "object", additionalProperties: true },
+          },
+        },
+        response: {
+          200: successEnvelope({
+            type: "object",
+            required: ["binding", "microApp"],
+            properties: {
+              binding: {
+                anyOf: [
+                  { type: "null" },
+                  {
+                    type: "object",
+                    required: [
+                      "id",
+                      "capabilityId",
+                      "microAppDefinitionId",
+                      "enabled",
+                      "config",
+                      "createdAt",
+                      "updatedAt",
+                    ],
+                    properties: {
+                      id: { type: "string" },
+                      capabilityId: { type: "string" },
+                      microAppDefinitionId: { type: "string" },
+                      enabled: { type: "boolean" },
+                      config: { type: "object", additionalProperties: true },
+                      createdAt: { type: "string" },
+                      updatedAt: { type: "string" },
+                    },
+                  },
+                ],
+              },
+              microApp: {
+                anyOf: [{ type: "null" }, microAppSchema],
+              },
+            },
+          }),
+          400: errorEnvelope,
+          401: errorEnvelope,
+          404: errorEnvelope,
+        },
+      },
+    },
+    routeHandler("Failed to bind MicroAPP", async (request) => {
+      const capability = integrationCapabilitiesRepository.getById(request.params.id);
+      if (!capability) {
+        throw notFound(`Integration capability not found: ${request.params.id}`);
+      }
+
+      const microAppId = request.body.microAppId?.trim() || null;
+      if (!microAppId) {
+        integrationCapabilityMicroAppsRepository.unbindByCapabilityId(capability.id);
+        return success({ binding: null, microApp: null });
+      }
+
+      const microApp = microAppsRepository.getById(microAppId);
+      if (!microApp) {
+        throw notFound(`MicroAPP not found: ${microAppId}`);
+      }
+
+      if (!supportsMicroAppBinding(capability.type, microApp.type)) {
+        throw badRequest(
+          `MicroAPP "${microApp.type}" does not support capability "${capability.type}"`,
+        );
+      }
+
+      const binding = integrationCapabilityMicroAppsRepository.bind(capability.id, {
+        microAppDefinitionId: microApp.id,
+        enabled: request.body.enabled,
+        config: request.body.config ?? {},
+      });
+      return success({ binding, microApp });
     }),
   );
 

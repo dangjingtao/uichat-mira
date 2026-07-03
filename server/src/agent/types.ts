@@ -139,6 +139,8 @@ export interface AgentRun {
   observations: AgentObservation[];
   traceId: string;
   currentStepId?: string;
+  blockedReason?: string;
+  terminalReason?: string;
   pendingApproval?: AgentApprovalRequest;
   approvedInvocations?: AgentApprovedInvocation[];
   contextBudget?: ContextBudgetAudit;
@@ -229,6 +231,8 @@ export interface AgentGraphOutput {
   selectedToolId?: string;
   pendingToolCall?: AgentToolCallRequest;
   lastToolExecution?: AgentToolExecutionResult;
+  blockedReason?: string;
+  terminalReason?: string;
   errorMessage?: string;
   errorSourceNodeId?: string;
   contextBudget?: ContextBudgetAudit;

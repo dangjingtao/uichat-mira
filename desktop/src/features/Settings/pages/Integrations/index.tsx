@@ -29,17 +29,22 @@ import { message } from "@/shared/ui/Message";
 import { ApiError } from "@/shared/lib/request";
 import { listKnowledgeBases, type KnowledgeBaseSummary } from "@/shared/api/knowledgeBase";
 import {
+  getIntegrationCapabilityMicroAppBinding,
   getIntegrationCapabilityStatus,
   getIntegrationInstances,
+  getIntegrationMicroApps,
   sendWecomRobotCapabilityTestMessage,
   startIntegrationCapability,
   stopIntegrationCapability,
   updateIntegrationCapability,
+  updateIntegrationCapabilityMicroAppBinding,
   updateIntegrationInstance,
+  type IntegrationCapabilityMicroAppBindingRecord,
   type IntegrationCapabilityRecord,
   type IntegrationCapabilityStatus,
   type IntegrationInstanceRecord,
   type IntegrationProviderCode,
+  type MicroAppRecord,
 } from "@/shared/api/integrations";
 
 type PlatformTab = {
@@ -61,12 +66,14 @@ type CapabilityDraft = {
   type: string;
   name: string;
   enabled: boolean;
-  knowledgeBaseId: string;
   botId: string;
   secret: string;
   webhookUrl: string;
   webhookSecret: string;
   replyMode: "stream" | "send";
+  microAppId: string;
+  bindingEnabled: boolean;
+  bindingConfig: Record<string, unknown>;
 };
 
 function GuideSection({
@@ -102,7 +109,7 @@ const capabilityLabel = (type: string) => {
 };
 
 const capabilityDescription = (type: string) => {
-  if (type === "wecom.smart_robot") return "接收群聊 @ 和单聊消息，调用知识库后自动回复。";
+  if (type === "wecom.smart_robot") return "接收群聊 @ 和单聊消息，并把问题送入企业集成能力链路。";
   if (type === "wecom.webhook_robot") return "从聊天或流程里主动推送通知到企业微信群。";
   return "第三方接入能力。";
 };
@@ -159,6 +166,10 @@ export default function IntegrationsSettings() {
   const [activeProvider, setActiveProvider] = useState<IntegrationProviderCode>("wecom");
   const [instances, setInstances] = useState<IntegrationInstanceRecord[]>([]);
   const [capabilities, setCapabilities] = useState<IntegrationCapabilityRecord[]>([]);
+  const [microApps, setMicroApps] = useState<MicroAppRecord[]>([]);
+  const [capabilityBindings, setCapabilityBindings] = useState<
+    Record<string, IntegrationCapabilityMicroAppBindingRecord | null>
+  >({});
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseSummary[]>([]);
   const [statuses, setStatuses] = useState<Record<string, IntegrationCapabilityStatus | null>>({});
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -191,7 +202,11 @@ export default function IntegrationsSettings() {
     filteredInstances[0] ??
     null;
   const currentCapabilities = currentInstance
-    ? capabilities.filter((item) => item.instanceId === currentInstance.id)
+    ? capabilities.filter(
+        (item) =>
+          item.instanceId === currentInstance.id &&
+          item.type !== "wecom.knowledge_query",
+      )
     : [];
   const currentCapability =
     currentCapabilities.find((item) => item.id === activeCapabilityId) ??
@@ -203,6 +218,17 @@ export default function IntegrationsSettings() {
     ? instanceHealth(currentInstance, currentCapabilities, statuses)
     : { label: "未配置", tone: "warning" as const };
   const primaryMethod = currentCapabilities[0] ? capabilityLabel(currentCapabilities[0].type) : "未设置";
+  const availableMicroApps = currentCapability
+    ? microApps.filter(
+        (item) =>
+          item.enabled &&
+          item.supportedAccessPoints.includes(currentCapability.type),
+      )
+    : [];
+  const selectedMicroApp =
+    currentCapabilityDraft && currentCapabilityDraft.microAppId
+      ? microApps.find((item) => item.id === currentCapabilityDraft.microAppId) ?? null
+      : null;
 
   const hydrateSelection = (
     nextInstances: IntegrationInstanceRecord[],
@@ -245,13 +271,29 @@ export default function IntegrationsSettings() {
   const load = async () => {
     setLoading(true);
     try {
-      const [instanceResult, kbResult] = await Promise.all([
+      const [instanceResult, kbResult, microAppResult] = await Promise.all([
         getIntegrationInstances({ provider: "wecom", includeCapabilities: true }),
         listKnowledgeBases(),
+        getIntegrationMicroApps(),
       ]);
 
       const nextInstances = instanceResult.instances;
       const nextCapabilities = nextInstances.flatMap((item) => item.capabilities ?? []).filter(Boolean);
+      const nextBindings = Object.fromEntries(
+        await Promise.all(
+          nextCapabilities.map(async (capability) => {
+            if (capability.type !== "wecom.smart_robot") {
+              return [capability.id, null] as const;
+            }
+            try {
+              const result = await getIntegrationCapabilityMicroAppBinding(capability.id);
+              return [capability.id, result.binding] as const;
+            } catch {
+              return [capability.id, null] as const;
+            }
+          }),
+        ),
+      );
       const nextCapabilityDrafts: Record<string, CapabilityDraft> = Object.fromEntries(
         nextCapabilities.map((capability) => [
           capability.id,
@@ -261,7 +303,6 @@ export default function IntegrationsSettings() {
             type: capability.type,
             name: capability.name,
             enabled: capability.enabled,
-            knowledgeBaseId: capability.knowledgeBaseId ?? "",
             botId:
               typeof (capability.config as Record<string, unknown>).botId === "string"
                 ? ((capability.config as Record<string, unknown>).botId as string)
@@ -274,6 +315,9 @@ export default function IntegrationsSettings() {
             webhookSecret: "",
             replyMode:
               (capability.config as Record<string, unknown>).replyMode === "send" ? "send" : "stream",
+            microAppId: nextBindings[capability.id]?.microAppDefinitionId ?? "",
+            bindingEnabled: nextBindings[capability.id]?.enabled ?? true,
+            bindingConfig: nextBindings[capability.id]?.config ?? {},
           } satisfies CapabilityDraft,
         ]),
       );
@@ -295,6 +339,8 @@ export default function IntegrationsSettings() {
 
       setInstances(nextInstances);
       setCapabilities(nextCapabilities);
+      setMicroApps(microAppResult.microApps);
+      setCapabilityBindings(nextBindings);
       setKnowledgeBases(kbResult);
       setStatuses(nextStatuses);
       hydrateSelection(
@@ -349,6 +395,20 @@ export default function IntegrationsSettings() {
   const saveCapability = async (capabilityId: string) => {
     const draft = capabilityDrafts[capabilityId];
     if (!draft) return;
+    if (draft.type === "wecom.smart_robot" && draft.microAppId) {
+      const boundMicroApp = microApps.find((item) => item.id === draft.microAppId) ?? null;
+      const missingRequiredField = boundMicroApp?.bindingSchema.fields.find((field) => {
+        if (!field.required) {
+          return false;
+        }
+        const value = draft.bindingConfig[field.key];
+        return value === undefined || value === null || String(value).trim() === "";
+      });
+      if (missingRequiredField) {
+        message.error(`请先填写${missingRequiredField.label}`);
+        return;
+      }
+    }
     setSaving(true);
     try {
       const currentRecord = capabilities.find((item) => item.id === capabilityId);
@@ -361,11 +421,6 @@ export default function IntegrationsSettings() {
           config.secret = draft.secret.trim();
         }
         config.replyMode = draft.replyMode;
-        if (draft.knowledgeBaseId.trim()) {
-          config.knowledgeBaseId = draft.knowledgeBaseId.trim();
-        } else {
-          delete config.knowledgeBaseId;
-        }
       }
 
       if (draft.type === "wecom.webhook_robot") {
@@ -380,9 +435,17 @@ export default function IntegrationsSettings() {
       await updateIntegrationCapability(draft.id, {
         name: draft.name.trim(),
         enabled: draft.enabled,
-        knowledgeBaseId: draft.type === "wecom.smart_robot" ? draft.knowledgeBaseId.trim() || null : null,
+        knowledgeBaseId: null,
         config,
       });
+
+      if (draft.type === "wecom.smart_robot") {
+        await updateIntegrationCapabilityMicroAppBinding(draft.id, {
+          microAppId: draft.microAppId.trim() || null,
+          enabled: draft.bindingEnabled,
+          config: draft.bindingConfig,
+        });
+      }
 
       message.success(t("settings.integrations.messages.capabilitySaved"));
       await load();
@@ -456,10 +519,6 @@ export default function IntegrationsSettings() {
       description={t("settings.integrations.page.description")}
       slot={
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setGuideOpen(true)}>
-            <BookOpen className="h-4 w-4" />
-            如何接入
-          </Button>
           <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
             <RefreshCcw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             {t("settings.integrations.actions.refresh")}
@@ -542,12 +601,6 @@ export default function IntegrationsSettings() {
               </div>
 
               <div className="flex shrink-0 flex-wrap gap-2">
-                <Button variant="outline" onClick={() => setGuideOpen(true)}>
-                  接入说明
-                </Button>
-                <Button variant="outline" onClick={() => openCurrentDrawer("debug")}>
-                  状态与调试
-                </Button>
                 <Button variant="primary" onClick={() => openCurrentDrawer("basic")}>
                   配置接入
                 </Button>
@@ -570,7 +623,10 @@ export default function IntegrationsSettings() {
                 const draft = capabilityDrafts[capability.id];
                 const runtime = statuses[capability.id];
                 const Icon = capabilityIcon(capability.type);
-                const kbName = knowledgeBases.find((item) => item.id === capability.knowledgeBaseId)?.name;
+                const binding = capabilityBindings[capability.id];
+                const boundMicroApp = binding
+                  ? microApps.find((item) => item.id === binding.microAppDefinitionId) ?? null
+                  : null;
 
                 return (
                   <button
@@ -597,7 +653,7 @@ export default function IntegrationsSettings() {
                           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-tertiary">
                             <span>{draft?.enabled ? "已启用" : "未启用"}</span>
                             {capability.type === "wecom.smart_robot" ? (
-                              <span>{kbName ? `知识库：${kbName}` : "未绑定知识库"}</span>
+                              <span>{boundMicroApp ? `微应用：${boundMicroApp.name}` : "未绑定微应用"}</span>
                             ) : null}
                             {runtime?.lastError ? <span className="text-danger">最近异常：{runtime.lastError}</span> : null}
                           </div>
@@ -646,7 +702,7 @@ export default function IntegrationsSettings() {
           <GuideSection
             icon={<Bot className="h-4 w-4 text-icon-secondary" />}
             title="智能机器人怎么配"
-            body="去企业微信管理后台创建智能机器人，选择 API 模式和长连接方式，拿到 Bot ID 和 Secret。然后回到这里，在“智能机器人”里填写 Bot ID、Secret、知识库和回复模式，再点击启动。"
+            body="去企业微信管理后台创建智能机器人，选择 API 模式和长连接方式，拿到 Bot ID 和 Secret。然后回到这里，在“智能机器人”里填写 Bot ID、Secret 和回复模式；知识库绑定改到“微应用 -> 知识库调用”里配置。"
           />
           <GuideSection
             icon={<Webhook className="h-4 w-4 text-icon-secondary" />}
@@ -704,15 +760,16 @@ export default function IntegrationsSettings() {
         }
         bodyClassName="space-y-5"
       >
-        <NavigationCardTabs
-          tabs={[
-            { value: "basic", label: "基础配置", icon: <ShieldCheck className="h-4 w-4" /> },
-            { value: "caps", label: "接入方式", icon: <Bot className="h-4 w-4" /> },
-            { value: "debug", label: "状态与调试", icon: <Database className="h-4 w-4" /> },
-          ]}
-          value={drawerTab}
-          onChange={(value) => setDrawerTab(value as typeof drawerTab)}
-        />
+        {drawerTab !== "basic" ? (
+          <NavigationCardTabs
+            tabs={[
+              { value: "caps", label: "接入方式", icon: <Bot className="h-4 w-4" /> },
+              { value: "debug", label: "状态与调试", icon: <Database className="h-4 w-4" /> },
+            ]}
+            value={drawerTab}
+            onChange={(value) => setDrawerTab(value as "caps" | "debug")}
+          />
+        ) : null}
 
         {drawerTab === "basic" && instanceDraft ? (
           <div className="space-y-5">
@@ -752,7 +809,7 @@ export default function IntegrationsSettings() {
             </div>
 
             <div className="rounded-ui-panel border border-border bg-surface-secondary/20 px-4 py-3 text-sm text-text-secondary">
-              这一层只保留轻量基础信息，Bot ID、Webhook、知识库等具体内容放在“接入方式”里配置。
+              这里仅配置实例本身的信息。具体能力如智能机器人、Webhook 机器人，请回到接入方式列表后分别进入配置。
             </div>
 
             <div className="flex justify-end">
@@ -766,17 +823,6 @@ export default function IntegrationsSettings() {
         {drawerTab === "caps" ? (
           currentCapabilityDraft ? (
             <div className="space-y-5">
-              <Select
-                label="接入方式"
-                value={currentCapabilityDraft.id}
-                onChange={(value) => setActiveCapabilityId(value)}
-                options={currentCapabilities.map((item) => ({
-                  value: item.id,
-                  label: capabilityLabel(item.type),
-                }))}
-                disabled={saving}
-              />
-
               <div className="rounded-ui-panel border border-border bg-surface-secondary/20 px-4 py-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="text-sm font-medium text-text-primary">
@@ -831,21 +877,6 @@ export default function IntegrationsSettings() {
                       disabled={saving}
                     />
                     <Select
-                      label="知识库"
-                      value={currentCapabilityDraft.knowledgeBaseId}
-                      onChange={(value) =>
-                        setCapabilityDrafts((current) => ({
-                          ...current,
-                          [currentCapabilityDraft.id]: { ...current[currentCapabilityDraft.id], knowledgeBaseId: value },
-                        }))
-                      }
-                      options={[
-                        { value: "", label: "暂不绑定知识库" },
-                        ...knowledgeBases.map((item) => ({ value: item.id, label: item.name })),
-                      ]}
-                      disabled={saving}
-                    />
-                    <Select
                       label="回复模式"
                       value={currentCapabilityDraft.replyMode}
                       onChange={(value) =>
@@ -863,6 +894,83 @@ export default function IntegrationsSettings() {
                       ]}
                       disabled={saving}
                     />
+
+                    <div className="rounded-ui-panel border border-border bg-surface-secondary/20 px-4 py-4">
+                      <div className="space-y-1">
+                        <div className="text-sm font-medium text-text-primary">绑定微应用</div>
+                        <div className="text-xs leading-5 text-text-tertiary">
+                          一个智能机器人接入点只绑定一个微应用。选择后，系统会按该微应用声明的配置协议渲染表单。
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid gap-4">
+                        <Select
+                          label="微应用"
+                          value={currentCapabilityDraft.microAppId}
+                          onChange={(value) =>
+                            setCapabilityDrafts((current) => ({
+                              ...current,
+                              [currentCapabilityDraft.id]: {
+                                ...current[currentCapabilityDraft.id],
+                                microAppId: value,
+                                bindingConfig: value === current[currentCapabilityDraft.id].microAppId
+                                  ? current[currentCapabilityDraft.id].bindingConfig
+                                  : {},
+                              },
+                            }))
+                          }
+                          options={[
+                            { value: "", label: "暂不绑定微应用" },
+                            ...availableMicroApps.map((item) => ({
+                              value: item.id,
+                              label: item.name,
+                            })),
+                          ]}
+                          disabled={saving}
+                        />
+
+                        {selectedMicroApp?.bindingSchema.fields.map((field) => {
+                          const fieldValue =
+                            currentCapabilityDraft.bindingConfig[field.key] ?? field.defaultValue ?? "";
+
+                          if (field.type === "knowledge_base_select") {
+                            return (
+                              <Select
+                                key={field.key}
+                                label={field.label}
+                                value={typeof fieldValue === "string" ? fieldValue : ""}
+                                onChange={(value) =>
+                                  setCapabilityDrafts((current) => ({
+                                    ...current,
+                                    [currentCapabilityDraft.id]: {
+                                      ...current[currentCapabilityDraft.id],
+                                      bindingConfig: {
+                                        ...current[currentCapabilityDraft.id].bindingConfig,
+                                        [field.key]: value,
+                                      },
+                                    },
+                                  }))
+                                }
+                                options={[
+                                  {
+                                    value: "",
+                                    label: field.required ? "请选择知识库" : "暂不绑定知识库",
+                                  },
+                                  ...knowledgeBases.map((item) => ({
+                                    value: item.id,
+                                    label: item.name,
+                                  })),
+                                ]}
+                                disabled={saving}
+                                labelHelp={field.description}
+                              />
+                            );
+                          }
+
+                          return null;
+                        })}
+                      </div>
+                    </div>
                   </>
                 ) : null}
 
@@ -940,16 +1048,6 @@ export default function IntegrationsSettings() {
         {drawerTab === "debug" ? (
           currentCapabilityDraft ? (
             <div className="space-y-5">
-              <Select
-                label="调试对象"
-                value={currentCapabilityDraft.id}
-                onChange={(value) => setActiveCapabilityId(value)}
-                options={currentCapabilities.map((item) => ({
-                  value: item.id,
-                  label: capabilityLabel(item.type),
-                }))}
-              />
-
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-ui-panel border border-border bg-surface-secondary/20 px-4 py-3">
                   <div className="text-xs font-semibold uppercase tracking-[0.08em] text-text-tertiary">运行状态</div>

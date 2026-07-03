@@ -47,6 +47,11 @@ export interface Message {
         fileId?: string;
         mimeType: string;
       }
+    | {
+        type: "data";
+        name: string;
+        value: unknown;
+      }
   >;
   metadata: Record<string, unknown>;
   createdAt: string;
@@ -116,6 +121,8 @@ export interface AgentRun {
     | "cancelled";
   traceId: string;
   currentStepId?: string;
+  blockedReason?: string;
+  terminalReason?: string;
   pendingApproval?: AgentApprovalRequest;
   selectedCapabilityId?: string;
   createdAt: string;

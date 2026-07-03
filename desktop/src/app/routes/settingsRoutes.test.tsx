@@ -75,6 +75,12 @@ vi.mock("@/features/Settings/pages/Mcp", () => ({
 vi.mock("@/features/Settings/pages/Personas/index", () => ({
   default: () => null,
 }));
+vi.mock("@/features/Settings/pages/MicroApps/index", () => ({
+  default: () => null,
+}));
+vi.mock("@/features/Settings/pages/MicroApps/Detail", () => ({
+  default: () => null,
+}));
 
 function NavigationProbe() {
   const items = useSettingsNavigationItems();
@@ -83,7 +89,7 @@ function NavigationProbe() {
     <ul>
       {items.map((item) => (
         <li key={item.to}>
-          {item.label}:{item.to}
+          {item.label}:{item.to}:{item.group}:{item.order}:{item.match}:{String(item.preserveSearch)}
         </li>
       ))}
     </ul>
@@ -117,7 +123,7 @@ describe("settings routes", () => {
     );
 
     expect(
-      screen.getByText("settings.navigation.mcp:/settings/mcp"),
+      screen.getByText("settings.navigation.mcp:/settings/mcp:basic:30:exact:false"),
     ).toBeInTheDocument();
   });
 
@@ -129,12 +135,48 @@ describe("settings routes", () => {
     );
 
     expect(
-      screen.getByText("settings.navigation.development:/settings/development"),
+      screen.getByText("settings.navigation.development:/settings/development:other:10:prefix:false"),
     ).toBeInTheDocument();
     expect(
       screen.queryByText(
         "settings.navigation.developmentLogs:/settings/development/logs",
       ),
     ).not.toBeInTheDocument();
+  });
+
+  it("marks knowledge base navigation as prefix-matched for deep pages", () => {
+    render(
+      <MemoryRouter>
+        <NavigationProbe />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByText("settings.navigation.knowledgeBase:/settings/knowledge-base:knowledge:10:prefix:true"),
+    ).toBeInTheDocument();
+  });
+
+  it("includes micro apps route in navigation items", () => {
+    render(
+      <MemoryRouter>
+        <NavigationProbe />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByText("settings.navigation.microApps:/settings/micro-apps:app:15:prefix:false"),
+    ).toBeInTheDocument();
+  });
+
+  it("marks micro apps navigation as prefix-matched for detail pages", () => {
+    render(
+      <MemoryRouter>
+        <NavigationProbe />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByText("settings.navigation.microApps:/settings/micro-apps:app:15:prefix:false"),
+    ).toBeInTheDocument();
   });
 });

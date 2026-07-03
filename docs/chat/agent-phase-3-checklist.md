@@ -16,13 +16,13 @@ Related:
 
 ## Phase Goal
 
-Phase 3 的目标是实现适合当前产品的完全版智能体。
+Phase 3 的目标不是补二期没做完的可用闭环，而是在二期闭环已经成立的前提下，完成**整体回归、平台化扩展和长期可演进能力**。
 
 这里的“完全版”不是无限自治，而是：
 
 > Agent 具备清晰目标、可插拔计划、可恢复执行、可审批工具、可控记忆、可观察 trace、可评测质量，并能在当前 UI Chat RAG Tester 产品中稳定使用。
 
-Phase 3 要把 Phase 1/2 的 AgentRun 从“可运行”升级成“可长期信任、可扩展、可评估”的智能体系统。
+Phase 3 要把二期已经可用的 Agent，从“能稳定使用的功能”升级成“可长期信任、可扩展、可评估的系统”。
 
 ## Global Principles
 
@@ -40,7 +40,7 @@ Phase 3 要把 Phase 1/2 的 AgentRun 从“可运行”升级成“可长期信
    - 不允许因为工具失败就伪造成功回答。
    - 不允许用“兼容模式”掩盖架构不一致。
 
-3. 万物可插拔。
+3. 万物可插拔，但前提是二期闭环已经稳定。
    - planner 可插拔。
    - evaluator 可插拔。
    - memory store 可插拔。
@@ -61,12 +61,14 @@ Phase 3 要把 Phase 1/2 的 AgentRun 从“可运行”升级成“可长期信
 - durable Agent memory。
 - 可插拔 planner / evaluator。
 - 更完整 LangGraph AgentGraph。
-- replan / retry / stop criteria。
+- replan / retry / stop criteria 的正式系统化抽象。
 - 长任务状态和恢复策略。
 - evaluation workbench 接入 Agent trace。
 - 多工具组合。
 - 角色、知识库、工具策略协同。
 - 用户可见的 memory controls。
+
+本期不是继续补“能不能用”的主线缺口；那部分应在二期完成。
 
 本期谨慎探索：
 
@@ -114,6 +116,11 @@ Phase 3 要把 Phase 1/2 的 AgentRun 从“可运行”升级成“可长期信
 - [ ] planner 输出必须经过 policy validation。
 - [ ] planner 失败不能静默降级为普通 chat。
 
+说明：
+
+- 二期可以先为 planner loop 留边和留接口
+- 三期才做完整 planner plugin system
+
 ### 4. Evaluator Plugin System
 
 - [ ] 定义 `AgentEvaluator` interface。
@@ -123,6 +130,11 @@ Phase 3 要把 Phase 1/2 的 AgentRun 从“可运行”升级成“可长期信
 - [ ] evaluator 能判断 complete / replan / ask_user / blocked。
 - [ ] evaluator 结果进入 trace。
 - [ ] evaluator 不能绕过 policy。
+
+说明：
+
+- 二期可以先把 `evaluate` 做成 grounded answer check
+- 三期再把 evaluator 抽成完整插件体系
 
 ### 5. Advanced AgentGraph
 
@@ -135,6 +147,11 @@ Phase 3 要把 Phase 1/2 的 AgentRun 从“可运行”升级成“可长期信
 - [ ] 增加 provider adapter node。
 - [ ] 增加 graph-level trace summary。
 - [ ] 明确 LangGraph checkpoint / interrupt 是否进入正式路径。
+
+说明：
+
+- 二期应先完成“可用闭环”的必要 graph 语义
+- 三期再做更重的 graph 扩展：checkpoint / interrupt / ask_user / memory node 体系化落地
 
 ### 6. Tool Ecosystem
 
@@ -238,8 +255,8 @@ Phase 3 要把 Phase 1/2 的 AgentRun 从“可运行”升级成“可长期信
 
 ## Completion Criteria
 
-- [ ] AgentRun 完整持久化和可恢复。
-- [ ] AgentGraph 支持 replan / retry / ask_user / memory。
+- [ ] 二期可用闭环已稳定，并通过整体回归。
+- [ ] AgentGraph 支持 replan / retry / ask_user / memory 的正式系统化实现。
 - [ ] 高风险工具审批稳定。
 - [ ] durable memory 可控、可见、可删。
 - [ ] evaluation workbench 可评测 Agent。

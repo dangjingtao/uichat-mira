@@ -186,6 +186,18 @@ describe("UChatThread", () => {
     assert.equal(messageErrorMock.mock.calls.length, 0);
   });
 
+  test("agent toggle stays enabled once workspace is bound even if agent mode is still off", async () => {
+    draftWorkspaceState.value = "workspace-1";
+    draftAgentEnabledState.value = false;
+
+    await act(async () => {
+      render(<UChatThread />);
+    });
+
+    const button = screen.getByRole("button", { name: "Enable Agent" });
+    assert.equal(button.hasAttribute("disabled"), false);
+  });
+
   test("welcome state falls back to normal send when agent toggle is off", async () => {
     draftAgentEnabledState.value = false;
 

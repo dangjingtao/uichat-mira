@@ -92,6 +92,21 @@ const extractQuotedValue = (query: string) => {
 const cleanTrailingPunctuation = (value: string) =>
   value.replace(/[。．，,；;！!？?]+$/u, "").trim();
 
+const extractExplicitPathTarget = (query: string) => {
+  const quoted = extractQuotedValue(query);
+  if (quoted) {
+    return cleanTrailingPunctuation(quoted);
+  }
+
+  const directPathMatch = query.match(/(?:^|[\s(])([a-zA-Z]:\\[^\s)]+|[.~]{0,2}[\\/][^\s)]+)/u);
+  if (directPathMatch?.[1]) {
+    return cleanTrailingPunctuation(trimWrappedPath(directPathMatch[1]));
+  }
+
+  const fileNameMatch = query.match(/\b[\w.-]+\.[a-z0-9]{1,12}\b/i);
+  return fileNameMatch?.[0] ? cleanTrailingPunctuation(fileNameMatch[0]) : null;
+};
+
 const extractPathAfterVerb = (query: string, pattern: RegExp) => {
   const match = query.match(pattern);
   if (!match?.[1]) {
@@ -189,6 +204,68 @@ const buildWorkspaceMutationArgs = (query: string) => {
   return null;
 };
 
+const resolveReadTargetFromEvidence = (state: AgentNodeState, query: string) => {
+  const explicitTarget = extractExplicitPathTarget(query);
+  if (explicitTarget) {
+    return explicitTarget;
+  }
+
+  const latestCompletedTool = [...(state.evidence?.toolExecutions ?? [])]
+    .reverse()
+    .find((execution) => execution.status === "completed" && execution.result);
+  if (!latestCompletedTool?.result || typeof latestCompletedTool.result !== "object") {
+    return null;
+  }
+
+  const result = latestCompletedTool.result as Record<string, unknown>;
+  const hits = Array.isArray(result.hits) ? result.hits : [];
+  const entries = Array.isArray(result.entries) ? result.entries : [];
+  const queryText = normalizeIntentText(query);
+
+  for (const hit of hits) {
+    if (!hit || typeof hit !== "object") {
+      continue;
+    }
+    const path =
+      typeof (hit as Record<string, unknown>).path === "string"
+        ? ((hit as Record<string, unknown>).path as string)
+        : null;
+    if (!path) {
+      continue;
+    }
+    const fileName = path.split(/[\\/]/).at(-1)?.toLowerCase();
+    if (!fileName || queryText.includes(fileName)) {
+      return path;
+    }
+  }
+
+  for (const entry of entries) {
+    if (typeof entry === "string") {
+      if (queryText.includes(entry.toLowerCase())) {
+        return entry;
+      }
+      continue;
+    }
+
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+
+    const value = entry as Record<string, unknown>;
+    const name = typeof value.name === "string" ? value.name : null;
+    const path = typeof value.path === "string" ? value.path : name;
+    if (!path) {
+      continue;
+    }
+    const fileName = path.split(/[\\/]/).at(-1)?.toLowerCase();
+    if (!fileName || queryText.includes(fileName)) {
+      return path;
+    }
+  }
+
+  return null;
+};
+
 const getWorkspaceMutationBlockReason = (query: string) =>
   isHighRiskWorkspaceMutationRequest(query)
     ? "High-risk workspace mutation request could not be converted into reviewed structured parameters."
@@ -210,6 +287,7 @@ export interface AgentNodeState {
   retrievedChunks?: RetrievedChunk[];
   observations?: AgentObservation[];
   blockedReason?: string;
+  terminalReason?: string;
   pendingApproval?: AgentApprovalRequest;
   approvedInvocations?: AgentApprovedInvocation[];
   selectedCapabilityId?: string;
@@ -224,6 +302,8 @@ export interface AgentNodeState {
   maxIterations?: number;
   continueIteration?: boolean;
   postToolReviewPending?: boolean;
+  reviewDecision?: "capability" | "generate";
+  reviewReason?: string;
 }
 
 export type EmitAgentExecutionNode = (event: ReturnType<typeof toAgentExecutionNode>) => Promise<void> | void;
@@ -378,7 +458,10 @@ const buildToolArgs = (input: {
       };
     case "read_open":
     case "read":
-      return {};
+      return (() => {
+        const targetPath = resolveReadTargetFromEvidence(input.state, question);
+        return targetPath ? { path: targetPath } : {};
+      })();
     case "terminal_session":
       return {
         ...(executionEnvironment.cwd?.trim() ? { cwd: executionEnvironment.cwd.trim() } : {}),
@@ -1246,22 +1329,63 @@ export const routeStepNode = async (
     ...traceAttemptMeta,
     nodeType: "reason",
     phase: "start",
-    label: "下一步判断",
-    summary: "正在根据最新工具结果决定继续回看还是直接收口",
+    label: "回看决策",
+    summary: "正在根据累计证据决定继续规划还是直接生成回答",
   });
 
+  const question = getLatestUserQuestion(state.messages) || state.goal.text;
   const maxIterations = state.maxIterations ?? 3;
   const iterationCount = state.iterationCount ?? 0;
   const evidence = getEvidencePayload(state);
   const completedToolExecutions = evidence.toolExecutions.filter(
     (execution) => execution.status === "completed",
   );
-  const hasCompletedToolResult = completedToolExecutions.length > 0;
-  const hasAnyEvidence =
-    evidence.observations.length > 0 ||
-    evidence.retrievals.length > 0 ||
-    completedToolExecutions.length > 0;
-  const continueIteration = hasCompletedToolResult && iterationCount < maxIterations;
+  const latestCompletedToolExecution = completedToolExecutions.at(-1);
+  const latestRetrieval = evidence.retrievals.at(-1);
+  const remainingReviewBudget = Math.max(0, maxIterations - iterationCount);
+  const canContinue = remainingReviewBudget > 0;
+
+  let continueIteration = false;
+  let reviewDecision: "capability" | "generate" = "generate";
+  let decisionReason =
+    "No accumulated evidence requires another planning pass, so the agent will generate a final answer.";
+
+  if (latestCompletedToolExecution && canContinue) {
+    const latestToolId = latestCompletedToolExecution.toolId;
+    const wantsDirectoryOverview = queryRequestsDirectoryOverview(question);
+    const wantsFileContent = queryRequestsFileContent(question);
+    const explicitReadTarget = extractExplicitPathTarget(question);
+
+    if (
+      (latestToolId === "read_locate" || latestToolId === "read_list") &&
+      wantsFileContent &&
+      (explicitReadTarget || !wantsDirectoryOverview)
+    ) {
+      continueIteration = true;
+      reviewDecision = "capability";
+      decisionReason =
+        "The latest tool only discovered workspace targets; the original question still asks for file content, so the agent should plan one more tool step.";
+    } else {
+      decisionReason =
+        "The latest completed tool already produced answer-ready evidence for the current question.";
+    }
+  } else if (
+    latestRetrieval &&
+    latestRetrieval.chunkCount > 0 &&
+    canContinue &&
+    queryMentionsWorkspace(question)
+  ) {
+    continueIteration = true;
+    reviewDecision = "capability";
+    decisionReason =
+      "Knowledge retrieval produced evidence and the question still mentions workspace content, so the agent should re-check whether a workspace tool is now warranted.";
+  } else if (latestRetrieval && latestRetrieval.chunkCount > 0) {
+    decisionReason =
+      "Retrieved knowledge is available and no additional tool step is required before answer generation.";
+  } else if (!canContinue && (latestCompletedToolExecution || latestRetrieval)) {
+    decisionReason =
+      "The review budget is exhausted, so the agent must stop planning and generate the final answer from current evidence.";
+  }
 
   await emitStepNode(emit, {
     runId: state.runId,
@@ -1269,32 +1393,29 @@ export const routeStepNode = async (
     ...traceAttemptMeta,
     nodeType: "reason",
     phase: "done",
-    label: "下一步判断",
+    label: "回看决策",
     summary: continueIteration
-      ? "已进入工具结果回看轮次"
-      : "已结束自动回看，转入回答生成",
+      ? "证据表明还需要一次规划回看"
+      : "当前证据已足够进入回答生成",
     details: {
       iterationCount,
       maxIterations,
-      hasCompletedToolResult,
+      reviewDecision,
+      latestToolId: latestCompletedToolExecution?.toolId ?? null,
+      latestRetrievalChunkCount: latestRetrieval?.chunkCount ?? 0,
       completedToolExecutionCount: completedToolExecutions.length,
       retrievalEvidenceCount: evidence.retrievals.length,
       observationCount: evidence.observations.length,
-      hasAnyEvidence,
       continueIteration,
-      decisionReason: continueIteration
-        ? "A completed tool execution exists in the evidence payload and the review budget is not exhausted."
-        : hasCompletedToolResult
-          ? "Reached the configured automatic review limit."
-          : hasAnyEvidence
-            ? "Evidence exists, but there is no completed tool execution that requires another review pass."
-            : "No accumulated evidence is available for another review pass.",
+      decisionReason,
     },
   });
 
   return {
     continueIteration,
     postToolReviewPending: continueIteration,
+    reviewDecision,
+    reviewReason: decisionReason,
   };
 };
 
@@ -1469,6 +1590,143 @@ const buildGenerateContextBudget = (state: AgentNodeState) =>
     },
   });
 
+const DIRECTORY_OVERVIEW_TOKENS = [
+  "list",
+  "show",
+  "what's in",
+  "what is in",
+  "contents",
+  "under",
+  "inside",
+  "有哪些",
+  "有啥",
+  "有什么",
+  "列出",
+  "内容",
+  "看看",
+];
+
+const FILE_CONTENT_TOKENS = [
+  "open",
+  "read",
+  "content",
+  "contents",
+  "inside",
+  "详情",
+  "内容",
+  "打开",
+  "读取",
+  "阅读",
+  "查看",
+];
+
+const WORKSPACE_TOKENS = [
+  "workspace",
+  "folder",
+  "directory",
+  "repo",
+  "repository",
+  "project",
+  "file",
+  "files",
+  "文件",
+  "文件夹",
+  "目录",
+  "工作区",
+  "项目",
+  "仓库",
+];
+
+const normalizeIntentText = (value: string) => value.trim().toLowerCase();
+
+const includesAnyToken = (value: string, tokens: string[]) =>
+  tokens.some((token) => value.includes(token));
+
+const queryRequestsDirectoryOverview = (query: string) =>
+  includesAnyToken(normalizeIntentText(query), DIRECTORY_OVERVIEW_TOKENS);
+
+const queryRequestsFileContent = (query: string) => {
+  const normalized = normalizeIntentText(query);
+  if (includesAnyToken(normalized, FILE_CONTENT_TOKENS)) {
+    return true;
+  }
+
+  return /[\w-]+\.[a-z0-9]{1,12}\b/i.test(query);
+};
+
+const queryMentionsWorkspace = (query: string) =>
+  includesAnyToken(normalizeIntentText(query), WORKSPACE_TOKENS);
+
+const summarizeToolResult = (result: unknown) => {
+  if (!result || typeof result !== "object") {
+    return null;
+  }
+
+  const value = result as Record<string, unknown>;
+  const hits = Array.isArray(value.hits) ? value.hits : [];
+  const entries = Array.isArray(value.entries) ? value.entries : [];
+
+  if (hits.length > 0) {
+    return `Located ${hits.length} workspace hit(s).`;
+  }
+
+  if (entries.length > 0) {
+    return `Listed ${entries.length} workspace entr${entries.length === 1 ? "y" : "ies"}.`;
+  }
+
+  if (typeof value.content === "string" && value.content.trim()) {
+    return `Opened content with ${Array.from(value.content.trim()).length} characters.`;
+  }
+
+  return null;
+};
+
+const buildCapabilityReviewContext = (state: AgentNodeState) => {
+  const evidence = getEvidencePayload(state);
+  const notes: string[] = [];
+  const latestRetrieval = evidence.retrievals.at(-1);
+  const latestCompletedTool = [...evidence.toolExecutions]
+    .reverse()
+    .find((execution) => execution.status === "completed");
+
+  if (latestRetrieval && latestRetrieval.chunkCount > 0) {
+    const documentNames = latestRetrieval.chunks
+      .slice(0, 3)
+      .map((chunk) => chunk.documentName)
+      .filter(Boolean);
+    notes.push(
+      `Retrieved ${latestRetrieval.chunkCount} knowledge chunk(s)${
+        documentNames.length > 0 ? ` from ${documentNames.join(", ")}` : ""
+      }.`,
+    );
+  }
+
+  if (latestCompletedTool?.result) {
+    const toolSummary = summarizeToolResult(latestCompletedTool.result);
+    if (toolSummary) {
+      notes.push(`${latestCompletedTool.toolId}: ${toolSummary}`);
+    }
+  }
+
+  return notes;
+};
+
+const answerClaimsUnverifiedObservation = (answer: string) => {
+  const normalized = answer.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  const patterns = [
+    /i (checked|looked at|opened|searched|found|read)\b/i,
+    /(我已|我刚|我查看了|我看了|我打开了|我搜索了|我找到了|我读取了)/u,
+    /(根据(文件|目录|网页|知识库|检索结果|工具结果))/u,
+    /(search results|tool result|retrieved context|knowledge base)/i,
+  ];
+
+  return patterns.some((pattern) => pattern.test(answer));
+};
+
 export const generateNode = async (
   state: AgentNodeState,
   emit?: EmitAgentExecutionNode,
@@ -1594,6 +1852,14 @@ export const evaluateNode = async (
   emit?: EmitAgentExecutionNode,
 ): Promise<Partial<AgentNodeState>> => {
   const answer = state.answer?.trim() ?? "";
+  const evidence = getEvidencePayload(state);
+  const hasCompletedToolEvidence = evidence.toolExecutions.some(
+    (execution) => execution.status === "completed" && typeof execution.result !== "undefined",
+  );
+  const hasRetrievalEvidence = evidence.retrievals.some(
+    (retrieval) => retrieval.chunkCount > 0,
+  );
+  const hasGroundingEvidence = hasCompletedToolEvidence || hasRetrievalEvidence;
   await emitStepNode(emit, {
     runId: state.runId,
     nodeId: "agent-evaluate",
@@ -1603,7 +1869,15 @@ export const evaluateNode = async (
     summary: "正在检查 Agent 执行结果",
   });
 
-  const ok = answer.length > 0;
+  const ok =
+    answer.length > 0 &&
+    !(answerClaimsUnverifiedObservation(answer) && !hasGroundingEvidence);
+  const blockedReason =
+    answer.length === 0
+      ? "Agent run did not produce an answer."
+      : answerClaimsUnverifiedObservation(answer) && !hasGroundingEvidence
+        ? "Agent answer claimed external or workspace observations without grounded evidence."
+        : undefined;
   const observation = createObservation({
     runId: state.runId,
     stepId: "evaluate",
@@ -1611,9 +1885,9 @@ export const evaluateNode = async (
     facts: [
       ok
         ? "Agent run produced a final answer."
-        : "Agent run did not produce an answer.",
+        : blockedReason ?? "Agent evaluation failed.",
     ],
-    ...(ok ? {} : { errorMessage: "Agent run did not produce an answer." }),
+    ...(ok || !blockedReason ? {} : { errorMessage: blockedReason }),
   });
 
   await emitStepNode(emit, {
@@ -1622,12 +1896,24 @@ export const evaluateNode = async (
     nodeType: "evaluate",
     phase: ok ? "done" : "error",
     label: "检查结果",
-    summary: ok ? "Agent 执行已完成" : "Agent 执行未产出回答",
+    summary: ok ? "Agent 执行已完成" : "Agent 结果未通过证据检查",
+    details: {
+      hasCompletedToolEvidence,
+      hasRetrievalEvidence,
+      hasGroundingEvidence,
+      blockedReason: blockedReason ?? null,
+    },
   });
 
   return {
     observations: [...(state.observations ?? []), observation],
     evidence: appendObservationEvidence(state, observation),
-    ...(ok ? {} : { blockedReason: "Agent run did not produce an answer." }),
+    ...(ok
+      ? { terminalReason: "completed" }
+      : {
+          blockedReason,
+          terminalReason:
+            answer.length === 0 ? "blocked_no_answer" : "blocked_grounding_check",
+        }),
   };
 };

@@ -6,6 +6,8 @@ export * from "./model-config.repository";
 export * from "./provider-settings.repository";
 export * from "./integration-instances.repository";
 export * from "./integration-capabilities.repository";
+export * from "./micro-apps.repository";
+export * from "./integration-capability-micro-apps.repository";
 export * from "./web-search-settings.repository";
 export * from "./wecom-identity-bindings.repository";
 export * from "./wecom-settings.repository";

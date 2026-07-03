@@ -14,7 +14,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 describe("DevelopmentServerTests", () => {
-  it("requests the server test result summary from the backend", async () => {
+  it("requests the server official reports from the backend", async () => {
     globalThis.fetch = vi.fn(
       async () => new Response("Not Found", { status: 404 }),
     );
@@ -23,7 +23,10 @@ describe("DevelopmentServerTests", () => {
 
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
-        "http://127.0.0.1:8787/server-coverage/test-results.json",
+        "http://127.0.0.1:8787/server-coverage/coverage-report.json",
+      );
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "http://127.0.0.1:8787/server-coverage/test-report.json",
       );
     });
   });

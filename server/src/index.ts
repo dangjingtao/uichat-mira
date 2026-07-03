@@ -41,7 +41,9 @@ import { initializeRoleDatabase } from "@/db/role.db";
 import { initializeThreadDatabase } from "@/db/thread.db";
 import { agentRunRepository } from "@/db/repositories/agent-run.repository.js";
 import { integrationCapabilitiesRepository } from "@/db/repositories/integration-capabilities.repository.js";
+import { integrationCapabilityMicroAppsRepository } from "@/db/repositories/integration-capability-micro-apps.repository.js";
 import { integrationInstancesRepository } from "@/db/repositories/integration-instances.repository.js";
+import { microAppsRepository } from "@/db/repositories/micro-apps.repository.js";
 import { webSearchSettingsRepository } from "@/db/repositories/web-search-settings.repository.js";
 import { wecomSettingsRepository } from "@/db/repositories/wecom-settings.repository.js";
 import { initializeVectorStore } from "@/db";
@@ -56,6 +58,9 @@ import { attachmentStorageRoot } from "@/services/attachment-storage.service.js"
 import { configureAgentRunPersistence } from "@/agent/run-store.js";
 import { agentRunStore } from "@/agent/run-store.js";
 import { configureInvocationRetention } from "@/mcp/core/invocations.js";
+import {
+  migrateLegacyMicroAppBindings,
+} from "@/microapps/legacy-sync.js";
 
 const app = Fastify({
   bodyLimit: MAX_UPLOAD_FILE_BYTES,
@@ -336,6 +341,9 @@ const setupDatabase = async () => {
   wecomSettingsRepository.initialize();
   integrationInstancesRepository.initialize();
   integrationCapabilitiesRepository.initialize();
+  microAppsRepository.initialize();
+  integrationCapabilityMicroAppsRepository.initialize();
+  migrateLegacyMicroAppBindings();
   initializeExternalMcpDatabase();
   registerAllExternalMcpCapabilities();
   evaluationService.initializePersistence();

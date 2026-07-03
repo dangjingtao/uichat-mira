@@ -19,8 +19,6 @@ export interface ResolveChatToolSurfaceInput {
 
 const DEFAULT_CHAT_TOOL_ALLOWLIST = [
   "web_search",
-  "wecom_notify_send",
-  "wecom_org_lookup",
 ] as const;
 const DEFAULT_MAX_CHAT_TOOLS = 8;
 
@@ -51,7 +49,7 @@ export const resolveChatToolSurface = (
   input: ResolveChatToolSurfaceInput = {},
 ): ChatToolSurfaceDefinition[] => {
   const definitions = resolveHarnessToolExposure({
-    source: input.agentEnabled ? "tools_list" : "chat_surface",
+    source: input.agentEnabled ? "agent_intent" : "chat_surface",
   }).visibleDefinitions;
 
   if (input.agentEnabled) {

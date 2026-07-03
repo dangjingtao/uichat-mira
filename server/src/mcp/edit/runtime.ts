@@ -7,7 +7,7 @@ import type {
 } from "../core/definitions.js";
 import { createArtifact } from "../core/artifacts.js";
 import { mcpBadRequest, mcpInternalError } from "../core/errors.js";
-import { ensureParentDir, resolveWorkspacePath } from "../workspace.js";
+import { ensureParentDir, resolveWorkspaceWritePath } from "../workspace.js";
 
 type EditExecutionContext = {
   args: Record<string, unknown>;
@@ -70,9 +70,18 @@ const replaceOnce = (input: {
   oldText: string;
   newText: string;
 }) => {
+  if (!input.oldText.length) {
+    throw mcpBadRequest("expectedOldText must not be empty");
+  }
+
   const index = input.current.indexOf(input.oldText);
   if (index < 0) {
     throw mcpBadRequest("expectedOldText does not match current file content");
+  }
+
+  const nextIndex = input.current.indexOf(input.oldText, index + input.oldText.length);
+  if (nextIndex >= 0) {
+    throw mcpBadRequest("expectedOldText must match exactly once");
   }
 
   return (
@@ -149,9 +158,18 @@ export const executeEditFileRuntime = async ({
   if (!pathValue.trim()) {
     throw mcpBadRequest("path is required");
   }
+  if (/[\\/]$/.test(pathValue.trim())) {
+    throw mcpBadRequest("edit_file does not support directory paths");
+  }
 
-  const targetPath = resolveWorkspacePath(pathValue);
-  const dryRun = args.dryRun === true;
+  const targetPath = resolveWorkspaceWritePath(pathValue);
+  if (fs.existsSync(targetPath) && fs.statSync(targetPath).isDirectory()) {
+    throw mcpBadRequest("edit_file does not support directory targets");
+  }
+  const targetExists = fs.existsSync(targetPath);
+  const overwriteEscalatedToDryRun =
+    operation === "write_file" && targetExists && args.dryRun !== true;
+  const dryRun = args.dryRun === true || overwriteEscalatedToDryRun;
   const capability = selectEditCapability(harnessEnvironment, operation);
 
   pushEvent?.({
@@ -160,6 +178,13 @@ export const executeEditFileRuntime = async ({
   });
 
   const nextContent = executeCapability(capability, targetPath, args);
+
+  if (overwriteEscalatedToDryRun) {
+    pushEvent?.({
+      type: "invocation:progress",
+      message: "Escalated existing-file overwrite to dry-run",
+    });
+  }
 
   pushEvent?.({
     type: "invocation:progress",

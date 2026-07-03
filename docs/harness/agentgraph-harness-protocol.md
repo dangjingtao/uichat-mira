@@ -120,7 +120,7 @@ AgentGraph 不直接替代这些能力，而是消费它们。
 3. `AgentGraph` 在图节点里做：
    - 上下文准备
    - 计划推进
-   - capability intent 选择
+   - 候选暴露后的调用前守卫
    - policy 判断
    - retrieve / tool / generate / evaluate
 4. 图返回 `AgentGraphOutput`
@@ -138,7 +138,7 @@ AgentGraph 不直接替代这些能力，而是消费它们。
 
 - `prepareContext`
 - `planStep`
-- `capabilityIntentStep`
+- `toolGuardStep`
 - `policyStep`
 - `approval`
 - `retrieve`
@@ -149,8 +149,8 @@ AgentGraph 不直接替代这些能力，而是消费它们。
 
 其中真正和 Harness 紧密耦合的是三类节点：
 
-- `capabilityIntentStep`
-  - 从 Harness capability surface 中理解候选能力
+- `toolGuardStep`
+  - 消费 Harness 已暴露候选，并做本地调用前守卫收口
 - `policyStep`
   - 根据 tool metadata 判断是否允许直接执行
 - `tool`

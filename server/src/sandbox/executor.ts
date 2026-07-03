@@ -1,10 +1,8 @@
 import { spawn } from "node:child_process";
-import fs from "node:fs";
-import path from "node:path";
 import type { McpExecutionEnvironment } from "@/mcp/core/definitions.js";
 import { mcpBadRequest, mcpInternalError } from "@/mcp/core/errors.js";
 import { decodeTerminalOutput } from "@/mcp/terminal/encoding.js";
-import { getWorkspaceRoot, resolveWorkspacePath } from "@/mcp/workspace.js";
+import { resolveWorkspaceDirectoryPath } from "@/mcp/workspace.js";
 import { assertSandboxCommandPolicy } from "./policy.js";
 
 export interface SandboxShellProfile {
@@ -66,41 +64,7 @@ const buildShellArgs = (profile: SandboxShellProfile, command: string) => {
   return ["-lc", command];
 };
 
-const getWorkspaceRealRoot = () => {
-  const workspaceRoot = getWorkspaceRoot();
-  try {
-    return fs.realpathSync.native(workspaceRoot);
-  } catch {
-    return path.resolve(workspaceRoot);
-  }
-};
-
-const assertPathInsideWorkspace = (targetPath: string) => {
-  const workspaceRoot = getWorkspaceRealRoot();
-  const normalizedTarget = (() => {
-    try {
-      return fs.realpathSync.native(targetPath);
-    } catch {
-      return path.resolve(targetPath);
-    }
-  })();
-
-  const relative = path.relative(workspaceRoot, normalizedTarget);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw mcpBadRequest("path must stay inside workspace root");
-  }
-
-  return normalizedTarget;
-};
-
-const resolveSandboxCwd = (cwd?: string) => {
-  const resolved = cwd ? resolveWorkspacePath(cwd) : resolveWorkspacePath(".");
-  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
-    throw mcpBadRequest(`cwd must be an existing workspace directory: ${cwd ?? "."}`);
-  }
-
-  return assertPathInsideWorkspace(resolved);
-};
+const resolveSandboxCwd = (cwd?: string) => resolveWorkspaceDirectoryPath(cwd ?? ".");
 
 const resolveSandboxEnv = (overrides?: Record<string, string>) => {
   const base = Object.fromEntries(

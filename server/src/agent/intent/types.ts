@@ -15,6 +15,9 @@ export interface CapabilityIntentDocument {
   source: "internal" | "external";
   domain: string;
   tags: string[];
+  preferredToolId?: string;
+  supportingToolIds?: string[];
+  actionProfileId?: string;
 }
 
 export interface CapabilityIntentCandidate {
@@ -30,6 +33,7 @@ export interface CapabilityIntentCandidate {
   source: "internal" | "external";
   domain: string;
   tags: string[];
+  actionProfileId?: string;
 }
 
 export interface CapabilityIntentResult {
@@ -38,7 +42,7 @@ export interface CapabilityIntentResult {
   selectedCapabilityIds: string[];
   selectedToolIds: string[];
   exposureReasons?: string[];
-  decisionSource?: "embedding" | "task-model" | "rule";
+  decisionSource?: "embedding" | "task-model" | "rule" | "guard";
   decisionReason?: string;
   retrievalModel?: {
     provider?: string;

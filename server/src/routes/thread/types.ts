@@ -56,6 +56,11 @@ export interface CreateMessageBody {
         fileId?: string;
         mimeType: string;
       }
+    | {
+        type: "data";
+        name: string;
+        value: unknown;
+      }
   >;
   /** Free-form message metadata, including RAG source payloads. */
   metadata?: Record<string, unknown>;

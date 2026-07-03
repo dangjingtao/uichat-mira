@@ -57,6 +57,8 @@ const agentRunSchema = {
     },
     traceId: { type: "string" },
     currentStepId: { type: "string" },
+    blockedReason: { type: "string" },
+    terminalReason: { type: "string" },
     pendingApproval: agentApprovalRequestSchema,
     selectedCapabilityId: { type: "string" },
     selectedToolId: { type: "string" },

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Folder, MoreHorizontal, Plus, Search } from "lucide-react";
+import { ChevronDown, ChevronRight, Folder, FolderOpen, MoreHorizontal, Plus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ChatSidebarEntry, ChatThreadSummary } from "../core";
@@ -29,7 +29,6 @@ export function UChatSidebarView({
   onSidebarEntryClick,
   onToggleWorkspaceGroup,
   onDeleteWorkspace,
-  onAddThreadToWorkspace,
   onSelectThread,
   onArchiveThread,
   onDeleteThread,
@@ -48,7 +47,6 @@ export function UChatSidebarView({
   onSidebarEntryClick?: (entry: ChatSidebarEntry) => void | Promise<void>;
   onToggleWorkspaceGroup?: (workspaceId: string) => void | Promise<void>;
   onDeleteWorkspace?: (workspaceId: string) => void | Promise<void>;
-  onAddThreadToWorkspace?: (workspaceId: string) => void | Promise<void>;
   onSelectThread: (threadId: string) => void | Promise<void>;
   onArchiveThread: (threadId: string) => void | Promise<void>;
   onDeleteThread: (threadId: string) => void | Promise<void>;
@@ -58,6 +56,7 @@ export function UChatSidebarView({
   const [collapsedWorkspaceIds, setCollapsedWorkspaceIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [isHistoryCollapsed, setHistoryCollapsed] = useState(false);
 
   // The list is sorted in the view so the latest updated thread always floats
   // to the top even if the repository returns a stale ordering.
@@ -139,28 +138,29 @@ export function UChatSidebarView({
         </div>
       ) : null}
 
-      {hasWorkspaceSection ? (
-        <div className="shrink-0 px-2 pb-2 pr-4">
-          <div className="mb-2 flex items-center justify-between px-1">
-            <span className="text-xs font-medium uppercase tracking-[0.18em] text-text-tertiary">
-              {t("chat.sidebar.workspaces")}
-            </span>
-            {onCreateWorkspace ? (
-              <button
-                type="button"
-                aria-label={t("chat.sidebar.workspaceCreate")}
-                onClick={() => {
-                  void onCreateWorkspace();
-                }}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-ui-control border border-transparent bg-transparent p-0 text-text-secondary transition-all duration-150 hover:bg-surface-secondary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary"
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </button>
-            ) : null}
-          </div>
-          <div className="space-y-1">
-            {hasWorkspaceGroups
-              ? workspaceList.map((workspace) => {
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-3 pr-4">
+        {hasWorkspaceSection ? (
+          <div className="pb-2">
+            <div className="mb-2 flex items-center justify-between px-1">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-text-tertiary">
+                {t("chat.sidebar.workspaces")}
+              </span>
+              {onCreateWorkspace ? (
+                <button
+                  type="button"
+                  aria-label={t("chat.sidebar.workspaceCreate")}
+                  onClick={() => {
+                    void onCreateWorkspace();
+                  }}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-ui-control border border-transparent bg-transparent p-0 text-text-secondary transition-all duration-150 hover:bg-surface-secondary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </div>
+            <div className="space-y-1">
+              {hasWorkspaceGroups
+                ? workspaceList.map((workspace) => {
               const isCollapsed =
                 collapsedWorkspaceIds.has(workspace.id) || (workspace.collapsed ?? false);
               const hasThreads = workspace.threads.length > 0;
@@ -176,10 +176,14 @@ export function UChatSidebarView({
                       }}
                       className="flex min-w-0 flex-1 items-center gap-2 rounded-[8px] px-2 py-1 text-left focus-visible:outline-none"
                     >
-                      <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-text-tertiary">
-                        <Folder className="h-3.5 w-3.5" />
+                      <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-text-tertiary transition-transform duration-200 ease-out">
+                        {isCollapsed ? (
+                          <Folder className="h-3.5 w-3.5" />
+                        ) : (
+                          <FolderOpen className="h-3.5 w-3.5" />
+                        )}
                       </span>
-                      <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-text-tertiary">
+                      <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-text-tertiary transition-transform duration-200 ease-out">
                         {isCollapsed ? (
                           <ChevronRight className="h-3.5 w-3.5" />
                         ) : (
@@ -199,7 +203,7 @@ export function UChatSidebarView({
                     </button>
 
                     <div className="flex items-center gap-1">
-                      {onAddThreadToWorkspace || onDeleteWorkspace ? (
+                      {onDeleteWorkspace ? (
                         <DropdownMenu
                           trigger={
                             <button
@@ -213,34 +217,16 @@ export function UChatSidebarView({
                             </button>
                           }
                           items={[
-                            ...(onAddThreadToWorkspace
-                              ? [
-                                  {
-                                    id: "workspace-add-thread",
-                                    label: t("chat.sidebar.workspaceAddThread"),
-                                    leadingIcon: null,
-                                    tone: "default" as const,
-                                  },
-                                ]
-                              : []),
-                            ...(onDeleteWorkspace
-                              ? [
-                                  {
-                                    id: "workspace-delete",
-                                    label: t("chat.sidebar.delete"),
-                                    leadingIcon: null,
-                                    tone: "danger" as const,
-                                  },
-                                ]
-                              : []),
+                            {
+                              id: "workspace-delete",
+                              label: t("chat.sidebar.delete"),
+                              leadingIcon: null,
+                              tone: "danger" as const,
+                            },
                           ]}
                           onSelect={(item) => {
-                            if (item.id === "workspace-add-thread") {
-                              void onAddThreadToWorkspace?.(workspace.id);
-                              return;
-                            }
                             if (item.id !== "workspace-delete") return;
-                            void onDeleteWorkspace?.(workspace.id);
+                            void onDeleteWorkspace(workspace.id);
                           }}
                           align="end"
                         />
@@ -248,8 +234,15 @@ export function UChatSidebarView({
                     </div>
                   </div>
 
-                  {!isCollapsed && hasThreads ? (
-                    <div className="space-y-0.5 pl-[21px]">
+                  <div
+                    className={`grid overflow-hidden pl-[21px] transition-[grid-template-rows,opacity] duration-200 ease-out ${
+                      !isCollapsed && hasThreads
+                        ? "grid-rows-[1fr] opacity-100"
+                        : "grid-rows-[0fr] opacity-0"
+                    }`}
+                  >
+                    <div className="min-h-0">
+                      <div className="space-y-0.5 pb-0.5">
                       {workspace.threads.map((thread) => {
                         const isActive = thread.id === activeThreadId;
                         const isMenuOpen = openMenuThreadId === thread.id;
@@ -257,13 +250,12 @@ export function UChatSidebarView({
                         return (
                           <div
                             key={thread.id}
-                            className="group relative flex items-center rounded-[8px] px-1 py-0 text-text-secondary transition-all duration-150 hover:bg-[rgb(var(--color-primary)/0.04)] hover:text-text-primary"
+                            className={`group relative flex items-center rounded-[8px] px-1 py-0 text-text-secondary transition-all duration-150 hover:bg-[rgb(var(--color-primary)/0.04)] hover:text-text-primary ${
+                              isActive
+                                ? "bg-[rgb(var(--color-primary)/0.04)] text-text-primary"
+                                : ""
+                            }`}
                           >
-                            <span
-                              className={`pointer-events-none absolute inset-y-1 left-0 w-[2px] rounded-full bg-primary/85 transition-opacity duration-150 ${
-                                isActive ? "opacity-100" : "opacity-0"
-                              }`}
-                            />
                             <button
                               type="button"
                               onClick={() => {
@@ -286,6 +278,7 @@ export function UChatSidebarView({
                                     current === thread.id ? null : thread.id,
                                   )
                                 }
+                                aria-label={t("common.actions.more")}
                                 className={`mr-0.5 flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center text-text-tertiary transition-all duration-150 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 ${
                                   isMenuOpen || isActive
                                     ? "opacity-100"
@@ -329,19 +322,40 @@ export function UChatSidebarView({
                           </div>
                         );
                       })}
+                      </div>
                     </div>
-                  ) : null}
+                  </div>
                 </div>
               );
                 })
-              : null}
+                : null}
+            </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
-      <div className="min-h-0 flex-1 overflow-hidden px-2 py-3">
-        <div className="flex h-full min-h-0 flex-col overflow-hidden">
-          <div className="h-0 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-0.5">
+        <div className="flex min-h-0 flex-col overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setHistoryCollapsed((current) => !current)}
+            className="mb-2 flex items-center justify-between gap-2 rounded-[10px] px-1 py-1 text-left transition-colors hover:bg-[rgb(var(--color-primary)/0.04)] focus-visible:outline-none"
+          >
+            <span className="text-xs font-medium uppercase tracking-[0.18em] text-text-tertiary">
+              {t("chat.sidebar.historyThreads")}
+            </span>
+            <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-text-tertiary transition-transform duration-200 ease-out">
+              {isHistoryCollapsed ? (
+                <ChevronRight className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5" />
+              )}
+            </span>
+          </button>
+          <div
+            className={`grid overflow-hidden transition-[grid-template-rows,opacity] duration-200 ease-out ${
+              !isHistoryCollapsed ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+            }`}
+          >
+            <div className="min-h-0 pr-0.5">
             {threadListStatus === "loading" && visibleThreads.length === 0 ? (
               <div className="px-4 py-3 text-sm text-text-secondary">
                 {t("common.status.loading")}
@@ -356,15 +370,11 @@ export function UChatSidebarView({
                 <div
                   key={thread.id}
                   className={`group relative mb-0.5 flex items-center px-0.5 py-0 text-text-secondary transition-all duration-150 hover:bg-[rgb(var(--color-primary)/0.04)] hover:text-text-primary ${
-                    isActive ? "" : ""
+                    isActive
+                      ? "bg-[rgb(var(--color-primary)/0.04)] text-text-primary"
+                      : ""
                   }`}
                 >
-                  <span
-                    className={`pointer-events-none absolute inset-y-1 left-0 w-[2px] rounded-full bg-primary/85 transition-opacity duration-150 ${
-                      isActive ? "opacity-100" : "opacity-0"
-                    }`}
-                  />
-
                   <button
                     type="button"
                     onClick={() => {
@@ -388,6 +398,7 @@ export function UChatSidebarView({
                           current === thread.id ? null : thread.id,
                         )
                       }
+                      aria-label={t("common.actions.more")}
                       className={`mr-0.5 flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center text-text-tertiary transition-all duration-150 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 ${
                         isMenuOpen || isActive
                           ? "opacity-100"
@@ -431,6 +442,7 @@ export function UChatSidebarView({
                 </div>
               );
             })}
+            </div>
           </div>
         </div>
       </div>

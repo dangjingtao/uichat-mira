@@ -77,20 +77,25 @@ prepareContext
 
 这不是命名小问题，而是领域模型没有分层完成。
 
-### 3. 意图识别与规则短路
+### 3. 候选暴露与调用前守卫
 
-当前意图识别整体方向并不差，它已经是：
+当前更合适的分层不是让 Agent 再做一套主意图识别，而是：
 
 ```txt
-embedding
-+ rule hint
-+ rerank
-+ task model 二次裁决
+Harness
+-> 暴露候选 capability / tool surface
+-> Agent 调用前守卫收口
+-> policy / tool execution
 ```
 
-问题在于规则短路仍然偏强，尤其 `isWorkspaceIntentQuery` 这类逻辑已经不只是 hint，而是强路由 gate。
+也就是说，Agent 这一层不应继续承担第二套 embedding / task-model 主裁决。它更适合作为最后守卫机制：
 
-这一层可以继续保留规则增强，但不适合让规则直接替代能力选择，更不适合把粗粒度字符串命中当成最终路由依据。
+- 接收 Harness 已给出的候选
+- 最多做 topN 收束，防止候选爆炸
+- 校验候选与 tool 映射是否合法
+- 把结果安全地交给 `policy / tool`
+
+这一层未来仍可扩展，但当前不宜继续演化成另一套主识别器。
 
 ### 4. 工具回看与证据链
 
@@ -226,7 +231,7 @@ Agent 不该把自然语言直接翻译成 shell command，尤其不该用 `term
 
 整改方向：
 
-把 workspace rule 从 hard shortcut 降级为 scoring hint 或高置信辅助信号，让 task model 在能力选择层保持最终意图裁决权；安全放行仍由 policy / approval / runtime 校验负责。
+把 workspace rule 从 hard shortcut 降级为 scoring hint 或高置信辅助信号；Agent 侧不再承担第二套主识别，而是退回到 Harness 候选之后的调用前守卫。未来如需增强，可在守卫节点上扩展更强的合法性检查，而不是恢复为重型二次裁决器。
 
 #### P1-4：工具结果证据链补全
 

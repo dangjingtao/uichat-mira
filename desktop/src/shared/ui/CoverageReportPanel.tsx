@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  AlertCircle,
   ArrowDownAZ,
   ArrowUpZA,
   CheckCircle2,
-  XCircle,
   Clock,
-  AlertCircle,
+  FileText,
 } from "lucide-react";
 import Card from "./Card";
+import { ModalShell } from "./Modal";
 
 export interface CoverageMetric {
   total: number;
@@ -22,81 +23,144 @@ export interface CoverageEntry {
   statements: CoverageMetric;
   functions: CoverageMetric;
   branches: CoverageMetric;
-  branchesTrue?: CoverageMetric;
+  branchesTrue?: CoverageMetric | null;
 }
 
-export type CoverageSummary = Record<string, CoverageEntry>;
+export interface CoverageFileReport {
+  path: string;
+  absolutePath: string;
+  summary: CoverageEntry;
+  lines: {
+    map: Record<string, unknown>;
+    hits: Record<string, number>;
+  };
+  statements: {
+    map: Record<string, unknown>;
+    hits: Record<string, number>;
+  };
+  functions: {
+    map: Record<string, unknown>;
+    hits: Record<string, number>;
+  };
+  branches: Array<{
+    id: string;
+    line: number | null;
+    type: string;
+    locations: Array<{
+      index: number;
+      start: unknown;
+      end: unknown;
+      count: number;
+    }>;
+  }>;
+}
 
-export interface TestResultSummary {
-  total: number;
-  passed: number;
-  failed: number;
-  skipped: number;
-  durationMs: number;
-  suites: TestSuiteResult[];
+export interface CoverageReport {
+  schemaVersion: number;
+  generatedAt: string;
+  scope: "client" | "server" | string;
+  summary: {
+    total?: CoverageEntry;
+  } & Record<string, CoverageEntry | undefined>;
+  files: CoverageFileReport[];
+  available?: boolean;
+  missingReason?: string;
 }
 
 export type TestStatus = "passed" | "failed" | "skipped" | "pending" | "todo";
 
 export interface TestCaseResult {
+  ancestorTitles: string[];
   fullName: string;
   title: string;
   status: TestStatus | string;
-  duration?: number;
+  duration: number | null;
   failureMessages: string[];
+  meta?: Record<string, unknown>;
 }
 
 export interface TestSuiteResult {
   name: string;
+  absoluteName: string;
   status: string;
-  startTime?: number;
-  endTime?: number;
-  message?: string;
+  startTime: number | null;
+  endTime: number | null;
+  message: string;
   assertionResults: TestCaseResult[];
 }
 
-interface VitestJsonResult {
-  numTotalTests?: number;
-  numPassedTests?: number;
-  numFailedTests?: number;
-  numPendingTests?: number;
-  numTodoTests?: number;
-  testResults?: TestSuiteResult[];
+export interface TestReport {
+  schemaVersion: number;
+  generatedAt: string;
+  scope: "client" | "server" | string;
+  summary: {
+    totalTests: number;
+    passedTests: number;
+    failedTests: number;
+    pendingTests: number;
+    todoTests: number;
+    totalSuites: number;
+    passedSuites: number;
+    failedSuites: number;
+    pendingSuites: number;
+    success: boolean;
+    startTime: number | null;
+    durationMs: number;
+  };
+  suites: TestSuiteResult[];
 }
 
 export interface CoverageReportPanelProps {
-  /** coverage-summary.json 的完整 URL，可选 */
   src?: string;
-  /** Vitest test-results.json 的完整 URL */
   resultSrc?: string;
-  /** 面板标题 */
-  title?: React.ReactNode;
-  /** 报告不存在时的提示文案 */
-  emptyText?: React.ReactNode;
-  /** 加载失败时的提示文案 */
-  errorText?: React.ReactNode;
+  title?: ReactNode;
+  emptyText?: ReactNode;
+  errorText?: ReactNode;
   className?: string;
 }
 
-type LoadState =
+type LoadState<T> =
   | { status: "idle" }
   | { status: "checking" }
-  | { status: "ready"; data: CoverageSummary }
+  | { status: "ready"; data: T }
   | { status: "empty" }
   | { status: "error"; error: string };
 
-type ResultLoadState =
-  | { status: "idle" }
-  | { status: "checking" }
-  | { status: "ready"; data: TestResultSummary }
-  | { status: "empty" }
-  | { status: "error"; error: string };
-
-type SortKey = "name" | "statements" | "branches" | "functions" | "lines";
+type SortKey =
+  | "name"
+  | "tests"
+  | "passed"
+  | "failed"
+  | "skipped"
+  | "duration"
+  | "statements"
+  | "branches"
+  | "functions"
+  | "lines";
 type SortOrder = "asc" | "desc";
+
+interface FileTableEntry {
+  path: string;
+  name: string;
+  suites: TestSuiteResult[];
+  tests: number;
+  passed: number;
+  failed: number;
+  skipped: number;
+  durationMs: number;
+  coverage?: CoverageEntry;
+  coverageFile?: CoverageFileReport;
+}
 
 function formatPct(value: number): string {
   return `${value.toFixed(2)}%`;
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) {
+    return `${ms}ms`;
+  }
+  return `${(ms / 1000).toFixed(2)}s`;
 }
 
 function getPctClass(pct: number): string {
@@ -119,12 +183,24 @@ function getPctBarClass(pct: number): string {
   return "bg-danger";
 }
 
-function CoveragePctCell({ pct }: { pct: number }) {
+function getStatusClass(status: string): string {
+  if (status === "passed") {
+    return "text-success";
+  }
+  if (status === "failed") {
+    return "text-danger";
+  }
+  return "text-text-tertiary";
+}
+
+function CoveragePctCell({ pct }: { pct?: number }) {
+  if (typeof pct !== "number") {
+    return <span className="text-text-tertiary">-</span>;
+  }
+
   return (
     <div className="flex min-w-[72px] flex-col gap-1">
-      <span className={`font-medium ${getPctClass(pct)}`}>
-        {formatPct(pct)}
-      </span>
+      <span className={`font-medium ${getPctClass(pct)}`}>{formatPct(pct)}</span>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-secondary">
         <div
           className={`h-full rounded-full transition-all ${getPctBarClass(pct)}`}
@@ -135,62 +211,44 @@ function CoveragePctCell({ pct }: { pct: number }) {
   );
 }
 
-function formatDuration(ms: number): string {
-  if (ms < 1000) {
-    return `${ms}ms`;
-  }
-  return `${(ms / 1000).toFixed(2)}s`;
+function normalizeSuiteFileName(suite: TestSuiteResult): string {
+  const raw = suite.name || suite.absoluteName;
+  return raw.split("/").pop() || raw;
 }
 
-function normalizeTestResults(data: VitestJsonResult): TestResultSummary {
-  const suites = Array.isArray(data.testResults) ? data.testResults : [];
-  const startTimes = suites
-    .map((item) => item.startTime)
-    .filter((value): value is number => typeof value === "number");
-  const endTimes = suites
-    .map((item) => item.endTime)
-    .filter((value): value is number => typeof value === "number");
-  const durationMs =
-    startTimes.length > 0 && endTimes.length > 0
-      ? Math.max(...endTimes) - Math.min(...startTimes)
-      : 0;
-  const skipped =
-    (data.numPendingTests ?? 0) +
-    (data.numTodoTests ?? 0) +
-    suites.reduce(
-      (sum, suite) =>
-        sum +
-        suite.assertionResults.filter((test) => test.status === "skipped")
-          .length,
-      0,
-    );
+function countCoveredHits(hits: Record<string, number>): number {
+  return Object.values(hits).filter((value) => value > 0).length;
+}
 
-  return {
-    total:
-      data.numTotalTests ??
-      suites.reduce((sum, suite) => sum + suite.assertionResults.length, 0),
-    passed:
-      data.numPassedTests ??
-      suites.reduce(
-        (sum, suite) =>
-          sum +
-          suite.assertionResults.filter((test) => test.status === "passed")
-            .length,
-        0,
-      ),
-    failed:
-      data.numFailedTests ??
-      suites.reduce(
-        (sum, suite) =>
-          sum +
-          suite.assertionResults.filter((test) => test.status === "failed")
-            .length,
-        0,
-      ),
-    skipped,
-    durationMs,
-    suites,
-  };
+function countUncoveredHits(hits: Record<string, number>): number {
+  return Object.values(hits).filter((value) => value <= 0).length;
+}
+
+function getUncoveredKeys(hits: Record<string, number>, limit = 8): string[] {
+  return Object.entries(hits)
+    .filter(([, value]) => value <= 0)
+    .slice(0, limit)
+    .map(([key]) => key);
+}
+
+function getUncoveredBranchItems(branches: CoverageFileReport["branches"], limit = 8) {
+  const items: string[] = [];
+  for (const branch of branches) {
+    const uncoveredLocations = branch.locations
+      .filter((location) => location.count <= 0)
+      .map((location) => `#${location.index}`);
+
+    if (uncoveredLocations.length > 0) {
+      items.push(
+        `line ${branch.line ?? "-"} · ${branch.type} · ${uncoveredLocations.join(", ")}`,
+      );
+    }
+
+    if (items.length >= limit) {
+      break;
+    }
+  }
+  return items;
 }
 
 function getSuiteDuration(suite: TestSuiteResult): number {
@@ -200,20 +258,31 @@ function getSuiteDuration(suite: TestSuiteResult): number {
   ) {
     return Math.max(0, suite.endTime - suite.startTime);
   }
+
   return suite.assertionResults.reduce(
     (sum, test) => sum + (typeof test.duration === "number" ? test.duration : 0),
     0,
   );
 }
 
-function getStatusClass(status: string): string {
-  if (status === "passed") {
-    return "text-success";
-  }
-  if (status === "failed") {
-    return "text-danger";
-  }
-  return "text-text-tertiary";
+function isCoverageReport(data: unknown): data is CoverageReport {
+  return Boolean(
+    data &&
+      typeof data === "object" &&
+      "summary" in data &&
+      "files" in data &&
+      Array.isArray((data as CoverageReport).files),
+  );
+}
+
+function isTestReport(data: unknown): data is TestReport {
+  return Boolean(
+    data &&
+      typeof data === "object" &&
+      "summary" in data &&
+      "suites" in data &&
+      Array.isArray((data as TestReport).suites),
+  );
 }
 
 export default function CoverageReportPanel({
@@ -225,23 +294,24 @@ export default function CoverageReportPanel({
   className = "",
 }: CoverageReportPanelProps) {
   const { t } = useTranslation();
-  const [state, setState] = useState<LoadState>(
+  const [coverageState, setCoverageState] = useState<LoadState<CoverageReport>>(
     src ? { status: "checking" } : { status: "idle" },
   );
-  const [resultState, setResultState] = useState<ResultLoadState>(
+  const [resultState, setResultState] = useState<LoadState<TestReport>>(
     resultSrc ? { status: "checking" } : { status: "idle" },
   );
-  const [sortKey, setSortKey] = useState<SortKey>("statements");
+  const [sortKey, setSortKey] = useState<SortKey>("failed");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
 
   useEffect(() => {
     if (!src) {
-      setState({ status: "idle" });
+      setCoverageState({ status: "idle" });
       return;
     }
 
     let cancelled = false;
-    setState({ status: "checking" });
+    setCoverageState({ status: "checking" });
 
     fetch(src)
       .then(async (res) => {
@@ -249,21 +319,21 @@ export default function CoverageReportPanel({
           return;
         }
         if (!res.ok) {
-          setState({ status: "empty" });
+          setCoverageState({ status: "empty" });
           return;
         }
-        const data = (await res.json()) as CoverageSummary;
-        if (!data || typeof data !== "object" || !data.total) {
-          setState({ status: "empty" });
+        const data = (await res.json()) as unknown;
+        if (!isCoverageReport(data)) {
+          setCoverageState({ status: "empty" });
           return;
         }
-        setState({ status: "ready", data });
+        setCoverageState({ status: "ready", data });
       })
       .catch((error) => {
         if (cancelled) {
           return;
         }
-        setState({
+        setCoverageState({
           status: "error",
           error: error instanceof Error ? error.message : String(error),
         });
@@ -276,6 +346,7 @@ export default function CoverageReportPanel({
 
   useEffect(() => {
     if (!resultSrc) {
+      setResultState({ status: "idle" });
       return;
     }
 
@@ -291,8 +362,8 @@ export default function CoverageReportPanel({
           setResultState({ status: "empty" });
           return;
         }
-        const data = normalizeTestResults((await res.json()) as VitestJsonResult);
-        if (!data || typeof data !== "object") {
+        const data = (await res.json()) as unknown;
+        if (!isTestReport(data)) {
           setResultState({ status: "empty" });
           return;
         }
@@ -313,41 +384,119 @@ export default function CoverageReportPanel({
     };
   }, [resultSrc]);
 
-  const total = state.status === "ready" ? state.data.total : null;
+  const coverageFiles = coverageState.status === "ready" ? coverageState.data.files : [];
+  const coverageTotal =
+    coverageState.status === "ready" ? coverageState.data.summary.total : undefined;
+  const resultSummary =
+    resultState.status === "ready" ? resultState.data.summary : undefined;
+  const suites = resultState.status === "ready" ? resultState.data.suites : [];
 
-  const fileEntries = useMemo(() => {
-    if (state.status !== "ready") {
-      return [];
+  const fileEntries = useMemo<FileTableEntry[]>(() => {
+    const suitesByFile = new Map<string, TestSuiteResult[]>();
+    for (const suite of suites) {
+      const key = normalizeSuiteFileName(suite);
+      const current = suitesByFile.get(key) ?? [];
+      current.push(suite);
+      suitesByFile.set(key, current);
     }
-    return Object.entries(state.data)
-      .filter(([key]) => key !== "total")
-      .map(([path, entry]) => ({
-        path,
-        name: path.split(/[/\\]/).pop() || path,
-        statements: entry.statements.pct,
-        branches: entry.branches.pct,
-        functions: entry.functions.pct,
-        lines: entry.lines.pct,
-      }));
-  }, [state]);
+
+    const coverageByFile = new Map<string, CoverageFileReport>();
+    for (const file of coverageFiles) {
+      coverageByFile.set(file.path.split("/").pop() || file.path, file);
+    }
+
+    const allFileNames = new Set<string>([
+      ...suitesByFile.keys(),
+      ...coverageByFile.keys(),
+    ]);
+
+    return [...allFileNames].map((name) => {
+      const fileSuites = suitesByFile.get(name) ?? [];
+      const coverage = coverageByFile.get(name)?.summary;
+      const tests = fileSuites.flatMap((suite) => suite.assertionResults);
+
+      return {
+        path: coverageByFile.get(name)?.path ?? fileSuites[0]?.name ?? name,
+        name,
+        suites: fileSuites,
+        tests: tests.length,
+        passed: tests.filter((test) => test.status === "passed").length,
+        failed: tests.filter((test) => test.status === "failed").length,
+        skipped: tests.filter(
+          (test) =>
+            test.status === "skipped" ||
+            test.status === "pending" ||
+            test.status === "todo",
+        ).length,
+        durationMs: fileSuites.reduce(
+          (sum, suite) => sum + getSuiteDuration(suite),
+          0,
+        ),
+        coverage,
+        coverageFile: coverageByFile.get(name),
+      };
+    });
+  }, [coverageFiles, suites]);
 
   const sortedEntries = useMemo(() => {
     const sorted = [...fileEntries];
-    sorted.sort((a, b) => {
+    sorted.sort((left, right) => {
       const factor = sortOrder === "asc" ? 1 : -1;
+
       if (sortKey === "name") {
-        return factor * a.name.localeCompare(b.name);
+        return factor * left.name.localeCompare(right.name);
       }
-      return factor * (a[sortKey] - b[sortKey]);
+
+      if (sortKey === "tests") {
+        return factor * (left.tests - right.tests);
+      }
+      if (sortKey === "passed") {
+        return factor * (left.passed - right.passed);
+      }
+      if (sortKey === "failed") {
+        if (left.failed !== right.failed) {
+          return factor * (left.failed - right.failed);
+        }
+        return factor * (right.tests - left.tests);
+      }
+      if (sortKey === "skipped") {
+        return factor * (left.skipped - right.skipped);
+      }
+      if (sortKey === "duration") {
+        return factor * (left.durationMs - right.durationMs);
+      }
+
+      const leftPct = left.coverage?.[sortKey]?.pct ?? -1;
+      const rightPct = right.coverage?.[sortKey]?.pct ?? -1;
+      return factor * (leftPct - rightPct);
     });
     return sorted;
   }, [fileEntries, sortKey, sortOrder]);
+
+  const selectedEntry = useMemo(
+    () => fileEntries.find((entry) => entry.path === selectedFilePath) ?? null,
+    [fileEntries, selectedFilePath],
+  );
+  const selectedCoverageFile = selectedEntry?.coverageFile;
+  const uncoveredLines = selectedCoverageFile
+    ? getUncoveredKeys(selectedCoverageFile.lines.hits)
+    : [];
+  const uncoveredStatements = selectedCoverageFile
+    ? getUncoveredKeys(selectedCoverageFile.statements.hits)
+    : [];
+  const uncoveredFunctions = selectedCoverageFile
+    ? getUncoveredKeys(selectedCoverageFile.functions.hits)
+    : [];
+  const uncoveredBranches = selectedCoverageFile
+    ? getUncoveredBranchItems(selectedCoverageFile.branches)
+    : [];
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
       setSortOrder((current) => (current === "asc" ? "desc" : "asc"));
       return;
     }
+
     setSortKey(key);
     setSortOrder(key === "name" ? "asc" : "desc");
   };
@@ -355,9 +504,11 @@ export default function CoverageReportPanel({
   const SortHeader = ({
     label,
     activeKey,
+    className: extraClassName = "",
   }: {
     label: string;
     activeKey: SortKey;
+    className?: string;
   }) => {
     const active = sortKey === activeKey;
     const Icon = active && sortOrder === "desc" ? ArrowUpZA : ArrowDownAZ;
@@ -370,7 +521,7 @@ export default function CoverageReportPanel({
           active
             ? "text-text-primary"
             : "text-text-secondary hover:text-text-primary"
-        }`}
+        } ${extraClassName}`}
       >
         {label}
         {active ? <Icon className="h-3 w-3" /> : null}
@@ -378,12 +529,11 @@ export default function CoverageReportPanel({
     );
   };
 
-  if (
-    state.status === "checking" &&
-    resultState.status !== "ready" &&
-    resultState.status !== "error" &&
-    resultState.status !== "empty"
-  ) {
+  const isLoading =
+    (coverageState.status === "checking" || coverageState.status === "idle") &&
+    (resultState.status === "checking" || resultState.status === "idle");
+
+  if (isLoading) {
     return (
       <Card className={`space-y-3 ${className}`}>
         {title ? (
@@ -397,10 +547,9 @@ export default function CoverageReportPanel({
   }
 
   if (
-    state.status === "error" &&
+    coverageState.status === "error" &&
     resultState.status !== "ready" &&
-    resultState.status !== "error" &&
-    resultState.status !== "empty"
+    resultState.status !== "error"
   ) {
     return (
       <Card className={`space-y-3 ${className}`}>
@@ -409,17 +558,16 @@ export default function CoverageReportPanel({
         ) : null}
         <div className="flex h-[200px] flex-col items-center justify-center gap-1 text-sm text-danger">
           <span>{errorText}</span>
-          <span className="text-xs text-text-tertiary">{state.error}</span>
+          <span className="text-xs text-text-tertiary">{coverageState.error}</span>
         </div>
       </Card>
     );
   }
 
   if (
-    state.status === "empty" &&
+    coverageState.status === "empty" &&
     resultState.status !== "ready" &&
-    resultState.status !== "error" &&
-    resultState.status !== "empty"
+    resultState.status !== "error"
   ) {
     return (
       <Card className={`space-y-3 ${className}`}>
@@ -433,143 +581,71 @@ export default function CoverageReportPanel({
     );
   }
 
-  const resultSummary =
-    resultState.status === "ready" ? resultState.data : null;
-  const hasCoverage = state.status === "ready" && Boolean(total);
-  const coverageTotal =
-    state.status === "ready" ? state.data.total : undefined;
-
   return (
-    <Card className={`flex h-full flex-col space-y-4 ${className}`}>
-      {title ? (
-        <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
-      ) : null}
+    <>
+      <Card className={`flex h-full flex-col space-y-4 ${className}`}>
+        {title ? (
+          <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
+        ) : null}
 
-      {resultSummary ? (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            {resultSummary.failed > 0 ? (
-              <AlertCircle className="h-4 w-4 text-danger" />
-            ) : (
-              <CheckCircle2 className="h-4 w-4 text-success" />
-            )}
-            <h3 className="text-sm font-semibold text-text-primary">
-              {t("settings.development.testResults.title")}
-            </h3>
-          </div>
+        {resultSummary ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              {resultSummary.failedTests > 0 ? (
+                <AlertCircle className="h-4 w-4 text-danger" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4 text-success" />
+              )}
+              <h3 className="text-sm font-semibold text-text-primary">
+                {t("settings.development.testResults.title")}
+              </h3>
+            </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
-              <div className="text-xs text-text-tertiary">
-                {t("settings.development.testResults.total")}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
+                <div className="text-xs text-text-tertiary">
+                  {t("settings.development.testResults.total")}
+                </div>
+                <div className="text-lg font-semibold text-text-primary">
+                  {resultSummary.totalTests}
+                </div>
               </div>
-              <div className="text-lg font-semibold text-text-primary">
-                {resultSummary.total}
+              <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
+                <div className="text-xs text-text-tertiary">
+                  {t("settings.development.testResults.passed")}
+                </div>
+                <div className="text-lg font-semibold text-success">
+                  {resultSummary.passedTests}
+                </div>
               </div>
-            </div>
-            <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
-              <div className="text-xs text-text-tertiary">
-                {t("settings.development.testResults.passed")}
+              <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
+                <div className="text-xs text-text-tertiary">
+                  {t("settings.development.testResults.failed")}
+                </div>
+                <div
+                  className={`text-lg font-semibold ${
+                    resultSummary.failedTests > 0
+                      ? "text-danger"
+                      : "text-text-primary"
+                  }`}
+                >
+                  {resultSummary.failedTests}
+                </div>
               </div>
-              <div className="text-lg font-semibold text-success">
-                {resultSummary.passed}
+              <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
+                <div className="text-xs text-text-tertiary">
+                  {t("settings.development.testResults.duration")}
+                </div>
+                <div className="flex items-center gap-1 text-lg font-semibold text-text-primary">
+                  <Clock className="h-3.5 w-3.5 text-icon-tertiary" />
+                  {formatDuration(resultSummary.durationMs)}
+                </div>
               </div>
-            </div>
-            <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
-              <div className="text-xs text-text-tertiary">
-                {t("settings.development.testResults.failed")}
-              </div>
-              <div
-                className={`text-lg font-semibold ${
-                  resultSummary.failed > 0 ? "text-danger" : "text-text-primary"
-                }`}
-              >
-                {resultSummary.failed}
-              </div>
-            </div>
-            <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
-              <div className="text-xs text-text-tertiary">
-                {t("settings.development.testResults.duration")}
-              </div>
-              <div className="flex items-center gap-1 text-lg font-semibold text-text-primary">
-                <Clock className="h-3.5 w-3.5 text-icon-tertiary" />
-                {formatDuration(resultSummary.durationMs)}
-              </div>
-            </div>
-          </div>
-
-          <div className="min-h-0 overflow-hidden rounded-lg border border-border/70">
-            <div className="max-h-[360px] overflow-auto divide-y divide-border/70">
-              {resultSummary.suites.map((suite) => {
-                const failedCases = suite.assertionResults.filter(
-                  (test) => test.status === "failed",
-                );
-                return (
-                  <div key={suite.name} className="px-3 py-2.5">
-                    <div className="flex min-w-0 items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div
-                          className="truncate font-mono text-xs font-medium text-text-primary"
-                          title={suite.name}
-                        >
-                          {suite.name}
-                        </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-tertiary">
-                          <span>{suite.assertionResults.length} tests</span>
-                          <span>{formatDuration(getSuiteDuration(suite))}</span>
-                        </div>
-                      </div>
-                      <span
-                        className={`shrink-0 text-xs font-medium ${getStatusClass(suite.status)}`}
-                      >
-                        {suite.status}
-                      </span>
-                    </div>
-                    <div className="mt-2 space-y-1">
-                      {suite.assertionResults.map((test) => (
-                        <div
-                          key={test.fullName}
-                          className="rounded-md bg-surface-secondary/45 px-2.5 py-1.5"
-                        >
-                          <div className="flex min-w-0 items-center justify-between gap-2">
-                            <span
-                              className="truncate text-xs text-text-secondary"
-                              title={test.fullName}
-                            >
-                              {test.fullName}
-                            </span>
-                            <span
-                              className={`shrink-0 text-[11px] font-medium ${getStatusClass(test.status)}`}
-                            >
-                              {test.status}
-                              {typeof test.duration === "number"
-                                ? ` · ${formatDuration(test.duration)}`
-                                : ""}
-                            </span>
-                          </div>
-                          {test.failureMessages.length > 0 ? (
-                            <pre className="mt-1 max-h-[120px] overflow-auto whitespace-pre-wrap rounded border border-danger/20 bg-danger-soft px-2 py-1 text-[11px] leading-4 text-danger-text">
-                              {test.failureMessages.join("\n\n")}
-                            </pre>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                    {suite.message && failedCases.length === 0 ? (
-                      <pre className="mt-2 max-h-[120px] overflow-auto whitespace-pre-wrap rounded border border-border bg-surface-secondary px-2 py-1 text-[11px] leading-4 text-text-secondary">
-                        {suite.message}
-                      </pre>
-                    ) : null}
-                  </div>
-                );
-              })}
             </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
-      {hasCoverage && coverageTotal ? (
-        <>
+        {coverageTotal ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
               <div className="text-xs text-text-tertiary">Statements</div>
@@ -579,8 +655,7 @@ export default function CoverageReportPanel({
                 {formatPct(coverageTotal.statements.pct)}
               </div>
               <div className="text-xs text-text-tertiary">
-                {coverageTotal.statements.covered}/
-                {coverageTotal.statements.total}
+                {coverageTotal.statements.covered}/{coverageTotal.statements.total}
               </div>
             </div>
             <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
@@ -602,8 +677,7 @@ export default function CoverageReportPanel({
                 {formatPct(coverageTotal.functions.pct)}
               </div>
               <div className="text-xs text-text-tertiary">
-                {coverageTotal.functions.covered}/
-                {coverageTotal.functions.total}
+                {coverageTotal.functions.covered}/{coverageTotal.functions.total}
               </div>
             </div>
             <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
@@ -618,69 +692,382 @@ export default function CoverageReportPanel({
               </div>
             </div>
           </div>
+        ) : null}
 
-          <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border/70">
-            <div className="h-full overflow-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="sticky top-0 z-10 bg-surface-secondary">
-                  <tr className="border-b border-border">
-                    <th className="px-3 py-2 font-medium text-text-secondary">
-                      <SortHeader label="File" activeKey="name" />
-                    </th>
-                    <th className="px-3 py-2 font-medium text-text-secondary">
-                      <SortHeader label="Statements" activeKey="statements" />
-                    </th>
-                    <th className="px-3 py-2 font-medium text-text-secondary">
-                      <SortHeader label="Branches" activeKey="branches" />
-                    </th>
-                    <th className="hidden px-3 py-2 font-medium text-text-secondary sm:table-cell">
-                      <SortHeader label="Functions" activeKey="functions" />
-                    </th>
-                    <th className="hidden px-3 py-2 font-medium text-text-secondary sm:table-cell">
-                      <SortHeader label="Lines" activeKey="lines" />
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedEntries.map((entry) => (
-                    <tr
-                      key={entry.path}
-                      className="border-b border-border/70 last:border-b-0 hover:bg-surface-secondary/40"
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-semibold text-text-primary">文件摘要</div>
+          <div className="text-xs text-text-tertiary">
+            共 {fileEntries.length} 个文件
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border/70">
+          <div className="h-full overflow-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="sticky top-0 z-10 bg-surface-secondary">
+                <tr className="border-b border-border">
+                  <th className="px-3 py-2 font-medium text-text-secondary">
+                    <SortHeader label="File" activeKey="name" />
+                  </th>
+                  <th className="px-3 py-2 font-medium text-text-secondary">
+                    <SortHeader label="Tests" activeKey="tests" />
+                  </th>
+                  <th className="px-3 py-2 font-medium text-text-secondary">
+                    <SortHeader label="Passed" activeKey="passed" />
+                  </th>
+                  <th className="px-3 py-2 font-medium text-text-secondary">
+                    <SortHeader label="Failed" activeKey="failed" />
+                  </th>
+                  <th className="hidden px-3 py-2 font-medium text-text-secondary lg:table-cell">
+                    <SortHeader label="Skipped" activeKey="skipped" />
+                  </th>
+                  <th className="hidden px-3 py-2 font-medium text-text-secondary lg:table-cell">
+                    <SortHeader label="Duration" activeKey="duration" />
+                  </th>
+                  <th className="px-3 py-2 font-medium text-text-secondary">
+                    <SortHeader label="Statements" activeKey="statements" />
+                  </th>
+                  <th className="hidden px-3 py-2 font-medium text-text-secondary xl:table-cell">
+                    <SortHeader label="Branches" activeKey="branches" />
+                  </th>
+                  <th className="hidden px-3 py-2 font-medium text-text-secondary xl:table-cell">
+                    <SortHeader label="Functions" activeKey="functions" />
+                  </th>
+                  <th className="hidden px-3 py-2 font-medium text-text-secondary xl:table-cell">
+                    <SortHeader label="Lines" activeKey="lines" />
+                  </th>
+                  <th className="px-3 py-2 font-medium text-text-secondary">
+                    <span className="text-xs font-medium">Details</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedEntries.map((entry) => (
+                  <tr
+                    key={entry.path}
+                    className="border-b border-border/70 last:border-b-0 hover:bg-surface-secondary/40"
+                  >
+                    <td
+                      className="max-w-[220px] truncate px-3 py-2 font-mono text-text-primary sm:max-w-[300px]"
+                      title={entry.path}
                     >
-                      <td
-                        className="max-w-[200px] truncate px-3 py-2 font-mono text-text-primary sm:max-w-[300px]"
-                        title={entry.path}
+                      {entry.name}
+                    </td>
+                    <td className="px-3 py-2 text-text-primary">{entry.tests}</td>
+                    <td className="px-3 py-2 text-success">{entry.passed}</td>
+                    <td
+                      className={`px-3 py-2 ${
+                        entry.failed > 0 ? "text-danger" : "text-text-primary"
+                      }`}
+                    >
+                      {entry.failed}
+                    </td>
+                    <td className="hidden px-3 py-2 text-text-secondary lg:table-cell">
+                      {entry.skipped}
+                    </td>
+                    <td className="hidden px-3 py-2 text-text-secondary lg:table-cell">
+                      {entry.durationMs > 0 ? formatDuration(entry.durationMs) : "-"}
+                    </td>
+                    <td className="px-3 py-2">
+                      <CoveragePctCell pct={entry.coverage?.statements.pct} />
+                    </td>
+                    <td className="hidden px-3 py-2 xl:table-cell">
+                      <CoveragePctCell pct={entry.coverage?.branches.pct} />
+                    </td>
+                    <td className="hidden px-3 py-2 xl:table-cell">
+                      <CoveragePctCell pct={entry.coverage?.functions.pct} />
+                    </td>
+                    <td className="hidden px-3 py-2 xl:table-cell">
+                      <CoveragePctCell pct={entry.coverage?.lines.pct} />
+                    </td>
+                    <td className="px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedFilePath(entry.path)}
+                        className="inline-flex items-center gap-1 rounded-md border border-border/70 px-2 py-1 text-xs font-medium text-text-primary transition-colors hover:bg-surface-secondary"
                       >
-                        {entry.name}
-                      </td>
-                      <td className="px-3 py-2">
-                        <CoveragePctCell pct={entry.statements} />
-                      </td>
-                      <td className="px-3 py-2">
-                        <CoveragePctCell pct={entry.branches} />
-                      </td>
-                      <td className="hidden px-3 py-2 sm:table-cell">
-                        <CoveragePctCell pct={entry.functions} />
-                      </td>
-                      <td className="hidden px-3 py-2 sm:table-cell">
-                        <CoveragePctCell pct={entry.lines} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        <FileText className="h-3.5 w-3.5" />
+                        查看
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {!coverageTotal && resultSummary ? (
+          <div className="rounded-lg border border-border/70 bg-surface-secondary/40 px-3 py-4 text-sm text-text-secondary">
+            当前只找到了测试结果，覆盖率明细报告不可用。
+          </div>
+        ) : null}
+      </Card>
+
+      <ModalShell
+        open={Boolean(selectedEntry)}
+        title={selectedEntry ? `${selectedEntry.name} · 测试详情` : undefined}
+        width={920}
+        maxHeight={720}
+        onClose={() => setSelectedFilePath(null)}
+      >
+        {selectedEntry ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
+                <div className="text-xs text-text-tertiary">Tests</div>
+                <div className="text-lg font-semibold text-text-primary">
+                  {selectedEntry.tests}
+                </div>
+              </div>
+              <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
+                <div className="text-xs text-text-tertiary">Passed</div>
+                <div className="text-lg font-semibold text-success">
+                  {selectedEntry.passed}
+                </div>
+              </div>
+              <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
+                <div className="text-xs text-text-tertiary">Failed</div>
+                <div
+                  className={`text-lg font-semibold ${
+                    selectedEntry.failed > 0 ? "text-danger" : "text-text-primary"
+                  }`}
+                >
+                  {selectedEntry.failed}
+                </div>
+              </div>
+              <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
+                <div className="text-xs text-text-tertiary">Duration</div>
+                <div className="text-lg font-semibold text-text-primary">
+                  {selectedEntry.durationMs > 0
+                    ? formatDuration(selectedEntry.durationMs)
+                    : "-"}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border/70 bg-surface-secondary/40 px-3 py-3 text-xs text-text-secondary">
+              <div className="font-mono text-text-primary">{selectedEntry.path}</div>
+            </div>
+
+            <div className="space-y-3">
+              {selectedEntry.coverage && selectedCoverageFile ? (
+                <div className="rounded-lg border border-border/70 bg-surface-secondary/30 px-3 py-3">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-text-primary">
+                        覆盖率明细
+                      </div>
+                      <div className="text-xs text-text-tertiary">
+                        没有独立测试记录时，也会保留该文件的覆盖率诊断信息。
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                    <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
+                      <div className="text-xs text-text-tertiary">Statements</div>
+                      <div
+                        className={`text-lg font-semibold ${getPctClass(selectedEntry.coverage.statements.pct)}`}
+                      >
+                        {formatPct(selectedEntry.coverage.statements.pct)}
+                      </div>
+                      <div className="text-xs text-text-tertiary">
+                        {selectedEntry.coverage.statements.covered}/
+                        {selectedEntry.coverage.statements.total}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
+                      <div className="text-xs text-text-tertiary">Branches</div>
+                      <div
+                        className={`text-lg font-semibold ${getPctClass(selectedEntry.coverage.branches.pct)}`}
+                      >
+                        {formatPct(selectedEntry.coverage.branches.pct)}
+                      </div>
+                      <div className="text-xs text-text-tertiary">
+                        {selectedEntry.coverage.branches.covered}/
+                        {selectedEntry.coverage.branches.total}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
+                      <div className="text-xs text-text-tertiary">Functions</div>
+                      <div
+                        className={`text-lg font-semibold ${getPctClass(selectedEntry.coverage.functions.pct)}`}
+                      >
+                        {formatPct(selectedEntry.coverage.functions.pct)}
+                      </div>
+                      <div className="text-xs text-text-tertiary">
+                        {selectedEntry.coverage.functions.covered}/
+                        {selectedEntry.coverage.functions.total}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
+                      <div className="text-xs text-text-tertiary">Lines</div>
+                      <div
+                        className={`text-lg font-semibold ${getPctClass(selectedEntry.coverage.lines.pct)}`}
+                      >
+                        {formatPct(selectedEntry.coverage.lines.pct)}
+                      </div>
+                      <div className="text-xs text-text-tertiary">
+                        {selectedEntry.coverage.lines.covered}/
+                        {selectedEntry.coverage.lines.total}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-2">
+                    <div className="rounded-lg border border-border/70 bg-surface-primary px-3 py-3">
+                      <div className="text-xs font-medium text-text-primary">
+                        执行命中概览
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-text-secondary">
+                        <div>
+                          行命中: {countCoveredHits(selectedCoverageFile.lines.hits)}
+                        </div>
+                        <div>
+                          行未命中: {countUncoveredHits(selectedCoverageFile.lines.hits)}
+                        </div>
+                        <div>
+                          语句命中:{" "}
+                          {countCoveredHits(selectedCoverageFile.statements.hits)}
+                        </div>
+                        <div>
+                          语句未命中:{" "}
+                          {countUncoveredHits(selectedCoverageFile.statements.hits)}
+                        </div>
+                        <div>
+                          函数命中:{" "}
+                          {countCoveredHits(selectedCoverageFile.functions.hits)}
+                        </div>
+                        <div>
+                          函数未命中:{" "}
+                          {countUncoveredHits(selectedCoverageFile.functions.hits)}
+                        </div>
+                        <div>
+                          分支未命中: {uncoveredBranches.length}
+                        </div>
+                        <div>
+                          分支总数: {selectedCoverageFile.branches.length}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-border/70 bg-surface-primary px-3 py-3">
+                      <div className="text-xs font-medium text-text-primary">
+                        未覆盖线索
+                      </div>
+                      <div className="mt-2 grid grid-cols-1 gap-2 text-[11px] text-text-secondary">
+                        <div>
+                          <span className="font-medium text-text-primary">Lines:</span>{" "}
+                          {uncoveredLines.length > 0 ? uncoveredLines.join(", ") : "无"}
+                        </div>
+                        <div>
+                          <span className="font-medium text-text-primary">
+                            Statements:
+                          </span>{" "}
+                          {uncoveredStatements.length > 0
+                            ? uncoveredStatements.join(", ")
+                            : "无"}
+                        </div>
+                        <div>
+                          <span className="font-medium text-text-primary">
+                            Functions:
+                          </span>{" "}
+                          {uncoveredFunctions.length > 0
+                            ? uncoveredFunctions.join(", ")
+                            : "无"}
+                        </div>
+                        <div>
+                          <span className="font-medium text-text-primary">
+                            Branches:
+                          </span>{" "}
+                          {uncoveredBranches.length > 0
+                            ? uncoveredBranches.join(" | ")
+                            : "无"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {selectedEntry.suites.length > 0 ? (
+                selectedEntry.suites.map((suite) => (
+                  <div
+                    key={suite.absoluteName || suite.name}
+                    className="rounded-lg border border-border/70"
+                  >
+                    <div className="flex items-start justify-between gap-3 border-b border-border/70 px-3 py-2.5">
+                      <div className="min-w-0">
+                        <div
+                          className="truncate font-mono text-xs font-medium text-text-primary"
+                          title={suite.absoluteName || suite.name}
+                        >
+                          {suite.name}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-tertiary">
+                          <span>{suite.assertionResults.length} tests</span>
+                          <span>{formatDuration(getSuiteDuration(suite))}</span>
+                        </div>
+                      </div>
+                      <span
+                        className={`shrink-0 text-xs font-medium ${getStatusClass(suite.status)}`}
+                      >
+                        {suite.status}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 px-3 py-3">
+                      {suite.assertionResults.map((test) => (
+                        <div
+                          key={test.fullName}
+                          className="rounded-md border border-border/70 bg-surface-secondary/45 px-2.5 py-2"
+                        >
+                          <div className="flex min-w-0 items-center justify-between gap-2">
+                            <span
+                              className="truncate text-xs text-text-primary"
+                              title={test.fullName}
+                            >
+                              {test.fullName}
+                            </span>
+                            <span
+                              className={`shrink-0 text-[11px] font-medium ${getStatusClass(test.status)}`}
+                            >
+                              {test.status}
+                              {typeof test.duration === "number"
+                                ? ` · ${formatDuration(test.duration)}`
+                                : ""}
+                            </span>
+                          </div>
+                          {test.failureMessages.length > 0 ? (
+                            <pre className="mt-2 max-h-[160px] overflow-auto whitespace-pre-wrap rounded border border-danger/20 bg-danger-soft px-2 py-1.5 text-[11px] leading-4 text-danger-text">
+                              {test.failureMessages.join("\n\n")}
+                            </pre>
+                          ) : null}
+                        </div>
+                      ))}
+
+                      {suite.message ? (
+                        <pre className="max-h-[120px] overflow-auto whitespace-pre-wrap rounded border border-border bg-surface-secondary px-2 py-1 text-[11px] leading-4 text-text-secondary">
+                          {suite.message}
+                        </pre>
+                      ) : null}
+                    </div>
+                  </div>
+                ))
+              ) : selectedEntry.coverage ? (
+                <div className="rounded-lg border border-border/70 bg-surface-secondary/40 px-3 py-4 text-sm text-text-secondary">
+                  当前文件没有独立测试用例记录，已展示覆盖率诊断信息。
+                </div>
+              ) : (
+                <div className="rounded-lg border border-border/70 bg-surface-secondary/40 px-3 py-4 text-sm text-text-secondary">
+                  当前文件没有可展示的测试明细。
+                </div>
+              )}
             </div>
           </div>
-
-          <div className="text-xs text-text-tertiary">
-            共 {fileEntries.length} 个文件 · 点击表头可排序
-          </div>
-        </>
-      ) : resultSummary ? (
-        <div className="rounded-lg border border-border/70 bg-surface-secondary/40 px-3 py-4 text-sm text-text-secondary">
-          仅保留测试结果摘要，覆盖率明细未随包发布。
-        </div>
-      ) : null}
-    </Card>
+        ) : null}
+      </ModalShell>
+    </>
   );
 }

@@ -86,24 +86,20 @@ function copyPath(sourcePath, destinationPath, label) {
 }
 
 function copyTestResults(sourceDir, destinationDir, label) {
-  const rawSource = path.join(sourceDir, "test-results.json");
-  const summarySource = path.join(sourceDir, "test-results-summary.json");
-
-  if (!fs.existsSync(rawSource)) {
-    throw new Error(`Missing ${label} test results: ${rawSource}`);
-  }
-  if (!fs.existsSync(summarySource)) {
-    throw new Error(`Missing ${label} test results summary: ${summarySource}`);
-  }
+  const filenames = ["test-report.json", "coverage-report.json"];
 
   fs.rmSync(destinationDir, { recursive: true, force: true });
   fs.mkdirSync(destinationDir, { recursive: true });
-  fs.copyFileSync(rawSource, path.join(destinationDir, "test-results.json"));
-  fs.copyFileSync(
-    summarySource,
-    path.join(destinationDir, "test-results-summary.json"),
-  );
-  console.log(`Copied ${label} test results JSON: ${destinationDir}`);
+
+  for (const filename of filenames) {
+    const sourcePath = path.join(sourceDir, filename);
+    if (!fs.existsSync(sourcePath)) {
+      throw new Error(`Missing ${label} report file: ${sourcePath}`);
+    }
+    fs.copyFileSync(sourcePath, path.join(destinationDir, filename));
+  }
+
+  console.log(`Copied ${label} test report JSON: ${destinationDir}`);
 }
 
 console.log("Preparing shared desktop artifacts...");
@@ -134,15 +130,15 @@ if (shouldPrepareLocalModels) {
   );
 }
 
-let desktopCoveragePath;
-let serverCoveragePath;
+let desktopReportPath;
+let serverReportPath;
 
 if (skipTests) {
   console.log("Skipping release test report generation because --notest was set.");
 } else {
   const reportResult = generateReleaseTestReports();
-  desktopCoveragePath = reportResult.desktopCoverageDir;
-  serverCoveragePath = reportResult.serverCoverageDir;
+  desktopReportPath = reportResult.clientReportDir;
+  serverReportPath = reportResult.serverReportDir;
 }
 
 execSync("pnpm internal:build:desktop", { cwd: projectRoot, stdio: "inherit" });
@@ -154,12 +150,12 @@ if (!fs.existsSync(serverBundleArtifactsRoot)) {
 }
 if (!skipTests) {
   copyTestResults(
-    desktopCoveragePath,
+    desktopReportPath,
     path.join(serverBundleArtifactsRoot, "client-coverage"),
     "frontend",
   );
   copyTestResults(
-    serverCoveragePath,
+    serverReportPath,
     path.join(serverBundleArtifactsRoot, "server-coverage"),
     "server",
   );

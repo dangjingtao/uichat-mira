@@ -1,6 +1,6 @@
 Status: Planned
 Owner: chat / runtime
-Last verified: 2026-06-28
+Last verified: 2026-07-02
 Layer: raw-source
 Module: Chat
 Feature: AgentRuntime
@@ -71,7 +71,9 @@ Phase 1 的目标是做出适合当前产品的 Agent MVP：
 
 ### 已完成
 
-- `capabilityIntentStep` 已接入 embedding + cosine similarity 的通用能力召回节点。
+- 当前主链已拆成 `capabilitySelectStep -> toolGuardStep`：
+  - `capabilitySelectStep` 负责获取 Harness 候选并完成本轮候选选择
+  - `toolGuardStep` 只负责本地格式/合法性守卫，不再承担第二套主识别
 - `approval` 已作为独立 LangGraph 节点接入主链。
 - `tool` 已作为独立 LangGraph 节点接入主链，并负责选择低风险能力、交由 Harness 执行。
 - `error` 已作为独立 LangGraph 节点接入主链。
@@ -86,12 +88,13 @@ Phase 1 的目标是做出适合当前产品的 Agent MVP：
 - 已新增 `GET /agent/runs/:runId`、`POST /agent/runs/:runId/approve`、`POST /agent/runs/:runId/reject`、`POST /agent/runs/:runId/cancel` 的 Agent 路由骨架。
 - `AgentRun` 现在已经有单独的后端路由入口，审批状态不再只停留在消息 metadata。
 - approve 现已把本轮批准的 tool id 写入运行态，并触发 resume helper 继续执行。
-- `AgentRunStore` 已验证可回环保存 `pendingApproval`、`approvedToolIds`、`contextBudget`。
+- `AgentRunStore` 已验证可回环保存 `pendingApproval`、`approvedInvocations`、`contextBudget`。
 - `AgentRunStore` 已验证可完成收尾状态更新（`complete`）。
-- `resumeApprovedAgentRun` 已验证会在批准后恢复运行，并保留 `approvedToolIds` 与 `contextBudget`。
+- `resumeApprovedAgentRun` 已验证会在批准后恢复运行，并保留 `approvedInvocations` 与 `contextBudget`。
 - approve 后恢复完成的 Agent 结果已能回写原 assistant 消息，不再只改变 `AgentRun` 状态。
 - `AgentRun` 已显式记录审批挂起消息落点（assistant message id / parent id），保证 resume 后仍能续写同一轮消息。
 - `AgentRun` 已完成 SQLite 持久化读写闭环；运行态读取采用“内存优先，缺失后查 repository”，恢复后仍可继续推进状态。
+- approve 后恢复阶段新增的 execution trace 已能回写到原 assistant 消息；刷新线程后，后续执行节点不会丢失或退回旧审批态。
 - `AgentPolicy` 已验证允许 `read` / `web_search`，并拦截 `edit` / `terminal` / `external_mcp`。
 - `AgentTraceEmitter` 已验证可正确生成 `data-execution-node` payload。
 - `approvalNode` 已验证在缺少 pending approval 时会直接发 error trace。
@@ -105,11 +108,11 @@ Phase 1 的目标是做出适合当前产品的 Agent MVP：
 - `UChatExecutionTrace` 已验证可渲染 Agent `plan` / `approval` 节点，并保持展开后详情可见。
 - `UChatThreadView` 已验证可显示 `blocked` Agent 状态提示。
 
-### 进行中
+### 当前口径
 
-- 审批 UI 已接通 approve / reject 路由，基础交互已具备处理中禁点、成功反馈与卡片内错误提示。
-- Agent 运行中 / 等待审批 / 阻断 / 失败的前端状态文案与消息态展示已基本统一，仍待结合完整手测继续压边界。
-- `AgentGraph` 已收成有限步迭代图；tool result 回流、loop guard、无证据不冒充执行结果都已经在代码和测试里落地。
+- 一期主链已收口到可交付状态。
+- 当前仍保留的未完成项，不再属于一期阻断项，而是后续增强项。
+- 剩余需继续推进的内容，统一以下方 `Phase 1 Remaining` 为准。
 
 ### Bug List
 
@@ -129,6 +132,10 @@ Phase 1 的目标是做出适合当前产品的 Agent MVP：
 - `data-execution-node -> uchat message.parts.data -> executionParsers -> UChatExecutionTrace` 这条展示链已经打通，并有前端 runtime / view 自动化测试覆盖。
 - `AgentGraph` 当前真实形态已经是有限步迭代执行；Phase 1 剩下的是把联调边界继续压稳，而不是再补主链骨架。
 - Phase 1 当前已通过 `pnpm check`、关键 server tests、关键 desktop tests，主线代码已经收口到可继续联调的状态。
+- `approve -> resume` 的真实前端链路已手测通过：批准后会继续执行、生成最终回答，刷新线程后 trace 与正文都能保留。
+- `Capability / Tool` 执行态分层已在 graph、resume、持久化与 trace 中收口；执行层以 `toolId` 为主，不再依赖旧的 capability/tool 混用语义。
+- Harness 的 schema 校验与 workspace boundary contract 已在真实 `POST /mcp/invocations` 接口层手测生效。
+- 守卫链路现已明确分层：候选选择和调用前守卫是两个独立节点；守卫节点不再继续调用 embedding。
 
 ### 暂不做
 
@@ -178,7 +185,7 @@ Phase 1 的目标是做出适合当前产品的 Agent MVP：
 - [x] 默认允许工程任务所需的低风险动作与上下文收集。
 - [x] 默认阻断 edit / terminal / external side-effect。
 - [x] 复用 `server/src/services/context-budget/` 作为 Agent 输入前的统一 token budget packer。
-- [x] `capabilityIntentStep` 已接入 embedding + cosine similarity 的通用能力召回节点。
+- [x] 当前主链已拆成 `capabilitySelectStep -> toolGuardStep`，候选选择与调用前守卫职责已分离。
 
 ### 3. LangGraph AgentGraph
 
@@ -240,13 +247,14 @@ Phase 1 的目标是做出适合当前产品的 Agent MVP：
 ### Backend
 
 - [x] `AgentRunStore` create / get / update / complete。
-- [x] `AgentRunStore` 可回环保存 `pendingApproval`、`approvedToolIds`、`contextBudget`。
-- [x] `resumeApprovedAgentRun` 会在批准后恢复运行，并保留 `approvedToolIds` 与 `contextBudget`。
+- [x] `AgentRunStore` 可回环保存 `pendingApproval`、`approvedInvocations`、`contextBudget`。
+- [x] `resumeApprovedAgentRun` 会在批准后恢复运行，并保留 `approvedInvocations` 与 `contextBudget`。
 - [x] `AgentRun` 持久化已覆盖读取、恢复和后续状态推进，且不会破坏内存态单测。
 - [x] `AgentRun` 可在内存态丢失后从 repository 读回。
 - [x] `AgentRun` 缺 `runtimeInput` 时会按错误优先策略直接失败，不做降级。
 - [x] 审批态 `approve / reject / cancel` 边界已覆盖测试。
 - [x] 审批恢复后会把完成结果续写回原 assistant 消息；reject 不会误写恢复消息。
+- [x] 审批恢复后新增的 execution trace 会续写回原 assistant 消息，刷新线程后仍可读。
 - [x] `AgentPolicy` 允许 `read` / `web_search`。
 - [x] `AgentPolicy` 阻断 `edit` / `terminal` / `external_mcp`。
 - [x] `AgentTraceEmitter` 正确生成 `data-execution-node` payload。
@@ -258,6 +266,8 @@ Phase 1 的目标是做出适合当前产品的 Agent MVP：
 - [x] `AgentGraph` 有限步迭代 path：tool result 会回流到后续判断，而不是一次 tool 后直接结束语义。
 - [x] `AgentGraph` loop guard：超过最大步数时会停止并给出明确状态。
 - [x] 无真实工具结果 / 检索证据时，不会伪造“已查看目录/文件/网页”的执行结论。
+- [x] 执行态 capability/tool 分层：`selectedToolId / pendingToolCall.toolId / lastToolExecution.toolId` 已独立收口。
+- [x] Harness 统一 schema / boundary contract：高风险工具缺参会报校验错误，workspace 越界会给出明确 boundary 审批原因。
 - [x] chat route：普通发送不受影响。
 - [x] chat route：`agentEnabled = true` 创建 AgentRun 并返回最终回答。
 - [x] graph node error 能产生 error trace，且不静默降级。
@@ -278,10 +288,12 @@ Phase 1 的目标是做出适合当前产品的 Agent MVP：
 - [x] 运行 `pnpm check`。
 - [x] 如有新增后端测试，运行相关 server test。
 - [x] 如有新增前端测试，运行相关 desktop test。
-- [ ] 本地启动开发流程，验证普通 chat。
-- [ ] 本地启动开发流程，验证 Agent 按钮请求。
+- [x] 本地启动开发流程，验证普通 chat。
+- [x] 本地启动开发流程，验证 Agent 按钮请求。
 - [ ] 本地验证 RAG thread 不回退。
-- [ ] 本地验证高风险工具不会自动执行。
+- [x] 本地验证高风险工具不会自动执行。
+- [x] 本地验证审批恢复后 trace 刷新不丢。
+- [x] 本地验证 Harness 缺参 / 越界 contract 生效。
 
 ## Owner Manual Test List
 
@@ -293,6 +305,13 @@ Phase 1 的目标是做出适合当前产品的 Agent MVP：
 - [ ] 被阻断的高风险动作提示是否清楚。
 - [ ] 最终回答质量是否满足第一期 MVP 预期。
 
+## Latest Manual Verification
+
+- [x] Agent 线程内发送高风险文件删除请求，会进入审批等待。
+- [x] 点击 `批准` 后，Agent 会继续执行，而不是停留在审批态。
+- [x] 批准后可看到后续节点：`工具选择`、`下一步判断`、`组织最终回答`、`检查结果`。
+- [x] 刷新线程后，恢复阶段的 execution trace 与最终正文仍然可见。
+
 ## Completion Criteria
 
 - [x] Agent 按钮能触发 AgentRun。
@@ -303,3 +322,14 @@ Phase 1 的目标是做出适合当前产品的 Agent MVP：
 - [x] execution trace 全链路可见。
 - [x] 普通 chat 不回退。
 - [x] `pnpm check` 通过。
+
+## Phase 1 Remaining
+
+- 当前仍未明确做完、但也不再阻断一期收尾的，只剩这几项后续增强：
+  - 工具 + RAG 自然组合
+  - 更强的 observation-aware 回看升级
+  - `blockedReason / terminal reason` 可观测性增强
+  - `evaluate` 节点语义升级
+- 另外还有一项验证缺口尚未补票据：
+  - 本地验证 RAG thread 不回退
+- 除以上项目外，一期主链按当前文档口径视为已收口。

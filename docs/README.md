@@ -89,6 +89,7 @@ Related:
 ### 开发支撑
 
 - `developments/README.md`
+- `developments/frontend-route-navigation-protocol.md`
 - `developments/release-management.md`
 - `developments/request-wrapper.md`
 - `developments/frontend-i18n.md`
@@ -99,10 +100,12 @@ Related:
 
 ### 集成
 
+- `microapp/README.md`
 - `integrations/wecom-admin-setup-checklist.md`
 - `integrations/wecom-cloudflare-worker-poc.md`
 - `integrations/enterprise-wecom-implementation-checklist.md`
 - `integrations/enterprise-wecom-integration-poc.md`
+- `integrations/wecom-microapp-interface-design.md`
 - `integrations/wecom-instance-capability-design.md`
 - `integrations/wecom-instance-capability-implementation-checklist.md`
 - `integrations/third-party-integration-backend-design.md`
@@ -168,6 +171,7 @@ Related:
 
 ## 目录说明
 
+- `microapp/`：微应用模块定义、接入点绑定关系、跨平台业务工作流边界
 - `architecture/`：运行时边界、API 契约、实现边界
 - `build/`：构建、打包、release 产物与测试报告入包规则
 - `platform/`：桌面壳层与平台运行环境

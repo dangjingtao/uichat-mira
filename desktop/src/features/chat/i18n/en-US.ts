@@ -6,6 +6,7 @@ const chatPending = {
       archive: "Archive",
       delete: "Delete",
       workspaces: "Workspaces",
+      historyThreads: "History Threads",
       workspaceCreate: "Create Workspace",
       workspaceAddThread: "Add to Workspace",
       workspaceSelect: "Select Workspace",
@@ -22,6 +23,9 @@ const chatPending = {
       workspaceDeleteTitle: "Delete Workspace",
       workspaceDeleteDescription: "Deleting this workspace will also delete all threads inside it. This action cannot be undone.",
       workspaceDeleteConfirm: "Delete Workspace",
+      threadDeleteTitle: "Delete Conversation",
+      threadDeleteDescription: "Deleting this conversation will permanently remove all messages in it. This action cannot be undone.",
+      threadDeleteConfirm: "Delete Conversation",
       tools: {
         search: "Chat Search",
         searchDescription: "Find previous threads quickly",

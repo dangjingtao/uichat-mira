@@ -1,4 +1,5 @@
 import { resolveHarnessCapabilityProfiles } from "./capability-profiles.js";
+import { resolveHarnessActionProfiles } from "./action-profiles.js";
 import { resolveHarnessToolExposure } from "./exposure.js";
 import { executeLocalEmbedding } from "@/services/internal-capabilities/local-embedding.js";
 import { executeLocalRerank } from "@/services/internal-capabilities/local-rerank.js";
@@ -33,10 +34,22 @@ export interface HarnessCapabilityDiagnosticsResult {
     capabilityId: string;
     preferredToolId: string;
     supportingToolIds: string[];
+    actionProfileId?: string;
+    actionProfileTitle?: string;
+    actionProfileDescription?: string;
     title: string;
     description: string;
     domain: string;
     source: "internal" | "external";
+    tags: string[];
+  }>;
+  actionProfiles: Array<{
+    actionProfileId: string;
+    runtimeToolId: string;
+    title: string;
+    description: string;
+    domain: string;
+    source: "internal";
     tags: string[];
   }>;
   candidates: CapabilityIntentCandidate[];
@@ -79,8 +92,6 @@ const RULE_HINTS: Record<string, string[]> = {
   workspace_edit: ["edit", "write", "replace", "modify", "patch", "修改", "编辑", "写入", "替换"],
   web_research: ["latest", "current", "news", "web", "search", "today", "最新", "当前", "搜索", "联网"],
   terminal_execution: ["terminal", "command", "shell", "run", "cmd", "powershell", "命令", "终端", "执行"],
-  wecom_notification: ["wecom", "notify", "send", "message", "企业微信", "通知", "发送"],
-  wecom_directory_lookup: ["wecom", "org", "directory", "contact", "组织", "通讯录", "成员"],
 };
 
 const computeRuleScore = (input: {
@@ -178,6 +189,7 @@ export const resolveHarnessCapabilityDiagnostics = async (
     query: input.query,
   });
   const profiles = resolveHarnessCapabilityProfiles(exposure.visibleDefinitions);
+  const actionProfiles = resolveHarnessActionProfiles(exposure.visibleDefinitions);
 
   if (!input.query.trim() || profiles.length === 0) {
     return {
@@ -189,6 +201,22 @@ export const resolveHarnessCapabilityDiagnostics = async (
         capabilityId: profile.id,
         preferredToolId: profile.preferredToolId,
         supportingToolIds: profile.supportingToolIds,
+        ...(profile.actionProfileId
+          ? {
+              actionProfileId: profile.actionProfileId,
+              actionProfileTitle: profile.actionProfileTitle,
+              actionProfileDescription: profile.actionProfileDescription,
+            }
+          : {}),
+        title: profile.title,
+        description: profile.description,
+        domain: profile.domain,
+        source: profile.source,
+        tags: profile.tags,
+      })),
+      actionProfiles: actionProfiles.map((profile) => ({
+        actionProfileId: profile.id,
+        runtimeToolId: profile.runtimeToolId,
         title: profile.title,
         description: profile.description,
         domain: profile.domain,
@@ -256,6 +284,7 @@ export const resolveHarnessCapabilityDiagnostics = async (
         source: profile.source,
         domain: profile.domain,
         tags: profile.tags,
+        actionProfileId: profile.actionProfileId,
       };
     })
     .filter((candidate): candidate is CapabilityIntentCandidate => candidate !== null)
@@ -354,8 +383,24 @@ export const resolveHarnessCapabilityDiagnostics = async (
     rerankModel,
     profiles: profiles.map((profile) => ({
       capabilityId: profile.id,
-      preferredToolId: profile.preferredToolId,
-      supportingToolIds: profile.supportingToolIds,
+        preferredToolId: profile.preferredToolId,
+        supportingToolIds: profile.supportingToolIds,
+        ...(profile.actionProfileId
+          ? {
+              actionProfileId: profile.actionProfileId,
+              actionProfileTitle: profile.actionProfileTitle,
+              actionProfileDescription: profile.actionProfileDescription,
+            }
+          : {}),
+        title: profile.title,
+        description: profile.description,
+        domain: profile.domain,
+        source: profile.source,
+      tags: profile.tags,
+    })),
+    actionProfiles: actionProfiles.map((profile) => ({
+      actionProfileId: profile.id,
+      runtimeToolId: profile.runtimeToolId,
       title: profile.title,
       description: profile.description,
       domain: profile.domain,

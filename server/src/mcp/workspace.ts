@@ -87,6 +87,80 @@ export const resolveWorkspacePath = (inputPath: unknown) => {
   return resolved;
 };
 
+const getWorkspaceRealRoot = (workspaceRoot: string) => {
+  try {
+    return fs.realpathSync.native(workspaceRoot);
+  } catch {
+    return path.resolve(workspaceRoot);
+  }
+};
+
+const assertPathInsideWorkspaceRoot = (workspaceRoot: string, targetPath: string) => {
+  const relative = path.relative(workspaceRoot, targetPath);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw mcpBadRequest("path must stay inside workspace root");
+  }
+};
+
+const findNearestExistingAncestor = (targetPath: string) => {
+  let current = targetPath;
+  while (!fs.existsSync(current)) {
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return null;
+    }
+    current = parent;
+  }
+
+  return current;
+};
+
+export const resolveWorkspaceWritePath = (inputPath: unknown) => {
+  const workspaceRoot = getWorkspaceRoot();
+  const resolved = resolveWorkspacePath(inputPath);
+  const workspaceRealRoot = getWorkspaceRealRoot(workspaceRoot);
+  const existingAncestor = findNearestExistingAncestor(resolved);
+
+  if (!existingAncestor) {
+    throw mcpBadRequest("path must stay inside workspace root");
+  }
+
+  let resolvedAncestor = existingAncestor;
+  try {
+    resolvedAncestor = fs.realpathSync.native(existingAncestor);
+  } catch {
+    resolvedAncestor = path.resolve(existingAncestor);
+  }
+
+  assertPathInsideWorkspaceRoot(workspaceRealRoot, resolvedAncestor);
+  return resolved;
+};
+
+export const resolveWorkspaceDirectoryPath = (inputPath: unknown) => {
+  const workspaceRoot = getWorkspaceRoot();
+  const resolved = resolveWorkspacePath(inputPath);
+
+  if (!fs.existsSync(resolved)) {
+    throw mcpBadRequest(`cwd must be an existing workspace directory: ${String(inputPath ?? ".")}`);
+  }
+
+  const stat = fs.statSync(resolved);
+  if (!stat.isDirectory()) {
+    throw mcpBadRequest(`cwd must be an existing workspace directory: ${String(inputPath ?? ".")}`);
+  }
+
+  const workspaceRealRoot = getWorkspaceRealRoot(workspaceRoot);
+  let resolvedDirectory = resolved;
+  try {
+    resolvedDirectory = fs.realpathSync.native(resolved);
+  } catch {
+    resolvedDirectory = path.resolve(resolved);
+  }
+
+  assertPathInsideWorkspaceRoot(workspaceRealRoot, resolvedDirectory);
+  return resolvedDirectory;
+};
+
 export const ensureParentDir = (targetPath: string) => {
   const parentDir = path.dirname(targetPath);
   fs.mkdirSync(parentDir, { recursive: true });

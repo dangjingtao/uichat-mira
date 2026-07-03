@@ -63,11 +63,16 @@ Doc Type: current-contract
 - `edit`
 - `web_search`
 - `terminal`
-- `browser_action`
 
 外部工具来自用户接入的 MCP server。
 
 它们不直接替代内置 capability。
+
+当前还要明确一条边界：
+
+- 企业微信、飞书这类第三方内部集成能力，不属于 Harness 当前内置工具面
+- 它们可以保留在 `integrations/*` 体系中独立演进
+- 只有明确决定并入 Harness 的能力，才进入 `server/src/mcp/harness/runtime.ts` 注册面
 
 当前边界下：
 
@@ -329,6 +334,50 @@ artifact 的作用是：
 - 不做多 provider UI
 - 不在 tool 壳里散落 provider 分支
 
+#### Web Search 工具治理规则
+
+1. `web_search` 是统一公网搜索能力，不按 provider 拆工具。
+   `Tavily` / `SearXNG` 属于 Harness Runtime 的实现细节。
+
+2. LLM-facing tool schema 只应暴露：
+   - `query`
+   - `maxResults`
+
+3. `apiKey`、`baseUrl`、`provider` 不允许由模型生成。
+   它们只能来自受信任的 runtime config：
+   - trusted runtime override
+   - `web_search_settings`
+   - environment variables
+
+4. `baseUrl` 必须来自可信配置或 allowlist，禁止模型任意指定，避免 SSRF / 内网探测风险。
+
+5. `maxResults` 必须限幅。
+   当前建议默认 `5`，最大 `10` 或 `20`。
+
+6. 搜索结果必须标准化。
+   上层只消费统一结构，不直接依赖 `Tavily` / `SearXNG` 原始格式。
+
+7. provider 失败必须结构化返回。
+   不允许静默失败，也不允许上层在无结果时编造答案。
+
+8. `search-results` artifact 可以保留，但不得写入 `apiKey`、header、环境变量等敏感信息。
+
+#### 当前实现差距
+
+当前代码还保留了下面这些过渡口：
+
+- `apiKey`
+- `baseUrl`
+
+它们目前仍在 `web_search` 的 tool input schema 里出现，并且 invocation args 可以参与 provider 配置解析。
+
+这不符合长期治理目标。
+
+后续应收敛到：
+
+- LLM-facing schema 只暴露 `query` 与 `maxResults`
+- provider 相关配置只由受信任 runtime config 提供
+
 ### Edit
 
 当前第一阶段收口为：
@@ -339,6 +388,71 @@ artifact 的作用是：
 
 - `write_file`
 - `replace_block`
+
+并支持：
+
+- `dryRun`
+
+当前现状语义：
+
+- `edit_file`
+  - 对一个已知路径的工作区文件执行修改
+- `write_file`
+  - 用给定 `content` 写入目标文件
+- `replace_block`
+  - 用 `expectedOldText` 匹配旧内容，匹配成功后替换为 `newText`
+- `dryRun`
+  - 预演模式，只返回准备执行的编辑结果，不实际写入文件
+
+#### 当前评审结论
+
+当前 `edit_file` 作为底层执行工具是够的，不建议因为语义不清就立刻扩出大量真实执行工具。
+
+但它作为 LLM / selector 可识别的语义入口偏粗，当前至少会混住三类高频意图：
+
+- 创建文件
+- 覆盖文件
+- 局部替换
+
+也就是说，当前问题不是执行能力不够，而是上层语义暴露不够稳定。
+
+#### 语义边界
+
+当前评审建议把这几类边界写死：
+
+- `create_file`
+  - 只处理新建
+  - 不负责覆盖已有文件
+  - 如果目标已存在，不应静默改写
+- `write_file`
+  - 处理完整内容写入
+  - 可以写新文件，也可以写已有文件
+  - 它的重点是“全量写入”，不是“仅新建”
+- `replace_block`
+  - 只处理局部替换
+  - 依赖旧内容匹配
+  - 不负责新建文件
+  - 不负责整文件覆盖
+- `edit_file`
+  - 当前更适合作为底层统一执行入口，或兼容 / 聚合入口
+  - 不适合长期同时承担最清晰的上层用户语义入口
+
+#### 风险边界
+
+无论是当前 `edit_file`，还是后续若拆出更清晰的语义入口，这组能力都属于：
+
+- `local-write`
+- `workspaceBound`
+- `requiresApproval`
+
+但风险层次仍应区分：
+
+- `create_file`
+  - 主要风险是误创建、路径越界
+- `write_file`
+  - 主要风险是覆盖已有内容、路径越界
+- `replace_block`
+  - 主要风险是错误替换目标块，但比全量覆盖更可控
 
 ### Terminal
 
@@ -355,15 +469,15 @@ artifact 的作用是：
 
 ### Browser Action
 
-当前代码里还存在：
+`browser_action` 目前不是 Harness 当前主能力域。
 
-- `wecom_notify_send`
-- `wecom_org_lookup`
-- `wecom_robot_notify`
+如果项目里仍有历史上的 `browser_action` 类型定义或第三方内部集成实现，这不代表它们属于 Harness 当前内置注册面。
 
-它们目前仍使用 `browser_action` 作为内部 domain。
+当前口径应以这条为准：
 
-这不代表它们已经进入当前 Tools workbench 的主能力域，只代表 runtime contract 里这一域尚未完全清理收口。
+- Harness 当前主内置能力域是 `read`、`edit`、`web_search`、`terminal`
+- 第三方内部集成能力默认留在 `integrations/*` 产品线
+- 是否清理 `browser_action` 历史 contract，后续再单独决策
 
 ## 与外部 MCP 的关系
 

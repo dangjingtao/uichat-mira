@@ -17,16 +17,16 @@ vi.mock("react-i18next", async (importOriginal) => {
 
 vi.mock("@/app/routes/settingsRoutes", () => ({
   useSettingsNavigationItems: () => [
-    { label: "settings.navigation.general", icon: () => null, to: "/settings/general" },
-    { label: "settings.navigation.model", icon: () => null, to: "/settings/model-setting" },
-    { label: "settings.navigation.tools", icon: () => null, to: "/settings/tools" },
-    { label: "settings.navigation.mcp", icon: () => null, to: "/settings/mcp" },
-    { label: "settings.navigation.enterpriseIntegrations", icon: () => null, to: "/settings/integrations" },
-    { label: "settings.navigation.knowledgeBase", icon: () => null, to: "/settings/knowledge-base" },
-    { label: "settings.navigation.evaluationCenter", icon: () => null, to: "/settings/evaluation/center" },
-    { label: "settings.navigation.roles", icon: () => null, to: "/settings/roles" },
-    { label: "settings.navigation.development", icon: () => null, to: "/settings/development" },
-    { label: "settings.navigation.about", icon: () => null, to: "/settings/about" },
+    { label: "settings.navigation.general", icon: () => null, to: "/settings/general", group: "general", order: 10, match: "exact", preserveSearch: false },
+    { label: "settings.navigation.model", icon: () => null, to: "/settings/model-setting", group: "basic", order: 10, match: "exact", preserveSearch: false },
+    { label: "settings.navigation.tools", icon: () => null, to: "/settings/tools", group: "basic", order: 20, match: "exact", preserveSearch: false },
+    { label: "settings.navigation.mcp", icon: () => null, to: "/settings/mcp", group: "basic", order: 30, match: "exact", preserveSearch: false },
+    { label: "settings.navigation.enterpriseIntegrations", icon: () => null, to: "/settings/integrations", group: "app", order: 20, match: "exact", preserveSearch: false },
+    { label: "settings.navigation.knowledgeBase", icon: () => null, to: "/settings/knowledge-base", group: "knowledge", order: 10, match: "prefix", preserveSearch: true },
+    { label: "settings.navigation.evaluationCenter", icon: () => null, to: "/settings/evaluation/center", group: "knowledge", order: 20, match: "prefix", preserveSearch: false },
+    { label: "settings.navigation.roles", icon: () => null, to: "/settings/roles", group: "app", order: 10, match: "exact", preserveSearch: false },
+    { label: "settings.navigation.development", icon: () => null, to: "/settings/development", group: "other", order: 10, match: "prefix", preserveSearch: false },
+    { label: "settings.navigation.about", icon: () => null, to: "/settings/about", group: "other", order: 20, match: "exact", preserveSearch: false },
   ],
 }));
 
@@ -45,5 +45,29 @@ describe("SettingsNavigation", () => {
     expect(
       screen.queryByText("settings.navigation.developmentLogs"),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps the parent item active on a deep knowledge base route", () => {
+    render(
+      <MemoryRouter initialEntries={["/settings/knowledge-base/detail"]}>
+        <SettingsNavigation />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("link", { name: "settings.navigation.knowledgeBase" })).toHaveClass("bg-primary/10");
+    expect(screen.getByRole("link", { name: "settings.navigation.evaluationCenter" })).not.toHaveClass("bg-primary/10");
+  });
+
+  it("preserves the active knowledge base query when linking inside the knowledge base section", () => {
+    render(
+      <MemoryRouter initialEntries={["/settings/knowledge-base?knowledgeBaseId=kb1"]}>
+        <SettingsNavigation />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("link", { name: "settings.navigation.knowledgeBase" })).toHaveAttribute(
+      "href",
+      "/settings/knowledge-base?knowledgeBaseId=kb1",
+    );
   });
 });

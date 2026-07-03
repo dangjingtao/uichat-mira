@@ -44,7 +44,7 @@ task_state: DONE
 ## Acceptance Criteria
 
 1. workspace rule 从 hard shortcut 降级为 hint / score 型信号，或至少显著收紧触发条件
-2. task model 在能力选择层保持最终意图裁决权
+2. Agent 侧不再承担第二套主识别；Harness 候选之后仅保留调用前守卫
 3. 安全放行仍明确由 `policy / approval / runtime` 负责
 4. 台账回填：
    - 对应 `GR-P1-3`
@@ -74,7 +74,7 @@ task_state: DONE
   - Updated direct selector tests to lock in the new behavior and parser contract.
 - Acceptance criteria evidence:
   - AC1: `selectCapabilityWithTaskModel` no longer returns early on `isWorkspaceIntentQuery`; workspace wording is downgraded to `buildWorkspaceIntentHint(...)` and sent as prompt context only.
-  - AC2: Selector decisions now always pass through the task model when candidates exist, including workspace-folder requests covered by `task-capability-selector.test.ts`.
+  - AC2: 2026-07-02 设计口径更新：主识别不再要求继续经过 task model；当前主线改为 Harness 候选暴露后进入 Agent 调用前守卫。
   - AC3: No `policy`, `approval`, or runtime execution files were modified; this task stays within the capability-selection layer.
   - AC4: This task addresses `GR-P1-3` and the raw review points:
     - `R01`: rule score remains a hint, not final routing authority
@@ -95,7 +95,7 @@ task_state: DONE
 - 当前状态：`DONE`
 - 结论依据：
   - workspace 规则已从强短路降级为 task-model 辅助提示
-  - task model 保留最终能力裁决权
+  - 2026-07-02 后续架构收口决定：task model 不再作为主线最终裁决；当前主线改为 Harness 候选 + Agent 调用前守卫
   - 解析契约已收紧，避免 `use_capability` 的脏成功态
 - 对应实现证据：
   - [server/src/agent/intent/task-capability-selector.ts](D:/workspace/rag-demo/server/src/agent/intent/task-capability-selector.ts:67)

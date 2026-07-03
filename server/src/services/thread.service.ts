@@ -52,6 +52,11 @@ export interface MessageResponse {
         fileId?: string;
         mimeType: string;
       }
+    | {
+        type: "data";
+        name: string;
+        value: unknown;
+      }
   >;
   metadata: Record<string, unknown>;
   createdAt: string;
@@ -112,6 +117,11 @@ export interface CreateMessageInput {
         filename: string;
         fileId?: string;
         mimeType: string;
+      }
+    | {
+        type: "data";
+        name: string;
+        value: unknown;
       }
   >;
   metadata?: Record<string, unknown>;
@@ -636,7 +646,8 @@ export const threadService = {
     const hasAttachmentPart = normalizedParts.some(
       (part) => part.type === "image" || part.type === "file",
     );
-    const hasSupportedContent = hasTextPart || hasAttachmentPart;
+    const hasDataPart = normalizedParts.some((part) => part.type === "data");
+    const hasSupportedContent = hasTextPart || hasAttachmentPart || hasDataPart;
     const normalizedMetadata = input.metadata ? JSON.stringify(input.metadata) : "{}";
     const existing = input.id ? messageRepository.findById(input.id) : undefined;
     const effectiveParentId =

@@ -489,7 +489,7 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
         tags: ["Tools"],
         summary: "Get persisted WeCom config",
         description:
-          "Return the backend-persisted WeCom configuration used by Harness wecom_* tools.",
+          "Return the backend-persisted WeCom configuration used by the internal WeCom integration routes and providers.",
         response: {
           200: successEnvelope({
             type: "object",
@@ -547,7 +547,7 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
         tags: ["Tools"],
         summary: "Persist WeCom config",
         description:
-          "Persist the WeCom configuration into the server SQLite database. These saved values are later used by Harness wecom_* tools as the default provider credentials.",
+          "Persist the WeCom configuration into the server SQLite database. These saved values are later used by the internal WeCom integration routes and providers as default credentials.",
           body: {
             type: "object",
             additionalProperties: false,

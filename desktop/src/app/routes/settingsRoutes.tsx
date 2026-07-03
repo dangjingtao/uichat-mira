@@ -11,6 +11,7 @@ import {
   Info,
   LibraryBig,
   ListChecks,
+  PanelsTopLeft,
   ShieldCheck,
   Wrench,
   UserRoundPen,
@@ -36,10 +37,25 @@ import McpSettings from "@/features/Settings/pages/Mcp/index";
 import IntegrationsSettings from "@/features/Settings/pages/Integrations/index";
 import ToolsSettings from "@/features/Settings/pages/Tools/index";
 import RoleSettings from "@/features/Settings/pages/Personas/index";
+import MicroAppsSettings from "@/features/Settings/pages/MicroApps/index";
+import MicroAppDetailPage from "@/features/Settings/pages/MicroApps/Detail";
+
+export type SettingsNavGroup =
+  | "general"
+  | "basic"
+  | "knowledge"
+  | "app"
+  | "other";
+
+export type SettingsNavMatchMode = "exact" | "prefix";
 
 type SettingsRouteNavMeta = {
   labelKey: string;
   icon: LucideIcon;
+  group: SettingsNavGroup;
+  order: number;
+  match?: SettingsNavMatchMode;
+  preserveSearch?: boolean;
 };
 
 type SettingsRouteConfig = {
@@ -53,28 +69,56 @@ export type SettingsNavigationItem = {
   label: string;
   icon: LucideIcon;
   to: string;
+  group: SettingsNavGroup;
+  order: number;
+  match: SettingsNavMatchMode;
+  preserveSearch: boolean;
 };
 
 const settingsRouteTree: SettingsRouteConfig[] = [
   {
     path: "general",
     element: <GeneralSettings />,
-    nav: { labelKey: "settings.navigation.general", icon: Bolt },
+    nav: { labelKey: "settings.navigation.general", icon: Bolt, group: "general", order: 10 },
   },
   {
     path: "model-setting",
     element: <ModelSettings />,
-    nav: { labelKey: "settings.navigation.model", icon: Blend },
+    nav: { labelKey: "settings.navigation.model", icon: Blend, group: "basic", order: 10 },
   },
   {
     path: "knowledge-base",
     element: <KnowledgeBaseSettings />,
-    nav: { labelKey: "settings.navigation.knowledgeBase", icon: LibraryBig },
+    nav: {
+      labelKey: "settings.navigation.knowledgeBase",
+      icon: LibraryBig,
+      group: "knowledge",
+      order: 10,
+      match: "prefix",
+      preserveSearch: true,
+    },
   },
   {
     path: "roles",
     element: <RoleSettings />,
-    nav: { labelKey: "settings.navigation.roles", icon: UserRoundPen },
+    nav: { labelKey: "settings.navigation.roles", icon: UserRoundPen, group: "app", order: 10 },
+  },
+  {
+    path: "micro-apps",
+    element: <MicroAppsSettings />,
+    nav: {
+      labelKey: "settings.navigation.microApps",
+      icon: PanelsTopLeft,
+      group: "app",
+      order: 15,
+      match: "prefix",
+    },
+    children: [
+      {
+        path: ":appId",
+        element: <MicroAppDetailPage />,
+      },
+    ],
   },
   {
     path: "knowledge-base/add",
@@ -93,6 +137,9 @@ const settingsRouteTree: SettingsRouteConfig[] = [
         nav: {
           labelKey: "settings.navigation.evaluationCenter",
           icon: ListChecks,
+          group: "knowledge",
+          order: 20,
+          match: "prefix",
         },
       },
       {
@@ -137,27 +184,35 @@ const settingsRouteTree: SettingsRouteConfig[] = [
     nav: {
       labelKey: "settings.navigation.development",
       icon: Braces,
+      group: "other",
+      order: 10,
+      match: "prefix",
     },
   },
   {
     path: "mcp",
     element: <McpSettings />,
-    nav: { labelKey: "settings.navigation.mcp", icon: Boxes },
+    nav: { labelKey: "settings.navigation.mcp", icon: Boxes, group: "basic", order: 30 },
   },
   {
     path: "integrations",
     element: <IntegrationsSettings />,
-    nav: { labelKey: "settings.navigation.enterpriseIntegrations", icon: ShieldCheck },
+    nav: {
+      labelKey: "settings.navigation.enterpriseIntegrations",
+      icon: ShieldCheck,
+      group: "app",
+      order: 20,
+    },
   },
   {
     path: "tools",
     element: <ToolsSettings />,
-    nav: { labelKey: "settings.navigation.tools", icon: Wrench },
+    nav: { labelKey: "settings.navigation.tools", icon: Wrench, group: "basic", order: 20 },
   },
   {
     path: "about",
     element: <About />,
-    nav: { labelKey: "settings.navigation.about", icon: Info },
+    nav: { labelKey: "settings.navigation.about", icon: Info, group: "other", order: 20 },
   },
   {
     path: "account",
@@ -188,6 +243,10 @@ function buildSettingsNavigationItems(
             label: translate(route.nav.labelKey),
             icon: route.nav.icon,
             to: currentPath,
+            group: route.nav.group,
+            order: route.nav.order,
+            match: route.nav.match ?? "exact",
+            preserveSearch: route.nav.preserveSearch ?? false,
           },
         ]
       : [];

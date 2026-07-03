@@ -237,6 +237,13 @@
 - `ui-hero` 只在明确需要更强视觉存在感时使用
 - 不要在业务页继续写 `rounded-2xl`、`rounded-3xl` 作为默认
 
+## 7.2 Tabs 组件约束
+
+- 页面级 tabs 优先复用 `NavigationCardTabs`，不要在业务页重复手写 tab rail
+- `NavigationCardTabs` 可基于 Radix Tabs primitives 实现交互与可访问性，但视觉仍需保持紧凑、低噪音
+- tab trigger 默认用 `surface-* + border + text-*` 建层，激活态只做轻量顶部强调，不铺满高饱和主色
+- 若只是局部模式切换或小范围过滤，优先使用 `SegmentedTabs`，不要把页面级 tabs 缩成胶囊按钮
+
 ## 8. Typography
 
 ### 8.1 字体角色

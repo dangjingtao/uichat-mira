@@ -9,6 +9,9 @@ export interface HarnessCapabilityProfile {
   tags: string[];
   preferredToolId: string;
   supportingToolIds: string[];
+  actionProfileId?: string;
+  actionProfileTitle?: string;
+  actionProfileDescription?: string;
 }
 
 const INTERNAL_PROFILE_BLUEPRINTS: Array<{
@@ -19,6 +22,9 @@ const INTERNAL_PROFILE_BLUEPRINTS: Array<{
   tags: string[];
   preferredToolId: string;
   supportingToolIds: string[];
+  actionProfileId?: string;
+  actionProfileTitle?: string;
+  actionProfileDescription?: string;
 }> = [
   {
     id: "workspace_lookup",
@@ -29,6 +35,7 @@ const INTERNAL_PROFILE_BLUEPRINTS: Array<{
     tags: ["workspace", "read", "lookup", "locate", "open"],
     preferredToolId: "read_locate",
     supportingToolIds: ["read", "read_list", "read_locate", "read_open", "read_extract", "read_slice"],
+    actionProfileId: "read_locate",
   },
   {
     id: "workspace_edit",
@@ -36,8 +43,11 @@ const INTERNAL_PROFILE_BLUEPRINTS: Array<{
     description: "Modify workspace files through managed, structured workspace operations.",
     domain: "edit",
     tags: ["workspace", "edit", "write", "replace", "delete", "move", "rename", "mutation"],
-    preferredToolId: "workspace_mutation",
+    preferredToolId: "edit_file",
     supportingToolIds: ["workspace_mutation", "edit_file"],
+    actionProfileId: "edit_create_file",
+    actionProfileTitle: "Edit Create File",
+    actionProfileDescription: "Create a new workspace file through managed file editing.",
   },
   {
     id: "web_research",
@@ -56,24 +66,9 @@ const INTERNAL_PROFILE_BLUEPRINTS: Array<{
     tags: ["terminal", "command", "shell", "process"],
     preferredToolId: "terminal_session",
     supportingToolIds: ["terminal_session"],
-  },
-  {
-    id: "wecom_notification",
-    title: "WeCom Notification",
-    description: "Send WeCom notifications or operational updates through configured integrations.",
-    domain: "browser_action",
-    tags: ["wecom", "notify", "message", "integration"],
-    preferredToolId: "wecom_notify_send",
-    supportingToolIds: ["wecom_notify_send"],
-  },
-  {
-    id: "wecom_directory_lookup",
-    title: "WeCom Directory Lookup",
-    description: "Look up WeCom organization structure and contact context.",
-    domain: "browser_action",
-    tags: ["wecom", "directory", "lookup", "org", "contact"],
-    preferredToolId: "wecom_org_lookup",
-    supportingToolIds: ["wecom_org_lookup"],
+    actionProfileId: "terminal_execute_command",
+    actionProfileTitle: "Terminal Execute Command",
+    actionProfileDescription: "Execute a controlled terminal command through the managed terminal runtime.",
   },
 ];
 
@@ -105,7 +100,7 @@ export const resolveHarnessCapabilityProfiles = (
     }
 
     matchedToolIds.forEach((toolId) => consumed.add(toolId));
-    profiles.push({
+  profiles.push({
       id: blueprint.id,
       title: blueprint.title,
       description: blueprint.description,
@@ -114,6 +109,13 @@ export const resolveHarnessCapabilityProfiles = (
       tags: blueprint.tags,
       preferredToolId: blueprint.preferredToolId,
       supportingToolIds: matchedToolIds,
+      ...(blueprint.actionProfileId
+        ? {
+            actionProfileId: blueprint.actionProfileId,
+            actionProfileTitle: blueprint.actionProfileTitle,
+            actionProfileDescription: blueprint.actionProfileDescription,
+          }
+        : {}),
     });
   }
 

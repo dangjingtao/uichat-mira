@@ -10,27 +10,17 @@ use std::sync::Mutex;
 use std::sync::OnceLock;
 #[cfg(not(debug_assertions))]
 use std::path::Path;
-#[cfg(not(debug_assertions))]
-use std::thread;
-#[cfg(not(debug_assertions))]
-use std::time::{Duration, Instant};
-#[cfg(not(debug_assertions))]
 use uuid::Uuid;
 use regex::Regex;
 use serde_json::Value;
 #[cfg(not(debug_assertions))]
-use tauri::{Manager, RunEvent};
+use tauri::{Manager, RunEvent, WindowEvent};
 
 #[cfg(not(debug_assertions))]
 struct BackendProcess(Mutex<Option<std::process::Child>>);
 
 #[cfg(all(windows, not(debug_assertions)))]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
-#[cfg(not(debug_assertions))]
-const BACKEND_START_TIMEOUT_MS: u64 = 15_000;
-#[cfg(not(debug_assertions))]
-const BACKEND_START_POLL_INTERVAL_MS: u64 = 300;
-
 #[cfg(not(debug_assertions))]
 fn stop_backend_process<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     let backend_process = app.state::<BackendProcess>();
@@ -291,49 +281,6 @@ async fn check_backend_health(token: Option<String>) -> Result<HealthCheckResult
     }
 }
 
-#[cfg(not(debug_assertions))]
-fn wait_for_backend_ready(
-    process: &mut std::process::Child,
-) -> Result<(), String> {
-    let client = reqwest::blocking::Client::new();
-    let health_url = format!("{}/health", get_backend_url());
-    let started_at = Instant::now();
-    let timeout = Duration::from_millis(BACKEND_START_TIMEOUT_MS);
-    let poll_interval = Duration::from_millis(BACKEND_START_POLL_INTERVAL_MS);
-
-    while started_at.elapsed() < timeout {
-        match client.get(&health_url).send() {
-            Ok(response) if response.status().is_success() => {
-                return Ok(());
-            }
-            Ok(_) | Err(_) => {}
-        }
-
-        match process.try_wait() {
-            Ok(Some(status)) => {
-                return Err(format!(
-                    "Bundled backend exited before becoming healthy: {}",
-                    status
-                ));
-            }
-            Ok(None) => {}
-            Err(error) => {
-                return Err(format!(
-                    "Failed to inspect bundled backend state: {}",
-                    error
-                ));
-            }
-        }
-
-        thread::sleep(poll_interval);
-    }
-
-    Err(format!(
-        "Bundled backend did not become healthy within {}ms: {}",
-        BACKEND_START_TIMEOUT_MS, health_url
-    ))
-}
-
 async fn check_database_health(token: Option<String>) -> Result<DatabaseHealthResult, String> {
     let client = reqwest::Client::new();
     let mut request = client.get(&format!("{}/db/health", get_backend_url()));
@@ -488,6 +435,12 @@ fn find_node_executable() -> PathBuf {
 pub fn run() {
     let builder = tauri::Builder::default()
         .append_invoke_initialization_script(desktop_runtime_initialization_script())
+        .on_window_event(|window, event| {
+            #[cfg(not(debug_assertions))]
+            if matches!(event, WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed) {
+                stop_backend_process(&window.app_handle());
+            }
+        })
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             get_backend_url_command,
@@ -514,8 +467,7 @@ pub fn run() {
             std::fs::create_dir_all(&log_dir)
                 .map_err(|error| format!("Failed to create log directory {:?}: {}", log_dir, error))?;
 
-            let mut process = start_backend_process(&data_dir, &log_dir, &jwt_secret, &settings_secret)?;
-            wait_for_backend_ready(&mut process)?;
+            let process = start_backend_process(&data_dir, &log_dir, &jwt_secret, &settings_secret)?;
             *app.state::<BackendProcess>().0.lock().unwrap() = Some(process);
             Ok(())
         });

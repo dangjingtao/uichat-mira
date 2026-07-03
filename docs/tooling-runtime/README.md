@@ -11,6 +11,8 @@ Canonical: true
 Related:
   - harness-runtime-design.md
   - harness-assessment-2026-06-28.md
+  - core-tool-matrix-review.md
+  - core-tool-rectification-ledger.md
   - project-map-design.md
   - context-builder-design.md
   - ../chat/agent-workspace-context-system.md
@@ -38,9 +40,11 @@ Related:
 3. `read-skill-design.md`
 4. `terminal-capability-checklist.md`
 5. `tools-ecosystem-research.md`
-6. `project-map-design.md`
-7. `context-builder-design.md`
-8. `../chat/agent-workspace-context-system.md`
+6. `core-tool-matrix-review.md`
+7. `core-tool-rectification-ledger.md`
+8. `project-map-design.md`
+9. `context-builder-design.md`
+10. `../chat/agent-workspace-context-system.md`
 
 ## 当前结构
 
@@ -76,8 +80,10 @@ Related:
 
 - `tools-ecosystem-research.md`
 - `tool-runtime-retrospective-2026-06-27.md`
+- `core-tool-matrix-review.md`
+- `core-tool-rectification-ledger.md`
 
-前者回答外部成熟方案与行业风向，后者回答这一轮工具运行时改造里踩过的坑与已经收回的边界。
+前者回答外部成熟方案与行业风向，后者回答这一轮工具运行时改造里踩过的坑与已经收回的边界，`core-tool-matrix-review.md` 负责从矩阵视角统一 `Read / Edit / Web Search / Terminal` 的语义、治理和 action profile 颗粒度，`core-tool-rectification-ledger.md` 负责按整改优先级推进执行项。
 
 ## 当前结论
 

@@ -83,6 +83,13 @@ Phase 2 当前实现说明：
   - `stderrSeparated`
   - approval / timeout / reused session 状态
 
+### 本轮评审补充
+
+- `attachSessionId` 复用已有 session，不等于自动继承执行权限
+- 在 thread / session 级 approval grant 落地前，每条新 command 仍然要过 policyNode / approval gate
+- 当前已补回归测试：
+  - 同一 `attachSessionId` 下只要 `command` 变化，Harness 仍返回 `awaiting_approval`
+
 ## Phase 3
 
 - [x] trace span 暴露

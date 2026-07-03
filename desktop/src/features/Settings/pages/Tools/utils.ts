@@ -95,11 +95,7 @@ export function buildToolDraft(tool: McpToolDefinition) {
         newText: "new text",
       });
     case "web_search":
-      return compactJson({
-        query: "OpenAI Codex",
-        apiKey: "",
-        baseUrl: "",
-      });
+      return compactJson({ query: "OpenAI Codex" });
     case "terminal_session":
       return compactJson({ command: "pwd", sessionMode: "ephemeral", timeoutMs: 2000 });
     default:

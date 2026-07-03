@@ -172,6 +172,7 @@ Related:
 - `Tool`
 - `KnowledgeBase`
 - `Role`
+- `MicroAPP`
 - `Docs`
 - `Develoments`
 
@@ -183,6 +184,7 @@ Related:
 - `provider` 相关页 -> `ModelSetting`
 - `tooling-runtime` 中以内置工具为主的页 -> `Tool`
 - `tooling-runtime` 中以外部 MCP / MCP product 为主的页 -> `MCP`
+- `microapp` area -> `MicroAPP`
 - `knowledge-system` -> `Docs`
 - `architecture / platform / evaluation / planning / bugfix / developments` 先统一 -> `Develoments`
 
@@ -294,6 +296,7 @@ Related:
 - `ModelSetting` 负责模型配置、provider 与模型接线
 - `Tool` 负责内置工具与工具运行时
 - `MCP` 负责外部 MCP 接入与 MCP 暴露面
+- `MicroAPP` 负责可注册微应用、接入点绑定的业务工作流与跨平台集成能力
 - `Docs` 负责文档系统、schema、索引、阅读规则与知识系统治理
 - `Develoments` 负责 runtime、platform、evaluation、规划、bugfix 与工程支撑
 

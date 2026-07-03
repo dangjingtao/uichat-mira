@@ -60,6 +60,21 @@ const getMarketplaceTransportDetail = (
   return transport.packageIdentifier;
 };
 
+const dedupeMarketplaceServers = (servers: McpMarketplaceServer[]) => {
+  const seen = new Set<string>();
+  const deduped: McpMarketplaceServer[] = [];
+
+  for (const server of servers) {
+    if (seen.has(server.id)) {
+      continue;
+    }
+    seen.add(server.id);
+    deduped.push(server);
+  }
+
+  return deduped;
+};
+
 const toFriendlyMcpActionError = (error: unknown, action: "connect" | "discover") => {
   const fallback =
     action === "connect"
@@ -165,7 +180,7 @@ export default function McpSettings() {
         }
 
         setMarketplaceServers((current) =>
-          options?.append ? [...current, ...result.servers] : result.servers,
+          dedupeMarketplaceServers(options?.append ? [...current, ...result.servers] : result.servers),
         );
         setNextCursor(result.metadata.nextCursor);
         setSourceUrl(result.metadata.sourceUrl);
@@ -580,8 +595,8 @@ export default function McpSettings() {
       {
         value: "marketplace" as const,
         label: (
-          <span className="flex items-center gap-1.5">
-            <Store className="h-4 w-4" />
+          <span className="flex items-center gap-1">
+            <Store className="h-3.5 w-3.5" />
             {t("settings.mcp.tabs.marketplace")}
           </span>
         ),
@@ -589,10 +604,10 @@ export default function McpSettings() {
       {
         value: "installed" as const,
         label: (
-          <span className="flex items-center gap-1.5">
-            <PackageCheck className="h-4 w-4" />
+          <span className="flex items-center gap-1">
+            <PackageCheck className="h-3.5 w-3.5" />
             {t("settings.mcp.tabs.installed")}
-            <span className="rounded-full bg-surface-secondary px-1.5 py-0.5 text-[10px] text-text-tertiary">
+            <span className="rounded-full bg-surface-secondary px-1.5 py-0 text-[10px] leading-4 text-text-tertiary">
               {installedServers.length}
             </span>
           </span>
@@ -668,7 +683,12 @@ export default function McpSettings() {
       <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-ui-panel border border-border bg-surface-primary shadow-shadow-sm">
         <div className="border-b border-border px-5 py-4">
           <div className="flex flex-wrap items-center gap-3">
-            <SegmentedTabs items={tabs} value={activeTab} onChange={setActiveTab} />
+            <SegmentedTabs
+              items={tabs}
+              value={activeTab}
+              onChange={setActiveTab}
+              size="sm"
+            />
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <div className="min-w-[220px] flex-1">
                 <TextInput

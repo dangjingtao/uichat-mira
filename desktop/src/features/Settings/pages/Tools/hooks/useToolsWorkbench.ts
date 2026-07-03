@@ -271,8 +271,6 @@ export function useToolsWorkbench() {
       parsedArgs = {
         ...parsedArgs,
         maxResults: normalizeWebSearchMaxResults(webSearchConfig.maxResults),
-        ...(webSearchConfig.apiKey.trim() ? { apiKey: webSearchConfig.apiKey.trim() } : {}),
-        ...(webSearchConfig.baseUrl.trim() ? { baseUrl: webSearchConfig.baseUrl.trim() } : {}),
       };
     }
 

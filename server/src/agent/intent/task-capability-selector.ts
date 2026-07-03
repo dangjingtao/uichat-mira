@@ -78,6 +78,7 @@ const LOCATE_TOKENS = [
 const OPEN_TOKENS = [
   "open",
   "read",
+  "cat",
   "查看内容",
   "打开",
   "读取",
@@ -106,10 +107,64 @@ const WRITE_TOKENS = [
   "overwrite",
   "save",
   "create file",
+  "create a file",
+  "new file",
+  "make file",
   "写入",
   "覆盖",
   "保存",
+  "创建文件",
   "新建文件",
+];
+
+const FILE_CREATION_TOKENS = [
+  "create file",
+  "create a file",
+  "new file",
+  "make file",
+  "write file",
+  "创建文件",
+  "新建文件",
+  "写入文件",
+];
+
+const FILE_WRITE_INTENT_TOKENS = [
+  "write",
+  "overwrite",
+  "save",
+  "write to",
+  "save to",
+  "overwrite file",
+  "写入",
+  "保存到",
+  "覆盖到",
+  "写到",
+];
+
+const FILE_TARGET_TOKENS = [
+  "file",
+  "files",
+  "path",
+  "readme",
+  "文件",
+  "路径",
+];
+
+const RANGE_TOKENS = [
+  "line",
+  "lines",
+  "page",
+  "pages",
+  "section",
+  "heading",
+  "snippet",
+  "range",
+  "行",
+  "页",
+  "章节",
+  "标题",
+  "片段",
+  "范围",
 ];
 
 const buildWorkspaceIntentHint = (query: string) => {
@@ -144,6 +199,88 @@ const buildWorkspaceIntentHint = (query: string) => {
   ]
     .filter(Boolean)
     .join(" ");
+};
+
+const hasPathLikeTarget = (query: string) => {
+  const normalized = normalizeQuery(query);
+  return (
+    /(?:^|[\s"'`(])(?:[a-z]:[\\/]|[./~]|[\w-]+[\\/])[\w./\\-]+/i.test(normalized) ||
+    /\b[\w-]+\.[a-z0-9]{1,8}\b/i.test(normalized)
+  );
+};
+
+const hasQuotedContent = (query: string) => /["'`].+?["'`]/.test(query);
+
+const hasExplicitReadRange = (query: string) => {
+  const normalized = normalizeQuery(query);
+  if (!normalized) {
+    return false;
+  }
+
+  if (containsAny(normalized, RANGE_TOKENS)) {
+    return true;
+  }
+
+  return (
+    /\bline\s+\d+(\s*-\s*\d+)?\b/i.test(normalized) ||
+    /\bpage\s+\d+(\s*-\s*\d+)?\b/i.test(normalized) ||
+    /第\s*\d+\s*行/u.test(query) ||
+    /第\s*\d+\s*页/u.test(query)
+  );
+};
+
+const isExplicitFileWriteIntent = (query: string) => {
+  const normalized = normalizeQuery(query);
+  return containsAny(normalized, FILE_CREATION_TOKENS);
+};
+
+const isStructuredFileWriteIntent = (query: string) => {
+  const normalized = normalizeQuery(query);
+  if (isExplicitFileWriteIntent(normalized)) {
+    return true;
+  }
+
+  const mentionsWriteAction = containsAny(normalized, FILE_WRITE_INTENT_TOKENS);
+  if (!mentionsWriteAction) {
+    return false;
+  }
+
+  if (containsAny(normalized, FILE_TARGET_TOKENS) && hasPathLikeTarget(normalized)) {
+    return true;
+  }
+
+  if (hasPathLikeTarget(normalized) && hasQuotedContent(query)) {
+    return true;
+  }
+
+  return /(?:write|save|overwrite)\s+.+?\s+(?:to|into)\s+.+/i.test(normalized) ||
+    /把.+?(?:写入|保存到|覆盖到).+/u.test(query);
+};
+
+const selectRuleBasedCapability = (input: {
+  query: string;
+  topCandidates: CapabilityIntentCandidate[];
+}): Pick<
+  CapabilityIntentResult,
+  "selectedCapabilityIds" | "decisionSource" | "decisionReason"
+> | null => {
+  if (!isStructuredFileWriteIntent(input.query)) {
+    return null;
+  }
+
+  const editCandidate = input.topCandidates.find(
+    (candidate) => candidate.domain === "edit" && candidate.capabilityId === "workspace_edit",
+  );
+  if (!editCandidate) {
+    return null;
+  }
+
+  return {
+    selectedCapabilityIds: [editCandidate.capabilityId],
+    decisionSource: "rule",
+    decisionReason:
+      "Explicit create/write-file intent should prefer managed Edit capability over terminal execution.",
+  };
 };
 
 const pickPreferredReadCandidate = (
@@ -194,14 +331,18 @@ const pickPreferredReadToolId = (
       ? supportingToolIds
       : [preferredToolId],
   );
+  const prefersExplicitOpen =
+    hasPathLikeTarget(query) ||
+    hasExplicitReadRange(query) ||
+    containsAny(normalized, OPEN_TOKENS);
   const preferredToolIds =
-    containsAny(normalized, DIRECTORY_LIST_TOKENS)
-      ? ["read_list", "read_locate", "read_open", "read"]
+    prefersExplicitOpen
+      ? ["read_open", "read_extract", "read_locate", "read_list", "read"]
+      : containsAny(normalized, DIRECTORY_LIST_TOKENS)
+        ? ["read_list", "read_locate", "read_open", "read_extract", "read"]
       : containsAny(normalized, LOCATE_TOKENS)
-        ? ["read_locate", "read_list", "read_open", "read"]
-        : containsAny(normalized, OPEN_TOKENS)
-          ? ["read_open", "read_extract", "read_slice", "read_locate", "read"]
-          : ["read_locate", "read_list", "read_open", "read"];
+        ? ["read_locate", "read_list", "read_open", "read_extract", "read"]
+      : ["read_locate", "read_list", "read_open", "read_extract", "read"];
 
   for (const toolId of preferredToolIds) {
     if (availableToolIds.has(toolId)) {
@@ -227,8 +368,14 @@ const pickPreferredEditToolId = (
 
   const prefersWorkspaceMutation =
     containsAny(normalized, DELETE_TOKENS) ||
-    containsAny(normalized, MOVE_TOKENS) ||
-    containsAny(normalized, WRITE_TOKENS);
+    containsAny(normalized, MOVE_TOKENS);
+
+  const prefersStructuredFileWrite =
+    isExplicitFileWriteIntent(normalized) || containsAny(normalized, WRITE_TOKENS);
+
+  if (prefersStructuredFileWrite && availableToolIds.has("edit_file")) {
+    return "edit_file";
+  }
 
   if (prefersWorkspaceMutation && availableToolIds.has("workspace_mutation")) {
     return "workspace_mutation";
@@ -366,6 +513,11 @@ export const selectCapabilityWithTaskModel = async (input: {
     };
   }
 
+  const ruleBasedSelection = selectRuleBasedCapability(input);
+  if (ruleBasedSelection) {
+    return ruleBasedSelection;
+  }
+
   let output = "";
   for await (const delta of providerProxyService.streamTaskChatText(
     buildSelectionMessages(input),
@@ -434,4 +586,8 @@ export const resolveSelectedToolIds = (input: {
 
     return candidate.preferredToolId || candidate.capabilityId;
   });
+};
+
+export const __taskCapabilitySelectorTestUtils = {
+  hasExplicitReadRange,
 };

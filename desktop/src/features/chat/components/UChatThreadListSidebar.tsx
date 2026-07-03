@@ -11,7 +11,6 @@ import {
   createChatWorkspace,
   deleteChatWorkspace,
   listChatWorkspaces,
-  updateThread,
   type ChatWorkspace,
 } from "@/shared/api/thread";
 import { UChatSidebarToolsModal } from "./UChatSidebarToolsModal";
@@ -41,7 +40,6 @@ export function UChatThreadListSidebar() {
   const [workspaceNameError, setWorkspaceNameError] = useState("");
   const [workspaceRootPath, setWorkspaceRootPath] = useState("");
   const [workspaceRootPathError, setWorkspaceRootPathError] = useState("");
-  const [workspacePickerThreadId, setWorkspacePickerThreadId] = useState<string | null>(null);
   const [toolsModalMode, setToolsModalMode] = useState<"search" | "workspace" | null>(null);
   const platform = getDesktopRuntime().platform;
 
@@ -104,7 +102,15 @@ export function UChatThreadListSidebar() {
 
   const handleDeleteThread = async (threadId: string) => {
     if (!capabilities.deleteThread) return;
-    await runtime.deleteThread(threadId);
+    Modal.confirm({
+      title: t("chat.sidebar.threadDeleteTitle"),
+      description: t("chat.sidebar.threadDeleteDescription"),
+      confirmText: t("chat.sidebar.threadDeleteConfirm"),
+      tone: "danger",
+      onConfirm: async () => {
+        await runtime.deleteThread(threadId);
+      },
+    });
   };
 
   const handleSidebarEntryClick = async (entry: ChatSidebarEntry) => {
@@ -164,18 +170,6 @@ export function UChatThreadListSidebar() {
     });
   };
 
-  const handleWorkspaceAssign = async (workspaceId: string) => {
-    const targetThreadId = workspacePickerThreadId ?? activeThreadId;
-    if (!targetThreadId) {
-      return;
-    }
-
-    await updateThread(targetThreadId, { workspaceId });
-    await runtime.refreshThread(targetThreadId);
-    setWorkspacePickerThreadId(null);
-    await refreshWorkspaces();
-  };
-
   return (
     <>
       <UChatSidebarView
@@ -190,7 +184,6 @@ export function UChatThreadListSidebar() {
         onSidebarEntryClick={handleSidebarEntryClick}
         onToggleWorkspaceGroup={() => {}}
         onDeleteWorkspace={handleWorkspaceDelete}
-        onAddThreadToWorkspace={handleWorkspaceAssign}
         onSelectThread={handleSelectThread}
         onArchiveThread={handleArchiveThread}
         onDeleteThread={handleDeleteThread}

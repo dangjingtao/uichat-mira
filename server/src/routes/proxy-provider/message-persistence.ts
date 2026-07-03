@@ -120,6 +120,31 @@ export interface PersistAssistantMessageInput {
   assistantMessageId: string;
   parentId: string | null;
   content: string;
+  parts?: Array<
+    | {
+        type: "text";
+        text: string;
+      }
+    | {
+        type: "image";
+        image: string;
+        filename?: string;
+        fileId?: string;
+        mediaType?: string;
+      }
+    | {
+        type: "file";
+        data: string;
+        filename: string;
+        fileId?: string;
+        mimeType: string;
+      }
+    | {
+        type: "data";
+        name: string;
+        value: unknown;
+      }
+  >;
   metadata?: Record<string, unknown>;
 }
 
@@ -129,9 +154,22 @@ export const persistAssistantMessage = ({
   assistantMessageId,
   parentId,
   content,
+  parts,
   metadata,
 }: PersistAssistantMessageInput) => {
-  if (!content.trim()) {
+  const normalizedParts =
+    parts && parts.length > 0
+      ? parts
+      : content.trim()
+        ? [
+            {
+              type: "text" as const,
+              text: content,
+            },
+          ]
+        : [];
+
+  if (!content.trim() && normalizedParts.length === 0) {
     return;
   }
 
@@ -140,12 +178,7 @@ export const persistAssistantMessage = ({
     parentId,
     role: "assistant",
     content,
-    parts: [
-      {
-        type: "text",
-        text: content,
-      },
-    ],
+    parts: normalizedParts,
     metadata,
   });
 };

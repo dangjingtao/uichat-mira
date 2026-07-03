@@ -1,13 +1,14 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation, type To } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { useMemo } from "react";
 import { ArrowLeft } from "lucide-react";
 import Sidebar from "../Sidebar";
 import NavItem from "@/shared/ui/NavItem";
 import Divider from "@/shared/ui/Divider";
-import { useSettingsNavigationItems } from "@/app/routes/settingsRoutes";
+import { type SettingsNavGroup, type SettingsNavigationItem, useSettingsNavigationItems } from "@/app/routes/settingsRoutes";
 
 /**
  * Shared shell for workspace-style pages.
@@ -70,33 +71,26 @@ export function WorkspaceShell({
 export function SettingsNavigation() {
   const { t } = useTranslation();
   const settingsNavigationItems = useSettingsNavigationItems();
+  const groupedItems = useMemo(() => {
+    const groups = new Map<SettingsNavGroup, SettingsNavigationItem[]>();
 
-  const generalItems = settingsNavigationItems.filter(
-    (item) => item.to === "/settings/general",
-  );
+    for (const item of [...settingsNavigationItems].sort((left, right) => left.order - right.order)) {
+      const current = groups.get(item.group) ?? [];
+      current.push(item);
+      groups.set(item.group, current);
+    }
 
-  const basicConfigItems = settingsNavigationItems.filter(
-    (item) =>
-      item.to === "/settings/model-setting" ||
-      item.to === "/settings/tools" ||
-      item.to === "/settings/mcp" ||
-      item.to === "/settings/integrations",
-  );
+    return groups;
+  }, [settingsNavigationItems]);
 
-  const knowledgeItems = settingsNavigationItems.filter(
-    (item) =>
-      item.to === "/settings/knowledge-base" ||
-      item.to === "/settings/evaluation/center",
-  );
+  const navGroupTitles: Partial<Record<SettingsNavGroup, string>> = {
+    basic: t("settings.navigation.basicConfig"),
+    knowledge: t("settings.navigation.knowledgeGroup"),
+    app: t("settings.navigation.appGroup"),
+    other: t("settings.navigation.otherGroup"),
+  };
 
-  const appItems = settingsNavigationItems.filter(
-    (item) => item.to === "/settings/roles",
-  );
-
-  const otherItems = settingsNavigationItems.filter(
-    (item) =>
-      item.to === "/settings/development" || item.to === "/settings/about",
-  );
+  const orderedGroups: SettingsNavGroup[] = ["general", "basic", "knowledge", "app", "other"];
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -109,42 +103,53 @@ export function SettingsNavigation() {
       </NavLink>
 
       <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-        <SettingsNavigationGroup items={generalItems} />
-        <Divider />
-        <SettingsNavigationGroup
-          title={t("settings.navigation.basicConfig")}
-          items={basicConfigItems}
-        />
-        {knowledgeItems.length > 0 ? (
-          <>
-            <Divider />
-            <SettingsNavigationGroup
-              title={t("settings.navigation.knowledgeGroup")}
-              items={knowledgeItems}
-            />
-          </>
-        ) : null}
-        {appItems.length > 0 ? (
-          <>
-            <Divider />
-            <SettingsNavigationGroup
-              title={t("settings.navigation.appGroup")}
-              items={appItems}
-            />
-          </>
-        ) : null}
-        {otherItems.length > 0 ? (
-          <>
-            <Divider />
-            <SettingsNavigationGroup
-              title={t("settings.navigation.otherGroup")}
-              items={otherItems}
-            />
-          </>
-        ) : null}
+        {orderedGroups.map((group, index) => {
+          const items = groupedItems.get(group) ?? [];
+
+          if (items.length === 0) {
+            return null;
+          }
+
+          return (
+            <div key={group}>
+              {index > 0 ? <Divider /> : null}
+              <SettingsNavigationGroup
+                title={navGroupTitles[group]}
+                items={items}
+              />
+            </div>
+          );
+        })}
       </div>
     </div>
   );
+}
+
+function isSettingsNavigationItemActive(item: SettingsNavigationItem, pathname: string) {
+  if (item.match === "prefix") {
+    return pathname === item.to || pathname.startsWith(`${item.to}/`);
+  }
+
+  return pathname === item.to;
+}
+
+function buildSettingsNavigationItemTarget(
+  item: SettingsNavigationItem,
+  pathname: string,
+  search: string,
+): To {
+  if (
+    item.preserveSearch &&
+    search &&
+    (pathname === item.to || pathname.startsWith(`${item.to}/`))
+  ) {
+    return {
+      pathname: item.to,
+      search,
+    };
+  }
+
+  return item.to;
 }
 
 function SettingsNavigationGroup({
@@ -152,8 +157,10 @@ function SettingsNavigationGroup({
   items,
 }: {
   title?: string;
-  items: ReturnType<typeof useSettingsNavigationItems>;
+  items: SettingsNavigationItem[];
 }) {
+  const location = useLocation();
+
   return (
     <div className="space-y-1">
       {title ? (
@@ -167,10 +174,10 @@ function SettingsNavigationGroup({
         return (
           <NavLink
             key={item.to}
-            to={item.to}
-            className={({ isActive }) =>
+            to={buildSettingsNavigationItemTarget(item, location.pathname, location.search)}
+            className={() =>
               `flex items-center gap-3 rounded-[10px] px-3 py-1.5 text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-elevated ${
-                isActive
+                isSettingsNavigationItemActive(item, location.pathname)
                   ? "bg-primary/10 text-text-primary"
                   : "text-text-secondary hover:bg-surface-secondary/70 hover:text-text-primary"
               }`

@@ -88,6 +88,61 @@ test("UChatThreadView hides legacy tool trace card when execution trace parts ex
   assert.equal(screen.queryByText("Tool Calls"), null);
 });
 
+test("UChatThreadView shows loading skeleton instead of welcome hero while hydrating a persisted thread", () => {
+  render(
+    <UChatThreadView
+      activeThreadId="thread-1"
+      title="Thread"
+      badges={[]}
+      messages={[]}
+      composer={{ text: "", attachments: [] }}
+      runStatus={{ type: "idle" }}
+      threadStatus="loading"
+      capabilities={{ composerActions: [], messagePresentation: {} }}
+      hasKnowledgeBase={false}
+      placeholder="Type"
+      isSendDisabled={false}
+      onComposerTextChange={() => {}}
+      onComposerAttachmentsChange={() => {}}
+      onSend={() => {}}
+      onComposerAction={() => {}}
+      threadContextTags={[]}
+      resolveAttachmentSource={(value) => value}
+    />,
+  );
+
+  assert.ok(screen.getByTestId("uchat-thread-loading-skeleton"));
+  assert.equal(screen.queryByText(i18n.t("chat.thread.empty.heading")), null);
+});
+
+test("UChatThreadView still shows welcome hero for the draft welcome state", () => {
+  const { container } = render(
+    <UChatThreadView
+      activeThreadId={null}
+      title="Thread"
+      badges={[]}
+      messages={[]}
+      composer={{ text: "", attachments: [] }}
+      runStatus={{ type: "idle" }}
+      threadStatus="idle"
+      capabilities={{ composerActions: [], messagePresentation: {} }}
+      hasKnowledgeBase={false}
+      placeholder="Type"
+      isSendDisabled={false}
+      onComposerTextChange={() => {}}
+      onComposerAttachmentsChange={() => {}}
+      onSend={() => {}}
+      onComposerAction={() => {}}
+      threadContextTags={[]}
+      resolveAttachmentSource={(value) => value}
+    />,
+  );
+
+  const heroImage = container.querySelector('img[src*="welcome-astronaut-hero.png"]');
+  assert.ok(heroImage);
+  assert.equal(screen.queryByTestId("uchat-thread-loading-skeleton"), null);
+});
+
 test("UChatThreadView still shows legacy tool trace card when no execution trace exists", () => {
   render(
     <UChatThreadView
@@ -148,6 +203,7 @@ test("UChatThreadView calls onAgentSend when the Agent button is clicked", () =>
       agentEnabled
       onAgentSend={onAgentSend}
       onToggleAgentEnabled={onToggleAgentEnabled}
+      agentToggleAvailability={{ enabled: true }}
       agentAvailability={{ enabled: true }}
       onApproveAgentRun={() => {}}
       onRejectAgentRun={() => {}}
@@ -186,6 +242,10 @@ test("UChatThreadView disables send arrow when Agent is enabled but workspace is
       agentEnabled
       onAgentSend={onAgentSend}
       onToggleAgentEnabled={onToggleAgentEnabled}
+      agentToggleAvailability={{
+        enabled: false,
+        disabledReason: "Bind a workspace before using Agent.",
+      }}
       onApproveAgentRun={() => {}}
       onRejectAgentRun={() => {}}
       agentAvailability={{
@@ -232,6 +292,10 @@ test("UChatThreadView keeps normal send enabled when Agent toggle is off", () =>
       agentEnabled={false}
       onAgentSend={onAgentSend}
       onToggleAgentEnabled={onToggleAgentEnabled}
+      agentToggleAvailability={{
+        enabled: false,
+        disabledReason: "Bind a workspace before using Agent.",
+      }}
       onApproveAgentRun={() => {}}
       onRejectAgentRun={() => {}}
       agentAvailability={{
@@ -275,6 +339,9 @@ test("UChatThreadView calls the real Agent toggle handler", () => {
       onSend={() => {}}
       agentEnabled={false}
       onToggleAgentEnabled={onToggleAgentEnabled}
+      agentToggleAvailability={{
+        enabled: true,
+      }}
       agentAvailability={{
         enabled: true,
       }}
@@ -311,6 +378,10 @@ test("UChatThreadView disables enabling Agent when workspace is unavailable", ()
       onSend={() => {}}
       agentEnabled={false}
       onToggleAgentEnabled={onToggleAgentEnabled}
+      agentToggleAvailability={{
+        enabled: false,
+        disabledReason: "Bind a workspace before using Agent.",
+      }}
       agentAvailability={{
         enabled: false,
         disabledReason: "Bind a workspace before using Agent.",

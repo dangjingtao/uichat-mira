@@ -10,7 +10,8 @@ import type { RetrievedChunk } from "@/services/rag-nodes";
 import {
   type AgentIntentEmbeddingConfig,
   type CapabilityIntentResult,
-  capabilityIntentNode,
+  capabilitySelectNode,
+  toolGuardNode,
 } from "./intent/index.js";
 import {
   evaluateNode,
@@ -59,6 +60,7 @@ const AgentGraphState = Annotation.Root({
   observations: Annotation<AgentObservation[] | undefined>,
   evidence: Annotation<AgentGraphOutput["evidence"] | undefined>,
   blockedReason: Annotation<string | undefined>,
+  terminalReason: Annotation<string | undefined>,
   contextBudget: Annotation<ContextBudgetAudit | undefined>,
   errorMessage: Annotation<string | undefined>,
   errorSourceNodeId: Annotation<string | undefined>,
@@ -67,6 +69,8 @@ const AgentGraphState = Annotation.Root({
   maxIterations: Annotation<number | undefined>,
   continueIteration: Annotation<boolean | undefined>,
   postToolReviewPending: Annotation<boolean | undefined>,
+  reviewDecision: Annotation<"capability" | "generate" | undefined>,
+  reviewReason: Annotation<string | undefined>,
 });
 
 type AgentGraphStateType = typeof AgentGraphState.State;
@@ -125,10 +129,7 @@ const routeAfterCapabilityIntent = (state: AgentGraphStateType) => {
     return "policyStep";
   }
 
-  if (
-    state.postToolReviewPending &&
-    state.lastToolExecution?.status === "completed"
-  ) {
+  if (state.postToolReviewPending) {
     return "generate";
   }
 
@@ -148,7 +149,15 @@ const routeAfterPlanStep = (state: AgentGraphStateType) => {
     return "error";
   }
 
-  return "capabilityIntentStep";
+  return "capabilitySelectStep";
+};
+
+const routeAfterCapabilitySelect = (state: AgentGraphStateType) => {
+  if (state.errorMessage) {
+    return "error";
+  }
+
+  return "toolGuardStep";
 };
 
 const routeAfterPolicy = (state: AgentGraphStateType) => {
@@ -188,8 +197,8 @@ const routeAfterRouteStep = (state: AgentGraphStateType) => {
     return "error";
   }
 
-  if (state.continueIteration) {
-    return "capabilityIntentStep";
+  if (state.reviewDecision === "capability") {
+    return "capabilitySelectStep";
   }
 
   return "generate";
@@ -200,7 +209,7 @@ const routeAfterRetrieve = (state: AgentGraphStateType) => {
     return "error";
   }
 
-  return "generate";
+  return "routeStep";
 };
 
 const routeAfterGenerate = (state: AgentGraphStateType) => {
@@ -234,7 +243,11 @@ const routeAfterApproval = (state: AgentGraphStateType) => {
 const agentStateGraph = new StateGraph(AgentGraphState)
   .addNode("prepareContext", createAgentNode("prepareContext", prepareContextNode))
   .addNode("planStep", createAgentNode("planStep", planNode))
-  .addNode("capabilityIntentStep", createAgentNode("capabilityIntentStep", capabilityIntentNode))
+  .addNode(
+    "capabilitySelectStep",
+    createAgentNode("capabilitySelectStep", capabilitySelectNode),
+  )
+  .addNode("toolGuardStep", createAgentNode("toolGuardStep", toolGuardNode))
   .addNode("policyStep", createAgentNode("policyStep", policyNode))
   .addNode("routeStep", createAgentNode("routeStep", routeStepNode))
   .addNode("approval", createAgentNode("approval", approvalNode))
@@ -249,10 +262,14 @@ const agentStateGraph = new StateGraph(AgentGraphState)
     "error",
   ])
   .addConditionalEdges("planStep", routeAfterPlanStep, [
-    "capabilityIntentStep",
+    "capabilitySelectStep",
     "error",
   ])
-  .addConditionalEdges("capabilityIntentStep", routeAfterCapabilityIntent, [
+  .addConditionalEdges("capabilitySelectStep", routeAfterCapabilitySelect, [
+    "toolGuardStep",
+    "error",
+  ])
+  .addConditionalEdges("toolGuardStep", routeAfterCapabilityIntent, [
     "policyStep",
     "retrieve",
     "generate",
@@ -266,8 +283,7 @@ const agentStateGraph = new StateGraph(AgentGraphState)
     "error",
   ])
   .addConditionalEdges("approval", routeAfterApproval, [END, "error"])
-  .addEdge("retrieve", "generate")
-  .addConditionalEdges("retrieve", routeAfterRetrieve, ["generate", "error"])
+  .addConditionalEdges("retrieve", routeAfterRetrieve, ["routeStep", "error"])
   .addConditionalEdges("tool", routeAfterTool, [
     "approval",
     "routeStep",
@@ -275,7 +291,7 @@ const agentStateGraph = new StateGraph(AgentGraphState)
     "error",
   ])
   .addConditionalEdges("routeStep", routeAfterRouteStep, [
-    "capabilityIntentStep",
+    "capabilitySelectStep",
     "generate",
     "error",
   ])
@@ -310,6 +326,8 @@ export const agentGraph = {
         maxIterations: input.maxIterations ?? DEFAULT_AGENT_MAX_ITERATIONS,
         continueIteration: false,
         postToolReviewPending: false,
+        reviewDecision: undefined,
+        reviewReason: undefined,
       },
       {
         configurable: {
@@ -337,6 +355,18 @@ export const agentGraph = {
         state.pendingApproval?.toolId,
       pendingToolCall: state.pendingToolCall,
       lastToolExecution: state.lastToolExecution,
+      blockedReason: state.blockedReason,
+      terminalReason:
+        state.terminalReason ??
+        (state.pendingApproval
+          ? "waiting_approval"
+          : state.errorMessage
+            ? "failed_error"
+            : state.blockedReason
+              ? "blocked"
+              : answer
+                ? "completed"
+                : "blocked"),
       contextBudget: state.contextBudget,
       errorMessage: state.errorMessage,
       errorSourceNodeId: state.errorSourceNodeId,
@@ -344,6 +374,8 @@ export const agentGraph = {
         ? "waiting_approval"
         : state.errorMessage
           ? "failed"
+          : state.blockedReason
+            ? "blocked"
           : answer
             ? "completed"
             : "blocked",

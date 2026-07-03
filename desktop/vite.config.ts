@@ -26,8 +26,8 @@ function createCoverageStaticPlugin() {
     name: "serve-coverage-report",
     configureServer(server: ViteDevServer) {
       server.middlewares.use("/client-coverage", (req, res, next) => {
-        const coverageDir = path.resolve(__dirname, "coverage");
-        if (!fs.existsSync(coverageDir)) {
+        const reportDir = path.resolve(__dirname, "test-report");
+        if (!fs.existsSync(reportDir)) {
           res.statusCode = 404;
           res.end("Coverage report not found");
           return;
@@ -38,9 +38,9 @@ function createCoverageStaticPlugin() {
         const safePath = path
           .normalize(requestedPath)
           .replace(/^(\.\.[/\\])+/, "");
-        const filePath = path.join(coverageDir, safePath);
+        const filePath = path.join(reportDir, safePath);
 
-        if (!filePath.startsWith(coverageDir)) {
+        if (!filePath.startsWith(reportDir)) {
           res.statusCode = 403;
           res.end("Forbidden");
           return;
@@ -120,7 +120,6 @@ export default defineConfig({
       "/server-coverage": {
         target: backendOrigin,
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/server-coverage/, "/coverage"),
       },
     },
   },

@@ -34,7 +34,7 @@ import MarkdownText from "@/shared/ui/MarkdownText";
 import Badge from "@/shared/ui/Badge";
 import DropdownMenu from "@/shared/ui/DropdownMenu";
 import Tooltip from "@/shared/ui/Tooltip";
-import { Button } from "@/shared/ui";
+import { Button, Skeleton } from "@/shared/ui";
 import { copyTextToClipboard } from "@/shared/lib/clipboard";
 import { message as uiMessage } from "@/shared/ui/Message";
 import {
@@ -173,6 +173,43 @@ const collapseDisplayParts = (
   return collapsed;
 };
 
+function UChatThreadLoadingSkeleton() {
+  return (
+    <div
+      className="flex flex-col gap-5 py-4"
+      data-testid="uchat-thread-loading-skeleton"
+    >
+      <div className="flex justify-start">
+        <div className="max-w-[min(100%,38rem)] rounded-[24px] border border-border/60 bg-surface-primary/65 px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+          <div className="flex items-start gap-3">
+            <Skeleton.Circle size={28} />
+            <div className="min-w-0 flex-1">
+              <Skeleton width="32%" height={12} className="mb-3" />
+              <Skeleton.Text lines={3} lastLineWidth="72%" />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="flex justify-end">
+        <div className="max-w-[min(100%,30rem)] rounded-[24px] border border-border/60 bg-surface-primary/55 px-4 py-3">
+          <Skeleton.Text lines={2} lastLineWidth="58%" />
+        </div>
+      </div>
+      <div className="flex justify-start">
+        <div className="max-w-[min(100%,40rem)] rounded-[24px] border border-border/60 bg-surface-primary/65 px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+          <div className="flex items-start gap-3">
+            <Skeleton.Circle size={28} />
+            <div className="min-w-0 flex-1">
+              <Skeleton width="24%" height={12} className="mb-3" />
+              <Skeleton.Text lines={4} lastLineWidth="64%" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // MessagePartContent renders one canonical message part into visible content.
 function MessagePartContent({
   part,
@@ -262,6 +299,7 @@ export function UChatThreadView({
   assistantTypingLabel,
   isAgentRunning,
   agentEnabled,
+  agentToggleAvailability,
   agentAvailability,
   onToggleAgentEnabled,
 }: {
@@ -306,6 +344,10 @@ export function UChatThreadView({
   assistantTypingLabel?: string;
   isAgentRunning?: boolean;
   agentEnabled?: boolean;
+  agentToggleAvailability?: {
+    enabled: boolean;
+    disabledReason?: string;
+  };
   agentAvailability?: {
     enabled: boolean;
     disabledReason?: string;
@@ -314,6 +356,10 @@ export function UChatThreadView({
 }) {
   const { t } = useTranslation();
   const isRunning = runStatus.type === "running";
+  const isHydratingPersistedThread =
+    activeThreadId !== null && threadStatus === "loading" && messages.length === 0;
+  const showWelcomeEmptyState =
+    activeThreadId === null && threadStatus !== "loading" && messages.length === 0;
   const [imagePreview, setImagePreview] = useState<ImagePreviewState | null>(
     null,
   );
@@ -416,13 +462,11 @@ export function UChatThreadView({
                     >
                       <UChatWelcomeEmptyState
                         activeThreadId={activeThreadId}
-                        isVisible={messages.length === 0}
+                        isVisible={showWelcomeEmptyState}
                       />
 
-                      {threadStatus === "loading" && messages.length === 0 ? (
-                        <div className="py-6 text-sm text-text-secondary">
-                          {t("common.status.loading")}
-                        </div>
+                      {isHydratingPersistedThread ? (
+                        <UChatThreadLoadingSkeleton />
                       ) : null}
 
                       {messages.map((message) => (
@@ -563,6 +607,7 @@ export function UChatThreadView({
                           isRunning={isRunning}
                           isSendDisabled={isSendDisabled}
                           agentEnabled={agentEnabled}
+                          agentToggleAvailability={agentToggleAvailability}
                           agentAvailability={agentAvailability}
                           onComposerAction={onComposerAction}
                           onRemoveThreadContextTag={onRemoveThreadContextTag}
@@ -723,6 +768,8 @@ function UChatMessageRow({
           status?: "waiting_approval" | "blocked" | "completed" | "failed";
           runId?: string;
           pendingApproval?: { toolId?: string; reason?: string };
+          blockedReason?: string | null;
+          terminalReason?: string | null;
           errorMessage?: string | null;
         })
       : null;
@@ -953,7 +1000,8 @@ function UChatMessageRow({
                     className={`mt-1 break-words text-xs ${agentStatusTone.detailClassName}`}
                   >
                     {agentMetadata.status === "blocked"
-                      ? agentMetadata.errorMessage ??
+                      ? agentMetadata.blockedReason ??
+                        agentMetadata.errorMessage ??
                         t("chat.thread.agent.blockedDetail")
                       : agentMetadata.status === "failed"
                         ? agentMetadata.errorMessage ??
@@ -1277,6 +1325,7 @@ function UChatComposerActions({
   isRunning,
   isSendDisabled,
   agentEnabled,
+  agentToggleAvailability,
   agentAvailability,
   onComposerAction,
   onRemoveThreadContextTag,
@@ -1291,6 +1340,10 @@ function UChatComposerActions({
   isRunning: boolean;
   isSendDisabled: boolean;
   agentEnabled?: boolean;
+  agentToggleAvailability?: {
+    enabled: boolean;
+    disabledReason?: string;
+  };
   agentAvailability?: {
     enabled: boolean;
     disabledReason?: string;
@@ -1310,7 +1363,7 @@ function UChatComposerActions({
   const [pendingAttachmentAction, setPendingAttachmentAction] =
     useState<ChatComposerAction | null>(null);
   const isAgentToggleDisabled =
-    agentEnabled !== true && agentAvailability?.enabled === false;
+    agentEnabled !== true && agentToggleAvailability?.enabled === false;
 
   const handleAction = (action: ChatComposerAction) => {
     if (action.disabled) {
@@ -1405,7 +1458,8 @@ function UChatComposerActions({
             aria-pressed={agentEnabled ? "true" : "false"}
             title={
               isAgentToggleDisabled
-                ? agentAvailability?.disabledReason ?? t("chat.thread.agent.toggleOn")
+                ? agentToggleAvailability?.disabledReason ??
+                  t("chat.thread.agent.toggleOn")
                 : agentEnabled
                   ? t("chat.thread.agent.toggleOff")
                   : t("chat.thread.agent.toggleOn")

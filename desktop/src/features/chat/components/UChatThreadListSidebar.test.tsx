@@ -9,6 +9,7 @@ import i18next from "i18next";
 const mockedApis = vi.hoisted(() => ({
   modalConfirmMock: vi.fn(),
   deleteChatWorkspaceMock: vi.fn(),
+  runtimeDeleteThreadMock: vi.fn(),
 }));
 
 const mockSidebarState = {
@@ -23,7 +24,9 @@ const mockSidebarState = {
   ],
   activeThreadId: null,
   threadListStatus: "ready",
-  capabilities: {},
+  capabilities: {
+    deleteThread: true,
+  },
 } as const;
 
 vi.mock("@/features/chat/core/runtime", () => ({
@@ -31,7 +34,7 @@ vi.mock("@/features/chat/core/runtime", () => ({
     enterWelcomeState: vi.fn(),
     selectThread: vi.fn(),
     archiveThread: vi.fn(),
-    deleteThread: vi.fn(),
+    deleteThread: mockedApis.runtimeDeleteThreadMock,
     refreshThread: vi.fn(),
     store: {
       getState: () => ({ resetComposer: vi.fn() }),
@@ -45,7 +48,6 @@ vi.mock("@/shared/api/thread", () => ({
   listChatWorkspaces: async () => [],
   createChatWorkspace: vi.fn(),
   deleteChatWorkspace: mockedApis.deleteChatWorkspaceMock,
-  updateThread: vi.fn(),
 }));
 
 vi.mock("@/shared/ui", async () => {
@@ -65,11 +67,13 @@ vi.mock("@/shared/uchat/ui", () => ({
     onSidebarEntryClick,
     onCreateWorkspace,
     onDeleteWorkspace,
+    onDeleteThread,
   }: {
     sidebarEntries?: Array<{ id: string; label: string }>;
     onSidebarEntryClick?: (entry: { id: string; label: string }) => void | Promise<void>;
     onCreateWorkspace?: () => void | Promise<void>;
     onDeleteWorkspace?: (workspaceId: string) => void | Promise<void>;
+    onDeleteThread?: (threadId: string) => void | Promise<void>;
   }) => (
     <div>
       {sidebarEntries.map((entry) => (
@@ -88,6 +92,9 @@ vi.mock("@/shared/uchat/ui", () => ({
       </button>
       <button type="button" onClick={() => void onDeleteWorkspace?.("workspace-1")}>
         Delete Workspace
+      </button>
+      <button type="button" onClick={() => void onDeleteThread?.("thread-1")}>
+        Delete Thread
       </button>
     </div>
   ),
@@ -118,6 +125,10 @@ void i18n.use(initReactI18next).init({
         "chat.sidebar.newConversation": "New Conversation",
         "chat.sidebar.tools.search": "Chat Search",
         "chat.sidebar.workspaceCreate": "Create Workspace",
+        "chat.sidebar.threadDeleteTitle": "Delete Conversation",
+        "chat.sidebar.threadDeleteDescription":
+          "Deleting this conversation will permanently remove all messages in it. This action cannot be undone.",
+        "chat.sidebar.threadDeleteConfirm": "Delete Conversation",
         "chat.sidebar.workspaceName": "Workspace Name",
         "chat.sidebar.workspaceRootPath": "Workspace Root Path",
         "chat.sidebar.workspaceRootPathInvalid": "Enter a valid absolute directory path",
@@ -133,6 +144,29 @@ void i18n.use(initReactI18next).init({
 });
 
 describe("UChatThreadListSidebar", () => {
+  it("shows confirmation before deleting a thread", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <I18nextProvider i18n={i18n}>
+        <UChatThreadListSidebar />
+      </I18nextProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Delete Thread" }));
+
+    expect(mockedApis.modalConfirmMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Delete Conversation",
+        description:
+          "Deleting this conversation will permanently remove all messages in it. This action cannot be undone.",
+        confirmText: "Delete Conversation",
+        tone: "danger",
+      }),
+    );
+    expect(mockedApis.runtimeDeleteThreadMock).not.toHaveBeenCalled();
+  });
+
   it("shows confirmation before deleting a workspace", async () => {
     const user = userEvent.setup();
 

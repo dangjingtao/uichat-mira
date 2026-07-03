@@ -102,6 +102,12 @@ export interface McpExecutionEnvironment {
       stderrEncoding: string;
     };
   };
+  toolConfig?: {
+    web_search?: {
+      apiKey?: string;
+      baseUrl?: string;
+    };
+  };
 }
 
 export interface McpResourceDefinition {
@@ -143,6 +149,9 @@ export interface McpToolDefinition {
   source: "internal" | "external";
   mode: McpToolMode;
   inputSchema: Record<string, unknown>;
+  inputSchemaByExposure?: Partial<
+    Record<"tools_list" | "agent_intent" | "chat_surface", Record<string, unknown>>
+  >;
   outputSchema?: Record<string, unknown>;
   tags: string[];
   capabilities: McpCapabilityMetadata;
@@ -206,6 +215,14 @@ export interface McpInvocationTrace {
   startedAt: string;
   finishedAt?: string;
   spans: McpTraceSpan[];
+  debugView?: {
+    invocationId: string;
+    toolId: string;
+    traceId: string;
+    spanCount: number;
+    runningSpanCount: number;
+    kinds: McpTraceSpanKind[];
+  };
 }
 
 export type McpStreamEvent =

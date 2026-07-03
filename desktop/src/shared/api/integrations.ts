@@ -46,6 +46,48 @@ export type IntegrationCapabilityStatus = {
   lastConnectedAt: string | null;
 };
 
+export type MicroAppType = "knowledge_query";
+
+export type MicroAppRecord = {
+  id: string;
+  type: MicroAppType;
+  name: string;
+  description: string;
+  supportedAccessPoints: string[];
+  bindingSchema: {
+    fields: Array<{
+      key: string;
+      label: string;
+      type:
+        | "knowledge_base_select"
+        | "text"
+        | "textarea"
+        | "number"
+        | "switch"
+        | "select";
+      required: boolean;
+      description?: string;
+      placeholder?: string;
+      defaultValue?: string | number | boolean | null;
+      options?: Array<{ label: string; value: string }>;
+    }>;
+  };
+  runtimeKey: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type IntegrationCapabilityMicroAppBindingRecord = {
+  id: string;
+  capabilityId: string;
+  microAppDefinitionId: string;
+  enabled: boolean;
+  config: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type IntegrationInstancePayload = {
   provider: IntegrationProviderCode;
   name?: string;
@@ -65,6 +107,12 @@ export type IntegrationCapabilityPayload = {
   config?: Record<string, unknown>;
   runtime?: Record<string, unknown>;
   isDefault?: boolean;
+};
+
+export type MicroAppPayload = {
+  name?: string;
+  description?: string;
+  enabled?: boolean;
 };
 
 export function getIntegrationProviders() {
@@ -105,6 +153,48 @@ export function getIntegrationCapabilities(params?: {
   return get<{ capabilities: IntegrationCapabilityRecord[] }>(
     `/integrations/capabilities${query ? `?${query}` : ""}`,
   );
+}
+
+export function getIntegrationMicroApps(params?: {
+  type?: MicroAppType;
+}) {
+  const search = new URLSearchParams();
+  if (params?.type) {
+    search.set("type", params.type);
+  }
+
+  const query = search.toString();
+  return get<{ microApps: MicroAppRecord[] }>(
+    `/integrations/micro-apps${query ? `?${query}` : ""}`,
+  );
+}
+
+export function updateIntegrationMicroApp(
+  id: string,
+  payload: MicroAppPayload,
+) {
+  return patch<{ microApp: MicroAppRecord }>(`/integrations/micro-apps/${id}`, payload);
+}
+
+export function getIntegrationCapabilityMicroAppBinding(id: string) {
+  return get<{
+    binding: IntegrationCapabilityMicroAppBindingRecord | null;
+    microApp: MicroAppRecord | null;
+  }>(`/integrations/capabilities/${id}/micro-app-binding`);
+}
+
+export function updateIntegrationCapabilityMicroAppBinding(
+  id: string,
+  input: {
+    microAppId: string | null;
+    enabled?: boolean;
+    config?: Record<string, unknown>;
+  },
+) {
+  return put<{
+    binding: IntegrationCapabilityMicroAppBindingRecord | null;
+    microApp: MicroAppRecord | null;
+  }>(`/integrations/capabilities/${id}/micro-app-binding`, input);
 }
 
 export function createIntegrationInstance(payload: IntegrationInstancePayload) {

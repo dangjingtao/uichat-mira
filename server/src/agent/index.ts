@@ -61,6 +61,8 @@ export const createAndRunAgent = async (
       agentRunStore.update(run.id, {
         status: "waiting_approval",
         currentStepId: output.pendingApproval.stepId,
+        blockedReason: output.blockedReason,
+        terminalReason: output.terminalReason,
         pendingApproval: output.pendingApproval,
         selectedCapabilityId: output.selectedCapabilityId,
         selectedToolId: output.pendingApproval.toolId,
@@ -73,6 +75,8 @@ export const createAndRunAgent = async (
       status: output.status,
       currentStepId: output.pendingApproval ? output.pendingApproval.stepId : undefined,
       contextBudget: output.contextBudget,
+      blockedReason: output.blockedReason,
+      terminalReason: output.terminalReason,
       selectedCapabilityId: output.selectedCapabilityId,
       selectedToolId: output.selectedToolId ?? output.pendingApproval?.toolId,
       pendingToolCall: output.pendingToolCall,

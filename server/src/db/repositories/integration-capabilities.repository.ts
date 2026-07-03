@@ -10,6 +10,7 @@ import {
 export type IntegrationCapabilityType =
   | "wecom.smart_robot"
   | "wecom.webhook_robot"
+  | "wecom.knowledge_query"
   | "wecom.sales_agent"
   | "lark.bot"
   | "lark.webhook"
@@ -191,6 +192,7 @@ const migrateWecomCapabilitiesFromLegacySettings = () => {
       })
       .run();
   }
+
 };
 
 export const integrationCapabilitiesRepository = {
@@ -204,6 +206,19 @@ export const integrationCapabilitiesRepository = {
       .select()
       .from(integrationCapabilities)
       .where(eq(integrationCapabilities.instanceId, instanceId))
+      .orderBy(
+        asc(integrationCapabilities.provider),
+        asc(integrationCapabilities.type),
+        asc(integrationCapabilities.createdAt),
+      )
+      .all()
+      .map(toRecord);
+  },
+
+  listAll() {
+    return getDb()
+      .select()
+      .from(integrationCapabilities)
       .orderBy(
         asc(integrationCapabilities.provider),
         asc(integrationCapabilities.type),

@@ -102,6 +102,226 @@ Doc Type: design
 4. 未知格式要可预测降级，不能只靠扩展名报浅层错误。
 5. 第一阶段优先稳 contract 与 harness，不优先追求格式铺满。
 
+## 评审结论补充
+
+这页在 `2026-07-02` 补充一轮 `Read` 工具评审结论。
+
+本轮结论不是删工具，而是把 6 个 `Read` 子工具的边界写死，避免后续代码和 selector 逐渐滑坡。
+
+保留的工具集合：
+
+- `read_list`
+- `read_locate`
+- `read_open`
+- `read_extract`
+- `read_slice`
+- `read`
+
+必须收紧的硬规则：
+
+1. `read` 只能做兼容 / 聚合 / fallback，不要抢精细工具语义。
+2. `read_locate` 只返回候选和短 preview，不承担最终阅读。
+3. `read_slice` 更适合内部窗口化，不作为普通用户意图首选。
+4. `read_open` 必须支持大文件降级，不保证全文一次返回。
+
+额外判断：
+
+- `read_locate` 必须支持内容定位 / 关键词定位。
+- 如果 `read_locate` 只能做路径或文件名定位，后续大量“找配置 / 找调用 / 找关键词”的请求会退化到 `terminal` 去做 `rg / grep`，这会造成终端被滥用。
+
+## 子工具语义
+
+### `read_list`
+
+语义：
+
+- 列目录
+- 看资源清单
+- 建立局部目录感
+
+职责：
+
+- 返回某个路径下的文件 / 目录候选
+- 给后续 `read_open` / `read_locate` 提供入口
+
+非职责：
+
+- 深度内容抽取
+- 相关性检索
+- 文档正文解析
+
+默认约束：
+
+- `recursive = false`
+- 必须支持 `maxDepth`
+- 必须支持 `maxEntries`
+- 建议支持 `ignorePatterns`
+
+### `read_locate`
+
+语义：
+
+- 定位候选目标
+
+职责：
+
+- path / name locate
+- 找文件
+- 找名字相近的文件
+- 找路径
+- 找内容关键词命中
+- 找代码符号 / 配置项 / 标题位置
+- 在大工作区里缩小候选范围
+
+底层实现说明：
+
+- `read_locate` 可以使用 grep / ripgrep / 索引 / embedding 等底层实现
+- 但上层语义不是 grep，而是 locate
+
+硬规则：
+
+- `read_locate` 是检索入口，不是最终阅读结果。
+- 可以返回短 preview，但 preview 必须短，不能演变成大段正文。
+- 返回重点是候选位置，不是最终答案。
+- `read_locate` 不负责：
+  - 返回大量正文
+  - 代替 `read_open` 阅读全文
+  - 代替 `read_extract` 抽取完整片段
+
+### `read_open`
+
+语义：
+
+- 打开一个指定资源
+
+职责：
+
+- 在给定明确目标后打开资源本体
+- 读取单个文件、文档正文或目录对象的基础内容
+
+硬规则：
+
+- `read_open` 与 `read` 的边界必须写死。
+- `read_open` 是精细工具，面向明确目标。
+- `read` 是兼容 / 聚合 / fallback，不是首选打开工具。
+
+大文件约束：
+
+- `read_open` 可以打开目标，但不保证始终一次返回全文。
+- 对大文件应允许降级到 preview / summary，并明确建议下一步用 `read_extract`。
+
+### `read_extract`
+
+语义：
+
+- 从文件 / 文档源里定点抽取
+
+职责：
+
+- 面向资源本体做局部提取
+- 支持 lines / pages / sections / headings 这类范围语义
+
+硬规则：
+
+- `read_extract` 面向文件 / 文档源。
+- 不能与 `read_slice` 共享同一种“已有结果切片”语义。
+
+### `read_slice`
+
+语义：
+
+- 对已有文本结果再切片
+
+职责：
+
+- 面向已经产生的文本结果做窗口化
+- 适合作为 runtime 内部上下文处理工具
+
+硬规则：
+
+- `read_slice` 不应作为普通用户意图首选工具。
+- `read_slice` 必须依赖 `previousResultId` / `sourceArtifactId` / `textRef` 这类已有结果引用。
+- `read_slice` 不直接拿 `path` 当入口。
+
+### `read`
+
+语义：
+
+- 统一兼容入口
+- 聚合入口
+- fallback 入口
+
+职责：
+
+- 供 Harness / 兼容层调度
+- 在无法直接选择精细工具时做统一派发
+
+硬规则：
+
+- `read` 不作为第一优先候选。
+- Agent / LLM 优先看到精细工具：
+  - `read_list`
+  - `read_locate`
+  - `read_open`
+  - `read_extract`
+- Harness / 兼容层可以调用 `read`。
+
+如果这条规则不成立，模型会持续偷懒，直接把 `read` 用成“什么都能干”的总入口，最终让其余精细工具失去意义。
+
+## Selector 规则
+
+给模型选工具时：
+
+- 优先暴露 `read_list` / `read_locate` / `read_open` / `read_extract`
+- `read` 只作为 fallback / 兼容入口 / 内部聚合入口
+- `read_slice` 默认不作为普通用户意图首选
+
+这条规则是能力治理的一部分，不只是 prompt 偏好。
+
+如果 selector 继续把 `read` 放在高优先级，长期一定会退化成：
+
+- 用户：帮我看看 README
+- 模型：调用 `read`
+
+这样会直接削弱 `read_open`、`read_extract`、`read_locate` 的存在价值。
+
+## 优先级规则
+
+`Read` 组的内部优先级必须拆成两层：
+
+- 工具选择优先级
+- 工具内部执行优先级
+
+二者不能混成一层。
+
+### 工具选择优先级
+
+给 Agent / LLM / selector 的规则：
+
+1. `read` 永远降权，只做 fallback / dispatch。
+2. `read_slice` 不作为普通用户意图首选。
+3. `read_locate` 优先级高于“泛读”，但低于“明确打开目标”。
+4. 底层实现优先级由 Harness 环境决定，不由 tool schema 决定。
+5. 明确局部范围优先 `read_extract`。
+
+第 5 条必须写死：
+
+- 如果用户指定行号、页码、section、标题、片段范围，应优先 `read_extract`。
+- 不能先走 `read_open` 全量打开，再由模型自己在长文本里找局部。
+
+### 工具内部执行优先级
+
+这层不暴露给模型，而由 Harness / runtime 决定。
+
+例如 `read_locate(mode: "content")` 的底层实现可以是：
+
+- grep / ripgrep
+- path scan
+- index
+- embedding
+
+但对上层来说，它们都仍然属于 `read_locate` 的执行策略，而不是新的工具。
+
 ## 范围
 
 当前 `Read` 能力范围建议收敛为：
@@ -230,6 +450,108 @@ type ReadResult = {
   warnings?: string[];
 };
 ```
+
+## 子工具协议约束
+
+上面的统一 `ReadContract` 只适合描述总能力，不足以约束每个子工具的边界。
+
+为了避免 `read_locate` 滑向“全文搜索 + 阅读”，以及 `read_extract` / `read_slice` 在 schema 上重新混掉，本页补充下面这些子协议约束。
+
+### `read_locate` 结果约束
+
+建议结果：
+
+```ts
+type ReadLocateResult = {
+  candidates: Array<{
+    path: string;
+    kind: "file" | "directory" | "section" | "page" | "symbol";
+    score?: number;
+    reason?: string;
+    preview?: string;
+    location?: {
+      lineStart?: number;
+      lineEnd?: number;
+      page?: number;
+      section?: string;
+    };
+  }>;
+};
+```
+
+规则：
+
+- `preview` 可以有，但必须短。
+- `read_locate` 负责定位，不负责回答。
+- 如果 locate 结果需要正文，下一步应由 `read_open` 或 `read_extract` 接手。
+
+### `read_extract` 输入约束
+
+建议输入：
+
+```ts
+type ReadExtractInput = {
+  path: string;
+  range: {
+    lines?: [number, number];
+    pages?: [number, number];
+    section?: string;
+    heading?: string;
+  };
+};
+```
+
+规则：
+
+- `read_extract` 面向文件 / 文档源。
+- 它以 path / resource 为主入口。
+
+### `read_slice` 输入约束
+
+建议输入：
+
+```ts
+type ReadSliceInput = {
+  sourceId: string;
+  offset?: number;
+  limit?: number;
+  strategy?: "head" | "tail" | "window" | "around_match";
+};
+```
+
+规则：
+
+- `read_slice` 面向已经产生的文本结果。
+- 它必须依赖 `sourceId` / `previousResultId` / `textRef` 一类结果引用。
+- 如果 `read_slice` 的 schema 重新回到 `{ path, start, end }`，它会和 `read_extract` 再次混掉。
+
+### `read_open` 结果约束
+
+建议结果：
+
+```ts
+type ReadOpenResult =
+  | {
+      mode: "full";
+      path: string;
+      content: string;
+    }
+  | {
+      mode: "summary_or_preview";
+      path: string;
+      preview: string;
+      totalSize: number;
+      continuation: {
+        canExtract: true;
+        recommendedTool: "read_extract";
+      };
+    };
+```
+
+规则：
+
+- `read_open` 可以“打开”，但不保证一次性返回全文。
+- 对超大文件或超长文本，必须允许降级，并明确下一步工具建议。
 
 ### 4. Harness Integration
 

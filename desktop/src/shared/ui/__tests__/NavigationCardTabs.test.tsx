@@ -35,4 +35,13 @@ describe("NavigationCardTabs", () => {
 
     expect(handleChange).toHaveBeenCalledWith("settings");
   });
+
+  it("does not emit a change when the active tab is clicked again", async () => {
+    const handleChange = vi.fn();
+    render(<NavigationCardTabs tabs={tabs} value="chat" onChange={handleChange} />);
+
+    await userEvent.click(screen.getByRole("tab", { name: "对话工作台" }));
+
+    expect(handleChange).not.toHaveBeenCalled();
+  });
 });

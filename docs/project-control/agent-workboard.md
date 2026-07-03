@@ -1,7 +1,7 @@
 ---
 status: current
 owner: docs
-last_verified: 2026-06-30
+last_verified: 2026-07-02
 layer: project-control
 module: ProjectControl
 feature: Phase1Remediation
@@ -27,17 +27,17 @@ related:
 | ID | Severity | Topic | Current Judgment | Status | Primary Source | Raw Review Points |
 | --- | --- | --- | --- | --- | --- | --- |
 | `GR-P0-1` | `P0` | Agent 自动拼 `terminal command` 风险 | 当前主线风险已收口，危险自动终端路径已被结构化 workspace mutation 替代 | `DONE` | [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md) | `R15` `R16` `R19` |
-| `GR-P0-2` | `P0` | 高风险工具审批粒度过粗 | 当前高风险问题已确认，属于授权模型错误 | `OPEN` | [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md) | `R11` `R13` `R14` `R19` |
-| `GR-P0-3` | `P0` | 执行契约没有强冻结 | 当前高风险问题已确认，策略层冻结调用但执行层仍可重建参数 | `OPEN` | [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md) | `R10` `R18` |
-| `GR-P1-HIGH` | `P1-high` | `policyNode` 未显式处理 `deny` | 当前是类型契约安全隐患，不是已知必现风险 | `OPEN` | [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md) | `R12` |
-| `GR-P1-1` | `P1` | Capability / Tool 分层重构 | 当前根因级问题已确认，影响 state、approval、trace、resume | `OPEN` | [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md) | `R03` `R07` `R08` `R09` `R28` `R29` `R30` |
-| `GR-P1-2` | `P1` | Harness 输入契约与 schema 校验 | 当前是安全边界缺口，尤其对高风险工具不够强 | `OPEN` | [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md) | `R16` `R17` `R18` `R19` |
-| `GR-P1-3` | `P1` | 意图识别中的规则短路降级 | 当前属于能力选择层风险，规则增强过强、短路过早 | `OPEN` | [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md) | `R01` `R02` `R03` `R04` `R05` `R06` |
+| `GR-P0-2` | `P0` | 高风险工具审批粒度过粗 | 当前审批、resume 与 Harness 放行已统一到 invocation 级别，高风险授权模型已收口 | `DONE` | [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md) | `R11` `R13` `R14` `R19` |
+| `GR-P0-3` | `P0` | 执行契约没有强冻结 | 当前执行层已只接受冻结调用对象，缺失 `pendingToolCall` 时会直接阻断 | `DONE` | [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md) | `R10` `R18` |
+| `GR-P1-HIGH` | `P1-high` | `policyNode` 未显式处理 `deny` | 当前策略分支已显式区分 `allow / require_approval / deny`，隐性放行路径已清掉 | `DONE` | [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md) | `R12` |
+| `GR-P1-1` | `P1` | Capability / Tool 分层重构 | 当前执行态已显式区分 capability/tool，tool-first 执行语义已在 graph、resume、trace、持久化中收口 | `DONE` | [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md) | `R03` `R07` `R08` `R09` `R28` `R29` `R30` |
+| `GR-P1-2` | `P1` | Harness 输入契约与 schema 校验 | 当前高风险工具已具备统一 schema 校验与 workspace boundary contract，接口层手测已验证生效 | `DONE` | [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md) | `R16` `R17` `R18` `R19` |
+| `GR-P1-3` | `P1` | 候选暴露与调用前守卫收口 | 当前主链已拆成“候选选择 -> 调用前守卫”；Harness 负责候选暴露，守卫节点只做 topN 与合法性校验 | `DONE` | [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md) | `R01` `R02` `R03` `R04` `R05` `R06` |
 | `GR-P1-4` | `P1` | 工具结果证据链补全 | 当前已补 formal evidence payload，route/generate 已共享正式证据输入 | `DONE` | [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md) | `R20` `R21` `R22` `R23` `R29` |
-| `GR-P2-1` | `P2` | 回看逻辑升级 | 当前回看更像机械再判断，不是 observation-aware review | `OPEN` | [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md) | `R20` `R21` |
-| `GR-P2-2` | `P2` | 工具路径与 RAG 路径组合 | 当前主流程更像工具 / RAG 互斥分流，不是自然组合 | `OPEN` | [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md) | `R23` |
-| `GR-P2-3` | `P2` | 终态与可观测性增强 | 当前终态能工作，但 blocked reason 和 trace 语义表达不足 | `OPEN` | [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md) | `R25` `R26` `R27` `R28` |
-| `GR-P2-4` | `P2` | `evaluate` 节点语义升级 | 当前更像 answer presence check，不是真正 verifier | `OPEN` | [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md) | `R24` |
+| `GR-P2-1` | `P2` | 回看逻辑升级 | `routeStep` 已升级为 evidence-aware review；会基于 retrieval / tool evidence 决定 replan 还是 generate，并阻断空证据假回看 | `DONE` | [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md) | `R20` `R21` |
+| `GR-P2-2` | `P2` | 工具路径与 RAG 路径组合 | 主链已支持 `retrieve -> review -> capabilitySelect -> tool/generate`，RAG 与工具证据可在同一轮回答中组合 | `DONE` | [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md) | `R23` |
+| `GR-P2-3` | `P2` | 终态与可观测性增强 | `blockedReason / terminalReason` 已进入 graph output、assistant metadata 和前端消费类型，终态语义不再只停在中间 state | `DONE` | [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md) | `R25` `R26` `R27` `R28` |
+| `GR-P2-4` | `P2` | `evaluate` 节点语义升级 | `evaluate` 已从 answer presence check 升级为最小 grounded check，会拦截“无真实证据却声称已查看/已搜索”的回答 | `DONE` | [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md) | `R24` |
 
 ## Global Review To Raw Review Mapping
 
@@ -164,11 +164,11 @@ related:
   - `R19`：[terminal_session safety chain](D:/workspace/rag-demo/docs/chat/agent-phase-1-code-review.md)  
     引述：“command 内容不会被解析。”
 
-#### `GR-P1-3` 意图识别中的规则短路降级
+#### `GR-P1-3` 候选暴露与调用前守卫收口
 
 - Global Review 定义出处：
   - [agent-phase-1-global-review.md](D:/workspace/rag-demo/docs/chat/agent-phase-1-global-review.md)
-  - 引述：“规则短路仍然偏强……不适合让规则直接替代能力选择。”
+  - 引述：“Agent 这一层不应继续承担第二套 embedding / task-model 主裁决……它更适合作为最后守卫机制。”
 - 对应原始评审点：
   - `R01`：[computeRuleScore](D:/workspace/rag-demo/docs/chat/agent-phase-1-code-review.md)  
     引述：“可以作为召回增强，但不适合承担强决策。”
@@ -258,8 +258,8 @@ related:
 | `GR-P0-2` | [T-004-approval-invocation-level.md](D:/workspace/rag-demo/docs/project-control/tasks/T-004-approval-invocation-level.md) | `P0` | `DONE` | 已通过评审；审批对象、resume 与 Harness 放行已统一到 invocation 语义 |
 | `GR-P0-3` | [T-002-toolnode-no-fallback.md](D:/workspace/rag-demo/docs/project-control/tasks/T-002-toolnode-no-fallback.md) | `P0` | `DONE` | 已通过评审；执行层缺少冻结调用对象时会阻断 |
 | `GR-P1-HIGH` | [T-001-policy-deny.md](D:/workspace/rag-demo/docs/project-control/tasks/T-001-policy-deny.md) | `P1-high` | `DONE` | 已通过评审；`policyNode` 已显式处理 `allow / require_approval / deny` |
-| `GR-P1-1` | [T-005-capability-tool-separation.md](D:/workspace/rag-demo/docs/project-control/tasks/T-005-capability-tool-separation.md) | `P1` | `TODO` | 任务卡已建立，待进入实现 |
-| `GR-P1-2` | [T-006-harness-schema-and-boundary.md](D:/workspace/rag-demo/docs/project-control/tasks/T-006-harness-schema-and-boundary.md) | `P1` | `TODO` | 任务卡已建立，待进入实现 |
+| `GR-P1-1` | [T-005-capability-tool-separation.md](D:/workspace/rag-demo/docs/project-control/tasks/T-005-capability-tool-separation.md) | `P1` | `DONE` | 已完成定向单测与手测；执行态 capability/tool 分层已收口 |
+| `GR-P1-2` | [T-006-harness-schema-and-boundary.md](D:/workspace/rag-demo/docs/project-control/tasks/T-006-harness-schema-and-boundary.md) | `P1` | `DONE` | 已完成定向单测与真实接口手测；schema 与 workspace boundary contract 已生效 |
 | `GR-P1-3` | [T-007-intent-shortcut-demotion.md](D:/workspace/rag-demo/docs/project-control/tasks/T-007-intent-shortcut-demotion.md) | `P1` | `DONE` | 已通过评审；workspace 规则已降级为 task-model 辅助提示 |
 | `GR-P1-4` | [T-008-evidence-chain-completion.md](D:/workspace/rag-demo/docs/project-control/tasks/T-008-evidence-chain-completion.md) | `P1` | `DONE` | 已通过评审；formal evidence payload 已进入 route/generate 主链 |
 
@@ -268,3 +268,32 @@ related:
 | Debt ID | Related Task | Status | Summary |
 | --- | --- | --- | --- |
 | `TD-T003-01` | [T-003-terminal-command-safety.md](D:/workspace/rag-demo/docs/project-control/tasks/T-003-terminal-command-safety.md) | `CLOSED` | `workspace_mutation` 已落地，T-003 评审通过后该历史债务关闭 |
+| `TD-BUILD-001` | [T-009-test-report-json-consolidation.md](D:/workspace/rag-demo/docs/project-control/tasks/T-009-test-report-json-consolidation.md) | `OPEN` | 当前前后端 `coverage-report.json` 已达约 `11 MB / 10.8 MB`，且官方报告与 backend 静态目录存在重复拷贝；后续应改为脚本合并单一测试报告 JSON 载荷 |
+
+## Recent Verification Notes
+
+- `2026-07-02`：已完成真实前端审批链路手测：
+  - 在线程 `Codex Resume Trace Handtest` 中，以 Agent 模式发送 `请删除 codex-handtest-resume-trace.txt`
+  - 命中 `waiting_approval`
+  - 点击 `批准` 后，运行继续推进到完成态
+  - 页面显示完整 `9 / 9` 步执行链，而不是停留在审批等待
+  - 刷新线程后，后续 execution trace 仍然保留，不会回退成旧的审批态
+  - 文件系统验证目标文件已删除
+- 结论：`approve -> resume -> 执行 -> 组织回答 -> 刷新后 trace 可读` 这条一期主链已做实
+- `2026-07-02`：已完成守卫链路收口验证：
+  - 后端执行路径已拆成 `候选选择 -> 调用前守卫 -> 审批策略 -> 工具选择`
+  - `toolGuardNode` 不再自行调用 embedding / diagnostics，只消费上游候选并做本地合法性检查
+  - 单测：`pnpm --filter @ui-chat-mira/server exec vitest run src/agent/graph.test.ts`
+  - 类型检查：`pnpm --filter @ui-chat-mira/server exec tsc --noEmit -p tsconfig.json`
+  - 浏览器手测：在线程 `读取当前工作空间文件列表` 中，以 Agent 模式发送 `请列出当前工作空间根目录第一层文件。测试ID: GUARD-HANDTEST-0702-C`
+  - 页面可见步骤：`候选选择 -> 调用前守卫 -> 审批策略 -> 工具选择 -> 下一步判断 -> 候选选择 -> 调用前守卫 -> 组织最终回答 -> 检查结果`
+- `2026-07-02`：已完成 `T-005` 定向验证：
+  - `pnpm --filter @ui-chat-mira/server exec vitest run src/agent/graph.test.ts src/agent/resume.test.ts src/agent/persistence.test.ts src/agent/routes.test.ts`
+  - 结果：`31 passed`
+  - 手测：真实线程 execution trace/details 已以 `toolId` 为执行主语写回
+- `2026-07-02`：已完成 `T-006` 定向验证：
+  - `pnpm --filter @ui-chat-mira/server exec vitest run src/mcp/core/invocations.test.ts src/mcp/core/schema.test.ts src/mcp/tools/terminal-session.tool.test.ts src/mcp/tools/read-open.tool.test.ts src/mcp/tools/read-list.tool.test.ts src/mcp/tools/read.tool.test.ts src/mcp/tools/read-locate.tool.test.ts src/mcp/tools/edit-file.tool.test.ts src/mcp/tools/workspace-mutation.tool.test.ts`
+  - 结果：`49 passed`
+  - `pnpm check`
+  - 结果：通过
+  - 手测：真实 `POST /mcp/invocations` 已验证 schema 缺参报错、workspace 越界给出明确审批原因、合法工作区内请求进入正常审批

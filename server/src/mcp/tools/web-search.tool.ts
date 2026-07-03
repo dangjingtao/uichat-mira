@@ -5,12 +5,36 @@ import type {
 } from "../core/definitions.js";
 import { mcpBadRequest, mcpInternalError } from "../core/errors.js";
 import { webSearchSettingsRepository } from "@/db/repositories/web-search-settings.repository.js";
+import { createRouteError } from "@/utils/route-errors.js";
+import { ErrorCodes } from "@/utils/response.js";
 
 export interface SearchResult {
   title: string;
   link: string;
   snippet: string;
 }
+
+type NormalizedWebSearchResult = {
+  query: string;
+  provider: WebSearchProvider;
+  capabilityId: string;
+  results: SearchResult[];
+};
+
+type WebSearchProviderErrorCategory =
+  | "http_error"
+  | "upstream_unavailable"
+  | "network_error"
+  | "configuration_error"
+  | "unknown_error";
+
+type WebSearchProviderError = {
+  provider: WebSearchProvider;
+  capabilityId: string;
+  category: WebSearchProviderErrorCategory;
+  message: string;
+  statusCode?: number;
+};
 
 type WebSearchProvider = "tavily" | "searxng";
 
@@ -38,10 +62,34 @@ type WebSearchExecutionPlan = WebSearchProviderPlan & {
   reason?: string;
 };
 
+class WebSearchProviderExecutionError extends Error {
+  readonly detail: WebSearchProviderError;
+
+  constructor(detail: WebSearchProviderError) {
+    super(detail.message);
+    this.name = "WebSearchProviderExecutionError";
+    this.detail = detail;
+  }
+}
+
 const SEARCH_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_RESULTS = 4;
 const MIN_MAX_RESULTS = 1;
 const MAX_MAX_RESULTS = 10;
+
+const toWebSearchProviderError = (input: {
+  provider: WebSearchProvider;
+  capabilityId: string;
+  category: WebSearchProviderErrorCategory;
+  message: string;
+  statusCode?: number;
+}) => ({
+  provider: input.provider,
+  capabilityId: input.capabilityId,
+  category: input.category,
+  message: input.message,
+  ...(typeof input.statusCode === "number" ? { statusCode: input.statusCode } : {}),
+});
 
 const withTimeoutSignal = () => AbortSignal.timeout(SEARCH_TIMEOUT_MS);
 
@@ -79,23 +127,24 @@ const normalizeMaxResults = (value: unknown) => {
 
 const resolveStoredWebSearchSettings = () => webSearchSettingsRepository.get();
 
-const resolveTavilyApiKey = (args: Record<string, unknown>) =>
-  typeof args.apiKey === "string" && args.apiKey.trim()
-    ? args.apiKey.trim()
-    : (
-        resolveStoredWebSearchSettings().tavilyApiKey ||
-        (process.env.TAVILY_API_KEY ?? "")
-      ).trim();
+const resolveTrustedToolConfig = (environment?: McpExecutionEnvironment) =>
+  assertWebSearchEnvironment(environment).toolConfig?.web_search;
 
-const resolveSearxngBaseUrl = (args: Record<string, unknown>) =>
-  typeof args.baseUrl === "string" && args.baseUrl.trim()
-    ? args.baseUrl.trim().replace(/\/+$/, "")
-    : (
-        resolveStoredWebSearchSettings().searxngBaseUrl ||
-        (process.env.SEARXNG_BASE_URL ?? "")
-      )
-        .trim()
-        .replace(/\/+$/, "");
+const resolveTavilyApiKey = (environment?: McpExecutionEnvironment) =>
+  (
+    resolveTrustedToolConfig(environment)?.apiKey ||
+    resolveStoredWebSearchSettings().tavilyApiKey ||
+    (process.env.TAVILY_API_KEY ?? "")
+  ).trim();
+
+const resolveSearxngBaseUrl = (environment?: McpExecutionEnvironment) =>
+  (
+    resolveTrustedToolConfig(environment)?.baseUrl ||
+    resolveStoredWebSearchSettings().searxngBaseUrl ||
+    (process.env.SEARXNG_BASE_URL ?? "")
+  )
+    .trim()
+    .replace(/\/+$/, "");
 
 const resolveDefaultMaxResults = (args: Record<string, unknown>) =>
   args.maxResults === undefined
@@ -106,8 +155,8 @@ const sortProviderPlans = (
   environment: McpExecutionEnvironment,
   context: WebSearchExecutionContext,
 ): WebSearchProviderPlan[] => {
-  const tavilyApiKey = resolveTavilyApiKey(context.args);
-  const searxngBaseUrl = resolveSearxngBaseUrl(context.args);
+  const tavilyApiKey = resolveTavilyApiKey(context.environment);
+  const searxngBaseUrl = resolveSearxngBaseUrl(context.environment);
 
   return [...environment.web_search.capabilities]
     .filter((capability) => capability.available)
@@ -131,6 +180,7 @@ const fetchTavilySearch = async (
   query: string,
   maxResults: number,
   apiKey: string,
+  capabilityId: string,
 ): Promise<SearchResult[]> => {
   const response = await fetch("https://api.tavily.com/search", {
     method: "POST",
@@ -145,7 +195,15 @@ const fetchTavilySearch = async (
   });
 
   if (!response.ok) {
-    throw mcpInternalError(`Tavily search failed: ${response.status}`);
+    throw new WebSearchProviderExecutionError(
+      toWebSearchProviderError({
+        provider: "tavily",
+        capabilityId,
+        category: "http_error",
+        message: `Tavily search failed: ${response.status}`,
+        statusCode: response.status,
+      }),
+    );
   }
 
   const data = (await response.json()) as TavilyResponse;
@@ -176,6 +234,7 @@ const fetchSearxngSearch = async (
   query: string,
   maxResults: number,
   baseUrl: string,
+  capabilityId: string,
 ): Promise<SearchResult[]> => {
   const response = await fetch(buildSearxngSearchUrl({ baseUrl, query }), {
     method: "GET",
@@ -186,7 +245,15 @@ const fetchSearxngSearch = async (
   });
 
   if (!response.ok) {
-    throw mcpInternalError(`SearXNG search failed: ${response.status}`);
+    throw new WebSearchProviderExecutionError(
+      toWebSearchProviderError({
+        provider: "searxng",
+        capabilityId,
+        category: "http_error",
+        message: `SearXNG search failed: ${response.status}`,
+        statusCode: response.status,
+      }),
+    );
   }
 
   const data = (await response.json()) as SearxngResponse;
@@ -202,8 +269,13 @@ const fetchSearxngSearch = async (
     const engineSummary = data.unresponsive_engines
       ?.map(([engine, reason]) => `${engine}: ${reason}`)
       .join("; ");
-    throw mcpInternalError(
-      `SearXNG returned no results because upstream engines were unavailable. ${engineSummary}`,
+    throw new WebSearchProviderExecutionError(
+      toWebSearchProviderError({
+        provider: "searxng",
+        capabilityId,
+        category: "upstream_unavailable",
+        message: `SearXNG returned no results because upstream engines were unavailable. ${engineSummary}`,
+      }),
     );
   }
 
@@ -262,10 +334,20 @@ const executeWebSearchPlan = async (input: {
   baseUrl: string;
 }) => {
   if (input.plan.provider === "tavily") {
-    return fetchTavilySearch(input.query, input.maxResults, input.apiKey);
+    return fetchTavilySearch(
+      input.query,
+      input.maxResults,
+      input.apiKey,
+      input.plan.capabilityId,
+    );
   }
 
-  return fetchSearxngSearch(input.query, input.maxResults, input.baseUrl);
+  return fetchSearxngSearch(
+    input.query,
+    input.maxResults,
+    input.baseUrl,
+    input.plan.capabilityId,
+  );
 };
 
 export const webSearchTool: McpToolImplementation = {
@@ -283,12 +365,31 @@ export const webSearchTool: McpToolImplementation = {
       properties: {
         query: { type: "string" },
         maxResults: { type: "number" },
-        apiKey: { type: "string" },
-        baseUrl: { type: "string" },
       },
       additionalProperties: false,
     },
     tags: ["search", "web"],
+    outputSchema: {
+      type: "object",
+      required: ["query", "provider", "capabilityId", "results"],
+      properties: {
+        query: { type: "string" },
+        provider: { type: "string", enum: ["tavily", "searxng"] },
+        capabilityId: { type: "string" },
+        results: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["title", "link", "snippet"],
+            properties: {
+              title: { type: "string" },
+              link: { type: "string" },
+              snippet: { type: "string" },
+            },
+          },
+        },
+      },
+    },
     capabilities: {
       sideEffect: "network",
       requiresApproval: false,
@@ -298,8 +399,8 @@ export const webSearchTool: McpToolImplementation = {
   execute: async (context) => {
     const query = normalizeQuery(context.args.query);
     const maxResults = normalizeMaxResults(resolveDefaultMaxResults(context.args));
-    const resolvedApiKey = resolveTavilyApiKey(context.args);
-    const resolvedBaseUrl = resolveSearxngBaseUrl(context.args);
+    const resolvedApiKey = resolveTavilyApiKey(context.environment);
+    const resolvedBaseUrl = resolveSearxngBaseUrl(context.environment);
     const harnessEnvironment = assertWebSearchEnvironment(context.environment);
     const plans = sortProviderPlans(harnessEnvironment, context);
     const executionAttempts: WebSearchExecutionPlan[] = [];
@@ -307,6 +408,7 @@ export const webSearchTool: McpToolImplementation = {
     let results: SearchResult[] | null = null;
     let selectedProvider: WebSearchProvider | null = null;
     let selectedCapabilityId = "";
+    const providerErrors: WebSearchProviderError[] = [];
 
     const planningSpan = context.trace.startSpan({
       name: "Resolve web search provider plan",
@@ -366,7 +468,16 @@ export const webSearchTool: McpToolImplementation = {
         selectedCapabilityId = plan.capabilityId;
         break;
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const detail =
+          error instanceof WebSearchProviderExecutionError
+            ? error.detail
+            : toWebSearchProviderError({
+                provider: plan.provider,
+                capabilityId: plan.capabilityId,
+                category: "unknown_error",
+                message: error instanceof Error ? error.message : String(error),
+              });
+        const message = detail.message;
         executionSpan.end({
           status: "failed",
           metadata: {
@@ -374,6 +485,7 @@ export const webSearchTool: McpToolImplementation = {
             error: message,
           },
         });
+        providerErrors.push(detail);
         executionAttempts.push({
           ...plan,
           reason: message,
@@ -385,12 +497,22 @@ export const webSearchTool: McpToolImplementation = {
       const attemptSummary = executionAttempts
         .map((attempt) => `${attempt.provider}: ${attempt.reason ?? "failed"}`)
         .join("; ");
-      throw mcpInternalError(
-        attemptSummary
+      throw createRouteError({
+        statusCode: 500,
+        code: ErrorCodes.INTERNAL_ERROR,
+        message: attemptSummary
           ? `Web search failed for all configured providers. ${attemptSummary}`
           : "No web search provider is available. Configure Tavily apiKey or SearXNG baseUrl.",
-      );
+        errors: providerErrors,
+      });
     }
+
+    const normalizedResult: NormalizedWebSearchResult = {
+      query,
+      provider: selectedProvider,
+      capabilityId: selectedCapabilityId,
+      results,
+    };
 
     context.addArtifact({
       kind: "search-results",
@@ -400,22 +522,12 @@ export const webSearchTool: McpToolImplementation = {
         query,
         provider: selectedProvider,
         capabilityId: selectedCapabilityId,
-        ...(selectedProvider === "searxng"
-          ? { baseUrl: resolvedBaseUrl }
-          : {}),
+        resultCount: results.length,
       },
     });
 
     return {
-      result: {
-        query,
-        provider: selectedProvider,
-        capabilityId: selectedCapabilityId,
-        ...(selectedProvider === "searxng"
-          ? { baseUrl: resolvedBaseUrl }
-          : {}),
-        results,
-      },
+      result: normalizedResult,
     };
   },
 };

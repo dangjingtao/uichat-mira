@@ -32,6 +32,9 @@ export const toCapabilityIntentDocument = (
     source: profile.source,
     domain: profile.domain,
     tags: profile.tags,
+    preferredToolId: profile.preferredToolId,
+    supportingToolIds: profile.supportingToolIds,
+    actionProfileId: profile.actionProfileId,
   };
 };
 

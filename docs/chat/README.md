@@ -50,6 +50,18 @@ Related:
 - `chat-execution-trace-design.md`
 - `chat-execution-trace-checklist.md`
 
+### UI Assessment
+
+- `uchat-agent-ui-assessment.md`
+
+### UChat Governance
+
+- `uchat-governance/README.md`
+- `uchat-governance/governance-assessment.md`
+- `uchat-governance/boundary-contract.md`
+- `uchat-governance/phase-1-plan.md`
+- `uchat-governance/ambiguity-log.md`
+
 ### Agent
 
 - `agent-swot-plan.md`

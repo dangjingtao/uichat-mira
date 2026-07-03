@@ -2,7 +2,7 @@ import { integrationCapabilitiesRepository } from "@/db/repositories/integration
 import { integrationInstancesRepository } from "@/db/repositories/integration-instances.repository.js";
 import { mcpBadRequest, mcpInternalError } from "@/mcp/core/errors.js";
 import { writeStructuredLog } from "@/logger";
-import { thirdPartyRagAdapter } from "@/services/third-party-rag-adapter.service.js";
+import { microAppRuntime } from "@/microapps/runtime.js";
 import { resolveWecomConfig } from "./config.js";
 
 export type SmartRobotConnectionStatus =
@@ -52,7 +52,6 @@ type SmartRobotResolvedCapability = {
   capabilityId: string;
   botId: string;
   secret: string;
-  knowledgeBaseId: string | null;
   replyMode: "stream" | "send";
 };
 
@@ -200,7 +199,6 @@ const resolveCapabilityConfig = (
     capabilityId: capability.id,
     botId,
     secret,
-    knowledgeBaseId: capability.knowledgeBaseId?.trim() || null,
     replyMode,
   };
 };
@@ -411,31 +409,62 @@ const registerRuntimeHandlers = (
 
     try {
       writeStructuredLog("info", {
-        msg: "WeCom smart robot calling RAG",
+        msg: "WeCom smart robot invoking MicroAPP",
         capabilityId: capability.capabilityId,
         ...meta,
         question,
-        knowledgeBaseId: capability.knowledgeBaseId,
       });
-      const result = await thirdPartyRagAdapter.answer({
-        question,
-        knowledgeBaseId: capability.knowledgeBaseId ?? undefined,
+      const result = await microAppRuntime.invokeForCapability(capability.capabilityId, {
+        provider: "wecom",
+        accessPointType: "wecom.smart_robot",
+        instanceId:
+          integrationCapabilitiesRepository.getById(capability.capabilityId)?.instanceId ??
+          "",
+        accessPointId: capability.capabilityId,
+        messageId:
+          ((frame as { body?: { msgid?: string } })?.body?.msgid ?? "").trim() || undefined,
+        conversation: {
+          id: meta.chatid ?? "",
+          kind: meta.chattype === "single" ? "direct" : "group",
+        },
+        sender: {
+          externalUserId: meta.fromUserId ?? "",
+        },
+        text: question,
+        context: {
+          receivedAt: new Date().toISOString(),
+          rawProviderEventType: meta.msgtype ?? undefined,
+        },
       });
-      const finalAnswer = result.answer || "我没有检索到可用答案。";
+      if (result.mode === "no_reply") {
+        writeStructuredLog("info", {
+          msg: "WeCom smart robot MicroAPP returned no_reply",
+          capabilityId: capability.capabilityId,
+          ...meta,
+          question,
+        });
+        return;
+      }
+
+      if (result.mode === "error") {
+        throw new Error(result.errorMessage || "MicroAPP execution failed");
+      }
+
+      const finalAnswer = result.message?.content?.trim() || "我没有检索到可用答案。";
       writeStructuredLog("info", {
-        msg: "WeCom smart robot RAG completed",
+        msg: "WeCom smart robot MicroAPP completed",
         capabilityId: capability.capabilityId,
         ...meta,
         question,
         answerLength: Array.from(finalAnswer).length,
         answerPreview: previewText(finalAnswer),
-        knowledgeBaseId: result.knowledgeBaseId,
+        microAppMeta: result.meta ?? null,
       });
       await replyToFrame(entry, capability, frame, finalAnswer);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "RAG 调用失败";
+      const errorMessage = error instanceof Error ? error.message : "MicroAPP 调用失败";
       writeStructuredLog("error", {
-        msg: "WeCom smart robot RAG failed",
+        msg: "WeCom smart robot MicroAPP failed",
         capabilityId: capability.capabilityId,
         ...meta,
         question,
@@ -446,7 +475,7 @@ const registerRuntimeHandlers = (
         lastError: errorMessage,
       });
       try {
-        await replyToFrame(entry, capability, frame, `RAG 调用失败：${errorMessage}`);
+        await replyToFrame(entry, capability, frame, `MicroAPP 调用失败：${errorMessage}`);
       } catch {
         // Keep runtime error state only when reply fails too.
       }
@@ -544,7 +573,6 @@ export const startWecomSmartRobotByCapability = async (capabilityId: string) => 
     capabilityId,
     botId: capability.botId,
     hasSecret: Boolean(capability.secret),
-    knowledgeBaseId: capability.knowledgeBaseId,
   });
 
   setEntryStatus(entry, capability, {

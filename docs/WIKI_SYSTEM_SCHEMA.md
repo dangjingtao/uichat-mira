@@ -270,6 +270,7 @@ docs/
 | `Tool` | 内置工具、tool runtime、read/edit/terminal 等工具能力 | `tooling-runtime/tools-protocol.md`、`tooling-runtime/harness-runtime-design.md` |
 | `KnowledgeBase` | 知识库内容、导入、检索、workspace | `knowledge-base/api.md`、`knowledge-base/markdown-workspace-mode.md` |
 | `Role` | 角色系统、persona、role API | `role/README.md`、`role/role-api.md` |
+| `MicroAPP` | 微应用模块、接入点绑定的业务工作流、跨平台复用的集成业务能力 | `microapp/README.md`、`integrations/wecom-microapp-interface-design.md` |
 | `Docs` | 文档系统、schema、索引、AI 阅读规则、知识系统治理 | `WIKI_SYSTEM_SCHEMA.md`、`knowledge-system/DOCUMENTATION_STANDARDS.md`、`knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md` |
 | `Develoments` | 开发支撑域：runtime、platform、evaluation、规划、bugfix、架构与工程约束 | `architecture/README.md`、`platform/tauri.md`、`developments/release-management.md` |
 
@@ -333,6 +334,7 @@ docs/
 - `Tool`
 - `KnowledgeBase`
 - `Role`
+- `MicroAPP`
 - `Docs`
 - `Develoments`
 - `ProjectControl`
@@ -448,7 +450,7 @@ docs/
 
 ```yaml
 layer: raw-source | wiki | schema | project-control
-module: Chat | ModelSetting | MCP | Tool | KnowledgeBase | Role | Docs | Develoments | ProjectControl
+module: Chat | ModelSetting | MCP | Tool | KnowledgeBase | Role | MicroAPP | Docs | Develoments | ProjectControl
 feature: <optional feature slug or name>
 doc_type: current-contract | reference | overview | design | plan | checklist | draft | implementation-notes | historical | how-to | index | workboard | task-card | review | decision | archive-snapshot
 status: current | planned | active | historical

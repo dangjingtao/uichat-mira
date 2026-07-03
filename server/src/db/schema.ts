@@ -319,6 +319,74 @@ export const integrationCapabilities = sqliteTable(
 export type IntegrationCapability = typeof integrationCapabilities.$inferSelect;
 export type NewIntegrationCapability = typeof integrationCapabilities.$inferInsert;
 
+export const microApps = sqliteTable(
+  "micro_app_definitions",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    type: text("type").notNull(),
+    name: text("name").notNull().default(""),
+    description: text("description").notNull().default(""),
+    supportedAccessPointsJson: text("supported_access_points_json")
+      .notNull()
+      .default("[]"),
+    bindingSchemaJson: text("binding_schema_json").notNull().default("{\"fields\":[]}"),
+    runtimeKey: text("runtime_key").notNull().default(""),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    typeIdx: index("idx_micro_apps_type").on(table.type),
+    enabledIdx: index("idx_micro_apps_enabled").on(table.enabled),
+    typeUniqueIdx: uniqueIndex("idx_micro_apps_type_unique").on(table.type),
+  }),
+);
+
+export type MicroApp = typeof microApps.$inferSelect;
+export type NewMicroApp = typeof microApps.$inferInsert;
+
+export const integrationCapabilityMicroApps = sqliteTable(
+  "integration_capability_micro_app_bindings",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    capabilityId: text("capability_id")
+      .notNull()
+      .references(() => integrationCapabilities.id, { onDelete: "cascade" }),
+    microAppDefinitionId: text("micro_app_definition_id")
+      .notNull()
+      .references(() => microApps.id, { onDelete: "cascade" }),
+    bindingConfigJsonEncrypted: text("binding_config_json_encrypted"),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    capabilityIdx: uniqueIndex("idx_integration_capability_micro_apps_capability").on(
+      table.capabilityId,
+    ),
+    microAppIdx: index("idx_integration_capability_micro_apps_micro_app").on(
+      table.microAppDefinitionId,
+    ),
+  }),
+);
+
+export type IntegrationCapabilityMicroApp =
+  typeof integrationCapabilityMicroApps.$inferSelect;
+export type NewIntegrationCapabilityMicroApp =
+  typeof integrationCapabilityMicroApps.$inferInsert;
+
 export const externalIdentityBindings = sqliteTable(
   "external_identity_bindings",
   {

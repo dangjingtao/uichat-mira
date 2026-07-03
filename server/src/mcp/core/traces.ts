@@ -22,6 +22,19 @@ const sweepTraces = () => {
   });
 };
 
+const attachDebugView = (trace: McpInvocationTrace): McpInvocationTrace => {
+  trace.debugView = {
+    invocationId: trace.invocationId,
+    toolId: trace.toolId,
+    traceId: trace.traceId,
+    spanCount: trace.spans.length,
+    runningSpanCount: trace.spans.filter((span) => span.status === "running").length,
+    kinds: [...new Set(trace.spans.map((span) => span.kind))],
+  };
+
+  return trace;
+};
+
 export const createInvocationTrace = (input: {
   invocationId: string;
   toolId: string;
@@ -36,10 +49,13 @@ export const createInvocationTrace = (input: {
     spans: [],
   };
   traceMap.set(input.invocationId, trace);
-  return trace;
+  return attachDebugView(trace);
 };
 
-export const getInvocationTrace = (invocationId: string) => traceMap.get(invocationId);
+export const getInvocationTrace = (invocationId: string) => {
+  const trace = traceMap.get(invocationId);
+  return trace ? attachDebugView(trace) : trace;
+};
 
 export const clearInvocationTraces = () => {
   traceMap.clear();
@@ -66,7 +82,7 @@ export const finishInvocationTrace = (invocationId: string) => {
 
   trace.finishedAt = new Date().toISOString();
   sweepTraces();
-  return trace;
+  return attachDebugView(trace);
 };
 
 export const startTraceSpan = (input: {
@@ -93,6 +109,7 @@ export const startTraceSpan = (input: {
     ...(input.metadata ? { metadata: input.metadata } : {}),
   };
   trace.spans.push(span);
+  attachDebugView(trace);
 
   return {
     spanId: span.id,
@@ -112,6 +129,7 @@ export const startTraceSpan = (input: {
           ...next.metadata,
         };
       }
+      attachDebugView(trace);
     },
   };
 };
