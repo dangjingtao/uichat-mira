@@ -46,7 +46,7 @@ Agent node 专属总台账。
 | `agent_node_T004` | `policyNode` 只消费 `pendingToolCall` | 当前任务只收敛 `policyNode`：它只能审批冻结后的 `pendingToolCall`，不得自己造工具调用，不得从 `capabilityIntent / query / selectedToolId` 推导执行对象，也不得把 `capabilityId` 当执行对象 | `TODO` | [agent_node_T004-policy-node-consume-pending-tool-call.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T004-policy-node-consume-pending-tool-call.md) |
 | `agent_node_T005` | `toolNode` 只执行 frozen `pendingToolCall` | 当前实现已提交评审：`toolNode` 已拆分为独立模块，只在 `policyDecision.allow` 与 frozen `pendingToolCall` 对齐时执行；执行结果已保留 `toolCallId / inputHash`，成功或失败后会清理 `pendingToolCall`，但整仓打包仍被非本任务失败项阻断 | `READY_FOR_REVIEW` | [agent_node_T005-tool-node-execute-frozen-pending-tool-call.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T005-tool-node-execute-frozen-pending-tool-call.md) |
 | `agent_node_T006` | `evidence` 回流与 Agent loop 路由闭环 | `retrieveNode / toolNode -> evidence -> Planner` 的最小闭环已接通；retrieval / tool evidence 写回、evidence-update trace、去重 helper、`maxIterations` 收口和旧入口阻断都已有定向验证，等待评审确认 | `READY_FOR_REVIEW` | [agent_node_T006-evidence-loop-routing.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T006-evidence-loop-routing.md) |
-| `agent_node_T007` | Agent Decision Loop v1 验收测试与回归护栏 | 当前任务只做闭环验收、自动化测试和最小护栏，证明 `Planner -> Normalize -> Policy -> Tool -> Evidence -> Planner` 已成立，并证明旧 `selectedToolId / selectedToolIds / capabilityId` 执行路径已经失效；不得借机扩成架构重写 | `TODO` | [agent_node_T007-decision-loop-acceptance-regression-guardrails.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T007-decision-loop-acceptance-regression-guardrails.md) |
+| `agent_node_T007` | Agent Decision Loop v1 验收测试与回归护栏 | 已补齐图级与节点级回归测试，验证 `Planner -> Normalize -> Policy -> Tool -> Evidence -> Planner` 闭环成立，并证明旧 `selectedToolId / selectedToolIds / capabilityId` 执行路径不会绕过执行主链；实现侧未发现需要扩散修复的新架构问题 | `DONE` | [agent_node_T007-decision-loop-acceptance-regression-guardrails.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T007-decision-loop-acceptance-regression-guardrails.md) |
 
 ## Current Ground Truth
 
@@ -147,3 +147,9 @@ Agent node 专属总台账。
   - 追加第七个节点任务编号 `agent_node_T007`
   - 把 Agent Decision Loop v1 的验收测试与回归护栏正式纳入 `AgentNodes` 总台账
   - 明确第七个任务只负责闭环验证、测试覆盖、最小护栏和旧执行路径回流防护
+  - `agent_node_T007` 已完成定向验收测试补齐，状态更新为 `DONE`
+  - 验证证据：
+    - `pnpm --filter @ui-chat-mira/server test -- src/agent/graph.test.ts src/agent/tool-call-normalize.test.ts src/agent/tool-node.test.ts src/agent/policy.test.ts`
+      - 结果：通过，`43 passed`
+    - `pnpm --filter @ui-chat-mira/server typecheck`
+      - 结果：通过

@@ -129,7 +129,7 @@ const buildNextActionPlannerMessages = (input: {
         '{"type":"answer","reason":"..."}',
         '{"type":"retrieve","query":"...","reason":"..."}',
         '{"type":"use_tool","toolId":"...","args":{},"reason":"..."}',
-        '{"type":"ask_user","question":"...","reason":"..."}',
+        '{"type":"error","reason":"..."}',
         "如果你选择 use_tool，toolId 必须来自当前暴露的真实工具列表，args 必须是 JSON object。",
         "不要输出 capabilityId，不要发明未暴露工具，不要输出额外字段。",
       ].join("\n"),
@@ -218,15 +218,6 @@ const parseNextActionPlannerOutput = (value: string): AgentNextAction | null => 
           type: "use_tool",
           toolId: parsed.toolId.trim(),
           args: parsed.args,
-          reason: parsed.reason.trim(),
-        };
-      case "ask_user":
-        if (typeof parsed.question !== "string" || !parsed.question.trim()) {
-          return null;
-        }
-        return {
-          type: "ask_user",
-          question: parsed.question.trim(),
           reason: parsed.reason.trim(),
         };
       case "error":
@@ -343,5 +334,12 @@ export const nextActionPlannerNode = async (
 
   return {
     nextAction,
+    ...(nextAction.type === "error"
+      ? {
+          errorMessage: nextAction.reason,
+          blockedReason: nextAction.reason,
+          errorSourceNodeId: "agent-next-action-planner",
+        }
+      : {}),
   };
 };

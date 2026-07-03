@@ -214,6 +214,11 @@ export interface AgentRun {
   approvedInvocations?: AgentApprovedInvocation[];
   policyDecision?: AgentPolicyDecision;
   contextBudget?: ContextBudgetAudit;
+  /**
+   * Legacy / trace / UI compatibility only.
+   * It must not be treated as a tool execution entry.
+   * Real execution must always use pendingToolCall.toolId.
+   */
   selectedToolId?: string;
   pendingToolCall?: AgentToolCallRequest;
   lastToolExecution?: AgentToolExecutionResult;
@@ -279,6 +284,11 @@ export interface AgentGraphInput {
   intentConfig?: AgentIntentEmbeddingConfig;
   approvedInvocations?: AgentApprovedInvocation[];
   policyDecision?: AgentPolicyDecision;
+  /**
+   * Legacy / trace / UI compatibility only.
+   * Graph routing, policy approval and tool execution must not derive execution
+   * from this field.
+   */
   selectedToolId?: string;
   pendingToolCall?: AgentToolCallRequest;
   maxIterations?: number;
@@ -297,6 +307,11 @@ export interface AgentGraphOutput {
   toolIntent?: ToolIntentResult;
   pendingApproval?: AgentApprovalRequest;
   policyDecision?: AgentPolicyDecision;
+  /**
+   * Legacy / trace / UI compatibility only.
+   * This can be surfaced for diagnostics or UI continuity, but execution must
+   * remain bound to pendingToolCall.toolId.
+   */
   selectedToolId?: string;
   pendingToolCall?: AgentToolCallRequest;
   lastToolExecution?: AgentToolExecutionResult;

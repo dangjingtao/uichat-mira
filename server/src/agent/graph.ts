@@ -167,6 +167,8 @@ const routeAfterNextAction = (state: AgentGraphStateType) => {
     case "retrieve":
       return "retrieve";
     case "ask_user":
+      // ask_user is retained only for legacy compatibility until a dedicated
+      // askUserNode + waiting_user state are implemented.
       return "generate";
     case "use_tool":
       return "toolCallNormalize";

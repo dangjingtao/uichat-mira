@@ -16,7 +16,7 @@ related:
   - docs/project-control/tasks/agent_node_T006-evidence-loop-routing.md
   - docs/chat/agent-runtime-design.md
   - docs/harness/agentgraph-harness-protocol.md
-task_state: TODO
+task_state: DONE
 ---
 
 # agent_node_T007 decision loop acceptance and regression guardrails
@@ -250,6 +250,22 @@ server/src/agent/__tests__/agent-decision-loop.test.ts
 3. 是否发现并修复了实现问题
 4. 当前测试命令
 5. 是否仍有未覆盖风险
+
+## Completion Notes
+
+- 已补齐图级验收测试：
+  - 普通 `answer` 不进工具链
+  - `retrieve -> evidence -> Planner`
+  - `use_tool -> normalize -> policy -> tool -> evidence -> Planner`
+  - capability-like id / 未暴露工具阻断执行
+  - `policy require_approval` 停止当前 loop
+  - `maxIterations` 到达后停止继续检索
+  - resume 场景保留 frozen `pendingToolCall`
+- 已复用并保留节点级测试：
+  - `toolCallNormalizeNode` 对未暴露工具、capability-like id、schema 错误、非 plain object 参数的阻断
+  - `policyNode` 对 `skip / allow / require_approval / deny / error` 的约束
+  - `toolNode` 只执行 frozen `pendingToolCall`，不读取 `selectedToolId`
+- 本任务未引入新的运行逻辑重构；只补测试，并修正了一个依赖前序 mock 污染的既有 graph 测试，使其显式声明恢复后 Planner 的输出。
 
 ## Final Acceptance
 

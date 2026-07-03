@@ -44,6 +44,11 @@ export interface AgentNodeState {
   pendingApproval?: AgentApprovalRequest;
   approvedInvocations?: AgentApprovedInvocation[];
   policyDecision?: AgentPolicyDecision;
+  /**
+   * Legacy / trace / UI compatibility only.
+   * Node execution must never branch to policy / tool from this field.
+   * The only execution entry is pendingToolCall.
+   */
   selectedToolId?: string;
   pendingToolCall?: AgentToolCallRequest;
   lastToolExecution?: AgentToolExecutionResult;
