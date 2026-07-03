@@ -251,21 +251,117 @@ server/src/agent/__tests__/agent-decision-loop.test.ts
 4. 当前测试命令
 5. 是否仍有未覆盖风险
 
-## Completion Notes
+## Auditable Evidence
 
-- 已补齐图级验收测试：
-  - 普通 `answer` 不进工具链
-  - `retrieve -> evidence -> Planner`
-  - `use_tool -> normalize -> policy -> tool -> evidence -> Planner`
-  - capability-like id / 未暴露工具阻断执行
-  - `policy require_approval` 停止当前 loop
-  - `maxIterations` 到达后停止继续检索
-  - resume 场景保留 frozen `pendingToolCall`
-- 已复用并保留节点级测试：
-  - `toolCallNormalizeNode` 对未暴露工具、capability-like id、schema 错误、非 plain object 参数的阻断
-  - `policyNode` 对 `skip / allow / require_approval / deny / error` 的约束
-  - `toolNode` 只执行 frozen `pendingToolCall`，不读取 `selectedToolId`
-- 本任务未引入新的运行逻辑重构；只补测试，并修正了一个依赖前序 mock 污染的既有 graph 测试，使其显式声明恢复后 Planner 的输出。
+### Current Branch And Commit
+
+- branch: `main`
+- commit: `8110b0aaf921e79a4dc20022c31c5f41908d3afc`
+
+### Test Source Files
+
+当前 T007 采用的实际测试源码文件是：
+
+- `server/src/agent/graph.test.ts`
+- `server/src/agent/tool-call-normalize.test.ts`
+- `server/src/agent/tool-node.test.ts`
+- `server/src/agent/policy.test.ts`
+
+### Scenario Coverage Map
+
+- `server/src/agent/graph.test.ts`
+  - 覆盖 Required Scenarios `1`
+    - `agentGraph routes planner answer to generate without entering normalize or tool execution`
+  - 覆盖 Required Scenarios `2`
+    - `agentGraph routes retrieve evidence back to planner before final generation`
+  - 覆盖 Required Scenarios `3`
+    - `agentGraph routes planner use_tool through normalize before policy and tool execution`
+  - 覆盖 Required Scenarios `4`
+    - `agentGraph stops when planner selects a tool that is not exposed for this turn`
+  - 覆盖 Required Scenarios `5`
+    - `agentGraph stops on normalize rejection for capability-like ids and never enters policy or tool`
+  - 覆盖 Required Scenarios `8`
+    - `agentGraph does not let selectedToolIds bypass planner and normalize`
+  - 覆盖 Required Scenarios `9`
+    - `agentGraph stops re-planning after maxIterations and does not issue a second retrieve`
+  - 覆盖 Required Scenarios `10`
+    - `agentGraph stops the current loop when policy requires approval and never enters tool execution`
+  - 同时补充 graph 级恢复链路验证：
+    - `agentGraph preserves the frozen pendingToolCall resume entry and goes straight to policy/tool`
+    - `agentGraph keeps pendingApproval and frozen pendingToolCall when Harness pauses for approval`
+- `server/src/agent/tool-call-normalize.test.ts`
+  - 直接覆盖 Required Scenarios `3`
+    - frozen `pendingToolCall`、`args` 保真、稳定 `inputHash`
+  - 直接覆盖 Required Scenarios `4`
+    - 未暴露工具拒绝
+  - 直接覆盖 Required Scenarios `5`
+    - capability-like id 不当作 toolId
+  - 同时验证：
+    - 非 plain object 参数拒绝
+    - schema 不匹配拒绝
+    - trace 不泄露原始参数
+- `server/src/agent/policy.test.ts`
+  - 直接覆盖 Required Scenarios `6`
+    - `allow / require_approval / deny / skip / error` 分支约束
+  - 支撑 Required Scenarios `10`
+    - `policyNode raises approval for risky frozen pendingToolCall`
+  - 同时验证：
+    - 只接受 frozen planner `pendingToolCall`
+    - 只复用完全匹配 `toolId + inputHash` 的审批
+    - unknown tool 不猜 fallback
+- `server/src/agent/tool-node.test.ts`
+  - 直接覆盖 Required Scenarios `6`
+    - policy 未 allow 不执行
+  - 直接覆盖 Required Scenarios `7`
+    - `pendingToolCall` 缺失时不读取 `selectedToolId`
+  - 支撑 Final Acceptance `10`、`11`、`13`
+    - 工具结果写入 execution record
+    - 成功后清理 `pendingToolCall`
+    - Harness 二次 `awaiting_approval` 时保留 frozen `pendingToolCall`
+
+### Test Commands
+
+```bash
+pnpm --filter @ui-chat-mira/server test -- src/agent/graph.test.ts src/agent/tool-call-normalize.test.ts src/agent/tool-node.test.ts src/agent/policy.test.ts
+pnpm --filter @ui-chat-mira/server typecheck
+```
+
+### Current Report Files
+
+- 原始 vitest JSON 报告：
+  - `server/test-report/agent-node-T007-8110b0aa-vitest.json`
+- vitest 运行时间元数据：
+  - `server/test-report/agent-node-T007-8110b0aa-vitest.meta.txt`
+- typecheck 输出报告：
+  - `server/test-report/agent-node-T007-8110b0aa-typecheck.txt`
+- 人可读摘要：
+  - `server/test-report/agent-node-T007-8110b0aa-summary.md`
+
+### Execution Time And Results
+
+- `pnpm --filter @ui-chat-mira/server test -- src/agent/graph.test.ts src/agent/tool-call-normalize.test.ts src/agent/tool-node.test.ts src/agent/policy.test.ts`
+  - startedAt: `2026-07-04T02:20:40.8485977+08:00`
+  - finishedAt: `2026-07-04T02:20:45.6522973+08:00`
+  - durationMs: `4804`
+  - result: `passed`
+  - suites: `4 passed / 0 failed`
+  - tests: `46 passed / 0 failed`
+- `pnpm --filter @ui-chat-mira/server typecheck`
+  - startedAt: `2026-07-04T02:20:18.6373874+08:00`
+  - finishedAt: `2026-07-04T02:20:22.3094287+08:00`
+  - durationMs: `3672`
+  - result: `passed`
+
+### Historical Report Rule
+
+- `2026-07-03` 生成的 `server/test-report/test-report.json`、`server/server-coverage/test-report.json` 与其它旧全量失败报告，不再作为 T007 当前验收依据。
+- T007 当前验收只引用本节列出的 commit 专属报告文件。
+
+### Remaining Risks
+
+- 本次验收聚焦 T007 任务卡要求的 4 个 agent 定向测试文件，没有重跑整个 `server` 测试集，因此无法替代全仓 `server` 回归结论。
+- `retrieve` / `tool` / `approval` 的闭环已经通过 mock 隔离验证，但没有在这次任务里引入真实外部 provider、真实 Harness 工具或真实网络环境的集成验收；这符合 T007 的离线可重复要求，也意味着外部依赖联调不在本次证据范围内。
+- 本次未运行 `pnpm check`、打包命令或桌面端 smoke test，因为它们超出 T007 允许改动范围，且不是本任务卡的直接验收命令。
 
 ## Final Acceptance
 

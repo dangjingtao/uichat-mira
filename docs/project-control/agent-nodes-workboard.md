@@ -44,9 +44,9 @@ Agent node 专属总台账。
 | `agent_node_T002` | `toolCallNormalizeNode` | 当前只实现 Planner 后的“工具调用规范化/冻结节点”，只负责把 `nextAction.use_tool` 校验并冻结成 `pendingToolCall`；不得顺手改 Harness / policy / toolNode / Planner / 完整 loop | `TODO` | [agent_node_T002-tool-call-normalize-node.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T002-tool-call-normalize-node.md) |
 | `agent_node_T003` | `AgentGraph wiring for planner -> normalize -> policy -> tool loop` | 当前任务只做主链路接线：把 `nextActionPlannerNode` 与 `toolCallNormalizeNode` 接入 `AgentGraph`，并让旧的 `capabilityIntent.selectedToolIds -> policyNode` 执行入口失效；不得借机重写 Planner / Normalize / Harness / policy / toolNode | `TODO` | [agent_node_T003-agent-graph-wiring.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T003-agent-graph-wiring.md) |
 | `agent_node_T004` | `policyNode` 只消费 `pendingToolCall` | 当前任务只收敛 `policyNode`：它只能审批冻结后的 `pendingToolCall`，不得自己造工具调用，不得从 `capabilityIntent / query / selectedToolId` 推导执行对象，也不得把 `capabilityId` 当执行对象 | `TODO` | [agent_node_T004-policy-node-consume-pending-tool-call.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T004-policy-node-consume-pending-tool-call.md) |
-| `agent_node_T005` | `toolNode` 只执行 frozen `pendingToolCall` | 当前实现已提交评审：`toolNode` 已拆分为独立模块，只在 `policyDecision.allow` 与 frozen `pendingToolCall` 对齐时执行；执行结果已保留 `toolCallId / inputHash`，成功或失败后会清理 `pendingToolCall`，但整仓打包仍被非本任务失败项阻断 | `READY_FOR_REVIEW` | [agent_node_T005-tool-node-execute-frozen-pending-tool-call.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T005-tool-node-execute-frozen-pending-tool-call.md) |
-| `agent_node_T006` | `evidence` 回流与 Agent loop 路由闭环 | `retrieveNode / toolNode -> evidence -> Planner` 的最小闭环已接通；retrieval / tool evidence 写回、evidence-update trace、去重 helper、`maxIterations` 收口和旧入口阻断都已有定向验证，等待评审确认 | `READY_FOR_REVIEW` | [agent_node_T006-evidence-loop-routing.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T006-evidence-loop-routing.md) |
-| `agent_node_T007` | Agent Decision Loop v1 验收测试与回归护栏 | 已补齐图级与节点级回归测试，验证 `Planner -> Normalize -> Policy -> Tool -> Evidence -> Planner` 闭环成立，并证明旧 `selectedToolId / selectedToolIds / capabilityId` 执行路径不会绕过执行主链；实现侧未发现需要扩散修复的新架构问题 | `DONE` | [agent_node_T007-decision-loop-acceptance-regression-guardrails.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T007-decision-loop-acceptance-regression-guardrails.md) |
+| `agent_node_T005` | `toolNode` 只执行 frozen `pendingToolCall` | `toolNode` 收敛与独立模块拆分已评审通过：它现在只在 `policyDecision.allow` 与 frozen `pendingToolCall` 对齐时执行；执行结果会保留 `toolCallId / inputHash`，成功或失败后会清理 `pendingToolCall`；整仓打包阻断项已明确为非本任务问题 | `DONE` | [agent_node_T005-tool-node-execute-frozen-pending-tool-call.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T005-tool-node-execute-frozen-pending-tool-call.md) |
+| `agent_node_T006` | `evidence` 回流与 Agent loop 路由闭环 | `retrieveNode / toolNode -> evidence -> Planner` 的最小闭环已接通；retrieval / tool evidence 写回、evidence-update trace、去重 helper、`maxIterations` 收口和旧入口阻断都已有定向验证，评审已通过 | `DONE` | [agent_node_T006-evidence-loop-routing.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T006-evidence-loop-routing.md) |
+| `agent_node_T007` | Agent Decision Loop v1 验收测试与回归护栏 | 已补齐当前 commit 专属验收证据：4 个定向测试源码、vitest JSON 报告、typecheck 报告、场景映射、运行时间与剩余风险均已回填到任务卡；当前证据不再引用 `2026-07-03` 的旧失败报告 | `DONE` | [agent_node_T007-decision-loop-acceptance-regression-guardrails.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T007-decision-loop-acceptance-regression-guardrails.md) |
 
 ## Current Ground Truth
 
@@ -135,6 +135,7 @@ Agent node 专属总台账。
   - `agent_node_T005` 已完成实现并提交评审：`toolNode` 已拆分为独立模块，执行入口只保留 frozen `pendingToolCall`
   - 定向 `server` typecheck、`tool-node / policy / graph / resume` 测试与 `pnpm check` 已通过
   - `pnpm package:electron:win` 仍被仓库现有的前端 / server 非本任务失败项阻断，当前状态更新为 `READY_FOR_REVIEW`
+  - `agent_node_T005` 评审通过，状态更新为 `DONE`
   - 追加第六个节点任务编号 `agent_node_T006`
   - 明确第六个任务只接通 `evidence` 回流与 Agent loop 路由闭环：`行动 -> 证据 -> 再决策`
   - 补齐 `agent_node_T006` 任务卡链接、路由约束、`approval pending` 限制与 `maxIterations` 停止条件
@@ -144,12 +145,18 @@ Agent node 专属总台账。
     - `agent-evidence-update-retrieve` / `agent-evidence-update-tool` trace 事件
     - `routeAfterNextAction` 默认错误分支与 `routeAfterTool` 的 `maxIterations` 停止收口
   - 定向验证已通过：`graph.test.ts`、`tool-node.test.ts`、`server` typecheck、`pnpm check`
+  - `agent_node_T006` 评审通过，状态更新为 `DONE`
   - 追加第七个节点任务编号 `agent_node_T007`
   - 把 Agent Decision Loop v1 的验收测试与回归护栏正式纳入 `AgentNodes` 总台账
   - 明确第七个任务只负责闭环验证、测试覆盖、最小护栏和旧执行路径回流防护
-  - `agent_node_T007` 已完成定向验收测试补齐，状态更新为 `DONE`
-  - 验证证据：
+  - `agent_node_T007` 已补齐当前 commit 专属验收证据，状态保持 `DONE`
+  - 当前验收只引用以下新报告，不再引用 `2026-07-03` 的旧全量失败报告：
+    - `server/test-report/agent-node-T007-8110b0aa-vitest.json`
+    - `server/test-report/agent-node-T007-8110b0aa-vitest.meta.txt`
+    - `server/test-report/agent-node-T007-8110b0aa-typecheck.txt`
+    - `server/test-report/agent-node-T007-8110b0aa-summary.md`
+  - 定向验证结果：
     - `pnpm --filter @ui-chat-mira/server test -- src/agent/graph.test.ts src/agent/tool-call-normalize.test.ts src/agent/tool-node.test.ts src/agent/policy.test.ts`
-      - 结果：通过，`43 passed`
+      - 结果：通过，`46 passed`
     - `pnpm --filter @ui-chat-mira/server typecheck`
       - 结果：通过

@@ -38,11 +38,11 @@
         {
           "version": "0.7.1",
           "commit": {
-            "hash": "252cf2e44904feddc9db9d4f9f4b8b0a5112f5b2",
-            "shortHash": "252cf2e",
-            "message": "ci: pin desktop builds to windows-2022",
+            "hash": "8110b0aaf921e79a4dc20022c31c5f41908d3afc",
+            "shortHash": "8110b0a",
+            "message": "openAI review",
             "author": "Tomz",
-            "date": "2026-07-03T16:07:48+08:00"
+            "date": "2026-07-04T02:08:31+08:00"
           }
         },
         {

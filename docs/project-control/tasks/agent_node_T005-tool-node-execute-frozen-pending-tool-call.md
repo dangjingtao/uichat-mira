@@ -14,7 +14,7 @@ related:
   - docs/project-control/tasks/agent_node_T004-policy-node-consume-pending-tool-call.md
   - docs/chat/agent-runtime-design.md
   - docs/harness/agentgraph-harness-protocol.md
-task_state: READY_FOR_REVIEW
+task_state: DONE
 ---
 
 # agent_node_T005 toolNode execute frozen pendingToolCall only
@@ -403,8 +403,8 @@ toolNode 只执行 frozen pendingToolCall。
 
 ## Review Result
 
-- 当前状态：`READY_FOR_REVIEW`
-- 提交结论：
+- `2026-07-04`：评审通过，状态更新为 `DONE`
+- 评审结论：
   - `toolNode` 已收敛为只执行 frozen `pendingToolCall`
   - `toolNode` 已拆为独立文件
   - 定向类型检查、agent 相关测试和 `pnpm check` 已通过

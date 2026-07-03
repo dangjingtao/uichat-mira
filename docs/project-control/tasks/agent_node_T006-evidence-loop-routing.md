@@ -15,7 +15,7 @@ related:
   - docs/project-control/tasks/agent_node_T005-tool-node-execute-frozen-pending-tool-call.md
   - docs/chat/agent-runtime-design.md
   - docs/harness/agentgraph-harness-protocol.md
-task_state: READY_FOR_REVIEW
+task_state: DONE
 ---
 
 # agent_node_T006 evidence loop routing
@@ -681,6 +681,11 @@ Planner -> use_tool
   - `server` 既有缺依赖 / 缺文件：`xlsx`、`src/mcp/harness/sandbox.ts`、`thread-request-context-web-search.resolver.js`
   - 其他与本任务无关的既有断言失败：`bootstrap-env`、`agent/persistence`、`thread.service`、`rag-nodes/generate.service`
 - 本次没有完成 packaged app 启动后的 `/health` 手测，因为打包命令只生成产物，没有自动拉起桌面应用与 bundled backend
+
+## Review Outcome
+
+- 当前提交结论：评审通过
+- 当前状态：`DONE`
 
 ## One-line Principle
 
