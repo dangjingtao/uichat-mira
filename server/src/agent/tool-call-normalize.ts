@@ -84,9 +84,43 @@ const findToolMeta = (
 
 const READ_PATH_ARG_KEY = "path";
 const WORKSPACE_ROOT_SENTINEL = "/workspace";
+const BLOCKED_ROOT_RELATIVE_PREFIXES = new Set([
+  "bin",
+  "boot",
+  "dev",
+  "etc",
+  "home",
+  "lib",
+  "lib64",
+  "media",
+  "mnt",
+  "opt",
+  "proc",
+  "root",
+  "run",
+  "sbin",
+  "sys",
+  "tmp",
+  "usr",
+  "var",
+]);
 
 const isWindowsAbsolutePath = (value: string) =>
   /^[a-zA-Z]:[\\/]/.test(value) || value.startsWith("\\\\");
+
+const isBlockedRootRelativePath = (value: string) => {
+  const withoutLeadingSlash = value.slice(1);
+  const [firstSegment = ""] = withoutLeadingSlash.split("/");
+  if (!firstSegment) {
+    return false;
+  }
+
+  if (BLOCKED_ROOT_RELATIVE_PREFIXES.has(firstSegment.toLowerCase())) {
+    return true;
+  }
+
+  return /^[a-zA-Z]:$/.test(firstSegment);
+};
 
 const normalizeWorkspaceReadPath = (
   value: string,
@@ -101,7 +135,15 @@ const normalizeWorkspaceReadPath = (
     candidate = ".";
   } else if (trimmed.startsWith(`${WORKSPACE_ROOT_SENTINEL}/`)) {
     candidate = trimmed.slice(WORKSPACE_ROOT_SENTINEL.length + 1);
+  } else if (trimmed === ".." || trimmed.startsWith("../")) {
+    candidate = trimmed;
   } else if (trimmed.startsWith("/")) {
+    if (isBlockedRootRelativePath(trimmed)) {
+      return {
+        rejectReason:
+          "Planner read tool path must stay workspace-relative; system root paths are not allowed.",
+      };
+    }
     candidate = trimmed.slice(1);
   }
 
@@ -111,6 +153,7 @@ const normalizeWorkspaceReadPath = (
 
   const normalizedCandidate = path.posix.normalize(candidate.replaceAll("\\", "/"));
   if (
+    normalizedCandidate.startsWith("/") ||
     normalizedCandidate === ".." ||
     normalizedCandidate.startsWith("../") ||
     normalizedCandidate === ""

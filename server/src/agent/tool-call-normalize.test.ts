@@ -164,6 +164,22 @@ test("toolCallNormalizeNode normalizes read_list /workspace to workspace root do
   assert.deepEqual(patch.pendingToolCall?.args, { path: "." });
 });
 
+test("toolCallNormalizeNode normalizes read_list /workspace/ to workspace root dot", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_list",
+        args: { path: "/workspace/" },
+        reason: "Need the workspace listing.",
+      },
+    }),
+  );
+
+  assert.equal(patch.errorMessage, undefined);
+  assert.deepEqual(patch.pendingToolCall?.args, { path: "." });
+});
+
 test("toolCallNormalizeNode normalizes read_open /README.md to workspace-relative path", async () => {
   const patch = await toolCallNormalizeNode(
     createState({
@@ -226,6 +242,86 @@ test("toolCallNormalizeNode rejects workspace-root-relative traversal attempts",
 
   assert.equal(patch.pendingToolCall, undefined);
   assert.match(patch.errorMessage ?? "", /escaped the workspace root/i);
+});
+
+test("toolCallNormalizeNode rejects plain relative traversal attempts", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: { path: "../outside.txt" },
+        reason: "Need file content.",
+      },
+    }),
+  );
+
+  assert.equal(patch.pendingToolCall, undefined);
+  assert.match(patch.errorMessage ?? "", /escaped the workspace root/i);
+});
+
+test("toolCallNormalizeNode rejects root-relative /etc/passwd", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: { path: "/etc/passwd" },
+        reason: "Need file content.",
+      },
+    }),
+  );
+
+  assert.equal(patch.pendingToolCall, undefined);
+  assert.match(patch.errorMessage ?? "", /workspace-relative|system root/i);
+});
+
+test("toolCallNormalizeNode rejects root-relative /bin/sh", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: { path: "/bin/sh" },
+        reason: "Need file content.",
+      },
+    }),
+  );
+
+  assert.equal(patch.pendingToolCall, undefined);
+  assert.match(patch.errorMessage ?? "", /workspace-relative|system root/i);
+});
+
+test("toolCallNormalizeNode rejects root-relative /usr/bin/env", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: { path: "/usr/bin/env" },
+        reason: "Need file content.",
+      },
+    }),
+  );
+
+  assert.equal(patch.pendingToolCall, undefined);
+  assert.match(patch.errorMessage ?? "", /workspace-relative|system root/i);
+});
+
+test("toolCallNormalizeNode rejects root-relative /C:/Windows/System32", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: { path: "/C:/Windows/System32" },
+        reason: "Need file content.",
+      },
+    }),
+  );
+
+  assert.equal(patch.pendingToolCall, undefined);
+  assert.match(patch.errorMessage ?? "", /workspace-relative|system root/i);
 });
 
 test("toolCallNormalizeNode keeps windows absolute read paths unchanged for downstream workspace checks", async () => {

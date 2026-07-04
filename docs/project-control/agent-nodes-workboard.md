@@ -54,7 +54,7 @@ Agent node 专属总台账。
 | `agent_node_T008` | V1 cleanup / release hardening | V1 收尾任务已完成：主分支误留的大型报告与 sqlite 临时文件已清理；`planNode` placeholder、`selectedToolId` 兼容语义、generate 阶段大结果 TODO，以及 V1 当前不变量都已回填到正式代码注释和契约文档；没有把 `TaskFrame` 或 generate size guard 误报成已完成能力 | `DONE` | [agent_node_T008-v1-cleanup-release-hardening.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T008-v1-cleanup-release-hardening.md) |
 | `agent_node_T009` | Evidence Summary + Answer Stop Rule | `AgentEvidenceSummary`、Planner 前置 answer stop rule、`read_list / read_open / web_search / terminal_session` 最小摘要 schema 与 trace 可审计字段已落地；answer stop rule 命中时可阻止第二次 `nextActionPlanner` task-model 调用和重复 `use_tool / retrieve` 执行。`2026-07-04` 前台 smoke 已离开 planner invalid JSON，但新 blocker 已转移到 workspace path argument contract / approval path 与后续回答质量问题，因此当前保持 `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | [agent_node_T009-evidence-summary-answer-stop-rule.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T009-evidence-summary-answer-stop-rule.md) |
 | `agent_node_T010` | `nextActionPlannerNode` JSON Contract Hardening | `T010` 是 `T009` 前台 smoke blocker 修复任务：planner 现已支持 fenced JSON / 前缀 JSON / think 后 JSON，并且对缺失 `reason` 的合法 action 自动补默认值并记录 `missing_reason_defaulted` warning。`2026-07-04` 前台 smoke 已确认 4 条请求都不再失败于 `Planner output was invalid JSON`；当前新 blocker 已转移到 `agent-approval` 与 workspace path argument contract / approval path，path 问题不再归入 `T010` | `DONE` | [agent_node_T010-next-action-planner-json-contract-hardening.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T010-next-action-planner-json-contract-hardening.md) |
-| `agent_node_T011` | Workspace Path Argument Contract | `T011` 已完成：Planner prompt 现已明确 workspace-relative path 契约，Normalize 会对 `read` 域 workspace-bound 工具做单点 path 规范化，把 `"/workspace"`、`"/README.md"`、`"/docs/README.md"` 转成 workspace-relative path，并拒绝规范化后仍逃出 workspace root 的路径。`2026-07-04` 复测显示 `read_list / read_open` 已不再卡在 workspace path approval，而 `terminal_session` 仍按既有高风险策略要求显式审批 | `DONE` | [agent_node_T011-workspace-path-argument-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T011-workspace-path-argument-contract.md) |
+| `agent_node_T011` | Workspace Path Argument Contract | `T011` 当前已修复 root-relative read path normalizer 过宽问题：`/etc/passwd` 不会再被 normalize 成 `etc/passwd`，root-relative path normalizer 也不再无脑处理所有 `/xxx`。`/workspace`、`/README.md`、`/docs/README.md` 仍保持预期行为，T011 安全边界回归测试已补齐。本轮未补前台 smoke 证据，因此状态先保持 `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | [agent_node_T011-workspace-path-argument-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T011-workspace-path-argument-contract.md) |
 
 ## Current Ground Truth
 
@@ -153,12 +153,12 @@ Agent node 专属总台账。
 
 - 代码闭环已通过 `T010` 当前边界内验证。
 - 前台 smoke 已离开 `Planner output was invalid JSON`。
-- `T011` 已解除 workspace path argument contract blocker。
+- `T011` 的 root-relative path normalizer blocker 已修复，当前等待本轮 smoke 证据后再决定是否转 `DONE`。
 - `read_list / read_open / README` 内容查询路径当前都可进入 `ToolNode -> evidence -> answer stop rule -> generate`。
 - `terminal_session` 当前仍按既有高风险策略要求显式审批；这不是 workspace path defect。
 - `T009` 当前状态仍为 `READY_FOR_REVIEW`。
 - `T010` 原始 blocker 已解除，状态维持 `DONE`。
-- `T011` 已完成并关闭 workspace path argument contract 问题。
+- `T011` 当前红线修复与回归测试已完成，但本轮未补前台 smoke 证据，状态保持 `READY_FOR_REVIEW`。
 
 ## Work Rules
 
@@ -342,3 +342,11 @@ Agent node 专属总台账。
       - approval reason 已变为 `terminal_session requires explicit approval before Agent execution.`
       - 说明 workspace path approval blocker 已解除，剩余的是既有高风险审批策略
   - `agent_node_T011` 状态更新为 `DONE`
+  - `2026-07-04` T011 复评补充：
+    - 当前评审确认 `server/src/agent/tool-call-normalize.ts` 的 root-relative path normalizer 过宽
+    - 红线问题是 `/etc/passwd` 会被静默改写成 `etc/passwd`
+    - 已修复为更窄的白名单语义：`/etc/passwd` 不会再被 normalize 成 `etc/passwd`
+    - root-relative path normalizer 不再无脑处理所有 `/xxx`
+    - 已补齐 `/etc/passwd`、`/bin/sh`、`/usr/bin/env`、`/C:/Windows/System32`、`../outside.txt` 等定向回归测试
+    - `pnpm --filter @ui-chat-mira/server test -- src/agent/tool-call-normalize.test.ts`、`pnpm --filter @ui-chat-mira/server test -- src/agent/graph.test.ts src/agent/tool-call-normalize.test.ts`、`pnpm check` 均通过
+    - 本轮未补前台 smoke 证据，因此 `agent_node_T011` 当前状态回到 `READY_FOR_REVIEW`
