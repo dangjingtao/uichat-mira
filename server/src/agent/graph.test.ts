@@ -662,6 +662,108 @@ test("agentGraph blocks a repeated retrieval query in the same run and does not 
   assert.equal(guardedPlannerDoneEvent?.details?.guardedQuery, "missing topic");
 });
 
+test('agentGraph treats read_list "/workspace" and "." as the same repeated call and does not execute twice', async () => {
+  const readList = makeToolDefinition({
+    id: "read_list",
+    domain: "read",
+    inputSchema: {
+      type: "object",
+      required: ["path"],
+      properties: {
+        path: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+  });
+  readList.capabilities.workspaceBound = true;
+  vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([readList]);
+  vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
+    makeToolIntentResult({
+      query: "inspect workspace root twice",
+      topCandidates: [{ toolId: "read_list", domain: "read" }],
+      exposedDefinitions: [readList],
+    }),
+  );
+  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
+    selectedToolIds: ["read_list"],
+    decisionSource: "task-model",
+    decisionReason: "Directory listing is available.",
+  });
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_list","args":{"path":"."},"reason":"Need the workspace listing first."}';
+    })
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_list","args":{"path":"/workspace"},"reason":"Need the workspace listing again."}';
+    });
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-read-list-repeat-1",
+      toolId: "read_list",
+      status: "completed",
+      result: {
+        type: "opaque-list",
+        path: ".",
+        entries: [],
+      },
+      startedAt: "2026-07-04T00:00:00.000Z",
+      finishedAt: "2026-07-04T00:00:01.000Z",
+    } as never);
+  const generateInvokeSpy = vi
+    .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
+    .mockResolvedValue("best effort answer from the first workspace listing");
+  const executionNodes: Array<{
+    nodeId: string;
+    phase: string;
+    details?: Record<string, unknown>;
+  }> = [];
+
+  const result = await agentGraph.run({
+    runId: "run-read-list-workspace-repeat-guard",
+    threadId: "thread-1",
+    userId: 1,
+    goal: {
+      ...baseGoal,
+      text: "inspect workspace root twice",
+    },
+    plan: basePlan,
+    messages: [makeMessage("inspect workspace root twice")],
+    onExecutionNode: async (event) => {
+      executionNodes.push({
+        nodeId: event.nodeId,
+        phase: event.phase,
+        details:
+          event.details && typeof event.details === "object"
+            ? (event.details as Record<string, unknown>)
+            : undefined,
+      });
+    },
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(plannerSpy.mock.calls.length, 2);
+  assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+  assert.equal(generateInvokeSpy.mock.calls.length, 1);
+  assert.equal(result.evidence.toolExecutions.length, 1);
+  const plannerDoneEvents = executionNodes.filter(
+    (event) => event.nodeId === "agent-next-action-planner" && event.phase === "done",
+  );
+  const guardedPlannerDoneEvent = plannerDoneEvents.at(-1);
+  assert.equal(guardedPlannerDoneEvent?.details?.repeatedToolGuardTriggered, true);
+  assert.equal(guardedPlannerDoneEvent?.details?.guardedActionType, "use_tool");
+  assert.equal(guardedPlannerDoneEvent?.details?.guardedToolId, "read_list");
+  assert.equal(
+    guardedPlannerDoneEvent?.details?.guardedArgsHash,
+    createInvocationInputHash({
+      toolId: "read_list",
+      args: { path: "." },
+      source: "planner",
+    }),
+  );
+});
+
 test("agentGraph preserves /README.md for downstream workspace checks and executes read_open", async () => {
   const readOpen = makeToolDefinition({
     id: "read_open",

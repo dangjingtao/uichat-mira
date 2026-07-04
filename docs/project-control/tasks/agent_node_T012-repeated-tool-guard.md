@@ -94,6 +94,11 @@ T012 采用 Planner 输出后 guard，原因如下：
 - Planner 当前 `args` 经过稳定 JSON hash 后，与已有 completed `toolExecution.inputHash` 相同
 - 已有 evidence 中存在 `status === "completed"` 的工具执行结果
 
+补充约束：
+
+- 为了与 `T011` 的 `/workspace` sentinel 契约对齐，重复判定只在 guard 比较时，把 workspace read 工具的 `{"path":"/workspace"}` 与 `{"path":"."}` 视为相同输入
+- 这不是恢复通用 path normalize；`/README.md`、`/docs/README.md`、`/etc/passwd` 之类路径在 T012 里仍不做等价处理
+
 以下情况不算重复：
 
 - `args` 不同
@@ -126,6 +131,11 @@ T012 采用 Planner 输出后 guard，原因如下：
    - `guardedQuery`
    - `matchedEvidenceIndex`
    - `matchedToolCallId`
+8. `2026-07-04` 评审修订补充：
+   - 在 `server/src/agent/evidence.ts` 为 repeated guard 新增最小参数归一化
+   - 仅对 workspace read 工具识别 `/workspace` 与 `/workspace/` sentinel，并在比较 hash 时等价为 `.`
+   - 不修改 Planner 原始 `nextAction.args`
+   - 不改 `toolCallNormalizeNode`、`policyNode`、`toolNode` 的真实执行参数链路
 
 ## Test Coverage
 
@@ -142,6 +152,8 @@ T012 采用 Planner 输出后 guard，原因如下：
 9. old execution entry does not bypass `Planner -> Normalize -> Policy -> ToolNode`
 10. graph-level repeated tool guard prevents a second Harness execution
 11. graph-level repeated retrieval guard prevents a second RAG retrieval
+12. planner-level `/workspace` vs `.` repeated `read_list` is guarded
+13. graph-level `/workspace` vs `.` repeated `read_list` does not execute twice
 
 ## Changed Files
 
@@ -156,15 +168,8 @@ T012 采用 Planner 输出后 guard，原因如下：
 ## Verification
 
 - `pnpm --filter @ui-chat-mira/server test -- src/agent/next-action-planner.test.ts src/agent/graph.test.ts`
-  - 结果：通过，`54 passed`
+  - 结果：通过，`56 passed`
 - `pnpm --filter @ui-chat-mira/server typecheck`
-  - 结果：通过
-- `pnpm check`
-  - 结果：通过
-- `pnpm package:electron:win`
-  - 结果：命令返回成功，产物目录为 `release/v0.7.1_20260704_205127/electron`
-  - 备注：打包过程夹带仓库现有前端 / server 非本任务失败项；本次没有修改这些失败项
-- `curl http://127.0.0.1:8787/health`
   - 结果：通过
 
 ## Frontend Smoke
@@ -225,10 +230,22 @@ T012 采用 Planner 输出后 guard，原因如下：
   - `read_open` 没有重复执行
   - 当前新增前台阻塞发生在生成阶段，不是 repeated guard 缺陷
 - 但 4 条最小 smoke 没有完整跑完，因此本任务状态先保持 `READY_FOR_REVIEW`
+- 本轮评审修订如果再次进行前台手测，仍需要继续关注生成阶段异常；这部分不属于 T012 的重复动作防护实现
+
+### Review-revise smoke
+
+- `2026-07-04` 新线程：`ragDemo` workspace 绑定后的新对话
+- 输入：`看看当前 workspace 有哪些文件`
+- 结果：`PASS`
+- 观察：
+  - 链路完整经过 `候选选择 -> 调用前守卫 -> 执行计划 -> 工具调用规范化 -> 审批策略 -> 工具执行 -> 证据写回 -> 组织最终回答`
+  - 页面只看到 1 次 `工具执行`，对应 `read_list`
+  - 最终回答正常展示 `D:\workspace\rag-demo` 根目录结构
 
 ## Current Status
 
 - 后端重复执行防护已实现
-- 后端定向测试已通过
+- 本轮评审修订已补 `/workspace` sentinel 与 `.` 的重复判定等价逻辑
+- 后端定向测试已复跑通过
 - 已完成一轮真实前台绑定 smoke，但暴露了非 T012 的生成阶段阻塞
 - 当前状态：`READY_FOR_REVIEW`

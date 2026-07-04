@@ -56,7 +56,7 @@ Agent node 专属总台账。
 | `agent_node_T009` | Evidence Summary + Answer Stop Rule | `AgentEvidenceSummary`、Planner 前置 answer stop rule、`read_list / read_open / web_search / terminal_session` 最小摘要 schema 与 trace 可审计字段已落地；`2026-07-04` 已基于非默认 workspace 完成 `read_list -> evidence -> final answer`、`read_open -> evidence -> final answer`、`terminal_session -> waiting_approval` 真实黑盒复测，因此状态更新为 `DONE` | `DONE` | [agent_node_T009-evidence-summary-answer-stop-rule.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T009-evidence-summary-answer-stop-rule.md) |
 | `agent_node_T010` | `nextActionPlannerNode` JSON Contract Hardening | `T010` 是 `T009` 前台 smoke blocker 修复任务：planner 现已支持 fenced JSON / 前缀 JSON / think 后 JSON，并且对缺失 `reason` 的合法 action 自动补默认值并记录 `missing_reason_defaulted` warning。`2026-07-04` 前台 smoke 已确认 4 条请求都不再失败于 `Planner output was invalid JSON`；当前新 blocker 已转移到 `agent-approval` 与 workspace path argument contract / approval path，path 问题不再归入 `T010` | `DONE` | [agent_node_T010-next-action-planner-json-contract-hardening.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T010-next-action-planner-json-contract-hardening.md) |
 | `agent_node_T011` | Workspace Path Argument Contract | `T011` 当前已把 root-relative read path normalizer 收紧到只识别 `/workspace` sentinel：`/etc/passwd` 不会再被 normalize 成 `etc/passwd`，root-relative path normalizer 也不再无脑处理所有 `/xxx`。`/README.md`、`/docs/README.md` 现在同样保持原值，继续交给下游 workspace root 校验；T011 安全边界回归测试与真实前台 workspace 绑定 smoke 证据已补齐，线程配置里的 workspace path 已确认进入 Agent 执行链路 | `DONE` | [agent_node_T011-workspace-path-argument-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T011-workspace-path-argument-contract.md) |
-| `agent_node_T012` | Repeated Tool Guard | `T012` 是 `Agent V1.5 runtime hardening` 任务，不是 `T009 / T010 / T011` 的补丁返工。当前实现只防同一 run 内 identical completed `use_tool` / identical retrieval query 的重复执行；guard 命中后改成 `answer` 并记录 trace 诊断。后端定向测试已通过；真实前台绑定 smoke 已证明 `read_list` / `read_open` 没有重复执行，但第 2、3 条请求暴露了非 T012 的生成阶段问题，因此状态先保持 `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | [agent_node_T012-repeated-tool-guard.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T012-repeated-tool-guard.md) |
+| `agent_node_T012` | Repeated Tool Guard | `T012` 是 `Agent V1.5 runtime hardening` 任务，不是 `T009 / T010 / T011` 的补丁返工。当前实现只防同一 run 内 identical completed `use_tool` / identical retrieval query 的重复执行；`2026-07-04` 评审修订已补 `/workspace` sentinel 与 `.` 在 repeated guard 比较中的等价判定，但没有恢复通用 path normalize。真实前台绑定 smoke 已证明 `read_list` / `read_open` 没有重复执行，但第 2、3 条请求暴露了非 T012 的生成阶段问题，因此状态先保持 `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | [agent_node_T012-repeated-tool-guard.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T012-repeated-tool-guard.md) |
 
 ## Current Ground Truth
 
@@ -397,3 +397,19 @@ Agent node 专属总台账。
       - `read_open` 只执行 1 次，没有重复执行
       - 当前停在 `组织最终回答`，属于非 T012 的生成阶段阻塞
   - 因为 4 条 smoke 未完整跑完，状态先记为 `READY_FOR_REVIEW`
+  - `2026-07-04` T012 评审修订：
+    - 评审指出 repeated guard 当前比较的是 Planner 原始参数 hash，因此 `{"path":"."}` 与 `{"path":"/workspace"}` 会被误判成两次不同的 `read_list`
+    - 已在 `server/src/agent/evidence.ts` 为 repeated guard 增加最小等价归一化，只对 workspace read 工具识别 `/workspace` 与 `/workspace/` sentinel，并在比较 hash 时按 `.` 处理
+    - 此修订不修改 Planner 原始 `nextAction.args`，也不恢复通用 root-relative path normalize
+    - 已补 planner-level 与 graph-level `/workspace` vs `.` 重复 `read_list` 定向测试
+    - 定向验证结果：
+      - `pnpm --filter @ui-chat-mira/server test -- src/agent/next-action-planner.test.ts src/agent/graph.test.ts`
+        - 结果：通过，`56 passed`
+      - `pnpm --filter @ui-chat-mira/server typecheck`
+        - 结果：通过
+    - 新线程前台复测：
+      - 新对话绑定 `ragDemo -> D:\workspace\rag-demo`
+      - `看看当前 workspace 有哪些文件`
+        - `PASS`
+        - 页面完整经过 `read_list -> evidence -> final answer`
+        - 页面只看到 1 次 `工具执行`

@@ -483,6 +483,99 @@ test("nextActionPlannerNode also guards a repeated completed read_list call", as
   }
 });
 
+test('nextActionPlannerNode treats read_list "/workspace" and "." as the same repeated call', async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"read_list","args":{"path":"/workspace"},"reason":"Need the workspace listing again."}';
+    });
+  const events: Array<{
+    nodeId: string;
+    phase: string;
+    details?: unknown;
+  }> = [];
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        toolExposure: {
+          exposedTools: ["read_open", "web_search", "read_list"],
+          toolMeta: [...baseToolExposure.toolMeta, readListToolMeta],
+        },
+        evidence: {
+          observations: [],
+          retrievals: [],
+          toolExecutions: [
+            {
+              toolCallId: "tool-call-list-root",
+              toolId: "read_list",
+              inputHash: readListDotArgsHash,
+              args: {
+                path: ".",
+              },
+              status: "completed",
+              result: {
+                type: "list",
+                path: ".",
+                entries: [],
+              },
+              startedAt: "2026-07-04T00:00:00.000Z",
+              finishedAt: "2026-07-04T00:00:01.000Z",
+            },
+          ],
+        },
+      }),
+      async (event) => {
+        events.push({
+          nodeId: event.nodeId,
+          phase: event.phase,
+          details: event.details,
+        });
+      },
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "answer",
+        reason:
+          "Repeated tool guard: identical read_list call already completed in this run; answer from existing evidence.",
+      },
+    });
+    assert.equal(streamSpy.mock.calls.length, 1);
+
+    const doneEvent = events.find(
+      (event) =>
+        event.nodeId === "agent-next-action-planner" && event.phase === "done",
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.repeatedToolGuardTriggered,
+      true,
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.guardedActionType,
+      "use_tool",
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.guardedToolId,
+      "read_list",
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.guardedArgsHash,
+      readListDotArgsHash,
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.matchedEvidenceIndex,
+      0,
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.matchedToolCallId,
+      "tool-call-list-root",
+    );
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
 test("nextActionPlannerNode allows the same tool when args differ", async () => {
   const streamSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")

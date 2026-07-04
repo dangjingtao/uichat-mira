@@ -78,6 +78,16 @@ const COMMAND_TOKENS = [
   "运行",
 ];
 
+const WORKSPACE_READ_TOOL_IDS = new Set([
+  "read_list",
+  "read_open",
+  "read_locate",
+  "read_extract",
+  "read_slice",
+]);
+
+const WORKSPACE_ROOT_SENTINEL = "/workspace";
+
 export const getEvidencePayload = (state: EvidenceState): AgentEvidencePayload => ({
   observations: state.evidence?.observations ?? state.observations ?? [],
   toolExecutions: state.evidence?.toolExecutions ?? [],
@@ -570,6 +580,35 @@ export const getLatestEvidenceSummary = (state: EvidenceState) =>
 const normalizeRepeatedRetrievalQuery = (value: string) =>
   value.trim().replace(/\s+/g, " ").toLowerCase();
 
+const normalizeRepeatedToolArgs = (
+  toolId: string,
+  args: Record<string, unknown>,
+) => {
+  if (!WORKSPACE_READ_TOOL_IDS.has(toolId)) {
+    return args;
+  }
+
+  const rawPath = args.path;
+  if (typeof rawPath !== "string") {
+    return args;
+  }
+
+  const trimmedPath = rawPath.trim();
+  // Only align repeated-guard hashing with the T011 /workspace sentinel contract.
+  // This does not reintroduce generic root-relative path normalization.
+  if (
+    trimmedPath !== WORKSPACE_ROOT_SENTINEL &&
+    trimmedPath !== `${WORKSPACE_ROOT_SENTINEL}/`
+  ) {
+    return args;
+  }
+
+  return {
+    ...args,
+    path: ".",
+  };
+};
+
 const createRepeatedToolArgsHash = (input: {
   toolId: string;
   args: Record<string, unknown>;
@@ -590,9 +629,13 @@ export const getRepeatedActionGuardResult = (input: {
 
   if (input.nextAction.type === "use_tool") {
     const nextToolId = input.nextAction.toolId;
+    const guardedArgs = normalizeRepeatedToolArgs(
+      nextToolId,
+      input.nextAction.args,
+    );
     const guardedArgsHash = createRepeatedToolArgsHash({
       toolId: nextToolId,
-      args: input.nextAction.args,
+      args: guardedArgs,
     });
     const matchedEvidenceIndex = input.evidence.toolExecutions.findIndex(
       (execution) =>
