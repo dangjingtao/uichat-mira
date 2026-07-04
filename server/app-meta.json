@@ -38,11 +38,11 @@
         {
           "version": "0.7.1",
           "commit": {
-            "hash": "f88a8a408426c9c0a84d6ff72abf8b3c12cbc948",
-            "shortHash": "f88a8a4",
-            "message": "openAI review",
+            "hash": "1a64d87c26f9077ded92d88afc4daa6cc86ea805",
+            "shortHash": "1a64d87",
+            "message": "feat: agentv1.5",
             "author": "Tomz",
-            "date": "2026-07-04T22:53:36+08:00"
+            "date": "2026-07-05T00:09:58+08:00"
           }
         },
         {
