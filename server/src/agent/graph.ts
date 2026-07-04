@@ -27,6 +27,10 @@ import {
   type EmitAgentExecutionNode,
 } from "./nodes.js";
 import { policyNode } from "./policy-node.js";
+import {
+  runWithAgentNodeSpan,
+  runWithAgentRunSpan,
+} from "./observability.js";
 import type {
   AgentGoal,
   AgentGraphInput,
@@ -102,7 +106,12 @@ const createAgentNode = (
 ) =>
   async (state: AgentGraphStateType, config?: LangGraphRunnableConfig) => {
     try {
-      return await handler(state, getEmitter(config));
+      return await runWithAgentNodeSpan({
+        nodeName: nodeId,
+        state,
+        run: () => handler(state, getEmitter(config)),
+        mergeResult: (result) => result,
+      });
     } catch (error) {
       return {
         errorMessage: error instanceof Error ? error.message : String(error),
@@ -347,87 +356,93 @@ const agentStateGraph = new StateGraph(AgentGraphState)
 
 export const agentGraph = {
   async run(input: AgentGraphInput): Promise<AgentGraphOutput> {
-    const state = await agentStateGraph.invoke(
-      {
-        runId: input.runId,
-        threadId: input.threadId,
-        userId: input.userId,
-        goal: input.goal,
-        plan: input.plan,
-        messages: input.messages,
-        requestContextMessages: input.requestContextMessages,
-        params: input.params,
-        knowledgeBaseId: input.knowledgeBaseId,
-        intentConfig: input.intentConfig,
-        workspaceRoot: input.workspaceRoot,
-        observations: [],
-        approvedInvocations: input.approvedInvocations,
-        policyDecision: input.policyDecision,
-        toolExposure: undefined,
-        selectedToolId: input.selectedToolId,
-        pendingToolCall: input.pendingToolCall,
-        nextAction: undefined,
-        lastToolExecution: undefined,
-        evidence: undefined,
-        pendingApproval: undefined,
-        iterationCount: 0,
-        maxIterations: input.maxIterations ?? DEFAULT_AGENT_MAX_ITERATIONS,
-        continueIteration: false,
-        postToolReviewPending: false,
-        reviewDecision: undefined,
-        reviewReason: undefined,
-      },
-      {
-        configurable: {
-          [AGENT_EMIT_CONFIG_KEY]: input.onExecutionNode,
-        },
-      },
-    );
+    return runWithAgentRunSpan({
+      graphInput: input,
+      run: async () => {
+        const state = await agentStateGraph.invoke(
+          {
+            runId: input.runId,
+            threadId: input.threadId,
+            userId: input.userId,
+            goal: input.goal,
+            plan: input.plan,
+            messages: input.messages,
+            requestContextMessages: input.requestContextMessages,
+            params: input.params,
+            knowledgeBaseId: input.knowledgeBaseId,
+            intentConfig: input.intentConfig,
+            workspaceRoot: input.workspaceRoot,
+            observations: [],
+            approvedInvocations: input.approvedInvocations,
+            policyDecision: input.policyDecision,
+            toolExposure: undefined,
+            selectedToolId: input.selectedToolId,
+            pendingToolCall: input.pendingToolCall,
+            nextAction: undefined,
+            lastToolExecution: undefined,
+            evidence: undefined,
+            pendingApproval: undefined,
+            iterationCount: 0,
+            maxIterations: input.maxIterations ?? DEFAULT_AGENT_MAX_ITERATIONS,
+            continueIteration: false,
+            postToolReviewPending: false,
+            reviewDecision: undefined,
+            reviewReason: undefined,
+          },
+          {
+            configurable: {
+              [AGENT_EMIT_CONFIG_KEY]: input.onExecutionNode,
+            },
+          },
+        );
 
-    const answer = state.answer?.trim() ?? "";
-    return {
-      answer,
-      observations: state.observations ?? [],
-      evidence: state.evidence ?? {
-        observations: state.observations ?? [],
-        toolExecutions: [],
-        retrievals: [],
+        const answer = state.answer?.trim() ?? "";
+        return {
+          answer,
+          observations: state.observations ?? [],
+          evidence: state.evidence ?? {
+            observations: state.observations ?? [],
+            toolExecutions: [],
+            retrievals: [],
+          },
+          retrievedChunks: state.retrievedChunks ?? [],
+          toolIntent: state.toolIntent,
+          pendingApproval: state.pendingApproval,
+          policyDecision: state.policyDecision,
+          selectedToolId:
+            state.selectedToolId ??
+            state.lastToolExecution?.toolId ??
+            state.pendingApproval?.toolId,
+          pendingToolCall: state.pendingToolCall,
+          lastToolExecution: state.lastToolExecution,
+          blockedReason: state.blockedReason,
+          terminalReason:
+            state.terminalReason ??
+            (state.pendingApproval
+              ? "waiting_approval"
+              : state.errorMessage
+                ? "failed_error"
+                : state.blockedReason
+                  ? "blocked"
+                  : answer
+                    ? "completed"
+                    : "blocked"),
+          contextBudget: state.contextBudget,
+          errorMessage: state.errorMessage,
+          errorSourceNodeId: state.errorSourceNodeId,
+          status: state.pendingApproval
+            ? "waiting_approval"
+            : state.errorMessage
+              ? "failed"
+              : state.blockedReason
+                ? "blocked"
+                : answer
+                  ? "completed"
+                  : "blocked",
+        };
       },
-      retrievedChunks: state.retrievedChunks ?? [],
-      toolIntent: state.toolIntent,
-      pendingApproval: state.pendingApproval,
-      policyDecision: state.policyDecision,
-      selectedToolId:
-        state.selectedToolId ??
-        state.lastToolExecution?.toolId ??
-        state.pendingApproval?.toolId,
-      pendingToolCall: state.pendingToolCall,
-      lastToolExecution: state.lastToolExecution,
-      blockedReason: state.blockedReason,
-      terminalReason:
-        state.terminalReason ??
-        (state.pendingApproval
-          ? "waiting_approval"
-          : state.errorMessage
-            ? "failed_error"
-            : state.blockedReason
-              ? "blocked"
-              : answer
-                ? "completed"
-                : "blocked"),
-      contextBudget: state.contextBudget,
-      errorMessage: state.errorMessage,
-      errorSourceNodeId: state.errorSourceNodeId,
-      status: state.pendingApproval
-        ? "waiting_approval"
-        : state.errorMessage
-          ? "failed"
-          : state.blockedReason
-            ? "blocked"
-          : answer
-            ? "completed"
-            : "blocked",
-    };
+      summarizeResult: (result) => result,
+    });
   },
 
   get graph() {

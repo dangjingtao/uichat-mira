@@ -89,6 +89,7 @@ Related:
 
 ### 开发支撑
 
+- `development/agent-observability.md`
 - `developments/README.md`
 - `developments/frontend-route-navigation-protocol.md`
 - `developments/release-management.md`

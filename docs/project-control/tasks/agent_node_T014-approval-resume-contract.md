@@ -221,6 +221,33 @@ task_state: DONE
 9. 定向后端测试通过
 10. 前台 smoke 已证明“不再卡在等待审批后无法恢复执行”
 
+## Review Outcome
+
+`2026-07-04` 局部代码评审结论：`PASS`
+
+本次评审只收口 `pendingApproval -> 用户审批 -> 恢复原 frozen pendingToolCall -> ToolNode -> evidence -> 回到 Planner / Generate` 这一条链路。
+
+本次 `PASS` 明确确认了下面这些事实：
+
+1. `pendingApproval` 已绑定原 frozen `pendingToolCall`
+2. 审批恢复前会校验 `toolId + inputHash + toolCallId`
+3. mismatch 时会阻断，不会进入 graph / ToolNode
+4. reject / cancel 后不会执行工具，并会清理审批状态
+5. 批准后恢复的是原 frozen 调用，不是重新让 Planner 生成一次工具调用
+6. `ToolNode` 仍只执行 frozen `pendingToolCall`，不会从 `selectedToolId` 或 `capabilityIntent.selectedToolIds` 绕过
+7. completed tool execution 会真实写入 evidence，并保留 `toolCallId / toolId / inputHash / args / invocationId / status / result`
+8. Agent 审批 hash 与 Harness args hash 的口径差异已经通过桥接处理，不会再在批准后被 Harness 二次误判成未审批
+
+本次 `PASS` 不覆盖：
+
+- `T013 final answer grounding`
+- generate 阶段空回答
+- 前端审批 UI 展示残留
+- Provider Gateway
+- MCP registry
+- Agent V2
+- DAG / 并发 / 多智能体 / 长期记忆
+
 ## Follow-up Candidates
 
 下面两项是本轮 smoke 新看到的后续候选，不混入 `T014` 结论：

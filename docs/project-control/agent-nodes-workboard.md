@@ -23,6 +23,7 @@ related:
   - docs/project-control/tasks/agent_node_T012-repeated-tool-guard.md
   - docs/project-control/tasks/agent_node_T013-evidence-grounded-final-answer.md
   - docs/project-control/tasks/agent_node_T014-approval-resume-contract.md
+  - docs/project-control/tasks/agent_node_T015-phoenix-minimum-human-observability.md
   - docs/chat/agent-runtime-design.md
   - docs/harness/agentgraph-harness-protocol.md
 ---
@@ -61,6 +62,7 @@ Agent node 专属总台账。
 | `agent_node_T012` | Repeated Tool Guard | `T012` 是 `Agent V1.5 runtime hardening` 任务，不是 `T009 / T010 / T011` 的补丁返工。当前实现只防同一 run 内 identical completed `use_tool` / identical retrieval query 的重复执行；`2026-07-04` 评审修订已补 `/workspace` sentinel 与 `.` 在 repeated guard 比较中的等价判定，但没有恢复通用 path normalize。真实前台 smoke 已证明 `read_list` / `read_open` 没有重复执行；但旧线程仍存在 `<function_calls> . </function_calls>` 生成阶段 / 回答组织异常。该异常不属于 T012 repeated guard 缺陷，但会影响前台完整 smoke 通过，因此状态保持 `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | [agent_node_T012-repeated-tool-guard.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T012-repeated-tool-guard.md) |
 | `agent_node_T013` | Evidence Grounded Final Answer | `T013` 是 `Agent V1.5 final answer grounding` 任务，不是 `T009 / T010 / T011 / T012` 的补丁返工。`2026-07-04` 评审意见要求的最小整改 2 点已完成并通过复审：retrieval fallback 现已优先基于 chunk 内容回答；no-evidence guard 已覆盖“模型直接编造 workspace / 文件结果”的场景；同时补了裸 `toolId` 泄漏回归测试。整个任务没有改 Graph 主路由，没有改 ToolNode 直答，没有改 Planner / Normalize / Policy / ToolNode 边界 | `DONE` | [agent_node_T013-evidence-grounded-final-answer.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T013-evidence-grounded-final-answer.md) |
 | `agent_node_T014` | Approval Resume Contract | `T014` 是 `Agent V1.5 approval resume contract` 任务，可与 `T013` 并行，但不覆盖 `T013`。本次只收紧 `pendingApproval -> approval resume -> ToolNode -> evidence` 合同：审批对象已补 `toolCallId`，恢复时会校验 `toolId + inputHash + toolCallId`，并把 Agent 审批哈希桥接为 Harness 认得的参数哈希，因此前台 `terminal_session` 批准后已不再卡在“等待审批后无法恢复执行”，而是进入真实 `工具执行 -> 证据写回`。本任务不改前端审批 UI，不改 Provider Gateway，也不把 final answer 质量混进来 | `DONE` | [agent_node_T014-approval-resume-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T014-approval-resume-contract.md) |
+| `agent_node_T015` | Phoenix Minimum Human Observability (`T_phonex`) | `T015 / T_phonex` 是 `Agent V1.5` 的开发态最小人眼可观测性任务。当前实现只在 `graph.ts` 组装层统一包装节点和 run 根 span：默认关闭，`AGENT_TRACE_PHOENIX=true` 时导出到 Phoenix，`AGENT_TRACE_VERBOSE=true` 时追加脱敏后的 state 摘要。实现没有改各 node 业务逻辑，没有改 AgentGraph 路由，也没有把 tracing 扩大成自研 observability 平台 | `DONE` | [agent_node_T015-phoenix-minimum-human-observability.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T015-phoenix-minimum-human-observability.md) |
 
 ## Current Ground Truth
 
@@ -168,6 +170,7 @@ Agent node 专属总台账。
 - `T012` 当前只处理同一 run 内重复 `use_tool / retrieve` 执行防护，不扩到工具选择策略、前端 trace UI 或 approval resume 大改。
 - `T013` 当前只处理 completed evidence 到最终回答之间的用户可读性与真实性，不改前端 UI，不改 Provider Gateway，也不让 ToolNode 直接 answer。
 - `T014` 当前只处理审批暂停与恢复合同，不改前端审批 UI，不改 Provider Gateway，不把批准后的最终回答质量问题混进本任务。
+- `T015` 当前只处理开发环境 Phoenix tracing 与最小脱敏 state 摘要，不改 AgentGraph 路由，不改各 node 业务实现，也不扩成通用 observability 平台。
 
 ## Work Rules
 
@@ -503,3 +506,42 @@ Agent node 专属总台账。
       - 当前主区仍残留 `等待审批` 展示，属于前端状态同步候选，不改变 `T014` 的后端合同结论
   - 结论：
     - `agent_node_T014` 状态更新为 `DONE`
+  - 追加第十五个节点任务编号 `agent_node_T015`
+  - 按项目 owner 指定别名记录为 `T_phonex`
+  - 明确 `T015` 只处理 AgentGraph 开发态最小人眼可观测性：
+    - 默认关闭
+    - 环境变量显式开启
+    - Phoenix / OpenTelemetry 导出
+    - 组装层统一 wrapper
+    - 脱敏后的 state 摘要
+  - 当前实现已完成：
+    - 新增 `server/src/agent/observability.ts`
+    - 在 `server/src/agent/graph.ts` 为 run 根 span 与各节点统一包装
+    - 新增 `docs/development/agent-observability.md`
+    - 新增 `server/src/agent/observability.test.ts`
+  - 定向验证结果：
+    - `pnpm --filter @ui-chat-mira/server typecheck`
+      - 结果：通过
+    - `pnpm --filter @ui-chat-mira/server test -- src/agent/observability.test.ts`
+      - 结果：通过，`2 passed`
+    - `pnpm --filter @ui-chat-mira/server test -- src/agent/graph.test.ts src/agent/next-action-planner.test.ts src/agent/tool-call-normalize.test.ts src/agent/policy.test.ts src/agent/tool-node.test.ts src/agent/nodes.test.ts src/agent/observability.test.ts`
+      - 结果：通过，`115 passed`
+  - 结论：
+    - `agent_node_T015` 状态更新为 `DONE`
+  - `2026-07-04` T014 局部评审结论：
+    - 结论：`PASS`
+    - 本次评审只覆盖 `pendingApproval -> 用户审批 -> 恢复原 frozen pendingToolCall -> ToolNode -> evidence -> 回到 Planner / Generate`
+    - 已确认：
+      - `pendingApproval` 绑定原 frozen `pendingToolCall`
+      - 恢复前会校验 `toolId + inputHash + toolCallId`
+      - mismatch 时阻断并清理审批状态
+      - reject / cancel 不会执行工具
+      - 批准后恢复的是原 frozen 调用，不是重新规划一次工具调用
+      - `ToolNode` 仍只执行 frozen `pendingToolCall`
+      - completed tool execution 会真实写入 evidence
+      - Agent 审批 hash 与 Harness args hash 的差异已通过桥接处理
+    - 本次 `PASS` 不覆盖：
+      - `T013 final answer grounding`
+      - generate 阶段空回答
+      - 前端审批 UI 展示残留
+      - Provider Gateway / MCP registry / Agent V2 / DAG / 并发 / 多智能体 / 长期记忆
