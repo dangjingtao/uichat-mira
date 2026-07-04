@@ -21,6 +21,7 @@ related:
   - docs/project-control/tasks/agent_node_T010-next-action-planner-json-contract-hardening.md
   - docs/project-control/tasks/agent_node_T011-workspace-path-argument-contract.md
   - docs/project-control/tasks/agent_node_T012-repeated-tool-guard.md
+  - docs/project-control/tasks/agent_node_T013-evidence-grounded-final-answer.md
   - docs/chat/agent-runtime-design.md
   - docs/harness/agentgraph-harness-protocol.md
 ---
@@ -56,7 +57,8 @@ Agent node 专属总台账。
 | `agent_node_T009` | Evidence Summary + Answer Stop Rule | `AgentEvidenceSummary`、Planner 前置 answer stop rule、`read_list / read_open / web_search / terminal_session` 最小摘要 schema 与 trace 可审计字段已落地；`2026-07-04` 已基于非默认 workspace 完成 `read_list -> evidence -> final answer`、`read_open -> evidence -> final answer`、`terminal_session -> waiting_approval` 真实黑盒复测，因此状态更新为 `DONE` | `DONE` | [agent_node_T009-evidence-summary-answer-stop-rule.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T009-evidence-summary-answer-stop-rule.md) |
 | `agent_node_T010` | `nextActionPlannerNode` JSON Contract Hardening | `T010` 是 `T009` 前台 smoke blocker 修复任务：planner 现已支持 fenced JSON / 前缀 JSON / think 后 JSON，并且对缺失 `reason` 的合法 action 自动补默认值并记录 `missing_reason_defaulted` warning。`2026-07-04` 前台 smoke 已确认 4 条请求都不再失败于 `Planner output was invalid JSON`；当前新 blocker 已转移到 `agent-approval` 与 workspace path argument contract / approval path，path 问题不再归入 `T010` | `DONE` | [agent_node_T010-next-action-planner-json-contract-hardening.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T010-next-action-planner-json-contract-hardening.md) |
 | `agent_node_T011` | Workspace Path Argument Contract | `T011` 当前已把 root-relative read path normalizer 收紧到只识别 `/workspace` sentinel：`/etc/passwd` 不会再被 normalize 成 `etc/passwd`，root-relative path normalizer 也不再无脑处理所有 `/xxx`。`/README.md`、`/docs/README.md` 现在同样保持原值，继续交给下游 workspace root 校验；T011 安全边界回归测试与真实前台 workspace 绑定 smoke 证据已补齐，线程配置里的 workspace path 已确认进入 Agent 执行链路 | `DONE` | [agent_node_T011-workspace-path-argument-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T011-workspace-path-argument-contract.md) |
-| `agent_node_T012` | Repeated Tool Guard | `T012` 是 `Agent V1.5 runtime hardening` 任务，不是 `T009 / T010 / T011` 的补丁返工。当前实现只防同一 run 内 identical completed `use_tool` / identical retrieval query 的重复执行；`2026-07-04` 评审修订已补 `/workspace` sentinel 与 `.` 在 repeated guard 比较中的等价判定，但没有恢复通用 path normalize。真实前台绑定 smoke 已证明 `read_list` / `read_open` 没有重复执行，但第 2、3 条请求暴露了非 T012 的生成阶段问题，因此状态先保持 `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | [agent_node_T012-repeated-tool-guard.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T012-repeated-tool-guard.md) |
+| `agent_node_T012` | Repeated Tool Guard | `T012` 是 `Agent V1.5 runtime hardening` 任务，不是 `T009 / T010 / T011` 的补丁返工。当前实现只防同一 run 内 identical completed `use_tool` / identical retrieval query 的重复执行；`2026-07-04` 评审修订已补 `/workspace` sentinel 与 `.` 在 repeated guard 比较中的等价判定，但没有恢复通用 path normalize。真实前台 smoke 已证明 `read_list` / `read_open` 没有重复执行；但旧线程仍存在 `<function_calls> . </function_calls>` 生成阶段 / 回答组织异常。该异常不属于 T012 repeated guard 缺陷，但会影响前台完整 smoke 通过，因此状态保持 `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | [agent_node_T012-repeated-tool-guard.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T012-repeated-tool-guard.md) |
+| `agent_node_T013` | Evidence Grounded Final Answer | `T013` 是 `Agent V1.5 final answer grounding` 任务，不是 `T009 / T010 / T011 / T012` 的补丁返工。当前实现已把 `generate` 阶段改成消费稳定 evidence 摘要块，并新增最小输出防护与 evidence 保底回答：`read_list / read_open / retrieval` 都能收口成面向用户的自然语言回答，`pendingApproval` 不会被伪装成已执行，没有 completed evidence 时也不会编造“已查看”。本任务不改前端 UI，不改 Provider Gateway，不让 ToolNode 直接 answer | `DONE` | [agent_node_T013-evidence-grounded-final-answer.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T013-evidence-grounded-final-answer.md) |
 
 ## Current Ground Truth
 
@@ -162,6 +164,7 @@ Agent node 专属总台账。
 - `T010` 原始 blocker 已解除，状态维持 `DONE`。
 - `T011` 当前红线修复、回归测试和前台 smoke 证据已完成，状态更新为 `DONE`。
 - `T012` 当前只处理同一 run 内重复 `use_tool / retrieve` 执行防护，不扩到工具选择策略、前端 trace UI 或 approval resume 大改。
+- `T013` 当前只处理 completed evidence 到最终回答之间的用户可读性与真实性，不改前端 UI，不改 Provider Gateway，也不让 ToolNode 直接 answer。
 
 ## Work Rules
 
@@ -413,3 +416,28 @@ Agent node 专属总台账。
         - `PASS`
         - 页面完整经过 `read_list -> evidence -> final answer`
         - 页面只看到 1 次 `工具执行`
+    - 复审结论：
+      - T012 repeated guard 后端实现与评审修订已通过复审
+      - 当前状态保持 `READY_FOR_REVIEW`，不是 `DONE`
+      - 原因是旧线程仍存在 `<function_calls> . </function_calls>` 生成阶段 / 回答组织异常
+      - 该异常不属于 T012 repeated guard 缺陷，不在 T012 内顺手修复，也不误报为已解决
+  - 追加第十三个节点任务编号 `agent_node_T013`
+  - 明确 `T013` 是 `Agent V1.5 final answer grounding` 任务
+  - 当前任务只处理 `generate` 阶段基于 completed evidence 的最终回答真实性与可读性
+  - 当前实现已完成：
+    - `generate` 改为优先消费稳定 evidence 摘要块，而不是直接依赖完整工具 `result` JSON
+    - 新增 generate 输出防护，拦截 `<function_calls>`、tool JSON、`pendingToolCall`、`toolId/args` 协议文本和伪执行话术
+    - 新增基于 `read_list / read_open / retrieval / pendingApproval / no evidence` 的最小保底回答
+    - `server/src/agent/nodes.test.ts` 已补 5 条定向用例
+  - 定向验证结果：
+    - `pnpm --filter @ui-chat-mira/server test -- src/agent/nodes.test.ts src/agent/graph.test.ts src/agent/next-action-planner.test.ts`
+      - 结果：通过，`61 passed`
+    - `pnpm --filter @ui-chat-mira/server typecheck`
+      - 结果：通过
+    - `pnpm check`
+      - 结果：通过
+  - 打包验证结果：
+    - `pnpm package:electron:win`
+      - 结果：失败
+      - 失败原因是仓库当前已有的 desktop / server 非本任务测试与依赖缺口，不是 T013 改动引入的新 blocker
+  - `agent_node_T013` 状态更新为 `DONE`

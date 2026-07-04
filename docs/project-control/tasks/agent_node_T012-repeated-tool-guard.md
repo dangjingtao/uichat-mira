@@ -229,7 +229,9 @@ T012 采用 Planner 输出后 guard，原因如下：
   - `read_list` 没有重复执行
   - `read_open` 没有重复执行
   - 当前新增前台阻塞发生在生成阶段，不是 repeated guard 缺陷
-- 但 4 条最小 smoke 没有完整跑完，因此本任务状态先保持 `READY_FOR_REVIEW`
+- 但旧线程仍存在 `<function_calls> . </function_calls>` 的生成阶段 / 回答组织异常，前台完整 smoke 不能算通过
+- 该异常不属于 T012 repeated guard 缺陷，因此不在 T012 内顺手修复，也不误报为已解决
+- 因此前台完整 smoke 仍未通过，本任务状态保持 `READY_FOR_REVIEW`
 - 本轮评审修订如果再次进行前台手测，仍需要继续关注生成阶段异常；这部分不属于 T012 的重复动作防护实现
 
 ### Review-revise smoke
@@ -247,5 +249,7 @@ T012 采用 Planner 输出后 guard，原因如下：
 - 后端重复执行防护已实现
 - 本轮评审修订已补 `/workspace` sentinel 与 `.` 的重复判定等价逻辑
 - 后端定向测试已复跑通过
-- 已完成一轮真实前台绑定 smoke，但暴露了非 T012 的生成阶段阻塞
+- T012 repeated guard 后端实现与评审修订已通过复审
+- 真实前台 smoke 已证明 `read_list / read_open` 没有重复执行
+- 旧线程仍存在 `<function_calls> . </function_calls>` 生成阶段 / 回答组织异常；该异常不属于 T012 repeated guard 缺陷，但会影响前台完整 smoke 通过
 - 当前状态：`READY_FOR_REVIEW`
