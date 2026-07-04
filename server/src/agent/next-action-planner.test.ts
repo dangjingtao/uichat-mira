@@ -3,6 +3,7 @@ import { test, vi } from "vitest";
 import { subscribeToLogLines } from "@/logger";
 import { providerProxyService } from "@/services/provider-proxy.service/index.js";
 import type { AgentNodeState } from "./nodes.js";
+import { createInvocationInputHash } from "./approval-fingerprint.js";
 import {
   nextActionPlannerNode,
   parseNextActionPlannerOutput,
@@ -75,6 +76,34 @@ const createState = (
   maxIterations: 3,
   ...overrides,
 });
+
+const readmeArgsHash = createInvocationInputHash({
+  toolId: "read_open",
+  args: { path: "README.md" },
+  source: "planner",
+});
+
+const readListDotArgsHash = createInvocationInputHash({
+  toolId: "read_list",
+  args: { path: "." },
+  source: "planner",
+});
+
+const baseToolExposure = createState().toolExposure!;
+
+const readListToolMeta = {
+  toolId: "read_list",
+  title: "Read List",
+  description: "List a workspace directory",
+  inputSchema: { type: "object", properties: { path: { type: "string" } } },
+  domain: "read",
+  source: "internal",
+  tags: ["read"],
+  capabilities: {
+    sideEffect: "none" as const,
+    requiresApproval: false,
+  },
+};
 
 test("nextActionPlannerNode returns answer action from task model JSON", async () => {
   const streamSpy = vi
@@ -309,6 +338,371 @@ test("nextActionPlannerNode returns use_tool action when toolId is exposed", asy
     });
     assert.equal("pendingToolCall" in patch, false);
     assert.equal("selectedToolId" in patch, false);
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode turns a repeated completed tool call into answer and writes guard diagnostics", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need the file content."}';
+    });
+  const events: Array<Record<string, unknown>> = [];
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        evidence: {
+          observations: [],
+          retrievals: [],
+          toolExecutions: [
+            {
+              toolCallId: "tool-call-readme",
+              toolId: "read_open",
+              inputHash: readmeArgsHash,
+              args: {
+                path: "README.md",
+              },
+              status: "completed",
+              result: {
+                type: "open",
+                path: "README.md",
+                source: {
+                  kind: "text",
+                  text: "# README",
+                },
+              },
+              startedAt: "2026-07-04T00:00:00.000Z",
+              finishedAt: "2026-07-04T00:00:01.000Z",
+            },
+          ],
+        },
+      }),
+      async (event) => {
+        events.push({
+          nodeId: event.nodeId,
+          phase: event.phase,
+          details: event.details,
+        });
+      },
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "answer",
+        reason:
+          "Repeated tool guard: identical read_open call already completed in this run; answer from existing evidence.",
+      },
+    });
+    assert.equal(streamSpy.mock.calls.length, 1);
+
+    const doneEvent = events.find(
+      (event) =>
+        event.nodeId === "agent-next-action-planner" && event.phase === "done",
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.repeatedToolGuardTriggered,
+      true,
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.guardedActionType,
+      "use_tool",
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.guardedToolId,
+      "read_open",
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.guardedArgsHash,
+      readmeArgsHash,
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.matchedEvidenceIndex,
+      0,
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.matchedToolCallId,
+      "tool-call-readme",
+    );
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode also guards a repeated completed read_list call", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"read_list","args":{"path":"."},"reason":"Need the workspace listing."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        toolExposure: {
+          exposedTools: ["read_open", "web_search", "read_list"],
+          toolMeta: [...baseToolExposure.toolMeta, readListToolMeta],
+        },
+        evidence: {
+          observations: [],
+          retrievals: [],
+          toolExecutions: [
+            {
+              toolCallId: "tool-call-list",
+              toolId: "read_list",
+              inputHash: readListDotArgsHash,
+              args: {
+                path: ".",
+              },
+              status: "completed",
+              result: {
+                type: "list",
+                path: ".",
+                entries: [],
+              },
+              startedAt: "2026-07-04T00:00:00.000Z",
+              finishedAt: "2026-07-04T00:00:01.000Z",
+            },
+          ],
+        },
+      }),
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "answer",
+        reason:
+          "Repeated tool guard: identical read_list call already completed in this run; answer from existing evidence.",
+      },
+    });
+    assert.equal(streamSpy.mock.calls.length, 1);
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode allows the same tool when args differ", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"docs/README.md"},"reason":"Need the nested file content."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        evidence: {
+          observations: [],
+          retrievals: [],
+          toolExecutions: [
+            {
+              toolCallId: "tool-call-readme",
+              toolId: "read_open",
+              inputHash: readmeArgsHash,
+              args: {
+                path: "README.md",
+              },
+              status: "completed",
+              result: {
+                type: "open",
+                path: "README.md",
+              },
+              startedAt: "2026-07-04T00:00:00.000Z",
+              finishedAt: "2026-07-04T00:00:01.000Z",
+            },
+          ],
+        },
+      }),
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: {
+          path: "docs/README.md",
+        },
+        reason: "Need the nested file content.",
+      },
+    });
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode does not treat failed tool execution as a completed duplicate", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Retry the file content."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        evidence: {
+          observations: [],
+          retrievals: [],
+          toolExecutions: [
+            {
+              toolCallId: "tool-call-readme-failed",
+              toolId: "read_open",
+              inputHash: readmeArgsHash,
+              args: {
+                path: "README.md",
+              },
+              status: "failed",
+              errorMessage: "file not found",
+              startedAt: "2026-07-04T00:00:00.000Z",
+              finishedAt: "2026-07-04T00:00:01.000Z",
+            },
+          ],
+        },
+      }),
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: {
+          path: "README.md",
+        },
+        reason: "Retry the file content.",
+      },
+    });
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode does not treat awaiting approval tool execution as a completed duplicate", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Retry after approval wait."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        evidence: {
+          observations: [],
+          retrievals: [],
+          toolExecutions: [
+            {
+              toolCallId: "tool-call-readme-awaiting",
+              toolId: "read_open",
+              inputHash: readmeArgsHash,
+              args: {
+                path: "README.md",
+              },
+              status: "awaiting_approval",
+              approval: {
+                id: "approval-1",
+                runId: "run-1",
+                stepId: "tool",
+                toolId: "read_open",
+                reason: "needs approval",
+                input: {
+                  path: "README.md",
+                },
+                inputHash:
+                  readmeArgsHash,
+                createdAt: "2026-07-04T00:00:00.000Z",
+              },
+              startedAt: "2026-07-04T00:00:00.000Z",
+              finishedAt: "2026-07-04T00:00:01.000Z",
+            },
+          ],
+        },
+      }),
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: {
+          path: "README.md",
+        },
+        reason: "Retry after approval wait.",
+      },
+    });
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode turns a repeated retrieval query into answer and writes guard diagnostics", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"retrieve","query":"README.md 内容","reason":"Need retrieval evidence."}';
+    });
+  const events: Array<Record<string, unknown>> = [];
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        evidence: {
+          observations: [],
+          toolExecutions: [],
+          retrievals: [
+            {
+              query: " README.md   内容 ",
+              chunkCount: 1,
+              chunks: [
+                {
+                  chunkId: "chunk-1",
+                  documentName: "README",
+                  content: "README content",
+                },
+              ],
+              createdAt: "2026-07-04T00:00:00.000Z",
+            },
+          ],
+        },
+      }),
+      async (event) => {
+        events.push({
+          nodeId: event.nodeId,
+          phase: event.phase,
+          details: event.details,
+        });
+      },
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "answer",
+        reason:
+          "Repeated retrieval guard: identical retrieval query already completed in this run; answer from existing evidence.",
+      },
+    });
+
+    const doneEvent = events.find(
+      (event) =>
+        event.nodeId === "agent-next-action-planner" && event.phase === "done",
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.repeatedToolGuardTriggered,
+      true,
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.guardedActionType,
+      "retrieve",
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.guardedQuery,
+      "readme.md 内容",
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.matchedEvidenceIndex,
+      0,
+    );
   } finally {
     streamSpy.mockRestore();
   }

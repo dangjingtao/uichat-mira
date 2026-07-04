@@ -498,6 +498,170 @@ test("agentGraph routes planner use_tool through normalize and answer stop rule 
   assert.equal(generateInvokeSpy.mock.calls.length, 1);
 });
 
+test("agentGraph blocks a repeated completed tool call in the same run and does not execute the tool twice", async () => {
+  const customReadTool = makeToolDefinition({
+    id: "read_note",
+    domain: "read",
+    inputSchema: {
+      type: "object",
+      required: ["path"],
+      properties: {
+        path: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+  });
+  vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([customReadTool]);
+  vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
+    makeToolIntentResult({
+      query: "inspect NOTE.md",
+      topCandidates: [{ toolId: "read_note", domain: "read" }],
+      exposedDefinitions: [customReadTool],
+    }),
+  );
+  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
+    selectedToolIds: ["read_note"],
+    decisionSource: "task-model",
+    decisionReason: "A custom read tool is available.",
+  });
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_note","args":{"path":"NOTE.md"},"reason":"Need the note content."}';
+    })
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_note","args":{"path":"NOTE.md"},"reason":"Try the same note again."}';
+    });
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-read-note-1",
+      toolId: "read_note",
+      status: "completed",
+      result: {
+        note: "plain payload without a dedicated summary contract",
+      },
+      startedAt: "2026-07-04T00:00:00.000Z",
+      finishedAt: "2026-07-04T00:00:01.000Z",
+    });
+  const generateInvokeSpy = vi
+    .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
+    .mockResolvedValue("best effort answer from existing evidence");
+  const executionNodes: Array<{
+    nodeId: string;
+    phase: string;
+    details?: Record<string, unknown>;
+  }> = [];
+
+  const result = await agentGraph.run({
+    runId: "run-repeated-tool-guard",
+    threadId: "thread-1",
+    userId: 1,
+    goal: {
+      ...baseGoal,
+      text: "inspect NOTE.md",
+    },
+    plan: basePlan,
+    messages: [makeMessage("inspect NOTE.md")],
+    onExecutionNode: async (event) => {
+      executionNodes.push({
+        nodeId: event.nodeId,
+        phase: event.phase,
+        details:
+          event.details && typeof event.details === "object"
+            ? (event.details as Record<string, unknown>)
+            : undefined,
+      });
+    },
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(plannerSpy.mock.calls.length, 2);
+  assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+  assert.equal(generateInvokeSpy.mock.calls.length, 1);
+  assert.equal(result.evidence.toolExecutions.length, 1);
+  const plannerDoneEvents = executionNodes.filter(
+    (event) => event.nodeId === "agent-next-action-planner" && event.phase === "done",
+  );
+  assert.equal(plannerDoneEvents.length >= 2, true);
+  const guardedPlannerDoneEvent = plannerDoneEvents.at(-1);
+  assert.equal(guardedPlannerDoneEvent?.details?.repeatedToolGuardTriggered, true);
+  assert.equal(guardedPlannerDoneEvent?.details?.guardedActionType, "use_tool");
+  assert.equal(guardedPlannerDoneEvent?.details?.guardedToolId, "read_note");
+});
+
+test("agentGraph blocks a repeated retrieval query in the same run and does not retrieve twice", async () => {
+  vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([]);
+  vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
+    makeToolIntentResult({
+      query: "search missing knowledge",
+    }),
+  );
+  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
+    selectedToolIds: [],
+    decisionSource: "task-model",
+    decisionReason: "No tool is required for this turn.",
+  });
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"retrieve","query":"missing topic","reason":"Need knowledge evidence first."}';
+    })
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"retrieve","query":"missing topic","reason":"Try the same retrieval again."}';
+    });
+  const ragInvokeSpy = vi
+    .spyOn(runnablesModule.agentRagRunnable, "invoke")
+    .mockResolvedValue({
+      answer: "",
+      sources: [],
+    });
+  const generateInvokeSpy = vi
+    .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
+    .mockResolvedValue("No matching knowledge was found in this run.");
+  const executionNodes: Array<{
+    nodeId: string;
+    phase: string;
+    details?: Record<string, unknown>;
+  }> = [];
+
+  const result = await agentGraph.run({
+    runId: "run-repeated-retrieve-guard",
+    threadId: "thread-1",
+    userId: 1,
+    goal: {
+      ...baseGoal,
+      text: "search missing knowledge",
+    },
+    plan: basePlan,
+    knowledgeBaseId: "kb-1",
+    messages: [makeMessage("search missing knowledge")],
+    onExecutionNode: async (event) => {
+      executionNodes.push({
+        nodeId: event.nodeId,
+        phase: event.phase,
+        details:
+          event.details && typeof event.details === "object"
+            ? (event.details as Record<string, unknown>)
+            : undefined,
+      });
+    },
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(plannerSpy.mock.calls.length, 2);
+  assert.equal(ragInvokeSpy.mock.calls.length, 1);
+  assert.equal(generateInvokeSpy.mock.calls.length, 1);
+  assert.equal(result.evidence.retrievals.length, 1);
+  const plannerDoneEvents = executionNodes.filter(
+    (event) => event.nodeId === "agent-next-action-planner" && event.phase === "done",
+  );
+  const guardedPlannerDoneEvent = plannerDoneEvents.at(-1);
+  assert.equal(guardedPlannerDoneEvent?.details?.repeatedToolGuardTriggered, true);
+  assert.equal(guardedPlannerDoneEvent?.details?.guardedActionType, "retrieve");
+  assert.equal(guardedPlannerDoneEvent?.details?.guardedQuery, "missing topic");
+});
+
 test("agentGraph preserves /README.md for downstream workspace checks and executes read_open", async () => {
   const readOpen = makeToolDefinition({
     id: "read_open",

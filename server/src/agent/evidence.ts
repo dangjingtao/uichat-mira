@@ -2,9 +2,12 @@ import type {
   AgentEvidencePayload,
   AgentEvidenceSummary,
   AgentObservation,
+  AgentRepeatedActionGuardResult,
   AgentRetrievalEvidence,
+  AgentNextAction,
   AgentToolExecutionResult,
 } from "./types.js";
+import { createInvocationInputHash } from "./approval-fingerprint.js";
 
 type EvidenceState = Pick<
   {
@@ -563,6 +566,73 @@ export const createToolExecutionEvidenceSummary = (input: {
 
 export const getLatestEvidenceSummary = (state: EvidenceState) =>
   getEvidencePayload(state).latestSummary;
+
+const normalizeRepeatedRetrievalQuery = (value: string) =>
+  value.trim().replace(/\s+/g, " ").toLowerCase();
+
+const createRepeatedToolArgsHash = (input: {
+  toolId: string;
+  args: Record<string, unknown>;
+}) =>
+  createInvocationInputHash({
+    toolId: input.toolId,
+    args: input.args,
+    source: "planner",
+  });
+
+export const getRepeatedActionGuardResult = (input: {
+  evidence: AgentEvidencePayload | undefined;
+  nextAction: AgentNextAction | undefined;
+}): AgentRepeatedActionGuardResult => {
+  if (!input.evidence || !input.nextAction) {
+    return { triggered: false };
+  }
+
+  if (input.nextAction.type === "use_tool") {
+    const nextToolId = input.nextAction.toolId;
+    const guardedArgsHash = createRepeatedToolArgsHash({
+      toolId: nextToolId,
+      args: input.nextAction.args,
+    });
+    const matchedEvidenceIndex = input.evidence.toolExecutions.findIndex(
+      (execution) =>
+        execution.status === "completed" &&
+        execution.toolId === nextToolId &&
+        execution.inputHash === guardedArgsHash,
+    );
+    if (matchedEvidenceIndex >= 0) {
+      const matchedExecution = input.evidence.toolExecutions[matchedEvidenceIndex]!;
+      return {
+        triggered: true,
+        reason: `Repeated tool guard: identical ${nextToolId} call already completed in this run; answer from existing evidence.`,
+        guardedActionType: "use_tool",
+        guardedToolId: nextToolId,
+        guardedArgsHash,
+        matchedEvidenceIndex,
+        matchedToolCallId: matchedExecution.toolCallId,
+      };
+    }
+  }
+
+  if (input.nextAction.type === "retrieve") {
+    const guardedQuery = normalizeRepeatedRetrievalQuery(input.nextAction.query);
+    const matchedEvidenceIndex = input.evidence.retrievals.findIndex(
+      (retrieval) =>
+        normalizeRepeatedRetrievalQuery(retrieval.query) === guardedQuery,
+    );
+    if (matchedEvidenceIndex >= 0) {
+      return {
+        triggered: true,
+        reason: `Repeated retrieval guard: identical retrieval query already completed in this run; answer from existing evidence.`,
+        guardedActionType: "retrieve",
+        guardedQuery,
+        matchedEvidenceIndex,
+      };
+    }
+  }
+
+  return { triggered: false };
+};
 
 export const getAnswerStopDecision = (input: {
   latestSummary: AgentEvidenceSummary | undefined;

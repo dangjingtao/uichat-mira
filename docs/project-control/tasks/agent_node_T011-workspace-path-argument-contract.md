@@ -37,6 +37,8 @@ task_state: DONE
 
 ## Forbidden Changes
 
+以下限制是本任务最初的评审边界，用来防止在红线修复阶段把问题扩成大范围改造：
+
 - `server/src/agent/tool-node.ts`
 - `server/src/agent/policy-node.ts`
 - `server/src/agent/graph.ts`
@@ -46,6 +48,12 @@ task_state: DONE
 - Provider Gateway
 - MCP registry
 - Agent V2 / DAG / 并发 / 多智能体 / 长期记忆
+
+最终交付阶段另外经过项目 owner 明确批准的后续整改，不算违背这组初始限制：
+
+- 删除 runtime workspace fallback 污染
+- 让 `ToolNode` 执行时把线程绑定的 `workspaceRoot` 传给下游 workspace 解析
+- 给 `electron/dev-launcher.cjs` 补 workspace env 定向测试
 
 ## Defect Layer
 
@@ -125,10 +133,24 @@ T011 的安全边界已补测，当前定向测试覆盖至少包含：
 
 ## Changed Files
 
+本任务最终实际涉及两组改动：
+
+### 红线修复主改动
+
 - `server/src/agent/tool-call-normalize.ts`
 - `server/src/agent/tool-call-normalize.test.ts`
 - `docs/project-control/tasks/agent_node_T011-workspace-path-argument-contract.md`
 - `docs/project-control/agent-nodes-workboard.md`
+
+### 经批准追加的运行态整改与补测
+
+- `server/src/mcp/workspace.ts`
+- `server/src/mcp/workspace.test.ts`
+- `server/src/agent/tool-node.ts`
+- `server/src/agent/tool-node.test.ts`
+- `electron/dev-launcher.cjs`
+- `electron/dev-launcher.test.cjs`
+
 
 ## Frontend Smoke
 

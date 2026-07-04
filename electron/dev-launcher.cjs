@@ -13,9 +13,10 @@ let isShuttingDown = false;
 
 function buildBackendEnv(baseEnv = process.env) {
   const explicitWorkspaceRoot = baseEnv.UI_CHAT_WORKSPACE_ROOT?.trim();
+  const { UI_CHAT_WORKSPACE_ROOT: _ignoredWorkspaceRoot, ...restEnv } = baseEnv;
 
   return {
-    ...baseEnv,
+    ...restEnv,
     UI_CHAT_ALLOW_BACKEND_REUSE: "1",
     ...(explicitWorkspaceRoot
       ? { UI_CHAT_WORKSPACE_ROOT: explicitWorkspaceRoot }

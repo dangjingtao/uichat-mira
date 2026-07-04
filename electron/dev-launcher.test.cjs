@@ -29,3 +29,13 @@ test("buildBackendEnv trims explicit UI_CHAT_WORKSPACE_ROOT", () => {
 
   assert.equal(env.UI_CHAT_WORKSPACE_ROOT, "D:\\workspace\\rag-demo");
 });
+
+test("buildBackendEnv omits UI_CHAT_WORKSPACE_ROOT when it is blank after trim", () => {
+  const env = buildBackendEnv({
+    PATH: "C:\\Windows\\System32",
+    UI_CHAT_WORKSPACE_ROOT: "   ",
+  });
+
+  assert.equal(env.UI_CHAT_ALLOW_BACKEND_REUSE, "1");
+  assert.equal("UI_CHAT_WORKSPACE_ROOT" in env, false);
+});

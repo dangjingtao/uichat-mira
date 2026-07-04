@@ -257,6 +257,17 @@ export interface AgentEvidenceSummary {
   };
 }
 
+export interface AgentRepeatedActionGuardResult {
+  triggered: boolean;
+  reason?: string;
+  guardedActionType?: "use_tool" | "retrieve";
+  guardedToolId?: string;
+  guardedArgsHash?: string;
+  guardedQuery?: string;
+  matchedEvidenceIndex?: number;
+  matchedToolCallId?: string;
+}
+
 export type AgentNextAction =
   | {
       type: "answer";

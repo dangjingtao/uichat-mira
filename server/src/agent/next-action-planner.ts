@@ -2,10 +2,15 @@ import { providerProxyService } from "@/services/provider-proxy.service/index.js
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
 import { writeStructuredLog } from "@/logger";
 import { toAgentExecutionNode } from "./trace.js";
-import { getAnswerStopDecision, getLatestEvidenceSummary } from "./evidence.js";
+import {
+  getAnswerStopDecision,
+  getLatestEvidenceSummary,
+  getRepeatedActionGuardResult,
+} from "./evidence.js";
 import type {
   AgentApprovalRequest,
   AgentEvidencePayload,
+  AgentRepeatedActionGuardResult,
   AgentEvidenceSummary,
   AgentNextAction,
   AgentObservation,
@@ -47,6 +52,7 @@ const logPlannerDecisionDebug = (input: {
   sanitizedOutput: string;
   parseErrorReason?: string;
   parseWarnings?: string[];
+  repeatedActionGuard?: AgentRepeatedActionGuardResult;
 }) => {
   writeStructuredLog(input.parseErrorReason ? "warn" : "info", {
     msg: "Planner decision debug",
@@ -62,6 +68,14 @@ const logPlannerDecisionDebug = (input: {
     reason: input.nextAction.reason,
     parseErrorReason: input.parseErrorReason,
     parseWarnings: input.parseWarnings,
+    repeatedToolGuardTriggered: input.repeatedActionGuard?.triggered ?? false,
+    repeatedToolGuardReason: input.repeatedActionGuard?.reason,
+    guardedActionType: input.repeatedActionGuard?.guardedActionType,
+    guardedToolId: input.repeatedActionGuard?.guardedToolId,
+    guardedArgsHash: input.repeatedActionGuard?.guardedArgsHash,
+    guardedQuery: input.repeatedActionGuard?.guardedQuery,
+    matchedEvidenceIndex: input.repeatedActionGuard?.matchedEvidenceIndex,
+    matchedToolCallId: input.repeatedActionGuard?.matchedToolCallId,
     rawOutputPreview: input.rawOutput ? toPreview(input.rawOutput) : undefined,
     sanitizedOutputPreview: input.sanitizedOutput
       ? toPreview(input.sanitizedOutput)
@@ -561,6 +575,7 @@ export const nextActionPlannerNode = async (
   let sanitizedOutput = "";
   let parseErrorReason: string | undefined;
   let parseWarnings: string[] | undefined;
+  let repeatedActionGuard: AgentRepeatedActionGuardResult | undefined;
   const taskModelInvoked =
     !answerStopDecision.shouldAnswer && !(maxIterations > 0 && iteration >= maxIterations);
 
@@ -600,6 +615,18 @@ export const nextActionPlannerNode = async (
       sanitizedOutput = validationResult.sanitizedOutput ?? "";
       parseErrorReason = validationResult.parseErrorReason;
       parseWarnings = validationResult.parseWarnings;
+      repeatedActionGuard = getRepeatedActionGuardResult({
+        evidence: state.evidence,
+        nextAction,
+      });
+      if (repeatedActionGuard.triggered) {
+        nextAction = {
+          type: "answer",
+          reason:
+            repeatedActionGuard.reason ??
+            "Repeated action guard blocked a duplicate action and will answer from existing evidence.",
+        };
+      }
     } catch (error) {
       nextAction = toNextActionFallback(
         error instanceof Error && error.message.trim()
@@ -621,6 +648,7 @@ export const nextActionPlannerNode = async (
     sanitizedOutput,
     parseErrorReason,
     parseWarnings,
+    repeatedActionGuard,
   });
 
   await emitStepNode(emit, {
@@ -644,6 +672,14 @@ export const nextActionPlannerNode = async (
       sanitizedOutputPreview: sanitizedOutput ? toPreview(sanitizedOutput) : undefined,
       parseErrorReason,
       parseWarnings,
+      repeatedToolGuardTriggered: repeatedActionGuard?.triggered ?? false,
+      repeatedToolGuardReason: repeatedActionGuard?.reason,
+      guardedActionType: repeatedActionGuard?.guardedActionType,
+      guardedToolId: repeatedActionGuard?.guardedToolId ?? null,
+      guardedArgsHash: repeatedActionGuard?.guardedArgsHash,
+      guardedQuery: repeatedActionGuard?.guardedQuery,
+      matchedEvidenceIndex: repeatedActionGuard?.matchedEvidenceIndex,
+      matchedToolCallId: repeatedActionGuard?.matchedToolCallId,
       allowedActionTypes: [...ALLOWED_ACTION_TYPES],
     },
   });
