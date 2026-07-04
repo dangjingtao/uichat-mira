@@ -33,6 +33,7 @@ export interface AgentNodeState {
   params?: Record<string, unknown>;
   knowledgeBaseId?: string | null;
   intentConfig?: AgentIntentEmbeddingConfig;
+  workspaceRoot?: string | null;
   toolIntent?: ToolIntentResult;
   toolExposure?: AgentToolExposureState;
   nextAction?: AgentNextAction;

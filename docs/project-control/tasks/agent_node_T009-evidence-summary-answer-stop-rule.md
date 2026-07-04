@@ -567,9 +567,11 @@ Observed:
 - `pnpm check`
   - 结果：通过
 - 前台 black-box smoke test
-  - 结果：失败，`2026-07-04` 在内置浏览器登录账号 `Tomz` 下执行 4 条手测，线程绑定 `T009 Smoke Workspace -> D:\workspace\rag-demo` 后均在工具执行前失败于 `Planner output was invalid JSON`
+  - 历史结果：`2026-07-04` 首轮手测失败，线程绑定 `T009 Smoke Workspace -> D:\workspace\rag-demo` 后均在工具执行前失败于 `Planner output was invalid JSON`
+  - 当前补充结果：`2026-07-04` 在已绑定 `PW Test -> D:\testData` 的真实前台线程中复测 `看看当前 workspace 有哪些文件`，前台已离开 `Planner output was invalid JSON`，并成功走到 `工具执行 -> 证据写回 -> 组织最终回答 -> 检查结果`，最终回答基于真实 workspace 文件列表生成
+  - 当前缺口：本轮没有在前台补齐 `read_open` 与 `terminal_session approval waiting` 两类黑盒验收场景；其中 `D:\testData` 当前不存在 `README.md`，不能把仓库根目录的 `README.md` 误当作当前 workspace 证据
 
 ## Review Outcome
 
-- 当前提交结论：后端定向实现与测试证据成立，前台 black-box smoke test 未通过
+- 当前提交结论：后端定向实现与测试证据成立；前台已确认不再失败于 `Planner output was invalid JSON`，且 `read_list -> evidence summary -> final answer` 链路可用；但本任务卡要求的前台 black-box 证据仍未补齐到可直接标记 `DONE`
 - 当前状态：`READY_FOR_REVIEW`

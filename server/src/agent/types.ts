@@ -322,6 +322,7 @@ export interface AgentRun {
     | "params"
     | "knowledgeBaseId"
     | "intentConfig"
+    | "workspaceRoot"
   >;
   createdAt: string;
   updatedAt: string;
@@ -342,6 +343,7 @@ export interface AgentRunStore {
       | "params"
       | "knowledgeBaseId"
       | "intentConfig"
+      | "workspaceRoot"
     >;
   }): AgentRun;
   get(runId: string): AgentRun | undefined;
@@ -372,6 +374,7 @@ export interface AgentGraphInput {
   params?: Record<string, unknown>;
   knowledgeBaseId?: string | null;
   intentConfig?: AgentIntentEmbeddingConfig;
+  workspaceRoot?: string | null;
   approvedInvocations?: AgentApprovedInvocation[];
   policyDecision?: AgentPolicyDecision;
   /**

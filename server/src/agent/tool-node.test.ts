@@ -80,6 +80,50 @@ test("toolNode executes the frozen pendingToolCall without rebuilding args", asy
   }
 });
 
+test("toolNode passes workspaceRoot through to the invocation environment", async () => {
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-workspace-1",
+      toolId: "read_list",
+      status: "completed",
+      result: { entries: [] },
+      startedAt: "2026-07-04T00:00:00.000Z",
+      finishedAt: "2026-07-04T00:00:01.000Z",
+    });
+
+  try {
+    await toolNode(
+      createBaseState({
+        workspaceRoot: "D:\\testData",
+        policyDecision: {
+          type: "allow",
+          toolId: "read_list",
+          inputHash: "hash-read-list",
+          reason: "Allowed in test.",
+        },
+        pendingToolCall: {
+          id: "pending-workspace-1",
+          toolId: "read_list",
+          args: { path: "." },
+          inputHash: "hash-read-list",
+          source: "planner",
+          status: "frozen",
+          createdAt: "2026-07-04T00:00:00.000Z",
+        },
+      }),
+    );
+
+    assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+    assert.equal(
+      executeHarnessInvocationSpy.mock.calls[0]?.[0].environment?.workspace.rootPath,
+      "D:\\testData",
+    );
+  } finally {
+    executeHarnessInvocationSpy.mockRestore();
+  }
+});
+
 test("toolNode blocks execution when pendingToolCall is missing", async () => {
   const executeHarnessInvocationSpy = vi.spyOn(
     harnessInvocations,

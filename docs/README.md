@@ -65,6 +65,7 @@ Related:
 - `uchat.md`
 - `uchat-internal-maintenance.md`
 - `chat/chat-system-practices.md`
+- `chat/agent-frontend-workspace-smoke-method.md`
 - `chat/chat-tool-integration-research.md`
 - `chat/chat-tool-integration-poc.md`
 - `chat/chat-tool-integration-checklist.md`

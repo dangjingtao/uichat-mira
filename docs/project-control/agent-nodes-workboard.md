@@ -52,9 +52,9 @@ Agent node 专属总台账。
 | `agent_node_T006` | `evidence` 回流与 Agent loop 路由闭环 | `retrieveNode / toolNode -> evidence -> Planner` 的最小闭环已接通；retrieval / tool evidence 写回、evidence-update trace、去重 helper、`maxIterations` 收口和旧入口阻断都已有定向验证，评审已通过 | `DONE` | [agent_node_T006-evidence-loop-routing.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T006-evidence-loop-routing.md) |
 | `agent_node_T007` | Agent Decision Loop v1 验收测试与回归护栏 | 已补齐当前 commit 专属验收证据：4 个定向测试源码、vitest JSON 报告、typecheck 报告、场景映射、运行时间与剩余风险均已回填到任务卡；当前证据不再引用 `2026-07-03` 的旧失败报告 | `DONE` | [agent_node_T007-decision-loop-acceptance-regression-guardrails.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T007-decision-loop-acceptance-regression-guardrails.md) |
 | `agent_node_T008` | V1 cleanup / release hardening | V1 收尾任务已完成：主分支误留的大型报告与 sqlite 临时文件已清理；`planNode` placeholder、`selectedToolId` 兼容语义、generate 阶段大结果 TODO，以及 V1 当前不变量都已回填到正式代码注释和契约文档；没有把 `TaskFrame` 或 generate size guard 误报成已完成能力 | `DONE` | [agent_node_T008-v1-cleanup-release-hardening.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T008-v1-cleanup-release-hardening.md) |
-| `agent_node_T009` | Evidence Summary + Answer Stop Rule | `AgentEvidenceSummary`、Planner 前置 answer stop rule、`read_list / read_open / web_search / terminal_session` 最小摘要 schema 与 trace 可审计字段已落地；answer stop rule 命中时可阻止第二次 `nextActionPlanner` task-model 调用和重复 `use_tool / retrieve` 执行。`2026-07-04` 前台 smoke 已离开 planner invalid JSON，但新 blocker 已转移到 workspace path argument contract / approval path 与后续回答质量问题，因此当前保持 `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | [agent_node_T009-evidence-summary-answer-stop-rule.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T009-evidence-summary-answer-stop-rule.md) |
+| `agent_node_T009` | Evidence Summary + Answer Stop Rule | `AgentEvidenceSummary`、Planner 前置 answer stop rule、`read_list / read_open / web_search / terminal_session` 最小摘要 schema 与 trace 可审计字段已落地；answer stop rule 命中时可阻止第二次 `nextActionPlanner` task-model 调用和重复 `use_tool / retrieve` 执行。`2026-07-04` 前台已确认离开 `Planner output was invalid JSON`，并成功走通 `read_list -> evidence -> final answer`；但 `read_open` 与 `terminal_session approval waiting` 的前台 black-box 证据本轮仍未补齐，因此状态继续保持 `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | [agent_node_T009-evidence-summary-answer-stop-rule.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T009-evidence-summary-answer-stop-rule.md) |
 | `agent_node_T010` | `nextActionPlannerNode` JSON Contract Hardening | `T010` 是 `T009` 前台 smoke blocker 修复任务：planner 现已支持 fenced JSON / 前缀 JSON / think 后 JSON，并且对缺失 `reason` 的合法 action 自动补默认值并记录 `missing_reason_defaulted` warning。`2026-07-04` 前台 smoke 已确认 4 条请求都不再失败于 `Planner output was invalid JSON`；当前新 blocker 已转移到 `agent-approval` 与 workspace path argument contract / approval path，path 问题不再归入 `T010` | `DONE` | [agent_node_T010-next-action-planner-json-contract-hardening.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T010-next-action-planner-json-contract-hardening.md) |
-| `agent_node_T011` | Workspace Path Argument Contract | `T011` 当前已把 root-relative read path normalizer 收紧到只识别 `/workspace` sentinel：`/etc/passwd` 不会再被 normalize 成 `etc/passwd`，root-relative path normalizer 也不再无脑处理所有 `/xxx`。`/README.md`、`/docs/README.md` 现在同样保持原值，继续交给下游 workspace root 校验；T011 安全边界回归测试已补齐。本轮未补前台 smoke 证据，因此状态先保持 `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | [agent_node_T011-workspace-path-argument-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T011-workspace-path-argument-contract.md) |
+| `agent_node_T011` | Workspace Path Argument Contract | `T011` 当前已把 root-relative read path normalizer 收紧到只识别 `/workspace` sentinel：`/etc/passwd` 不会再被 normalize 成 `etc/passwd`，root-relative path normalizer 也不再无脑处理所有 `/xxx`。`/README.md`、`/docs/README.md` 现在同样保持原值，继续交给下游 workspace root 校验；T011 安全边界回归测试与真实前台 workspace 绑定 smoke 证据已补齐，线程配置里的 workspace path 已确认进入 Agent 执行链路 | `DONE` | [agent_node_T011-workspace-path-argument-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T011-workspace-path-argument-contract.md) |
 
 ## Current Ground Truth
 
@@ -153,12 +153,12 @@ Agent node 专属总台账。
 
 - 代码闭环已通过 `T010` 当前边界内验证。
 - 前台 smoke 已离开 `Planner output was invalid JSON`。
-- `T011` 的 root-relative path normalizer blocker 已修复，当前等待本轮 smoke 证据后再决定是否转 `DONE`。
+- `T011` 的 root-relative path normalizer blocker 已修复，当前代码回归测试与真实前台 smoke 证据都已补齐。
 - `read_list / read_open / README` 内容查询路径当前都可进入 `ToolNode -> evidence -> answer stop rule -> generate`。
 - `terminal_session` 当前仍按既有高风险策略要求显式审批；这不是 workspace path defect。
 - `T009` 当前状态仍为 `READY_FOR_REVIEW`。
 - `T010` 原始 blocker 已解除，状态维持 `DONE`。
-- `T011` 当前红线修复与回归测试已完成，但本轮未补前台 smoke 证据，状态保持 `READY_FOR_REVIEW`。
+- `T011` 当前红线修复、回归测试和前台 smoke 证据已完成，状态更新为 `DONE`。
 
 ## Work Rules
 
@@ -350,4 +350,5 @@ Agent node 专属总台账。
     - `/README.md`、`/docs/README.md` 也不再在 normalize 阶段被静默洗成 workspace-relative path
     - 已补齐 `/etc/passwd`、`/bin/sh`、`/usr/bin/env`、`/C:/Windows/System32`、`../outside.txt` 等定向回归测试
     - `pnpm --filter @ui-chat-mira/server test -- src/agent/tool-call-normalize.test.ts`、`pnpm --filter @ui-chat-mira/server test -- src/agent/graph.test.ts src/agent/tool-call-normalize.test.ts`、`pnpm check` 均通过
-    - 本轮未补前台 smoke 证据，因此 `agent_node_T011` 当前状态回到 `READY_FOR_REVIEW`
+    - 随后已补齐前台 smoke：已绑定 `PW Test -> D:\testData` 的线程点击 `重新生成` 后，Agent 最终回答已引用 `D:\testData` 并列出真实 workspace 文件
+    - `agent_node_T011` 当前状态重新更新为 `DONE`

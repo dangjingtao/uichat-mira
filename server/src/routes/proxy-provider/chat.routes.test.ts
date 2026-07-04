@@ -816,6 +816,123 @@ test("POST /proxy/chat/default passes agentEnabled true into createAndRunAgent",
   }
 });
 
+test("POST /proxy/chat/default passes bound thread workspaceRoot into createAndRunAgent", async () => {
+  const user = userRepository.create({
+    username: `user-${crypto.randomUUID()}`,
+    passwordHash: "hash",
+    role: "user",
+    isActive: true,
+  });
+  const workspaceRoot = os.platform() === "win32"
+    ? "D:\\testData"
+    : "/tmp/test-data";
+  const workspace = threadService.createChatWorkspace({
+    userId: user.id,
+    name: "PW Test",
+    rootPath: workspaceRoot,
+  });
+  const thread = threadService.createThread({
+    userId: user.id,
+    title: "Agent workspace thread",
+    agentEnabled: true,
+    workspaceId: workspace.id,
+  });
+  const token = createAccessToken({
+    id: user.id,
+    username: user.username,
+    role: user.role,
+  });
+  const app = await createAuthedApp(user);
+
+  const originalPersistedStream = providerProxyService.createPersistedChatStream;
+  const originalStreamTaskChatText = providerProxyService.streamTaskChatText;
+  let capturedExecuteFullAnswer:
+    | Parameters<typeof providerProxyService.createPersistedChatStream>[0]["executeFullAnswer"]
+    | undefined;
+  const createAndRunAgentSpy = vi
+    .spyOn(agentModule, "createAndRunAgent")
+    .mockResolvedValue({
+      run: {
+        id: "agent-run-workspace-1",
+        threadId: thread.id,
+        userId: user.id,
+        goal: {
+          id: "goal-workspace-1",
+          text: "看看当前 workspace 有哪些文件",
+          successCriteria: [],
+          constraints: [],
+          riskLevel: "low",
+        },
+        plan: {
+          id: "plan-workspace-1",
+          goalId: "goal-workspace-1",
+          version: 1,
+          steps: [],
+        },
+        status: "completed",
+        observations: [],
+        traceId: "trace-workspace-1",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      output: {
+        answer: "agent answer",
+        observations: [],
+        retrievedChunks: [],
+        status: "completed",
+      },
+    } as never);
+  providerProxyService.createPersistedChatStream = (input) => {
+    capturedExecuteFullAnswer = input.executeFullAnswer;
+    return Readable.from([""]);
+  };
+  providerProxyService.streamTaskChatText = async function* () {
+    yield "Agent 工作空间标题";
+  };
+
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: "/proxy/chat/default",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      payload: {
+        id: thread.id,
+        messageId: "user-agent-workspace-1",
+        agentEnabled: true,
+        messages: [
+          {
+            id: "user-agent-workspace-1",
+            role: "user",
+            parts: [{ type: "text", text: "看看当前 workspace 有哪些文件" }],
+          },
+        ],
+      },
+    });
+
+    assert.equal(response.statusCode, 200, response.body);
+    assert.ok(capturedExecuteFullAnswer);
+    const answer = await capturedExecuteFullAnswer?.({
+      emitToolEvent: async () => {},
+      emitExecutionNode: async () => {},
+    });
+
+    assert.equal(answer?.answer, "agent answer");
+    assert.equal(createAndRunAgentSpy.mock.calls.length, 1);
+    assert.equal(
+      createAndRunAgentSpy.mock.calls[0]?.[0].workspaceRoot,
+      workspaceRoot,
+    );
+  } finally {
+    providerProxyService.createPersistedChatStream = originalPersistedStream;
+    providerProxyService.streamTaskChatText = originalStreamTaskChatText;
+    createAndRunAgentSpy.mockRestore();
+    await app.close();
+  }
+});
+
 test("POST /proxy/chat/default persists agent metadata on completed agent responses", async () => {
   const user = userRepository.create({
     username: `user-${crypto.randomUUID()}`,

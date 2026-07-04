@@ -36,6 +36,7 @@ export const createAndRunAgent = async (
       params: input.params,
       knowledgeBaseId: input.knowledgeBaseId,
       intentConfig: input.intentConfig,
+      workspaceRoot: input.workspaceRoot,
     },
   });
 

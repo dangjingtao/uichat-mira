@@ -12,7 +12,7 @@ related:
   - docs/project-control/agent-nodes-workboard.md
   - server/src/agent/tool-call-normalize.ts
   - server/src/agent/tool-call-normalize.test.ts
-task_state: READY_FOR_REVIEW
+task_state: DONE
 ---
 
 # agent_node_T011 workspace path argument contract
@@ -116,8 +116,18 @@ T011 的安全边界已补测，当前定向测试覆盖至少包含：
 
 ## Smoke Test
 
-- 本轮未重跑前台 smoke
-- 按当前验收口径，在没有本轮 smoke 证据前，T011 不标 `DONE`
+- 前台已补真实绑定 workspace 的 smoke 证据
+- 测试入口：内置浏览器 `http://127.0.0.1:5173/#/chat`
+- 线程绑定方式：输入框左侧 `+ -> Workspace -> Add to workspace`
+- 绑定目标：`PW Test -> D:\testData`
+- 触发方式：在已绑定线程中点击 `重新生成`
+- 输入问题：`看看当前 workspace 有哪些文件`
+- 观察结果：
+  - Agent trace 已继续进入 `工具执行 -> 证据写回 -> 组织最终回答 -> 检查结果`
+  - `read_list` 未卡在 workspace path approval
+  - 最终回答明确引用当前 workspace 路径 `D:\testData`
+  - 最终列出的目录和文件来自 `D:\testData`，不再误落到 `D:\workspace\rag-demo`
+- 这轮 smoke 证明线程配置里的 workspace path 已被 Agent 运行时真实消费，而不是只停留在前台绑定状态
 
 ## Changed Files
 
@@ -128,7 +138,7 @@ T011 的安全边界已补测，当前定向测试覆盖至少包含：
 
 ## Final Status
 
-- `T011 = READY_FOR_REVIEW`
+- `T011 = DONE`
 
 ## Notes
 
@@ -136,3 +146,4 @@ T011 的安全边界已补测，当前定向测试覆盖至少包含：
 - root-relative path normalizer 不再无脑处理所有 `/xxx`
 - `/README.md`、`/docs/README.md` 也不再在 normalize 阶段被静默洗成 workspace-relative path
 - 本轮没有引入 runtime fallback，也没有放松 workspace root 边界
+- 本轮补充的前台 smoke 同时确认：绑定线程的 workspace path 已从线程配置正确透传到 Agent 执行链路

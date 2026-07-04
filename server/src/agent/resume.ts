@@ -184,6 +184,7 @@ export const resumeApprovedAgentRun = async (runId: string) => {
     params: runtimeInput.params,
     knowledgeBaseId: runtimeInput.knowledgeBaseId,
     intentConfig: runtimeInput.intentConfig,
+    workspaceRoot: runtimeInput.workspaceRoot,
     approvedInvocations,
     selectedToolId: pendingToolCall.toolId,
     pendingToolCall,

@@ -1,4 +1,5 @@
 import { executeHarnessInvocation } from "@/mcp/harness/invocations.js";
+import { createHarnessEnvironmentSnapshot } from "@/mcp/harness/environment.js";
 import {
   emitStepNode,
   getIterativeNodeId,
@@ -252,11 +253,21 @@ export const toolNode = async (
     },
   });
 
+  const invocationEnvironment = state.workspaceRoot
+    ? createHarnessEnvironmentSnapshot({
+        workspace: {
+          rootPath: state.workspaceRoot,
+          source: "selected",
+        },
+      })
+    : undefined;
+
   const invocation = await executeHarnessInvocation({
     toolId: pendingToolCall.toolId,
     args: pendingToolCall.args,
     userId: state.userId,
     threadId: state.threadId,
+    ...(invocationEnvironment ? { environment: invocationEnvironment } : {}),
     approvedInvocations: state.approvedInvocations,
   });
 

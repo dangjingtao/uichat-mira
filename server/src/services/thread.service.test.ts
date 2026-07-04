@@ -275,6 +275,33 @@ test("deleteChatWorkspace removes threads bound to that workspace", () => {
   assert.ok(threadService.getThreadById(unboundThread.id, user.id));
 });
 
+test("getThreadWorkspaceRoot resolves a bound thread workspace path", () => {
+  const user = userRepository.create({
+    username: `user-${crypto.randomUUID()}`,
+    passwordHash: "hash",
+    role: "user",
+    isActive: true,
+  });
+  const workspaceRoot = os.platform() === "win32"
+    ? "D:\\testData"
+    : "/tmp/test-data";
+  const workspace = threadService.createChatWorkspace({
+    userId: user.id,
+    name: "PW Test",
+    rootPath: workspaceRoot,
+  });
+  const thread = threadService.createThread({
+    userId: user.id,
+    workspaceId: workspace.id,
+    title: "Bound Thread",
+  });
+
+  assert.equal(
+    threadService.getThreadWorkspaceRoot(thread.id, user.id),
+    workspaceRoot,
+  );
+});
+
 test("createMessage uses lineage.parentId for branch pruning", () => {
   const user = userRepository.create({
     username: `user-${crypto.randomUUID()}`,

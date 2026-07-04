@@ -66,6 +66,7 @@ Related:
 
 - `agent-swot-plan.md`
 - `agent-runtime-design.md`
+- `agent-frontend-workspace-smoke-method.md`
 - `agent-phase-1-checklist.md`
 - `agent-phase-2-checklist.md`
 - `agent-phase-3-checklist.md`

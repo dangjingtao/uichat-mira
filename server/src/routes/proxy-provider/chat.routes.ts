@@ -65,6 +65,17 @@ const resolveDefaultProviderThread = (
   return threadService.getThreadSummaryById(threadId, userId);
 };
 
+const resolveThreadWorkspaceRoot = (
+  threadId: string | undefined,
+  userId: number | undefined,
+) => {
+  if (typeof threadId !== "string" || !userId) {
+    return null;
+  }
+
+  return threadService.getThreadWorkspaceRoot(threadId, userId);
+};
+
 const collectThreadRequestContext = (
   threadId: string | undefined,
   userId: number | undefined,
@@ -86,6 +97,7 @@ const collectThreadRequestContext = (
   }
 
   const harnessEnvironment = getHarnessEnvironmentSnapshot();
+  const threadWorkspaceRoot = resolveThreadWorkspaceRoot(threadId, userId);
   const toolSurface = resolveChatToolSurface({
     agentEnabled:
       typeof options.agentEnabled === "boolean"
@@ -100,8 +112,8 @@ const collectThreadRequestContext = (
         platform: process.platform,
         shellFamily: harnessEnvironment.terminal.shellProfile.shellFamily,
         shellExecutable: harnessEnvironment.terminal.shellProfile.shell,
-        workspaceRoot: harnessEnvironment.workspace.rootPath,
-        cwd: harnessEnvironment.workspace.rootPath,
+        workspaceRoot: threadWorkspaceRoot ?? harnessEnvironment.workspace.rootPath,
+        cwd: threadWorkspaceRoot ?? harnessEnvironment.workspace.rootPath,
         availableTools: toolSurface.map((tool) => tool.id),
       },
     },
@@ -229,6 +241,7 @@ const sendPersistedDefaultChatStream = ({
   knowledgeBaseId?: string | null;
   preludeChunks?: string[];
 }) => {
+  const workspaceRoot = resolveThreadWorkspaceRoot(threadId, authUserId);
   const { latestUserMessageId, latestUserMessage } = persistVisibleUserMessage({
     threadId,
     userId: authUserId,
@@ -262,6 +275,7 @@ const sendPersistedDefaultChatStream = ({
             requestContextMessages,
             params,
             knowledgeBaseId,
+            workspaceRoot,
             onExecutionNode: emitExecutionNode,
           });
 

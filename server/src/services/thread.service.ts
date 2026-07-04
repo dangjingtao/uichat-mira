@@ -376,6 +376,16 @@ export const threadService = {
       .map(toChatWorkspaceResponse);
   },
 
+  getThreadWorkspaceRoot(threadId: string, userId: number): string | null {
+    const thread = threadRepository.findById(threadId, userId);
+    if (!thread?.workspaceId) {
+      return null;
+    }
+
+    const workspace = chatWorkspaceRepository.findById(thread.workspaceId, userId);
+    return workspace?.rootPath ?? null;
+  },
+
   createChatWorkspace(input: CreateChatWorkspaceInput): ChatWorkspaceResponse {
     const name = input.name.trim();
     if (!name) {
