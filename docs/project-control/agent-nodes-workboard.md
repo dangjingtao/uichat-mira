@@ -54,7 +54,7 @@ Agent node 专属总台账。
 | `agent_node_T008` | V1 cleanup / release hardening | V1 收尾任务已完成：主分支误留的大型报告与 sqlite 临时文件已清理；`planNode` placeholder、`selectedToolId` 兼容语义、generate 阶段大结果 TODO，以及 V1 当前不变量都已回填到正式代码注释和契约文档；没有把 `TaskFrame` 或 generate size guard 误报成已完成能力 | `DONE` | [agent_node_T008-v1-cleanup-release-hardening.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T008-v1-cleanup-release-hardening.md) |
 | `agent_node_T009` | Evidence Summary + Answer Stop Rule | `AgentEvidenceSummary`、Planner 前置 answer stop rule、`read_list / read_open / web_search / terminal_session` 最小摘要 schema 与 trace 可审计字段已落地；answer stop rule 命中时可阻止第二次 `nextActionPlanner` task-model 调用和重复 `use_tool / retrieve` 执行。`2026-07-04` 前台 smoke 已离开 planner invalid JSON，但新 blocker 已转移到 workspace path argument contract / approval path 与后续回答质量问题，因此当前保持 `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | [agent_node_T009-evidence-summary-answer-stop-rule.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T009-evidence-summary-answer-stop-rule.md) |
 | `agent_node_T010` | `nextActionPlannerNode` JSON Contract Hardening | `T010` 是 `T009` 前台 smoke blocker 修复任务：planner 现已支持 fenced JSON / 前缀 JSON / think 后 JSON，并且对缺失 `reason` 的合法 action 自动补默认值并记录 `missing_reason_defaulted` warning。`2026-07-04` 前台 smoke 已确认 4 条请求都不再失败于 `Planner output was invalid JSON`；当前新 blocker 已转移到 `agent-approval` 与 workspace path argument contract / approval path，path 问题不再归入 `T010` | `DONE` | [agent_node_T010-next-action-planner-json-contract-hardening.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T010-next-action-planner-json-contract-hardening.md) |
-| `agent_node_T011` | Workspace Path Argument Contract | `T011` 当前已修复 root-relative read path normalizer 过宽问题：`/etc/passwd` 不会再被 normalize 成 `etc/passwd`，root-relative path normalizer 也不再无脑处理所有 `/xxx`。`/workspace`、`/README.md`、`/docs/README.md` 仍保持预期行为，T011 安全边界回归测试已补齐。本轮未补前台 smoke 证据，因此状态先保持 `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | [agent_node_T011-workspace-path-argument-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T011-workspace-path-argument-contract.md) |
+| `agent_node_T011` | Workspace Path Argument Contract | `T011` 当前已把 root-relative read path normalizer 收紧到只识别 `/workspace` sentinel：`/etc/passwd` 不会再被 normalize 成 `etc/passwd`，root-relative path normalizer 也不再无脑处理所有 `/xxx`。`/README.md`、`/docs/README.md` 现在同样保持原值，继续交给下游 workspace root 校验；T011 安全边界回归测试已补齐。本轮未补前台 smoke 证据，因此状态先保持 `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | [agent_node_T011-workspace-path-argument-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T011-workspace-path-argument-contract.md) |
 
 ## Current Ground Truth
 
@@ -345,8 +345,9 @@ Agent node 专属总台账。
   - `2026-07-04` T011 复评补充：
     - 当前评审确认 `server/src/agent/tool-call-normalize.ts` 的 root-relative path normalizer 过宽
     - 红线问题是 `/etc/passwd` 会被静默改写成 `etc/passwd`
-    - 已修复为更窄的白名单语义：`/etc/passwd` 不会再被 normalize 成 `etc/passwd`
+    - 已进一步收紧为“只识别 `/workspace` sentinel”的语义：`/etc/passwd` 不会再被 normalize 成 `etc/passwd`
     - root-relative path normalizer 不再无脑处理所有 `/xxx`
+    - `/README.md`、`/docs/README.md` 也不再在 normalize 阶段被静默洗成 workspace-relative path
     - 已补齐 `/etc/passwd`、`/bin/sh`、`/usr/bin/env`、`/C:/Windows/System32`、`../outside.txt` 等定向回归测试
     - `pnpm --filter @ui-chat-mira/server test -- src/agent/tool-call-normalize.test.ts`、`pnpm --filter @ui-chat-mira/server test -- src/agent/graph.test.ts src/agent/tool-call-normalize.test.ts`、`pnpm check` 均通过
     - 本轮未补前台 smoke 证据，因此 `agent_node_T011` 当前状态回到 `READY_FOR_REVIEW`

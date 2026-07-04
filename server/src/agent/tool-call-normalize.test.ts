@@ -180,7 +180,7 @@ test("toolCallNormalizeNode normalizes read_list /workspace/ to workspace root d
   assert.deepEqual(patch.pendingToolCall?.args, { path: "." });
 });
 
-test("toolCallNormalizeNode normalizes read_open /README.md to workspace-relative path", async () => {
+test("toolCallNormalizeNode preserves root-relative /README.md for downstream workspace checks", async () => {
   const patch = await toolCallNormalizeNode(
     createState({
       nextAction: {
@@ -193,10 +193,10 @@ test("toolCallNormalizeNode normalizes read_open /README.md to workspace-relativ
   );
 
   assert.equal(patch.errorMessage, undefined);
-  assert.deepEqual(patch.pendingToolCall?.args, { path: "README.md" });
+  assert.deepEqual(patch.pendingToolCall?.args, { path: "/README.md" });
 });
 
-test("toolCallNormalizeNode normalizes nested root-relative read paths", async () => {
+test("toolCallNormalizeNode preserves nested root-relative read paths for downstream workspace checks", async () => {
   const patch = await toolCallNormalizeNode(
     createState({
       nextAction: {
@@ -209,7 +209,7 @@ test("toolCallNormalizeNode normalizes nested root-relative read paths", async (
   );
 
   assert.equal(patch.errorMessage, undefined);
-  assert.deepEqual(patch.pendingToolCall?.args, { path: "docs/README.md" });
+  assert.deepEqual(patch.pendingToolCall?.args, { path: "/docs/README.md" });
 });
 
 test("toolCallNormalizeNode preserves normal relative read paths", async () => {
@@ -260,7 +260,7 @@ test("toolCallNormalizeNode rejects plain relative traversal attempts", async ()
   assert.match(patch.errorMessage ?? "", /escaped the workspace root/i);
 });
 
-test("toolCallNormalizeNode rejects root-relative /etc/passwd", async () => {
+test("toolCallNormalizeNode preserves root-relative /etc/passwd for downstream workspace checks", async () => {
   const patch = await toolCallNormalizeNode(
     createState({
       nextAction: {
@@ -272,11 +272,11 @@ test("toolCallNormalizeNode rejects root-relative /etc/passwd", async () => {
     }),
   );
 
-  assert.equal(patch.pendingToolCall, undefined);
-  assert.match(patch.errorMessage ?? "", /workspace-relative|system root/i);
+  assert.equal(patch.errorMessage, undefined);
+  assert.deepEqual(patch.pendingToolCall?.args, { path: "/etc/passwd" });
 });
 
-test("toolCallNormalizeNode rejects root-relative /bin/sh", async () => {
+test("toolCallNormalizeNode preserves root-relative /bin/sh for downstream workspace checks", async () => {
   const patch = await toolCallNormalizeNode(
     createState({
       nextAction: {
@@ -288,11 +288,11 @@ test("toolCallNormalizeNode rejects root-relative /bin/sh", async () => {
     }),
   );
 
-  assert.equal(patch.pendingToolCall, undefined);
-  assert.match(patch.errorMessage ?? "", /workspace-relative|system root/i);
+  assert.equal(patch.errorMessage, undefined);
+  assert.deepEqual(patch.pendingToolCall?.args, { path: "/bin/sh" });
 });
 
-test("toolCallNormalizeNode rejects root-relative /usr/bin/env", async () => {
+test("toolCallNormalizeNode preserves root-relative /usr/bin/env for downstream workspace checks", async () => {
   const patch = await toolCallNormalizeNode(
     createState({
       nextAction: {
@@ -304,11 +304,11 @@ test("toolCallNormalizeNode rejects root-relative /usr/bin/env", async () => {
     }),
   );
 
-  assert.equal(patch.pendingToolCall, undefined);
-  assert.match(patch.errorMessage ?? "", /workspace-relative|system root/i);
+  assert.equal(patch.errorMessage, undefined);
+  assert.deepEqual(patch.pendingToolCall?.args, { path: "/usr/bin/env" });
 });
 
-test("toolCallNormalizeNode rejects root-relative /C:/Windows/System32", async () => {
+test("toolCallNormalizeNode preserves root-relative /C:/Windows/System32 for downstream workspace checks", async () => {
   const patch = await toolCallNormalizeNode(
     createState({
       nextAction: {
@@ -320,8 +320,8 @@ test("toolCallNormalizeNode rejects root-relative /C:/Windows/System32", async (
     }),
   );
 
-  assert.equal(patch.pendingToolCall, undefined);
-  assert.match(patch.errorMessage ?? "", /workspace-relative|system root/i);
+  assert.equal(patch.errorMessage, undefined);
+  assert.deepEqual(patch.pendingToolCall?.args, { path: "/C:/Windows/System32" });
 });
 
 test("toolCallNormalizeNode keeps windows absolute read paths unchanged for downstream workspace checks", async () => {

@@ -72,7 +72,7 @@ task_state: READY_FOR_REVIEW
 
 ## Implementation Result
 
-本次实现只收紧 root-relative read path normalizer，改成更窄的白名单语义，保持 `Normalize -> Policy -> ToolNode` 现有职责不变。
+本次实现把 root-relative read path normalizer 进一步收紧到只识别 workspace sentinel，保持 `Normalize -> Policy -> ToolNode` 现有职责不变。
 
 具体结果：
 
@@ -80,11 +80,11 @@ task_state: READY_FOR_REVIEW
    - `/workspace` -> `.`
    - `/workspace/` -> `.`
    - `/workspace/<safe-relative-path>` -> `<safe-relative-path>`
-2. 普通 root-relative path 不再无脑处理所有 `/xxx`
+2. 普通 root-relative path 不再被 normalize 阶段静默改写
 3. `/etc/passwd` 不会被 normalize 成 `etc/passwd`
-4. `/bin/sh`、`/usr/bin/env`、`/C:/Windows/System32` 这类系统绝对路径前缀会在 normalize 阶段直接拒绝
+4. `/README.md`、`/docs/README.md` 也不再在 normalize 阶段自动改成相对路径
 5. `../outside.txt` 与 `/workspace/../outside.txt` 仍会因为越出 workspace 边界而被拒绝
-6. `README.md`、`docs/README.md` 保持原值
+6. `README.md`、`docs/README.md` 继续保持原值
 7. `D:\workspace\rag-demo\README.md` 这类 Windows 绝对路径仍不在 normalize 阶段静默改写，继续交给下游 workspace root 校验
 
 ## Test Coverage
@@ -93,15 +93,15 @@ T011 的安全边界已补测，当前定向测试覆盖至少包含：
 
 1. `/workspace` -> `.`
 2. `/workspace/` -> `.`
-3. `/README.md` -> `README.md`
-4. `/docs/README.md` -> `docs/README.md`
+3. `/README.md` 保持原值，继续交给下游 workspace root 校验
+4. `/docs/README.md` 保持原值，继续交给下游 workspace root 校验
 5. `README.md` 保持原值
 6. `../outside.txt` 被拒绝
 7. `/workspace/../outside.txt` 被拒绝
-8. `/etc/passwd` 被拒绝，不会被 normalize 成 `etc/passwd`
-9. `/bin/sh` 被拒绝
-10. `/usr/bin/env` 被拒绝
-11. `/C:/Windows/System32` 被拒绝
+8. `/etc/passwd` 保持原值，不会被 normalize 成 `etc/passwd`
+9. `/bin/sh` 保持原值
+10. `/usr/bin/env` 保持原值
+11. `/C:/Windows/System32` 保持原值
 12. `D:\testData\x.txt` 保持原值，继续由下游 workspace 安全校验处理
 13. `terminal_session.command` 不被改写
 
@@ -134,4 +134,5 @@ T011 的安全边界已补测，当前定向测试覆盖至少包含：
 
 - `/etc/passwd` 不会被 normalize 成 `etc/passwd`
 - root-relative path normalizer 不再无脑处理所有 `/xxx`
+- `/README.md`、`/docs/README.md` 也不再在 normalize 阶段被静默洗成 workspace-relative path
 - 本轮没有引入 runtime fallback，也没有放松 workspace root 边界

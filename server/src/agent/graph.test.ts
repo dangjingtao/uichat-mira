@@ -498,7 +498,7 @@ test("agentGraph routes planner use_tool through normalize and answer stop rule 
   assert.equal(generateInvokeSpy.mock.calls.length, 1);
 });
 
-test("agentGraph normalizes /README.md before policy and executes read_open", async () => {
+test("agentGraph preserves /README.md for downstream workspace checks and executes read_open", async () => {
   const readOpen = makeToolDefinition({
     id: "read_open",
     domain: "read",
@@ -571,7 +571,7 @@ test("agentGraph normalizes /README.md before policy and executes read_open", as
   assert.deepEqual(executeHarnessInvocationSpy.mock.calls[0]?.[0], {
     toolId: "read_open",
     args: {
-      path: "README.md",
+      path: "/README.md",
     },
     userId: 1,
     threadId: "thread-1",
