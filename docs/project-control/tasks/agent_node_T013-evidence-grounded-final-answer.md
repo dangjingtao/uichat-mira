@@ -18,7 +18,7 @@ related:
   - server/src/agent/nodes.ts
   - server/src/agent/graph.test.ts
   - server/src/agent/nodes.test.ts
-task_state: DONE
+task_state: READY_FOR_REVIEW
 ---
 
 # agent_node_T013 evidence grounded final answer
@@ -28,6 +28,8 @@ task_state: DONE
 T013 是 `Agent V1.5 final answer grounding` 任务。
 
 它不是 `T009 / T010 / T011 / T012` 的补丁返工，也不是前端 UI、Provider Gateway 或 ToolNode 直答改造。
+
+本次文档回填对应的是 `T013` 评审结论 `REVISE` 之后的最小整改，不是新任务。
 
 本任务只处理一件事：
 
@@ -93,10 +95,18 @@ T013 是 `Agent V1.5 final answer grounding` 任务。
 5. 新增最小保底回答：
    - `read_list` 用目录摘要直接回答
    - `read_open` 用文件内容预览直接概括
-   - retrieval 用检索摘要 / chunk 预览直接回答
+   - retrieval 现在优先使用最新 chunk content 预览回答，而不是只说“命中了某个文档”
    - `pendingApproval` 时明确说明等待审批，当前没有真实执行结果
    - 没有 completed evidence 时明确说明证据不足，不编造“已查看”
 6. 这次没有改前端 UI，没有改 Provider Gateway，也没有让 ToolNode 直接 answer
+
+### REVISE Minimal Fixes
+
+本轮针对评审意见补了 2 个最小修订点和 1 个可选补强：
+
+1. retrieval fallback 不再优先停在 `latestSummary.source === "retrieval"` 的文档命中摘要，而是优先读取最新 retrieval 的前 1-3 个 chunk 内容，并以“根据当前检索证据”组织自然语言回答
+2. no-evidence guard 新增“直接编造 workspace / 文件结果”的防护，不再只依赖“我已经查看了”这一类显式自述
+3. 补了裸 `toolId` 泄漏回归测试，覆盖 `read_open completed, README.md says ...` 这类输出
 
 ## Test Coverage
 
@@ -104,9 +114,11 @@ T013 是 `Agent V1.5 final answer grounding` 任务。
 
 1. `read_list evidence -> natural answer`
 2. `read_open evidence -> natural answer`
-3. `retrieval evidence -> grounded answer`
+3. `retrieval evidence -> grounded answer from chunk content`
 4. `no completed evidence -> do not claim already checked`
-5. `pendingApproval -> waiting approval answer`
+5. `no completed evidence -> block direct fabricated workspace results`
+6. `pendingApproval -> waiting approval answer`
+7. `read_open completed -> block bare toolId leakage`
 
 并复跑：
 
@@ -133,41 +145,36 @@ T013 是 `Agent V1.5 final answer grounding` 任务。
 ### Smoke Result
 
 - 本轮没有伪造 smoke
-- 当前仓库没有现成的稳定前台 smoke 自动化
-- `pnpm package:electron:win` 本轮未能产出可继续手测的打包结果
-- 阻塞原因不是 T013 改动，而是仓库当前已有非本任务失败项：
-  - `desktop/src/shared/uchat/ui/UChatSidebarView.test.tsx` 仍有 1 个失败用例
-  - `server` 侧仍有多组既有测试 / 依赖缺口，例如 `xlsx` 缺失、若干历史测试 import 失败
-- 因此本轮前台 smoke 证据仍以“手测方法已检索并按该 runbook 准备”为准，没有把未跑通的黑盒结果误报成已通过
+- 当前整改轮次没有重跑前台黑盒 smoke
+- 原因：本次派发只要求做 T013 最小整改并回交评审线程；当前没有把前台结果误报成已通过
+- 当前已知前台 smoke 阻塞仍沿用上轮记录，是否仍存在需要评审线程或后续黑盒复测确认
 
 ## Verification
 
 - `pnpm --filter @ui-chat-mira/server test -- src/agent/nodes.test.ts src/agent/graph.test.ts src/agent/next-action-planner.test.ts`
-  - 结果：通过，`61 passed`
+  - 结果：通过，`63 passed`
 - `pnpm --filter @ui-chat-mira/server typecheck`
   - 结果：通过
 - `pnpm check`
   - 结果：通过
-- `pnpm package:electron:win`
-  - 结果：失败
-  - 失败原因：
-    - 打包流程会带出仓库当前已有的 desktop / server 非本任务失败项
-    - 本轮没有修改这些模块，也没有顺手把无关缺陷混入 T013
 
-## Acceptance Outcome
+本轮没有重跑 `pnpm package:electron:win`。如后续评审要求打包或前台 smoke，需要单独追加，不在这次最小整改里伪造结果。
 
-T013 当前可标记 `DONE` 的依据是：
+## Review Handoff
 
-1. completed `read_list` evidence 可收口成自然语言目录回答
-2. completed `read_open` evidence 可收口成自然语言文件内容概括
-3. retrieval evidence 可收口成 grounded answer
-4. `pendingApproval` 不会被伪装成“已执行”
-5. 无 completed evidence 时不会编造“已查看”
-6. generate 最终回答不再直接暴露 tool JSON / `pendingToolCall` / `nextAction` JSON / `<function_calls>`
-7. 没有破坏 Planner / Normalize / Policy / ToolNode 边界
-8. 后端定向测试通过
+本轮只把代码与证据交回评审线程，不在这里把 `T013` 标记成 `PASS`。
 
-未完成项和风险单独记录，不混入 T013 结论：
+当前可提交给评审的事实是：
+
+1. retrieval fallback 已从“只说命中文档”改成优先基于 chunk 内容回答
+2. no-evidence 下已补“直接编造 workspace / 文件结果”的防护测试
+3. 裸 `toolId` 泄漏场景已补最小回归测试
+4. 没有改 Graph 主路由
+5. 没有改 ToolNode 直答
+6. 没有改 Planner parser / repeated guard / path normalize
+7. 没有改前端 UI / Provider Gateway
+
+仍需评审线程决定是否放行为 `PASS` 的事项：
 
 - 打包链路仍被仓库现有非 T013 缺陷阻断
 - 前台完整黑盒 smoke 还需要在这些既有阻塞清理后继续跑

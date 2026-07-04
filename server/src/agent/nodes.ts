@@ -995,6 +995,37 @@ const answerClaimsUnverifiedObservation = (answer: string) => {
   return patterns.some((pattern) => pattern.test(answer));
 };
 
+const answerLooksLikeFabricatedWorkspaceResult = (input: {
+  question: string;
+  answer: string;
+}) => {
+  const normalizedQuestion = normalizeIntentText(input.question);
+  if (
+    !queryMentionsWorkspace(normalizedQuestion) &&
+    !queryRequestsDirectoryOverview(normalizedQuestion) &&
+    !queryRequestsFileContent(normalizedQuestion)
+  ) {
+    return false;
+  }
+
+  const answer = input.answer.trim();
+  if (!answer) {
+    return false;
+  }
+
+  const resultClaimPatterns = [
+    /(当前|这个|该)?\s*(workspace|目录|文件夹|文件|folder|directory)\s*(下|里|中)?\s*(有|包含|包括|contains|includes|has)\s+/iu,
+    /(workspace|directory|folder)\s+(contains|includes|has)\s+/iu,
+  ];
+  const filenamePattern = /\b[\w.-]+\.[a-z0-9]{1,12}\b/iu;
+  const listPattern = /(?:^|[：:]\s*|有\s+)(?:[\w.-]+(?:\.[a-z0-9]{1,12})?)(?:\s*[、,，]\s*[\w.-]+(?:\.[a-z0-9]{1,12})?){1,}/iu;
+
+  return (
+    resultClaimPatterns.some((pattern) => pattern.test(answer)) &&
+    (filenamePattern.test(answer) || listPattern.test(answer))
+  );
+};
+
 const renderSummaryBasedAnswer = (summary: AgentEvidenceSummary) => {
   if (summary.source === "tool" && summary.data?.kind === "read_list") {
     const preview = summary.data.entriesPreview.join("、");
@@ -1052,19 +1083,32 @@ const buildEvidenceGroundedFallbackAnswer = (state: AgentNodeState) => {
   }
 
   const evidence = getEvidencePayload(state);
+  const latestRetrieval = evidence.retrievals.at(-1);
+  if (latestRetrieval && latestRetrieval.chunkCount > 0) {
+    const chunkPreviews = latestRetrieval.chunks
+      .slice(0, 3)
+      .map((chunk) => ({
+        documentName: chunk.documentName,
+        preview: toPreviewText(chunk.content, 220),
+      }))
+      .filter((chunk) => chunk.preview);
+    if (chunkPreviews.length > 0) {
+      const [firstChunk, ...restChunks] = chunkPreviews;
+      const extraPreview =
+        restChunks.length > 0
+          ? ` 另外还有 ${restChunks
+              .map((chunk) => `${chunk.documentName} 片段：${chunk.preview}`)
+              .join("；")}`
+          : "";
+      return `根据当前检索证据，${firstChunk.documentName} 片段提到：${firstChunk.preview}${extraPreview}`;
+    }
+  }
+
   const latestSummary = evidence.latestSummary ?? getLatestEvidenceSummary({ evidence });
   if (latestSummary) {
     const summaryAnswer = renderSummaryBasedAnswer(latestSummary);
     if (summaryAnswer) {
       return summaryAnswer;
-    }
-  }
-
-  const latestRetrieval = evidence.retrievals.at(-1);
-  if (latestRetrieval && latestRetrieval.chunkCount > 0) {
-    const chunk = latestRetrieval.chunks[0];
-    if (chunk) {
-      return `当前检索证据显示，${chunk.documentName} 提到：${toPreviewText(chunk.content, 220)}`;
     }
   }
 
@@ -1091,6 +1135,25 @@ const detectGenerateOutputGuardReason = (answer: string) => {
   }
 
   return undefined;
+};
+
+const answerLeaksCompletedToolId = (input: {
+  answer: string;
+  completedToolIds: string[];
+}) => {
+  const normalized = input.answer.trim();
+  if (!normalized) {
+    return false;
+  }
+
+  return input.completedToolIds.some((toolId) => {
+    const escapedToolId = toolId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const leakagePatterns = [
+      new RegExp(`\\b${escapedToolId}\\s+completed\\b`, "i"),
+      new RegExp(`^${escapedToolId}\\b`, "i"),
+    ];
+    return leakagePatterns.some((pattern) => pattern.test(normalized));
+  });
 };
 
 export const generateNode = async (
@@ -1165,6 +1228,16 @@ export const generateNode = async (
   }
   if (!outputGuardReason) {
     const evidence = getEvidencePayload(state);
+    const completedToolIds = evidence.toolExecutions
+      .filter((execution) => execution.status === "completed")
+      .map((execution) => execution.toolId);
+    if (answerLeaksCompletedToolId({ answer, completedToolIds })) {
+      outputGuardReason =
+        "generate output leaked completed tool id text instead of a user-facing final answer";
+    }
+  }
+  if (!outputGuardReason) {
+    const evidence = getEvidencePayload(state);
     const hasCompletedToolEvidence = evidence.toolExecutions.some(
       (execution) => execution.status === "completed",
     );
@@ -1174,7 +1247,11 @@ export const generateNode = async (
     if (
       !hasCompletedToolEvidence &&
       !hasRetrievalEvidence &&
-      answerClaimsUnverifiedObservation(answer)
+      (answerClaimsUnverifiedObservation(answer) ||
+        answerLooksLikeFabricatedWorkspaceResult({
+          question: getLatestUserQuestion(state.messages) || state.goal.text,
+          answer,
+        }))
     ) {
       outputGuardReason =
         "generate output claimed grounded observation without completed evidence";

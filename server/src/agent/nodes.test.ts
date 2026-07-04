@@ -252,7 +252,8 @@ test("generateNode rewrites retrieval JSON output into a grounded retrieval answ
   const result = await generateNode(state);
 
   assert.match(result.answer ?? "", /README\.md/);
-  assert.doesNotMatch(result.answer ?? "", /\"type\"|retrieve/i);
+  assert.match(result.answer ?? "", /local-first desktop workspace/);
+  assert.doesNotMatch(result.answer ?? "", /\"type\"|retrieve JSON|nextAction/i);
 });
 
 test("generateNode replaces unverified observation claims when no completed evidence exists", async () => {
@@ -265,6 +266,18 @@ test("generateNode replaces unverified observation claims when no completed evid
 
   assert.match(result.answer ?? "", /当前还没有足够的已完成证据/);
   assert.doesNotMatch(result.answer ?? "", /我已经查看了/);
+});
+
+test("generateNode blocks direct fabricated workspace results when no completed evidence exists", async () => {
+  const state = createBaseState("看看当前 workspace 有哪些文件");
+  vi.spyOn(providerProxyService, "generateTextForRole").mockResolvedValue(
+    "当前 workspace 下有 README.md、server、desktop。",
+  );
+
+  const result = await generateNode(state);
+
+  assert.match(result.answer ?? "", /当前还没有足够的已完成证据/);
+  assert.doesNotMatch(result.answer ?? "", /README\.md、server、desktop/);
 });
 
 test("generateNode explains waiting approval instead of pretending execution already happened", async () => {
@@ -287,4 +300,55 @@ test("generateNode explains waiting approval instead of pretending execution alr
 
   assert.match(result.answer ?? "", /等待审批|还没有真实执行结果/);
   assert.doesNotMatch(result.answer ?? "", /已经执行完成/);
+});
+
+test("generateNode strips bare tool id leakage from read_open completed evidence", async () => {
+  const state = createBaseState("打开 README.md 看看内容");
+  state.evidence = {
+    observations: [],
+    toolExecutions: [
+      {
+        toolId: "read_open",
+        args: { path: "README.md" },
+        status: "completed",
+        inputHash: "hash-read-open",
+        result: {},
+        summary: {
+          source: "tool",
+          status: "completed",
+          toolId: "read_open",
+          inputHash: "hash-read-open",
+          actionTaken: "Opened file README.md.",
+          keyFindings: ["contentLength=42", "# UIChat Mira"],
+          answerReadiness: {
+            canAnswer: true,
+            reason: "Opened file content is available for answer generation.",
+          },
+          data: {
+            kind: "read_open",
+            path: "README.md",
+            contentPreview: "# UIChat Mira UIChat Mira is a local-first desktop workspace.",
+            contentLength: 42,
+            truncated: false,
+            keySections: ["UIChat Mira"],
+            canAnswerFileQuestion: true,
+          },
+        },
+        startedAt: "2026-07-04T00:00:00.000Z",
+        finishedAt: "2026-07-04T00:00:01.000Z",
+      },
+    ],
+    retrievals: [],
+  };
+  state.evidence.latestSummary = state.evidence.toolExecutions[0]?.summary;
+
+  vi.spyOn(providerProxyService, "generateTextForRole").mockResolvedValue(
+    "read_open completed, README.md says UIChat Mira is a local-first desktop workspace.",
+  );
+
+  const result = await generateNode(state);
+
+  assert.match(result.answer ?? "", /README\.md/);
+  assert.match(result.answer ?? "", /UIChat Mira/);
+  assert.doesNotMatch(result.answer ?? "", /read_open completed|read_open/);
 });
