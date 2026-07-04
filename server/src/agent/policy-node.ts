@@ -19,6 +19,7 @@ const nowIso = () => new Date().toISOString();
 const createPendingApproval = (input: {
   runId: string;
   toolId: string;
+  toolCallId: string;
   reason: string;
   args: Record<string, unknown>;
   inputHash: string;
@@ -27,6 +28,7 @@ const createPendingApproval = (input: {
   runId: input.runId,
   stepId: "approval",
   toolId: input.toolId,
+  toolCallId: input.toolCallId,
   reason: input.reason,
   input: input.args,
   inputHash: input.inputHash,
@@ -315,6 +317,7 @@ export const policyNode = async (
   const pendingApproval = createPendingApproval({
     runId: state.runId,
     toolId: selectedDefinition.id,
+    toolCallId: pendingToolCall.id,
     reason: decision.reason,
     args: pendingToolCall.args,
     inputHash: pendingToolCall.inputHash,

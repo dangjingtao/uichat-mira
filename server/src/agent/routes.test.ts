@@ -202,11 +202,19 @@ describe("agent routes", () => {
     });
     expect(rejectResponse.statusCode).toBe(200);
     const rejectData = rejectResponse.json() as {
-      data: { status: string; pendingApproval?: unknown; currentStepId?: string };
+      data: {
+        status: string;
+        pendingApproval?: unknown;
+        pendingToolCall?: unknown;
+        currentStepId?: string;
+        terminalReason?: string;
+      };
     };
     expect(rejectData.data.status).toBe("blocked");
     expect(rejectData.data.pendingApproval).toBeUndefined();
+    expect(rejectData.data.pendingToolCall).toBeUndefined();
     expect(rejectData.data.currentStepId).toBeUndefined();
+    expect(rejectData.data.terminalReason).toBe("approval_rejected");
 
     const cancelledRun = createRun();
     agentRunStore.update(cancelledRun.id, {
@@ -228,11 +236,19 @@ describe("agent routes", () => {
     });
     expect(cancelResponse.statusCode).toBe(200);
     const cancelData = cancelResponse.json() as {
-      data: { status: string; pendingApproval?: unknown; currentStepId?: string };
+      data: {
+        status: string;
+        pendingApproval?: unknown;
+        pendingToolCall?: unknown;
+        currentStepId?: string;
+        terminalReason?: string;
+      };
     };
     expect(cancelData.data.status).toBe("cancelled");
     expect(cancelData.data.pendingApproval).toBeUndefined();
+    expect(cancelData.data.pendingToolCall).toBeUndefined();
     expect(cancelData.data.currentStepId).toBeUndefined();
+    expect(cancelData.data.terminalReason).toBe("cancelled");
 
     await app.close();
   });

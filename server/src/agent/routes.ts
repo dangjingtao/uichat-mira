@@ -17,6 +17,7 @@ const agentApprovalRequestSchema = {
     runId: { type: "string" },
     stepId: { type: "string" },
     toolId: { type: "string" },
+    toolCallId: { type: "string" },
     reason: { type: "string" },
     input: {
       type: "object",
@@ -60,6 +61,10 @@ const agentRunSchema = {
     blockedReason: { type: "string" },
     terminalReason: { type: "string" },
     pendingApproval: agentApprovalRequestSchema,
+    pendingToolCall: {
+      type: "object",
+      additionalProperties: true,
+    },
     selectedToolId: { type: "string" },
     contextBudget: {
       type: "object",
@@ -177,6 +182,10 @@ const registerAgentRoutes: FastifyPluginAsync = async (app: FastifyInstance) => 
         status: "blocked",
         currentStepId: undefined,
         pendingApproval: undefined,
+        pendingToolCall: undefined,
+        selectedToolId: undefined,
+        blockedReason: "User rejected the pending approval request.",
+        terminalReason: "approval_rejected",
       });
 
       return success(next);
@@ -212,6 +221,9 @@ const registerAgentRoutes: FastifyPluginAsync = async (app: FastifyInstance) => 
         status: "cancelled",
         currentStepId: undefined,
         pendingApproval: undefined,
+        pendingToolCall: undefined,
+        selectedToolId: undefined,
+        terminalReason: "cancelled",
       });
 
       return success(next);

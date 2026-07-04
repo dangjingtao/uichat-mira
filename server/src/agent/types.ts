@@ -79,6 +79,7 @@ export interface AgentApprovalRequest {
   runId: string;
   stepId: string;
   toolId: string;
+  toolCallId?: string;
   reason: string;
   input?: Record<string, unknown>;
   inputHash?: string;

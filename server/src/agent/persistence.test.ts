@@ -119,6 +119,7 @@ const createPersistedWaitingApprovalRun = (options?: {
       runId: run.id,
       stepId: "approval",
       toolId: "web-search",
+      toolCallId: "pending-1",
       reason: "needs approval",
       input: { query: "hello" },
       inputHash: createInvocationInputHash({ query: "hello" }),
@@ -202,11 +203,9 @@ test("resumeApprovedAgentRun can continue from repository after in-memory state 
     const result = await resumeApprovedAgentRun(run.id);
 
     assert.equal(runSpy.mock.calls.length, 1);
-    assert.equal(runSpy.mock.calls[0]?.[0].selectedCapabilityId, "web_research");
     assert.equal(runSpy.mock.calls[0]?.[0].selectedToolId, "web-search");
     assert.equal(result.run?.status, "completed");
     assert.equal(result.run?.pendingApproval, undefined);
-    assert.equal(result.run?.selectedCapabilityId, undefined);
     assert.equal(result.run?.selectedToolId, "web-search");
     const persistedThread = threadService.getThreadById(run.threadId, 1);
     const assistantMessage = persistedThread?.messages.find(

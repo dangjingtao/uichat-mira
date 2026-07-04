@@ -1755,14 +1755,7 @@ test("agentGraph preserves the frozen pendingToolCall resume entry and goes stra
     approvedInvocations: [
       {
         toolId: "web_search",
-        input: approvedInput,
-        inputHash: createInvocationInputHash({
-          toolId: "web_search",
-          args: approvedInput,
-          source: "planner",
-        }),
-        approvedAt: "2026-07-04T00:00:00.000Z",
-        approvalId: "approval-1",
+        inputHash: createInvocationInputHash(approvedInput),
       },
     ],
   });

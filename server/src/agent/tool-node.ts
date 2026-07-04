@@ -1,6 +1,7 @@
 import { executeHarnessInvocation } from "@/mcp/harness/invocations.js";
 import { createHarnessEnvironmentSnapshot } from "@/mcp/harness/environment.js";
 import { runWithWorkspaceRootOverride } from "@/mcp/workspace.js";
+import { createInvocationInputHash } from "./approval-fingerprint.js";
 import {
   emitStepNode,
   getIterativeNodeId,
@@ -42,6 +43,7 @@ const createObservation = (input: {
 const createPendingApproval = (input: {
   runId: string;
   toolId: string;
+  toolCallId: string;
   reason: string;
   args: Record<string, unknown>;
   inputHash: string;
@@ -50,6 +52,7 @@ const createPendingApproval = (input: {
   runId: input.runId,
   stepId: "approval",
   toolId: input.toolId,
+  toolCallId: input.toolCallId,
   reason: input.reason,
   input: input.args,
   inputHash: input.inputHash,
@@ -99,6 +102,14 @@ const getDurationMs = (startedAt: string, finishedAt: string) => {
 
   return Math.max(0, endMs - startMs);
 };
+
+const toHarnessApprovedInvocations = (
+  approvedInvocations: AgentNodeState["approvedInvocations"],
+) =>
+  approvedInvocations?.map((invocation) => ({
+    toolId: invocation.toolId,
+    inputHash: createInvocationInputHash(invocation.input),
+  }));
 
 const emitEvidenceUpdateNode = async (
   emit: EmitAgentExecutionNode | undefined,
@@ -272,7 +283,7 @@ export const toolNode = async (
         userId: state.userId,
         threadId: state.threadId,
         ...(invocationEnvironment ? { environment: invocationEnvironment } : {}),
-        approvedInvocations: state.approvedInvocations,
+        approvedInvocations: toHarnessApprovedInvocations(state.approvedInvocations),
       }),
   );
 
@@ -284,6 +295,7 @@ export const toolNode = async (
     const approval = createPendingApproval({
       runId: state.runId,
       toolId: pendingToolCall.toolId,
+      toolCallId: pendingToolCall.id,
       reason: invocation.approval?.reason ?? `${pendingToolCall.toolId} requires approval.`,
       args: pendingToolCall.args,
       inputHash: pendingToolCall.inputHash,

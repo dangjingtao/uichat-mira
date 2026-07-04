@@ -18,6 +18,7 @@ const buildAssistantMetadata = (input: {
     id: string;
     stepId: string;
     toolId: string;
+    toolCallId?: string;
     reason: string;
     input?: Record<string, unknown>;
     inputHash?: string;
@@ -70,6 +71,32 @@ const toApprovedInvocation = (input: {
   approvedAt: new Date().toISOString(),
   approvalId: input.pendingApproval.id,
 });
+
+const getApprovalResumeMismatchReason = (input: {
+  pendingApproval: AgentApprovalRequest;
+  pendingToolCall: AgentToolCallRequest;
+}) => {
+  if (input.pendingApproval.toolId !== input.pendingToolCall.toolId) {
+    return `Approval resume mismatch: approved toolId ${input.pendingApproval.toolId} does not match frozen pendingToolCall.toolId ${input.pendingToolCall.toolId}.`;
+  }
+
+  if (
+    input.pendingApproval.inputHash &&
+    input.pendingApproval.inputHash !== input.pendingToolCall.inputHash
+  ) {
+    return `Approval resume mismatch: approved inputHash ${input.pendingApproval.inputHash} does not match frozen pendingToolCall.inputHash ${input.pendingToolCall.inputHash}.`;
+  }
+
+  if (
+    input.pendingApproval.toolCallId &&
+    "id" in input.pendingToolCall &&
+    input.pendingApproval.toolCallId !== input.pendingToolCall.id
+  ) {
+    return `Approval resume mismatch: approved toolCallId ${input.pendingApproval.toolCallId} does not match frozen pendingToolCall.id ${input.pendingToolCall.id}.`;
+  }
+
+  return null;
+};
 
 const buildAssistantParts = (input: {
   content: string;
@@ -146,12 +173,21 @@ export const resumeApprovedAgentRun = async (runId: string) => {
     throw new Error(`AgentRun missing frozen approval invocation: ${runId}`);
   }
 
-  if (
-    pendingApproval.toolId !== pendingToolCall.toolId ||
-    (pendingApproval.inputHash &&
-      pendingApproval.inputHash !== pendingToolCall.inputHash)
-  ) {
-    throw new Error(`AgentRun approval mismatch for frozen invocation: ${runId}`);
+  const mismatchReason = getApprovalResumeMismatchReason({
+    pendingApproval,
+    pendingToolCall,
+  });
+  if (mismatchReason) {
+    agentRunStore.complete(runId, {
+      status: "blocked",
+      currentStepId: undefined,
+      pendingApproval: undefined,
+      pendingToolCall: undefined,
+      selectedToolId: undefined,
+      blockedReason: mismatchReason,
+      terminalReason: "approval_resume_mismatch",
+    });
+    throw new Error(mismatchReason);
   }
 
   const approvedInvocation = toApprovedInvocation({

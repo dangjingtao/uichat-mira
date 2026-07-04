@@ -319,6 +319,7 @@ export const approvalNode = async (
     label: "审批节点",
     summary: "等待人工审批",
     details: {
+      toolCallId: state.pendingApproval.toolCallId,
       toolId: state.pendingApproval.toolId,
       reason: state.pendingApproval.reason,
       input: state.pendingApproval.input,
@@ -333,6 +334,7 @@ export const approvalNode = async (
     summary: "已进入审批等待",
     details: {
       approvalId: state.pendingApproval.id,
+      toolCallId: state.pendingApproval.toolCallId,
       toolId: state.pendingApproval.toolId,
       reason: state.pendingApproval.reason,
       inputHash: state.pendingApproval.inputHash,

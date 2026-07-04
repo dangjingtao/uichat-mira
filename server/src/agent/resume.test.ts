@@ -38,6 +38,7 @@ test("resumeApprovedAgentRun resumes a pending run and keeps approval state", as
       runId: run.id,
       stepId: "approval",
       toolId: "web-search",
+      toolCallId: "pending-1",
       reason: "needs approval",
       input: approvedInput,
       inputHash: createInvocationInputHash(approvedInput),
@@ -136,6 +137,7 @@ test("resumeApprovedAgentRun resumes a pending run and keeps approval state", as
     });
     assert.equal(result.run?.selectedToolId, "web-search");
     assert.equal(result.run?.pendingApproval, undefined);
+    assert.equal(result.run?.pendingToolCall, undefined);
     assert.equal(result.run?.contextBudget?.policy, "task-chat");
     assert.equal(persistAssistantMessageSpy.mock.calls.length, 1);
     assert.deepEqual(persistAssistantMessageSpy.mock.calls[0]?.[0], {
@@ -203,6 +205,7 @@ test("resumeApprovedAgentRun updates assistant message when run returns waiting 
       runId: run.id,
       stepId: "approval",
       toolId: "web-search",
+      toolCallId: "pending-2",
       reason: "needs approval",
       input: approvedInput,
       inputHash: createInvocationInputHash(approvedInput),
@@ -242,6 +245,7 @@ test("resumeApprovedAgentRun updates assistant message when run returns waiting 
         runId: run.id,
         stepId: "approval-2",
         toolId: "terminal_session",
+        toolCallId: "pending-approval-2",
         reason: "needs more approval",
         inputHash: "hash-2",
         createdAt: "2026-06-28T00:01:00.000Z",
@@ -299,6 +303,7 @@ test("resumeApprovedAgentRun updates assistant message when run returns waiting 
             runId: run.id,
             stepId: "approval-2",
             toolId: "terminal_session",
+            toolCallId: "pending-approval-2",
             reason: "needs more approval",
             inputHash: "hash-2",
             createdAt: "2026-06-28T00:01:00.000Z",
@@ -343,6 +348,7 @@ test("resumeApprovedAgentRun updates assistant message when resumed run fails", 
       runId: run.id,
       stepId: "approval",
       toolId: "web-search",
+      toolCallId: "pending-3",
       reason: "needs approval",
       input: approvedInput,
       inputHash: createInvocationInputHash(approvedInput),
@@ -434,6 +440,75 @@ test("resumeApprovedAgentRun updates assistant message when resumed run fails", 
     runSpy.mockRestore();
     persistAssistantMessageSpy.mockRestore();
     getMessageByIdSpy.mockRestore();
+    agentRunStore.clear();
+  }
+});
+
+test("resumeApprovedAgentRun blocks execution when approval toolCallId does not match the frozen pendingToolCall", async () => {
+  const approvedInput = { query: "hello" };
+  const goal = createAgentGoal("answer the user");
+  const run = agentRunStore.create({
+    threadId: "thread-1",
+    userId: 1,
+    goal,
+    plan: createAgentPlan(goal),
+    runtimeInput: {
+      messages: [
+        {
+          role: "user",
+          content: "hello",
+          parts: [{ type: "text", text: "hello" }],
+        },
+      ],
+      params: {},
+    },
+  });
+
+  agentRunStore.update(run.id, {
+    status: "waiting_approval",
+    pendingApproval: {
+      id: "approval-mismatch-1",
+      runId: run.id,
+      stepId: "approval",
+      toolId: "web-search",
+      toolCallId: "pending-other",
+      reason: "needs approval",
+      input: approvedInput,
+      inputHash: createInvocationInputHash(approvedInput),
+      createdAt: "2026-06-28T00:00:00.000Z",
+    },
+    pendingToolCall: {
+      id: "pending-actual",
+      toolId: "web-search",
+      args: approvedInput,
+      inputHash: createInvocationInputHash(approvedInput),
+      source: "planner",
+      status: "frozen",
+      createdAt: "2026-06-28T00:00:00.000Z",
+    },
+  });
+
+  const runSpy = vi.spyOn(agentGraph, "run");
+
+  try {
+    await assert.rejects(
+      () => resumeApprovedAgentRun(run.id),
+      /approved toolCallId pending-other does not match frozen pendingToolCall\.id pending-actual/i,
+    );
+
+    assert.equal(runSpy.mock.calls.length, 0);
+    const blockedRun = agentRunStore.get(run.id);
+    assert.equal(blockedRun?.status, "blocked");
+    assert.equal(blockedRun?.pendingApproval, undefined);
+    assert.equal(blockedRun?.pendingToolCall, undefined);
+    assert.equal(blockedRun?.selectedToolId, undefined);
+    assert.equal(blockedRun?.terminalReason, "approval_resume_mismatch");
+    assert.match(
+      blockedRun?.blockedReason ?? "",
+      /approved toolCallId pending-other does not match frozen pendingToolCall\.id pending-actual/i,
+    );
+  } finally {
+    runSpy.mockRestore();
     agentRunStore.clear();
   }
 });

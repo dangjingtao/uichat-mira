@@ -5,6 +5,7 @@ import path from "node:path";
 import { test, vi } from "vitest";
 import * as harnessInvocations from "@/mcp/harness/invocations.js";
 import { getWorkspaceRoot } from "@/mcp/workspace.js";
+import { createInvocationInputHash } from "./approval-fingerprint.js";
 import { toolNode } from "./tool-node.js";
 import type { AgentNodeState } from "./node-runtime.js";
 
@@ -79,6 +80,64 @@ test("toolNode executes the frozen pendingToolCall without rebuilding args", asy
     assert.equal(result.lastToolExecution?.toolId, "web_search");
     assert.equal(result.errorMessage, undefined);
     assert.equal(result.pendingToolCall, undefined);
+  } finally {
+    executeHarnessInvocationSpy.mockRestore();
+  }
+});
+
+test("toolNode remaps approvedInvocations to Harness arg hashes before execution", async () => {
+  const frozenArgs = {
+    command: "dir",
+    cwd: "D:\\workspace\\rag-demo",
+  };
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-approved-terminal-1",
+      toolId: "terminal_session",
+      status: "completed",
+      result: { command: "dir", stdout: "ok", stderr: "", exitCode: 0, timedOut: false },
+      startedAt: "2026-07-04T00:00:00.000Z",
+      finishedAt: "2026-07-04T00:00:01.000Z",
+    });
+
+  try {
+    await toolNode(
+      createBaseState({
+        policyDecision: {
+          type: "allow",
+          toolId: "terminal_session",
+          inputHash: "agent-frozen-hash",
+          reason: "Allowed in test.",
+        },
+        approvedInvocations: [
+          {
+            toolId: "terminal_session",
+            input: frozenArgs,
+            inputHash: "agent-frozen-hash",
+            approvedAt: "2026-07-04T00:00:00.000Z",
+            approvalId: "approval-1",
+          },
+        ],
+        pendingToolCall: {
+          id: "pending-approved-terminal-1",
+          toolId: "terminal_session",
+          args: frozenArgs,
+          inputHash: "agent-frozen-hash",
+          source: "planner",
+          status: "frozen",
+          createdAt: "2026-07-04T00:00:00.000Z",
+        },
+      }),
+    );
+
+    assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+    assert.deepEqual(executeHarnessInvocationSpy.mock.calls[0]?.[0].approvedInvocations, [
+      {
+        toolId: "terminal_session",
+        inputHash: createInvocationInputHash(frozenArgs),
+      },
+    ]);
   } finally {
     executeHarnessInvocationSpy.mockRestore();
   }
@@ -289,6 +348,7 @@ test("toolNode keeps frozen pendingToolCall when Harness requests approval", asy
 
     assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
     assert.equal(result.pendingApproval?.toolId, "terminal_session");
+    assert.equal(result.pendingApproval?.toolCallId, pendingToolCall.id);
     assert.equal(result.pendingApproval?.inputHash, pendingToolCall.inputHash);
     assert.deepEqual(result.pendingToolCall, pendingToolCall);
     assert.equal(result.selectedToolId, undefined);

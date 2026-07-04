@@ -18,7 +18,7 @@ related:
   - server/src/agent/nodes.ts
   - server/src/agent/graph.test.ts
   - server/src/agent/nodes.test.ts
-task_state: READY_FOR_REVIEW
+task_state: DONE
 ---
 
 # agent_node_T013 evidence grounded final answer
@@ -160,11 +160,11 @@ T013 是 `Agent V1.5 final answer grounding` 任务。
 
 本轮没有重跑 `pnpm package:electron:win`。如后续评审要求打包或前台 smoke，需要单独追加，不在这次最小整改里伪造结果。
 
-## Review Handoff
+## Review Outcome
 
-本轮只把代码与证据交回评审线程，不在这里把 `T013` 标记成 `PASS`。
+`2026-07-04` 评审整改已通过，`T013` 状态更新为 `DONE`。
 
-当前可提交给评审的事实是：
+本轮确认的事实是：
 
 1. retrieval fallback 已从“只说命中文档”改成优先基于 chunk 内容回答
 2. no-evidence 下已补“直接编造 workspace / 文件结果”的防护测试
@@ -174,7 +174,7 @@ T013 是 `Agent V1.5 final answer grounding` 任务。
 6. 没有改 Planner parser / repeated guard / path normalize
 7. 没有改前端 UI / Provider Gateway
 
-仍需评审线程决定是否放行为 `PASS` 的事项：
+仍保留但不阻断 `T013 DONE` 的事项：
 
 - 打包链路仍被仓库现有非 T013 缺陷阻断
 - 前台完整黑盒 smoke 还需要在这些既有阻塞清理后继续跑

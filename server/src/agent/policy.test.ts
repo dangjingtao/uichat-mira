@@ -252,6 +252,7 @@ test("policyNode raises approval for risky frozen pendingToolCall", async () => 
     assert.equal(result.selectedToolId, undefined);
     assert.equal(result.policyDecision?.type, "require_approval");
     assert.equal(result.pendingApproval?.toolId, "workspace_mutation");
+    assert.equal(result.pendingApproval?.toolCallId, pendingToolCall.id);
     assert.equal(result.pendingApproval?.inputHash, pendingToolCall.inputHash);
     assert.deepEqual(result.pendingToolCall, pendingToolCall);
     assert.ok(emitted.length > 0);
@@ -384,6 +385,7 @@ test("policyNode does not reuse approval when inputHash does not match", async (
     assert.equal(result.selectedToolId, undefined);
     assert.equal(result.policyDecision?.type, "require_approval");
     assert.equal(result.pendingApproval?.toolId, "terminal_session");
+    assert.equal(result.pendingApproval?.toolCallId, pendingToolCall.id);
     assert.equal(result.pendingApproval?.inputHash, pendingToolCall.inputHash);
   } finally {
     listCapabilityDefinitionsSpy.mockRestore();

@@ -22,6 +22,7 @@ related:
   - docs/project-control/tasks/agent_node_T011-workspace-path-argument-contract.md
   - docs/project-control/tasks/agent_node_T012-repeated-tool-guard.md
   - docs/project-control/tasks/agent_node_T013-evidence-grounded-final-answer.md
+  - docs/project-control/tasks/agent_node_T014-approval-resume-contract.md
   - docs/chat/agent-runtime-design.md
   - docs/harness/agentgraph-harness-protocol.md
 ---
@@ -58,7 +59,8 @@ Agent node 专属总台账。
 | `agent_node_T010` | `nextActionPlannerNode` JSON Contract Hardening | `T010` 是 `T009` 前台 smoke blocker 修复任务：planner 现已支持 fenced JSON / 前缀 JSON / think 后 JSON，并且对缺失 `reason` 的合法 action 自动补默认值并记录 `missing_reason_defaulted` warning。`2026-07-04` 前台 smoke 已确认 4 条请求都不再失败于 `Planner output was invalid JSON`；当前新 blocker 已转移到 `agent-approval` 与 workspace path argument contract / approval path，path 问题不再归入 `T010` | `DONE` | [agent_node_T010-next-action-planner-json-contract-hardening.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T010-next-action-planner-json-contract-hardening.md) |
 | `agent_node_T011` | Workspace Path Argument Contract | `T011` 当前已把 root-relative read path normalizer 收紧到只识别 `/workspace` sentinel：`/etc/passwd` 不会再被 normalize 成 `etc/passwd`，root-relative path normalizer 也不再无脑处理所有 `/xxx`。`/README.md`、`/docs/README.md` 现在同样保持原值，继续交给下游 workspace root 校验；T011 安全边界回归测试与真实前台 workspace 绑定 smoke 证据已补齐，线程配置里的 workspace path 已确认进入 Agent 执行链路 | `DONE` | [agent_node_T011-workspace-path-argument-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T011-workspace-path-argument-contract.md) |
 | `agent_node_T012` | Repeated Tool Guard | `T012` 是 `Agent V1.5 runtime hardening` 任务，不是 `T009 / T010 / T011` 的补丁返工。当前实现只防同一 run 内 identical completed `use_tool` / identical retrieval query 的重复执行；`2026-07-04` 评审修订已补 `/workspace` sentinel 与 `.` 在 repeated guard 比较中的等价判定，但没有恢复通用 path normalize。真实前台 smoke 已证明 `read_list` / `read_open` 没有重复执行；但旧线程仍存在 `<function_calls> . </function_calls>` 生成阶段 / 回答组织异常。该异常不属于 T012 repeated guard 缺陷，但会影响前台完整 smoke 通过，因此状态保持 `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | [agent_node_T012-repeated-tool-guard.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T012-repeated-tool-guard.md) |
-| `agent_node_T013` | Evidence Grounded Final Answer | `T013` 是 `Agent V1.5 final answer grounding` 任务，不是 `T009 / T010 / T011 / T012` 的补丁返工。`2026-07-04` 评审意见要求最小整改 2 点：retrieval fallback 不能只说命中文档，必须优先基于 chunk 内容回答；no-evidence guard 还要覆盖“模型直接编造 workspace / 文件结果”的场景。本轮整改已落地，并补了裸 `toolId` 泄漏回归测试；没有改 Graph 主路由，没有改 ToolNode 直答，没有改 Planner / Normalize / Policy / ToolNode 边界 | `READY_FOR_REVIEW` | [agent_node_T013-evidence-grounded-final-answer.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T013-evidence-grounded-final-answer.md) |
+| `agent_node_T013` | Evidence Grounded Final Answer | `T013` 是 `Agent V1.5 final answer grounding` 任务，不是 `T009 / T010 / T011 / T012` 的补丁返工。`2026-07-04` 评审意见要求的最小整改 2 点已完成并通过复审：retrieval fallback 现已优先基于 chunk 内容回答；no-evidence guard 已覆盖“模型直接编造 workspace / 文件结果”的场景；同时补了裸 `toolId` 泄漏回归测试。整个任务没有改 Graph 主路由，没有改 ToolNode 直答，没有改 Planner / Normalize / Policy / ToolNode 边界 | `DONE` | [agent_node_T013-evidence-grounded-final-answer.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T013-evidence-grounded-final-answer.md) |
+| `agent_node_T014` | Approval Resume Contract | `T014` 是 `Agent V1.5 approval resume contract` 任务，可与 `T013` 并行，但不覆盖 `T013`。本次只收紧 `pendingApproval -> approval resume -> ToolNode -> evidence` 合同：审批对象已补 `toolCallId`，恢复时会校验 `toolId + inputHash + toolCallId`，并把 Agent 审批哈希桥接为 Harness 认得的参数哈希，因此前台 `terminal_session` 批准后已不再卡在“等待审批后无法恢复执行”，而是进入真实 `工具执行 -> 证据写回`。本任务不改前端审批 UI，不改 Provider Gateway，也不把 final answer 质量混进来 | `DONE` | [agent_node_T014-approval-resume-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T014-approval-resume-contract.md) |
 
 ## Current Ground Truth
 
@@ -165,6 +167,7 @@ Agent node 专属总台账。
 - `T011` 当前红线修复、回归测试和前台 smoke 证据已完成，状态更新为 `DONE`。
 - `T012` 当前只处理同一 run 内重复 `use_tool / retrieve` 执行防护，不扩到工具选择策略、前端 trace UI 或 approval resume 大改。
 - `T013` 当前只处理 completed evidence 到最终回答之间的用户可读性与真实性，不改前端 UI，不改 Provider Gateway，也不让 ToolNode 直接 answer。
+- `T014` 当前只处理审批暂停与恢复合同，不改前端审批 UI，不改 Provider Gateway，不把批准后的最终回答质量问题混进本任务。
 
 ## Work Rules
 
@@ -461,3 +464,42 @@ Agent node 专属总台账。
       - `pnpm check`
         - 结果：通过
     - 当前状态更新为 `READY_FOR_REVIEW`
+  - `2026-07-04` T013 整改评审通过
+    - `agent_node_T013` 状态更新为 `DONE`
+  - 追加第十四个节点任务编号 `agent_node_T014`
+  - 明确 `T014` 是 `Agent V1.5 approval resume contract` 任务，可与 `T013` 并行，但不覆盖 `T013`
+  - 当前任务只处理：
+    - `pendingApproval` 绑定原 frozen `pendingToolCall`
+    - 批准后恢复原冻结调用
+    - 拒绝后不执行工具
+    - `ToolNode -> evidence` 真实写回
+  - 当前实现已完成：
+    - `AgentApprovalRequest` 补齐 `toolCallId`
+    - `policy-node.ts`、`tool-node.ts`、trace details 均已带上 `toolCallId`
+    - `resume.ts` 已补 `toolId / inputHash / toolCallId` 恢复一致性校验
+    - 恢复不一致时会阻断执行并写 `approval_resume_mismatch`
+    - `reject / cancel` 会清理 `pendingApproval / pendingToolCall / selectedToolId`
+    - `tool-node.ts` 已把 Agent 审批记录桥接成 Harness 认得的参数哈希，不再在 Harness 层二次卡回审批
+  - 定向验证结果：
+    - `pnpm --filter @ui-chat-mira/server test -- src/agent/tool-node.test.ts src/agent/graph.test.ts src/agent/resume.test.ts`
+      - 结果：通过，`33 passed`
+    - `pnpm --filter @ui-chat-mira/server test -- src/agent/policy.test.ts src/agent/tool-node.test.ts src/agent/resume.test.ts src/agent/routes.test.ts src/agent/persistence.test.ts src/agent/graph.test.ts`
+      - 结果：通过，`54 passed`
+    - `pnpm --filter @ui-chat-mira/server typecheck`
+      - 结果：通过
+  - `2026-07-04` 前台 smoke 复测：
+    - 线程通过 `Composer menu -> Workspace -> Add to workspace -> ragDemo (D:\workspace\rag-demo)` 绑定 workspace
+    - `Agent` 按钮从禁用变为可点击
+    - 请求 `执行 dir 命令看看结果`
+    - 批准路径：
+      - 先进入 `等待审批`
+      - 点击 `批准` 后，已不再停在“等待审批后无法恢复执行”
+      - trace 已进入 `工具执行 -> 证据写回`
+      - `terminal_session` 显示已由 Harness 执行完成
+      - 新暴露问题是 `组织最终回答` 失败于 `Model returned empty answer`，不属于 `T014`
+    - 拒绝路径：
+      - toast 显示 `已拒绝本次 Agent 执行。`
+      - trace 未进入 `工具执行`
+      - 当前主区仍残留 `等待审批` 展示，属于前端状态同步候选，不改变 `T014` 的后端合同结论
+  - 结论：
+    - `agent_node_T014` 状态更新为 `DONE`
