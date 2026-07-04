@@ -34,7 +34,7 @@ const createState = (
     },
   ],
   toolExposure: {
-    exposedTools: ["read_open", "web_search"],
+    exposedTools: ["read_open", "read_list", "web_search", "terminal_session"],
     toolMeta: [
       {
         toolId: "read_open",
@@ -54,6 +54,28 @@ const createState = (
         capabilities: {
           sideEffect: "none",
           requiresApproval: false,
+          workspaceBound: true,
+        },
+      },
+      {
+        toolId: "read_list",
+        title: "Read List",
+        description: "List a workspace directory",
+        inputSchema: {
+          type: "object",
+          required: ["path"],
+          properties: {
+            path: { type: "string" },
+          },
+          additionalProperties: false,
+        },
+        domain: "read",
+        source: "internal",
+        tags: ["read"],
+        capabilities: {
+          sideEffect: "none",
+          requiresApproval: false,
+          workspaceBound: true,
         },
       },
       {
@@ -74,6 +96,27 @@ const createState = (
         capabilities: {
           sideEffect: "network",
           requiresApproval: false,
+        },
+      },
+      {
+        toolId: "terminal_session",
+        title: "Terminal Session",
+        description: "Run a terminal command",
+        inputSchema: {
+          type: "object",
+          required: ["command"],
+          properties: {
+            command: { type: "string" },
+          },
+          additionalProperties: false,
+        },
+        domain: "terminal",
+        source: "internal",
+        tags: ["terminal"],
+        capabilities: {
+          sideEffect: "process",
+          requiresApproval: true,
+          workspaceBound: true,
         },
       },
     ],
@@ -103,6 +146,118 @@ test("toolCallNormalizeNode freezes a valid planner use_tool action", async () =
   assert.match(String(patch.pendingToolCall?.id ?? ""), /^[0-9a-f-]{36}$/i);
   assert.match(String(patch.pendingToolCall?.createdAt ?? ""), /^\d{4}-\d{2}-\d{2}T/);
   assert.ok(patch.pendingToolCall?.inputHash);
+});
+
+test("toolCallNormalizeNode normalizes read_list /workspace to workspace root dot", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_list",
+        args: { path: "/workspace" },
+        reason: "Need the workspace listing.",
+      },
+    }),
+  );
+
+  assert.equal(patch.errorMessage, undefined);
+  assert.deepEqual(patch.pendingToolCall?.args, { path: "." });
+});
+
+test("toolCallNormalizeNode normalizes read_open /README.md to workspace-relative path", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: { path: "/README.md" },
+        reason: "Need file content.",
+      },
+    }),
+  );
+
+  assert.equal(patch.errorMessage, undefined);
+  assert.deepEqual(patch.pendingToolCall?.args, { path: "README.md" });
+});
+
+test("toolCallNormalizeNode normalizes nested root-relative read paths", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: { path: "/docs/README.md" },
+        reason: "Need nested file content.",
+      },
+    }),
+  );
+
+  assert.equal(patch.errorMessage, undefined);
+  assert.deepEqual(patch.pendingToolCall?.args, { path: "docs/README.md" });
+});
+
+test("toolCallNormalizeNode preserves normal relative read paths", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: { path: "README.md" },
+        reason: "Need file content.",
+      },
+    }),
+  );
+
+  assert.equal(patch.errorMessage, undefined);
+  assert.deepEqual(patch.pendingToolCall?.args, { path: "README.md" });
+});
+
+test("toolCallNormalizeNode rejects workspace-root-relative traversal attempts", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: { path: "/workspace/../outside.txt" },
+        reason: "Need file content.",
+      },
+    }),
+  );
+
+  assert.equal(patch.pendingToolCall, undefined);
+  assert.match(patch.errorMessage ?? "", /escaped the workspace root/i);
+});
+
+test("toolCallNormalizeNode keeps windows absolute read paths unchanged for downstream workspace checks", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: { path: "D:\\testData\\x.txt" },
+        reason: "Need file content.",
+      },
+    }),
+  );
+
+  assert.equal(patch.errorMessage, undefined);
+  assert.deepEqual(patch.pendingToolCall?.args, { path: "D:\\testData\\x.txt" });
+});
+
+test("toolCallNormalizeNode does not rewrite non-read tool arguments", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "terminal_session",
+        args: { command: "/README.md" },
+        reason: "Need terminal output.",
+      },
+    }),
+  );
+
+  assert.equal(patch.errorMessage, undefined);
+  assert.deepEqual(patch.pendingToolCall?.args, { command: "/README.md" });
 });
 
 test("toolCallNormalizeNode returns empty result for non-use_tool nextAction", async () => {
@@ -213,9 +368,9 @@ test("toolCallNormalizeNode fails when toolId is not exposed", async () => {
     createState({
       nextAction: {
         type: "use_tool",
-        toolId: "terminal_session",
+        toolId: "workspace_mutation",
         args: {},
-        reason: "Need terminal.",
+        reason: "Need file changes.",
       },
     }),
   );
@@ -351,9 +506,9 @@ test("toolCallNormalizeNode emits failure trace details without dumping args", a
     createState({
       nextAction: {
         type: "use_tool",
-        toolId: "terminal_session",
+        toolId: "workspace_mutation",
         args: { command: "dir" },
-        reason: "Need terminal.",
+        reason: "Need file changes.",
       },
     }),
     async (event) => {
@@ -371,7 +526,7 @@ test("toolCallNormalizeNode emits failure trace details without dumping args", a
   );
   assert.ok(errorEvent);
   const details = errorEvent?.details as Record<string, unknown>;
-  assert.equal(details.toolId, "terminal_session");
+  assert.equal(details.toolId, "workspace_mutation");
   assert.equal(typeof details.availableToolCount, "number");
   assert.equal("args" in details, false);
 });

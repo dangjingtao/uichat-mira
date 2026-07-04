@@ -19,6 +19,7 @@ related:
   - docs/project-control/tasks/agent_node_T008-v1-cleanup-release-hardening.md
   - docs/project-control/tasks/agent_node_T009-evidence-summary-answer-stop-rule.md
   - docs/project-control/tasks/agent_node_T010-next-action-planner-json-contract-hardening.md
+  - docs/project-control/tasks/agent_node_T011-workspace-path-argument-contract.md
   - docs/chat/agent-runtime-design.md
   - docs/harness/agentgraph-harness-protocol.md
 ---
@@ -51,8 +52,9 @@ Agent node 专属总台账。
 | `agent_node_T006` | `evidence` 回流与 Agent loop 路由闭环 | `retrieveNode / toolNode -> evidence -> Planner` 的最小闭环已接通；retrieval / tool evidence 写回、evidence-update trace、去重 helper、`maxIterations` 收口和旧入口阻断都已有定向验证，评审已通过 | `DONE` | [agent_node_T006-evidence-loop-routing.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T006-evidence-loop-routing.md) |
 | `agent_node_T007` | Agent Decision Loop v1 验收测试与回归护栏 | 已补齐当前 commit 专属验收证据：4 个定向测试源码、vitest JSON 报告、typecheck 报告、场景映射、运行时间与剩余风险均已回填到任务卡；当前证据不再引用 `2026-07-03` 的旧失败报告 | `DONE` | [agent_node_T007-decision-loop-acceptance-regression-guardrails.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T007-decision-loop-acceptance-regression-guardrails.md) |
 | `agent_node_T008` | V1 cleanup / release hardening | V1 收尾任务已完成：主分支误留的大型报告与 sqlite 临时文件已清理；`planNode` placeholder、`selectedToolId` 兼容语义、generate 阶段大结果 TODO，以及 V1 当前不变量都已回填到正式代码注释和契约文档；没有把 `TaskFrame` 或 generate size guard 误报成已完成能力 | `DONE` | [agent_node_T008-v1-cleanup-release-hardening.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T008-v1-cleanup-release-hardening.md) |
-| `agent_node_T009` | Evidence Summary + Answer Stop Rule | `AgentEvidenceSummary`、Planner 前置 answer stop rule、`read_list / read_open / web_search / terminal_session` 最小摘要 schema 与 trace 可审计字段已落地；answer stop rule 命中时可阻止第二次 `nextActionPlanner` task-model 调用和重复 `use_tool / retrieve` 执行，但前台 `2026-07-04` black-box smoke test 在工具执行前失败于 `Planner output was invalid JSON`，当前不能维持 `DONE` | `READY_FOR_REVIEW` | [agent_node_T009-evidence-summary-answer-stop-rule.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T009-evidence-summary-answer-stop-rule.md) |
-| `agent_node_T010` | `nextActionPlannerNode` JSON Contract Hardening | `T010` 是 `T009` 前台 smoke blocker 修复任务：当前已为 planner 增加脏输出提取、schema 校验和 trace 诊断，能处理 fenced JSON / 前缀 JSON / think 后 JSON；`Repeated Tool Guard` 尚未正式派发，本次不做，后续可作为 `T011` 候选任务。但 `2026-07-04` 前台 smoke 仍停在 `Planner output was invalid JSON`，当前只能保持评审态 | `READY_FOR_REVIEW` | [agent_node_T010-next-action-planner-json-contract-hardening.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T010-next-action-planner-json-contract-hardening.md) |
+| `agent_node_T009` | Evidence Summary + Answer Stop Rule | `AgentEvidenceSummary`、Planner 前置 answer stop rule、`read_list / read_open / web_search / terminal_session` 最小摘要 schema 与 trace 可审计字段已落地；answer stop rule 命中时可阻止第二次 `nextActionPlanner` task-model 调用和重复 `use_tool / retrieve` 执行。`2026-07-04` 前台 smoke 已离开 planner invalid JSON，但新 blocker 已转移到 workspace path argument contract / approval path 与后续回答质量问题，因此当前保持 `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | [agent_node_T009-evidence-summary-answer-stop-rule.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T009-evidence-summary-answer-stop-rule.md) |
+| `agent_node_T010` | `nextActionPlannerNode` JSON Contract Hardening | `T010` 是 `T009` 前台 smoke blocker 修复任务：planner 现已支持 fenced JSON / 前缀 JSON / think 后 JSON，并且对缺失 `reason` 的合法 action 自动补默认值并记录 `missing_reason_defaulted` warning。`2026-07-04` 前台 smoke 已确认 4 条请求都不再失败于 `Planner output was invalid JSON`；当前新 blocker 已转移到 `agent-approval` 与 workspace path argument contract / approval path，path 问题不再归入 `T010` | `DONE` | [agent_node_T010-next-action-planner-json-contract-hardening.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T010-next-action-planner-json-contract-hardening.md) |
+| `agent_node_T011` | Workspace Path Argument Contract | `T011` 已完成：Planner prompt 现已明确 workspace-relative path 契约，Normalize 会对 `read` 域 workspace-bound 工具做单点 path 规范化，把 `"/workspace"`、`"/README.md"`、`"/docs/README.md"` 转成 workspace-relative path，并拒绝规范化后仍逃出 workspace root 的路径。`2026-07-04` 复测显示 `read_list / read_open` 已不再卡在 workspace path approval，而 `terminal_session` 仍按既有高风险策略要求显式审批 | `DONE` | [agent_node_T011-workspace-path-argument-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T011-workspace-path-argument-contract.md) |
 
 ## Current Ground Truth
 
@@ -149,12 +151,14 @@ Agent node 专属总台账。
 
 ## 当前 V1 总结
 
-- 代码闭环有条件通过。
-- 前台手测未通过。
-- 当前阻塞项不是重复工具执行，而是 `2026-07-04` 前台 black-box smoke test 在 4 条用例里都停在 `Planner output was invalid JSON; planner must stop instead of pretending an answer is ready.`，失败发生在工具执行前。
-- 因此前台当前无法证明 `read_list / read_open / terminal_session` 的真实单次收口行为。
-- 当前下一步不是扩 T009 范围去改前端，而是先处理 `T010` 的 Planner JSON Contract Hardening，再重新执行 T009 smoke test。
-- `T009` 当前状态为 `READY_FOR_REVIEW`，不能维持 `DONE`，`T010` 也不应在这个状态下提前作为验收结论推进。
+- 代码闭环已通过 `T010` 当前边界内验证。
+- 前台 smoke 已离开 `Planner output was invalid JSON`。
+- `T011` 已解除 workspace path argument contract blocker。
+- `read_list / read_open / README` 内容查询路径当前都可进入 `ToolNode -> evidence -> answer stop rule -> generate`。
+- `terminal_session` 当前仍按既有高风险策略要求显式审批；这不是 workspace path defect。
+- `T009` 当前状态仍为 `READY_FOR_REVIEW`。
+- `T010` 原始 blocker 已解除，状态维持 `DONE`。
+- `T011` 已完成并关闭 workspace path argument contract 问题。
 
 ## Work Rules
 
@@ -282,8 +286,59 @@ Agent node 专属总台账。
     - `pnpm check`
       - 结果：通过
   - `2026-07-04` 前台黑盒复测：
-    - `看看当前 workspace 有哪些文件`：`FAIL`
-    - 当前失败阶段仍为 `nextActionPlanner` invalid JSON
-    - 当前页面路径仍停在 `准备上下文 -> 执行计划 -> 候选选择 -> 调用前守卫 -> 执行计划 -> 错误节点`
-    - 尚未进入 `Normalize / Policy / ToolNode`
-  - 因此前台当前仍无法证明 `T010` 已消除真实运行态 blocker，`agent_node_T010` 状态更新为 `READY_FOR_REVIEW`
+    - 运行时 workspace 已切到 `D:\workspace\rag-demo`
+    - `看看当前 workspace 有哪些文件`
+      - 不再失败于 `Planner output was invalid JSON`
+      - Planner 接受缺失 `reason` 的 `use_tool read_list` 并自动补 `reason`
+      - 当前新停点为 `agent-approval`
+      - approval reason: `read_list` 请求 path 超出当前 workspace root
+    - `打开 README.md 看看内容`
+      - 不再失败于 `Planner output was invalid JSON`
+      - Planner 接受缺失 `reason` 的 `use_tool read_open` 并自动补 `reason`
+      - 当前新停点为 `agent-approval`
+    - `看看 README.md 的内容`
+      - 不再失败于 `Planner output was invalid JSON`
+      - Planner 接受缺失 `reason` 的 `retrieve`
+      - 后续又进入 `web_search`，并带 `missing_reason_defaulted` warning
+      - 当前暴露的是回答内容 / 生成质量问题
+    - `执行 dir 命令看看结果`
+      - 不再失败于 `Planner output was invalid JSON`
+      - Planner 接受缺失 `reason` 的 `use_tool terminal_session` 并自动补 `reason`
+      - 当前新停点为 `agent-approval`
+  - `T010` 原始 blocker 已解除，状态更新为 `DONE`
+  - 当前新 blocker 不再归入 `T010`，后续建议新建 `agent_node_T011-workspace-path-argument-contract`
+  - 追加第十一个节点任务编号 `agent_node_T011`
+  - 明确 `T011` 只处理 workspace-bound read 工具的 path 参数契约，不改前端、PolicyNode 大结构、ToolNode 大结构或 runtime 安全边界
+  - `agent_node_T011` 已完成：
+    - 在 planner prompt 中明确 workspace-relative path 契约
+    - 在 normalize 层对 `read` 域 workspace-bound 工具做单点 path 规范化
+    - `"/workspace"` -> `.`
+    - `"/README.md"` -> `README.md`
+    - `"/docs/README.md"` -> `docs/README.md`
+    - 对规范化后仍逃出 workspace root 的路径直接拒绝
+  - 定向验证结果：
+    - `pnpm --filter @ui-chat-mira/server test -- src/agent/tool-call-normalize.test.ts`
+      - 结果：通过，`24 passed`
+    - `pnpm --filter @ui-chat-mira/server test -- src/agent/graph.test.ts src/agent/tool-call-normalize.test.ts`
+      - 结果：通过，`41 passed`
+  - `2026-07-04` smoke 复测：
+    - 运行前先把 `/mcp/workspace/select` 切到 `D:\workspace\rag-demo`
+    - `看看当前 workspace 有哪些文件`
+      - 不再失败于 planner invalid JSON
+      - 不再卡在 workspace path approval
+      - 已进入 `ToolNode`、写入 `agent-evidence-update-tool`，再经 answer stop rule 进入 `generate/evaluate`
+      - 最终回答基于真实 workspace listing
+    - `打开 README.md 看看内容`
+      - 不再失败于 planner invalid JSON
+      - 不再卡在 workspace path approval
+      - 已进入 `ToolNode`、写入 `agent-evidence-update-tool`，再经 answer stop rule 进入 `generate/evaluate`
+      - 最终回答基于真实 `README.md` 文件内容
+    - `看看 README.md 的内容`
+      - 当前已走 `read_open` 实际工具路径，不再绕到旧的 `retrieve -> web_search`
+      - 已进入 `ToolNode`、写入 `agent-evidence-update-tool`，再经 answer stop rule 进入 `generate/evaluate`
+      - 最终回答基于真实 `README.md` 文件内容
+    - `执行 dir 命令看看结果`
+      - 当前仍停在 approval
+      - approval reason 已变为 `terminal_session requires explicit approval before Agent execution.`
+      - 说明 workspace path approval blocker 已解除，剩余的是既有高风险审批策略
+  - `agent_node_T011` 状态更新为 `DONE`

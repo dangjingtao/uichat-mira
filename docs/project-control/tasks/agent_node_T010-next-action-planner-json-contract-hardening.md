@@ -13,7 +13,7 @@ related:
   - docs/project-control/tasks/agent_node_T009-evidence-summary-answer-stop-rule.md
   - server/src/agent/next-action-planner.ts
   - server/src/agent/next-action-planner.test.ts
-task_state: READY_FOR_REVIEW
+task_state: DONE
 ---
 
 # agent_node_T010 next action planner JSON contract hardening
@@ -27,7 +27,7 @@ task_state: READY_FOR_REVIEW
 1. 让 `nextActionPlannerNode` 能从真实 task model 常见脏输出中稳定提取单一 JSON 决策
 2. 在无法解析时输出可审计的 planner trace 诊断，而不是只有笼统的 invalid JSON
 3. 保持 `Planner -> Normalize -> Policy -> ToolNode` 边界不变
-4. 复跑 T009 前台 smoke，确认当前失败是否仍停在 planner invalid JSON
+4. 复跑 T009 前台 smoke，确认当前失败是否已经离开 planner invalid JSON
 
 ## Allowed Changes
 
@@ -117,15 +117,14 @@ Input:
 
 Observed:
 
-- result: `FAIL`
-- stage: 仍停在 `nextActionPlanner`
-- evidence source: `2026-07-04` 前台黑盒手测，`http://127.0.0.1:5173/#/chat`
+- result: `NO LONGER FAILING AT PLANNER PARSE`
+- stage: 已离开 `nextActionPlanner` invalid JSON
+- evidence source: `2026-07-04` 前台 black-box smoke test，运行时 workspace 已切到 `D:\workspace\rag-demo`
 - notes:
-  - 页面执行路径仍为 `准备上下文 -> 执行计划 -> 候选选择 -> 调用前守卫 -> 执行计划 -> 错误节点`
-  - 未进入 `Normalize`
-  - 未进入 `Policy`
-  - 未进入 `ToolNode`
-  - 错误仍为 `Planner output was invalid JSON; planner must stop instead of pretending an answer is ready.`
+  - Planner 接受缺失 `reason` 的 `use_tool read_list` 输出，并自动补 `reason`
+  - planner trace 记录 `parseWarnings: ["missing_reason_defaulted"]`
+  - 当前新停点为 `agent-approval`
+  - approval reason: `read_list` 请求的 path 落在当前 workspace root 之外
 
 ### Smoke 2: README open
 
@@ -137,8 +136,11 @@ Input:
 
 Observed:
 
-- 本轮未继续执行
-- 原因：Smoke 1 已确认前台仍停在同一 planner 失败阶段；当前没有证据表明后续 3 条用例会进入新阶段
+- result: `NO LONGER FAILING AT PLANNER PARSE`
+- notes:
+  - Planner 接受缺失 `reason` 的 `use_tool read_open` 输出，并自动补 `reason`
+  - planner trace 记录 `parseWarnings: ["missing_reason_defaulted"]`
+  - 当前新停点为 `agent-approval`
 
 ### Smoke 3: README content
 
@@ -150,8 +152,11 @@ Input:
 
 Observed:
 
-- 本轮未继续执行
-- 原因：同上
+- result: `NO LONGER FAILING AT PLANNER PARSE`
+- notes:
+  - Planner 接受缺失 `reason` 的 `retrieve`
+  - 后续又进入 `web_search`，并带 `missing_reason_defaulted` warning
+  - 当前不再是 parser 失败，后续暴露的是回答内容 / 生成质量问题
 
 ### Smoke 4: terminal dir
 
@@ -163,8 +168,11 @@ Input:
 
 Observed:
 
-- 本轮未继续执行
-- 原因：同上
+- result: `NO LONGER FAILING AT PLANNER PARSE`
+- notes:
+  - Planner 接受缺失 `reason` 的 `use_tool terminal_session`，并自动补 `reason`
+  - planner trace 记录 `parseWarnings: ["missing_reason_defaulted"]`
+  - 当前新停点为 `agent-approval`
 
 ## Changed Files
 
@@ -176,9 +184,9 @@ Observed:
 ## Verification
 
 - `pnpm --filter @ui-chat-mira/server test -- src/agent/next-action-planner.test.ts`
-  - 结果：通过，`21 passed`
-- `pnpm --filter @ui-chat-mira/server test -- src/agent/graph.test.ts src/agent/next-action-planner.test.ts src/agent/tool-node.test.ts src/agent/policy.test.ts src/agent/tool-call-normalize.test.ts`
-  - 结果：通过，`70 passed`
+  - 结果：通过，`23 passed`
+- `pnpm --filter @ui-chat-mira/server test -- src/agent/next-action-planner.test.ts src/agent/graph.test.ts`
+  - 结果：通过，`44 passed`
 - `pnpm --filter @ui-chat-mira/server typecheck`
   - 结果：通过
 - `pnpm check`
@@ -190,15 +198,20 @@ Observed:
   - 本轮未执行
   - 原因：本轮只完成打包，不在本回合内启动打包产物做 `/health` 验证
 - 前台 black-box smoke test
-  - 结果：失败
-  - 结论：当前前台仍停在 `nextActionPlanner` invalid JSON，尚未证明本轮代码已在当前 dev 运行态生效，或仍存在未覆盖的真实模型脏输出形态
+  - 结果：已离开 `Planner output was invalid JSON`
+  - 结论：
+    - `read_list / read_open / terminal_session` 三条路径当前新停点为 `agent-approval`
+    - `README` 内容查询路径当前已暴露后续回答内容 / 生成质量问题
+    - `T010` 原始 blocker 已解除
+    - 当前新 blocker 不是 Planner JSON contract，而是 workspace path argument contract / approval path 问题
 
 ## Final Status
 
-- `T010 = READY_FOR_REVIEW`
+- `T010 = DONE`
 - `T009 = READY_FOR_REVIEW`
 
 ## Notes
 
 - `Repeated Tool Guard` 本次未实现，也不是本次正式派发任务
-- 后续如继续派发，建议编号为 `agent_node_T011-repeated-tool-guard`
+- 不要把 workspace path / approval path 问题塞回 `T010`
+- 后续建议新建 `agent_node_T011-workspace-path-argument-contract`

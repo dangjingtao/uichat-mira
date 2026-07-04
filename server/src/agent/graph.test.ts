@@ -498,6 +498,88 @@ test("agentGraph routes planner use_tool through normalize and answer stop rule 
   assert.equal(generateInvokeSpy.mock.calls.length, 1);
 });
 
+test("agentGraph normalizes /README.md before policy and executes read_open", async () => {
+  const readOpen = makeToolDefinition({
+    id: "read_open",
+    domain: "read",
+    inputSchema: {
+      type: "object",
+      required: ["path"],
+      properties: {
+        path: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+  });
+  readOpen.capabilities.workspaceBound = true;
+  vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([readOpen]);
+  vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
+    makeToolIntentResult({
+      query: "打开 README.md 看看内容",
+      topCandidates: [{ toolId: "read_open", domain: "read" }],
+      exposedDefinitions: [readOpen],
+    }),
+  );
+  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
+    selectedToolIds: ["read_open"],
+    decisionSource: "task-model",
+    decisionReason: "A read tool is available for inspection.",
+  });
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"/README.md"},"reason":"Need the file content."}';
+    });
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-read-open-root-relative-1",
+      toolId: "read_open",
+      status: "completed",
+      result: {
+        type: "open",
+        path: "README.md",
+        source: {
+          kind: "text",
+          mimeType: "text/markdown",
+          text: "# README\n\nProject overview",
+          metadata: {},
+        },
+      },
+      startedAt: "2026-07-04T00:00:00.000Z",
+      finishedAt: "2026-07-04T00:00:01.000Z",
+    });
+  const generateInvokeSpy = vi
+    .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
+    .mockResolvedValue("README content answer");
+
+  const result = await agentGraph.run({
+    runId: "run-use-tool-root-relative-open",
+    threadId: "thread-1",
+    userId: 1,
+    goal: {
+      ...baseGoal,
+      text: "打开 README.md 看看内容",
+    },
+    plan: basePlan,
+    messages: [makeMessage("打开 README.md 看看内容")],
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(plannerSpy.mock.calls.length, 1);
+  assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+  assert.deepEqual(executeHarnessInvocationSpy.mock.calls[0]?.[0], {
+    toolId: "read_open",
+    args: {
+      path: "README.md",
+    },
+    userId: 1,
+    threadId: "thread-1",
+    approvedInvocations: undefined,
+  });
+  assert.equal(generateInvokeSpy.mock.calls.length, 1);
+});
+
 test("agentGraph answers after a single read_list execution when the user asked for a workspace listing", async () => {
   const readList = makeToolDefinition({
     id: "read_list",
@@ -574,6 +656,86 @@ test("agentGraph answers after a single read_list execution when the user asked 
     assert.equal(result.evidence.latestSummary.data.canAnswerDirectoryQuestion, true);
     assert.equal(result.evidence.latestSummary.data.entriesPreview.length > 0, true);
   }
+});
+
+test("agentGraph normalizes /workspace before policy and executes read_list", async () => {
+  const readList = makeToolDefinition({
+    id: "read_list",
+    domain: "read",
+    inputSchema: {
+      type: "object",
+      required: ["path"],
+      properties: {
+        path: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+  });
+  readList.capabilities.workspaceBound = true;
+  vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([readList]);
+  vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
+    makeToolIntentResult({
+      query: "看看当前 workspace 有哪些文件",
+      topCandidates: [{ toolId: "read_list", domain: "read" }],
+      exposedDefinitions: [readList],
+    }),
+  );
+  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
+    selectedToolIds: ["read_list"],
+    decisionSource: "task-model",
+    decisionReason: "Directory listing is available.",
+  });
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_list","args":{"path":"/workspace"},"reason":"Need the workspace listing."}';
+    });
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-read-list-root-relative-1",
+      toolId: "read_list",
+      status: "completed",
+      result: {
+        type: "list",
+        path: ".",
+        entries: [
+          { name: "README.md", type: "file" },
+          { name: "server", type: "directory" },
+        ],
+      },
+      startedAt: "2026-07-04T00:00:00.000Z",
+      finishedAt: "2026-07-04T00:00:01.000Z",
+    } as never);
+  const generateInvokeSpy = vi
+    .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
+    .mockResolvedValue("workspace listing answer");
+
+  const result = await agentGraph.run({
+    runId: "run-read-list-root-relative",
+    threadId: "thread-1",
+    userId: 1,
+    goal: {
+      ...baseGoal,
+      text: "看看当前 workspace 有哪些文件",
+    },
+    plan: basePlan,
+    messages: [makeMessage("看看当前 workspace 有哪些文件")],
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(plannerSpy.mock.calls.length, 1);
+  assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+  assert.deepEqual(executeHarnessInvocationSpy.mock.calls[0]?.[0], {
+    toolId: "read_list",
+    args: {
+      path: ".",
+    },
+    userId: 1,
+    threadId: "thread-1",
+    approvedInvocations: undefined,
+  });
+  assert.equal(generateInvokeSpy.mock.calls.length, 1);
 });
 
 test("agentGraph answers after a single web_search execution when search evidence is sufficient", async () => {
