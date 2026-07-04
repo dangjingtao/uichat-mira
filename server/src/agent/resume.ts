@@ -61,6 +61,17 @@ const buildAssistantMetadata = (input: {
   },
 });
 
+const getExistingAssistantMessage = (input: {
+  assistantMessageId?: string;
+  userId: number;
+}) => {
+  if (!input.assistantMessageId) {
+    return null;
+  }
+
+  return threadService.getMessageById(input.assistantMessageId, input.userId);
+};
+
 const toApprovedInvocation = (input: {
   pendingApproval: AgentApprovalRequest;
   pendingToolCall: AgentToolCallRequest;
@@ -156,6 +167,63 @@ const buildAssistantParts = (input: {
   return [...baseParts, ...dedupedDataParts.values()];
 };
 
+export const persistAgentAssistantState = (input: {
+  run: {
+    id: string;
+    traceId: string;
+    threadId: string;
+    userId: number;
+    assistantMessageId?: string;
+    assistantParentId?: string | null;
+  };
+  status: "completed" | "failed" | "blocked" | "waiting_approval";
+  content: string;
+  pendingApproval?: AgentApprovalRequest;
+  blockedReason?: string;
+  terminalReason?: string;
+  errorMessage?: string;
+  errorSourceNodeId?: string;
+  executionNodes?: AssistantExecutionNodeEvent[];
+}) => {
+  if (
+    !input.run.assistantMessageId ||
+    typeof input.run.assistantParentId === "undefined"
+  ) {
+    return;
+  }
+
+  const existingAssistantMessage = getExistingAssistantMessage({
+    assistantMessageId: input.run.assistantMessageId,
+    userId: input.run.userId,
+  });
+  const content =
+    input.content.trim() || existingAssistantMessage?.content?.trim() || "";
+  const parts = buildAssistantParts({
+    content,
+    existingParts: existingAssistantMessage?.parts,
+    executionNodes: input.executionNodes ?? [],
+  });
+
+  persistAssistantMessage({
+    threadId: input.run.threadId,
+    userId: input.run.userId,
+    assistantMessageId: input.run.assistantMessageId,
+    parentId: input.run.assistantParentId ?? null,
+    content,
+    parts,
+    metadata: buildAssistantMetadata({
+      runId: input.run.id,
+      traceId: input.run.traceId,
+      status: input.status,
+      pendingApproval: input.pendingApproval,
+      blockedReason: input.blockedReason,
+      terminalReason: input.terminalReason,
+      errorMessage: input.errorMessage,
+      errorSourceNodeId: input.errorSourceNodeId,
+    }),
+  });
+};
+
 export const resumeApprovedAgentRun = async (runId: string) => {
   const run = getAgentRunById(runId);
   if (!run) {
@@ -178,12 +246,19 @@ export const resumeApprovedAgentRun = async (runId: string) => {
     pendingToolCall,
   });
   if (mismatchReason) {
-    agentRunStore.complete(runId, {
+    const blockedRun = agentRunStore.complete(runId, {
       status: "blocked",
       currentStepId: undefined,
       pendingApproval: undefined,
       pendingToolCall: undefined,
       selectedToolId: undefined,
+      blockedReason: mismatchReason,
+      terminalReason: "approval_resume_mismatch",
+    });
+    persistAgentAssistantState({
+      run: blockedRun,
+      status: "blocked",
+      content: "审批对象与待执行工具不一致，已阻断本次执行，工具没有运行。",
       blockedReason: mismatchReason,
       terminalReason: "approval_resume_mismatch",
     });
@@ -258,37 +333,17 @@ export const resumeApprovedAgentRun = async (runId: string) => {
 
   const nextRun = getAgentRunById(runId);
 
-  if (
-    nextRun?.assistantMessageId &&
-    typeof nextRun.assistantParentId !== "undefined"
-  ) {
-    const existingAssistantMessage = threadService.getMessageById(
-      nextRun.assistantMessageId,
-      nextRun.userId,
-    );
-    const content = output.answer.trim() || existingAssistantMessage?.content?.trim() || "";
-    const parts = buildAssistantParts({
-      content,
-      existingParts: existingAssistantMessage?.parts,
+  if (nextRun) {
+    persistAgentAssistantState({
+      run: nextRun,
+      status: output.status,
+      content: output.answer,
+      pendingApproval: output.pendingApproval,
+      blockedReason: output.blockedReason,
+      terminalReason: output.terminalReason,
+      errorMessage: output.errorMessage,
+      errorSourceNodeId: output.errorSourceNodeId,
       executionNodes: resumedExecutionNodes,
-    });
-    persistAssistantMessage({
-      threadId: nextRun.threadId,
-      userId: nextRun.userId,
-      assistantMessageId: nextRun.assistantMessageId,
-      parentId: nextRun.assistantParentId ?? null,
-      content,
-      parts,
-      metadata: buildAssistantMetadata({
-        runId: nextRun.id,
-        traceId: nextRun.traceId,
-        status: output.status,
-        pendingApproval: output.pendingApproval,
-        blockedReason: output.blockedReason,
-        terminalReason: output.terminalReason,
-        errorMessage: output.errorMessage,
-        errorSourceNodeId: output.errorSourceNodeId,
-      }),
     });
   }
 

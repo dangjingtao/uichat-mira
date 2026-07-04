@@ -7,6 +7,8 @@ import agentRoute from "./routes.js";
 import { agentRunStore } from "./run-store.js";
 import { createAgentGoal, createAgentPlan } from "./nodes.js";
 import * as resumeModule from "./resume.js";
+import * as messagePersistenceModule from "@/routes/proxy-provider/message-persistence.js";
+import { threadService } from "@/services/thread.service.js";
 
 const requireAuthMock = vi.hoisted(() =>
   vi.fn(async (request: { authUser?: unknown }) => {
@@ -186,6 +188,8 @@ describe("agent routes", () => {
     agentRunStore.update(rejectedRun.id, {
       status: "waiting_approval",
       currentStepId: "approval-step",
+      assistantMessageId: "assistant-reject-1",
+      assistantParentId: "user-1",
       pendingApproval: {
         id: "approval-reject",
         runId: rejectedRun.id,
@@ -195,6 +199,20 @@ describe("agent routes", () => {
         createdAt: new Date().toISOString(),
       },
     });
+    const persistAssistantMessageSpy = vi
+      .spyOn(messagePersistenceModule, "persistAssistantMessage")
+      .mockImplementation(() => {});
+    const getMessageByIdSpy = vi
+      .spyOn(threadService, "getMessageById")
+      .mockReturnValue({
+        id: "assistant-reject-1",
+        threadId: "thread-1",
+        role: "assistant",
+        content: "等待审批",
+        parts: [{ type: "text", text: "等待审批" }],
+        metadata: {},
+        createdAt: "2026-06-28T00:00:00.000Z",
+      });
 
     const rejectResponse = await app.inject({
       method: "POST",
@@ -215,6 +233,28 @@ describe("agent routes", () => {
     expect(rejectData.data.pendingToolCall).toBeUndefined();
     expect(rejectData.data.currentStepId).toBeUndefined();
     expect(rejectData.data.terminalReason).toBe("approval_rejected");
+    expect(persistAssistantMessageSpy).toHaveBeenCalledWith({
+      threadId: "thread-1",
+      userId: 1,
+      assistantMessageId: "assistant-reject-1",
+      parentId: "user-1",
+      content: "你已拒绝这次需要审批的工具调用，工具没有执行。",
+      parts: [
+        {
+          type: "text",
+          text: "你已拒绝这次需要审批的工具调用，工具没有执行。",
+        },
+      ],
+      metadata: {
+        agent: {
+          status: "blocked",
+          runId: rejectedRun.id,
+          traceId: expect.any(String),
+          blockedReason: "User rejected the pending approval request.",
+          terminalReason: "approval_rejected",
+        },
+      },
+    });
 
     const cancelledRun = createRun();
     agentRunStore.update(cancelledRun.id, {
@@ -249,8 +289,11 @@ describe("agent routes", () => {
     expect(cancelData.data.pendingToolCall).toBeUndefined();
     expect(cancelData.data.currentStepId).toBeUndefined();
     expect(cancelData.data.terminalReason).toBe("cancelled");
+    expect(persistAssistantMessageSpy).toHaveBeenCalledTimes(1);
 
     await app.close();
+    persistAssistantMessageSpy.mockRestore();
+    getMessageByIdSpy.mockRestore();
   });
 
   test("approve returns resumed run state from resume helper", async () => {

@@ -489,6 +489,24 @@ test("resumeApprovedAgentRun blocks execution when approval toolCallId does not 
   });
 
   const runSpy = vi.spyOn(agentGraph, "run");
+  const persistAssistantMessageSpy = vi
+    .spyOn(messagePersistenceModule, "persistAssistantMessage")
+    .mockImplementation(() => {});
+  const getMessageByIdSpy = vi
+    .spyOn(threadService, "getMessageById")
+    .mockReturnValue({
+      id: "assistant-mismatch-1",
+      threadId: "thread-1",
+      role: "assistant",
+      content: "等待审批",
+      parts: [{ type: "text", text: "等待审批" }],
+      metadata: {},
+      createdAt: "2026-06-28T00:00:00.000Z",
+    });
+  agentRunStore.update(run.id, {
+    assistantMessageId: "assistant-mismatch-1",
+    assistantParentId: "user-1",
+  });
 
   try {
     await assert.rejects(
@@ -507,8 +525,33 @@ test("resumeApprovedAgentRun blocks execution when approval toolCallId does not 
       blockedRun?.blockedReason ?? "",
       /approved toolCallId pending-other does not match frozen pendingToolCall\.id pending-actual/i,
     );
+    assert.equal(persistAssistantMessageSpy.mock.calls.length, 1);
+    assert.deepEqual(persistAssistantMessageSpy.mock.calls[0]?.[0], {
+      threadId: "thread-1",
+      userId: 1,
+      assistantMessageId: "assistant-mismatch-1",
+      parentId: "user-1",
+      content: "审批对象与待执行工具不一致，已阻断本次执行，工具没有运行。",
+      parts: [
+        {
+          type: "text",
+          text: "审批对象与待执行工具不一致，已阻断本次执行，工具没有运行。",
+        },
+      ],
+      metadata: {
+        agent: {
+          status: "blocked",
+          runId: run.id,
+          traceId: blockedRun?.traceId,
+          blockedReason: blockedRun?.blockedReason,
+          terminalReason: "approval_resume_mismatch",
+        },
+      },
+    });
   } finally {
     runSpy.mockRestore();
+    persistAssistantMessageSpy.mockRestore();
+    getMessageByIdSpy.mockRestore();
     agentRunStore.clear();
   }
 });

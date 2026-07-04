@@ -8,6 +8,7 @@ import { notFound } from "@/utils/route-errors.js";
 import type { AgentRun } from "./types.js";
 import { resumeApprovedAgentRun } from "./resume.js";
 import { getAgentRunById } from "./run-read.js";
+import { persistAgentAssistantState } from "./resume.js";
 
 const agentApprovalRequestSchema = {
   type: "object",
@@ -184,6 +185,13 @@ const registerAgentRoutes: FastifyPluginAsync = async (app: FastifyInstance) => 
         pendingApproval: undefined,
         pendingToolCall: undefined,
         selectedToolId: undefined,
+        blockedReason: "User rejected the pending approval request.",
+        terminalReason: "approval_rejected",
+      });
+      persistAgentAssistantState({
+        run: next,
+        status: "blocked",
+        content: "你已拒绝这次需要审批的工具调用，工具没有执行。",
         blockedReason: "User rejected the pending approval request.",
         terminalReason: "approval_rejected",
       });

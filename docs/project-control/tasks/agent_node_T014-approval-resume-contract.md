@@ -19,10 +19,36 @@ related:
   - server/src/agent/routes.ts
   - server/src/agent/types.ts
   - desktop/src/shared/api/thread.ts
-task_state: DONE
+task_state: READY_FOR_REVIEW
 ---
 
 # agent_node_T014 approval resume contract
+
+## T014R Scope
+
+`T014R` 是 `T014` 的补充修复，不重做 resume 对象对齐。
+
+`T014` 已经证明：
+
+- approve 恢复的是原 frozen `pendingToolCall`
+- `toolId + inputHash + toolCallId` 对齐校验成立
+- ToolNode 能真实执行
+- evidence 能写回
+- reject 后不会执行工具
+
+`T014R` 只补 approve / reject 之后的 state finalization：
+
+- 不再残留会误导前台的 `pendingApproval`
+- 不再残留会误导前台的 `pendingToolCall`
+- `currentStepId` 不再停在 approval
+- assistant message metadata 不再继续保留旧的 `waiting_approval`
+
+本任务不处理：
+
+- terminal stdout 乱码
+- final answer 质量
+- 前端审批 UI 大改
+- Provider Gateway / MCP / Agent V2
 
 ## Target
 
@@ -119,6 +145,14 @@ task_state: DONE
    - Agent 保留自己的 frozen hash 用于恢复合同校验
    - 真正调用 Harness 前，把 `approvedInvocations` 改写成 Harness 认得的 `args` 哈希
 9. 因此批准后不再让 Harness 二次误判成未审批，而是直接进入真实工具执行
+10. `resume.ts` 新增 `persistAgentAssistantState`
+   - approve 继续沿用已有 assistant message 回写逻辑
+   - approval mismatch 现在会把 assistant message 明确回写成 `blocked`
+   - 不再让前台继续读到旧的 `waiting_approval`
+11. `/agent/runs/:id/reject` 现在会同步回写 assistant message
+   - 文案明确表达“已拒绝，工具没有执行”
+   - metadata.status = `blocked`
+   - `pendingApproval / pendingToolCall` 不再通过旧 metadata 继续把前台留在等待审批
 
 ## Test Coverage
 
@@ -133,6 +167,8 @@ task_state: DONE
 7. `pendingApproval is not repeated duplicate`
 8. `graph continues after approved execution`
 9. `approvedInvocations` 会在进入 Harness 前转换成 Harness 所需哈希
+10. reject 路由会把 assistant metadata 从 `waiting_approval` 改成明确终态
+11. approval mismatch 会同步回写 assistant metadata，避免前台继续显示等待审批
 
 ## Verification
 
@@ -152,78 +188,48 @@ task_state: DONE
 
 ## Frontend Smoke
 
-本轮按 `docs/chat/agent-frontend-workspace-smoke-method.md` 重新手测：
+本轮只完成了前台前置链路确认，没有把 `P0-4 / P0-5 / P0-6` 全部跑成可交付证据。
+
+已确认：
 
 - 页面：`http://127.0.0.1:5173/#/chat`
 - 后端健康检查：`http://127.0.0.1:8787/health`
 - 线程绑定方式：输入框左侧 `Composer menu -> Workspace -> Add to workspace -> ragDemo (D:\workspace\rag-demo)`
 - 绑定证据：`Agent` 按钮从禁用变为可点击
-- smoke 提问：`执行 dir 命令看看结果`
 
-### Approve Path
+本轮实际尝试：
 
-观察到的真实链路：
+1. 新建真实前台线程
+2. 通过 `Add to workspace` 绑定 `ragDemo`
+3. 确认 `Agent` 按钮从禁用变为可点击
+4. 发送 `执行 dir 命令看看结果`
 
-1. 进入 `pendingApproval`
-2. 前台显示 `等待审批`
-3. 点击 `批准` 后，不再停留在“批准后无法恢复执行”
-4. trace 进入：
-   - `审批策略`
-   - `工具执行`
-   - `证据写回`
-5. `工具执行` 节点显示：`terminal_session 已由 Harness 执行完成`
-6. `证据写回` 节点显示：`工具执行结果已写入 evidence`
+本轮没有拿到可作为验收结论的 approve / reject 终态截图级证据：
 
-这说明 T014 要修的核心阻断已经解除：
+- 真实前台线程进入了 Agent 执行链路
+- 但在本机这次 headless 复测窗口内，没有稳定跑到可点击 approve / reject 的最终状态
+- 因此这轮不能把 `P0-5 / P0-6` 记成通过
 
-- 批准后恢复的是原 frozen `pendingToolCall`
-- `terminal_session` 确实执行了
-- 结果确实进入了 evidence
+这不是把前台 smoke 改写成“后端测试替代前台验证”，而是明确说明：
 
-批准后新暴露的问题是：
-
-- 页面后续失败在 `组织最终回答`
-- 错误文本是 `Model returned empty answer`
-
-这不是 T014 的审批恢复缺陷，而是批准后更后面的回答组织链路问题。
-
-### Reject Path
-
-观察到的真实链路：
-
-1. 前台出现 `等待审批`
-2. 点击 `拒绝`
-3. 页面 toast 显示：`已拒绝本次 Agent 执行。`
-4. trace 没有进入 `工具执行`
-
-当前前台仍有一个展示层候选问题：
-
-- toast 已提示拒绝成功，但主区域还残留 `等待审批` 展示
-
-这说明前端状态同步还有残留问题，但它不改变本次 T014 的后端合同结论：
-
-- 拒绝后没有执行工具
+- 后端 state finalization 修复已落地
+- 前台真实终态复测仍需补齐
 
 ## Conclusion
 
-`T014 = DONE`
+当前结论是：`T014` 的 resume 对齐仍成立，`T014R` 的后端修复已完成，但任务状态先保持 `READY_FOR_REVIEW`。
 
-理由是：
+理由：
 
-1. 需要审批的工具在未批准前不会执行
-2. `pendingApproval` 绑定了原 frozen `pendingToolCall`
-3. 批准恢复会校验 `toolId + inputHash + toolCallId`
-4. 批准后已经恢复原调用并进入真实 `ToolNode`
-5. `terminal_session` 真实执行完成
-6. 执行结果已写入 evidence
-7. 拒绝后没有执行工具
-8. 审批恢复不再被 Harness 二次误判成未批准
-9. 定向后端测试通过
-10. 前台 smoke 已证明“不再卡在等待审批后无法恢复执行”
+1. approve / reject 后的 run 终态清理逻辑已经补齐
+2. approval mismatch 与 reject 都会同步回写 assistant metadata，避免前台继续拿旧的 `waiting_approval`
+3. 定向后端测试与 typecheck 已通过
+4. 本轮前台只完成了 workspace 绑定与 Agent 可用性确认
+5. `P0-4 / P0-5 / P0-6` 的真实 approve / reject 终态 smoke 证据本轮仍未补齐
 
 ## Review Outcome
 
-`2026-07-04` 局部代码评审结论：`PASS`
+`2026-07-05` 当前代码评审结论：`READY_FOR_REVIEW`
 
 本次评审只收口 `pendingApproval -> 用户审批 -> 恢复原 frozen pendingToolCall -> ToolNode -> evidence -> 回到 Planner / Generate` 这一条链路。
 
@@ -250,7 +256,7 @@ task_state: DONE
 
 ## Follow-up Candidates
 
-下面两项是本轮 smoke 新看到的后续候选，不混入 `T014` 结论：
+下面两项仍单独跟踪，不混入 `T014R` 结论：
 
 1. 批准后 `generate` 阶段可能返回空回答，页面显示 `Model returned empty answer`
-2. 拒绝后前台主区域还残留 `等待审批` 展示，说明前端 run 状态刷新还有缺口
+2. 本轮真实前台 approve / reject 终态 smoke 证据仍待补齐
