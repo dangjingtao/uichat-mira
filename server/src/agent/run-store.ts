@@ -162,7 +162,7 @@ export class InMemoryAgentRunStore implements AgentRunStore {
       >;
     },
   ): AgentRun {
-    const current = this.runs.get(runId);
+    const current = getStoredRun(this.runs, runId);
     if (!current) {
       throw new Error(`AgentRun not found: ${runId}`);
     }

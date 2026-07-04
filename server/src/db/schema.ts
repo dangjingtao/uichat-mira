@@ -802,6 +802,8 @@ export const agentRuns = sqliteTable(
     observationsJson: text("observations_json").notNull().default("[]"),
     traceId: text("trace_id").notNull(),
     currentStepId: text("current_step_id"),
+    blockedReason: text("blocked_reason"),
+    terminalReason: text("terminal_reason"),
     pendingApprovalJson: text("pending_approval_json"),
     approvedInvocationsJson: text("approved_invocations_json").notNull().default("[]"),
     contextBudgetJson: text("context_budget_json"),

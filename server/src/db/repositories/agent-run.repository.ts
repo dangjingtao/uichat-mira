@@ -29,6 +29,11 @@ const parseJson = <T>(value: string | null | undefined, fallback: T): T => {
 
 const serializeJson = (value: unknown) => JSON.stringify(value);
 
+const hasPatchField = <K extends keyof Partial<Omit<AgentRun, "id" | "createdAt">>>(
+  patch: Partial<Omit<AgentRun, "id" | "createdAt">>,
+  key: K,
+) => Object.prototype.hasOwnProperty.call(patch, key);
+
 const rowToRun = (row: AgentRunRow): AgentRun => ({
   id: row.id,
   threadId: row.threadId,
@@ -50,6 +55,8 @@ const rowToRun = (row: AgentRunRow): AgentRun => ({
   observations: parseJson<AgentObservation[]>(row.observationsJson, []),
   traceId: row.traceId,
   currentStepId: row.currentStepId ?? undefined,
+  blockedReason: row.blockedReason ?? undefined,
+  terminalReason: row.terminalReason ?? undefined,
   pendingApproval: parseJson<AgentApprovalRequest | undefined>(
     row.pendingApprovalJson,
     undefined,
@@ -74,65 +81,70 @@ const toPatch = (
 ): Record<string, unknown> => {
   const next: Record<string, unknown> = {};
 
-  if (patch.threadId !== undefined) next.threadId = patch.threadId;
-  if (patch.userId !== undefined) next.userId = patch.userId;
-  if (patch.goal !== undefined) next.goalJson = serializeJson(patch.goal);
-  if (patch.plan !== undefined) next.planJson = serializeJson(patch.plan);
-  if (patch.status !== undefined) next.status = patch.status;
-  if (patch.observations !== undefined) next.observationsJson = serializeJson(patch.observations);
-  if (patch.traceId !== undefined) next.traceId = patch.traceId;
-  if (patch.currentStepId !== undefined) next.currentStepId = patch.currentStepId;
-  if (patch.pendingApproval !== undefined) {
-    next.pendingApprovalJson =
-      patch.pendingApproval === undefined
-        ? null
-        : patch.pendingApproval === null
-          ? null
-          : serializeJson(patch.pendingApproval);
+  if (hasPatchField(patch, "threadId") && patch.threadId !== undefined) {
+    next.threadId = patch.threadId;
   }
-  if (patch.approvedInvocations !== undefined) {
+  if (hasPatchField(patch, "userId") && patch.userId !== undefined) {
+    next.userId = patch.userId;
+  }
+  if (hasPatchField(patch, "goal") && patch.goal !== undefined) {
+    next.goalJson = serializeJson(patch.goal);
+  }
+  if (hasPatchField(patch, "plan") && patch.plan !== undefined) {
+    next.planJson = serializeJson(patch.plan);
+  }
+  if (hasPatchField(patch, "status") && patch.status !== undefined) {
+    next.status = patch.status;
+  }
+  if (hasPatchField(patch, "observations") && patch.observations !== undefined) {
+    next.observationsJson = serializeJson(patch.observations);
+  }
+  if (hasPatchField(patch, "traceId") && patch.traceId !== undefined) {
+    next.traceId = patch.traceId;
+  }
+  if (hasPatchField(patch, "currentStepId")) {
+    next.currentStepId = patch.currentStepId ?? null;
+  }
+  if (hasPatchField(patch, "blockedReason")) {
+    next.blockedReason = patch.blockedReason ?? null;
+  }
+  if (hasPatchField(patch, "terminalReason")) {
+    next.terminalReason = patch.terminalReason ?? null;
+  }
+  if (hasPatchField(patch, "pendingApproval")) {
+    next.pendingApprovalJson =
+      patch.pendingApproval == null ? null : serializeJson(patch.pendingApproval);
+  }
+  if (
+    hasPatchField(patch, "approvedInvocations") &&
+    patch.approvedInvocations !== undefined
+  ) {
     next.approvedInvocationsJson = serializeJson(patch.approvedInvocations);
   }
-  if (patch.contextBudget !== undefined) {
+  if (hasPatchField(patch, "contextBudget")) {
     next.contextBudgetJson =
-      patch.contextBudget === undefined
-        ? null
-        : patch.contextBudget === null
-          ? null
-          : serializeJson(patch.contextBudget);
+      patch.contextBudget == null ? null : serializeJson(patch.contextBudget);
   }
-  if (patch.selectedToolId !== undefined) {
-    next.selectedToolId = patch.selectedToolId;
+  if (hasPatchField(patch, "selectedToolId")) {
+    next.selectedToolId = patch.selectedToolId ?? null;
   }
-  if (patch.pendingToolCall !== undefined) {
+  if (hasPatchField(patch, "pendingToolCall")) {
     next.pendingToolCallJson =
-      patch.pendingToolCall === undefined
-        ? null
-        : patch.pendingToolCall === null
-          ? null
-          : serializeJson(patch.pendingToolCall);
+      patch.pendingToolCall == null ? null : serializeJson(patch.pendingToolCall);
   }
-  if (patch.lastToolExecution !== undefined) {
+  if (hasPatchField(patch, "lastToolExecution")) {
     next.lastToolExecutionJson =
-      patch.lastToolExecution === undefined
-        ? null
-        : patch.lastToolExecution === null
-          ? null
-          : serializeJson(patch.lastToolExecution);
+      patch.lastToolExecution == null ? null : serializeJson(patch.lastToolExecution);
   }
-  if (patch.assistantMessageId !== undefined) {
-    next.assistantMessageId = patch.assistantMessageId;
+  if (hasPatchField(patch, "assistantMessageId")) {
+    next.assistantMessageId = patch.assistantMessageId ?? null;
   }
-  if (patch.assistantParentId !== undefined) {
-    next.assistantParentId = patch.assistantParentId;
+  if (hasPatchField(patch, "assistantParentId")) {
+    next.assistantParentId = patch.assistantParentId ?? null;
   }
-  if (patch.runtimeInput !== undefined) {
+  if (hasPatchField(patch, "runtimeInput")) {
     next.runtimeInputJson =
-      patch.runtimeInput === undefined
-        ? null
-        : patch.runtimeInput === null
-          ? null
-          : serializeJson(patch.runtimeInput);
+      patch.runtimeInput == null ? null : serializeJson(patch.runtimeInput);
   }
 
   return next;
@@ -151,6 +163,8 @@ const createPersistedRun = (run: AgentRun) => {
       observationsJson: serializeJson(run.observations),
       traceId: run.traceId,
       currentStepId: null,
+      blockedReason: null,
+      terminalReason: null,
       pendingApprovalJson: null,
       approvedInvocationsJson: serializeJson([]),
       contextBudgetJson: null,

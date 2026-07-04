@@ -68,6 +68,8 @@ const createAgentRunTables = () => {
       observations_json TEXT NOT NULL DEFAULT '[]',
       trace_id TEXT NOT NULL,
       current_step_id TEXT,
+      blocked_reason TEXT,
+      terminal_reason TEXT,
       pending_approval_json TEXT,
       approved_invocations_json TEXT NOT NULL DEFAULT '[]',
       context_budget_json TEXT,
@@ -391,6 +393,20 @@ const ensureAgentRunMessageLinkColumns = () => {
 
 const ensureAgentRunExecutionStateColumns = () => {
   const sqlite = getSqlite();
+
+  if (!hasSqliteColumn(sqlite, "agent_runs", "blocked_reason")) {
+    sqlite.exec(`
+      ALTER TABLE agent_runs
+      ADD COLUMN blocked_reason TEXT;
+    `);
+  }
+
+  if (!hasSqliteColumn(sqlite, "agent_runs", "terminal_reason")) {
+    sqlite.exec(`
+      ALTER TABLE agent_runs
+      ADD COLUMN terminal_reason TEXT;
+    `);
+  }
 
   if (!hasSqliteColumn(sqlite, "agent_runs", "approved_invocations_json")) {
     sqlite.exec(`
