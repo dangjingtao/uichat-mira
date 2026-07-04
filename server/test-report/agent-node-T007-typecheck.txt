@@ -1,8 +1,0 @@
-startedAt=2026-07-04T02:34:18.3796986+08:00
-finishedAt=2026-07-04T02:34:22.1576552+08:00
-durationMs=3778
-
-
-> @ui-chat-mira/server@0.7.1 typecheck D:\workspace\rag-demo\server
-> tsc --noEmit -p tsconfig.json
-

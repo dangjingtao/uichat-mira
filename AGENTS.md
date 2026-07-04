@@ -40,6 +40,8 @@ If other docs, comments, or legacy files still mention `UI Chat RAG Tester`, tre
 - Never silently repair a bug without first communicating its severity, layer, and expected impact. This includes “small” patch-style fixes such as unapproved workarounds, compatibility shims, fallback branches, or local patches.
 - When debugging a concrete defect, prefer a minimal reproducible check at the failing layer first, then state the cause. Do not keep asking the project owner to retest while the failure has not been pinned to a verified code path.
 - If a bug has already been solved before and a new fix attempt is stuck after multiple rounds, stop re-deriving it from scratch and review the historical branches or commits for the prior solution path.
+- Do not add `hardcoded local path`, temporary fallback, mock default, or silent fallback to the main flow just to make manual verification pass.
+- If temporary verification logic is necessary, keep it only in test files or behind an explicit `DEBUG` configuration switch. Do not let that logic enter production code paths by default.
 - Unless there is already an explicitly confirmed business requirement for compatibility, do not add fallback logic in backend code. If compatibility behavior, downgrade paths, or silent兜底 seem necessary, stop and align on the design with the project owner first.
 - If fallback or compatibility logic is explicitly approved and must remain, add a succinct comment explaining why it exists, which concrete failure mode it protects, and when it should be removed.
 - If you find legacy code that is no longer applicable and does not affect current behavior, remove it during development instead of keeping dead paths around.

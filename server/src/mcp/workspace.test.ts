@@ -4,7 +4,9 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   clearWorkspaceSelection,
+  getWorkspaceRoot,
   getWorkspaceSelection,
+  runWithWorkspaceRootOverride,
   resolveWorkspacePath,
   resolveWorkspaceWritePath,
   selectWorkspaceRoot,
@@ -24,9 +26,23 @@ describe("workspace selection", () => {
     fs.rmSync(outsideRoot, { recursive: true, force: true });
   });
 
-  it("returns the development fallback workspace root when no workspace root is configured", () => {
+  it("returns unset selection when no workspace root is configured", () => {
     expect(getWorkspaceSelection()).toMatchObject({
-      rootPath: "D:\\testData",
+      rootPath: null,
+      source: "unset",
+    });
+  });
+
+  it("throws when no workspace root is selected or configured", () => {
+    expect(() => getWorkspaceRoot()).toThrow("workspace root is not selected");
+  });
+
+  it("uses configured workspace root when UI_CHAT_WORKSPACE_ROOT is explicitly set", () => {
+    fs.mkdirSync(tempRoot, { recursive: true });
+    process.env.UI_CHAT_WORKSPACE_ROOT = tempRoot;
+
+    expect(getWorkspaceSelection()).toMatchObject({
+      rootPath: path.resolve(tempRoot),
       source: "configured",
     });
   });
@@ -39,6 +55,45 @@ describe("workspace selection", () => {
     expect(selection).toMatchObject({
       rootPath: tempRoot,
       source: "selected",
+    });
+  });
+
+  it("clearWorkspaceSelection returns to unset when no configured workspace root exists", () => {
+    fs.mkdirSync(tempRoot, { recursive: true });
+    selectWorkspaceRoot(tempRoot);
+
+    expect(clearWorkspaceSelection()).toMatchObject({
+      rootPath: null,
+      source: "unset",
+    });
+  });
+
+  it("clearWorkspaceSelection returns to configured when UI_CHAT_WORKSPACE_ROOT exists", () => {
+    fs.mkdirSync(tempRoot, { recursive: true });
+    fs.mkdirSync(outsideRoot, { recursive: true });
+    process.env.UI_CHAT_WORKSPACE_ROOT = tempRoot;
+    selectWorkspaceRoot(outsideRoot);
+
+    expect(clearWorkspaceSelection()).toMatchObject({
+      rootPath: path.resolve(tempRoot),
+      source: "configured",
+    });
+  });
+
+  it("uses request-scoped workspace root override during a single invocation", async () => {
+    fs.mkdirSync(tempRoot, { recursive: true });
+
+    await runWithWorkspaceRootOverride(tempRoot, async () => {
+      expect(getWorkspaceSelection()).toMatchObject({
+        rootPath: path.resolve(tempRoot),
+        source: "selected",
+      });
+      expect(getWorkspaceRoot()).toBe(path.resolve(tempRoot));
+    });
+
+    expect(getWorkspaceSelection()).toMatchObject({
+      rootPath: null,
+      source: "unset",
     });
   });
 

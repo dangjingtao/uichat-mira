@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { test, vi } from "vitest";
 import * as harnessInvocations from "@/mcp/harness/invocations.js";
+import { getWorkspaceRoot } from "@/mcp/workspace.js";
 import { toolNode } from "./tool-node.js";
 import type { AgentNodeState } from "./node-runtime.js";
 
@@ -121,6 +125,61 @@ test("toolNode passes workspaceRoot through to the invocation environment", asyn
     );
   } finally {
     executeHarnessInvocationSpy.mockRestore();
+  }
+});
+
+test("toolNode applies workspaceRoot as the active workspace during invocation execution", async () => {
+  const workspaceRoot = path.join(
+    os.tmpdir(),
+    `rag-demo-tool-node-workspace-${process.pid}-${Date.now()}`,
+  );
+  fs.mkdirSync(workspaceRoot, { recursive: true });
+
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockImplementation(async () => ({
+      id: "invocation-workspace-override-1",
+      toolId: "read_list",
+      status: "completed",
+      result: { activeWorkspaceRoot: getWorkspaceRoot() },
+      startedAt: "2026-07-04T00:00:00.000Z",
+      finishedAt: "2026-07-04T00:00:01.000Z",
+    }));
+
+  try {
+    const result = await toolNode(
+      createBaseState({
+        workspaceRoot,
+        policyDecision: {
+          type: "allow",
+          toolId: "read_list",
+          inputHash: "hash-read-list-override",
+          reason: "Allowed in test.",
+        },
+        pendingToolCall: {
+          id: "pending-workspace-override-1",
+          toolId: "read_list",
+          args: { path: "." },
+          inputHash: "hash-read-list-override",
+          source: "planner",
+          status: "frozen",
+          createdAt: "2026-07-04T00:00:00.000Z",
+        },
+      }),
+    );
+
+    assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+    assert.equal(
+      result.lastToolExecution?.result &&
+        typeof result.lastToolExecution.result === "object" &&
+        "activeWorkspaceRoot" in result.lastToolExecution.result
+        ? result.lastToolExecution.result.activeWorkspaceRoot
+        : null,
+      workspaceRoot,
+    );
+  } finally {
+    executeHarnessInvocationSpy.mockRestore();
+    fs.rmSync(workspaceRoot, { recursive: true, force: true });
   }
 });
 

@@ -11,6 +11,18 @@ const STARTUP_TIMEOUT_MS = 60000;
 const childProcesses = [];
 let isShuttingDown = false;
 
+function buildBackendEnv(baseEnv = process.env) {
+  const explicitWorkspaceRoot = baseEnv.UI_CHAT_WORKSPACE_ROOT?.trim();
+
+  return {
+    ...baseEnv,
+    UI_CHAT_ALLOW_BACKEND_REUSE: "1",
+    ...(explicitWorkspaceRoot
+      ? { UI_CHAT_WORKSPACE_ROOT: explicitWorkspaceRoot }
+      : {}),
+  };
+}
+
 function loadRuntimeConfig() {
   const candidates = [
     path.join(__dirname, "runtime.config.cjs"),
@@ -213,9 +225,6 @@ async function main() {
   const backendHost = runtimeConfig.backend.host;
   const backendPort = runtimeConfig.backend.port;
   const backendHealthUrl = `http://${backendHost}:${backendPort}/health`;
-  const temporaryWorkspaceRoot =
-    process.env.UI_CHAT_WORKSPACE_ROOT?.trim() || "D:\\testData";
-  fs.mkdirSync(temporaryWorkspaceRoot, { recursive: true });
 
   const workspaceRoot = path.resolve(__dirname, "..");
   const serverDir = path.join(workspaceRoot, "server");
@@ -243,10 +252,7 @@ async function main() {
   } else {
     console.log("Starting backend dev server...");
     backendReady = spawnManagedProcess("server", serverDir, "pnpm dev", {
-      env: {
-        UI_CHAT_ALLOW_BACKEND_REUSE: "1",
-        UI_CHAT_WORKSPACE_ROOT: temporaryWorkspaceRoot,
-      },
+      env: buildBackendEnv(process.env),
       readyWhen: (_text, combined) =>
         combined.includes(`Server running on http://${backendHost}:${backendPort}`),
     }).ready;
@@ -306,10 +312,16 @@ async function main() {
   });
 }
 
-process.on("SIGINT", () => shutdown(0));
-process.on("SIGTERM", () => shutdown(0));
+if (require.main === module) {
+  process.on("SIGINT", () => shutdown(0));
+  process.on("SIGTERM", () => shutdown(0));
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
-  shutdown(1);
-});
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    shutdown(1);
+  });
+}
+
+module.exports = {
+  buildBackendEnv,
+};

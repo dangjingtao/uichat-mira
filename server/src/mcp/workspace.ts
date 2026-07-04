@@ -1,21 +1,24 @@
 import path from "node:path";
 import fs from "node:fs";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { mcpBadRequest, mcpInternalError } from "./core/errors.js";
 
 let selectedWorkspaceRoot: string | null = null;
-const temporaryDefaultWorkspaceRoot = "D:\\testData";
+const workspaceRootOverrideStorage = new AsyncLocalStorage<string | null>();
+
+const resolveWorkspaceRootOverride = () => {
+  const override = workspaceRootOverrideStorage.getStore()?.trim();
+  if (override) {
+    return path.resolve(override);
+  }
+
+  return null;
+};
 
 const resolveConfiguredWorkspaceRoot = () => {
   const configured = process.env.UI_CHAT_WORKSPACE_ROOT?.trim();
   if (configured) {
     return path.resolve(configured);
-  }
-
-  if (process.env.NODE_ENV !== "production") {
-    // Temporary verification fallback: keep local validation unblocked when the
-    // app is launched without an explicit workspace selection. Remove once the
-    // workspace picker flow is wired into the normal startup path.
-    return path.resolve(temporaryDefaultWorkspaceRoot);
   }
 
   return null;
@@ -35,7 +38,10 @@ const assertWorkspaceDirectory = (targetPath: string) => {
 };
 
 export const getWorkspaceRoot = () => {
-  const currentRoot = selectedWorkspaceRoot ?? resolveConfiguredWorkspaceRoot();
+  const currentRoot =
+    resolveWorkspaceRootOverride() ??
+    selectedWorkspaceRoot ??
+    resolveConfiguredWorkspaceRoot();
   if (!currentRoot) {
     throw mcpBadRequest("workspace root is not selected");
   }
@@ -46,12 +52,29 @@ export const getWorkspaceRoot = () => {
 
 export const getWorkspaceSelection = () => {
   const configuredRoot = resolveConfiguredWorkspaceRoot();
-  const activeRoot = selectedWorkspaceRoot ?? configuredRoot;
+  const overrideRoot = resolveWorkspaceRootOverride();
+  const activeRoot = overrideRoot ?? selectedWorkspaceRoot ?? configuredRoot;
 
   return {
     rootPath: activeRoot,
-    source: selectedWorkspaceRoot ? "selected" : configuredRoot ? "configured" : "unset",
+    source: overrideRoot || selectedWorkspaceRoot
+      ? "selected"
+      : configuredRoot
+        ? "configured"
+        : "unset",
   } as const;
+};
+
+export const runWithWorkspaceRootOverride = async <T>(
+  rootPath: string | null | undefined,
+  run: () => Promise<T>,
+) => {
+  const normalizedRoot =
+    typeof rootPath === "string" && rootPath.trim()
+      ? path.resolve(rootPath.trim())
+      : null;
+
+  return await workspaceRootOverrideStorage.run(normalizedRoot, run);
 };
 
 export const selectWorkspaceRoot = (inputPath: unknown) => {
@@ -95,7 +118,10 @@ const getWorkspaceRealRoot = (workspaceRoot: string) => {
   }
 };
 
-const assertPathInsideWorkspaceRoot = (workspaceRoot: string, targetPath: string) => {
+const assertPathInsideWorkspaceRoot = (
+  workspaceRoot: string,
+  targetPath: string,
+) => {
   const relative = path.relative(workspaceRoot, targetPath);
   if (relative.startsWith("..") || path.isAbsolute(relative)) {
     throw mcpBadRequest("path must stay inside workspace root");
@@ -141,12 +167,16 @@ export const resolveWorkspaceDirectoryPath = (inputPath: unknown) => {
   const resolved = resolveWorkspacePath(inputPath);
 
   if (!fs.existsSync(resolved)) {
-    throw mcpBadRequest(`cwd must be an existing workspace directory: ${String(inputPath ?? ".")}`);
+    throw mcpBadRequest(
+      `cwd must be an existing workspace directory: ${String(inputPath ?? ".")}`,
+    );
   }
 
   const stat = fs.statSync(resolved);
   if (!stat.isDirectory()) {
-    throw mcpBadRequest(`cwd must be an existing workspace directory: ${String(inputPath ?? ".")}`);
+    throw mcpBadRequest(
+      `cwd must be an existing workspace directory: ${String(inputPath ?? ".")}`,
+    );
   }
 
   const workspaceRealRoot = getWorkspaceRealRoot(workspaceRoot);
@@ -166,10 +196,15 @@ export const ensureParentDir = (targetPath: string) => {
   fs.mkdirSync(parentDir, { recursive: true });
 };
 
-export const readTextFileSafe = (targetPath: string, encoding: BufferEncoding = "utf-8") => {
+export const readTextFileSafe = (
+  targetPath: string,
+  encoding: BufferEncoding = "utf-8",
+) => {
   try {
     return fs.readFileSync(targetPath, encoding);
   } catch (error) {
-    throw mcpInternalError(`Failed to read file: ${targetPath}`, { cause: error });
+    throw mcpInternalError(`Failed to read file: ${targetPath}`, {
+      cause: error,
+    });
   }
 };

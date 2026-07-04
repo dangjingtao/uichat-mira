@@ -1,5 +1,6 @@
 import { executeHarnessInvocation } from "@/mcp/harness/invocations.js";
 import { createHarnessEnvironmentSnapshot } from "@/mcp/harness/environment.js";
+import { runWithWorkspaceRootOverride } from "@/mcp/workspace.js";
 import {
   emitStepNode,
   getIterativeNodeId,
@@ -262,14 +263,18 @@ export const toolNode = async (
       })
     : undefined;
 
-  const invocation = await executeHarnessInvocation({
-    toolId: pendingToolCall.toolId,
-    args: pendingToolCall.args,
-    userId: state.userId,
-    threadId: state.threadId,
-    ...(invocationEnvironment ? { environment: invocationEnvironment } : {}),
-    approvedInvocations: state.approvedInvocations,
-  });
+  const invocation = await runWithWorkspaceRootOverride(
+    state.workspaceRoot,
+    async () =>
+      await executeHarnessInvocation({
+        toolId: pendingToolCall.toolId,
+        args: pendingToolCall.args,
+        userId: state.userId,
+        threadId: state.threadId,
+        ...(invocationEnvironment ? { environment: invocationEnvironment } : {}),
+        approvedInvocations: state.approvedInvocations,
+      }),
+  );
 
   const startedAt = invocation.startedAt ?? pendingToolCall.createdAt;
   const finishedAt = nowIso();

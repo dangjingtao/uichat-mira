@@ -114,20 +114,14 @@ T011 的安全边界已补测，当前定向测试覆盖至少包含：
 - `pnpm check`
   - 结果：通过
 
-## Smoke Test
+## Runtime Pollution Notice
 
-- 前台已补真实绑定 workspace 的 smoke 证据
-- 测试入口：内置浏览器 `http://127.0.0.1:5173/#/chat`
-- 线程绑定方式：输入框左侧 `+ -> Workspace -> Add to workspace`
-- 绑定目标：`PW Test -> D:\testData`
-- 触发方式：在已绑定线程中点击 `重新生成`
-- 输入问题：`看看当前 workspace 有哪些文件`
-- 观察结果：
-  - Agent trace 已继续进入 `工具执行 -> 证据写回 -> 组织最终回答 -> 检查结果`
-  - `read_list` 未卡在 workspace path approval
-  - 最终回答明确引用当前 workspace 路径 `D:\testData`
-  - 最终列出的目录和文件来自 `D:\testData`，不再误落到 `D:\workspace\rag-demo`
-- 这轮 smoke 证明线程配置里的 workspace path 已被 Agent 运行时真实消费，而不是只停留在前台绑定状态
+- 之前基于 `D:\testData` 的前台 smoke 证据作废
+- 作废原因不是 Agent Graph 主链路错误，而是运行态 workspace root 被默认值污染：
+  - `server/src/mcp/workspace.ts` 曾存在 fallback 到 `D:\testData`
+  - `electron/dev-launcher.cjs` 曾默认注入 `UI_CHAT_WORKSPACE_ROOT=D:\testData`
+- 在清理这两个污染源之前，`read_open` / `read_list` 命中 `D:\testData` 不能证明真实链路
+- 当前这两个污染源已经删除；下面列出的 smoke 证据全部来自非默认、非 fallback workspace
 
 ## Changed Files
 
@@ -135,6 +129,50 @@ T011 的安全边界已补测，当前定向测试覆盖至少包含：
 - `server/src/agent/tool-call-normalize.test.ts`
 - `docs/project-control/tasks/agent_node_T011-workspace-path-argument-contract.md`
 - `docs/project-control/agent-nodes-workboard.md`
+
+## Frontend Smoke
+
+### Smoke 1: bound workspace `D:\CODEX_TEST_FOLDER`
+
+- workspace:
+  - `CODEX TEST FOLDER -> D:\CODEX_TEST_FOLDER`
+- thread:
+  - `08e02db0cc87952b5a54d53e5af06ac2`
+- request 1:
+  - `看看当前 workspace 有哪些文件`
+- observed:
+  - 前台 trace 出现 `read_list 已由 Harness 执行完成`
+  - 前台 trace 出现 `工具执行结果已写入 evidence`
+  - 最终回答列出真实文件 `ONLY_CODEX_TEST_FOLDER.txt` 与 `README.md`
+  - 没有落回 `D:\testData`
+- request 2:
+  - `打开 README.md 看看内容`
+- observed:
+  - 前台 trace 出现 `已冻结 read_open 调用参数`
+  - 前台 trace 出现 `read_open 已由 Harness 执行完成`
+  - 前台 trace 出现 `工具执行结果已写入 evidence`
+  - 最终回答直接引用 `D:\CODEX_TEST_FOLDER\README.md` 的真实内容：
+    - `CODEX TEST FOLDER README`
+    - `This file is for frontend workspace smoke.`
+    - `Marker: CODEX_TEST_FOLDER_README_20260704`
+  - 本轮只出现一次 `read_open`
+  - Planner 没有再输出 `/README.md` 或 `/docs/README.md`
+
+### Smoke 2: bound workspace switch `D:\CODEX_TEST_FOLDER_ALT`
+
+- workspace:
+  - `CODEX TEST FOLDER ALT -> D:\CODEX_TEST_FOLDER_ALT`
+- thread:
+  - `a1f97cab6404e7837c032d7f305bc187`
+- request:
+  - `看看当前 workspace 有哪些文件`
+- observed:
+  - `/proxy/chat/default` 实际运行在绑定线程上
+  - trace 中 `selectedToolId = read_list`
+  - `latestEvidenceSummary.data.kind = read_list`
+  - `answerStopRuleTriggered = true`
+  - 最终回答只列出 `ONLY_ALT_WORKSPACE.txt`
+  - 最终回答不包含 `README.md`、`ONLY_CODEX_TEST_FOLDER.txt` 或 `D:\testData`
 
 ## Final Status
 
@@ -146,4 +184,4 @@ T011 的安全边界已补测，当前定向测试覆盖至少包含：
 - root-relative path normalizer 不再无脑处理所有 `/xxx`
 - `/README.md`、`/docs/README.md` 也不再在 normalize 阶段被静默洗成 workspace-relative path
 - 本轮没有引入 runtime fallback，也没有放松 workspace root 边界
-- 本轮补充的前台 smoke 同时确认：绑定线程的 workspace path 已从线程配置正确透传到 Agent 执行链路
+- T011 的安全边界已补测

@@ -19,7 +19,7 @@ related:
   - server/src/agent/tool-node.ts
   - server/src/agent/next-action-planner.ts
   - server/src/agent/tool-call-normalize.ts
-task_state: READY_FOR_REVIEW
+task_state: DONE
 ---
 
 # agent_node_T009 evidence summary and answer stop rule
@@ -482,9 +482,18 @@ Expected:
 
 Observed:
 
-- result: `FAIL`
-- evidence source: frontend execution nodes / trace event
-- notes: `2026-07-04` 在 `http://127.0.0.1:5173/#/chat` 前台手测；线程已绑定 `T009 Smoke Workspace -> D:\workspace\rag-demo` 并开启 Agent，但在进入工具执行前即显示 `Planner output was invalid JSON; planner must stop instead of pretending an answer is ready.`。前台步骤停在 `5 / 6`，显示 `准备上下文 -> 执行计划 -> 候选选择 -> 调用前守卫 -> 执行计划 -> 错误节点`，未出现 `read_list` 执行节点，也没有最终回答。
+- result: `PASS`
+- evidence source: real bound workspace frontend thread + persisted agent run
+- notes:
+  - 线程 `08e02db0cc87952b5a54d53e5af06ac2` 绑定 `CODEX TEST FOLDER -> D:\CODEX_TEST_FOLDER`
+  - 前台 trace 出现 `read_list 已由 Harness 执行完成`
+  - 前台 trace 出现 `工具执行结果已写入 evidence`
+  - 最终回答列出真实文件 `ONLY_CODEX_TEST_FOLDER.txt`、`README.md`
+  - 额外切换 smoke：线程 `a1f97cab6404e7837c032d7f305bc187` 绑定 `CODEX TEST FOLDER ALT -> D:\CODEX_TEST_FOLDER_ALT`
+  - `agent run d32359a2-a66e-44ee-a33f-2284ee35d07d` 记录 `selectedToolId = read_list`
+  - `latestEvidenceSummary.data.kind = read_list`
+  - `answerStopRuleTriggered = true`
+  - 最终回答只列出 `ONLY_ALT_WORKSPACE.txt`
 
 ### Smoke 2: read_open file content
 
@@ -502,9 +511,19 @@ Expected:
 
 Observed:
 
-- result: `FAIL`
-- evidence source: frontend execution nodes / trace event
-- notes: 与 Smoke 1 相同，前台在工具执行前失败于 `Planner output was invalid JSON`；未出现 `read_open` 执行节点，没有最终回答。
+- result: `PASS`
+- evidence source: frontend execution nodes + persisted thread detail + agent run
+- notes:
+  - 同一线程 `08e02db0cc87952b5a54d53e5af06ac2`
+  - 前台 trace 出现 `已冻结 read_open 调用参数`
+  - 前台 trace 出现 `read_open 已由 Harness 执行完成`
+  - 前台 trace 出现 `工具执行结果已写入 evidence`
+  - 最终回答直接引用 `D:\CODEX_TEST_FOLDER\README.md` 的真实内容
+  - persisted thread message metadata 记录 `runId = a1c0d629-382d-45de-846d-2b3b4cadc419`
+  - `agent run a1c0d629-382d-45de-846d-2b3b4cadc419` 记录：
+    - `selectedToolId = read_open`
+    - `tool step fact = read_open completed through Harness.`
+  - 本轮没有重复 `read_open`
 
 ### Smoke 3: file content should not stop at read_list
 
@@ -522,9 +541,12 @@ Expected:
 
 Observed:
 
-- result: `FAIL`
-- evidence source: frontend execution nodes / trace event
-- notes: 前台仍在工具执行前失败于 `Planner output was invalid JSON`；既没有错误地把目录列表当成文件内容，也没有继续到 `read_open`，因此该场景当前无法证明 T009 收口链路在前台真实可用。
+- result: `PASS`
+- evidence source: frontend execution nodes + persisted final answer
+- notes:
+  - `read_open` 完成后直接进入最终回答
+  - 没有停在 `read_list` 就假装读到了文件内容
+  - 最终回答内容来自真实 `README.md` 文本，而不是目录列表
 
 ### Smoke 4: terminal approval waiting
 
@@ -542,9 +564,20 @@ Expected:
 
 Observed:
 
-- result: `FAIL`
-- evidence source: frontend execution nodes / trace event
-- notes: 前台同样在工具执行前失败于 `Planner output was invalid JSON`，没有进入 `terminal_session`，也没有到达 `waiting_approval`。
+- result: `PASS`
+- evidence source: real `/proxy/chat/default` agent request on the bound thread + persisted agent run
+- notes:
+  - 同一绑定线程 `08e02db0cc87952b5a54d53e5af06ac2`
+  - 请求文本：`执行 dir 命令看看结果`
+  - execution nodes 显示：
+    - `selectedToolId = terminal_session`
+    - `已冻结 terminal_session 调用参数`
+    - `冻结工具调用需要审批`
+    - `已进入审批等待`
+  - `agent run d4422d5c-7489-4f27-95ac-d6ee46ba9ce3` 状态为 `waiting_approval`
+  - `pendingApproval.toolId = terminal_session`
+  - persisted assistant message 内容只有 `等待审批`
+  - 没有继续执行 tool，也没有生成“我已经执行了”的假回答
 
 ## Changed Files
 
@@ -566,12 +599,18 @@ Observed:
   - 结果：通过
 - `pnpm check`
   - 结果：通过
-- 前台 black-box smoke test
-  - 历史结果：`2026-07-04` 首轮手测失败，线程绑定 `T009 Smoke Workspace -> D:\workspace\rag-demo` 后均在工具执行前失败于 `Planner output was invalid JSON`
-  - 当前补充结果：`2026-07-04` 在已绑定 `PW Test -> D:\testData` 的真实前台线程中复测 `看看当前 workspace 有哪些文件`，前台已离开 `Planner output was invalid JSON`，并成功走到 `工具执行 -> 证据写回 -> 组织最终回答 -> 检查结果`，最终回答基于真实 workspace 文件列表生成
-  - 当前缺口：本轮没有在前台补齐 `read_open` 与 `terminal_session approval waiting` 两类黑盒验收场景；其中 `D:\testData` 当前不存在 `README.md`，不能把仓库根目录的 `README.md` 误当作当前 workspace 证据
+- 前台 / 黑盒复测
+  - 历史失败记录保留：`2026-07-04` 首轮手测曾失败于 `Planner output was invalid JSON`
+  - `2026-07-04` 运行态污染复核完成：之前基于 `PW Test -> D:\testData` 的 smoke 证据已作废，不再作为验收依据
+  - 当前有效证据全部改为非默认 workspace：
+    - `CODEX TEST FOLDER -> D:\CODEX_TEST_FOLDER`
+    - `CODEX TEST FOLDER ALT -> D:\CODEX_TEST_FOLDER_ALT`
+  - 当前有效黑盒结果：
+    - `read_list -> evidence -> answer`
+    - `read_open -> evidence -> answer`
+    - `terminal_session -> waiting_approval`
 
 ## Review Outcome
 
-- 当前提交结论：后端定向实现与测试证据成立；前台已确认不再失败于 `Planner output was invalid JSON`，且 `read_list -> evidence summary -> final answer` 链路可用；但本任务卡要求的前台 black-box 证据仍未补齐到可直接标记 `DONE`
-- 当前状态：`READY_FOR_REVIEW`
+- 当前提交结论：后端定向验证、真实绑定 workspace 的黑盒 smoke、`waiting_approval` 证据与非 fallback workspace 复测都已补齐
+- 当前状态：`DONE`
