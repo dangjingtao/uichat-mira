@@ -1,0 +1,96 @@
+UIChat Mira V1.6 total review test evidence
+Date: 2026-07-05
+Workspace: D:\workspace\rag-demo
+Commit: 3b79d1dbcfc7ee076fbb925a2636cb18ba54c17d
+
+Git baseline
+- `git status --short --branch`: dirty
+- `git log --oneline -n 10`: starts with `3b79d1d feat: T016`
+
+Executed commands
+
+1. Command
+pnpm --filter @ui-chat-mira/server test
+Result
+FAIL
+Key output
+- `src/bootstrap-env.test.ts`: `expected undefined to be 'D:\models\raw'`
+- `src/services/thread.service.test.ts`: expected `/Workspace root path format is invalid/`, actual `Error: Workspace root path is invalid`
+- `src/services/thread.service.test.ts`: expected fallback parts `[Image attachment]`, actual `[]`
+- `src/services/rag-nodes/generate.service.test.ts`: 2 assertions failed because actual prompt messages now include extra system evidence message and `parts`
+- `src/mcp/document-readers.test.ts`: `Cannot find package 'xlsx'`
+- `src/mcp/resources/workspace-resource.test.ts`: `Cannot find package 'xlsx'`
+- `src/mcp/tools/read-extract.tool.test.ts`: `Cannot find package 'xlsx'`
+- `src/services/shared-nodes/thread-request-context-web-search.resolver.test.ts`: target module missing
+- `src/mcp/tools/read-locate.tool.test.ts`: timed out at 5000ms in full-suite run
+- `src/mcp/tools/terminal-session.tool.test.ts`: expected stdout to contain `中文`, actual `[binary output omitted]`
+
+2. Command
+pnpm --filter @ui-chat-mira/server exec vitest run src/harness/exposure.test.ts src/harness/tool-candidates.test.ts src/harness/capability-diagnostics.test.ts src/mcp/tools/web-search.tool.test.ts src/mcp/tools/terminal-session.tool.test.ts src/routes/proxy-provider/chat-tool-surface.test.ts
+Result
+FAIL
+Summary
+- 5 files passed
+- 1 file failed
+Failure
+- `server/src/mcp/tools/terminal-session.tool.test.ts:652`
+  `expected '[binary output omitted]' to contain '中文'`
+
+3. Command
+pnpm --filter @ui-chat-mira/server exec vitest run src/agent/__tests__/toolcall-loop-regression.test.ts src/agent/__tests__/tool-call-normalize.test.ts src/agent/__tests__/tool-node.test.ts src/agent/__tests__/policy.test.ts src/agent/__tests__/graph.test.ts src/agent/__tests__/routes.test.ts src/routes/proxy-provider/chat-tool-loop.test.ts
+Result
+PASS
+Summary
+- 7 files passed
+- 97 tests passed
+
+4. Command
+pnpm --filter @ui-chat-mira/server exec vitest run src/sandbox/executor.test.ts src/harness/sandbox.test.ts src/harness/sandbox/index.test.ts
+Result
+PASS
+Summary
+- 3 files passed
+- 34 tests passed
+
+5. Command
+pnpm --filter @ui-chat-mira/server exec vitest run src/harness/context/planner.test.ts src/harness/context/bench/cases.test.ts src/mcp/tools/read-list.tool.test.ts src/mcp/tools/read-open.tool.test.ts src/mcp/tools/read-locate.tool.test.ts src/services/shared-nodes/thread-request-context-web-search.resolver.test.ts src/agent/__tests__/trace.test.ts
+Result
+FAIL
+Summary
+- 6 files passed
+- 1 suite failed to load
+Failure
+- `server/src/services/shared-nodes/thread-request-context-web-search.resolver.test.ts:3`
+  `Cannot find module './thread-request-context-web-search.resolver.js'`
+
+6. Command
+pnpm --filter @ui-chat-mira/server bench:sandbox:direct
+Result
+PASS WITH GAP
+Summary
+- runner: `sandbox-direct-bench`
+- total `8`, passed `7`, failed `0`, notImplemented `1`
+Important cases
+- unicode output preserved
+- non-zero exit returns `status=failed` and `exitCode=7`
+- cwd escape returns `status=blocked`
+- timeout returns `status=timed_out`
+- output limit returns `truncated=true`
+- artifact registration returned concrete artifact metadata
+Gap
+- `read_only` profile reported as `not_implemented`
+- contract coverage also reports `workspace_write` and `networked_command` as `not_implemented`
+
+7. Command
+pnpm --filter @ui-chat-mira/server bench:context:read
+Result
+PASS
+Summary
+- runner: `context-read-bench`
+- total `11`, passed `11`, failed `0`
+Important cases
+- `read_list`, `read_open`, `read_slice`, `locate->open`, `list->open`, `inspect` all covered
+- UTF-8 BOM, GBK uncertain decode, binaryDetected, and budget clipping covered
+
+Notes
+- The `pnpm ... exec vitest run ...` commands printed an extra trailing line `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL Command "vitest" not found` after Vitest finished. The test bodies still executed and returned real pass/fail summaries, so the command-level status above follows the actual Vitest outcome plus the shell exit code.

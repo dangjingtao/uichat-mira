@@ -33,7 +33,7 @@ related:
 | Stream | State | Current Focus | Evidence / Source | Ledger Note |
 | --- | --- | --- | --- | --- |
 | Project Control Governance | `IN_PROGRESS` | 建立唯一总控制台账，停止多 workboard 争抢当前真相 | [governance-principles.md](governance-principles.md) | 本文件建立后，其他 workboard 只作为证据来源 |
-| Harness Context System | `READY_FOR_REVIEW` | Context Read Bench 已提交评审，补齐真实读取压测 | [harness_context_T001](tasks/harness_context_T001-context-read-plan-dsl.md), [harness_context_T002](tasks/harness_context_T002-context-read-bench.md) | T001 已 DONE；T002 bench 定向验证通过，整仓检查仍被任务外 typecheck 问题阻断 |
+| Harness Context System | `DONE` | Context Read Bench 已验收通过，补齐真实读取压测 | [harness_context_T001](tasks/harness_context_T001-context-read-plan-dsl.md), [harness_context_T002](tasks/harness_context_T002-context-read-bench.md) | T001、T002 已 DONE；整仓检查仍有任务外 typecheck 阻断 |
 | AgentGraph / Agent V1.5 | `READY_FOR_REVIEW` | 主链合同、弱模型防线、审批恢复、evidence grounded answer | [agent-nodes-workboard.md](agent-nodes-workboard.md), `agent_node_T001-T017` | 旧专项 workboard 存在状态冲突，见下方 Agent Nodes Index |
 | Harness / Sandbox | `READY_FOR_REVIEW` | 候选排序、sandbox direct contract、artifact/output contract；L1 workspace sandbox runner 已通过，跨层 diagnostics 闭环已补专门回归并通过 `pnpm check` | [T-010](tasks/T-010-harness-candidate-ordering.md), [T-011](tasks/T-011-sandbox-contract-direct-bench.md), [T-012](tasks/T-012-l1-workspace-sandbox-runner.md), [T-013](tasks/T-013-sandbox-artifact-output-contract.md), [T-014](tasks/T-014-cross-layer-diagnostics-closure.md) | T-012、T-013、T-014 已 DONE，其余仍按各自任务状态处理 |
 | Core Tools | `READY_FOR_REVIEW` | read / write / terminal / web-search 工具治理尾项 | `core_tools_T001-T019` | 多数已完成，仍有 review 队列 |
@@ -59,7 +59,7 @@ related:
 | [T-011](tasks/T-011-sandbox-contract-direct-bench.md) | `READY_FOR_REVIEW` | Harness / Sandbox | 评审 sandbox direct bench contract |
 | [T-012](tasks/T-012-l1-workspace-sandbox-runner.md) | `DONE` | Harness / Sandbox | Review 02 已通过：L1 workspace sandbox runner |
 | [T-009](tasks/T-009-test-report-json-consolidation.md) | `PROPOSED` | Evidence Hygiene | 决定是否进入执行队列 |
-| [harness_context_T002](tasks/harness_context_T002-context-read-bench.md) | `READY_FOR_REVIEW` | Harness Context | 评审 Context / Read bench 的覆盖面和任务外 typecheck 阻断记录是否可接受 |
+| [harness_context_T002](tasks/harness_context_T002-context-read-bench.md) | `DONE` | Harness Context | 已验收通过；保留任务外 typecheck 阻断记录 |
 
 ## Agent Nodes Index
 
@@ -112,7 +112,7 @@ related:
 | Task | Ledger State | Notes |
 | --- | --- | --- |
 | [harness_context_T001](tasks/harness_context_T001-context-read-plan-dsl.md) | `DONE` | Context Read Plan DSL MVP |
-| [harness_context_T002](tasks/harness_context_T002-context-read-bench.md) | `READY_FOR_REVIEW` | Context / Read bench |
+| [harness_context_T002](tasks/harness_context_T002-context-read-bench.md) | `DONE` | Context / Read bench |
 | [T-001](tasks/T-001-policy-deny.md) | `DONE` | policy deny |
 | [T-002](tasks/T-002-toolnode-no-fallback.md) | `DONE` | toolNode no fallback |
 | [T-003](tasks/T-003-terminal-command-safety.md) | `DONE` | terminal command safety |

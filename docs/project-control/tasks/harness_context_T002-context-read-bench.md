@@ -13,7 +13,7 @@ related:
   - docs/tooling-runtime/read-skill-design.md
   - server/src/harness/context/bench/runner.ts
   - server/src/harness/context/bench/cases.test.ts
-task_state: READY_FOR_REVIEW
+task_state: DONE
 ---
 
 # harness_context_T002 Context Read Bench
@@ -143,5 +143,5 @@ task_state: READY_FOR_REVIEW
 
 ## Review Outcome
 
-- 评审结论：待评审
-- 当前状态：`READY_FOR_REVIEW`
+- 评审结论：通过
+- 当前状态：`DONE`
