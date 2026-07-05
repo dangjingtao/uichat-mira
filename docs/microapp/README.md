@@ -13,6 +13,7 @@ Related:
   - ../integrations/third-party-integration-consumption-model.md
   - ../integrations/wecom-microapp-interface-design.md
   - image-generation-microapp-poc.md
+  - computer-use-microapp-poc.md
 
 ## 单点真相范围
 
@@ -136,6 +137,7 @@ Related:
 - `org_directory_lookup`
 - `sales_copilot`
 - `image_generation`
+- `computer_use`
 
 ## 当前绑定关系
 
@@ -282,6 +284,18 @@ Platform
 当前 docs-only POC 见：
 
 - `image-generation-microapp-poc.md`
+
+### `computer_use`
+
+作用：
+
+- 接收一个明确目标
+- 在受控执行面里完成最小界面操作
+- 返回截图、步骤状态、结果摘要和失败原因
+
+当前 docs-only POC 见：
+
+- `computer-use-microapp-poc.md`
 
 ## 对前端的产品约束
 

@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
-import path from "node:path";
 import { afterAll, test } from "vitest";
 import { initializeAuthDatabase } from "@/db/auth.db";
 import { getSqlite } from "@/db/index.js";
@@ -16,11 +15,9 @@ import {
   userRepository,
 } from "@/db/repositories";
 import { threadService } from "./thread.service.js";
+import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 
-const testDbPath = path.join(
-  os.tmpdir(),
-  `rag-demo-thread-service-${process.pid}-${Date.now()}.sqlite`,
-);
+const testDbPath = createTimestampedTestArtifactPath("db", "rag-demo-thread-service", ".sqlite");
 
 process.env.DATABASE_URL = `file:${testDbPath}`;
 

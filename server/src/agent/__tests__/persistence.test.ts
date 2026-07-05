@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
 import { beforeEach, afterEach, test, vi } from "vitest";
@@ -19,14 +18,16 @@ import { getAgentRunById } from "../run-read";
 import { persistAgentAssistantState, resumeApprovedAgentRun } from "../resume";
 import { agentGraph } from "../graph";
 import { createInvocationInputHash } from "../approval-fingerprint";
+import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 
 const originalDatabaseUrl = process.env.DATABASE_URL;
 let activeDbPath: string | null = null;
 
 const createTempDbPath = () =>
-  path.join(
-    os.tmpdir(),
-    `agent-persistence-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.sqlite`,
+  createTimestampedTestArtifactPath(
+    "db",
+    `agent-persistence-${Math.random().toString(16).slice(2)}`,
+    ".sqlite",
   );
 
 const setupDb = () => {

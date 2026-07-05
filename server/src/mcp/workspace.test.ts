@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -11,13 +10,11 @@ import {
   resolveWorkspaceWritePath,
   selectWorkspaceRoot,
 } from "./workspace.js";
+import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 
 describe("workspace selection", () => {
-  const tempRoot = path.join(os.tmpdir(), `rag-demo-workspace-${process.pid}-${Date.now()}`);
-  const outsideRoot = path.join(
-    os.tmpdir(),
-    `rag-demo-workspace-outside-${process.pid}-${Date.now()}`,
-  );
+  const tempRoot = createTimestampedTestArtifactPath("workspace", "rag-demo-workspace");
+  const outsideRoot = createTimestampedTestArtifactPath("workspace", "rag-demo-workspace-outside");
 
   afterEach(() => {
     clearWorkspaceSelection();

@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, test } from "vitest";
 import AdmZip from "adm-zip";
 import { initializeEvaluationDatabase } from "@/db/evaluation.db";
@@ -9,11 +7,9 @@ import { initializeKnowledgeBaseDatabase } from "@/db/knowledge-base.db";
 import { initializeModelConfigDatabase } from "@/db/model-config.db";
 import { knowledgeBaseRepository } from "@/db/repositories";
 import { evaluationService } from "./evaluation.service.js";
+import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 
-const testDbPath = path.join(
-  os.tmpdir(),
-  `rag-demo-evaluation-service-${process.pid}-${Date.now()}.sqlite`,
-);
+const testDbPath = createTimestampedTestArtifactPath("db", "rag-demo-evaluation-service", ".sqlite");
 
 process.env.DATABASE_URL = `file:${testDbPath}`;
 

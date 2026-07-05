@@ -46,13 +46,16 @@ task_state: READY_FOR_REVIEW
 
 ## Acceptance Criteria
 
-1. 新增一篇正式 POC 文档，明确 `image_generation` 的目标、范围、运行时边界和最小闭环。
-2. 文档明确区分 `MicroAPP`、provider API、桌面入口和后端执行器，不把它们混成一个概念。
+1. 正式 POC 文档已升级为“兼容底座设计版”，明确 `image_generation` 的目标、范围、运行时边界和最小闭环。
+2. 文档明确区分 `MicroAPP`、provider API、桌面入口、后端执行器和本地 workflow runner，不把它们混成一个概念。
 3. 文档明确 renderer 不直连第三方 API，secret 只允许在 backend 真相层出现。
-4. 文档明确第一版只做单 provider、单次生成、单页预览，不扩成多 provider 市场或图片编辑平台。
-5. `docs/microapp/README.md` 已把 `image_generation` 挂到当前 `MicroAPP` 候选清单里，并能链接到 POC 文档。
-6. `docs/project-control/project-control-ledger.md` 已登记该任务和当前状态。
-7. 不修改 forbidden area。
+4. 文档明确第一版先抽统一任务生命周期，不先抽统一模型参数层。
+5. 文档明确 `ComfyUI` 必须支持，且支持边界是“用户提供 workflow API JSON，我们负责提交和回收结果”。
+6. 文档明确当前能力只在微应用界面里调试，不提前开放给 chat、第三方平台入口或通用调用面。
+7. 文档明确首批适配器范围和第二批预留范围，不追求 provider 数量最多。
+8. `docs/microapp/README.md` 已把 `image_generation` 挂到当前 `MicroAPP` 候选清单里，并能链接到 POC 文档。
+9. `docs/project-control/project-control-ledger.md` 已登记该任务和当前状态。
+10. 不修改 forbidden area。
 
 ## Verification
 
@@ -79,16 +82,17 @@ task_state: READY_FOR_REVIEW
   - `docs/project-control/project-control-ledger.md`
 
 - Diff summary:
-  - 新增 `image_generation` 微应用的 docs-only POC 文档
-  - 在 `MicroAPP` 总纲里把 `image_generation` 正式挂到候选清单，并增加文档入口
-  - 新增 `project-control` 任务卡，明确这轮只做文档基础建设
-  - 在唯一总台账登记该任务为 `READY_FOR_REVIEW`
+  - 把 `image_generation` POC 文档从单 provider 示意升级为兼容底座设计文档
+  - 增加 provider 分层、统一任务生命周期、产物落盘规则和首批 adapter 范围
+  - 明确 `ComfyUI` 以 workflow API JSON runner 形式接入，不再尝试统一其局部能力语义
+  - 明确当前能力只服务微应用界面调试，不提前扩散到 chat 或第三方入口
+  - 保持 `project-control` 任务卡和总台账与最新 POC 口径一致
 
 ## Unfinished / Risks
 
 - 当前只完成 docs-only POC，没有批准任何 provider 接入、secret 存储、文件落盘或 UI 实现。
 - 由于生图链路天然涉及外部数据发送，后续如进入实现，属于需要再次确认的高风险边界。
-- 当前没有选定最终 provider，文档中的 provider 结构只是第一版建议契约，不代表采购或正式技术选型已经完成。
+- 当前首批 provider 范围是兼容底座建议，不代表采购或正式商务选型已经完成。
 
 ## Review Outcome
 

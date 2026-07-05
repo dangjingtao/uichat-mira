@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { getTestArtifactDir } from "@/test-support/artifacts.js";
 import {
   resetLocalModelResourcesForTests,
   resolveLocalModelResources,
@@ -62,7 +62,7 @@ afterEach(() => {
 
 describe("resolveLocalModelResources", () => {
   it("synthesizes a development manifest from a raw model directory", async () => {
-    const rawRoot = await fs.mkdtemp(path.join(os.tmpdir(), "local-model-raw-"));
+    const rawRoot = await fs.mkdtemp(path.join(getTestArtifactDir("workspace"), "local-model-raw-"));
     await writeFiles(rawRoot, [...RAW_MODEL_FILES.embedding, ...RAW_MODEL_FILES.rerank]);
     process.env.LOCAL_MODEL_RAW_ROOT = rawRoot;
     delete process.env.LOCAL_MODEL_RESOURCE_ROOT;
@@ -93,7 +93,7 @@ describe("resolveLocalModelResources", () => {
   });
 
   it("throws a clear error when a discovered raw model is incomplete", async () => {
-    const rawRoot = await fs.mkdtemp(path.join(os.tmpdir(), "local-model-raw-"));
+    const rawRoot = await fs.mkdtemp(path.join(getTestArtifactDir("workspace"), "local-model-raw-"));
     await writeFiles(rawRoot, RAW_MODEL_FILES.embedding.slice(0, -1));
     process.env.LOCAL_MODEL_RAW_ROOT = rawRoot;
     delete process.env.LOCAL_MODEL_RESOURCE_ROOT;

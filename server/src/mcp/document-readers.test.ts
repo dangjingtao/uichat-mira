@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import * as XLSX from "xlsx";
@@ -10,8 +9,9 @@ import {
   listDirectory,
   readStructuredDocument,
 } from "./document-readers.js";
+import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 
-const tempRoot = path.join(os.tmpdir(), `rag-demo-document-readers-${process.pid}-${Date.now()}`);
+const tempRoot = createTimestampedTestArtifactPath("workspace", "rag-demo-document-readers");
 
 const createDocx = (filePath: string, text: string) => {
   execFileSync(

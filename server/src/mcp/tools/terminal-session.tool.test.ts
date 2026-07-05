@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -7,6 +6,7 @@ import { createHarnessEnvironmentSnapshot } from "../../harness/environment.js";
 import { getHarnessInvocationTrace } from "../../harness/invocations.js";
 import { clearWorkspaceSelection } from "../workspace.js";
 import { createInvocationInputHash } from "@/agent/approval-fingerprint.js";
+import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 
 const terminalMocks = vi.hoisted(() => ({
   createTerminalSessionMock: vi.fn(),
@@ -111,9 +111,9 @@ const createMockSpawnProcess = () => {
 };
 
 describe("terminal_session tool", () => {
-  const workspaceRoot = path.join(
-    os.tmpdir(),
-    `rag-demo-terminal-${process.pid}-${Date.now()}`,
+  const workspaceRoot = createTimestampedTestArtifactPath(
+    "workspace",
+    "rag-demo-terminal",
   );
 
   beforeEach(() => {

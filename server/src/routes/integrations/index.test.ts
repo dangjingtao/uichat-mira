@@ -3,10 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import integrationsRoute from "./index.js";
 import { sendRouteError } from "@/utils/route-errors.js";
 import { getLoggerConfig } from "@/logger";
-import { getSqlite } from "@/db/index.js";
+import { getSqlite, resetDatabaseClients } from "@/db/index.js";
 import { integrationCapabilitiesRepository } from "@/db/repositories/integration-capabilities.repository.js";
 import { integrationInstancesRepository } from "@/db/repositories/integration-instances.repository.js";
 import { wecomSettingsRepository } from "@/db/repositories/wecom-settings.repository.js";
+import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 
 const requireAuthMock = vi.hoisted(() =>
   vi.fn(async (request: { authUser?: unknown }) => {
@@ -24,7 +25,8 @@ vi.mock("@/db/auth.db.js", () => ({
 
 describe("integrations route", () => {
   beforeEach(() => {
-    process.env.DATABASE_URL = `file:${process.cwd()}/tmp-integrations-route.sqlite`;
+    process.env.DATABASE_URL = `file:${createTimestampedTestArtifactPath("db", "tmp-integrations-route", ".sqlite")}`;
+    resetDatabaseClients();
     const sqlite = getSqlite();
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS users (
@@ -48,6 +50,7 @@ describe("integrations route", () => {
   });
 
   afterEach(() => {
+    resetDatabaseClients();
     delete process.env.DATABASE_URL;
   });
 

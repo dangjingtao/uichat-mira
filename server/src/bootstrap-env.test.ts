@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { getTestArtifactDir } from "./test-support/artifacts.js";
 import {
   applyWorkspaceEnvBootstrap,
   findWorkspaceRoot,
@@ -17,7 +17,7 @@ afterEach(() => {
 
 describe("bootstrap-env", () => {
   it("finds the workspace root by walking up to a sentinel file", async () => {
-    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "bootstrap-env-"));
+    const tempRoot = await fs.mkdtemp(path.join(getTestArtifactDir("workspace"), "bootstrap-env-"));
     const nestedDir = path.join(tempRoot, "packages", "server");
     await fs.mkdir(nestedDir, { recursive: true });
     await fs.writeFile(path.join(tempRoot, "runtime.config.cjs"), "module.exports = {};\n");
@@ -26,7 +26,7 @@ describe("bootstrap-env", () => {
   });
 
   it("loads root .env values into process.env", async () => {
-    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "bootstrap-env-"));
+    const tempRoot = await fs.mkdtemp(path.join(getTestArtifactDir("workspace"), "bootstrap-env-"));
     const nestedDir = path.join(tempRoot, "server");
     await fs.mkdir(nestedDir, { recursive: true });
     await fs.mkdir(path.join(tempRoot, "scripts"), { recursive: true });

@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, test } from "vitest";
 import { initializeAuthDatabase } from "@/db/auth.db";
 import { initializeRoleDatabase } from "@/db/role.db";
@@ -10,11 +8,9 @@ import { initializeModelConfigDatabase } from "@/db/model-config.db";
 import { initializeThreadDatabase } from "@/db/thread.db";
 import { userRepository } from "@/db/repositories";
 import { roleService } from "./role.service.js";
+import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 
-const testDbPath = path.join(
-  os.tmpdir(),
-  `rag-demo-role-service-${process.pid}-${Date.now()}.sqlite`,
-);
+const testDbPath = createTimestampedTestArtifactPath("db", "rag-demo-role-service", ".sqlite");
 
 process.env.DATABASE_URL = `file:${testDbPath}`;
 

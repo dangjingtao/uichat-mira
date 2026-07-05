@@ -12,6 +12,8 @@ try {
 export const LOG_FILE = path.join(LOG_DIR, "server.log");
 export const ERROR_LOG_FILE = path.join(LOG_DIR, "error.log");
 const logLineEmitter = new EventEmitter();
+const LOGGER_LISTENERS_READY = Symbol.for("uichat-mira.logger.listeners-ready");
+const LOGGER_STREAMS_KEY = Symbol.for("uichat-mira.logger.streams");
 
 const isBrokenPipeError = (error: unknown): boolean =>
   error instanceof Error && "code" in error && error.code === "EPIPE";
@@ -19,17 +21,29 @@ const isBrokenPipeError = (error: unknown): boolean =>
 let stdoutAvailable = true;
 let stderrAvailable = true;
 
-process.stdout.on("error", (error) => {
-  if (isBrokenPipeError(error)) {
-    stdoutAvailable = false;
-  }
-});
+const globalWithLoggerState = globalThis as typeof globalThis & {
+  [LOGGER_LISTENERS_READY]?: boolean;
+  [LOGGER_STREAMS_KEY]?: {
+    logStream: fs.WriteStream;
+    errorStream: fs.WriteStream;
+  };
+};
 
-process.stderr.on("error", (error) => {
-  if (isBrokenPipeError(error)) {
-    stderrAvailable = false;
-  }
-});
+if (!globalWithLoggerState[LOGGER_LISTENERS_READY]) {
+  process.stdout.on("error", (error) => {
+    if (isBrokenPipeError(error)) {
+      stdoutAvailable = false;
+    }
+  });
+
+  process.stderr.on("error", (error) => {
+    if (isBrokenPipeError(error)) {
+      stderrAvailable = false;
+    }
+  });
+
+  globalWithLoggerState[LOGGER_LISTENERS_READY] = true;
+}
 
 const safeWriteToConsole = (message: string, useStdErr = false) => {
   const stream = useStdErr ? process.stderr : process.stdout;
@@ -90,15 +104,19 @@ export const writeStructuredLog = (
 };
 
 export const createLogStreams = () => {
-  const logStream = fs.createWriteStream(LOG_FILE, { flags: "a" });
-  const errorStream = fs.createWriteStream(ERROR_LOG_FILE, { flags: "a" });
+  if (!globalWithLoggerState[LOGGER_STREAMS_KEY]) {
+    globalWithLoggerState[LOGGER_STREAMS_KEY] = {
+      logStream: fs.createWriteStream(LOG_FILE, { flags: "a" }),
+      errorStream: fs.createWriteStream(ERROR_LOG_FILE, { flags: "a" }),
+    };
+  }
 
   return {
     LOG_DIR,
     LOG_FILE,
     ERROR_LOG_FILE,
-    logStream,
-    errorStream,
+    logStream: globalWithLoggerState[LOGGER_STREAMS_KEY].logStream,
+    errorStream: globalWithLoggerState[LOGGER_STREAMS_KEY].errorStream,
   };
 };
 

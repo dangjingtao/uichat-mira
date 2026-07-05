@@ -1,7 +1,6 @@
-import os from "node:os";
-import path from "node:path";
 import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 import {
   clearExternalMcpServers,
   connectExternalMcpServer,
@@ -54,7 +53,7 @@ vi.mock("node:child_process", async (importOriginal) => {
 });
 
 describe("external MCP connect", () => {
-  const tempDb = path.join(os.tmpdir(), `rag-demo-mcp-connect-${process.pid}-${Date.now()}.sqlite`);
+  const tempDb = createTimestampedTestArtifactPath("db", "rag-demo-mcp-connect", ".sqlite");
 
   beforeEach(() => {
     process.env.DATABASE_URL = `file:${tempDb}`;

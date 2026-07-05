@@ -1,12 +1,14 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createHarnessEnvironmentSnapshot } from "../../harness/environment.js";
 import { clearWorkspaceSelection } from "../workspace.js";
 import { editFileTool } from "./edit-file.tool.js";
+import {
+  createTimestampedTestArtifactPath,
+} from "@/test-support/artifacts.js";
 
-const tempRoot = path.join(os.tmpdir(), `rag-demo-mcp-edit-${process.pid}-${Date.now()}`);
+const tempRoot = createTimestampedTestArtifactPath("workspace", "rag-demo-mcp-edit");
 
 const createInvocationContext = (args: Record<string, unknown>) => {
   const events: string[] = [];
@@ -275,7 +277,11 @@ describe("edit_file tool", () => {
   });
 
   it("rejects absolute paths outside the workspace root", async () => {
-    const outsidePath = path.join(os.tmpdir(), `rag-demo-edit-outside-${crypto.randomUUID()}.txt`);
+    const outsidePath = createTimestampedTestArtifactPath(
+      "outside",
+      `rag-demo-edit-outside-${crypto.randomUUID()}`,
+      ".txt",
+    );
     const invocation = createInvocationContext({
       path: outsidePath,
       operation: "write_file",
@@ -288,7 +294,10 @@ describe("edit_file tool", () => {
   });
 
   it("rejects writes through linked directories that resolve outside the workspace root", async () => {
-    const outsideDir = path.join(os.tmpdir(), `rag-demo-edit-linked-${crypto.randomUUID()}`);
+    const outsideDir = createTimestampedTestArtifactPath(
+      "outside",
+      `rag-demo-edit-linked-${crypto.randomUUID()}`,
+    );
     try {
       fs.mkdirSync(outsideDir, { recursive: true });
       fs.symlinkSync(outsideDir, path.join(tempRoot, "linked-outside"), "junction");
@@ -307,7 +316,10 @@ describe("edit_file tool", () => {
   });
 
   it("rejects writes when the workspace target file is a symlink to an external file", async () => {
-    const outsideDir = path.join(os.tmpdir(), `rag-demo-edit-linked-file-${crypto.randomUUID()}`);
+    const outsideDir = createTimestampedTestArtifactPath(
+      "outside",
+      `rag-demo-edit-linked-file-${crypto.randomUUID()}`,
+    );
     try {
       fs.mkdirSync(outsideDir, { recursive: true });
       const outsideFile = path.join(outsideDir, "outside.txt");

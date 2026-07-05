@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { test } from "vitest";
+import fs from "node:fs";
+import { afterAll, test } from "vitest";
 import { toUserMessageMetadata } from "./rag-message-metadata.js";
 import {
   initializeAuthDatabase,
@@ -18,16 +19,31 @@ import {
   persistVisibleUserMessage,
   shouldGenerateTitle,
 } from "./message-persistence.js";
+import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 
-const testDbPath = `file:${process.pid}-${Date.now()}-rag-message-metadata.sqlite`;
+const testDbPath = createTimestampedTestArtifactPath(
+  "db",
+  "rag-message-metadata",
+  ".sqlite",
+);
 
-process.env.DATABASE_URL = testDbPath;
+process.env.DATABASE_URL = `file:${testDbPath}`;
 
 initializeAuthDatabase();
 initializeModelConfigDatabase();
 initializeKnowledgeBaseDatabase();
 initializeRoleDatabase();
 initializeThreadDatabase();
+
+afterAll(() => {
+  for (const suffix of ["", "-shm", "-wal"]) {
+    try {
+      fs.rmSync(`${testDbPath}${suffix}`, { force: true });
+    } catch {
+      // Ignore Windows file locking during test teardown.
+    }
+  }
+});
 
 test("toUserMessageMetadata keeps lineage for mixed media messages", () => {
   assert.deepEqual(

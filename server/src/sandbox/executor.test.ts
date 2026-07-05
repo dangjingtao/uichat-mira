@@ -1,10 +1,10 @@
 import { EventEmitter } from "node:events";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { executeSandboxedCommand } from "./executor.js";
 import { clearWorkspaceSelection } from "@/mcp/workspace.js";
+import { getTestArtifactDir } from "@/test-support/artifacts.js";
 
 const shellProfile = {
   shell: "powershell.exe",
@@ -53,6 +53,7 @@ describe("SandboxExecutor", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     delete process.env.UI_CHAT_WORKSPACE_ROOT;
     clearWorkspaceSelection();
     vi.restoreAllMocks();
@@ -363,7 +364,7 @@ describe("SandboxExecutor", () => {
   });
 
   it("collects registered artifacts after command completion", async () => {
-    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "mira-sandbox-executor-"));
+    const tempRoot = await mkdtemp(path.join(getTestArtifactDir("workspace"), "mira-sandbox-executor-"));
     tempDirs.push(tempRoot);
     await mkdir(path.join(tempRoot, "workspace"), { recursive: true });
     const workspaceRoot = path.join(tempRoot, "workspace");

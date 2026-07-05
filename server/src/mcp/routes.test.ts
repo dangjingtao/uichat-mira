@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
 import Fastify from "fastify";
@@ -18,6 +17,9 @@ import { integrationCapabilitiesRepository } from "@/db/repositories/integration
 import { integrationInstancesRepository } from "@/db/repositories/integration-instances.repository.js";
 import { wecomSettingsRepository } from "@/db/repositories/wecom-settings.repository.js";
 import { resolveWecomConfig } from "@/integrations/wecom/config.js";
+import {
+  createTimestampedTestArtifactPath,
+} from "@/test-support/artifacts.js";
 
 type StdioMockHandler = (request: {
   method?: string;
@@ -120,11 +122,8 @@ vi.mock("node:child_process", async (importOriginal) => {
   };
 });
 
-const tempRoot = path.join(os.tmpdir(), `rag-demo-mcp-routes-${process.pid}-${Date.now()}`);
-const tempDatabasePath = path.join(
-  os.tmpdir(),
-  `rag-demo-mcp-routes-${process.pid}-${Date.now()}.sqlite`,
-);
+const tempRoot = createTimestampedTestArtifactPath("workspace", "rag-demo-mcp-routes");
+const tempDatabasePath = createTimestampedTestArtifactPath("db", "rag-demo-mcp-routes", ".sqlite");
 
 describe("mcp routes", () => {
   beforeEach(() => {

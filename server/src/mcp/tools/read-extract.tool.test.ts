@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import * as XLSX from "xlsx";
@@ -7,8 +6,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createHarnessEnvironmentSnapshot } from "../../harness/environment.js";
 import { clearWorkspaceSelection } from "../workspace.js";
 import { readExtractTool } from "./read-extract.tool.js";
+import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 
-const tempRoot = path.join(os.tmpdir(), `rag-demo-read-extract-tool-${process.pid}-${Date.now()}`);
+const tempRoot = createTimestampedTestArtifactPath("workspace", "rag-demo-read-extract-tool");
 
 const createDocx = (filePath: string, text: string) => {
   execFileSync(

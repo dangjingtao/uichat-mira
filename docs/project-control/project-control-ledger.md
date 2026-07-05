@@ -42,7 +42,10 @@ related:
 | Phase-1 Remediation | `DONE_WITH_HISTORY` | 早期 P0/P1/P2 缺陷整改 | [agent-workboard.md](agent-workboard.md), `T-001-T008` | 仅作为历史证据，不再作为当前项目台账；阶段口径见 Agent Phase 1 |
 | Test Report / Evidence Hygiene | `PROPOSED` | 测试报告 JSON 合并与瘦身 | [T-009](tasks/T-009-test-report-json-consolidation.md) | `status: proposed`, `canonical: false`，未进入当前执行 |
 | Skill Docs Foundation | `DONE` | `docs/skill` 基础数据 POC 整理为 docs-only Phase 0 | [skill_T001](tasks/skill_T001-docs-only-foundation.md), [docs/skill/roadmap.md](../skill/roadmap.md) | docs-only Phase 0 评审通过；未批准 runtime / DB / UI / AgentGraph / Harness / MCP 实现 |
-| MicroAPP Image Generation POC | `READY_FOR_REVIEW` | 生图微应用 docs-only 基础建设：任务卡、总纲挂载、POC 方案文档 | [microapp_T001](tasks/microapp_T001-image-generation-poc-docs-foundation.md), [image-generation-microapp-poc.md](../microapp/image-generation-microapp-poc.md) | 当前只提交 docs-only POC；未批准 runtime / DB / UI / provider 实现 |
+| MicroAPP Image Generation POC | `READY_FOR_REVIEW` | 生图微应用 docs-only 基础建设：兼容底座、统一任务生命周期、ComfyUI workflow runner 边界；当前仅服务微应用界面调试 | [microapp_T001](tasks/microapp_T001-image-generation-poc-docs-foundation.md), [image-generation-microapp-poc.md](../microapp/image-generation-microapp-poc.md) | 当前只提交 docs-only POC；未批准 runtime / DB / UI / provider 实现 |
+| MicroAPP Image Generation Interaction Spec | `READY_FOR_REVIEW` | 生图微应用调试页交互说明：页面结构、状态反馈、Prompt/Workflow 双模式 | [microapp_T011](tasks/microapp_T011-image-generation-debug-workspace-interaction-spec.md), [interaction-spec.md](../microapp/image-generation-debug-workspace-interaction-spec.md) | 当前只提交 docs-only 交互说明；未批准 UI 实现 |
+| MicroAPP Computer Use POC | `READY_FOR_REVIEW` | `computer_use` 微应用 docs-only 基础建设：隔离执行面优先、审批链、回放 artifact 与 Electron / Tauri 边界 | [microapp_T002](tasks/microapp_T002-computer-use-poc-docs-foundation.md), [computer-use-microapp-poc.md](../microapp/computer-use-microapp-poc.md) | 当前只提交 docs-only POC；未批准 runtime / DB / UI / preload / desktop automation 实现 |
+| MicroAPP Image Generation Parallel Build | `TODO` | 并行施工代码隔离：共享注册层、server domain、adapter、route、desktop API、desktop 调试页六块拆卡 | [microapp_T010](tasks/microapp_T010-image-generation-parallel-code-isolation.md), [microapp_T100-T105](tasks/microapp_T100-image-generation-shared-registry-and-seed.md) | 当前只完成任务卡拆分；实现线程尚未开工 |
 
 ## Active Review Queue
 
@@ -62,7 +65,21 @@ related:
 | [T-012](tasks/T-012-l1-workspace-sandbox-runner.md) | `DONE` | Harness / Sandbox | Review 02 已通过：L1 workspace sandbox runner |
 | [T-009](tasks/T-009-test-report-json-consolidation.md) | `PROPOSED` | Evidence Hygiene | 决定是否进入执行队列 |
 | [harness_context_T002](tasks/harness_context_T002-context-read-bench.md) | `DONE` | Harness Context | 已验收通过；保留任务外 typecheck 阻断记录 |
-| [microapp_T001](tasks/microapp_T001-image-generation-poc-docs-foundation.md) | `READY_FOR_REVIEW` | MicroAPP | 评审 docs-only 生图微应用 POC 的范围、边界和后续切片是否可接受 |
+| [microapp_T001](tasks/microapp_T001-image-generation-poc-docs-foundation.md) | `READY_FOR_REVIEW` | MicroAPP | 评审 docs-only 生图微应用兼容底座、ComfyUI runner 边界，以及“仅微应用界面调试”范围是否可接受 |
+| [microapp_T011](tasks/microapp_T011-image-generation-debug-workspace-interaction-spec.md) | `READY_FOR_REVIEW` | MicroAPP | 评审生图微应用调试页的交互语言是否足够完整，能否直接进入设计出稿 |
+| [microapp_T002](tasks/microapp_T002-computer-use-poc-docs-foundation.md) | `READY_FOR_REVIEW` | MicroAPP | 评审 docs-only `computer_use` 微应用边界、隔离执行面优先级和后续高风险切片是否可接受 |
+| [microapp_T010](tasks/microapp_T010-image-generation-parallel-code-isolation.md) | `READY_FOR_REVIEW` | MicroAPP | 评审 `image_generation` 并行施工的代码隔离、共享文件归属和推荐批次是否可接受 |
+
+## MicroAPP Image Generation Parallel Task Index
+
+| Task | Ledger State | Notes |
+| --- | --- | --- |
+| [microapp_T100](tasks/microapp_T100-image-generation-shared-registry-and-seed.md) | `TODO` | 共享注册层、默认 seed、runtime 识别入口 |
+| [microapp_T101](tasks/microapp_T101-image-generation-server-domain-core.md) | `TODO` | `server/src/microapps/image-generation/core/**` 领域核心 |
+| [microapp_T102](tasks/microapp_T102-image-generation-server-adapters-and-artifacts.md) | `TODO` | provider adapter、ComfyUI runner、artifact 回收 |
+| [microapp_T103](tasks/microapp_T103-image-generation-server-http-surface.md) | `TODO` | `server/src/routes/microapps/**` 和 server 注册 |
+| [microapp_T104](tasks/microapp_T104-image-generation-desktop-api-client.md) | `TODO` | `desktop/src/shared/api/imageGeneration.ts` 共享 API client |
+| [microapp_T105](tasks/microapp_T105-image-generation-desktop-debug-workspace.md) | `TODO` | 微应用界面调试页和 settings route 挂载 |
 
 ## Agent Nodes Index
 

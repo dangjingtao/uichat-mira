@@ -33,10 +33,12 @@ import {
   __chatToolSurfaceTestUtils,
 } from "./chat-tool-surface.js";
 import { executeDefaultChatToolLoop } from "./chat-tool-loop.js";
+import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 
-const testDbPath = path.join(
-  os.tmpdir(),
-  `rag-demo-proxy-provider-${process.pid}-${Date.now()}.sqlite`,
+const testDbPath = createTimestampedTestArtifactPath(
+  "db",
+  "rag-demo-proxy-provider",
+  ".sqlite",
 );
 
 process.env.DATABASE_URL = `file:${testDbPath}`;

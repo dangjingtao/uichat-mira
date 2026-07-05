@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createHarnessEnvironmentSnapshot } from "../../harness/environment.js";
@@ -9,10 +8,11 @@ import { clearHarnessRegistry, registerCapability } from "../../harness/registry
 import { createInvocationInputHash } from "@/agent/approval-fingerprint.js";
 import { clearWorkspaceSelection } from "../workspace.js";
 import { workspaceMutationTool } from "./workspace-mutation.tool.js";
+import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 
-const tempRoot = path.join(
-  os.tmpdir(),
-  `rag-demo-mcp-workspace-mutation-${process.pid}-${Date.now()}`,
+const tempRoot = createTimestampedTestArtifactPath(
+  "workspace",
+  "rag-demo-mcp-workspace-mutation",
 );
 
 const createInvocationContext = (args: Record<string, unknown>) => {

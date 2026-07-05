@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, test } from "vitest";
 import Fastify from "fastify";
 import { createAccessToken, initializeAuthDatabase } from "@/db/auth.db";
@@ -9,17 +7,17 @@ import { initializeRoleDatabase } from "@/db/role.db";
 import { initializeKnowledgeBaseDatabase } from "@/db/knowledge-base.db";
 import { initializeModelConfigDatabase } from "@/db/model-config.db";
 import { initializeThreadDatabase } from "@/db/thread.db";
+import { resetDatabaseClients } from "@/db/index.js";
 import { userRepository } from "@/db/repositories";
 import roleRoute from "@/routes/role/index.js";
 import { getLoggerConfig } from "@/logger";
 import { sendRouteError } from "@/utils/route-errors.js";
+import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 
-const testDbPath = path.join(
-  os.tmpdir(),
-  `rag-demo-role-routes-${process.pid}-${Date.now()}.sqlite`,
-);
+const testDbPath = createTimestampedTestArtifactPath("db", "rag-demo-role-routes", ".sqlite");
 
 process.env.DATABASE_URL = `file:${testDbPath}`;
+resetDatabaseClients();
 
 initializeAuthDatabase();
 initializeModelConfigDatabase();
@@ -28,6 +26,7 @@ initializeThreadDatabase();
 initializeRoleDatabase();
 
 afterAll(() => {
+  resetDatabaseClients();
   try {
     fs.rmSync(testDbPath, { force: true });
   } catch {

@@ -7,100 +7,26 @@ Current HEAD: c6311cec46b5f849ae35346f187714a6fa503559
 Command
 pnpm --filter @ui-chat-mira/server test
 Result
-FAIL
+PASS
 Summary
-- `82` files passed
-- `3` files failed
-- `592` tests passed
-- `5` tests failed
-- duration: `76.11s`
-Failure files and error summary
-- `src/agent/__tests__/routes.test.ts`
-  - `returns and updates runs`
-  - `approve is idempotent when run is not waiting approval`
-  - `approve returns resumed run state from resume helper`
-  - all failed by timeout at `5000ms`
-- `src/mcp/tools/read-locate.tool.test.ts`
-  - `locates files by path pattern`
-  - failed by timeout at `5000ms`
-- `src/routes/role/roles.routes.test.ts`
-  - `role routes support create list update delete`
-  - failed by timeout at `5000ms`
+- `85` files passed
+- `604` tests passed
+- duration: `50.66s`
 
-2. Tool Exposure suite
+2. Full-suite contention repro used during diagnosis
 Command
-pnpm --filter @ui-chat-mira/server test -- src/harness/exposure.test.ts src/harness/tool-candidates.test.ts src/harness/capability-diagnostics.test.ts src/mcp/tools/web-search.tool.test.ts src/mcp/tools/terminal-session.tool.test.ts src/routes/proxy-provider/chat-tool-surface.test.ts
+pnpm vitest run src/agent/__tests__/routes.test.ts src/routes/logs.test.ts src/routes/role/roles.routes.test.ts src/sandbox/executor.test.ts src/mcp/tools/read-locate.tool.test.ts
 Result
 PASS
 Summary
-- `6` files passed
-- `97` tests passed
+- `5` files passed
+- `28` tests passed
+- this sequence previously reproduced the `read_locate` timeout before the timer cleanup fix
 
-3. ToolCall Loop suite
+3. Typecheck
 Command
-pnpm --filter @ui-chat-mira/server test -- src/agent/__tests__/toolcall-loop-regression.test.ts src/agent/__tests__/tool-call-normalize.test.ts src/agent/__tests__/tool-node.test.ts src/agent/__tests__/policy.test.ts src/agent/__tests__/graph.test.ts src/agent/__tests__/routes.test.ts src/routes/proxy-provider/chat-tool-loop.test.ts
+pnpm --filter @ui-chat-mira/server typecheck
 Result
 PASS
 Summary
-- `7` files passed
-- `97` tests passed
-
-4. Sandbox suite
-Command
-pnpm --filter @ui-chat-mira/server test -- src/sandbox/executor.test.ts src/harness/sandbox.test.ts src/harness/sandbox/index.test.ts
-Result
-PASS
-Summary
-- `3` files passed
-- `36` tests passed
-
-5. Context / RAG / chat route suite
-Command
-pnpm --filter @ui-chat-mira/server test -- src/services/shared-nodes/thread-request-context-role.resolver.test.ts src/services/shared-nodes/thread-request-context-summary.resolver.test.ts src/services/shared-nodes/thread-request-context-memory.resolver.test.ts src/services/shared-nodes/thread-request-context-agent.resolver.test.ts src/services/shared-nodes/thread-request-context.node.test.ts src/services/rag-nodes/generate.service.test.ts src/services/rag-graph.test.ts src/routes/proxy-provider/chat.routes.test.ts
-Result
-PASS
-Summary
-- `8` files passed
-- `49` tests passed
-- current request context chain covered:
-  - `role`
-  - `summary`
-  - `memory`
-  - `agent`
-- `thread-request-context-web-search.resolver` is not part of this suite or the current design
-
-6. Full-suite timeout cross-check
-Command
-pnpm --filter @ui-chat-mira/server test -- src/agent/__tests__/routes.test.ts src/mcp/tools/read-locate.tool.test.ts src/routes/role/roles.routes.test.ts
-Result
-PASS
-Summary
-- `3` files passed
-- `9` tests passed
-- current evidence says the failing behavior is full-suite timeout contention, not a stable single-file failure
-
-7. Sandbox bench
-Command
-pnpm --filter @ui-chat-mira/server bench:sandbox:direct
-Result
-PASS
-Summary
-- V1.6 gate profile `command`: satisfied
-- summary total `10`
-- gate passed `7`
-- gate failed `0`
-- future profile `3`
-- future profiles:
-  - `read_only`
-  - `workspace_write`
-  - `networked_command`
-
-8. Context bench
-Command
-pnpm --filter @ui-chat-mira/server bench:context:read
-Result
-PASS
-Summary
-- `11/11` passed
-- covered `read_list`, `read_open`, `read_slice`, `locate->open`, `list->open`, `inspect`
-- included UTF-8 BOM, uncertain GBK decode, binaryDetected, maxFiles, maxChars
+- `tsc --noEmit -p tsconfig.json` completed without errors

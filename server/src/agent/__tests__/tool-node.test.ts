@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { test, vi } from "vitest";
 import * as harnessInvocations from "@/harness/invocations";
 import { getWorkspaceRoot } from "@/mcp/workspace";
+import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 import { createInvocationInputHash } from "../approval-fingerprint";
 import { toolNode } from "../nodes/tool-node";
 import type { AgentNodeState } from "../node-runtime";
@@ -188,9 +188,9 @@ test("toolNode passes workspaceRoot through to the invocation environment", asyn
 });
 
 test("toolNode applies workspaceRoot as the active workspace during invocation execution", async () => {
-  const workspaceRoot = path.join(
-    os.tmpdir(),
-    `rag-demo-tool-node-workspace-${process.pid}-${Date.now()}`,
+  const workspaceRoot = createTimestampedTestArtifactPath(
+    "workspace",
+    "rag-demo-tool-node-workspace",
   );
   fs.mkdirSync(workspaceRoot, { recursive: true });
 

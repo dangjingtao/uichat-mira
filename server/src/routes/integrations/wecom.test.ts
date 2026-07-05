@@ -7,7 +7,8 @@ import { integrationCapabilitiesRepository } from "@/db/repositories/integration
 import { integrationInstancesRepository } from "@/db/repositories/integration-instances.repository.js";
 import { wecomSettingsRepository } from "@/db/repositories/wecom-settings.repository.js";
 import { wecomIdentityBindingsRepository } from "@/db/repositories/wecom-identity-bindings.repository.js";
-import { getSqlite } from "@/db/index.js";
+import { getSqlite, resetDatabaseClients } from "@/db/index.js";
+import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 
 const getWecomUserByUserIdMock = vi.hoisted(() => vi.fn());
 const startWecomOAuthRelayMock = vi.hoisted(() => vi.fn());
@@ -35,7 +36,8 @@ vi.mock("@/db/auth.db.js", () => ({
 
 describe("wecom route", () => {
   beforeEach(() => {
-    process.env.DATABASE_URL = `file:${process.cwd()}/tmp-wecom-route.sqlite`;
+    process.env.DATABASE_URL = `file:${createTimestampedTestArtifactPath("db", "tmp-wecom-route", ".sqlite")}`;
+    resetDatabaseClients();
     const sqlite = getSqlite();
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS users (
@@ -62,6 +64,7 @@ describe("wecom route", () => {
   });
 
   afterEach(() => {
+    resetDatabaseClients();
     delete process.env.DATABASE_URL;
   });
 
