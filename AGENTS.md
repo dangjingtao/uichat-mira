@@ -87,15 +87,15 @@ If other docs, comments, or legacy files still mention `UI Chat RAG Tester`, tre
 - After completing a task package, always provide a diff summary, the test or verification results with evidence, and any unfinished items, risks, or intentionally deferred work.
 - If no test or verification was run, say that explicitly and explain why.
 
-Run these before considering packaging or runtime changes complete:
+Run this before considering packaging or runtime changes complete:
 
 ```bash
 pnpm check
-pnpm package:electron:win
 ```
 
 Packaging notes:
 
+- Do not run `pnpm package:electron:win` by default after every task. Run it only when the current task explicitly requires packaging verification or changes packaging/runtime behavior enough that a packaged build is part of the acceptance criteria.
 - `pnpm package:electron:win` keeps the most recent `3` release directories by default.
 - Use `RELEASE_KEEP_COUNT` to change the retention count for a run.
 - If an old release directory is locked by Windows, cleanup is skipped instead of failing the build.

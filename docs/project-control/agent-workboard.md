@@ -262,6 +262,8 @@ related:
 | `GR-P1-2` | [T-006-harness-schema-and-boundary.md](D:/workspace/rag-demo/docs/project-control/tasks/T-006-harness-schema-and-boundary.md) | `P1` | `DONE` | 已完成定向单测与真实接口手测；schema 与 workspace boundary contract 已生效 |
 | `GR-P1-3` | [T-007-intent-shortcut-demotion.md](D:/workspace/rag-demo/docs/project-control/tasks/T-007-intent-shortcut-demotion.md) | `P1` | `DONE` | 已通过评审；workspace 规则已降级为 task-model 辅助提示 |
 | `GR-P1-4` | [T-008-evidence-chain-completion.md](D:/workspace/rag-demo/docs/project-control/tasks/T-008-evidence-chain-completion.md) | `P1` | `DONE` | 已通过评审；formal evidence payload 已进入 route/generate 主链 |
+| `Standalone` | [T-010-harness-candidate-ordering.md](D:/workspace/rag-demo/docs/project-control/tasks/T-010-harness-candidate-ordering.md) | `P1` | `READY_FOR_REVIEW` | 已完成 Harness 候选排序缺陷修复与定向验证；当前等待评审 |
+| `Standalone` | [T-011-sandbox-contract-direct-bench.md](D:/workspace/rag-demo/docs/project-control/tasks/T-011-sandbox-contract-direct-bench.md) | `P1` | `READY_FOR_REVIEW` | 已补 Sandbox direct bench、独立 bench contract、JSON runner 和 `not_implemented` 标记；当前等待按最新工作区复评 |
 
 ## Technical Debt
 
@@ -272,6 +274,27 @@ related:
 
 ## Recent Verification Notes
 
+- `2026-07-05`：已完成 `T-011` 定向验证：
+  - `pnpm --filter @ui-chat-mira/server exec vitest run src/harness/sandbox.test.ts src/harness/sandbox/index.test.ts src/sandbox/executor.test.ts`
+  - 结果：通过，`19 passed`
+  - `pnpm --filter @ui-chat-mira/server bench:sandbox:direct D:\workspace\rag-demo`
+  - 结果：通过，JSON summary 为 `total=7`、`passed=6`、`failed=0`、`notImplemented=1`
+  - `pnpm --filter @ui-chat-mira/server exec tsc --noEmit -p tsconfig.json`
+  - 结果：通过
+  - `pnpm check`
+  - 结果：通过
+  - `pnpm package:electron:win`
+  - 结果：失败，失败点在仓内既有 desktop/server 测试与 `better-sqlite3` 清理问题，不在 `T-011` 修改范围内
+- `2026-07-05`：已完成 `T-010` 定向验证：
+  - `pnpm --filter @ui-chat-mira/server exec vitest run src/harness/tool-candidates.test.ts src/harness/capability-diagnostics.test.ts src/harness/exposure.test.ts`
+  - 结果：通过，`15 passed`
+  - `pnpm --filter @ui-chat-mira/server exec tsc --noEmit -p tsconfig.json`
+  - 结果：通过
+  - `pnpm package:electron:win`
+  - 结果：通过
+  - 打包后健康检查：以 `release/v0.7.1_20260705_204516/electron/win-unpacked/resources/node-runtime/node.exe` 启动 `resources/server/server.cjs`，`curl http://127.0.0.1:8787/health` 返回 `success: true`
+  - `pnpm check`
+  - 结果：失败，原因是仓内既有 `server typecheck` 崩溃：`RangeError: Maximum call stack size exceeded`
 - `2026-07-02`：已完成真实前端审批链路手测：
   - 在线程 `Codex Resume Trace Handtest` 中，以 Agent 模式发送 `请删除 codex-handtest-resume-trace.txt`
   - 命中 `waiting_approval`

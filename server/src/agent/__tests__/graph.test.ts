@@ -9,6 +9,7 @@ import * as taskSelectorModule from "../intent/task-capability-selector";
 import * as runnablesModule from "../runnables";
 import { createInvocationInputHash } from "../approval-fingerprint";
 import { agentGraph } from "../graph";
+import { routeAfterRetrieve, routeAfterTool } from "../graph/routes";
 
 const baseGoal = {
   id: "goal-1",
@@ -30,6 +31,15 @@ const makeMessage = (content: string) => ({
   content,
   parts: [{ type: "text" as const, text: content }],
 });
+
+const makeRouteState = (overrides: Record<string, unknown> = {}) =>
+  ({
+    iterationCount: 0,
+    maxIterations: 3,
+    pendingApproval: undefined,
+    errorMessage: undefined,
+    ...overrides,
+  }) as Parameters<typeof routeAfterTool>[0];
 
 const isToolExecutionNodeId = (nodeId: string) =>
   nodeId === "agent-tool" || /^agent-tool-\d+$/.test(nodeId);
@@ -1751,6 +1761,56 @@ test("agentGraph stops re-planning after maxIterations and does not issue a seco
   assert.equal(
     executionNodes.some((nodeId) => nodeId === "agent-tool"),
     false,
+  );
+});
+
+test("routeAfterTool returns the declared tool graph branches", () => {
+  assert.equal(routeAfterTool(makeRouteState()), "toolSelectStep");
+  assert.equal(
+    routeAfterTool(
+      makeRouteState({
+        iterationCount: 3,
+      }),
+    ),
+    "generate",
+  );
+  assert.equal(
+    routeAfterTool(
+      makeRouteState({
+        pendingApproval: {
+          toolId: "terminal_session",
+        },
+      }),
+    ),
+    "approval",
+  );
+  assert.equal(
+    routeAfterTool(
+      makeRouteState({
+        errorMessage: "tool failed",
+      }),
+    ),
+    "error",
+  );
+});
+
+test("routeAfterRetrieve returns the declared retrieve graph branches", () => {
+  assert.equal(routeAfterRetrieve(makeRouteState()), "toolSelectStep");
+  assert.equal(
+    routeAfterRetrieve(
+      makeRouteState({
+        iterationCount: 3,
+      }),
+    ),
+    "generate",
+  );
+  assert.equal(
+    routeAfterRetrieve(
+      makeRouteState({
+        errorMessage: "retrieve failed",
+      }),
+    ),
+    "error",
   );
 });
 

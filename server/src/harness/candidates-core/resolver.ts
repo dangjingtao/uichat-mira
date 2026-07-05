@@ -30,11 +30,11 @@ export const resolveHarnessToolCandidatesForTurn = async (
     source,
     query: input.query,
   });
-  const exposedDefinitions = exposureDecision.exposedDefinitions.slice(0, maxTools);
-  const profiles = resolveHarnessCapabilityProfiles(exposedDefinitions);
-  const toolExposure: HarnessToolExposure = {
-    exposedToolIds: exposedDefinitions.map((definition) => definition.id),
-    exposedDefinitions,
+  const visibleDefinitions = exposureDecision.exposedDefinitions;
+  const profiles = resolveHarnessCapabilityProfiles(visibleDefinitions);
+  const initialToolExposure: HarnessToolExposure = {
+    exposedToolIds: visibleDefinitions.map((definition) => definition.id),
+    exposedDefinitions: visibleDefinitions,
     reason: exposureDecision.reason,
     blockedCapabilityIds: exposureDecision.blockedCapabilityIds,
   };
@@ -44,7 +44,7 @@ export const resolveHarnessToolCandidatesForTurn = async (
       query: input.query,
       source,
       toolCandidates: [],
-      toolExposure,
+      toolExposure: initialToolExposure,
     };
   }
 
@@ -109,8 +109,7 @@ export const resolveHarnessToolCandidatesForTurn = async (
       ): match is NonNullable<typeof match> =>
         match !== null && match.finalScore >= minScore,
     )
-    .sort((left, right) => right.finalScore - left.finalScore)
-    .slice(0, topK);
+    .sort((left, right) => right.finalScore - left.finalScore);
 
   let rerankModel:
     | {
@@ -133,13 +132,27 @@ export const resolveHarnessToolCandidatesForTurn = async (
     }
   }
 
+  const rankedMatches = matches.slice(0, topK);
+  const rankedToolCandidates = expandHarnessToolCandidates({
+    matches: rankedMatches,
+    definitions: visibleDefinitions,
+  }).sort((left, right) => right.finalScore - left.finalScore);
+  const toolCandidates = rankedToolCandidates.slice(0, maxTools);
+  const definitionMap = new Map(visibleDefinitions.map((definition) => [definition.id, definition]));
+  const exposedDefinitions = toolCandidates
+    .map((candidate) => definitionMap.get(candidate.toolId))
+    .filter((definition): definition is NonNullable<typeof definition> => Boolean(definition));
+  const toolExposure: HarnessToolExposure = {
+    exposedToolIds: exposedDefinitions.map((definition) => definition.id),
+    exposedDefinitions,
+    reason: exposureDecision.reason,
+    blockedCapabilityIds: exposureDecision.blockedCapabilityIds,
+  };
+
   return {
     query: input.query,
     source,
-    toolCandidates: expandHarnessToolCandidates({
-      matches,
-      definitions: exposedDefinitions,
-    }),
+    toolCandidates,
     toolExposure,
     ...(retrievalError ? { retrievalError } : {}),
     ...(embeddingResult

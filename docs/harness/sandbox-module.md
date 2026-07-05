@@ -46,12 +46,15 @@ Doc Type: current-contract
 - timeout
 - abort / 进程树终止
 - 最小命令 + 参数策略
+- direct bench 最小合同与结构化 JSON runner
 
 相关实现：
 
 - [executor.ts](/D:/workspace/rag-demo/server/src/sandbox/executor.ts)
 - [policy.ts](/D:/workspace/rag-demo/server/src/sandbox/policy.ts)
 - [executor.test.ts](/D:/workspace/rag-demo/server/src/sandbox/executor.test.ts)
+- [contract.ts](/D:/workspace/rag-demo/server/src/harness/sandbox/contract.ts)
+- [runner.ts](/D:/workspace/rag-demo/server/src/harness/sandbox/bench/runner.ts)
 
 ## 当前接入范围
 
@@ -120,11 +123,29 @@ Doc Type: current-contract
 - 受控执行器
 - 轻量沙箱前置层
 - 桌面级可治理执行面
+- 带 direct bench 合同校验的最小执行层
 
 它不是：
 
 - 严格意义上的安全沙箱
 - 三端统一强隔离运行时
+
+## Direct Bench 当前范围
+
+当前已补一条绕过 LLM / Planner / Tool Selection / `read_list` / Generate 的 direct bench：
+
+- bench 直接调用 `SandboxRunRequest -> SandboxRunResult`
+- 正向覆盖 `echo hello`、中文输出、非零 `exitCode`
+- 负向覆盖 `cwd` 越界、超短 `timeout`、巨量输出
+- 输出为结构化 JSON
+
+当前仍明确未实现：
+
+- `read_only`
+- `workspace_write`
+- `networked_command`
+
+这些 profile 目前会被 bench 明确标成 `not_implemented`，不会伪装成通过。
 
 ## 后续方向
 

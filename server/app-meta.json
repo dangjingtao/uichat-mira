@@ -38,11 +38,11 @@
         {
           "version": "0.7.1",
           "commit": {
-            "hash": "651b39b188a20b0ba85ab9114cb6c4470b05cba4",
-            "shortHash": "651b39b",
-            "message": "feat: smoke test",
+            "hash": "10ec92f153bc571c05d44740cc56aecff89e2ca2",
+            "shortHash": "10ec92f",
+            "message": "refactor: phisical split",
             "author": "Tomz",
-            "date": "2026-07-05T03:20:14+08:00"
+            "date": "2026-07-05T19:43:06+08:00"
           }
         },
         {

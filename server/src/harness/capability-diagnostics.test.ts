@@ -252,4 +252,83 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
       actionProfileId: "terminal_execute_command",
     });
   });
+
+  it("keeps exposure reasons, blocked ids, and candidate scores for workspace-local diagnostics", async () => {
+    registerCapability({
+      definition: {
+        id: "read_open",
+        title: "Read Open",
+        description: "open workspace file",
+        domain: "read",
+        source: "internal",
+        mode: "sync",
+        inputSchema: {},
+        tags: ["workspace", "open", "readme"],
+        capabilities: {
+          sideEffect: "none",
+          requiresApproval: false,
+        },
+      },
+      execute() {
+        return {};
+      },
+    });
+
+    registerCapability({
+      definition: {
+        id: "web_search",
+        title: "Web Search",
+        description: "search the public web",
+        domain: "web_search",
+        source: "internal",
+        mode: "sync",
+        inputSchema: {},
+        tags: ["web", "search", "latest"],
+        capabilities: {
+          sideEffect: "network",
+          requiresApproval: false,
+        },
+      },
+      execute() {
+        return {};
+      },
+    });
+
+    vi.spyOn(embedding, "executeLocalEmbedding").mockResolvedValue({
+      embeddingModel: "test",
+      embeddingModelConfigId: "test-config",
+      embeddings: [
+        [1, 0],
+        [1, 0],
+      ],
+    });
+    vi.spyOn(rerank, "executeLocalRerank").mockResolvedValue({
+      rerankedCandidates: [
+        {
+          id: "workspace_lookup",
+          text: "Workspace Lookup",
+          score: 1,
+          probability: 0.88,
+          rank: 1,
+        },
+      ],
+      rerankModel: "test-rerank",
+      rerankModelConfigId: "test-rerank-config",
+    });
+
+    const result = await resolveHarnessCapabilityDiagnostics({
+      query: "请打开 README.md 看看 Runtime 部分",
+      source: "agent_intent",
+    });
+
+    expect(result.toolExposure.exposedToolIds).toEqual(["read_open"]);
+    expect(result.blockedCapabilityIds).toContain("web_search");
+    expect(result.exposureReasons).toContain(
+      "Workspace-local query hides web_search for agent_intent; local read evidence should be preferred.",
+    );
+    expect(result.toolCandidates[0]).toMatchObject({
+      toolId: "read_open",
+    });
+    expect(result.toolCandidates[0]?.finalScore).toBeGreaterThan(0);
+  });
 });

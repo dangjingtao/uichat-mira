@@ -83,6 +83,7 @@ Doc Type: checklist
 - [ ] 为并发执行增加上限
 - [ ] 明确默认不允许长驻后台进程逃逸
 - [x] 输出超限时返回标准化错误
+- [x] 新增绕过 LLM / Planner 的 direct bench，并输出结构化 JSON
 
 ### B5. 环境变量治理
 
@@ -127,6 +128,7 @@ Doc Type: checklist
 - [x] 进程树清理测试
 - [x] 外部 MCP 风险分层测试
 - [x] retention / cleanup 测试
+- [x] Sandbox direct bench 正负向样例与 `not_implemented` 标记
 
 ## G. 文档与验收
 

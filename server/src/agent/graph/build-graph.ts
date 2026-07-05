@@ -96,6 +96,7 @@ export const compiledAgentStateGraph = new StateGraph(AgentGraphStateAnnotation)
   ])
   .addConditionalEdges("tool", routeAfterTool, [
     "approval",
+    "generate",
     "toolSelectStep",
     "error",
   ])
