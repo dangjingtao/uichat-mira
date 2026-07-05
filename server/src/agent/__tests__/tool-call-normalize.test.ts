@@ -34,7 +34,13 @@ const createState = (
     },
   ],
   toolExposure: {
-    exposedTools: ["read_open", "read_list", "web_search", "terminal_session"],
+    exposedTools: [
+      "read_open",
+      "read_list",
+      "web_search",
+      "terminal_session",
+      "workspace_mutation",
+    ],
     toolMeta: [
       {
         toolId: "read_open",
@@ -55,6 +61,9 @@ const createState = (
           sideEffect: "none",
           requiresApproval: false,
           workspaceBound: true,
+          workspaceBoundary: {
+            argKeys: ["path"],
+          },
         },
       },
       {
@@ -76,6 +85,9 @@ const createState = (
           sideEffect: "none",
           requiresApproval: false,
           workspaceBound: true,
+          workspaceBoundary: {
+            argKeys: ["path"],
+          },
         },
       },
       {
@@ -117,6 +129,36 @@ const createState = (
           sideEffect: "process",
           requiresApproval: true,
           workspaceBound: true,
+        },
+      },
+      {
+        toolId: "workspace_mutation",
+        title: "Workspace Mutation",
+        description: "Mutate workspace files",
+        inputSchema: {
+          type: "object",
+          required: ["operation", "targetPath"],
+          properties: {
+            operation: {
+              type: "string",
+              enum: ["delete", "move", "write"],
+            },
+            targetPath: { type: "string" },
+            destinationPath: { type: "string" },
+            content: { type: "string" },
+          },
+          additionalProperties: false,
+        },
+        domain: "edit",
+        source: "internal",
+        tags: ["edit"],
+        capabilities: {
+          sideEffect: "local-write",
+          requiresApproval: true,
+          workspaceBound: true,
+          workspaceBoundary: {
+            argKeys: ["targetPath", "destinationPath"],
+          },
         },
       },
     ],
@@ -181,7 +223,7 @@ test("toolCallNormalizeNode normalizes read_list /workspace/ to workspace root d
   assert.deepEqual(patch.pendingToolCall?.args, { path: "." });
 });
 
-test("toolCallNormalizeNode preserves root-relative /README.md for downstream workspace checks", async () => {
+test("toolCallNormalizeNode normalizes root-relative /README.md to workspace-relative path", async () => {
   const patch = await toolCallNormalizeNode(
     createState({
       nextAction: {
@@ -194,10 +236,10 @@ test("toolCallNormalizeNode preserves root-relative /README.md for downstream wo
   );
 
   assert.equal(patch.errorMessage, undefined);
-  assert.deepEqual(patch.pendingToolCall?.args, { path: "/README.md" });
+  assert.deepEqual(patch.pendingToolCall?.args, { path: "README.md" });
 });
 
-test("toolCallNormalizeNode preserves nested root-relative read paths for downstream workspace checks", async () => {
+test("toolCallNormalizeNode normalizes nested root-relative read paths", async () => {
   const patch = await toolCallNormalizeNode(
     createState({
       nextAction: {
@@ -210,7 +252,7 @@ test("toolCallNormalizeNode preserves nested root-relative read paths for downst
   );
 
   assert.equal(patch.errorMessage, undefined);
-  assert.deepEqual(patch.pendingToolCall?.args, { path: "/docs/README.md" });
+  assert.deepEqual(patch.pendingToolCall?.args, { path: "docs/README.md" });
 });
 
 test("toolCallNormalizeNode preserves normal relative read paths", async () => {
@@ -245,6 +287,69 @@ test("toolCallNormalizeNode rejects workspace-root-relative traversal attempts",
   assert.match(patch.errorMessage ?? "", /escaped the workspace root/i);
 });
 
+test("toolCallNormalizeNode normalizes workspace_mutation root-relative targetPath before freezing", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "workspace_mutation",
+        args: {
+          operation: "delete",
+          targetPath: "/ONLY_ALT_WORKSPACE.txt",
+        },
+        reason: "Delete the workspace file.",
+      },
+    }),
+  );
+
+  assert.equal(patch.errorMessage, undefined);
+  assert.deepEqual(patch.pendingToolCall?.args, {
+    operation: "delete",
+    targetPath: "ONLY_ALT_WORKSPACE.txt",
+  });
+});
+
+test("toolCallNormalizeNode rejects workspace_mutation traversal targetPath", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "workspace_mutation",
+        args: {
+          operation: "delete",
+          targetPath: "..\\outside.txt",
+        },
+        reason: "Delete the outside file.",
+      },
+    }),
+  );
+
+  assert.equal(patch.pendingToolCall, undefined);
+  assert.match(patch.errorMessage ?? "", /escaped the workspace root/i);
+});
+
+test("toolCallNormalizeNode preserves Windows absolute workspace_mutation targetPath for boundary rejection", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "workspace_mutation",
+        args: {
+          operation: "delete",
+          targetPath: "D:\\outside.txt",
+        },
+        reason: "Delete the outside file.",
+      },
+    }),
+  );
+
+  assert.equal(patch.errorMessage, undefined);
+  assert.deepEqual(patch.pendingToolCall?.args, {
+    operation: "delete",
+    targetPath: "D:\\outside.txt",
+  });
+});
+
 test("toolCallNormalizeNode rejects plain relative traversal attempts", async () => {
   const patch = await toolCallNormalizeNode(
     createState({
@@ -261,7 +366,7 @@ test("toolCallNormalizeNode rejects plain relative traversal attempts", async ()
   assert.match(patch.errorMessage ?? "", /escaped the workspace root/i);
 });
 
-test("toolCallNormalizeNode preserves root-relative /etc/passwd for downstream workspace checks", async () => {
+test("toolCallNormalizeNode normalizes root-relative /etc/passwd to workspace-relative path", async () => {
   const patch = await toolCallNormalizeNode(
     createState({
       nextAction: {
@@ -274,10 +379,10 @@ test("toolCallNormalizeNode preserves root-relative /etc/passwd for downstream w
   );
 
   assert.equal(patch.errorMessage, undefined);
-  assert.deepEqual(patch.pendingToolCall?.args, { path: "/etc/passwd" });
+  assert.deepEqual(patch.pendingToolCall?.args, { path: "etc/passwd" });
 });
 
-test("toolCallNormalizeNode preserves root-relative /bin/sh for downstream workspace checks", async () => {
+test("toolCallNormalizeNode normalizes root-relative /bin/sh to workspace-relative path", async () => {
   const patch = await toolCallNormalizeNode(
     createState({
       nextAction: {
@@ -290,10 +395,10 @@ test("toolCallNormalizeNode preserves root-relative /bin/sh for downstream works
   );
 
   assert.equal(patch.errorMessage, undefined);
-  assert.deepEqual(patch.pendingToolCall?.args, { path: "/bin/sh" });
+  assert.deepEqual(patch.pendingToolCall?.args, { path: "bin/sh" });
 });
 
-test("toolCallNormalizeNode preserves root-relative /usr/bin/env for downstream workspace checks", async () => {
+test("toolCallNormalizeNode normalizes root-relative /usr/bin/env to workspace-relative path", async () => {
   const patch = await toolCallNormalizeNode(
     createState({
       nextAction: {
@@ -306,10 +411,10 @@ test("toolCallNormalizeNode preserves root-relative /usr/bin/env for downstream 
   );
 
   assert.equal(patch.errorMessage, undefined);
-  assert.deepEqual(patch.pendingToolCall?.args, { path: "/usr/bin/env" });
+  assert.deepEqual(patch.pendingToolCall?.args, { path: "usr/bin/env" });
 });
 
-test("toolCallNormalizeNode preserves root-relative /C:/Windows/System32 for downstream workspace checks", async () => {
+test("toolCallNormalizeNode normalizes pseudo-root-relative /C:/Windows/System32 to workspace-relative path", async () => {
   const patch = await toolCallNormalizeNode(
     createState({
       nextAction: {
@@ -322,7 +427,7 @@ test("toolCallNormalizeNode preserves root-relative /C:/Windows/System32 for dow
   );
 
   assert.equal(patch.errorMessage, undefined);
-  assert.deepEqual(patch.pendingToolCall?.args, { path: "/C:/Windows/System32" });
+  assert.deepEqual(patch.pendingToolCall?.args, { path: "C:/Windows/System32" });
 });
 
 test("toolCallNormalizeNode keeps windows absolute read paths unchanged for downstream workspace checks", async () => {
@@ -463,6 +568,10 @@ test("toolCallNormalizeNode rejects class instance args", async () => {
 test("toolCallNormalizeNode fails when toolId is not exposed", async () => {
   const patch = await toolCallNormalizeNode(
     createState({
+      toolExposure: {
+        exposedTools: ["read_open", "read_list", "web_search", "terminal_session"],
+        toolMeta: [],
+      },
       nextAction: {
         type: "use_tool",
         toolId: "workspace_mutation",

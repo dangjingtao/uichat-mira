@@ -129,6 +129,43 @@ describe("workspace_mutation tool", () => {
     );
   });
 
+  it("rejects Windows absolute and UNC deletion targets outside the workspace root", async () => {
+    const absoluteInvocation = createInvocationContext({
+      operation: "delete",
+      targetPath: "D:\\outside.txt",
+    });
+    const uncInvocation = createInvocationContext({
+      operation: "delete",
+      targetPath: "\\\\server\\share\\file.txt",
+    });
+
+    await expect(workspaceMutationTool.execute(absoluteInvocation.context)).rejects.toThrow(
+      "path must stay inside workspace root",
+    );
+    await expect(workspaceMutationTool.execute(uncInvocation.context)).rejects.toThrow(
+      "path must stay inside workspace root",
+    );
+  });
+
+  it("treats /notes.txt as workspace-root-relative during execution", async () => {
+    fs.writeFileSync(path.join(tempRoot, "notes.txt"), "remove me", "utf-8");
+    const invocation = createInvocationContext({
+      operation: "delete",
+      targetPath: "/notes.txt",
+    });
+
+    const result = await workspaceMutationTool.execute(invocation.context);
+
+    expect(fs.existsSync(path.join(tempRoot, "notes.txt"))).toBe(false);
+    expect(result.result).toEqual({
+      operation: "delete",
+      targetPath: "/notes.txt",
+      dryRun: false,
+      deletedType: "file",
+      recursive: false,
+    });
+  });
+
   it("rejects directory deletion without recursive=true", async () => {
     fs.mkdirSync(path.join(tempRoot, "logs"), { recursive: true });
     const invocation = createInvocationContext({

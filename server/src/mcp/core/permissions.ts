@@ -4,6 +4,7 @@ import type {
   McpExecutionEnvironment,
   McpToolDefinition,
 } from "./definitions.js";
+import { normalizeWorkspaceRelativePathArg } from "../workspace-path-args.js";
 
 export const describeRisk = (capabilities: McpCapabilityMetadata) => {
   if (capabilities.sideEffect === "process") {
@@ -36,7 +37,13 @@ const resolveWorkspaceRelativeTarget = (
   workspaceRoot: string,
   candidate: string,
 ) => {
-  const resolved = path.resolve(workspaceRoot, candidate);
+  const normalizedCandidate = normalizeWorkspaceRelativePathArg(candidate);
+  const resolved = path.resolve(
+    workspaceRoot,
+    normalizedCandidate.type === "reject"
+      ? candidate
+      : normalizedCandidate.value,
+  );
   const relative = path.relative(workspaceRoot, resolved);
   return {
     resolved,

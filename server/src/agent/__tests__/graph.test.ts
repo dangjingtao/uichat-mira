@@ -44,6 +44,31 @@ const makeRouteState = (overrides: Record<string, unknown> = {}) =>
 const isToolExecutionNodeId = (nodeId: string) =>
   nodeId === "agent-tool" || /^agent-tool-\d+$/.test(nodeId);
 
+const getDefaultWorkspaceBoundaryArgKeys = (input: {
+  id: string;
+  domain: string;
+  workspaceBound?: boolean;
+  workspaceBoundaryArgKeys?: string[];
+}) => {
+  if (!input.workspaceBound) {
+    return undefined;
+  }
+
+  if (input.workspaceBoundaryArgKeys) {
+    return input.workspaceBoundaryArgKeys;
+  }
+
+  if (input.domain === "read") {
+    return ["path"];
+  }
+
+  if (input.id === "terminal_session") {
+    return ["cwd"];
+  }
+
+  return undefined;
+};
+
 const makeToolDefinition = (input: {
   id: string;
   title?: string;
@@ -52,20 +77,34 @@ const makeToolDefinition = (input: {
   inputSchema: Record<string, unknown>;
   sideEffect?: "none" | "network" | "process" | "local-write";
   requiresApproval?: boolean;
-}) => ({
-  id: input.id,
-  title: input.title ?? input.id,
-  description: input.description ?? input.id,
-  domain: input.domain,
-  source: "internal" as const,
-  mode: "sync" as const,
-  inputSchema: input.inputSchema,
-  tags: [input.domain],
-  capabilities: {
-    sideEffect: input.sideEffect ?? "none",
-    requiresApproval: input.requiresApproval ?? false,
-  },
-});
+  workspaceBound?: boolean;
+  workspaceBoundaryArgKeys?: string[];
+}) => {
+  const workspaceBoundaryArgKeys = getDefaultWorkspaceBoundaryArgKeys(input);
+
+  return {
+    id: input.id,
+    title: input.title ?? input.id,
+    description: input.description ?? input.id,
+    domain: input.domain,
+    source: "internal" as const,
+    mode: "sync" as const,
+    inputSchema: input.inputSchema,
+    tags: [input.domain],
+    capabilities: {
+      sideEffect: input.sideEffect ?? "none",
+      requiresApproval: input.requiresApproval ?? false,
+      workspaceBound: input.workspaceBound ?? false,
+      ...(workspaceBoundaryArgKeys
+        ? {
+            workspaceBoundary: {
+              argKeys: workspaceBoundaryArgKeys,
+            },
+          }
+        : {}),
+    },
+  };
+};
 
 const makeToolIntentResult = (input: {
   query: string;
@@ -784,6 +823,9 @@ test('agentGraph treats read_list "/workspace" and "." as the same repeated call
     },
   });
   readList.capabilities.workspaceBound = true;
+  readList.capabilities.workspaceBoundary = {
+    argKeys: ["path"],
+  };
   vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([readList]);
   vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
     makeToolIntentResult({
@@ -1036,6 +1078,7 @@ test("agentGraph normalizes /workspace before policy and executes read_list", as
   const readList = makeToolDefinition({
     id: "read_list",
     domain: "read",
+    workspaceBound: true,
     inputSchema: {
       type: "object",
       required: ["path"],
@@ -1045,7 +1088,6 @@ test("agentGraph normalizes /workspace before policy and executes read_list", as
       additionalProperties: false,
     },
   });
-  readList.capabilities.workspaceBound = true;
   vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([readList]);
   vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
     makeToolIntentResult({

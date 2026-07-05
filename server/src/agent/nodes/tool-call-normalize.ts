@@ -1,9 +1,9 @@
 /**
  * 工具调用规范化节点：校验并冻结 Planner 输出的工具调用参数，生成 pending tool call。
  */
-import path from "node:path";
 import crypto from "node:crypto";
 import { validateInvocationArgs } from "@/mcp/core/schema";
+import { normalizeWorkspaceBoundaryArgs } from "@/mcp/workspace-path-args";
 import { toAgentExecutionNode } from "../trace";
 import type { EmitAgentExecutionNode, AgentGraphState } from "../node-runtime";
 import type { AgentNextAction, AgentToolMeta, PendingToolCall } from "../types";
@@ -83,87 +83,25 @@ const emitNormalizeFailure = async (
 const findToolMeta = (toolMeta: AgentToolMeta[] | undefined, toolId: string) =>
   toolMeta?.find((item) => item.toolId === toolId);
 
-const READ_PATH_ARG_KEY = "path";
-const WORKSPACE_ROOT_SENTINEL = "/workspace";
-
-const isWindowsAbsolutePath = (value: string) =>
-  /^[a-zA-Z]:[\\/]/.test(value) || value.startsWith("\\\\");
-
-const normalizeWorkspaceReadPath = (
-  value: string,
-): { normalizedPath: string } | { rejectReason: string } | null => {
-  const trimmed = value.trim();
-  if (!trimmed || isWindowsAbsolutePath(trimmed)) {
-    return null;
-  }
-
-  let candidate: string | null = null;
-  if (
-    trimmed === WORKSPACE_ROOT_SENTINEL ||
-    trimmed === `${WORKSPACE_ROOT_SENTINEL}/`
-  ) {
-    candidate = ".";
-  } else if (trimmed.startsWith(`${WORKSPACE_ROOT_SENTINEL}/`)) {
-    candidate = trimmed.slice(WORKSPACE_ROOT_SENTINEL.length + 1);
-  } else if (trimmed === ".." || trimmed.startsWith("../")) {
-    candidate = trimmed;
-  }
-
-  if (candidate === null) {
-    return null;
-  }
-
-  const normalizedCandidate = path.posix.normalize(
-    candidate.replaceAll("\\", "/"),
-  );
-  if (
-    normalizedCandidate.startsWith("/") ||
-    normalizedCandidate === ".." ||
-    normalizedCandidate.startsWith("../") ||
-    normalizedCandidate === ""
-  ) {
-    return {
-      rejectReason:
-        "Planner read tool path escaped the workspace root after normalization.",
-    };
-  }
-
-  return {
-    normalizedPath: normalizedCandidate,
-  };
-};
-
-const normalizeWorkspaceReadArgs = (
+const normalizeWorkspaceBoundArgs = (
   toolMeta: AgentToolMeta,
   args: Record<string, unknown>,
 ): { args: Record<string, unknown> } | { rejectReason: string } => {
-  if (
-    toolMeta.domain !== "read" ||
-    toolMeta.capabilities?.workspaceBound !== true
-  ) {
-    return { args };
-  }
-
-  const pathValue = args[READ_PATH_ARG_KEY];
-  if (typeof pathValue !== "string") {
-    return { args };
-  }
-
-  const result = normalizeWorkspaceReadPath(pathValue);
-  if (!result) {
-    return { args };
-  }
-
-  if ("rejectReason" in result) {
-    return { rejectReason: result.rejectReason };
-  }
-
-  return {
-    args: {
-      ...args,
-      [READ_PATH_ARG_KEY]: result.normalizedPath,
+  const normalizedArgs = normalizeWorkspaceBoundaryArgs(
+    {
+      capabilities: toolMeta.capabilities,
     },
-  };
+    args,
+  );
+
+  if ("rejectReason" in normalizedArgs) {
+    return {
+      rejectReason:
+        "Planner workspace tool path escaped the workspace root after normalization.",
+    };
+  }
+
+  return normalizedArgs;
 };
 
 const getUseToolAction = (
@@ -282,7 +220,7 @@ export const toolCallNormalizeNode = async (
     });
   }
 
-  const normalizedArgsResult = normalizeWorkspaceReadArgs(
+  const normalizedArgsResult = normalizeWorkspaceBoundArgs(
     toolMeta,
     useToolAction.args,
   );

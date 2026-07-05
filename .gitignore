@@ -8,6 +8,7 @@ dist/
 .DS_Store
 coverage/
 .artifacts/
+.test-artifact/
 .local-models/
 apps/desktop/release/
 apps/desktop/release-*/

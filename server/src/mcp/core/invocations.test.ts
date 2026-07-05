@@ -500,6 +500,89 @@ describe("mcp invocations", () => {
     expect(executed).toBe(false);
   });
 
+  it("allows workspace-root-relative slash paths after normalization on Windows-style workspace roots", async () => {
+    let executed = false;
+
+    registerCapability({
+      definition: {
+        id: "boundary_tool_root_relative",
+        title: "Boundary Tool Root Relative",
+        description: "boundary",
+        domain: "edit",
+        source: "internal",
+        mode: "sync",
+        inputSchema: {
+          type: "object",
+          required: ["targetPath"],
+          properties: {
+            targetPath: { type: "string" },
+          },
+        },
+        tags: ["test"],
+        capabilities: {
+          sideEffect: "local-write",
+          requiresApproval: false,
+          workspaceBound: true,
+          workspaceBoundary: {
+            argKeys: ["targetPath"],
+          },
+        },
+      },
+      execute() {
+        executed = true;
+        return {
+          result: {
+            ok: true,
+          },
+        };
+      },
+    });
+
+    const record = await executeHarnessInvocation({
+      toolId: "boundary_tool_root_relative",
+      args: {
+        targetPath: "/ONLY_ALT_WORKSPACE.txt",
+      },
+      environment: {
+        source: "harness",
+        workspace: {
+          rootPath: "D:\\CODEX_TEST_FOLDER_ALT",
+          source: "configured",
+        },
+        approvals: {
+          outsideWorkspace: "prompt",
+          persistence: "thread",
+        },
+        trace: {
+          streamEvents: true,
+        },
+        read: {
+          capabilities: [],
+        },
+        edit: {
+          capabilities: [],
+        },
+        web_search: {
+          capabilities: [],
+        },
+        terminal: {
+          capabilities: [],
+          shellProfile: {
+            shell: "powershell.exe",
+            shellFamily: "powershell",
+            argsMode: "powershell",
+            stdoutEncoding: "utf16le",
+            stderrEncoding: "utf16le",
+          },
+        },
+      },
+    });
+
+    expect(record.status).toBe("completed");
+    expect(record.approval).toBeUndefined();
+    expect(executed).toBe(true);
+  });
+
   it("sweeps finished invocations beyond retention limit", async () => {
     const tool: McpToolImplementation = {
       definition: {

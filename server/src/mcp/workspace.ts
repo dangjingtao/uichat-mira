@@ -2,6 +2,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { mcpBadRequest, mcpInternalError } from "./core/errors.js";
+import { normalizeWorkspaceRelativePathArg } from "./workspace-path-args.js";
 
 let selectedWorkspaceRoot: string | null = null;
 const workspaceRootOverrideStorage = new AsyncLocalStorage<string | null>();
@@ -100,7 +101,12 @@ export const resolveWorkspacePath = (inputPath: unknown) => {
   }
 
   const workspaceRoot = getWorkspaceRoot();
-  const resolved = path.resolve(workspaceRoot, inputPath);
+  const normalizedPath = normalizeWorkspaceRelativePathArg(inputPath);
+  if (normalizedPath.type === "reject") {
+    throw mcpBadRequest("path must stay inside workspace root");
+  }
+
+  const resolved = path.resolve(workspaceRoot, normalizedPath.value);
   const relative = path.relative(workspaceRoot, resolved);
 
   if (relative.startsWith("..") || path.isAbsolute(relative)) {

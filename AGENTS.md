@@ -42,6 +42,7 @@ If other docs, comments, or legacy files still mention `UI Chat RAG Tester`, tre
 - If a bug has already been solved before and a new fix attempt is stuck after multiple rounds, stop re-deriving it from scratch and review the historical branches or commits for the prior solution path.
 - Do not add `hardcoded local path`, temporary fallback, mock default, or silent fallback to the main flow just to make manual verification pass.
 - If temporary verification logic is necessary, keep it only in test files or behind an explicit `DEBUG` configuration switch. Do not let that logic enter production code paths by default.
+- Put test temporary artifacts under the repository root `.test-artifact/` directory. This includes SQLite main files and companion files such as `*.sqlite-wal`, `*.sqlite-shm`, `*.db-wal`, and `*.db-shm`. Do not place these files next to business data or source files, and do not commit them into version control.
 - Unless there is already an explicitly confirmed business requirement for compatibility, do not add fallback logic in backend code. If compatibility behavior, downgrade paths, or silent兜底 seem necessary, stop and align on the design with the project owner first.
 - If fallback or compatibility logic is explicitly approved and must remain, add a succinct comment explaining why it exists, which concrete failure mode it protects, and when it should be removed.
 - If you find legacy code that is no longer applicable and does not affect current behavior, remove it during development instead of keeping dead paths around.

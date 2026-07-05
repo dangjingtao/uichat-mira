@@ -555,3 +555,120 @@ test("resumeApprovedAgentRun blocks execution when approval toolCallId does not 
     agentRunStore.clear();
   }
 });
+
+test("resumeApprovedAgentRun keeps a legacy root-relative workspace path and can continue without repeating approval", async () => {
+  const approvedInput = {
+    operation: "delete",
+    targetPath: "/ONLY_ALT_WORKSPACE.txt",
+  };
+  const goal = createAgentGoal("delete the workspace file");
+  const run = agentRunStore.create({
+    threadId: "thread-1",
+    userId: 1,
+    goal,
+    plan: createAgentPlan(goal),
+    assistantMessageId: "assistant-workspace-1",
+    assistantParentId: "user-1",
+    runtimeInput: {
+      messages: [
+        {
+          role: "user",
+          content: "delete the workspace file",
+          parts: [{ type: "text", text: "delete the workspace file" }],
+        },
+      ],
+      params: {},
+      workspaceRoot: "D:\\CODEX_TEST_FOLDER_ALT",
+    },
+  });
+
+  agentRunStore.update(run.id, {
+    status: "waiting_approval",
+    pendingApproval: {
+      id: "approval-workspace-1",
+      runId: run.id,
+      stepId: "approval",
+      toolId: "workspace_mutation",
+      toolCallId: "pending-workspace-1",
+      reason: "needs approval",
+      input: approvedInput,
+      inputHash: createInvocationInputHash(approvedInput),
+      createdAt: "2026-07-05T00:00:00.000Z",
+    },
+    pendingToolCall: {
+      id: "pending-workspace-1",
+      toolId: "workspace_mutation",
+      args: approvedInput,
+      inputHash: createInvocationInputHash(approvedInput),
+      source: "planner",
+      status: "frozen",
+      createdAt: "2026-07-05T00:00:00.000Z",
+    },
+  });
+
+  const runSpy = vi.spyOn(agentGraph, "run").mockImplementation(async (input) => {
+    assert.deepEqual(input.pendingToolCall, {
+      id: "pending-workspace-1",
+      toolId: "workspace_mutation",
+      args: approvedInput,
+      inputHash: createInvocationInputHash(approvedInput),
+      source: "planner",
+      status: "frozen",
+      createdAt: "2026-07-05T00:00:00.000Z",
+    });
+    assert.equal(input.workspaceRoot, "D:\\CODEX_TEST_FOLDER_ALT");
+    return {
+      answer: "deleted",
+      observations: [],
+      evidence: {
+        observations: [],
+        toolExecutions: [],
+        retrievals: [],
+      },
+      retrievedChunks: [],
+      status: "completed",
+      contextBudget: {
+        policy: "task-chat",
+        model: "test-model",
+        providerCode: "test-provider",
+        modelContextTokens: 8192,
+        reservedOutputTokens: 1024,
+        maxInputTokens: 7168,
+        totalEstimatedTokensBefore: 100,
+        totalEstimatedTokensAfter: 90,
+        sections: [],
+        warnings: [],
+      },
+    } as never;
+  });
+  const persistAssistantMessageSpy = vi
+    .spyOn(messagePersistenceModule, "persistAssistantMessage")
+    .mockImplementation(() => {});
+  const getMessageByIdSpy = vi
+    .spyOn(threadService, "getMessageById")
+    .mockReturnValue({
+      id: "assistant-workspace-1",
+      threadId: "thread-1",
+      role: "assistant",
+      content: "等待审批",
+      parts: [{ type: "text", text: "等待审批" }],
+      metadata: {},
+      createdAt: "2026-07-05T00:00:00.000Z",
+    });
+
+  try {
+    const result = await resumeApprovedAgentRun(run.id);
+
+    assert.equal(runSpy.mock.calls.length, 1);
+    assert.equal(result.output.status, "completed");
+    assert.equal(result.run?.status, "completed");
+    assert.equal(result.run?.pendingApproval, undefined);
+    assert.equal(result.run?.pendingToolCall, undefined);
+    assert.equal(persistAssistantMessageSpy.mock.calls.length, 1);
+  } finally {
+    runSpy.mockRestore();
+    persistAssistantMessageSpy.mockRestore();
+    getMessageByIdSpy.mockRestore();
+    agentRunStore.clear();
+  }
+});
