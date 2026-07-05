@@ -146,13 +146,17 @@ Doc Type: current-contract
 - 负向覆盖 `cwd` 越界、超短 `timeout`、巨量输出
 - 输出为结构化 JSON
 
-当前仍明确未实现：
+UIChat Mira V1.6 当前 gate 只承诺：
+
+- `command`
+
+当前声明但不计入 V1.6 gate 的 future profile：
 
 - `read_only`
 - `workspace_write`
 - `networked_command`
 
-这些 profile 目前会被 bench 明确标成 `not_implemented`，不会伪装成通过。
+这些 future profile 会被 direct bench 明确标成 `future_profile`，用于保留合同边界证据，不会伪装成 V1.6 已覆盖或已通过。
 
 ## 后续方向
 

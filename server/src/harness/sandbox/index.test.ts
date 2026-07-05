@@ -3,6 +3,7 @@ import path from "node:path";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  getSandboxContractCoverage,
   evaluateSandboxL1WorkspaceRunnerStatus,
   getSandboxL1WorkspaceRunnerStatus,
   getSandboxProfileCoverage,
@@ -99,6 +100,26 @@ describe("sandbox direct contract", () => {
       workspace_write: "not_implemented",
       command: "implemented",
       networked_command: "not_implemented",
+    });
+  });
+
+  it("separates V1.6 gate coverage from future profile declarations", () => {
+    expect(getSandboxContractCoverage()).toEqual({
+      declaredProfiles: {
+        read_only: "future_profile",
+        workspace_write: "future_profile",
+        command: "implemented",
+        networked_command: "future_profile",
+      },
+      v16GateProfiles: {
+        command: "implemented",
+      },
+      futureProfiles: {
+        read_only: "future_profile",
+        workspace_write: "future_profile",
+        networked_command: "future_profile",
+      },
+      v16GateSatisfied: true,
     });
   });
 
@@ -248,7 +269,7 @@ describe("sandbox direct contract", () => {
     expect(result.exitCode).toBe(7);
   });
 
-  it("marks unsupported profiles without pretending success", async () => {
+  it("marks future profiles without pretending they are part of the V1.6 gate", async () => {
     const result = await runSandboxCommandDirect({
       profile: "read_only",
       workspaceRoot,
@@ -257,7 +278,7 @@ describe("sandbox direct contract", () => {
     });
 
     expect(result.status).toBe("blocked");
-    expect(result.violations[0]).toContain("not_implemented");
+    expect(result.violations[0]).toContain("future_profile");
   });
 
   it("reports output limit failures as truncated", async () => {

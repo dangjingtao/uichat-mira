@@ -4,6 +4,10 @@ export type SandboxProfile =
   | "command"
   | "networked_command";
 
+export type SandboxV16Profile = "command";
+
+export type SandboxFutureProfile = Exclude<SandboxProfile, SandboxV16Profile>;
+
 export type SandboxArtifactKind = "file" | "directory" | "patch" | "log" | "report";
 
 export type SandboxOutputEncoding = "utf8" | "gbk" | "utf16le" | "unknown";
@@ -49,7 +53,7 @@ export interface SandboxRunResult {
 
 export type SandboxBenchCaseGroup = "positive" | "negative" | "coverage";
 
-export type SandboxBenchCaseStatus = "passed" | "failed" | "not_implemented";
+export type SandboxBenchCaseStatus = "passed" | "failed" | "future_profile";
 
 export interface SandboxBenchCaseResult {
   id: string;
@@ -66,13 +70,16 @@ export interface SandboxBenchReport {
   generatedAt: string;
   workspaceRoot: string;
   contractCoverage: {
-    profiles: Record<SandboxProfile, "implemented" | "not_implemented">;
+    declaredProfiles: Record<SandboxProfile, "implemented" | "not_implemented" | "future_profile">;
+    v16GateProfiles: Record<SandboxV16Profile, "implemented" | "not_implemented">;
+    futureProfiles: Record<SandboxFutureProfile, "future_profile">;
+    v16GateSatisfied: boolean;
   };
   summary: {
     total: number;
-    passed: number;
-    failed: number;
-    notImplemented: number;
+    gatePassed: number;
+    gateFailed: number;
+    futureProfile: number;
   };
   cases: SandboxBenchCaseResult[];
 }

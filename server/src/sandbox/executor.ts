@@ -183,12 +183,16 @@ const normalizeReportedEncoding = (encoding: string): SandboxOutputEncoding => {
   return "unknown";
 };
 
-const hasBinarySignature = (chunk: Buffer | string) => {
+const hasBinarySignature = (chunk: Buffer | string, encoding: string) => {
   if (typeof chunk === "string") {
     return false;
   }
 
+  const reportedEncoding = normalizeReportedEncoding(encoding);
   if (chunk.includes(0)) {
+    if (reportedEncoding === "utf16le" && looksLikeUtf16Le(chunk)) {
+      return false;
+    }
     return true;
   }
 
@@ -231,29 +235,40 @@ const looksLikeUtf16Le = (chunk: Buffer) => {
 const decodeChunk = (
   chunk: Buffer | string,
   encoding: string,
-): { text: string; encoding: SandboxOutputEncoding } => {
+): { text: string; encoding: SandboxOutputEncoding; failed: boolean } => {
   if (typeof chunk === "string") {
     return {
       text: chunk,
       encoding: normalizeReportedEncoding(encoding),
+      failed: false,
     };
   }
 
   const reportedEncoding = normalizeReportedEncoding(encoding);
-  if (reportedEncoding === "utf16le" && !looksLikeUtf16Le(chunk)) {
+  try {
+    if (reportedEncoding === "utf16le" && !looksLikeUtf16Le(chunk)) {
+      return {
+        text: chunk.toString("utf8"),
+        encoding: "utf8",
+        failed: false,
+      };
+    }
+
     return {
-      text: chunk.toString("utf8"),
-      encoding: "utf8",
+      text: decodeTerminalOutput({
+        chunk,
+        encoding,
+      }),
+      encoding: reportedEncoding,
+      failed: false,
+    };
+  } catch {
+    return {
+      text: "",
+      encoding: "unknown",
+      failed: true,
     };
   }
-
-  return {
-    text: decodeTerminalOutput({
-      chunk,
-      encoding,
-    }),
-    encoding: reportedEncoding,
-  };
 };
 
 const inferMimeTypeFromPath = (targetPath: string) => {
@@ -417,7 +432,8 @@ export const executeSandboxedCommand = async (
       return;
     }
 
-    if (hasBinarySignature(chunk)) {
+    const decoded = decodeChunk(chunk, encoding);
+    if (decoded.failed || hasBinarySignature(chunk, encoding)) {
       if (stream === "stdout") {
         stdoutBinaryDetected = true;
       } else {
@@ -432,7 +448,6 @@ export const executeSandboxedCommand = async (
       return;
     }
 
-    const decoded = decodeChunk(chunk, encoding);
     if (stream === "stdout") {
       stdoutDetectedEncoding = decoded.encoding;
     } else {

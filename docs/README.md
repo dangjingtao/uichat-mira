@@ -59,6 +59,11 @@ Related:
 - `architecture/model-config-api.md`
 - `architecture/context-budget-runtime.md`
 
+### SKILL
+
+- `skill/README.md`
+- `skill/skill-memory-poc.md`
+
 ### 对话
 
 - `chat/README.md`
@@ -174,6 +179,7 @@ Related:
 ## 目录说明
 
 - `microapp/`：微应用模块定义、接入点绑定关系、跨平台业务工作流边界
+- `skill/`：skill 模块定义、skill 与 memory 的产品边界、skill-driven memory POC
 - `architecture/`：运行时边界、API 契约、实现边界
 - `build/`：构建、打包、release 产物与测试报告入包规则
 - `platform/`：桌面壳层与平台运行环境

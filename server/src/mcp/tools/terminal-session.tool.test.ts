@@ -650,6 +650,8 @@ describe("terminal_session tool", () => {
       const result = await promise;
 
       expect((result.result as { stdout: string }).stdout).toContain("中文");
+      expect((result.result as { binaryDetected: boolean }).binaryDetected).toBe(false);
+      expect((result.result as { stdoutEncoding: string }).stdoutEncoding).toBe("utf16le");
       expect(terminalMocks.spawnMock).toHaveBeenCalledTimes(1);
       expect(String(terminalMocks.spawnMock.mock.calls[0]?.[0] ?? "")).toContain("powershell.exe");
       expect(terminalMocks.spawnMock.mock.calls[0]?.[1]).toEqual([

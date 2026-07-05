@@ -268,6 +268,7 @@ docs/
 | `ModelSetting` | 模型配置、provider 接线、模型能力与接口约束 | `provider/README.md`、`architecture/model-config-api.md` |
 | `MCP` | 外部 MCP 接入、MCP 市场、MCP 资源与能力暴露 | `external-mcp-marketplace.md`、`CONCEPT_MCP.md` |
 | `Tool` | 内置工具、tool runtime、read/edit/terminal 等工具能力 | `tooling-runtime/tools-protocol.md`、`tooling-runtime/harness-runtime-design.md` |
+| `SKILL` | 助手内部复用的工作动作、skill 与 memory 的桥接层、skill-driven memory 设计 | `skill/README.md`、`skill/skill-memory-poc.md` |
 | `KnowledgeBase` | 知识库内容、导入、检索、workspace | `knowledge-base/api.md`、`knowledge-base/markdown-workspace-mode.md` |
 | `Role` | 角色系统、persona、role API | `role/README.md`、`role/role-api.md` |
 | `MicroAPP` | 微应用模块、接入点绑定的业务工作流、跨平台复用的集成业务能力 | `microapp/README.md`、`integrations/wecom-microapp-interface-design.md` |
@@ -332,6 +333,7 @@ docs/
 - `ModelSetting`
 - `MCP`
 - `Tool`
+- `SKILL`
 - `KnowledgeBase`
 - `Role`
 - `MicroAPP`
@@ -346,6 +348,7 @@ docs/
 - 旧的 `runtime / platform / evaluation / planning / bugfix` 先统一并入 `Develoments`
 - 旧的 `provider` 先统一并入 `ModelSetting`
 - 旧的 `tooling-runtime` 不再作为长期顶级模块，而是按内容主语拆进 `Tool` 或 `MCP`
+- `SKILL` 用于承接“助手内部复用的工作动作”这类文档，不再把它混进 `Tool`、`MicroAPP` 或 `MCP`
 - 版本、请求封装、i18n、工程规范、缺陷与路线类正文，优先下沉到 `developments/`
 
 ### Allowed `Doc Type`
@@ -450,7 +453,7 @@ docs/
 
 ```yaml
 layer: raw-source | wiki | schema | project-control
-module: Chat | ModelSetting | MCP | Tool | KnowledgeBase | Role | MicroAPP | Docs | Develoments | ProjectControl
+module: Chat | ModelSetting | MCP | Tool | SKILL | KnowledgeBase | Role | MicroAPP | Docs | Develoments | ProjectControl
 feature: <optional feature slug or name>
 doc_type: current-contract | reference | overview | design | plan | checklist | draft | implementation-notes | historical | how-to | index | workboard | task-card | review | decision | archive-snapshot
 status: current | planned | active | historical

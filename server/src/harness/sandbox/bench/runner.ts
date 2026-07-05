@@ -12,20 +12,18 @@ const main = async () => {
     runner: "sandbox-direct-bench",
     generatedAt: new Date().toISOString(),
     workspaceRoot,
-    contractCoverage: {
-      profiles: contractCoverage,
-    },
+    contractCoverage,
     summary: {
       total: cases.length,
-      passed: cases.filter((item) => item.status === "passed").length,
-      failed: cases.filter((item) => item.status === "failed").length,
-      notImplemented: cases.filter((item) => item.status === "not_implemented").length,
+      gatePassed: cases.filter((item) => item.status === "passed").length,
+      gateFailed: cases.filter((item) => item.status === "failed").length,
+      futureProfile: cases.filter((item) => item.status === "future_profile").length,
     },
     cases,
   };
 
   console.log(JSON.stringify(report, null, 2));
-  if (report.summary.failed > 0) {
+  if (report.summary.gateFailed > 0) {
     process.exitCode = 1;
   }
 };

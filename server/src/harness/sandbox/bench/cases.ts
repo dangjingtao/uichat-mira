@@ -2,10 +2,11 @@ import path from "node:path";
 import type {
   SandboxBenchCaseResult,
   SandboxBenchCaseStatus,
+  SandboxFutureProfile,
   SandboxRunRequest,
   SandboxRunResult,
 } from "../contract.js";
-import { getSandboxProfileCoverage, runSandboxCommandDirect } from "../index.js";
+import { getSandboxContractCoverage, runSandboxCommandDirect } from "../index.js";
 
 interface SandboxBenchCaseDefinition {
   id: string;
@@ -47,6 +48,32 @@ const commandSet = buildCommandSet();
 
 const createNotes = (passed: boolean, successNote: string, failureNote: string) =>
   passed ? [successNote] : [failureNote];
+
+const createFutureProfileCase = (
+  workspaceRoot: string,
+  profile: SandboxFutureProfile,
+): SandboxBenchCaseDefinition => ({
+  id: `coverage-${profile}-future-profile`,
+  group: "coverage",
+  description: `${profile} is declared as a future profile and must stay out of the V1.6 gate`,
+  request: {
+    profile,
+    workspaceRoot,
+    command: commandSet.echoHello,
+    timeoutMs: 1_000,
+  },
+  evaluate: (result) => {
+    const passed = result.violations.some((item) => item.startsWith("future_profile:"));
+    return {
+      status: passed ? "future_profile" : "failed",
+      notes: createNotes(
+        passed,
+        `${profile} 已明确标记为 future profile，不计入 V1.6 gate`,
+        `期望 future_profile，实际 status=${result.status} violations=${JSON.stringify(result.violations)}`,
+      ),
+    };
+  },
+});
 
 export const createSandboxDirectBenchCases = (
   workspaceRoot: string,
@@ -217,34 +244,15 @@ export const createSandboxDirectBenchCases = (
       };
     },
   },
-  {
-    id: "coverage-read-only-profile",
-    group: "coverage",
-    description: "unsupported profile should be reported as not_implemented",
-    request: {
-      profile: "read_only",
-      workspaceRoot,
-      command: commandSet.echoHello,
-      timeoutMs: 1_000,
-    },
-    evaluate: (result) => {
-      const passed = result.violations.some((item) => item.startsWith("not_implemented:"));
-      return {
-        status: passed ? "not_implemented" : "failed",
-        notes: createNotes(
-          passed,
-          "read_only profile 当前未落地，bench 已明确标成 not_implemented",
-          `期望 not_implemented，实际 status=${result.status} violations=${JSON.stringify(result.violations)}`,
-        ),
-      };
-    },
-  },
+  createFutureProfileCase(workspaceRoot, "read_only"),
+  createFutureProfileCase(workspaceRoot, "workspace_write"),
+  createFutureProfileCase(workspaceRoot, "networked_command"),
 ];
 
 export const runSandboxDirectBenchCases = async (
   workspaceRoot: string,
 ): Promise<{
-  contractCoverage: ReturnType<typeof getSandboxProfileCoverage>;
+  contractCoverage: ReturnType<typeof getSandboxContractCoverage>;
   cases: SandboxBenchCaseResult[];
 }> => {
   const definitions = createSandboxDirectBenchCases(workspaceRoot);
@@ -265,7 +273,7 @@ export const runSandboxDirectBenchCases = async (
   }
 
   return {
-    contractCoverage: getSandboxProfileCoverage(),
+    contractCoverage: getSandboxContractCoverage(),
     cases: results,
   };
 };

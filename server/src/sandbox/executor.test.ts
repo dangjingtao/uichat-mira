@@ -339,6 +339,29 @@ describe("SandboxExecutor", () => {
     expect(result.stdoutEncoding).toBe("unknown");
   });
 
+  it("decodes utf16le stdout before applying binary detection", async () => {
+    const child = createMockSpawnProcess();
+    sandboxMocks.spawnMock.mockReturnValue(child);
+
+    const promise = executeSandboxedCommand({
+      command: "Write-Output '中文'",
+      timeoutMs: 500,
+      signal: new AbortController().signal,
+      shellProfile: {
+        ...shellProfile,
+        stdoutEncoding: "utf16le",
+      },
+    });
+
+    child.stdout.emit("data", Buffer.from("中文\n", "utf16le"));
+    child.emit("close", 0);
+
+    const result = await promise;
+    expect(result.binaryDetected).toBe(false);
+    expect(result.stdout).toContain("中文");
+    expect(result.stdoutEncoding).toBe("utf16le");
+  });
+
   it("collects registered artifacts after command completion", async () => {
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "mira-sandbox-executor-"));
     tempDirs.push(tempRoot);
