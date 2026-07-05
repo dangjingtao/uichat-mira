@@ -105,7 +105,7 @@ test("createChatWorkspace validates workspace root paths", () => {
         name: "Workspace",
         rootPath: "workspace/project-alpha",
       }),
-    /Workspace root path format is invalid/,
+    /Workspace root path is invalid/,
   );
 
   assert.throws(
@@ -117,7 +117,7 @@ test("createChatWorkspace validates workspace root paths", () => {
           ? "/workspace/project-alpha"
           : "workspace/project-alpha",
       }),
-    /Workspace root path format is invalid/,
+    /Workspace root path is invalid/,
   );
 
   const created = threadService.createChatWorkspace({
@@ -497,7 +497,7 @@ test("thread service keeps canonical parts and ignores assistantUi attachment fa
   assert.equal(duplicate.id, created.id);
 });
 
-test("thread service fallback read ignores legacy assistantUi text suppression", () => {
+test("thread service fallback read suppresses legacy assistantUi placeholder text", () => {
   const user = userRepository.create({
     username: `user-${crypto.randomUUID()}`,
     passwordHash: "hash",
@@ -520,12 +520,7 @@ test("thread service fallback read ignores legacy assistantUi text suppression",
   });
 
   const hydrated = threadService.getMessageById(created.id, user.id);
-  assert.deepEqual(hydrated?.parts, [
-    {
-      type: "text",
-      text: "[Image attachment]",
-    },
-  ]);
+  assert.deepEqual(hydrated?.parts, []);
 });
 
 test("thread service createMessages and getMessageById handle ownership and nulls", () => {

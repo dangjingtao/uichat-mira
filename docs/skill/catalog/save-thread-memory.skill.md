@@ -16,7 +16,8 @@ Related:
 ## Skill Card
 
 ```yaml
-id: save-thread-memory
+id: save_thread_memory
+fileSlug: save-thread-memory
 title: 保存线程记忆
 status: planned
 scope: thread-level-memory-poc
@@ -26,12 +27,13 @@ inputs:
   - 当前线程内与目标主题直接相关的最近多轮对话
   - 已有 thread-level summary 或 memory 文本，若存在则作为合并参考
 outputs:
+  - 若已有 memory，先生成包含旧内容与新内容处理方式的合并草案
   - 一份待确认的线程记忆草案
   - 草案应是面向后续续接的短文本，不是原始消息堆砌
   - 若发现内容不适合沉淀，应返回“不建议写入”的判断
 writes:
   - 确认后更新 thread-level memory 可见对象
-  - 允许覆盖、追加或改写现有线程记忆
+  - 允许覆盖、追加或改写现有线程记忆，但必须先生成合并草案并让用户确认具体写法
   - 写回结果必须能被用户再次打开、编辑、清空
 requiresUserConfirmation: true
 agentHarnessImpact:
@@ -51,6 +53,8 @@ acceptance criteria:
   - 只在用户明确要求保存线程记忆时触发
   - 产出的是待确认草案，而不是直接写入结果
   - 确认前不发生任何持久写回
+  - 如果已有 memory，必须先展示合并草案，默认不直接覆盖
+  - 只有用户明确确认覆盖时，才允许覆盖现有 memory
   - 确认后写回的是线程级可见对象
   - 用户之后可以查看、编辑、清空该对象
   - 不要求改动 AgentGraph / Harness / MCP / ToolNode / Policy / Planner
@@ -110,6 +114,8 @@ acceptance criteria:
 ```text
 生成草案
 -> 告诉用户准备写什么
+-> 如果已有 memory，先给出合并草案
+-> 如果涉及覆盖、追加或改写，明确告诉用户将采用哪一种
 -> 等用户确认
 -> 再写回线程级 memory 对象
 ```
@@ -118,8 +124,21 @@ acceptance criteria:
 
 - 先写后告知
 - 静默追加
+- 在未说明覆盖还是追加前直接改写现有内容
 - 模型自行判断“这条很重要所以我先记下”
+
+如果当前线程已经存在 memory 文本，确认时还必须说清：
+
+1. 这次是覆盖旧内容
+2. 这次是追加到旧内容后面
+3. 这次是基于旧内容重写成新版本
+
+默认不直接覆盖现有 memory。
+
+只有用户明确确认“覆盖旧内容”时，才允许覆盖。
+
+用户没有确认具体处理方式前，不允许写回。
 
 ## 当前结论
 
-`save-thread-memory` 是第一批最基础的记忆型 skill，因为它最贴近当前 thread summary 的产品形态，也最容易验证“可见、可改、可清空”的基本闭环。
+`save_thread_memory` 是第一批最基础的记忆型 skill，因为它最贴近当前 thread summary 的产品形态，也最容易验证“可见、可改、可清空”和“写回前明确确认覆盖方式”的基本闭环。

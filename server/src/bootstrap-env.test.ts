@@ -29,6 +29,15 @@ describe("bootstrap-env", () => {
     const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "bootstrap-env-"));
     const nestedDir = path.join(tempRoot, "server");
     await fs.mkdir(nestedDir, { recursive: true });
+    await fs.mkdir(path.join(tempRoot, "scripts"), { recursive: true });
+    await fs.writeFile(
+      path.join(tempRoot, "package.json"),
+      JSON.stringify({ name: "bootstrap-env-test" }),
+    );
+    await fs.copyFile(
+      path.join(process.cwd(), "..", "scripts", "load-local-env.cjs"),
+      path.join(tempRoot, "scripts", "load-local-env.cjs"),
+    );
     await fs.writeFile(
       path.join(tempRoot, ".env"),
       [

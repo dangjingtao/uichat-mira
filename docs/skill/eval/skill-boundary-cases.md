@@ -12,13 +12,15 @@ Related:
   - ../README.md
   - ../skill-memory-poc.md
   - ../schema/skill-card.schema.md
+  - ../catalog/README.md
+  - ../roadmap.md
   - ../catalog/save-thread-memory.skill.md
   - ../catalog/save-preference.skill.md
   - ../catalog/save-decision.skill.md
 
 ## 单点真相范围
 
-这页用于卡死第一批 skill-driven memory POC 的边界，防止它越界成：
+这页用于卡死 docs-only `Phase 0` 的第一批 skill-driven memory POC 边界，防止它越界成：
 
 - 黑盒长期记忆
 - Harness tool 包装层
@@ -71,7 +73,7 @@ requiresUserConfirmation: true
 
 ### 场景
 
-文档把 `save-preference` 定义成一个新的 Harness tool。
+文档把 `save_preference` 定义成一个新的 Harness tool。
 
 ### 预期
 
@@ -90,7 +92,7 @@ requiresUserConfirmation: true
 
 ### 场景
 
-文档把 `save-decision` 写成“未来要做成独立 MCP server”。
+文档把 `save_decision` 写成“未来要做成独立 MCP server”。
 
 ### 预期
 
@@ -128,7 +130,7 @@ requiresUserConfirmation: true
 
 ### 场景
 
-文档规定 `save-thread-memory` 必须直接触发某个 Harness tool，作为 skill 成立前提。
+文档规定 `save_thread_memory` 必须直接触发某个 Harness tool，作为 skill 成立前提。
 
 ### 预期
 
@@ -143,7 +145,30 @@ requiresUserConfirmation: true
 - 文档不绑定具体 tool
 - 文档不要求新增 tool 调用链
 
-## 边界 Case 7：不能把 thread-level POC 扩成 user-level 画像系统
+## 边界 Case 7：不能默认覆盖已有 memory
+
+### 场景
+
+当前线程已经有 memory，助手生成了新草案后，未经明确确认就直接覆盖旧内容。
+
+### 预期
+
+- 不允许
+
+### 原因
+
+`save_thread_memory` 的当前 POC 规则是：
+
+- 先生成合并草案
+- 默认不直接覆盖
+- 只有用户明确确认覆盖时，才允许覆盖
+
+### 验收点
+
+- 有旧 memory 时必须先展示合并草案
+- 用户未明确选择覆盖前，不得覆盖旧内容
+
+## 边界 Case 8：不能把 thread-level POC 扩成 user-level 画像系统
 
 ### 场景
 
@@ -164,7 +189,7 @@ requiresUserConfirmation: true
 - catalog 中只写线程级可见对象
 - 不引入用户级全局记忆范围
 
-## 边界 Case 8：不能把可见对象做成黑盒
+## 边界 Case 9：不能把可见对象做成黑盒
 
 ### 场景
 
@@ -187,7 +212,7 @@ skill 写回一个用户看不见、也不能编辑的内部 memory blob。
 - 所有写回对象都要满足这三点
 - 文档不能接受隐藏写回
 
-## 边界 Case 9：不能把临时命令误写成长期偏好
+## 边界 Case 10：不能把临时命令误写成长期偏好
 
 ### 场景
 
@@ -203,10 +228,10 @@ skill 写回一个用户看不见、也不能编辑的内部 memory blob。
 
 ### 验收点
 
-- `save-preference` 只接稳定协作偏好
+- `save_preference` 只接稳定协作偏好
 - 临时表达必须落在 non-trigger 范围
 
-## 边界 Case 10：不能把讨论倾向误写成已定决策
+## 边界 Case 11：不能把讨论倾向误写成已定决策
 
 ### 场景
 
@@ -222,7 +247,7 @@ skill 写回一个用户看不见、也不能编辑的内部 memory blob。
 
 ### 验收点
 
-- `save-decision` 只能用于明确结论
+- `save_decision` 只能用于明确结论
 - 摇摆状态必须列入 non-trigger
 
 ## 当前结论
@@ -233,3 +258,4 @@ skill 写回一个用户看不见、也不能编辑的内部 memory blob。
 - 不越过确认
 - 不偷换模块边界
 - 不把 docs-only POC 变成运行时改造任务
+- 不把 `Phase 0` 文档合同误当成 `Phase 1+` 实现批准

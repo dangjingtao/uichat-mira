@@ -16,7 +16,8 @@ Related:
 ## Skill Card
 
 ```yaml
-id: save-decision
+id: save_decision
+fileSlug: save-decision
 title: 保存决策
 status: planned
 scope: thread-level-memory-poc
@@ -116,4 +117,4 @@ acceptance criteria:
 
 ## 当前结论
 
-`save-decision` 的价值在于减少后续线程里对同一判断的反复争论，但它也最容易把“讨论中的倾向”误写成“已经确定的结论”，所以必须把确认门槛写死。
+`save_decision` 的价值在于减少后续线程里对同一判断的反复争论，但它也最容易把“讨论中的倾向”误写成“已经确定的结论”，所以必须把确认门槛写死。

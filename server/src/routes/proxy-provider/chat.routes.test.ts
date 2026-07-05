@@ -1431,6 +1431,150 @@ test("POST /proxy/chat/default applies bound role llmProfile to the default chat
   }
 });
 
+test("POST /proxy/chat/default passes thread requestContextMessages into createAndRunAgent", async () => {
+  const user = userRepository.create({
+    username: `user-${crypto.randomUUID()}`,
+    passwordHash: "hash",
+    role: "user",
+    isActive: true,
+  });
+  const role = roleRepository.create({
+    userId: user.id,
+    name: "Programmer",
+    summary: "Writes and verifies code carefully",
+    avatarId: "pilot-helper",
+    status: "active",
+    tagsJson: JSON.stringify(["code"]),
+    promptJson: JSON.stringify({
+      description: "你是一个程序员人设。",
+      worldview: "",
+      persona: "",
+      scenario: "",
+      exampleDialogues: "",
+      style: "",
+      constraints: "不要假装运行过代码。",
+    }),
+  });
+  const thread = threadService.createThread({
+    userId: user.id,
+    title: "Agent role summary thread",
+    roleId: role.id,
+    contextSummary: "用户当前正在排查 request context 注入顺序。",
+    agentEnabled: true,
+  });
+  const token = createAccessToken({
+    id: user.id,
+    username: user.username,
+    role: user.role,
+  });
+  const app = await createAuthedApp(user);
+
+  const originalPersistedStream = providerProxyService.createPersistedChatStream;
+  const originalStreamTaskChatText = providerProxyService.streamTaskChatText;
+  let capturedExecuteFullAnswer:
+    | Parameters<typeof providerProxyService.createPersistedChatStream>[0]["executeFullAnswer"]
+    | undefined;
+  let capturedAgentInput:
+    | Parameters<typeof agentModule.createAndRunAgent>[0]
+    | null = null;
+
+  providerProxyService.createPersistedChatStream = (input) => {
+    capturedExecuteFullAnswer = input.executeFullAnswer;
+    return Readable.from([""]);
+  };
+  providerProxyService.streamTaskChatText = async function* () {
+    yield "Agent 标题";
+  };
+  const createAndRunAgentSpy = vi
+    .spyOn(agentModule, "createAndRunAgent")
+    .mockImplementation(async (input) => {
+      capturedAgentInput = input;
+      return {
+        run: {
+          id: "agent-run-context-1",
+          threadId: input.threadId,
+          userId: input.userId,
+          goal: {
+            id: "goal-context-1",
+            text: input.goalText,
+            successCriteria: [],
+            constraints: [],
+            riskLevel: "low",
+          },
+          plan: {
+            id: "plan-context-1",
+            goalId: "goal-context-1",
+            version: 1,
+            steps: [],
+          },
+          status: "completed",
+          observations: [],
+          traceId: "trace-context-1",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        output: {
+          answer: "agent answer",
+          observations: [],
+          retrievedChunks: [],
+          status: "completed",
+        },
+      };
+    });
+
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: "/proxy/chat/default",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      payload: {
+        id: thread.id,
+        messageId: "user-agent-context-1",
+        agentEnabled: true,
+        messages: [
+          {
+            id: "user-agent-context-1",
+            role: "user",
+            parts: [{ type: "text", text: "继续帮我排查这个问题" }],
+          },
+        ],
+      },
+    });
+
+    assert.equal(response.statusCode, 200, response.body);
+    assert.ok(capturedExecuteFullAnswer);
+
+    const answer = await capturedExecuteFullAnswer?.({
+      emitToolEvent: async () => {},
+      emitExecutionNode: async () => {},
+    });
+
+    assert.equal(answer?.answer, "agent answer");
+    assert.ok(capturedAgentInput);
+    assert.equal(capturedAgentInput?.requestContextMessages?.length, 3);
+    assert.match(
+      capturedAgentInput?.requestContextMessages?.[0]?.content ?? "",
+      /程序员人设|不要假装运行过代码/,
+    );
+    assert.match(
+      capturedAgentInput?.requestContextMessages?.[1]?.content ?? "",
+      /线程摘要|request context 注入顺序/,
+    );
+    assert.match(
+      capturedAgentInput?.requestContextMessages?.[2]?.content ?? "",
+      /智能体模式|当前执行平台：/,
+    );
+  } finally {
+    providerProxyService.createPersistedChatStream = originalPersistedStream;
+    providerProxyService.streamTaskChatText = originalStreamTaskChatText;
+    createAndRunAgentSpy.mockRestore();
+    await app.close();
+  }
+});
+
 test("POST /proxy/chat/default persists canonical image parts for default chat threads", async () => {
   const user = userRepository.create({
     username: `user-${crypto.randomUUID()}`,

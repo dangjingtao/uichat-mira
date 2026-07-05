@@ -1,31 +1,88 @@
 UIChat Mira V1.6 total review typecheck evidence
 Date: 2026-07-06
 Workspace: D:\workspace\rag-demo
-Commit: e6f905c09c1e8ea054ad01410dd9014d275ddd18
+Commit: b3bd970aaee12d00f52b965b8c07dc1d4c14e7e2
 
-Baseline
-- `git status --short` before test run: clean
+Scope
+- Task: fix the root filtered typecheck command for `@ui-chat-mira/server`
+- Allowed change used in this run: `server/package.json` script entry and this report file
+- No business TypeScript source was changed
 
-Required command
+Initial reproduction
 1. Command
 pnpm --filter @ui-chat-mira/server typecheck
 Result
 FAIL
-Key output
-- `tsc --noEmit -p tsconfig.json`
-- `ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL`
-- exit status `3221225477`
+Full output
+> @ui-chat-mira/server@0.7.1 typecheck D:\workspace\rag-demo\server
+> tsc --noEmit -p tsconfig.json
 
-Diagnostic rerun
+D:\workspace\rag-demo\server:
+ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL @ui-chat-mira/server@0.7.1 typecheck: `tsc --noEmit -p tsconfig.json`
+Exit status 3221225477
+
 2. Command
+cd server
 pnpm typecheck
-Workdir
-D:\workspace\rag-demo\server
+Result
+FAIL in this environment
+Full output
+> @ui-chat-mira/server@0.7.1 typecheck D:\workspace\rag-demo\server
+> tsc --noEmit -p tsconfig.json
+
+ELIFECYCLE Command failed with exit code 3221225477.
+
+Diagnostic comparison
+3. Command
+cd server
+node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json
 Result
 PASS
-Output
-- `tsc --noEmit -p tsconfig.json`
 
-Assessment
-- The required root-level filtered command did not pass, so this review cannot mark typecheck as passed.
-- The package-local rerun did not report TypeScript type errors; the observed failure is the root command process crash, not a confirmed TS diagnostic.
+4. Command
+cd server
+cmd /d /c .\node_modules\.bin\tsc.CMD --noEmit -p tsconfig.json
+Result
+PASS
+
+5. Command
+cd server
+pnpm exec node -e "const {spawnSync}=require('node:child_process'); const r=spawnSync('cmd.exe',['/d','/c','tsc --noEmit -p tsconfig.json'],{stdio:'inherit',shell:false}); console.log('status=',r.status,'signal=',r.signal,'error=',r.error); process.exit(r.status??1)"
+Result
+FAIL
+Key output
+- `status= 3221225477`
+
+Root cause judgment
+- Category: script definition problem, triggered by Windows command resolution under `pnpm run`
+- Not a pnpm workspace/filter targeting problem: the same crash happened in root filtered mode and in `server` package-local `pnpm typecheck`
+- Not a TypeScript diagnostic problem: direct execution of `typescript/bin/tsc` completed successfully
+- Not a `tsconfig.json` or business code problem: the compiler completed once the script bypassed the ambiguous `tsc` shim resolution path
+- Most likely failing layer: `pnpm run` on Windows launches the script through `cmd.exe`; the bare `tsc` command resolves through `node_modules/.bin` and crashes with exit `3221225477`, while explicit `node ./node_modules/typescript/bin/tsc` is stable
+
+Fix
+- Updated `server/package.json`
+- Changed script from `tsc --noEmit -p tsconfig.json`
+- To `node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`
+
+Verification after fix
+6. Command
+pnpm --filter @ui-chat-mira/server typecheck
+Result
+PASS
+Full output
+> @ui-chat-mira/server@0.7.1 typecheck D:\workspace\rag-demo\server
+> node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json
+
+7. Command
+cd server
+pnpm typecheck
+Result
+PASS
+Full output
+> @ui-chat-mira/server@0.7.1 typecheck D:\workspace\rag-demo\server
+> node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json
+
+Changed files in this run
+- server/package.json
+- server/test-report/v16-total-review-typecheck.txt

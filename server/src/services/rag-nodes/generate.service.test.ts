@@ -42,17 +42,25 @@ describe("generateService LLM delegation", () => {
       "default",
       expect.any(Array),
     );
-    expect(streamSpy.mock.calls[0]?.[1]).toEqual([
-      expect.objectContaining({
-        role: "system",
-        content: expect.stringContaining("README"),
-      }),
-      { role: "assistant", content: "previous" },
-      expect.objectContaining({
-        role: "user",
-        content: "where is the answer",
-      }),
-    ]);
+    const messages = streamSpy.mock.calls[0]?.[1] ?? [];
+    expect(messages).toHaveLength(4);
+    expect(messages[0]).toMatchObject({
+      role: "system",
+      content: expect.stringContaining("参考文档"),
+    });
+    expect(messages[1]).toMatchObject({
+      role: "system",
+      content: expect.stringContaining("[1] README"),
+    });
+    expect(messages[2]).toMatchObject({
+      role: "assistant",
+      content: "previous",
+    });
+    expect(messages[3]).toMatchObject({
+      role: "user",
+      content: "where is the answer",
+      parts: [{ type: "text", text: "where is the answer" }],
+    });
   });
 
   it("prepends thread request context before the RAG guardrail prompt", async () => {
@@ -143,16 +151,21 @@ describe("generateService LLM delegation", () => {
       sources: chunks,
     });
     expect(chatResult).toBe("chat-answer");
-    expect(streamSpy.mock.calls[0]?.[1]).toEqual([
-      expect.objectContaining({
-        role: "system",
-        content: expect.stringContaining("参考文档"),
-      }),
-      expect.objectContaining({
-        role: "user",
-        content: "what happened",
-      }),
-    ]);
+    const ragMessages = streamSpy.mock.calls[0]?.[1] ?? [];
+    expect(ragMessages).toHaveLength(3);
+    expect(ragMessages[0]).toMatchObject({
+      role: "system",
+      content: expect.stringContaining("参考文档"),
+    });
+    expect(ragMessages[1]).toMatchObject({
+      role: "system",
+      content: expect.stringContaining("[1] README"),
+    });
+    expect(ragMessages[2]).toMatchObject({
+      role: "user",
+      content: "what happened",
+      parts: [{ type: "text", text: "what happened" }],
+    });
     expect(streamSpy.mock.calls[1]).toEqual([
       "default",
       [

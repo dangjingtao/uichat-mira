@@ -16,7 +16,8 @@ Related:
 ## Skill Card
 
 ```yaml
-id: save-preference
+id: save_preference
+fileSlug: save-preference
 title: 保存偏好
 status: planned
 scope: thread-level-memory-poc
@@ -32,7 +33,7 @@ outputs:
 writes:
   - 确认后把偏好条目写入 thread-level memory 可见对象
   - 第一批 POC 中偏好条目不单独建表，先并入线程记忆
-  - 写回结果必须允许用户逐条修改或整体清空
+  - 第一批先保证整段 thread-level memory 可见、可手动编辑、可清空；逐条编辑和逐条删除放到 Phase 2 再评估
 requiresUserConfirmation: true
 agentHarnessImpact:
   - 不修改 Agent 主链
@@ -51,7 +52,8 @@ acceptance criteria:
   - 只针对稳定协作偏好生成草案
   - 临时要求和一次性语气不进入写回候选
   - 确认前不能静默写入线程记忆
-  - 确认后写回结果对用户可见、可编辑、可清空
+  - 确认后写回结果以可见文本形式并入 thread-level memory
+  - 当前 POC 只要求用户能手动编辑或清空整段 memory，不要求逐条编辑或逐条删除偏好条目
   - 不要求调用 Harness tool
   - 不影响 Agent 主链
 ```
@@ -98,8 +100,14 @@ acceptance criteria:
 重要的是产品边界，而不是现在就把数据结构做复杂：
 
 - 用户要能看到记录了什么
-- 用户要能改写那句偏好
-- 用户要能删除那句偏好
+- 用户要能编辑整个 thread-level memory 文本
+- 用户要能清空这块 thread-level memory
+
+Phase 2 才评估：
+
+- 偏好条目的逐条修改
+- 偏好条目的逐条删除
+- 偏好条目的独立对象化
 
 ## 确认要求
 
@@ -121,4 +129,4 @@ acceptance criteria:
 
 ## 当前结论
 
-`save-preference` 适合做成“建议触发但必须确认”的 skill，因为它最容易误伤边界，只有把确认权留给用户，thread-level memory POC 才不会变成黑盒记忆。
+`save_preference` 适合做成“建议触发但必须确认”的 skill，因为它最容易误伤边界，只有把确认权留给用户，thread-level memory POC 才不会变成黑盒记忆。

@@ -41,11 +41,11 @@ Related:
 
 ## 适用范围
 
-当前 schema 只适用于第一批记忆型 skill：
+当前 schema 只适用于 docs-only `Phase 0` 的第一批记忆型 skill：
 
-- `save-thread-memory`
-- `save-preference`
-- `save-decision`
+- `save_thread_memory`
+- `save_preference`
+- `save_decision`
 
 这些 skill 的共同硬约束是：
 
@@ -65,8 +65,28 @@ Related:
 
 要求：
 
-- kebab-case
+- snake_case
 - 在 `docs/skill/catalog/` 内唯一
+
+### `file slug`
+
+文件 slug 和 `id` 不是一回事。
+
+要求：
+
+- 文件名保持 kebab-case
+- `id` 保持 snake_case
+
+例如：
+
+- 文件名：`save-thread-memory.skill.md`
+- skill id：`save_thread_memory`
+
+这样做的目的：
+
+- 文件路径对文档目录更稳定
+- `id` 对结构化字段和后续数据消费更稳定
+- `id` 未来可能进入日志、trace、数据库或 runtime，因此保持和现有 tool id 风格一致
 
 ### `title`
 
@@ -174,6 +194,7 @@ requiresUserConfirmation: true
 
 ```yaml
 id: <required>
+fileSlug: <required>
 title: <required>
 status: planned | active | historical
 scope: thread-level-memory-poc
@@ -199,6 +220,23 @@ acceptance criteria:
 ```
 
 ## 字段解释原则
+
+### `fileSlug` 写什么
+
+写当前文档在 `docs/skill/catalog/` 下的稳定文件 slug。
+
+例如：
+
+- `save-thread-memory`
+- `save-preference`
+- `save-decision`
+
+不要把：
+
+- `save-thread-memory.skill.md`
+- `save_thread_memory`
+
+混成同一个字段。
 
 ### `inputs` 写什么
 
@@ -229,6 +267,8 @@ acceptance criteria:
 - thread memory 中的 preference 条目
 - thread memory 中的 decision 条目
 
+当前 `Phase 0` 里，`save_preference` 和 `save_decision` 都只要求并入可见的 thread-level memory 文本区，不要求逐条编辑对象。
+
 ### `agentHarnessImpact` 写什么
 
 写“这个 skill card 对现有运行时边界的要求”。
@@ -252,6 +292,7 @@ acceptance criteria:
 4. 直接把 `SKILL` 映射成 MCP server
 5. 把 skill card 写成某个平台接入方案
 6. 要求改动 AgentGraph / Harness / MCP / ToolNode / Policy / Planner
+7. 把 docs-only `Phase 0` 写成已经批准的 runtime 方案
 
 ## 当前结论
 

@@ -19,7 +19,7 @@
 | `Tool Exposure` 专项 | 通过 | `6` 个文件、`97` 个测试通过 |
 | `ToolCall Loop` 专项 | 通过 | `7` 个文件、`97` 个测试通过 |
 | `Sandbox` 专项 | 通过 | `3` 个文件、`36` 个测试通过 |
-| `Context / Evidence / Diagnostics` 专项 | 部分通过 | 跑通的 `6` 个文件、`18` 个测试通过，但 resolver 测试文件不存在，未形成闭环覆盖 |
+| `Context / Evidence / Diagnostics` 专项 | 通过 | 当前真实 request context 主链相关的 `8` 个文件、`49` 个测试通过；废弃 web-search resolver 不再纳入该链路 |
 | `pnpm --filter @ui-chat-mira/server bench:sandbox:direct` | 通过 | V1.6 gate `command` profile 通过，另有 `3` 个 future profile |
 | `pnpm --filter @ui-chat-mira/server bench:context:read` | 通过 | `11/11` 通过 |
 
@@ -69,12 +69,28 @@
     - `src/agent/__tests__/routes.test.ts` 3 个测试超时
     - `src/routes/role/roles.routes.test.ts` 1 个测试超时
 
-## 未覆盖项
+## 当前 request context 覆盖说明
 
-- `Context / Evidence / Diagnostics` 里要求的 `thread-request-context-web-search.resolver` 链路没有形成本地可执行覆盖。
-  - 命令里带了 `src/services/shared-nodes/thread-request-context-web-search.resolver.test.ts`
-  - 但当前仓库中这个测试文件并不存在
-  - 因此这条链路不能记作已覆盖
+- 废弃链路已移除。
+  - `thread-request-context-web-search.resolver` 不再属于当前 request context 设计，也不应再作为覆盖缺口统计。
+- 当前真实主链只包含 4 个 resolver。
+  - `role`
+  - `summary`
+  - `memory`
+  - `agent`
+- 当前已覆盖的真实链路文件：
+  - `src/services/shared-nodes/thread-request-context-role.resolver.ts`
+  - `src/services/shared-nodes/thread-request-context-summary.resolver.ts`
+  - `src/services/shared-nodes/thread-request-context-memory.resolver.ts`
+  - `src/services/shared-nodes/thread-request-context-agent.resolver.ts`
+  - `src/services/shared-nodes/thread-request-context.node.ts`
+  - 消费链路：`src/routes/proxy-provider/chat.routes.ts`
+  - 消费链路：`src/services/rag-graph.ts`
+  - 消费链路：`src/services/rag-nodes/generate.service.ts`
+- 不再属于当前设计的 web_search request-context 能力：
+  - 不再通过线程 request context resolver 预注入 web_search 提示
+  - 不再把 web_search 当成 `requestContextMessages` 的一部分
+  - web_search 现在属于独立工具能力，不属于 `role -> summary -> memory -> agent` 主链
 - `Sandbox` 非 V1.6 gate 的 3 个 profile 没有进入本次通过面。
   - `read_only`
   - `workspace_write`
@@ -106,11 +122,12 @@
   - Sandbox 专项
   - `bench:sandbox:direct`
   - `bench:context:read`
+- request context:
+  - 废弃的 `thread-request-context-web-search.resolver` 已移除，不再记作 coverage gap
+  - 当前真实主链覆盖已落在 `role / summary / memory / agent` 及其 chat、RAG、agent 消费链路
 - 失败:
   - 指定 `typecheck` 命令失败
   - 全量 `test` 失败
-- 未覆盖:
-  - `thread-request-context-web-search.resolver` 链路
 - `not_implemented`:
   - 源码中仍然存在
   - 但本次 sandbox bench 输出层面已切到 `future_profile`

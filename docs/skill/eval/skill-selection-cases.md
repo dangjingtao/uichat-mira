@@ -12,13 +12,15 @@ Related:
   - ../README.md
   - ../skill-memory-poc.md
   - ../schema/skill-card.schema.md
+  - ../catalog/README.md
+  - ../roadmap.md
   - ../catalog/save-thread-memory.skill.md
   - ../catalog/save-preference.skill.md
   - ../catalog/save-decision.skill.md
 
 ## 单点真相范围
 
-这页用于评估：第一批 thread-level memory POC 里，什么情况下应该选中哪张 skill card。
+这页用于评估：docs-only `Phase 0` 的第一批 thread-level memory POC 里，什么情况下应该选中哪张 skill card。
 
 它只评估动作选择，不评估 runtime 实现。
 
@@ -30,9 +32,9 @@ Related:
 
 ### 预期
 
-- 应触发：`save-thread-memory`
-- 不应触发：`save-preference`
-- 不应触发：`save-decision`
+- 应触发：`save_thread_memory`
+- 不应触发：`save_preference`
+- 不应触发：`save_decision`
 
 ### 原因
 
@@ -52,9 +54,9 @@ Related:
 
 ### 预期
 
-- 应触发：`save-preference`
-- 不应触发：`save-thread-memory`
-- 不应触发：`save-decision`
+- 应触发：`save_preference`
+- 不应触发：`save_thread_memory`
+- 不应触发：`save_decision`
 
 ### 原因
 
@@ -65,6 +67,7 @@ Related:
 - 输出偏好条目草案
 - 要求用户确认
 - 确认后才允许进入线程记忆
+- 当前只要求用户能手动编辑或清空整段 memory，不要求逐条编辑偏好条目
 
 ## Case 3
 
@@ -74,9 +77,9 @@ Related:
 
 ### 预期
 
-- 应触发：`save-decision`
-- 不应触发：`save-thread-memory`
-- 不应触发：`save-preference`
+- 应触发：`save_decision`
+- 不应触发：`save_thread_memory`
+- 不应触发：`save_preference`
 
 ### 原因
 
@@ -134,7 +137,7 @@ Related:
 
 ### 预期
 
-- 不应触发 `save-decision`
+- 不应触发 `save_decision`
 - 不应触发任何写回类 skill
 
 ### 原因
@@ -154,7 +157,7 @@ Related:
 
 ### 预期
 
-- 可以建议触发：`save-preference`
+- 可以建议触发：`save_preference`
 - 不能直接写入
 
 ### 原因
@@ -174,7 +177,7 @@ Related:
 
 ### 预期
 
-- 应触发：`save-thread-memory`
+- 应触发：`save_thread_memory`
 - 且必须输出候选草案而不是直接覆盖
 
 ### 原因
@@ -184,7 +187,9 @@ Related:
 ### 验收点
 
 - 显示待写回内容
-- 不允许直接覆盖已有可见对象
+- 如果已有 memory，必须先显示合并草案
+- 默认不允许直接覆盖已有可见对象
+- 只有用户明确确认覆盖时，才允许覆盖
 
 ## 当前结论
 
@@ -193,3 +198,4 @@ Related:
 - 只在边界清楚时触发
 - 只生成待确认草案
 - 永远不把即时回答动作偷换成长期写回动作
+- 当前结论只服务于 docs-only `Phase 0` 评审，不代表 runtime 已批准

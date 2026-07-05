@@ -13,6 +13,8 @@ Related:
   - ../tooling-runtime/tools-protocol.md
   - ../chat/agent-runtime-design.md
   - ./skill-memory-poc.md
+  - ./catalog/README.md
+  - ./roadmap.md
 
 ## 单点真相范围
 
@@ -70,7 +72,7 @@ Related:
 
 - 对一个任务动作的编排定义
 - 决定是否需要调用一个或多个 tool
-- 决定执行后如何收口
+- 决定执行后如何整理结果
 
 一句话：
 
@@ -208,7 +210,7 @@ Role -> Summary -> Memory -> Agent
 
 这意味着：
 
-- 第一批 skill 完全可以复用这条收口路径
+- 第一批 skill 完全可以复用这条整理路径
 
 ### 4. Harness tool surface
 
@@ -245,6 +247,12 @@ Role -> Summary -> Memory -> Agent
 - 可以复用现有 agent / thread / request-context 主链
 - 能自然长出记忆对象层
 
+当前 docs-only 基础数据 POC 先只正式整理这 3 张卡：
+
+- `save_thread_memory`
+- `save_preference`
+- `save_decision`
+
 ## 当前阶段的硬规则
 
 1. 先不要把 `SKILL` 做成插件市场。
@@ -252,13 +260,24 @@ Role -> Summary -> Memory -> Agent
 3. 先不要把 `SKILL` 和企业集成 `MicroAPP` 混成一个模块。
 4. 第一批 `SKILL` 优先面向“沉淀、回放、续接上下文”，不要优先做平台连接。
 5. 第一批 `SKILL` 的写回对象必须可见、可编辑、可删除，不能静默写黑盒长期记忆。
+6. 当前任务只到 `docs-only Phase 0`，不把 catalog、schema、eval 文档直接等同于 runtime 方案批准。
+
+## 当前文档入口
+
+- `catalog/README.md`：第一批 skill card 入口索引
+- `schema/skill-card.schema.md`：skill card 最小结构合同
+- `skill-memory-poc.md`：当前 POC 的范围与限制
+- `roadmap.md`：`Phase 0` 到 `Phase 4` 的演进路线
+- `eval/`：选择与边界评估用例
 
 ## 推荐阅读顺序
 
 1. `./skill-memory-poc.md`
-2. `../chat/agent-runtime-design.md`
-3. `../tooling-runtime/tools-protocol.md`
-4. `../microapp/README.md`
+2. `./catalog/README.md`
+3. `./roadmap.md`
+4. `../chat/agent-runtime-design.md`
+5. `../tooling-runtime/tools-protocol.md`
+6. `../microapp/README.md`
 
 ## 当前结论
 
