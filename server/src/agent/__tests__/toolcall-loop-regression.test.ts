@@ -137,11 +137,14 @@ const setupToolExposure = (
   vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
     makeToolIntentResult(query, definitions),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
+  const selectToolSpy = vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
     selectedToolIds: definitions.slice(0, 1).map((definition) => definition.id),
     decisionSource: "task-model",
     decisionReason: "test",
   });
+  return {
+    selectToolSpy,
+  };
 };
 
 const setupGenerate = (answer = "final answer") =>
@@ -158,12 +161,35 @@ const completedReadOpenInvocation = (text = "# README\n\nUIChat Mira runtime doc
       source: {
         kind: "text",
         mimeType: "text/markdown",
-          text,
+        text,
         metadata: {},
       },
     },
     startedAt: "2026-07-05T00:00:00.000Z",
     finishedAt: "2026-07-05T00:00:01.000Z",
+  }) as const;
+
+const completedTimedOutTerminalInvocation = () =>
+  ({
+    id: "invocation-terminal-timeout-1",
+    toolId: "terminal_session",
+    status: "completed" as const,
+    result: {
+      sessionId: "terminal-session-timeout-1",
+      command: "pwd",
+      cwd: "D:\\workspace\\rag-demo",
+      exitCode: null,
+      output: "",
+      stdout: "",
+      stderr: "Command timed out",
+      timedOut: true,
+      reusedSession: false,
+      sessionMode: "ephemeral",
+      streamMode: "split",
+      stderrSeparated: true,
+    },
+    startedAt: "2026-07-05T00:00:00.000Z",
+    finishedAt: "2026-07-05T00:00:30.000Z",
   }) as const;
 
 const runToolLoop = (input: {
@@ -296,6 +322,47 @@ test("toolCall loop freezes valid use_tool, allows policy, executes ToolNode, wr
   assert.equal(result.evidence.toolExecutions[0]?.toolCallId, result.lastToolExecution?.toolCallId);
   assert.equal(result.evidence.latestSummary?.toolId, "read_open");
   assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, true);
+});
+
+test("toolCall loop ignores selectedToolIds unless planner emits use_tool", async () => {
+  const readOpen = readOpenTool();
+  setupToolExposure("answer directly", [readOpen]);
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"answer","reason":"No tool is needed."}';
+    });
+  const executeSpy = vi.spyOn(harnessInvocations, "executeHarnessInvocation");
+  const generateSpy = setupGenerate("direct answer");
+  const normalizeEvents: Array<Record<string, unknown>> = [];
+  const toolSelectEvents: Array<Record<string, unknown>> = [];
+
+  const result = await runToolLoop({
+    runId: "run-regression-selected-toolids-no-exec",
+    question: "answer directly",
+    onExecutionNode: async (event) => {
+      if (event.nodeId === "agent-tool-call-normalize") {
+        normalizeEvents.push(event.details as Record<string, unknown>);
+      }
+      if (event.nodeId.startsWith("agent-tool-select") && event.phase === "done") {
+        toolSelectEvents.push(event.details as Record<string, unknown>);
+      }
+    },
+  });
+
+  assertMatrixFields(result, {
+    status: "completed",
+    pendingToolCall: "absent",
+    pendingApproval: "absent",
+    lastToolExecution: "absent",
+    latestSummary: "present",
+    terminalField: "answer",
+  });
+  assert.deepEqual(toolSelectEvents[0]?.selectedToolIds, ["read_open"]);
+  assert.equal(plannerSpy.mock.calls.length, 1);
+  assert.equal(executeSpy.mock.calls.length, 0);
+  assert.equal(generateSpy.mock.calls.length, 1);
+  assert.equal(normalizeEvents.length, 0);
 });
 
 test("toolCall loop schema-invalid args do not execute the tool and replan at most once before generate", async () => {
@@ -552,4 +619,53 @@ test("toolCall loop failed tool writes failed evidence and never reports fake su
   assert.equal(result.evidence.latestSummary?.status, "failed");
   assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, false);
   assert.match(result.errorMessage ?? "", /File not found/);
+});
+
+test("toolCall loop timedOut tool evidence is not marked answer-ready", async () => {
+  const terminalSession = terminalTool();
+  setupToolExposure("execute shell command pwd and show stdout", [terminalSession]);
+  vi.spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"terminal_session","args":{"command":"pwd"},"reason":"Need command output."}';
+    })
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"answer","reason":"Timeout evidence is not enough for a grounded command result."}';
+    });
+  vi.spyOn(policyModule, "evaluateAgentToolPolicy").mockReturnValue({
+    type: "allow",
+    reason: "Regression case allows terminal execution to inspect timeout evidence.",
+  });
+  const executeSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue(completedTimedOutTerminalInvocation());
+  const generateSpy = setupGenerate("The command timed out before producing a stable result.");
+
+  const result = await runToolLoop({
+    runId: "run-regression-timedout-tool",
+    question: "execute shell command pwd and show stdout",
+  });
+
+  assertMatrixFields(result, {
+    status: "completed",
+    pendingToolCall: "absent",
+    pendingApproval: "absent",
+    lastToolExecution: "present",
+    latestSummary: "present",
+    terminalField: "answer",
+  });
+  assert.equal(executeSpy.mock.calls.length, 1);
+  assert.equal(generateSpy.mock.calls.length, 1);
+  assert.equal(result.lastToolExecution?.status, "completed");
+  assert.equal(result.evidence.latestSummary?.status, "completed");
+  assert.equal(result.evidence.latestSummary?.toolId, "terminal_session");
+  assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, false);
+  assert.match(
+    result.evidence.latestSummary?.answerReadiness.reason ?? "",
+    /timed out/i,
+  );
+  assert.equal(result.evidence.latestSummary?.data?.kind, "terminal_session");
+  if (result.evidence.latestSummary?.data?.kind === "terminal_session") {
+    assert.equal(result.evidence.latestSummary.data.timedOut, true);
+    assert.equal(result.evidence.latestSummary.data.canAnswerCommandQuestion, false);
+  }
 });

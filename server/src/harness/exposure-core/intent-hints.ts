@@ -80,7 +80,7 @@ export const DIRECTORY_LISTING_HINTS = [
   "有哪些",
 ] as const;
 
-export const TERMINAL_COMMAND_INTENT_HINTS = [
+export const TERMINAL_COMMAND_WEAK_INTENT_HINTS = [
   "command",
   "commands",
   "terminal",
@@ -91,20 +91,29 @@ export const TERMINAL_COMMAND_INTENT_HINTS = [
   "run ",
   "execute",
   "exec",
-  "pnpm",
-  "npm",
-  "node ",
-  "git ",
-  "dir",
-  "ls",
   "终端",
   "命令",
 ] as const;
 
-export const TERMINAL_COMMAND_INTENT_PATTERNS = [
+export const TERMINAL_COMMAND_WEAK_INTENT_PATTERNS = [
   /执行.{0,8}命令/,
   /运行.{0,8}命令/,
   /跑.{0,8}命令/,
+] as const;
+
+export const TERMINAL_COMMAND_EXECUTABLE_PATTERNS = [
+  /(^|[\s`"'，。；;：:])pnpm(\s|$)/,
+  /(^|[\s`"'，。；;：:])npm(\s|$)/,
+  /(^|[\s`"'，。；;：:])node(\s|$)/,
+  /(^|[\s`"'，。；;：:])git(\s|$)/,
+  /(^|[\s`"'，。；;：:])dir(\s|$)/,
+  /(^|[\s`"'，。；;：:])ls(\s|$)/,
+  /(^|[\s`"'，。；;：:])curl(\s|$)/,
+  /(^|[\s`"'，。；;：:])echo(\s|$)/,
+  /(^|[\s`"'，。；;：:])python(\s|$)/,
+  /(^|[\s`"'，。；;：:])pytest(\s|$)/,
+  /(^|[\s`"'，。；;：:])vitest(\s|$)/,
+  /(^|[\s`"'，。；;：:])tsx(\s|$)/,
 ] as const;
 
 export const LOW_INTENT_TOKENS = new Set([
@@ -168,8 +177,12 @@ export const querySuggestsTerminalCommand = (query: string | undefined) => {
     return false;
   }
 
-  return (
-    TERMINAL_COMMAND_INTENT_HINTS.some((token) => normalized.includes(token)) ||
-    TERMINAL_COMMAND_INTENT_PATTERNS.some((pattern) => pattern.test(normalized))
-  );
+  const hasWeakCommandIntent =
+    TERMINAL_COMMAND_WEAK_INTENT_HINTS.some((token) => normalized.includes(token)) ||
+    TERMINAL_COMMAND_WEAK_INTENT_PATTERNS.some((pattern) => pattern.test(normalized));
+  if (!hasWeakCommandIntent) {
+    return false;
+  }
+
+  return TERMINAL_COMMAND_EXECUTABLE_PATTERNS.some((pattern) => pattern.test(normalized));
 };

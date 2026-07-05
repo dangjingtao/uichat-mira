@@ -686,13 +686,16 @@ edit_replace_block
     - timeout 与 output limit 有执行层硬上限
     - result 包含 status、exitCode、stdoutText、stderrText、durationMs、truncated、violations
     - Windows kill tree 明确标记 best-effort limitation
+    - sandbox unavailable / L1 不满足时，`terminal_session` 不进入 `agent_intent`
   - 当前实现：
     - `server/src/sandbox/executor.ts` 补齐 cwd/env/timeout/output/result violations
     - `server/src/mcp/terminal-sessions.ts` 的 persistent PTY 创建路径复用 sandbox cwd/env 入口
     - `server/src/harness/sandbox/index.ts` 将 executor 的 `truncated` / `violations` 回传到 direct result contract
+    - `server/src/harness/sandbox/index.ts` 暴露 L1 workspace runner status；`command` profile 只有在所有 L1 requirement 通过时才是 `implemented`
+    - `server/src/harness/exposure.test.ts` 覆盖 sandbox unavailable 时不暴露 `terminal_session`
   - 验证结果：
-    - `pnpm --filter @ui-chat-mira/server test -- src/mcp/tools/terminal-session.tool.test.ts src/harness/sandbox.test.ts src/harness/sandbox/index.test.ts src/sandbox/executor.test.ts`
-      - 结果：通过，`48 passed`
+    - `pnpm --filter @ui-chat-mira/server test -- src/harness/exposure.test.ts src/mcp/tools/terminal-session.tool.test.ts src/harness/sandbox.test.ts src/harness/sandbox/index.test.ts src/sandbox/executor.test.ts`
+      - 结果：通过，`71 passed`
     - `pnpm --filter @ui-chat-mira/server bench:sandbox:direct D:\workspace\rag-demo`
       - 结果：通过，JSON summary 为 `total=7`、`passed=6`、`failed=0`、`notImplemented=1`
     - `pnpm --filter @ui-chat-mira/server exec tsc --noEmit -p tsconfig.json`

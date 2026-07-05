@@ -10,8 +10,8 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/agent-nodes-workboard.md
-  - docs/project-control/agent-nodes-V1.5 终审.md
-  - docs/project-control/agent-nodes-V1.5 全新线程复测.md
+  - docs/project-control/phase-conclusions/agent-nodes-V1.5 终审.md
+  - docs/project-control/testEvidence/agent-nodes-V1.5 全新线程复测.md
   - docs/chat/agent-frontend-workspace-smoke-method.md
   - server/src/agent/next-action-planner.ts
   - server/src/agent/tool-call-normalize.ts

@@ -46,6 +46,7 @@ Doc Type: current-contract
 - timeout 默认值、调用层限幅与执行层硬上限
 - abort / 进程树终止；Windows kill tree 为 best-effort，并在 timeout result 中标记 limitation
 - 最小命令 + 参数策略
+- L1 workspace runner status；条件不满足时 `command` profile 不可用
 - direct bench 最小合同与结构化 JSON runner
 
 相关实现：
@@ -62,6 +63,7 @@ Doc Type: current-contract
 
 - `terminal_session` 的 ephemeral child-process 路径
 - `terminal_session` 的 persistent PTY 创建路径复用 workspace cwd 与 env 白名单入口
+- Harness exposure 依赖 L1 `command` profile 状态；sandbox unavailable / L1 不满足时不暴露 `terminal_session`
 
 当前 1 期没有接入：
 

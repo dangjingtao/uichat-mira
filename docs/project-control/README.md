@@ -39,7 +39,12 @@ Do not use AI thread memory as the source of truth for project status.
 docs/project-control/
   README.md
   governance-principles.md
+  project-control-ledger.md
   agent-workboard.md
+  testEvidence/
+    agent-nodes-V1.5 全新线程复测.md
+  phase-conclusions/
+    agent-nodes-V1.5 终审.md
   tasks/
     T-001-example-task.md
   reviews/
@@ -64,13 +69,37 @@ It defines evidence levels, black-box smoke requirements, environment and hardco
 
 Read it before starting AgentGraph, Harness, tool execution, approval, runtime, packaging, or other high-risk task packages.
 
+### `project-control-ledger.md`
+
+The single project-level control ledger.
+
+All active project streams, review queues, blockers, and task indexes must be recorded here. Do not create another project-level workboard. Older workboards may remain as evidence sources, but they are not the current project ledger.
+
+Task status is sourced from each task card's `task_state`. The ledger summarizes and indexes task status; it must not override a task card.
+
 ### `agent-workboard.md`
 
-The active workboard.
+Legacy Phase-1 remediation workboard.
 
-It tracks current task status, priority, blockers, review queue, and evidence links.
+It is retained as evidence and historical context. It is not the current project-level control ledger.
 
-Keep it short. It should point to task cards and evidence, not duplicate every detail.
+### `agent-nodes-workboard.md`
+
+Legacy Agent node workboard.
+
+It is retained as evidence and historical context. It is not the current project-level control ledger.
+
+### `testEvidence/`
+
+Test evidence and black-box smoke records.
+
+Put concrete verification records here when they are larger than a task card should carry. Link to them from task cards and `project-control-ledger.md`.
+
+### `phase-conclusions/`
+
+Stage or phase conclusion documents.
+
+Put final review summaries, phase conclusions, and owner acceptance summaries here. These files may cite test evidence, but they are not test evidence by themselves.
 
 ### `tasks/`
 

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { getSandboxProfileCoverage, runSandboxCommandDirect } from "./index.js";
+import {
+  evaluateSandboxL1WorkspaceRunnerStatus,
+  getSandboxL1WorkspaceRunnerStatus,
+  getSandboxProfileCoverage,
+  runSandboxCommandDirect,
+} from "./index.js";
 
 const workspaceRoot = process.cwd();
 
@@ -42,6 +47,39 @@ const buildCommand = (kind: "echo" | "sleep" | "huge" | "unicode" | "exit" | "en
 };
 
 describe("sandbox direct contract", () => {
+  it("declares command profile available only when all L1 workspace runner checks pass", () => {
+    expect(getSandboxL1WorkspaceRunnerStatus()).toMatchObject({
+      available: true,
+      missingRequirements: [],
+      requirements: {
+        workspace_cwd_lock: true,
+        empty_cwd_defaults_workspace_root: true,
+        cwd_escape_blocked: true,
+        env_allowlist: true,
+        timeout_hard_cap: true,
+        output_limit_truncation: true,
+        complete_result_contract: true,
+        windows_kill_tree_limitation_marked: true,
+      },
+    });
+
+    expect(
+      evaluateSandboxL1WorkspaceRunnerStatus({
+        workspace_cwd_lock: true,
+        empty_cwd_defaults_workspace_root: true,
+        cwd_escape_blocked: true,
+        env_allowlist: true,
+        timeout_hard_cap: true,
+        output_limit_truncation: false,
+        complete_result_contract: true,
+        windows_kill_tree_limitation_marked: true,
+      }),
+    ).toMatchObject({
+      available: false,
+      missingRequirements: ["output_limit_truncation"],
+    });
+  });
+
   it("reports unsupported profiles as not implemented coverage", () => {
     expect(getSandboxProfileCoverage()).toEqual({
       read_only: "not_implemented",
@@ -63,6 +101,18 @@ describe("sandbox direct contract", () => {
     expect(result.status).toBe("completed");
     expect(result.stdoutText).toContain("hello");
     expect(result.artifacts).toHaveLength(1);
+    expect(Object.keys(result).sort()).toEqual(
+      [
+        "artifacts",
+        "durationMs",
+        "exitCode",
+        "stderrText",
+        "status",
+        "stdoutText",
+        "truncated",
+        "violations",
+      ].sort(),
+    );
   });
 
   it("runs a direct command in a child workspace directory", async () => {
@@ -149,6 +199,10 @@ describe("sandbox direct contract", () => {
 
     expect(result.status).toBe("timed_out");
     expect(result.violations.join(" ")).toContain("terminal execution timed out");
+    if (process.platform === "win32") {
+      expect(result.violations.join(" ")).toContain("windows_kill_tree_best_effort");
+    }
+    expect(result.status).not.toBe("completed");
   });
 
   it("preserves unicode output", async () => {

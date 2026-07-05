@@ -50,12 +50,32 @@ describe("resolveHarnessToolExposure", () => {
     expect(decision.exposedToolIds).not.toContain("terminal_session");
   });
 
-  it("exposes terminal_session with approval metadata for explicit command requests", () => {
+  it.each([
+    "run",
+    "run a local command",
+    "command",
+    "execute a command",
+    "terminal please",
+    "执行",
+    "执行命令",
+    "运行命令",
+  ])("does not expose terminal_session for weak command wording: %s", (query) => {
+    registerCapability(terminalSessionTool);
+
+    const decision = resolveHarnessToolExposure({
+      source: "agent_intent",
+      query,
+    });
+
+    expect(decision.exposedToolIds).not.toContain("terminal_session");
+  });
+
+  it("exposes terminal_session with approval metadata only when default L1 command sandbox is available", () => {
     registerCapability(terminalSessionTool);
 
     const [definition] = resolveHarnessToolExposure({
       source: "agent_intent",
-      query: "run a local command",
+      query: "run pnpm check",
     }).visibleDefinitions;
 
     const properties = (definition?.inputSchema.properties ?? {}) as Record<string, unknown>;
@@ -72,7 +92,27 @@ describe("resolveHarnessToolExposure", () => {
     expect(definition?.capabilities.sandboxProfile).toBe("command");
   });
 
-  it("does not expose terminal_session to agent_intent when command sandbox is unavailable", () => {
+  it("does not expose terminal_session to agent_intent when approval metadata is missing", () => {
+    registerCapability({
+      ...terminalSessionTool,
+      definition: {
+        ...terminalSessionTool.definition,
+        capabilities: {
+          ...terminalSessionTool.definition.capabilities,
+          requiresApproval: false,
+        },
+      },
+    });
+
+    const decision = resolveHarnessToolExposure({
+      source: "agent_intent",
+      query: "run pnpm check",
+    });
+
+    expect(decision.exposedToolIds).not.toContain("terminal_session");
+  });
+
+  it("does not expose terminal_session to agent_intent when L1 command sandbox is unavailable", () => {
     registerCapability(terminalSessionTool);
 
     const decision = resolveHarnessToolExposure({

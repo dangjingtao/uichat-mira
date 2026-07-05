@@ -14,11 +14,36 @@ import type {
 const DEFAULT_TIMEOUT_MS = 5_000;
 const DEFAULT_OUTPUT_LIMIT_BYTES = 64 * 1024;
 
-const PROFILE_COVERAGE: Record<SandboxProfile, "implemented" | "not_implemented"> = {
+type SandboxProfileCoverageStatus = "implemented" | "not_implemented";
+
+type SandboxL1Requirement =
+  | "workspace_cwd_lock"
+  | "empty_cwd_defaults_workspace_root"
+  | "cwd_escape_blocked"
+  | "env_allowlist"
+  | "timeout_hard_cap"
+  | "output_limit_truncation"
+  | "complete_result_contract"
+  | "windows_kill_tree_limitation_marked";
+
+type SandboxL1RequirementChecks = Record<SandboxL1Requirement, boolean>;
+
+const PROFILE_COVERAGE_BASE: Record<SandboxProfile, SandboxProfileCoverageStatus> = {
   read_only: "not_implemented",
   workspace_write: "not_implemented",
-  command: "implemented",
+  command: "not_implemented",
   networked_command: "not_implemented",
+};
+
+const SANDBOX_L1_WORKSPACE_RUNNER_CHECKS: SandboxL1RequirementChecks = {
+  workspace_cwd_lock: true,
+  empty_cwd_defaults_workspace_root: true,
+  cwd_escape_blocked: true,
+  env_allowlist: true,
+  timeout_hard_cap: true,
+  output_limit_truncation: true,
+  complete_result_contract: true,
+  windows_kill_tree_limitation_marked: true,
 };
 
 const createDefaultShellProfile = () =>
@@ -42,13 +67,36 @@ const isOutputLimitError = (message: string) =>
 const toNotImplementedViolation = (profile: SandboxProfile) =>
   `not_implemented: profile ${profile} is declared in the contract but not enforced by SandboxExecutor v0.5`;
 
-export const getSandboxProfileCoverage = () => ({ ...PROFILE_COVERAGE });
+export const evaluateSandboxL1WorkspaceRunnerStatus = (
+  checks: SandboxL1RequirementChecks = SANDBOX_L1_WORKSPACE_RUNNER_CHECKS,
+) => {
+  const missingRequirements = Object.entries(checks)
+    .filter(([, passed]) => !passed)
+    .map(([requirement]) => requirement);
+
+  return {
+    available: missingRequirements.length === 0,
+    requirements: { ...checks },
+    missingRequirements,
+  };
+};
+
+export const getSandboxL1WorkspaceRunnerStatus = () =>
+  evaluateSandboxL1WorkspaceRunnerStatus();
+
+export const getSandboxProfileCoverage = () => {
+  const l1Status = getSandboxL1WorkspaceRunnerStatus();
+  return {
+    ...PROFILE_COVERAGE_BASE,
+    command: l1Status.available ? "implemented" : "not_implemented",
+  } satisfies Record<SandboxProfile, SandboxProfileCoverageStatus>;
+};
 
 export const runSandboxCommandDirect = async (
   request: SandboxRunRequest,
 ): Promise<SandboxRunResult> => {
   const startedAt = performance.now();
-  const coverage = PROFILE_COVERAGE[request.profile];
+  const coverage = getSandboxProfileCoverage()[request.profile];
   if (coverage === "not_implemented") {
     return {
       status: "blocked",
