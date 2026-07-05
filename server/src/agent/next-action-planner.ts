@@ -85,6 +85,13 @@ const LOCATE_QUERY_TRAILING_NOISE = [
   "资料",
   "信息",
 ] as const;
+const LOCAL_EVIDENCE_TOOL_IDS = new Set([
+  "read_open",
+  "read_list",
+  "read_locate",
+  "read_extract",
+  "read_slice",
+]);
 
 const stripThinkBlocks = (value: string) =>
   value.replace(/^\s*(?:<think\b[^>]*>[\s\S]*?<\/think>\s*)+/i, "").trim();
@@ -211,6 +218,38 @@ const normalizeWorkspaceLocateQuery = (query: string, originalQuestion: string) 
   }, trimmed);
 
   return strippedTrailingNoise || trimmed;
+};
+
+const isWorkspaceLocalEvidenceToolAction = (input: {
+  nextAction: AgentNextAction;
+  toolExposure: AgentToolExposureState;
+}) => {
+  if (input.nextAction.type !== "use_tool") {
+    return false;
+  }
+
+  const nextToolAction = input.nextAction;
+
+  if (!input.toolExposure.exposedTools.includes(nextToolAction.toolId)) {
+    return false;
+  }
+
+  const toolMeta = input.toolExposure.toolMeta.find(
+    (tool) => tool.toolId === nextToolAction.toolId,
+  );
+  if (!toolMeta || nextToolAction.toolId === "web_search") {
+    return false;
+  }
+
+  if (toolMeta.domain === "read") {
+    return true;
+  }
+
+  if (toolMeta.capabilities?.workspaceBound === true) {
+    return true;
+  }
+
+  return LOCAL_EVIDENCE_TOOL_IDS.has(nextToolAction.toolId);
 };
 
 const emitStepNode = async (
@@ -366,6 +405,15 @@ const getWorkspaceLocalIntentGuardAction = (input: {
   }
 
   if (!queryMentionsWorkspaceLocal(input.question)) {
+    return null;
+  }
+
+  if (
+    isWorkspaceLocalEvidenceToolAction({
+      nextAction: input.nextAction,
+      toolExposure: input.toolExposure,
+    })
+  ) {
     return null;
   }
 

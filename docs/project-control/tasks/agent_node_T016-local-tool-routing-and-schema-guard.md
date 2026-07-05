@@ -20,7 +20,7 @@ related:
   - server/src/agent/evidence.ts
   - server/src/agent/types.ts
   - server/src/agent/tool-node.ts
-task_state: IN_PROGRESS
+task_state: READY_FOR_REVIEW
 ---
 
 # agent_node_T016 local tool routing and schema guard
@@ -279,29 +279,33 @@ host 和 port 必须来自 `runtime.config.cjs`。
 4. Normalize schema invalid 已接入一次 bounded replan
 5. bounded replan 用尽后会返回 deterministic safe error，不再直接 failed
 6. generate 空回答已改为 deterministic fallback，不再直接 failed
-7. 后端定向测试与 `pnpm check` 已通过
+7. 后端定向测试、`pnpm --filter @ui-chat-mira/server typecheck` 与 `pnpm check` 已通过
+8. `2026-07-05` 真实前台 `P0-9` 新线程复测已通过：workspace 绑定后稳定进入 `read_open("README.md")`，没有再被 local intent guard 误伤
+9. `pnpm package:electron:win` 已成功产出 `release/v0.7.1_20260705_161348/electron`
 
-还没有完成：
-
-- `pnpm package:electron:win`
+当前没有新的 `T016` 阻断未完成项。
 
 ## Verification Snapshot
 
 - `pnpm --filter @ui-chat-mira/server test -- src/agent/next-action-planner.test.ts src/agent/tool-call-normalize.test.ts src/agent/graph.test.ts src/agent/nodes.test.ts`
-  - 结果：通过，`109 passed`
+  - 结果：通过，`112 passed`
+- `pnpm --filter @ui-chat-mira/server typecheck`
+  - 结果：通过
 - `pnpm check`
   - 结果：通过
+- `pnpm package:electron:win`
+  - 结果：通过，产物目录为 `release/v0.7.1_20260705_161348/electron`
 - `curl http://127.0.0.1:8787/health`
   - 结果：通过，返回 `success=true`
 
-本轮没有执行：
+补充说明：
 
-- `pnpm package:electron:win`
-- `pnpm --filter @ui-chat-mira/server typecheck`
-
-原因：
-
-- 当前先完成后端硬化、前台 smoke 与统一检查链路；`typecheck` 没有单独补跑，是因为 `pnpm check` 已通过并覆盖仓内统一检查链路
+- `runtime.config.cjs` 当前配置为 `host=127.0.0.1`、`port=8787`，本轮 health 校验按该配置执行
+- `pnpm package:electron:win` 在生成测试报告时顺带暴露出若干仓库现存失败项，例如：
+  - `desktop/src/shared/uchat/ui/UChatSidebarView.test.tsx` 断言仍按 `menuitem` 查找 `Archive`
+  - 多个 `server/src/mcp/*` 测试缺少 `xlsx` 依赖或引用了不存在的 `.js` 测试入口
+  - `server/src/services/thread.service.test.ts`、`server/src/services/rag-nodes/generate.service.test.ts` 仍有断言失败
+- 上述失败项没有阻断本次桌面打包产物生成，也不属于 `T016` 允许修改范围，因此本任务只记录，不顺手改动
 
 已执行前台 smoke：
 
@@ -342,30 +346,34 @@ host 和 port 必须来自 `runtime.config.cjs`。
 
 #### P0-9 README Runtime section
 
-- 前台线程：`thread_id=5135871566de7d2ceaca5636d72655e0`
+- 前台线程：`thread_id=158d35808fc8d9cf67501b1d119d2fcb`
 - 用户问题：`README.md 的 Runtime 一节具体列了哪些运行组件？请基于文件内容回答。`
+- 绑定路径：
+  - 真实走了 `/#/chat -> + 新建对话 -> Composer menu -> Workspace -> Add to workspace -> 选择 ragDemo / D:\workspace\rag-demo -> 开启 Agent -> 发送问题`
 - 前台 trace：
-  - 进入了 `read_open`
+  - 进入了 `执行计划 -> 工具调用规范化 -> 审批策略 -> 工具执行 -> 证据写回 -> 组织最终回答 -> 检查结果`
+  - `工具执行` 明确显示 `read_open 已由 Harness 执行完成`
   - 没有出现 Normalize schema error
   - 没有出现 approval 卡住
   - 没有出现 `web_search`
 - 数据库证据：
-  - `agent_runs.id=f49a7ea0-55a9-4bad-bd0a-628919c7738f`
+  - `agent_runs.id=74dad73d-0310-434e-a4fd-148c53345658`
   - `status=completed`
-  - `trace_id=3eeabe41-29ab-4c7a-bcec-c52c44e885fe`
   - `last_tool_execution.toolId=read_open`
   - `last_tool_execution.args.path="README.md"`
-  - `observations` 包含 `read_open completed through Harness`、`Generated answer length: 246`、`Agent run produced a final answer`
-  - `read_open` 实际拿到的 README 内容明确包含：
+  - `assistant_message_id=33040eae-2b3b-4388-8b21-3b15212cb8db`
+  - assistant 最终消息已落库，正文明确列出：
     - `React + Vite renderer`
     - `Electron / Tauri shell`
     - `Fastify backend`
     - `Host and port come from runtime.config.cjs`
 - 用户可见回答：
-  - 仍声称“未包含 Runtime 一节的内容”，并拒绝列出运行组件
+  - 已按 README 原文列出运行组件
+  - 没有要求审批
+  - 没有出现“未包含 Runtime 一节内容”的旧错误回答
 - 结论：
-  - `T016` 的 schema invalid 直失败问题已解除，`P0-9` 不再死在 Normalize
-  - 该问题已在后续修复中解除；`read_open` 原文拼接和最终回答 grounding 当前已恢复
+  - `P0-9` 已通过：本地 README Runtime 问题不再误走 `web_search`，也不再死在 Normalize schema error
+  - `read_open` 原文拼接和最终回答 grounding 已恢复到可交付状态
 
 #### P0-10 final answer shape control sample
 

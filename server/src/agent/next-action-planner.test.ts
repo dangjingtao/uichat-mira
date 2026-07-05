@@ -571,6 +571,196 @@ test("nextActionPlannerNode guards workspace file-content intent away from web_s
   }
 });
 
+test("nextActionPlannerNode keeps a legal local read_open action unchanged for workspace-local questions", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need the file content."}';
+    });
+  const events: Array<Record<string, unknown>> = [];
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question: "帮我打开 README.md",
+        messages: [
+          {
+            role: "user",
+            content: "帮我打开 README.md",
+            parts: [{ type: "text", text: "帮我打开 README.md" }],
+          },
+        ],
+        workspaceRoot: "D:\\workspace\\rag-demo",
+      }),
+      async (event) => {
+        events.push({
+          nodeId: event.nodeId,
+          phase: event.phase,
+          details: event.details,
+        });
+      },
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: {
+          path: "README.md",
+        },
+        reason: "Need the file content.",
+      },
+    });
+
+    const doneEvent = events.find(
+      (event) =>
+        event.nodeId === "agent-next-action-planner" && event.phase === "done",
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.localIntentGuardTriggered,
+      false,
+    );
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode keeps a legal local read_list action unchanged for workspace-local questions", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"read_list","args":{"path":"."},"reason":"Need the workspace listing."}';
+    });
+  const events: Array<Record<string, unknown>> = [];
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question: "看看当前 workspace 有哪些文件",
+        messages: [
+          {
+            role: "user",
+            content: "看看当前 workspace 有哪些文件",
+            parts: [{ type: "text", text: "看看当前 workspace 有哪些文件" }],
+          },
+        ],
+        workspaceRoot: "D:\\workspace\\rag-demo",
+        toolExposure: {
+          exposedTools: ["read_open", "read_list", "web_search"],
+          toolMeta: [...baseToolExposure.toolMeta, readListToolMeta],
+        },
+      }),
+      async (event) => {
+        events.push({
+          nodeId: event.nodeId,
+          phase: event.phase,
+          details: event.details,
+        });
+      },
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_list",
+        args: {
+          path: ".",
+        },
+        reason: "Need the workspace listing.",
+      },
+    });
+
+    const doneEvent = events.find(
+      (event) =>
+        event.nodeId === "agent-next-action-planner" && event.phase === "done",
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.localIntentGuardTriggered,
+      false,
+    );
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode keeps a legal local read_locate action unchanged for workspace-local questions", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"read_locate","args":{"query":"UIChat Mira"},"reason":"Need workspace matches first."}';
+    });
+  const events: Array<Record<string, unknown>> = [];
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question: "请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答。",
+        messages: [
+          {
+            role: "user",
+            content: "请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答。",
+            parts: [
+              {
+                type: "text",
+                text: "请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答。",
+              },
+            ],
+          },
+        ],
+        workspaceRoot: "D:\\workspace\\rag-demo",
+        toolExposure: {
+          exposedTools: ["read_open", "read_locate", "web_search"],
+          toolMeta: [
+            ...baseToolExposure.toolMeta,
+            {
+              toolId: "read_locate",
+              title: "Read Locate",
+              description: "Locate files or matching content inside the authorized workspace.",
+              inputSchema: { type: "object", properties: { query: { type: "string" } } },
+              domain: "read",
+              source: "internal",
+              tags: ["read"],
+              capabilities: {
+                sideEffect: "none",
+                requiresApproval: false,
+              },
+            },
+          ],
+        },
+      }),
+      async (event) => {
+        events.push({
+          nodeId: event.nodeId,
+          phase: event.phase,
+          details: event.details,
+        });
+      },
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_locate",
+        args: {
+          query: "UIChat Mira",
+        },
+        reason: "Need workspace matches first.",
+      },
+    });
+
+    const doneEvent = events.find(
+      (event) =>
+        event.nodeId === "agent-next-action-planner" && event.phase === "done",
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.localIntentGuardTriggered,
+      false,
+    );
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
 test("nextActionPlannerNode keeps explicit external web_search requests unchanged", async () => {
   const streamSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")

@@ -16,7 +16,7 @@ const AGENT_TRACE_VERBOSE_ENV = "AGENT_TRACE_VERBOSE";
 const PHOENIX_COLLECTOR_ENDPOINT_ENV = "PHOENIX_COLLECTOR_ENDPOINT";
 const AGENT_TRACE_PROJECT_ENV = "AGENT_TRACE_PROJECT";
 
-const DEFAULT_COLLECTOR_ENDPOINT = "http://localhost:6006";
+const DEFAULT_COLLECTOR_ENDPOINT = "http://localhost:16006";
 const DEFAULT_PROJECT_NAME = "uichat-mira-dev";
 const REDACTED_VALUE = "[REDACTED]";
 const MAX_DEPTH = 5;
@@ -81,7 +81,9 @@ class CompositeSpanExporter implements SpanExporter {
 
       pending -= 1;
       if (pending === 0) {
-        resultCallback(failedError ? { code: 1, error: failedError } : { code: 0 });
+        resultCallback(
+          failedError ? { code: 1, error: failedError } : { code: 0 },
+        );
       }
     };
 
@@ -98,8 +100,11 @@ class CompositeSpanExporter implements SpanExporter {
     await Promise.all(
       this.exporters
         .filter(
-          (exporter): exporter is SpanExporter & { forceFlush: () => Promise<void> } =>
-            typeof (exporter as { forceFlush?: unknown }).forceFlush === "function",
+          (
+            exporter,
+          ): exporter is SpanExporter & { forceFlush: () => Promise<void> } =>
+            typeof (exporter as { forceFlush?: unknown }).forceFlush ===
+            "function",
         )
         .map((exporter) => exporter.forceFlush()),
     );
@@ -173,7 +178,9 @@ const sanitizeUnknown = (value: unknown, depth = 0): unknown => {
   }
 
   if (Array.isArray(value)) {
-    return value.slice(0, MAX_ITEMS).map((item) => sanitizeUnknown(item, depth + 1));
+    return value
+      .slice(0, MAX_ITEMS)
+      .map((item) => sanitizeUnknown(item, depth + 1));
   }
 
   if (typeof value === "object") {
@@ -313,7 +320,8 @@ const createSpanProcessors = (): SpanProcessor[] => {
     exporters.push(
       new OTLPTraceExporter({
         url: normalizeCollectorEndpoint(
-          process.env[PHOENIX_COLLECTOR_ENDPOINT_ENV]?.trim() || DEFAULT_COLLECTOR_ENDPOINT,
+          process.env[PHOENIX_COLLECTOR_ENDPOINT_ENV]?.trim() ||
+            DEFAULT_COLLECTOR_ENDPOINT,
         ),
       }),
     );
@@ -362,134 +370,145 @@ export const runWithAgentNodeSpan = async <T>(input: {
   }
 
   const tracer = getTracer();
-  return tracer.startActiveSpan(`agent.node.${input.nodeName}`, async (span) => {
-    const startedAt = Date.now();
-    const before = summarizeState(input.state);
-    const verboseBefore = isVerboseTracingEnabled()
-      ? getVerboseStatePayload(input.state)
-      : undefined;
-
-    setPrimitiveAttributes(span, {
-      "agent.trace_project": getTraceProjectName(),
-      "agent.run_id": before.runId,
-      "agent.thread_id": before.threadId,
-      "agent.node_name": input.nodeName,
-      "agent.iteration_count": before.iterationCount,
-      "agent.max_iterations": before.maxIterations,
-      "agent.next_action_type": before.nextActionType,
-      "agent.pending_tool_id": before.pendingToolId,
-      "agent.policy_decision_type": before.policyDecisionType,
-      "agent.pending_approval_tool_id": before.pendingApprovalToolId,
-      "agent.last_tool_execution_tool_id": before.lastToolExecutionToolId,
-      "agent.retrieved_chunk_count": before.retrievedChunkCount,
-      "agent.observation_count": before.observationCount,
-      "agent.answer_exists": before.answerExists,
-      "agent.error_message": before.errorMessage,
-      "agent.error_source_node_id": before.errorSourceNodeId,
-      "agent.blocked_reason": before.blockedReason,
-    });
-
-    const beforeJson = toJsonAttribute(before);
-    if (beforeJson) {
-      span.setAttribute("agent.state.before.summary_json", beforeJson);
-    }
-    if (verboseBefore) {
-      const verboseJson = toJsonAttribute(verboseBefore);
-      if (verboseJson) {
-        span.setAttribute("agent.state.before.verbose_json", verboseJson);
-      }
-    }
-
-    try {
-      const result = await input.run();
-      const mergedState = input.mergeResult
-        ? ({ ...input.state, ...input.mergeResult(result) } as AgentGraphState)
-        : input.state;
-      const after = summarizeState(mergedState);
-      const verboseAfter = isVerboseTracingEnabled()
-        ? getVerboseStatePayload(mergedState)
+  return tracer.startActiveSpan(
+    `agent.node.${input.nodeName}`,
+    async (span) => {
+      const startedAt = Date.now();
+      const before = summarizeState(input.state);
+      const verboseBefore = isVerboseTracingEnabled()
+        ? getVerboseStatePayload(input.state)
         : undefined;
-      const latencyMs = Date.now() - startedAt;
 
       setPrimitiveAttributes(span, {
-        "agent.node_status": "ok",
-        "agent.next_action_type_after": after.nextActionType,
-        "agent.pending_tool_id_after": after.pendingToolId,
-        "agent.policy_decision_type_after": after.policyDecisionType,
-        "agent.pending_approval_tool_id_after": after.pendingApprovalToolId,
-        "agent.last_tool_execution_tool_id_after": after.lastToolExecutionToolId,
-        "agent.retrieved_chunk_count_after": after.retrievedChunkCount,
-        "agent.observation_count_after": after.observationCount,
-        "agent.answer_exists_after": after.answerExists,
-        "agent.error_message_after": after.errorMessage,
-        "agent.error_source_node_id_after": after.errorSourceNodeId,
-        "agent.blocked_reason_after": after.blockedReason,
-        "agent.latest_evidence_source_after": after.latestEvidenceSource,
-        "agent.latest_evidence_tool_id_after": after.latestEvidenceToolId,
-        "agent.latest_evidence_can_answer_after": after.latestEvidenceCanAnswer,
-        "agent.latency_ms": latencyMs,
+        "agent.trace_project": getTraceProjectName(),
+        "agent.run_id": before.runId,
+        "agent.thread_id": before.threadId,
+        "agent.node_name": input.nodeName,
+        "agent.iteration_count": before.iterationCount,
+        "agent.max_iterations": before.maxIterations,
+        "agent.next_action_type": before.nextActionType,
+        "agent.pending_tool_id": before.pendingToolId,
+        "agent.policy_decision_type": before.policyDecisionType,
+        "agent.pending_approval_tool_id": before.pendingApprovalToolId,
+        "agent.last_tool_execution_tool_id": before.lastToolExecutionToolId,
+        "agent.retrieved_chunk_count": before.retrievedChunkCount,
+        "agent.observation_count": before.observationCount,
+        "agent.answer_exists": before.answerExists,
+        "agent.error_message": before.errorMessage,
+        "agent.error_source_node_id": before.errorSourceNodeId,
+        "agent.blocked_reason": before.blockedReason,
       });
 
-      const afterJson = toJsonAttribute(after);
-      if (afterJson) {
-        span.setAttribute("agent.state.after.summary_json", afterJson);
+      const beforeJson = toJsonAttribute(before);
+      if (beforeJson) {
+        span.setAttribute("agent.state.before.summary_json", beforeJson);
       }
-      if (verboseAfter) {
-        const verboseJson = toJsonAttribute(verboseAfter);
+      if (verboseBefore) {
+        const verboseJson = toJsonAttribute(verboseBefore);
         if (verboseJson) {
-          span.setAttribute("agent.state.after.verbose_json", verboseJson);
+          span.setAttribute("agent.state.before.verbose_json", verboseJson);
         }
       }
 
-      span.setStatus({ code: SpanStatusCode.OK });
-      const recordAttributes = {
-        "agent.node_name": input.nodeName,
-        "agent.run_id": before.runId,
-        "agent.thread_id": before.threadId,
-        "agent.node_status": "ok",
-        "agent.latency_ms": latencyMs,
-        "agent.state.after.summary_json": afterJson ?? null,
-        ...(verboseAfter
-          ? {
-              "agent.state.after.verbose_json":
-                toJsonAttribute(verboseAfter) ?? null,
-            }
-          : {}),
-      } satisfies Record<string, PrimitiveAttribute>;
-      captureRecord({
-        name: `agent.node.${input.nodeName}`,
-        attributes: recordAttributes,
-      });
-      return result;
-    } catch (error) {
-      const latencyMs = Date.now() - startedAt;
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      span.recordException(error instanceof Error ? error : new Error(errorMessage));
-      span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: sanitizeString(errorMessage),
-      });
-      setPrimitiveAttributes(span, {
-        "agent.node_status": "error",
-        "agent.error_message_after": sanitizeString(errorMessage),
-        "agent.latency_ms": latencyMs,
-      });
-      captureRecord({
-        name: `agent.node.${input.nodeName}`,
-        attributes: {
+      try {
+        const result = await input.run();
+        const mergedState = input.mergeResult
+          ? ({
+              ...input.state,
+              ...input.mergeResult(result),
+            } as AgentGraphState)
+          : input.state;
+        const after = summarizeState(mergedState);
+        const verboseAfter = isVerboseTracingEnabled()
+          ? getVerboseStatePayload(mergedState)
+          : undefined;
+        const latencyMs = Date.now() - startedAt;
+
+        setPrimitiveAttributes(span, {
+          "agent.node_status": "ok",
+          "agent.next_action_type_after": after.nextActionType,
+          "agent.pending_tool_id_after": after.pendingToolId,
+          "agent.policy_decision_type_after": after.policyDecisionType,
+          "agent.pending_approval_tool_id_after": after.pendingApprovalToolId,
+          "agent.last_tool_execution_tool_id_after":
+            after.lastToolExecutionToolId,
+          "agent.retrieved_chunk_count_after": after.retrievedChunkCount,
+          "agent.observation_count_after": after.observationCount,
+          "agent.answer_exists_after": after.answerExists,
+          "agent.error_message_after": after.errorMessage,
+          "agent.error_source_node_id_after": after.errorSourceNodeId,
+          "agent.blocked_reason_after": after.blockedReason,
+          "agent.latest_evidence_source_after": after.latestEvidenceSource,
+          "agent.latest_evidence_tool_id_after": after.latestEvidenceToolId,
+          "agent.latest_evidence_can_answer_after":
+            after.latestEvidenceCanAnswer,
+          "agent.latency_ms": latencyMs,
+        });
+
+        const afterJson = toJsonAttribute(after);
+        if (afterJson) {
+          span.setAttribute("agent.state.after.summary_json", afterJson);
+        }
+        if (verboseAfter) {
+          const verboseJson = toJsonAttribute(verboseAfter);
+          if (verboseJson) {
+            span.setAttribute("agent.state.after.verbose_json", verboseJson);
+          }
+        }
+
+        span.setStatus({ code: SpanStatusCode.OK });
+        const recordAttributes = {
           "agent.node_name": input.nodeName,
           "agent.run_id": before.runId,
           "agent.thread_id": before.threadId,
+          "agent.node_status": "ok",
+          "agent.latency_ms": latencyMs,
+          "agent.state.after.summary_json": afterJson ?? null,
+          ...(verboseAfter
+            ? {
+                "agent.state.after.verbose_json":
+                  toJsonAttribute(verboseAfter) ?? null,
+              }
+            : {}),
+        } satisfies Record<string, PrimitiveAttribute>;
+        captureRecord({
+          name: `agent.node.${input.nodeName}`,
+          attributes: recordAttributes,
+        });
+        return result;
+      } catch (error) {
+        const latencyMs = Date.now() - startedAt;
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        span.recordException(
+          error instanceof Error ? error : new Error(errorMessage),
+        );
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: sanitizeString(errorMessage),
+        });
+        setPrimitiveAttributes(span, {
           "agent.node_status": "error",
           "agent.error_message_after": sanitizeString(errorMessage),
           "agent.latency_ms": latencyMs,
-        },
-      });
-      throw error;
-    } finally {
-      span.end();
-    }
-  });
+        });
+        captureRecord({
+          name: `agent.node.${input.nodeName}`,
+          attributes: {
+            "agent.node_name": input.nodeName,
+            "agent.run_id": before.runId,
+            "agent.thread_id": before.threadId,
+            "agent.node_status": "error",
+            "agent.error_message_after": sanitizeString(errorMessage),
+            "agent.latency_ms": latencyMs,
+          },
+        });
+        throw error;
+      } finally {
+        span.end();
+      }
+    },
+  );
 };
 
 export const runWithAgentRunSpan = async <T>(input: {
@@ -561,7 +580,9 @@ export const runWithAgentRunSpan = async <T>(input: {
         "agent.output_error_source_node_id": outputSummary?.errorSourceNodeId,
       });
 
-      const outputJson = outputSummary ? toJsonAttribute(outputSummary) : undefined;
+      const outputJson = outputSummary
+        ? toJsonAttribute(outputSummary)
+        : undefined;
       if (outputJson) {
         span.setAttribute("agent.run.output.summary_json", outputJson);
       }
@@ -580,8 +601,11 @@ export const runWithAgentRunSpan = async <T>(input: {
       return result;
     } catch (error) {
       const latencyMs = Date.now() - startedAt;
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      span.recordException(error instanceof Error ? error : new Error(errorMessage));
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      span.recordException(
+        error instanceof Error ? error : new Error(errorMessage),
+      );
       span.setStatus({
         code: SpanStatusCode.ERROR,
         message: sanitizeString(errorMessage),

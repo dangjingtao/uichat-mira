@@ -64,7 +64,12 @@ docker run --rm -it -p 6006:6006 -p 4318:4318 arizephoenix/phoenix:latest
 启动后：
 
 - Phoenix UI: `http://localhost:6006`
-- 当前本机 collector 可直接使用：`http://localhost:6006`
+- collector 必须使用你当前 Phoenix 的本机映射端口
+
+例如当前这台机器：
+
+- UI：`http://localhost:16006`
+- collector：`http://localhost:16006`
 
 如果你已经有自己的 collector 入口，也可以继续用自定义地址。
 
@@ -74,7 +79,7 @@ docker run --rm -it -p 6006:6006 -p 4318:4318 arizephoenix/phoenix:latest
 
 ```bash
 AGENT_TRACE_PHOENIX=true
-PHOENIX_COLLECTOR_ENDPOINT=http://localhost:6006
+PHOENIX_COLLECTOR_ENDPOINT=http://localhost:16006
 AGENT_TRACE_PROJECT=uichat-mira-dev
 ```
 
@@ -105,7 +110,7 @@ pnpm dev:electron:win:trace
 这个命令会自动注入：
 
 - `AGENT_TRACE_PHOENIX=true`
-- `PHOENIX_COLLECTOR_ENDPOINT=http://localhost:6006`
+- `PHOENIX_COLLECTOR_ENDPOINT=http://localhost:16006`
 - `AGENT_TRACE_PROJECT=uichat-mira-dev`
 - `AGENT_TRACE_VERBOSE=true`
 

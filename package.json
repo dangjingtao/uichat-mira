@@ -38,7 +38,7 @@
   },
   "scripts": {
     "dev:electron:win": "node scripts/generate-dev-coverage.js && pnpm --filter @ui-chat-mira/electron dev",
-    "dev:electron:win:trace": "cross-env AGENT_TRACE_PHOENIX=true PHOENIX_COLLECTOR_ENDPOINT=http://localhost:6006 AGENT_TRACE_PROJECT=uichat-mira-dev AGENT_TRACE_VERBOSE=true pnpm dev:electron:win",
+    "dev:electron:win:trace": "cross-env AGENT_TRACE_PHOENIX=true PHOENIX_COLLECTOR_ENDPOINT=http://localhost:16006 AGENT_TRACE_PROJECT=uichat-mira-dev AGENT_TRACE_VERBOSE=true pnpm dev:electron:win",
     "dev:tauri:win": "cross-env CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 pnpm tauri dev --config tauri/tauri.conf.json",
     "docs:dev": "pnpm --filter @ui-chat-mira/docs-site dev",
     "docs:build": "pnpm --filter @ui-chat-mira/docs-site build",
