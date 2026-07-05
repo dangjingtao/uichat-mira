@@ -15,7 +15,7 @@ related:
   - docs/skill/schema/skill-card.schema.md
   - docs/skill/catalog/README.md
   - docs/skill/roadmap.md
-task_state: READY_FOR_REVIEW
+task_state: DONE
 ---
 
 # skill_T001 Docs-Only Foundation
@@ -103,5 +103,7 @@ task_state: READY_FOR_REVIEW
 
 ## Review Outcome
 
-- 当前状态：`READY_FOR_REVIEW`
-- 提交内容：docs-only `Phase 0` 基础文档整理
+- 评审结论：通过
+- 当前状态：`DONE`
+- 接受范围：docs-only `Phase 0` 基础文档整理
+- 明确未批准 runtime / DB / UI / AgentGraph / Harness / MCP 实现

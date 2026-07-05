@@ -41,7 +41,7 @@ related:
 | Agent Phase 2 | `ARCHIVED_PARTIAL_SUPERSEDED` | 可用闭环阶段部分归档，后续由 Agent V1.5 / 老三期接管 | [agent-phase-1-2-archive-decision.md](phase-conclusions/agent-phase-1-2-archive-decision.md), [agent-phase-2-checklist.md](../chat/agent-phase-2-checklist.md) | 不按完成归档；未完成项不得口头升级为 DONE |
 | Phase-1 Remediation | `DONE_WITH_HISTORY` | 早期 P0/P1/P2 缺陷整改 | [agent-workboard.md](agent-workboard.md), `T-001-T008` | 仅作为历史证据，不再作为当前项目台账；阶段口径见 Agent Phase 1 |
 | Test Report / Evidence Hygiene | `PROPOSED` | 测试报告 JSON 合并与瘦身 | [T-009](tasks/T-009-test-report-json-consolidation.md) | `status: proposed`, `canonical: false`，未进入当前执行 |
-| Skill Docs Foundation | `READY_FOR_REVIEW` | `docs/skill` 基础数据 POC 整理为 docs-only Phase 0 | [skill_T001](tasks/skill_T001-docs-only-foundation.md), [docs/skill/roadmap.md](../skill/roadmap.md) | 仅更新文档口径、catalog 和 eval，不进入 runtime 实现 |
+| Skill Docs Foundation | `DONE` | `docs/skill` 基础数据 POC 整理为 docs-only Phase 0 | [skill_T001](tasks/skill_T001-docs-only-foundation.md), [docs/skill/roadmap.md](../skill/roadmap.md) | docs-only Phase 0 评审通过；未批准 runtime / DB / UI / AgentGraph / Harness / MCP 实现 |
 
 ## Active Review Queue
 
@@ -61,7 +61,6 @@ related:
 | [T-012](tasks/T-012-l1-workspace-sandbox-runner.md) | `DONE` | Harness / Sandbox | Review 02 已通过：L1 workspace sandbox runner |
 | [T-009](tasks/T-009-test-report-json-consolidation.md) | `PROPOSED` | Evidence Hygiene | 决定是否进入执行队列 |
 | [harness_context_T002](tasks/harness_context_T002-context-read-bench.md) | `DONE` | Harness Context | 已验收通过；保留任务外 typecheck 阻断记录 |
-| [skill_T001](tasks/skill_T001-docs-only-foundation.md) | `READY_FOR_REVIEW` | Skill Docs | 评审 docs-only Phase 0 命名、边界、catalog 和 roadmap 口径是否可接受 |
 
 ## Agent Nodes Index
 

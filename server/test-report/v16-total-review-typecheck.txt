@@ -1,88 +1,42 @@
 UIChat Mira V1.6 total review typecheck evidence
 Date: 2026-07-06
 Workspace: D:\workspace\rag-demo
-Commit: b3bd970aaee12d00f52b965b8c07dc1d4c14e7e2
+Current HEAD: c6311cec46b5f849ae35346f187714a6fa503559
 
-Scope
-- Task: fix the root filtered typecheck command for `@ui-chat-mira/server`
-- Allowed change used in this run: `server/package.json` script entry and this report file
-- No business TypeScript source was changed
+Current server/package.json typecheck script
+- `node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`
 
-Initial reproduction
+Why package.json was changed
+- Before this run, `server/package.json` still used bare `tsc --noEmit -p tsconfig.json`.
+- In this workspace, `pnpm --filter @ui-chat-mira/server typecheck` passed, but `cd server && pnpm typecheck` still failed with exit `3221225477`.
+- That meant the old report text claiming the script had already been changed was false, and the actual package-local command was not stable.
+- To make code and report consistent, the script was formally changed to the explicit Node invocation.
+
+Verification
 1. Command
-pnpm --filter @ui-chat-mira/server typecheck
+git rev-parse HEAD
 Result
-FAIL
-Full output
-> @ui-chat-mira/server@0.7.1 typecheck D:\workspace\rag-demo\server
-> tsc --noEmit -p tsconfig.json
-
-D:\workspace\rag-demo\server:
-ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL @ui-chat-mira/server@0.7.1 typecheck: `tsc --noEmit -p tsconfig.json`
-Exit status 3221225477
+PASS
+Output
+c6311cec46b5f849ae35346f187714a6fa503559
 
 2. Command
-cd server
-pnpm typecheck
-Result
-FAIL in this environment
-Full output
-> @ui-chat-mira/server@0.7.1 typecheck D:\workspace\rag-demo\server
-> tsc --noEmit -p tsconfig.json
-
-ELIFECYCLE Command failed with exit code 3221225477.
-
-Diagnostic comparison
-3. Command
-cd server
-node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json
-Result
-PASS
-
-4. Command
-cd server
-cmd /d /c .\node_modules\.bin\tsc.CMD --noEmit -p tsconfig.json
-Result
-PASS
-
-5. Command
-cd server
-pnpm exec node -e "const {spawnSync}=require('node:child_process'); const r=spawnSync('cmd.exe',['/d','/c','tsc --noEmit -p tsconfig.json'],{stdio:'inherit',shell:false}); console.log('status=',r.status,'signal=',r.signal,'error=',r.error); process.exit(r.status??1)"
-Result
-FAIL
-Key output
-- `status= 3221225477`
-
-Root cause judgment
-- Category: script definition problem, triggered by Windows command resolution under `pnpm run`
-- Not a pnpm workspace/filter targeting problem: the same crash happened in root filtered mode and in `server` package-local `pnpm typecheck`
-- Not a TypeScript diagnostic problem: direct execution of `typescript/bin/tsc` completed successfully
-- Not a `tsconfig.json` or business code problem: the compiler completed once the script bypassed the ambiguous `tsc` shim resolution path
-- Most likely failing layer: `pnpm run` on Windows launches the script through `cmd.exe`; the bare `tsc` command resolves through `node_modules/.bin` and crashes with exit `3221225477`, while explicit `node ./node_modules/typescript/bin/tsc` is stable
-
-Fix
-- Updated `server/package.json`
-- Changed script from `tsc --noEmit -p tsconfig.json`
-- To `node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`
-
-Verification after fix
-6. Command
 pnpm --filter @ui-chat-mira/server typecheck
 Result
 PASS
-Full output
+Output
 > @ui-chat-mira/server@0.7.1 typecheck D:\workspace\rag-demo\server
 > node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json
 
-7. Command
-cd server
-pnpm typecheck
+3. Command
+cd server && pnpm typecheck
 Result
 PASS
-Full output
+Output
 > @ui-chat-mira/server@0.7.1 typecheck D:\workspace\rag-demo\server
 > node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json
 
-Changed files in this run
-- server/package.json
-- server/test-report/v16-total-review-typecheck.txt
+Consistency judgment
+- The report no longer claims an uncommitted script change.
+- The current script in `server/package.json` matches the command that actually passed.
+- Root filtered typecheck and package-local typecheck are now aligned.

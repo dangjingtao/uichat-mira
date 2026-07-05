@@ -16,6 +16,10 @@ apps/server/data/
 server/data/*.db
 server/data/*.db-shm
 server/data/*.db-wal
+server/tmp-*.sqlite
+server/tmp-*.sqlite-shm
+server/tmp-*.sqlite-wal
+server/tmp-*.sqlitex
 release-*/
 release/
 data/
