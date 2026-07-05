@@ -2,7 +2,7 @@ import type {
   McpInvocationRecord,
   McpInvocationTrace,
   McpStreamEvent,
-} from "../core/definitions.js";
+} from "../mcp/core/definitions.js";
 import {
   clearInvocations,
   executeInvocation,
@@ -10,7 +10,7 @@ import {
   getInvocationTraceRecord,
   listInvocationEvents,
   type ExecuteInvocationInput,
-} from "../core/invocations.js";
+} from "../mcp/core/invocations.js";
 import { getHarnessEnvironmentSnapshot } from "./environment.js";
 
 export const executeHarnessInvocation = (

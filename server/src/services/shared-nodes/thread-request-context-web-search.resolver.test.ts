@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import * as harnessInvocations from "@/mcp/harness/invocations.js";
+import * as harnessInvocations from "@/harness/invocations.js";
 import { resolveThreadWebSearchContext } from "./thread-request-context-web-search.resolver.js";
 
 const createLogger = () =>

@@ -1,0 +1,21 @@
+import type { McpToolDefinition } from "../../mcp/core/definitions.js";
+import type { HarnessTurnSource } from "../shared/types.js";
+
+export type HarnessExposureSource = HarnessTurnSource;
+
+export interface HarnessExposurePolicyInput {
+  source: HarnessExposureSource;
+  query?: string;
+  allowExternal?: boolean;
+}
+
+export interface HarnessExposureDecision {
+  exposedToolIds: string[];
+  exposedDefinitions: McpToolDefinition[];
+  reason: string[];
+  visibleDefinitions: McpToolDefinition[];
+  blockedCapabilityIds: string[];
+  reasons: string[];
+}
+
+export type HarnessToolExposureResult = HarnessExposureDecision;

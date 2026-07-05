@@ -1,18 +1,18 @@
-import { workspaceResource } from "../resources/workspace-resource.js";
-import { editFileTool } from "../tools/edit-file.tool.js";
-import { readExtractTool } from "../tools/read-extract.tool.js";
-import { readListTool } from "../tools/read-list.tool.js";
-import { readLocateTool } from "../tools/read-locate.tool.js";
-import { readOpenTool } from "../tools/read-open.tool.js";
-import { readSliceTool } from "../tools/read-slice.tool.js";
-import { readTool } from "../tools/read.tool.js";
-import { terminalSessionTool } from "../tools/terminal-session.tool.js";
-import { webSearchTool } from "../tools/web-search.tool.js";
-import { workspaceMutationTool } from "../tools/workspace-mutation.tool.js";
+import { workspaceResource } from "../mcp/resources/workspace-resource.js";
+import { editFileTool } from "../mcp/tools/edit-file.tool.js";
+import { readExtractTool } from "../mcp/tools/read-extract.tool.js";
+import { readListTool } from "../mcp/tools/read-list.tool.js";
+import { readLocateTool } from "../mcp/tools/read-locate.tool.js";
+import { readOpenTool } from "../mcp/tools/read-open.tool.js";
+import { readSliceTool } from "../mcp/tools/read-slice.tool.js";
+import { readTool } from "../mcp/tools/read.tool.js";
+import { terminalSessionTool } from "../mcp/tools/terminal-session.tool.js";
+import { webSearchTool } from "../mcp/tools/web-search.tool.js";
+import { workspaceMutationTool } from "../mcp/tools/workspace-mutation.tool.js";
 import {
   initializeExternalMcpDatabase,
   registerAllExternalMcpCapabilities,
-} from "../external.js";
+} from "../mcp/external.js";
 import { webSearchSettingsRepository } from "@/db/repositories/web-search-settings.repository.js";
 import { registerCapability, registerReadableResource } from "./registry.js";
 

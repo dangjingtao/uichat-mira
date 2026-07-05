@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createHarnessEnvironmentSnapshot } from "../harness/environment.js";
+import { createHarnessEnvironmentSnapshot } from "../../harness/environment.js";
 import { readSliceTool } from "./read-slice.tool.js";
 
 describe("read_slice tool", () => {

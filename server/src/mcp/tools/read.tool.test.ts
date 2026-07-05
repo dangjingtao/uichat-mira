@@ -2,8 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createHarnessEnvironmentSnapshot } from "../harness/environment.js";
-import { clearHarnessRegistry } from "../harness/registry.js";
+import { createHarnessEnvironmentSnapshot } from "../../harness/environment.js";
+import { clearHarnessRegistry } from "../../harness/registry.js";
 import { clearWorkspaceSelection } from "../workspace.js";
 import { readTool } from "./read.tool.js";
 

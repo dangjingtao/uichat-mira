@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { clearHarnessRegistry, registerCapability } from "./registry.js";
 import { resolveHarnessToolExposure } from "./exposure.js";
-import { terminalSessionTool } from "../tools/terminal-session.tool.js";
-import { readTool } from "../tools/read.tool.js";
-import { readOpenTool } from "../tools/read-open.tool.js";
-import { readSliceTool } from "../tools/read-slice.tool.js";
-import { webSearchTool } from "../tools/web-search.tool.js";
+import { terminalSessionTool } from "../mcp/tools/terminal-session.tool.js";
+import { readTool } from "../mcp/tools/read.tool.js";
+import { readOpenTool } from "../mcp/tools/read-open.tool.js";
+import { readSliceTool } from "../mcp/tools/read-slice.tool.js";
+import { webSearchTool } from "../mcp/tools/web-search.tool.js";
 
 describe("resolveHarnessToolExposure", () => {
   afterEach(() => {

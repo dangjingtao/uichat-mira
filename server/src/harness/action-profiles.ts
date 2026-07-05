@@ -1,5 +1,5 @@
-import { mcpBadRequest } from "../core/errors.js";
-import type { McpToolDefinition } from "../core/definitions.js";
+import { mcpBadRequest } from "../mcp/core/errors.js";
+import type { McpToolDefinition } from "../mcp/core/definitions.js";
 
 export interface HarnessActionProfile {
   id: string;

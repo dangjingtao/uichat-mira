@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { test, vi } from "vitest";
 import { executeDefaultChatToolLoop } from "./chat-tool-loop.js";
 import { initializeHarnessRuntime, resetHarnessRuntime } from "@/mcp/bootstrap.js";
-import { clearHarnessRegistry } from "@/mcp/harness/registry.js";
+import { clearHarnessRegistry } from "@/harness/registry.js";
 import * as providerResolution from "@/services/provider-proxy.service/resolution.js";
-import * as harnessInvocations from "@/mcp/harness/invocations.js";
+import * as harnessInvocations from "@/harness/invocations.js";
 
 test("executeDefaultChatToolLoop trims long non-system history before tool decision", async () => {
   clearHarnessRegistry();

@@ -2,7 +2,7 @@ import type { ProxyProviderParam } from "@/services/provider-proxy.service/index
 import type {
   HarnessToolCandidate,
   HarnessToolExposure,
-} from "@/mcp/harness/tool-candidates";
+} from "@/harness/tool-candidates";
 
 export interface AgentIntentEmbeddingConfig {
   requestedProvider?: ProxyProviderParam;

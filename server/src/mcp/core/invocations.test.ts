@@ -4,8 +4,8 @@ import {
   executeHarnessInvocation,
   getHarnessInvocationTrace,
   listHarnessInvocationEvents,
-} from "../harness/invocations.js";
-import { clearHarnessRegistry, registerCapability } from "../harness/registry.js";
+} from "../../harness/invocations.js";
+import { clearHarnessRegistry, registerCapability } from "../../harness/registry.js";
 import { createInvocationInputHash } from "@/agent/approval-fingerprint.js";
 import { McpApprovalRequiredError } from "./errors.js";
 import type { McpToolImplementation } from "./definitions.js";

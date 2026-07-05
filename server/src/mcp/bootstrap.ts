@@ -3,4 +3,4 @@ export {
   initializeHarnessRuntime as initializeMcpRuntime,
   resetHarnessRuntime,
   resetHarnessRuntime as resetMcpBootstrap,
-} from "./harness/runtime.js";
+} from "../harness/runtime.js";

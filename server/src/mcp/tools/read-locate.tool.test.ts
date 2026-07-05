@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createHarnessEnvironmentSnapshot } from "../harness/environment.js";
+import { createHarnessEnvironmentSnapshot } from "../../harness/environment.js";
 import { clearWorkspaceSelection } from "../workspace.js";
 import { readLocateTool } from "./read-locate.tool.js";
 

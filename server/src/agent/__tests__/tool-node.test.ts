@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test, vi } from "vitest";
-import * as harnessInvocations from "@/mcp/harness/invocations";
+import * as harnessInvocations from "@/harness/invocations";
 import { getWorkspaceRoot } from "@/mcp/workspace";
 import { createInvocationInputHash } from "../approval-fingerprint";
 import { toolNode } from "../nodes/tool-node";

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { PUBLIC_API_ROUTES } from "@/config/public-api.js";
-import { getHarnessEnvironmentSnapshot } from "@/mcp/harness/environment.js";
+import { getHarnessEnvironmentSnapshot } from "@/harness/environment.js";
 import { threadService } from "@/services/thread.service.js";
 import {
   roleService,

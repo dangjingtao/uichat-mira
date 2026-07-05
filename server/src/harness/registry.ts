@@ -3,7 +3,7 @@ import type {
   McpResourceImplementation,
   McpToolDefinition,
   McpToolImplementation,
-} from "../core/definitions.js";
+} from "../mcp/core/definitions.js";
 import {
   clearRegistry,
   getResourceImplementation,
@@ -13,7 +13,7 @@ import {
   registerResource,
   registerTool,
   unregisterTool,
-} from "../core/registry.js";
+} from "../mcp/core/registry.js";
 
 export const registerCapability = (capability: McpToolImplementation) =>
   registerTool(capability);

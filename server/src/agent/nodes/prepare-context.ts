@@ -1,7 +1,7 @@
 /**
  * 上下文准备节点：收集线程消息、可用工具和策略允许的自动工具列表。
  */
-import { listCapabilityDefinitions } from "@/mcp/harness/registry";
+import { listCapabilityDefinitions } from "@/harness/registry";
 import { evaluateAgentToolPolicy } from "../policy";
 import { emitStepNode } from "../node-runtime";
 import type { AgentNodeState, EmitAgentExecutionNode } from "../node-runtime";

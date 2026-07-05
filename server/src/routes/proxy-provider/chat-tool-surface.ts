@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from "@/mcp/core/definitions.js";
-import { resolveHarnessToolExposure } from "@/mcp/harness/exposure.js";
+import { resolveHarnessToolExposure } from "@/harness/exposure.js";
 
 export interface ChatToolSurfaceDefinition {
   id: string;

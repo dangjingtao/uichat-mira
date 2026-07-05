@@ -1,18 +1,5 @@
-import type { McpToolDefinition } from "../core/definitions.js";
-
-export interface HarnessCapabilityProfile {
-  id: string;
-  title: string;
-  description: string;
-  domain: McpToolDefinition["domain"];
-  source: "internal" | "external";
-  tags: string[];
-  preferredToolId: string;
-  supportingToolIds: string[];
-  actionProfileId?: string;
-  actionProfileTitle?: string;
-  actionProfileDescription?: string;
-}
+import type { McpToolDefinition } from "../../mcp/core/definitions.js";
+import type { HarnessCapabilityProfile } from "./types.js";
 
 const INTERNAL_PROFILE_BLUEPRINTS: Array<{
   id: string;
@@ -100,7 +87,7 @@ export const resolveHarnessCapabilityProfiles = (
     }
 
     matchedToolIds.forEach((toolId) => consumed.add(toolId));
-  profiles.push({
+    profiles.push({
       id: blueprint.id,
       title: blueprint.title,
       description: blueprint.description,

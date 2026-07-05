@@ -11,8 +11,8 @@ import { initializeModelConfigDatabase } from "@/db/model-config.db";
 import { initializeRoleDatabase } from "@/db/role.db";
 import { initializeThreadDatabase } from "@/db/thread.db";
 import { initializeHarnessRuntime, resetHarnessRuntime } from "@/mcp/bootstrap.js";
-import { clearHarnessRegistry } from "@/mcp/harness/registry.js";
-import * as harnessInvocations from "@/mcp/harness/invocations.js";
+import { clearHarnessRegistry } from "@/harness/registry.js";
+import * as harnessInvocations from "@/harness/invocations.js";
 import {
   knowledgeBaseRepository,
   roleRepository,

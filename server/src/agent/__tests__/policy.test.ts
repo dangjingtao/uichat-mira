@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test, vi } from "vitest";
-import * as registry from "@/mcp/harness/registry";
+import * as registry from "@/harness/registry";
 import type { AgentNodeState } from "../node-runtime";
 import * as policy from "../policy";
 import { policyNode } from "../nodes/policy-node";

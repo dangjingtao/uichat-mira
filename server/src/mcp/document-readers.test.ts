@@ -4,7 +4,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import * as XLSX from "xlsx";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createHarnessEnvironmentSnapshot } from "./harness/environment.js";
+import { createHarnessEnvironmentSnapshot } from "../harness/environment.js";
 import {
   buildReadStrategies,
   listDirectory,

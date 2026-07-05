@@ -3,7 +3,7 @@ import { resolveChatToolSurface } from "./chat-tool-surface.js";
 
 const resolveHarnessToolExposureMock = vi.hoisted(() => vi.fn());
 
-vi.mock("@/mcp/harness/exposure.js", () => ({
+vi.mock("@/harness/exposure.js", () => ({
   resolveHarnessToolExposure: resolveHarnessToolExposureMock,
 }));
 

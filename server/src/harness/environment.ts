@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
-import type { McpExecutionEnvironment } from "../core/definitions.js";
-import { getWorkspaceSelection } from "../workspace.js";
+import type { McpExecutionEnvironment } from "../mcp/core/definitions.js";
+import { getWorkspaceSelection } from "../mcp/workspace.js";
 
 export interface HarnessToolConfig {
   web_search?: {

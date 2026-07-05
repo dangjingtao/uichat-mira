@@ -9,16 +9,16 @@ import {
   getHarnessInvocation,
   getHarnessInvocationTrace,
   listHarnessInvocationEvents,
-} from "./harness/invocations.js";
+} from "../harness/invocations.js";
 import {
   getReadableResourceImplementation,
   listInternalCapabilityDefinitions,
   listReadableResourceDefinitions,
-} from "./harness/registry.js";
-import { resolveHarnessToolExposure } from "./harness/exposure.js";
-import { resolveHarnessCapabilityDiagnostics } from "./harness/capability-diagnostics.js";
-import { resolveHarnessToolCandidatesForTurn } from "./harness/tool-candidates.js";
-import { getHarnessEnvironmentSnapshot } from "./harness/environment.js";
+} from "../harness/registry.js";
+import { resolveHarnessToolExposure } from "../harness/exposure.js";
+import { resolveHarnessCapabilityDiagnostics } from "../harness/capability-diagnostics.js";
+import { resolveHarnessToolCandidatesForTurn } from "../harness/tool-candidates.js";
+import { getHarnessEnvironmentSnapshot } from "../harness/environment.js";
 import { toSseChunk } from "./core/events.js";
 import { mcpNotFound } from "./core/errors.js";
 import { getWorkspaceSelection, selectWorkspaceRoot } from "./workspace.js";

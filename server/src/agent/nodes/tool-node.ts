@@ -1,8 +1,8 @@
 /**
  * 工具执行节点：执行已审批或免审的工具调用，并将结果加入证据。
  */
-import { executeHarnessInvocation } from "@/mcp/harness/invocations";
-import { createHarnessEnvironmentSnapshot } from "@/mcp/harness/environment";
+import { executeHarnessInvocation } from "@/harness/invocations";
+import { createHarnessEnvironmentSnapshot } from "@/harness/environment";
 import { runWithWorkspaceRootOverride } from "@/mcp/workspace";
 import { createInvocationInputHash } from "../approval-fingerprint";
 import {

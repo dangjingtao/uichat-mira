@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createHarnessEnvironmentSnapshot } from "../harness/environment.js";
+import { createHarnessEnvironmentSnapshot } from "../../harness/environment.js";
 import { wecomNotifySendTool } from "./wecom-notify-send.tool.js";
 
 const hasWecomAppConfigMock = vi.hoisted(() => vi.fn(() => false));

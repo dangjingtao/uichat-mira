@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createHarnessEnvironmentSnapshot } from "../harness/environment.js";
+import { createHarnessEnvironmentSnapshot } from "../../harness/environment.js";
 import { webSearchTool } from "./web-search.tool.js";
 
 const webSearchSettingsMock = vi.hoisted(() => ({

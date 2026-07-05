@@ -1,7 +1,7 @@
 import { getSqlite } from "@/db";
 import { mcpBadRequest, mcpInternalError, mcpNotFound } from "./core/errors.js";
 import type { McpToolDefinition, McpToolImplementation } from "./core/definitions.js";
-import { registerCapability, unregisterCapability } from "./harness/registry.js";
+import { registerCapability, unregisterCapability } from "../harness/registry.js";
 import { StdioMcpSession } from "./stdio-session.js";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, test, vi } from "vitest";
-import * as harnessInvocations from "@/mcp/harness/invocations";
-import * as registry from "@/mcp/harness/registry";
+import * as harnessInvocations from "@/harness/invocations";
+import * as registry from "@/harness/registry";
 import { contextBudgetService } from "@/services/context-budget/index";
 import { providerProxyService } from "@/services/provider-proxy.service/index";
 import * as intentMatcherModule from "../intent/embedding-capability-matcher";

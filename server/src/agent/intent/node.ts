@@ -1,4 +1,4 @@
-import { listCapabilityDefinitions } from "@/mcp/harness/registry";
+import { listCapabilityDefinitions } from "@/harness/registry";
 import {
   emitStepNode,
   getIterativeNodeId,

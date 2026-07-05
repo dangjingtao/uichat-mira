@@ -1,4 +1,4 @@
-import { resolveHarnessToolCandidatesForTurn } from "@/mcp/harness/tool-candidates";
+import { resolveHarnessToolCandidatesForTurn } from "@/harness/tool-candidates";
 import type {
   AgentIntentEmbeddingConfig,
   ToolIntentCandidate,

@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { createOpenAICompatibleClient } from "@/services/openai-compatible-provider.js";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
-import { executeHarnessInvocation } from "@/mcp/harness/invocations.js";
+import { executeHarnessInvocation } from "@/harness/invocations.js";
 import { resolveProviderForRole } from "@/services/provider-proxy.service/resolution.js";
 import { getProviderDefinition } from "@/providers/catalog.js";
 import { toOpenAICompatibleChatOptions } from "@/services/provider-proxy.service/params.js";

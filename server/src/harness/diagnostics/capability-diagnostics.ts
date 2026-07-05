@@ -1,11 +1,12 @@
-import { resolveHarnessActionProfiles } from "./action-profiles.js";
-import { resolveHarnessCapabilityProfiles } from "./capability-profiles.js";
-import { resolveHarnessToolCandidatesForTurn } from "./tool-candidates.js";
+import { resolveHarnessActionProfiles } from "../action-profiles.js";
+import { resolveHarnessCapabilityProfiles } from "../profiles/index.js";
+import { resolveHarnessToolCandidatesForTurn } from "../candidates-core/index.js";
 import type { ToolIntentCandidate } from "@/agent/intent/types.js";
+import type { HarnessTurnSource } from "../shared/types.js";
 
 export interface HarnessCapabilityDiagnosticsInput {
   query: string;
-  source?: "tools_list" | "agent_intent" | "chat_surface";
+  source?: HarnessTurnSource;
   topK?: number;
   minScore?: number;
   selectedTopK?: number;
@@ -14,7 +15,7 @@ export interface HarnessCapabilityDiagnosticsInput {
 
 export interface HarnessCapabilityDiagnosticsResult {
   query: string;
-  source: "tools_list" | "agent_intent" | "chat_surface";
+  source: HarnessTurnSource;
   exposureReasons: string[];
   blockedCapabilityIds: string[];
   toolExposure: {
@@ -29,7 +30,7 @@ export interface HarnessCapabilityDiagnosticsResult {
       tags: string[];
     }>;
     reason: string[];
-      blockedCapabilityIds: string[];
+    blockedCapabilityIds: string[];
   };
   toolCandidates: Array<{
     toolId: string;
@@ -78,8 +79,8 @@ export interface HarnessCapabilityDiagnosticsResult {
     title: string;
     description: string;
     domain: string;
-      source: "internal";
-      tags: string[];
+    source: "internal";
+    tags: string[];
   }>;
   candidates: ToolIntentCandidate[];
   selectedToolIds: string[];

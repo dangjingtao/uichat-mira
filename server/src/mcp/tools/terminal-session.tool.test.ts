@@ -3,8 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createHarnessEnvironmentSnapshot } from "../harness/environment.js";
-import { getHarnessInvocationTrace } from "../harness/invocations.js";
+import { createHarnessEnvironmentSnapshot } from "../../harness/environment.js";
+import { getHarnessInvocationTrace } from "../../harness/invocations.js";
 import { clearWorkspaceSelection } from "../workspace.js";
 import { createInvocationInputHash } from "@/agent/approval-fingerprint.js";
 
@@ -317,8 +317,8 @@ describe("terminal_session tool", () => {
       return mock.session;
     });
 
-    const { clearHarnessRegistry, registerCapability } = await import("../harness/registry.js");
-    const { clearHarnessInvocations, executeHarnessInvocation } = await import("../harness/invocations.js");
+    const { clearHarnessRegistry, registerCapability } = await import("../../harness/registry.js");
+    const { clearHarnessInvocations, executeHarnessInvocation } = await import("../../harness/invocations.js");
     const { terminalSessionTool } = await import("./terminal-session.tool.js");
 
     clearHarnessRegistry();
@@ -705,8 +705,8 @@ describe("terminal_session tool", () => {
   });
 
   it("surfaces approval-required requests through harness invocation status", async () => {
-    const { clearHarnessRegistry, registerCapability } = await import("../harness/registry.js");
-    const { clearHarnessInvocations, executeHarnessInvocation } = await import("../harness/invocations.js");
+    const { clearHarnessRegistry, registerCapability } = await import("../../harness/registry.js");
+    const { clearHarnessInvocations, executeHarnessInvocation } = await import("../../harness/invocations.js");
     const { McpApprovalRequiredError } = await import("../core/errors.js");
 
     clearHarnessRegistry();

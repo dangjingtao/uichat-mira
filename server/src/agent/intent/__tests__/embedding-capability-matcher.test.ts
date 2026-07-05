@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test, vi } from "vitest";
-import * as toolCandidates from "@/mcp/harness/tool-candidates";
+import * as toolCandidates from "@/harness/tool-candidates";
 import {
   cosineSimilarity,
   matchToolCandidatesByEmbedding,
