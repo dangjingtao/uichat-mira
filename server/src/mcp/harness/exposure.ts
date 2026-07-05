@@ -113,6 +113,21 @@ const WEB_SEARCH_INTENT_HINTS = [
   "price",
 ] as const;
 
+const DIRECTORY_LISTING_HINTS = [
+  "folder",
+  "folders",
+  "directory",
+  "directories",
+  "list",
+  "listing",
+  "tree",
+  "文件夹",
+  "目录",
+  "列出",
+  "下面有",
+  "有哪些",
+] as const;
+
 const querySuggestsWorkspaceRead = (query: string | undefined) => {
   const normalized = normalizeQuery(query);
   if (!normalized) {
@@ -131,6 +146,15 @@ const querySuggestsWebSearch = (query: string | undefined) => {
   return WEB_SEARCH_INTENT_HINTS.some((token) => normalized.includes(token));
 };
 
+const querySuggestsDirectoryListing = (query: string | undefined) => {
+  const normalized = normalizeQuery(query);
+  if (!normalized) {
+    return false;
+  }
+
+  return DIRECTORY_LISTING_HINTS.some((token) => normalized.includes(token));
+};
+
 const shouldExposeWebSearchForQuery = (query: string | undefined) => {
   if (!query?.trim()) {
     return true;
@@ -141,6 +165,24 @@ const shouldExposeWebSearchForQuery = (query: string | undefined) => {
   }
 
   return querySuggestsWebSearch(query);
+};
+
+const shouldHideWebSearchForWorkspaceLocalAgentIntent = (
+  input: HarnessExposurePolicyInput,
+) => {
+  if (input.source !== "agent_intent") {
+    return false;
+  }
+
+  if (!querySuggestsWorkspaceRead(input.query)) {
+    return false;
+  }
+
+  if (querySuggestsWebSearch(input.query)) {
+    return false;
+  }
+
+  return true;
 };
 
 const shouldIncludeDefinition = (
@@ -168,7 +210,7 @@ const shouldIncludeDefinition = (
   }
 
   if (
-    input.source === "chat_surface" &&
+    (input.source === "chat_surface" || shouldHideWebSearchForWorkspaceLocalAgentIntent(input)) &&
     definition.id === "web_search" &&
     !shouldExposeWebSearchForQuery(input.query)
   ) {
@@ -224,6 +266,11 @@ export const resolveHarnessToolExposure = (
   if (input.source === "chat_surface") {
     reasons.push("Chat-visible tool surface is restricted to safe built-in domains.");
   }
+  if (shouldHideWebSearchForWorkspaceLocalAgentIntent(input)) {
+    reasons.push(
+      "Workspace-local query hides web_search for agent_intent; local read evidence should be preferred.",
+    );
+  }
   if (!input.allowExternal) {
     reasons.push("External MCP capabilities are hidden unless explicitly enabled.");
   }
@@ -242,5 +289,7 @@ export const __exposureTestUtils = {
   isLowIntentGreeting,
   querySuggestsWorkspaceRead,
   querySuggestsWebSearch,
+  querySuggestsDirectoryListing,
   shouldExposeWebSearchForQuery,
+  shouldHideWebSearchForWorkspaceLocalAgentIntent,
 };

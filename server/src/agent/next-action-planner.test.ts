@@ -370,6 +370,25 @@ test("nextActionPlannerNode guards workspace-local retrieve intent away from web
           },
         ],
         workspaceRoot: "D:\\workspace\\rag-demo",
+        toolExposure: {
+          exposedTools: ["read_open", "read_locate", "web_search"],
+          toolMeta: [
+            ...baseToolExposure.toolMeta,
+            {
+              toolId: "read_locate",
+              title: "Read Locate",
+              description: "Locate files or matching content inside the authorized workspace.",
+              inputSchema: { type: "object", properties: { query: { type: "string" } } },
+              domain: "read",
+              source: "internal",
+              tags: ["read"],
+              capabilities: {
+                sideEffect: "none",
+                requiresApproval: false,
+              },
+            },
+          ],
+        },
       }),
       async (event) => {
         events.push({
@@ -382,8 +401,11 @@ test("nextActionPlannerNode guards workspace-local retrieve intent away from web
 
     assert.deepEqual(patch, {
       nextAction: {
-        type: "retrieve",
-        query: "请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答。",
+        type: "use_tool",
+        toolId: "read_locate",
+        args: {
+          query: "UIChat Mira",
+        },
         reason: "Workspace-local intent guard blocked web_search and redirected to a local evidence path.",
       },
     });
@@ -755,6 +777,347 @@ test("nextActionPlannerNode keeps a legal local read_locate action unchanged for
     assert.equal(
       (doneEvent?.details as Record<string, unknown>)?.localIntentGuardTriggered,
       false,
+    );
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode bridges completed read_locate evidence into read_open when the question still asks for file content", async () => {
+  const streamSpy = vi.spyOn(providerProxyService, "streamTaskChatText");
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question: "看看文件夹下面有无读我文件，有的话，内容是啥",
+        messages: [
+          {
+            role: "user",
+            content: "看看文件夹下面有无读我文件，有的话，内容是啥",
+            parts: [{ type: "text", text: "看看文件夹下面有无读我文件，有的话，内容是啥" }],
+          },
+        ],
+        workspaceRoot: "D:\\workspace\\rag-demo",
+        toolExposure: {
+          exposedTools: ["read_open", "read_locate"],
+          toolMeta: [
+            baseToolExposure.toolMeta[0]!,
+            {
+              toolId: "read_locate",
+              title: "Read Locate",
+              description: "Locate files or matching content inside the authorized workspace.",
+              inputSchema: { type: "object", properties: { query: { type: "string" } } },
+              domain: "read",
+              source: "internal",
+              tags: ["read"],
+              capabilities: {
+                sideEffect: "none",
+                requiresApproval: false,
+              },
+            },
+          ],
+        },
+        evidence: {
+          observations: [],
+          retrievals: [],
+          toolExecutions: [
+            {
+              toolCallId: "tool-call-read-locate-1",
+              toolId: "read_locate",
+              inputHash: "hash-read-locate-1",
+              args: {
+                query: "读我文件",
+              },
+              invocationId: "invocation-read-locate-1",
+              status: "completed",
+              result: {
+                type: "locate",
+                scope: ".",
+                query: "读我文件",
+                searchMode: "content",
+                matches: [
+                  {
+                    path: "README.md",
+                    matchType: "content",
+                    preview: "UIChat Mira is a local-first desktop workspace.",
+                  },
+                ],
+              },
+              summary: {
+                source: "tool",
+                status: "completed",
+                toolId: "read_locate",
+                inputHash: "hash-read-locate-1",
+                actionTaken: 'Located 1 workspace match(es) for "读我文件".',
+                keyFindings: ["matchCount=1", "[content] README.md: UIChat Mira is a local-first desktop workspace."],
+                answerReadiness: {
+                  canAnswer: false,
+                  reason: "Locate results found targets, but the question still needs file content.",
+                  missingInfo: ["opened file content for the matched workspace target"],
+                },
+                data: {
+                  kind: "read_locate",
+                  scope: ".",
+                  query: "读我文件",
+                  searchMode: "content",
+                  matchCount: 1,
+                  matchesPreview: ["[content] README.md: UIChat Mira is a local-first desktop workspace."],
+                  truncated: false,
+                  canAnswerLocateQuestion: false,
+                },
+                rawRef: {
+                  evidenceIndex: 0,
+                  toolCallId: "tool-call-read-locate-1",
+                  invocationId: "invocation-read-locate-1",
+                },
+              },
+              startedAt: "2026-07-05T00:00:00.000Z",
+              finishedAt: "2026-07-05T00:00:01.000Z",
+            },
+          ],
+        },
+      }),
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: {
+          path: "README.md",
+        },
+        reason:
+          "Workspace locate evidence found a likely file target, so the agent will open that file before answering.",
+      },
+    });
+    assert.equal(streamSpy.mock.calls.length, 0);
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode bridges completed read_list evidence into read_open when README.md is listed and the question still asks for file content", async () => {
+  const streamSpy = vi.spyOn(providerProxyService, "streamTaskChatText");
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question: "看看文件夹下面有无读我文件，有的话，内容是啥",
+        messages: [
+          {
+            role: "user",
+            content: "看看文件夹下面有无读我文件，有的话，内容是啥",
+            parts: [{ type: "text", text: "看看文件夹下面有无读我文件，有的话，内容是啥" }],
+          },
+        ],
+        workspaceRoot: "D:\\workspace\\rag-demo",
+        toolExposure: {
+          exposedTools: ["read_open", "read_list"],
+          toolMeta: [baseToolExposure.toolMeta[0]!, readListToolMeta],
+        },
+        evidence: {
+          observations: [],
+          retrievals: [],
+          toolExecutions: [
+            {
+              toolCallId: "tool-call-read-list-1",
+              toolId: "read_list",
+              inputHash: "hash-read-list-1",
+              args: {
+                path: ".",
+              },
+              invocationId: "invocation-read-list-1",
+              status: "completed",
+              result: {
+                type: "list",
+                path: ".",
+                entries: [
+                  {
+                    name: "README.md",
+                    type: "file",
+                  },
+                  {
+                    name: "docs",
+                    type: "directory",
+                  },
+                ],
+              },
+              summary: {
+                source: "tool",
+                status: "completed",
+                toolId: "read_list",
+                inputHash: "hash-read-list-1",
+                actionTaken: "Listed workspace directory .",
+                keyFindings: ["entryCount=2", "fileCount=1", "directoryCount=1", "[F] README.md"],
+                answerReadiness: {
+                  canAnswer: false,
+                  reason: "Directory listing alone does not satisfy a file-content question.",
+                  missingInfo: ["target file content or a narrower path"],
+                },
+                data: {
+                  kind: "read_list",
+                  path: ".",
+                  entryCount: 2,
+                  fileCount: 1,
+                  directoryCount: 1,
+                  entriesPreview: ["[F] README.md", "[D] docs"],
+                  truncated: false,
+                  canAnswerDirectoryQuestion: false,
+                },
+                rawRef: {
+                  evidenceIndex: 0,
+                  toolCallId: "tool-call-read-list-1",
+                  invocationId: "invocation-read-list-1",
+                },
+              },
+              startedAt: "2026-07-05T00:00:00.000Z",
+              finishedAt: "2026-07-05T00:00:01.000Z",
+            },
+          ],
+        },
+      }),
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: {
+          path: "README.md",
+        },
+        reason:
+          "Workspace locate evidence found a likely file target, so the agent will open that file before answering.",
+      },
+    });
+    assert.equal(streamSpy.mock.calls.length, 0);
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode reroutes workspace-local folder queries from web_search to read_list instead of returning an internal error", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"web_search","args":{"query":"readme files in folder"},"reason":"Need search results."}';
+    });
+  const events: Array<Record<string, unknown>> = [];
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question: "看看文件夹下面有无读我文件，有的话，内容是啥",
+        messages: [
+          {
+            role: "user",
+            content: "看看文件夹下面有无读我文件，有的话，内容是啥",
+            parts: [{ type: "text", text: "看看文件夹下面有无读我文件，有的话，内容是啥" }],
+          },
+        ],
+        workspaceRoot: "D:\\workspace\\rag-demo",
+        toolExposure: {
+          exposedTools: ["read_open", "read_list", "read_locate", "web_search"],
+          toolMeta: [
+            ...baseToolExposure.toolMeta,
+            readListToolMeta,
+            {
+              toolId: "read_locate",
+              title: "Read Locate",
+              description: "Locate files or matching content inside the authorized workspace.",
+              inputSchema: { type: "object", properties: { query: { type: "string" } } },
+              domain: "read",
+              source: "internal",
+              tags: ["read"],
+              capabilities: {
+                sideEffect: "none",
+                requiresApproval: false,
+              },
+            },
+          ],
+        },
+      }),
+      async (event) => {
+        events.push({
+          nodeId: event.nodeId,
+          phase: event.phase,
+          details: event.details,
+        });
+      },
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_list",
+        args: {
+          path: ".",
+        },
+        reason: "Workspace-local intent guard blocked web_search and redirected to a local evidence path.",
+      },
+    });
+
+    const doneEvent = events.find(
+      (event) =>
+        event.nodeId === "agent-next-action-planner" && event.phase === "done",
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.localIntentGuardTriggered,
+      true,
+    );
+    assert.doesNotMatch(
+      JSON.stringify(patch),
+      /web_search cannot substitute/i,
+    );
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode returns a user-facing safe error when no local evidence tool is available", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"web_search","args":{"query":"readme files in folder"},"reason":"Need search results."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question: "看看文件夹下面有无读我文件，有的话，内容是啥",
+        messages: [
+          {
+            role: "user",
+            content: "看看文件夹下面有无读我文件，有的话，内容是啥",
+            parts: [{ type: "text", text: "看看文件夹下面有无读我文件，有的话，内容是啥" }],
+          },
+        ],
+        workspaceRoot: "D:\\workspace\\rag-demo",
+        toolExposure: {
+          exposedTools: ["web_search"],
+          toolMeta: baseToolExposure.toolMeta.filter(
+            (tool) => tool.toolId === "web_search",
+          ),
+        },
+      }),
+    );
+
+    assert.equal(patch.nextAction.type, "error");
+    assert.equal(
+      patch.nextAction.reason,
+      "当前请求需要读取本地 workspace 文件，但本轮没有可用的本地读取工具。请确认 workspace 已绑定后重试。",
+    );
+    assert.equal(
+      patch.errorMessage,
+      "当前请求需要读取本地 workspace 文件，但本轮没有可用的本地读取工具。请确认 workspace 已绑定后重试。",
+    );
+    assert.equal(patch.errorSourceNodeId, "agent-next-action-planner");
+    assert.equal(
+      patch.blockedReason,
+      "当前请求需要读取本地 workspace 文件，但本轮没有可用的本地读取工具。请确认 workspace 已绑定后重试。",
+    );
+    assert.doesNotMatch(
+      patch.nextAction.reason,
+      /web_search cannot substitute/i,
     );
   } finally {
     streamSpy.mockRestore();

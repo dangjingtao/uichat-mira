@@ -395,7 +395,7 @@ test("agentGraph routes retrieve evidence back to planner and answer stop rule w
   assert.equal(evidenceUpdateEvent?.details?.retrievalChunkCount, 1);
 });
 
-test("agentGraph blocks workspace-local web_search planning and uses retrieve instead", async () => {
+test("agentGraph reroutes workspace-local planner web_search into local read evidence when web_search is still exposed", async () => {
   const webSearch = makeToolDefinition({
     id: "web_search",
     domain: "web_search",
@@ -409,12 +409,28 @@ test("agentGraph blocks workspace-local web_search planning and uses retrieve in
     },
     sideEffect: "network",
   });
-  vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([webSearch]);
+  const readLocate = makeToolDefinition({
+    id: "read_locate",
+    domain: "read",
+    inputSchema: {
+      type: "object",
+      required: ["query"],
+      properties: {
+        query: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    sideEffect: "none",
+  });
+  vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([
+    webSearch,
+    readLocate,
+  ]);
   vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
     makeToolIntentResult({
       query: "请检索 workspace 中关于 UIChat Mira 的说明",
       topCandidates: [{ toolId: "web_search", domain: "web_search" }],
-      exposedDefinitions: [webSearch],
+      exposedDefinitions: [readLocate, webSearch],
     }),
   );
   vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
@@ -427,27 +443,34 @@ test("agentGraph blocks workspace-local web_search planning and uses retrieve in
     .mockImplementationOnce(async function* () {
       yield '{"type":"use_tool","toolId":"web_search","args":{"query":"UIChat Mira 说明"},"reason":"Need information."}';
     });
-  const ragInvokeSpy = vi
-    .spyOn(runnablesModule.agentRagRunnable, "invoke")
+  const executeHarnessInvocationSpy = vi
+    .spyOn(
+      harnessInvocations,
+      "executeHarnessInvocation",
+    )
     .mockResolvedValue({
-      answer: "",
-      sources: [
-        {
-          chunkId: "chunk-1",
-          documentName: "README.md",
-          score: 0.91,
-          content: "UIChat Mira is a local-first desktop workspace.",
-        },
-      ],
+      id: "invocation-read-locate-guard-1",
+      toolId: "read_locate",
+      status: "completed",
+      result: {
+        type: "locate",
+        scope: ".",
+        query: "UIChat Mira",
+        searchMode: "content",
+        matches: [
+          {
+            path: "README.md",
+            matchType: "content",
+            preview: "UIChat Mira is a local-first desktop workspace.",
+          },
+        ],
+      },
+      startedAt: "2026-07-04T00:00:00.000Z",
+      finishedAt: "2026-07-04T00:00:01.000Z",
     });
-  const executeHarnessInvocationSpy = vi.spyOn(
-    harnessInvocations,
-    "executeHarnessInvocation",
-  );
   const generateInvokeSpy = vi
     .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
-    .mockResolvedValue("retrieval grounded answer");
-
+    .mockResolvedValue("local grounded answer");
   const result = await agentGraph.run({
     runId: "run-workspace-intent-guard",
     threadId: "thread-1",
@@ -464,10 +487,9 @@ test("agentGraph blocks workspace-local web_search planning and uses retrieve in
 
   assert.equal(result.status, "completed");
   assert.equal(plannerSpy.mock.calls.length, 1);
-  assert.equal(executeHarnessInvocationSpy.mock.calls.length, 0);
-  assert.equal(ragInvokeSpy.mock.calls.length, 1);
-  assert.equal(result.evidence.retrievals.length, 1);
-  assert.equal(result.evidence.toolExecutions.length, 0);
+  assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+  assert.equal(result.evidence.retrievals.length, 0);
+  assert.equal(result.evidence.toolExecutions.length, 1);
   assert.equal(generateInvokeSpy.mock.calls.length, 1);
 });
 
@@ -1870,6 +1892,132 @@ test("agentGraph reroutes workspace retrieve intent without a knowledge base int
     "read_locate",
   );
   assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, true);
+  assert.equal(generateInvokeSpy.mock.calls.length, 1);
+});
+
+test("agentGraph opens README.md after read_list when the workspace question still asks for file content", async () => {
+  const readOpen = makeToolDefinition({
+    id: "read_open",
+    domain: "read",
+    inputSchema: {
+      type: "object",
+      required: ["path"],
+      properties: {
+        path: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+  });
+  const readList = makeToolDefinition({
+    id: "read_list",
+    domain: "read",
+    inputSchema: {
+      type: "object",
+      required: ["path"],
+      properties: {
+        path: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+  });
+  const readLocate = makeToolDefinition({
+    id: "read_locate",
+    domain: "read",
+    inputSchema: {
+      type: "object",
+      required: ["query"],
+      properties: {
+        query: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+  });
+  vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([readOpen, readList, readLocate]);
+  vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
+    makeToolIntentResult({
+      query: "看看文件夹下面有无读我文件，有的话，内容是啥",
+      topCandidates: [{ toolId: "read_list", domain: "read" }],
+      exposedDefinitions: [readOpen, readList, readLocate],
+    }),
+  );
+  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
+    selectedToolIds: ["read_list"],
+    decisionSource: "task-model",
+    decisionReason: "Workspace inspection should start from a directory listing.",
+  });
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_list","args":{"path":"."},"reason":"Need to inspect the directory first."}';
+    });
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValueOnce({
+      id: "invocation-read-list-bridge-1",
+      toolId: "read_list",
+      status: "completed",
+      result: {
+        type: "list",
+        path: ".",
+        entries: [
+          {
+            name: "README.md",
+            type: "file",
+          },
+          {
+            name: "docs",
+            type: "directory",
+          },
+        ],
+      },
+      startedAt: "2026-07-05T00:00:00.000Z",
+      finishedAt: "2026-07-05T00:00:01.000Z",
+    })
+    .mockResolvedValueOnce({
+      id: "invocation-read-open-bridge-1",
+      toolId: "read_open",
+      status: "completed",
+      result: {
+        type: "open",
+        path: "README.md",
+        source: {
+          kind: "text",
+          mimeType: "text/markdown",
+          text: "# README\n\nProject overview",
+          metadata: {},
+        },
+      },
+      startedAt: "2026-07-05T00:00:02.000Z",
+      finishedAt: "2026-07-05T00:00:03.000Z",
+    });
+  const generateInvokeSpy = vi
+    .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
+    .mockResolvedValue("README.md exists and its content starts with Project overview.");
+
+  const result = await agentGraph.run({
+    runId: "run-read-locate-to-open",
+    threadId: "thread-1",
+    userId: 1,
+    goal: {
+      ...baseGoal,
+      text: "看看文件夹下面有无读我文件，有的话，内容是啥",
+    },
+    plan: basePlan,
+    workspaceRoot: "D:\\workspace\\rag-demo",
+    knowledgeBaseId: null,
+    messages: [makeMessage("看看文件夹下面有无读我文件，有的话，内容是啥")],
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(plannerSpy.mock.calls.length, 1);
+  assert.equal(executeHarnessInvocationSpy.mock.calls.length, 2);
+  assert.equal(executeHarnessInvocationSpy.mock.calls[0]?.[0]?.toolId, "read_list");
+  assert.equal(executeHarnessInvocationSpy.mock.calls[1]?.[0]?.toolId, "read_open");
+  assert.deepEqual(executeHarnessInvocationSpy.mock.calls[1]?.[0]?.args, {
+    path: "README.md",
+  });
+  assert.equal(result.evidence.toolExecutions.length, 2);
+  assert.equal(result.evidence.latestSummary?.toolId, "read_open");
   assert.equal(generateInvokeSpy.mock.calls.length, 1);
 });
 

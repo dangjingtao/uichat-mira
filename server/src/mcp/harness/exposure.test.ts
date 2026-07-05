@@ -3,6 +3,7 @@ import { clearHarnessRegistry, registerCapability } from "./registry.js";
 import { resolveHarnessToolExposure } from "./exposure.js";
 import { terminalSessionTool } from "../tools/terminal-session.tool.js";
 import { readTool } from "../tools/read.tool.js";
+import { readOpenTool } from "../tools/read-open.tool.js";
 import { readSliceTool } from "../tools/read-slice.tool.js";
 import { webSearchTool } from "../tools/web-search.tool.js";
 
@@ -81,6 +82,46 @@ describe("resolveHarnessToolExposure", () => {
     }).visibleDefinitions.map((definition) => definition.id);
 
     expect(chatIds).toContain("web_search");
+  });
+
+  it("hides web_search from agent_intent for workspace-local folder/readme requests", () => {
+    registerCapability(readOpenTool);
+    registerCapability(webSearchTool);
+
+    const decision = resolveHarnessToolExposure({
+      source: "agent_intent",
+      query: "看看文件夹下面有无读我文件，有的话，内容是啥",
+    });
+
+    expect(decision.exposedToolIds).not.toContain("web_search");
+    expect(decision.exposedToolIds).toContain("read_open");
+    expect(decision.reasons).toContain(
+      "Workspace-local query hides web_search for agent_intent; local read evidence should be preferred.",
+    );
+  });
+
+  it("hides web_search from agent_intent for README Runtime file-content requests", () => {
+    registerCapability(readOpenTool);
+    registerCapability(webSearchTool);
+
+    const decision = resolveHarnessToolExposure({
+      source: "agent_intent",
+      query: "README.md 的 Runtime 一节具体列了哪些运行组件？请基于文件内容回答。",
+    });
+
+    expect(decision.exposedToolIds).toContain("read_open");
+    expect(decision.exposedToolIds).not.toContain("web_search");
+  });
+
+  it("keeps web_search in agent_intent for explicit external web queries", () => {
+    registerCapability(webSearchTool);
+
+    const decision = resolveHarnessToolExposure({
+      source: "agent_intent",
+      query: "请联网搜索今天最新的 release notes",
+    });
+
+    expect(decision.exposedToolIds).toContain("web_search");
   });
 
   it("keeps external capabilities out of agent_intent unless allowExternal is enabled", () => {

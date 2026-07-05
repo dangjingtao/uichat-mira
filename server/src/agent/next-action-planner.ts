@@ -30,6 +30,10 @@ const INVALID_PLANNER_OUTPUT_REASON =
   "Planner output was invalid JSON; planner must stop instead of pretending an answer is ready.";
 const LOCAL_INTENT_GUARD_REASON =
   "Workspace-local intent guard blocked web_search and redirected to a local evidence path.";
+const LOCAL_INTENT_SAFE_ERROR_REASON =
+  "当前请求需要读取本地 workspace 文件，但本轮没有可用的本地读取工具。请确认 workspace 已绑定后重试。";
+const LOCATE_TO_OPEN_BRIDGE_REASON =
+  "Workspace locate evidence found a likely file target, so the agent will open that file before answering.";
 const SCHEMA_REPLAN_ATTEMPT_LIMIT = 1;
 const FILE_CONTENT_TOKENS = [
   "open",
@@ -76,6 +80,21 @@ const RETRIEVE_INTENT_TOKENS = [
   "搜索",
   "查找",
 ] as const;
+const DIRECTORY_LISTING_TOKENS = [
+  "list",
+  "listing",
+  "folder",
+  "folders",
+  "directory",
+  "directories",
+  "tree",
+  "下面有",
+  "有哪些",
+  "文件夹",
+  "目录",
+  "列出",
+  "看看文件夹",
+] as const;
 const LOCATE_QUERY_TRAILING_NOISE = [
   "说明",
   "介绍",
@@ -92,6 +111,8 @@ const LOCAL_EVIDENCE_TOOL_IDS = new Set([
   "read_extract",
   "read_slice",
 ]);
+const DOCUMENTATION_PRIORITY_HINTS = ["readme", "agents", "docs/"] as const;
+const README_FILE_PATTERN = /^readme(?:\.[a-z0-9]{1,12})?$/i;
 
 const stripThinkBlocks = (value: string) =>
   value.replace(/^\s*(?:<think\b[^>]*>[\s\S]*?<\/think>\s*)+/i, "").trim();
@@ -174,6 +195,9 @@ const queryMentionsWorkspaceLocal = (query: string) =>
 const queryRequestsRetrieve = (query: string) =>
   includesAnyToken(normalizeIntentText(query), RETRIEVE_INTENT_TOKENS);
 
+const queryRequestsDirectoryListing = (query: string) =>
+  includesAnyToken(normalizeIntentText(query), DIRECTORY_LISTING_TOKENS);
+
 const trimWrappedPath = (value: string) =>
   value
     .trim()
@@ -218,6 +242,146 @@ const normalizeWorkspaceLocateQuery = (query: string, originalQuestion: string) 
   }, trimmed);
 
   return strippedTrailingNoise || trimmed;
+};
+
+const scoreLocatePathForOpenFollowup = (path: string) => {
+  const normalized = path.replace(/\\/g, "/").toLowerCase();
+  const segments = normalized.split("/").filter(Boolean).length;
+  const hasFileExtension = /\.[a-z0-9]{1,12}$/i.test(normalized);
+  return [
+    hasFileExtension ? 1 : 0,
+    DOCUMENTATION_PRIORITY_HINTS.some((token) => normalized.includes(token)) ? 1 : 0,
+    -segments,
+    -normalized.length,
+  ] as const;
+};
+
+const compareLocatePathPriority = (left: string, right: string) => {
+  const leftScore = scoreLocatePathForOpenFollowup(left);
+  const rightScore = scoreLocatePathForOpenFollowup(right);
+  for (let index = 0; index < leftScore.length; index += 1) {
+    if (leftScore[index] !== rightScore[index]) {
+      return rightScore[index] - leftScore[index];
+    }
+  }
+
+  return left.localeCompare(right);
+};
+
+const getReadOpenBridgeActionFromLocateEvidence = (input: {
+  question: string;
+  toolExposure: AgentToolExposureState;
+  evidence: AgentEvidencePayload | undefined;
+}) => {
+  if (!queryRequestsFileContent(input.question)) {
+    return null;
+  }
+
+  if (!input.toolExposure.exposedTools.includes("read_open")) {
+    return null;
+  }
+
+  const latestLocateExecution = [...(input.evidence?.toolExecutions ?? [])]
+    .reverse()
+    .find(
+      (execution) =>
+        execution.status === "completed" &&
+        execution.toolId === "read_locate" &&
+        execution.result &&
+        typeof execution.result === "object",
+    );
+  if (!latestLocateExecution?.result || typeof latestLocateExecution.result !== "object") {
+    return null;
+  }
+
+  const result = latestLocateExecution.result as Record<string, unknown>;
+  if (result.type !== "locate" || !Array.isArray(result.matches)) {
+    return null;
+  }
+
+  const matchedPaths = result.matches
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object")
+    .map((entry) => (typeof entry.path === "string" ? entry.path.trim() : ""))
+    .filter((path) => Boolean(path))
+    .sort(compareLocatePathPriority);
+  const targetPath = matchedPaths[0];
+  if (!targetPath) {
+    return null;
+  }
+
+  return {
+    type: "use_tool" as const,
+    toolId: "read_open",
+    args: {
+      path: targetPath,
+    },
+    reason: LOCATE_TO_OPEN_BRIDGE_REASON,
+  };
+};
+
+const buildListedEntryPath = (basePath: string, entryName: string) => {
+  if (basePath === "." || basePath === "/workspace" || basePath === "") {
+    return entryName;
+  }
+
+  const normalizedBase = basePath.replace(/[\\/]$/, "");
+  return `${normalizedBase}/${entryName}`;
+};
+
+const getReadOpenBridgeActionFromListEvidence = (input: {
+  question: string;
+  toolExposure: AgentToolExposureState;
+  evidence: AgentEvidencePayload | undefined;
+}) => {
+  if (!queryRequestsFileContent(input.question)) {
+    return null;
+  }
+
+  if (!input.toolExposure.exposedTools.includes("read_open")) {
+    return null;
+  }
+
+  const latestListExecution = [...(input.evidence?.toolExecutions ?? [])]
+    .reverse()
+    .find(
+      (execution) =>
+        execution.status === "completed" &&
+        execution.toolId === "read_list" &&
+        execution.result &&
+        typeof execution.result === "object",
+    );
+  if (!latestListExecution?.result || typeof latestListExecution.result !== "object") {
+    return null;
+  }
+
+  const result = latestListExecution.result as Record<string, unknown>;
+  if (result.type !== "list" || typeof result.path !== "string" || !Array.isArray(result.entries)) {
+    return null;
+  }
+
+  const matchingReadmeEntry = result.entries
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object")
+    .find((entry) => {
+      const name = typeof entry.name === "string" ? entry.name.trim() : "";
+      const type = entry.type === "directory" ? "directory" : "file";
+      return type === "file" && README_FILE_PATTERN.test(name);
+    });
+  const readmeName =
+    matchingReadmeEntry && typeof matchingReadmeEntry.name === "string"
+      ? matchingReadmeEntry.name.trim()
+      : "";
+  if (!readmeName) {
+    return null;
+  }
+
+  return {
+    type: "use_tool" as const,
+    toolId: "read_open",
+    args: {
+      path: buildListedEntryPath(result.path, readmeName),
+    },
+    reason: LOCATE_TO_OPEN_BRIDGE_REASON,
+  };
 };
 
 const isWorkspaceLocalEvidenceToolAction = (input: {
@@ -428,13 +592,19 @@ const getWorkspaceLocalIntentGuardAction = (input: {
       : input.nextAction.type === "retrieve" && input.nextAction.query.trim()
         ? input.nextAction.query.trim()
         : input.question;
+  const isWebSearchAction =
+    input.nextAction.type === "use_tool" && input.nextAction.toolId === "web_search";
+  const isRetrieveWithoutKnowledgeBase =
+    input.nextAction.type === "retrieve" && !input.knowledgeBaseId;
+  const wantsDirectoryListing = queryRequestsDirectoryListing(input.question);
+  const wantsFileContent = queryRequestsFileContent(input.question);
+  const wantsRetrieve = queryRequestsRetrieve(input.question);
 
   if (
     explicitPath &&
-    queryRequestsFileContent(input.question) &&
+    wantsFileContent &&
     exposedToolIds.has("read_open") &&
-    input.nextAction.type === "use_tool" &&
-    input.nextAction.toolId === "web_search"
+    (isWebSearchAction || isRetrieveWithoutKnowledgeBase)
   ) {
     return {
       guarded: true,
@@ -449,9 +619,7 @@ const getWorkspaceLocalIntentGuardAction = (input: {
   }
 
   const shouldRedirectWorkspaceRetrieve =
-    queryRequestsRetrieve(input.question) &&
-    ((input.nextAction.type === "use_tool" && input.nextAction.toolId === "web_search") ||
-      (input.nextAction.type === "retrieve" && !input.knowledgeBaseId));
+    wantsRetrieve && (isWebSearchAction || isRetrieveWithoutKnowledgeBase);
 
   if (shouldRedirectWorkspaceRetrieve && exposedToolIds.has("read_locate")) {
     return {
@@ -470,12 +638,66 @@ const getWorkspaceLocalIntentGuardAction = (input: {
     };
   }
 
-  if (queryRequestsRetrieve(input.question) && input.nextAction.type === "use_tool" && input.nextAction.toolId === "web_search") {
+  if (
+    wantsDirectoryListing &&
+    (isWebSearchAction || isRetrieveWithoutKnowledgeBase) &&
+    exposedToolIds.has("read_list")
+  ) {
     return {
       guarded: true,
       nextAction: {
-        type: "retrieve" as const,
-        query: input.question,
+        type: "use_tool" as const,
+        toolId: "read_list",
+        args: {
+          path: ".",
+        },
+        reason: LOCAL_INTENT_GUARD_REASON,
+      },
+      reason: LOCAL_INTENT_GUARD_REASON,
+    };
+  }
+
+  if (wantsFileContent && explicitPath && exposedToolIds.has("read_open")) {
+    return {
+      guarded: true,
+      nextAction: {
+        type: "use_tool" as const,
+        toolId: "read_open",
+        args: {
+          path: explicitPath,
+        },
+        reason: LOCAL_INTENT_GUARD_REASON,
+      },
+      reason: LOCAL_INTENT_GUARD_REASON,
+    };
+  }
+
+  if ((isWebSearchAction || isRetrieveWithoutKnowledgeBase) && exposedToolIds.has("read_locate")) {
+    return {
+      guarded: true,
+      nextAction: {
+        type: "use_tool" as const,
+        toolId: "read_locate",
+        args: {
+          query:
+            explicitPath ??
+            normalizeWorkspaceLocateQuery(redirectedWorkspaceQuery, input.question),
+        },
+        reason: LOCAL_INTENT_GUARD_REASON,
+      },
+      reason: LOCAL_INTENT_GUARD_REASON,
+    };
+  }
+
+  if ((isWebSearchAction || isRetrieveWithoutKnowledgeBase) && exposedToolIds.has("read_list")) {
+    return {
+      guarded: true,
+      nextAction: {
+        type: "use_tool" as const,
+        toolId: "read_list",
+        args: {
+          path: ".",
+        },
         reason: LOCAL_INTENT_GUARD_REASON,
       },
       reason: LOCAL_INTENT_GUARD_REASON,
@@ -486,8 +708,7 @@ const getWorkspaceLocalIntentGuardAction = (input: {
     guarded: true,
     nextAction: {
       type: "error" as const,
-      reason:
-        "Workspace-local intent requires local file or retrieval evidence; web_search cannot substitute for it.",
+      reason: LOCAL_INTENT_SAFE_ERROR_REASON,
     },
     reason: LOCAL_INTENT_GUARD_REASON,
   };
@@ -931,6 +1152,21 @@ export const nextActionPlannerNode = async (
       "Planner reached the iteration limit and must stop.",
     );
   } else {
+    const listToOpenBridgeAction = getReadOpenBridgeActionFromListEvidence({
+      question,
+      toolExposure,
+      evidence: state.evidence,
+    });
+    const locateToOpenBridgeAction = getReadOpenBridgeActionFromLocateEvidence({
+      question,
+      toolExposure,
+      evidence: state.evidence,
+    });
+    if (listToOpenBridgeAction) {
+      nextAction = listToOpenBridgeAction;
+    } else if (locateToOpenBridgeAction) {
+      nextAction = locateToOpenBridgeAction;
+    } else {
     const messages = buildNextActionPlannerMessages({
       question,
       plan: state.plan,
@@ -988,6 +1224,7 @@ export const nextActionPlannerNode = async (
           ? `Planner task model call failed: ${error.message.trim()}`
           : NEXT_ACTION_PLANNER_FALLBACK_REASON,
       );
+    }
     }
   }
 
