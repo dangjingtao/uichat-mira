@@ -7,6 +7,8 @@ import {
   ensureMicroAppBindingForCapability,
   migrateLegacyMicroAppBindings,
 } from "./legacy-sync.js";
+import { computerUseMicroApp } from "./apps/computer-use.microapp.js";
+import { imageGenerationMicroApp } from "./apps/image-generation.microapp.js";
 import { knowledgeQueryMicroApp } from "./apps/knowledge-query.microapp.js";
 import type {
   MicroAppDefinition,
@@ -16,6 +18,8 @@ import type {
 
 const definitions = new Map<string, MicroAppDefinition>([
   [knowledgeQueryMicroApp.type, knowledgeQueryMicroApp],
+  [imageGenerationMicroApp.type, imageGenerationMicroApp],
+  [computerUseMicroApp.type, computerUseMicroApp],
 ]);
 
 const getDefinition = (type: string) => definitions.get(type) ?? null;

@@ -2,7 +2,7 @@
 status: current
 priority: P2
 owner: runtime
-last_verified: 2026-07-03
+last_verified: 2026-07-06
 layer: project-control
 module: ProjectControl
 feature: CoreToolsWebSearchNormalizedResultsAndProviderErrors
@@ -12,7 +12,7 @@ related:
   - docs/tooling-runtime/core-tool-rectification-ledger.md
   - docs/tooling-runtime/core-tool-matrix-review.md
   - docs/tooling-runtime/tools-protocol.md
-task_state: READY_FOR_REVIEW
+task_state: DONE
 ---
 
 # core_tools_T014 Web Search Normalized Results And Provider Errors
@@ -46,6 +46,7 @@ task_state: READY_FOR_REVIEW
 
 - `pnpm --filter @ui-chat-mira/server typecheck`
 - `pnpm --filter @ui-chat-mira/server test -- src/mcp/tools/web-search*.test.ts`
+- `pnpm check`
 
 ## Notes
 
@@ -60,9 +61,28 @@ task_state: READY_FOR_REVIEW
   - `web_search` 成功结果统一收口为同一搜索结果结构
   - `SearXNG` 成功结果不再向上层暴露 `baseUrl`
   - provider 失败会归一为结构化错误明细，并在全 provider 失败时挂到统一错误对象的 `errors`
+- 验收对应：
+  - AC1 上层统一结果结构：
+    - `server/src/mcp/tools/web-search.tool.ts` 的 `outputSchema` 只暴露 `query / provider / capabilityId / results`
+    - 成功返回统一走 `NormalizedWebSearchResult`
+  - AC2 Tavily 结果标准化：
+    - `server/src/mcp/tools/web-search.tool.test.ts` 覆盖 Tavily 返回 `title / link / snippet`
+  - AC3 SearXNG 结果标准化：
+    - `server/src/mcp/tools/web-search.tool.test.ts` 覆盖 SearXNG 返回 `title / link / snippet`
+    - 上层结果与 provider 专属 `baseUrl` 解耦
+  - AC4 provider 失败结构化返回：
+    - `server/src/mcp/tools/web-search.tool.test.ts` 覆盖 Tavily `502`、SearXNG upstream engine unavailable，以及多 provider 全失败时统一挂载 `errors`
+  - AC5 台账回填：
+    - `docs/tooling-runtime/core-tool-rectification-ledger.md` 的 P2 / Web Search 条目已更新为当前验证结果
 - 验证：
   - `pnpm --filter @ui-chat-mira/server test -- src/mcp/tools/web-search.tool.test.ts`
     - 结果：通过，`14 passed`
   - `pnpm --filter @ui-chat-mira/server typecheck`
-    - 结果：当前分支失败
-    - 说明：失败点位于 `server/src/mcp/harness/capability-profiles.ts`，是当前分支既有 `actionProfileId` / `actionProfileTitle` 字段类型未对齐，不属于 `T014` 允许改动范围
+    - 结果：通过
+  - `pnpm check`
+    - 结果：通过
+
+## Review Outcome
+
+- 评审结论：通过
+- 当前状态：`DONE`

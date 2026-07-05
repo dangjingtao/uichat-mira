@@ -12,7 +12,7 @@ related:
   - docs/project-control/tasks/microapp_T010-image-generation-parallel-code-isolation.md
   - docs/microapp/image-generation-microapp-poc.md
   - docs/architecture/README.md
-task_state: TODO
+task_state: DONE
 ---
 
 # microapp_T104 Image Generation Desktop API Client
@@ -70,11 +70,12 @@ task_state: TODO
   - `desktop/src/shared/api/index.ts`
   - `desktop/src/shared/api/imageGeneration.test.ts`
 
-- Acceptance evidence placeholder:
-  - 等实现线程回填
+- Acceptance evidence:
+  - `desktop/src/shared/api/imageGeneration.ts` 新增 `createImageGeneration` 与 `getImageGeneration`，统一经由 `@/shared/lib/request` 访问 `/microapps/image-generation/generations`
+  - `desktop/src/shared/api/imageGeneration.test.ts` 覆盖创建任务的路径与请求体透传，以及查询任务的路径编码
+  - `desktop/src/shared/api/index.ts` 已补充 image generation 共享导出
 
 ## Isolation Rules
 
 - 本卡是唯一允许修改 `desktop/src/shared/api/index.ts` 的 image generation 线程。
 - 页面线程只能 import 本卡导出的 API client，不能自己绕过共享层直接请求 backend。
-

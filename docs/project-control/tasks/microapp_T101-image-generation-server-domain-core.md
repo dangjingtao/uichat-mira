@@ -11,7 +11,7 @@ canonical: true
 related:
   - docs/project-control/tasks/microapp_T010-image-generation-parallel-code-isolation.md
   - docs/microapp/image-generation-microapp-poc.md
-task_state: TODO
+task_state: DONE
 ---
 
 # microapp_T101 Image Generation Server Domain Core
@@ -73,10 +73,18 @@ task_state: TODO
   - `server/src/microapps/image-generation/__tests__/core*.test.ts`
 
 - Acceptance evidence placeholder:
-  - 等实现线程回填
+  - `server/src/microapps/image-generation/core/types.ts` 已定义统一执行类型、任务状态、请求摘要、产物摘要，以及 adapter registry / artifact store / job store 的依赖注入接口
+  - `server/src/microapps/image-generation/core/job-lifecycle.ts` 已定义统一任务状态机，覆盖创建、状态流转和终态保护
+  - `server/src/microapps/image-generation/core/service.ts` 已实现领域 service，统一编排 provider adapter、artifact store 和 job store，不直接耦合任何具体 provider 协议
+  - `server/src/microapps/image-generation/index.ts` 已导出核心对外接口，供后续 adapter 和 HTTP 入口直接接入
+  - `server/src/microapps/image-generation/__tests__/core.job-lifecycle.test.ts` 与 `server/src/microapps/image-generation/__tests__/core.service.test.ts` 已覆盖状态流转、服务编排和 provider 缺失错误
+
+## Unfinished / Risks
+
+- 本卡提供的是纯领域层和内存级 `jobStore`，未落 DB 持久化；如果后续需要跨进程或重启保留任务，需要单独开卡设计存储边界。
+- 当前 `refreshGeneration` / `cancelGeneration` 的实际能力取决于 adapter 是否实现对应接口；这属于后续 `T102` 的协议实现范围，不在本卡里用兼容分支代替。
 
 ## Isolation Rules
 
 - 本卡只拥有 `core/**` 和根导出文件，不能顺手改 `adapters/**`、`artifacts/**` 或 route。
 - 如果需要 provider 特有字段，必须通过接口或 `providerParams` 透传，不允许把某个 provider 协议塞进核心层。
-

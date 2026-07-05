@@ -10,6 +10,7 @@ const projectRoot = path.join(__dirname, "..");
 const outputDir = path.join(projectRoot, ".artifacts", "server-bundle");
 const outputNodeModules = path.join(outputDir, "node_modules");
 const pnpmStore = path.join(projectRoot, "node_modules", ".pnpm");
+const pnpmVirtualNodeModules = path.join(pnpmStore, "node_modules");
 
 function readPackageJson(packageDir) {
   return JSON.parse(
@@ -59,23 +60,37 @@ function copyStaticDir() {
   console.log(`Copied static assets: ${staticDest}`);
 }
 
-function resolveInstalledPackageDir(packageName) {
-  return fs
+function resolveInstalledPackageSource(packageName) {
+  const virtualPackageJson = path.join(
+    pnpmVirtualNodeModules,
+    packageName,
+    "package.json",
+  );
+
+  if (fs.existsSync(virtualPackageJson)) {
+    return path.dirname(fs.realpathSync(virtualPackageJson));
+  }
+
+  const packageDirName = fs
     .readdirSync(pnpmStore)
     .find((name) => name.startsWith(`${packageName}@`));
+
+  if (!packageDirName) {
+    return null;
+  }
+
+  return path.join(pnpmStore, packageDirName, "node_modules", packageName);
 }
 
 function copyPackage(packageName) {
   const serverPackage = readPackageJson(__dirname);
   const version = serverPackage.dependencies?.[packageName];
-  const packageDirName = resolveInstalledPackageDir(packageName);
+  const source = resolveInstalledPackageSource(packageName);
 
-  if (!packageDirName) {
+  if (!source) {
     const suffix = version ? `@${version}` : "";
     throw new Error(`Cannot find installed pnpm package for ${packageName}${suffix}`);
   }
-
-  const source = path.join(pnpmStore, packageDirName, "node_modules", packageName);
   const destination = path.join(outputNodeModules, packageName);
 
   if (!fs.existsSync(source)) {
@@ -89,17 +104,11 @@ function copyPackage(packageName) {
 
 function writeBackendPackageJson() {
   const serverPackage = readPackageJson(__dirname);
-  const sqliteVecPackageDirName = resolveInstalledPackageDir("sqlite-vec");
-  const sqliteVecPackage = sqliteVecPackageDirName
+  const sqliteVecPackageSource = resolveInstalledPackageSource("sqlite-vec");
+  const sqliteVecPackage = sqliteVecPackageSource
     ? JSON.parse(
         fs.readFileSync(
-          path.join(
-            pnpmStore,
-            sqliteVecPackageDirName,
-            "node_modules",
-            "sqlite-vec",
-            "package.json",
-          ),
+          path.join(sqliteVecPackageSource, "package.json"),
           "utf-8",
         ),
       )
@@ -110,6 +119,7 @@ function writeBackendPackageJson() {
     type: "commonjs",
     dependencies: {
       "better-sqlite3": serverPackage.dependencies["better-sqlite3"],
+      "playwright-core": serverPackage.dependencies["playwright-core"],
       "sqlite-vec": serverPackage.dependencies["sqlite-vec"],
       bindings: "^1.5.0",
       "file-uri-to-path": "^1.0.0",
@@ -138,11 +148,12 @@ build({
   format: "cjs",
   outfile: path.join(outputDir, "server.cjs"),
   absWorkingDir: __dirname,
-  external: ["better-sqlite3", "sqlite-vec"],
+  external: ["better-sqlite3", "playwright-core", "sqlite-vec"],
 })
   .then(() => {
     console.log("Server bundle completed, copying native modules...");
     copyPackage("better-sqlite3");
+    copyPackage("playwright-core");
     copyPackage("sqlite-vec");
     copyPackage("sqlite-vec-windows-x64");
     copyPackage("bindings");

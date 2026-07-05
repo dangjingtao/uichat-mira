@@ -2,9 +2,15 @@ import { asc, eq } from "drizzle-orm";
 import { getDb, getSqlite } from "../index";
 import { microApps } from "../schema";
 
-export type MicroAppType = "knowledge_query";
+export type MicroAppType =
+  | "knowledge_query"
+  | "image_generation"
+  | "computer_use";
 
-export type MicroAppSupportedAccessPoint = "wecom.smart_robot";
+export type MicroAppSupportedAccessPoint =
+  | "wecom.smart_robot"
+  | "desktop.image_generation_studio"
+  | "desktop.computer_use_studio";
 
 export type MicroAppBindingFieldType =
   | "knowledge_base_select"
@@ -72,15 +78,119 @@ const defaultKnowledgeQuerySchema: MicroAppBindingSchema = {
   ],
 };
 
-const defaultDefinitionSeed: Omit<MicroAppRecord, "id" | "createdAt" | "updatedAt"> = {
-  type: "knowledge_query",
-  name: "Knowledge Query",
-  description: "接收外部问答入口的文本问题，调用本地知识库检索链路，并返回一条稳定文本回复。",
-  supportedAccessPoints: ["wecom.smart_robot"],
-  bindingSchema: defaultKnowledgeQuerySchema,
-  runtimeKey: "knowledge-query",
-  enabled: true,
+export const imageGenerationBindingSchema: MicroAppBindingSchema = {
+  fields: [
+    {
+      key: "providerId",
+      label: "默认 Provider",
+      type: "text",
+      required: true,
+      description: "声明这个微应用默认使用的生图 provider 标识。",
+      placeholder: "openai_images",
+      defaultValue: "openai_images",
+    },
+    {
+      key: "model",
+      label: "默认模型",
+      type: "text",
+      required: true,
+      description: "声明这个微应用默认使用的生图模型。",
+      placeholder: "gpt-image-1",
+      defaultValue: "gpt-image-1",
+    },
+    {
+      key: "defaultSize",
+      label: "默认画幅",
+      type: "text",
+      required: true,
+      description: "调试页初始使用的图片尺寸或画幅。",
+      placeholder: "1024x1024",
+      defaultValue: "1024x1024",
+    },
+    {
+      key: "defaultStylePreset",
+      label: "默认风格",
+      type: "text",
+      required: false,
+      description: "调试页默认填充的风格预设名称。",
+      placeholder: "natural",
+      defaultValue: "natural",
+    },
+    {
+      key: "workflowRunnerProfile",
+      label: "Workflow Runner Profile",
+      type: "text",
+      required: false,
+      description: "可选的本地 workflow runner 配置档标识。",
+      placeholder: "comfyui_local_default",
+      defaultValue: "",
+    },
+  ],
 };
+
+export const computerUseBindingSchema: MicroAppBindingSchema = {
+  fields: [
+    {
+      key: "defaultStartUrl",
+      label: "默认起始网址",
+      type: "text",
+      required: false,
+      description: "工作台创建浏览器任务时默认填充的起始网址。",
+      placeholder: "https://example.com",
+      defaultValue: "",
+    },
+    {
+      key: "allowedOrigins",
+      label: "允许访问站点",
+      type: "textarea",
+      required: false,
+      description: "限制第一阶段浏览器任务允许访问的站点列表，使用换行分隔。",
+      placeholder: "https://example.com\nhttps://www.example.com",
+      defaultValue: "",
+    },
+    {
+      key: "requireApprovalForExternalNavigation",
+      label: "外部跳转需审批",
+      type: "switch",
+      required: true,
+      description: "当任务准备离开允许站点范围时，是否默认要求人工审批。",
+      defaultValue: true,
+    },
+  ],
+};
+
+const defaultDefinitionSeeds: Array<
+  Omit<MicroAppRecord, "id" | "createdAt" | "updatedAt">
+> = [
+  {
+    type: "knowledge_query",
+    name: "Knowledge Query",
+    description: "接收外部问答入口的文本问题，调用本地知识库检索链路，并返回一条稳定文本回复。",
+    supportedAccessPoints: ["wecom.smart_robot"],
+    bindingSchema: defaultKnowledgeQuerySchema,
+    runtimeKey: "knowledge-query",
+    enabled: true,
+  },
+  {
+    type: "image_generation",
+    name: "Image Generation",
+    description: "为桌面内的生图调试工作区保留共享注册定义和稳定 runtime key，不在这里承接实际生成逻辑。",
+    supportedAccessPoints: ["desktop.image_generation_studio"],
+    bindingSchema: imageGenerationBindingSchema,
+    runtimeKey: "image_generation",
+    enabled: true,
+  },
+  {
+    type: "computer_use",
+    name: "Computer Use",
+    description:
+      "为桌面内的浏览器任务工作台保留共享注册定义和稳定 runtime key，不在这里承接实际浏览器执行逻辑。",
+    supportedAccessPoints: ["desktop.computer_use_studio"],
+    bindingSchema: computerUseBindingSchema,
+    runtimeKey: "computer_use",
+    enabled: true,
+  },
+];
 
 const ensureTable = () => {
   const sqlite = getSqlite();
@@ -113,25 +223,32 @@ const ensureTable = () => {
 };
 
 const seedDefaults = () => {
-  const existing = getDb().select().from(microApps).all();
-  if (existing.length > 0) {
-    return;
-  }
+  const existingTypes = new Set(
+    getDb()
+      .select({ type: microApps.type })
+      .from(microApps)
+      .all()
+      .map((row) => row.type),
+  );
 
-  getDb()
-    .insert(microApps)
-    .values({
-      type: defaultDefinitionSeed.type,
-      name: defaultDefinitionSeed.name,
-      description: defaultDefinitionSeed.description,
-      supportedAccessPointsJson: JSON.stringify(
-        defaultDefinitionSeed.supportedAccessPoints,
-      ),
-      bindingSchemaJson: JSON.stringify(defaultDefinitionSeed.bindingSchema),
-      runtimeKey: defaultDefinitionSeed.runtimeKey,
-      enabled: defaultDefinitionSeed.enabled,
-    })
-    .run();
+  for (const definition of defaultDefinitionSeeds) {
+    if (existingTypes.has(definition.type)) {
+      continue;
+    }
+
+    getDb()
+      .insert(microApps)
+      .values({
+        type: definition.type,
+        name: definition.name,
+        description: definition.description,
+        supportedAccessPointsJson: JSON.stringify(definition.supportedAccessPoints),
+        bindingSchemaJson: JSON.stringify(definition.bindingSchema),
+        runtimeKey: definition.runtimeKey,
+        enabled: definition.enabled,
+      })
+      .run();
+  }
 };
 
 const migrateFromLegacyMicroAppsTable = () => {
@@ -163,17 +280,19 @@ const migrateFromLegacyMicroAppsTable = () => {
 
   getDb()
     .insert(microApps)
-    .values({
-      type: "knowledge_query",
-      name: normalizeText(legacyKnowledgeQuery.name) || defaultDefinitionSeed.name,
-      description: defaultDefinitionSeed.description,
-      supportedAccessPointsJson: JSON.stringify(
-        defaultDefinitionSeed.supportedAccessPoints,
-      ),
-      bindingSchemaJson: JSON.stringify(defaultDefinitionSeed.bindingSchema),
-      runtimeKey: defaultDefinitionSeed.runtimeKey,
-      enabled: Boolean(legacyKnowledgeQuery.enabled),
-    })
+      .values({
+        type: "knowledge_query",
+        name:
+          normalizeText(legacyKnowledgeQuery.name) ||
+          defaultDefinitionSeeds[0].name,
+        description: defaultDefinitionSeeds[0].description,
+        supportedAccessPointsJson: JSON.stringify(
+          defaultDefinitionSeeds[0].supportedAccessPoints,
+        ),
+        bindingSchemaJson: JSON.stringify(defaultDefinitionSeeds[0].bindingSchema),
+        runtimeKey: defaultDefinitionSeeds[0].runtimeKey,
+        enabled: Boolean(legacyKnowledgeQuery.enabled),
+      })
     .run();
 };
 

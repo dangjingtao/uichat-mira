@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Bot, BookOpen, Link2, RefreshCcw, Sparkles } from "lucide-react";
+import { ArrowRight, Bot, BookOpen, Link2, RefreshCcw, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import Card from "@/shared/ui/Card";
@@ -48,6 +48,17 @@ const microAppCapabilities = (microApp: MicroAppRecord) => {
   }
   return ["企业集成能力"];
 };
+
+const featuredStudioEntries = [
+  {
+    key: "computerUse",
+    route: "/settings/micro-apps/computer-use-studio",
+  },
+  {
+    key: "imageGeneration",
+    route: "/settings/micro-apps/image-generation-studio",
+  },
+] as const;
 
 export default function MicroAppsSettings() {
   const { t } = useTranslation();
@@ -143,6 +154,51 @@ export default function MicroAppsSettings() {
       <Alert variant="info" title={t("settings.microApps.banner.title")}>
         {t("settings.microApps.banner.description")}
       </Alert>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        {featuredStudioEntries.map((entry) => {
+          const key = `settings.microApps.studioEntries.${entry.key}` as const;
+
+          return (
+            <Card key={entry.route} className="border-primary/15 bg-primary/5 p-5">
+              <div className="flex h-full flex-col gap-4 lg:justify-between">
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="info" size="sm">
+                      {t(`${key}.badges.debug`)}
+                    </Badge>
+                    <Badge variant="muted" size="sm">
+                      {t(`${key}.badges.focus`)}
+                    </Badge>
+                    <Badge variant="muted" size="sm">
+                      {t(`${key}.badges.runtime`)}
+                    </Badge>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-base font-semibold text-text-primary">
+                      {t(`${key}.title`)}
+                    </div>
+                    <div className="text-sm leading-6 text-text-secondary">
+                      {t(`${key}.description`)}
+                    </div>
+                    <div className="text-xs leading-5 text-text-tertiary">
+                      {t(`${key}.hint`)}
+                    </div>
+                  </div>
+                </div>
+
+                <Link
+                  to={entry.route}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-ui-control border border-primary/20 bg-primary px-4 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
+                >
+                  {t(`${key}.actions.open`)}
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
 
       {microApps.length === 0 ? (
         <Alert variant="info" title={t("settings.microApps.states.emptyTitle")}>

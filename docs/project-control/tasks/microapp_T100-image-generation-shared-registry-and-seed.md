@@ -11,7 +11,7 @@ canonical: true
 related:
   - docs/project-control/tasks/microapp_T010-image-generation-parallel-code-isolation.md
   - docs/microapp/image-generation-microapp-poc.md
-task_state: TODO
+task_state: DONE
 ---
 
 # microapp_T100 Image Generation Shared Registry And Seed
@@ -74,7 +74,9 @@ task_state: TODO
   - `server/src/microapps/__tests__/image-generation-registry.test.ts`
 
 - Acceptance evidence placeholder:
-  - 等实现线程回填
+  - `server/src/db/repositories/micro-apps.repository.ts` 已新增 `image_generation` 类型、`desktop.image_generation_studio` access point，以及稳定 `runtimeKey: "image_generation"` 的默认 seed 定义
+  - `server/src/microapps/runtime.ts` 已注册 `imageGenerationMicroApp`，共享运行时可识别 `image_generation`
+  - `server/src/microapps/__tests__/image-generation-registry.test.ts` 已验证 seed 与 runtime 注册同时生效
 
 ## Isolation Rules
 
@@ -85,4 +87,3 @@ task_state: TODO
 
 - 本卡不负责实际生图 service、adapter、route、desktop 页面。
 - 如果实现线程发现需要改 DB schema，必须停下重新开卡，不能在本卡里顺手扩表。
-

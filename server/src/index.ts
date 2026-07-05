@@ -8,6 +8,30 @@ import swaggerUi from "@fastify/swagger-ui";
 import fs from "node:fs/promises";
 import path from "node:path";
 import fsSync from "node:fs";
+import crypto from "node:crypto";
+import {
+  createComputerUsePlan,
+  createComputerUseService,
+  createInMemoryComputerUseEvidenceStore,
+  createInMemoryComputerUseTaskStore,
+  type ComputerUseExecutor,
+  type ComputerUseRuntimeState,
+  type ComputerUseTask,
+  type ComputerUseTaskError,
+} from "@/microapps/computer-use/index.js";
+import { ComputerUseRuntimeManager } from "@/microapps/computer-use/runtime/manager.js";
+import { runComputerUseActions } from "@/microapps/computer-use/executor/runner.js";
+import {
+  createAliyunWanxAdapter,
+  createComfyUiLocalAdapter,
+  createOpenAiImagesAdapter,
+  createTencentHunyuanAdapter,
+} from "@/microapps/image-generation/adapters/index.js";
+import { LocalImageGenerationArtifactStore } from "@/microapps/image-generation/artifacts/index.js";
+import {
+  createImageGenerationService,
+  createInMemoryImageGenerationJobStore,
+} from "@/microapps/image-generation/index.js";
 import healthRoute from "@/routes/health";
 import appMetaRoute from "@/routes/app-meta";
 import dbHealthRoute from "@/routes/dbHealth";
@@ -26,6 +50,7 @@ import chatRagRoute from "@/routes/chat-rag";
 import ragRuntimeRoute from "@/routes/rag-runtime/index.js";
 import evaluationRoute from "@/routes/evaluation/index.js";
 import integrationsRoute from "@/routes/integrations/index.js";
+import microappsRoute from "@/routes/microapps/index.js";
 import wecomRoute from "@/routes/integrations/wecom.js";
 import agentRoute from "@/agent/routes.js";
 import mcpRoutes from "@/mcp/routes.js";
@@ -73,6 +98,20 @@ const clientCoverageRoot = path.resolve(process.cwd(), "client-coverage");
 const serverCoverageRoot = path.resolve(process.cwd(), "server-coverage");
 const docsSiteRoot = path.resolve(process.cwd(), "docs-site");
 const swaggerLogoPath = path.resolve(process.cwd(), "static", "logo.png");
+const imageGenerationArtifactRoot = path.resolve(
+  process.cwd(),
+  ".artifacts",
+  "image-generation",
+);
+const computerUseArtifactRoot = path.resolve(
+  process.cwd(),
+  ".artifacts",
+  "computer-use",
+);
+const computerUseRuntimeRoot = path.resolve(
+  computerUseArtifactRoot,
+  "runtime",
+);
 const workspaceSwaggerLogoPath = path.resolve(
   process.cwd(),
   "..",
@@ -91,6 +130,340 @@ const readSwaggerLogo = async () => {
 };
 
 app.setErrorHandler(sendRouteError);
+
+const createImageGenerationAdapterRegistry = () => {
+  const adapters = [
+    process.env.UI_CHAT_IMAGE_GENERATION_OPENAI_API_KEY
+      ? createOpenAiImagesAdapter({
+          apiKey: process.env.UI_CHAT_IMAGE_GENERATION_OPENAI_API_KEY,
+          baseUrl: process.env.UI_CHAT_IMAGE_GENERATION_OPENAI_BASE_URL,
+          defaultModel: process.env.UI_CHAT_IMAGE_GENERATION_OPENAI_MODEL,
+        })
+      : null,
+    process.env.UI_CHAT_IMAGE_GENERATION_ALIYUN_API_KEY &&
+      process.env.UI_CHAT_IMAGE_GENERATION_ALIYUN_BASE_URL
+      ? createAliyunWanxAdapter({
+          apiKey: process.env.UI_CHAT_IMAGE_GENERATION_ALIYUN_API_KEY,
+          baseUrl: process.env.UI_CHAT_IMAGE_GENERATION_ALIYUN_BASE_URL,
+          defaultModel: process.env.UI_CHAT_IMAGE_GENERATION_ALIYUN_MODEL,
+        })
+      : null,
+    process.env.UI_CHAT_IMAGE_GENERATION_TENCENT_SECRET_ID &&
+      process.env.UI_CHAT_IMAGE_GENERATION_TENCENT_SECRET_KEY
+      ? createTencentHunyuanAdapter({
+          secretId: process.env.UI_CHAT_IMAGE_GENERATION_TENCENT_SECRET_ID,
+          secretKey: process.env.UI_CHAT_IMAGE_GENERATION_TENCENT_SECRET_KEY,
+          region: process.env.UI_CHAT_IMAGE_GENERATION_TENCENT_REGION,
+          endpoint: process.env.UI_CHAT_IMAGE_GENERATION_TENCENT_ENDPOINT,
+          version: process.env.UI_CHAT_IMAGE_GENERATION_TENCENT_VERSION,
+        })
+      : null,
+    process.env.UI_CHAT_IMAGE_GENERATION_COMFYUI_BASE_URL
+      ? createComfyUiLocalAdapter({
+          baseUrl: process.env.UI_CHAT_IMAGE_GENERATION_COMFYUI_BASE_URL,
+          clientId: process.env.UI_CHAT_IMAGE_GENERATION_COMFYUI_CLIENT_ID,
+        })
+      : null,
+  ].filter((adapter) => adapter !== null);
+
+  return {
+    getAdapter(providerId: string) {
+      return adapters.find((item) => item.providerId === providerId) ?? null;
+    },
+  };
+};
+
+const imageGenerationService = createImageGenerationService({
+  adapterRegistry: createImageGenerationAdapterRegistry(),
+  artifactStore: new LocalImageGenerationArtifactStore({
+    rootDir: imageGenerationArtifactRoot,
+  }),
+  // Current strategy is intentionally temporary: jobs stay in process memory
+  // until a dedicated persistent store is approved and implemented.
+  jobStore: createInMemoryImageGenerationJobStore(),
+});
+
+const computerUseRuntimeManager = new ComputerUseRuntimeManager({
+  storageRoot: computerUseRuntimeRoot,
+});
+
+const nowIso = () => new Date().toISOString();
+
+const toComputerUseRuntimeState = (
+  checkedAt: string,
+): ComputerUseRuntimeState => {
+  const resolved = computerUseRuntimeManager.resolveRuntime();
+
+  if (resolved.status === "ready") {
+    return {
+      status: "ready",
+      browserEngine: resolved.runtime.channel,
+      version: resolved.runtime.version,
+      checkedAt,
+      details: {
+        strategy: resolved.strategy,
+        executablePath: resolved.runtime.executablePath,
+        source: resolved.runtime.source,
+        inspectedCandidates: resolved.inspectedCandidates,
+      },
+    };
+  }
+
+  return {
+    status: "not_installed",
+    checkedAt,
+    message: resolved.reason,
+    details: {
+      strategy: resolved.strategy,
+      inspectedCandidates: resolved.inspectedCandidates,
+    },
+  };
+};
+
+const extractFirstUrl = (input: string) => {
+  const matched = input.match(/https?:\/\/[^\s]+/i);
+  return matched?.[0];
+};
+
+const normalizeSiteTarget = (value?: string) => {
+  if (!value) {
+    return undefined;
+  }
+  if (/^https?:\/\//i.test(value)) {
+    return value;
+  }
+  return `https://${value}`;
+};
+
+const resolveTargetUrl = (task: ComputerUseTask) =>
+  extractFirstUrl(task.goal) ?? normalizeSiteTarget(task.siteScope[0]);
+
+const createApprovalRequest = (task: ComputerUseTask) => ({
+  id: `approval_${crypto.randomUUID()}`,
+  stepId: "step-submit",
+  status: "pending" as const,
+  title: "Approve browser task execution",
+  reason:
+    "This browser task may navigate, click, or submit data on an external site.",
+  requestedAt: nowIso(),
+  requestedBy: task.requestedBy,
+});
+
+const createBlockedResult = (
+  summary: string,
+  error: ComputerUseTaskError,
+  completedAt: string,
+) => ({
+  status: "blocked" as const,
+  summary,
+  completedAt,
+  error,
+});
+
+const executeBrowserTask = async (
+  task: ComputerUseTask,
+  runtime: ComputerUseRuntimeState,
+) => {
+  const checkedAt = nowIso();
+  const executablePath =
+    typeof runtime.details?.executablePath === "string"
+      ? runtime.details.executablePath
+      : undefined;
+  const targetUrl = resolveTargetUrl(task);
+
+  if (!executablePath || !targetUrl) {
+    const completedAt = nowIso();
+    return {
+      status: "blocked" as const,
+      currentStepId: "step-open",
+      evidenceEntries: [
+        {
+          id: `evidence_${crypto.randomUUID()}`,
+          kind: "error" as const,
+          message: !targetUrl
+            ? "Task is missing a concrete target URL or site scope."
+            : "Runtime is ready but executablePath is unavailable.",
+          createdAt: checkedAt,
+          stepId: "step-open",
+        },
+      ],
+      result: createBlockedResult(
+        !targetUrl
+          ? "Task is blocked because no target URL or site scope was provided."
+          : "Task is blocked because the runtime executable path is unavailable.",
+        {
+          code: !targetUrl
+            ? "COMPUTER_USE_TARGET_REQUIRED"
+            : "COMPUTER_USE_RUNTIME_EXECUTABLE_MISSING",
+          message: !targetUrl
+            ? "Provide a URL in the goal or a siteScope entry before starting the task."
+            : "Runtime executablePath is missing from the resolved runtime state.",
+        },
+        completedAt,
+      ),
+      meta: {
+        checkedAt,
+      },
+    };
+  }
+
+  const artifactDir = path.join(computerUseArtifactRoot, "tasks", task.id);
+  const execution = await runComputerUseActions(
+    [
+      { kind: "navigate", url: targetUrl, waitUntil: "load" },
+      {
+        kind: "capture",
+        artifactPath: path.join(task.id, "landing-page.png"),
+      },
+      {
+        kind: "finish",
+        summary: `Opened ${targetUrl} and captured the landing page.`,
+      },
+    ],
+    {
+      artifactRoot: artifactDir,
+      executablePath,
+      headless: true,
+    },
+  );
+
+  const finishedAt = nowIso();
+  const capturePath = execution.captures[0];
+
+  return {
+    status: "succeeded" as const,
+    currentStepId: "step-open",
+    evidenceEntries: execution.steps.map((step, index) => ({
+      id: `evidence_${crypto.randomUUID()}`,
+      kind: "action" as const,
+      message: step.detail,
+      createdAt: checkedAt,
+      stepId: index === execution.steps.length - 1 ? "step-capture" : "step-open",
+    })),
+    artifacts: capturePath
+      ? [
+          {
+            id: `artifact_${crypto.randomUUID()}`,
+            kind: "screenshot" as const,
+            label: "Landing page capture",
+            filePath: capturePath,
+            createdAt: finishedAt,
+          },
+        ]
+      : [],
+    result: {
+      status: "succeeded" as const,
+      summary:
+        execution.finishSummary ??
+        `Opened ${targetUrl} and captured the landing page.`,
+      completedAt: finishedAt,
+      finalUrl: execution.finalUrl,
+    },
+  };
+};
+
+const computerUseExecutor: ComputerUseExecutor = {
+  async createPlan({ goal, siteScope }) {
+    const targetUrl = extractFirstUrl(goal) ?? normalizeSiteTarget(siteScope[0]);
+    return createComputerUsePlan({
+      createdAt: nowIso(),
+      summary: targetUrl
+        ? `Open ${targetUrl}, observe the page state, and capture a screenshot.`
+        : "Resolve the target site, open it in the managed browser, and capture a screenshot.",
+      steps: [
+        {
+          id: "step-open",
+          title: "Open target page",
+          description: targetUrl
+            ? `Navigate to ${targetUrl}.`
+            : "Navigate to the requested target page.",
+          status: "pending",
+          requiresApproval: false,
+        },
+        {
+          id: "step-capture",
+          title: "Capture evidence",
+          description: "Capture a screenshot after the page loads.",
+          status: "pending",
+          requiresApproval: false,
+        },
+        {
+          id: "step-submit",
+          title: "Approve high-risk browser actions",
+          description:
+            "If the task needs clicks, typing, or data submission, require explicit approval before continuing.",
+          status: "pending",
+          requiresApproval: true,
+          approvalReason:
+            "Browser tasks may trigger clicks or send data to an external site.",
+        },
+      ],
+      riskSummary:
+        "第一阶段 server 只自动执行受控打开页和截图；后续点击、输入、提交属于需要审批的高风险动作。",
+    });
+  },
+  async runTask({ task, runtime }) {
+    const goalLower = task.goal.toLowerCase();
+    const needsApproval =
+      goalLower.includes("submit") ||
+      goalLower.includes("send") ||
+      goalLower.includes("login") ||
+      goalLower.includes("purchase") ||
+      goalLower.includes("delete");
+
+    if (needsApproval) {
+      return {
+        status: "awaiting_approval" as const,
+        currentStepId: "step-submit",
+        evidenceEntries: [
+          {
+            id: `evidence_${crypto.randomUUID()}`,
+            kind: "approval" as const,
+            message:
+              "Task paused before high-risk browser actions and is waiting for approval.",
+            createdAt: nowIso(),
+            stepId: "step-submit",
+          },
+        ],
+        approvalRequest: createApprovalRequest(task),
+      };
+    }
+
+    return executeBrowserTask(task, runtime);
+  },
+  async resumeTask({ task, runtime }) {
+    return executeBrowserTask(task, runtime);
+  },
+  async cancelTask() {
+    return;
+  },
+};
+
+const computerUseService = createComputerUseService({
+  runtimeManager: {
+    async getRuntimeState() {
+      return toComputerUseRuntimeState(nowIso());
+    },
+  },
+  executor: computerUseExecutor,
+  evidenceStore: createInMemoryComputerUseEvidenceStore(),
+  taskStore: createInMemoryComputerUseTaskStore(),
+});
+
+const computerUseRuntimeService = {
+  async getRuntimeState() {
+    return toComputerUseRuntimeState(nowIso());
+  },
+  async installRuntime(request: {
+    version: string;
+    archiveUrl: string;
+    executableRelativePath: string;
+    expectedSha256?: string;
+  }) {
+    await computerUseRuntimeManager.installManagedRuntime(request);
+    return toComputerUseRuntimeState(nowIso());
+  },
+};
 
 const setupPlugins = async () => {
   const appMeta = getAppMeta();
@@ -296,6 +669,11 @@ const setupRoutes = async () => {
   await app.register(ragRuntimeRoute);
   await app.register(evaluationRoute);
   await app.register(integrationsRoute);
+  await app.register(microappsRoute, {
+    imageGenerationService,
+    computerUseService,
+    computerUseRuntimeService,
+  });
   await app.register(wecomRoute);
   await app.register(agentRoute);
   await app.register(mcpRoutes);

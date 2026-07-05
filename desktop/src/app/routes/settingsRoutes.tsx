@@ -39,6 +39,8 @@ import ToolsSettings from "@/features/Settings/pages/Tools/index";
 import RoleSettings from "@/features/Settings/pages/Personas/index";
 import MicroAppsSettings from "@/features/Settings/pages/MicroApps/index";
 import MicroAppDetailPage from "@/features/Settings/pages/MicroApps/Detail";
+import ImageGenerationStudioPage from "@/features/Settings/pages/MicroApps/ImageGeneration";
+import ComputerUseStudioPage from "@/features/Settings/pages/MicroApps/ComputerUse";
 
 export type SettingsNavGroup =
   | "general"
@@ -119,6 +121,14 @@ const settingsRouteTree: SettingsRouteConfig[] = [
         element: <MicroAppDetailPage />,
       },
     ],
+  },
+  {
+    path: "micro-apps/image-generation-studio",
+    element: <ImageGenerationStudioPage />,
+  },
+  {
+    path: "micro-apps/computer-use-studio",
+    element: <ComputerUseStudioPage />,
   },
   {
     path: "knowledge-base/add",

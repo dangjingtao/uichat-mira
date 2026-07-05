@@ -14,6 +14,7 @@ Related:
   - ../integrations/wecom-microapp-interface-design.md
   - image-generation-microapp-poc.md
   - computer-use-microapp-poc.md
+  - computer-use-feature-design.md
 
 ## 单点真相范围
 
@@ -296,6 +297,7 @@ Platform
 当前 docs-only POC 见：
 
 - `computer-use-microapp-poc.md`
+- `computer-use-feature-design.md`
 
 ## 对前端的产品约束
 

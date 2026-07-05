@@ -38,11 +38,11 @@
         {
           "version": "0.7.1",
           "commit": {
-            "hash": "10ec92f153bc571c05d44740cc56aecff89e2ca2",
-            "shortHash": "10ec92f",
-            "message": "refactor: phisical split",
+            "hash": "4c2d570a8586f063e38beaf45a09a5d42f2c63db",
+            "shortHash": "4c2d570",
+            "message": "fix: wave2",
             "author": "Tomz",
-            "date": "2026-07-05T19:43:06+08:00"
+            "date": "2026-07-06T02:52:08+08:00"
           }
         },
         {

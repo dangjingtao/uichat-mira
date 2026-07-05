@@ -630,8 +630,7 @@ edit_replace_block
     - `pnpm --filter @ui-chat-mira/server test -- src/mcp/tools/web-search.tool.test.ts`
       - 结果：通过，`14 passed`
     - `pnpm --filter @ui-chat-mira/server typecheck`
-      - 结果：当前分支失败
-      - 说明：失败点位于 `server/src/mcp/harness/capability-profiles.ts`，是当前分支既有 `actionProfileId` / `actionProfileTitle` 字段类型未对齐，不属于 `T014` 允许改动范围
+      - 结果：通过
 
 ### Terminal
 

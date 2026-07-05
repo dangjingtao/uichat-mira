@@ -18,6 +18,7 @@ related:
   - docs/project-control/tasks/microapp_T103-image-generation-server-http-surface.md
   - docs/project-control/tasks/microapp_T104-image-generation-desktop-api-client.md
   - docs/project-control/tasks/microapp_T105-image-generation-desktop-debug-workspace.md
+  - docs/project-control/tasks/microapp_T106-image-generation-desktop-entry-integration.md
 task_state: READY_FOR_REVIEW
 ---
 
@@ -38,6 +39,7 @@ task_state: READY_FOR_REVIEW
 - `docs/project-control/tasks/microapp_T103-image-generation-server-http-surface.md`
 - `docs/project-control/tasks/microapp_T104-image-generation-desktop-api-client.md`
 - `docs/project-control/tasks/microapp_T105-image-generation-desktop-debug-workspace.md`
+- `docs/project-control/tasks/microapp_T106-image-generation-desktop-entry-integration.md`
 - `docs/project-control/project-control-ledger.md`
 
 ## Forbidden Changes
@@ -59,6 +61,7 @@ task_state: READY_FOR_REVIEW
 | `T103` | Server HTTP surface | `server/src/routes/microapps/**`, `server/src/index.ts` |
 | `T104` | Desktop shared API client | `desktop/src/shared/api/imageGeneration.ts`, `desktop/src/shared/api/index.ts` |
 | `T105` | Desktop debug workspace | `desktop/src/features/Settings/pages/MicroApps/ImageGeneration/**`, `desktop/src/app/routes/settingsRoutes.tsx`, `desktop/src/app/routes/settingsRoutes.test.tsx`, `desktop/src/features/Settings/i18n/en-US.ts`, `desktop/src/features/Settings/i18n/zh-CN.ts` |
+| `T106` | Desktop product entry integration | `desktop/src/features/Settings/pages/MicroApps/index.tsx`, `desktop/src/features/Settings/pages/MicroApps/Detail.tsx`, `desktop/src/features/Settings/pages/MicroApps/__tests__/index.test.tsx`, `desktop/src/features/Settings/pages/MicroApps/__tests__/Detail.test.tsx` |
 
 ## Parallel Batches
 
@@ -86,6 +89,15 @@ task_state: READY_FOR_REVIEW
 - `T104` 依赖 HTTP route 契约
 - `T105` 依赖 desktop shared API client
 
+### Batch C
+
+- `T106`
+
+这条线程应在 `T105` 独立调试页和既有路由稳定后开工，因为：
+
+- `T106` 只负责把现有产品入口接到 `T105` 已存在的调试页
+- `T106` 独占 `MicroApps/index.tsx` 和 `Detail.tsx`，避免和工作台内部实现互相踩文件
+
 ## Hard Rules
 
 1. 不允许两张卡同时声明同一个真实文件为 allowed area。
@@ -93,10 +105,11 @@ task_state: READY_FOR_REVIEW
 3. `image_generation` 的 server 业务代码统一放到 `server/src/microapps/image-generation/`，不要散落回 `server/src/routes/`、`server/src/services/` 或旧 `server/src/microapps/apps/`。
 4. `image_generation` 的 desktop 调试页面统一放到 `desktop/src/features/Settings/pages/MicroApps/ImageGeneration/`，不要直接塞回现有 `MicroApps/index.tsx` 或 `Detail.tsx`。
 5. 当前能力只服务微应用界面调试，不允许任何线程顺手接 chat、第三方平台入口或通用 MCP / Tool 暴露面。
+6. 当前产品入口衔接由 `T106` 独占；其他线程不得顺手改 `MicroApps/index.tsx` 或 `Detail.tsx`。
 
 ## Acceptance Criteria
 
-1. 五张子任务卡全部存在，并且每张卡的 allowed area 互不重叠。
+1. 七张子任务卡全部存在，并且每张卡的 allowed area 互不重叠。
 2. 现有共享文件已经明确归属到唯一任务卡，不再出现“谁都可以顺手改”的灰区。
 3. 并行批次已经明确，至少能支持两条线程同时施工而不争用文件。
 4. 每张子卡都写明了目标、允许改动、禁止改动、验收标准和验证命令。
@@ -104,7 +117,7 @@ task_state: READY_FOR_REVIEW
 
 ## Verification
 
-- `git diff -- docs/project-control/tasks/microapp_T010-image-generation-parallel-code-isolation.md docs/project-control/tasks/microapp_T100-image-generation-shared-registry-and-seed.md docs/project-control/tasks/microapp_T101-image-generation-server-domain-core.md docs/project-control/tasks/microapp_T102-image-generation-server-adapters-and-artifacts.md docs/project-control/tasks/microapp_T103-image-generation-server-http-surface.md docs/project-control/tasks/microapp_T104-image-generation-desktop-api-client.md docs/project-control/tasks/microapp_T105-image-generation-desktop-debug-workspace.md docs/project-control/project-control-ledger.md`
+- `git diff -- docs/project-control/tasks/microapp_T010-image-generation-parallel-code-isolation.md docs/project-control/tasks/microapp_T100-image-generation-shared-registry-and-seed.md docs/project-control/tasks/microapp_T101-image-generation-server-domain-core.md docs/project-control/tasks/microapp_T102-image-generation-server-adapters-and-artifacts.md docs/project-control/tasks/microapp_T103-image-generation-server-http-surface.md docs/project-control/tasks/microapp_T104-image-generation-desktop-api-client.md docs/project-control/tasks/microapp_T105-image-generation-desktop-debug-workspace.md docs/project-control/tasks/microapp_T106-image-generation-desktop-entry-integration.md docs/project-control/project-control-ledger.md`
   - workdir: `D:/workspace/rag-demo`
   - purpose: 核对任务卡和台账更新范围
 - `git status --short`
@@ -125,21 +138,21 @@ task_state: READY_FOR_REVIEW
   - `docs/project-control/tasks/microapp_T103-image-generation-server-http-surface.md`
   - `docs/project-control/tasks/microapp_T104-image-generation-desktop-api-client.md`
   - `docs/project-control/tasks/microapp_T105-image-generation-desktop-debug-workspace.md`
+  - `docs/project-control/tasks/microapp_T106-image-generation-desktop-entry-integration.md`
   - `docs/project-control/project-control-ledger.md`
 
 - Diff summary:
   - 新增 `image_generation` 并行施工总隔离卡
-  - 新增五张互不重叠的实现任务卡
+  - 新增六张互不重叠的实现任务卡和一张产品入口衔接卡
   - 明确共享文件归属、推荐并行批次和禁止交叉修改规则
   - 在唯一总台账登记新的并行施工队列
 
 ## Unfinished / Risks
 
 - 当前只完成任务拆分，不代表这些实现任务已经批准直接开工。
-- `T100` 到 `T105` 之间的 import 依赖仍然存在，但文件归属已经切开；施工时必须按卡片边界协作，不能用“顺手改一下对方文件”解决问题。
+- `T100` 到 `T106` 之间的 import 依赖仍然存在，但文件归属已经切开；施工时必须按卡片边界协作，不能用“顺手改一下对方文件”解决问题。
 
 ## Review Outcome
 
 - 当前状态：`READY_FOR_REVIEW`
 - 待评审范围：并行施工代码隔离方案
-

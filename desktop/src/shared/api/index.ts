@@ -5,3 +5,5 @@ export * from "./wecom";
 export * from "./modelSettings";
 export * from "./knowledgeBase";
 export * from "./system";
+export * from "./imageGeneration";
+export * from "./computerUse";

@@ -45,7 +45,11 @@ related:
 | MicroAPP Image Generation POC | `READY_FOR_REVIEW` | 生图微应用 docs-only 基础建设：兼容底座、统一任务生命周期、ComfyUI workflow runner 边界；当前仅服务微应用界面调试 | [microapp_T001](tasks/microapp_T001-image-generation-poc-docs-foundation.md), [image-generation-microapp-poc.md](../microapp/image-generation-microapp-poc.md) | 当前只提交 docs-only POC；未批准 runtime / DB / UI / provider 实现 |
 | MicroAPP Image Generation Interaction Spec | `READY_FOR_REVIEW` | 生图微应用调试页交互说明：页面结构、状态反馈、Prompt/Workflow 双模式 | [microapp_T011](tasks/microapp_T011-image-generation-debug-workspace-interaction-spec.md), [interaction-spec.md](../microapp/image-generation-debug-workspace-interaction-spec.md) | 当前只提交 docs-only 交互说明；未批准 UI 实现 |
 | MicroAPP Computer Use POC | `READY_FOR_REVIEW` | `computer_use` 微应用 docs-only 基础建设：隔离执行面优先、审批链、回放 artifact 与 Electron / Tauri 边界 | [microapp_T002](tasks/microapp_T002-computer-use-poc-docs-foundation.md), [computer-use-microapp-poc.md](../microapp/computer-use-microapp-poc.md) | 当前只提交 docs-only POC；未批准 runtime / DB / UI / preload / desktop automation 实现 |
-| MicroAPP Image Generation Parallel Build | `TODO` | 并行施工代码隔离：共享注册层、server domain、adapter、route、desktop API、desktop 调试页六块拆卡 | [microapp_T010](tasks/microapp_T010-image-generation-parallel-code-isolation.md), [microapp_T100-T105](tasks/microapp_T100-image-generation-shared-registry-and-seed.md) | 当前只完成任务卡拆分；实现线程尚未开工 |
+| MicroAPP Computer Use Feature Design | `READY_FOR_REVIEW` | `computer_use` 第一阶段浏览器工作台功能设计：入口、状态、审批、安装引导、结果回放 | [microapp_T003](tasks/microapp_T003-computer-use-feature-design.md), [computer-use-feature-design.md](../microapp/computer-use-feature-design.md) | 当前只提交 docs-only 功能设计；未批准 runtime / DB / UI / browser runtime implementation |
+| MicroAPP Computer Use Parallel Build | `READY_FOR_REVIEW` | 并行施工代码隔离：共享注册层、server core、runtime/executor、route、desktop API、desktop 工作台，以及产品入口衔接卡 | [microapp_T020](tasks/microapp_T020-computer-use-parallel-code-isolation.md), [microapp_T110-T116](tasks/microapp_T110-computer-use-shared-registry-and-seed.md) | 当前已补入口衔接任务卡；实现与评审按各自任务状态推进 |
+| MicroAPP Computer Use Smoke | `READY_FOR_REVIEW` | `Computer Use Studio` 产品入口级冒烟已补第二轮真实证据：即使目标明确要求输出页面标题和主标题文本，当前链路仍只生成“导航 + 截图”plan，并返回同样的截图型结果摘要 | [microapp_T117](tasks/microapp_T117-computer-use-browser-smoke.md) | 证据目录已回填到 `.test-artifact/computer-use-smoke/2026-07-06-T117/`；当前阻塞已收敛为一期能力边界，不再只是证据缺失 |
+| MicroAPP Image Generation Parallel Build | `IN_PROGRESS` | 并行施工代码隔离：共享注册层、server domain、adapter、route、desktop API、desktop 调试页，以及产品入口衔接卡 | [microapp_T010](tasks/microapp_T010-image-generation-parallel-code-isolation.md), [microapp_T100](tasks/microapp_T100-image-generation-shared-registry-and-seed.md), [microapp_T106](tasks/microapp_T106-image-generation-desktop-entry-integration.md) | `T100`、`T101`、`T103`、`T104`、`T105`、`T106` 已 DONE；`T102` 待评审 |
+| MicroAPP Image Generation Smoke | `DONE` | `ComfyUI Local` 产品入口级冒烟：从当前微应用列表页进入 `Image Generation Studio`，使用合法 workflow 跑真实任务终态并保留证据 | [microapp_T107](tasks/microapp_T107-image-generation-comfyui-smoke.md), [image-generation-comfyui-smoke-guide.md](../microapp/image-generation-comfyui-smoke-guide.md) | 已完成两轮真实冒烟；第二轮在补齐 `UI_CHAT_IMAGE_GENERATION_COMFYUI_BASE_URL` 并重启 backend 后成功到 `succeeded` |
 
 ## Active Review Queue
 
@@ -58,7 +62,6 @@ related:
 | [agent_node_T016](tasks/agent_node_T016-local-tool-routing-and-schema-guard.md) | `READY_FOR_REVIEW` | AgentGraph | 评审弱模型防线和最新前台 smoke 证据 |
 | [core_tools_T008](tasks/core_tools_T008-read-locate-keyword-preview.md) | `READY_FOR_REVIEW` | Core Tools | 评审 read locate preview |
 | [core_tools_T011](tasks/core_tools_T011-selector-create-file-prefers-edit.md) | `READY_FOR_REVIEW` | Core Tools | 评审 create-file selector 策略 |
-| [core_tools_T014](tasks/core_tools_T014-web-search-normalized-results-and-provider-errors.md) | `READY_FOR_REVIEW` | Core Tools | 评审 web search 结果规范化和 provider error |
 | [core_tools_T017](tasks/core_tools_T017-web-search-artifact-sensitive-field-scrubbing.md) | `READY_FOR_REVIEW` | Core Tools | 评审敏感字段清理 |
 | [core_tools_T019](tasks/core_tools_T019-workspace-mutation-boundary-retention.md) | `READY_FOR_REVIEW` | Core Tools | 评审 workspace mutation boundary retention |
 | [T-011](tasks/T-011-sandbox-contract-direct-bench.md) | `READY_FOR_REVIEW` | Harness / Sandbox | 评审 sandbox direct bench contract |
@@ -68,18 +71,36 @@ related:
 | [microapp_T001](tasks/microapp_T001-image-generation-poc-docs-foundation.md) | `READY_FOR_REVIEW` | MicroAPP | 评审 docs-only 生图微应用兼容底座、ComfyUI runner 边界，以及“仅微应用界面调试”范围是否可接受 |
 | [microapp_T011](tasks/microapp_T011-image-generation-debug-workspace-interaction-spec.md) | `READY_FOR_REVIEW` | MicroAPP | 评审生图微应用调试页的交互语言是否足够完整，能否直接进入设计出稿 |
 | [microapp_T002](tasks/microapp_T002-computer-use-poc-docs-foundation.md) | `READY_FOR_REVIEW` | MicroAPP | 评审 docs-only `computer_use` 微应用边界、隔离执行面优先级和后续高风险切片是否可接受 |
+| [microapp_T003](tasks/microapp_T003-computer-use-feature-design.md) | `READY_FOR_REVIEW` | MicroAPP | 评审 `computer_use` 第一阶段浏览器工作台功能设计是否可接受 |
+| [microapp_T020](tasks/microapp_T020-computer-use-parallel-code-isolation.md) | `READY_FOR_REVIEW` | MicroAPP | 评审 `computer_use` 并行施工的代码隔离、共享文件归属和推荐批次是否可接受 |
+| [microapp_T117](tasks/microapp_T117-computer-use-browser-smoke.md) | `READY_FOR_REVIEW` | MicroAPP | 评审两轮真实冒烟证据，并确认当前阻塞应按一期能力边界处理，还是另开实现卡修复 |
 | [microapp_T010](tasks/microapp_T010-image-generation-parallel-code-isolation.md) | `READY_FOR_REVIEW` | MicroAPP | 评审 `image_generation` 并行施工的代码隔离、共享文件归属和推荐批次是否可接受 |
 
 ## MicroAPP Image Generation Parallel Task Index
 
 | Task | Ledger State | Notes |
 | --- | --- | --- |
-| [microapp_T100](tasks/microapp_T100-image-generation-shared-registry-and-seed.md) | `TODO` | 共享注册层、默认 seed、runtime 识别入口 |
-| [microapp_T101](tasks/microapp_T101-image-generation-server-domain-core.md) | `TODO` | `server/src/microapps/image-generation/core/**` 领域核心 |
-| [microapp_T102](tasks/microapp_T102-image-generation-server-adapters-and-artifacts.md) | `TODO` | provider adapter、ComfyUI runner、artifact 回收 |
-| [microapp_T103](tasks/microapp_T103-image-generation-server-http-surface.md) | `TODO` | `server/src/routes/microapps/**` 和 server 注册 |
-| [microapp_T104](tasks/microapp_T104-image-generation-desktop-api-client.md) | `TODO` | `desktop/src/shared/api/imageGeneration.ts` 共享 API client |
-| [microapp_T105](tasks/microapp_T105-image-generation-desktop-debug-workspace.md) | `TODO` | 微应用界面调试页和 settings route 挂载 |
+| [microapp_T100](tasks/microapp_T100-image-generation-shared-registry-and-seed.md) | `DONE` | 共享注册层、默认 seed、runtime 识别入口 |
+| [microapp_T101](tasks/microapp_T101-image-generation-server-domain-core.md) | `DONE` | `server/src/microapps/image-generation/core/**` 领域核心 |
+| [microapp_T102](tasks/microapp_T102-image-generation-server-adapters-and-artifacts.md) | `READY_FOR_REVIEW` | provider adapter、ComfyUI runner、artifact 回收 |
+| [microapp_T103](tasks/microapp_T103-image-generation-server-http-surface.md) | `DONE` | `server/src/routes/microapps/**` 和 server 注册 |
+| [microapp_T104](tasks/microapp_T104-image-generation-desktop-api-client.md) | `DONE` | `desktop/src/shared/api/imageGeneration.ts` 共享 API client |
+| [microapp_T105](tasks/microapp_T105-image-generation-desktop-debug-workspace.md) | `DONE` | 微应用界面调试页和 settings route 挂载 |
+| [microapp_T106](tasks/microapp_T106-image-generation-desktop-entry-integration.md) | `DONE` | 已补列表页稳定主入口、详情页边界说明和页面测试证据；用户无需手输 URL 即可进入 `Image Generation Studio` |
+| [microapp_T107](tasks/microapp_T107-image-generation-comfyui-smoke.md) | `DONE` | 已完成 `ComfyUI Local` 冒烟；第二轮已真实跑通 `queued -> running -> succeeded`，并回收到本地预览图 |
+
+## MicroAPP Computer Use Parallel Task Index
+
+| Task | Ledger State | Notes |
+| --- | --- | --- |
+| [microapp_T110](tasks/microapp_T110-computer-use-shared-registry-and-seed.md) | `DONE` | 共享注册层、默认 seed、runtime 识别入口和 `computer-use.microapp.ts` 桥接文件 |
+| [microapp_T111](tasks/microapp_T111-computer-use-server-domain-core.md) | `DONE` | `server/src/microapps/computer-use/core/**` 领域核心 |
+| [microapp_T112](tasks/microapp_T112-computer-use-browser-runtime-and-executor.md) | `DONE` | 浏览器运行时管理、Playwright 执行器和 `.test-artifact/computer-use/**` |
+| [microapp_T113](tasks/microapp_T113-computer-use-server-http-surface.md) | `DONE` | `server/src/routes/microapps/computer-use/**`、route 聚合和 server 注册 |
+| [microapp_T114](tasks/microapp_T114-computer-use-desktop-api-client.md) | `DONE` | `desktop/src/shared/api/computerUse.ts` 共享 API client |
+| [microapp_T115](tasks/microapp_T115-computer-use-desktop-studio-workspace.md) | `DONE` | 浏览器工作台、settings route 挂载和 settings i18n 文案 |
+| [microapp_T116](tasks/microapp_T116-computer-use-desktop-entry-integration.md) | `DONE` | 当前微应用列表页 / 详情页到 `Computer Use Studio` 的产品入口衔接 |
+| [microapp_T117](tasks/microapp_T117-computer-use-browser-smoke.md) | `READY_FOR_REVIEW` | 两轮真实证据都只证明“导航 + 截图”成功；当前仍未证明能把页面标题和主标题文本产出到结果里 |
 
 ## Agent Nodes Index
 
@@ -120,7 +141,7 @@ related:
 | [core_tools_T011](tasks/core_tools_T011-selector-create-file-prefers-edit.md) | `READY_FOR_REVIEW` | selector create-file policy |
 | [core_tools_T012](tasks/core_tools_T012-read-fallback-dispatch-demotion.md) | `DONE` | read fallback demotion |
 | [core_tools_T013](tasks/core_tools_T013-read-slice-non-primary-intent.md) | `DONE` | read slice exposure |
-| [core_tools_T014](tasks/core_tools_T014-web-search-normalized-results-and-provider-errors.md) | `READY_FOR_REVIEW` | web search normalized results |
+| [core_tools_T014](tasks/core_tools_T014-web-search-normalized-results-and-provider-errors.md) | `DONE` | web search normalized results |
 | [core_tools_T015](tasks/core_tools_T015-terminal-execute-command-action-profile.md) | `DONE` | terminal action profile |
 | [core_tools_T016](tasks/core_tools_T016-edit-action-profiles.md) | `DONE` | edit action profiles |
 | [core_tools_T017](tasks/core_tools_T017-web-search-artifact-sensitive-field-scrubbing.md) | `READY_FOR_REVIEW` | artifact sensitive field scrubbing |
