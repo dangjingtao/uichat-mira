@@ -1,0 +1,31 @@
+AgentGraph Mainline Blackbox Review Diff
+Current HEAD: 68e11d7ce8157cf6f8ab73c66eeb289d264c5675
+
+[Added] server/src/agent/__tests__/agentgraph-mainline-blackbox.test.ts
+[Added] server/test-report/agentgraph-blackbox-summary.md
+[Added] server/test-report/agentgraph-blackbox-vitest.txt
+[Added] server/test-report/agentgraph-blackbox-typecheck.txt
+[Added] server/test-report/agentgraph-blackbox-diff.txt
+
+Runtime change audit:
+- Planner runtime modified: No
+- Normalize runtime modified: No
+- Policy runtime modified: No
+- ToolNode runtime modified: No
+- Evidence runtime modified: No
+- AgentGraph runtime modified: No
+
+Forbidden runtime files audit:
+- server/src/agent/graph.ts: not modified
+- server/src/agent/routes.ts: not modified
+- server/src/agent/next-action-planner.ts: not modified
+- server/src/agent/tool-call-normalize.ts: not modified
+- server/src/agent/policy-node.ts: not modified
+- server/src/agent/tool-node.ts: not modified
+- server/src/agent/evidence.ts: not modified
+- desktop/**: not modified
+
+Review diff summary:
+- Added one blackbox regression file that uses agentGraph.run(...) as the only execution entry.
+- Added review reports for diff, coverage matrix, vitest result, and typecheck result.
+- No runtime implementation file was edited.
