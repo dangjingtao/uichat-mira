@@ -1,4 +1,4 @@
-import type { McpToolDefinition } from "../../mcp/core/definitions.js";
+import type { McpSandboxProfile, McpToolDefinition } from "../../mcp/core/definitions.js";
 import type { HarnessTurnSource } from "../shared/types.js";
 
 export type HarnessExposureSource = HarnessTurnSource;
@@ -7,6 +7,7 @@ export interface HarnessExposurePolicyInput {
   source: HarnessExposureSource;
   query?: string;
   allowExternal?: boolean;
+  sandboxProfiles?: Partial<Record<McpSandboxProfile, boolean>>;
 }
 
 export interface HarnessExposureDecision {

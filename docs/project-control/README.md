@@ -38,6 +38,7 @@ Do not use AI thread memory as the source of truth for project status.
 ```text
 docs/project-control/
   README.md
+  governance-principles.md
   agent-workboard.md
   tasks/
     T-001-example-task.md
@@ -54,6 +55,14 @@ docs/project-control/
 ```
 
 ## File Responsibilities
+
+### `governance-principles.md`
+
+The delivery governance contract for high-risk work.
+
+It defines evidence levels, black-box smoke requirements, environment and hardcoded configuration rules, review gates, and stop-the-line conditions.
+
+Read it before starting AgentGraph, Harness, tool execution, approval, runtime, packaging, or other high-risk task packages.
 
 ### `agent-workboard.md`
 

@@ -10,6 +10,12 @@ export type McpToolMode = "sync" | "stream";
 
 export type McpToolSideEffect = "none" | "local-write" | "process" | "network";
 
+export type McpSandboxProfile =
+  | "read_only"
+  | "workspace_write"
+  | "command"
+  | "networked_command";
+
 export type McpInvocationStatus =
   | "queued"
   | "running"
@@ -50,6 +56,8 @@ export interface McpCapabilityMetadata {
   };
   networkAccess?: boolean;
   longRunning?: boolean;
+  sandboxRequired?: boolean;
+  sandboxProfile?: McpSandboxProfile;
 }
 
 export interface McpExecutionEnvironmentCapability {

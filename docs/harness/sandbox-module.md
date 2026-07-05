@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: runtime
-Last verified: 2026-06-28
+Last verified: 2026-07-05
 Layer: wiki
 Module: Sandbox
 Feature: ModuleDefinition
@@ -42,9 +42,9 @@ Doc Type: current-contract
 - `SandboxExecutor` 独立入口
 - workspace 真实路径边界检查
 - 最小 env 白名单
-- stdout / stderr 总量限制
-- timeout
-- abort / 进程树终止
+- stdout / stderr 总量限制与 `truncated` 标记
+- timeout 默认值、调用层限幅与执行层硬上限
+- abort / 进程树终止；Windows kill tree 为 best-effort，并在 timeout result 中标记 limitation
 - 最小命令 + 参数策略
 - direct bench 最小合同与结构化 JSON runner
 
@@ -61,10 +61,11 @@ Doc Type: current-contract
 当前 1 期已经接入：
 
 - `terminal_session` 的 ephemeral child-process 路径
+- `terminal_session` 的 persistent PTY 创建路径复用 workspace cwd 与 env 白名单入口
 
 当前 1 期没有接入：
 
-- `terminal_session` 的 persistent PTY 路径
+- `terminal_session` 的 persistent PTY 还没有完全并入 `SandboxExecutor` 的 process/result 模型
 - external MCP 的真实执行
 - `edit_file`
 
@@ -109,11 +110,12 @@ Doc Type: current-contract
 当前决议是：
 
 - ephemeral child-process 路径进入 `SandboxExecutor`
-- persistent PTY 路径 1 期继续保留现状
+- persistent PTY 的创建路径复用 `SandboxExecutor` 暴露的 cwd/env 归一化入口
+- persistent PTY 仍保留自己的交互式 session 与 output/result 语义
 
 原因：
 
-- 先收口最容易失控的非持久进程执行面
+- 先稳住最容易失控的非持久进程执行面
 - 避免在 1 期同时重写交互式 PTY 语义和沙箱边界
 
 ## 1期不是最终沙箱

@@ -32,6 +32,7 @@ const createDefaultShellProfile = () =>
 
 const isBlockedError = (message: string) =>
   message.includes("path must stay inside workspace root") ||
+  message.includes("cwd must be a relative workspace directory without parent traversal") ||
   message.includes("cwd must be an existing workspace directory") ||
   message.includes("blocked by sandbox policy");
 
@@ -100,8 +101,8 @@ export const runSandboxCommandDirect = async (
       stdoutText: execution.stdout,
       stderrText: execution.stderr,
       durationMs: Math.round(performance.now() - startedAt),
-      truncated: false,
-      violations: [],
+      truncated: execution.truncated,
+      violations: execution.violations,
       artifacts,
     };
   } catch (error) {

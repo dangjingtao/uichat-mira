@@ -1,4 +1,5 @@
 import type { McpToolDefinition } from "../../mcp/core/definitions.js";
+import { getSandboxProfileCoverage } from "../sandbox/index.js";
 import { listCapabilityDefinitions } from "../registry.js";
 import {
   shouldExposeWebSearchForQuery,
@@ -8,6 +9,7 @@ import {
 import {
   isLowIntentQuery,
   querySuggestsDirectoryListing,
+  querySuggestsTerminalCommand,
   querySuggestsWebSearch,
   querySuggestsWorkspaceRead,
 } from "./intent-hints.js";
@@ -34,8 +36,20 @@ export const resolveHarnessToolExposure = (
   const definitions = listCapabilityDefinitions();
   const blockedCapabilityIds: string[] = [];
   const reasons: string[] = [];
+  const sandboxCoverage = getSandboxProfileCoverage();
+  const policyInput: HarnessExposurePolicyInput = {
+    ...input,
+    sandboxProfiles:
+      input.sandboxProfiles ??
+      Object.fromEntries(
+        Object.entries(sandboxCoverage).map(([profile, status]) => [
+          profile,
+          status === "implemented",
+        ]),
+      ),
+  };
 
-  if (input.source === "agent_intent" && isLowIntentQuery(input.query ?? "")) {
+  if (policyInput.source === "agent_intent" && isLowIntentQuery(policyInput.query ?? "")) {
     return {
       exposedToolIds: [],
       exposedDefinitions: [],
@@ -48,23 +62,40 @@ export const resolveHarnessToolExposure = (
 
   const visibleDefinitions = definitions
     .filter((definition) => {
-      const allowed = shouldIncludeDefinition(definition, input);
+      const allowed = shouldIncludeDefinition(definition, policyInput);
       if (!allowed) {
         blockedCapabilityIds.push(definition.id);
       }
       return allowed;
     })
-    .map((definition) => applyExposureSchema(definition, input.source));
+    .map((definition) => applyExposureSchema(definition, policyInput.source));
 
-  if (input.source === "chat_surface") {
+  if (policyInput.source === "chat_surface") {
     reasons.push("Chat-visible tool surface is restricted to safe built-in domains.");
   }
-  if (shouldHideWebSearchForWorkspaceLocalAgentIntent(input)) {
+  if (shouldHideWebSearchForWorkspaceLocalAgentIntent(policyInput)) {
     reasons.push(
       "Workspace-local query hides web_search for agent_intent; local read evidence should be preferred.",
     );
   }
-  if (!input.allowExternal) {
+  if (
+    policyInput.source === "agent_intent" &&
+    !querySuggestsTerminalCommand(policyInput.query) &&
+    definitions.some((definition) => definition.domain === "terminal")
+  ) {
+    reasons.push("Terminal tools are hidden unless the turn clearly asks to run a command.");
+  }
+  if (
+    definitions.some(
+      (definition) =>
+        definition.capabilities.sandboxRequired &&
+        definition.capabilities.sandboxProfile &&
+        policyInput.sandboxProfiles?.[definition.capabilities.sandboxProfile] !== true,
+    )
+  ) {
+    reasons.push("Sandbox-required tools are hidden when their sandbox profile is unavailable.");
+  }
+  if (!policyInput.allowExternal) {
     reasons.push("External MCP capabilities are hidden unless explicitly enabled.");
   }
 
@@ -83,6 +114,7 @@ export const __exposureTestUtils = {
   querySuggestsWorkspaceRead,
   querySuggestsWebSearch,
   querySuggestsDirectoryListing,
+  querySuggestsTerminalCommand,
   shouldExposeWebSearchForQuery,
   shouldHideWebSearchForWorkspaceLocalAgentIntent,
 };

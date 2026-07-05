@@ -2,7 +2,7 @@ import os from "node:os";
 import path from "node:path";
 import pty from "node-pty";
 import { mcpBadRequest } from "./core/errors.js";
-import { resolveWorkspaceDirectoryPath } from "./workspace.js";
+import { resolveSandboxCwd, resolveSandboxEnv } from "@/sandbox/executor.js";
 import type { McpExecutionEnvironment } from "./core/definitions.js";
 
 export interface TerminalSessionRecord {
@@ -57,16 +57,13 @@ export const createTerminalSession = (input: {
   const shell =
     shellProfile?.shell ??
     (process.platform === "win32" ? "powershell.exe" : process.env.SHELL || "bash");
-  const cwd = resolveWorkspaceDirectoryPath(input.cwd ?? ".");
+  const cwd = resolveSandboxCwd(input.cwd);
   const sessionId = crypto.randomUUID();
   const encoding = shellProfile?.stdoutEncoding ?? "utf8";
   const child = pty.spawn(shell, [], {
     name: "xterm-color",
     cwd,
-    env: {
-      ...process.env,
-      ...(input.env ?? {}),
-    } as Record<string, string>,
+    env: resolveSandboxEnv(input.env),
     encoding,
   });
 

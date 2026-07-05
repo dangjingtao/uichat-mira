@@ -1,6 +1,7 @@
 import type { McpToolDefinition } from "../../mcp/core/definitions.js";
 import {
   SAFE_CHAT_DOMAINS,
+  querySuggestsTerminalCommand,
   querySuggestsWebSearch,
   querySuggestsWorkspaceRead,
 } from "./intent-hints.js";
@@ -44,6 +45,41 @@ export const isInternalIntentOnlyTool = (definition: McpToolDefinition) =>
 export const isSafeChatSurfaceTool = (definition: McpToolDefinition) =>
   SAFE_CHAT_DOMAINS.has(definition.domain);
 
+export const isSandboxAvailableForDefinition = (
+  definition: McpToolDefinition,
+  input: HarnessExposurePolicyInput,
+) => {
+  if (!definition.capabilities.sandboxRequired) {
+    return true;
+  }
+
+  const profile = definition.capabilities.sandboxProfile;
+  if (!profile) {
+    return false;
+  }
+
+  return input.sandboxProfiles?.[profile] === true;
+};
+
+export const shouldExposeTerminalForAgentIntent = (
+  definition: McpToolDefinition,
+  input: HarnessExposurePolicyInput,
+) => {
+  if (input.source !== "agent_intent" || definition.domain !== "terminal") {
+    return true;
+  }
+
+  if (!querySuggestsTerminalCommand(input.query)) {
+    return false;
+  }
+
+  if (definition.capabilities.requiresApproval !== true) {
+    return false;
+  }
+
+  return isSandboxAvailableForDefinition(definition, input);
+};
+
 export const shouldIncludeDefinition = (
   definition: McpToolDefinition,
   input: HarnessExposurePolicyInput,
@@ -57,6 +93,17 @@ export const shouldIncludeDefinition = (
   }
 
   if (input.source === "chat_surface" && !isSafeChatSurfaceTool(definition)) {
+    return false;
+  }
+
+  if (
+    (input.source === "agent_intent" || input.source === "chat_surface") &&
+    !isSandboxAvailableForDefinition(definition, input)
+  ) {
+    return false;
+  }
+
+  if (!shouldExposeTerminalForAgentIntent(definition, input)) {
     return false;
   }
 

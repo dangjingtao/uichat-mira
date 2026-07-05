@@ -25,6 +25,7 @@ related:
   - docs/project-control/tasks/agent_node_T014-approval-resume-contract.md
   - docs/project-control/tasks/agent_node_T015-phoenix-minimum-human-observability.md
   - docs/project-control/tasks/agent_node_T016-local-tool-routing-and-schema-guard.md
+  - docs/project-control/tasks/agent_node_T017-toolcall-loop-regression-matrix.md
   - docs/chat/agent-runtime-design.md
   - docs/harness/agentgraph-harness-protocol.md
 ---
@@ -65,6 +66,7 @@ Agent node 专属总台账。
 | `agent_node_T014` | Approval Resume Contract | `T014` 原始 resume 对象对齐仍成立；`T014R` 补完了 approve / reject 之后的 state finalization。项目 owner 已完成真实前台 smoke：`terminal_session` 会正常停在等待审批，approve 后 UI 不再停留在等待审批并继续执行，reject 后明确显示已拒绝且按钮消失，刷新线程后审批状态不复活；因此当前状态更新为 `DONE` | `DONE` | [agent_node_T014-approval-resume-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T014-approval-resume-contract.md) |
 | `agent_node_T015` | Phoenix Minimum Human Observability (`T_phonex`) | `T015 / T_phonex` 是 `Agent V1.5` 的开发态最小人眼可观测性任务。当前实现只在 `graph.ts` 组装层统一包装节点和 run 根 span：默认关闭，`AGENT_TRACE_PHOENIX=true` 时导出到 Phoenix，`AGENT_TRACE_VERBOSE=true` 时追加脱敏后的 state 摘要。实现没有改各 node 业务逻辑，没有改 AgentGraph 路由，也没有把 tracing 扩大成自研 observability 平台 | `DONE` | [agent_node_T015-phoenix-minimum-human-observability.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T015-phoenix-minimum-human-observability.md) |
 | `agent_node_T016` | Local Tool Routing and Schema Guard Under Weak Task Model | `T016` 是 `Agent V1.5 P0` 修复任务，只补 workspace local intent、防 schema invalid 直接打死前台、以及 generate 空回答 fallback 的最小防线。`2026-07-05` 最新真实前台 smoke 已补齐：`P0-8` 会稳定进入本地 `read_locate`，不再误走 `web_search`；`P0-9` 新线程在绑定 `ragDemo / D:\workspace\rag-demo` 并开启 Agent 后，已稳定进入 `read_open("README.md")`，没有 Normalize schema error、没有 approval wait，最终回答已按 README 原文列出 `React + Vite renderer`、`Electron / Tauri shell`、`Fastify backend` 与 `runtime.config.cjs`。当前剩余只记录非阻断说明，例如“第二次完全相同检索”没有单独形成第二条 completed evidence，以及打包过程中暴露的仓库现存非 `T016` 测试失败 | `READY_FOR_REVIEW` | [agent_node_T016-local-tool-routing-and-schema-guard.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T016-local-tool-routing-and-schema-guard.md) |
+| `agent_node_T017` | ToolCall Loop Regression Matrix | `T017` 只新增后端黑盒回归矩阵，覆盖 `nextAction.use_tool -> toolCallNormalize -> policy -> tool -> evidence -> planner / generate` 主链。已验证 valid use_tool freeze、policy allow、tool evidence、answer-ready generate、schema invalid bounded replan、policy deny、policy / Harness approval、repeated guard、maxIterations、failed tool；没有改 Harness exposure、sandbox、UI 或 Agent V2 | `DONE` | [agent_node_T017-toolcall-loop-regression-matrix.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T017-toolcall-loop-regression-matrix.md) |
 
 ## Current Ground Truth
 

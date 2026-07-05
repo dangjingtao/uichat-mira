@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import path from "node:path";
 import type { McpExecutionEnvironment } from "@/mcp/core/definitions.js";
 import { mcpBadRequest, mcpInternalError } from "@/mcp/core/errors.js";
 import { decodeTerminalOutput } from "@/mcp/terminal/encoding.js";
@@ -31,9 +32,13 @@ export interface SandboxExecutionResult {
   stdout: string;
   stderr: string;
   output: string;
+  truncated: boolean;
+  violations: string[];
 }
 
 const DEFAULT_OUTPUT_LIMIT_BYTES = 1024 * 1024;
+const MAX_TIMEOUT_MS = 60_000;
+const MAX_OUTPUT_LIMIT_BYTES = 1024 * 1024;
 
 const SAFE_ENV_ALLOWLIST = [
   "PATH",
@@ -64,19 +69,82 @@ const buildShellArgs = (profile: SandboxShellProfile, command: string) => {
   return ["-lc", command];
 };
 
-const resolveSandboxCwd = (cwd?: string) => resolveWorkspaceDirectoryPath(cwd ?? ".");
+const hasParentSegment = (inputPath: string) =>
+  inputPath
+    .split(/[\\/]+/)
+    .map((segment) => segment.trim())
+    .some((segment) => segment === "..");
 
-const resolveSandboxEnv = (overrides?: Record<string, string>) => {
+const isAbsoluteInputPath = (inputPath: string) =>
+  path.isAbsolute(inputPath) || path.win32.isAbsolute(inputPath) || path.posix.isAbsolute(inputPath);
+
+export const resolveSandboxCwd = (cwd?: string) => {
+  const normalizedCwd = cwd?.trim() || ".";
+  if (normalizedCwd !== "." && (hasParentSegment(normalizedCwd) || isAbsoluteInputPath(normalizedCwd))) {
+    throw mcpBadRequest("cwd must be a relative workspace directory without parent traversal");
+  }
+
+  return resolveWorkspaceDirectoryPath(normalizedCwd);
+};
+
+const findAllowedEnvKey = (inputKey: string) =>
+  SAFE_ENV_ALLOWLIST.find((allowedKey) =>
+    process.platform === "win32"
+      ? allowedKey.toLowerCase() === inputKey.toLowerCase()
+      : allowedKey === inputKey,
+  );
+
+const findProcessEnvValue = (inputKey: string) => {
+  if (typeof process.env[inputKey] === "string") {
+    return process.env[inputKey];
+  }
+
+  if (process.platform !== "win32") {
+    return undefined;
+  }
+
+  const actualKey = Object.keys(process.env).find(
+    (key) => key.toLowerCase() === inputKey.toLowerCase(),
+  );
+  return actualKey ? process.env[actualKey] : undefined;
+};
+
+export const resolveSandboxEnv = (overrides?: Record<string, string>) => {
   const base = Object.fromEntries(
-    SAFE_ENV_ALLOWLIST.flatMap((key) =>
-      typeof process.env[key] === "string" ? [[key, process.env[key] as string]] : [],
-    ),
+    SAFE_ENV_ALLOWLIST.flatMap((key) => {
+      const value = findProcessEnvValue(key);
+      return typeof value === "string" ? [[key, value]] : [];
+    }),
+  );
+
+  const allowedOverrides = Object.fromEntries(
+    Object.entries(overrides ?? {}).flatMap(([key, value]) => {
+      const allowedKey = findAllowedEnvKey(key);
+      return allowedKey && typeof value === "string" ? [[allowedKey, value]] : [];
+    }),
   );
 
   return {
     ...base,
-    ...(overrides ?? {}),
+    ...allowedOverrides,
   };
+};
+
+const normalizeTimeoutMs = (timeoutMs: number) => {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw mcpBadRequest("timeoutMs must be a positive finite number");
+  }
+
+  return Math.min(Math.trunc(timeoutMs), MAX_TIMEOUT_MS);
+};
+
+const normalizeOutputLimitBytes = (outputLimitBytes?: number) => {
+  const normalized = outputLimitBytes ?? DEFAULT_OUTPUT_LIMIT_BYTES;
+  if (!Number.isFinite(normalized) || normalized <= 0) {
+    throw mcpBadRequest("outputLimitBytes must be a positive finite number");
+  }
+
+  return Math.min(Math.trunc(normalized), MAX_OUTPUT_LIMIT_BYTES);
 };
 
 const killProcessTree = async (pid: number | undefined) => {
@@ -121,7 +189,8 @@ export const executeSandboxedCommand = async (
   assertSandboxCommandPolicy(input.command);
   const cwd = resolveSandboxCwd(input.cwd);
   const env = resolveSandboxEnv(input.env);
-  const outputLimitBytes = input.outputLimitBytes ?? DEFAULT_OUTPUT_LIMIT_BYTES;
+  const timeoutMs = normalizeTimeoutMs(input.timeoutMs);
+  const outputLimitBytes = normalizeOutputLimitBytes(input.outputLimitBytes);
 
   const child = spawn(
     input.shellProfile.shell,
@@ -140,6 +209,8 @@ export const executeSandboxedCommand = async (
   let stderrBytes = 0;
   let exitCode: number | null = null;
   let timedOut = false;
+  let truncated = false;
+  const violations: string[] = [];
   let settled = false;
   let failExecution: ((error: Error) => void) | null = null;
 
@@ -152,6 +223,8 @@ export const executeSandboxedCommand = async (
     }
 
     if (stdoutBytes + stderrBytes > outputLimitBytes) {
+      truncated = true;
+      violations.push(`terminal output exceeded limit of ${outputLimitBytes} bytes`);
       failExecution?.(
         mcpBadRequest(`terminal output exceeded limit of ${outputLimitBytes} bytes`),
       );
@@ -183,10 +256,16 @@ export const executeSandboxedCommand = async (
 
     const timer = setTimeout(() => {
       timedOut = true;
+      violations.push(`terminal execution timed out after ${timeoutMs}ms`);
+      if (process.platform === "win32") {
+        violations.push(
+          "windows_kill_tree_best_effort: taskkill /t /f is used after timeout, but descendant cleanup cannot be guaranteed",
+        );
+      }
       bestEffortKillChild(child);
       void killProcessTree(child.pid);
       finishResolve();
-    }, input.timeoutMs);
+    }, timeoutMs);
 
     child.stdout?.on("data", (chunk: Buffer | string) => {
       try {
@@ -262,6 +341,8 @@ export const executeSandboxedCommand = async (
     stdout,
     stderr,
     output: toCombinedOutput(stdout, stderr),
+    truncated,
+    violations,
   };
 };
 

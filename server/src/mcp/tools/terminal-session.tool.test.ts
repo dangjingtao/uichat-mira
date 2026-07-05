@@ -232,7 +232,7 @@ describe("terminal_session tool", () => {
           return { id: "a", ...artifact };
         },
       }),
-    ).rejects.toThrow("path must stay inside workspace root");
+    ).rejects.toThrow("cwd must be a relative workspace directory without parent traversal");
   });
 
   it("supports attaching to an existing persistent terminal session", async () => {
@@ -534,7 +534,7 @@ describe("terminal_session tool", () => {
     ).rejects.toThrow("command is required");
   });
 
-  it("filters non-string env entries", async () => {
+  it("filters env entries to string allowlist values", async () => {
     const child = createMockSpawnProcess();
     terminalMocks.spawnMock.mockReturnValue(child);
 
@@ -544,6 +544,7 @@ describe("terminal_session tool", () => {
       args: {
         command: "echo hi",
         env: {
+          PATH: "sandbox-path",
           OK: "1",
           BAD: 2,
           NOPE: false,
@@ -563,9 +564,15 @@ describe("terminal_session tool", () => {
       expect.any(String),
       expect.any(Array),
       expect.objectContaining({
-        env: expect.objectContaining({ OK: "1" }),
+        env: expect.objectContaining({ PATH: "sandbox-path" }),
       }),
     );
+    const spawnOptions = terminalMocks.spawnMock.mock.calls[0]?.[2] as {
+      env?: Record<string, string>;
+    };
+    expect(spawnOptions.env).not.toHaveProperty("OK");
+    expect(spawnOptions.env).not.toHaveProperty("BAD");
+    expect(spawnOptions.env).not.toHaveProperty("NOPE");
   });
 
   it("uses harness shell profile for Windows ephemeral pwd commands", async () => {

@@ -26,7 +26,31 @@ describe("resolveHarnessToolExposure", () => {
     expect(properties.sessionMode).toBeDefined();
   });
 
-  it("hides terminal session-management fields from agent_intent exposure", () => {
+  it("does not expose terminal_session to agent_intent for file-read requests", () => {
+    registerCapability(terminalSessionTool);
+    registerCapability(readOpenTool);
+
+    const decision = resolveHarnessToolExposure({
+      source: "agent_intent",
+      query: "README.md 的 Runtime 一节具体列了哪些运行组件？请基于文件内容回答。",
+    });
+
+    expect(decision.exposedToolIds).toContain("read_open");
+    expect(decision.exposedToolIds).not.toContain("terminal_session");
+  });
+
+  it("does not expose terminal_session to agent_intent for small talk", () => {
+    registerCapability(terminalSessionTool);
+
+    const decision = resolveHarnessToolExposure({
+      source: "agent_intent",
+      query: "你好",
+    });
+
+    expect(decision.exposedToolIds).not.toContain("terminal_session");
+  });
+
+  it("exposes terminal_session with approval metadata for explicit command requests", () => {
     registerCapability(terminalSessionTool);
 
     const [definition] = resolveHarnessToolExposure({
@@ -43,6 +67,37 @@ describe("resolveHarnessToolExposure", () => {
     expect(properties.attachSessionId).toBeUndefined();
     expect(properties.sessionMode).toBeUndefined();
     expect(definition?.inputSchema.additionalProperties).toBe(false);
+    expect(definition?.capabilities.requiresApproval).toBe(true);
+    expect(definition?.capabilities.sandboxRequired).toBe(true);
+    expect(definition?.capabilities.sandboxProfile).toBe("command");
+  });
+
+  it("does not expose terminal_session to agent_intent when command sandbox is unavailable", () => {
+    registerCapability(terminalSessionTool);
+
+    const decision = resolveHarnessToolExposure({
+      source: "agent_intent",
+      query: "run pnpm check",
+      sandboxProfiles: {
+        command: false,
+      },
+    });
+
+    expect(decision.exposedToolIds).not.toContain("terminal_session");
+    expect(decision.reasons).toContain(
+      "Sandbox-required tools are hidden when their sandbox profile is unavailable.",
+    );
+  });
+
+  it("does not expose terminal_session to chat_surface", () => {
+    registerCapability(terminalSessionTool);
+
+    const decision = resolveHarnessToolExposure({
+      source: "chat_surface",
+      query: "run pnpm check",
+    });
+
+    expect(decision.exposedToolIds).not.toContain("terminal_session");
   });
 
   it("hides read fallback aliases from agent_intent exposure while keeping tools_list intact", () => {

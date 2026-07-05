@@ -1,0 +1,555 @@
+import assert from "node:assert/strict";
+import { afterEach, beforeEach, test, vi } from "vitest";
+import * as harnessInvocations from "@/harness/invocations";
+import * as registry from "@/harness/registry";
+import { contextBudgetService } from "@/services/context-budget/index";
+import { providerProxyService } from "@/services/provider-proxy.service/index";
+import * as intentMatcherModule from "../intent/embedding-capability-matcher";
+import * as taskSelectorModule from "../intent/task-capability-selector";
+import * as policyModule from "../policy";
+import * as runnablesModule from "../runnables";
+import { agentGraph } from "../graph";
+import type { AgentGraphOutput } from "../types";
+
+const baseGoal = {
+  id: "goal-1",
+  text: "answer the user",
+  successCriteria: ["return an answer"],
+  constraints: ["stay safe"],
+  riskLevel: "low" as const,
+};
+
+const basePlan = {
+  id: "plan-1",
+  goalId: "goal-1",
+  version: 1,
+  steps: [],
+};
+
+const makeMessage = (content: string) => ({
+  role: "user" as const,
+  content,
+  parts: [{ type: "text" as const, text: content }],
+});
+
+const makeToolDefinition = (input: {
+  id: string;
+  domain: string;
+  inputSchema: Record<string, unknown>;
+  sideEffect?: "none" | "network" | "process" | "local-write";
+  requiresApproval?: boolean;
+  workspaceBound?: boolean;
+}) => ({
+  id: input.id,
+  title: input.id,
+  description: input.id,
+  domain: input.domain,
+  source: "internal" as const,
+  mode: "sync" as const,
+  inputSchema: input.inputSchema,
+  tags: [input.domain],
+  capabilities: {
+    sideEffect: input.sideEffect ?? "none",
+    requiresApproval: input.requiresApproval ?? false,
+    workspaceBound: input.workspaceBound ?? false,
+  },
+});
+
+const readOpenTool = () =>
+  makeToolDefinition({
+    id: "read_open",
+    domain: "read",
+    inputSchema: {
+      type: "object",
+      required: ["path"],
+      properties: {
+        path: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    workspaceBound: true,
+  });
+
+const terminalTool = () =>
+  makeToolDefinition({
+    id: "terminal_session",
+    domain: "terminal",
+    inputSchema: {
+      type: "object",
+      required: ["command"],
+      properties: {
+        command: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    sideEffect: "process",
+    requiresApproval: true,
+  });
+
+const makeToolIntentResult = (
+  query: string,
+  definitions: Array<ReturnType<typeof makeToolDefinition>>,
+) => ({
+  query,
+  topCandidates: definitions.map((definition) => ({
+    toolId: definition.id,
+    title: definition.title,
+    description: definition.description,
+    domain: definition.domain,
+    source: definition.source,
+    tags: definition.tags,
+    score: 0.9,
+    embeddingScore: 0.9,
+    ruleScore: 0,
+    rerankScore: 0.9,
+    finalScore: 0.9,
+  })),
+  toolCandidates: definitions.map((definition) => ({
+    toolId: definition.id,
+    title: definition.title,
+    description: definition.description,
+    domain: definition.domain,
+    source: definition.source,
+    tags: definition.tags,
+    score: 0.9,
+    embeddingScore: 0.9,
+    ruleScore: 0,
+    rerankScore: 0.9,
+    finalScore: 0.9,
+  })),
+  toolExposure: {
+    exposedToolIds: definitions.map((definition) => definition.id),
+    exposedDefinitions: definitions,
+    reason: [],
+    blockedCapabilityIds: [],
+  },
+  selectedToolIds: definitions.slice(0, 1).map((definition) => definition.id),
+  candidateToolIds: definitions.map((definition) => definition.id),
+  decisionSource: "task-model" as const,
+  decisionReason: "test",
+});
+
+const setupToolExposure = (
+  query: string,
+  definitions: Array<ReturnType<typeof makeToolDefinition>>,
+) => {
+  vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue(definitions);
+  vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
+    makeToolIntentResult(query, definitions),
+  );
+  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
+    selectedToolIds: definitions.slice(0, 1).map((definition) => definition.id),
+    decisionSource: "task-model",
+    decisionReason: "test",
+  });
+};
+
+const setupGenerate = (answer = "final answer") =>
+  vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke").mockResolvedValue(answer);
+
+const completedReadOpenInvocation = (text = "# README\n\nUIChat Mira runtime docs.") =>
+  ({
+    id: "invocation-read-open-1",
+    toolId: "read_open",
+    status: "completed" as const,
+    result: {
+      type: "open",
+      path: "README.md",
+      source: {
+        kind: "text",
+        mimeType: "text/markdown",
+          text,
+        metadata: {},
+      },
+    },
+    startedAt: "2026-07-05T00:00:00.000Z",
+    finishedAt: "2026-07-05T00:00:01.000Z",
+  }) as const;
+
+const runToolLoop = (input: {
+  runId: string;
+  question: string;
+  maxIterations?: number;
+  onExecutionNode?: Parameters<typeof agentGraph.run>[0]["onExecutionNode"];
+}) =>
+  agentGraph.run({
+    runId: input.runId,
+    threadId: "thread-1",
+    userId: 1,
+    goal: {
+      ...baseGoal,
+      text: input.question,
+    },
+    plan: basePlan,
+    messages: [makeMessage(input.question)],
+    workspaceRoot: "D:\\workspace\\rag-demo",
+    maxIterations: input.maxIterations,
+    onExecutionNode: input.onExecutionNode,
+  });
+
+const assertMatrixFields = (
+  result: AgentGraphOutput,
+  expected: {
+    status: AgentGraphOutput["status"];
+    pendingToolCall: "present" | "absent";
+    pendingApproval: "present" | "absent";
+    lastToolExecution: "present" | "absent";
+    latestSummary: "present" | "absent";
+    terminalField: "answer" | "blockedReason" | "errorMessage" | "none";
+  },
+) => {
+  assert.equal(result.status, expected.status);
+  assert.equal(Boolean(result.pendingToolCall), expected.pendingToolCall === "present");
+  assert.equal(Boolean(result.pendingApproval), expected.pendingApproval === "present");
+  assert.equal(Boolean(result.lastToolExecution), expected.lastToolExecution === "present");
+  assert.equal(Boolean(result.evidence.latestSummary), expected.latestSummary === "present");
+  if (expected.terminalField === "answer") {
+    assert.notEqual(result.answer.trim(), "");
+  } else if (expected.terminalField === "blockedReason") {
+    assert.notEqual((result.blockedReason ?? "").trim(), "");
+  } else if (expected.terminalField === "errorMessage") {
+    assert.notEqual((result.errorMessage ?? "").trim(), "");
+  } else {
+    assert.equal(result.answer, "");
+  }
+};
+
+beforeEach(() => {
+  vi.spyOn(contextBudgetService, "pack").mockImplementation((input) => ({
+    messages: [
+      ...(input.sections.prefaceMessages ?? []),
+      ...(input.sections.instructionMessages ?? []),
+      ...((input.sections.payloads ?? []).flatMap((payload) => payload.messages)),
+      ...(input.sections.historyMessages ?? []),
+      input.sections.latestUserMessage,
+    ],
+    payloads: [],
+    audit: {
+      policy: input.policy,
+      model: "test-model",
+      providerCode: "test-provider",
+      modelContextTokens: 8192,
+      reservedOutputTokens: 1024,
+      maxInputTokens: 7168,
+      totalEstimatedTokensBefore: 0,
+      totalEstimatedTokensAfter: 0,
+      sections: [],
+      warnings: [],
+    },
+  }));
+  vi.spyOn(providerProxyService, "describeChatInvocation").mockImplementation(
+    (_requestedProvider, messages) => ({
+      operation: "chat",
+      providerCode: "test-provider",
+      requestedProvider: "default",
+      resolvedProvider: "default",
+      model: "test-model",
+      modelConfigId: "test-model-config",
+      messageCount: messages.length,
+      messagesPreview: [],
+    }),
+  );
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+test("toolCall loop freezes valid use_tool, allows policy, executes ToolNode, writes evidence, and generates from answer-ready summary", async () => {
+  const readOpen = readOpenTool();
+  setupToolExposure("open README.md", [readOpen]);
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need file content."}';
+    });
+  const executeSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue(completedReadOpenInvocation());
+  const generateSpy = setupGenerate("README content answer");
+  const normalizeEvents: Array<Record<string, unknown>> = [];
+
+  const result = await runToolLoop({
+    runId: "run-regression-valid-tool-loop",
+    question: "open README.md",
+    onExecutionNode: async (event) => {
+      if (event.nodeId === "agent-tool-call-normalize" && event.phase === "done") {
+        normalizeEvents.push(event.details as Record<string, unknown>);
+      }
+    },
+  });
+
+  assertMatrixFields(result, {
+    status: "completed",
+    pendingToolCall: "absent",
+    pendingApproval: "absent",
+    lastToolExecution: "present",
+    latestSummary: "present",
+    terminalField: "answer",
+  });
+  assert.equal(plannerSpy.mock.calls.length, 1);
+  assert.equal(executeSpy.mock.calls.length, 1);
+  assert.equal(generateSpy.mock.calls.length, 1);
+  assert.equal(normalizeEvents[0]?.status, "frozen");
+  assert.equal(result.lastToolExecution?.toolId, "read_open");
+  assert.equal(result.evidence.toolExecutions.length, 1);
+  assert.equal(result.evidence.toolExecutions[0]?.toolCallId, result.lastToolExecution?.toolCallId);
+  assert.equal(result.evidence.latestSummary?.toolId, "read_open");
+  assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, true);
+});
+
+test("toolCall loop schema-invalid args do not execute the tool and replan at most once before generate", async () => {
+  const readOpen = readOpenTool();
+  setupToolExposure("open README.md", [readOpen]);
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"missing":"README.md"},"reason":"Need file content."}';
+    })
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"missing":"README.md"},"reason":"Still invalid."}';
+    });
+  const executeSpy = vi.spyOn(harnessInvocations, "executeHarnessInvocation");
+  const generateSpy = setupGenerate("should not be used");
+
+  const result = await runToolLoop({
+    runId: "run-regression-invalid-args",
+    question: "open README.md",
+  });
+
+  assertMatrixFields(result, {
+    status: "completed",
+    pendingToolCall: "absent",
+    pendingApproval: "absent",
+    lastToolExecution: "absent",
+    latestSummary: "present",
+    terminalField: "answer",
+  });
+  assert.equal(plannerSpy.mock.calls.length, 2);
+  assert.equal(executeSpy.mock.calls.length, 0);
+  assert.equal(generateSpy.mock.calls.length, 0);
+  assert.match(result.answer, /没有执行任何工具/);
+  assert.equal(result.evidence.toolExecutions.length, 0);
+});
+
+test("toolCall loop policy deny does not execute the tool", async () => {
+  const readOpen = readOpenTool();
+  setupToolExposure("open README.md", [readOpen]);
+  vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
+    async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need file content."}';
+    },
+  );
+  vi.spyOn(policyModule, "evaluateAgentToolPolicy").mockReturnValue({
+    type: "deny",
+    reason: "read_open is denied in this regression case.",
+  });
+  const executeSpy = vi.spyOn(harnessInvocations, "executeHarnessInvocation");
+  const generateSpy = vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke");
+
+  const result = await runToolLoop({
+    runId: "run-regression-policy-deny",
+    question: "open README.md",
+  });
+
+  assertMatrixFields(result, {
+    status: "failed",
+    pendingToolCall: "absent",
+    pendingApproval: "absent",
+    lastToolExecution: "absent",
+    latestSummary: "absent",
+    terminalField: "errorMessage",
+  });
+  assert.equal(result.policyDecision?.type, "deny");
+  assert.equal(executeSpy.mock.calls.length, 0);
+  assert.equal(generateSpy.mock.calls.length, 0);
+});
+
+test("toolCall loop policy approval stops at waiting_approval without ToolNode execution", async () => {
+  const terminalSession = terminalTool();
+  setupToolExposure("run dir", [terminalSession]);
+  vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
+    async function* () {
+      yield '{"type":"use_tool","toolId":"terminal_session","args":{"command":"dir"},"reason":"Need command output."}';
+    },
+  );
+  const executeSpy = vi.spyOn(harnessInvocations, "executeHarnessInvocation");
+  const generateSpy = vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke");
+
+  const result = await runToolLoop({
+    runId: "run-regression-policy-approval",
+    question: "run dir",
+  });
+
+  assertMatrixFields(result, {
+    status: "waiting_approval",
+    pendingToolCall: "present",
+    pendingApproval: "present",
+    lastToolExecution: "absent",
+    latestSummary: "absent",
+    terminalField: "none",
+  });
+  assert.equal(result.policyDecision?.type, "require_approval");
+  assert.equal(result.pendingApproval?.toolCallId, "id" in result.pendingToolCall! ? result.pendingToolCall.id : undefined);
+  assert.equal(executeSpy.mock.calls.length, 0);
+  assert.equal(generateSpy.mock.calls.length, 0);
+});
+
+test("toolCall loop Harness awaiting approval keeps pendingApproval and frozen pendingToolCall", async () => {
+  const readOpen = readOpenTool();
+  setupToolExposure("open README.md", [readOpen]);
+  vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
+    async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need file content."}';
+    },
+  );
+  const executeSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-read-open-awaiting-approval",
+      toolId: "read_open",
+      status: "awaiting_approval",
+      approval: {
+        reason: "read_open requires Harness approval.",
+      },
+      startedAt: "2026-07-05T00:00:00.000Z",
+    } as never);
+
+  const result = await runToolLoop({
+    runId: "run-regression-harness-approval",
+    question: "open README.md",
+  });
+
+  assertMatrixFields(result, {
+    status: "waiting_approval",
+    pendingToolCall: "present",
+    pendingApproval: "present",
+    lastToolExecution: "present",
+    latestSummary: "present",
+    terminalField: "none",
+  });
+  assert.equal(executeSpy.mock.calls.length, 1);
+  assert.equal(result.lastToolExecution?.status, "awaiting_approval");
+  assert.equal(result.evidence.latestSummary?.status, "awaiting_approval");
+  assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, false);
+});
+
+test("toolCall loop repeated same tool args triggers the repeated guard and skips the duplicate execution", async () => {
+  const readOpen = readOpenTool();
+  setupToolExposure("open README.md", [readOpen]);
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need file content."}';
+    })
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Try the same file again."}';
+    });
+  const executeSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue(completedReadOpenInvocation(""));
+  const generateSpy = setupGenerate("README content answer");
+  const plannerEvents: Array<Record<string, unknown>> = [];
+
+  const result = await runToolLoop({
+    runId: "run-regression-repeated-guard",
+    question: "open README.md",
+    onExecutionNode: async (event) => {
+      if (event.nodeId === "agent-next-action-planner" && event.phase === "done") {
+        plannerEvents.push(event.details as Record<string, unknown>);
+      }
+    },
+  });
+
+  assertMatrixFields(result, {
+    status: "completed",
+    pendingToolCall: "absent",
+    pendingApproval: "absent",
+    lastToolExecution: "present",
+    latestSummary: "present",
+    terminalField: "answer",
+  });
+  assert.equal(plannerSpy.mock.calls.length, 2);
+  assert.equal(executeSpy.mock.calls.length, 1);
+  assert.equal(generateSpy.mock.calls.length, 1);
+  assert.equal(result.evidence.toolExecutions.length, 1);
+  assert.equal(
+    plannerEvents.some((event) => event.repeatedToolGuardTriggered === true),
+    true,
+  );
+});
+
+test("toolCall loop maxIterations routes to generate instead of a second tool execution", async () => {
+  const readOpen = readOpenTool();
+  setupToolExposure("open README.md", [readOpen]);
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need file content."}';
+    });
+  const executeSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue(completedReadOpenInvocation());
+  const generateSpy = setupGenerate("README content answer");
+
+  const result = await runToolLoop({
+    runId: "run-regression-max-iterations",
+    question: "open README.md",
+    maxIterations: 1,
+  });
+
+  assertMatrixFields(result, {
+    status: "completed",
+    pendingToolCall: "absent",
+    pendingApproval: "absent",
+    lastToolExecution: "present",
+    latestSummary: "present",
+    terminalField: "answer",
+  });
+  assert.equal(plannerSpy.mock.calls.length, 1);
+  assert.equal(executeSpy.mock.calls.length, 1);
+  assert.equal(generateSpy.mock.calls.length, 1);
+});
+
+test("toolCall loop failed tool writes failed evidence and never reports fake success", async () => {
+  const readOpen = readOpenTool();
+  setupToolExposure("open README.md", [readOpen]);
+  vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
+    async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need file content."}';
+    },
+  );
+  const executeSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-read-open-failed",
+      toolId: "read_open",
+      status: "failed",
+      error: {
+        message: "File not found",
+      },
+      startedAt: "2026-07-05T00:00:00.000Z",
+      finishedAt: "2026-07-05T00:00:01.000Z",
+    } as never);
+  const generateSpy = vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke");
+
+  const result = await runToolLoop({
+    runId: "run-regression-failed-tool",
+    question: "open README.md",
+  });
+
+  assertMatrixFields(result, {
+    status: "failed",
+    pendingToolCall: "absent",
+    pendingApproval: "absent",
+    lastToolExecution: "present",
+    latestSummary: "present",
+    terminalField: "errorMessage",
+  });
+  assert.equal(executeSpy.mock.calls.length, 1);
+  assert.equal(generateSpy.mock.calls.length, 0);
+  assert.equal(result.lastToolExecution?.status, "failed");
+  assert.equal(result.evidence.latestSummary?.status, "failed");
+  assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, false);
+  assert.match(result.errorMessage ?? "", /File not found/);
+});

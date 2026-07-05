@@ -652,6 +652,54 @@ edit_replace_block
     - `pnpm --filter @ui-chat-mira/server typecheck`
       - 结果：通过
 
+- [x] `terminal_session` 增加 Tool Exposure 风险门禁
+  - 任务卡：
+    - `C:/Users/Administrator/Downloads/mira-v16-classified-taskcards/01-tool-exposure/task/02-risk-gate-terminal-exposure.md`
+  - 结果标准：
+    - 文件读取问题不暴露 `terminal_session`
+    - 闲聊不暴露 `terminal_session`
+    - 明确命令请求可暴露 `terminal_session`，且必须保留 `requiresApproval = true`
+    - `sandboxProfile: command` 不可用时，`terminal_session` 不进入 `agent_intent`
+    - `chat_surface` 不暴露 Terminal
+    - `tools_list` 可保留完整 runtime schema，不等于模型意图暴露
+  - 当前实现：
+    - `McpCapabilityMetadata` 增加 `sandboxRequired` / `sandboxProfile`
+    - `terminal_session` 标记为 `sandboxRequired: true`、`sandboxProfile: command`
+    - Harness Tool Exposure 对 `terminal_session` 增加明确命令意图检查、approval 元数据检查、sandbox profile 可用性检查
+    - `tools_list` 继续返回 `env` / `attachSessionId` / `sessionMode` 等完整 runtime schema
+  - 验证结果：
+    - `pnpm --filter @ui-chat-mira/server test -- src/harness/exposure.test.ts`
+      - 结果：通过，`13 passed`
+    - `pnpm --filter @ui-chat-mira/server test -- src/harness/tool-candidates.test.ts src/harness/capability-profiles.test.ts src/harness/capability-diagnostics.test.ts`
+      - 结果：通过，`9 passed`
+    - `pnpm --filter @ui-chat-mira/server typecheck`
+      - 结果：通过
+
+- [x] `terminal_session` / SandboxExecutor 达到 L1 Workspace Sandbox Runner 最小能力
+  - 任务卡：
+    - `docs/project-control/tasks/T-012-l1-workspace-sandbox-runner.md`
+    - `C:/Users/Administrator/Downloads/mira-v16-classified-taskcards/03-sandbox-runtime/task/02-l1-workspace-runner.md`
+  - 结果标准：
+    - cwd 锁定 workspace，拒绝 `..`、绝对路径和 symlink escape
+    - 空 cwd 默认 workspaceRoot
+    - env 默认白名单，不透传完整 `process.env`
+    - timeout 与 output limit 有执行层硬上限
+    - result 包含 status、exitCode、stdoutText、stderrText、durationMs、truncated、violations
+    - Windows kill tree 明确标记 best-effort limitation
+  - 当前实现：
+    - `server/src/sandbox/executor.ts` 补齐 cwd/env/timeout/output/result violations
+    - `server/src/mcp/terminal-sessions.ts` 的 persistent PTY 创建路径复用 sandbox cwd/env 入口
+    - `server/src/harness/sandbox/index.ts` 将 executor 的 `truncated` / `violations` 回传到 direct result contract
+  - 验证结果：
+    - `pnpm --filter @ui-chat-mira/server test -- src/mcp/tools/terminal-session.tool.test.ts src/harness/sandbox.test.ts src/harness/sandbox/index.test.ts src/sandbox/executor.test.ts`
+      - 结果：通过，`48 passed`
+    - `pnpm --filter @ui-chat-mira/server bench:sandbox:direct D:\workspace\rag-demo`
+      - 结果：通过，JSON summary 为 `total=7`、`passed=6`、`failed=0`、`notImplemented=1`
+    - `pnpm --filter @ui-chat-mira/server exec tsc --noEmit -p tsconfig.json`
+      - 结果：通过
+    - `pnpm check`
+      - 结果：通过
+
 ### Edit
 
 - [x] 增加 `edit_create_file` / `edit_overwrite_file` / `edit_replace_block` action profile

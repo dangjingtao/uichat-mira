@@ -127,7 +127,9 @@ export const createSandboxDirectBenchCases = (
     evaluate: (result) => {
       const passed =
         result.status === "blocked" &&
-        result.violations.some((item) => item.includes("path must stay inside workspace root"));
+        result.violations.some((item) =>
+          item.includes("cwd must be a relative workspace directory without parent traversal"),
+        );
       return {
         status: passed ? "passed" : "failed",
         notes: createNotes(

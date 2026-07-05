@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: runtime
-Last verified: 2026-07-03
+Last verified: 2026-07-05
 Layer: wiki
 Module: Harness
 Feature: Phase1Implementation
@@ -57,7 +57,7 @@ Doc Type: checklist
 - [x] 所有 `cwd` 先做绝对路径解析
 - [ ] 所有文件参数先做绝对路径解析
 - [x] 使用真实路径判断是否位于 workspace root 内
-- [x] 拒绝 `..`、软链接逃逸、workspace 外绝对路径
+- [x] 拒绝 `..`、软链接逃逸、绝对 cwd 输入
 - [x] 补齐 workspace 越界单测
 
 ### B2. 命令策略
@@ -74,7 +74,7 @@ Doc Type: checklist
 - [x] 超时时统一结束进程树
 - [x] 取消时统一结束进程树
 - [x] 失败时清理短生命周期进程句柄
-- [x] Windows 下验证进程树回收行为
+- [x] Windows 下使用 best-effort kill tree，并在 result 中标记 limitation
 
 ### B4. 输出与资源限制
 
@@ -91,6 +91,7 @@ Doc Type: checklist
 - [x] 定义最小 env 白名单
 - [ ] 把 secret 类 env 与普通 env 分开
 - [x] 为 env 过滤补单测
+- [x] persistent PTY 创建路径复用 env 白名单
 
 ## C. 风控与审批
 

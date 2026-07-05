@@ -50,6 +50,8 @@ export const terminalSessionTool: McpToolImplementation = {
         argKeys: ["cwd"],
       },
       longRunning: true,
+      sandboxRequired: true,
+      sandboxProfile: "command",
     },
   },
   execute: async (context) => {
