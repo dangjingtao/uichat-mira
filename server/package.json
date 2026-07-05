@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:protocol": "tsx --tsconfig tsconfig.test.json --test src/**/*.test.ts",
-    "bench:sandbox:direct": "tsx src/harness/sandbox/bench/runner.ts"
+    "bench:sandbox:direct": "tsx src/harness/sandbox/bench/runner.ts",
+    "bench:context:read": "tsx src/harness/context/bench/runner.ts"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",

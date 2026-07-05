@@ -26,6 +26,7 @@ related:
   - docs/project-control/tasks/agent_node_T015-phoenix-minimum-human-observability.md
   - docs/project-control/tasks/agent_node_T016-local-tool-routing-and-schema-guard.md
   - docs/project-control/tasks/agent_node_T017-toolcall-loop-regression-matrix.md
+  - docs/project-control/tasks/agent_node_T018-invocation-result-evidence-truth-contract.md
   - docs/chat/agent-runtime-design.md
   - docs/harness/agentgraph-harness-protocol.md
 ---
@@ -67,6 +68,7 @@ Agent node 专属总台账。
 | `agent_node_T015` | Phoenix Minimum Human Observability (`T_phonex`) | `T015 / T_phonex` 是 `Agent V1.5` 的开发态最小人眼可观测性任务。当前实现只在 `graph.ts` 组装层统一包装节点和 run 根 span：默认关闭，`AGENT_TRACE_PHOENIX=true` 时导出到 Phoenix，`AGENT_TRACE_VERBOSE=true` 时追加脱敏后的 state 摘要。实现没有改各 node 业务逻辑，没有改 AgentGraph 路由，也没有把 tracing 扩大成自研 observability 平台 | `DONE` | [agent_node_T015-phoenix-minimum-human-observability.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T015-phoenix-minimum-human-observability.md) |
 | `agent_node_T016` | Local Tool Routing and Schema Guard Under Weak Task Model | `T016` 是 `Agent V1.5 P0` 修复任务，只补 workspace local intent、防 schema invalid 直接打死前台、以及 generate 空回答 fallback 的最小防线。`2026-07-05` 最新真实前台 smoke 已补齐：`P0-8` 会稳定进入本地 `read_locate`，不再误走 `web_search`；`P0-9` 新线程在绑定 `ragDemo / D:\workspace\rag-demo` 并开启 Agent 后，已稳定进入 `read_open("README.md")`，没有 Normalize schema error、没有 approval wait，最终回答已按 README 原文列出 `React + Vite renderer`、`Electron / Tauri shell`、`Fastify backend` 与 `runtime.config.cjs`。当前剩余只记录非阻断说明，例如“第二次完全相同检索”没有单独形成第二条 completed evidence，以及打包过程中暴露的仓库现存非 `T016` 测试失败 | `READY_FOR_REVIEW` | [agent_node_T016-local-tool-routing-and-schema-guard.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T016-local-tool-routing-and-schema-guard.md) |
 | `agent_node_T017` | ToolCall Loop Regression Matrix | `T017` 只新增后端黑盒回归矩阵，覆盖 `nextAction.use_tool -> toolCallNormalize -> policy -> tool -> evidence -> planner / generate` 主链。已验证 valid use_tool freeze、policy allow、tool evidence、answer-ready generate、schema invalid bounded replan、policy deny、policy / Harness approval、repeated guard、maxIterations、failed / timedOut 非 answer-ready、以及 `selectedToolIds` 不得进入执行链；没有改 Harness exposure、sandbox、UI 或 Agent V2 | `DONE` | [agent_node_T017-toolcall-loop-regression-matrix.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T017-toolcall-loop-regression-matrix.md) |
+| `agent_node_T018` | Invocation Result -> Evidence Truth Contract | `T018` 只补 evidence 真值合同和 generate 防伪回答。`2026-07-05` 已把 `policy deny` 写成 `denied` evidence，把 Harness `awaiting_approval` 映射成 `blocked` summary，把 terminal 的 `timedOut / truncated / binaryDetected / stdoutEncoding / stderrEncoding / violations` 透传进 summary，并阻断“乱码 / 不可读 / 非 completed 证据”被 generate 假装成已成功理解的结果；没有改 Tool Exposure、Sandbox Runner 实现、UI 或 Agent V2 | `DONE` | [agent_node_T018-invocation-result-evidence-truth-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T018-invocation-result-evidence-truth-contract.md) |
 
 ## Current Ground Truth
 
@@ -559,6 +561,24 @@ Agent node 专属总台账。
     - 打包验证
   - 当前状态更新为：
     - `IN_PROGRESS`
+  - `2026-07-05` 追加第十八个节点任务编号 `agent_node_T018`
+  - 明确 `T018` 只处理 `invocation result -> evidence truth contract` 与 generate 防伪回答，不改 Tool Exposure、Sandbox Runner 实现、UI 或 Agent V2
+  - 当前实现已完成：
+    - `policy deny` 现在会写入 `denied` evidence，并回填 `lastToolExecution`
+    - Harness `awaiting_approval` 现在会映射成 `blocked` evidence summary，而不是假装成 completed
+    - `terminal_session` 结果现在会透传 `timedOut / truncated / binaryDetected / stdoutEncoding / stderrEncoding / violations`
+    - `terminal` evidence summary 现在会显式区分 `timed_out / truncated / binaryDetected / blocked`
+    - `generate` 现在会阻断“非 completed 证据被假装成已稳定理解结果”的输出
+    - `read_list` fallback 只回答目录概览；`read_locate` fallback 只回答定位结果
+  - 定向验证结果：
+    - `pnpm --filter @ui-chat-mira/server test -- src/agent/__tests__/policy.test.ts src/agent/__tests__/toolcall-loop-regression.test.ts src/agent/__tests__/nodes.test.ts`
+      - 结果：通过，`36 passed`
+    - `pnpm --filter @ui-chat-mira/server typecheck`
+      - 结果：通过
+    - `pnpm check`
+      - 结果：通过
+  - 结论：
+    - `agent_node_T018` 状态更新为 `DONE`
   - `2026-07-04` T014 局部评审结论：
     - 结论：`PASS`
     - 本次评审只覆盖 `pendingApproval -> 用户审批 -> 恢复原 frozen pendingToolCall -> ToolNode -> evidence -> 回到 Planner / Generate`

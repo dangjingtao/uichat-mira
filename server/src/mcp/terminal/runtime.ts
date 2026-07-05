@@ -41,6 +41,11 @@ type TerminalExecutionResult = {
     sessionMode: "ephemeral" | "persistent";
     streamMode: "split" | "merged";
     stderrSeparated: boolean;
+    stdoutEncoding?: "utf8" | "gbk" | "utf16le" | "unknown";
+    stderrEncoding?: "utf8" | "gbk" | "utf16le" | "unknown";
+    truncated?: boolean;
+    binaryDetected?: boolean;
+    violations?: string[];
   };
   artifacts: McpArtifact[];
 };
@@ -192,6 +197,11 @@ const runEphemeralCommand = async (input: {
     stdout: result.stdout,
     stderr: result.stderr,
     output: result.output,
+    stdoutEncoding: result.stdoutEncoding,
+    stderrEncoding: result.stderrEncoding,
+    truncated: result.truncated,
+    binaryDetected: result.binaryDetected,
+    violations: result.violations,
   };
 };
 
@@ -600,11 +610,16 @@ export const executeTerminalSessionRuntime = async ({
       stdout: result.stdout,
       stderr: result.stderr,
       timedOut: result.timedOut,
-      reusedSession: false,
-      sessionMode: "ephemeral",
-      streamMode: "split",
-      stderrSeparated: true,
-    },
+        reusedSession: false,
+        sessionMode: "ephemeral",
+        streamMode: "split",
+        stderrSeparated: true,
+        stdoutEncoding: result.stdoutEncoding,
+        stderrEncoding: result.stderrEncoding,
+        truncated: result.truncated,
+        binaryDetected: result.binaryDetected,
+        violations: result.violations,
+      },
     artifacts: [
       createArtifact({
         kind: "terminal-log",

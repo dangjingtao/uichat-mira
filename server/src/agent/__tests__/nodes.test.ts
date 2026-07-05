@@ -429,6 +429,152 @@ test("generateNode explains waiting approval instead of pretending execution alr
   assert.doesNotMatch(result.answer ?? "", /已经执行完成/);
 });
 
+test("createToolExecutionEvidenceSummary marks binary terminal output as non-language evidence", () => {
+  const summary = createToolExecutionEvidenceSummary({
+    question: "执行命令看看结果",
+    execution: {
+      toolId: "terminal_session",
+      args: { command: "type image.png" },
+      status: "completed",
+      inputHash: "hash-terminal-binary",
+      result: {
+        command: "type image.png",
+        stdout: "[binary output omitted]",
+        stderr: "",
+        exitCode: 0,
+        timedOut: false,
+        stdoutEncoding: "unknown",
+        stderrEncoding: "utf8",
+        truncated: false,
+        binaryDetected: true,
+        violations: [],
+      },
+      startedAt: "2026-07-04T00:00:00.000Z",
+      finishedAt: "2026-07-04T00:00:01.000Z",
+    },
+    evidenceIndex: 0,
+  });
+
+  assert.equal(summary.status, "binaryDetected");
+  assert.equal(summary.answerReadiness.canAnswer, false);
+  assert.equal(summary.data?.kind, "terminal_session");
+  if (summary.data?.kind === "terminal_session") {
+    assert.equal(summary.data.binaryDetected, true);
+    assert.equal(summary.data.outputInterpretable, false);
+  }
+});
+
+test("generateNode keeps read_list fallback at directory-overview scope when file content is still missing", async () => {
+  const state = createBaseState("README.md 里写了什么？");
+  state.evidence = {
+    observations: [],
+    toolExecutions: [
+      {
+        toolId: "read_list",
+        args: { path: "." },
+        status: "completed",
+        inputHash: "hash-read-list-missing-content",
+        result: {},
+        summary: {
+          source: "tool",
+          status: "completed",
+          toolId: "read_list",
+          inputHash: "hash-read-list-missing-content",
+          actionTaken: "Listed workspace directory .",
+          keyFindings: ["entryCount=3", "[F] README.md", "[D] docs"],
+          answerReadiness: {
+            canAnswer: false,
+            reason: "Directory listing alone does not satisfy a file-content question.",
+            missingInfo: ["target file content or a narrower path"],
+          },
+          data: {
+            kind: "read_list",
+            path: ".",
+            entryCount: 3,
+            fileCount: 2,
+            directoryCount: 1,
+            entriesPreview: ["[F] README.md", "[D] docs", "[F] package.json"],
+            truncated: false,
+            canAnswerDirectoryQuestion: false,
+          },
+        },
+        startedAt: "2026-07-04T00:00:00.000Z",
+        finishedAt: "2026-07-04T00:00:01.000Z",
+      },
+    ],
+    retrievals: [],
+  };
+  state.evidence.latestSummary = state.evidence.toolExecutions[0]?.summary;
+
+  vi.spyOn(providerProxyService, "generateTextForRole").mockResolvedValue(
+    "<function_calls>{\"toolId\":\"read_open\"}</function_calls>",
+  );
+
+  const result = await generateNode(state);
+
+  assert.match(result.answer ?? "", /目录概览证据/);
+  assert.match(result.answer ?? "", /README\.md/);
+  assert.match(result.answer ?? "", /还不能回答文件内容问题/);
+});
+
+test("generateNode refuses to pretend garbled terminal text was understood", async () => {
+  const state = createBaseState("执行命令看看中文输出");
+  state.evidence = {
+    observations: [],
+    toolExecutions: [
+      {
+        toolId: "terminal_session",
+        args: { command: "Get-Content README.md" },
+        status: "completed",
+        inputHash: "hash-terminal-garbled",
+        result: {},
+        summary: {
+          source: "tool",
+          status: "blocked",
+          toolId: "terminal_session",
+          inputHash: "hash-terminal-garbled",
+          actionTaken: 'Executed terminal command "Get-Content README.md".',
+          keyFindings: ["stdout=锟斤拷锟斤拷", "stdoutEncoding=unknown"],
+          answerReadiness: {
+            canAnswer: false,
+            reason: "Terminal output appears garbled, so the agent must not pretend it understood the text.",
+            missingInfo: ["a readable terminal result"],
+          },
+          data: {
+            kind: "terminal_session",
+            command: "Get-Content README.md",
+            exitCode: 0,
+            stdoutPreview: "锟斤拷锟斤拷",
+            stderrPreview: "",
+            stdoutEncoding: "unknown",
+            stderrEncoding: "utf8",
+            timedOut: false,
+            truncated: false,
+            binaryDetected: false,
+            violations: [],
+            outputInterpretable: false,
+            unreadableReason: "Terminal output appears garbled, so the agent must not pretend it understood the text.",
+            canAnswerCommandQuestion: false,
+          },
+        },
+        startedAt: "2026-07-04T00:00:00.000Z",
+        finishedAt: "2026-07-04T00:00:01.000Z",
+      },
+    ],
+    retrievals: [],
+  };
+  state.evidence.latestSummary = state.evidence.toolExecutions[0]?.summary;
+
+  vi.spyOn(providerProxyService, "generateTextForRole").mockResolvedValue(
+    "命令输出说明 README 主要在介绍 UIChat Mira。",
+  );
+
+  const result = await generateNode(state);
+
+  assert.match(result.answer ?? "", /garbled|不可|不能|不可靠/);
+  assert.doesNotMatch(result.answer ?? "", /README 主要在介绍 UIChat Mira/);
+});
+
 test("generateNode strips bare tool id leakage from read_open completed evidence", async () => {
   const state = createBaseState("打开 README.md 看看内容");
   state.evidence = {

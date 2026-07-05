@@ -1,5 +1,6 @@
 ---
 status: done
+task_state: DONE
 owner: agent-runtime
 last_verified: 2026-07-05
 layer: project-control

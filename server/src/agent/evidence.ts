@@ -87,6 +87,7 @@ const WORKSPACE_READ_TOOL_IDS = new Set([
 ]);
 
 const WORKSPACE_ROOT_SENTINEL = "/workspace";
+const TERMINAL_GARBLED_TEXT_PATTERNS = [/�/u, /锟斤拷/u, /\?\?\?/u];
 
 export const getEvidencePayload = (state: EvidenceState): AgentEvidencePayload => ({
   observations: state.evidence?.observations ?? state.observations ?? [],
@@ -113,6 +114,42 @@ const trimTextPreview = (value: string, limit = TEXT_PREVIEW_LIMIT) => {
   return normalized.length > limit
     ? `${normalized.slice(0, limit).trimEnd()}...`
     : normalized;
+};
+
+const containsVisibleText = (value: string) => value.trim().length > 0;
+const containsNonAsciiText = (value: string) => /[^\x00-\x7F]/.test(value);
+
+const getTerminalUnreadableReason = (input: {
+  stdout: string;
+  stderr: string;
+  stdoutEncoding: string;
+  stderrEncoding: string;
+  binaryDetected: boolean;
+}) => {
+  if (input.binaryDetected) {
+    return "Terminal output contains binary data and cannot be treated as natural-language evidence.";
+  }
+
+  const combinedText = `${input.stdout}\n${input.stderr}`;
+  if (
+    input.stdoutEncoding === "unknown" ||
+    input.stderrEncoding === "unknown"
+  ) {
+    if (
+      containsVisibleText(combinedText) &&
+      containsNonAsciiText(combinedText)
+    ) {
+      return "Terminal output encoding could not be determined, so the text is not reliable enough to interpret.";
+    }
+  }
+
+  if (
+    TERMINAL_GARBLED_TEXT_PATTERNS.some((pattern) => pattern.test(combinedText))
+  ) {
+    return "Terminal output appears garbled, so the agent must not pretend it understood the text.";
+  }
+
+  return undefined;
 };
 
 const NOISY_WORKSPACE_ARTIFACT_PREFIXES = [
@@ -311,7 +348,7 @@ const createReadListSummary = (input: {
 
   return {
     source: "tool",
-    status: "completed",
+    status: truncated ? "truncated" : "completed",
     toolId: input.execution.toolId,
     inputHash: input.execution.inputHash,
     actionTaken: `Listed workspace directory ${value.path}.`,
@@ -381,7 +418,7 @@ const createReadOpenSummary = (input: {
 
   return {
     source: "tool",
-    status: "completed",
+    status: truncated ? "truncated" : "completed",
     toolId: input.execution.toolId,
     inputHash: input.execution.inputHash,
     actionTaken: `Opened file ${value.path}.`,
@@ -462,7 +499,7 @@ const createReadLocateSummary = (input: {
 
   return {
     source: "tool",
-    status: "completed",
+    status: truncated ? "truncated" : "completed",
     toolId: input.execution.toolId,
     inputHash: input.execution.inputHash,
     actionTaken: `Located ${matchCount} workspace match(es) for "${value.query}".`,
@@ -595,15 +632,52 @@ const createTerminalSessionSummary = (input: {
   const stdoutPreview = trimTextPreview(typeof value.stdout === "string" ? value.stdout : "");
   const stderrPreview = trimTextPreview(typeof value.stderr === "string" ? value.stderr : "");
   const timedOut = Boolean(value.timedOut);
+  const stdoutEncoding =
+    value.stdoutEncoding === "utf8" ||
+    value.stdoutEncoding === "gbk" ||
+    value.stdoutEncoding === "utf16le" ||
+    value.stdoutEncoding === "unknown"
+      ? value.stdoutEncoding
+      : "utf8";
+  const stderrEncoding =
+    value.stderrEncoding === "utf8" ||
+    value.stderrEncoding === "gbk" ||
+    value.stderrEncoding === "utf16le" ||
+    value.stderrEncoding === "unknown"
+      ? value.stderrEncoding
+      : "utf8";
+  const truncated = Boolean(value.truncated);
+  const binaryDetected = Boolean(value.binaryDetected);
+  const violations = Array.isArray(value.violations)
+    ? value.violations.filter((item): item is string => typeof item === "string")
+    : [];
   const exitCode =
     typeof value.exitCode === "number" || value.exitCode === null
       ? (value.exitCode as number | null)
       : null;
-  const canAnswerCommandQuestion = !timedOut && queryRequestsCommandResult(input.question);
+  const unreadableReason = getTerminalUnreadableReason({
+    stdout: typeof value.stdout === "string" ? value.stdout : "",
+    stderr: typeof value.stderr === "string" ? value.stderr : "",
+    stdoutEncoding,
+    stderrEncoding,
+    binaryDetected,
+  });
+  const outputInterpretable = !unreadableReason;
+  const terminalStatus = binaryDetected
+    ? "binaryDetected"
+    : timedOut
+      ? "timed_out"
+      : truncated
+        ? "truncated"
+        : unreadableReason
+          ? "blocked"
+          : "completed";
+  const canAnswerCommandQuestion =
+    terminalStatus === "completed" && queryRequestsCommandResult(input.question);
 
   return {
     source: "tool",
-    status: "completed",
+    status: terminalStatus,
     toolId: input.execution.toolId,
     inputHash: input.execution.inputHash,
     actionTaken: `Executed terminal command "${value.command}".`,
@@ -611,7 +685,12 @@ const createTerminalSessionSummary = (input: {
       `exitCode=${exitCode === null ? "null" : exitCode}`,
       ...(stdoutPreview ? [`stdout=${stdoutPreview}`] : []),
       ...(stderrPreview ? [`stderr=${stderrPreview}`] : []),
+      `stdoutEncoding=${stdoutEncoding}`,
+      `stderrEncoding=${stderrEncoding}`,
       `timedOut=${timedOut}`,
+      `truncated=${truncated}`,
+      `binaryDetected=${binaryDetected}`,
+      ...violations.slice(0, 3),
     ],
     answerReadiness: canAnswerCommandQuestion
       ? {
@@ -620,10 +699,20 @@ const createTerminalSessionSummary = (input: {
         }
       : {
           canAnswer: false,
-          reason: timedOut
-            ? "Terminal session timed out before producing a stable result."
-            : "Terminal result is not yet enough for a command-oriented answer.",
-          missingInfo: timedOut ? ["a completed command result"] : ["clear command result intent"],
+          reason: binaryDetected
+            ? "Terminal output included binary data and cannot be treated as natural-language evidence."
+            : timedOut
+              ? "Terminal session timed out before producing a stable result."
+              : truncated
+                ? "Terminal output was truncated before a stable natural-language result was available."
+                : unreadableReason ??
+                  "Terminal result is not yet enough for a command-oriented answer.",
+          missingInfo:
+            binaryDetected || unreadableReason
+              ? ["a readable terminal result"]
+              : timedOut || truncated
+                ? ["a completed command result"]
+                : ["clear command result intent"],
         },
     data: {
       kind: "terminal_session",
@@ -631,7 +720,14 @@ const createTerminalSessionSummary = (input: {
       exitCode,
       stdoutPreview,
       stderrPreview,
+      stdoutEncoding,
+      stderrEncoding,
       timedOut,
+      truncated,
+      binaryDetected,
+      violations,
+      outputInterpretable,
+      ...(unreadableReason ? { unreadableReason } : {}),
       canAnswerCommandQuestion,
     },
     rawRef: {
@@ -650,7 +746,7 @@ export const createToolExecutionEvidenceSummary = (input: {
   if (input.execution.status === "awaiting_approval") {
     return {
       source: "tool",
-      status: "awaiting_approval",
+      status: "blocked",
       toolId: input.execution.toolId,
       inputHash: input.execution.inputHash,
       actionTaken: `${input.execution.toolId} is waiting for approval.`,
@@ -662,6 +758,30 @@ export const createToolExecutionEvidenceSummary = (input: {
         canAnswer: false,
         reason: "Tool execution is paused for approval and cannot satisfy the answer stop rule.",
         missingInfo: ["approval decision"],
+      },
+      rawRef: {
+        evidenceIndex: input.evidenceIndex,
+        toolCallId: input.execution.toolCallId,
+        invocationId: input.execution.invocationId,
+      },
+    };
+  }
+
+  if (input.execution.status === "denied") {
+    return {
+      source: "tool",
+      status: "denied",
+      toolId: input.execution.toolId,
+      inputHash: input.execution.inputHash,
+      actionTaken: `${input.execution.toolId} was denied before execution.`,
+      keyFindings: [
+        `toolId=${input.execution.toolId}`,
+        ...(input.execution.errorMessage ? [input.execution.errorMessage] : []),
+      ],
+      answerReadiness: {
+        canAnswer: false,
+        reason: "Denied tool execution does not satisfy the answer stop rule.",
+        missingInfo: ["allowed grounded evidence"],
       },
       rawRef: {
         evidenceIndex: input.evidenceIndex,
@@ -850,7 +970,10 @@ export const getAnswerStopDecision = (input: {
     };
   }
 
-  if (input.latestSummary.status !== "completed") {
+  if (
+    input.latestSummary.status !== "completed" &&
+    input.latestSummary.status !== "truncated"
+  ) {
     return {
       shouldAnswer: false,
       reason: `Answer stop rule requires completed evidence, but latest status is ${input.latestSummary.status}.`,

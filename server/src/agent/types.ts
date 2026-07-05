@@ -2,6 +2,7 @@ import type { AssistantExecutionNodeEvent } from "@/services/chat-stream-events"
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol";
 import type { RetrievedChunk } from "@/services/rag-nodes";
 import type { ContextBudgetAudit } from "@/services/context-budget/index";
+import type { SandboxOutputEncoding } from "@/harness/sandbox/contract";
 import type {
   AgentIntentEmbeddingConfig,
   ToolIntentResult,
@@ -142,7 +143,7 @@ export interface AgentToolExecutionResult {
   inputHash?: string;
   args: Record<string, unknown>;
   invocationId?: string;
-  status: "completed" | "failed" | "awaiting_approval";
+  status: "completed" | "failed" | "awaiting_approval" | "denied";
   result?: unknown;
   errorMessage?: string;
   approval?: AgentApprovalRequest;
@@ -228,7 +229,14 @@ export interface AgentTerminalSessionEvidenceData {
   exitCode: number | null;
   stdoutPreview: string;
   stderrPreview: string;
+  stdoutEncoding: SandboxOutputEncoding;
+  stderrEncoding: SandboxOutputEncoding;
   timedOut: boolean;
+  truncated: boolean;
+  binaryDetected: boolean;
+  violations: string[];
+  outputInterpretable: boolean;
+  unreadableReason?: string;
   canAnswerCommandQuestion: boolean;
 }
 
@@ -256,7 +264,15 @@ export type AgentEvidenceSummaryData =
 
 export interface AgentEvidenceSummary {
   source: "tool" | "retrieval" | "observation";
-  status: "completed" | "failed" | "awaiting_approval" | "partial" | "blocked";
+  status:
+    | "completed"
+    | "failed"
+    | "partial"
+    | "blocked"
+    | "denied"
+    | "timed_out"
+    | "truncated"
+    | "binaryDetected";
   toolId?: string;
   inputHash?: string;
   actionTaken: string;

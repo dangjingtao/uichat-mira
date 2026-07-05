@@ -13,7 +13,7 @@ related:
   - server/src/harness/candidates-core/resolver.ts
   - server/src/harness/tool-candidates.test.ts
   - server/src/harness/capability-diagnostics.test.ts
-task_state: READY_FOR_REVIEW
+task_state: DONE
 ---
 
 # T-010 Harness Candidate Ordering
@@ -112,19 +112,9 @@ task_state: READY_FOR_REVIEW
 
 ## Review Outcome
 
-- 评审结论：待复评
-- 当前状态：`READY_FOR_REVIEW`
-- Review 01 跟进：
-  - 打回意见指向的阻断点是“`maxTools` 仍在评分前截断 `exposedDefinitions`”
-  - 当前本地源码 `D:/workspace/rag-demo/server/src/harness/candidates-core/resolver.ts` 已不再执行：
-    - `const exposedDefinitions = exposureDecision.exposedDefinitions.slice(0, maxTools);`
-    - `const profiles = resolveHarnessCapabilityProfiles(exposedDefinitions);`
-  - 当前实际实现是：
-    - 先取全量允许集合：`const visibleDefinitions = exposureDecision.exposedDefinitions;`
-    - 再基于全量允许集合建立 profile、embedding、rule score、rerank
-    - 最后才执行：
-      - `const rankedMatches = matches.slice(0, topK);`
-      - `const toolCandidates = rankedToolCandidates.slice(0, maxTools);`
-  - 结论：
-    - Review 01 提到的阻断缺陷，在当前工作区实现中已被消除
-    - 当前需要的是基于最新源码重做复评，而不是继续沿用旧快照结论
+- 评审结论：通过
+- 当前状态：`DONE`
+- 通过依据：
+  - 候选排序缺陷已修正，`maxTools` 不再在评分前截断 `exposedDefinitions`
+  - 工具暴露 regression pack 已补齐，覆盖 workspace local、联网查询、terminal 命令请求、external MCP 开关、`chat_surface` safe domains 等 12 类场景
+  - 定向验证与 `pnpm check` 已通过

@@ -423,13 +423,16 @@ test("toolCall loop policy deny does not execute the tool", async () => {
     status: "failed",
     pendingToolCall: "absent",
     pendingApproval: "absent",
-    lastToolExecution: "absent",
-    latestSummary: "absent",
+    lastToolExecution: "present",
+    latestSummary: "present",
     terminalField: "errorMessage",
   });
   assert.equal(result.policyDecision?.type, "deny");
   assert.equal(executeSpy.mock.calls.length, 0);
   assert.equal(generateSpy.mock.calls.length, 0);
+  assert.equal(result.lastToolExecution?.status, "denied");
+  assert.equal(result.evidence.latestSummary?.status, "denied");
+  assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, false);
 });
 
 test("toolCall loop policy approval stops at waiting_approval without ToolNode execution", async () => {
@@ -497,7 +500,7 @@ test("toolCall loop Harness awaiting approval keeps pendingApproval and frozen p
   });
   assert.equal(executeSpy.mock.calls.length, 1);
   assert.equal(result.lastToolExecution?.status, "awaiting_approval");
-  assert.equal(result.evidence.latestSummary?.status, "awaiting_approval");
+  assert.equal(result.evidence.latestSummary?.status, "blocked");
   assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, false);
 });
 
@@ -656,7 +659,7 @@ test("toolCall loop timedOut tool evidence is not marked answer-ready", async ()
   assert.equal(executeSpy.mock.calls.length, 1);
   assert.equal(generateSpy.mock.calls.length, 1);
   assert.equal(result.lastToolExecution?.status, "completed");
-  assert.equal(result.evidence.latestSummary?.status, "completed");
+  assert.equal(result.evidence.latestSummary?.status, "timed_out");
   assert.equal(result.evidence.latestSummary?.toolId, "terminal_session");
   assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, false);
   assert.match(
@@ -666,6 +669,7 @@ test("toolCall loop timedOut tool evidence is not marked answer-ready", async ()
   assert.equal(result.evidence.latestSummary?.data?.kind, "terminal_session");
   if (result.evidence.latestSummary?.data?.kind === "terminal_session") {
     assert.equal(result.evidence.latestSummary.data.timedOut, true);
+    assert.equal(result.evidence.latestSummary.data.outputInterpretable, true);
     assert.equal(result.evidence.latestSummary.data.canAnswerCommandQuestion, false);
   }
 });

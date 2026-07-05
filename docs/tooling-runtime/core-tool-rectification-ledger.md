@@ -655,6 +655,9 @@ edit_replace_block
 - [x] `terminal_session` 增加 Tool Exposure 风险门禁
   - 任务卡：
     - `C:/Users/Administrator/Downloads/mira-v16-classified-taskcards/01-tool-exposure/task/02-risk-gate-terminal-exposure.md`
+  - Review 02 状态：
+    - 评审结论：通过
+    - 当前状态：`DONE`
   - 结果标准：
     - 文件读取问题不暴露 `terminal_session`
     - 闲聊不暴露 `terminal_session`
@@ -697,6 +700,25 @@ edit_replace_block
       - 结果：通过
     - `pnpm check`
       - 结果：通过
+  - 2026-07-05 Review 02 验收通过证据：
+    - `pnpm --filter @ui-chat-mira/server test -- src/harness/exposure.test.ts`
+      - 结果：通过，`29 passed`
+    - `pnpm --filter @ui-chat-mira/server test -- src/harness/tool-candidates.test.ts src/routes/proxy-provider/chat-tool-surface.test.ts src/routes/proxy-provider/chat.routes.test.ts src/mcp/routes.test.ts`
+      - 结果：通过，`40 passed`
+    - `pnpm --filter @ui-chat-mira/server typecheck`
+      - 结果：通过
+    - `pnpm check`
+      - 结果：通过
+    - 暴露矩阵黑盒结果：
+      - `agent_intent` + `run a local command`：不暴露 `terminal_session`
+      - `agent_intent` + `执行命令`：不暴露 `terminal_session`
+      - `agent_intent` + `run pnpm check`：暴露 `terminal_session`，且 `requiresApproval=true`
+      - `agent_intent` + `run pnpm check` + `requiresApproval=false`：不暴露 `terminal_session`
+      - `agent_intent` + `run pnpm check` + `sandboxProfiles.command=false`：不暴露 `terminal_session`
+      - `tools_list`：保留 `command / cwd / env / timeoutMs / attachSessionId / sessionMode`
+      - `chat_surface` + `run pnpm check`：不暴露 `terminal_session`
+      - README 文件内容请求：保留 `read_open`，不暴露 `terminal_session`
+      - 联网搜索请求：保留 `web_search`，不暴露 `terminal_session`
 
 - [x] `terminal_session` / SandboxExecutor 达到 L1 Workspace Sandbox Runner 最小能力
   - 任务卡：

@@ -14,7 +14,7 @@ related:
   - docs/harness/harness-phase-1-implementation-checklist.md
   - server/src/harness/sandbox/contract.ts
   - server/src/harness/sandbox/bench/runner.ts
-task_state: READY_FOR_REVIEW
+task_state: DONE
 ---
 
 # T-011 Sandbox Contract Direct Bench
@@ -147,13 +147,9 @@ task_state: READY_FOR_REVIEW
 
 ## Review Outcome
 
-- 评审结论：待复评
-- 当前状态：`READY_FOR_REVIEW`
-- Review 01 跟进：
-  - 打回意见指出“没有 direct bench runner / bench contract / JSON 输出 / not_implemented 标记”
-  - 当前工作区实际已补：
-    - 独立 bench contract：`server/src/harness/sandbox/contract.ts`
-    - 独立 direct bench runner：`server/src/harness/sandbox/bench/runner.ts`
-    - 结构化 JSON 输出：runner 直接 `console.log(JSON.stringify(report, null, 2))`
-    - `not_implemented` 标记：profile coverage 与 coverage case 已显式输出
-  - 当前需要的是基于最新工作区重做复评，而不是继续沿用缺少 bench 层的旧结论
+- 评审结论：通过
+- 当前状态：`DONE`
+- 评审确认：
+  - 已接受 direct bench 作为独立交付，不再按 executor unit test 认定
+  - 已接受 bench contract、JSON runner、正负向 case 和 `not_implemented` 标记
+  - 本卡验收范围内的问题已关闭

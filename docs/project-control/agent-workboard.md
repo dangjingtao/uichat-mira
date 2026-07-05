@@ -262,10 +262,10 @@ related:
 | `GR-P1-2` | [T-006-harness-schema-and-boundary.md](D:/workspace/rag-demo/docs/project-control/tasks/T-006-harness-schema-and-boundary.md) | `P1` | `DONE` | 已完成定向单测与真实接口手测；schema 与 workspace boundary contract 已生效 |
 | `GR-P1-3` | [T-007-intent-shortcut-demotion.md](D:/workspace/rag-demo/docs/project-control/tasks/T-007-intent-shortcut-demotion.md) | `P1` | `DONE` | 已通过评审；workspace 规则已降级为 task-model 辅助提示 |
 | `GR-P1-4` | [T-008-evidence-chain-completion.md](D:/workspace/rag-demo/docs/project-control/tasks/T-008-evidence-chain-completion.md) | `P1` | `DONE` | 已通过评审；formal evidence payload 已进入 route/generate 主链 |
-| `Standalone` | [T-010-harness-candidate-ordering.md](D:/workspace/rag-demo/docs/project-control/tasks/T-010-harness-candidate-ordering.md) | `P1` | `READY_FOR_REVIEW` | 已完成 Harness 候选排序缺陷修复与定向验证；当前等待评审 |
-| `Standalone` | [T-011-sandbox-contract-direct-bench.md](D:/workspace/rag-demo/docs/project-control/tasks/T-011-sandbox-contract-direct-bench.md) | `P1` | `READY_FOR_REVIEW` | 已补 Sandbox direct bench、独立 bench contract、JSON runner 和 `not_implemented` 标记；当前等待按最新工作区复评 |
-| `Standalone` | [T-012-l1-workspace-sandbox-runner.md](D:/workspace/rag-demo/docs/project-control/tasks/T-012-l1-workspace-sandbox-runner.md) | `P1` | `READY_FOR_REVIEW` | 已完成 L1 Workspace Sandbox Runner：cwd workspace 锁、env 白名单、timeout/output 上限、direct result violations、Windows kill tree limitation 标记、sandbox unavailable 时隐藏 terminal_session |
-| `Standalone` | [T-013-sandbox-artifact-output-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/T-013-sandbox-artifact-output-contract.md) | `P1` | `READY_FOR_REVIEW` | 已完成 Sandbox artifact/output 合同：artifact 注册、stdout/stderr 编码回传、binary 检测与 direct bench 覆盖 |
+| `Standalone` | [T-010-harness-candidate-ordering.md](D:/workspace/rag-demo/docs/project-control/tasks/T-010-harness-candidate-ordering.md) | `P1` | `DONE` | 评审已通过；Harness 候选排序缺陷修复与定向验证已验收 |
+| `Standalone` | [T-011-sandbox-contract-direct-bench.md](D:/workspace/rag-demo/docs/project-control/tasks/T-011-sandbox-contract-direct-bench.md) | `P1` | `DONE` | 评审已通过；Sandbox direct bench、独立 bench contract、JSON runner 和 `not_implemented` 标记已验收 |
+| `Standalone` | [T-012-l1-workspace-sandbox-runner.md](D:/workspace/rag-demo/docs/project-control/tasks/T-012-l1-workspace-sandbox-runner.md) | `P1` | `DONE` | Review 02 已通过；L1 Workspace Sandbox Runner 已具备 cwd workspace 锁、env 白名单、timeout/output 上限、direct result violations、Windows kill tree limitation 标记、sandbox unavailable 时隐藏 terminal_session |
+| `Standalone` | [T-013-sandbox-artifact-output-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/T-013-sandbox-artifact-output-contract.md) | `P1` | `DONE` | 已通过评审；Sandbox artifact/output 合同已验收，包含 artifact 注册、stdout/stderr 编码回传、binary 检测与 direct bench 覆盖 |
 
 ## Technical Debt
 

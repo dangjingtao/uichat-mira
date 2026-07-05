@@ -13,7 +13,7 @@ related:
   - docs/tooling-runtime/read-skill-design.md
   - server/src/harness/context/index.ts
   - server/src/harness/context/planner.test.ts
-task_state: READY_FOR_REVIEW
+task_state: DONE
 ---
 
 # harness_context_T001 Context Read Plan DSL MVP
@@ -106,5 +106,5 @@ task_state: READY_FOR_REVIEW
 
 ## Review Outcome
 
-- 评审结论：待复评
-- 当前状态：`READY_FOR_REVIEW`
+- 评审结论：通过
+- 当前状态：`DONE`

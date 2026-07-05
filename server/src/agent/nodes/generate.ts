@@ -65,6 +65,16 @@ const PENDING_APPROVAL_FAKE_EXECUTION_PATTERNS = [
   /(already executed|executed successfully|output is|result is)/i,
 ];
 
+const LIMITATION_DISCLOSURE_PATTERNS = [
+  /等待审批|还没有真实执行结果|需要审批/u,
+  /拒绝|denied/i,
+  /阻断|blocked/i,
+  /超时|timed out/i,
+  /截断|truncated/i,
+  /二进制|binary/i,
+  /乱码|garbled|不可读|不可靠/u,
+];
+
 const toPreviewText = (value: string, limit = 220) => {
   const normalized = value.replace(/\s+/g, " ").trim();
   if (!normalized) {
@@ -132,6 +142,15 @@ const buildToolEvidenceBlock = (execution: AgentToolExecutionResult) => {
     );
     lines.push(`stdoutPreview: ${summary.data.stdoutPreview || "(empty)"}`);
     lines.push(`stderrPreview: ${summary.data.stderrPreview || "(empty)"}`);
+    lines.push(`stdoutEncoding: ${summary.data.stdoutEncoding}`);
+    lines.push(`stderrEncoding: ${summary.data.stderrEncoding}`);
+    lines.push(`timedOut: ${summary.data.timedOut}`);
+    lines.push(`truncated: ${summary.data.truncated}`);
+    lines.push(`binaryDetected: ${summary.data.binaryDetected}`);
+    lines.push(`outputInterpretable: ${summary.data.outputInterpretable}`);
+    if (summary.data.unreadableReason) {
+      lines.push(`unreadableReason: ${summary.data.unreadableReason}`);
+    }
   }
 
   lines.push("keyFindings:");
@@ -291,6 +310,7 @@ const buildGenerateInstructionMessages = (
         state.pendingApproval
           ? "当前存在 pendingApproval。你只能说明工具仍在等待审批，当前还没有真实执行结果，不能假装命令或工具已经执行。"
           : "如果已存在 completed evidence，请只基于这些真实 evidence 回答。",
+        "如果 evidence status 是 blocked、denied、timed_out、truncated 或 binaryDetected，必须忠实说明限制，不能把它们伪装成已稳定完成的自然语言证据。",
         hasCompletedToolEvidence || hasRetrievalEvidence
           ? "如果 evidence 足够，请直接总结事实；如果 evidence 仍不足，请明确说明缺什么。"
           : "当前没有真实检索结果或已完成工具结果时，不要声称自己已经查看过文件、目录、网页、知识库或外部系统。",
@@ -379,8 +399,30 @@ const answerLooksLikeFabricatedWorkspaceResult = (input: {
 };
 
 const renderSummaryBasedAnswer = (summary: AgentEvidenceSummary) => {
+  if (summary.source === "tool" && summary.status === "denied") {
+    return "这次工具调用在执行前被策略拒绝了，所以当前没有新的可用执行结果。";
+  }
+
+  if (summary.source === "tool" && summary.status === "blocked") {
+    return "当前这条工具证据还处于阻断状态，不能当成已经稳定完成的执行结果来回答。";
+  }
+
+  if (summary.source === "tool" && summary.status === "timed_out") {
+    return "这次工具执行发生超时，当前没有形成稳定完整的结果。";
+  }
+
+  if (summary.source === "tool" && summary.status === "binaryDetected") {
+    return "这次工具输出包含二进制内容，不能当成自然语言证据直接解读。";
+  }
+
   if (summary.source === "tool" && summary.data?.kind === "read_list") {
     const preview = summary.data.entriesPreview.join("、");
+    if (!summary.data.canAnswerDirectoryQuestion) {
+      return summary.data.entryCount > 0
+        ? `当前只有目录概览证据：workspace 路径 ${summary.data.path} 下列出了 ${summary.data.entryCount} 项，预览包括 ${preview}${summary.data.truncated ? " 等内容，但这还不能回答文件内容问题。" : "，但这还不能回答文件内容问题。"}`
+        : `当前只有目录概览证据：workspace 路径 ${summary.data.path} 下没有列出任何条目。`;
+    }
+
     return summary.data.entryCount > 0
       ? `当前 workspace 下共找到 ${summary.data.entryCount} 项，其中预览包括 ${preview}${summary.data.truncated ? " 等内容。" : "。"}`
       : `当前 workspace 路径 ${summary.data.path} 下没有列出任何条目。`;
@@ -396,6 +438,13 @@ const renderSummaryBasedAnswer = (summary: AgentEvidenceSummary) => {
       : `${summary.data.path} 已打开，但当前可用内容为空，暂时无法给出可靠概括。`;
   }
 
+  if (summary.source === "tool" && summary.data?.kind === "read_locate") {
+    const preview = summary.data.matchesPreview.slice(0, 3).join("；");
+    return summary.data.matchCount > 0
+      ? `当前只拿到了定位结果：共找到 ${summary.data.matchCount} 处匹配，预览包括 ${preview || "匹配项"}。如果要回答文件内容，还需要继续打开对应文件。`
+      : `这次定位没有找到匹配项，所以当前还没有文件内容证据可供回答。`;
+  }
+
   if (summary.source === "tool" && summary.data?.kind === "web_search") {
     const finding = summary.data.topFindings[0];
     return finding
@@ -404,6 +453,12 @@ const renderSummaryBasedAnswer = (summary: AgentEvidenceSummary) => {
   }
 
   if (summary.source === "tool" && summary.data?.kind === "terminal_session") {
+    if (!summary.data.outputInterpretable) {
+      return summary.data.unreadableReason
+        ? `${summary.data.unreadableReason}`
+        : "这次终端输出当前不可可靠解读。";
+    }
+
     const parts = [`命令 \`${summary.data.command}\` 已执行。`];
     if (summary.data.exitCode !== null) {
       parts.push(`退出码是 ${summary.data.exitCode}。`);
@@ -416,6 +471,9 @@ const renderSummaryBasedAnswer = (summary: AgentEvidenceSummary) => {
     }
     if (summary.data.timedOut) {
       parts.push("这次执行发生超时，结果可能不完整。");
+    }
+    if (summary.data.truncated) {
+      parts.push("这次输出被截断了。");
     }
     return parts.join(" ");
   }
@@ -550,6 +608,34 @@ const answerLeaksCompletedToolId = (input: {
   });
 };
 
+const answerAcknowledgesUnreadableTerminalEvidence = (answer: string) =>
+  /(garbled|unreadable|not reliable|cannot reliably|不可|不可靠|无法可靠|不能可靠|乱码)/iu.test(
+    answer,
+  );
+
+const answerPretendsUnavailableEvidenceWasUsable = (input: {
+  answer: string;
+  latestSummary: AgentEvidenceSummary | undefined;
+}) => {
+  const summary = input.latestSummary;
+  if (!summary || summary.source !== "tool") {
+    return false;
+  }
+
+  if (summary.status === "completed" || summary.status === "truncated") {
+    return false;
+  }
+
+  const normalized = input.answer.trim();
+  if (!normalized) {
+    return false;
+  }
+
+  return !LIMITATION_DISCLOSURE_PATTERNS.some((pattern) =>
+    pattern.test(normalized),
+  );
+};
+
 export const generateNode = async (
   state: AgentNodeState,
   emit?: EmitAgentExecutionNode,
@@ -676,6 +762,30 @@ export const generateNode = async (
     if (answerLeaksCompletedToolId({ answer, completedToolIds })) {
       outputGuardReason =
         "generate output leaked completed tool id text instead of a user-facing final answer";
+    }
+  }
+  if (!outputGuardReason) {
+    const latestSummary = getEvidencePayload(state).latestSummary;
+    if (
+      answerPretendsUnavailableEvidenceWasUsable({
+        answer,
+        latestSummary,
+      })
+    ) {
+      outputGuardReason =
+        "generate output treated unavailable or unreadable tool evidence as if it were a stable completed result";
+    }
+  }
+  if (!outputGuardReason) {
+    const latestSummary = getEvidencePayload(state).latestSummary;
+    if (
+      latestSummary?.source === "tool" &&
+      latestSummary.data?.kind === "terminal_session" &&
+      !latestSummary.data.outputInterpretable &&
+      !answerAcknowledgesUnreadableTerminalEvidence(answer)
+    ) {
+      outputGuardReason =
+        "generate output interpreted unreadable terminal evidence as grounded content";
     }
   }
   if (!outputGuardReason) {

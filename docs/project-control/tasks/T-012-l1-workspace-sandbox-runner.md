@@ -16,7 +16,7 @@ related:
   - server/src/sandbox/executor.ts
   - server/src/mcp/terminal-sessions.ts
   - server/src/harness/sandbox/index.ts
-task_state: READY_FOR_REVIEW
+task_state: DONE
 ---
 
 # T-012 L1 Workspace Sandbox Runner
@@ -142,5 +142,5 @@ L1 范围：
 
 ## Review Outcome
 
-- 评审结论：待复评
-- 当前状态：`READY_FOR_REVIEW`
+- 评审结论：通过
+- 当前状态：`DONE`
