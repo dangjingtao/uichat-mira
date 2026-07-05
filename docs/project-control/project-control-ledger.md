@@ -42,6 +42,7 @@ related:
 | Phase-1 Remediation | `DONE_WITH_HISTORY` | 早期 P0/P1/P2 缺陷整改 | [agent-workboard.md](agent-workboard.md), `T-001-T008` | 仅作为历史证据，不再作为当前项目台账；阶段口径见 Agent Phase 1 |
 | Test Report / Evidence Hygiene | `PROPOSED` | 测试报告 JSON 合并与瘦身 | [T-009](tasks/T-009-test-report-json-consolidation.md) | `status: proposed`, `canonical: false`，未进入当前执行 |
 | Skill Docs Foundation | `DONE` | `docs/skill` 基础数据 POC 整理为 docs-only Phase 0 | [skill_T001](tasks/skill_T001-docs-only-foundation.md), [docs/skill/roadmap.md](../skill/roadmap.md) | docs-only Phase 0 评审通过；未批准 runtime / DB / UI / AgentGraph / Harness / MCP 实现 |
+| MicroAPP Image Generation POC | `READY_FOR_REVIEW` | 生图微应用 docs-only 基础建设：任务卡、总纲挂载、POC 方案文档 | [microapp_T001](tasks/microapp_T001-image-generation-poc-docs-foundation.md), [image-generation-microapp-poc.md](../microapp/image-generation-microapp-poc.md) | 当前只提交 docs-only POC；未批准 runtime / DB / UI / provider 实现 |
 
 ## Active Review Queue
 
@@ -61,6 +62,7 @@ related:
 | [T-012](tasks/T-012-l1-workspace-sandbox-runner.md) | `DONE` | Harness / Sandbox | Review 02 已通过：L1 workspace sandbox runner |
 | [T-009](tasks/T-009-test-report-json-consolidation.md) | `PROPOSED` | Evidence Hygiene | 决定是否进入执行队列 |
 | [harness_context_T002](tasks/harness_context_T002-context-read-bench.md) | `DONE` | Harness Context | 已验收通过；保留任务外 typecheck 阻断记录 |
+| [microapp_T001](tasks/microapp_T001-image-generation-poc-docs-foundation.md) | `READY_FOR_REVIEW` | MicroAPP | 评审 docs-only 生图微应用 POC 的范围、边界和后续切片是否可接受 |
 
 ## Agent Nodes Index
 

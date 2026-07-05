@@ -12,6 +12,7 @@ Related:
   - ../integrations/third-party-integration-architecture.md
   - ../integrations/third-party-integration-consumption-model.md
   - ../integrations/wecom-microapp-interface-design.md
+  - image-generation-microapp-poc.md
 
 ## 单点真相范围
 
@@ -134,6 +135,7 @@ Related:
 - `knowledge_ingest`
 - `org_directory_lookup`
 - `sales_copilot`
+- `image_generation`
 
 ## 当前绑定关系
 
@@ -268,6 +270,18 @@ Platform
 - 未来按业务角色提供销售导向工作流
 
 这类 `MicroAPP` 不应该提前塞进 `smart robot` 逻辑里，而应单独建模。
+
+### `image_generation`
+
+作用：
+
+- 接收 prompt、风格和画幅参数
+- 调用外部生图 provider
+- 返回可预览、可复用的图片结果与生成元数据
+
+当前 docs-only POC 见：
+
+- `image-generation-microapp-poc.md`
 
 ## 对前端的产品约束
 
