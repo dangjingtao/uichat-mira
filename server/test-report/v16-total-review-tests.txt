@@ -1,11 +1,10 @@
 UIChat Mira V1.6 total review test evidence
-Date: 2026-07-05
+Date: 2026-07-06
 Workspace: D:\workspace\rag-demo
-Commit: 3b79d1dbcfc7ee076fbb925a2636cb18ba54c17d
+Commit: e6f905c09c1e8ea054ad01410dd9014d275ddd18
 
-Git baseline
-- `git status --short --branch`: dirty
-- `git log --oneline -n 10`: starts with `3b79d1d feat: T016`
+Baseline
+- `git status --short` before test run: clean
 
 Executed commands
 
@@ -13,31 +12,49 @@ Executed commands
 pnpm --filter @ui-chat-mira/server test
 Result
 FAIL
-Key output
-- `src/bootstrap-env.test.ts`: `expected undefined to be 'D:\models\raw'`
-- `src/services/thread.service.test.ts`: expected `/Workspace root path format is invalid/`, actual `Error: Workspace root path is invalid`
-- `src/services/thread.service.test.ts`: expected fallback parts `[Image attachment]`, actual `[]`
-- `src/services/rag-nodes/generate.service.test.ts`: 2 assertions failed because actual prompt messages now include extra system evidence message and `parts`
-- `src/mcp/document-readers.test.ts`: `Cannot find package 'xlsx'`
-- `src/mcp/resources/workspace-resource.test.ts`: `Cannot find package 'xlsx'`
-- `src/mcp/tools/read-extract.tool.test.ts`: `Cannot find package 'xlsx'`
-- `src/services/shared-nodes/thread-request-context-web-search.resolver.test.ts`: target module missing
-- `src/mcp/tools/read-locate.tool.test.ts`: timed out at 5000ms in full-suite run
-- `src/mcp/tools/terminal-session.tool.test.ts`: expected stdout to contain `中文`, actual `[binary output omitted]`
+Summary
+- Vitest executed from `D:\workspace\rag-demo\server`
+- Many suites passed, including:
+  - `src/mcp/tools/read-locate.tool.test.ts`
+  - `src/mcp/tools/terminal-session.tool.test.ts`
+  - `src/harness/sandbox/index.test.ts`
+- Full-suite result is still not green
+Failures
+- Missing package `xlsx`
+  - `src/mcp/document-readers.test.ts`
+  - `src/mcp/resources/workspace-resource.test.ts`
+  - `src/mcp/tools/read-extract.tool.test.ts`
+- Assertion mismatch
+  - `src/bootstrap-env.test.ts`
+    - expected `process.env.LOCAL_MODEL_RAW_ROOT` to be `D:\models\raw`
+    - actual `undefined`
+  - `src/services/thread.service.test.ts: createChatWorkspace validates workspace root paths`
+    - expected `/Workspace root path format is invalid/`
+    - actual `Error: Workspace root path is invalid`
+  - `src/services/thread.service.test.ts: thread service fallback read ignores legacy assistantUi text suppression`
+    - expected fallback part `[Image attachment]`
+    - actual `[]`
+  - `src/services/rag-nodes/generate.service.test.ts`
+    - 2 assertions failed because actual prompt messages include extra system evidence message and `parts`
+- Timeout failures in full-suite context
+  - `src/agent/__tests__/routes.test.ts`
+    - `returns and updates runs`
+    - `approve is idempotent when run is not waiting approval`
+    - `approve returns resumed run state from resume helper`
+  - `src/routes/role/roles.routes.test.ts`
+    - `role routes support create list update delete`
 
 2. Command
-pnpm --filter @ui-chat-mira/server exec vitest run src/harness/exposure.test.ts src/harness/tool-candidates.test.ts src/harness/capability-diagnostics.test.ts src/mcp/tools/web-search.tool.test.ts src/mcp/tools/terminal-session.tool.test.ts src/routes/proxy-provider/chat-tool-surface.test.ts
+pnpm --filter @ui-chat-mira/server test -- src/harness/exposure.test.ts src/harness/tool-candidates.test.ts src/harness/capability-diagnostics.test.ts src/mcp/tools/web-search.tool.test.ts src/mcp/tools/terminal-session.tool.test.ts src/routes/proxy-provider/chat-tool-surface.test.ts
 Result
-FAIL
+PASS
 Summary
-- 5 files passed
-- 1 file failed
-Failure
-- `server/src/mcp/tools/terminal-session.tool.test.ts:652`
-  `expected '[binary output omitted]' to contain '中文'`
+- 6 files passed
+- 97 tests passed
+- `terminal-session.tool.test.ts` passed in this rerun
 
 3. Command
-pnpm --filter @ui-chat-mira/server exec vitest run src/agent/__tests__/toolcall-loop-regression.test.ts src/agent/__tests__/tool-call-normalize.test.ts src/agent/__tests__/tool-node.test.ts src/agent/__tests__/policy.test.ts src/agent/__tests__/graph.test.ts src/agent/__tests__/routes.test.ts src/routes/proxy-provider/chat-tool-loop.test.ts
+pnpm --filter @ui-chat-mira/server test -- src/agent/__tests__/toolcall-loop-regression.test.ts src/agent/__tests__/tool-call-normalize.test.ts src/agent/__tests__/tool-node.test.ts src/agent/__tests__/policy.test.ts src/agent/__tests__/graph.test.ts src/agent/__tests__/routes.test.ts src/routes/proxy-provider/chat-tool-loop.test.ts
 Result
 PASS
 Summary
@@ -45,31 +62,34 @@ Summary
 - 97 tests passed
 
 4. Command
-pnpm --filter @ui-chat-mira/server exec vitest run src/sandbox/executor.test.ts src/harness/sandbox.test.ts src/harness/sandbox/index.test.ts
+pnpm --filter @ui-chat-mira/server test -- src/sandbox/executor.test.ts src/harness/sandbox.test.ts src/harness/sandbox/index.test.ts
 Result
 PASS
 Summary
 - 3 files passed
-- 34 tests passed
+- 36 tests passed
 
 5. Command
-pnpm --filter @ui-chat-mira/server exec vitest run src/harness/context/planner.test.ts src/harness/context/bench/cases.test.ts src/mcp/tools/read-list.tool.test.ts src/mcp/tools/read-open.tool.test.ts src/mcp/tools/read-locate.tool.test.ts src/services/shared-nodes/thread-request-context-web-search.resolver.test.ts src/agent/__tests__/trace.test.ts
+pnpm --filter @ui-chat-mira/server test -- src/harness/context/planner.test.ts src/harness/context/bench/cases.test.ts src/mcp/tools/read-list.tool.test.ts src/mcp/tools/read-open.tool.test.ts src/mcp/tools/read-locate.tool.test.ts src/services/shared-nodes/thread-request-context-web-search.resolver.test.ts src/agent/__tests__/trace.test.ts
 Result
-FAIL
+PASS WITH COVERAGE GAP
 Summary
-- 6 files passed
-- 1 suite failed to load
-Failure
-- `server/src/services/shared-nodes/thread-request-context-web-search.resolver.test.ts:3`
-  `Cannot find module './thread-request-context-web-search.resolver.js'`
+- Vitest reported 6 files passed
+- 18 tests passed
+Gap
+- `src/services/shared-nodes/thread-request-context-web-search.resolver.test.ts` does not exist in the current workspace
+- Because the file is absent, this command did not actually provide executable coverage for that resolver chain
 
 6. Command
 pnpm --filter @ui-chat-mira/server bench:sandbox:direct
 Result
-PASS WITH GAP
+PASS WITH FUTURE-PROFILE GAP
 Summary
 - runner: `sandbox-direct-bench`
-- total `8`, passed `7`, failed `0`, notImplemented `1`
+- total `10`
+- gatePassed `7`
+- gateFailed `0`
+- futureProfile `3`
 Important cases
 - unicode output preserved
 - non-zero exit returns `status=failed` and `exitCode=7`
@@ -77,9 +97,12 @@ Important cases
 - timeout returns `status=timed_out`
 - output limit returns `truncated=true`
 - artifact registration returned concrete artifact metadata
-Gap
-- `read_only` profile reported as `not_implemented`
-- contract coverage also reports `workspace_write` and `networked_command` as `not_implemented`
+Future-profile gap
+- `read_only`
+- `workspace_write`
+- `networked_command`
+Note
+- This runner output no longer reports those 3 profiles as bench result `not_implemented`; it reports them as `future_profile`.
 
 7. Command
 pnpm --filter @ui-chat-mira/server bench:context:read
@@ -87,10 +110,12 @@ Result
 PASS
 Summary
 - runner: `context-read-bench`
-- total `11`, passed `11`, failed `0`
+- total `11`
+- passed `11`
+- failed `0`
 Important cases
-- `read_list`, `read_open`, `read_slice`, `locate->open`, `list->open`, `inspect` all covered
-- UTF-8 BOM, GBK uncertain decode, binaryDetected, and budget clipping covered
-
-Notes
-- The `pnpm ... exec vitest run ...` commands printed an extra trailing line `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL Command "vitest" not found` after Vitest finished. The test bodies still executed and returned real pass/fail summaries, so the command-level status above follows the actual Vitest outcome plus the shell exit code.
+- `read_list`, `read_open`, `read_slice`, `locate->open`, `list->open`, `inspect`
+- UTF-8 BOM
+- GBK uncertain decode
+- binaryDetected
+- budget clipping
