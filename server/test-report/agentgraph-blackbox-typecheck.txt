@@ -1,9 +1,4 @@
-AgentGraph blackbox typecheck report
-Current HEAD: 68e11d7ce8157cf6f8ab73c66eeb289d264c5675
-Runtime modified: No
 
-Command:
-pnpm --filter @ui-chat-mira/server typecheck
+> @ui-chat-mira/server@0.7.1 typecheck D:\workspace\rag-demo\server
+> node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json
 
-Result:
-- PASS
