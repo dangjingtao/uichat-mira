@@ -1,12 +1,26 @@
-import type { McpArtifact } from "@/mcp/core/definitions.js";
-
 export type SandboxProfile =
   | "read_only"
   | "workspace_write"
   | "command"
   | "networked_command";
 
-export type SandboxArtifact = McpArtifact;
+export type SandboxArtifactKind = "file" | "directory" | "patch" | "log" | "report";
+
+export type SandboxOutputEncoding = "utf8" | "gbk" | "utf16le" | "unknown";
+
+export interface SandboxArtifactRegistration {
+  path: string;
+  kind?: SandboxArtifactKind;
+}
+
+export interface SandboxArtifact {
+  id: string;
+  kind: SandboxArtifactKind;
+  path: string;
+  size: number;
+  mime?: string;
+  createdAt: string;
+}
 
 export interface SandboxRunRequest {
   profile: SandboxProfile;
@@ -16,6 +30,7 @@ export interface SandboxRunRequest {
   env?: Record<string, string>;
   timeoutMs?: number;
   outputLimitBytes?: number;
+  artifactRegistrations?: SandboxArtifactRegistration[];
 }
 
 export interface SandboxRunResult {
@@ -23,8 +38,11 @@ export interface SandboxRunResult {
   exitCode?: number | null;
   stdoutText: string;
   stderrText: string;
+  stdoutEncoding: SandboxOutputEncoding;
+  stderrEncoding: SandboxOutputEncoding;
   durationMs: number;
   truncated: boolean;
+  binaryDetected: boolean;
   violations: string[];
   artifacts: SandboxArtifact[];
 }

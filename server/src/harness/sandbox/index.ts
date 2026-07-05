@@ -1,8 +1,7 @@
 import { performance } from "node:perf_hooks";
-import { createArtifact } from "@/mcp/core/artifacts.js";
+import { createHarnessEnvironmentSnapshot } from "@/harness/environment.js";
 import { runWithWorkspaceRootOverride } from "@/mcp/workspace.js";
 import {
-  createSandboxShellProfile,
   executeSandboxedCommand,
 } from "@/sandbox/executor.js";
 import type {
@@ -46,14 +45,7 @@ const SANDBOX_L1_WORKSPACE_RUNNER_CHECKS: SandboxL1RequirementChecks = {
   windows_kill_tree_limitation_marked: true,
 };
 
-const createDefaultShellProfile = () =>
-  createSandboxShellProfile({
-    shell: process.platform === "win32" ? "powershell.exe" : "/bin/sh",
-    shellFamily: process.platform === "win32" ? "powershell" : "posix",
-    argsMode: process.platform === "win32" ? "powershell" : "posix",
-    stdoutEncoding: "utf8",
-    stderrEncoding: "utf8",
-  });
+const createDefaultShellProfile = () => createHarnessEnvironmentSnapshot().terminal.shellProfile;
 
 const isBlockedError = (message: string) =>
   message.includes("path must stay inside workspace root") ||
@@ -103,8 +95,11 @@ export const runSandboxCommandDirect = async (
       exitCode: null,
       stdoutText: "",
       stderrText: "",
+      stdoutEncoding: "unknown",
+      stderrEncoding: "unknown",
       durationMs: Math.round(performance.now() - startedAt),
       truncated: false,
+      binaryDetected: false,
       violations: [toNotImplementedViolation(request.profile)],
       artifacts: [],
     };
@@ -118,26 +113,11 @@ export const runSandboxCommandDirect = async (
         env: request.env,
         timeoutMs: request.timeoutMs ?? DEFAULT_TIMEOUT_MS,
         outputLimitBytes: request.outputLimitBytes ?? DEFAULT_OUTPUT_LIMIT_BYTES,
+        artifactRegistrations: request.artifactRegistrations,
         signal: new AbortController().signal,
         shellProfile: createDefaultShellProfile(),
       }),
     );
-
-    const artifacts =
-      execution.stdout || execution.stderr
-        ? [
-            createArtifact({
-              kind: "terminal-log",
-              title: "sandbox-direct-output",
-              mimeType: "text/plain",
-              data: execution.output,
-              metadata: {
-                exitCode: execution.exitCode,
-                cwd: execution.cwd,
-              },
-            }),
-          ]
-        : [];
 
     return {
       status: execution.timedOut
@@ -148,10 +128,13 @@ export const runSandboxCommandDirect = async (
       exitCode: execution.exitCode,
       stdoutText: execution.stdout,
       stderrText: execution.stderr,
+      stdoutEncoding: execution.stdoutEncoding,
+      stderrEncoding: execution.stderrEncoding,
       durationMs: Math.round(performance.now() - startedAt),
       truncated: execution.truncated,
+      binaryDetected: execution.binaryDetected,
       violations: execution.violations,
-      artifacts,
+      artifacts: execution.artifacts,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -164,8 +147,11 @@ export const runSandboxCommandDirect = async (
       exitCode: null,
       stdoutText: "",
       stderrText: message,
+      stdoutEncoding: "unknown",
+      stderrEncoding: "unknown",
       durationMs: Math.round(performance.now() - startedAt),
       truncated: isOutputLimitError(message),
+      binaryDetected: false,
       violations: isBlockedError(message) || isOutputLimitError(message) ? [message] : [],
       artifacts: [],
     };

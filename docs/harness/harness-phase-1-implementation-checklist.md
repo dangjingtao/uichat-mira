@@ -79,6 +79,9 @@ Doc Type: checklist
 ### B4. 输出与资源限制
 
 - [x] 为 stdout / stderr 增加总量上限
+- [x] `stdout` / `stderr` 编码结果显式回传
+- [x] 二进制输出不再直接按文本回传
+- [x] workspace 内文件/目录支持显式 artifact 注册
 - [x] 为执行增加 timeout
 - [ ] 为并发执行增加上限
 - [ ] 明确默认不允许长驻后台进程逃逸

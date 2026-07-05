@@ -29,6 +29,8 @@ export const resolveHarnessToolCandidatesForTurn = async (
   const exposureDecision = resolveHarnessToolExposure({
     source,
     query: input.query,
+    allowExternal: input.allowExternal,
+    sandboxProfiles: input.sandboxProfiles,
   });
   const visibleDefinitions = exposureDecision.exposedDefinitions;
   const profiles = resolveHarnessCapabilityProfiles(visibleDefinitions);

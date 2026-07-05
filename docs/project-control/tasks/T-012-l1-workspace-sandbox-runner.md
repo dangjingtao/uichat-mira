@@ -77,8 +77,8 @@ L1 范围：
   - workdir: `D:/workspace/rag-demo`
   - result: passed
   - summary:
-    - `total: 7`
-    - `passed: 6`
+    - `total: 8`
+    - `passed: 7`
     - `failed: 0`
     - `notImplemented: 1`
 - `pnpm --filter @ui-chat-mira/server exec tsc --noEmit -p tsconfig.json`

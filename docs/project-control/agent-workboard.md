@@ -265,6 +265,7 @@ related:
 | `Standalone` | [T-010-harness-candidate-ordering.md](D:/workspace/rag-demo/docs/project-control/tasks/T-010-harness-candidate-ordering.md) | `P1` | `READY_FOR_REVIEW` | 已完成 Harness 候选排序缺陷修复与定向验证；当前等待评审 |
 | `Standalone` | [T-011-sandbox-contract-direct-bench.md](D:/workspace/rag-demo/docs/project-control/tasks/T-011-sandbox-contract-direct-bench.md) | `P1` | `READY_FOR_REVIEW` | 已补 Sandbox direct bench、独立 bench contract、JSON runner 和 `not_implemented` 标记；当前等待按最新工作区复评 |
 | `Standalone` | [T-012-l1-workspace-sandbox-runner.md](D:/workspace/rag-demo/docs/project-control/tasks/T-012-l1-workspace-sandbox-runner.md) | `P1` | `READY_FOR_REVIEW` | 已完成 L1 Workspace Sandbox Runner：cwd workspace 锁、env 白名单、timeout/output 上限、direct result violations、Windows kill tree limitation 标记、sandbox unavailable 时隐藏 terminal_session |
+| `Standalone` | [T-013-sandbox-artifact-output-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/T-013-sandbox-artifact-output-contract.md) | `P1` | `READY_FOR_REVIEW` | 已完成 Sandbox artifact/output 合同：artifact 注册、stdout/stderr 编码回传、binary 检测与 direct bench 覆盖 |
 
 ## Technical Debt
 
@@ -275,11 +276,20 @@ related:
 
 ## Recent Verification Notes
 
+- `2026-07-05`：已完成 `T-013` 定向验证：
+  - `pnpm --filter @ui-chat-mira/server test -- src/sandbox/executor.test.ts src/harness/sandbox/index.test.ts`
+  - 结果：通过，`31 passed`
+  - `pnpm --filter @ui-chat-mira/server bench:sandbox:direct D:\workspace\rag-demo`
+  - 结果：通过
+  - `pnpm --filter @ui-chat-mira/server exec tsc --noEmit -p tsconfig.json`
+  - 结果：通过
+  - `pnpm check`
+  - 结果：通过
 - `2026-07-05`：已完成 `T-012` 定向验证：
   - `pnpm --filter @ui-chat-mira/server test -- src/harness/exposure.test.ts src/mcp/tools/terminal-session.tool.test.ts src/harness/sandbox.test.ts src/harness/sandbox/index.test.ts src/sandbox/executor.test.ts`
   - 结果：通过，`78 passed`
   - `pnpm --filter @ui-chat-mira/server bench:sandbox:direct D:\workspace\rag-demo`
-  - 结果：通过，JSON summary 为 `total=7`、`passed=6`、`failed=0`、`notImplemented=1`
+  - 结果：通过，JSON summary 为 `total=8`、`passed=7`、`failed=0`、`notImplemented=1`
   - `pnpm --filter @ui-chat-mira/server exec tsc --noEmit -p tsconfig.json`
   - 结果：通过
   - `pnpm check`
@@ -288,7 +298,7 @@ related:
   - `pnpm --filter @ui-chat-mira/server exec vitest run src/harness/sandbox.test.ts src/harness/sandbox/index.test.ts src/sandbox/executor.test.ts`
   - 结果：通过，`19 passed`
   - `pnpm --filter @ui-chat-mira/server bench:sandbox:direct D:\workspace\rag-demo`
-  - 结果：通过，JSON summary 为 `total=7`、`passed=6`、`failed=0`、`notImplemented=1`
+  - 结果：通过，JSON summary 为 `total=8`、`passed=7`、`failed=0`、`notImplemented=1`
   - `pnpm --filter @ui-chat-mira/server exec tsc --noEmit -p tsconfig.json`
   - 结果：通过
   - `pnpm check`

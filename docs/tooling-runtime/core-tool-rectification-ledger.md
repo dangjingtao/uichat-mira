@@ -2,7 +2,7 @@
 
 Status: Active
 Owner: runtime
-Last verified: 2026-07-02
+Last verified: 2026-07-05
 Layer: raw-source
 Module: Tool
 Feature: CoreToolRectification
@@ -674,6 +674,29 @@ edit_replace_block
       - 结果：通过，`9 passed`
     - `pnpm --filter @ui-chat-mira/server typecheck`
       - 结果：通过
+  - 2026-07-05 回归包补强：
+    - `server/src/harness/exposure.test.ts` 增加工具暴露 direct regression pack，覆盖：
+      - workspace README 文件内容请求
+      - workspace 目录列表
+      - workspace 模糊查找
+      - `chat_surface` safe domains
+      - terminal 明确命令 / 非命令
+      - 小聊天
+      - external MCP default hidden / `allowExternal=true`
+    - `server/src/harness/tool-candidates.test.ts` 补齐 12 类工具暴露 regression pack，逐条断言：
+      - `exposedToolIds`
+      - `blockedCapabilityIds`
+      - `reasons`
+      - `toolCandidates` topN
+      - `preferredForQuery`
+    - `server/src/harness/capability-diagnostics.test.ts` 补 diagnostics 层回归，确认 `allowExternal` / `sandboxProfiles` 能继续透传到候选与诊断输出
+  - 2026-07-05 本地验证：
+    - `pnpm --filter @ui-chat-mira/server test -- src/harness/exposure.test.ts src/harness/tool-candidates.test.ts src/harness/capability-diagnostics.test.ts`
+      - 结果：通过，`3 files`、`60 passed`
+    - `pnpm --filter @ui-chat-mira/server exec tsc --noEmit -p tsconfig.json`
+      - 结果：通过
+    - `pnpm check`
+      - 结果：通过
 
 - [x] `terminal_session` / SandboxExecutor 达到 L1 Workspace Sandbox Runner 最小能力
   - 任务卡：
@@ -697,7 +720,30 @@ edit_replace_block
     - `pnpm --filter @ui-chat-mira/server test -- src/harness/exposure.test.ts src/mcp/tools/terminal-session.tool.test.ts src/harness/sandbox.test.ts src/harness/sandbox/index.test.ts src/sandbox/executor.test.ts`
       - 结果：通过，`78 passed`
     - `pnpm --filter @ui-chat-mira/server bench:sandbox:direct D:\workspace\rag-demo`
-      - 结果：通过，JSON summary 为 `total=7`、`passed=6`、`failed=0`、`notImplemented=1`
+      - 结果：通过，JSON summary 为 `total=8`、`passed=7`、`failed=0`、`notImplemented=1`
+    - `pnpm --filter @ui-chat-mira/server exec tsc --noEmit -p tsconfig.json`
+      - 结果：通过
+    - `pnpm check`
+      - 结果：通过
+
+- [x] Sandbox direct result 补齐 artifact/output 合同
+  - 任务卡：
+    - `docs/project-control/tasks/T-013-sandbox-artifact-output-contract.md`
+    - `C:/Users/Administrator/Downloads/mira-v16-classified-taskcards/03-sandbox-runtime/task/03-artifact-output-contract.md`
+  - 结果标准：
+    - result 包含 `stdoutText` / `stderrText`、`stdoutEncoding` / `stderrEncoding`、`truncated`、`binaryDetected`
+    - binary 输出不直接按文本展开
+    - 命令生成的 workspace 内文件/目录可显式注册为 artifact
+  - 当前实现：
+    - `server/src/harness/sandbox/contract.ts` 新增本地产物 artifact 合同与输出编码字段
+    - `server/src/sandbox/executor.ts` 增加编码归一、二进制检测和 artifact 注册
+    - `server/src/harness/sandbox/index.ts` 把 executor 的编码 / binary / artifact 结果回传到 direct contract
+    - `server/src/harness/sandbox/bench/cases.ts` 新增 artifact 注册正向 bench case
+  - 验证结果：
+    - `pnpm --filter @ui-chat-mira/server test -- src/sandbox/executor.test.ts src/harness/sandbox/index.test.ts`
+      - 结果：通过，`31 passed`
+    - `pnpm --filter @ui-chat-mira/server bench:sandbox:direct D:\workspace\rag-demo`
+      - 结果：通过
     - `pnpm --filter @ui-chat-mira/server exec tsc --noEmit -p tsconfig.json`
       - 结果：通过
     - `pnpm check`

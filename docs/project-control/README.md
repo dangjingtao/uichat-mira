@@ -1,7 +1,7 @@
 ---
 status: current
 owner: docs
-last_verified:
+last_verified: 2026-07-05
 layer: project-control
 module: ProjectControl
 feature: Workboard
@@ -45,6 +45,7 @@ docs/project-control/
     agent-nodes-V1.5 全新线程复测.md
   phase-conclusions/
     agent-nodes-V1.5 终审.md
+    agent-phase-1-2-archive-decision.md
   tasks/
     T-001-example-task.md
   reviews/
@@ -244,11 +245,11 @@ If a high-risk gate is triggered, stop and ask the project owner before implemen
 
 At the end of a phase:
 
-- create a dated archive directory
-- copy the final workboard as `workboard.snapshot.md`
-- move completed task cards into the archive
-- copy relevant review and decision files
-- keep only active or upcoming work in the live workboard
+- record the phase-level conclusion under `phase-conclusions/`
+- link the conclusion from `project-control-ledger.md`
+- keep historical task cards in place unless the project owner explicitly approves a move
+- if a dated archive directory is needed, use it for historical snapshots, not as a second active ledger
+- keep only active or upcoming work in the single live project control ledger
 
 Archived material should remain readable, but it should not compete with current project truth.
 

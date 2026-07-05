@@ -18,6 +18,8 @@ interface SandboxBenchCaseDefinition {
   };
 }
 
+const benchArtifactPath = ".artifacts/sandbox-bench/sandbox-bench-artifact.txt";
+
 const buildCommandSet = () => {
   if (process.platform === "win32") {
     return {
@@ -27,6 +29,7 @@ const buildCommandSet = () => {
       exitCode: "exit 7",
       timeout: "Start-Sleep -Seconds 2",
       hugeOutput: "1..9000 | ForEach-Object { '0123456789' }",
+      artifactWrite: `New-Item -ItemType Directory -Force -Path '.artifacts/sandbox-bench' | Out-Null; Set-Content -Path '${benchArtifactPath}' -Value 'artifact output'`,
     };
   }
 
@@ -36,6 +39,7 @@ const buildCommandSet = () => {
     exitCode: "exit 7",
     timeout: "sleep 2",
     hugeOutput: "yes 0123456789 | head -n 9000",
+    artifactWrite: `mkdir -p .artifacts/sandbox-bench && printf 'artifact output\\n' > '${benchArtifactPath}'`,
   };
 };
 
@@ -109,6 +113,31 @@ export const createSandboxDirectBenchCases = (
           passed,
           "exitCode=7 已回传，非零退出不会被吞掉",
           `期望 failed + exitCode=7，实际 status=${result.status} exitCode=${String(result.exitCode)}`,
+        ),
+      };
+    },
+  },
+  {
+    id: "positive-artifact-registration",
+    group: "positive",
+    description: "registered workspace artifact should be returned",
+    request: {
+      profile: "command",
+      workspaceRoot,
+      command: commandSet.artifactWrite,
+      timeoutMs: 5_000,
+      artifactRegistrations: [{ path: benchArtifactPath, kind: "report" }],
+    },
+    evaluate: (result) => {
+      const passed =
+        result.status === "completed" &&
+        result.artifacts.some((artifact) => artifact.kind === "report");
+      return {
+        status: passed ? "passed" : "failed",
+        notes: createNotes(
+          passed,
+          "命令生成的本地文件已按 artifact 合同回传",
+          `期望 artifacts 中存在 report，实际 status=${result.status} artifacts=${JSON.stringify(result.artifacts)}`,
         ),
       };
     },

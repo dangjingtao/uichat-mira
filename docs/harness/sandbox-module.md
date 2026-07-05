@@ -43,6 +43,9 @@ Doc Type: current-contract
 - workspace 真实路径边界检查
 - 最小 env 白名单
 - stdout / stderr 总量限制与 `truncated` 标记
+- `stdoutText` / `stderrText` 分离回传，并附带编码标记
+- 二进制输出检测；命中后不再直接当普通文本展开
+- 命令完成后可显式登记 workspace 内文件/目录 artifact
 - timeout 默认值、调用层限幅与执行层硬上限
 - abort / 进程树终止；Windows kill tree 为 best-effort，并在 timeout result 中标记 limitation
 - 最小命令 + 参数策略
@@ -139,7 +142,7 @@ Doc Type: current-contract
 当前已补一条绕过 LLM / Planner / Tool Selection / `read_list` / Generate 的 direct bench：
 
 - bench 直接调用 `SandboxRunRequest -> SandboxRunResult`
-- 正向覆盖 `echo hello`、中文输出、非零 `exitCode`
+- 正向覆盖 `echo hello`、中文输出、非零 `exitCode`、artifact 注册
 - 负向覆盖 `cwd` 越界、超短 `timeout`、巨量输出
 - 输出为结构化 JSON
 

@@ -3,6 +3,55 @@ import * as embedding from "@/services/internal-capabilities/local-embedding.js"
 import * as rerank from "@/services/internal-capabilities/local-rerank.js";
 import { clearHarnessRegistry, registerCapability } from "./registry.js";
 import { resolveHarnessCapabilityDiagnostics } from "./capability-diagnostics.js";
+import { readOpenTool } from "../mcp/tools/read-open.tool.js";
+import { webSearchTool } from "../mcp/tools/web-search.tool.js";
+import { terminalSessionTool } from "../mcp/tools/terminal-session.tool.js";
+
+const externalFakeTool = {
+  definition: {
+    id: "external_fake_tool",
+    title: "External Fake Tool",
+    description: "Use an external MCP system.",
+    domain: "external_mcp" as const,
+    source: "external" as const,
+    mode: "sync" as const,
+    inputSchema: {},
+    tags: ["external", "system", "use"],
+    capabilities: {
+      sideEffect: "network" as const,
+      requiresApproval: false,
+    },
+  },
+  execute() {
+    return {};
+  },
+};
+
+const mockRecallOrder = (preferredCapabilityIds: string[] = []) => {
+  vi.spyOn(embedding, "executeLocalEmbedding").mockRejectedValue(
+    new Error("LOCAL_MODEL_RAW_ROOT is not set."),
+  );
+  vi.spyOn(rerank, "executeLocalRerank").mockImplementation(async ({ candidates }) => {
+    const scored = candidates
+      .map((candidate) => {
+        const orderIndex = preferredCapabilityIds.indexOf(candidate.id);
+        return {
+          id: candidate.id,
+          text: candidate.text,
+          score: orderIndex === -1 ? 0.1 : 1 - orderIndex * 0.1,
+          probability: orderIndex === -1 ? 0.1 : 0.95 - orderIndex * 0.1,
+          rank: orderIndex === -1 ? preferredCapabilityIds.length + 1 : orderIndex + 1,
+        };
+      })
+      .sort((left, right) => right.probability - left.probability);
+
+    return {
+      rerankedCandidates: scored,
+      rerankModel: "test-rerank",
+      rerankModelConfigId: "test-rerank-config",
+    };
+  });
+};
 
 describe("resolveHarnessCapabilityDiagnostics", () => {
   beforeEach(() => {
@@ -234,8 +283,9 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
     });
 
     const result = await resolveHarnessCapabilityDiagnostics({
-      query: "run a terminal command",
+      query: "run pnpm check",
       source: "agent_intent",
+      sandboxProfiles: { command: true },
     });
 
     expect(result.profiles).toEqual(
@@ -331,4 +381,106 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
     });
     expect(result.toolCandidates[0]?.finalScore).toBeGreaterThan(0);
   });
+
+  it.each([
+    {
+      label: "workspace-local README query stays on read_open",
+      query: "请打开 README.md 看看 Runtime 部分",
+      source: "agent_intent" as const,
+      tools: [readOpenTool, webSearchTool, externalFakeTool],
+      rerankOrder: ["read_open"],
+      expectedExposedToolIds: ["read_open"],
+      expectedBlockedCapabilityIds: ["web_search", "external_fake_tool"],
+      expectedReason: "Workspace-local query hides web_search for agent_intent; local read evidence should be preferred.",
+      expectedTopToolId: "read_open",
+      expectedPreferredToolId: "read_open",
+    },
+    {
+      label: "chat surface keeps safe built-in domains only",
+      query: "今天最新新闻是什么",
+      source: "chat_surface" as const,
+      tools: [readOpenTool, webSearchTool, terminalSessionTool, externalFakeTool],
+      rerankOrder: ["web_research", "read_open"],
+      expectedExposedToolIds: ["web_search"],
+      expectedBlockedCapabilityIds: ["terminal_session", "external_fake_tool"],
+      expectedReason: "Chat-visible tool surface is restricted to safe built-in domains.",
+      expectedTopToolId: "web_search",
+      expectedPreferredToolId: "web_search",
+    },
+    {
+      label: "non-command turn keeps terminal hidden in diagnostics",
+      query: "帮我总结 README.md",
+      source: "agent_intent" as const,
+      tools: [terminalSessionTool, externalFakeTool],
+      rerankOrder: [],
+      expectedExposedToolIds: [],
+      expectedBlockedCapabilityIds: ["terminal_session", "external_fake_tool"],
+      expectedReason: "Terminal tools are hidden unless the turn clearly asks to run a command.",
+      expectedTopToolId: undefined,
+      expectedPreferredToolId: undefined,
+    },
+    {
+      label: "allowExternal propagates to diagnostics",
+      query: "use external system",
+      source: "agent_intent" as const,
+      tools: [externalFakeTool],
+      allowExternal: true,
+      rerankOrder: ["external_fake_tool"],
+      expectedExposedToolIds: ["external_fake_tool"],
+      expectedBlockedCapabilityIds: [],
+      expectedReason: undefined,
+      expectedTopToolId: "external_fake_tool",
+      expectedPreferredToolId: "external_fake_tool",
+    },
+    {
+      label: "sandbox-unavailable command keeps terminal blocked",
+      query: "run pnpm check",
+      source: "agent_intent" as const,
+      tools: [terminalSessionTool, externalFakeTool],
+      sandboxProfiles: { command: false },
+      rerankOrder: [],
+      expectedExposedToolIds: [],
+      expectedBlockedCapabilityIds: ["terminal_session", "external_fake_tool"],
+      expectedReason: "Sandbox-required tools are hidden when their sandbox profile is unavailable.",
+      expectedTopToolId: undefined,
+      expectedPreferredToolId: undefined,
+    },
+  ])(
+    "mirrors the exposure regression pack in diagnostics: $label",
+    async ({
+      query,
+      source,
+      tools,
+      allowExternal,
+      sandboxProfiles,
+      rerankOrder,
+      expectedExposedToolIds,
+      expectedBlockedCapabilityIds,
+      expectedReason,
+      expectedTopToolId,
+      expectedPreferredToolId,
+    }) => {
+      for (const tool of tools) {
+        registerCapability(tool);
+      }
+      mockRecallOrder(rerankOrder);
+
+      const result = await resolveHarnessCapabilityDiagnostics({
+        query,
+        source,
+        allowExternal,
+        sandboxProfiles,
+      });
+
+      expect(result.toolExposure.exposedToolIds).toEqual(expectedExposedToolIds);
+      expect(result.blockedCapabilityIds).toEqual(expect.arrayContaining(expectedBlockedCapabilityIds));
+      if (expectedReason) {
+        expect(result.exposureReasons).toContain(expectedReason);
+      }
+      expect(result.toolCandidates[0]?.toolId).toBe(expectedTopToolId);
+      expect(
+        result.toolCandidates.find((candidate) => candidate.preferredForQuery === true)?.toolId,
+      ).toBe(expectedPreferredToolId);
+    },
+  );
 });

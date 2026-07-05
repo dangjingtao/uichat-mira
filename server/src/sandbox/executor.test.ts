@@ -1,4 +1,6 @@
 import { EventEmitter } from "node:events";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { executeSandboxedCommand } from "./executor.js";
@@ -42,6 +44,8 @@ const createMockSpawnProcess = () => {
 };
 
 describe("SandboxExecutor", () => {
+  const tempDirs: string[] = [];
+
   beforeEach(() => {
     process.env.UI_CHAT_WORKSPACE_ROOT = process.cwd();
     clearWorkspaceSelection();
@@ -52,6 +56,15 @@ describe("SandboxExecutor", () => {
     delete process.env.UI_CHAT_WORKSPACE_ROOT;
     clearWorkspaceSelection();
     vi.restoreAllMocks();
+  });
+
+  afterEach(async () => {
+    while (tempDirs.length > 0) {
+      const dir = tempDirs.pop();
+      if (dir) {
+        await rm(dir, { recursive: true, force: true });
+      }
+    }
   });
 
   it("rejects cwd outside workspace root", async () => {
@@ -175,6 +188,7 @@ describe("SandboxExecutor", () => {
 
     expect(result.timedOut).toBe(true);
     expect(result.exitCode).toBeNull();
+    expect(result.binaryDetected).toBe(false);
     expect(child.kill).toHaveBeenCalled();
   });
 
@@ -194,6 +208,7 @@ describe("SandboxExecutor", () => {
 
     const result = await promise;
     expect(result.stdout).toBe("ok");
+    expect(result.stdoutEncoding).toBe("utf8");
     expect(sandboxMocks.spawnMock).toHaveBeenCalledWith(
       expect.stringContaining("powershell.exe"),
       ["-NoProfile", "-Command", "node script.js"],
@@ -302,5 +317,56 @@ describe("SandboxExecutor", () => {
 
     expect(result.timedOut).toBe(true);
     expect(result.violations).toContain("terminal execution timed out after 60000ms");
+  });
+
+  it("marks binary stdout instead of decoding it as text", async () => {
+    const child = createMockSpawnProcess();
+    sandboxMocks.spawnMock.mockReturnValue(child);
+
+    const promise = executeSandboxedCommand({
+      command: "node script.js",
+      timeoutMs: 500,
+      signal: new AbortController().signal,
+      shellProfile,
+    });
+
+    child.stdout.emit("data", Buffer.from([0x00, 0x01, 0x02, 0x03, 0x04]));
+    child.emit("close", 0);
+
+    const result = await promise;
+    expect(result.binaryDetected).toBe(true);
+    expect(result.stdout).toBe("[binary output omitted]");
+    expect(result.stdoutEncoding).toBe("unknown");
+  });
+
+  it("collects registered artifacts after command completion", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "mira-sandbox-executor-"));
+    tempDirs.push(tempRoot);
+    await mkdir(path.join(tempRoot, "workspace"), { recursive: true });
+    const workspaceRoot = path.join(tempRoot, "workspace");
+    const artifactPath = path.join(workspaceRoot, "report.txt");
+    await writeFile(artifactPath, "report body", "utf8");
+    process.env.UI_CHAT_WORKSPACE_ROOT = workspaceRoot;
+
+    const child = createMockSpawnProcess();
+    sandboxMocks.spawnMock.mockReturnValue(child);
+
+    const promise = executeSandboxedCommand({
+      command: "node script.js",
+      timeoutMs: 500,
+      artifactRegistrations: [{ path: "report.txt", kind: "report" }],
+      signal: new AbortController().signal,
+      shellProfile,
+    });
+
+    child.emit("close", 0);
+    const result = await promise;
+
+    expect(result.artifacts).toHaveLength(1);
+    expect(result.artifacts[0]).toMatchObject({
+      kind: "report",
+      path: artifactPath,
+      mime: "text/plain",
+    });
   });
 });

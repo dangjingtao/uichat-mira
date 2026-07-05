@@ -1,9 +1,16 @@
 import { spawn } from "node:child_process";
+import { stat } from "node:fs/promises";
 import path from "node:path";
 import type { McpExecutionEnvironment } from "@/mcp/core/definitions.js";
 import { mcpBadRequest, mcpInternalError } from "@/mcp/core/errors.js";
 import { decodeTerminalOutput } from "@/mcp/terminal/encoding.js";
-import { resolveWorkspaceDirectoryPath } from "@/mcp/workspace.js";
+import { resolveWorkspaceDirectoryPath, resolveWorkspacePath } from "@/mcp/workspace.js";
+import type {
+  SandboxArtifact,
+  SandboxArtifactKind,
+  SandboxArtifactRegistration,
+  SandboxOutputEncoding,
+} from "@/harness/sandbox/contract.js";
 import { assertSandboxCommandPolicy } from "./policy.js";
 
 export interface SandboxShellProfile {
@@ -19,6 +26,7 @@ export interface SandboxExecutionInput {
   env?: Record<string, string>;
   timeoutMs: number;
   outputLimitBytes?: number;
+  artifactRegistrations?: SandboxArtifactRegistration[];
   signal: AbortSignal;
   shellProfile: SandboxShellProfile;
   pushStdout?: (chunk: string) => void;
@@ -31,14 +39,20 @@ export interface SandboxExecutionResult {
   timedOut: boolean;
   stdout: string;
   stderr: string;
+  stdoutEncoding: SandboxOutputEncoding;
+  stderrEncoding: SandboxOutputEncoding;
   output: string;
   truncated: boolean;
+  binaryDetected: boolean;
   violations: string[];
+  artifacts: SandboxArtifact[];
 }
 
 const DEFAULT_OUTPUT_LIMIT_BYTES = 1024 * 1024;
 const MAX_TIMEOUT_MS = 60_000;
 const MAX_OUTPUT_LIMIT_BYTES = 1024 * 1024;
+
+const BINARY_PLACEHOLDER_TEXT = "[binary output omitted]";
 
 const SAFE_ENV_ALLOWLIST = [
   "PATH",
@@ -147,6 +161,167 @@ const normalizeOutputLimitBytes = (outputLimitBytes?: number) => {
   return Math.min(Math.trunc(normalized), MAX_OUTPUT_LIMIT_BYTES);
 };
 
+const normalizeReportedEncoding = (encoding: string): SandboxOutputEncoding => {
+  const normalized = encoding.trim().toLowerCase();
+  if (normalized === "utf8" || normalized === "utf-8") {
+    return "utf8";
+  }
+
+  if (
+    normalized === "gbk" ||
+    normalized === "gb2312" ||
+    normalized === "gb18030" ||
+    normalized === "cp936"
+  ) {
+    return "gbk";
+  }
+
+  if (normalized === "utf16le" || normalized === "utf-16le") {
+    return "utf16le";
+  }
+
+  return "unknown";
+};
+
+const hasBinarySignature = (chunk: Buffer | string) => {
+  if (typeof chunk === "string") {
+    return false;
+  }
+
+  if (chunk.includes(0)) {
+    return true;
+  }
+
+  if (chunk.length < 24) {
+    return false;
+  }
+
+  let suspiciousBytes = 0;
+  for (const byte of chunk) {
+    const isAllowedControl = byte === 0x09 || byte === 0x0a || byte === 0x0d;
+    const isPrintableAscii = byte >= 0x20 && byte <= 0x7e;
+    const isExtendedByte = byte >= 0x80;
+    if (!isAllowedControl && !isPrintableAscii && !isExtendedByte) {
+      suspiciousBytes += 1;
+    }
+  }
+
+  return suspiciousBytes / chunk.length > 0.3;
+};
+
+const looksLikeUtf16Le = (chunk: Buffer) => {
+  if (chunk.length < 2 || chunk.length % 2 !== 0) {
+    return false;
+  }
+
+  if (chunk[0] === 0xff && chunk[1] === 0xfe) {
+    return true;
+  }
+
+  let zeroBytesOnOddPositions = 0;
+  for (let index = 1; index < chunk.length; index += 2) {
+    if (chunk[index] === 0x00) {
+      zeroBytesOnOddPositions += 1;
+    }
+  }
+
+  return zeroBytesOnOddPositions / Math.ceil(chunk.length / 2) > 0.3;
+};
+
+const decodeChunk = (
+  chunk: Buffer | string,
+  encoding: string,
+): { text: string; encoding: SandboxOutputEncoding } => {
+  if (typeof chunk === "string") {
+    return {
+      text: chunk,
+      encoding: normalizeReportedEncoding(encoding),
+    };
+  }
+
+  const reportedEncoding = normalizeReportedEncoding(encoding);
+  if (reportedEncoding === "utf16le" && !looksLikeUtf16Le(chunk)) {
+    return {
+      text: chunk.toString("utf8"),
+      encoding: "utf8",
+    };
+  }
+
+  return {
+    text: decodeTerminalOutput({
+      chunk,
+      encoding,
+    }),
+    encoding: reportedEncoding,
+  };
+};
+
+const inferMimeTypeFromPath = (targetPath: string) => {
+  const extension = path.extname(targetPath).toLowerCase();
+  switch (extension) {
+    case ".txt":
+    case ".log":
+      return "text/plain";
+    case ".md":
+      return "text/markdown";
+    case ".json":
+      return "application/json";
+    case ".html":
+      return "text/html";
+    case ".csv":
+      return "text/csv";
+    case ".patch":
+    case ".diff":
+      return "text/x-diff";
+    default:
+      return "application/octet-stream";
+  }
+};
+
+const resolveRegisteredArtifactKind = (
+  registration: SandboxArtifactRegistration,
+  isDirectory: boolean,
+): SandboxArtifactKind => {
+  if (registration.kind) {
+    return registration.kind;
+  }
+
+  return isDirectory ? "directory" : "file";
+};
+
+const buildRegisteredArtifacts = async (
+  registrations: SandboxArtifactRegistration[] | undefined,
+  violations: string[],
+): Promise<SandboxArtifact[]> => {
+  if (!registrations?.length) {
+    return [];
+  }
+
+  const artifacts: SandboxArtifact[] = [];
+  for (const registration of registrations) {
+    try {
+      const resolvedPath = resolveWorkspacePath(registration.path);
+      const stats = await stat(resolvedPath);
+      const kind = resolveRegisteredArtifactKind(registration, stats.isDirectory());
+      artifacts.push({
+        id: crypto.randomUUID(),
+        kind,
+        path: resolvedPath,
+        size: stats.size,
+        ...(stats.isFile()
+          ? { mime: inferMimeTypeFromPath(resolvedPath) }
+          : {}),
+        createdAt: stats.birthtime.toISOString(),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      violations.push(`artifact registration skipped: ${registration.path} (${message})`);
+    }
+  }
+
+  return artifacts;
+};
+
 const killProcessTree = async (pid: number | undefined) => {
   if (!pid) {
     return;
@@ -207,6 +382,10 @@ export const executeSandboxedCommand = async (
   const stderrChunks: string[] = [];
   let stdoutBytes = 0;
   let stderrBytes = 0;
+  let stdoutBinaryDetected = false;
+  let stderrBinaryDetected = false;
+  let stdoutDetectedEncoding = normalizeReportedEncoding(input.shellProfile.stdoutEncoding);
+  let stderrDetectedEncoding = normalizeReportedEncoding(input.shellProfile.stderrEncoding);
   let exitCode: number | null = null;
   let timedOut = false;
   let truncated = false;
@@ -214,8 +393,13 @@ export const executeSandboxedCommand = async (
   let settled = false;
   let failExecution: ((error: Error) => void) | null = null;
 
-  const appendChunk = (target: string[], chunk: string, stream: "stdout" | "stderr") => {
-    const nextBytes = Buffer.byteLength(chunk, "utf-8");
+  const appendChunk = (
+    target: string[],
+    chunk: Buffer | string,
+    stream: "stdout" | "stderr",
+    encoding: string,
+  ) => {
+    const nextBytes = typeof chunk === "string" ? Buffer.byteLength(chunk, "utf-8") : chunk.length;
     if (stream === "stdout") {
       stdoutBytes += nextBytes;
     } else {
@@ -233,7 +417,29 @@ export const executeSandboxedCommand = async (
       return;
     }
 
-    target.push(chunk);
+    if (hasBinarySignature(chunk)) {
+      if (stream === "stdout") {
+        stdoutBinaryDetected = true;
+      } else {
+        stderrBinaryDetected = true;
+      }
+      target.length = 0;
+      target.push(BINARY_PLACEHOLDER_TEXT);
+      return;
+    }
+
+    if ((stream === "stdout" && stdoutBinaryDetected) || (stream === "stderr" && stderrBinaryDetected)) {
+      return;
+    }
+
+    const decoded = decodeChunk(chunk, encoding);
+    if (stream === "stdout") {
+      stdoutDetectedEncoding = decoded.encoding;
+    } else {
+      stderrDetectedEncoding = decoded.encoding;
+    }
+    const text = decoded.text;
+    target.push(text);
   };
 
   await new Promise<void>((resolve, reject) => {
@@ -269,12 +475,10 @@ export const executeSandboxedCommand = async (
 
     child.stdout?.on("data", (chunk: Buffer | string) => {
       try {
-        const text = decodeTerminalOutput({
-          chunk,
-          encoding: input.shellProfile.stdoutEncoding,
-        });
-        appendChunk(stdoutChunks, text, "stdout");
-        input.pushStdout?.(text);
+        appendChunk(stdoutChunks, chunk, "stdout", input.shellProfile.stdoutEncoding);
+        if (!stdoutBinaryDetected) {
+          input.pushStdout?.(stdoutChunks[stdoutChunks.length - 1] ?? "");
+        }
       } catch (error) {
         clearTimeout(timer);
         finishReject(error instanceof Error ? error : new Error(String(error)));
@@ -283,12 +487,10 @@ export const executeSandboxedCommand = async (
 
     child.stderr?.on("data", (chunk: Buffer | string) => {
       try {
-        const text = decodeTerminalOutput({
-          chunk,
-          encoding: input.shellProfile.stderrEncoding,
-        });
-        appendChunk(stderrChunks, text, "stderr");
-        input.pushStderr?.(text);
+        appendChunk(stderrChunks, chunk, "stderr", input.shellProfile.stderrEncoding);
+        if (!stderrBinaryDetected) {
+          input.pushStderr?.(stderrChunks[stderrChunks.length - 1] ?? "");
+        }
       } catch (error) {
         clearTimeout(timer);
         finishReject(error instanceof Error ? error : new Error(String(error)));
@@ -333,6 +535,7 @@ export const executeSandboxedCommand = async (
 
   const stdout = stdoutChunks.join("").trimEnd();
   const stderr = stderrChunks.join("").trimEnd();
+  const artifacts = await buildRegisteredArtifacts(input.artifactRegistrations, violations);
 
   return {
     cwd,
@@ -340,9 +543,13 @@ export const executeSandboxedCommand = async (
     timedOut,
     stdout,
     stderr,
+    stdoutEncoding: stdoutBinaryDetected ? "unknown" : stdoutDetectedEncoding,
+    stderrEncoding: stderrBinaryDetected ? "unknown" : stderrDetectedEncoding,
     output: toCombinedOutput(stdout, stderr),
     truncated,
+    binaryDetected: stdoutBinaryDetected || stderrBinaryDetected,
     violations,
+    artifacts,
   };
 };
 

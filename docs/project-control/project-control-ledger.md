@@ -11,6 +11,7 @@ related:
   - AGENTS.md
   - docs/project-control/README.md
   - docs/project-control/governance-principles.md
+  - docs/project-control/phase-conclusions/agent-phase-1-2-archive-decision.md
 ---
 
 # Project Control Ledger
@@ -32,10 +33,13 @@ related:
 | Stream | State | Current Focus | Evidence / Source | Ledger Note |
 | --- | --- | --- | --- | --- |
 | Project Control Governance | `IN_PROGRESS` | 建立唯一总控制台账，停止多 workboard 争抢当前真相 | [governance-principles.md](governance-principles.md) | 本文件建立后，其他 workboard 只作为证据来源 |
+| Harness Context System | `READY_FOR_REVIEW` | 建立 Context Read Plan DSL MVP，先固定怎么读的最小协议与解释信息 | [harness_context_T001](tasks/harness_context_T001-context-read-plan-dsl.md) | 定向测试已通过；整仓检查仍被任务外 `mime-types` 类型缺口阻断 |
 | AgentGraph / Agent V1.5 | `READY_FOR_REVIEW` | 主链合同、弱模型防线、审批恢复、evidence grounded answer | [agent-nodes-workboard.md](agent-nodes-workboard.md), `agent_node_T001-T017` | 旧专项 workboard 存在状态冲突，见下方 Agent Nodes Index |
-| Harness / Sandbox | `READY_FOR_REVIEW` | 候选排序、sandbox direct contract、L1 workspace sandbox runner | [T-010](tasks/T-010-harness-candidate-ordering.md), [T-011](tasks/T-011-sandbox-contract-direct-bench.md), [T-012](tasks/T-012-l1-workspace-sandbox-runner.md) | 当前是 review 队列，不算 DONE |
+| Harness / Sandbox | `READY_FOR_REVIEW` | 候选排序、sandbox direct contract、L1 workspace sandbox runner、artifact/output contract | [T-010](tasks/T-010-harness-candidate-ordering.md), [T-011](tasks/T-011-sandbox-contract-direct-bench.md), [T-012](tasks/T-012-l1-workspace-sandbox-runner.md), [T-013](tasks/T-013-sandbox-artifact-output-contract.md) | 当前是 review 队列，不算 DONE |
 | Core Tools | `READY_FOR_REVIEW` | read / write / terminal / web-search 工具治理尾项 | `core_tools_T001-T019` | 多数已完成，仍有 review 队列 |
-| Phase-1 Remediation | `DONE_WITH_HISTORY` | 早期 P0/P1/P2 缺陷整改 | [agent-workboard.md](agent-workboard.md), `T-001-T008` | 仅作为历史证据，不再作为当前项目台账 |
+| Agent Phase 1 | `ARCHIVED_DONE` | Agent MVP 主链历史归档 | [agent-phase-1-2-archive-decision.md](phase-conclusions/agent-phase-1-2-archive-decision.md), [agent-phase-1-checklist.md](../chat/agent-phase-1-checklist.md) | 一期完成归档；剩余增强项转后续 |
+| Agent Phase 2 | `ARCHIVED_PARTIAL_SUPERSEDED` | 可用闭环阶段部分归档，后续由 Agent V1.5 / 老三期接管 | [agent-phase-1-2-archive-decision.md](phase-conclusions/agent-phase-1-2-archive-decision.md), [agent-phase-2-checklist.md](../chat/agent-phase-2-checklist.md) | 不按完成归档；未完成项不得口头升级为 DONE |
+| Phase-1 Remediation | `DONE_WITH_HISTORY` | 早期 P0/P1/P2 缺陷整改 | [agent-workboard.md](agent-workboard.md), `T-001-T008` | 仅作为历史证据，不再作为当前项目台账；阶段口径见 Agent Phase 1 |
 | Test Report / Evidence Hygiene | `PROPOSED` | 测试报告 JSON 合并与瘦身 | [T-009](tasks/T-009-test-report-json-consolidation.md) | `status: proposed`, `canonical: false`，未进入当前执行 |
 
 ## Active Review Queue
@@ -44,6 +48,7 @@ related:
 
 | Task | State | Area | Required Next Step |
 | --- | --- | --- | --- |
+| [harness_context_T001](tasks/harness_context_T001-context-read-plan-dsl.md) | `READY_FOR_REVIEW` | Harness Context System | 评审 DSL contract、deterministic planner 和任务外 `mime-types` typecheck 阻断记录是否可接受 |
 | [agent_node_T002](tasks/agent_node_T002-tool-call-normalize-node.md) | `TODO` | AgentGraph | 状态异常审计：代码与后续任务显示 normalize 已接入，但任务卡仍是 TODO |
 | [agent_node_T012](tasks/agent_node_T012-repeated-tool-guard.md) | `READY_FOR_REVIEW` | AgentGraph | 评审 repeated guard 是否可接受，以及旧线程 `<function_calls>` 异常是否另开任务 |
 | [agent_node_T016](tasks/agent_node_T016-local-tool-routing-and-schema-guard.md) | `READY_FOR_REVIEW` | AgentGraph | 评审弱模型防线和最新前台 smoke 证据 |
@@ -56,6 +61,7 @@ related:
 | [T-010](tasks/T-010-harness-candidate-ordering.md) | `READY_FOR_REVIEW` | Harness | 评审候选排序修复和现存非本任务测试失败 |
 | [T-011](tasks/T-011-sandbox-contract-direct-bench.md) | `READY_FOR_REVIEW` | Harness / Sandbox | 评审 sandbox direct bench contract |
 | [T-012](tasks/T-012-l1-workspace-sandbox-runner.md) | `READY_FOR_REVIEW` | Harness / Sandbox | 评审 L1 workspace sandbox runner |
+| [T-013](tasks/T-013-sandbox-artifact-output-contract.md) | `READY_FOR_REVIEW` | Harness / Sandbox | 评审 sandbox artifact/output contract |
 | [T-009](tasks/T-009-test-report-json-consolidation.md) | `PROPOSED` | Evidence Hygiene | 决定是否进入执行队列 |
 
 ## Agent Nodes Index
@@ -108,6 +114,7 @@ related:
 
 | Task | Ledger State | Notes |
 | --- | --- | --- |
+| [harness_context_T001](tasks/harness_context_T001-context-read-plan-dsl.md) | `READY_FOR_REVIEW` | Context Read Plan DSL MVP |
 | [T-001](tasks/T-001-policy-deny.md) | `DONE` | policy deny |
 | [T-002](tasks/T-002-toolnode-no-fallback.md) | `DONE` | toolNode no fallback |
 | [T-003](tasks/T-003-terminal-command-safety.md) | `DONE` | terminal command safety |
@@ -120,6 +127,7 @@ related:
 | [T-010](tasks/T-010-harness-candidate-ordering.md) | `READY_FOR_REVIEW` | Harness candidate ordering |
 | [T-011](tasks/T-011-sandbox-contract-direct-bench.md) | `READY_FOR_REVIEW` | sandbox contract direct bench |
 | [T-012](tasks/T-012-l1-workspace-sandbox-runner.md) | `READY_FOR_REVIEW` | L1 workspace sandbox runner |
+| [T-013](tasks/T-013-sandbox-artifact-output-contract.md) | `READY_FOR_REVIEW` | sandbox artifact/output contract |
 
 ## Non-Ledger Evidence Files
 
@@ -130,6 +138,7 @@ related:
 | [agent-workboard.md](agent-workboard.md) | Phase-1 remediation historical workboard / evidence source |
 | [agent-nodes-workboard.md](agent-nodes-workboard.md) | Agent node historical workboard / evidence source; contains known state conflicts |
 | [agent-nodes-V1.5 终审.md](phase-conclusions/agent-nodes-V1.5%20终审.md) | Phase conclusion / final review summary |
+| [agent-phase-1-2-archive-decision.md](phase-conclusions/agent-phase-1-2-archive-decision.md) | Phase 1 completed archive and Phase 2 partial superseded archive decision |
 | [agent-nodes-V1.5 全新线程复测.md](testEvidence/agent-nodes-V1.5%20全新线程复测.md) | Test evidence / fresh-thread smoke record |
 | `testEvidence/` | Test evidence folder |
 | `phase-conclusions/` | Stage conclusion folder |

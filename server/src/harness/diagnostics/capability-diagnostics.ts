@@ -1,3 +1,4 @@
+import type { McpSandboxProfile } from "../../mcp/core/definitions.js";
 import { resolveHarnessActionProfiles } from "../action-profiles.js";
 import { resolveHarnessCapabilityProfiles } from "../profiles/index.js";
 import { resolveHarnessToolCandidatesForTurn } from "../candidates-core/index.js";
@@ -11,6 +12,8 @@ export interface HarnessCapabilityDiagnosticsInput {
   minScore?: number;
   selectedTopK?: number;
   selectedMinScore?: number;
+  allowExternal?: boolean;
+  sandboxProfiles?: Partial<Record<McpSandboxProfile, boolean>>;
 }
 
 export interface HarnessCapabilityDiagnosticsResult {
@@ -101,6 +104,8 @@ export const resolveHarnessCapabilityDiagnostics = async (
     source,
     topK: input.topK,
     minScore: input.minScore,
+    allowExternal: input.allowExternal,
+    sandboxProfiles: input.sandboxProfiles,
   });
   const profiles = resolveHarnessCapabilityProfiles(
     candidateResolution.toolExposure.exposedDefinitions,

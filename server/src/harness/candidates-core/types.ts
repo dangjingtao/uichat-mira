@@ -1,4 +1,4 @@
-import type { McpToolDefinition } from "../../mcp/core/definitions.js";
+import type { McpSandboxProfile, McpToolDefinition } from "../../mcp/core/definitions.js";
 import type { HarnessTurnSource } from "../shared/types.js";
 
 export interface HarnessCapabilityMatch {
@@ -49,6 +49,8 @@ export interface ResolveHarnessToolCandidatesForTurnInput {
   maxTools?: number;
   topK?: number;
   minScore?: number;
+  allowExternal?: boolean;
+  sandboxProfiles?: Partial<Record<McpSandboxProfile, boolean>>;
 }
 
 export interface ResolveHarnessToolCandidatesForTurnResult {

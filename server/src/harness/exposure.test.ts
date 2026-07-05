@@ -4,8 +4,30 @@ import { resolveHarnessToolExposure } from "./exposure.js";
 import { terminalSessionTool } from "../mcp/tools/terminal-session.tool.js";
 import { readTool } from "../mcp/tools/read.tool.js";
 import { readOpenTool } from "../mcp/tools/read-open.tool.js";
+import { readListTool } from "../mcp/tools/read-list.tool.js";
+import { readLocateTool } from "../mcp/tools/read-locate.tool.js";
 import { readSliceTool } from "../mcp/tools/read-slice.tool.js";
 import { webSearchTool } from "../mcp/tools/web-search.tool.js";
+
+const externalFakeTool = {
+  definition: {
+    id: "external_fake_tool",
+    title: "External Fake Tool",
+    description: "external fake",
+    domain: "external_mcp" as const,
+    source: "external" as const,
+    mode: "sync" as const,
+    inputSchema: {},
+    tags: ["external", "mcp"],
+    capabilities: {
+      sideEffect: "network" as const,
+      requiresApproval: false,
+    },
+  },
+  execute() {
+    return {};
+  },
+};
 
 describe("resolveHarnessToolExposure", () => {
   afterEach(() => {
@@ -304,25 +326,7 @@ describe("resolveHarnessToolExposure", () => {
   });
 
   it("keeps external capabilities out of agent_intent unless allowExternal is enabled", () => {
-    registerCapability({
-      definition: {
-        id: "external_fake_tool",
-        title: "External Fake Tool",
-        description: "external fake",
-        domain: "external_mcp",
-        source: "external",
-        mode: "sync",
-        inputSchema: {},
-        tags: ["external", "mcp"],
-        capabilities: {
-          sideEffect: "network",
-          requiresApproval: false,
-        },
-      },
-      execute() {
-        return {};
-      },
-    });
+    registerCapability(externalFakeTool);
 
     const hiddenIds = resolveHarnessToolExposure({
       source: "agent_intent",
@@ -337,4 +341,119 @@ describe("resolveHarnessToolExposure", () => {
     expect(hiddenIds).not.toContain("external_fake_tool");
     expect(visibleIds).toContain("external_fake_tool");
   });
+
+  it.each([
+    {
+      label: "workspace README content hides web_search",
+      input: {
+        source: "agent_intent" as const,
+        query: "README.md 的 Runtime 一节具体列了哪些运行组件？请基于文件内容回答。",
+      },
+      tools: [readOpenTool, webSearchTool, externalFakeTool],
+      expectedExposed: ["read_open"],
+      expectedBlocked: ["web_search", "external_fake_tool"],
+      expectedReasons: [
+        "Workspace-local query hides web_search for agent_intent; local read evidence should be preferred.",
+      ],
+    },
+    {
+      label: "workspace directory listing exposes read_list",
+      input: {
+        source: "agent_intent" as const,
+        query: "帮我看看工作区目录里有哪些文件夹",
+      },
+      tools: [readListTool, externalFakeTool],
+      expectedExposed: ["read_list"],
+      expectedBlocked: ["external_fake_tool"],
+      expectedReasons: ["External MCP capabilities are hidden unless explicitly enabled."],
+    },
+    {
+      label: "workspace fuzzy search exposes read_locate",
+      input: {
+        source: "agent_intent" as const,
+        query: "帮我找一下 settings 相关文件",
+      },
+      tools: [readLocateTool, externalFakeTool],
+      expectedExposed: ["read_locate"],
+      expectedBlocked: ["external_fake_tool"],
+      expectedReasons: ["External MCP capabilities are hidden unless explicitly enabled."],
+    },
+    {
+      label: "chat surface keeps only safe domains",
+      input: {
+        source: "chat_surface" as const,
+        query: "今天最新新闻是什么",
+      },
+      tools: [readOpenTool, webSearchTool, terminalSessionTool, externalFakeTool],
+      expectedExposed: ["read_open", "web_search"],
+      expectedBlocked: ["terminal_session", "external_fake_tool"],
+      expectedReasons: ["Chat-visible tool surface is restricted to safe built-in domains."],
+    },
+    {
+      label: "terminal command keeps requiresApproval schema",
+      input: {
+        source: "agent_intent" as const,
+        query: "run pnpm check",
+        sandboxProfiles: { command: true },
+      },
+      tools: [terminalSessionTool, externalFakeTool],
+      expectedExposed: ["terminal_session"],
+      expectedBlocked: ["external_fake_tool"],
+      expectedReasons: ["External MCP capabilities are hidden unless explicitly enabled."],
+      expectedApprovalToolId: "terminal_session",
+    },
+    {
+      label: "non-command turn hides terminal",
+      input: {
+        source: "agent_intent" as const,
+        query: "帮我总结 README.md",
+      },
+      tools: [terminalSessionTool, externalFakeTool],
+      expectedExposed: [],
+      expectedBlocked: ["terminal_session", "external_fake_tool"],
+      expectedReasons: ["Terminal tools are hidden unless the turn clearly asks to run a command."],
+    },
+    {
+      label: "small talk exposes no tool",
+      input: {
+        source: "agent_intent" as const,
+        query: "谢谢",
+      },
+      tools: [readOpenTool, webSearchTool, terminalSessionTool, externalFakeTool],
+      expectedExposed: [],
+      expectedBlocked: ["read_open", "web_search", "terminal_session", "external_fake_tool"],
+      expectedReasons: ["Greeting or low-intent input should stay in pure conversation mode."],
+    },
+    {
+      label: "allowExternal is required before external MCP becomes visible",
+      input: {
+        source: "agent_intent" as const,
+        query: "use external system",
+        allowExternal: true,
+      },
+      tools: [externalFakeTool],
+      expectedExposed: ["external_fake_tool"],
+      expectedBlocked: [],
+      expectedReasons: [],
+    },
+  ])(
+    "applies the exposure regression pack directly: $label",
+    ({ input, tools, expectedExposed, expectedBlocked, expectedReasons, expectedApprovalToolId }) => {
+      for (const tool of tools) {
+        registerCapability(tool);
+      }
+
+      const decision = resolveHarnessToolExposure(input);
+
+      expect(decision.exposedToolIds).toEqual(expectedExposed);
+      expect(decision.blockedCapabilityIds).toEqual(expect.arrayContaining(expectedBlocked));
+      for (const reason of expectedReasons) {
+        expect(decision.reasons).toContain(reason);
+      }
+      if (expectedApprovalToolId) {
+        const definition = decision.visibleDefinitions.find((item) => item.id === expectedApprovalToolId);
+        expect(definition?.capabilities.requiresApproval).toBe(true);
+      }
+    },
+  );
 });
