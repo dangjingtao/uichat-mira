@@ -1,0 +1,124 @@
+
+> @ui-chat-mira/server@0.7.1 test D:\workspace\rag-demo\server
+> vitest run "src/routes/proxy-provider/chat-agent-approval.smoke.test.ts"
+
+
+[1m[46m RUN [49m[22m [36mv3.2.6 [39m[90mD:/workspace/rag-demo/server[39m
+
+[90mstdout[2m | src/routes/proxy-provider/chat-agent-approval.smoke.test.ts
+[22m[39m[Database] ✅ Drizzle database client initialized
+✅ Auth database initialized
+
+stderr | src/routes/proxy-provider/chat-agent-approval.smoke.test.ts
+[Auth] Using development bootstrap users. Set SEED_ADMIN_USERNAME/SEED_ADMIN_PASSWORD to override.
+
+stderr | src/routes/proxy-provider/chat-agent-approval.smoke.test.ts > chat route approval resume smoke > S1 reads the workspace through chat route and completes with answer and trace
+[Auth] JWT_SECRET is not set. Falling back to a development-only secret.
+
+{"level":30,"time":1783292243548,"pid":3704,"hostname":"Tomz","reqId":"req-1","req":{"method":"POST","url":"/proxy/chat/default","hostname":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1783292243576,"pid":3704,"hostname":"Tomz","msg":"Planner decision debug","event":"agent-next-action-planner-debug","runId":"40ec90eb-aa5e-419a-b3a2-09b8619733cb","threadId":"612a80b8ec8bcce9cad53a7a438610d4","iteration":0,"maxIterations":3,"answerStopRuleTriggered":false,"taskModelInvoked":true,"selectedActionType":"use_tool","selectedToolId":"read_list","reason":"Need the workspace listing.","parseWarnings":[],"repeatedToolGuardTriggered":false,"rawOutputPreview":"{\"type\":\"use_tool\",\"toolId\":\"read_list\",\"args\":{\"path\":\"/workspace\"},\"reason\":\"Need the workspace listing.\"}","sanitizedOutputPreview":"{\"type\":\"use_tool\",\"toolId\":\"read_list\",\"args\":{\"path\":\"/workspace\"},\"reason\":\"Need the workspace listing.\"}","allowedActionTypes":["answer","retrieve","use_tool","error"]}
+{"level":30,"time":1783292243585,"pid":3704,"hostname":"Tomz","msg":"Planner decision debug","event":"agent-next-action-planner-debug","runId":"40ec90eb-aa5e-419a-b3a2-09b8619733cb","threadId":"612a80b8ec8bcce9cad53a7a438610d4","iteration":1,"maxIterations":3,"answerStopRuleTriggered":true,"taskModelInvoked":false,"selectedActionType":"answer","selectedToolId":null,"reason":"Directory listing is sufficient for the user's workspace overview question.","repeatedToolGuardTriggered":false,"allowedActionTypes":["answer","retrieve","use_tool","error"]}
+{"level":30,"time":1783292243599,"pid":3704,"hostname":"Tomz","reqId":"req-1","res":{"statusCode":200},"responseTime":51.17469999939203,"msg":"request completed"}
+{"level":30,"time":1783292243621,"pid":3704,"hostname":"Tomz","reqId":"req-1","req":{"method":"POST","url":"/proxy/chat/default","hostname":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1783292243631,"pid":3704,"hostname":"Tomz","msg":"Planner decision debug","event":"agent-next-action-planner-debug","runId":"17184a72-5e47-44ee-b657-d0b8af54ce05","threadId":"3c68ef49d9ea64b9168d13bc34b4b332","iteration":0,"maxIterations":3,"answerStopRuleTriggered":false,"taskModelInvoked":true,"selectedActionType":"use_tool","selectedToolId":"workspace_mutation","reason":"Need to delete the file.","parseWarnings":[],"repeatedToolGuardTriggered":false,"rawOutputPreview":"{\"type\":\"use_tool\",\"toolId\":\"workspace_mutation\",\"args\":{\"operation\":\"delete\",\"targetPath\":\"/ONLY_ALT_WORKSPACE.txt\"},\"reason\":\"Need to delete the file.\"}","sanitizedOutputPreview":"{\"type\":\"use_tool\",\"toolId\":\"workspace_mutation\",\"args\":{\"operation\":\"delete\",\"targetPath\":\"/ONLY_ALT_WORKSPACE.txt\"},\"reason\":\"Need to delete the file.\"}","allowedActionTypes":["answer","retrieve","use_tool","error"]}
+{"level":30,"time":1783292243638,"pid":3704,"hostname":"Tomz","reqId":"req-1","res":{"statusCode":200},"responseTime":16.226499998942018,"msg":"request completed"}
+{"level":30,"time":1783292243638,"pid":3704,"hostname":"Tomz","reqId":"req-2","req":{"method":"POST","url":"/agent/runs/17184a72-5e47-44ee-b657-d0b8af54ce05/approve","hostname":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1783292243645,"pid":3704,"hostname":"Tomz","msg":"Planner decision debug","event":"agent-next-action-planner-debug","runId":"17184a72-5e47-44ee-b657-d0b8af54ce05","threadId":"3c68ef49d9ea64b9168d13bc34b4b332","iteration":1,"maxIterations":3,"answerStopRuleTriggered":false,"taskModelInvoked":true,"selectedActionType":"use_tool","selectedToolId":"workspace_mutation","reason":"Need to delete the file.","parseWarnings":[],"repeatedToolGuardTriggered":false,"rawOutputPreview":"{\"type\":\"use_tool\",\"toolId\":\"workspace_mutation\",\"args\":{\"operation\":\"delete\",\"targetPath\":\"/ONLY_ALT_WORKSPACE.txt\"},\"reason\":\"Need to delete the file.\"}","sanitizedOutputPreview":"{\"type\":\"use_tool\",\"toolId\":\"workspace_mutation\",\"args\":{\"operation\":\"delete\",\"targetPath\":\"/ONLY_ALT_WORKSPACE.txt\"},\"reason\":\"Need to delete the file.\"}","allowedActionTypes":["answer","retrieve","use_tool","error"]}
+{"level":30,"time":1783292243651,"pid":3704,"hostname":"Tomz","msg":"Planner decision debug","event":"agent-next-action-planner-debug","runId":"17184a72-5e47-44ee-b657-d0b8af54ce05","threadId":"3c68ef49d9ea64b9168d13bc34b4b332","iteration":2,"maxIterations":3,"answerStopRuleTriggered":false,"taskModelInvoked":true,"selectedActionType":"use_tool","selectedToolId":"workspace_mutation","reason":"Need to delete the file.","parseWarnings":[],"repeatedToolGuardTriggered":false,"rawOutputPreview":"{\"type\":\"use_tool\",\"toolId\":\"workspace_mutation\",\"args\":{\"operation\":\"delete\",\"targetPath\":\"/ONLY_ALT_WORKSPACE.txt\"},\"reason\":\"Need to delete the file.\"}","sanitizedOutputPreview":"{\"type\":\"use_tool\",\"toolId\":\"workspace_mutation\",\"args\":{\"operation\":\"delete\",\"targetPath\":\"/ONLY_ALT_WORKSPACE.txt\"},\"reason\":\"Need to delete the file.\"}","allowedActionTypes":["answer","retrieve","use_tool","error"]}
+{"level":30,"time":1783292243660,"pid":3704,"hostname":"Tomz","reqId":"req-2","res":{"statusCode":200},"responseTime":21.920399999246,"msg":"request completed"}
+{"level":30,"time":1783292243677,"pid":3704,"hostname":"Tomz","reqId":"req-1","req":{"method":"POST","url":"/proxy/chat/default","hostname":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1783292243685,"pid":3704,"hostname":"Tomz","msg":"Planner decision debug","event":"agent-next-action-planner-debug","runId":"29280c85-acb9-44f3-8f11-6eb9ff815fd6","threadId":"5d5860dc9946e6bbe28c880281ec6875","iteration":0,"maxIterations":3,"answerStopRuleTriggered":false,"taskModelInvoked":true,"selectedActionType":"use_tool","selectedToolId":"workspace_mutation","reason":"Need to delete the file.","parseWarnings":[],"repeatedToolGuardTriggered":false,"rawOutputPreview":"{\"type\":\"use_tool\",\"toolId\":\"workspace_mutation\",\"args\":{\"operation\":\"delete\",\"targetPath\":\"/ONLY_ALT_WORKSPACE.txt\"},\"reason\":\"Need to delete the file.\"}","sanitizedOutputPreview":"{\"type\":\"use_tool\",\"toolId\":\"workspace_mutation\",\"args\":{\"operation\":\"delete\",\"targetPath\":\"/ONLY_ALT_WORKSPACE.txt\"},\"reason\":\"Need to delete the file.\"}","allowedActionTypes":["answer","retrieve","use_tool","error"]}
+{"level":30,"time":1783292243689,"pid":3704,"hostname":"Tomz","reqId":"req-1","res":{"statusCode":200},"responseTime":11.99610000103712,"msg":"request completed"}
+{"level":30,"time":1783292243690,"pid":3704,"hostname":"Tomz","reqId":"req-2","req":{"method":"POST","url":"/agent/runs/29280c85-acb9-44f3-8f11-6eb9ff815fd6/reject","hostname":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1783292243692,"pid":3704,"hostname":"Tomz","reqId":"req-2","res":{"statusCode":200},"responseTime":2.1100999992340803,"msg":"request completed"}
+{"level":30,"time":1783292243705,"pid":3704,"hostname":"Tomz","reqId":"req-1","req":{"method":"POST","url":"/proxy/chat/default","hostname":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1783292243714,"pid":3704,"hostname":"Tomz","msg":"Planner decision debug","event":"agent-next-action-planner-debug","runId":"cfa529a7-ace5-411f-89bc-f9f0eb30abf5","threadId":"780ff42a3602e39b1401ac0d120d672a","iteration":0,"maxIterations":3,"answerStopRuleTriggered":false,"taskModelInvoked":true,"selectedActionType":"use_tool","selectedToolId":"read_open","reason":"Need the file content.","parseWarnings":[],"repeatedToolGuardTriggered":false,"rawOutputPreview":"{\"type\":\"use_tool\",\"toolId\":\"read_open\",\"args\":{\"path\":\"missing.md\"},\"reason\":\"Need the file content.\"}","sanitizedOutputPreview":"{\"type\":\"use_tool\",\"toolId\":\"read_open\",\"args\":{\"path\":\"missing.md\"},\"reason\":\"Need the file content.\"}","allowedActionTypes":["answer","retrieve","use_tool","error"]}
+{"level":30,"time":1783292243719,"pid":3704,"hostname":"Tomz","reqId":"req-1","res":{"statusCode":200},"responseTime":13.414799999445677,"msg":"request completed"}
+ [31m❯[39m src/routes/proxy-provider/chat-agent-approval.smoke.test.ts [2m([22m[2m4 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 231[2mms[22m[39m
+   [32m✓[39m chat route approval resume smoke[2m > [22mS1 reads the workspace through chat route and completes with answer and trace[32m 110[2mms[22m[39m
+[31m   [31m×[31m chat route approval resume smoke[2m > [22mS2-S3 approve/resume executes the approved workspace mutation only once and keeps second approve idempotent[39m[32m 62[2mms[22m[39m
+[31m     → Expected values to be strictly equal:
+
+3 !== 1
+[39m
+   [32m✓[39m chat route approval resume smoke[2m > [22mS4 waiting_approval stays resumable while reject turns the visible state into blocked[32m 29[2mms[22m[39m
+[31m   [31m×[31m chat route approval resume smoke[2m > [22mS5-S6 failed tool path does not fake completion and smoke artifacts stay under .test-artifact/server[39m[32m 28[2mms[22m[39m
+[31m     → Expected values to be strictly deep-equal:
++ actual - expected
+
++ [
++   'tmp-a.sqlite',
++   'tmp-b.sqlite',
++   'tmp-integrations-route.sqlite',
++   'tmp-wecom-route.sqlite'
++ ]
+- []
+[39m
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/routes/proxy-provider/chat-agent-approval.smoke.test.ts > chat route approval resume smoke > S2-S3 approve/resume executes the approved workspace mutation only once and keeps second approve idempotent
+AssertionError: Expected values to be strictly equal:
+
+3 !== 1
+
+
+- Expected
++ Received
+
+- 1
++ 3
+
+ ❯ src/routes/proxy-provider/chat-agent-approval.smoke.test.ts:491:12
+    489|     assert.equal(approveData.data.status, "completed");
+    490|     assert.equal(approveData.data.pendingApproval, undefined);
+    491|     assert.equal(executeSpy.mock.calls.length, 1);
+       |            ^
+    492|     assert.equal(executeSpy.mock.calls[0]?.[0]?.toolId, "workspace_mut…
+    493|     assert.deepEqual(executeSpy.mock.calls[0]?.[0]?.args, {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/routes/proxy-provider/chat-agent-approval.smoke.test.ts > chat route approval resume smoke > S5-S6 failed tool path does not fake completion and smoke artifacts stay under .test-artifact/server
+AssertionError: Expected values to be strictly deep-equal:
++ actual - expected
+
++ [
++   'tmp-a.sqlite',
++   'tmp-b.sqlite',
++   'tmp-integrations-route.sqlite',
++   'tmp-wecom-route.sqlite'
++ ]
+- []
+
+
+- Expected
++ Received
+
+- []
++ [
++   "tmp-a.sqlite",
++   "tmp-b.sqlite",
++   "tmp-integrations-route.sqlite",
++   "tmp-wecom-route.sqlite",
++ ]
+
+ ❯ src/routes/proxy-provider/chat-agent-approval.smoke.test.ts:662:12
+    660|     assert.match(workspaceFixtureRoot, /[\\\/]\.test-artifact[\\\/]ser…
+    661|     assert.ok(fs.existsSync(artifactServerRoot));
+    662|     assert.deepEqual(
+       |            ^
+    663|       fs
+    664|         .readdirSync(process.cwd())
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m2 passed[39m[22m[90m (4)[39m
+[2m   Start at [22m 06:57:19
+[2m   Duration [22m 3.98s[2m (transform 677ms, setup 0ms, collect 3.49s, tests 231ms, environment 0ms, prepare 99ms)[22m
+
+D:\workspace\rag-demo\server:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @ui-chat-mira/server@0.7.1 test: `vitest run "src/routes/proxy-provider/chat-agent-approval.smoke.test.ts"`
+Exit status 1

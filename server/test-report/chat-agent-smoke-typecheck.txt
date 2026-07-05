@@ -1,0 +1,4 @@
+
+> @ui-chat-mira/server@0.7.1 typecheck D:\workspace\rag-demo\server
+> node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json
+
