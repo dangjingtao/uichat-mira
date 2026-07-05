@@ -428,6 +428,7 @@ export const retrieveNode = async (
       retrievedChunks: [],
       observations: [...(state.observations ?? []), observation],
       evidence,
+      iterationCount: (state.iterationCount ?? 0) + 1,
     };
   }
 
@@ -680,6 +681,13 @@ const buildToolEvidenceBlock = (execution: AgentToolExecutionResult) => {
     lines.push(`entryCount: ${summary.data.entryCount}`);
     lines.push(`entriesPreview: ${summary.data.entriesPreview.join(" | ") || "(none)"}`);
     lines.push(`truncated: ${summary.data.truncated}`);
+  } else if (summary.data?.kind === "read_locate") {
+    lines.push(`scope: ${summary.data.scope}`);
+    lines.push(`query: ${summary.data.query}`);
+    lines.push(`searchMode: ${summary.data.searchMode}`);
+    lines.push(`matchCount: ${summary.data.matchCount}`);
+    lines.push(`matchesPreview: ${summary.data.matchesPreview.join(" | ") || "(none)"}`);
+    lines.push(`truncated: ${summary.data.truncated}`);
   } else if (summary.data?.kind === "read_open") {
     lines.push(`path: ${summary.data.path}`);
     lines.push(`contentPreview: ${summary.data.contentPreview || "(empty)"}`);
@@ -698,6 +706,33 @@ const buildToolEvidenceBlock = (execution: AgentToolExecutionResult) => {
   lines.push("keyFindings:");
   lines.push(formatEvidenceBulletList(summary.keyFindings));
   return lines.join("\n");
+};
+
+const READ_OPEN_FULL_TEXT_LIMIT = 4000;
+
+const buildReadOpenRawContentBlock = (
+  execution: AgentToolExecutionResult,
+) => {
+  if (!execution.result || typeof execution.result !== "object") {
+    return null;
+  }
+
+  const value = execution.result as Record<string, unknown>;
+  const source =
+    value.type === "open" && value.source && typeof value.source === "object"
+      ? (value.source as Record<string, unknown>)
+      : null;
+  const text = source && typeof source.text === "string" ? source.text.trim() : "";
+  if (!text) {
+    return null;
+  }
+
+  const boundedText =
+    text.length > READ_OPEN_FULL_TEXT_LIMIT
+      ? `${text.slice(0, READ_OPEN_FULL_TEXT_LIMIT).trimEnd()}\n...[truncated]`
+      : text;
+
+  return ["rawContent:", boundedText].join("\n");
 };
 
 const buildRetrievalEvidenceBlock = (retrieval: AgentRetrievalEvidence) => {
@@ -734,9 +769,17 @@ const buildGenerateEvidenceMessages = (
   if (completedToolExecutions.length > 0) {
     const toolEvidenceText = [
       "以下是本轮 Agent 已实际执行完成的工具证据摘要。",
-      ...completedToolExecutions.map((execution, index) =>
-        [`#${index + 1}`, buildToolEvidenceBlock(execution)].join("\n"),
-      ),
+      ...completedToolExecutions.map((execution, index) => {
+        const sections = [`#${index + 1}`, buildToolEvidenceBlock(execution)];
+        const rawContentBlock =
+          execution.toolId === "read_open"
+            ? buildReadOpenRawContentBlock(execution)
+            : null;
+        if (rawContentBlock) {
+          sections.push(rawContentBlock);
+        }
+        return sections.join("\n");
+      }),
       "你只能基于这些真实证据回答；不要复述工具协议，也不要输出工具 JSON。",
     ].join("\n\n");
     evidenceMessages.push({
@@ -1127,6 +1170,46 @@ const buildEvidenceGroundedFallbackAnswer = (state: AgentNodeState) => {
   return "当前还没有足够的已完成证据来可靠回答这个问题，所以我不能声称自己已经查看过相关文件、目录、网页或命令结果。";
 };
 
+const buildSchemaReplanSafeErrorAnswer = (state: AgentNodeState) => {
+  const schemaError = state.schemaReplanDiagnostics?.schemaError;
+  if (!schemaError) {
+    return "当前没有可用证据，而且工具参数规划没有形成可执行调用，所以我不能可靠回答这个问题。";
+  }
+
+  return `这次没有执行任何工具，因为生成的工具参数不符合要求：${schemaError}。我目前也没有可用证据可以基于文件或检索结果回答，请重试，或把要读取的文件和目标说得更明确一些。`;
+};
+
+const buildGenerateEmptyAnswerFallback = (state: AgentNodeState) => {
+  const evidence = getEvidencePayload(state);
+  const latestSummary = evidence.latestSummary ?? getLatestEvidenceSummary({ evidence });
+  if (latestSummary) {
+    const summaryAnswer = renderSummaryBasedAnswer(latestSummary);
+    if (summaryAnswer) {
+      return `工具已执行，但模型没有生成有效回答。以下是当前可用证据摘要：${summaryAnswer}`;
+    }
+  }
+
+  const latestCompletedTool = [...evidence.toolExecutions]
+    .reverse()
+    .find((execution) => execution.status === "completed");
+  if (latestCompletedTool?.summary) {
+    const summaryAnswer = renderSummaryBasedAnswer(latestCompletedTool.summary);
+    if (summaryAnswer) {
+      return `工具已执行，但模型没有生成有效回答。以下是当前可用证据摘要：${summaryAnswer}`;
+    }
+  }
+
+  const latestRetrieval = evidence.retrievals.at(-1);
+  if (latestRetrieval && latestRetrieval.chunkCount > 0) {
+    const firstChunk = latestRetrieval.chunks[0];
+    if (firstChunk?.content?.trim()) {
+      return `工具已执行，但模型没有生成有效回答。当前至少有这条检索证据可用：${firstChunk.documentName} 提到 ${toPreviewText(firstChunk.content, 220)}`;
+    }
+  }
+
+  return "模型没有生成有效回答，而且当前也没有可用证据可供总结。";
+};
+
 const detectGenerateOutputGuardReason = (answer: string) => {
   if (!answer.trim()) {
     return undefined;
@@ -1178,6 +1261,46 @@ export const generateNode = async (
     "default",
     generationMessages,
   );
+  if (
+    state.schemaReplanDiagnostics &&
+    state.schemaReplanDiagnostics.attemptCount > 1 &&
+    !getEvidencePayload(state).toolExecutions.some((execution) => execution.status === "completed") &&
+    !getEvidencePayload(state).retrievals.some((retrieval) => retrieval.chunkCount > 0)
+  ) {
+    const answer = buildSchemaReplanSafeErrorAnswer(state);
+    const observation = createObservation({
+      runId: state.runId,
+      stepId: "generate",
+      status: "partial",
+      facts: ["Schema-safe fallback answer was returned after bounded replan was exhausted."],
+    });
+
+    await emitStepNode(emit, {
+      runId: state.runId,
+      nodeId: "agent-generate",
+      nodeType: "generate",
+      phase: "done",
+      label: "生成回答",
+      summary: "bounded replan 已用尽，返回安全收口回答",
+      details: {
+        answerLength: Array.from(answer).length,
+        invocation: generationInvocation,
+        contextBudget: budget.audit,
+        messageCount: generationMessages.length,
+        schemaSafeErrorFallback: true,
+        schemaError: state.schemaReplanDiagnostics.schemaError,
+      },
+    });
+
+    return {
+      answer,
+      observations: [...(state.observations ?? []), observation],
+      evidence: appendObservationEvidence(state, observation),
+      contextBudget: budget.audit,
+      schemaReplanDiagnostics: undefined,
+      generatedAnswerEmptyFallback: false,
+    };
+  }
   let answer: string;
   let outputGuardReason: string | undefined;
   try {
@@ -1263,34 +1386,34 @@ export const generateNode = async (
     answer = buildEvidenceGroundedFallbackAnswer(state);
   }
   if (!answer.trim()) {
-    const errorMessage = "Model returned empty answer";
     const observation = createObservation({
       runId: state.runId,
       stepId: "generate",
-      status: "failed",
-      facts: ["Generated answer was empty."],
-      errorMessage,
+      status: "partial",
+      facts: ["Generated answer was empty; deterministic fallback answer was returned."],
     });
+    const fallbackAnswer = buildGenerateEmptyAnswerFallback(state);
     await emitStepNode(emit, {
       runId: state.runId,
       nodeId: "agent-generate",
       nodeType: "generate",
-      phase: "error",
+      phase: "done",
       label: "生成回答",
-      summary: "Agent 回答为空",
+      summary: "模型回答为空，已返回保底回答",
       details: {
         answerLength: 0,
         invocation: generationInvocation,
         contextBudget: budget.audit,
         messageCount: generationMessages.length,
+        generatedAnswerEmptyFallback: true,
       },
     });
 
     return {
+      answer: fallbackAnswer,
       observations: [...(state.observations ?? []), observation],
       evidence: appendObservationEvidence(state, observation),
-      errorMessage,
-      errorSourceNodeId: "agent-generate",
+      generatedAnswerEmptyFallback: true,
     };
   }
   const observation = createObservation({
@@ -1314,6 +1437,7 @@ export const generateNode = async (
         messageCount: generationMessages.length,
         outputGuardTriggered: Boolean(outputGuardReason),
         outputGuardReason: outputGuardReason ?? null,
+        generatedAnswerEmptyFallback: false,
       },
     });
 
@@ -1322,6 +1446,8 @@ export const generateNode = async (
     observations: [...(state.observations ?? []), observation],
     evidence: appendObservationEvidence(state, observation),
     contextBudget: budget.audit,
+    schemaReplanDiagnostics: undefined,
+    generatedAnswerEmptyFallback: false,
   };
 };
 

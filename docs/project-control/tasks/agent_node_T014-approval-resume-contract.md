@@ -19,7 +19,7 @@ related:
   - server/src/agent/routes.ts
   - server/src/agent/types.ts
   - desktop/src/shared/api/thread.ts
-task_state: READY_FOR_REVIEW
+task_state: DONE
 ---
 
 # agent_node_T014 approval resume contract
@@ -188,48 +188,32 @@ task_state: READY_FOR_REVIEW
 
 ## Frontend Smoke
 
-本轮只完成了前台前置链路确认，没有把 `P0-4 / P0-5 / P0-6` 全部跑成可交付证据。
+项目 owner 已在真实前台线程完成 `P0-4 / P0-5 / P0-6` 终态 smoke，并明确确认下面这些结果：
 
-已确认：
+- `terminal_session` 会先进入等待审批，不会在未批准前执行
+- approve 后等待审批 UI 消失，工具继续执行
+- reject 后页面明确显示“已拒绝 / 未执行”，不再显示 approve / reject 按钮
+- 刷新线程后，等待审批状态不会复活
 
-- 页面：`http://127.0.0.1:5173/#/chat`
-- 后端健康检查：`http://127.0.0.1:8787/health`
-- 线程绑定方式：输入框左侧 `Composer menu -> Workspace -> Add to workspace -> ragDemo (D:\workspace\rag-demo)`
-- 绑定证据：`Agent` 按钮从禁用变为可点击
+这次前台 smoke 结论与后端定向验证一致，说明本轮修复不仅清掉了内存态，也清掉了会在 DB reload 后复活的审批残留状态。
 
-本轮实际尝试：
-
-1. 新建真实前台线程
-2. 通过 `Add to workspace` 绑定 `ragDemo`
-3. 确认 `Agent` 按钮从禁用变为可点击
-4. 发送 `执行 dir 命令看看结果`
-
-本轮没有拿到可作为验收结论的 approve / reject 终态截图级证据：
-
-- 真实前台线程进入了 Agent 执行链路
-- 但在本机这次 headless 复测窗口内，没有稳定跑到可点击 approve / reject 的最终状态
-- 因此这轮不能把 `P0-5 / P0-6` 记成通过
-
-这不是把前台 smoke 改写成“后端测试替代前台验证”，而是明确说明：
-
-- 后端 state finalization 修复已落地
-- 前台真实终态复测仍需补齐
+当前任务卡不重复附截图文件路径，直接以项目 owner 本轮验收结论作为人工验收证据来源。
 
 ## Conclusion
 
-当前结论是：`T014` 的 resume 对齐仍成立，`T014R` 的后端修复已完成，但任务状态先保持 `READY_FOR_REVIEW`。
+当前结论是：`T014` 的 resume 对齐与 `T014R` 的 state finalization 都已完成闭环，本任务可以更新为 `DONE`。
 
 理由：
 
-1. approve / reject 后的 run 终态清理逻辑已经补齐
-2. approval mismatch 与 reject 都会同步回写 assistant metadata，避免前台继续拿旧的 `waiting_approval`
-3. 定向后端测试与 typecheck 已通过
-4. 本轮前台只完成了 workspace 绑定与 Agent 可用性确认
-5. `P0-4 / P0-5 / P0-6` 的真实 approve / reject 终态 smoke 证据本轮仍未补齐
+1. approve 后原 frozen `pendingToolCall` 会继续执行并写回 evidence
+2. approve / reject / mismatch 后，`pendingApproval / pendingToolCall / currentStepId` 不会再以等待审批态残留到 repository reload 之后
+3. reject 后不会执行工具，页面会明确表达“已拒绝 / 未执行”
+4. approval mismatch 仍会阻断执行，同时清理审批残留状态
+5. 定向后端测试、typecheck 和项目 owner 真实前台 smoke 都已通过
 
 ## Review Outcome
 
-`2026-07-05` 当前代码评审结论：`READY_FOR_REVIEW`
+`2026-07-05` 当前评审结论：`PASS`
 
 本次评审只收口 `pendingApproval -> 用户审批 -> 恢复原 frozen pendingToolCall -> ToolNode -> evidence -> 回到 Planner / Generate` 这一条链路。
 
@@ -256,7 +240,6 @@ task_state: READY_FOR_REVIEW
 
 ## Follow-up Candidates
 
-下面两项仍单独跟踪，不混入 `T014R` 结论：
+下面一项仍单独跟踪，不混入 `T014R` 结论：
 
 1. 批准后 `generate` 阶段可能返回空回答，页面显示 `Model returned empty answer`
-2. 本轮真实前台 approve / reject 终态 smoke 证据仍待补齐

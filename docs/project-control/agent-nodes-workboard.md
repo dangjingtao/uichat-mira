@@ -62,9 +62,9 @@ Agent node 专属总台账。
 | `agent_node_T011` | Workspace Path Argument Contract | `T011` 当前已把 root-relative read path normalizer 收紧到只识别 `/workspace` sentinel：`/etc/passwd` 不会再被 normalize 成 `etc/passwd`，root-relative path normalizer 也不再无脑处理所有 `/xxx`。`/README.md`、`/docs/README.md` 现在同样保持原值，继续交给下游 workspace root 校验；T011 安全边界回归测试与真实前台 workspace 绑定 smoke 证据已补齐，线程配置里的 workspace path 已确认进入 Agent 执行链路 | `DONE` | [agent_node_T011-workspace-path-argument-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T011-workspace-path-argument-contract.md) |
 | `agent_node_T012` | Repeated Tool Guard | `T012` 是 `Agent V1.5 runtime hardening` 任务，不是 `T009 / T010 / T011` 的补丁返工。当前实现只防同一 run 内 identical completed `use_tool` / identical retrieval query 的重复执行；`2026-07-04` 评审修订已补 `/workspace` sentinel 与 `.` 在 repeated guard 比较中的等价判定，但没有恢复通用 path normalize。真实前台 smoke 已证明 `read_list` / `read_open` 没有重复执行；但旧线程仍存在 `<function_calls> . </function_calls>` 生成阶段 / 回答组织异常。该异常不属于 T012 repeated guard 缺陷，但会影响前台完整 smoke 通过，因此状态保持 `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | [agent_node_T012-repeated-tool-guard.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T012-repeated-tool-guard.md) |
 | `agent_node_T013` | Evidence Grounded Final Answer | `T013` 是 `Agent V1.5 final answer grounding` 任务，不是 `T009 / T010 / T011 / T012` 的补丁返工。`2026-07-04` 评审意见要求的最小整改 2 点已完成并通过复审：retrieval fallback 现已优先基于 chunk 内容回答；no-evidence guard 已覆盖“模型直接编造 workspace / 文件结果”的场景；同时补了裸 `toolId` 泄漏回归测试。整个任务没有改 Graph 主路由，没有改 ToolNode 直答，没有改 Planner / Normalize / Policy / ToolNode 边界 | `DONE` | [agent_node_T013-evidence-grounded-final-answer.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T013-evidence-grounded-final-answer.md) |
-| `agent_node_T014` | Approval Resume Contract | `T014` 原始 resume 对象对齐仍成立；当前新增 `T014R` 只补 approve / reject 之后的 state finalization。后端已补 run 终态清理与 assistant metadata 回写：reject 与 approval mismatch 不再把前台继续留在旧的 `waiting_approval` 语义里。当前后端回归与 typecheck 已通过，但本轮真实前台 `P0-4 / P0-5 / P0-6` 终态 smoke 证据还没有补齐，所以状态先不回写成 `DONE` | `READY_FOR_REVIEW` | [agent_node_T014-approval-resume-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T014-approval-resume-contract.md) |
+| `agent_node_T014` | Approval Resume Contract | `T014` 原始 resume 对象对齐仍成立；`T014R` 补完了 approve / reject 之后的 state finalization。项目 owner 已完成真实前台 smoke：`terminal_session` 会正常停在等待审批，approve 后 UI 不再停留在等待审批并继续执行，reject 后明确显示已拒绝且按钮消失，刷新线程后审批状态不复活；因此当前状态更新为 `DONE` | `DONE` | [agent_node_T014-approval-resume-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T014-approval-resume-contract.md) |
 | `agent_node_T015` | Phoenix Minimum Human Observability (`T_phonex`) | `T015 / T_phonex` 是 `Agent V1.5` 的开发态最小人眼可观测性任务。当前实现只在 `graph.ts` 组装层统一包装节点和 run 根 span：默认关闭，`AGENT_TRACE_PHOENIX=true` 时导出到 Phoenix，`AGENT_TRACE_VERBOSE=true` 时追加脱敏后的 state 摘要。实现没有改各 node 业务逻辑，没有改 AgentGraph 路由，也没有把 tracing 扩大成自研 observability 平台 | `DONE` | [agent_node_T015-phoenix-minimum-human-observability.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T015-phoenix-minimum-human-observability.md) |
-| `agent_node_T016` | Local Tool Routing and Schema Guard Under Weak Task Model | `T016` 是 `Agent V1.5 P0` 修复任务，只补 workspace local intent、防 schema invalid 直接打死前台、以及 generate 空回答 fallback 的最小防线。它不是工具选择大改，不是 Agent V2，也不是靠换更强 task model 过验收；当前状态先建卡为 `TODO`，后续实现必须保住 Planner / Normalize / Policy / ToolNode 既有边界 | `TODO` | [agent_node_T016-local-tool-routing-and-schema-guard.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T016-local-tool-routing-and-schema-guard.md) |
+| `agent_node_T016` | Local Tool Routing and Schema Guard Under Weak Task Model | `T016` 是 `Agent V1.5 P0` 修复任务，只补 workspace local intent、防 schema invalid 直接打死前台、以及 generate 空回答 fallback 的最小防线。`2026-07-05` 真实前台 smoke 已完成第二轮复测：`P0-8` 现在会稳定进入本地 `read_locate`，不再误走 `web_search`，也不再落到递归上限；最终回答已回到 `README.md / AGENTS.md / package.json / electron-builder.yml` 等本地证据，不再被 `release/*.exe` 安装包路径带偏。当前剩余现象只剩“第二次完全相同检索”没有单独形成第二条 completed evidence，回答会对此做保守说明；该现象已记录为非阻断解释，因此状态更新为 `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | [agent_node_T016-local-tool-routing-and-schema-guard.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T016-local-tool-routing-and-schema-guard.md) |
 
 ## Current Ground Truth
 
@@ -174,6 +174,7 @@ Agent node 专属总台账。
 - `T014` 当前只处理审批暂停与恢复合同，不改前端审批 UI，不改 Provider Gateway，不把批准后的最终回答质量问题混进本任务。
 - `T015` 当前只处理开发环境 Phoenix tracing 与最小脱敏 state 摘要，不改 AgentGraph 路由，不改各 node 业务实现，也不扩成通用 observability 平台。
 - `T016` 当前只处理 workspace local intent、tool schema invalid、generate empty answer fallback 三个最小防线，不改前端大结构，不改 Agent V2，不把“换更强模型”当成唯一修复。
+- `T014` 当前真实前台 smoke 已由项目 owner 补齐：审批等待、批准继续执行、拒绝终结、刷新不复活都已确认，因此状态更新为 `DONE`。
 
 ## Work Rules
 
@@ -541,6 +542,21 @@ Agent node 专属总台账。
     - `docs/project-control/tasks/agent_node_T016-local-tool-routing-and-schema-guard.md`
   - 当前状态初始化为：
     - `TODO`
+  - `2026-07-05` 已完成第一轮后端施工：
+    - `nextActionPlanner` 已补 workspace local intent guard，明确本地 workspace / 文件问题误走 `web_search` 时会改走本地证据路径
+    - `toolCallNormalize` 遇到 schema invalid 时不再直接 failed，而是记录 `schemaReplanDiagnostics` 并允许一次 bounded replan
+    - bounded replan 用尽后会转成 deterministic safe error answer，不执行工具、不伪造 evidence
+    - `generate` 遇到空回答时会返回 deterministic fallback，并记录 `generatedAnswerEmptyFallback`
+  - 后端验证结果：
+    - `pnpm --filter @ui-chat-mira/server test -- src/agent/next-action-planner.test.ts src/agent/tool-call-normalize.test.ts src/agent/graph.test.ts src/agent/nodes.test.ts`
+      - 结果：通过，`103 passed`
+    - `pnpm check`
+      - 结果：通过
+  - 当前未完成：
+    - 前台 `P0-8 / P0-9 / P0-10` smoke
+    - 打包验证
+  - 当前状态更新为：
+    - `IN_PROGRESS`
   - `2026-07-04` T014 局部评审结论：
     - 结论：`PASS`
     - 本次评审只覆盖 `pendingApproval -> 用户审批 -> 恢复原 frozen pendingToolCall -> ToolNode -> evidence -> 回到 Planner / Generate`

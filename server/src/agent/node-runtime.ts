@@ -15,6 +15,7 @@ import type {
   AgentObservation,
   AgentPlan,
   AgentPolicyDecision,
+  AgentSchemaReplanDiagnostics,
   AgentToolCallRequest,
   AgentToolExecutionResult,
   AgentToolExposureState,
@@ -57,6 +58,8 @@ export interface AgentNodeState {
   contextBudget?: ContextBudgetAudit;
   errorMessage?: string;
   errorSourceNodeId?: string;
+  schemaReplanDiagnostics?: AgentSchemaReplanDiagnostics;
+  generatedAnswerEmptyFallback?: boolean;
   iterationCount?: number;
   maxIterations?: number;
   continueIteration?: boolean;

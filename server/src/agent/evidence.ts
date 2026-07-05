@@ -115,6 +115,61 @@ const trimTextPreview = (value: string, limit = TEXT_PREVIEW_LIMIT) => {
     : normalized;
 };
 
+const NOISY_WORKSPACE_ARTIFACT_PREFIXES = [
+  "release/",
+  "tauri/target/",
+  "node_modules/",
+  "server/logs/",
+  "desktop/dist/",
+  "dist/",
+  "build/",
+] as const;
+
+const isNoisyWorkspaceArtifactPath = (value: string) => {
+  const normalized = value.replace(/\\/g, "/").toLowerCase();
+  return NOISY_WORKSPACE_ARTIFACT_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+};
+
+const isDocumentationLikePath = (value: string) => {
+  const normalized = value.replace(/\\/g, "/").toLowerCase();
+  return (
+    normalized === "agents.md" ||
+    normalized === "readme.md" ||
+    normalized.endsWith("/readme.md") ||
+    normalized.endsWith("/agents.md") ||
+    normalized.startsWith("docs/")
+  );
+};
+
+const scoreReadLocateMatch = (input: {
+  path: string;
+  matchType: string;
+}) => {
+  const segments = input.path.replace(/\\/g, "/").split("/").filter(Boolean).length;
+  return [
+    isNoisyWorkspaceArtifactPath(input.path) ? 0 : 1,
+    input.matchType === "content" ? 1 : 0,
+    isDocumentationLikePath(input.path) ? 1 : 0,
+    -segments,
+    input.path.length * -1,
+  ] as const;
+};
+
+const compareReadLocateMatchPriority = (
+  left: { path: string; matchType: string },
+  right: { path: string; matchType: string },
+) => {
+  const leftScore = scoreReadLocateMatch(left);
+  const rightScore = scoreReadLocateMatch(right);
+  for (let index = 0; index < leftScore.length; index += 1) {
+    if (leftScore[index] !== rightScore[index]) {
+      return rightScore[index] - leftScore[index];
+    }
+  }
+
+  return left.path.localeCompare(right.path);
+};
+
 const getLatestUserQuestion = (state: EvidenceState) => {
   const latest = [...(state.messages ?? [])]
     .reverse()
@@ -361,6 +416,97 @@ const createReadOpenSummary = (input: {
   };
 };
 
+const createReadLocateSummary = (input: {
+  question: string;
+  execution: AgentToolExecutionResult;
+  evidenceIndex: number;
+}): AgentEvidenceSummary | null => {
+  const result = input.execution.result;
+  if (!result || typeof result !== "object") {
+    return null;
+  }
+
+  const value = result as Record<string, unknown>;
+  if (
+    value.type !== "locate" ||
+    typeof value.scope !== "string" ||
+    typeof value.query !== "string" ||
+    !Array.isArray(value.matches)
+  ) {
+    return null;
+  }
+
+  const matches = value.matches
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object")
+    .map((entry) => {
+      const path = typeof entry.path === "string" ? entry.path : "unknown";
+      const matchType = entry.matchType === "content" ? "content" : "path";
+      const preview =
+        typeof entry.preview === "string" && entry.preview.trim()
+          ? trimTextPreview(entry.preview, 120)
+          : "";
+      return { path, matchType, preview };
+    })
+    .sort(compareReadLocateMatchPriority);
+  const matchCount = matches.length;
+  const matchesPreview = matches
+    .slice(0, PREVIEW_ITEM_LIMIT)
+    .map((match) =>
+      match.preview
+        ? `[${match.matchType}] ${match.path}: ${match.preview}`
+        : `[${match.matchType}] ${match.path}`,
+    );
+  const truncated = matchCount > PREVIEW_ITEM_LIMIT;
+  const canAnswerLocateQuestion =
+    matchCount > 0 && !queryRequestsFileContent(input.question);
+
+  return {
+    source: "tool",
+    status: "completed",
+    toolId: input.execution.toolId,
+    inputHash: input.execution.inputHash,
+    actionTaken: `Located ${matchCount} workspace match(es) for "${value.query}".`,
+    keyFindings:
+      matchCount > 0
+        ? [`matchCount=${matchCount}`, ...matchesPreview]
+        : [`matchCount=0`, `query=${value.query}`],
+    answerReadiness: canAnswerLocateQuestion
+      ? {
+          canAnswer: true,
+          reason: "Workspace locate results are available for answer generation.",
+        }
+      : {
+          canAnswer: false,
+          reason:
+            matchCount === 0
+              ? "Workspace locate returned no matches."
+              : "Locate results found targets, but the question still needs file content.",
+          missingInfo:
+            matchCount === 0
+              ? [`workspace matches for "${value.query}"`]
+              : ["opened file content for the matched workspace target"],
+        },
+    data: {
+      kind: "read_locate",
+      scope: value.scope,
+      query: value.query,
+      searchMode:
+        value.searchMode === "path" || value.searchMode === "content"
+          ? value.searchMode
+          : "auto",
+      matchCount,
+      matchesPreview,
+      truncated,
+      canAnswerLocateQuestion,
+    },
+    rawRef: {
+      evidenceIndex: input.evidenceIndex,
+      toolCallId: input.execution.toolCallId,
+      invocationId: input.execution.invocationId,
+    },
+  };
+};
+
 const createWebSearchSummary = (input: {
   question: string;
   execution: AgentToolExecutionResult;
@@ -552,6 +698,7 @@ export const createToolExecutionEvidenceSummary = (input: {
   return (
     createReadListSummary(input) ??
     createReadOpenSummary(input) ??
+    createReadLocateSummary(input) ??
     createWebSearchSummary(input) ??
     createTerminalSessionSummary(input) ?? {
       source: "tool",

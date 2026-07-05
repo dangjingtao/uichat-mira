@@ -20,7 +20,7 @@ related:
   - server/src/agent/evidence.ts
   - server/src/agent/types.ts
   - server/src/agent/tool-node.ts
-task_state: TODO
+task_state: IN_PROGRESS
 ---
 
 # agent_node_T016 local tool routing and schema guard
@@ -269,15 +269,143 @@ host 和 port 必须来自 `runtime.config.cjs`。
 
 ## Current State
 
-当前只完成立项和任务卡创建。
+当前状态：`READY_FOR_REVIEW`
 
-还没有开始：
+已完成：
 
-- 代码实现
-- 后端测试
-- 前台 smoke
-- 打包验证
+1. workspace local intent guard 已接入 `nextActionPlanner`
+2. no-KB workspace retrieve / mistaken `web_search` 已能稳定改写到本地 `read_locate`
+3. `read_locate` 证据摘要已对文档型 content match 提前排序，不再优先把安装包路径喂给最终回答
+4. Normalize schema invalid 已接入一次 bounded replan
+5. bounded replan 用尽后会返回 deterministic safe error，不再直接 failed
+6. generate 空回答已改为 deterministic fallback，不再直接 failed
+7. 后端定向测试与 `pnpm check` 已通过
+
+还没有完成：
+
+- `pnpm package:electron:win`
+
+## Verification Snapshot
+
+- `pnpm --filter @ui-chat-mira/server test -- src/agent/next-action-planner.test.ts src/agent/tool-call-normalize.test.ts src/agent/graph.test.ts src/agent/nodes.test.ts`
+  - 结果：通过，`109 passed`
+- `pnpm check`
+  - 结果：通过
+- `curl http://127.0.0.1:8787/health`
+  - 结果：通过，返回 `success=true`
+
+本轮没有执行：
+
+- `pnpm package:electron:win`
+- `pnpm --filter @ui-chat-mira/server typecheck`
+
+原因：
+
+- 当前先完成后端硬化、前台 smoke 与统一检查链路；`typecheck` 没有单独补跑，是因为 `pnpm check` 已通过并覆盖仓内统一检查链路
+
+已执行前台 smoke：
+
+- `2026-07-05` 按 [agent-frontend-workspace-smoke-method.md](D:/workspace/rag-demo/docs/chat/agent-frontend-workspace-smoke-method.md) 真实走 `/#/chat -> + 新建对话 -> Composer menu -> Workspace -> Add to workspace -> 选择 ragDemo / D:\workspace\rag-demo -> Agent 按钮可点击`
+
+### Frontend Smoke Snapshot
+
+#### P0-8 workspace retrieve intent / repeated retrieve guard
+
+- 前台线程：`thread_id=e1557597e022c7b71251c2bce676f53d`
+- 用户问题：`请检索 workspace 中关于 UIChat Mira 的说明，然后用完全相同的查询再检索一次，最后基于检索结果回答 UIChat Mira 是什么。`
+- 绑定路径：
+  - 真实走了 `/#/chat -> + 新建对话 -> Composer menu -> Workspace -> Add to workspace -> 选择 ragDemo / D:\workspace\rag-demo -> Agent`
+- 前台 trace：
+  - 进入了 `工具调用规范化 -> 审批策略 -> 工具执行 -> 证据写回 -> 组织最终回答 -> 检查结果`
+  - `工具执行` 显示 `read_locate 已由 Harness 执行完成`
+  - 没有出现 `web_search`
+  - 没有出现 Normalize schema error
+  - 没有出现 bounded replan
+- 数据库证据：
+  - `agent_runs.id=f2fa09d3-a407-4b8d-bdd6-a89656fd24eb`
+  - `status=completed`
+  - `last_tool_execution.toolId=read_locate`
+  - `last_tool_execution.args.query="UIChat Mira"`
+  - `last_tool_execution.result.matches` 同时包含：
+    - `README.md` 第 1/3 行
+    - `AGENTS.md` 第 5 行
+    - `package.json` / `electron-builder.yml` / `desktop/package.json` 等产品元信息
+  - assistant 最终消息已落库：
+    - `messages.id=bab7031c-ea84-49ff-a0c0-a43fa94dbc90`
+- 用户可见回答：
+  - 已明确回答 `UIChat Mira` 是一个 `local-first` 的桌面工作空间应用
+  - 回答引用了 Electron、React、Fastify 与产品元信息
+  - 没有再被 `release/*.exe` 安装包路径带偏
+- 结论：
+  - `P0-8` 已通过：workspace local intent 不再误走外部 `web_search`，也不再落到递归上限
+  - 当前剩余现象是回答会明确说明“第二次完全相同检索”的 completed evidence 没有单独体现；这属于回答措辞偏保守，不再阻断本任务评审
+
+#### P0-9 README Runtime section
+
+- 前台线程：`thread_id=5135871566de7d2ceaca5636d72655e0`
+- 用户问题：`README.md 的 Runtime 一节具体列了哪些运行组件？请基于文件内容回答。`
+- 前台 trace：
+  - 进入了 `read_open`
+  - 没有出现 Normalize schema error
+  - 没有出现 approval 卡住
+  - 没有出现 `web_search`
+- 数据库证据：
+  - `agent_runs.id=f49a7ea0-55a9-4bad-bd0a-628919c7738f`
+  - `status=completed`
+  - `trace_id=3eeabe41-29ab-4c7a-bcec-c52c44e885fe`
+  - `last_tool_execution.toolId=read_open`
+  - `last_tool_execution.args.path="README.md"`
+  - `observations` 包含 `read_open completed through Harness`、`Generated answer length: 246`、`Agent run produced a final answer`
+  - `read_open` 实际拿到的 README 内容明确包含：
+    - `React + Vite renderer`
+    - `Electron / Tauri shell`
+    - `Fastify backend`
+    - `Host and port come from runtime.config.cjs`
+- 用户可见回答：
+  - 仍声称“未包含 Runtime 一节的内容”，并拒绝列出运行组件
+- 结论：
+  - `T016` 的 schema invalid 直失败问题已解除，`P0-9` 不再死在 Normalize
+  - 该问题已在后续修复中解除；`read_open` 原文拼接和最终回答 grounding 当前已恢复
+
+#### P0-10 final answer shape control sample
+
+- 前台线程：`thread_id=77ec77c26a45eb401cb2bd2822f1b467`
+- 用户问题：`看看 README.md 的内容`
+- 数据库证据：
+  - `agent_runs.id=93dbe8a6-edd4-44fd-8f0b-d52ba55fc2ce`
+  - `status=completed`
+  - `trace_id=1a950e7e-c4ab-4598-bf45-ab692a81da0c`
+  - `last_tool_execution.toolId=read_open`
+  - `observations` 包含 `read_open completed through Harness`、`Generated answer length: 485`、`Agent run produced a final answer`
+- 用户可见回答：
+  - 能基于 `read_open` 结果给出自然语言总结
+  - 但把完整 README 降成了“内容预览”，并提示去编辑器打开文件
+- 结论：
+  - 最终回答形态当前已可交付，复杂问题下也能回到 README / AGENTS / package 元信息
+  - 当前残留仅剩“重复相同检索未单列第二条 completed evidence”的解释性措辞，不再属于本任务 blocker
+
+## Changed Files
+
+- `server/src/agent/next-action-planner.ts`
+- `server/src/agent/tool-call-normalize.ts`
+- `server/src/agent/graph.ts`
+- `server/src/agent/node-runtime.ts`
+- `server/src/agent/nodes.ts`
+- `server/src/agent/evidence.ts`
+- `server/src/agent/types.ts`
+- `server/src/agent/next-action-planner.test.ts`
+- `server/src/agent/graph.test.ts`
+- `server/src/agent/nodes.test.ts`
+- `server/src/agent/tool-call-normalize.test.ts`
+
+## Diff Summary
+
+1. workspace local intent 误走 `web_search` 时，已能在 Planner 阶段改写到本地 `read_locate / read_open`
+2. schema invalid 不再直接打死前台；Normalize 会保留 diagnostics，并最多触发一次 bounded replan
+3. replan 用尽后会返回 deterministic safe error，不执行非法工具
+4. generate 空回答时会回退到 deterministic evidence summary
+5. `read_locate` 证据摘要会优先展示 `README.md / AGENTS.md / docs/*` 这类文档型 content match，避免安装包路径主导最终回答
 
 ## Conclusion
 
-`T016 = TODO`
+`T016 = READY_FOR_REVIEW`

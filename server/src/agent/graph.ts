@@ -38,6 +38,7 @@ import type {
   AgentNextAction,
   AgentObservation,
   AgentPlan,
+  AgentSchemaReplanDiagnostics,
   AgentToolExposureState,
 } from "./types.js";
 import type { ContextBudgetAudit } from "@/services/context-budget/index.js";
@@ -74,6 +75,8 @@ const AgentGraphState = Annotation.Root({
   contextBudget: Annotation<ContextBudgetAudit | undefined>,
   errorMessage: Annotation<string | undefined>,
   errorSourceNodeId: Annotation<string | undefined>,
+  schemaReplanDiagnostics: Annotation<AgentSchemaReplanDiagnostics | undefined>,
+  generatedAnswerEmptyFallback: Annotation<boolean | undefined>,
   approvedInvocations: Annotation<AgentGraphInput["approvedInvocations"] | undefined>,
   iterationCount: Annotation<number | undefined>,
   maxIterations: Annotation<number | undefined>,
@@ -183,14 +186,24 @@ const routeAfterNextAction = (state: AgentGraphStateType) => {
     case "use_tool":
       return "toolCallNormalize";
     case "error":
-      return "error";
+      return state.schemaReplanDiagnostics ? "generate" : "error";
     default:
       return "error";
   }
 };
 
 const routeAfterToolCallNormalize = (state: AgentGraphStateType) => {
-  if (state.errorMessage || !state.pendingToolCall) {
+  if (state.errorMessage) {
+    return "error";
+  }
+
+  if (state.schemaReplanDiagnostics) {
+    return state.schemaReplanDiagnostics.attemptCount <= 1
+      ? "nextActionPlanner"
+      : "generate";
+  }
+
+  if (!state.pendingToolCall) {
     return "error";
   }
 
@@ -329,6 +342,8 @@ const agentStateGraph = new StateGraph(AgentGraphState)
     "error",
   ])
   .addConditionalEdges("toolCallNormalize", routeAfterToolCallNormalize, [
+    "nextActionPlanner",
+    "generate",
     "policyStep",
     "error",
   ])
@@ -382,6 +397,8 @@ export const agentGraph = {
             lastToolExecution: undefined,
             evidence: undefined,
             pendingApproval: undefined,
+            schemaReplanDiagnostics: undefined,
+            generatedAnswerEmptyFallback: false,
             iterationCount: 0,
             maxIterations: input.maxIterations ?? DEFAULT_AGENT_MAX_ITERATIONS,
             continueIteration: false,

@@ -10,12 +10,13 @@ import {
 import type {
   AgentApprovalRequest,
   AgentEvidencePayload,
-  AgentRepeatedActionGuardResult,
   AgentEvidenceSummary,
   AgentNextAction,
   AgentObservation,
   AgentPlan,
+  AgentRepeatedActionGuardResult,
   AgentRetrievalEvidence,
+  AgentSchemaReplanDiagnostics,
   AgentToolExecutionResult,
   AgentToolExposureState,
 } from "./types.js";
@@ -27,6 +28,63 @@ const PLANNER_OUTPUT_PREVIEW_LIMIT = 500;
 const ALLOWED_ACTION_TYPES = ["answer", "retrieve", "use_tool", "error"] as const;
 const INVALID_PLANNER_OUTPUT_REASON =
   "Planner output was invalid JSON; planner must stop instead of pretending an answer is ready.";
+const LOCAL_INTENT_GUARD_REASON =
+  "Workspace-local intent guard blocked web_search and redirected to a local evidence path.";
+const SCHEMA_REPLAN_ATTEMPT_LIMIT = 1;
+const FILE_CONTENT_TOKENS = [
+  "open",
+  "read",
+  "content",
+  "contents",
+  "inside",
+  "section",
+  "runtime",
+  "详情",
+  "内容",
+  "打开",
+  "读取",
+  "阅读",
+  "查看",
+  "一节",
+] as const;
+const WORKSPACE_LOCAL_TOKENS = [
+  "workspace",
+  "current workspace",
+  "local project",
+  "project",
+  "repository",
+  "repo",
+  "folder",
+  "directory",
+  "file",
+  "files",
+  "readme.md",
+  "工作区",
+  "本地项目",
+  "本地仓库",
+  "目录",
+  "文件",
+  "文件内容",
+  "基于文件内容",
+] as const;
+const RETRIEVE_INTENT_TOKENS = [
+  "retrieve",
+  "search workspace",
+  "look up",
+  "find",
+  "检索",
+  "搜索",
+  "查找",
+] as const;
+const LOCATE_QUERY_TRAILING_NOISE = [
+  "说明",
+  "介绍",
+  "定义",
+  "内容",
+  "是什么",
+  "资料",
+  "信息",
+] as const;
 
 const stripThinkBlocks = (value: string) =>
   value.replace(/^\s*(?:<think\b[^>]*>[\s\S]*?<\/think>\s*)+/i, "").trim();
@@ -87,6 +145,72 @@ const logPlannerDecisionDebug = (input: {
 const getLatestUserQuestion = (messages: NormalizedChatMessage[]) => {
   const latest = [...messages].reverse().find((message) => message.role === "user");
   return latest?.content.trim() ?? "";
+};
+
+const normalizeIntentText = (value: string) => value.trim().toLowerCase();
+
+const includesAnyToken = (value: string, tokens: readonly string[]) =>
+  tokens.some((token) => value.includes(token));
+
+const queryRequestsFileContent = (query: string) => {
+  const normalized = normalizeIntentText(query);
+  if (includesAnyToken(normalized, FILE_CONTENT_TOKENS)) {
+    return true;
+  }
+
+  return /[\w.-]+\.[a-z0-9]{1,12}\b/i.test(query);
+};
+
+const queryMentionsWorkspaceLocal = (query: string) =>
+  includesAnyToken(normalizeIntentText(query), WORKSPACE_LOCAL_TOKENS);
+
+const queryRequestsRetrieve = (query: string) =>
+  includesAnyToken(normalizeIntentText(query), RETRIEVE_INTENT_TOKENS);
+
+const trimWrappedPath = (value: string) =>
+  value
+    .trim()
+    .replace(/^["'`]/, "")
+    .replace(/["'`]$/, "")
+    .trim();
+
+const cleanTrailingPunctuation = (value: string) =>
+  value.replace(/[。．，,；;！!？?]+$/u, "").trim();
+
+const extractExplicitPathTarget = (query: string) => {
+  const quoted = query.match(/["'`](.+?)["'`]/)?.[1];
+  if (quoted) {
+    return cleanTrailingPunctuation(trimWrappedPath(quoted));
+  }
+
+  const directPathMatch = query.match(/(?:^|[\s(])([a-zA-Z]:\\[^\s)]+|[.~]{0,2}[\\/][^\s)]+)/u);
+  if (directPathMatch?.[1]) {
+    return cleanTrailingPunctuation(trimWrappedPath(directPathMatch[1]));
+  }
+
+  const fileNameMatch = query.match(/\b[\w.-]+\.[a-z0-9]{1,12}\b/i);
+  return fileNameMatch?.[0] ? cleanTrailingPunctuation(fileNameMatch[0]) : null;
+};
+
+const normalizeWorkspaceLocateQuery = (query: string, originalQuestion: string) => {
+  const trimmed = cleanTrailingPunctuation(query).trim();
+  if (!trimmed) {
+    return cleanTrailingPunctuation(originalQuestion).trim();
+  }
+
+  const aboutMatch = originalQuestion.match(
+    /关于\s+(.+?)\s+的?(?:说明|介绍|定义|内容|资料|信息)/u,
+  );
+  if (aboutMatch?.[1]) {
+    return cleanTrailingPunctuation(aboutMatch[1]).trim();
+  }
+
+  const strippedTrailingNoise = LOCATE_QUERY_TRAILING_NOISE.reduce((value, token) => {
+    const pattern = new RegExp(`\\s*${token}\\s*$`, "u");
+    return value.replace(pattern, "").trim();
+  }, trimmed);
+
+  return strippedTrailingNoise || trimmed;
 };
 
 const emitStepNode = async (
@@ -168,6 +292,159 @@ const normalizeToolExposure = (
   };
 };
 
+const summarizeToolSchemas = (toolExposure: AgentToolExposureState) =>
+  toolExposure.toolMeta.map((tool) => {
+    const schema = tool.inputSchema as
+      | {
+          properties?: Record<string, { type?: string }>;
+          required?: string[];
+          additionalProperties?: boolean;
+        }
+      | undefined;
+
+    return {
+      toolId: tool.toolId,
+      domain: tool.domain ?? null,
+      required: Array.isArray(schema?.required) ? schema.required : [],
+      properties: Object.entries(schema?.properties ?? {}).map(([key, value]) => ({
+        name: key,
+        type: value?.type ?? "unknown",
+      })),
+      additionalProperties:
+        typeof schema?.additionalProperties === "boolean"
+          ? schema.additionalProperties
+          : undefined,
+    };
+  });
+
+const buildSchemaReplanMessages = (input: {
+  question: string;
+  toolExposure: AgentToolExposureState;
+  diagnostics: AgentSchemaReplanDiagnostics;
+}): NormalizedChatMessage[] => [
+  {
+    role: "system",
+    content: [
+      "你正在做一次 bounded replan。",
+      "只允许返回一个合法的 nextAction JSON。",
+      "允许动作只有 answer / retrieve / use_tool / error。",
+      "不要输出 Markdown，不要输出代码块，不要输出解释。",
+      "当前 workspace 已绑定。",
+      "如果问题明显在问本地 workspace 或本地文件，不要使用 web_search 代替本地证据路径。",
+      "如果选择 use_tool，toolId 必须来自允许工具列表，args 必须严格符合 schema。",
+    ].join("\n"),
+    parts: [],
+  },
+  {
+    role: "user",
+    content: JSON.stringify(
+      {
+        lastUserRequest: input.question,
+        workspaceBound: true,
+        previousSchemaError: input.diagnostics.schemaError,
+        previousInvalidAction: input.diagnostics.invalidAction ?? null,
+        allowedTools: summarizeToolSchemas(input.toolExposure),
+        instruction:
+          "Return exactly one valid nextAction JSON. If no safe local tool action is possible, return an error action.",
+      },
+      null,
+      2,
+    ),
+    parts: [],
+  },
+];
+
+const getWorkspaceLocalIntentGuardAction = (input: {
+  question: string;
+  nextAction: AgentNextAction;
+  toolExposure: AgentToolExposureState;
+  workspaceRoot?: string | null;
+  knowledgeBaseId?: string | null;
+}) => {
+  if (!input.workspaceRoot) {
+    return null;
+  }
+
+  if (!queryMentionsWorkspaceLocal(input.question)) {
+    return null;
+  }
+
+  const explicitPath = extractExplicitPathTarget(input.question);
+  const exposedToolIds = new Set(input.toolExposure.exposedTools);
+  const redirectedWorkspaceQuery =
+    input.nextAction.type === "use_tool" &&
+    input.nextAction.toolId === "web_search" &&
+    typeof input.nextAction.args.query === "string" &&
+    input.nextAction.args.query.trim()
+      ? input.nextAction.args.query.trim()
+      : input.nextAction.type === "retrieve" && input.nextAction.query.trim()
+        ? input.nextAction.query.trim()
+        : input.question;
+
+  if (
+    explicitPath &&
+    queryRequestsFileContent(input.question) &&
+    exposedToolIds.has("read_open") &&
+    input.nextAction.type === "use_tool" &&
+    input.nextAction.toolId === "web_search"
+  ) {
+    return {
+      guarded: true,
+      nextAction: {
+        type: "use_tool" as const,
+        toolId: "read_open",
+        args: { path: explicitPath },
+        reason: LOCAL_INTENT_GUARD_REASON,
+      },
+      reason: LOCAL_INTENT_GUARD_REASON,
+    };
+  }
+
+  const shouldRedirectWorkspaceRetrieve =
+    queryRequestsRetrieve(input.question) &&
+    ((input.nextAction.type === "use_tool" && input.nextAction.toolId === "web_search") ||
+      (input.nextAction.type === "retrieve" && !input.knowledgeBaseId));
+
+  if (shouldRedirectWorkspaceRetrieve && exposedToolIds.has("read_locate")) {
+    return {
+      guarded: true,
+      nextAction: {
+        type: "use_tool" as const,
+        toolId: "read_locate",
+        args: {
+          query:
+            explicitPath ??
+            normalizeWorkspaceLocateQuery(redirectedWorkspaceQuery, input.question),
+        },
+        reason: LOCAL_INTENT_GUARD_REASON,
+      },
+      reason: LOCAL_INTENT_GUARD_REASON,
+    };
+  }
+
+  if (queryRequestsRetrieve(input.question) && input.nextAction.type === "use_tool" && input.nextAction.toolId === "web_search") {
+    return {
+      guarded: true,
+      nextAction: {
+        type: "retrieve" as const,
+        query: input.question,
+        reason: LOCAL_INTENT_GUARD_REASON,
+      },
+      reason: LOCAL_INTENT_GUARD_REASON,
+    };
+  }
+
+  return {
+    guarded: true,
+    nextAction: {
+      type: "error" as const,
+      reason:
+        "Workspace-local intent requires local file or retrieval evidence; web_search cannot substitute for it.",
+    },
+    reason: LOCAL_INTENT_GUARD_REASON,
+  };
+};
+
 const buildNextActionPlannerMessages = (input: {
   question: string;
   plan: AgentPlan;
@@ -179,7 +456,19 @@ const buildNextActionPlannerMessages = (input: {
   maxIterations: number;
   pendingApproval?: AgentApprovalRequest;
   latestEvidenceSummary?: AgentEvidenceSummary;
+  schemaReplanDiagnostics?: AgentSchemaReplanDiagnostics;
 }): NormalizedChatMessage[] => {
+  if (
+    input.schemaReplanDiagnostics &&
+    input.schemaReplanDiagnostics.attemptCount <= SCHEMA_REPLAN_ATTEMPT_LIMIT
+  ) {
+    return buildSchemaReplanMessages({
+      question: input.question,
+      toolExposure: input.toolExposure,
+      diagnostics: input.schemaReplanDiagnostics,
+    });
+  }
+
   const evidenceSummary = summarizePlannerEvidence(input.evidence);
 
   return [
@@ -228,6 +517,7 @@ const buildNextActionPlannerMessages = (input: {
               }
             : null,
           latestEvidenceSummary: input.latestEvidenceSummary ?? null,
+          schemaReplanDiagnostics: input.schemaReplanDiagnostics ?? null,
         },
         null,
         2,
@@ -567,6 +857,8 @@ export const nextActionPlannerNode = async (
       latestEvidenceSummary: latestEvidenceSummary ?? null,
       answerStopRuleTriggered: answerStopDecision.shouldAnswer,
       answerStopRuleReason: answerStopDecision.reason,
+      schemaReplanAttemptCount: state.schemaReplanDiagnostics?.attemptCount ?? 0,
+      schemaReplanError: state.schemaReplanDiagnostics?.schemaError ?? null,
     },
   });
 
@@ -576,6 +868,8 @@ export const nextActionPlannerNode = async (
   let parseErrorReason: string | undefined;
   let parseWarnings: string[] | undefined;
   let repeatedActionGuard: AgentRepeatedActionGuardResult | undefined;
+  let localIntentGuardTriggered = false;
+  let localIntentGuardReason: string | undefined;
   const taskModelInvoked =
     !answerStopDecision.shouldAnswer && !(maxIterations > 0 && iteration >= maxIterations);
 
@@ -600,6 +894,7 @@ export const nextActionPlannerNode = async (
       maxIterations,
       pendingApproval: state.pendingApproval,
       latestEvidenceSummary,
+      schemaReplanDiagnostics: state.schemaReplanDiagnostics,
     });
 
     try {
@@ -615,6 +910,18 @@ export const nextActionPlannerNode = async (
       sanitizedOutput = validationResult.sanitizedOutput ?? "";
       parseErrorReason = validationResult.parseErrorReason;
       parseWarnings = validationResult.parseWarnings;
+      const localIntentGuardAction = getWorkspaceLocalIntentGuardAction({
+        question,
+        nextAction,
+        toolExposure,
+        workspaceRoot: state.workspaceRoot,
+        knowledgeBaseId: state.knowledgeBaseId,
+      });
+      if (localIntentGuardAction?.guarded) {
+        nextAction = localIntentGuardAction.nextAction;
+        localIntentGuardTriggered = true;
+        localIntentGuardReason = localIntentGuardAction.reason;
+      }
       repeatedActionGuard = getRepeatedActionGuardResult({
         evidence: state.evidence,
         nextAction,
@@ -680,12 +987,21 @@ export const nextActionPlannerNode = async (
       guardedQuery: repeatedActionGuard?.guardedQuery,
       matchedEvidenceIndex: repeatedActionGuard?.matchedEvidenceIndex,
       matchedToolCallId: repeatedActionGuard?.matchedToolCallId,
+      localIntentGuardTriggered,
+      localIntentGuardReason: localIntentGuardReason ?? null,
+      schemaReplanAttemptCount: state.schemaReplanDiagnostics?.attemptCount ?? 0,
+      schemaReplanError: state.schemaReplanDiagnostics?.schemaError ?? null,
       allowedActionTypes: [...ALLOWED_ACTION_TYPES],
     },
   });
 
   return {
     nextAction,
+    ...(nextAction.type === "error" && state.schemaReplanDiagnostics
+      ? {
+          schemaReplanDiagnostics: state.schemaReplanDiagnostics,
+        }
+      : {}),
     ...(nextAction.type === "error"
       ? {
           errorMessage: nextAction.reason,

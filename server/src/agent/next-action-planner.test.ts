@@ -343,6 +343,319 @@ test("nextActionPlannerNode returns use_tool action when toolId is exposed", asy
   }
 });
 
+test("nextActionPlannerNode guards workspace-local retrieve intent away from web_search", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"web_search","args":{"query":"UIChat Mira 说明"},"reason":"Need current information."}';
+    });
+  const events: Array<Record<string, unknown>> = [];
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question:
+          "请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答。",
+        messages: [
+          {
+            role: "user",
+            content:
+              "请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答。",
+            parts: [
+              {
+                type: "text",
+                text: "请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答。",
+              },
+            ],
+          },
+        ],
+        workspaceRoot: "D:\\workspace\\rag-demo",
+      }),
+      async (event) => {
+        events.push({
+          nodeId: event.nodeId,
+          phase: event.phase,
+          details: event.details,
+        });
+      },
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "retrieve",
+        query: "请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答。",
+        reason: "Workspace-local intent guard blocked web_search and redirected to a local evidence path.",
+      },
+    });
+
+    const doneEvent = events.find(
+      (event) =>
+        event.nodeId === "agent-next-action-planner" && event.phase === "done",
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.localIntentGuardTriggered,
+      true,
+    );
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode turns workspace-local retrieve into read_locate when no knowledge base is bound", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"retrieve","query":"请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答。","reason":"Need workspace evidence first."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question:
+          "请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答。",
+        messages: [
+          {
+            role: "user",
+            content:
+              "请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答。",
+            parts: [
+              {
+                type: "text",
+                text: "请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答。",
+              },
+            ],
+          },
+        ],
+        workspaceRoot: "D:\\workspace\\rag-demo",
+        knowledgeBaseId: null,
+        toolExposure: {
+          exposedTools: ["read_open", "read_locate", "web_search"],
+          toolMeta: [
+            ...baseToolExposure.toolMeta,
+            {
+              toolId: "read_locate",
+              title: "Read Locate",
+              description: "Locate files or matching content inside the authorized workspace.",
+              inputSchema: { type: "object", properties: { query: { type: "string" } } },
+              domain: "read",
+              source: "internal",
+              tags: ["read"],
+              capabilities: {
+                sideEffect: "none",
+                requiresApproval: false,
+              },
+            },
+          ],
+        },
+      }),
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_locate",
+        args: {
+          query: "UIChat Mira",
+        },
+        reason: "Workspace-local intent guard blocked web_search and redirected to a local evidence path.",
+      },
+    });
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode reuses the planner search query when redirecting workspace-local web_search to read_locate", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"web_search","args":{"query":"UIChat Mira","maxResults":5},"reason":"Need information."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question:
+          "请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答。",
+        messages: [
+          {
+            role: "user",
+            content:
+              "请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答。",
+            parts: [
+              {
+                type: "text",
+                text: "请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答。",
+              },
+            ],
+          },
+        ],
+        workspaceRoot: "D:\\workspace\\rag-demo",
+        knowledgeBaseId: null,
+        toolExposure: {
+          exposedTools: ["read_open", "read_locate", "web_search"],
+          toolMeta: [
+            ...baseToolExposure.toolMeta,
+            {
+              toolId: "read_locate",
+              title: "Read Locate",
+              description: "Locate files or matching content inside the authorized workspace.",
+              inputSchema: { type: "object", properties: { query: { type: "string" } } },
+              domain: "read",
+              source: "internal",
+              tags: ["read"],
+              capabilities: {
+                sideEffect: "none",
+                requiresApproval: false,
+              },
+            },
+          ],
+        },
+      }),
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_locate",
+        args: {
+          query: "UIChat Mira",
+        },
+        reason: "Workspace-local intent guard blocked web_search and redirected to a local evidence path.",
+      },
+    });
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode guards workspace file-content intent away from web_search to read_open", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"web_search","args":{"query":"README Runtime"},"reason":"Need search results."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question: "README.md 的 Runtime 一节具体列了哪些运行组件？请基于文件内容回答。",
+        messages: [
+          {
+            role: "user",
+            content: "README.md 的 Runtime 一节具体列了哪些运行组件？请基于文件内容回答。",
+            parts: [
+              {
+                type: "text",
+                text: "README.md 的 Runtime 一节具体列了哪些运行组件？请基于文件内容回答。",
+              },
+            ],
+          },
+        ],
+        workspaceRoot: "D:\\workspace\\rag-demo",
+      }),
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: {
+          path: "README.md",
+        },
+        reason: "Workspace-local intent guard blocked web_search and redirected to a local evidence path.",
+      },
+    });
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode keeps explicit external web_search requests unchanged", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"web_search","args":{"query":"latest release notes"},"reason":"Need current external information."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question: "请联网搜索今天最新的 release notes",
+        messages: [
+          {
+            role: "user",
+            content: "请联网搜索今天最新的 release notes",
+            parts: [{ type: "text", text: "请联网搜索今天最新的 release notes" }],
+          },
+        ],
+        workspaceRoot: "D:\\workspace\\rag-demo",
+      }),
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "use_tool",
+        toolId: "web_search",
+        args: {
+          query: "latest release notes",
+        },
+        reason: "Need current external information.",
+      },
+    });
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode uses bounded replan prompt when schema diagnostics exist", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need the file content."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        workspaceRoot: "D:\\workspace\\rag-demo",
+        schemaReplanDiagnostics: {
+          schemaError: "args.limit is not allowed",
+          toolId: "read_open",
+          invalidAction: {
+            type: "use_tool",
+            toolId: "read_open",
+            args: {
+              path: "README.md",
+              limit: 3,
+            },
+            reason: "Need file content.",
+          },
+          attemptCount: 1,
+        },
+      }),
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: {
+          path: "README.md",
+        },
+        reason: "Need the file content.",
+      },
+    });
+
+    const plannerMessages = streamSpy.mock.calls[0]?.[0] ?? [];
+    assert.match(String(plannerMessages[0]?.content ?? ""), /bounded replan/i);
+    assert.match(String(plannerMessages[1]?.content ?? ""), /args\.limit is not allowed/);
+    assert.match(String(plannerMessages[1]?.content ?? ""), /allowedTools/);
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
 test("nextActionPlannerNode turns a repeated completed tool call into answer and writes guard diagnostics", async () => {
   const streamSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")

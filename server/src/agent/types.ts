@@ -199,6 +199,17 @@ export interface AgentReadOpenEvidenceData {
   canAnswerFileQuestion: boolean;
 }
 
+export interface AgentReadLocateEvidenceData {
+  kind: "read_locate";
+  scope: string;
+  query: string;
+  searchMode: "auto" | "path" | "content";
+  matchCount: number;
+  matchesPreview: string[];
+  truncated: boolean;
+  canAnswerLocateQuestion: boolean;
+}
+
 export interface AgentWebSearchEvidenceData {
   kind: "web_search";
   query: string;
@@ -237,6 +248,7 @@ export interface AgentObservationEvidenceData {
 export type AgentEvidenceSummaryData =
   | AgentReadListEvidenceData
   | AgentReadOpenEvidenceData
+  | AgentReadLocateEvidenceData
   | AgentWebSearchEvidenceData
   | AgentTerminalSessionEvidenceData
   | AgentRetrievalEvidenceData
@@ -298,6 +310,13 @@ export type AgentNextAction =
 export interface AgentToolExposureState {
   exposedTools: string[];
   toolMeta: AgentToolMeta[];
+}
+
+export interface AgentSchemaReplanDiagnostics {
+  schemaError: string;
+  toolId?: string;
+  invalidAction?: Extract<AgentNextAction, { type: "use_tool" }>;
+  attemptCount: number;
 }
 
 export interface AgentRun {

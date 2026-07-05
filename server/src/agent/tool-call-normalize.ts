@@ -60,6 +60,8 @@ const emitNormalizeFailure = async (
     reason: string;
     toolId?: string | null;
     availableToolCount: number;
+    schemaReplanEligible?: boolean;
+    schemaReplanAttemptCount?: number;
   },
 ) => {
   await emitStepNode(emit, {
@@ -73,6 +75,8 @@ const emitNormalizeFailure = async (
       reason: input.reason,
       toolId: input.toolId ?? null,
       availableToolCount: input.availableToolCount,
+      schemaReplanEligible: input.schemaReplanEligible ?? false,
+      schemaReplanAttemptCount: input.schemaReplanAttemptCount ?? 0,
     },
   });
 };
@@ -173,16 +177,37 @@ const failNormalize = async (
   input: {
     reason: string;
     toolId?: string | null;
+    schemaReplanEligible?: boolean;
   },
 ): Promise<Partial<AgentGraphState>> => {
+  const nextAttemptCount = input.schemaReplanEligible
+    ? (state.schemaReplanDiagnostics?.attemptCount ?? 0) + 1
+    : 0;
   await emitNormalizeFailure(state, emit, {
     reason: input.reason,
     toolId: input.toolId,
     availableToolCount: state.toolExposure?.exposedTools.length ?? 0,
+    schemaReplanEligible: input.schemaReplanEligible,
+    schemaReplanAttemptCount: nextAttemptCount,
   });
+
+  if (input.schemaReplanEligible) {
+    return {
+      pendingToolCall: undefined,
+      schemaReplanDiagnostics: {
+        schemaError: input.reason,
+        toolId: input.toolId ?? undefined,
+        invalidAction: getUseToolAction(state.nextAction) ?? undefined,
+        attemptCount: nextAttemptCount,
+      },
+      errorMessage: undefined,
+      errorSourceNodeId: undefined,
+    };
+  }
 
   return {
     pendingToolCall: undefined,
+    schemaReplanDiagnostics: undefined,
     errorMessage: input.reason,
     errorSourceNodeId: "agent-tool-call-normalize",
   };
@@ -204,6 +229,9 @@ export const toolCallNormalizeNode = async (
   if (!useToolAction) {
     return {
       pendingToolCall: undefined,
+      ...(state.schemaReplanDiagnostics
+        ? { schemaReplanDiagnostics: undefined }
+        : {}),
     };
   }
 
@@ -264,6 +292,7 @@ export const toolCallNormalizeNode = async (
           ? error.message
           : `Planner tool args failed schema validation for ${normalizedToolId}.`,
       toolId: normalizedToolId,
+      schemaReplanEligible: true,
     });
   }
 
@@ -302,6 +331,9 @@ export const toolCallNormalizeNode = async (
 
   return {
     pendingToolCall,
+    ...(state.schemaReplanDiagnostics
+      ? { schemaReplanDiagnostics: undefined }
+      : {}),
     errorMessage: undefined,
     errorSourceNodeId: undefined,
   };

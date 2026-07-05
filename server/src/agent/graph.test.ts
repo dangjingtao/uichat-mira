@@ -395,6 +395,82 @@ test("agentGraph routes retrieve evidence back to planner and answer stop rule w
   assert.equal(evidenceUpdateEvent?.details?.retrievalChunkCount, 1);
 });
 
+test("agentGraph blocks workspace-local web_search planning and uses retrieve instead", async () => {
+  const webSearch = makeToolDefinition({
+    id: "web_search",
+    domain: "web_search",
+    inputSchema: {
+      type: "object",
+      required: ["query"],
+      properties: {
+        query: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    sideEffect: "network",
+  });
+  vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([webSearch]);
+  vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
+    makeToolIntentResult({
+      query: "请检索 workspace 中关于 UIChat Mira 的说明",
+      topCandidates: [{ toolId: "web_search", domain: "web_search" }],
+      exposedDefinitions: [webSearch],
+    }),
+  );
+  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
+    selectedToolIds: ["web_search"],
+    decisionSource: "task-model",
+    decisionReason: "A web tool candidate exists.",
+  });
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"web_search","args":{"query":"UIChat Mira 说明"},"reason":"Need information."}';
+    });
+  const ragInvokeSpy = vi
+    .spyOn(runnablesModule.agentRagRunnable, "invoke")
+    .mockResolvedValue({
+      answer: "",
+      sources: [
+        {
+          chunkId: "chunk-1",
+          documentName: "README.md",
+          score: 0.91,
+          content: "UIChat Mira is a local-first desktop workspace.",
+        },
+      ],
+    });
+  const executeHarnessInvocationSpy = vi.spyOn(
+    harnessInvocations,
+    "executeHarnessInvocation",
+  );
+  const generateInvokeSpy = vi
+    .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
+    .mockResolvedValue("retrieval grounded answer");
+
+  const result = await agentGraph.run({
+    runId: "run-workspace-intent-guard",
+    threadId: "thread-1",
+    userId: 1,
+    goal: {
+      ...baseGoal,
+      text: "请检索 workspace 中关于 UIChat Mira 的说明",
+    },
+    plan: basePlan,
+    workspaceRoot: "D:\\workspace\\rag-demo",
+    knowledgeBaseId: "kb-1",
+    messages: [makeMessage("请检索 workspace 中关于 UIChat Mira 的说明")],
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(plannerSpy.mock.calls.length, 1);
+  assert.equal(executeHarnessInvocationSpy.mock.calls.length, 0);
+  assert.equal(ragInvokeSpy.mock.calls.length, 1);
+  assert.equal(result.evidence.retrievals.length, 1);
+  assert.equal(result.evidence.toolExecutions.length, 0);
+  assert.equal(generateInvokeSpy.mock.calls.length, 1);
+});
+
 test("agentGraph routes planner use_tool through normalize and answer stop rule without a second planner model call", async () => {
   const readOpen = makeToolDefinition({
     id: "read_open",
@@ -1183,7 +1259,7 @@ test("agentGraph answers after a single terminal_session execution when command 
   }
 });
 
-test("agentGraph stops on normalize failure and does not enter policy or tool", async () => {
+test("agentGraph replans once after normalize schema failure and then executes the corrected tool", async () => {
   const readOpen = makeToolDefinition({
     id: "read_open",
     domain: "read",
@@ -1209,20 +1285,44 @@ test("agentGraph stops on normalize failure and does not enter policy or tool", 
     decisionSource: "task-model",
     decisionReason: "A read tool is available for inspection.",
   });
-  vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
-    async function* () {
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
       yield '{"type":"use_tool","toolId":"read_open","args":{},"reason":"Need the file content."}';
-    },
-  );
+    })
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need the file content."}';
+    });
   const executeHarnessInvocationSpy = vi.spyOn(
     harnessInvocations,
     "executeHarnessInvocation",
   );
+  executeHarnessInvocationSpy.mockResolvedValue({
+    id: "invocation-read-open-replan",
+    toolId: "read_open",
+    status: "completed",
+    result: {
+      type: "open",
+      path: "README.md",
+      source: {
+        kind: "text",
+        mimeType: "text/markdown",
+        text: "# UIChat Mira",
+        metadata: {},
+      },
+    },
+    startedAt: "2026-07-04T00:00:00.000Z",
+    finishedAt: "2026-07-04T00:00:01.000Z",
+  });
   const generateInvokeSpy = vi.spyOn(
     runnablesModule.agentGenerateTextRunnable,
     "invoke",
-  );
-  const executionNodes: string[] = [];
+  ).mockResolvedValue("README answer after bounded replan");
+  const executionNodes: Array<{
+    nodeId: string;
+    phase: string;
+    details?: Record<string, unknown>;
+  }> = [];
 
   const result = await agentGraph.run({
     runId: "run-normalize-fail",
@@ -1235,22 +1335,92 @@ test("agentGraph stops on normalize failure and does not enter policy or tool", 
     plan: basePlan,
     messages: [makeMessage("open README.md")],
     onExecutionNode: async (event) => {
-      executionNodes.push(event.nodeId);
+      executionNodes.push({
+        nodeId: event.nodeId,
+        phase: event.phase,
+        details:
+          event.details && typeof event.details === "object"
+            ? (event.details as Record<string, unknown>)
+            : undefined,
+      });
     },
   });
 
-  assert.equal(result.status, "failed");
-  assert.match(result.errorMessage ?? "", /required|path/i);
+  assert.equal(result.status, "completed");
+  assert.equal(result.answer, "README answer after bounded replan");
+  assert.equal(plannerSpy.mock.calls.length, 2);
+  assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+  assert.equal(generateInvokeSpy.mock.calls.length, 1);
+  assert.equal(
+    executeHarnessInvocationSpy.mock.calls[0]?.[0]?.toolId,
+    "read_open",
+  );
+  const normalizeErrorEvent = executionNodes.find(
+    (event) =>
+      event.nodeId === "agent-tool-call-normalize" && event.phase === "error",
+  );
+  assert.equal(normalizeErrorEvent?.details?.schemaReplanEligible, true);
+  assert.equal(normalizeErrorEvent?.details?.schemaReplanAttemptCount, 1);
+});
+
+test("agentGraph returns a safe answer when bounded schema replan is exhausted", async () => {
+  const readOpen = makeToolDefinition({
+    id: "read_open",
+    domain: "read",
+    inputSchema: {
+      type: "object",
+      required: ["path"],
+      properties: {
+        path: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+  });
+  vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([readOpen]);
+  vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
+    makeToolIntentResult({
+      query: "open README.md",
+      topCandidates: [{ toolId: "read_open", domain: "read" }],
+      exposedDefinitions: [readOpen],
+    }),
+  );
+  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
+    selectedToolIds: ["read_open"],
+    decisionSource: "task-model",
+    decisionReason: "A read tool is available for inspection.",
+  });
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{},"reason":"Need the file content."}';
+    });
+  const executeHarnessInvocationSpy = vi.spyOn(
+    harnessInvocations,
+    "executeHarnessInvocation",
+  );
+  const generateInvokeSpy = vi.spyOn(
+    runnablesModule.agentGenerateTextRunnable,
+    "invoke",
+  );
+
+  const result = await agentGraph.run({
+    runId: "run-normalize-safe-error",
+    threadId: "thread-1",
+    userId: 1,
+    goal: {
+      ...baseGoal,
+      text: "open README.md",
+    },
+    plan: basePlan,
+    messages: [makeMessage("open README.md")],
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(plannerSpy.mock.calls.length, 2);
   assert.equal(executeHarnessInvocationSpy.mock.calls.length, 0);
   assert.equal(generateInvokeSpy.mock.calls.length, 0);
-  assert.equal(
-    executionNodes.some((nodeId) => nodeId.startsWith("agent-policy")),
-    false,
-  );
-  assert.equal(
-    executionNodes.some((nodeId) => nodeId === "agent-tool"),
-    false,
-  );
+  assert.match(result.answer, /没有执行任何工具|工具参数不符合要求/);
+  assert.equal(result.errorMessage, undefined);
 });
 
 test("agentGraph stops when planner selects a tool that is not exposed for this turn", async () => {
@@ -1560,6 +1730,147 @@ test("agentGraph stops re-planning after maxIterations and does not issue a seco
     executionNodes.some((nodeId) => nodeId === "agent-tool"),
     false,
   );
+});
+
+test("agentGraph counts skipped retrieve iterations without a knowledge base and stops at the iteration limit", async () => {
+  vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([]);
+  vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
+    makeToolIntentResult({
+      query: "请检索 workspace 中关于 UIChat Mira 的说明",
+    }),
+  );
+  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
+    selectedToolIds: [],
+    decisionSource: "task-model",
+    decisionReason: "No tool is needed for this turn.",
+  });
+
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"retrieve","query":"UIChat Mira 说明","reason":"Need workspace evidence first."}';
+    });
+  const generateInvokeSpy = vi.spyOn(
+    runnablesModule.agentGenerateTextRunnable,
+    "invoke",
+  ).mockResolvedValue("best effort answer after skipped retrieval limit");
+  const ragInvokeSpy = vi.spyOn(runnablesModule.agentRagRunnable, "invoke");
+  const executionNodes: string[] = [];
+
+  const result = await agentGraph.run({
+    runId: "run-no-kb-retrieve-limit",
+    threadId: "thread-1",
+    userId: 1,
+    goal: {
+      ...baseGoal,
+      text: "请检索 workspace 中关于 UIChat Mira 的说明",
+    },
+    plan: basePlan,
+    knowledgeBaseId: null,
+    maxIterations: 1,
+    messages: [makeMessage("请检索 workspace 中关于 UIChat Mira 的说明")],
+    onExecutionNode: async (event) => {
+      executionNodes.push(event.nodeId);
+    },
+  });
+
+  assert.equal(plannerSpy.mock.calls.length, 1);
+  assert.equal(ragInvokeSpy.mock.calls.length, 0);
+  assert.equal(generateInvokeSpy.mock.calls.length, 1);
+  assert.equal(result.status, "completed");
+  assert.equal(result.answer, "best effort answer after skipped retrieval limit");
+  assert.equal(result.evidence.retrievals.length, 0);
+  assert.equal(
+    executionNodes.filter((nodeId) => nodeId === "agent-retrieve").length,
+    2,
+  );
+  assert.equal(
+    executionNodes.filter((nodeId) => nodeId === "agent-next-action-planner").length,
+    2,
+  );
+});
+
+test("agentGraph reroutes workspace retrieve intent without a knowledge base into read_locate and answers from local evidence", async () => {
+  const readLocate = makeToolDefinition({
+    id: "read_locate",
+    domain: "read",
+    inputSchema: {
+      type: "object",
+      required: ["query"],
+      properties: {
+        query: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+  });
+  vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([readLocate]);
+  vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
+    makeToolIntentResult({
+      query: "请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答。",
+      topCandidates: [{ toolId: "read_locate", domain: "read" }],
+      exposedDefinitions: [readLocate],
+    }),
+  );
+  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
+    selectedToolIds: ["read_locate"],
+    decisionSource: "task-model",
+    decisionReason: "Workspace search should use a local read tool.",
+  });
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"retrieve","query":"请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答。","reason":"Need workspace evidence first."}';
+    });
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-read-locate-1",
+      toolId: "read_locate",
+      status: "completed",
+      result: {
+        type: "locate",
+        scope: ".",
+        query: "请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答。",
+        searchMode: "content",
+        matches: [
+          {
+            path: "README.md",
+            matchType: "content",
+            preview: "UIChat Mira is a local-first desktop workspace for chat, knowledge, tools, and docs.",
+          },
+        ],
+      },
+      startedAt: "2026-07-04T00:00:00.000Z",
+      finishedAt: "2026-07-04T00:00:01.000Z",
+    });
+  const generateInvokeSpy = vi
+    .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
+    .mockResolvedValue("UIChat Mira is a local-first desktop workspace for chat, knowledge, tools, and docs.");
+
+  const result = await agentGraph.run({
+    runId: "run-no-kb-read-locate",
+    threadId: "thread-1",
+    userId: 1,
+    goal: {
+      ...baseGoal,
+      text: "请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答。",
+    },
+    plan: basePlan,
+    workspaceRoot: "D:\\workspace\\rag-demo",
+    knowledgeBaseId: null,
+    messages: [makeMessage("请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答。")],
+  });
+
+  assert.equal(plannerSpy.mock.calls.length, 1);
+  assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+  assert.equal(executeHarnessInvocationSpy.mock.calls[0]?.[0]?.toolId, "read_locate");
+  assert.equal(result.status, "completed");
+  assert.equal(
+    result.evidence.latestSummary?.data?.kind,
+    "read_locate",
+  );
+  assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, true);
+  assert.equal(generateInvokeSpy.mock.calls.length, 1);
 });
 
 test("agentGraph stops the current loop when policy requires approval and never enters tool execution", async () => {

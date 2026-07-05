@@ -137,6 +137,7 @@ test("toolCallNormalizeNode freezes a valid planner use_tool action", async () =
   );
 
   assert.equal(patch.errorMessage, undefined);
+  assert.equal(patch.schemaReplanDiagnostics, undefined);
   assert.equal(patch.pendingToolCall?.toolId, "read_open");
   assert.deepEqual(patch.pendingToolCall?.args, { path: "README.md" });
   assert.equal(patch.pendingToolCall?.reason, "Need the file content.");
@@ -504,7 +505,42 @@ test("toolCallNormalizeNode fails when args do not match inputSchema", async () 
   );
 
   assert.equal(patch.pendingToolCall, undefined);
-  assert.match(patch.errorMessage ?? "", /required|not allowed/i);
+  assert.equal(patch.errorMessage, undefined);
+  assert.equal(patch.errorSourceNodeId, undefined);
+  assert.match(patch.schemaReplanDiagnostics?.schemaError ?? "", /required|not allowed/i);
+  assert.equal(patch.schemaReplanDiagnostics?.toolId, "read_open");
+  assert.equal(patch.schemaReplanDiagnostics?.attemptCount, 1);
+});
+
+test("toolCallNormalizeNode increments schema replan attempt count on repeated schema failures", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      schemaReplanDiagnostics: {
+        schemaError: "args.limit is not allowed",
+        toolId: "read_open",
+        invalidAction: {
+          type: "use_tool",
+          toolId: "read_open",
+          args: {
+            path: "README.md",
+            limit: 1,
+          },
+          reason: "Need file content.",
+        },
+        attemptCount: 1,
+      },
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: { unknown: "README.md" },
+        reason: "Need file content.",
+      },
+    }),
+  );
+
+  assert.equal(patch.pendingToolCall, undefined);
+  assert.equal(patch.errorMessage, undefined);
+  assert.equal(patch.schemaReplanDiagnostics?.attemptCount, 2);
 });
 
 test("toolCallNormalizeNode fails when exposed tool metadata is missing", async () => {

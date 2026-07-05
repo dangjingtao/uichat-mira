@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, test, vi } from "vitest";
 import { contextBudgetService } from "@/services/context-budget/index.js";
 import { providerProxyService } from "@/services/provider-proxy.service/index.js";
+import { createToolExecutionEvidenceSummary } from "./evidence.js";
 import { generateNode } from "./nodes.js";
 import type { AgentNodeState } from "./node-runtime.js";
 
@@ -79,6 +80,57 @@ vi.spyOn(providerProxyService, "describeChatInvocation").mockImplementation(
 
 afterEach(() => {
   vi.clearAllMocks();
+});
+
+test("createToolExecutionEvidenceSummary prioritizes documentation content over build artifacts for read_locate", () => {
+  const summary = createToolExecutionEvidenceSummary({
+    question: "请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答 UIChat Mira 是什么。",
+    execution: {
+      toolId: "read_locate",
+      args: { query: "UIChat Mira" },
+      status: "completed",
+      inputHash: "hash-read-locate",
+      result: {
+        type: "locate",
+        scope: ".",
+        query: "UIChat Mira",
+        searchMode: "auto",
+        matches: [
+          {
+            path: "release/v0.7.1_20260704_205127/electron/UIChat Mira Setup 0.7.1.exe",
+            matchType: "path",
+          },
+          {
+            path: "README.md",
+            matchType: "content",
+            line: 3,
+            column: 1,
+            preview: "UIChat Mira is a local-first desktop workspace for chat, knowledge, tools, and docs.",
+          },
+          {
+            path: "AGENTS.md",
+            matchType: "content",
+            line: 5,
+            column: 1,
+            preview: "UIChat Mira is a local-first desktop workspace with an Electron shell, a React renderer, and a bundled Fastify backend.",
+          },
+        ],
+      },
+      startedAt: "2026-07-04T00:00:00.000Z",
+      finishedAt: "2026-07-04T00:00:01.000Z",
+    },
+    evidenceIndex: 0,
+  });
+
+  assert.equal(summary?.data?.kind, "read_locate");
+  assert.deepEqual(
+    summary?.data?.matchesPreview.slice(0, 2).map((entry) => entry.includes("README.md") || entry.includes("AGENTS.md")),
+    [true, true],
+  );
+  assert.equal(
+    (summary?.data?.matchesPreview[0] ?? "").startsWith("[path] release/"),
+    false,
+  );
 });
 
 test("generateNode rewrites tool-style output into a natural read_list answer grounded in evidence", async () => {
@@ -204,6 +256,81 @@ test("generateNode rewrites pseudo-execution wording into a grounded read_open s
   assert.match(result.answer ?? "", /README\.md/);
   assert.match(result.answer ?? "", /UIChat Mira/);
   assert.doesNotMatch(result.answer ?? "", /我将调用|read_open/);
+});
+
+test("generateNode includes raw read_open content so later sections remain answerable", async () => {
+  const state = createBaseState("README.md 的 Runtime 一节具体列了哪些运行组件？请基于文件内容回答。");
+  state.evidence = {
+    observations: [],
+    toolExecutions: [
+      {
+        toolId: "read_open",
+        args: { path: "README.md" },
+        status: "completed",
+        inputHash: "hash-read-open-runtime",
+        result: {
+          type: "open",
+          path: "README.md",
+          source: {
+            kind: "text",
+            mimeType: "text/plain",
+            text: [
+              "# UIChat Mira",
+              "",
+              "Intro line before runtime.",
+              "",
+              "## Runtime",
+              "",
+              "- React + Vite renderer",
+              "- Electron / Tauri shell",
+              "- Fastify backend",
+              "- Host and port come from `runtime.config.cjs`",
+            ].join("\n"),
+          },
+        },
+        summary: {
+          source: "tool",
+          status: "completed",
+          toolId: "read_open",
+          inputHash: "hash-read-open-runtime",
+          actionTaken: "Opened file README.md.",
+          keyFindings: ["contentLength=220", "# UIChat Mira"],
+          answerReadiness: {
+            canAnswer: true,
+            reason: "Opened file content is available for answer generation.",
+          },
+          data: {
+            kind: "read_open",
+            path: "README.md",
+            contentPreview: "# UIChat Mira Intro line before runtime.",
+            contentLength: 220,
+            truncated: true,
+            keySections: ["UIChat Mira", "Runtime"],
+            canAnswerFileQuestion: true,
+          },
+        },
+        startedAt: "2026-07-04T00:00:00.000Z",
+        finishedAt: "2026-07-04T00:00:01.000Z",
+      },
+    ],
+    retrievals: [],
+  };
+  state.evidence.latestSummary = state.evidence.toolExecutions[0]?.summary;
+
+  const invokeSpy = vi
+    .spyOn(providerProxyService, "generateTextForRole")
+    .mockResolvedValue("Runtime 包括 React + Vite renderer、Electron / Tauri shell、Fastify backend，host 和 port 来自 runtime.config.cjs。");
+
+  const result = await generateNode(state);
+
+  const generateMessages = invokeSpy.mock.calls[0]?.[1] ?? [];
+  const toolEvidenceMessage = generateMessages.find((message) =>
+    message.role === "system" && message.content.includes("以下是本轮 Agent 已实际执行完成的工具证据摘要。"),
+  );
+
+  assert.match(toolEvidenceMessage?.content ?? "", /## Runtime/);
+  assert.match(toolEvidenceMessage?.content ?? "", /React \+ Vite renderer/);
+  assert.match(result.answer ?? "", /Fastify backend/);
 });
 
 test("generateNode rewrites retrieval JSON output into a grounded retrieval answer", async () => {
@@ -351,4 +478,94 @@ test("generateNode strips bare tool id leakage from read_open completed evidence
   assert.match(result.answer ?? "", /README\.md/);
   assert.match(result.answer ?? "", /UIChat Mira/);
   assert.doesNotMatch(result.answer ?? "", /read_open completed|read_open/);
+});
+
+test("generateNode returns deterministic fallback when model answer is empty but completed evidence exists", async () => {
+  const state = createBaseState("打开 README.md 看看内容");
+  state.evidence = {
+    observations: [],
+    toolExecutions: [
+      {
+        toolId: "read_open",
+        args: { path: "README.md" },
+        status: "completed",
+        inputHash: "hash-read-open",
+        result: {},
+        summary: {
+          source: "tool",
+          status: "completed",
+          toolId: "read_open",
+          inputHash: "hash-read-open",
+          actionTaken: "Opened file README.md.",
+          keyFindings: ["contentLength=42", "# UIChat Mira"],
+          answerReadiness: {
+            canAnswer: true,
+            reason: "Opened file content is available for answer generation.",
+          },
+          data: {
+            kind: "read_open",
+            path: "README.md",
+            contentPreview: "# UIChat Mira UIChat Mira is a local-first desktop workspace.",
+            contentLength: 42,
+            truncated: false,
+            keySections: ["UIChat Mira"],
+            canAnswerFileQuestion: true,
+          },
+        },
+        startedAt: "2026-07-04T00:00:00.000Z",
+        finishedAt: "2026-07-04T00:00:01.000Z",
+      },
+    ],
+    retrievals: [],
+  };
+  state.evidence.latestSummary = state.evidence.toolExecutions[0]?.summary;
+
+  vi.spyOn(providerProxyService, "generateTextForRole").mockResolvedValue("");
+
+  const result = await generateNode(state);
+
+  assert.match(result.answer ?? "", /模型没有生成有效回答/);
+  assert.match(result.answer ?? "", /README\.md/);
+  assert.equal(result.generatedAnswerEmptyFallback, true);
+  assert.equal(result.errorMessage, undefined);
+});
+
+test("generateNode returns deterministic fallback when model answer is empty and no evidence exists", async () => {
+  const state = createBaseState("README.md 的 Runtime 一节具体列了哪些运行组件？");
+  vi.spyOn(providerProxyService, "generateTextForRole").mockResolvedValue("");
+
+  const result = await generateNode(state);
+
+  assert.equal(
+    result.answer,
+    "模型没有生成有效回答，而且当前也没有可用证据可供总结。",
+  );
+  assert.equal(result.generatedAnswerEmptyFallback, true);
+  assert.equal(result.errorMessage, undefined);
+});
+
+test("generateNode returns schema-safe fallback without calling the model after bounded replan is exhausted", async () => {
+  const state = createBaseState("README.md 的 Runtime 一节具体列了哪些运行组件？请基于文件内容回答。");
+  state.schemaReplanDiagnostics = {
+    schemaError: "args.limit is not allowed",
+    toolId: "read_open",
+    invalidAction: {
+      type: "use_tool",
+      toolId: "read_open",
+      args: {
+        path: "README.md",
+        limit: 3,
+      },
+      reason: "Need file content.",
+    },
+    attemptCount: 2,
+  };
+  const invokeSpy = vi.spyOn(providerProxyService, "generateTextForRole");
+
+  const result = await generateNode(state);
+
+  assert.equal(invokeSpy.mock.calls.length, 0);
+  assert.match(result.answer ?? "", /工具参数不符合要求/);
+  assert.match(result.answer ?? "", /args\.limit is not allowed/);
+  assert.equal(result.errorMessage, undefined);
 });
