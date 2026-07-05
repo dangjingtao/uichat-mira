@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test, vi } from "vitest";
-import * as toolCandidates from "@/mcp/harness/tool-candidates.js";
+import * as toolCandidates from "@/mcp/harness/tool-candidates";
 import {
   cosineSimilarity,
   matchToolCandidatesByEmbedding,
-} from "./embedding-capability-matcher.js";
+} from "../embedding-capability-matcher";
 
 test("cosineSimilarity returns descending similarity as vectors diverge", () => {
   const identical = cosineSimilarity([1, 0], [1, 0]);

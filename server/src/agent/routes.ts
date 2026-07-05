@@ -1,14 +1,14 @@
 import type { FastifyInstance, FastifyPluginAsync } from "fastify";
-import { requireAuth } from "@/db/auth.db.js";
-import { routeHandler } from "@/utils/route-errors.js";
-import { success } from "@/utils/index.js";
-import { successEnvelope, errorEnvelope } from "@/routes/schema-helpers.js";
-import { agentRunStore } from "./run-store.js";
-import { notFound } from "@/utils/route-errors.js";
-import type { AgentRun } from "./types.js";
-import { resumeApprovedAgentRun } from "./resume.js";
-import { getAgentRunById } from "./run-read.js";
-import { persistAgentAssistantState } from "./resume.js";
+import { requireAuth } from "@/db/auth.db";
+import { routeHandler } from "@/utils/route-errors";
+import { success } from "@/utils/index";
+import { successEnvelope, errorEnvelope } from "@/routes/schema-helpers";
+import { agentRunStore } from "./run-store";
+import { notFound } from "@/utils/route-errors";
+import type { AgentRun } from "./types";
+import { resumeApprovedAgentRun } from "./resume";
+import { getAgentRunById } from "./run-read";
+import { persistAgentAssistantState } from "./resume";
 
 const agentApprovalRequestSchema = {
   type: "object",

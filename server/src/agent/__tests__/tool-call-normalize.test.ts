@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import type { AgentNodeState } from "./nodes.js";
-import { toolCallNormalizeNode } from "./tool-call-normalize.js";
+import type { AgentNodeState } from "../node-runtime";
+import { toolCallNormalizeNode } from "../nodes/tool-call-normalize";
 
 class FakeArgs {
   constructor(public path: string) {}

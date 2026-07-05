@@ -1,26 +1,29 @@
-import { executeHarnessInvocation } from "@/mcp/harness/invocations.js";
-import { createHarnessEnvironmentSnapshot } from "@/mcp/harness/environment.js";
-import { runWithWorkspaceRootOverride } from "@/mcp/workspace.js";
-import { createInvocationInputHash } from "./approval-fingerprint.js";
+/**
+ * 工具执行节点：执行已审批或免审的工具调用，并将结果加入证据。
+ */
+import { executeHarnessInvocation } from "@/mcp/harness/invocations";
+import { createHarnessEnvironmentSnapshot } from "@/mcp/harness/environment";
+import { runWithWorkspaceRootOverride } from "@/mcp/workspace";
+import { createInvocationInputHash } from "../approval-fingerprint";
 import {
   emitStepNode,
   getIterativeNodeId,
   getTraceAttemptMeta,
   type AgentNodeState,
   type EmitAgentExecutionNode,
-} from "./node-runtime.js";
+} from "../node-runtime";
 import {
   appendObservationEvidence,
   appendToolExecutionEvidence,
   getEvidenceCounts,
-} from "./evidence.js";
+} from "../evidence";
 import type {
   AgentApprovalRequest,
   AgentObservation,
   AgentToolCallRequest,
   AgentToolExecutionResult,
   PendingToolCall,
-} from "./types.js";
+} from "../types";
 
 const nowIso = () => new Date().toISOString();
 

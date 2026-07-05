@@ -1,9 +1,9 @@
-import { resolveHarnessToolCandidatesForTurn } from "@/mcp/harness/tool-candidates.js";
+import { resolveHarnessToolCandidatesForTurn } from "@/mcp/harness/tool-candidates";
 import type {
   AgentIntentEmbeddingConfig,
   ToolIntentCandidate,
   ToolIntentResult,
-} from "./types.js";
+} from "./types";
 
 export const cosineSimilarity = (left: number[], right: number[]) => {
   if (left.length === 0 || right.length === 0 || left.length !== right.length) {

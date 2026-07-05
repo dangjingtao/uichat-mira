@@ -1,5 +1,5 @@
-import type { HarnessCapabilityProfile } from "@/mcp/harness/capability-profiles.js";
-import type { CapabilityIntentDocument } from "./types.js";
+import type { HarnessCapabilityProfile } from "@/mcp/harness/capability-profiles";
+import type { CapabilityIntentDocument } from "./types";
 
 const toCompactJson = (value: unknown) => {
   try {

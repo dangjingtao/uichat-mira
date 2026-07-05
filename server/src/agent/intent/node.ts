@@ -1,17 +1,17 @@
-import type { AgentNodeState, EmitAgentExecutionNode } from "../nodes.js";
-import { listCapabilityDefinitions } from "@/mcp/harness/registry.js";
+import { listCapabilityDefinitions } from "@/mcp/harness/registry";
 import {
   emitStepNode,
   getIterativeNodeId,
-  getLatestUserQuestion,
   getTraceAttemptMeta,
-} from "../nodes.js";
-import { matchToolCandidatesByEmbedding } from "./embedding-capability-matcher.js";
+} from "../node-runtime";
+import { getLatestUserQuestion } from "../nodes/index";
+import type { AgentNodeState, EmitAgentExecutionNode } from "../node-runtime";
+import { matchToolCandidatesByEmbedding } from "./embedding-capability-matcher";
 import {
   resolveInvocationCandidateToolIds,
   selectToolWithTaskModel,
-} from "./task-capability-selector.js";
-import type { ToolIntentResult } from "./types.js";
+} from "./task-capability-selector";
+import type { ToolIntentResult } from "./types";
 
 const toAgentToolExposureState = (
   toolIntent: ToolIntentResult,
@@ -364,4 +364,4 @@ export const toolSelectNode = async (
 
 export const toolIntentNode = toolSelectNode;
 
-export type { ToolIntentResult } from "./types.js";
+export type { ToolIntentResult } from "./types";

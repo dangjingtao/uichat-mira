@@ -1,11 +1,11 @@
-import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
+import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol";
 import type { RetrievedChunk } from "@/services/rag-nodes";
-import type { ContextBudgetAudit } from "@/services/context-budget/index.js";
-import { toAgentExecutionNode } from "./trace.js";
+import type { ContextBudgetAudit } from "@/services/context-budget/index";
+import { toAgentExecutionNode } from "./trace";
 import type {
   AgentIntentEmbeddingConfig,
   ToolIntentResult,
-} from "./intent/index.js";
+} from "./intent/index";
 import type {
   AgentApprovedInvocation,
   AgentApprovalRequest,
@@ -19,7 +19,7 @@ import type {
   AgentToolCallRequest,
   AgentToolExecutionResult,
   AgentToolExposureState,
-} from "./types.js";
+} from "./types";
 
 export interface AgentNodeState {
   runId: string;

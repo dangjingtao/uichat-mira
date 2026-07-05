@@ -1,14 +1,14 @@
-import { agentGraph } from "./graph.js";
-import { agentRunStore } from "./run-store.js";
-import { getAgentRunById } from "./run-read.js";
+import { agentGraph } from "./graph";
+import { agentRunStore } from "./run-store";
+import { getAgentRunById } from "./run-read";
 import type {
   AgentApprovalRequest,
   AgentApprovedInvocation,
   AgentToolCallRequest,
-} from "./types.js";
-import { persistAssistantMessage } from "@/routes/proxy-provider/message-persistence.js";
-import { threadService } from "@/services/thread.service.js";
-import type { AssistantExecutionNodeEvent } from "@/services/chat-stream-events.js";
+} from "./types";
+import { persistAssistantMessage } from "@/routes/proxy-provider/message-persistence";
+import { threadService } from "@/services/thread.service";
+import type { AssistantExecutionNodeEvent } from "@/services/chat-stream-events";
 
 const buildAssistantMetadata = (input: {
   runId: string;

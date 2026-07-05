@@ -1,7 +1,7 @@
 import { RunnableLambda } from "@langchain/core/runnables";
-import { providerProxyService } from "@/services/provider-proxy.service/index.js";
-import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
-import { ragRunnableSequence, retrieveOnlyRunnable } from "@/services/rag-runables.js";
+import { providerProxyService } from "@/services/provider-proxy.service/index";
+import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol";
+import { ragRunnableSequence, retrieveOnlyRunnable } from "@/services/rag-runables";
 
 export const agentRetrieveRunnable = retrieveOnlyRunnable;
 export const agentRagRunnable = ragRunnableSequence;

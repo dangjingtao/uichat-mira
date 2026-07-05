@@ -1,5 +1,5 @@
-import type { AssistantExecutionNodeEvent } from "@/services/chat-stream-events.js";
-import type { AgentPlanStep } from "./types.js";
+import type { AssistantExecutionNodeEvent } from "@/services/chat-stream-events";
+import type { AgentPlanStep } from "./types";
 
 export const toAgentExecutionNode = (input: {
   runId: string;

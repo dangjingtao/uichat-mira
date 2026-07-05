@@ -3,11 +3,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test, vi } from "vitest";
-import * as harnessInvocations from "@/mcp/harness/invocations.js";
-import { getWorkspaceRoot } from "@/mcp/workspace.js";
-import { createInvocationInputHash } from "./approval-fingerprint.js";
-import { toolNode } from "./tool-node.js";
-import type { AgentNodeState } from "./node-runtime.js";
+import * as harnessInvocations from "@/mcp/harness/invocations";
+import { getWorkspaceRoot } from "@/mcp/workspace";
+import { createInvocationInputHash } from "../approval-fingerprint";
+import { toolNode } from "../nodes/tool-node";
+import type { AgentNodeState } from "../node-runtime";
 
 const createBaseState = (
   overrides: Partial<AgentNodeState> = {},

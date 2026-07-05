@@ -5,7 +5,7 @@ import {
   toAgentErrorExecutionNode,
   toAgentExecutionNode,
   toPlanNodeDetails,
-} from "./trace.js";
+} from "../trace";
 
 test("toAgentExecutionNode prefixes runId into node details", () => {
   const event = toAgentExecutionNode({

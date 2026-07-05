@@ -5,14 +5,14 @@ import {
   StateGraph,
   type LangGraphRunnableConfig,
 } from "@langchain/langgraph";
-import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
+import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol";
 import type { RetrievedChunk } from "@/services/rag-nodes";
 import {
   type AgentIntentEmbeddingConfig,
   type ToolIntentResult,
   toolSelectNode,
   toolGuardNode,
-} from "./intent/index.js";
+} from "./intent/index";
 import {
   evaluateNode,
   approvalNode,
@@ -20,17 +20,14 @@ import {
   generateNode,
   nextActionPlannerNode,
   planNode,
+  policyNode,
   prepareContextNode,
   retrieveNode,
   toolCallNormalizeNode,
   toolNode,
   type EmitAgentExecutionNode,
-} from "./nodes.js";
-import { policyNode } from "./policy-node.js";
-import {
-  runWithAgentNodeSpan,
-  runWithAgentRunSpan,
-} from "./observability.js";
+} from "./nodes/index";
+import { runWithAgentNodeSpan, runWithAgentRunSpan } from "./observability";
 import type {
   AgentGoal,
   AgentGraphInput,
@@ -40,8 +37,8 @@ import type {
   AgentPlan,
   AgentSchemaReplanDiagnostics,
   AgentToolExposureState,
-} from "./types.js";
-import type { ContextBudgetAudit } from "@/services/context-budget/index.js";
+} from "./types";
+import type { ContextBudgetAudit } from "@/services/context-budget/index";
 
 const AGENT_EMIT_CONFIG_KEY = "agent:emitExecutionNode";
 const DEFAULT_AGENT_MAX_ITERATIONS = 3;
@@ -65,7 +62,9 @@ const AgentGraphState = Annotation.Root({
   policyDecision: Annotation<AgentGraphOutput["policyDecision"] | undefined>,
   selectedToolId: Annotation<string | undefined>,
   pendingToolCall: Annotation<AgentGraphOutput["pendingToolCall"] | undefined>,
-  lastToolExecution: Annotation<AgentGraphOutput["lastToolExecution"] | undefined>,
+  lastToolExecution: Annotation<
+    AgentGraphOutput["lastToolExecution"] | undefined
+  >,
   answer: Annotation<string | undefined>,
   retrievedChunks: Annotation<RetrievedChunk[] | undefined>,
   observations: Annotation<AgentObservation[] | undefined>,
@@ -77,7 +76,9 @@ const AgentGraphState = Annotation.Root({
   errorSourceNodeId: Annotation<string | undefined>,
   schemaReplanDiagnostics: Annotation<AgentSchemaReplanDiagnostics | undefined>,
   generatedAnswerEmptyFallback: Annotation<boolean | undefined>,
-  approvedInvocations: Annotation<AgentGraphInput["approvedInvocations"] | undefined>,
+  approvedInvocations: Annotation<
+    AgentGraphInput["approvedInvocations"] | undefined
+  >,
   iterationCount: Annotation<number | undefined>,
   maxIterations: Annotation<number | undefined>,
   continueIteration: Annotation<boolean | undefined>,
@@ -100,13 +101,14 @@ const getEmitter = (
     : undefined;
 };
 
-const createAgentNode = (
-  nodeId: string,
-  handler: (
-    state: AgentGraphStateType,
-    emit?: EmitAgentExecutionNode,
-  ) => Promise<Partial<AgentGraphStateType>>,
-) =>
+const createAgentNode =
+  (
+    nodeId: string,
+    handler: (
+      state: AgentGraphStateType,
+      emit?: EmitAgentExecutionNode,
+    ) => Promise<Partial<AgentGraphStateType>>,
+  ) =>
   async (state: AgentGraphStateType, config?: LangGraphRunnableConfig) => {
     try {
       return await runWithAgentNodeSpan({
@@ -128,9 +130,9 @@ const hasFrozenPendingToolCall = (
 ) =>
   Boolean(
     pendingToolCall &&
-      pendingToolCall.source === "planner" &&
-      "status" in pendingToolCall &&
-      pendingToolCall.status === "frozen",
+    pendingToolCall.source === "planner" &&
+    "status" in pendingToolCall &&
+    pendingToolCall.status === "frozen",
   );
 
 const routeAfterToolGuard = (state: AgentGraphStateType) => {
@@ -295,12 +297,12 @@ const routeAfterApproval = (state: AgentGraphStateType) => {
 };
 
 const agentStateGraph = new StateGraph(AgentGraphState)
-  .addNode("prepareContext", createAgentNode("prepareContext", prepareContextNode))
-  .addNode("planStep", createAgentNode("planStep", planNode))
   .addNode(
-    "toolSelectStep",
-    createAgentNode("toolSelectStep", toolSelectNode),
+    "prepareContext",
+    createAgentNode("prepareContext", prepareContextNode),
   )
+  .addNode("planStep", createAgentNode("planStep", planNode))
+  .addNode("toolSelectStep", createAgentNode("toolSelectStep", toolSelectNode))
   .addNode("toolGuardStep", createAgentNode("toolGuardStep", toolGuardNode))
   .addNode(
     "nextActionPlanner",

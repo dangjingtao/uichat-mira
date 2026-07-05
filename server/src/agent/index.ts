@@ -1,8 +1,8 @@
-import { agentGraph } from "./graph.js";
-import { createAgentGoal, createAgentPlan } from "./nodes.js";
-import { agentRunStore, configureAgentRunPersistence } from "./run-store.js";
-import type { AgentGraphInput } from "./types.js";
-import { agentRunRepository } from "@/db/repositories/agent-run.repository.js";
+import { agentGraph } from "./graph";
+import { createAgentGoal, createAgentPlan } from "./nodes/index";
+import { agentRunStore, configureAgentRunPersistence } from "./run-store";
+import type { AgentGraphInput } from "./types";
+import { agentRunRepository } from "@/db/repositories/agent-run.repository";
 
 configureAgentRunPersistence({
   create: (run) => {
@@ -103,6 +103,6 @@ export const createAndRunAgent = async (
   }
 };
 
-export { agentRunStore } from "./run-store.js";
-export { configureAgentRunPersistence } from "./run-store.js";
-export type * from "./types.js";
+export { agentRunStore } from "./run-store";
+export { configureAgentRunPersistence } from "./run-store";
+export type * from "./types";

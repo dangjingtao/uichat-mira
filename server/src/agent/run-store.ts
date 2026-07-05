@@ -4,12 +4,12 @@ import type {
   AgentPlan,
   AgentRun,
   AgentRunStore,
-} from "./types.js";
+} from "./types";
 import {
   DEFAULT_RETENTION_CONFIG,
   sweepRetentionMap,
   type RetentionConfig,
-} from "@/utils/retention.js";
+} from "@/utils/retention";
 
 const nowIso = () => new Date().toISOString();
 

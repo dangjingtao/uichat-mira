@@ -1,4 +1,4 @@
-import type { McpToolDefinition } from "@/mcp/core/definitions.js";
+import type { McpToolDefinition } from "@/mcp/core/definitions";
 
 export type AgentPolicyDecision =
   | { type: "allow"; reason: string }

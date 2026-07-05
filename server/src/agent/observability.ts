@@ -8,8 +8,8 @@ import {
   type SpanExporter,
   type SpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
-import type { AgentGraphInput, AgentGraphOutput } from "./types.js";
-import type { AgentGraphState } from "./node-runtime.js";
+import type { AgentGraphInput, AgentGraphOutput } from "./types";
+import type { AgentGraphState } from "./node-runtime";
 
 const AGENT_TRACE_ENABLED_ENV = "AGENT_TRACE_PHOENIX";
 const AGENT_TRACE_VERBOSE_ENV = "AGENT_TRACE_VERBOSE";

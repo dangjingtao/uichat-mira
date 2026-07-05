@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { test, vi } from "vitest";
-import { providerProxyService } from "@/services/provider-proxy.service/index.js";
+import { providerProxyService } from "@/services/provider-proxy.service/index";
 import {
   __taskCapabilitySelectorTestUtils,
   resolveSelectedToolIds,
   selectToolWithTaskModel,
-} from "./task-capability-selector.js";
+} from "../task-capability-selector";
 
 test("selectToolWithTaskModel returns none when task model rejects tool use", async () => {
   const streamTaskChatTextSpy = vi

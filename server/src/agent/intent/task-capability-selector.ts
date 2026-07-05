@@ -1,9 +1,9 @@
-import { providerProxyService } from "@/services/provider-proxy.service/index.js";
-import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
+import { providerProxyService } from "@/services/provider-proxy.service/index";
+import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol";
 import type {
   ToolIntentCandidate,
   ToolIntentResult,
-} from "./types.js";
+} from "./types";
 
 interface TaskToolSelection {
   mode: "none" | "use_tool";

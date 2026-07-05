@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { afterEach, test, vi } from "vitest";
-import { contextBudgetService } from "@/services/context-budget/index.js";
-import { providerProxyService } from "@/services/provider-proxy.service/index.js";
-import { createToolExecutionEvidenceSummary } from "./evidence.js";
-import { generateNode } from "./nodes.js";
-import type { AgentNodeState } from "./node-runtime.js";
+import { contextBudgetService } from "@/services/context-budget/index";
+import { providerProxyService } from "@/services/provider-proxy.service/index";
+import { createToolExecutionEvidenceSummary } from "../evidence";
+import { generateNode } from "../nodes/index";
+import type { AgentNodeState } from "../node-runtime";
 
 const baseGoal = {
   id: "goal-1",

@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { afterEach, test, vi } from "vitest";
-import * as harnessInvocations from "@/mcp/harness/invocations.js";
-import * as registry from "@/mcp/harness/registry.js";
-import { contextBudgetService } from "@/services/context-budget/index.js";
-import { providerProxyService } from "@/services/provider-proxy.service/index.js";
-import * as intentMatcherModule from "./intent/embedding-capability-matcher.js";
-import * as taskSelectorModule from "./intent/task-capability-selector.js";
-import * as runnablesModule from "./runnables.js";
-import { createInvocationInputHash } from "./approval-fingerprint.js";
-import { agentGraph } from "./graph.js";
+import * as harnessInvocations from "@/mcp/harness/invocations";
+import * as registry from "@/mcp/harness/registry";
+import { contextBudgetService } from "@/services/context-budget/index";
+import { providerProxyService } from "@/services/provider-proxy.service/index";
+import * as intentMatcherModule from "../intent/embedding-capability-matcher";
+import * as taskSelectorModule from "../intent/task-capability-selector";
+import * as runnablesModule from "../runnables";
+import { createInvocationInputHash } from "../approval-fingerprint";
+import { agentGraph } from "../graph";
 
 const baseGoal = {
   id: "goal-1",

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { InMemoryAgentRunStore } from "./run-store.js";
+import { InMemoryAgentRunStore } from "../run-store";
 
 test("InMemoryAgentRunStore creates and updates agent runs", () => {
   const store = new InMemoryAgentRunStore();

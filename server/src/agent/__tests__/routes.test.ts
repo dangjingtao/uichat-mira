@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import Fastify from "fastify";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { getLoggerConfig } from "@/logger";
-import { sendRouteError } from "@/utils/route-errors.js";
-import agentRoute from "./routes.js";
-import { agentRunStore } from "./run-store.js";
-import { createAgentGoal, createAgentPlan } from "./nodes.js";
-import * as resumeModule from "./resume.js";
-import * as messagePersistenceModule from "@/routes/proxy-provider/message-persistence.js";
-import { threadService } from "@/services/thread.service.js";
+import { sendRouteError } from "@/utils/route-errors";
+import agentRoute from "../routes";
+import { agentRunStore } from "../run-store";
+import { createAgentGoal, createAgentPlan } from "../nodes/index";
+import * as resumeModule from "../resume";
+import * as messagePersistenceModule from "@/routes/proxy-provider/message-persistence";
+import { threadService } from "@/services/thread.service";
 
 const requireAuthMock = vi.hoisted(() =>
   vi.fn(async (request: { authUser?: unknown }) => {

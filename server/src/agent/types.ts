@@ -1,12 +1,12 @@
-import type { AssistantExecutionNodeEvent } from "@/services/chat-stream-events.js";
-import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
+import type { AssistantExecutionNodeEvent } from "@/services/chat-stream-events";
+import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol";
 import type { RetrievedChunk } from "@/services/rag-nodes";
-import type { ContextBudgetAudit } from "@/services/context-budget/index.js";
+import type { ContextBudgetAudit } from "@/services/context-budget/index";
 import type {
   AgentIntentEmbeddingConfig,
   ToolIntentResult,
-} from "./intent/index.js";
-import type { McpToolDefinition } from "@/mcp/core/definitions.js";
+} from "./intent/index";
+import type { McpToolDefinition } from "@/mcp/core/definitions";
 
 export type AgentRunStatus =
   | "queued"

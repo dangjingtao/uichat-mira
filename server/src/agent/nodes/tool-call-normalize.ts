@@ -1,13 +1,12 @@
+/**
+ * 工具调用规范化节点：校验并冻结 Planner 输出的工具调用参数，生成 pending tool call。
+ */
 import path from "node:path";
 import crypto from "node:crypto";
-import { validateInvocationArgs } from "@/mcp/core/schema.js";
-import { toAgentExecutionNode } from "./trace.js";
-import type { EmitAgentExecutionNode, AgentGraphState } from "./nodes.js";
-import type {
-  AgentNextAction,
-  AgentToolMeta,
-  PendingToolCall,
-} from "./types.js";
+import { validateInvocationArgs } from "@/mcp/core/schema";
+import { toAgentExecutionNode } from "../trace";
+import type { EmitAgentExecutionNode, AgentGraphState } from "../node-runtime";
+import type { AgentNextAction, AgentToolMeta, PendingToolCall } from "../types";
 
 const nowIso = () => new Date().toISOString();
 
@@ -81,10 +80,8 @@ const emitNormalizeFailure = async (
   });
 };
 
-const findToolMeta = (
-  toolMeta: AgentToolMeta[] | undefined,
-  toolId: string,
-) => toolMeta?.find((item) => item.toolId === toolId);
+const findToolMeta = (toolMeta: AgentToolMeta[] | undefined, toolId: string) =>
+  toolMeta?.find((item) => item.toolId === toolId);
 
 const READ_PATH_ARG_KEY = "path";
 const WORKSPACE_ROOT_SENTINEL = "/workspace";
@@ -101,7 +98,10 @@ const normalizeWorkspaceReadPath = (
   }
 
   let candidate: string | null = null;
-  if (trimmed === WORKSPACE_ROOT_SENTINEL || trimmed === `${WORKSPACE_ROOT_SENTINEL}/`) {
+  if (
+    trimmed === WORKSPACE_ROOT_SENTINEL ||
+    trimmed === `${WORKSPACE_ROOT_SENTINEL}/`
+  ) {
     candidate = ".";
   } else if (trimmed.startsWith(`${WORKSPACE_ROOT_SENTINEL}/`)) {
     candidate = trimmed.slice(WORKSPACE_ROOT_SENTINEL.length + 1);
@@ -113,7 +113,9 @@ const normalizeWorkspaceReadPath = (
     return null;
   }
 
-  const normalizedCandidate = path.posix.normalize(candidate.replaceAll("\\", "/"));
+  const normalizedCandidate = path.posix.normalize(
+    candidate.replaceAll("\\", "/"),
+  );
   if (
     normalizedCandidate.startsWith("/") ||
     normalizedCandidate === ".." ||
@@ -135,7 +137,10 @@ const normalizeWorkspaceReadArgs = (
   toolMeta: AgentToolMeta,
   args: Record<string, unknown>,
 ): { args: Record<string, unknown> } | { rejectReason: string } => {
-  if (toolMeta.domain !== "read" || toolMeta.capabilities?.workspaceBound !== true) {
+  if (
+    toolMeta.domain !== "read" ||
+    toolMeta.capabilities?.workspaceBound !== true
+  ) {
     return { args };
   }
 
@@ -235,10 +240,14 @@ export const toolCallNormalizeNode = async (
     };
   }
 
-  if (typeof useToolAction.toolId !== "string" || !useToolAction.toolId.trim()) {
+  if (
+    typeof useToolAction.toolId !== "string" ||
+    !useToolAction.toolId.trim()
+  ) {
     return failNormalize(state, emit, {
       reason: "Planner use_tool output must include a non-empty toolId.",
-      toolId: typeof useToolAction.toolId === "string" ? useToolAction.toolId : null,
+      toolId:
+        typeof useToolAction.toolId === "string" ? useToolAction.toolId : null,
     });
   }
 
@@ -273,7 +282,10 @@ export const toolCallNormalizeNode = async (
     });
   }
 
-  const normalizedArgsResult = normalizeWorkspaceReadArgs(toolMeta, useToolAction.args);
+  const normalizedArgsResult = normalizeWorkspaceReadArgs(
+    toolMeta,
+    useToolAction.args,
+  );
   if ("rejectReason" in normalizedArgsResult) {
     return failNormalize(state, emit, {
       reason: normalizedArgsResult.rejectReason,

@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { test, vi } from "vitest";
-import { agentGraph } from "./graph.js";
-import { resumeApprovedAgentRun } from "./resume.js";
-import { agentRunStore } from "./run-store.js";
-import { createInvocationInputHash } from "./approval-fingerprint.js";
-import { createAgentGoal, createAgentPlan } from "./nodes.js";
-import * as messagePersistenceModule from "@/routes/proxy-provider/message-persistence.js";
-import { threadService } from "@/services/thread.service.js";
+import { agentGraph } from "../graph";
+import { resumeApprovedAgentRun } from "../resume";
+import { agentRunStore } from "../run-store";
+import { createInvocationInputHash } from "../approval-fingerprint";
+import { createAgentGoal, createAgentPlan } from "../nodes/index";
+import * as messagePersistenceModule from "@/routes/proxy-provider/message-persistence";
+import { threadService } from "@/services/thread.service";
 
 test("resumeApprovedAgentRun resumes a pending run and keeps approval state", async () => {
   const approvedInput = { query: "hello" };

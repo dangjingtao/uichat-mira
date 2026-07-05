@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test, vi } from "vitest";
-import * as registry from "@/mcp/harness/registry.js";
-import type { AgentNodeState } from "./node-runtime.js";
-import * as policy from "./policy.js";
-import { policyNode } from "./policy-node.js";
-import type { McpToolDefinition } from "@/mcp/core/definitions.js";
-import type { PendingToolCall } from "./types.js";
+import * as registry from "@/mcp/harness/registry";
+import type { AgentNodeState } from "../node-runtime";
+import * as policy from "../policy";
+import { policyNode } from "../nodes/policy-node";
+import type { McpToolDefinition } from "@/mcp/core/definitions";
+import type { PendingToolCall } from "../types";
 
 const createTool = (
   overrides: Partial<McpToolDefinition>,

@@ -1,12 +1,15 @@
-import { providerProxyService } from "@/services/provider-proxy.service/index.js";
-import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
+/**
+ * 下一步规划节点：根据当前状态决定下一步是回答、检索、调用工具还是报错。
+ */
+import { providerProxyService } from "@/services/provider-proxy.service/index";
+import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol";
 import { writeStructuredLog } from "@/logger";
-import { toAgentExecutionNode } from "./trace.js";
+import { toAgentExecutionNode } from "../trace";
 import {
   getAnswerStopDecision,
   getLatestEvidenceSummary,
   getRepeatedActionGuardResult,
-} from "./evidence.js";
+} from "../evidence";
 import type {
   AgentApprovalRequest,
   AgentEvidencePayload,
@@ -19,8 +22,8 @@ import type {
   AgentSchemaReplanDiagnostics,
   AgentToolExecutionResult,
   AgentToolExposureState,
-} from "./types.js";
-import type { AgentGraphState, EmitAgentExecutionNode } from "./nodes.js";
+} from "../types";
+import type { AgentGraphState, EmitAgentExecutionNode } from "../node-runtime";
 
 const NEXT_ACTION_PLANNER_FALLBACK_REASON =
   "Planner fallback: unable to safely determine next action.";

@@ -1,18 +1,21 @@
-import { listCapabilityDefinitions } from "@/mcp/harness/registry.js";
-import { evaluateAgentToolPolicy } from "./policy.js";
+/**
+ * 策略审批节点：根据工具策略判断是否需要人工审批，并生成审批请求。
+ */
+import { listCapabilityDefinitions } from "@/mcp/harness/registry";
+import { evaluateAgentToolPolicy } from "../policy";
 import {
   emitStepNode,
   getIterativeNodeId,
   getTraceAttemptMeta,
   type AgentNodeState,
   type EmitAgentExecutionNode,
-} from "./node-runtime.js";
+} from "../node-runtime";
 import type {
   AgentApprovedInvocation,
   AgentApprovalRequest,
   AgentToolCallRequest,
   PendingToolCall,
-} from "./types.js";
+} from "../types";
 
 const nowIso = () => new Date().toISOString();
 

@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { test, vi } from "vitest";
 import { subscribeToLogLines } from "@/logger";
-import { providerProxyService } from "@/services/provider-proxy.service/index.js";
-import type { AgentNodeState } from "./nodes.js";
-import { createInvocationInputHash } from "./approval-fingerprint.js";
+import { providerProxyService } from "@/services/provider-proxy.service/index";
+import type { AgentNodeState } from "../node-runtime";
+import { createInvocationInputHash } from "../approval-fingerprint";
 import {
   nextActionPlannerNode,
   parseNextActionPlannerOutput,
-} from "./next-action-planner.js";
+} from "../nodes/next-action-planner";
 
 const createState = (
   overrides: Partial<AgentNodeState> = {},

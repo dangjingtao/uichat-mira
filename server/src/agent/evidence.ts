@@ -6,8 +6,8 @@ import type {
   AgentRetrievalEvidence,
   AgentNextAction,
   AgentToolExecutionResult,
-} from "./types.js";
-import { createInvocationInputHash } from "./approval-fingerprint.js";
+} from "./types";
+import { createInvocationInputHash } from "./approval-fingerprint";
 
 type EvidenceState = Pick<
   {
