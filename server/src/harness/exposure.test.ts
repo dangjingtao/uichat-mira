@@ -140,6 +140,90 @@ describe("resolveHarnessToolExposure", () => {
     expect(decision.exposedToolIds).not.toContain("terminal_session");
   });
 
+  it.each([
+    {
+      label: "weak English command wording",
+      input: { source: "agent_intent" as const, query: "run a local command" },
+      requiresApproval: true,
+      expectedExposed: false,
+      expectedSchemaKeys: [],
+    },
+    {
+      label: "weak Chinese command wording",
+      input: { source: "agent_intent" as const, query: "执行命令" },
+      requiresApproval: true,
+      expectedExposed: false,
+      expectedSchemaKeys: [],
+    },
+    {
+      label: "explicit command with sandbox available",
+      input: { source: "agent_intent" as const, query: "run pnpm check" },
+      requiresApproval: true,
+      expectedExposed: true,
+      expectedSchemaKeys: ["command", "cwd", "timeoutMs"],
+    },
+    {
+      label: "explicit command without approval metadata",
+      input: { source: "agent_intent" as const, query: "run pnpm check" },
+      requiresApproval: false,
+      expectedExposed: false,
+      expectedSchemaKeys: [],
+    },
+    {
+      label: "explicit command with sandbox unavailable",
+      input: {
+        source: "agent_intent" as const,
+        query: "run pnpm check",
+        sandboxProfiles: { command: false },
+      },
+      requiresApproval: true,
+      expectedExposed: false,
+      expectedSchemaKeys: [],
+    },
+    {
+      label: "tools_list keeps runtime schema",
+      input: { source: "tools_list" as const },
+      requiresApproval: true,
+      expectedExposed: true,
+      expectedSchemaKeys: ["command", "cwd", "env", "timeoutMs", "attachSessionId", "sessionMode"],
+    },
+    {
+      label: "chat_surface hides terminal",
+      input: { source: "chat_surface" as const, query: "run pnpm check" },
+      requiresApproval: true,
+      expectedExposed: false,
+      expectedSchemaKeys: [],
+    },
+  ])(
+    "applies the terminal exposure risk matrix: $label",
+    ({ input, requiresApproval, expectedExposed, expectedSchemaKeys }) => {
+      registerCapability({
+        ...terminalSessionTool,
+        definition: {
+          ...terminalSessionTool.definition,
+          capabilities: {
+            ...terminalSessionTool.definition.capabilities,
+            requiresApproval,
+          },
+        },
+      });
+
+      const decision = resolveHarnessToolExposure(input);
+      const terminalDefinition = decision.visibleDefinitions.find(
+        (definition) => definition.id === "terminal_session",
+      );
+      const schemaKeys = terminalDefinition
+        ? Object.keys((terminalDefinition.inputSchema.properties ?? {}) as Record<string, unknown>)
+        : [];
+
+      expect(decision.exposedToolIds.includes("terminal_session")).toBe(expectedExposed);
+      expect(schemaKeys).toEqual(expectedSchemaKeys);
+      if (terminalDefinition) {
+        expect(terminalDefinition.capabilities.requiresApproval).toBe(true);
+      }
+    },
+  );
+
   it("hides read fallback aliases from agent_intent exposure while keeping tools_list intact", () => {
     registerCapability(readTool);
     registerCapability(readSliceTool);

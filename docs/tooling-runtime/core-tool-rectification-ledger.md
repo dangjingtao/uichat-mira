@@ -692,10 +692,10 @@ edit_replace_block
     - `server/src/mcp/terminal-sessions.ts` 的 persistent PTY 创建路径复用 sandbox cwd/env 入口
     - `server/src/harness/sandbox/index.ts` 将 executor 的 `truncated` / `violations` 回传到 direct result contract
     - `server/src/harness/sandbox/index.ts` 暴露 L1 workspace runner status；`command` profile 只有在所有 L1 requirement 通过时才是 `implemented`
-    - `server/src/harness/exposure.test.ts` 覆盖 sandbox unavailable 时不暴露 `terminal_session`
+    - `server/src/harness/exposure.test.ts` 覆盖 sandbox unavailable 时不暴露 `terminal_session`，并补 terminal exposure 风险矩阵
   - 验证结果：
     - `pnpm --filter @ui-chat-mira/server test -- src/harness/exposure.test.ts src/mcp/tools/terminal-session.tool.test.ts src/harness/sandbox.test.ts src/harness/sandbox/index.test.ts src/sandbox/executor.test.ts`
-      - 结果：通过，`71 passed`
+      - 结果：通过，`78 passed`
     - `pnpm --filter @ui-chat-mira/server bench:sandbox:direct D:\workspace\rag-demo`
       - 结果：通过，JSON summary 为 `total=7`、`passed=6`、`failed=0`、`notImplemented=1`
     - `pnpm --filter @ui-chat-mira/server exec tsc --noEmit -p tsconfig.json`

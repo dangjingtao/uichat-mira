@@ -277,7 +277,7 @@ related:
 
 - `2026-07-05`：已完成 `T-012` 定向验证：
   - `pnpm --filter @ui-chat-mira/server test -- src/harness/exposure.test.ts src/mcp/tools/terminal-session.tool.test.ts src/harness/sandbox.test.ts src/harness/sandbox/index.test.ts src/sandbox/executor.test.ts`
-  - 结果：通过，`71 passed`
+  - 结果：通过，`78 passed`
   - `pnpm --filter @ui-chat-mira/server bench:sandbox:direct D:\workspace\rag-demo`
   - 结果：通过，JSON summary 为 `total=7`、`passed=6`、`failed=0`、`notImplemented=1`
   - `pnpm --filter @ui-chat-mira/server exec tsc --noEmit -p tsconfig.json`

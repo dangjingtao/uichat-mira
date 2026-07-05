@@ -72,7 +72,7 @@ L1 范围：
 
 - `pnpm --filter @ui-chat-mira/server test -- src/harness/exposure.test.ts src/mcp/tools/terminal-session.tool.test.ts src/harness/sandbox.test.ts src/harness/sandbox/index.test.ts src/sandbox/executor.test.ts`
   - workdir: `D:/workspace/rag-demo`
-  - result: passed (`5` files, `71` tests)
+  - result: passed (`5` files, `78` tests)
 - `pnpm --filter @ui-chat-mira/server bench:sandbox:direct D:\workspace\rag-demo`
   - workdir: `D:/workspace/rag-demo`
   - result: passed
@@ -115,6 +115,7 @@ L1 范围：
   - persistent PTY 创建路径复用 sandbox cwd/env 入口，避免全量 `process.env` 进入 PTY。
   - direct contract 测试补齐 L1 验收项：`.`、子目录、`../`、`C:\`、空 cwd、env、timeout、巨量输出、中文输出、非零 exitCode、完整 result 字段、Windows limitation。
   - exposure 测试覆盖 sandbox unavailable / L1 不满足时 `terminal_session` 不进入 `agent_intent`。
+  - exposure risk matrix 覆盖弱命令措辞、显式命令、缺审批元数据、sandbox unavailable、`tools_list` runtime schema、`chat_surface` 隐藏 terminal。
 
 - Acceptance criteria evidence:
   - AC1: [index.test.ts](/D:/workspace/rag-demo/server/src/harness/sandbox/index.test.ts:53) 覆盖 cwd `"."`。
@@ -130,6 +131,7 @@ L1 范围：
   - AC11: [exposure.test.ts](/D:/workspace/rag-demo/server/src/harness/exposure.test.ts:75) 覆盖 L1 command sandbox unavailable 时不暴露 `terminal_session`。
   - L1 status gate: [index.test.ts](/D:/workspace/rag-demo/server/src/harness/sandbox/index.test.ts:43) 覆盖任意 L1 requirement 缺失时 status 为 unavailable。
   - Windows limitation: [index.test.ts](/D:/workspace/rag-demo/server/src/harness/sandbox/index.test.ts:147) 覆盖 Windows timeout result 包含 `windows_kill_tree_best_effort`，且不会返回 `completed`。
+  - Exposure matrix: [exposure.test.ts](/D:/workspace/rag-demo/server/src/harness/exposure.test.ts:143) 覆盖 terminal 暴露风险矩阵。
 
 ## Unfinished / Risks
 
