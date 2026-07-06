@@ -152,6 +152,25 @@ test("resumeApprovedAgentRun resumes a pending run and keeps approval state", as
           type: "data",
           name: "execution-node",
           value: {
+            nodeId: "agent-resume-execution",
+            nodeType: "approval",
+            phase: "done",
+            label: "恢复执行",
+            traceDomain: "agent",
+            summary: "审批已通过，继续恢复 web-search 的执行",
+            details: {
+              runId: run.id,
+              toolId: "web-search",
+              toolCallId: "pending-1",
+              inputHash: createInvocationInputHash(approvedInput),
+              resumedFromApproval: true,
+            },
+          },
+        },
+        {
+          type: "data",
+          name: "execution-node",
+          value: {
             nodeId: "agent-generate",
             nodeType: "generate",
             phase: "done",
@@ -281,6 +300,25 @@ test("resumeApprovedAgentRun updates assistant message when run returns waiting 
       content: "waiting",
       parts: [
         { type: "text", text: "waiting" },
+        {
+          type: "data",
+          name: "execution-node",
+          value: {
+            nodeId: "agent-resume-execution",
+            nodeType: "approval",
+            phase: "done",
+            label: "恢复执行",
+            traceDomain: "agent",
+            summary: "审批已通过，继续恢复 web-search 的执行",
+            details: {
+              runId: run.id,
+              toolId: "web-search",
+              toolCallId: "pending-2",
+              inputHash: createInvocationInputHash(approvedInput),
+              resumedFromApproval: true,
+            },
+          },
+        },
         {
           type: "data",
           name: "execution-node",
@@ -419,6 +457,25 @@ test("resumeApprovedAgentRun updates assistant message when resumed run fails", 
           type: "data",
           name: "execution-node",
           value: {
+            nodeId: "agent-resume-execution",
+            nodeType: "approval",
+            phase: "done",
+            label: "恢复执行",
+            traceDomain: "agent",
+            summary: "审批已通过，继续恢复 web-search 的执行",
+            details: {
+              runId: run.id,
+              toolId: "web-search",
+              toolCallId: "pending-3",
+              inputHash: createInvocationInputHash(approvedInput),
+              resumedFromApproval: true,
+            },
+          },
+        },
+        {
+          type: "data",
+          name: "execution-node",
+          value: {
             nodeId: "agent-error",
             nodeType: "error",
             phase: "error",
@@ -537,6 +594,25 @@ test("resumeApprovedAgentRun blocks execution when approval toolCallId does not 
           type: "text",
           text: "审批对象与待执行工具不一致，已阻断本次执行，工具没有运行。",
         },
+        {
+          type: "data",
+          name: "execution-node",
+          value: {
+            nodeId: "agent-resume-execution",
+            nodeType: "error",
+            phase: "error",
+            label: "恢复执行",
+            traceDomain: "agent",
+            summary: "审批对象与待执行工具不一致，已阻断恢复执行",
+            details: {
+              runId: run.id,
+              toolId: "web-search",
+              toolCallId: "pending-actual",
+              inputHash: createInvocationInputHash(approvedInput),
+              reason: blockedRun?.blockedReason,
+            },
+          },
+        },
       ],
       metadata: {
         agent: {
@@ -552,6 +628,81 @@ test("resumeApprovedAgentRun blocks execution when approval toolCallId does not 
     runSpy.mockRestore();
     persistAssistantMessageSpy.mockRestore();
     getMessageByIdSpy.mockRestore();
+    agentRunStore.clear();
+  }
+});
+
+test("resumeApprovedAgentRun blocks terminal_session when the approved inputHash belongs to a different command", async () => {
+  const approvedInput = {
+    command: "dir",
+    cwd: "D:\\workspace\\rag-demo",
+  };
+  const frozenInput = {
+    command: "git status",
+    cwd: "D:\\workspace\\rag-demo",
+  };
+  const goal = createAgentGoal("inspect workspace status");
+  const run = agentRunStore.create({
+    threadId: "thread-1",
+    userId: 1,
+    goal,
+    plan: createAgentPlan(goal),
+    runtimeInput: {
+      messages: [
+        {
+          role: "user",
+          content: "run git status",
+          parts: [{ type: "text", text: "run git status" }],
+        },
+      ],
+      params: {},
+    },
+  });
+
+  agentRunStore.update(run.id, {
+    status: "waiting_approval",
+    pendingApproval: {
+      id: "approval-terminal-mismatch-1",
+      runId: run.id,
+      stepId: "approval",
+      toolId: "terminal_session",
+      toolCallId: "pending-terminal-mismatch-1",
+      reason: "needs approval",
+      input: approvedInput,
+      inputHash: createInvocationInputHash(approvedInput),
+      createdAt: "2026-07-06T00:00:00.000Z",
+    },
+    pendingToolCall: {
+      id: "pending-terminal-mismatch-1",
+      toolId: "terminal_session",
+      args: frozenInput,
+      inputHash: createInvocationInputHash(frozenInput),
+      source: "planner",
+      status: "frozen",
+      createdAt: "2026-07-06T00:00:00.000Z",
+    },
+  });
+
+  const runSpy = vi.spyOn(agentGraph, "run");
+
+  try {
+    await assert.rejects(
+      () => resumeApprovedAgentRun(run.id),
+      /approved inputHash .* does not match frozen pendingToolCall\.inputHash/i,
+    );
+
+    assert.equal(runSpy.mock.calls.length, 0);
+    const blockedRun = agentRunStore.get(run.id);
+    assert.equal(blockedRun?.status, "blocked");
+    assert.equal(blockedRun?.pendingApproval, undefined);
+    assert.equal(blockedRun?.pendingToolCall, undefined);
+    assert.equal(blockedRun?.terminalReason, "approval_resume_mismatch");
+    assert.match(
+      blockedRun?.blockedReason ?? "",
+      /approved inputHash .* does not match frozen pendingToolCall\.inputHash/i,
+    );
+  } finally {
+    runSpy.mockRestore();
     agentRunStore.clear();
   }
 });

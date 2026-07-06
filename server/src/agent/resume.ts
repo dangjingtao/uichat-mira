@@ -1,6 +1,7 @@
 import { agentGraph } from "./graph";
 import { agentRunStore } from "./run-store";
 import { getAgentRunById } from "./run-read";
+import { toAgentErrorExecutionNode, toAgentResumeExecutionNode } from "./trace";
 import type {
   AgentApprovalRequest,
   AgentApprovedInvocation,
@@ -261,6 +262,21 @@ export const resumeApprovedAgentRun = async (runId: string) => {
       content: "审批对象与待执行工具不一致，已阻断本次执行，工具没有运行。",
       blockedReason: mismatchReason,
       terminalReason: "approval_resume_mismatch",
+      executionNodes: [
+        toAgentErrorExecutionNode({
+          runId,
+          nodeId: "agent-resume-execution",
+          label: "恢复执行",
+          summary: "审批对象与待执行工具不一致，已阻断恢复执行",
+          details: {
+            toolId: pendingToolCall.toolId,
+            toolCallId:
+              "id" in pendingToolCall ? pendingToolCall.id : null,
+            inputHash: pendingToolCall.inputHash,
+            reason: mismatchReason,
+          },
+        }),
+      ],
     });
     throw new Error(mismatchReason);
   }
@@ -283,7 +299,14 @@ export const resumeApprovedAgentRun = async (runId: string) => {
     pendingToolCall,
   });
 
-  const resumedExecutionNodes: AssistantExecutionNodeEvent[] = [];
+  const resumedExecutionNodes: AssistantExecutionNodeEvent[] = [
+    toAgentResumeExecutionNode({
+      runId,
+      toolId: pendingToolCall.toolId,
+      toolCallId: "id" in pendingToolCall ? pendingToolCall.id : undefined,
+      inputHash: pendingToolCall.inputHash,
+    }),
+  ];
   const output = await agentGraph.run({
     runId,
     threadId: run.threadId,

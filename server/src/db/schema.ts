@@ -551,6 +551,49 @@ export const mailMessages = sqliteTable(
 export type MailMessage = typeof mailMessages.$inferSelect;
 export type NewMailMessage = typeof mailMessages.$inferInsert;
 
+export const newsItems = sqliteTable(
+  "news_items",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    sourceType: text("source_type").notNull().default("rss"),
+    sourceName: text("source_name").notNull().default(""),
+    sourceKey: text("source_key").notNull().default(""),
+    externalId: text("external_id").notNull().default(""),
+    title: text("title").notNull().default(""),
+    summary: text("summary").notNull().default(""),
+    contentText: text("content_text").notNull().default(""),
+    url: text("url").notNull().default(""),
+    author: text("author"),
+    publishedAt: text("published_at"),
+    ingestedAt: text("ingested_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    lang: text("lang").notNull().default("en"),
+    topic: text("topic").notNull().default("technology"),
+    tagsJson: text("tags_json").notNull().default("[]"),
+    rawPayloadJson: text("raw_payload_json").notNull().default("{}"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    sourceKeyIdx: index("idx_news_items_source_key").on(table.sourceKey),
+    sourceTypeIdx: index("idx_news_items_source_type").on(table.sourceType),
+    publishedIdx: index("idx_news_items_published_at").on(table.publishedAt),
+    ingestedIdx: index("idx_news_items_ingested_at").on(table.ingestedAt),
+    sourceExternalUniqueIdx: uniqueIndex("idx_news_items_source_external").on(
+      table.sourceKey,
+      table.externalId,
+    ),
+  }),
+);
+
+export type NewsItem = typeof newsItems.$inferSelect;
+export type NewNewsItem = typeof newsItems.$inferInsert;
+
 export const externalIdentityBindings = sqliteTable(
   "external_identity_bindings",
   {

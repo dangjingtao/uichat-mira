@@ -81,6 +81,9 @@ vi.mock("@/features/Settings/pages/MicroApps/index", () => ({
 vi.mock("@/features/Settings/pages/MicroApps/Detail", () => ({
   default: () => null,
 }));
+vi.mock("@/features/Settings/pages/MicroApps/NewsHub", () => ({
+  default: () => <div data-testid="news-hub-page">news-hub-page</div>,
+}));
 vi.mock("@/features/Settings/pages/MicroApps/ImageGeneration", () => ({
   default: () => <div data-testid="image-generation-studio-page">image-generation-studio-page</div>,
 }));
@@ -187,6 +190,32 @@ describe("settings routes", () => {
     expect(
       screen.getByText("settings.navigation.microApps:/settings/micro-apps:app:15:prefix:false"),
     ).toBeInTheDocument();
+  });
+
+  it("includes the image generation studio route under the micro apps path", () => {
+    expect(
+      settingsRoutes.some(
+        (route) => route.path === "micro-apps/news-hub",
+      ),
+    ).toBe(true);
+  });
+
+  it("mounts the news hub page at /settings/micro-apps/news-hub", () => {
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/settings",
+          children: settingsRoutes,
+        },
+      ],
+      {
+        initialEntries: ["/settings/micro-apps/news-hub"],
+      },
+    );
+
+    render(<RouterProvider router={router} />);
+
+    expect(screen.getByTestId("news-hub-page")).toBeInTheDocument();
   });
 
   it("includes the image generation studio route under the micro apps path", () => {

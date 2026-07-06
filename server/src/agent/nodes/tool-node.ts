@@ -8,8 +8,13 @@ import { createInvocationInputHash } from "../approval-fingerprint";
 import {
   appendConfirmedObjectToTaskFrame,
   emitStepNode,
+  getToolTraceTargetPreview,
   getIterativeNodeId,
   getTraceAttemptMeta,
+  summarizeToolExecutionCompleted,
+  summarizeToolExecutionFailure,
+  summarizeToolExecutionStart,
+  summarizeToolExecutionWaitingApproval,
   updateTaskFrameBlocker,
   type AgentNodeState,
   type EmitAgentExecutionNode,
@@ -325,10 +330,18 @@ export const toolNode = async (
     nodeType: "tool",
     phase: "start",
     label: "工具执行",
-    summary: `准备执行 ${pendingToolCall.toolId}`,
+    summary: summarizeToolExecutionStart(
+      pendingToolCall.toolId,
+      pendingToolCall.args,
+    ),
     details: {
       toolCallId: pendingToolCall.id,
       toolId: pendingToolCall.toolId,
+      targetPreview:
+        getToolTraceTargetPreview(
+          pendingToolCall.toolId,
+          pendingToolCall.args,
+        ) ?? null,
       inputHash: pendingToolCall.inputHash,
       status: "running",
     },
@@ -395,10 +408,18 @@ export const toolNode = async (
       nodeType: "tool",
       phase: "done",
       label: "工具执行",
-      summary: `${pendingToolCall.toolId} 进入审批等待`,
+      summary: summarizeToolExecutionWaitingApproval(
+        pendingToolCall.toolId,
+        pendingToolCall.args,
+      ),
       details: {
         toolCallId: pendingToolCall.id,
         toolId: pendingToolCall.toolId,
+        targetPreview:
+          getToolTraceTargetPreview(
+            pendingToolCall.toolId,
+            pendingToolCall.args,
+          ) ?? null,
         inputHash: pendingToolCall.inputHash,
         invocationId: invocation.id,
         status: "awaiting_approval",
@@ -497,10 +518,19 @@ export const toolNode = async (
       nodeType: "tool",
       phase: "error",
       label: "工具执行",
-      summary: `${pendingToolCall.toolId} 执行失败`,
+      summary: summarizeToolExecutionFailure({
+        toolId: pendingToolCall.toolId,
+        failureKind,
+        args: pendingToolCall.args,
+      }),
       details: {
         toolCallId: pendingToolCall.id,
         toolId: pendingToolCall.toolId,
+        targetPreview:
+          getToolTraceTargetPreview(
+            pendingToolCall.toolId,
+            pendingToolCall.args,
+          ) ?? null,
         inputHash: pendingToolCall.inputHash,
         invocationId: invocation.id,
         status: "failed",
@@ -585,10 +615,18 @@ export const toolNode = async (
     nodeType: "tool",
     phase: "done",
     label: "工具执行",
-    summary: `${pendingToolCall.toolId} 已由 Harness 执行完成`,
+    summary: summarizeToolExecutionCompleted(
+      pendingToolCall.toolId,
+      pendingToolCall.args,
+    ),
     details: {
       toolCallId: pendingToolCall.id,
       toolId: pendingToolCall.toolId,
+      targetPreview:
+        getToolTraceTargetPreview(
+          pendingToolCall.toolId,
+          pendingToolCall.args,
+        ) ?? null,
       inputHash: pendingToolCall.inputHash,
       invocationId: invocation.id,
       status: "completed",

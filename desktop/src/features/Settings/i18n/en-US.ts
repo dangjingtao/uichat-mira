@@ -84,6 +84,19 @@ const settingsPending = {
         description: "{{count}} WeCom smart robot entries are currently available. Future micro apps will also be connected here only after they become real capabilities.",
       },
       studioEntries: {
+        newsHub: {
+          title: "News Hub",
+          description: "Pull no-key tech news sources into one local table and expose a simple aggregation workspace for local consumption.",
+          hint: "The first pass uses Hacker News, GitHub Changelog, and curated GitHub release feeds. Trigger a manual refresh to ingest items.",
+          badges: {
+            debug: "Local news base",
+            focus: "Tech aggregation",
+            runtime: "No-key sources",
+          },
+          actions: {
+            open: "Open news hub",
+          },
+        },
         mailCenter: {
           title: "Mail Center",
           description: "The mail center connects to real SMTP and IMAP for account config, test send, inbox sync, and real message list display.",
@@ -122,6 +135,69 @@ const settingsPending = {
           actions: {
             open: "Open Studio",
           },
+        },
+      },
+      newsHub: {
+        page: {
+          miniTitle: "News Hub",
+          title: "News Hub",
+          description: "This workspace pulls no-key tech news sources into local SQLite so the same aggregated records can feed local pages, search, and later AI workflows.",
+        },
+        banner: {
+          title: "The first pass is about a reliable local aggregation loop",
+          description: "This page does not try to cover the whole internet yet, and it does not depend on login-heavy platforms. It starts by aggregating Hacker News, GitHub Changelog, and core open-source release feeds into one local table with stable query access.",
+        },
+        actions: {
+          refresh: "Refresh news",
+          applyFilters: "Apply filters",
+          openSource: "Open source",
+          openArticle: "Open article",
+        },
+        badges: {
+          noKey: "No key",
+          localTable: "Single local table",
+          manualRefresh: "Manual refresh",
+        },
+        filters: {
+          source: "Source",
+          query: "Keyword",
+          queryPlaceholder: "Filter by title, summary, or content snippet",
+          allSources: "All sources",
+        },
+        sections: {
+          sources: "Connected sources",
+          items: "Aggregated items",
+        },
+        metrics: {
+          items: "Current items",
+          itemsHint: "Number of items returned by the active filters.",
+          sources: "Sources",
+          sourcesHint: "Number of connected sources that this workspace can refresh.",
+          lastGenerated: "View generated",
+          lastGeneratedHint: "Time when this overview was generated. It does not mean every source was refreshed at that exact moment.",
+        },
+        labels: {
+          total: "{{count}} items",
+          author: "Author",
+          unknownAuthor: "Unknown",
+          publishedAt: "Published",
+          lastPublished: "Last published",
+        },
+        cards: {
+          runtime: {
+            title: "The local news foundation is now separated cleanly",
+            description: "Each refresh pulls public JSON / RSS / Atom sources, normalizes them, and writes the results into the local `news_items` table. Search, digests, local feeds, and later agent consumption can all build on the same records.",
+          },
+        },
+        states: {
+          loading: "Loading the aggregated news workspace...",
+          emptyTitle: "No items match the current filters",
+          emptyDescription: "Try refreshing the sources first, or adjust the source and keyword filters.",
+        },
+        messages: {
+          loadFailed: "Failed to load the news hub view",
+          refreshFailed: "Failed to refresh the news hub",
+          refreshed: "Refresh finished: fetched {{fetchedCount}}, inserted {{insertedCount}}, updated {{updatedCount}}.",
         },
       },
       mailCenter: {

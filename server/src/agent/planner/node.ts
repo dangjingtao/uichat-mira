@@ -6,6 +6,8 @@ import type { AgentNextAction, AgentRepeatedActionGuardResult } from "../types";
 import {
   buildPlannerObservationContext,
   emitStepNode,
+  getToolTraceTargetPreview,
+  summarizePlannerNextAction,
   updateCurrentTaskFrameFromPlanner,
   type AgentGraphState,
   type EmitAgentExecutionNode,
@@ -264,11 +266,23 @@ export const nextActionPlannerNode = async (
     nodeType: "plan",
     phase: "done",
     label: "下一步动作决策",
-    summary: "已完成下一步动作决策",
+    summary: summarizePlannerNextAction({
+      nextAction,
+      pendingApprovalActive,
+      recoveryExhausted,
+    }),
     details: {
       exposedToolCount: toolExposure.exposedTools.length,
       selectedActionType: nextAction?.type ?? null,
       selectedToolId: nextAction?.type === "use_tool" ? nextAction.toolId : null,
+      selectedToolTarget:
+        nextAction?.type === "use_tool"
+          ? getToolTraceTargetPreview(nextAction.toolId, nextAction.args) ?? null
+          : nextAction?.type === "retrieve"
+            ? nextAction.query
+            : nextAction?.type === "ask_user"
+              ? nextAction.question
+              : null,
       reason: nextAction?.reason ?? null,
       iteration,
       maxIterations,

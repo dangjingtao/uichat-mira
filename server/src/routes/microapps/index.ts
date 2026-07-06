@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { requireAuth } from "@/db/auth.db.js";
 import type { createMailCenterService } from "@/microapps/mail-center/index.js";
+import type { createNewsHubService } from "@/microapps/news-hub/index.js";
 import type {
   ComputerUseGoalInput,
   ComputerUseRuntimeState,
@@ -18,6 +19,7 @@ import { success } from "@/utils/index.js";
 import { badRequest, notFound, routeHandler } from "@/utils/route-errors.js";
 import computerUseRoutes from "./computer-use/index.js";
 import mailCenterRoutes from "./mail-center/index.js";
+import newsHubRoutes from "./news-hub/index.js";
 import { imageGenerationRouteSchemas } from "./schemas.js";
 
 export type ImageGenerationRouteService = {
@@ -48,12 +50,14 @@ export type ComputerUseRuntimeRouteService = {
 };
 
 export type MailCenterRouteService = ReturnType<typeof createMailCenterService>;
+export type NewsHubRouteService = ReturnType<typeof createNewsHubService>;
 
 type MicroappsRouteOptions = {
   imageGenerationService?: ImageGenerationRouteService;
   computerUseService?: ComputerUseRouteService;
   computerUseRuntimeService?: ComputerUseRuntimeRouteService;
   mailCenterService?: MailCenterRouteService;
+  newsHubService?: NewsHubRouteService;
 };
 
 const toGenerationResponse = (job: ImageGenerationJob) => ({
@@ -96,6 +100,7 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
   const computerUseService = options.computerUseService;
   const computerUseRuntimeService = options.computerUseRuntimeService;
   const mailCenterService = options.mailCenterService;
+  const newsHubService = options.newsHubService;
   if (!imageGenerationService) {
     throw new Error(
       "microappsRoute requires imageGenerationService to be injected from the server composition root.",
@@ -114,6 +119,11 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
   if (!mailCenterService) {
     throw new Error(
       "microappsRoute requires mailCenterService to be injected from the server composition root.",
+    );
+  }
+  if (!newsHubService) {
+    throw new Error(
+      "microappsRoute requires newsHubService to be injected from the server composition root.",
     );
   }
 
@@ -161,6 +171,9 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
   });
   await app.register(mailCenterRoutes, {
     mailCenterService,
+  });
+  await app.register(newsHubRoutes, {
+    newsHubService,
   });
 };
 

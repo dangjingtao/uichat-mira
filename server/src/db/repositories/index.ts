@@ -19,3 +19,4 @@ export * from "./agent-run.repository";
 export * from "./mail-accounts.repository";
 export * from "./mail-folders.repository";
 export * from "./mail-messages.repository";
+export * from "./news-items.repository";

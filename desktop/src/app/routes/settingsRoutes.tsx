@@ -42,6 +42,7 @@ import MicroAppDetailPage from "@/features/Settings/pages/MicroApps/Detail";
 import ImageGenerationStudioPage from "@/features/Settings/pages/MicroApps/ImageGeneration";
 import ComputerUseStudioPage from "@/features/Settings/pages/MicroApps/ComputerUse";
 import MailCenterPage from "@/features/Settings/pages/MicroApps/MailCenter";
+import NewsHubPage from "@/features/Settings/pages/MicroApps/NewsHub";
 
 export type SettingsNavGroup =
   | "general"
@@ -122,6 +123,10 @@ const settingsRouteTree: SettingsRouteConfig[] = [
         element: <MicroAppDetailPage />,
       },
     ],
+  },
+  {
+    path: "micro-apps/news-hub",
+    element: <NewsHubPage />,
   },
   {
     path: "micro-apps/image-generation-studio",

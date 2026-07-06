@@ -33,6 +33,18 @@ export interface ApprovedInvocation {
   inputHash: string;
 }
 
+export const hasExactApprovedInvocation = (input: {
+  toolId: string;
+  inputHash?: string;
+  approvedInvocations?: ApprovedInvocation[];
+}) =>
+  input.inputHash !== undefined &&
+  (input.approvedInvocations?.some(
+    (invocation) =>
+      invocation.toolId === input.toolId &&
+      invocation.inputHash === input.inputHash,
+  ) ?? false);
+
 const resolveWorkspaceRelativeTarget = (
   workspaceRoot: string,
   candidate: string,
@@ -80,14 +92,13 @@ export const evaluateInvocationApproval = (input: {
 }): InvocationApprovalDecision => {
   // Approval remains invocation-bound. Reusing a terminal session via
   // attachSessionId does not authorize a different command unless the exact
-  // new input hash was approved too.
-  const isApproved =
-    input.inputHash !== undefined &&
-    (input.approvedInvocations?.some(
-      (invocation) =>
-        invocation.toolId === input.definition.id &&
-        invocation.inputHash === input.inputHash,
-    ) ?? false);
+  // new input hash was approved too. The same rule also forces re-approval
+  // when cwd, env, timeoutMs or any other reviewed argument changes.
+  const isApproved = hasExactApprovedInvocation({
+    toolId: input.definition.id,
+    inputHash: input.inputHash,
+    approvedInvocations: input.approvedInvocations,
+  });
 
   if (input.definition.capabilities.workspaceBound) {
     const workspaceRoot = input.environment?.workspace.rootPath;

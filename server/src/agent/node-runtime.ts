@@ -2,6 +2,14 @@ import type { NormalizedChatMessage } from "@/services/provider-proxy.message-pr
 import type { RetrievedChunk } from "@/services/rag-nodes";
 import type { ContextBudgetAudit } from "@/services/context-budget/index";
 import { toAgentExecutionNode } from "./trace";
+export {
+  getToolTraceTargetPreview,
+  summarizePlannerNextAction,
+  summarizeToolExecutionCompleted,
+  summarizeToolExecutionFailure,
+  summarizeToolExecutionStart,
+  summarizeToolExecutionWaitingApproval,
+} from "./trace";
 import { getEvidencePayload, getLatestEvidenceSummary } from "./evidence";
 import { buildPlannerRecoveryContext } from "./recovery";
 import type {

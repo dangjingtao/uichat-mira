@@ -599,7 +599,11 @@ test("agentGraph routes planner use_tool through normalize and answer stop rule 
   const generateInvokeSpy = vi
     .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
     .mockResolvedValue("README content answer");
-  const executionNodes: string[] = [];
+  const executionNodes: Array<{
+    nodeId: string;
+    phase: string;
+    summary?: string;
+  }> = [];
 
   const result = await agentGraph.run({
     runId: "run-use-tool",
@@ -715,7 +719,11 @@ test("agentGraph routes recoverable tool failure back to the planner chain inste
     plan: basePlan,
     messages: [makeMessage("open missing.md")],
     onExecutionNode: async (event) => {
-      executionNodes.push(event.nodeId);
+      executionNodes.push({
+        nodeId: event.nodeId,
+        phase: event.phase,
+        summary: event.summary,
+      });
     },
   });
 
@@ -728,7 +736,26 @@ test("agentGraph routes recoverable tool failure back to the planner chain inste
   assert.equal(result.lastToolExecution?.failureKind, "recoverable");
   assert.equal(result.lastToolExecution?.recoveryAttemptCount, 1);
   assert.equal(
-    executionNodes.filter((nodeId) => nodeId === "agent-next-action-planner").length >= 3,
+    executionNodes.filter((event) => event.nodeId === "agent-next-action-planner")
+      .length >= 3,
+    true,
+  );
+  const toolFailureEvent = executionNodes.find(
+    (event) =>
+      isToolExecutionNodeId(event.nodeId) && event.phase === "error",
+  );
+  assert.equal(
+    toolFailureEvent?.summary,
+    "read_open 执行失败：missing.md，正在重新判断下一步",
+  );
+  const plannerDecisionEvents = executionNodes.filter(
+    (event) =>
+      event.nodeId === "agent-next-action-planner" && event.phase === "done",
+  );
+  assert.equal(
+    plannerDecisionEvents.some(
+      (event) => event.summary === "当前证据已足够，开始组织最终回答",
+    ),
     true,
   );
 });

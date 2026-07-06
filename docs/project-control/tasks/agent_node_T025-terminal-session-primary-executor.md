@@ -13,7 +13,7 @@ related:
   - docs/project-control/tasks/agent_node_T021-agent-execution-observation.md
   - docs/project-control/tasks/agent_node_T022-tool-node-recoverable-failure.md
   - docs/chat/agent-loop-v1.7-construction-plan.md
-task_state: TODO
+task_state: DONE
 ---
 
 # agent_node_T025 terminal session primary executor
@@ -73,9 +73,10 @@ task_state: TODO
 
 - terminal 结果结构测试
 - 审批恢复与新命令重审测试
+- `2026-07-06` 已执行：`pnpm --filter @ui-chat-mira/server test -- src/mcp/core/permissions.test.ts src/agent/__tests__/execution-observation.test.ts src/agent/__tests__/resume.test.ts src/mcp/core/invocations.test.ts`
+- `2026-07-06` 已执行：`pnpm check`
 
 ## Risk Points
 
 - 与 `tool-node.ts` 的 recoverable failure 改造强耦合
 - 极易被做成“终端特殊通道”
-

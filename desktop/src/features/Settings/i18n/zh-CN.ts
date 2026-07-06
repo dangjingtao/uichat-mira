@@ -84,6 +84,19 @@ const settingsPending = {
         description: "已发现 {{count}} 个企业微信智能机器人入口。后续新增微应用时，也会继续在这里按真实能力接入。",
       },
       studioEntries: {
+        newsHub: {
+          title: "资讯聚合台",
+          description: "把免 Key 的科技资讯源拉进本地一张表，先给你一个能直接消费的聚合入口。",
+          hint: "当前默认接 Hacker News、GitHub Changelog 和精选 GitHub Release feeds，手动刷新即可入库。",
+          badges: {
+            debug: "本地资讯底座",
+            focus: "科技资讯聚合",
+            runtime: "免 Key Sources",
+          },
+          actions: {
+            open: "进入资讯台",
+          },
+        },
         mailCenter: {
           title: "邮件中心",
           description: "邮件中心当前直接接真实 SMTP / IMAP，用来配置账号、测试发信、同步收件箱和查看真实列表。",
@@ -122,6 +135,69 @@ const settingsPending = {
           actions: {
             open: "进入工作区",
           },
+        },
+      },
+      newsHub: {
+        page: {
+          miniTitle: "资讯聚合台",
+          title: "资讯聚合台",
+          description: "这里把免 Key 的科技资讯源统一拉到本地 SQLite，一次刷新后就能给本地页面、搜索和后续 AI 消费共用。",
+        },
+        banner: {
+          title: "第一版先解决本地聚合闭环",
+          description: "当前不追全网覆盖，也不接复杂登录态平台。先把 Hacker News、GitHub Changelog 和核心开源仓库发布流聚合到一张本地表里，再给你稳定查询和后续扩展底座。",
+        },
+        actions: {
+          refresh: "刷新资讯",
+          applyFilters: "应用筛选",
+          openSource: "打开源站",
+          openArticle: "打开原文",
+        },
+        badges: {
+          noKey: "免 Key",
+          localTable: "本地一张表",
+          manualRefresh: "手动刷新",
+        },
+        filters: {
+          source: "来源",
+          query: "关键词",
+          queryPlaceholder: "按标题、摘要或正文片段筛选",
+          allSources: "全部来源",
+        },
+        sections: {
+          sources: "已接入来源",
+          items: "聚合结果",
+        },
+        metrics: {
+          items: "当前结果",
+          itemsHint: "按当前筛选条件返回的资讯条目数。",
+          sources: "来源数",
+          sourcesHint: "当前已接入并可刷新的资讯源数量。",
+          lastGenerated: "视图时间",
+          lastGeneratedHint: "这次概览生成的时间点，不代表全部来源都刚刷新过。",
+        },
+        labels: {
+          total: "共 {{count}} 条",
+          author: "作者",
+          unknownAuthor: "未知",
+          publishedAt: "发布时间",
+          lastPublished: "最近发布",
+        },
+        cards: {
+          runtime: {
+            title: "本地资讯底座已经独立出来",
+            description: "刷新动作会抓取公开 JSON / RSS / Atom 源，统一归一化后写入本地 `news_items` 表。后面你要做筛选、搜索、日报摘要或 agent 消费，都可以直接复用这里的结果。",
+          },
+        },
+        states: {
+          loading: "正在加载资讯聚合视图...",
+          emptyTitle: "当前筛选没有结果",
+          emptyDescription: "可以先点一次“刷新资讯”，或者换个来源和关键词再看。",
+        },
+        messages: {
+          loadFailed: "加载资讯聚合视图失败",
+          refreshFailed: "刷新资讯失败",
+          refreshed: "刷新完成：抓取 {{fetchedCount}} 条，新增 {{insertedCount}} 条，更新 {{updatedCount}} 条。",
         },
       },
       mailCenter: {

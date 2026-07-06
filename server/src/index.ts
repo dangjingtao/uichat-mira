@@ -33,6 +33,7 @@ import {
   createInMemoryImageGenerationJobStore,
 } from "@/microapps/image-generation/index.js";
 import { createMailCenterService } from "@/microapps/mail-center/index.js";
+import { createNewsHubService } from "@/microapps/news-hub/index.js";
 import healthRoute from "@/routes/health";
 import appMetaRoute from "@/routes/app-meta";
 import dbHealthRoute from "@/routes/dbHealth";
@@ -73,6 +74,7 @@ import { mailAccountsRepository } from "@/db/repositories/mail-accounts.reposito
 import { mailFoldersRepository } from "@/db/repositories/mail-folders.repository.js";
 import { mailMessagesRepository } from "@/db/repositories/mail-messages.repository.js";
 import { microAppsRepository } from "@/db/repositories/micro-apps.repository.js";
+import { newsItemsRepository } from "@/db/repositories/news-items.repository.js";
 import { webSearchSettingsRepository } from "@/db/repositories/web-search-settings.repository.js";
 import { wecomSettingsRepository } from "@/db/repositories/wecom-settings.repository.js";
 import { initializeVectorStore } from "@/db";
@@ -470,6 +472,7 @@ const computerUseRuntimeService = {
 };
 
 const mailCenterService = createMailCenterService();
+const newsHubService = createNewsHubService();
 
 const setupPlugins = async () => {
   const appMeta = getAppMeta();
@@ -680,6 +683,7 @@ const setupRoutes = async () => {
     computerUseService,
     computerUseRuntimeService,
     mailCenterService,
+    newsHubService,
   });
   await app.register(wecomRoute);
   await app.register(agentRoute);
@@ -731,6 +735,7 @@ const setupDatabase = async () => {
   mailAccountsRepository.initialize();
   mailFoldersRepository.initialize();
   mailMessagesRepository.initialize();
+  newsItemsRepository.initialize();
   migrateLegacyMicroAppBindings();
   initializeExternalMcpDatabase();
   registerAllExternalMcpCapabilities();

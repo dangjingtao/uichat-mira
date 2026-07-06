@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import {
+  getToolTraceTargetPreview,
+  summarizePlannerNextAction,
+  summarizeToolExecutionFailure,
+  toAgentResumeExecutionNode,
   toAgentApprovalExecutionNode,
   toAgentErrorExecutionNode,
   toAgentExecutionNode,
@@ -85,5 +89,55 @@ test("toPlanNodeDetails preserves tool and approval metadata", () => {
         toolId: "web-search",
       },
     ],
+  });
+});
+
+test("summarizePlannerNextAction turns use_tool into a user-visible next step", () => {
+  assert.equal(
+    summarizePlannerNextAction({
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: { path: "README.md" },
+        reason: "Need the file content.",
+      },
+      pendingApprovalActive: false,
+      recoveryExhausted: false,
+    }),
+    "下一步改为执行 read_open：README.md",
+  );
+});
+
+test("summarizeToolExecutionFailure explains recoverable retry intent", () => {
+  assert.equal(
+    summarizeToolExecutionFailure({
+      toolId: "read_open",
+      failureKind: "recoverable",
+      args: { path: "missing.md" },
+    }),
+    "read_open 执行失败：missing.md，正在重新判断下一步",
+  );
+  assert.equal(getToolTraceTargetPreview("terminal_session", { command: "pnpm check" }), "pnpm check");
+});
+
+test("toAgentResumeExecutionNode emits a user-visible resume event", () => {
+  const event = toAgentResumeExecutionNode({
+    runId: "run-1",
+    toolId: "terminal_session",
+    toolCallId: "pending-1",
+    inputHash: "hash-1",
+  });
+
+  assert.equal(event.nodeId, "agent-resume-execution");
+  assert.equal(event.nodeType, "approval");
+  assert.equal(event.phase, "done");
+  assert.equal(event.label, "恢复执行");
+  assert.equal(event.summary, "审批已通过，继续恢复 terminal_session 的执行");
+  assert.deepEqual(event.details, {
+    runId: "run-1",
+    toolId: "terminal_session",
+    toolCallId: "pending-1",
+    inputHash: "hash-1",
+    resumedFromApproval: true,
   });
 });

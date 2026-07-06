@@ -51,6 +51,10 @@ const microAppCapabilities = (microApp: MicroAppRecord) => {
 
 const featuredStudioEntries = [
   {
+    key: "newsHub",
+    route: "/settings/micro-apps/news-hub",
+  },
+  {
     key: "mailCenter",
     route: "/settings/micro-apps/mail-center",
   },

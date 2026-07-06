@@ -127,6 +127,71 @@ test("maps completed tool execution into a completed execution observation", () 
   });
 });
 
+test("maps completed terminal_session into a completed execution observation with terminal preview data", () => {
+  const observation = toExecutionObservationFromToolExecution({
+    toolCallId: "tool-call-terminal-completed",
+    toolId: "terminal_session",
+    inputHash: "hash-terminal-completed",
+    args: { command: "pwd", cwd: "." },
+    status: "completed",
+    summary: {
+      source: "tool",
+      status: "completed",
+      toolId: "terminal_session",
+      inputHash: "hash-terminal-completed",
+      actionTaken: 'Executed terminal command "pwd".',
+      keyFindings: ["exitCode=0", "stdout=D:\\workspace\\rag-demo"],
+      answerReadiness: {
+        canAnswer: true,
+        reason: "Terminal command output is available for answer generation.",
+      },
+      data: {
+        kind: "terminal_session",
+        command: "pwd",
+        exitCode: 0,
+        stdoutPreview: "D:\\workspace\\rag-demo",
+        stderrPreview: "",
+        stdoutEncoding: "utf16le",
+        stderrEncoding: "utf16le",
+        timedOut: false,
+        truncated: false,
+        binaryDetected: false,
+        violations: [],
+        outputInterpretable: true,
+        canAnswerCommandQuestion: true,
+      },
+    },
+    result: {
+      command: "pwd",
+      stdout: "D:\\workspace\\rag-demo",
+      stderr: "",
+      exitCode: 0,
+      timedOut: false,
+    },
+    startedAt: "2026-07-06T10:00:00.000Z",
+    finishedAt: "2026-07-06T10:00:01.000Z",
+  });
+
+  assert.equal(observation.status, "completed");
+  assert.equal(observation.toolId, "terminal_session");
+  assert.deepEqual(observation.argsPreview, { command: "pwd", cwd: "." });
+  assert.deepEqual(observation.resultPreview, {
+    kind: "terminal_session",
+    command: "pwd",
+    exitCode: 0,
+    stdoutPreview: "D:\\workspace\\rag-demo",
+    stderrPreview: "",
+    stdoutEncoding: "utf16le",
+    stderrEncoding: "utf16le",
+    timedOut: false,
+    truncated: false,
+    binaryDetected: false,
+    violations: [],
+    outputInterpretable: true,
+    canAnswerCommandQuestion: true,
+  });
+});
+
 test("maps failed recoverable tool execution into a failed_recoverable execution observation", () => {
   const observation = toExecutionObservationFromToolExecution({
     toolCallId: "tool-call-recoverable",
@@ -192,6 +257,37 @@ test("maps pending approval into a waiting_approval execution observation", () =
   assert.equal(observation.actionType, "approval");
   assert.equal(observation.status, "waiting_approval");
   assert.deepEqual(observation.argsPreview, { command: "dir" });
+  assert.deepEqual(observation.suggestedNextActions, [
+    "wait_for_approval",
+    "resume_after_approval",
+  ]);
+});
+
+test("maps terminal_session awaiting approval tool execution into a waiting_approval execution observation", () => {
+  const observation = toExecutionObservationFromToolExecution({
+    toolCallId: "tool-call-terminal-approval",
+    toolId: "terminal_session",
+    inputHash: "hash-terminal-approval",
+    args: { command: "pnpm check", timeoutMs: 2000 },
+    status: "awaiting_approval",
+    approval: {
+      id: "approval-terminal-1",
+      runId: "run-1",
+      stepId: "tool",
+      toolId: "terminal_session",
+      toolCallId: "tool-call-terminal-approval",
+      inputHash: "hash-terminal-approval",
+      reason: "terminal_session requires reviewed approval.",
+      input: { command: "pnpm check", timeoutMs: 2000 },
+      createdAt: "2026-07-06T10:00:02.000Z",
+    },
+    startedAt: "2026-07-06T10:00:00.000Z",
+    finishedAt: "2026-07-06T10:00:01.000Z",
+  });
+
+  assert.equal(observation.status, "waiting_approval");
+  assert.equal(observation.recoverable, false);
+  assert.equal(observation.reason, "terminal_session requires reviewed approval.");
   assert.deepEqual(observation.suggestedNextActions, [
     "wait_for_approval",
     "resume_after_approval",

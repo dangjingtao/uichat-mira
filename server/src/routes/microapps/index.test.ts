@@ -15,6 +15,7 @@ import {
   type ImageGenerationJob,
 } from "@/microapps/image-generation/index.js";
 import type { MailCenterRouteService } from "./index.js";
+import type { NewsHubRouteService } from "./index.js";
 import { getLoggerConfig } from "@/logger";
 import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 import { sendRouteError } from "@/utils/route-errors.js";
@@ -97,9 +98,31 @@ const createMailCenterServiceStub = (): MailCenterRouteService => ({
   },
 });
 
+const createNewsHubServiceStub = (): NewsHubRouteService => ({
+  getOverview() {
+    return {
+      sources: [],
+      items: [],
+      total: 0,
+      generatedAt: "2026-07-06T12:00:00.000Z",
+    };
+  },
+  async refresh() {
+    return {
+      startedAt: "2026-07-06T12:00:00.000Z",
+      finishedAt: "2026-07-06T12:00:01.000Z",
+      fetchedCount: 0,
+      insertedCount: 0,
+      updatedCount: 0,
+      sources: [],
+    };
+  },
+});
+
 const createApp = async (
   service: ImageGenerationRouteService,
   mailCenterService: MailCenterRouteService = createMailCenterServiceStub(),
+  newsHubService: NewsHubRouteService = createNewsHubServiceStub(),
 ) => {
   const app = Fastify({
     logger: getLoggerConfig(),
@@ -140,6 +163,7 @@ const createApp = async (
       },
     },
     mailCenterService,
+    newsHubService,
   });
   return app;
 };
@@ -399,6 +423,91 @@ test("microapps mail center overview route returns sanitized account list", asyn
   assert.equal(response.json().data.accounts[0].hasSmtpPassword, true);
   assert.equal(response.json().data.accounts[0].hasImapPassword, true);
   assert.equal(response.json().data.inbox.messages[0].subject, "Hello");
+
+  await app.close();
+});
+
+test("microapps news hub overview route returns aggregated items", async () => {
+  const app = await createApp(
+    {
+      async createGeneration() {
+        return createTestJob();
+      },
+      async getGeneration() {
+        return createTestJob();
+      },
+    },
+    createMailCenterServiceStub(),
+    {
+      getOverview() {
+        return {
+          sources: [
+            {
+              key: "hn-frontpage",
+              name: "Hacker News Front Page",
+              sourceType: "api",
+              fetchUrl: "https://hn.algolia.com/api/v1/search?tags=front_page",
+              siteUrl: "https://news.ycombinator.com/",
+              topic: "technology",
+              lang: "en",
+              tags: ["hacker-news", "community"],
+              itemCount: 12,
+              lastPublishedAt: "2026-07-06T11:00:00.000Z",
+              lastIngestedAt: "2026-07-06T11:05:00.000Z",
+            },
+          ],
+          items: [
+            {
+              id: "news-1",
+              sourceType: "api",
+              sourceName: "Hacker News Front Page",
+              sourceKey: "hn-frontpage",
+              externalId: "123",
+              title: "A good post",
+              summary: "Short summary",
+              contentText: "Longer summary",
+              url: "https://example.com/post",
+              author: "dang",
+              publishedAt: "2026-07-06T11:00:00.000Z",
+              ingestedAt: "2026-07-06T11:05:00.000Z",
+              lang: "en",
+              topic: "technology",
+              tags: ["hacker-news"],
+              rawPayload: {},
+              createdAt: "2026-07-06T11:05:00.000Z",
+              updatedAt: "2026-07-06T11:05:00.000Z",
+            },
+          ],
+          total: 1,
+          generatedAt: "2026-07-06T11:05:00.000Z",
+        };
+      },
+      async refresh() {
+        return {
+          startedAt: "2026-07-06T11:00:00.000Z",
+          finishedAt: "2026-07-06T11:05:00.000Z",
+          fetchedCount: 1,
+          insertedCount: 1,
+          updatedCount: 0,
+          sources: [],
+        };
+      },
+    },
+  );
+  const token = createToken();
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/microapps/news-hub/overview?limit=20",
+    headers: {
+      authorization: `Bearer ${token}`,
+    },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.json().data.total, 1);
+  assert.equal(response.json().data.items[0].title, "A good post");
+  assert.equal(response.json().data.sources[0].key, "hn-frontpage");
 
   await app.close();
 });

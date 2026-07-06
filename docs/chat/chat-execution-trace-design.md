@@ -267,6 +267,19 @@ tool 节点详情建议复用现有 detail drawer 的结构，不新造单独 mo
 
 如果 detail drawer 当前字段命名过于 RAG 化，再做第二轮收口。
 
+### 7.4 Agent 节点文案约束
+
+Agent execution trace 的 `summary` 不能只写成“已完成决策”或内部字段名。
+
+用户可见轨迹至少要直接说清：
+
+- 失败的是哪一步
+- 下一步准备改做什么
+- 是否进入审批等待
+- 审批通过后是否已经恢复执行
+
+也就是说，`summary` 应优先表达推进语义，例如“read_open 执行失败，正在重新判断下一步”“审批已通过，继续恢复 terminal_session 的执行”，而不是只暴露 `selectedActionType=use_tool` 这类内部值。
+
 ---
 
 ## 8. 实施分阶段

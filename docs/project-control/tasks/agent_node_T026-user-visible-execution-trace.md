@@ -14,7 +14,7 @@ related:
   - docs/project-control/tasks/agent_node_T021-agent-execution-observation.md
   - docs/chat/agent-loop-v1.7-construction-plan.md
   - docs/chat/chat-execution-trace-design.md
-task_state: TODO
+task_state: DONE
 ---
 
 # agent_node_T026 user visible execution trace
@@ -43,6 +43,7 @@ task_state: TODO
 
 - `server/src/agent/trace.ts`
 - `server/src/agent/node-runtime.ts`
+- `server/src/agent/planner/node.ts`
 - `server/src/agent/nodes/tool-node.ts`
 - `server/src/agent/resume.ts`
 - `docs/chat/chat-execution-trace-design.md`
@@ -71,9 +72,10 @@ task_state: TODO
 
 - execution node 事件测试
 - trace summary/details 断言
+- `2026-07-06` 已执行：`pnpm --filter @ui-chat-mira/server test -- src/agent/__tests__/trace.test.ts src/agent/__tests__/graph.test.ts src/agent/__tests__/resume.test.ts src/agent/__tests__/execution-observation.test.ts`
+- `2026-07-06` 已执行：`pnpm check`
 
 ## Risk Points
 
 - 如果直接依赖未稳定 observation 字段，会导致返工
 - 容易把“内部调试信息”误当“用户可见轨迹”
-
