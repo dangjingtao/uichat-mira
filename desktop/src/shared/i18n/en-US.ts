@@ -944,7 +944,7 @@ const enUS = {
         miniTitle: "Model Settings",
         title: "Model Settings",
         description:
-          "On this page, you can select and configure language models for Q&A. The platform handles connections and model synchronization, while this page displays the current role configurations and allows you to save parameters directly.",
+          "This page separates default role models, provider connections, model sync, and built-in local models so the current binding state is easier to read and adjust.",
       },
       actions: {
         resetDefault: "Reset Default Models",
@@ -954,17 +954,39 @@ const enUS = {
       resetModal: {
         title: "Confirm Reset Default Models",
         description:
-          "This will clear the default models for LLM, Embedding, Rerank, Task, and Evaluation, and restore default parameters.",
+          "This will clear the default bindings for LLM, Embedding, Rerank, Task, AgentTask, Evaluation, and Image Generation, and restore default parameters.",
         warning:
           "This operation will affect the default model selection for current conversations and knowledge bases.",
         success: "Default models have been reset",
         failed: "Reset failed",
       },
       defaultCard: {
-        platformSettingsTitle: "Platform Model Settings",
+        platformSettingsTitle: "Provider Connections and Role Bindings",
         close: "Close",
         done: "Done",
         syncing: "Synchronizing model configuration...",
+      },
+      groups: {
+        chat: {
+          title: "Chat",
+          description: "Default models used by the main chat experience.",
+        },
+        agentTask: {
+          title: "Agent / Task",
+          description: "Current bindings for lightweight tasks and agent-specific planning.",
+        },
+        knowledgeBase: {
+          title: "Knowledge Base",
+          description: "Default models used for vectorization and reranking.",
+        },
+        evaluation: {
+          title: "Evaluation",
+          description: "Default bindings for evaluation package generation and judge models.",
+        },
+        imageGeneration: {
+          title: "Image Generation",
+          description: "Image-generation bindings stay separate from chat parameter controls.",
+        },
       },
       config: {
         llm: {
@@ -976,6 +998,12 @@ const enUS = {
           subtitle: "For task execution and workflow orchestration",
           readOnlyHint:
             "The default binding for task models can be adjusted in platform model settings; parameters are managed by the system for lightweight task scheduling such as retrieval rewriting. The current interface only displays the effective configuration.",
+        },
+        agentTask: {
+          title: "AgentTask Model",
+          subtitle: "For agent-specific task planning and execution",
+          readOnlyHint:
+            "The default binding for AgentTask can be adjusted in platform model settings. If it is not configured yet, the backend will temporarily fall back to the existing Task model so Agent flows remain available.",
         },
         evaluation: {
           title: "Evaluation Model",
@@ -989,6 +1017,13 @@ const enUS = {
         rerank: {
           title: "ReRank",
           subtitle: "For result reranking and relevance assessment",
+        },
+        imageGeneration: {
+          title: "Image Generation Model",
+          subtitle:
+            "For default image-generation model binding; the first pass only manages the default role",
+          readOnlyHint:
+            "Image generation currently supports default role binding only. Runtime image calls will be connected in a later task.",
         },
         configured: "Configured",
         builtInReady: "Built-in Ready",
@@ -1005,23 +1040,62 @@ const enUS = {
         saving: "Saving...",
         saved: "Parameters saved",
         saveFailed: "Failed to save parameters",
+        providerTemplate: "Template: {{template}}",
+        connectionLabel: "Connection: {{provider}}",
+        noEditableParams:
+          "This role does not expose editable runtime parameters on this page. Adjust the default binding from the provider connections panel instead.",
       },
-      platform: {
-        title: "Platform List",
-        bound: "Bound {{roles}}",
-        waitingSync: "Waiting for model sync",
+      connections: {
+        sidebarTitle: "Provider Connections",
+        sidebarDescription:
+          "Browse built-in and custom connections on the left, then inspect connection info, capabilities, synced models, and role bindings on the right.",
+        builtinGroupTitle: "Built-in providers",
+        builtinGroupDescription: "System-managed providers that are ready to configure.",
+        customGroupTitle: "Custom providers",
+        customGroupDescription: "User-created OpenAI-compatible connection instances.",
+        builtinBadge: "Built-in",
+        customBadge: "Custom",
+        boundSummary: "Bound {{roles}}",
+        unassignedSummary: "No default role bindings yet",
+        emptyGroup: "There are no connections in this group yet.",
+        loading: "Loading...",
+        sectionTitle: "Connection",
+        sectionDescription:
+          "Manage the display name, base URL, and API key here, then sync the provider models.",
+      },
+      capabilities: {
+        sectionTitle: "Capabilities",
+        sectionDescription:
+          "Capability badges come from the stable backend contract. The frontend only renders what the backend already reports.",
+        chat: "Chat",
+        embedding: "Embedding",
+        rerank: "Rerank",
+        image: "Image",
       },
       api: {
         selectPlatform: "Please select a platform on the left.",
         description:
-          "After saving the connection configuration, synchronize the model list through the server; successful synchronization indicates the platform link is available.",
+          "Confirm the connection first, then synchronize the model list, and finally bind a synced model to each default role.",
+        displayName: "Display Name",
+        displayNamePlaceholder: "Enter a display name",
+        connectionId: "Connection ID",
         selectModel: "Select model...",
         noModels: "No models available, please sync first",
+        fetchFailed: "Fetch failed, please sync again",
         apiKey: "API Key",
         apiKeyPlaceholder: "Enter API key",
         apiUrl: "API URL",
         apiUrlPlaceholder: "Enter API URL",
         currentModel: "Current Model",
+        syncedModelsTitle: "Synced Models",
+        syncedModelsDescription:
+          "After sync succeeds, choose which model should be bound to the selected role.",
+        roleBindingsTitle: "Default Role Bindings",
+        roleBindingsDescription:
+          "Role bindings are grouped by product purpose and rendered from shared role metadata.",
+        lastSyncedAt: "Last synced: {{value}}",
+        neverSynced: "This provider has not completed a successful model sync yet.",
+        unassigned: "Unassigned",
         syncAriaLabel: "Save configuration and sync models",
         syncSuccess: "Model synchronization successful",
         syncFailed: "Failed to sync models",
@@ -1029,7 +1103,9 @@ const enUS = {
         setDefaultEmbedding: "Set as Default Embedding",
         setDefaultRerank: "Set as Default ReRank",
         setDefaultTask: "Set as Default Task",
+        setDefaultAgentTask: "Set as Default AgentTask",
         setDefaultEvaluation: "Set as Default Evaluation Model",
+        setDefaultImageGeneration: "Set as Default Image Generation Model",
         setting: "Setting...",
         selectModelFirst: "Please select a model first",
         updatedLlm: "Default LLM model updated",

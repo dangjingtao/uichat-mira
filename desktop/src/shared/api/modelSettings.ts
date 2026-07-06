@@ -1,4 +1,4 @@
-import { get, post, put } from "../lib/request";
+import { del, get, post, put } from "../lib/request";
 import type { ProviderCode } from "../providerCatalog";
 
 export type { ProviderCode } from "../providerCatalog";
@@ -7,7 +7,9 @@ export type RoleModelType =
   | "embedding"
   | "rerank"
   | "task"
-  | "evaluation";
+  | "agentTask"
+  | "evaluation"
+  | "imageGeneration";
 export type ProviderStatus = "idle" | "syncing" | "connected" | "error";
 
 export interface RoleModelConfig {
@@ -15,6 +17,8 @@ export interface RoleModelConfig {
   type: RoleModelType;
   name: string;
   providerCode: ProviderCode | null;
+  providerConnectionId: string | null;
+  providerTemplateCode: string | null;
   remoteModelId: string | null;
   params: Record<string, unknown>;
   isDefault: boolean;
@@ -23,7 +27,10 @@ export interface RoleModelConfig {
 }
 
 export interface ProviderSummary {
+  id: string;
   code: ProviderCode;
+  templateCode: string;
+  providerCode: string | null;
   displayName: string;
   baseUrl: string;
   hasApiKey: boolean;
@@ -31,11 +38,23 @@ export interface ProviderSummary {
   lastError: string | null;
   lastSyncedAt: string | null;
   assignedRoles: RoleModelType[];
+  isSystem: boolean;
+  capabilities: {
+    syncAdapter: string;
+    chatAdapter: string;
+    embeddingAdapter: string;
+    rerankAdapter: string;
+    imageAdapter: string;
+    supportsRoles: RoleModelType[];
+  };
 }
 
 export interface ProviderDetail {
   provider: {
+    id: string;
     code: ProviderCode;
+    templateCode: string;
+    providerCode: string | null;
     displayName: string;
     baseUrl: string;
     apiKey: string;
@@ -43,6 +62,8 @@ export interface ProviderDetail {
     status: ProviderStatus;
     lastError: string | null;
     lastSyncedAt: string | null;
+    isSystem: boolean;
+    capabilities: ProviderSummary["capabilities"];
   };
   models: Array<{
     id: string;
@@ -52,10 +73,20 @@ export interface ProviderDetail {
     RoleModelType,
     {
       providerCode: ProviderCode;
+      providerConnectionId: string;
+      providerTemplateCode: string | null;
       remoteModelId: string;
       modelName: string;
     } | null
   >;
+}
+
+export interface ProviderTemplateSummary {
+  code: string;
+  displayName: string;
+  defaultBaseUrl: string;
+  capabilities: ProviderSummary["capabilities"];
+  isCustomTemplate: boolean;
 }
 
 export interface SyncModelsResponse {
@@ -64,6 +95,13 @@ export interface SyncModelsResponse {
     id: string;
     name: string;
   }>;
+}
+
+export interface CreateProviderConnectionPayload {
+  templateCode: string;
+  displayName: string;
+  baseUrl?: string;
+  apiKey?: string;
 }
 
 export async function getRoleModelConfigs(): Promise<RoleModelConfig[]> {
@@ -81,17 +119,31 @@ export async function getProviders(): Promise<ProviderSummary[]> {
   return get<ProviderSummary[]>("/providers");
 }
 
+export async function getProviderTemplates(): Promise<ProviderTemplateSummary[]> {
+  return get<ProviderTemplateSummary[]>("/provider-templates");
+}
+
 export async function getProviderDetail(
   providerCode: ProviderCode,
 ): Promise<ProviderDetail> {
   return get<ProviderDetail>(`/providers/${providerCode}`);
 }
 
+export async function createProviderConnection(
+  payload: CreateProviderConnectionPayload,
+) {
+  return post("/providers", payload);
+}
+
 export async function saveProviderConfig(
   providerCode: ProviderCode,
-  payload: { baseUrl: string; apiKey: string },
+  payload: { displayName?: string; baseUrl: string; apiKey: string },
 ) {
   return put(`/providers/${providerCode}`, payload);
+}
+
+export async function deleteProviderConnection(providerCode: ProviderCode) {
+  return del(`/providers/${providerCode}`);
 }
 
 export async function syncProviderModels(
@@ -104,7 +156,7 @@ export async function selectProviderRoleModel(
   providerCode: ProviderCode,
   role: RoleModelType,
   remoteModelId: string,
-  connectionPayload?: { baseUrl: string; apiKey: string },
+  connectionPayload?: { displayName?: string; baseUrl: string; apiKey: string },
 ): Promise<RoleModelConfig> {
   return put<RoleModelConfig>(`/providers/${providerCode}/select-model/${role}`, {
     remoteModelId,

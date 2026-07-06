@@ -2,7 +2,7 @@
 status: current
 priority: P3
 owner: runtime
-last_verified: 2026-07-03
+last_verified: 2026-07-06
 layer: project-control
 module: ProjectControl
 feature: CoreToolsWorkspaceMutationBoundaryRetention
@@ -12,7 +12,7 @@ related:
   - docs/tooling-runtime/core-tool-rectification-ledger.md
   - docs/tooling-runtime/core-tool-matrix-review.md
   - docs/tooling-runtime/tools-protocol.md
-task_state: READY_FOR_REVIEW
+task_state: DONE
 ---
 
 # core_tools_T019 Workspace Mutation Boundary Retention
@@ -43,7 +43,7 @@ task_state: READY_FOR_REVIEW
 ## Verification
 
 - `pnpm --filter @ui-chat-mira/server typecheck`
-- `pnpm --filter @ui-chat-mira/server test -- src/mcp/tools/edit*.test.ts src/agent/**/*.test.ts`
+- `pnpm --filter @ui-chat-mira/server test -- src/mcp/tools/edit-file.tool.test.ts src/agent/intent/__tests__/task-capability-selector.test.ts`
 
 ## Notes
 
@@ -59,8 +59,9 @@ task_state: READY_FOR_REVIEW
   - `delete / move` 这类 Workspace Mutation 语义不会被 `edit_file` 承接
   - 目录路径与目录目标会被显式拒绝，继续保持 Workspace Mutation 边界隔离
 - 验证：
-  - `pnpm --filter @ui-chat-mira/server test -- src/mcp/tools/edit-file.tool.test.ts src/agent/intent/task-capability-selector.test.ts`
-    - 结果：通过，`27 passed`
+  - `pnpm --filter @ui-chat-mira/server test -- src/mcp/tools/edit-file.tool.test.ts src/agent/intent/__tests__/task-capability-selector.test.ts`
+    - 结果：通过，`30 passed`
   - `pnpm --filter @ui-chat-mira/server typecheck`
-    - 结果：当前分支失败
-    - 说明：失败点位于 `server/src/mcp/harness/capability-profiles.ts`，是当前分支既有 `actionProfileId` / `actionProfileTitle` 字段类型未对齐，不属于 `T019` 允许改动范围
+    - 结果：通过
+  - 说明：
+    - 任务卡原测试 glob `src/agent/**/*.test.ts` 在当前仓库已不能覆盖迁移后的 `src/agent/intent/__tests__/task-capability-selector.test.ts`，因此验证命令同步收敛为当前真实测试路径

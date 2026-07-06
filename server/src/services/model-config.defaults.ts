@@ -30,6 +30,10 @@ export const MANAGED_TASK_PARAMS = {
   presencePenalty: 0,
 } as const;
 
+export const DEFAULT_IMAGE_GENERATION_PARAMS = {
+  enabled: true,
+} as const;
+
 export const DEFAULT_EVALUATION_PARAMS = {
   enabled: true,
   temperature: 0.2,
@@ -64,6 +68,13 @@ export const DEFAULT_ROLE_CONFIGS: DefaultRoleConfig[] = [
     params: { ...MANAGED_TASK_PARAMS },
   },
   {
+    type: "agentTask",
+    name: "",
+    providerCode: null,
+    remoteModelId: null,
+    params: { ...MANAGED_TASK_PARAMS },
+  },
+  {
     type: "embedding",
     name: "bge-large:latest",
     providerCode: "ollama",
@@ -94,6 +105,13 @@ export const DEFAULT_ROLE_CONFIGS: DefaultRoleConfig[] = [
     providerCode: null,
     remoteModelId: null,
     params: { ...DEFAULT_EVALUATION_PARAMS },
+  },
+  {
+    type: "imageGeneration",
+    name: "",
+    providerCode: null,
+    remoteModelId: null,
+    params: { ...DEFAULT_IMAGE_GENERATION_PARAMS },
   },
 ];
 
@@ -156,6 +174,60 @@ export const PARAM_TEMPLATES: ParamTemplateSeed[] = [
     model_type: "task",
     param_key: "temperature",
     param_label: "Temperature",
+    param_type: "number",
+    step: 0.1,
+    options: null,
+    default_value: 0,
+  },
+  {
+    model_type: "agentTask",
+    param_key: "temperature",
+    param_label: "Temperature",
+    param_type: "number",
+    step: 0.1,
+    options: null,
+    default_value: 0,
+  },
+  {
+    model_type: "agentTask",
+    param_key: "topP",
+    param_label: "Top P",
+    param_type: "number",
+    step: 0.1,
+    options: null,
+    default_value: 1,
+  },
+  {
+    model_type: "agentTask",
+    param_key: "topK",
+    param_label: "Top K",
+    param_type: "number",
+    step: null,
+    options: null,
+    default_value: 20,
+  },
+  {
+    model_type: "agentTask",
+    param_key: "maxTokens",
+    param_label: "Max Tokens",
+    param_type: "number",
+    step: null,
+    options: null,
+    default_value: 128,
+  },
+  {
+    model_type: "agentTask",
+    param_key: "frequencyPenalty",
+    param_label: "Frequency Penalty",
+    param_type: "number",
+    step: 0.1,
+    options: null,
+    default_value: 0,
+  },
+  {
+    model_type: "agentTask",
+    param_key: "presencePenalty",
+    param_label: "Presence Penalty",
     param_type: "number",
     step: 0.1,
     options: null,
@@ -325,6 +397,15 @@ export const PARAM_TEMPLATES: ParamTemplateSeed[] = [
     step: 0.1,
     options: null,
     default_value: 0.5,
+  },
+  {
+    model_type: "imageGeneration",
+    param_key: "enabled",
+    param_label: "Enabled",
+    param_type: "boolean",
+    step: null,
+    options: null,
+    default_value: true,
   },
 ];
 

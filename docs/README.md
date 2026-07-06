@@ -57,6 +57,7 @@ Related:
 - `architecture/rag-langgraph-flow.md`
 - `architecture/api-response-spec.md`
 - `architecture/model-config-api.md`
+- `architecture/model-settings-roadmap.md`
 - `architecture/context-budget-runtime.md`
 
 ### SKILL
@@ -69,6 +70,7 @@ Related:
 - `chat/README.md`
 - `uchat.md`
 - `uchat-internal-maintenance.md`
+- `chat/agent-loop-v1.7-construction-plan.md`
 - `chat/chat-system-practices.md`
 - `chat/agent-frontend-workspace-smoke-method.md`
 - `chat/chat-tool-integration-research.md`
@@ -104,6 +106,7 @@ Related:
 - `developments/defect-log.md`
 - `developments/product-roadmap-priorities.md`
 - `project-control/README.md`
+- `project-control/model-settings-workboard.md`
 
 ### 集成
 

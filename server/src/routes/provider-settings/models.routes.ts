@@ -7,10 +7,10 @@ import {
 } from "@/utils/index.js";
 import { badRequest, routeHandler } from "@/utils/route-errors.js";
 import { providerSettingsRouteSchemas } from "./schemas.js";
-import type { ProviderCodeParams } from "./types.js";
+import type { ProviderIdParams } from "./types.js";
 
 export const registerProviderModelRoutes = async (app: FastifyInstance) => {
-  app.post<{ Params: ProviderCodeParams }>(
+  app.post<{ Params: ProviderIdParams }>(
     "/providers/:providerCode/sync-models",
     { schema: providerSettingsRouteSchemas.syncProviderModels },
     routeHandler("Failed to sync provider models", async (request) => {

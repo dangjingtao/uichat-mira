@@ -40,6 +40,7 @@ docs/project-control/
   README.md
   governance-principles.md
   project-control-ledger.md
+  model-settings-workboard.md
   agent-workboard.md
   testEvidence/
     agent-nodes-V1.5 全新线程复测.md
@@ -77,6 +78,12 @@ The single project-level control ledger.
 All active project streams, review queues, blockers, and task indexes must be recorded here. Do not create another project-level workboard. Older workboards may remain as evidence sources, but they are not the current project ledger.
 
 Task status is sourced from each task card's `task_state`. The ledger summarizes and indexes task status; it must not override a task card.
+
+### `model-settings-workboard.md`
+
+Model settings 专项工作台账。
+
+It tracks the `modelset_` task package for model role expansion, image generation providers, custom provider instances, and the model settings UI refinement. It is scoped to this model settings roadmap and does not replace `project-control-ledger.md`.
 
 ### `agent-workboard.md`
 

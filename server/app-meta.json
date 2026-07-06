@@ -38,11 +38,11 @@
         {
           "version": "0.7.1",
           "commit": {
-            "hash": "4c2d570a8586f063e38beaf45a09a5d42f2c63db",
-            "shortHash": "4c2d570",
-            "message": "fix: wave2",
+            "hash": "0952670ff74e0415b36ee303f1ea5ea8e84e3adb",
+            "shortHash": "0952670",
+            "message": "feat:micro APP",
             "author": "Tomz",
-            "date": "2026-07-06T02:52:08+08:00"
+            "date": "2026-07-06T07:03:41+08:00"
           }
         },
         {

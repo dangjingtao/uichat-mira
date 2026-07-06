@@ -29,6 +29,7 @@ export const registerProviderAssignmentRoutes = async (
           request.params.role,
           request.body.remoteModelId,
           {
+            displayName: request.body.displayName,
             baseUrl: request.body.baseUrl,
             apiKey: request.body.apiKey,
           },

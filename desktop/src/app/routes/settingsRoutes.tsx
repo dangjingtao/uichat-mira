@@ -41,6 +41,7 @@ import MicroAppsSettings from "@/features/Settings/pages/MicroApps/index";
 import MicroAppDetailPage from "@/features/Settings/pages/MicroApps/Detail";
 import ImageGenerationStudioPage from "@/features/Settings/pages/MicroApps/ImageGeneration";
 import ComputerUseStudioPage from "@/features/Settings/pages/MicroApps/ComputerUse";
+import MailCenterPage from "@/features/Settings/pages/MicroApps/MailCenter";
 
 export type SettingsNavGroup =
   | "general"
@@ -129,6 +130,10 @@ const settingsRouteTree: SettingsRouteConfig[] = [
   {
     path: "micro-apps/computer-use-studio",
     element: <ComputerUseStudioPage />,
+  },
+  {
+    path: "micro-apps/mail-center",
+    element: <MailCenterPage />,
   },
   {
     path: "knowledge-base/add",

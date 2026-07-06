@@ -14,6 +14,7 @@ import {
   type RoleModelType,
 } from "@/shared/api/modelSettings";
 import {
+  hasConfiguredProviderBinding,
   resolveGlobalModelAccessStatus,
   type GlobalModelAccessStatus,
 } from "@/shared/business/modelAccess";
@@ -37,7 +38,9 @@ const emptyConfigMap: RoleModelConfigMap = {
   embedding: null,
   rerank: null,
   task: null,
+  agentTask: null,
   evaluation: null,
+  imageGeneration: null,
 };
 
 const disconnectedModelAccessStatus: GlobalModelAccessStatus = {
@@ -54,7 +57,7 @@ const ROLE_MODEL_CONFIG_CHANGED_EVENT = "role-model-config-changed";
 function hasConfiguredRoleModel(
   config: RoleModelConfig | null | undefined,
 ): boolean {
-  return Boolean(config?.providerCode && config?.remoteModelId);
+  return hasConfiguredProviderBinding(config);
 }
 
 function buildConfigMap(configs: RoleModelConfig[]): RoleModelConfigMap {

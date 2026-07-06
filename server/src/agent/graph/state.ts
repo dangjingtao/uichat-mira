@@ -18,6 +18,7 @@ import type {
   AgentToolExposureState,
 } from "../types";
 import type { EmitAgentExecutionNode } from "../node-runtime";
+import { createInitialCurrentTaskFrame } from "../node-runtime";
 
 export const AGENT_EMIT_CONFIG_KEY = "agent:emitExecutionNode";
 export const DEFAULT_AGENT_MAX_ITERATIONS = 3;
@@ -28,6 +29,7 @@ export const AgentGraphStateAnnotation = Annotation.Root({
   userId: Annotation<number>,
   goal: Annotation<AgentGoal>,
   plan: Annotation<AgentPlan>,
+  currentTaskFrame: Annotation<AgentGraphOutput["currentTaskFrame"] | undefined>,
   messages: Annotation<NormalizedChatMessage[]>,
   requestContextMessages: Annotation<NormalizedChatMessage[] | undefined>,
   params: Annotation<Record<string, unknown> | undefined>,
@@ -106,6 +108,14 @@ export const createInitialAgentGraphState = (
   userId: input.userId,
   goal: input.goal,
   plan: input.plan,
+  currentTaskFrame:
+    input.currentTaskFrame ??
+    createInitialCurrentTaskFrame({
+      goal: input.goal,
+      messages: input.messages,
+      workspaceRoot: input.workspaceRoot,
+      knowledgeBaseId: input.knowledgeBaseId,
+    }),
   messages: input.messages,
   requestContextMessages: input.requestContextMessages,
   params: input.params,

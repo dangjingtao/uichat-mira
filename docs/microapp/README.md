@@ -137,6 +137,7 @@ Related:
 - `knowledge_ingest`
 - `org_directory_lookup`
 - `sales_copilot`
+- `mail_center`
 - `image_generation`
 - `computer_use`
 
@@ -285,6 +286,27 @@ Platform
 当前 docs-only POC 见：
 
 - `image-generation-microapp-poc.md`
+
+### `mail_center`
+
+作用：
+
+- 保存本地邮箱账号配置
+- 通过 SMTP 发送测试邮件
+- 通过 IMAP 拉取最近一批收件箱邮件
+- 在桌面内展示真实收件箱列表
+
+当前第一版只覆盖：
+
+- backend HTTP 路由
+- 本地 SQLite 账号与收件箱缓存
+- 邮件中心页面真实列表展示
+
+当前不覆盖：
+
+- 规则中心
+- 模板中心
+- 多端同步任务编排
 
 ### `computer_use`
 

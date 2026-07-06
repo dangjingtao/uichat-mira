@@ -10,8 +10,13 @@ export type GlobalModelAccessStatus = {
   rerankConnected: boolean;
 };
 
-function isRoleConnected(config: RoleModelConfig | undefined) {
-  return Boolean(config?.providerCode && config?.remoteModelId);
+export function hasConfiguredProviderBinding(
+  config: RoleModelConfig | null | undefined,
+) {
+  return Boolean(
+    config?.remoteModelId &&
+      (config.providerConnectionId || config.providerCode),
+  );
 }
 
 export function resolveGlobalModelAccessStatus(
@@ -24,9 +29,9 @@ export function resolveGlobalModelAccessStatus(
   }
 
   return {
-    llmConnected: isRoleConnected(byType.get("llm")),
-    embeddingConnected: isRoleConnected(byType.get("embedding")),
-    rerankConnected: isRoleConnected(byType.get("rerank")),
+    llmConnected: hasConfiguredProviderBinding(byType.get("llm")),
+    embeddingConnected: hasConfiguredProviderBinding(byType.get("embedding")),
+    rerankConnected: hasConfiguredProviderBinding(byType.get("rerank")),
   };
 }
 

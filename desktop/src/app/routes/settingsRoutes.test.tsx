@@ -87,6 +87,9 @@ vi.mock("@/features/Settings/pages/MicroApps/ImageGeneration", () => ({
 vi.mock("@/features/Settings/pages/MicroApps/ComputerUse", () => ({
   default: () => <div data-testid="computer-use-studio-page">computer-use-studio-page</div>,
 }));
+vi.mock("@/features/Settings/pages/MicroApps/MailCenter", () => ({
+  default: () => <div data-testid="mail-center-page">mail-center-page</div>,
+}));
 
 function NavigationProbe() {
   const items = useSettingsNavigationItems();
@@ -236,5 +239,31 @@ describe("settings routes", () => {
     render(<RouterProvider router={router} />);
 
     expect(screen.getByTestId("computer-use-studio-page")).toBeInTheDocument();
+  });
+
+  it("includes the mail center route under the micro apps path", () => {
+    expect(
+      settingsRoutes.some(
+        (route) => route.path === "micro-apps/mail-center",
+      ),
+    ).toBe(true);
+  });
+
+  it("mounts the mail center page at /settings/micro-apps/mail-center", () => {
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/settings",
+          children: settingsRoutes,
+        },
+      ],
+      {
+        initialEntries: ["/settings/micro-apps/mail-center"],
+      },
+    );
+
+    render(<RouterProvider router={router} />);
+
+    expect(screen.getByTestId("mail-center-page")).toBeInTheDocument();
   });
 });

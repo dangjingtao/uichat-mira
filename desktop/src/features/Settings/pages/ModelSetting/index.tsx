@@ -34,7 +34,9 @@ export default function ModelSettings() {
             resetProviderRoleModel("embedding"),
             resetProviderRoleModel("rerank"),
             resetProviderRoleModel("task"),
+            resetProviderRoleModel("agentTask"),
             resetProviderRoleModel("evaluation"),
+            resetProviderRoleModel("imageGeneration"),
           ]);
           await refresh();
           message.success(t("settings.model.resetModal.success"));

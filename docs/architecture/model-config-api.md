@@ -87,6 +87,33 @@ GET /models/param-templates
 GET /models/param-templates?type=llm
 ```
 
+### 读取服务商列表
+
+```http
+GET /providers
+```
+
+返回的每个 provider summary 现在包含：
+
+- `assignedRoles`：当前默认绑定到该 provider 的角色列表
+- `capabilities.syncAdapter`：模型同步协议
+- `capabilities.chatAdapter`：聊天协议
+- `capabilities.embeddingAdapter`：向量协议
+- `capabilities.rerankAdapter`：重排协议，`none` 表示不支持
+- `capabilities.imageAdapter`：生图协议，`none` 表示不支持
+- `capabilities.supportsRoles`：后端 catalog 认定该 provider 可承接的角色列表
+
+### 读取服务商详情
+
+```http
+GET /providers/:providerCode
+```
+
+`provider.capabilities` 与列表接口保持同一份能力真相，用于判断：
+
+- 当前 provider 是否支持 `imageGeneration`
+- 当前 provider 走哪种 adapter，而不是把生图混成 chat completion
+
 ### 列出模型配置
 
 ```http

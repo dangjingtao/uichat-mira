@@ -29,7 +29,11 @@ export const normalizeOpenAICompatibleBaseUrl = (baseUrl: string) => {
   }
 
   const normalized = trimTrailingSlash(baseUrl.trim());
-  if (normalized.match(/\/v\d+$/)) {
+  if (
+    normalized.match(/\/v\d+$/) ||
+    normalized.match(/\/v\d+beta\/openai$/i) ||
+    normalized.endsWith("/openai")
+  ) {
     return normalized;
   }
   return `${normalized}/v1`;

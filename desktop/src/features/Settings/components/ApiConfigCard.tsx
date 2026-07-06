@@ -6,6 +6,11 @@ import Card from "@/shared/ui/Card";
 import { TextInput } from "@/shared/ui/Input";
 import { Select } from "@/shared/ui/Select";
 import type { ProviderDetail, RoleModelType } from "@/shared/api/modelSettings";
+import {
+  MODEL_ROLE_GROUPS,
+  PROVIDER_CAPABILITY_GROUPS,
+  providerSupportsCapability,
+} from "../pages/ModelSetting/roleMeta";
 
 interface ApiConfigCardProps {
   detail: ProviderDetail | null;
@@ -14,12 +19,16 @@ interface ApiConfigCardProps {
   syncing?: boolean;
   assigningRole?: RoleModelType | null;
   syncError?: string | null;
+  onDisplayNameChange: (value: string) => void;
   onApiKeyChange: (value: string) => void;
   onApiUrlChange: (value: string) => void;
   onSelectedModelChange: (value: string) => void;
   onTestConnection: () => void;
   onSetDefaultRole: (role: RoleModelType) => void;
 }
+
+const sectionClassName =
+  "rounded-xl border border-border bg-surface-primary/80 p-3";
 
 const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
   detail,
@@ -28,6 +37,7 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
   syncing = false,
   assigningRole = null,
   syncError = null,
+  onDisplayNameChange,
   onApiKeyChange,
   onApiUrlChange,
   onSelectedModelChange,
@@ -38,9 +48,7 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
 
   if (!detail) {
     return (
-      <Card
-        className="flex h-full flex-1 items-center justify-center text-sm text-text-secondary"
-      >
+      <Card className="flex h-full flex-1 items-center justify-center text-sm text-text-secondary">
         {t("settings.model.api.selectPlatform")}
       </Card>
     );
@@ -59,19 +67,30 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
           {
             value: "",
             label: syncError
-              ? "fetch failed"
+              ? t("settings.model.api.fetchFailed")
               : t("settings.model.api.noModels"),
           },
         ];
 
   const isBusy = loading || syncing;
+  const providerKindKey = detail.provider.isSystem
+    ? "settings.model.connections.builtinBadge"
+    : "settings.model.connections.customBadge";
 
   return (
-    <Card className="flex h-full flex-1 flex-col" padding="sm">
-      <div className="mb-2.5 flex items-start justify-between gap-2.5">
-        <div className="space-y-0.5">
-          <div className="text-sm font-semibold text-text-primary">
-            {detail.provider.displayName}
+    <Card className="flex h-full flex-1 flex-col overflow-hidden" padding="sm">
+      <div className="mb-3 flex items-start justify-between gap-2.5">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-sm font-semibold text-text-primary">
+              {detail.provider.displayName}
+            </div>
+            <span className="rounded-full bg-surface-secondary px-2 py-0.5 text-[11px] font-medium text-text-secondary">
+              {t(providerKindKey)}
+            </span>
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+              {detail.provider.templateCode}
+            </span>
           </div>
           <div className="text-xs leading-4 text-text-secondary">
             {t("settings.model.api.description")}
@@ -85,41 +104,97 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
       </div>
 
       <div
-        className={`flex min-h-0 flex-1 flex-col space-y-2.5 ${
+        className={`flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1 ${
           loading ? "pointer-events-none opacity-60" : ""
         }`}
       >
-        <TextInput
-          label={t("settings.model.api.apiKey")}
-          type="password"
-          value={detail.provider.apiKey}
-          onChange={onApiKeyChange}
-          placeholder={t("settings.model.api.apiKeyPlaceholder")}
-          compact
-        />
+        <section className={sectionClassName}>
+          <div className="mb-2">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-text-tertiary">
+              {t("settings.model.connections.sectionTitle")}
+            </div>
+            <div className="mt-1 text-xs leading-5 text-text-secondary">
+              {t("settings.model.connections.sectionDescription")}
+            </div>
+          </div>
 
-        <div className="grid grid-cols-1 gap-1.5">
-          <TextInput
-            label={t("settings.model.api.apiUrl")}
-            value={detail.provider.baseUrl}
-            onChange={onApiUrlChange}
-            placeholder={t("settings.model.api.apiUrlPlaceholder")}
-            compact
-          />
-        </div>
-
-        <div className="flex items-start gap-2">
-          <div className="min-w-0 flex-1">
-            <Select
-              label={t("settings.model.api.currentModel")}
-              value={selectedModelId}
-              onChange={onSelectedModelChange}
-              options={modelOptions}
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+            <TextInput
+              label={t("settings.model.api.displayName")}
+              value={detail.provider.displayName}
+              onChange={onDisplayNameChange}
+              placeholder={t("settings.model.api.displayNamePlaceholder")}
               compact
-              error={syncError ?? undefined}
+            />
+            <TextInput
+              label={t("settings.model.api.connectionId")}
+              value={detail.provider.id}
+              onChange={() => void 0}
+              compact
+              disabled
+            />
+            <TextInput
+              label={t("settings.model.api.apiUrl")}
+              value={detail.provider.baseUrl}
+              onChange={onApiUrlChange}
+              placeholder={t("settings.model.api.apiUrlPlaceholder")}
+              compact
+            />
+            <TextInput
+              label={t("settings.model.api.apiKey")}
+              type="password"
+              value={detail.provider.apiKey}
+              onChange={onApiKeyChange}
+              placeholder={t("settings.model.api.apiKeyPlaceholder")}
+              compact
             />
           </div>
-          <div className="shrink-0 pt-6">
+        </section>
+
+        <section className={sectionClassName}>
+          <div className="mb-2">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-text-tertiary">
+              {t("settings.model.capabilities.sectionTitle")}
+            </div>
+            <div className="mt-1 text-xs leading-5 text-text-secondary">
+              {t("settings.model.capabilities.sectionDescription")}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {PROVIDER_CAPABILITY_GROUPS.map((capability) => {
+              const supported = providerSupportsCapability(
+                detail.provider,
+                capability.id,
+              );
+
+              return (
+                <span
+                  key={capability.id}
+                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                    supported
+                      ? "bg-success/10 text-success"
+                      : "bg-surface-secondary text-text-tertiary"
+                  }`}
+                >
+                  {t(capability.labelKey)}
+                </span>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className={sectionClassName}>
+          <div className="mb-2 flex items-start justify-between gap-2">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-text-tertiary">
+                {t("settings.model.api.syncedModelsTitle")}
+              </div>
+              <div className="mt-1 text-xs leading-5 text-text-secondary">
+                {t("settings.model.api.syncedModelsDescription")}
+              </div>
+            </div>
+
             <IconButton
               ariaLabel={t("settings.model.api.syncAriaLabel")}
               size="sm"
@@ -130,7 +205,24 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
               <RotateCcw className="h-4 w-4" />
             </IconButton>
           </div>
-        </div>
+
+          <Select
+            label={t("settings.model.api.currentModel")}
+            value={selectedModelId}
+            onChange={onSelectedModelChange}
+            options={modelOptions}
+            compact
+            error={syncError ?? undefined}
+          />
+
+          <div className="mt-2 text-xs text-text-secondary">
+            {detail.provider.lastSyncedAt
+              ? t("settings.model.api.lastSyncedAt", {
+                  value: detail.provider.lastSyncedAt,
+                })
+              : t("settings.model.api.neverSynced")}
+          </div>
+        </section>
 
         {detail.provider.lastError ? (
           <div className="flex items-start gap-2 rounded-ui-panel border border-danger-border bg-danger-soft px-3 py-2 text-xs text-danger-text">
@@ -139,58 +231,68 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
           </div>
         ) : null}
 
-        <div className="flex flex-wrap gap-1.5">
-          <Button
-            size="small"
-            variant="secondary"
-            onClick={() => onSetDefaultRole("llm")}
-            disabled={assigningRole === "llm" || !selectedModelId}
-          >
-            {assigningRole === "llm"
-              ? t("settings.model.api.setting")
-              : t("settings.model.api.setDefaultLlm")}
-          </Button>
-          <Button
-            size="small"
-            variant="secondary"
-            onClick={() => onSetDefaultRole("embedding")}
-            disabled={assigningRole === "embedding" || !selectedModelId}
-          >
-            {assigningRole === "embedding"
-              ? t("settings.model.api.setting")
-              : t("settings.model.api.setDefaultEmbedding")}
-          </Button>
-          <Button
-            size="small"
-            variant="secondary"
-            onClick={() => onSetDefaultRole("rerank")}
-            disabled={assigningRole === "rerank" || !selectedModelId}
-          >
-            {assigningRole === "rerank"
-              ? t("settings.model.api.setting")
-              : t("settings.model.api.setDefaultRerank")}
-          </Button>
-          <Button
-            size="small"
-            variant="secondary"
-            onClick={() => onSetDefaultRole("task")}
-            disabled={assigningRole === "task" || !selectedModelId}
-          >
-            {assigningRole === "task"
-              ? t("settings.model.api.setting")
-              : t("settings.model.api.setDefaultTask")}
-          </Button>
-          <Button
-            size="small"
-            variant="secondary"
-            onClick={() => onSetDefaultRole("evaluation")}
-            disabled={assigningRole === "evaluation" || !selectedModelId}
-          >
-            {assigningRole === "evaluation"
-              ? t("settings.model.api.setting")
-              : t("settings.model.api.setDefaultEvaluation")}
-          </Button>
-        </div>
+        <section className={sectionClassName}>
+          <div className="mb-2">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-text-tertiary">
+              {t("settings.model.api.roleBindingsTitle")}
+            </div>
+            <div className="mt-1 text-xs leading-5 text-text-secondary">
+              {t("settings.model.api.roleBindingsDescription")}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {MODEL_ROLE_GROUPS.map((group) => (
+              <div key={group.id} className="rounded-lg bg-surface-secondary/50 p-2.5">
+                <div className="mb-2 flex flex-col gap-0.5">
+                  <div className="text-sm font-medium text-text-primary">
+                    {t(group.titleKey)}
+                  </div>
+                  <div className="text-xs text-text-secondary">
+                    {t(group.descriptionKey)}
+                  </div>
+                </div>
+
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {group.roles.map((item) => (
+                    <Button
+                      key={item.role}
+                      size="small"
+                      variant="secondary"
+                      onClick={() => onSetDefaultRole(item.role)}
+                      disabled={assigningRole === item.role || !selectedModelId}
+                    >
+                      {assigningRole === item.role
+                        ? t("settings.model.api.setting")
+                        : t(item.actionLabelKey)}
+                    </Button>
+                  ))}
+                </div>
+
+                <div className="space-y-1.5">
+                  {group.roles.map((item) => {
+                    const assignment = detail.assignments[item.role];
+                    const summary = assignment
+                      ? `${assignment.providerCode} · ${assignment.modelName}`
+                      : t("settings.model.api.unassigned");
+
+                    return (
+                      <div
+                        key={`${group.id}:${item.role}:summary`}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 bg-surface-primary px-2.5 py-2 text-xs"
+                      >
+                        <span className="font-medium text-text-primary">
+                          {t(`settings.model.config.${item.role}.title`)}
+                        </span>
+                        <span className="text-text-secondary">{summary}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
     </Card>
   );

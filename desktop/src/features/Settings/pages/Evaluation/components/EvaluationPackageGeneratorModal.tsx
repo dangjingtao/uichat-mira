@@ -10,6 +10,7 @@ import {
   listKnowledgeBaseDocuments,
   type KnowledgeBaseSummary,
 } from "@/shared/api/knowledgeBase";
+import { hasConfiguredProviderBinding } from "@/shared/business/modelAccess";
 import { Button } from "@/shared/ui/Button";
 import { NumberInput, TextInput } from "@/shared/ui/Input";
 import { message } from "@/shared/ui/Message";
@@ -221,11 +222,11 @@ export default function EvaluationPackageGeneratorModal({
   const [checkingKnowledgeBase, setCheckingKnowledgeBase] = useState(false);
 
   const evaluationConfig = configMap.evaluation;
-  const hasEvaluationModel = Boolean(
-    evaluationConfig?.providerCode && evaluationConfig?.remoteModelId,
-  );
+  const hasEvaluationModel = hasConfiguredProviderBinding(evaluationConfig);
   const evaluationProviderLabel = evaluationConfig?.providerCode
     ? getProviderLabel(evaluationConfig.providerCode)
+    : evaluationConfig?.providerConnectionId
+      ? evaluationConfig.providerConnectionId
     : t("settings.evaluation.packageGenerator.notConfigured");
   const hasReadyDocuments =
     typeof readyStats?.documentCount === "number"

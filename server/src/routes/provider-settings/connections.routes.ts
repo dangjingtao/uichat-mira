@@ -4,7 +4,8 @@ import { success } from "@/utils/index.js";
 import { routeHandler } from "@/utils/route-errors.js";
 import { providerSettingsRouteSchemas } from "./schemas.js";
 import type {
-  ProviderCodeParams,
+  CreateProviderConnectionBody,
+  ProviderIdParams,
   SaveProviderConnectionBody,
 } from "./types.js";
 
@@ -12,13 +13,30 @@ export const registerProviderConnectionRoutes = async (
   app: FastifyInstance,
 ) => {
   app.get(
+    "/provider-templates",
+    { schema: providerSettingsRouteSchemas.listProviderTemplates },
+    routeHandler("Failed to get provider templates", async () =>
+      success(providerSettingsService.listProviderTemplates())),
+  );
+
+  app.get(
     "/providers",
     { schema: providerSettingsRouteSchemas.listProviders },
     routeHandler("Failed to get providers", async () =>
       success(providerSettingsService.getProviderSummaries())),
   );
 
-  app.get<{ Params: ProviderCodeParams }>(
+  app.post<{ Body: CreateProviderConnectionBody }>(
+    "/providers",
+    { schema: providerSettingsRouteSchemas.createProviderConnection },
+    routeHandler("Failed to create provider connection", async (request) =>
+      success(
+        providerSettingsService.createProviderConnection(request.body),
+        "Provider connection created",
+      )),
+  );
+
+  app.get<{ Params: ProviderIdParams }>(
     "/providers/:providerCode",
     { schema: providerSettingsRouteSchemas.getProviderDetail },
     routeHandler("Failed to get provider detail", async (request) =>
@@ -30,7 +48,7 @@ export const registerProviderConnectionRoutes = async (
   );
 
   app.put<{
-    Params: ProviderCodeParams;
+    Params: ProviderIdParams;
     Body: SaveProviderConnectionBody;
   }>(
     "/providers/:providerCode",
@@ -41,6 +59,15 @@ export const registerProviderConnectionRoutes = async (
         request.body,
       );
       return success(connection, "Provider config saved");
+    }),
+  );
+
+  app.delete<{ Params: ProviderIdParams }>(
+    "/providers/:providerCode",
+    { schema: providerSettingsRouteSchemas.deleteProviderConnection },
+    routeHandler("Failed to delete provider connection", async (request) => {
+      providerSettingsService.deleteProviderConnection(request.params.providerCode);
+      return success({ id: request.params.providerCode }, "Provider connection deleted");
     }),
   );
 };

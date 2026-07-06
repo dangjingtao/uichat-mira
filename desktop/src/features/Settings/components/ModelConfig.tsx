@@ -10,6 +10,7 @@ import {
   updateRoleModelConfigParams,
 } from "@/shared/api/modelSettings";
 import { getBuiltInLocalModel } from "@/shared/business/localModels";
+import { hasConfiguredProviderBinding } from "@/shared/business/modelAccess";
 import { getProviderLabel } from "@/shared/providerCatalog";
 import SettingsNotice from "./SettingsNotice";
 import SettingsStatBlock from "./SettingsStatBlock";
@@ -28,6 +29,7 @@ interface ModelMeta {
   badgeText: string;
   badgeClassName: string;
   params: ParamMeta[];
+  readOnlyHintKey?: string;
 }
 
 type ConfigValue = number | string | boolean;
@@ -63,6 +65,32 @@ const MODEL_META: Record<RoleModelType, ModelMeta> = {
     subtitleKey: "settings.model.config.task.subtitle",
     badgeText: "TSK",
     badgeClassName: "bg-warning/10 text-warning",
+    readOnlyHintKey: "settings.model.config.task.readOnlyHint",
+    params: [
+      { key: "temperature", label: "Temperature", type: "number", step: 0.1 },
+      { key: "topP", label: "Top P", type: "number", step: 0.1 },
+      { key: "topK", label: "Top K", type: "number" },
+      { key: "maxTokens", label: "Max Tokens", type: "number" },
+      {
+        key: "frequencyPenalty",
+        label: "Frequency Penalty",
+        type: "number",
+        step: 0.1,
+      },
+      {
+        key: "presencePenalty",
+        label: "Presence Penalty",
+        type: "number",
+        step: 0.1,
+      },
+    ],
+  },
+  agentTask: {
+    titleKey: "settings.model.config.agentTask.title",
+    subtitleKey: "settings.model.config.agentTask.subtitle",
+    badgeText: "AGT",
+    badgeClassName: "bg-warning/10 text-warning",
+    readOnlyHintKey: "settings.model.config.agentTask.readOnlyHint",
     params: [
       { key: "temperature", label: "Temperature", type: "number", step: 0.1 },
       { key: "topP", label: "Top P", type: "number", step: 0.1 },
@@ -142,6 +170,14 @@ const MODEL_META: Record<RoleModelType, ModelMeta> = {
       },
     ],
   },
+  imageGeneration: {
+    titleKey: "settings.model.config.imageGeneration.title",
+    subtitleKey: "settings.model.config.imageGeneration.subtitle",
+    badgeText: "IMG",
+    badgeClassName: "bg-primary/10 text-primary",
+    readOnlyHintKey: "settings.model.config.imageGeneration.readOnlyHint",
+    params: [],
+  },
 };
 
 const normalizeConfigState = (
@@ -181,12 +217,21 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
     setIsChanged(false);
   }, [config]);
 
-  const isConfigured = Boolean(config?.providerCode && config?.remoteModelId);
+  const isConfigured = hasConfiguredProviderBinding(config);
   const providerLabel = config?.providerCode
     ? getProviderLabel(config.providerCode)
+    : config?.providerConnectionId
+      ? config.providerConnectionId
     : builtInModel
       ? t("settings.model.config.builtInLocal")
       : t("settings.model.config.notConfigured");
+  const providerDescription = config?.providerTemplateCode
+    ? t("settings.model.config.providerTemplate", {
+        template: config.providerTemplateCode,
+      })
+    : builtInModel
+      ? builtInModel.runtime
+      : undefined;
   const modelLabel = isConfigured
     ? config?.name || t("settings.model.config.selectModel")
     : builtInModel
@@ -319,15 +364,17 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
 
       {readOnly ? (
         <SettingsNotice tone="info" size="sm" className="mb-2.5 leading-5">
-          {t("settings.model.config.task.readOnlyHint")}
+          {t(meta.readOnlyHintKey ?? "settings.model.config.task.readOnlyHint")}
         </SettingsNotice>
       ) : null}
 
       <div className="mb-2.5">
         <SettingsStatBlock
-          label={providerLabel}
+          label={t("settings.model.config.connectionLabel", {
+            provider: providerLabel,
+          })}
           value={modelLabel}
-          description={modelDescription}
+          description={modelDescription ?? providerDescription}
           size="sm"
         />
       </div>
@@ -338,56 +385,62 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
-        {fields.map((field) => {
-          const value = localConfig[field.key];
-          const isReadonlyDimensions =
-            modelType === "embedding" && field.key === "dimensions";
+      {fields.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border bg-surface-secondary/40 px-3 py-2 text-xs leading-5 text-text-secondary">
+          {t("settings.model.config.noEditableParams")}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+          {fields.map((field) => {
+            const value = localConfig[field.key];
+            const isReadonlyDimensions =
+              modelType === "embedding" && field.key === "dimensions";
 
-          if (field.type === "select") {
+            if (field.type === "select") {
+              return (
+                <Select
+                  key={field.key}
+                  label={field.label}
+                  value={
+                    typeof value === "boolean"
+                      ? value.toString()
+                      : String(value ?? "")
+                  }
+                  onChange={(nextValue) =>
+                    handleChange(
+                      field.key,
+                      field.key === "normalize"
+                        ? nextValue === "true"
+                        : nextValue,
+                    )
+                  }
+                  options={field.options ?? []}
+                  compact
+                  disabled={!isConfigured || readOnly}
+                />
+              );
+            }
+
             return (
-              <Select
+              <NumberInput
                 key={field.key}
                 label={field.label}
-                value={
-                  typeof value === "boolean"
-                    ? value.toString()
-                    : String(value ?? "")
-                }
-                onChange={(nextValue) =>
-                  handleChange(
-                    field.key,
-                    field.key === "normalize"
-                      ? nextValue === "true"
-                      : nextValue,
-                  )
-                }
-                options={field.options ?? []}
+                value={Number(value ?? 0)}
+                onChange={(nextValue) => {
+                  if (isReadonlyDimensions) {
+                    return;
+                  }
+
+                  handleChange(field.key, nextValue);
+                }}
+                step={field.step}
                 compact
-                disabled={!isConfigured || readOnly}
+                disabled={!isConfigured || isReadonlyDimensions || readOnly}
               />
             );
-          }
-
-          return (
-            <NumberInput
-              key={field.key}
-              label={field.label}
-              value={Number(value ?? 0)}
-              onChange={(nextValue) => {
-                if (isReadonlyDimensions) {
-                  return;
-                }
-
-                handleChange(field.key, nextValue);
-              }}
-              step={field.step}
-              compact
-              disabled={!isConfigured || isReadonlyDimensions || readOnly}
-            />
-          );
-        })}
-      </div>
+          })}
+        </div>
+      )}
     </div>
   );
 };

@@ -18,12 +18,27 @@ import type {
   ProxyProviderParam,
 } from "./types.js";
 
+const getRuntimeProviderCode = (input: {
+  providerCode: ProviderCode | null;
+  templateCode: string;
+}): ProviderCode => {
+  if (input.providerCode) {
+    return input.providerCode;
+  }
+
+  if (input.templateCode === "openai-compatible-custom") {
+    return "volcengine";
+  }
+
+  throw new Error(`Unsupported provider template "${input.templateCode}"`);
+};
+
 export const applyRoleSpecificProviderParams = (
   roleType: ModelType,
   providerCode: ProviderCode,
   params: Record<string, unknown>,
 ) => {
-  if (roleType !== "task") {
+  if (roleType !== "task" && roleType !== "agentTask") {
     return params;
   }
 
@@ -41,6 +56,23 @@ export const applyRoleSpecificProviderParams = (
     default:
       return params;
   }
+};
+
+export const resolveAgentTaskProvider = (
+  requestedProvider: ProxyProviderParam = "default",
+): ProviderResolution => {
+  const agentTaskConfig = modelConfigRepository.findDefaultByType("agentTask");
+
+  // Keep Agent runtime compatible with existing task-role installs until the
+  // new dedicated AgentTask role is explicitly configured by the user.
+  if (
+    agentTaskConfig?.remoteModelId &&
+    (agentTaskConfig.providerConnectionId || agentTaskConfig.providerCode)
+  ) {
+    return resolveProviderForRole("agentTask", requestedProvider);
+  }
+
+  return resolveProviderForRole("task", requestedProvider);
 };
 
 const resolveProviderModelIdentifier = (
@@ -125,27 +157,36 @@ const assertProviderConnectionConfigured = (input: {
 };
 
 const resolveProviderConnection = (
-  providerCode: ProviderCode,
+  providerId: string,
   roleType: ModelType,
 ) => {
-  const provider = providerConnectionRepository.findByCode(providerCode);
+  const provider =
+    providerConnectionRepository.findById(providerId) ??
+    providerConnectionRepository.findByCode(providerId as ProviderCode);
   if (!provider) {
-    throw new Error(`Provider "${providerCode}" not found`);
+    throw new Error(`Provider "${providerId}" not found`);
   }
 
   if (!provider.isEnabled) {
-    throw new Error(`Provider "${providerCode}" is disabled`);
+    throw new Error(`Provider "${providerId}" is disabled`);
   }
 
   const decryptedApiKey = decryptSecret(provider.apiKeyEncrypted);
+  const runtimeProviderCode = getRuntimeProviderCode({
+    providerCode: provider.providerCode ?? null,
+    templateCode: provider.templateCode,
+  });
   assertProviderConnectionConfigured({
-    providerCode,
+    providerCode: runtimeProviderCode,
     baseUrl: provider.baseUrl ?? "",
     apiKey: decryptedApiKey,
     roleType,
   });
 
   return {
+    id: provider.id,
+    templateCode: provider.templateCode,
+    providerCode: runtimeProviderCode,
     baseUrl: provider.baseUrl ?? "",
     apiKey: decryptedApiKey,
   };
@@ -161,33 +202,49 @@ export const resolveProviderForRole = (
   }
 
   if (!modelConfig.providerCode || !modelConfig.remoteModelId) {
+    if (!modelConfig.providerConnectionId || !modelConfig.remoteModelId) {
+      throw new Error(
+        `${roleType.toUpperCase()} model has no provider or remote model assigned`,
+      );
+    }
+  }
+
+  const resolvedProviderId =
+    modelConfig.providerConnectionId ?? modelConfig.providerCode;
+
+  if (!resolvedProviderId) {
     throw new Error(
       `${roleType.toUpperCase()} model has no provider or remote model assigned`,
     );
   }
 
-  const providerCode =
-    requestedProvider === "default"
-      ? modelConfig.providerCode
-      : requestedProvider;
+  const connection = resolveProviderConnection(resolvedProviderId, roleType);
+  const configuredRuntimeProviderCode = connection.providerCode;
 
-  if (providerCode !== modelConfig.providerCode) {
+  if (
+    requestedProvider !== "default" &&
+    requestedProvider !== configuredRuntimeProviderCode
+  ) {
     throw new Error(
-      `Requested provider "${providerCode}" does not match current default ${roleType.toUpperCase()} provider "${modelConfig.providerCode}"`,
+      `Requested provider "${requestedProvider}" does not match current default ${roleType.toUpperCase()} provider "${configuredRuntimeProviderCode}"`,
     );
   }
 
-  const connection = resolveProviderConnection(providerCode, roleType);
-
   return {
-    providerCode,
+    providerCode: configuredRuntimeProviderCode,
+    providerConnectionId: connection.id,
+    providerTemplateCode: connection.templateCode,
     baseUrl: connection.baseUrl,
     apiKey: connection.apiKey,
-    model: resolveProviderModelIdentifier(roleType, providerCode, modelConfig),
+    model: resolveProviderModelIdentifier(
+      roleType,
+      connection.providerCode,
+      modelConfig,
+    ),
     modelConfigId: modelConfig.id,
     params: applyRoleSpecificProviderParams(
       roleType,
-      providerCode,
+      connection.providerCode,
       parseModelParams(modelConfig.params),
     ),
   };
@@ -207,6 +264,8 @@ export const resolveExplicitProviderSelection = (
 
   return {
     providerCode,
+    providerConnectionId: connection.id,
+    providerTemplateCode: connection.templateCode,
     baseUrl: connection.baseUrl,
     apiKey: connection.apiKey,
     model,

@@ -1,5 +1,12 @@
-import type { ProviderCode } from "@/db/schema.js";
-import { PROVIDER_CODE_VALUES } from "@/providers/codes.js";
+import type {
+  ModelType,
+  ProviderCode,
+  ProviderTemplateCode,
+} from "@/db/schema.js";
+import {
+  PROVIDER_CODE_VALUES,
+  PROVIDER_TEMPLATE_CODE_VALUES,
+} from "@/providers/codes.js";
 
 export const CLOUDFLARE_ACCOUNT_BASE_URL_GUIDE =
   "https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/ai";
@@ -14,19 +21,31 @@ export type ProviderEmbeddingAdapter =
   | "openai-compatible"
   | "cloudflare";
 export type ProviderRerankAdapter = "openai-compatible" | "none";
+export type ProviderImageAdapter = "openai-images" | "none";
+
+export interface ProviderCapabilitySummary {
+  syncAdapter: ProviderSyncAdapter;
+  chatAdapter: ProviderChatAdapter;
+  embeddingAdapter: ProviderEmbeddingAdapter;
+  rerankAdapter: ProviderRerankAdapter;
+  imageAdapter: ProviderImageAdapter;
+  supportsRoles: ModelType[];
+}
 
 export interface ProviderDefinition {
-  code: ProviderCode;
+  code: ProviderTemplateCode;
   displayName: string;
   defaultBaseUrl: string;
   syncAdapter: ProviderSyncAdapter;
   chatAdapter: ProviderChatAdapter;
   embeddingAdapter: ProviderEmbeddingAdapter;
   rerankAdapter: ProviderRerankAdapter;
+  imageAdapter: ProviderImageAdapter;
   callableModelIdPrefix?: string;
 }
 
 export const PROVIDER_CODE_ENUM = PROVIDER_CODE_VALUES;
+export const PROVIDER_TEMPLATE_CODE_ENUM = PROVIDER_TEMPLATE_CODE_VALUES;
 
 export const PROVIDER_DEFINITIONS = {
   ollama: {
@@ -37,6 +56,7 @@ export const PROVIDER_DEFINITIONS = {
     chatAdapter: "ollama",
     embeddingAdapter: "ollama",
     rerankAdapter: "none",
+    imageAdapter: "none",
   },
   lmstudio: {
     code: "lmstudio",
@@ -46,6 +66,7 @@ export const PROVIDER_DEFINITIONS = {
     chatAdapter: "openai-compatible",
     embeddingAdapter: "openai-compatible",
     rerankAdapter: "none",
+    imageAdapter: "none",
   },
   openai: {
     code: "openai",
@@ -55,6 +76,17 @@ export const PROVIDER_DEFINITIONS = {
     chatAdapter: "openai-compatible",
     embeddingAdapter: "openai-compatible",
     rerankAdapter: "none",
+    imageAdapter: "openai-images",
+  },
+  google: {
+    code: "google",
+    displayName: "Google Gemini",
+    defaultBaseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+    syncAdapter: "openai-compatible",
+    chatAdapter: "openai-compatible",
+    embeddingAdapter: "openai-compatible",
+    rerankAdapter: "none",
+    imageAdapter: "none",
   },
   cloudflare: {
     code: "cloudflare",
@@ -65,6 +97,7 @@ export const PROVIDER_DEFINITIONS = {
     chatAdapter: "openai-compatible",
     embeddingAdapter: "cloudflare",
     rerankAdapter: "none",
+    imageAdapter: "none",
     callableModelIdPrefix: "@cf/",
   },
   volcengine: {
@@ -75,14 +108,29 @@ export const PROVIDER_DEFINITIONS = {
     chatAdapter: "openai-compatible",
     embeddingAdapter: "openai-compatible",
     rerankAdapter: "openai-compatible",
+    imageAdapter: "none",
   },
-} satisfies Record<ProviderCode, ProviderDefinition>;
+  "openai-compatible-custom": {
+    code: "openai-compatible-custom",
+    displayName: "Custom OpenAI-Compatible",
+    defaultBaseUrl: "https://api.example.com/v1",
+    syncAdapter: "openai-compatible",
+    chatAdapter: "openai-compatible",
+    embeddingAdapter: "openai-compatible",
+    rerankAdapter: "openai-compatible",
+    imageAdapter: "none",
+  },
+} satisfies Record<ProviderTemplateCode, ProviderDefinition>;
 
 export const DEFAULT_PROVIDER_CONNECTIONS = PROVIDER_CODE_ENUM.map((code) => ({
+  id: code,
+  templateCode: code,
   providerCode: code,
   displayName: PROVIDER_DEFINITIONS[code].displayName,
   baseUrl: PROVIDER_DEFINITIONS[code].defaultBaseUrl,
 })) as Array<{
+  id: string;
+  templateCode: ProviderTemplateCode;
   providerCode: ProviderCode;
   displayName: string;
   baseUrl: string;
@@ -104,11 +152,50 @@ export const getProviderDefinition = (
   providerCode: ProviderCode,
 ): ProviderDefinition => PROVIDER_DEFINITIONS[providerCode];
 
+export const getProviderTemplateDefinition = (
+  templateCode: ProviderTemplateCode,
+): ProviderDefinition => PROVIDER_DEFINITIONS[templateCode];
+
 export const getProviderDisplayName = (providerCode: ProviderCode) =>
   getProviderDefinition(providerCode).displayName;
 
 export const getProviderDefaultBaseUrl = (providerCode: ProviderCode) =>
   getProviderDefinition(providerCode).defaultBaseUrl;
+
+export const getProviderCapabilities = (
+  providerCode: ProviderTemplateCode,
+): ProviderCapabilitySummary => {
+  const definition = getProviderTemplateDefinition(providerCode);
+  const supportsRoles: ModelType[] = [
+    "llm",
+    "task",
+    "agentTask",
+    "evaluation",
+    "embedding",
+  ];
+
+  if (definition.rerankAdapter !== "none") {
+    supportsRoles.push("rerank");
+  }
+
+  if (definition.imageAdapter !== "none") {
+    supportsRoles.push("imageGeneration");
+  }
+
+  return {
+    syncAdapter: definition.syncAdapter,
+    chatAdapter: definition.chatAdapter,
+    embeddingAdapter: definition.embeddingAdapter,
+    rerankAdapter: definition.rerankAdapter,
+    imageAdapter: definition.imageAdapter,
+    supportsRoles,
+  };
+};
+
+export const supportsRoleForProvider = (
+  providerCode: ProviderTemplateCode,
+  roleType: ModelType,
+) => getProviderCapabilities(providerCode).supportsRoles.includes(roleType);
 
 export const requiresCallableModelId = (providerCode: ProviderCode) =>
   Boolean(getProviderDefinition(providerCode).callableModelIdPrefix);

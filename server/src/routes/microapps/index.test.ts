@@ -14,6 +14,7 @@ import {
   ImageGenerationRequestValidationError,
   type ImageGenerationJob,
 } from "@/microapps/image-generation/index.js";
+import type { MailCenterRouteService } from "./index.js";
 import { getLoggerConfig } from "@/logger";
 import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 import { sendRouteError } from "@/utils/route-errors.js";
@@ -71,7 +72,29 @@ const createTestJob = (
   ...overrides,
 });
 
-const createApp = async (service: ImageGenerationRouteService) => {
+const createMailCenterServiceStub = (): MailCenterRouteService => ({
+  getOverview() {
+    return {
+      accounts: [],
+      selectedAccountId: null,
+      inbox: null,
+    };
+  },
+  saveAccount() {
+    throw new Error("not implemented");
+  },
+  async sendTestMail() {
+    throw new Error("not implemented");
+  },
+  async syncInbox() {
+    throw new Error("not implemented");
+  },
+});
+
+const createApp = async (
+  service: ImageGenerationRouteService,
+  mailCenterService: MailCenterRouteService = createMailCenterServiceStub(),
+) => {
   const app = Fastify({
     logger: getLoggerConfig(),
     serializerOpts: { encoding: "utf8" },
@@ -79,6 +102,38 @@ const createApp = async (service: ImageGenerationRouteService) => {
   app.setErrorHandler(sendRouteError);
   await app.register(microappsRoute, {
     imageGenerationService: service,
+    computerUseService: {
+      async createPlan() {
+        throw new Error("not implemented");
+      },
+      async getTask() {
+        return null;
+      },
+      async startTask() {
+        throw new Error("not implemented");
+      },
+      async resolveApproval() {
+        throw new Error("not implemented");
+      },
+      async cancelTask() {
+        throw new Error("not implemented");
+      },
+    },
+    computerUseRuntimeService: {
+      async getRuntimeState() {
+        return {
+          status: "not_installed",
+          checkedAt: new Date().toISOString(),
+        };
+      },
+      async installRuntime() {
+        return {
+          status: "ready",
+          checkedAt: new Date().toISOString(),
+        };
+      },
+    },
+    mailCenterService,
   });
   return app;
 };
@@ -239,6 +294,99 @@ test("microapps image generation routes map request validation errors to 400", a
 
   assert.equal(response.statusCode, 400, response.body);
   assert.equal(response.json().message, "Prompt or workflow is required.");
+
+  await app.close();
+});
+
+test("microapps mail center overview route returns sanitized account list", async () => {
+  const app = await createApp(
+    {
+      async createGeneration() {
+        return createTestJob();
+      },
+      async getGeneration() {
+        return createTestJob();
+      },
+    },
+    {
+      getOverview() {
+        return {
+          accounts: [
+            {
+              id: "mail-1",
+              userId: 1,
+              name: "Main Inbox",
+              emailAddress: "main@example.com",
+              smtpHost: "smtp.example.com",
+              smtpPort: 465,
+              smtpSecure: true,
+              smtpUsername: "main@example.com",
+              smtpPassword: "smtp-secret",
+              imapHost: "imap.example.com",
+              imapPort: 993,
+              imapSecure: true,
+              imapUsername: "main@example.com",
+              imapPassword: "imap-secret",
+              inboxFolderPath: "INBOX",
+              status: "connected",
+              lastError: null,
+              lastSyncedAt: "2026-07-06T12:00:00.000Z",
+              isDefault: true,
+              createdAt: "2026-07-06T10:00:00.000Z",
+              updatedAt: "2026-07-06T12:00:00.000Z",
+            },
+          ],
+          selectedAccountId: "mail-1",
+          inbox: {
+            messageCount: 20,
+            unreadCount: 2,
+            lastSyncedAt: "2026-07-06T12:00:00.000Z",
+            syncStatus: "succeeded",
+            lastError: null,
+            messages: [
+              {
+                id: "msg-1",
+                remoteUid: 101,
+                messageId: "<message-1@example.com>",
+                subject: "Hello",
+                fromDisplay: "Sender",
+                fromAddress: "sender@example.com",
+                previewText: "Preview",
+                sentAt: "2026-07-06T11:58:00.000Z",
+                receivedAt: "2026-07-06T11:59:00.000Z",
+                isRead: false,
+                isFlagged: false,
+                hasAttachments: false,
+              },
+            ],
+          },
+        };
+      },
+      saveAccount() {
+        throw new Error("not implemented");
+      },
+      async sendTestMail() {
+        throw new Error("not implemented");
+      },
+      async syncInbox() {
+        throw new Error("not implemented");
+      },
+    },
+  );
+  const token = createToken();
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/microapps/mail-center/overview",
+    headers: {
+      authorization: `Bearer ${token}`,
+    },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.json().data.accounts[0].hasSmtpPassword, true);
+  assert.equal(response.json().data.accounts[0].hasImapPassword, true);
+  assert.equal(response.json().data.inbox.messages[0].subject, "Hello");
 
   await app.close();
 });

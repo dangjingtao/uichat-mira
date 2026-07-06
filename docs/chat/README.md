@@ -12,6 +12,7 @@ Related:
   - ../uchat.md
   - ../uchat-internal-maintenance.md
   - ../maps/AREA_MAP_CHAT.md
+  - agent-loop-v1.7-construction-plan.md
 
 ## 单点真相范围
 
@@ -64,6 +65,7 @@ Related:
 
 ### Agent
 
+- `agent-loop-v1.7-construction-plan.md`
 - `agent-swot-plan.md`
 - `agent-runtime-design.md`
 - `agent-frontend-workspace-smoke-method.md`

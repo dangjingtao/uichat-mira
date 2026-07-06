@@ -1,70 +1,17 @@
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol";
-import type { AgentGraphState } from "../node-runtime";
+import type { ToolIntentResult } from "../intent/index";
 import type {
-  AgentApprovalRequest,
-  AgentEvidencePayload,
-  AgentEvidenceSummary,
-  AgentObservation,
   AgentPlan,
-  AgentRetrievalEvidence,
-  AgentSchemaReplanDiagnostics,
-  AgentToolExecutionResult,
   AgentToolExposureState,
+  PlannerObservationContext,
 } from "../types";
 import { SCHEMA_REPLAN_ATTEMPT_LIMIT } from "./action-types";
 
-const summarizePlannerObservation = (observation: AgentObservation) => ({
-  stepId: observation.stepId,
-  status: observation.status,
-  facts: observation.facts.slice(0, 3),
-  ...(observation.errorMessage ? { errorMessage: observation.errorMessage } : {}),
-});
-
-const summarizePlannerToolExecution = (execution: AgentToolExecutionResult) => ({
-  toolId: execution.toolId,
-  status: execution.status,
-  ...(execution.errorMessage ? { errorMessage: execution.errorMessage } : {}),
-});
-
-const summarizePlannerRetrieval = (retrieval: AgentRetrievalEvidence) => ({
-  query: retrieval.query,
-  chunkCount: retrieval.chunkCount,
-  documents: retrieval.chunks.slice(0, 3).map((chunk) => chunk.documentName),
-});
-
-const summarizePlannerEvidence = (evidence: AgentEvidencePayload | undefined) => {
-  if (!evidence) {
-    return {
-      observationCount: 0,
-      toolExecutionCount: 0,
-      retrievalCount: 0,
-    };
-  }
-
-  return {
-    observationCount: evidence.observations.length,
-    toolExecutionCount: evidence.toolExecutions.length,
-    retrievalCount: evidence.retrievals.length,
-    latestObservation:
-      evidence.observations.length > 0
-        ? summarizePlannerObservation(evidence.observations[evidence.observations.length - 1]!)
-        : undefined,
-    latestToolExecution:
-      evidence.toolExecutions.length > 0
-        ? summarizePlannerToolExecution(
-            evidence.toolExecutions[evidence.toolExecutions.length - 1]!,
-          )
-        : undefined,
-    latestRetrieval:
-      evidence.retrievals.length > 0
-        ? summarizePlannerRetrieval(evidence.retrievals[evidence.retrievals.length - 1]!)
-        : undefined,
-    latestEvidenceSummary: evidence.latestSummary,
-  };
-};
-
 export const normalizeToolExposure = (
-  state: Pick<AgentGraphState, "toolExposure" | "toolIntent">,
+  state: {
+    toolExposure?: AgentToolExposureState;
+    toolIntent?: ToolIntentResult;
+  },
 ): AgentToolExposureState => {
   if (state.toolExposure) {
     return state.toolExposure;
@@ -114,7 +61,7 @@ const summarizeToolSchemas = (toolExposure: AgentToolExposureState) =>
 const buildSchemaReplanMessages = (input: {
   question: string;
   toolExposure: AgentToolExposureState;
-  diagnostics: AgentSchemaReplanDiagnostics;
+  observationContext: PlannerObservationContext;
 }): NormalizedChatMessage[] => [
   {
     role: "system",
@@ -135,9 +82,10 @@ const buildSchemaReplanMessages = (input: {
       {
         lastUserRequest: input.question,
         workspaceBound: true,
-        previousSchemaError: input.diagnostics.schemaError,
-        previousInvalidAction: input.diagnostics.invalidAction ?? null,
+        previousSchemaError: input.observationContext.recovery.schemaError ?? null,
+        previousInvalidAction: input.observationContext.recovery.invalidAction ?? null,
         allowedTools: summarizeToolSchemas(input.toolExposure),
+        observationContext: input.observationContext,
         instruction:
           "Return exactly one valid nextAction JSON. If no safe local tool action is possible, return an error action.",
       },
@@ -151,28 +99,21 @@ const buildSchemaReplanMessages = (input: {
 export const buildNextActionPlannerMessages = (input: {
   question: string;
   plan: AgentPlan;
-  taskFrame?: AgentGraphState["taskFrame"];
-  evidence: AgentEvidencePayload | undefined;
-  lastToolExecution?: AgentToolExecutionResult;
+  observationContext: PlannerObservationContext;
   toolExposure: AgentToolExposureState;
   iteration: number;
   maxIterations: number;
-  pendingApproval?: AgentApprovalRequest;
-  latestEvidenceSummary?: AgentEvidenceSummary;
-  schemaReplanDiagnostics?: AgentSchemaReplanDiagnostics;
 }): NormalizedChatMessage[] => {
   if (
-    input.schemaReplanDiagnostics &&
-    input.schemaReplanDiagnostics.attemptCount <= SCHEMA_REPLAN_ATTEMPT_LIMIT
+    input.observationContext.recovery.attemptCount > 0 &&
+    input.observationContext.recovery.attemptCount <= SCHEMA_REPLAN_ATTEMPT_LIMIT
   ) {
     return buildSchemaReplanMessages({
       question: input.question,
       toolExposure: input.toolExposure,
-      diagnostics: input.schemaReplanDiagnostics,
+      observationContext: input.observationContext,
     });
   }
-
-  const evidenceSummary = summarizePlannerEvidence(input.evidence);
 
   return [
     {
@@ -192,7 +133,7 @@ export const buildNextActionPlannerMessages = (input: {
         "不要输出 '/workspace' 作为 path。",
         "不要把 workspace 根目录下的文件写成 '/README.md' 这类类 Unix 绝对路径；应写成 'README.md'。",
         "如果要读取 workspace 根目录下的嵌套文件，应写成 'docs/README.md' 这类 workspace-relative path。",
-        "如果 latestEvidenceSummary.answerReadiness.canAnswer 为 true，且没有 missingInfo、pendingApproval 或 errorMessage，则下一步必须输出 answer。",
+        "如果 observationContext.latestEvidenceSummary.answerReadiness.canAnswer 为 true，且没有 missingInfo、pendingApproval 或 errorMessage，则下一步必须输出 answer。",
       ].join("\n"),
       parts: [],
     },
@@ -202,25 +143,13 @@ export const buildNextActionPlannerMessages = (input: {
         {
           question: input.question,
           plan: input.plan,
-          taskFrame: input.taskFrame ?? null,
-          evidenceSummary,
-          lastToolExecution: input.lastToolExecution
-            ? summarizePlannerToolExecution(input.lastToolExecution)
-            : null,
+          observationContext: input.observationContext,
           toolExposure: {
             exposedTools: input.toolExposure.exposedTools,
             toolMeta: input.toolExposure.toolMeta,
           },
           iteration: input.iteration,
           maxIterations: input.maxIterations,
-          pendingApproval: input.pendingApproval
-            ? {
-                toolId: input.pendingApproval.toolId,
-                reason: input.pendingApproval.reason,
-              }
-            : null,
-          latestEvidenceSummary: input.latestEvidenceSummary ?? null,
-          schemaReplanDiagnostics: input.schemaReplanDiagnostics ?? null,
         },
         null,
         2,

@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { requireAuth } from "@/db/auth.db.js";
+import type { createMailCenterService } from "@/microapps/mail-center/index.js";
 import type {
   ComputerUseGoalInput,
   ComputerUseRuntimeState,
@@ -16,6 +17,7 @@ import {
 import { success } from "@/utils/index.js";
 import { badRequest, notFound, routeHandler } from "@/utils/route-errors.js";
 import computerUseRoutes from "./computer-use/index.js";
+import mailCenterRoutes from "./mail-center/index.js";
 import { imageGenerationRouteSchemas } from "./schemas.js";
 
 export type ImageGenerationRouteService = {
@@ -45,10 +47,13 @@ export type ComputerUseRuntimeRouteService = {
   ): Promise<ComputerUseRuntimeState>;
 };
 
+export type MailCenterRouteService = ReturnType<typeof createMailCenterService>;
+
 type MicroappsRouteOptions = {
   imageGenerationService?: ImageGenerationRouteService;
   computerUseService?: ComputerUseRouteService;
   computerUseRuntimeService?: ComputerUseRuntimeRouteService;
+  mailCenterService?: MailCenterRouteService;
 };
 
 const toGenerationResponse = (job: ImageGenerationJob) => ({
@@ -90,6 +95,7 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
   const imageGenerationService = options.imageGenerationService;
   const computerUseService = options.computerUseService;
   const computerUseRuntimeService = options.computerUseRuntimeService;
+  const mailCenterService = options.mailCenterService;
   if (!imageGenerationService) {
     throw new Error(
       "microappsRoute requires imageGenerationService to be injected from the server composition root.",
@@ -103,6 +109,11 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
   if (!computerUseRuntimeService) {
     throw new Error(
       "microappsRoute requires computerUseRuntimeService to be injected from the server composition root.",
+    );
+  }
+  if (!mailCenterService) {
+    throw new Error(
+      "microappsRoute requires mailCenterService to be injected from the server composition root.",
     );
   }
 
@@ -147,6 +158,9 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
   await app.register(computerUseRoutes, {
     computerUseService,
     computerUseRuntimeService,
+  });
+  await app.register(mailCenterRoutes, {
+    mailCenterService,
   });
 };
 

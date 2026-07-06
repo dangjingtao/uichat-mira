@@ -49,6 +49,7 @@ export const modelConfigRepository = {
       name?: string;
       params?: string;
       providerCode?: ProviderCode | null;
+      providerConnectionId?: string | null;
       remoteModelId?: string | null;
     },
   ): ModelConfig | undefined {
@@ -69,6 +70,7 @@ export const modelConfigRepository = {
     name: string;
     params: string;
     providerCode?: ProviderCode | null;
+    providerConnectionId?: string | null;
     remoteModelId?: string | null;
   }): ModelConfig {
     const db = getDb();
@@ -81,6 +83,7 @@ export const modelConfigRepository = {
           name: data.name,
           params: data.params,
           providerCode: data.providerCode ?? null,
+          providerConnectionId: data.providerConnectionId ?? null,
           remoteModelId: data.remoteModelId ?? null,
           updatedAt: nowIso(),
         })
@@ -94,6 +97,7 @@ export const modelConfigRepository = {
       name: data.name,
       params: data.params,
       providerCode: data.providerCode ?? null,
+      providerConnectionId: data.providerConnectionId ?? null,
       remoteModelId: data.remoteModelId ?? null,
       isDefault: true,
     });

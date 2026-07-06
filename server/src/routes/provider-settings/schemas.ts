@@ -1,6 +1,5 @@
 import {
-  PROVIDER_CODE_ENUM,
-  providerCodeSchema,
+  PROVIDER_TEMPLATE_CODE_ENUM,
 } from "@/providers/catalog.js";
 import {
   errorEnvelope,
@@ -11,10 +10,70 @@ import {
 
 // Provider summary for settings lists. It intentionally excludes decrypted API
 // keys while surfacing enough status for connection management.
+const providerCapabilitiesSchema = {
+  type: "object",
+  required: [
+    "syncAdapter",
+    "chatAdapter",
+    "embeddingAdapter",
+    "rerankAdapter",
+    "imageAdapter",
+    "supportsRoles",
+  ],
+  properties: {
+    syncAdapter: {
+      type: "string",
+      enum: ["ollama", "openai-compatible", "cloudflare"],
+      description: "Model discovery adapter used to sync provider models.",
+    },
+    chatAdapter: {
+      type: "string",
+      enum: ["ollama", "openai-compatible"],
+      description: "Chat adapter protocol declared by the provider catalog.",
+    },
+    embeddingAdapter: {
+      type: "string",
+      enum: ["ollama", "openai-compatible", "cloudflare"],
+      description:
+        "Embedding adapter protocol declared by the provider catalog.",
+    },
+    rerankAdapter: {
+      type: "string",
+      enum: ["openai-compatible", "none"],
+      description: "Rerank adapter protocol, or none when unsupported.",
+    },
+    imageAdapter: {
+      type: "string",
+      enum: ["openai-images", "none"],
+      description: "Image adapter protocol, or none when unsupported.",
+    },
+    supportsRoles: {
+      type: "array",
+      description:
+        "Model roles this provider can serve according to the backend catalog.",
+      items: modelTypeSchema,
+    },
+  },
+} as const;
+
+const providerIdSchema = {
+  type: "string",
+  description:
+    "Provider connection id. Built-in connection ids stay aligned with legacy provider codes.",
+} as const;
+
+const providerTemplateCodeSchema = {
+  type: "string",
+  enum: PROVIDER_TEMPLATE_CODE_ENUM,
+} as const;
+
 export const providerSummarySchema = {
   type: "object",
   required: [
+    "id",
     "code",
+    "templateCode",
+    "providerCode",
     "displayName",
     "baseUrl",
     "hasApiKey",
@@ -22,12 +81,22 @@ export const providerSummarySchema = {
     "lastError",
     "lastSyncedAt",
     "assignedRoles",
+    "isSystem",
+    "capabilities",
   ],
   properties: {
+    id: providerIdSchema,
     code: {
       type: "string",
-      description: "Provider code from the centralized catalog.",
-      enum: PROVIDER_CODE_ENUM,
+      description: "Compatibility alias of the provider connection id.",
+    },
+    templateCode: {
+      ...providerTemplateCodeSchema,
+      description: "Provider template code resolved by the backend catalog.",
+    },
+    providerCode: {
+      description: "Legacy built-in provider code when this is a system connection.",
+      anyOf: [{ type: "string" }, { type: "null" }],
     },
     displayName: {
       type: "string",
@@ -58,6 +127,15 @@ export const providerSummarySchema = {
       description: "Model roles currently assigned to this provider.",
       items: modelTypeSchema,
     },
+    isSystem: {
+      type: "boolean",
+      description: "Whether this connection is a built-in system connection.",
+    },
+    capabilities: {
+      ...providerCapabilitiesSchema,
+      description:
+        "Capability snapshot derived from the centralized provider catalog.",
+    },
   },
 } as const;
 
@@ -66,12 +144,25 @@ const roleAssignmentSchema = {
   anyOf: [
     {
       type: "object",
-      required: ["providerCode", "remoteModelId", "modelName"],
+      required: [
+        "providerCode",
+        "providerConnectionId",
+        "providerTemplateCode",
+        "remoteModelId",
+        "modelName",
+      ],
       properties: {
         providerCode: {
           type: "string",
-          description: "Provider owning the assigned remote model.",
-          enum: PROVIDER_CODE_ENUM,
+          description: "Compatibility provider reference for the assigned model.",
+        },
+        providerConnectionId: {
+          type: "string",
+          description: "Connection instance owning the assigned remote model.",
+        },
+        providerTemplateCode: {
+          anyOf: [{ ...providerTemplateCodeSchema }, { type: "null" }],
+          description: "Template backing the assigned provider connection.",
         },
         remoteModelId: {
           type: "string",
@@ -95,6 +186,8 @@ export const roleModelConfigSchema = {
     "type",
     "name",
     "providerCode",
+    "providerConnectionId",
+    "providerTemplateCode",
     "remoteModelId",
     "params",
     "isDefault",
@@ -110,7 +203,15 @@ export const roleModelConfigSchema = {
     name: { type: "string", description: "Display name for the config." },
     providerCode: {
       description: "Assigned provider code, or null when reset.",
-      anyOf: [{ type: "string", enum: PROVIDER_CODE_ENUM }, { type: "null" }],
+      anyOf: [{ type: "string" }, { type: "null" }],
+    },
+    providerConnectionId: {
+      description: "Assigned provider connection id, or null when reset.",
+      anyOf: [{ type: "string" }, { type: "null" }],
+    },
+    providerTemplateCode: {
+      description: "Assigned provider template code, or null when reset.",
+      anyOf: [{ ...providerTemplateCodeSchema }, { type: "null" }],
     },
     remoteModelId: {
       description: "Assigned remote model id, or null when reset.",
@@ -142,8 +243,8 @@ const providerParamsSchema = {
   type: "object",
   properties: {
     providerCode: {
-      ...providerCodeSchema,
-      description: "Provider code from the centralized provider catalog.",
+      ...providerIdSchema,
+      description: "Provider connection id or legacy built-in provider code.",
     },
   },
   required: ["providerCode"],
@@ -167,18 +268,26 @@ const providerModelItemSchema = {
 const providerConnectionResponseSchema = {
   type: "object",
   required: [
+    "id",
+    "templateCode",
     "providerCode",
     "displayName",
     "baseUrl",
+    "isSystem",
     "isEnabled",
     "status",
     "createdAt",
     "updatedAt",
   ],
   properties: {
+    id: providerIdSchema,
+    templateCode: {
+      ...providerTemplateCodeSchema,
+      description: "Provider template code saved by the connection.",
+    },
     providerCode: {
-      ...providerCodeSchema,
-      description: "Provider code saved by the connection.",
+      description: "Legacy provider code saved by the connection, when present.",
+      anyOf: [{ type: "string" }, { type: "null" }],
     },
     displayName: {
       type: "string",
@@ -191,6 +300,10 @@ const providerConnectionResponseSchema = {
     apiKeyEncrypted: {
       description: "Encrypted API key stored by the backend, when present.",
       anyOf: [{ type: "string" }, { type: "null" }],
+    },
+    isSystem: {
+      type: "boolean",
+      description: "Whether this connection is managed as a built-in system connection.",
     },
     isEnabled: {
       type: "boolean",
@@ -224,6 +337,36 @@ const providerConnectionResponseSchema = {
 // OpenAPI route schemas for provider settings. The split mirrors the route
 // groups: connections, model sync, and role assignment.
 export const providerSettingsRouteSchemas = {
+  listProviderTemplates: {
+    tags: ["Provider Settings"],
+    summary: "List provider templates",
+    description:
+      "Return built-in provider templates and the custom OpenAI-compatible template for connection creation.",
+    operationId: "listProviderTemplates",
+    response: {
+      200: successEnvelope({
+        type: "array",
+        items: {
+          type: "object",
+          required: [
+            "code",
+            "displayName",
+            "defaultBaseUrl",
+            "capabilities",
+            "isCustomTemplate",
+          ],
+          properties: {
+            code: providerTemplateCodeSchema,
+            displayName: { type: "string" },
+            defaultBaseUrl: { type: "string" },
+            capabilities: providerCapabilitiesSchema,
+            isCustomTemplate: { type: "boolean" },
+          },
+        },
+      }),
+      500: errorEnvelope,
+    },
+  },
   listProviders: {
     tags: ["Provider Settings"],
     summary: "List provider summaries",
@@ -253,7 +396,10 @@ export const providerSettingsRouteSchemas = {
           provider: {
             type: "object",
             required: [
+              "id",
               "code",
+              "templateCode",
+              "providerCode",
               "displayName",
               "baseUrl",
               "apiKey",
@@ -261,11 +407,22 @@ export const providerSettingsRouteSchemas = {
               "status",
               "lastError",
               "lastSyncedAt",
+              "isSystem",
+              "capabilities",
             ],
             properties: {
+              id: providerIdSchema,
               code: {
-                ...providerCodeSchema,
-                description: "Provider code from the catalog.",
+                type: "string",
+                description: "Compatibility alias of the provider connection id.",
+              },
+              templateCode: {
+                ...providerTemplateCodeSchema,
+                description: "Provider template code from the catalog.",
+              },
+              providerCode: {
+                description: "Legacy built-in provider code when available.",
+                anyOf: [{ type: "string" }, { type: "null" }],
               },
               displayName: {
                 type: "string",
@@ -298,6 +455,15 @@ export const providerSettingsRouteSchemas = {
                   { type: "null" },
                 ],
               },
+              isSystem: {
+                type: "boolean",
+                description: "Whether this connection is managed as a built-in system connection.",
+              },
+              capabilities: {
+                ...providerCapabilitiesSchema,
+                description:
+                  "Capability snapshot derived from the centralized provider catalog.",
+              },
             },
           },
           models: {
@@ -308,13 +474,23 @@ export const providerSettingsRouteSchemas = {
           assignments: {
             type: "object",
             description: "Current default model assignment by role.",
-            required: ["llm", "embedding", "rerank", "task", "evaluation"],
+            required: [
+              "llm",
+              "embedding",
+              "rerank",
+              "task",
+              "agentTask",
+              "evaluation",
+              "imageGeneration",
+            ],
             properties: {
               llm: roleAssignmentSchema,
               embedding: roleAssignmentSchema,
               rerank: roleAssignmentSchema,
               task: roleAssignmentSchema,
+              agentTask: roleAssignmentSchema,
               evaluation: roleAssignmentSchema,
+              imageGeneration: roleAssignmentSchema,
             },
           },
         },
@@ -332,6 +508,10 @@ export const providerSettingsRouteSchemas = {
     body: {
       type: "object",
       properties: {
+        displayName: {
+          type: "string",
+          description: "Connection display name used in settings lists.",
+        },
         baseUrl: {
           type: "string",
           description: "Provider base URL used by backend calls.",
@@ -345,6 +525,28 @@ export const providerSettingsRouteSchemas = {
     },
     response: {
       200: successEnvelope(providerConnectionResponseSchema),
+      500: errorEnvelope,
+    },
+  },
+  createProviderConnection: {
+    tags: ["Provider Settings"],
+    summary: "Create provider connection",
+    description:
+      "Create a new provider connection instance. T003 only allows custom OpenAI-compatible creation.",
+    operationId: "createProviderConnection",
+    body: {
+      type: "object",
+      properties: {
+        templateCode: providerTemplateCodeSchema,
+        displayName: { type: "string" },
+        baseUrl: { type: "string" },
+        apiKey: { type: "string" },
+      },
+      required: ["templateCode", "displayName"],
+    },
+    response: {
+      200: successEnvelope(providerConnectionResponseSchema),
+      400: errorEnvelope,
       500: errorEnvelope,
     },
   },
@@ -372,6 +574,24 @@ export const providerSettingsRouteSchemas = {
       500: errorEnvelope,
     },
   },
+  deleteProviderConnection: {
+    tags: ["Provider Settings"],
+    summary: "Delete provider connection",
+    description: "Delete a custom provider connection instance.",
+    operationId: "deleteProviderConnection",
+    params: providerParamsSchema,
+    response: {
+      200: successEnvelope({
+        type: "object",
+        required: ["id"],
+        properties: {
+          id: providerIdSchema,
+        },
+      }),
+      400: errorEnvelope,
+      500: errorEnvelope,
+    },
+  },
   selectRoleModel: {
     tags: ["Provider Settings"],
     summary: "Select default model for role",
@@ -381,7 +601,7 @@ export const providerSettingsRouteSchemas = {
     params: {
       type: "object",
       properties: {
-        providerCode: providerCodeSchema,
+        providerCode: providerIdSchema,
         role: {
           ...modelTypeSchema,
           description: "Model role receiving the selected provider model.",
@@ -395,6 +615,11 @@ export const providerSettingsRouteSchemas = {
         remoteModelId: {
           type: "string",
           description: "Remote model id selected from the provider model cache.",
+        },
+        displayName: {
+          type: "string",
+          description:
+            "Optional provider display name to persist together with the role selection.",
         },
         baseUrl: {
           type: "string",

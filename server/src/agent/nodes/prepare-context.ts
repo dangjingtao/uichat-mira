@@ -35,6 +35,7 @@ export const prepareContextNode = async (
       messageCount: state.messages.length,
       requestContextCount: state.requestContextMessages?.length ?? 0,
       autoAllowedTools,
+      currentTaskFrameWriter: "prepareContextNode reads the initialized task frame only",
     },
   });
 

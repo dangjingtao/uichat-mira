@@ -10,7 +10,7 @@ import {
   createImageGeneration,
   getImageGeneration,
   type ImageGenerationJob,
-} from "./imageGeneration";
+} from "../imageGeneration";
 
 const sampleJob: ImageGenerationJob = {
   id: "imggen_1",

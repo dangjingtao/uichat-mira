@@ -1,9 +1,15 @@
 import { providerProxyService } from "@/services/provider-proxy.service/index";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol";
 import { writeStructuredLog } from "@/logger";
-import { getLatestEvidenceSummary } from "../evidence";
+import { getEvidencePayload } from "../evidence";
 import type { AgentNextAction, AgentRepeatedActionGuardResult } from "../types";
-import { emitStepNode, type AgentGraphState, type EmitAgentExecutionNode } from "../node-runtime";
+import {
+  buildPlannerObservationContext,
+  emitStepNode,
+  updateCurrentTaskFrameFromPlanner,
+  type AgentGraphState,
+  type EmitAgentExecutionNode,
+} from "../node-runtime";
 import { getLatestUserQuestion } from "../nodes/shared";
 import {
   ALLOWED_ACTION_TYPES,
@@ -80,13 +86,12 @@ export const nextActionPlannerNode = async (
   const question =
     state.question?.trim() || getLatestUserQuestion(state.messages) || state.goal.text;
   const toolExposure = normalizeToolExposure(state);
-  const latestEvidenceSummary = getLatestEvidenceSummary({
-    evidence: state.evidence,
-    observations: state.observations,
-  });
+  const plannerEvidence = getEvidencePayload(state);
+  const observationContext = buildPlannerObservationContext(state);
+  const latestEvidenceSummary = observationContext.latestEvidenceSummary;
   const answerStopDecision = getPlannerAnswerStopDecision({
     latestSummary: latestEvidenceSummary,
-    pendingApproval: state.pendingApproval,
+    pendingApproval: observationContext.pendingApproval,
     errorMessage: state.errorMessage,
   });
 
@@ -104,8 +109,8 @@ export const nextActionPlannerNode = async (
       latestEvidenceSummary: latestEvidenceSummary ?? null,
       answerStopRuleTriggered: answerStopDecision.shouldAnswer,
       answerStopRuleReason: answerStopDecision.reason,
-      schemaReplanAttemptCount: state.schemaReplanDiagnostics?.attemptCount ?? 0,
-      schemaReplanError: state.schemaReplanDiagnostics?.schemaError ?? null,
+      schemaReplanAttemptCount: observationContext.recovery.attemptCount,
+      schemaReplanError: observationContext.recovery.schemaError ?? null,
     },
   });
 
@@ -133,12 +138,12 @@ export const nextActionPlannerNode = async (
     const listToOpenBridgeAction = getReadOpenBridgeActionFromListEvidence({
       question,
       toolExposure,
-      evidence: state.evidence,
+      evidence: plannerEvidence,
     });
     const locateToOpenBridgeAction = getReadOpenBridgeActionFromLocateEvidence({
       question,
       toolExposure,
-      evidence: state.evidence,
+      evidence: plannerEvidence,
     });
 
     if (listToOpenBridgeAction) {
@@ -149,15 +154,10 @@ export const nextActionPlannerNode = async (
       const messages: NormalizedChatMessage[] = buildNextActionPlannerMessages({
         question,
         plan: state.plan,
-        taskFrame: state.taskFrame,
-        evidence: state.evidence,
-        lastToolExecution: state.lastToolExecution,
+        observationContext,
         toolExposure,
         iteration,
         maxIterations,
-        pendingApproval: state.pendingApproval,
-        latestEvidenceSummary,
-        schemaReplanDiagnostics: state.schemaReplanDiagnostics,
       });
 
       try {
@@ -188,7 +188,7 @@ export const nextActionPlannerNode = async (
         }
 
         repeatedActionGuard = getPlannerRepeatedActionGuardResult({
-          evidence: state.evidence,
+          evidence: plannerEvidence,
           nextAction,
         });
         if (repeatedActionGuard.triggered) {
@@ -255,17 +255,32 @@ export const nextActionPlannerNode = async (
       matchedToolCallId: repeatedActionGuard?.matchedToolCallId,
       localIntentGuardTriggered,
       localIntentGuardReason: localIntentGuardReason ?? null,
-      schemaReplanAttemptCount: state.schemaReplanDiagnostics?.attemptCount ?? 0,
-      schemaReplanError: state.schemaReplanDiagnostics?.schemaError ?? null,
+      schemaReplanAttemptCount: observationContext.recovery.attemptCount,
+      schemaReplanError: observationContext.recovery.schemaError ?? null,
       allowedActionTypes: [...ALLOWED_ACTION_TYPES],
       localIntentLegacyGuardReason: LOCAL_INTENT_GUARD_REASON,
     },
   });
 
+  const plannerTaskFrame = updateCurrentTaskFrameFromPlanner({
+    frame: state.currentTaskFrame,
+    goal: state.goal,
+    nextAction,
+    latestQuestion: question,
+  });
+
   return {
     nextAction,
-    ...(nextAction.type === "error" && state.schemaReplanDiagnostics
-      ? { schemaReplanDiagnostics: state.schemaReplanDiagnostics }
+    ...(plannerTaskFrame ? { currentTaskFrame: plannerTaskFrame } : {}),
+    ...(nextAction.type === "error" && observationContext.recovery.schemaError
+      ? {
+          schemaReplanDiagnostics: {
+            schemaError: observationContext.recovery.schemaError,
+            toolId: observationContext.recovery.toolId,
+            invalidAction: observationContext.recovery.invalidAction,
+            attemptCount: observationContext.recovery.attemptCount,
+          },
+        }
       : {}),
     ...(nextAction.type === "error"
       ? {

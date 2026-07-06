@@ -844,11 +844,10 @@ edit_replace_block
     - `server/src/mcp/edit/runtime.ts` 明确拒绝目录路径与目录目标，保持 `edit_file` 只承接文件写入/局部替换
     - `server/src/mcp/tools/edit-file.tool.test.ts` 补了 `delete / move` 不支持、目录路径拒绝、目录目标拒绝回归
   - 验证结果：
-    - `pnpm --filter @ui-chat-mira/server test -- src/mcp/tools/edit-file.tool.test.ts src/agent/intent/task-capability-selector.test.ts`
-      - 结果：通过，`27 passed`
+    - `pnpm --filter @ui-chat-mira/server test -- src/mcp/tools/edit-file.tool.test.ts src/agent/intent/__tests__/task-capability-selector.test.ts`
+      - 结果：通过，`30 passed`
     - `pnpm --filter @ui-chat-mira/server typecheck`
-      - 结果：当前分支失败
-      - 说明：失败点位于 `server/src/mcp/harness/capability-profiles.ts`，是当前分支既有 `actionProfileId` / `actionProfileTitle` 字段类型未对齐，不属于 `T019` 允许改动范围
+      - 结果：通过
 
 ---
 

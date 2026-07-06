@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import { test, vi } from "vitest";
 import { subscribeToLogLines } from "@/logger";
 import { providerProxyService } from "@/services/provider-proxy.service/index";
-import type { AgentNodeState } from "../node-runtime";
+import {
+  buildPlannerObservationContext,
+  type AgentNodeState,
+} from "../node-runtime";
 import { createInvocationInputHash } from "../approval-fingerprint";
+import { buildNextActionPlannerMessages } from "../planner/prompt";
 import {
   nextActionPlannerNode,
   parseNextActionPlannerOutput,
@@ -104,6 +108,231 @@ const readListToolMeta = {
     requiresApproval: false,
   },
 };
+
+test("buildPlannerObservationContext handles empty planner state", () => {
+  const context = buildPlannerObservationContext(
+    createState({
+      currentTaskFrame: undefined,
+      observations: undefined,
+      evidence: undefined,
+      lastToolExecution: undefined,
+      pendingApproval: undefined,
+      schemaReplanDiagnostics: undefined,
+    }),
+  );
+
+  assert.equal(context.currentTaskFrame, undefined);
+  assert.equal(context.latestObservation, undefined);
+  assert.deepEqual(context.recentObservations, []);
+  assert.equal(context.latestEvidenceSummary, undefined);
+  assert.deepEqual(context.recovery, {
+    attemptCount: 0,
+    maxAttempts: 1,
+    exhausted: false,
+    schemaError: undefined,
+    toolId: undefined,
+    invalidAction: undefined,
+  });
+  assert.equal(context.pendingApproval, undefined);
+});
+
+test("buildPlannerObservationContext includes lastToolExecution as the latest planner observation", () => {
+  const context = buildPlannerObservationContext(
+    createState({
+      lastToolExecution: {
+        toolId: "read_open",
+        args: { path: "README.md" },
+        status: "completed",
+        summary: {
+          source: "tool",
+          status: "completed",
+          toolId: "read_open",
+          actionTaken: "Opened README.md.",
+          keyFindings: ["contentLength=120"],
+          answerReadiness: {
+            canAnswer: true,
+            reason: "Opened file content is available for answer generation.",
+          },
+        },
+        startedAt: "2026-07-06T10:00:00.000Z",
+        finishedAt: "2026-07-06T10:00:01.000Z",
+      },
+      evidence: undefined,
+      observations: undefined,
+    }),
+  );
+
+  assert.equal(context.latestObservation?.source, "tool_execution");
+  assert.equal(context.latestObservation?.actionType, "tool");
+  assert.equal(context.latestObservation?.toolId, "read_open");
+  assert.equal(context.latestObservation?.status, "completed");
+  assert.deepEqual(context.latestObservation?.argsPreview, { path: "README.md" });
+  assert.equal(context.latestObservation?.summary?.toolId, "read_open");
+});
+
+test("buildPlannerObservationContext includes pendingApproval in both approval view and recent observations", () => {
+  const context = buildPlannerObservationContext(
+    createState({
+      pendingApproval: {
+        id: "approval-1",
+        runId: "run-1",
+        stepId: "approval",
+        toolId: "terminal_session",
+        toolCallId: "tool-call-1",
+        inputHash: "hash-1",
+        reason: "Needs approval before running.",
+        createdAt: "2026-07-06T10:00:02.000Z",
+      },
+      evidence: undefined,
+      observations: undefined,
+    }),
+  );
+
+  assert.deepEqual(context.pendingApproval, {
+    toolId: "terminal_session",
+    inputHash: "hash-1",
+    reason: "Needs approval before running.",
+  });
+  assert.equal(context.latestObservation?.source, "approval");
+  assert.equal(context.latestObservation?.actionType, "approval");
+  assert.equal(context.latestObservation?.toolId, "terminal_session");
+  assert.equal(context.latestObservation?.status, "waiting_approval");
+  assert.deepEqual(context.latestObservation?.suggestedNextActions, [
+    "wait_for_approval",
+    "resume_after_approval",
+  ]);
+});
+
+test("buildPlannerObservationContext maps retrieve results into unified execution observations", () => {
+  const context = buildPlannerObservationContext(
+    createState({
+      evidence: {
+        observations: [],
+        retrievals: [
+          {
+            knowledgeBaseId: "kb-1",
+            query: "inspect docs",
+            chunkCount: 1,
+            chunks: [
+              {
+                chunkId: "c1",
+                documentName: "README.md",
+                content: "doc one",
+              },
+            ],
+            createdAt: "2026-07-06T10:00:00.000Z",
+          },
+        ],
+        toolExecutions: [],
+      },
+      lastToolExecution: undefined,
+      pendingApproval: undefined,
+    }),
+  );
+
+  assert.equal(context.latestObservation?.source, "retrieval");
+  assert.equal(context.latestObservation?.actionType, "retrieve");
+  assert.equal(context.latestObservation?.status, "completed");
+  assert.deepEqual(context.latestObservation?.resultPreview, {
+    query: "inspect docs",
+    chunkCount: 1,
+    documents: ["README.md"],
+  });
+});
+
+test("buildPlannerObservationContext carries recovery diagnostics into a unified recovery view", () => {
+  const context = buildPlannerObservationContext(
+    createState({
+      schemaReplanDiagnostics: {
+        schemaError: "path is required",
+        toolId: "read_open",
+        invalidAction: {
+          type: "use_tool",
+          toolId: "read_open",
+          args: {},
+          reason: "Need file content.",
+        },
+        attemptCount: 1,
+      },
+    }),
+  );
+
+  assert.deepEqual(context.recovery, {
+    attemptCount: 1,
+    maxAttempts: 1,
+    exhausted: true,
+    schemaError: "path is required",
+    toolId: "read_open",
+    invalidAction: {
+      type: "use_tool",
+      toolId: "read_open",
+      args: {},
+      reason: "Need file content.",
+    },
+  });
+});
+
+test("buildNextActionPlannerMessages reads planner observation context instead of scattered top-level planner state fields", () => {
+  const observationContext = buildPlannerObservationContext(
+    createState({
+      currentTaskFrame: {
+        currentGoal: "Inspect README.md",
+        confirmedObjects: [],
+        completionCriteria: ["Inspect README.md"],
+      },
+      lastToolExecution: {
+        toolId: "read_open",
+        args: { path: "README.md" },
+        status: "completed",
+        summary: {
+          source: "tool",
+          status: "completed",
+          toolId: "read_open",
+          actionTaken: "Opened README.md.",
+          keyFindings: ["contentLength=120"],
+          answerReadiness: {
+            canAnswer: true,
+            reason: "Opened file content is available for answer generation.",
+          },
+        },
+        startedAt: "2026-07-06T10:00:00.000Z",
+        finishedAt: "2026-07-06T10:00:01.000Z",
+      },
+      pendingApproval: {
+        id: "approval-1",
+        runId: "run-1",
+        stepId: "approval",
+        toolId: "terminal_session",
+        toolCallId: "tool-call-1",
+        inputHash: "hash-1",
+        reason: "Needs approval before running.",
+        createdAt: "2026-07-06T10:00:02.000Z",
+      },
+      schemaReplanDiagnostics: {
+        schemaError: "path is required",
+        toolId: "read_open",
+        attemptCount: 1,
+      },
+    }),
+  );
+
+  const messages = buildNextActionPlannerMessages({
+    question: "Open README.md",
+    plan: createState().plan,
+    observationContext,
+    toolExposure: createState().toolExposure!,
+    iteration: 0,
+    maxIterations: 3,
+  });
+  const payload = JSON.parse(String(messages[1]?.content ?? "{}")) as Record<string, unknown>;
+
+  assert.ok("observationContext" in payload);
+  assert.equal("taskFrame" in payload, false);
+  assert.equal("lastToolExecution" in payload, false);
+  assert.equal("pendingApproval" in payload, false);
+  assert.equal("schemaReplanDiagnostics" in payload, false);
+  assert.equal("latestEvidenceSummary" in payload, false);
+});
 
 test("nextActionPlannerNode returns answer action from task model JSON", async () => {
   const streamSpy = vi
@@ -2214,6 +2443,63 @@ test("nextActionPlannerNode only writes nextAction in its state patch", async ()
   try {
     const patch = await nextActionPlannerNode(createState());
     assert.deepEqual(Object.keys(patch), ["nextAction"]);
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode is the primary writer for runtime currentTaskFrame updates", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need file content."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        currentTaskFrame: {
+          currentGoal: "stale goal",
+          currentSubtask: "Old subtask",
+          currentBlocker: "Existing blocker",
+          confirmedObjects: [
+            {
+              type: "knowledge",
+              id: "kb-1",
+              label: "kb-1",
+              confidence: 1,
+            },
+          ],
+          completionCriteria: ["Inspect README.md"],
+        },
+        question: "Open README.md",
+      }),
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: {
+          path: "README.md",
+        },
+        reason: "Need file content.",
+      },
+      currentTaskFrame: {
+        currentGoal: "Open README.md",
+        currentSubtask: "Run read_open with reviewed parameters.",
+        currentBlocker: "Existing blocker",
+        confirmedObjects: [
+          {
+            type: "knowledge",
+            id: "kb-1",
+            label: "kb-1",
+            confidence: 1,
+          },
+        ],
+        completionCriteria: ["Inspect README.md"],
+      },
+    });
   } finally {
     streamSpy.mockRestore();
   }

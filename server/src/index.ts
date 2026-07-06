@@ -32,6 +32,7 @@ import {
   createImageGenerationService,
   createInMemoryImageGenerationJobStore,
 } from "@/microapps/image-generation/index.js";
+import { createMailCenterService } from "@/microapps/mail-center/index.js";
 import healthRoute from "@/routes/health";
 import appMetaRoute from "@/routes/app-meta";
 import dbHealthRoute from "@/routes/dbHealth";
@@ -68,6 +69,9 @@ import { agentRunRepository } from "@/db/repositories/agent-run.repository.js";
 import { integrationCapabilitiesRepository } from "@/db/repositories/integration-capabilities.repository.js";
 import { integrationCapabilityMicroAppsRepository } from "@/db/repositories/integration-capability-micro-apps.repository.js";
 import { integrationInstancesRepository } from "@/db/repositories/integration-instances.repository.js";
+import { mailAccountsRepository } from "@/db/repositories/mail-accounts.repository.js";
+import { mailFoldersRepository } from "@/db/repositories/mail-folders.repository.js";
+import { mailMessagesRepository } from "@/db/repositories/mail-messages.repository.js";
 import { microAppsRepository } from "@/db/repositories/micro-apps.repository.js";
 import { webSearchSettingsRepository } from "@/db/repositories/web-search-settings.repository.js";
 import { wecomSettingsRepository } from "@/db/repositories/wecom-settings.repository.js";
@@ -465,6 +469,8 @@ const computerUseRuntimeService = {
   },
 };
 
+const mailCenterService = createMailCenterService();
+
 const setupPlugins = async () => {
   const appMeta = getAppMeta();
 
@@ -673,6 +679,7 @@ const setupRoutes = async () => {
     imageGenerationService,
     computerUseService,
     computerUseRuntimeService,
+    mailCenterService,
   });
   await app.register(wecomRoute);
   await app.register(agentRoute);
@@ -721,6 +728,9 @@ const setupDatabase = async () => {
   integrationCapabilitiesRepository.initialize();
   microAppsRepository.initialize();
   integrationCapabilityMicroAppsRepository.initialize();
+  mailAccountsRepository.initialize();
+  mailFoldersRepository.initialize();
+  mailMessagesRepository.initialize();
   migrateLegacyMicroAppBindings();
   initializeExternalMcpDatabase();
   registerAllExternalMcpCapabilities();

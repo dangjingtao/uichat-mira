@@ -6,9 +6,11 @@ import { createHarnessEnvironmentSnapshot } from "@/harness/environment";
 import { runWithWorkspaceRootOverride } from "@/mcp/workspace";
 import { createInvocationInputHash } from "../approval-fingerprint";
 import {
+  appendConfirmedObjectToTaskFrame,
   emitStepNode,
   getIterativeNodeId,
   getTraceAttemptMeta,
+  updateTaskFrameBlocker,
   type AgentNodeState,
   type EmitAgentExecutionNode,
 } from "../node-runtime";
@@ -22,6 +24,7 @@ import type {
   AgentObservation,
   AgentToolCallRequest,
   AgentToolExecutionResult,
+  CurrentTaskFrameConfirmedObject,
   PendingToolCall,
 } from "../types";
 
@@ -104,6 +107,43 @@ const getDurationMs = (startedAt: string, finishedAt: string) => {
   }
 
   return Math.max(0, endMs - startMs);
+};
+
+const getConfirmedObjectFromToolExecution = (
+  pendingToolCall: PendingToolCall,
+): CurrentTaskFrameConfirmedObject => {
+  if (pendingToolCall.toolId === "terminal_session") {
+    return {
+      type: "command",
+      id: pendingToolCall.inputHash,
+      label:
+        typeof pendingToolCall.args.command === "string"
+          ? pendingToolCall.args.command
+          : pendingToolCall.toolId,
+      confidence: 1,
+    };
+  }
+
+  if (
+    (pendingToolCall.toolId === "read_open" ||
+      pendingToolCall.toolId === "read_list" ||
+      pendingToolCall.toolId === "read_locate") &&
+    typeof pendingToolCall.args.path === "string"
+  ) {
+    return {
+      type: "file",
+      id: pendingToolCall.args.path,
+      label: pendingToolCall.args.path,
+      confidence: 1,
+    };
+  }
+
+  return {
+    type: "tool",
+    id: pendingToolCall.toolId,
+    label: pendingToolCall.toolId,
+    confidence: 1,
+  };
 };
 
 const toHarnessApprovedInvocations = (
@@ -372,6 +412,15 @@ export const toolNode = async (
       lastToolExecution: executionRecord,
       observations: [...(state.observations ?? []), observation],
       evidence,
+      currentTaskFrame: updateTaskFrameBlocker(
+        appendConfirmedObjectToTaskFrame(state.currentTaskFrame, {
+          type: "approval",
+          id: approval.id,
+          label: approval.toolId,
+          confidence: 1,
+        }),
+        approval.reason,
+      ),
       continueIteration: false,
       postToolReviewPending: false,
     };
@@ -448,6 +497,13 @@ export const toolNode = async (
       selectedToolId: undefined,
       pendingToolCall: undefined,
       lastToolExecution: executionRecord,
+      currentTaskFrame: updateTaskFrameBlocker(
+        appendConfirmedObjectToTaskFrame(
+          state.currentTaskFrame,
+          getConfirmedObjectFromToolExecution(pendingToolCall),
+        ),
+        errorMessage,
+      ),
       errorMessage,
       errorSourceNodeId: "agent-tool",
       continueIteration: false,
@@ -515,6 +571,13 @@ export const toolNode = async (
     selectedToolId: undefined,
     pendingToolCall: undefined,
     lastToolExecution: executionRecord,
+    currentTaskFrame: updateTaskFrameBlocker(
+      appendConfirmedObjectToTaskFrame(
+        state.currentTaskFrame,
+        getConfirmedObjectFromToolExecution(pendingToolCall),
+      ),
+      undefined,
+    ),
     iterationCount: (state.iterationCount ?? 0) + 1,
     continueIteration: false,
     postToolReviewPending: false,

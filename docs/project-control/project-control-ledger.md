@@ -1,7 +1,7 @@
 ---
 status: current
 owner: project-owner
-last_verified: 2026-07-05
+last_verified: 2026-07-06
 layer: project-control
 module: ProjectControl
 feature: ProjectControlLedger
@@ -63,7 +63,6 @@ related:
 | [core_tools_T008](tasks/core_tools_T008-read-locate-keyword-preview.md) | `READY_FOR_REVIEW` | Core Tools | 评审 read locate preview |
 | [core_tools_T011](tasks/core_tools_T011-selector-create-file-prefers-edit.md) | `READY_FOR_REVIEW` | Core Tools | 评审 create-file selector 策略 |
 | [core_tools_T017](tasks/core_tools_T017-web-search-artifact-sensitive-field-scrubbing.md) | `READY_FOR_REVIEW` | Core Tools | 评审敏感字段清理 |
-| [core_tools_T019](tasks/core_tools_T019-workspace-mutation-boundary-retention.md) | `READY_FOR_REVIEW` | Core Tools | 评审 workspace mutation boundary retention |
 | [T-011](tasks/T-011-sandbox-contract-direct-bench.md) | `READY_FOR_REVIEW` | Harness / Sandbox | 评审 sandbox direct bench contract |
 | [T-012](tasks/T-012-l1-workspace-sandbox-runner.md) | `DONE` | Harness / Sandbox | Review 02 已通过：L1 workspace sandbox runner |
 | [T-009](tasks/T-009-test-report-json-consolidation.md) | `PROPOSED` | Evidence Hygiene | 决定是否进入执行队列 |
@@ -146,7 +145,7 @@ related:
 | [core_tools_T016](tasks/core_tools_T016-edit-action-profiles.md) | `DONE` | edit action profiles |
 | [core_tools_T017](tasks/core_tools_T017-web-search-artifact-sensitive-field-scrubbing.md) | `READY_FOR_REVIEW` | artifact sensitive field scrubbing |
 | [core_tools_T018](tasks/core_tools_T018-observability-trace-debug-panel-contract.md) | `DONE` | trace debug panel contract |
-| [core_tools_T019](tasks/core_tools_T019-workspace-mutation-boundary-retention.md) | `READY_FOR_REVIEW` | mutation boundary retention |
+| [core_tools_T019](tasks/core_tools_T019-workspace-mutation-boundary-retention.md) | `DONE` | mutation boundary retention |
 
 ## Harness / Remediation Index
 

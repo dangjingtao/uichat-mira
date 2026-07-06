@@ -16,8 +16,10 @@ import {
 } from "@/constants/domain.js";
 import {
   PROVIDER_CODE_VALUES,
+  PROVIDER_TEMPLATE_CODE_VALUES,
   PROVIDER_STATUS_VALUES,
   type ProviderCodeValue,
+  type ProviderTemplateCodeValue,
   type ProviderStatusValue,
 } from "@/providers/codes.js";
 
@@ -77,6 +79,10 @@ export const modelConfigs = sqliteTable(
     providerCode: text("provider_code", {
       enum: PROVIDER_CODE_VALUES,
     }),
+    providerConnectionId: text("provider_connection_id").references(
+      () => providerConnections.id,
+      { onDelete: "set null" },
+    ),
     remoteModelId: text("remote_model_id"),
     params: text("params").notNull().default("{}"),
     isDefault: integer("is_default", { mode: "boolean" })
@@ -143,12 +149,21 @@ export type NewModelParamTemplate = typeof modelParamTemplates.$inferInsert;
 export const providerConnections = sqliteTable(
   "provider_connections",
   {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    templateCode: text("template_code", {
+      enum: PROVIDER_TEMPLATE_CODE_VALUES,
+    }).notNull(),
     providerCode: text("provider_code", {
       enum: PROVIDER_CODE_VALUES,
-    }).primaryKey(),
+    }),
     displayName: text("display_name").notNull(),
     baseUrl: text("base_url").notNull().default(""),
     apiKeyEncrypted: text("api_key_encrypted"),
+    isSystem: integer("is_system", { mode: "boolean" })
+      .notNull()
+      .default(false),
     isEnabled: integer("is_enabled", { mode: "boolean" })
       .notNull()
       .default(true),
@@ -170,6 +185,12 @@ export const providerConnections = sqliteTable(
     providerStatusIdx: index("idx_provider_connections_status").on(
       table.status,
     ),
+    templateIdx: index("idx_provider_connections_template").on(table.templateCode),
+    legacyProviderCodeUniqueIdx: uniqueIndex(
+      "idx_provider_connections_provider_code_unique",
+    )
+      .on(table.providerCode)
+      .where(sql`${table.providerCode} IS NOT NULL`),
   }),
 );
 
@@ -180,9 +201,12 @@ export const providerModels = sqliteTable(
   "provider_models",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
+    providerConnectionId: text("provider_connection_id")
+      .notNull()
+      .references(() => providerConnections.id, { onDelete: "cascade" }),
     providerCode: text("provider_code", {
       enum: PROVIDER_CODE_VALUES,
-    }).notNull(),
+    }),
     remoteModelId: text("remote_model_id").notNull(),
     modelName: text("model_name").notNull(),
     rawPayloadJson: text("raw_payload_json"),
@@ -191,11 +215,12 @@ export const providerModels = sqliteTable(
   },
   (table) => ({
     providerModelUniqueIdx: uniqueIndex(
-      "idx_provider_models_provider_remote",
-    ).on(table.providerCode, table.remoteModelId),
-    providerModelIdx: index("idx_provider_models_provider").on(
-      table.providerCode,
+      "idx_provider_models_connection_remote",
+    ).on(table.providerConnectionId, table.remoteModelId),
+    providerModelIdx: index("idx_provider_models_connection").on(
+      table.providerConnectionId,
     ),
+    providerCodeIdx: index("idx_provider_models_provider_code").on(table.providerCode),
   }),
 );
 
@@ -386,6 +411,144 @@ export type IntegrationCapabilityMicroApp =
   typeof integrationCapabilityMicroApps.$inferSelect;
 export type NewIntegrationCapabilityMicroApp =
   typeof integrationCapabilityMicroApps.$inferInsert;
+
+export const mailAccounts = sqliteTable(
+  "mail_accounts",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull().default(""),
+    emailAddress: text("email_address").notNull().default(""),
+    smtpHost: text("smtp_host").notNull().default(""),
+    smtpPort: integer("smtp_port").notNull().default(587),
+    smtpSecure: integer("smtp_secure", { mode: "boolean" }).notNull().default(false),
+    smtpUsername: text("smtp_username").notNull().default(""),
+    smtpPasswordEncrypted: text("smtp_password_encrypted"),
+    imapHost: text("imap_host").notNull().default(""),
+    imapPort: integer("imap_port").notNull().default(993),
+    imapSecure: integer("imap_secure", { mode: "boolean" }).notNull().default(true),
+    imapUsername: text("imap_username").notNull().default(""),
+    imapPasswordEncrypted: text("imap_password_encrypted"),
+    inboxFolderPath: text("inbox_folder_path").notNull().default("INBOX"),
+    status: text("status", { enum: ["idle", "connected", "error"] })
+      .notNull()
+      .default("idle"),
+    lastError: text("last_error"),
+    lastSyncedAt: text("last_synced_at"),
+    isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    userIdx: index("idx_mail_accounts_user_id").on(table.userId),
+    statusIdx: index("idx_mail_accounts_status").on(table.status),
+    defaultIdx: uniqueIndex("idx_mail_accounts_user_default")
+      .on(table.userId, table.isDefault)
+      .where(sql`${table.isDefault} = 1`),
+  }),
+);
+
+export type MailAccount = typeof mailAccounts.$inferSelect;
+export type NewMailAccount = typeof mailAccounts.$inferInsert;
+
+export const mailFolders = sqliteTable(
+  "mail_folders",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => mailAccounts.id, { onDelete: "cascade" }),
+    folderKey: text("folder_key").notNull().default("inbox"),
+    folderName: text("folder_name").notNull().default("Inbox"),
+    folderPath: text("folder_path").notNull().default("INBOX"),
+    messageCount: integer("message_count").notNull().default(0),
+    unreadCount: integer("unread_count").notNull().default(0),
+    syncStatus: text("sync_status", {
+      enum: ["idle", "syncing", "succeeded", "failed"],
+    })
+      .notNull()
+      .default("idle"),
+    lastSyncedAt: text("last_synced_at"),
+    lastError: text("last_error"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    accountIdx: index("idx_mail_folders_account_id").on(table.accountId),
+    uniqueFolderIdx: uniqueIndex("idx_mail_folders_account_folder_key").on(
+      table.accountId,
+      table.folderKey,
+    ),
+  }),
+);
+
+export type MailFolder = typeof mailFolders.$inferSelect;
+export type NewMailFolder = typeof mailFolders.$inferInsert;
+
+export const mailMessages = sqliteTable(
+  "mail_messages",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => mailAccounts.id, { onDelete: "cascade" }),
+    folderId: text("folder_id")
+      .notNull()
+      .references(() => mailFolders.id, { onDelete: "cascade" }),
+    remoteUid: integer("remote_uid").notNull(),
+    messageId: text("message_id"),
+    subject: text("subject").notNull().default(""),
+    fromDisplay: text("from_display").notNull().default(""),
+    fromAddress: text("from_address").notNull().default(""),
+    toJson: text("to_json").notNull().default("[]"),
+    previewText: text("preview_text").notNull().default(""),
+    textContent: text("text_content").notNull().default(""),
+    sentAt: text("sent_at"),
+    receivedAt: text("received_at"),
+    isRead: integer("is_read", { mode: "boolean" }).notNull().default(false),
+    isFlagged: integer("is_flagged", { mode: "boolean" }).notNull().default(false),
+    hasAttachments: integer("has_attachments", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    rawHeadersJson: text("raw_headers_json").notNull().default("{}"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    folderReceivedIdx: index("idx_mail_messages_folder_received").on(
+      table.folderId,
+      table.receivedAt,
+    ),
+    accountIdx: index("idx_mail_messages_account_id").on(table.accountId),
+    uniqueRemoteUidIdx: uniqueIndex("idx_mail_messages_folder_remote_uid").on(
+      table.folderId,
+      table.remoteUid,
+    ),
+  }),
+);
+
+export type MailMessage = typeof mailMessages.$inferSelect;
+export type NewMailMessage = typeof mailMessages.$inferInsert;
 
 export const externalIdentityBindings = sqliteTable(
   "external_identity_bindings",
@@ -870,10 +1033,13 @@ export type ModelType =
   | "embedding"
   | "rerank"
   | "task"
-  | "evaluation";
+  | "agentTask"
+  | "evaluation"
+  | "imageGeneration";
 export type UserRole = "admin" | "user";
 export type ParamType = "number" | "select" | "boolean";
 export type ProviderCode = ProviderCodeValue;
+export type ProviderTemplateCode = ProviderTemplateCodeValue;
 export type ProviderStatus = ProviderStatusValue;
 export type KnowledgeBaseStatus = "active" | "archived";
 export type DocumentSourceType = "upload" | "sync" | "api";

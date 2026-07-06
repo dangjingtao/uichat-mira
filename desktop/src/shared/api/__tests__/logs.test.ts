@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { readSseFrames, streamRuntimeLogs } from "./logs";
+import { readSseFrames, streamRuntimeLogs } from "../logs";
 
 describe("runtime log stream api", () => {
   it("parses complete SSE frames and keeps the trailing partial frame", () => {

@@ -4,7 +4,9 @@ export const MODEL_TYPE_VALUES = [
   "embedding",
   "rerank",
   "task",
+  "agentTask",
   "evaluation",
+  "imageGeneration",
 ] as const;
 export const MESSAGE_ROLE_VALUES = ["user", "assistant", "system"] as const;
 export const THREAD_STATUS_VALUES = ["active", "archived", "deleted"] as const;

@@ -1,6 +1,7 @@
 import {
   modelConfigRepository,
   modelParamTemplateRepository,
+  providerConnectionRepository,
 } from "@/db/repositories";
 import type { ModelConfig, ModelParamTemplate, ModelType, ProviderCode } from "@/db/schema";
 
@@ -8,7 +9,7 @@ const sanitizeParamsByType = (
   type: ModelType,
   params: Record<string, unknown>,
 ): Record<string, unknown> => {
-  if (type === "task" || type === "evaluation") {
+  if (type === "task" || type === "agentTask" || type === "evaluation") {
     const sanitized: Record<string, unknown> = {};
 
     if (typeof params.enabled === "boolean") {
@@ -37,6 +38,16 @@ const sanitizeParamsByType = (
   }
 
   if (type !== "rerank") {
+    if (type === "imageGeneration") {
+      const sanitized: Record<string, unknown> = {};
+
+      if (typeof params.enabled === "boolean") {
+        sanitized.enabled = params.enabled;
+      }
+
+      return sanitized;
+    }
+
     return params;
   }
 
@@ -59,7 +70,9 @@ export interface ModelConfigResponse {
   id: string;
   type: ModelType;
   name: string;
-  providerCode: ProviderCode | null;
+  providerCode: string | null;
+  providerConnectionId: string | null;
+  providerTemplateCode: string | null;
   remoteModelId: string | null;
   params: Record<string, unknown>;
   isDefault: boolean;
@@ -76,17 +89,25 @@ export interface ParamTemplateResponse {
   defaultValue: number | string | boolean;
 }
 
-const toModelConfigResponse = (row: ModelConfig): ModelConfigResponse => ({
-  id: row.id,
-  type: row.type,
-  name: row.name,
-  providerCode: row.providerCode ?? null,
-  remoteModelId: row.remoteModelId ?? null,
-  params: sanitizeParamsByType(row.type, JSON.parse(row.params)),
-  isDefault: row.isDefault,
-  createdAt: row.createdAt,
-  updatedAt: row.updatedAt,
-});
+const toModelConfigResponse = (row: ModelConfig): ModelConfigResponse => {
+  const connection = row.providerConnectionId
+    ? providerConnectionRepository.findById(row.providerConnectionId)
+    : null;
+
+  return {
+    id: row.id,
+    type: row.type,
+    name: row.name,
+    providerCode: row.providerCode ?? row.providerConnectionId ?? null,
+    providerConnectionId: row.providerConnectionId ?? null,
+    providerTemplateCode: connection?.templateCode ?? null,
+    remoteModelId: row.remoteModelId ?? null,
+    params: sanitizeParamsByType(row.type, JSON.parse(row.params)),
+    isDefault: row.isDefault,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+};
 
 const toParamTemplateResponse = (
   row: ModelParamTemplate,
@@ -115,6 +136,7 @@ export const modelConfigService = {
       name?: string;
       params?: Record<string, unknown>;
       providerCode?: ProviderCode | null;
+      providerConnectionId?: string | null;
       remoteModelId?: string | null;
     },
   ): ModelConfigResponse | null {
@@ -138,6 +160,10 @@ export const modelConfigService = {
       params: JSON.stringify(mergedParams),
       providerCode:
         data.providerCode !== undefined ? data.providerCode : current.providerCode,
+      providerConnectionId:
+        data.providerConnectionId !== undefined
+          ? data.providerConnectionId
+          : current.providerConnectionId,
       remoteModelId:
         data.remoteModelId !== undefined
           ? data.remoteModelId
@@ -159,7 +185,9 @@ export const modelConfigService = {
       embedding: [],
       rerank: [],
       task: [],
+      agentTask: [],
       evaluation: [],
+      imageGeneration: [],
     };
 
     for (const row of rows) {

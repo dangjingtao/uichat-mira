@@ -16,6 +16,8 @@ const modelConfigSchema = {
     "type",
     "name",
     "providerCode",
+    "providerConnectionId",
+    "providerTemplateCode",
     "remoteModelId",
     "params",
     "isDefault",
@@ -27,7 +29,13 @@ const modelConfigSchema = {
     type: modelTypeSchema,
     name: { type: "string" },
     providerCode: {
-      anyOf: [{ type: "string", enum: PROVIDER_CODE_ENUM }, { type: "null" }],
+      anyOf: [{ type: "string" }, { type: "null" }],
+    },
+    providerConnectionId: {
+      anyOf: [{ type: "string" }, { type: "null" }],
+    },
+    providerTemplateCode: {
+      anyOf: [{ type: "string" }, { type: "null" }],
     },
     remoteModelId: {
       anyOf: [{ type: "string" }, { type: "null" }],
@@ -201,13 +209,23 @@ const modelConfigRoute: FastifyPluginAsync = async (app) => {
         response: {
           200: successEnvelope({
             type: "object",
-            required: ["llm", "embedding", "rerank", "task", "evaluation"],
+            required: [
+              "llm",
+              "embedding",
+              "rerank",
+              "task",
+              "agentTask",
+              "evaluation",
+              "imageGeneration",
+            ],
             properties: {
               llm: { type: "array", items: paramTemplateItemSchema },
               embedding: { type: "array", items: paramTemplateItemSchema },
               rerank: { type: "array", items: paramTemplateItemSchema },
               task: { type: "array", items: paramTemplateItemSchema },
+              agentTask: { type: "array", items: paramTemplateItemSchema },
               evaluation: { type: "array", items: paramTemplateItemSchema },
+              imageGeneration: { type: "array", items: paramTemplateItemSchema },
             },
           }),
           500: errorEnvelope,

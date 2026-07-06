@@ -1,0 +1,377 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/shared/lib/request", () => ({
+  get: vi.fn(),
+  post: vi.fn(),
+  put: vi.fn(),
+  patch: vi.fn(),
+  del: vi.fn(),
+}));
+
+vi.mock("@/shared/lib/sessionStorage", () => ({
+  getSession: vi.fn(() => ({ token: "token-1", user: { username: "alice" } })),
+}));
+
+vi.mock("@/shared/platform/desktopRuntime", () => ({
+  getApiBaseUrl: vi.fn(() => "http://localhost:3000"),
+}));
+
+import { get, post, put, patch, del } from "@/shared/lib/request";
+import {
+  getTools,
+  getMcpMarketplaceServers,
+  getExternalMcpServers,
+  createExternalMcpServer,
+  connectExternalMcpServer,
+  discoverExternalMcpServer,
+  deleteExternalMcpServer,
+  getExternalMcpServerConfigSchema,
+  getExternalMcpServerConfig,
+  updateExternalMcpServerConfig,
+  getMcpWorkspaceSelection,
+  getMcpWebSearchConfig,
+  saveMcpWebSearchConfig,
+  selectMcpWorkspaceRoot,
+  getMcpTools,
+  getMcpInvocationTrace,
+  executeMcpInvocationStream,
+  type ToolDefinition,
+  type McpMarketplaceServer,
+  type ExternalMcpServerRecord,
+  type McpWorkspaceSelection,
+  type McpWebSearchConfig,
+  type McpToolDefinition,
+  type McpInvocationTrace,
+} from "../tools";
+
+const sampleTool: ToolDefinition = {
+  id: "tool-1",
+  name: "Search",
+  description: "search docs",
+  version: "1",
+  category: "tool",
+  tags: ["rag"],
+  author: "team",
+  parameters: {},
+  runtime: {},
+};
+
+const sampleMarketplaceServer: McpMarketplaceServer = {
+  id: "srv-1",
+  name: "server",
+  title: "Server",
+  description: "desc",
+  version: "1.0.0",
+  status: "active",
+  isLatest: true,
+  publishedAt: "2026-07-06T00:00:00.000Z",
+  updatedAt: "2026-07-06T00:00:00.000Z",
+  websiteUrl: null,
+  repositoryUrl: null,
+  transports: [
+    {
+      kind: "streamable-http",
+      packageType: "remote",
+      installable: true,
+      label: "HTTP",
+      url: "https://example.com/sse",
+    },
+  ],
+};
+
+const sampleExternalServer: ExternalMcpServerRecord = {
+  id: "ext-1",
+  source: "manual",
+  displayName: "External",
+  transport: { kind: "streamable-http", url: "https://example.com" },
+  status: "configured",
+  enabled: true,
+  createdAt: "2026-07-06T00:00:00.000Z",
+  updatedAt: "2026-07-06T00:00:00.000Z",
+  discoveredTools: [],
+};
+
+const sampleWorkspaceSelection: McpWorkspaceSelection = {
+  rootPath: "/workspace",
+  source: "selected",
+};
+
+const sampleWebSearchConfig: McpWebSearchConfig = {
+  apiKey: "key",
+  baseUrl: "https://search.example.com",
+  maxResults: 10,
+};
+
+const sampleMcpTool: McpToolDefinition = {
+  id: "mcp-tool-1",
+  title: "Read File",
+  description: "read",
+  domain: "read",
+  source: "internal",
+  mode: "sync",
+  inputSchema: {},
+  outputSchema: {},
+  tags: [],
+  capabilities: {
+    sideEffect: "none",
+    requiresApproval: false,
+  },
+};
+
+const sampleTrace: McpInvocationTrace = {
+  traceId: "trace-1",
+  invocationId: "inv-1",
+  toolId: "mcp-tool-1",
+  startedAt: "2026-07-06T00:00:00.000Z",
+  spans: [],
+};
+
+describe("tools api", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("getTools 返回工具列表", async () => {
+    vi.mocked(get).mockResolvedValueOnce([sampleTool]);
+
+    const result = await getTools();
+
+    expect(get).toHaveBeenCalledWith("/tools");
+    expect(result).toEqual([sampleTool]);
+  });
+
+  it("getMcpMarketplaceServers 支持查询参数", async () => {
+    vi.mocked(get).mockResolvedValueOnce({
+      servers: [sampleMarketplaceServer],
+      metadata: { count: 1, nextCursor: null, sourceUrl: "", cache: { hit: false, stale: false, cachedAt: null } },
+    });
+
+    const result = await getMcpMarketplaceServers({
+      cursor: "c1",
+      limit: 10,
+      query: "search",
+    });
+
+    expect(get).toHaveBeenCalledWith(
+      "/mcp/marketplace/servers?cursor=c1&limit=10&query=search",
+      { signal: undefined, timeout: 300000 },
+    );
+    expect(result.servers).toEqual([sampleMarketplaceServer]);
+  });
+
+  it("getExternalMcpServers 返回外部服务器列表", async () => {
+    vi.mocked(get).mockResolvedValueOnce([sampleExternalServer]);
+
+    const result = await getExternalMcpServers();
+
+    expect(get).toHaveBeenCalledWith("/mcp/external/servers", {
+      timeout: 300000,
+    });
+    expect(result).toEqual([sampleExternalServer]);
+  });
+
+  it("createExternalMcpServer 创建服务器", async () => {
+    vi.mocked(post).mockResolvedValueOnce(sampleExternalServer);
+
+    const input = {
+      displayName: "New",
+      transport: { kind: "stdio" as const, command: "node" },
+      disclaimerAccepted: false,
+    };
+    const result = await createExternalMcpServer(input);
+
+    expect(post).toHaveBeenCalledWith("/mcp/external/servers", input, {
+      timeout: 300000,
+    });
+    expect(result).toBe(sampleExternalServer);
+  });
+
+  it("connectExternalMcpServer 连接服务器", async () => {
+    vi.mocked(post).mockResolvedValueOnce(sampleExternalServer);
+
+    const result = await connectExternalMcpServer("ext-1");
+
+    expect(post).toHaveBeenCalledWith(
+      "/mcp/external/servers/ext-1/connect",
+      undefined,
+      { timeout: 300000 },
+    );
+    expect(result).toBe(sampleExternalServer);
+  });
+
+  it("discoverExternalMcpServer 发现工具", async () => {
+    vi.mocked(post).mockResolvedValueOnce(sampleExternalServer);
+
+    const result = await discoverExternalMcpServer("ext-1");
+
+    expect(post).toHaveBeenCalledWith(
+      "/mcp/external/servers/ext-1/discover",
+      undefined,
+      { timeout: 300000 },
+    );
+    expect(result).toBe(sampleExternalServer);
+  });
+
+  it("deleteExternalMcpServer 删除服务器", async () => {
+    vi.mocked(del).mockResolvedValueOnce(sampleExternalServer);
+
+    const result = await deleteExternalMcpServer("ext-1");
+
+    expect(del).toHaveBeenCalledWith("/mcp/external/servers/ext-1", {
+      timeout: 300000,
+    });
+    expect(result).toBe(sampleExternalServer);
+  });
+
+  it("getExternalMcpServerConfigSchema 获取配置 schema", async () => {
+    vi.mocked(get).mockResolvedValueOnce({
+      fields: [],
+      completeness: "unknown",
+      sources: [],
+    });
+
+    const result = await getExternalMcpServerConfigSchema("ext-1");
+
+    expect(get).toHaveBeenCalledWith(
+      "/mcp/external/servers/ext-1/config-schema",
+      { timeout: 300000 },
+    );
+    expect(result.fields).toEqual([]);
+  });
+
+  it("getExternalMcpServerConfig 获取配置", async () => {
+    vi.mocked(get).mockResolvedValueOnce({
+      authType: "none",
+      timeoutMs: 60000,
+      customHeadersJson: "{}",
+    });
+
+    const result = await getExternalMcpServerConfig("ext-1");
+
+    expect(get).toHaveBeenCalledWith(
+      "/mcp/external/servers/ext-1/config",
+      { timeout: 300000 },
+    );
+    expect(result.authType).toBe("none");
+  });
+
+  it("updateExternalMcpServerConfig 更新配置", async () => {
+    vi.mocked(patch).mockResolvedValueOnce({
+      authType: "bearer",
+      timeoutMs: 60000,
+      customHeadersJson: "{}",
+    });
+
+    const input = { authType: "bearer" as const, timeoutMs: 60000, customHeadersJson: "{}" };
+    const result = await updateExternalMcpServerConfig("ext-1", input);
+
+    expect(patch).toHaveBeenCalledWith(
+      "/mcp/external/servers/ext-1/config",
+      input,
+      { timeout: 300000 },
+    );
+    expect(result.authType).toBe("bearer");
+  });
+
+  it("getMcpWorkspaceSelection 获取工作区选择", async () => {
+    vi.mocked(get).mockResolvedValueOnce(sampleWorkspaceSelection);
+
+    const result = await getMcpWorkspaceSelection();
+
+    expect(get).toHaveBeenCalledWith("/mcp/workspace");
+    expect(result).toBe(sampleWorkspaceSelection);
+  });
+
+  it("getMcpWebSearchConfig 获取搜索配置", async () => {
+    vi.mocked(get).mockResolvedValueOnce(sampleWebSearchConfig);
+
+    const result = await getMcpWebSearchConfig();
+
+    expect(get).toHaveBeenCalledWith("/mcp/web-search/config");
+    expect(result).toBe(sampleWebSearchConfig);
+  });
+
+  it("saveMcpWebSearchConfig 保存搜索配置", async () => {
+    vi.mocked(put).mockResolvedValueOnce(sampleWebSearchConfig);
+
+    const input = { maxResults: 20 };
+    const result = await saveMcpWebSearchConfig(input);
+
+    expect(put).toHaveBeenCalledWith("/mcp/web-search/config", input);
+    expect(result).toBe(sampleWebSearchConfig);
+  });
+
+  it("selectMcpWorkspaceRoot 选择工作区根目录", async () => {
+    vi.mocked(post).mockResolvedValueOnce(sampleWorkspaceSelection);
+
+    const result = await selectMcpWorkspaceRoot("/workspace");
+
+    expect(post).toHaveBeenCalledWith("/mcp/workspace/select", {
+      rootPath: "/workspace",
+    });
+    expect(result).toBe(sampleWorkspaceSelection);
+  });
+
+  it("getMcpTools 获取 MCP 工具列表", async () => {
+    vi.mocked(get).mockResolvedValueOnce([sampleMcpTool]);
+
+    const result = await getMcpTools();
+
+    expect(get).toHaveBeenCalledWith("/mcp/tools");
+    expect(result).toEqual([sampleMcpTool]);
+  });
+
+  it("getMcpInvocationTrace 获取调用链路", async () => {
+    vi.mocked(get).mockResolvedValueOnce(sampleTrace);
+
+    const result = await getMcpInvocationTrace("inv-1");
+
+    expect(get).toHaveBeenCalledWith("/mcp/invocations/inv-1/trace");
+    expect(result).toBe(sampleTrace);
+  });
+
+  it("executeMcpInvocationStream 处理 SSE 事件流", async () => {
+    const encoder = new TextEncoder();
+    const event = JSON.stringify({
+      type: "invocation:start",
+      invocationId: "inv-1",
+      toolId: "mcp-tool-1",
+      at: "2026-07-06T00:00:00.000Z",
+    });
+    const bytes = encoder.encode(`data: ${event}\n\n`);
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: vi
+              .fn()
+              .mockResolvedValueOnce({ done: false, value: bytes })
+              .mockResolvedValueOnce({ done: true }),
+          }),
+        },
+      }),
+    );
+
+    const events: unknown[] = [];
+    await executeMcpInvocationStream({ toolId: "mcp-tool-1" }, (event) => {
+      events.push(event);
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      "http://localhost:3000/mcp/invocations/stream",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer token-1",
+        }),
+        body: JSON.stringify({ toolId: "mcp-tool-1", args: {} }),
+      }),
+    );
+    expect(events).toHaveLength(1);
+    expect((events[0] as { type: string }).type).toBe("invocation:start");
+  });
+});

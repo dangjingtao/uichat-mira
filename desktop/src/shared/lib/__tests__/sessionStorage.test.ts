@@ -5,8 +5,8 @@ import {
   getSession,
   readSessionFromStorage,
   writeSessionToStorage,
-} from "./sessionStorage";
-import type { SessionState } from "../types/auth";
+} from "../sessionStorage";
+import type { SessionState } from "../../types/auth";
 
 const validSession: SessionState = {
   token: "token-1",

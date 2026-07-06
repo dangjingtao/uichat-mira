@@ -33,6 +33,7 @@ import {
 import { parseModelParams, toEmbeddingOptions } from "./params.js";
 import {
   assertOllamaModelAvailable,
+  resolveAgentTaskProvider,
   resolveExplicitProviderSelection,
   resolveProviderForRole,
 } from "./resolution.js";
@@ -344,7 +345,7 @@ export const providerProxyService = {
   },
 
   streamTaskChatText(messages: NormalizedChatMessage[]) {
-    const resolved = resolveProviderForRole("task", "default");
+    const resolved = resolveAgentTaskProvider("default");
 
     return streamResolvedChat(resolved, messages);
   },
@@ -364,7 +365,7 @@ export const providerProxyService = {
   describeTaskChatInvocation(
     messages: NormalizedChatMessage[],
   ): ProviderInvocationMetadata {
-    const resolved = resolveProviderForRole("task", "default");
+    const resolved = resolveAgentTaskProvider("default");
     return describeResolvedChatInvocation(resolved, messages, "task-chat");
   },
 

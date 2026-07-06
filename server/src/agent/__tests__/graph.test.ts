@@ -2335,6 +2335,149 @@ test("agentGraph preserves the frozen pendingToolCall resume entry and goes stra
   );
 });
 
+test("agentGraph resume path does not repeat a normalized workspace_mutation after approval", async () => {
+  const workspaceMutation = makeToolDefinition({
+    id: "workspace_mutation",
+    domain: "edit",
+    inputSchema: {
+      type: "object",
+      required: ["operation", "targetPath"],
+      properties: {
+        operation: {
+          type: "string",
+          enum: ["delete", "move", "write"],
+        },
+        targetPath: { type: "string" },
+        destinationPath: { type: "string" },
+        content: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    sideEffect: "local-write",
+    requiresApproval: true,
+    workspaceBound: true,
+    workspaceBoundaryArgKeys: ["targetPath", "destinationPath"],
+  });
+  const approvedArgs = {
+    operation: "delete",
+    targetPath: "ONLY_ALT_WORKSPACE.txt",
+  };
+  vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([workspaceMutation]);
+  vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
+    makeToolIntentResult({
+      query: "删除 ONLY_ALT_WORKSPACE.txt。",
+      topCandidates: [{ toolId: "workspace_mutation", domain: "edit" }],
+      exposedDefinitions: [workspaceMutation],
+    }),
+  );
+  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
+    selectedToolIds: ["workspace_mutation"],
+    decisionSource: "task-model",
+    decisionReason: "Workspace mutation is the selected tool for this request.",
+  });
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"workspace_mutation","args":{"operation":"delete","targetPath":"/ONLY_ALT_WORKSPACE.txt"},"reason":"Need to delete the file."}';
+    });
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-workspace-mutation-approved-1",
+      toolId: "workspace_mutation",
+      status: "completed",
+      result: {
+        operation: "delete",
+        targetPath: "ONLY_ALT_WORKSPACE.txt",
+        deletedType: "file",
+        dryRun: false,
+        recursive: false,
+      },
+      startedAt: "2026-07-06T00:00:00.000Z",
+      finishedAt: "2026-07-06T00:00:01.000Z",
+    });
+  const generateInvokeSpy = vi
+    .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
+    .mockResolvedValue("deleted ONLY_ALT_WORKSPACE.txt");
+  const executionNodes: Array<{
+    nodeId: string;
+    phase: string;
+    details?: Record<string, unknown>;
+  }> = [];
+
+  const result = await agentGraph.run({
+    runId: "run-approved-workspace-mutation",
+    threadId: "thread-1",
+    userId: 1,
+    goal: {
+      ...baseGoal,
+      text: "删除 ONLY_ALT_WORKSPACE.txt。",
+    },
+    plan: basePlan,
+    workspaceRoot: "D:\\CODEX_TEST_FOLDER_ALT",
+    messages: [makeMessage("删除 ONLY_ALT_WORKSPACE.txt。")],
+    selectedToolId: "workspace_mutation",
+    pendingToolCall: {
+      id: "pending-workspace-1",
+      toolId: "workspace_mutation",
+      args: approvedArgs,
+      reason: "Already approved frozen call.",
+      inputHash: createInvocationInputHash({
+        toolId: "workspace_mutation",
+        args: approvedArgs,
+        source: "planner",
+      }),
+      source: "planner",
+      status: "frozen",
+      toolMeta: {
+        toolId: "workspace_mutation",
+        title: "workspace_mutation",
+        description: "workspace_mutation",
+        inputSchema: workspaceMutation.inputSchema,
+        domain: "edit",
+        source: "internal",
+        tags: ["edit"],
+      },
+      createdAt: "2026-07-06T00:00:00.000Z",
+    },
+    approvedInvocations: [
+      {
+        toolId: "workspace_mutation",
+        input: approvedArgs,
+        inputHash: createInvocationInputHash({
+          toolId: "workspace_mutation",
+          args: approvedArgs,
+          source: "planner",
+        }),
+        approvedAt: "2026-07-06T00:00:00.000Z",
+        approvalId: "approval-workspace-1",
+      },
+    ],
+    onExecutionNode: async (event) => {
+      executionNodes.push({
+        nodeId: event.nodeId,
+        phase: event.phase,
+        details:
+          event.details && typeof event.details === "object"
+            ? (event.details as Record<string, unknown>)
+            : undefined,
+      });
+    },
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.answer, "deleted ONLY_ALT_WORKSPACE.txt");
+  assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+  assert.deepEqual(executeHarnessInvocationSpy.mock.calls[0]?.[0]?.args, approvedArgs);
+  assert.equal(plannerSpy.mock.calls.length, 1);
+  const plannerDoneEvents = executionNodes.filter(
+    (event) => event.nodeId === "agent-next-action-planner" && event.phase === "done",
+  );
+  assert.equal(plannerDoneEvents.some((event) => event.details?.repeatedToolGuardTriggered === true), true);
+  assert.equal(result.evidence.toolExecutions.length, 1);
+  assert.equal(generateInvokeSpy.mock.calls.length, 1);
+});
+
 test("agentGraph keeps pendingApproval and frozen pendingToolCall when Harness pauses for approval", async () => {
   const webSearch = makeToolDefinition({
     id: "web_search",

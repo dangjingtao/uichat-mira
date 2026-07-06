@@ -8,6 +8,7 @@ import type {
   AgentToolExecutionResult,
 } from "./types";
 import { createInvocationInputHash } from "./approval-fingerprint";
+import { normalizeWorkspaceRelativePathArg } from "@/mcp/workspace-path-args";
 
 type EvidenceState = Pick<
   {
@@ -84,6 +85,10 @@ const WORKSPACE_READ_TOOL_IDS = new Set([
   "read_locate",
   "read_extract",
   "read_slice",
+]);
+const WORKSPACE_MUTATION_TOOL_IDS = new Set([
+  "workspace_mutation",
+  "edit_file",
 ]);
 
 const WORKSPACE_ROOT_SENTINEL = "/workspace";
@@ -847,33 +852,65 @@ export const getLatestEvidenceSummary = (state: EvidenceState) =>
 const normalizeRepeatedRetrievalQuery = (value: string) =>
   value.trim().replace(/\s+/g, " ").toLowerCase();
 
+const normalizeRepeatedWorkspaceArg = (value: unknown) => {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const normalized = normalizeWorkspaceRelativePathArg(value);
+  if (normalized.type === "normalized") {
+    return normalized.value;
+  }
+
+  return value.trim();
+};
+
 const normalizeRepeatedToolArgs = (
   toolId: string,
   args: Record<string, unknown>,
 ) => {
-  if (!WORKSPACE_READ_TOOL_IDS.has(toolId)) {
-    return args;
+  if (WORKSPACE_READ_TOOL_IDS.has(toolId)) {
+    const rawPath = args.path;
+    if (typeof rawPath !== "string") {
+      return args;
+    }
+
+    const trimmedPath = rawPath.trim();
+    // Only align repeated-guard hashing with workspace-bound path normalization.
+    // This keeps planner repeat detection consistent with frozen pendingToolCall args.
+    if (
+      trimmedPath !== WORKSPACE_ROOT_SENTINEL &&
+      trimmedPath !== `${WORKSPACE_ROOT_SENTINEL}/` &&
+      !trimmedPath.startsWith(`${WORKSPACE_ROOT_SENTINEL}/`)
+    ) {
+      return args;
+    }
+
+    return {
+      ...args,
+      path: normalizeRepeatedWorkspaceArg(rawPath),
+    };
   }
 
-  const rawPath = args.path;
-  if (typeof rawPath !== "string") {
-    return args;
+  if (WORKSPACE_MUTATION_TOOL_IDS.has(toolId)) {
+    let nextArgs: Record<string, unknown> | null = null;
+
+    for (const key of ["targetPath", "destinationPath"] as const) {
+      if (typeof args[key] !== "string") {
+        continue;
+      }
+
+      const normalizedValue = normalizeRepeatedWorkspaceArg(args[key]);
+      if (normalizedValue !== args[key]) {
+        nextArgs ??= { ...args };
+        nextArgs[key] = normalizedValue;
+      }
+    }
+
+    return nextArgs ?? args;
   }
 
-  const trimmedPath = rawPath.trim();
-  // Only align repeated-guard hashing with the T011 /workspace sentinel contract.
-  // This does not reintroduce generic root-relative path normalization.
-  if (
-    trimmedPath !== WORKSPACE_ROOT_SENTINEL &&
-    trimmedPath !== `${WORKSPACE_ROOT_SENTINEL}/`
-  ) {
-    return args;
-  }
-
-  return {
-    ...args,
-    path: ".",
-  };
+  return args;
 };
 
 const createRepeatedToolArgsHash = (input: {

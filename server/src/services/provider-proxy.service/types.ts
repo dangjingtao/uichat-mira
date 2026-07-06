@@ -5,6 +5,8 @@ export type ProxyProviderParam = ProviderCode | "default";
 
 export interface ProviderResolution {
   providerCode: ProviderCode;
+  providerConnectionId: string;
+  providerTemplateCode: string;
   baseUrl: string;
   apiKey: string;
   model: string;

@@ -3,6 +3,7 @@ import Card from "@/shared/ui/Card";
 import Badge from "@/shared/ui/Badge";
 import type { RoleModelConfig } from "@/shared/api/modelSettings";
 import type { BuiltInLocalModel } from "@/shared/business/localModels";
+import { hasConfiguredProviderBinding } from "@/shared/business/modelAccess";
 
 interface ModelStatusCardProps {
   title: string;
@@ -22,9 +23,11 @@ export default function ModelStatusCard({
   icon,
 }: ModelStatusCardProps) {
   const { t } = useTranslation();
-  const configured = Boolean(config?.providerCode && config?.remoteModelId);
+  const configured = hasConfiguredProviderBinding(config);
   const modelSummary = configured
-    ? `${config?.providerCode} · ${config?.name ?? config?.remoteModelId}`
+    ? `${config?.providerCode ?? config?.providerConnectionId} · ${
+        config?.name ?? config?.remoteModelId
+      }`
     : null;
   const builtInSummary = builtInModel
     ? `${t("settings.knowledgeBase.add.builtInLocal")} · ${

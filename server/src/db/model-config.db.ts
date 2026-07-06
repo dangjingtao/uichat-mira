@@ -7,11 +7,16 @@ import {
 import { applySqliteConnectionPragmas } from "@/db/init-utils";
 import {
   DEFAULT_PROVIDER_CONNECTIONS,
+  DEFAULT_IMAGE_GENERATION_PARAMS,
   DEFAULT_ROLE_CONFIGS,
   MANAGED_TASK_PARAMS,
   PARAM_TEMPLATES,
 } from "@/services/model-config.defaults.js";
-import { toSqlEnumValues, PROVIDER_CODE_VALUES } from "@/providers/codes.js";
+import {
+  toSqlEnumValues,
+  PROVIDER_CODE_VALUES,
+  PROVIDER_TEMPLATE_CODE_VALUES,
+} from "@/providers/codes.js";
 
 const parseParams = (paramsJson: string) => {
   try {
@@ -42,9 +47,22 @@ const needsManagedTaskParams = (params: Record<string, unknown>) => {
 };
 
 const providerCodeSqlValues = toSqlEnumValues(PROVIDER_CODE_VALUES);
-const modelTypeSqlValues = "'llm', 'embedding', 'rerank', 'task', 'evaluation'";
+const providerTemplateCodeSqlValues = toSqlEnumValues(
+  PROVIDER_TEMPLATE_CODE_VALUES,
+);
+const MODEL_TYPE_SQL_VALUES = [
+  "llm",
+  "embedding",
+  "rerank",
+  "task",
+  "agentTask",
+  "evaluation",
+  "imageGeneration",
+] as const;
 
-const tableSupportsEvaluationRole = (
+const modelTypeSqlValues = MODEL_TYPE_SQL_VALUES.map((value) => `'${value}'`).join(", ");
+
+const tableSupportsAllModelRoles = (
   sqlite: ReturnType<typeof getSqlite>,
   tableName: string,
 ) => {
@@ -52,15 +70,15 @@ const tableSupportsEvaluationRole = (
     .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?")
     .get(tableName) as { sql?: string } | undefined;
 
-  return row?.sql?.includes("'evaluation'") ?? false;
+  return MODEL_TYPE_SQL_VALUES.every((role) => row?.sql?.includes(`'${role}'`) ?? false);
 };
 
-const recreateModelConfigTablesForEvaluationRole = (
+const recreateModelConfigTablesForCurrentRoles = (
   sqlite: ReturnType<typeof getSqlite>,
 ) => {
   if (
-    tableSupportsEvaluationRole(sqlite, "model_configs") &&
-    tableSupportsEvaluationRole(sqlite, "model_param_templates")
+    tableSupportsAllModelRoles(sqlite, "model_configs") &&
+    tableSupportsAllModelRoles(sqlite, "model_param_templates")
   ) {
     return;
   }
@@ -75,7 +93,7 @@ const recreateModelConfigTablesForEvaluationRole = (
       DROP INDEX IF EXISTS idx_model_param_templates_type_key;
     `);
 
-    if (!tableSupportsEvaluationRole(sqlite, "model_configs")) {
+    if (!tableSupportsAllModelRoles(sqlite, "model_configs")) {
       sqlite.exec(`
         ALTER TABLE model_configs RENAME TO model_configs_legacy;
 
@@ -118,7 +136,7 @@ const recreateModelConfigTablesForEvaluationRole = (
       `);
     }
 
-    if (!tableSupportsEvaluationRole(sqlite, "model_param_templates")) {
+    if (!tableSupportsAllModelRoles(sqlite, "model_param_templates")) {
       sqlite.exec(`
         ALTER TABLE model_param_templates RENAME TO model_param_templates_legacy;
 
@@ -178,6 +196,165 @@ const recreateModelConfigTablesForEvaluationRole = (
   }
 };
 
+const ensureModelConfigConnectionColumns = (
+  sqlite: ReturnType<typeof getSqlite>,
+) => {
+  const columns = sqlite.prepare("PRAGMA table_info(model_configs)").all() as Array<{
+    name: string;
+  }>;
+  const hasProviderConnectionId = columns.some(
+    (column) => column.name === "provider_connection_id",
+  );
+
+  if (!hasProviderConnectionId) {
+    sqlite.exec(`
+      ALTER TABLE model_configs
+      ADD COLUMN provider_connection_id TEXT
+      REFERENCES provider_connections(id)
+      ON DELETE SET NULL
+    `);
+  }
+};
+
+const migrateProviderConnectionTables = (sqlite: ReturnType<typeof getSqlite>) => {
+  const connectionColumns = sqlite.prepare("PRAGMA table_info(provider_connections)").all() as Array<{
+    name: string;
+    pk: number;
+  }>;
+  const providerConnectionsNeedsRebuild =
+    connectionColumns.length > 0 &&
+    (!connectionColumns.some((column) => column.name === "id") ||
+      connectionColumns.some(
+        (column) => column.name === "provider_code" && column.pk === 1,
+      ));
+
+  if (providerConnectionsNeedsRebuild) {
+    sqlite.exec("BEGIN");
+
+    try {
+      sqlite.exec(`
+        DROP INDEX IF EXISTS idx_provider_connections_status;
+        ALTER TABLE provider_connections RENAME TO provider_connections_legacy;
+
+        CREATE TABLE provider_connections (
+          id TEXT PRIMARY KEY,
+          template_code TEXT NOT NULL CHECK (template_code IN (${providerTemplateCodeSqlValues})),
+          provider_code TEXT CHECK (provider_code IN (${providerCodeSqlValues})),
+          display_name TEXT NOT NULL,
+          base_url TEXT NOT NULL DEFAULT '',
+          api_key_encrypted TEXT,
+          is_system INTEGER NOT NULL DEFAULT 0,
+          is_enabled INTEGER NOT NULL DEFAULT 1,
+          status TEXT NOT NULL DEFAULT 'idle' CHECK (status IN ('idle', 'syncing', 'connected', 'error')),
+          last_error TEXT,
+          last_synced_at TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        INSERT INTO provider_connections (
+          id,
+          template_code,
+          provider_code,
+          display_name,
+          base_url,
+          api_key_encrypted,
+          is_system,
+          is_enabled,
+          status,
+          last_error,
+          last_synced_at,
+          created_at,
+          updated_at
+        )
+        SELECT
+          provider_code,
+          provider_code,
+          provider_code,
+          display_name,
+          base_url,
+          api_key_encrypted,
+          1,
+          is_enabled,
+          status,
+          last_error,
+          last_synced_at,
+          created_at,
+          updated_at
+        FROM provider_connections_legacy;
+
+        DROP TABLE provider_connections_legacy;
+      `);
+
+      sqlite.exec("COMMIT");
+    } catch (error) {
+      sqlite.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  const providerModelColumns = sqlite.prepare("PRAGMA table_info(provider_models)").all() as Array<{
+    name: string;
+  }>;
+  const providerModelsNeedsRebuild =
+    providerModelColumns.length > 0 &&
+    !providerModelColumns.some(
+      (column) => column.name === "provider_connection_id",
+    );
+
+  if (providerModelsNeedsRebuild) {
+    sqlite.exec("BEGIN");
+
+    try {
+      sqlite.exec(`
+        DROP INDEX IF EXISTS idx_provider_models_provider;
+        DROP INDEX IF EXISTS idx_provider_models_provider_remote;
+        ALTER TABLE provider_models RENAME TO provider_models_legacy;
+
+        CREATE TABLE provider_models (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          provider_connection_id TEXT NOT NULL REFERENCES provider_connections(id) ON DELETE CASCADE,
+          provider_code TEXT CHECK (provider_code IN (${providerCodeSqlValues})),
+          remote_model_id TEXT NOT NULL,
+          model_name TEXT NOT NULL,
+          raw_payload_json TEXT,
+          is_active INTEGER NOT NULL DEFAULT 1,
+          synced_at TEXT NOT NULL,
+          UNIQUE(provider_connection_id, remote_model_id)
+        );
+
+        INSERT INTO provider_models (
+          provider_connection_id,
+          provider_code,
+          remote_model_id,
+          model_name,
+          raw_payload_json,
+          is_active,
+          synced_at
+        )
+        SELECT
+          provider_code,
+          provider_code,
+          remote_model_id,
+          model_name,
+          raw_payload_json,
+          is_active,
+          synced_at
+        FROM provider_models_legacy;
+
+        DROP TABLE provider_models_legacy;
+      `);
+
+      sqlite.exec("COMMIT");
+    } catch (error) {
+      sqlite.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  ensureModelConfigConnectionColumns(sqlite);
+};
+
 export const initializeModelConfigDatabase = (): void => {
   try {
     const sqlite = getSqlite();
@@ -189,6 +366,7 @@ export const initializeModelConfigDatabase = (): void => {
         type TEXT NOT NULL CHECK (type IN (${modelTypeSqlValues})),
         name TEXT NOT NULL DEFAULT '',
         provider_code TEXT CHECK (provider_code IN (${providerCodeSqlValues})),
+        provider_connection_id TEXT REFERENCES provider_connections(id) ON DELETE SET NULL,
         remote_model_id TEXT,
         params TEXT NOT NULL DEFAULT '{}',
         is_default INTEGER NOT NULL DEFAULT 1,
@@ -218,14 +396,17 @@ export const initializeModelConfigDatabase = (): void => {
       )
     `);
 
-    recreateModelConfigTablesForEvaluationRole(sqlite);
+    recreateModelConfigTablesForCurrentRoles(sqlite);
 
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS provider_connections (
-        provider_code TEXT PRIMARY KEY CHECK (provider_code IN (${providerCodeSqlValues})),
+        id TEXT PRIMARY KEY,
+        template_code TEXT NOT NULL CHECK (template_code IN (${providerTemplateCodeSqlValues})),
+        provider_code TEXT CHECK (provider_code IN (${providerCodeSqlValues})),
         display_name TEXT NOT NULL,
         base_url TEXT NOT NULL DEFAULT '',
         api_key_encrypted TEXT,
+        is_system INTEGER NOT NULL DEFAULT 0,
         is_enabled INTEGER NOT NULL DEFAULT 1,
         status TEXT NOT NULL DEFAULT 'idle' CHECK (status IN ('idle', 'syncing', 'connected', 'error')),
         last_error TEXT,
@@ -238,45 +419,60 @@ export const initializeModelConfigDatabase = (): void => {
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS provider_models (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        provider_code TEXT NOT NULL CHECK (provider_code IN (${providerCodeSqlValues})),
+        provider_connection_id TEXT NOT NULL REFERENCES provider_connections(id) ON DELETE CASCADE,
+        provider_code TEXT CHECK (provider_code IN (${providerCodeSqlValues})),
         remote_model_id TEXT NOT NULL,
         model_name TEXT NOT NULL,
         raw_payload_json TEXT,
         is_active INTEGER NOT NULL DEFAULT 1,
         synced_at TEXT NOT NULL,
-        UNIQUE(provider_code, remote_model_id)
+        UNIQUE(provider_connection_id, remote_model_id)
       )
     `);
+
+    migrateProviderConnectionTables(sqlite);
 
     sqlite.exec(`
       CREATE INDEX IF NOT EXISTS idx_model_configs_type ON model_configs(type);
       CREATE INDEX IF NOT EXISTS idx_model_param_templates_type ON model_param_templates(model_type);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_model_param_templates_type_key ON model_param_templates(model_type, param_key);
       CREATE INDEX IF NOT EXISTS idx_provider_connections_status ON provider_connections(status);
-      CREATE INDEX IF NOT EXISTS idx_provider_models_provider ON provider_models(provider_code);
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_provider_models_provider_remote ON provider_models(provider_code, remote_model_id);
+      CREATE INDEX IF NOT EXISTS idx_provider_connections_template ON provider_connections(template_code);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_provider_connections_provider_code_unique ON provider_connections(provider_code) WHERE provider_code IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_provider_models_connection ON provider_models(provider_connection_id);
+      CREATE INDEX IF NOT EXISTS idx_provider_models_provider_code ON provider_models(provider_code);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_provider_models_connection_remote ON provider_models(provider_connection_id, remote_model_id);
     `);
 
     for (const provider of DEFAULT_PROVIDER_CONNECTIONS) {
-      const existingProvider = providerConnectionRepository.findByCode(
-        provider.providerCode,
-      );
+      const existingProvider = providerConnectionRepository.findById(provider.id);
 
       if (existingProvider) {
         continue;
       }
 
-      providerConnectionRepository.upsert({
+      providerConnectionRepository.upsertSystemConnection({
+        id: provider.id,
+        templateCode: provider.templateCode,
         providerCode: provider.providerCode,
         displayName: provider.displayName,
         baseUrl: provider.baseUrl,
         apiKeyEncrypted: null,
+        isSystem: true,
         isEnabled: true,
         status: "idle",
         lastError: null,
         lastSyncedAt: null,
       });
     }
+
+    sqlite.exec(`
+      UPDATE model_configs
+      SET provider_connection_id = provider_code
+      WHERE provider_connection_id IS NULL
+        AND provider_code IS NOT NULL
+        AND provider_code IN (${providerCodeSqlValues})
+    `);
 
     for (const config of DEFAULT_ROLE_CONFIGS) {
       const existing = modelConfigRepository.findDefaultByType(config.type);
@@ -286,6 +482,7 @@ export const initializeModelConfigDatabase = (): void => {
           name: config.name,
           params: JSON.stringify(config.params),
           providerCode: config.providerCode,
+          providerConnectionId: config.providerCode,
           remoteModelId: config.remoteModelId,
         });
       }
@@ -307,6 +504,7 @@ export const initializeModelConfigDatabase = (): void => {
         name: rerankDefault.name,
         params: JSON.stringify(rerankDefault.params),
         providerCode: rerankDefault.providerCode,
+        providerConnectionId: rerankDefault.providerCode,
         remoteModelId: rerankDefault.remoteModelId,
       });
     }
@@ -330,8 +528,56 @@ export const initializeModelConfigDatabase = (): void => {
             ...MANAGED_TASK_PARAMS,
           }),
           providerCode: taskDefault.providerCode,
+          providerConnectionId: taskDefault.providerCode,
           remoteModelId: taskDefault.remoteModelId,
           name: taskDefault.name,
+        });
+      }
+    }
+
+    const agentTaskDefault = DEFAULT_ROLE_CONFIGS.find(
+      (config) => config.type === "agentTask",
+    );
+    const existingAgentTask = modelConfigRepository.findDefaultByType("agentTask");
+
+    if (agentTaskDefault && existingAgentTask) {
+      const currentAgentTaskParams = parseParams(existingAgentTask.params);
+      const needsUpdate = Object.entries(MANAGED_TASK_PARAMS).some(
+        ([key, value]) => currentAgentTaskParams[key] !== value,
+      );
+
+      if (needsUpdate) {
+        modelConfigRepository.updateDefault("agentTask", {
+          params: JSON.stringify({
+            ...currentAgentTaskParams,
+            ...MANAGED_TASK_PARAMS,
+          }),
+          providerConnectionId: existingAgentTask.providerConnectionId ?? null,
+        });
+      }
+    }
+
+    const imageGenerationDefault = DEFAULT_ROLE_CONFIGS.find(
+      (config) => config.type === "imageGeneration",
+    );
+    const existingImageGeneration =
+      modelConfigRepository.findDefaultByType("imageGeneration");
+
+    if (imageGenerationDefault && existingImageGeneration) {
+      const currentImageGenerationParams = parseParams(
+        existingImageGeneration.params,
+      );
+      if (
+        typeof currentImageGenerationParams.enabled !== "boolean" ||
+        currentImageGenerationParams.enabled !==
+          DEFAULT_IMAGE_GENERATION_PARAMS.enabled
+      ) {
+        modelConfigRepository.updateDefault("imageGeneration", {
+          params: JSON.stringify({
+            ...currentImageGenerationParams,
+            ...DEFAULT_IMAGE_GENERATION_PARAMS,
+          }),
+          providerConnectionId: existingImageGeneration.providerConnectionId ?? null,
         });
       }
     }

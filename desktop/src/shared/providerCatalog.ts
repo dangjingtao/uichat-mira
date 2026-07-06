@@ -2,21 +2,24 @@ export const PROVIDER_CODES = [
   "ollama",
   "lmstudio",
   "openai",
+  "google",
   "cloudflare",
   "volcengine",
 ] as const;
 
-export type ProviderCode = (typeof PROVIDER_CODES)[number];
+export type BuiltinProviderCode = (typeof PROVIDER_CODES)[number];
+export type ProviderCode = string;
 
-export const DEFAULT_PROVIDER_CODE: ProviderCode = "ollama";
+export const DEFAULT_PROVIDER_CODE = "ollama";
 
-export const PROVIDER_LABELS: Record<ProviderCode, string> = {
+export const PROVIDER_LABELS: Record<BuiltinProviderCode, string> = {
   ollama: "Ollama",
   lmstudio: "LM Studio",
   openai: "OpenAI",
+  google: "Google Gemini",
   cloudflare: "Cloudflare",
   volcengine: "OpenAI兼容服务商",
 };
 
 export const getProviderLabel = (providerCode: ProviderCode) =>
-  PROVIDER_LABELS[providerCode];
+  PROVIDER_LABELS[providerCode as BuiltinProviderCode] ?? providerCode;

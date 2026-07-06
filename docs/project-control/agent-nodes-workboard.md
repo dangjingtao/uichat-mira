@@ -27,6 +27,16 @@ related:
   - docs/project-control/tasks/agent_node_T016-local-tool-routing-and-schema-guard.md
   - docs/project-control/tasks/agent_node_T017-toolcall-loop-regression-matrix.md
   - docs/project-control/tasks/agent_node_T018-invocation-result-evidence-truth-contract.md
+  - docs/project-control/tasks/agent_node_T019-planner-observation-context.md
+  - docs/project-control/tasks/agent_node_T020-current-task-frame.md
+  - docs/project-control/tasks/agent_node_T021-agent-execution-observation.md
+  - docs/project-control/tasks/agent_node_T022-tool-node-recoverable-failure.md
+  - docs/project-control/tasks/agent_node_T023-route-after-tool-back-to-planner.md
+  - docs/project-control/tasks/agent_node_T024-planner-node-progression-rules.md
+  - docs/project-control/tasks/agent_node_T025-terminal-session-primary-executor.md
+  - docs/project-control/tasks/agent_node_T026-user-visible-execution-trace.md
+  - docs/project-control/tasks/agent_node_T027-blackbox-test-plan-v17.md
+  - docs/project-control/tasks/agent_node_T028-blackbox-autonomous-source-review.md
   - docs/chat/agent-runtime-design.md
   - docs/harness/agentgraph-harness-protocol.md
 ---
@@ -69,6 +79,16 @@ Agent node 专属总台账。
 | `agent_node_T016` | Local Tool Routing and Schema Guard Under Weak Task Model | `T016` 是 `Agent V1.5 P0` 修复任务，只补 workspace local intent、防 schema invalid 直接打死前台、以及 generate 空回答 fallback 的最小防线。`2026-07-05` 最新真实前台 smoke 已补齐：`P0-8` 会稳定进入本地 `read_locate`，不再误走 `web_search`；`P0-9` 新线程在绑定 `ragDemo / D:\workspace\rag-demo` 并开启 Agent 后，已稳定进入 `read_open("README.md")`，没有 Normalize schema error、没有 approval wait，最终回答已按 README 原文列出 `React + Vite renderer`、`Electron / Tauri shell`、`Fastify backend` 与 `runtime.config.cjs`。当前剩余只记录非阻断说明，例如“第二次完全相同检索”没有单独形成第二条 completed evidence，以及打包过程中暴露的仓库现存非 `T016` 测试失败 | `READY_FOR_REVIEW` | [agent_node_T016-local-tool-routing-and-schema-guard.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T016-local-tool-routing-and-schema-guard.md) |
 | `agent_node_T017` | ToolCall Loop Regression Matrix | `T017` 只新增后端黑盒回归矩阵，覆盖 `nextAction.use_tool -> toolCallNormalize -> policy -> tool -> evidence -> planner / generate` 主链。已验证 valid use_tool freeze、policy allow、tool evidence、answer-ready generate、schema invalid bounded replan、policy deny、policy / Harness approval、repeated guard、maxIterations、failed / timedOut 非 answer-ready、以及 `selectedToolIds` 不得进入执行链；没有改 Harness exposure、sandbox、UI 或 Agent V2 | `DONE` | [agent_node_T017-toolcall-loop-regression-matrix.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T017-toolcall-loop-regression-matrix.md) |
 | `agent_node_T018` | Invocation Result -> Evidence Truth Contract | `T018` 只补 evidence 真值合同和 generate 防伪回答。`2026-07-05` 已把 `policy deny` 写成 `denied` evidence，把 Harness `awaiting_approval` 映射成 `blocked` summary，把 terminal 的 `timedOut / truncated / binaryDetected / stdoutEncoding / stderrEncoding / violations` 透传进 summary，并阻断“乱码 / 不可读 / 非 completed 证据”被 generate 假装成已成功理解的结果；没有改 Tool Exposure、Sandbox Runner 实现、UI 或 Agent V2 | `DONE` | [agent_node_T018-invocation-result-evidence-truth-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T018-invocation-result-evidence-truth-contract.md) |
+| `agent_node_T019` | PlannerObservationContext | `v1.7` A 组第一张卡。只建立 Planner 的统一观察入口，禁止继续散读 `evidence / observations / lastToolExecution / pendingApproval`；A 组必须单线程串行推进 | `TODO` | [agent_node_T019-planner-observation-context.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T019-planner-observation-context.md) |
+| `agent_node_T020` | currentTaskFrame | `v1.7` A 组第二张卡。把当前目标、当前子任务、当前阻塞点、已确认对象、完成判据落成运行时最小任务板；不引入大型计划系统 | `TODO` | [agent_node_T020-current-task-frame.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T020-current-task-frame.md) |
+| `agent_node_T021` | AgentExecutionObservation | `v1.7` A 组第三张卡。把 Executor 执行结果收口成统一 observation 结构，供 `PlannerObservationContext` 消费；A1-A3 稳定后 B/C 组才能启动并行准备 | `TODO` | [agent_node_T021-agent-execution-observation.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T021-agent-execution-observation.md) |
+| `agent_node_T022` | toolNode recoverable failure | `v1.7` A 组第四张卡。让 `toolNode` 的可恢复失败不再默认终止图，而是写 failed observation / evidence / lastToolExecution；`tool-node.ts` 是并改禁区 | `TODO` | [agent_node_T022-tool-node-recoverable-failure.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T022-tool-node-recoverable-failure.md) |
+| `agent_node_T023` | routeAfterTool back to Planner | `v1.7` A 组第五张卡。把工具后路由改成 `waiting_approval -> approval`、`failed_recoverable -> toolSelectStep`、`failed_terminal -> error` | `TODO` | [agent_node_T023-route-after-tool-back-to-planner.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T023-route-after-tool-back-to-planner.md) |
+| `agent_node_T024` | PlannerNode progression rules | `v1.7` A 组第六张卡。让 Planner 基于 `PlannerObservationContext` 做失败恢复、换工具、换参数、ask_user 和预算耗尽终局；这是 A 组主线收口卡 | `TODO` | [agent_node_T024-planner-node-progression-rules.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T024-planner-node-progression-rules.md) |
+| `agent_node_T025` | terminal_session primary executor | `v1.7` B 组任务卡。A1-A3 稳定后只允许开始 terminal observation mapping 设计与测试准备；凡涉及 `tool-node.ts / resume.ts / approval` 的实际接入，必须等 `T022` 完成 | `TODO` | [agent_node_T025-terminal-session-primary-executor.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T025-terminal-session-primary-executor.md) |
+| `agent_node_T026` | User-visible execution trace | `v1.7` C 组第一张卡。A1-A3 稳定后可并行开始，把内部 execution node 整理成用户可读推进轨迹，不要求复杂 UI | `TODO` | [agent_node_T026-user-visible-execution-trace.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T026-user-visible-execution-trace.md) |
+| `agent_node_T027` | v1.7 blackbox test plan | `v1.7` C 组第二张卡。A1-A3 稳定后可并行开始，只设计 3 个黑盒场景的输入、断言和禁止行为，不提前落测试代码 | `TODO` | [agent_node_T027-blackbox-test-plan-v17.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T027-blackbox-test-plan-v17.md) |
+| `agent_node_T028` | v1.7 blackbox trio implementation | `v1.7` C 组第三张卡。必须等 A1-A6 全部完成后，正式落地 3 个端到端黑盒：自主源码审查、终端失败后继续推进、小范围修复闭环 | `TODO` | [agent_node_T028-blackbox-autonomous-source-review.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T028-blackbox-autonomous-source-review.md) |
 
 ## Current Ground Truth
 
@@ -179,6 +199,15 @@ Agent node 专属总台账。
 - `T015` 当前只处理开发环境 Phoenix tracing 与最小脱敏 state 摘要，不改 AgentGraph 路由，不改各 node 业务实现，也不扩成通用 observability 平台。
 - `T016` 当前只处理 workspace local intent、tool schema invalid、generate empty answer fallback 三个最小防线，不改前端大结构，不改 Agent V2，不把“换更强模型”当成唯一修复。
 - `T014` 当前真实前台 smoke 已由项目 owner 补齐：审批等待、批准继续执行、拒绝终结、刷新不复活都已确认，因此状态更新为 `DONE`。
+- `v1.7` 当前采用分组施工边界：
+  - `A` 组：`T019-T024`，核心闭环主线，严格串行，单线程
+  - `B` 组：`T025`，A1-A3 稳定后只允许开始设计与测试准备；涉及 `tool-node.ts / resume.ts / approval` 的接入必须等 `T022`
+  - `C` 组：`T026-T028`，`T026/T027` 可在 A1-A3 稳定后并行准备；`T028` 必须等 `T019-T024` 全部完成
+- `v1.7` 并改禁区：
+  - `server/src/agent/planner/prompt.ts`
+  - `server/src/agent/graph/state.ts`
+  - `server/src/agent/graph/routes.ts`
+  - `server/src/agent/nodes/tool-node.ts`
 
 ## Work Rules
 

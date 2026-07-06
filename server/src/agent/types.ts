@@ -335,6 +335,82 @@ export interface AgentSchemaReplanDiagnostics {
   attemptCount: number;
 }
 
+export interface CurrentTaskFrameConfirmedObject {
+  type: "file" | "command" | "tool" | "script" | "knowledge" | "approval";
+  id?: string;
+  label: string;
+  confidence?: number;
+}
+
+/**
+ * Runtime-minimum task board for the current agent loop.
+ * PlannerNode is the primary writer of goal/subtask/completion inference.
+ * Executor nodes must only append objective confirmedObjects or blocker facts.
+ * Generate/Evaluate nodes are read-only.
+ */
+export interface CurrentTaskFrame {
+  currentGoal: string;
+  currentSubtask?: string;
+  currentBlocker?: string;
+  confirmedObjects: CurrentTaskFrameConfirmedObject[];
+  completionCriteria: string[];
+}
+
+export type AgentExecutionObservationStatus =
+  | "completed"
+  | "failed_recoverable"
+  | "failed_terminal"
+  | "waiting_approval";
+
+export type AgentExecutionObservationActionType =
+  | "retrieve"
+  | "tool"
+  | "generate"
+  | "approval";
+
+export interface AgentExecutionObservation {
+  id: string;
+  source: "observation" | "tool_execution" | "approval" | "retrieval";
+  actionType: AgentExecutionObservationActionType;
+  status: AgentExecutionObservationStatus;
+  createdAt: string;
+  stepId?: string;
+  toolId?: string;
+  toolCallId?: string;
+  inputHash?: string;
+  argsPreview?: unknown;
+  resultPreview?: unknown;
+  summary?: AgentEvidenceSummary;
+  facts?: string[];
+  errorMessage?: string;
+  errorCode?: string;
+  recoverable?: boolean;
+  suggestedNextActions?: string[];
+  reason?: string;
+}
+
+export interface PlannerObservationRecoveryContext {
+  attemptCount: number;
+  maxAttempts: number;
+  exhausted: boolean;
+  schemaError?: string;
+  toolId?: string;
+  invalidAction?: Extract<AgentNextAction, { type: "use_tool" }>;
+}
+
+export interface PlannerObservationContext {
+  currentTaskFrame?: CurrentTaskFrame;
+  latestObservation?: AgentExecutionObservation;
+  recentObservations: AgentExecutionObservation[];
+  latestEvidenceSummary?: AgentEvidenceSummary;
+  recovery: PlannerObservationRecoveryContext;
+  pendingApproval?: {
+    toolId: string;
+    inputHash?: string;
+    reason: string;
+  };
+}
+
 export interface AgentRun {
   id: string;
   threadId: string;
@@ -360,6 +436,7 @@ export interface AgentRun {
   pendingToolCall?: AgentToolCallRequest;
   lastToolExecution?: AgentToolExecutionResult;
   evidence?: AgentEvidencePayload;
+  currentTaskFrame?: CurrentTaskFrame;
   assistantMessageId?: string;
   assistantParentId?: string | null;
   runtimeInput?: Pick<
@@ -431,6 +508,7 @@ export interface AgentGraphInput {
    */
   selectedToolId?: string;
   pendingToolCall?: AgentToolCallRequest;
+  currentTaskFrame?: CurrentTaskFrame;
   maxIterations?: number;
   continueIteration?: boolean;
   postToolReviewPending?: boolean;
@@ -455,6 +533,7 @@ export interface AgentGraphOutput {
   selectedToolId?: string;
   pendingToolCall?: AgentToolCallRequest;
   lastToolExecution?: AgentToolExecutionResult;
+  currentTaskFrame?: CurrentTaskFrame;
   blockedReason?: string;
   terminalReason?: string;
   errorMessage?: string;

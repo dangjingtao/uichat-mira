@@ -11,6 +11,7 @@ import {
   type KnowledgeBaseDocument,
 } from "@/shared/api/knowledgeBase";
 import { useRoleModelConfigs } from "@/app/providers/RoleModelConfigProvider";
+import { hasConfiguredProviderBinding } from "@/shared/business/modelAccess";
 
 export type UploadStep = 1 | 2 | 3;
 
@@ -91,10 +92,8 @@ export function useAddWizard() {
   const embeddingConfig = configMap.embedding;
   const rerankConfig = configMap.rerank;
   const canProceedStep2 = Boolean(
-    llmConfig?.providerCode &&
-      llmConfig?.remoteModelId &&
-      embeddingConfig?.providerCode &&
-      embeddingConfig?.remoteModelId,
+    hasConfiguredProviderBinding(llmConfig) &&
+      hasConfiguredProviderBinding(embeddingConfig),
   );
   const canUploadDocument = modelAccessStatus?.embeddingConnected ?? false;
 

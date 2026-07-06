@@ -51,6 +51,10 @@ const microAppCapabilities = (microApp: MicroAppRecord) => {
 
 const featuredStudioEntries = [
   {
+    key: "mailCenter",
+    route: "/settings/micro-apps/mail-center",
+  },
+  {
     key: "computerUse",
     route: "/settings/micro-apps/computer-use-studio",
   },
@@ -164,7 +168,7 @@ export default function MicroAppsSettings() {
               <div className="flex h-full flex-col gap-4 lg:justify-between">
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="info" size="sm">
+                    <Badge variant="primary" size="sm">
                       {t(`${key}.badges.debug`)}
                     </Badge>
                     <Badge variant="muted" size="sm">

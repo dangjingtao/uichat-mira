@@ -901,7 +901,7 @@ const zhCN = {
         miniTitle: "Model Settings",
         title: "模型设置",
         description:
-          "在此页面中，您可以选择和配置用于问答的语言模型。平台侧负责连接与模型同步，这里只展示当前生效的角色配置，并允许直接保存调用参数。",
+          "这里把默认角色模型、服务商连接、模型同步和内置本地模型分开展示，方便你直接看清当前绑定关系和可编辑范围。",
       },
       actions: {
         resetDefault: "重置默认模型",
@@ -911,16 +911,38 @@ const zhCN = {
       resetModal: {
         title: "确认重置默认模型",
         description:
-          "将清空 LLM、Embedding、Rerank、Task、评测模型五个默认模型，并恢复默认参数。",
+          "将清空 LLM、Embedding、Rerank、Task、AgentTask、评测模型和生图模型的默认绑定，并恢复默认参数。",
         warning: "该操作会影响当前对话与知识库的默认模型选择。",
         success: "默认模型已重置",
         failed: "重置失败",
       },
       defaultCard: {
-        platformSettingsTitle: "平台模型设置",
+        platformSettingsTitle: "服务商连接与模型绑定",
         close: "关闭",
         done: "完成",
         syncing: "正在同步模型配置...",
+      },
+      groups: {
+        chat: {
+          title: "Chat",
+          description: "主对话回答使用的默认模型。",
+        },
+        agentTask: {
+          title: "Agent / Task",
+          description: "轻任务与 Agent 决策模型的当前生效绑定。",
+        },
+        knowledgeBase: {
+          title: "Knowledge Base",
+          description: "知识库向量化和检索重排使用的默认模型。",
+        },
+        evaluation: {
+          title: "Evaluation",
+          description: "评测包生成和裁判模型使用的默认绑定。",
+        },
+        imageGeneration: {
+          title: "Image Generation",
+          description: "生图角色默认绑定单独展示，不和 chat 参数混放。",
+        },
       },
       config: {
         llm: {
@@ -933,6 +955,12 @@ const zhCN = {
           readOnlyHint:
             "任务模型的默认绑定可在平台模型设置中调整；参数由系统统一托管，用于检索改写等轻任务调度，当前界面仅展示生效配置。",
         },
+        agentTask: {
+          title: "AgentTask 模型",
+          subtitle: "用于 Agent 专用任务规划与执行",
+          readOnlyHint:
+            "AgentTask 的默认绑定可在平台模型设置中调整；如果未单独配置，后端会兼容回退到现有 Task 模型，避免影响 Agent 可用性。",
+        },
         evaluation: {
           title: "评测模型",
           subtitle: "用于评测包生成和生成类评测裁判",
@@ -944,6 +972,12 @@ const zhCN = {
         rerank: {
           title: "ReRank",
           subtitle: "用于结果重排和相关性评估",
+        },
+        imageGeneration: {
+          title: "生图模型",
+          subtitle: "用于默认生图模型绑定，第一版仅管理默认角色",
+          readOnlyHint:
+            "生图模型当前只提供默认角色绑定，不在这里编辑调用参数；真实生图调用会在后续任务中接入。",
         },
         configured: "已配置",
         builtInReady: "内置可用",
@@ -960,23 +994,57 @@ const zhCN = {
         saving: "保存中...",
         saved: "参数已保存",
         saveFailed: "保存参数失败",
+        providerTemplate: "协议模板：{{template}}",
+        connectionLabel: "连接：{{provider}}",
+        noEditableParams: "当前角色在这个页面没有可直接编辑的运行参数；默认绑定请到右侧服务商连接里调整。",
       },
-      platform: {
-        title: "平台列表",
-        bound: "已绑定 {{roles}}",
-        waitingSync: "等待同步模型",
+      connections: {
+        sidebarTitle: "Provider Connections",
+        sidebarDescription:
+          "左侧按内置和自定义连接分区，右侧查看连接、能力、已同步模型和默认角色绑定。",
+        builtinGroupTitle: "内置服务商",
+        builtinGroupDescription: "系统预置连接，适合直接开始配置。",
+        customGroupTitle: "自定义服务商",
+        customGroupDescription: "用户创建的 OpenAI-compatible 连接实例。",
+        builtinBadge: "内置",
+        customBadge: "自定义",
+        boundSummary: "已绑定 {{roles}}",
+        unassignedSummary: "还没有默认角色绑定",
+        emptyGroup: "当前分组下还没有可展示的连接。",
+        loading: "加载中...",
+        sectionTitle: "Connection",
+        sectionDescription: "管理 display name、base URL 和 API key。保存后再同步模型列表。",
+      },
+      capabilities: {
+        sectionTitle: "Capabilities",
+        sectionDescription: "能力标签直接来自后端稳定接口，前端只负责展示，不自行猜测协议能力。",
+        chat: "Chat",
+        embedding: "Embedding",
+        rerank: "Rerank",
+        image: "Image",
       },
       api: {
         selectPlatform: "请选择左侧平台。",
         description:
-          "保存连接配置后，通过服务端同步模型列表；同步成功即代表平台链路可用。",
+          "先确认连接信息，再同步模型列表，最后把已同步模型绑定到默认角色。",
+        displayName: "显示名称",
+        displayNamePlaceholder: "输入连接显示名称",
+        connectionId: "连接 ID",
         selectModel: "选择模型...",
         noModels: "暂无模型，请先同步",
+        fetchFailed: "拉取失败，请重新同步",
         apiKey: "API 密钥",
         apiKeyPlaceholder: "输入 API 密钥",
         apiUrl: "API 地址",
         apiUrlPlaceholder: "输入 API 地址",
         currentModel: "当前模型",
+        syncedModelsTitle: "Synced Models",
+        syncedModelsDescription: "同步完成后，从这里选择要绑定到角色的模型。",
+        roleBindingsTitle: "Default Role Bindings",
+        roleBindingsDescription: "按业务用途分组绑定默认角色模型，新增角色也走同一套元数据渲染。",
+        lastSyncedAt: "最近同步：{{value}}",
+        neverSynced: "还没有成功同步过模型列表",
+        unassigned: "未绑定",
         syncAriaLabel: "保存配置并同步模型",
         syncSuccess: "模型同步成功",
         syncFailed: "同步模型失败",
@@ -984,7 +1052,9 @@ const zhCN = {
         setDefaultEmbedding: "设为默认 Embedding",
         setDefaultRerank: "设为默认 ReRank",
         setDefaultTask: "设为默认 Task",
+        setDefaultAgentTask: "设为默认 AgentTask",
         setDefaultEvaluation: "设为默认评测模型",
+        setDefaultImageGeneration: "设为默认生图模型",
         setting: "设置中...",
         selectModelFirst: "请先选择模型",
         updatedLlm: "已更新默认 LLM 模型",
