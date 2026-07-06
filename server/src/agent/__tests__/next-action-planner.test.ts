@@ -7,6 +7,7 @@ import {
   type AgentNodeState,
 } from "../node-runtime";
 import { createInvocationInputHash } from "../approval-fingerprint";
+import { DEFAULT_AGENT_MAX_RECOVERY_ATTEMPTS } from "../recovery";
 import { buildNextActionPlannerMessages } from "../planner/prompt";
 import {
   nextActionPlannerNode,
@@ -126,12 +127,10 @@ test("buildPlannerObservationContext handles empty planner state", () => {
   assert.deepEqual(context.recentObservations, []);
   assert.equal(context.latestEvidenceSummary, undefined);
   assert.deepEqual(context.recovery, {
+    source: "none",
     attemptCount: 0,
     maxAttempts: 1,
     exhausted: false,
-    schemaError: undefined,
-    toolId: undefined,
-    invalidAction: undefined,
   });
   assert.equal(context.pendingApproval, undefined);
 });
@@ -227,6 +226,16 @@ test("buildPlannerObservationContext keeps recoverable tool failure as failed_re
     "retry_with_adjustment",
     "switch_action",
   ]);
+  assert.deepEqual(context.recovery, {
+    source: "tool_failure",
+    attemptCount: 1,
+    maxAttempts: DEFAULT_AGENT_MAX_RECOVERY_ATTEMPTS,
+    exhausted: false,
+    toolId: "read_open",
+    inputHash: "hash-read-open-recoverable",
+    errorMessage: "File not found",
+    failureKind: "recoverable",
+  });
 });
 
 test("buildPlannerObservationContext includes pendingApproval in both approval view and recent observations", () => {
@@ -317,9 +326,11 @@ test("buildPlannerObservationContext carries recovery diagnostics into a unified
   );
 
   assert.deepEqual(context.recovery, {
+    source: "schema_replan",
     attemptCount: 1,
     maxAttempts: 1,
     exhausted: false,
+    errorMessage: "path is required",
     schemaError: "path is required",
     toolId: "read_open",
     invalidAction: {
@@ -349,9 +360,11 @@ test("buildPlannerObservationContext marks recovery as exhausted only after the 
   );
 
   assert.deepEqual(context.recovery, {
+    source: "schema_replan",
     attemptCount: 2,
     maxAttempts: 1,
     exhausted: true,
+    errorMessage: "path is still required",
     schemaError: "path is still required",
     toolId: "read_open",
     invalidAction: {
@@ -423,6 +436,50 @@ test("buildNextActionPlannerMessages reads planner observation context instead o
   assert.equal("pendingApproval" in payload, false);
   assert.equal("schemaReplanDiagnostics" in payload, false);
   assert.equal("latestEvidenceSummary" in payload, false);
+});
+
+test("buildNextActionPlannerMessages uses tool failure recovery budget in the main planner prompt", () => {
+  const observationContext = buildPlannerObservationContext(
+    createState({
+      lastToolExecution: {
+        toolCallId: "tool-call-recoverable-failed",
+        toolId: "read_open",
+        inputHash: "hash-read-open-recoverable",
+        args: { path: "missing.md" },
+        status: "failed",
+        failureKind: "recoverable",
+        recoveryAttemptCount: 1,
+        errorMessage: "File not found",
+        startedAt: "2026-07-06T10:00:00.000Z",
+        finishedAt: "2026-07-06T10:00:01.000Z",
+      },
+      evidence: undefined,
+      observations: undefined,
+    }),
+  );
+
+  const messages = buildNextActionPlannerMessages({
+    question: "Open missing.md",
+    plan: createState().plan,
+    observationContext,
+    toolExposure: createState().toolExposure!,
+    iteration: 0,
+    maxIterations: 3,
+  });
+  const payload = JSON.parse(String(messages[1]?.content ?? "{}")) as Record<string, unknown>;
+  const progression = payload.progression as Record<string, unknown>;
+
+  assert.equal(observationContext.recovery.source, "tool_failure");
+  assert.equal(observationContext.recovery.attemptCount, 1);
+  assert.equal(
+    observationContext.recovery.maxAttempts,
+    DEFAULT_AGENT_MAX_RECOVERY_ATTEMPTS,
+  );
+  assert.equal(progression.remainingRecoveryAttempts, 1);
+  assert.match(
+    String(messages[0]?.content ?? ""),
+    /当前恢复预算还剩 1 次；如果继续恢复，必须说明这次为什么与上次不同。/,
+  );
 });
 
 test("nextActionPlannerNode returns answer action from task model JSON", async () => {

@@ -392,9 +392,13 @@ export interface AgentExecutionObservation {
 }
 
 export interface PlannerObservationRecoveryContext {
+  source: "tool_failure" | "schema_replan" | "none";
   attemptCount: number;
   maxAttempts: number;
   exhausted: boolean;
+  inputHash?: string;
+  errorMessage?: string;
+  failureKind?: "recoverable" | "terminal";
   schemaError?: string;
   toolId?: string;
   invalidAction?: Extract<AgentNextAction, { type: "use_tool" }>;

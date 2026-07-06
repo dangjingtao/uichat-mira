@@ -38,6 +38,7 @@ const getRecoveryExhaustedPlannerConclusion = (observationContext: ReturnType<
 >): AgentNextAction => {
   const latestObservation = observationContext.latestObservation;
   const failureReason =
+    observationContext.recovery.errorMessage?.trim() ||
     observationContext.recovery.schemaError?.trim() ||
     latestObservation?.errorMessage?.trim() ||
     latestObservation?.reason?.trim();
@@ -146,9 +147,8 @@ export const nextActionPlannerNode = async (
   let localIntentGuardReason: string | undefined;
   const pendingApprovalActive = Boolean(observationContext.pendingApproval);
   const recoveryExhausted =
-    observationContext.recovery.exhausted &&
-    (Boolean(observationContext.recovery.schemaError) ||
-      observationContext.latestObservation?.recoverable === true);
+    observationContext.recovery.source !== "none" &&
+    observationContext.recovery.exhausted;
   const taskModelInvoked =
     !answerStopDecision.shouldAnswer &&
     !pendingApprovalActive &&

@@ -1,8 +1,7 @@
 import { END } from "@langchain/langgraph";
+import { buildPlannerRecoveryContext } from "../recovery";
 import { DEFAULT_AGENT_MAX_ITERATIONS } from "./state";
 import type { AgentGraphStateType } from "./state";
-
-const DEFAULT_AGENT_MAX_RECOVERY_ATTEMPTS = 2;
 
 const hasFrozenPendingToolCall = (
   pendingToolCall: AgentGraphStateType["pendingToolCall"],
@@ -118,14 +117,13 @@ export const routeAfterTool = (state: AgentGraphStateType) => {
     return "approval";
   }
 
-  const lastToolExecution = state.lastToolExecution;
-  if (lastToolExecution?.status === "failed") {
-    if (lastToolExecution.failureKind === "terminal") {
+  const recovery = buildPlannerRecoveryContext(state);
+  if (state.lastToolExecution?.status === "failed") {
+    if (state.lastToolExecution.failureKind === "terminal") {
       return "error";
     }
 
-    const recoveryAttemptCount = lastToolExecution.recoveryAttemptCount ?? 0;
-    if (recoveryAttemptCount >= DEFAULT_AGENT_MAX_RECOVERY_ATTEMPTS) {
+    if (recovery.source === "tool_failure" && recovery.exhausted) {
       return "generate";
     }
 

@@ -3,11 +3,11 @@ import type { RetrievedChunk } from "@/services/rag-nodes";
 import type { ContextBudgetAudit } from "@/services/context-budget/index";
 import { toAgentExecutionNode } from "./trace";
 import { getEvidencePayload, getLatestEvidenceSummary } from "./evidence";
+import { buildPlannerRecoveryContext } from "./recovery";
 import type {
   AgentIntentEmbeddingConfig,
   ToolIntentResult,
 } from "./intent/index";
-import { SCHEMA_REPLAN_ATTEMPT_LIMIT } from "./planner/action-types";
 import type {
   AgentApprovedInvocation,
   AgentApprovalRequest,
@@ -501,21 +501,13 @@ export const buildPlannerObservationContext = (
   const items = buildExecutionObservationView(state);
   const recentObservations = items.slice(-5).reverse();
   const latestObservation = recentObservations[0];
-  const recoveryAttemptCount = state.schemaReplanDiagnostics?.attemptCount ?? 0;
 
   return {
     currentTaskFrame: state.currentTaskFrame,
     latestObservation,
     recentObservations,
     latestEvidenceSummary: getLatestEvidenceSummary(state),
-    recovery: {
-      attemptCount: recoveryAttemptCount,
-      maxAttempts: SCHEMA_REPLAN_ATTEMPT_LIMIT,
-      exhausted: recoveryAttemptCount > SCHEMA_REPLAN_ATTEMPT_LIMIT,
-      schemaError: state.schemaReplanDiagnostics?.schemaError,
-      toolId: state.schemaReplanDiagnostics?.toolId,
-      invalidAction: state.schemaReplanDiagnostics?.invalidAction,
-    },
+    recovery: buildPlannerRecoveryContext(state),
     pendingApproval: state.pendingApproval
       ? {
           toolId: state.pendingApproval.toolId,

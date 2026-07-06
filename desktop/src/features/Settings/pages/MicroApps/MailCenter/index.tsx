@@ -820,26 +820,30 @@ export default function MailCenterPage() {
                             <div className="truncate text-sm font-medium text-text-primary">
                               {account.name}
                             </div>
-                            {editingAccountId === account.id ? (
-                              <Tooltip
-                                text={t("settings.microApps.mailCenter.actions.editAccount")}
-                                placement="top"
+                            <Tooltip
+                              text={t("settings.microApps.mailCenter.actions.editAccount")}
+                              placement="top"
+                            >
+                              <button
+                                type="button"
+                                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-ui-control text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setEditingAccountId(account.id);
+                                  const nextForm = toForm(account);
+                                  setSelectedProviderId(
+                                    detectMailProvider(nextForm, providerProfiles),
+                                  );
+                                  setForm(nextForm);
+                                  setIsAccountModalOpen(true);
+                                }}
+                                aria-label={t(
+                                  "settings.microApps.mailCenter.actions.editAccount",
+                                )}
                               >
-                                <button
-                                  type="button"
-                                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-ui-control text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    openEditModal();
-                                  }}
-                                  aria-label={t(
-                                    "settings.microApps.mailCenter.actions.editAccount",
-                                  )}
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </button>
-                              </Tooltip>
-                            ) : null}
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                            </Tooltip>
                             <Tooltip
                               text={t("settings.microApps.mailCenter.actions.deleteAccount")}
                               placement="top"
@@ -861,24 +865,32 @@ export default function MailCenterPage() {
                           <div className="mt-1 truncate text-xs text-text-secondary">
                             {account.emailAddress}
                           </div>
+                          </div>
+                          <span
+                            className={[
+                              "mt-1 inline-flex h-2.5 w-2.5 shrink-0 rounded-full",
+                              account.status === "connected"
+                                ? "bg-success"
+                                : account.status === "error"
+                                  ? "bg-warning"
+                                  : "bg-muted-foreground/40",
+                            ].join(" ")}
+                            aria-label={
+                              account.status === "connected"
+                                ? t("settings.microApps.mailCenter.labels.connected")
+                                : account.status === "error"
+                                  ? t("settings.microApps.mailCenter.labels.error")
+                                  : t("settings.microApps.mailCenter.labels.unverified")
+                            }
+                            title={
+                              account.status === "connected"
+                                ? t("settings.microApps.mailCenter.labels.connected")
+                                : account.status === "error"
+                                  ? t("settings.microApps.mailCenter.labels.error")
+                                  : t("settings.microApps.mailCenter.labels.unverified")
+                            }
+                          />
                         </div>
-                        <Badge
-                          variant={
-                            account.status === "connected"
-                              ? "success"
-                              : account.status === "error"
-                                ? "warning"
-                                : "muted"
-                          }
-                          size="sm"
-                        >
-                          {account.status === "connected"
-                            ? t("settings.microApps.mailCenter.labels.connected")
-                            : account.status === "error"
-                              ? t("settings.microApps.mailCenter.labels.error")
-                              : t("settings.microApps.mailCenter.labels.unverified")}
-                        </Badge>
-                      </div>
                       <div className="mt-3 flex items-center justify-between text-xs text-text-tertiary">
                         <span>
                           {account.isDefault

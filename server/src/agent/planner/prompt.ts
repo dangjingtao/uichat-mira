@@ -5,7 +5,7 @@ import type {
   AgentToolExposureState,
   PlannerObservationContext,
 } from "../types";
-import { SCHEMA_REPLAN_ATTEMPT_LIMIT } from "./action-types";
+import { getRemainingPlannerRecoveryAttempts } from "../recovery";
 
 export const normalizeToolExposure = (
   state: {
@@ -55,15 +55,11 @@ const summarizeToolSchemas = (toolExposure: AgentToolExposureState) =>
         typeof schema?.additionalProperties === "boolean"
           ? schema.additionalProperties
           : undefined,
-      };
+    };
   });
 
 const getRemainingRecoveryAttempts = (observationContext: PlannerObservationContext) =>
-  Math.max(
-    0,
-    observationContext.recovery.maxAttempts -
-      Math.max(0, observationContext.recovery.attemptCount - 1),
-  );
+  getRemainingPlannerRecoveryAttempts(observationContext.recovery);
 
 const buildProgressionRules = (input: {
   observationContext: PlannerObservationContext;
@@ -170,8 +166,8 @@ export const buildNextActionPlannerMessages = (input: {
   maxIterations: number;
 }): NormalizedChatMessage[] => {
   if (
-    input.observationContext.recovery.attemptCount > 0 &&
-    input.observationContext.recovery.attemptCount <= SCHEMA_REPLAN_ATTEMPT_LIMIT
+    input.observationContext.recovery.source === "schema_replan" &&
+    !input.observationContext.recovery.exhausted
   ) {
     return buildSchemaReplanMessages({
       question: input.question,
