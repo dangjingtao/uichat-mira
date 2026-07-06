@@ -13,7 +13,7 @@ related:
   - docs/project-control/tasks/agent_node_T019-planner-observation-context.md
   - docs/project-control/tasks/agent_node_T023-route-after-tool-back-to-planner.md
   - docs/chat/agent-loop-v1.7-construction-plan.md
-task_state: TODO
+task_state: DONE
 ---
 
 # agent_node_T024 planner node progression rules
@@ -70,3 +70,28 @@ task_state: TODO
 - 这是最容易发散成“重做 Planner”的卡，必须只做推进规则
 - 输入事实不完整时，prompt 规则会失效
 
+## Acceptance Evidence
+
+- 代码改动：
+  - `server/src/agent/planner/prompt.ts`
+  - `server/src/agent/planner/parse.ts`
+  - `server/src/agent/planner/action-types.ts`
+  - `server/src/agent/planner/node.ts`
+  - `server/src/agent/graph/routes.ts`
+  - `server/src/agent/__tests__/next-action-planner.test.ts`
+  - `server/src/agent/__tests__/graph.test.ts`
+- 本轮完成：
+  - planner prompt 明确接入失败恢复、换参数、换工具、`ask_user`、恢复预算与迭代预算规则
+  - planner parse / allowed action contract 正式接受 `ask_user`
+  - bounded replan prompt 不再只允许 `answer / retrieve / use_tool / error`
+  - `pendingApproval` 存在时，planner 不再调用 task model、不再产出 `answer/error` 终局动作，只保留等待审批态
+  - `routeAfterNextAction` 在 `pendingApproval` 仍存在时直接回 `approval`，不会把“planner 没出新动作”误收成错误终局
+  - 恢复预算语义已统一为“超过 replan 上限才算 exhausted”；预算耗尽时会直接给出明确终局，不再继续 `use_tool`
+  - 新增和更新单测，覆盖 `ask_user` 合法输出、主 prompt 推进规则、bounded replan 恢复规则、allowed action trace、pending approval 停住语义与 recovery exhausted 运行级行为
+- 验证结果：
+  - `pnpm --filter @ui-chat-mira/server test -- src/agent/__tests__/next-action-planner.test.ts`
+  - 结果：`63 passed`
+  - `pnpm --filter @ui-chat-mira/server test -- src/agent/__tests__/graph.test.ts`
+  - 结果：`32 passed`
+  - `pnpm check`
+  - 结果：通过；本轮把 `pendingApproval` 分支改成“不产出 nextAction”后引入的 `server/src/agent/planner/node.ts` 类型合同缺陷已修复，`T024` 不再阻断仓库级 typecheck

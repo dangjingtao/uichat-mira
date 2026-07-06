@@ -1221,6 +1221,19 @@ const enUS = {
     modal: {
       closeAria: "Close dialog",
     },
+    externalLink: {
+      openFailedCopied: "The link could not be opened directly. The URL has been copied for manual opening.",
+      copyOnlySuccess: "This runtime only allows copying links. The URL has been copied.",
+      copyFailed: "The link could not be opened, and copying the URL also failed.",
+      confirm: {
+        title: "Open external link",
+        description:
+          "This link will be opened in an external browser or isolated container. The destination page content and safety are outside this app's responsibility. Continue only if you trust this URL: {{url}}",
+        confirmText: "Open link",
+        cancelText: "Cancel",
+        loadingText: "Opening",
+      },
+    },
     select: {
       empty: "Please select",
       noOptions: "No options available",

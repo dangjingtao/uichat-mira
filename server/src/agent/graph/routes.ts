@@ -2,6 +2,8 @@ import { END } from "@langchain/langgraph";
 import { DEFAULT_AGENT_MAX_ITERATIONS } from "./state";
 import type { AgentGraphStateType } from "./state";
 
+const DEFAULT_AGENT_MAX_RECOVERY_ATTEMPTS = 2;
+
 const hasFrozenPendingToolCall = (
   pendingToolCall: AgentGraphStateType["pendingToolCall"],
 ) =>
@@ -51,6 +53,10 @@ export const routeAfterToolSelect = (state: AgentGraphStateType) => {
 export const routeAfterNextAction = (state: AgentGraphStateType) => {
   if (state.errorMessage) {
     return "error";
+  }
+
+  if (state.pendingApproval) {
+    return "approval";
   }
 
   switch (state.nextAction?.type) {
@@ -108,12 +114,26 @@ export const routeAfterPolicy = (state: AgentGraphStateType) => {
 };
 
 export const routeAfterTool = (state: AgentGraphStateType) => {
-  if (state.errorMessage) {
-    return "error";
-  }
-
   if (state.pendingApproval) {
     return "approval";
+  }
+
+  const lastToolExecution = state.lastToolExecution;
+  if (lastToolExecution?.status === "failed") {
+    if (lastToolExecution.failureKind === "terminal") {
+      return "error";
+    }
+
+    const recoveryAttemptCount = lastToolExecution.recoveryAttemptCount ?? 0;
+    if (recoveryAttemptCount >= DEFAULT_AGENT_MAX_RECOVERY_ATTEMPTS) {
+      return "generate";
+    }
+
+    return "toolSelectStep";
+  }
+
+  if (state.errorMessage) {
+    return "error";
   }
 
   const iterationCount = state.iterationCount ?? 0;

@@ -9,7 +9,11 @@ import * as taskSelectorModule from "../intent/task-capability-selector";
 import * as runnablesModule from "../runnables";
 import { createInvocationInputHash } from "../approval-fingerprint";
 import { agentGraph } from "../graph";
-import { routeAfterRetrieve, routeAfterTool } from "../graph/routes";
+import {
+  routeAfterNextAction,
+  routeAfterRetrieve,
+  routeAfterTool,
+} from "../graph/routes";
 
 const baseGoal = {
   id: "goal-1",
@@ -633,6 +637,10 @@ test("agentGraph routes planner use_tool through normalize and answer stop rule 
   assert.equal(typeof result.lastToolExecution?.toolCallId, "string");
   assert.equal(result.pendingToolCall, undefined);
   assert.equal(
+    executionNodes.filter((nodeId) => nodeId === "agent-next-action-planner").length >= 2,
+    true,
+  );
+  assert.equal(
     executionNodes.indexOf("agent-tool-call-normalize") <
       executionNodes.findIndex((nodeId) => nodeId.startsWith("agent-policy")),
     true,
@@ -643,6 +651,259 @@ test("agentGraph routes planner use_tool through normalize and answer stop rule 
     true,
   );
   assert.equal(generateInvokeSpy.mock.calls.length, 1);
+});
+
+test("agentGraph routes recoverable tool failure back to the planner chain instead of the global error path", async () => {
+  const readOpen = makeToolDefinition({
+    id: "read_open",
+    domain: "read",
+    inputSchema: {
+      type: "object",
+      required: ["path"],
+      properties: {
+        path: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+  });
+  vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([readOpen]);
+  vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
+    makeToolIntentResult({
+      query: "open missing.md",
+      topCandidates: [{ toolId: "read_open", domain: "read" }],
+      exposedDefinitions: [readOpen],
+    }),
+  );
+  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
+    selectedToolIds: ["read_open"],
+    decisionSource: "task-model",
+    decisionReason: "A read tool is available for inspection.",
+  });
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"missing.md"},"reason":"Need the file content."}';
+    })
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"answer","reason":"The file is missing, so explain the failure from evidence."}';
+    });
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-read-open-missing",
+      toolId: "read_open",
+      status: "failed",
+      error: {
+        message: "File not found",
+      },
+      startedAt: "2026-07-06T00:00:00.000Z",
+      finishedAt: "2026-07-06T00:00:01.000Z",
+    } as never);
+  const generateInvokeSpy = vi
+    .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
+    .mockResolvedValue("missing.md was not found in the workspace.");
+  const executionNodes: string[] = [];
+
+  const result = await agentGraph.run({
+    runId: "run-recoverable-tool-failure",
+    threadId: "thread-1",
+    userId: 1,
+    goal: {
+      ...baseGoal,
+      text: "open missing.md",
+    },
+    plan: basePlan,
+    messages: [makeMessage("open missing.md")],
+    onExecutionNode: async (event) => {
+      executionNodes.push(event.nodeId);
+    },
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.errorMessage, undefined);
+  assert.equal(plannerSpy.mock.calls.length, 2);
+  assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+  assert.equal(generateInvokeSpy.mock.calls.length, 1);
+  assert.equal(result.lastToolExecution?.status, "failed");
+  assert.equal(result.lastToolExecution?.failureKind, "recoverable");
+  assert.equal(result.lastToolExecution?.recoveryAttemptCount, 1);
+  assert.equal(
+    executionNodes.filter((nodeId) => nodeId === "agent-next-action-planner").length >= 3,
+    true,
+  );
+});
+
+test("agentGraph stops retrying after two recoverable tool failures and does not re-enter planner or tool again", async () => {
+  const readOpen = makeToolDefinition({
+    id: "read_open",
+    domain: "read",
+    inputSchema: {
+      type: "object",
+      required: ["path"],
+      properties: {
+        path: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+  });
+  vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([readOpen]);
+  vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
+    makeToolIntentResult({
+      query: "open the missing file and explain what happened",
+      topCandidates: [{ toolId: "read_open", domain: "read" }],
+      exposedDefinitions: [readOpen],
+    }),
+  );
+  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
+    selectedToolIds: ["read_open"],
+    decisionSource: "task-model",
+    decisionReason: "A read tool is available for inspection.",
+  });
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"missing.md"},"reason":"Need the file content."}';
+    })
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"docs/missing.md"},"reason":"Retry with a more specific path."}';
+    });
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValueOnce({
+      id: "invocation-read-open-missing-1",
+      toolId: "read_open",
+      status: "failed",
+      error: {
+        message: "File not found",
+      },
+      startedAt: "2026-07-06T00:00:00.000Z",
+      finishedAt: "2026-07-06T00:00:01.000Z",
+    } as never)
+    .mockResolvedValueOnce({
+      id: "invocation-read-open-missing-2",
+      toolId: "read_open",
+      status: "failed",
+      error: {
+        message: "File not found under docs/",
+      },
+      startedAt: "2026-07-06T00:00:02.000Z",
+      finishedAt: "2026-07-06T00:00:03.000Z",
+    } as never);
+  const generateInvokeSpy = vi
+    .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
+    .mockResolvedValue(
+      "The file could not be found after two recovery attempts, so the run stopped with the current evidence.",
+    );
+  const executionNodes: Array<{
+    nodeId: string;
+    phase: string;
+  }> = [];
+
+  const result = await agentGraph.run({
+    runId: "run-recoverable-tool-failure-limit",
+    threadId: "thread-1",
+    userId: 1,
+    goal: {
+      ...baseGoal,
+      text: "open the missing file and explain what happened",
+    },
+    plan: basePlan,
+    messages: [makeMessage("open the missing file and explain what happened")],
+    onExecutionNode: async (event) => {
+      executionNodes.push({
+        nodeId: event.nodeId,
+        phase: event.phase,
+      });
+    },
+  });
+
+  const plannerDoneEvents = executionNodes.filter(
+    (event) =>
+      event.nodeId === "agent-next-action-planner" && event.phase === "done",
+  );
+  const toolStartEvents = executionNodes.filter(
+    (event) => isToolExecutionNodeId(event.nodeId) && event.phase === "start",
+  );
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.errorMessage, undefined);
+  assert.equal(result.lastToolExecution?.status, "failed");
+  assert.equal(result.lastToolExecution?.failureKind, "recoverable");
+  assert.equal(result.lastToolExecution?.recoveryAttemptCount, 2);
+  assert.equal(plannerSpy.mock.calls.length, 2);
+  assert.equal(executeHarnessInvocationSpy.mock.calls.length, 2);
+  assert.equal(generateInvokeSpy.mock.calls.length, 1);
+  assert.equal(plannerDoneEvents.length, 2);
+  assert.equal(toolStartEvents.length, 2);
+});
+
+test("agentGraph keeps terminal tool failure on the global error path", async () => {
+  const readOpen = makeToolDefinition({
+    id: "read_open",
+    domain: "read",
+    inputSchema: {
+      type: "object",
+      required: ["path"],
+      properties: {
+        path: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+  });
+  vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([readOpen]);
+  vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
+    makeToolIntentResult({
+      query: "open README.md",
+      topCandidates: [{ toolId: "read_open", domain: "read" }],
+      exposedDefinitions: [readOpen],
+    }),
+  );
+  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
+    selectedToolIds: ["read_open"],
+    decisionSource: "task-model",
+    decisionReason: "A read tool is available for inspection.",
+  });
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need the file content."}';
+    });
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-read-open-terminal",
+      toolId: "read_open",
+      status: "failed",
+      error: {
+        message: "Tool protocol mismatch: result payload is invalid",
+      },
+      startedAt: "2026-07-06T00:00:00.000Z",
+      finishedAt: "2026-07-06T00:00:01.000Z",
+    } as never);
+  const generateInvokeSpy = vi.spyOn(
+    runnablesModule.agentGenerateTextRunnable,
+    "invoke",
+  );
+
+  const result = await agentGraph.run({
+    runId: "run-terminal-tool-failure",
+    threadId: "thread-1",
+    userId: 1,
+    goal: {
+      ...baseGoal,
+      text: "open README.md",
+    },
+    plan: basePlan,
+    messages: [makeMessage("open README.md")],
+  });
+
+  assert.equal(result.status, "failed");
+  assert.equal(plannerSpy.mock.calls.length, 1);
+  assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+  assert.equal(generateInvokeSpy.mock.calls.length, 0);
+  assert.equal(result.lastToolExecution?.status, "failed");
+  assert.equal(result.lastToolExecution?.failureKind, "terminal");
+  assert.match(result.errorMessage ?? "", /protocol mismatch/i);
 });
 
 test("agentGraph blocks a repeated completed tool call in the same run and does not execute the tool twice", async () => {
@@ -1807,14 +2068,75 @@ test("agentGraph stops re-planning after maxIterations and does not issue a seco
 });
 
 test("routeAfterTool returns the declared tool graph branches", () => {
-  assert.equal(routeAfterTool(makeRouteState()), "toolSelectStep");
   assert.equal(
     routeAfterTool(
       makeRouteState({
-        iterationCount: 3,
+        lastToolExecution: {
+          toolId: "read_open",
+          args: {
+            path: "README.md",
+          },
+          status: "completed",
+          startedAt: "2026-07-06T00:00:00.000Z",
+          finishedAt: "2026-07-06T00:00:01.000Z",
+        },
+      }),
+    ),
+    "toolSelectStep",
+  );
+  assert.equal(
+    routeAfterTool(
+      makeRouteState({
+        lastToolExecution: {
+          toolId: "read_open",
+          args: {
+            path: "missing.md",
+          },
+          status: "failed",
+          failureKind: "recoverable",
+          recoveryAttemptCount: 1,
+          startedAt: "2026-07-06T00:00:00.000Z",
+          finishedAt: "2026-07-06T00:00:01.000Z",
+        },
+      }),
+    ),
+    "toolSelectStep",
+  );
+  assert.equal(
+    routeAfterTool(
+      makeRouteState({
+        lastToolExecution: {
+          toolId: "read_open",
+          args: {
+            path: "missing.md",
+          },
+          status: "failed",
+          failureKind: "recoverable",
+          recoveryAttemptCount: 2,
+          startedAt: "2026-07-06T00:00:00.000Z",
+          finishedAt: "2026-07-06T00:00:01.000Z",
+        },
       }),
     ),
     "generate",
+  );
+  assert.equal(
+    routeAfterTool(
+      makeRouteState({
+        lastToolExecution: {
+          toolId: "read_open",
+          args: {
+            path: "README.md",
+          },
+          status: "failed",
+          failureKind: "terminal",
+          startedAt: "2026-07-06T00:00:00.000Z",
+          finishedAt: "2026-07-06T00:00:01.000Z",
+        },
+        errorMessage: "tool failed",
+      }),
+    ),
+    "error",
   );
   assert.equal(
     routeAfterTool(
@@ -1829,10 +2151,24 @@ test("routeAfterTool returns the declared tool graph branches", () => {
   assert.equal(
     routeAfterTool(
       makeRouteState({
-        errorMessage: "tool failed",
+        iterationCount: 3,
       }),
     ),
-    "error",
+    "generate",
+  );
+});
+
+test("routeAfterNextAction returns approval when pendingApproval is still present", () => {
+  assert.equal(
+    routeAfterNextAction(
+      makeRouteState({
+        pendingApproval: {
+          toolId: "terminal_session",
+        },
+        nextAction: undefined,
+      }),
+    ),
+    "approval",
   );
 });
 

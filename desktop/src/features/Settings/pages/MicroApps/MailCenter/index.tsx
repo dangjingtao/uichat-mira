@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   CircleHelp,
-  ExternalLink,
+  ExternalLink as ExternalLinkIcon,
   Mail,
   MailCheck,
   Pencil,
@@ -11,6 +11,7 @@ import {
   Save,
   Send,
   ServerCog,
+  Trash2,
 } from "lucide-react";
 import SettingsPageLayout from "../../../components/SettingsPageLayout";
 import Card from "@/shared/ui/Card";
@@ -19,15 +20,19 @@ import Divider from "@/shared/ui/Divider";
 import Switch from "@/shared/ui/Switch";
 import {
   Button,
+  ExternalLink,
   FullPageStatus,
   Modal,
   Select,
   TextInput,
   Tooltip,
   message,
+  useModal,
 } from "@/shared/ui";
 import {
   createMailAccount,
+  deleteMailAccount,
+  getMailMessageDetail,
   getMailCenterOverview,
   sendMailAccountTest,
   syncMailInbox,
@@ -35,6 +40,7 @@ import {
   type MailAccountPayload,
   type MailAccountRecord,
   type MailCenterOverview,
+  type MailInboxMessageDetail,
 } from "@/shared/api/mailCenter";
 
 type MailAccountForm = {
@@ -82,6 +88,38 @@ const fieldClassName =
 
 const textAreaClassName =
   "min-h-[88px] w-full rounded-ui-control border border-border bg-surface-primary px-3.5 py-2.5 text-sm text-text-primary shadow-shadow-sm transition-[background-color,border-color,box-shadow] duration-150 ease-out placeholder:text-text-tertiary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
+
+const buildMailHtmlDocument = (html: string) => `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <base target="_blank" />
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: #ffffff;
+      }
+      body {
+        padding: 16px 18px 24px;
+        color: #1f2937;
+        font: 14px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        overflow-wrap: anywhere;
+      }
+      img, table, iframe {
+        max-width: 100%;
+      }
+      pre {
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>${html}</body>
+</html>`;
 
 const createBlankForm = (): MailAccountForm => ({
   name: "",
@@ -225,14 +263,17 @@ const toPayload = (
 
 export default function MailCenterPage() {
   const { t, i18n } = useTranslation();
+  const modal = useModal();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [sendingTest, setSendingTest] = useState(false);
   const [overview, setOverview] = useState<MailCenterOverview | null>(null);
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
+  const [isMessageDetailModalOpen, setIsMessageDetailModalOpen] = useState(false);
   const [selectedProviderId, setSelectedProviderId] =
     useState<MailProviderId>("custom");
   const [form, setForm] = useState<MailAccountForm>(createBlankForm);
@@ -241,6 +282,9 @@ export default function MailCenterPage() {
   const [testContent, setTestContent] = useState(
     "这是一封来自 UIChat Mira 邮件中心的测试邮件。",
   );
+  const [messageDetailLoading, setMessageDetailLoading] = useState(false);
+  const [selectedMessageDetail, setSelectedMessageDetail] =
+    useState<MailInboxMessageDetail | null>(null);
 
   const selectedAccount = useMemo(
     () =>
@@ -431,6 +475,23 @@ export default function MailCenterPage() {
     });
   };
 
+  const formatRecipients = (
+    recipients: Array<{ name?: string; address?: string }> | undefined,
+  ) =>
+    (recipients ?? [])
+      .map((recipient) => {
+        const name = recipient.name?.trim() ?? "";
+        const address = recipient.address?.trim() ?? "";
+
+        if (name && address) {
+          return `${name} <${address}>`;
+        }
+
+        return name || address;
+      })
+      .filter(Boolean)
+      .join(", ");
+
   const load = async (accountId?: string | null) => {
     setLoading(true);
     try {
@@ -443,6 +504,8 @@ export default function MailCenterPage() {
         setSelectedProviderId("custom");
         setForm(createBlankForm());
         setTestTarget("");
+        setIsMessageDetailModalOpen(false);
+        setSelectedMessageDetail(null);
         return;
       }
 
@@ -457,6 +520,8 @@ export default function MailCenterPage() {
       setSelectedProviderId(detectMailProvider(nextForm, providerProfiles));
       setForm(nextForm);
       setTestTarget(account.emailAddress);
+      setIsMessageDetailModalOpen(false);
+      setSelectedMessageDetail(null);
     } catch (error) {
       message.error(
         error instanceof Error
@@ -529,6 +594,32 @@ export default function MailCenterPage() {
     await load(accountId);
   };
 
+  const handleOpenMessageDetail = async (messageId: string) => {
+    if (!editingAccountId) {
+      message.error(t("settings.microApps.mailCenter.messages.selectAccountFirst"));
+      return;
+    }
+
+    setIsMessageDetailModalOpen(true);
+    setSelectedMessageDetail(null);
+    setMessageDetailLoading(true);
+
+    try {
+      const result = await getMailMessageDetail(editingAccountId, messageId);
+      setSelectedMessageDetail(result.message);
+    } catch (error) {
+      setIsMessageDetailModalOpen(false);
+      setSelectedMessageDetail(null);
+      message.error(
+        error instanceof Error
+          ? error.message
+          : t("settings.microApps.mailCenter.messages.detailLoadFailed"),
+      );
+    } finally {
+      setMessageDetailLoading(false);
+    }
+  };
+
   const openTestModal = () => {
     if (!editingAccountId) {
       message.error(t("settings.microApps.mailCenter.messages.saveConfigFirst"));
@@ -567,6 +658,47 @@ export default function MailCenterPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleDeleteAccountFromList = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    account: MailAccountRecord,
+  ) => {
+    event.stopPropagation();
+    setEditingAccountId(account.id);
+
+    modal.confirm({
+      title: t("settings.microApps.mailCenter.deleteModal.title"),
+      description: t("settings.microApps.mailCenter.deleteModal.description", {
+        name: account.name,
+      }),
+      confirmText: t("settings.microApps.mailCenter.deleteModal.confirm"),
+      cancelText: t("common.actions.cancel"),
+      loadingText: t("settings.microApps.mailCenter.deleteModal.deleting"),
+      tone: "danger",
+      onConfirm: async () => {
+        setDeleting(true);
+        try {
+          await deleteMailAccount(account.id);
+          message.success(t("settings.microApps.mailCenter.messages.accountDeleted"));
+          if (editingAccountId === account.id) {
+            setIsAccountModalOpen(false);
+            setIsMessageDetailModalOpen(false);
+            setSelectedMessageDetail(null);
+          }
+          await load();
+        } catch (error) {
+          message.error(
+            error instanceof Error
+              ? error.message
+              : t("settings.microApps.mailCenter.messages.deleteFailed"),
+          );
+          throw error;
+        } finally {
+          setDeleting(false);
+        }
+      },
+    });
   };
 
   const handleSendTest = async () => {
@@ -708,6 +840,23 @@ export default function MailCenterPage() {
                                 </button>
                               </Tooltip>
                             ) : null}
+                            <Tooltip
+                              text={t("settings.microApps.mailCenter.actions.deleteAccount")}
+                              placement="top"
+                            >
+                              <button
+                                type="button"
+                                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-ui-control text-text-secondary transition-colors hover:bg-danger-soft hover:text-danger"
+                                onClick={(event) =>
+                                  handleDeleteAccountFromList(event, account)
+                                }
+                                aria-label={t(
+                                  "settings.microApps.mailCenter.actions.deleteAccount",
+                                )}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </Tooltip>
                           </div>
                           <div className="mt-1 truncate text-xs text-text-secondary">
                             {account.emailAddress}
@@ -828,11 +977,13 @@ export default function MailCenterPage() {
 
               <div className="stable-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto pr-1">
                 {overview?.inbox?.messages.length ? (
-                  <div className="space-y-3">
+                  <div className="divide-y divide-border">
                     {overview.inbox.messages.map((item) => (
-                      <div
+                      <button
                         key={item.id}
-                        className="min-w-0 overflow-hidden rounded-ui-panel border border-border bg-surface-primary px-4 py-3"
+                        type="button"
+                        onClick={() => void handleOpenMessageDetail(item.id)}
+                        className="w-full min-w-0 overflow-hidden px-1 py-3 text-left transition-colors hover:bg-surface-secondary/20"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
@@ -863,7 +1014,7 @@ export default function MailCenterPage() {
                           {item.previewText ||
                             t("settings.microApps.mailCenter.values.noPreview")}
                         </div>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 ) : (
@@ -931,16 +1082,15 @@ export default function MailCenterPage() {
               {selectedProviderProfile.docs.length ? (
                 <div className="flex flex-wrap gap-3 pt-1">
                   {selectedProviderProfile.docs.map((doc) => (
-                    <a
+                    <ExternalLink
                       key={doc.url}
                       href={doc.url}
-                      target="_blank"
-                      rel="noreferrer"
+                      confirmBeforeOpen
                       className="inline-flex items-center gap-1 text-xs font-medium text-primary transition-opacity hover:opacity-80"
                     >
                       <span>{doc.label}</span>
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </a>
+                      <ExternalLinkIcon className="h-3.5 w-3.5" />
+                    </ExternalLink>
                   ))}
                 </div>
               ) : (
@@ -1162,6 +1312,106 @@ export default function MailCenterPage() {
             />
           </label>
         </div>
+      </Modal>
+
+      <Modal
+        open={isMessageDetailModalOpen}
+        title={t("settings.microApps.mailCenter.modal.detailTitle")}
+        width={860}
+        onClose={() => {
+          setIsMessageDetailModalOpen(false);
+          setSelectedMessageDetail(null);
+        }}
+      >
+        {messageDetailLoading ? (
+          <div className="py-8 text-sm text-text-secondary">
+            {t("settings.microApps.mailCenter.states.loadingDetail")}
+          </div>
+        ) : selectedMessageDetail ? (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="text-lg font-semibold text-text-primary">
+                {selectedMessageDetail.subject}
+              </div>
+              <div className="grid gap-3 rounded-ui-panel border border-border bg-surface-secondary/20 px-4 py-3 text-sm md:grid-cols-2">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-text-tertiary">
+                    {t("settings.microApps.mailCenter.detail.from")}
+                  </div>
+                  <div className="mt-1 break-all text-text-primary">
+                    {selectedMessageDetail.fromDisplay}
+                    {selectedMessageDetail.fromAddress
+                      ? ` <${selectedMessageDetail.fromAddress}>`
+                      : ""}
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-text-tertiary">
+                    {t("settings.microApps.mailCenter.detail.to")}
+                  </div>
+                  <div className="mt-1 break-all text-text-primary">
+                    {formatRecipients(selectedMessageDetail.to) ||
+                      t("settings.microApps.mailCenter.values.noRecipients")}
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-text-tertiary">
+                    {t("settings.microApps.mailCenter.detail.receivedAt")}
+                  </div>
+                  <div className="mt-1 text-text-primary">
+                    {formatDateTime(selectedMessageDetail.receivedAt)}
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-text-tertiary">
+                    {t("settings.microApps.mailCenter.detail.sentAt")}
+                  </div>
+                  <div className="mt-1 text-text-primary">
+                    {formatDateTime(selectedMessageDetail.sentAt)}
+                  </div>
+                </div>
+                <div className="min-w-0 md:col-span-2">
+                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-text-tertiary">
+                    {t("settings.microApps.mailCenter.detail.messageId")}
+                  </div>
+                  <div className="mt-1 break-all text-text-primary">
+                    {selectedMessageDetail.messageId ||
+                      t("settings.microApps.mailCenter.values.noMessageId")}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-ui-panel border border-border bg-surface-primary px-4 py-4">
+              <div className="mb-2 text-sm font-medium text-text-primary">
+                {selectedMessageDetail.htmlContent
+                  ? t("settings.microApps.mailCenter.detail.htmlBody")
+                  : t("settings.microApps.mailCenter.detail.body")}
+              </div>
+              {selectedMessageDetail.htmlContent ? (
+                <div className="overflow-hidden rounded-ui-control border border-border bg-white">
+                  <iframe
+                    title={selectedMessageDetail.subject}
+                    srcDoc={buildMailHtmlDocument(selectedMessageDetail.htmlContent)}
+                    sandbox="allow-popups allow-popups-to-escape-sandbox"
+                    referrerPolicy="no-referrer"
+                    className="h-[52vh] w-full border-0 bg-white"
+                  />
+                </div>
+              ) : (
+                <div className="max-h-[52vh] overflow-y-auto whitespace-pre-wrap break-words text-sm leading-6 text-text-secondary">
+                  {selectedMessageDetail.textContent ||
+                    selectedMessageDetail.previewText ||
+                    t("settings.microApps.mailCenter.values.emptyDetailBody")}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="py-8 text-sm text-text-secondary">
+            {t("settings.microApps.mailCenter.states.emptyDetail")}
+          </div>
+        )}
       </Modal>
     </SettingsPageLayout>
   );

@@ -1,7 +1,7 @@
 ---
 status: current
 owner: agent-runtime
-last_verified: 2026-07-05
+last_verified: 2026-07-06
 layer: project-control
 module: ProjectControl
 feature: AgentNodesWorkboard
@@ -82,9 +82,9 @@ Agent node 专属总台账。
 | `agent_node_T019` | PlannerObservationContext | `v1.7` A 组第一张卡。只建立 Planner 的统一观察入口，禁止继续散读 `evidence / observations / lastToolExecution / pendingApproval`；A 组必须单线程串行推进 | `TODO` | [agent_node_T019-planner-observation-context.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T019-planner-observation-context.md) |
 | `agent_node_T020` | currentTaskFrame | `v1.7` A 组第二张卡。把当前目标、当前子任务、当前阻塞点、已确认对象、完成判据落成运行时最小任务板；不引入大型计划系统 | `TODO` | [agent_node_T020-current-task-frame.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T020-current-task-frame.md) |
 | `agent_node_T021` | AgentExecutionObservation | `v1.7` A 组第三张卡。把 Executor 执行结果收口成统一 observation 结构，供 `PlannerObservationContext` 消费；A1-A3 稳定后 B/C 组才能启动并行准备 | `TODO` | [agent_node_T021-agent-execution-observation.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T021-agent-execution-observation.md) |
-| `agent_node_T022` | toolNode recoverable failure | `v1.7` A 组第四张卡。让 `toolNode` 的可恢复失败不再默认终止图，而是写 failed observation / evidence / lastToolExecution；`tool-node.ts` 是并改禁区 | `TODO` | [agent_node_T022-tool-node-recoverable-failure.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T022-tool-node-recoverable-failure.md) |
+| `agent_node_T022` | toolNode recoverable failure | `v1.7` A 组第四张卡已完成：`toolNode` 现在会把 Harness 失败区分为 recoverable / terminal，recoverable failure 不再默认写全局 `errorMessage`，并且 `PlannerObservationContext` 读取 `lastToolExecution.failureKind` 后，terminal failure 仍保持 `failed_terminal`，不会被误判成可恢复 | `DONE` | [agent_node_T022-tool-node-recoverable-failure.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T022-tool-node-recoverable-failure.md) |
 | `agent_node_T023` | routeAfterTool back to Planner | `v1.7` A 组第五张卡。把工具后路由改成 `waiting_approval -> approval`、`failed_recoverable -> toolSelectStep`、`failed_terminal -> error` | `TODO` | [agent_node_T023-route-after-tool-back-to-planner.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T023-route-after-tool-back-to-planner.md) |
-| `agent_node_T024` | PlannerNode progression rules | `v1.7` A 组第六张卡。让 Planner 基于 `PlannerObservationContext` 做失败恢复、换工具、换参数、ask_user 和预算耗尽终局；这是 A 组主线收口卡 | `TODO` | [agent_node_T024-planner-node-progression-rules.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T024-planner-node-progression-rules.md) |
+| `agent_node_T024` | PlannerNode progression rules | `T024` 已补齐 planner 合同里的 `ask_user`、失败恢复、恢复预算和迭代预算规则；本轮又修正了 `pendingApproval` 语义，planner 在待审批时不会继续调模型，也不会把审批中的工具调用收成最终回答，`routeAfterNextAction` 会直接回 `approval` 保持等待审批态。恢复预算耗尽时，planner 会直接给出明确终局，不会继续 `use_tool`，也不会把失败 observation 误当成成功 evidence。定向验证：`next-action-planner` `63 passed`，`graph` `32 passed`，仓库级 `pnpm check` 通过；此前由本轮改动引入的 `server/src/agent/planner/node.ts` 类型合同缺陷已消除 | `DONE` | [agent_node_T024-planner-node-progression-rules.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T024-planner-node-progression-rules.md) |
 | `agent_node_T025` | terminal_session primary executor | `v1.7` B 组任务卡。A1-A3 稳定后只允许开始 terminal observation mapping 设计与测试准备；凡涉及 `tool-node.ts / resume.ts / approval` 的实际接入，必须等 `T022` 完成 | `TODO` | [agent_node_T025-terminal-session-primary-executor.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T025-terminal-session-primary-executor.md) |
 | `agent_node_T026` | User-visible execution trace | `v1.7` C 组第一张卡。A1-A3 稳定后可并行开始，把内部 execution node 整理成用户可读推进轨迹，不要求复杂 UI | `TODO` | [agent_node_T026-user-visible-execution-trace.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T026-user-visible-execution-trace.md) |
 | `agent_node_T027` | v1.7 blackbox test plan | `v1.7` C 组第二张卡。A1-A3 稳定后可并行开始，只设计 3 个黑盒场景的输入、断言和禁止行为，不提前落测试代码 | `TODO` | [agent_node_T027-blackbox-test-plan-v17.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T027-blackbox-test-plan-v17.md) |

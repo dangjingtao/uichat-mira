@@ -14,6 +14,7 @@
 - `CodeBlock`
 - `CollapsiblePanel`
 - `Drawer`
+- `ExternalLink`
 - `ErrorBoundary`
 - `Divider`
 - `DropdownMenu`
@@ -775,6 +776,25 @@ message.destroy();
 - 适合工具菜单、附件菜单、知识库二级菜单
 - 菜单项文案优先短句，补充信息放 `trailingText` 或 `title`
 - 子菜单只用于一层渐进披露，不要在业务里堆三层以上
+
+## ExternalLink
+
+用于统一处理外部链接打开行为，避免业务页直接写裸 `<a>` 并各自判断 Electron、Tauri 或浏览器差异。
+
+### 当前能力
+
+- 默认优先调用共享平台层的 `openExternalUrl`
+- 可按运行载体切换到 `copy-only` 降级行为
+- 打开失败时自动回退到“复制 URL + 提示”
+- 支持在打开前弹出免责确认，适合外部文档、邮件正文链接等场景
+- 保留原生链接语义，仍然以 `<a>` 输出
+
+### 使用建议
+
+- 业务页中的外部文档、官网、帮助中心链接优先复用这个组件
+- 当某个载体不允许直接打开外链时，通过 `copyOnlyHosts` 声明降级策略，不要在业务页重复判断
+- 当链接会离开当前应用上下文时，通过 `confirmBeforeOpen` 统一补上确认提示，不要在业务页重复拼接免责文案
+- 失败提示和复制逻辑由共享层统一处理，避免页面各写一套 toast 文案
 - 菜单承载动作，不要把长说明塞进菜单内容里
 
 ## Chat-specific UI

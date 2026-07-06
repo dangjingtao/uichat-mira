@@ -180,7 +180,9 @@ export const toExecutionObservationFromToolExecution = (
         ? "waiting_approval"
         : execution.status === "denied"
           ? "failed_terminal"
-          : "failed_recoverable";
+          : execution.failureKind === "terminal"
+            ? "failed_terminal"
+            : "failed_recoverable";
   const createdAt = execution.finishedAt || execution.startedAt;
 
   return {
@@ -509,7 +511,7 @@ export const buildPlannerObservationContext = (
     recovery: {
       attemptCount: recoveryAttemptCount,
       maxAttempts: SCHEMA_REPLAN_ATTEMPT_LIMIT,
-      exhausted: recoveryAttemptCount >= SCHEMA_REPLAN_ATTEMPT_LIMIT,
+      exhausted: recoveryAttemptCount > SCHEMA_REPLAN_ATTEMPT_LIMIT,
       schemaError: state.schemaReplanDiagnostics?.schemaError,
       toolId: state.schemaReplanDiagnostics?.toolId,
       invalidAction: state.schemaReplanDiagnostics?.invalidAction,

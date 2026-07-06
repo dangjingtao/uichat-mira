@@ -15,6 +15,7 @@ export type MailMessageRecord = {
   to: Array<{ name?: string; address?: string }>;
   previewText: string;
   textContent: string;
+  htmlContent: string;
   sentAt: string | null;
   receivedAt: string | null;
   isRead: boolean;
@@ -55,6 +56,7 @@ const ensureTable = () => {
       to_json TEXT NOT NULL DEFAULT '[]',
       preview_text TEXT NOT NULL DEFAULT '',
       text_content TEXT NOT NULL DEFAULT '',
+      html_content TEXT NOT NULL DEFAULT '',
       sent_at TEXT,
       received_at TEXT,
       is_read INTEGER NOT NULL DEFAULT 0,
@@ -79,6 +81,17 @@ const ensureTable = () => {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_mail_messages_folder_remote_uid
     ON mail_messages(folder_id, remote_uid)
   `);
+
+  const columns = sqlite
+    .prepare("PRAGMA table_info(mail_messages)")
+    .all() as Array<{ name?: string }>;
+  const hasHtmlContent = columns.some((column) => column.name === "html_content");
+
+  if (!hasHtmlContent) {
+    sqlite.exec(
+      "ALTER TABLE mail_messages ADD COLUMN html_content TEXT NOT NULL DEFAULT ''",
+    );
+  }
 };
 
 const toRecord = (row: typeof mailMessages.$inferSelect): MailMessageRecord => ({
@@ -93,6 +106,7 @@ const toRecord = (row: typeof mailMessages.$inferSelect): MailMessageRecord => (
   to: parseJson(row.toJson, []),
   previewText: row.previewText,
   textContent: row.textContent,
+  htmlContent: row.htmlContent,
   sentAt: row.sentAt ?? null,
   receivedAt: row.receivedAt ?? null,
   isRead: Boolean(row.isRead),
@@ -106,6 +120,21 @@ const toRecord = (row: typeof mailMessages.$inferSelect): MailMessageRecord => (
 export const mailMessagesRepository = {
   initialize() {
     ensureTable();
+  },
+
+  getByIdForAccount(messageId: string, accountId: string) {
+    const row = getDb()
+      .select()
+      .from(mailMessages)
+      .where(
+        and(
+          eq(mailMessages.id, messageId),
+          eq(mailMessages.accountId, accountId),
+        ),
+      )
+      .get();
+
+    return row ? toRecord(row) : null;
   },
 
   listRecentByFolder(folderId: string, limit: number) {
@@ -145,6 +174,7 @@ export const mailMessagesRepository = {
               toJson: JSON.stringify(item.to),
               previewText: item.previewText,
               textContent: item.textContent,
+              htmlContent: item.htmlContent,
               sentAt: item.sentAt,
               receivedAt: item.receivedAt,
               isRead: item.isRead,
@@ -171,6 +201,7 @@ export const mailMessagesRepository = {
             toJson: JSON.stringify(item.to),
             previewText: item.previewText,
             textContent: item.textContent,
+            htmlContent: item.htmlContent,
             sentAt: item.sentAt,
             receivedAt: item.receivedAt,
             isRead: item.isRead,

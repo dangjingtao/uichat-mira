@@ -170,6 +170,65 @@ test("buildPlannerObservationContext includes lastToolExecution as the latest pl
   assert.equal(context.latestObservation?.summary?.toolId, "read_open");
 });
 
+test("buildPlannerObservationContext keeps terminal tool failure as failed_terminal", () => {
+  const context = buildPlannerObservationContext(
+    createState({
+      lastToolExecution: {
+        toolCallId: "tool-call-terminal-failed",
+        toolId: "read_open",
+        inputHash: "hash-read-open-terminal",
+        args: { path: "README.md" },
+        status: "failed",
+        failureKind: "terminal",
+        errorMessage: "Tool protocol mismatch: result payload is invalid",
+        startedAt: "2026-07-06T10:00:00.000Z",
+        finishedAt: "2026-07-06T10:00:01.000Z",
+      },
+      evidence: undefined,
+      observations: undefined,
+    }),
+  );
+
+  assert.equal(context.latestObservation?.source, "tool_execution");
+  assert.equal(context.latestObservation?.actionType, "tool");
+  assert.equal(context.latestObservation?.status, "failed_terminal");
+  assert.equal(context.latestObservation?.recoverable, false);
+  assert.deepEqual(context.latestObservation?.suggestedNextActions, [
+    "report_terminal_failure",
+  ]);
+});
+
+test("buildPlannerObservationContext keeps recoverable tool failure as failed_recoverable", () => {
+  const context = buildPlannerObservationContext(
+    createState({
+      lastToolExecution: {
+        toolCallId: "tool-call-recoverable-failed",
+        toolId: "read_open",
+        inputHash: "hash-read-open-recoverable",
+        args: { path: "missing.md" },
+        status: "failed",
+        failureKind: "recoverable",
+        recoveryAttemptCount: 1,
+        errorMessage: "File not found",
+        startedAt: "2026-07-06T10:00:00.000Z",
+        finishedAt: "2026-07-06T10:00:01.000Z",
+      },
+      evidence: undefined,
+      observations: undefined,
+    }),
+  );
+
+  assert.equal(context.latestObservation?.source, "tool_execution");
+  assert.equal(context.latestObservation?.actionType, "tool");
+  assert.equal(context.latestObservation?.status, "failed_recoverable");
+  assert.equal(context.latestObservation?.recoverable, true);
+  assert.deepEqual(context.latestObservation?.suggestedNextActions, [
+    "inspect_failure_cause",
+    "retry_with_adjustment",
+    "switch_action",
+  ]);
+});
+
 test("buildPlannerObservationContext includes pendingApproval in both approval view and recent observations", () => {
   const context = buildPlannerObservationContext(
     createState({
@@ -260,8 +319,40 @@ test("buildPlannerObservationContext carries recovery diagnostics into a unified
   assert.deepEqual(context.recovery, {
     attemptCount: 1,
     maxAttempts: 1,
-    exhausted: true,
+    exhausted: false,
     schemaError: "path is required",
+    toolId: "read_open",
+    invalidAction: {
+      type: "use_tool",
+      toolId: "read_open",
+      args: {},
+      reason: "Need file content.",
+    },
+  });
+});
+
+test("buildPlannerObservationContext marks recovery as exhausted only after the replan budget is exceeded", () => {
+  const context = buildPlannerObservationContext(
+    createState({
+      schemaReplanDiagnostics: {
+        schemaError: "path is still required",
+        toolId: "read_open",
+        invalidAction: {
+          type: "use_tool",
+          toolId: "read_open",
+          args: {},
+          reason: "Need file content.",
+        },
+        attemptCount: 2,
+      },
+    }),
+  );
+
+  assert.deepEqual(context.recovery, {
+    attemptCount: 2,
+    maxAttempts: 1,
+    exhausted: true,
+    schemaError: "path is still required",
     toolId: "read_open",
     invalidAction: {
       type: "use_tool",
@@ -462,6 +553,19 @@ test("parseNextActionPlannerOutput defaults reason for answer output", () => {
     {
       type: "answer",
       reason: "Planner selected final answer.",
+    },
+  );
+});
+
+test("parseNextActionPlannerOutput accepts ask_user output and defaults the reason", () => {
+  assert.deepEqual(
+    parseNextActionPlannerOutput(
+      '{"type":"ask_user","question":"请确认要检查哪个仓库？"}',
+    ),
+    {
+      type: "ask_user",
+      question: "请确认要检查哪个仓库？",
+      reason: "Planner needs the user to clarify the missing information.",
     },
   );
 });
@@ -1766,59 +1870,74 @@ test("nextActionPlannerNode does not treat failed tool execution as a completed 
   }
 });
 
-test("nextActionPlannerNode does not treat awaiting approval tool execution as a completed duplicate", async () => {
-  const streamSpy = vi
-    .spyOn(providerProxyService, "streamTaskChatText")
-    .mockImplementation(async function* () {
-      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Retry after approval wait."}';
-    });
+test("nextActionPlannerNode stops on pendingApproval without producing a final answer", async () => {
+  const streamSpy = vi.spyOn(providerProxyService, "streamTaskChatText");
+  const events: Array<Record<string, unknown>> = [];
 
   try {
     const patch = await nextActionPlannerNode(
       createState({
-        evidence: {
-          observations: [],
-          retrievals: [],
-          toolExecutions: [
-            {
-              toolCallId: "tool-call-readme-awaiting",
-              toolId: "read_open",
-              inputHash: readmeArgsHash,
-              args: {
-                path: "README.md",
-              },
-              status: "awaiting_approval",
-              approval: {
-                id: "approval-1",
-                runId: "run-1",
-                stepId: "tool",
-                toolId: "read_open",
-                reason: "needs approval",
-                input: {
-                  path: "README.md",
-                },
-                inputHash:
-                  readmeArgsHash,
-                createdAt: "2026-07-04T00:00:00.000Z",
-              },
-              startedAt: "2026-07-04T00:00:00.000Z",
-              finishedAt: "2026-07-04T00:00:01.000Z",
+        pendingApproval: {
+          id: "approval-1",
+          runId: "run-1",
+          stepId: "tool",
+          toolId: "read_open",
+          toolCallId: "tool-call-readme-awaiting",
+          reason: "Needs approval before reading README.md.",
+          input: {
+            path: "README.md",
+          },
+          inputHash: readmeArgsHash,
+          createdAt: "2026-07-04T00:00:00.000Z",
+        },
+        lastToolExecution: {
+          toolCallId: "tool-call-readme-awaiting",
+          toolId: "read_open",
+          inputHash: readmeArgsHash,
+          args: {
+            path: "README.md",
+          },
+          status: "awaiting_approval",
+          approval: {
+            id: "approval-1",
+            runId: "run-1",
+            stepId: "tool",
+            toolId: "read_open",
+            reason: "Needs approval before reading README.md.",
+            input: {
+              path: "README.md",
             },
-          ],
+            inputHash: readmeArgsHash,
+            createdAt: "2026-07-04T00:00:00.000Z",
+          },
+          startedAt: "2026-07-04T00:00:00.000Z",
+          finishedAt: "2026-07-04T00:00:01.000Z",
         },
       }),
+      async (event) => {
+        events.push({
+          nodeId: event.nodeId,
+          phase: event.phase,
+          details: event.details,
+        });
+      },
     );
 
-    assert.deepEqual(patch, {
-      nextAction: {
-        type: "use_tool",
-        toolId: "read_open",
-        args: {
-          path: "README.md",
-        },
-        reason: "Retry after approval wait.",
-      },
-    });
+    assert.deepEqual(patch, {});
+    assert.equal(streamSpy.mock.calls.length, 0);
+
+    const doneEvent = events.find(
+      (event) =>
+        event.nodeId === "agent-next-action-planner" && event.phase === "done",
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.pendingApprovalActive,
+      true,
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.selectedActionType,
+      null,
+    );
   } finally {
     streamSpy.mockRestore();
   }
@@ -1945,7 +2064,7 @@ test("nextActionPlannerNode keeps missing-reason use_tool output as a valid acti
   }
 });
 
-test("nextActionPlannerNode treats ask_user output as invalid for the current planner contract", async () => {
+test("nextActionPlannerNode accepts ask_user output for missing information", async () => {
   const streamSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementation(async function* () {
@@ -1953,25 +2072,37 @@ test("nextActionPlannerNode treats ask_user output as invalid for the current pl
     });
 
   try {
-    const patch = await nextActionPlannerNode(createState());
+    const patch = await nextActionPlannerNode(
+      createState({
+        currentTaskFrame: {
+          currentGoal: "Inspect the repository",
+          currentSubtask: "Determine the next action.",
+          currentBlocker: undefined,
+          confirmedObjects: [],
+          completionCriteria: ["Identify the right repository"],
+        },
+      }),
+    );
     assert.deepEqual(patch, {
       nextAction: {
-        type: "error",
-        reason:
-          "Planner output was invalid JSON; planner must stop instead of pretending an answer is ready.",
+        type: "ask_user",
+        question: "Which repository should I inspect?",
+        reason: "The target repo is ambiguous.",
       },
-      errorMessage:
-        "Planner output was invalid JSON; planner must stop instead of pretending an answer is ready.",
-      blockedReason:
-        "Planner output was invalid JSON; planner must stop instead of pretending an answer is ready.",
-      errorSourceNodeId: "agent-next-action-planner",
+      currentTaskFrame: {
+        currentGoal: "What should we do next?",
+        currentSubtask: "Ask the user for the missing information needed to continue.",
+        currentBlocker: undefined,
+        confirmedObjects: [],
+        completionCriteria: ["Identify the right repository"],
+      },
     });
   } finally {
     streamSpy.mockRestore();
   }
 });
 
-test("nextActionPlannerNode prompt no longer allows ask_user output", async () => {
+test("nextActionPlannerNode prompt allows ask_user output and includes progression rules", async () => {
   const streamSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementation(async function* () {
@@ -1979,13 +2110,232 @@ test("nextActionPlannerNode prompt no longer allows ask_user output", async () =
     });
 
   try {
-    await nextActionPlannerNode(createState());
-    const plannerMessages = streamSpy.mock.calls[0]?.[0] ?? [];
-    assert.match(String(plannerMessages[0]?.content ?? ""), /"type":"error"/);
-    assert.doesNotMatch(
-      String(plannerMessages[0]?.content ?? ""),
-      /"type":"ask_user"/,
+    await nextActionPlannerNode(
+      createState({
+        currentTaskFrame: {
+          currentGoal: "Inspect the repository",
+          currentSubtask: "Review the latest failed action.",
+          currentBlocker: "Last path was wrong",
+          confirmedObjects: [],
+          completionCriteria: ["Find the right repository"],
+        },
+        lastToolExecution: {
+          toolId: "read_open",
+          args: {
+            path: "missing.md",
+          },
+          status: "failed",
+          errorMessage: "file not found",
+          startedAt: "2026-07-06T10:00:00.000Z",
+          finishedAt: "2026-07-06T10:00:01.000Z",
+        },
+      }),
     );
+    const plannerMessages = streamSpy.mock.calls[0]?.[0] ?? [];
+    assert.match(String(plannerMessages[0]?.content ?? ""), /"type":"ask_user"/);
+    assert.match(
+      String(plannerMessages[0]?.content ?? ""),
+      /如果上一次工具或检索失败但仍可恢复，不要默认输出 error/,
+    );
+    assert.match(
+      String(plannerMessages[0]?.content ?? ""),
+      /不要无理由重复同一个失败调用/,
+    );
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode bounded replan prompt includes ask_user and recovery exhaustion guidance", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"ask_user","question":"Please confirm the exact file path.","reason":"The previous tool args were invalid and the correct path is still unclear."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        workspaceRoot: "D:\\workspace\\rag-demo",
+        schemaReplanDiagnostics: {
+          schemaError: "args.limit is not allowed",
+          toolId: "read_open",
+          invalidAction: {
+            type: "use_tool",
+            toolId: "read_open",
+            args: {
+              path: "README.md",
+              limit: 3,
+            },
+            reason: "Need file content.",
+          },
+          attemptCount: 1,
+        },
+      }),
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "ask_user",
+        question: "Please confirm the exact file path.",
+        reason:
+          "The previous tool args were invalid and the correct path is still unclear.",
+      },
+    });
+
+    const plannerMessages = streamSpy.mock.calls[0]?.[0] ?? [];
+    assert.match(String(plannerMessages[0]?.content ?? ""), /ask_user/);
+    assert.match(
+      String(plannerMessages[0]?.content ?? ""),
+      /改参数、换工具、ask_user，或在确实无法继续时输出明确终局/,
+    );
+    assert.match(String(plannerMessages[1]?.content ?? ""), /remainingRecoveryAttempts/);
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode stops with a terminal conclusion when recovery budget is exhausted", async () => {
+  const streamSpy = vi.spyOn(providerProxyService, "streamTaskChatText");
+  const events: Array<Record<string, unknown>> = [];
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        lastToolExecution: {
+          toolCallId: "tool-call-readme-failed",
+          toolId: "read_open",
+          inputHash: readmeArgsHash,
+          args: {
+            path: "README.md",
+          },
+          status: "failed",
+          errorMessage: "file not found",
+          summary: {
+            source: "tool",
+            status: "failed",
+            toolId: "read_open",
+            actionTaken: "Tried to open README.md.",
+            keyFindings: ["The file path could not be resolved."],
+            answerReadiness: {
+              canAnswer: false,
+              reason: "The file open attempt failed, so there is no grounded file evidence.",
+              missingInfo: ["A valid file path or a different recovery action."],
+            },
+          },
+          startedAt: "2026-07-04T00:00:00.000Z",
+          finishedAt: "2026-07-04T00:00:01.000Z",
+        },
+        schemaReplanDiagnostics: {
+          schemaError: "path is required",
+          toolId: "read_open",
+          invalidAction: {
+            type: "use_tool",
+            toolId: "read_open",
+            args: {},
+            reason: "Need file content.",
+          },
+          attemptCount: 2,
+        },
+      }),
+      async (event) => {
+        events.push({
+          nodeId: event.nodeId,
+          phase: event.phase,
+          details: event.details,
+        });
+      },
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "error",
+        reason: "Recovery budget exhausted after read_open failed: path is required",
+      },
+      schemaReplanDiagnostics: {
+        schemaError: "path is required",
+        toolId: "read_open",
+        invalidAction: {
+          type: "use_tool",
+          toolId: "read_open",
+          args: {},
+          reason: "Need file content.",
+        },
+        attemptCount: 2,
+      },
+      errorMessage: "Recovery budget exhausted after read_open failed: path is required",
+      blockedReason: "Recovery budget exhausted after read_open failed: path is required",
+      errorSourceNodeId: "agent-next-action-planner",
+    });
+    assert.equal(streamSpy.mock.calls.length, 0);
+
+    const doneEvent = events.find(
+      (event) =>
+        event.nodeId === "agent-next-action-planner" && event.phase === "done",
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.recoveryExhausted,
+      true,
+    );
+    assert.equal(
+      (doneEvent?.details as Record<string, unknown>)?.selectedActionType,
+      "error",
+    );
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode stops when schema replan budget is exhausted even without a failed observation", async () => {
+  const streamSpy = vi.spyOn(providerProxyService, "streamTaskChatText");
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        schemaReplanDiagnostics: {
+          schemaError: "args.limit is not allowed",
+          toolId: "read_open",
+          invalidAction: {
+            type: "use_tool",
+            toolId: "read_open",
+            args: {
+              path: "README.md",
+              limit: 3,
+            },
+            reason: "Need file content.",
+          },
+          attemptCount: 2,
+        },
+      }),
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "error",
+        reason:
+          "Recovery budget exhausted after read_open failed: args.limit is not allowed",
+      },
+      schemaReplanDiagnostics: {
+        schemaError: "args.limit is not allowed",
+        toolId: "read_open",
+        invalidAction: {
+          type: "use_tool",
+          toolId: "read_open",
+          args: {
+            path: "README.md",
+            limit: 3,
+          },
+          reason: "Need file content.",
+        },
+        attemptCount: 2,
+      },
+      errorMessage:
+        "Recovery budget exhausted after read_open failed: args.limit is not allowed",
+      blockedReason:
+        "Recovery budget exhausted after read_open failed: args.limit is not allowed",
+      errorSourceNodeId: "agent-next-action-planner",
+    });
+    assert.equal(streamSpy.mock.calls.length, 0);
   } finally {
     streamSpy.mockRestore();
   }
@@ -2071,7 +2421,7 @@ test("nextActionPlannerNode writes invalid planner output diagnostics into trace
     );
     assert.deepEqual(
       (doneEvent?.details as Record<string, unknown>)?.allowedActionTypes,
-      ["answer", "retrieve", "use_tool", "error"],
+      ["answer", "retrieve", "use_tool", "ask_user", "error"],
     );
   } finally {
     streamSpy.mockRestore();

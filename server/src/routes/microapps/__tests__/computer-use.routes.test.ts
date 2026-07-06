@@ -27,6 +27,7 @@ import microappsRoute, {
   type ComputerUseRouteService,
   type ComputerUseRuntimeRouteService,
   type ImageGenerationRouteService,
+  type MailCenterRouteService,
 } from "../index.js";
 
 const testDbPath = createTimestampedTestArtifactPath(
@@ -105,6 +106,31 @@ const imageGenerationService: ImageGenerationRouteService = {
   },
 };
 
+const mailCenterService: MailCenterRouteService = {
+  getOverview() {
+    return {
+      accounts: [],
+      selectedAccountId: null,
+      inbox: null,
+    };
+  },
+  getMessageDetail() {
+    throw new Error("not used in computer use route tests");
+  },
+  deleteAccount() {
+    throw new Error("not used in computer use route tests");
+  },
+  saveAccount() {
+    throw new Error("not used in computer use route tests");
+  },
+  async sendTestMail() {
+    throw new Error("not used in computer use route tests");
+  },
+  async syncInbox() {
+    throw new Error("not used in computer use route tests");
+  },
+};
+
 const createApp = async (input: {
   computerUseService: ComputerUseRouteService;
   computerUseRuntimeService: ComputerUseRuntimeRouteService;
@@ -118,6 +144,7 @@ const createApp = async (input: {
     imageGenerationService,
     computerUseService: input.computerUseService,
     computerUseRuntimeService: input.computerUseRuntimeService,
+    mailCenterService,
   });
   return app;
 };

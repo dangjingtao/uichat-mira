@@ -46,6 +46,13 @@ export type MailMessageSummary = {
   hasAttachments: boolean;
 };
 
+export type MailMessageDetail = MailMessageSummary & {
+  to: Array<{ name?: string; address?: string }>;
+  textContent: string;
+  htmlContent: string;
+  rawHeaders: Record<string, string>;
+};
+
 type ParsedMailLike = {
   from?: { value?: MessageAddressObject[] };
   to?: { value?: MessageAddressObject[] };
@@ -246,6 +253,61 @@ export const createMailCenterService = () => ({
     });
   },
 
+  getMessageDetail(userId: number, accountId: string, messageId: string): MailMessageDetail {
+    const account = mailAccountsRepository.getByIdForUser(accountId, userId);
+    if (!account) {
+      throw new Error(`Mail account not found: ${accountId}`);
+    }
+
+    const message = mailMessagesRepository.getByIdForAccount(messageId, account.id);
+    if (!message) {
+      throw new Error(`Mail message not found: ${messageId}`);
+    }
+
+    return {
+      id: message.id,
+      remoteUid: message.remoteUid,
+      messageId: message.messageId,
+      subject: message.subject,
+      fromDisplay: message.fromDisplay,
+      fromAddress: message.fromAddress,
+      to: message.to,
+      previewText: message.previewText,
+      textContent: message.textContent,
+      htmlContent: message.htmlContent,
+      sentAt: message.sentAt,
+      receivedAt: message.receivedAt,
+      isRead: message.isRead,
+      isFlagged: message.isFlagged,
+      hasAttachments: message.hasAttachments,
+      rawHeaders: message.rawHeaders,
+    };
+  },
+
+  deleteAccount(userId: number, accountId: string) {
+    const account = mailAccountsRepository.getByIdForUser(accountId, userId);
+    if (!account) {
+      throw new Error(`Mail account not found: ${accountId}`);
+    }
+
+    const deleted = mailAccountsRepository.delete(account.id);
+    if (!deleted) {
+      throw new Error(`Mail account not found: ${accountId}`);
+    }
+
+    if (account.isDefault) {
+      const remaining = mailAccountsRepository.listByUser(userId);
+      if (remaining.length > 0 && !remaining.some((item) => item.isDefault)) {
+        mailAccountsRepository.update(remaining[0].id, { isDefault: true });
+      }
+    }
+
+    return {
+      accountId,
+      deleted: true,
+    };
+  },
+
   async sendTestMail(userId: number, accountId: string, input: MailTestSendInput) {
     const account = mailAccountsRepository.getByIdForUser(accountId, userId);
     if (!account) {
@@ -325,6 +387,7 @@ export const createMailCenterService = () => ({
           to: Array<{ name?: string; address?: string }>;
           previewText: string;
           textContent: string;
+          htmlContent: string;
           sentAt: string | null;
           receivedAt: string | null;
           isRead: boolean;
@@ -354,6 +417,8 @@ export const createMailCenterService = () => ({
               message.envelope?.to?.map((item) => formatAddress(item)) ??
               [];
             const textContent = normalizeText(parsed?.text ?? "");
+            const htmlContent =
+              typeof parsed?.html === "string" ? parsed.html.trim() : "";
             const previewText =
               normalizePreview(textContent) ||
               normalizePreview(parsed?.html ? String(parsed.html) : "") ||
@@ -377,6 +442,7 @@ export const createMailCenterService = () => ({
               to: toList,
               previewText,
               textContent,
+              htmlContent,
               sentAt:
                 parsed?.date instanceof Date
                   ? parsed.date.toISOString()

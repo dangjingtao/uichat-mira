@@ -33,6 +33,27 @@ import { buildNextActionPlannerMessages, normalizeToolExposure } from "./prompt"
 import { getPlannerRepeatedActionGuardResult } from "./repeated-action-guard";
 import { validateNextAction } from "./validate";
 
+const getRecoveryExhaustedPlannerConclusion = (observationContext: ReturnType<
+  typeof buildPlannerObservationContext
+>): AgentNextAction => {
+  const latestObservation = observationContext.latestObservation;
+  const failureReason =
+    observationContext.recovery.schemaError?.trim() ||
+    latestObservation?.errorMessage?.trim() ||
+    latestObservation?.reason?.trim();
+  const actionLabel =
+    observationContext.recovery.toolId ??
+    latestObservation?.toolId ??
+    (latestObservation?.actionType === "retrieve" ? "retrieval" : "the latest action");
+
+  return {
+    type: "error",
+    reason: failureReason
+      ? `Recovery budget exhausted after ${actionLabel} failed: ${failureReason}`
+      : `Recovery budget exhausted after ${actionLabel} failed; planner must stop instead of proposing another tool action.`,
+  };
+};
+
 const logPlannerDecisionDebug = (input: {
   runId: string;
   threadId: string;
@@ -40,7 +61,7 @@ const logPlannerDecisionDebug = (input: {
   maxIterations: number;
   answerStopRuleTriggered: boolean;
   taskModelInvoked: boolean;
-  nextAction: AgentNextAction;
+  nextAction?: AgentNextAction;
   rawOutput: string;
   sanitizedOutput: string;
   parseErrorReason?: string;
@@ -56,9 +77,10 @@ const logPlannerDecisionDebug = (input: {
     maxIterations: input.maxIterations,
     answerStopRuleTriggered: input.answerStopRuleTriggered,
     taskModelInvoked: input.taskModelInvoked,
-    selectedActionType: input.nextAction.type,
-    selectedToolId: input.nextAction.type === "use_tool" ? input.nextAction.toolId : null,
-    reason: input.nextAction.reason,
+    selectedActionType: input.nextAction?.type ?? null,
+    selectedToolId:
+      input.nextAction?.type === "use_tool" ? input.nextAction.toolId : null,
+    reason: input.nextAction?.reason ?? null,
     parseErrorReason: input.parseErrorReason,
     parseWarnings: input.parseWarnings,
     repeatedToolGuardTriggered: input.repeatedActionGuard?.triggered ?? false,
@@ -114,7 +136,7 @@ export const nextActionPlannerNode = async (
     },
   });
 
-  let nextAction: AgentNextAction;
+  let nextAction: AgentNextAction | undefined;
   let rawOutput = "";
   let sanitizedOutput = "";
   let parseErrorReason: string | undefined;
@@ -122,14 +144,26 @@ export const nextActionPlannerNode = async (
   let repeatedActionGuard: AgentRepeatedActionGuardResult | undefined;
   let localIntentGuardTriggered = false;
   let localIntentGuardReason: string | undefined;
+  const pendingApprovalActive = Boolean(observationContext.pendingApproval);
+  const recoveryExhausted =
+    observationContext.recovery.exhausted &&
+    (Boolean(observationContext.recovery.schemaError) ||
+      observationContext.latestObservation?.recoverable === true);
   const taskModelInvoked =
-    !answerStopDecision.shouldAnswer && !(maxIterations > 0 && iteration >= maxIterations);
+    !answerStopDecision.shouldAnswer &&
+    !pendingApprovalActive &&
+    !recoveryExhausted &&
+    !(maxIterations > 0 && iteration >= maxIterations);
 
   if (answerStopDecision.shouldAnswer) {
     nextAction = {
       type: "answer",
       reason: answerStopDecision.reason,
     };
+  } else if (pendingApprovalActive) {
+    nextAction = undefined;
+  } else if (recoveryExhausted) {
+    nextAction = getRecoveryExhaustedPlannerConclusion(observationContext);
   } else if (maxIterations > 0 && iteration >= maxIterations) {
     nextAction = toNextActionFallback(
       "Planner reached the iteration limit and must stop.",
@@ -233,9 +267,9 @@ export const nextActionPlannerNode = async (
     summary: "已完成下一步动作决策",
     details: {
       exposedToolCount: toolExposure.exposedTools.length,
-      selectedActionType: nextAction.type,
-      selectedToolId: nextAction.type === "use_tool" ? nextAction.toolId : null,
-      reason: nextAction.reason,
+      selectedActionType: nextAction?.type ?? null,
+      selectedToolId: nextAction?.type === "use_tool" ? nextAction.toolId : null,
+      reason: nextAction?.reason ?? null,
       iteration,
       maxIterations,
       latestEvidenceSummary: latestEvidenceSummary ?? null,
@@ -257,22 +291,26 @@ export const nextActionPlannerNode = async (
       localIntentGuardReason: localIntentGuardReason ?? null,
       schemaReplanAttemptCount: observationContext.recovery.attemptCount,
       schemaReplanError: observationContext.recovery.schemaError ?? null,
+      pendingApprovalActive,
+      recoveryExhausted,
       allowedActionTypes: [...ALLOWED_ACTION_TYPES],
       localIntentLegacyGuardReason: LOCAL_INTENT_GUARD_REASON,
     },
   });
 
-  const plannerTaskFrame = updateCurrentTaskFrameFromPlanner({
-    frame: state.currentTaskFrame,
-    goal: state.goal,
-    nextAction,
-    latestQuestion: question,
-  });
+  const plannerTaskFrame = nextAction
+    ? updateCurrentTaskFrameFromPlanner({
+        frame: state.currentTaskFrame,
+        goal: state.goal,
+        nextAction,
+        latestQuestion: question,
+      })
+    : undefined;
 
   return {
-    nextAction,
+    ...(nextAction ? { nextAction } : {}),
     ...(plannerTaskFrame ? { currentTaskFrame: plannerTaskFrame } : {}),
-    ...(nextAction.type === "error" && observationContext.recovery.schemaError
+    ...(nextAction?.type === "error" && observationContext.recovery.schemaError
       ? {
           schemaReplanDiagnostics: {
             schemaError: observationContext.recovery.schemaError,
@@ -282,7 +320,7 @@ export const nextActionPlannerNode = async (
           },
         }
       : {}),
-    ...(nextAction.type === "error"
+    ...(nextAction?.type === "error"
       ? {
           errorMessage: nextAction.reason,
           blockedReason: nextAction.reason,

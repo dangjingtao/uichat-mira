@@ -361,6 +361,114 @@ test("toolNode keeps frozen pendingToolCall when Harness requests approval", asy
   }
 });
 
+test("toolNode records recoverable Harness failure without promoting it to a global tool-node error", async () => {
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-read-open-failed",
+      toolId: "read_open",
+      status: "failed",
+      error: {
+        message: "File not found",
+      },
+      startedAt: "2026-07-06T00:00:00.000Z",
+      finishedAt: "2026-07-06T00:00:01.000Z",
+    } as never);
+
+  try {
+    const result = await toolNode(
+      createBaseState({
+        policyDecision: {
+          type: "allow",
+          toolId: "read_open",
+          inputHash: "hash-read-open-missing",
+          reason: "Allowed in test.",
+        },
+        pendingToolCall: {
+          id: "pending-read-open-failed",
+          toolId: "read_open",
+          args: { path: "missing.md" },
+          inputHash: "hash-read-open-missing",
+          source: "planner",
+          status: "frozen",
+          createdAt: "2026-07-06T00:00:00.000Z",
+        },
+      }),
+    );
+
+    assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+    assert.equal(result.errorMessage, undefined);
+    assert.equal(result.errorSourceNodeId, undefined);
+    assert.equal(result.pendingToolCall, undefined);
+    assert.equal(result.pendingApproval, undefined);
+    assert.equal(result.lastToolExecution?.status, "failed");
+    assert.equal(result.lastToolExecution?.failureKind, "recoverable");
+    assert.equal(result.lastToolExecution?.recoveryAttemptCount, 1);
+    assert.equal(result.evidence?.latestSummary?.status, "failed");
+    assert.match(result.evidence?.latestSummary?.actionTaken ?? "", /can be retried or adjusted/i);
+    assert.deepEqual(result.observations?.at(-1)?.facts, [
+      "read_open failed during Harness execution but can be retried.",
+    ]);
+    assert.equal(result.observations?.at(-1)?.status, "failed");
+  } finally {
+    executeHarnessInvocationSpy.mockRestore();
+  }
+});
+
+test("toolNode keeps terminal Harness failure on the global error path", async () => {
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-terminal-failed",
+      toolId: "read_open",
+      status: "failed",
+      error: {
+        message: "Tool protocol mismatch: result payload is invalid",
+      },
+      startedAt: "2026-07-06T00:00:00.000Z",
+      finishedAt: "2026-07-06T00:00:01.000Z",
+    } as never);
+
+  try {
+    const result = await toolNode(
+      createBaseState({
+        policyDecision: {
+          type: "allow",
+          toolId: "read_open",
+          inputHash: "hash-read-open-terminal",
+          reason: "Allowed in test.",
+        },
+        pendingToolCall: {
+          id: "pending-read-open-terminal",
+          toolId: "read_open",
+          args: { path: "README.md" },
+          inputHash: "hash-read-open-terminal",
+          source: "planner",
+          status: "frozen",
+          createdAt: "2026-07-06T00:00:00.000Z",
+        },
+      }),
+    );
+
+    assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+    assert.equal(result.lastToolExecution?.status, "failed");
+    assert.equal(result.lastToolExecution?.failureKind, "terminal");
+    assert.equal(result.lastToolExecution?.recoveryAttemptCount, undefined);
+    assert.match(result.errorMessage ?? "", /protocol mismatch/i);
+    assert.equal(result.errorSourceNodeId, "agent-tool");
+    assert.match(result.terminalReason ?? "", /protocol mismatch/i);
+    assert.match(result.blockedReason ?? "", /protocol mismatch/i);
+    assert.equal(result.observations?.at(-1)?.status, "blocked");
+    assert.equal(result.evidence?.latestSummary?.status, "failed");
+    assert.match(
+      result.evidence?.latestSummary?.actionTaken ?? "",
+      /stopped the current tool loop/i,
+    );
+  } finally {
+    executeHarnessInvocationSpy.mockRestore();
+  }
+});
+
 test("toolNode blocks execution when policy has not explicitly allowed the frozen call", async () => {
   const executeHarnessInvocationSpy = vi.spyOn(
     harnessInvocations,

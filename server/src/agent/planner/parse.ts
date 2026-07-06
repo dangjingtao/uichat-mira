@@ -32,6 +32,8 @@ const getDefaultPlannerReason = (
       return `Planner requested retrieval for query: ${String(payload.query ?? "").trim()}.`;
     case "use_tool":
       return `Planner selected tool ${String(payload.toolId ?? "").trim()}.`;
+    case "ask_user":
+      return "Planner needs the user to clarify the missing information.";
     case "error":
       return "Planner returned an error action without a reason.";
   }
@@ -182,6 +184,26 @@ const parseNextActionPlannerObject = (
       return {
         action: {
           type: "error",
+          reason,
+        },
+        sanitizedOutput: "",
+        parseErrorReason: null,
+        parseWarnings,
+      };
+    case "ask_user":
+      if (typeof parsed.question !== "string" || !parsed.question.trim()) {
+        return {
+          action: null,
+          sanitizedOutput: "",
+          parseErrorReason:
+            'Planner "ask_user" action must include a non-empty string "question" field.',
+          parseWarnings: [],
+        };
+      }
+      return {
+        action: {
+          type: "ask_user",
+          question: parsed.question.trim(),
           reason,
         },
         sanitizedOutput: "",

@@ -90,6 +90,59 @@ const inboxMessageSchema = {
   },
 } as const;
 
+const inboxMessageDetailSchema = {
+  type: "object",
+  required: [
+    "id",
+    "remoteUid",
+    "messageId",
+    "subject",
+    "fromDisplay",
+    "fromAddress",
+    "to",
+    "previewText",
+    "textContent",
+    "htmlContent",
+    "sentAt",
+    "receivedAt",
+    "isRead",
+    "isFlagged",
+    "hasAttachments",
+    "rawHeaders",
+  ],
+  properties: {
+    id: { type: "string" },
+    remoteUid: { type: "number" },
+    messageId: { type: ["string", "null"] },
+    subject: { type: "string" },
+    fromDisplay: { type: "string" },
+    fromAddress: { type: "string" },
+    to: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          name: { type: "string" },
+          address: { type: "string" },
+        },
+      },
+    },
+    previewText: { type: "string" },
+    textContent: { type: "string" },
+    htmlContent: { type: "string" },
+    sentAt: { type: ["string", "null"] },
+    receivedAt: { type: ["string", "null"] },
+    isRead: { type: "boolean" },
+    isFlagged: { type: "boolean" },
+    hasAttachments: { type: "boolean" },
+    rawHeaders: {
+      type: "object",
+      additionalProperties: { type: "string" },
+    },
+  },
+} as const;
+
 const accountBodySchema = {
   type: "object",
   additionalProperties: false,
@@ -291,6 +344,59 @@ const mailCenterRoutes: FastifyPluginAsync<{
     }),
   );
 
+  app.get<{
+    Params: { id: string; messageId: string };
+  }>(
+    "/microapps/mail-center/accounts/:id/messages/:messageId",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Get mail message detail",
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: "object",
+          additionalProperties: false,
+          required: ["id", "messageId"],
+          properties: {
+            id: { type: "string" },
+            messageId: { type: "string" },
+          },
+        },
+        response: {
+          200: successEnvelope({
+            type: "object",
+            required: ["message"],
+            properties: {
+              message: inboxMessageDetailSchema,
+            },
+          }),
+          401: errorEnvelope,
+          404: errorEnvelope,
+        },
+      },
+    },
+    routeHandler("Failed to get mail message detail", async (request) => {
+      try {
+        const message = mailCenterService.getMessageDetail(
+          request.authUser!.id,
+          request.params.id,
+          request.params.messageId,
+        );
+        return success({ message });
+      } catch (error) {
+        if (error instanceof Error) {
+          if (error.message === `Mail account not found: ${request.params.id}`) {
+            throw notFound(error.message, { cause: error });
+          }
+          if (error.message === `Mail message not found: ${request.params.messageId}`) {
+            throw notFound(error.message, { cause: error });
+          }
+        }
+        throw error;
+      }
+    }),
+  );
+
   app.patch<{
     Params: { id: string };
     Body: Record<string, unknown>;
@@ -335,6 +441,46 @@ const mailCenterRoutes: FastifyPluginAsync<{
         throw badRequest(error instanceof Error ? error.message : "Invalid mail account config", {
           cause: error,
         });
+      }
+    }),
+  );
+
+  app.delete<{
+    Params: { id: string };
+  }>(
+    "/microapps/mail-center/accounts/:id",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Delete a mail account",
+        security: [{ bearerAuth: [] }],
+        params: idParamsSchema,
+        response: {
+          200: successEnvelope({
+            type: "object",
+            required: ["accountId", "deleted"],
+            properties: {
+              accountId: { type: "string" },
+              deleted: { type: "boolean" },
+            },
+          }),
+          401: errorEnvelope,
+          404: errorEnvelope,
+        },
+      },
+    },
+    routeHandler("Failed to delete mail account", async (request) => {
+      try {
+        const result = mailCenterService.deleteAccount(
+          request.authUser!.id,
+          request.params.id,
+        );
+        return success(result);
+      } catch (error) {
+        if (error instanceof Error && error.message === `Mail account not found: ${request.params.id}`) {
+          throw notFound(error.message, { cause: error });
+        }
+        throw error;
       }
     }),
   );

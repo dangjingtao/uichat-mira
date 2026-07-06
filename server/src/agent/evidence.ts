@@ -797,19 +797,30 @@ export const createToolExecutionEvidenceSummary = (input: {
   }
 
   if (input.execution.status === "failed") {
+    const failureKind = input.execution.failureKind ?? "recoverable";
     return {
       source: "tool",
       status: "failed",
       toolId: input.execution.toolId,
       inputHash: input.execution.inputHash,
-      actionTaken: `${input.execution.toolId} failed.`,
+      actionTaken:
+        failureKind === "terminal"
+          ? `${input.execution.toolId} failed and stopped the current tool loop.`
+          : `${input.execution.toolId} failed and can be retried or adjusted.`,
       keyFindings: [
         `toolId=${input.execution.toolId}`,
+        `failureKind=${failureKind}`,
+        ...(typeof input.execution.recoveryAttemptCount === "number"
+          ? [`recoveryAttemptCount=${input.execution.recoveryAttemptCount}`]
+          : []),
         ...(input.execution.errorMessage ? [input.execution.errorMessage] : []),
       ],
       answerReadiness: {
         canAnswer: false,
-        reason: "Failed tool execution does not satisfy the answer stop rule.",
+        reason:
+          failureKind === "terminal"
+            ? "Terminal tool failure does not satisfy the answer stop rule."
+            : "Recoverable tool failure does not satisfy the answer stop rule yet.",
         missingInfo: ["successful grounded evidence"],
       },
       rawRef: {

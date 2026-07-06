@@ -1168,6 +1168,19 @@ const zhCN = {
     modal: {
       closeAria: "关闭弹窗",
     },
+    externalLink: {
+      openFailedCopied: "无法直接打开链接，已复制 URL，请手动打开。",
+      copyOnlySuccess: "当前运行载体只允许复制链接，URL 已复制。",
+      copyFailed: "链接打开失败，复制 URL 也失败了。",
+      confirm: {
+        title: "即将打开外部链接",
+        description:
+          "该链接将交由外部浏览器或独立容器打开，目标页面内容和安全性不由当前应用负责。请确认链接可信后再继续：{{url}}",
+        confirmText: "继续打开",
+        cancelText: "取消",
+        loadingText: "正在打开",
+      },
+    },
     select: {
       empty: "请选择",
       noOptions: "暂无选项",

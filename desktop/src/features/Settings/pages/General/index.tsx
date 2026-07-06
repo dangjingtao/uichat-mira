@@ -271,11 +271,8 @@ export default function General() {
           {t("settings.general.preferences")}
         </h2>
 
-        <div className="space-y-2">
-          <Card
-            variant="subtle"
-            className="flex items-center justify-between gap-4 border-border/70 bg-surface-secondary/60 px-3.5 py-3"
-          >
+        <div className="overflow-hidden rounded-ui-panel border border-border/70 bg-surface-secondary/60">
+          <div className="flex items-center justify-between gap-4 px-3.5 py-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium text-text-primary">
@@ -290,74 +287,71 @@ export default function General() {
               <KeyRound className="h-4 w-4" />
               {t("settings.general.account.changePassword")}
             </Button>
-          </Card>
+          </div>
 
-          <Card
-            variant="subtle"
-            className="flex items-center justify-between gap-4 border-border/70 bg-surface-secondary/60 px-3.5 py-3"
-          >
-            <div className="min-w-0">
-              <div className="text-sm font-medium text-text-primary">
-                {t("settings.general.language.label")}
+          <div className="border-t border-border/70">
+            <div className="flex items-center justify-between gap-4 px-3.5 py-3">
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-text-primary">
+                  {t("settings.general.language.label")}
+                </div>
+              </div>
+              <div className="w-full max-w-[168px] shrink-0">
+                <Select
+                  value={language}
+                  onChange={(value) =>
+                    void setLanguage(value as "zh-CN" | "en-US")
+                  }
+                  options={supportedLanguages.map((value) => ({
+                    value,
+                    label: t(`settings.general.language.options.${value}`),
+                  }))}
+                  compact
+                />
               </div>
             </div>
-            <div className="w-full max-w-[168px] shrink-0">
-              <Select
-                value={language}
-                onChange={(value) =>
-                  void setLanguage(value as "zh-CN" | "en-US")
+          </div>
+
+          <div className="border-t border-border/70">
+            <div className="flex items-center justify-between gap-4 px-3.5 py-3">
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-text-primary">
+                  {t("settings.general.theme.label")}
+                </div>
+                <div className="mt-0.5 text-xs leading-5 text-text-secondary">
+                  {themeMetadata[colorTheme]?.description}
+                </div>
+              </div>
+              <div className="w-full max-w-[168px] shrink-0">
+                <Select
+                  value={colorTheme}
+                  onChange={(value) => setColorTheme(value as ThemePresetId)}
+                  options={themePresets.map((theme) => ({
+                    value: theme.id,
+                    label: themeMetadata[theme.id].label,
+                  }))}
+                  compact
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-border/70">
+            <div className="flex items-center justify-between gap-4 px-3.5 py-3">
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-text-primary">
+                  {t("settings.general.darkMode.label")}
+                </div>
+              </div>
+              <Switch
+                checked={themeMode === "dark"}
+                onChange={() =>
+                  setThemeMode(themeMode === "dark" ? "light" : "dark")
                 }
-                options={supportedLanguages.map((value) => ({
-                  value,
-                  label: t(`settings.general.language.options.${value}`),
-                }))} 
-                compact
+                ariaLabel={t("settings.general.darkMode.ariaLabel")}
               />
             </div>
-          </Card>
-
-          <Card
-            variant="subtle"
-            className="flex items-center justify-between gap-4 border-border/70 bg-surface-secondary/60 px-3.5 py-3"
-          >
-            <div className="min-w-0">
-              <div className="text-sm font-medium text-text-primary">
-                {t("settings.general.theme.label")}
-              </div>
-              <div className="mt-0.5 text-xs leading-5 text-text-secondary">
-                {themeMetadata[colorTheme]?.description}
-              </div>
-            </div>
-            <div className="w-full max-w-[168px] shrink-0">
-              <Select
-                value={colorTheme}
-                onChange={(value) => setColorTheme(value as ThemePresetId)}
-                options={themePresets.map((theme) => ({
-                  value: theme.id,
-                  label: themeMetadata[theme.id].label,
-                }))} 
-                compact
-              />
-            </div>
-          </Card>
-
-          <Card
-            variant="subtle"
-            className="flex items-center justify-between gap-4 border-border/70 bg-surface-secondary/60 px-3.5 py-3"
-          >
-            <div className="min-w-0">
-              <div className="text-sm font-medium text-text-primary">
-                {t("settings.general.darkMode.label")}
-              </div>
-            </div>
-            <Switch
-              checked={themeMode === "dark"}
-              onChange={() =>
-                setThemeMode(themeMode === "dark" ? "light" : "dark")
-              }
-              ariaLabel={t("settings.general.darkMode.ariaLabel")}
-            />
-          </Card>
+          </div>
         </div>
       </Card>
     </SettingsPageLayout>

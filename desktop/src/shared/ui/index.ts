@@ -9,6 +9,7 @@ export { default as ConfirmDialog } from "./ConfirmDialog";
 export { default as Divider } from "./Divider";
 export { default as DropdownMenu } from "./DropdownMenu";
 export { default as Drawer } from "./Drawer";
+export { default as ExternalLink } from "./ExternalLink";
 export { default as ExpandableSection } from "./ExpandableSection";
 export { FileIcon } from "./FileIcon";
 export { default as FileListItem } from "./FileListItem";

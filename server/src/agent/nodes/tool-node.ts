@@ -30,6 +30,15 @@ import type {
 
 const nowIso = () => new Date().toISOString();
 
+const TERMINAL_FAILURE_PATTERNS = [
+  /\bapproval mismatch\b/i,
+  /\bpolicy denied\b/i,
+  /\bsecurity\b/i,
+  /\bprotocol\b/i,
+  /\bschema\b/i,
+  /\boutside workspace\b/i,
+] as const;
+
 const createObservation = (input: {
   runId: string;
   stepId: string;
@@ -82,6 +91,8 @@ const buildExecutionRecord = (input: {
   invocationId?: string;
   startedAt: string;
   finishedAt: string;
+  failureKind?: AgentToolExecutionResult["failureKind"];
+  recoveryAttemptCount?: number;
   errorMessage?: string;
   result?: unknown;
   approval?: AgentApprovalRequest;
@@ -92,12 +103,27 @@ const buildExecutionRecord = (input: {
   args: input.pendingToolCall.args,
   invocationId: input.invocationId,
   status: input.status,
+  failureKind: input.failureKind,
+  recoveryAttemptCount: input.recoveryAttemptCount,
   errorMessage: input.errorMessage,
   result: input.result,
   approval: input.approval,
   startedAt: input.startedAt,
   finishedAt: input.finishedAt,
 });
+
+const classifyHarnessFailure = (input: {
+  invocationStatus: "failed" | "cancelled";
+  errorMessage: string;
+}): AgentToolExecutionResult["failureKind"] => {
+  if (input.invocationStatus === "cancelled") {
+    return "terminal";
+  }
+
+  return TERMINAL_FAILURE_PATTERNS.some((pattern) => pattern.test(input.errorMessage))
+    ? "terminal"
+    : "recoverable";
+};
 
 const getDurationMs = (startedAt: string, finishedAt: string) => {
   const startMs = Date.parse(startedAt);
@@ -430,11 +456,25 @@ export const toolNode = async (
     const errorMessage =
       invocation.error?.message ??
       `${pendingToolCall.toolId} failed during Harness execution.`;
+    const invocationFailureStatus =
+      invocation.status === "cancelled" ? "cancelled" : "failed";
+    const failureKind = classifyHarnessFailure({
+      invocationStatus: invocationFailureStatus,
+      errorMessage,
+    });
+    const recoveryAttemptCount =
+      failureKind === "recoverable"
+        ? (state.lastToolExecution?.recoveryAttemptCount ?? 0) + 1
+        : undefined;
     const observation = createObservation({
       runId: state.runId,
       stepId: "tool",
-      status: "failed",
-      facts: [`${pendingToolCall.toolId} failed during Harness execution.`],
+      status: failureKind === "terminal" ? "blocked" : "failed",
+      facts: [
+        failureKind === "terminal"
+          ? `${pendingToolCall.toolId} hit a terminal failure during Harness execution.`
+          : `${pendingToolCall.toolId} failed during Harness execution but can be retried.`,
+      ],
       errorMessage,
     });
 
@@ -443,6 +483,8 @@ export const toolNode = async (
       toolId: pendingToolCall.toolId,
       invocationId: invocation.id,
       status: "failed",
+      failureKind,
+      recoveryAttemptCount,
       errorMessage,
       startedAt,
       finishedAt,
@@ -462,6 +504,8 @@ export const toolNode = async (
         inputHash: pendingToolCall.inputHash,
         invocationId: invocation.id,
         status: "failed",
+        failureKind,
+        recoveryAttemptCount: recoveryAttemptCount ?? null,
         durationMs: durationMs ?? null,
       },
     });
@@ -488,13 +532,9 @@ export const toolNode = async (
     return {
       observations: [...(state.observations ?? []), observation],
       evidence,
-      policyDecision: {
-        type: "error",
-        toolId: pendingToolCall.toolId,
-        inputHash: pendingToolCall.inputHash,
-        reason: errorMessage,
-      },
+      policyDecision: undefined,
       selectedToolId: undefined,
+      pendingApproval: undefined,
       pendingToolCall: undefined,
       lastToolExecution: executionRecord,
       currentTaskFrame: updateTaskFrameBlocker(
@@ -504,8 +544,19 @@ export const toolNode = async (
         ),
         errorMessage,
       ),
-      errorMessage,
-      errorSourceNodeId: "agent-tool",
+      ...(failureKind === "terminal"
+        ? {
+            blockedReason: errorMessage,
+            terminalReason: errorMessage,
+            errorMessage,
+            errorSourceNodeId: "agent-tool" as const,
+          }
+        : {
+            blockedReason: undefined,
+            terminalReason: undefined,
+            errorMessage: undefined,
+            errorSourceNodeId: undefined,
+          }),
       continueIteration: false,
       postToolReviewPending: false,
     };

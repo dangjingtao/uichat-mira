@@ -93,16 +93,16 @@ vi.mock("@/app/providers/RoleModelConfigProvider", () => ({
 import DefaultModelCard from "./DefaultModelCard";
 
 describe("DefaultModelCard", () => {
-  it("renders grouped role sections and new role cards", () => {
+  it("renders role cards without grouped wrapper sections", () => {
     render(
       <I18nextProvider i18n={i18n}>
         <DefaultModelCard />
       </I18nextProvider>,
     );
 
-    expect(screen.getByText("Chat")).toBeInTheDocument();
-    expect(screen.getByText("Knowledge Base")).toBeInTheDocument();
+    expect(screen.queryByText("Chat")).not.toBeInTheDocument();
     expect(screen.getByText("AgentTask Model")).toBeInTheDocument();
     expect(screen.getByText("Image Generation Model")).toBeInTheDocument();
+    expect(screen.getByText("LLM")).toBeInTheDocument();
   });
 });

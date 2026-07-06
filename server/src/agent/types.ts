@@ -144,6 +144,8 @@ export interface AgentToolExecutionResult {
   args: Record<string, unknown>;
   invocationId?: string;
   status: "completed" | "failed" | "awaiting_approval" | "denied";
+  failureKind?: "recoverable" | "terminal";
+  recoveryAttemptCount?: number;
   result?: unknown;
   errorMessage?: string;
   approval?: AgentApprovalRequest;

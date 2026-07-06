@@ -12,7 +12,7 @@ related:
   - docs/project-control/agent-nodes-workboard.md
   - docs/project-control/tasks/agent_node_T021-agent-execution-observation.md
   - docs/chat/agent-loop-v1.7-construction-plan.md
-task_state: TODO
+task_state: DONE
 ---
 
 # agent_node_T022 tool node recoverable failure
@@ -65,9 +65,10 @@ task_state: TODO
 
 - `tool-node` 定向单测
 - 失败分类单测
+- `2026-07-06` 已执行：`pnpm --filter @ui-chat-mira/server test -- src/agent/__tests__/tool-node.test.ts src/agent/__tests__/next-action-planner.test.ts`
+- `2026-07-06` 已执行：`pnpm check`
 
 ## Risk Points
 
 - recoverable 判定过宽会放过真正应终止的错误
 - 这是 `tool-node.ts` 交界点，严禁与其它线程并改
-

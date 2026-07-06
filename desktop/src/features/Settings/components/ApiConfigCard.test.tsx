@@ -132,7 +132,6 @@ describe("ApiConfigCard", () => {
         <ApiConfigCard
           detail={providerDetail}
           selectedModelId="qwen2.5:latest"
-          onDisplayNameChange={() => {}}
           onApiKeyChange={() => {}}
           onApiUrlChange={() => {}}
           onSelectedModelChange={() => {}}
@@ -161,7 +160,6 @@ describe("ApiConfigCard", () => {
         <ApiConfigCard
           detail={providerDetail}
           selectedModelId="qwen2.5:latest"
-          onDisplayNameChange={() => {}}
           onApiKeyChange={() => {}}
           onApiUrlChange={() => {}}
           onSelectedModelChange={() => {}}
@@ -171,9 +169,8 @@ describe("ApiConfigCard", () => {
       </I18nextProvider>,
     );
 
-    expect(screen.getByText("Capabilities")).toBeInTheDocument();
-    expect(screen.getAllByText("Chat").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Knowledge Base").length).toBeGreaterThan(0);
-    expect(screen.getByText("ollama · qwen2.5:latest")).toBeInTheDocument();
+    expect(screen.getByLabelText("API Key")).toBeInTheDocument();
+    expect(screen.getByLabelText("API URL")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sync models" })).toBeInTheDocument();
   });
 });

@@ -105,28 +105,7 @@ void i18n.use(initReactI18next).init({
   resources: {
     en: {
       translation: {
-        "settings.model.connections.sidebarTitle": "Provider Connections",
-        "settings.model.connections.sidebarDescription":
-          "Review built-in and custom providers.",
-        "settings.model.connections.builtinGroupTitle": "Built-in providers",
-        "settings.model.connections.builtinGroupDescription":
-          "System-managed providers",
-        "settings.model.connections.customGroupTitle": "Custom providers",
-        "settings.model.connections.customGroupDescription":
-          "User-created provider connections",
-        "settings.model.connections.boundSummary": "Bound {{roles}}",
-        "settings.model.connections.unassignedSummary": "No role bindings yet",
-        "settings.model.connections.loading": "Loading...",
-        "settings.model.connections.emptyGroup": "Nothing here yet",
-        "settings.model.connections.builtinBadge": "Built-in",
-        "settings.model.connections.customBadge": "Custom",
-        "settings.model.connections.sectionTitle": "Connection",
-        "settings.model.connections.sectionDescription":
-          "Manage the provider connection.",
         "settings.model.api.description": "Provider description",
-        "settings.model.api.displayName": "Display name",
-        "settings.model.api.displayNamePlaceholder": "Enter display name",
-        "settings.model.api.connectionId": "Connection ID",
         "settings.model.api.apiKey": "API Key",
         "settings.model.api.apiKeyPlaceholder": "Enter API key",
         "settings.model.api.apiUrl": "API URL",
@@ -134,14 +113,6 @@ void i18n.use(initReactI18next).init({
         "settings.model.api.currentModel": "Current Model",
         "settings.model.api.selectModel": "Select model...",
         "settings.model.api.noModels": "No models",
-        "settings.model.api.fetchFailed": "fetch failed",
-        "settings.model.api.syncedModelsTitle": "Synced Models",
-        "settings.model.api.syncedModelsDescription": "Choose a synced model",
-        "settings.model.api.roleBindingsTitle": "Role Bindings",
-        "settings.model.api.roleBindingsDescription": "Bind model to roles",
-        "settings.model.api.lastSyncedAt": "Last synced {{value}}",
-        "settings.model.api.neverSynced": "Never synced",
-        "settings.model.api.unassigned": "Unassigned",
         "settings.model.api.syncAriaLabel": "Sync models",
         "settings.model.api.setDefaultLlm": "Set as Default LLM",
         "settings.model.api.setDefaultEmbedding":
@@ -157,30 +128,9 @@ void i18n.use(initReactI18next).init({
         "settings.model.api.setting": "Setting...",
         "settings.model.status.connected": "Connected",
         "settings.model.status.idle": "Idle",
-        "settings.model.capabilities.sectionTitle": "Capabilities",
-        "settings.model.capabilities.sectionDescription":
-          "Capabilities are derived from backend support roles.",
-        "settings.model.capabilities.chat": "Chat",
-        "settings.model.capabilities.embedding": "Embedding",
-        "settings.model.capabilities.rerank": "Rerank",
-        "settings.model.capabilities.image": "Image",
-        "settings.model.groups.chat.title": "Chat",
-        "settings.model.groups.chat.description": "Chat group",
-        "settings.model.groups.agentTask.title": "Agent / Task",
-        "settings.model.groups.agentTask.description": "Agent group",
-        "settings.model.groups.knowledgeBase.title": "Knowledge Base",
-        "settings.model.groups.knowledgeBase.description": "KB group",
-        "settings.model.groups.evaluation.title": "Evaluation",
-        "settings.model.groups.evaluation.description": "Eval group",
-        "settings.model.groups.imageGeneration.title": "Image Generation",
-        "settings.model.groups.imageGeneration.description": "Image group",
-        "settings.model.config.llm.title": "LLM",
-        "settings.model.config.embedding.title": "Embedding",
-        "settings.model.config.rerank.title": "Rerank",
-        "settings.model.config.task.title": "Task",
-        "settings.model.config.agentTask.title": "AgentTask",
-        "settings.model.config.evaluation.title": "Evaluation",
-        "settings.model.config.imageGeneration.title": "Image",
+        "settings.model.platform.title": "Platform",
+        "settings.model.platform.bound": "Bound {{roles}}",
+        "settings.model.platform.waitingSync": "Waiting sync",
         "settings.model.platformConfig.syncSuccess": "Sync success",
         "settings.model.platformConfig.syncFailed": "Sync failed",
         "settings.model.platformConfig.loadFailed": "Load failed",
@@ -194,7 +144,7 @@ void i18n.use(initReactI18next).init({
 import PlatformConfigModal from "./PlatformConfigModal";
 
 describe("PlatformConfigModal", () => {
-  it("groups built-in and custom providers in the sidebar", async () => {
+  it("renders provider list with built-in and custom entries in one platform panel", async () => {
     render(
       <I18nextProvider i18n={i18n}>
         <PlatformConfigModal />
@@ -202,10 +152,9 @@ describe("PlatformConfigModal", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Built-in providers")).toBeInTheDocument();
+      expect(screen.getByText("Platform")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Custom providers")).toBeInTheDocument();
     expect(screen.getAllByText("Ollama").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Custom OpenAI").length).toBeGreaterThan(0);
   });

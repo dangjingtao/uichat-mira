@@ -519,6 +519,7 @@ export const mailMessages = sqliteTable(
     toJson: text("to_json").notNull().default("[]"),
     previewText: text("preview_text").notNull().default(""),
     textContent: text("text_content").notNull().default(""),
+    htmlContent: text("html_content").notNull().default(""),
     sentAt: text("sent_at"),
     receivedAt: text("received_at"),
     isRead: integer("is_read", { mode: "boolean" }).notNull().default(false),

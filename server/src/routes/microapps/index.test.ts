@@ -80,6 +80,12 @@ const createMailCenterServiceStub = (): MailCenterRouteService => ({
       inbox: null,
     };
   },
+  getMessageDetail() {
+    throw new Error("not implemented");
+  },
+  deleteAccount() {
+    throw new Error("not implemented");
+  },
   saveAccount() {
     throw new Error("not implemented");
   },
@@ -365,6 +371,12 @@ test("microapps mail center overview route returns sanitized account list", asyn
       saveAccount() {
         throw new Error("not implemented");
       },
+      getMessageDetail() {
+        throw new Error("not implemented");
+      },
+      deleteAccount() {
+        throw new Error("not implemented");
+      },
       async sendTestMail() {
         throw new Error("not implemented");
       },
@@ -387,6 +399,142 @@ test("microapps mail center overview route returns sanitized account list", asyn
   assert.equal(response.json().data.accounts[0].hasSmtpPassword, true);
   assert.equal(response.json().data.accounts[0].hasImapPassword, true);
   assert.equal(response.json().data.inbox.messages[0].subject, "Hello");
+
+  await app.close();
+});
+
+test("microapps mail center message detail route returns stored plain text body", async () => {
+  const app = await createApp(
+    {
+      async createGeneration() {
+        return createTestJob();
+      },
+      async getGeneration() {
+        return createTestJob();
+      },
+    },
+    {
+      getOverview() {
+        return {
+          accounts: [],
+          selectedAccountId: null,
+          inbox: null,
+        };
+      },
+      getMessageDetail(_userId, accountId, messageId) {
+        assert.equal(accountId, "mail-1");
+        assert.equal(messageId, "msg-1");
+
+        return {
+          id: "msg-1",
+          remoteUid: 101,
+          messageId: "<message-1@example.com>",
+          subject: "Hello",
+          fromDisplay: "Sender",
+          fromAddress: "sender@example.com",
+          to: [
+            {
+              name: "Receiver",
+              address: "receiver@example.com",
+            },
+          ],
+          previewText: "Preview",
+          textContent: "Full plain text body",
+          htmlContent: "<p>Full <strong>HTML</strong> body</p>",
+          sentAt: "2026-07-06T11:58:00.000Z",
+          receivedAt: "2026-07-06T11:59:00.000Z",
+          isRead: false,
+          isFlagged: false,
+          hasAttachments: false,
+          rawHeaders: {
+            subject: "Hello",
+          },
+        };
+      },
+      saveAccount() {
+        throw new Error("not implemented");
+      },
+      deleteAccount() {
+        throw new Error("not implemented");
+      },
+      async sendTestMail() {
+        throw new Error("not implemented");
+      },
+      async syncInbox() {
+        throw new Error("not implemented");
+      },
+    },
+  );
+  const token = createToken();
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/microapps/mail-center/accounts/mail-1/messages/msg-1",
+    headers: {
+      authorization: `Bearer ${token}`,
+    },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.json().data.message.textContent, "Full plain text body");
+  assert.equal(response.json().data.message.htmlContent, "<p>Full <strong>HTML</strong> body</p>");
+  assert.equal(response.json().data.message.to[0].address, "receiver@example.com");
+
+  await app.close();
+});
+
+test("microapps mail center delete account route returns deletion result", async () => {
+  const app = await createApp(
+    {
+      async createGeneration() {
+        return createTestJob();
+      },
+      async getGeneration() {
+        return createTestJob();
+      },
+    },
+    {
+      getOverview() {
+        return {
+          accounts: [],
+          selectedAccountId: null,
+          inbox: null,
+        };
+      },
+      getMessageDetail() {
+        throw new Error("not implemented");
+      },
+      deleteAccount(_userId, accountId) {
+        assert.equal(accountId, "mail-1");
+        return {
+          accountId: "mail-1",
+          deleted: true,
+        };
+      },
+      saveAccount() {
+        throw new Error("not implemented");
+      },
+      async sendTestMail() {
+        throw new Error("not implemented");
+      },
+      async syncInbox() {
+        throw new Error("not implemented");
+      },
+    },
+  );
+  const token = createToken();
+
+  const response = await app.inject({
+    method: "DELETE",
+    url: "/microapps/mail-center/accounts/mail-1",
+    headers: {
+      authorization: `Bearer ${token}`,
+    },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.json().data.accountId, "mail-1");
+  assert.equal(response.json().data.deleted, true);
 
   await app.close();
 });

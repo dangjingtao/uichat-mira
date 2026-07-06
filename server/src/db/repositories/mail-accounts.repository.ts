@@ -291,4 +291,14 @@ export const mailAccountsRepository = {
 
     return row ? toRecord(row) : null;
   },
+
+  delete(id: string) {
+    const existing = this.getById(id);
+    if (!existing) {
+      return false;
+    }
+
+    getDb().delete(mailAccounts).where(eq(mailAccounts.id, id)).run();
+    return true;
+  },
 };
