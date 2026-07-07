@@ -1,10 +1,16 @@
 // @vitest-environment jsdom
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import i18next from "i18next";
 import { I18nextProvider, initReactI18next } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
-import type { ProviderDetail, ProviderSummary } from "@/shared/api/modelSettings";
+import type {
+  ProviderDetail,
+  ProviderSummary,
+  RoleModelConfig,
+  ProviderTemplateSummary,
+} from "@/shared/api/modelSettings";
 
 const providerSummaries: ProviderSummary[] = [
   {
@@ -81,13 +87,43 @@ const providerDetail: ProviderDetail = {
   },
 };
 
+const providerTemplates: ProviderTemplateSummary[] = [
+  {
+    code: "openai-compatible-custom",
+    displayName: "Custom OpenAI-Compatible",
+    defaultBaseUrl: "https://api.example.com/v1",
+    capabilities: providerSummaries[1].capabilities,
+    isCustomTemplate: true,
+  },
+];
+
 const refreshMock = vi.fn(async () => []);
+const apiMocks = vi.hoisted(() => ({
+  selectProviderRoleModelMock: vi.fn(
+    async (): Promise<RoleModelConfig> => ({
+      id: "cfg-1",
+      type: "llm",
+      name: "qwen2.5:latest",
+      providerCode: "ollama",
+      providerConnectionId: "ollama",
+      providerTemplateCode: "ollama",
+      remoteModelId: "qwen2.5:latest",
+      params: {},
+      isDefault: true,
+      createdAt: "2026-07-06T10:00:00.000Z",
+      updatedAt: "2026-07-06T10:00:00.000Z",
+    }),
+  ),
+  createProviderConnectionMock: vi.fn(async () => providerSummaries[1]),
+}));
 
 vi.mock("@/shared/api/modelSettings", () => ({
   getProviders: vi.fn(async () => providerSummaries),
   getProviderDetail: vi.fn(async () => providerDetail),
+  getProviderTemplates: vi.fn(async () => providerTemplates),
+  createProviderConnection: apiMocks.createProviderConnectionMock,
   saveProviderConfig: vi.fn(async () => undefined),
-  selectProviderRoleModel: vi.fn(async () => ({})),
+  selectProviderRoleModel: apiMocks.selectProviderRoleModelMock,
   syncProviderModels: vi.fn(async () => undefined),
 }));
 
@@ -131,11 +167,26 @@ void i18n.use(initReactI18next).init({
         "settings.model.platform.title": "Platform",
         "settings.model.platform.bound": "Bound {{roles}}",
         "settings.model.platform.waitingSync": "Waiting sync",
+        "settings.model.platform.searchPlaceholder": "Search providers",
+        "settings.model.platform.addProvider": "Add provider",
+        "settings.model.platform.noResults": "No matching providers",
+        "settings.model.platform.createTitle": "Create provider",
+        "settings.model.platform.createDescription":
+          "Create a custom OpenAI-compatible provider connection.",
+        "settings.model.platform.createNamePlaceholder":
+          "Enter provider name",
+        "settings.model.platform.createNameRequired":
+          "Please enter provider name",
+        "settings.model.platform.createProvider": "Create provider",
+        "settings.model.platform.creatingProvider": "Creating...",
+        "settings.model.platform.createSuccess": "Provider created",
+        "settings.model.platform.createFailed": "Create failed",
         "settings.model.platformConfig.syncSuccess": "Sync success",
         "settings.model.platformConfig.syncFailed": "Sync failed",
         "settings.model.platformConfig.loadFailed": "Load failed",
         "settings.model.platformConfig.loadDetailFailed": "Load detail failed",
         "settings.model.platformConfig.requestAborted": "Request aborted",
+        "settings.model.api.displayName": "Display Name",
       },
     },
   },
@@ -157,5 +208,62 @@ describe("PlatformConfigModal", () => {
 
     expect(screen.getAllByText("Ollama").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Custom OpenAI").length).toBeGreaterThan(0);
+  });
+
+  it("hides role buttons and confirms a single role selection in selection mode", async () => {
+    const ref = { current: null as null | { confirmSelection: () => Promise<boolean> } };
+
+    render(
+      <I18nextProvider i18n={i18n}>
+        <PlatformConfigModal
+          ref={(value) => {
+            ref.current = value;
+          }}
+          selectionRole="llm"
+          onSelectionStateChange={() => {}}
+        />
+      </I18nextProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Current Model")).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByRole("button", { name: "Set as Default LLM" }),
+    ).not.toBeInTheDocument();
+
+    let confirmed = false;
+    await act(async () => {
+      confirmed = (await ref.current?.confirmSelection()) ?? false;
+    });
+    expect(confirmed).toBe(true);
+    expect(apiMocks.selectProviderRoleModelMock).toHaveBeenCalledWith(
+      "ollama",
+      "llm",
+      "qwen2.5:latest",
+      {
+        baseUrl: "http://127.0.0.1:11434",
+        apiKey: "",
+      },
+    );
+  });
+
+  it("filters providers by search query", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <I18nextProvider i18n={i18n}>
+        <PlatformConfigModal />
+      </I18nextProvider>,
+    );
+
+    const searchInput = await screen.findByPlaceholderText("Search providers");
+    await user.type(searchInput, "custom");
+
+    expect(screen.getAllByText("Custom OpenAI").length).toBeGreaterThan(0);
+    expect(
+      screen.queryByRole("button", { name: /Ollama/i }),
+    ).not.toBeInTheDocument();
   });
 });

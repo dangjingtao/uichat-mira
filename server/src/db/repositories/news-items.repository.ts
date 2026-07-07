@@ -34,6 +34,7 @@ export type NewsItemUpsertInput = Omit<
 export type NewsItemsListFilters = {
   limit?: number;
   sourceKey?: string;
+  sourceKeys?: string[];
   query?: string;
 };
 
@@ -193,6 +194,14 @@ export const newsItemsRepository = {
     if (filters.sourceKey) {
       predicates.push(eq(newsItems.sourceKey, filters.sourceKey));
     }
+    if (filters.sourceKeys && filters.sourceKeys.length > 0) {
+      const keys = filters.sourceKeys.map((key) => key.trim()).filter(Boolean);
+      if (keys.length > 0) {
+        predicates.push(
+          or(...keys.map((key) => eq(newsItems.sourceKey, key))),
+        );
+      }
+    }
     if (query) {
       const likeValue = `%${query}%`;
       predicates.push(
@@ -242,5 +251,27 @@ export const newsItemsRepository = {
       .from(newsItems)
       .groupBy(newsItems.sourceKey)
       .all() as SourceStatsRow[];
+  },
+
+  deleteBySourceKeysExcluding(sourceKeys: string[]) {
+    const keys = sourceKeys.map((key) => key.trim()).filter(Boolean);
+    if (keys.length === 0) {
+      return { deletedCount: 0 };
+    }
+
+    const keepPredicate = or(...keys.map((key) => eq(newsItems.sourceKey, key)));
+    const existingRows = getDb()
+      .select({ id: newsItems.id })
+      .from(newsItems)
+      .where(keepPredicate ? sql`NOT (${keepPredicate})` : undefined)
+      .all();
+
+    if (existingRows.length === 0) {
+      return { deletedCount: 0 };
+    }
+
+    getDb().delete(newsItems).where(sql`NOT (${keepPredicate})`).run();
+
+    return { deletedCount: existingRows.length };
   },
 };

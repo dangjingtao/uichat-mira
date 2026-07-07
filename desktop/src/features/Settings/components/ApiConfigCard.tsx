@@ -31,6 +31,7 @@ interface ApiConfigCardProps {
   selectedModelId: string;
   loading?: boolean;
   syncing?: boolean;
+  hideRoleActions?: boolean;
   assigningRole?: RoleModelType | null;
   syncError?: string | null;
   onApiKeyChange: (value: string) => void;
@@ -40,14 +41,12 @@ interface ApiConfigCardProps {
   onSetDefaultRole: (role: RoleModelType) => void;
 }
 
-const sectionClassName =
-  "rounded-xl border border-border bg-surface-primary/80 p-3";
-
 const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
   detail,
   selectedModelId,
   loading = false,
   syncing = false,
+  hideRoleActions = false,
   assigningRole = null,
   syncError = null,
   onApiKeyChange,
@@ -157,21 +156,23 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
           </div>
         ) : null}
 
-        <div className="flex flex-wrap gap-1.5">
-          {ASSIGNABLE_ROLES.map(({ role, labelKey }) => (
-            <Button
-              key={role}
-              size="small"
-              variant="secondary"
-              onClick={() => onSetDefaultRole(role)}
-              disabled={assigningRole === role || !selectedModelId}
-            >
-              {assigningRole === role
-                ? t("settings.model.api.setting")
-                : t(labelKey)}
-            </Button>
-          ))}
-        </div>
+        {!hideRoleActions ? (
+          <div className="flex flex-wrap gap-1.5">
+            {ASSIGNABLE_ROLES.map(({ role, labelKey }) => (
+              <Button
+                key={role}
+                size="small"
+                variant="secondary"
+                onClick={() => onSetDefaultRole(role)}
+                disabled={assigningRole === role || !selectedModelId}
+              >
+                {assigningRole === role
+                  ? t("settings.model.api.setting")
+                  : t(labelKey)}
+              </Button>
+            ))}
+          </div>
+        ) : null}
       </div>
     </Card>
   );

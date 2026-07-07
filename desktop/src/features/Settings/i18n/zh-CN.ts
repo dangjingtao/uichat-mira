@@ -87,7 +87,7 @@ const settingsPending = {
         newsHub: {
           title: "资讯聚合台",
           description: "把免 Key 的科技资讯源拉进本地一张表，先给你一个能直接消费的聚合入口。",
-          hint: "当前默认接 Hacker News、GitHub Changelog 和精选 GitHub Release feeds，手动刷新即可入库。",
+          hint: "当前只保留 Hacker News Front Page，手动刷新即可入库。",
           badges: {
             debug: "本地资讯底座",
             focus: "科技资讯聚合",
@@ -145,7 +145,7 @@ const settingsPending = {
         },
         banner: {
           title: "第一版先解决本地聚合闭环",
-          description: "当前不追全网覆盖，也不接复杂登录态平台。先把 Hacker News、GitHub Changelog 和核心开源仓库发布流聚合到一张本地表里，再给你稳定查询和后续扩展底座。",
+          description: "当前只保留 Hacker News Front Page，先把这一条源稳定落进本地表里，再给你本地查询和后续扩展底座。",
         },
         actions: {
           refresh: "刷新资讯",

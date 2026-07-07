@@ -66,6 +66,12 @@ void i18n.use(initReactI18next).init({
         "settings.model.config.notConfigured": "Not configured",
         "settings.model.config.selectModel": "Select model",
         "settings.model.config.managed": "Managed",
+        "settings.model.config.openEditor": "Edit Params",
+        "settings.model.config.viewDetails": "View Details",
+        "settings.model.config.editInDialogHint": "Edit in dialog",
+        "settings.model.config.viewInDialogHint": "View in dialog",
+        "settings.model.config.configured": "Configured",
+        "settings.model.config.connectionLabel": "Connection: {{provider}}",
         "settings.model.defaultCard.syncing": "Syncing...",
         "settings.model.groups.chat.title": "Chat",
         "settings.model.groups.chat.description": "Chat group",
@@ -77,6 +83,7 @@ void i18n.use(initReactI18next).init({
         "settings.model.groups.evaluation.description": "Evaluation group",
         "settings.model.groups.imageGeneration.title": "Image Generation",
         "settings.model.groups.imageGeneration.description": "Image group",
+        "common.actions.close": "Close",
       },
     },
   },
@@ -94,15 +101,19 @@ import DefaultModelCard from "./DefaultModelCard";
 
 describe("DefaultModelCard", () => {
   it("renders role cards without grouped wrapper sections", () => {
-    render(
+    const { container } = render(
       <I18nextProvider i18n={i18n}>
         <DefaultModelCard />
       </I18nextProvider>,
     );
 
+    expect(container.querySelector(".grid.grid-cols-2")).not.toBeNull();
     expect(screen.queryByText("Chat")).not.toBeInTheDocument();
     expect(screen.getByText("AgentTask Model")).toBeInTheDocument();
+    expect(screen.getByText("AgentTask subtitle")).toBeInTheDocument();
     expect(screen.getByText("Image Generation Model")).toBeInTheDocument();
     expect(screen.getByText("LLM")).toBeInTheDocument();
+    expect(screen.queryByText("Managed")).not.toBeInTheDocument();
+    expect(screen.getAllByLabelText("Not configured")).toHaveLength(5);
   });
 });

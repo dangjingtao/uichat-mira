@@ -131,7 +131,7 @@ export async function getProviderDetail(
 
 export async function createProviderConnection(
   payload: CreateProviderConnectionPayload,
-) {
+) : Promise<ProviderSummary> {
   return post("/providers", payload);
 }
 

@@ -248,7 +248,7 @@ test("google provider can save config and sync models through the provider insta
 
   providerSettingsService.saveProviderConnection("google", {
     displayName: "Google Gemini",
-    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+    baseUrl: "https://generativelanguage.googleapis.com",
     apiKey: "google-key",
   });
 

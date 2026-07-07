@@ -5,7 +5,7 @@ import { nowIso } from "@/utils/time.js";
 export type NewsHubSourceDefinition = {
   key: string;
   name: string;
-  sourceType: "api" | "rss" | "atom";
+  sourceType: "api" | "rss";
   fetchUrl: string;
   siteUrl: string;
   topic: string;
@@ -55,6 +55,9 @@ type NewsHubOverviewFilters = {
   query?: string | null;
 };
 
+const isNonNullable = <T>(value: T | null | undefined): value is T =>
+  value != null;
+
 type FeedEntry = {
   externalId: string;
   title: string;
@@ -81,14 +84,7 @@ type HnSearchResponse = {
   }>;
 };
 
-const defaultGithubRepos = [
-  "openai/openai-node",
-  "openai/openai-python",
-  "vercel/next.js",
-  "microsoft/typescript",
-];
-
-const decodeHtmlEntities = (value: string) =>
+const stripHtml = (value: string) =>
   value
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
     .replace(/&amp;/g, "&")
@@ -96,10 +92,7 @@ const decodeHtmlEntities = (value: string) =>
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, " ");
-
-const stripHtml = (value: string) =>
-  decodeHtmlEntities(value)
+    .replace(/&nbsp;/g, " ")
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<[^>]+>/g, " ")
@@ -112,97 +105,8 @@ const readTag = (xml: string, tagName: string) => {
     "i",
   );
   const matched = xml.match(pattern);
-  return matched ? decodeHtmlEntities(matched[1]).trim() : "";
+  return matched ? stripHtml(matched[1]) : "";
 };
-
-const readLinkHref = (xml: string) => {
-  const atomLink = xml.match(/<link\b[^>]*href="([^"]+)"[^>]*\/?>/i);
-  if (atomLink?.[1]) {
-    return decodeHtmlEntities(atomLink[1]).trim();
-  }
-
-  return readTag(xml, "link");
-};
-
-const parseAtomFeed = (xml: string): FeedEntry[] => {
-  const entries = xml.match(/<entry\b[\s\S]*?<\/entry>/gi) ?? [];
-
-  return entries
-    .map((entryXml) => {
-      const title = stripHtml(readTag(entryXml, "title"));
-      const summary = stripHtml(readTag(entryXml, "summary"));
-      const contentText = stripHtml(readTag(entryXml, "content"));
-      const url = readLinkHref(entryXml);
-      const externalId = readTag(entryXml, "id") || url || title;
-      const publishedAt =
-        readTag(entryXml, "published") || readTag(entryXml, "updated") || null;
-
-      if (!title || !url || !externalId) {
-        return null;
-      }
-
-      return {
-        externalId,
-        title,
-        summary,
-        contentText,
-        url,
-        author: stripHtml(readTag(entryXml, "name")) || null,
-        publishedAt,
-        rawPayload: {
-          id: externalId,
-          title,
-          summary,
-          url,
-          publishedAt,
-        },
-      } satisfies FeedEntry;
-    })
-    .filter((item): item is FeedEntry => Boolean(item));
-};
-
-const parseRssFeed = (xml: string): FeedEntry[] => {
-  const items = xml.match(/<item\b[\s\S]*?<\/item>/gi) ?? [];
-
-  return items
-    .map((itemXml) => {
-      const title = stripHtml(readTag(itemXml, "title"));
-      const summary = stripHtml(readTag(itemXml, "description"));
-      const contentText =
-        stripHtml(readTag(itemXml, "content:encoded")) || summary;
-      const url = readTag(itemXml, "link");
-      const externalId = readTag(itemXml, "guid") || url || title;
-      const publishedAt = readTag(itemXml, "pubDate") || null;
-
-      if (!title || !url || !externalId) {
-        return null;
-      }
-
-      return {
-        externalId,
-        title,
-        summary,
-        contentText,
-        url,
-        author:
-          stripHtml(readTag(itemXml, "dc:creator")) ||
-          stripHtml(readTag(itemXml, "author")) ||
-          null,
-        publishedAt,
-        rawPayload: {
-          guid: externalId,
-          title,
-          summary,
-          url,
-          publishedAt,
-        },
-      } satisfies FeedEntry;
-    })
-    .filter((item): item is FeedEntry => Boolean(item));
-};
-
-const parseFeedXml = (xml: string) =>
-  /<feed\b/i.test(xml) ? parseAtomFeed(xml) : parseRssFeed(xml);
 
 const fetchTextWithTimeout = async (
   url: string,
@@ -231,12 +135,6 @@ const fetchTextWithTimeout = async (
 };
 
 const createSourceDefinitions = (): NewsHubSourceDefinition[] => {
-  const repos = (
-    process.env.UI_CHAT_NEWS_GITHUB_RELEASE_REPOS?.split(",") ?? defaultGithubRepos
-  )
-    .map((item) => item.trim())
-    .filter(Boolean);
-
   return [
     {
       key: "hn-frontpage",
@@ -258,38 +156,8 @@ const createSourceDefinitions = (): NewsHubSourceDefinition[] => {
       lang: "en",
       tags: ["github", "changelog"],
     },
-    ...repos.map((repo) => ({
-      key: `github-release:${repo}`,
-      name: `${repo} Releases`,
-      sourceType: "atom" as const,
-      fetchUrl: `https://github.com/${repo}/releases.atom`,
-      siteUrl: `https://github.com/${repo}/releases`,
-      topic: "open-source",
-      lang: "en",
-      tags: ["github", "release", repo],
-    })),
   ];
 };
-
-const normalizeFeedItem = (
-  source: NewsHubSourceDefinition,
-  item: FeedEntry,
-): NewsItemUpsertInput => ({
-  sourceType: source.sourceType,
-  sourceName: source.name,
-  sourceKey: source.key,
-  externalId: item.externalId,
-  title: item.title,
-  summary: item.summary,
-  contentText: item.contentText || item.summary,
-  url: item.url,
-  author: item.author,
-  publishedAt: item.publishedAt,
-  lang: source.lang,
-  topic: source.topic,
-  tags: source.tags,
-  rawPayload: item.rawPayload,
-});
 
 const fetchHackerNewsItems = async (
   source: NewsHubSourceDefinition,
@@ -307,7 +175,7 @@ const fetchHackerNewsItems = async (
         return null;
       }
 
-      return {
+      const result: NewsItemUpsertInput = {
         sourceType: source.sourceType,
         sourceName: source.name,
         sourceKey: source.key,
@@ -325,37 +193,87 @@ const fetchHackerNewsItems = async (
           objectID: hit.objectID,
           points: hit.points ?? null,
         },
-      } satisfies NewsItemUpsertInput;
+      };
+
+      return result;
     })
-    .filter((item): item is NewsItemUpsertInput => Boolean(item));
+    .filter(isNonNullable);
 };
 
-const fetchFeedItems = async (
+const fetchRssItems = async (
   source: NewsHubSourceDefinition,
 ): Promise<NewsItemUpsertInput[]> => {
   const text = await fetchTextWithTimeout(source.fetchUrl);
-  return parseFeedXml(text).map((item) => normalizeFeedItem(source, item));
+  const items = text.match(/<item\b[\s\S]*?<\/item>/gi) ?? [];
+
+  return items
+    .map((itemXml) => {
+      const title = readTag(itemXml, "title");
+      const summary = readTag(itemXml, "description");
+      const contentText =
+        readTag(itemXml, "content:encoded") || summary;
+      const url = readTag(itemXml, "link");
+      const externalId = readTag(itemXml, "guid") || url || title;
+      const author =
+        readTag(itemXml, "dc:creator") || readTag(itemXml, "author") || null;
+      const publishedAt = readTag(itemXml, "pubDate") || null;
+
+      if (!title || !url || !externalId) {
+        return null;
+      }
+
+      const result: NewsItemUpsertInput = {
+        sourceType: source.sourceType,
+        sourceName: source.name,
+        sourceKey: source.key,
+        externalId,
+        title,
+        summary,
+        contentText,
+        url,
+        author,
+        publishedAt,
+        lang: source.lang,
+        topic: source.topic,
+        tags: source.tags,
+        rawPayload: {
+          guid: externalId,
+          title,
+          summary,
+          url,
+          author,
+          publishedAt,
+        },
+      };
+
+      return result;
+    })
+    .filter(isNonNullable);
 };
 
 const fetchSourceItems = async (source: NewsHubSourceDefinition) => {
-  if (source.key === "hn-frontpage") {
-    return fetchHackerNewsItems(source);
+  if (source.key === "github-changelog") {
+    return fetchRssItems(source);
   }
 
-  return fetchFeedItems(source);
+  return fetchHackerNewsItems(source);
 };
 
 export const createNewsHubService = (input?: {
   sources?: NewsHubSourceDefinition[];
 }) => {
   const sources = input?.sources ?? createSourceDefinitions();
+  const allowedSourceKeys = sources.map((source) => source.key);
 
   return {
     getOverview(filters: NewsHubOverviewFilters = {}): NewsHubOverview {
+      newsItemsRepository.deleteBySourceKeysExcluding(allowedSourceKeys);
+
       const list = newsItemsRepository.listRecent({
         limit: filters.limit,
         query: filters.query ?? undefined,
         sourceKey: filters.sourceKey ?? undefined,
+        sourceKeys: allowedSourceKeys,
       });
       const stats = new Map(
         newsItemsRepository
@@ -385,6 +303,8 @@ export const createNewsHubService = (input?: {
       let fetchedCount = 0;
       let insertedCount = 0;
       let updatedCount = 0;
+
+      newsItemsRepository.deleteBySourceKeysExcluding(allowedSourceKeys);
 
       for (const source of sources) {
         try {

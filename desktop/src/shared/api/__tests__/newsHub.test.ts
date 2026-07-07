@@ -23,12 +23,12 @@ describe("news hub api", () => {
 
     await getNewsHubOverview({
       limit: 20,
-      sourceKey: "github-release:openai/openai-node",
+      sourceKey: "github-changelog",
       query: "agent sdk",
     });
 
     expect(get).toHaveBeenCalledWith(
-      "/microapps/news-hub/overview?limit=20&sourceKey=github-release%3Aopenai%2Fopenai-node&q=agent+sdk",
+      "/microapps/news-hub/overview?limit=20&sourceKey=github-changelog&q=agent+sdk",
     );
   });
 

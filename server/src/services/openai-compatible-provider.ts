@@ -22,10 +22,24 @@ export interface OpenAICompatibleChatMessage {
 }
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
+const GOOGLE_OPENAI_COMPATIBLE_BASE_URL =
+  "https://generativelanguage.googleapis.com/v1beta/openai";
+
+const isGoogleGenerativeLanguageBaseUrl = (baseUrl: string) => {
+  const normalized = trimTrailingSlash(baseUrl.trim()).toLowerCase();
+  return (
+    normalized === "https://generativelanguage.googleapis.com" ||
+    normalized === "https://generativelanguage.googleapis.com/v1beta"
+  );
+};
 
 export const normalizeOpenAICompatibleBaseUrl = (baseUrl: string) => {
   if (isCloudflareBaseUrl(baseUrl)) {
     return normalizeCloudflareOpenAICompatibleBaseUrl(baseUrl);
+  }
+
+  if (isGoogleGenerativeLanguageBaseUrl(baseUrl)) {
+    return GOOGLE_OPENAI_COMPATIBLE_BASE_URL;
   }
 
   const normalized = trimTrailingSlash(baseUrl.trim());

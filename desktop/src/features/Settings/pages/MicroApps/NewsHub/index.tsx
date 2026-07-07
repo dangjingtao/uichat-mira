@@ -1,18 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Globe,
   Newspaper,
   RefreshCcw,
-  Rss,
   Search,
-  Sparkles,
   ExternalLink as ExternalLinkIcon,
 } from "lucide-react";
 import SettingsPageLayout from "../../../components/SettingsPageLayout";
 import Card from "@/shared/ui/Card";
 import Badge from "@/shared/ui/Badge";
-import Alert from "@/shared/ui/Alert";
 import {
   Button,
   ExternalLink,
@@ -61,8 +57,8 @@ export default function NewsHubPage() {
     try {
       const result = await getNewsHubOverview({
         limit: 80,
-        sourceKey: next?.sourceKey ?? sourceKey || undefined,
-        query: next?.query ?? query || undefined,
+        sourceKey: next?.sourceKey ?? sourceKey ?? undefined,
+        query: next?.query ?? query ?? undefined,
       });
       setOverview(result);
     } catch (error) {
@@ -80,6 +76,17 @@ export default function NewsHubPage() {
     void load();
   }, []);
 
+  useEffect(() => {
+    if (!overview) {
+      return;
+    }
+
+    void load({
+      sourceKey,
+      query,
+    });
+  }, [sourceKey]);
+
   const sourceOptions = useMemo(
     () => [
       {
@@ -93,33 +100,6 @@ export default function NewsHubPage() {
     ],
     [overview?.sources, t],
   );
-
-  const topMetrics = useMemo(() => {
-    const itemCount = overview?.items.length ?? 0;
-    const sourceCount = overview?.sources.length ?? 0;
-    const updatedAt = overview?.generatedAt ?? null;
-
-    return [
-      {
-        key: "items",
-        label: t("settings.microApps.newsHub.metrics.items"),
-        value: String(itemCount),
-        description: t("settings.microApps.newsHub.metrics.itemsHint"),
-      },
-      {
-        key: "sources",
-        label: t("settings.microApps.newsHub.metrics.sources"),
-        value: String(sourceCount),
-        description: t("settings.microApps.newsHub.metrics.sourcesHint"),
-      },
-      {
-        key: "updatedAt",
-        label: t("settings.microApps.newsHub.metrics.lastGenerated"),
-        value: formatDateTime(updatedAt, i18n.language),
-        description: t("settings.microApps.newsHub.metrics.lastGeneratedHint"),
-      },
-    ];
-  }, [i18n.language, overview?.generatedAt, overview?.items.length, overview?.sources.length, t]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -158,7 +138,8 @@ export default function NewsHubPage() {
         miniTitle={t("settings.microApps.newsHub.page.miniTitle")}
         title={t("settings.microApps.newsHub.page.title")}
         description={t("settings.microApps.newsHub.page.description")}
-        contentClassName="pt-6"
+        contentClassName="h-full pt-6"
+        scrollBody={false}
       >
         <FullPageStatus message={t("settings.microApps.newsHub.states.loading")} />
       </SettingsPageLayout>
@@ -183,217 +164,127 @@ export default function NewsHubPage() {
           </Button>
         </div>
       }
-      contentClassName="space-y-6 pt-6"
+      contentClassName="flex h-full min-h-0 flex-col gap-6 pt-6"
+      scrollBody={false}
     >
-      <Alert variant="info" title={t("settings.microApps.newsHub.banner.title")}>
-        {t("settings.microApps.newsHub.banner.description")}
-      </Alert>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        {topMetrics.map((metric) => (
-          <Card
-            key={metric.key}
-            label={metric.label}
-            value={metric.value}
-            description={metric.description}
-          />
-        ))}
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.84fr)_minmax(0,1.16fr)]">
-        <Card className="space-y-4 border-primary/15 bg-primary/5 p-5">
-          <div className="flex items-start gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-ui-control bg-primary text-white">
-              <Sparkles className="h-5 w-5" />
-            </span>
-            <div className="space-y-1">
-              <div className="text-base font-semibold text-text-primary">
-                {t("settings.microApps.newsHub.cards.runtime.title")}
+      <Card className="min-h-0 flex-1 overflow-hidden p-5">
+        <div className="flex h-full min-h-0 flex-col">
+          <div className="shrink-0">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)_auto]">
+              <Select
+                label={t("settings.microApps.newsHub.filters.source")}
+                value={sourceKey}
+                onChange={(value) => {
+                  setSourceKey(value);
+                }}
+                options={sourceOptions}
+              />
+              <TextInput
+                label={t("settings.microApps.newsHub.filters.query")}
+                value={draftQuery}
+                onChange={setDraftQuery}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    void handleApplyFilters();
+                  }
+                }}
+                placeholder={t("settings.microApps.newsHub.filters.queryPlaceholder")}
+              />
+              <div className="flex items-end">
+                <Button className="w-full" onClick={() => void handleApplyFilters()}>
+                  <Search className="h-4 w-4" />
+                  {t("settings.microApps.newsHub.actions.applyFilters")}
+                </Button>
               </div>
-              <div className="text-sm leading-6 text-text-secondary">
-                {t("settings.microApps.newsHub.cards.runtime.description")}
-              </div>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="primary" size="sm">
-              {t("settings.microApps.newsHub.badges.noKey")}
-            </Badge>
-            <Badge variant="muted" size="sm">
-              {t("settings.microApps.newsHub.badges.localTable")}
-            </Badge>
-            <Badge variant="muted" size="sm">
-              {t("settings.microApps.newsHub.badges.manualRefresh")}
-            </Badge>
-          </div>
-        </Card>
 
-        <Card className="space-y-4 p-5">
-          <div className="grid gap-3 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)_auto]">
-            <Select
-              label={t("settings.microApps.newsHub.filters.source")}
-              value={sourceKey}
-              onChange={(value) => setSourceKey(value)}
-              options={sourceOptions}
-            />
-            <TextInput
-              label={t("settings.microApps.newsHub.filters.query")}
-              value={draftQuery}
-              onChange={setDraftQuery}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  void handleApplyFilters();
-                }
-              }}
-              placeholder={t("settings.microApps.newsHub.filters.queryPlaceholder")}
-            />
-            <div className="flex items-end">
-              <Button className="w-full" onClick={() => void handleApplyFilters()}>
-                <Search className="h-4 w-4" />
-                {t("settings.microApps.newsHub.actions.applyFilters")}
-              </Button>
-            </div>
-          </div>
-        </Card>
-      </div>
+          <div className="my-5 shrink-0 border-t border-border" />
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)]">
-        <Card className="space-y-3 p-5">
-          <div className="flex items-center gap-2">
-            <Rss className="h-4 w-4 text-primary" />
-            <div className="text-sm font-semibold text-text-primary">
-              {t("settings.microApps.newsHub.sections.sources")}
-            </div>
-          </div>
-          <div className="space-y-3">
-            {(overview?.sources ?? []).map((source) => (
-              <div
-                key={source.key}
-                className="rounded-ui-panel border border-border bg-surface-secondary/30 p-3"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium text-text-primary">
-                      {source.name}
-                    </div>
-                    <div className="text-xs text-text-secondary">
-                      {source.topic} · {source.sourceType}
-                    </div>
-                  </div>
-                  <Badge variant="muted" size="sm">
-                    {source.itemCount}
-                  </Badge>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {source.tags.slice(0, 3).map((tag) => (
-                    <Badge key={tag} variant="primary" size="sm">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-                <div className="mt-3 flex items-center justify-between gap-3 text-xs text-text-tertiary">
-                  <span>
-                    {t("settings.microApps.newsHub.labels.lastPublished")}{" "}
-                    {formatDateTime(source.lastPublishedAt, i18n.language)}
-                  </span>
-                  <ExternalLink href={source.siteUrl}>
-                    <span className="inline-flex items-center gap-1">
-                      {t("settings.microApps.newsHub.actions.openSource")}
-                      <ExternalLinkIcon className="h-3.5 w-3.5" />
-                    </span>
-                  </ExternalLink>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="shrink-0 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Newspaper className="h-4 w-4 text-primary" />
+                <div className="text-sm font-semibold text-text-primary">
+                  {t("settings.microApps.newsHub.sections.items")}
                 </div>
               </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card className="space-y-4 p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Newspaper className="h-4 w-4 text-primary" />
-              <div className="text-sm font-semibold text-text-primary">
-                {t("settings.microApps.newsHub.sections.items")}
-              </div>
+              <Badge variant="muted" size="sm">
+                {t("settings.microApps.newsHub.labels.total", {
+                  count: overview?.total ?? 0,
+                })}
+              </Badge>
             </div>
-            <Badge variant="muted" size="sm">
-              {t("settings.microApps.newsHub.labels.total", {
-                count: overview?.total ?? 0,
-              })}
-            </Badge>
-          </div>
 
-          {(overview?.items ?? []).length === 0 ? (
-            <Alert
-              variant="info"
-              title={t("settings.microApps.newsHub.states.emptyTitle")}
-            >
-              {t("settings.microApps.newsHub.states.emptyDescription")}
-            </Alert>
-          ) : null}
-
-          <div className="space-y-3">
-            {(overview?.items ?? []).map((item) => (
-              <div
-                key={item.id}
-                className="rounded-ui-panel border border-border bg-surface-primary p-4"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="primary" size="sm">
-                        {item.sourceName}
-                      </Badge>
-                      <Badge variant="muted" size="sm">
-                        {item.topic}
-                      </Badge>
-                      <Badge variant="muted" size="sm">
-                        {item.lang.toUpperCase()}
-                      </Badge>
-                    </div>
-                    <div className="text-base font-semibold leading-6 text-text-primary">
-                      {item.title}
-                    </div>
+            {(overview?.items ?? []).length === 0 ? (
+              <div className="mt-4 rounded-ui-panel border border-border bg-surface-secondary/30 px-4 py-5 text-sm text-text-secondary">
+                {t("settings.microApps.newsHub.states.emptyDescription")}
+              </div>
+            ) : (
+              <div className="mt-4 min-h-0 flex-1 overflow-y-auto pt-4">
+                {(overview?.items ?? []).map((item, index) => (
+                  <div key={item.id}>
+                    <div className="px-4 py-4 first:pt-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="primary" size="sm">
+                              {item.sourceName}
+                            </Badge>
+                            <Badge variant="muted" size="sm">
+                              {item.topic}
+                            </Badge>
+                            <Badge variant="muted" size="sm">
+                              {item.lang.toUpperCase()}
+                            </Badge>
+                          </div>
+                          <div className="text-base font-semibold leading-6 text-text-primary">
+                            {item.title}
+                          </div>
                     <div className="text-sm leading-6 text-text-secondary">
                       {trimPreview(item)}
                     </div>
                   </div>
-                  <span className="flex h-10 w-10 items-center justify-center rounded-ui-control bg-surface-secondary text-icon-secondary">
-                    <Globe className="h-4.5 w-4.5" />
-                  </span>
-                </div>
+                      </div>
 
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {item.tags.slice(0, 4).map((tag) => (
-                    <Badge key={tag} variant="muted" size="sm">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {item.tags.slice(0, 4).map((tag) => (
+                          <Badge key={tag} variant="muted" size="sm">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
 
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-text-tertiary">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span>
-                      {t("settings.microApps.newsHub.labels.author")}{" "}
-                      {item.author || t("settings.microApps.newsHub.labels.unknownAuthor")}
-                    </span>
-                    <span>
-                      {t("settings.microApps.newsHub.labels.publishedAt")}{" "}
-                      {formatDateTime(item.publishedAt, i18n.language)}
-                    </span>
+                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-text-tertiary">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span>
+                            {t("settings.microApps.newsHub.labels.author")}{" "}
+                            {item.author || t("settings.microApps.newsHub.labels.unknownAuthor")}
+                          </span>
+                          <span>
+                            {t("settings.microApps.newsHub.labels.publishedAt")}{" "}
+                            {formatDateTime(item.publishedAt, i18n.language)}
+                          </span>
+                        </div>
+                        <ExternalLink href={item.url}>
+                          <span className="inline-flex items-center gap-1">
+                            {t("settings.microApps.newsHub.actions.openArticle")}
+                            <ExternalLinkIcon className="h-3.5 w-3.5" />
+                          </span>
+                        </ExternalLink>
+                      </div>
+                    </div>
+
+                    {index < (overview?.items ?? []).length - 1 ? (
+                      <div className="border-t border-border" />
+                    ) : null}
                   </div>
-                  <ExternalLink href={item.url}>
-                    <span className="inline-flex items-center gap-1">
-                      {t("settings.microApps.newsHub.actions.openArticle")}
-                      <ExternalLinkIcon className="h-3.5 w-3.5" />
-                    </span>
-                  </ExternalLink>
-                </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        </Card>
-      </div>
+        </div>
+      </Card>
     </SettingsPageLayout>
   );
 }

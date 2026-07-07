@@ -12,7 +12,7 @@ related:
   - docs/project-control/agent-nodes-workboard.md
   - docs/project-control/tasks/agent_node_T027-blackbox-test-plan-v17.md
   - docs/chat/agent-loop-v1.7-construction-plan.md
-task_state: TODO
+task_state: done
 ---
 
 # agent_node_T028 blackbox trio implementation
@@ -74,8 +74,22 @@ task_state: TODO
 - 3 个黑盒场景运行结果
 - 中间可见轨迹断言
 
+### Verification Result
+
+- `pnpm --filter @ui-chat-mira/server test -- src/agent/__tests__/agentgraph-v17-blackbox-trio.test.ts`
+  - workdir: `D:/workspace/rag-demo`
+  - result: passed (`1` file, `3` tests)
+
+## Evidence
+
+- Changed files:
+  - `server/src/agent/__tests__/agentgraph-v17-blackbox-trio.test.ts`
+- Covered blackbox scenarios:
+  - 自主源码审查：先 `read_locate` 失败，再次定位命中目标，随后 `read_open` 读取实现文件并基于 evidence 回答
+  - 终端失败后继续推进：`terminal_session` 首次失败后读取 `package.json`，再对新命令重新审批并执行
+  - 小范围修复闭环：`read_extract -> workspace_mutation approval -> write -> terminal_session approval -> verify -> answer`
+
 ## Risk Points
 
 - 如果 A 组未完全收口，黑盒只会变成脆弱快照
 - 如果中间断言太弱，会掩盖“看起来通过，实际没有推进”的问题
-

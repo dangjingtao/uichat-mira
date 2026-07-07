@@ -964,6 +964,7 @@ const enUS = {
         platformSettingsTitle: "Provider Connections and Role Bindings",
         close: "Close",
         done: "Done",
+        setRoleModel: "Set as {{role}}",
         syncing: "Synchronizing model configuration...",
       },
       groups: {
@@ -1044,6 +1045,13 @@ const enUS = {
         connectionLabel: "Connection: {{provider}}",
         noEditableParams:
           "This role does not expose editable runtime parameters on this page. Adjust the default binding from the provider connections panel instead.",
+        chooseModel: "Choose Model",
+        openEditor: "Edit Params",
+        viewDetails: "View Details",
+        editInDialogHint:
+          "The page shows a summary only. Open the dialog to adjust parameters.",
+        viewInDialogHint:
+          "The page shows a summary only. Open the dialog to inspect the effective configuration.",
       },
       connections: {
         sidebarTitle: "Provider Connections",
@@ -1062,6 +1070,23 @@ const enUS = {
         sectionTitle: "Connection",
         sectionDescription:
           "Manage the display name, base URL, and API key here, then sync the provider models.",
+      },
+      platform: {
+        title: "Provider Connections",
+        bound: "Bound {{roles}}",
+        waitingSync: "Waiting for model sync",
+        searchPlaceholder: "Search providers",
+        addProvider: "Add provider",
+        noResults: "No matching providers",
+        createTitle: "Create custom provider",
+        createDescription:
+          "Create a custom OpenAI-compatible provider connection first, then finish the endpoint, key, and model sync on the right.",
+        createNamePlaceholder: "Enter provider name",
+        createNameRequired: "Please enter a provider name",
+        createProvider: "Create provider",
+        creatingProvider: "Creating...",
+        createSuccess: "Provider created",
+        createFailed: "Failed to create provider",
       },
       capabilities: {
         sectionTitle: "Capabilities",
@@ -1112,7 +1137,9 @@ const enUS = {
         updatedEmbedding: "Default Embedding model updated",
         updatedRerank: "Default ReRank model updated",
         updatedTask: "Default Task model updated",
+        updatedAgentTask: "Default AgentTask model updated",
         updatedEvaluation: "Default evaluation model updated",
+        updatedImageGeneration: "Default image generation model updated",
         setDefaultFailed: "Failed to set default model",
         loadFailed: "Failed to load platform configuration",
         loadDetailFailed: "Failed to load platform details",

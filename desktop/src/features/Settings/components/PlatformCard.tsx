@@ -1,21 +1,29 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { CheckCircle, Loader2, AlertCircle } from "lucide-react";
+import { CheckCircle, Loader2, AlertCircle, Plus } from "lucide-react";
 import type { ProviderSummary } from "@/shared/api/modelSettings";
 import Card from "@/shared/ui/Card";
+import { IconButton } from "@/shared/ui/Button";
+import { TextInput } from "@/shared/ui/Input";
 
 interface PlatformCardProps {
   platforms: ProviderSummary[];
   selectedPlatform: string;
   loadingPlatformId?: string | null;
+  searchQuery: string;
   onSelectPlatform: (id: string) => void;
+  onSearchQueryChange: (value: string) => void;
+  onCreateProvider: () => void;
 }
 
 const PlatformCard: React.FC<PlatformCardProps> = ({
   platforms,
   selectedPlatform,
   loadingPlatformId,
+  searchQuery,
   onSelectPlatform,
+  onSearchQueryChange,
+  onCreateProvider,
 }) => {
   const { t } = useTranslation();
 
@@ -30,7 +38,32 @@ const PlatformCard: React.FC<PlatformCardProps> = ({
           {t("settings.model.platform.title")}
         </div>
 
-        <div className="mt-1 flex-1 space-y-1 overflow-y-auto">
+        <div className="mt-2 flex items-center gap-2 px-1">
+          <div className="min-w-0 flex-1">
+            <TextInput
+              value={searchQuery}
+              onChange={onSearchQueryChange}
+              placeholder={t("settings.model.platform.searchPlaceholder")}
+              compact
+            />
+          </div>
+          <IconButton
+            ariaLabel={t("settings.model.platform.addProvider")}
+            title={t("settings.model.platform.addProvider")}
+            size="sm"
+            styleType="outline"
+            onClick={onCreateProvider}
+          >
+            <Plus className="h-4 w-4" />
+          </IconButton>
+        </div>
+
+        <div className="mt-2 flex-1 space-y-1 overflow-y-auto">
+          {platforms.length === 0 ? (
+            <div className="rounded-ui-panel border border-dashed border-border bg-surface-secondary px-3 py-6 text-center text-sm text-text-secondary">
+              {t("settings.model.platform.noResults")}
+            </div>
+          ) : null}
           {platforms.map((platform) => {
             const isSelected = selectedPlatform === platform.code;
             const isLoading = loadingPlatformId === platform.code;

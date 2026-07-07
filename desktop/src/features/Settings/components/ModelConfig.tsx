@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/shared/ui/Button";
 import { NumberInput } from "@/shared/ui/Input";
 import { message } from "@/shared/ui/Message";
+import { Modal } from "@/shared/ui/Modal";
 import { Select } from "@/shared/ui/Select";
 import {
   type RoleModelConfig,
@@ -12,6 +13,9 @@ import {
 import { getBuiltInLocalModel } from "@/shared/business/localModels";
 import { hasConfiguredProviderBinding } from "@/shared/business/modelAccess";
 import { getProviderLabel } from "@/shared/providerCatalog";
+import PlatformConfigModal, {
+  type PlatformConfigModalRef,
+} from "./PlatformConfigModal";
 import SettingsNotice from "./SettingsNotice";
 import SettingsStatBlock from "./SettingsStatBlock";
 
@@ -190,41 +194,20 @@ const normalizeConfigState = (
   };
 };
 
-interface ModelConfigProps {
-  modelType: RoleModelType;
-  config: RoleModelConfig | null;
-  onUpdated: (config: RoleModelConfig) => void;
-  readOnly?: boolean;
-}
-
-const ModelConfig: React.FC<ModelConfigProps> = ({
-  modelType,
-  config,
-  onUpdated,
-  readOnly = false,
-}) => {
-  const { t } = useTranslation();
-  const meta = MODEL_META[modelType];
+function buildModelSummary(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  config: RoleModelConfig | null,
+  modelType: RoleModelType,
+) {
   const builtInModel = getBuiltInLocalModel(modelType);
-  const [localConfig, setLocalConfig] = useState<ConfigState>(
-    normalizeConfigState(config),
-  );
-  const [isChanged, setIsChanged] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-
-  useEffect(() => {
-    setLocalConfig(normalizeConfigState(config));
-    setIsChanged(false);
-  }, [config]);
-
   const isConfigured = hasConfiguredProviderBinding(config);
   const providerLabel = config?.providerCode
     ? getProviderLabel(config.providerCode)
     : config?.providerConnectionId
       ? config.providerConnectionId
-    : builtInModel
-      ? t("settings.model.config.builtInLocal")
-      : t("settings.model.config.notConfigured");
+      : builtInModel
+        ? t("settings.model.config.builtInLocal")
+        : t("settings.model.config.notConfigured");
   const providerDescription = config?.providerTemplateCode
     ? t("settings.model.config.providerTemplate", {
         template: config.providerTemplateCode,
@@ -270,6 +253,85 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
         .join(" · ")
     : null;
 
+  return {
+    builtInModel,
+    builtInModelDescription,
+    isConfigured,
+    modelLabel,
+    modelDescription,
+    providerDescription,
+    providerLabel,
+  };
+}
+
+function buildStatusMeta(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  isConfigured: boolean,
+  builtInModel: ReturnType<typeof getBuiltInLocalModel>,
+) {
+  if (isConfigured) {
+    return {
+      label: t("settings.model.config.configured"),
+      dotClassName: "bg-success",
+    };
+  }
+
+  if (builtInModel) {
+    return {
+      label: builtInModel.optional
+        ? t("settings.model.config.optionalBuiltIn")
+        : t("settings.model.config.builtInReady"),
+      dotClassName: "bg-success",
+    };
+  }
+
+  return {
+    label: t("settings.model.config.notConfigured"),
+    dotClassName: "bg-danger",
+  };
+}
+
+interface ModelConfigProps {
+  modelType: RoleModelType;
+  config: RoleModelConfig | null;
+  onUpdated: (config: RoleModelConfig) => void;
+  readOnly?: boolean;
+}
+
+interface ModelConfigEditorProps extends ModelConfigProps {
+  onClose: () => void;
+}
+
+const ModelConfigEditor: React.FC<ModelConfigEditorProps> = ({
+  modelType,
+  config,
+  onUpdated,
+  onClose,
+  readOnly = false,
+}) => {
+  const { t } = useTranslation();
+  const meta = MODEL_META[modelType];
+  const [localConfig, setLocalConfig] = useState<ConfigState>(
+    normalizeConfigState(config),
+  );
+  const [isChanged, setIsChanged] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setLocalConfig(normalizeConfigState(config));
+    setIsChanged(false);
+  }, [config]);
+
+  const {
+    builtInModel,
+    builtInModelDescription,
+    isConfigured,
+    modelLabel,
+    modelDescription,
+    providerDescription,
+    providerLabel,
+  } = buildModelSummary(t, config, modelType);
+
   const handleChange = (key: string, value: ConfigValue) => {
     if (readOnly) {
       return;
@@ -280,7 +342,7 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
   };
 
   const handleSave = async () => {
-    if (!config) {
+    if (!config || readOnly) {
       return;
     }
 
@@ -289,8 +351,9 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
       const { enabled: _enabled, ...params } = localConfig;
       const updated = await updateRoleModelConfigParams(modelType, params);
       onUpdated(updated);
-      message.success(t("settings.model.config.saved"));
+      setLocalConfig(normalizeConfigState(updated));
       setIsChanged(false);
+      message.success(t("settings.model.config.saved"));
     } catch (err) {
       const messageText =
         err instanceof Error
@@ -305,82 +368,35 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
   const fields = useMemo(() => meta.params, [meta.params]);
 
   return (
-    <div
-      className={`rounded-xl border border-border bg-surface-primary p-3 shadow-shadow-sm ${
-        readOnly ? "opacity-70" : ""
-      }`}
-    >
-      <div className="mb-2.5 flex items-start justify-between gap-2.5">
-        <div className="flex min-w-0 items-start gap-2">
-          <div
-            className={`inline-flex h-8 w-8 items-center justify-center rounded-lg text-[11px] font-semibold ${meta.badgeClassName}`}
-          >
-            {meta.badgeText}
-          </div>
-          <div className="min-w-0 space-y-1">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <div className="text-sm font-semibold text-text-primary">
-                {t(meta.titleKey)}
-              </div>
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                  isConfigured
-                    ? "bg-success/10 text-success"
-                    : "bg-surface-tertiary text-text-secondary"
-                }`}
-              >
-                {isConfigured
-                  ? t("settings.model.config.configured")
-                  : builtInModel
-                    ? builtInModel.optional
-                      ? t("settings.model.config.optionalBuiltIn")
-                      : t("settings.model.config.builtInReady")
-                  : t("settings.model.config.notConfigured")}
-              </span>
-            </div>
-            <div className="text-xs leading-4 text-text-secondary">
-              {t(meta.subtitleKey)}
-            </div>
-          </div>
+    <div className="space-y-3">
+      <div className="space-y-1">
+        <div className="text-sm font-medium text-text-primary">
+          {t(meta.subtitleKey)}
         </div>
-
-        {readOnly ? (
-          <span className="rounded-full bg-surface-tertiary px-2 py-1 text-xs text-text-secondary">
-            {t("settings.model.config.managed")}
-          </span>
-        ) : (
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={!isConfigured || !isChanged || isSaving}
-            onClick={handleSave}
-          >
-            {isSaving
-              ? t("settings.model.config.saving")
-              : t("settings.model.config.save")}
-          </Button>
-        )}
+        <div className="text-xs leading-5 text-text-secondary">
+          {readOnly
+            ? t("settings.model.config.viewInDialogHint")
+            : t("settings.model.config.editInDialogHint")}
+        </div>
       </div>
 
       {readOnly ? (
-        <SettingsNotice tone="info" size="sm" className="mb-2.5 leading-5">
+        <SettingsNotice tone="info" size="sm" className="leading-5">
           {t(meta.readOnlyHintKey ?? "settings.model.config.task.readOnlyHint")}
         </SettingsNotice>
       ) : null}
 
-      <div className="mb-2.5">
-        <SettingsStatBlock
-          label={t("settings.model.config.connectionLabel", {
-            provider: providerLabel,
-          })}
-          value={modelLabel}
-          description={modelDescription ?? providerDescription}
-          size="sm"
-        />
-      </div>
+      <SettingsStatBlock
+        label={t("settings.model.config.connectionLabel", {
+          provider: providerLabel,
+        })}
+        value={modelLabel}
+        description={modelDescription ?? providerDescription}
+        size="sm"
+      />
 
       {builtInModelDescription ? (
-        <div className="mb-2.5 rounded-lg border border-primary/15 bg-primary/5 px-3 py-2 text-xs leading-5 text-text-secondary">
+        <div className="rounded-lg border border-primary/15 bg-primary/5 px-3 py-2 text-xs leading-5 text-text-secondary">
           {builtInModelDescription}
         </div>
       ) : null}
@@ -390,7 +406,7 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
           {t("settings.model.config.noEditableParams")}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
           {fields.map((field) => {
             const value = localConfig[field.key];
             const isReadonlyDimensions =
@@ -441,6 +457,161 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
           })}
         </div>
       )}
+
+      <div className="flex items-center justify-end gap-2 border-t border-border pt-3">
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          {t("common.actions.close")}
+        </Button>
+        {!readOnly ? (
+          <Button
+            size="sm"
+            disabled={!isConfigured || !isChanged || isSaving}
+            onClick={() => void handleSave()}
+          >
+            {isSaving
+              ? t("settings.model.config.saving")
+              : t("settings.model.config.save")}
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+};
+
+const ModelConfig: React.FC<ModelConfigProps> = ({
+  modelType,
+  config,
+  onUpdated,
+  readOnly = false,
+}) => {
+  const { t } = useTranslation();
+  const meta = MODEL_META[modelType];
+  const { builtInModel, isConfigured, modelLabel, providerLabel } =
+    buildModelSummary(t, config, modelType);
+  const statusMeta = buildStatusMeta(t, isConfigured, builtInModel);
+  const selectorRef = useRef<PlatformConfigModalRef | null>(null);
+  const [selectorState, setSelectorState] = useState({
+    canConfirm: false,
+    confirming: false,
+  });
+
+  const openEditor = () => {
+    let modalKey = "";
+
+    modalKey = Modal.show({
+      title: t(meta.titleKey),
+      width: 760,
+      maxHeight: 720,
+      footer: null,
+      onClose: () => void 0,
+      content: (
+        <ModelConfigEditor
+          modelType={modelType}
+          config={config}
+          onUpdated={onUpdated}
+          readOnly={readOnly}
+          onClose={() => Modal.close(modalKey)}
+        />
+      ),
+    });
+  };
+
+  const openModelSelector = () => {
+    let modalKey = "";
+
+    modalKey = Modal.show({
+      title: t("settings.model.defaultCard.platformSettingsTitle"),
+      width: 940,
+      height: 560,
+      onClose: () => {
+        setSelectorState({ canConfirm: false, confirming: false });
+      },
+      footer: (
+        <>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => Modal.close(modalKey)}
+          >
+            {t("settings.model.defaultCard.close")}
+          </Button>
+          <Button
+            size="sm"
+            disabled={!selectorState.canConfirm || selectorState.confirming}
+            onClick={async () => {
+              const confirmed =
+                await selectorRef.current?.confirmSelection();
+              if (confirmed) {
+                Modal.close(modalKey);
+              }
+            }}
+          >
+            {selectorState.confirming
+              ? t("settings.model.api.setting")
+              : t("settings.model.defaultCard.setRoleModel", {
+                  role: t(meta.titleKey),
+                })}
+          </Button>
+        </>
+      ),
+      content: (
+        <PlatformConfigModal
+          ref={selectorRef}
+          selectionRole={modelType}
+          onSelectionStateChange={setSelectorState}
+        />
+      ),
+    });
+  };
+
+  return (
+    <div className="flex h-full w-full flex-col rounded-xl border border-border bg-surface-primary p-3 shadow-shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-2">
+          <div
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-lg text-[11px] font-semibold ${meta.badgeClassName}`}
+          >
+            {meta.badgeText}
+          </div>
+          <div className="min-w-0 space-y-1">
+            <div className="flex min-h-8 flex-wrap items-center gap-1.5">
+              <div className="text-sm font-semibold text-text-primary">
+                {t(meta.titleKey)}
+              </div>
+              <span
+                aria-label={statusMeta.label}
+                title={statusMeta.label}
+                className={`inline-block h-2 w-2 rounded-full ${statusMeta.dotClassName}`}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={openModelSelector}>
+            {t("settings.model.config.chooseModel")}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={openEditor}>
+            {readOnly
+              ? t("settings.model.config.viewDetails")
+              : t("settings.model.config.openEditor")}
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <SettingsStatBlock
+          label={t("settings.model.config.connectionLabel", {
+            provider: providerLabel,
+          })}
+          value={modelLabel}
+          size="sm"
+        />
+      </div>
+
+      <div className="mt-2 text-xs leading-5 text-text-secondary">
+        {t(meta.subtitleKey)}
+      </div>
     </div>
   );
 };

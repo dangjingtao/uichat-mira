@@ -2,23 +2,15 @@ import { useTranslation } from "react-i18next";
 import DefaultModelCard from "../../components/DefaultModelCard";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import { Button } from "@/shared/ui/Button";
-import { RotateCcw, Settings2 } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { message } from "@/shared/ui/Message";
 import { Modal } from "@/shared/ui/Modal";
 import { resetProviderRoleModel } from "@/shared/api/modelSettings";
 import { useRoleModelConfigs } from "@/app/providers/RoleModelConfigProvider";
-import { useRef, useState } from "react";
 
 export default function ModelSettings() {
   const { t } = useTranslation();
-  const childRef = useRef<{ openPlatformSettings: () => void }>(null);
   const { refresh } = useRoleModelConfigs();
-  const [ready, setReady] = useState(false);
-
-  const handleClick = () => {
-    if (!ready) return;
-    childRef.current?.openPlatformSettings();
-  };
 
   const handleResetAllDefaults = async () => {
     Modal.confirm({
@@ -68,21 +60,12 @@ export default function ModelSettings() {
             <RotateCcw className="h-4 w-4" />
             {t("settings.model.actions.resetDefault")}
           </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleClick}
-            className="gap-2 self-start"
-          >
-            <Settings2 className="h-4 w-4" />
-            {t("settings.model.actions.openSettings")}
-          </Button>
         </div>
       }
       contentClassName="pt-6"
     >
       <div className="min-w-0 flex">
-        <DefaultModelCard onReady={() => setReady(true)} ref={childRef} />
+        <DefaultModelCard />
       </div>
     </SettingsPageLayout>
   );

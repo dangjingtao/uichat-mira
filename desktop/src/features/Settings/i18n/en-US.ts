@@ -87,7 +87,7 @@ const settingsPending = {
         newsHub: {
           title: "News Hub",
           description: "Pull no-key tech news sources into one local table and expose a simple aggregation workspace for local consumption.",
-          hint: "The first pass uses Hacker News, GitHub Changelog, and curated GitHub release feeds. Trigger a manual refresh to ingest items.",
+          hint: "The first pass keeps only Hacker News Front Page. Trigger a manual refresh to ingest items.",
           badges: {
             debug: "Local news base",
             focus: "Tech aggregation",
@@ -145,7 +145,7 @@ const settingsPending = {
         },
         banner: {
           title: "The first pass is about a reliable local aggregation loop",
-          description: "This page does not try to cover the whole internet yet, and it does not depend on login-heavy platforms. It starts by aggregating Hacker News, GitHub Changelog, and core open-source release feeds into one local table with stable query access.",
+          description: "This page now keeps only Hacker News Front Page and writes that source into one local table with stable local query access.",
         },
         actions: {
           refresh: "Refresh news",
