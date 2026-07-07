@@ -138,7 +138,9 @@ describe("MicroAppsSettings", () => {
     expect(screen.queryByText("支持接入点")).not.toBeInTheDocument();
     expect(screen.queryByText("配置字段")).not.toBeInTheDocument();
     expect(screen.getByText("settings.microApps.labels.supportsWecomSmartRobot")).toBeInTheDocument();
-    expect(screen.getByText("settings.microApps.labels.boundCount")).toBeInTheDocument();
+    expect(screen.queryByText("settings.microApps.labels.boundCount")).not.toBeInTheDocument();
+    expect(screen.queryByText("支持绑定企业微信智能机器人")).not.toBeInTheDocument();
+    expect(screen.queryByText("接入点绑定时动态填写知识库配置")).not.toBeInTheDocument();
   });
 
   it("navigates to the computer use studio without typing the route manually", async () => {

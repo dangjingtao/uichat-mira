@@ -17,6 +17,7 @@ const modelConfigSchema = {
     "name",
     "providerCode",
     "providerConnectionId",
+    "providerConnectionDisplayName",
     "providerTemplateCode",
     "remoteModelId",
     "params",
@@ -32,6 +33,9 @@ const modelConfigSchema = {
       anyOf: [{ type: "string" }, { type: "null" }],
     },
     providerConnectionId: {
+      anyOf: [{ type: "string" }, { type: "null" }],
+    },
+    providerConnectionDisplayName: {
       anyOf: [{ type: "string" }, { type: "null" }],
     },
     providerTemplateCode: {

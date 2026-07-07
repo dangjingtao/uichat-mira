@@ -360,6 +360,7 @@ function LoginPage() {
                     }))
                   }
                   placeholder={t("auth.login.usernamePlaceholder")}
+                  autoComplete="username"
                   disabled={isSubmitting}
                   error={fieldError}
                 />
@@ -375,6 +376,7 @@ function LoginPage() {
                     }))
                   }
                   placeholder={t("auth.login.passwordPlaceholder")}
+                  autoComplete="current-password"
                   disabled={isSubmitting}
                   error={fieldError}
                 />

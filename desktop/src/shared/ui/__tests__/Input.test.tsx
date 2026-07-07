@@ -46,6 +46,25 @@ describe("TextInput", () => {
     render(<TextInput value="" onChange={() => {}} compact />);
     expect(screen.getByRole("textbox")).toHaveClass("h-8");
   });
+
+  it("defaults autocomplete to off", () => {
+    render(<TextInput value="" onChange={() => {}} />);
+    expect(screen.getByRole("textbox")).toHaveAttribute("autocomplete", "off");
+  });
+
+  it("allows overriding autocomplete", () => {
+    render(
+      <TextInput
+        value=""
+        onChange={() => {}}
+        autoComplete="username"
+      />,
+    );
+    expect(screen.getByRole("textbox")).toHaveAttribute(
+      "autocomplete",
+      "username",
+    );
+  });
 });
 
 describe("NumberInput", () => {

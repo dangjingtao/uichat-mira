@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowRight, Bot, BookOpen, Link2, Sparkles } from "lucide-react";
+import { ArrowRight, Bot, BookOpen } from "lucide-react";
 import { Link } from "react-router-dom";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import Alert from "@/shared/ui/Alert";
@@ -9,44 +9,16 @@ import Badge from "@/shared/ui/Badge";
 import { Skeleton } from "@/shared/ui";
 import { message } from "@/shared/ui/Message";
 import {
-  getIntegrationCapabilityMicroAppBinding,
   getIntegrationInstances,
   getIntegrationMicroApps,
-  type IntegrationInstanceRecord,
   type MicroAppRecord,
 } from "@/shared/api/integrations";
-
-type SmartRobotBindingSummary = {
-  capabilityId: string;
-  microAppDefinitionId: string | null;
-};
-
-const countBoundAccessPoints = (
-  bindings: SmartRobotBindingSummary[],
-  microAppId: string,
-) =>
-  new Set(
-    bindings
-      .filter((item) => item.microAppDefinitionId === microAppId)
-      .map((item) => item.capabilityId),
-  ).size;
 
 const microAppSummary = (microApp: MicroAppRecord) => {
   if (microApp.type === "knowledge_query") {
     return "接收外部入口文本问题，调用本地知识库检索链路，并返回一条稳定回复。";
   }
   return "企业集成微应用。";
-};
-
-const microAppCapabilities = (microApp: MicroAppRecord) => {
-  if (microApp.type === "knowledge_query") {
-    return [
-      "支持绑定企业微信智能机器人",
-      "接入点绑定时动态填写知识库配置",
-      "当前返回单条稳定文本回复",
-    ];
-  }
-  return ["企业集成能力"];
 };
 
 const featuredStudioEntries = [
@@ -72,43 +44,16 @@ export default function MicroAppsSettings() {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [microApps, setMicroApps] = useState<MicroAppRecord[]>([]);
-  const [instances, setInstances] = useState<IntegrationInstanceRecord[]>([]);
-  const [bindings, setBindings] = useState<SmartRobotBindingSummary[]>([]);
 
   const load = async () => {
     setLoading(true);
     try {
-      const [microAppResult, instanceResult] = await Promise.all([
+      const [microAppResult] = await Promise.all([
         getIntegrationMicroApps({ type: "knowledge_query" }),
         getIntegrationInstances({ provider: "wecom", includeCapabilities: true }),
       ]);
 
-      const smartRobotCapabilities = instanceResult.instances.flatMap((instance) =>
-        (instance.capabilities ?? []).filter(
-          (capability) => capability.type === "wecom.smart_robot",
-        ),
-      );
-
-      const nextBindings = await Promise.all(
-        smartRobotCapabilities.map(async (capability) => {
-          try {
-            const result = await getIntegrationCapabilityMicroAppBinding(capability.id);
-            return {
-              capabilityId: capability.id,
-              microAppDefinitionId: result.binding?.microAppDefinitionId ?? null,
-            } satisfies SmartRobotBindingSummary;
-          } catch {
-            return {
-              capabilityId: capability.id,
-              microAppDefinitionId: null,
-            } satisfies SmartRobotBindingSummary;
-          }
-        }),
-      );
-
       setMicroApps(microAppResult.microApps);
-      setInstances(instanceResult.instances);
-      setBindings(nextBindings);
     } catch (error) {
       message.error(error instanceof Error ? error.message : t("settings.microApps.messages.loadFailed"));
     } finally {
@@ -136,76 +81,46 @@ export default function MicroAppsSettings() {
             </div>
           </Card>
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {featuredStudioEntries.map((entry) => (
-              <Card key={entry.route} className="border-primary/15 bg-primary/5 p-5">
-                <div className="flex h-full flex-col gap-4 lg:justify-between">
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Skeleton height={22} width={64} className="rounded-full" />
-                      <Skeleton height={22} width={72} className="rounded-full" />
-                      <Skeleton height={22} width={68} className="rounded-full" />
-                    </div>
-                    <div className="space-y-2">
-                      <Skeleton height={18} width="48%" />
-                      <Skeleton.Text lines={2} lastLineWidth="68%" />
-                      <Skeleton height={12} width="40%" />
-                    </div>
-                  </div>
-
-                  <Skeleton height={40} width={136} />
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <Card className="border-primary/15 bg-primary/5 p-5">
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  <Skeleton height={22} width={72} className="rounded-full" />
+                  <Skeleton height={22} width={84} className="rounded-full" />
+                  <Skeleton height={22} width={76} className="rounded-full" />
                 </div>
-              </Card>
-            ))}
+                <Skeleton height={20} width="34%" />
+                <Skeleton.Text lines={4} lastLineWidth="58%" />
+                <Skeleton height={40} width={160} />
+              </div>
+            </Card>
+
+            <Card className="p-5">
+              <div className="space-y-4">
+                <Skeleton height={18} width="42%" />
+                <Skeleton.Text lines={3} lastLineWidth="66%" />
+                <Skeleton height={18} width="30%" />
+                <Skeleton.Text lines={3} lastLineWidth="54%" />
+              </div>
+            </Card>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 xl:grid-cols-3">
             {Array.from({ length: 3 }).map((_, index) => (
-              <Card key={index} className="h-full p-4">
-                <div className="flex h-full flex-col gap-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex min-w-0 flex-1 items-start gap-3">
-                      <Skeleton.Circle size={36} className="shrink-0" />
-                      <div className="min-w-0 flex-1 space-y-2">
-                        <Skeleton height={18} width="46%" />
-                        <Skeleton height={12} width="28%" />
-                        <Skeleton.Text lines={2} lastLineWidth="74%" />
-                      </div>
-                    </div>
-                    <Skeleton height={22} width={64} className="rounded-full" />
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <Skeleton height={22} width={144} className="rounded-full" />
-                    <Skeleton height={22} width={120} className="rounded-full" />
-                  </div>
-
-                  <div className="grid gap-2">
-                    <div className="rounded-ui-panel border border-border bg-surface-secondary/20 px-3 py-2.5">
-                      <Skeleton height={12} width={80} />
-                      <Skeleton height={16} width={44} className="mt-2" />
-                    </div>
-                    <div className="rounded-ui-panel border border-border bg-surface-secondary/20 px-3 py-2.5">
-                      <Skeleton height={12} width={68} />
-                      <Skeleton height={16} width={44} className="mt-2" />
+              <Card key={index} className="p-5">
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <Skeleton.Circle size={36} className="shrink-0" />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <Skeleton height={18} width="52%" />
+                      <Skeleton height={12} width="34%" />
                     </div>
                   </div>
-
-                  <div className="space-y-2">
-                    <Skeleton height={12} width="84%" />
-                    <Skeleton height={12} width="66%" />
-                  </div>
+                  <Skeleton.Text lines={4} lastLineWidth="62%" />
                 </div>
               </Card>
             ))}
           </div>
-
-          <Card variant="subtle" className="border-dashed">
-            <div className="space-y-2">
-              <Skeleton height={16} width="24%" />
-              <Skeleton.Text lines={2} lastLineWidth="62%" />
-            </div>
-          </Card>
         </div>
       </SettingsPageLayout>
     );
@@ -218,6 +133,12 @@ export default function MicroAppsSettings() {
       description={t("settings.microApps.page.description")}
       contentClassName="space-y-6 pt-6"
     >
+      {microApps.length === 0 ? (
+        <Alert variant="info" title={t("settings.microApps.states.emptyTitle")}>
+          {t("settings.microApps.states.emptyDescription")}
+        </Alert>
+      ) : null}
+
       <div data-testid="micro-apps-studio-grid" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {featuredStudioEntries.map((entry) => {
           const key = `settings.microApps.studioEntries.${entry.key}` as const;
@@ -261,18 +182,8 @@ export default function MicroAppsSettings() {
             </Card>
           );
         })}
-      </div>
 
-      {microApps.length === 0 ? (
-        <Alert variant="info" title={t("settings.microApps.states.emptyTitle")}>
-          {t("settings.microApps.states.emptyDescription")}
-        </Alert>
-      ) : null}
-
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {microApps.map((microApp) => {
-          const boundCount = countBoundAccessPoints(bindings, microApp.id);
-
           return (
             <Link
               key={microApp.id}
@@ -291,10 +202,6 @@ export default function MicroAppsSettings() {
                     <Badge variant="muted" size="sm">
                       <Bot className="mr-1 h-3.5 w-3.5" />
                       {t("settings.microApps.labels.supportsWecomSmartRobot")}
-                    </Badge>
-                    <Badge variant="muted" size="sm">
-                      <Link2 className="mr-1 h-3.5 w-3.5" />
-                      {t("settings.microApps.labels.boundCount", { count: boundCount })}
                     </Badge>
                   </div>
 
@@ -321,14 +228,6 @@ export default function MicroAppsSettings() {
                     </div>
                   </div>
 
-                  <div className="space-y-1.5">
-                    {microAppCapabilities(microApp).slice(0, 2).map((capability) => (
-                      <div key={capability} className="flex items-start gap-2 text-xs leading-5 text-text-secondary">
-                        <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                        <span>{capability}</span>
-                      </div>
-                    ))}
-                  </div>
                 </div>
               </Card>
             </Link>

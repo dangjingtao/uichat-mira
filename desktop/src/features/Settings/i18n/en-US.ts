@@ -53,7 +53,7 @@ const settingsPending = {
       page: {
         miniTitle: "Micro Apps",
         title: "Micro Apps",
-        description: "This page now reflects real integration micro apps instead of a template marketplace.",
+        description: "Micro apps turn concrete business capabilities such as knowledge answers, news aggregation, and mail handling into workspaces you can enter directly.",
       },
       actions: {
         refresh: "Refresh",

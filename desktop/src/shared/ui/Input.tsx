@@ -144,6 +144,7 @@ interface TextInputProps {
   step?: string | number;
   compact?: boolean;
   labelHelp?: string;
+  autoComplete?: string;
 }
 
 export const TextInput: React.FC<TextInputProps> = ({
@@ -158,6 +159,7 @@ export const TextInput: React.FC<TextInputProps> = ({
   step,
   compact,
   labelHelp,
+  autoComplete = "off",
 }) => {
   const inputId = useId();
   const describedById = error ? `${inputId}-error` : undefined;
@@ -181,6 +183,7 @@ export const TextInput: React.FC<TextInputProps> = ({
         onKeyDown={onKeyDown}
         placeholder={placeholder}
         disabled={disabled}
+        autoComplete={autoComplete}
         aria-invalid={Boolean(error)}
         aria-describedby={describedById}
         className={`

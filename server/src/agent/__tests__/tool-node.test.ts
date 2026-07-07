@@ -465,6 +465,55 @@ test("toolNode prioritizes structured failureCode over terminal-looking message 
   }
 });
 
+test("toolNode treats schema_invalid failureCode as terminal even without schema-like message text", async () => {
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-schema-invalid-terminal",
+      toolId: "read_open",
+      status: "failed",
+      error: {
+        message: "The tool returned a malformed payload.",
+        failureCode: "schema_invalid",
+      },
+      startedAt: "2026-07-08T00:00:00.000Z",
+      finishedAt: "2026-07-08T00:00:01.000Z",
+    } as never);
+
+  try {
+    const result = await toolNode(
+      createBaseState({
+        policyDecision: {
+          type: "allow",
+          toolId: "read_open",
+          inputHash: "hash-read-open-schema-invalid",
+          reason: "Allowed in test.",
+        },
+        pendingToolCall: {
+          id: "pending-read-open-schema-invalid",
+          toolId: "read_open",
+          args: { path: "README.md" },
+          inputHash: "hash-read-open-schema-invalid",
+          source: "planner",
+          status: "frozen",
+          createdAt: "2026-07-08T00:00:00.000Z",
+        },
+      }),
+    );
+
+    assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+    assert.equal(result.lastToolExecution?.failureCode, "schema_invalid");
+    assert.equal(result.lastToolExecution?.failureKind, "terminal");
+    assert.match(
+      result.evidence?.latestSummary?.keyFindings.join(" | ") ?? "",
+      /failureCode=schema_invalid/,
+    );
+    assert.match(result.errorMessage ?? "", /malformed payload/i);
+  } finally {
+    executeHarnessInvocationSpy.mockRestore();
+  }
+});
+
 test("toolNode keeps terminal Harness failure on the global error path", async () => {
   const executeHarnessInvocationSpy = vi
     .spyOn(harnessInvocations, "executeHarnessInvocation")
@@ -563,6 +612,103 @@ test("toolNode treats workspace_escape failureCode as terminal and exposes it in
       /failureCode=workspace_escape/,
     );
     assert.match(result.errorMessage ?? "", /File not found/);
+  } finally {
+    executeHarnessInvocationSpy.mockRestore();
+  }
+});
+
+test("toolNode treats timeout failureCode as recoverable even when the message matches terminal fallback patterns", async () => {
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-timeout-recoverable",
+      toolId: "read_open",
+      status: "failed",
+      error: {
+        message: "Outside workspace guard timed out before a stable result was produced.",
+        failureCode: "timeout",
+      },
+      startedAt: "2026-07-08T00:00:00.000Z",
+      finishedAt: "2026-07-08T00:00:01.000Z",
+    } as never);
+
+  try {
+    const result = await toolNode(
+      createBaseState({
+        policyDecision: {
+          type: "allow",
+          toolId: "read_open",
+          inputHash: "hash-read-open-timeout",
+          reason: "Allowed in test.",
+        },
+        pendingToolCall: {
+          id: "pending-read-open-timeout",
+          toolId: "read_open",
+          args: { path: "README.md" },
+          inputHash: "hash-read-open-timeout",
+          source: "planner",
+          status: "frozen",
+          createdAt: "2026-07-08T00:00:00.000Z",
+        },
+      }),
+    );
+
+    assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+    assert.equal(result.lastToolExecution?.failureCode, "timeout");
+    assert.equal(result.lastToolExecution?.failureKind, "recoverable");
+    assert.equal(result.errorMessage, undefined);
+    assert.match(
+      result.evidence?.latestSummary?.keyFindings.join(" | ") ?? "",
+      /failureCode=timeout/,
+    );
+  } finally {
+    executeHarnessInvocationSpy.mockRestore();
+  }
+});
+
+test("toolNode falls back to legacy terminal message patterns when failureCode is absent", async () => {
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-legacy-fallback-terminal",
+      toolId: "read_open",
+      status: "failed",
+      error: {
+        message: "Approval mismatch while replaying the frozen invocation.",
+      },
+      startedAt: "2026-07-08T00:00:00.000Z",
+      finishedAt: "2026-07-08T00:00:01.000Z",
+    } as never);
+
+  try {
+    const result = await toolNode(
+      createBaseState({
+        policyDecision: {
+          type: "allow",
+          toolId: "read_open",
+          inputHash: "hash-read-open-legacy-fallback",
+          reason: "Allowed in test.",
+        },
+        pendingToolCall: {
+          id: "pending-read-open-legacy-fallback",
+          toolId: "read_open",
+          args: { path: "README.md" },
+          inputHash: "hash-read-open-legacy-fallback",
+          source: "planner",
+          status: "frozen",
+          createdAt: "2026-07-08T00:00:00.000Z",
+        },
+      }),
+    );
+
+    assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+    assert.equal(result.lastToolExecution?.failureCode, undefined);
+    assert.equal(result.lastToolExecution?.failureKind, "terminal");
+    assert.doesNotMatch(
+      result.evidence?.latestSummary?.keyFindings.join(" | ") ?? "",
+      /failureCode=/,
+    );
+    assert.match(result.errorMessage ?? "", /approval mismatch/i);
   } finally {
     executeHarnessInvocationSpy.mockRestore();
   }

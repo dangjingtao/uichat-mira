@@ -53,7 +53,7 @@ const settingsPending = {
       page: {
         miniTitle: "微应用",
         title: "微应用",
-        description: "这里收口已经真实落地的企业集成微应用，而不是模板市场。",
+        description: "微应用用于承接具体业务入口，把知识问答、资讯聚合、邮件处理等能力整理成可直接进入的工作界面。",
       },
       actions: {
         refresh: "刷新",
