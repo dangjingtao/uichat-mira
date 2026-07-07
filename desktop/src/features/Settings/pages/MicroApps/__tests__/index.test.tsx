@@ -34,6 +34,24 @@ describe("MicroAppsSettings", () => {
     apiMocks.getIntegrationCapabilityMicroAppBinding.mockReset();
   });
 
+  it("shows a skeleton layout instead of a loading status card on first entry", () => {
+    apiMocks.getIntegrationMicroApps.mockReturnValue(new Promise(() => {}));
+    apiMocks.getIntegrationInstances.mockReturnValue(new Promise(() => {}));
+
+    render(
+      <MemoryRouter initialEntries={["/settings/micro-apps"]}>
+        <Routes>
+          <Route path="/settings/micro-apps" element={<MicroAppsSettings />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("micro-apps-loading-skeleton")).toBeInTheDocument();
+    expect(
+      screen.queryByText("settings.microApps.states.loading"),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders a visible computer use studio entry from the micro apps list", async () => {
     render(
       <MemoryRouter initialEntries={["/settings/micro-apps"]}>
@@ -49,6 +67,17 @@ describe("MicroAppsSettings", () => {
       ).toBeInTheDocument();
     });
 
+    expect(screen.getByTestId("micro-apps-studio-grid")).toHaveClass("sm:grid-cols-2");
+    expect(screen.getByTestId("micro-apps-studio-grid")).toHaveClass("xl:grid-cols-3");
+    expect(
+      screen.queryByText("settings.microApps.banner.title"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("settings.microApps.footer.title"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /settings\.microApps\.actions\.refresh/ }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByText("settings.microApps.studioEntries.computerUse.description"),
     ).toBeInTheDocument();
@@ -57,6 +86,59 @@ describe("MicroAppsSettings", () => {
         name: /settings\.microApps\.studioEntries\.computerUse\.actions\.open/,
       }),
     ).toHaveAttribute("href", "/settings/micro-apps/computer-use-studio");
+    expect(
+      screen.getByRole("link", {
+        name: /settings\.microApps\.studioEntries\.computerUse\.actions\.open/,
+      }),
+    ).toHaveClass("bg-transparent");
+    expect(
+      screen.getByRole("link", {
+        name: /settings\.microApps\.studioEntries\.computerUse\.actions\.open/,
+      }),
+    ).toHaveClass("border-primary/20");
+    expect(
+      screen.getByRole("link", {
+        name: /settings\.microApps\.studioEntries\.computerUse\.actions\.open/,
+      }),
+    ).toHaveClass("text-primary");
+  });
+
+  it("renders real micro app cards with the same highlighted shell style as studio cards", async () => {
+    apiMocks.getIntegrationMicroApps.mockResolvedValue({
+      microApps: [
+        {
+          id: "microapp-knowledge-query",
+          name: "Default Knowledge Query",
+          type: "knowledge_query",
+          enabled: true,
+          supportedAccessPoints: ["wecom.smart_robot"],
+          bindingSchema: {
+            fields: [{ key: "knowledgeBaseId" }],
+          },
+        },
+      ],
+    });
+    apiMocks.getIntegrationInstances.mockResolvedValue({
+      instances: [],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/settings/micro-apps"]}>
+        <Routes>
+          <Route path="/settings/micro-apps" element={<MicroAppsSettings />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const microAppCard = await screen.findByTestId("micro-app-card-microapp-knowledge-query");
+    expect(microAppCard).toHaveClass("block");
+    expect(microAppCard.firstChild).toHaveClass("border-primary/15");
+    expect(microAppCard.firstChild).toHaveClass("bg-primary/5");
+    expect(screen.queryByText("settings.microApps.labels.enabled")).not.toBeInTheDocument();
+    expect(screen.queryByText("支持接入点")).not.toBeInTheDocument();
+    expect(screen.queryByText("配置字段")).not.toBeInTheDocument();
+    expect(screen.getByText("settings.microApps.labels.supportsWecomSmartRobot")).toBeInTheDocument();
+    expect(screen.getByText("settings.microApps.labels.boundCount")).toBeInTheDocument();
   });
 
   it("navigates to the computer use studio without typing the route manually", async () => {

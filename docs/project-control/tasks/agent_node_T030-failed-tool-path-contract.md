@@ -14,7 +14,7 @@ related:
   - server/src/routes/proxy-provider/chat-agent-approval.smoke.test.ts
   - server/src/agent/__tests__/toolcall-loop-regression.test.ts
   - server/src/agent/__tests__/agentgraph-mainline-blackbox.test.ts
-task_state: READY_FOR_REVIEW
+task_state: DONE
 ---
 
 # agent_node_T030 Failed Tool Path Contract

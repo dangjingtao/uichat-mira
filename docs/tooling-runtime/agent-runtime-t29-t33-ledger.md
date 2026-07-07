@@ -42,9 +42,9 @@ Related:
 | --- | --- | --- | --- | --- | --- |
 | `T29` `server/test-report 全绿` | `agent_node_T029` | `agent_node_T029-server-test-report-green.md` | `P0` | `TODO` | 必须先于 `T30-T33` |
 | `T30` `失败路径合同裁决卡` | `agent_node_T030` | `agent_node_T030-failed-tool-path-contract.md` | `P1` | `READY_FOR_REVIEW` | 依赖 `T29` |
-| `T31` `terminal result 语义拆分` | `agent_node_T031` | `agent_node_T031-terminal-result-semantics.md` | `P1` | `TODO` | 依赖 `T29`；不得混入 `T30/T32/T33` 内容 |
-| `T32` `结构化 failure code 小补` | `agent_node_T032` | `agent_node_T032-structured-failure-code.md` | `P1` | `TODO` | 依赖 `T29`；建议晚于或平行于 `T31` |
-| `T33` `核心工具 summary contract` | `agent_node_T033` | `agent_node_T033-core-tool-summary-contracts.md` | `P2` | `TODO` | 依赖 `T29`；建议晚于 `T31` 和 `T32` |
+| `T31` `terminal result 语义拆分` | `agent_node_T031` | `agent_node_T031-terminal-result-semantics.md` | `P1` | `DONE` | 依赖 `T29`；不得混入 `T30/T32/T33` 内容 |
+| `T32` `结构化 failure code 小补` | `agent_node_T032` | `agent_node_T032-structured-failure-code.md` | `P1` | `DONE` | 依赖 `T29`；建议晚于或平行于 `T31` |
+| `T33` `核心工具 summary contract` | `agent_node_T033` | `agent_node_T033-core-tool-summary-contracts.md` | `P2` | `DONE` | 依赖 `T29`；建议晚于 `T31` 和 `T32` |
 
 ## Scope Summary
 
@@ -68,7 +68,10 @@ Related:
 
 - 2026-07-07：已完成仓库内正式登记和编号顺延。
 - `T030` 已完成合同断言同步并进入 `READY_FOR_REVIEW`。
-- `T029`、`T031`、`T032`、`T033` 仍处于 `TODO`。
+- `T031` 已完成 terminal result 语义拆分复核并回填 `DONE`。
+- `T033` 已完成核心工具 summary contract 复核并回填 `DONE`。
+- `T029` 仍处于 `TODO`。
+- `T032` 已完成最小结构化 `failureCode` 接入并回填 `DONE`。
 
 ## Related Docs
 

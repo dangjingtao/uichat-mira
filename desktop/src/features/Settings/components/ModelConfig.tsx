@@ -201,15 +201,15 @@ function buildModelSummary(
 ) {
   const builtInModel = getBuiltInLocalModel(modelType);
   const isConfigured = hasConfiguredProviderBinding(config);
-  const providerLabel = config?.providerCode
-    ? getProviderLabel(config.providerCode)
-    : config?.providerConnectionDisplayName
-      ? config.providerConnectionDisplayName
+  const providerLabel = config?.providerConnectionDisplayName
+    ? config.providerConnectionDisplayName
+    : config?.providerCode
+      ? getProviderLabel(config.providerCode)
       : config?.providerConnectionId
         ? config.providerConnectionId
-      : builtInModel
-        ? t("settings.model.config.builtInLocal")
-        : t("settings.model.config.notConfigured");
+        : builtInModel
+          ? t("settings.model.config.builtInLocal")
+          : t("settings.model.config.notConfigured");
   const providerDescription = config?.providerTemplateCode
     ? t("settings.model.config.providerTemplate", {
         template: config.providerTemplateCode,

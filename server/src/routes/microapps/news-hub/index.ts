@@ -20,6 +20,9 @@ const newsHubSourceSchema = {
     "itemCount",
     "lastPublishedAt",
     "lastIngestedAt",
+    "lastFetchedAt",
+    "lastFetchStatus",
+    "lastFetchError",
   ],
   properties: {
     key: { type: "string" },
@@ -36,6 +39,40 @@ const newsHubSourceSchema = {
     itemCount: { type: "number" },
     lastPublishedAt: { type: ["string", "null"] },
     lastIngestedAt: { type: ["string", "null"] },
+    lastFetchedAt: { type: ["string", "null"] },
+    lastFetchStatus: {
+      type: "string",
+      enum: ["idle", "succeeded", "failed"],
+    },
+    lastFetchError: { type: ["string", "null"] },
+  },
+} as const;
+
+const newsHubConfigSchema = {
+  type: "object",
+  required: [
+    "newsDataEnabled",
+    "newsDataApiKey",
+    "currentsEnabled",
+    "currentsApiKey",
+    "redditEnabled",
+    "redditClientId",
+    "redditClientSecret",
+    "redditUserAgent",
+    "redditSubreddits",
+    "refreshTtlMinutes",
+  ],
+  properties: {
+    newsDataEnabled: { type: "boolean" },
+    newsDataApiKey: { type: "string" },
+    currentsEnabled: { type: "boolean" },
+    currentsApiKey: { type: "string" },
+    redditEnabled: { type: "boolean" },
+    redditClientId: { type: "string" },
+    redditClientSecret: { type: "string" },
+    redditUserAgent: { type: "string" },
+    redditSubreddits: { type: "string" },
+    refreshTtlMinutes: { type: "integer", minimum: 60, maximum: 1440 },
   },
 } as const;
 
@@ -145,7 +182,7 @@ const newsHubRoutes: FastifyPluginAsync<{
           ? Number.parseInt(request.query.limit, 10)
           : undefined;
 
-      const overview = newsHubService.getOverview({
+      const overview = await newsHubService.getOverview({
         limit: Number.isFinite(limit) ? limit : undefined,
         sourceKey: request.query.sourceKey || undefined,
         query: request.query.q || undefined,
@@ -171,6 +208,8 @@ const newsHubRoutes: FastifyPluginAsync<{
               "fetchedCount",
               "insertedCount",
               "updatedCount",
+              "skippedCount",
+              "ttlMinutes",
               "sources",
             ],
             properties: {
@@ -179,6 +218,8 @@ const newsHubRoutes: FastifyPluginAsync<{
               fetchedCount: { type: "number" },
               insertedCount: { type: "number" },
               updatedCount: { type: "number" },
+              skippedCount: { type: "number" },
+              ttlMinutes: { type: "number" },
               sources: {
                 type: "array",
                 items: {
@@ -191,6 +232,8 @@ const newsHubRoutes: FastifyPluginAsync<{
                     "updatedCount",
                     "status",
                     "error",
+                    "usedCache",
+                    "lastFetchedAt",
                   ],
                   properties: {
                     key: { type: "string" },
@@ -198,8 +241,13 @@ const newsHubRoutes: FastifyPluginAsync<{
                     fetchedCount: { type: "number" },
                     insertedCount: { type: "number" },
                     updatedCount: { type: "number" },
-                    status: { type: "string", enum: ["succeeded", "failed"] },
+                    status: {
+                      type: "string",
+                      enum: ["succeeded", "failed", "skipped"],
+                    },
                     error: { type: ["string", "null"] },
+                    usedCache: { type: "boolean" },
+                    lastFetchedAt: { type: ["string", "null"] },
                   },
                 },
               },
@@ -212,6 +260,42 @@ const newsHubRoutes: FastifyPluginAsync<{
       const result = await newsHubService.refresh();
       return success(result, "News hub refreshed");
     }),
+  );
+
+  app.get(
+    "/microapps/news-hub/config",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Get news hub config",
+        security: [{ bearerAuth: [] }],
+        response: {
+          200: successEnvelope(newsHubConfigSchema),
+        },
+      },
+    },
+    routeHandler("Failed to load news hub config", async () =>
+      success(newsHubService.getConfig())),
+  );
+
+  app.put<{ Body: ReturnType<NewsHubRouteService["getConfig"]> }>(
+    "/microapps/news-hub/config",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Save news hub config",
+        security: [{ bearerAuth: [] }],
+        body: {
+          ...newsHubConfigSchema,
+          additionalProperties: false,
+        },
+        response: {
+          200: successEnvelope(newsHubConfigSchema),
+        },
+      },
+    },
+    routeHandler("Failed to save news hub config", async (request) =>
+      success(newsHubService.updateConfig(request.body), "News hub config saved")),
   );
 };
 

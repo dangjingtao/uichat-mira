@@ -75,6 +75,13 @@ const LIMITATION_DISCLOSURE_PATTERNS = [
   /乱码|garbled|不可读|不可靠/u,
 ];
 
+const TERMINAL_TASK_SUCCESS_CLAIM_PATTERNS = [
+  /任务已完成|任务完成|已经完成任务/u,
+  /测试已通过|测试通过|tests?\s+passed/i,
+  /修复成功|已经修复|fixed successfully|issue is fixed/i,
+  /命令成功|执行成功|command succeeded|ran successfully/i,
+];
+
 const toPreviewText = (value: string, limit = 220) => {
   const normalized = value.replace(/\s+/g, " ").trim();
   if (!normalized) {
@@ -140,6 +147,9 @@ const buildToolEvidenceBlock = (execution: AgentToolExecutionResult) => {
     lines.push(
       `exitCode: ${summary.data.exitCode === null ? "null" : summary.data.exitCode}`,
     );
+    lines.push(`processCompleted: ${summary.data.processCompleted}`);
+    lines.push(`commandSucceeded: ${summary.data.commandSucceeded}`);
+    lines.push(`taskSatisfied: ${summary.data.taskSatisfied}`);
     lines.push(`stdoutPreview: ${summary.data.stdoutPreview || "(empty)"}`);
     lines.push(`stderrPreview: ${summary.data.stderrPreview || "(empty)"}`);
     lines.push(`stdoutEncoding: ${summary.data.stdoutEncoding}`);
@@ -150,6 +160,41 @@ const buildToolEvidenceBlock = (execution: AgentToolExecutionResult) => {
     lines.push(`outputInterpretable: ${summary.data.outputInterpretable}`);
     if (summary.data.unreadableReason) {
       lines.push(`unreadableReason: ${summary.data.unreadableReason}`);
+    }
+  } else if (
+    summary.data?.kind === "edit_file" ||
+    summary.data?.kind === "workspace_mutation"
+  ) {
+    lines.push(`operation: ${summary.data.operation}`);
+    if (summary.data.targetPath) {
+      lines.push(`targetPath: ${summary.data.targetPath}`);
+    }
+    if ("destinationPath" in summary.data && summary.data.destinationPath) {
+      lines.push(`destinationPath: ${summary.data.destinationPath}`);
+    }
+    if (typeof summary.data.dryRun === "boolean") {
+      lines.push(`dryRun: ${summary.data.dryRun}`);
+    }
+    if (typeof summary.data.changed === "boolean") {
+      lines.push(`changed: ${summary.data.changed}`);
+    }
+    if (typeof summary.data.created === "boolean") {
+      lines.push(`created: ${summary.data.created}`);
+    }
+    if (typeof summary.data.replaced === "boolean") {
+      lines.push(`replaced: ${summary.data.replaced}`);
+    }
+    if (typeof summary.data.deleted === "boolean") {
+      lines.push(`deleted: ${summary.data.deleted}`);
+    }
+    if ("moved" in summary.data && typeof summary.data.moved === "boolean") {
+      lines.push(`moved: ${summary.data.moved}`);
+    }
+    if (summary.data.runtimeToolId) {
+      lines.push(`runtimeToolId: ${summary.data.runtimeToolId}`);
+    }
+    if (summary.data.actionProfileId) {
+      lines.push(`actionProfileId: ${summary.data.actionProfileId}`);
     }
   }
 
@@ -403,7 +448,11 @@ const renderSummaryBasedAnswer = (summary: AgentEvidenceSummary) => {
     return "这次工具调用在执行前被策略拒绝了，所以当前没有新的可用执行结果。";
   }
 
-  if (summary.source === "tool" && summary.status === "blocked") {
+  if (
+    summary.source === "tool" &&
+    summary.status === "blocked" &&
+    summary.data?.kind !== "terminal_session"
+  ) {
     return "当前这条工具证据还处于阻断状态，不能当成已经稳定完成的执行结果来回答。";
   }
 
@@ -454,12 +503,31 @@ const renderSummaryBasedAnswer = (summary: AgentEvidenceSummary) => {
 
   if (summary.source === "tool" && summary.data?.kind === "terminal_session") {
     if (!summary.data.outputInterpretable) {
-      return summary.data.unreadableReason
+      const reason = summary.data.unreadableReason
         ? `${summary.data.unreadableReason}`
         : "这次终端输出当前不可可靠解读。";
+      if (summary.data.processCompleted) {
+        return `命令 \`${summary.data.command}\` 已执行完成，但输出证据当前不可可靠解读。${reason}`;
+      }
+      return `命令 \`${summary.data.command}\` 还没有形成稳定完成结果，而且输出证据当前不可可靠解读。${reason}`;
     }
 
-    const parts = [`命令 \`${summary.data.command}\` 已执行。`];
+    const parts: string[] = [];
+    if (summary.data.binaryDetected) {
+      parts.push(`命令 \`${summary.data.command}\` 已执行完成，但输出包含二进制内容，当前不能作为自然语言证据解读。`);
+    } else if (summary.data.truncated) {
+      parts.push(`命令 \`${summary.data.command}\` 已执行完成，但输出证据被截断了。`);
+    } else if (!summary.data.processCompleted) {
+      parts.push(`命令 \`${summary.data.command}\` 没有形成稳定完成结果。`);
+    } else if (summary.data.commandSucceeded === "true") {
+      parts.push(`命令 \`${summary.data.command}\` 已执行完成，且退出码为 0。`);
+    } else if (summary.data.commandSucceeded === "false") {
+      parts.push(
+        `命令 \`${summary.data.command}\` 已执行完成，但退出码为 ${summary.data.exitCode === null ? "null" : summary.data.exitCode}，说明命令执行失败。`,
+      );
+    } else {
+      parts.push(`命令 \`${summary.data.command}\` 已执行，但命令成功状态当前无法确认。`);
+    }
     if (summary.data.exitCode !== null) {
       parts.push(`退出码是 ${summary.data.exitCode}。`);
     }
@@ -475,7 +543,78 @@ const renderSummaryBasedAnswer = (summary: AgentEvidenceSummary) => {
     if (summary.data.truncated) {
       parts.push("这次输出被截断了。");
     }
+    if (summary.data.taskSatisfied === "unknown") {
+      parts.push("这只能说明命令执行状态；是否已经满足任务目标，目前仍不能直接下结论。");
+    } else if (summary.data.taskSatisfied === "false") {
+      parts.push("现有证据表明任务目标尚未满足。");
+    } else {
+      parts.push("现有证据表明任务目标已经满足。");
+    }
     return parts.join(" ");
+  }
+
+  if (summary.source === "tool" && summary.data?.kind === "edit_file") {
+    if (summary.data.dryRun) {
+      return summary.data.targetPath
+        ? `当前只有文件修改预览证据：${summary.data.targetPath} 的变更方案已经生成，但还没有真实写入，不能说这个文件已经被修改。`
+        : "当前只有文件修改预览证据，还没有真实写入结果。";
+    }
+
+    if (summary.data.operation === "replace") {
+      return summary.data.targetPath
+        ? `已实际修改 ${summary.data.targetPath}，并完成了指定内容替换。`
+        : "已实际完成一次文件内容替换。";
+    }
+
+    if (summary.data.operation === "overwrite") {
+      return summary.data.targetPath
+        ? `已实际覆盖写入 ${summary.data.targetPath}。`
+        : "已实际完成一次覆盖写入。";
+    }
+
+    return summary.data.targetPath
+      ? `已实际创建文件 ${summary.data.targetPath}。`
+      : "已实际完成一次文件写入。";
+  }
+
+  if (summary.source === "tool" && summary.data?.kind === "workspace_mutation") {
+    if (summary.data.dryRun) {
+      if (
+        summary.data.operation === "move" &&
+        summary.data.targetPath &&
+        summary.data.destinationPath
+      ) {
+        return `当前只有 workspace 变更预览证据：计划把 ${summary.data.targetPath} 移动到 ${summary.data.destinationPath}，但还没有真实执行。`;
+      }
+
+      return summary.data.targetPath
+        ? `当前只有 workspace 变更预览证据：${summary.data.targetPath} 的变更计划已经生成，但还没有真实执行。`
+        : "当前只有 workspace 变更预览证据，还没有真实执行结果。";
+    }
+
+    if (summary.data.operation === "delete") {
+      return summary.data.targetPath
+        ? `已实际删除 workspace 目标 ${summary.data.targetPath}。`
+        : "已实际删除一个 workspace 目标。";
+    }
+
+    if (
+      summary.data.operation === "move" &&
+      summary.data.targetPath &&
+      summary.data.destinationPath
+    ) {
+      return `已实际把 ${summary.data.targetPath} 移动到 ${summary.data.destinationPath}。`;
+    }
+
+    if (summary.data.operation === "overwrite") {
+      return summary.data.targetPath
+        ? `已实际覆盖写入 workspace 目标 ${summary.data.targetPath}。`
+        : "已实际完成一次 workspace 覆盖写入。";
+    }
+
+    return summary.data.targetPath
+      ? `已实际创建 workspace 目标 ${summary.data.targetPath}。`
+      : "已实际完成一次 workspace 写入。";
   }
 
   if (summary.source === "retrieval" && summary.data?.kind === "retrieval") {
@@ -612,6 +751,37 @@ const answerAcknowledgesUnreadableTerminalEvidence = (answer: string) =>
   /(garbled|unreadable|not reliable|cannot reliably|不可|不可靠|无法可靠|不能可靠|乱码)/iu.test(
     answer,
   );
+
+const answerOverclaimsTerminalTaskSuccess = (input: {
+  answer: string;
+  latestSummary: AgentEvidenceSummary | undefined;
+}) => {
+  const summary = input.latestSummary;
+  if (
+    summary?.source !== "tool" ||
+    summary.data?.kind !== "terminal_session"
+  ) {
+    return false;
+  }
+
+  const normalized = input.answer.trim();
+  if (!normalized) {
+    return false;
+  }
+
+  const claimsTaskSuccess = TERMINAL_TASK_SUCCESS_CLAIM_PATTERNS.some((pattern) =>
+    pattern.test(normalized),
+  );
+  if (!claimsTaskSuccess) {
+    return false;
+  }
+
+  if (summary.data.commandSucceeded !== "true") {
+    return true;
+  }
+
+  return summary.data.taskSatisfied !== "true";
+};
 
 const answerPretendsUnavailableEvidenceWasUsable = (input: {
   answer: string;
@@ -786,6 +956,18 @@ export const generateNode = async (
     ) {
       outputGuardReason =
         "generate output interpreted unreadable terminal evidence as grounded content";
+    }
+  }
+  if (!outputGuardReason) {
+    const latestSummary = getEvidencePayload(state).latestSummary;
+    if (
+      answerOverclaimsTerminalTaskSuccess({
+        answer,
+        latestSummary,
+      })
+    ) {
+      outputGuardReason =
+        "generate output overclaimed terminal task success beyond the available evidence";
     }
   }
   if (!outputGuardReason) {

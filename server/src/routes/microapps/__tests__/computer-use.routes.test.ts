@@ -133,12 +133,40 @@ const mailCenterService: MailCenterRouteService = {
 };
 
 const newsHubService: NewsHubRouteService = {
-  getOverview() {
+  async getOverview() {
     return {
       sources: [],
       items: [],
       total: 0,
       generatedAt: "2026-07-06T12:00:00.000Z",
+    };
+  },
+  getConfig() {
+    return {
+      newsDataEnabled: false,
+      newsDataApiKey: "",
+      currentsEnabled: false,
+      currentsApiKey: "",
+      redditEnabled: false,
+      redditClientId: "",
+      redditClientSecret: "",
+      redditUserAgent: "UIChat-Mira-NewsHub/0.1",
+      redditSubreddits: "technology",
+      refreshTtlMinutes: 60,
+    };
+  },
+  updateConfig(input) {
+    return {
+      newsDataEnabled: input.newsDataEnabled ?? false,
+      newsDataApiKey: input.newsDataApiKey ?? "",
+      currentsEnabled: input.currentsEnabled ?? false,
+      currentsApiKey: input.currentsApiKey ?? "",
+      redditEnabled: input.redditEnabled ?? false,
+      redditClientId: input.redditClientId ?? "",
+      redditClientSecret: input.redditClientSecret ?? "",
+      redditUserAgent: input.redditUserAgent ?? "UIChat-Mira-NewsHub/0.1",
+      redditSubreddits: input.redditSubreddits ?? "technology",
+      refreshTtlMinutes: input.refreshTtlMinutes ?? 60,
     };
   },
   async refresh() {
@@ -148,6 +176,8 @@ const newsHubService: NewsHubRouteService = {
       fetchedCount: 0,
       insertedCount: 0,
       updatedCount: 0,
+      skippedCount: 0,
+      ttlMinutes: 60,
       sources: [],
     };
   },

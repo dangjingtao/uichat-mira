@@ -403,6 +403,7 @@ test("toolNode records recoverable Harness failure without promoting it to a glo
     assert.equal(result.pendingApproval, undefined);
     assert.equal(result.lastToolExecution?.status, "failed");
     assert.equal(result.lastToolExecution?.failureKind, "recoverable");
+    assert.equal(result.lastToolExecution?.failureCode, undefined);
     assert.equal(result.lastToolExecution?.recoveryAttemptCount, 1);
     assert.equal(result.evidence?.latestSummary?.status, "failed");
     assert.match(result.evidence?.latestSummary?.actionTaken ?? "", /can be retried or adjusted/i);
@@ -410,6 +411,55 @@ test("toolNode records recoverable Harness failure without promoting it to a glo
       "read_open failed during Harness execution but can be retried.",
     ]);
     assert.equal(result.observations?.at(-1)?.status, "failed");
+  } finally {
+    executeHarnessInvocationSpy.mockRestore();
+  }
+});
+
+test("toolNode prioritizes structured failureCode over terminal-looking message patterns", async () => {
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-failurecode-priority",
+      toolId: "read_open",
+      status: "failed",
+      error: {
+        message: "Tool protocol mismatch: result payload is invalid",
+        failureCode: "tool_runtime_failed",
+      },
+      startedAt: "2026-07-07T00:00:00.000Z",
+      finishedAt: "2026-07-07T00:00:01.000Z",
+    } as never);
+
+  try {
+    const result = await toolNode(
+      createBaseState({
+        policyDecision: {
+          type: "allow",
+          toolId: "read_open",
+          inputHash: "hash-read-open-priority",
+          reason: "Allowed in test.",
+        },
+        pendingToolCall: {
+          id: "pending-read-open-priority",
+          toolId: "read_open",
+          args: { path: "README.md" },
+          inputHash: "hash-read-open-priority",
+          source: "planner",
+          status: "frozen",
+          createdAt: "2026-07-07T00:00:00.000Z",
+        },
+      }),
+    );
+
+    assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+    assert.equal(result.lastToolExecution?.failureCode, "tool_runtime_failed");
+    assert.equal(result.lastToolExecution?.failureKind, "recoverable");
+    assert.equal(result.errorMessage, undefined);
+    assert.match(
+      result.evidence?.latestSummary?.keyFindings.join(" | ") ?? "",
+      /failureCode=tool_runtime_failed/,
+    );
   } finally {
     executeHarnessInvocationSpy.mockRestore();
   }
@@ -464,6 +514,55 @@ test("toolNode keeps terminal Harness failure on the global error path", async (
       result.evidence?.latestSummary?.actionTaken ?? "",
       /stopped the current tool loop/i,
     );
+  } finally {
+    executeHarnessInvocationSpy.mockRestore();
+  }
+});
+
+test("toolNode treats workspace_escape failureCode as terminal and exposes it in evidence", async () => {
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-workspace-escape",
+      toolId: "read_open",
+      status: "failed",
+      error: {
+        message: "File not found",
+        failureCode: "workspace_escape",
+      },
+      startedAt: "2026-07-07T00:00:00.000Z",
+      finishedAt: "2026-07-07T00:00:01.000Z",
+    } as never);
+
+  try {
+    const result = await toolNode(
+      createBaseState({
+        policyDecision: {
+          type: "allow",
+          toolId: "read_open",
+          inputHash: "hash-read-open-workspace-escape",
+          reason: "Allowed in test.",
+        },
+        pendingToolCall: {
+          id: "pending-read-open-workspace-escape",
+          toolId: "read_open",
+          args: { path: "../README.md" },
+          inputHash: "hash-read-open-workspace-escape",
+          source: "planner",
+          status: "frozen",
+          createdAt: "2026-07-07T00:00:00.000Z",
+        },
+      }),
+    );
+
+    assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+    assert.equal(result.lastToolExecution?.failureCode, "workspace_escape");
+    assert.equal(result.lastToolExecution?.failureKind, "terminal");
+    assert.match(
+      result.evidence?.latestSummary?.keyFindings.join(" | ") ?? "",
+      /failureCode=workspace_escape/,
+    );
+    assert.match(result.errorMessage ?? "", /File not found/);
   } finally {
     executeHarnessInvocationSpy.mockRestore();
   }

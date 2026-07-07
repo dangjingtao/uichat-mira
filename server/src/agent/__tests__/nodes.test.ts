@@ -459,8 +459,228 @@ test("createToolExecutionEvidenceSummary marks binary terminal output as non-lan
   assert.equal(summary.answerReadiness.canAnswer, false);
   assert.equal(summary.data?.kind, "terminal_session");
   if (summary.data?.kind === "terminal_session") {
+    assert.equal(summary.data.processCompleted, true);
+    assert.equal(summary.data.commandSucceeded, "true");
+    assert.equal(summary.data.taskSatisfied, "unknown");
     assert.equal(summary.data.binaryDetected, true);
     assert.equal(summary.data.outputInterpretable, false);
+  }
+});
+
+test("createToolExecutionEvidenceSummary separates process completion from command success for terminal_session", () => {
+  const successSummary = createToolExecutionEvidenceSummary({
+    question: "执行命令看看结果",
+    execution: {
+      toolId: "terminal_session",
+      args: { command: "dir" },
+      status: "completed",
+      inputHash: "hash-terminal-success",
+      result: {
+        command: "dir",
+        stdout: "README.md\nserver\n",
+        stderr: "",
+        exitCode: 0,
+        timedOut: false,
+        stdoutEncoding: "utf8",
+        stderrEncoding: "utf8",
+        truncated: false,
+        binaryDetected: false,
+        violations: [],
+      },
+      startedAt: "2026-07-04T00:00:00.000Z",
+      finishedAt: "2026-07-04T00:00:01.000Z",
+    },
+    evidenceIndex: 0,
+  });
+
+  const failedSummary = createToolExecutionEvidenceSummary({
+    question: "执行命令看看结果",
+    execution: {
+      toolId: "terminal_session",
+      args: { command: "pnpm test" },
+      status: "completed",
+      inputHash: "hash-terminal-failed",
+      result: {
+        command: "pnpm test",
+        stdout: "",
+        stderr: "missing script: test",
+        exitCode: 1,
+        timedOut: false,
+        stdoutEncoding: "utf8",
+        stderrEncoding: "utf8",
+        truncated: false,
+        binaryDetected: false,
+        violations: [],
+      },
+      startedAt: "2026-07-04T00:00:00.000Z",
+      finishedAt: "2026-07-04T00:00:01.000Z",
+    },
+    evidenceIndex: 1,
+  });
+
+  assert.equal(successSummary.data?.kind, "terminal_session");
+  assert.equal(failedSummary.data?.kind, "terminal_session");
+  if (
+    successSummary.data?.kind === "terminal_session" &&
+    failedSummary.data?.kind === "terminal_session"
+  ) {
+    assert.equal(successSummary.data.processCompleted, true);
+    assert.equal(successSummary.data.commandSucceeded, "true");
+    assert.equal(successSummary.data.taskSatisfied, "unknown");
+    assert.equal(failedSummary.data.processCompleted, true);
+    assert.equal(failedSummary.data.commandSucceeded, "false");
+    assert.equal(failedSummary.data.taskSatisfied, "unknown");
+    assert.match(
+      failedSummary.answerReadiness.reason,
+      /non-zero exit code/i,
+    );
+  }
+});
+
+test("createToolExecutionEvidenceSummary keeps processCompleted=true when terminal output is truncated", () => {
+  const summary = createToolExecutionEvidenceSummary({
+    question: "执行命令看看结果",
+    execution: {
+      toolId: "terminal_session",
+      args: { command: "dir /s" },
+      status: "completed",
+      inputHash: "hash-terminal-truncated",
+      result: {
+        command: "dir /s",
+        stdout: "README.md\nserver\n...[truncated]",
+        stderr: "",
+        exitCode: 0,
+        timedOut: false,
+        stdoutEncoding: "utf8",
+        stderrEncoding: "utf8",
+        truncated: true,
+        binaryDetected: false,
+        violations: [],
+      },
+      startedAt: "2026-07-04T00:00:00.000Z",
+      finishedAt: "2026-07-04T00:00:01.000Z",
+    },
+    evidenceIndex: 2,
+  });
+
+  assert.equal(summary.status, "truncated");
+  assert.equal(summary.data?.kind, "terminal_session");
+  if (summary.data?.kind === "terminal_session") {
+    assert.equal(summary.data.processCompleted, true);
+    assert.equal(summary.data.commandSucceeded, "true");
+    assert.equal(summary.data.taskSatisfied, "unknown");
+    assert.equal(summary.data.truncated, true);
+  }
+  assert.equal(summary.answerReadiness.canAnswer, false);
+});
+
+test("createToolExecutionEvidenceSummary marks dry-run edit_file as preview-only mutation evidence", () => {
+  const summary = createToolExecutionEvidenceSummary({
+    question: "把 notes.txt 改成新内容",
+    execution: {
+      toolId: "edit_file",
+      args: {
+        path: "notes.txt",
+        operation: "write_file",
+        content: "replacement content",
+      },
+      status: "completed",
+      inputHash: "hash-edit-file-dry-run",
+      result: {
+        path: "notes.txt",
+        operation: "write_file",
+        dryRun: true,
+        bytes: Buffer.byteLength("replacement content", "utf-8"),
+      },
+      startedAt: "2026-07-07T00:00:00.000Z",
+      finishedAt: "2026-07-07T00:00:01.000Z",
+    },
+    evidenceIndex: 3,
+  });
+
+  assert.equal(summary.status, "completed");
+  assert.equal(summary.data?.kind, "edit_file");
+  if (summary.data?.kind === "edit_file") {
+    assert.equal(summary.data.dryRun, true);
+    assert.equal(summary.data.changed, false);
+    assert.equal(summary.data.canAnswerMutationQuestion, true);
+  }
+  assert.equal(summary.answerReadiness.canAnswer, true);
+  assert.match(summary.answerReadiness.reason, /preview|modified/i);
+});
+
+test("createToolExecutionEvidenceSummary marks applied edit_file replacement as a real mutation", () => {
+  const summary = createToolExecutionEvidenceSummary({
+    question: "把 notes.txt 里的 old 替换成 new",
+    execution: {
+      toolId: "edit_file",
+      args: {
+        path: "notes.txt",
+        operation: "replace_block",
+        expectedOldText: "old",
+        newText: "new",
+      },
+      status: "completed",
+      inputHash: "hash-edit-file-replace",
+      result: {
+        actionProfileId: "edit_replace_block",
+        runtimeToolId: "edit_file",
+        result: {
+          path: "notes.txt",
+          operation: "replace_block",
+          dryRun: false,
+          bytes: Buffer.byteLength("new", "utf-8"),
+        },
+      },
+      startedAt: "2026-07-07T00:00:00.000Z",
+      finishedAt: "2026-07-07T00:00:01.000Z",
+    },
+    evidenceIndex: 4,
+  });
+
+  assert.equal(summary.status, "completed");
+  assert.equal(summary.data?.kind, "edit_file");
+  if (summary.data?.kind === "edit_file") {
+    assert.equal(summary.data.operation, "replace");
+    assert.equal(summary.data.dryRun, false);
+    assert.equal(summary.data.changed, true);
+    assert.equal(summary.data.replaced, true);
+    assert.equal(summary.data.actionProfileId, "edit_replace_block");
+    assert.equal(summary.data.runtimeToolId, "edit_file");
+  }
+});
+
+test("createToolExecutionEvidenceSummary maps workspace_mutation delete to completed mutation evidence", () => {
+  const summary = createToolExecutionEvidenceSummary({
+    question: "删除 notes.txt",
+    execution: {
+      toolId: "workspace_mutation",
+      args: {
+        operation: "delete",
+        targetPath: "notes.txt",
+      },
+      status: "completed",
+      inputHash: "hash-workspace-delete",
+      result: {
+        operation: "delete",
+        targetPath: "notes.txt",
+        dryRun: false,
+        deletedType: "file",
+        recursive: false,
+      },
+      startedAt: "2026-07-07T00:00:00.000Z",
+      finishedAt: "2026-07-07T00:00:01.000Z",
+    },
+    evidenceIndex: 5,
+  });
+
+  assert.equal(summary.status, "completed");
+  assert.equal(summary.data?.kind, "workspace_mutation");
+  if (summary.data?.kind === "workspace_mutation") {
+    assert.equal(summary.data.operation, "delete");
+    assert.equal(summary.data.changed, true);
+    assert.equal(summary.data.deleted, true);
+    assert.equal(summary.data.dryRun, false);
   }
 });
 
@@ -517,6 +737,136 @@ test("generateNode keeps read_list fallback at directory-overview scope when fil
   assert.match(result.answer ?? "", /还不能回答文件内容问题/);
 });
 
+test("generateNode keeps edit_file dry-run fallback at preview scope instead of claiming the file changed", async () => {
+  const state = createBaseState("把 notes.txt 改成新内容");
+  state.evidence = {
+    observations: [],
+    toolExecutions: [
+      {
+        toolId: "edit_file",
+        args: {
+          path: "notes.txt",
+          operation: "write_file",
+          content: "replacement content",
+        },
+        status: "completed",
+        inputHash: "hash-edit-dry-run-fallback",
+        result: {
+          path: "notes.txt",
+          operation: "write_file",
+          dryRun: true,
+          bytes: Buffer.byteLength("replacement content", "utf-8"),
+        },
+        summary: createToolExecutionEvidenceSummary({
+          question: "把 notes.txt 改成新内容",
+          execution: {
+            toolId: "edit_file",
+            args: {
+              path: "notes.txt",
+              operation: "write_file",
+              content: "replacement content",
+            },
+            status: "completed",
+            inputHash: "hash-edit-dry-run-fallback",
+            result: {
+              path: "notes.txt",
+              operation: "write_file",
+              dryRun: true,
+              bytes: Buffer.byteLength("replacement content", "utf-8"),
+            },
+            startedAt: "2026-07-07T00:00:00.000Z",
+            finishedAt: "2026-07-07T00:00:01.000Z",
+          },
+          evidenceIndex: 6,
+        }),
+        startedAt: "2026-07-07T00:00:00.000Z",
+        finishedAt: "2026-07-07T00:00:01.000Z",
+      },
+    ],
+    retrievals: [],
+  };
+  state.evidence.latestSummary = state.evidence.toolExecutions[0]?.summary;
+
+  vi.spyOn(providerProxyService, "generateTextForRole").mockResolvedValue(
+    "<function_calls>{\"toolId\":\"edit_file\"}</function_calls>",
+  );
+
+  const result = await generateNode(state);
+
+  assert.match(result.answer ?? "", /预览证据|还没有真实写入/);
+  assert.doesNotMatch(result.answer ?? "", /已实际创建|已实际修改|已经修改/);
+});
+
+test("generateNode can summarize a real edit_file replacement after action profile mapping", async () => {
+  const state = createBaseState("把 notes.txt 里的 old 替换成 new");
+  state.evidence = {
+    observations: [],
+    toolExecutions: [
+      {
+        toolId: "edit_file",
+        args: {
+          path: "notes.txt",
+          operation: "replace_block",
+          expectedOldText: "old",
+          newText: "new",
+        },
+        status: "completed",
+        inputHash: "hash-edit-real-fallback",
+        result: {
+          actionProfileId: "edit_replace_block",
+          runtimeToolId: "edit_file",
+          result: {
+            path: "notes.txt",
+            operation: "replace_block",
+            dryRun: false,
+            bytes: Buffer.byteLength("new", "utf-8"),
+          },
+        },
+        summary: createToolExecutionEvidenceSummary({
+          question: "把 notes.txt 里的 old 替换成 new",
+          execution: {
+            toolId: "edit_file",
+            args: {
+              path: "notes.txt",
+              operation: "replace_block",
+              expectedOldText: "old",
+              newText: "new",
+            },
+            status: "completed",
+            inputHash: "hash-edit-real-fallback",
+            result: {
+              actionProfileId: "edit_replace_block",
+              runtimeToolId: "edit_file",
+              result: {
+                path: "notes.txt",
+                operation: "replace_block",
+                dryRun: false,
+                bytes: Buffer.byteLength("new", "utf-8"),
+              },
+            },
+            startedAt: "2026-07-07T00:00:00.000Z",
+            finishedAt: "2026-07-07T00:00:01.000Z",
+          },
+          evidenceIndex: 7,
+        }),
+        startedAt: "2026-07-07T00:00:00.000Z",
+        finishedAt: "2026-07-07T00:00:01.000Z",
+      },
+    ],
+    retrievals: [],
+  };
+  state.evidence.latestSummary = state.evidence.toolExecutions[0]?.summary;
+
+  vi.spyOn(providerProxyService, "generateTextForRole").mockResolvedValue(
+    "<function_calls>{\"toolId\":\"edit_file\"}</function_calls>",
+  );
+
+  const result = await generateNode(state);
+
+  assert.match(result.answer ?? "", /已实际修改 notes\.txt|完成了指定内容替换/);
+  assert.doesNotMatch(result.answer ?? "", /预览|还没有真实写入/);
+});
+
 test("generateNode refuses to pretend garbled terminal text was understood", async () => {
   const state = createBaseState("执行命令看看中文输出");
   state.evidence = {
@@ -544,6 +894,9 @@ test("generateNode refuses to pretend garbled terminal text was understood", asy
             kind: "terminal_session",
             command: "Get-Content README.md",
             exitCode: 0,
+            processCompleted: true,
+            commandSucceeded: "unknown",
+            taskSatisfied: "unknown",
             stdoutPreview: "锟斤拷锟斤拷",
             stderrPreview: "",
             stdoutEncoding: "unknown",
@@ -571,8 +924,76 @@ test("generateNode refuses to pretend garbled terminal text was understood", asy
 
   const result = await generateNode(state);
 
-  assert.match(result.answer ?? "", /garbled|不可|不能|不可靠/);
+  assert.match(result.answer ?? "", /已执行完成/);
+  assert.match(result.answer ?? "", /输出证据当前不可可靠解读|garbled|不可|不能|不可靠/);
   assert.doesNotMatch(result.answer ?? "", /README 主要在介绍 UIChat Mira/);
+  assert.doesNotMatch(result.answer ?? "", /没有形成稳定完成结果/);
+});
+
+test("generateNode does not let non-zero exitCode terminal evidence be rewritten as task success", async () => {
+  const state = createBaseState("执行 pnpm test 并告诉我结果");
+  state.evidence = {
+    observations: [],
+    toolExecutions: [
+      {
+        toolId: "terminal_session",
+        args: { command: "pnpm test" },
+        status: "completed",
+        inputHash: "hash-terminal-nonzero",
+        result: {},
+        summary: {
+          source: "tool",
+          status: "completed",
+          toolId: "terminal_session",
+          inputHash: "hash-terminal-nonzero",
+          actionTaken: 'Executed terminal command "pnpm test".',
+          keyFindings: [
+            "exitCode=1",
+            "processCompleted=true",
+            "commandSucceeded=false",
+            "taskSatisfied=unknown",
+          ],
+          answerReadiness: {
+            canAnswer: true,
+            reason:
+              "Terminal command completed with a non-zero exit code, so the answer must describe command failure without claiming the task succeeded.",
+          },
+          data: {
+            kind: "terminal_session",
+            command: "pnpm test",
+            exitCode: 1,
+            processCompleted: true,
+            commandSucceeded: "false",
+            taskSatisfied: "unknown",
+            stdoutPreview: "",
+            stderrPreview: "missing script: test",
+            stdoutEncoding: "utf8",
+            stderrEncoding: "utf8",
+            timedOut: false,
+            truncated: false,
+            binaryDetected: false,
+            violations: [],
+            outputInterpretable: true,
+            canAnswerCommandQuestion: true,
+          },
+        },
+        startedAt: "2026-07-04T00:00:00.000Z",
+        finishedAt: "2026-07-04T00:00:01.000Z",
+      },
+    ],
+    retrievals: [],
+  };
+  state.evidence.latestSummary = state.evidence.toolExecutions[0]?.summary;
+
+  vi.spyOn(providerProxyService, "generateTextForRole").mockResolvedValue(
+    "测试已通过，修复成功。",
+  );
+
+  const result = await generateNode(state);
+
+  assert.match(result.answer ?? "", /退出码为 1|命令执行失败/);
+  assert.match(result.answer ?? "", /不能直接下结论|任务目标/);
+  assert.doesNotMatch(result.answer ?? "", /测试已通过|修复成功/);
 });
 
 test("generateNode strips bare tool id leakage from read_open completed evidence", async () => {

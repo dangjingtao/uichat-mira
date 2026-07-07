@@ -3,11 +3,11 @@ import type { NormalizedChatMessage } from "@/services/provider-proxy.message-pr
 import type { RetrievedChunk } from "@/services/rag-nodes";
 import type { ContextBudgetAudit } from "@/services/context-budget/index";
 import type { SandboxOutputEncoding } from "@/harness/sandbox/contract";
+import type { McpInvocationFailureCode, McpToolDefinition } from "@/mcp/core/definitions";
 import type {
   AgentIntentEmbeddingConfig,
   ToolIntentResult,
 } from "./intent/index";
-import type { McpToolDefinition } from "@/mcp/core/definitions";
 
 export type AgentRunStatus =
   | "queued"
@@ -145,6 +145,7 @@ export interface AgentToolExecutionResult {
   invocationId?: string;
   status: "completed" | "failed" | "awaiting_approval" | "denied";
   failureKind?: "recoverable" | "terminal";
+  failureCode?: McpInvocationFailureCode;
   recoveryAttemptCount?: number;
   result?: unknown;
   errorMessage?: string;
@@ -225,10 +226,18 @@ export interface AgentWebSearchEvidenceData {
   canAnswerSearchQuestion: boolean;
 }
 
+export type AgentEvidenceResolution =
+  | "true"
+  | "false"
+  | "unknown";
+
 export interface AgentTerminalSessionEvidenceData {
   kind: "terminal_session";
   command: string;
   exitCode: number | null;
+  processCompleted: boolean;
+  commandSucceeded: AgentEvidenceResolution;
+  taskSatisfied: AgentEvidenceResolution;
   stdoutPreview: string;
   stderrPreview: string;
   stdoutEncoding: SandboxOutputEncoding;
@@ -255,6 +264,36 @@ export interface AgentObservationEvidenceData {
   factsPreview: string[];
 }
 
+export interface AgentWorkspaceMutationEvidenceData {
+  kind: "workspace_mutation";
+  operation: "create" | "overwrite" | "replace" | "delete" | "move" | "unknown";
+  targetPath?: string;
+  destinationPath?: string;
+  dryRun?: boolean;
+  changed?: boolean;
+  created?: boolean;
+  replaced?: boolean;
+  deleted?: boolean;
+  moved?: boolean;
+  runtimeToolId?: string;
+  actionProfileId?: string;
+  canAnswerMutationQuestion: boolean;
+}
+
+export interface AgentEditFileEvidenceData {
+  kind: "edit_file";
+  operation: "create" | "overwrite" | "replace" | "delete" | "move" | "unknown";
+  targetPath?: string;
+  dryRun?: boolean;
+  changed?: boolean;
+  created?: boolean;
+  replaced?: boolean;
+  deleted?: boolean;
+  runtimeToolId?: string;
+  actionProfileId?: string;
+  canAnswerMutationQuestion: boolean;
+}
+
 export type AgentEvidenceSummaryData =
   | AgentReadListEvidenceData
   | AgentReadOpenEvidenceData
@@ -262,7 +301,9 @@ export type AgentEvidenceSummaryData =
   | AgentWebSearchEvidenceData
   | AgentTerminalSessionEvidenceData
   | AgentRetrievalEvidenceData
-  | AgentObservationEvidenceData;
+  | AgentObservationEvidenceData
+  | AgentWorkspaceMutationEvidenceData
+  | AgentEditFileEvidenceData;
 
 export interface AgentEvidenceSummary {
   source: "tool" | "retrieval" | "observation";

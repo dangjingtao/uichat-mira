@@ -59,10 +59,6 @@ const settingsPending = {
         refresh: "Refresh",
         save: "Save",
       },
-      banner: {
-        title: "Only real capabilities are shown here",
-        description: 'The current micro app page only exposes capabilities that already exist. Right now, "Knowledge Query" is live and can be bound to a WeCom smart robot as an external Q&A entry.',
-      },
       labels: {
         knowledgeQuery: "Knowledge Query",
         enabled: "Enabled",
@@ -79,15 +75,11 @@ const settingsPending = {
         platformWecom: "WeCom",
         smartRobotEntry: "Smart robot entry",
       },
-      footer: {
-        title: "This page no longer acts as a template marketplace",
-        description: "{{count}} WeCom smart robot entries are currently available. Future micro apps will also be connected here only after they become real capabilities.",
-      },
       studioEntries: {
         newsHub: {
           title: "News Hub",
-          description: "Pull no-key tech news sources into one local table and expose a simple aggregation workspace for local consumption.",
-          hint: "The first pass keeps only Hacker News Front Page. Trigger a manual refresh to ingest items.",
+          description: "Bring no-key tech news sources into one local news table and expose a direct entry for browsing, searching, and further use.",
+          hint: "The first pass starts with Hacker News Front Page, and more sources will continue to expand through the same entry.",
           badges: {
             debug: "Local news base",
             focus: "Tech aggregation",
@@ -99,8 +91,8 @@ const settingsPending = {
         },
         mailCenter: {
           title: "Mail Center",
-          description: "The mail center connects to real SMTP and IMAP for account config, test send, inbox sync, and real message list display.",
-          hint: "Set up a mailbox account first, then run test send and inbox sync. Templates, rules, and collaboration stay out of scope for now.",
+          description: "The mail center connects directly to real SMTP and IMAP so account setup, send capability, and inbox sync stay in one place.",
+          hint: "Connect the mailbox first, then continue with send tests and inbox sync, with future mail assets staying in the same entry.",
           badges: {
             debug: "Live mailbox",
             focus: "Multi-account mail center",
@@ -112,10 +104,10 @@ const settingsPending = {
         },
         computerUse: {
           title: "Computer Use Studio",
-          description: "A browser-task debugging entry for reviewing plans, approvals, execution state, and evidence playback inside the existing workspace.",
-          hint: "Use this entry when you need the browser workspace itself. It is not an enterprise integration binding page.",
+          description: "A browser task workspace for reviewing plans, approvals, execution progress, and evidence playback in one place.",
+          hint: "Use this entry to manage browser tasks continuously instead of switching into enterprise integration setup flows.",
           badges: {
-            debug: "UI debug entry",
+            debug: "Browser workspace",
             focus: "Browser task workspace",
             runtime: "Plan + Approval + Evidence",
           },
@@ -125,10 +117,10 @@ const settingsPending = {
         },
         imageGeneration: {
           title: "Image Generation Studio",
-          description: "A dedicated micro app UI debugging entry for prompt generation, workflow submission, and ComfyUI Local validation.",
-          hint: "Use this entry when you need to verify the image generation workspace itself rather than an enterprise integration binding.",
+          description: "An image generation workspace for prompt creation, workflow submission, and ComfyUI Local outputs in one place.",
+          hint: "Future parameters, results, and generated assets for image creation will continue to live in this same entry.",
           badges: {
-            debug: "UI debug entry",
+            debug: "Image workspace",
             focus: "Prompt + Workflow",
             runtime: "Includes ComfyUI Local",
           },
@@ -150,6 +142,9 @@ const settingsPending = {
         actions: {
           refresh: "Refresh news",
           applyFilters: "Apply filters",
+          configureSources: "Configure sources",
+          saveConfig: "Save config",
+          savingConfig: "Saving...",
           openSource: "Open source",
           openArticle: "Open article",
         },
@@ -183,6 +178,25 @@ const settingsPending = {
           publishedAt: "Published",
           lastPublished: "Last published",
         },
+        config: {
+          title: "News source config",
+          description: "The provider entry now sits next to the source filter and opens in a modal. After saving, this page only requests upstream again when the previous fetch is older than 60 minutes.",
+          guideLabel: "Official links",
+          requestAccess: "Request access",
+          createApp: "Create app",
+          docs: "Docs",
+          newsDataHint: "Enable after entering your own NewsData.io key.",
+          newsDataApiKey: "NewsData.io API Key",
+          currentsHint: "Enable after entering your own Currents API key.",
+          currentsApiKey: "Currents API Key",
+          redditHint: "Enable after entering the Reddit app client id, client secret, and user agent.",
+          redditClientId: "Reddit Client ID",
+          redditClientSecret: "Reddit Client Secret",
+          redditUserAgent: "Reddit User Agent",
+          redditSubreddits: "Reddit Subreddits",
+          refreshTtlMinutes: "Refresh interval",
+          refreshTtlHelp: "Currently fixed at 60 minutes. Refresh requests inside that window return cached data instead of hitting upstream again.",
+        },
         cards: {
           runtime: {
             title: "The local news foundation is now separated cleanly",
@@ -197,7 +211,9 @@ const settingsPending = {
         messages: {
           loadFailed: "Failed to load the news hub view",
           refreshFailed: "Failed to refresh the news hub",
-          refreshed: "Refresh finished: fetched {{fetchedCount}}, inserted {{insertedCount}}, updated {{updatedCount}}.",
+          configSaved: "News source config saved",
+          configSaveFailed: "Failed to save the news source config",
+          refreshed: "Refresh finished: fetched {{fetchedCount}}, inserted {{insertedCount}}, updated {{updatedCount}}, cached {{skippedCount}} sources. The minimum refresh interval is {{ttlMinutes}} minutes.",
         },
       },
       mailCenter: {

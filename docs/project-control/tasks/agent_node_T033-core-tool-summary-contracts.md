@@ -13,7 +13,7 @@ related:
   - docs/tooling-runtime/agent-runtime-t29-t33-ledger.md
   - docs/tooling-runtime/core-tool-rectification-ledger.md
   - server/src/agent/evidence.ts
-task_state: TODO
+task_state: DONE
 ---
 
 # agent_node_T033 Core Tool Summary Contracts
@@ -76,3 +76,12 @@ task_state: TODO
 
 - 运行 `edit_file` summary、workspace mutation summary、action profile summary 相关的最小测试集。
 - 核对 dry-run 和真实写入在 generate 层的表达差异。
+
+## Review Evidence
+
+- `server/src/agent/evidence.ts` 已为 `edit_file` 与 `workspace_mutation` 增加稳定 summary builder，区分 `operation / dryRun / changed / created / replaced / deleted / runtimeToolId / actionProfileId`。
+- `dryRun=true` 时，summary 与 generate fallback 都保持预览语义，不会说成已实际写入或已实际执行。
+- `edit_file` / `workspace_mutation` 的失败不会进入 completed mutation summary；unknown completed tool fallback 仍保持 `canAnswer=false` 和 “summary contract 尚不稳定”的安全口径。
+- action profile 映射后的结果会保留 `actionProfileId` 与 `runtimeToolId`，generate 可按真实 runtime tool 结果给出可读摘要。
+- `2026-07-08` 复核通过的定向验证：
+  - `pnpm --filter @ui-chat-mira/server exec vitest run src/agent/__tests__/nodes.test.ts src/harness/action-profiles.test.ts src/mcp/tools/edit-file.tool.test.ts`

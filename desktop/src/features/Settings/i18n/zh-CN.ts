@@ -59,10 +59,6 @@ const settingsPending = {
         refresh: "刷新",
         save: "保存",
       },
-      banner: {
-        title: "只展示当前真实能力",
-        description: "当前微应用页只接入已经落地的能力。现在已上线的是“知识库调用”，它可以被企业微信智能机器人绑定，用来承接外部问答入口。",
-      },
       labels: {
         knowledgeQuery: "知识库调用",
         enabled: "已启用",
@@ -79,15 +75,11 @@ const settingsPending = {
         platformWecom: "企业微信",
         smartRobotEntry: "智能机器人入口",
       },
-      footer: {
-        title: "当前页面不再承担模板市场职责",
-        description: "已发现 {{count}} 个企业微信智能机器人入口。后续新增微应用时，也会继续在这里按真实能力接入。",
-      },
       studioEntries: {
         newsHub: {
           title: "资讯聚合台",
-          description: "把免 Key 的科技资讯源拉进本地一张表，先给你一个能直接消费的聚合入口。",
-          hint: "当前只保留 Hacker News Front Page，手动刷新即可入库。",
+          description: "把免 Key 的科技资讯源汇成一张本地资讯表，给你一个可以直接浏览、检索和继续消费的科技资讯入口。",
+          hint: "当前先聚合 Hacker News Front Page，后续会在同一入口继续扩充来源。",
           badges: {
             debug: "本地资讯底座",
             focus: "科技资讯聚合",
@@ -99,8 +91,8 @@ const settingsPending = {
         },
         mailCenter: {
           title: "邮件中心",
-          description: "邮件中心当前直接接真实 SMTP / IMAP，用来配置账号、测试发信、同步收件箱和查看真实列表。",
-          hint: "先完成邮箱账号配置，再执行测试发信和收件箱同步。当前不扩模板、规则和协作中心。",
+          description: "邮件中心直接连接真实 SMTP / IMAP，统一管理账号配置、发信能力和收件箱同步。",
+          hint: "先完成邮箱账号接入，再继续发信测试和收件箱同步，后续邮件资产都会留在同一入口里。",
           badges: {
             debug: "真实邮箱接入",
             focus: "多账号邮件中心",
@@ -112,10 +104,10 @@ const settingsPending = {
         },
         computerUse: {
           title: "Computer Use Studio",
-          description: "这是浏览器任务工作台调试入口，用来进入现有工作区，查看计划、审批、执行状态和证据回放。",
-          hint: "这里进入的是浏览器工作台本身，不是企业集成绑定配置入口。",
+          description: "这是浏览器任务工作台，用来统一查看计划、审批、执行进度和证据回放。",
+          hint: "你可以在这里持续管理浏览器任务，而不必切换到企业集成配置流程里。",
           badges: {
-            debug: "界面调试入口",
+            debug: "浏览器工作台",
             focus: "浏览器任务工作台",
             runtime: "计划 + 审批 + 证据",
           },
@@ -125,10 +117,10 @@ const settingsPending = {
         },
         imageGeneration: {
           title: "Image Generation Studio",
-          description: "这是一个明确的微应用界面调试入口，用来验证 prompt 生图、workflow 提交和 ComfyUI Local 链路。",
-          hint: "这里进入的是调试工作区本身，不是企业集成绑定配置入口。",
+          description: "这是图像生成工作台，用来统一承接 Prompt 生图、Workflow 提交和 ComfyUI Local 产出。",
+          hint: "后续与图像生成相关的参数、结果和产物流转都会继续沉淀在这个入口里。",
           badges: {
-            debug: "界面调试入口",
+            debug: "图像生成工作台",
             focus: "Prompt + Workflow",
             runtime: "包含 ComfyUI Local",
           },
@@ -150,6 +142,9 @@ const settingsPending = {
         actions: {
           refresh: "刷新资讯",
           applyFilters: "应用筛选",
+          configureSources: "配置源",
+          saveConfig: "保存配置",
+          savingConfig: "保存中...",
           openSource: "打开源站",
           openArticle: "打开原文",
         },
@@ -183,6 +178,25 @@ const settingsPending = {
           publishedAt: "发布时间",
           lastPublished: "最近发布",
         },
+        config: {
+          title: "资讯源配置",
+          description: "新增服务商入口放在“来源”旁边，通过弹窗配置。这里保存后，页面只会在距离上次抓取超过 60 分钟时才真正请求上游。",
+          guideLabel: "官方入口",
+          requestAccess: "申请访问",
+          createApp: "创建应用",
+          docs: "文档",
+          newsDataHint: "填写你自己的 NewsData.io Key 后启用。",
+          newsDataApiKey: "NewsData.io API Key",
+          currentsHint: "填写你自己的 Currents API Key 后启用。",
+          currentsApiKey: "Currents API Key",
+          redditHint: "填写 Reddit 应用的 client id / client secret / user agent 后启用。",
+          redditClientId: "Reddit Client ID",
+          redditClientSecret: "Reddit Client Secret",
+          redditUserAgent: "Reddit User Agent",
+          redditSubreddits: "Reddit Subreddits",
+          refreshTtlMinutes: "刷新间隔",
+          refreshTtlHelp: "当前固定为 60 分钟。60 分钟内点击刷新也只返回缓存，不会重新请求上游。",
+        },
         cards: {
           runtime: {
             title: "本地资讯底座已经独立出来",
@@ -197,7 +211,9 @@ const settingsPending = {
         messages: {
           loadFailed: "加载资讯聚合视图失败",
           refreshFailed: "刷新资讯失败",
-          refreshed: "刷新完成：抓取 {{fetchedCount}} 条，新增 {{insertedCount}} 条，更新 {{updatedCount}} 条。",
+          configSaved: "资讯源配置已保存",
+          configSaveFailed: "保存资讯源配置失败",
+          refreshed: "刷新完成：抓取 {{fetchedCount}} 条，新增 {{insertedCount}} 条，更新 {{updatedCount}} 条，命中缓存 {{skippedCount}} 条源。当前最短刷新间隔 {{ttlMinutes}} 分钟。",
         },
       },
       mailCenter: {

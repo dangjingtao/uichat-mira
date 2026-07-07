@@ -24,6 +24,17 @@ export type McpInvocationStatus =
   | "failed"
   | "cancelled";
 
+export type McpInvocationFailureCode =
+  | "approval_mismatch"
+  | "policy_denied"
+  | "schema_invalid"
+  | "workspace_escape"
+  | "tool_runtime_failed"
+  | "command_exit_nonzero"
+  | "timeout"
+  | "cancelled"
+  | "unknown";
+
 export type McpTraceSpanKind =
   | "invocation"
   | "permission_check"
@@ -190,6 +201,7 @@ export interface McpInvocationRecord {
   result?: unknown;
   error?: {
     message: string;
+    failureCode?: McpInvocationFailureCode;
   };
   approval?: {
     required: true;

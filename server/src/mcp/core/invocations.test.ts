@@ -149,6 +149,39 @@ describe("mcp invocations", () => {
     });
   });
 
+  it("records structured failureCode for schema validation failures thrown by tools", async () => {
+    registerCapability({
+      definition: {
+        id: "tool_schema_failure",
+        title: "Tool Schema Failure",
+        description: "schema failure",
+        domain: "read",
+        source: "internal",
+        mode: "sync",
+        inputSchema: { type: "object" },
+        tags: ["test"],
+        capabilities: {
+          sideEffect: "none",
+          requiresApproval: false,
+        },
+      },
+      execute() {
+        throw new Error("schema mismatch: invalid result payload");
+      },
+    });
+
+    const record = await executeHarnessInvocation({
+      toolId: "tool_schema_failure",
+      args: {},
+    });
+
+    expect(record.status).toBe("failed");
+    expect(record.error).toEqual({
+      message: "schema mismatch: invalid result payload",
+      failureCode: "schema_invalid",
+    });
+  });
+
   it("requires approval at preflight when capability metadata marks the tool as approval-gated", async () => {
     let executed = false;
 

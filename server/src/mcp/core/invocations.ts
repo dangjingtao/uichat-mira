@@ -2,6 +2,7 @@ import { createArtifact } from "./artifacts.js";
 import type {
   McpArtifact,
   McpExecutionEnvironment,
+  McpInvocationFailureCode,
   McpInvocationRecord,
   McpStreamEvent,
   McpStreamEventInput,
@@ -24,6 +25,8 @@ import {
   sweepRetentionMap,
   type RetentionConfig,
 } from "@/utils/retention.js";
+import { isAppError } from "@/utils/errors.js";
+import { ErrorCodes } from "@/utils/response.js";
 import { evaluateInvocationApproval } from "./permissions.js";
 import { createInvocationInputHash } from "@/agent/approval-fingerprint.js";
 import { validateInvocationArgs } from "./schema.js";
@@ -281,14 +284,23 @@ export const executeInvocation = async (
       return record;
     }
 
+    const failureCode = inferInvocationFailureCode({
+      error,
+      message,
+      signal,
+    });
     record.status = signal.aborted ? "cancelled" : "failed";
-    record.error = { message };
+    record.error = {
+      message,
+      failureCode,
+    };
     record.finishedAt = new Date().toISOString();
     invocationSpan.end({
       status: signal.aborted ? "cancelled" : "failed",
       metadata: {
         status: record.status,
         message,
+        failureCode,
       },
     });
     finishInvocationTrace(invocationId);
@@ -305,4 +317,55 @@ export const executeInvocation = async (
 
     return record;
   }
+};
+
+const inferInvocationFailureCode = (input: {
+  error: unknown;
+  message: string;
+  signal: AbortSignal;
+}): McpInvocationFailureCode => {
+  if (input.signal.aborted) {
+    return "cancelled";
+  }
+
+  if (isAppError(input.error)) {
+    if (
+      input.error.statusCode === 400 ||
+      input.error.code === ErrorCodes.VALIDATION_ERROR
+    ) {
+      return "schema_invalid";
+    }
+
+    if (
+      input.error.statusCode === 403 ||
+      input.error.code === ErrorCodes.FORBIDDEN
+    ) {
+      return "policy_denied";
+    }
+  }
+
+  if (/\bapproval mismatch\b/i.test(input.message)) {
+    return "approval_mismatch";
+  }
+
+  if (/\bpolicy denied\b/i.test(input.message)) {
+    return "policy_denied";
+  }
+
+  if (
+    /\boutside workspace\b/i.test(input.message) ||
+    /\boutside the current workspace root\b/i.test(input.message)
+  ) {
+    return "workspace_escape";
+  }
+
+  if (/\bschema\b/i.test(input.message)) {
+    return "schema_invalid";
+  }
+
+  if (/\btimeout\b|\btimed out\b/i.test(input.message)) {
+    return "timeout";
+  }
+
+  return "tool_runtime_failed";
 };

@@ -12,7 +12,7 @@ related:
   - docs/project-control/project-control-ledger.md
   - docs/tooling-runtime/agent-runtime-t29-t33-ledger.md
   - server/src/agent/nodes/tool-node.ts
-task_state: TODO
+task_state: DONE
 ---
 
 # agent_node_T032 Structured Failure Code
@@ -74,3 +74,66 @@ type HarnessFailureCode =
 
 - 运行与 `classifyHarnessFailure`、Harness failure summary、ToolNode failure 相关的最小测试集。
 - 明确记录 `failureCode` 命中和字符串 fallback 命中的验证结果。
+
+## Delivery Evidence
+
+### Changed Files
+
+- `server/src/mcp/core/definitions.ts`
+- `server/src/mcp/core/invocations.ts`
+- `server/src/mcp/core/invocations.test.ts`
+- `server/src/agent/types.ts`
+- `server/src/agent/nodes/tool-node.ts`
+- `server/src/agent/evidence.ts`
+- `server/src/agent/__tests__/tool-node.test.ts`
+
+### Diff Summary
+
+- 给 Harness invocation failure 的 `record.error` 增加最小结构化 `failureCode`。
+- 给 `AgentToolExecutionResult` 增加 `failureCode` 承载，并在 ToolNode failure record 中透传。
+- `classifyHarnessFailure` 先按 `failureCode` 判定，再回退到旧 message pattern。
+- failed tool evidence summary 追加 `failureCode=...`，让失败摘要可直接看见结构化分类结果。
+- 补了 Harness 与 ToolNode 的定向单测，覆盖结构化优先、旧字符串 fallback 和 evidence 可见性。
+
+### Acceptance Criteria Evidence
+
+- `AC1` 已满足：
+  - [tool-node.ts](D:/workspace/rag-demo/server/src/agent/nodes/tool-node.ts) 的 `classifyHarnessFailure` 现在先读取 `failureCode`。
+- `AC2` 已满足：
+  - 没有 `failureCode` 时，`TERMINAL_FAILURE_PATTERNS` 的旧字符串判定仍保留。
+- `AC3` 已满足：
+  - [evidence.ts](D:/workspace/rag-demo/server/src/agent/evidence.ts) failed summary 的 `keyFindings` 追加了 `failureCode=...`。
+- `AC4` 已满足：
+  - [tool-node.test.ts](D:/workspace/rag-demo/server/src/agent/__tests__/tool-node.test.ts) 覆盖了：
+    - `failureCode` 优先于 terminal-looking message pattern
+    - `workspace_escape` 的结构化 terminal 分类
+    - 无 `failureCode` 的旧 fallback
+  - [invocations.test.ts](D:/workspace/rag-demo/server/src/mcp/core/invocations.test.ts) 覆盖了 Harness 侧 `schema_invalid` 结构化记录。
+- `AC5` 已满足：
+  - 本轮只给 invocation error 增加最小字段，没有重写 Harness 或 MCP invocation 主流程。
+
+### Verification Results
+
+- `pnpm --filter @ui-chat-mira/server exec vitest run src/agent/__tests__/tool-node.test.ts src/mcp/core/invocations.test.ts`
+  - 结果：`2` 个测试文件通过，`25` 个测试通过，`0` 失败
+- `pnpm --filter @ui-chat-mira/server exec tsc --noEmit`
+  - 结果：通过
+- `pnpm check`
+  - 结果：通过
+
+### Review Evidence
+
+- `server/src/mcp/core/definitions.ts` 只给 invocation error 增加了最小 `failureCode` 字段，没有扩成复杂异常体系。
+- `server/src/mcp/core/invocations.ts` 会在 invocation failure 时写入结构化 `failureCode`，没有重写 Harness/MCP invocation 主流程。
+- `server/src/agent/nodes/tool-node.ts` 的 `classifyHarnessFailure` 先按 `failureCode` 判定，再回退到旧 message pattern。
+- `server/src/agent/evidence.ts` failed tool summary 会带出 `failureCode=...`。
+- `server/src/agent/__tests__/tool-node.test.ts` 覆盖了：
+  - `failureCode` 优先于 terminal-looking message pattern
+  - `workspace_escape` 结构化 terminal 分类
+  - 无 `failureCode` 的旧 fallback
+- `server/src/mcp/core/invocations.test.ts` 覆盖了 Harness 侧 `schema_invalid` 结构化记录。
+
+### Remaining Notes
+
+- 本轮没有把所有历史错误都改成结构化 `failureCode`，旧 message pattern fallback 仍然保留，符合本卡“小补”边界。
+- `policy_denied`、`command_exit_nonzero`、`timeout`、`unknown` 这几个 code 只完成了类型与分类入口，没有在本轮把所有调用源逐一补齐。

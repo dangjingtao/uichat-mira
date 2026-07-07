@@ -74,6 +74,7 @@ import { integrationInstancesRepository } from "@/db/repositories/integration-in
 import { mailAccountsRepository } from "@/db/repositories/mail-accounts.repository.js";
 import { mailFoldersRepository } from "@/db/repositories/mail-folders.repository.js";
 import { mailMessagesRepository } from "@/db/repositories/mail-messages.repository.js";
+import { newsHubSettingsRepository } from "@/db/repositories/news-hub-settings.repository.js";
 import { microAppsRepository } from "@/db/repositories/micro-apps.repository.js";
 import { newsItemsRepository } from "@/db/repositories/news-items.repository.js";
 import { generalSettingsRepository } from "@/db/repositories/general-settings.repository.js";
@@ -739,6 +740,7 @@ const setupDatabase = async () => {
   mailAccountsRepository.initialize();
   mailFoldersRepository.initialize();
   mailMessagesRepository.initialize();
+  newsHubSettingsRepository.initialize();
   newsItemsRepository.initialize();
   migrateLegacyMicroAppBindings();
   initializeExternalMcpDatabase();

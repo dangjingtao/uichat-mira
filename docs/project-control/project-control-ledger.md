@@ -124,10 +124,10 @@ related:
 | [agent_node_T016](tasks/agent_node_T016-local-tool-routing-and-schema-guard.md) | `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | local routing / schema guard |
 | [agent_node_T017](tasks/agent_node_T017-toolcall-loop-regression-matrix.md) | `DONE` | `DONE` | Review 02 已通过；toolCall loop 黑盒回归矩阵 |
 | [agent_node_T029](tasks/agent_node_T029-server-test-report-green.md) | `TODO` | `TODO` | 外部 `T29` 正式登记；必须先于 `T30-T33` |
-| [agent_node_T030](tasks/agent_node_T030-failed-tool-path-contract.md) | `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | failed tool 路径合同断言已与 C 合同对齐；定向 vitest 26/26 通过；未回填 `T29` |
-| [agent_node_T031](tasks/agent_node_T031-terminal-result-semantics.md) | `TODO` | `TODO` | 外部 `T31` 正式登记；聚焦 terminal 结果语义拆分 |
-| [agent_node_T032](tasks/agent_node_T032-structured-failure-code.md) | `TODO` | `TODO` | 外部 `T32` 正式登记；聚焦结构化 `failureCode` |
-| [agent_node_T033](tasks/agent_node_T033-core-tool-summary-contracts.md) | `TODO` | `TODO` | 外部 `T33` 正式登记；聚焦核心工具 summary contract |
+| [agent_node_T030](tasks/agent_node_T030-failed-tool-path-contract.md) | `DONE` | `DONE` | failed tool 路径合同断言已与 C 合同对齐；定向 vitest 26/26 通过；未回填 `T29` |
+| [agent_node_T031](tasks/agent_node_T031-terminal-result-semantics.md) | `DONE` | `DONE` | terminal result 三层语义已拆开；受限回答与 `T30` 失败路径合同复核通过 |
+| [agent_node_T032](tasks/agent_node_T032-structured-failure-code.md) | `DONE` | `DONE` | ToolNode 与 Harness failure 已接入最小结构化 `failureCode`；结构化优先、fallback 与 evidence 可见性复核通过 |
+| [agent_node_T033](tasks/agent_node_T033-core-tool-summary-contracts.md) | `DONE` | `DONE` | edit/workspace mutation/action profile summary contract 已补齐；dry-run、真实写入与 unknown fallback 复核通过 |
 
 ## Core Tools Index
 

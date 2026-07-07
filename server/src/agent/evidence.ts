@@ -1,5 +1,6 @@
 import type {
   AgentEvidencePayload,
+  AgentEvidenceResolution,
   AgentEvidenceSummary,
   AgentObservation,
   AgentRepeatedActionGuardResult,
@@ -117,9 +118,14 @@ const trimTextPreview = (value: string, limit = TEXT_PREVIEW_LIMIT) => {
   }
 
   return normalized.length > limit
-    ? `${normalized.slice(0, limit).trimEnd()}...`
+      ? `${normalized.slice(0, limit).trimEnd()}...`
     : normalized;
 };
+
+const toEvidenceResolutionFinding = (
+  label: string,
+  value: AgentEvidenceResolution,
+) => `${label}=${value}`;
 
 const containsVisibleText = (value: string) => value.trim().length > 0;
 const containsNonAsciiText = (value: string) => /[^\x00-\x7F]/.test(value);
@@ -236,6 +242,34 @@ const queryRequestsWebSearch = (query: string) =>
 
 const queryRequestsCommandResult = (query: string) =>
   includesAnyToken(normalizeIntentText(query), COMMAND_TOKENS);
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const unwrapResultRecord = (result: unknown) => {
+  if (!isRecord(result)) {
+    return null;
+  }
+
+  if (isRecord(result.result)) {
+    return {
+      value: result.result,
+      meta: result,
+    };
+  }
+
+  if (isRecord(result.payload)) {
+    return {
+      value: result.payload,
+      meta: result,
+    };
+  }
+
+  return {
+    value: result,
+    meta: result,
+  };
+};
 
 const toObservationSummaryStatus = (
   status: AgentObservation["status"],
@@ -619,6 +653,216 @@ const createWebSearchSummary = (input: {
   };
 };
 
+const createEditFileSummary = (input: {
+  execution: AgentToolExecutionResult;
+  evidenceIndex: number;
+}): AgentEvidenceSummary | null => {
+  const unwrapped = unwrapResultRecord(input.execution.result);
+  if (!unwrapped) {
+    return null;
+  }
+
+  const { value, meta } = unwrapped;
+  if (
+    typeof value.path !== "string" ||
+    (value.operation !== "write_file" && value.operation !== "replace_block")
+  ) {
+    return null;
+  }
+
+  const dryRun = value.dryRun === true;
+  const actionProfileId =
+    typeof meta.actionProfileId === "string" ? meta.actionProfileId : undefined;
+  const runtimeToolId =
+    typeof meta.runtimeToolId === "string"
+      ? meta.runtimeToolId
+      : input.execution.toolId;
+  const operation =
+    value.operation === "replace_block"
+      ? "replace"
+      : actionProfileId === "edit_overwrite_file"
+        ? "overwrite"
+        : actionProfileId === "edit_create_file"
+          ? "create"
+          : dryRun
+            ? "unknown"
+            : "create";
+  const changed = !dryRun;
+  const created = changed && operation === "create";
+  const replaced =
+    changed && (operation === "replace" || operation === "overwrite");
+  const canAnswerMutationQuestion = true;
+  const actionTaken = dryRun
+    ? operation === "overwrite"
+      ? `Prepared a dry-run preview to overwrite workspace file ${value.path}.`
+      : operation === "replace"
+        ? `Prepared a dry-run preview to replace content in workspace file ${value.path}.`
+        : operation === "create"
+          ? `Prepared a dry-run preview to create workspace file ${value.path}.`
+          : `Prepared a dry-run preview edit for workspace file ${value.path}.`
+    : operation === "replace"
+      ? `Replaced content in workspace file ${value.path}.`
+      : operation === "overwrite"
+        ? `Overwrote workspace file ${value.path}.`
+        : `Created workspace file ${value.path}.`;
+
+  return {
+    source: "tool",
+    status: "completed",
+    toolId: input.execution.toolId,
+    inputHash: input.execution.inputHash,
+    actionTaken,
+    keyFindings: [
+      `operation=${operation}`,
+      `targetPath=${value.path}`,
+      `dryRun=${dryRun}`,
+      `changed=${changed}`,
+      ...(created ? ["created=true"] : []),
+      ...(replaced ? ["replaced=true"] : []),
+      ...(typeof value.bytes === "number" ? [`bytes=${value.bytes}`] : []),
+      ...(actionProfileId ? [`actionProfileId=${actionProfileId}`] : []),
+      ...(runtimeToolId ? [`runtimeToolId=${runtimeToolId}`] : []),
+    ],
+    answerReadiness: {
+      canAnswer: canAnswerMutationQuestion,
+      reason: dryRun
+        ? "This edit result is only a preview, so the answer must describe the proposed change without claiming the file was modified."
+        : "This edit result completed and can ground a file-mutation answer.",
+    },
+    data: {
+      kind: "edit_file",
+      operation,
+      targetPath: value.path,
+      dryRun,
+      changed,
+      created,
+      replaced,
+      deleted: false,
+      runtimeToolId,
+      actionProfileId,
+      canAnswerMutationQuestion,
+    },
+    rawRef: {
+      evidenceIndex: input.evidenceIndex,
+      toolCallId: input.execution.toolCallId,
+      invocationId: input.execution.invocationId,
+    },
+  };
+};
+
+const createWorkspaceMutationSummary = (input: {
+  execution: AgentToolExecutionResult;
+  evidenceIndex: number;
+}): AgentEvidenceSummary | null => {
+  const unwrapped = unwrapResultRecord(input.execution.result);
+  if (!unwrapped) {
+    return null;
+  }
+
+  const { value, meta } = unwrapped;
+  if (
+    typeof value.targetPath !== "string" ||
+    (value.operation !== "write" &&
+      value.operation !== "delete" &&
+      value.operation !== "move")
+  ) {
+    return null;
+  }
+
+  const dryRun = value.dryRun === true;
+  const actionProfileId =
+    typeof meta.actionProfileId === "string" ? meta.actionProfileId : undefined;
+  const runtimeToolId =
+    typeof meta.runtimeToolId === "string"
+      ? meta.runtimeToolId
+      : input.execution.toolId;
+  const operation =
+    value.operation === "delete"
+      ? "delete"
+      : value.operation === "move"
+        ? "move"
+        : value.overwrite === true
+          ? "overwrite"
+          : "create";
+  const changed = !dryRun;
+  const created = changed && operation === "create";
+  const replaced = changed && operation === "overwrite";
+  const deleted = changed && operation === "delete";
+  const moved = changed && operation === "move";
+  const canAnswerMutationQuestion = true;
+  const destinationPath =
+    typeof value.destinationPath === "string" ? value.destinationPath : undefined;
+
+  let actionTaken: string;
+  if (dryRun) {
+    if (operation === "delete") {
+      actionTaken = `Prepared a dry-run preview to delete workspace target ${value.targetPath}.`;
+    } else if (operation === "move" && destinationPath) {
+      actionTaken = `Prepared a dry-run preview to move workspace target ${value.targetPath} to ${destinationPath}.`;
+    } else if (operation === "overwrite") {
+      actionTaken = `Prepared a dry-run preview to overwrite workspace target ${value.targetPath}.`;
+    } else {
+      actionTaken = `Prepared a dry-run preview to create workspace target ${value.targetPath}.`;
+    }
+  } else if (operation === "delete") {
+    actionTaken = `Deleted workspace target ${value.targetPath}.`;
+  } else if (operation === "move" && destinationPath) {
+    actionTaken = `Moved workspace target ${value.targetPath} to ${destinationPath}.`;
+  } else if (operation === "overwrite") {
+    actionTaken = `Overwrote workspace target ${value.targetPath}.`;
+  } else {
+    actionTaken = `Created workspace target ${value.targetPath}.`;
+  }
+
+  return {
+    source: "tool",
+    status: "completed",
+    toolId: input.execution.toolId,
+    inputHash: input.execution.inputHash,
+    actionTaken,
+    keyFindings: [
+      `operation=${operation}`,
+      `targetPath=${value.targetPath}`,
+      `dryRun=${dryRun}`,
+      `changed=${changed}`,
+      ...(created ? ["created=true"] : []),
+      ...(replaced ? ["replaced=true"] : []),
+      ...(deleted ? ["deleted=true"] : []),
+      ...(moved ? ["moved=true"] : []),
+      ...(destinationPath ? [`destinationPath=${destinationPath}`] : []),
+      ...(typeof value.bytes === "number" ? [`bytes=${value.bytes}`] : []),
+      ...(actionProfileId ? [`actionProfileId=${actionProfileId}`] : []),
+      ...(runtimeToolId ? [`runtimeToolId=${runtimeToolId}`] : []),
+    ],
+    answerReadiness: {
+      canAnswer: canAnswerMutationQuestion,
+      reason: dryRun
+        ? "This workspace mutation result is only a preview, so the answer must not claim the target was already changed."
+        : "This workspace mutation completed and can ground a mutation answer.",
+    },
+    data: {
+      kind: "workspace_mutation",
+      operation,
+      targetPath: value.targetPath,
+      ...(destinationPath ? { destinationPath } : {}),
+      dryRun,
+      changed,
+      created,
+      replaced,
+      deleted,
+      moved,
+      runtimeToolId,
+      actionProfileId,
+      canAnswerMutationQuestion,
+    },
+    rawRef: {
+      evidenceIndex: input.evidenceIndex,
+      toolCallId: input.execution.toolCallId,
+      invocationId: input.execution.invocationId,
+    },
+  };
+};
+
 const createTerminalSessionSummary = (input: {
   question: string;
   execution: AgentToolExecutionResult;
@@ -668,6 +912,15 @@ const createTerminalSessionSummary = (input: {
     binaryDetected,
   });
   const outputInterpretable = !unreadableReason;
+  const processCompleted = !timedOut;
+  const commandSucceeded: AgentEvidenceResolution = processCompleted
+    ? exitCode === 0
+      ? "true"
+      : typeof exitCode === "number"
+        ? "false"
+        : "unknown"
+    : "unknown";
+  const taskSatisfied: AgentEvidenceResolution = "unknown";
   const terminalStatus = binaryDetected
     ? "binaryDetected"
     : timedOut
@@ -678,7 +931,11 @@ const createTerminalSessionSummary = (input: {
           ? "blocked"
           : "completed";
   const canAnswerCommandQuestion =
-    terminalStatus === "completed" && queryRequestsCommandResult(input.question);
+    processCompleted &&
+    !truncated &&
+    !binaryDetected &&
+    outputInterpretable &&
+    queryRequestsCommandResult(input.question);
 
   return {
     source: "tool",
@@ -688,6 +945,9 @@ const createTerminalSessionSummary = (input: {
     actionTaken: `Executed terminal command "${value.command}".`,
     keyFindings: [
       `exitCode=${exitCode === null ? "null" : exitCode}`,
+      `processCompleted=${processCompleted}`,
+      toEvidenceResolutionFinding("commandSucceeded", commandSucceeded),
+      toEvidenceResolutionFinding("taskSatisfied", taskSatisfied),
       ...(stdoutPreview ? [`stdout=${stdoutPreview}`] : []),
       ...(stderrPreview ? [`stderr=${stderrPreview}`] : []),
       `stdoutEncoding=${stdoutEncoding}`,
@@ -700,7 +960,10 @@ const createTerminalSessionSummary = (input: {
     answerReadiness: canAnswerCommandQuestion
       ? {
           canAnswer: true,
-          reason: "Terminal command output is available for answer generation.",
+          reason:
+            commandSucceeded === "true"
+              ? "Terminal command completed successfully, but task satisfaction still requires answer-time interpretation."
+              : "Terminal command completed with a non-zero exit code, so the answer must describe command failure without claiming the task succeeded.",
         }
       : {
           canAnswer: false,
@@ -723,6 +986,9 @@ const createTerminalSessionSummary = (input: {
       kind: "terminal_session",
       command: value.command,
       exitCode,
+      processCompleted,
+      commandSucceeded,
+      taskSatisfied,
       stdoutPreview,
       stderrPreview,
       stdoutEncoding,
@@ -810,6 +1076,9 @@ export const createToolExecutionEvidenceSummary = (input: {
       keyFindings: [
         `toolId=${input.execution.toolId}`,
         `failureKind=${failureKind}`,
+        ...(input.execution.failureCode
+          ? [`failureCode=${input.execution.failureCode}`]
+          : []),
         ...(typeof input.execution.recoveryAttemptCount === "number"
           ? [`recoveryAttemptCount=${input.execution.recoveryAttemptCount}`]
           : []),
@@ -836,6 +1105,8 @@ export const createToolExecutionEvidenceSummary = (input: {
     createReadOpenSummary(input) ??
     createReadLocateSummary(input) ??
     createWebSearchSummary(input) ??
+    createEditFileSummary(input) ??
+    createWorkspaceMutationSummary(input) ??
     createTerminalSessionSummary(input) ?? {
       source: "tool",
       status: "completed",

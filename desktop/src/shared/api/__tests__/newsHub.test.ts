@@ -3,10 +3,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/shared/lib/request", () => ({
   get: vi.fn(),
   post: vi.fn(),
+  put: vi.fn(),
 }));
 
 import { get, post } from "@/shared/lib/request";
-import { getNewsHubOverview, refreshNewsHub } from "../newsHub";
+import { put } from "@/shared/lib/request";
+import {
+  getNewsHubConfig,
+  getNewsHubOverview,
+  refreshNewsHub,
+  saveNewsHubConfig,
+} from "../newsHub";
 
 describe("news hub api", () => {
   beforeEach(() => {
@@ -45,5 +52,44 @@ describe("news hub api", () => {
     await refreshNewsHub();
 
     expect(post).toHaveBeenCalledWith("/microapps/news-hub/refresh");
+  });
+
+  it("loads the news hub config", async () => {
+    vi.mocked(get).mockResolvedValueOnce({
+      newsDataEnabled: false,
+      newsDataApiKey: "",
+      currentsEnabled: true,
+      currentsApiKey: "currents-key",
+      redditEnabled: false,
+      redditClientId: "",
+      redditClientSecret: "",
+      redditUserAgent: "UIChat-Mira-NewsHub/0.1",
+      redditSubreddits: "technology",
+      refreshTtlMinutes: 60,
+    });
+
+    await getNewsHubConfig();
+
+    expect(get).toHaveBeenCalledWith("/microapps/news-hub/config");
+  });
+
+  it("saves the news hub config", async () => {
+    const payload = {
+      newsDataEnabled: true,
+      newsDataApiKey: "newsdata-key",
+      currentsEnabled: true,
+      currentsApiKey: "currents-key",
+      redditEnabled: true,
+      redditClientId: "reddit-client-id",
+      redditClientSecret: "reddit-client-secret",
+      redditUserAgent: "UIChat-Mira-NewsHub/0.2",
+      redditSubreddits: "technology+artificial",
+      refreshTtlMinutes: 60,
+    };
+    vi.mocked(put).mockResolvedValueOnce(payload);
+
+    await saveNewsHubConfig(payload);
+
+    expect(put).toHaveBeenCalledWith("/microapps/news-hub/config", payload);
   });
 });

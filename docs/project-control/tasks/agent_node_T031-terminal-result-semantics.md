@@ -13,7 +13,7 @@ related:
   - docs/tooling-runtime/agent-runtime-t29-t33-ledger.md
   - docs/tooling-runtime/tools-protocol.md
   - server/src/agent/evidence.ts
-task_state: TODO
+task_state: DONE
 ---
 
 # agent_node_T031 Terminal Result Semantics
@@ -76,3 +76,12 @@ unreadableReason?: string
 - 运行与 `terminal_session` summary 相关的最小测试集。
 - 确认 `completed` 不再被误读为“任务成功”。
 - 确认失败命令仍可被解释为“命令已执行但失败”，而不是“无法回答”。
+
+## Review Evidence
+
+- `server/src/agent/evidence.ts` 已把 `processCompleted` 收回到进程完成语义；`truncated`、`binaryDetected`、`unreadableReason` 不再把它降成 `false`。
+- `server/src/agent/nodes/generate.ts` 对 `truncated`、`binary`、`unreadable` 保持受限回答，不再把这类场景表述成“进程没完成”。
+- `exitCode !== 0` 现在明确落到“命令已执行完成但失败”；`taskSatisfied` 仍保持独立，默认 `unknown`，不会被 `exitCode===0` 自动抬成任务满足。
+- 2026-07-07 复核通过的定向验证：
+  - `pnpm test src/agent/__tests__/nodes.test.ts`
+  - `pnpm test src/agent/__tests__/toolcall-loop-regression.test.ts`

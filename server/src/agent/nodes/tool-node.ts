@@ -4,6 +4,7 @@
 import { executeHarnessInvocation } from "@/harness/invocations";
 import { createHarnessEnvironmentSnapshot } from "@/harness/environment";
 import { runWithWorkspaceRootOverride } from "@/mcp/workspace";
+import type { McpInvocationFailureCode } from "@/mcp/core/definitions";
 import { createInvocationInputHash } from "../approval-fingerprint";
 import {
   appendConfirmedObjectToTaskFrame,
@@ -97,6 +98,7 @@ const buildExecutionRecord = (input: {
   startedAt: string;
   finishedAt: string;
   failureKind?: AgentToolExecutionResult["failureKind"];
+  failureCode?: AgentToolExecutionResult["failureCode"];
   recoveryAttemptCount?: number;
   errorMessage?: string;
   result?: unknown;
@@ -109,6 +111,7 @@ const buildExecutionRecord = (input: {
   invocationId: input.invocationId,
   status: input.status,
   failureKind: input.failureKind,
+  failureCode: input.failureCode,
   recoveryAttemptCount: input.recoveryAttemptCount,
   errorMessage: input.errorMessage,
   result: input.result,
@@ -120,9 +123,26 @@ const buildExecutionRecord = (input: {
 const classifyHarnessFailure = (input: {
   invocationStatus: "failed" | "cancelled";
   errorMessage: string;
+  failureCode?: McpInvocationFailureCode;
 }): AgentToolExecutionResult["failureKind"] => {
   if (input.invocationStatus === "cancelled") {
     return "terminal";
+  }
+
+  if (input.failureCode) {
+    switch (input.failureCode) {
+      case "approval_mismatch":
+      case "policy_denied":
+      case "schema_invalid":
+      case "workspace_escape":
+      case "cancelled":
+        return "terminal";
+      case "tool_runtime_failed":
+      case "command_exit_nonzero":
+      case "timeout":
+      case "unknown":
+        return "recoverable";
+    }
   }
 
   return TERMINAL_FAILURE_PATTERNS.some((pattern) => pattern.test(input.errorMessage))
@@ -477,11 +497,13 @@ export const toolNode = async (
     const errorMessage =
       invocation.error?.message ??
       `${pendingToolCall.toolId} failed during Harness execution.`;
+    const failureCode = invocation.error?.failureCode;
     const invocationFailureStatus =
       invocation.status === "cancelled" ? "cancelled" : "failed";
     const failureKind = classifyHarnessFailure({
       invocationStatus: invocationFailureStatus,
       errorMessage,
+      failureCode,
     });
     const recoveryAttemptCount =
       failureKind === "recoverable"
@@ -505,6 +527,7 @@ export const toolNode = async (
       invocationId: invocation.id,
       status: "failed",
       failureKind,
+      failureCode,
       recoveryAttemptCount,
       errorMessage,
       startedAt,
@@ -535,6 +558,7 @@ export const toolNode = async (
         invocationId: invocation.id,
         status: "failed",
         failureKind,
+        failureCode: failureCode ?? null,
         recoveryAttemptCount: recoveryAttemptCount ?? null,
         durationMs: durationMs ?? null,
       },

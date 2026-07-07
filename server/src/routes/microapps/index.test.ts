@@ -99,12 +99,40 @@ const createMailCenterServiceStub = (): MailCenterRouteService => ({
 });
 
 const createNewsHubServiceStub = (): NewsHubRouteService => ({
-  getOverview() {
+  async getOverview() {
     return {
       sources: [],
       items: [],
       total: 0,
       generatedAt: "2026-07-06T12:00:00.000Z",
+    };
+  },
+  getConfig() {
+    return {
+      newsDataEnabled: false,
+      newsDataApiKey: "",
+      currentsEnabled: false,
+      currentsApiKey: "",
+      redditEnabled: false,
+      redditClientId: "",
+      redditClientSecret: "",
+      redditUserAgent: "UIChat-Mira-NewsHub/0.1",
+      redditSubreddits: "technology",
+      refreshTtlMinutes: 60,
+    };
+  },
+  updateConfig(input) {
+    return {
+      newsDataEnabled: input.newsDataEnabled ?? false,
+      newsDataApiKey: input.newsDataApiKey ?? "",
+      currentsEnabled: input.currentsEnabled ?? false,
+      currentsApiKey: input.currentsApiKey ?? "",
+      redditEnabled: input.redditEnabled ?? false,
+      redditClientId: input.redditClientId ?? "",
+      redditClientSecret: input.redditClientSecret ?? "",
+      redditUserAgent: input.redditUserAgent ?? "UIChat-Mira-NewsHub/0.1",
+      redditSubreddits: input.redditSubreddits ?? "technology",
+      refreshTtlMinutes: input.refreshTtlMinutes ?? 60,
     };
   },
   async refresh() {
@@ -114,6 +142,8 @@ const createNewsHubServiceStub = (): NewsHubRouteService => ({
       fetchedCount: 0,
       insertedCount: 0,
       updatedCount: 0,
+      skippedCount: 0,
+      ttlMinutes: 60,
       sources: [],
     };
   },
@@ -439,7 +469,7 @@ test("microapps news hub overview route returns aggregated items", async () => {
     },
     createMailCenterServiceStub(),
     {
-      getOverview() {
+      async getOverview() {
         return {
           sources: [
             {
@@ -454,6 +484,9 @@ test("microapps news hub overview route returns aggregated items", async () => {
               itemCount: 12,
               lastPublishedAt: "2026-07-06T11:00:00.000Z",
               lastIngestedAt: "2026-07-06T11:05:00.000Z",
+              lastFetchedAt: "2026-07-06T11:05:00.000Z",
+              lastFetchStatus: "succeeded",
+              lastFetchError: null,
             },
           ],
           items: [
@@ -482,6 +515,12 @@ test("microapps news hub overview route returns aggregated items", async () => {
           generatedAt: "2026-07-06T11:05:00.000Z",
         };
       },
+      getConfig() {
+        return createNewsHubServiceStub().getConfig();
+      },
+      updateConfig(input) {
+        return createNewsHubServiceStub().updateConfig(input);
+      },
       async refresh() {
         return {
           startedAt: "2026-07-06T11:00:00.000Z",
@@ -489,6 +528,8 @@ test("microapps news hub overview route returns aggregated items", async () => {
           fetchedCount: 1,
           insertedCount: 1,
           updatedCount: 0,
+          skippedCount: 0,
+          ttlMinutes: 60,
           sources: [],
         };
       },
@@ -508,6 +549,105 @@ test("microapps news hub overview route returns aggregated items", async () => {
   assert.equal(response.json().data.total, 1);
   assert.equal(response.json().data.items[0].title, "A good post");
   assert.equal(response.json().data.sources[0].key, "hn-frontpage");
+
+  await app.close();
+});
+
+test("microapps news hub config routes return and persist provider config", async () => {
+  const app = await createApp(
+    {
+      async createGeneration() {
+        return createTestJob();
+      },
+      async getGeneration() {
+        return createTestJob();
+      },
+    },
+    createMailCenterServiceStub(),
+    {
+      async getOverview() {
+        return {
+          sources: [],
+          items: [],
+          total: 0,
+          generatedAt: "2026-07-06T12:00:00.000Z",
+        };
+      },
+      getConfig() {
+        return {
+          newsDataEnabled: false,
+          newsDataApiKey: "",
+          currentsEnabled: true,
+          currentsApiKey: "currents-key",
+          redditEnabled: false,
+          redditClientId: "",
+          redditClientSecret: "",
+          redditUserAgent: "UIChat-Mira-NewsHub/0.1",
+          redditSubreddits: "technology",
+          refreshTtlMinutes: 60,
+        };
+      },
+      updateConfig(input) {
+        assert.equal(input.newsDataEnabled, true);
+        assert.equal(input.newsDataApiKey, "newsdata-key");
+        assert.equal(input.redditEnabled, true);
+        assert.equal(input.redditClientId, "reddit-client-id");
+        return input;
+      },
+      async refresh() {
+        return {
+          startedAt: "2026-07-06T11:00:00.000Z",
+          finishedAt: "2026-07-06T11:05:00.000Z",
+          fetchedCount: 0,
+          insertedCount: 0,
+          updatedCount: 0,
+          skippedCount: 2,
+          ttlMinutes: 60,
+          sources: [],
+        };
+      },
+    },
+  );
+  const token = createToken();
+
+  const getResponse = await app.inject({
+    method: "GET",
+    url: "/microapps/news-hub/config",
+    headers: {
+      authorization: `Bearer ${token}`,
+    },
+  });
+
+  assert.equal(getResponse.statusCode, 200, getResponse.body);
+  assert.equal(getResponse.json().data.currentsEnabled, true);
+  assert.equal(getResponse.json().data.refreshTtlMinutes, 60);
+
+  const payload = {
+    newsDataEnabled: true,
+    newsDataApiKey: "newsdata-key",
+    currentsEnabled: true,
+    currentsApiKey: "currents-key",
+    redditEnabled: true,
+    redditClientId: "reddit-client-id",
+    redditClientSecret: "reddit-client-secret",
+    redditUserAgent: "UIChat-Mira-NewsHub/0.2",
+    redditSubreddits: "technology+programming",
+    refreshTtlMinutes: 60,
+  };
+
+  const saveResponse = await app.inject({
+    method: "PUT",
+    url: "/microapps/news-hub/config",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    payload,
+  });
+
+  assert.equal(saveResponse.statusCode, 200, saveResponse.body);
+  assert.equal(saveResponse.json().data.redditEnabled, true);
+  assert.equal(saveResponse.json().data.newsDataApiKey, "newsdata-key");
 
   await app.close();
 });

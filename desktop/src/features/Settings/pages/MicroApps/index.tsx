@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowRight, Bot, BookOpen, Link2, RefreshCcw, Sparkles } from "lucide-react";
+import { ArrowRight, Bot, BookOpen, Link2, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
+import Alert from "@/shared/ui/Alert";
 import Card from "@/shared/ui/Card";
 import Badge from "@/shared/ui/Badge";
-import Alert from "@/shared/ui/Alert";
-import { Button, FullPageStatus } from "@/shared/ui";
+import { Skeleton } from "@/shared/ui";
 import { message } from "@/shared/ui/Message";
 import {
   getIntegrationCapabilityMicroAppBinding,
@@ -120,28 +120,93 @@ export default function MicroAppsSettings() {
     void load();
   }, []);
 
-  const smartRobotCapabilities = useMemo(
-    () =>
-      instances.flatMap((instance) =>
-        (instance.capabilities ?? [])
-          .filter((capability) => capability.type === "wecom.smart_robot")
-          .map((capability) => ({
-            instance,
-            capability,
-          })),
-      ),
-    [instances],
-  );
-
   if (loading) {
     return (
       <SettingsPageLayout
         miniTitle={t("settings.microApps.page.miniTitle")}
         title={t("settings.microApps.page.title")}
         description={t("settings.microApps.page.description")}
-        contentClassName="pt-6"
+        contentClassName="space-y-6 pt-6"
       >
-        <FullPageStatus message={t("settings.microApps.states.loading")} />
+        <div data-testid="micro-apps-loading-skeleton" className="space-y-6">
+          <Card className="p-4">
+            <div className="space-y-3">
+              <Skeleton height={18} width="28%" />
+              <Skeleton.Text lines={2} lastLineWidth="72%" />
+            </div>
+          </Card>
+
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {featuredStudioEntries.map((entry) => (
+              <Card key={entry.route} className="border-primary/15 bg-primary/5 p-5">
+                <div className="flex h-full flex-col gap-4 lg:justify-between">
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Skeleton height={22} width={64} className="rounded-full" />
+                      <Skeleton height={22} width={72} className="rounded-full" />
+                      <Skeleton height={22} width={68} className="rounded-full" />
+                    </div>
+                    <div className="space-y-2">
+                      <Skeleton height={18} width="48%" />
+                      <Skeleton.Text lines={2} lastLineWidth="68%" />
+                      <Skeleton height={12} width="40%" />
+                    </div>
+                  </div>
+
+                  <Skeleton height={40} width={136} />
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <Card key={index} className="h-full p-4">
+                <div className="flex h-full flex-col gap-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <Skeleton.Circle size={36} className="shrink-0" />
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <Skeleton height={18} width="46%" />
+                        <Skeleton height={12} width="28%" />
+                        <Skeleton.Text lines={2} lastLineWidth="74%" />
+                      </div>
+                    </div>
+                    <Skeleton height={22} width={64} className="rounded-full" />
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Skeleton height={22} width={144} className="rounded-full" />
+                    <Skeleton height={22} width={120} className="rounded-full" />
+                  </div>
+
+                  <div className="grid gap-2">
+                    <div className="rounded-ui-panel border border-border bg-surface-secondary/20 px-3 py-2.5">
+                      <Skeleton height={12} width={80} />
+                      <Skeleton height={16} width={44} className="mt-2" />
+                    </div>
+                    <div className="rounded-ui-panel border border-border bg-surface-secondary/20 px-3 py-2.5">
+                      <Skeleton height={12} width={68} />
+                      <Skeleton height={16} width={44} className="mt-2" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Skeleton height={12} width="84%" />
+                    <Skeleton height={12} width="66%" />
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          <Card variant="subtle" className="border-dashed">
+            <div className="space-y-2">
+              <Skeleton height={16} width="24%" />
+              <Skeleton.Text lines={2} lastLineWidth="62%" />
+            </div>
+          </Card>
+        </div>
       </SettingsPageLayout>
     );
   }
@@ -151,19 +216,9 @@ export default function MicroAppsSettings() {
       miniTitle={t("settings.microApps.page.miniTitle")}
       title={t("settings.microApps.page.title")}
       description={t("settings.microApps.page.description")}
-      slot={
-        <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-          <RefreshCcw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          {t("settings.microApps.actions.refresh")}
-        </Button>
-      }
       contentClassName="space-y-6 pt-6"
     >
-      <Alert variant="info" title={t("settings.microApps.banner.title")}>
-        {t("settings.microApps.banner.description")}
-      </Alert>
-
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div data-testid="micro-apps-studio-grid" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {featuredStudioEntries.map((entry) => {
           const key = `settings.microApps.studioEntries.${entry.key}` as const;
 
@@ -197,7 +252,7 @@ export default function MicroAppsSettings() {
 
                 <Link
                   to={entry.route}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-ui-control border border-primary/20 bg-primary px-4 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-ui-control border border-primary/20 bg-transparent px-4 text-sm font-medium text-primary transition-all duration-150 ease-out hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary"
                 >
                   {t(`${key}.actions.open`)}
                   <ArrowRight className="h-4 w-4" />
@@ -219,34 +274,20 @@ export default function MicroAppsSettings() {
           const boundCount = countBoundAccessPoints(bindings, microApp.id);
 
           return (
-            <Link key={microApp.id} to={`/settings/micro-apps/${microApp.id}`} className="block">
-              <Card interactive className="h-full p-4">
+            <Link
+              key={microApp.id}
+              to={`/settings/micro-apps/${microApp.id}`}
+              className="block"
+              data-testid={`micro-app-card-${microApp.id}`}
+            >
+              <Card interactive className="h-full border-primary/15 bg-primary/5 p-5">
                 <div className="flex h-full flex-col gap-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <span className="flex h-9 w-9 items-center justify-center rounded-ui-control bg-primary/10 text-primary">
-                          <BookOpen className="h-4.5 w-4.5" />
-                        </span>
-                        <div>
-                          <div className="text-base font-semibold text-text-primary">{microApp.name}</div>
-                          <div className="text-xs text-text-secondary">
-                            {microApp.type === "knowledge_query"
-                              ? t("settings.microApps.labels.knowledgeQuery")
-                              : microApp.type}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-xs leading-5 text-text-secondary">{microAppSummary(microApp)}</div>
-                    </div>
-                    <Badge variant={microApp.enabled ? "success" : "muted"} size="sm">
-                      {microApp.enabled
-                        ? t("settings.microApps.labels.enabled")
-                        : t("settings.microApps.labels.disabled")}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="primary" size="sm">
+                      {microApp.type === "knowledge_query"
+                        ? t("settings.microApps.labels.knowledgeQuery")
+                        : microApp.type}
                     </Badge>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
                     <Badge variant="muted" size="sm">
                       <Bot className="mr-1 h-3.5 w-3.5" />
                       {t("settings.microApps.labels.supportsWecomSmartRobot")}
@@ -257,21 +298,25 @@ export default function MicroAppsSettings() {
                     </Badge>
                   </div>
 
-                  <div className="grid gap-2">
-                    <div className="rounded-ui-panel border border-border bg-surface-secondary/20 px-3 py-2.5">
-                      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-text-tertiary">
-                        支持接入点
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-ui-control bg-primary/10 text-primary">
+                          <BookOpen className="h-4.5 w-4.5" />
+                        </span>
+                        <div>
+                          <div className="text-base font-semibold text-text-primary">{microApp.name}</div>
+                        </div>
                       </div>
-                      <div className="mt-1 text-sm font-medium text-text-primary">
-                        {microApp.supportedAccessPoints.length} 项
-                      </div>
-                    </div>
-                    <div className="rounded-ui-panel border border-border bg-surface-secondary/20 px-3 py-2.5">
-                      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-text-tertiary">
-                        配置字段
-                      </div>
-                      <div className="mt-1 text-sm font-medium text-text-primary">
-                        {microApp.bindingSchema.fields.length} 项
+                      <div className="space-y-1">
+                        <div className="text-sm leading-6 text-text-secondary">
+                          {microAppSummary(microApp)}
+                        </div>
+                        <div className="text-xs leading-5 text-text-tertiary">
+                          {microApp.enabled
+                            ? "当前已经接入企业问答流程，可继续承接企业微信智能机器人入口。"
+                            : "当前已完成微应用注册，后续启用后即可继续承接真实入口。"}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -290,21 +335,6 @@ export default function MicroAppsSettings() {
           );
         })}
       </div>
-
-      <Card variant="subtle" className="border-dashed">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-1">
-            <div className="text-sm font-medium text-text-primary">
-              {t("settings.microApps.footer.title")}
-            </div>
-            <div className="text-sm leading-6 text-text-secondary">
-              {t("settings.microApps.footer.description", {
-                count: smartRobotCapabilities.length,
-              })}
-            </div>
-          </div>
-        </div>
-      </Card>
     </SettingsPageLayout>
   );
 }

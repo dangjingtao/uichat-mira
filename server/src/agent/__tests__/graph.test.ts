@@ -1616,6 +1616,9 @@ test("agentGraph answers after a single terminal_session execution when command 
   assert.equal(result.evidence.latestSummary?.data?.kind, "terminal_session");
   if (result.evidence.latestSummary?.data?.kind === "terminal_session") {
     assert.equal(result.evidence.latestSummary.data.exitCode, 0);
+    assert.equal(result.evidence.latestSummary.data.processCompleted, true);
+    assert.equal(result.evidence.latestSummary.data.commandSucceeded, "true");
+    assert.equal(result.evidence.latestSummary.data.taskSatisfied, "unknown");
     assert.equal(result.evidence.latestSummary.data.timedOut, false);
     assert.equal(result.evidence.latestSummary.data.canAnswerCommandQuestion, true);
   }

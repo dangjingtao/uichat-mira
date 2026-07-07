@@ -1,4 +1,4 @@
-import { get, post } from "../lib/request";
+import { get, post, put } from "../lib/request";
 
 export type NewsHubSource = {
   key: string;
@@ -12,6 +12,9 @@ export type NewsHubSource = {
   itemCount: number;
   lastPublishedAt: string | null;
   lastIngestedAt: string | null;
+  lastFetchedAt: string | null;
+  lastFetchStatus: "idle" | "succeeded" | "failed";
+  lastFetchError: string | null;
 };
 
 export type NewsHubItem = {
@@ -48,15 +51,32 @@ export type NewsHubRefreshResult = {
   fetchedCount: number;
   insertedCount: number;
   updatedCount: number;
+  skippedCount: number;
+  ttlMinutes: number;
   sources: Array<{
     key: string;
     name: string;
     fetchedCount: number;
     insertedCount: number;
     updatedCount: number;
-    status: "succeeded" | "failed";
+    status: "succeeded" | "failed" | "skipped";
     error: string | null;
+    usedCache: boolean;
+    lastFetchedAt: string | null;
   }>;
+};
+
+export type NewsHubConfig = {
+  newsDataEnabled: boolean;
+  newsDataApiKey: string;
+  currentsEnabled: boolean;
+  currentsApiKey: string;
+  redditEnabled: boolean;
+  redditClientId: string;
+  redditClientSecret: string;
+  redditUserAgent: string;
+  redditSubreddits: string;
+  refreshTtlMinutes: number;
 };
 
 export async function getNewsHubOverview(params?: {
@@ -81,4 +101,12 @@ export async function getNewsHubOverview(params?: {
 
 export async function refreshNewsHub() {
   return post<NewsHubRefreshResult>("/microapps/news-hub/refresh");
+}
+
+export async function getNewsHubConfig() {
+  return get<NewsHubConfig>("/microapps/news-hub/config");
+}
+
+export async function saveNewsHubConfig(payload: NewsHubConfig) {
+  return put<NewsHubConfig>("/microapps/news-hub/config", payload);
 }
