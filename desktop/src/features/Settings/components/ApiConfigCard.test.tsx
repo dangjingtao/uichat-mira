@@ -64,6 +64,9 @@ void i18n.use(initReactI18next).init({
         "settings.model.api.apiKeyPlaceholder": "Enter API key",
         "settings.model.api.apiUrl": "API URL",
         "settings.model.api.apiUrlPlaceholder": "Enter API URL",
+        "settings.model.api.modelName": "Model Name",
+        "settings.model.api.modelNamePlaceholder": "Enter model name",
+        "settings.model.api.syncedModel": "Synced Model",
         "settings.model.api.currentModel": "Current Model",
         "settings.model.api.syncedModelsTitle": "Synced Models",
         "settings.model.api.syncedModelsDescription": "Choose a synced model",
@@ -132,9 +135,11 @@ describe("ApiConfigCard", () => {
         <ApiConfigCard
           detail={providerDetail}
           selectedModelId="qwen2.5:latest"
+          currentModelName="qwen2.5:latest"
           onApiKeyChange={() => {}}
           onApiUrlChange={() => {}}
           onSelectedModelChange={() => {}}
+          onModelNameChange={() => {}}
           onTestConnection={() => {}}
           onSetDefaultRole={onSetDefaultRole}
         />
@@ -160,9 +165,11 @@ describe("ApiConfigCard", () => {
         <ApiConfigCard
           detail={providerDetail}
           selectedModelId="qwen2.5:latest"
+          currentModelName="qwen2.5:latest"
           onApiKeyChange={() => {}}
           onApiUrlChange={() => {}}
           onSelectedModelChange={() => {}}
+          onModelNameChange={() => {}}
           onTestConnection={() => {}}
           onSetDefaultRole={() => {}}
         />
@@ -171,6 +178,8 @@ describe("ApiConfigCard", () => {
 
     expect(screen.getByLabelText("API Key")).toBeInTheDocument();
     expect(screen.getByLabelText("API URL")).toBeInTheDocument();
+    expect(screen.getByLabelText("Model Name")).toBeInTheDocument();
+    expect(screen.getByLabelText("Synced Model")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sync models" })).toBeInTheDocument();
   });
 });

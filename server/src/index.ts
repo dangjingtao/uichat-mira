@@ -37,6 +37,7 @@ import { createNewsHubService } from "@/microapps/news-hub/index.js";
 import healthRoute from "@/routes/health";
 import appMetaRoute from "@/routes/app-meta";
 import dbHealthRoute from "@/routes/dbHealth";
+import generalSettingsRoute from "@/routes/general-settings";
 import logsRoute from "@/routes/logs";
 import loginRoute from "@/routes/login";
 import meRoute from "@/routes/me";
@@ -75,6 +76,7 @@ import { mailFoldersRepository } from "@/db/repositories/mail-folders.repository
 import { mailMessagesRepository } from "@/db/repositories/mail-messages.repository.js";
 import { microAppsRepository } from "@/db/repositories/micro-apps.repository.js";
 import { newsItemsRepository } from "@/db/repositories/news-items.repository.js";
+import { generalSettingsRepository } from "@/db/repositories/general-settings.repository.js";
 import { webSearchSettingsRepository } from "@/db/repositories/web-search-settings.repository.js";
 import { wecomSettingsRepository } from "@/db/repositories/wecom-settings.repository.js";
 import { initializeVectorStore } from "@/db";
@@ -664,6 +666,7 @@ const setupRoutes = async () => {
   await app.register(healthRoute);
   await app.register(appMetaRoute);
   await app.register(dbHealthRoute);
+  await app.register(generalSettingsRoute);
   await app.register(logsRoute);
   await app.register(loginRoute);
   await app.register(meRoute);
@@ -728,6 +731,7 @@ const setupDatabase = async () => {
   });
   webSearchSettingsRepository.initialize();
   wecomSettingsRepository.initialize();
+  generalSettingsRepository.initialize();
   integrationInstancesRepository.initialize();
   integrationCapabilitiesRepository.initialize();
   microAppsRepository.initialize();

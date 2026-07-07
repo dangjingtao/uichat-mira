@@ -13,6 +13,7 @@ Related:
   - harness-assessment-2026-06-28.md
   - core-tool-matrix-review.md
   - core-tool-rectification-ledger.md
+  - agent-runtime-t29-t33-ledger.md
   - project-map-design.md
   - context-builder-design.md
   - ../chat/agent-workspace-context-system.md
@@ -31,7 +32,7 @@ Related:
 - `Harness Runtime`、`Read`、工具协议、工具调研各自承担什么角色
 - 读工具运行时相关文档时，先从哪几篇开始最省脑子
 
-它不替代细页本身，而是负责把当前有效阅读路径收口。
+它不替代细页本身，而是负责把当前有效阅读路径讲清楚。
 
 ## 推荐入口
 
@@ -42,9 +43,10 @@ Related:
 5. `tools-ecosystem-research.md`
 6. `core-tool-matrix-review.md`
 7. `core-tool-rectification-ledger.md`
-8. `project-map-design.md`
-9. `context-builder-design.md`
-10. `../chat/agent-workspace-context-system.md`
+8. `agent-runtime-t29-t33-ledger.md`
+9. `project-map-design.md`
+10. `context-builder-design.md`
+11. `../chat/agent-workspace-context-system.md`
 
 ## 当前结构
 
@@ -82,8 +84,9 @@ Related:
 - `tool-runtime-retrospective-2026-06-27.md`
 - `core-tool-matrix-review.md`
 - `core-tool-rectification-ledger.md`
+- `agent-runtime-t29-t33-ledger.md`
 
-前者回答外部成熟方案与行业风向，后者回答这一轮工具运行时改造里踩过的坑与已经收回的边界，`core-tool-matrix-review.md` 负责从矩阵视角统一 `Read / Edit / Web Search / Terminal` 的语义、治理和 action profile 颗粒度，`core-tool-rectification-ledger.md` 负责按整改优先级推进执行项。
+前者回答外部成熟方案与行业风向，后者回答这一轮工具运行时改造里踩过的坑与已经确认的边界，`core-tool-matrix-review.md` 负责从矩阵视角统一 `Read / Edit / Web Search / Terminal` 的语义、治理和 action profile 颗粒度，`core-tool-rectification-ledger.md` 负责按整改优先级推进执行项，`agent-runtime-t29-t33-ledger.md` 负责登记新一轮 `T29-T33` 任务包的标准命名、依赖和状态。
 
 ## 当前结论
 
@@ -96,19 +99,19 @@ Related:
 
 ## 可维护性判断
 
-当前工具层已经进入**可维护但未完全收口**的状态。
+当前工具层已经进入**可维护但仍有少量遗留问题**的状态。
 
 这意味着：
 
 - 协议边界已经比早期清晰很多，`source`、`domain`、`McpExecutionEnvironment`、`McpStreamEvent` 都已经成为稳定约束
 - 注册、执行、环境、UI surface 基本分层，新增能力不再需要从零拼一套链路
-- 但仍有少量历史术语、文档口径和个别决策逻辑分散在不同层，后续还需要继续收口
+- 但仍有少量历史术语、文档口径和个别决策逻辑分散在不同层，后续还需要继续清理
 
 现在可以继续稳定加能力，但前提是：
 
 - 新工具必须先走协议和测试
 - 不再把能力域、产品归属、审批策略混成一个字段
-- 文档和实现必须同步收口，否则维护成本会再次回升
+- 文档和实现必须同步更新，否则维护成本会再次回升
 
 ## 相关文档
 

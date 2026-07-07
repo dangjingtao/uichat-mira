@@ -4,6 +4,7 @@
 export * from "./user.repository";
 export * from "./model-config.repository";
 export * from "./provider-settings.repository";
+export * from "./general-settings.repository";
 export * from "./integration-instances.repository";
 export * from "./integration-capabilities.repository";
 export * from "./micro-apps.repository";

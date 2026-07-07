@@ -1,6 +1,6 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { AlertCircle, Loader2, RotateCcw } from "lucide-react";
+import { AlertCircle, Loader2, RotateCcw, Trash2 } from "lucide-react";
 import { Button, IconButton } from "@/shared/ui/Button";
 import Card from "@/shared/ui/Card";
 import { TextInput } from "@/shared/ui/Input";
@@ -29,30 +29,38 @@ const ASSIGNABLE_ROLES: Array<{
 interface ApiConfigCardProps {
   detail: ProviderDetail | null;
   selectedModelId: string;
+  currentModelName: string;
   loading?: boolean;
   syncing?: boolean;
+  deleting?: boolean;
   hideRoleActions?: boolean;
   assigningRole?: RoleModelType | null;
   syncError?: string | null;
   onApiKeyChange: (value: string) => void;
   onApiUrlChange: (value: string) => void;
   onSelectedModelChange: (value: string) => void;
+  onModelNameChange: (value: string) => void;
   onTestConnection: () => void;
+  onDeleteProvider?: () => void;
   onSetDefaultRole: (role: RoleModelType) => void;
 }
 
 const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
   detail,
   selectedModelId,
+  currentModelName,
   loading = false,
   syncing = false,
+  deleting = false,
   hideRoleActions = false,
   assigningRole = null,
   syncError = null,
   onApiKeyChange,
   onApiUrlChange,
   onSelectedModelChange,
+  onModelNameChange,
   onTestConnection,
+  onDeleteProvider,
   onSetDefaultRole,
 }) => {
   const { t } = useTranslation();
@@ -81,7 +89,8 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
           },
         ];
 
-  const isBusy = loading || syncing;
+  const isBusy = loading || syncing || deleting;
+  const canDeleteProvider = !detail.provider.isSystem && Boolean(onDeleteProvider);
 
   return (
     <Card className="flex h-full flex-1 flex-col" padding="sm">
@@ -95,9 +104,25 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
           </div>
         </div>
 
-        <div className="inline-flex items-center gap-2 rounded-full bg-surface-secondary px-3 py-1 text-xs text-text-secondary">
-          {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-          {t(`settings.model.status.${detail.provider.status}`)}
+        <div className="flex items-center gap-2">
+          {canDeleteProvider ? (
+            <Button
+              size="sm"
+              variant="danger-outline"
+              onClick={onDeleteProvider}
+              disabled={isBusy}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {deleting
+                ? t("settings.model.platform.deletingProvider")
+                : t("settings.model.platform.deleteProvider")}
+            </Button>
+          ) : null}
+
+          <div className="inline-flex items-center gap-2 rounded-full bg-surface-secondary px-3 py-1 text-xs text-text-secondary">
+            {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            {t(`settings.model.status.${detail.provider.status}`)}
+          </div>
         </div>
       </div>
 
@@ -128,7 +153,7 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
             <Select
-              label={t("settings.model.api.currentModel")}
+              label={t("settings.model.api.syncedModel")}
               value={selectedModelId}
               onChange={onSelectedModelChange}
               options={modelOptions}
@@ -149,6 +174,18 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
           </div>
         </div>
 
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <TextInput
+              label={t("settings.model.api.modelName")}
+              value={currentModelName}
+              onChange={onModelNameChange}
+              placeholder={t("settings.model.api.modelNamePlaceholder")}
+              compact
+            />
+          </div>
+        </div>
+
         {detail.provider.lastError ? (
           <div className="flex items-start gap-2 rounded-ui-panel border border-danger-border bg-danger-soft px-3 py-2 text-xs text-danger-text">
             <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
@@ -164,7 +201,7 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
                 size="small"
                 variant="secondary"
                 onClick={() => onSetDefaultRole(role)}
-                disabled={assigningRole === role || !selectedModelId}
+                disabled={assigningRole === role || !currentModelName.trim()}
               >
                 {assigningRole === role
                   ? t("settings.model.api.setting")

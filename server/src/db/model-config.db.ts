@@ -62,15 +62,30 @@ const MODEL_TYPE_SQL_VALUES = [
 
 const modelTypeSqlValues = MODEL_TYPE_SQL_VALUES.map((value) => `'${value}'`).join(", ");
 
-const tableSupportsAllModelRoles = (
+const tableSqlContainsAllValues = (
   sqlite: ReturnType<typeof getSqlite>,
   tableName: string,
+  values: readonly string[],
 ) => {
   const row = sqlite
     .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?")
     .get(tableName) as { sql?: string } | undefined;
 
-  return MODEL_TYPE_SQL_VALUES.every((role) => row?.sql?.includes(`'${role}'`) ?? false);
+  return values.every((value) => row?.sql?.includes(`'${value}'`) ?? false);
+};
+
+const tableSupportsAllModelRoles = (
+  sqlite: ReturnType<typeof getSqlite>,
+  tableName: string,
+) => {
+  return tableSqlContainsAllValues(sqlite, tableName, MODEL_TYPE_SQL_VALUES);
+};
+
+const tableSupportsAllProviderCodes = (
+  sqlite: ReturnType<typeof getSqlite>,
+  tableName: string,
+) => {
+  return tableSqlContainsAllValues(sqlite, tableName, PROVIDER_CODE_VALUES);
 };
 
 const recreateModelConfigTablesForCurrentRoles = (
@@ -78,7 +93,8 @@ const recreateModelConfigTablesForCurrentRoles = (
 ) => {
   if (
     tableSupportsAllModelRoles(sqlite, "model_configs") &&
-    tableSupportsAllModelRoles(sqlite, "model_param_templates")
+    tableSupportsAllModelRoles(sqlite, "model_param_templates") &&
+    tableSupportsAllProviderCodes(sqlite, "model_configs")
   ) {
     return;
   }
@@ -93,7 +109,10 @@ const recreateModelConfigTablesForCurrentRoles = (
       DROP INDEX IF EXISTS idx_model_param_templates_type_key;
     `);
 
-    if (!tableSupportsAllModelRoles(sqlite, "model_configs")) {
+    if (
+      !tableSupportsAllModelRoles(sqlite, "model_configs") ||
+      !tableSupportsAllProviderCodes(sqlite, "model_configs")
+    ) {
       sqlite.exec(`
         ALTER TABLE model_configs RENAME TO model_configs_legacy;
 
@@ -226,7 +245,8 @@ const migrateProviderConnectionTables = (sqlite: ReturnType<typeof getSqlite>) =
     (!connectionColumns.some((column) => column.name === "id") ||
       connectionColumns.some(
         (column) => column.name === "provider_code" && column.pk === 1,
-      ));
+      ) ||
+      !tableSupportsAllProviderCodes(sqlite, "provider_connections"));
 
   if (providerConnectionsNeedsRebuild) {
     sqlite.exec("BEGIN");
@@ -298,9 +318,10 @@ const migrateProviderConnectionTables = (sqlite: ReturnType<typeof getSqlite>) =
   }>;
   const providerModelsNeedsRebuild =
     providerModelColumns.length > 0 &&
-    !providerModelColumns.some(
+    (!providerModelColumns.some(
       (column) => column.name === "provider_connection_id",
-    );
+    ) ||
+      !tableSupportsAllProviderCodes(sqlite, "provider_models"));
 
   if (providerModelsNeedsRebuild) {
     sqlite.exec("BEGIN");

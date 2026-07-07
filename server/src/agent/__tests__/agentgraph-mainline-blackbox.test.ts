@@ -1,9 +1,17 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { afterEach, beforeEach, test, vi } from "vitest";
+import { initializeAuthDatabase } from "@/db/auth.db";
+import { resetDatabaseClients } from "@/db/index.js";
+import { initializeKnowledgeBaseDatabase } from "@/db/knowledge-base.db";
+import { initializeModelConfigDatabase } from "@/db/model-config.db";
+import { initializeRoleDatabase } from "@/db/role.db";
+import { initializeThreadDatabase } from "@/db/thread.db";
 import * as harnessInvocations from "@/harness/invocations";
 import * as registry from "@/harness/registry";
 import { contextBudgetService } from "@/services/context-budget/index";
 import { providerProxyService } from "@/services/provider-proxy.service/index";
+import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 import * as intentMatcherModule from "../intent/embedding-capability-matcher";
 import * as taskSelectorModule from "../intent/task-capability-selector";
 import * as runnablesModule from "../runnables";
@@ -23,6 +31,13 @@ const basePlan = {
   version: 1,
   steps: [],
 };
+
+const originalDatabaseUrl = process.env.DATABASE_URL;
+const testDbPath = createTimestampedTestArtifactPath(
+  "db",
+  "agentgraph-mainline-blackbox",
+  ".sqlite",
+);
 
 const makeMessage = (content: string) => ({
   role: "user" as const,
@@ -186,6 +201,13 @@ const runBlackbox = (input: {
   });
 
 beforeEach(() => {
+  process.env.DATABASE_URL = `file:${testDbPath}`;
+  resetDatabaseClients();
+  initializeAuthDatabase();
+  initializeModelConfigDatabase();
+  initializeKnowledgeBaseDatabase();
+  initializeThreadDatabase();
+  initializeRoleDatabase();
   vi.spyOn(contextBudgetService, "pack").mockImplementation((input) => ({
     messages: [
       ...(input.sections.prefaceMessages ?? []),
@@ -224,6 +246,17 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  resetDatabaseClients();
+  try {
+    fs.rmSync(testDbPath, { force: true });
+  } catch {
+    // ignore cleanup failure on Windows file locking
+  }
+  if (originalDatabaseUrl) {
+    process.env.DATABASE_URL = originalDatabaseUrl;
+  } else {
+    delete process.env.DATABASE_URL;
+  }
 });
 
 test("A1 direct answer completes without entering the tool chain", async () => {
@@ -502,10 +535,52 @@ test("A8 failed tool does not continue with extra tool execution or fake success
     question: "open README.md",
   });
 
+  assert.equal(failedResult.status, "completed");
+  assert.equal(executeSpy.mock.calls.length, 2);
+  assert.equal(generateSpy.mock.calls.length, 1);
+  assert.equal(failedResult.lastToolExecution?.status, "failed");
+  assert.equal(failedResult.lastToolExecution?.failureKind, "recoverable");
+  assert.equal(failedResult.evidence.latestSummary?.status, "failed");
+  assert.equal(failedResult.evidence.latestSummary?.answerReadiness.canAnswer, false);
+  assert.match(failedResult.answer ?? "", /当前还没有足够的已完成证据/);
+});
+
+test("A8 terminal failed tool still stops the graph instead of producing a guarded answer", async () => {
+  setupToolExposure("open README.md", [readOpenTool()]);
+  vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
+    async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need file content."}';
+    },
+  );
+  const executeSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-a8-read-open-terminal-failed",
+      toolId: "read_open",
+      status: "failed",
+      error: {
+        message: "Tool protocol mismatch: result payload is invalid",
+      },
+      startedAt: "2026-07-05T00:00:00.000Z",
+      finishedAt: "2026-07-05T00:00:01.000Z",
+    } as never);
+  const generateSpy = vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke");
+
+  const failedResult = await runBlackbox({
+    runId: "blackbox-a8-terminal-failed-tool",
+    question: "open README.md",
+  });
+
   assert.equal(failedResult.status, "failed");
-  assert.match(failedResult.errorMessage ?? "", /File not found/);
   assert.equal(executeSpy.mock.calls.length, 1);
   assert.equal(generateSpy.mock.calls.length, 0);
+  assert.equal(failedResult.lastToolExecution?.status, "failed");
+  assert.equal(failedResult.lastToolExecution?.failureKind, "terminal");
+  assert.equal(failedResult.evidence.latestSummary?.status, "failed");
+  assert.equal(failedResult.evidence.latestSummary?.answerReadiness.canAnswer, false);
+  assert.match(failedResult.errorMessage ?? "", /protocol mismatch/i);
+  assert.match(failedResult.terminalReason ?? "", /protocol mismatch/i);
+  assert.equal(failedResult.answer, "");
 });
 
 test("A8 maxIterations does not issue a second tool execution", async () => {

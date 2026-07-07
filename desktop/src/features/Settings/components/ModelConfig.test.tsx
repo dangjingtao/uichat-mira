@@ -62,6 +62,7 @@ describe("ModelConfig", () => {
       name: "gpt-4.1",
       providerCode: "openai",
       providerConnectionId: "conn-openai",
+      providerConnectionDisplayName: "OpenAI Main",
       providerTemplateCode: "openai",
       remoteModelId: "gpt-4.1",
       params: { temperature: 0.7, maxTokens: 4096 },

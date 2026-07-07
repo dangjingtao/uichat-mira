@@ -612,7 +612,7 @@ describe("chat route approval resume smoke", () => {
   );
 
   test(
-    "S5-S6 failed tool path does not fake completion and smoke artifacts stay under .test-artifact/server",
+    "S5-S6 failed tool path emits a guarded answer and smoke artifacts stay under .test-artifact/server",
     async () => {
     const app = await createAuthedApp();
     const { user, thread, token } = createUserThread();
@@ -633,7 +633,9 @@ describe("chat route approval resume smoke", () => {
       startedAt: "2026-07-06T00:00:00.000Z",
       finishedAt: "2026-07-06T00:00:01.000Z",
     } as never);
-    const generateSpy = vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke");
+    const generateSpy = vi
+      .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
+      .mockResolvedValue("当前还没有足够的已完成证据，无法确认文件已成功打开。");
 
     const response = await sendAgentChat({
       app,
@@ -645,11 +647,18 @@ describe("chat route approval resume smoke", () => {
 
     assert.equal(response.statusCode, 200, response.body);
     assert.match(response.body, /File not found/);
-    assert.match(response.body, /"finishReason":"error"/);
-    assert.equal(generateSpy.mock.calls.length, 0);
+    assert.match(response.body, /当前还没有足够的已完成证据/);
+    assert.match(response.body, /"finishReason":"stop"/);
+    assert.equal(generateSpy.mock.calls.length, 1);
 
     const assistantMessage = getLatestAssistantMessage(thread.id, user.id);
-    assert.equal(assistantMessage, undefined);
+    assert.ok(assistantMessage);
+    assert.match(assistantMessage?.content ?? "", /当前还没有足够的已完成证据/);
+    assert.equal(
+      (assistantMessage?.metadata as { agent?: { status?: string } } | undefined)?.agent
+        ?.status,
+      "completed",
+    );
 
     const threadAfterFailure = threadService.getThreadById(thread.id, user.id);
     const userMessage = threadAfterFailure?.messages.find((message) => message.id === "user-s5");
@@ -665,6 +674,51 @@ describe("chat route approval resume smoke", () => {
         .filter((entry) => /^tmp-.*\.sqlite(?:-wal|-shm)?$/i.test(entry)),
       [],
     );
+
+      await app.close();
+    },
+    15000,
+  );
+
+  test(
+    "S6 terminal failed tool path still returns finishReason error and does not persist a fake assistant answer",
+    async () => {
+      const app = await createAuthedApp();
+      const { user, thread, token } = createUserThread();
+
+      setupToolExposure("打开 README.md。", [readOpenTool()]);
+      vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
+        async function* () {
+          yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need the file content."}';
+        },
+      );
+      const generateSpy = vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke");
+      vi.spyOn(harnessInvocations, "executeHarnessInvocation").mockResolvedValue({
+        id: "invocation-s6-read-open-terminal-failed",
+        toolId: "read_open",
+        status: "failed",
+        error: {
+          message: "Tool protocol mismatch: result payload is invalid",
+        },
+        startedAt: "2026-07-06T00:00:00.000Z",
+        finishedAt: "2026-07-06T00:00:01.000Z",
+      } as never);
+
+      const response = await sendAgentChat({
+        app,
+        token,
+        threadId: thread.id,
+        messageId: "user-s6",
+        text: "打开 README.md。",
+      });
+
+      assert.equal(response.statusCode, 200, response.body);
+      assert.match(response.body, /protocol mismatch/i);
+      assert.match(response.body, /"finishReason":"error"/);
+      assert.equal(generateSpy.mock.calls.length, 0);
+
+      const assistantMessage = getLatestAssistantMessage(thread.id, user.id);
+      assert.equal(assistantMessage, undefined);
 
       await app.close();
     },

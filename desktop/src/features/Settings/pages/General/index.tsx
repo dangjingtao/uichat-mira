@@ -1,9 +1,14 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CheckCircle2, KeyRound } from "lucide-react";
+import { CheckCircle2, KeyRound, Network } from "lucide-react";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { useLanguagePreferences } from "@/app/providers/LanguageProvider";
 import { changePassword } from "@/shared/api";
+import {
+  getGeneralSettings,
+  updateGeneralSettings,
+  type GeneralSettings as BackendGeneralSettings,
+} from "@/shared/api/generalSettings";
 import { ApiError } from "@/shared/lib/request";
 import { useThemePreferences } from "@/app/providers/ThemeProvider";
 import type { ThemePresetId } from "@/shared/theme/colorThemes";
@@ -28,6 +33,20 @@ const initialFormState: PasswordFormState = {
   currentPassword: "",
   newPassword: "",
   confirmPassword: "",
+};
+
+type ProxyFormState = {
+  socks5Host: string;
+  socks5Port: string;
+  socks5Username: string;
+  socks5Password: string;
+};
+
+const initialProxyFormState: ProxyFormState = {
+  socks5Host: "",
+  socks5Port: "",
+  socks5Username: "",
+  socks5Password: "",
 };
 
 function ChangePasswordModal({
@@ -141,6 +160,13 @@ export default function General() {
   const { colorTheme, setColorTheme, themeMode, setThemeMode, themePresets } =
     useThemePreferences();
   const [form, setForm] = useState<PasswordFormState>(initialFormState);
+  const [proxyForm, setProxyForm] = useState<ProxyFormState>(initialProxyFormState);
+  const [savedProxyForm, setSavedProxyForm] =
+    useState<ProxyFormState>(initialProxyFormState);
+  const [proxyLoading, setProxyLoading] = useState(true);
+  const [proxySaving, setProxySaving] = useState(false);
+  const [proxyError, setProxyError] = useState("");
+  const [proxySuccess, setProxySuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -195,6 +221,57 @@ export default function General() {
     form.confirmPassword.trim().length > 0 &&
     !passwordMismatch &&
     form.currentPassword !== form.newPassword;
+
+  const proxyPortError = useMemo(() => {
+    const value = proxyForm.socks5Port.trim();
+    if (!value) {
+      return "";
+    }
+
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+      return t("settings.general.proxy.portInvalid");
+    }
+
+    return "";
+  }, [proxyForm.socks5Port, t]);
+
+  const proxyIsDirty = useMemo(
+    () =>
+      proxyForm.socks5Host !== savedProxyForm.socks5Host ||
+      proxyForm.socks5Port !== savedProxyForm.socks5Port ||
+      proxyForm.socks5Username !== savedProxyForm.socks5Username ||
+      proxyForm.socks5Password !== savedProxyForm.socks5Password,
+    [proxyForm, savedProxyForm],
+  );
+
+  const canSaveProxy = !proxySaving && !proxyPortError && proxyIsDirty;
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        setProxyLoading(true);
+        const settings = await getGeneralSettings();
+        const nextForm = {
+          socks5Host: settings.socks5Host,
+          socks5Port: settings.socks5Port > 0 ? String(settings.socks5Port) : "",
+          socks5Username: settings.socks5Username,
+          socks5Password: settings.socks5Password,
+        };
+        setProxyForm(nextForm);
+        setSavedProxyForm(nextForm);
+        setProxyError("");
+      } catch (requestError) {
+        if (requestError instanceof ApiError) {
+          setProxyError(requestError.message);
+        } else {
+          setProxyError(t("settings.general.proxy.loadFailed"));
+        }
+      } finally {
+        setProxyLoading(false);
+      }
+    })();
+  }, [t]);
 
   const resetForm = () => {
     setForm(initialFormState);
@@ -255,6 +332,53 @@ export default function General() {
       footer: null,
       onClose: resetForm,
     });
+  };
+
+  const handleProxyFieldChange = (patch: Partial<ProxyFormState>) => {
+    setProxyForm((previous) => ({ ...previous, ...patch }));
+    setProxyError("");
+    setProxySuccess("");
+  };
+
+  const handleSaveProxy = async () => {
+    if (proxyPortError) {
+      setProxyError(proxyPortError);
+      return;
+    }
+
+    const payload: BackendGeneralSettings = {
+      socks5Host: proxyForm.socks5Host.trim(),
+      socks5Port: proxyForm.socks5Port.trim()
+        ? Number(proxyForm.socks5Port.trim())
+        : 0,
+      socks5Username: proxyForm.socks5Username.trim(),
+      socks5Password: proxyForm.socks5Password,
+    };
+
+    setProxySaving(true);
+    setProxyError("");
+    setProxySuccess("");
+
+    try {
+      const saved = await updateGeneralSettings(payload);
+      const nextForm = {
+        socks5Host: saved.socks5Host,
+        socks5Port: saved.socks5Port > 0 ? String(saved.socks5Port) : "",
+        socks5Username: saved.socks5Username,
+        socks5Password: saved.socks5Password,
+      };
+      setProxyForm(nextForm);
+      setSavedProxyForm(nextForm);
+      setProxySuccess(t("settings.general.proxy.saveSuccess"));
+    } catch (requestError) {
+      if (requestError instanceof ApiError) {
+        setProxyError(requestError.message);
+      } else {
+        setProxyError(t("settings.general.proxy.saveFailed"));
+      }
+    } finally {
+      setProxySaving(false);
+    }
   };
 
   return (
@@ -352,6 +476,88 @@ export default function General() {
               />
             </div>
           </div>
+        </div>
+      </Card>
+
+      <Card className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Network className="h-4 w-4 text-text-secondary" />
+          <h2 className="text-sm font-semibold text-text-primary">
+            {t("settings.general.proxy.title")}
+          </h2>
+        </div>
+        <p className="text-sm text-text-secondary">
+          {t("settings.general.proxy.description")}
+        </p>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <TextInput
+            label={t("settings.general.proxy.host")}
+            value={proxyForm.socks5Host}
+            onChange={(socks5Host) => handleProxyFieldChange({ socks5Host })}
+            placeholder={t("settings.general.proxy.hostPlaceholder")}
+            disabled={proxyLoading || proxySaving}
+            compact
+          />
+          <TextInput
+            label={t("settings.general.proxy.port")}
+            value={proxyForm.socks5Port}
+            onChange={(socks5Port) => handleProxyFieldChange({ socks5Port })}
+            placeholder={t("settings.general.proxy.portPlaceholder")}
+            disabled={proxyLoading || proxySaving}
+            error={proxyPortError || undefined}
+            compact
+          />
+          <TextInput
+            label={t("settings.general.proxy.username")}
+            value={proxyForm.socks5Username}
+            onChange={(socks5Username) =>
+              handleProxyFieldChange({ socks5Username })
+            }
+            placeholder={t("settings.general.proxy.usernamePlaceholder")}
+            disabled={proxyLoading || proxySaving}
+            compact
+          />
+          <TextInput
+            label={t("settings.general.proxy.password")}
+            type="password"
+            value={proxyForm.socks5Password}
+            onChange={(socks5Password) =>
+              handleProxyFieldChange({ socks5Password })
+            }
+            placeholder={t("settings.general.proxy.passwordPlaceholder")}
+            disabled={proxyLoading || proxySaving}
+            compact
+          />
+        </div>
+
+        <SettingsNotice tone="info">
+          {t("settings.general.proxy.hint")}
+        </SettingsNotice>
+
+        {proxyError ? (
+          <SettingsNotice tone="danger">{proxyError}</SettingsNotice>
+        ) : null}
+
+        {proxySuccess ? (
+          <SettingsNotice
+            tone="success"
+            icon={<CheckCircle2 className="h-4 w-4 text-success" />}
+          >
+            {proxySuccess}
+          </SettingsNotice>
+        ) : null}
+
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            disabled={!canSaveProxy || proxyLoading}
+            onClick={() => void handleSaveProxy()}
+          >
+            {proxySaving
+              ? t("settings.general.proxy.saving")
+              : t("settings.general.proxy.save")}
+          </Button>
         </div>
       </Card>
     </SettingsPageLayout>

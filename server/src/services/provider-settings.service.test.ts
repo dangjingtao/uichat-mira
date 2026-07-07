@@ -9,6 +9,7 @@ import {
   providerModelRepository,
 } from "@/db/repositories";
 import { modelConfigService } from "./model-config.service.js";
+import { buildDefaultParams } from "./model-config.defaults.js";
 import { providerSettingsService } from "./provider-settings.service.js";
 import * as openAiCompatibleProvider from "./openai-compatible-provider.js";
 import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
@@ -25,7 +26,7 @@ legacyDb.exec(`
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL CHECK (type IN ('llm', 'embedding', 'rerank', 'task', 'evaluation')),
     name TEXT NOT NULL DEFAULT '',
-    provider_code TEXT,
+    provider_code TEXT CHECK (provider_code IN ('ollama', 'lmstudio', 'openai', 'cloudflare', 'volcengine')),
     remote_model_id TEXT,
     params TEXT NOT NULL DEFAULT '{}',
     is_default INTEGER NOT NULL DEFAULT 1,
@@ -92,6 +93,7 @@ test("initializeModelConfigDatabase upgrades legacy model-role tables and seeds 
 
   assert.ok(modelConfigSql?.sql?.includes("'agentTask'"));
   assert.ok(modelConfigSql?.sql?.includes("'imageGeneration'"));
+  assert.ok(modelConfigSql?.sql?.includes("'google'"));
   assert.ok(templateSql?.sql?.includes("'agentTask'"));
   assert.ok(templateSql?.sql?.includes("'imageGeneration'"));
 
@@ -117,6 +119,21 @@ test("initializeModelConfigDatabase upgrades legacy model-role tables and seeds 
   const paramTemplates = modelConfigService.getParamTemplates();
   assert.equal(paramTemplates.agentTask.length, 6);
   assert.equal(paramTemplates.imageGeneration.length, 1);
+});
+
+test("initializeModelConfigDatabase upgrades legacy provider_code constraint so google role binding can persist", () => {
+  const updated = modelConfigRepository.upsertDefault({
+    type: "llm",
+    name: "gemini-2.5-flash",
+    params: JSON.stringify(buildDefaultParams("llm")),
+    providerCode: "google",
+    providerConnectionId: "google",
+    remoteModelId: "gemini-2.5-flash",
+  });
+
+  assert.equal(updated.providerCode, "google");
+  assert.equal(updated.providerConnectionId, "google");
+  assert.equal(updated.remoteModelId, "gemini-2.5-flash");
 });
 
 test("provider settings detail surfaces agentTask and imageGeneration assignments", () => {
@@ -180,6 +197,43 @@ test("provider settings expose image adapter capability for openai", () => {
   assert.ok(detail.provider.capabilities.supportsRoles.includes("imageGeneration"));
 });
 
+test("custom openai-compatible provider exposes image adapter capability", () => {
+  const custom = providerSettingsService.createProviderConnection({
+    templateCode: "openai-compatible-custom",
+    displayName: "Custom Image Provider",
+    baseUrl: "https://image.example.com/v1",
+    apiKey: "image-key",
+  });
+
+  const detail = providerSettingsService.getProviderDetail(custom.id);
+
+  assert.equal(detail.provider.capabilities.imageAdapter, "openai-images");
+  assert.equal(
+    detail.provider.capabilities.supportsRoles.includes("imageGeneration"),
+    true,
+  );
+});
+
+test("provider settings can bind a manually typed model id that is not in synced models", () => {
+  const custom = providerSettingsService.createProviderConnection({
+    templateCode: "openai-compatible-custom",
+    displayName: "Manual Model Provider",
+    baseUrl: "https://manual.example.com/v1",
+    apiKey: "manual-key",
+  });
+
+  const updated = providerSettingsService.selectRoleModel(
+    custom.id,
+    "llm",
+    "manual-custom-model",
+  );
+
+  assert.equal(updated.providerConnectionId, custom.id);
+  assert.equal(updated.remoteModelId, "manual-custom-model");
+  assert.equal(updated.name, "manual-custom-model");
+  assert.equal(updated.providerTemplateCode, "openai-compatible-custom");
+});
+
 test("provider settings can create two custom OpenAI-compatible connections and bind a role to one of them", () => {
   const first = providerSettingsService.createProviderConnection({
     templateCode: "openai-compatible-custom",
@@ -195,6 +249,10 @@ test("provider settings can create two custom OpenAI-compatible connections and 
   });
 
   assert.notEqual(first.id, second.id);
+  assert.equal(first.code, first.id);
+  assert.equal(second.code, second.id);
+  assert.equal(first.hasApiKey, true);
+  assert.equal(first.isSystem, false);
 
   providerModelRepository.replaceForConnection(first.id, [
     {
@@ -233,6 +291,58 @@ test("provider settings can create two custom OpenAI-compatible connections and 
     remoteModelId: "model-a",
     modelName: "Model A",
   });
+});
+
+test("deleting a custom provider clears every default role binding that points to it", () => {
+  const custom = providerSettingsService.createProviderConnection({
+    templateCode: "openai-compatible-custom",
+    displayName: "Custom Delete",
+    baseUrl: "https://delete.example.com/v1",
+    apiKey: "delete-key",
+  });
+
+  providerModelRepository.replaceForConnection(custom.id, [
+    {
+      providerConnectionId: custom.id,
+      providerCode: null,
+      remoteModelId: "llm-model",
+      modelName: "LLM Model",
+      rawPayloadJson: JSON.stringify({ id: "llm-model" }),
+      isActive: true,
+      syncedAt: "2026-07-07T10:00:00.000Z",
+    },
+    {
+      providerConnectionId: custom.id,
+      providerCode: null,
+      remoteModelId: "embed-model",
+      modelName: "Embed Model",
+      rawPayloadJson: JSON.stringify({ id: "embed-model", dimensions: 1536 }),
+      isActive: true,
+      syncedAt: "2026-07-07T10:00:00.000Z",
+    },
+  ]);
+
+  providerSettingsService.selectRoleModel(custom.id, "llm", "llm-model");
+  providerSettingsService.selectRoleModel(custom.id, "embedding", "embed-model");
+
+  providerSettingsService.deleteProviderConnection(custom.id);
+
+  const llmConfig = modelConfigRepository.findDefaultByType("llm");
+  const embeddingConfig = modelConfigRepository.findDefaultByType("embedding");
+
+  assert.equal(llmConfig?.providerConnectionId, null);
+  assert.equal(llmConfig?.providerCode, null);
+  assert.equal(llmConfig?.remoteModelId, null);
+  assert.equal(llmConfig?.name, "");
+
+  assert.equal(embeddingConfig?.providerConnectionId, null);
+  assert.equal(embeddingConfig?.providerCode, null);
+  assert.equal(embeddingConfig?.remoteModelId, null);
+  assert.equal(embeddingConfig?.name, "");
+  assert.deepEqual(
+    embeddingConfig ? JSON.parse(embeddingConfig.params) : null,
+    buildDefaultParams("embedding"),
+  );
 });
 
 test("google provider can save config and sync models through the provider instance path", async () => {

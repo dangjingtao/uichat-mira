@@ -227,6 +227,23 @@ export const providerModels = sqliteTable(
 export type ProviderModel = typeof providerModels.$inferSelect;
 export type NewProviderModel = typeof providerModels.$inferInsert;
 
+export const generalSettings = sqliteTable("general_settings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  socks5Host: text("socks5_host").notNull().default(""),
+  socks5Port: integer("socks5_port").notNull().default(0),
+  socks5Username: text("socks5_username").notNull().default(""),
+  socks5PasswordEncrypted: text("socks5_password_encrypted"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export type GeneralSettings = typeof generalSettings.$inferSelect;
+export type NewGeneralSettings = typeof generalSettings.$inferInsert;
+
 export const webSearchSettings = sqliteTable("web_search_settings", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   tavilyApiKeyEncrypted: text("tavily_api_key_encrypted"),

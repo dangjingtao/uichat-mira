@@ -72,6 +72,7 @@ export interface ModelConfigResponse {
   name: string;
   providerCode: string | null;
   providerConnectionId: string | null;
+  providerConnectionDisplayName: string | null;
   providerTemplateCode: string | null;
   remoteModelId: string | null;
   params: Record<string, unknown>;
@@ -100,6 +101,7 @@ const toModelConfigResponse = (row: ModelConfig): ModelConfigResponse => {
     name: row.name,
     providerCode: row.providerCode ?? row.providerConnectionId ?? null,
     providerConnectionId: row.providerConnectionId ?? null,
+    providerConnectionDisplayName: connection?.displayName ?? null,
     providerTemplateCode: connection?.templateCode ?? null,
     remoteModelId: row.remoteModelId ?? null,
     params: sanitizeParamsByType(row.type, JSON.parse(row.params)),

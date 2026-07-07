@@ -37,6 +37,7 @@ related:
 | AgentGraph / Agent V1.5 | `READY_FOR_REVIEW` | 主链合同、弱模型防线、审批恢复、evidence grounded answer | [agent-nodes-workboard.md](agent-nodes-workboard.md), `agent_node_T001-T017` | 旧专项 workboard 存在状态冲突，见下方 Agent Nodes Index |
 | Harness / Sandbox | `READY_FOR_REVIEW` | 候选排序、sandbox direct contract、artifact/output contract；L1 workspace sandbox runner 已通过，跨层 diagnostics 闭环已补专门回归并通过 `pnpm check` | [T-010](tasks/T-010-harness-candidate-ordering.md), [T-011](tasks/T-011-sandbox-contract-direct-bench.md), [T-012](tasks/T-012-l1-workspace-sandbox-runner.md), [T-013](tasks/T-013-sandbox-artifact-output-contract.md), [T-014](tasks/T-014-cross-layer-diagnostics-closure.md) | T-012、T-013、T-014 已 DONE，其余仍按各自任务状态处理 |
 | Core Tools | `READY_FOR_REVIEW` | read / write / terminal / web-search 工具治理尾项 | `core_tools_T001-T019` | 多数已完成，仍有 review 队列 |
+| Agent Runtime T29-T33 Task Pack | `TODO` | 登记 `server` 测试全绿、failed tool 路径合同、terminal 结果语义、结构化 failure code、核心工具 summary contract 五个任务包 | [agent-runtime-t29-t33-ledger.md](../tooling-runtime/agent-runtime-t29-t33-ledger.md), [agent_node_T029](tasks/agent_node_T029-server-test-report-green.md), [agent_node_T030](tasks/agent_node_T030-failed-tool-path-contract.md), [agent_node_T031](tasks/agent_node_T031-terminal-result-semantics.md), [agent_node_T032](tasks/agent_node_T032-structured-failure-code.md), [agent_node_T033](tasks/agent_node_T033-core-tool-summary-contracts.md) | 已完成仓库内正式登记；当前只新增任务卡和专项台账，未开始实现 |
 | Agent Phase 1 | `ARCHIVED_DONE` | Agent MVP 主链历史归档 | [agent-phase-1-2-archive-decision.md](phase-conclusions/agent-phase-1-2-archive-decision.md), [agent-phase-1-checklist.md](../chat/agent-phase-1-checklist.md) | 一期完成归档；剩余增强项转后续 |
 | Agent Phase 2 | `ARCHIVED_PARTIAL_SUPERSEDED` | 可用闭环阶段部分归档，后续由 Agent V1.5 / 老三期接管 | [agent-phase-1-2-archive-decision.md](phase-conclusions/agent-phase-1-2-archive-decision.md), [agent-phase-2-checklist.md](../chat/agent-phase-2-checklist.md) | 不按完成归档；未完成项不得口头升级为 DONE |
 | Phase-1 Remediation | `DONE_WITH_HISTORY` | 早期 P0/P1/P2 缺陷整改 | [agent-workboard.md](agent-workboard.md), `T-001-T008` | 仅作为历史证据，不再作为当前项目台账；阶段口径见 Agent Phase 1 |
@@ -122,6 +123,11 @@ related:
 | [agent_node_T015](tasks/agent_node_T015-phoenix-minimum-human-observability.md) | `DONE` | `DONE` | Phoenix observability |
 | [agent_node_T016](tasks/agent_node_T016-local-tool-routing-and-schema-guard.md) | `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | local routing / schema guard |
 | [agent_node_T017](tasks/agent_node_T017-toolcall-loop-regression-matrix.md) | `DONE` | `DONE` | Review 02 已通过；toolCall loop 黑盒回归矩阵 |
+| [agent_node_T029](tasks/agent_node_T029-server-test-report-green.md) | `TODO` | `TODO` | 外部 `T29` 正式登记；必须先于 `T30-T33` |
+| [agent_node_T030](tasks/agent_node_T030-failed-tool-path-contract.md) | `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | failed tool 路径合同断言已与 C 合同对齐；定向 vitest 26/26 通过；未回填 `T29` |
+| [agent_node_T031](tasks/agent_node_T031-terminal-result-semantics.md) | `TODO` | `TODO` | 外部 `T31` 正式登记；聚焦 terminal 结果语义拆分 |
+| [agent_node_T032](tasks/agent_node_T032-structured-failure-code.md) | `TODO` | `TODO` | 外部 `T32` 正式登记；聚焦结构化 `failureCode` |
+| [agent_node_T033](tasks/agent_node_T033-core-tool-summary-contracts.md) | `TODO` | `TODO` | 外部 `T33` 正式登记；聚焦核心工具 summary contract |
 
 ## Core Tools Index
 

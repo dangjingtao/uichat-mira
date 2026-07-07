@@ -1,9 +1,17 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { afterEach, beforeEach, test, vi } from "vitest";
+import { initializeAuthDatabase } from "@/db/auth.db";
+import { resetDatabaseClients } from "@/db/index.js";
+import { initializeKnowledgeBaseDatabase } from "@/db/knowledge-base.db";
+import { initializeModelConfigDatabase } from "@/db/model-config.db";
+import { initializeRoleDatabase } from "@/db/role.db";
+import { initializeThreadDatabase } from "@/db/thread.db";
 import * as harnessInvocations from "@/harness/invocations";
 import * as registry from "@/harness/registry";
 import { contextBudgetService } from "@/services/context-budget/index";
 import { providerProxyService } from "@/services/provider-proxy.service/index";
+import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 import * as intentMatcherModule from "../intent/embedding-capability-matcher";
 import * as taskSelectorModule from "../intent/task-capability-selector";
 import * as policyModule from "../policy";
@@ -25,6 +33,13 @@ const basePlan = {
   version: 1,
   steps: [],
 };
+
+const originalDatabaseUrl = process.env.DATABASE_URL;
+const testDbPath = createTimestampedTestArtifactPath(
+  "db",
+  "toolcall-loop-regression",
+  ".sqlite",
+);
 
 const makeMessage = (content: string) => ({
   role: "user" as const,
@@ -241,6 +256,13 @@ const assertMatrixFields = (
 };
 
 beforeEach(() => {
+  process.env.DATABASE_URL = `file:${testDbPath}`;
+  resetDatabaseClients();
+  initializeAuthDatabase();
+  initializeModelConfigDatabase();
+  initializeKnowledgeBaseDatabase();
+  initializeThreadDatabase();
+  initializeRoleDatabase();
   vi.spyOn(contextBudgetService, "pack").mockImplementation((input) => ({
     messages: [
       ...(input.sections.prefaceMessages ?? []),
@@ -279,6 +301,17 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  resetDatabaseClients();
+  try {
+    fs.rmSync(testDbPath, { force: true });
+  } catch {
+    // ignore cleanup failure on Windows file locking
+  }
+  if (originalDatabaseUrl) {
+    process.env.DATABASE_URL = originalDatabaseUrl;
+  } else {
+    delete process.env.DATABASE_URL;
+  }
 });
 
 test("toolCall loop freezes valid use_tool, allows policy, executes ToolNode, writes evidence, and generates from answer-ready summary", async () => {
@@ -609,6 +642,50 @@ test("toolCall loop failed tool writes failed evidence and never reports fake su
   });
 
   assertMatrixFields(result, {
+    status: "completed",
+    pendingToolCall: "absent",
+    pendingApproval: "absent",
+    lastToolExecution: "present",
+    latestSummary: "present",
+    terminalField: "answer",
+  });
+  assert.equal(executeSpy.mock.calls.length, 2);
+  assert.equal(generateSpy.mock.calls.length, 1);
+  assert.equal(result.lastToolExecution?.status, "failed");
+  assert.equal(result.lastToolExecution?.failureKind, "recoverable");
+  assert.equal(result.evidence.latestSummary?.status, "failed");
+  assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, false);
+  assert.match(result.answer ?? "", /当前还没有足够的已完成证据/);
+});
+
+test("toolCall loop terminal failed tool still fails the graph and does not generate a guarded answer", async () => {
+  const readOpen = readOpenTool();
+  setupToolExposure("open README.md", [readOpen]);
+  vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
+    async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need file content."}';
+    },
+  );
+  const executeSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-read-open-terminal-failed",
+      toolId: "read_open",
+      status: "failed",
+      error: {
+        message: "Tool protocol mismatch: result payload is invalid",
+      },
+      startedAt: "2026-07-05T00:00:00.000Z",
+      finishedAt: "2026-07-05T00:00:01.000Z",
+    } as never);
+  const generateSpy = vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke");
+
+  const result = await runToolLoop({
+    runId: "run-regression-terminal-failed-tool",
+    question: "open README.md",
+  });
+
+  assertMatrixFields(result, {
     status: "failed",
     pendingToolCall: "absent",
     pendingApproval: "absent",
@@ -619,9 +696,12 @@ test("toolCall loop failed tool writes failed evidence and never reports fake su
   assert.equal(executeSpy.mock.calls.length, 1);
   assert.equal(generateSpy.mock.calls.length, 0);
   assert.equal(result.lastToolExecution?.status, "failed");
+  assert.equal(result.lastToolExecution?.failureKind, "terminal");
   assert.equal(result.evidence.latestSummary?.status, "failed");
   assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, false);
-  assert.match(result.errorMessage ?? "", /File not found/);
+  assert.match(result.errorMessage ?? "", /protocol mismatch/i);
+  assert.match(result.terminalReason ?? "", /protocol mismatch/i);
+  assert.equal(result.answer, "");
 });
 
 test("toolCall loop timedOut tool evidence is not marked answer-ready", async () => {

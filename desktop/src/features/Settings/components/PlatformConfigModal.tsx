@@ -9,6 +9,7 @@ import {
 import { useTranslation } from "react-i18next";
 import {
   createProviderConnection,
+  deleteProviderConnection,
   getProviderDetail,
   getProviders,
   getProviderTemplates,
@@ -154,7 +155,7 @@ const PlatformConfigModal = forwardRef<
   PlatformConfigModalProps
 >(({ onRoleConfigUpdated, selectionRole, onSelectionStateChange }, ref) => {
   const { t } = useTranslation();
-  const { refresh: refreshRoleModelConfigs } = useRoleModelConfigs();
+  const { configMap, refresh: refreshRoleModelConfigs } = useRoleModelConfigs();
   const [providers, setProviders] = useState<ProviderSummary[]>([]);
   const [providerTemplates, setProviderTemplates] = useState<
     ProviderTemplateSummary[]
@@ -168,14 +169,25 @@ const PlatformConfigModal = forwardRef<
   const [selectedModelIds, setSelectedModelIds] = useState<
     Partial<Record<ProviderCode, string>>
   >({});
+  const [currentModelNames, setCurrentModelNames] = useState<
+    Partial<Record<ProviderCode, string>>
+  >({});
   const [loadingProviderId, setLoadingProviderId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [assigningRole, setAssigningRole] = useState<RoleModelType | null>(null);
   const [creatingProvider, setCreatingProvider] = useState(false);
+  const [deletingProvider, setDeletingProvider] = useState(false);
   const [syncErrorByProvider, setSyncErrorByProvider] = useState<
     Partial<Record<ProviderCode, string | null>>
   >({});
+  const [hasResolvedInitialProvider, setHasResolvedInitialProvider] =
+    useState(false);
   const activeSelectionRole = selectionRole ?? "llm";
+  const preferredInitialProviderCode =
+    selectionRole !== undefined
+      ? ((configMap[selectionRole]?.providerConnectionId ??
+          configMap[selectionRole]?.providerCode) as ProviderCode | null | undefined)
+      : undefined;
 
   const getErrorMessage = useCallback(
     (err: unknown, fallbackKey: string) => {
@@ -211,10 +223,21 @@ const PlatformConfigModal = forwardRef<
         setSyncErrorByProvider((prev) => ({ ...prev, [providerCode]: null }));
         setSelectedModelIds((prev) => ({
           ...prev,
+          [providerCode]: (() => {
+            const preferredModelId =
+              prev[providerCode] ??
+              detail.assignments[activeSelectionRole]?.remoteModelId ??
+              "";
+            return detail.models.some((model) => model.id === preferredModelId)
+              ? preferredModelId
+              : "";
+          })(),
+        }));
+        setCurrentModelNames((prev) => ({
+          ...prev,
           [providerCode]:
-            prev[providerCode] ||
-            detail.assignments[activeSelectionRole]?.remoteModelId ||
-            detail.models[0]?.id ||
+            prev[providerCode] ??
+            detail.assignments[activeSelectionRole]?.remoteModelId ??
             "",
         }));
       } finally {
@@ -232,11 +255,19 @@ const PlatformConfigModal = forwardRef<
           getProviderTemplates(),
         ]);
         setProviderTemplates(nextTemplates);
-        const initialProvider =
-          nextProviders.find((item) => item.code === selectedProviderCode)?.code ??
-          nextProviders[0]?.code ??
-          DEFAULT_PROVIDER_CODE;
+        const initialProvider = !hasResolvedInitialProvider
+          ? nextProviders.find((item) => item.code === preferredInitialProviderCode)
+              ?.code ??
+            nextProviders.find((item) => item.code === selectedProviderCode)?.code ??
+            nextProviders[0]?.code ??
+            DEFAULT_PROVIDER_CODE
+          : nextProviders.find((item) => item.code === selectedProviderCode)?.code ??
+            nextProviders[0]?.code ??
+            DEFAULT_PROVIDER_CODE;
         setSelectedProviderCode(initialProvider);
+        if (!hasResolvedInitialProvider) {
+          setHasResolvedInitialProvider(true);
+        }
         await loadProviderDetail(initialProvider);
       } catch (err) {
         const messageText = getErrorMessage(
@@ -248,8 +279,10 @@ const PlatformConfigModal = forwardRef<
     })();
   }, [
     getErrorMessage,
+    hasResolvedInitialProvider,
     loadProviderDetail,
     loadProviders,
+    preferredInitialProviderCode,
     selectedProviderCode,
   ]);
 
@@ -276,11 +309,12 @@ const PlatformConfigModal = forwardRef<
 
   const currentDetail = providerDetails[selectedProviderCode] ?? null;
   const currentSelectedModelId = selectedModelIds[selectedProviderCode] ?? "";
+  const currentModelName = currentModelNames[selectedProviderCode] ?? "";
   const isConfirmingSelection =
     selectionRole !== undefined && assigningRole === selectionRole;
   const canConfirmSelection =
     selectionRole !== undefined &&
-    Boolean(currentSelectedModelId) &&
+    Boolean(currentModelName.trim()) &&
     !syncing &&
     !loadingProviderId;
 
@@ -357,7 +391,7 @@ const PlatformConfigModal = forwardRef<
   };
 
   const handleSetDefaultRole = useCallback(async (role: RoleModelType) => {
-    if (!currentSelectedModelId) {
+    if (!currentModelName.trim()) {
       message.warning(t("settings.model.platformConfig.selectModelFirst"));
       return false;
     }
@@ -367,7 +401,7 @@ const PlatformConfigModal = forwardRef<
       await selectProviderRoleModel(
         selectedProviderCode,
         role,
-        currentSelectedModelId,
+        currentModelName.trim(),
         {
           baseUrl: currentDetail?.provider.baseUrl ?? "",
           apiKey: currentDetail?.provider.apiKey ?? "",
@@ -393,7 +427,7 @@ const PlatformConfigModal = forwardRef<
   }, [
     currentDetail?.provider.apiKey,
     currentDetail?.provider.baseUrl,
-    currentSelectedModelId,
+    currentModelName,
     getErrorMessage,
     loadProviderDetail,
     loadProviders,
@@ -435,6 +469,85 @@ const PlatformConfigModal = forwardRef<
     },
     [getErrorMessage, loadProviderDetail, loadProviders, t],
   );
+
+  const handleDeleteProvider = useCallback(() => {
+    if (!currentDetail || currentDetail.provider.isSystem) {
+      return;
+    }
+
+    const providerCode = currentDetail.provider.code;
+    const providerName = currentDetail.provider.displayName;
+
+    Modal.confirm({
+      title: t("settings.model.platform.deleteTitle"),
+      description: t("settings.model.platform.deleteDescription", {
+        name: providerName,
+      }),
+      confirmText: t("settings.model.platform.deleteConfirm"),
+      loadingText: t("settings.model.platform.deletingProvider"),
+      tone: "danger",
+      onConfirm: async () => {
+        setDeletingProvider(true);
+        try {
+          await deleteProviderConnection(providerCode);
+
+          setProviderDetails((prev) => {
+            const next = { ...prev };
+            delete next[providerCode];
+            return next;
+          });
+          setSelectedModelIds((prev) => {
+            const next = { ...prev };
+            delete next[providerCode];
+            return next;
+          });
+          setCurrentModelNames((prev) => {
+            const next = { ...prev };
+            delete next[providerCode];
+            return next;
+          });
+          setSyncErrorByProvider((prev) => {
+            const next = { ...prev };
+            delete next[providerCode];
+            return next;
+          });
+
+          const nextProviders = await loadProviders();
+          const fallbackProviderCode =
+            nextProviders.find((item) => item.code !== providerCode)?.code ??
+            nextProviders[0]?.code ??
+            DEFAULT_PROVIDER_CODE;
+
+          setSelectedProviderCode(fallbackProviderCode);
+          if (nextProviders.some((item) => item.code === fallbackProviderCode)) {
+            await loadProviderDetail(fallbackProviderCode);
+          }
+
+          await refreshRoleModelConfigs();
+          broadcastRoleModelConfigChanged();
+          await onRoleConfigUpdated?.();
+          message.success(t("settings.model.platform.deleteSuccess"));
+        } catch (err) {
+          const messageText = getErrorMessage(
+            err,
+            "settings.model.platform.deleteFailed",
+          );
+          message.error(messageText);
+          throw err;
+        } finally {
+          setDeletingProvider(false);
+        }
+      },
+    });
+  }, [
+    currentDetail,
+    getErrorMessage,
+    loadProviderDetail,
+    loadProviders,
+    onRoleConfigUpdated,
+    refreshRoleModelConfigs,
+    t,
+  ]);
 
   const openCreateProviderDialog = useCallback(() => {
     let modalKey = "";
@@ -507,20 +620,35 @@ const PlatformConfigModal = forwardRef<
         <ApiConfigCard
           detail={currentDetail}
           selectedModelId={currentSelectedModelId}
+          currentModelName={currentModelName}
           loading={loadingProviderId === selectedProviderCode}
           syncing={syncing}
+          deleting={deletingProvider}
           hideRoleActions={selectionRole !== undefined}
           assigningRole={assigningRole}
           syncError={syncErrorByProvider[selectedProviderCode] ?? null}
           onApiKeyChange={(apiKey) => updateCurrentDetail({ apiKey })}
           onApiUrlChange={(baseUrl) => updateCurrentDetail({ baseUrl })}
-          onSelectedModelChange={(value) =>
+          onSelectedModelChange={(value) => {
             setSelectedModelIds((prev) => ({
+              ...prev,
+              [selectedProviderCode]: value,
+            }));
+            if (value) {
+              setCurrentModelNames((prev) => ({
+                ...prev,
+                [selectedProviderCode]: value,
+              }));
+            }
+          }}
+          onModelNameChange={(value) =>
+            setCurrentModelNames((prev) => ({
               ...prev,
               [selectedProviderCode]: value,
             }))
           }
           onTestConnection={handleSyncModels}
+          onDeleteProvider={handleDeleteProvider}
           onSetDefaultRole={handleSetDefaultRole}
         />
       </div>

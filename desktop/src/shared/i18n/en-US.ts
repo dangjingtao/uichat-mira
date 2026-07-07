@@ -596,6 +596,27 @@ const enUS = {
       account: {
         changePassword: "Change Password",
       },
+      proxy: {
+        title: "SOCKS5 Proxy",
+        description:
+          "This step only persists backend outbound proxy settings. No request flow uses it yet.",
+        host: "SOCKS5 Host",
+        hostPlaceholder: "For example 127.0.0.1",
+        port: "SOCKS5 Port",
+        portPlaceholder: "For example 1080",
+        username: "Username",
+        usernamePlaceholder: "Optional",
+        password: "Password",
+        passwordPlaceholder: "Optional",
+        hint:
+          "Leave host or port empty to keep the proxy disabled. The config is stored now and can be wired into provider traffic later.",
+        save: "Save proxy settings",
+        saving: "Saving...",
+        saveSuccess: "Proxy settings saved",
+        saveFailed: "Failed to save proxy settings",
+        loadFailed: "Failed to load proxy settings",
+        portInvalid: "Port must be an integer between 1 and 65535",
+      },
       password: {
         modalTitle: "Change Password",
         title: "Change Password",
@@ -1087,6 +1108,15 @@ const enUS = {
         creatingProvider: "Creating...",
         createSuccess: "Provider created",
         createFailed: "Failed to create provider",
+        deleteProvider: "Delete provider",
+        deletingProvider: "Deleting...",
+        deleteTitle: "Delete custom provider",
+        deleteDescription:
+          "After deletion, {{name}} and every default model binding that points to it will be cleared.",
+        deleteConfirm: "Delete provider",
+        deleteSuccess:
+          "Provider deleted and related default model bindings were cleared",
+        deleteFailed: "Failed to delete provider",
       },
       capabilities: {
         sectionTitle: "Capabilities",
@@ -1111,6 +1141,10 @@ const enUS = {
         apiKeyPlaceholder: "Enter API key",
         apiUrl: "API URL",
         apiUrlPlaceholder: "Enter API URL",
+        modelName: "Model Name",
+        modelNamePlaceholder:
+          "Enter a model name, including one that is not in synced models",
+        syncedModel: "Synced Model",
         currentModel: "Current Model",
         syncedModelsTitle: "Synced Models",
         syncedModelsDescription:

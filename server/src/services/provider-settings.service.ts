@@ -280,6 +280,23 @@ const requireConnection = (providerId: string) => {
   return connection;
 };
 
+const clearDefaultRoleBindingsForConnection = (providerConnectionId: string) => {
+  const defaults = modelConfigRepository.findAllDefaults();
+
+  defaults
+    .filter((config) => config.providerConnectionId === providerConnectionId)
+    .forEach((config) => {
+      modelConfigRepository.upsertDefault({
+        type: config.type,
+        name: "",
+        providerCode: null,
+        providerConnectionId: null,
+        remoteModelId: null,
+        params: JSON.stringify(buildDefaultParams(config.type)),
+      });
+    });
+};
+
 export const providerSettingsService = {
   listProviderTemplates(): ProviderTemplateSummaryResponse[] {
     const templateCodes: ProviderTemplateCode[] = [
@@ -361,13 +378,13 @@ export const providerSettingsService = {
     displayName: string;
     baseUrl?: string;
     apiKey?: string;
-  }) {
+  }): ProviderSummaryResponse {
     if (payload.templateCode !== "openai-compatible-custom") {
       throw new Error("Only custom OpenAI-compatible connections can be created.");
     }
 
     const template = getProviderTemplateDefinition(payload.templateCode);
-    return providerConnectionRepository.create({
+    const connection = providerConnectionRepository.create({
       templateCode: payload.templateCode,
       providerCode: null,
       displayName: payload.displayName.trim() || template.displayName,
@@ -379,6 +396,8 @@ export const providerSettingsService = {
       lastError: null,
       lastSyncedAt: null,
     });
+
+    return toProviderSummary(connection, []);
   },
 
   saveProviderConnection(
@@ -408,6 +427,7 @@ export const providerSettingsService = {
       throw new Error("Built-in provider connections cannot be deleted.");
     }
 
+    clearDefaultRoleBindingsForConnection(connection.id);
     providerConnectionRepository.delete(connection.id);
   },
 
@@ -500,19 +520,20 @@ export const providerSettingsService = {
     }
 
     const connection = requireConnection(providerId);
-    const providerModel = providerModelRepository.findByConnectionAndRemoteModelId(
-      connection.id,
-      remoteModelId,
-    );
-
-    if (!providerModel) {
+    const normalizedRemoteModelId = remoteModelId.trim();
+    if (!normalizedRemoteModelId) {
       throw new Error(PROVIDER_MODEL_NOT_FOUND_MESSAGE);
     }
+
+    const providerModel = providerModelRepository.findByConnectionAndRemoteModelId(
+      connection.id,
+      normalizedRemoteModelId,
+    );
 
     const currentDefault = modelConfigRepository.findDefaultByType(role);
     const params = buildDefaultParams(role);
     const embeddingDimensions =
-      role === "embedding"
+      role === "embedding" && providerModel
         ? getEmbeddingDimensionsFromProviderModel(providerModel)
         : undefined;
 
@@ -534,13 +555,13 @@ export const providerSettingsService = {
 
     const updated = modelConfigRepository.upsertDefault({
       type: role,
-      name: providerModel.modelName,
+      name: providerModel?.modelName ?? normalizedRemoteModelId,
       providerCode: connection.providerCode ?? null,
       providerConnectionId: connection.id,
       remoteModelId:
-        connection.providerCode === "cloudflare"
+        providerModel && connection.providerCode === "cloudflare"
           ? providerModel.modelName
-          : providerModel.remoteModelId,
+          : providerModel?.remoteModelId ?? normalizedRemoteModelId,
       params: JSON.stringify(params),
     });
 

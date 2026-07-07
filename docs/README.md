@@ -132,6 +132,7 @@ Related:
 
 - `tooling-runtime/harness-runtime-design.md`
 - `tooling-runtime/read-skill-design.md`
+- `tooling-runtime/agent-runtime-t29-t33-ledger.md`
 - `tooling-runtime/terminal-capability-checklist.md`
 - `tooling-runtime/tools-protocol.md`
 - `tooling-runtime/tools-ecosystem-research.md`

@@ -118,7 +118,7 @@ export const PROVIDER_DEFINITIONS = {
     chatAdapter: "openai-compatible",
     embeddingAdapter: "openai-compatible",
     rerankAdapter: "openai-compatible",
-    imageAdapter: "none",
+    imageAdapter: "openai-images",
   },
 } satisfies Record<ProviderTemplateCode, ProviderDefinition>;
 

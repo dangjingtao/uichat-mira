@@ -545,7 +545,7 @@ export const providerSettingsRouteSchemas = {
       required: ["templateCode", "displayName"],
     },
     response: {
-      200: successEnvelope(providerConnectionResponseSchema),
+      200: successEnvelope(providerSummarySchema),
       400: errorEnvelope,
       500: errorEnvelope,
     },

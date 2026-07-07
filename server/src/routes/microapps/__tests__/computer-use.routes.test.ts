@@ -28,6 +28,7 @@ import microappsRoute, {
   type ComputerUseRuntimeRouteService,
   type ImageGenerationRouteService,
   type MailCenterRouteService,
+  type NewsHubRouteService,
 } from "../index.js";
 
 const testDbPath = createTimestampedTestArtifactPath(
@@ -131,6 +132,27 @@ const mailCenterService: MailCenterRouteService = {
   },
 };
 
+const newsHubService: NewsHubRouteService = {
+  getOverview() {
+    return {
+      sources: [],
+      items: [],
+      total: 0,
+      generatedAt: "2026-07-06T12:00:00.000Z",
+    };
+  },
+  async refresh() {
+    return {
+      startedAt: "2026-07-06T12:00:00.000Z",
+      finishedAt: "2026-07-06T12:00:01.000Z",
+      fetchedCount: 0,
+      insertedCount: 0,
+      updatedCount: 0,
+      sources: [],
+    };
+  },
+};
+
 const createApp = async (input: {
   computerUseService: ComputerUseRouteService;
   computerUseRuntimeService: ComputerUseRuntimeRouteService;
@@ -145,6 +167,7 @@ const createApp = async (input: {
     computerUseService: input.computerUseService,
     computerUseRuntimeService: input.computerUseRuntimeService,
     mailCenterService,
+    newsHubService,
   });
   return app;
 };

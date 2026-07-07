@@ -18,6 +18,7 @@ export interface RoleModelConfig {
   name: string;
   providerCode: ProviderCode | null;
   providerConnectionId: string | null;
+  providerConnectionDisplayName: string | null;
   providerTemplateCode: string | null;
   remoteModelId: string | null;
   params: Record<string, unknown>;

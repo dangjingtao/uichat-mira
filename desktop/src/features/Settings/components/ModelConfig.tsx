@@ -203,8 +203,10 @@ function buildModelSummary(
   const isConfigured = hasConfiguredProviderBinding(config);
   const providerLabel = config?.providerCode
     ? getProviderLabel(config.providerCode)
-    : config?.providerConnectionId
-      ? config.providerConnectionId
+    : config?.providerConnectionDisplayName
+      ? config.providerConnectionDisplayName
+      : config?.providerConnectionId
+        ? config.providerConnectionId
       : builtInModel
         ? t("settings.model.config.builtInLocal")
         : t("settings.model.config.notConfigured");
@@ -299,6 +301,11 @@ interface ModelConfigProps {
 }
 
 interface ModelConfigEditorProps extends ModelConfigProps {
+  onClose: () => void;
+}
+
+interface ModelSelectorDialogContentProps {
+  modelType: RoleModelType;
   onClose: () => void;
 }
 
@@ -478,6 +485,53 @@ const ModelConfigEditor: React.FC<ModelConfigEditorProps> = ({
   );
 };
 
+const ModelSelectorDialogContent: React.FC<ModelSelectorDialogContentProps> = ({
+  modelType,
+  onClose,
+}) => {
+  const { t } = useTranslation();
+  const meta = MODEL_META[modelType];
+  const selectorRef = useRef<PlatformConfigModalRef | null>(null);
+  const [selectorState, setSelectorState] = useState({
+    canConfirm: false,
+    confirming: false,
+  });
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="min-h-0 flex-1">
+        <PlatformConfigModal
+          ref={selectorRef}
+          selectionRole={modelType}
+          onSelectionStateChange={setSelectorState}
+        />
+      </div>
+
+      <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border pt-3">
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          {t("settings.model.defaultCard.close")}
+        </Button>
+        <Button
+          size="sm"
+          disabled={!selectorState.canConfirm || selectorState.confirming}
+          onClick={async () => {
+            const confirmed = await selectorRef.current?.confirmSelection();
+            if (confirmed) {
+              onClose();
+            }
+          }}
+        >
+          {selectorState.confirming
+            ? t("settings.model.api.setting")
+            : t("settings.model.defaultCard.setRoleModel", {
+                role: t(meta.titleKey),
+              })}
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 const ModelConfig: React.FC<ModelConfigProps> = ({
   modelType,
   config,
@@ -489,11 +543,6 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
   const { builtInModel, isConfigured, modelLabel, providerLabel } =
     buildModelSummary(t, config, modelType);
   const statusMeta = buildStatusMeta(t, isConfigured, builtInModel);
-  const selectorRef = useRef<PlatformConfigModalRef | null>(null);
-  const [selectorState, setSelectorState] = useState({
-    canConfirm: false,
-    confirming: false,
-  });
 
   const openEditor = () => {
     let modalKey = "";
@@ -523,42 +572,11 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
       title: t("settings.model.defaultCard.platformSettingsTitle"),
       width: 940,
       height: 560,
-      onClose: () => {
-        setSelectorState({ canConfirm: false, confirming: false });
-      },
-      footer: (
-        <>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => Modal.close(modalKey)}
-          >
-            {t("settings.model.defaultCard.close")}
-          </Button>
-          <Button
-            size="sm"
-            disabled={!selectorState.canConfirm || selectorState.confirming}
-            onClick={async () => {
-              const confirmed =
-                await selectorRef.current?.confirmSelection();
-              if (confirmed) {
-                Modal.close(modalKey);
-              }
-            }}
-          >
-            {selectorState.confirming
-              ? t("settings.model.api.setting")
-              : t("settings.model.defaultCard.setRoleModel", {
-                  role: t(meta.titleKey),
-                })}
-          </Button>
-        </>
-      ),
+      footer: null,
       content: (
-        <PlatformConfigModal
-          ref={selectorRef}
-          selectionRole={modelType}
-          onSelectionStateChange={setSelectorState}
+        <ModelSelectorDialogContent
+          modelType={modelType}
+          onClose={() => Modal.close(modalKey)}
         />
       ),
     });
