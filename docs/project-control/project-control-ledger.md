@@ -1,7 +1,7 @@
 ---
 status: current
 owner: project-owner
-last_verified: 2026-07-06
+last_verified: 2026-07-09
 layer: project-control
 module: ProjectControl
 feature: ProjectControlLedger
@@ -36,9 +36,9 @@ related:
 | Harness Context System | `DONE` | Context Read Bench 已验收通过，补齐真实读取压测 | [harness_context_T001](tasks/harness_context_T001-context-read-plan-dsl.md), [harness_context_T002](tasks/harness_context_T002-context-read-bench.md) | T001、T002 已 DONE；整仓检查仍有任务外 typecheck 阻断 |
 | AgentGraph / Agent V1.5 | `READY_FOR_REVIEW` | 主链合同、弱模型防线、审批恢复、evidence grounded answer | [agent-nodes-workboard.md](agent-nodes-workboard.md), `agent_node_T001-T017` | 旧专项 workboard 存在状态冲突，见下方 Agent Nodes Index |
 | Harness / Sandbox | `READY_FOR_REVIEW` | 候选排序、sandbox direct contract、artifact/output contract；L1 workspace sandbox runner 已通过，跨层 diagnostics 闭环已补专门回归并通过 `pnpm check` | [T-010](tasks/T-010-harness-candidate-ordering.md), [T-011](tasks/T-011-sandbox-contract-direct-bench.md), [T-012](tasks/T-012-l1-workspace-sandbox-runner.md), [T-013](tasks/T-013-sandbox-artifact-output-contract.md), [T-014](tasks/T-014-cross-layer-diagnostics-closure.md) | T-012、T-013、T-014 已 DONE，其余仍按各自任务状态处理 |
-| Deep Agents Spike | `IN_PROGRESS` | `T-DeepAgents-02` 正在验证 selector baseline 与 middleware 可抽取性；不接入现有 Harness 主链 | [T-DeepAgents-01](tasks/T-DeepAgents-01-deepagents-js-spike.md), [T-DeepAgents-02](tasks/T-DeepAgents-02-selector-middleware-baseline.md) | 独立 spike package，`T-01` 已形成条件通过结论；`T-02` 继续验证 selector、domain gate、middleware 风险和 `T-03` 前提 |
+| Deep Agents Spike | `IN_PROGRESS` | `T-DeepAgents-02` 已整改为诚实 baseline：fake wiring 与 real selector quality 已拆开；当前 real selector baseline 因缺少环境配置而 `SKIPPED`，`T-03` 保持阻塞 | [T-DeepAgents-01](tasks/T-DeepAgents-01-deepagents-js-spike.md), [T-DeepAgents-02](tasks/T-DeepAgents-02-selector-middleware-baseline.md) | 独立 spike package，`T-01` 已形成条件通过结论；`T-02` 当前结论是 middleware wiring 通过、middleware extractability 部分成立，但 real selector quality 仍未证明 |
 | Core Tools | `READY_FOR_REVIEW` | read / write / terminal / web-search 工具治理尾项 | `core_tools_T001-T019` | 多数已完成，仍有 review 队列 |
-| Codebase Understanding Docs | `READY_FOR_REVIEW` | `code_T001`、`code_T002`、`code_T003`、`code_T004`、`code_T007` 已补齐 scoped docs 卡；`code_T006` 已完成本地 CodeGraph benchmark spike review，结论为继续做受控候选，并在 runtime 前新增 wrapper 合同，不接 runtime | [code_T001](tasks/code_T001-codebase-understanding-consensus-doc-integration.md), [code_T002](tasks/code_T002-codebase-engine-benchmark.md), [code_T003](tasks/code_T003-codegraph-managed-mcp-spike.md), [code_T004](tasks/code_T004-codebase-engine-abstraction.md), [code_T006](tasks/code_T006-codegraph-benchmark-spike.md), [code_T007](tasks/code_T007-codegraph-wrapper-contract.md), [review](reviews/codebase-understanding-docs-review-index.md), [codegraph benchmark spike](reviews/codegraph-benchmark-spike.md) | 文档正文统一落入 `docs/tooling-runtime/`；总审查材料按仓库规则落入 `reviews/`，不沿用外部 `docs/agent/`；`code_T007` 是 docs-only wrapper 合同任务，不是 runtime 接入任务 |
+| Codebase Understanding Docs | `READY_FOR_REVIEW` | `code_T001`、`code_T002`、`code_T003`、`code_T004`、`code_T007`、`code_T008` 已补齐 scoped docs 卡；`code_T006` 已完成本地 CodeGraph benchmark spike review，结论为继续做受控候选，并在 runtime 前新增 wrapper 合同和 implementation plan，不接 runtime | [code_T001](tasks/code_T001-codebase-understanding-consensus-doc-integration.md), [code_T002](tasks/code_T002-codebase-engine-benchmark.md), [code_T003](tasks/code_T003-codegraph-managed-mcp-spike.md), [code_T004](tasks/code_T004-codebase-engine-abstraction.md), [code_T006](tasks/code_T006-codegraph-benchmark-spike.md), [code_T007](tasks/code_T007-codegraph-wrapper-contract.md), [code_T008](tasks/code_T008-codegraph-managed-mcp-runtime-implementation-plan.md), [review](reviews/codebase-understanding-docs-review-index.md), [codegraph benchmark spike](reviews/codegraph-benchmark-spike.md) | 文档正文统一落入 `docs/tooling-runtime/`；总审查材料按仓库规则落入 `reviews/`，不沿用外部 `docs/agent/`；`code_T007` 是 docs-only wrapper 合同任务，`code_T008` 是 docs-only runtime implementation plan，不是 runtime 接入任务 |
 | Agent Runtime T29-T33 Task Pack | `TODO` | 登记 `server` 测试全绿、failed tool 路径合同、terminal 结果语义、结构化 failure code、核心工具 summary contract 五个任务包 | [agent-runtime-t29-t33-ledger.md](../tooling-runtime/agent-runtime-t29-t33-ledger.md), [agent_node_T029](tasks/agent_node_T029-server-test-report-green.md), [agent_node_T030](tasks/agent_node_T030-failed-tool-path-contract.md), [agent_node_T031](tasks/agent_node_T031-terminal-result-semantics.md), [agent_node_T032](tasks/agent_node_T032-structured-failure-code.md), [agent_node_T033](tasks/agent_node_T033-core-tool-summary-contracts.md) | 已完成仓库内正式登记；当前只新增任务卡和专项台账，未开始实现 |
 | Agent Phase 1 | `ARCHIVED_DONE` | Agent MVP 主链历史归档 | [agent-phase-1-2-archive-decision.md](phase-conclusions/agent-phase-1-2-archive-decision.md), [agent-phase-1-checklist.md](../chat/agent-phase-1-checklist.md) | 一期完成归档；剩余增强项转后续 |
 | Agent Phase 2 | `ARCHIVED_PARTIAL_SUPERSEDED` | 可用闭环阶段部分归档，后续由 Agent V1.5 / 老三期接管 | [agent-phase-1-2-archive-decision.md](phase-conclusions/agent-phase-1-2-archive-decision.md), [agent-phase-2-checklist.md](../chat/agent-phase-2-checklist.md) | 不按完成归档；未完成项不得口头升级为 DONE |
@@ -71,9 +71,10 @@ related:
 | [code_T006](tasks/code_T006-codegraph-benchmark-spike.md) | `DONE` | Docs / Tooling Runtime | 本地 CodeGraph benchmark spike 已完成；review 记录见 `reviews/codegraph-benchmark-spike.md`，结论是继续做受控候选，不直接接 runtime |
 | [code_T004](tasks/code_T004-codebase-engine-abstraction.md) | `DONE` | Docs / Tooling Runtime | 抽象层设计文档、索引与台账已回填；2026-07-08 项目 owner 明确要求直接标记完成，后续仍执行总审查 |
 | [code_T007](tasks/code_T007-codegraph-wrapper-contract.md) | `READY_FOR_REVIEW` | Docs / Tooling Runtime | 评审 CodeGraph wrapper 合同是否足够固定 scope、裁剪、核验和降级边界 |
+| [code_T008](tasks/code_T008-codegraph-managed-mcp-runtime-implementation-plan.md) | `READY_FOR_REVIEW` | Docs / Tooling Runtime | 评审 CodeGraph Managed MCP runtime implementation plan 是否足够固定托管进程、Trace、Evidence、失败降级和权限边界 |
 | [T-011](tasks/T-011-sandbox-contract-direct-bench.md) | `READY_FOR_REVIEW` | Harness / Sandbox | 评审 sandbox direct bench contract |
 | [T-DeepAgents-01](tasks/T-DeepAgents-01-deepagents-js-spike.md) | `READY_FOR_REVIEW` | Agent Runtime / Spike | 已完成 runtime feasibility spike；按项目 owner 结论为“有条件通过” |
-| [T-DeepAgents-02](tasks/T-DeepAgents-02-selector-middleware-baseline.md) | `READY_FOR_REVIEW` | Agent Runtime / Spike | 已完成 selector baseline、domain gate 对比与 middleware extractability inspection，等待评审是否进入 `T-03` |
+| [T-DeepAgents-02](tasks/T-DeepAgents-02-selector-middleware-baseline.md) | `READY_FOR_REVIEW` | Agent Runtime / Spike | 已完成整改：fake wiring 与 real selector baseline 已拆开，新增 116 条 fixtures、high-risk 双口径指标和 runtime middleware smoke tests；当前因缺少 `DEEPAGENTS_SELECTOR_BASE_URL / MODEL`，real selector baseline 为 `SKIPPED`，`T-03` 继续阻塞 |
 | [T-012](tasks/T-012-l1-workspace-sandbox-runner.md) | `DONE` | Harness / Sandbox | Review 02 已通过：L1 workspace sandbox runner |
 | [T-009](tasks/T-009-test-report-json-consolidation.md) | `PROPOSED` | Evidence Hygiene | 决定是否进入执行队列 |
 | [harness_context_T002](tasks/harness_context_T002-context-read-bench.md) | `DONE` | Harness Context | 已验收通过；保留任务外 typecheck 阻断记录 |
@@ -172,6 +173,7 @@ related:
 | [code_T004](tasks/code_T004-codebase-engine-abstraction.md) | `DONE` | 外部 `CARD-04` 已本地化；抽象层设计文档已进入 `docs/tooling-runtime/`，并按 2026-07-08 项目 owner 明确决定标记完成 |
 | [code_T006](tasks/code_T006-codegraph-benchmark-spike.md) | `DONE` | 本地 CodeGraph benchmark spike 已执行；输出已进入 `docs/project-control/reviews/codegraph-benchmark-spike.md`，未接入 runtime |
 | [code_T007](tasks/code_T007-codegraph-wrapper-contract.md) | `READY_FOR_REVIEW` | 新增 CodeGraph wrapper 合同文档，明确 Planner 只见 `codebase_explore`，CodeGraph 原生命令只允许留在 wrapper 内部，当前为 docs-only |
+| [code_T008](tasks/code_T008-codegraph-managed-mcp-runtime-implementation-plan.md) | `READY_FOR_REVIEW` | 新增 CodeGraph Managed MCP runtime implementation plan，固定托管进程、Windows 边界、telemetry、Trace、Evidence、失败降级和状态机；当前为 docs-only |
 
 ## Codebase Understanding Review Index
 
@@ -200,7 +202,7 @@ related:
 | [T-013](tasks/T-013-sandbox-artifact-output-contract.md) | `DONE` | sandbox artifact/output contract |
 | [T-014](tasks/T-014-cross-layer-diagnostics-closure.md) | `DONE` | cross-layer diagnostics closure（dedicated regression + evidence/generate fix） |
 | [T-DeepAgents-01](tasks/T-DeepAgents-01-deepagents-js-spike.md) | `READY_FOR_REVIEW` | deepagents 独立集成验证已完成，结论是“有条件通过”，不进入现有 Harness 主线 |
-| [T-DeepAgents-02](tasks/T-DeepAgents-02-selector-middleware-baseline.md) | `READY_FOR_REVIEW` | selector baseline 与 middleware extractability 基线已完成，不进入现有 Harness 主线 |
+| [T-DeepAgents-02](tasks/T-DeepAgents-02-selector-middleware-baseline.md) | `READY_FOR_REVIEW` | baseline 已整改为诚实口径：middleware wiring 通过，real selector baseline 在当前环境 `SKIPPED`，selector quality `NOT PROVEN`，不进入现有 Harness 主线 |
 
 ## Non-Ledger Evidence Files
 

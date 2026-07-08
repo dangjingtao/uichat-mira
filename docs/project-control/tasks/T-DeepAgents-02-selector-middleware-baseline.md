@@ -25,15 +25,15 @@ task_state: READY_FOR_REVIEW
 
 ## Target
 
-验证 `DeepAgents / LangChain` 当前 selector 与 middleware 抽取能力，回答下面 5 个问题：
+把 `T-DeepAgents-02` 改成一个诚实、可复核的 baseline，明确区分下面几件事：
 
-1. `llmToolSelectorMiddleware` 能否作为独立 selector baseline 使用
-2. `createDeepAgent` 的 middleware 栈中，哪些能力可以抽出复用，哪些不能
-3. selector baseline 在 `no_tool / domain / top1 tool / high-risk wrong-tool` 这些维度上的基线表现是什么
-4. deterministic domain gate 加在 selector 前面后，能否明显降低高风险误判
-5. 基于真实 baseline 结果，是否建议进入 `T-DeepAgents-03`
+1. `llmToolSelectorMiddleware` 接线是否能跑通
+2. fake model 只能证明 wiring，不代表真实 selector 质量
+3. 是否存在真实模型 selector baseline；如果没有，必须明确 `SKIPPED / BLOCKED`
+4. high-risk 指标是否同时给出 overall 和 within-high-risk 两种口径
+5. middleware extractability 是否有运行时导出和 smoke test 证据，而不是只靠类型文件猜测
 
-本任务是独立 spike，不把 `DeepAgents` 接入现有 `Harness`，也不把 selector 结论口头升级成“已经解决工具误判”。
+本任务仍然是独立 spike，不把 `DeepAgents` 接入现有 `Harness`，也不把 selector 结论升级成“已经解决工具误判”。
 
 ## Allowed Changes
 
@@ -62,45 +62,67 @@ task_state: READY_FOR_REVIEW
 
 ## Acceptance Criteria
 
-1. 新建 `T-DeepAgents-02` 任务卡。
-2. 产出 `80` 条 selector fixtures。
-3. 跑通 deterministic domain gate baseline。
-4. 跑通 LangChain / DeepAgents selector baseline。
-5. 跑通 domain gate + selector baseline。
-6. 生成 `packages/deepagents-spike/deepagents-selector-baseline-report.md`。
-7. 生成 `.test-artifact/deepagents-spike/selector-baseline.json`。
-8. 报告明确本任务是独立 spike，不接 `AgentGraph / Harness` 主链。
-9. 报告明确 selector baseline 不是“DeepAgents 已解决工具误判”的证明。
-10. 报告给出 selector 指标：
-    - `no_tool`
-    - `domain`
-    - `top1 tool`
-    - `high-risk wrong-tool rate`
-11. 报告给出 middleware extractability 结论。
-12. 报告给出 `T-DeepAgents-03` 建议。
-13. 报告明确不允许直接暴露 `filesystem / subagent / MCP` 给主模型。
-14. 报告明确不允许把 LangGraph 原始事件直接塞进现有 trace UI。
-15. 不修改 `AgentGraph / Harness` 现有实现。
-16. 运行 `pnpm check`。
+1. 保留 `T-DeepAgents-02` 为独立 spike，不接入 `AgentGraph / Harness` 主链。
+2. FakeSelectorModel 只能作为 `middleware wiring smoke test`，不能再被写成真实 selector quality baseline。
+3. 报告必须拆成五组实验：
+   - `middleware_wiring_fake_model`
+   - `deterministic_domain_gate`
+   - `domain_gate_plus_fake_model_wiring`
+   - `real_model_selector_baseline`
+   - `domain_gate_plus_real_model_selector`
+4. 如果未配置真实模型环境变量，D/E 必须标记为 `SKIPPED`，并给出原因。
+5. 如果配置了真实模型环境变量但跑不通，D/E 必须标记为 `BLOCKED`，不能回退成 fake 质量结论。
+6. selector fixtures 至少 `110` 条，并新增至少 `30` 条 ambiguous / multi-domain / no-tool-hard 样本。
+7. 指标必须同时包含：
+   - `highRiskFixtureCount`
+   - `highRiskWrongToolCount`
+   - `highRiskWrongRateOverall`
+   - `highRiskWrongRateWithinHighRisk`
+   - `noToolFalsePositiveRate`
+   - `noToolFalseNegativeRate`
+   - `domainAccuracy`
+   - `top1ToolAccuracy`
+   - `top3ToolRecall`
+   - `falsePositiveByDomain`
+   - `wrongToolByRiskLevel`
+8. middleware inspection 必须有运行时导出和 smoke test 证据。
+9. 如果某项只能在类型层发现，报告必须写明 `type-level only / runtime not proven`。
+10. 报告必须给出最终状态：
+    - `middleware wiring: PASS / FAIL`
+    - `real selector baseline: PASS / SKIPPED / BLOCKED`
+    - `selector quality: PROVEN / NOT PROVEN`
+    - `middleware extractability: PASS / PARTIAL / FAIL`
+    - `T-03 recommendation: GO / BLOCKED / CONTROLLED_SPIKE_ONLY`
+11. 报告必须明确：
+    - 不允许直接暴露 `filesystem / subagent / MCP` 给主模型
+    - 不允许把 LangGraph 原始事件直接塞进现有 trace UI
+12. 不修改 `AgentGraph / Harness` 现有实现。
 
 ## Verification
 
 1. `pnpm --filter @ui-chat-mira/deepagents-spike typecheck`
 2. `pnpm --filter @ui-chat-mira/deepagents-spike selector:baseline`
-3. `pnpm check`
+3. 若配置了真实模型环境变量，再执行真实 selector baseline
+
+本轮没有改 workspace 级依赖或公共配置，所以不强制运行 `pnpm check`。
 
 ## Risks
 
-- `llmToolSelectorMiddleware` 基线结果只说明当前 selector primitive 的可用性，不等于现有 `Harness` 已可替换。
-- 若 selector 在 `no_tool` 和高风险误判上表现差，后续只能把它视为候选组件，不能直接放进主链。
-- `DeepAgents` 的 `filesystem / todo / subagent / summarization` 默认栈仍然比现有 `Harness` 能力面更宽，不能裸接。
+- fake wiring 指标只能说明 pipeline 形状，不说明真实 selector 质量。
+- 在真实 selector baseline 缺失时，任何 “建议进入 T-03” 的结论都不成立。
+- `DeepAgents` 的 `filesystem / todo / subagent / summarization` 默认能力面仍然比现有 `Harness` 更宽，不能直接暴露。
 
 ## Implementation Summary
 
-- 新增 fixtures、selector baseline、评估器和 middleware inspection 脚本。
-- 基于 `langchain` 当前导出的 `llmToolSelectorMiddleware` 做 baseline，而不是自造同名实现。
-- 用独立 mock capability / tool 集合做 baseline，不碰现有 `Harness registry`。
-- 产出 selector baseline JSON 和 Markdown 报告。
+- 扩展 selector fixtures 到 `116` 条，并补充 ambiguous / multi-domain / no-tool-hard 样本组。
+- 把实验拆成 A-E 五组，明确 fake wiring 与 real selector baseline 的边界。
+- 新增真实模型环境变量配置入口：
+  - `DEEPAGENTS_SELECTOR_BASE_URL`
+  - `DEEPAGENTS_SELECTOR_API_KEY`
+  - `DEEPAGENTS_SELECTOR_MODEL`
+- 在未配置真实模型时，把 real selector baseline 诚实标记为 `SKIPPED`。
+- 将 high-risk 指标拆成 overall 和 within-high-risk 两种口径。
+- 把 middleware inspection 改成运行时导出检查 + smoke test，并保留必要的 type-level 补证。
 
 ## Verification Evidence
 
@@ -108,25 +130,29 @@ task_state: READY_FOR_REVIEW
    - 结果：通过
 2. `pnpm --filter @ui-chat-mira/deepagents-spike selector:baseline`
    - 结果：通过
-   - 关键指标：
-     - `selector_only.noToolFalsePositiveRate = 0.5`
-     - `selector_only.domainAccuracy = 0.7625`
-     - `selector_only.top1ToolAccuracy = 0.7375`
-     - `selector_only.highRiskWrongToolRate = 0.0375`
-     - `domain_gate_plus_selector.noToolFalsePositiveRate = 0.2`
-     - `domain_gate_plus_selector.domainAccuracy = 0.85`
-     - `domain_gate_plus_selector.top1ToolAccuracy = 0.8125`
-     - `domain_gate_plus_selector.highRiskWrongToolRate = 0`
-   - 高风险误判样本：
-     - `none-04` 把“不要跑终端，也不要查网”的纯方案请求误判成 `terminal.session`
-     - `none-05` 把“直接给客户发消息”误判成 `terminal.session + wecom.notify`
-     - `none-06` 把“删库重建”误判成 `terminal.session + wecom.notify`
-3. `pnpm check`
-   - 结果：通过
+   - 最终状态：
+     - `middleware wiring = PASS`
+     - `real selector baseline = SKIPPED`
+     - `selector quality = NOT PROVEN`
+     - `middleware extractability = PARTIAL`
+     - `T-03 recommendation = BLOCKED`
+   - 真实模型跳过原因：
+     - `Missing real selector configuration: DEEPAGENTS_SELECTOR_BASE_URL, DEEPAGENTS_SELECTOR_MODEL.`
+   - fake wiring smoke test 关键指标：
+     - `total = 116`
+     - `highRiskFixtureCount = 36`
+     - `highRiskWrongToolCount = 6`
+     - `highRiskWrongRateOverall = 0.0517`
+     - `highRiskWrongRateWithinHighRisk = 0.1667`
+   - domain gate + fake wiring 关键指标：
+     - `highRiskWrongToolCount = 1`
+     - `highRiskWrongRateOverall = 0.0086`
+     - `highRiskWrongRateWithinHighRisk = 0.0278`
+   - 说明：
+     - 上述 fake 指标只用于 wiring smoke test 和组合管线形状观察，不是 real selector quality 结论。
 
 ## Remaining Gaps
 
-- 这次 baseline 没有对接真实生产模型服务，结论是 selector / middleware 合同和风险基线，不是线上质量结论。
-- 本任务没有修改 `AgentGraph / Harness`，因此也没有验证主链接入后的审批、trace UI、evidence 合同。
-- `selector_only` 在 `no_tool` 场景的误判率仍然偏高，不能宣称 `DeepAgents` 已解决工具误判。
-- `domain gate + selector` 当前结果说明“前置收窄 + selector”值得进入 `T-03` 做受控验证，但不支持直接暴露 `filesystem / subagent / MCP` 给主模型。
+- 当前环境未配置真实 selector endpoint，所以真实 selector quality 仍然 `NOT PROVEN`。
+- `T-DeepAgents-03` 仍然应视为 `BLOCKED`，直到 real selector baseline 可用。
+- 这次没有修改 `AgentGraph / Harness` 主链，因此没有验证审批、evidence 合同或 trace adapter 接入后的运行效果。

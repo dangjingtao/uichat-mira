@@ -12,6 +12,10 @@ import {
   ImageGenerationJobNotFoundError,
   ImageGenerationProviderNotFoundError,
   ImageGenerationRequestValidationError,
+  ComfyUiStudioNotFoundError,
+  ComfyUiStudioValidationError,
+  type ComfyUiConnection,
+  type ComfyUiFlow,
   type ImageGenerationCreateRequest,
   type ImageGenerationJob,
 } from "@/microapps/image-generation/index.js";
@@ -26,6 +30,50 @@ export type ImageGenerationRouteService = {
   createGeneration(request: ImageGenerationCreateRequest): Promise<ImageGenerationJob>;
   getGeneration(jobId: string): Promise<ImageGenerationJob | null>;
   refreshGeneration?(jobId: string): Promise<ImageGenerationJob>;
+};
+
+export type ComfyUiStudioRouteService = {
+  listConnections(): ComfyUiConnection[];
+  createConnection(input: { baseUrl: string; clientId?: string }): ComfyUiConnection;
+  updateConnection(
+    id: string,
+    input: { baseUrl: string; clientId?: string },
+  ): ComfyUiConnection;
+  testConnection(id: string): Promise<ComfyUiConnection>;
+  listFlows(): ComfyUiFlow[];
+  createFlow(input: {
+    connectionId?: string | null;
+    name: string;
+    note?: string;
+    source?: "template" | "upload" | "manual";
+    workflowApiJson: string;
+    mapping?: {
+      promptPath?: string;
+      seedPath?: string;
+      widthPath?: string;
+      heightPath?: string;
+      outputNodeId?: string;
+      previewNodeId?: string;
+    };
+  }): ComfyUiFlow;
+  updateFlow(
+    id: string,
+    input: {
+      connectionId?: string | null;
+      name: string;
+      note?: string;
+      source?: "template" | "upload" | "manual";
+      workflowApiJson: string;
+      mapping?: {
+        promptPath?: string;
+        seedPath?: string;
+        widthPath?: string;
+        heightPath?: string;
+        outputNodeId?: string;
+        previewNodeId?: string;
+      };
+    },
+  ): ComfyUiFlow;
 };
 
 export type ComputerUseRouteService = {
@@ -54,6 +102,7 @@ export type NewsHubRouteService = ReturnType<typeof createNewsHubService>;
 
 type MicroappsRouteOptions = {
   imageGenerationService?: ImageGenerationRouteService;
+  comfyUiStudioService?: ComfyUiStudioRouteService;
   computerUseService?: ComputerUseRouteService;
   computerUseRuntimeService?: ComputerUseRuntimeRouteService;
   mailCenterService?: MailCenterRouteService;
@@ -75,15 +124,42 @@ const toGenerationResponse = (job: ImageGenerationJob) => ({
   meta: job.meta,
 });
 
+const toComfyUiConnectionResponse = (connection: ComfyUiConnection) => ({
+  id: connection.id,
+  baseUrl: connection.baseUrl,
+  clientId: connection.clientId,
+  status: connection.status,
+  lastError: connection.lastError,
+  lastCheckedAt: connection.lastCheckedAt,
+  createdAt: connection.createdAt,
+  updatedAt: connection.updatedAt,
+});
+
+const toComfyUiFlowResponse = (flow: ComfyUiFlow) => ({
+  id: flow.id,
+  connectionId: flow.connectionId,
+  name: flow.name,
+  note: flow.note,
+  source: flow.source,
+  workflowApiJson: flow.workflowApiJson,
+  mapping: flow.mapping,
+  createdAt: flow.createdAt,
+  updatedAt: flow.updatedAt,
+});
+
 const mapImageGenerationError = (error: unknown): never => {
   if (
     error instanceof ImageGenerationProviderNotFoundError ||
-    error instanceof ImageGenerationRequestValidationError
+    error instanceof ImageGenerationRequestValidationError ||
+    error instanceof ComfyUiStudioValidationError
   ) {
     throw badRequest(error.message, { cause: error });
   }
 
-  if (error instanceof ImageGenerationJobNotFoundError) {
+  if (
+    error instanceof ImageGenerationJobNotFoundError ||
+    error instanceof ComfyUiStudioNotFoundError
+  ) {
     throw notFound(error.message, { cause: error });
   }
 
@@ -97,6 +173,7 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
   app.addHook("preHandler", requireAuth);
 
   const imageGenerationService = options.imageGenerationService;
+  const comfyUiStudioService = options.comfyUiStudioService;
   const computerUseService = options.computerUseService;
   const computerUseRuntimeService = options.computerUseRuntimeService;
   const mailCenterService = options.mailCenterService;
@@ -104,6 +181,11 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
   if (!imageGenerationService) {
     throw new Error(
       "microappsRoute requires imageGenerationService to be injected from the server composition root.",
+    );
+  }
+  if (!comfyUiStudioService) {
+    throw new Error(
+      "microappsRoute requires comfyUiStudioService to be injected from the server composition root.",
     );
   }
   if (!computerUseService) {
@@ -138,6 +220,116 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
         return mapImageGenerationError(error);
       }
     }),
+  );
+
+  app.get(
+    "/microapps/image-generation/comfyui/connections",
+    { schema: imageGenerationRouteSchemas.listComfyUiConnections },
+    routeHandler("Failed to list ComfyUI connections", async () =>
+      success(
+        comfyUiStudioService.listConnections().map(toComfyUiConnectionResponse),
+      )),
+  );
+
+  app.post<{ Body: { baseUrl: string; clientId?: string } }>(
+    "/microapps/image-generation/comfyui/connections",
+    { schema: imageGenerationRouteSchemas.createComfyUiConnection },
+    routeHandler("Failed to create ComfyUI connection", async (request) =>
+      success(
+        toComfyUiConnectionResponse(
+          comfyUiStudioService.createConnection(request.body),
+        ),
+        "ComfyUI connection created",
+      )),
+  );
+
+  app.patch<{
+    Params: { id: string };
+    Body: { baseUrl: string; clientId?: string };
+  }>(
+    "/microapps/image-generation/comfyui/connections/:id",
+    { schema: imageGenerationRouteSchemas.updateComfyUiConnection },
+    routeHandler("Failed to update ComfyUI connection", async (request) =>
+      success(
+        toComfyUiConnectionResponse(
+          comfyUiStudioService.updateConnection(request.params.id, request.body),
+        ),
+        "ComfyUI connection updated",
+      )),
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/microapps/image-generation/comfyui/connections/:id/test",
+    { schema: imageGenerationRouteSchemas.testComfyUiConnection },
+    routeHandler("Failed to test ComfyUI connection", async (request) =>
+      success(
+        toComfyUiConnectionResponse(
+          await comfyUiStudioService.testConnection(request.params.id),
+        ),
+        "ComfyUI connection tested",
+      )),
+  );
+
+  app.get(
+    "/microapps/image-generation/comfyui/flows",
+    { schema: imageGenerationRouteSchemas.listComfyUiFlows },
+    routeHandler("Failed to list ComfyUI flows", async () =>
+      success(comfyUiStudioService.listFlows().map(toComfyUiFlowResponse))),
+  );
+
+  app.post<{
+    Body: {
+      connectionId?: string | null;
+      name: string;
+      note?: string;
+      source?: "template" | "upload" | "manual";
+      workflowApiJson: string;
+      mapping?: {
+        promptPath?: string;
+        seedPath?: string;
+        widthPath?: string;
+        heightPath?: string;
+        outputNodeId?: string;
+        previewNodeId?: string;
+      };
+    };
+  }>(
+    "/microapps/image-generation/comfyui/flows",
+    { schema: imageGenerationRouteSchemas.createComfyUiFlow },
+    routeHandler("Failed to create ComfyUI flow", async (request) =>
+      success(
+        toComfyUiFlowResponse(comfyUiStudioService.createFlow(request.body)),
+        "ComfyUI flow created",
+      )),
+  );
+
+  app.patch<{
+    Params: { id: string };
+    Body: {
+      connectionId?: string | null;
+      name: string;
+      note?: string;
+      source?: "template" | "upload" | "manual";
+      workflowApiJson: string;
+      mapping?: {
+        promptPath?: string;
+        seedPath?: string;
+        widthPath?: string;
+        heightPath?: string;
+        outputNodeId?: string;
+        previewNodeId?: string;
+      };
+    };
+  }>(
+    "/microapps/image-generation/comfyui/flows/:id",
+    { schema: imageGenerationRouteSchemas.updateComfyUiFlow },
+    routeHandler("Failed to update ComfyUI flow", async (request) =>
+      success(
+        toComfyUiFlowResponse(
+          comfyUiStudioService.updateFlow(request.params.id, request.body),
+        ),
+        "ComfyUI flow updated",
+      )),
   );
 
   app.get<{

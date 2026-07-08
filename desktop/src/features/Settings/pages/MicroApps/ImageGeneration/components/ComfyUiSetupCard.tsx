@@ -109,22 +109,16 @@ export default function ComfyUiSetupCard({
         {!editingConnection ? (
           <div className="flex flex-wrap items-end gap-3">
             <div className="min-w-0 flex-1">
-              <div className="flex h-10 items-center rounded-ui-panel border border-border bg-surface-primary px-3">
-                {connectionStatus === "unconfigured" ? (
-                  <div className="truncate text-sm text-text-secondary">
-                    {t("settings.microApps.imageGenerationStudio.connection.messages.empty")}
-                  </div>
-                ) : (
-                  <a
-                    href={connectionAddress}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="truncate font-mono text-sm text-primary underline-offset-4 hover:underline"
-                  >
-                    {connectionAddress}
-                  </a>
-                )}
-              </div>
+              <TextInput
+                value={
+                  connectionStatus === "unconfigured"
+                    ? t("settings.microApps.imageGenerationStudio.connection.messages.empty")
+                    : connectionAddress
+                }
+                onChange={() => {}}
+                compact
+                disabled
+              />
               {connectionStatus === "failed" ? (
                 <div className="mt-1 text-xs text-danger-text">
                   {t("settings.microApps.imageGenerationStudio.connection.messages.failed")}
@@ -309,9 +303,7 @@ export default function ComfyUiSetupCard({
                 </div>
                 <div>
                   {t("settings.microApps.imageGenerationStudio.mapping.summary.output")}{" "}
-                  {mapping?.outputNodeId || "—"}
-                </div>
-                <div>
+                  {mapping?.outputNodeId || "—"} / {" "}
                   {t("settings.microApps.imageGenerationStudio.mapping.summary.preview")}{" "}
                   {mapping?.previewNodeId || "—"}
                 </div>

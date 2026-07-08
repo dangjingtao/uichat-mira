@@ -31,6 +31,7 @@ import { LocalImageGenerationArtifactStore } from "@/microapps/image-generation/
 import {
   createImageGenerationService,
   createInMemoryImageGenerationJobStore,
+  comfyUiStudioService,
 } from "@/microapps/image-generation/index.js";
 import { createMailCenterService } from "@/microapps/mail-center/index.js";
 import { createNewsHubService } from "@/microapps/news-hub/index.js";
@@ -75,6 +76,7 @@ import { mailAccountsRepository } from "@/db/repositories/mail-accounts.reposito
 import { mailFoldersRepository } from "@/db/repositories/mail-folders.repository.js";
 import { mailMessagesRepository } from "@/db/repositories/mail-messages.repository.js";
 import { newsHubSettingsRepository } from "@/db/repositories/news-hub-settings.repository.js";
+import { comfyUiStudioRepository } from "@/db/repositories/comfyui-studio.repository.js";
 import { microAppsRepository } from "@/db/repositories/micro-apps.repository.js";
 import { newsItemsRepository } from "@/db/repositories/news-items.repository.js";
 import { generalSettingsRepository } from "@/db/repositories/general-settings.repository.js";

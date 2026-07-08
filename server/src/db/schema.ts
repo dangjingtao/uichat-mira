@@ -393,6 +393,71 @@ export const microApps = sqliteTable(
 export type MicroApp = typeof microApps.$inferSelect;
 export type NewMicroApp = typeof microApps.$inferInsert;
 
+export const comfyUiConnections = sqliteTable(
+  "comfyui_connections",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    baseUrl: text("base_url").notNull().default(""),
+    clientId: text("client_id"),
+    status: text("status", {
+      enum: ["unconfigured", "unverified", "connectable", "failed"],
+    })
+      .notNull()
+      .default("unconfigured"),
+    lastErrorJson: text("last_error_json"),
+    lastCheckedAt: text("last_checked_at"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    statusIdx: index("idx_comfyui_connections_status").on(table.status),
+    updatedAtIdx: index("idx_comfyui_connections_updated_at").on(table.updatedAt),
+  }),
+);
+
+export type ComfyUiConnectionRow = typeof comfyUiConnections.$inferSelect;
+export type NewComfyUiConnectionRow = typeof comfyUiConnections.$inferInsert;
+
+export const comfyUiFlows = sqliteTable(
+  "comfyui_flows",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    connectionId: text("connection_id").references(() => comfyUiConnections.id, {
+      onDelete: "set null",
+    }),
+    name: text("name").notNull().default(""),
+    note: text("note").notNull().default(""),
+    source: text("source", {
+      enum: ["template", "upload", "manual"],
+    })
+      .notNull()
+      .default("manual"),
+    workflowApiJson: text("workflow_api_json").notNull().default("{}"),
+    mappingJson: text("mapping_json").notNull().default("{}"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    connectionIdx: index("idx_comfyui_flows_connection_id").on(table.connectionId),
+    updatedAtIdx: index("idx_comfyui_flows_updated_at").on(table.updatedAt),
+  }),
+);
+
+export type ComfyUiFlowRow = typeof comfyUiFlows.$inferSelect;
+export type NewComfyUiFlowRow = typeof comfyUiFlows.$inferInsert;
+
 export const integrationCapabilityMicroApps = sqliteTable(
   "integration_capability_micro_app_bindings",
   {

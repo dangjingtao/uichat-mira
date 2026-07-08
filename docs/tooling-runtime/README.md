@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: runtime
-Last verified: 2026-06-27
+Last verified: 2026-07-09
 Layer: wiki
 Module: Tool
 Feature: Overview
@@ -26,6 +26,7 @@ Related:
   - codebase-engine-benchmark.md
   - codebase-engine-abstraction.md
   - codegraph-wrapper-contract.md
+  - codegraph-managed-mcp-runtime-implementation-plan.md
 
 ## 单点真相范围
 
@@ -51,12 +52,13 @@ Related:
 8. `codegraph-managed-mcp-spike.md`
 9. `codebase-engine-abstraction.md`
 10. `codegraph-wrapper-contract.md`
-11. `core-tool-matrix-review.md`
-12. `core-tool-rectification-ledger.md`
-13. `agent-runtime-t29-t33-ledger.md`
-14. `project-map-design.md`
-15. `context-builder-design.md`
-16. `../chat/agent-workspace-context-system.md`
+11. `codegraph-managed-mcp-runtime-implementation-plan.md`
+12. `core-tool-matrix-review.md`
+13. `core-tool-rectification-ledger.md`
+14. `agent-runtime-t29-t33-ledger.md`
+15. `project-map-design.md`
+16. `context-builder-design.md`
+17. `../chat/agent-workspace-context-system.md`
 
 ## 当前结构
 
@@ -100,8 +102,9 @@ Related:
 - `codegraph-managed-mcp-spike.md`
 - `codebase-engine-abstraction.md`
 - `codegraph-wrapper-contract.md`
+- `codegraph-managed-mcp-runtime-implementation-plan.md`
 
-前者回答外部成熟方案与行业风向，后者回答这一轮工具运行时改造里踩过的坑与已经确认的边界，`core-tool-matrix-review.md` 负责从矩阵视角统一 `Read / Edit / Web Search / Terminal` 的语义、治理和 action profile 颗粒度，`core-tool-rectification-ledger.md` 负责按整改优先级推进执行项，`agent-runtime-t29-t33-ledger.md` 负责登记新一轮 `T29-T33` 任务包的标准命名、依赖和状态，`codebase-understanding-consensus.md` 负责记录代码库理解能力的阶段性共识和暂不实现边界，`codebase-engine-benchmark.md` 负责定义 CodeGraph、`codebase-memory-mcp`、Serena 进入实现前的真实仓库评测问题集和评分规则，`codegraph-managed-mcp-spike.md` 负责定义 CodeGraph 第一阶段推荐的 Managed MCP server 形态、Windows 部署边界、生命周期、telemetry 关闭和原文核验约束，`codebase-engine-abstraction.md` 负责收敛 provider 抽象、统一结果合同、第一阶段暴露面与降级策略，`codegraph-wrapper-contract.md` 负责把 CodeGraph 进入 runtime 前必须经过受控 `codebase_explore` wrapper 的合同、scope、裁剪、核验和降级链固定下来。
+前者回答外部成熟方案与行业风向，后者回答这一轮工具运行时改造里踩过的坑与已经确认的边界，`core-tool-matrix-review.md` 负责从矩阵视角统一 `Read / Edit / Web Search / Terminal` 的语义、治理和 action profile 颗粒度，`core-tool-rectification-ledger.md` 负责按整改优先级推进执行项，`agent-runtime-t29-t33-ledger.md` 负责登记新一轮 `T29-T33` 任务包的标准命名、依赖和状态，`codebase-understanding-consensus.md` 负责记录代码库理解能力的阶段性共识和暂不实现边界，`codebase-engine-benchmark.md` 负责定义 CodeGraph、`codebase-memory-mcp`、Serena 进入实现前的真实仓库评测问题集和评分规则，`codegraph-managed-mcp-spike.md` 负责定义 CodeGraph 第一阶段推荐的 Managed MCP server 形态、Windows 部署边界、生命周期、telemetry 关闭和原文核验约束，`codebase-engine-abstraction.md` 负责收敛 provider 抽象、统一结果合同、第一阶段暴露面与降级策略，`codegraph-wrapper-contract.md` 负责把 CodeGraph 进入 runtime 前必须经过受控 `codebase_explore` wrapper 的合同、scope、裁剪、核验和降级链固定下来，`codegraph-managed-mcp-runtime-implementation-plan.md` 负责把 CodeGraph 真正进入 runtime 前的托管进程、wrapper 挂接、Trace、Evidence 和失败降级计划固定下来，但当前仍是 docs-only implementation plan。
 
 ## 当前结论
 
@@ -115,6 +118,7 @@ Related:
 - `codegraph-managed-mcp-spike.md` 是 CodeGraph 第一阶段接入前的托管形态与运行边界设计
 - `codebase-engine-abstraction.md` 是多 provider 代码库理解层进入实现前的统一抽象与结果合同设计
 - `codegraph-wrapper-contract.md` 是 CodeGraph 第一阶段只能经由 `codebase_explore` wrapper 暴露给 Planner 的受控合同
+- `codegraph-managed-mcp-runtime-implementation-plan.md` 是 CodeGraph 进入 runtime 前的 implementation plan，固定托管进程、Trace、Evidence 和失败降级边界
 - 其他工具域继续围绕这条主线扩展
 
 ## 可维护性判断
@@ -142,3 +146,4 @@ Related:
 - `codebase-engine-benchmark.md`
 - `codebase-engine-abstraction.md`
 - `codegraph-wrapper-contract.md`
+- `codegraph-managed-mcp-runtime-implementation-plan.md`

@@ -30,6 +30,13 @@ const imageGenerationArtifactSourceValues = [
   "remote-url",
   "local-file",
 ] as const;
+const comfyUiConnectionStatusValues = [
+  "unconfigured",
+  "unverified",
+  "connectable",
+  "failed",
+] as const;
+const comfyUiFlowSourceValues = ["template", "upload", "manual"] as const;
 
 const imageGenerationInputFileSchema = {
   type: "object",
@@ -38,6 +45,43 @@ const imageGenerationInputFileSchema = {
   properties: {
     fileId: { type: "string" },
     role: { type: "string", enum: imageGenerationInputFileRoleValues },
+  },
+} as const;
+
+const comfyUiNodeMappingSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    promptPath: { type: "string" },
+    seedPath: { type: "string" },
+    widthPath: { type: "string" },
+    heightPath: { type: "string" },
+    outputNodeId: { type: "string" },
+    previewNodeId: { type: "string" },
+  },
+} as const;
+
+const comfyUiConnectionBodySchema = {
+  type: "object",
+  required: ["baseUrl"],
+  additionalProperties: false,
+  properties: {
+    baseUrl: { type: "string" },
+    clientId: { type: "string" },
+  },
+} as const;
+
+const comfyUiFlowBodySchema = {
+  type: "object",
+  required: ["name", "workflowApiJson"],
+  additionalProperties: false,
+  properties: {
+    connectionId: { anyOf: [{ type: "string" }, { type: "null" }] },
+    name: { type: "string" },
+    note: { type: "string" },
+    source: { type: "string", enum: comfyUiFlowSourceValues },
+    workflowApiJson: { type: "string" },
+    mapping: comfyUiNodeMappingSchema,
   },
 } as const;
 
@@ -145,6 +189,68 @@ const imageGenerationJobErrorSchema = {
   },
 } as const;
 
+const comfyUiConnectionSchema = {
+  type: "object",
+  required: ["id", "baseUrl", "clientId", "status", "createdAt", "updatedAt"],
+  additionalProperties: false,
+  properties: {
+    id: { type: "string" },
+    baseUrl: { type: "string" },
+    clientId: { type: "string" },
+    status: { type: "string", enum: comfyUiConnectionStatusValues },
+    lastError: {
+      anyOf: [
+        {
+          type: "object",
+          required: ["code", "message"],
+          additionalProperties: true,
+          properties: {
+            code: { type: "string" },
+            message: { type: "string" },
+            details: {
+              type: "object",
+              additionalProperties: true,
+            },
+          },
+        },
+        { type: "null" },
+      ],
+    },
+    lastCheckedAt: {
+      anyOf: [{ type: "string", format: "date-time" }, { type: "null" }],
+    },
+    createdAt: { type: "string", format: "date-time" },
+    updatedAt: { type: "string", format: "date-time" },
+  },
+} as const;
+
+const comfyUiFlowSchema = {
+  type: "object",
+  required: [
+    "id",
+    "connectionId",
+    "name",
+    "note",
+    "source",
+    "workflowApiJson",
+    "mapping",
+    "createdAt",
+    "updatedAt",
+  ],
+  additionalProperties: false,
+  properties: {
+    id: { type: "string" },
+    connectionId: { anyOf: [{ type: "string" }, { type: "null" }] },
+    name: { type: "string" },
+    note: { type: "string" },
+    source: { type: "string", enum: comfyUiFlowSourceValues },
+    workflowApiJson: { type: "string" },
+    mapping: comfyUiNodeMappingSchema,
+    createdAt: { type: "string", format: "date-time" },
+    updatedAt: { type: "string", format: "date-time" },
+  },
+} as const;
+
 export const imageGenerationResponseSchema = {
   type: "object",
   required: [
@@ -183,6 +289,96 @@ export const imageGenerationResponseSchema = {
 } as const;
 
 export const imageGenerationRouteSchemas = {
+  listComfyUiConnections: {
+    tags: ["MicroAPP"],
+    summary: "List ComfyUI connections",
+    security: [{ bearerAuth: [] }],
+    response: {
+      200: successEnvelope({
+        type: "array",
+        items: comfyUiConnectionSchema,
+      }),
+      401: errorEnvelope,
+      500: errorEnvelope,
+    },
+  },
+  createComfyUiConnection: {
+    tags: ["MicroAPP"],
+    summary: "Create ComfyUI connection",
+    security: [{ bearerAuth: [] }],
+    body: comfyUiConnectionBodySchema,
+    response: {
+      200: successEnvelope(comfyUiConnectionSchema),
+      400: errorEnvelope,
+      401: errorEnvelope,
+      500: errorEnvelope,
+    },
+  },
+  updateComfyUiConnection: {
+    tags: ["MicroAPP"],
+    summary: "Update ComfyUI connection",
+    security: [{ bearerAuth: [] }],
+    params: idParamsSchema,
+    body: comfyUiConnectionBodySchema,
+    response: {
+      200: successEnvelope(comfyUiConnectionSchema),
+      400: errorEnvelope,
+      401: errorEnvelope,
+      404: errorEnvelope,
+      500: errorEnvelope,
+    },
+  },
+  testComfyUiConnection: {
+    tags: ["MicroAPP"],
+    summary: "Test ComfyUI connection",
+    security: [{ bearerAuth: [] }],
+    params: idParamsSchema,
+    response: {
+      200: successEnvelope(comfyUiConnectionSchema),
+      401: errorEnvelope,
+      404: errorEnvelope,
+      500: errorEnvelope,
+    },
+  },
+  listComfyUiFlows: {
+    tags: ["MicroAPP"],
+    summary: "List ComfyUI flows",
+    security: [{ bearerAuth: [] }],
+    response: {
+      200: successEnvelope({
+        type: "array",
+        items: comfyUiFlowSchema,
+      }),
+      401: errorEnvelope,
+      500: errorEnvelope,
+    },
+  },
+  createComfyUiFlow: {
+    tags: ["MicroAPP"],
+    summary: "Create ComfyUI flow",
+    security: [{ bearerAuth: [] }],
+    body: comfyUiFlowBodySchema,
+    response: {
+      200: successEnvelope(comfyUiFlowSchema),
+      400: errorEnvelope,
+      401: errorEnvelope,
+      500: errorEnvelope,
+    },
+  },
+  updateComfyUiFlow: {
+    tags: ["MicroAPP"],
+    summary: "Update ComfyUI flow",
+    security: [{ bearerAuth: [] }],
+    params: idParamsSchema,
+    body: comfyUiFlowBodySchema,
+    response: {
+      200: successEnvelope(comfyUiFlowSchema),
+      400: errorEnvelope,
+      401: errorEnvelope,
+      404: errorEnvelope,
+      500: errorEnvelope,
+    },
+  },
   createGeneration: {
     tags: ["MicroAPP"],
     summary: "Create an image generation job",

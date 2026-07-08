@@ -282,90 +282,97 @@ export default function ImageGenerationStudioPage({
       miniTitle={t("settings.microApps.imageGenerationStudio.page.miniTitle")}
       title={t("settings.microApps.imageGenerationStudio.page.title")}
       description={t("settings.microApps.imageGenerationStudio.page.description")}
-      contentClassName="space-y-6 pt-6"
+      contentClassName="pt-6"
+      scrollBody={false}
     >
-      <NavigationCardTabs<StudioTab>
-        tabs={[
-          {
-            value: "providers",
-            label: t("settings.microApps.imageGenerationStudio.tabs.providers"),
-            icon: <ImageIcon className="h-4 w-4" />,
-          },
-          {
-            value: "comfyui",
-            label: t("settings.microApps.imageGenerationStudio.tabs.comfyui"),
-            icon: <Workflow className="h-4 w-4" />,
-          },
-        ]}
-        value={activeTab}
-        onChange={setActiveTab}
-      />
-
-      {activeTab === "comfyui" ? (
-        <div className="grid gap-3 lg:gap-4 md:grid-cols-[minmax(0,1.05fr)_minmax(300px,0.95fr)]">
-          <div className="space-y-4">
-            <ComfyUiSetupCard
-              connectionStatus={connectionStatus}
-              connectionAddress={connectionAddress}
-              editingConnection={editingConnection}
-              draftConnectionAddress={draftConnectionAddress}
-              testingConnection={testingConnection}
-              flows={flows}
-              selectedFlowId={selectedFlowId}
-              selectedFlow={selectedFlow}
-              nodes={selectedFlowNodes}
-              running={state.isRunning}
-              onDraftConnectionAddressChange={setDraftConnectionAddress}
-              onStartCreateConnection={startCreateConnection}
-              onStartEditConnection={startEditConnection}
-              onSaveConnection={saveConnection}
-              onTestConnection={testConnection}
-              onSelectFlow={handleSelectFlow}
-              onCreateFlow={openCreateFlowEditor}
-              onEditFlow={openEditFlowEditor}
-              onMappingChange={handleFlowMappingChange}
-            />
-          </div>
-
-          <div className="space-y-4">
-            <ComfyUiExecutionInputCard
-              overridePrompt={state.workflowForm.overridePrompt}
-              overrideSize={state.workflowForm.overrideSize}
-              formStatus={state.formStatus}
-              running={state.isRunning}
-              canCancel={state.canCancel}
-              onOverridePromptChange={(overridePrompt) =>
-                state.setWorkflowForm((current) => ({ ...current, overridePrompt }))
-              }
-              onOverrideSizeChange={(overrideSize) =>
-                state.setWorkflowForm((current) => ({ ...current, overrideSize }))
-              }
-              onSubmit={handleSubmit}
-              onReset={state.reset}
-              onCancel={state.cancel}
-            />
-            <ResultPreviewCard
-              previewStatus={state.previewStatus}
-              result={state.result}
-            />
-          </div>
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="shrink-0">
+          <NavigationCardTabs<StudioTab>
+            tabs={[
+              {
+                value: "providers",
+                label: t("settings.microApps.imageGenerationStudio.tabs.providers"),
+                icon: <ImageIcon className="h-4 w-4" />,
+              },
+              {
+                value: "comfyui",
+                label: t("settings.microApps.imageGenerationStudio.tabs.comfyui"),
+                icon: <Workflow className="h-4 w-4" />,
+              },
+            ]}
+            value={activeTab}
+            onChange={setActiveTab}
+          />
         </div>
-      ) : (
-        <Card className="space-y-4 p-5">
-          <div className="space-y-1">
-            <div className="text-sm font-semibold text-text-primary">
-              {t("settings.microApps.imageGenerationStudio.cards.providersPlaceholder.title")}
-            </div>
-            <div className="max-w-2xl text-sm leading-6 text-text-secondary">
-              {t("settings.microApps.imageGenerationStudio.cards.providersPlaceholder.description")}
-            </div>
-          </div>
 
-          <div className="rounded-ui-panel border border-dashed border-border bg-surface-secondary/20 px-4 py-6 text-sm leading-6 text-text-secondary">
-            {t("settings.microApps.imageGenerationStudio.cards.providersPlaceholder.body")}
-          </div>
-        </Card>
-      )}
+        <div className="stable-scrollbar min-h-0 flex-1 overflow-y-auto pt-6">
+          {activeTab === "comfyui" ? (
+            <div className="grid gap-3 lg:gap-4 md:grid-cols-[minmax(0,1.05fr)_minmax(300px,0.95fr)]">
+              <div className="space-y-4">
+                <ComfyUiSetupCard
+                  connectionStatus={connectionStatus}
+                  connectionAddress={connectionAddress}
+                  editingConnection={editingConnection}
+                  draftConnectionAddress={draftConnectionAddress}
+                  testingConnection={testingConnection}
+                  flows={flows}
+                  selectedFlowId={selectedFlowId}
+                  selectedFlow={selectedFlow}
+                  nodes={selectedFlowNodes}
+                  running={state.isRunning}
+                  onDraftConnectionAddressChange={setDraftConnectionAddress}
+                  onStartCreateConnection={startCreateConnection}
+                  onStartEditConnection={startEditConnection}
+                  onSaveConnection={saveConnection}
+                  onTestConnection={testConnection}
+                  onSelectFlow={handleSelectFlow}
+                  onCreateFlow={openCreateFlowEditor}
+                  onEditFlow={openEditFlowEditor}
+                  onMappingChange={handleFlowMappingChange}
+                />
+              </div>
+
+              <div className="space-y-4">
+                <ComfyUiExecutionInputCard
+                  overridePrompt={state.workflowForm.overridePrompt}
+                  overrideSize={state.workflowForm.overrideSize}
+                  formStatus={state.formStatus}
+                  running={state.isRunning}
+                  canCancel={state.canCancel}
+                  onOverridePromptChange={(overridePrompt) =>
+                    state.setWorkflowForm((current) => ({ ...current, overridePrompt }))
+                  }
+                  onOverrideSizeChange={(overrideSize) =>
+                    state.setWorkflowForm((current) => ({ ...current, overrideSize }))
+                  }
+                  onSubmit={handleSubmit}
+                  onReset={state.reset}
+                  onCancel={state.cancel}
+                />
+                <ResultPreviewCard
+                  previewStatus={state.previewStatus}
+                  result={state.result}
+                />
+              </div>
+            </div>
+          ) : (
+            <Card className="space-y-4 p-5">
+              <div className="space-y-1">
+                <div className="text-sm font-semibold text-text-primary">
+                  {t("settings.microApps.imageGenerationStudio.cards.providersPlaceholder.title")}
+                </div>
+                <div className="max-w-2xl text-sm leading-6 text-text-secondary">
+                  {t("settings.microApps.imageGenerationStudio.cards.providersPlaceholder.description")}
+                </div>
+              </div>
+
+              <div className="rounded-ui-panel border border-dashed border-border bg-surface-secondary/20 px-4 py-6 text-sm leading-6 text-text-secondary">
+                {t("settings.microApps.imageGenerationStudio.cards.providersPlaceholder.body")}
+              </div>
+            </Card>
+          )}
+        </div>
+      </div>
 
       <Modal
         open={flowEditorOpen}
