@@ -215,13 +215,13 @@ describe("ImageGenerationStudioPage", () => {
       }),
     ).toBeDisabled();
     expect(
-      screen.getByRole("button", {
-        name: "settings.microApps.imageGenerationStudio.actions.cancel",
-      }),
-    ).toBeDisabled();
-    expect(
       screen.getByLabelText("settings.microApps.imageGenerationStudio.fields.prompt"),
     ).toBeDisabled();
+    expect(
+      screen.queryByRole("button", {
+        name: "settings.microApps.imageGenerationStudio.actions.cancel",
+      }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByText(
         "settings.microApps.imageGenerationStudio.messages.cancelUnavailable",

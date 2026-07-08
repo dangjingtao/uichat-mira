@@ -436,10 +436,10 @@ const settingsPending = {
       },
       imageGenerationStudio: {
         page: {
-          miniTitle: "Image Generation Studio",
-          title: "Image Generation Studio",
-          subtitle: "Debug provider and workflow execution inside the Micro Apps settings area.",
-          description: "A dedicated debug workspace for prompt-based image generation and ComfyUI workflow validation.",
+          miniTitle: "Image Generation Workbench",
+          title: "Image Generation Workbench",
+          subtitle: "Organize a generation run around a provider target and workflow input.",
+          description: "Choose the execution mode, prepare the input surface, and review results in a stable preview and diagnostics workspace.",
         },
         banner: {
           title: "Current boundary",
@@ -452,7 +452,8 @@ const settingsPending = {
         cards: {
           modeProvider: {
             title: "Mode and provider",
-            description: "Choose the execution mode first, then confirm the provider and model target.",
+            description: "Choose the execution mode first, then confirm the current provider and model target.",
+            currentTarget: "Current execution target",
           },
           prompt: {
             title: "Prompt request",
@@ -488,6 +489,10 @@ const settingsPending = {
           help: {
             title: "Debug notes",
             description: "Keep the usage boundary explicit for prompt mode, workflow mode, and the current shared API dependency.",
+          },
+          diagnostics: {
+            title: "Diagnostics and details",
+            description: "Collapsed by default. Expand when you need the request summary, logs, or usage notes.",
           },
         },
         modes: {
@@ -578,7 +583,7 @@ const settingsPending = {
         },
         messages: {
           formDirty: "The form changed after the last submission and has not been resubmitted yet.",
-          cancelUnavailable: "The current desktop API surface does not expose cancellation yet, so the page keeps the cancel action visible but disabled while the backend route is still missing.",
+          cancelUnavailable: "Cancellation is not available in the current version. Once started, the task must wait for a terminal provider or runner result.",
         },
         pageStatus: {
           "initial-loading": "initial-loading",

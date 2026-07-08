@@ -38,6 +38,52 @@ related:
 3. `docs/tooling-runtime/codegraph-managed-mcp-spike.md`
 4. `docs/tooling-runtime/codebase-engine-abstraction.md`
 
+本 review 只审上面 4 篇 `docs/tooling-runtime/` 文档，以及它们对应的任务卡回填与台账登记。
+
+不纳入本 review scope 的内容包括：
+
+- dev 分支上其他 runtime / UI / bugfix 改动
+- `server/src/**`、`desktop/src/**`、`electron/**`、`packages/**` 的任务外实现变更
+- 不属于 `code_T001`、`code_T002`、`code_T003`、`code_T004` 的其他任务卡
+
+这些改动即使与当前工作区同时存在，也不作为本轮 Codebase Understanding docs 审查的通过或不通过依据。
+
+## Scoped Review Conclusion
+
+### Conclusion
+
+- `code_T001` 到 `code_T004` 的 Codebase Understanding 文档施工 scoped review 通过。
+- 若按项目 owner 当前汇总口径把“`code_T001-T005` 文档施工”作为一组对外表述，本 review 仅对 `code_T001-T004` 的 4 篇 `docs/tooling-runtime/` 文档给出 scoped pass；`T005` 或其他非本组文档卡仍以各自任务卡和独立 review 为准。
+
+### In-Scope Files
+
+- `docs/tooling-runtime/codebase-understanding-consensus.md`
+- `docs/tooling-runtime/codebase-engine-benchmark.md`
+- `docs/tooling-runtime/codegraph-managed-mcp-spike.md`
+- `docs/tooling-runtime/codebase-engine-abstraction.md`
+
+### Out-Of-Scope Working Tree Changes
+
+- 当前 dev 分支同时包含其他 runtime / UI / bugfix 改动。
+- 这些改动不纳入 `code_T001-T004` 文档卡的 scoped 审查范围。
+- 它们不能作为本 review 的阻断项，也不能被本 review 自动视为通过。
+
+### Review Decision
+
+- 上述 4 篇文档已完成各自任务卡要求的 docs-only 范围施工与台账回填。
+- 本轮 review 不审 runtime 实现、不审 UI 变更、不审 bugfix 代码路径。
+- 其他非文档改动必须按对应任务卡单独审查，不得借本 review 一并收口。
+
+### Non-Goals
+
+本 review 明确不做：
+
+- 新增实现
+- 安装依赖
+- 接入 CodeGraph
+- 修改 runtime
+- 替代其他任务卡的独立评审
+
 ## Review Prompt
 
 ```text

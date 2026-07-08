@@ -44,6 +44,8 @@ export default function ModeProviderCard({
       ? "settings.microApps.imageGenerationStudio.environment.workflowHint"
       : `settings.microApps.imageGenerationStudio.environment.${provider}`;
 
+  const activeProviderOption = options.find((option) => option.value === provider);
+
   return (
     <Card className="space-y-4">
       <div className="space-y-1">
@@ -70,16 +72,52 @@ export default function ModeProviderCard({
         ]}
       />
 
-      <Select
-        label={t("settings.microApps.imageGenerationStudio.fields.provider")}
-        value={provider}
-        onChange={(value) => onProviderChange(value as StudioProvider)}
-        options={options.map((option) => ({
-          value: option.value,
-          label: t(option.labelKey),
-        }))}
-        disabled={running || mode === "workflow"}
-      />
+      <div className="rounded-ui-panel border border-border bg-surface-secondary/20 p-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1">
+            <div className="text-xs uppercase tracking-[0.08em] text-text-tertiary">
+              {t("settings.microApps.imageGenerationStudio.cards.modeProvider.currentTarget")}
+            </div>
+            <div className="text-sm font-medium text-text-primary">
+              {activeProviderOption ? t(activeProviderOption.labelKey) : provider}
+            </div>
+            <div className="max-w-xl text-sm leading-6 text-text-secondary">
+              {activeProviderOption
+                ? t(activeProviderOption.descriptionKey)
+                : t(helperKey)}
+            </div>
+          </div>
+          <div className="rounded-ui-panel border border-border bg-surface-primary px-3 py-2 text-right">
+            <div className="text-xs uppercase tracking-[0.08em] text-text-tertiary">
+              {t("settings.microApps.imageGenerationStudio.fields.mode")}
+            </div>
+            <div className="mt-1 text-sm font-medium text-text-primary">
+              {t(`settings.microApps.imageGenerationStudio.modes.${mode}`)}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <Select
+          label={t("settings.microApps.imageGenerationStudio.fields.provider")}
+          value={provider}
+          onChange={(value) => onProviderChange(value as StudioProvider)}
+          options={options.map((option) => ({
+            value: option.value,
+            label: t(option.labelKey),
+          }))}
+          disabled={running || mode === "workflow"}
+        />
+
+        <TextInput
+          label={t("settings.microApps.imageGenerationStudio.fields.model")}
+          value={model}
+          onChange={onModelChange}
+          disabled={running}
+          placeholder={t("settings.microApps.imageGenerationStudio.placeholders.model")}
+        />
+      </div>
 
       <div className="grid gap-2">
         {options.map((option) => {
@@ -99,14 +137,6 @@ export default function ModeProviderCard({
           );
         })}
       </div>
-
-      <TextInput
-        label={t("settings.microApps.imageGenerationStudio.fields.model")}
-        value={model}
-        onChange={onModelChange}
-        disabled={running}
-        placeholder={t("settings.microApps.imageGenerationStudio.placeholders.model")}
-      />
 
       <Alert variant="info" title={t("settings.microApps.imageGenerationStudio.environment.title")}>
         {t(helperKey)}

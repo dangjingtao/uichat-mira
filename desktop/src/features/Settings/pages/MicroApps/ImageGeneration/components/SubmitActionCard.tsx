@@ -75,11 +75,10 @@ export default function SubmitActionCard({
           <RotateCcw className="h-4 w-4" />
           {t("settings.microApps.imageGenerationStudio.actions.reset")}
         </Button>
-        {running ? (
+        {running && canCancel ? (
           <Button
             variant="danger-outline"
             onClick={onCancel}
-            disabled={!canCancel}
           >
             <Square className="h-4 w-4" />
             {t("settings.microApps.imageGenerationStudio.actions.cancel")}

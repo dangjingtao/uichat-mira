@@ -2,7 +2,6 @@ import { useTranslation } from "react-i18next";
 import Card from "@/shared/ui/Card";
 import { Select, TextArea, TextInput } from "@/shared/ui";
 import Badge from "@/shared/ui/Badge";
-import Alert from "@/shared/ui/Alert";
 import type { PromptFormValue } from "../model/view-model";
 import {
   sizeOptions,
@@ -112,12 +111,13 @@ export default function PromptRequestCard({
         </div>
       </details>
 
-      <Alert
-        variant="info"
-        title={t("settings.microApps.imageGenerationStudio.cards.prompt.countTitle")}
-      >
+      <div className="rounded-ui-panel border border-info-border bg-info-soft px-3 py-2.5 text-sm text-info-text">
+        <span className="font-medium">
+          {t("settings.microApps.imageGenerationStudio.cards.prompt.countTitle")}
+        </span>
+        {" "}
         {t("settings.microApps.imageGenerationStudio.cards.prompt.countDescription")}
-      </Alert>
+      </div>
     </Card>
   );
 }

@@ -435,10 +435,10 @@ const settingsPending = {
       },
       imageGenerationStudio: {
         page: {
-          miniTitle: "生图调试工作区",
-          title: "Image Generation Studio",
-          subtitle: "在微应用设置区内调试 provider 和 workflow 执行链路。",
-          description: "一个只服务微应用调试的双模式工作区，用来验证 prompt 生图和 ComfyUI workflow 提交。",
+          miniTitle: "生图工作台",
+          title: "Image Generation Workbench",
+          subtitle: "围绕 provider 和 workflow 组织一次可回看的生成任务。",
+          description: "选择执行模式，整理输入参数，并在一个稳定的结果区里查看生成结果和诊断信息。",
         },
         banner: {
           title: "当前边界",
@@ -451,7 +451,8 @@ const settingsPending = {
         cards: {
           modeProvider: {
             title: "模式与 provider",
-            description: "先明确执行模式，再确认 provider 和 model 目标。",
+            description: "先明确本次执行模式，再确认当前 provider 和 model 目标。",
+            currentTarget: "当前执行目标",
           },
           prompt: {
             title: "Prompt 请求",
@@ -487,6 +488,10 @@ const settingsPending = {
           help: {
             title: "调试说明",
             description: "把 Prompt / Workflow 使用边界，以及当前 shared API 前置依赖讲清楚。",
+          },
+          diagnostics: {
+            title: "诊断与详情",
+            description: "默认收起，请在需要复盘请求摘要、日志和使用边界时再展开。",
           },
         },
         modes: {
@@ -577,7 +582,7 @@ const settingsPending = {
         },
         messages: {
           formDirty: "表单已变更，尚未重新提交。",
-          cancelUnavailable: "当前 desktop API 面还没有暴露取消接口，所以页面会继续展示取消任务按钮，但在运行中保持禁用并明确说明原因。",
+          cancelUnavailable: "当前版本还没有开放取消接口。任务开始后需要等待 provider 或本地 runner 返回终态。",
         },
         pageStatus: {
           "initial-loading": "initial-loading",
