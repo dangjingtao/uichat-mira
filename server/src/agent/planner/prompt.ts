@@ -157,6 +157,56 @@ const buildSchemaReplanMessages = (input: {
   },
 ];
 
+export const buildAnswerCompletionReplanMessages = (input: {
+  question: string;
+  plan: AgentPlan;
+  observationContext: PlannerObservationContext;
+  toolExposure: AgentToolExposureState;
+  iteration: number;
+  maxIterations: number;
+  blockedAnswerReason: string;
+  previousAnswerReason: string;
+}): NormalizedChatMessage[] => [
+  {
+    role: "system",
+    content: [
+      "你正在做一次 bounded completion replan。",
+      "上一次 planner 输出了 answer，但这个 answer 被任务完成判定挡回。",
+      "这次禁止再次输出 answer，除非你能基于当前证据明确说明为什么已经没有安全推进路径且只能终局。",
+      "你必须改为给出下一步推进动作：retrieve、use_tool、ask_user，或在确实无法继续时输出 error。",
+      "如果选择 use_tool，toolId 必须来自允许工具列表，args 必须严格符合 schema。",
+      "不要假装工具已经成功，也不要把还能继续自主推进的情况直接改成人工确认。",
+      ...buildProgressionRules({
+        observationContext: input.observationContext,
+        iteration: input.iteration,
+        maxIterations: input.maxIterations,
+      }),
+    ].join("\n"),
+    parts: [],
+  },
+  {
+    role: "user",
+    content: JSON.stringify(
+      {
+        question: input.question,
+        plan: input.plan,
+        observationContext: input.observationContext,
+        blockedAnswerReason: input.blockedAnswerReason,
+        previousAnswerReason: input.previousAnswerReason,
+        toolExposure: {
+          exposedTools: input.toolExposure.exposedTools,
+          toolMeta: input.toolExposure.toolMeta,
+        },
+        instruction:
+          "Return exactly one valid nextAction JSON. Do not return answer again just because the latest evidence looks answerable. Prefer the next autonomous step that closes the missing coverage.",
+      },
+      null,
+      2,
+    ),
+    parts: [],
+  },
+];
+
 export const buildNextActionPlannerMessages = (input: {
   question: string;
   plan: AgentPlan;
@@ -189,16 +239,19 @@ export const buildNextActionPlannerMessages = (input: {
         '{"type":"use_tool","toolId":"...","args":{},"reason":"..."}',
         '{"type":"ask_user","question":"...","reason":"..."}',
         '{"type":"error","reason":"..."}',
-        "如果你选择 use_tool，toolId 必须来自当前暴露的真实工具列表，args 必须是 JSON object。",
-        "不要输出 capabilityId，不要发明未暴露工具，不要输出额外字段。",
-        "对 workspace-bound read 工具的 path 参数，当前 workspace 根目录一律用 '.' 表示。",
-        "不要输出 '/workspace' 作为 path。",
-        "不要把 workspace 根目录下的文件写成 '/README.md' 这类类 Unix 绝对路径；应写成 'README.md'。",
-        "如果要读取 workspace 根目录下的嵌套文件，应写成 'docs/README.md' 这类 workspace-relative path。",
-        "如果 observationContext.latestEvidenceSummary.answerReadiness.canAnswer 为 true，且没有 missingInfo、pendingApproval 或 errorMessage，则下一步必须输出 answer。",
-        ...buildProgressionRules({
-          observationContext: input.observationContext,
-          iteration: input.iteration,
+      "如果你选择 use_tool，toolId 必须来自当前暴露的真实工具列表，args 必须是 JSON object。",
+      "不要输出 capabilityId，不要发明未暴露工具，不要输出额外字段。",
+      "对 workspace-bound read 工具的 path 参数，当前 workspace 根目录一律用 '.' 表示。",
+      "不要输出 '/workspace' 作为 path。",
+      "不要把 workspace 根目录下的文件写成 '/README.md' 这类类 Unix 绝对路径；应写成 'README.md'。",
+      "如果要读取 workspace 根目录下的嵌套文件，应写成 'docs/README.md' 这类 workspace-relative path。",
+      "对 terminal_session.cwd，只能输出 workspace-relative directory。",
+      "如果命令就在 workspace 根目录执行，优先省略 cwd，或把 cwd 写成 '.'。",
+      "不要把 terminal_session.cwd 写成 Windows 绝对路径、POSIX 绝对路径或父级跳转，例如 'D:\\workspace\\rag-demo'、'/workspace'、'..'、'../server'。",
+      "如果 observationContext.latestEvidenceSummary.answerReadiness.canAnswer 为 true，且没有 missingInfo、pendingApproval 或 errorMessage，则下一步必须输出 answer。",
+      ...buildProgressionRules({
+        observationContext: input.observationContext,
+        iteration: input.iteration,
           maxIterations: input.maxIterations,
         }),
       ].join("\n"),

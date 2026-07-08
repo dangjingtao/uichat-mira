@@ -119,6 +119,7 @@ const createState = (
           required: ["command"],
           properties: {
             command: { type: "string" },
+            cwd: { type: "string" },
           },
           additionalProperties: false,
         },
@@ -129,6 +130,12 @@ const createState = (
           sideEffect: "process",
           requiresApproval: true,
           workspaceBound: true,
+          workspaceBoundary: {
+            argKeys: ["cwd"],
+            argTypes: {
+              cwd: "directory",
+            },
+          },
         },
       },
       {
@@ -460,6 +467,163 @@ test("toolCallNormalizeNode does not rewrite non-read tool arguments", async () 
 
   assert.equal(patch.errorMessage, undefined);
   assert.deepEqual(patch.pendingToolCall?.args, { command: "/README.md" });
+});
+
+test("toolCallNormalizeNode accepts terminal_session without cwd", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "terminal_session",
+        args: { command: "dir" },
+        reason: "Need terminal output.",
+      },
+    }),
+  );
+
+  assert.equal(patch.errorMessage, undefined);
+  assert.equal(patch.schemaReplanDiagnostics, undefined);
+  assert.deepEqual(patch.pendingToolCall?.args, { command: "dir" });
+});
+
+test("toolCallNormalizeNode accepts terminal_session.cwd = '.'", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "terminal_session",
+        args: { command: "dir", cwd: "." },
+        reason: "Need terminal output.",
+      },
+    }),
+  );
+
+  assert.equal(patch.errorMessage, undefined);
+  assert.equal(patch.schemaReplanDiagnostics, undefined);
+  assert.deepEqual(patch.pendingToolCall?.args, { command: "dir", cwd: "." });
+});
+
+test("toolCallNormalizeNode accepts terminal_session.cwd = 'server'", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "terminal_session",
+        args: { command: "dir", cwd: "server" },
+        reason: "Need terminal output.",
+      },
+    }),
+  );
+
+  assert.equal(patch.errorMessage, undefined);
+  assert.equal(patch.schemaReplanDiagnostics, undefined);
+  assert.deepEqual(patch.pendingToolCall?.args, { command: "dir", cwd: "server" });
+});
+
+test("toolCallNormalizeNode normalizes terminal_session.cwd child paths", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "terminal_session",
+        args: { command: "dir", cwd: "server\\src" },
+        reason: "Need terminal output.",
+      },
+    }),
+  );
+
+  assert.equal(patch.errorMessage, undefined);
+  assert.equal(patch.schemaReplanDiagnostics, undefined);
+  assert.deepEqual(patch.pendingToolCall?.args, { command: "dir", cwd: "server/src" });
+});
+
+test("toolCallNormalizeNode rejects terminal_session.cwd Windows absolute paths with schema replan diagnostics", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "terminal_session",
+        args: { command: "dir", cwd: "D:\\workspace\\rag-demo" },
+        reason: "Need terminal output.",
+      },
+    }),
+  );
+
+  assert.equal(patch.pendingToolCall, undefined);
+  assert.equal(patch.errorMessage, undefined);
+  assert.equal(patch.errorSourceNodeId, undefined);
+  assert.match(
+    patch.schemaReplanDiagnostics?.schemaError ?? "",
+    /workspace root|absolute paths|parent traversal/i,
+  );
+  assert.equal(patch.schemaReplanDiagnostics?.toolId, "terminal_session");
+  assert.equal(patch.schemaReplanDiagnostics?.attemptCount, 1);
+});
+
+test("toolCallNormalizeNode rejects terminal_session.cwd drive-root paths with schema replan diagnostics", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "terminal_session",
+        args: { command: "dir", cwd: "C:\\" },
+        reason: "Need terminal output.",
+      },
+    }),
+  );
+
+  assert.equal(patch.pendingToolCall, undefined);
+  assert.equal(patch.errorMessage, undefined);
+  assert.equal(patch.errorSourceNodeId, undefined);
+  assert.match(
+    patch.schemaReplanDiagnostics?.schemaError ?? "",
+    /workspace root|absolute paths|parent traversal/i,
+  );
+  assert.equal(patch.schemaReplanDiagnostics?.toolId, "terminal_session");
+});
+
+test("toolCallNormalizeNode rejects terminal_session.cwd POSIX absolute paths with schema replan diagnostics", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "terminal_session",
+        args: { command: "dir", cwd: "/workspace" },
+        reason: "Need terminal output.",
+      },
+    }),
+  );
+
+  assert.equal(patch.pendingToolCall, undefined);
+  assert.equal(patch.errorMessage, undefined);
+  assert.equal(patch.errorSourceNodeId, undefined);
+  assert.match(
+    patch.schemaReplanDiagnostics?.schemaError ?? "",
+    /workspace root|absolute paths|parent traversal/i,
+  );
+  assert.equal(patch.schemaReplanDiagnostics?.toolId, "terminal_session");
+});
+
+test("toolCallNormalizeNode rejects terminal_session.cwd parent traversal with schema replan diagnostics", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      nextAction: {
+        type: "use_tool",
+        toolId: "terminal_session",
+        args: { command: "dir", cwd: "../outside" },
+        reason: "Need terminal output.",
+      },
+    }),
+  );
+
+  assert.equal(patch.pendingToolCall, undefined);
+  assert.equal(patch.errorMessage, undefined);
+  assert.equal(patch.errorSourceNodeId, undefined);
+  assert.match(
+    patch.schemaReplanDiagnostics?.schemaError ?? "",
+    /workspace root|absolute paths|parent traversal/i,
+  );
+  assert.equal(patch.schemaReplanDiagnostics?.toolId, "terminal_session");
 });
 
 test("toolCallNormalizeNode returns empty result for non-use_tool nextAction", async () => {

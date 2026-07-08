@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test, vi } from "vitest";
 import { subscribeToLogLines } from "@/logger";
 import { providerProxyService } from "@/services/provider-proxy.service/index";
+import { getTaskCompletionDecision } from "../evidence";
 import {
   buildPlannerObservationContext,
   type AgentNodeState,
@@ -685,6 +686,104 @@ test("nextActionPlannerNode short-circuits to answer when latest evidence summar
   }
 });
 
+test("nextActionPlannerNode does not short-circuit to answer when mutation task still lacks execution coverage", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"workspace_mutation","args":{"operation":"delete","targetPath":"notes.txt"},"reason":"Need to execute the deletion."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question: "删除 notes.txt",
+        messages: [
+          {
+            role: "user",
+            content: "删除 notes.txt",
+            parts: [{ type: "text", text: "删除 notes.txt" }],
+          },
+        ],
+        currentTaskFrame: {
+          currentGoal: "删除 notes.txt",
+          currentSubtask: "Determine the next action.",
+          currentBlocker: undefined,
+          confirmedObjects: [],
+          completionCriteria: ["删除 notes.txt"],
+        },
+        toolExposure: {
+          exposedTools: ["workspace_mutation"],
+          toolMeta: [
+            {
+              toolId: "workspace_mutation",
+              title: "Workspace Mutation",
+              description: "Mutate a workspace target",
+              inputSchema: {
+                type: "object",
+                properties: {
+                  operation: { type: "string" },
+                  targetPath: { type: "string" },
+                },
+              },
+              domain: "edit",
+              source: "internal",
+              tags: ["edit"],
+              capabilities: {
+                sideEffect: "local-write",
+                requiresApproval: true,
+              },
+            },
+          ],
+        },
+        evidence: {
+          observations: [],
+          retrievals: [],
+          toolExecutions: [],
+          latestSummary: {
+            source: "tool",
+            status: "completed",
+            toolId: "read_locate",
+            actionTaken: "Located notes.txt in the workspace.",
+            keyFindings: ["matchCount=1", "targetPath=notes.txt"],
+            answerReadiness: {
+              canAnswer: true,
+              reason: "Located target path can support a follow-up answer.",
+            },
+            data: {
+              kind: "read_locate",
+              scope: ".",
+              query: "notes.txt",
+              searchMode: "path",
+              matchCount: 1,
+              matchedPaths: ["notes.txt"],
+              matchesPreview: ["notes.txt"],
+              truncated: false,
+              canAnswerLocateQuestion: true,
+            },
+            rawRef: {
+              evidenceIndex: 0,
+              toolCallId: "tool-call-locate-1",
+            },
+          },
+        },
+      }),
+    );
+
+    assert.deepEqual(patch.nextAction, {
+      type: "use_tool",
+      toolId: "workspace_mutation",
+      args: {
+        operation: "delete",
+        targetPath: "notes.txt",
+      },
+      reason: "Need to execute the deletion.",
+    });
+    assert.equal(streamSpy.mock.calls.length, 1);
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
 test("nextActionPlannerNode returns retrieve action from task model JSON", async () => {
   const streamSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
@@ -705,6 +804,713 @@ test("nextActionPlannerNode returns retrieve action from task model JSON", async
   } finally {
     streamSpy.mockRestore();
   }
+});
+
+test("nextActionPlannerNode does not short-circuit to answer when a multi-target locate question still misses one target", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"answer","reason":"I found one of the requested files."}';
+    })
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_locate","args":{"query":"AGENTS.md"},"reason":"Need to locate the remaining target."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question: "README.md 和 AGENTS.md 在哪里？",
+        messages: [
+          {
+            role: "user",
+            content: "README.md 和 AGENTS.md 在哪里？",
+            parts: [{ type: "text", text: "README.md 和 AGENTS.md 在哪里？" }],
+          },
+        ],
+        currentTaskFrame: {
+          currentGoal: "README.md 和 AGENTS.md 在哪里？",
+          currentSubtask: "Locate the requested files.",
+          currentBlocker: undefined,
+          confirmedObjects: [],
+          completionCriteria: ["README.md 和 AGENTS.md 在哪里？"],
+        },
+        toolExposure: {
+          exposedTools: ["read_locate"],
+          toolMeta: [
+            {
+              toolId: "read_locate",
+              title: "Read Locate",
+              description: "Locate workspace matches",
+              inputSchema: {
+                type: "object",
+                properties: {
+                  query: { type: "string" },
+                },
+              },
+              domain: "read",
+              source: "internal",
+              tags: ["read"],
+              capabilities: {
+                sideEffect: "none",
+                requiresApproval: false,
+              },
+            },
+          ],
+        },
+        evidence: {
+          observations: [],
+          retrievals: [],
+          toolExecutions: [],
+          latestSummary: {
+            source: "tool",
+            status: "completed",
+            toolId: "read_locate",
+            actionTaken: "Located README.md in the workspace.",
+            keyFindings: ["matchCount=1", "targetPath=README.md"],
+            answerReadiness: {
+              canAnswer: true,
+              reason: "Located target path can support a follow-up answer.",
+            },
+            data: {
+              kind: "read_locate",
+              scope: ".",
+              query: "README.md AGENTS.md",
+              searchMode: "path",
+              matchCount: 1,
+              matchedPaths: ["README.md"],
+              matchesPreview: ["README.md"],
+              truncated: false,
+              canAnswerLocateQuestion: true,
+            },
+            rawRef: {
+              evidenceIndex: 0,
+              toolCallId: "tool-call-locate-readme-only",
+            },
+          },
+        },
+      }),
+    );
+
+    assert.deepEqual(patch.nextAction, {
+      type: "use_tool",
+      toolId: "read_locate",
+      args: {
+        query: "AGENTS.md",
+      },
+      reason: "Need to locate the remaining target.",
+    });
+    assert.equal(streamSpy.mock.calls.length, 2);
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode still short-circuits to answer for a single-target locate question once the target is covered", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"answer","reason":"Planner should not be called."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question: "README.md 在哪里？",
+        messages: [
+          {
+            role: "user",
+            content: "README.md 在哪里？",
+            parts: [{ type: "text", text: "README.md 在哪里？" }],
+          },
+        ],
+        currentTaskFrame: {
+          currentGoal: "README.md 在哪里？",
+          currentSubtask: "Locate the requested file.",
+          currentBlocker: undefined,
+          confirmedObjects: [],
+          completionCriteria: ["README.md 在哪里？"],
+        },
+        evidence: {
+          observations: [],
+          retrievals: [],
+          toolExecutions: [],
+          latestSummary: {
+            source: "tool",
+            status: "completed",
+            toolId: "read_locate",
+            actionTaken: "Located README.md in the workspace.",
+            keyFindings: ["matchCount=1", "targetPath=README.md"],
+            answerReadiness: {
+              canAnswer: true,
+              reason: "Located target path can support a direct answer.",
+            },
+            data: {
+              kind: "read_locate",
+              scope: ".",
+              query: "README.md",
+              searchMode: "path",
+              matchCount: 1,
+              matchedPaths: ["README.md"],
+              matchesPreview: ["README.md"],
+              truncated: false,
+              canAnswerLocateQuestion: true,
+            },
+            rawRef: {
+              evidenceIndex: 0,
+              toolCallId: "tool-call-locate-readme",
+            },
+          },
+        },
+      }),
+    );
+
+    assert.deepEqual(patch.nextAction, {
+      type: "answer",
+      reason: "Located target path can support a direct answer.",
+    });
+    assert.equal(streamSpy.mock.calls.length, 0);
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode rejects planner answer when mutation task has only locate evidence", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"answer","reason":"I found the file to delete."}';
+    })
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"workspace_mutation","args":{"operation":"delete","targetPath":"notes.txt"},"reason":"Need to execute the deletion."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question: "删除 notes.txt",
+        messages: [
+          {
+            role: "user",
+            content: "删除 notes.txt",
+            parts: [{ type: "text", text: "删除 notes.txt" }],
+          },
+        ],
+        currentTaskFrame: {
+          currentGoal: "删除 notes.txt",
+          currentSubtask: "Delete the target file.",
+          currentBlocker: undefined,
+          confirmedObjects: [],
+          completionCriteria: ["删除 notes.txt"],
+        },
+        toolExposure: {
+          exposedTools: ["workspace_mutation"],
+          toolMeta: [
+            {
+              toolId: "workspace_mutation",
+              title: "Workspace Mutation",
+              description: "Mutate a workspace target",
+              inputSchema: {
+                type: "object",
+                properties: {
+                  operation: { type: "string" },
+                  targetPath: { type: "string" },
+                },
+              },
+              domain: "edit",
+              source: "internal",
+              tags: ["edit"],
+              capabilities: {
+                sideEffect: "local-write",
+                requiresApproval: true,
+              },
+            },
+          ],
+        },
+        evidence: {
+          observations: [],
+          retrievals: [],
+          toolExecutions: [],
+          latestSummary: {
+            source: "tool",
+            status: "completed",
+            toolId: "read_locate",
+            actionTaken: "Located notes.txt in the workspace.",
+            keyFindings: ["matchCount=1", "targetPath=notes.txt"],
+            answerReadiness: {
+              canAnswer: true,
+              reason: "Located target path can support a follow-up answer.",
+            },
+            data: {
+              kind: "read_locate",
+              scope: ".",
+              query: "notes.txt",
+              searchMode: "path",
+              matchCount: 1,
+              matchedPaths: ["notes.txt"],
+              matchesPreview: ["notes.txt"],
+              truncated: false,
+              canAnswerLocateQuestion: true,
+            },
+            rawRef: {
+              evidenceIndex: 0,
+              toolCallId: "tool-call-locate-1",
+            },
+          },
+        },
+      }),
+    );
+
+    assert.deepEqual(patch.nextAction, {
+      type: "use_tool",
+      toolId: "workspace_mutation",
+      args: {
+        operation: "delete",
+        targetPath: "notes.txt",
+      },
+      reason: "Need to execute the deletion.",
+    });
+    assert.equal(streamSpy.mock.calls.length, 2);
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode still rejects planner answer when all mutation targets are only located but not executed", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"answer","reason":"I located both files already."}';
+    })
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"workspace_mutation","args":{"operation":"delete","targetPath":"README.md"},"reason":"Need to enter the deletion execution path before answering."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question: "删除 README.md 和 AGENTS.md",
+        messages: [
+          {
+            role: "user",
+            content: "删除 README.md 和 AGENTS.md",
+            parts: [{ type: "text", text: "删除 README.md 和 AGENTS.md" }],
+          },
+        ],
+        currentTaskFrame: {
+          currentGoal: "删除 README.md 和 AGENTS.md",
+          currentSubtask: "Delete both files.",
+          currentBlocker: undefined,
+          confirmedObjects: [],
+          completionCriteria: ["删除 README.md 和 AGENTS.md"],
+        },
+        toolExposure: {
+          exposedTools: ["workspace_mutation"],
+          toolMeta: [
+            {
+              toolId: "workspace_mutation",
+              title: "Workspace Mutation",
+              description: "Mutate a workspace target",
+              inputSchema: {
+                type: "object",
+                properties: {
+                  operation: { type: "string" },
+                  targetPath: { type: "string" },
+                },
+              },
+              domain: "edit",
+              source: "internal",
+              tags: ["edit"],
+              capabilities: {
+                sideEffect: "local-write",
+                requiresApproval: true,
+              },
+            },
+          ],
+        },
+        evidence: {
+          observations: [],
+          retrievals: [],
+          toolExecutions: [],
+          latestSummary: {
+            source: "tool",
+            status: "completed",
+            toolId: "read_locate",
+            actionTaken: "Located README.md and AGENTS.md in the workspace.",
+            keyFindings: ["matchCount=2", "targets=README.md,AGENTS.md"],
+            answerReadiness: {
+              canAnswer: true,
+              reason: "Located target paths can support a follow-up answer.",
+            },
+            data: {
+              kind: "read_locate",
+              scope: ".",
+              query: "README.md AGENTS.md",
+              searchMode: "path",
+              matchCount: 2,
+              matchedPaths: ["README.md", "AGENTS.md"],
+              matchesPreview: ["README.md", "AGENTS.md"],
+              truncated: false,
+              canAnswerLocateQuestion: true,
+            },
+            rawRef: {
+              evidenceIndex: 0,
+              toolCallId: "tool-call-locate-both",
+            },
+          },
+        },
+      }),
+    );
+
+    assert.deepEqual(patch.nextAction, {
+      type: "use_tool",
+      toolId: "workspace_mutation",
+      args: {
+        operation: "delete",
+        targetPath: "README.md",
+      },
+      reason: "Need to enter the deletion execution path before answering.",
+    });
+    assert.equal(streamSpy.mock.calls.length, 2);
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("getTaskCompletionDecision extracts Chinese bare mutation targets into requiredTargets", () => {
+  const decision = getTaskCompletionDecision({
+    question: "删除如何被美丽女孩爱上和如何爱上美丽女孩",
+    currentTaskFrame: {
+      currentGoal: "删除如何被美丽女孩爱上和如何爱上美丽女孩",
+      currentSubtask: "Delete both targets.",
+      currentBlocker: undefined,
+      confirmedObjects: [],
+      completionCriteria: ["删除如何被美丽女孩爱上和如何爱上美丽女孩"],
+    },
+    evidence: {
+      observations: [],
+      retrievals: [],
+      toolExecutions: [
+        {
+          toolId: "workspace_mutation",
+          args: {
+            operation: "delete",
+            targetPath: "如何被美丽女孩爱上",
+          },
+          status: "completed",
+          summary: {
+            source: "tool",
+            status: "completed",
+            toolId: "workspace_mutation",
+            actionTaken: "Deleted the first target.",
+            keyFindings: ["targetPath=如何被美丽女孩爱上"],
+            answerReadiness: {
+              canAnswer: true,
+              reason: "This workspace mutation completed and can ground a mutation answer.",
+            },
+            data: {
+              kind: "workspace_mutation",
+              operation: "delete",
+              targetPath: "如何被美丽女孩爱上",
+              changed: true,
+              deleted: true,
+              dryRun: false,
+              canAnswerMutationQuestion: true,
+            },
+          },
+          startedAt: "2026-07-08T00:00:00.000Z",
+          finishedAt: "2026-07-08T00:00:01.000Z",
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(decision.requiredTargets, [
+    "如何被美丽女孩爱上",
+    "如何爱上美丽女孩",
+  ]);
+  assert.deepEqual(decision.coveredTargets, ["如何被美丽女孩爱上"]);
+  assert.deepEqual(decision.missingTargets, ["如何爱上美丽女孩"]);
+  assert.deepEqual(decision.pendingActions, ["mutation_execution"]);
+  assert.equal(decision.taskCompleted, false);
+});
+
+test("getTaskCompletionDecision treats terminal mutation failure as a completed terminal outcome", () => {
+  const decision = getTaskCompletionDecision({
+    question: "删除 notes.txt",
+    currentTaskFrame: {
+      currentGoal: "删除 notes.txt",
+      currentSubtask: "Delete the target file.",
+      currentBlocker: "notes.txt does not exist",
+      confirmedObjects: [],
+      completionCriteria: ["删除 notes.txt"],
+    },
+    evidence: {
+      observations: [],
+      retrievals: [],
+      toolExecutions: [
+        {
+          toolId: "workspace_mutation",
+          args: {
+            operation: "delete",
+            targetPath: "notes.txt",
+          },
+          status: "failed",
+          failureKind: "terminal",
+          errorMessage: "notes.txt does not exist",
+          startedAt: "2026-07-08T00:00:00.000Z",
+          finishedAt: "2026-07-08T00:00:01.000Z",
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(decision.requiredTargets, ["notes.txt"]);
+  assert.deepEqual(decision.coveredTargets, []);
+  assert.deepEqual(decision.missingTargets, []);
+  assert.deepEqual(decision.pendingActions, []);
+  assert.equal(decision.taskCompleted, true);
+});
+
+test("getTaskCompletionDecision does not treat terminal failed read tools as mutation completion", () => {
+  const decision = getTaskCompletionDecision({
+    question: "删除 notes.txt",
+    currentTaskFrame: {
+      currentGoal: "删除 notes.txt",
+      currentSubtask: "Delete the target file.",
+      currentBlocker: "read_open failed before any mutation happened",
+      confirmedObjects: [],
+      completionCriteria: ["删除 notes.txt"],
+    },
+    evidence: {
+      observations: [],
+      retrievals: [],
+      toolExecutions: [
+        {
+          toolId: "read_open",
+          args: {
+            path: "notes.txt",
+          },
+          status: "failed",
+          failureKind: "terminal",
+          errorMessage: "read_open protocol mismatch",
+          startedAt: "2026-07-08T00:00:00.000Z",
+          finishedAt: "2026-07-08T00:00:01.000Z",
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(decision.requiredTargets, ["notes.txt"]);
+  assert.deepEqual(decision.coveredTargets, []);
+  assert.deepEqual(decision.missingTargets, ["notes.txt"]);
+  assert.deepEqual(decision.pendingActions, ["mutation_execution"]);
+  assert.equal(decision.taskCompleted, false);
+});
+
+test("getTaskCompletionDecision treats terminal failed edit_file as a completed mutation outcome", () => {
+  const decision = getTaskCompletionDecision({
+    question: "写入 notes.txt",
+    currentTaskFrame: {
+      currentGoal: "写入 notes.txt",
+      currentSubtask: "Write the target file.",
+      currentBlocker: "edit_file failed terminally",
+      confirmedObjects: [],
+      completionCriteria: ["写入 notes.txt"],
+    },
+    evidence: {
+      observations: [],
+      retrievals: [],
+      toolExecutions: [
+        {
+          toolId: "edit_file",
+          args: {
+            targetPath: "notes.txt",
+            content: "hello",
+          },
+          status: "failed",
+          failureKind: "terminal",
+          errorMessage: "edit_file policy rejected final write",
+          startedAt: "2026-07-08T00:00:00.000Z",
+          finishedAt: "2026-07-08T00:00:01.000Z",
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(decision.requiredTargets, ["notes.txt"]);
+  assert.deepEqual(decision.coveredTargets, []);
+  assert.deepEqual(decision.missingTargets, []);
+  assert.deepEqual(decision.pendingActions, []);
+  assert.equal(decision.taskCompleted, true);
+});
+
+test("getTaskCompletionDecision does not treat failed read target args as covered evidence", () => {
+  const decision = getTaskCompletionDecision({
+    question: "README.md 和 AGENTS.md 在哪里",
+    currentTaskFrame: {
+      currentGoal: "Find README.md and AGENTS.md",
+      currentSubtask: "Locate both files.",
+      currentBlocker: undefined,
+      confirmedObjects: [],
+      completionCriteria: ["Locate README.md and AGENTS.md"],
+    },
+    evidence: {
+      observations: [],
+      retrievals: [],
+      toolExecutions: [
+        {
+          toolId: "read_open",
+          args: {
+            path: "README.md",
+          },
+          status: "failed",
+          failureKind: "recoverable",
+          errorMessage: "README.md not opened yet",
+          startedAt: "2026-07-08T00:00:00.000Z",
+          finishedAt: "2026-07-08T00:00:01.000Z",
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(decision.requiredTargets, ["readme.md", "agents.md"]);
+  assert.deepEqual(decision.coveredTargets, []);
+  assert.deepEqual(decision.missingTargets, ["readme.md", "agents.md"]);
+  assert.deepEqual(decision.pendingActions, []);
+  assert.equal(decision.taskCompleted, false);
+});
+
+test("getTaskCompletionDecision uses read_locate matchedPaths instead of display-formatted matchesPreview", () => {
+  const decision = getTaskCompletionDecision({
+    question: "README.md 和 AGENTS.md 在哪里？",
+    currentTaskFrame: {
+      currentGoal: "README.md 和 AGENTS.md 在哪里？",
+      currentSubtask: "Locate the requested files.",
+      currentBlocker: undefined,
+      confirmedObjects: [],
+      completionCriteria: ["README.md 和 AGENTS.md 在哪里？"],
+    },
+    latestSummary: {
+      source: "tool",
+      status: "completed",
+      toolId: "read_locate",
+      actionTaken: 'Located 2 workspace match(es) for "README.md AGENTS.md".',
+      keyFindings: [
+        "matchCount=2",
+        "[path] README.md",
+        "[content] AGENTS.md: project instructions",
+      ],
+      answerReadiness: {
+        canAnswer: true,
+        reason: "Workspace locate results are available for answer generation.",
+      },
+      data: {
+        kind: "read_locate",
+        scope: ".",
+        query: "README.md AGENTS.md",
+        searchMode: "auto",
+        matchCount: 2,
+        matchedPaths: ["README.md", "AGENTS.md"],
+        matchesPreview: [
+          "[path] README.md",
+          "[content] AGENTS.md: project instructions",
+        ],
+        truncated: false,
+        canAnswerLocateQuestion: true,
+      },
+      rawRef: {
+        evidenceIndex: 0,
+        toolCallId: "tool-call-locate-real-format",
+      },
+    },
+  });
+
+  assert.deepEqual(decision.requiredTargets, ["readme.md", "agents.md"]);
+  assert.deepEqual(decision.coveredTargets, ["readme.md", "agents.md"]);
+  assert.deepEqual(decision.missingTargets, []);
+  assert.equal(decision.taskCompleted, true);
+});
+
+test("getTaskCompletionDecision keeps read_locate matchedPaths beyond preview truncation", () => {
+  const decision = getTaskCompletionDecision({
+    question: "README.md、AGENTS.md、docs/README.md、docs/guide.md、notes.txt、extra.md 在哪里？",
+    currentTaskFrame: {
+      currentGoal:
+        "README.md、AGENTS.md、docs/README.md、docs/guide.md、notes.txt、extra.md 在哪里？",
+      currentSubtask: "Locate all requested files.",
+      currentBlocker: undefined,
+      confirmedObjects: [],
+      completionCriteria: [
+        "README.md、AGENTS.md、docs/README.md、docs/guide.md、notes.txt、extra.md 在哪里？",
+      ],
+    },
+    latestSummary: {
+      source: "tool",
+      status: "truncated",
+      toolId: "read_locate",
+      actionTaken:
+        'Located 6 workspace match(es) for "README.md AGENTS.md docs/README.md docs/guide.md notes.txt extra.md".',
+      keyFindings: [
+        "matchCount=6",
+        "[path] README.md",
+        "[path] AGENTS.md",
+        "[path] docs/README.md",
+        "[path] docs/guide.md",
+        "[path] notes.txt",
+      ],
+      answerReadiness: {
+        canAnswer: true,
+        reason: "Workspace locate results are available for answer generation.",
+      },
+      data: {
+        kind: "read_locate",
+        scope: ".",
+        query: "README.md AGENTS.md docs/README.md docs/guide.md notes.txt extra.md",
+        searchMode: "auto",
+        matchCount: 6,
+        matchedPaths: [
+          "README.md",
+          "AGENTS.md",
+          "docs/README.md",
+          "docs/guide.md",
+          "notes.txt",
+          "extra.md",
+        ],
+        matchesPreview: [
+          "[path] README.md",
+          "[path] AGENTS.md",
+          "[path] docs/README.md",
+          "[path] docs/guide.md",
+          "[path] notes.txt",
+        ],
+        truncated: true,
+        canAnswerLocateQuestion: true,
+      },
+      rawRef: {
+        evidenceIndex: 0,
+        toolCallId: "tool-call-locate-truncated-preview",
+      },
+    },
+  });
+
+  assert.deepEqual(decision.requiredTargets, [
+    "readme.md",
+    "agents.md",
+    "docs/readme.md",
+    "docs/guide.md",
+    "notes.txt",
+    "extra.md",
+  ]);
+  assert.deepEqual(decision.coveredTargets, [
+    "readme.md",
+    "agents.md",
+    "docs/readme.md",
+    "docs/guide.md",
+    "notes.txt",
+    "extra.md",
+  ]);
+  assert.deepEqual(decision.missingTargets, []);
+  assert.equal(decision.taskCompleted, true);
 });
 
 test("nextActionPlannerNode returns use_tool action when toolId is exposed", async () => {
@@ -1251,6 +2057,7 @@ test("nextActionPlannerNode bridges completed read_locate evidence into read_ope
                   query: "读我文件",
                   searchMode: "content",
                   matchCount: 1,
+                  matchedPaths: ["README.md"],
                   matchesPreview: ["[content] README.md: UIChat Mira is a local-first desktop workspace."],
                   truncated: false,
                   canAnswerLocateQuestion: false,

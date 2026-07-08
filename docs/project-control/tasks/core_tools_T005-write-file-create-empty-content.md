@@ -2,7 +2,7 @@
 status: current
 priority: P1
 owner: runtime
-last_verified: 2026-07-02
+last_verified: 2026-07-08
 layer: project-control
 module: ProjectControl
 feature: CoreToolsWriteFileCreate
@@ -50,7 +50,7 @@ task_state: DONE
 - `pnpm --filter @ui-chat-mira/server typecheck`
   - 结果：通过
 - `pnpm --filter @ui-chat-mira/server exec vitest run src/mcp/tools/edit-file.tool.test.ts`
-  - 结果：通过，包含创建空文件用例
+  - 结果：通过，`17 passed`
 
 ## Implementation Evidence
 
@@ -58,12 +58,15 @@ task_state: DONE
   - `executeNodeWriteFile` 以 `typeof args.content === "string"` 判定合法内容，空字符串不会被误判为缺参
 - `server/src/mcp/tools/edit-file.tool.test.ts`
   - 现有用例覆盖创建非空文件
-  - 新增用例覆盖 `content: ""` 时创建空文件且结果 `bytes = 0`
+  - 现有用例覆盖 `content: ""` 时创建空文件且结果 `bytes = 0`
+- `docs/tooling-runtime/core-tool-rectification-ledger.md`
+  - `P1 / Edit / T005` 条目已回填，确认本卡只覆盖“新建文件语义”和“空内容合法性”
 
 ## Risks / Deferred
 
 - 本任务没有处理“覆盖已有文件必须 dryRun 或确认”；那是台账中的下一项独立整改
 - 本任务没有新增 `edit_create_file` action profile；那是 P2 的语义入口整改
+- 本任务不处理 `replace_block` 或目录级变更；这些仍属于后续独立任务范围
 
 ## Review Outcome
 
@@ -73,4 +76,5 @@ task_state: DONE
   - `AC1` 已满足：文件不存在时，`write_file` 可以创建新文件
   - `AC2` 已满足：`content: ""` 被视为合法输入，不会误判为缺失参数
   - `AC3` 已满足：台账已对齐 `P1 / Edit`
-  - 非阻断说明：本卡只确认创建语义与空内容合法性，不处理已有文件覆盖审批，也不处理 `replace_block` 唯一匹配
+  - 验证补充：`pnpm --filter @ui-chat-mira/server typecheck` 通过；`pnpm --filter @ui-chat-mira/server exec vitest run src/mcp/tools/edit-file.tool.test.ts` 通过，`17 passed`
+  - 非阻断说明：本卡只确认创建语义与空内容合法性，不处理已有文件覆盖审批，也不处理 `replace_block` 唯一匹配或目录级变更

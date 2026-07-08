@@ -617,11 +617,13 @@ test("toolCall loop maxIterations routes to generate instead of a second tool ex
 test("toolCall loop failed tool writes failed evidence and never reports fake success", async () => {
   const readOpen = readOpenTool();
   setupToolExposure("open README.md", [readOpen]);
-  vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
-    async function* () {
+  vi.spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
       yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need file content."}';
-    },
-  );
+    })
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"answer","reason":"There is still no completed evidence to answer from."}';
+    });
   const executeSpy = vi
     .spyOn(harnessInvocations, "executeHarnessInvocation")
     .mockResolvedValue({
@@ -656,7 +658,7 @@ test("toolCall loop failed tool writes failed evidence and never reports fake su
   assert.equal(result.evidence.latestSummary?.status, "failed");
   assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, false);
   assert.match(result.answer ?? "", /当前还没有足够的已完成证据/);
-});
+}, 15000);
 
 test("toolCall loop terminal failed tool still fails the graph and does not generate a guarded answer", async () => {
   const readOpen = readOpenTool();

@@ -64,6 +64,7 @@ export interface McpCapabilityMetadata {
   workspaceBound?: boolean;
   workspaceBoundary?: {
     argKeys: string[];
+    argTypes?: Partial<Record<string, "path" | "directory">>;
   };
   networkAccess?: boolean;
   longRunning?: boolean;

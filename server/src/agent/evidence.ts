@@ -7,6 +7,7 @@ import type {
   AgentRetrievalEvidence,
   AgentNextAction,
   AgentToolExecutionResult,
+  CurrentTaskFrame,
 } from "./types";
 import { createInvocationInputHash } from "./approval-fingerprint";
 import { normalizeWorkspaceRelativePathArg } from "@/mcp/workspace-path-args";
@@ -94,6 +95,12 @@ const WORKSPACE_MUTATION_TOOL_IDS = new Set([
 
 const WORKSPACE_ROOT_SENTINEL = "/workspace";
 const TERMINAL_GARBLED_TEXT_PATTERNS = [/�/u, /锟斤拷/u, /\?\?\?/u];
+const MUTATION_INTENT_PATTERNS = [
+  /\b(delete|remove|edit|write|rewrite|modify|update|replace|create|overwrite|move|rename)\b/i,
+  /删除|移除|修改|编辑|改成|改为|替换|写入|新建|创建|覆盖|移动|重命名/u,
+] as const;
+const PATH_TARGET_PATTERN =
+  /(?:[A-Za-z]:\\[^\s"'<>|]+|(?:\.{1,2}[\\/])?[A-Za-z0-9_./\\-]+\.[A-Za-z0-9_-]{1,12})/g;
 
 export const getEvidencePayload = (state: EvidenceState): AgentEvidencePayload => ({
   observations: state.evidence?.observations ?? state.observations ?? [],
@@ -223,6 +230,274 @@ const getLatestUserQuestion = (state: EvidenceState) => {
     .reverse()
     .find((message) => message.role === "user");
   return latest?.content.trim() ?? state.goal?.text?.trim() ?? "";
+};
+
+const normalizeTargetPath = (value: string) =>
+  value.trim().replace(/\\/g, "/").replace(/^\.\/+/, "").toLowerCase();
+
+const normalizeNamedTargetCandidate = (value: string) =>
+  value
+    .trim()
+    .replace(/^["'`“”‘’]+|["'`“”‘’]+$/g, "")
+    .replace(/^(?:file|files|folder|folders|directory|directories)\s+/i, "")
+    .replace(/^(?:文件|文件夹|目录)\s*/u, "")
+    .replace(/[。；;，,、]+$/u, "");
+
+const extractNamedTargetsFromMutationText = (text: string) => {
+  const segments: string[] = [];
+  const englishMatch = text.match(
+    /\b(?:delete|remove|edit|write|rewrite|modify|update|replace|create|overwrite|move|rename)\b\s+(.+)/i,
+  );
+  if (englishMatch?.[1]) {
+    segments.push(englishMatch[1]);
+  }
+
+  const chineseMatch = text.match(
+    /(?:删除|移除|修改|编辑|改成|改为|替换|写入|新建|创建|覆盖|移动|重命名)(.+)/u,
+  );
+  if (chineseMatch?.[1]) {
+    segments.push(chineseMatch[1]);
+  }
+
+  return segments.flatMap((segment) =>
+    segment
+      .split(/\s*(?:,|，|、|\band\b|\bor\b|和|与|及)\s*/iu)
+      .map((item) =>
+        normalizeNamedTargetCandidate(
+          item.split(/\s+(?:then|then\s+tell|then\s+answer|afterwards|并且|然后|再|并说明)\b/iu)[0] ??
+            item,
+        ),
+      )
+      .filter(
+        (item) =>
+          item.length > 0 &&
+          item.length <= 120 &&
+          !/\s/.test(item) &&
+          /[\p{Script=Han}A-Za-z0-9_\-.\\/]/u.test(item),
+      ),
+  );
+};
+
+const extractRequiredTargets = (texts: string[]) => {
+  const targets = new Set<string>();
+  for (const text of texts) {
+    const matches = text.match(PATH_TARGET_PATTERN) ?? [];
+    for (const match of matches) {
+      const normalized = normalizeTargetPath(match);
+      if (normalized.length > 0) {
+        targets.add(normalized);
+      }
+    }
+
+    for (const namedTarget of extractNamedTargetsFromMutationText(text)) {
+      const normalized = normalizeTargetPath(namedTarget);
+      if (normalized.length > 0) {
+        targets.add(normalized);
+      }
+    }
+  }
+
+  return [...targets];
+};
+
+const hasMutationIntent = (texts: string[]) =>
+  texts.some((text) => MUTATION_INTENT_PATTERNS.some((pattern) => pattern.test(text)));
+
+const collectTaskIntentTexts = (input: {
+  question?: string;
+  currentTaskFrame?: CurrentTaskFrame;
+}) =>
+  [
+    input.question?.trim(),
+    input.currentTaskFrame?.currentGoal?.trim(),
+    ...(input.currentTaskFrame?.completionCriteria ?? []).map((item) => item.trim()),
+  ].filter((value): value is string => Boolean(value));
+
+const collectMutationResolvedTargets = (evidence: AgentEvidencePayload | undefined) => {
+  const targets = new Set<string>();
+
+  for (const execution of evidence?.toolExecutions ?? []) {
+    if (
+      execution.status === "failed" &&
+      execution.failureKind === "terminal" &&
+      WORKSPACE_MUTATION_TOOL_IDS.has(execution.toolId)
+    ) {
+      for (const target of collectCoveredTargetsFromExecutionArgs(execution.args)) {
+        if (target.length > 0) {
+          targets.add(target);
+        }
+      }
+      continue;
+    }
+
+    if (execution.status !== "completed" || !execution.summary?.data) {
+      continue;
+    }
+
+    const summaryData = execution.summary.data;
+    if (
+      summaryData.kind === "edit_file" &&
+      summaryData.changed &&
+      !summaryData.dryRun &&
+      typeof summaryData.targetPath === "string"
+    ) {
+      targets.add(normalizeTargetPath(summaryData.targetPath));
+    }
+
+    if (
+      summaryData.kind === "workspace_mutation" &&
+      summaryData.changed &&
+      !summaryData.dryRun
+    ) {
+      if (typeof summaryData.targetPath === "string") {
+        targets.add(normalizeTargetPath(summaryData.targetPath));
+      }
+      if (typeof summaryData.destinationPath === "string") {
+        targets.add(normalizeTargetPath(summaryData.destinationPath));
+      }
+    }
+  }
+
+  return [...targets];
+};
+
+const collectCoveredTargetsFromSummary = (summary: AgentEvidenceSummary | undefined) => {
+  if (summary?.source !== "tool" || !summary.data) {
+    return [];
+  }
+
+  switch (summary.data.kind) {
+    case "read_locate":
+      return summary.data.matchedPaths.map((path) => normalizeTargetPath(path));
+    case "read_open":
+    case "read_list":
+      return [normalizeTargetPath(summary.data.path)];
+    case "workspace_mutation": {
+      const targets: string[] = [];
+      if (typeof summary.data.targetPath === "string") {
+        targets.push(normalizeTargetPath(summary.data.targetPath));
+      }
+      if (typeof summary.data.destinationPath === "string") {
+        targets.push(normalizeTargetPath(summary.data.destinationPath));
+      }
+      return targets;
+    }
+    case "edit_file":
+      return typeof summary.data.targetPath === "string"
+        ? [normalizeTargetPath(summary.data.targetPath)]
+        : [];
+    default:
+      return [];
+  }
+};
+
+const collectCoveredTargetsFromExecutionArgs = (
+  args: AgentToolExecutionResult["args"] | undefined,
+) => {
+  const targets: string[] = [];
+  for (const key of ["path", "targetPath", "destinationPath"] as const) {
+    const value = args?.[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      targets.push(normalizeTargetPath(value));
+    }
+  }
+
+  return targets;
+};
+
+const collectEvidenceCoveredTargets = (input: {
+  evidence?: AgentEvidencePayload;
+  latestSummary?: AgentEvidenceSummary;
+}) => {
+  const targets = new Set<string>();
+
+  for (const execution of input.evidence?.toolExecutions ?? []) {
+    if (execution.status !== "completed") {
+      continue;
+    }
+
+    for (const target of collectCoveredTargetsFromSummary(execution.summary)) {
+      if (target.length > 0) {
+        targets.add(target);
+      }
+    }
+
+    if (!execution.summary) {
+      for (const target of collectCoveredTargetsFromExecutionArgs(execution.args)) {
+        if (target.length > 0) {
+          targets.add(target);
+        }
+      }
+    }
+  }
+
+  for (const target of collectCoveredTargetsFromSummary(input.latestSummary)) {
+    if (target.length > 0) {
+      targets.add(target);
+    }
+  }
+
+  return [...targets];
+};
+
+const buildTaskCompletionReason = (input: {
+  pendingActions: string[];
+  missingTargets: string[];
+}) => {
+  if (input.pendingActions.length > 0 && input.missingTargets.length > 0) {
+    return `Task is not complete yet: pendingActions=${input.pendingActions.join(", ")}; missingTargets=${input.missingTargets.join(", ")}.`;
+  }
+
+  if (input.pendingActions.length > 0) {
+    return `Task is not complete yet: pendingActions=${input.pendingActions.join(", ")}.`;
+  }
+
+  if (input.missingTargets.length > 0) {
+    return `Task is not complete yet: missingTargets=${input.missingTargets.join(", ")}.`;
+  }
+
+  return "Current task coverage is complete.";
+};
+
+export const getTaskCompletionDecision = (input: {
+  question?: string;
+  currentTaskFrame?: CurrentTaskFrame;
+  evidence?: AgentEvidencePayload;
+  latestSummary?: AgentEvidenceSummary;
+}) => {
+  const intentTexts = collectTaskIntentTexts(input);
+  const mutationRequired = hasMutationIntent(intentTexts);
+  const requiredTargets = extractRequiredTargets(intentTexts);
+  const coveredTargets = collectEvidenceCoveredTargets(input);
+  const resolvedMutationTargets = collectMutationResolvedTargets(input.evidence);
+  const completionSatisfiedTargets = mutationRequired
+    ? [...new Set([...coveredTargets, ...resolvedMutationTargets])]
+    : coveredTargets;
+  const missingTargets = requiredTargets.filter(
+    (target) => !completionSatisfiedTargets.includes(target),
+  );
+  const pendingActions = mutationRequired
+    ? requiredTargets.length === 0
+      ? resolvedMutationTargets.length > 0
+        ? []
+        : ["mutation_execution"]
+      : resolvedMutationTargets.length > 0 &&
+          requiredTargets.every((target) => resolvedMutationTargets.includes(target))
+        ? []
+        : ["mutation_execution"]
+    : [];
+
+  return {
+    taskCompleted: pendingActions.length === 0 && missingTargets.length === 0,
+    requiredTargets,
+    coveredTargets,
+    missingTargets,
+    pendingActions,
+    reason: buildTaskCompletionReason({
+      pendingActions,
+      missingTargets,
+    }),
+  };
 };
 
 const queryRequestsDirectoryOverview = (query: string) =>
@@ -525,6 +800,7 @@ const createReadLocateSummary = (input: {
     })
     .sort(compareReadLocateMatchPriority);
   const matchCount = matches.length;
+  const matchedPaths = matches.map((match) => match.path);
   const matchesPreview = matches
     .slice(0, PREVIEW_ITEM_LIMIT)
     .map((match) =>
@@ -571,6 +847,7 @@ const createReadLocateSummary = (input: {
           ? value.searchMode
           : "auto",
       matchCount,
+      matchedPaths,
       matchesPreview,
       truncated,
       canAnswerLocateQuestion,
@@ -1267,6 +1544,9 @@ export const getAnswerStopDecision = (input: {
   latestSummary: AgentEvidenceSummary | undefined;
   pendingApproval?: unknown;
   errorMessage?: string;
+  question?: string;
+  currentTaskFrame?: CurrentTaskFrame;
+  evidence?: AgentEvidencePayload;
 }) => {
   if (!input.latestSummary) {
     return {
@@ -1312,6 +1592,19 @@ export const getAnswerStopDecision = (input: {
     return {
       shouldAnswer: false,
       reason: "Latest evidence summary still declares missing information.",
+    };
+  }
+
+  const taskCompletionDecision = getTaskCompletionDecision({
+    question: input.question,
+    currentTaskFrame: input.currentTaskFrame,
+    evidence: input.evidence,
+    latestSummary: input.latestSummary,
+  });
+  if (!taskCompletionDecision.taskCompleted) {
+    return {
+      shouldAnswer: false,
+      reason: taskCompletionDecision.reason,
     };
   }
 

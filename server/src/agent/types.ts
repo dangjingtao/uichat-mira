@@ -209,6 +209,7 @@ export interface AgentReadLocateEvidenceData {
   query: string;
   searchMode: "auto" | "path" | "content";
   matchCount: number;
+  matchedPaths: string[];
   matchesPreview: string[];
   truncated: boolean;
   canAnswerLocateQuestion: boolean;

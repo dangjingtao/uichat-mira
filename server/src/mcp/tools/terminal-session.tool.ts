@@ -8,7 +8,11 @@ const terminalSessionLlmInputSchema = {
   required: ["command"],
   properties: {
     command: { type: "string" },
-    cwd: { type: "string" },
+    cwd: {
+      type: "string",
+      description:
+        "Workspace-relative directory only. Use '.' for the workspace root. Absolute paths and parent traversal are invalid.",
+    },
     timeoutMs: { type: "number" },
   },
   additionalProperties: false,
@@ -27,7 +31,11 @@ export const terminalSessionTool: McpToolImplementation = {
       required: ["command"],
       properties: {
         command: { type: "string" },
-        cwd: { type: "string" },
+        cwd: {
+          type: "string",
+          description:
+            "Workspace-relative directory only. Use '.' for the workspace root. Absolute paths and parent traversal are invalid.",
+        },
         env: { type: "object" },
         timeoutMs: { type: "number" },
         attachSessionId: { type: "string" },
@@ -48,6 +56,9 @@ export const terminalSessionTool: McpToolImplementation = {
       workspaceBound: true,
       workspaceBoundary: {
         argKeys: ["cwd"],
+        argTypes: {
+          cwd: "directory",
+        },
       },
       longRunning: true,
       sandboxRequired: true,

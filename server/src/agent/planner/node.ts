@@ -1,7 +1,7 @@
 import { providerProxyService } from "@/services/provider-proxy.service/index";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol";
 import { writeStructuredLog } from "@/logger";
-import { getEvidencePayload } from "../evidence";
+import { getEvidencePayload, getTaskCompletionDecision } from "../evidence";
 import type { AgentNextAction, AgentRepeatedActionGuardResult } from "../types";
 import {
   buildPlannerObservationContext,
@@ -31,7 +31,11 @@ import {
 import {
   parseNextActionPlannerOutputWithDiagnostics,
 } from "./parse";
-import { buildNextActionPlannerMessages, normalizeToolExposure } from "./prompt";
+import {
+  buildAnswerCompletionReplanMessages,
+  buildNextActionPlannerMessages,
+  normalizeToolExposure,
+} from "./prompt";
 import { getPlannerRepeatedActionGuardResult } from "./repeated-action-guard";
 import { validateNextAction } from "./validate";
 
@@ -118,6 +122,9 @@ export const nextActionPlannerNode = async (
     latestSummary: latestEvidenceSummary,
     pendingApproval: observationContext.pendingApproval,
     errorMessage: state.errorMessage,
+    question,
+    currentTaskFrame: state.currentTaskFrame,
+    evidence: plannerEvidence,
   });
 
   await emitStepNode(emit, {
@@ -196,19 +203,35 @@ export const nextActionPlannerNode = async (
         maxIterations,
       });
 
-      try {
-        for await (const delta of providerProxyService.streamTaskChatText(messages)) {
-          rawOutput += delta;
+      const resolvePlannerModelAction = async (
+        plannerMessages: NormalizedChatMessage[],
+      ) => {
+        let resolvedRawOutput = "";
+        for await (const delta of providerProxyService.streamTaskChatText(plannerMessages)) {
+          resolvedRawOutput += delta;
         }
 
         const validationResult = validateNextAction(
-          parseNextActionPlannerOutputWithDiagnostics(rawOutput),
+          parseNextActionPlannerOutputWithDiagnostics(resolvedRawOutput),
           toolExposure.exposedTools,
         );
-        nextAction = validationResult.action;
-        sanitizedOutput = validationResult.sanitizedOutput ?? "";
-        parseErrorReason = validationResult.parseErrorReason;
-        parseWarnings = validationResult.parseWarnings;
+
+        return {
+          action: validationResult.action,
+          rawOutput: resolvedRawOutput,
+          sanitizedOutput: validationResult.sanitizedOutput ?? "",
+          parseErrorReason: validationResult.parseErrorReason,
+          parseWarnings: validationResult.parseWarnings,
+        };
+      };
+
+      try {
+        const initialPlannerDecision = await resolvePlannerModelAction(messages);
+        nextAction = initialPlannerDecision.action;
+        rawOutput = initialPlannerDecision.rawOutput;
+        sanitizedOutput = initialPlannerDecision.sanitizedOutput;
+        parseErrorReason = initialPlannerDecision.parseErrorReason;
+        parseWarnings = initialPlannerDecision.parseWarnings;
 
         const localIntentGuardAction = getWorkspaceLocalIntentGuardAction({
           question,
@@ -234,6 +257,45 @@ export const nextActionPlannerNode = async (
               repeatedActionGuard.reason ??
               "Repeated action guard blocked a duplicate action and will answer from existing evidence.",
           };
+        }
+
+        if (nextAction?.type === "answer") {
+          const taskCompletionDecision = getTaskCompletionDecision({
+            question,
+            currentTaskFrame: state.currentTaskFrame,
+            evidence: plannerEvidence,
+            latestSummary: latestEvidenceSummary,
+          });
+          if (!taskCompletionDecision.taskCompleted) {
+            if (nextAction.reason === repeatedActionGuard?.reason) {
+              nextAction = toNextActionFallback(taskCompletionDecision.reason);
+            } else {
+              const completionReplanMessages = buildAnswerCompletionReplanMessages({
+                question,
+                plan: state.plan,
+                observationContext,
+                toolExposure,
+                iteration,
+                maxIterations,
+                blockedAnswerReason: taskCompletionDecision.reason,
+                previousAnswerReason: nextAction.reason,
+              });
+              const completionReplanDecision = await resolvePlannerModelAction(
+                completionReplanMessages,
+              );
+              nextAction = completionReplanDecision.action;
+              rawOutput = completionReplanDecision.rawOutput;
+              sanitizedOutput = completionReplanDecision.sanitizedOutput;
+              parseErrorReason = completionReplanDecision.parseErrorReason;
+              parseWarnings = completionReplanDecision.parseWarnings;
+
+              if (nextAction?.type === "answer") {
+                nextAction = toNextActionFallback(
+                  `Planner proposed answer again after completion check blocked it: ${taskCompletionDecision.reason}`,
+                );
+              }
+            }
+          }
         }
       } catch (error) {
         nextAction = toNextActionFallback(

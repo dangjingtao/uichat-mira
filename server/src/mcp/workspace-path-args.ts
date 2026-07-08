@@ -24,6 +24,12 @@ const rejectEscapedWorkspaceRoot = (): NormalizeWorkspacePathResult => ({
   reason: "Workspace path escaped the workspace root after normalization.",
 });
 
+const rejectInvalidWorkspaceDirectory = (): NormalizeWorkspacePathResult => ({
+  type: "reject",
+  reason:
+    "Workspace directory path must be relative to the workspace root without absolute paths or parent traversal.",
+});
+
 export const normalizeWorkspaceRelativePathArg = (
   value: string,
 ): NormalizeWorkspacePathResult => {
@@ -80,12 +86,62 @@ export const normalizeWorkspaceRelativePathArg = (
   };
 };
 
+export const normalizeWorkspaceRelativeDirectoryArg = (
+  value: string,
+): NormalizeWorkspacePathResult => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return {
+      type: "unchanged",
+      value,
+    };
+  }
+
+  if (
+    trimmed === WORKSPACE_ROOT_SENTINEL ||
+    trimmed === `${WORKSPACE_ROOT_SENTINEL}/` ||
+    trimmed.startsWith(`${WORKSPACE_ROOT_SENTINEL}/`) ||
+    trimmed.startsWith("/")
+  ) {
+    return rejectInvalidWorkspaceDirectory();
+  }
+
+  if (isWindowsAbsolutePath(trimmed)) {
+    return rejectInvalidWorkspaceDirectory();
+  }
+
+  const normalizedCandidate = path.posix.normalize(
+    trimmed.replaceAll("\\", "/"),
+  );
+
+  if (
+    normalizedCandidate.startsWith("/") ||
+    normalizedCandidate === ".." ||
+    normalizedCandidate.startsWith("../")
+  ) {
+    return rejectInvalidWorkspaceDirectory();
+  }
+
+  if (normalizedCandidate === trimmed) {
+    return {
+      type: "unchanged",
+      value: trimmed,
+    };
+  }
+
+  return {
+    type: "normalized",
+    value: normalizedCandidate,
+  };
+};
+
 export const normalizeWorkspaceBoundaryArgs = <
   TDefinition extends {
     capabilities?: {
       workspaceBound?: boolean;
       workspaceBoundary?: {
         argKeys?: string[];
+        argTypes?: Partial<Record<string, "path" | "directory">>;
       };
     };
   },
@@ -98,6 +154,7 @@ export const normalizeWorkspaceBoundaryArgs = <
   }
 
   const argKeys = definition.capabilities.workspaceBoundary?.argKeys ?? [];
+  const argTypes = definition.capabilities.workspaceBoundary?.argTypes ?? {};
   if (argKeys.length === 0) {
     return { args };
   }
@@ -110,7 +167,10 @@ export const normalizeWorkspaceBoundaryArgs = <
       continue;
     }
 
-    const normalized = normalizeWorkspaceRelativePathArg(value);
+    const normalized =
+      argTypes[argKey] === "directory"
+        ? normalizeWorkspaceRelativeDirectoryArg(value)
+        : normalizeWorkspaceRelativePathArg(value);
     if (normalized.type === "reject") {
       return {
         rejectReason: normalized.reason,

@@ -136,6 +136,25 @@ describe("terminal_session tool", () => {
     vi.restoreAllMocks();
   });
 
+  it("describes cwd as a workspace-relative directory in the exposed schemas", async () => {
+    const { terminalSessionTool } = await import("./terminal-session.tool.js");
+
+    expect(
+      (
+        terminalSessionTool.definition.inputSchema.properties as Record<
+          string,
+          { description?: string }
+        >
+      ).cwd.description,
+    ).toContain("Workspace-relative directory only");
+    expect(
+      (
+        terminalSessionTool.definition.inputSchemaByExposure?.agent_intent
+          ?.properties as Record<string, { description?: string }>
+      ).cwd.description,
+    ).toContain("Use '.' for the workspace root");
+  });
+
   it("streams split stdout/stderr for ephemeral terminal execution", async () => {
     const child = createMockSpawnProcess();
     terminalMocks.spawnMock.mockReturnValue(child);
