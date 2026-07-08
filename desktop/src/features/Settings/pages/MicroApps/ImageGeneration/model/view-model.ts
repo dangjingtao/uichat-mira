@@ -62,6 +62,7 @@ export type WorkflowFormValue = {
   workflowJson: string;
   overridePrompt: string;
   overrideSeed: string;
+  overrideSize: string;
 };
 
 export type StudioLogEntry = {
@@ -98,6 +99,7 @@ export type SubmittedSnapshot = {
   providerParam: string;
   overridePrompt: string;
   overrideSeed: string;
+  overrideSize: string;
 };
 
 export const providerOptions: ProviderOption[] = [
@@ -170,4 +172,5 @@ export const defaultWorkflowForm: WorkflowFormValue = {
   workflowJson: "",
   overridePrompt: "",
   overrideSeed: "",
+  overrideSize: "1024x1024",
 };

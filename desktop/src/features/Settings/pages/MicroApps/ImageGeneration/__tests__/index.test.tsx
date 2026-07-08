@@ -85,6 +85,7 @@ const defaultWorkflowForm: WorkflowFormValue = {
   workflowJson: "",
   overridePrompt: "",
   overrideSeed: "",
+  overrideSize: "1024x1024",
 };
 
 type MockStateOverrides = Partial<ReturnType<typeof createState>>;
@@ -152,6 +153,11 @@ describe("ImageGenerationStudioPage", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText("settings.microApps.imageGenerationStudio.cards.flow.title"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "settings.microApps.imageGenerationStudio.cards.nodeMapping.title",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(

@@ -1,21 +1,26 @@
 import { useTranslation } from "react-i18next";
 import Card from "@/shared/ui/Card";
-import { Alert, TextArea, TextInput } from "@/shared/ui";
+import { Alert, Select, TextArea, TextInput } from "@/shared/ui";
+import { sizeOptions } from "../model/view-model";
 
 interface ComfyUiExecutionInputCardProps {
   overridePrompt: string;
   overrideSeed: string;
+  overrideSize: string;
   running: boolean;
   onOverridePromptChange: (value: string) => void;
   onOverrideSeedChange: (value: string) => void;
+  onOverrideSizeChange: (value: string) => void;
 }
 
 export default function ComfyUiExecutionInputCard({
   overridePrompt,
   overrideSeed,
+  overrideSize,
   running,
   onOverridePromptChange,
   onOverrideSeedChange,
+  onOverrideSizeChange,
 }: ComfyUiExecutionInputCardProps) {
   const { t } = useTranslation();
 
@@ -56,12 +61,24 @@ export default function ComfyUiExecutionInputCard({
           )}
           disabled={running}
         />
+        <Select
+          label={t("settings.microApps.imageGenerationStudio.fields.overrideSize")}
+          value={overrideSize}
+          onChange={onOverrideSizeChange}
+          disabled={running}
+          options={sizeOptions.map((option) => ({
+            value: option.value,
+            label: t(option.labelKey),
+          }))}
+        />
       </div>
 
-      <Alert variant="info" title={t("settings.microApps.imageGenerationStudio.cards.executionInputs.noticeTitle")}>
+      <Alert
+        variant="info"
+        title={t("settings.microApps.imageGenerationStudio.cards.executionInputs.noticeTitle")}
+      >
         {t("settings.microApps.imageGenerationStudio.cards.executionInputs.noticeDescription")}
       </Alert>
     </Card>
   );
 }
-

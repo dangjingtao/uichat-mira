@@ -511,11 +511,17 @@ const settingsPending = {
             title: "Flow",
             description: "把 flow 作为可回看的资产来选择、上传和编辑，而不是每次只临时粘贴 JSON。",
           },
+          nodeMapping: {
+            title: "节点映射",
+            description: "明确这条 flow 的输入入口和结果出口，让工作台知道本次执行该改哪里、结果该看哪里。",
+            ruleTitle: "路径写法",
+            ruleDescription: "输入路径统一写成“节点 ID.字段名”。例如 `57:27.text`、`57:3.seed`、`57:13.width`。这里默认把字段写进该节点的 inputs 下。",
+          },
           executionInputs: {
             title: "本次执行输入",
             description: "这里只放这次运行真正会生效的运行时覆盖项，不把 flow 本体和本次输入混成一块。",
             noticeTitle: "当前版本支持范围",
-            noticeDescription: "这轮页面先支持 workflow JSON、本次运行 prompt 覆盖和 seed 覆盖。更复杂的 flow 字段映射要等后续合同明确后再展开。",
+            noticeDescription: "这轮页面先支持 prompt、seed、尺寸三类输入映射，以及主输出节点、预览节点两类结果绑定。更复杂的 flow 字段映射等后续契约明确后再展开。",
           },
         },
         modes: {
@@ -585,6 +591,37 @@ const settingsPending = {
             manual: "手动",
           },
         },
+        mapping: {
+          fields: {
+            promptPath: "Prompt 节点字段",
+            seedPath: "Seed 节点字段",
+            widthPath: "宽度节点字段",
+            heightPath: "高度节点字段",
+            outputNodeId: "主输出节点",
+            previewNodeId: "预览节点",
+          },
+          placeholders: {
+            promptPath: "例如 57:27.text",
+            seedPath: "例如 57:3.seed",
+            widthPath: "例如 57:13.width",
+            heightPath: "例如 57:13.height",
+            outputNodeId: "例如 9",
+            previewNodeId: "例如 9",
+          },
+          summary: {
+            title: "当前绑定",
+            input: "输入节点",
+            output: "主输出节点",
+            preview: "预览节点",
+          },
+          nodes: {
+            title: "当前 Flow 节点",
+            empty: "当前 JSON 还没有可识别的节点。先保证 workflow JSON 合法，再回来配置映射。",
+          },
+          messages: {
+            previewHint: "结果区当前仍以后端返回的 artifact 为准。节点映射先服务于提交前写回和调试定位。",
+          },
+        },
         providers: {
           openaiImages: {
             label: "OpenAI Images",
@@ -623,6 +660,7 @@ const settingsPending = {
           workflowJson: "Workflow JSON",
           overridePrompt: "运行时覆盖 prompt",
           overrideSeed: "运行时覆盖 seed",
+          overrideSize: "运行时覆盖尺寸",
           mode: "模式",
           providerJobId: "Provider Job ID",
           artifactId: "Artifact ID",

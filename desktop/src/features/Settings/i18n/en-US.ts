@@ -512,11 +512,17 @@ const settingsPending = {
             title: "Flow",
             description: "Treat flows as reusable assets that can be selected, uploaded, and reviewed instead of pasting raw JSON every time.",
           },
+          nodeMapping: {
+            title: "Node mapping",
+            description: "Declare which nodes receive the run-time inputs and which nodes represent the result exits for this flow.",
+            ruleTitle: "Path format",
+            ruleDescription: "Input paths use the format `nodeId.fieldName`, such as `57:27.text`, `57:3.seed`, or `57:13.width`. The field is written into that node's `inputs` object.",
+          },
           executionInputs: {
             title: "Run-time inputs",
             description: "This section only shows the runtime overrides that affect the current execution. It does not mix flow management with the run input surface.",
             noticeTitle: "Current supported scope",
-            noticeDescription: "This page currently supports workflow JSON, runtime prompt override, and runtime seed override. Richer flow field mapping should wait until the contract is defined more clearly.",
+            noticeDescription: "This page currently supports prompt, seed, and size input mapping, plus a primary output node and preview node binding for the flow.",
           },
         },
         modes: {
@@ -586,6 +592,37 @@ const settingsPending = {
             manual: "Manual",
           },
         },
+        mapping: {
+          fields: {
+            promptPath: "Prompt node field",
+            seedPath: "Seed node field",
+            widthPath: "Width node field",
+            heightPath: "Height node field",
+            outputNodeId: "Primary output node",
+            previewNodeId: "Preview node",
+          },
+          placeholders: {
+            promptPath: "For example 57:27.text",
+            seedPath: "For example 57:3.seed",
+            widthPath: "For example 57:13.width",
+            heightPath: "For example 57:13.height",
+            outputNodeId: "For example 9",
+            previewNodeId: "For example 9",
+          },
+          summary: {
+            title: "Current binding",
+            input: "Input nodes",
+            output: "Primary output node",
+            preview: "Preview node",
+          },
+          nodes: {
+            title: "Nodes in current flow",
+            empty: "No readable nodes are available yet. Make sure the workflow JSON is valid before mapping fields.",
+          },
+          messages: {
+            previewHint: "The result panel still follows backend artifact output. Node mapping currently drives pre-submit rewrite and debug targeting.",
+          },
+        },
         providers: {
           openaiImages: {
             label: "OpenAI Images",
@@ -624,6 +661,7 @@ const settingsPending = {
           workflowJson: "Workflow JSON",
           overridePrompt: "Runtime override prompt",
           overrideSeed: "Runtime override seed",
+          overrideSize: "Runtime override size",
           mode: "Mode",
           providerJobId: "Provider job id",
           artifactId: "Artifact id",

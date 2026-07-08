@@ -13,12 +13,17 @@ import CollapsiblePanel from "@/shared/ui/CollapsiblePanel";
 import ComfyUiConnectionCard from "./components/ComfyUiConnectionCard";
 import ComfyUiFlowCard from "./components/ComfyUiFlowCard";
 import ComfyUiExecutionInputCard from "./components/ComfyUiExecutionInputCard";
+import ComfyUiNodeMappingCard from "./components/ComfyUiNodeMappingCard";
 import { useImageGenerationStudioState } from "./hooks/useImageGenerationStudioState";
 import type { createImageGeneration, getImageGeneration } from "@/shared/api/imageGeneration";
 import MicroAppPageLayout from "../components/MicroAppPageLayout";
 import {
+  composeComfyUiWorkflowJson,
   defaultComfyUiFlows,
+  emptyComfyUiNodeMapping,
+  getComfyUiNodeSummaries,
   type ComfyUiConnectionStatus,
+  type ComfyUiNodeMapping,
 } from "./model/comfyui-workbench";
 
 interface ImageGenerationStudioPageProps {
@@ -55,6 +60,9 @@ export default function ImageGenerationStudioPage({
 
   const selectedFlow =
     flows.find((flow) => flow.id === selectedFlowId) ?? null;
+  const selectedFlowNodes = selectedFlow
+    ? getComfyUiNodeSummaries(selectedFlow.rawJson)
+    : [];
 
   useEffect(() => {
     if (selectedFlow) {
@@ -147,6 +155,7 @@ export default function ImageGenerationStudioPage({
         updatedAt: new Date().toLocaleString(),
         source: "upload" as const,
         rawJson,
+        mapping: emptyComfyUiNodeMapping(),
       };
       setFlows((current) => [...current, nextFlow]);
       setSelectedFlowId(nextFlow.id);
@@ -162,6 +171,7 @@ export default function ImageGenerationStudioPage({
       updatedAt: new Date().toLocaleString(),
       source: "manual" as const,
       rawJson: "{}",
+      mapping: emptyComfyUiNodeMapping(),
     };
     setFlows((current) => [...current, nextFlow]);
     setSelectedFlowId(nextFlow.id);
@@ -202,6 +212,42 @@ export default function ImageGenerationStudioPage({
       ),
     );
     state.setWorkflowForm((current) => ({ ...current, workflowJson }));
+  };
+
+  const handleFlowMappingChange = (nextMapping: ComfyUiNodeMapping) => {
+    if (!selectedFlow) {
+      return;
+    }
+
+    setFlows((current) =>
+      current.map((flow) =>
+        flow.id === selectedFlow.id
+          ? {
+              ...flow,
+              mapping: nextMapping,
+            }
+          : flow,
+      ),
+    );
+  };
+
+  const handleSubmit = () => {
+    if (activeTab !== "comfyui" || !selectedFlow) {
+      void state.submit();
+      return;
+    }
+
+    const workflowJson = composeComfyUiWorkflowJson({
+      rawJson: selectedFlow.rawJson,
+      mapping: selectedFlow.mapping,
+      overrides: {
+        prompt: state.workflowForm.overridePrompt,
+        seed: state.workflowForm.overrideSeed,
+        size: state.workflowForm.overrideSize,
+      },
+    });
+
+    void state.submit({ workflowJson });
   };
 
   return (
@@ -267,15 +313,26 @@ export default function ImageGenerationStudioPage({
               onWorkflowJsonChange={handleWorkflowJsonChange}
             />
 
+            <ComfyUiNodeMappingCard
+              selectedFlow={selectedFlow}
+              nodes={selectedFlowNodes}
+              running={state.isRunning}
+              onMappingChange={handleFlowMappingChange}
+            />
+
             <ComfyUiExecutionInputCard
               overridePrompt={state.workflowForm.overridePrompt}
               overrideSeed={state.workflowForm.overrideSeed}
+              overrideSize={state.workflowForm.overrideSize}
               running={state.isRunning}
               onOverridePromptChange={(overridePrompt) =>
                 state.setWorkflowForm((current) => ({ ...current, overridePrompt }))
               }
               onOverrideSeedChange={(overrideSeed) =>
                 state.setWorkflowForm((current) => ({ ...current, overrideSeed }))
+              }
+              onOverrideSizeChange={(overrideSize) =>
+                state.setWorkflowForm((current) => ({ ...current, overrideSize }))
               }
             />
 
@@ -284,7 +341,7 @@ export default function ImageGenerationStudioPage({
               pageStatus={state.pageStatus}
               running={state.isRunning}
               canCancel={state.canCancel}
-              onSubmit={state.submit}
+              onSubmit={handleSubmit}
               onReset={state.reset}
               onCancel={state.cancel}
             />

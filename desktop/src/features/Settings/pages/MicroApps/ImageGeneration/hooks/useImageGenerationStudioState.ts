@@ -105,13 +105,19 @@ const createSnapshot = (
   provider: StudioProvider,
   promptForm: PromptFormValue,
   workflowForm: WorkflowFormValue,
+  workflowJsonOverride?: string,
 ): SubmittedSnapshot => ({
   mode,
   provider,
   model: promptForm.model.trim() || "gpt-image-1",
-  promptSummary: promptForm.prompt.trim(),
-  workflowSummary: workflowForm.workflowJson.trim().slice(0, 140),
-  size: promptForm.size,
+  promptSummary:
+    mode === "prompt"
+      ? promptForm.prompt.trim()
+      : workflowForm.overridePrompt.trim(),
+  workflowSummary: (workflowJsonOverride ?? workflowForm.workflowJson)
+    .trim()
+    .slice(0, 140),
+  size: mode === "prompt" ? promptForm.size : workflowForm.overrideSize,
   stylePreset: promptForm.stylePreset,
   seed:
     mode === "prompt"
@@ -120,6 +126,7 @@ const createSnapshot = (
   providerParam: promptForm.providerParam.trim(),
   overridePrompt: workflowForm.overridePrompt.trim(),
   overrideSeed: workflowForm.overrideSeed.trim(),
+  overrideSize: workflowForm.overrideSize,
 });
 
 const buildSignature = (
@@ -217,6 +224,7 @@ const buildRequestPayload = (
   provider: StudioProvider,
   promptForm: PromptFormValue,
   workflowForm: WorkflowFormValue,
+  workflowJsonOverride?: string,
 ): ImageGenerationCreateRequest => {
   const providerId = providerIdMap[provider];
   const model = promptForm.model.trim() || undefined;
@@ -231,7 +239,9 @@ const buildRequestPayload = (
     return {
       providerId,
       model,
-      workflowApiJson: JSON.parse(workflowForm.workflowJson) as Record<
+      workflowApiJson: JSON.parse(
+        workflowJsonOverride ?? workflowForm.workflowJson,
+      ) as Record<
         string,
         unknown
       >,
@@ -598,7 +608,7 @@ export function useImageGenerationStudioState(api: ImageGenerationStudioApi = de
     );
   };
 
-  const submit = async () => {
+  const submit = async (options?: { workflowJson?: string }) => {
     if (formStatus === "invalid" || isRunning) {
       return;
     }
@@ -608,8 +618,20 @@ export function useImageGenerationStudioState(api: ImageGenerationStudioApi = de
       pollTimerRef.current = null;
     }
 
-    const snapshot = createSnapshot(mode, provider, promptForm, workflowForm);
-    const payload = buildRequestPayload(mode, provider, promptForm, workflowForm);
+    const snapshot = createSnapshot(
+      mode,
+      provider,
+      promptForm,
+      workflowForm,
+      options?.workflowJson,
+    );
+    const payload = buildRequestPayload(
+      mode,
+      provider,
+      promptForm,
+      workflowForm,
+      options?.workflowJson,
+    );
 
     lastSubmittedSignatureRef.current = currentSignature;
     setSubmittedSnapshot(snapshot);
