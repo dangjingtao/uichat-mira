@@ -13,7 +13,6 @@ import {
   ServerCog,
   Trash2,
 } from "lucide-react";
-import SettingsPageLayout from "../../../components/SettingsPageLayout";
 import Card from "@/shared/ui/Card";
 import Badge from "@/shared/ui/Badge";
 import Divider from "@/shared/ui/Divider";
@@ -29,6 +28,7 @@ import {
   message,
   useModal,
 } from "@/shared/ui";
+import MicroAppPageLayout from "../components/MicroAppPageLayout";
 import {
   createMailAccount,
   deleteMailAccount,
@@ -758,19 +758,19 @@ export default function MailCenterPage() {
 
   if (loading && !overview) {
     return (
-      <SettingsPageLayout
+      <MicroAppPageLayout
         miniTitle={t("settings.microApps.mailCenter.page.miniTitle")}
         title={t("settings.microApps.mailCenter.page.title")}
         description={t("settings.microApps.mailCenter.page.description")}
         contentClassName="pt-6"
       >
         <FullPageStatus message={t("settings.microApps.mailCenter.states.loading")} />
-      </SettingsPageLayout>
+      </MicroAppPageLayout>
     );
   }
 
   return (
-    <SettingsPageLayout
+    <MicroAppPageLayout
       miniTitle={t("settings.microApps.mailCenter.page.miniTitle")}
       title={t("settings.microApps.mailCenter.page.title")}
       description={t("settings.microApps.mailCenter.page.description")}
@@ -1425,6 +1425,6 @@ export default function MailCenterPage() {
           </div>
         )}
       </Modal>
-    </SettingsPageLayout>
+    </MicroAppPageLayout>
   );
 }

@@ -592,6 +592,7 @@ test("microapps news hub config routes return and persist provider config", asyn
         assert.equal(input.newsDataApiKey, "newsdata-key");
         assert.equal(input.redditEnabled, true);
         assert.equal(input.redditClientId, "reddit-client-id");
+        assert.equal(input.refreshTtlMinutes, 180);
         return input;
       },
       async refresh() {
@@ -632,7 +633,7 @@ test("microapps news hub config routes return and persist provider config", asyn
     redditClientSecret: "reddit-client-secret",
     redditUserAgent: "UIChat-Mira-NewsHub/0.2",
     redditSubreddits: "technology+programming",
-    refreshTtlMinutes: 60,
+    refreshTtlMinutes: 180,
   };
 
   const saveResponse = await app.inject({
@@ -648,6 +649,7 @@ test("microapps news hub config routes return and persist provider config", asyn
   assert.equal(saveResponse.statusCode, 200, saveResponse.body);
   assert.equal(saveResponse.json().data.redditEnabled, true);
   assert.equal(saveResponse.json().data.newsDataApiKey, "newsdata-key");
+  assert.equal(saveResponse.json().data.refreshTtlMinutes, 180);
 
   await app.close();
 });

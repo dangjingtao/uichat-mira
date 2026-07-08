@@ -33,16 +33,16 @@
       }
     ],
     "git": {
-      "branch": "main",
+      "branch": "agent/volcano-provider-survey",
       "versions": [
         {
           "version": "0.7.1",
           "commit": {
-            "hash": "c0ebc2731cf5f9043c9e98405a8074906e0d9a5f",
-            "shortHash": "c0ebc27",
-            "message": "feat: T24",
+            "hash": "0e7e4ab36ee22dbfa2384c770f71f298ddbf35d8",
+            "shortHash": "0e7e4ab",
+            "message": "feat: 撩骚日",
             "author": "Tomz",
-            "date": "2026-07-06T23:53:53+08:00"
+            "date": "2026-07-08T02:50:03+08:00"
           }
         },
         {

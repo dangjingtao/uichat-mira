@@ -10,6 +10,7 @@ import {
 import { computerUseMicroApp } from "./apps/computer-use.microapp.js";
 import { imageGenerationMicroApp } from "./apps/image-generation.microapp.js";
 import { knowledgeQueryMicroApp } from "./apps/knowledge-query.microapp.js";
+import { newsHubMicroApp } from "./apps/news-hub.microapp.js";
 import type {
   MicroAppDefinition,
   MicroAppInvokeRequest,
@@ -18,6 +19,7 @@ import type {
 
 const definitions = new Map<string, MicroAppDefinition>([
   [knowledgeQueryMicroApp.type, knowledgeQueryMicroApp],
+  [newsHubMicroApp.type, newsHubMicroApp],
   [imageGenerationMicroApp.type, imageGenerationMicroApp],
   [computerUseMicroApp.type, computerUseMicroApp],
 ]);

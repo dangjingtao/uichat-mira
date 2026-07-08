@@ -81,6 +81,13 @@ describe("MicroAppsSettings", () => {
     expect(
       screen.getByText("settings.microApps.studioEntries.computerUse.description"),
     ).toBeInTheDocument();
+    expect(screen.getByTestId("studio-entry-icon-computerUse")).toBeInTheDocument();
+    expect(
+      screen.queryByText("settings.microApps.studioEntries.computerUse.badges.runtime"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText("settings.microApps.studioEntries.computerUse.badges.focus"),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("link", {
         name: /settings\.microApps\.studioEntries\.computerUse\.actions\.open/,
@@ -101,6 +108,12 @@ describe("MicroAppsSettings", () => {
         name: /settings\.microApps\.studioEntries\.computerUse\.actions\.open/,
       }),
     ).toHaveClass("text-primary");
+    expect(screen.getByTestId("studio-entry-icon-newsHub")).toBeInTheDocument();
+    expect(screen.getByTestId("studio-entry-icon-mailCenter")).toBeInTheDocument();
+    expect(screen.getByTestId("studio-entry-icon-imageGeneration")).toBeInTheDocument();
+    expect(
+      screen.queryByText("settings.microApps.studioEntries.imageGeneration.badges.focus"),
+    ).not.toBeInTheDocument();
   });
 
   it("renders real micro app cards with the same highlighted shell style as studio cards", async () => {

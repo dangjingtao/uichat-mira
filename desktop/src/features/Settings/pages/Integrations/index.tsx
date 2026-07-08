@@ -24,7 +24,7 @@ import Alert from "@/shared/ui/Alert";
 import NavigationCardTabs from "@/shared/ui/NavigationCardTabs";
 import Switch from "@/shared/ui/Switch";
 import { Button } from "@/shared/ui/Button";
-import { Select, TextArea, TextInput } from "@/shared/ui";
+import { Select, Skeleton, TextArea, TextInput } from "@/shared/ui";
 import { message } from "@/shared/ui/Message";
 import { ApiError } from "@/shared/lib/request";
 import { listKnowledgeBases, type KnowledgeBaseSummary } from "@/shared/api/knowledgeBase";
@@ -550,13 +550,60 @@ export default function IntegrationsSettings() {
         </Alert>
       ) : null}
 
-      {activeProvider === "wecom" && !currentInstance ? (
+      {activeProvider === "wecom" && loading ? (
+        <div data-testid="integrations-loading-skeleton" className="space-y-6 pt-1">
+          <div className="space-y-3">
+            <Skeleton height={28} width="26%" />
+            <Skeleton.Text lines={2} lastLineWidth="58%" />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div key={index} className="space-y-2">
+                <Skeleton height={14} width={72} />
+                <Skeleton height={18} width={`${48 + index * 8}%`} />
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Skeleton height={20} width={88} />
+              <Skeleton.Text lines={1} lastLineWidth="46%" />
+            </div>
+
+            {Array.from({ length: 2 }).map((_, index) => (
+              <div
+                key={index}
+                className="space-y-3 border-b border-border/60 py-4 first:pt-0 last:border-b-0 last:pb-0"
+              >
+                <div className="flex items-start gap-3">
+                  <Skeleton.Circle size={44} className="shrink-0" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Skeleton height={20} width={112} />
+                      <Skeleton height={22} width={56} className="rounded-full" />
+                    </div>
+                    <Skeleton.Text lines={2} lastLineWidth="62%" />
+                    <div className="flex flex-wrap gap-3">
+                      <Skeleton height={14} width={64} />
+                      <Skeleton height={14} width={138} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {activeProvider === "wecom" && !loading && !currentInstance ? (
         <Alert variant="info" title={t("settings.integrations.empty.title")}>
           {t("settings.integrations.empty.description")}
         </Alert>
       ) : null}
 
-      {activeProvider === "wecom" && currentInstance ? (
+      {activeProvider === "wecom" && !loading && currentInstance ? (
         <>
           <Card variant="default" className="p-6">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">

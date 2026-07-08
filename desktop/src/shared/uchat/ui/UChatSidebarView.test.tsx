@@ -146,11 +146,11 @@ describe("UChatSidebarView", () => {
     expect(historyMoreButton).toBeInTheDocument();
 
     await user.click(historyMoreButton as HTMLButtonElement);
-    await user.click(screen.getByRole("menuitem", { name: "Archive" }));
+    await user.click(screen.getByRole("button", { name: "Archive" }));
     expect(onArchiveThread).toHaveBeenCalledWith("thread-1");
 
     await user.click(historyMoreButton as HTMLButtonElement);
-    await user.click(screen.getByRole("menuitem", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
     expect(onDeleteThread).toHaveBeenCalledWith("thread-1");
   });
 
@@ -414,6 +414,36 @@ describe("UChatSidebarView", () => {
     expect(
       await screen.findByText("D:\\workspace\\project-alpha"),
     ).toBeInTheDocument();
+  });
+
+  it("keeps long workspace titles inside the sidebar width by allowing the tooltip trigger to shrink", () => {
+    render(
+      <I18nextProvider i18n={i18n}>
+        <UChatSidebarView
+          threads={[]}
+          activeThreadId={null}
+          threadListStatus="ready"
+          capabilities={{}}
+          workspaceGroups={[
+            {
+              id: "workspace-1",
+              name: "CODEX TEST FOLDER ALT",
+              rootPath: "D:\\workspace\\codex-test-folder-alt",
+              threads: [],
+            },
+          ]}
+          onCreateThread={() => {}}
+          onSelectThread={() => {}}
+          onArchiveThread={() => {}}
+          onDeleteThread={() => {}}
+        />
+      </I18nextProvider>,
+    );
+
+    const title = screen.getByText("CODEX TEST FOLDER ALT");
+    expect(title).toHaveClass("truncate");
+    expect(title.parentElement).toHaveClass("min-w-0");
+    expect(title.parentElement).toHaveClass("max-w-full");
   });
 
   it("applies the hover highlight style to the active workspace thread", () => {

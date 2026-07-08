@@ -35,7 +35,7 @@ const Tooltip: React.FC<TooltipProps> = ({
       <span
         data-tooltip-id={tooltipId}
         data-tooltip-content={text}
-        className="inline-flex items-center"
+        className="inline-flex min-w-0 max-w-full items-center"
       >
         {children}
       </span>

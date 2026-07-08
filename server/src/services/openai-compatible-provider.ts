@@ -1,10 +1,6 @@
 import OpenAI from "openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import {
-  embedMany,
-  streamText,
-  type ModelMessage,
-} from "ai";
+import { embedMany, streamText, type ModelMessage } from "ai";
 import fetch from "node-fetch";
 import { SocksProxyAgent } from "socks-proxy-agent";
 import { generalSettingsRepository } from "@/db/repositories/general-settings.repository.js";
@@ -31,7 +27,10 @@ export interface OpenAICompatibleChatMessage {
 }
 
 type JsonPrimitive = string | number | boolean | null;
-type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue | undefined };
+type JsonValue =
+  | JsonPrimitive
+  | JsonValue[]
+  | { [key: string]: JsonValue | undefined };
 type JsonObject = { [key: string]: JsonValue | undefined };
 
 type OpenAICompatibleProviderOptions = {
@@ -200,7 +199,14 @@ const toModelMessages = (
           typeof message.content === "string"
             ? message.content
             : message.content
-                .filter((part): part is Extract<OpenAICompatibleContentPart, { type: "text" }> => part.type === "text")
+                .filter(
+                  (
+                    part,
+                  ): part is Extract<
+                    OpenAICompatibleContentPart,
+                    { type: "text" }
+                  > => part.type === "text",
+                )
                 .map((part) => part.text)
                 .join("\n"),
       };
@@ -283,7 +289,9 @@ const toAiSdkChatSettings = (
     ...(typeof params.presencePenalty === "number"
       ? { presencePenalty: params.presencePenalty }
       : {}),
-    ...(Array.isArray(params.stop) ? { stopSequences: params.stop as string[] } : {}),
+    ...(Array.isArray(params.stop)
+      ? { stopSequences: params.stop as string[] }
+      : {}),
     ...(Object.keys(providerOptions).length > 0
       ? {
           providerOptions: {
@@ -329,13 +337,18 @@ export const listOpenAICompatibleModels = async (
   baseUrl: string,
   apiKey: string,
 ) => {
-  const response = await createProxyAwareFetch()(createOpenAICompatibleModelsUrl(baseUrl), {
-    method: "GET",
-    headers: getAuthHeaders(apiKey),
-  });
+  const response = await createProxyAwareFetch()(
+    createOpenAICompatibleModelsUrl(baseUrl),
+    {
+      method: "GET",
+      headers: getAuthHeaders(apiKey),
+    },
+  );
 
   if (!response.ok) {
-    throw new Error(`Failed to list models: ${response.status} ${response.statusText}`);
+    throw new Error(
+      `Failed to list models: ${response.status} ${response.statusText}`,
+    );
   }
 
   const payload = (await response.json()) as {
@@ -365,10 +378,68 @@ export const streamOpenAICompatibleChat = async function* ({
   params: Record<string, unknown>;
 }) {
   const provider = createOpenAICompatibleProvider(baseUrl, apiKey);
+
+  const systemInstructions: string[] = [];
+  const chatMessages: OpenAICompatibleChatMessage[] = [];
+
+  for (const message of messages) {
+    if (message.role === "system") {
+      const text =
+        typeof message.content === "string"
+          ? message.content
+          : message.content
+              .filter(
+                (
+                  part,
+                ): part is Extract<
+                  OpenAICompatibleContentPart,
+                  { type: "text" }
+                > => part.type === "text",
+              )
+              .map((part) => part.text)
+              .join("\n");
+      if (text.trim()) {
+        systemInstructions.push(text);
+      }
+      continue;
+    }
+    chatMessages.push(message);
+  }
+
+  const instructions =
+    systemInstructions.length > 0 ? systemInstructions.join("\n\n") : undefined;
+
+  // Forward provider-specific options that are not part of the standard
+  // streamText settings (e.g. Volcano Engine's `thinking` field).
+  const openaiCompatibleOptions: {
+    thinking?: { type: "enabled" } | { type: "disabled" };
+  } = {};
+  if (params.thinking !== undefined) {
+    if (typeof params.thinking === "boolean") {
+      openaiCompatibleOptions.thinking = params.thinking
+        ? { type: "enabled" }
+        : { type: "disabled" };
+    } else if (
+      typeof params.thinking === "object" &&
+      params.thinking !== null &&
+      "type" in params.thinking &&
+      (params.thinking.type === "enabled" ||
+        params.thinking.type === "disabled")
+    ) {
+      openaiCompatibleOptions.thinking = params.thinking as {
+        type: "enabled" | "disabled";
+      };
+    }
+  }
+
   const result = streamText({
     model: provider.chatModel(model),
-    messages: toModelMessages(messages),
+    ...(instructions ? { instructions } : {}),
+    messages: toModelMessages(chatMessages),
     ...toAiSdkChatSettings(params),
+    ...(openaiCompatibleOptions.thinking
+      ? { providerOptions: { openaiCompatible: openaiCompatibleOptions } }
+      : {}),
   });
 
   for await (const delta of result.textStream) {

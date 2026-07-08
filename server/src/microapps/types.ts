@@ -6,7 +6,8 @@ import type { MicroAppRecord, MicroAppType } from "@/db/repositories/micro-apps.
 export type MicroAppSupportedAccessPoint = Extract<
   IntegrationCapabilityType,
   "wecom.smart_robot"
-> | "desktop.image_generation_studio"
+> | "desktop.news_hub"
+  | "desktop.image_generation_studio"
   | "desktop.computer_use_studio";
 
 export type IntegrationConversationKind = "direct" | "group";

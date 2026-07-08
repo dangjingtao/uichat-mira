@@ -8,7 +8,6 @@ import {
   SquareTerminal,
   XCircle,
 } from "lucide-react";
-import SettingsPageLayout from "@/features/Settings/components/SettingsPageLayout";
 import {
   Badge,
   Button,
@@ -17,6 +16,7 @@ import {
   TextArea,
   TextInput,
 } from "@/shared/ui";
+import MicroAppPageLayout from "../components/MicroAppPageLayout";
 import type {
   ComputerUseRuntimeInstallRequest,
   ComputerUseTask,
@@ -741,7 +741,7 @@ export default function ComputerUseStudioPage({
   });
 
   return (
-    <SettingsPageLayout
+    <MicroAppPageLayout
       miniTitle={t("settings.microApps.computerUseStudio.page.miniTitle")}
       title={t("settings.microApps.computerUseStudio.page.title")}
       description={t("settings.microApps.computerUseStudio.page.description")}
@@ -763,6 +763,6 @@ export default function ComputerUseStudioPage({
         <ExecutionPanel state={state} />
         <EvidenceWorkspace state={state} />
       </div>
-    </SettingsPageLayout>
+    </MicroAppPageLayout>
   );
 }

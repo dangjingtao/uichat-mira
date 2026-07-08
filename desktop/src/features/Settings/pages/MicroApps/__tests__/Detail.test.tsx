@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import MicroAppDetailPage from "../Detail";
@@ -58,6 +58,10 @@ describe("MicroAppDetailPage", () => {
       <MemoryRouter initialEntries={["/settings/micro-apps/knowledge-query"]}>
         <Routes>
           <Route
+            path="/settings/micro-apps"
+            element={<div data-testid="micro-apps-index-page" />}
+          />
+          <Route
             path="/settings/micro-apps/:appId"
             element={<MicroAppDetailPage />}
           />
@@ -74,5 +78,13 @@ describe("MicroAppDetailPage", () => {
         name: /settings\.microApps\.studioEntries\.computerUse\.actions\.open/,
       }),
     ).not.toBeInTheDocument();
+
+    expect(
+      screen.queryByText("settings.microApps.page.miniTitle"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to micro apps" }));
+
+    expect(window.location.hash).toBe("#/settings/micro-apps");
   });
 });

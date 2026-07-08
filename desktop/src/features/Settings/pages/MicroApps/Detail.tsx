@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Bot, BookOpen, RefreshCcw, Sparkles, Webhook } from "lucide-react";
-import SettingsPageLayout from "../../components/SettingsPageLayout";
 import Card from "@/shared/ui/Card";
 import Badge from "@/shared/ui/Badge";
 import Alert from "@/shared/ui/Alert";
 import Switch from "@/shared/ui/Switch";
 import { Button, FullPageStatus, TextInput } from "@/shared/ui";
 import { message } from "@/shared/ui/Message";
+import MicroAppPageLayout from "./components/MicroAppPageLayout";
 import {
   getIntegrationCapabilityMicroAppBinding,
   getIntegrationCapabilityStatus,
@@ -204,32 +204,32 @@ export default function MicroAppDetailPage() {
 
   if (loading) {
     return (
-      <SettingsPageLayout
+      <MicroAppPageLayout
         miniTitle={t("settings.microApps.page.miniTitle")}
         title={t("settings.microApps.page.title")}
         description={t("settings.microApps.page.description")}
         contentClassName="pt-6"
       >
         <FullPageStatus message={t("settings.microApps.states.loading")} />
-      </SettingsPageLayout>
+      </MicroAppPageLayout>
     );
   }
 
   if (!microApp) {
     return (
-      <SettingsPageLayout
+      <MicroAppPageLayout
         miniTitle={t("settings.microApps.page.miniTitle")}
         title={t("settings.microApps.page.title")}
         description={t("settings.microApps.page.description")}
         contentClassName="pt-6"
       >
         <FullPageStatus message={t("settings.microApps.detail.notFound")} />
-      </SettingsPageLayout>
+      </MicroAppPageLayout>
     );
   }
 
   return (
-    <SettingsPageLayout
+    <MicroAppPageLayout
       miniTitle={t("settings.microApps.page.miniTitle")}
       title={microApp.name}
       description={detailSummary(microApp)}
@@ -429,6 +429,6 @@ export default function MicroAppDetailPage() {
           </Card>
         </aside>
       </div>
-    </SettingsPageLayout>
+    </MicroAppPageLayout>
   );
 }

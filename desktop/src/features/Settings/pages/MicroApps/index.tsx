@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowRight, Bot, BookOpen } from "lucide-react";
+import { ArrowRight, Bot, BookOpen, Image, Mail, MonitorSmartphone, Newspaper } from "lucide-react";
 import { Link } from "react-router-dom";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import Alert from "@/shared/ui/Alert";
@@ -39,6 +39,13 @@ const featuredStudioEntries = [
     route: "/settings/micro-apps/image-generation-studio",
   },
 ] as const;
+
+const featuredStudioIcons = {
+  newsHub: Newspaper,
+  mailCenter: Mail,
+  computerUse: MonitorSmartphone,
+  imageGeneration: Image,
+} as const;
 
 export default function MicroAppsSettings() {
   const { t } = useTranslation();
@@ -142,6 +149,7 @@ export default function MicroAppsSettings() {
       <div data-testid="micro-apps-studio-grid" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {featuredStudioEntries.map((entry) => {
           const key = `settings.microApps.studioEntries.${entry.key}` as const;
+          const EntryIcon = featuredStudioIcons[entry.key];
 
           return (
             <Card key={entry.route} className="border-primary/15 bg-primary/5 p-5">
@@ -151,16 +159,23 @@ export default function MicroAppsSettings() {
                     <Badge variant="primary" size="sm">
                       {t(`${key}.badges.debug`)}
                     </Badge>
-                    <Badge variant="muted" size="sm">
-                      {t(`${key}.badges.focus`)}
-                    </Badge>
-                    <Badge variant="muted" size="sm">
-                      {t(`${key}.badges.runtime`)}
-                    </Badge>
+                    {entry.key === "imageGeneration" ? null : (
+                      <Badge variant="muted" size="sm">
+                        {t(`${key}.badges.focus`)}
+                      </Badge>
+                    )}
                   </div>
                   <div className="space-y-1">
-                    <div className="text-base font-semibold text-text-primary">
-                      {t(`${key}.title`)}
+                    <div className="flex items-center gap-2">
+                      <span
+                        data-testid={`studio-entry-icon-${entry.key}`}
+                        className="flex h-9 w-9 items-center justify-center rounded-ui-control bg-primary/10 text-primary"
+                      >
+                        <EntryIcon className="h-4.5 w-4.5" />
+                      </span>
+                      <div className="text-base font-semibold text-text-primary">
+                        {t(`${key}.title`)}
+                      </div>
                     </div>
                     <div className="text-sm leading-6 text-text-secondary">
                       {t(`${key}.description`)}

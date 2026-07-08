@@ -1,5 +1,4 @@
 import { useTranslation } from "react-i18next";
-import SettingsPageLayout from "@/features/Settings/components/SettingsPageLayout";
 import HeaderBanner from "./components/HeaderBanner";
 import ModeProviderCard from "./components/ModeProviderCard";
 import PromptRequestCard from "./components/PromptRequestCard";
@@ -12,6 +11,7 @@ import DebugLogCard from "./components/DebugLogCard";
 import HelpCard from "./components/HelpCard";
 import { useImageGenerationStudioState } from "./hooks/useImageGenerationStudioState";
 import type { createImageGeneration, getImageGeneration } from "@/shared/api/imageGeneration";
+import MicroAppPageLayout from "../components/MicroAppPageLayout";
 
 interface ImageGenerationStudioPageProps {
   api?: {
@@ -27,7 +27,7 @@ export default function ImageGenerationStudioPage({
   const state = useImageGenerationStudioState(api);
 
   return (
-    <SettingsPageLayout
+    <MicroAppPageLayout
       miniTitle={t("settings.microApps.imageGenerationStudio.page.miniTitle")}
       title={t("settings.microApps.imageGenerationStudio.page.title")}
       description={t("settings.microApps.imageGenerationStudio.page.description")}
@@ -93,6 +93,6 @@ export default function ImageGenerationStudioPage({
         <DebugLogCard logs={state.logs} />
         <HelpCard />
       </div>
-    </SettingsPageLayout>
+    </MicroAppPageLayout>
   );
 }

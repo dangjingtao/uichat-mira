@@ -7,16 +7,15 @@ import {
   ExternalLink as ExternalLinkIcon,
   SlidersHorizontal,
 } from "lucide-react";
-import SettingsPageLayout from "../../../components/SettingsPageLayout";
 import Card from "@/shared/ui/Card";
 import Badge from "@/shared/ui/Badge";
 import {
   Button,
   ExternalLink,
-  FullPageStatus,
   Modal,
   NumberInput,
   Select,
+  Skeleton,
   Switch,
   TextInput,
   message,
@@ -30,6 +29,7 @@ import {
   type NewsHubItem,
   type NewsHubOverview,
 } from "@/shared/api/newsHub";
+import MicroAppPageLayout from "../components/MicroAppPageLayout";
 
 const formatDateTime = (value: string | null, locale: string) => {
   if (!value) {
@@ -63,7 +63,21 @@ const defaultConfig: NewsHubConfig = {
   refreshTtlMinutes: 60,
 };
 
+const MIN_REFRESH_TTL_MINUTES = 60;
+const MAX_REFRESH_TTL_MINUTES = 24 * 60;
+
 const hasText = (value: string) => value.trim().length > 0;
+
+const normalizeRefreshTtlMinutes = (value: number) => {
+  if (!Number.isFinite(value)) {
+    return defaultConfig.refreshTtlMinutes;
+  }
+
+  return Math.min(
+    MAX_REFRESH_TTL_MINUTES,
+    Math.max(MIN_REFRESH_TTL_MINUTES, Math.trunc(value)),
+  );
+};
 
 const providerLinks = {
   newsData: {
@@ -251,7 +265,9 @@ export default function NewsHubPage() {
           (hasText(draftConfig.redditClientId) &&
             hasText(draftConfig.redditClientSecret) &&
             hasText(draftConfig.redditUserAgent)),
-        refreshTtlMinutes: 60,
+        refreshTtlMinutes: normalizeRefreshTtlMinutes(
+          draftConfig.refreshTtlMinutes,
+        ),
       };
       const saved = await saveNewsHubConfig(normalizedConfig);
       setConfig(saved);
@@ -275,21 +291,96 @@ export default function NewsHubPage() {
 
   if (loading && !overview) {
     return (
-      <SettingsPageLayout
+      <MicroAppPageLayout
         miniTitle={t("settings.microApps.newsHub.page.miniTitle")}
         title={t("settings.microApps.newsHub.page.title")}
         description={t("settings.microApps.newsHub.page.description")}
+        slot={
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" disabled>
+              <RefreshCcw className="h-4 w-4" />
+              {t("settings.microApps.newsHub.actions.refresh")}
+            </Button>
+          </div>
+        }
         contentClassName="h-full pt-6"
         scrollBody={false}
       >
-        <FullPageStatus message={t("settings.microApps.newsHub.states.loading")} />
-      </SettingsPageLayout>
+        <div data-testid="news-hub-loading-skeleton" className="min-h-0 flex-1">
+          <Card className="min-h-0 flex-1 overflow-hidden p-5">
+            <div className="flex h-full min-h-0 flex-col">
+              <div className="shrink-0">
+                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_auto]">
+                  <div className="grid gap-2">
+                    <label className="h-5 text-xs font-medium text-text-secondary">
+                      {t("settings.microApps.newsHub.filters.source")}
+                    </label>
+                    <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+                      <Skeleton height={40} className="rounded-ui-control" />
+                      <Skeleton height={40} width={156} className="rounded-ui-control" />
+                    </div>
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="h-5 text-xs font-medium text-text-secondary">
+                      {t("settings.microApps.newsHub.filters.query")}
+                    </label>
+                    <Skeleton height={40} className="rounded-ui-control" />
+                  </div>
+                  <div className="flex items-end">
+                    <Skeleton height={40} className="w-full rounded-ui-control" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="my-5 shrink-0 border-t border-border" />
+
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div className="flex shrink-0 items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Newspaper className="h-4 w-4 text-primary" />
+                    <div className="text-sm font-semibold text-text-primary">
+                      {t("settings.microApps.newsHub.sections.items")}
+                    </div>
+                  </div>
+                  <Skeleton height={24} width={72} className="rounded-full" />
+                </div>
+
+                <div className="mt-4 min-h-0 flex-1 overflow-hidden rounded-ui-panel border border-border bg-surface-secondary/10 px-4 py-4">
+                  <div className="space-y-4">
+                    {Array.from({ length: 4 }).map((_, index) => (
+                      <div key={index} className="space-y-3">
+                        <div className="flex flex-wrap gap-2">
+                          <Skeleton height={24} width={118} className="rounded-full" />
+                          <Skeleton height={24} width={84} className="rounded-full" />
+                          <Skeleton height={24} width={54} className="rounded-full" />
+                        </div>
+                        <Skeleton height={22} width={`${72 - index * 6}%`} />
+                        <Skeleton.Text lines={2} lastLineWidth={`${64 - index * 5}%`} />
+                        <div className="flex flex-wrap gap-2">
+                          <Skeleton height={24} width={66} className="rounded-full" />
+                          <Skeleton height={24} width={78} className="rounded-full" />
+                          <Skeleton height={24} width={58} className="rounded-full" />
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <Skeleton height={14} width={220} />
+                          <Skeleton height={14} width={120} />
+                        </div>
+                        {index < 3 ? <div className="border-t border-border" /> : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </MicroAppPageLayout>
     );
   }
 
   return (
     <>
-      <SettingsPageLayout
+      <MicroAppPageLayout
         miniTitle={t("settings.microApps.newsHub.page.miniTitle")}
         title={t("settings.microApps.newsHub.page.title")}
         description={t("settings.microApps.newsHub.page.description")}
@@ -441,7 +532,7 @@ export default function NewsHubPage() {
             </div>
           </div>
         </Card>
-      </SettingsPageLayout>
+      </MicroAppPageLayout>
 
       <Modal
         open={configOpen}
@@ -604,9 +695,14 @@ export default function NewsHubPage() {
 
           <NumberInput
             label={t("settings.microApps.newsHub.config.refreshTtlMinutes")}
-            value={60}
-            onChange={() => {}}
-            disabled
+            value={draftConfig.refreshTtlMinutes}
+            onChange={(value) =>
+              updateDraftConfig(
+                "refreshTtlMinutes",
+                normalizeRefreshTtlMinutes(value),
+              )
+            }
+            step={60}
             labelHelp={t("settings.microApps.newsHub.config.refreshTtlHelp")}
           />
         </div>

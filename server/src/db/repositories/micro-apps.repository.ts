@@ -4,11 +4,13 @@ import { microApps } from "../schema";
 
 export type MicroAppType =
   | "knowledge_query"
+  | "news_hub"
   | "image_generation"
   | "computer_use";
 
 export type MicroAppSupportedAccessPoint =
   | "wecom.smart_robot"
+  | "desktop.news_hub"
   | "desktop.image_generation_studio"
   | "desktop.computer_use_studio";
 
@@ -76,6 +78,10 @@ const defaultKnowledgeQuerySchema: MicroAppBindingSchema = {
       defaultValue: "",
     },
   ],
+};
+
+export const newsHubBindingSchema: MicroAppBindingSchema = {
+  fields: [],
 };
 
 export const imageGenerationBindingSchema: MicroAppBindingSchema = {
@@ -169,6 +175,16 @@ const defaultDefinitionSeeds: Array<
     supportedAccessPoints: ["wecom.smart_robot"],
     bindingSchema: defaultKnowledgeQuerySchema,
     runtimeKey: "knowledge-query",
+    enabled: true,
+  },
+  {
+    type: "news_hub",
+    name: "News Hub",
+    description:
+      "为桌面内的 NewsHub 新闻聚合设置页保留共享注册定义和稳定 runtime key，不在这里承接外部接入点执行逻辑。",
+    supportedAccessPoints: ["desktop.news_hub"],
+    bindingSchema: newsHubBindingSchema,
+    runtimeKey: "news_hub",
     enabled: true,
   },
   {
