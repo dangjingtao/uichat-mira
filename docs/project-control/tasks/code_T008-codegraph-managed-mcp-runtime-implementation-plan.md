@@ -14,7 +14,7 @@ related:
   - docs/tooling-runtime/codegraph-managed-mcp-runtime-implementation-plan.md
   - docs/tooling-runtime/codegraph-managed-mcp-spike.md
   - docs/tooling-runtime/codegraph-wrapper-contract.md
-task_state: READY_FOR_REVIEW
+task_state: DONE
 ---
 
 # code_T008 CodeGraph Managed MCP Runtime Implementation Plan
@@ -140,6 +140,6 @@ task_state: READY_FOR_REVIEW
 
 ## Review Outcome
 
-- 当前状态：`READY_FOR_REVIEW`
-- 待后续动作：按项目控制流程评审 `code_T008` 文档是否可作为后续 runtime 任务的设计约束
+- 当前状态：`DONE`
+- 评审结论：`code_T008` 文档可作为后续 runtime 任务的设计约束
 - 明确未修改：runtime、依赖、测试文件、Agent Runtime 实现、MCP runtime 实现、CodeGraph 安装/启动/托管代码、CodeGraph wrapper runtime 代码

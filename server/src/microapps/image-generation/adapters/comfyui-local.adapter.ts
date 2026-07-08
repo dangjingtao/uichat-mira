@@ -47,6 +47,13 @@ type ComfyHistoryPayload = Record<
   }
 >;
 
+const resolveRequestOverrides = (providerParams: Record<string, unknown> | undefined) => ({
+  baseUrl:
+    typeof providerParams?.baseUrl === "string" ? providerParams.baseUrl.trim() : "",
+  clientId:
+    typeof providerParams?.clientId === "string" ? providerParams.clientId.trim() : "",
+});
+
 export function createComfyUiLocalAdapter(
   config: ComfyUiLocalAdapterConfig,
 ): ProviderAdapter {
@@ -56,18 +63,21 @@ export function createComfyUiLocalAdapter(
     providerId: "comfyui_local",
     executionKind: "workflow-runner",
     async startGeneration(input) {
+      const overrides = resolveRequestOverrides(input.request.providerParams);
+      const baseUrl = overrides.baseUrl || config.baseUrl;
+      const clientId = overrides.clientId || config.clientId || input.job.id;
       const workflowApiJson = ensureWorkflowApiJson(
         input.request.workflowApiJson as JsonObject | undefined,
       );
       const httpRequest = {
-        url: joinUrl(config.baseUrl, "/prompt"),
+        url: joinUrl(baseUrl, "/prompt"),
         method: "POST" as const,
         headers: {
           "Content-Type": "application/json",
         },
         body: jsonStringify({
           prompt: workflowApiJson,
-          client_id: config.clientId ?? input.job.id,
+          client_id: clientId,
         }),
         timeoutMs: config.timeoutMs,
       };
@@ -109,13 +119,18 @@ export function createComfyUiLocalAdapter(
         providerJobId: payload.prompt_id,
         artifacts: [],
         meta: {
+          baseUrl,
           rawResponse: payload,
         },
       };
     },
     async getGeneration({ job }) {
+      const baseUrl =
+        typeof job.meta?.baseUrl === "string" && job.meta.baseUrl.trim()
+          ? job.meta.baseUrl
+          : config.baseUrl;
       const httpRequest = {
-        url: joinUrl(config.baseUrl, `/history/${job.providerJobId}`),
+        url: joinUrl(baseUrl, `/history/${job.providerJobId}`),
         method: "GET" as const,
         timeoutMs: config.timeoutMs,
       };
@@ -128,12 +143,13 @@ export function createComfyUiLocalAdapter(
           ? "SUCCEEDED"
           : historyItem?.status?.status_str,
       );
-      const artifacts = extractComfyArtifacts(config.baseUrl, historyItem);
+      const artifacts = extractComfyArtifacts(baseUrl, historyItem);
       return {
         status,
         providerJobId: job.providerJobId,
         artifacts,
         meta: {
+          baseUrl,
           remoteStatus: historyItem?.status?.status_str,
           rawResponse: payload,
         },

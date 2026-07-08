@@ -225,6 +225,7 @@ const buildRequestPayload = (
   promptForm: PromptFormValue,
   workflowForm: WorkflowFormValue,
   workflowJsonOverride?: string,
+  workflowProviderParams?: Record<string, unknown>,
 ): ImageGenerationCreateRequest => {
   const providerId = providerIdMap[provider];
   const model = promptForm.model.trim() || undefined;
@@ -247,6 +248,7 @@ const buildRequestPayload = (
       >,
       prompt: workflowForm.overridePrompt.trim() || undefined,
       seed: parsedSeed,
+      providerParams: workflowProviderParams,
     };
   }
 
@@ -290,12 +292,12 @@ const resolveArtifactPreviewSrc = (
     return "";
   }
 
-  if (artifact.localPath) {
-    return resolveLocalFilePreviewSrc(artifact.localPath);
-  }
-
   if (artifact.remoteUrl) {
     return artifact.remoteUrl;
+  }
+
+  if (artifact.localPath) {
+    return resolveLocalFilePreviewSrc(artifact.localPath);
   }
 
   return "";
@@ -608,7 +610,10 @@ export function useImageGenerationStudioState(api: ImageGenerationStudioApi = de
     );
   };
 
-  const submit = async (options?: { workflowJson?: string }) => {
+  const submit = async (options?: {
+    workflowJson?: string;
+    providerParams?: Record<string, unknown>;
+  }) => {
     if (formStatus === "invalid" || isRunning) {
       return;
     }
@@ -631,6 +636,7 @@ export function useImageGenerationStudioState(api: ImageGenerationStudioApi = de
       promptForm,
       workflowForm,
       options?.workflowJson,
+      options?.providerParams,
     );
 
     lastSubmittedSignatureRef.current = currentSignature;

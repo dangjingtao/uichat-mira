@@ -20,6 +20,7 @@ import { getLoggerConfig } from "@/logger";
 import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 import { sendRouteError } from "@/utils/route-errors.js";
 import microappsRoute, { type ImageGenerationRouteService } from "./index.js";
+import type { ComfyUiStudioRouteService } from "./index.js";
 
 const testDbPath = createTimestampedTestArtifactPath(
   "db",
@@ -153,6 +154,90 @@ const createApp = async (
   service: ImageGenerationRouteService,
   mailCenterService: MailCenterRouteService = createMailCenterServiceStub(),
   newsHubService: NewsHubRouteService = createNewsHubServiceStub(),
+  comfyUiStudioService: ComfyUiStudioRouteService = {
+    listConnections() {
+      return [];
+    },
+    createConnection(input) {
+      return {
+        id: "conn-1",
+        baseUrl: input.baseUrl,
+        clientId: input.clientId ?? "",
+        status: "unverified",
+        lastError: null,
+        lastCheckedAt: null,
+        createdAt: "2026-07-06T12:00:00.000Z",
+        updatedAt: "2026-07-06T12:00:00.000Z",
+      };
+    },
+    updateConnection(id, input) {
+      return {
+        id,
+        baseUrl: input.baseUrl,
+        clientId: input.clientId ?? "",
+        status: "unverified",
+        lastError: null,
+        lastCheckedAt: null,
+        createdAt: "2026-07-06T12:00:00.000Z",
+        updatedAt: "2026-07-06T12:00:00.000Z",
+      };
+    },
+    async testConnection(id) {
+      return {
+        id,
+        baseUrl: "http://127.0.0.1:8188",
+        clientId: "",
+        status: "connectable",
+        lastError: null,
+        lastCheckedAt: "2026-07-06T12:00:00.000Z",
+        createdAt: "2026-07-06T12:00:00.000Z",
+        updatedAt: "2026-07-06T12:00:00.000Z",
+      };
+    },
+    listFlows() {
+      return [];
+    },
+    createFlow(input) {
+      return {
+        id: "flow-1",
+        connectionId: input.connectionId ?? null,
+        name: input.name,
+        note: input.note ?? "",
+        source: input.source ?? "manual",
+        workflowApiJson: input.workflowApiJson,
+        mapping: {
+          promptPath: input.mapping?.promptPath ?? "",
+          seedPath: input.mapping?.seedPath ?? "",
+          widthPath: input.mapping?.widthPath ?? "",
+          heightPath: input.mapping?.heightPath ?? "",
+          outputNodeId: input.mapping?.outputNodeId ?? "",
+          previewNodeId: input.mapping?.previewNodeId ?? "",
+        },
+        createdAt: "2026-07-06T12:00:00.000Z",
+        updatedAt: "2026-07-06T12:00:00.000Z",
+      };
+    },
+    updateFlow(id, input) {
+      return {
+        id,
+        connectionId: input.connectionId ?? null,
+        name: input.name,
+        note: input.note ?? "",
+        source: input.source ?? "manual",
+        workflowApiJson: input.workflowApiJson,
+        mapping: {
+          promptPath: input.mapping?.promptPath ?? "",
+          seedPath: input.mapping?.seedPath ?? "",
+          widthPath: input.mapping?.widthPath ?? "",
+          heightPath: input.mapping?.heightPath ?? "",
+          outputNodeId: input.mapping?.outputNodeId ?? "",
+          previewNodeId: input.mapping?.previewNodeId ?? "",
+        },
+        createdAt: "2026-07-06T12:00:00.000Z",
+        updatedAt: "2026-07-06T12:00:00.000Z",
+      };
+    },
+  },
 ) => {
   const app = Fastify({
     logger: getLoggerConfig(),
@@ -161,6 +246,7 @@ const createApp = async (
   app.setErrorHandler(sendRouteError);
   await app.register(microappsRoute, {
     imageGenerationService: service,
+    comfyUiStudioService,
     computerUseService: {
       async createPlan() {
         throw new Error("not implemented");
@@ -354,6 +440,287 @@ test("microapps image generation routes map request validation errors to 400", a
 
   assert.equal(response.statusCode, 400, response.body);
   assert.equal(response.json().message, "Prompt or workflow is required.");
+
+  await app.close();
+});
+
+test("microapps comfyui connection routes list, create, update, and test connections", async () => {
+  const app = await createApp(
+    {
+      async createGeneration() {
+        return createTestJob();
+      },
+      async getGeneration() {
+        return createTestJob();
+      },
+    },
+    createMailCenterServiceStub(),
+    createNewsHubServiceStub(),
+    {
+      listConnections() {
+        return [
+          {
+            id: "conn-1",
+            baseUrl: "http://127.0.0.1:8188",
+            clientId: "",
+            status: "unverified",
+            lastError: null,
+            lastCheckedAt: null,
+            createdAt: "2026-07-06T12:00:00.000Z",
+            updatedAt: "2026-07-06T12:00:00.000Z",
+          },
+        ];
+      },
+      createConnection(input) {
+        assert.equal(input.baseUrl, "http://127.0.0.1:8188");
+        return {
+          id: "conn-1",
+          baseUrl: input.baseUrl,
+          clientId: input.clientId ?? "",
+          status: "unverified",
+          lastError: null,
+          lastCheckedAt: null,
+          createdAt: "2026-07-06T12:00:00.000Z",
+          updatedAt: "2026-07-06T12:00:00.000Z",
+        };
+      },
+      updateConnection(id, input) {
+        assert.equal(id, "conn-1");
+        assert.equal(input.baseUrl, "http://127.0.0.1:8288");
+        return {
+          id,
+          baseUrl: input.baseUrl,
+          clientId: input.clientId ?? "",
+          status: "unverified",
+          lastError: null,
+          lastCheckedAt: null,
+          createdAt: "2026-07-06T12:00:00.000Z",
+          updatedAt: "2026-07-06T12:05:00.000Z",
+        };
+      },
+      async testConnection(id) {
+        assert.equal(id, "conn-1");
+        return {
+          id,
+          baseUrl: "http://127.0.0.1:8288",
+          clientId: "",
+          status: "connectable",
+          lastError: null,
+          lastCheckedAt: "2026-07-06T12:06:00.000Z",
+          createdAt: "2026-07-06T12:00:00.000Z",
+          updatedAt: "2026-07-06T12:06:00.000Z",
+        };
+      },
+      listFlows() {
+        return [];
+      },
+      createFlow() {
+        throw new Error("not implemented");
+      },
+      updateFlow() {
+        throw new Error("not implemented");
+      },
+    },
+  );
+  const token = createToken();
+
+  const listResponse = await app.inject({
+    method: "GET",
+    url: "/microapps/image-generation/comfyui/connections",
+    headers: {
+      authorization: `Bearer ${token}`,
+    },
+  });
+
+  assert.equal(listResponse.statusCode, 200, listResponse.body);
+  assert.equal(listResponse.json().data[0].baseUrl, "http://127.0.0.1:8188");
+
+  const createResponse = await app.inject({
+    method: "POST",
+    url: "/microapps/image-generation/comfyui/connections",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    payload: {
+      baseUrl: "http://127.0.0.1:8188",
+    },
+  });
+
+  assert.equal(createResponse.statusCode, 200, createResponse.body);
+  assert.equal(createResponse.json().data.status, "unverified");
+
+  const updateResponse = await app.inject({
+    method: "PATCH",
+    url: "/microapps/image-generation/comfyui/connections/conn-1",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    payload: {
+      baseUrl: "http://127.0.0.1:8288",
+    },
+  });
+
+  assert.equal(updateResponse.statusCode, 200, updateResponse.body);
+  assert.equal(updateResponse.json().data.baseUrl, "http://127.0.0.1:8288");
+
+  const testResponse = await app.inject({
+    method: "POST",
+    url: "/microapps/image-generation/comfyui/connections/conn-1/test",
+    headers: {
+      authorization: `Bearer ${token}`,
+    },
+  });
+
+  assert.equal(testResponse.statusCode, 200, testResponse.body);
+  assert.equal(testResponse.json().data.status, "connectable");
+
+  await app.close();
+});
+
+test("microapps comfyui flow routes list, create, and update flows", async () => {
+  const app = await createApp(
+    {
+      async createGeneration() {
+        return createTestJob();
+      },
+      async getGeneration() {
+        return createTestJob();
+      },
+    },
+    createMailCenterServiceStub(),
+    createNewsHubServiceStub(),
+    {
+      listConnections() {
+        return [];
+      },
+      createConnection() {
+        throw new Error("not implemented");
+      },
+      updateConnection() {
+        throw new Error("not implemented");
+      },
+      async testConnection() {
+        throw new Error("not implemented");
+      },
+      listFlows() {
+        return [
+          {
+            id: "flow-1",
+            connectionId: null,
+            name: "SDXL",
+            note: "",
+            source: "template",
+            workflowApiJson: "{\"6\":{}}",
+            mapping: {
+              promptPath: "6.text",
+              seedPath: "3.seed",
+              widthPath: "13.width",
+              heightPath: "13.height",
+              outputNodeId: "9",
+              previewNodeId: "9",
+            },
+            createdAt: "2026-07-06T12:00:00.000Z",
+            updatedAt: "2026-07-06T12:00:00.000Z",
+          },
+        ];
+      },
+      createFlow(input) {
+        assert.equal(input.name, "New Flow");
+        return {
+          id: "flow-2",
+          connectionId: input.connectionId ?? null,
+          name: input.name,
+          note: input.note ?? "",
+          source: input.source ?? "manual",
+          workflowApiJson: input.workflowApiJson,
+          mapping: {
+            promptPath: input.mapping?.promptPath ?? "",
+            seedPath: input.mapping?.seedPath ?? "",
+            widthPath: input.mapping?.widthPath ?? "",
+            heightPath: input.mapping?.heightPath ?? "",
+            outputNodeId: input.mapping?.outputNodeId ?? "",
+            previewNodeId: input.mapping?.previewNodeId ?? "",
+          },
+          createdAt: "2026-07-06T12:00:00.000Z",
+          updatedAt: "2026-07-06T12:00:00.000Z",
+        };
+      },
+      updateFlow(id, input) {
+        assert.equal(id, "flow-1");
+        assert.equal(input.name, "Updated Flow");
+        return {
+          id,
+          connectionId: input.connectionId ?? null,
+          name: input.name,
+          note: input.note ?? "",
+          source: input.source ?? "manual",
+          workflowApiJson: input.workflowApiJson,
+          mapping: {
+            promptPath: input.mapping?.promptPath ?? "",
+            seedPath: input.mapping?.seedPath ?? "",
+            widthPath: input.mapping?.widthPath ?? "",
+            heightPath: input.mapping?.heightPath ?? "",
+            outputNodeId: input.mapping?.outputNodeId ?? "",
+            previewNodeId: input.mapping?.previewNodeId ?? "",
+          },
+          createdAt: "2026-07-06T12:00:00.000Z",
+          updatedAt: "2026-07-06T12:10:00.000Z",
+        };
+      },
+    },
+  );
+  const token = createToken();
+
+  const listResponse = await app.inject({
+    method: "GET",
+    url: "/microapps/image-generation/comfyui/flows",
+    headers: {
+      authorization: `Bearer ${token}`,
+    },
+  });
+
+  assert.equal(listResponse.statusCode, 200, listResponse.body);
+  assert.equal(listResponse.json().data[0].name, "SDXL");
+
+  const createResponse = await app.inject({
+    method: "POST",
+    url: "/microapps/image-generation/comfyui/flows",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    payload: {
+      name: "New Flow",
+      workflowApiJson: "{\"6\":{}}",
+      mapping: {
+        promptPath: "6.text",
+      },
+    },
+  });
+
+  assert.equal(createResponse.statusCode, 200, createResponse.body);
+  assert.equal(createResponse.json().data.id, "flow-2");
+
+  const updateResponse = await app.inject({
+    method: "PATCH",
+    url: "/microapps/image-generation/comfyui/flows/flow-1",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    payload: {
+      name: "Updated Flow",
+      workflowApiJson: "{\"6\":{}}",
+      mapping: {
+        promptPath: "6.text",
+      },
+    },
+  });
+
+  assert.equal(updateResponse.statusCode, 200, updateResponse.body);
+  assert.equal(updateResponse.json().data.name, "Updated Flow");
 
   await app.close();
 });

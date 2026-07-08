@@ -63,6 +63,7 @@ related:
 | [agent_node_T002](tasks/agent_node_T002-tool-call-normalize-node.md) | `TODO` | AgentGraph | 状态异常审计：代码与后续任务显示 normalize 已接入，但任务卡仍是 TODO |
 | [agent_node_T012](tasks/agent_node_T012-repeated-tool-guard.md) | `READY_FOR_REVIEW` | AgentGraph | 评审 repeated guard 是否可接受，以及旧线程 `<function_calls>` 异常是否另开任务 |
 | [agent_node_T016](tasks/agent_node_T016-local-tool-routing-and-schema-guard.md) | `READY_FOR_REVIEW` | AgentGraph | 评审弱模型防线和最新前台 smoke 证据 |
+| [agent_node_T037](tasks/agent_node_T037-planner-task-coverage-view.md) | `TODO` | AgentGraph | 起一张轻量 `TaskCoverageView` 卡，收紧 Planner 完成判定，并把剩余未完成目标稳定传给后续 ToolSelect / Harness query |
 | [core_tools_T008](tasks/core_tools_T008-read-locate-keyword-preview.md) | `READY_FOR_REVIEW` | Core Tools | 评审 read locate preview |
 | [core_tools_T011](tasks/core_tools_T011-selector-create-file-prefers-edit.md) | `READY_FOR_REVIEW` | Core Tools | 评审 create-file selector 策略 |
 | [core_tools_T017](tasks/core_tools_T017-web-search-artifact-sensitive-field-scrubbing.md) | `READY_FOR_REVIEW` | Core Tools | 评审敏感字段清理 |
@@ -71,7 +72,7 @@ related:
 | [code_T006](tasks/code_T006-codegraph-benchmark-spike.md) | `DONE` | Docs / Tooling Runtime | 本地 CodeGraph benchmark spike 已完成；review 记录见 `reviews/codegraph-benchmark-spike.md`，结论是继续做受控候选，不直接接 runtime |
 | [code_T004](tasks/code_T004-codebase-engine-abstraction.md) | `DONE` | Docs / Tooling Runtime | 抽象层设计文档、索引与台账已回填；2026-07-08 项目 owner 明确要求直接标记完成，后续仍执行总审查 |
 | [code_T007](tasks/code_T007-codegraph-wrapper-contract.md) | `READY_FOR_REVIEW` | Docs / Tooling Runtime | 评审 CodeGraph wrapper 合同是否足够固定 scope、裁剪、核验和降级边界 |
-| [code_T008](tasks/code_T008-codegraph-managed-mcp-runtime-implementation-plan.md) | `READY_FOR_REVIEW` | Docs / Tooling Runtime | 评审 CodeGraph Managed MCP runtime implementation plan 是否足够固定托管进程、Trace、Evidence、失败降级和权限边界 |
+| [code_T008](tasks/code_T008-codegraph-managed-mcp-runtime-implementation-plan.md) | `DONE` | Docs / Tooling Runtime | CodeGraph Managed MCP runtime implementation plan 已评审通过，可作为后续 runtime spike / wrapper / verification / trace 任务的设计约束 |
 | [T-011](tasks/T-011-sandbox-contract-direct-bench.md) | `READY_FOR_REVIEW` | Harness / Sandbox | 评审 sandbox direct bench contract |
 | [T-DeepAgents-01](tasks/T-DeepAgents-01-deepagents-js-spike.md) | `READY_FOR_REVIEW` | Agent Runtime / Spike | 已完成 runtime feasibility spike；按项目 owner 结论为“有条件通过” |
 | [T-DeepAgents-02](tasks/T-DeepAgents-02-selector-middleware-baseline.md) | `READY_FOR_REVIEW` | Agent Runtime / Spike | 已完成整改：fake wiring 与 real selector baseline 已拆开，新增 116 条 fixtures、high-risk 双口径指标和 runtime middleware smoke tests；当前因缺少 `DEEPAGENTS_SELECTOR_BASE_URL / MODEL`，real selector baseline 为 `SKIPPED`，`T-03` 继续阻塞 |
@@ -138,6 +139,7 @@ related:
 | [agent_node_T031](tasks/agent_node_T031-terminal-result-semantics.md) | `DONE` | `DONE` | terminal result 三层语义已拆开；受限回答与 `T30` 失败路径合同复核通过 |
 | [agent_node_T032](tasks/agent_node_T032-structured-failure-code.md) | `DONE` | `DONE` | ToolNode 与 Harness failure 已接入最小结构化 `failureCode`；结构化优先、fallback 与 evidence 可见性复核通过 |
 | [agent_node_T033](tasks/agent_node_T033-core-tool-summary-contracts.md) | `DONE` | `DONE` | edit/workspace mutation/action profile summary contract 已补齐；dry-run、真实写入与 unknown fallback 复核通过 |
+| [agent_node_T037](tasks/agent_node_T037-planner-task-coverage-view.md) | `TODO` | `TODO` | 轻量 `TaskCoverageView`：在不改主执行链的前提下，把任务覆盖度变成 Planner 的刚性判定输入 |
 
 ## Core Tools Index
 
@@ -173,7 +175,7 @@ related:
 | [code_T004](tasks/code_T004-codebase-engine-abstraction.md) | `DONE` | 外部 `CARD-04` 已本地化；抽象层设计文档已进入 `docs/tooling-runtime/`，并按 2026-07-08 项目 owner 明确决定标记完成 |
 | [code_T006](tasks/code_T006-codegraph-benchmark-spike.md) | `DONE` | 本地 CodeGraph benchmark spike 已执行；输出已进入 `docs/project-control/reviews/codegraph-benchmark-spike.md`，未接入 runtime |
 | [code_T007](tasks/code_T007-codegraph-wrapper-contract.md) | `READY_FOR_REVIEW` | 新增 CodeGraph wrapper 合同文档，明确 Planner 只见 `codebase_explore`，CodeGraph 原生命令只允许留在 wrapper 内部，当前为 docs-only |
-| [code_T008](tasks/code_T008-codegraph-managed-mcp-runtime-implementation-plan.md) | `READY_FOR_REVIEW` | 新增 CodeGraph Managed MCP runtime implementation plan，固定托管进程、Windows 边界、telemetry、Trace、Evidence、失败降级和状态机；当前为 docs-only |
+| [code_T008](tasks/code_T008-codegraph-managed-mcp-runtime-implementation-plan.md) | `DONE` | 新增 CodeGraph Managed MCP runtime implementation plan，固定托管进程、Windows 边界、telemetry、Trace、Evidence、失败降级和状态机；当前为 docs-only，已可作为后续实现约束 |
 
 ## Codebase Understanding Review Index
 

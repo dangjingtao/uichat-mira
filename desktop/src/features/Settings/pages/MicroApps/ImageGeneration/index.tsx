@@ -5,6 +5,17 @@ import Badge from "@/shared/ui/Badge";
 import Card from "@/shared/ui/Card";
 import NavigationCardTabs from "@/shared/ui/NavigationCardTabs";
 import { Button, Modal, TextArea, TextInput } from "@/shared/ui";
+import {
+  createComfyUiConnection,
+  createComfyUiFlow,
+  listComfyUiConnections,
+  listComfyUiFlows,
+  testComfyUiConnection as testComfyUiConnectionRequest,
+  updateComfyUiConnection,
+  updateComfyUiFlow,
+  type ComfyUiConnection,
+  type ComfyUiFlow,
+} from "@/shared/api/comfyuiStudio";
 import ResultPreviewCard from "./components/ResultPreviewCard";
 import ComfyUiExecutionInputCard from "./components/ComfyUiExecutionInputCard";
 import ComfyUiSetupCard from "./components/ComfyUiSetupCard";
@@ -13,8 +24,6 @@ import type { createImageGeneration, getImageGeneration } from "@/shared/api/ima
 import MicroAppPageLayout from "../components/MicroAppPageLayout";
 import {
   composeComfyUiWorkflowJson,
-  defaultComfyUiFlows,
-  emptyComfyUiNodeMapping,
   getComfyUiNodeSummaries,
   type ComfyUiConnectionStatus,
   type ComfyUiNodeMapping,
@@ -29,6 +38,7 @@ interface ImageGenerationStudioPageProps {
 }
 
 type StudioTab = "comfyui" | "providers";
+type StudioFlow = ComfyUiFlow & { rawJson: string };
 
 const flowJsonStatusVariant = (status: WorkflowJsonStatus) => {
   if (status === "valid") {
@@ -77,19 +87,23 @@ export default function ImageGenerationStudioPage({
       ? "comfyui"
       : "providers",
   );
-  const [connectionStatus, setConnectionStatus] =
-    useState<ComfyUiConnectionStatus>("unconfigured");
-  const [connectionAddress, setConnectionAddress] = useState("");
+  const [connections, setConnections] = useState<ComfyUiConnection[]>([]);
   const [editingConnection, setEditingConnection] = useState(false);
   const [draftConnectionAddress, setDraftConnectionAddress] = useState("");
   const [testingConnection, setTestingConnection] = useState(false);
-  const [flows, setFlows] = useState(defaultComfyUiFlows);
-  const [selectedFlowId, setSelectedFlowId] = useState(defaultComfyUiFlows[0]?.id ?? "");
+  const [flows, setFlows] = useState<StudioFlow[]>([]);
+  const [selectedFlowId, setSelectedFlowId] = useState("");
   const [flowEditorOpen, setFlowEditorOpen] = useState(false);
   const [flowEditorMode, setFlowEditorMode] = useState<"create" | "edit">("edit");
   const [flowNameDraft, setFlowNameDraft] = useState("");
   const [flowNoteDraft, setFlowNoteDraft] = useState("");
   const [flowJsonDraft, setFlowJsonDraft] = useState("");
+  const [studioLoading, setStudioLoading] = useState(false);
+
+  const currentConnection = connections[0] ?? null;
+  const connectionStatus: ComfyUiConnectionStatus =
+    currentConnection?.status ?? "unconfigured";
+  const connectionAddress = currentConnection?.baseUrl ?? "";
 
   const selectedFlow =
     flows.find((flow) => flow.id === selectedFlowId) ?? null;
@@ -97,6 +111,20 @@ export default function ImageGenerationStudioPage({
     ? getComfyUiNodeSummaries(selectedFlow.rawJson)
     : [];
   const flowEditorJsonStatus = getFlowJsonStatus(flowJsonDraft);
+
+  const reloadStudioConfig = async () => {
+    setStudioLoading(true);
+    try {
+      const [nextConnections, nextFlows] = await Promise.all([
+        listComfyUiConnections(),
+        listComfyUiFlows(),
+      ]);
+      setConnections(nextConnections);
+      setFlows(nextFlows.map((flow) => ({ ...flow, rawJson: flow.workflowApiJson })));
+    } finally {
+      setStudioLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (activeTab === "comfyui") {
@@ -113,6 +141,23 @@ export default function ImageGenerationStudioPage({
       state.setMode("prompt");
     }
   }, [activeTab, state.mode, state.provider, state.setMode, state.setProvider]);
+
+  useEffect(() => {
+    void reloadStudioConfig();
+  }, []);
+
+  useEffect(() => {
+    if (!flows.length) {
+      if (selectedFlowId) {
+        setSelectedFlowId("");
+      }
+      return;
+    }
+
+    if (!selectedFlowId || !flows.some((flow) => flow.id === selectedFlowId)) {
+      setSelectedFlowId(flows[0].id);
+    }
+  }, [flows, selectedFlowId]);
 
   useEffect(() => {
     if (!selectedFlow) {
@@ -133,31 +178,35 @@ export default function ImageGenerationStudioPage({
   };
 
   const startEditConnection = () => {
-    setDraftConnectionAddress(connectionAddress);
+    setDraftConnectionAddress(currentConnection?.baseUrl ?? "");
     setEditingConnection(true);
   };
 
-  const saveConnection = () => {
+  const saveConnection = async () => {
     const nextAddress = draftConnectionAddress.trim();
     if (!nextAddress) {
       return;
     }
 
-    setConnectionAddress(nextAddress);
-    setConnectionStatus("unverified");
+    const nextConnection = currentConnection
+      ? await updateComfyUiConnection(currentConnection.id, { baseUrl: nextAddress })
+      : await createComfyUiConnection({ baseUrl: nextAddress });
+    setConnections([nextConnection, ...connections.filter((item) => item.id !== nextConnection.id)]);
     setEditingConnection(false);
   };
 
-  const testConnection = () => {
-    if (!connectionAddress && !draftConnectionAddress.trim()) {
+  const testConnection = async () => {
+    if (!currentConnection) {
       return;
     }
 
     setTestingConnection(true);
-    window.setTimeout(() => {
+    try {
+      const tested = await testComfyUiConnectionRequest(currentConnection.id);
+      setConnections([tested, ...connections.filter((item) => item.id !== tested.id)]);
+    } finally {
       setTestingConnection(false);
-      setConnectionStatus("connectable");
-    }, 600);
+    }
   };
 
   const handleSelectFlow = (flowId: string) => {
@@ -195,6 +244,7 @@ export default function ImageGenerationStudioPage({
   };
 
   const saveFlowEditor = () => {
+    void (async () => {
     const nextName = flowNameDraft.trim();
     const nextNote = flowNoteDraft.trim();
     const nextRawJson = flowJsonDraft.trim();
@@ -204,19 +254,26 @@ export default function ImageGenerationStudioPage({
     }
 
     if (flowEditorMode === "create") {
-      const nextFlow = {
-        id: `manual_${Date.now()}`,
+      const nextFlow = await createComfyUiFlow({
+        connectionId: currentConnection?.id ?? null,
         name: nextName,
         note:
           nextNote ||
           t("settings.microApps.imageGenerationStudio.flow.defaults.newFlowNote"),
-        updatedAt: new Date().toLocaleString(),
-        source: "manual" as const,
-        rawJson: nextRawJson,
-        mapping: emptyComfyUiNodeMapping(),
-      };
-      setFlows((current) => [...current, nextFlow]);
-      setSelectedFlowId(nextFlow.id);
+        source: "manual",
+        workflowApiJson: nextRawJson,
+        mapping: selectedFlow?.mapping ?? {
+          promptPath: "",
+          seedPath: "",
+          widthPath: "",
+          heightPath: "",
+          outputNodeId: "",
+          previewNodeId: "",
+        },
+      });
+      const mappedFlow = { ...nextFlow, rawJson: nextFlow.workflowApiJson };
+      setFlows((current) => [...current, mappedFlow]);
+      setSelectedFlowId(mappedFlow.id);
       setFlowEditorOpen(false);
       return;
     }
@@ -225,37 +282,48 @@ export default function ImageGenerationStudioPage({
       return;
     }
 
+    const nextFlow = await updateComfyUiFlow(selectedFlow.id, {
+      connectionId: selectedFlow.connectionId ?? currentConnection?.id ?? null,
+      name: nextName,
+      note: nextNote || selectedFlow.note,
+      source: selectedFlow.source,
+      workflowApiJson: nextRawJson,
+      mapping: selectedFlow.mapping,
+    });
     setFlows((current) =>
       current.map((flow) =>
         flow.id === selectedFlow.id
-          ? {
-              ...flow,
-              name: nextName,
-              note: nextNote || flow.note,
-              rawJson: nextRawJson,
-              updatedAt: new Date().toLocaleString(),
-            }
+          ? { ...nextFlow, rawJson: nextFlow.workflowApiJson }
           : flow,
       ),
     );
     setFlowEditorOpen(false);
+    })();
   };
 
   const handleFlowMappingChange = (nextMapping: ComfyUiNodeMapping) => {
+    void (async () => {
     if (!selectedFlow) {
       return;
     }
 
+    const nextFlow = await updateComfyUiFlow(selectedFlow.id, {
+      connectionId: selectedFlow.connectionId ?? currentConnection?.id ?? null,
+      name: selectedFlow.name,
+      note: selectedFlow.note,
+      source: selectedFlow.source,
+      workflowApiJson: selectedFlow.rawJson,
+      mapping: nextMapping,
+    });
+
     setFlows((current) =>
       current.map((flow) =>
         flow.id === selectedFlow.id
-          ? {
-              ...flow,
-              mapping: nextMapping,
-            }
+          ? { ...nextFlow, rawJson: nextFlow.workflowApiJson }
           : flow,
       ),
     );
+    })();
   };
 
   const handleSubmit = () => {
@@ -274,7 +342,15 @@ export default function ImageGenerationStudioPage({
       },
     });
 
-    void state.submit({ workflowJson });
+    void state.submit({
+      workflowJson,
+      providerParams: currentConnection
+        ? {
+            baseUrl: currentConnection.baseUrl,
+            clientId: currentConnection.clientId || undefined,
+          }
+        : undefined,
+    });
   };
 
   return (
@@ -314,7 +390,7 @@ export default function ImageGenerationStudioPage({
                   connectionAddress={connectionAddress}
                   editingConnection={editingConnection}
                   draftConnectionAddress={draftConnectionAddress}
-                  testingConnection={testingConnection}
+                  testingConnection={testingConnection || studioLoading}
                   flows={flows}
                   selectedFlowId={selectedFlowId}
                   selectedFlow={selectedFlow}

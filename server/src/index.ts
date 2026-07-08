@@ -686,6 +686,7 @@ const setupRoutes = async () => {
   await app.register(integrationsRoute);
   await app.register(microappsRoute, {
     imageGenerationService,
+    comfyUiStudioService,
     computerUseService,
     computerUseRuntimeService,
     mailCenterService,
@@ -738,6 +739,7 @@ const setupDatabase = async () => {
   integrationInstancesRepository.initialize();
   integrationCapabilitiesRepository.initialize();
   microAppsRepository.initialize();
+  comfyUiStudioRepository.initialize();
   integrationCapabilityMicroAppsRepository.initialize();
   mailAccountsRepository.initialize();
   mailFoldersRepository.initialize();

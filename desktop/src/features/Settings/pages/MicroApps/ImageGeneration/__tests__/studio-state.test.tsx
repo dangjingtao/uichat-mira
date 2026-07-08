@@ -169,4 +169,73 @@ describe("useImageGenerationStudioState", () => {
       "file:///C:/artifacts/job%201.png",
     );
   });
+
+  it("prefers remote preview urls when the artifact was also materialized to a local file", async () => {
+    const api = {
+      createImageGeneration: vi.fn().mockResolvedValue({
+        generationId: "job-remote-1",
+        status: "running",
+        executionKind: "workflow-runner",
+        artifacts: [],
+        requestSummary: {
+          providerId: "comfyui_local",
+          providerParamKeys: [],
+          inputFileCount: 0,
+          hasWorkflowApiJson: true,
+        },
+        createdAt: "2026-07-06T00:00:00.000Z",
+        updatedAt: "2026-07-06T00:00:00.000Z",
+      }),
+      getImageGeneration: vi.fn().mockResolvedValue({
+        generationId: "job-remote-1",
+        status: "succeeded",
+        executionKind: "workflow-runner",
+        artifacts: [
+          {
+            id: "artifact-remote-1",
+            type: "image",
+            mimeType: "image/png",
+            source: "remote-url",
+            localPath: "D:\\workspace\\rag-demo\\server\\.artifacts\\job-remote-1.png",
+            remoteUrl:
+              "http://127.0.0.1:8188/view?filename=job-remote-1.png&type=output",
+            width: 1024,
+            height: 1024,
+            fileName: "job-remote-1.png",
+          },
+        ],
+        requestSummary: {
+          providerId: "comfyui_local",
+          providerParamKeys: [],
+          inputFileCount: 0,
+          hasWorkflowApiJson: true,
+        },
+        createdAt: "2026-07-06T00:00:00.000Z",
+        updatedAt: "2026-07-06T00:00:01.000Z",
+        completedAt: "2026-07-06T00:00:01.000Z",
+      }),
+    };
+
+    render(<HookProbe api={api} />);
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    fireEvent.click(screen.getByText("fill prompt"));
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("submit"));
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(1200);
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId("task-status").textContent).toBe("succeeded");
+    expect(screen.getByTestId("preview-src").textContent).toBe(
+      "http://127.0.0.1:8188/view?filename=job-remote-1.png&type=output",
+    );
+  });
 });
