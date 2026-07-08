@@ -3,7 +3,6 @@ import { ImageIcon, Workflow } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import Card from "@/shared/ui/Card";
 import NavigationCardTabs from "@/shared/ui/NavigationCardTabs";
-import WorkflowRequestCard from "./components/WorkflowRequestCard";
 import SubmitActionCard from "./components/SubmitActionCard";
 import ResultPreviewCard from "./components/ResultPreviewCard";
 import TaskStatusCard from "./components/TaskStatusCard";
@@ -11,9 +10,16 @@ import RequestSummaryCard from "./components/RequestSummaryCard";
 import DebugLogCard from "./components/DebugLogCard";
 import HelpCard from "./components/HelpCard";
 import CollapsiblePanel from "@/shared/ui/CollapsiblePanel";
+import ComfyUiConnectionCard from "./components/ComfyUiConnectionCard";
+import ComfyUiFlowCard from "./components/ComfyUiFlowCard";
+import ComfyUiExecutionInputCard from "./components/ComfyUiExecutionInputCard";
 import { useImageGenerationStudioState } from "./hooks/useImageGenerationStudioState";
 import type { createImageGeneration, getImageGeneration } from "@/shared/api/imageGeneration";
 import MicroAppPageLayout from "../components/MicroAppPageLayout";
+import {
+  defaultComfyUiFlows,
+  type ComfyUiConnectionStatus,
+} from "./model/comfyui-workbench";
 
 interface ImageGenerationStudioPageProps {
   api?: {
@@ -34,6 +40,27 @@ export default function ImageGenerationStudioPage({
       ? "comfyui"
       : "providers",
   );
+  const [connectionStatus, setConnectionStatus] =
+    useState<ComfyUiConnectionStatus>("unconfigured");
+  const [connectionName, setConnectionName] = useState("");
+  const [connectionAddress, setConnectionAddress] = useState("");
+  const [editingConnection, setEditingConnection] = useState(false);
+  const [draftConnectionName, setDraftConnectionName] = useState("");
+  const [draftConnectionAddress, setDraftConnectionAddress] = useState("");
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [flows, setFlows] = useState(defaultComfyUiFlows);
+  const [selectedFlowId, setSelectedFlowId] = useState(defaultComfyUiFlows[0]?.id ?? "");
+  const [editingFlowMeta, setEditingFlowMeta] = useState(false);
+  const [flowNoteDraft, setFlowNoteDraft] = useState("");
+
+  const selectedFlow =
+    flows.find((flow) => flow.id === selectedFlowId) ?? null;
+
+  useEffect(() => {
+    if (selectedFlow) {
+      setFlowNoteDraft(selectedFlow.note);
+    }
+  }, [selectedFlow]);
 
   useEffect(() => {
     if (activeTab === "comfyui") {
@@ -50,6 +77,132 @@ export default function ImageGenerationStudioPage({
       state.setMode("prompt");
     }
   }, [activeTab, state.mode, state.provider, state.setMode, state.setProvider]);
+
+  useEffect(() => {
+    if (!selectedFlow) {
+      return;
+    }
+
+    if (state.workflowForm.workflowJson !== selectedFlow.rawJson) {
+      state.setWorkflowForm((current) => ({
+        ...current,
+        workflowJson: selectedFlow.rawJson,
+      }));
+    }
+  }, [selectedFlow, state.setWorkflowForm, state.workflowForm.workflowJson]);
+
+  const startCreateConnection = () => {
+    setDraftConnectionName("");
+    setDraftConnectionAddress("");
+    setEditingConnection(true);
+  };
+
+  const startEditConnection = () => {
+    setDraftConnectionName(connectionName);
+    setDraftConnectionAddress(connectionAddress);
+    setEditingConnection(true);
+  };
+
+  const saveConnection = () => {
+    const nextName = draftConnectionName.trim();
+    const nextAddress = draftConnectionAddress.trim();
+    if (!nextName || !nextAddress) {
+      return;
+    }
+
+    setConnectionName(nextName);
+    setConnectionAddress(nextAddress);
+    setConnectionStatus("unverified");
+    setEditingConnection(false);
+  };
+
+  const testConnection = () => {
+    if (!connectionAddress && !draftConnectionAddress.trim()) {
+      return;
+    }
+
+    setTestingConnection(true);
+    window.setTimeout(() => {
+      setTestingConnection(false);
+      setConnectionStatus("connectable");
+    }, 600);
+  };
+
+  const handleSelectFlow = (flowId: string) => {
+    setSelectedFlowId(flowId);
+    setEditingFlowMeta(false);
+  };
+
+  const handleUploadFlow = (files: FileList | null) => {
+    const file = files?.item(0);
+    if (!file) {
+      return;
+    }
+
+    void file.text().then((rawJson) => {
+      const nextFlow = {
+        id: `upload_${Date.now()}`,
+        name: file.name.replace(/\.json$/i, ""),
+        note: t("settings.microApps.imageGenerationStudio.flow.messages.uploaded"),
+        updatedAt: new Date().toLocaleString(),
+        source: "upload" as const,
+        rawJson,
+      };
+      setFlows((current) => [...current, nextFlow]);
+      setSelectedFlowId(nextFlow.id);
+      setEditingFlowMeta(false);
+    });
+  };
+
+  const handleCreateFlow = () => {
+    const nextFlow = {
+      id: `manual_${Date.now()}`,
+      name: t("settings.microApps.imageGenerationStudio.flow.defaults.newFlowName"),
+      note: t("settings.microApps.imageGenerationStudio.flow.defaults.newFlowNote"),
+      updatedAt: new Date().toLocaleString(),
+      source: "manual" as const,
+      rawJson: "{}",
+    };
+    setFlows((current) => [...current, nextFlow]);
+    setSelectedFlowId(nextFlow.id);
+    setEditingFlowMeta(true);
+  };
+
+  const saveFlowMeta = () => {
+    if (!selectedFlow) {
+      return;
+    }
+    setFlows((current) =>
+      current.map((flow) =>
+        flow.id === selectedFlow.id
+          ? {
+              ...flow,
+              note: flowNoteDraft.trim() || flow.note,
+              updatedAt: new Date().toLocaleString(),
+            }
+          : flow,
+      ),
+    );
+    setEditingFlowMeta(false);
+  };
+
+  const handleWorkflowJsonChange = (workflowJson: string) => {
+    if (!selectedFlow) {
+      return;
+    }
+    setFlows((current) =>
+      current.map((flow) =>
+        flow.id === selectedFlow.id
+          ? {
+              ...flow,
+              rawJson: workflowJson,
+              updatedAt: new Date().toLocaleString(),
+            }
+          : flow,
+      ),
+    );
+    state.setWorkflowForm((current) => ({ ...current, workflowJson }));
+  };
 
   return (
     <MicroAppPageLayout
@@ -78,46 +231,52 @@ export default function ImageGenerationStudioPage({
       {activeTab === "comfyui" ? (
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
           <div className="space-y-4">
-            <Card className="space-y-4">
-              <div className="space-y-1">
-                <div className="text-sm font-semibold text-text-primary">
-                  {t("settings.microApps.imageGenerationStudio.cards.comfyui.title")}
-                </div>
-                <div className="text-sm leading-6 text-text-secondary">
-                  {t("settings.microApps.imageGenerationStudio.cards.comfyui.description")}
-                </div>
-              </div>
-
-              <div className="rounded-ui-panel border border-border bg-surface-secondary/20 p-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="text-xs uppercase tracking-[0.08em] text-text-tertiary">
-                      {t("settings.microApps.imageGenerationStudio.cards.modeProvider.currentTarget")}
-                    </div>
-                    <div className="text-sm font-medium text-text-primary">
-                      {t("settings.microApps.imageGenerationStudio.providers.comfyUiLocal.label")}
-                    </div>
-                    <div className="max-w-xl text-sm leading-6 text-text-secondary">
-                      {t("settings.microApps.imageGenerationStudio.cards.comfyui.flowFirst")}
-                    </div>
-                  </div>
-                  <div className="rounded-ui-panel border border-border bg-surface-primary px-3 py-2 text-right">
-                    <div className="text-xs uppercase tracking-[0.08em] text-text-tertiary">
-                      {t("settings.microApps.imageGenerationStudio.fields.mode")}
-                    </div>
-                    <div className="mt-1 text-sm font-medium text-text-primary">
-                      {t("settings.microApps.imageGenerationStudio.modes.workflow")}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Card>
-
-            <WorkflowRequestCard
-              value={state.workflowForm}
+            <ComfyUiConnectionCard
+              status={connectionStatus}
+              name={connectionName}
+              address={connectionAddress}
+              editing={editingConnection}
+              draftName={draftConnectionName}
+              draftAddress={draftConnectionAddress}
+              testing={testingConnection}
               running={state.isRunning}
+              onDraftNameChange={setDraftConnectionName}
+              onDraftAddressChange={setDraftConnectionAddress}
+              onStartCreate={startCreateConnection}
+              onStartEdit={startEditConnection}
+              onCancelEdit={() => setEditingConnection(false)}
+              onSave={saveConnection}
+              onTest={testConnection}
+            />
+
+            <ComfyUiFlowCard
+              flows={flows}
+              selectedFlowId={selectedFlowId}
+              selectedFlow={selectedFlow}
+              flowNoteDraft={flowNoteDraft}
               jsonStatus={state.workflowJsonStatus}
-              onChange={state.setWorkflowForm}
+              running={state.isRunning}
+              editingFlowMeta={editingFlowMeta}
+              onSelectFlow={handleSelectFlow}
+              onUploadFlow={handleUploadFlow}
+              onCreateFlow={handleCreateFlow}
+              onStartEditFlowMeta={() => setEditingFlowMeta(true)}
+              onCancelEditFlowMeta={() => setEditingFlowMeta(false)}
+              onFlowNoteDraftChange={setFlowNoteDraft}
+              onSaveFlowMeta={saveFlowMeta}
+              onWorkflowJsonChange={handleWorkflowJsonChange}
+            />
+
+            <ComfyUiExecutionInputCard
+              overridePrompt={state.workflowForm.overridePrompt}
+              overrideSeed={state.workflowForm.overrideSeed}
+              running={state.isRunning}
+              onOverridePromptChange={(overridePrompt) =>
+                state.setWorkflowForm((current) => ({ ...current, overridePrompt }))
+              }
+              onOverrideSeedChange={(overrideSeed) =>
+                state.setWorkflowForm((current) => ({ ...current, overrideSeed }))
+              }
             />
 
             <SubmitActionCard

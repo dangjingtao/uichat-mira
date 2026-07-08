@@ -493,10 +493,97 @@ const settingsPending = {
             title: "诊断与详情",
             description: "默认收起，请在需要复盘请求摘要、日志和使用边界时再展开。",
           },
+          comfyui: {
+            title: "ComfyUI 工作台",
+            description: "这一页先围绕 ComfyUI 的 workflow 组织输入、提交和结果查看，不再和其它服务商共用一套首屏结构。",
+            flowFirst: "当前先按 flow 驱动执行组织页面。先准备 workflow JSON，再填写运行时覆盖项并提交。",
+          },
+          providersPlaceholder: {
+            title: "其它服务商",
+            description: "这里先留作后续扩展入口，不和 ComfyUI 共用同一套工作台结构。",
+            body: "后续如果要接 OpenAI Images、万相或混元，这里再根据各自的请求模型单独展开。当前版本先把 ComfyUI 做清楚。",
+          },
+          connection: {
+            title: "当前连接",
+            description: "先确认当前连的是哪个 ComfyUI，再继续选择和编辑 flow。",
+          },
+          flow: {
+            title: "Flow",
+            description: "把 flow 作为可回看的资产来选择、上传和编辑，而不是每次只临时粘贴 JSON。",
+          },
+          executionInputs: {
+            title: "本次执行输入",
+            description: "这里只放这次运行真正会生效的运行时覆盖项，不把 flow 本体和本次输入混成一块。",
+            noticeTitle: "当前版本支持范围",
+            noticeDescription: "这轮页面先支持 workflow JSON、本次运行 prompt 覆盖和 seed 覆盖。更复杂的 flow 字段映射要等后续合同明确后再展开。",
+          },
         },
         modes: {
           prompt: "Prompt 模式",
           workflow: "Workflow 模式",
+        },
+        tabs: {
+          comfyui: "ComfyUI",
+          providers: "其它服务商",
+        },
+        connection: {
+          status: {
+            unconfigured: "未配置",
+            unverified: "已保存，待校验",
+            connectable: "可连接",
+            failed: "连接失败",
+          },
+          actions: {
+            new: "新建连接",
+            edit: "编辑连接",
+            save: "保存连接",
+            cancel: "取消",
+            test: "测试连接",
+            retry: "重试连接",
+          },
+          fields: {
+            name: "连接名称",
+            address: "地址",
+          },
+          placeholders: {
+            name: "例如 本地 ComfyUI",
+            address: "例如 http://127.0.0.1:8188",
+          },
+          messages: {
+            empty: "还没有配置 ComfyUI 连接。",
+            failed: "目标地址当前不可用，请检查 ComfyUI 是否已启动，或者入口地址是否填写正确。",
+          },
+        },
+        flow: {
+          actions: {
+            new: "新建 Flow",
+            edit: "编辑备注",
+            save: "保存备注",
+            cancel: "取消",
+            inspect: "原始 JSON",
+          },
+          fields: {
+            select: "选择 Flow",
+            updatedAt: "最近更新",
+            rawJson: "Flow JSON",
+          },
+          placeholders: {
+            select: "请选择一个 Flow",
+            rawJson: "在这里维护当前 Flow 的原始 workflow JSON。",
+          },
+          messages: {
+            empty: "还没有选中 Flow。先选择、上传或新建一个 Flow，再继续填写本次执行输入。",
+            uploaded: "通过本地文件上传的 Flow",
+          },
+          defaults: {
+            newFlowName: "未命名 Flow",
+            newFlowNote: "新建的空白 Flow，请补充 workflow JSON 和备注。",
+          },
+          sources: {
+            template: "模板",
+            upload: "上传",
+            manual: "手动",
+          },
         },
         providers: {
           openaiImages: {

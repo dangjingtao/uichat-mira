@@ -494,10 +494,97 @@ const settingsPending = {
             title: "Diagnostics and details",
             description: "Collapsed by default. Expand when you need the request summary, logs, or usage notes.",
           },
+          comfyui: {
+            title: "ComfyUI workbench",
+            description: "This page now centers the first-screen workflow around ComfyUI and its workflow execution model instead of forcing the same structure onto every provider.",
+            flowFirst: "The page is currently organized around flow-driven execution. Prepare the workflow JSON first, then fill runtime overrides and submit.",
+          },
+          providersPlaceholder: {
+            title: "Other providers",
+            description: "This area is reserved for future expansion and does not share the same workbench structure as ComfyUI.",
+            body: "If OpenAI Images, Wanx, or Hunyuan are added later, each one can expand here according to its own request model. The current version keeps the focus on ComfyUI.",
+          },
+          connection: {
+            title: "Current connection",
+            description: "Confirm which ComfyUI target is active before you continue with flow selection and execution.",
+          },
+          flow: {
+            title: "Flow",
+            description: "Treat flows as reusable assets that can be selected, uploaded, and reviewed instead of pasting raw JSON every time.",
+          },
+          executionInputs: {
+            title: "Run-time inputs",
+            description: "This section only shows the runtime overrides that affect the current execution. It does not mix flow management with the run input surface.",
+            noticeTitle: "Current supported scope",
+            noticeDescription: "This page currently supports workflow JSON, runtime prompt override, and runtime seed override. Richer flow field mapping should wait until the contract is defined more clearly.",
+          },
         },
         modes: {
           prompt: "Prompt mode",
           workflow: "Workflow mode",
+        },
+        tabs: {
+          comfyui: "ComfyUI",
+          providers: "Other providers",
+        },
+        connection: {
+          status: {
+            unconfigured: "Unconfigured",
+            unverified: "Saved, waiting for verification",
+            connectable: "Reachable",
+            failed: "Connection failed",
+          },
+          actions: {
+            new: "New connection",
+            edit: "Edit connection",
+            save: "Save connection",
+            cancel: "Cancel",
+            test: "Test connection",
+            retry: "Retry connection",
+          },
+          fields: {
+            name: "Connection name",
+            address: "Address",
+          },
+          placeholders: {
+            name: "For example Local ComfyUI",
+            address: "For example http://127.0.0.1:8188",
+          },
+          messages: {
+            empty: "No ComfyUI connection has been configured yet.",
+            failed: "The target is not reachable right now. Check whether ComfyUI is running and whether the endpoint address is correct.",
+          },
+        },
+        flow: {
+          actions: {
+            new: "New flow",
+            edit: "Edit note",
+            save: "Save note",
+            cancel: "Cancel",
+            inspect: "Raw JSON",
+          },
+          fields: {
+            select: "Select flow",
+            updatedAt: "Updated",
+            rawJson: "Flow JSON",
+          },
+          placeholders: {
+            select: "Select a flow",
+            rawJson: "Maintain the raw workflow JSON for the current flow here.",
+          },
+          messages: {
+            empty: "No flow is selected yet. Select, upload, or create a flow before you continue with run-time inputs.",
+            uploaded: "Flow uploaded from a local file",
+          },
+          defaults: {
+            newFlowName: "Untitled flow",
+            newFlowNote: "A blank flow created locally. Fill in the workflow JSON and note.",
+          },
+          sources: {
+            template: "Template",
+            upload: "Upload",
+            manual: "Manual",
+          },
         },
         providers: {
           openaiImages: {

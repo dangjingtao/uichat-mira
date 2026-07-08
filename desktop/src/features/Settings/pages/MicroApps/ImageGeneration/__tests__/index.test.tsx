@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import ImageGenerationStudioPage from "../index";
 import type {
@@ -123,28 +123,20 @@ function createState(overrides: MockStateOverrides = {}) {
 }
 
 describe("ImageGenerationStudioPage", () => {
-  it("shows prompt mode by default and wires the workflow mode switch", () => {
-    const setMode = vi.fn();
+  it("shows provider placeholder by default and renders the ComfyUI workbench when workflow mode is active", () => {
     useImageGenerationStudioStateMock.mockReturnValue(
       createState({
         mode: "prompt",
-        setMode,
       }),
     );
 
-    const { rerender } = render(<ImageGenerationStudioPage />);
+    const { unmount } = render(<ImageGenerationStudioPage />);
 
     expect(
-      screen.getByText("settings.microApps.imageGenerationStudio.cards.prompt.title"),
+      screen.getByText(
+        "settings.microApps.imageGenerationStudio.cards.providersPlaceholder.title",
+      ),
     ).toBeInTheDocument();
-
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: "settings.microApps.imageGenerationStudio.modes.workflow",
-      }),
-    );
-
-    expect(setMode).toHaveBeenCalledWith("workflow");
 
     useImageGenerationStudioStateMock.mockReturnValue(
       createState({
@@ -152,10 +144,19 @@ describe("ImageGenerationStudioPage", () => {
         provider: "comfyui-local",
       }),
     );
-    rerender(<ImageGenerationStudioPage />);
+    unmount();
+    render(<ImageGenerationStudioPage />);
 
     expect(
-      screen.getByText("settings.microApps.imageGenerationStudio.cards.workflow.title"),
+      screen.getByText("settings.microApps.imageGenerationStudio.cards.connection.title"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("settings.microApps.imageGenerationStudio.cards.flow.title"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "settings.microApps.imageGenerationStudio.cards.executionInputs.title",
+      ),
     ).toBeInTheDocument();
   });
 
@@ -185,14 +186,16 @@ describe("ImageGenerationStudioPage", () => {
   it("locks the page when a generation is running", () => {
     useImageGenerationStudioStateMock.mockReturnValue(
       createState({
+        mode: "workflow",
+        provider: "comfyui-local",
         pageStatus: "polling",
         previewStatus: "preview-loading",
         taskStatus: "running",
         formStatus: "locked-by-running-job",
         isRunning: true,
-        promptForm: {
-          ...defaultPromptForm,
-          prompt: "studio quality portrait",
+        workflowForm: {
+          ...defaultWorkflowForm,
+          workflowJson: "{\"1\":{\"class_type\":\"KSampler\",\"inputs\":{}}}",
         },
       }),
     );
@@ -215,7 +218,9 @@ describe("ImageGenerationStudioPage", () => {
       }),
     ).toBeDisabled();
     expect(
-      screen.getByLabelText("settings.microApps.imageGenerationStudio.fields.prompt"),
+      screen.getByLabelText(
+        "settings.microApps.imageGenerationStudio.flow.fields.rawJson",
+      ),
     ).toBeDisabled();
     expect(
       screen.queryByRole("button", {
@@ -232,6 +237,8 @@ describe("ImageGenerationStudioPage", () => {
   it("renders a blocked failure state on the page", () => {
     useImageGenerationStudioStateMock.mockReturnValue(
       createState({
+        mode: "workflow",
+        provider: "comfyui-local",
         pageStatus: "terminal-failed",
         previewStatus: "preview-failed",
         taskStatus: "blocked",
@@ -270,6 +277,8 @@ describe("ImageGenerationStudioPage", () => {
   it("renders preview images from local-file artifacts", () => {
     useImageGenerationStudioStateMock.mockReturnValue(
       createState({
+        mode: "workflow",
+        provider: "comfyui-local",
         pageStatus: "terminal-success",
         previewStatus: "preview-ready",
         taskStatus: "succeeded",
