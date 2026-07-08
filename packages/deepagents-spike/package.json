@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "spike": "tsx src/run-spike.ts",
+    "selector:baseline": "tsx src/selector-baseline.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

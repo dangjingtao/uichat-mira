@@ -53,14 +53,9 @@ export default function ComfyUiConnectionCard({
   return (
     <Card className="space-y-4">
       <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
+        <div>
           <div className="text-sm font-semibold text-text-primary">
             {t("settings.microApps.imageGenerationStudio.cards.connection.title")}
-          </div>
-          <div className="text-sm leading-6 text-text-secondary">
-            {t(
-              "settings.microApps.imageGenerationStudio.cards.connection.description",
-            )}
           </div>
         </div>
         <Badge variant={statusVariant(status)} size="sm">
@@ -71,7 +66,7 @@ export default function ComfyUiConnectionCard({
       {!editing ? (
         <div className="space-y-4">
           <div className="rounded-ui-panel border border-border bg-surface-secondary/20 p-3">
-            <div className="flex items-start gap-3">
+            <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-ui-panel bg-surface-primary text-icon-secondary">
                 <Plug className="h-4.5 w-4.5" />
               </div>

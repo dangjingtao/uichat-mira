@@ -1,7 +1,6 @@
 import { ImageOff, SearchCode, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import Card from "@/shared/ui/Card";
-import Badge from "@/shared/ui/Badge";
 import Skeleton from "@/shared/ui/Skeleton";
 import type {
   ResultMetadata,
@@ -21,12 +20,9 @@ export default function ResultPreviewCard({
 
   return (
     <Card className="space-y-4">
-      <div className="space-y-1">
+      <div>
         <div className="text-sm font-semibold text-text-primary">
           {t("settings.microApps.imageGenerationStudio.cards.preview.title")}
-        </div>
-        <div className="text-sm text-text-secondary">
-          {t("settings.microApps.imageGenerationStudio.cards.preview.description")}
         </div>
       </div>
 
@@ -115,20 +111,11 @@ export default function ResultPreviewCard({
                 {t("settings.microApps.imageGenerationStudio.results.failedTitle")}
               </div>
             </div>
-            <div className="text-sm leading-6 text-danger-text/90">
-              {t(result.failureSummary ?? "settings.microApps.imageGenerationStudio.results.failedSummary")}
-            </div>
             {result.errorMessage ? (
-              <div className="rounded-ui-panel border border-danger-border/60 bg-surface-primary/60 px-3 py-2 text-sm text-danger-text">
+              <div className="px-1 py-1 text-sm leading-7 whitespace-pre-wrap break-words text-danger-text">
                 {result.errorMessage}
               </div>
             ) : null}
-          </div>
-          <div className="mt-5 flex items-center gap-2">
-            <Badge variant="danger" size="sm">
-              <Sparkles className="mr-1 h-3.5 w-3.5" />
-              {t("settings.microApps.imageGenerationStudio.results.openDiagnostics")}
-            </Badge>
           </div>
         </div>
       ) : null}

@@ -97,7 +97,15 @@ const WORKSPACE_ROOT_SENTINEL = "/workspace";
 const TERMINAL_GARBLED_TEXT_PATTERNS = [/�/u, /锟斤拷/u, /\?\?\?/u];
 const MUTATION_INTENT_PATTERNS = [
   /\b(delete|remove|edit|write|rewrite|modify|update|replace|create|overwrite|move|rename)\b/i,
-  /删除|移除|修改|编辑|改成|改为|替换|写入|新建|创建|覆盖|移动|重命名/u,
+  /删除|移除|删掉|修改|编辑|改成|改为|替换|写入|新建|创建|覆盖|移动|重命名/u,
+] as const;
+const MUTATION_VERIFY_PATTERNS = [
+  /\b(verify|verification|confirm|check|inspect|validate)\b/i,
+  /验证|确认|检查|核实|看看结果|看下结果|确认一下/u,
+] as const;
+const WRITE_LIKE_MUTATION_PATTERNS = [
+  /\b(edit|write|rewrite|modify|update|replace|create|overwrite)\b/i,
+  /修改|编辑|改成|改为|替换|写入|新建|创建|覆盖/u,
 ] as const;
 const PATH_TARGET_PATTERN =
   /(?:[A-Za-z]:\\[^\s"'<>|]+|(?:\.{1,2}[\\/])?[A-Za-z0-9_./\\-]+\.[A-Za-z0-9_-]{1,12})/g;
@@ -303,6 +311,13 @@ const extractRequiredTargets = (texts: string[]) => {
 const hasMutationIntent = (texts: string[]) =>
   texts.some((text) => MUTATION_INTENT_PATTERNS.some((pattern) => pattern.test(text)));
 
+const requiresMutationVerification = (texts: string[]) =>
+  texts.some(
+    (text) =>
+      MUTATION_VERIFY_PATTERNS.some((pattern) => pattern.test(text)) &&
+      WRITE_LIKE_MUTATION_PATTERNS.some((pattern) => pattern.test(text)),
+  );
+
 const collectTaskIntentTexts = (input: {
   question?: string;
   currentTaskFrame?: CurrentTaskFrame;
@@ -440,6 +455,51 @@ const collectEvidenceCoveredTargets = (input: {
   return [...targets];
 };
 
+const collectReadVerifiedTargets = (input: {
+  evidence?: AgentEvidencePayload;
+  latestSummary?: AgentEvidenceSummary;
+}) => {
+  const targets = new Set<string>();
+
+  const addSummaryTargets = (summary: AgentEvidenceSummary | undefined) => {
+    if (summary?.source !== "tool" || !summary.data) {
+      return;
+    }
+
+    if (
+      summary.data.kind === "read_list" ||
+      summary.data.kind === "read_open" ||
+      summary.data.kind === "read_locate"
+    ) {
+      for (const target of collectCoveredTargetsFromSummary(summary)) {
+        if (target.length > 0) {
+          targets.add(target);
+        }
+      }
+    }
+  };
+
+  for (const execution of input.evidence?.toolExecutions ?? []) {
+    if (execution.status !== "completed") {
+      continue;
+    }
+
+    addSummaryTargets(execution.summary);
+  }
+
+  addSummaryTargets(input.latestSummary);
+
+  return [...targets];
+};
+
+const hasLatestRecoverableToolFailure = (evidence: AgentEvidencePayload | undefined) => {
+  const latestExecution = evidence?.toolExecutions.at(-1);
+  return (
+    latestExecution?.status === "failed" &&
+    latestExecution.failureKind === "recoverable"
+  );
+};
+
 const buildTaskCompletionReason = (input: {
   pendingActions: string[];
   missingTargets: string[];
@@ -467,25 +527,42 @@ export const getTaskCompletionDecision = (input: {
 }) => {
   const intentTexts = collectTaskIntentTexts(input);
   const mutationRequired = hasMutationIntent(intentTexts);
+  const mutationVerificationRequired = requiresMutationVerification(intentTexts);
   const requiredTargets = extractRequiredTargets(intentTexts);
   const coveredTargets = collectEvidenceCoveredTargets(input);
   const resolvedMutationTargets = collectMutationResolvedTargets(input.evidence);
+  const readVerifiedTargets = collectReadVerifiedTargets(input);
   const completionSatisfiedTargets = mutationRequired
     ? [...new Set([...coveredTargets, ...resolvedMutationTargets])]
     : coveredTargets;
   const missingTargets = requiredTargets.filter(
     (target) => !completionSatisfiedTargets.includes(target),
   );
-  const pendingActions = mutationRequired
-    ? requiredTargets.length === 0
-      ? resolvedMutationTargets.length > 0
-        ? []
-        : ["mutation_execution"]
-      : resolvedMutationTargets.length > 0 &&
-          requiredTargets.every((target) => resolvedMutationTargets.includes(target))
-        ? []
-        : ["mutation_execution"]
-    : [];
+  const pendingActions: string[] = [];
+
+  if (mutationRequired) {
+    const mutationExecutionSatisfied =
+      requiredTargets.length === 0
+        ? resolvedMutationTargets.length > 0
+        : resolvedMutationTargets.length > 0 &&
+          requiredTargets.every((target) => resolvedMutationTargets.includes(target));
+    if (!mutationExecutionSatisfied) {
+      pendingActions.push("mutation_execution");
+    }
+  }
+
+  if (
+    mutationRequired &&
+    mutationVerificationRequired &&
+    requiredTargets.length > 0 &&
+    !requiredTargets.every((target) => readVerifiedTargets.includes(target))
+  ) {
+    pendingActions.push("mutation_verification");
+  }
+
+  if (hasLatestRecoverableToolFailure(input.evidence)) {
+    pendingActions.push("recoverable_execution");
+  }
 
   return {
     taskCompleted: pendingActions.length === 0 && missingTargets.length === 0,

@@ -1,20 +1,13 @@
 import { useEffect, useState } from "react";
 import { ImageIcon, Workflow } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import Badge from "@/shared/ui/Badge";
 import Card from "@/shared/ui/Card";
 import NavigationCardTabs from "@/shared/ui/NavigationCardTabs";
 import { Button, Modal, TextArea, TextInput } from "@/shared/ui";
-import SubmitActionCard from "./components/SubmitActionCard";
 import ResultPreviewCard from "./components/ResultPreviewCard";
-import TaskStatusCard from "./components/TaskStatusCard";
-import RequestSummaryCard from "./components/RequestSummaryCard";
-import DebugLogCard from "./components/DebugLogCard";
-import HelpCard from "./components/HelpCard";
-import CollapsiblePanel from "@/shared/ui/CollapsiblePanel";
-import ComfyUiConnectionCard from "./components/ComfyUiConnectionCard";
-import ComfyUiFlowCard from "./components/ComfyUiFlowCard";
 import ComfyUiExecutionInputCard from "./components/ComfyUiExecutionInputCard";
-import ComfyUiNodeMappingCard from "./components/ComfyUiNodeMappingCard";
+import ComfyUiSetupCard from "./components/ComfyUiSetupCard";
 import { useImageGenerationStudioState } from "./hooks/useImageGenerationStudioState";
 import type { createImageGeneration, getImageGeneration } from "@/shared/api/imageGeneration";
 import MicroAppPageLayout from "../components/MicroAppPageLayout";
@@ -26,6 +19,7 @@ import {
   type ComfyUiConnectionStatus,
   type ComfyUiNodeMapping,
 } from "./model/comfyui-workbench";
+import type { WorkflowJsonStatus } from "./model/view-model";
 
 interface ImageGenerationStudioPageProps {
   api?: {
@@ -35,6 +29,43 @@ interface ImageGenerationStudioPageProps {
 }
 
 type StudioTab = "comfyui" | "providers";
+
+const flowJsonStatusVariant = (status: WorkflowJsonStatus) => {
+  if (status === "valid") {
+    return "success";
+  }
+  if (status === "invalid-json" || status === "invalid-comfyui-format") {
+    return "danger";
+  }
+  return "neutral";
+};
+
+const getFlowJsonStatus = (workflowJson: string): WorkflowJsonStatus => {
+  const trimmed = workflowJson.trim();
+  if (!trimmed) {
+    return "empty";
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return "invalid-comfyui-format";
+    }
+
+    const hasApiNodes = Object.values(parsed as Record<string, unknown>).some(
+      (node) =>
+        !!node &&
+        typeof node === "object" &&
+        !Array.isArray(node) &&
+        "class_type" in (node as Record<string, unknown>) &&
+        "inputs" in (node as Record<string, unknown>),
+    );
+
+    return hasApiNodes ? "valid" : "invalid-comfyui-format";
+  } catch {
+    return "invalid-json";
+  }
+};
 
 export default function ImageGenerationStudioPage({
   api,
@@ -65,6 +96,7 @@ export default function ImageGenerationStudioPage({
   const selectedFlowNodes = selectedFlow
     ? getComfyUiNodeSummaries(selectedFlow.rawJson)
     : [];
+  const flowEditorJsonStatus = getFlowJsonStatus(flowJsonDraft);
 
   useEffect(() => {
     if (activeTab === "comfyui") {
@@ -270,74 +302,52 @@ export default function ImageGenerationStudioPage({
       />
 
       {activeTab === "comfyui" ? (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
+        <div className="grid gap-3 lg:gap-4 md:grid-cols-[minmax(0,1.05fr)_minmax(300px,0.95fr)]">
           <div className="space-y-4">
-            <ComfyUiConnectionCard
-              status={connectionStatus}
-              address={connectionAddress}
-              editing={editingConnection}
-              draftAddress={draftConnectionAddress}
-              testing={testingConnection}
-              running={state.isRunning}
-              onDraftAddressChange={setDraftConnectionAddress}
-              onStartCreate={startCreateConnection}
-              onStartEdit={startEditConnection}
-              onCancelEdit={() => setEditingConnection(false)}
-              onSave={saveConnection}
-              onTest={testConnection}
-            />
-
-            <ComfyUiFlowCard
+            <ComfyUiSetupCard
+              connectionStatus={connectionStatus}
+              connectionAddress={connectionAddress}
+              editingConnection={editingConnection}
+              draftConnectionAddress={draftConnectionAddress}
+              testingConnection={testingConnection}
               flows={flows}
               selectedFlowId={selectedFlowId}
               selectedFlow={selectedFlow}
-              jsonStatus={state.workflowJsonStatus}
+              nodes={selectedFlowNodes}
               running={state.isRunning}
+              onDraftConnectionAddressChange={setDraftConnectionAddress}
+              onStartCreateConnection={startCreateConnection}
+              onStartEditConnection={startEditConnection}
+              onSaveConnection={saveConnection}
+              onTestConnection={testConnection}
               onSelectFlow={handleSelectFlow}
               onCreateFlow={openCreateFlowEditor}
               onEditFlow={openEditFlowEditor}
-            />
-
-            <ComfyUiNodeMappingCard
-              selectedFlow={selectedFlow}
-              nodes={selectedFlowNodes}
-              running={state.isRunning}
               onMappingChange={handleFlowMappingChange}
-            />
-
-            <ComfyUiExecutionInputCard
-              overridePrompt={state.workflowForm.overridePrompt}
-              overrideSeed={state.workflowForm.overrideSeed}
-              overrideSize={state.workflowForm.overrideSize}
-              running={state.isRunning}
-              onOverridePromptChange={(overridePrompt) =>
-                state.setWorkflowForm((current) => ({ ...current, overridePrompt }))
-              }
-              onOverrideSeedChange={(overrideSeed) =>
-                state.setWorkflowForm((current) => ({ ...current, overrideSeed }))
-              }
-              onOverrideSizeChange={(overrideSize) =>
-                state.setWorkflowForm((current) => ({ ...current, overrideSize }))
-              }
-            />
-
-            <SubmitActionCard
-              formStatus={state.formStatus}
-              pageStatus={state.pageStatus}
-              running={state.isRunning}
-              canCancel={state.canCancel}
-              onSubmit={handleSubmit}
-              onReset={state.reset}
-              onCancel={state.cancel}
             />
           </div>
 
           <div className="space-y-4">
+            <ComfyUiExecutionInputCard
+              overridePrompt={state.workflowForm.overridePrompt}
+              overrideSize={state.workflowForm.overrideSize}
+              formStatus={state.formStatus}
+              running={state.isRunning}
+              canCancel={state.canCancel}
+              onOverridePromptChange={(overridePrompt) =>
+                state.setWorkflowForm((current) => ({ ...current, overridePrompt }))
+              }
+              onOverrideSizeChange={(overrideSize) =>
+                state.setWorkflowForm((current) => ({ ...current, overrideSize }))
+              }
+              onSubmit={handleSubmit}
+              onReset={state.reset}
+              onCancel={state.cancel}
+            />
             <ResultPreviewCard
               previewStatus={state.previewStatus}
               result={state.result}
             />
-            <TaskStatusCard taskStatus={state.taskStatus} />
           </div>
         </div>
       ) : (
@@ -357,23 +367,6 @@ export default function ImageGenerationStudioPage({
         </Card>
       )}
 
-      <CollapsiblePanel
-        title={t("settings.microApps.imageGenerationStudio.cards.diagnostics.title")}
-        meta={t("settings.microApps.imageGenerationStudio.cards.diagnostics.description")}
-        contentClassName="p-4"
-      >
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-          <div className="space-y-4">
-            <RequestSummaryCard
-              submittedSnapshot={state.submittedSnapshot}
-              result={state.result}
-            />
-            <HelpCard />
-          </div>
-          <DebugLogCard logs={state.logs} />
-        </div>
-      </CollapsiblePanel>
-
       <Modal
         open={flowEditorOpen}
         title={t(
@@ -388,12 +381,13 @@ export default function ImageGenerationStudioPage({
           <div className="flex items-center justify-end gap-2">
             <Button
               variant="secondary"
+              size="sm"
               onClick={closeFlowEditor}
               disabled={state.isRunning}
             >
               {t("common.actions.cancel")}
             </Button>
-            <Button onClick={saveFlowEditor} disabled={state.isRunning}>
+            <Button size="sm" onClick={saveFlowEditor} disabled={state.isRunning}>
               {t("common.actions.save")}
             </Button>
           </div>
@@ -408,6 +402,7 @@ export default function ImageGenerationStudioPage({
               label={t("settings.microApps.imageGenerationStudio.flow.fields.name")}
               value={flowNameDraft}
               onChange={setFlowNameDraft}
+              compact
               disabled={state.isRunning}
             />
             <TextArea
@@ -415,6 +410,7 @@ export default function ImageGenerationStudioPage({
               value={flowNoteDraft}
               onChange={setFlowNoteDraft}
               rows={3}
+              compact
               disabled={state.isRunning}
             />
             <TextArea
@@ -425,8 +421,19 @@ export default function ImageGenerationStudioPage({
                 "settings.microApps.imageGenerationStudio.flow.placeholders.rawJson",
               )}
               rows={14}
+              compact
               disabled={state.isRunning}
             />
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={flowJsonStatusVariant(flowEditorJsonStatus)} size="sm">
+                {t("settings.microApps.imageGenerationStudio.workflowJsonStatus.title")}
+              </Badge>
+              <div className="text-sm text-text-secondary">
+                {t(
+                  `settings.microApps.imageGenerationStudio.workflowJsonStatus.${flowEditorJsonStatus}`,
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </Modal>

@@ -1,40 +1,43 @@
+import { Loader2, RotateCcw, Square } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import Card from "@/shared/ui/Card";
-import { Alert, Select, TextArea, TextInput } from "@/shared/ui";
+import { Button, Select, TextArea } from "@/shared/ui";
 import { sizeOptions } from "../model/view-model";
+import type { StudioFormStatus } from "../model/view-model";
 
 interface ComfyUiExecutionInputCardProps {
   overridePrompt: string;
-  overrideSeed: string;
   overrideSize: string;
+  formStatus: StudioFormStatus;
   running: boolean;
+  canCancel: boolean;
   onOverridePromptChange: (value: string) => void;
-  onOverrideSeedChange: (value: string) => void;
   onOverrideSizeChange: (value: string) => void;
+  onSubmit: () => void;
+  onReset: () => void;
+  onCancel: () => void;
 }
 
 export default function ComfyUiExecutionInputCard({
   overridePrompt,
-  overrideSeed,
   overrideSize,
+  formStatus,
   running,
+  canCancel,
   onOverridePromptChange,
-  onOverrideSeedChange,
   onOverrideSizeChange,
+  onSubmit,
+  onReset,
+  onCancel,
 }: ComfyUiExecutionInputCardProps) {
   const { t } = useTranslation();
 
   return (
     <Card className="space-y-4">
-      <div className="space-y-1">
+      <div>
         <div className="text-sm font-semibold text-text-primary">
           {t(
             "settings.microApps.imageGenerationStudio.cards.executionInputs.title",
-          )}
-        </div>
-        <div className="text-sm leading-6 text-text-secondary">
-          {t(
-            "settings.microApps.imageGenerationStudio.cards.executionInputs.description",
           )}
         </div>
       </div>
@@ -50,35 +53,55 @@ export default function ComfyUiExecutionInputCard({
             "settings.microApps.imageGenerationStudio.placeholders.overridePrompt",
           )}
           rows={4}
-          disabled={running}
-        />
-        <TextInput
-          label={t("settings.microApps.imageGenerationStudio.fields.overrideSeed")}
-          value={overrideSeed}
-          onChange={onOverrideSeedChange}
-          placeholder={t(
-            "settings.microApps.imageGenerationStudio.placeholders.overrideSeed",
-          )}
+          compact
           disabled={running}
         />
         <Select
           label={t("settings.microApps.imageGenerationStudio.fields.overrideSize")}
           value={overrideSize}
           onChange={onOverrideSizeChange}
+          compact
           disabled={running}
           options={sizeOptions.map((option) => ({
             value: option.value,
             label: t(option.labelKey),
           }))}
         />
-      </div>
 
-      <Alert
-        variant="info"
-        title={t("settings.microApps.imageGenerationStudio.cards.executionInputs.noticeTitle")}
-      >
-        {t("settings.microApps.imageGenerationStudio.cards.executionInputs.noticeDescription")}
-      </Alert>
+        <div className="flex flex-wrap gap-3">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={onSubmit}
+            disabled={formStatus === "invalid" || running}
+          >
+            {running ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {t("settings.microApps.imageGenerationStudio.actions.submit")}
+          </Button>
+          <Button variant="outline" size="sm" onClick={onReset} disabled={running}>
+            <RotateCcw className="h-4 w-4" />
+            {t("settings.microApps.imageGenerationStudio.actions.reset")}
+          </Button>
+          {running && canCancel ? (
+            <Button variant="danger-outline" size="sm" onClick={onCancel}>
+              <Square className="h-4 w-4" />
+              {t("settings.microApps.imageGenerationStudio.actions.cancel")}
+            </Button>
+          ) : null}
+        </div>
+
+        {running && !canCancel ? (
+          <div className="rounded-ui-panel border border-warning-border bg-warning-soft px-3 py-2 text-sm text-warning-text">
+            {t("settings.microApps.imageGenerationStudio.messages.cancelUnavailable")}
+          </div>
+        ) : null}
+
+        {formStatus === "dirty" ? (
+          <div className="rounded-ui-panel border border-warning-border bg-warning-soft px-3 py-2 text-sm text-warning-text">
+            {t("settings.microApps.imageGenerationStudio.messages.formDirty")}
+          </div>
+        ) : null}
+      </div>
     </Card>
   );
 }

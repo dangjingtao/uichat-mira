@@ -1176,6 +1176,107 @@ test("nextActionPlannerNode still rejects planner answer when all mutation targe
   }
 });
 
+test("nextActionPlannerNode rejects planner answer for Chinese 删掉 mutation when evidence only located one target", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"answer","reason":"I found one target already."}';
+    })
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"workspace_mutation","args":{"operation":"delete","targetPath":"如何被美丽女孩爱上"},"reason":"Need to enter the deletion execution path before answering."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question: "删掉如何被美丽女孩爱上和如何爱上美丽女孩",
+        messages: [
+          {
+            role: "user",
+            content: "删掉如何被美丽女孩爱上和如何爱上美丽女孩",
+            parts: [{ type: "text", text: "删掉如何被美丽女孩爱上和如何爱上美丽女孩" }],
+          },
+        ],
+        currentTaskFrame: {
+          currentGoal: "删掉如何被美丽女孩爱上和如何爱上美丽女孩",
+          currentSubtask: "Delete both files.",
+          currentBlocker: undefined,
+          confirmedObjects: [],
+          completionCriteria: ["删掉如何被美丽女孩爱上和如何爱上美丽女孩"],
+        },
+        toolExposure: {
+          exposedTools: ["workspace_mutation"],
+          toolMeta: [
+            {
+              toolId: "workspace_mutation",
+              title: "Workspace Mutation",
+              description: "Mutate a workspace target",
+              inputSchema: {
+                type: "object",
+                properties: {
+                  operation: { type: "string" },
+                  targetPath: { type: "string" },
+                },
+              },
+              domain: "edit",
+              source: "internal",
+              tags: ["edit"],
+              capabilities: {
+                sideEffect: "local-write",
+                requiresApproval: true,
+              },
+            },
+          ],
+        },
+        evidence: {
+          observations: [],
+          retrievals: [],
+          toolExecutions: [],
+          latestSummary: {
+            source: "tool",
+            status: "completed",
+            toolId: "read_locate",
+            actionTaken: "Located 如何被美丽女孩爱上 in the workspace.",
+            keyFindings: ["matchCount=1", "targetPath=如何被美丽女孩爱上"],
+            answerReadiness: {
+              canAnswer: true,
+              reason: "Located target path can support a follow-up answer.",
+            },
+            data: {
+              kind: "read_locate",
+              scope: ".",
+              query: "如何被美丽女孩爱上",
+              searchMode: "path",
+              matchCount: 1,
+              matchedPaths: ["如何被美丽女孩爱上"],
+              matchesPreview: ["如何被美丽女孩爱上"],
+              truncated: false,
+              canAnswerLocateQuestion: true,
+            },
+            rawRef: {
+              evidenceIndex: 0,
+              toolCallId: "tool-call-locate-chinese-delete",
+            },
+          },
+        },
+      }),
+    );
+
+    assert.deepEqual(patch.nextAction, {
+      type: "use_tool",
+      toolId: "workspace_mutation",
+      args: {
+        operation: "delete",
+        targetPath: "如何被美丽女孩爱上",
+      },
+      reason: "Need to enter the deletion execution path before answering.",
+    });
+    assert.equal(streamSpy.mock.calls.length, 2);
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
 test("getTaskCompletionDecision extracts Chinese bare mutation targets into requiredTargets", () => {
   const decision = getTaskCompletionDecision({
     question: "删除如何被美丽女孩爱上和如何爱上美丽女孩",
@@ -1376,7 +1477,7 @@ test("getTaskCompletionDecision does not treat failed read target args as covere
   assert.deepEqual(decision.requiredTargets, ["readme.md", "agents.md"]);
   assert.deepEqual(decision.coveredTargets, []);
   assert.deepEqual(decision.missingTargets, ["readme.md", "agents.md"]);
-  assert.deepEqual(decision.pendingActions, []);
+  assert.deepEqual(decision.pendingActions, ["recoverable_execution"]);
   assert.equal(decision.taskCompleted, false);
 });
 
@@ -1511,6 +1612,180 @@ test("getTaskCompletionDecision keeps read_locate matchedPaths beyond preview tr
   ]);
   assert.deepEqual(decision.missingTargets, []);
   assert.equal(decision.taskCompleted, true);
+});
+
+test("getTaskCompletionDecision keeps write mutation incomplete when the request also requires verification", () => {
+  const decision = getTaskCompletionDecision({
+    question: "写入 notes.txt 后验证内容是否正确",
+    currentTaskFrame: {
+      currentGoal: "写入 notes.txt 后验证内容是否正确",
+      currentSubtask: "Write then verify the target file.",
+      currentBlocker: undefined,
+      confirmedObjects: [],
+      completionCriteria: ["写入 notes.txt 后验证内容是否正确"],
+    },
+    evidence: {
+      observations: [],
+      retrievals: [],
+      toolExecutions: [
+        {
+          toolId: "workspace_mutation",
+          args: {
+            operation: "write",
+            targetPath: "notes.txt",
+          },
+          status: "completed",
+          summary: {
+            source: "tool",
+            status: "completed",
+            toolId: "workspace_mutation",
+            actionTaken: "Wrote notes.txt.",
+            keyFindings: ["targetPath=notes.txt"],
+            answerReadiness: {
+              canAnswer: true,
+              reason: "This workspace mutation completed and can ground a mutation answer.",
+            },
+            data: {
+              kind: "workspace_mutation",
+              operation: "write",
+              targetPath: "notes.txt",
+              changed: true,
+              created: true,
+              dryRun: false,
+              canAnswerMutationQuestion: true,
+            },
+          },
+          startedAt: "2026-07-08T00:00:00.000Z",
+          finishedAt: "2026-07-08T00:00:01.000Z",
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(decision.requiredTargets, ["notes.txt"]);
+  assert.deepEqual(decision.coveredTargets, ["notes.txt"]);
+  assert.deepEqual(decision.missingTargets, []);
+  assert.deepEqual(decision.pendingActions, ["mutation_verification"]);
+  assert.equal(decision.taskCompleted, false);
+});
+
+test("getTaskCompletionDecision allows answer after write mutation verification covers the target", () => {
+  const decision = getTaskCompletionDecision({
+    question: "写入 notes.txt 后验证内容是否正确",
+    currentTaskFrame: {
+      currentGoal: "写入 notes.txt 后验证内容是否正确",
+      currentSubtask: "Write then verify the target file.",
+      currentBlocker: undefined,
+      confirmedObjects: [],
+      completionCriteria: ["写入 notes.txt 后验证内容是否正确"],
+    },
+    evidence: {
+      observations: [],
+      retrievals: [],
+      toolExecutions: [
+        {
+          toolId: "workspace_mutation",
+          args: {
+            operation: "write",
+            targetPath: "notes.txt",
+          },
+          status: "completed",
+          summary: {
+            source: "tool",
+            status: "completed",
+            toolId: "workspace_mutation",
+            actionTaken: "Wrote notes.txt.",
+            keyFindings: ["targetPath=notes.txt"],
+            answerReadiness: {
+              canAnswer: true,
+              reason: "This workspace mutation completed and can ground a mutation answer.",
+            },
+            data: {
+              kind: "workspace_mutation",
+              operation: "write",
+              targetPath: "notes.txt",
+              changed: true,
+              created: true,
+              dryRun: false,
+              canAnswerMutationQuestion: true,
+            },
+          },
+          startedAt: "2026-07-08T00:00:00.000Z",
+          finishedAt: "2026-07-08T00:00:01.000Z",
+        },
+        {
+          toolId: "read_open",
+          args: {
+            path: "notes.txt",
+          },
+          status: "completed",
+          summary: {
+            source: "tool",
+            status: "completed",
+            toolId: "read_open",
+            actionTaken: "Opened notes.txt.",
+            keyFindings: ["path=notes.txt"],
+            answerReadiness: {
+              canAnswer: true,
+              reason: "Opened file content is available for answer generation.",
+            },
+            data: {
+              kind: "read_open",
+              path: "notes.txt",
+              contentPreview: "hello",
+              contentLength: 5,
+              keySections: [],
+              canAnswerFileQuestion: true,
+            },
+          },
+          startedAt: "2026-07-08T00:00:02.000Z",
+          finishedAt: "2026-07-08T00:00:03.000Z",
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(decision.requiredTargets, ["notes.txt"]);
+  assert.deepEqual(decision.coveredTargets, ["notes.txt"]);
+  assert.deepEqual(decision.missingTargets, []);
+  assert.deepEqual(decision.pendingActions, []);
+  assert.equal(decision.taskCompleted, true);
+});
+
+test("getTaskCompletionDecision keeps recoverable tool failure from becoming answer-ready completion", () => {
+  const decision = getTaskCompletionDecision({
+    question: "打开 README.md 看看内容",
+    currentTaskFrame: {
+      currentGoal: "打开 README.md 看看内容",
+      currentSubtask: "Read the requested file.",
+      currentBlocker: "read_open timed out once",
+      confirmedObjects: [],
+      completionCriteria: ["打开 README.md 看看内容"],
+    },
+    evidence: {
+      observations: [],
+      retrievals: [],
+      toolExecutions: [
+        {
+          toolId: "read_open",
+          args: {
+            path: "README.md",
+          },
+          status: "failed",
+          failureKind: "recoverable",
+          errorMessage: "temporary timeout",
+          startedAt: "2026-07-08T00:00:00.000Z",
+          finishedAt: "2026-07-08T00:00:01.000Z",
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(decision.requiredTargets, ["readme.md"]);
+  assert.deepEqual(decision.coveredTargets, []);
+  assert.deepEqual(decision.missingTargets, ["readme.md"]);
+  assert.deepEqual(decision.pendingActions, ["recoverable_execution"]);
+  assert.equal(decision.taskCompleted, false);
 });
 
 test("nextActionPlannerNode returns use_tool action when toolId is exposed", async () => {

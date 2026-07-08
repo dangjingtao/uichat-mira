@@ -1,4 +1,4 @@
-import { Cable, ImageIcon, ScanSearch } from "lucide-react";
+import { Cable, ScanSearch } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import Card from "@/shared/ui/Card";
 import Badge from "@/shared/ui/Badge";
@@ -53,12 +53,9 @@ export default function ComfyUiNodeMappingCard({
 
   return (
     <Card className="space-y-4">
-      <div className="space-y-1">
+      <div>
         <div className="text-sm font-semibold text-text-primary">
           {t("settings.microApps.imageGenerationStudio.cards.nodeMapping.title")}
-        </div>
-        <div className="text-sm leading-6 text-text-secondary">
-          {t("settings.microApps.imageGenerationStudio.cards.nodeMapping.description")}
         </div>
       </div>
 
@@ -171,11 +168,6 @@ export default function ComfyUiNodeMappingCard({
             )}
           </div>
         </div>
-      </div>
-
-      <div className="flex items-center gap-2 text-xs text-text-tertiary">
-        <ImageIcon className="h-3.5 w-3.5" />
-        {t("settings.microApps.imageGenerationStudio.mapping.messages.previewHint")}
       </div>
     </Card>
   );

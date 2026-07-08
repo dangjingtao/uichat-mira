@@ -644,20 +644,20 @@ test("toolCall loop failed tool writes failed evidence and never reports fake su
   });
 
   assertMatrixFields(result, {
-    status: "completed",
+    status: "failed",
     pendingToolCall: "absent",
     pendingApproval: "absent",
     lastToolExecution: "present",
     latestSummary: "present",
-    terminalField: "answer",
+    terminalField: "errorMessage",
   });
   assert.equal(executeSpy.mock.calls.length, 2);
-  assert.equal(generateSpy.mock.calls.length, 1);
+  assert.equal(generateSpy.mock.calls.length, 0);
   assert.equal(result.lastToolExecution?.status, "failed");
   assert.equal(result.lastToolExecution?.failureKind, "recoverable");
   assert.equal(result.evidence.latestSummary?.status, "failed");
   assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, false);
-  assert.match(result.answer ?? "", /当前还没有足够的已完成证据/);
+  assert.match(result.errorMessage ?? "", /planner cannot continue safely|planner output was invalid json/i);
 }, 15000);
 
 test("toolCall loop terminal failed tool still fails the graph and does not generate a guarded answer", async () => {
