@@ -7,14 +7,11 @@ import type { ComfyUiConnectionStatus } from "../model/comfyui-workbench";
 
 interface ComfyUiConnectionCardProps {
   status: ComfyUiConnectionStatus;
-  name: string;
   address: string;
   editing: boolean;
-  draftName: string;
   draftAddress: string;
   testing: boolean;
   running: boolean;
-  onDraftNameChange: (value: string) => void;
   onDraftAddressChange: (value: string) => void;
   onStartCreate: () => void;
   onStartEdit: () => void;
@@ -38,14 +35,11 @@ const statusVariant = (status: ComfyUiConnectionStatus) => {
 
 export default function ComfyUiConnectionCard({
   status,
-  name,
   address,
   editing,
-  draftName,
   draftAddress,
   testing,
   running,
-  onDraftNameChange,
   onDraftAddressChange,
   onStartCreate,
   onStartEdit,
@@ -54,8 +48,7 @@ export default function ComfyUiConnectionCard({
   onTest,
 }: ComfyUiConnectionCardProps) {
   const { t } = useTranslation();
-  const saveDisabled =
-    running || !draftName.trim() || !draftAddress.trim() || testing;
+  const saveDisabled = running || !draftAddress.trim() || testing;
 
   return (
     <Card className="space-y-4">
@@ -90,14 +83,14 @@ export default function ComfyUiConnectionCard({
                     )}
                   </div>
                 ) : (
-                  <>
-                    <div className="text-sm font-medium text-text-primary">
-                      {name}
-                    </div>
-                    <div className="break-all font-mono text-xs text-text-secondary">
-                      {address}
-                    </div>
-                  </>
+                  <a
+                    href={address}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="break-all font-mono text-xs text-primary underline-offset-4 hover:underline"
+                  >
+                    {address}
+                  </a>
                 )}
                 {status === "failed" ? (
                   <div className="text-xs text-danger-text">
@@ -142,30 +135,17 @@ export default function ComfyUiConnectionCard({
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="grid gap-3 md:grid-cols-2">
-            <TextInput
-              label={t(
-                "settings.microApps.imageGenerationStudio.connection.fields.name",
-              )}
-              value={draftName}
-              onChange={onDraftNameChange}
-              placeholder={t(
-                "settings.microApps.imageGenerationStudio.connection.placeholders.name",
-              )}
-              disabled={running || testing}
-            />
-            <TextInput
-              label={t(
-                "settings.microApps.imageGenerationStudio.connection.fields.address",
-              )}
-              value={draftAddress}
-              onChange={onDraftAddressChange}
-              placeholder={t(
-                "settings.microApps.imageGenerationStudio.connection.placeholders.address",
-              )}
-              disabled={running || testing}
-            />
-          </div>
+          <TextInput
+            label={t(
+              "settings.microApps.imageGenerationStudio.connection.fields.address",
+            )}
+            value={draftAddress}
+            onChange={onDraftAddressChange}
+            placeholder={t(
+              "settings.microApps.imageGenerationStudio.connection.placeholders.address",
+            )}
+            disabled={running || testing}
+          />
 
           <div className="flex flex-wrap gap-3">
             <Button variant="primary" onClick={onSave} disabled={saveDisabled}>
@@ -188,4 +168,3 @@ export default function ComfyUiConnectionCard({
     </Card>
   );
 }
-

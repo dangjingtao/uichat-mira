@@ -15,7 +15,7 @@ related:
   - packages/deepagents-spike/package.json
   - packages/deepagents-spike/src/run-spike.ts
   - packages/deepagents-spike/deepagents-spike-report.md
-task_state: IN_PROGRESS
+task_state: READY_FOR_REVIEW
 ---
 
 # T-DeepAgents-01 Deep Agents JS Spike
@@ -41,6 +41,7 @@ task_state: IN_PROGRESS
 - `docs/project-control/tasks/T-DeepAgents-01-deepagents-js-spike.md`
 - `docs/project-control/project-control-ledger.md`
 - `packages/deepagents-spike/**`
+- `.test-artifact/deepagents-spike/**`
 
 允许在以上范围内新增：
 
@@ -49,6 +50,7 @@ task_state: IN_PROGRESS
 - 本地 MCP mock server
 - 产物目录说明
 - spike report
+- 验证期临时产物目录
 
 ## Forbidden Changes
 
@@ -90,3 +92,34 @@ task_state: IN_PROGRESS
 - `deepagents` 依赖的 `langchain`、`@langchain/core`、`zod` 版本高于仓库当前主线，直接并入 `server` 会放大依赖冲突面。
 - `deepagents` 自带 filesystem / subagent / todo middleware，默认能力面比当前 Harness 更宽，若未来接主线，安全与审批边界必须重做映射，不能直接裸接。
 - 若 `deepagents` 的 streaming event 语义与现有 trace node contract 不同，第二阶段需要单独做事件适配层，而不是强塞进当前 AgentGraph span 结构。
+
+## Implementation Summary
+
+- 新建独立 workspace package：`packages/deepagents-spike`
+- 新增正式 runner：`packages/deepagents-spike/src/run-spike.ts`
+- 新增本地 MCP mock server：`packages/deepagents-spike/src/local-mcp-server.ts`
+- 新增本地 openai-compatible 假网关：`packages/deepagents-spike/src/fake-openai-compatible-server.ts`
+- 生成 spike 报告：`packages/deepagents-spike/deepagents-spike-report.md`
+- 生成验证期临时产物：`.test-artifact/deepagents-spike/last-run.json`
+
+## Verification Evidence
+
+1. `pnpm --filter @ui-chat-mira/deepagents-spike typecheck`
+   - 结果：通过
+2. `pnpm --filter @ui-chat-mira/deepagents-spike spike`
+   - 结果：通过
+   - 关键证据：
+     - `createDeepAgent` 最小 demo 跑通
+     - fake LangChain tool 跑通，tool 输出 `lookup:deepagents`
+     - 本地 MCP tool 跑通，tool 输出 `mcp:deepagents-mcp`
+     - openai-compatible 假网关收到 `2` 次请求，tool flow 完整闭环
+     - filesystem permission 允许 `/allowed/**`，拒绝 `/blocked/**`
+     - `streamEvents(v2)` 已采到 graph / middleware / model / tool 事件
+     - `todos` 状态可从结果状态直接观测，`task`/general-purpose subagent 可从事件流观测
+3. `packages/deepagents-spike/deepagents-spike-report.md`
+   - 结果：已生成
+
+## Remaining Gaps
+
+- 本机缺少 `DATABASE_URL`，所以这次没有验证项目当前 DB 驱动的 Provider Gateway provider 解析链。
+- history summarization/offload 状态类型已确认存在，但本次 spike 没拿到稳定可复现的外部观测证据。

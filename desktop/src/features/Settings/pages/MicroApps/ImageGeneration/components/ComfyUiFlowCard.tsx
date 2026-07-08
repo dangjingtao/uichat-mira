@@ -1,8 +1,8 @@
-import { Braces, FilePlus2, Pencil, Workflow } from "lucide-react";
+import { FilePlus2, Pencil, Workflow } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import Card from "@/shared/ui/Card";
 import Badge from "@/shared/ui/Badge";
-import { Button, FileUploadDropzone, Select, TextArea, TextInput } from "@/shared/ui";
+import { Button, Select } from "@/shared/ui";
 import type { WorkflowJsonStatus } from "../model/view-model";
 import type { ComfyUiFlowAsset } from "../model/comfyui-workbench";
 
@@ -10,18 +10,11 @@ interface ComfyUiFlowCardProps {
   flows: ComfyUiFlowAsset[];
   selectedFlowId: string;
   selectedFlow: ComfyUiFlowAsset | null;
-  flowNoteDraft: string;
   jsonStatus: WorkflowJsonStatus;
   running: boolean;
-  editingFlowMeta: boolean;
   onSelectFlow: (id: string) => void;
-  onUploadFlow: (files: FileList | null) => void;
   onCreateFlow: () => void;
-  onStartEditFlowMeta: () => void;
-  onCancelEditFlowMeta: () => void;
-  onFlowNoteDraftChange: (value: string) => void;
-  onSaveFlowMeta: () => void;
-  onWorkflowJsonChange: (value: string) => void;
+  onEditFlow: () => void;
 }
 
 const sourceKeyByValue: Record<ComfyUiFlowAsset["source"], string> = {
@@ -44,18 +37,11 @@ export default function ComfyUiFlowCard({
   flows,
   selectedFlowId,
   selectedFlow,
-  flowNoteDraft,
   jsonStatus,
   running,
-  editingFlowMeta,
   onSelectFlow,
-  onUploadFlow,
   onCreateFlow,
-  onStartEditFlowMeta,
-  onCancelEditFlowMeta,
-  onFlowNoteDraftChange,
-  onSaveFlowMeta,
-  onWorkflowJsonChange,
+  onEditFlow,
 }: ComfyUiFlowCardProps) {
   const { t } = useTranslation();
 
@@ -70,7 +56,7 @@ export default function ComfyUiFlowCard({
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto]">
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
         <Select
           label={t("settings.microApps.imageGenerationStudio.flow.fields.select")}
           value={selectedFlowId}
@@ -90,22 +76,16 @@ export default function ComfyUiFlowCard({
           ]}
         />
         <div className="pt-7">
-          <FileUploadDropzone
-            className="min-w-[160px]"
-            onSelectFiles={onUploadFlow}
-            accept=".json,application/json"
-            maxCount={1}
-            disabled={running}
-            helperText={t(
-              "settings.microApps.imageGenerationStudio.cards.workflow.uploadHint",
-            )}
-          />
-        </div>
-        <div className="pt-7">
-          <Button variant="outline" onClick={onCreateFlow} disabled={running}>
-            <FilePlus2 className="h-4 w-4" />
-            {t("settings.microApps.imageGenerationStudio.flow.actions.new")}
-          </Button>
+            <div className="flex flex-wrap gap-3">
+              <Button variant="link" onClick={onEditFlow} disabled={running}>
+                <Pencil className="h-3.5 w-3.5" />
+                {t("settings.microApps.imageGenerationStudio.flow.actions.edit")}
+              </Button>
+              <Button variant="outline" onClick={onCreateFlow} disabled={running}>
+                <FilePlus2 className="h-4 w-4" />
+                {t("settings.microApps.imageGenerationStudio.flow.actions.new")}
+              </Button>
+            </div>
         </div>
       </div>
 
@@ -119,19 +99,9 @@ export default function ComfyUiFlowCard({
                   {selectedFlow.name}
                 </span>
               </div>
-              {!editingFlowMeta ? (
-                <div className="text-sm leading-6 text-text-secondary">
-                  {selectedFlow.note}
-                </div>
-              ) : (
-                <div className="max-w-xl">
-                  <TextInput
-                    value={flowNoteDraft}
-                    onChange={onFlowNoteDraftChange}
-                    disabled={running}
-                  />
-                </div>
-              )}
+              <div className="text-sm leading-6 text-text-secondary">
+                {selectedFlow.note}
+              </div>
             </div>
             <Badge variant="neutral" size="sm">
               {t(
@@ -146,47 +116,11 @@ export default function ComfyUiFlowCard({
               {" "}
               {selectedFlow.updatedAt}
             </div>
-            {!editingFlowMeta ? (
-              <div className="flex flex-wrap gap-3">
-                <Button
-                  variant="link"
-                  onClick={onStartEditFlowMeta}
-                  disabled={running}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  {t("settings.microApps.imageGenerationStudio.flow.actions.edit")}
-                </Button>
-                <Button variant="link" disabled>
-                  <Braces className="h-3.5 w-3.5" />
-                  {t("settings.microApps.imageGenerationStudio.flow.actions.inspect")}
-                </Button>
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-3">
-                <Button variant="outline" onClick={onSaveFlowMeta} disabled={running}>
-                  {t("settings.microApps.imageGenerationStudio.flow.actions.save")}
-                </Button>
-                <Button
-                  variant="link"
-                  onClick={onCancelEditFlowMeta}
-                  disabled={running}
-                >
-                  {t("settings.microApps.imageGenerationStudio.flow.actions.cancel")}
-                </Button>
-              </div>
-            )}
           </div>
 
-          <TextArea
-            label={t("settings.microApps.imageGenerationStudio.flow.fields.rawJson")}
-            value={selectedFlow.rawJson}
-            onChange={onWorkflowJsonChange}
-            placeholder={t(
-              "settings.microApps.imageGenerationStudio.flow.placeholders.rawJson",
-            )}
-            rows={10}
-            disabled={running}
-          />
+          <div className="rounded-ui-panel border border-border bg-surface-primary/70 px-3 py-2 text-sm text-text-secondary">
+            {t("settings.microApps.imageGenerationStudio.flow.messages.editInDialog")}
+          </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant={jsonStatusVariant(jsonStatus)} size="sm">

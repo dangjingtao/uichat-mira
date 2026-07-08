@@ -541,23 +541,21 @@ const settingsPending = {
             failed: "Connection failed",
           },
           actions: {
-            new: "New connection",
-            edit: "Edit connection",
-            save: "Save connection",
+            new: "Set address",
+            edit: "Edit address",
+            save: "Save address",
             cancel: "Cancel",
             test: "Test connection",
             retry: "Retry connection",
           },
           fields: {
-            name: "Connection name",
             address: "Address",
           },
           placeholders: {
-            name: "For example Local ComfyUI",
             address: "For example http://127.0.0.1:8188",
           },
           messages: {
-            empty: "No ComfyUI connection has been configured yet.",
+            empty: "No ComfyUI address has been set yet.",
             failed: "The target is not reachable right now. Check whether ComfyUI is running and whether the endpoint address is correct.",
           },
         },
@@ -571,6 +569,8 @@ const settingsPending = {
           },
           fields: {
             select: "Select flow",
+            name: "Flow name",
+            note: "Flow note",
             updatedAt: "Updated",
             rawJson: "Flow JSON",
           },
@@ -581,10 +581,16 @@ const settingsPending = {
           messages: {
             empty: "No flow is selected yet. Select, upload, or create a flow before you continue with run-time inputs.",
             uploaded: "Flow uploaded from a local file",
+            editInDialog: "Edit the current flow name, note, and raw JSON in the dialog instead of inline on the page.",
           },
           defaults: {
             newFlowName: "Untitled flow",
             newFlowNote: "A blank flow created locally. Fill in the workflow JSON and note.",
+          },
+          dialogs: {
+            createTitle: "Create flow",
+            editTitle: "Edit flow",
+            description: "Flow creation and editing are handled in a dialog so the first screen stays focused on selection and workbench context instead of turning into a full-page JSON editor.",
           },
           sources: {
             template: "Template",

@@ -530,7 +530,7 @@ const settingsPending = {
         },
         tabs: {
           comfyui: "ComfyUI",
-          providers: "其它服务商",
+          providers: "API 服务商",
         },
         connection: {
           status: {
@@ -540,23 +540,21 @@ const settingsPending = {
             failed: "连接失败",
           },
           actions: {
-            new: "新建连接",
-            edit: "编辑连接",
-            save: "保存连接",
+            new: "填写地址",
+            edit: "编辑地址",
+            save: "保存地址",
             cancel: "取消",
             test: "测试连接",
             retry: "重试连接",
           },
           fields: {
-            name: "连接名称",
             address: "地址",
           },
           placeholders: {
-            name: "例如 本地 ComfyUI",
             address: "例如 http://127.0.0.1:8188",
           },
           messages: {
-            empty: "还没有配置 ComfyUI 连接。",
+            empty: "还没有填写 ComfyUI 地址。",
             failed: "目标地址当前不可用，请检查 ComfyUI 是否已启动，或者入口地址是否填写正确。",
           },
         },
@@ -570,6 +568,8 @@ const settingsPending = {
           },
           fields: {
             select: "选择 Flow",
+            name: "Flow 名称",
+            note: "Flow 说明",
             updatedAt: "最近更新",
             rawJson: "Flow JSON",
           },
@@ -580,10 +580,16 @@ const settingsPending = {
           messages: {
             empty: "还没有选中 Flow。先选择、上传或新建一个 Flow，再继续填写本次执行输入。",
             uploaded: "通过本地文件上传的 Flow",
+            editInDialog: "当前 Flow 的名称、说明和原始 JSON 统一在弹窗里编辑。",
           },
           defaults: {
             newFlowName: "未命名 Flow",
             newFlowNote: "新建的空白 Flow，请补充 workflow JSON 和备注。",
+          },
+          dialogs: {
+            createTitle: "新建 Flow",
+            editTitle: "编辑 Flow",
+            description: "Flow 的创建和编辑统一通过弹窗完成，首屏卡片只保留选择和摘要，避免把工作台正文压成一大片 JSON 编辑区。",
           },
           sources: {
             template: "模板",

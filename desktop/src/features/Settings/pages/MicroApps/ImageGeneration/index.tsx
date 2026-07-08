@@ -3,6 +3,7 @@ import { ImageIcon, Workflow } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import Card from "@/shared/ui/Card";
 import NavigationCardTabs from "@/shared/ui/NavigationCardTabs";
+import { Button, Modal, TextArea, TextInput } from "@/shared/ui";
 import SubmitActionCard from "./components/SubmitActionCard";
 import ResultPreviewCard from "./components/ResultPreviewCard";
 import TaskStatusCard from "./components/TaskStatusCard";
@@ -47,28 +48,23 @@ export default function ImageGenerationStudioPage({
   );
   const [connectionStatus, setConnectionStatus] =
     useState<ComfyUiConnectionStatus>("unconfigured");
-  const [connectionName, setConnectionName] = useState("");
   const [connectionAddress, setConnectionAddress] = useState("");
   const [editingConnection, setEditingConnection] = useState(false);
-  const [draftConnectionName, setDraftConnectionName] = useState("");
   const [draftConnectionAddress, setDraftConnectionAddress] = useState("");
   const [testingConnection, setTestingConnection] = useState(false);
   const [flows, setFlows] = useState(defaultComfyUiFlows);
   const [selectedFlowId, setSelectedFlowId] = useState(defaultComfyUiFlows[0]?.id ?? "");
-  const [editingFlowMeta, setEditingFlowMeta] = useState(false);
+  const [flowEditorOpen, setFlowEditorOpen] = useState(false);
+  const [flowEditorMode, setFlowEditorMode] = useState<"create" | "edit">("edit");
+  const [flowNameDraft, setFlowNameDraft] = useState("");
   const [flowNoteDraft, setFlowNoteDraft] = useState("");
+  const [flowJsonDraft, setFlowJsonDraft] = useState("");
 
   const selectedFlow =
     flows.find((flow) => flow.id === selectedFlowId) ?? null;
   const selectedFlowNodes = selectedFlow
     ? getComfyUiNodeSummaries(selectedFlow.rawJson)
     : [];
-
-  useEffect(() => {
-    if (selectedFlow) {
-      setFlowNoteDraft(selectedFlow.note);
-    }
-  }, [selectedFlow]);
 
   useEffect(() => {
     if (activeTab === "comfyui") {
@@ -100,25 +96,21 @@ export default function ImageGenerationStudioPage({
   }, [selectedFlow, state.setWorkflowForm, state.workflowForm.workflowJson]);
 
   const startCreateConnection = () => {
-    setDraftConnectionName("");
     setDraftConnectionAddress("");
     setEditingConnection(true);
   };
 
   const startEditConnection = () => {
-    setDraftConnectionName(connectionName);
     setDraftConnectionAddress(connectionAddress);
     setEditingConnection(true);
   };
 
   const saveConnection = () => {
-    const nextName = draftConnectionName.trim();
     const nextAddress = draftConnectionAddress.trim();
-    if (!nextName || !nextAddress) {
+    if (!nextAddress) {
       return;
     }
 
-    setConnectionName(nextName);
     setConnectionAddress(nextAddress);
     setConnectionStatus("unverified");
     setEditingConnection(false);
@@ -138,80 +130,83 @@ export default function ImageGenerationStudioPage({
 
   const handleSelectFlow = (flowId: string) => {
     setSelectedFlowId(flowId);
-    setEditingFlowMeta(false);
   };
 
-  const handleUploadFlow = (files: FileList | null) => {
-    const file = files?.item(0);
-    if (!file) {
+  const openCreateFlowEditor = () => {
+    setFlowEditorMode("create");
+    setFlowNameDraft(
+      t("settings.microApps.imageGenerationStudio.flow.defaults.newFlowName"),
+    );
+    setFlowNoteDraft("");
+    setFlowJsonDraft("{}");
+    setFlowEditorOpen(true);
+  };
+
+  const openEditFlowEditor = () => {
+    if (!selectedFlow) {
       return;
     }
 
-    void file.text().then((rawJson) => {
+    setFlowEditorMode("edit");
+    setFlowNameDraft(selectedFlow.name);
+    setFlowNoteDraft(selectedFlow.note);
+    setFlowJsonDraft(selectedFlow.rawJson);
+    setFlowEditorOpen(true);
+  };
+
+  const closeFlowEditor = () => {
+    if (state.isRunning) {
+      return;
+    }
+
+    setFlowEditorOpen(false);
+  };
+
+  const saveFlowEditor = () => {
+    const nextName = flowNameDraft.trim();
+    const nextNote = flowNoteDraft.trim();
+    const nextRawJson = flowJsonDraft.trim();
+
+    if (!nextName || !nextRawJson) {
+      return;
+    }
+
+    if (flowEditorMode === "create") {
       const nextFlow = {
-        id: `upload_${Date.now()}`,
-        name: file.name.replace(/\.json$/i, ""),
-        note: t("settings.microApps.imageGenerationStudio.flow.messages.uploaded"),
+        id: `manual_${Date.now()}`,
+        name: nextName,
+        note:
+          nextNote ||
+          t("settings.microApps.imageGenerationStudio.flow.defaults.newFlowNote"),
         updatedAt: new Date().toLocaleString(),
-        source: "upload" as const,
-        rawJson,
+        source: "manual" as const,
+        rawJson: nextRawJson,
         mapping: emptyComfyUiNodeMapping(),
       };
       setFlows((current) => [...current, nextFlow]);
       setSelectedFlowId(nextFlow.id);
-      setEditingFlowMeta(false);
-    });
-  };
+      setFlowEditorOpen(false);
+      return;
+    }
 
-  const handleCreateFlow = () => {
-    const nextFlow = {
-      id: `manual_${Date.now()}`,
-      name: t("settings.microApps.imageGenerationStudio.flow.defaults.newFlowName"),
-      note: t("settings.microApps.imageGenerationStudio.flow.defaults.newFlowNote"),
-      updatedAt: new Date().toLocaleString(),
-      source: "manual" as const,
-      rawJson: "{}",
-      mapping: emptyComfyUiNodeMapping(),
-    };
-    setFlows((current) => [...current, nextFlow]);
-    setSelectedFlowId(nextFlow.id);
-    setEditingFlowMeta(true);
-  };
-
-  const saveFlowMeta = () => {
     if (!selectedFlow) {
       return;
     }
+
     setFlows((current) =>
       current.map((flow) =>
         flow.id === selectedFlow.id
           ? {
               ...flow,
-              note: flowNoteDraft.trim() || flow.note,
+              name: nextName,
+              note: nextNote || flow.note,
+              rawJson: nextRawJson,
               updatedAt: new Date().toLocaleString(),
             }
           : flow,
       ),
     );
-    setEditingFlowMeta(false);
-  };
-
-  const handleWorkflowJsonChange = (workflowJson: string) => {
-    if (!selectedFlow) {
-      return;
-    }
-    setFlows((current) =>
-      current.map((flow) =>
-        flow.id === selectedFlow.id
-          ? {
-              ...flow,
-              rawJson: workflowJson,
-              updatedAt: new Date().toLocaleString(),
-            }
-          : flow,
-      ),
-    );
-    state.setWorkflowForm((current) => ({ ...current, workflowJson }));
+    setFlowEditorOpen(false);
   };
 
   const handleFlowMappingChange = (nextMapping: ComfyUiNodeMapping) => {
@@ -260,14 +255,14 @@ export default function ImageGenerationStudioPage({
       <NavigationCardTabs<StudioTab>
         tabs={[
           {
-            value: "comfyui",
-            label: t("settings.microApps.imageGenerationStudio.tabs.comfyui"),
-            icon: <Workflow className="h-4 w-4" />,
-          },
-          {
             value: "providers",
             label: t("settings.microApps.imageGenerationStudio.tabs.providers"),
             icon: <ImageIcon className="h-4 w-4" />,
+          },
+          {
+            value: "comfyui",
+            label: t("settings.microApps.imageGenerationStudio.tabs.comfyui"),
+            icon: <Workflow className="h-4 w-4" />,
           },
         ]}
         value={activeTab}
@@ -279,14 +274,11 @@ export default function ImageGenerationStudioPage({
           <div className="space-y-4">
             <ComfyUiConnectionCard
               status={connectionStatus}
-              name={connectionName}
               address={connectionAddress}
               editing={editingConnection}
-              draftName={draftConnectionName}
               draftAddress={draftConnectionAddress}
               testing={testingConnection}
               running={state.isRunning}
-              onDraftNameChange={setDraftConnectionName}
               onDraftAddressChange={setDraftConnectionAddress}
               onStartCreate={startCreateConnection}
               onStartEdit={startEditConnection}
@@ -299,18 +291,11 @@ export default function ImageGenerationStudioPage({
               flows={flows}
               selectedFlowId={selectedFlowId}
               selectedFlow={selectedFlow}
-              flowNoteDraft={flowNoteDraft}
               jsonStatus={state.workflowJsonStatus}
               running={state.isRunning}
-              editingFlowMeta={editingFlowMeta}
               onSelectFlow={handleSelectFlow}
-              onUploadFlow={handleUploadFlow}
-              onCreateFlow={handleCreateFlow}
-              onStartEditFlowMeta={() => setEditingFlowMeta(true)}
-              onCancelEditFlowMeta={() => setEditingFlowMeta(false)}
-              onFlowNoteDraftChange={setFlowNoteDraft}
-              onSaveFlowMeta={saveFlowMeta}
-              onWorkflowJsonChange={handleWorkflowJsonChange}
+              onCreateFlow={openCreateFlowEditor}
+              onEditFlow={openEditFlowEditor}
             />
 
             <ComfyUiNodeMappingCard
@@ -388,6 +373,63 @@ export default function ImageGenerationStudioPage({
           <DebugLogCard logs={state.logs} />
         </div>
       </CollapsiblePanel>
+
+      <Modal
+        open={flowEditorOpen}
+        title={t(
+          flowEditorMode === "create"
+            ? "settings.microApps.imageGenerationStudio.flow.dialogs.createTitle"
+            : "settings.microApps.imageGenerationStudio.flow.dialogs.editTitle",
+        )}
+        width={860}
+        maxHeight="calc(100vh - 4rem)"
+        onClose={closeFlowEditor}
+        footer={
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              variant="secondary"
+              onClick={closeFlowEditor}
+              disabled={state.isRunning}
+            >
+              {t("common.actions.cancel")}
+            </Button>
+            <Button onClick={saveFlowEditor} disabled={state.isRunning}>
+              {t("common.actions.save")}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div className="rounded-ui-panel border border-border bg-surface-secondary/30 px-4 py-3 text-sm leading-6 text-text-secondary">
+            {t("settings.microApps.imageGenerationStudio.flow.dialogs.description")}
+          </div>
+          <div className="grid gap-4">
+            <TextInput
+              label={t("settings.microApps.imageGenerationStudio.flow.fields.name")}
+              value={flowNameDraft}
+              onChange={setFlowNameDraft}
+              disabled={state.isRunning}
+            />
+            <TextArea
+              label={t("settings.microApps.imageGenerationStudio.flow.fields.note")}
+              value={flowNoteDraft}
+              onChange={setFlowNoteDraft}
+              rows={3}
+              disabled={state.isRunning}
+            />
+            <TextArea
+              label={t("settings.microApps.imageGenerationStudio.flow.fields.rawJson")}
+              value={flowJsonDraft}
+              onChange={setFlowJsonDraft}
+              placeholder={t(
+                "settings.microApps.imageGenerationStudio.flow.placeholders.rawJson",
+              )}
+              rows={14}
+              disabled={state.isRunning}
+            />
+          </div>
+        </div>
+      </Modal>
     </MicroAppPageLayout>
   );
 }

@@ -224,9 +224,9 @@ describe("ImageGenerationStudioPage", () => {
       }),
     ).toBeDisabled();
     expect(
-      screen.getByLabelText(
-        "settings.microApps.imageGenerationStudio.flow.fields.rawJson",
-      ),
+      screen.getByRole("button", {
+        name: "settings.microApps.imageGenerationStudio.flow.actions.edit",
+      }),
     ).toBeDisabled();
     expect(
       screen.queryByRole("button", {
