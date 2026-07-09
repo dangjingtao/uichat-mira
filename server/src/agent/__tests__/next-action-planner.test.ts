@@ -786,9 +786,10 @@ test("nextActionPlannerNode does not short-circuit to answer when mutation task 
         operation: "delete",
         targetPath: "notes.txt",
       },
-      reason: "Need to execute the deletion.",
+      reason:
+        "Coverage transition: execute the required delete mutation on notes.txt before answering.",
     });
-    assert.equal(streamSpy.mock.calls.length, 1);
+    assert.equal(streamSpy.mock.calls.length, 0);
   } finally {
     streamSpy.mockRestore();
   }
@@ -907,9 +908,10 @@ test("nextActionPlannerNode does not short-circuit to answer when a multi-target
       args: {
         query: "AGENTS.md",
       },
-      reason: "Need to locate the remaining target.",
+      reason:
+        "Coverage transition: locate the remaining target before continuing.",
     });
-    assert.equal(streamSpy.mock.calls.length, 2);
+    assert.equal(streamSpy.mock.calls.length, 0);
   } finally {
     streamSpy.mockRestore();
   }
@@ -1077,9 +1079,10 @@ test("nextActionPlannerNode rejects planner answer when mutation task has only l
         operation: "delete",
         targetPath: "notes.txt",
       },
-      reason: "Need to execute the deletion.",
+      reason:
+        "Coverage transition: execute the required delete mutation on notes.txt before answering.",
     });
-    assert.equal(streamSpy.mock.calls.length, 2);
+    assert.equal(streamSpy.mock.calls.length, 0);
   } finally {
     streamSpy.mockRestore();
   }
@@ -1178,9 +1181,10 @@ test("nextActionPlannerNode still rejects planner answer when all mutation targe
         operation: "delete",
         targetPath: "README.md",
       },
-      reason: "Need to enter the deletion execution path before answering.",
+      reason:
+        "Coverage transition: execute the required delete mutation on README.md before answering.",
     });
-    assert.equal(streamSpy.mock.calls.length, 2);
+    assert.equal(streamSpy.mock.calls.length, 0);
   } finally {
     streamSpy.mockRestore();
   }
@@ -1279,9 +1283,10 @@ test("nextActionPlannerNode rejects planner answer for Chinese 删掉 mutation w
         operation: "delete",
         targetPath: "如何被美丽女孩爱上",
       },
-      reason: "Need to enter the deletion execution path before answering.",
+      reason:
+        "Coverage transition: execute the required delete mutation on 如何被美丽女孩爱上 before answering.",
     });
-    assert.equal(streamSpy.mock.calls.length, 2);
+    assert.equal(streamSpy.mock.calls.length, 0);
   } finally {
     streamSpy.mockRestore();
   }
@@ -2111,7 +2116,8 @@ test("nextActionPlannerNode guards workspace file-content intent away from web_s
         args: {
           path: "README.md",
         },
-        reason: "Workspace-local intent guard blocked web_search and redirected to a local evidence path.",
+        reason:
+          "Coverage transition: open README.md to satisfy the file-content request.",
       },
     });
   } finally {
@@ -2156,7 +2162,8 @@ test("nextActionPlannerNode keeps a legal local read_open action unchanged for w
         args: {
           path: "README.md",
         },
-        reason: "Need the file content.",
+        reason:
+          "Coverage transition: open README.md to satisfy the file-content request.",
       },
     });
 
@@ -2214,7 +2221,8 @@ test("nextActionPlannerNode keeps a legal local read_list action unchanged for w
         args: {
           path: ".",
         },
-        reason: "Need the workspace listing.",
+        reason:
+          "Coverage transition: list the workspace directory before answering.",
       },
     });
 
@@ -2680,7 +2688,8 @@ test("nextActionPlannerNode keeps explicit external web_search requests unchange
         args: {
           query: "latest release notes",
         },
-        reason: "Need current external information.",
+        reason:
+          "Coverage transition: gather the requested external search evidence before answering.",
       },
     });
   } finally {
@@ -2903,7 +2912,8 @@ test("nextActionPlannerNode does not let repeated read_open evidence close a mul
         args: {
           path: "AGENTS.md",
         },
-        reason: "Need the remaining file content.",
+        reason:
+          "Coverage transition: open AGENTS.md to satisfy the file-content request.",
       },
       currentTaskFrame: {
         ...readmeAndAgentsState.currentTaskFrame,
@@ -2912,7 +2922,7 @@ test("nextActionPlannerNode does not let repeated read_open evidence close a mul
         completionCriteria: ["README.md 和 AGENTS.md 的内容分别是什么？"],
       },
     });
-    assert.equal(streamSpy.mock.calls.length, 2);
+    assert.equal(streamSpy.mock.calls.length, 0);
   } finally {
     streamSpy.mockRestore();
   }
@@ -4121,7 +4131,8 @@ test("nextActionPlannerNode is the primary writer for runtime currentTaskFrame u
         args: {
           path: "README.md",
         },
-        reason: "Need file content.",
+        reason:
+          "Coverage transition: open README.md to satisfy the file-content request.",
       },
       currentTaskFrame: {
         currentGoal: "Open README.md",

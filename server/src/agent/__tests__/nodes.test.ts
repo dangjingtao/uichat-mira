@@ -331,19 +331,284 @@ test("toolSelectNode injects pending task coverage into effectiveQuery for candi
       decisionSource: "task-model",
       decisionReason: "No tool is needed for this assertion.",
     });
+  const events: Array<{ phase: string; details?: Record<string, unknown> }> = [];
 
-  const result = await toolSelectNode(state);
+  const result = await toolSelectNode(state, async (event) => {
+    events.push({
+      phase: event.phase,
+      details:
+        event.details && typeof event.details === "object"
+          ? (event.details as Record<string, unknown>)
+          : undefined,
+    });
+  });
 
   const matcherQuery = matchToolCandidatesSpy.mock.calls[0]?.[0]?.query ?? "";
   const selectorQuery = selectToolSpy.mock.calls[0]?.[0]?.query ?? "";
   for (const queryText of [matcherQuery, selectorQuery]) {
+    assert.match(queryText, /Original user query:/);
+    assert.match(queryText, /Review context:/);
     assert.match(queryText, /Remaining task coverage:/);
     assert.match(queryText, /pendingTargets: \[agents\.md\]/i);
     assert.match(queryText, /pendingActions:/i);
+    assert.match(queryText, /Preferred next coverage action:/);
+    assert.match(queryText, /action: read_open/i);
+    assert.match(queryText, /target: AGENTS\.md/i);
     assert.match(queryText, /README\.md 和 AGENTS\.md/);
   }
   assert.notEqual(matcherQuery, "请读取 README.md 和 AGENTS.md 的内容");
   assert.equal(result.toolIntent?.query, "请读取 README.md 和 AGENTS.md 的内容");
+  const doneEvent = events.find((event) => event.phase === "done");
+  assert.equal(doneEvent?.details?.effectiveQuery, matcherQuery);
+  assert.deepEqual(doneEvent?.details?.taskCoverageView, {
+    requiredTargets: ["readme.md", "agents.md"],
+    coveredTargets: ["readme.md"],
+    pendingTargets: ["agents.md"],
+    pendingActions: [],
+    blockedReason: "Task is not complete yet: missingTargets=agents.md.",
+    taskCompletable: false,
+  });
+});
+
+test("toolSelectNode highlights mutation execution gaps in effectiveQuery", async () => {
+  const state = createBaseState("删除 notes.txt");
+  state.currentTaskFrame = {
+    currentGoal: "删除 notes.txt",
+    currentSubtask: "Execute the required deletion.",
+    currentBlocker: undefined,
+    confirmedObjects: [],
+    completionCriteria: ["删除 notes.txt"],
+  };
+  state.evidence = {
+    observations: [],
+    retrievals: [],
+    toolExecutions: [
+      {
+        toolId: "read_locate",
+        args: { query: "notes.txt" },
+        status: "completed",
+        inputHash: "hash-locate-notes",
+        summary: {
+          source: "tool",
+          status: "completed",
+          toolId: "read_locate",
+          inputHash: "hash-locate-notes",
+          actionTaken: "Located notes.txt.",
+          keyFindings: ["targetPath=notes.txt"],
+          answerReadiness: {
+            canAnswer: true,
+            reason: "Located target path can support a follow-up answer.",
+          },
+          data: {
+            kind: "read_locate",
+            scope: ".",
+            query: "notes.txt",
+            searchMode: "path",
+            matchCount: 1,
+            matchedPaths: ["notes.txt"],
+            matchesPreview: ["notes.txt"],
+            truncated: false,
+            canAnswerLocateQuestion: true,
+          },
+        },
+        startedAt: "2026-07-09T00:00:00.000Z",
+        finishedAt: "2026-07-09T00:00:01.000Z",
+      },
+    ],
+  };
+  state.evidence.latestSummary = state.evidence.toolExecutions[0]?.summary;
+
+  const matchToolCandidatesSpy = vi
+    .spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding")
+    .mockResolvedValue({
+      query: "unused-matcher-query",
+      topCandidates: [],
+      toolCandidates: [],
+      toolExposure: {
+        exposedToolIds: [],
+        exposedDefinitions: [],
+        reason: [],
+        blockedCapabilityIds: [],
+      },
+      selectedToolIds: [],
+      candidateToolIds: [],
+      decisionSource: "task-model",
+      decisionReason: "No direct tool selected yet.",
+    });
+  const selectToolSpy = vi
+    .spyOn(taskSelectorModule, "selectToolWithTaskModel")
+    .mockResolvedValue({
+      selectedToolIds: [],
+      decisionSource: "task-model",
+      decisionReason: "No tool is needed for this assertion.",
+    });
+
+  await toolSelectNode(state);
+
+  const matcherQuery = matchToolCandidatesSpy.mock.calls[0]?.[0]?.query ?? "";
+  const selectorQuery = selectToolSpy.mock.calls[0]?.[0]?.query ?? "";
+  for (const queryText of [matcherQuery, selectorQuery]) {
+    assert.match(queryText, /pendingActions: \[mutation_execution\]/i);
+    assert.match(queryText, /Preferred next coverage action:/);
+    assert.match(queryText, /action: mutation_execution/i);
+    assert.match(queryText, /target: notes\.txt/i);
+    assert.match(queryText, /prioritize edit or mutation capabilities/i);
+  }
+});
+
+test("toolSelectNode highlights mutation verification gaps in effectiveQuery", async () => {
+  const state = createBaseState("写入 notes.txt 后验证内容是否正确");
+  state.currentTaskFrame = {
+    currentGoal: "写入 notes.txt 后验证内容是否正确",
+    currentSubtask: "Verify the mutation result.",
+    currentBlocker: undefined,
+    confirmedObjects: [],
+    completionCriteria: ["写入 notes.txt 后验证内容是否正确"],
+  };
+  state.evidence = {
+    observations: [],
+    retrievals: [],
+    toolExecutions: [
+      {
+        toolId: "workspace_mutation",
+        args: { operation: "write", targetPath: "notes.txt" },
+        status: "completed",
+        inputHash: "hash-write-notes",
+        summary: {
+          source: "tool",
+          status: "completed",
+          toolId: "workspace_mutation",
+          inputHash: "hash-write-notes",
+          actionTaken: "Wrote notes.txt.",
+          keyFindings: ["targetPath=notes.txt"],
+          answerReadiness: {
+            canAnswer: true,
+            reason: "Mutated file is available for follow-up verification.",
+          },
+          data: {
+            kind: "workspace_mutation",
+            operation: "overwrite",
+            targetPath: "notes.txt",
+            dryRun: false,
+            changed: true,
+            created: false,
+            replaced: false,
+            deleted: false,
+            moved: false,
+            canAnswerMutationQuestion: true,
+          },
+        },
+        startedAt: "2026-07-09T00:00:00.000Z",
+        finishedAt: "2026-07-09T00:00:01.000Z",
+      },
+    ],
+  };
+  state.evidence.latestSummary = state.evidence.toolExecutions[0]?.summary;
+
+  const matchToolCandidatesSpy = vi
+    .spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding")
+    .mockResolvedValue({
+      query: "unused-matcher-query",
+      topCandidates: [],
+      toolCandidates: [],
+      toolExposure: {
+        exposedToolIds: [],
+        exposedDefinitions: [],
+        reason: [],
+        blockedCapabilityIds: [],
+      },
+      selectedToolIds: [],
+      candidateToolIds: [],
+      decisionSource: "task-model",
+      decisionReason: "No direct tool selected yet.",
+    });
+  const selectToolSpy = vi
+    .spyOn(taskSelectorModule, "selectToolWithTaskModel")
+    .mockResolvedValue({
+      selectedToolIds: [],
+      decisionSource: "task-model",
+      decisionReason: "No tool is needed for this assertion.",
+    });
+
+  await toolSelectNode(state);
+
+  const matcherQuery = matchToolCandidatesSpy.mock.calls[0]?.[0]?.query ?? "";
+  const selectorQuery = selectToolSpy.mock.calls[0]?.[0]?.query ?? "";
+  for (const queryText of [matcherQuery, selectorQuery]) {
+    assert.match(queryText, /pendingActions: \[mutation_verification\]/i);
+    assert.match(queryText, /Preferred next coverage action:/);
+    assert.match(queryText, /action: mutation_verification/i);
+    assert.match(queryText, /target: notes\.txt/i);
+    assert.match(queryText, /prioritize read_open or read_extract/i);
+  }
+});
+
+test("toolSelectNode includes recoverable failure context in effectiveQuery", async () => {
+  const state = createBaseState("打开 README.md 看看内容");
+  state.currentTaskFrame = {
+    currentGoal: "打开 README.md 看看内容",
+    currentSubtask: "Retry the failed file read with corrected parameters.",
+    currentBlocker: "README.md read failed previously.",
+    confirmedObjects: [],
+    completionCriteria: ["打开 README.md 看看内容"],
+  };
+  state.lastToolExecution = {
+    toolId: "read_open",
+    args: { path: "README.md" },
+    status: "failed",
+    failureKind: "recoverable",
+    recoveryAttemptCount: 1,
+    inputHash: "hash-read-open-failed",
+    errorMessage: "File not found: README.md",
+    startedAt: "2026-07-09T00:00:00.000Z",
+    finishedAt: "2026-07-09T00:00:01.000Z",
+  };
+  state.evidence = {
+    observations: [],
+    retrievals: [],
+    toolExecutions: [state.lastToolExecution],
+  };
+
+  const matchToolCandidatesSpy = vi
+    .spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding")
+    .mockResolvedValue({
+      query: "unused-matcher-query",
+      topCandidates: [],
+      toolCandidates: [],
+      toolExposure: {
+        exposedToolIds: [],
+        exposedDefinitions: [],
+        reason: [],
+        blockedCapabilityIds: [],
+      },
+      selectedToolIds: [],
+      candidateToolIds: [],
+      decisionSource: "task-model",
+      decisionReason: "No direct tool selected yet.",
+    });
+  const selectToolSpy = vi
+    .spyOn(taskSelectorModule, "selectToolWithTaskModel")
+    .mockResolvedValue({
+      selectedToolIds: [],
+      decisionSource: "task-model",
+      decisionReason: "No tool is needed for this assertion.",
+    });
+
+  await toolSelectNode(state);
+
+  const matcherQuery = matchToolCandidatesSpy.mock.calls[0]?.[0]?.query ?? "";
+  const selectorQuery = selectToolSpy.mock.calls[0]?.[0]?.query ?? "";
+  for (const queryText of [matcherQuery, selectorQuery]) {
+    assert.match(queryText, /pendingActions: \[recoverable_execution\]/i);
+    assert.match(queryText, /Preferred next coverage action:/);
+    assert.match(queryText, /action: recoverable_execution/i);
+    assert.match(queryText, /tool: read_open/i);
+    assert.match(queryText, /failureSummary: File not found: README\.md/i);
+    assert.match(
+      queryText,
+      /the next attempt must differ from the previous failed invocation/i,
+    );
+  }
 });
 
 test("generateNode includes raw read_open content so later sections remain answerable", async () => {

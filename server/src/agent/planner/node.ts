@@ -38,6 +38,8 @@ import {
 } from "./prompt";
 import { getPlannerRepeatedActionGuardResult } from "./repeated-action-guard";
 import { validateNextAction } from "./validate";
+import { getCoverageTransitionDecision } from "./coverage-transition";
+import { reduceAgentCoverageState } from "../coverage-state";
 
 const getRecoveryExhaustedPlannerConclusion = (observationContext: ReturnType<
   typeof buildPlannerObservationContext
@@ -119,6 +121,12 @@ export const nextActionPlannerNode = async (
   const observationContext = buildPlannerObservationContext(state);
   const latestEvidenceSummary = observationContext.latestEvidenceSummary;
   const taskCoverageView = observationContext.taskCoverageView;
+  const coverageState = reduceAgentCoverageState({
+    question,
+    currentTaskFrame: state.currentTaskFrame,
+    evidence: plannerEvidence,
+    latestSummary: latestEvidenceSummary,
+  });
   const answerStopDecision = getPlannerAnswerStopDecision({
     latestSummary: latestEvidenceSummary,
     pendingApproval: observationContext.pendingApproval,
@@ -156,6 +164,7 @@ export const nextActionPlannerNode = async (
   let repeatedActionGuard: AgentRepeatedActionGuardResult | undefined;
   let localIntentGuardTriggered = false;
   let localIntentGuardReason: string | undefined;
+  let coverageTransitionReason: string | undefined;
   const pendingApprovalActive = Boolean(observationContext.pendingApproval);
   const recoveryExhausted =
     observationContext.recovery.source !== "none" &&
@@ -180,6 +189,17 @@ export const nextActionPlannerNode = async (
       "Planner reached the iteration limit and must stop.",
     );
   } else {
+    const coverageTransitionDecision = getCoverageTransitionDecision({
+      question,
+      coverageState,
+      toolExposure,
+      recovery: observationContext.recovery,
+      pendingApproval: observationContext.pendingApproval,
+      iteration,
+      maxIterations,
+    });
+    coverageTransitionReason = coverageTransitionDecision.reason;
+
     const listToOpenBridgeAction = getReadOpenBridgeActionFromListEvidence({
       question,
       toolExposure,
@@ -191,7 +211,9 @@ export const nextActionPlannerNode = async (
       evidence: plannerEvidence,
     });
 
-    if (listToOpenBridgeAction) {
+    if (coverageTransitionDecision.nextAction) {
+      nextAction = coverageTransitionDecision.nextAction;
+    } else if (listToOpenBridgeAction) {
       nextAction = listToOpenBridgeAction;
     } else if (locateToOpenBridgeAction) {
       nextAction = locateToOpenBridgeAction;
@@ -350,6 +372,7 @@ export const nextActionPlannerNode = async (
       taskCoverageView: taskCoverageView ?? null,
       answerStopRuleTriggered: answerStopDecision.shouldAnswer,
       answerStopRuleReason: answerStopDecision.reason,
+      coverageTransitionReason: coverageTransitionReason ?? null,
       rawOutputPreview: rawOutput ? toPreview(rawOutput) : undefined,
       sanitizedOutputPreview: sanitizedOutput ? toPreview(sanitizedOutput) : undefined,
       parseErrorReason,

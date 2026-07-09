@@ -86,6 +86,33 @@ describe("image-generation adapters", () => {
     expect(job.artifacts[0]?.source).toBe("local-file");
   });
 
+  it("normalizes OpenAI image base URLs and strips a pasted Bearer prefix", async () => {
+    const context = createMockContext((request) => {
+      expect(request.url).toBe("https://api.openai.com/v1/images/generations");
+      expect(request.headers?.Authorization).toBe("Bearer sk-test");
+      return createJsonResponse({
+        data: [{ b64_json: "ZmFrZS1pbWFnZS0x" }],
+      });
+    });
+
+    const adapter = createOpenAiImagesAdapter({
+      apiKey: "Bearer sk-test",
+      baseUrl: "https://api.openai.com/images/generations",
+      context,
+    });
+
+    const result = await adapter.startGeneration({
+      job: {} as never,
+      request: {
+        providerId: "openai_images",
+        prompt: "studio portrait",
+      },
+      requestSummary: {} as never,
+    });
+
+    expect(result.status).toBe("succeeded");
+  });
+
   it("submits Aliyun Wanx as an async job and polls remote URLs through the core contract", async () => {
     const context = createMockContext((request) => {
       if (request.method === "POST") {

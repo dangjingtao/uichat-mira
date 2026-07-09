@@ -23,6 +23,7 @@ export type HttpResponse = {
   status: number;
   json(): Promise<unknown>;
   text(): Promise<string>;
+  arrayBuffer?(): Promise<ArrayBuffer>;
 };
 
 export type ImageGenerationAdapterContext = {

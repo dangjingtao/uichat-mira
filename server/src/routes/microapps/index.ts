@@ -1,6 +1,8 @@
 import fs from "node:fs/promises";
+import { getAuthUserFromRequest } from "@/db/auth.db.js";
 import type { FastifyPluginAsync } from "fastify";
 import { requireAuth } from "@/db/auth.db.js";
+import { errorResponse, ErrorCodes } from "@/utils/index.js";
 import type { createMailCenterService } from "@/microapps/mail-center/index.js";
 import type { createNewsHubService } from "@/microapps/news-hub/index.js";
 import type {
@@ -15,6 +17,8 @@ import {
   ImageGenerationRequestValidationError,
   ComfyUiStudioNotFoundError,
   ComfyUiStudioValidationError,
+  type ImageGenerationProgressSnapshot,
+  type ImageGenerationRealtimeEvent,
   type ComfyUiConnection,
   type ComfyUiFlow,
   type ImageGenerationCreateRequest,
@@ -31,6 +35,11 @@ export type ImageGenerationRouteService = {
   createGeneration(request: ImageGenerationCreateRequest): Promise<ImageGenerationJob>;
   getGeneration(jobId: string): Promise<ImageGenerationJob | null>;
   refreshGeneration?(jobId: string): Promise<ImageGenerationJob>;
+  subscribeRealtime?(
+    jobId: string,
+    listener: (event: ImageGenerationRealtimeEvent) => void,
+  ): () => void;
+  getProgressSnapshot?(jobId: string): ImageGenerationProgressSnapshot | null;
 };
 
 export type ComfyUiStudioRouteService = {
@@ -125,6 +134,16 @@ const toGenerationResponse = (job: ImageGenerationJob) => ({
   meta: job.meta,
 });
 
+const toGenerationProgressResponse = (progress: ImageGenerationProgressSnapshot) => ({
+  generationId: progress.generationId,
+  providerJobId: progress.providerJobId,
+  status: progress.status,
+  stage: progress.stage,
+  progressPercent: progress.progressPercent,
+  message: progress.message,
+  updatedAt: progress.updatedAt,
+});
+
 const toComfyUiConnectionResponse = (connection: ComfyUiConnection) => ({
   id: connection.id,
   baseUrl: connection.baseUrl,
@@ -171,7 +190,31 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
   app,
   options,
 ) => {
-  app.addHook("preHandler", requireAuth);
+  app.addHook("preHandler", async (request, reply) => {
+    if (
+      request.url.includes("/microapps/image-generation/generations/") &&
+      request.url.includes("/events")
+    ) {
+      return;
+    }
+
+    const authUser = getAuthUserFromRequest(request);
+    if (authUser) {
+      request.authUser = authUser;
+      return;
+    }
+
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return reply
+        .code(401)
+        .send(errorResponse("Missing auth token", ErrorCodes.UNAUTHORIZED));
+    }
+
+    return reply
+      .code(401)
+      .send(errorResponse("Invalid auth token", ErrorCodes.UNAUTHORIZED));
+  });
 
   const imageGenerationService = options.imageGenerationService;
   const comfyUiStudioService = options.comfyUiStudioService;
@@ -221,6 +264,104 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
         return mapImageGenerationError(error);
       }
     }),
+  );
+
+  app.get<{
+    Params: { id: string };
+  }>(
+    "/microapps/image-generation/generations/:id/progress",
+    { schema: imageGenerationRouteSchemas.getGenerationProgress },
+    routeHandler("Failed to get image generation job progress", async (request) => {
+      try {
+        const job = await imageGenerationService.getGeneration(request.params.id);
+        if (!job) {
+          throw new ImageGenerationJobNotFoundError(request.params.id);
+        }
+
+        const progress = imageGenerationService.getProgressSnapshot?.(request.params.id) ?? {
+          generationId: job.id,
+          providerJobId: job.providerJobId,
+          status: job.status,
+          stage: job.status,
+          progressPercent: job.status === "succeeded" ? 100 : job.status === "running" ? 66 : 12,
+          message: job.error?.message,
+          updatedAt: job.updatedAt,
+        };
+
+        return success(toGenerationProgressResponse(progress));
+      } catch (error) {
+        return mapImageGenerationError(error);
+      }
+    }),
+  );
+
+  app.get<{
+    Params: { id: string };
+    Querystring: { token?: string };
+  }>(
+    "/microapps/image-generation/generations/:id/events",
+    {
+      websocket: true,
+    },
+    (connection, request) => {
+      const generationId = request.params.id;
+      const sendEvent = (payload: unknown) => {
+        connection.socket.send(
+          JSON.stringify({
+            success: true,
+            data: payload,
+            timestamp: new Date().toISOString(),
+          }),
+        );
+      };
+
+      const unsubscribe = imageGenerationService.subscribeRealtime?.(
+        generationId,
+        (event) => {
+          if (event.type === "job") {
+            sendEvent({
+              type: "job",
+              generation: toGenerationResponse(event.generation),
+            });
+            return;
+          }
+
+          sendEvent({
+            type: "progress",
+            progress: toGenerationProgressResponse(event.progress),
+          });
+        },
+      );
+
+      void imageGenerationService
+        .getGeneration(generationId)
+        .then((job) => {
+          if (!job) {
+            connection.socket.close(4404, "Not found");
+            return;
+          }
+
+          sendEvent({
+            type: "job",
+            generation: toGenerationResponse(job),
+          });
+
+          const progress = imageGenerationService.getProgressSnapshot?.(generationId);
+          if (progress) {
+            sendEvent({
+              type: "progress",
+              progress: toGenerationProgressResponse(progress),
+            });
+          }
+        })
+        .catch(() => {
+          connection.socket.close(1011, "Failed to load generation");
+        });
+
+      connection.socket.on("close", () => {
+        unsubscribe?.();
+      });
+    },
   );
 
   app.get(

@@ -22,17 +22,21 @@ import {
 } from "../node-runtime";
 import {
   appendObservationEvidence,
+  appendRetrievalEvidence,
   appendToolExecutionEvidence,
   getEvidenceCounts,
 } from "../evidence";
 import type {
   AgentApprovalRequest,
+  AgentEvidenceSummary,
   AgentObservation,
+  AgentRetrievalEvidence,
   AgentToolCallRequest,
   AgentToolExecutionResult,
   CurrentTaskFrameConfirmedObject,
   PendingToolCall,
 } from "../types";
+import type { CodebaseExploreToolResult } from "@/mcp/managed-codegraph/types";
 
 const nowIso = () => new Date().toISOString();
 
@@ -163,6 +167,15 @@ const getDurationMs = (startedAt: string, finishedAt: string) => {
 const getConfirmedObjectFromToolExecution = (
   pendingToolCall: PendingToolCall,
 ): CurrentTaskFrameConfirmedObject => {
+  if (pendingToolCall.toolId === "codebase_explore") {
+    return {
+      type: "tool",
+      id: pendingToolCall.inputHash,
+      label: "codebase_explore",
+      confidence: 1,
+    };
+  }
+
   if (pendingToolCall.toolId === "terminal_session") {
     return {
       type: "command",
@@ -196,6 +209,40 @@ const getConfirmedObjectFromToolExecution = (
     confidence: 1,
   };
 };
+
+const isCodebaseExploreToolResult = (
+  value: unknown,
+): value is CodebaseExploreToolResult => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  return (
+    record.capabilityId === "codebase_explore" &&
+    record.plannerExposure === "controlled_tool_only" &&
+    typeof record.verifiedEvidenceInput === "object" &&
+    record.verifiedEvidenceInput !== null &&
+    typeof record.trace === "object" &&
+    record.trace !== null
+  );
+};
+
+const toCodebaseRetrievalEvidence = (
+  value: CodebaseExploreToolResult["verifiedEvidenceInput"],
+): AgentRetrievalEvidence => ({
+  query: value.query,
+  chunkCount: value.chunkCount,
+  chunks: value.chunks.map((chunk) => ({
+    chunkId: chunk.chunkId,
+    documentId: String(chunk.documentName),
+    documentName: chunk.documentName,
+    score: chunk.score,
+    content: chunk.content,
+  })),
+  summary: value.summary as AgentEvidenceSummary | undefined,
+  createdAt: value.createdAt,
+});
 
 const toHarnessApprovedInvocations = (
   approvedInvocations: AgentNodeState["approvedInvocations"],
@@ -664,6 +711,21 @@ export const toolNode = async (
     },
     executionRecord,
   );
+  const codebaseRetrieval =
+    pendingToolCall.toolId === "codebase_explore" &&
+    isCodebaseExploreToolResult(invocation.result) &&
+    invocation.result.verifiedEvidenceInput.chunkCount > 0
+      ? toCodebaseRetrievalEvidence(invocation.result.verifiedEvidenceInput)
+      : null;
+  const finalEvidence = codebaseRetrieval
+    ? appendRetrievalEvidence(
+        {
+          ...state,
+          evidence,
+        },
+        codebaseRetrieval,
+      )
+    : evidence;
   await emitEvidenceUpdateNode(emit, {
     runId: state.runId,
     summary: "工具执行结果已写入 evidence",
@@ -671,15 +733,15 @@ export const toolNode = async (
     toolCallId: pendingToolCall.id,
     inputHash: pendingToolCall.inputHash,
     status: executionRecord.status,
-    evidenceCounts: getEvidenceCounts({ evidence }),
-    latestEvidenceSummary: evidence.latestSummary,
+    evidenceCounts: getEvidenceCounts({ evidence: finalEvidence }),
+    latestEvidenceSummary: finalEvidence.latestSummary,
     iteration: (state.iterationCount ?? 0) + 1,
     maxIterations: state.maxIterations,
   });
 
   return {
     observations: [...(state.observations ?? []), observation],
-    evidence,
+    evidence: finalEvidence,
     policyDecision: undefined,
     selectedToolId: undefined,
     pendingToolCall: undefined,

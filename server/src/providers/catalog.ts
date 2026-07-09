@@ -108,7 +108,7 @@ export const PROVIDER_DEFINITIONS = {
     chatAdapter: "openai-compatible",
     embeddingAdapter: "openai-compatible",
     rerankAdapter: "openai-compatible",
-    imageAdapter: "none",
+    imageAdapter: "openai-images",
   },
   "openai-compatible-custom": {
     code: "openai-compatible-custom",

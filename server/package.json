@@ -22,6 +22,7 @@
     "@fastify/static": "^7.0.4",
     "@fastify/swagger": "^8.15.0",
     "@fastify/swagger-ui": "^4.2.0",
+    "@fastify/websocket": "^8.3.1",
     "@langchain/community": "^1.1.29",
     "@langchain/core": "^1.1.48",
     "@langchain/langgraph": "^1.4.1",

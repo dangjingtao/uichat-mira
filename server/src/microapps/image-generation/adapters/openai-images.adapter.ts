@@ -30,17 +30,55 @@ type OpenAiImagesResponse = {
   }>;
 };
 
+const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
+
+const sanitizeApiKey = (value: string) =>
+  value.trim().replace(/^Bearer\s+/i, "");
+
+const normalizeImagesBaseUrl = (value: string) => {
+  const trimmed = trimTrailingSlash(value.trim());
+  if (!trimmed) {
+    return "https://api.openai.com/v1";
+  }
+
+  const withoutImagesRoute = trimmed.replace(
+    /\/images\/generations$/i,
+    "",
+  );
+
+  if (
+    withoutImagesRoute.match(/\/v\d+$/i) ||
+    withoutImagesRoute.match(/\/v\d+beta\/openai$/i) ||
+    withoutImagesRoute.endsWith("/openai")
+  ) {
+    return withoutImagesRoute;
+  }
+
+  return `${withoutImagesRoute}/v1`;
+};
+
 export function createOpenAiImagesAdapter(
   config: OpenAiImagesAdapterConfig,
 ): ProviderAdapter {
-  const baseUrl = config.baseUrl ?? "https://api.openai.com/v1";
+  const baseUrl = normalizeImagesBaseUrl(
+    config.baseUrl ?? "https://api.openai.com/v1",
+  );
+  const apiKey = sanitizeApiKey(config.apiKey);
   const context = config.context ?? createFetchAdapterContext();
 
   return {
     providerId: "openai_images",
     executionKind: "sync-http",
     async startGeneration(input) {
-      return executeOpenAiRequest(config, baseUrl, input, context);
+      return executeOpenAiRequest(
+        {
+          ...config,
+          apiKey,
+        },
+        baseUrl,
+        input,
+        context,
+      );
     },
   };
 }

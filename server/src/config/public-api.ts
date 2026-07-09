@@ -17,11 +17,16 @@ export const AUTH_EXEMPT_ROUTES: AuthExemptRoute[] = [
   { path: "/health", match: "exact" },
   { path: "/app/meta", match: "exact" },
   { path: "/attachments", match: "prefix" },
+  { path: "/artifacts/image-generation", match: "prefix" },
   { path: "/assets/avatars", match: "prefix" },
   { path: "/docs", match: "prefix" },
   { path: "/client-coverage", match: "prefix" },
   { path: "/server-coverage", match: "prefix" },
   { path: CONFIG.SWAGGER_PREFIX, match: "prefix" },
+];
+
+const AUTH_EXEMPT_PATH_PATTERNS = [
+  /^\/microapps\/image-generation\/generations\/[^/]+\/events$/u,
 ];
 
 export const PUBLIC_API_ROUTES = {
@@ -66,6 +71,10 @@ export const OPENAPI_PUBLIC_TAGS = [
 
 export const isAuthExemptPath = (url: string) => {
   const pathname = url.split("?")[0] || "/";
+
+  if (AUTH_EXEMPT_PATH_PATTERNS.some((pattern) => pattern.test(pathname))) {
+    return true;
+  }
 
   return AUTH_EXEMPT_ROUTES.some((route) => {
     if (route.match === "exact") {

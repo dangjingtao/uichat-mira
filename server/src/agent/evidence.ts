@@ -13,6 +13,10 @@ import type {
 } from "./types";
 import { createInvocationInputHash } from "./approval-fingerprint";
 import { normalizeWorkspaceRelativePathArg } from "@/mcp/workspace-path-args";
+import {
+  normalizeTaskTargetPath,
+} from "./task-intent";
+import { reduceAgentCoverageState } from "./coverage-state";
 
 type EvidenceState = Pick<
   {
@@ -101,20 +105,6 @@ const WORKSPACE_MUTATION_TOOL_IDS = new Set([
 
 const WORKSPACE_ROOT_SENTINEL = "/workspace";
 const TERMINAL_GARBLED_TEXT_PATTERNS = [/�/u, /锟斤拷/u, /\?\?\?/u];
-const MUTATION_INTENT_PATTERNS = [
-  /\b(delete|remove|edit|write|rewrite|modify|update|replace|create|overwrite|move|rename)\b/i,
-  /删除|移除|删掉|修改|编辑|改成|改为|替换|写入|新建|创建|覆盖|移动|重命名/u,
-] as const;
-const MUTATION_VERIFY_PATTERNS = [
-  /\b(verify|verification|confirm|check|inspect|validate)\b/i,
-  /验证|确认|检查|核实|看看结果|看下结果|确认一下/u,
-] as const;
-const WRITE_LIKE_MUTATION_PATTERNS = [
-  /\b(edit|write|rewrite|modify|update|replace|create|overwrite)\b/i,
-  /修改|编辑|改成|改为|替换|写入|新建|创建|覆盖/u,
-] as const;
-const PATH_TARGET_PATTERN =
-  /(?:[A-Za-z]:\\[^\s"'<>|]+|(?:\.{1,2}[\\/])?[A-Za-z0-9_./\\-]+\.[A-Za-z0-9_-]{1,12})/g;
 
 export const getEvidencePayload = (state: EvidenceState): AgentEvidencePayload => ({
   observations: state.evidence?.observations ?? state.observations ?? [],
@@ -249,94 +239,6 @@ const getLatestUserQuestion = (state: EvidenceState) => {
   return latest?.content.trim() ?? state.goal?.text?.trim() ?? "";
 };
 
-const normalizeTargetPath = (value: string) =>
-  value.trim().replace(/\\/g, "/").replace(/^\.\/+/, "").toLowerCase();
-
-const normalizeNamedTargetCandidate = (value: string) =>
-  value
-    .trim()
-    .replace(/^["'`“”‘’]+|["'`“”‘’]+$/g, "")
-    .replace(/^(?:file|files|folder|folders|directory|directories)\s+/i, "")
-    .replace(/^(?:文件|文件夹|目录)\s*/u, "")
-    .replace(/[。；;，,、]+$/u, "");
-
-const extractNamedTargetsFromMutationText = (text: string) => {
-  const segments: string[] = [];
-  const englishMatch = text.match(
-    /\b(?:delete|remove|edit|write|rewrite|modify|update|replace|create|overwrite|move|rename)\b\s+(.+)/i,
-  );
-  if (englishMatch?.[1]) {
-    segments.push(englishMatch[1]);
-  }
-
-  const chineseMatch = text.match(
-    /(?:删除|移除|修改|编辑|改成|改为|替换|写入|新建|创建|覆盖|移动|重命名)(.+)/u,
-  );
-  if (chineseMatch?.[1]) {
-    segments.push(chineseMatch[1]);
-  }
-
-  return segments.flatMap((segment) =>
-    segment
-      .split(/\s*(?:,|，|、|\band\b|\bor\b|和|与|及)\s*/iu)
-      .map((item) =>
-        normalizeNamedTargetCandidate(
-          item.split(/\s+(?:then|then\s+tell|then\s+answer|afterwards|并且|然后|再|并说明)\b/iu)[0] ??
-            item,
-        ),
-      )
-      .filter(
-        (item) =>
-          item.length > 0 &&
-          item.length <= 120 &&
-          !/\s/.test(item) &&
-          /[\p{Script=Han}A-Za-z0-9_\-.\\/]/u.test(item),
-      ),
-  );
-};
-
-const extractRequiredTargets = (texts: string[]) => {
-  const targets = new Set<string>();
-  for (const text of texts) {
-    const matches = text.match(PATH_TARGET_PATTERN) ?? [];
-    for (const match of matches) {
-      const normalized = normalizeTargetPath(match);
-      if (normalized.length > 0) {
-        targets.add(normalized);
-      }
-    }
-
-    for (const namedTarget of extractNamedTargetsFromMutationText(text)) {
-      const normalized = normalizeTargetPath(namedTarget);
-      if (normalized.length > 0) {
-        targets.add(normalized);
-      }
-    }
-  }
-
-  return [...targets];
-};
-
-const hasMutationIntent = (texts: string[]) =>
-  texts.some((text) => MUTATION_INTENT_PATTERNS.some((pattern) => pattern.test(text)));
-
-const requiresMutationVerification = (texts: string[]) =>
-  texts.some(
-    (text) =>
-      MUTATION_VERIFY_PATTERNS.some((pattern) => pattern.test(text)) &&
-      WRITE_LIKE_MUTATION_PATTERNS.some((pattern) => pattern.test(text)),
-  );
-
-const collectTaskIntentTexts = (input: {
-  question?: string;
-  currentTaskFrame?: CurrentTaskFrame;
-}) =>
-  [
-    input.question?.trim(),
-    input.currentTaskFrame?.currentGoal?.trim(),
-    ...(input.currentTaskFrame?.completionCriteria ?? []).map((item) => item.trim()),
-  ].filter((value): value is string => Boolean(value));
-
 const collectMutationResolvedTargets = (evidence: AgentEvidencePayload | undefined) => {
   const targets = new Set<string>();
 
@@ -365,7 +267,7 @@ const collectMutationResolvedTargets = (evidence: AgentEvidencePayload | undefin
       !summaryData.dryRun &&
       typeof summaryData.targetPath === "string"
     ) {
-      targets.add(normalizeTargetPath(summaryData.targetPath));
+      targets.add(normalizeTaskTargetPath(summaryData.targetPath));
     }
 
     if (
@@ -374,10 +276,10 @@ const collectMutationResolvedTargets = (evidence: AgentEvidencePayload | undefin
       !summaryData.dryRun
     ) {
       if (typeof summaryData.targetPath === "string") {
-        targets.add(normalizeTargetPath(summaryData.targetPath));
+        targets.add(normalizeTaskTargetPath(summaryData.targetPath));
       }
       if (typeof summaryData.destinationPath === "string") {
-        targets.add(normalizeTargetPath(summaryData.destinationPath));
+        targets.add(normalizeTaskTargetPath(summaryData.destinationPath));
       }
     }
   }
@@ -392,23 +294,23 @@ const collectCoveredTargetsFromSummary = (summary: AgentEvidenceSummary | undefi
 
   switch (summary.data.kind) {
     case "read_locate":
-      return summary.data.matchedPaths.map((path) => normalizeTargetPath(path));
+      return summary.data.matchedPaths.map((path) => normalizeTaskTargetPath(path));
     case "read_open":
     case "read_list":
-      return [normalizeTargetPath(summary.data.path)];
+      return [normalizeTaskTargetPath(summary.data.path)];
     case "workspace_mutation": {
       const targets: string[] = [];
       if (typeof summary.data.targetPath === "string") {
-        targets.push(normalizeTargetPath(summary.data.targetPath));
+        targets.push(normalizeTaskTargetPath(summary.data.targetPath));
       }
       if (typeof summary.data.destinationPath === "string") {
-        targets.push(normalizeTargetPath(summary.data.destinationPath));
+        targets.push(normalizeTaskTargetPath(summary.data.destinationPath));
       }
       return targets;
     }
     case "edit_file":
       return typeof summary.data.targetPath === "string"
-        ? [normalizeTargetPath(summary.data.targetPath)]
+        ? [normalizeTaskTargetPath(summary.data.targetPath)]
         : [];
     default:
       return [];
@@ -422,7 +324,7 @@ const collectCoveredTargetsFromExecutionArgs = (
   for (const key of ["path", "targetPath", "destinationPath"] as const) {
     const value = args?.[key];
     if (typeof value === "string" && value.trim().length > 0) {
-      targets.push(normalizeTargetPath(value));
+      targets.push(normalizeTaskTargetPath(value));
     }
   }
 
@@ -587,72 +489,15 @@ export const getTaskCoverageView = (input: {
   evidence?: AgentEvidencePayload;
   latestSummary?: AgentEvidenceSummary;
 }): AgentTaskCoverageView => {
-  const intentTexts = collectTaskIntentTexts(input);
-  const mutationRequired = hasMutationIntent(intentTexts);
-  const mutationVerificationRequired = requiresMutationVerification(intentTexts);
-  const fileContentRequired = intentTexts.some((text) => explicitlyRequestsFileContent(text));
-  const requiredTargets = extractRequiredTargets(intentTexts);
-  const coveredTargets = collectEvidenceCoveredTargets(input);
-  const resolvedMutationTargets = collectMutationResolvedTargets(input.evidence);
-  const readVerifiedTargets = collectReadVerifiedTargets(input);
-  const readOpenedTargets = collectReadOpenedTargets(input);
-  const completionSatisfiedTargets = mutationRequired
-    ? [...new Set([...coveredTargets, ...resolvedMutationTargets])]
-    : coveredTargets;
-  const pendingTargets = requiredTargets.filter(
-    (target) => !completionSatisfiedTargets.includes(target),
-  );
-  const pendingActions: string[] = [];
-
-  if (mutationRequired) {
-    const mutationExecutionSatisfied =
-      requiredTargets.length === 0
-        ? resolvedMutationTargets.length > 0
-        : resolvedMutationTargets.length > 0 &&
-          requiredTargets.every((target) => resolvedMutationTargets.includes(target));
-    if (!mutationExecutionSatisfied) {
-      pendingActions.push("mutation_execution");
-    }
-  }
-
-  if (
-    mutationRequired &&
-    mutationVerificationRequired &&
-    requiredTargets.length > 0 &&
-    !requiredTargets.every((target) => readVerifiedTargets.includes(target))
-  ) {
-    pendingActions.push("mutation_verification");
-  }
-
-  if (
-    !mutationRequired &&
-    fileContentRequired &&
-    requiredTargets.length > 0 &&
-    pendingTargets.length === 0 &&
-    !requiredTargets.every((target) => readOpenedTargets.includes(target))
-  ) {
-    pendingActions.push("read_open");
-  }
-
-  if (hasLatestRecoverableToolFailure(input.evidence)) {
-    pendingActions.push("recoverable_execution");
-  }
-
-  const blockedReason = buildTaskCompletionReason({
-    pendingActions,
-    missingTargets: pendingTargets,
-  });
+  const state = reduceAgentCoverageState(input);
 
   return {
-    requiredTargets,
-    coveredTargets,
-    pendingTargets,
-    pendingActions,
-    blockedReason:
-      pendingActions.length === 0 && pendingTargets.length === 0
-        ? undefined
-        : blockedReason,
-    taskCompletable: pendingActions.length === 0 && pendingTargets.length === 0,
+    requiredTargets: state.requiredTargets,
+    coveredTargets: state.coveredTargets,
+    pendingTargets: state.pendingTargets,
+    pendingActions: state.pendingActions,
+    blockedReason: state.blockedReason,
+    taskCompletable: state.taskCompletable,
   };
 };
 

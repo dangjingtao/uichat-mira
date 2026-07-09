@@ -1,5 +1,6 @@
 import { get, post } from "@/shared/lib/request";
 import { client } from "@/shared/lib/request";
+import { getSession } from "@/shared/lib/sessionStorage";
 import { getApiBaseUrl } from "@/shared/platform/desktopRuntime";
 
 const IMAGE_GENERATION_ROUTE = "/microapps/image-generation/generations";
@@ -65,6 +66,7 @@ export interface ImageGenerationArtifactSummary {
   mimeType: string;
   source: ImageGenerationArtifactSource;
   localPath?: string;
+  publicUrl?: string;
   remoteUrl?: string;
   expiresAt?: string;
   width?: number;
@@ -101,10 +103,22 @@ export interface GetImageGenerationOptions {
   refresh?: boolean;
 }
 
+export interface ImageGenerationProgressSnapshot {
+  generationId: string;
+  providerJobId?: string;
+  status: ImageGenerationJobStatus;
+  stage: string;
+  progressPercent: number;
+  message?: string;
+  updatedAt: string;
+}
+
 export async function createImageGeneration(
   payload: ImageGenerationCreateRequest,
 ): Promise<ImageGenerationJob> {
-  return post<ImageGenerationJob>(IMAGE_GENERATION_ROUTE, payload);
+  return post<ImageGenerationJob>(IMAGE_GENERATION_ROUTE, payload, {
+    timeout: 0,
+  });
 }
 
 export async function getImageGeneration(
@@ -120,6 +134,14 @@ export async function getImageGeneration(
             refresh: String(options.refresh),
           },
         },
+  );
+}
+
+export async function getImageGenerationProgress(
+  generationId: string,
+): Promise<ImageGenerationProgressSnapshot> {
+  return get<ImageGenerationProgressSnapshot>(
+    `${IMAGE_GENERATION_ROUTE}/${encodeURIComponent(generationId)}/progress`,
   );
 }
 
@@ -143,4 +165,20 @@ export async function getImageGenerationArtifactPreviewUrl(
   );
 
   return URL.createObjectURL(response.data);
+}
+
+export function getImageGenerationRealtimeUrl(generationId: string) {
+  const baseUrl = getApiBaseUrl();
+  const token = getSession()?.token ?? "";
+  const routePath = `${IMAGE_GENERATION_ROUTE}/${encodeURIComponent(generationId)}/events`;
+  const normalizedBase = baseUrl.replace(/\/+$/, "");
+
+  if (/^https?:\/\//i.test(normalizedBase)) {
+    const wsBase = normalizedBase.replace(/^http/i, "ws");
+    return `${wsBase}${routePath}?token=${encodeURIComponent(token)}`;
+  }
+
+  const protocol = globalThis.window?.location?.protocol === "https:" ? "wss:" : "ws:";
+  const host = globalThis.window?.location?.host ?? "127.0.0.1:5173";
+  return `${protocol}//${host}${normalizedBase}${routePath}?token=${encodeURIComponent(token)}`;
 }

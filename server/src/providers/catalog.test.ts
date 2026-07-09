@@ -16,10 +16,12 @@ test("rerank support is declared independently from chat compatibility", () => {
 
 test("image-generation capability is declared independently from chat compatibility", () => {
   assert.equal(getProviderDefinition("openai").imageAdapter, "openai-images");
+  assert.equal(getProviderDefinition("volcengine").imageAdapter, "openai-images");
   assert.equal(getProviderDefinition("ollama").imageAdapter, "none");
 
   const openAiCapabilities = getProviderCapabilities("openai");
   assert.ok(openAiCapabilities.supportsRoles.includes("imageGeneration"));
   assert.equal(supportsRoleForProvider("openai", "imageGeneration"), true);
+  assert.equal(supportsRoleForProvider("volcengine", "imageGeneration"), true);
   assert.equal(supportsRoleForProvider("cloudflare", "imageGeneration"), false);
 });

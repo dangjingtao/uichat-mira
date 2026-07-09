@@ -66,6 +66,9 @@ describe("image generation api", () => {
     expect(post).toHaveBeenCalledWith(
       "/microapps/image-generation/generations",
       payload,
+      {
+        timeout: 0,
+      },
     );
     expect(result).toBe(sampleJob);
   });

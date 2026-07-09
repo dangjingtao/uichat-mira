@@ -1,4 +1,10 @@
 import { workspaceResource } from "../mcp/resources/workspace-resource.js";
+import {
+  codebaseExploreTool,
+} from "../mcp/managed-codegraph/codebase-explore.tool.js";
+import {
+  isCodebaseExplorePlannerExposureEnabled,
+} from "../mcp/managed-codegraph/planner-exposure-config.js";
 import { editFileTool } from "../mcp/tools/edit-file.tool.js";
 import { readExtractTool } from "../mcp/tools/read-extract.tool.js";
 import { readListTool } from "../mcp/tools/read-list.tool.js";
@@ -34,6 +40,9 @@ export const initializeHarnessRuntime = () => {
   registerCapability(workspaceMutationTool);
   registerCapability(webSearchTool);
   registerCapability(terminalSessionTool);
+  if (isCodebaseExplorePlannerExposureEnabled()) {
+    registerCapability(codebaseExploreTool);
+  }
   // External MCP persistence is optional at bootstrap time. Some callers
   // (notably route-level tests and early app startup before DB wiring) only
   // need the built-in harness capabilities. In those cases we should not fail

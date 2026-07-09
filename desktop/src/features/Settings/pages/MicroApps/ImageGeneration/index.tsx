@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { ImageIcon, Workflow } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import {
+  getProviderDetail,
+  getRoleModelConfigs,
+} from "@/shared/api/modelSettings";
 import Badge from "@/shared/ui/Badge";
 import Card from "@/shared/ui/Card";
 import NavigationCardTabs from "@/shared/ui/NavigationCardTabs";
@@ -19,6 +23,11 @@ import {
 import ResultPreviewCard from "./components/ResultPreviewCard";
 import ComfyUiExecutionInputCard from "./components/ComfyUiExecutionInputCard";
 import ComfyUiSetupCard from "./components/ComfyUiSetupCard";
+import ApiProviderStatusCard, {
+  type ApiImageProviderSummary,
+  type ApiImageSizeOption,
+} from "./components/ApiProviderStatusCard";
+import ApiExecutionInputCard from "./components/ApiExecutionInputCard";
 import { useImageGenerationStudioState } from "./hooks/useImageGenerationStudioState";
 import type { createImageGeneration, getImageGeneration } from "@/shared/api/imageGeneration";
 import MicroAppPageLayout from "../components/MicroAppPageLayout";
@@ -39,6 +48,51 @@ interface ImageGenerationStudioPageProps {
 
 type StudioTab = "comfyui" | "providers";
 type StudioFlow = ComfyUiFlow & { rawJson: string };
+
+const defaultApiSizeOptions: ApiImageSizeOption[] = [
+  { value: "1024x1024", label: "1024 × 1024" },
+  { value: "1536x1024", label: "1536 × 1024" },
+  { value: "1024x1536", label: "1024 × 1536" },
+];
+
+const volcengineLargeSizeOptions: ApiImageSizeOption[] = [
+  { value: "2048x2048", label: "2048 × 2048" },
+  { value: "2304x1792", label: "2304 × 1792" },
+  { value: "1792x2304", label: "1792 × 2304" },
+];
+
+const parseImageSize = (value: string) => {
+  const match = value.trim().match(/^(\d+)\s*[xX×]\s*(\d+)$/);
+  if (!match) {
+    return null;
+  }
+
+  return {
+    width: Number(match[1]),
+    height: Number(match[2]),
+  };
+};
+
+const requiresLargeVolcengineImageSize = (
+  provider: ApiImageProviderSummary | null,
+) => {
+  if (!provider) {
+    return false;
+  }
+
+  const modelId = provider.modelId.toLowerCase();
+  const providerCode = provider.providerCode?.toLowerCase() ?? "";
+  const templateCode = provider.providerTemplateCode?.toLowerCase() ?? "";
+  const baseUrl = provider.baseUrl.toLowerCase();
+
+  const isVolcengineConnection =
+    providerCode.includes("volcengine") ||
+    templateCode.includes("volcengine") ||
+    baseUrl.includes("volces.com") ||
+    baseUrl.includes("ark.cn-beijing.volces.com");
+
+  return isVolcengineConnection && modelId.includes("seedream");
+};
 
 const flowJsonStatusVariant = (status: WorkflowJsonStatus) => {
   if (status === "valid") {
@@ -99,6 +153,10 @@ export default function ImageGenerationStudioPage({
   const [flowNoteDraft, setFlowNoteDraft] = useState("");
   const [flowJsonDraft, setFlowJsonDraft] = useState("");
   const [studioLoading, setStudioLoading] = useState(false);
+  const [apiProvider, setApiProvider] = useState<ApiImageProviderSummary | null>(
+    null,
+  );
+  const [apiProviderLoading, setApiProviderLoading] = useState(false);
 
   const currentConnection = connections[0] ?? null;
   const connectionStatus: ComfyUiConnectionStatus =
@@ -111,6 +169,77 @@ export default function ImageGenerationStudioPage({
     ? getComfyUiNodeSummaries(selectedFlow.rawJson)
     : [];
   const flowEditorJsonStatus = getFlowJsonStatus(flowJsonDraft);
+  const apiSizeOptions = requiresLargeVolcengineImageSize(apiProvider)
+    ? volcengineLargeSizeOptions
+    : defaultApiSizeOptions;
+  const apiSizeValidationMessage = (() => {
+    if (!requiresLargeVolcengineImageSize(apiProvider)) {
+      return undefined;
+    }
+
+    const parsedSize = parseImageSize(state.promptForm.size);
+    if (!parsedSize) {
+      return "当前火山生图模型要求使用更大的尺寸，请从预设中选择。";
+    }
+
+    if (parsedSize.width * parsedSize.height < 3686400) {
+      return "当前火山生图模型要求图片尺寸至少为 3686400 像素，1024 这一档会直接失败。";
+    }
+
+    return undefined;
+  })();
+
+  const reloadApiProviderConfig = async () => {
+    setApiProviderLoading(true);
+    try {
+      const roleConfigs = await getRoleModelConfigs();
+      const imageConfig =
+        roleConfigs.find((config) => config.type === "imageGeneration") ?? null;
+
+      if (!imageConfig?.providerConnectionId || !imageConfig.remoteModelId) {
+        setApiProvider(null);
+        return;
+      }
+
+      const modelId = imageConfig.remoteModelId;
+      const detail = await getProviderDetail(imageConfig.providerConnectionId);
+      setApiProvider({
+        providerConnectionId: detail.provider.id,
+        providerDisplayName: detail.provider.displayName,
+        providerCode: detail.provider.providerCode,
+        providerTemplateCode: detail.provider.templateCode,
+        baseUrl: detail.provider.baseUrl,
+        modelId,
+        status: detail.provider.status,
+        hasApiKey: detail.provider.hasApiKey,
+      });
+      state.setPromptForm((current) => ({
+        ...current,
+        model: modelId,
+        size:
+          requiresLargeVolcengineImageSize({
+            providerConnectionId: detail.provider.id,
+            providerDisplayName: detail.provider.displayName,
+            providerCode: detail.provider.providerCode,
+            providerTemplateCode: detail.provider.templateCode,
+            baseUrl: detail.provider.baseUrl,
+            modelId,
+            status: detail.provider.status,
+            hasApiKey: detail.provider.hasApiKey,
+          }) && parseImageSize(current.size)
+          ? (parseImageSize(current.size)!.width *
+              parseImageSize(current.size)!.height <
+            3686400
+              ? volcengineLargeSizeOptions[0].value
+              : current.size)
+          : current.size,
+      }));
+    } catch {
+      setApiProvider(null);
+    } finally {
+      setApiProviderLoading(false);
+    }
+  };
 
   const reloadStudioConfig = async () => {
     setStudioLoading(true);
@@ -144,6 +273,7 @@ export default function ImageGenerationStudioPage({
 
   useEffect(() => {
     void reloadStudioConfig();
+    void reloadApiProviderConfig();
   }, []);
 
   useEffect(() => {
@@ -328,7 +458,10 @@ export default function ImageGenerationStudioPage({
 
   const handleSubmit = () => {
     if (activeTab !== "comfyui" || !selectedFlow) {
-      void state.submit();
+      void state.submit({
+        providerId: apiProvider?.providerConnectionId,
+        model: apiProvider?.modelId,
+      });
       return;
     }
 
@@ -428,24 +561,40 @@ export default function ImageGenerationStudioPage({
                 <ResultPreviewCard
                   previewStatus={state.previewStatus}
                   result={state.result}
+                  progress={state.progress}
                 />
               </div>
             </div>
           ) : (
-            <Card className="space-y-4 p-5">
-              <div className="space-y-1">
-                <div className="text-sm font-semibold text-text-primary">
-                  {t("settings.microApps.imageGenerationStudio.cards.providersPlaceholder.title")}
-                </div>
-                <div className="max-w-2xl text-sm leading-6 text-text-secondary">
-                  {t("settings.microApps.imageGenerationStudio.cards.providersPlaceholder.description")}
-                </div>
+            <div className="grid gap-3 lg:gap-4 md:grid-cols-[minmax(0,1.05fr)_minmax(300px,0.95fr)]">
+              <div className="space-y-4">
+                <ApiProviderStatusCard
+                  provider={apiProvider}
+                  loading={apiProviderLoading}
+                />
+                <ApiExecutionInputCard
+                  value={state.promptForm}
+                  formStatus={state.formStatus}
+                  running={state.isRunning}
+                  canCancel={state.canCancel}
+                  configured={Boolean(apiProvider?.hasApiKey && apiProvider.modelId)}
+                  sizeOptions={apiSizeOptions}
+                  sizeValidationMessage={apiSizeValidationMessage}
+                  onChange={state.setPromptForm}
+                  onSubmit={handleSubmit}
+                  onReset={state.reset}
+                  onCancel={state.cancel}
+                />
               </div>
 
-              <div className="rounded-ui-panel border border-dashed border-border bg-surface-secondary/20 px-4 py-6 text-sm leading-6 text-text-secondary">
-                {t("settings.microApps.imageGenerationStudio.cards.providersPlaceholder.body")}
+              <div className="space-y-4">
+                <ResultPreviewCard
+                  previewStatus={state.previewStatus}
+                  result={state.result}
+                  progress={state.progress}
+                />
               </div>
-            </Card>
+            </div>
           )}
         </div>
       </div>

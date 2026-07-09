@@ -3,6 +3,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
+import fastifyWebsocket from "@fastify/websocket";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import fs from "node:fs/promises";
@@ -22,15 +23,14 @@ import {
 import { ComputerUseRuntimeManager } from "@/microapps/computer-use/runtime/manager.js";
 import { runComputerUseActions } from "@/microapps/computer-use/executor/runner.js";
 import {
-  createAliyunWanxAdapter,
   createComfyUiLocalAdapter,
   createOpenAiImagesAdapter,
-  createTencentHunyuanAdapter,
 } from "@/microapps/image-generation/adapters/index.js";
 import { LocalImageGenerationArtifactStore } from "@/microapps/image-generation/artifacts/index.js";
 import {
   createImageGenerationService,
   createInMemoryImageGenerationJobStore,
+  createInMemoryImageGenerationRealtimeStore,
   comfyUiStudioService,
 } from "@/microapps/image-generation/index.js";
 import { createMailCenterService } from "@/microapps/mail-center/index.js";
@@ -82,6 +82,13 @@ import { newsItemsRepository } from "@/db/repositories/news-items.repository.js"
 import { generalSettingsRepository } from "@/db/repositories/general-settings.repository.js";
 import { webSearchSettingsRepository } from "@/db/repositories/web-search-settings.repository.js";
 import { wecomSettingsRepository } from "@/db/repositories/wecom-settings.repository.js";
+import {
+  modelConfigRepository,
+  providerConnectionRepository,
+} from "@/db/repositories/index.js";
+import type { ProviderCode } from "@/db/schema.js";
+import { decryptSecret } from "@/utils/crypto.js";
+import { getProviderCapabilities } from "@/providers/catalog.js";
 import { initializeVectorStore } from "@/db";
 import CONFIG from "@/config";
 import { isAuthExemptPath, OPENAPI_PUBLIC_TAGS } from "@/config/public-api.js";
@@ -114,6 +121,7 @@ const imageGenerationArtifactRoot = path.resolve(
   ".artifacts",
   "image-generation",
 );
+const imageGenerationArtifactPublicPrefix = "/artifacts/image-generation/";
 const computerUseArtifactRoot = path.resolve(
   process.cwd(),
   ".artifacts",
@@ -143,55 +151,78 @@ const readSwaggerLogo = async () => {
 app.setErrorHandler(sendRouteError);
 
 const createImageGenerationAdapterRegistry = () => {
-  const adapters = [
-    process.env.UI_CHAT_IMAGE_GENERATION_OPENAI_API_KEY
-      ? createOpenAiImagesAdapter({
-          apiKey: process.env.UI_CHAT_IMAGE_GENERATION_OPENAI_API_KEY,
-          baseUrl: process.env.UI_CHAT_IMAGE_GENERATION_OPENAI_BASE_URL,
-          defaultModel: process.env.UI_CHAT_IMAGE_GENERATION_OPENAI_MODEL,
-        })
-      : null,
-    process.env.UI_CHAT_IMAGE_GENERATION_ALIYUN_API_KEY &&
-      process.env.UI_CHAT_IMAGE_GENERATION_ALIYUN_BASE_URL
-      ? createAliyunWanxAdapter({
-          apiKey: process.env.UI_CHAT_IMAGE_GENERATION_ALIYUN_API_KEY,
-          baseUrl: process.env.UI_CHAT_IMAGE_GENERATION_ALIYUN_BASE_URL,
-          defaultModel: process.env.UI_CHAT_IMAGE_GENERATION_ALIYUN_MODEL,
-        })
-      : null,
-    process.env.UI_CHAT_IMAGE_GENERATION_TENCENT_SECRET_ID &&
-      process.env.UI_CHAT_IMAGE_GENERATION_TENCENT_SECRET_KEY
-      ? createTencentHunyuanAdapter({
-          secretId: process.env.UI_CHAT_IMAGE_GENERATION_TENCENT_SECRET_ID,
-          secretKey: process.env.UI_CHAT_IMAGE_GENERATION_TENCENT_SECRET_KEY,
-          region: process.env.UI_CHAT_IMAGE_GENERATION_TENCENT_REGION,
-          endpoint: process.env.UI_CHAT_IMAGE_GENERATION_TENCENT_ENDPOINT,
-          version: process.env.UI_CHAT_IMAGE_GENERATION_TENCENT_VERSION,
-        })
-      : null,
-    process.env.UI_CHAT_IMAGE_GENERATION_COMFYUI_BASE_URL
-      ? createComfyUiLocalAdapter({
-          baseUrl: process.env.UI_CHAT_IMAGE_GENERATION_COMFYUI_BASE_URL,
-          clientId: process.env.UI_CHAT_IMAGE_GENERATION_COMFYUI_CLIENT_ID,
-        })
-      : null,
-  ].filter((adapter) => adapter !== null);
+  const resolveConfiguredImageProvider = (providerId: string) => {
+    const defaultImageConfig = modelConfigRepository.findDefaultByType(
+      "imageGeneration",
+    );
+    const defaultConnection = defaultImageConfig?.providerConnectionId
+      ? providerConnectionRepository.findById(defaultImageConfig.providerConnectionId)
+      : undefined;
+    const targetConnection =
+      providerConnectionRepository.findById(providerId) ??
+      providerConnectionRepository.findByCode(providerId as ProviderCode) ??
+      (providerId === "openai_images" ? defaultConnection : undefined);
+
+    if (!targetConnection) {
+      return null;
+    }
+
+    const capabilities = getProviderCapabilities(targetConnection.templateCode);
+    if (capabilities.imageAdapter !== "openai-images") {
+      return null;
+    }
+
+    const apiKey = decryptSecret(targetConnection.apiKeyEncrypted).trim();
+    if (!apiKey) {
+      return null;
+    }
+
+    return {
+      baseUrl: targetConnection.baseUrl,
+      apiKey,
+      defaultModel:
+        defaultImageConfig &&
+        defaultImageConfig.providerConnectionId === targetConnection.id
+          ? defaultImageConfig.remoteModelId ?? undefined
+          : undefined,
+    };
+  };
 
   return {
     getAdapter(providerId: string) {
-      return adapters.find((item) => item.providerId === providerId) ?? null;
+      if (providerId === "comfyui_local") {
+        return createComfyUiLocalAdapter({
+          baseUrl: process.env.UI_CHAT_IMAGE_GENERATION_COMFYUI_BASE_URL ?? "",
+          clientId: process.env.UI_CHAT_IMAGE_GENERATION_COMFYUI_CLIENT_ID,
+        });
+      }
+
+      const configuredProvider = resolveConfiguredImageProvider(providerId);
+      if (configuredProvider) {
+        return createOpenAiImagesAdapter({
+          apiKey: configuredProvider.apiKey,
+          baseUrl: configuredProvider.baseUrl,
+          defaultModel: configuredProvider.defaultModel,
+        });
+      }
+
+      return null;
     },
   };
 };
+
+const imageGenerationRealtimeStore = createInMemoryImageGenerationRealtimeStore();
 
 const imageGenerationService = createImageGenerationService({
   adapterRegistry: createImageGenerationAdapterRegistry(),
   artifactStore: new LocalImageGenerationArtifactStore({
     rootDir: imageGenerationArtifactRoot,
+    publicBaseUrl: imageGenerationArtifactPublicPrefix.slice(0, -1),
   }),
   // Current strategy is intentionally temporary: jobs stay in process memory
   // until a dedicated persistent store is approved and implemented.
   jobStore: createInMemoryImageGenerationJobStore(),
+  realtimeStore: imageGenerationRealtimeStore,
 });
 
 const computerUseRuntimeManager = new ComputerUseRuntimeManager({
@@ -494,6 +525,7 @@ const setupPlugins = async () => {
       fileSize: MAX_UPLOAD_FILE_BYTES,
     },
   });
+  await app.register(fastifyWebsocket);
 
   await fs.mkdir(attachmentStorageRoot, { recursive: true });
   await app.register(fastifyStatic, {
@@ -505,6 +537,16 @@ const setupPlugins = async () => {
         "Cache-Control",
         "private, max-age=31536000, immutable",
       );
+    },
+  });
+
+  await fs.mkdir(imageGenerationArtifactRoot, { recursive: true });
+  await app.register(fastifyStatic, {
+    root: imageGenerationArtifactRoot,
+    prefix: imageGenerationArtifactPublicPrefix,
+    decorateReply: false,
+    setHeaders(response) {
+      response.setHeader("Cache-Control", "private, no-cache");
     },
   });
 

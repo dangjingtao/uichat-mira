@@ -25,6 +25,24 @@ const INTERNAL_PROFILE_BLUEPRINTS: Array<{
     actionProfileId: "read_locate",
   },
   {
+    id: "codebase_understanding",
+    title: "Codebase Understanding",
+    description:
+      "Explore codebase architecture, affected areas, and cross-file relationships through the controlled CodeGraph wrapper.",
+    domain: "read",
+    tags: [
+      "codebase",
+      "architecture",
+      "dependency",
+      "impact",
+      "flow",
+      "codegraph",
+      "explore",
+    ],
+    preferredToolId: "codebase_explore",
+    supportingToolIds: ["codebase_explore"],
+  },
+  {
     id: "workspace_edit",
     title: "Workspace Edit",
     description: "Modify workspace files through managed, structured workspace operations.",

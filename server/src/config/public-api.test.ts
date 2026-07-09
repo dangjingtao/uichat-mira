@@ -15,6 +15,20 @@ describe("public api auth exemptions", () => {
     expect(isAuthExemptPath("/api-docs/json")).toBe(true);
   });
 
+  it("treats image generation artifact and realtime event routes as auth exempt", () => {
+    expect(
+      isAuthExemptPath("/artifacts/image-generation/job-1/result.png"),
+    ).toBe(true);
+    expect(
+      isAuthExemptPath(
+        "/microapps/image-generation/generations/job-1/events?token=abc",
+      ),
+    ).toBe(true);
+    expect(
+      isAuthExemptPath("/microapps/image-generation/generations/job-1"),
+    ).toBe(false);
+  });
+
   it("does not exempt unrelated routes", () => {
     expect(isAuthExemptPath("/doc")).toBe(false);
     expect(isAuthExemptPath("/settings/docs")).toBe(false);

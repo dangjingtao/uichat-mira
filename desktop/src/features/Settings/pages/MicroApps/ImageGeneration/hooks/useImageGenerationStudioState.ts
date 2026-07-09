@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createImageGeneration,
   getImageGeneration,
+  getImageGenerationRealtimeUrl,
   getImageGenerationArtifactContentUrl,
   getImageGenerationArtifactPreviewUrl,
   type ImageGenerationArtifactSummary,
@@ -9,10 +10,12 @@ import {
   type GetImageGenerationOptions,
   type ImageGenerationJobError,
   type ImageGenerationJobStatus,
+  type ImageGenerationProgressSnapshot,
   type ImageGenerationRequestSummary,
 } from "@/shared/api/imageGeneration";
 import type {
   PromptFormValue,
+  ResultProgressMetadata,
   ResultMetadata,
   StudioFormStatus,
   StudioLogEntry,
@@ -34,6 +37,7 @@ type ImageGenerationStudioApi = {
   createImageGeneration: typeof createImageGeneration;
   getImageGeneration: typeof getImageGeneration;
   getArtifactPreviewUrl?: typeof getImageGenerationArtifactPreviewUrl;
+  getRealtimeUrl?: typeof getImageGenerationRealtimeUrl;
 };
 
 type NormalizedGenerationJob = {
@@ -55,6 +59,7 @@ const defaultApi: ImageGenerationStudioApi = {
   createImageGeneration,
   getImageGeneration,
   getArtifactPreviewUrl: getImageGenerationArtifactPreviewUrl,
+  getRealtimeUrl: getImageGenerationRealtimeUrl,
 };
 
 const providerIdMap: Record<StudioProvider, string> = {
@@ -230,9 +235,14 @@ const buildRequestPayload = (
   workflowForm: WorkflowFormValue,
   workflowJsonOverride?: string,
   workflowProviderParams?: Record<string, unknown>,
+  requestOverrides?: {
+    providerId?: string;
+    model?: string;
+  },
 ): ImageGenerationCreateRequest => {
-  const providerId = providerIdMap[provider];
-  const model = promptForm.model.trim() || undefined;
+  const providerId = requestOverrides?.providerId ?? providerIdMap[provider];
+  const model =
+    requestOverrides?.model ?? (promptForm.model.trim() || undefined);
   const seedValue =
     mode === "prompt" ? promptForm.seed.trim() : workflowForm.overrideSeed.trim();
   const parsedSeed =
@@ -276,6 +286,10 @@ const resolveArtifactPreviewSrc = (
 ) => {
   if (!artifact) {
     return "";
+  }
+
+  if (artifact.publicUrl) {
+    return artifact.publicUrl;
   }
 
   if (artifact.localPath) {
@@ -427,6 +441,7 @@ export function useImageGenerationStudioState(api: ImageGenerationStudioApi = de
       getImageGeneration: api.getImageGeneration ?? defaultApi.getImageGeneration,
       getArtifactPreviewUrl:
         api.getArtifactPreviewUrl ?? defaultApi.getArtifactPreviewUrl!,
+      getRealtimeUrl: api.getRealtimeUrl ?? defaultApi.getRealtimeUrl!,
     }),
     [api],
   );
@@ -446,11 +461,18 @@ export function useImageGenerationStudioState(api: ImageGenerationStudioApi = de
   const [logs, setLogs] = useState<StudioLogEntry[]>([]);
   const [generationId, setGenerationId] = useState<string | null>(null);
   const [apiErrorMessage, setApiErrorMessage] = useState<string | null>(null);
+  const [progress, setProgress] = useState<ResultProgressMetadata>({
+    status: null,
+    progressPercent: 0,
+    stage: "",
+    message: undefined,
+  });
   const promptProviderRef = useRef<StudioProvider>("openai-images");
   const lastSubmittedSignatureRef = useRef<string | null>(null);
   const pollTimerRef = useRef<number | null>(null);
   const lastLoggedStatusRef = useRef<StudioTaskStatus | null>(null);
   const previewObjectUrlRef = useRef<string | null>(null);
+  const realtimeSocketRef = useRef<WebSocket | null>(null);
 
   const workflowJsonStatus = useMemo(
     () => getWorkflowJsonStatus(workflowForm.workflowJson),
@@ -470,6 +492,10 @@ export function useImageGenerationStudioState(api: ImageGenerationStudioApi = de
       if (previewObjectUrlRef.current) {
         revokePreviewObjectUrl(previewObjectUrlRef.current);
         previewObjectUrlRef.current = null;
+      }
+      if (realtimeSocketRef.current) {
+        realtimeSocketRef.current.close();
+        realtimeSocketRef.current = null;
       }
     };
   }, []);
@@ -587,6 +613,55 @@ export function useImageGenerationStudioState(api: ImageGenerationStudioApi = de
     result?.previewSrc,
   ]);
 
+  useEffect(() => {
+    if (!generationId || typeof WebSocket === "undefined") {
+      return;
+    }
+
+    if (realtimeSocketRef.current) {
+      realtimeSocketRef.current.close();
+      realtimeSocketRef.current = null;
+    }
+
+    const socket = new WebSocket(resolvedApi.getRealtimeUrl(generationId));
+    realtimeSocketRef.current = socket;
+
+    socket.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(String(event.data)) as {
+          data?: {
+            type?: "job" | "progress";
+            generation?: unknown;
+            progress?: ImageGenerationProgressSnapshot;
+          };
+        };
+
+        if (payload.data?.type === "job" && payload.data.generation) {
+          applyJobToState(normalizeGenerationJob(payload.data.generation));
+          return;
+        }
+
+        if (payload.data?.type === "progress" && payload.data.progress) {
+          setProgress({
+            status: normalizeTaskStatus(payload.data.progress.status),
+            progressPercent: payload.data.progress.progressPercent,
+            stage: payload.data.progress.stage,
+            message: payload.data.progress.message,
+          });
+        }
+      } catch {
+        // ignore malformed realtime payload
+      }
+    };
+
+    return () => {
+      socket.close();
+      if (realtimeSocketRef.current === socket) {
+        realtimeSocketRef.current = null;
+      }
+    };
+  }, [generationId, resolvedApi]);
+
   const appendLog = (
     stageKey: string,
     detailKey: string,
@@ -604,6 +679,18 @@ export function useImageGenerationStudioState(api: ImageGenerationStudioApi = de
     setTaskStatus(nextTaskStatus);
     setPageStatus(derivePageStatus(nextTaskStatus));
     setApiErrorMessage(job.error?.message ?? null);
+    setProgress((current) => ({
+      status: nextTaskStatus,
+      progressPercent:
+        nextTaskStatus === "succeeded" ||
+        nextTaskStatus === "failed" ||
+        nextTaskStatus === "blocked" ||
+        nextTaskStatus === "cancelled"
+          ? 100
+          : current.progressPercent || (nextTaskStatus === "running" ? 66 : 12),
+      stage: nextTaskStatus ?? current.stage,
+      message: job.error?.message ?? current.message,
+    }));
     const derived = derivePreviewState(job);
     setPreviewStatus(derived.previewStatus);
     setResult(derived.result);
@@ -699,6 +786,8 @@ export function useImageGenerationStudioState(api: ImageGenerationStudioApi = de
   const submit = async (options?: {
     workflowJson?: string;
     providerParams?: Record<string, unknown>;
+    providerId?: string;
+    model?: string;
   }) => {
     if (formStatus === "invalid" || isRunning) {
       return;
@@ -723,6 +812,10 @@ export function useImageGenerationStudioState(api: ImageGenerationStudioApi = de
       workflowForm,
       options?.workflowJson,
       options?.providerParams,
+      {
+        providerId: options?.providerId,
+        model: options?.model,
+      },
     );
 
     lastSubmittedSignatureRef.current = currentSignature;
@@ -732,6 +825,12 @@ export function useImageGenerationStudioState(api: ImageGenerationStudioApi = de
     setTaskStatus("queued");
     setResult(null);
     setApiErrorMessage(null);
+    setProgress({
+      status: "queued",
+      progressPercent: 8,
+      stage: "queued",
+      message: undefined,
+    });
     appendLog(
       "settings.microApps.imageGenerationStudio.logs.submissionStage",
       "settings.microApps.imageGenerationStudio.logs.submissionQueued",
@@ -809,6 +908,12 @@ export function useImageGenerationStudioState(api: ImageGenerationStudioApi = de
     setLogs([]);
     setGenerationId(null);
     setApiErrorMessage(null);
+    setProgress({
+      status: null,
+      progressPercent: 0,
+      stage: "",
+      message: undefined,
+    });
     lastSubmittedSignatureRef.current = null;
     lastLoggedStatusRef.current = null;
     if (previewObjectUrlRef.current) {
@@ -833,6 +938,7 @@ export function useImageGenerationStudioState(api: ImageGenerationStudioApi = de
     isRunning,
     generationId,
     apiErrorMessage,
+    progress,
     canCancel: false,
     setMode: setModeWithRules,
     setProvider: (nextProvider: StudioProvider) => {

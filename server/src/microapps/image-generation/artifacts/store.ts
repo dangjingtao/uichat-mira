@@ -15,12 +15,15 @@ export class LocalImageGenerationArtifactStore
   implements ImageGenerationArtifactStore
 {
   private readonly rootDir: string;
+  private readonly publicBaseUrl: string;
   private readonly fetchImpl: typeof fetch;
   private readonly now: () => string;
   private readonly idFactory: () => string;
 
   constructor(options: ArtifactStoreOptions) {
     this.rootDir = options.rootDir;
+    this.publicBaseUrl =
+      options.publicBaseUrl?.replace(/\/+$/, "") ?? "/artifacts/image-generation";
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.now = options.now ?? (() => new Date().toISOString());
     this.idFactory = options.idFactory ?? randomUUID;
@@ -78,6 +81,11 @@ export class LocalImageGenerationArtifactStore
     }
 
     await fs.writeFile(localPath, bytes);
+    const rootRelativePath = path
+      .relative(this.rootDir, localPath)
+      .split(path.sep)
+      .map(encodeURIComponent)
+      .join("/");
 
     return {
       id,
@@ -85,6 +93,7 @@ export class LocalImageGenerationArtifactStore
       mimeType: input.mimeType,
       source: input.source,
       localPath,
+      publicUrl: `${this.publicBaseUrl}/${rootRelativePath}`,
       fileName,
       byteSize: input.byteSize ?? bytes.byteLength,
       remoteUrl: input.remoteUrl,

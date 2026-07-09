@@ -87,6 +87,13 @@ export type ResultMetadata = {
   errorMessage?: string;
 };
 
+export type ResultProgressMetadata = {
+  status: StudioTaskStatus | null;
+  progressPercent: number;
+  stage: string;
+  message?: string;
+};
+
 export type SubmittedSnapshot = {
   mode: StudioMode;
   provider: StudioProvider;

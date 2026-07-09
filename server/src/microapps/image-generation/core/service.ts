@@ -3,13 +3,16 @@ import {
   isTerminalImageGenerationJobStatus,
   transitionImageGenerationJob,
 } from "./job-lifecycle.js";
+import { createInMemoryImageGenerationRealtimeStore } from "./realtime-store.js";
 import type {
   ImageGenerationAdapterRunResult,
   ImageGenerationArtifactCandidate,
   ImageGenerationCreateRequest,
   ImageGenerationJob,
   ImageGenerationJobError,
+  ImageGenerationRealtimeEvent,
   ImageGenerationJobStore,
+  ImageGenerationProgressSnapshot,
   ImageGenerationRequestSummary,
   ImageGenerationServiceDeps,
 } from "./types.js";
@@ -131,10 +134,13 @@ const validateCreateRequest = (request: ImageGenerationCreateRequest) => {
 
 export class ImageGenerationService {
   private readonly deps: Required<ImageGenerationServiceDeps>;
+  private readonly monitorTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(deps: ImageGenerationServiceDeps) {
     this.deps = {
       ...deps,
+      realtimeStore:
+        deps.realtimeStore ?? createInMemoryImageGenerationRealtimeStore(),
       now: deps.now ?? defaultNow,
       createId: deps.createId ?? defaultCreateId,
     };
@@ -158,6 +164,15 @@ export class ImageGenerationService {
     });
 
     await this.deps.jobStore.create(job);
+    this.publishJob(job);
+    this.publishProgress({
+      generationId: job.id,
+      status: job.status,
+      stage: "queued",
+      progressPercent: 8,
+      message: "Job created.",
+      updatedAt: createdAt,
+    });
 
     return this.runAdapter(job, async () =>
       adapter.startGeneration({
@@ -170,6 +185,17 @@ export class ImageGenerationService {
 
   async getGeneration(jobId: string) {
     return this.deps.jobStore.getById(jobId);
+  }
+
+  subscribeRealtime(
+    generationId: string,
+    listener: (event: ImageGenerationRealtimeEvent) => void,
+  ) {
+    return this.deps.realtimeStore.subscribe(generationId, listener);
+  }
+
+  getProgressSnapshot(generationId: string) {
+    return this.deps.realtimeStore.getProgress(generationId);
   }
 
   async refreshGeneration(jobId: string) {
@@ -239,6 +265,9 @@ export class ImageGenerationService {
       });
 
       await this.deps.jobStore.update(nextJob);
+      this.publishJob(nextJob);
+      this.publishProgress(this.toProgressSnapshot(nextJob, result));
+      this.syncMonitor(nextJob);
       return nextJob;
     } catch (error) {
       const failedJob = transitionImageGenerationJob(job, "failed", {
@@ -247,8 +276,102 @@ export class ImageGenerationService {
       });
 
       await this.deps.jobStore.update(failedJob);
+      this.publishJob(failedJob);
+      this.publishProgress(
+        this.toProgressSnapshot(failedJob, {
+          status: "failed",
+          error: failedJob.error,
+        }),
+      );
+      this.syncMonitor(failedJob);
       return failedJob;
     }
+  }
+
+  private publishJob(job: ImageGenerationJob) {
+    this.deps.realtimeStore.publishJob(job);
+  }
+
+  private publishProgress(progress: ImageGenerationProgressSnapshot) {
+    this.deps.realtimeStore.publishProgress(progress);
+  }
+
+  private toProgressSnapshot(
+    job: ImageGenerationJob,
+    result: Partial<ImageGenerationAdapterRunResult>,
+  ): ImageGenerationProgressSnapshot {
+    const details =
+      result.meta && typeof result.meta.progress === "object" && result.meta.progress
+        ? (result.meta.progress as Record<string, unknown>)
+        : null;
+    const progressPercent =
+      typeof details?.percent === "number"
+        ? Math.max(0, Math.min(100, Math.round(details.percent)))
+        : this.defaultProgressPercent(job.status);
+    const stage =
+      typeof details?.stage === "string" && details.stage.trim()
+        ? details.stage.trim()
+        : job.status;
+    const message =
+      typeof details?.message === "string" && details.message.trim()
+        ? details.message.trim()
+        : job.error?.message;
+
+    return {
+      generationId: job.id,
+      providerJobId: job.providerJobId,
+      status: job.status,
+      stage,
+      progressPercent,
+      message,
+      updatedAt: job.updatedAt,
+    };
+  }
+
+  private defaultProgressPercent(status: ImageGenerationJob["status"]) {
+    switch (status) {
+      case "queued":
+        return 12;
+      case "running":
+        return 66;
+      case "succeeded":
+        return 100;
+      case "failed":
+      case "cancelled":
+      case "blocked":
+        return 100;
+      default:
+        return 0;
+    }
+  }
+
+  private syncMonitor(job: ImageGenerationJob) {
+    if (isTerminalImageGenerationJobStatus(job.status)) {
+      const existing = this.monitorTimers.get(job.id);
+      if (existing) {
+        clearTimeout(existing);
+        this.monitorTimers.delete(job.id);
+      }
+      return;
+    }
+
+    const adapter = this.deps.adapterRegistry.getAdapter(job.providerId);
+    if (!adapter?.getGeneration) {
+      return;
+    }
+
+    const existing = this.monitorTimers.get(job.id);
+    if (existing) {
+      clearTimeout(existing);
+    }
+
+    const timer = setTimeout(() => {
+      this.monitorTimers.delete(job.id);
+      void this.refreshGeneration(job.id).catch(() => {
+        // refreshGeneration already persists failed state when adapter execution throws
+      });
+    }, 1200);
+    this.monitorTimers.set(job.id, timer);
   }
 }
 

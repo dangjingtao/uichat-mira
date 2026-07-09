@@ -7,6 +7,7 @@ import {
 } from "../node-runtime";
 import { getLatestUserQuestion } from "../nodes/index";
 import type { AgentNodeState, EmitAgentExecutionNode } from "../node-runtime";
+import type { PlannerObservationContext } from "../types";
 import { matchToolCandidatesByEmbedding } from "./embedding-capability-matcher";
 import {
   resolveInvocationCandidateToolIds,
@@ -32,6 +33,9 @@ const toAgentToolExposureState = (
 
 const DEFAULT_TOOL_GUARD_CANDIDATE_LIMIT = 10;
 const EXPLICIT_TARGET_READ_TOOLS = new Set(["read_open", "read", "read_slice"]);
+const READ_CONTENT_TOKENS = ["read", "open", "content", "contents", "读取", "打开", "内容", "阅读"];
+const LOCATE_TOKENS = ["find", "locate", "where", "查找", "定位", "在哪里"];
+const MUTATION_TOKENS = ["delete", "remove", "write", "overwrite", "rename", "move", "删除", "移除", "写入", "覆盖", "重命名", "移动"];
 
 const hasExplicitReadTarget = (query: string) => {
   const normalized = query.trim();
@@ -54,13 +58,52 @@ const hasExplicitReadTarget = (query: string) => {
   return /[\w\-./\\]+\.[a-z0-9]{1,12}\b/i.test(normalized);
 };
 
-const buildSelectionReviewNotes = (state: AgentNodeState) => {
-  const evidence = state.evidence;
-  if (!evidence) {
-    return [] as string[];
+const normalizeCoverageQuery = (query: string) => query.trim().toLowerCase();
+
+const includesCoverageToken = (query: string, tokens: string[]) => {
+  const normalized = normalizeCoverageQuery(query);
+  return tokens.some((token) => normalized.includes(token));
+};
+
+const extractFallbackCoverageTarget = (query: string) => {
+  const quotedMatch = [...query.matchAll(/["'`“”‘’]([^"'`“”‘’]+)["'`“”‘’]/g)]
+    .map((match) => match[1]?.trim())
+    .filter((value): value is string => Boolean(value))
+    .at(-1);
+  if (quotedMatch) {
+    return quotedMatch;
   }
 
+  const fileLikeMatch = query.match(/([\w./\\-]+\.[a-z0-9]{1,12})\b/i);
+  if (fileLikeMatch?.[1]) {
+    return fileLikeMatch[1];
+  }
+
+  const chineseTargetMatch = query.match(/(?:删除|移除|删掉|打开|读取|查看|写入|覆盖)\s+([^\s，。！？]+)/u);
+  if (chineseTargetMatch?.[1]) {
+    return chineseTargetMatch[1].trim();
+  }
+
+  return undefined;
+};
+
+const buildSelectionReviewNotes = (
+  state: AgentNodeState,
+  observationContext: PlannerObservationContext,
+) => {
+  const evidence = state.evidence;
   const notes: string[] = [];
+  if (state.currentTaskFrame?.currentSubtask) {
+    notes.push(`Current subtask: ${state.currentTaskFrame.currentSubtask}`);
+  }
+  if (state.currentTaskFrame?.currentBlocker) {
+    notes.push(`Current blocker: ${state.currentTaskFrame.currentBlocker}`);
+  }
+
+  if (!evidence) {
+    return notes;
+  }
+
   const latestRetrieval = evidence.retrievals.at(-1);
   const latestCompletedTool = [...evidence.toolExecutions]
     .reverse()
@@ -100,11 +143,110 @@ const buildSelectionReviewNotes = (state: AgentNodeState) => {
     }
   }
 
+  if (
+    observationContext.recovery.source === "tool_failure" &&
+    observationContext.recovery.errorMessage
+  ) {
+    const toolLabel = observationContext.recovery.toolId ?? "the previous tool";
+    notes.push(
+      `${toolLabel} failed recoverably: ${observationContext.recovery.errorMessage}`,
+    );
+  }
+
   return notes;
 };
 
-const buildTaskCoverageReviewContext = (state: AgentNodeState) => {
-  const taskCoverageView = buildPlannerObservationContext(state).taskCoverageView;
+const buildPreferredCoverageActionContext = (input: {
+  query: string;
+  taskCoverageView: NonNullable<PlannerObservationContext["taskCoverageView"]>;
+  recovery: PlannerObservationContext["recovery"];
+}) => {
+  const nextPendingAction = input.taskCoverageView.pendingActions[0];
+  const nextPendingTarget =
+    input.taskCoverageView.pendingTargets[0] ??
+    input.taskCoverageView.requiredTargets.find(
+      (target) => !input.taskCoverageView.coveredTargets.includes(target),
+    ) ??
+    extractFallbackCoverageTarget(input.query);
+  const lines = ["Preferred next coverage action:"];
+  const inferredPendingAction =
+    nextPendingAction ??
+    (nextPendingTarget
+      ? includesCoverageToken(input.query, MUTATION_TOKENS)
+        ? "mutation_execution"
+        : includesCoverageToken(input.query, READ_CONTENT_TOKENS)
+          ? "read_open"
+          : includesCoverageToken(input.query, LOCATE_TOKENS)
+            ? "read_locate"
+            : "read_locate"
+      : undefined);
+
+  switch (inferredPendingAction) {
+    case "read_open":
+      lines.push("- action: read_open");
+      lines.push(`- target: ${nextPendingTarget ?? "unknown"}`);
+      lines.push("- guidance: prioritize the remaining unopened target and avoid already opened targets.");
+      break;
+    case "read_locate":
+      lines.push("- action: read_locate");
+      lines.push(`- target: ${nextPendingTarget ?? "unknown"}`);
+      lines.push("- guidance: prioritize the target that is still not located.");
+      break;
+    case "mutation_execution":
+      lines.push("- action: mutation_execution");
+      lines.push(`- target: ${nextPendingTarget ?? "unknown"}`);
+      lines.push("- guidance: prioritize edit or mutation capabilities over read-only answer collection.");
+      break;
+    case "mutation_verification":
+      lines.push("- action: mutation_verification");
+      lines.push(`- target: ${nextPendingTarget ?? "unknown"}`);
+      lines.push("- guidance: prioritize read_open or read_extract style verification evidence.");
+      break;
+    case "recoverable_execution":
+      lines.push("- action: recoverable_execution");
+      lines.push(`- tool: ${input.recovery.toolId ?? "unknown"}`);
+      if (nextPendingTarget) {
+        lines.push(`- target: ${nextPendingTarget}`);
+      }
+      lines.push(
+        `- failureSummary: ${input.recovery.errorMessage ?? "The previous attempt failed recoverably."}`,
+      );
+      lines.push(
+        "- recoveryRequirement: the next attempt must differ from the previous failed invocation.",
+      );
+      break;
+    case "read_list":
+      lines.push("- action: read_list");
+      lines.push("- guidance: prioritize directory listing evidence before answering.");
+      break;
+    case "search_execution":
+      lines.push("- action: search_execution");
+      lines.push("- guidance: prioritize external or retrieval evidence for the remaining search gap.");
+      break;
+    case "terminal_execution":
+      lines.push("- action: terminal_execution");
+      lines.push("- guidance: prioritize command execution evidence before answering.");
+      break;
+    default:
+      if (!inferredPendingAction && !nextPendingTarget) {
+        return undefined;
+      }
+      lines.push(`- action: ${inferredPendingAction ?? "coverage_gap_review"}`);
+      if (nextPendingTarget) {
+        lines.push(`- target: ${nextPendingTarget}`);
+      }
+      break;
+  }
+
+  return lines.join("\n");
+};
+
+const buildTaskCoverageReviewContext = (input: {
+  query: string;
+  taskCoverageView?: PlannerObservationContext["taskCoverageView"];
+  recovery: PlannerObservationContext["recovery"];
+}) => {
+  const taskCoverageView = input.taskCoverageView;
   if (!taskCoverageView) {
     return undefined;
   }
@@ -122,10 +264,16 @@ const buildTaskCoverageReviewContext = (state: AgentNodeState) => {
   if (blockedReason) {
     lines.push(`- blockedReason: ${blockedReason}`);
   }
+  const preferredNextCoverageAction = buildPreferredCoverageActionContext({
+    query: input.query,
+    taskCoverageView,
+    recovery: input.recovery,
+  });
 
   return {
     taskCoverageView,
     reviewText: lines.join("\n"),
+    preferredNextCoverageAction,
   };
 };
 
@@ -306,16 +454,24 @@ export const toolSelectNode = async (
   emit?: EmitAgentExecutionNode,
 ): Promise<Partial<AgentNodeState>> => {
   const query = getLatestUserQuestion(state.messages) || state.goal.text;
-  const reviewNotes = buildSelectionReviewNotes(state);
-  const taskCoverageReviewContext = buildTaskCoverageReviewContext(state);
+  const observationContext = buildPlannerObservationContext(state);
+  const reviewNotes = buildSelectionReviewNotes(state, observationContext);
+  const taskCoverageReviewContext = buildTaskCoverageReviewContext({
+    query,
+    taskCoverageView: observationContext.taskCoverageView,
+    recovery: observationContext.recovery,
+  });
   const effectiveQuery =
     reviewNotes.length > 0 || taskCoverageReviewContext
       ? [
-          query,
-          reviewNotes.length > 0
-            ? `Review context:\n${reviewNotes.map((note) => `- ${note}`).join("\n")}`
-            : undefined,
+          `Original user query:\n${query}`,
+          `Review context:\n${
+            reviewNotes.length > 0
+              ? reviewNotes.map((note) => `- ${note}`).join("\n")
+              : "- none"
+          }`,
           taskCoverageReviewContext?.reviewText,
+          taskCoverageReviewContext?.preferredNextCoverageAction,
         ]
           .filter((section): section is string => Boolean(section))
           .join("\n\n")

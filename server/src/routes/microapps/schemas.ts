@@ -134,6 +134,7 @@ const imageGenerationArtifactSchema = {
     mimeType: { type: "string" },
     source: { type: "string", enum: imageGenerationArtifactSourceValues },
     localPath: { type: "string" },
+    publicUrl: { type: "string" },
     remoteUrl: { type: "string" },
     expiresAt: { type: "string", format: "date-time" },
     width: { type: "number" },
@@ -196,6 +197,27 @@ const imageGenerationArtifactParamsSchema = {
   properties: {
     id: { type: "string" },
     artifactId: { type: "string" },
+  },
+} as const;
+
+const imageGenerationProgressSchema = {
+  type: "object",
+  required: [
+    "generationId",
+    "status",
+    "stage",
+    "progressPercent",
+    "updatedAt",
+  ],
+  additionalProperties: false,
+  properties: {
+    generationId: { type: "string" },
+    providerJobId: { type: "string" },
+    status: { type: "string", enum: imageGenerationJobStatusValues },
+    stage: { type: "string" },
+    progressPercent: { type: "number" },
+    message: { type: "string" },
+    updatedAt: { type: "string", format: "date-time" },
   },
 } as const;
 
@@ -426,6 +448,18 @@ export const imageGenerationRouteSchemas = {
         type: "string",
         format: "binary",
       },
+      401: errorEnvelope,
+      404: errorEnvelope,
+      500: errorEnvelope,
+    },
+  },
+  getGenerationProgress: {
+    tags: ["MicroAPP"],
+    summary: "Get image generation job progress",
+    security: [{ bearerAuth: [] }],
+    params: idParamsSchema,
+    response: {
+      200: successEnvelope(imageGenerationProgressSchema),
       401: errorEnvelope,
       404: errorEnvelope,
       500: errorEnvelope,

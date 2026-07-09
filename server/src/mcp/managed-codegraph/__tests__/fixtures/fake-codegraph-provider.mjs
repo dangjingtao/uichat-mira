@@ -15,6 +15,65 @@ const healthSequence = (process.env.FAKE_HEALTH_SEQUENCE ?? "ready")
 
 let healthIndex = 0;
 
+const parseCandidates = (rawValue, fallbackKind) => {
+  if (!rawValue) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(rawValue);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.map((entry, index) => ({
+      path: typeof entry.path === "string" ? entry.path : `unknown-${index}.ts`,
+      startLine: Number.isInteger(entry.startLine) ? entry.startLine : null,
+      endLine: Number.isInteger(entry.endLine) ? entry.endLine : null,
+      kind: typeof entry.kind === "string" ? entry.kind : fallbackKind,
+      summary: typeof entry.summary === "string" ? entry.summary : `summary-${index}`,
+      snippet: typeof entry.snippet === "string" ? entry.snippet : null,
+      score: typeof entry.score === "number" ? entry.score : 0.5,
+    }));
+  } catch {
+    return [];
+  }
+};
+
+const defaultCommandCandidates = {
+  query: [
+    {
+      path: "server/src/agent/planner.ts",
+      startLine: 10,
+      endLine: 18,
+      kind: "symbol-definition",
+      summary: "planner entry point",
+      snippet: "export function planner() {\n  return 'planner';\n}",
+      score: 0.92,
+    },
+  ],
+  explore: [
+    {
+      path: "docs/architecture/README.md",
+      startLine: 20,
+      endLine: 35,
+      kind: "text-hit",
+      summary: "architecture overview",
+      snippet: "renderer -> preload -> backend",
+      score: 0.76,
+    },
+  ],
+  affected: [
+    {
+      path: "server/src/mcp/router.ts",
+      startLine: 42,
+      endLine: 58,
+      kind: "impact-edge",
+      summary: "MCP route impact",
+      snippet: "registerRoute('mcp')",
+      score: 0.83,
+    },
+  ],
+};
+
 const writeFrame = (payload) => {
   process.stdout.write(`${JSON.stringify(payload)}\n`);
 };
@@ -134,6 +193,40 @@ process.stdin.on("data", (chunk) => {
       continue;
     }
 
+    if (
+      message.method === "codegraph/query" ||
+      message.method === "codegraph/explore" ||
+      message.method === "codegraph/affected"
+    ) {
+      const rawMode = process.env.FAKE_QUERY_MODE ?? "ok";
+      if (rawMode === "error") {
+        writeFrame({
+          jsonrpc: "2.0",
+          id: message.id,
+          error: {
+            code: -32020,
+            message: "query failed",
+          },
+        });
+        continue;
+      }
+
+      const command = message.method.replace("codegraph/", "");
+      const envKey = `FAKE_${command.toUpperCase()}_CANDIDATES`;
+      const candidates = parseCandidates(
+        process.env[envKey],
+        command === "affected" ? "impact-edge" : command === "explore" ? "text-hit" : "reference",
+      );
+      writeFrame({
+        jsonrpc: "2.0",
+        id: message.id,
+        result: {
+          candidates: candidates.length > 0 ? candidates : defaultCommandCandidates[command],
+        },
+      });
+      continue;
+    }
+
     if (message.method === "shutdown") {
       if ((process.env.FAKE_SHUTDOWN_MODE ?? "exit") === "hang") {
         continue;
@@ -149,4 +242,3 @@ process.stdin.on("data", (chunk) => {
     }
   }
 });
-

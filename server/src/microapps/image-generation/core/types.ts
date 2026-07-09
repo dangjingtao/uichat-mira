@@ -59,6 +59,7 @@ export type ImageGenerationArtifactSummary = {
   mimeType: string;
   source: ImageGenerationArtifactSource;
   localPath?: string;
+  publicUrl?: string;
   remoteUrl?: string;
   expiresAt?: string;
   width?: number;
@@ -161,10 +162,42 @@ export interface ImageGenerationJobStore {
   update(job: ImageGenerationJob): Promise<void>;
 }
 
+export type ImageGenerationProgressSnapshot = {
+  generationId: string;
+  providerJobId?: string;
+  status: ImageGenerationJobStatus;
+  stage: string;
+  progressPercent: number;
+  message?: string;
+  updatedAt: string;
+};
+
+export type ImageGenerationRealtimeEvent =
+  | {
+      type: "job";
+      generation: ImageGenerationJob;
+    }
+  | {
+      type: "progress";
+      progress: ImageGenerationProgressSnapshot;
+    };
+
+export interface ImageGenerationRealtimeStore {
+  publishJob(job: ImageGenerationJob): void;
+  publishProgress(progress: ImageGenerationProgressSnapshot): void;
+  subscribe(
+    generationId: string,
+    listener: (event: ImageGenerationRealtimeEvent) => void,
+  ): () => void;
+  getJob(generationId: string): ImageGenerationJob | null;
+  getProgress(generationId: string): ImageGenerationProgressSnapshot | null;
+}
+
 export type ImageGenerationServiceDeps = {
   adapterRegistry: ImageGenerationAdapterRegistry;
   artifactStore: ImageGenerationArtifactStore;
   jobStore: ImageGenerationJobStore;
+  realtimeStore?: ImageGenerationRealtimeStore;
   now?: () => string;
   createId?: () => string;
 };

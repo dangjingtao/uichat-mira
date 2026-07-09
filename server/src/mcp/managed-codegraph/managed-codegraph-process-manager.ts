@@ -398,6 +398,22 @@ export class ManagedCodeGraphProcessManager {
     }
   }
 
+  async request<T>(
+    method: string,
+    params: Record<string, unknown>,
+    timeoutMs = this.options.healthTimeoutMs ?? DEFAULT_TIMEOUT_MS,
+  ): Promise<T> {
+    if (this.delegateOwner) {
+      return await this.delegateOwner.request<T>(method, params, timeoutMs);
+    }
+
+    if (!this.session || !this.session.isAlive()) {
+      throw new Error("Managed CodeGraph process is not ready");
+    }
+
+    return await this.session.request<T>(method, params, timeoutMs);
+  }
+
   async stop() {
     if (this.delegateOwner) {
       this.delegateOwner = null;
