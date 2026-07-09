@@ -64,6 +64,7 @@ describe("useImageGenerationStudioState", () => {
     const api = {
       createImageGeneration: vi.fn(),
       getImageGeneration: vi.fn(),
+      getArtifactPreviewUrl: vi.fn(),
     };
     render(<HookProbe api={api} />);
     act(() => {
@@ -85,6 +86,7 @@ describe("useImageGenerationStudioState", () => {
     const api = {
       createImageGeneration: vi.fn(),
       getImageGeneration: vi.fn(),
+      getArtifactPreviewUrl: vi.fn(),
     };
     render(<HookProbe api={api} />);
     act(() => {
@@ -98,7 +100,7 @@ describe("useImageGenerationStudioState", () => {
     expect(screen.getByTestId("task-status").textContent).toBe("none");
   });
 
-  it("polls running jobs with refresh=true and adopts local-file previews", async () => {
+  it("polls running jobs with refresh=true and adopts authenticated blob previews", async () => {
     const api = {
       createImageGeneration: vi.fn().mockResolvedValue({
         generationId: "job-1",
@@ -140,6 +142,7 @@ describe("useImageGenerationStudioState", () => {
         updatedAt: "2026-07-06T00:00:01.000Z",
         completedAt: "2026-07-06T00:00:01.000Z",
       }),
+      getArtifactPreviewUrl: vi.fn().mockResolvedValue("blob:job-1"),
     };
 
     render(<HookProbe api={api} />);
@@ -159,18 +162,21 @@ describe("useImageGenerationStudioState", () => {
     await act(async () => {
       vi.advanceTimersByTime(1200);
       await Promise.resolve();
+      await Promise.resolve();
     });
 
     expect(api.getImageGeneration).toHaveBeenCalledWith("job-1", {
       refresh: true,
     });
-    expect(screen.getByTestId("task-status").textContent).toBe("succeeded");
-    expect(screen.getByTestId("preview-src").textContent).toBe(
-      "/api/microapps/image-generation/generations/job-1/artifacts/artifact-1/content",
+    expect(api.getArtifactPreviewUrl).toHaveBeenCalledWith(
+      "job-1",
+      "artifact-1",
     );
+    expect(screen.getByTestId("task-status").textContent).toBe("succeeded");
+    expect(screen.getByTestId("preview-src").textContent).toBe("blob:job-1");
   });
 
-  it("prefers backend artifact urls when the artifact was materialized to a local file", async () => {
+  it("prefers authenticated blob previews when the artifact was materialized locally", async () => {
     const api = {
       createImageGeneration: vi.fn().mockResolvedValue({
         generationId: "job-remote-1",
@@ -196,7 +202,8 @@ describe("useImageGenerationStudioState", () => {
             type: "image",
             mimeType: "image/png",
             source: "remote-url",
-            localPath: "D:\\workspace\\rag-demo\\server\\.artifacts\\job-remote-1.png",
+            localPath:
+              "D:\\workspace\\rag-demo\\server\\.artifacts\\job-remote-1.png",
             remoteUrl:
               "http://127.0.0.1:8188/view?filename=job-remote-1.png&type=output",
             width: 1024,
@@ -214,6 +221,7 @@ describe("useImageGenerationStudioState", () => {
         updatedAt: "2026-07-06T00:00:01.000Z",
         completedAt: "2026-07-06T00:00:01.000Z",
       }),
+      getArtifactPreviewUrl: vi.fn().mockResolvedValue("blob:job-remote-1"),
     };
 
     render(<HookProbe api={api} />);
@@ -231,11 +239,16 @@ describe("useImageGenerationStudioState", () => {
     await act(async () => {
       vi.advanceTimersByTime(1200);
       await Promise.resolve();
+      await Promise.resolve();
     });
 
+    expect(api.getArtifactPreviewUrl).toHaveBeenCalledWith(
+      "job-remote-1",
+      "artifact-remote-1",
+    );
     expect(screen.getByTestId("task-status").textContent).toBe("succeeded");
     expect(screen.getByTestId("preview-src").textContent).toBe(
-      "/api/microapps/image-generation/generations/job-remote-1/artifacts/artifact-remote-1/content",
+      "blob:job-remote-1",
     );
   });
 });

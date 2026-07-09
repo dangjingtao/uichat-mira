@@ -1,6 +1,7 @@
 import { listCapabilityDefinitions } from "@/harness/registry";
 import {
   emitStepNode,
+  buildPlannerObservationContext,
   getIterativeNodeId,
   getTraceAttemptMeta,
 } from "../node-runtime";
@@ -100,6 +101,32 @@ const buildSelectionReviewNotes = (state: AgentNodeState) => {
   }
 
   return notes;
+};
+
+const buildTaskCoverageReviewContext = (state: AgentNodeState) => {
+  const taskCoverageView = buildPlannerObservationContext(state).taskCoverageView;
+  if (!taskCoverageView) {
+    return undefined;
+  }
+
+  const { pendingTargets, pendingActions, blockedReason } = taskCoverageView;
+  if (pendingTargets.length === 0 && pendingActions.length === 0 && !blockedReason) {
+    return undefined;
+  }
+
+  const lines = [
+    "Remaining task coverage:",
+    `- pendingTargets: [${pendingTargets.join(", ")}]`,
+    `- pendingActions: [${pendingActions.join(", ")}]`,
+  ];
+  if (blockedReason) {
+    lines.push(`- blockedReason: ${blockedReason}`);
+  }
+
+  return {
+    taskCoverageView,
+    reviewText: lines.join("\n"),
+  };
 };
 
 const applyToolGuard = (input: {
@@ -280,9 +307,18 @@ export const toolSelectNode = async (
 ): Promise<Partial<AgentNodeState>> => {
   const query = getLatestUserQuestion(state.messages) || state.goal.text;
   const reviewNotes = buildSelectionReviewNotes(state);
+  const taskCoverageReviewContext = buildTaskCoverageReviewContext(state);
   const effectiveQuery =
-    reviewNotes.length > 0
-      ? `${query}\n\nReview context:\n${reviewNotes.map((note) => `- ${note}`).join("\n")}`
+    reviewNotes.length > 0 || taskCoverageReviewContext
+      ? [
+          query,
+          reviewNotes.length > 0
+            ? `Review context:\n${reviewNotes.map((note) => `- ${note}`).join("\n")}`
+            : undefined,
+          taskCoverageReviewContext?.reviewText,
+        ]
+          .filter((section): section is string => Boolean(section))
+          .join("\n\n")
       : query;
   const nodeId = getIterativeNodeId("agent-tool-select", state);
   const traceAttemptMeta = getTraceAttemptMeta("agent-tool-select", state);
@@ -344,6 +380,7 @@ export const toolSelectNode = async (
       query,
       effectiveQuery,
       reviewNotes,
+      taskCoverageView: taskCoverageReviewContext?.taskCoverageView ?? null,
       selectedToolIds: resolvedToolIntent.selectedToolIds,
       candidateToolIds: resolvedToolIntent.candidateToolIds,
       topCandidates: resolvedToolIntent.topCandidates,

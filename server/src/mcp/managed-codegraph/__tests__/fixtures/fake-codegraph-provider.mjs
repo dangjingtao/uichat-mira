@@ -1,0 +1,152 @@
+import process from "node:process";
+
+const args = process.argv.slice(2);
+const command = args.at(0);
+
+const providerVersion = process.env.FAKE_PROVIDER_VERSION ?? "1.2.3";
+const telemetryStatus = process.env.FAKE_TELEMETRY_STATUS ?? "disabled";
+const workspaceHash = process.env.CODEGRAPH_WORKSPACE_HASH ?? "missing-workspace-hash";
+const indexRoot = process.env.CODEGRAPH_INDEX_ROOT ?? "missing-index-root";
+const logRoot = process.env.CODEGRAPH_LOG_ROOT ?? "missing-log-root";
+const healthSequence = (process.env.FAKE_HEALTH_SEQUENCE ?? "ready")
+  .split(",")
+  .map((entry) => entry.trim())
+  .filter(Boolean);
+
+let healthIndex = 0;
+
+const writeFrame = (payload) => {
+  process.stdout.write(`${JSON.stringify(payload)}\n`);
+};
+
+const resolveHealthMode = () => {
+  const current = healthSequence[Math.min(healthIndex, healthSequence.length - 1)] ?? "ready";
+  healthIndex += 1;
+  return current;
+};
+
+if (command === "--version") {
+  process.stdout.write(`${providerVersion}\n`);
+  process.exit(0);
+}
+
+if (command === "--telemetry-status") {
+  process.stdout.write(`${telemetryStatus}\n`);
+  process.exit(0);
+}
+
+if (command !== "--mcp") {
+  process.stderr.write(`unknown command ${command}\n`);
+  process.exit(2);
+}
+
+if (Number(process.env.FAKE_CRASH_AFTER_MS ?? "0") > 0) {
+  setTimeout(() => {
+    process.exit(Number(process.env.FAKE_CRASH_EXIT_CODE ?? "91"));
+  }, Number(process.env.FAKE_CRASH_AFTER_MS));
+}
+
+process.stdin.setEncoding("utf8");
+let buffer = "";
+
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  while (true) {
+    const newlineIndex = buffer.indexOf("\n");
+    if (newlineIndex === -1) {
+      break;
+    }
+
+    const line = buffer.slice(0, newlineIndex).trim();
+    buffer = buffer.slice(newlineIndex + 1);
+    if (!line) {
+      continue;
+    }
+
+    let message;
+    try {
+      message = JSON.parse(line);
+    } catch {
+      process.stderr.write("invalid json\n");
+      process.exit(3);
+    }
+
+    if (message.method === "initialize") {
+      if ((process.env.FAKE_HANDSHAKE_MODE ?? "ok") === "fail") {
+        writeFrame({
+          jsonrpc: "2.0",
+          id: message.id,
+          error: {
+            code: -32000,
+            message: "initialize failed",
+          },
+        });
+        continue;
+      }
+
+      writeFrame({
+        jsonrpc: "2.0",
+        id: message.id,
+        result: {
+          protocolVersion: "2025-06-18",
+          serverInfo: {
+            name: "fake-codegraph",
+            version: providerVersion,
+          },
+          capabilities: {
+            tools: {},
+          },
+        },
+      });
+      continue;
+    }
+
+    if (message.method === "codegraph/health") {
+      const mode = resolveHealthMode();
+      if (mode === "error") {
+        writeFrame({
+          jsonrpc: "2.0",
+          id: message.id,
+          error: {
+            code: -32001,
+            message: "health probe failed",
+          },
+        });
+        continue;
+      }
+
+      if (mode === "hang") {
+        continue;
+      }
+
+      writeFrame({
+        jsonrpc: "2.0",
+        id: message.id,
+        result: {
+          providerVersion,
+          telemetryStatus,
+          workspaceHash: mode === "workspace_mismatch" ? "wrong-workspace-hash" : workspaceHash,
+          indexRoot,
+          logRoot,
+          status: mode === "degraded" ? "degraded" : "ready",
+        },
+      });
+      continue;
+    }
+
+    if (message.method === "shutdown") {
+      if ((process.env.FAKE_SHUTDOWN_MODE ?? "exit") === "hang") {
+        continue;
+      }
+      setTimeout(() => {
+        process.exit(Number(process.env.FAKE_EXIT_CODE ?? "0"));
+      }, 10);
+      continue;
+    }
+
+    if (message.method === "codegraph/crash") {
+      process.exit(Number(process.env.FAKE_CRASH_EXIT_CODE ?? "91"));
+    }
+  }
+});
+

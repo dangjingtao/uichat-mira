@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { afterEach, test, vi } from "vitest";
 import { contextBudgetService } from "@/services/context-budget/index";
 import { providerProxyService } from "@/services/provider-proxy.service/index";
+import * as intentMatcherModule from "../intent/embedding-capability-matcher";
+import * as taskSelectorModule from "../intent/task-capability-selector";
 import { createToolExecutionEvidenceSummary } from "../evidence";
+import { toolSelectNode } from "../intent";
 import { generateNode } from "../nodes/index";
 import type { AgentNodeState } from "../node-runtime";
 
@@ -256,6 +259,91 @@ test("generateNode rewrites pseudo-execution wording into a grounded read_open s
   assert.match(result.answer ?? "", /README\.md/);
   assert.match(result.answer ?? "", /UIChat Mira/);
   assert.doesNotMatch(result.answer ?? "", /我将调用|read_open/);
+});
+
+test("toolSelectNode injects pending task coverage into effectiveQuery for candidate selection", async () => {
+  const state = createBaseState("请读取 README.md 和 AGENTS.md 的内容");
+  state.currentTaskFrame = {
+    currentGoal: "请读取 README.md 和 AGENTS.md 的内容",
+    currentSubtask: "Read the remaining file content.",
+    currentBlocker: undefined,
+    confirmedObjects: [],
+    completionCriteria: ["请读取 README.md 和 AGENTS.md 的内容"],
+  };
+  state.evidence = {
+    observations: [],
+    retrievals: [],
+    toolExecutions: [
+      {
+        toolId: "read_open",
+        args: { path: "README.md" },
+        status: "completed",
+        inputHash: "hash-read-open-readme",
+        summary: {
+          source: "tool",
+          status: "completed",
+          toolId: "read_open",
+          inputHash: "hash-read-open-readme",
+          actionTaken: "Opened README.md.",
+          keyFindings: ["path=README.md"],
+          answerReadiness: {
+            canAnswer: true,
+            reason: "Opened file content is available for answer generation.",
+          },
+          data: {
+            kind: "read_open",
+            path: "README.md",
+            contentPreview: "# README",
+            contentLength: 120,
+            truncated: false,
+            keySections: [],
+            canAnswerFileQuestion: true,
+          },
+        },
+        startedAt: "2026-07-09T00:00:00.000Z",
+        finishedAt: "2026-07-09T00:00:01.000Z",
+      },
+    ],
+  };
+  state.evidence.latestSummary = state.evidence.toolExecutions[0]?.summary;
+
+  const matchToolCandidatesSpy = vi
+    .spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding")
+    .mockResolvedValue({
+      query: "unused-matcher-query",
+      topCandidates: [],
+      toolCandidates: [],
+      toolExposure: {
+        exposedToolIds: [],
+        exposedDefinitions: [],
+        reason: [],
+        blockedCapabilityIds: [],
+      },
+      selectedToolIds: [],
+      candidateToolIds: [],
+      decisionSource: "task-model",
+      decisionReason: "No direct tool selected yet.",
+    });
+  const selectToolSpy = vi
+    .spyOn(taskSelectorModule, "selectToolWithTaskModel")
+    .mockResolvedValue({
+      selectedToolIds: [],
+      decisionSource: "task-model",
+      decisionReason: "No tool is needed for this assertion.",
+    });
+
+  const result = await toolSelectNode(state);
+
+  const matcherQuery = matchToolCandidatesSpy.mock.calls[0]?.[0]?.query ?? "";
+  const selectorQuery = selectToolSpy.mock.calls[0]?.[0]?.query ?? "";
+  for (const queryText of [matcherQuery, selectorQuery]) {
+    assert.match(queryText, /Remaining task coverage:/);
+    assert.match(queryText, /pendingTargets: \[agents\.md\]/i);
+    assert.match(queryText, /pendingActions:/i);
+    assert.match(queryText, /README\.md 和 AGENTS\.md/);
+  }
+  assert.notEqual(matcherQuery, "请读取 README.md 和 AGENTS.md 的内容");
+  assert.equal(result.toolIntent?.query, "请读取 README.md 和 AGENTS.md 的内容");
 });
 
 test("generateNode includes raw read_open content so later sections remain answerable", async () => {

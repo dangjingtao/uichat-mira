@@ -3,6 +3,7 @@ import {
   createImageGeneration,
   getImageGeneration,
   getImageGenerationArtifactContentUrl,
+  getImageGenerationArtifactPreviewUrl,
   type ImageGenerationArtifactSummary,
   type ImageGenerationCreateRequest,
   type GetImageGenerationOptions,
@@ -32,6 +33,7 @@ import {
 type ImageGenerationStudioApi = {
   createImageGeneration: typeof createImageGeneration;
   getImageGeneration: typeof getImageGeneration;
+  getArtifactPreviewUrl?: typeof getImageGenerationArtifactPreviewUrl;
 };
 
 type NormalizedGenerationJob = {
@@ -52,6 +54,7 @@ type NormalizedGenerationJob = {
 const defaultApi: ImageGenerationStudioApi = {
   createImageGeneration,
   getImageGeneration,
+  getArtifactPreviewUrl: getImageGenerationArtifactPreviewUrl,
 };
 
 const providerIdMap: Record<StudioProvider, string> = {
@@ -408,7 +411,25 @@ const levelByStatus: Record<StudioTaskStatus, StudioLogEntry["level"]> = {
   blocked: "warning",
 };
 
+const revokePreviewObjectUrl = (value: string | null) => {
+  if (!value || typeof URL.revokeObjectURL !== "function") {
+    return;
+  }
+
+  URL.revokeObjectURL(value);
+};
+
 export function useImageGenerationStudioState(api: ImageGenerationStudioApi = defaultApi) {
+  const resolvedApi = useMemo<Required<ImageGenerationStudioApi>>(
+    () => ({
+      createImageGeneration:
+        api.createImageGeneration ?? defaultApi.createImageGeneration,
+      getImageGeneration: api.getImageGeneration ?? defaultApi.getImageGeneration,
+      getArtifactPreviewUrl:
+        api.getArtifactPreviewUrl ?? defaultApi.getArtifactPreviewUrl!,
+    }),
+    [api],
+  );
   const [mode, setMode] = useState<StudioMode>("prompt");
   const [provider, setProvider] = useState<StudioProvider>("openai-images");
   const [promptForm, setPromptForm] = useState<PromptFormValue>(defaultPromptForm);
@@ -429,6 +450,7 @@ export function useImageGenerationStudioState(api: ImageGenerationStudioApi = de
   const lastSubmittedSignatureRef = useRef<string | null>(null);
   const pollTimerRef = useRef<number | null>(null);
   const lastLoggedStatusRef = useRef<StudioTaskStatus | null>(null);
+  const previewObjectUrlRef = useRef<string | null>(null);
 
   const workflowJsonStatus = useMemo(
     () => getWorkflowJsonStatus(workflowForm.workflowJson),
@@ -444,6 +466,10 @@ export function useImageGenerationStudioState(api: ImageGenerationStudioApi = de
       window.clearTimeout(timer);
       if (pollTimerRef.current) {
         window.clearTimeout(pollTimerRef.current);
+      }
+      if (previewObjectUrlRef.current) {
+        revokePreviewObjectUrl(previewObjectUrlRef.current);
+        previewObjectUrlRef.current = null;
       }
     };
   }, []);
@@ -484,6 +510,83 @@ export function useImageGenerationStudioState(api: ImageGenerationStudioApi = de
       : "dirty";
   }, [currentSignature, isRunning, mode, promptValid, workflowValid]);
 
+  useEffect(() => {
+    if (
+      previewStatus !== "preview-ready" ||
+      !generationId ||
+      !result?.artifactId ||
+      !result.previewSrc.startsWith("/api/")
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const nextPreviewUrl = await resolvedApi.getArtifactPreviewUrl(
+          generationId,
+          result.artifactId,
+        );
+        
+        if (cancelled) {
+          revokePreviewObjectUrl(nextPreviewUrl);
+          return;
+        }
+        
+        if (previewObjectUrlRef.current) {
+          revokePreviewObjectUrl(previewObjectUrlRef.current);
+        }
+        previewObjectUrlRef.current = nextPreviewUrl;
+        
+        setResult((current) => {
+          if (!current || current.artifactId !== result.artifactId) {
+            return current;
+          }
+        
+          return {
+            ...current,
+            previewSrc: nextPreviewUrl,
+          };
+        });
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        const message =
+          error instanceof Error
+            ? error.message
+            : "settings.microApps.imageGenerationStudio.errors.previewFailed";
+
+        setApiErrorMessage(message);
+        setResult((current) => {
+          if (!current || current.artifactId !== result.artifactId) {
+            return current;
+          }
+
+          return {
+            ...current,
+            previewSrc: "",
+            previewUnavailableReason:
+              "settings.microApps.imageGenerationStudio.results.previewUnavailableNoUrl",
+            errorMessage: current.errorMessage ?? message,
+          };
+        });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    generationId,
+    previewStatus,
+    resolvedApi,
+    result?.artifactId,
+    result?.previewSrc,
+  ]);
+
   const appendLog = (
     stageKey: string,
     detailKey: string,
@@ -520,7 +623,7 @@ export function useImageGenerationStudioState(api: ImageGenerationStudioApi = de
 
   const pollGeneration = async (jobId: string) => {
     try {
-      const rawJob = await api.getImageGeneration(
+      const rawJob = await resolvedApi.getImageGeneration(
         jobId,
         { refresh: true } satisfies GetImageGenerationOptions,
       );
@@ -708,6 +811,10 @@ export function useImageGenerationStudioState(api: ImageGenerationStudioApi = de
     setApiErrorMessage(null);
     lastSubmittedSignatureRef.current = null;
     lastLoggedStatusRef.current = null;
+    if (previewObjectUrlRef.current) {
+      revokePreviewObjectUrl(previewObjectUrlRef.current);
+      previewObjectUrlRef.current = null;
+    }
   };
 
   return {
