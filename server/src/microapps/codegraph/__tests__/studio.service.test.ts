@@ -159,4 +159,78 @@ describe("CodeGraph Studio service", () => {
     expect(smoke.report.config.maxResults).toBe(7);
     expect(smoke.report.config.plannerExposureEnabled).toBe(false);
   });
+
+  it("rejects appDataRoot when it is the workspace root", async () => {
+    const service = createCodeGraphStudioService({
+      workspaceRoot: isolatedWorkspaceRoot,
+      storageRoot,
+    });
+
+    expect(() =>
+      service.saveConfig({
+        appDataRoot: isolatedWorkspaceRoot,
+      }),
+    ).toThrowError("App Data Root cannot be the workspace root.");
+    expect(fs.existsSync(service.getStoragePath())).toBe(false);
+  });
+
+  it("rejects appDataRoot when it is inside the workspace root", async () => {
+    const service = createCodeGraphStudioService({
+      workspaceRoot: isolatedWorkspaceRoot,
+      storageRoot,
+    });
+    const nestedRoot = path.join(isolatedWorkspaceRoot, "tmp", "codegraph");
+
+    expect(() =>
+      service.saveConfig({
+        appDataRoot: nestedRoot,
+      }),
+    ).toThrowError("App Data Root must stay outside the workspace root.");
+    expect(fs.existsSync(service.getStoragePath())).toBe(false);
+  });
+
+  it("saves appDataRoot when it is outside the workspace root", async () => {
+    const caseRoot = path.join(
+      getTestArtifactDir("codegraph-studio-cases"),
+      `outside-${Date.now()}`,
+    );
+    const caseStorageRoot = path.join(caseRoot, "storage");
+    const caseAppDataRoot = path.join(caseRoot, "appdata");
+    const caseWorkspaceRoot = path.join(caseRoot, "workspace");
+    fs.mkdirSync(caseStorageRoot, { recursive: true });
+    fs.mkdirSync(caseAppDataRoot, { recursive: true });
+    fs.mkdirSync(caseWorkspaceRoot, { recursive: true });
+    const service = createCodeGraphStudioService({
+      workspaceRoot: caseWorkspaceRoot,
+      storageRoot: caseStorageRoot,
+    });
+
+    service.saveConfig({
+      appDataRoot: caseAppDataRoot,
+    });
+
+    expect(service.getDraft().appDataRoot).toBe(path.resolve(caseAppDataRoot));
+    expect(fs.existsSync(service.getStoragePath())).toBe(true);
+  });
+
+  it("does not persist invalid appDataRoot or start the provider after validation failure", async () => {
+    const service = createCodeGraphStudioService({
+      workspaceRoot: isolatedWorkspaceRoot,
+      storageRoot,
+    });
+    const invalidRoot = path.join(isolatedWorkspaceRoot, ".codegraph", "appdata");
+
+    expect(() =>
+      service.saveConfig({
+        appDataRoot: invalidRoot,
+      }),
+    ).toThrowError(
+      "App Data Root cannot point to repo-root `.codegraph` or any path inside it.",
+    );
+
+    const started = await service.start();
+    expect(started.report.status).toBe("blocked");
+    expect(started.report.runtime.processAlive).toBe(false);
+    expect(fs.existsSync(service.getStoragePath())).toBe(false);
+  });
 });

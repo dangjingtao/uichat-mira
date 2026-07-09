@@ -3,7 +3,7 @@ import { CircleHelp } from "lucide-react";
 import Tooltip from "./Tooltip";
 
 type SliderProps = {
-  label: string;
+  label?: string;
   value: number;
   onChange: (value: number) => void;
   min: number;
@@ -12,6 +12,8 @@ type SliderProps = {
   disabled?: boolean;
   labelHelp?: string;
   valueFormatter?: (value: number) => string;
+  compact?: boolean;
+  ariaLabel?: string;
 };
 
 const formatValue = (value: number) =>
@@ -20,6 +22,7 @@ const formatValue = (value: number) =>
 const trackProgressStyle = (value: number, min: number, max: number) => {
   const ratio = max <= min ? 0 : ((value - min) / (max - min)) * 100;
   const progress = Math.max(0, Math.min(100, ratio));
+
   return {
     background: `linear-gradient(to right, rgb(var(--color-primary)) 0%, rgb(var(--color-primary)) ${progress}%, rgb(var(--color-border)) ${progress}%, rgb(var(--color-border)) 100%)`,
   };
@@ -35,29 +38,34 @@ export default function Slider({
   disabled = false,
   labelHelp,
   valueFormatter = formatValue,
+  compact = false,
+  ariaLabel,
 }: SliderProps) {
   const inputId = useId();
+  const displayValue = valueFormatter(value);
 
   return (
-    <div className="space-y-2">
-      <label
-        htmlFor={inputId}
-        className={`flex items-center justify-between gap-3 text-xs font-medium ${
-          disabled ? "text-text-tertiary" : "text-text-secondary"
-        }`}
-      >
-        <span className="flex items-center gap-1.5">
-          <span>{label}</span>
-          {labelHelp ? (
-            <Tooltip text={labelHelp} placement="top">
-              <span className="text-icon-secondary">
-                <CircleHelp className="h-3.5 w-3.5" />
-              </span>
-            </Tooltip>
-          ) : null}
-        </span>
-        <span className="font-semibold text-text-primary">{valueFormatter(value)}</span>
-      </label>
+    <div className={`w-full ${compact ? "space-y-1.5" : "space-y-2"}`}>
+      {label ? (
+        <label
+          htmlFor={inputId}
+          className={`flex items-baseline justify-between gap-3 ${
+            disabled ? "text-text-tertiary" : "text-text-secondary"
+          }`}
+        >
+          <span className="flex items-center gap-1.5 text-sm font-medium text-text-primary">
+            <span>{label}</span>
+            {labelHelp ? (
+              <Tooltip text={labelHelp} placement="top">
+                <span className="text-icon-secondary">
+                  <CircleHelp className="h-3.5 w-3.5" />
+                </span>
+              </Tooltip>
+            ) : null}
+          </span>
+          <span className="font-mono text-[11px] text-text-secondary">{displayValue}</span>
+        </label>
+      ) : null}
 
       <input
         id={inputId}
@@ -69,7 +77,10 @@ export default function Slider({
         onChange={(event) => onChange(Number(event.target.value))}
         disabled={disabled}
         style={trackProgressStyle(value, min, max)}
-        className="slider-thumb-primary h-2 w-full cursor-pointer appearance-none rounded-full disabled:cursor-not-allowed disabled:opacity-60"
+        aria-label={ariaLabel ?? label ?? "slider"}
+        className={`claude-range-slider ${compact ? "claude-range-slider-compact" : ""} ${
+          disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+        }`}
       />
     </div>
   );

@@ -9,6 +9,13 @@ export interface SelectOption {
   label: string;
 }
 
+interface SelectEndAction {
+  ariaLabel: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+}
+
 interface SelectProps {
   label?: string;
   value: string;
@@ -18,6 +25,7 @@ interface SelectProps {
   error?: string;
   compact?: boolean;
   labelHelp?: string;
+  endAction?: SelectEndAction;
 }
 
 const encodedValuePrefix = "__radix-select__";
@@ -109,6 +117,7 @@ export const Select: React.FC<SelectProps> = ({
   error,
   compact,
   labelHelp,
+  endAction,
 }) => {
   const { t } = useTranslation();
   const inputId = useId();
@@ -131,6 +140,8 @@ export const Select: React.FC<SelectProps> = ({
   const placeholder =
     options.find((option) => option.value === "")?.label ??
     t("ui.select.empty");
+  const selectedLabel = selectedOption?.label ?? "";
+  const showEndAction = Boolean(endAction);
 
   return (
     <InputWrapper
@@ -142,113 +153,160 @@ export const Select: React.FC<SelectProps> = ({
       compact={compact}
       labelHelp={labelHelp}
     >
-      <SelectPrimitive.Root
-        value={currentValue}
-        onValueChange={(nextValue) => {
-          onChange(decodeValue(nextValue));
-        }}
-        disabled={disabled || !hasOptions}
-      >
-        <SelectPrimitive.Trigger
-          id={inputId}
-          aria-invalid={Boolean(error)}
-          aria-describedby={describedById}
-          className={`
-            group
-            inline-flex
-            min-w-0
-            w-full
-            items-center
-            justify-between
-            gap-2
-            text-left
-            ${inputBaseClassName}
-            ${getInputSizeClassName(compact)}
-            ${error ? "border-danger" : ""}
-          `}
+      <div className="relative">
+        <SelectPrimitive.Root
+          value={currentValue}
+          onValueChange={(nextValue) => {
+            onChange(decodeValue(nextValue));
+          }}
+          disabled={disabled || !hasOptions}
         >
-          <SelectPrimitive.Value
-            className="min-w-0 flex-1 truncate"
-            placeholder={
-              <span className="block truncate text-text-tertiary">
-                {hasOptions ? placeholder : t("ui.select.noOptions")}
-              </span>
-            }
-          />
-          <SelectPrimitive.Icon asChild>
-            <ChevronDown className="h-4 w-4 flex-shrink-0 text-icon-secondary transition-transform duration-150 group-data-[state=open]:rotate-180" />
-          </SelectPrimitive.Icon>
-        </SelectPrimitive.Trigger>
+          <SelectPrimitive.Trigger
+            id={inputId}
+            aria-invalid={Boolean(error)}
+            aria-describedby={describedById}
+            className={`
+              inline-flex
+              min-w-0
+              w-full
+              items-center
+              text-left
+              ${inputBaseClassName}
+              ${getInputSizeClassName(compact)}
+              ${showEndAction ? "pr-14" : "pr-10"}
+              ${error ? "border-danger" : ""}
+            `}
+          >
+            {selectedOption ? (
+              <SelectPrimitive.Value aria-label={selectedLabel}>
+                <span className="block min-w-0 truncate">
+                  {selectedLabel}
+                </span>
+              </SelectPrimitive.Value>
+            ) : (
+              <SelectPrimitive.Value
+                placeholder={
+                  <span className="block truncate text-text-tertiary">
+                    {hasOptions ? placeholder : t("ui.select.noOptions")}
+                  </span>
+                }
+              />
+            )}
+          </SelectPrimitive.Trigger>
 
-        {hasOptions ? (
-          <SelectPrimitive.Portal>
-            <SelectPrimitive.Content
-              position="popper"
-              sideOffset={6}
-              collisionPadding={8}
+          {hasOptions ? (
+            <SelectPrimitive.Portal>
+              <SelectPrimitive.Content
+                position="popper"
+                sideOffset={6}
+                collisionPadding={8}
+                className="
+                  z-[240]
+                  max-h-64
+                  min-w-[var(--radix-select-trigger-width)]
+                  max-w-[var(--radix-select-trigger-width)]
+                  overflow-hidden
+                  rounded-ui-surface
+                  border
+                  border-border
+                  bg-surface-elevated
+                  shadow-shadow-lg
+                  data-[state=open]:animate-in
+                  data-[state=closed]:animate-out
+                  data-[side=bottom]:slide-in-from-top-1
+                  data-[side=top]:slide-in-from-bottom-1
+                "
+              >
+                <SelectPrimitive.Viewport className="w-[var(--radix-select-trigger-width)] p-1">
+                  {encodedOptions.map((option) => {
+                    const isSelected = option.value === value;
+
+                    return (
+                      <SelectPrimitive.Item
+                        key={option.encodedValue}
+                        value={option.encodedValue}
+                        className={`
+                          relative
+                          flex
+                          w-full
+                          min-w-0
+                          cursor-default
+                          items-center
+                          gap-2
+                          rounded-ui-control
+                          px-2.5
+                          py-2
+                          pr-8
+                          text-left
+                          text-sm
+                          text-text-primary
+                          outline-none
+                          transition-colors
+                          duration-150
+                          data-[highlighted]:bg-primary/10
+                          data-[highlighted]:text-text-primary
+                          data-[state=checked]:bg-primary/8
+                          data-[state=checked]:text-primary
+                        `}
+                      >
+                        <SelectPrimitive.ItemText>
+                          <span className="block truncate">{option.label}</span>
+                        </SelectPrimitive.ItemText>
+                        <SelectPrimitive.ItemIndicator className="absolute right-2.5 inline-flex items-center justify-center">
+                          <Check
+                            className={`h-4 w-4 ${isSelected ? "text-primary" : "text-text-primary"}`}
+                          />
+                        </SelectPrimitive.ItemIndicator>
+                      </SelectPrimitive.Item>
+                    );
+                  })}
+                </SelectPrimitive.Viewport>
+              </SelectPrimitive.Content>
+            </SelectPrimitive.Portal>
+          ) : null}
+        </SelectPrimitive.Root>
+
+        <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center gap-1">
+          {showEndAction ? (
+            <button
+              type="button"
+              aria-label={endAction?.ariaLabel}
+              disabled={disabled || endAction?.disabled}
               className="
-                z-[240]
-                max-h-64
-                min-w-[var(--radix-select-trigger-width)]
-                overflow-hidden
-                rounded-ui-surface
-                border
-                border-border
-                bg-surface-elevated
-                shadow-shadow-lg
-                data-[state=open]:animate-in
-                data-[state=closed]:animate-out
-                data-[side=bottom]:slide-in-from-top-1
-                data-[side=top]:slide-in-from-bottom-1
+                pointer-events-auto
+                inline-flex
+                h-6
+                w-6
+                items-center
+                justify-center
+                rounded-full
+                text-text-tertiary
+                transition-colors
+                duration-150
+                hover:bg-surface-secondary
+                hover:text-danger-text
+                focus-visible:outline-none
+                focus-visible:ring-2
+                focus-visible:ring-primary/20
+                disabled:cursor-not-allowed
+                disabled:opacity-50
               "
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                endAction?.onClick();
+              }}
             >
-              <SelectPrimitive.Viewport className="p-1">
-                {encodedOptions.map((option) => {
-                  const isSelected = option.value === value;
-
-                  return (
-                    <SelectPrimitive.Item
-                      key={option.encodedValue}
-                      value={option.encodedValue}
-                      className={`
-                        relative
-                        flex
-                        w-full
-                        cursor-default
-                        items-center
-                        gap-2
-                        rounded-ui-control
-                        px-2.5
-                        py-2
-                        pr-8
-                        text-left
-                        text-sm
-                        text-text-primary
-                        outline-none
-                        transition-colors
-                        duration-150
-                        data-[highlighted]:bg-primary/10
-                        data-[highlighted]:text-text-primary
-                        data-[state=checked]:bg-primary/8
-                        data-[state=checked]:text-primary
-                      `}
-                    >
-                      <SelectPrimitive.ItemText>
-                        {option.label}
-                      </SelectPrimitive.ItemText>
-                      <SelectPrimitive.ItemIndicator className="absolute right-2.5 inline-flex items-center justify-center">
-                        <Check
-                          className={`h-4 w-4 ${isSelected ? "text-primary" : "text-text-primary"}`}
-                        />
-                      </SelectPrimitive.ItemIndicator>
-                    </SelectPrimitive.Item>
-                  );
-                })}
-              </SelectPrimitive.Viewport>
-            </SelectPrimitive.Content>
-          </SelectPrimitive.Portal>
-        ) : null}
-      </SelectPrimitive.Root>
+              {endAction?.icon}
+            </button>
+          ) : null}
+          <ChevronDown className="h-4 w-4 flex-shrink-0 text-icon-secondary" />
+        </div>
+      </div>
     </InputWrapper>
   );
 };

@@ -268,6 +268,11 @@ const baseReport = {
 
 describe("CodeGraphStudioPage", () => {
   beforeEach(() => {
+    vi.stubGlobal("navigator", {
+      clipboard: {
+        writeText: vi.fn().mockResolvedValue(undefined),
+      },
+    });
     apiMocks.getCodeGraphStudioReport.mockResolvedValue(baseReport);
     apiMocks.saveCodeGraphStudioConfig.mockResolvedValue(baseReport);
     apiMocks.detectCodeGraphStudio.mockResolvedValue({ report: baseReport });
@@ -373,10 +378,22 @@ describe("CodeGraphStudioPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows the raw debug report inline by default", async () => {
+  it("keeps the raw debug report folded by default", async () => {
     render(<CodeGraphStudioPage />);
 
     await screen.findByText("原始调试报告");
+    expect(screen.queryByText(/"status":/)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "复制调试报告" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the raw debug report after expanding the debug card", async () => {
+    render(<CodeGraphStudioPage />);
+
+    await screen.findByText("原始调试报告");
+    fireEvent.click(screen.getByRole("button", { name: "原始调试报告" }));
+
     expect(screen.getByText(/"status":/)).toBeInTheDocument();
   });
 

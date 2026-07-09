@@ -12,6 +12,7 @@
 - `Badge`
 - `Card`
 - `CodeBlock`
+- `CompactAudioPlayer`
 - `CollapsiblePanel`
 - `Drawer`
 - `ExternalLink`
@@ -405,12 +406,37 @@
 | `step` | `number` | 步长 |
 | `labelHelp` | `string` | label 旁 Tooltip 说明 |
 | `valueFormatter` | `(value: number) => string` | 右侧数值展示格式化 |
+| `compact` | `boolean` | 紧凑滑块样式 |
+| `ariaLabel` | `string` | 无 label 时的可访问名称 |
 
 ### 交互与色彩
 
-- 轨道默认用 `border` 中性色，已选区段用 `primary`
-- 滑块圆点使用 `primary`，并保留浅色描边保证亮暗主题都清晰
+- 轨道默认是 4px 细线，未选中段用 `border` 中性色，已选区段用 `primary`
+- 滑块圆点使用 `primary`，带浅色内描边和一层细外描边，贴近 Claude 风格的紧凑控件
+- hover 会轻微放大，focus-visible 会出现 `primary` 弱环
 - 适合语速、阈值、温度、比例类字段，不适合无界长数字
+
+## CompactAudioPlayer
+
+用于单行紧凑音频预览，包含播放按钮、进度条、时间、音量弹层。
+
+### Props
+
+| 属性 | 类型 | 说明 |
+| --- | --- | --- |
+| `src` | `string` | 音频地址 |
+| `title` | `string` | 主标题 |
+| `subtitle` | `string` | 次级说明 |
+| `tone` | `"light" \| "dark"` | Claude 风格浅色 / 深色皮肤 |
+| `className` | `string` | 外层自定义样式 |
+
+### 交互与色彩
+
+- 播放按钮使用 Claude 风格珊瑚色圆形实底，尺寸保持紧凑
+- 浅色皮肤默认使用暖米色卡片底，深色皮肤使用近黑底，均保留大圆角
+- 进度条复用同一套紧凑 range 视觉，但轨道颜色会随浅深皮肤切换
+- 时间使用 `mono` 小字号，减少视觉噪音
+- 音量按钮点击展开竖向滑块，双击支持静音/恢复
 
 ## TextArea
 
@@ -430,10 +456,13 @@
 ### 当前能力
 
 - 保持 `label`、`value`、`onChange`、`options`、`disabled`、`error`、`compact` 轻量 API
+- `labelHelp` 可在 label 右侧显示问号 Tooltip，用于字段格式说明或边界提示
+- `endAction` 可在选择框右侧挂一个轻量操作按钮，例如删除当前选项；默认不启用，不影响旧调用
 - 统一接管键盘导航、焦点管理、类型搜索与无障碍语义
 - 下拉面板通过 portal 渲染到顶层，避免在弹窗、抽屉和滚动容器中被裁切
 - 下拉浮层默认使用更高层级，避免被弹窗、抽屉和聊天悬浮区遮挡
 - 为兼容业务层空字符串值，组件内部会对 option value 做编码映射；外部仍保持原始字符串 API
+- 触发器和下拉项默认对长文本做单行截断，避免文件名或长标签把布局撑开
 
 ### 色彩约束
 

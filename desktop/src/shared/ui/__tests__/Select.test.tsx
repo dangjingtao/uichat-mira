@@ -63,4 +63,28 @@ describe("Select", () => {
     );
     expect(document.querySelector("svg")).toBeInTheDocument();
   });
+
+  it("renders end action and triggers callback without changing value", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+    const handleEndAction = vi.fn();
+
+    render(
+      <Select
+        value="a"
+        onChange={handleChange}
+        options={options}
+        endAction={{
+          ariaLabel: "Delete option",
+          icon: <span>X</span>,
+          onClick: handleEndAction,
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Delete option" }));
+
+    expect(handleEndAction).toHaveBeenCalledTimes(1);
+    expect(handleChange).not.toHaveBeenCalled();
+  });
 });

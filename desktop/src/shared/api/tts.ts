@@ -1,5 +1,4 @@
 import { client, get, post, put } from "@/shared/lib/request";
-import { getApiBaseUrl } from "@/shared/platform/desktopRuntime";
 
 const TTS_ROUTE = "/microapps/tts";
 
@@ -173,7 +172,7 @@ export function getTtsSynthesis(jobId: string) {
 }
 
 export function getTtsAudioUrl(jobId: string) {
-  return `${getApiBaseUrl()}${TTS_ROUTE}/syntheses/${encodeURIComponent(jobId)}/audio`;
+  return `${TTS_ROUTE}/syntheses/${encodeURIComponent(jobId)}/audio`;
 }
 
 export async function getTtsAudioPreviewUrl(jobId: string) {

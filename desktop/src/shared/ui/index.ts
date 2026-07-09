@@ -4,6 +4,7 @@ export { default as AvatarPicker } from "./AvatarPicker";
 export { default as Badge } from "./Badge";
 export { default as Card } from "./Card";
 export { default as CodeBlock } from "./CodeBlock";
+export { default as CompactAudioPlayer } from "./CompactAudioPlayer";
 export { ErrorBoundary } from "./ErrorBoundary";
 export { default as ConfirmDialog } from "./ConfirmDialog";
 export { default as Divider } from "./Divider";

@@ -73,9 +73,6 @@ describe("tts api", () => {
     await createTtsSynthesis({
       providerId: "windows_builtin",
       text: "hello",
-      voice: "Voice-A",
-      rate: 0,
-      volume: 100,
     });
 
     expect(post).toHaveBeenCalledWith(
@@ -83,9 +80,6 @@ describe("tts api", () => {
       {
         providerId: "windows_builtin",
         text: "hello",
-        voice: "Voice-A",
-        rate: 0,
-        volume: 100,
       },
       {
         timeout: 0,
@@ -203,7 +197,7 @@ describe("tts api", () => {
 
   it("builds the audio route from the backend api base", () => {
     expect(getTtsAudioUrl("job/with spaces")).toBe(
-      "/api/microapps/tts/syntheses/job%2Fwith%20spaces/audio",
+      "/microapps/tts/syntheses/job%2Fwith%20spaces/audio",
     );
   });
 
@@ -217,7 +211,7 @@ describe("tts api", () => {
     const previewUrl = await getTtsAudioPreviewUrl("tts-job-1");
 
     expect(client.get).toHaveBeenCalledWith(
-      "/api/microapps/tts/syntheses/tts-job-1/audio",
+      "/microapps/tts/syntheses/tts-job-1/audio",
       {
         responseType: "blob",
       },

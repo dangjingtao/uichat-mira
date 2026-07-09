@@ -15,6 +15,7 @@ import {
   type ManagedCodeGraphRepoPollutionGuard,
   type ManagedCodeGraphStatusSnapshot,
 } from "@/mcp/managed-codegraph/index.js";
+import { badRequest } from "@/utils/route-errors.js";
 
 export type CodeGraphStudioStatus =
   | "ready"
@@ -164,6 +165,78 @@ const ensureDirectory = (targetPath: string) => {
   fs.mkdirSync(targetPath, { recursive: true });
 };
 
+const normalizeComparablePath = (targetPath: string) => {
+  const resolved = path.resolve(targetPath).replace(/[\\/]+$/, "");
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+};
+
+const isSamePath = (leftPath: string, rightPath: string) =>
+  normalizeComparablePath(leftPath) === normalizeComparablePath(rightPath);
+
+const isPathInside = (candidatePath: string, containerPath: string) => {
+  const relativePath = path.relative(
+    normalizeComparablePath(containerPath),
+    normalizeComparablePath(candidatePath),
+  );
+
+  return (
+    relativePath.length > 0 &&
+    !relativePath.startsWith("..") &&
+    !path.isAbsolute(relativePath)
+  );
+};
+
+const validateAppDataRoot = (
+  appDataRoot: string,
+  workspaceRoot: string,
+  repoDataDirPath: string,
+) => {
+  const trimmed = appDataRoot.trim();
+  if (!trimmed) {
+    return {
+      appDataRootResolved: null,
+      error: null,
+    };
+  }
+
+  const appDataRootResolved = path.resolve(trimmed);
+  if (!path.isAbsolute(appDataRootResolved)) {
+    return {
+      appDataRootResolved,
+      error: "App Data Root must resolve to an absolute path.",
+    };
+  }
+
+  if (
+    isSamePath(appDataRootResolved, repoDataDirPath) ||
+    isPathInside(appDataRootResolved, repoDataDirPath)
+  ) {
+    return {
+      appDataRootResolved,
+      error: "App Data Root cannot point to repo-root `.codegraph` or any path inside it.",
+    };
+  }
+
+  if (isSamePath(appDataRootResolved, workspaceRoot)) {
+    return {
+      appDataRootResolved,
+      error: "App Data Root cannot be the workspace root.",
+    };
+  }
+
+  if (isPathInside(appDataRootResolved, workspaceRoot)) {
+    return {
+      appDataRootResolved,
+      error: "App Data Root must stay outside the workspace root.",
+    };
+  }
+
+  return {
+    appDataRootResolved,
+    error: null,
+  };
+};
+
 const resolveDatabaseDir = () => {
   const rawDatabaseUrl = process.env.DATABASE_URL?.trim() ?? "";
   if (rawDatabaseUrl.startsWith("file:")) {
@@ -238,34 +311,42 @@ export const createCodeGraphStudioService = (options?: {
 
   const buildRuntimeConfig = (draft = getDraft()) => {
     const plannerConfig = resolveManagedCodeGraphPlannerConfig(workspaceRoot);
-    const appDataRootResolved = draft.appDataRoot
-      ? path.resolve(draft.appDataRoot)
-      : plannerConfig.storage.appDataRoot;
-    const plannerStorage = appDataRootResolved
-      ? createManagedCodeGraphPlannerStorageFromAppDataRoot(
-          workspaceHash,
-          appDataRootResolved,
-        )
-      : plannerConfig.storage;
     const externalIndexSupport = resolveManagedCodeGraphExternalIndexSupport(
       draft.command,
     );
+    const repoDataDirName =
+      externalIndexSupport.repoDataDirName.trim() || DEFAULT_REPO_DATA_DIR_NAME;
+    const repoDataDirPath = path.join(workspaceRoot, repoDataDirName);
+    const appDataRootValidation = validateAppDataRoot(
+      draft.appDataRoot,
+      workspaceRoot,
+      repoDataDirPath,
+    );
+    const appDataRootResolved = draft.appDataRoot
+      ? appDataRootValidation.appDataRootResolved
+      : plannerConfig.storage.appDataRoot;
+    const plannerStorage =
+      appDataRootValidation.error && appDataRootValidation.appDataRootResolved
+        ? {
+            status: "blocked",
+            source: "unresolved",
+            appDataRoot: appDataRootValidation.appDataRootResolved,
+            logRoot: null,
+            indexRoot: null,
+            reason: appDataRootValidation.error,
+          }
+        : appDataRootResolved
+          ? createManagedCodeGraphPlannerStorageFromAppDataRoot(
+              workspaceHash,
+              appDataRootResolved,
+            )
+          : plannerConfig.storage;
     const pollutionGuard: CodeGraphStudioPollutionGuard = {
       status:
         externalIndexSupport.status === "blocked" ? "blocked" : "ready",
-      repoDataDirName:
-        externalIndexSupport.repoDataDirName.trim() || DEFAULT_REPO_DATA_DIR_NAME,
-      repoDataDirPath: path.join(
-        workspaceRoot,
-        externalIndexSupport.repoDataDirName.trim() || DEFAULT_REPO_DATA_DIR_NAME,
-      ),
-      exists: fs.existsSync(
-        path.join(
-          workspaceRoot,
-          externalIndexSupport.repoDataDirName.trim() ||
-            DEFAULT_REPO_DATA_DIR_NAME,
-        ),
-      ),
+      repoDataDirName,
+      repoDataDirPath,
+      exists: fs.existsSync(repoDataDirPath),
       blockedReason: externalIndexSupport.reason,
     };
 
@@ -508,6 +589,15 @@ export const createCodeGraphStudioService = (options?: {
         maxResults: normalizePositiveNumber(input.maxResults, current.maxResults),
         queryLimit: normalizePositiveNumber(input.queryLimit, current.queryLimit),
       };
+      const runtime = buildRuntimeConfig(next);
+      if (runtime.plannerStorage.status === "blocked" && next.appDataRoot.trim()) {
+        throw badRequest(
+          runtime.plannerStorage.reason ?? "App Data Root is invalid.",
+        );
+      }
+      if (runtime.config.appDataRootResolved) {
+        next.appDataRoot = runtime.config.appDataRootResolved;
+      }
 
       ensureDirectory(storageRoot);
       fs.writeFileSync(configFilePath, JSON.stringify(next, null, 2), "utf8");

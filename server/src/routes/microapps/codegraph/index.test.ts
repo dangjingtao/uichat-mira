@@ -16,6 +16,7 @@ import { initializeThreadDatabase } from "@/db/thread.db.js";
 import { getLoggerConfig } from "@/logger.js";
 import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 import { sendRouteError } from "@/utils/route-errors.js";
+import { badRequest } from "@/utils/route-errors.js";
 import microappsRoute, {
   type CodeGraphStudioRouteService,
   type ComfyUiStudioRouteService,
@@ -337,6 +338,61 @@ test("CodeGraph microapp routes expose report, config save, and smoke query acti
     smokeQueryResponse.json().data.message,
     "blocked:microapps architecture",
   );
+
+  await app.close();
+});
+
+test("CodeGraph config route returns 400 when appDataRoot validation fails", async () => {
+  const codeGraphStudioService: CodeGraphStudioRouteService = {
+    getReport: vi.fn(async () => {
+      throw new Error("not needed");
+    }),
+    saveConfig: vi.fn(() => {
+      throw badRequest("App Data Root must stay outside the workspace root.");
+    }),
+    detect: vi.fn(async () => {
+      throw new Error("not needed");
+    }),
+    start: vi.fn(async () => {
+      throw new Error("not needed");
+    }),
+    health: vi.fn(async () => {
+      throw new Error("not needed");
+    }),
+    stop: vi.fn(async () => {
+      throw new Error("not needed");
+    }),
+    smokeStatus: vi.fn(async () => {
+      throw new Error("not needed");
+    }),
+    smokeQuery: vi.fn(async () => {
+      throw new Error("not needed");
+    }),
+    getDraft: vi.fn(),
+    getStoragePath: vi.fn(),
+  };
+
+  const app = await createApp(codeGraphStudioService);
+  const token = createToken();
+
+  const configResponse = await app.inject({
+    method: "PUT",
+    url: "/microapps/codegraph/config",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    payload: {
+      appDataRoot: "D:\\workspace\\rag-demo\\server\\tmp\\codegraph",
+    },
+  });
+
+  assert.equal(configResponse.statusCode, 400, configResponse.body);
+  assert.equal(
+    configResponse.json().message,
+    "App Data Root must stay outside the workspace root.",
+  );
+  assert.equal(codeGraphStudioService.saveConfig.mock.calls.length, 1);
 
   await app.close();
 });

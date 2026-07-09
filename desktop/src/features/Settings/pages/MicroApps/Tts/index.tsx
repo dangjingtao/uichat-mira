@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AudioLines,
+  CircleHelp,
   RefreshCcw,
   Save,
   Upload,
@@ -12,7 +13,15 @@ import Card from "@/shared/ui/Card";
 import Alert from "@/shared/ui/Alert";
 import Badge from "@/shared/ui/Badge";
 import NavigationCardTabs from "@/shared/ui/NavigationCardTabs";
-import { Button, IconButton, Select, Slider, TextArea, TextInput } from "@/shared/ui";
+import {
+  Button,
+  CompactAudioPlayer,
+  Select,
+  Slider,
+  TextArea,
+  TextInput,
+  Tooltip,
+} from "@/shared/ui";
 import { message } from "@/shared/ui/Message";
 import MicroAppPageLayout from "../components/MicroAppPageLayout";
 import {
@@ -62,6 +71,12 @@ type GptSovitsFormState = {
   topP: string;
 };
 
+type ParsedRefAudio = StoredGptSovitsRefAudio & {
+  displayName: string;
+  promptTextFromName: string;
+  hasStructuredName: boolean;
+};
+
 const providerTitle: Record<TtsProviderId, string> = {
   windows_builtin: "内置语音",
   piper_local: "Piper 语音包",
@@ -100,6 +115,36 @@ const pickNumberOption = (value: string, options: number[], fallback: number) =>
     return String(fallback);
   }
   return options[0] !== undefined ? String(options[0]) : String(fallback);
+};
+
+const refAudioFileNamePattern = /^\[([^\]]+)\](.+)\.wav$/i;
+
+const parseRefAudioFileName = (fileName: string) => {
+  const match = fileName.match(refAudioFileNamePattern);
+  const rawName = fileName.trim();
+  if (!match) {
+    return {
+      displayName: rawName || fileName,
+      promptTextFromName: "",
+      hasStructuredName: false,
+    };
+  }
+
+  const displayName = match[1]?.trim() ?? "";
+  const promptTextFromName = match[2]?.trim() ?? "";
+  if (!displayName || !promptTextFromName) {
+    return {
+      displayName: rawName || fileName,
+      promptTextFromName: "",
+      hasStructuredName: false,
+    };
+  }
+
+  return {
+    displayName,
+    promptTextFromName,
+    hasStructuredName: true,
+  };
 };
 
 const buildGptFormFromCatalog = (
@@ -159,9 +204,6 @@ export default function TtsStudioPage() {
   const [providerId, setProviderId] = useState<BaseTtsProviderId>("windows_builtin");
   const [voices, setVoices] = useState<TtsVoiceSummary[]>([]);
   const [text, setText] = useState("你好，这里是 UIChat Mira 的 TTS 微应用调试页。");
-  const [voice, setVoice] = useState("");
-  const [rate, setRate] = useState("0");
-  const [volume, setVolume] = useState("100");
   const [audioPreviewUrl, setAudioPreviewUrl] = useState("");
   const [gptCatalog, setGptCatalog] = useState<GptSovitsCatalog | null>(null);
   const [gptForm, setGptForm] = useState<GptSovitsFormState>({
@@ -186,8 +228,19 @@ export default function TtsStudioPage() {
   const selectedProvider = providers.find((item) => item.providerId === providerId) ?? null;
   const selectedDraft = drafts[providerId] ?? null;
   const selectedGptDraft = drafts.gpt_sovits ?? null;
+  const parsedRefAudios = useMemo<ParsedRefAudio[]>(
+    () =>
+      storedRefAudios.map((item) => {
+        const parsed = parseRefAudioFileName(item.name);
+        return {
+          ...item,
+          ...parsed,
+        };
+      }),
+    [storedRefAudios],
+  );
   const selectedRefAudio =
-    storedRefAudios.find((item) => item.id === selectedRefAudioId) ?? null;
+    parsedRefAudios.find((item) => item.id === selectedRefAudioId) ?? null;
   const selectedJob =
     activeTab === "gpt_sovits"
       ? recentJobs.find((item) => item.providerId === "gpt_sovits") ?? null
@@ -256,11 +309,11 @@ export default function TtsStudioPage() {
 
   const storedRefAudioOptions = useMemo(
     () =>
-      storedRefAudios.map((item) => ({
+      parsedRefAudios.map((item) => ({
         value: item.id,
-        label: item.name,
+        label: item.displayName,
       })),
-    [storedRefAudios],
+    [parsedRefAudios],
   );
 
   const loadStoredRefAudios = async () => {
@@ -304,7 +357,6 @@ export default function TtsStudioPage() {
     try {
       const result = await getTtsVoices(nextProviderId);
       setVoices(result.voices);
-      setVoice("");
     } catch (error) {
       setVoices([]);
       message.error(error instanceof Error ? error.message : "加载语音列表失败");
@@ -340,6 +392,17 @@ export default function TtsStudioPage() {
       void loadStoredRefAudios();
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    if (!selectedRefAudio?.hasStructuredName || !selectedRefAudio.promptTextFromName) {
+      return;
+    }
+    setGptForm((current) =>
+      current.promptText === selectedRefAudio.promptTextFromName
+        ? current
+        : { ...current, promptText: selectedRefAudio.promptTextFromName },
+    );
+  }, [selectedRefAudio]);
 
   useEffect(() => {
     if (!selectedJob || selectedJob.status !== "succeeded") {
@@ -494,9 +557,6 @@ export default function TtsStudioPage() {
       await createTtsSynthesis({
         providerId,
         text: text.trim(),
-        voice: voice || undefined,
-        rate: Number(rate),
-        volume: Number(volume),
       });
       message.success("语音合成完成");
       await loadOverview();
@@ -620,63 +680,47 @@ export default function TtsStudioPage() {
 
         <div className="stable-scrollbar min-h-0 flex-1 overflow-y-auto pt-6">
           <div className="space-y-4">
-            <Card className="p-5">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-base font-semibold text-text-primary">结果预览</div>
-                  {selectedJob ? (
-                    <Badge
-                      variant={
-                        selectedJob.status === "succeeded"
-                          ? "success"
-                          : selectedJob.status === "failed"
-                            ? "danger"
-                            : "warning"
-                      }
-                      size="sm"
-                    >
-                      {selectedJob.status}
-                    </Badge>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-base font-semibold text-text-primary">结果预览</div>
+                {selectedJob ? (
+                  <Badge
+                    variant={
+                      selectedJob.status === "succeeded"
+                        ? "success"
+                        : selectedJob.status === "failed"
+                          ? "danger"
+                          : "warning"
+                    }
+                    size="sm"
+                  >
+                    {selectedJob.status}
+                  </Badge>
+                ) : null}
+              </div>
+
+              {!selectedJob ? (
+                <Alert variant="info" title="暂无结果">
+                  当前还没有可预览的语音结果。
+                </Alert>
+              ) : (
+                <div className="space-y-4">
+                  {selectedJob.errorMessage ? (
+                    <Alert variant="warning" title="最近一次失败原因">
+                      {selectedJob.errorMessage}
+                    </Alert>
                   ) : null}
-                </div>
 
-                {!selectedJob ? (
-                  <Alert variant="info" title="暂无结果">
-                    当前还没有可预览的语音结果。
-                  </Alert>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="space-y-2 text-sm">
-                      <div className="text-text-primary">
-                        <span className="font-medium">Provider：</span>
-                        {providerTitle[selectedJob.providerId]}
-                      </div>
-                      <div className="text-text-primary">
-                        <span className="font-medium">时间：</span>
-                        {selectedJob.createdAt}
-                      </div>
-                      <div className="text-text-secondary">
-                        <span className="font-medium text-text-primary">文本：</span>
-                        {selectedJob.text}
-                      </div>
-                    </div>
-
-                    {selectedJob.errorMessage ? (
-                      <Alert variant="warning" title="最近一次失败原因">
-                        {selectedJob.errorMessage}
-                      </Alert>
-                    ) : null}
-
-                    {selectedJob.status === "succeeded" && audioPreviewUrl ? (
-                      <audio
-                        key={selectedJob.id}
-                        controls
-                        className="w-full"
-                        src={audioPreviewUrl}
-                      />
-                    ) : (
-                      <Alert variant="info" title="当前任务还没有可播放音频">
-                        {selectedJob.status === "succeeded"
+                  {selectedJob.status === "succeeded" && audioPreviewUrl ? (
+                    <CompactAudioPlayer
+                      key={selectedJob.id}
+                      src={audioPreviewUrl}
+                      title={providerTitle[selectedJob.providerId]}
+                      subtitle={selectedJob.text}
+                    />
+                  ) : (
+                    <Alert variant="info" title="当前任务还没有可播放音频">
+                      {selectedJob.status === "succeeded"
                           ? "音频预览还在加载，请稍等。"
                           : "只有成功任务才会返回音频产物。"}
                       </Alert>
@@ -684,13 +728,12 @@ export default function TtsStudioPage() {
                   </div>
                 )}
               </div>
-            </Card>
 
             {activeTab === "gpt_sovits" ? (
-              <div className="grid gap-4 md:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
+              <div className="grid items-stretch gap-4 md:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
                 <div className="space-y-4">
-                  <Card className="p-5">
-                    <div className="space-y-4">
+                  <Card className="h-full p-5">
+                    <div className="flex h-full flex-col space-y-4">
                       <div className="flex items-center gap-2 text-base font-semibold text-text-primary">
                         <Waves className="h-5 w-5 text-primary" />
                         GPT-SoVITS 配置
@@ -757,16 +800,32 @@ export default function TtsStudioPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <div className="text-xs font-medium text-text-secondary">
-                          参考音频文件
+                        <div className="flex items-center gap-1.5 text-xs font-medium text-text-secondary">
+                          <span>参考音频文件</span>
+                          <Tooltip text="上传格式：[名称]参考文本.wav" placement="top">
+                            <span className="inline-flex text-icon-secondary">
+                              <CircleHelp className="h-3.5 w-3.5" />
+                            </span>
+                          </Tooltip>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Select
-                            value={selectedRefAudioId}
-                            onChange={setSelectedRefAudioId}
-                            options={storedRefAudioOptions}
-                            disabled={storedRefAudios.length === 0}
-                          />
+                          <div className="min-w-0 flex-1">
+                            <Select
+                              value={selectedRefAudioId}
+                              onChange={setSelectedRefAudioId}
+                              options={storedRefAudioOptions}
+                              disabled={storedRefAudios.length === 0}
+                              endAction={
+                                selectedRefAudio
+                                  ? {
+                                      ariaLabel: "删除参考音频",
+                                      icon: <X className="h-3.5 w-3.5" />,
+                                      onClick: () => void handleDeleteRefAudio(selectedRefAudio.id),
+                                    }
+                                  : undefined
+                              }
+                            />
+                          </div>
                           <Button
                             variant="outline"
                             size="sm"
@@ -783,23 +842,6 @@ export default function TtsStudioPage() {
                             onChange={handleSelectRefAudioFiles}
                           />
                         </div>
-
-                        {selectedRefAudio ? (
-                          <div className="flex items-center gap-2 rounded-ui-control border border-border bg-surface-secondary px-3 py-2">
-                            <div className="min-w-0 flex-1 truncate text-sm text-text-primary">
-                              {selectedRefAudio.name}
-                            </div>
-                            <IconButton
-                              size="xs"
-                              tone="danger"
-                              styleType="ghost"
-                              ariaLabel="删除参考音频"
-                              onClick={() => void handleDeleteRefAudio(selectedRefAudio.id)}
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </IconButton>
-                          </div>
-                        ) : null}
                       </div>
 
                       <TextArea
@@ -940,10 +982,10 @@ export default function TtsStudioPage() {
                 </div>
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
+              <div className="grid items-stretch gap-4 md:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
                 <div className="space-y-4">
-                  <Card className="p-5">
-                    <div className="space-y-4">
+                  <Card className="h-full p-5">
+                    <div className="flex h-full flex-col space-y-4">
                       <div className="flex items-start justify-between gap-4">
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
@@ -956,7 +998,7 @@ export default function TtsStudioPage() {
                       </div>
 
                       {selectedProvider && selectedDraft ? (
-                        <div className="space-y-4">
+                        <div className="flex h-full flex-1 flex-col space-y-4">
                           <Select
                             label="语音来源"
                             value={providerId}
@@ -989,27 +1031,34 @@ export default function TtsStudioPage() {
                                 options={voiceOptions}
                                 disabled={Boolean(savingProviderId) || voicesLoading}
                               />
-                              <div className="grid gap-4 sm:grid-cols-2">
-                                <TextInput
+                              <div className="space-y-4">
+                                <Slider
                                   label="默认语速"
-                                  value={String(selectedDraft.config.rate ?? 0)}
+                                  value={Number(selectedDraft.config.rate ?? 0)}
+                                  min={-10}
+                                  max={10}
+                                  step={1}
                                   onChange={(value) =>
                                     updateProviderConfig(
                                       providerId,
                                       "rate",
-                                      Number(value || 0),
+                                      value,
                                     )
                                   }
                                   disabled={Boolean(savingProviderId)}
+                                  labelHelp="Windows 建议范围 -10 到 10"
                                 />
-                                <TextInput
+                                <Slider
                                   label="默认音量"
-                                  value={String(selectedDraft.config.volume ?? 100)}
+                                  value={Number(selectedDraft.config.volume ?? 100)}
+                                  min={0}
+                                  max={100}
+                                  step={1}
                                   onChange={(value) =>
                                     updateProviderConfig(
                                       providerId,
                                       "volume",
-                                      Number(value || 100),
+                                      value,
                                     )
                                   }
                                   disabled={Boolean(savingProviderId)}
@@ -1018,24 +1067,26 @@ export default function TtsStudioPage() {
                             </>
                           ) : (
                             <>
-                              <TextInput
-                                label="语音包文件"
-                                value={String(selectedDraft.config.modelPath ?? "")}
-                                onChange={(value) =>
-                                  updateProviderConfig(providerId, "modelPath", value)
-                                }
-                                placeholder="例如 C:\\models\\zh_CN-huayan-medium.onnx"
-                                disabled={Boolean(savingProviderId)}
-                              />
-                              <TextInput
-                                label="语音包标签"
-                                value={String(selectedDraft.config.voiceLabel ?? "")}
-                                onChange={(value) =>
-                                  updateProviderConfig(providerId, "voiceLabel", value)
-                                }
-                                placeholder="例如 zh_CN-huayan-medium"
-                                disabled={Boolean(savingProviderId)}
-                              />
+                              <div className="grid gap-4 sm:grid-cols-2">
+                                <TextInput
+                                  label="语音包文件"
+                                  value={String(selectedDraft.config.modelPath ?? "")}
+                                  onChange={(value) =>
+                                    updateProviderConfig(providerId, "modelPath", value)
+                                  }
+                                  placeholder="例如 C:\\models\\zh_CN-huayan-medium.onnx"
+                                  disabled={Boolean(savingProviderId)}
+                                />
+                                <TextInput
+                                  label="语音包标签"
+                                  value={String(selectedDraft.config.voiceLabel ?? "")}
+                                  onChange={(value) =>
+                                    updateProviderConfig(providerId, "voiceLabel", value)
+                                  }
+                                  placeholder="例如 zh_CN-huayan-medium"
+                                  disabled={Boolean(savingProviderId)}
+                                />
+                              </div>
                               <TextInput
                                 label="默认 Speaker"
                                 value={String(selectedDraft.config.speaker ?? "")}
@@ -1048,11 +1099,12 @@ export default function TtsStudioPage() {
                             </>
                           )}
 
-                          <div className="flex justify-end">
+                          <div className="mt-auto">
                             <Button
                               variant="primary"
                               onClick={() => void saveBaseProvider()}
                               disabled={Boolean(savingProviderId)}
+                              className="w-full"
                             >
                               <Save className="h-4 w-4" />
                               保存 Provider
@@ -1069,49 +1121,27 @@ export default function TtsStudioPage() {
                 </div>
 
                 <div className="space-y-4">
-                  <Card className="p-5">
-                    <div className="space-y-4">
+                  <Card className="h-full p-5">
+                    <div className="flex h-full flex-col space-y-4">
                       <div className="flex items-center gap-2 text-base font-semibold text-text-primary">
                         <Volume2 className="h-5 w-5 text-primary" />
                         合成请求
-                      </div>
-
-                      <Select
-                        label={providerId === "windows_builtin" ? "系统语音" : "语音包音色"}
-                        value={voice}
-                        onChange={setVoice}
-                        options={voiceOptions}
-                        disabled={voicesLoading}
-                      />
-
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <TextInput
-                          label="语速"
-                          value={rate}
-                          onChange={setRate}
-                          placeholder="Windows 建议 -10 到 10"
-                        />
-                        <TextInput
-                          label="音量"
-                          value={volume}
-                          onChange={setVolume}
-                          placeholder="0 到 100"
-                        />
                       </div>
 
                       <TextArea
                         label="要合成的文本"
                         value={text}
                         onChange={setText}
-                        rows={8}
+                        rows={15}
                         placeholder="输入一段文本，快速验证桌面 TTS 闭环。"
                       />
 
-                      <div className="flex justify-end">
+                      <div className="mt-auto -mb-1">
                         <Button
                           variant="primary"
                           onClick={() => void runBaseSynthesis()}
                           disabled={synthesizing || loading}
+                          className="w-full"
                         >
                           {synthesizing ? "合成中..." : "开始合成"}
                         </Button>

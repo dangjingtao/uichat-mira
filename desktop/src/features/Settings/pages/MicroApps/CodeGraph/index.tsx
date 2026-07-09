@@ -1,6 +1,7 @@
 import { useEffect, useState, type ComponentType } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  ChevronDown,
   Copy,
   FlaskConical,
   FolderCog,
@@ -192,6 +193,7 @@ export default function CodeGraphStudioPage() {
   const [smokeResult, setSmokeResult] = useState<CodeGraphStudioSmokeResult | null>(null);
   const [smokeMode, setSmokeMode] = useState<SmokeMode>("real");
   const [realDraftBackup, setRealDraftBackup] = useState<CodeGraphDraft | null>(null);
+  const [debugExpanded, setDebugExpanded] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -1068,7 +1070,15 @@ export default function CodeGraphStudioPage() {
           <div className="flex h-full flex-col gap-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-0">
+                  <IconButton
+                    size="sm"
+                    styleType="ghost"
+                    ariaLabel={t("settings.microApps.codeGraphStudio.actions.copyDebug")}
+                    onClick={() => void copyDebugReport()}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </IconButton>
                   <div className="text-lg font-semibold text-text-primary">
                     {t("settings.microApps.codeGraphStudio.cards.debug.title")}
                   </div>
@@ -1078,19 +1088,26 @@ export default function CodeGraphStudioPage() {
                 <IconButton
                   size="sm"
                   styleType="ghost"
-                  ariaLabel={t("settings.microApps.codeGraphStudio.actions.copyDebug")}
-                  onClick={() => void copyDebugReport()}
+                  ariaLabel={t("settings.microApps.codeGraphStudio.cards.debug.title")}
+                  aria-expanded={debugExpanded}
+                  onClick={() => setDebugExpanded((value) => !value)}
                 >
-                  <Copy className="h-4 w-4" />
+                  <ChevronDown
+                    className={`h-4 w-4 text-text-tertiary transition-transform duration-200 ${
+                      debugExpanded ? "rotate-180" : ""
+                    }`}
+                  />
                 </IconButton>
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 border-t border-border/70 pt-3">
-              <pre className="h-full overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-all rounded-ui-panel border border-border bg-surface-secondary/20 p-3 text-xs text-text-secondary">
-                {JSON.stringify(report, null, 2)}
-              </pre>
-            </div>
+            {debugExpanded ? (
+              <div className="min-h-0 flex-1 border-t border-border/70 pt-3">
+                <pre className="h-full overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-all rounded-ui-panel border border-border bg-surface-secondary/20 p-3 text-xs text-text-secondary">
+                  {JSON.stringify(report, null, 2)}
+                </pre>
+              </div>
+            ) : null}
           </div>
         </Card>
       </div>

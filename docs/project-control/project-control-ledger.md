@@ -196,6 +196,7 @@ related:
 | [code_T014](tasks/code_T014-codegraph-real-provider-smoke.md) | `BLOCKED` | 已把真实 provider smoke 的任务卡、review、smoke report、JSON 与原始输出完整落盘；真实 `codegraph 1.3.0` 在 `telemetry = verified_off` 下 detect / start / health 均为 ready，4 条 query 中 3 条产出 verified candidate；但第一次真实 smoke 在 repo 根目录新增 `.codegraph/`，且 flow query 当前 raw output 虽有源码块、wrapper 统计仍是 `0 verified`，按任务边界必须保持 blocked |
 | [code_T015](tasks/code_T015-codegraph-external-index-root-repo-pollution-control.md) | `READY_FOR_REVIEW` | 已确认 `CodeGraph 1.3.0` 不支持可靠 external index root；managed CodeGraph 现已在 detect/start/health 之前阻断 repo pollution risk，clean temp repo 与已有 repo-root `.codegraph/` 场景均有原始 smoke 证据 |
 | [code_T016](tasks/code_T016-codegraph-studio-desktop-ux-polish.md) | `DONE` | `CodeGraph Studio` 前端工作台已完成 owner 视角可用性、参考图对齐与 blocked-safe 引导；不改 server blocked-safe 逻辑，不解禁真实 provider，不碰 Planner 主链 |
+| [code_T016-Fix](tasks/code_T016-fix-codegraph-studio-merge-blockers.md) | `DONE` | 已完成 `CodeGraph Studio` 合并阻断修复：`App Data Root` 后端强校验已补，`Raw Debug` 已恢复默认折叠，相关 service / route / desktop tests 已更新通过；真实 provider 仍 blocked |
 
 ## Codebase Understanding Review Index
 

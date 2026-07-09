@@ -39,6 +39,12 @@ export type TtsSynthesisRequest = {
   volume?: number;
 };
 
+type ResolvedBaseSynthesisRequest = {
+  voice: string | null;
+  rate: number;
+  volume: number;
+};
+
 export type TtsOverview = {
   providers: TtsProviderConfigRecord[];
   recentJobs: TtsSynthesisJobRecord[];
@@ -117,6 +123,36 @@ const parseJson = <T>(value: string, fallback: T): T => {
 
 const basenameWithoutExt = (filePath: string) =>
   path.basename(filePath, path.extname(filePath));
+
+const resolveBaseSynthesisRequest = (
+  provider: TtsProviderConfigRecord,
+): ResolvedBaseSynthesisRequest => {
+  if (provider.providerId === WINDOWS_PROVIDER_ID) {
+    const defaultVoice =
+      typeof provider.config.defaultVoice === "string"
+        ? provider.config.defaultVoice.trim()
+        : "";
+    const rate =
+      typeof provider.config.rate === "number" ? provider.config.rate : 0;
+    const volume =
+      typeof provider.config.volume === "number" ? provider.config.volume : 100;
+
+    return {
+      voice: defaultVoice || null,
+      rate: clampNumber(Math.round(rate), -10, 10),
+      volume: clampNumber(Math.round(volume), 0, 100),
+    };
+  }
+
+  const speaker =
+    typeof provider.config.speaker === "string" ? provider.config.speaker.trim() : "";
+
+  return {
+    voice: speaker || null,
+    rate: 0,
+    volume: 100,
+  };
+};
 
 const resolveBundledPiperExecutablePath = async () => {
   const processWithResourcesPath = process as NodeJS.Process & {
@@ -408,14 +444,16 @@ export const createTtsService = (options?: { artifactRoot?: string }) => {
         throw new Error("Use the GPT-SoVITS synthesis route for this provider.");
       }
 
+      const resolvedRequest = resolveBaseSynthesisRequest(provider);
+
       const job = ttsSynthesisJobsRepository.create({
         providerId: request.providerId,
         status: "queued",
         text,
-        voice: request.voice?.trim() || null,
+        voice: resolvedRequest.voice,
         requestConfig: {
-          rate: request.rate ?? 0,
-          volume: request.volume ?? 100,
+          rate: resolvedRequest.rate,
+          volume: resolvedRequest.volume,
         },
       });
 
@@ -424,9 +462,25 @@ export const createTtsService = (options?: { artifactRoot?: string }) => {
 
       try {
         if (request.providerId === WINDOWS_PROVIDER_ID) {
-          await synthesizeWithWindowsVoice(outputPath, { ...request, text });
+          await synthesizeWithWindowsVoice(outputPath, {
+            providerId: request.providerId,
+            text,
+            voice: resolvedRequest.voice ?? undefined,
+            rate: resolvedRequest.rate,
+            volume: resolvedRequest.volume,
+          });
         } else {
-          await synthesizeWithPiper(outputPath, { ...request, text }, provider);
+          await synthesizeWithPiper(
+            outputPath,
+            {
+              providerId: request.providerId,
+              text,
+              voice: resolvedRequest.voice ?? undefined,
+              rate: resolvedRequest.rate,
+              volume: resolvedRequest.volume,
+            },
+            provider,
+          );
         }
 
         const completed = ttsSynthesisJobsRepository.markSucceeded(job.id, {
