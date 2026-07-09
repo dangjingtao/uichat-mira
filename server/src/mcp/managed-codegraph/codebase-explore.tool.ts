@@ -112,9 +112,14 @@ export const codebaseExploreTool: McpToolImplementation = {
     const plannerConfig = resolveManagedCodeGraphPlannerConfig(workspaceRoot);
     if (
       plannerConfig.storage.status !== "ready" ||
+      plannerConfig.externalIndexSupport.status !== "ready" ||
       !plannerConfig.logRoot ||
       !plannerConfig.indexRoot
     ) {
+      const blockedReason =
+        plannerConfig.externalIndexSupport.reason ??
+        plannerConfig.storage.reason ??
+        "Managed CodeGraph app-data root is unavailable.";
       const trace = createCodebaseExploreTrace({
         originalQuery: queryValue,
         normalizedQuery: queryValue.trim(),
@@ -165,8 +170,7 @@ export const codebaseExploreTool: McpToolImplementation = {
             degraded: true,
             limitations: ["provider_unavailable", "query_failed"],
             followUpHints: [
-              plannerConfig.storage.reason ??
-                "Managed CodeGraph app-data root is unavailable.",
+              blockedReason,
             ],
             fallbackSignal: {
               required: true,
@@ -206,6 +210,11 @@ export const codebaseExploreTool: McpToolImplementation = {
       allowedWorkspaceRoot: workspaceRoot,
       logRoot: plannerConfig.logRoot,
       indexRoot: plannerConfig.indexRoot,
+      repoPollutionGuard: {
+        status: plannerConfig.externalIndexSupport.status,
+        repoDataDirName: plannerConfig.externalIndexSupport.repoDataDirName,
+        blockedReason: plannerConfig.externalIndexSupport.reason,
+      },
     });
     const wrapper = new CodebaseExploreWrapper(manager);
     const exploreResult = await wrapper.explore({

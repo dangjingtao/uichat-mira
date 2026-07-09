@@ -43,6 +43,23 @@ type ManagedCodeGraphPlannerStorage = {
   reason: string | null;
 };
 
+type ManagedCodeGraphExternalIndexSupport = {
+  status: "ready" | "blocked";
+  externalIndexRootSupported: boolean;
+  repoDataDirName: string;
+  reason: string | null;
+  investigation: {
+    cliArgSupported: boolean;
+    envPathSupported: boolean;
+    configFilePathSupported: boolean;
+    cwdProjectSeparationSupported: boolean;
+    serveMcpProjectIndexSeparationSupported: boolean;
+    dataDirEnvName: string | null;
+  };
+};
+
+const DEFAULT_REPO_DATA_DIR_NAME = ".codegraph";
+
 const toAbsoluteIfPresent = (value: string | undefined) => {
   const trimmed = value?.trim();
   if (!trimmed) {
@@ -107,12 +124,61 @@ const resolveManagedCodeGraphPlannerStorage = (
   };
 };
 
+const isLikelyRealCodeGraphCommand = (command: string) => {
+  const normalized = command.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  const baseName = path.basename(normalized);
+  return baseName === "codegraph" || baseName === "codegraph.cmd" || baseName === "codegraph.exe";
+};
+
+const resolveManagedCodeGraphExternalIndexSupport = (
+  command: string,
+): ManagedCodeGraphExternalIndexSupport => {
+  if (!isLikelyRealCodeGraphCommand(command)) {
+    return {
+      status: "ready",
+      externalIndexRootSupported: true,
+      repoDataDirName: DEFAULT_REPO_DATA_DIR_NAME,
+      reason: null,
+      investigation: {
+        cliArgSupported: false,
+        envPathSupported: false,
+        configFilePathSupported: false,
+        cwdProjectSeparationSupported: true,
+        serveMcpProjectIndexSeparationSupported: false,
+        dataDirEnvName: null,
+      },
+    };
+  }
+
+  return {
+    status: "blocked",
+    externalIndexRootSupported: false,
+    repoDataDirName: DEFAULT_REPO_DATA_DIR_NAME,
+    reason:
+      "CodeGraph 1.3.0 does not provide a reliable external index root. `serve --mcp` has no index-root CLI flag, `CODEGRAPH_DIR` only accepts a single directory name inside the project root, and current docs/source do not expose a config-file path override for repo-external index data. Managed CodeGraph must stay blocked because using the real provider would require a repo-root .codegraph directory.",
+    investigation: {
+      cliArgSupported: false,
+      envPathSupported: false,
+      configFilePathSupported: false,
+      cwdProjectSeparationSupported: true,
+      serveMcpProjectIndexSeparationSupported: false,
+      dataDirEnvName: "CODEGRAPH_DIR",
+    },
+  };
+};
+
 export const resolveManagedCodeGraphPlannerConfig = (workspaceRoot: string) => {
   const workspaceHash = createManagedCodeGraphWorkspaceHash(workspaceRoot);
   const storage = resolveManagedCodeGraphPlannerStorage(workspaceHash);
+  const command = (process.env.UI_CHAT_CODEGRAPH_COMMAND ?? "codegraph").trim();
+  const externalIndexSupport = resolveManagedCodeGraphExternalIndexSupport(command);
 
   return {
-    command: (process.env.UI_CHAT_CODEGRAPH_COMMAND ?? "codegraph").trim(),
+    command,
     startArgs: parseJsonArrayEnv(
       process.env.UI_CHAT_CODEGRAPH_START_ARGS,
       ["serve", "--mcp"],
@@ -126,6 +192,7 @@ export const resolveManagedCodeGraphPlannerConfig = (workspaceRoot: string) => {
       ["telemetry", "status"],
     ),
     storage,
+    externalIndexSupport,
     logRoot: storage.logRoot,
     indexRoot: storage.indexRoot,
   };

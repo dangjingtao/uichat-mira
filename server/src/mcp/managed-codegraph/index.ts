@@ -21,6 +21,7 @@ export type {
   CodebaseVerifiedCandidate,
   ManagedCodeGraphDetectResult,
   ManagedCodeGraphProcessManagerOptions,
+  ManagedCodeGraphRepoPollutionGuard,
   ManagedCodeGraphRuntimeStatus,
   ManagedCodeGraphStartDisposition,
   ManagedCodeGraphStatusSnapshot,

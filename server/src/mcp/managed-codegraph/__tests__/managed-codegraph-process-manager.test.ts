@@ -78,6 +78,7 @@ const createManager = (
     startTimeoutMs: overrides.startTimeoutMs ?? 1_500,
     healthTimeoutMs: overrides.healthTimeoutMs ?? 1_500,
     stopTimeoutMs: overrides.stopTimeoutMs ?? 500,
+    repoPollutionGuard: overrides.repoPollutionGuard,
   });
   activeManagers.push(manager);
   return manager;
@@ -267,6 +268,54 @@ describe("ManagedCodeGraphProcessManager", () => {
     expect(started.processAlive).toBe(false);
   });
 
+  it("blocks before launch when external index root is unsupported for the real provider", async () => {
+    const isolatedWorkspace = makeTempDir();
+    const manager = createManager({
+      workspaceRoot: isolatedWorkspace,
+      allowedWorkspaceRoot: isolatedWorkspace,
+      repoPollutionGuard: {
+        status: "blocked",
+        repoDataDirName: ".codegraph",
+        blockedReason:
+          "CodeGraph 1.3.0 does not support an external index root and would require a repo-root .codegraph directory.",
+      },
+    });
+
+    const detected = await manager.detect();
+    const started = await manager.start();
+
+    expect(detected.status).toBe("blocked");
+    expect(detected.reasons).toContain("repo_pollution_risk");
+    expect(started.status).toBe("blocked");
+    expect(started.lastError).toContain("external index root");
+    expect(fs.existsSync(path.join(isolatedWorkspace, ".codegraph"))).toBe(false);
+  });
+
+  it("blocks and preserves an existing repo-root .codegraph directory", async () => {
+    const isolatedWorkspace = makeTempDir();
+    const repoCodeGraphDir = path.join(isolatedWorkspace, ".codegraph");
+    fs.mkdirSync(repoCodeGraphDir, { recursive: true });
+    fs.writeFileSync(path.join(repoCodeGraphDir, "sentinel.txt"), "user-owned", "utf8");
+
+    const manager = createManager({
+      workspaceRoot: isolatedWorkspace,
+      allowedWorkspaceRoot: isolatedWorkspace,
+      repoPollutionGuard: {
+        status: "ready",
+        repoDataDirName: ".codegraph",
+        blockedReason: null,
+      },
+    });
+
+    const detected = await manager.detect();
+    const started = await manager.start();
+
+    expect(detected.status).toBe("blocked");
+    expect(detected.reasons).toContain("repo_root_codegraph_present");
+    expect(started.status).toBe("blocked");
+    expect(fs.readFileSync(path.join(repoCodeGraphDir, "sentinel.txt"), "utf8")).toBe("user-owned");
+  });
+
   it("sends notifications/initialized immediately after initialize succeeds", async () => {
     const messageLogPath = path.join(makeTempDir(), "provider-messages.log");
     const manager = createManager({
@@ -293,6 +342,34 @@ describe("ManagedCodeGraphProcessManager", () => {
     );
     expect(methodOrder.indexOf("codegraph/health")).toBeGreaterThan(
       methodOrder.indexOf("notifications/initialized"),
+    );
+  });
+
+  it("never reports ready after repo pollution appears before health", async () => {
+    const isolatedWorkspace = makeTempDir();
+    const manager = createManager({
+      workspaceRoot: isolatedWorkspace,
+      allowedWorkspaceRoot: isolatedWorkspace,
+      repoPollutionGuard: {
+        status: "ready",
+        repoDataDirName: ".codegraph",
+        blockedReason: null,
+      },
+    });
+
+    const started = await manager.start();
+    expect(started.status).toBe("ready");
+
+    const repoCodeGraphDir = path.join(isolatedWorkspace, ".codegraph");
+    fs.mkdirSync(repoCodeGraphDir, { recursive: true });
+    fs.writeFileSync(path.join(repoCodeGraphDir, "created-during-test.txt"), "pollution", "utf8");
+
+    const health = await manager.health();
+
+    expect(health.status).toBe("blocked");
+    expect(health.lastError).toContain(".codegraph");
+    expect(fs.readFileSync(path.join(repoCodeGraphDir, "created-during-test.txt"), "utf8")).toBe(
+      "pollution",
     );
   });
 

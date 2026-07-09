@@ -208,3 +208,44 @@ test("codebaseExploreTool reports blocked provider status when app-data root can
   assert.equal(exploreTrace.fallbackReason, "provider_unavailable");
   assert.equal(exploreTrace.workspaceHash, null);
 });
+
+test("codebaseExploreTool keeps repo pollution risk blocked instead of treating it as empty results", async () => {
+  applyToolEnv();
+  process.env.UI_CHAT_CODEGRAPH_COMMAND = "codegraph";
+
+  const workspaceRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), "codebase-explore-tool-pollution-risk-"),
+  );
+
+  const result = await codebaseExploreTool.execute({
+    invocationId: "invocation-4",
+    args: { query: "planner function" },
+    pushEvent: () => {},
+    addArtifact: (artifact) => ({ id: "artifact-4", ...artifact }),
+    trace: {
+      startSpan: () => ({
+        spanId: "span-4",
+        end: () => {},
+      }),
+    },
+    signal: new AbortController().signal,
+    environment: createHarnessEnvironmentSnapshot({
+      workspace: {
+        rootPath: workspaceRoot,
+        source: "selected",
+      },
+    }),
+  });
+
+  const payload = result.result as Record<string, unknown>;
+  const exploreResult = payload.exploreResult as Record<string, unknown>;
+  const exploreTrace = (payload.trace as Record<string, unknown>)
+    .explore as Record<string, unknown>;
+  const retrieval = payload.verifiedEvidenceInput as Record<string, unknown>;
+  const hints = exploreResult.followUpHints as string[];
+
+  assert.equal(exploreResult.status, "degraded");
+  assert.equal(retrieval.chunkCount, 0);
+  assert.equal(exploreTrace.fallbackReason, "provider_unavailable");
+  assert.equal(hints.some((hint) => hint.includes("repo-root .codegraph")), true);
+});

@@ -12,6 +12,7 @@ import type {
   ManagedCodeGraphDetectResult,
   ManagedCodeGraphHealthProbe,
   ManagedCodeGraphProcessManagerOptions,
+  ManagedCodeGraphRepoPollutionGuard,
   ManagedCodeGraphStatusSnapshot,
   ManagedCodeGraphTelemetryStatus,
   ManagedCodeGraphRuntimeStatus,
@@ -88,11 +89,20 @@ const normalizeExitCode = (message: string, fallback: number | null) => {
   return match ? Number(match[1]) : null;
 };
 
+const DEFAULT_REPO_DATA_DIR_NAME = ".codegraph";
+
 const makeLeaseKey = (
   workspaceHash: string,
   providerVersion: string | null,
   indexRoot: string,
 ) => `${workspaceHash}::${providerVersion ?? "unknown"}::${resolvePath(indexRoot)}`;
+
+type RepoPollutionStatus = {
+  enabled: boolean;
+  exists: boolean;
+  repoDataDirPath: string | null;
+  blockedReason: string | null;
+};
 
 export class ManagedCodeGraphProcessManager {
   private static readonly leaseRegistry = new Map<string, ManagedCodeGraphProcessManager>();
@@ -158,6 +168,7 @@ export class ManagedCodeGraphProcessManager {
     const logRootReady = this.ensureWritableDirectory(this.logRoot);
     const indexRootReady = this.ensureWritableDirectory(this.indexRoot);
     const workspaceAllowed = this.workspaceRoot === this.allowedWorkspaceRoot;
+    const repoPollution = this.inspectRepoPollution();
 
     let providerVersion: string | null = null;
     if (commandFound) {
@@ -187,11 +198,22 @@ export class ManagedCodeGraphProcessManager {
     if (telemetryStatus === "not_verified") {
       reasons.push("telemetry_not_verified");
     }
+    if (repoPollution.exists) {
+      reasons.push("repo_root_codegraph_present");
+    }
+    if (repoPollution.blockedReason) {
+      reasons.push("repo_pollution_risk");
+    }
 
     let status: ManagedCodeGraphRuntimeStatus = "stopped";
     if (!commandFound || !providerVersion || !logRootReady || !indexRootReady) {
       status = "unavailable";
-    } else if (!workspaceAllowed || telemetryStatus !== "verified_off") {
+    } else if (
+      !workspaceAllowed ||
+      telemetryStatus !== "verified_off" ||
+      repoPollution.exists ||
+      repoPollution.blockedReason
+    ) {
       status = "blocked";
     }
 
@@ -213,6 +235,15 @@ export class ManagedCodeGraphProcessManager {
       providerVersion,
       telemetryStatus,
       workspaceMatches: workspaceAllowed,
+      lastError:
+        status === "blocked"
+          ? this.getRepoPollutionBlockedMessage(repoPollution) ??
+            (!workspaceAllowed
+              ? "workspace_mismatch"
+              : telemetryStatus !== "verified_off"
+                ? "telemetry_not_verified"
+                : null)
+          : null,
     };
 
     return this.detectCache;
@@ -377,6 +408,17 @@ export class ManagedCodeGraphProcessManager {
           processAlive: false,
         };
       }
+      return this.getStatus();
+    }
+
+    const repoPollution = this.inspectRepoPollution();
+    if (repoPollution.exists || repoPollution.blockedReason) {
+      this.snapshot = {
+        ...this.snapshot,
+        status: "blocked",
+        processAlive: this.session.isAlive(),
+        lastError: this.getRepoPollutionBlockedMessage(repoPollution),
+      };
       return this.getStatus();
     }
 
@@ -771,6 +813,44 @@ export class ManagedCodeGraphProcessManager {
       .filter(Boolean)
       .join("\n")
       .trim();
+  }
+
+  private inspectRepoPollution(): RepoPollutionStatus {
+    const guard = this.options.repoPollutionGuard;
+    if (!guard) {
+      return {
+        enabled: false,
+        exists: false,
+        repoDataDirPath: null,
+        blockedReason: null,
+      };
+    }
+
+    const repoDataDirName = this.getRepoDataDirName(guard);
+    const repoDataDirPath = path.join(this.workspaceRoot, repoDataDirName);
+    return {
+      enabled: true,
+      exists: fs.existsSync(repoDataDirPath),
+      repoDataDirPath,
+      blockedReason: guard.status === "blocked" ? guard.blockedReason : null,
+    };
+  }
+
+  private getRepoDataDirName(guard: ManagedCodeGraphRepoPollutionGuard) {
+    return guard.repoDataDirName.trim() || DEFAULT_REPO_DATA_DIR_NAME;
+  }
+
+  private getRepoPollutionBlockedMessage(repoPollution: RepoPollutionStatus) {
+    if (!repoPollution.enabled) {
+      return null;
+    }
+    if (repoPollution.exists && repoPollution.repoDataDirPath) {
+      return `repo pollution detected: ${repoPollution.repoDataDirPath}`;
+    }
+    if (repoPollution.blockedReason) {
+      return repoPollution.blockedReason;
+    }
+    return null;
   }
 }
 

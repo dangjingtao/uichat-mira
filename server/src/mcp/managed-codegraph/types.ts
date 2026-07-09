@@ -45,6 +45,13 @@ export interface ManagedCodeGraphProcessManagerOptions {
   startTimeoutMs?: number;
   healthTimeoutMs?: number;
   stopTimeoutMs?: number;
+  repoPollutionGuard?: ManagedCodeGraphRepoPollutionGuard;
+}
+
+export interface ManagedCodeGraphRepoPollutionGuard {
+  status: "ready" | "blocked";
+  repoDataDirName: string;
+  blockedReason: string | null;
 }
 
 export interface ManagedCodeGraphDetectResult {

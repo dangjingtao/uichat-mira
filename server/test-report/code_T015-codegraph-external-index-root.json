@@ -1,0 +1,232 @@
+{
+  "generatedAt": "2026-07-09T14:24:22.554Z",
+  "smokeRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z",
+  "cleanRepoRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\clean-repo",
+  "preexistingRepoRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\preexisting-repo",
+  "investigation": {
+    "status": "blocked",
+    "externalIndexRootSupported": false,
+    "repoDataDirName": ".codegraph",
+    "reason": "CodeGraph 1.3.0 does not provide a reliable external index root. `serve --mcp` has no index-root CLI flag, `CODEGRAPH_DIR` only accepts a single directory name inside the project root, and current docs/source do not expose a config-file path override for repo-external index data. Managed CodeGraph must stay blocked because using the real provider would require a repo-root .codegraph directory.",
+    "investigation": {
+      "cliArgSupported": false,
+      "envPathSupported": false,
+      "configFilePathSupported": false,
+      "cwdProjectSeparationSupported": true,
+      "serveMcpProjectIndexSeparationSupported": false,
+      "dataDirEnvName": "CODEGRAPH_DIR"
+    }
+  },
+  "startupPolicy": {
+    "command": "codegraph",
+    "startArgs": [
+      "serve",
+      "--mcp"
+    ],
+    "versionProbeArgs": [
+      "--version"
+    ],
+    "telemetryProbeArgs": [
+      "telemetry",
+      "status"
+    ],
+    "cwdStrategy": "cwd stays at project root; no repo-external index root is passed because CodeGraph 1.3.0 does not support it."
+  },
+  "captures": {
+    "version": "D:\\workspace\\rag-demo\\server\\test-report\\code_T015-codegraph-external-index-root-version.txt",
+    "serveHelp": "D:\\workspace\\rag-demo\\server\\test-report\\code_T015-codegraph-external-index-root-serve-help.txt",
+    "initHelp": "D:\\workspace\\rag-demo\\server\\test-report\\code_T015-codegraph-external-index-root-init-help.txt",
+    "initWithAbsoluteCodeGraphDir": "D:\\workspace\\rag-demo\\server\\test-report\\code_T015-codegraph-external-index-root-init-with-absolute-codegraph-dir.txt"
+  },
+  "cleanRepoPollution": {
+    "repoRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\clean-repo",
+    "externalIndexRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\external-index-root",
+    "repoDotCodeGraphExists": true,
+    "repoDotCodeGraphEntries": [
+      ".gitignore",
+      "codegraph.db"
+    ],
+    "externalIndexRootEntries": []
+  },
+  "cleanRepoPreflightManager": {
+    "detect": {
+      "status": "blocked",
+      "commandFound": true,
+      "providerVersion": "1.3.0",
+      "telemetryStatus": "verified_off",
+      "workspaceHash": "c5fa6b81f2b8c766",
+      "workspaceAllowed": true,
+      "logRootReady": true,
+      "indexRootReady": true,
+      "reasons": [
+        "repo_pollution_risk"
+      ]
+    },
+    "start": {
+      "status": "blocked",
+      "providerVersion": "1.3.0",
+      "telemetryStatus": "verified_off",
+      "handshakeStatus": "not_started",
+      "initializedNotificationSent": false,
+      "workspaceHash": "c5fa6b81f2b8c766",
+      "workspaceRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\clean-repo",
+      "allowedWorkspaceRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\clean-repo",
+      "workspaceMatches": true,
+      "logRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\appdata\\managed-codegraph\\c5fa6b81f2b8c766\\logs",
+      "indexRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\appdata\\managed-codegraph\\c5fa6b81f2b8c766\\index",
+      "processAlive": false,
+      "startedAt": null,
+      "stoppedAt": null,
+      "durationMs": null,
+      "exitCode": null,
+      "lastStatus": null,
+      "lastError": "CodeGraph 1.3.0 does not provide a reliable external index root. `serve --mcp` has no index-root CLI flag, `CODEGRAPH_DIR` only accepts a single directory name inside the project root, and current docs/source do not expose a config-file path override for repo-external index data. Managed CodeGraph must stay blocked because using the real provider would require a repo-root .codegraph directory.",
+      "crashCount": 0,
+      "startDisposition": null
+    },
+    "health": {
+      "status": "blocked",
+      "providerVersion": "1.3.0",
+      "telemetryStatus": "verified_off",
+      "handshakeStatus": "not_started",
+      "initializedNotificationSent": false,
+      "workspaceHash": "c5fa6b81f2b8c766",
+      "workspaceRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\clean-repo",
+      "allowedWorkspaceRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\clean-repo",
+      "workspaceMatches": true,
+      "logRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\appdata\\managed-codegraph\\c5fa6b81f2b8c766\\logs",
+      "indexRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\appdata\\managed-codegraph\\c5fa6b81f2b8c766\\index",
+      "processAlive": false,
+      "startedAt": null,
+      "stoppedAt": null,
+      "durationMs": null,
+      "exitCode": null,
+      "lastStatus": null,
+      "lastError": "CodeGraph 1.3.0 does not provide a reliable external index root. `serve --mcp` has no index-root CLI flag, `CODEGRAPH_DIR` only accepts a single directory name inside the project root, and current docs/source do not expose a config-file path override for repo-external index data. Managed CodeGraph must stay blocked because using the real provider would require a repo-root .codegraph directory.",
+      "crashCount": 0,
+      "startDisposition": null
+    }
+  },
+  "cleanRepoManager": {
+    "detect": {
+      "status": "blocked",
+      "commandFound": true,
+      "providerVersion": "1.3.0",
+      "telemetryStatus": "verified_off",
+      "workspaceHash": "c5fa6b81f2b8c766",
+      "workspaceAllowed": true,
+      "logRootReady": true,
+      "indexRootReady": true,
+      "reasons": [
+        "repo_root_codegraph_present",
+        "repo_pollution_risk"
+      ]
+    },
+    "start": {
+      "status": "blocked",
+      "providerVersion": "1.3.0",
+      "telemetryStatus": "verified_off",
+      "handshakeStatus": "not_started",
+      "initializedNotificationSent": false,
+      "workspaceHash": "c5fa6b81f2b8c766",
+      "workspaceRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\clean-repo",
+      "allowedWorkspaceRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\clean-repo",
+      "workspaceMatches": true,
+      "logRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\appdata\\managed-codegraph\\c5fa6b81f2b8c766\\logs",
+      "indexRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\appdata\\managed-codegraph\\c5fa6b81f2b8c766\\index",
+      "processAlive": false,
+      "startedAt": null,
+      "stoppedAt": null,
+      "durationMs": null,
+      "exitCode": null,
+      "lastStatus": null,
+      "lastError": "repo pollution detected: C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\clean-repo\\.codegraph",
+      "crashCount": 0,
+      "startDisposition": null
+    },
+    "health": {
+      "status": "blocked",
+      "providerVersion": "1.3.0",
+      "telemetryStatus": "verified_off",
+      "handshakeStatus": "not_started",
+      "initializedNotificationSent": false,
+      "workspaceHash": "c5fa6b81f2b8c766",
+      "workspaceRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\clean-repo",
+      "allowedWorkspaceRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\clean-repo",
+      "workspaceMatches": true,
+      "logRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\appdata\\managed-codegraph\\c5fa6b81f2b8c766\\logs",
+      "indexRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\appdata\\managed-codegraph\\c5fa6b81f2b8c766\\index",
+      "processAlive": false,
+      "startedAt": null,
+      "stoppedAt": null,
+      "durationMs": null,
+      "exitCode": null,
+      "lastStatus": null,
+      "lastError": "repo pollution detected: C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\clean-repo\\.codegraph",
+      "crashCount": 0,
+      "startDisposition": null
+    }
+  },
+  "preexistingRepo": {
+    "dotCodeGraphExists": true,
+    "sentinelContent": "user-owned",
+    "detect": {
+      "status": "blocked",
+      "commandFound": true,
+      "providerVersion": "1.3.0",
+      "telemetryStatus": "verified_off",
+      "workspaceHash": "62d4de843c7027dc",
+      "workspaceAllowed": true,
+      "logRootReady": true,
+      "indexRootReady": true,
+      "reasons": [
+        "repo_root_codegraph_present"
+      ]
+    },
+    "start": {
+      "status": "blocked",
+      "providerVersion": "1.3.0",
+      "telemetryStatus": "verified_off",
+      "handshakeStatus": "not_started",
+      "initializedNotificationSent": false,
+      "workspaceHash": "62d4de843c7027dc",
+      "workspaceRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\preexisting-repo",
+      "allowedWorkspaceRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\preexisting-repo",
+      "workspaceMatches": true,
+      "logRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\appdata\\managed-codegraph\\62d4de843c7027dc\\logs",
+      "indexRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\appdata\\managed-codegraph\\62d4de843c7027dc\\index",
+      "processAlive": false,
+      "startedAt": null,
+      "stoppedAt": null,
+      "durationMs": null,
+      "exitCode": null,
+      "lastStatus": null,
+      "lastError": "repo pollution detected: C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\preexisting-repo\\.codegraph",
+      "crashCount": 0,
+      "startDisposition": null
+    },
+    "health": {
+      "status": "blocked",
+      "providerVersion": "1.3.0",
+      "telemetryStatus": "verified_off",
+      "handshakeStatus": "not_started",
+      "initializedNotificationSent": false,
+      "workspaceHash": "62d4de843c7027dc",
+      "workspaceRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\preexisting-repo",
+      "allowedWorkspaceRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\preexisting-repo",
+      "workspaceMatches": true,
+      "logRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\appdata\\managed-codegraph\\62d4de843c7027dc\\logs",
+      "indexRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\appdata\\managed-codegraph\\62d4de843c7027dc\\index",
+      "processAlive": false,
+      "startedAt": null,
+      "stoppedAt": null,
+      "durationMs": null,
+      "exitCode": null,
+      "lastStatus": null,
+      "lastError": "repo pollution detected: C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\uichat-mira-codegraph-external-index-root\\2026-07-09T14-24-18-412Z\\preexisting-repo\\.codegraph",
+      "crashCount": 0,
+      "startDisposition": null
+    }
+  },
+  "finalStatus": "PASS"
+}
