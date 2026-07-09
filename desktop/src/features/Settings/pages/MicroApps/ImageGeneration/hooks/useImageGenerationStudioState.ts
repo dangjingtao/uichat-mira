@@ -7,6 +7,7 @@ import {
   getImageGenerationArtifactPreviewUrl,
   type ImageGenerationArtifactSummary,
   type ImageGenerationCreateRequest,
+  type ImageGenerationJob,
   type GetImageGenerationOptions,
   type ImageGenerationJobError,
   type ImageGenerationJobStatus,
@@ -174,9 +175,9 @@ const normalizeTaskStatus = (
   }
 };
 
-const normalizeGenerationJob = (value: unknown): NormalizedGenerationJob => {
+const normalizeGenerationJob = (value: ImageGenerationJob | unknown): NormalizedGenerationJob => {
   const raw = value as Record<string, unknown>;
-  const generationId = String(raw.generationId ?? raw.id ?? "");
+  const generationId = String(raw.generationId ?? "");
   const status = normalizeTaskStatus(String(raw.status ?? "")) ?? "failed";
   const requestSummary = (raw.requestSummary ?? {}) as ImageGenerationRequestSummary;
   const artifacts = Array.isArray(raw.artifacts)

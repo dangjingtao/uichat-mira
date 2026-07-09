@@ -1,15 +1,18 @@
 import type { AgentCoverageState } from "../coverage-state";
 import type {
+  AgentExecutionObservation,
   AgentNextAction,
   AgentToolExposureState,
   PlannerObservationRecoveryContext,
 } from "../types";
+import { createInvocationInputHash } from "../approval-fingerprint";
 
 export interface CoverageTransitionInput {
   question: string;
   coverageState: AgentCoverageState;
   toolExposure: AgentToolExposureState;
   recovery: PlannerObservationRecoveryContext;
+  latestObservation?: AgentExecutionObservation;
   pendingApproval?: unknown;
   iteration: number;
   maxIterations: number;
@@ -23,6 +26,16 @@ export interface CoverageTransitionDecision {
 
 const hasTool = (input: CoverageTransitionInput, toolId: string) =>
   input.toolExposure.exposedTools.includes(toolId);
+
+const RECOVERABLE_FAILURE_GUARD_TOOL_IDS = new Set([
+  "read_open",
+  "read_locate",
+  "workspace_mutation",
+  "terminal_session",
+]);
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const escapeRegex = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -110,6 +123,230 @@ const extractMutationWriteContent = (question: string) => {
   return undefined;
 };
 
+const getRecoverableFailedToolArgs = (
+  input: CoverageTransitionInput,
+): Record<string, unknown> | undefined => {
+  if (input.recovery.source !== "tool_failure" || input.recovery.exhausted) {
+    return undefined;
+  }
+
+  if (
+    input.latestObservation?.source !== "tool_execution" ||
+    input.latestObservation.status !== "failed_recoverable" ||
+    input.latestObservation.toolId !== input.recovery.toolId ||
+    !isRecord(input.latestObservation.argsPreview)
+  ) {
+    return undefined;
+  }
+
+  return input.latestObservation.argsPreview;
+};
+
+const getRecoverableFailedTargetPath = (
+  input: CoverageTransitionInput,
+  expectedToolId: string,
+): string | undefined => {
+  if (input.recovery.toolId !== expectedToolId) {
+    return undefined;
+  }
+
+  const args = getRecoverableFailedToolArgs(input);
+  if (!args) {
+    return undefined;
+  }
+
+  const candidate =
+    typeof args.path === "string"
+      ? args.path
+      : typeof args.targetPath === "string"
+        ? args.targetPath
+        : undefined;
+  return candidate ? toDisplayTarget(input.question, candidate) : undefined;
+};
+
+const pickTargetWithRecoverableFallback = <
+  T extends { target: string; pendingActions: string[]; status: string },
+>(
+  input: CoverageTransitionInput,
+  candidates: T[],
+  expectedToolId: string,
+): T | undefined => {
+  const failedTargetPath = getRecoverableFailedTargetPath(input, expectedToolId);
+  if (!failedTargetPath) {
+    return candidates[0];
+  }
+
+  return (
+    candidates.find(
+      (candidate) =>
+        toDisplayTarget(input.question, candidate.target) !== failedTargetPath,
+    ) ?? candidates[0]
+  );
+};
+
+const getRecoverableRetryDifference = (
+  toolId: string,
+  previousArgs: Record<string, unknown>,
+  nextArgs: Record<string, unknown>,
+): { sameAttempt: boolean; difference?: string } | undefined => {
+  switch (toolId) {
+    case "read_open": {
+      const previousPath = previousArgs.path;
+      const nextPath = nextArgs.path;
+      if (typeof previousPath !== "string" || typeof nextPath !== "string") {
+        return undefined;
+      }
+
+      return previousPath === nextPath
+        ? { sameAttempt: true, difference: `path "${nextPath}"` }
+        : {
+            sameAttempt: false,
+            difference: `path from "${previousPath}" to "${nextPath}"`,
+          };
+    }
+    case "read_locate": {
+      const previousQuery = previousArgs.query;
+      const nextQuery = nextArgs.query;
+      if (typeof previousQuery !== "string" || typeof nextQuery !== "string") {
+        return undefined;
+      }
+
+      return previousQuery === nextQuery
+        ? { sameAttempt: true, difference: `query "${nextQuery}"` }
+        : {
+            sameAttempt: false,
+            difference: `query from "${previousQuery}" to "${nextQuery}"`,
+          };
+    }
+    case "workspace_mutation": {
+      const previousOperation = previousArgs.operation;
+      const previousTargetPath = previousArgs.targetPath;
+      const nextOperation = nextArgs.operation;
+      const nextTargetPath = nextArgs.targetPath;
+      if (
+        typeof previousOperation !== "string" ||
+        typeof previousTargetPath !== "string" ||
+        typeof nextOperation !== "string" ||
+        typeof nextTargetPath !== "string"
+      ) {
+        return undefined;
+      }
+
+      if (
+        previousOperation === nextOperation &&
+        previousTargetPath === nextTargetPath
+      ) {
+        return {
+          sameAttempt: true,
+          difference: `operation "${nextOperation}" on "${nextTargetPath}"`,
+        };
+      }
+
+      const parts: string[] = [];
+      if (previousOperation !== nextOperation) {
+        parts.push(`operation from "${previousOperation}" to "${nextOperation}"`);
+      }
+      if (previousTargetPath !== nextTargetPath) {
+        parts.push(
+          `targetPath from "${previousTargetPath}" to "${nextTargetPath}"`,
+        );
+      }
+      return {
+        sameAttempt: false,
+        difference: parts.join(" and "),
+      };
+    }
+    case "terminal_session": {
+      const previousCommand = previousArgs.command;
+      const nextCommand = nextArgs.command;
+      if (
+        typeof previousCommand !== "string" ||
+        typeof nextCommand !== "string"
+      ) {
+        return undefined;
+      }
+
+      return previousCommand === nextCommand
+        ? { sameAttempt: true, difference: `command "${nextCommand}"` }
+        : {
+            sameAttempt: false,
+            difference: `command from "${previousCommand}" to "${nextCommand}"`,
+          };
+    }
+    default:
+      return undefined;
+  }
+};
+
+const applyRecoverableFailureGuard = (
+  input: CoverageTransitionInput,
+  decision: CoverageTransitionDecision,
+): CoverageTransitionDecision => {
+  if (
+    !decision.nextAction ||
+    decision.nextAction.type !== "use_tool" ||
+    input.recovery.source !== "tool_failure" ||
+    input.recovery.exhausted !== false
+  ) {
+    return decision;
+  }
+
+  const { toolId, args } = decision.nextAction;
+  if (
+    toolId !== input.recovery.toolId ||
+    !RECOVERABLE_FAILURE_GUARD_TOOL_IDS.has(toolId)
+  ) {
+    return decision;
+  }
+
+  const previousArgs = getRecoverableFailedToolArgs(input);
+  const nextArgs = isRecord(args) ? args : undefined;
+  if (!previousArgs || !nextArgs) {
+    return {
+      nextAction: undefined,
+      reason: `Coverage transition could not prove a safe changed ${toolId} retry after the recoverable failure and will fall back to the task model.`,
+      source: "coverage-transition",
+    };
+  }
+
+  const difference = getRecoverableRetryDifference(toolId, previousArgs, nextArgs);
+  if (!difference) {
+    return {
+      nextAction: undefined,
+      reason: `Coverage transition could not prove a safe changed ${toolId} retry after the recoverable failure and will fall back to the task model.`,
+      source: "coverage-transition",
+    };
+  }
+
+  const previousHash = createInvocationInputHash({
+    toolId,
+    args: previousArgs,
+    source: "planner",
+  });
+  const nextHash = createInvocationInputHash({
+    toolId,
+    args: nextArgs,
+    source: "planner",
+  });
+
+  if (difference.sameAttempt || previousHash === nextHash) {
+    return {
+      nextAction: undefined,
+      reason: `Coverage transition blocked repeating the same recoverable ${toolId} attempt (${difference.difference ?? "same arguments"}) and will fall back to the task model.`,
+      source: "coverage-transition",
+    };
+  }
+
+  return {
+    ...decision,
+    nextAction: {
+      ...decision.nextAction,
+      reason: `${decision.nextAction.reason} This retry changes ${difference.difference}.`,
+    },
+    reason: `${decision.reason} Recoverable failure guard allowed a changed ${toolId} retry by changing ${difference.difference}.`,
+  };
+};
+
 const buildLocateAction = (
   input: CoverageTransitionInput,
   targets: string[],
@@ -135,8 +372,14 @@ const buildLocateAction = (
 const buildReadContentAction = (
   input: CoverageTransitionInput,
 ): CoverageTransitionDecision | undefined => {
-  const nextTarget = input.coverageState.targets.find(
-    (entry) => entry.pendingActions.includes("read_open") || entry.status === "pending",
+  const candidateTargets = input.coverageState.targets.filter(
+    (entry) =>
+      entry.pendingActions.includes("read_open") || entry.status === "pending",
+  );
+  const nextTarget = pickTargetWithRecoverableFallback(
+    input,
+    candidateTargets,
+    "read_open",
   );
   if (!nextTarget) {
     return undefined;
@@ -167,13 +410,18 @@ const buildReadContentAction = (
 const buildMutationAction = (
   input: CoverageTransitionInput,
 ): CoverageTransitionDecision | undefined => {
-  const nextTarget = input.coverageState.targets.find(
+  const candidateTargets = input.coverageState.targets.filter(
     (entry) =>
       entry.pendingActions.includes("mutation_execution") ||
       entry.pendingActions.includes("mutation_verification") ||
       entry.status === "pending" ||
       entry.status === "located" ||
       entry.status === "mutated",
+  );
+  const nextTarget = pickTargetWithRecoverableFallback(
+    input,
+    candidateTargets,
+    "workspace_mutation",
   );
   if (!nextTarget) {
     return undefined;
@@ -409,7 +657,7 @@ export const getCoverageTransitionDecision = (
   for (const buildAction of actionBuilders) {
     const decision = buildAction(input);
     if (decision?.nextAction) {
-      return decision;
+      return applyRecoverableFailureGuard(input, decision);
     }
   }
 

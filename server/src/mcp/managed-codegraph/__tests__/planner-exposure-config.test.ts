@@ -70,3 +70,16 @@ test("resolveManagedCodeGraphPlannerConfig derives app-data root from existing l
   assert.equal(result.logRoot?.startsWith(path.resolve(appDataRoot)), true);
   assert.equal(result.indexRoot?.startsWith(path.resolve(appDataRoot)), true);
 });
+
+test("resolveManagedCodeGraphPlannerConfig defaults to serve --mcp for the real provider", () => {
+  process.env.UI_CHAT_CODEGRAPH_APP_DATA_ROOT = path.join(
+    os.tmpdir(),
+    "codegraph-appdata-default-args",
+  );
+  delete process.env.UI_CHAT_LOG_DIR;
+  delete process.env.UI_CHAT_DATABASE_DIR;
+
+  const result = resolveManagedCodeGraphPlannerConfig("D:\\workspace\\rag-demo");
+
+  assert.deepEqual(result.startArgs, ["serve", "--mcp"]);
+});

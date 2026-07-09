@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 
 import {
   ManagedJsonRpcSession,
+  resolveManagedCodeGraphLaunchSpec,
   type ManagedJsonRpcExitInfo,
 } from "./managed-jsonrpc-session.js";
 import type {
@@ -25,10 +26,25 @@ type InitializeResult = {
   capabilities?: Record<string, unknown>;
 };
 
-const DEFAULT_PROTOCOL_VERSION = "2025-06-18";
+type ManagedToolsListResult = {
+  tools?: Array<{
+    name?: string;
+  }>;
+};
+
+type ManagedToolCallResult = {
+  content?: Array<{
+    type?: string;
+    text?: string;
+  }>;
+  isError?: boolean;
+};
+
+const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const DEFAULT_TIMEOUT_MS = 2_000;
 const DEFAULT_STOP_TIMEOUT_MS = 1_000;
 const DEFAULT_DISABLED_TOKENS = ["disabled", "off", "0", "false", "verified_off"];
+const STANDARD_INITIALIZED_NOTIFICATION_METHOD = "initialized";
 const INITIALIZED_NOTIFICATION_METHOD = "notifications/initialized";
 
 const now = () => Date.now();
@@ -303,6 +319,7 @@ export class ManagedCodeGraphProcessManager {
         processAlive: this.session.isAlive(),
       };
 
+      this.session.notify(STANDARD_INITIALIZED_NOTIFICATION_METHOD);
       this.session.notify(INITIALIZED_NOTIFICATION_METHOD);
       this.snapshot = {
         ...this.snapshot,
@@ -364,6 +381,16 @@ export class ManagedCodeGraphProcessManager {
     }
 
     try {
+      const standardHealth = await this.tryStandardMcpHealth();
+      if (standardHealth) {
+        this.snapshot = {
+          ...this.snapshot,
+          ...standardHealth,
+          processAlive: this.session.isAlive(),
+        };
+        return this.getStatus();
+      }
+
       const probe = await this.session.request<ManagedCodeGraphHealthProbe>(
         "codegraph/health",
         {
@@ -438,6 +465,33 @@ export class ManagedCodeGraphProcessManager {
     }
 
     return await this.session.request<T>(method, params, timeoutMs);
+  }
+
+  async listTools() {
+    return await this.request<ManagedToolsListResult>(
+      "tools/list",
+      {},
+      this.options.healthTimeoutMs ?? DEFAULT_TIMEOUT_MS,
+    );
+  }
+
+  async callTool(name: string, args: Record<string, unknown>) {
+    const toolArgs =
+      name.startsWith("codegraph_") && args.projectPath === undefined
+        ? {
+            ...args,
+            projectPath: this.workspaceRoot,
+          }
+        : args;
+
+    return await this.request<ManagedToolCallResult>(
+      "tools/call",
+      {
+        name,
+        arguments: toolArgs,
+      },
+      this.options.healthTimeoutMs ?? DEFAULT_TIMEOUT_MS,
+    );
   }
 
   async stop() {
@@ -555,7 +609,8 @@ export class ManagedCodeGraphProcessManager {
   }
 
   private runProbe(args: string[]) {
-    const result = spawnSync(this.options.command, args, {
+    const launch = resolveManagedCodeGraphLaunchSpec(this.options.command, args);
+    const result = spawnSync(launch.command, launch.args, {
       cwd: this.workspaceRoot,
       env: {
         ...process.env,
@@ -645,6 +700,77 @@ export class ManagedCodeGraphProcessManager {
     if (!intentional && this.primaryLeaseKey) {
       ManagedCodeGraphProcessManager.leaseRegistry.delete(this.primaryLeaseKey);
     }
+  }
+
+  private async tryStandardMcpHealth() {
+    try {
+      const toolsList = await this.session!.request<ManagedToolsListResult>(
+        "tools/list",
+        {},
+        this.options.healthTimeoutMs ?? DEFAULT_TIMEOUT_MS,
+      );
+      const toolNames = new Set(
+        (toolsList.tools ?? [])
+          .map((tool) => tool.name?.trim())
+          .filter((toolName): toolName is string => Boolean(toolName)),
+      );
+
+      const telemetryStatus = this.snapshot.telemetryStatus;
+      const workspaceMatches = this.snapshot.workspaceMatches;
+      let status: ManagedCodeGraphRuntimeStatus = "ready";
+      let lastError: string | null = null;
+
+      if (!workspaceMatches) {
+        status = "blocked";
+        lastError = "workspace_mismatch";
+      } else if (telemetryStatus !== "verified_off") {
+        status = "blocked";
+        lastError = "telemetry_not_verified";
+      } else if (toolNames.size === 0) {
+        status = "degraded";
+        lastError = "tool_surface_empty";
+      } else if (toolNames.has("codegraph_status")) {
+        const toolResult = await this.callTool("codegraph_status", {});
+        const toolText = this.extractToolText(toolResult);
+        if (toolResult.isError) {
+          status = "degraded";
+          lastError = "status_tool_failed";
+        } else if (
+          /isn't indexed|not initialized|no \.codegraph\/ index exists/i.test(toolText)
+        ) {
+          status = "degraded";
+          lastError = "project_not_indexed";
+        } else if (!/CodeGraph Status|Files indexed:|Index is up to date/i.test(toolText)) {
+          status = "degraded";
+          lastError = "status_tool_unreadable";
+        }
+      }
+
+      return {
+        status,
+        providerVersion: this.snapshot.providerVersion,
+        telemetryStatus,
+        workspaceMatches,
+        lastError,
+      } satisfies Pick<
+        ManagedCodeGraphStatusSnapshot,
+        "status" | "providerVersion" | "telemetryStatus" | "workspaceMatches" | "lastError"
+      >;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/Method not found|timed out/i.test(message)) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  private extractToolText(result: ManagedToolCallResult) {
+    return (result.content ?? [])
+      .map((entry) => entry.text ?? "")
+      .filter(Boolean)
+      .join("\n")
+      .trim();
   }
 }
 

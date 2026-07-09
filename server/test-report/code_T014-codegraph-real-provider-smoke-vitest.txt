@@ -1,0 +1,37 @@
+
+> @ui-chat-mira/server@0.7.1 test D:\workspace\rag-demo\server
+> vitest run "src/mcp/managed-codegraph/__tests__/real-provider-compat.test.ts" "src/mcp/managed-codegraph/__tests__/planner-exposure-config.test.ts" "src/mcp/managed-codegraph/__tests__/managed-codegraph-process-manager.test.ts" "src/mcp/managed-codegraph/__tests__/codebase-explore.tool.test.ts"
+
+
+[1m[46m RUN [49m[22m [36mv3.2.6 [39m[90mD:/workspace/rag-demo/server[39m
+
+ [32m✓[39m src/mcp/managed-codegraph/__tests__/managed-codegraph-process-manager.test.ts [2m([22m[2m40 tests[22m[2m)[22m[33m 39604[2mms[22m[39m
+   [33m[2m✓[22m[39m ManagedCodeGraphProcessManager[2m > [22mstarts successfully and reports ready [33m 3464[2mms[22m[39m
+   [33m[2m✓[22m[39m ManagedCodeGraphProcessManager[2m > [22mreuses an existing process for duplicate start attempts [33m 3630[2mms[22m[39m
+   [33m[2m✓[22m[39m ManagedCodeGraphProcessManager[2m > [22mmarks health probe failures as degraded or failed without touching agent mainline [33m 3318[2mms[22m[39m
+   [33m[2m✓[22m[39m ManagedCodeGraphProcessManager[2m > [22mstops successfully and records exit details [33m 1843[2mms[22m[39m
+   [33m[2m✓[22m[39m ManagedCodeGraphProcessManager[2m > [22mdegrades or fails after a crash [33m 841[2mms[22m[39m
+   [33m[2m✓[22m[39m ManagedCodeGraphProcessManager[2m > [22msends notifications/initialized immediately after initialize succeeds [33m 1806[2mms[22m[39m
+   [33m[2m✓[22m[39m CodebaseExploreWrapper[2m > [22minfers agent-runtime scope from agent questions [33m 1799[2mms[22m[39m
+   [33m[2m✓[22m[39m CodebaseExploreWrapper[2m > [22minfers harness-mcp scope from harness and MCP questions [33m 1823[2mms[22m[39m
+   [33m[2m✓[22m[39m CodebaseExploreWrapper[2m > [22minfers microapps scope from microapp questions [33m 1815[2mms[22m[39m
+   [33m[2m✓[22m[39m CodebaseExploreWrapper[2m > [22minfers docs scope from docs questions [33m 1817[2mms[22m[39m
+   [33m[2m✓[22m[39m CodebaseExploreWrapper[2m > [22mfalls back to workspace-general only when no narrower scope fits [33m 1789[2mms[22m[39m
+   [33m[2m✓[22m[39m CodebaseExploreWrapper[2m > [22mpasses include and exclude paths through the wrapper request [33m 1843[2mms[22m[39m
+   [33m[2m✓[22m[39m CodebaseExploreWrapper[2m > [22mtrims broad explore output and marks the result partial [33m 1786[2mms[22m[39m
+   [33m[2m✓[22m[39m CodebaseExploreWrapper[2m > [22mmarks every candidate as verification required and pending [33m 1824[2mms[22m[39m
+   [33m[2m✓[22m[39m CodebaseExploreWrapper[2m > [22mdowngrades no-line-range candidates to low confidence and adds limitations [33m 1811[2mms[22m[39m
+   [33m[2m✓[22m[39m CodebaseExploreWrapper[2m > [22mreturns degraded plus fallback signal when the provider query fails [33m 1787[2mms[22m[39m
+   [33m[2m✓[22m[39m CodebaseExploreWrapper[2m > [22memits complete ready-query trace fields [33m 1795[2mms[22m[39m
+   [33m[2m✓[22m[39m CodebaseExploreWrapper[2m > [22mincludes limitations in partial truncated trace [33m 1788[2mms[22m[39m
+   [33m[2m✓[22m[39m CodebaseExploreWrapper[2m > [22mdoes not serialize raw output or duplicate source excerpts into trace [33m 1818[2mms[22m[39m
+ [32m✓[39m src/mcp/managed-codegraph/__tests__/codebase-explore.tool.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 2518[2mms[22m[39m
+   [33m[2m✓[22m[39m codebaseExploreTool returns controlled exposure traces and verified evidence [33m 2253[2mms[22m[39m
+ [32m✓[39m src/mcp/managed-codegraph/__tests__/real-provider-compat.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 1[2mms[22m[39m
+ [32m✓[39m src/mcp/managed-codegraph/__tests__/planner-exposure-config.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 1[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m4 passed[39m[22m[90m (4)[39m
+[2m      Tests [22m [1m[32m49 passed[39m[22m[90m (49)[39m
+[2m   Start at [22m 20:37:53
+[2m   Duration [22m 43.52s[2m (transform 168ms, setup 0ms, collect 923ms, tests 42.12s, environment 0ms, prepare 141ms)[22m
+

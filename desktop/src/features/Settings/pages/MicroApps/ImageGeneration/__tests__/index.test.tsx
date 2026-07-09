@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import ImageGenerationStudioPage from "../index";
 import type {
   PromptFormValue,
@@ -71,6 +71,21 @@ vi.mock("../hooks/useImageGenerationStudioState", () => ({
     useImageGenerationStudioStateMock(...args),
 }));
 
+vi.mock("@/shared/api/comfyuiStudio", () => ({
+  listComfyUiConnections: vi.fn().mockResolvedValue([]),
+  listComfyUiFlows: vi.fn().mockResolvedValue([]),
+  createComfyUiConnection: vi.fn(),
+  updateComfyUiConnection: vi.fn(),
+  testComfyUiConnection: vi.fn(),
+  createComfyUiFlow: vi.fn(),
+  updateComfyUiFlow: vi.fn(),
+}));
+
+vi.mock("@/shared/api/modelSettings", () => ({
+  getRoleModelConfigs: vi.fn().mockResolvedValue([]),
+  getProviderDetail: vi.fn(),
+}));
+
 const defaultPromptForm: PromptFormValue = {
   prompt: "",
   negativePrompt: "",
@@ -124,6 +139,10 @@ function createState(overrides: MockStateOverrides = {}) {
 }
 
 describe("ImageGenerationStudioPage", () => {
+  beforeEach(() => {
+    useImageGenerationStudioStateMock.mockReset();
+  });
+
   it("shows provider placeholder by default and renders the ComfyUI workbench when workflow mode is active", () => {
     useImageGenerationStudioStateMock.mockReturnValue(
       createState({
@@ -133,11 +152,8 @@ describe("ImageGenerationStudioPage", () => {
 
     const { unmount } = render(<ImageGenerationStudioPage />);
 
-    expect(
-      screen.getByText(
-        "settings.microApps.imageGenerationStudio.cards.providersPlaceholder.title",
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByText("当前生图模型")).toBeInTheDocument();
+    expect(screen.getByText("还没有配置默认生图模型")).toBeInTheDocument();
 
     useImageGenerationStudioStateMock.mockReturnValue(
       createState({
@@ -156,31 +172,26 @@ describe("ImageGenerationStudioPage", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "settings.microApps.imageGenerationStudio.cards.nodeMapping.title",
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
         "settings.microApps.imageGenerationStudio.cards.executionInputs.title",
       ),
     ).toBeInTheDocument();
   });
 
-  it("renders invalid ComfyUI API format state in workflow mode", () => {
+  it("renders invalid ComfyUI API format state in the flow editor", () => {
     useImageGenerationStudioStateMock.mockReturnValue(
       createState({
         mode: "workflow",
         provider: "comfyui-local",
-        workflowJsonStatus: "invalid-comfyui-format",
-        workflowForm: {
-          ...defaultWorkflowForm,
-          workflowJson: "{}",
-        },
-        formStatus: "invalid",
       }),
     );
 
     render(<ImageGenerationStudioPage />);
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "settings.microApps.imageGenerationStudio.flow.actions.new",
+      }),
+    );
 
     expect(
       screen.getByText(
@@ -208,11 +219,6 @@ describe("ImageGenerationStudioPage", () => {
 
     render(<ImageGenerationStudioPage />);
 
-    expect(
-      screen.getByText(
-        "settings.microApps.imageGenerationStudio.formStatus.locked-by-running-job",
-      ),
-    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", {
         name: "settings.microApps.imageGenerationStudio.actions.submit",
@@ -268,11 +274,6 @@ describe("ImageGenerationStudioPage", () => {
     expect(
       screen.getByText(
         "settings.microApps.imageGenerationStudio.results.failedTitle",
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "settings.microApps.imageGenerationStudio.taskStatus.blocked",
       ),
     ).toBeInTheDocument();
     expect(

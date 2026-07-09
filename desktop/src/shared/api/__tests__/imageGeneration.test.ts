@@ -18,8 +18,7 @@ import {
 } from "../imageGeneration";
 
 const sampleJob: ImageGenerationJob = {
-  id: "imggen_1",
-  providerId: "openai_images",
+  generationId: "imggen_1",
   executionKind: "sync-http",
   status: "queued",
   requestSummary: {

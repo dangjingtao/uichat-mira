@@ -514,6 +514,68 @@ test("nextActionPlannerNode returns answer action from task model JSON", async (
   }
 });
 
+test("nextActionPlannerNode falls back to the task model when coverage transition blocks the same recoverable read_open retry", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"ask_user","question":"README.md 读取失败了，要不要换一个文件或给我更多线索？","reason":"The same read_open retry is not safe, so the planner must replan."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question: "README.md 的内容是什么？",
+        messages: [
+          {
+            role: "user",
+            content: "README.md 的内容是什么？",
+            parts: [{ type: "text", text: "README.md 的内容是什么？" }],
+          },
+        ],
+        lastToolExecution: {
+          toolCallId: "tool-call-read-open-failed",
+          toolId: "read_open",
+          inputHash: "hash-read-open-readme",
+          args: { path: "README.md" },
+          status: "failed",
+          failureKind: "recoverable",
+          recoveryAttemptCount: 1,
+          errorMessage: "README.md is temporarily unavailable",
+          startedAt: "2026-07-09T00:00:00.000Z",
+          finishedAt: "2026-07-09T00:00:01.000Z",
+        },
+        evidence: {
+          observations: [],
+          retrievals: [],
+          toolExecutions: [
+            {
+              toolId: "read_open",
+              args: { path: "README.md" },
+              status: "failed",
+              failureKind: "recoverable",
+              recoveryAttemptCount: 1,
+              errorMessage: "README.md is temporarily unavailable",
+              startedAt: "2026-07-09T00:00:00.000Z",
+              finishedAt: "2026-07-09T00:00:01.000Z",
+            },
+          ],
+        },
+      }),
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "ask_user",
+        question: "README.md 读取失败了，要不要换一个文件或给我更多线索？",
+        reason: "The same read_open retry is not safe, so the planner must replan.",
+      },
+    });
+    assert.equal(streamSpy.mock.calls.length, 1);
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
 test("parseNextActionPlannerOutput accepts fenced JSON output", () => {
   assert.deepEqual(
     parseNextActionPlannerOutput(

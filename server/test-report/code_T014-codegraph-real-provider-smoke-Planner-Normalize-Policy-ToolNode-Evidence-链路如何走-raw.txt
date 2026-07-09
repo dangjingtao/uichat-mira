@@ -1,0 +1,716 @@
+$ C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\@colbymchenry\codegraph\npm-shim.js explore -p D:\workspace\rag-demo Planner -> Normalize -> Policy -> ToolNode -> Evidence 链路如何走？
+**Exploration: Planner -> Normalize -> Policy -> ToolNode -> Evidence 链路如何走？**
+
+Found 13 symbols across 1 file.
+
+**Blast radius — what depends on these (update/verify before editing)**
+
+- `policyNode` (server/src/agent/nodes/policy-node.ts:99) — 3 callers in `server/src/agent/graph/build-graph.ts`, `server/src/agent/nodes/index.ts`; tests: `server/src/agent/__tests__/policy.test.ts`
+- `planNode` (server/src/agent/nodes/plan.ts:8) — 2 callers in `server/src/agent/graph/build-graph.ts`, `server/src/agent/nodes/index.ts`; ⚠️ no covering tests found
+- `toolNode` (server/src/agent/nodes/tool-node.ts:291) — 5 callers in `server/src/agent/graph/build-graph.ts`, `server/src/agent/nodes/index.ts`; tests: `server/src/agent/__tests__/codebase-explore-tool-node.test.ts`, `server/src/agent/__tests__/current-task-frame.test.ts`, `server/src/agent/__tests__/tool-node.test.ts`
+- `AgentPolicyDecision` (server/src/agent/policy.ts:3) — 1 caller in `server/src/agent/policy.ts`; ⚠️ no covering tests found
+- `ManagedCodeGraphPlannerStorage` (server/src/mcp/managed-codegraph/planner-exposure-config.ts:37) — 1 caller in `server/src/mcp/managed-codegraph/planner-exposure-config.ts`; ⚠️ no covering tests found
+
+**Relationships**
+
+**calls:**
+- policyNode → getIterativeNodeId
+- policyNode → getTraceAttemptMeta
+- policyNode → emitStepNode
+- policyNode → isFrozenPlannerPendingToolCall
+- policyNode → resolvePolicyToolDefinition
+- policyNode → getPolicyRiskDetails
+- policyNode → evaluateAgentToolPolicy
+- policyNode → nowIso
+- policyNode → appendToolExecutionEvidence
+- policyNode → hasApprovedInvocation
+- ... and 117 more
+
+**references:**
+- policyNode → AgentNodeState
+- policyNode → EmitAgentExecutionNode
+- getIterativeNodeId → AgentNodeState
+- getTraceAttemptMeta → AgentNodeState
+- emitStepNode → EmitAgentExecutionNode
+- planNode → AgentNodeState
+- planNode → EmitAgentExecutionNode
+- toPlanNodeDetails → AgentPlanStep
+- AgentNodeState → AgentGoal
+- AgentNodeState → AgentPlan
+- ... and 100 more
+
+**Source Code**
+
+> The code below is the **verbatim, current on-disk source** of these files — re-read from disk on this call and line-numbered, byte-for-byte identical to what the Read tool returns. It is NOT a summary, outline, or stale cache. Treat each block as a Read you have already performed: do not Read a file shown here.
+
+**`server/src/agent/nodes/tool-node.ts`** — references(references), emitStepNode(calls), AgentToolExecutionResult(references), getToolTraceTargetPreview(calls), nowIso(calls), AgentNodeState(references), createObservation(calls), buildExecutionRecord(calls), appendToolExecutionEvidence(calls), appendObservationEvidence(calls), +38 more
+
+```typescript
+38	} from "../types";
+39	import type { CodebaseExploreToolResult } from "@/mcp/managed-codegraph/types";
+40	
+41	const nowIso = () => new Date().toISOString();
+42	
+43	const TERMINAL_FAILURE_PATTERNS = [
+44	  /\bapproval mismatch\b/i,
+45	  /\bpolicy denied\b/i,
+46	  /\bsecurity\b/i,
+47	  /\bprotocol\b/i,
+48	  /\bschema\b/i,
+49	  /\boutside workspace\b/i,
+50	] as const;
+51	
+52	const createObservation = (input: {
+53	  runId: string;
+54	  stepId: string;
+55	  status: AgentObservation["status"];
+56	  facts: string[];
+57	  errorMessage?: string;
+58	}): AgentObservation => ({
+59	  id: crypto.randomUUID(),
+60	  runId: input.runId,
+61	  stepId: input.stepId,
+62	  status: input.status,
+63	  facts: input.facts,
+64	  ...(input.errorMessage ? { errorMessage: input.errorMessage } : {}),
+65	  createdAt: nowIso(),
+66	});
+67	
+68	const createPendingApproval = (input: {
+69	  runId: string;
+70	  toolId: string;
+71	  toolCallId: string;
+72	  reason: string;
+73	  args: Record<string, unknown>;
+74	  inputHash: string;
+75	}): AgentApprovalRequest => ({
+76	  id: crypto.randomUUID(),
+77	  runId: input.runId,
+78	  stepId: "approval",
+79	  toolId: input.toolId,
+80	  toolCallId: input.toolCallId,
+81	  reason: input.reason,
+82	  input: input.args,
+83	  inputHash: input.inputHash,
+84	  createdAt: nowIso(),
+85	});
+86	
+87	const isFrozenPlannerPendingToolCall = (
+88	  pendingToolCall: AgentToolCallRequest | undefined,
+89	): pendingToolCall is PendingToolCall =>
+90	  Boolean(
+91	    pendingToolCall &&
+92	      pendingToolCall.source === "planner" &&
+93	      "status" in pendingToolCall &&
+94	      pendingToolCall.status === "frozen",
+95	  );
+96	
+97	const buildExecutionRecord = (input: {
+98	  pendingToolCall: PendingToolCall;
+99	  toolId: string;
+100	  status: AgentToolExecutionResult["status"];
+101	  invocationId?: string;
+102	  startedAt: string;
+103	  finishedAt: string;
+104	  failureKind?: AgentToolExecutionResult["failureKind"];
+105	  failureCode?: AgentToolExecutionResult["failureCode"];
+106	  recoveryAttemptCount?: number;
+107	  errorMessage?: string;
+108	  result?: unknown;
+109	  approval?: AgentApprovalRequest;
+110	}): AgentToolExecutionResult => ({
+111	  toolCallId: input.pendingToolCall.id,
+112	  toolId: input.toolId,
+113	  inputHash: input.pendingToolCall.inputHash,
+114	  args: input.pendingToolCall.args,
+115	  invocationId: input.invocationId,
+116	  status: input.status,
+117	  failureKind: input.failureKind,
+118	  failureCode: input.failureCode,
+119	  recoveryAttemptCount: input.recoveryAttemptCount,
+120	  errorMessage: input.errorMessage,
+121	  result: input.result,
+122	  approval: input.approval,
+123	  startedAt: input.startedAt,
+124	  finishedAt: input.finishedAt,
+125	});
+126	
+127	const classifyHarnessFailure = (input: {
+128	  invocationStatus: "failed" | "cancelled";
+129	  errorMessage: string;
+130	  failureCode?: McpInvocationFailureCode;
+131	}): AgentToolExecutionResult["failureKind"] => {
+132	  if (input.invocationStatus === "cancelled") {
+133	    return "terminal";
+134	  }
+135	
+136	  if (input.failureCode) {
+137	    switch (input.failureCode) {
+138	      case "approval_mismatch":
+139	      case "policy_denied":
+140	      case "schema_invalid":
+141	      case "workspace_escape":
+142	      case "cancelled":
+143	        return "terminal";
+144	      case "tool_runtime_failed":
+145	      case "command_exit_nonzero":
+146	      case "timeout":
+147	      case "unknown":
+148	        return "recoverable";
+149	    }
+150	  }
+151	
+152	  return TERMINAL_FAILURE_PATTERNS.some((pattern) => pattern.test(input.errorMessage))
+153	    ? "terminal"
+154	    : "recoverable";
+155	};
+156	
+157	const getDurationMs = (startedAt: string, finishedAt: string) => {
+158	  const startMs = Date.parse(startedAt);
+159	  const endMs = Date.parse(finishedAt);
+160	  if (Number.isNaN(startMs) || Number.isNaN(endMs)) {
+161	    return undefined;
+162	  }
+163	
+164	  return Math.max(0, endMs - startMs);
+165	};
+166	
+167	const getConfirmedObjectFromToolExecution = (
+168	  pendingToolCall: PendingToolCall,
+169	): CurrentTaskFrameConfirmedObject => {
+170	  if (pendingToolCall.toolId === "codebase_explore") {
+171	    return {
+172	      type: "tool",
+173	      id: pendingToolCall.inputHash,
+174	      label: "codebase_explore",
+175	      confidence: 1,
+176	    };
+177	  }
+178	
+179	  if (pendingToolCall.toolId === "terminal_session") {
+180	    return {
+181	      type: "command",
+182	      id: pendingToolCall.inputHash,
+183	      label:
+184	        typeof pendingToolCall.args.command === "string"
+185	          ? pendingToolCall.args.command
+186	          : pendingToolCall.toolId,
+187	      confidence: 1,
+188	    };
+189	  }
+190	
+191	  if (
+192	    (pendingToolCall.toolId === "read_open" ||
+193	      pendingToolCall.toolId === "read_list" ||
+194	      pendingToolCall.toolId === "read_locate") &&
+195	    typeof pendingToolCall.args.path === "string"
+196	  ) {
+197	    return {
+198	      type: "file",
+199	      id: pendingToolCall.args.path,
+200	      label: pendingToolCall.args.path,
+201	      confidence: 1,
+202	    };
+203	  }
+204	
+205	  return {
+206	    type: "tool",
+207	    id: pendingToolCall.toolId,
+208	    label: pendingToolCall.toolId,
+209	    confidence: 1,
+210	  };
+211	};
+212	
+213	const isCodebaseExploreToolResult = (
+214	  value: unknown,
+215	): value is CodebaseExploreToolResult => {
+216	  if (!value || typeof value !== "object") {
+217	    return false;
+218	  }
+219	
+220	  const record = value as Record<string, unknown>;
+221	  return (
+222	    record.capabilityId === "codebase_explore" &&
+223	    record.plannerExposure === "controlled_tool_only" &&
+224	    typeof record.verifiedEvidenceInput === "object" &&
+225	    record.verifiedEvidenceInput !== null &&
+226	    typeof record.trace === "object" &&
+227	    record.trace !== null
+228	  );
+229	};
+230	
+231	const toCodebaseRetrievalEvidence = (
+232	  value: CodebaseExploreToolResult["verifiedEvidenceInput"],
+233	): AgentRetrievalEvidence => ({
+234	  query: value.query,
+235	  chunkCount: value.chunkCount,
+236	  chunks: value.chunks.map((chunk) => ({
+237	    chunkId: chunk.chunkId,
+238	    documentId: String(chunk.documentName),
+239	    documentName: chunk.documentName,
+240	    score: chunk.score,
+241	    content: chunk.content,
+242	  })),
+243	  summary: value.summary as AgentEvidenceSummary | undefined,
+244	  createdAt: value.createdAt,
+245	});
+246	
+247	const toHarnessApprovedInvocations = (
+248	  approvedInvocations: AgentNodeState["approvedInvocations"],
+249	) =>
+250	  approvedInvocations?.map((invocation) => ({
+251	    toolId: invocation.toolId,
+252	    inputHash: createInvocationInputHash(invocation.input),
+253	  }));
+254	
+255	const emitEvidenceUpdateNode = async (
+256	  emit: EmitAgentExecutionNode | undefined,
+257	  input: {
+258	    runId: string;
+259	    summary: string;
+260	    toolId: string;
+261	    toolCallId?: string;
+262	    inputHash?: string;
+263	    status: AgentToolExecutionResult["status"];
+264	    evidenceCounts: ReturnType<typeof getEvidenceCounts>;
+265	    latestEvidenceSummary?: AgentToolExecutionResult["summary"];
+266	    iteration: number;
+267	    maxIterations?: number;
+268	  },
+269	) => {
+270	  await emitStepNode(emit, {
+271	    runId: input.runId,
+272	    nodeId: "agent-evidence-update-tool",
+273	    nodeType: "reason",
+274	    phase: "done",
+275	    label: "证据写回",
+276	    summary: input.summary,
+277	    details: {
+278	      sourceNode: "toolNode",
+279	      toolId: input.toolId,
+280	      toolCallId: input.toolCallId ?? null,
+281	      inputHash: input.inputHash ?? null,
+282	      toolExecutionStatus: input.status,
+283	      latestEvidenceSummary: input.latestEvidenceSummary ?? null,
+284	      evidenceCounts: input.evidenceCounts,
+285	      iteration: input.iteration,
+286	      maxIterations: input.maxIterations ?? null,
+287	    },
+288	  });
+289	};
+290	
+291	export const toolNode = async (
+292	  state: AgentNodeState,
+293	  emit?: EmitAgentExecutionNode,
+294	): Promise<Partial<AgentNodeState>> => {
+295	  const nodeId = getIterativeNodeId("agent-tool", state);
+296	  const traceAttemptMeta = getTraceAttemptMeta("agent-tool", state);
+297	  const pendingToolCall = state.pendingToolCall;
+298	
+299	  if (!pendingToolCall) {
+300	    const errorMessage = "No pendingToolCall available for tool execution.";
+301	    await emitStepNode(emit, {
+302	      runId: state.runId,
+303	      nodeId,
+304	      ...traceAttemptMeta,
+305	      nodeType: "tool",
+306	      phase: "error",
+307	      label: "工具执行",
+308	      summary: "没有冻结工具调用，已阻断执行",
+309	      details: {
+310	        status: "error",
+311	        reason: errorMessage,
+312	      },
+313	    });
+314	    return {
+315	      pendingToolCall: undefined,
+316	      selectedToolId: undefined,
+317	      errorMessage,
+318	      errorSourceNodeId: "agent-tool",
+319	      blockedReason: errorMessage,
+320	      continueIteration: false,
+321	      postToolReviewPending: false,
+322	    };
+323	  }
+324	
+325	  if (!isFrozenPlannerPendingToolCall(pendingToolCall)) {
+326	    const errorMessage =
+327	      "toolNode requires a frozen planner pendingToolCall before execution.";
+328	    await emitStepNode(emit, {
+329	      runId: state.runId,
+330	      nodeId,
+331	      ...traceAttemptMeta,
+332	      nodeType: "tool",
+333	      phase: "error",
+334	      label: "工具执行",
+335	      summary: "待执行调用不是冻结后的 planner 调用，已阻断执行",
+336	      details: {
+337	        toolCallId: "id" in pendingToolCall ? pendingToolCall.id : null,
+338	        toolId: pendingToolCall.toolId,
+339	        inputHash: pendingToolCall.inputHash,
+340	        status: "error",
+341	        reason: errorMessage,
+342	      },
+343	    });
+344	    return {
+345	      pendingToolCall: undefined,
+346	      selectedToolId: undefined,
+347	      errorMessage,
+348	      errorSourceNodeId: "agent-tool",
+349	      blockedReason: errorMessage,
+350	      continueIteration: false,
+351	      postToolReviewPending: false,
+352	    };
+353	  }
+354	
+355	  const policyDecision = state.policyDecision;
+356	  if (
+357	    policyDecision?.type !== "allow" ||
+358	    policyDecision.toolId !== pendingToolCall.toolId ||
+359	    policyDecision.inputHash !== pendingToolCall.inputHash
+360	  ) {
+361	    const errorMessage =
+362	      policyDecision == null
+363	        ? "No policy allow decision available for tool execution."
+364	        : "Policy decision does not allow this frozen pendingToolCall.";
+365	    await emitStepNode(emit, {
+366	      runId: state.runId,
+367	      nodeId,
+368	      ...traceAttemptMeta,
+369	      nodeType: "tool",
+370	      phase: "error",
+371	      label: "工具执行",
+372	      summary: "审批结果未明确允许当前冻结调用，已阻断执行",
+373	      details: {
+374	        toolCallId: pendingToolCall.id,
+375	        toolId: pendingToolCall.toolId,
+376	        inputHash: pendingToolCall.inputHash,
+377	        status: "error",
+378	        reason: errorMessage,
+379	        policyDecisionType: policyDecision?.type ?? null,
+380	      },
+381	    });
+382	    return {
+383	      pendingToolCall: undefined,
+384	      selectedToolId: undefined,
+385	      errorMessage,
+386	      errorSourceNodeId: "agent-tool",
+387	      blockedReason: errorMessage,
+388	      continueIteration: false,
+389	      postToolReviewPending: false,
+390	    };
+391	  }
+392	
+393	  await emitStepNode(emit, {
+394	    runId: state.runId,
+395	    nodeId,
+396	    ...traceAttemptMeta,
+397	    nodeType: "tool",
+398	    phase: "start",
+399	    label: "工具执行",
+400	    summary: summarizeToolExecutionStart(
+401	      pendingToolCall.toolId,
+402	      pendingToolCall.args,
+403	    ),
+404	    details: {
+405	      toolCallId: pendingToolCall.id,
+406	      toolId: pendingToolCall.toolId,
+407	      targetPreview:
+408	        getToolTraceTargetPreview(
+409	          pendingToolCall.toolId,
+410	          pendingToolCall.args,
+411	        ) ?? null,
+412	      inputHash: pendingToolCall.inputHash,
+413	      status: "running",
+414	    },
+415	  });
+416	
+417	  const invocationEnvironment = state.workspaceRoot
+418	    ? createHarnessEnvironmentSnapshot({
+419	        workspace: {
+420	          rootPath: state.workspaceRoot,
+421	          source: "selected",
+422	        },
+423	      })
+424	    : undefined;
+425	
+426	  const invocation = await runWithWorkspaceRootOverride(
+427	    state.workspaceRoot,
+428	    async () =>
+429	      await executeHarnessInvocation({
+430	        toolId: pendingToolCall.toolId,
+431	        args: pendingToolCall.args,
+432	        userId: state.userId,
+433	        threadId: state.threadId,
+434	        ...(invocationEnvironment ? { environment: invocationEnvironment } : {}),
+435	        approvedInvocations: toHarnessApprovedInvocations(state.approvedInvocations),
+436	      }),
+437	  );
+438	
+439	  const startedAt = invocation.startedAt ?? pendingToolCall.createdAt;
+440	  const finishedAt = nowIso();
+441	  const durationMs = getDurationMs(startedAt, finishedAt);
+442	
+443	  if (invocation.status === "awaiting_approval") {
+444	    const approval = createPendingApproval({
+445	      runId: state.runId,
+446	      toolId: pendingToolCall.toolId,
+447	      toolCallId: pendingToolCall.id,
+448	      reason: invocation.approval?.reason ?? `${pendingToolCall.toolId} requires approval.`,
+449	      args: pendingToolCall.args,
+450	      inputHash: pendingToolCall.inputHash,
+451	    });
+452	
+453	    const observation = createObservation({
+454	      runId: state.runId,
+455	      stepId: "tool",
+456	      status: "blocked",
+457	      facts: [`${pendingToolCall.toolId} paused for approval before completion.`],
+458	      errorMessage: approval.reason,
+459	    });
+460	
+461	    const executionRecord = buildExecutionRecord({
+462	      pendingToolCall,
+463	      toolId: pendingToolCall.toolId,
+464	      invocationId: invocation.id,
+465	      status: "awaiting_approval",
+466	      approval,
+467	      startedAt,
+468	      finishedAt,
+469	    });
+470	
+471	    await emitStepNode(emit, {
+472	      runId: state.runId,
+473	      nodeId,
+474	      ...traceAttemptMeta,
+475	      nodeType: "tool",
+476	      phase: "done",
+477	      label: "工具执行",
+478	      summary: summarizeToolExecutionWaitingApproval(
+479	        pendingToolCall.toolId,
+480	        pendingToolCall.args,
+481	      ),
+482	      details: {
+483	        toolCallId: pendingToolCall.id,
+484	        toolId: pendingToolCall.toolId,
+485	        targetPreview:
+486	          getToolTraceTargetPreview(
+487	            pendingToolCall.toolId,
+488	            pendingToolCall.args,
+489	          ) ?? null,
+490	        inputHash: pendingToolCall.inputHash,
+491	        invocationId: invocation.id,
+492	        status: "awaiting_approval",
+493	        durationMs: durationMs ?? null,
+494	      },
+495	    });
+496	    const evidence = appendToolExecutionEvidence(
+497	      {
+498	        ...state,
+499	        evidence: appendObservationEvidence(state, observation),
+500	      },
+501	      executionRecord,
+502	    );
+503	    await emitEvidenceUpdateNode(emit, {
+504	      runId: state.runId,
+505	      summary: "工具审批等待结果已写入 evidence",
+506	      toolId: pendingToolCall.toolId,
+507	      toolCallId: pendingToolCall.id,
+508	      inputHash: pendingToolCall.inputHash,
+509	      status: executionRecord.status,
+510	      evidenceCounts: getEvidenceCounts({ evidence }),
+511	      latestEvidenceSummary: evidence.latestSummary,
+512	      iteration: state.iterationCount ?? 0,
+513	      maxIterations: state.maxIterations,
+514	    });
+515	
+516	    return {
+517	      pendingApproval: approval,
+518	      policyDecision: {
+519	        type: "require_approval",
+520	        toolId: pendingToolCall.toolId,
+521	        inputHash: pendingToolCall.inputHash,
+522	        reason: approval.reason,
+523	      },
+524	      selectedToolId: undefined,
+525	      pendingToolCall,
+526	      lastToolExecution: executionRecord,
+527	      observations: [...(state.observations ?? []), observation],
+528	      evidence,
+529	      currentTaskFrame: updateTaskFrameBlocker(
+530	        appendConfirmedObjectToTaskFrame(state.currentTaskFrame, {
+531	          type: "approval",
+532	          id: approval.id,
+533	          label: approval.toolId,
+534	          confidence: 1,
+535	        }),
+536	        approval.reason,
+537	      ),
+538	      continueIteration: false,
+539	      postToolReviewPending: false,
+540	    };
+541	  }
+542	
+543	  if (invocation.status !== "completed") {
+544	    const errorMessage =
+545	      invocation.error?.message ??
+546	      `${pendingToolCall.toolId} failed during Harness execution.`;
+547	    const failureCode = invocation.error?.failureCode;
+548	    const invocationFailureStatus =
+549	      invocation.status === "cancelled" ? "cancelled" : "failed";
+550	    const failureKind = classifyHarnessFailure({
+551	      invocationStatus: invocationFailureStatus,
+552	      errorMessage,
+553	      failureCode,
+554	    });
+555	    const recoveryAttemptCount =
+556	      failureKind === "recoverable"
+557	        ? (state.lastToolExecution?.recoveryAttemptCount ?? 0) + 1
+558	        : undefined;
+559	    const observation = createObservation({
+560	      runId: state.runId,
+561	      stepId: "tool",
+562	      status: failureKind === "terminal" ? "blocked" : "failed",
+563	      facts: [
+564	        failureKind === "terminal"
+565	          ? `${pendingToolCall.toolId} hit a terminal failure during Harness execution.`
+566	          : `${pendingToolCall.toolId} failed during Harness execution but can be retried.`,
+567	      ],
+568	      errorMessage,
+569	    });
+570	
+571	    const executionRecord = buildExecutionRecord({
+572	      pendingToolCall,
+573	      toolId: pendingToolCall.toolId,
+574	      invocationId: invocation.id,
+575	      status: "failed",
+576	      failureKind,
+577	      failureCode,
+578	      recoveryAttemptCount,
+579	      errorMessage,
+580	      startedAt,
+581	      finishedAt,
+582	    });
+583	
+584	    await emitStepNode(emit, {
+585	      runId: state.runId,
+586	      nodeId,
+587	      ...traceAttemptMeta,
+588	      nodeType: "tool",
+589	      phase: "error",
+590	      label: "工具执行",
+591	      summary: summarizeToolExecutionFailure({
+592	        toolId: pendingToolCall.toolId,
+593	        failureKind,
+594	        args: pendingToolCall.args,
+595	      }),
+596	      details: {
+597	        toolCallId: pendingToolCall.id,
+598	        toolId: pendingToolCall.toolId,
+599	        targetPreview:
+600	          getToolTraceTargetPreview(
+601	            pendingToolCall.toolId,
+602	            pendingToolCall.args,
+603	          ) ?? null,
+604	        inputHash: pendingToolCall.inputHash,
+605	        invocationId: invocation.id,
+606	        status: "failed",
+607	        failureKind,
+608	        failureCode: failureCode ?? null,
+609	        recoveryAttemptCount: recoveryAttemptCount ?? null,
+610	        durationMs: durationMs ?? null,
+611	      },
+612	    });
+613	    const evidence = appendToolExecutionEvidence(
+614	      {
+615	        ...state,
+616	        evidence: appendObservationEvidence(state, observation),
+617	      },
+618	      executionRecord,
+619	    );
+620	    await emitEvidenceUpdateNode(emit, {
+621	      runId: state.runId,
+622	      summary: "工具失败结果已写入 evidence",
+623	      toolId: pendingToolCall.toolId,
+624	      toolCallId: pendingToolCall.id,
+625	      inputHash: pendingToolCall.inputHash,
+626	      status: executionRecord.status,
+627	      evidenceCounts: getEvidenceCounts({ evidence }),
+628	      latestEvidenceSummary: evidence.latestSummary,
+629	      iteration: state.iterationCount ?? 0,
+630	      maxIterations: state.maxIterations,
+631	    });
+632	
+633	    return {
+634	      observations: [...(state.observations ?? []), observation],
+635	      evidence,
+636	      policyDecision: undefined,
+637	      selectedToolId: undefined,
+638	      pendingApproval: undefined,
+639	      pendingToolCall: undefined,
+640	      lastToolExecution: executionRecord,
+641	      currentTaskFrame: updateTaskFrameBlocker(
+642	        appendConfirmedObjectToTaskFrame(
+643	          state.currentTaskFrame,
+644	          getConfirmedObjectFromToolExecution(pendingToolCall),
+645	        ),
+646	        errorMessage,
+647	      ),
+648	      ...(failureKind === "terminal"
+649	        ? {
+650	            blockedReason: errorMessage,
+651	            terminalReason: errorMessage,
+652	            errorMessage,
+653	            errorSourceNodeId: "agent-tool" as const,
+654	          }
+655	        : {
+656	            blockedReason: undefined,
+657	            terminalReason: undefined,
+658	            errorMessage: undefined,
+659	            errorSourceNodeId: undefined,
+660	          }),
+661	      continueIteration: false,
+662	      postToolReviewPending: false,
+663	    };
+664	  }
+665	
+666	  const observation = createObservation({
+667	    runId: state.runId,
+668	    stepId: "tool",
+669	    status: "ok",
+670	    facts: [`${pendingToolCall.toolId} completed through Harness.`],
+671	  });
+672	  const executionRecord = buildExecutionRecord({
+673	    pendingToolCall,
+674	    toolId: pendingToolCall.toolId,
+675	    invocationId: invocation.id,
+676	    status: "completed",
+677	    result: invocation.result,
+678	    startedAt,
+679	    finishedAt,
+680	  });
+681	
+682	  await emitStepNode(emit, {
+683	    runId: state.runId,
+684	    nodeId,
+685	    ...traceAttemptMeta,
+686	    nodeType: "tool",
+687	    phase: "done",
+688	    label: "工具执行",
+689	    summary: summarizeToolExecutionCompleted(
+690	      pendingToolCall.toolId,
+691	      pendingToolCall.args,
+692	    ),
+693	    details: {
+694	      toolCallId: pendingToolCall.id,
+695	      toolId: pendingToolCall.toolId,
+696	      targetPreview:
+697	        getToolTraceTargetPreview(
+698	          pendingToolCall.toolId,
+699	          pendingToolCall.args,
+700	        ) ?? null,
+701	      inputHash: pendingToolCall.inputHash,
+702	      invocationId: invocation.id,
+703	      status: "completed",
+
+... (output truncated to budget; the source above is complete and verbatim — treat it as already Read. For any area not covered, run another codegraph_explore with the specific names — do NOT Read these files.)

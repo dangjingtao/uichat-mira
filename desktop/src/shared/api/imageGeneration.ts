@@ -84,8 +84,7 @@ export interface ImageGenerationJobError {
 }
 
 export interface ImageGenerationJob {
-  id: string;
-  providerId: string;
+  generationId: string;
   executionKind: ImageGenerationExecutionKind;
   status: ImageGenerationJobStatus;
   requestSummary: ImageGenerationRequestSummary;

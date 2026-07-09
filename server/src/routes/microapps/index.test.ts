@@ -330,6 +330,7 @@ test("microapps image generation routes create and query jobs", async () => {
 
   assert.equal(createResponse.statusCode, 200, createResponse.body);
   assert.equal(createResponse.json().data.generationId, createdJob.id);
+  assert.equal("providerId" in createResponse.json().data, false);
   assert.equal(
     createResponse.json().data.requestSummary.prompt,
     "sunrise over the river",
@@ -344,6 +345,8 @@ test("microapps image generation routes create and query jobs", async () => {
   });
 
   assert.equal(getResponse.statusCode, 200, getResponse.body);
+  assert.equal(getResponse.json().data.generationId, createdJob.id);
+  assert.equal("providerId" in getResponse.json().data, false);
   assert.equal(getResponse.json().data.status, "succeeded");
   assert.equal(
     getResponse.json().data.artifacts[0].remoteUrl,

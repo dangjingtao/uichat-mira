@@ -42,6 +42,13 @@ const MESSAGE_DELIMITER = Buffer.from("\n");
 
 const hasPathSeparator = (value: string) => /[\\/]/.test(value);
 
+const WINDOWS_LAUNCHER_EXTENSION_PRIORITY = [".exe", ".cmd", ".bat", ".ps1", ""] as const;
+
+type ManagedCodeGraphLaunchSpec = {
+  command: string;
+  args: string[];
+};
+
 const appendLog = (filePath: string | undefined, chunk: Buffer) => {
   if (!filePath) {
     return;
@@ -49,33 +56,117 @@ const appendLog = (filePath: string | undefined, chunk: Buffer) => {
   fs.appendFileSync(filePath, chunk);
 };
 
-const ensureLauncherAvailable = (command: string) => {
-  const normalized = command.trim();
-  if (!normalized) {
-    throw new Error("Managed CodeGraph command is required");
-  }
-
-  if (hasPathSeparator(normalized)) {
-    const resolved = path.resolve(normalized);
-    if (!fs.existsSync(resolved)) {
-      throw new Error(`Managed CodeGraph launcher not found: ${normalized}`);
-    }
-    return;
-  }
-
-  if (process.platform !== "win32") {
-    return;
-  }
-
-  const probe = spawnSync("where.exe", [normalized], {
+const resolveWindowsLauncherPath = (command: string) => {
+  const probe = spawnSync("where.exe", [command], {
     windowsHide: true,
     encoding: "utf8",
     stdio: "pipe",
   });
 
   if (probe.status !== 0) {
-    throw new Error(`Managed CodeGraph launcher not found: ${normalized}`);
+    throw new Error(`Managed CodeGraph launcher not found: ${command}`);
   }
+
+  const matches = (probe.stdout ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (matches.length === 0) {
+    throw new Error(`Managed CodeGraph launcher not found: ${command}`);
+  }
+
+  for (const extension of WINDOWS_LAUNCHER_EXTENSION_PRIORITY) {
+    const matched = matches.find((candidate) =>
+      path.extname(candidate).toLowerCase() === extension,
+    );
+    if (matched) {
+      return matched;
+    }
+  }
+
+  return matches[0]!;
+};
+
+const quoteForCmd = (value: string) => {
+  if (!value) {
+    return '""';
+  }
+
+  const escaped = value.replace(/"/g, '""');
+  return /[\s"&|<>^]/.test(value) ? `"${escaped}"` : escaped;
+};
+
+const tryResolveNpmShimLaunchSpec = (
+  resolvedCommand: string,
+  args: string[],
+): ManagedCodeGraphLaunchSpec | null => {
+  const commandBase = path.basename(resolvedCommand).toLowerCase();
+  if (commandBase !== "codegraph.cmd" && commandBase !== "codegraph.ps1") {
+    return null;
+  }
+
+  const installRoot = path.dirname(resolvedCommand);
+  const shimPath = path.join(
+    installRoot,
+    "node_modules",
+    "@colbymchenry",
+    "codegraph",
+    "npm-shim.js",
+  );
+  if (!fs.existsSync(shimPath)) {
+    return null;
+  }
+
+  const bundledNodePath = path.join(installRoot, "node.exe");
+  return {
+    command: fs.existsSync(bundledNodePath) ? bundledNodePath : "node",
+    args: [shimPath, ...args],
+  };
+};
+
+export const resolveManagedCodeGraphLaunchSpec = (
+  command: string,
+  args: string[],
+): ManagedCodeGraphLaunchSpec => {
+  const normalized = command.trim();
+  if (!normalized) {
+    throw new Error("Managed CodeGraph command is required");
+  }
+
+  let resolvedCommand = normalized;
+  if (hasPathSeparator(normalized)) {
+    resolvedCommand = path.resolve(normalized);
+    if (!fs.existsSync(resolvedCommand)) {
+      throw new Error(`Managed CodeGraph launcher not found: ${normalized}`);
+    }
+  } else if (process.platform === "win32") {
+    resolvedCommand = resolveWindowsLauncherPath(normalized);
+  }
+
+  const extension = path.extname(resolvedCommand).toLowerCase();
+  const npmShimLaunch = tryResolveNpmShimLaunchSpec(resolvedCommand, args);
+  if (npmShimLaunch) {
+    return npmShimLaunch;
+  }
+
+  if (extension === ".cmd" || extension === ".bat") {
+    return {
+      command: process.env.ComSpec ?? "cmd.exe",
+      args: ["/d", "/c", `call ${[resolvedCommand, ...args].map(quoteForCmd).join(" ")}`],
+    };
+  }
+
+  if (extension === ".ps1") {
+    return {
+      command: "powershell.exe",
+      args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", resolvedCommand, ...args],
+    };
+  }
+
+  return {
+    command: resolvedCommand,
+    args,
+  };
 };
 
 const normalizeExitMessage = (
@@ -117,8 +208,11 @@ export class ManagedJsonRpcSession {
       return;
     }
 
-    ensureLauncherAvailable(this.options.command);
-    this.process = spawn(this.options.command, this.options.args, {
+    const launch = resolveManagedCodeGraphLaunchSpec(
+      this.options.command,
+      this.options.args,
+    );
+    this.process = spawn(launch.command, launch.args, {
       stdio: "pipe",
       env: {
         ...process.env,

@@ -1,0 +1,8 @@
+$ C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\@colbymchenry\codegraph\npm-shim.js init D:\workspace\rag-demo
+T  Initializing CodeGraph
+|
+!  Already initialized in D:\workspace\rag-demo
+|
+•  Use "codegraph index" to re-index or "codegraph sync" to update
+|
+—

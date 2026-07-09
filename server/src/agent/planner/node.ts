@@ -194,6 +194,7 @@ export const nextActionPlannerNode = async (
       coverageState,
       toolExposure,
       recovery: observationContext.recovery,
+      latestObservation: observationContext.latestObservation,
       pendingApproval: observationContext.pendingApproval,
       iteration,
       maxIterations,

@@ -1,0 +1,7 @@
+$ C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\@colbymchenry\codegraph\npm-shim.js telemetry status
+Telemetry: [33mdisabled[0m [2m(your saved choice)[0m
+Machine ID: 9d0e3913-5ace-47db-9fab-8711d7edb137
+Config:     C:\Users\Administrator\.codegraph\telemetry.json
+[2m
+Exactly what is collected (and never collected): https://github.com/colbymchenry/codegraph/blob/main/TELEMETRY.md
+[0m

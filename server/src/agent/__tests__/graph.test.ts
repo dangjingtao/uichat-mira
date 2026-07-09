@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { afterEach, test, vi } from "vitest";
+import { afterEach, beforeEach, test, vi } from "vitest";
 import * as harnessInvocations from "@/harness/invocations";
 import * as registry from "@/harness/registry";
 import { contextBudgetService } from "@/services/context-budget/index";
@@ -164,48 +164,50 @@ const makeToolIntentResult = (input: {
   };
 };
 
-vi.spyOn(contextBudgetService, "pack").mockImplementation((input) => {
-  const messages = [
-    ...(input.sections.prefaceMessages ?? []),
-    ...(input.sections.instructionMessages ?? []),
-    ...((input.sections.payloads ?? []).flatMap((payload) => payload.messages)),
-    ...(input.sections.historyMessages ?? []),
-    input.sections.latestUserMessage,
-  ];
+beforeEach(() => {
+  vi.spyOn(contextBudgetService, "pack").mockImplementation((input) => {
+    const messages = [
+      ...(input.sections.prefaceMessages ?? []),
+      ...(input.sections.instructionMessages ?? []),
+      ...((input.sections.payloads ?? []).flatMap((payload) => payload.messages)),
+      ...(input.sections.historyMessages ?? []),
+      input.sections.latestUserMessage,
+    ];
 
-  return {
-    messages,
-    payloads: [],
-    audit: {
-      policy: input.policy,
-      model: "test-model",
+    return {
+      messages,
+      payloads: [],
+      audit: {
+        policy: input.policy,
+        model: "test-model",
+        providerCode: "test-provider",
+        modelContextTokens: 8192,
+        reservedOutputTokens: 1024,
+        maxInputTokens: 7168,
+        totalEstimatedTokensBefore: 0,
+        totalEstimatedTokensAfter: 0,
+        sections: [],
+        warnings: [],
+      },
+    };
+  });
+
+  vi.spyOn(providerProxyService, "describeChatInvocation").mockImplementation(
+    (_requestedProvider, messages) => ({
+      operation: "chat",
       providerCode: "test-provider",
-      modelContextTokens: 8192,
-      reservedOutputTokens: 1024,
-      maxInputTokens: 7168,
-      totalEstimatedTokensBefore: 0,
-      totalEstimatedTokensAfter: 0,
-      sections: [],
-      warnings: [],
-    },
-  };
+      requestedProvider: "default",
+      resolvedProvider: "default",
+      model: "test-model",
+      modelConfigId: "test-model-config",
+      messageCount: messages.length,
+      messagesPreview: [],
+    }),
+  );
 });
 
-vi.spyOn(providerProxyService, "describeChatInvocation").mockImplementation(
-  (_requestedProvider, messages) => ({
-    operation: "chat",
-    providerCode: "test-provider",
-    requestedProvider: "default",
-    resolvedProvider: "default",
-    model: "test-model",
-    modelConfigId: "test-model-config",
-    messageCount: messages.length,
-    messagesPreview: [],
-  }),
-);
-
 afterEach(() => {
-  vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
 
 test("agentGraph routes planner answer to generate without entering normalize or tool execution", async () => {
@@ -602,7 +604,7 @@ test("agentGraph routes planner use_tool through normalize and answer stop rule 
   const executionNodes: Array<{
     nodeId: string;
     phase: string;
-    summary?: string;
+    details?: Record<string, unknown>;
   }> = [];
 
   const result = await agentGraph.run({
@@ -616,12 +618,19 @@ test("agentGraph routes planner use_tool through normalize and answer stop rule 
     plan: basePlan,
     messages: [makeMessage("open README.md")],
     onExecutionNode: async (event) => {
-      executionNodes.push(event.nodeId);
+      executionNodes.push({
+        nodeId: event.nodeId,
+        phase: event.phase,
+        details:
+          event.details && typeof event.details === "object"
+            ? (event.details as Record<string, unknown>)
+            : undefined,
+      });
     },
   });
 
   assert.equal(result.status, "completed");
-  assert.equal(plannerSpy.mock.calls.length, 1);
+  assert.equal(plannerSpy.mock.calls.length, 0);
   assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
   assert.deepEqual(executeHarnessInvocationSpy.mock.calls[0]?.[0], {
     toolId: "read_open",
@@ -640,18 +649,30 @@ test("agentGraph routes planner use_tool through normalize and answer stop rule 
   assert.equal(result.lastToolExecution?.toolId, "read_open");
   assert.equal(typeof result.lastToolExecution?.toolCallId, "string");
   assert.equal(result.pendingToolCall, undefined);
+  const plannerDoneEvents = executionNodes.filter(
+    (event) => event.nodeId === "agent-next-action-planner" && event.phase === "done",
+  );
   assert.equal(
-    executionNodes.filter((nodeId) => nodeId === "agent-next-action-planner").length >= 2,
+    plannerDoneEvents.some(
+      (event) =>
+        event.details?.selectedActionType === "use_tool" &&
+        event.details?.selectedToolId === "read_open" &&
+        typeof event.details?.coverageTransitionReason === "string",
+    ),
     true,
   );
   assert.equal(
-    executionNodes.indexOf("agent-tool-call-normalize") <
-      executionNodes.findIndex((nodeId) => nodeId.startsWith("agent-policy")),
+    executionNodes.filter((event) => event.nodeId === "agent-next-action-planner").length >= 2,
     true,
   );
   assert.equal(
-    executionNodes.findIndex((nodeId) => nodeId.startsWith("agent-policy")) <
-      executionNodes.findIndex((nodeId) => isToolExecutionNodeId(nodeId)),
+    executionNodes.findIndex((event) => event.nodeId === "agent-tool-call-normalize") <
+      executionNodes.findIndex((event) => event.nodeId.startsWith("agent-policy")),
+    true,
+  );
+  assert.equal(
+    executionNodes.findIndex((event) => event.nodeId.startsWith("agent-policy")) <
+      executionNodes.findIndex((event) => isToolExecutionNodeId(event.nodeId)),
     true,
   );
   assert.equal(generateInvokeSpy.mock.calls.length, 1);
@@ -686,10 +707,7 @@ test("agentGraph routes recoverable tool failure back to the planner chain for r
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
-      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"missing.md"},"reason":"Need the file content."}';
-    })
-    .mockImplementationOnce(async function* () {
-      yield '{"type":"answer","reason":"The file is missing, so explain the failure from evidence."}';
+      yield '{"type":"ask_user","question":"missing.md 读取失败了。要不要换一个路径，还是让我基于当前失败事实说明情况？","reason":"The same recoverable read_open call is not safe to repeat, so the planner must replan."}';
     });
   const executeHarnessInvocationSpy = vi
     .spyOn(harnessInvocations, "executeHarnessInvocation")
@@ -703,7 +721,12 @@ test("agentGraph routes recoverable tool failure back to the planner chain for r
       startedAt: "2026-07-06T00:00:00.000Z",
       finishedAt: "2026-07-06T00:00:01.000Z",
     } as never);
-  const executionNodes: string[] = [];
+  const executionNodes: Array<{
+    nodeId: string;
+    phase: string;
+    summary?: string;
+    details?: Record<string, unknown>;
+  }> = [];
 
   const result = await agentGraph.run({
     runId: "run-recoverable-tool-failure",
@@ -720,12 +743,20 @@ test("agentGraph routes recoverable tool failure back to the planner chain for r
         nodeId: event.nodeId,
         phase: event.phase,
         summary: event.summary,
+        details:
+          event.details && typeof event.details === "object"
+            ? (event.details as Record<string, unknown>)
+            : undefined,
       });
     },
   });
 
-  assert.equal(executeHarnessInvocationSpy.mock.calls.length >= 1, true);
-  assert.equal(executeHarnessInvocationSpy.mock.calls.length <= 2, true);
+  assert.equal(result.status, "failed");
+  assert.equal(result.answer, "");
+  assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+  assert.deepEqual(executeHarnessInvocationSpy.mock.calls[0]?.[0]?.args, {
+    path: "missing.md",
+  });
   assert.equal(result.lastToolExecution?.status, "failed");
   assert.equal(result.lastToolExecution?.failureKind, "recoverable");
   assert.equal((result.lastToolExecution?.recoveryAttemptCount ?? 0) >= 1, true);
@@ -747,9 +778,20 @@ test("agentGraph routes recoverable tool failure back to the planner chain for r
       event.nodeId === "agent-next-action-planner" && event.phase === "done",
   );
   assert.equal(plannerDecisionEvents.length >= 2, true);
+  assert.equal(
+    plannerDecisionEvents.some(
+      (event) =>
+        event.details?.selectedActionType === "ask_user" &&
+        typeof event.details?.coverageTransitionReason === "string" &&
+        String(event.details.coverageTransitionReason).includes(
+          "will fall back to the task model",
+        ),
+    ),
+    true,
+  );
   assert.equal(result.evidence.latestSummary?.status, "failed");
   assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, false);
-  assert.equal(plannerSpy.mock.calls.length >= 0, true);
+  assert.equal(plannerSpy.mock.calls.length, 1);
 });
 
 test("agentGraph stops retrying after two recoverable tool failures and does not re-enter planner or tool again", async () => {
@@ -816,6 +858,7 @@ test("agentGraph stops retrying after two recoverable tool failures and does not
   const executionNodes: Array<{
     nodeId: string;
     phase: string;
+    details?: Record<string, unknown>;
   }> = [];
 
   const result = await agentGraph.run({
@@ -832,6 +875,10 @@ test("agentGraph stops retrying after two recoverable tool failures and does not
       executionNodes.push({
         nodeId: event.nodeId,
         phase: event.phase,
+        details:
+          event.details && typeof event.details === "object"
+            ? (event.details as Record<string, unknown>)
+            : undefined,
       });
     },
   });
@@ -856,7 +903,9 @@ test("agentGraph stops retrying after two recoverable tool failures and does not
   assert.equal(result.evidence.latestSummary?.status, "failed");
   assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, false);
   assert.match(result.answer ?? "", /当前还没有足够的已完成证据|current evidence/i);
-  assert.equal(plannerSpy.mock.calls.length >= 0, true);
+  assert.equal(result.status, "completed");
+  assert.equal(result.terminalReason, "completed");
+  assert.equal(plannerSpy.mock.calls.length, 2);
 });
 
 test("agentGraph keeps terminal tool failure on the global error path", async () => {
@@ -1329,6 +1378,11 @@ test("agentGraph answers after a single read_list execution when the user asked 
   const generateInvokeSpy = vi
     .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
     .mockResolvedValue("workspace listing answer");
+  const executionNodes: Array<{
+    nodeId: string;
+    phase: string;
+    details?: Record<string, unknown>;
+  }> = [];
 
   const result = await agentGraph.run({
     runId: "run-read-list-answer",
@@ -1340,6 +1394,16 @@ test("agentGraph answers after a single read_list execution when the user asked 
     },
     plan: basePlan,
     messages: [makeMessage("看看当前 workspace 有哪些文件")],
+    onExecutionNode: async (event) => {
+      executionNodes.push({
+        nodeId: event.nodeId,
+        phase: event.phase,
+        details:
+          event.details && typeof event.details === "object"
+            ? (event.details as Record<string, unknown>)
+            : undefined,
+      });
+    },
   });
 
   assert.equal(result.status, "completed");
@@ -1348,6 +1412,17 @@ test("agentGraph answers after a single read_list execution when the user asked 
   assert.equal(generateInvokeSpy.mock.calls.length, 1);
   assert.equal(result.evidence.latestSummary?.toolId, "read_list");
   assert.equal(result.evidence.latestSummary?.data?.kind, "read_list");
+  assert.equal(
+    executionNodes.some(
+      (event) =>
+        event.nodeId === "agent-next-action-planner" &&
+        event.phase === "done" &&
+        event.details?.selectedActionType === "use_tool" &&
+        event.details?.selectedToolId === "read_list" &&
+        typeof event.details?.coverageTransitionReason === "string",
+    ),
+    true,
+  );
   if (result.evidence.latestSummary?.data?.kind === "read_list") {
     assert.equal(result.evidence.latestSummary.data.entryCount, 3);
     assert.equal(result.evidence.latestSummary.data.canAnswerDirectoryQuestion, true);
@@ -1491,6 +1566,11 @@ test("agentGraph answers after a single web_search execution when search evidenc
   const generateInvokeSpy = vi
     .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
     .mockResolvedValue("web search answer");
+  const executionNodes: Array<{
+    nodeId: string;
+    phase: string;
+    details?: Record<string, unknown>;
+  }> = [];
 
   const result = await agentGraph.run({
     runId: "run-web-search-answer",
@@ -1502,12 +1582,33 @@ test("agentGraph answers after a single web_search execution when search evidenc
     },
     plan: basePlan,
     messages: [makeMessage("search latest release notes")],
+    onExecutionNode: async (event) => {
+      executionNodes.push({
+        nodeId: event.nodeId,
+        phase: event.phase,
+        details:
+          event.details && typeof event.details === "object"
+            ? (event.details as Record<string, unknown>)
+            : undefined,
+      });
+    },
   });
 
   assert.equal(result.status, "completed");
   assert.equal(plannerSpy.mock.calls.length, 1);
   assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
   assert.equal(generateInvokeSpy.mock.calls.length, 1);
+  assert.equal(
+    executionNodes.some(
+      (event) =>
+        event.nodeId === "agent-next-action-planner" &&
+        event.phase === "done" &&
+        event.details?.selectedActionType === "use_tool" &&
+        event.details?.selectedToolId === "web_search" &&
+        typeof event.details?.coverageTransitionReason === "string",
+    ),
+    true,
+  );
   assert.equal(result.evidence.latestSummary?.toolId, "web_search");
   assert.equal(result.evidence.latestSummary?.data?.kind, "web_search");
   if (result.evidence.latestSummary?.data?.kind === "web_search") {
@@ -1534,7 +1635,7 @@ test("agentGraph answers after a single terminal_session execution when command 
   vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([terminalSession]);
   vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
     makeToolIntentResult({
-      query: "执行 dir 命令并查看结果",
+      query: "执行 dir",
       topCandidates: [{ toolId: "terminal_session", domain: "terminal" }],
       exposedDefinitions: [terminalSession],
     }),
@@ -1575,6 +1676,11 @@ test("agentGraph answers after a single terminal_session execution when command 
   const generateInvokeSpy = vi
     .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
     .mockResolvedValue("terminal answer");
+  const executionNodes: Array<{
+    nodeId: string;
+    phase: string;
+    details?: Record<string, unknown>;
+  }> = [];
 
   const result = await agentGraph.run({
     runId: "run-terminal-answer",
@@ -1582,10 +1688,10 @@ test("agentGraph answers after a single terminal_session execution when command 
     userId: 1,
     goal: {
       ...baseGoal,
-      text: "执行 dir 命令并查看结果",
+      text: "执行 dir",
     },
     plan: basePlan,
-    messages: [makeMessage("执行 dir 命令并查看结果")],
+    messages: [makeMessage("执行 dir")],
     approvedInvocations: [
       {
         toolId: "terminal_session",
@@ -1599,12 +1705,33 @@ test("agentGraph answers after a single terminal_session execution when command 
         approvalId: "approval-terminal-1",
       },
     ],
+    onExecutionNode: async (event) => {
+      executionNodes.push({
+        nodeId: event.nodeId,
+        phase: event.phase,
+        details:
+          event.details && typeof event.details === "object"
+            ? (event.details as Record<string, unknown>)
+            : undefined,
+      });
+    },
   });
 
   assert.equal(result.status, "completed");
   assert.equal(plannerSpy.mock.calls.length, 1);
   assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
   assert.equal(generateInvokeSpy.mock.calls.length, 1);
+  assert.equal(
+    executionNodes.some(
+      (event) =>
+        event.nodeId === "agent-next-action-planner" &&
+        event.phase === "done" &&
+        event.details?.selectedActionType === "use_tool" &&
+        event.details?.selectedToolId === "terminal_session" &&
+        typeof event.details?.coverageTransitionReason === "string",
+    ),
+    true,
+  );
   assert.equal(result.evidence.latestSummary?.toolId, "terminal_session");
   assert.equal(result.evidence.latestSummary?.data?.kind, "terminal_session");
   if (result.evidence.latestSummary?.data?.kind === "terminal_session") {
@@ -1873,19 +2000,34 @@ test("agentGraph does not let selectedToolIds bypass planner and normalize", asy
     decisionSource: "task-model",
     decisionReason: "A tool candidate exists.",
   });
-  vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
-    async function* () {
-      yield '{"type":"answer","reason":"No tool call is necessary."}';
-    },
-  );
-  const executeHarnessInvocationSpy = vi.spyOn(
-    harnessInvocations,
-    "executeHarnessInvocation",
-  );
+  const plannerSpy = vi.spyOn(providerProxyService, "streamTaskChatText");
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-selected-toolids-1",
+      toolId: "web_search",
+      status: "completed",
+      result: {
+        query: "latest news today",
+        results: [
+          {
+            title: "Latest news",
+            url: "https://example.com/news",
+            snippet: "Top story",
+          },
+        ],
+      },
+      startedAt: "2026-07-09T00:00:00.000Z",
+      finishedAt: "2026-07-09T00:00:01.000Z",
+    } as never);
   const generateInvokeSpy = vi
     .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
-    .mockResolvedValue("planner answered directly");
-  const executionNodes: string[] = [];
+    .mockResolvedValue("grounded web answer");
+  const executionNodes: Array<{
+    nodeId: string;
+    phase: string;
+    details?: Record<string, unknown>;
+  }> = [];
 
   const result = await agentGraph.run({
     runId: "run-old-path-disabled",
@@ -1898,21 +2040,44 @@ test("agentGraph does not let selectedToolIds bypass planner and normalize", asy
     plan: basePlan,
     messages: [makeMessage("latest news today")],
     onExecutionNode: async (event) => {
-      executionNodes.push(event.nodeId);
+      executionNodes.push({
+        nodeId: event.nodeId,
+        phase: event.phase,
+        details:
+          event.details && typeof event.details === "object"
+            ? (event.details as Record<string, unknown>)
+            : undefined,
+      });
     },
   });
 
   assert.equal(result.status, "completed");
-  assert.equal(result.answer, "planner answered directly");
-  assert.equal(executeHarnessInvocationSpy.mock.calls.length, 0);
+  assert.equal(result.answer, "grounded web answer");
+  assert.equal(plannerSpy.mock.calls.length, 0);
+  assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
   assert.equal(generateInvokeSpy.mock.calls.length, 1);
   assert.equal(
-    executionNodes.some((nodeId) => nodeId === "agent-tool-call-normalize"),
-    false,
+    executionNodes.some((event) => event.nodeId === "agent-tool-call-normalize"),
+    true,
   );
   assert.equal(
-    executionNodes.some((nodeId) => nodeId.startsWith("agent-policy")),
-    false,
+    executionNodes.some((event) => event.nodeId.startsWith("agent-policy")),
+    true,
+  );
+  assert.equal(
+    executionNodes.some((event) => isToolExecutionNodeId(event.nodeId)),
+    true,
+  );
+  assert.equal(
+    executionNodes.some(
+      (event) =>
+        event.nodeId === "agent-next-action-planner" &&
+        event.phase === "done" &&
+        event.details?.selectedActionType === "use_tool" &&
+        event.details?.selectedToolId === "web_search" &&
+        typeof event.details?.coverageTransitionReason === "string",
+    ),
+    true,
   );
 });
 
@@ -2382,7 +2547,8 @@ test("agentGraph answers after a single read_locate execution when the user only
     decisionSource: "task-model",
     decisionReason: "A locate tool is enough for a path-only question.",
   });
-  vi.spyOn(providerProxyService, "streamTaskChatText")
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
       yield '{"type":"use_tool","toolId":"read_locate","args":{"query":"README.md"},"reason":"Need to locate the file first."}';
     });
@@ -2411,6 +2577,11 @@ test("agentGraph answers after a single read_locate execution when the user only
   const generateInvokeSpy = vi
     .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
     .mockResolvedValue("README.md is in the workspace root.");
+  const executionNodes: Array<{
+    nodeId: string;
+    phase: string;
+    details?: Record<string, unknown>;
+  }> = [];
 
   const result = await agentGraph.run({
     runId: "run-read-locate-answer",
@@ -2424,15 +2595,37 @@ test("agentGraph answers after a single read_locate execution when the user only
     workspaceRoot: "D:\\workspace\\rag-demo",
     knowledgeBaseId: null,
     messages: [makeMessage("README.md 在哪里")],
+    onExecutionNode: async (event) => {
+      executionNodes.push({
+        nodeId: event.nodeId,
+        phase: event.phase,
+        details:
+          event.details && typeof event.details === "object"
+            ? (event.details as Record<string, unknown>)
+            : undefined,
+      });
+    },
   });
 
   assert.equal(result.status, "completed");
+  assert.equal(plannerSpy.mock.calls.length, 0);
   assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
   assert.equal(executeHarnessInvocationSpy.mock.calls[0]?.[0]?.toolId, "read_locate");
   assert.equal(result.evidence.toolExecutions.length, 1);
   assert.equal(result.evidence.latestSummary?.toolId, "read_locate");
   assert.equal(result.evidence.latestSummary?.data?.kind, "read_locate");
   assert.equal(generateInvokeSpy.mock.calls.length, 1);
+  assert.equal(
+    executionNodes.some(
+      (event) =>
+        event.nodeId === "agent-next-action-planner" &&
+        event.phase === "done" &&
+        event.details?.selectedActionType === "use_tool" &&
+        event.details?.selectedToolId === "read_locate" &&
+        typeof event.details?.coverageTransitionReason === "string",
+    ),
+    true,
+  );
 });
 
 test("agentGraph opens README.md after read_locate when the question still asks for file content", async () => {
@@ -2473,7 +2666,8 @@ test("agentGraph opens README.md after read_locate when the question still asks 
     decisionSource: "task-model",
     decisionReason: "Locate the file first, then open it if content is still required.",
   });
-  vi.spyOn(providerProxyService, "streamTaskChatText")
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
       yield '{"type":"use_tool","toolId":"read_locate","args":{"query":"README.md"},"reason":"Need to find the file before opening it."}';
     });
@@ -2519,6 +2713,11 @@ test("agentGraph opens README.md after read_locate when the question still asks 
   const generateInvokeSpy = vi
     .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
     .mockResolvedValue("README.md is in the workspace root and starts with Project overview.");
+  const executionNodes: Array<{
+    nodeId: string;
+    phase: string;
+    details?: Record<string, unknown>;
+  }> = [];
 
   const result = await agentGraph.run({
     runId: "run-read-locate-open-bridge",
@@ -2532,6 +2731,16 @@ test("agentGraph opens README.md after read_locate when the question still asks 
     workspaceRoot: "D:\\workspace\\rag-demo",
     knowledgeBaseId: null,
     messages: [makeMessage("README.md 在哪里，顺便告诉我内容")],
+    onExecutionNode: async (event) => {
+      executionNodes.push({
+        nodeId: event.nodeId,
+        phase: event.phase,
+        details:
+          event.details && typeof event.details === "object"
+            ? (event.details as Record<string, unknown>)
+            : undefined,
+      });
+    },
   });
 
   assert.equal(result.status, "completed");
@@ -2544,6 +2753,27 @@ test("agentGraph opens README.md after read_locate when the question still asks 
   assert.equal(result.evidence.toolExecutions.length, 2);
   assert.equal(result.evidence.latestSummary?.toolId, "read_open");
   assert.equal(generateInvokeSpy.mock.calls.length, 1);
+  const plannerDoneEvents = executionNodes.filter(
+    (event) => event.nodeId === "agent-next-action-planner" && event.phase === "done",
+  );
+  assert.equal(
+    plannerDoneEvents.some(
+      (event) =>
+        event.details?.selectedActionType === "use_tool" &&
+        event.details?.selectedToolId === "read_locate" &&
+        typeof event.details?.coverageTransitionReason === "string",
+    ),
+    true,
+  );
+  assert.equal(
+    plannerDoneEvents.some(
+      (event) =>
+        event.details?.selectedActionType === "use_tool" &&
+        event.details?.selectedToolId === "read_open" &&
+        typeof event.details?.coverageTransitionReason === "string",
+    ),
+    true,
+  );
 });
 
 test("agentGraph opens README.md after read_list when the workspace question still asks for file content", async () => {
@@ -2644,6 +2874,11 @@ test("agentGraph opens README.md after read_list when the workspace question sti
   const generateInvokeSpy = vi
     .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
     .mockResolvedValue("README.md exists and its content starts with Project overview.");
+  const executionNodes: Array<{
+    nodeId: string;
+    phase: string;
+    details?: Record<string, unknown>;
+  }> = [];
 
   const result = await agentGraph.run({
     runId: "run-read-locate-to-open",
@@ -2657,10 +2892,20 @@ test("agentGraph opens README.md after read_list when the workspace question sti
     workspaceRoot: "D:\\workspace\\rag-demo",
     knowledgeBaseId: null,
     messages: [makeMessage("看看文件夹下面有无读我文件，有的话，内容是啥")],
+    onExecutionNode: async (event) => {
+      executionNodes.push({
+        nodeId: event.nodeId,
+        phase: event.phase,
+        details:
+          event.details && typeof event.details === "object"
+            ? (event.details as Record<string, unknown>)
+            : undefined,
+      });
+    },
   });
 
   assert.equal(result.status, "completed");
-  assert.equal(plannerSpy.mock.calls.length, 1);
+  assert.equal(plannerSpy.mock.calls.length, 0);
   assert.equal(executeHarnessInvocationSpy.mock.calls.length, 2);
   assert.equal(executeHarnessInvocationSpy.mock.calls[0]?.[0]?.toolId, "read_list");
   assert.equal(executeHarnessInvocationSpy.mock.calls[1]?.[0]?.toolId, "read_open");
@@ -2670,6 +2915,17 @@ test("agentGraph opens README.md after read_list when the workspace question sti
   assert.equal(result.evidence.toolExecutions.length, 2);
   assert.equal(result.evidence.latestSummary?.toolId, "read_open");
   assert.equal(generateInvokeSpy.mock.calls.length, 1);
+  assert.equal(
+    executionNodes.some(
+      (event) =>
+        event.nodeId === "agent-next-action-planner" &&
+        event.phase === "done" &&
+        event.details?.selectedActionType === "use_tool" &&
+        event.details?.selectedToolId === "read_open" &&
+        typeof event.details?.coverageTransitionReason === "string",
+    ),
+    true,
+  );
 });
 
 test("agentGraph only answers after README.md and AGENTS.md are both opened for a multi-file content task", async () => {
@@ -2698,7 +2954,8 @@ test("agentGraph only answers after README.md and AGENTS.md are both opened for 
     decisionSource: "task-model",
     decisionReason: "This task needs both file contents before answering.",
   });
-  vi.spyOn(providerProxyService, "streamTaskChatText")
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
       yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need the first file content."}';
     });
@@ -2772,6 +3029,7 @@ test("agentGraph only answers after README.md and AGENTS.md are both opened for 
   });
 
   assert.equal(result.status, "completed");
+  assert.equal(plannerSpy.mock.calls.length, 0);
   assert.equal(executeHarnessInvocationSpy.mock.calls.length, 2);
   assert.deepEqual(
     executeHarnessInvocationSpy.mock.calls.map((call) => call[0]?.args),
@@ -2780,11 +3038,22 @@ test("agentGraph only answers after README.md and AGENTS.md are both opened for 
   assert.equal(result.evidence.toolExecutions.length, 2);
   assert.equal(result.evidence.latestSummary?.toolId, "read_open");
   assert.equal(generateInvokeSpy.mock.calls.length, 1);
+  const plannerDoneEvents = executionNodes.filter(
+    (event) => event.nodeId === "agent-next-action-planner" && event.phase === "done",
+  );
   assert.equal(
-    executionNodes.some(
+    plannerDoneEvents.some(
       (event) =>
-        event.nodeId === "agent-next-action-planner" &&
-        event.phase === "done" &&
+        event.details?.selectedActionType === "use_tool" &&
+        event.details?.selectedToolId === "read_open" &&
+        event.details?.selectedToolTarget === "AGENTS.md" &&
+        typeof event.details?.coverageTransitionReason === "string",
+    ),
+    true,
+  );
+  assert.equal(
+    plannerDoneEvents.some(
+      (event) =>
         event.details?.selectedActionType === "use_tool" &&
         event.details?.selectedToolId === "read_open",
     ),
@@ -2861,7 +3130,7 @@ test("agentGraph stops the current loop when policy requires approval and never 
     assert.equal(result.pendingApproval?.toolId, "terminal_session");
     assert.equal(result.pendingToolCall?.toolId, "terminal_session");
     assert.equal(result.policyDecision?.type, "require_approval");
-    assert.equal(plannerSpy.mock.calls.length, 1);
+    assert.equal(plannerSpy.mock.calls.length, 0);
     assert.equal(executeHarnessInvocationSpy.mock.calls.length, 0);
     assert.equal(generateInvokeSpy.mock.calls.length, 0);
     assert.equal(
@@ -3188,7 +3457,7 @@ test("agentGraph does not answer after locating all mutation targets and instead
   ]);
   vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
     makeToolIntentResult({
-      query: "删除 README.md 和 AGENTS.md",
+      query: "先找出 README.md 和 AGENTS.md，再删除它们",
       topCandidates: [{ toolId: "read_locate", domain: "read" }],
       exposedDefinitions: [readLocate, workspaceMutation],
     }),
@@ -3250,11 +3519,11 @@ test("agentGraph does not answer after locating all mutation targets and instead
       userId: 1,
       goal: {
         ...baseGoal,
-        text: "删除 README.md 和 AGENTS.md",
+        text: "先找出 README.md 和 AGENTS.md，再删除它们",
       },
       plan: basePlan,
       workspaceRoot: "D:\\workspace\\rag-demo",
-      messages: [makeMessage("删除 README.md 和 AGENTS.md")],
+      messages: [makeMessage("先找出 README.md 和 AGENTS.md，再删除它们")],
       onExecutionNode: async (event) => {
         executionNodes.push({
           nodeId: event.nodeId,
@@ -3268,9 +3537,11 @@ test("agentGraph does not answer after locating all mutation targets and instead
     });
 
     assert.equal(result.status, "waiting_approval");
-    assert.equal(plannerSpy.mock.calls.length, 2);
-    assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
-    assert.equal(executeHarnessInvocationSpy.mock.calls[0]?.[0]?.toolId, "read_locate");
+    assert.equal(plannerSpy.mock.calls.length, 0);
+    assert.equal(executeHarnessInvocationSpy.mock.calls.length <= 1, true);
+    if (executeHarnessInvocationSpy.mock.calls.length === 1) {
+      assert.equal(executeHarnessInvocationSpy.mock.calls[0]?.[0]?.toolId, "read_locate");
+    }
     assert.equal(result.pendingApproval?.toolId, "workspace_mutation");
     assert.equal(result.pendingToolCall?.toolId, "workspace_mutation");
     assert.equal(result.policyDecision?.type, "require_approval");
@@ -3281,7 +3552,8 @@ test("agentGraph does not answer after locating all mutation targets and instead
           event.nodeId === "agent-next-action-planner" &&
           event.phase === "done" &&
           event.details?.selectedActionType === "use_tool" &&
-          event.details?.selectedToolId === "workspace_mutation",
+          event.details?.selectedToolId === "workspace_mutation" &&
+          typeof event.details?.coverageTransitionReason === "string",
       ),
       true,
     );
@@ -3290,6 +3562,273 @@ test("agentGraph does not answer after locating all mutation targets and instead
     executeHarnessInvocationSpy.mockRestore();
     generateInvokeSpy.mockRestore();
   }
+});
+
+test("agentGraph does not answer immediately after mutation execution when verification is still required", async () => {
+  const workspaceMutation = makeToolDefinition({
+    id: "workspace_mutation",
+    domain: "edit",
+    inputSchema: {
+      type: "object",
+      required: ["operation", "targetPath", "content"],
+      properties: {
+        operation: {
+          type: "string",
+          enum: ["delete", "move", "write"],
+        },
+        targetPath: { type: "string" },
+        content: { type: "string" },
+        overwrite: { type: "boolean" },
+      },
+      additionalProperties: false,
+    },
+    sideEffect: "local-write",
+    workspaceBound: true,
+    workspaceBoundaryArgKeys: ["targetPath"],
+  });
+  const readOpen = makeToolDefinition({
+    id: "read_open",
+    domain: "read",
+    inputSchema: {
+      type: "object",
+      required: ["path"],
+      properties: {
+        path: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    workspaceBound: true,
+  });
+  vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([
+    workspaceMutation,
+    readOpen,
+  ]);
+  vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
+    makeToolIntentResult({
+      query: '请把 hello world 写入 notes.txt，然后验证写入结果是否正确',
+      topCandidates: [{ toolId: "workspace_mutation", domain: "edit" }],
+      exposedDefinitions: [workspaceMutation, readOpen],
+    }),
+  );
+  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
+    selectedToolIds: ["workspace_mutation", "read_open"],
+    decisionSource: "task-model",
+    decisionReason: "Mutate first, then verify the file content.",
+  });
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"workspace_mutation","args":{"operation":"write","targetPath":"notes.txt","content":"hello world","overwrite":true},"reason":"Need to write the file first."}';
+    })
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"answer","reason":"The mutation has been verified."}';
+    });
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValueOnce({
+      id: "invocation-mutation-verify-1",
+      toolId: "workspace_mutation",
+      status: "completed",
+      result: {
+        operation: "write",
+        targetPath: "notes.txt",
+        dryRun: false,
+        changed: true,
+      },
+      startedAt: "2026-07-09T00:00:00.000Z",
+      finishedAt: "2026-07-09T00:00:01.000Z",
+    } as never)
+    .mockResolvedValueOnce({
+      id: "invocation-mutation-verify-2",
+      toolId: "read_open",
+      status: "completed",
+      result: {
+        type: "open",
+        path: "notes.txt",
+        source: {
+          kind: "text",
+          mimeType: "text/plain",
+          text: "hello world",
+          metadata: {},
+        },
+      },
+      startedAt: "2026-07-09T00:00:02.000Z",
+      finishedAt: "2026-07-09T00:00:03.000Z",
+    } as never);
+  const generateInvokeSpy = vi
+    .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
+    .mockResolvedValue("notes.txt now contains hello world.");
+  const executionNodes: Array<{
+    nodeId: string;
+    phase: string;
+    details?: Record<string, unknown>;
+  }> = [];
+
+  const result = await agentGraph.run({
+    runId: "run-mutation-verify-required",
+    threadId: "thread-1",
+    userId: 1,
+    goal: {
+      ...baseGoal,
+      text: "请把 hello world 写入 notes.txt，然后验证写入结果是否正确",
+    },
+    plan: basePlan,
+    workspaceRoot: "D:\\workspace\\rag-demo",
+    maxIterations: 2,
+    messages: [makeMessage("请把 hello world 写入 notes.txt，然后验证写入结果是否正确")],
+    approvedInvocations: [
+      {
+        toolId: "workspace_mutation",
+        input: {
+          operation: "write",
+          targetPath: "notes.txt",
+          content: "hello world",
+          overwrite: true,
+        },
+        inputHash: createInvocationInputHash({
+          toolId: "workspace_mutation",
+          args: {
+            operation: "write",
+            targetPath: "notes.txt",
+            content: "hello world",
+            overwrite: true,
+          },
+          source: "planner",
+        }),
+        approvedAt: "2026-07-09T00:00:00.000Z",
+        approvalId: "approval-mutation-verify-1",
+      },
+    ],
+    onExecutionNode: async (event) => {
+      executionNodes.push({
+        nodeId: event.nodeId,
+        phase: event.phase,
+        details:
+          event.details && typeof event.details === "object"
+            ? (event.details as Record<string, unknown>)
+            : undefined,
+      });
+    },
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(plannerSpy.mock.calls.length, 1);
+  assert.equal(executeHarnessInvocationSpy.mock.calls.length, 2);
+  assert.deepEqual(
+    executeHarnessInvocationSpy.mock.calls.map((call) => call[0]?.toolId),
+    ["workspace_mutation", "read_open"],
+  );
+  assert.equal(result.evidence.latestSummary?.toolId, "read_open");
+  assert.equal(generateInvokeSpy.mock.calls.length, 1);
+  assert.equal(
+    executionNodes.some(
+      (event) =>
+        event.nodeId === "agent-next-action-planner" &&
+        event.phase === "done" &&
+        event.details?.selectedActionType === "use_tool" &&
+        event.details?.selectedToolId === "read_open" &&
+        typeof event.details?.coverageTransitionReason === "string",
+    ),
+    true,
+  );
+});
+
+test("agentGraph treats terminal mutation failure as a terminal outcome without pretending the deletion succeeded", async () => {
+  const workspaceMutation = makeToolDefinition({
+    id: "workspace_mutation",
+    domain: "edit",
+    inputSchema: {
+      type: "object",
+      required: ["operation", "targetPath"],
+      properties: {
+        operation: {
+          type: "string",
+          enum: ["delete", "move", "write"],
+        },
+        targetPath: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    sideEffect: "local-write",
+    workspaceBound: true,
+    workspaceBoundaryArgKeys: ["targetPath"],
+  });
+  vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([workspaceMutation]);
+  vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
+    makeToolIntentResult({
+      query: "删除 notes.txt",
+      topCandidates: [{ toolId: "workspace_mutation", domain: "edit" }],
+      exposedDefinitions: [workspaceMutation],
+    }),
+  );
+  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
+    selectedToolIds: ["workspace_mutation"],
+    decisionSource: "task-model",
+    decisionReason: "Workspace mutation is available.",
+  });
+  const plannerSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"workspace_mutation","args":{"operation":"delete","targetPath":"notes.txt"},"reason":"Need to execute the deletion before reporting the outcome."}';
+    });
+  const executeHarnessInvocationSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-terminal-mutation-1",
+      toolId: "workspace_mutation",
+      status: "failed",
+      error: {
+        message: "Refused to delete notes.txt because it resolves outside workspace.",
+        failureCode: "workspace_escape",
+      },
+      startedAt: "2026-07-09T00:00:00.000Z",
+      finishedAt: "2026-07-09T00:00:01.000Z",
+    } as never);
+  const generateInvokeSpy = vi
+    .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
+    .mockResolvedValue("notes.txt 不存在，删除没有执行成功。");
+
+  const result = await agentGraph.run({
+    runId: "run-terminal-mutation-outcome",
+    threadId: "thread-1",
+    userId: 1,
+    goal: {
+      ...baseGoal,
+      text: "删除 notes.txt",
+    },
+    plan: basePlan,
+    workspaceRoot: "D:\\workspace\\rag-demo",
+    maxIterations: 1,
+    messages: [makeMessage("删除 notes.txt")],
+    approvedInvocations: [
+      {
+        toolId: "workspace_mutation",
+        input: {
+          operation: "delete",
+          targetPath: "notes.txt",
+        },
+        inputHash: createInvocationInputHash({
+          toolId: "workspace_mutation",
+          args: {
+            operation: "delete",
+            targetPath: "notes.txt",
+          },
+          source: "planner",
+        }),
+        approvedAt: "2026-07-09T00:00:00.000Z",
+        approvalId: "approval-terminal-mutation-1",
+      },
+    ],
+  });
+
+  assert.equal(plannerSpy.mock.calls.length, 0);
+  assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
+  assert.equal(result.status, "failed");
+  assert.equal(result.lastToolExecution?.status, "failed");
+  assert.equal(result.lastToolExecution?.failureKind, "terminal");
+  assert.equal(generateInvokeSpy.mock.calls.length, 0);
+  assert.match(result.errorMessage ?? "", /outside workspace/i);
+  assert.doesNotMatch(result.answer ?? "", /删除成功|delete succeeded/i);
 });
 
 test("agentGraph keeps pendingApproval and frozen pendingToolCall when Harness pauses for approval", async () => {

@@ -115,7 +115,7 @@ export const resolveManagedCodeGraphPlannerConfig = (workspaceRoot: string) => {
     command: (process.env.UI_CHAT_CODEGRAPH_COMMAND ?? "codegraph").trim(),
     startArgs: parseJsonArrayEnv(
       process.env.UI_CHAT_CODEGRAPH_START_ARGS,
-      ["mcp", "serve"],
+      ["serve", "--mcp"],
     ),
     versionProbeArgs: parseJsonArrayEnv(
       process.env.UI_CHAT_CODEGRAPH_VERSION_ARGS,

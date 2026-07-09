@@ -26,6 +26,8 @@ type ProviderCandidate = {
 
 type ProviderResponse = {
   candidates?: ProviderCandidate[];
+  unavailableReason?: "provider_unavailable";
+  unavailableMessage?: string;
 };
 
 type CodebaseExploreLimits = {
@@ -106,6 +108,74 @@ const trimSnippet = (snippet: string | null | undefined, maxLines: number) => {
 const toLineCount = (snippet: string | null) => (snippet ? snippet.split(/\r?\n/).length : 0);
 
 const unique = <T>(values: T[]) => [...new Set(values)];
+
+const extractLineNumber = (value: string) => {
+  const match = value.match(/^(\d+)\t(.*)$/);
+  if (!match) {
+    return null;
+  }
+
+  return {
+    lineNumber: Number(match[1]),
+    text: match[2]!.replace(/^\uFEFF/, ""),
+  };
+};
+
+const parseExploreToolResponse = (text: string): ProviderResponse => {
+  const normalized = text.trim();
+  if (!normalized) {
+    return { candidates: [] };
+  }
+
+  if (/isn't indexed|not initialized|no \.codegraph\/ index exists/i.test(normalized)) {
+    return {
+      candidates: [],
+      unavailableReason: "provider_unavailable",
+      unavailableMessage: normalized,
+    };
+  }
+
+  if (/No relevant code found/i.test(normalized)) {
+    return { candidates: [] };
+  }
+
+  const candidates: ProviderCandidate[] = [];
+  const sectionPattern =
+    /\*\*`([^`]+)`\*\*(?:\s+[—-]\s+([^\n]+))?\s*\n\s*```[^\n]*\n([\s\S]*?)\n```/g;
+  for (const match of normalized.matchAll(sectionPattern)) {
+    const filePath = match[1]?.trim();
+    if (!filePath) {
+      continue;
+    }
+
+    const summary = match[2]?.trim() || "CodeGraph explore returned a file section.";
+    const numberedLines = (match[3] ?? "")
+      .split(/\r?\n/)
+      .map((line) => extractLineNumber(line))
+      .filter((line): line is NonNullable<typeof line> => line !== null);
+
+    const startLine = numberedLines[0]?.lineNumber ?? null;
+    const endLine = numberedLines[numberedLines.length - 1]?.lineNumber ?? startLine;
+    const snippet =
+      numberedLines.length > 0
+        ? numberedLines.map((line) => line.text).join("\n")
+        : (match[3] ?? "").trim() || null;
+
+    candidates.push({
+      path: filePath,
+      startLine,
+      endLine,
+      kind: "file-entry",
+      summary,
+      snippet,
+      score: startLine !== null && endLine !== null ? 0.92 : 0.58,
+    });
+  }
+
+  return {
+    candidates,
+  };
+};
 
 const pickScope = (query: string): CodebaseExploreScope => {
   if (AGENT_RUNTIME_PATTERNS.some((pattern) => pattern.test(query))) {
@@ -276,6 +346,51 @@ export class CodebaseExploreWrapper {
                 excludePaths,
               ),
             ];
+      const unavailableResponse = providerResponses.find((response) => response.unavailableReason);
+      if (unavailableResponse) {
+        const fallbackSignal: CodebaseExploreFallbackSignal = {
+          required: true,
+          reason: "provider_unavailable",
+          suggestedChain: [...DEFAULT_SUGGESTED_CHAIN],
+        };
+
+        return {
+          status: "degraded",
+          scope: [scope],
+          query: normalizedQuery,
+          engine: "codegraph",
+          command,
+          includePaths,
+          excludePaths,
+          candidates: [],
+          followUpReads: [],
+          truncated: false,
+          degraded: true,
+          followUpHints: [
+            unavailableResponse.unavailableMessage ??
+              "CodeGraph provider is available but the workspace is not indexed.",
+          ],
+          limitations: ["provider_unavailable", "query_failed"],
+          fallbackSignal,
+          trace: createCodebaseExploreTrace({
+            originalQuery,
+            normalizedQuery,
+            selectedScope: [scope],
+            includePaths,
+            excludePaths,
+            internalCommand: command,
+            resultCount: 0,
+            truncated: false,
+            limitations: ["provider_unavailable", "query_failed"],
+            fallbackSignal,
+            verificationReadCount: 0,
+            durationMs: Date.now() - startedAt,
+            status: "degraded",
+            runtimeStatus: this.manager.getStatus(),
+          }),
+        };
+      }
+
       const rawCandidates = providerResponses.flatMap((response) => response.candidates ?? []);
       return this.normalizeResult({
         originalQuery,
@@ -338,14 +453,47 @@ export class CodebaseExploreWrapper {
     includePaths: string[],
     excludePaths: string[],
   ) {
-    return await this.manager.request<ProviderResponse>(
-      `codegraph/${command}`,
-      {
+    try {
+      return await this.manager.request<ProviderResponse>(
+        `codegraph/${command}`,
+        {
+          query,
+          includePaths,
+          excludePaths,
+        },
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/Method not found|Unknown tool/i.test(message)) {
+        throw error;
+      }
+    }
+
+    try {
+      const toolResult = await this.manager.callTool("codegraph_explore", {
         query,
-        includePaths,
-        excludePaths,
-      },
-    );
+      });
+      const toolText = (toolResult.content ?? [])
+        .map((entry) => entry.text ?? "")
+        .filter(Boolean)
+        .join("\n")
+        .trim();
+      if (toolResult.isError) {
+        throw new Error(toolText || "codegraph_explore returned an error");
+      }
+
+      return parseExploreToolResponse(toolText);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/isn't indexed|not initialized|no \.codegraph\/ index exists/i.test(message)) {
+        return {
+          candidates: [],
+          unavailableReason: "provider_unavailable",
+          unavailableMessage: message,
+        };
+      }
+      throw error;
+    }
   }
 
   private normalizeResult(input: {
