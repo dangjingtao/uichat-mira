@@ -8,6 +8,7 @@
 - manager detect / start / health：`ready`
 - 受控 `codebase_explore` 在真实 provider 下已跑通 3 条 query 的 verified candidate
 - 任务最终结论：`blocked`
+- review / report / json 已全部落盘，可直接在 GitHub 评审线程核对
 
 ## Why Blocked
 
@@ -19,6 +20,12 @@
 - 一旦真实 smoke 证明它会这样写，本任务结论必须是 `blocked`
 
 因此，这次任务证明的是“真实 provider 兼容层成立”，不是“可以进入 ready rollout”。
+
+对应评审入口：
+
+- task card: `docs/project-control/tasks/code_T014-codegraph-real-provider-smoke.md`
+- review: `docs/project-control/reviews/code_T014-codegraph-real-provider-smoke-review.md`
+- smoke report: `docs/project-control/reviews/code_T014-codegraph-real-provider-smoke-report.md`
 
 ## Detect
 

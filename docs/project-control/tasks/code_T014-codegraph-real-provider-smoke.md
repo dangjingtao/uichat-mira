@@ -27,6 +27,8 @@ task_state: BLOCKED
 
 在不扩大 Agent Runtime 暴露面的前提下，用真实 CodeGraph provider 对 `managed-codegraph` 的受控链路做最小 smoke。
 
+本次整改目标不是重写 smoke，也不是重跑主链逻辑，而是把真实 provider smoke 的证据、结论和阻断原因完整落到仓库内可提交路径，保证评审线程能直接通过 GitHub 核对。
+
 本任务要证明的是：
 
 - 真实 provider 在当前 Windows 环境可 detect、可启动、可 health
@@ -75,6 +77,8 @@ task_state: BLOCKED
 8. 本任务专属测试通过。
 9. 不默认启用 Planner 暴露。
 10. 不改主链。
+11. 任务卡、review、smoke report、smoke JSON、原始输出和总台账之间有可追溯链接。
+12. 任务状态保持 `BLOCKED`，不得把真实 provider readiness 误写成 pass。
 
 ## Completion Evidence
 
@@ -98,6 +102,7 @@ task_state: BLOCKED
 
 ### Diff Summary
 
+- 本次整改把真实 provider smoke 的证据链固定到任务卡、review、smoke report、`server/test-report` 原始输出与总台账之间，保证评审线程可以直接从仓库核对，不再依赖口头补充。
 - `managed-jsonrpc-session` 现在会把 Windows 全局 npm 的 `codegraph` shim 解析成 `node.exe + npm-shim.js`，避免 `.cmd` 启动链在 Node `spawn` 下失效。
 - `managed-codegraph-process-manager` 兼容了真实 CodeGraph 的标准 MCP 面：`serve --mcp`、`initialized`、`tools/list`、`tools/call`，并在保留 legacy `codegraph/*` 回退的前提下继续通过既有 fake-provider 回归。
 - `codebase-explore-wrapper` 现在能把真实 `codegraph_explore` 的文本输出规整成受控 `CodebaseExploreResult`，从真实 file block 中提取 `path / startLine / endLine / snippet`，并继续走 verification bridge。
@@ -111,6 +116,8 @@ task_state: BLOCKED
 - AC8：`pnpm --dir server test -- src/mcp/managed-codegraph/__tests__/real-provider-compat.test.ts src/mcp/managed-codegraph/__tests__/planner-exposure-config.test.ts src/mcp/managed-codegraph/__tests__/managed-codegraph-process-manager.test.ts src/mcp/managed-codegraph/__tests__/codebase-explore.tool.test.ts` 通过，49/49 通过。
 - AC9：本任务没有改 `UI_CHAT_CODEGRAPH_PLANNER_ENABLED` 默认值；`codebase_explore` 仍只在显式环境变量下暴露。
 - AC10：未修改 Planner / Normalize / Policy / ToolNode / Evidence 主链文件。
+- AC11：任务卡链接 `docs/project-control/reviews/code_T014-codegraph-real-provider-smoke-review.md`、`docs/project-control/reviews/code_T014-codegraph-real-provider-smoke-report.md`，smoke report 再链接 `server/test-report/code_T014-codegraph-real-provider-smoke.json` 与原始输出文件，总台账同步登记这些入口。
+- AC12：任务卡 `task_state`、review 结论、smoke report 结论和 `project-control-ledger.md` 对 `code_T014` 的状态全部保持 `BLOCKED`。
 
 ## Verification Results
 
@@ -133,6 +140,18 @@ task_state: BLOCKED
 1. 在当前 UIChat Mira 仓库做第一次真实 smoke 时，CodeGraph 在 repo 根目录新建了 `.codegraph/`。
 2. 这违反了本任务的核心边界：`如真实 CodeGraph 无法避免默认写 repo .codegraph，必须记录为风险并阻断 ready`。
 3. 后续再次重跑 smoke 时，baseline 已不再是“未污染”，因此不能把后续 ready/query 成功写成通过结论。
+4. `Planner -> Normalize -> Policy -> ToolNode -> Evidence` flow query 当前 raw output 虽然已经出现源码块，但 wrapper 统计仍是 `0 verified`；这属于后续质量缺口，不能被包装成 ready 结论。
+
+## Submission Evidence Index
+
+- 任务卡：`docs/project-control/tasks/code_T014-codegraph-real-provider-smoke.md`
+- review：`docs/project-control/reviews/code_T014-codegraph-real-provider-smoke-review.md`
+- smoke report：`docs/project-control/reviews/code_T014-codegraph-real-provider-smoke-report.md`
+- smoke JSON：`server/test-report/code_T014-codegraph-real-provider-smoke.json`
+- smoke summary：`server/test-report/code_T014-codegraph-real-provider-smoke.md`
+- vitest 原始输出：`server/test-report/code_T014-codegraph-real-provider-smoke-vitest.txt`
+- typecheck 原始输出：`server/test-report/code_T014-codegraph-real-provider-smoke-typecheck.txt`
+- pnpm check 原始输出：`server/test-report/code_T014-codegraph-real-provider-smoke-pnpm-check.txt`
 
 ## Scope Declaration
 

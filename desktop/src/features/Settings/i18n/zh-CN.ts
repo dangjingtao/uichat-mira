@@ -128,6 +128,19 @@ const settingsPending = {
             open: "进入工作区",
           },
         },
+        ttsStudio: {
+          title: "TTS Studio",
+          description: "这是语音合成工作台，用来统一承接 Windows 内置语音和 Piper 本地合成的调试闭环。",
+          hint: "当前先把 provider 配置、文本合成、音频产物和回放都收在这个入口里。",
+          badges: {
+            debug: "语音合成工作台",
+            focus: "Windows Voice + Piper",
+            runtime: "本地音频闭环",
+          },
+          actions: {
+            open: "进入工作区",
+          },
+        },
       },
       newsHub: {
         page: {

@@ -111,6 +111,7 @@ describe("MicroAppsSettings", () => {
     expect(screen.getByTestId("studio-entry-icon-newsHub")).toBeInTheDocument();
     expect(screen.getByTestId("studio-entry-icon-mailCenter")).toBeInTheDocument();
     expect(screen.getByTestId("studio-entry-icon-imageGeneration")).toBeInTheDocument();
+    expect(screen.getByTestId("studio-entry-icon-ttsStudio")).toBeInTheDocument();
     expect(
       screen.queryByText("settings.microApps.studioEntries.imageGeneration.badges.focus"),
     ).not.toBeInTheDocument();

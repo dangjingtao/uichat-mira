@@ -93,6 +93,9 @@ vi.mock("@/features/Settings/pages/MicroApps/ComputerUse", () => ({
 vi.mock("@/features/Settings/pages/MicroApps/MailCenter", () => ({
   default: () => <div data-testid="mail-center-page">mail-center-page</div>,
 }));
+vi.mock("@/features/Settings/pages/MicroApps/Tts", () => ({
+  default: () => <div data-testid="tts-studio-page">tts-studio-page</div>,
+}));
 
 function NavigationProbe() {
   const items = useSettingsNavigationItems();
@@ -294,5 +297,31 @@ describe("settings routes", () => {
     render(<RouterProvider router={router} />);
 
     expect(screen.getByTestId("mail-center-page")).toBeInTheDocument();
+  });
+
+  it("includes the tts studio route under the micro apps path", () => {
+    expect(
+      settingsRoutes.some(
+        (route) => route.path === "micro-apps/tts-studio",
+      ),
+    ).toBe(true);
+  });
+
+  it("mounts the tts studio page at /settings/micro-apps/tts-studio", () => {
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/settings",
+          children: settingsRoutes,
+        },
+      ],
+      {
+        initialEntries: ["/settings/micro-apps/tts-studio"],
+      },
+    );
+
+    render(<RouterProvider router={router} />);
+
+    expect(screen.getByTestId("tts-studio-page")).toBeInTheDocument();
   });
 });

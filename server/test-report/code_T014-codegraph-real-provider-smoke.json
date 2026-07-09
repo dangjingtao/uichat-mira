@@ -2,6 +2,12 @@
   "task": "code_T014-codegraph-real-provider-smoke",
   "conclusion": "blocked",
   "reason": "real smoke created repo-root .codegraph during the first current-repo initialization attempt",
+  "reviewThreadReady": true,
+  "reviewLinks": {
+    "taskCard": "docs/project-control/tasks/code_T014-codegraph-real-provider-smoke.md",
+    "review": "docs/project-control/reviews/code_T014-codegraph-real-provider-smoke-review.md",
+    "smokeReport": "docs/project-control/reviews/code_T014-codegraph-real-provider-smoke-report.md"
+  },
   "provider": {
     "command": "codegraph",
     "resolvedLaunch": "C:\\Program Files\\nodejs\\node.exe C:\\Program Files\\nodejs\\node_modules\\@colbymchenry\\codegraph\\npm-shim.js",
@@ -51,7 +57,8 @@
       "unverifiableCount": 0,
       "fallbackReason": null,
       "rawOutputFile": "server/test-report/code_T014-codegraph-real-provider-smoke-Planner-Normalize-Policy-ToolNode-Evidence-链路如何走-raw.txt",
-      "note": "CLI raw output already shows a source block, but the controlled wrapper still produced zero verified candidates."
+      "note": "CLI raw output already shows a source block, but the controlled wrapper still produced zero verified candidates.",
+      "qualityGap": "raw output contains source blocks while wrapper statistics still report zero verified candidates"
     },
     {
       "query": "selectedToolIds 在哪里写入和消费？",
@@ -78,6 +85,15 @@
     "serverTypecheck": "passed",
     "managedCodegraphTests": "passed",
     "pnpmCheck": "passed"
+  },
+  "scopeGuard": {
+    "plannerExposureDefaultEnabled": false,
+    "codebaseExploreDefaultEnabled": false,
+    "mainChainModified": false
+  },
+  "nextStep": {
+    "recommendedTask": "code_T015",
+    "reason": "real provider repo pollution and external index root control must be solved before dogfood"
   },
   "commandOutputs": {
     "version": "server/test-report/code_T014-codegraph-real-provider-smoke-version.txt",

@@ -128,6 +128,19 @@ const settingsPending = {
             open: "Open Studio",
           },
         },
+        ttsStudio: {
+          title: "TTS Studio",
+          description: "A speech synthesis workspace for Windows built-in voices and local Piper synthesis in one debug loop.",
+          hint: "Provider setup, synthesis requests, audio artifacts, and playback now stay inside the same entry.",
+          badges: {
+            debug: "Speech workspace",
+            focus: "Windows Voice + Piper",
+            runtime: "Local audio loop",
+          },
+          actions: {
+            open: "Open Studio",
+          },
+        },
       },
       newsHub: {
         page: {

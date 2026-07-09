@@ -43,6 +43,7 @@ import ImageGenerationStudioPage from "@/features/Settings/pages/MicroApps/Image
 import ComputerUseStudioPage from "@/features/Settings/pages/MicroApps/ComputerUse";
 import MailCenterPage from "@/features/Settings/pages/MicroApps/MailCenter";
 import NewsHubPage from "@/features/Settings/pages/MicroApps/NewsHub";
+import TtsStudioPage from "@/features/Settings/pages/MicroApps/Tts";
 
 export type SettingsNavGroup =
   | "general"
@@ -139,6 +140,10 @@ const settingsRouteTree: SettingsRouteConfig[] = [
   {
     path: "micro-apps/mail-center",
     element: <MailCenterPage />,
+  },
+  {
+    path: "micro-apps/tts-studio",
+    element: <TtsStudioPage />,
   },
   {
     path: "knowledge-base/add",

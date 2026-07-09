@@ -6,13 +6,15 @@ export type MicroAppType =
   | "knowledge_query"
   | "news_hub"
   | "image_generation"
-  | "computer_use";
+  | "computer_use"
+  | "tts";
 
 export type MicroAppSupportedAccessPoint =
   | "wecom.smart_robot"
   | "desktop.news_hub"
   | "desktop.image_generation_studio"
-  | "desktop.computer_use_studio";
+  | "desktop.computer_use_studio"
+  | "desktop.tts_studio";
 
 export type MicroAppBindingFieldType =
   | "knowledge_base_select"
@@ -165,6 +167,23 @@ export const computerUseBindingSchema: MicroAppBindingSchema = {
   ],
 };
 
+export const ttsBindingSchema: MicroAppBindingSchema = {
+  fields: [
+    {
+      key: "defaultProviderId",
+      label: "默认 Provider",
+      type: "select",
+      required: true,
+      description: "工作台初始使用的语音合成 provider。",
+      defaultValue: "windows_builtin",
+      options: [
+        { label: "Windows Built-in Voice", value: "windows_builtin" },
+        { label: "Piper Local", value: "piper_local" },
+      ],
+    },
+  ],
+};
+
 const defaultDefinitionSeeds: Array<
   Omit<MicroAppRecord, "id" | "createdAt" | "updatedAt">
 > = [
@@ -204,6 +223,16 @@ const defaultDefinitionSeeds: Array<
     supportedAccessPoints: ["desktop.computer_use_studio"],
     bindingSchema: computerUseBindingSchema,
     runtimeKey: "computer_use",
+    enabled: true,
+  },
+  {
+    type: "tts",
+    name: "TTS",
+    description:
+      "为桌面内的语音合成工作台保留共享注册定义和稳定 runtime key，不在这里承接实际语音合成逻辑。",
+    supportedAccessPoints: ["desktop.tts_studio"],
+    bindingSchema: ttsBindingSchema,
+    runtimeKey: "tts",
     enabled: true,
   },
 ];

@@ -489,6 +489,67 @@ export const integrationCapabilityMicroApps = sqliteTable(
   }),
 );
 
+export const ttsProviderConfigs = sqliteTable(
+  "tts_provider_configs",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    providerId: text("provider_id").notNull(),
+    displayName: text("display_name").notNull().default(""),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    configJson: text("config_json").notNull().default("{}"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    providerUniqueIdx: uniqueIndex("idx_tts_provider_configs_provider_id").on(
+      table.providerId,
+    ),
+  }),
+);
+
+export type TtsProviderConfigRow = typeof ttsProviderConfigs.$inferSelect;
+export type NewTtsProviderConfigRow = typeof ttsProviderConfigs.$inferInsert;
+
+export const ttsSynthesisJobs = sqliteTable(
+  "tts_synthesis_jobs",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    providerId: text("provider_id").notNull(),
+    status: text("status").notNull(),
+    text: text("text").notNull().default(""),
+    voice: text("voice"),
+    requestConfigJson: text("request_config_json").notNull().default("{}"),
+    outputPath: text("output_path"),
+    mimeType: text("mime_type"),
+    errorMessage: text("error_message"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    completedAt: text("completed_at"),
+  },
+  (table) => ({
+    createdAtIdx: index("idx_tts_synthesis_jobs_created_at").on(table.createdAt),
+    providerStatusIdx: index("idx_tts_synthesis_jobs_provider_status").on(
+      table.providerId,
+      table.status,
+    ),
+  }),
+);
+
+export type TtsSynthesisJobRow = typeof ttsSynthesisJobs.$inferSelect;
+export type NewTtsSynthesisJobRow = typeof ttsSynthesisJobs.$inferInsert;
+
 export type IntegrationCapabilityMicroApp =
   typeof integrationCapabilityMicroApps.$inferSelect;
 export type NewIntegrationCapabilityMicroApp =

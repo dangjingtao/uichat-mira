@@ -35,6 +35,7 @@ import {
 } from "@/microapps/image-generation/index.js";
 import { createMailCenterService } from "@/microapps/mail-center/index.js";
 import { createNewsHubService } from "@/microapps/news-hub/index.js";
+import { createTtsService } from "@/microapps/tts/index.js";
 import healthRoute from "@/routes/health";
 import appMetaRoute from "@/routes/app-meta";
 import dbHealthRoute from "@/routes/dbHealth";
@@ -82,6 +83,8 @@ import { newsItemsRepository } from "@/db/repositories/news-items.repository.js"
 import { generalSettingsRepository } from "@/db/repositories/general-settings.repository.js";
 import { webSearchSettingsRepository } from "@/db/repositories/web-search-settings.repository.js";
 import { wecomSettingsRepository } from "@/db/repositories/wecom-settings.repository.js";
+import { ttsProviderConfigsRepository } from "@/db/repositories/tts-provider-configs.repository.js";
+import { ttsSynthesisJobsRepository } from "@/db/repositories/tts-synthesis-jobs.repository.js";
 import {
   modelConfigRepository,
   providerConnectionRepository,
@@ -509,6 +512,7 @@ const computerUseRuntimeService = {
 
 const mailCenterService = createMailCenterService();
 const newsHubService = createNewsHubService();
+const ttsService = createTtsService();
 
 const setupPlugins = async () => {
   const appMeta = getAppMeta();
@@ -733,6 +737,7 @@ const setupRoutes = async () => {
     computerUseRuntimeService,
     mailCenterService,
     newsHubService,
+    ttsService,
   });
   await app.register(wecomRoute);
   await app.register(agentRoute);
@@ -788,6 +793,8 @@ const setupDatabase = async () => {
   mailMessagesRepository.initialize();
   newsHubSettingsRepository.initialize();
   newsItemsRepository.initialize();
+  ttsProviderConfigsRepository.initialize();
+  ttsSynthesisJobsRepository.initialize();
   migrateLegacyMicroAppBindings();
   initializeExternalMcpDatabase();
   registerAllExternalMcpCapabilities();

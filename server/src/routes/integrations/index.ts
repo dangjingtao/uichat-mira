@@ -630,9 +630,11 @@ const integrationsRoute: FastifyPluginAsync = async (app) => {
     },
     routeHandler("Failed to list MicroAPPs", async (request) =>
       success({
-        microApps: microAppsRepository.list(
-          request.query.type as "knowledge_query" | undefined,
-        ),
+        microApps: microAppsRepository
+          .list(request.query.type as "knowledge_query" | undefined)
+          .filter((item) =>
+            item.supportedAccessPoints.includes("wecom.smart_robot"),
+          ),
       }),
     ),
   );

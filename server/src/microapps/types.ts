@@ -8,7 +8,8 @@ export type MicroAppSupportedAccessPoint = Extract<
   "wecom.smart_robot"
 > | "desktop.news_hub"
   | "desktop.image_generation_studio"
-  | "desktop.computer_use_studio";
+  | "desktop.computer_use_studio"
+  | "desktop.tts_studio";
 
 export type IntegrationConversationKind = "direct" | "group";
 

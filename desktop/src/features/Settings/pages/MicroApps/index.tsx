@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowRight, Bot, BookOpen, Image, Mail, MonitorSmartphone, Newspaper } from "lucide-react";
+import { ArrowRight, AudioLines, Bot, BookOpen, Image, Mail, MonitorSmartphone, Newspaper } from "lucide-react";
 import { Link } from "react-router-dom";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import Alert from "@/shared/ui/Alert";
@@ -38,6 +38,10 @@ const featuredStudioEntries = [
     key: "imageGeneration",
     route: "/settings/micro-apps/image-generation-studio",
   },
+  {
+    key: "ttsStudio",
+    route: "/settings/micro-apps/tts-studio",
+  },
 ] as const;
 
 const featuredStudioIcons = {
@@ -45,6 +49,7 @@ const featuredStudioIcons = {
   mailCenter: Mail,
   computerUse: MonitorSmartphone,
   imageGeneration: Image,
+  ttsStudio: AudioLines,
 } as const;
 
 export default function MicroAppsSettings() {

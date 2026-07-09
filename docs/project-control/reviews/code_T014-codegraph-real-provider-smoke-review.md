@@ -102,3 +102,13 @@ related:
   - 单开 `code_T015`，专门解决真实 provider repo pollution 与 external index root 控制问题
   - `code_T015` 未解决前，不进入 dogfood
   - 复杂 flow query 的 candidate 解析与 verification 命中率缺口，作为 `code_T015` 之外的后续质量项单列
+
+## Review Thread Verification Pointers
+
+- 任务卡：`docs/project-control/tasks/code_T014-codegraph-real-provider-smoke.md`
+- smoke report：`docs/project-control/reviews/code_T014-codegraph-real-provider-smoke-report.md`
+- smoke JSON：`server/test-report/code_T014-codegraph-real-provider-smoke.json`
+- 原始输出：
+  - `server/test-report/code_T014-codegraph-real-provider-smoke-vitest.txt`
+  - `server/test-report/code_T014-codegraph-real-provider-smoke-typecheck.txt`
+  - `server/test-report/code_T014-codegraph-real-provider-smoke-pnpm-check.txt`

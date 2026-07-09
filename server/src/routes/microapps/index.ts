@@ -5,6 +5,7 @@ import { requireAuth } from "@/db/auth.db.js";
 import { errorResponse, ErrorCodes } from "@/utils/index.js";
 import type { createMailCenterService } from "@/microapps/mail-center/index.js";
 import type { createNewsHubService } from "@/microapps/news-hub/index.js";
+import type { TtsService } from "@/microapps/tts/index.js";
 import type {
   ComputerUseGoalInput,
   ComputerUseRuntimeState,
@@ -29,6 +30,7 @@ import { badRequest, notFound, routeHandler } from "@/utils/route-errors.js";
 import computerUseRoutes from "./computer-use/index.js";
 import mailCenterRoutes from "./mail-center/index.js";
 import newsHubRoutes from "./news-hub/index.js";
+import ttsRoutes from "./tts/index.js";
 import { imageGenerationRouteSchemas } from "./schemas.js";
 
 export type ImageGenerationRouteService = {
@@ -117,6 +119,7 @@ type MicroappsRouteOptions = {
   computerUseRuntimeService?: ComputerUseRuntimeRouteService;
   mailCenterService?: MailCenterRouteService;
   newsHubService?: NewsHubRouteService;
+  ttsService?: TtsService;
 };
 
 const toGenerationResponse = (job: ImageGenerationJob) => ({
@@ -222,6 +225,7 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
   const computerUseRuntimeService = options.computerUseRuntimeService;
   const mailCenterService = options.mailCenterService;
   const newsHubService = options.newsHubService;
+  const ttsService = options.ttsService;
   if (!imageGenerationService) {
     throw new Error(
       "microappsRoute requires imageGenerationService to be injected from the server composition root.",
@@ -250,6 +254,11 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
   if (!newsHubService) {
     throw new Error(
       "microappsRoute requires newsHubService to be injected from the server composition root.",
+    );
+  }
+  if (!ttsService) {
+    throw new Error(
+      "microappsRoute requires ttsService to be injected from the server composition root.",
     );
   }
 
@@ -539,6 +548,9 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
   });
   await app.register(newsHubRoutes, {
     newsHubService,
+  });
+  await app.register(ttsRoutes, {
+    ttsService,
   });
 };
 

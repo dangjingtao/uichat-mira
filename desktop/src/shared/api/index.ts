@@ -9,3 +9,4 @@ export * from "./imageGeneration";
 export * from "./computerUse";
 export * from "./mailCenter";
 export * from "./newsHub";
+export * from "./tts";

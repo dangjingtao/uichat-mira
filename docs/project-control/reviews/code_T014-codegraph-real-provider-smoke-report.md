@@ -21,6 +21,7 @@ related:
 - 结论：`blocked`
 - 不允许把本次真实 provider smoke 写成 `pass` 或 `ready`
 - 阻断原因：第一次真实 smoke 在当前仓库根目录新增 `.codegraph/`
+- 本报告是评审线程的 GitHub 核验入口，所有原始输出都必须以仓库路径可追溯。
 
 ## Provider Summary
 
@@ -58,6 +59,8 @@ related:
 
 `Planner -> Normalize -> Policy -> ToolNode -> Evidence` 这条 flow query 的 CLI raw output 已出现源码块，但受控 wrapper 最终统计仍是 `0 verified`。这说明当前缺口在真实 provider 文本输出到受控 candidate / verification bridge 的转换质量，不在 Planner 默认暴露，也不允许据此放宽 Evidence gate。
 
+这条缺口只能作为后续质量项记录，不能把它改写成“链路 ready”或“可默认 rollout”。
+
 ## Repo Pollution
 
 - first attempt pre-repo `.codegraph/`: `false`
@@ -83,3 +86,4 @@ related:
 - 未默认开启 `codebase_explore`
 - 未改 Planner / Normalize / Policy / ToolNode / Evidence 主链
 - 未把 CodeGraph raw output / snippet / minimalExcerpt 塞进 Trace 或 Evidence
+- 后续建议单开 `code_T015`，处理真实 provider repo pollution 与 external index root 控制；在此之前不进入 dogfood

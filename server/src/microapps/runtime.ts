@@ -11,6 +11,7 @@ import { computerUseMicroApp } from "./apps/computer-use.microapp.js";
 import { imageGenerationMicroApp } from "./apps/image-generation.microapp.js";
 import { knowledgeQueryMicroApp } from "./apps/knowledge-query.microapp.js";
 import { newsHubMicroApp } from "./apps/news-hub.microapp.js";
+import { ttsMicroApp } from "./apps/tts.microapp.js";
 import type {
   MicroAppDefinition,
   MicroAppInvokeRequest,
@@ -22,6 +23,7 @@ const definitions = new Map<string, MicroAppDefinition>([
   [newsHubMicroApp.type, newsHubMicroApp],
   [imageGenerationMicroApp.type, imageGenerationMicroApp],
   [computerUseMicroApp.type, computerUseMicroApp],
+  [ttsMicroApp.type, ttsMicroApp],
 ]);
 
 const getDefinition = (type: string) => definitions.get(type) ?? null;

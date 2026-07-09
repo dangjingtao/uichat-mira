@@ -21,6 +21,7 @@ import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 import { sendRouteError } from "@/utils/route-errors.js";
 import microappsRoute, { type ImageGenerationRouteService } from "./index.js";
 import type { ComfyUiStudioRouteService } from "./index.js";
+import type { TtsService } from "@/microapps/tts/index.js";
 
 const testDbPath = createTimestampedTestArtifactPath(
   "db",
@@ -238,6 +239,37 @@ const createApp = async (
       };
     },
   },
+  ttsService: TtsService = {
+    async getOverview() {
+      return {
+        providers: [],
+        recentJobs: [],
+      };
+    },
+    getProvider() {
+      return null;
+    },
+    updateProvider(providerId) {
+      return {
+        id: providerId,
+        providerId,
+        displayName: providerId,
+        enabled: true,
+        config: {},
+        createdAt: "2026-07-06T12:00:00.000Z",
+        updatedAt: "2026-07-06T12:00:00.000Z",
+      };
+    },
+    async listVoices() {
+      return [];
+    },
+    getSynthesis() {
+      return null;
+    },
+    async synthesize() {
+      throw new Error("not implemented");
+    },
+  },
 ) => {
   const app = Fastify({
     logger: getLoggerConfig(),
@@ -280,6 +312,7 @@ const createApp = async (
     },
     mailCenterService,
     newsHubService,
+    ttsService,
   });
   return app;
 };
@@ -1209,6 +1242,93 @@ test("microapps mail center delete account route returns deletion result", async
   assert.equal(response.statusCode, 200, response.body);
   assert.equal(response.json().data.accountId, "mail-1");
   assert.equal(response.json().data.deleted, true);
+
+  await app.close();
+});
+
+test("microapps tts overview route returns provider and recent job state", async () => {
+  const app = await createApp(
+    {
+      async createGeneration() {
+        return createTestJob();
+      },
+      async getGeneration() {
+        return createTestJob();
+      },
+    },
+    createMailCenterServiceStub(),
+    createNewsHubServiceStub(),
+    undefined,
+    {
+      async getOverview() {
+        return {
+          providers: [
+            {
+              id: "provider-1",
+              providerId: "windows_builtin",
+              displayName: "Windows Built-in Voice",
+              enabled: true,
+              config: {},
+              createdAt: "2026-07-06T12:00:00.000Z",
+              updatedAt: "2026-07-06T12:00:00.000Z",
+            },
+          ],
+          recentJobs: [
+            {
+              id: "tts-job-1",
+              providerId: "windows_builtin",
+              status: "succeeded",
+              text: "hello",
+              voice: "Voice-A",
+              requestConfig: { rate: 0, volume: 100 },
+              outputPath: "D:\\tmp\\tts-job-1.wav",
+              mimeType: "audio/wav",
+              errorMessage: null,
+              createdAt: "2026-07-06T12:00:00.000Z",
+              updatedAt: "2026-07-06T12:00:00.000Z",
+              completedAt: "2026-07-06T12:00:01.000Z",
+            },
+          ],
+        };
+      },
+      getProvider() {
+        return null;
+      },
+      updateProvider(providerId) {
+        return {
+          id: "provider-1",
+          providerId,
+          displayName: "Windows Built-in Voice",
+          enabled: true,
+          config: {},
+          createdAt: "2026-07-06T12:00:00.000Z",
+          updatedAt: "2026-07-06T12:00:00.000Z",
+        };
+      },
+      async listVoices() {
+        return [];
+      },
+      getSynthesis() {
+        return null;
+      },
+      async synthesize() {
+        throw new Error("not implemented");
+      },
+    },
+  );
+  const token = createToken();
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/microapps/tts/overview",
+    headers: {
+      authorization: `Bearer ${token}`,
+    },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.json().data.providers[0].providerId, "windows_builtin");
+  assert.equal(response.json().data.recentJobs[0].id, "tts-job-1");
 
   await app.close();
 });
