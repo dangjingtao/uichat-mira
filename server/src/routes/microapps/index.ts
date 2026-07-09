@@ -1,3 +1,4 @@
+import fs from "node:fs/promises";
 import type { FastifyPluginAsync } from "fastify";
 import { requireAuth } from "@/db/auth.db.js";
 import type { createMailCenterService } from "@/microapps/mail-center/index.js";
@@ -351,6 +352,37 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
         }
 
         return success(toGenerationResponse(job));
+      } catch (error) {
+        return mapImageGenerationError(error);
+      }
+    }),
+  );
+
+  app.get<{
+    Params: { id: string; artifactId: string };
+  }>(
+    "/microapps/image-generation/generations/:id/artifacts/:artifactId/content",
+    { schema: imageGenerationRouteSchemas.getGenerationArtifactContent },
+    routeHandler("Failed to get image generation artifact content", async (request, reply) => {
+      try {
+        const job = await imageGenerationService.getGeneration(request.params.id);
+        if (!job) {
+          throw new ImageGenerationJobNotFoundError(request.params.id);
+        }
+
+        const artifact = job.artifacts.find(
+          (item) => item.id === request.params.artifactId,
+        );
+        if (!artifact?.localPath) {
+          throw notFound(
+            `Image generation artifact was not found: ${request.params.artifactId}`,
+          );
+        }
+
+        const bytes = await fs.readFile(artifact.localPath);
+        reply.header("Cache-Control", "no-store");
+        reply.type(artifact.mimeType || "application/octet-stream");
+        return reply.send(bytes);
       } catch (error) {
         return mapImageGenerationError(error);
       }

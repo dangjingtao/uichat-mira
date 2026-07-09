@@ -118,6 +118,7 @@ export const nextActionPlannerNode = async (
   const plannerEvidence = getEvidencePayload(state);
   const observationContext = buildPlannerObservationContext(state);
   const latestEvidenceSummary = observationContext.latestEvidenceSummary;
+  const taskCoverageView = observationContext.taskCoverageView;
   const answerStopDecision = getPlannerAnswerStopDecision({
     latestSummary: latestEvidenceSummary,
     pendingApproval: observationContext.pendingApproval,
@@ -139,6 +140,7 @@ export const nextActionPlannerNode = async (
       iteration,
       maxIterations,
       latestEvidenceSummary: latestEvidenceSummary ?? null,
+      taskCoverageView: taskCoverageView ?? null,
       answerStopRuleTriggered: answerStopDecision.shouldAnswer,
       answerStopRuleReason: answerStopDecision.reason,
       schemaReplanAttemptCount: observationContext.recovery.attemptCount,
@@ -267,33 +269,29 @@ export const nextActionPlannerNode = async (
             latestSummary: latestEvidenceSummary,
           });
           if (!taskCompletionDecision.taskCompleted) {
-            if (nextAction.reason === repeatedActionGuard?.reason) {
-              nextAction = toNextActionFallback(taskCompletionDecision.reason);
-            } else {
-              const completionReplanMessages = buildAnswerCompletionReplanMessages({
-                question,
-                plan: state.plan,
-                observationContext,
-                toolExposure,
-                iteration,
-                maxIterations,
-                blockedAnswerReason: taskCompletionDecision.reason,
-                previousAnswerReason: nextAction.reason,
-              });
-              const completionReplanDecision = await resolvePlannerModelAction(
-                completionReplanMessages,
-              );
-              nextAction = completionReplanDecision.action;
-              rawOutput = completionReplanDecision.rawOutput;
-              sanitizedOutput = completionReplanDecision.sanitizedOutput;
-              parseErrorReason = completionReplanDecision.parseErrorReason;
-              parseWarnings = completionReplanDecision.parseWarnings;
+            const completionReplanMessages = buildAnswerCompletionReplanMessages({
+              question,
+              plan: state.plan,
+              observationContext,
+              toolExposure,
+              iteration,
+              maxIterations,
+              blockedAnswerReason: taskCompletionDecision.reason,
+              previousAnswerReason: nextAction.reason,
+            });
+            const completionReplanDecision = await resolvePlannerModelAction(
+              completionReplanMessages,
+            );
+            nextAction = completionReplanDecision.action;
+            rawOutput = completionReplanDecision.rawOutput;
+            sanitizedOutput = completionReplanDecision.sanitizedOutput;
+            parseErrorReason = completionReplanDecision.parseErrorReason;
+            parseWarnings = completionReplanDecision.parseWarnings;
 
-              if (nextAction?.type === "answer") {
-                nextAction = toNextActionFallback(
-                  `Planner proposed answer again after completion check blocked it: ${taskCompletionDecision.reason}`,
-                );
-              }
+            if (nextAction?.type === "answer") {
+              nextAction = toNextActionFallback(
+                `Planner proposed answer again after completion check blocked it: ${taskCompletionDecision.reason}`,
+              );
             }
           }
         }
@@ -349,6 +347,7 @@ export const nextActionPlannerNode = async (
       iteration,
       maxIterations,
       latestEvidenceSummary: latestEvidenceSummary ?? null,
+      taskCoverageView: taskCoverageView ?? null,
       answerStopRuleTriggered: answerStopDecision.shouldAnswer,
       answerStopRuleReason: answerStopDecision.reason,
       rawOutputPreview: rawOutput ? toPreview(rawOutput) : undefined,

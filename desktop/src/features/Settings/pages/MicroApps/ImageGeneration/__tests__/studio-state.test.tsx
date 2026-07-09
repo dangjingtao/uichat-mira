@@ -166,11 +166,11 @@ describe("useImageGenerationStudioState", () => {
     });
     expect(screen.getByTestId("task-status").textContent).toBe("succeeded");
     expect(screen.getByTestId("preview-src").textContent).toBe(
-      "file:///C:/artifacts/job%201.png",
+      "/api/microapps/image-generation/generations/job-1/artifacts/artifact-1/content",
     );
   });
 
-  it("prefers remote preview urls when the artifact was also materialized to a local file", async () => {
+  it("prefers backend artifact urls when the artifact was materialized to a local file", async () => {
     const api = {
       createImageGeneration: vi.fn().mockResolvedValue({
         generationId: "job-remote-1",
@@ -235,7 +235,7 @@ describe("useImageGenerationStudioState", () => {
 
     expect(screen.getByTestId("task-status").textContent).toBe("succeeded");
     expect(screen.getByTestId("preview-src").textContent).toBe(
-      "http://127.0.0.1:8188/view?filename=job-remote-1.png&type=output",
+      "/api/microapps/image-generation/generations/job-remote-1/artifacts/artifact-remote-1/content",
     );
   });
 });

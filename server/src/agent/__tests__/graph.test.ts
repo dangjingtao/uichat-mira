@@ -955,6 +955,9 @@ test("agentGraph blocks a repeated completed tool call in the same run and does 
     })
     .mockImplementationOnce(async function* () {
       yield '{"type":"use_tool","toolId":"read_note","args":{"path":"NOTE.md"},"reason":"Try the same note again."}';
+    })
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"ask_user","question":"你想确认 NOTE.md 的哪一部分内容？","reason":"The repeated read_note result did not produce a stable summary contract."}';
     });
   const executeHarnessInvocationSpy = vi
     .spyOn(harnessInvocations, "executeHarnessInvocation")
@@ -996,7 +999,7 @@ test("agentGraph blocks a repeated completed tool call in the same run and does 
     },
   });
 
-  assert.equal(plannerSpy.mock.calls.length, 2);
+  assert.equal(plannerSpy.mock.calls.length, 3);
   assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
   assert.equal(result.evidence.toolExecutions.length, 1);
   const plannerDoneEvents = executionNodes.filter(

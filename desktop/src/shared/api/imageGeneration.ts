@@ -1,4 +1,5 @@
 import { get, post } from "@/shared/lib/request";
+import { getApiBaseUrl } from "@/shared/platform/desktopRuntime";
 
 const IMAGE_GENERATION_ROUTE = "/microapps/image-generation/generations";
 
@@ -119,4 +120,12 @@ export async function getImageGeneration(
           },
         },
   );
+}
+
+export function getImageGenerationArtifactContentUrl(
+  generationId: string,
+  artifactId: string,
+) {
+  const baseUrl = getApiBaseUrl();
+  return `${baseUrl}${IMAGE_GENERATION_ROUTE}/${encodeURIComponent(generationId)}/artifacts/${encodeURIComponent(artifactId)}/content`;
 }

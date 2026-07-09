@@ -295,7 +295,8 @@ describe("ImageGenerationStudioPage", () => {
           generatedAt: "2026-07-06T00:00:02.000Z",
           providerJobId: "provider-success",
           artifactId: "artifact-success",
-          previewSrc: "file:///C:/artifacts/job-1.png",
+          previewSrc:
+            "/api/microapps/image-generation/generations/job-1/artifacts/artifact-success/content",
           artifactFileName: "job-1.png",
         },
       }),
@@ -307,6 +308,9 @@ describe("ImageGenerationStudioPage", () => {
       screen.getByRole("img", {
         name: "settings.microApps.imageGenerationStudio.results.previewAlt",
       }),
-    ).toHaveAttribute("src", "file:///C:/artifacts/job-1.png");
+    ).toHaveAttribute(
+      "src",
+      "/api/microapps/image-generation/generations/job-1/artifacts/artifact-success/content",
+    );
   });
 });

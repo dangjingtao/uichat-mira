@@ -5,10 +5,15 @@ vi.mock("@/shared/lib/request", () => ({
   post: vi.fn(),
 }));
 
+vi.mock("@/shared/platform/desktopRuntime", () => ({
+  getApiBaseUrl: () => "/api",
+}));
+
 import { get, post } from "@/shared/lib/request";
 import {
   createImageGeneration,
   getImageGeneration,
+  getImageGenerationArtifactContentUrl,
   type ImageGenerationJob,
 } from "../imageGeneration";
 
@@ -89,6 +94,14 @@ describe("image generation api", () => {
           refresh: "true",
         },
       },
+    );
+  });
+
+  it("builds the artifact content url from the backend api base", () => {
+    expect(
+      getImageGenerationArtifactContentUrl("job/with spaces", "artifact#1"),
+    ).toBe(
+      "/api/microapps/image-generation/generations/job%2Fwith%20spaces/artifacts/artifact%231/content",
     );
   });
 });

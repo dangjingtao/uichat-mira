@@ -189,6 +189,16 @@ const imageGenerationJobErrorSchema = {
   },
 } as const;
 
+const imageGenerationArtifactParamsSchema = {
+  type: "object",
+  required: ["id", "artifactId"],
+  additionalProperties: false,
+  properties: {
+    id: { type: "string" },
+    artifactId: { type: "string" },
+  },
+} as const;
+
 const comfyUiConnectionSchema = {
   type: "object",
   required: ["id", "baseUrl", "clientId", "status", "createdAt", "updatedAt"],
@@ -400,6 +410,22 @@ export const imageGenerationRouteSchemas = {
     response: {
       200: successEnvelope(imageGenerationResponseSchema),
       400: errorEnvelope,
+      401: errorEnvelope,
+      404: errorEnvelope,
+      500: errorEnvelope,
+    },
+  },
+  getGenerationArtifactContent: {
+    tags: ["MicroAPP"],
+    summary: "Get image generation artifact content",
+    security: [{ bearerAuth: [] }],
+    params: imageGenerationArtifactParamsSchema,
+    response: {
+      200: {
+        description: "Binary image artifact content",
+        type: "string",
+        format: "binary",
+      },
       401: errorEnvelope,
       404: errorEnvelope,
       500: errorEnvelope,

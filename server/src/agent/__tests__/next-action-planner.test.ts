@@ -127,6 +127,14 @@ test("buildPlannerObservationContext handles empty planner state", () => {
   assert.equal(context.latestObservation, undefined);
   assert.deepEqual(context.recentObservations, []);
   assert.equal(context.latestEvidenceSummary, undefined);
+  assert.deepEqual(context.taskCoverageView, {
+    requiredTargets: [],
+    coveredTargets: [],
+    pendingTargets: [],
+    pendingActions: [],
+    blockedReason: undefined,
+    taskCompletable: true,
+  });
   assert.deepEqual(context.recovery, {
     source: "none",
     attemptCount: 0,
@@ -430,6 +438,7 @@ test("buildNextActionPlannerMessages reads planner observation context instead o
     maxIterations: 3,
   });
   const payload = JSON.parse(String(messages[1]?.content ?? "{}")) as Record<string, unknown>;
+  const promptObservationContext = payload.observationContext as Record<string, unknown>;
 
   assert.ok("observationContext" in payload);
   assert.equal("taskFrame" in payload, false);
@@ -437,6 +446,7 @@ test("buildNextActionPlannerMessages reads planner observation context instead o
   assert.equal("pendingApproval" in payload, false);
   assert.equal("schemaReplanDiagnostics" in payload, false);
   assert.equal("latestEvidenceSummary" in payload, false);
+  assert.ok("taskCoverageView" in promptObservationContext);
 });
 
 test("buildNextActionPlannerMessages uses tool failure recovery budget in the main planner prompt", () => {
@@ -1275,6 +1285,51 @@ test("nextActionPlannerNode rejects planner answer for Chinese 删掉 mutation w
   } finally {
     streamSpy.mockRestore();
   }
+});
+
+test("getTaskCompletionDecision keeps locate-only evidence incomplete when the request still needs file content", () => {
+  const decision = getTaskCompletionDecision({
+    question: "README.md 和 AGENTS.md 的内容分别是什么？",
+    currentTaskFrame: {
+      currentGoal: "README.md 和 AGENTS.md 的内容分别是什么？",
+      currentSubtask: "Open both files and inspect the content.",
+      currentBlocker: undefined,
+      confirmedObjects: [],
+      completionCriteria: ["README.md 和 AGENTS.md 的内容分别是什么？"],
+    },
+    latestSummary: {
+      source: "tool",
+      status: "completed",
+      toolId: "read_locate",
+      actionTaken: 'Located 2 workspace match(es) for "README.md AGENTS.md".',
+      keyFindings: ["matchCount=2", "targets=README.md,AGENTS.md"],
+      answerReadiness: {
+        canAnswer: true,
+        reason: "Located both file paths.",
+      },
+      data: {
+        kind: "read_locate",
+        scope: ".",
+        query: "README.md AGENTS.md",
+        searchMode: "path",
+        matchCount: 2,
+        matchedPaths: ["README.md", "AGENTS.md"],
+        matchesPreview: ["README.md", "AGENTS.md"],
+        truncated: false,
+        canAnswerLocateQuestion: true,
+      },
+      rawRef: {
+        evidenceIndex: 0,
+        toolCallId: "tool-call-locate-both-content",
+      },
+    },
+  });
+
+  assert.deepEqual(decision.requiredTargets, ["readme.md", "agents.md"]);
+  assert.deepEqual(decision.coveredTargets, ["readme.md", "agents.md"]);
+  assert.deepEqual(decision.missingTargets, []);
+  assert.deepEqual(decision.pendingActions, ["read_open"]);
+  assert.equal(decision.taskCompleted, false);
 });
 
 test("getTaskCompletionDecision extracts Chinese bare mutation targets into requiredTargets", () => {
@@ -2764,6 +2819,100 @@ test("nextActionPlannerNode turns a repeated completed tool call into answer and
       (doneEvent?.details as Record<string, unknown>)?.matchedToolCallId,
       "tool-call-readme",
     );
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode does not let repeated read_open evidence close a multi-file content task early", async () => {
+  const readmeAndAgentsState = createState({
+    question: "README.md 和 AGENTS.md 的内容分别是什么？",
+    messages: [
+      {
+        role: "user",
+        content: "README.md 和 AGENTS.md 的内容分别是什么？",
+        parts: [{ type: "text", text: "README.md 和 AGENTS.md 的内容分别是什么？" }],
+      },
+    ],
+    currentTaskFrame: {
+      currentGoal: "README.md 和 AGENTS.md 的内容分别是什么？",
+      currentSubtask: "Open both files and inspect the content.",
+      currentBlocker: undefined,
+      confirmedObjects: [],
+      completionCriteria: ["README.md 和 AGENTS.md 的内容分别是什么？"],
+    },
+    evidence: {
+      observations: [],
+      retrievals: [],
+      toolExecutions: [
+        {
+          toolCallId: "tool-call-readme",
+          toolId: "read_open",
+          inputHash: readmeArgsHash,
+          args: {
+            path: "README.md",
+          },
+          status: "completed",
+          summary: {
+            source: "tool",
+            status: "completed",
+            toolId: "read_open",
+            inputHash: readmeArgsHash,
+            actionTaken: "Opened README.md.",
+            keyFindings: ["path=README.md"],
+            answerReadiness: {
+              canAnswer: true,
+              reason: "Opened file content is available for answer generation.",
+            },
+            data: {
+              kind: "read_open",
+              path: "README.md",
+              contentPreview: "# README",
+              contentLength: 120,
+              truncated: false,
+              keySections: [],
+              canAnswerFileQuestion: true,
+            },
+            rawRef: {
+              evidenceIndex: 0,
+              toolCallId: "tool-call-readme",
+            },
+          },
+          startedAt: "2026-07-04T00:00:00.000Z",
+          finishedAt: "2026-07-04T00:00:01.000Z",
+        },
+      ],
+    },
+  });
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need the first file content again."}';
+    })
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"AGENTS.md"},"reason":"Need the remaining file content."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(readmeAndAgentsState);
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "use_tool",
+        toolId: "read_open",
+        args: {
+          path: "AGENTS.md",
+        },
+        reason: "Need the remaining file content.",
+      },
+      currentTaskFrame: {
+        ...readmeAndAgentsState.currentTaskFrame,
+        currentGoal: "README.md 和 AGENTS.md 的内容分别是什么？",
+        currentSubtask: "Run read_open with reviewed parameters.",
+        completionCriteria: ["README.md 和 AGENTS.md 的内容分别是什么？"],
+      },
+    });
+    assert.equal(streamSpy.mock.calls.length, 2);
   } finally {
     streamSpy.mockRestore();
   }

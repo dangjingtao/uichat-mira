@@ -341,6 +341,25 @@ export interface AgentRepeatedActionGuardResult {
   matchedToolCallId?: string;
 }
 
+export interface AgentTaskCoverageView {
+  requiredTargets: string[];
+  coveredTargets: string[];
+  pendingTargets: string[];
+  pendingActions: string[];
+  blockedReason?: string;
+  taskCompletable: boolean;
+}
+
+export interface AgentTaskCompletionDecision {
+  taskCompleted: boolean;
+  requiredTargets: string[];
+  coveredTargets: string[];
+  missingTargets: string[];
+  pendingActions: string[];
+  reason: string;
+  taskCoverageView: AgentTaskCoverageView;
+}
+
 export type AgentNextAction =
   | {
       type: "answer";
@@ -451,6 +470,7 @@ export interface PlannerObservationContext {
   latestObservation?: AgentExecutionObservation;
   recentObservations: AgentExecutionObservation[];
   latestEvidenceSummary?: AgentEvidenceSummary;
+  taskCoverageView?: AgentTaskCoverageView;
   recovery: PlannerObservationRecoveryContext;
   pendingApproval?: {
     toolId: string;

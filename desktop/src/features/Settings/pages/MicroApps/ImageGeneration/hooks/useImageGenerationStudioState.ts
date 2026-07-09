@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createImageGeneration,
   getImageGeneration,
+  getImageGenerationArtifactContentUrl,
   type ImageGenerationArtifactSummary,
   type ImageGenerationCreateRequest,
   type GetImageGenerationOptions,
@@ -266,38 +267,20 @@ const buildRequestPayload = (
   };
 };
 
-const normalizeFilePath = (value: string) => value.replace(/\\/g, "/");
-
-const resolveLocalFilePreviewSrc = (localPath: string) => {
-  const normalizedPath = normalizeFilePath(localPath.trim());
-  if (!normalizedPath) {
-    return "";
-  }
-
-  if (/^[a-zA-Z]:\//.test(normalizedPath)) {
-    return encodeURI(`file:///${normalizedPath}`);
-  }
-
-  if (normalizedPath.startsWith("/")) {
-    return encodeURI(`file://${normalizedPath}`);
-  }
-
-  return encodeURI(`file:///${normalizedPath.replace(/^\.\/?/, "")}`);
-};
-
 const resolveArtifactPreviewSrc = (
+  generationId: string,
   artifact: ImageGenerationArtifactSummary | undefined,
 ) => {
   if (!artifact) {
     return "";
   }
 
-  if (artifact.remoteUrl) {
-    return artifact.remoteUrl;
+  if (artifact.localPath) {
+    return getImageGenerationArtifactContentUrl(generationId, artifact.id);
   }
 
-  if (artifact.localPath) {
-    return resolveLocalFilePreviewSrc(artifact.localPath);
+  if (artifact.remoteUrl) {
+    return artifact.remoteUrl;
   }
 
   return "";
@@ -314,7 +297,7 @@ const derivePreviewState = (
   }
 
   const primaryArtifact = job.artifacts[0];
-  const previewSrc = resolveArtifactPreviewSrc(primaryArtifact);
+  const previewSrc = resolveArtifactPreviewSrc(job.generationId, primaryArtifact);
 
   if (job.status === "succeeded") {
     if (!primaryArtifact) {

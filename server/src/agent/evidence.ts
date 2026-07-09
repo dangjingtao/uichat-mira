@@ -6,6 +6,8 @@ import type {
   AgentRepeatedActionGuardResult,
   AgentRetrievalEvidence,
   AgentNextAction,
+  AgentTaskCompletionDecision,
+  AgentTaskCoverageView,
   AgentToolExecutionResult,
   CurrentTaskFrame,
 } from "./types";
@@ -54,6 +56,10 @@ const FILE_CONTENT_TOKENS = [
   "阅读",
   "查看",
 ];
+const FILE_CONTENT_INTENT_PATTERNS = [
+  /\b(open|read|content|contents|inside)\b/i,
+  /详情|内容|打开|读取|阅读|查看/u,
+] as const;
 
 const WEB_SEARCH_TOKENS = [
   "search",
@@ -125,6 +131,9 @@ const normalizeIntentText = (value: string) => value.trim().toLowerCase();
 
 const includesAnyToken = (value: string, tokens: string[]) =>
   tokens.some((token) => value.includes(token));
+
+const explicitlyRequestsFileContent = (value: string) =>
+  FILE_CONTENT_INTENT_PATTERNS.some((pattern) => pattern.test(value));
 
 const trimTextPreview = (value: string, limit = TEXT_PREVIEW_LIMIT) => {
   const normalized = value.replace(/\s+/g, " ").trim();
@@ -492,6 +501,39 @@ const collectReadVerifiedTargets = (input: {
   return [...targets];
 };
 
+const collectReadOpenedTargets = (input: {
+  evidence?: AgentEvidencePayload;
+  latestSummary?: AgentEvidenceSummary;
+}) => {
+  const targets = new Set<string>();
+
+  const addSummaryTargets = (summary: AgentEvidenceSummary | undefined) => {
+    if (summary?.source !== "tool" || !summary.data) {
+      return;
+    }
+
+    if (summary.data.kind === "read_open") {
+      for (const target of collectCoveredTargetsFromSummary(summary)) {
+        if (target.length > 0) {
+          targets.add(target);
+        }
+      }
+    }
+  };
+
+  for (const execution of input.evidence?.toolExecutions ?? []) {
+    if (execution.status !== "completed") {
+      continue;
+    }
+
+    addSummaryTargets(execution.summary);
+  }
+
+  addSummaryTargets(input.latestSummary);
+
+  return [...targets];
+};
+
 const hasLatestRecoverableToolFailure = (evidence: AgentEvidencePayload | undefined) => {
   const latestExecution = evidence?.toolExecutions.at(-1);
   return (
@@ -524,18 +566,40 @@ export const getTaskCompletionDecision = (input: {
   currentTaskFrame?: CurrentTaskFrame;
   evidence?: AgentEvidencePayload;
   latestSummary?: AgentEvidenceSummary;
-}) => {
+}): AgentTaskCompletionDecision => {
+  const taskCoverageView = getTaskCoverageView(input);
+
+  return {
+    taskCompleted: taskCoverageView.taskCompletable,
+    requiredTargets: taskCoverageView.requiredTargets,
+    coveredTargets: taskCoverageView.coveredTargets,
+    missingTargets: taskCoverageView.pendingTargets,
+    pendingActions: taskCoverageView.pendingActions,
+    reason:
+      taskCoverageView.blockedReason ?? "Current task coverage is complete.",
+    taskCoverageView,
+  };
+};
+
+export const getTaskCoverageView = (input: {
+  question?: string;
+  currentTaskFrame?: CurrentTaskFrame;
+  evidence?: AgentEvidencePayload;
+  latestSummary?: AgentEvidenceSummary;
+}): AgentTaskCoverageView => {
   const intentTexts = collectTaskIntentTexts(input);
   const mutationRequired = hasMutationIntent(intentTexts);
   const mutationVerificationRequired = requiresMutationVerification(intentTexts);
+  const fileContentRequired = intentTexts.some((text) => explicitlyRequestsFileContent(text));
   const requiredTargets = extractRequiredTargets(intentTexts);
   const coveredTargets = collectEvidenceCoveredTargets(input);
   const resolvedMutationTargets = collectMutationResolvedTargets(input.evidence);
   const readVerifiedTargets = collectReadVerifiedTargets(input);
+  const readOpenedTargets = collectReadOpenedTargets(input);
   const completionSatisfiedTargets = mutationRequired
     ? [...new Set([...coveredTargets, ...resolvedMutationTargets])]
     : coveredTargets;
-  const missingTargets = requiredTargets.filter(
+  const pendingTargets = requiredTargets.filter(
     (target) => !completionSatisfiedTargets.includes(target),
   );
   const pendingActions: string[] = [];
@@ -560,20 +624,35 @@ export const getTaskCompletionDecision = (input: {
     pendingActions.push("mutation_verification");
   }
 
+  if (
+    !mutationRequired &&
+    fileContentRequired &&
+    requiredTargets.length > 0 &&
+    pendingTargets.length === 0 &&
+    !requiredTargets.every((target) => readOpenedTargets.includes(target))
+  ) {
+    pendingActions.push("read_open");
+  }
+
   if (hasLatestRecoverableToolFailure(input.evidence)) {
     pendingActions.push("recoverable_execution");
   }
 
+  const blockedReason = buildTaskCompletionReason({
+    pendingActions,
+    missingTargets: pendingTargets,
+  });
+
   return {
-    taskCompleted: pendingActions.length === 0 && missingTargets.length === 0,
     requiredTargets,
     coveredTargets,
-    missingTargets,
+    pendingTargets,
     pendingActions,
-    reason: buildTaskCompletionReason({
-      pendingActions,
-      missingTargets,
-    }),
+    blockedReason:
+      pendingActions.length === 0 && pendingTargets.length === 0
+        ? undefined
+        : blockedReason,
+    taskCompletable: pendingActions.length === 0 && pendingTargets.length === 0,
   };
 };
 
@@ -1672,16 +1751,17 @@ export const getAnswerStopDecision = (input: {
     };
   }
 
-  const taskCompletionDecision = getTaskCompletionDecision({
+  const taskCoverageView = getTaskCoverageView({
     question: input.question,
     currentTaskFrame: input.currentTaskFrame,
     evidence: input.evidence,
     latestSummary: input.latestSummary,
   });
-  if (!taskCompletionDecision.taskCompleted) {
+  if (!taskCoverageView.taskCompletable) {
     return {
       shouldAnswer: false,
-      reason: taskCompletionDecision.reason,
+      reason:
+        taskCoverageView.blockedReason ?? "Current task coverage is not complete yet.",
     };
   }
 

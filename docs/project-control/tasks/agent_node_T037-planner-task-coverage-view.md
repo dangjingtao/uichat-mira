@@ -17,7 +17,7 @@ related:
   - server/src/agent/types.ts
   - server/src/agent/__tests__/next-action-planner.test.ts
   - server/src/agent/__tests__/graph.test.ts
-task_state: TODO
+task_state: DONE
 ---
 
 # agent_node_T037 Planner Task Coverage View
@@ -136,3 +136,7 @@ task_state: TODO
 
 - 这是 Planner 判定层增强，不是 Planner redesign。
 - 如果实现过程中发现必须改 `Harness` 主循环、`ToolNode`、`Policy` 或外部 action 契约，必须先停下并回到项目 owner 重新确认边界。
+- 已实现：
+  - `TaskCoverageView` 作为 `currentTaskFrame` 旁边的派生视图，挂入 `PlannerObservationContext`
+  - Planner answer gate 同时校验 `latestEvidenceSummary.answerReadiness` 与 `taskCoverageView.taskCompletable`
+  - repeated guard 命中但任务仍未覆盖时，Planner 会重规划而不是把部分完成误收成最终 answer

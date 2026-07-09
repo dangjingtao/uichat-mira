@@ -444,6 +444,59 @@ test("microapps image generation routes map request validation errors to 400", a
   await app.close();
 });
 
+test("microapps image generation artifact content route serves materialized local files", async () => {
+  const artifactPath = createTimestampedTestArtifactPath(
+    "image-generation",
+    "microapps-artifact-content",
+    ".png",
+  );
+  fs.writeFileSync(artifactPath, Buffer.from("png-bytes"));
+
+  const service: ImageGenerationRouteService = {
+    async createGeneration() {
+      return createTestJob();
+    },
+    async getGeneration(jobId) {
+      assert.equal(jobId, "job-artifact-1");
+      return createTestJob({
+        id: "job-artifact-1",
+        artifacts: [
+          {
+            id: "artifact-local-1",
+            type: "image",
+            mimeType: "image/png",
+            source: "local-file",
+            localPath: artifactPath,
+            fileName: "artifact-local-1.png",
+          },
+        ],
+      });
+    },
+  };
+  const app = await createApp(service);
+  const token = createToken();
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/microapps/image-generation/generations/job-artifact-1/artifacts/artifact-local-1/content",
+    headers: {
+      authorization: `Bearer ${token}`,
+    },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.headers["content-type"], "image/png");
+  assert.deepEqual(response.rawPayload, Buffer.from("png-bytes"));
+
+  try {
+    fs.rmSync(artifactPath, { force: true });
+  } catch {
+    // ignore cleanup failure on Windows file locking
+  }
+
+  await app.close();
+});
+
 test("microapps comfyui connection routes list, create, update, and test connections", async () => {
   const app = await createApp(
     {

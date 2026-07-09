@@ -10,7 +10,11 @@ export {
   summarizeToolExecutionStart,
   summarizeToolExecutionWaitingApproval,
 } from "./trace";
-import { getEvidencePayload, getLatestEvidenceSummary } from "./evidence";
+import {
+  getEvidencePayload,
+  getLatestEvidenceSummary,
+  getTaskCoverageView,
+} from "./evidence";
 import { buildPlannerRecoveryContext } from "./recovery";
 import type {
   AgentIntentEmbeddingConfig,
@@ -506,6 +510,8 @@ export const buildPlannerObservationContext = (
     | "schemaReplanDiagnostics"
   >,
 ): PlannerObservationContext => {
+  const evidence = getEvidencePayload(state);
+  const latestEvidenceSummary = getLatestEvidenceSummary(state);
   const items = buildExecutionObservationView(state);
   const recentObservations = items.slice(-5).reverse();
   const latestObservation = recentObservations[0];
@@ -514,7 +520,12 @@ export const buildPlannerObservationContext = (
     currentTaskFrame: state.currentTaskFrame,
     latestObservation,
     recentObservations,
-    latestEvidenceSummary: getLatestEvidenceSummary(state),
+    latestEvidenceSummary,
+    taskCoverageView: getTaskCoverageView({
+      currentTaskFrame: state.currentTaskFrame,
+      evidence,
+      latestSummary: latestEvidenceSummary,
+    }),
     recovery: buildPlannerRecoveryContext(state),
     pendingApproval: state.pendingApproval
       ? {
