@@ -111,6 +111,12 @@ const DefaultModelCard = forwardRef<DefaultModelCardRef, DefaultModelCardProps>(
             onUpdated={handleConfigUpdated}
             readOnly
           />
+          <ModelConfig
+            modelType="voice"
+            config={configMap.voice}
+            onUpdated={handleConfigUpdated}
+            readOnly
+          />
         </div>
 
         {loading ? (

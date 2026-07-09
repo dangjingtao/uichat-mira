@@ -6,6 +6,7 @@ import { getLoggerConfig } from "@/logger";
 import { getSqlite, resetDatabaseClients } from "@/db/index.js";
 import { integrationCapabilitiesRepository } from "@/db/repositories/integration-capabilities.repository.js";
 import { integrationInstancesRepository } from "@/db/repositories/integration-instances.repository.js";
+import { microAppsRepository } from "@/db/repositories/micro-apps.repository.js";
 import { wecomSettingsRepository } from "@/db/repositories/wecom-settings.repository.js";
 import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 
@@ -298,6 +299,74 @@ describe("integrations route", () => {
         data: { status: string };
       }).data.status,
     ).toBe("stopped");
+
+    await app.close();
+  });
+
+  it("lists knowledge_query microapps after repository backfills stale definitions", async () => {
+    const sqlite = getSqlite();
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS micro_app_definitions (
+        id TEXT PRIMARY KEY NOT NULL,
+        type TEXT NOT NULL,
+        name TEXT NOT NULL DEFAULT '',
+        description TEXT NOT NULL DEFAULT '',
+        supported_access_points_json TEXT NOT NULL DEFAULT '[]',
+        binding_schema_json TEXT NOT NULL DEFAULT '{"fields":[]}',
+        runtime_key TEXT NOT NULL DEFAULT '',
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+    sqlite.exec(`
+      INSERT INTO micro_app_definitions (
+        id,
+        type,
+        name,
+        description,
+        supported_access_points_json,
+        binding_schema_json,
+        runtime_key,
+        enabled
+      ) VALUES (
+        'stale-knowledge-query',
+        'knowledge_query',
+        'Knowledge Query',
+        '',
+        '[]',
+        '{"fields":[]}',
+        '',
+        1
+      )
+    `);
+    microAppsRepository.initialize();
+
+    const app = Fastify({
+      logger: getLoggerConfig(),
+      serializerOpts: { encoding: "utf8" },
+    });
+    app.setErrorHandler(sendRouteError);
+    await app.register(integrationsRoute);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/integrations/micro-apps?type=knowledge_query",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(
+      (response.json() as {
+        data: { microApps: Array<{ id: string; supportedAccessPoints: string[] }> };
+      }).data.microApps,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "stale-knowledge-query",
+          supportedAccessPoints: ["wecom.smart_robot"],
+        }),
+      ]),
+    );
 
     await app.close();
   });

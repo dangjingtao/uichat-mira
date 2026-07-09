@@ -172,6 +172,7 @@ export const getProviderCapabilities = (
     "agentTask",
     "evaluation",
     "embedding",
+    "voice",
   ];
 
   if (definition.rerankAdapter !== "none") {

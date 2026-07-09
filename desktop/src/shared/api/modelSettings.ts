@@ -9,7 +9,8 @@ export type RoleModelType =
   | "task"
   | "agentTask"
   | "evaluation"
-  | "imageGeneration";
+  | "imageGeneration"
+  | "voice";
 export type ProviderStatus = "idle" | "syncing" | "connected" | "error";
 
 export interface RoleModelConfig {

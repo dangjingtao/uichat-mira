@@ -87,6 +87,7 @@ task_state: CURRENT
 ### Commands
 
 - `pnpm exec vitest run src/agent/__tests__/graph.test.ts -t "agentGraph answers after a single (read_list|web_search) execution"`
+- `pnpm exec vitest run src/agent/__tests__/graph.test.ts -t "agentGraph normalizes /workspace before policy and executes read_list|agentGraph answers after a single terminal_session execution when command output is sufficient"`
 - `pnpm exec vitest run src/agent/__tests__/graph.test.ts -t "agentGraph routes recoverable tool failure back to the planner chain for replanning|agentGraph stops retrying after two recoverable tool failures and does not re-enter planner or tool again"`
 - `pnpm exec vitest run src/agent/__tests__/graph.test.ts -t "agentGraph does not answer immediately after mutation execution when verification is still required"`
 - `pnpm exec vitest run src/agent/__tests__/graph.test.ts -t "agentGraph treats terminal mutation failure as a terminal outcome without pretending the deletion succeeded"`
@@ -99,6 +100,11 @@ task_state: CURRENT
 
 - targeted `graph.test.ts` run for `agentGraph answers after a single read_list execution when the user asked for a workspace listing` and `agentGraph answers after a single web_search execution when search evidence is sufficient`: passed (`2 passed`, `36 skipped`)
 - assertion update for those two deterministic coverage-transition scenarios:
+  - keep `coverageTransitionReason` / `selectedActionType` / `selectedToolId`
+  - change `plannerSpy.mock.calls.length` from `1` to `0`
+- targeted `graph.test.ts` run for `agentGraph normalizes /workspace before policy and executes read_list` and `agentGraph answers after a single terminal_session execution when command output is sufficient`: passed (`2 passed`, `36 skipped`)
+- assertion update for those two deterministic coverage-transition scenarios:
+  - remove one-shot planner LLM output mocks that implied task-model selection
   - keep `coverageTransitionReason` / `selectedActionType` / `selectedToolId`
   - change `plannerSpy.mock.calls.length` from `1` to `0`
 - full `pnpm exec vitest run src/agent/__tests__/graph.test.ts`: not green in the current branch (`12 failed`, `26 passed`); the failing set is broader than this T043 test-only adjustment and was not changed by the two assertion edits above

@@ -216,6 +216,9 @@ const getAssignments = () => {
       defaults.find(
         (config) => config.type === "imageGeneration" && config.remoteModelId,
       ) ?? null,
+    voice:
+      defaults.find((config) => config.type === "voice" && config.remoteModelId) ??
+      null,
   };
 };
 
@@ -369,6 +372,7 @@ export const providerSettingsService = {
         rerank: toRoleAssignment(assignments.rerank, connection),
         evaluation: toRoleAssignment(assignments.evaluation, connection),
         imageGeneration: toRoleAssignment(assignments.imageGeneration, connection),
+        voice: toRoleAssignment(assignments.voice, connection),
       },
     };
   },
@@ -571,6 +575,7 @@ export const providerSettingsService = {
       name: updated.name,
       providerCode: updated.providerCode ?? connection.id,
       providerConnectionId: updated.providerConnectionId ?? connection.id,
+      providerConnectionDisplayName: connection.displayName,
       providerTemplateCode: connection.templateCode,
       remoteModelId: updated.remoteModelId ?? null,
       params: JSON.parse(updated.params),
@@ -596,6 +601,7 @@ export const providerSettingsService = {
       name: updated.name,
       providerCode: null,
       providerConnectionId: null,
+      providerConnectionDisplayName: null,
       providerTemplateCode: null,
       remoteModelId: updated.remoteModelId ?? null,
       params: JSON.parse(updated.params),

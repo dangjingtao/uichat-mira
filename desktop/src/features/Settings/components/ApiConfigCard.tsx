@@ -21,6 +21,10 @@ const ASSIGNABLE_ROLES: Array<{
     labelKey: "settings.model.api.setDefaultImageGeneration",
   },
   {
+    role: "voice",
+    labelKey: "settings.model.api.setDefaultVoice",
+  },
+  {
     role: "evaluation",
     labelKey: "settings.model.api.setDefaultEvaluation",
   },

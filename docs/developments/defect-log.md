@@ -18,6 +18,55 @@ Related:
 
 ## 2026-06-27
 
+## 2026-07-10
+
+### Micro Apps 设置页知识库卡片消失
+
+- Layer: backend / microapp registry / persistence compatibility
+- Status: Confirmed
+- Severity: Medium for Settings / Micro Apps visibility
+
+现象：
+
+- `Settings / Micro Apps` 页面仍然请求 `knowledge_query`
+- 但已有“知识库”微应用卡片可能不显示
+- 页面会出现已有 studio 卡片和“还没有可用微应用”提示并存的异常感知
+
+已确认边界：
+
+- 这不是前端接口改成了两套协议
+- 这不是知识库微应用被产品移除
+- 这不是 Planner 或 Agent Runtime 主链问题
+- 这是旧 `micro_app_definitions` 记录缺少新字段后的兼容问题
+
+当前判断：
+
+- 同一接口 `/integrations/micro-apps?type=knowledge_query` 仍在使用
+- 旧 `knowledge_query` 记录可能缺少：
+  - `supportedAccessPoints`
+  - `bindingSchema`
+  - `runtimeKey`
+- 列表接口会按 `wecom.smart_robot` 访问点过滤
+- 因此旧记录会被后端静默过滤，前端拿到的列表为空
+
+影响：
+
+- owner 会误以为知识库微应用被删掉
+- 微应用定义字段以后继续扩展时，可能再出现同类“接口成功但卡片消失”的隐性回归
+
+已完成进展：
+
+- 已在 `microAppsRepository.initialize()` 增加对已知 seed 类型的最小回填
+- 已补仓库测试和路由测试，覆盖旧 `knowledge_query` 定义恢复显示
+- 已单独登记技术债：
+  - [TD-T016-01 MicroAPP Definition Reconcile Gap](../project-control/decisions/TD-T016-01-microapp-definition-reconcile-gap.md)
+
+下一步：
+
+- 评估是否需要把 `micro_app_definitions` 升级为显式 schema migration
+- 给微应用定义字段演进补一组旧库样本回归，而不是只靠 seed 回填
+- 在债务关闭前，不要把“接口返回 200”当作“微应用定义完整可见”的证据
+
 ### Chat Agent `terminal_session` 启动失败
 
 - Layer: runtime / harness / terminal capability

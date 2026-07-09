@@ -276,6 +276,26 @@
   *::-webkit-scrollbar-corner {
     background: transparent;
   }
+
+  .slider-thumb-primary::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    border: 2px solid rgb(var(--color-surface-primary));
+    background: rgb(var(--color-primary));
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
+  }
+
+  .slider-thumb-primary::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    border: 2px solid rgb(var(--color-surface-primary));
+    background: rgb(var(--color-primary));
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
+  }
 }
 
 @layer components {

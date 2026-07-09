@@ -578,7 +578,7 @@ const zhCN = {
         usernamePlaceholder: "可留空",
         password: "密码",
         passwordPlaceholder: "可留空",
-        hint: "留空 Host 或 Port，就表示当前不启用代理。配置会入库，后续服务商接入时再统一读取。",
+        hint: "留空 Host 或 Port，就表示当前不启用代理。",
         save: "保存代理配置",
         saving: "保存中...",
         saveSuccess: "代理配置已保存",
@@ -638,8 +638,7 @@ const zhCN = {
           clearSuccess: "日志已清空，共释放 {{size}} KB",
           clearFailed: "清空日志失败",
         },
-        summary:
-          "基础运行状态保留在这里，数据库与向量扩展的详细调试状态已迁移到“开发 > 数据库”标签页。",
+        summary: "",
       },
     },
     roles: {
@@ -930,7 +929,7 @@ const zhCN = {
       resetModal: {
         title: "确认重置默认模型",
         description:
-          "将清空 LLM、Embedding、Rerank、Task、AgentTask、评测模型和生图模型的默认绑定，并恢复默认参数。",
+          "将清空 LLM、Embedding、Rerank、Task、AgentTask、评测模型、生图模型和语音模型的默认绑定，并恢复默认参数。",
         warning: "该操作会影响当前对话与知识库的默认模型选择。",
         success: "默认模型已重置",
         failed: "重置失败",
@@ -998,6 +997,12 @@ const zhCN = {
           subtitle: "负责图像生成",
           readOnlyHint:
             "生图模型当前只提供默认角色绑定，不在这里编辑调用参数；真实生图调用会在后续任务中接入。",
+        },
+        voice: {
+          title: "语音模型",
+          subtitle: "负责语音识别与合成",
+          readOnlyHint:
+            "语音模型当前只提供默认角色绑定，不在这里编辑调用参数；真实语音调用会在后续任务中接入。",
         },
         configured: "已配置",
         builtInReady: "内置可用",
@@ -1107,6 +1112,7 @@ const zhCN = {
         setDefaultAgentTask: "设为默认编排模型",
         setDefaultEvaluation: "设为默认评测模型",
         setDefaultImageGeneration: "设为默认生图模型",
+        setDefaultVoice: "设为默认语音模型",
         setting: "设置中...",
         selectModelFirst: "请先选择模型",
         updatedLlm: "已更新默认主模型",
@@ -1116,6 +1122,7 @@ const zhCN = {
         updatedAgentTask: "已更新默认编排模型",
         updatedEvaluation: "已更新默认评测模型",
         updatedImageGeneration: "已更新默认生图模型",
+        updatedVoice: "已更新默认语音模型",
         setDefaultFailed: "设置默认模型失败",
         loadFailed: "加载平台配置失败",
         loadDetailFailed: "加载平台详情失败",

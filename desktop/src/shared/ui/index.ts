@@ -26,6 +26,7 @@ export { Modal, ModalProvider, useModal } from "./Modal";
 export { default as NavItem } from "./NavItem";
 export { default as SearchSelectModal } from "./SearchSelectModal";
 export { default as Skeleton } from "./Skeleton";
+export { default as Slider } from "./Slider";
 export { Select, SelectInput } from "./Select";
 export { default as SegmentedTabs } from "./SegmentedTabs";
 export { default as StatusIndicator } from "./StatusIndicator";

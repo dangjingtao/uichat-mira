@@ -9,6 +9,7 @@ doc_type: workboard
 canonical: true
 related:
   - docs/project-control/README.md
+  - docs/project-control/decisions/TD-AGENT-01-hardcoded-user-input-routing-and-execution.md
   - docs/project-control/tasks/agent_node_T001-next-action-planner-node.md
   - docs/project-control/tasks/agent_node_T002-tool-call-normalize-node.md
   - docs/project-control/tasks/agent_node_T003-agent-graph-wiring.md
@@ -50,6 +51,18 @@ Agent node 专属总台账。
 - 记录当前正在拆分和治理的 Agent graph node 任务
 - 给每个 node 任务分配独立任务编号 `agent_node_T+编号`
 - 把“节点职责”与“非目标”分开，避免一次任务扩大成整条 Agent loop 重写
+
+## Priority Read First
+
+所有 `agent_node_` 任务在开工前，先读这份技术债：
+
+- [TD-AGENT-01-hardcoded-user-input-routing-and-execution.md](D:/workspace/rag-demo/docs/project-control/decisions/TD-AGENT-01-hardcoded-user-input-routing-and-execution.md)
+
+原因：
+
+- 严禁把用户输入硬编码成所谓智能决策
+- 严禁把自然语言片段直接落成 `path / targetPath / command / content`
+- 类似问题优先通过 task model 合同、prompt 示例、对象确认步骤处理，不再继续堆局部规则
 
 ## Naming Rule
 
@@ -93,6 +106,7 @@ Agent node 专属总台账。
 ## Current Ground Truth
 
 - `T1-8` 属于 `V1` 内容。
+- 所有 `agent_node_` 任务在设计对象识别、参数冻结、planner prompt、tool 执行前，先阅读 [TD-AGENT-01-hardcoded-user-input-routing-and-execution.md](D:/workspace/rag-demo/docs/project-control/decisions/TD-AGENT-01-hardcoded-user-input-routing-and-execution.md)。
 
 - `nextActionPlannerNode` 当前任务已经明确：
   - 不允许硬编码上下文假设

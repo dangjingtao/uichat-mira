@@ -235,6 +235,54 @@ process.stdin.on("data", (chunk) => {
       continue;
     }
 
+    if (message.method === "tools/list") {
+      writeFrame({
+        jsonrpc: "2.0",
+        id: message.id,
+        result: {
+          tools: [
+            { name: "codegraph_status" },
+          ],
+        },
+      });
+      continue;
+    }
+
+    if (message.method === "tools/call") {
+      const toolName = message.params?.name;
+      if (toolName === "codegraph_status") {
+        writeFrame({
+          jsonrpc: "2.0",
+          id: message.id,
+          result: {
+            content: [
+              {
+                type: "text",
+                text: `CodeGraph Status\nFiles indexed: 12\nIndex is up to date\nWorkspace: ${workspaceHash}`,
+              },
+            ],
+            isError: false,
+          },
+        });
+        continue;
+      }
+
+      writeFrame({
+        jsonrpc: "2.0",
+        id: message.id,
+        result: {
+          content: [
+            {
+              type: "text",
+              text: `Unknown tool: ${toolName ?? "missing"}`,
+            },
+          ],
+          isError: true,
+        },
+      });
+      continue;
+    }
+
     if (
       message.method === "codegraph/query" ||
       message.method === "codegraph/explore" ||

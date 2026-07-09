@@ -9,7 +9,8 @@ export type MicroAppSupportedAccessPoint = Extract<
 > | "desktop.news_hub"
   | "desktop.image_generation_studio"
   | "desktop.computer_use_studio"
-  | "desktop.tts_studio";
+  | "desktop.tts_studio"
+  | "desktop.codegraph_studio";
 
 export type IntegrationConversationKind = "direct" | "group";
 

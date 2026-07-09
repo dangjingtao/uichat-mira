@@ -28,13 +28,13 @@ const parseJsonArrayEnv = (
 export const isCodebaseExplorePlannerExposureEnabled = () =>
   process.env.UI_CHAT_CODEGRAPH_PLANNER_ENABLED === "1";
 
-type ManagedCodeGraphPlannerStorageSource =
+export type ManagedCodeGraphPlannerStorageSource =
   | "explicit_app_data_root"
   | "log_dir_parent"
   | "database_dir_parent"
   | "unresolved";
 
-type ManagedCodeGraphPlannerStorage = {
+export type ManagedCodeGraphPlannerStorage = {
   status: "ready" | "blocked";
   source: ManagedCodeGraphPlannerStorageSource;
   appDataRoot: string | null;
@@ -43,7 +43,7 @@ type ManagedCodeGraphPlannerStorage = {
   reason: string | null;
 };
 
-type ManagedCodeGraphExternalIndexSupport = {
+export type ManagedCodeGraphExternalIndexSupport = {
   status: "ready" | "blocked";
   externalIndexRootSupported: boolean;
   repoDataDirName: string;
@@ -69,20 +69,43 @@ const toAbsoluteIfPresent = (value: string | undefined) => {
   return path.resolve(trimmed);
 };
 
-const resolveManagedCodeGraphPlannerStorage = (
+export const createManagedCodeGraphPlannerStorageFromAppDataRoot = (
+  workspaceHash: string,
+  appDataRoot: string | null,
+): ManagedCodeGraphPlannerStorage => {
+  if (!appDataRoot?.trim()) {
+    return {
+      status: "blocked",
+      source: "unresolved",
+      appDataRoot: null,
+      logRoot: null,
+      indexRoot: null,
+      reason:
+        "Managed CodeGraph planner exposure requires an app-data root. Set UI_CHAT_CODEGRAPH_APP_DATA_ROOT or provide an absolute UI_CHAT_LOG_DIR / UI_CHAT_DATABASE_DIR.",
+    };
+  }
+
+  const resolvedRoot = path.resolve(appDataRoot.trim());
+  const artifactRoot = path.join(resolvedRoot, "managed-codegraph", workspaceHash);
+  return {
+    status: "ready",
+    source: "explicit_app_data_root",
+    appDataRoot: resolvedRoot,
+    logRoot: path.join(artifactRoot, "logs"),
+    indexRoot: path.join(artifactRoot, "index"),
+    reason: null,
+  };
+};
+
+export const resolveManagedCodeGraphPlannerStorage = (
   workspaceHash: string,
 ): ManagedCodeGraphPlannerStorage => {
   const explicitRoot = toAbsoluteIfPresent(process.env.UI_CHAT_CODEGRAPH_APP_DATA_ROOT);
   if (explicitRoot) {
-    const artifactRoot = path.join(explicitRoot, "managed-codegraph", workspaceHash);
-    return {
-      status: "ready",
-      source: "explicit_app_data_root",
-      appDataRoot: explicitRoot,
-      logRoot: path.join(artifactRoot, "logs"),
-      indexRoot: path.join(artifactRoot, "index"),
-      reason: null,
-    };
+    return createManagedCodeGraphPlannerStorageFromAppDataRoot(
+      workspaceHash,
+      explicitRoot,
+    );
   }
 
   const configuredLogDir = toAbsoluteIfPresent(process.env.UI_CHAT_LOG_DIR);
@@ -134,7 +157,7 @@ const isLikelyRealCodeGraphCommand = (command: string) => {
   return baseName === "codegraph" || baseName === "codegraph.cmd" || baseName === "codegraph.exe";
 };
 
-const resolveManagedCodeGraphExternalIndexSupport = (
+export const resolveManagedCodeGraphExternalIndexSupport = (
   command: string,
 ): ManagedCodeGraphExternalIndexSupport => {
   if (!isLikelyRealCodeGraphCommand(command)) {

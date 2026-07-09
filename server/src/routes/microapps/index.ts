@@ -6,6 +6,7 @@ import { errorResponse, ErrorCodes } from "@/utils/index.js";
 import type { createMailCenterService } from "@/microapps/mail-center/index.js";
 import type { createNewsHubService } from "@/microapps/news-hub/index.js";
 import type { TtsService } from "@/microapps/tts/index.js";
+import type { CodeGraphStudioService } from "@/microapps/codegraph/index.js";
 import type {
   ComputerUseGoalInput,
   ComputerUseRuntimeState,
@@ -28,6 +29,7 @@ import {
 import { success } from "@/utils/index.js";
 import { badRequest, notFound, routeHandler } from "@/utils/route-errors.js";
 import computerUseRoutes from "./computer-use/index.js";
+import codeGraphRoutes from "./codegraph/index.js";
 import mailCenterRoutes from "./mail-center/index.js";
 import newsHubRoutes from "./news-hub/index.js";
 import ttsRoutes from "./tts/index.js";
@@ -117,10 +119,13 @@ type MicroappsRouteOptions = {
   comfyUiStudioService?: ComfyUiStudioRouteService;
   computerUseService?: ComputerUseRouteService;
   computerUseRuntimeService?: ComputerUseRuntimeRouteService;
+  codeGraphStudioService?: CodeGraphStudioService;
   mailCenterService?: MailCenterRouteService;
   newsHubService?: NewsHubRouteService;
   ttsService?: TtsService;
 };
+
+export type CodeGraphStudioRouteService = CodeGraphStudioService;
 
 const toGenerationResponse = (job: ImageGenerationJob) => ({
   generationId: job.id,
@@ -223,6 +228,7 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
   const comfyUiStudioService = options.comfyUiStudioService;
   const computerUseService = options.computerUseService;
   const computerUseRuntimeService = options.computerUseRuntimeService;
+  const codeGraphStudioService = options.codeGraphStudioService;
   const mailCenterService = options.mailCenterService;
   const newsHubService = options.newsHubService;
   const ttsService = options.ttsService;
@@ -254,6 +260,11 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
   if (!newsHubService) {
     throw new Error(
       "microappsRoute requires newsHubService to be injected from the server composition root.",
+    );
+  }
+  if (!codeGraphStudioService) {
+    throw new Error(
+      "microappsRoute requires codeGraphStudioService to be injected from the server composition root.",
     );
   }
   if (!ttsService) {
@@ -542,6 +553,9 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
   await app.register(computerUseRoutes, {
     computerUseService,
     computerUseRuntimeService,
+  });
+  await app.register(codeGraphRoutes, {
+    codeGraphStudioService,
   });
   await app.register(mailCenterRoutes, {
     mailCenterService,

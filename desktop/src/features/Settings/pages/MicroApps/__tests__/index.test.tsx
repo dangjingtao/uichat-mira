@@ -112,6 +112,7 @@ describe("MicroAppsSettings", () => {
     expect(screen.getByTestId("studio-entry-icon-mailCenter")).toBeInTheDocument();
     expect(screen.getByTestId("studio-entry-icon-imageGeneration")).toBeInTheDocument();
     expect(screen.getByTestId("studio-entry-icon-ttsStudio")).toBeInTheDocument();
+    expect(screen.getByTestId("studio-entry-icon-codeGraph")).toBeInTheDocument();
     expect(
       screen.queryByText("settings.microApps.studioEntries.imageGeneration.badges.focus"),
     ).not.toBeInTheDocument();
@@ -181,5 +182,27 @@ describe("MicroAppsSettings", () => {
         screen.getByTestId("computer-use-studio-page"),
       ).toBeInTheDocument();
     });
+  });
+
+  it("renders a visible CodeGraph Studio entry with a dedicated route", async () => {
+    render(
+      <MemoryRouter initialEntries={["/settings/micro-apps"]}>
+        <Routes>
+          <Route path="/settings/micro-apps" element={<MicroAppsSettings />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const entryLink = await screen.findByRole("link", {
+      name: /settings\.microApps\.studioEntries\.codeGraph\.actions\.open/,
+    });
+
+    expect(
+      screen.getByText("settings.microApps.studioEntries.codeGraph.title"),
+    ).toBeInTheDocument();
+    expect(entryLink).toHaveAttribute(
+      "href",
+      "/settings/micro-apps/codegraph-studio",
+    );
   });
 });

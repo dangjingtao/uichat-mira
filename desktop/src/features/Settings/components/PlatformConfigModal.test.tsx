@@ -84,6 +84,7 @@ const providerDetail: ProviderDetail = {
     agentTask: null,
     evaluation: null,
     imageGeneration: null,
+    voice: null,
   },
 };
 
@@ -118,6 +119,7 @@ const customProviderDetail: ProviderDetail = {
     agentTask: null,
     evaluation: null,
     imageGeneration: null,
+    voice: null,
   },
 };
 
@@ -139,6 +141,7 @@ const configMap = {
     name: "custom-model",
     providerCode: "custom-openai",
     providerConnectionId: "custom-openai",
+    providerConnectionDisplayName: "Custom OpenAI",
     providerTemplateCode: "openai-compatible-custom",
     remoteModelId: "custom-model",
     params: {},
@@ -152,6 +155,7 @@ const configMap = {
   agentTask: null,
   evaluation: null,
   imageGeneration: null,
+  voice: null,
 } as const;
 const apiMocks = vi.hoisted(() => ({
   selectProviderRoleModelMock: vi.fn(
@@ -161,6 +165,7 @@ const apiMocks = vi.hoisted(() => ({
       name: "qwen2.5:latest",
       providerCode: "ollama",
       providerConnectionId: "ollama",
+      providerConnectionDisplayName: "Ollama",
       providerTemplateCode: "ollama",
       remoteModelId: "qwen2.5:latest",
       params: {},

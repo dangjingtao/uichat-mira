@@ -35,6 +35,7 @@ import {
 } from "@/microapps/image-generation/index.js";
 import { createMailCenterService } from "@/microapps/mail-center/index.js";
 import { createNewsHubService } from "@/microapps/news-hub/index.js";
+import { createCodeGraphStudioService } from "@/microapps/codegraph/index.js";
 import { createTtsService } from "@/microapps/tts/index.js";
 import healthRoute from "@/routes/health";
 import appMetaRoute from "@/routes/app-meta";
@@ -512,6 +513,7 @@ const computerUseRuntimeService = {
 
 const mailCenterService = createMailCenterService();
 const newsHubService = createNewsHubService();
+const codeGraphStudioService = createCodeGraphStudioService();
 const ttsService = createTtsService();
 
 const setupPlugins = async () => {
@@ -735,6 +737,7 @@ const setupRoutes = async () => {
     comfyUiStudioService,
     computerUseService,
     computerUseRuntimeService,
+    codeGraphStudioService,
     mailCenterService,
     newsHubService,
     ttsService,

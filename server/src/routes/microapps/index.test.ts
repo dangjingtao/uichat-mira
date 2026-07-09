@@ -1308,10 +1308,37 @@ test("microapps tts overview route returns provider and recent job state", async
       async listVoices() {
         return [];
       },
+      async getGptSovitsCatalog() {
+        return {
+          serviceUrl: "http://127.0.0.1:9872",
+          gptModelOptions: [],
+          sovitsModelOptions: [],
+          languageOptions: [],
+          cutMethodOptions: [],
+          sampleStepOptions: [],
+          defaults: {
+            serviceUrl: "http://127.0.0.1:9872",
+            gptModel: "",
+            sovitsModel: "",
+            promptLanguage: "中文",
+            textLanguage: "中文",
+            cutMethod: "不切",
+            sampleSteps: 8,
+            speed: 1,
+            pauseSecond: 0.3,
+            temperature: 1,
+            topK: 15,
+            topP: 1,
+          },
+        };
+      },
       getSynthesis() {
         return null;
       },
       async synthesize() {
+        throw new Error("not implemented");
+      },
+      async synthesizeGptSovits() {
         throw new Error("not implemented");
       },
     },

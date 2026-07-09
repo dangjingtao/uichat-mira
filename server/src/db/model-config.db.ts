@@ -8,6 +8,7 @@ import { applySqliteConnectionPragmas } from "@/db/init-utils";
 import {
   DEFAULT_PROVIDER_CONNECTIONS,
   DEFAULT_IMAGE_GENERATION_PARAMS,
+  DEFAULT_VOICE_PARAMS,
   DEFAULT_ROLE_CONFIGS,
   MANAGED_TASK_PARAMS,
   PARAM_TEMPLATES,
@@ -58,6 +59,7 @@ const MODEL_TYPE_SQL_VALUES = [
   "agentTask",
   "evaluation",
   "imageGeneration",
+  "voice",
 ] as const;
 
 const modelTypeSqlValues = MODEL_TYPE_SQL_VALUES.map((value) => `'${value}'`).join(", ");
@@ -599,6 +601,27 @@ export const initializeModelConfigDatabase = (): void => {
             ...DEFAULT_IMAGE_GENERATION_PARAMS,
           }),
           providerConnectionId: existingImageGeneration.providerConnectionId ?? null,
+        });
+      }
+    }
+
+    const voiceDefault = DEFAULT_ROLE_CONFIGS.find(
+      (config) => config.type === "voice",
+    );
+    const existingVoice = modelConfigRepository.findDefaultByType("voice");
+
+    if (voiceDefault && existingVoice) {
+      const currentVoiceParams = parseParams(existingVoice.params);
+      if (
+        typeof currentVoiceParams.enabled !== "boolean" ||
+        currentVoiceParams.enabled !== DEFAULT_VOICE_PARAMS.enabled
+      ) {
+        modelConfigRepository.updateDefault("voice", {
+          params: JSON.stringify({
+            ...currentVoiceParams,
+            ...DEFAULT_VOICE_PARAMS,
+          }),
+          providerConnectionId: existingVoice.providerConnectionId ?? null,
         });
       }
     }

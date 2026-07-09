@@ -141,6 +141,188 @@ const settingsPending = {
             open: "进入工作区",
           },
         },
+        codeGraph: {
+          title: "CodeGraph Studio",
+          description: "这是 CodeGraph 微应用工作台，用来查看 blocked-safe 状态、参数配置和 smoke 调试结果。",
+          hint: "它不会默认暴露给 Planner，也不会替真实 provider 放宽 external index root 风险门槛。",
+          badges: {
+            debug: "CodeGraph 工作台",
+            focus: "状态 + 参数 + 调试",
+            runtime: "blocked-safe",
+          },
+          actions: {
+            open: "进入工作区",
+          },
+        },
+      },
+      codeGraphStudio: {
+        page: {
+          title: "CodeGraph Studio",
+          description:
+            "CodeGraph 用来理解代码仓结构、定位符号关系，并为后续代码检索和代码探索提供索引能力。这里可以查看它当前是否可用，并调试本地接入状态。",
+        },
+        overview: {
+          statusLabel: "当前状态：",
+          description:
+            "真实 CodeGraph 1.3.0 暂不支持可靠的外部索引目录，因此当前保持 blocked-safe，不会启动，也不会污染仓库。",
+          nextStepsTitle: "下一步",
+          nextSteps: {
+            step1: {
+              title: "填写 App Data Root",
+              description: "为日志与临时状态指定一个仓库外部目录。",
+            },
+            step2: {
+              title: "保存参数并重新检测",
+              description: "保存后点击 detect，重新检测当前状态。",
+            },
+            step3: {
+              title: "如需验证页面流程，可切换 Fake Provider",
+              description: "使用 Fake Provider 运行 Smoke，验证页面流程，不代表真实 CodeGraph 可用。",
+            },
+          },
+          chips: {
+            planner: "Planner 暴露：{{value}}",
+            telemetry: "Telemetry：{{value}}",
+            pollution: "仓库污染：{{value}}",
+            fakeProvider: "Fake Provider：{{value}}",
+          },
+        },
+        blockedCards: {
+          appDataRoot: {
+            title: "A. 缺少 App Data Root",
+            description: "需要一个仓库外部目录来保存日志和临时状态。",
+            badge: "可处理",
+          },
+          externalIndex: {
+            title: "B. CodeGraph 1.3.0 不支持外部 Index Root",
+            description: "真实 provider 仍会要求 repo-root `.codegraph`，因此当前不可启动。",
+            badge: "当前不可解除",
+          },
+          pollutionGuard: {
+            title: "C. 污染保护已启用",
+            description: "如果 repo root 出现 `.codegraph`，系统会阻断 ready，且不会删除用户文件。",
+            badge: "保护中",
+          },
+        },
+        cards: {
+          blockedReasons: {
+            title: "阻断原因",
+          },
+          pollutionSummary: {
+            title: "污染保护摘要",
+            behavior: "发现污染即阻断，不删除用户文件",
+            noticeTitle: "这是保护机制，不是报错。",
+            noticeBody: "repo-root `.codegraph` 一旦出现，系统只会阻断 ready，不会替你删除用户文件。",
+          },
+          config: {
+            title: "基础配置",
+            description: "这里只保留 owner 常用参数。Probe args、索引路径和日志路径统一收进高级配置。",
+            appDataRootHelp:
+              "用于保存日志与临时状态。必须位于仓库外部，建议选择长期可用的目录。",
+          },
+          advanced: {
+            title: "高级配置（可选）",
+            meta: "默认折叠。这里放 probe args、logRoot、indexRoot 等开发调试字段。",
+          },
+          actions: {
+            title: "运行时动作",
+            description: "detect 和 health 可随时重新检查状态；start 和 stop 会按 blocked-safe 规则受限。",
+            startHintBlocked: "真实 provider 当前 blocked，禁止启动。",
+            startHintFake: "已切到 Fake Provider。保存参数后可继续 detect / start 验证页面流程。",
+          },
+          smoke: {
+            title: "Smoke 验证",
+            description: "真实 provider blocked 时，这里会明确显示 blocked，不会被解释成 empty result。",
+            modes: {
+              real: "真实 Provider",
+              fake: "Fake Provider",
+            },
+            realTitle: "真实 Provider",
+            realReady: "当前状态允许继续做 smoke 检查。",
+            realBlocked: "当前 blocked，不能运行 smoke query。",
+            realDisabledHint: "真实 provider 当前 blocked，smoke query 已禁用。",
+            fakeTitle: "Fake Provider",
+            fakeDescription: "Fake Provider 仅用于验证页面流程，不代表真实 CodeGraph 可用。",
+            fakeToggleTitle: "切换到 Fake Provider 可验证页面流程",
+            fakeToggleHint: "切换后会把 command 与 probe args 改成测试 provider。建议先保存参数，再执行 detect / start。",
+            fakeDisabledHint: "切到 Fake Provider 后，先保存参数并执行 detect / start，再运行 Smoke。",
+          },
+          smokeResult: {
+            title: "Smoke 结果",
+            description: "如果真实 provider 仍 blocked，这里会明确显示 blocked，不会把它解释成空结果。",
+            metrics: {
+              status: "状态",
+              candidates: "候选数",
+              content: "结果片段",
+            },
+          },
+          debug: {
+            title: "原始调试报告",
+            meta: "供开发调试使用",
+            helperTitle: "这里保留原始字段",
+            helperBody: "原始 JSON 只放在折叠区，避免它抢走 owner 第一屏的阅读顺序。",
+          },
+        },
+        fields: {
+          guardStatus: "guardStatus",
+          repoDataDirPath: "repoDataDirPath",
+          exists: "exists",
+          behavior: "行为",
+          workspaceRootReadonly: "Workspace Root（只读）",
+          command: "Command",
+          appDataRootRequired: "App Data Root（必填）",
+          logRoot: "logRoot",
+          indexRoot: "indexRoot",
+          startArgs: "startArgs",
+          versionProbeArgs: "versionProbeArgs",
+          telemetryProbeArgs: "telemetryProbeArgs",
+          timeoutMs: "Timeout (ms)",
+          maxResults: "Max Results",
+          queryLimit: "Query Limit",
+          smokeQuery: "Smoke Query",
+        },
+        placeholders: {
+          appDataRoot: "请选择或输入一个仓库外部目录作为 App Data Root",
+        },
+        values: {
+          enabled: "开启",
+          disabled: "关闭",
+          available: "可用",
+          unavailable: "不可用",
+          selected: "已切换",
+          availableForValidation: "可用",
+          detected: "已发现",
+          notDetected: "未发现",
+          ready: "ready",
+          blocked: "blocked",
+        },
+        actions: {
+          refresh: "刷新",
+          saveConfig: "保存参数",
+          detect: "detect",
+          start: "start",
+          health: "health",
+          stop: "stop",
+          smokeStatus: "运行 Smoke Status",
+          smokeQuery: "运行 Smoke",
+          useRecommendedRoot: "使用推荐目录",
+          copyDebug: "复制调试报告",
+        },
+        states: {
+          loading: "正在加载 CodeGraph Studio...",
+          emptySmokeTitle: "当前没有可用结果",
+          emptySmoke:
+            "真实 provider blocked 时，这里会明确显示 blocked，不会被解释成空结果。",
+        },
+        messages: {
+          loadFailed: "加载 CodeGraph Studio 失败",
+          configSaved: "CodeGraph Studio 参数已保存",
+          configSaveFailed: "保存 CodeGraph Studio 参数失败",
+          actionExecuted: "{{action}} 已执行",
+          actionFailed: "CodeGraph 操作失败",
+          debugCopied: "原始调试报告已复制",
+          debugCopyFailed: "复制原始调试报告失败",
+        },
       },
       newsHub: {
         page: {

@@ -1457,11 +1457,7 @@ test("agentGraph normalizes /workspace before policy and executes read_list", as
     decisionSource: "task-model",
     decisionReason: "Directory listing is available.",
   });
-  const plannerSpy = vi
-    .spyOn(providerProxyService, "streamTaskChatText")
-    .mockImplementationOnce(async function* () {
-      yield '{"type":"use_tool","toolId":"read_list","args":{"path":"/workspace"},"reason":"Need the workspace listing."}';
-    });
+  const plannerSpy = vi.spyOn(providerProxyService, "streamTaskChatText");
   const executeHarnessInvocationSpy = vi
     .spyOn(harnessInvocations, "executeHarnessInvocation")
     .mockResolvedValue({
@@ -1482,6 +1478,11 @@ test("agentGraph normalizes /workspace before policy and executes read_list", as
   const generateInvokeSpy = vi
     .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
     .mockResolvedValue("workspace listing answer");
+  const executionNodes: Array<{
+    nodeId: string;
+    phase: string;
+    details?: Record<string, unknown>;
+  }> = [];
 
   const result = await agentGraph.run({
     runId: "run-read-list-root-relative",
@@ -1493,10 +1494,20 @@ test("agentGraph normalizes /workspace before policy and executes read_list", as
     },
     plan: basePlan,
     messages: [makeMessage("看看当前 workspace 有哪些文件")],
+    onExecutionNode: async (event) => {
+      executionNodes.push({
+        nodeId: event.nodeId,
+        phase: event.phase,
+        details:
+          event.details && typeof event.details === "object"
+            ? (event.details as Record<string, unknown>)
+            : undefined,
+      });
+    },
   });
 
   assert.equal(result.status, "completed");
-  assert.equal(plannerSpy.mock.calls.length, 1);
+  assert.equal(plannerSpy.mock.calls.length, 0);
   assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
   assert.deepEqual(executeHarnessInvocationSpy.mock.calls[0]?.[0], {
     toolId: "read_list",
@@ -1508,6 +1519,17 @@ test("agentGraph normalizes /workspace before policy and executes read_list", as
     approvedInvocations: undefined,
   });
   assert.equal(generateInvokeSpy.mock.calls.length, 1);
+  assert.equal(
+    executionNodes.some(
+      (event) =>
+        event.nodeId === "agent-next-action-planner" &&
+        event.phase === "done" &&
+        event.details?.selectedActionType === "use_tool" &&
+        event.details?.selectedToolId === "read_list" &&
+        typeof event.details?.coverageTransitionReason === "string",
+    ),
+    true,
+  );
 });
 
 test("agentGraph answers after a single web_search execution when search evidence is sufficient", async () => {
@@ -1645,11 +1667,7 @@ test("agentGraph answers after a single terminal_session execution when command 
     decisionSource: "task-model",
     decisionReason: "Terminal execution is available.",
   });
-  const plannerSpy = vi
-    .spyOn(providerProxyService, "streamTaskChatText")
-    .mockImplementationOnce(async function* () {
-      yield '{"type":"use_tool","toolId":"terminal_session","args":{"command":"dir"},"reason":"Need the command output."}';
-    });
+  const plannerSpy = vi.spyOn(providerProxyService, "streamTaskChatText");
   const executeHarnessInvocationSpy = vi
     .spyOn(harnessInvocations, "executeHarnessInvocation")
     .mockResolvedValue({
@@ -1718,7 +1736,7 @@ test("agentGraph answers after a single terminal_session execution when command 
   });
 
   assert.equal(result.status, "completed");
-  assert.equal(plannerSpy.mock.calls.length, 1);
+  assert.equal(plannerSpy.mock.calls.length, 0);
   assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
   assert.equal(generateInvokeSpy.mock.calls.length, 1);
   assert.equal(

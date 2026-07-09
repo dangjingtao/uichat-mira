@@ -7,14 +7,16 @@ export type MicroAppType =
   | "news_hub"
   | "image_generation"
   | "computer_use"
-  | "tts";
+  | "tts"
+  | "codegraph";
 
 export type MicroAppSupportedAccessPoint =
   | "wecom.smart_robot"
   | "desktop.news_hub"
   | "desktop.image_generation_studio"
   | "desktop.computer_use_studio"
-  | "desktop.tts_studio";
+  | "desktop.tts_studio"
+  | "desktop.codegraph_studio";
 
 export type MicroAppBindingFieldType =
   | "knowledge_base_select"
@@ -179,7 +181,31 @@ export const ttsBindingSchema: MicroAppBindingSchema = {
       options: [
         { label: "Windows Built-in Voice", value: "windows_builtin" },
         { label: "Piper Local", value: "piper_local" },
+        { label: "GPT-SoVITS", value: "gpt_sovits" },
       ],
+    },
+  ],
+};
+
+export const codeGraphBindingSchema: MicroAppBindingSchema = {
+  fields: [
+    {
+      key: "command",
+      label: "CodeGraph Command",
+      type: "text",
+      required: true,
+      description: "工作台默认使用的 CodeGraph provider 命令。",
+      placeholder: "codegraph",
+      defaultValue: "codegraph",
+    },
+    {
+      key: "appDataRoot",
+      label: "App Data Root",
+      type: "text",
+      required: false,
+      description: "CodeGraph 工作台默认使用的 app-data 根目录。",
+      placeholder: "C:\\Users\\<user>\\AppData\\Local\\UIChat-Mira",
+      defaultValue: "",
     },
   ],
 };
@@ -233,6 +259,16 @@ const defaultDefinitionSeeds: Array<
     supportedAccessPoints: ["desktop.tts_studio"],
     bindingSchema: ttsBindingSchema,
     runtimeKey: "tts",
+    enabled: true,
+  },
+  {
+    type: "codegraph",
+    name: "CodeGraph Studio",
+    description:
+      "为桌面内的 CodeGraph 调试工作台保留共享注册定义和稳定 runtime key，不在这里改动 Planner 主链或默认启用 provider。",
+    supportedAccessPoints: ["desktop.codegraph_studio"],
+    bindingSchema: codeGraphBindingSchema,
+    runtimeKey: "codegraph",
     enabled: true,
   },
 ];
@@ -292,6 +328,77 @@ const seedDefaults = () => {
         runtimeKey: definition.runtimeKey,
         enabled: definition.enabled,
       })
+      .run();
+  }
+};
+
+const hasNonEmptyText = (value: string | null | undefined) =>
+  typeof value === "string" && value.trim().length > 0;
+
+const shouldBackfillAccessPoints = (
+  accessPoints: MicroAppSupportedAccessPoint[],
+  seed: Omit<MicroAppRecord, "id" | "createdAt" | "updatedAt">,
+) => accessPoints.length === 0 && seed.supportedAccessPoints.length > 0;
+
+const shouldBackfillBindingSchema = (
+  schema: MicroAppBindingSchema,
+  seed: Omit<MicroAppRecord, "id" | "createdAt" | "updatedAt">,
+) => schema.fields.length === 0 && seed.bindingSchema.fields.length > 0;
+
+const reconcileSeededDefinitions = () => {
+  const seededByType = new Map(
+    defaultDefinitionSeeds.map((definition) => [definition.type, definition]),
+  );
+  const existingRows = getDb().select().from(microApps).all();
+
+  for (const row of existingRows) {
+    const seed = seededByType.get(row.type as MicroAppType);
+    if (!seed) {
+      continue;
+    }
+
+    const parsedAccessPoints = parseJson<MicroAppSupportedAccessPoint[]>(
+      row.supportedAccessPointsJson ?? "[]",
+      [],
+    );
+    const parsedBindingSchema = parseJson<MicroAppBindingSchema>(
+      row.bindingSchemaJson ?? "{\"fields\":[]}",
+      { fields: [] },
+    );
+
+    const nextDescription = hasNonEmptyText(row.description)
+      ? row.description
+      : seed.description;
+    const nextAccessPoints = shouldBackfillAccessPoints(parsedAccessPoints, seed)
+      ? seed.supportedAccessPoints
+      : parsedAccessPoints;
+    const nextBindingSchema = shouldBackfillBindingSchema(parsedBindingSchema, seed)
+      ? seed.bindingSchema
+      : parsedBindingSchema;
+    const nextRuntimeKey = hasNonEmptyText(row.runtimeKey)
+      ? row.runtimeKey
+      : seed.runtimeKey;
+
+    const changed =
+      nextDescription !== row.description ||
+      JSON.stringify(nextAccessPoints) !== row.supportedAccessPointsJson ||
+      JSON.stringify(nextBindingSchema) !== row.bindingSchemaJson ||
+      nextRuntimeKey !== row.runtimeKey;
+
+    if (!changed) {
+      continue;
+    }
+
+    getDb()
+      .update(microApps)
+      .set({
+        description: nextDescription,
+        supportedAccessPointsJson: JSON.stringify(nextAccessPoints),
+        bindingSchemaJson: JSON.stringify(nextBindingSchema),
+        runtimeKey: nextRuntimeKey,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(microApps.id, row.id))
       .run();
   }
 };
@@ -365,6 +472,7 @@ export const microAppsRepository = {
     ensureTable();
     migrateFromLegacyMicroAppsTable();
     seedDefaults();
+    reconcileSeededDefinitions();
   },
 
   list(type?: MicroAppType) {

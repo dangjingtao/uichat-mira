@@ -19,7 +19,6 @@ import { TextInput } from "@/shared/ui/Input";
 import { Modal } from "@/shared/ui/Modal";
 import { Select } from "@/shared/ui/Select";
 import Switch from "@/shared/ui/Switch";
-import HealthCheck from "./HealthCheck";
 import SettingsNotice from "../../components/SettingsNotice";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 
@@ -388,8 +387,6 @@ export default function General() {
       description={t("settings.general.page.description")}
       contentClassName="space-y-4 pt-6"
     >
-      <HealthCheck />
-
       <Card className="space-y-3">
         <h2 className="text-sm font-semibold text-text-primary">
           {t("settings.general.preferences")}

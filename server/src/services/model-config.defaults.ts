@@ -34,6 +34,10 @@ export const DEFAULT_IMAGE_GENERATION_PARAMS = {
   enabled: true,
 } as const;
 
+export const DEFAULT_VOICE_PARAMS = {
+  enabled: true,
+} as const;
+
 export const DEFAULT_EVALUATION_PARAMS = {
   enabled: true,
   temperature: 0.2,
@@ -112,6 +116,13 @@ export const DEFAULT_ROLE_CONFIGS: DefaultRoleConfig[] = [
     providerCode: null,
     remoteModelId: null,
     params: { ...DEFAULT_IMAGE_GENERATION_PARAMS },
+  },
+  {
+    type: "voice",
+    name: "",
+    providerCode: null,
+    remoteModelId: null,
+    params: { ...DEFAULT_VOICE_PARAMS },
   },
 ];
 
@@ -400,6 +411,15 @@ export const PARAM_TEMPLATES: ParamTemplateSeed[] = [
   },
   {
     model_type: "imageGeneration",
+    param_key: "enabled",
+    param_label: "Enabled",
+    param_type: "boolean",
+    step: null,
+    options: null,
+    default_value: true,
+  },
+  {
+    model_type: "voice",
     param_key: "enabled",
     param_label: "Enabled",
     param_type: "boolean",

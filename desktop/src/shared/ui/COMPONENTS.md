@@ -389,6 +389,29 @@
 - disabled 回退到 `surface-secondary` 和 `text-text-tertiary`
 - error 文案与错误描边使用 `danger`
 
+## Slider
+
+用于有明确最小值、最大值和步长的数值调节。
+
+### Props
+
+| 属性 | 类型 | 说明 |
+| --- | --- | --- |
+| `label` | `string` | 字段标题 |
+| `value` | `number` | 当前值 |
+| `onChange` | `(value: number) => void` | 值变化回调 |
+| `min` | `number` | 最小值 |
+| `max` | `number` | 最大值 |
+| `step` | `number` | 步长 |
+| `labelHelp` | `string` | label 旁 Tooltip 说明 |
+| `valueFormatter` | `(value: number) => string` | 右侧数值展示格式化 |
+
+### 交互与色彩
+
+- 轨道默认用 `border` 中性色，已选区段用 `primary`
+- 滑块圆点使用 `primary`，并保留浅色描边保证亮暗主题都清晰
+- 适合语速、阈值、温度、比例类字段，不适合无界长数字
+
 ## TextArea
 
 用于多行文本输入，例如描述、备注、Prompt、长说明。

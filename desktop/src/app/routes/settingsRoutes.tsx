@@ -45,6 +45,7 @@ import ComputerUseStudioPage from "@/features/Settings/pages/MicroApps/ComputerU
 import MailCenterPage from "@/features/Settings/pages/MicroApps/MailCenter";
 import NewsHubPage from "@/features/Settings/pages/MicroApps/NewsHub";
 import TtsStudioPage from "@/features/Settings/pages/MicroApps/Tts";
+import CodeGraphStudioPage from "@/features/Settings/pages/MicroApps/CodeGraph";
 
 export type SettingsNavGroup =
   | "general"
@@ -147,6 +148,10 @@ const settingsRouteTree: SettingsRouteConfig[] = [
       {
         path: "tts-studio",
         element: <TtsStudioPage />,
+      },
+      {
+        path: "codegraph-studio",
+        element: <CodeGraphStudioPage />,
       },
     ],
   },

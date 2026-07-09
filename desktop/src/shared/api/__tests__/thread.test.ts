@@ -36,6 +36,8 @@ import {
   type AgentRun,
 } from "../thread";
 
+const noTimeoutConfig = { timeout: 0 };
+
 const sampleThread: Thread = {
   id: "thread-1",
   title: "对话 1",
@@ -102,6 +104,7 @@ describe("thread api", () => {
 
     expect(get).toHaveBeenCalledWith(
       "/threads?status=active&sortBy=updatedAt&sortOrder=desc",
+      noTimeoutConfig,
     );
     expect(result).toEqual([sampleThread]);
   });
@@ -111,7 +114,7 @@ describe("thread api", () => {
 
     const result = await getThreadById("thread-1");
 
-    expect(get).toHaveBeenCalledWith("/threads/thread-1");
+    expect(get).toHaveBeenCalledWith("/threads/thread-1", noTimeoutConfig);
     expect(result).toBe(sampleThreadWithMessages);
   });
 
@@ -121,7 +124,7 @@ describe("thread api", () => {
     const input = { title: "新对话", modelName: "gpt-4o" };
     const result = await createThread(input);
 
-    expect(post).toHaveBeenCalledWith("/threads", input);
+    expect(post).toHaveBeenCalledWith("/threads", input, noTimeoutConfig);
     expect(result).toBe(sampleThread);
   });
 
@@ -130,7 +133,11 @@ describe("thread api", () => {
 
     const result = await updateThread("thread-1", { title: "已更新" });
 
-    expect(patch).toHaveBeenCalledWith("/threads/thread-1", { title: "已更新" });
+    expect(patch).toHaveBeenCalledWith(
+      "/threads/thread-1",
+      { title: "已更新" },
+      noTimeoutConfig,
+    );
     expect(result).toBe(sampleThread);
   });
 
@@ -142,7 +149,11 @@ describe("thread api", () => {
 
     const result = await generateThreadContextSummary("thread-1");
 
-    expect(post).toHaveBeenCalledWith("/threads/thread-1/context-summary", {});
+    expect(post).toHaveBeenCalledWith(
+      "/threads/thread-1/context-summary",
+      {},
+      noTimeoutConfig,
+    );
     expect(result.contextSummary).toBe("summary");
   });
 
@@ -151,7 +162,11 @@ describe("thread api", () => {
 
     const result = await archiveThread("thread-1");
 
-    expect(post).toHaveBeenCalledWith("/threads/thread-1/archive");
+    expect(post).toHaveBeenCalledWith(
+      "/threads/thread-1/archive",
+      undefined,
+      noTimeoutConfig,
+    );
     expect(result).toBe(sampleThread);
   });
 
@@ -160,7 +175,11 @@ describe("thread api", () => {
 
     const result = await restoreThread("thread-1");
 
-    expect(post).toHaveBeenCalledWith("/threads/thread-1/restore");
+    expect(post).toHaveBeenCalledWith(
+      "/threads/thread-1/restore",
+      undefined,
+      noTimeoutConfig,
+    );
     expect(result).toBe(sampleThread);
   });
 
@@ -169,7 +188,7 @@ describe("thread api", () => {
 
     const result = await deleteThread("thread-1");
 
-    expect(del).toHaveBeenCalledWith("/threads/thread-1");
+    expect(del).toHaveBeenCalledWith("/threads/thread-1", noTimeoutConfig);
     expect(result).toEqual({ deleted: true });
   });
 
@@ -178,7 +197,7 @@ describe("thread api", () => {
 
     const result = await listChatWorkspaces();
 
-    expect(get).toHaveBeenCalledWith("/chat-workspaces");
+    expect(get).toHaveBeenCalledWith("/chat-workspaces", noTimeoutConfig);
     expect(result).toEqual([sampleWorkspace]);
   });
 
@@ -187,7 +206,11 @@ describe("thread api", () => {
 
     const result = await createChatWorkspace({ name: "New" });
 
-    expect(post).toHaveBeenCalledWith("/chat-workspaces", { name: "New" });
+    expect(post).toHaveBeenCalledWith(
+      "/chat-workspaces",
+      { name: "New" },
+      noTimeoutConfig,
+    );
     expect(result).toBe(sampleWorkspace);
   });
 
@@ -198,7 +221,7 @@ describe("thread api", () => {
 
     expect(patch).toHaveBeenCalledWith("/chat-workspaces/ws-1", {
       name: "Updated",
-    });
+    }, noTimeoutConfig);
     expect(result).toBe(sampleWorkspace);
   });
 
@@ -207,7 +230,7 @@ describe("thread api", () => {
 
     const result = await deleteChatWorkspace("ws-1");
 
-    expect(del).toHaveBeenCalledWith("/chat-workspaces/ws-1");
+    expect(del).toHaveBeenCalledWith("/chat-workspaces/ws-1", noTimeoutConfig);
     expect(result).toEqual({ deleted: true });
   });
 
@@ -216,7 +239,7 @@ describe("thread api", () => {
 
     const result = await getAgentRun("run-1");
 
-    expect(get).toHaveBeenCalledWith("/agent/runs/run-1");
+    expect(get).toHaveBeenCalledWith("/agent/runs/run-1", noTimeoutConfig);
     expect(result).toBe(sampleAgentRun);
   });
 
@@ -225,7 +248,11 @@ describe("thread api", () => {
 
     const result = await approveAgentRun("run-1");
 
-    expect(post).toHaveBeenCalledWith("/agent/runs/run-1/approve", {});
+    expect(post).toHaveBeenCalledWith(
+      "/agent/runs/run-1/approve",
+      {},
+      noTimeoutConfig,
+    );
     expect(result).toBe(sampleAgentRun);
   });
 
@@ -234,7 +261,11 @@ describe("thread api", () => {
 
     const result = await rejectAgentRun("run-1");
 
-    expect(post).toHaveBeenCalledWith("/agent/runs/run-1/reject", {});
+    expect(post).toHaveBeenCalledWith(
+      "/agent/runs/run-1/reject",
+      {},
+      noTimeoutConfig,
+    );
     expect(result).toBe(sampleAgentRun);
   });
 
@@ -243,7 +274,11 @@ describe("thread api", () => {
 
     const result = await cancelAgentRun("run-1");
 
-    expect(post).toHaveBeenCalledWith("/agent/runs/run-1/cancel", {});
+    expect(post).toHaveBeenCalledWith(
+      "/agent/runs/run-1/cancel",
+      {},
+      noTimeoutConfig,
+    );
     expect(result).toBe(sampleAgentRun);
   });
 
@@ -252,7 +287,10 @@ describe("thread api", () => {
 
     const result = await getMessages("thread-1");
 
-    expect(get).toHaveBeenCalledWith("/threads/thread-1/messages");
+    expect(get).toHaveBeenCalledWith(
+      "/threads/thread-1/messages",
+      noTimeoutConfig,
+    );
     expect(result).toEqual([sampleMessage]);
   });
 
@@ -262,7 +300,11 @@ describe("thread api", () => {
     const input = { role: "user" as const, content: "hello" };
     const result = await createMessage("thread-1", input);
 
-    expect(post).toHaveBeenCalledWith("/threads/thread-1/messages", input);
+    expect(post).toHaveBeenCalledWith(
+      "/threads/thread-1/messages",
+      input,
+      noTimeoutConfig,
+    );
     expect(result).toBe(sampleMessage);
   });
 
@@ -271,7 +313,7 @@ describe("thread api", () => {
 
     const result = await deleteMessage("msg-1");
 
-    expect(del).toHaveBeenCalledWith("/messages/msg-1");
+    expect(del).toHaveBeenCalledWith("/messages/msg-1", noTimeoutConfig);
     expect(result).toEqual({ deleted: true });
   });
 });

@@ -9,6 +9,18 @@ export {
   verifyCodebaseExploreResult,
 } from "./codegraph-verification-bridge.js";
 export { createCodebaseExploreTrace } from "./codegraph-trace-diagnostics.js";
+export {
+  createManagedCodeGraphPlannerStorageFromAppDataRoot,
+  isCodebaseExplorePlannerExposureEnabled,
+  resolveManagedCodeGraphExternalIndexSupport,
+  resolveManagedCodeGraphPlannerConfig,
+  resolveManagedCodeGraphPlannerStorage,
+} from "./planner-exposure-config.js";
+export type {
+  ManagedCodeGraphExternalIndexSupport,
+  ManagedCodeGraphPlannerStorage,
+  ManagedCodeGraphPlannerStorageSource,
+} from "./planner-exposure-config.js";
 export type {
   CodebaseCandidate,
   CodebaseExploreCommand,

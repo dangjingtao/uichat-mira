@@ -8,6 +8,7 @@ import {
   migrateLegacyMicroAppBindings,
 } from "./legacy-sync.js";
 import { computerUseMicroApp } from "./apps/computer-use.microapp.js";
+import { codeGraphMicroApp } from "./apps/codegraph.microapp.js";
 import { imageGenerationMicroApp } from "./apps/image-generation.microapp.js";
 import { knowledgeQueryMicroApp } from "./apps/knowledge-query.microapp.js";
 import { newsHubMicroApp } from "./apps/news-hub.microapp.js";
@@ -23,6 +24,7 @@ const definitions = new Map<string, MicroAppDefinition>([
   [newsHubMicroApp.type, newsHubMicroApp],
   [imageGenerationMicroApp.type, imageGenerationMicroApp],
   [computerUseMicroApp.type, computerUseMicroApp],
+  [codeGraphMicroApp.type, codeGraphMicroApp],
   [ttsMicroApp.type, ttsMicroApp],
 ]);
 

@@ -7,6 +7,7 @@ export * from "./knowledgeBase";
 export * from "./system";
 export * from "./imageGeneration";
 export * from "./computerUse";
+export * from "./codegraphStudio";
 export * from "./mailCenter";
 export * from "./newsHub";
 export * from "./tts";

@@ -9,13 +9,11 @@ const {
   messageSuccess,
   messageError,
   resetProviderRoleModelMock,
-  openPlatformSettingsMock,
 } = vi.hoisted(() => ({
   confirmMock: vi.fn(),
   messageSuccess: vi.fn(),
   messageError: vi.fn(),
   resetProviderRoleModelMock: vi.fn(async () => undefined),
-  openPlatformSettingsMock: vi.fn(),
 }));
 
 vi.mock("react-i18next", () => ({
@@ -54,7 +52,7 @@ vi.mock("@/features/Settings/components/DefaultModelCard", () => ({
       { onReady?: () => void }
     >(({ onReady }, ref) => {
       React.useImperativeHandle(ref, () => ({
-        openPlatformSettings: openPlatformSettingsMock,
+        openPlatformSettings: vi.fn(),
       }));
       React.useEffect(() => {
         onReady?.();
@@ -72,9 +70,6 @@ describe("ModelSettings", () => {
     expect(screen.getByText("settings.model.page.title")).toBeInTheDocument();
     expect(
       screen.getByText("settings.model.actions.resetDefault"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("settings.model.actions.openSettings"),
     ).toBeInTheDocument();
   });
 
@@ -101,12 +96,15 @@ describe("ModelSettings", () => {
     };
     await onConfirm();
 
-    expect(resetProviderRoleModelMock).toHaveBeenCalledTimes(5);
+    expect(resetProviderRoleModelMock).toHaveBeenCalledTimes(8);
     expect(resetProviderRoleModelMock).toHaveBeenCalledWith("llm");
     expect(resetProviderRoleModelMock).toHaveBeenCalledWith("embedding");
     expect(resetProviderRoleModelMock).toHaveBeenCalledWith("rerank");
     expect(resetProviderRoleModelMock).toHaveBeenCalledWith("task");
+    expect(resetProviderRoleModelMock).toHaveBeenCalledWith("agentTask");
     expect(resetProviderRoleModelMock).toHaveBeenCalledWith("evaluation");
+    expect(resetProviderRoleModelMock).toHaveBeenCalledWith("imageGeneration");
+    expect(resetProviderRoleModelMock).toHaveBeenCalledWith("voice");
     await waitFor(() => {
       expect(messageSuccess).toHaveBeenCalledWith(
         "settings.model.resetModal.success",
@@ -128,16 +126,6 @@ describe("ModelSettings", () => {
 
     await waitFor(() => {
       expect(messageError).toHaveBeenCalledWith("reset failed");
-    });
-  });
-
-  it("opens platform settings via child ref when ready", async () => {
-    render(<ModelSettings />);
-
-    screen.getByText("settings.model.actions.openSettings").click();
-
-    await waitFor(() => {
-      expect(openPlatformSettingsMock).toHaveBeenCalledTimes(1);
     });
   });
 });

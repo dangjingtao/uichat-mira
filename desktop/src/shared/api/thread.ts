@@ -3,6 +3,8 @@ import { get, post, patch, del, ApiError } from "../lib/request";
 // 重新导出 ApiError 以便在其他模块中使用
 export { ApiError };
 
+const CHAT_REQUEST_CONFIG = { timeout: 0 } as const;
+
 export type ThreadStatus = "active" | "archived" | "deleted";
 export type MessageRole = "user" | "assistant" | "system";
 
@@ -140,17 +142,17 @@ export async function getThreads(
   if (filters?.sortOrder) params.append("sortOrder", filters.sortOrder);
 
   const query = params.toString();
-  return get<Thread[]>(`/threads${query ? `?${query}` : ""}`);
+  return get<Thread[]>(`/threads${query ? `?${query}` : ""}`, CHAT_REQUEST_CONFIG);
 }
 
 // 获取对话详情（含消息）
 export async function getThreadById(id: string): Promise<ThreadWithMessages> {
-  return get<ThreadWithMessages>(`/threads/${id}`);
+  return get<ThreadWithMessages>(`/threads/${id}`, CHAT_REQUEST_CONFIG);
 }
 
 // 创建新对话
 export async function createThread(input?: CreateThreadInput): Promise<Thread> {
-  return post<Thread>("/threads", input);
+  return post<Thread>("/threads", input, CHAT_REQUEST_CONFIG);
 }
 
 // 更新对话
@@ -158,7 +160,7 @@ export async function updateThread(
   id: string,
   input: Partial<CreateThreadInput>,
 ): Promise<Thread> {
-  return patch<Thread>(`/threads/${id}`, input);
+  return patch<Thread>(`/threads/${id}`, input, CHAT_REQUEST_CONFIG);
 }
 
 export async function generateThreadContextSummary(
@@ -167,65 +169,66 @@ export async function generateThreadContextSummary(
   return post<Pick<Thread, "contextSummary" | "contextSummaryUpdatedAt">>(
     `/threads/${id}/context-summary`,
     {},
+    CHAT_REQUEST_CONFIG,
   );
 }
 
 // 归档对话
 export async function archiveThread(id: string): Promise<Thread> {
-  return post<Thread>(`/threads/${id}/archive`);
+  return post<Thread>(`/threads/${id}/archive`, undefined, CHAT_REQUEST_CONFIG);
 }
 
 // 恢复对话
 export async function restoreThread(id: string): Promise<Thread> {
-  return post<Thread>(`/threads/${id}/restore`);
+  return post<Thread>(`/threads/${id}/restore`, undefined, CHAT_REQUEST_CONFIG);
 }
 
 // 删除对话
 export async function deleteThread(id: string): Promise<{ deleted: boolean }> {
-  return del<{ deleted: boolean }>(`/threads/${id}`);
+  return del<{ deleted: boolean }>(`/threads/${id}`, CHAT_REQUEST_CONFIG);
 }
 
 export async function listChatWorkspaces(): Promise<ChatWorkspace[]> {
-  return get<ChatWorkspace[]>("/chat-workspaces");
+  return get<ChatWorkspace[]>("/chat-workspaces", CHAT_REQUEST_CONFIG);
 }
 
 export async function createChatWorkspace(input: {
   name: string;
   rootPath?: string | null;
 }): Promise<ChatWorkspace> {
-  return post<ChatWorkspace>("/chat-workspaces", input);
+  return post<ChatWorkspace>("/chat-workspaces", input, CHAT_REQUEST_CONFIG);
 }
 
 export async function updateChatWorkspace(
   id: string,
   input: Partial<{ name: string; rootPath: string | null }>,
 ): Promise<ChatWorkspace> {
-  return patch<ChatWorkspace>(`/chat-workspaces/${id}`, input);
+  return patch<ChatWorkspace>(`/chat-workspaces/${id}`, input, CHAT_REQUEST_CONFIG);
 }
 
 export async function deleteChatWorkspace(id: string): Promise<{ deleted: boolean }> {
-  return del<{ deleted: boolean }>(`/chat-workspaces/${id}`);
+  return del<{ deleted: boolean }>(`/chat-workspaces/${id}`, CHAT_REQUEST_CONFIG);
 }
 
 export async function getAgentRun(runId: string): Promise<AgentRun> {
-  return get<AgentRun>(`/agent/runs/${runId}`);
+  return get<AgentRun>(`/agent/runs/${runId}`, CHAT_REQUEST_CONFIG);
 }
 
 export async function approveAgentRun(runId: string): Promise<AgentRun> {
-  return post<AgentRun>(`/agent/runs/${runId}/approve`, {});
+  return post<AgentRun>(`/agent/runs/${runId}/approve`, {}, CHAT_REQUEST_CONFIG);
 }
 
 export async function rejectAgentRun(runId: string): Promise<AgentRun> {
-  return post<AgentRun>(`/agent/runs/${runId}/reject`, {});
+  return post<AgentRun>(`/agent/runs/${runId}/reject`, {}, CHAT_REQUEST_CONFIG);
 }
 
 export async function cancelAgentRun(runId: string): Promise<AgentRun> {
-  return post<AgentRun>(`/agent/runs/${runId}/cancel`, {});
+  return post<AgentRun>(`/agent/runs/${runId}/cancel`, {}, CHAT_REQUEST_CONFIG);
 }
 
 // 获取对话消息
 export async function getMessages(threadId: string): Promise<Message[]> {
-  return get<Message[]>(`/threads/${threadId}/messages`);
+  return get<Message[]>(`/threads/${threadId}/messages`, CHAT_REQUEST_CONFIG);
 }
 
 // 创建消息
@@ -233,10 +236,10 @@ export async function createMessage(
   threadId: string,
   input: CreateMessageInput,
 ): Promise<Message> {
-  return post<Message>(`/threads/${threadId}/messages`, input);
+  return post<Message>(`/threads/${threadId}/messages`, input, CHAT_REQUEST_CONFIG);
 }
 
 // 删除消息
 export async function deleteMessage(id: string): Promise<{ deleted: boolean }> {
-  return del<{ deleted: boolean }>(`/messages/${id}`);
+  return del<{ deleted: boolean }>(`/messages/${id}`, CHAT_REQUEST_CONFIG);
 }

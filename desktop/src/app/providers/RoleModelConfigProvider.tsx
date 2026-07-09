@@ -41,6 +41,7 @@ const emptyConfigMap: RoleModelConfigMap = {
   agentTask: null,
   evaluation: null,
   imageGeneration: null,
+  voice: null,
 };
 
 const disconnectedModelAccessStatus: GlobalModelAccessStatus = {

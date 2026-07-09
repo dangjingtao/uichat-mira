@@ -7,6 +7,7 @@ export const MODEL_TYPE_VALUES = [
   "agentTask",
   "evaluation",
   "imageGeneration",
+  "voice",
 ] as const;
 export const MESSAGE_ROLE_VALUES = ["user", "assistant", "system"] as const;
 export const THREAD_STATUS_VALUES = ["active", "archived", "deleted"] as const;

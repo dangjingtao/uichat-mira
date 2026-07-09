@@ -38,7 +38,7 @@ const sanitizeParamsByType = (
   }
 
   if (type !== "rerank") {
-    if (type === "imageGeneration") {
+    if (type === "imageGeneration" || type === "voice") {
       const sanitized: Record<string, unknown> = {};
 
       if (typeof params.enabled === "boolean") {
@@ -187,10 +187,11 @@ export const modelConfigService = {
       embedding: [],
       rerank: [],
       task: [],
-      agentTask: [],
-      evaluation: [],
-      imageGeneration: [],
-    };
+    agentTask: [],
+    evaluation: [],
+    imageGeneration: [],
+    voice: [],
+  };
 
     for (const row of rows) {
       result[row.modelType].push(toParamTemplateResponse(row));

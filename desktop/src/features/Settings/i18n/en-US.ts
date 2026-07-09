@@ -141,6 +141,188 @@ const settingsPending = {
             open: "Open Studio",
           },
         },
+        codeGraph: {
+          title: "CodeGraph Studio",
+          description: "A CodeGraph workspace for blocked-safe runtime status, config tuning, and smoke-debug results.",
+          hint: "It does not expose CodeGraph to Planner by default and does not relax the real provider external-index risk gate.",
+          badges: {
+            debug: "CodeGraph workspace",
+            focus: "Status + Config + Debug",
+            runtime: "Blocked-safe",
+          },
+          actions: {
+            open: "Open Studio",
+          },
+        },
+      },
+      codeGraphStudio: {
+        page: {
+          title: "CodeGraph Studio",
+          description:
+            "CodeGraph is used to understand repository structure, trace symbol relationships, and provide indexing for later code search and code exploration. This page lets you see whether it is currently usable and debug the local integration state.",
+        },
+        overview: {
+          statusLabel: "Current Status:",
+          description:
+            "Real CodeGraph 1.3.0 still does not support a reliable external index directory, so the workspace remains blocked-safe and will neither start nor pollute the repository.",
+          nextStepsTitle: "Next",
+          nextSteps: {
+            step1: {
+              title: "Fill in App Data Root",
+              description: "Point logs and temporary state to a directory outside the repository.",
+            },
+            step2: {
+              title: "Save config and detect again",
+              description: "Save first, then run detect to refresh the current status.",
+            },
+            step3: {
+              title: "Switch to Fake Provider if you only need to validate the page flow",
+              description: "Use Fake Provider for smoke validation of the page flow. It does not mean the real CodeGraph provider is available.",
+            },
+          },
+          chips: {
+            planner: "Planner exposure: {{value}}",
+            telemetry: "Telemetry: {{value}}",
+            pollution: "Repo pollution: {{value}}",
+            fakeProvider: "Fake Provider: {{value}}",
+          },
+        },
+        blockedCards: {
+          appDataRoot: {
+            title: "A. Missing App Data Root",
+            description: "A directory outside the repository is required for logs and temporary state.",
+            badge: "Actionable",
+          },
+          externalIndex: {
+            title: "B. CodeGraph 1.3.0 Does Not Support External Index Root",
+            description: "The real provider still requires repo-root `.codegraph`, so startup must stay blocked.",
+            badge: "Not Removable Yet",
+          },
+          pollutionGuard: {
+            title: "C. Repo Pollution Guard Is Enabled",
+            description: "If `.codegraph` appears at repo root, the workspace will block ready and will not delete user files.",
+            badge: "Guarding",
+          },
+        },
+        cards: {
+          blockedReasons: {
+            title: "Blocked Reasons",
+          },
+          pollutionSummary: {
+            title: "Pollution Guard Summary",
+            behavior: "Block immediately when pollution appears. Never delete user files.",
+            noticeTitle: "This is a guard mechanism, not a crash.",
+            noticeBody: "If repo-root `.codegraph` appears, the system only blocks ready. It will not delete the user's files for them.",
+          },
+          config: {
+            title: "Base Config",
+            description: "Only the common owner-facing fields stay here. Probe args, log paths, and index paths move into Advanced Config.",
+            appDataRootHelp:
+              "This directory stores logs and temporary state. It must stay outside the repository and should be a durable location.",
+          },
+          advanced: {
+            title: "Advanced Config (Optional)",
+            meta: "Collapsed by default. Probe args, logRoot, and indexRoot stay here instead of occupying the first screen.",
+          },
+          actions: {
+            title: "Runtime Actions",
+            description: "detect and health are always for re-checking status. start and stop stay constrained by blocked-safe rules.",
+            startHintBlocked: "The real provider is currently blocked, so start is disabled.",
+            startHintFake: "Fake Provider is selected. Save first, then use detect / start to validate the page flow.",
+          },
+          smoke: {
+            title: "Smoke Validation",
+            description: "When the real provider is blocked, this area must say blocked explicitly instead of pretending the result is empty.",
+            modes: {
+              real: "Real Provider",
+              fake: "Fake Provider",
+            },
+            realTitle: "Real Provider",
+            realReady: "The current state allows smoke checks.",
+            realBlocked: "The current state is blocked, so smoke query cannot run.",
+            realDisabledHint: "The real provider is currently blocked, so smoke query is disabled.",
+            fakeTitle: "Fake Provider",
+            fakeDescription: "Fake Provider only validates the page flow. It does not mean the real CodeGraph provider is available.",
+            fakeToggleTitle: "Switch to Fake Provider to validate the page flow",
+            fakeToggleHint: "This rewrites command and probe args to the test provider. Save first, then run detect / start.",
+            fakeDisabledHint: "After switching to Fake Provider, save the config and run detect / start before smoke validation.",
+          },
+          smokeResult: {
+            title: "Smoke Result",
+            description: "When the real provider is blocked, this area must say blocked explicitly instead of being misread as an empty result.",
+            metrics: {
+              status: "Status",
+              candidates: "Candidates",
+              content: "Content Blocks",
+            },
+          },
+          debug: {
+            title: "Raw Debug Report",
+            meta: "For developer debugging only",
+            helperTitle: "Raw fields stay here",
+            helperBody: "The raw JSON stays in the folded section so it does not replace the owner-facing first-screen reading order.",
+          },
+        },
+        fields: {
+          guardStatus: "guardStatus",
+          repoDataDirPath: "repoDataDirPath",
+          exists: "exists",
+          behavior: "Behavior",
+          workspaceRootReadonly: "Workspace Root (Read-only)",
+          command: "Command",
+          appDataRootRequired: "App Data Root (Required)",
+          logRoot: "logRoot",
+          indexRoot: "indexRoot",
+          startArgs: "startArgs",
+          versionProbeArgs: "versionProbeArgs",
+          telemetryProbeArgs: "telemetryProbeArgs",
+          timeoutMs: "Timeout (ms)",
+          maxResults: "Max Results",
+          queryLimit: "Query Limit",
+          smokeQuery: "Smoke Query",
+        },
+        placeholders: {
+          appDataRoot: "Choose or enter a directory outside the repository for App Data Root",
+        },
+        values: {
+          enabled: "On",
+          disabled: "Off",
+          available: "Available",
+          unavailable: "Unavailable",
+          selected: "Selected",
+          availableForValidation: "Available",
+          detected: "Detected",
+          notDetected: "Not Detected",
+          ready: "ready",
+          blocked: "blocked",
+        },
+        actions: {
+          refresh: "Refresh",
+          saveConfig: "Save Config",
+          detect: "detect",
+          start: "start",
+          health: "health",
+          stop: "stop",
+          smokeStatus: "Run Smoke Status",
+          smokeQuery: "Run Smoke",
+          useRecommendedRoot: "Use Recommended Directory",
+          copyDebug: "Copy Debug Report",
+        },
+        states: {
+          loading: "Loading CodeGraph Studio...",
+          emptySmokeTitle: "No usable result yet",
+          emptySmoke:
+            "When the real provider is blocked, this area will say blocked explicitly instead of being interpreted as an empty result.",
+        },
+        messages: {
+          loadFailed: "Failed to load CodeGraph Studio",
+          configSaved: "CodeGraph Studio config saved",
+          configSaveFailed: "Failed to save CodeGraph Studio config",
+          actionExecuted: "{{action}} executed",
+          actionFailed: "CodeGraph action failed",
+          debugCopied: "Raw debug report copied",
+          debugCopyFailed: "Failed to copy the raw debug report",
+        },
       },
       newsHub: {
         page: {

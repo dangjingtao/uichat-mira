@@ -33,6 +33,7 @@ const sampleRoleConfig: RoleModelConfig = {
   name: "LLM",
   providerCode: "openai",
   providerConnectionId: "openai",
+  providerConnectionDisplayName: "OpenAI",
   providerTemplateCode: "openai",
   remoteModelId: "gpt-4o",
   params: { temperature: 0.7 },
@@ -95,6 +96,7 @@ const sampleProviderDetail: ProviderDetail = {
     agentTask: null,
     evaluation: null,
     imageGeneration: null,
+    voice: null,
   },
 };
 

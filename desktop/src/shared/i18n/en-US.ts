@@ -975,7 +975,7 @@ const enUS = {
       resetModal: {
         title: "Confirm Reset Default Models",
         description:
-          "This will clear the default bindings for LLM, Embedding, Rerank, Task, AgentTask, Evaluation, and Image Generation, and restore default parameters.",
+          "This will clear the default bindings for LLM, Embedding, Rerank, Task, AgentTask, Evaluation, Image Generation, and Voice, and restore default parameters.",
         warning:
           "This operation will affect the default model selection for current conversations and knowledge bases.",
         success: "Default models have been reset",
@@ -1046,6 +1046,12 @@ const enUS = {
             "For default image-generation model binding; the first pass only manages the default role",
           readOnlyHint:
             "Image generation currently supports default role binding only. Runtime image calls will be connected in a later task.",
+        },
+        voice: {
+          title: "Voice Model",
+          subtitle: "For speech recognition and synthesis",
+          readOnlyHint:
+            "Voice models currently support default role binding only. Runtime voice calls will be connected in a later task.",
         },
         configured: "Configured",
         builtInReady: "Built-in Ready",
@@ -1165,6 +1171,7 @@ const enUS = {
         setDefaultAgentTask: "Set as Default AgentTask",
         setDefaultEvaluation: "Set as Default Evaluation Model",
         setDefaultImageGeneration: "Set as Default Image Generation Model",
+        setDefaultVoice: "Set as Default Voice Model",
         setting: "Setting...",
         selectModelFirst: "Please select a model first",
         updatedLlm: "Default LLM model updated",
@@ -1174,6 +1181,7 @@ const enUS = {
         updatedAgentTask: "Default AgentTask model updated",
         updatedEvaluation: "Default evaluation model updated",
         updatedImageGeneration: "Default image generation model updated",
+        updatedVoice: "Default voice model updated",
         setDefaultFailed: "Failed to set default model",
         loadFailed: "Failed to load platform configuration",
         loadDetailFailed: "Failed to load platform details",

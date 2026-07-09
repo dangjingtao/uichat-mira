@@ -42,6 +42,7 @@ const ROLE_UPDATED_MESSAGE_KEY: Record<RoleModelType, string> = {
   embedding: "settings.model.api.updatedEmbedding",
   rerank: "settings.model.api.updatedRerank",
   imageGeneration: "settings.model.api.updatedImageGeneration",
+  voice: "settings.model.api.updatedVoice",
 };
 
 interface PlatformConfigModalProps {

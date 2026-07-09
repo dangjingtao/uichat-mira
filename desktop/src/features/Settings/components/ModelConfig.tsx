@@ -182,6 +182,14 @@ const MODEL_META: Record<RoleModelType, ModelMeta> = {
     readOnlyHintKey: "settings.model.config.imageGeneration.readOnlyHint",
     params: [],
   },
+  voice: {
+    titleKey: "settings.model.config.voice.title",
+    subtitleKey: "settings.model.config.voice.subtitle",
+    badgeText: "VOC",
+    badgeClassName: "bg-primary/10 text-primary",
+    readOnlyHintKey: "settings.model.config.voice.readOnlyHint",
+    params: [],
+  },
 };
 
 const normalizeConfigState = (

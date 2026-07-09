@@ -187,6 +187,7 @@ export const roleModelConfigSchema = {
     "name",
     "providerCode",
     "providerConnectionId",
+    "providerConnectionDisplayName",
     "providerTemplateCode",
     "remoteModelId",
     "params",
@@ -207,6 +208,10 @@ export const roleModelConfigSchema = {
     },
     providerConnectionId: {
       description: "Assigned provider connection id, or null when reset.",
+      anyOf: [{ type: "string" }, { type: "null" }],
+    },
+    providerConnectionDisplayName: {
+      description: "Assigned provider connection display name, or null when reset.",
       anyOf: [{ type: "string" }, { type: "null" }],
     },
     providerTemplateCode: {
@@ -482,6 +487,7 @@ export const providerSettingsRouteSchemas = {
               "agentTask",
               "evaluation",
               "imageGeneration",
+              "voice",
             ],
             properties: {
               llm: roleAssignmentSchema,
@@ -491,6 +497,7 @@ export const providerSettingsRouteSchemas = {
               agentTask: roleAssignmentSchema,
               evaluation: roleAssignmentSchema,
               imageGeneration: roleAssignmentSchema,
+              voice: roleAssignmentSchema,
             },
           },
         },

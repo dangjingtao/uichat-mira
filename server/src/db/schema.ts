@@ -1222,7 +1222,8 @@ export type ModelType =
   | "task"
   | "agentTask"
   | "evaluation"
-  | "imageGeneration";
+  | "imageGeneration"
+  | "voice";
 export type UserRole = "admin" | "user";
 export type ParamType = "number" | "select" | "boolean";
 export type ProviderCode = ProviderCodeValue;
