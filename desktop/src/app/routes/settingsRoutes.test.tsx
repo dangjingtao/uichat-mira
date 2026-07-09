@@ -196,9 +196,10 @@ describe("settings routes", () => {
   });
 
   it("includes the image generation studio route under the micro apps path", () => {
+    const microAppsRoute = settingsRoutes.find((route) => route.path === "micro-apps");
     expect(
-      settingsRoutes.some(
-        (route) => route.path === "micro-apps/news-hub",
+      microAppsRoute?.children?.some(
+        (route) => route.path === "news-hub",
       ),
     ).toBe(true);
   });
@@ -222,9 +223,10 @@ describe("settings routes", () => {
   });
 
   it("includes the image generation studio route under the micro apps path", () => {
+    const microAppsRoute = settingsRoutes.find((route) => route.path === "micro-apps");
     expect(
-      settingsRoutes.some(
-        (route) => route.path === "micro-apps/image-generation-studio",
+      microAppsRoute?.children?.some(
+        (route) => route.path === "image-generation-studio",
       ),
     ).toBe(true);
   });
@@ -248,9 +250,10 @@ describe("settings routes", () => {
   });
 
   it("includes the computer use studio route under the micro apps path", () => {
+    const microAppsRoute = settingsRoutes.find((route) => route.path === "micro-apps");
     expect(
-      settingsRoutes.some(
-        (route) => route.path === "micro-apps/computer-use-studio",
+      microAppsRoute?.children?.some(
+        (route) => route.path === "computer-use-studio",
       ),
     ).toBe(true);
   });
@@ -274,9 +277,10 @@ describe("settings routes", () => {
   });
 
   it("includes the mail center route under the micro apps path", () => {
+    const microAppsRoute = settingsRoutes.find((route) => route.path === "micro-apps");
     expect(
-      settingsRoutes.some(
-        (route) => route.path === "micro-apps/mail-center",
+      microAppsRoute?.children?.some(
+        (route) => route.path === "mail-center",
       ),
     ).toBe(true);
   });
@@ -300,9 +304,10 @@ describe("settings routes", () => {
   });
 
   it("includes the tts studio route under the micro apps path", () => {
+    const microAppsRoute = settingsRoutes.find((route) => route.path === "micro-apps");
     expect(
-      settingsRoutes.some(
-        (route) => route.path === "micro-apps/tts-studio",
+      microAppsRoute?.children?.some(
+        (route) => route.path === "tts-studio",
       ),
     ).toBe(true);
   });

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { RouteObject } from "react-router-dom";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { Outlet } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 import {
   Blend,
@@ -110,7 +111,7 @@ const settingsRouteTree: SettingsRouteConfig[] = [
   },
   {
     path: "micro-apps",
-    element: <MicroAppsSettings />,
+    element: <Outlet />,
     nav: {
       labelKey: "settings.navigation.microApps",
       icon: PanelsTopLeft,
@@ -120,30 +121,34 @@ const settingsRouteTree: SettingsRouteConfig[] = [
     },
     children: [
       {
+        path: "",
+        element: <MicroAppsSettings />,
+      },
+      {
         path: ":appId",
         element: <MicroAppDetailPage />,
       },
+      {
+        path: "news-hub",
+        element: <NewsHubPage />,
+      },
+      {
+        path: "image-generation-studio",
+        element: <ImageGenerationStudioPage />,
+      },
+      {
+        path: "computer-use-studio",
+        element: <ComputerUseStudioPage />,
+      },
+      {
+        path: "mail-center",
+        element: <MailCenterPage />,
+      },
+      {
+        path: "tts-studio",
+        element: <TtsStudioPage />,
+      },
     ],
-  },
-  {
-    path: "micro-apps/news-hub",
-    element: <NewsHubPage />,
-  },
-  {
-    path: "micro-apps/image-generation-studio",
-    element: <ImageGenerationStudioPage />,
-  },
-  {
-    path: "micro-apps/computer-use-studio",
-    element: <ComputerUseStudioPage />,
-  },
-  {
-    path: "micro-apps/mail-center",
-    element: <MailCenterPage />,
-  },
-  {
-    path: "micro-apps/tts-studio",
-    element: <TtsStudioPage />,
   },
   {
     path: "knowledge-base/add",

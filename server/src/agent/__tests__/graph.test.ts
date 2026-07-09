@@ -1407,7 +1407,7 @@ test("agentGraph answers after a single read_list execution when the user asked 
   });
 
   assert.equal(result.status, "completed");
-  assert.equal(plannerSpy.mock.calls.length, 1);
+  assert.equal(plannerSpy.mock.calls.length, 0);
   assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
   assert.equal(generateInvokeSpy.mock.calls.length, 1);
   assert.equal(result.evidence.latestSummary?.toolId, "read_list");
@@ -1595,7 +1595,7 @@ test("agentGraph answers after a single web_search execution when search evidenc
   });
 
   assert.equal(result.status, "completed");
-  assert.equal(plannerSpy.mock.calls.length, 1);
+  assert.equal(plannerSpy.mock.calls.length, 0);
   assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
   assert.equal(generateInvokeSpy.mock.calls.length, 1);
   assert.equal(

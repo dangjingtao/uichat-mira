@@ -86,16 +86,22 @@ task_state: CURRENT
 
 ### Commands
 
+- `pnpm exec vitest run src/agent/__tests__/graph.test.ts -t "agentGraph answers after a single (read_list|web_search) execution"`
 - `pnpm exec vitest run src/agent/__tests__/graph.test.ts -t "agentGraph routes recoverable tool failure back to the planner chain for replanning|agentGraph stops retrying after two recoverable tool failures and does not re-enter planner or tool again"`
 - `pnpm exec vitest run src/agent/__tests__/graph.test.ts -t "agentGraph does not answer immediately after mutation execution when verification is still required"`
 - `pnpm exec vitest run src/agent/__tests__/graph.test.ts -t "agentGraph treats terminal mutation failure as a terminal outcome without pretending the deletion succeeded"`
 - `pnpm exec vitest run src/agent/__tests__/graph.test.ts -t "agentGraph answers after a single terminal_session execution when command output is sufficient"`
 - `pnpm exec vitest run src/agent/__tests__/graph.test.ts -t "agentGraph answers after a single read_list execution when the user asked for a workspace listing|agentGraph answers after a single read_locate execution when the user only asked where README.md is|agentGraph opens README.md after read_locate when the question still asks for file content|agentGraph only answers after README.md and AGENTS.md are both opened for a multi-file content task|agentGraph does not let selectedToolIds bypass planner and normalize|agentGraph stops the current loop when policy requires approval and never enters tool execution|agentGraph keeps pendingApproval and frozen pendingToolCall when Harness pauses for approval"`
+- `pnpm exec vitest run src/agent/__tests__/graph.test.ts`
 - `pnpm check`
 
 ### Results
 
-- targeted `graph.test.ts` runs: passed for the above targeted scenarios after updating blackbox assertions
+- targeted `graph.test.ts` run for `agentGraph answers after a single read_list execution when the user asked for a workspace listing` and `agentGraph answers after a single web_search execution when search evidence is sufficient`: passed (`2 passed`, `36 skipped`)
+- assertion update for those two deterministic coverage-transition scenarios:
+  - keep `coverageTransitionReason` / `selectedActionType` / `selectedToolId`
+  - change `plannerSpy.mock.calls.length` from `1` to `0`
+- full `pnpm exec vitest run src/agent/__tests__/graph.test.ts`: not green in the current branch (`12 failed`, `26 passed`); the failing set is broader than this T043 test-only adjustment and was not changed by the two assertion edits above
 - `pnpm check`: failed in `packages/docs-site` with `@ui-chat-mira/docs-site@0.7.1 typecheck` exiting `3221225477`; this failure was pre-existing to the T043 test-file scope and was not changed here
 
 ## Risks / Deferred
