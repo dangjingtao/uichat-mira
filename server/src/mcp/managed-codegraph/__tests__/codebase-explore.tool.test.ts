@@ -11,6 +11,9 @@ const fixturePath = path.join(__dirname, "fixtures", "fake-codegraph-provider.mj
 
 const originalEnv = {
   UI_CHAT_CODEGRAPH_PLANNER_ENABLED: process.env.UI_CHAT_CODEGRAPH_PLANNER_ENABLED,
+  UI_CHAT_CODEGRAPH_APP_DATA_ROOT: process.env.UI_CHAT_CODEGRAPH_APP_DATA_ROOT,
+  UI_CHAT_LOG_DIR: process.env.UI_CHAT_LOG_DIR,
+  UI_CHAT_DATABASE_DIR: process.env.UI_CHAT_DATABASE_DIR,
   UI_CHAT_CODEGRAPH_COMMAND: process.env.UI_CHAT_CODEGRAPH_COMMAND,
   UI_CHAT_CODEGRAPH_START_ARGS: process.env.UI_CHAT_CODEGRAPH_START_ARGS,
   UI_CHAT_CODEGRAPH_VERSION_ARGS: process.env.UI_CHAT_CODEGRAPH_VERSION_ARGS,
@@ -24,6 +27,10 @@ const originalEnv = {
 
 const applyToolEnv = () => {
   process.env.UI_CHAT_CODEGRAPH_PLANNER_ENABLED = "1";
+  process.env.UI_CHAT_CODEGRAPH_APP_DATA_ROOT = path.join(
+    os.tmpdir(),
+    "codebase-explore-tool-appdata",
+  );
   process.env.UI_CHAT_CODEGRAPH_COMMAND = process.execPath;
   process.env.UI_CHAT_CODEGRAPH_START_ARGS = JSON.stringify([fixturePath, "--mcp"]);
   process.env.UI_CHAT_CODEGRAPH_VERSION_ARGS = JSON.stringify([fixturePath, "--version"]);
@@ -107,6 +114,13 @@ test("codebaseExploreTool returns controlled exposure traces and verified eviden
   assert.equal(payload.capabilityId, "codebase_explore");
   assert.equal(payload.plannerExposure, "controlled_tool_only");
   assert.equal(retrieval.chunkCount, 1);
+  assert.equal(
+    (retrieval.summary as Record<string, unknown>).answerReadiness
+      ? ((retrieval.summary as Record<string, unknown>).answerReadiness as Record<string, unknown>)
+          .canAnswer
+      : undefined,
+    false,
+  );
   assert.equal(exploreTrace.exposureMode, "controlled_tool_only");
   assert.equal(exploreTrace.provider, "codegraph");
   assert.equal(exploreTrace.providerVersion, "9.9.9");
@@ -153,4 +167,44 @@ test("codebaseExploreTool keeps provider unavailable runs degraded and does not 
   assert.equal(exploreTrace.fallbackUsed, true);
   assert.equal(exploreTrace.fallbackReason, "provider_unavailable");
   assert.equal(exploreTrace.exposureMode, "controlled_tool_only");
+});
+
+test("codebaseExploreTool reports blocked provider status when app-data root cannot be resolved", async () => {
+  applyToolEnv();
+  delete process.env.UI_CHAT_CODEGRAPH_APP_DATA_ROOT;
+  delete process.env.UI_CHAT_LOG_DIR;
+  delete process.env.UI_CHAT_DATABASE_DIR;
+
+  const workspaceRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), "codebase-explore-tool-no-appdata-"),
+  );
+
+  const result = await codebaseExploreTool.execute({
+    invocationId: "invocation-3",
+    args: { query: "planner function" },
+    pushEvent: () => {},
+    addArtifact: (artifact) => ({ id: "artifact-3", ...artifact }),
+    trace: {
+      startSpan: () => ({
+        spanId: "span-3",
+        end: () => {},
+      }),
+    },
+    signal: new AbortController().signal,
+    environment: createHarnessEnvironmentSnapshot({
+      workspace: {
+        rootPath: workspaceRoot,
+        source: "selected",
+      },
+    }),
+  });
+
+  const payload = result.result as Record<string, unknown>;
+  const exploreTrace = (payload.trace as Record<string, unknown>)
+    .explore as Record<string, unknown>;
+
+  assert.equal((payload.exploreResult as Record<string, unknown>).status, "degraded");
+  assert.equal(exploreTrace.indexStatus, "blocked");
+  assert.equal(exploreTrace.fallbackReason, "provider_unavailable");
+  assert.equal(exploreTrace.workspaceHash, null);
 });

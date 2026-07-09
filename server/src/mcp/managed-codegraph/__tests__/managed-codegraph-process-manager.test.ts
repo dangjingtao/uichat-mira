@@ -8,10 +8,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   CodebaseExploreWrapper,
   ManagedCodeGraphProcessManager,
-  toAgentRetrievalEvidenceFromVerification,
   createManagedCodeGraphWorkspaceHash,
+  toAgentRetrievalEvidenceFromVerification,
   verifyCodebaseExploreResult,
 } from "../index.js";
+import { ManagedJsonRpcSession } from "../managed-jsonrpc-session.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = path.resolve(__dirname, "../../../../..");
@@ -67,6 +68,7 @@ const createManager = (
     env: {
       FAKE_PROVIDER_VERSION: "1.2.3",
       FAKE_TELEMETRY_STATUS: "disabled",
+      FAKE_STRICT_INITIALIZED_MODE: "1",
       ...overrides.env,
     },
     workspaceRoot: currentWorkspace,
@@ -154,6 +156,7 @@ describe("ManagedCodeGraphProcessManager", () => {
     expect(health.processAlive).toBe(true);
     expect(health.providerVersion).toBe("1.2.3");
     expect(health.telemetryStatus).toBe("verified_off");
+    expect(health.initializedNotificationSent).toBe(true);
     expect(health.workspaceHash).toBe(createManagedCodeGraphWorkspaceHash(workspaceRoot));
 
     await manager.stop();
@@ -186,6 +189,7 @@ describe("ManagedCodeGraphProcessManager", () => {
       env: {
         FAKE_PROVIDER_VERSION: "1.2.3",
         FAKE_TELEMETRY_STATUS: "disabled",
+        FAKE_STRICT_INITIALIZED_MODE: "1",
       },
       workspaceRoot,
       allowedWorkspaceRoot: workspaceRoot,
@@ -263,13 +267,42 @@ describe("ManagedCodeGraphProcessManager", () => {
     expect(started.processAlive).toBe(false);
   });
 
+  it("sends notifications/initialized immediately after initialize succeeds", async () => {
+    const messageLogPath = path.join(makeTempDir(), "provider-messages.log");
+    const manager = createManager({
+      env: {
+        FAKE_MESSAGE_LOG_PATH: messageLogPath,
+      },
+    });
+
+    const started = await manager.start();
+    const methodOrder = fs
+      .readFileSync(messageLogPath, "utf8")
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as { method: string | null })
+      .map((frame) => frame.method);
+
+    expect(started.status).toBe("ready");
+    expect(started.initializedNotificationSent).toBe(true);
+    expect(methodOrder).toContain("initialize");
+    expect(methodOrder).toContain("notifications/initialized");
+    expect(methodOrder).toContain("codegraph/health");
+    expect(methodOrder.indexOf("notifications/initialized")).toBeGreaterThan(
+      methodOrder.indexOf("initialize"),
+    );
+    expect(methodOrder.indexOf("codegraph/health")).toBeGreaterThan(
+      methodOrder.indexOf("notifications/initialized"),
+    );
+  });
+
   it("keeps the spike isolated from Planner exposure", () => {
     const sourceDir = path.resolve(__dirname, "..");
     const combinedSource = listRuntimeSourceFiles(sourceDir)
       .map((filePath) => fs.readFileSync(filePath, "utf8"))
       .join("\n");
 
-    expect(combinedSource).not.toMatch(/from\s+["'][^"']*planner/i);
+    expect(combinedSource).not.toMatch(/from\s+["'][^"']*(?:agent\/planner|\/planner(?:\/|\.))/i);
     expect(combinedSource).not.toMatch(/from\s+["'][^"']*agent-graph/i);
   });
 
@@ -282,6 +315,117 @@ describe("ManagedCodeGraphProcessManager", () => {
     expect(combinedSource).not.toMatch(/appendRetrievalEvidence/);
     expect(combinedSource).not.toMatch(/appendToolExecutionEvidence/);
     expect(combinedSource).not.toMatch(/from\s+["'][^"']*read\//);
+  });
+});
+
+describe("ManagedJsonRpcSession initialized notification contract", () => {
+  it("fails codegraph/health before notifications/initialized is sent", async () => {
+    const tempDir = makeTempDir();
+    const session = new ManagedJsonRpcSession({
+      command: process.execPath,
+      args: [fixturePath, "--mcp"],
+      cwd: workspaceRoot,
+      env: {
+        FAKE_PROVIDER_VERSION: "1.2.3",
+        FAKE_TELEMETRY_STATUS: "disabled",
+        FAKE_STRICT_INITIALIZED_MODE: "1",
+        CODEGRAPH_WORKSPACE_ROOT: workspaceRoot,
+        CODEGRAPH_WORKSPACE_HASH: createManagedCodeGraphWorkspaceHash(workspaceRoot),
+        CODEGRAPH_LOG_ROOT: path.join(tempDir, "logs"),
+        CODEGRAPH_INDEX_ROOT: path.join(tempDir, "index"),
+      },
+      stdoutLogPath: path.join(tempDir, "stdout.log"),
+      stderrLogPath: path.join(tempDir, "stderr.log"),
+    });
+
+    await session.request(
+      "initialize",
+      {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: {
+          name: "uichat-mira-test",
+          version: "0.0.0",
+        },
+      },
+      1_500,
+    );
+
+    await expect(
+      session.request(
+        "codegraph/health",
+        {
+          workspaceHash: createManagedCodeGraphWorkspaceHash(workspaceRoot),
+          workspaceRoot,
+          indexRoot: path.join(tempDir, "index"),
+          logRoot: path.join(tempDir, "logs"),
+        },
+        1_500,
+      ),
+    ).rejects.toThrow(/notifications\/initialized required/i);
+
+    session.notify("shutdown", {
+      workspaceHash: createManagedCodeGraphWorkspaceHash(workspaceRoot),
+    });
+    await session.waitForExit(1_500);
+  });
+
+  it("allows codegraph/health after notifications/initialized is sent", async () => {
+    const tempDir = makeTempDir();
+    const session = new ManagedJsonRpcSession({
+      command: process.execPath,
+      args: [fixturePath, "--mcp"],
+      cwd: workspaceRoot,
+      env: {
+        FAKE_PROVIDER_VERSION: "1.2.3",
+        FAKE_TELEMETRY_STATUS: "disabled",
+        FAKE_STRICT_INITIALIZED_MODE: "1",
+        CODEGRAPH_WORKSPACE_ROOT: workspaceRoot,
+        CODEGRAPH_WORKSPACE_HASH: createManagedCodeGraphWorkspaceHash(workspaceRoot),
+        CODEGRAPH_LOG_ROOT: path.join(tempDir, "logs"),
+        CODEGRAPH_INDEX_ROOT: path.join(tempDir, "index"),
+      },
+      stdoutLogPath: path.join(tempDir, "stdout.log"),
+      stderrLogPath: path.join(tempDir, "stderr.log"),
+    });
+
+    await session.request(
+      "initialize",
+      {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: {
+          name: "uichat-mira-test",
+          version: "0.0.0",
+        },
+      },
+      1_500,
+    );
+    session.notify("notifications/initialized");
+
+    const health = await session.request<{
+      providerVersion: string;
+      telemetryStatus: string;
+      workspaceHash: string;
+      status: string;
+    }>(
+      "codegraph/health",
+      {
+        workspaceHash: createManagedCodeGraphWorkspaceHash(workspaceRoot),
+        workspaceRoot,
+        indexRoot: path.join(tempDir, "index"),
+        logRoot: path.join(tempDir, "logs"),
+      },
+      1_500,
+    );
+
+    expect(health.providerVersion).toBe("1.2.3");
+    expect(health.status).toBe("ready");
+
+    session.notify("shutdown", {
+      workspaceHash: createManagedCodeGraphWorkspaceHash(workspaceRoot),
+    });
+    await session.waitForExit(1_500);
   });
 });
 
@@ -548,7 +692,7 @@ describe("CodebaseExploreWrapper", () => {
       .map((filePath) => fs.readFileSync(filePath, "utf8"))
       .join("\n");
 
-    expect(combinedSource).not.toMatch(/from\s+["'][^"']*planner/i);
+    expect(combinedSource).not.toMatch(/from\s+["'][^"']*(?:agent\/planner|\/planner(?:\/|\.))/i);
     expect(combinedSource).not.toMatch(/from\s+["'][^"']*agent-graph/i);
   });
 
@@ -1058,7 +1202,7 @@ describe("CodeGraphVerificationBridge", () => {
       .map((filePath) => fs.readFileSync(filePath, "utf8"))
       .join("\n");
 
-    expect(combinedSource).not.toMatch(/from\s+["'][^"']*planner/i);
+    expect(combinedSource).not.toMatch(/from\s+["'][^"']*(?:agent\/planner|\/planner(?:\/|\.))/i);
   });
 
   it("keeps verification bridge code isolated from Generate behavior changes", () => {

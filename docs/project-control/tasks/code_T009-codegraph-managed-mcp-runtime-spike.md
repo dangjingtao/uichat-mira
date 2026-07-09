@@ -66,7 +66,7 @@ task_state: DONE
    - 启动时绑定 `logRoot` / `indexRoot`
 4. `health` 支持：
    - process alive
-   - MCP handshake 或等价 health probe
+   - MCP handshake 完成后先发送 `notifications/initialized`，再执行 health probe
    - `providerVersion` 可读
    - `telemetryStatus` 可读
    - `workspaceHash` 匹配
@@ -127,7 +127,8 @@ task_state: DONE
 
 - 新增隔离目录 `server/src/mcp/managed-codegraph/**`，实现最小 `ManagedCodeGraphProcessManager` 和本地 JSON-RPC session，不接现有 Planner、Evidence、Agent Graph。
 - `ManagedCodeGraphProcessManager` 覆盖 `detect/start/health/stop/status`、`workspaceHash`、telemetry gate、duplicate start guard、crash handling 和 workspace mismatch 阻断。
-- 新增 fake MCP provider 测试夹具，用真实子进程 + JSON-RPC 行级协议验证 handshake、health、stop、crash 和 duplicate start。
+- `initialize` 成功后立即发送 `notifications/initialized`，并把 `health / query / explore / affected` 固定到 initialized 之后才能执行。
+- fake MCP provider 新增严格 initialized 模式，用真实子进程 + JSON-RPC 行级协议验证 handshake、initialized notification、health、stop、crash 和 duplicate start。
 - 新增隔离性测试，明确本 spike 代码不 import Agent / Planner / Evidence / read runtime，也不暴露 `codebase_explore`。
 - 新增本任务卡、review 和 ledger 登记。
 
@@ -136,7 +137,7 @@ task_state: DONE
 - AC1：`server/src/mcp/managed-codegraph/managed-codegraph-process-manager.ts` 已新增 `ManagedCodeGraphProcessManager`。
 - AC2：`detect()` 会检查 launcher 是否存在、版本 probe 是否可读、telemetry probe 是否验证关闭，以及 `logRoot` / `indexRoot` 可写；测试覆盖 missing provider 和 telemetry blocked。
 - AC3：`start()` 只允许 `workspaceRoot === allowedWorkspaceRoot`，启动前走 detect / telemetry gate，预先生成 `workspaceHash`，并把 `CODEGRAPH_LOG_ROOT` / `CODEGRAPH_INDEX_ROOT` 传给受管进程。
-- AC4：`health()` 检查子进程是否存活，并通过 `codegraph/health` probe 读取 `providerVersion`、`telemetryStatus` 和 `workspaceHash`。
+- AC4：`health()` 检查子进程是否存活，并且只有在 `initialize` 之后已经发出 `notifications/initialized` 时，才通过 `codegraph/health` probe 读取 `providerVersion`、`telemetryStatus` 和 `workspaceHash`。
 - AC5：`stop()` 先发 `shutdown`，超时后 `forceKill()`，并记录 `exitCode`、`durationMs`、`lastStatus`。
 - AC6：module-level lease registry 以 `workspaceHash + providerVersion + indexRoot` 建 key，重复启动会复用已有健康进程并返回 `startDisposition: reused_existing`。
 - AC7：进程异常退出会进入 `degraded` 或 `failed`，并只留在隔离 manager 状态里，不改 Agent 主链。
@@ -150,7 +151,7 @@ task_state: DONE
 ## Verification Results
 
 - `pnpm --dir server test -- src/mcp/managed-codegraph/__tests__/managed-codegraph-process-manager.test.ts`
-  - 结果：通过，1 个测试文件，10 个测试通过
+  - 结果：通过，1 个测试文件，40 个测试通过
 - `pnpm --dir server typecheck`
   - 结果：通过
 - `pnpm check`

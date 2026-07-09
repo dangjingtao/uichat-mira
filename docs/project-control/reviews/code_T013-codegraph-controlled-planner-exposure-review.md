@@ -70,10 +70,20 @@ related:
 
 这点是 T013 最关键的边界，当前实现是成立的。
 
-### 4. 坏场景是诚实的
+### 4. 正式 runtime 写盘边界也收住了
+
+- 正式 runtime 默认不再落到 repo `.artifacts`
+- 现在优先使用 `UI_CHAT_CODEGRAPH_APP_DATA_ROOT`
+- 如果没有显式根目录，会继续尝试复用现有 `UI_CHAT_LOG_DIR / UI_CHAT_DATABASE_DIR` 的 app-data 父目录
+- 如果 app-data root 仍然无法解析，provider 会明确停在 blocked，而不是偷偷写 repo
+
+这解决了此前最危险的 repo 污染问题。
+
+### 5. 坏场景是诚实的
 
 - telemetry blocked / provider unavailable 时，结果是 `degraded`
 - broad explore 噪声时，retrieval summary 会标成 `partial`
+- 即使 verified chunk > 0，`answerReadiness.canAnswer` 也仍然是 `false`
 - trace 里能看到 `exposureMode`、provider、verification、fallback
 
 所以当前实现不会把“有点像答案的候选”伪装成“已经验证过的事实”。

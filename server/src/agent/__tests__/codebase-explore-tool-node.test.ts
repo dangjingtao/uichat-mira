@@ -64,8 +64,8 @@ test("toolNode appends only verified codebase_explore chunks into retrieval evid
             keyFindings: ["verifiedChunkCount=1", "fallbackReason=broad_scope_requery_recommended"],
             answerReadiness: {
               canAnswer: false,
-              reason: "Still partial.",
-              missingInfo: ["narrower workspace evidence"],
+              reason: "verified chunks are available for planner review",
+              missingInfo: ["planner must decide task completion based on task coverage"],
             },
             data: {
               kind: "retrieval",
@@ -185,6 +185,10 @@ test("toolNode appends only verified codebase_explore chunks into retrieval evid
     assert.equal(result.evidence?.latestSummary?.source, "retrieval");
     assert.equal(result.evidence?.latestSummary?.status, "partial");
     assert.equal(result.evidence?.latestSummary?.answerReadiness.canAnswer, false);
+    assert.equal(
+      result.evidence?.latestSummary?.answerReadiness.reason,
+      "verified chunks are available for planner review",
+    );
   } finally {
     executeHarnessInvocationSpy.mockRestore();
   }

@@ -203,13 +203,16 @@ export class ManagedJsonRpcSession {
     });
   }
 
-  notify(method: string, params: Record<string, unknown>) {
+  notify(method: string, params?: Record<string, unknown>) {
     this.start();
-    this.writeMessage({
+    const message: JsonRpcMessage = {
       jsonrpc: "2.0",
       method,
-      params,
-    });
+    };
+    if (params !== undefined) {
+      message.params = params;
+    }
+    this.writeMessage(message);
   }
 
   forceKill() {
@@ -320,4 +323,3 @@ export class ManagedJsonRpcSession {
     this.options.onExit?.(info);
   }
 }
-

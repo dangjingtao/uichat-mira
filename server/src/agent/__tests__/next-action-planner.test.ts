@@ -696,6 +696,79 @@ test("nextActionPlannerNode short-circuits to answer when latest evidence summar
   }
 });
 
+test("nextActionPlannerNode does not short-circuit to answer when codebase_explore verified chunks are only planner-review evidence", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"retrieve","query":"planner tool node relationship","reason":"Need more grounded coverage before answering."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question: "梳理 planner 和 tool node 的关系",
+        messages: [
+          {
+            role: "user",
+            content: "梳理 planner 和 tool node 的关系",
+            parts: [{ type: "text", text: "梳理 planner 和 tool node 的关系" }],
+          },
+        ],
+        evidence: {
+          observations: [],
+          retrievals: [
+            {
+              query: "梳理 planner 和 tool node 的关系",
+              chunkCount: 1,
+              chunks: [
+                {
+                  chunkId: "codegraph:server/src/agent/nodes/tool-node.ts:1-10:0",
+                  documentName: "server/src/agent/nodes/tool-node.ts",
+                  score: 0.91,
+                  content: "export const toolNode = async (...) => { ... }",
+                },
+              ],
+              createdAt: "2026-07-09T00:00:00.000Z",
+            },
+          ],
+          toolExecutions: [],
+          latestSummary: {
+            source: "retrieval",
+            status: "completed",
+            actionTaken: "Codebase explore verified 1 workspace chunk.",
+            keyFindings: ["verifiedChunkCount=1"],
+            answerReadiness: {
+              canAnswer: false,
+              reason: "verified chunks are available for planner review",
+              missingInfo: ["planner must decide task completion based on task coverage"],
+            },
+            data: {
+              kind: "retrieval",
+              query: "梳理 planner 和 tool node 的关系",
+              chunkCount: 1,
+              documentsPreview: ["server/src/agent/nodes/tool-node.ts"],
+            },
+            rawRef: {
+              evidenceIndex: 0,
+            },
+          },
+        },
+      }),
+    );
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "retrieve",
+        query: "planner tool node relationship",
+        reason: "Need more grounded coverage before answering.",
+      },
+    });
+    assert.equal(streamSpy.mock.calls.length, 1);
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
 test("nextActionPlannerNode does not short-circuit to answer when mutation task still lacks execution coverage", async () => {
   const streamSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")

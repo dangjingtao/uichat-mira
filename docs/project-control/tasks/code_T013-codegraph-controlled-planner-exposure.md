@@ -85,6 +85,7 @@ task_state: DONE
 - `docs/project-control/project-control-ledger.md`
 - `server/src/agent/nodes/tool-node.ts`
 - `server/src/agent/__tests__/codebase-explore-tool-node.test.ts`
+- `server/src/agent/__tests__/next-action-planner.test.ts`
 - `server/src/harness/runtime.ts`
 - `server/src/harness/runtime.test.ts`
 - `server/src/harness/profiles/resolver.ts`
@@ -93,15 +94,18 @@ task_state: DONE
 - `server/src/mcp/managed-codegraph/codegraph-trace-diagnostics.ts`
 - `server/src/mcp/managed-codegraph/index.ts`
 - `server/src/mcp/managed-codegraph/types.ts`
+- `server/src/mcp/managed-codegraph/__tests__/planner-exposure-config.test.ts`
 - `server/src/mcp/managed-codegraph/__tests__/codebase-explore.tool.test.ts`
 
 ### Diff Summary
 
 - 新增 `codebase_explore` 受控工具定义和 `UI_CHAT_CODEGRAPH_PLANNER_ENABLED` 开关，默认不注册、不暴露。
 - Harness runtime 只在 flag 打开时注册 `codebase_explore`，且 schema 只保留 `query`，不把 CodeGraph 原生命令暴露给 Planner。
+- `managed-codegraph` 正式 runtime 不再默认写 repo `.artifacts`；现在优先解析 `UI_CHAT_CODEGRAPH_APP_DATA_ROOT`，其次复用现有 `UI_CHAT_LOG_DIR / UI_CHAT_DATABASE_DIR` 的 app-data 父目录；如果解析不到 app-data root，就明确返回 blocked provider 状态，不再静默回退到 repo。
 - `toolNode` 现在会识别 `codebase_explore` 结果，只把 verification bridge 已核验通过的 chunk 写入 Retrieval Evidence；verified 为空时不写入 Retrieval Evidence。
+- `codebase_explore` 产出的 retrieval summary 现在固定 `answerReadiness.canAnswer = false`，只说明“verified chunks are available for planner review”，由 Planner 后续结合 task coverage 决定是否完成。
 - `CodebaseExploreTrace` 补了 `exposureMode`，让 trace 能直接看出这是 feature-flag 控制下的受控 Planner 暴露。
-- 新增定向测试，覆盖 flag off / on、受控 schema、verified-only Evidence、provider blocked fallback，以及 partial 结果不能直接变成 answer-ready。
+- 新增定向测试，覆盖 flag off / on、受控 schema、app-data root 解析、default no-repo-fallback、verified-only Evidence、Planner 不会因为 verified explore chunk 自动 answer，以及 provider blocked fallback。
 
 ### Acceptance Criteria Evidence
 
@@ -111,21 +115,21 @@ task_state: DONE
 - AC7-8：本任务没有改 `policy-node.ts` 的 allow / deny / require_approval 逻辑，也没有改 ToolNode 的 frozen `pendingToolCall` 入口条件；`tool-node.ts` 仍然先校验 frozen call 再执行。
 - AC9：本任务没有改 `selectedToolIds` 到执行链的关系；既有 `toolcall-loop-regression` 与 `tool-node` 测试合同继续适用。
 - AC10-11：`server/src/agent/nodes/tool-node.ts` 只在 `verifiedEvidenceInput.chunkCount > 0` 时 append Retrieval Evidence；`codebase-explore-tool-node.test.ts` 覆盖 verified-only 与 zero-verified 两条路径。
-- AC12-13：`codebase-explore.tool.ts` 仍复用 wrapper + verification bridge；`codebase-explore.tool.test.ts` 覆盖 telemetry blocked / provider unavailable 场景，验证 `degraded + fallback` 且 `chunkCount = 0`。
+- AC12-13：`codebase-explore.tool.ts` 仍复用 wrapper + verification bridge；`planner-exposure-config.test.ts` 覆盖 default no-repo-fallback、显式 app-data root、复用现有 log dir 父目录三条路径；`codebase-explore.tool.test.ts` 覆盖 app-data root 缺失时 `indexStatus = blocked`、telemetry blocked / provider unavailable 时 `degraded + fallback` 且 `chunkCount = 0`。
 - AC14：`codegraph-trace-diagnostics.ts` 和 `codebase-explore.tool.ts` 产出 `exposureMode + explore trace + verification trace`；测试断言 trace 中能看到 controlled exposure 与 fallback。
 - AC15：未修改 `server/src/agent/planner/prompt.ts` 和 `server/src/agent/graph/routes.ts`。
 - AC16：未修改 `package.json`；`pnpm-lock.yaml` 未被本任务改动。
+- 阻断问题 A：已整改，正式 runtime 默认不再写 repo `.artifacts`，app-data root 缺失时 provider 明确 blocked。
+- 阻断问题 B：已整改，`codebase_explore` verified chunk 只作为 planner review evidence，不能单独触发 answer-ready。
 
 ## Verification Results
 
-- `pnpm --dir server test -- src/harness/runtime.test.ts src/agent/__tests__/codebase-explore-tool-node.test.ts src/mcp/managed-codegraph/__tests__/codebase-explore.tool.test.ts`
-  - 结果：通过，3 个测试文件，6 个测试通过
+- `pnpm --dir server test -- src/mcp/managed-codegraph/__tests__/planner-exposure-config.test.ts src/mcp/managed-codegraph/__tests__/codebase-explore.tool.test.ts src/agent/__tests__/codebase-explore-tool-node.test.ts src/agent/__tests__/next-action-planner.test.ts`
+  - 结果：通过，4 个测试文件，91 个测试通过
 - `pnpm --dir server typecheck`
   - 结果：通过
 - `pnpm check`
-  - 结果：被任务外现有 `desktop` typecheck 错误阻断
-  - 阻断位置：
-    - `desktop/src/features/Settings/pages/MicroApps/ImageGeneration/index.tsx:492` 调用 `ApiExecutionInputCard` 时缺少必填 `sizeOptions`
+  - 结果：通过
 
 ## Scope Declaration
 

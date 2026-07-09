@@ -15,6 +15,7 @@ import {
   isCodebaseExplorePlannerExposureEnabled,
   resolveManagedCodeGraphPlannerConfig,
 } from "./planner-exposure-config.js";
+import { createCodebaseExploreTrace } from "./codegraph-trace-diagnostics.js";
 
 const nowIso = () => new Date().toISOString();
 
@@ -48,18 +49,11 @@ const createCodebaseExploreRetrievalSummary = (input: {
         : []),
       ...documentsPreview.map((name) => `document=${name}`),
     ],
-    answerReadiness: partial
-      ? {
-          canAnswer: false,
-          reason:
-            "Codebase explore only produced partial verified evidence, so the agent must keep narrowing scope or read more original files before answering.",
-          missingInfo: ["narrower workspace evidence"],
-        }
-      : {
-          canAnswer: true,
-          reason:
-            "Verified codebase chunks are available and were confirmed through the verification bridge.",
-        },
+    answerReadiness: {
+      canAnswer: false,
+      reason: "verified chunks are available for planner review",
+      missingInfo: ["planner must decide task completion based on task coverage"],
+    },
     data: {
       kind: "retrieval",
       query: input.retrieval.query,
@@ -116,6 +110,89 @@ export const codebaseExploreTool: McpToolImplementation = {
     }
 
     const plannerConfig = resolveManagedCodeGraphPlannerConfig(workspaceRoot);
+    if (
+      plannerConfig.storage.status !== "ready" ||
+      !plannerConfig.logRoot ||
+      !plannerConfig.indexRoot
+    ) {
+      const trace = createCodebaseExploreTrace({
+        originalQuery: queryValue,
+        normalizedQuery: queryValue.trim(),
+        selectedScope: ["workspace-general"],
+        includePaths: [],
+        excludePaths: [],
+        internalCommand: "mixed",
+        resultCount: 0,
+        truncated: false,
+        limitations: ["provider_unavailable", "query_failed"],
+        fallbackSignal: {
+          required: true,
+          reason: "provider_unavailable",
+          suggestedChain: [
+            "codegraph",
+            "scoped_search_text",
+            "workspace_inventory",
+            "read_file_slice",
+          ],
+        },
+        verificationReadCount: 0,
+        durationMs: 0,
+        status: "failed",
+        runtimeStatus: {
+          providerVersion: null,
+          telemetryStatus: "unavailable",
+          workspaceHash: null,
+          status: "blocked",
+        },
+      });
+      const retrieval = {
+        query: queryValue.trim(),
+        chunkCount: 0,
+        chunks: [],
+        createdAt: nowIso(),
+      };
+
+      return {
+        result: {
+          capabilityId: "codebase_explore",
+          plannerExposure: "controlled_tool_only",
+          query: queryValue.trim(),
+          scope: ["workspace-general"],
+          verifiedEvidenceInput: retrieval,
+          exploreResult: {
+            status: "degraded",
+            truncated: false,
+            degraded: true,
+            limitations: ["provider_unavailable", "query_failed"],
+            followUpHints: [
+              plannerConfig.storage.reason ??
+                "Managed CodeGraph app-data root is unavailable.",
+            ],
+            fallbackSignal: {
+              required: true,
+              reason: "provider_unavailable",
+              suggestedChain: [
+                "codegraph",
+                "scoped_search_text",
+                "workspace_inventory",
+                "read_file_slice",
+              ],
+            },
+          },
+          verificationResult: {
+            verifiedCount: 0,
+            rejectedCount: 0,
+            unverifiableCount: 0,
+          },
+          trace: {
+            exposureMode: "controlled_tool_only",
+            explore: trace,
+            verification: trace,
+          },
+        },
+      };
+    }
+
     const manager = new ManagedCodeGraphProcessManager({
       command: plannerConfig.command,
       startArgs: plannerConfig.startArgs,

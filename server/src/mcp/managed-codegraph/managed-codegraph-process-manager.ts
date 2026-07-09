@@ -29,6 +29,7 @@ const DEFAULT_PROTOCOL_VERSION = "2025-06-18";
 const DEFAULT_TIMEOUT_MS = 2_000;
 const DEFAULT_STOP_TIMEOUT_MS = 1_000;
 const DEFAULT_DISABLED_TOKENS = ["disabled", "off", "0", "false", "verified_off"];
+const INITIALIZED_NOTIFICATION_METHOD = "notifications/initialized";
 
 const now = () => Date.now();
 
@@ -105,6 +106,7 @@ export class ManagedCodeGraphProcessManager {
       providerVersion: null,
       telemetryStatus: "unavailable",
       handshakeStatus: "not_started",
+      initializedNotificationSent: false,
       workspaceHash: this.workspaceHash,
       workspaceRoot: this.workspaceRoot,
       allowedWorkspaceRoot: this.allowedWorkspaceRoot,
@@ -248,6 +250,7 @@ export class ManagedCodeGraphProcessManager {
       status: "starting",
       startDisposition: "primary",
       handshakeStatus: "not_started",
+      initializedNotificationSent: false,
       startedAt: now(),
       stoppedAt: null,
       durationMs: null,
@@ -300,6 +303,12 @@ export class ManagedCodeGraphProcessManager {
         processAlive: this.session.isAlive(),
       };
 
+      this.session.notify(INITIALIZED_NOTIFICATION_METHOD);
+      this.snapshot = {
+        ...this.snapshot,
+        initializedNotificationSent: true,
+      };
+
       ManagedCodeGraphProcessManager.leaseRegistry.set(leaseKey, this);
       this.writeManagerLog(`initialize ok for ${this.workspaceHash}`);
       return await this.health();
@@ -308,6 +317,7 @@ export class ManagedCodeGraphProcessManager {
         ...this.snapshot,
         status: "failed",
         handshakeStatus: "failed",
+        initializedNotificationSent: false,
         processAlive: Boolean(this.session?.isAlive()),
         lastError: error instanceof Error ? error.message : String(error),
       };
@@ -329,6 +339,16 @@ export class ManagedCodeGraphProcessManager {
     }
 
     if (!this.session) {
+      return this.getStatus();
+    }
+
+    if (!this.snapshot.initializedNotificationSent) {
+      this.snapshot = {
+        ...this.snapshot,
+        status: this.session.isAlive() ? "degraded" : "failed",
+        processAlive: this.session.isAlive(),
+        lastError: "notifications/initialized was not sent before health",
+      };
       return this.getStatus();
     }
 
@@ -411,6 +431,12 @@ export class ManagedCodeGraphProcessManager {
       throw new Error("Managed CodeGraph process is not ready");
     }
 
+    if (!this.snapshot.initializedNotificationSent) {
+      throw new Error(
+        "Managed CodeGraph process has not sent notifications/initialized yet",
+      );
+    }
+
     return await this.session.request<T>(method, params, timeoutMs);
   }
 
@@ -420,6 +446,7 @@ export class ManagedCodeGraphProcessManager {
       this.snapshot = {
         ...this.snapshot,
         status: "stopped",
+        initializedNotificationSent: false,
         stoppedAt: now(),
         processAlive: false,
       };
@@ -436,6 +463,7 @@ export class ManagedCodeGraphProcessManager {
       this.snapshot = {
         ...this.snapshot,
         status: "stopped",
+        initializedNotificationSent: false,
         stoppedAt: now(),
         durationMs: this.snapshot.startedAt ? now() - this.snapshot.startedAt : null,
         processAlive: false,
@@ -471,6 +499,7 @@ export class ManagedCodeGraphProcessManager {
         this.snapshot = {
           ...this.snapshot,
           status: "failed",
+          initializedNotificationSent: false,
           processAlive: false,
           stoppedAt: now(),
           durationMs: this.snapshot.startedAt ? now() - this.snapshot.startedAt : null,
@@ -492,6 +521,7 @@ export class ManagedCodeGraphProcessManager {
     this.snapshot = {
       ...this.snapshot,
       status: "stopped",
+      initializedNotificationSent: false,
       processAlive: false,
       stoppedAt: now(),
       durationMs: this.snapshot.startedAt ? now() - this.snapshot.startedAt : null,
@@ -606,6 +636,9 @@ export class ManagedCodeGraphProcessManager {
         : priorStatus === "ready" || priorStatus === "starting"
           ? "degraded"
           : "failed",
+      initializedNotificationSent: intentional
+        ? false
+        : this.snapshot.initializedNotificationSent,
       crashCount: intentional ? this.snapshot.crashCount : this.snapshot.crashCount + 1,
     };
     this.writeManagerLog(`process exit: ${info.message}`);

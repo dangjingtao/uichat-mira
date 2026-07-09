@@ -73,6 +73,7 @@ export interface ManagedCodeGraphStatusSnapshot {
   providerVersion: string | null;
   telemetryStatus: ManagedCodeGraphTelemetryStatus;
   handshakeStatus: ManagedCodeGraphHandshakeStatus;
+  initializedNotificationSent: boolean;
   workspaceHash: string;
   workspaceRoot: string;
   allowedWorkspaceRoot: string;

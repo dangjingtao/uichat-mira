@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import process from "node:process";
 
 const args = process.argv.slice(2);
@@ -12,8 +13,30 @@ const healthSequence = (process.env.FAKE_HEALTH_SEQUENCE ?? "ready")
   .split(",")
   .map((entry) => entry.trim())
   .filter(Boolean);
+const strictInitializedMode = process.env.FAKE_STRICT_INITIALIZED_MODE === "1";
+const messageLogPath = process.env.FAKE_MESSAGE_LOG_PATH ?? null;
 
 let healthIndex = 0;
+let initializedReceived = false;
+
+const appendMessageLog = (message) => {
+  if (!messageLogPath) {
+    return;
+  }
+
+  try {
+    fs.appendFileSync(
+      messageLogPath,
+      `${JSON.stringify({
+        method: message.method ?? null,
+        id: message.id ?? null,
+      })}\n`,
+      "utf8",
+    );
+  } catch {
+    // test fixture logging should not break protocol flow
+  }
+};
 
 const parseCandidates = (rawValue, fallbackKind) => {
   if (!rawValue) {
@@ -130,6 +153,8 @@ process.stdin.on("data", (chunk) => {
       process.exit(3);
     }
 
+    appendMessageLog(message);
+
     if (message.method === "initialize") {
       if ((process.env.FAKE_HANDSHAKE_MODE ?? "ok") === "fail") {
         writeFrame({
@@ -160,7 +185,24 @@ process.stdin.on("data", (chunk) => {
       continue;
     }
 
+    if (message.method === "notifications/initialized") {
+      initializedReceived = true;
+      continue;
+    }
+
     if (message.method === "codegraph/health") {
+      if (strictInitializedMode && !initializedReceived) {
+        writeFrame({
+          jsonrpc: "2.0",
+          id: message.id,
+          error: {
+            code: -32002,
+            message: "notifications/initialized required before codegraph/health",
+          },
+        });
+        continue;
+      }
+
       const mode = resolveHealthMode();
       if (mode === "error") {
         writeFrame({
@@ -198,6 +240,18 @@ process.stdin.on("data", (chunk) => {
       message.method === "codegraph/explore" ||
       message.method === "codegraph/affected"
     ) {
+      if (strictInitializedMode && !initializedReceived) {
+        writeFrame({
+          jsonrpc: "2.0",
+          id: message.id,
+          error: {
+            code: -32002,
+            message: `${message.method} requires notifications/initialized first`,
+          },
+        });
+        continue;
+      }
+
       const rawMode = process.env.FAKE_QUERY_MODE ?? "ok";
       if (rawMode === "error") {
         writeFrame({
