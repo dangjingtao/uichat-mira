@@ -23,6 +23,10 @@ extraResources:
     to: runtime.config.cjs
   - from: ./node-runtime
     to: node-runtime
+  - from: ./micro-apps/tts/piper
+    to: micro-apps/tts/piper
+    filter:
+      - "**/*"
   - from: ./model-packs
     to: model-packs
     filter:

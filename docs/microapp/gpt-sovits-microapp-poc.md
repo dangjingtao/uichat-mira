@@ -105,6 +105,7 @@ Related:
 
 - `GET /microapps/tts/gpt-sovits/catalog`
 - `POST /microapps/tts/gpt-sovits/syntheses`
+- `GET /microapps/tts/ref-audios/:file`
 
 设计目标是把上游 `Gradio` 的数组式输入收敛成项目自己的对象契约。
 
@@ -131,6 +132,7 @@ Related:
 - 存储只发生在当前桌面前端环境内
 - backend 不直接读取 `IndexedDB`
 - 真正发起合成时，renderer 再把选中的 `wav` 作为 `multipart/form-data` 上传给 backend
+- backend 收到文件后，会把它保存到自己的受控目录，并通过本地静态路由暴露给 `GPT-SoVITS Gradio`
 
 当前 `IndexedDB` 落点是：
 
@@ -239,7 +241,7 @@ type CreateGptSovitsSynthesisPayload = {
 
 ## 文件生命周期真相
 
-当前参考音频文件不是长期落盘资源，而是一次性中转输入。
+当前参考音频文件会先落到 backend 自己的受控静态目录，再作为本地 HTTP 资源提供给上游。
 
 具体流程：
 
@@ -247,18 +249,18 @@ type CreateGptSovitsSynthesisPayload = {
 2. renderer 存入 `IndexedDB`
 3. 用户点击“开始合成”
 4. renderer 把选中的 `wav` 连同表单字段一起提交给 backend
-5. backend 把这份文件临时写到 `.artifacts/tts/inputs`
-6. backend 用这个临时文件调用上游 `GPT-SoVITS`
-7. backend 合成完成后删除这份临时输入文件
+5. backend 把这份文件保存到 `data/microapps/tts/ref-audios`
+6. backend 通过 `GET /microapps/tts/ref-audios/:file` 把它暴露成本地静态资源
+7. backend 用这个静态 URL 调用上游 `GPT-SoVITS`
 
 所以当前真实落盘分成两类：
 
 - 浏览器持久缓存
   - `IndexedDB`
   - 用于前端下次还能看到和复用这份 `wav`
-- backend 临时输入文件
-  - `.artifacts/tts/inputs`
-  - 只服务当前一次提交
+- backend 参考音频文件
+  - `data/microapps/tts/ref-audios`
+  - 通过本地静态路由提供给 `Gradio` 读取
 - backend 输出文件
   - `.artifacts/tts/outputs`
   - 作为合成结果产物保留
@@ -277,13 +279,14 @@ type CreateGptSovitsSynthesisPayload = {
 renderer
   -> 用户上传 wav 到浏览器 IndexedDB
   -> POST /microapps/tts/gpt-sovits/syntheses
-  -> 如果是上传文件，backend 先临时落盘到 .artifacts/tts/inputs
+  -> 如果是上传文件，backend 先保存到 data/microapps/tts/ref-audios
+  -> backend 通过 /microapps/tts/ref-audios/:file 生成本地静态 URL
   -> backend 读取 provider 配置
   -> backend 调 /call/change_gpt_weights
   -> backend 调 /call/change_sovits_weights
   -> backend 调 /call/get_tts_wav
-  -> backend 把返回音频复制到 .artifacts/tts/outputs
-  -> backend 清理本次临时参考音频
+  -> backend 对返回的 PCM wav 做受控增益，避免成品音量明显偏小
+  -> backend 把处理后的音频保存到 .artifacts/tts/outputs
   -> backend 记录 tts_synthesis_jobs
   -> renderer 用现有音频预览链路播放结果
 ```
@@ -306,9 +309,9 @@ renderer
 
 - `.artifacts/tts/outputs`
 
-上传参考音频的 backend 临时目录是：
+上传参考音频的 backend 受控目录是：
 
-- `.artifacts/tts/inputs`
+- `data/microapps/tts/ref-audios`
 
 ## 当前限制
 
@@ -316,11 +319,12 @@ renderer
 
 1. 依赖用户自己先把 `GPT-SoVITS Gradio WebUI` 跑起来。
 2. 默认服务地址是 `http://127.0.0.1:9872`，当前不负责拉起或守护这个进程。
-3. 上传文件虽然会在前端 `IndexedDB` 里保存，但真正合成时仍会走一次后端临时落盘。
+3. 上传文件虽然会在前端 `IndexedDB` 里保存，但真正合成时仍会走一次后端受控落盘和本地静态资源暴露。
 4. 当前没有接 `aux_ref_audio_paths`、`ref_free`、`super_sampling`、`streaming_mode` 等高级参数。
 5. 当前 catalog 主要取自 `Gradio` 的元信息和模型列表，没有进一步抽象到跨供应商统一参数层。
 6. 当前 `IndexedDB` 里的参考音频删除后不可恢复，也不会联动删除历史任务里已经生成的输出文件。
 7. 当前滑块上下限来自现有上游元信息和组件约束，不代表未来所有 `GPT-SoVITS` 版本都完全一致。
+8. 当前产物侧增益只对 backend 能识别的 PCM wav 生效，不会强行改写未知音频格式。
 
 ## 后续扩展建议
 

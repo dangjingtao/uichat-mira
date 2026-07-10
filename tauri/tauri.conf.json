@@ -36,6 +36,7 @@
       "resources/runtime.config.cjs",
       "resources/server",
       "resources/node-runtime",
+      "resources/micro-apps/tts/piper",
       "resources/model-packs",
       "resources/model-runtime"
     ]

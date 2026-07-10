@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { success } from "@/utils/index.js";
-import { badRequest, notFound, routeHandler } from "@/utils/route-errors.js";
+import { badRequest, internalError, notFound, routeHandler } from "@/utils/route-errors.js";
 import type {
   GptSovitsSynthesisRequest,
   TtsProviderId,
@@ -15,6 +15,36 @@ type TtsRouteOptions = {
 
 const ttsRoutes: FastifyPluginAsync<TtsRouteOptions> = async (app, options) => {
   const { ttsService } = options;
+
+  const toTtsRouteError = (error: unknown) => {
+    const message = error instanceof Error ? error.message : "TTS synthesis failed";
+
+    if (
+      message.includes("provider is unavailable") ||
+      message.includes("modelPath is required") ||
+      message.includes("Bundled Piper runtime was not found") ||
+      message.includes("Synthesis text is required") ||
+      message.includes("Use the GPT-SoVITS synthesis route") ||
+      message.includes("ENOENT")
+    ) {
+      return badRequest(message, { cause: error });
+    }
+
+    return internalError(message, { cause: error });
+  };
+
+  const parseOptionalNumber = (value: string | undefined) => {
+    if (value === undefined) {
+      return Number.NaN;
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return Number.NaN;
+    }
+
+    return Number(trimmed);
+  };
 
   const readGptSovitsMultipartRequest = async (request: FastifyRequest) => {
     const fields: Record<string, string> = {};
@@ -62,12 +92,12 @@ const ttsRoutes: FastifyPluginAsync<TtsRouteOptions> = async (app, options) => {
       gptModel: fields.gptModel ?? "",
       sovitsModel: fields.sovitsModel ?? "",
       cutMethod: fields.cutMethod ?? "",
-      sampleSteps: Number(fields.sampleSteps ?? 0),
-      speed: Number(fields.speed ?? 0),
-      pauseSecond: Number(fields.pauseSecond ?? 0),
-      temperature: Number(fields.temperature ?? 0),
-      topK: Number(fields.topK ?? 0),
-      topP: Number(fields.topP ?? 0),
+      sampleSteps: parseOptionalNumber(fields.sampleSteps),
+      speed: parseOptionalNumber(fields.speed),
+      pauseSecond: parseOptionalNumber(fields.pauseSecond),
+      temperature: parseOptionalNumber(fields.temperature),
+      topK: parseOptionalNumber(fields.topK),
+      topP: parseOptionalNumber(fields.topP),
     };
 
     return { body, upload };
@@ -110,7 +140,15 @@ const ttsRoutes: FastifyPluginAsync<TtsRouteOptions> = async (app, options) => {
     "/microapps/tts/syntheses",
     routeHandler("Failed to create TTS synthesis", async (request) => {
       const body = request.body as TtsSynthesisRequest;
-      const job = await ttsService.synthesize(body);
+      let job;
+      try {
+        job = await ttsService.synthesize(body);
+      } catch (error) {
+        throw toTtsRouteError(error);
+      }
+      if (job.status === "failed") {
+        throw badRequest(job.errorMessage || "TTS synthesis failed");
+      }
       return success({ job }, "TTS synthesis created");
     }),
   );
@@ -136,7 +174,7 @@ const ttsRoutes: FastifyPluginAsync<TtsRouteOptions> = async (app, options) => {
           }
         | undefined;
 
-      if (request.isMultipart()) {
+      if (typeof request.isMultipart === "function" && request.isMultipart()) {
         const multipart = await readGptSovitsMultipartRequest(request);
         body = multipart.body;
         upload = multipart.upload;
@@ -145,6 +183,9 @@ const ttsRoutes: FastifyPluginAsync<TtsRouteOptions> = async (app, options) => {
       }
 
       const job = await ttsService.synthesizeGptSovits(body, upload);
+      if (job.status === "failed") {
+        throw badRequest(job.errorMessage || "GPT-SoVITS synthesis failed");
+      }
       return success({ job }, "GPT-SoVITS synthesis created");
     }),
   );

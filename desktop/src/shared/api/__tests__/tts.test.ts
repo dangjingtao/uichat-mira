@@ -98,6 +98,7 @@ describe("tts api", () => {
         sampleStepOptions: [],
         defaults: {
           serviceUrl: "http://127.0.0.1:9872",
+          promptText: "",
           gptModel: "",
           sovitsModel: "",
           promptLanguage: "中文",
@@ -124,18 +125,6 @@ describe("tts api", () => {
     await createGptSovitsSynthesis({
       text: "hello",
       refAudioPath: "D:\\voice\\ref.wav",
-      promptText: "你好",
-      promptLanguage: "中文",
-      textLanguage: "中文",
-      gptModel: "gpt-model",
-      sovitsModel: "sovits-model",
-      cutMethod: "按中文句号。切",
-      sampleSteps: 32,
-      speed: 1,
-      pauseSecond: 0.3,
-      temperature: 1,
-      topK: 15,
-      topP: 1,
     });
 
     expect(post).toHaveBeenCalledWith(
@@ -143,18 +132,6 @@ describe("tts api", () => {
       {
         text: "hello",
         refAudioPath: "D:\\voice\\ref.wav",
-        promptText: "你好",
-        promptLanguage: "中文",
-        textLanguage: "中文",
-        gptModel: "gpt-model",
-        sovitsModel: "sovits-model",
-        cutMethod: "按中文句号。切",
-        sampleSteps: 32,
-        speed: 1,
-        pauseSecond: 0.3,
-        temperature: 1,
-        topK: 15,
-        topP: 1,
       },
       {
         timeout: 0,
@@ -169,18 +146,6 @@ describe("tts api", () => {
     await createGptSovitsSynthesis({
       text: "hello",
       refAudioFile: file,
-      promptText: "你好",
-      promptLanguage: "中文",
-      textLanguage: "中文",
-      gptModel: "gpt-model",
-      sovitsModel: "sovits-model",
-      cutMethod: "按中文句号。切",
-      sampleSteps: 32,
-      speed: 1,
-      pauseSecond: 0.3,
-      temperature: 1,
-      topK: 15,
-      topP: 1,
     });
 
     expect(post).toHaveBeenCalledWith(

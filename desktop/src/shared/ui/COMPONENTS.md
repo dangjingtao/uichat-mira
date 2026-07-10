@@ -427,6 +427,8 @@
 | `src` | `string` | 音频地址 |
 | `title` | `string` | 主标题 |
 | `subtitle` | `string` | 次级说明 |
+| `statusMessage` | `string` | 播放器下方的状态说明，例如加载中或当前没有可播放音频 |
+| `disabled` | `boolean` | 禁用播放、进度和音量交互，但保留播放器外观 |
 | `tone` | `"light" \| "dark"` | Claude 风格浅色 / 深色皮肤 |
 | `className` | `string` | 外层自定义样式 |
 

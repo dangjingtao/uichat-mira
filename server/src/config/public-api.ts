@@ -17,6 +17,7 @@ export const AUTH_EXEMPT_ROUTES: AuthExemptRoute[] = [
   { path: "/health", match: "exact" },
   { path: "/app/meta", match: "exact" },
   { path: "/attachments", match: "prefix" },
+  { path: "/microapps/tts/ref-audios", match: "prefix" },
   { path: "/artifacts/image-generation", match: "prefix" },
   { path: "/assets/avatars", match: "prefix" },
   { path: "/docs", match: "prefix" },

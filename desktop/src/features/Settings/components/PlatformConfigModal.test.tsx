@@ -4,7 +4,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import i18next from "i18next";
 import { I18nextProvider, initReactI18next } from "react-i18next";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   ProviderDetail,
   ProviderSummary,
@@ -286,6 +286,10 @@ void i18n.use(initReactI18next).init({
 import PlatformConfigModal from "./PlatformConfigModal";
 
 describe("PlatformConfigModal", () => {
+  beforeEach(() => {
+    globalThis.localStorage.clear();
+  });
+
   it("renders provider list with built-in and custom entries in one platform panel", async () => {
     render(
       <I18nextProvider i18n={i18n}>
@@ -435,9 +439,17 @@ describe("PlatformConfigModal", () => {
 
     render(
       <I18nextProvider i18n={i18n}>
-        <PlatformConfigModal selectionRole="llm" onSelectionStateChange={() => {}} />
+        <PlatformConfigModal
+          selectionRole="imageGeneration"
+          onSelectionStateChange={() => {}}
+        />
       </I18nextProvider>,
     );
+
+    const customProviderButton = await screen.findByRole("button", {
+      name: /Custom OpenAI/i,
+    });
+    await user.click(customProviderButton);
 
     const syncedModelTrigger = await screen.findByRole("combobox", {
       name: "Synced Model",
@@ -446,5 +458,62 @@ describe("PlatformConfigModal", () => {
     await user.click(await screen.findByRole("option", { name: "custom-model" }));
 
     expect(screen.getByDisplayValue("custom-model")).toBeInTheDocument();
+    expect(
+      globalThis.localStorage.getItem("rag-demo-model-name-drafts"),
+    ).toContain("imageGeneration::custom-openai");
+    expect(
+      globalThis.localStorage.getItem("rag-demo-model-name-drafts"),
+    ).toContain("custom-model");
+  });
+
+  it("restores the locally stored model draft for the current role and provider", async () => {
+    const user = userEvent.setup();
+
+    globalThis.localStorage.setItem(
+      "rag-demo-model-name-drafts",
+      JSON.stringify({
+        "llm::custom-openai": "remembered-model",
+      }),
+    );
+
+    render(
+      <I18nextProvider i18n={i18n}>
+        <PlatformConfigModal selectionRole="llm" onSelectionStateChange={() => {}} />
+      </I18nextProvider>,
+    );
+
+    const customProviderButton = await screen.findByRole("button", {
+      name: /Custom OpenAI/i,
+    });
+    await user.click(customProviderButton);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("remembered-model")).toBeInTheDocument();
+    });
+  });
+
+  it("writes manual model name drafts into localStorage", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <I18nextProvider i18n={i18n}>
+        <PlatformConfigModal selectionRole="imageGeneration" onSelectionStateChange={() => {}} />
+      </I18nextProvider>,
+    );
+
+    const customProviderButton = await screen.findByRole("button", {
+      name: /Custom OpenAI/i,
+    });
+    await user.click(customProviderButton);
+    const modelNameInput = await screen.findByLabelText("Model Name");
+    await user.clear(modelNameInput);
+    await user.type(modelNameInput, "manual-image-model");
+
+    expect(
+      globalThis.localStorage.getItem("rag-demo-model-name-drafts"),
+    ).toContain("imageGeneration::custom-openai");
+    expect(
+      globalThis.localStorage.getItem("rag-demo-model-name-drafts"),
+    ).toContain("manual-image-model");
   });
 });

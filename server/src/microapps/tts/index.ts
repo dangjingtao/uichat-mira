@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
 import path from "node:path";
-import crypto from "node:crypto";
 import { spawn } from "node:child_process";
 import {
   ttsProviderConfigsRepository,
@@ -10,6 +10,7 @@ import {
   ttsSynthesisJobsRepository,
   type TtsSynthesisJobRecord,
 } from "@/db/repositories/tts-synthesis-jobs.repository.js";
+import { ttsRefAudioStorageService } from "@/services/tts-ref-audio-storage.service.js";
 import {
   getDefaultGptSovitsServiceUrl,
   loadGptSovitsCatalog,
@@ -60,6 +61,49 @@ const nowIso = () => new Date().toISOString();
 
 const ensureDir = async (targetPath: string) => {
   await fs.mkdir(targetPath, { recursive: true });
+};
+
+const findWorkspaceRoot = (startDir: string) => {
+  let currentDir = path.resolve(startDir);
+
+  while (true) {
+    const hasWorkspaceMarker =
+      fsSync.existsSync(path.join(currentDir, "runtime.config.cjs")) ||
+      fsSync.existsSync(path.join(currentDir, "pnpm-workspace.yaml"));
+
+    if (hasWorkspaceMarker) {
+      return currentDir;
+    }
+
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) {
+      return path.resolve(startDir);
+    }
+
+    currentDir = parentDir;
+  }
+};
+
+const resolveWorkspacePath = (...segments: string[]) =>
+  path.join(findWorkspaceRoot(process.cwd()), ...segments);
+
+const listManagedPiperExecutables = () => {
+  const runtimeRoot = resolveWorkspacePath(
+    ".local-runtimes",
+    "piper",
+    "windows-amd64",
+  );
+  if (!fsSync.existsSync(runtimeRoot)) {
+    return [];
+  }
+
+  return fsSync
+    .readdirSync(runtimeRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) =>
+      path.join(runtimeRoot, entry.name, "extracted", "piper", "piper.exe"),
+    )
+    .reverse();
 };
 
 const runProcess = async (
@@ -113,6 +157,23 @@ const runProcess = async (
 const clampNumber = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
+const getConfigString = (config: Record<string, unknown>, key: string) =>
+  typeof config[key] === "string" ? config[key].trim() : "";
+
+const getConfigNumber = (config: Record<string, unknown>, key: string) => {
+  const raw = config[key];
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return raw;
+  }
+  if (typeof raw === "string" && raw.trim()) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return Number.NaN;
+};
+
 const parseJson = <T>(value: string, fallback: T): T => {
   try {
     return JSON.parse(value) as T;
@@ -123,6 +184,112 @@ const parseJson = <T>(value: string, fallback: T): T => {
 
 const basenameWithoutExt = (filePath: string) =>
   path.basename(filePath, path.extname(filePath));
+
+const isHttpUrl = (value: string) => /^https?:\/\//iu.test(value);
+
+const pickRequestString = (
+  value: string,
+  providerConfig: Record<string, unknown>,
+  key: string,
+  fallback = "",
+) => {
+  const trimmed = value.trim();
+  if (trimmed) {
+    return trimmed;
+  }
+
+  const configValue = getConfigString(providerConfig, key);
+  return configValue || fallback;
+};
+
+const pickRequestNumber = (
+  value: number,
+  providerConfig: Record<string, unknown>,
+  key: string,
+  fallback: number,
+) => {
+  if (Number.isFinite(value)) {
+    return value;
+  }
+
+  const configValue = getConfigNumber(providerConfig, key);
+  return Number.isFinite(configValue) ? configValue : fallback;
+};
+
+const resolveGptSovitsSynthesisRequest = (
+  providerConfig: Record<string, unknown>,
+  request: GptSovitsSynthesisRequest,
+  refAudioPath: string,
+) => {
+  const resolved = {
+    text: request.text.trim(),
+    refAudioPath,
+    promptText: pickRequestString(request.promptText, providerConfig, "promptText"),
+    promptLanguage: pickRequestString(
+      request.promptLanguage,
+      providerConfig,
+      "promptLanguage",
+      "中文",
+    ),
+    textLanguage: pickRequestString(
+      request.textLanguage,
+      providerConfig,
+      "textLanguage",
+      "中文",
+    ),
+    gptModel: pickRequestString(request.gptModel, providerConfig, "gptModel"),
+    sovitsModel: pickRequestString(request.sovitsModel, providerConfig, "sovitsModel"),
+    cutMethod: pickRequestString(request.cutMethod, providerConfig, "cutMethod", "不切"),
+    sampleSteps: pickRequestNumber(request.sampleSteps, providerConfig, "sampleSteps", 8),
+    speed: pickRequestNumber(request.speed, providerConfig, "speed", 1),
+    pauseSecond: pickRequestNumber(request.pauseSecond, providerConfig, "pauseSecond", 0.3),
+    temperature: pickRequestNumber(request.temperature, providerConfig, "temperature", 1),
+    topK: pickRequestNumber(request.topK, providerConfig, "topK", 15),
+    topP: pickRequestNumber(request.topP, providerConfig, "topP", 1),
+  };
+
+  if (!resolved.gptModel) {
+    throw new Error("GPT-SoVITS GPT model is required. Please save or select a GPT model first.");
+  }
+  if (!resolved.sovitsModel) {
+    throw new Error(
+      "GPT-SoVITS SoVITS model is required. Please save or select a SoVITS model first.",
+    );
+  }
+
+  return resolved;
+};
+
+const validatePiperModelConfig = (config: Record<string, unknown>) => {
+  const modelPath =
+    typeof config.modelPath === "string" ? config.modelPath.trim() : "";
+
+  if (!modelPath) {
+    return;
+  }
+
+  if (!fsSync.existsSync(modelPath)) {
+    throw new Error(`Piper 语音包文件不存在: ${modelPath}`);
+  }
+
+  const modelConfigPath = `${modelPath}.json`;
+  if (!fsSync.existsSync(modelConfigPath)) {
+    throw new Error(`缺少 Piper 语音包配置文件: ${modelConfigPath}`);
+  }
+
+  const rawConfig = fsSync.readFileSync(modelConfigPath, "utf8");
+  const parsedConfig = parseJson<Record<string, unknown>>(rawConfig, {});
+  const phonemeType =
+    typeof parsedConfig.phoneme_type === "string"
+      ? parsedConfig.phoneme_type.trim().toLowerCase()
+      : "";
+
+  if (phonemeType && phonemeType !== "espeak") {
+    throw new Error(
+      `当前内置 Piper 运行时只支持 phoneme_type=espeak 的语音包。你这个语音包是 ${phonemeType}，暂不支持。`,
+    );
+  }
+};
 
 const resolveBaseSynthesisRequest = (
   provider: TtsProviderConfigRecord,
@@ -160,11 +327,24 @@ const resolveBundledPiperExecutablePath = async () => {
   };
   const candidates = [
     process.env.UIC_TTS_PIPER_EXECUTABLE,
-    path.resolve(process.cwd(), "vendor", "piper", "piper.exe"),
-    path.resolve(process.cwd(), ".artifacts", "runtimes", "piper", "piper.exe"),
-    path.resolve(path.dirname(process.execPath), "..", "piper", "piper.exe"),
+    ...listManagedPiperExecutables(),
+    resolveWorkspacePath(".artifacts", "micro-apps", "tts", "piper", "piper.exe"),
+    path.resolve(
+      path.dirname(process.execPath),
+      "..",
+      "micro-apps",
+      "tts",
+      "piper",
+      "piper.exe",
+    ),
     processWithResourcesPath.resourcesPath
-      ? path.resolve(processWithResourcesPath.resourcesPath, "piper", "piper.exe")
+      ? path.resolve(
+          processWithResourcesPath.resourcesPath,
+          "micro-apps",
+          "tts",
+          "piper",
+          "piper.exe",
+        )
       : "",
   ]
     .map((item) => item?.trim() ?? "")
@@ -180,7 +360,7 @@ const resolveBundledPiperExecutablePath = async () => {
   }
 
   throw new Error(
-    "Bundled Piper runtime was not found. Expected piper.exe in the managed runtime directory.",
+    "Bundled Piper runtime was not found. Expected piper.exe in the TTS micro-app Piper resources.",
   );
 };
 
@@ -324,10 +504,6 @@ const synthesizeWithPiper = async (
   request: TtsSynthesisRequest,
   config: TtsProviderConfigRecord,
 ) => {
-  const configuredExecutablePath =
-    typeof config.config.executablePath === "string"
-      ? config.config.executablePath.trim()
-      : "";
   const modelPath =
     typeof config.config.modelPath === "string" ? config.config.modelPath.trim() : "";
 
@@ -335,8 +511,7 @@ const synthesizeWithPiper = async (
     throw new Error("Piper modelPath is required.");
   }
 
-  const executablePath =
-    configuredExecutablePath || (await resolveBundledPiperExecutablePath());
+  const executablePath = await resolveBundledPiperExecutablePath();
 
   await fs.access(executablePath);
   await fs.access(modelPath);
@@ -361,17 +536,26 @@ const synthesizeWithPiper = async (
     args.push("--noise_w", String(config.config.noiseWScale));
   }
 
-  await runProcess(executablePath, args, {
-    stdinText: request.text,
-    cwd: path.dirname(executablePath),
-  });
+  try {
+    await runProcess(executablePath, args, {
+      stdinText: request.text,
+      cwd: path.dirname(executablePath),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Piper synthesis failed";
+    if (message.includes("is not a single codepoint")) {
+      throw new Error(
+        "当前 Piper 语音包不支持这段文本里的英文或拼音片段。请改成纯中文文本后再试。",
+      );
+    }
+    throw error;
+  }
 };
 
 export const createTtsService = (options?: { artifactRoot?: string }) => {
   const artifactRoot =
     options?.artifactRoot ??
-    path.resolve(process.cwd(), ".artifacts", "tts", "outputs");
-  const inputRoot = path.resolve(path.dirname(artifactRoot), "inputs");
+    resolveWorkspacePath(".artifacts", "tts", "outputs");
 
   return {
     async getOverview(): Promise<TtsOverview> {
@@ -394,6 +578,9 @@ export const createTtsService = (options?: { artifactRoot?: string }) => {
         config?: Record<string, unknown>;
       },
     ) {
+      if (providerId === PIPER_PROVIDER_ID && input.config) {
+        validatePiperModelConfig(input.config);
+      }
       return ttsProviderConfigsRepository.upsert(providerId, input);
     },
 
@@ -512,7 +699,6 @@ export const createTtsService = (options?: { artifactRoot?: string }) => {
       }
 
       await ensureDir(artifactRoot);
-      await ensureDir(inputRoot);
 
       const provider = ttsProviderConfigsRepository.getByProviderId(GPT_SOVITS_PROVIDER_ID);
       if (!provider || !provider.enabled) {
@@ -520,40 +706,52 @@ export const createTtsService = (options?: { artifactRoot?: string }) => {
       }
 
       let refAudioPath = (request.refAudioPath ?? "").trim();
-      let temporaryUploadPath = "";
       if (upload) {
-        const fileExt = path.extname(upload.fileName || "").trim().toLowerCase() || ".wav";
-        temporaryUploadPath = path.join(
-          inputRoot,
-          `${Date.now()}-${crypto.randomUUID()}${fileExt === ".wav" ? fileExt : ".wav"}`,
-        );
-        await fs.writeFile(temporaryUploadPath, upload.buffer);
-        refAudioPath = temporaryUploadPath;
+        const storedRefAudio = await ttsRefAudioStorageService.save({
+          buffer: upload.buffer,
+          originalName: upload.fileName,
+        });
+        refAudioPath = storedRefAudio.absoluteUrl;
+      } else if (refAudioPath.startsWith("/microapps/tts/ref-audios/")) {
+        refAudioPath = ttsRefAudioStorageService.resolveAbsoluteUrlFromPublicPath(refAudioPath);
+      } else if (refAudioPath && !isHttpUrl(refAudioPath)) {
+        const refAudioBuffer = await fs.readFile(refAudioPath);
+        const storedRefAudio = await ttsRefAudioStorageService.save({
+          buffer: refAudioBuffer,
+          originalName: path.basename(refAudioPath),
+        });
+        refAudioPath = storedRefAudio.absoluteUrl;
       }
+
+      const resolvedRequest = resolveGptSovitsSynthesisRequest(
+        provider.config,
+        request,
+        refAudioPath,
+      );
 
       const job = ttsSynthesisJobsRepository.create({
         providerId: GPT_SOVITS_PROVIDER_ID,
         status: "queued",
         text,
-        voice: request.sovitsModel.trim() || null,
+        voice: resolvedRequest.sovitsModel || null,
         requestConfig: {
           serviceUrl:
             typeof provider.config.baseUrl === "string" && provider.config.baseUrl.trim()
               ? provider.config.baseUrl.trim()
               : getDefaultGptSovitsServiceUrl(),
-          refAudioPath,
-          promptText: request.promptText,
-          promptLanguage: request.promptLanguage,
-          textLanguage: request.textLanguage,
-          gptModel: request.gptModel,
-          sovitsModel: request.sovitsModel,
-          cutMethod: request.cutMethod,
-          sampleSteps: request.sampleSteps,
-          speed: request.speed,
-          pauseSecond: request.pauseSecond,
-          temperature: request.temperature,
-          topK: request.topK,
-          topP: request.topP,
+          refAudioPath: resolvedRequest.refAudioPath,
+          promptText: resolvedRequest.promptText,
+          promptLanguage: resolvedRequest.promptLanguage,
+          textLanguage: resolvedRequest.textLanguage,
+          gptModel: resolvedRequest.gptModel,
+          sovitsModel: resolvedRequest.sovitsModel,
+          cutMethod: resolvedRequest.cutMethod,
+          sampleSteps: resolvedRequest.sampleSteps,
+          speed: resolvedRequest.speed,
+          pauseSecond: resolvedRequest.pauseSecond,
+          temperature: resolvedRequest.temperature,
+          topK: resolvedRequest.topK,
+          topP: resolvedRequest.topP,
         },
       });
 
@@ -563,7 +761,7 @@ export const createTtsService = (options?: { artifactRoot?: string }) => {
       try {
         const result = await synthesizeWithGptSovits({
           providerConfig: provider.config,
-          request: { ...request, text, refAudioPath },
+          request: resolvedRequest,
           outputPath,
         });
 
@@ -583,10 +781,6 @@ export const createTtsService = (options?: { artifactRoot?: string }) => {
           return failed;
         }
         throw error;
-      } finally {
-        if (temporaryUploadPath) {
-          await fs.rm(temporaryUploadPath, { force: true }).catch(() => undefined);
-        }
       }
     },
   };

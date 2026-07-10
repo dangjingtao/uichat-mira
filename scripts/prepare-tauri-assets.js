@@ -12,6 +12,12 @@ const artifactsRoot = path.join(projectRoot, ".artifacts");
 const desktopArtifactsRoot = path.join(artifactsRoot, "desktop", "dist");
 const serverBundleArtifactsRoot = path.join(artifactsRoot, "server-bundle");
 const nodeRuntimeArtifactsRoot = path.join(artifactsRoot, "node-runtime");
+const piperRuntimeArtifactsRoot = path.join(
+  artifactsRoot,
+  "micro-apps",
+  "tts",
+  "piper",
+);
 const localModelDistRoot = path.join(artifactsRoot, "model-packs", "dist");
 const onnxRuntimeWebDistRoot = path.join(
   projectRoot,
@@ -27,6 +33,12 @@ const tauriModelRuntimeDir = path.join(
   tauriResourcesRoot,
   "model-runtime",
   "onnxruntime-web",
+);
+const tauriPiperRuntimeDir = path.join(
+  tauriResourcesRoot,
+  "micro-apps",
+  "tts",
+  "piper",
 );
 const nodeRuntimeDest = path.join(nodeRuntimeDir, path.basename(process.execPath));
 const runtimeConfigDest = path.join(tauriResourcesRoot, "runtime.config.cjs");
@@ -69,6 +81,7 @@ fs.copyFileSync(
   nodeRuntimeDest,
 );
 fs.copyFileSync(runtimeConfigArtifactsPath, runtimeConfigDest);
+fs.cpSync(piperRuntimeArtifactsRoot, tauriPiperRuntimeDir, { recursive: true });
 if (fs.existsSync(localModelDistRoot)) {
   fs.cpSync(localModelDistRoot, tauriModelPacksDir, { recursive: true });
   fs.cpSync(onnxRuntimeWebDistRoot, tauriModelRuntimeDir, { recursive: true });
@@ -83,4 +96,5 @@ if (fs.existsSync(localModelDistRoot)) {
 console.log(`Prepared Tauri server assets: ${tauriServerDir}`);
 console.log(`Copied Node runtime for Tauri: ${nodeRuntimeDest}`);
 console.log(`Copied runtime config for Tauri: ${runtimeConfigDest}`);
+console.log(`Prepared Tauri Piper runtime: ${tauriPiperRuntimeDir}`);
 console.log("Tauri desktop assets are ready.");

@@ -64,6 +64,7 @@ export interface GptSovitsCatalog {
   sampleStepOptions: number[];
   defaults: {
     serviceUrl: string;
+    promptText: string;
     gptModel: string;
     sovitsModel: string;
     promptLanguage: string;
@@ -80,18 +81,18 @@ export interface GptSovitsCatalog {
 
 export interface CreateGptSovitsSynthesisPayload {
   text: string;
-  promptText: string;
-  promptLanguage: string;
-  textLanguage: string;
-  gptModel: string;
-  sovitsModel: string;
-  cutMethod: string;
-  sampleSteps: number;
-  speed: number;
-  pauseSecond: number;
-  temperature: number;
-  topK: number;
-  topP: number;
+  promptText?: string;
+  promptLanguage?: string;
+  textLanguage?: string;
+  gptModel?: string;
+  sovitsModel?: string;
+  cutMethod?: string;
+  sampleSteps?: number;
+  speed?: number;
+  pauseSecond?: number;
+  temperature?: number;
+  topK?: number;
+  topP?: number;
   refAudioPath?: string;
   refAudioFile?: File;
 }
@@ -131,18 +132,26 @@ export function createGptSovitsSynthesis(payload: CreateGptSovitsSynthesisPayloa
     const formData = new FormData();
     formData.append("refAudioFile", payload.refAudioFile);
     formData.append("text", payload.text);
-    formData.append("promptText", payload.promptText);
-    formData.append("promptLanguage", payload.promptLanguage);
-    formData.append("textLanguage", payload.textLanguage);
-    formData.append("gptModel", payload.gptModel);
-    formData.append("sovitsModel", payload.sovitsModel);
-    formData.append("cutMethod", payload.cutMethod);
-    formData.append("sampleSteps", String(payload.sampleSteps));
-    formData.append("speed", String(payload.speed));
-    formData.append("pauseSecond", String(payload.pauseSecond));
-    formData.append("temperature", String(payload.temperature));
-    formData.append("topK", String(payload.topK));
-    formData.append("topP", String(payload.topP));
+    if (payload.promptText !== undefined) formData.append("promptText", payload.promptText);
+    if (payload.promptLanguage !== undefined) {
+      formData.append("promptLanguage", payload.promptLanguage);
+    }
+    if (payload.textLanguage !== undefined) formData.append("textLanguage", payload.textLanguage);
+    if (payload.gptModel !== undefined) formData.append("gptModel", payload.gptModel);
+    if (payload.sovitsModel !== undefined) formData.append("sovitsModel", payload.sovitsModel);
+    if (payload.cutMethod !== undefined) formData.append("cutMethod", payload.cutMethod);
+    if (payload.sampleSteps !== undefined) {
+      formData.append("sampleSteps", String(payload.sampleSteps));
+    }
+    if (payload.speed !== undefined) formData.append("speed", String(payload.speed));
+    if (payload.pauseSecond !== undefined) {
+      formData.append("pauseSecond", String(payload.pauseSecond));
+    }
+    if (payload.temperature !== undefined) {
+      formData.append("temperature", String(payload.temperature));
+    }
+    if (payload.topK !== undefined) formData.append("topK", String(payload.topK));
+    if (payload.topP !== undefined) formData.append("topP", String(payload.topP));
 
     return post<{ job: TtsSynthesisJobRecord }>(
       `${TTS_ROUTE}/gpt-sovits/syntheses`,

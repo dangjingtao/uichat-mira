@@ -61,6 +61,83 @@ export interface PlatformConfigModalRef {
 
 const CUSTOM_PROVIDER_TEMPLATE_CODE = "openai-compatible-custom";
 const FALLBACK_CUSTOM_PROVIDER_BASE_URL = "https://api.example.com/v1";
+const MODEL_NAME_DRAFTS_STORAGE_KEY = "rag-demo-model-name-drafts";
+
+type StoredModelNameDraftMap = Record<string, string>;
+
+function buildModelNameDraftStorageKey(
+  role: RoleModelType,
+  providerCode: ProviderCode,
+) {
+  return `${role}::${providerCode}`;
+}
+
+function readStoredModelNameDrafts(): StoredModelNameDraftMap {
+  if (typeof globalThis === "undefined" || !globalThis.localStorage) {
+    return {};
+  }
+
+  try {
+    const serialized = globalThis.localStorage.getItem(
+      MODEL_NAME_DRAFTS_STORAGE_KEY,
+    );
+    if (!serialized) {
+      return {};
+    }
+
+    const parsed = JSON.parse(serialized) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(parsed).filter((entry): entry is [string, string] => {
+        const [key, value] = entry;
+        return typeof key === "string" && typeof value === "string";
+      }),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredModelNameDraft(
+  role: RoleModelType,
+  providerCode: ProviderCode,
+  modelName: string,
+) {
+  if (typeof globalThis === "undefined" || !globalThis.localStorage) {
+    return;
+  }
+
+  const normalizedModelName = modelName.trim();
+
+  try {
+    const drafts = readStoredModelNameDrafts();
+    const storageKey = buildModelNameDraftStorageKey(role, providerCode);
+
+    if (normalizedModelName) {
+      drafts[storageKey] = normalizedModelName;
+    } else {
+      delete drafts[storageKey];
+    }
+
+    globalThis.localStorage.setItem(
+      MODEL_NAME_DRAFTS_STORAGE_KEY,
+      JSON.stringify(drafts),
+    );
+  } catch {
+    // Ignore storage write failures and keep the in-memory draft only.
+  }
+}
+
+function readStoredModelNameDraft(
+  role: RoleModelType,
+  providerCode: ProviderCode,
+) {
+  const drafts = readStoredModelNameDrafts();
+  return drafts[buildModelNameDraftStorageKey(role, providerCode)] ?? "";
+}
 
 interface CreateCustomProviderModalContentProps {
   defaultBaseUrl: string;
@@ -220,6 +297,8 @@ const PlatformConfigModal = forwardRef<
 
       try {
         const detail = await getProviderDetail(providerCode);
+        const storedModelNameDraft =
+          readStoredModelNameDraft(activeSelectionRole, providerCode) || undefined;
         setProviderDetails((prev) => ({ ...prev, [providerCode]: detail }));
         setSyncErrorByProvider((prev) => ({ ...prev, [providerCode]: null }));
         setSelectedModelIds((prev) => ({
@@ -227,6 +306,7 @@ const PlatformConfigModal = forwardRef<
           [providerCode]: (() => {
             const preferredModelId =
               prev[providerCode] ??
+              storedModelNameDraft ??
               detail.assignments[activeSelectionRole]?.remoteModelId ??
               "";
             return detail.models.some((model) => model.id === preferredModelId)
@@ -238,6 +318,7 @@ const PlatformConfigModal = forwardRef<
           ...prev,
           [providerCode]:
             prev[providerCode] ??
+            storedModelNameDraft ??
             detail.assignments[activeSelectionRole]?.remoteModelId ??
             "",
         }));
@@ -636,18 +717,28 @@ const PlatformConfigModal = forwardRef<
               [selectedProviderCode]: value,
             }));
             if (value) {
+              writeStoredModelNameDraft(
+                activeSelectionRole,
+                selectedProviderCode,
+                value,
+              );
               setCurrentModelNames((prev) => ({
                 ...prev,
                 [selectedProviderCode]: value,
               }));
             }
           }}
-          onModelNameChange={(value) =>
+          onModelNameChange={(value) => {
+            writeStoredModelNameDraft(
+              activeSelectionRole,
+              selectedProviderCode,
+              value,
+            );
             setCurrentModelNames((prev) => ({
               ...prev,
               [selectedProviderCode]: value,
-            }))
-          }
+            }));
+          }}
           onTestConnection={handleSyncModels}
           onDeleteProvider={handleDeleteProvider}
           onSetDefaultRole={handleSetDefaultRole}

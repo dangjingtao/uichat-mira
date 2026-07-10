@@ -3,6 +3,14 @@ import path from "node:path";
 import { fetchJsonWithTimeout } from "@/utils/http.js";
 
 const DEFAULT_GPT_SOVITS_SERVICE_URL = "http://127.0.0.1:9872";
+const RIFF_HEADER = "RIFF";
+const WAVE_HEADER = "WAVE";
+const FMT_CHUNK = "fmt ";
+const DATA_CHUNK = "data";
+const WAV_PCM_FORMAT = 1;
+const GPT_SOVITS_OUTPUT_TARGET_PEAK = 0.9;
+const GPT_SOVITS_OUTPUT_MAX_GAIN = 2.5;
+const GPT_SOVITS_OUTPUT_MIN_PEAK = 0.01;
 
 type GradioChoice = string | [string, string] | [string, number];
 
@@ -43,6 +51,7 @@ type GradioFileData = {
 
 type GptSovitsCatalogDefaults = {
   serviceUrl: string;
+  promptText: string;
   gptModel: string;
   sovitsModel: string;
   promptLanguage: string;
@@ -90,6 +99,8 @@ const normalizeBaseUrl = (value: unknown) => {
       : DEFAULT_GPT_SOVITS_SERVICE_URL;
   return baseUrl.replace(/\/+$/, "");
 };
+
+const isHttpUrl = (value: string) => /^https?:\/\//iu.test(value);
 
 const toStringOption = (value: unknown): string => {
   if (typeof value === "string") {
@@ -150,6 +161,8 @@ const parseSseJsonPayload = <T>(content: string): T => {
     .map((chunk) => chunk.trim())
     .filter(Boolean);
 
+  let sawErrorEvent = false;
+
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const lines = events[index].split(/\r?\n/);
     const eventName = lines
@@ -157,20 +170,32 @@ const parseSseJsonPayload = <T>(content: string): T => {
       ?.slice("event:".length)
       .trim();
 
-    if (eventName !== "complete") {
-      continue;
-    }
-
     const dataText = lines
       .filter((line) => line.startsWith("data:"))
       .map((line) => line.slice("data:".length).trim())
       .join("\n");
+
+    if (eventName === "error") {
+      sawErrorEvent = true;
+      if (dataText && dataText !== "null") {
+        throw new Error(`GPT-SoVITS Gradio returned error event: ${dataText}`);
+      }
+      continue;
+    }
+
+    if (eventName !== "complete") {
+      continue;
+    }
 
     if (!dataText) {
       break;
     }
 
     return JSON.parse(dataText) as T;
+  }
+
+  if (sawErrorEvent) {
+    throw new Error("GPT-SoVITS Gradio returned an error event.");
   }
 
   throw new Error("GPT-SoVITS Gradio call did not return a complete event.");
@@ -217,6 +242,79 @@ const getParameterByName = (
   name: string,
 ) => parameters.find((item) => item.parameter_name === name);
 
+const readChunkId = (bytes: Buffer, offset: number) =>
+  bytes.subarray(offset, offset + 4).toString("ascii");
+
+export const applyGptSovitsOutputGain = (bytes: Buffer, mimeType: string) => {
+  if (!/audio\/wav/iu.test(mimeType)) {
+    return bytes;
+  }
+
+  if (bytes.length < 44 || readChunkId(bytes, 0) !== RIFF_HEADER || readChunkId(bytes, 8) !== WAVE_HEADER) {
+    return bytes;
+  }
+
+  let audioFormat = 0;
+  let bitsPerSample = 0;
+  let dataOffset = -1;
+  let dataSize = 0;
+
+  let offset = 12;
+  while (offset + 8 <= bytes.length) {
+    const chunkId = readChunkId(bytes, offset);
+    const chunkSize = bytes.readUInt32LE(offset + 4);
+    const chunkDataOffset = offset + 8;
+
+    if (chunkDataOffset + chunkSize > bytes.length) {
+      return bytes;
+    }
+
+    if (chunkId === FMT_CHUNK && chunkSize >= 16) {
+      audioFormat = bytes.readUInt16LE(chunkDataOffset);
+      bitsPerSample = bytes.readUInt16LE(chunkDataOffset + 14);
+    } else if (chunkId === DATA_CHUNK) {
+      dataOffset = chunkDataOffset;
+      dataSize = chunkSize;
+      break;
+    }
+
+    offset = chunkDataOffset + chunkSize + (chunkSize % 2);
+  }
+
+  if (audioFormat !== WAV_PCM_FORMAT || bitsPerSample !== 16 || dataOffset < 0 || dataSize < 2) {
+    return bytes;
+  }
+
+  let peak = 0;
+  for (let sampleOffset = dataOffset; sampleOffset + 1 < dataOffset + dataSize; sampleOffset += 2) {
+    const normalized = Math.abs(bytes.readInt16LE(sampleOffset)) / 32768;
+    if (normalized > peak) {
+      peak = normalized;
+    }
+  }
+
+  if (peak < GPT_SOVITS_OUTPUT_MIN_PEAK || peak >= GPT_SOVITS_OUTPUT_TARGET_PEAK) {
+    return bytes;
+  }
+
+  const gain = Math.min(
+    GPT_SOVITS_OUTPUT_TARGET_PEAK / peak,
+    GPT_SOVITS_OUTPUT_MAX_GAIN,
+  );
+  if (gain <= 1) {
+    return bytes;
+  }
+
+  const output = Buffer.from(bytes);
+  for (let sampleOffset = dataOffset; sampleOffset + 1 < dataOffset + dataSize; sampleOffset += 2) {
+    const amplified = Math.round(output.readInt16LE(sampleOffset) * gain);
+    const clipped = Math.max(-32768, Math.min(32767, amplified));
+    output.writeInt16LE(clipped, sampleOffset);
+  }
+
+  return output;
+};
+
 const copyGeneratedAudio = async (
   fileData: GradioFileData,
   outputPath: string,
@@ -225,8 +323,10 @@ const copyGeneratedAudio = async (
   const localPath = typeof fileData.path === "string" ? fileData.path.trim() : "";
   if (localPath) {
     try {
-      await fs.copyFile(localPath, outputPath);
-      return fileData.mime_type?.trim() || "audio/wav";
+      const mimeType = fileData.mime_type?.trim() || "audio/wav";
+      const bytes = await fs.readFile(localPath);
+      await fs.writeFile(outputPath, applyGptSovitsOutputGain(bytes, mimeType));
+      return mimeType;
     } catch {
       // Fall through to URL download when the path is not readable from our backend process.
     }
@@ -247,8 +347,10 @@ const copyGeneratedAudio = async (
   }
 
   const bytes = Buffer.from(await response.arrayBuffer());
-  await fs.writeFile(outputPath, bytes);
-  return fileData.mime_type?.trim() || response.headers.get("content-type") || "audio/wav";
+  const mimeType =
+    fileData.mime_type?.trim() || response.headers.get("content-type") || "audio/wav";
+  await fs.writeFile(outputPath, applyGptSovitsOutputGain(bytes, mimeType));
+  return mimeType;
 };
 
 export const getDefaultGptSovitsServiceUrl = () => DEFAULT_GPT_SOVITS_SERVICE_URL;
@@ -293,6 +395,8 @@ export const loadGptSovitsCatalog = async (
 
   const defaults: GptSovitsCatalogDefaults = {
     serviceUrl,
+    promptText:
+      typeof providerConfig.promptText === "string" ? providerConfig.promptText.trim() : "",
     gptModel: pickOption(providerConfig.gptModel, gptModelOptions),
     sovitsModel: pickOption(providerConfig.sovitsModel, sovitsModelOptions),
     promptLanguage: pickOption(
@@ -357,7 +461,22 @@ export const synthesizeWithGptSovits = async (input: {
     throw new Error("GPT-SoVITS reference audio path is required.");
   }
 
-  await fs.access(refAudioPath);
+  if (!isHttpUrl(refAudioPath)) {
+    await fs.access(refAudioPath);
+  }
+
+  const refAudioFileData = isHttpUrl(refAudioPath)
+    ? {
+        path: refAudioPath,
+        url: refAudioPath,
+        orig_name: path.basename(refAudioPath),
+        mime_type: "audio/wav",
+        meta: { _type: "gradio.FileData" },
+      }
+    : {
+        path: refAudioPath,
+        meta: { _type: "gradio.FileData" },
+      };
 
   await callGradioEndpoint<unknown[]>(serviceUrl, "change_gpt_weights", [request.gptModel]);
   await callGradioEndpoint<unknown[]>(serviceUrl, "change_sovits_weights", [
@@ -370,7 +489,7 @@ export const synthesizeWithGptSovits = async (input: {
     serviceUrl,
     "get_tts_wav",
     [
-      { path: refAudioPath, meta: { _type: "gradio.FileData" } },
+      refAudioFileData,
       request.promptText,
       request.promptLanguage,
       request.text,

@@ -6,6 +6,8 @@ type CompactAudioPlayerProps = {
   src: string;
   title?: string;
   subtitle?: string;
+  statusMessage?: string;
+  disabled?: boolean;
   className?: string;
   tone?: "light" | "dark";
 };
@@ -26,6 +28,8 @@ export default function CompactAudioPlayer({
   src,
   title = "音频预览",
   subtitle = "",
+  statusMessage = "",
+  disabled = false,
   className = "",
   tone = "light",
 }: CompactAudioPlayerProps) {
@@ -164,7 +168,7 @@ export default function CompactAudioPlayer({
 
   const togglePlayback = async () => {
     const audio = audioRef.current;
-    if (!audio) {
+    if (!audio || disabled || !src) {
       return;
     }
 
@@ -178,7 +182,7 @@ export default function CompactAudioPlayer({
 
   const handleSeek = (nextValue: number) => {
     const audio = audioRef.current;
-    if (!audio) {
+    if (!audio || disabled || !src) {
       return;
     }
     audio.currentTime = nextValue;
@@ -197,6 +201,9 @@ export default function CompactAudioPlayer({
   };
 
   const toggleMute = () => {
+    if (disabled || !src) {
+      return;
+    }
     if (volume === 0) {
       handleVolumeChange(previousVolume || 40);
       return;
@@ -221,6 +228,7 @@ export default function CompactAudioPlayer({
     ? "border-transparent bg-[#252320]"
     : "border-[#e7dfd3] bg-[#faf8f3]";
   const volumeSliderScopeClassName = "compact-audio-player-volume-slider";
+  const controlsDisabled = disabled || !src;
 
   return (
     <div
@@ -237,7 +245,12 @@ export default function CompactAudioPlayer({
         type="button"
         onClick={() => void togglePlayback()}
         aria-label={playing ? "暂停" : "播放"}
-        className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-[#cc785c] text-white transition-transform duration-150 active:scale-95"
+        disabled={controlsDisabled}
+        className={`flex h-10 w-10 flex-none items-center justify-center rounded-full text-white transition-transform duration-150 ${
+          controlsDisabled
+            ? "cursor-not-allowed bg-[#d9c5bb] opacity-70"
+            : "bg-[#cc785c] active:scale-95"
+        }`}
       >
         {playing ? (
           <Pause className="h-4 w-4 fill-current" strokeWidth={2.4} />
@@ -263,18 +276,23 @@ export default function CompactAudioPlayer({
           step={0.1}
           value={Math.min(currentTime, duration || 0)}
           onChange={(event) => handleSeek(Number(event.target.value))}
-          disabled={duration <= 0}
+          disabled={controlsDisabled || duration <= 0}
           aria-label="播放进度"
           style={{
             background: `linear-gradient(to right, rgb(var(--color-primary)) 0%, rgb(var(--color-primary)) ${progressPercent}%, ${sliderTrackColor} ${progressPercent}%, ${sliderTrackColor} 100%)`,
           }}
           className={`claude-range-slider claude-range-slider-compact ${
-            duration <= 0 ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+            controlsDisabled || duration <= 0
+              ? "cursor-not-allowed opacity-60"
+              : "cursor-pointer"
           }`}
         />
 
         {subtitle ? (
           <p className={`mt-1 truncate text-[11px] leading-none ${subtitleClassName}`}>{subtitle}</p>
+        ) : null}
+        {statusMessage ? (
+          <p className={`mt-1 text-[11px] leading-5 ${subtitleClassName}`}>{statusMessage}</p>
         ) : null}
       </div>
 
@@ -282,15 +300,21 @@ export default function CompactAudioPlayer({
         <button
           ref={volumeButtonRef}
           type="button"
-          onClick={() => setVolumeOpen((current) => !current)}
+          onClick={() => {
+            if (controlsDisabled) {
+              return;
+            }
+            setVolumeOpen((current) => !current);
+          }}
           onDoubleClick={toggleMute}
           aria-label="音量"
           aria-expanded={volumeOpen}
+          disabled={controlsDisabled}
           className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
             volumeOpen
               ? `${volumeButtonClassName} ${isDark ? "bg-[#2b2723]" : "bg-[#e7dfd3]"}`
               : `bg-transparent ${volumeButtonClassName}`
-          }`}
+          } ${controlsDisabled ? "cursor-not-allowed opacity-50" : ""}`}
         >
           <VolumeIcon className="h-4 w-4" />
         </button>

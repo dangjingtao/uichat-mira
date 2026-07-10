@@ -9,6 +9,7 @@ dist/
 coverage/
 .artifacts/
 .test-artifact/
+.local-runtimes/
 .local-models/
 apps/desktop/release/
 apps/desktop/release-*/

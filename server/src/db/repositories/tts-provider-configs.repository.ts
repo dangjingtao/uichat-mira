@@ -20,6 +20,9 @@ type TtsProviderConfigInput = {
   config?: Record<string, unknown>;
 };
 
+const isAlwaysEnabledProvider = (providerId: TtsProviderId) =>
+  providerId === "windows_builtin" || providerId === "piper_local";
+
 const defaultSeeds: Array<{
   providerId: TtsProviderId;
   displayName: string;
@@ -125,10 +128,24 @@ const seedDefaults = () => {
   }
 };
 
+const normalizeAlwaysEnabledProviders = () => {
+  for (const providerId of ["windows_builtin", "piper_local"] as const) {
+    getDb()
+      .update(ttsProviderConfigs)
+      .set({
+        enabled: true,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(ttsProviderConfigs.providerId, providerId))
+      .run();
+  }
+};
+
 export const ttsProviderConfigsRepository = {
   initialize() {
     ensureTable();
     seedDefaults();
+    normalizeAlwaysEnabledProviders();
   },
 
   list() {
@@ -150,6 +167,10 @@ export const ttsProviderConfigsRepository = {
   },
 
   upsert(providerId: TtsProviderId, input: TtsProviderConfigInput) {
+    const normalizedEnabled = isAlwaysEnabledProvider(providerId)
+      ? true
+      : (input.enabled ?? true);
+
     const current = this.getByProviderId(providerId);
     if (!current) {
       const row = getDb()
@@ -157,7 +178,7 @@ export const ttsProviderConfigsRepository = {
         .values({
           providerId,
           displayName: normalizeText(input.displayName ?? providerId),
-          enabled: input.enabled ?? true,
+          enabled: normalizedEnabled,
           configJson: JSON.stringify(input.config ?? {}),
         })
         .returning()
@@ -172,7 +193,7 @@ export const ttsProviderConfigsRepository = {
           typeof input.displayName === "string"
             ? normalizeText(input.displayName)
             : current.displayName,
-        enabled: typeof input.enabled === "boolean" ? input.enabled : current.enabled,
+        enabled: normalizedEnabled,
         configJson: JSON.stringify(input.config ?? current.config),
         updatedAt: new Date().toISOString(),
       })

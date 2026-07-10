@@ -87,6 +87,33 @@ pnpm prepare:local-model-packs
 本地没有这两个环境变量就直接报错，不会回退到 `.artifacts/`。
 CI 构建阶段才允许设置 `LOCAL_MODEL_ALLOW_NETWORK=1` 自动下载。
 
+## Bundled Piper Runtime
+
+Piper 微应用默认内置 Windows 运行时。
+
+用户侧只需要提供自己的 `.onnx` 语音包文件和同目录 `.onnx.json`，不需要单独安装 `piper.exe`。
+
+构建脚本会自动准备：
+
+```bash
+pnpm prepare:piper-runtime
+```
+
+默认行为：
+
+- 从固定版本的官方 Piper Windows 包下载运行时
+- 缓存到 `.local-runtimes/piper/`
+- staging 到 `.artifacts/micro-apps/tts/piper/`
+- 只随 `TTS` 微应用自己的资源目录入包
+
+当前支持边界：
+
+- 当前内置 `Piper` 运行时稳定支持 `phoneme_type=espeak` 的语音包
+- `phoneme_type=pinyin` 的中文语音包当前不在稳定支持范围内
+- 这是一条已确认的运行时兼容性技术债，详见：
+  - `docs/microapp/tts-studio-runtime-notes.md`
+  - `docs/developments/defect-log.md`
+
 ## Health Checks
 
 ```bash

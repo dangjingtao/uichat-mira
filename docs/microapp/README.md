@@ -15,6 +15,8 @@ Related:
   - image-generation-microapp-poc.md
   - computer-use-microapp-poc.md
   - computer-use-feature-design.md
+  - tts-studio-runtime-notes.md
+  - gpt-sovits-microapp-poc.md
 
 ## 单点真相范围
 
@@ -258,6 +260,13 @@ Platform
 
 - 接收外部文档或消息源
 - 进入知识库导入流程
+
+## 当前活跃文档
+
+- `image-generation-microapp-poc.md`
+- `computer-use-microapp-poc.md`
+- `gpt-sovits-microapp-poc.md`
+- `tts-studio-runtime-notes.md`
 
 这更适合飞书等文档平台。
 

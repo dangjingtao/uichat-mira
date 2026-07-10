@@ -102,6 +102,10 @@ import { getAppMeta } from "@/utils/index.js";
 import { sendRouteError, unauthorized } from "@/utils/route-errors.js";
 import { MAX_UPLOAD_FILE_BYTES } from "@/constants/knowledge-base.js";
 import { attachmentStorageRoot } from "@/services/attachment-storage.service.js";
+import {
+  ttsRefAudioPublicPrefix,
+  ttsRefAudioStorageRoot,
+} from "@/services/tts-ref-audio-storage.service.js";
 import { configureAgentRunPersistence } from "@/agent/run-store.js";
 import { agentRunStore } from "@/agent/run-store.js";
 import { configureInvocationRetention } from "@/mcp/core/invocations.js";
@@ -543,6 +547,16 @@ const setupPlugins = async () => {
         "Cache-Control",
         "private, max-age=31536000, immutable",
       );
+    },
+  });
+
+  await fs.mkdir(ttsRefAudioStorageRoot, { recursive: true });
+  await app.register(fastifyStatic, {
+    root: ttsRefAudioStorageRoot,
+    prefix: ttsRefAudioPublicPrefix,
+    decorateReply: false,
+    setHeaders(response) {
+      response.setHeader("Cache-Control", "private, no-cache");
     },
   });
 

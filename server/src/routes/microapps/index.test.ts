@@ -21,6 +21,7 @@ import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 import { sendRouteError } from "@/utils/route-errors.js";
 import microappsRoute, { type ImageGenerationRouteService } from "./index.js";
 import type { ComfyUiStudioRouteService } from "./index.js";
+import type { CodeGraphStudioRouteService } from "./index.js";
 import type { TtsService } from "@/microapps/tts/index.js";
 
 const testDbPath = createTimestampedTestArtifactPath(
@@ -263,11 +264,122 @@ const createApp = async (
     async listVoices() {
       return [];
     },
+    async getGptSovitsCatalog() {
+      return {
+        serviceUrl: "http://127.0.0.1:9872",
+        gptModelOptions: [],
+        sovitsModelOptions: [],
+        languageOptions: [],
+        cutMethodOptions: [],
+        sampleStepOptions: [],
+        defaults: {
+          serviceUrl: "http://127.0.0.1:9872",
+          promptText: "",
+          gptModel: "",
+          sovitsModel: "",
+          promptLanguage: "中文",
+          textLanguage: "中文",
+          cutMethod: "不切",
+          sampleSteps: 8,
+          speed: 1,
+          pauseSecond: 0.3,
+          temperature: 1,
+          topK: 15,
+          topP: 1,
+        },
+      };
+    },
     getSynthesis() {
       return null;
     },
     async synthesize() {
       throw new Error("not implemented");
+    },
+    async synthesizeGptSovits() {
+      throw new Error("not implemented");
+    },
+  },
+  codeGraphStudioService: CodeGraphStudioRouteService = {
+    async getReport() {
+      return {
+        status: "stopped",
+        blockedReasons: [],
+        config: {
+          workspaceRoot: "D:\\workspace\\rag-demo",
+          appDataRoot: "",
+          appDataRootResolved: null,
+          logRoot: null,
+          indexRoot: null,
+          command: "codegraph",
+          startArgs: [],
+          versionProbeArgs: ["--version"],
+          telemetryProbeArgs: ["--telemetry-status"],
+          timeoutMs: 2000,
+          maxResults: 5,
+          queryLimit: 5,
+          plannerExposureEnabled: false,
+        },
+        pollutionGuard: {
+          status: "ready",
+          repoDataDirName: ".codegraph",
+          repoDataDirPath: "D:\\workspace\\rag-demo\\.codegraph",
+          exists: false,
+          blockedReason: null,
+        },
+        runtime: {
+          providerVersion: null,
+          telemetryStatus: "unknown",
+          handshakeStatus: "unknown",
+          initializedNotificationSent: false,
+          processAlive: false,
+          startedAt: null,
+          stoppedAt: null,
+          durationMs: null,
+          exitCode: null,
+          lastStatus: null,
+          lastError: null,
+          crashCount: 0,
+          startDisposition: null,
+        },
+        debug: {
+          workspaceHash: "workspace-hash",
+          plannerStorage: {},
+          externalIndexSupport: {},
+          detectReasons: [],
+          rawManagerStatus: "stopped",
+        },
+      };
+    },
+    saveConfig() {},
+    async detect() {
+      return this.getReport();
+    },
+    async start() {
+      return this.getReport();
+    },
+    async health() {
+      return this.getReport();
+    },
+    async stop() {
+      return this.getReport();
+    },
+    async smokeStatus() {
+      return {
+        kind: "status",
+        ok: true,
+        message: "ok",
+        payload: {},
+        report: await this.getReport(),
+      };
+    },
+    async smokeQuery(query) {
+      return {
+        kind: "query",
+        ok: true,
+        message: query,
+        payload: {},
+        report: await this.getReport(),
+      };
     },
   },
 ) => {
@@ -310,6 +422,7 @@ const createApp = async (
         };
       },
     },
+    codeGraphStudioService,
     mailCenterService,
     newsHubService,
     ttsService,
@@ -1318,6 +1431,7 @@ test("microapps tts overview route returns provider and recent job state", async
           sampleStepOptions: [],
           defaults: {
             serviceUrl: "http://127.0.0.1:9872",
+            promptText: "",
             gptModel: "",
             sovitsModel: "",
             promptLanguage: "中文",
@@ -1356,6 +1470,124 @@ test("microapps tts overview route returns provider and recent job state", async
   assert.equal(response.statusCode, 200, response.body);
   assert.equal(response.json().data.providers[0].providerId, "windows_builtin");
   assert.equal(response.json().data.recentJobs[0].id, "tts-job-1");
+
+  await app.close();
+});
+
+test("microapps GPT-SoVITS synthesis route returns bad request when synthesis job failed", async () => {
+  const app = await createApp(
+    {
+      async createGeneration() {
+        return createTestJob();
+      },
+      async getGeneration() {
+        return createTestJob();
+      },
+    },
+    createMailCenterServiceStub(),
+    createNewsHubServiceStub(),
+    undefined,
+    {
+      async getOverview() {
+        return {
+          providers: [],
+          recentJobs: [],
+        };
+      },
+      getProvider() {
+        return null;
+      },
+      updateProvider(providerId) {
+        return {
+          id: "provider-1",
+          providerId,
+          displayName: "GPT-SoVITS",
+          enabled: true,
+          config: {},
+          createdAt: "2026-07-06T12:00:00.000Z",
+          updatedAt: "2026-07-06T12:00:00.000Z",
+        };
+      },
+      async listVoices() {
+        return [];
+      },
+      async getGptSovitsCatalog() {
+        return {
+          serviceUrl: "http://127.0.0.1:9872",
+          gptModelOptions: [],
+          sovitsModelOptions: [],
+          languageOptions: [],
+          cutMethodOptions: [],
+          sampleStepOptions: [],
+          defaults: {
+            serviceUrl: "http://127.0.0.1:9872",
+            promptText: "",
+            gptModel: "",
+            sovitsModel: "",
+            promptLanguage: "中文",
+            textLanguage: "中文",
+            cutMethod: "不切",
+            sampleSteps: 8,
+            speed: 1,
+            pauseSecond: 0.3,
+            temperature: 1,
+            topK: 15,
+            topP: 1,
+          },
+        };
+      },
+      getSynthesis() {
+        return null;
+      },
+      async synthesize() {
+        throw new Error("not implemented");
+      },
+      async synthesizeGptSovits() {
+        return {
+          id: "tts-job-gpt-failed",
+          providerId: "gpt_sovits",
+          status: "failed",
+          text: "hello",
+          voice: null,
+          requestConfig: {},
+          outputPath: null,
+          mimeType: null,
+          errorMessage: "upstream get_tts_wav failed",
+          createdAt: "2026-07-06T12:00:00.000Z",
+          updatedAt: "2026-07-06T12:00:00.000Z",
+          completedAt: "2026-07-06T12:00:01.000Z",
+        };
+      },
+    },
+  );
+  const token = createToken();
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/microapps/tts/gpt-sovits/syntheses",
+    headers: {
+      authorization: `Bearer ${token}`,
+    },
+    payload: {
+      text: "hello",
+      refAudioPath: "D:\\voice\\ref.wav",
+      promptText: "",
+      promptLanguage: "中文",
+      textLanguage: "中文",
+      gptModel: "",
+      sovitsModel: "",
+      cutMethod: "不切",
+      sampleSteps: 8,
+      speed: 1,
+      pauseSecond: 0.3,
+      temperature: 1,
+      topK: 15,
+      topP: 1,
+    },
+  });
+
+  assert.equal(response.statusCode, 400, response.body);
+  assert.equal(response.json().message, "upstream get_tts_wav failed");
 
   await app.close();
 });

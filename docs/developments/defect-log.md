@@ -20,6 +20,61 @@ Related:
 
 ## 2026-07-10
 
+### TTS Studio 内置 Piper runtime 不兼容 `phoneme_type=pinyin` 中文包
+
+- Layer: runtime / microapp / TTS / bundled Piper
+- Status: Confirmed
+- Severity: Medium for Piper provider stability
+
+现象：
+
+- `TTS Studio` 中切到 `Piper`
+- 更换部分中文语音包后保存可通过，但点击合成会失败
+- 典型错误为：
+  - `"[piper] [error] \"ai\" is not a single codepoint (ids=30,)"`
+
+已确认边界：
+
+- 这不是 `onnx` 路径填写错误
+- 这不是 provider 启用状态错误
+- 这不是页面表单问题
+- 这不是单纯因为测试文本里含英文
+- 这是当前内置 `Piper runtime` 与部分中文语音包类型不兼容
+
+当前判断：
+
+- 当前项目内置 `Piper` 为 Windows `2023.11.14-2`
+- 当前链路稳定支持：
+  - `phoneme_type=espeak`
+- 当前链路不稳定或不支持：
+  - `phoneme_type=pinyin`
+- 已确认可用示例：
+  - `zh_CN-huayan-medium`
+- 已确认不兼容示例：
+  - `zh_CN-xiao_ya-medium`
+
+影响：
+
+- 当前版本不能把 `Piper` 路线描述成“稳定支持所有中英文语音包”
+- 用户容易误把问题判断成模型路径、测试文案或前端配置错误
+- 如果不明确支持边界，后续会重复在 UI 层和表单层误修
+
+已完成进展：
+
+- 已把 `Piper` 运行时改成 `TTS` 微应用私有资源目录
+- 已把开发态路径解析收敛到工作区根目录
+- 已补 provider 启用态修正
+- 已在保存链路增加 `phoneme_type` 校验，当前只接受 `espeak`
+- 已单独补运行时说明文档：
+  - [tts-studio-runtime-notes.md](../microapp/tts-studio-runtime-notes.md)
+- 已正式登记技术债决策：
+  - [TD-TTS-01 Piper Phoneme Compatibility Gap](../project-control/decisions/TD-TTS-01-piper-phoneme-compatibility-gap.md)
+
+下一步：
+
+- 如果产品只要求当前版本稳定，继续明确 `Piper` 只支持 `espeak` 包
+- 如果产品要求 `Piper` 稳定覆盖更多中文包，需要单独处理运行时兼容能力，不要继续在 UI 层修补
+
 ### Micro Apps 设置页知识库卡片消失
 
 - Layer: backend / microapp registry / persistence compatibility

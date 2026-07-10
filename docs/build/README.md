@@ -29,6 +29,7 @@ Related:
 - 测试报告如何进入 release 包
 - release 输出目录和保留策略
 - 本地模型包和 WASM runtime 资源入包规则
+- Piper Windows 运行时入包规则
 - 当前平台兼容边界
 - 后续改造方向
 
@@ -65,6 +66,65 @@ pnpm version:sync
 本地 embedding / rerank 模型包、`onnxruntime-web` WASM runtime、Electron / Tauri resources 复制、首启解压和 checksum 校验规则，见：
 
 - `local-model-packaging.md`
+
+## Piper 运行时资源
+
+Piper 微应用当前按 Windows 首发处理，运行时由应用内置，不要求最终用户额外安装 `piper.exe`。
+
+当前构建输入和 staging 规则：
+
+```text
+.local-runtimes/piper/windows-amd64/<version>/
+  piper_windows_amd64.zip
+  extracted/piper/
+    piper.exe
+    onnxruntime.dll
+    piper_phonemize.dll
+    espeak-ng-data/
+    ...
+
+.artifacts/micro-apps/tts/piper/
+  piper.exe
+  onnxruntime.dll
+  piper_phonemize.dll
+  espeak-ng-data/
+  ...
+```
+
+构建命令：
+
+```bash
+pnpm prepare:piper-runtime
+```
+
+当前行为：
+
+- 固定下载官方 `piper_windows_amd64.zip`
+- 先复用 `.local-runtimes/` 持久缓存
+- 再复制到 `.artifacts/micro-apps/tts/piper/`
+- `prepare-desktop-artifacts` 会自动执行这一步
+- Electron resources 和 Tauri resources 都会带上 `micro-apps/tts/piper/` 目录
+
+服务端运行时解析顺序：
+
+1. `UIC_TTS_PIPER_EXECUTABLE`，仅用于显式调试覆盖
+2. `.local-runtimes/piper/.../piper.exe`
+3. `.artifacts/micro-apps/tts/piper/piper.exe`
+4. 打包后的 `resources/micro-apps/tts/piper/piper.exe`
+
+业务含义：
+
+- 用户只需要配置 Piper 语音包路径
+- `piper.exe`、依赖 DLL 和 `espeak-ng-data` 由应用负责提供
+
+当前支持边界：
+
+- 当前内置 `Piper` 运行时稳定支持 `phoneme_type=espeak` 的语音包
+- `phoneme_type=pinyin` 的中文语音包当前不在稳定支持范围内
+- 这不是打包路径问题，而是当前运行时兼容性边界
+- 具体样例和技术债说明见：
+  - `../microapp/tts-studio-runtime-notes.md`
+  - `../developments/defect-log.md`
 
 ## Release 构建原则
 

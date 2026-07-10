@@ -54,6 +54,7 @@
     "internal:prepare:desktop-artifacts": "node scripts/prepare-desktop-artifacts.js",
     "internal:prepare:tauri": "node scripts/prepare-tauri-assets.js",
     "internal:dev:tauri:services": "node scripts/tauri-dev-launcher.cjs",
+    "prepare:piper-runtime": "node scripts/prepare-piper-runtime.mjs",
     "prepare:local-model-packs": "node scripts/prepare-local-model-packs.mjs",
     "archive:local-model-packs": "node scripts/archive-local-model-packs.mjs",
     "smoke:local-model-runtime": "node scripts/smoke-local-model-runtime.mjs",

@@ -111,6 +111,7 @@ Related:
 ### 集成
 
 - `microapp/README.md`
+- `microapp/tts-studio-runtime-notes.md`
 - `integrations/wecom-admin-setup-checklist.md`
 - `integrations/wecom-cloudflare-worker-poc.md`
 - `integrations/enterprise-wecom-implementation-checklist.md`

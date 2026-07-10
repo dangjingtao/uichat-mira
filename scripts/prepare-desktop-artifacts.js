@@ -18,6 +18,12 @@ const runtimeConfigArtifactsPath = path.join(
   "runtime.config.cjs",
 );
 const nodeRuntimeArtifactsRoot = path.join(artifactsRoot, "node-runtime");
+const piperRuntimeArtifactsRoot = path.join(
+  artifactsRoot,
+  "micro-apps",
+  "tts",
+  "piper",
+);
 const electronArtifactsRoot = path.join(artifactsRoot, "electron-app");
 const localModelDistRoot = path.join(artifactsRoot, "model-packs", "dist");
 const onnxRuntimeWebDistRoot = path.join(
@@ -144,6 +150,7 @@ if (skipTests) {
 execSync("pnpm internal:build:desktop", { cwd: projectRoot, stdio: "inherit" });
 execSync("pnpm internal:build:server", { cwd: projectRoot, stdio: "inherit" });
 execSync("pnpm docs:build", { cwd: projectRoot, stdio: "inherit" });
+execSync("pnpm prepare:piper-runtime", { cwd: projectRoot, stdio: "inherit" });
 
 if (!fs.existsSync(serverBundleArtifactsRoot)) {
   throw new Error(`Missing server bundle: ${serverBundleArtifactsRoot}`);
@@ -233,6 +240,11 @@ copyPath(
   nodeRuntimeArtifactsRoot,
   path.join(electronArtifactsRoot, "node-runtime"),
   "staged Node runtime",
+);
+copyPath(
+  piperRuntimeArtifactsRoot,
+  path.join(electronArtifactsRoot, "micro-apps", "tts", "piper"),
+  "staged Piper runtime",
 );
 fs.mkdirSync(path.join(electronArtifactsRoot, "model-packs"), { recursive: true });
 fs.mkdirSync(path.join(electronArtifactsRoot, "model-runtime"), { recursive: true });
