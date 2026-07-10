@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/project-control-ledger.md
-task_state: TODO
+task_state: DONE
 ---
 
 # Agent V1.5 T03：移除 Planner 前置工具选择与 selectedToolIds 链路
@@ -102,3 +102,11 @@ task_state: TODO
 5. 实际执行的测试命令、原始结果与 typecheck 结果；
 6. 明确说明是否影响既有 Agent 主线黑盒；
 7. 所有测试源码与报告均须为 git tracked files，不接受只贴口头摘要。
+
+## Review Evidence
+
+- 2026-07-11 R03 复审通过：`pretool-selector-removal.test.ts` 3/3 通过，`embedding-capability-matcher.test.ts` 4/4 通过。
+- Graph 已移除 `toolSelectStep`、`toolGuardStep` 及其 route；task-capability-selector、local intent guard 和相关死测试已删除。
+- Planner 输出的 `use_tool` 直接进入 Normalize；Normalize 接受 exposure 内任意工具，拒绝 exposure 外工具，不做工具替换。
+- `git diff --check` 通过。
+- server typecheck 仍受既有 `server/src/microapps/codegraph/index.ts:543` 阻断；广泛 Agent graph 中的 Planner/coverage 失败按既有基线记录，未发现 T03 专属合同新增失败。
