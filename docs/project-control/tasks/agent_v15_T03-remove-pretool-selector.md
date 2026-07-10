@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/project-control-ledger.md
-task_state: TODO
+task_state: DONE
 ---
 
 # Agent V1.5 T03：移除 Planner 前置工具选择与 selectedToolIds 链路
@@ -102,3 +102,11 @@ task_state: TODO
 5. 实际执行的测试命令、原始结果与 typecheck 结果；
 6. 明确说明是否影响既有 Agent 主线黑盒；
 7. 所有测试源码与报告均须为 git tracked files，不接受只贴口头摘要。
+
+## Review Evidence
+
+- 2026-07-11 按 Mira PR #4 口径复审通过：`local-intent-guard.ts` 已恢复，`planner/node.ts` 原有调用与 trace 字段保持不变。
+- `pretool-selector-removal.test.ts` 3/3 通过，`embedding-capability-matcher.test.ts` 4/4 通过。
+- Graph 不再注册或路由经过 `toolSelectStep`、`toolGuardStep`；task-model selector 与 `selectedToolIds` 执行链影响已删除。
+- `git diff --check` 通过；广泛 Agent graph 的 15 条 Planner/coverage/tool-loop 失败按既有基线记录，非 T03 selector 合同新增失败。
+- server typecheck 仍受既有 `server/src/microapps/codegraph/index.ts:543` 阻断。
