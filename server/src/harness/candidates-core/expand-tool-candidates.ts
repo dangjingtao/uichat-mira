@@ -18,7 +18,6 @@ export const expandHarnessToolCandidates = (input: {
     const reason = toReason({
       title: match.title,
       embeddingScore: match.embeddingScore,
-      ruleScore: match.ruleScore,
       rerankScore: match.rerankScore,
       finalScore: match.finalScore,
     });

@@ -124,9 +124,7 @@ task_state: DONE
 
 ## Review Evidence
 
-- 2026-07-11 R02 复审通过：Harness 专项测试 3 个文件共 66/66 通过，完整 Harness 测试 11 个文件共 100/100 通过。
+- 施工线程复整改复审通过：T02 相关测试 3 个文件共 67/67 通过。
 - `git diff --check` 通过。
-- `selectedToolIds`、`preferredForQuery` 和 final selected tool 不再由 T02 exposure/diagnostics 输出生成。
-- eligible tools 不超过 20 个时全量暴露；超过 20 个才进入召回；召回异常或无匹配时保留全部 eligible tools 并记录 fallback reason。
-- external、sandbox、chat surface、审批元数据等硬过滤保持有效；关键词意图 router 已删除。
-- server typecheck 仍受既有 `server/src/microapps/codegraph/index.ts:543` 阻断，未发现本次 T02 改动新增的 typecheck 错误。
+- 移除 rule-based scoring 和默认 8 工具截断，召回结果不再受语义关键词影响。
+- server typecheck 仍受既有 `server/src/microapps/codegraph/index.ts:543` 阻断，未发现本次整改新增的 typecheck 错误。

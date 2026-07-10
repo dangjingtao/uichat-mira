@@ -197,21 +197,16 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
     const result = await resolveHarnessToolCandidatesForTurn({
       query: "target",
       source: "agent_intent",
-      maxTools: 3,
       topK: 20,
       minScore: 0,
     });
 
-    expect(result.toolCandidates).toHaveLength(3);
+    expect(result.toolCandidates).toHaveLength(20);
       expect(result.toolCandidates[0]).toMatchObject({
         toolId: "tail_target_tool",
       });
+    expect(result.toolExposure.exposedToolIds).toHaveLength(20);
     expect(result.toolExposure.exposedToolIds).toContain("tail_target_tool");
-    expect(result.toolExposure.exposedToolIds).not.toEqual([
-      "noise_tool_0",
-      "noise_tool_1",
-      "noise_tool_2",
-    ]);
   });
 
   it.each([0, 1, 20])("exposes every eligible tool and skips recall for %s tools", async (count) => {
@@ -332,6 +327,59 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
     );
     expect(result.toolCandidates.every((candidate) => !("preferredForQuery" in candidate))).toBe(true);
     expect(result).not.toHaveProperty("selectedToolIds");
+  });
+
+  it("does not use semantic keyword rules to change successful recall exposure", async () => {
+    const count = 21;
+    for (let index = 0; index < count; index += 1) {
+      registerCapability({
+        definition: {
+          id: `keyword_neutral_tool_${index}`,
+          title: `Keyword Neutral Tool ${index}`,
+          description: "eligible test tool",
+          domain: "read",
+          source: "internal",
+          mode: "sync",
+          inputSchema: { type: "object" },
+          tags: [],
+          capabilities: { sideEffect: "none", requiresApproval: false },
+        },
+        execute() {
+          return {};
+        },
+      });
+    }
+
+    vi.spyOn(embedding, "executeLocalEmbedding").mockImplementation(async ({ texts }) => ({
+      embeddingModel: "test-embedding",
+      embeddingModelConfigId: "test-embedding-config",
+      embeddings: texts.map(() => [1, 0]),
+    }));
+    vi.spyOn(rerank, "executeLocalRerank").mockResolvedValue({
+      rerankedCandidates: [],
+      rerankModel: "test-rerank",
+      rerankModelConfigId: "test-rerank-config",
+    });
+
+    const keywordResult = await resolveHarnessToolCandidatesForTurn({
+      query: "workspace web terminal edit",
+      source: "agent_intent",
+      topK: 20,
+    });
+    const neutralResult = await resolveHarnessToolCandidatesForTurn({
+      query: "unrelated wording",
+      source: "agent_intent",
+      topK: 20,
+    });
+
+    expect(keywordResult.toolExposure.exposedToolIds).toEqual(
+      neutralResult.toolExposure.exposedToolIds,
+    );
+    expect(keywordResult.toolCandidates.map((candidate) => candidate.toolId)).toEqual(
+      neutralResult.toolCandidates.map((candidate) => candidate.toolId),
+    );
+    expect(keywordResult.toolCandidates).toHaveLength(20);
+    expect(keywordResult.toolCandidates.every((candidate) => candidate.ruleScore === 0)).toBe(true);
   });
 
   it.each([

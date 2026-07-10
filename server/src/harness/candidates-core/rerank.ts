@@ -43,8 +43,8 @@ export const rerankHarnessCapabilityMatches = async (input: {
     .map((match) => {
       const rerankScore = rerankMap.get(match.capabilityId) ?? 0;
       const finalScore = input.hasEmbeddingSignal
-        ? match.embeddingScore * 0.65 + match.ruleScore * 0.15 + rerankScore * 0.2
-        : match.ruleScore * 0.4 + rerankScore * 0.6;
+        ? match.embeddingScore * 0.8 + rerankScore * 0.2
+        : rerankScore;
 
       return {
         ...match,

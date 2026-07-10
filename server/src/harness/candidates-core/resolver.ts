@@ -7,11 +7,9 @@ import {
   exposeAllHarnessToolCandidates,
 } from "./expand-tool-candidates.js";
 import {
-  DEFAULT_MAX_TOOLS,
   DEFAULT_MIN_SCORE,
   DEFAULT_TOP_K,
   TOOL_EXPOSURE_RECALL_THRESHOLD,
-  computeRuleScore,
   cosineSimilarity,
 } from "./scoring.js";
 import { rerankHarnessCapabilityMatches } from "./rerank.js";
@@ -28,7 +26,8 @@ export const resolveHarnessToolCandidatesForTurn = async (
   const source = input.source ?? "agent_intent";
   const topK = Math.max(1, input.topK ?? DEFAULT_TOP_K);
   const minScore = input.minScore ?? DEFAULT_MIN_SCORE;
-  const maxTools = Math.max(1, input.maxTools ?? DEFAULT_MAX_TOOLS);
+  const maxTools =
+    input.maxTools === undefined ? Number.POSITIVE_INFINITY : Math.max(1, input.maxTools);
 
   const exposureDecision = resolveHarnessToolExposure({
     source,
@@ -132,24 +131,14 @@ export const resolveHarnessToolCandidatesForTurn = async (
         queryEmbedding && documentEmbedding
           ? cosineSimilarity(queryEmbedding, documentEmbedding)
           : 0;
-      const ruleScore = computeRuleScore({
-        query: input.query,
-        capabilityId: profile.id,
-        title: profile.title,
-        tags: profile.tags,
-        domain: profile.domain,
-      });
-      const score =
-        queryEmbedding && documentEmbedding
-          ? embeddingScore * 0.8 + ruleScore * 0.2
-          : ruleScore;
+      const score = queryEmbedding && documentEmbedding ? embeddingScore : 0;
 
       return {
         capabilityId: profile.id,
         title: profile.title,
         score,
         embeddingScore,
-        ruleScore,
+        ruleScore: 0,
         rerankScore: 0,
         finalScore: score,
         candidateToolIds: profile.supportingToolIds,
