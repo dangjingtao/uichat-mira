@@ -407,8 +407,8 @@ export interface CurrentTaskFrameConfirmedObject {
 
 /**
  * Runtime-minimum task board for the current agent loop.
- * PlannerNode is the primary writer of goal/subtask/completion inference.
- * Executor nodes must only append objective confirmedObjects or blocker facts.
+ * PlannerNode is the only runtime writer of goal/subtask/completion inference.
+ * Executor nodes report objective facts through evidence and observations.
  * Generate/Evaluate nodes are read-only.
  */
 export interface CurrentTaskFrame {

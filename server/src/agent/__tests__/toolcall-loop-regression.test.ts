@@ -456,16 +456,15 @@ test("toolCall loop policy deny does not execute the tool", async () => {
     status: "failed",
     pendingToolCall: "absent",
     pendingApproval: "absent",
-    lastToolExecution: "present",
-    latestSummary: "present",
+    lastToolExecution: "absent",
+    latestSummary: "absent",
     terminalField: "errorMessage",
   });
   assert.equal(result.policyDecision?.type, "deny");
   assert.equal(executeSpy.mock.calls.length, 0);
   assert.equal(generateSpy.mock.calls.length, 0);
-  assert.equal(result.lastToolExecution?.status, "denied");
-  assert.equal(result.evidence.latestSummary?.status, "denied");
-  assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, false);
+  assert.equal(result.lastToolExecution, undefined);
+  assert.equal(result.evidence.latestSummary, undefined);
 });
 
 test("toolCall loop policy approval stops at waiting_approval without ToolNode execution", async () => {
@@ -498,7 +497,7 @@ test("toolCall loop policy approval stops at waiting_approval without ToolNode e
   assert.equal(generateSpy.mock.calls.length, 0);
 });
 
-test("toolCall loop Harness awaiting approval keeps pendingApproval and frozen pendingToolCall", async () => {
+test("toolCall loop reports Harness awaiting approval as an owner-contract failure", async () => {
   const readOpen = readOpenTool();
   setupToolExposure("open README.md", [readOpen]);
   vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
@@ -524,17 +523,18 @@ test("toolCall loop Harness awaiting approval keeps pendingApproval and frozen p
   });
 
   assertMatrixFields(result, {
-    status: "waiting_approval",
+    status: "failed",
     pendingToolCall: "present",
-    pendingApproval: "present",
+    pendingApproval: "absent",
     lastToolExecution: "present",
     latestSummary: "present",
-    terminalField: "none",
+    terminalField: "errorMessage",
   });
   assert.equal(executeSpy.mock.calls.length, 1);
   assert.equal(result.lastToolExecution?.status, "awaiting_approval");
   assert.equal(result.evidence.latestSummary?.status, "blocked");
   assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, false);
+  assert.match(result.errorMessage ?? "", /Policy must create pendingApproval/i);
 });
 
 test("toolCall loop repeated same tool args triggers the repeated guard and skips the duplicate execution", async () => {

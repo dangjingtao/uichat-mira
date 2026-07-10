@@ -3,6 +3,7 @@ import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { success } from "@/utils/index.js";
 import { badRequest, internalError, notFound, routeHandler } from "@/utils/route-errors.js";
 import type {
+  ApiProviderCatalog,
   GptSovitsSynthesisRequest,
   TtsProviderId,
   TtsService,
@@ -158,6 +159,15 @@ const ttsRoutes: FastifyPluginAsync<TtsRouteOptions> = async (app, options) => {
     routeHandler("Failed to load GPT-SoVITS catalog", async () =>
       success({
         catalog: await ttsService.getGptSovitsCatalog(),
+      }),
+    ),
+  );
+
+  app.get(
+    "/microapps/tts/api-provider/catalog",
+    routeHandler("Failed to load API provider catalog", async () =>
+      success({
+        catalog: ttsService.getApiProviderCatalog() as ApiProviderCatalog,
       }),
     ),
   );

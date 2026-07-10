@@ -289,6 +289,20 @@ const createApp = async (
         },
       };
     },
+    getApiProviderCatalog() {
+      return {
+        configured: false,
+        supported: false,
+        providerConnectionId: null,
+        providerDisplayName: "",
+        providerCode: null,
+        providerTemplateCode: null,
+        baseUrl: "",
+        modelId: "",
+        modelName: "",
+        errorMessage: "voice model is not configured",
+      };
+    },
     getSynthesis() {
       return null;
     },
@@ -1446,6 +1460,20 @@ test("microapps tts overview route returns provider and recent job state", async
           },
         };
       },
+      getApiProviderCatalog() {
+        return {
+          configured: false,
+          supported: false,
+          providerConnectionId: null,
+          providerDisplayName: "",
+          providerCode: null,
+          providerTemplateCode: null,
+          baseUrl: "",
+          modelId: "",
+          modelName: "",
+          errorMessage: "voice model is not configured",
+        };
+      },
       getSynthesis() {
         return null;
       },
@@ -1534,6 +1562,20 @@ test("microapps GPT-SoVITS synthesis route returns bad request when synthesis jo
             topK: 15,
             topP: 1,
           },
+        };
+      },
+      getApiProviderCatalog() {
+        return {
+          configured: false,
+          supported: false,
+          providerConnectionId: null,
+          providerDisplayName: "",
+          providerCode: null,
+          providerTemplateCode: null,
+          baseUrl: "",
+          modelId: "",
+          modelName: "",
+          errorMessage: "voice model is not configured",
         };
       },
       getSynthesis() {

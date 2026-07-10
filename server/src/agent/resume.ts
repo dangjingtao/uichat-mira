@@ -294,7 +294,7 @@ export const resumeApprovedAgentRun = async (runId: string) => {
     status: "running",
     pendingApproval: undefined,
     approvedInvocations,
-    // Resume keeps selectedToolId only for diagnostics / UI continuity.
+    // Compatibility field only; graph execution still uses pendingToolCall.
     selectedToolId: pendingToolCall.toolId,
     pendingToolCall,
   });
@@ -320,6 +320,7 @@ export const resumeApprovedAgentRun = async (runId: string) => {
     intentConfig: runtimeInput.intentConfig,
     workspaceRoot: runtimeInput.workspaceRoot,
     approvedInvocations,
+    // Compatibility input only; createInitialAgentGraphState does not store or read it.
     selectedToolId: pendingToolCall.toolId,
     pendingToolCall,
     onExecutionNode: (event) => {

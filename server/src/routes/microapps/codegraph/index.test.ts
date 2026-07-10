@@ -144,10 +144,19 @@ const createApp = async (codeGraphStudioService: CodeGraphStudioRouteService) =>
     async listVoices() {
       throw new Error("not implemented");
     },
+    async getGptSovitsCatalog() {
+      throw new Error("not implemented");
+    },
+    getApiProviderCatalog() {
+      throw new Error("not implemented");
+    },
     getSynthesis() {
       throw new Error("not implemented");
     },
     async synthesize() {
+      throw new Error("not implemented");
+    },
+    async synthesizeGptSovits() {
       throw new Error("not implemented");
     },
   };

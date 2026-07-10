@@ -35,6 +35,7 @@ related:
 | Project Control Governance | `IN_PROGRESS` | 建立唯一总控制台账，停止多 workboard 争抢当前真相 | [governance-principles.md](governance-principles.md) | 本文件建立后，其他 workboard 只作为证据来源 |
 | Harness Context System | `DONE` | Context Read Bench 已验收通过，补齐真实读取压测 | [harness_context_T001](tasks/harness_context_T001-context-read-plan-dsl.md), [harness_context_T002](tasks/harness_context_T002-context-read-bench.md) | T001、T002 已 DONE；整仓检查仍有任务外 typecheck 阻断 |
 | AgentGraph / Agent V1.5 | `READY_FOR_REVIEW` | 主链合同、弱模型防线、审批恢复、evidence grounded answer | [agent-nodes-workboard.md](agent-nodes-workboard.md), `agent_node_T001-T017` | 旧专项 workboard 存在状态冲突，见下方 Agent Nodes Index |
+| Agent V1.5 Stabilization 8-Card Package | `TODO` | 登记 T01-T08 施工任务卡，按依赖顺序推进 Agent V1.5 稳定化 | [Agent V1.5 Index](#agent-v15-stabilization-index), [T01](tasks/agent_v15_T01-state-ssot.md) | 8 张任务卡已纳入当前总台账；施工卡状态统一为 `TODO`，尚未开始实现 |
 | Harness / Sandbox | `READY_FOR_REVIEW` | 候选排序、sandbox direct contract、artifact/output contract；L1 workspace sandbox runner 已通过，跨层 diagnostics 闭环已补专门回归并通过 `pnpm check` | [T-010](tasks/T-010-harness-candidate-ordering.md), [T-011](tasks/T-011-sandbox-contract-direct-bench.md), [T-012](tasks/T-012-l1-workspace-sandbox-runner.md), [T-013](tasks/T-013-sandbox-artifact-output-contract.md), [T-014](tasks/T-014-cross-layer-diagnostics-closure.md) | T-012、T-013、T-014 已 DONE，其余仍按各自任务状态处理 |
 | Deep Agents Spike | `IN_PROGRESS` | `T-DeepAgents-02` 已整改为诚实 baseline：fake wiring 与 real selector quality 已拆开；当前 real selector baseline 因缺少环境配置而 `SKIPPED`，`T-03` 保持阻塞 | [T-DeepAgents-01](tasks/T-DeepAgents-01-deepagents-js-spike.md), [T-DeepAgents-02](tasks/T-DeepAgents-02-selector-middleware-baseline.md) | 独立 spike package，`T-01` 已形成条件通过结论；`T-02` 当前结论是 middleware wiring 通过、middleware extractability 部分成立，但 real selector quality 仍未证明 |
 | Core Tools | `READY_FOR_REVIEW` | read / write / terminal / web-search 工具治理尾项 | `core_tools_T001-T019` | 多数已完成，仍有 review 队列 |
@@ -152,6 +153,19 @@ related:
 | [agent_node_T041](tasks/agent_node_T041-toolselect-coverage-aware-routing.md) | `DONE` | `DONE` | 已加固 `toolSelectNode` 的 coverage-aware `effectiveQuery` 结构与 preferred next action 路由提示；matcher / selector 共同使用增强 query，`resolvedToolIntent.query` 仍保持原始用户语义 |
 | [agent_node_T042](tasks/agent_node_T042-recovery-replan-coverage-contract.md) | `DONE` | `DONE` | 已把误建的评审卡覆盖回正式施工卡；当前运行时代码无需追加修改，主要补的是 T042 相关图测试口径和正式任务证据，少量其他旧测试仍按 task-model 调用次数计数，后续可单独整理 |
 | [agent_node_T043](tasks/agent_node_T043-coverage-driven-blackbox-regression-suite.md) | `DONE` | `DONE` | 已补齐 T043 最容易回归的近黑盒闸门：单目标 locate 可回答、locate 后仍要内容时必须转 `read_open`、README.md / AGENTS.md 双文件内容任务必须全量完成后才 answer；当前不改运行时代码，只补正式任务卡、台账和图测试证据 |
+
+## Agent V1.5 Stabilization Index
+
+| Task | Ledger State | Task Card State | Dependency / Scope |
+| --- | --- | --- | --- |
+| [agent_v15_T01](tasks/agent_v15_T01-state-ssot.md) | `DONE` | `DONE` | State 单一事实源与字段所有权；R01 复审通过，专项测试 46/46 |
+| [agent_v15_T02](tasks/agent_v15_T02-tool-exposure.md) | `TODO` | `TODO` | Tool Exposure 收敛；依赖 T01 |
+| [agent_v15_T03](tasks/agent_v15_T03-remove-pretool-selector.md) | `TODO` | `TODO` | 移除 Planner 前置工具选择链路；依赖 T01、T02 |
+| [agent_v15_T04](tasks/agent_v15_T04-remove-static-plan.md) | `TODO` | `TODO` | 移除静态 Plan 层；依赖 T01，可与 T02 并行但需独立 PR |
+| [agent_v15_T05](tasks/agent_v15_T05-remove-shadow-deciders.md) | `TODO` | `TODO` | 移除 Shadow Deciders、桥接器与 Action Rewrite；依赖 T03、T04 |
+| [agent_v15_T06](tasks/agent_v15_T06-evidence-boundary.md) | `TODO` | `TODO` | Evidence 单一职责与显式回流节点；依赖 T01、T05 |
+| [agent_v15_T07](tasks/agent_v15_T07-read-surface.md) | `TODO` | `TODO` | Read 公共工具面收敛；依赖 T02、T03 |
+| [agent_v15_T08](tasks/agent_v15_T08-strengthen-planner.md) | `TODO` | `TODO` | Planner 正向决策能力强化；依赖 T05、T06、T07，最后合并 |
 
 ## Core Tools Index
 

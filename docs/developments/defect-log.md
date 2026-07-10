@@ -69,6 +69,7 @@ Related:
   - [tts-studio-runtime-notes.md](../microapp/tts-studio-runtime-notes.md)
 - 已正式登记技术债决策：
   - [TD-TTS-01 Piper Phoneme Compatibility Gap](../project-control/decisions/TD-TTS-01-piper-phoneme-compatibility-gap.md)
+  - [TD-TTS-02 TTS 音频持久化可见性缺口](../project-control/decisions/TD-TTS-02-audio-persistence-visibility-gap.md)
 
 下一步：
 

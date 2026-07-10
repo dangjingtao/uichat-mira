@@ -8,11 +8,7 @@ import {
   getEvidenceCounts,
   getLatestEvidenceSummary,
 } from "../evidence";
-import {
-  appendConfirmedObjectToTaskFrame,
-  emitStepNode,
-  updateTaskFrameBlocker,
-} from "../node-runtime";
+import { emitStepNode } from "../node-runtime";
 import {
   createObservation,
   emitEvidenceUpdateNode,
@@ -79,10 +75,6 @@ export const retrieveNode = async (
       retrievedChunks: [],
       observations: [...(state.observations ?? []), observation],
       evidence,
-      currentTaskFrame: updateTaskFrameBlocker(
-        state.currentTaskFrame,
-        "No knowledge base is bound to the current thread.",
-      ),
       iterationCount: (state.iterationCount ?? 0) + 1,
     };
   }
@@ -158,15 +150,6 @@ export const retrieveNode = async (
     retrievedChunks,
     observations: [...(state.observations ?? []), observation],
     evidence,
-    currentTaskFrame: updateTaskFrameBlocker(
-      appendConfirmedObjectToTaskFrame(state.currentTaskFrame, {
-        type: "knowledge",
-        id: state.knowledgeBaseId,
-        label: state.knowledgeBaseId,
-        confidence: 1,
-      }),
-      undefined,
-    ),
     iterationCount: (state.iterationCount ?? 0) + 1,
   };
 };
