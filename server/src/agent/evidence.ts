@@ -3,16 +3,12 @@ import type {
   AgentEvidenceResolution,
   AgentEvidenceSummary,
   AgentObservation,
-  AgentRepeatedActionGuardResult,
   AgentRetrievalEvidence,
-  AgentNextAction,
   AgentTaskCompletionDecision,
   AgentTaskCoverageView,
   AgentToolExecutionResult,
   CurrentTaskFrame,
 } from "./types";
-import { createInvocationInputHash } from "./approval-fingerprint";
-import { normalizeWorkspaceRelativePathArg } from "@/mcp/workspace-path-args";
 import {
   normalizeTaskTargetPath,
 } from "./task-intent";
@@ -91,19 +87,11 @@ const COMMAND_TOKENS = [
   "运行",
 ];
 
-const WORKSPACE_READ_TOOL_IDS = new Set([
-  "read_list",
-  "read_open",
-  "read_locate",
-  "read_extract",
-  "read_slice",
-]);
 const WORKSPACE_MUTATION_TOOL_IDS = new Set([
   "workspace_mutation",
   "edit_file",
 ]);
 
-const WORKSPACE_ROOT_SENTINEL = "/workspace";
 const TERMINAL_GARBLED_TEXT_PATTERNS = [/�/u, /锟斤拷/u, /\?\?\?/u];
 
 export const getEvidencePayload = (state: EvidenceState): AgentEvidencePayload => ({
@@ -1408,213 +1396,6 @@ export const createToolExecutionEvidenceSummary = (input: {
 
 export const getLatestEvidenceSummary = (state: EvidenceState) =>
   getEvidencePayload(state).latestSummary;
-
-const normalizeRepeatedRetrievalQuery = (value: string) =>
-  value.trim().replace(/\s+/g, " ").toLowerCase();
-
-const normalizeRepeatedWorkspaceArg = (value: unknown) => {
-  if (typeof value !== "string") {
-    return value;
-  }
-
-  const normalized = normalizeWorkspaceRelativePathArg(value);
-  if (normalized.type === "normalized") {
-    return normalized.value;
-  }
-
-  return value.trim();
-};
-
-const normalizeRepeatedToolArgs = (
-  toolId: string,
-  args: Record<string, unknown>,
-) => {
-  if (WORKSPACE_READ_TOOL_IDS.has(toolId)) {
-    const rawPath = args.path;
-    if (typeof rawPath !== "string") {
-      return args;
-    }
-
-    const trimmedPath = rawPath.trim();
-    // Only align repeated-guard hashing with workspace-bound path normalization.
-    // This keeps planner repeat detection consistent with frozen pendingToolCall args.
-    if (
-      trimmedPath !== WORKSPACE_ROOT_SENTINEL &&
-      trimmedPath !== `${WORKSPACE_ROOT_SENTINEL}/` &&
-      !trimmedPath.startsWith(`${WORKSPACE_ROOT_SENTINEL}/`)
-    ) {
-      return args;
-    }
-
-    return {
-      ...args,
-      path: normalizeRepeatedWorkspaceArg(rawPath),
-    };
-  }
-
-  if (WORKSPACE_MUTATION_TOOL_IDS.has(toolId)) {
-    let nextArgs: Record<string, unknown> | null = null;
-
-    for (const key of ["targetPath", "destinationPath"] as const) {
-      if (typeof args[key] !== "string") {
-        continue;
-      }
-
-      const normalizedValue = normalizeRepeatedWorkspaceArg(args[key]);
-      if (normalizedValue !== args[key]) {
-        nextArgs ??= { ...args };
-        nextArgs[key] = normalizedValue;
-      }
-    }
-
-    return nextArgs ?? args;
-  }
-
-  return args;
-};
-
-const createRepeatedToolArgsHash = (input: {
-  toolId: string;
-  args: Record<string, unknown>;
-}) =>
-  createInvocationInputHash({
-    toolId: input.toolId,
-    args: input.args,
-    source: "planner",
-  });
-
-export const getRepeatedActionGuardResult = (input: {
-  evidence: AgentEvidencePayload | undefined;
-  nextAction: AgentNextAction | undefined;
-}): AgentRepeatedActionGuardResult => {
-  if (!input.evidence || !input.nextAction) {
-    return { triggered: false };
-  }
-
-  if (input.nextAction.type === "use_tool") {
-    const nextToolId = input.nextAction.toolId;
-    const guardedArgs = normalizeRepeatedToolArgs(
-      nextToolId,
-      input.nextAction.args,
-    );
-    const guardedArgsHash = createRepeatedToolArgsHash({
-      toolId: nextToolId,
-      args: guardedArgs,
-    });
-    const matchedEvidenceIndex = input.evidence.toolExecutions.findIndex(
-      (execution) =>
-        execution.status === "completed" &&
-        execution.toolId === nextToolId &&
-        execution.inputHash === guardedArgsHash,
-    );
-    if (matchedEvidenceIndex >= 0) {
-      const matchedExecution = input.evidence.toolExecutions[matchedEvidenceIndex]!;
-      return {
-        triggered: true,
-        reason: `Repeated tool guard: identical ${nextToolId} call already completed in this run; answer from existing evidence.`,
-        guardedActionType: "use_tool",
-        guardedToolId: nextToolId,
-        guardedArgsHash,
-        matchedEvidenceIndex,
-        matchedToolCallId: matchedExecution.toolCallId,
-      };
-    }
-  }
-
-  if (input.nextAction.type === "retrieve") {
-    const guardedQuery = normalizeRepeatedRetrievalQuery(input.nextAction.query);
-    const matchedEvidenceIndex = input.evidence.retrievals.findIndex(
-      (retrieval) =>
-        normalizeRepeatedRetrievalQuery(retrieval.query) === guardedQuery,
-    );
-    if (matchedEvidenceIndex >= 0) {
-      return {
-        triggered: true,
-        reason: `Repeated retrieval guard: identical retrieval query already completed in this run; answer from existing evidence.`,
-        guardedActionType: "retrieve",
-        guardedQuery,
-        matchedEvidenceIndex,
-      };
-    }
-  }
-
-  return { triggered: false };
-};
-
-export const getAnswerStopDecision = (input: {
-  latestSummary: AgentEvidenceSummary | undefined;
-  pendingApproval?: unknown;
-  errorMessage?: string;
-  question?: string;
-  currentTaskFrame?: CurrentTaskFrame;
-  evidence?: AgentEvidencePayload;
-}) => {
-  if (!input.latestSummary) {
-    return {
-      shouldAnswer: false,
-      reason: "No latest evidence summary is available for answer stop evaluation.",
-    };
-  }
-
-  if (input.pendingApproval) {
-    return {
-      shouldAnswer: false,
-      reason: "Answer stop rule is blocked because the run is waiting for approval.",
-    };
-  }
-
-  if (input.errorMessage) {
-    return {
-      shouldAnswer: false,
-      reason: "Answer stop rule is blocked because the run already has an error.",
-    };
-  }
-
-  if (
-    input.latestSummary.status !== "completed" &&
-    input.latestSummary.status !== "truncated"
-  ) {
-    return {
-      shouldAnswer: false,
-      reason: `Answer stop rule requires completed evidence, but latest status is ${input.latestSummary.status}.`,
-    };
-  }
-
-  if (!input.latestSummary.answerReadiness.canAnswer) {
-    return {
-      shouldAnswer: false,
-      reason:
-        input.latestSummary.answerReadiness.reason ||
-        "Latest evidence summary does not mark the answer as ready.",
-    };
-  }
-
-  if ((input.latestSummary.answerReadiness.missingInfo?.length ?? 0) > 0) {
-    return {
-      shouldAnswer: false,
-      reason: "Latest evidence summary still declares missing information.",
-    };
-  }
-
-  const taskCoverageView = getTaskCoverageView({
-    question: input.question,
-    currentTaskFrame: input.currentTaskFrame,
-    evidence: input.evidence,
-    latestSummary: input.latestSummary,
-  });
-  if (!taskCoverageView.taskCompletable) {
-    return {
-      shouldAnswer: false,
-      reason:
-        taskCoverageView.blockedReason ?? "Current task coverage is not complete yet.",
-    };
-  }
-
-  return {
-    shouldAnswer: true,
-    reason: input.latestSummary.answerReadiness.reason,
-  };
-};
 
 const appendUniqueObservation = (
   observations: AgentObservation[],
