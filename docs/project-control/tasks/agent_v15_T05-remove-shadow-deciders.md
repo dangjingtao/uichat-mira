@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/project-control-ledger.md
-task_state: TODO
+task_state: DONE
 ---
 
 # Agent V1.5 T05：移除 Shadow Deciders、桥接器与 Action Rewrite
@@ -118,3 +118,11 @@ task_state: TODO
 5. 实际执行的测试命令、原始结果与 typecheck 结果；
 6. 明确说明是否影响既有 Agent 主线黑盒；
 7. 所有测试源码与报告均须为 git tracked files，不接受只贴口头摘要。
+
+## Review Evidence
+
+- 2026-07-11 复审通过：Planner 前后不再存在 answer stop、coverage transition、local intent、list/locate bridge、重复调用 action rewrite 或 completion replan 逻辑。
+- `getTaskCompletionDecision`、`buildAnswerCompletionReplanMessages`、`AgentTaskCompletionDecision` 及相关死代码已删除；旧 Shadow Decider 测试已删除或改写为新合同测试。
+- T05 专项、Graph、tool-loop、blackbox、Normalize 共 5 个测试文件通过，73/73 通过。
+- 新合同覆盖合法 Planner action 原样保留、list/locate 不自动 open、重复 fingerprint 不改写 action、Normalize 对暴露外工具拒绝且不替换。
+- `git diff --check` 通过；server typecheck 仍受既有 `server/src/microapps/codegraph/index.ts:543` 阻断。

@@ -536,16 +536,10 @@ test("toolCall loop repeated same tool args remains a planner decision and does 
     .spyOn(harnessInvocations, "executeHarnessInvocation")
     .mockResolvedValue(completedReadOpenInvocation(""));
   const generateSpy = setupGenerate("README content answer");
-  const plannerEvents: Array<Record<string, unknown>> = [];
 
   const result = await runToolLoop({
     runId: "run-regression-repeated-guard",
     question: "open README.md",
-    onExecutionNode: async (event) => {
-      if (event.nodeId === "agent-next-action-planner" && event.phase === "done") {
-        plannerEvents.push(event.details as Record<string, unknown>);
-      }
-    },
   });
 
   assertMatrixFields(result, {
@@ -560,10 +554,6 @@ test("toolCall loop repeated same tool args remains a planner decision and does 
   assert.equal(executeSpy.mock.calls.length, 3);
   assert.equal(generateSpy.mock.calls.length, 1);
   assert.equal(result.evidence.toolExecutions.length, 2);
-  assert.equal(
-    plannerEvents.some((event) => "repeatedToolGuardTriggered" in event),
-    false,
-  );
 });
 
 test("toolCall loop maxIterations routes to generate instead of a second tool execution", async () => {
