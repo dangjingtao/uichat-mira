@@ -4,7 +4,6 @@ import type {
   AgentEvidenceSummary,
   AgentObservation,
   AgentRetrievalEvidence,
-  AgentTaskCompletionDecision,
   AgentTaskCoverageView,
   AgentToolExecutionResult,
   CurrentTaskFrame,
@@ -422,53 +421,6 @@ const collectReadOpenedTargets = (input: {
   addSummaryTargets(input.latestSummary);
 
   return [...targets];
-};
-
-const hasLatestRecoverableToolFailure = (evidence: AgentEvidencePayload | undefined) => {
-  const latestExecution = evidence?.toolExecutions.at(-1);
-  return (
-    latestExecution?.status === "failed" &&
-    latestExecution.failureKind === "recoverable"
-  );
-};
-
-const buildTaskCompletionReason = (input: {
-  pendingActions: string[];
-  missingTargets: string[];
-}) => {
-  if (input.pendingActions.length > 0 && input.missingTargets.length > 0) {
-    return `Task is not complete yet: pendingActions=${input.pendingActions.join(", ")}; missingTargets=${input.missingTargets.join(", ")}.`;
-  }
-
-  if (input.pendingActions.length > 0) {
-    return `Task is not complete yet: pendingActions=${input.pendingActions.join(", ")}.`;
-  }
-
-  if (input.missingTargets.length > 0) {
-    return `Task is not complete yet: missingTargets=${input.missingTargets.join(", ")}.`;
-  }
-
-  return "Current task coverage is complete.";
-};
-
-export const getTaskCompletionDecision = (input: {
-  question?: string;
-  currentTaskFrame?: CurrentTaskFrame;
-  evidence?: AgentEvidencePayload;
-  latestSummary?: AgentEvidenceSummary;
-}): AgentTaskCompletionDecision => {
-  const taskCoverageView = getTaskCoverageView(input);
-
-  return {
-    taskCompleted: taskCoverageView.taskCompletable,
-    requiredTargets: taskCoverageView.requiredTargets,
-    coveredTargets: taskCoverageView.coveredTargets,
-    missingTargets: taskCoverageView.pendingTargets,
-    pendingActions: taskCoverageView.pendingActions,
-    reason:
-      taskCoverageView.blockedReason ?? "Current task coverage is complete.",
-    taskCoverageView,
-  };
 };
 
 export const getTaskCoverageView = (input: {

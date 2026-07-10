@@ -305,16 +305,6 @@ export interface AgentTaskCoverageView {
   taskCompletable: boolean;
 }
 
-export interface AgentTaskCompletionDecision {
-  taskCompleted: boolean;
-  requiredTargets: string[];
-  coveredTargets: string[];
-  missingTargets: string[];
-  pendingActions: string[];
-  reason: string;
-  taskCoverageView: AgentTaskCoverageView;
-}
-
 export type AgentNextAction =
   | {
       type: "answer";

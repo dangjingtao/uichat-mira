@@ -2528,7 +2528,7 @@ test("agentGraph answers after a single read_locate execution when the user only
   );
 });
 
-test("agentGraph opens README.md after read_locate when the question still asks for file content", async () => {
+test("Planner may choose read_open after read_locate evidence, without an automatic bridge", async () => {
   const readOpen = makeToolDefinition({
     id: "read_open",
     domain: "read",
@@ -2655,8 +2655,7 @@ test("agentGraph opens README.md after read_locate when the question still asks 
     plannerDoneEvents.some(
       (event) =>
         event.details?.selectedActionType === "use_tool" &&
-        event.details?.selectedToolId === "read_locate" &&
-        typeof event.details?.coverageTransitionReason === "string",
+        event.details?.selectedToolId === "read_locate",
     ),
     true,
   );
@@ -2664,14 +2663,13 @@ test("agentGraph opens README.md after read_locate when the question still asks 
     plannerDoneEvents.some(
       (event) =>
         event.details?.selectedActionType === "use_tool" &&
-        event.details?.selectedToolId === "read_open" &&
-        typeof event.details?.coverageTransitionReason === "string",
+        event.details?.selectedToolId === "read_open",
     ),
     true,
   );
 });
 
-test("agentGraph opens README.md after read_list when the workspace question still asks for file content", async () => {
+test("Planner may choose read_open after read_list evidence, without an automatic bridge", async () => {
 
   const readOpen = makeToolDefinition({
     id: "read_open",
@@ -2722,6 +2720,9 @@ test("agentGraph opens README.md after read_list when the workspace question sti
     .mockImplementationOnce(async function* () {
       yield '{"type":"use_tool","toolId":"read_list","args":{"path":"."},"reason":"Need to inspect the directory first."}';
     });
+  plannerSpy.mockImplementationOnce(async function* () {
+    yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Open the file selected from the list evidence."}';
+  });
   const executeHarnessInvocationSpy = vi
     .spyOn(harnessInvocations, "executeHarnessInvocation")
     .mockResolvedValueOnce({
@@ -2796,7 +2797,7 @@ test("agentGraph opens README.md after read_list when the workspace question sti
   });
 
   assert.equal(result.status, "completed");
-  assert.equal(plannerSpy.mock.calls.length, 0);
+  assert.equal(plannerSpy.mock.calls.length, 2);
   assert.equal(executeHarnessInvocationSpy.mock.calls.length, 2);
   assert.equal(executeHarnessInvocationSpy.mock.calls[0]?.[0]?.toolId, "read_list");
   assert.equal(executeHarnessInvocationSpy.mock.calls[1]?.[0]?.toolId, "read_open");
@@ -2812,8 +2813,7 @@ test("agentGraph opens README.md after read_list when the workspace question sti
         event.nodeId === "agent-next-action-planner" &&
         event.phase === "done" &&
         event.details?.selectedActionType === "use_tool" &&
-        event.details?.selectedToolId === "read_open" &&
-        typeof event.details?.coverageTransitionReason === "string",
+        event.details?.selectedToolId === "read_open",
     ),
     true,
   );

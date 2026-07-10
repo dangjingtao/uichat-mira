@@ -156,54 +156,6 @@ const buildSchemaReplanMessages = (input: {
   },
 ];
 
-export const buildAnswerCompletionReplanMessages = (input: {
-  question: string;
-  observationContext: PlannerObservationContext;
-  toolExposure: AgentToolExposureState;
-  iteration: number;
-  maxIterations: number;
-  blockedAnswerReason: string;
-  previousAnswerReason: string;
-}): NormalizedChatMessage[] => [
-  {
-    role: "system",
-    content: [
-      "你正在做一次 bounded completion replan。",
-      "上一次 planner 输出了 answer，但这个 answer 被任务完成判定挡回。",
-      "这次禁止再次输出 answer，除非你能基于当前证据明确说明为什么已经没有安全推进路径且只能终局。",
-      "你必须改为给出下一步推进动作：retrieve、use_tool、ask_user，或在确实无法继续时输出 error。",
-      "如果选择 use_tool，toolId 必须来自允许工具列表，args 必须严格符合 schema。",
-      "不要假装工具已经成功，也不要把还能继续自主推进的情况直接改成人工确认。",
-      ...buildProgressionRules({
-        observationContext: input.observationContext,
-        iteration: input.iteration,
-        maxIterations: input.maxIterations,
-      }),
-    ].join("\n"),
-    parts: [],
-  },
-  {
-    role: "user",
-    content: JSON.stringify(
-      {
-        question: input.question,
-        observationContext: input.observationContext,
-        blockedAnswerReason: input.blockedAnswerReason,
-        previousAnswerReason: input.previousAnswerReason,
-        toolExposure: {
-          exposedTools: input.toolExposure.exposedTools,
-          toolMeta: input.toolExposure.toolMeta,
-        },
-        instruction:
-          "Return exactly one valid nextAction JSON. Do not return answer again just because the latest evidence looks answerable. Prefer the next autonomous step that closes the missing coverage.",
-      },
-      null,
-      2,
-    ),
-    parts: [],
-  },
-];
-
 export const buildNextActionPlannerMessages = (input: {
   question: string;
   observationContext: PlannerObservationContext;
