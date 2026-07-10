@@ -49,10 +49,46 @@ export const expandHarnessToolCandidates = (input: {
               actionProfileDescription: profile.actionProfileDescription,
             }
           : {}),
-        ...(preferredToolId === toolId ? { preferredForQuery: true } : {}),
       });
     }
   }
 
   return candidates;
+};
+
+export const exposeAllHarnessToolCandidates = (input: {
+  definitions: McpToolDefinition[];
+  reason: string;
+}) => {
+  const profiles = resolveHarnessCapabilityProfiles(input.definitions);
+  const profileByToolId = new Map(
+    profiles.flatMap((profile) =>
+      profile.supportingToolIds.map((toolId) => [toolId, profile] as const),
+    ),
+  );
+
+  return input.definitions.map((definition) => {
+    const profile = profileByToolId.get(definition.id);
+    return {
+      toolId: definition.id,
+      title: definition.title,
+      description: definition.description,
+      domain: definition.domain,
+      source: definition.source,
+      tags: definition.tags,
+      score: 0,
+      embeddingScore: 0,
+      ruleScore: 0,
+      rerankScore: 0,
+      finalScore: 0,
+      reason: input.reason,
+      ...(profile?.actionProfileId
+        ? {
+            actionProfileId: profile.actionProfileId,
+            actionProfileTitle: profile.actionProfileTitle,
+            actionProfileDescription: profile.actionProfileDescription,
+          }
+        : {}),
+    } satisfies HarnessToolCandidate;
+  });
 };

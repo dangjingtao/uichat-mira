@@ -2,11 +2,15 @@ import { executeLocalEmbedding } from "@/services/internal-capabilities/local-em
 import { toCapabilityIntentDocuments } from "@/agent/intent/capability-documents.js";
 import { resolveHarnessToolExposure } from "../exposure-core/index.js";
 import { resolveHarnessCapabilityProfiles } from "../profiles/index.js";
-import { expandHarnessToolCandidates } from "./expand-tool-candidates.js";
+import {
+  expandHarnessToolCandidates,
+  exposeAllHarnessToolCandidates,
+} from "./expand-tool-candidates.js";
 import {
   DEFAULT_MAX_TOOLS,
   DEFAULT_MIN_SCORE,
   DEFAULT_TOP_K,
+  TOOL_EXPOSURE_RECALL_THRESHOLD,
   computeRuleScore,
   cosineSimilarity,
 } from "./scoring.js";
@@ -41,12 +45,40 @@ export const resolveHarnessToolCandidatesForTurn = async (
     blockedCapabilityIds: exposureDecision.blockedCapabilityIds,
   };
 
-  if (!input.query.trim() || profiles.length === 0) {
+  if (visibleDefinitions.length <= TOOL_EXPOSURE_RECALL_THRESHOLD) {
+    const exposureReason =
+      "All eligible tools are exposed because the eligible set is at most 20 tools.";
+    const toolCandidates = exposeAllHarnessToolCandidates({
+      definitions: visibleDefinitions,
+      reason: exposureReason,
+    });
     return {
       query: input.query,
       source,
-      toolCandidates: [],
-      toolExposure: initialToolExposure,
+      toolCandidates,
+      toolExposure: {
+        ...initialToolExposure,
+        reason: [...initialToolExposure.reason, exposureReason],
+      },
+    };
+  }
+
+  if (!input.query.trim() || profiles.length === 0) {
+    const toolCandidates = exposeAllHarnessToolCandidates({
+      definitions: visibleDefinitions,
+      reason: "Candidate recall was not run; all eligible tools remain visible as the conservative fallback.",
+    });
+    return {
+      query: input.query,
+      source,
+      toolCandidates,
+      toolExposure: {
+        ...initialToolExposure,
+        reason: [
+          ...initialToolExposure.reason,
+          "Candidate recall was not run; all eligible tools remain visible as the conservative fallback.",
+        ],
+      },
     };
   }
 
@@ -67,6 +99,25 @@ export const resolveHarnessToolCandidatesForTurn = async (
     [queryEmbedding, ...documentEmbeddings] = embeddingResult.embeddings ?? [];
   } catch (error) {
     retrievalError = error instanceof Error ? error.message : String(error);
+  }
+
+  if (retrievalError) {
+    const fallbackReason =
+      "Candidate recall failed; all eligible tools remain visible as the conservative fallback.";
+    const toolCandidates = exposeAllHarnessToolCandidates({
+      definitions: visibleDefinitions,
+      reason: fallbackReason,
+    });
+    return {
+      query: input.query,
+      source,
+      toolCandidates,
+      toolExposure: {
+        ...initialToolExposure,
+        reason: [...initialToolExposure.reason, fallbackReason],
+      },
+      retrievalError,
+    };
   }
 
   let matches: ResolvedHarnessCapabilityMatch[] = documents
@@ -132,6 +183,34 @@ export const resolveHarnessToolCandidatesForTurn = async (
     } catch {
       // Keep pre-rerank order when local rerank is unavailable.
     }
+  }
+
+  if (matches.length === 0) {
+    const fallbackReason =
+      "Candidate recall returned no matches above the score threshold; all eligible tools remain visible as the conservative fallback.";
+    const toolCandidates = exposeAllHarnessToolCandidates({
+      definitions: visibleDefinitions,
+      reason: fallbackReason,
+    });
+    return {
+      query: input.query,
+      source,
+      toolCandidates,
+      toolExposure: {
+        ...initialToolExposure,
+        reason: [...initialToolExposure.reason, fallbackReason],
+      },
+      ...(embeddingResult
+        ? {
+            retrievalModel: {
+              provider: "local",
+              model: embeddingResult.embeddingModel,
+              modelConfigId: embeddingResult.embeddingModelConfigId,
+            },
+          }
+        : {}),
+      ...(rerankModel ? { rerankModel } : {}),
+    };
   }
 
   const rankedMatches = matches.slice(0, topK);

@@ -1,6 +1,7 @@
 export const DEFAULT_TOP_K = 10;
 export const DEFAULT_MIN_SCORE = 0.15;
 export const DEFAULT_MAX_TOOLS = 8;
+export const TOOL_EXPOSURE_RECALL_THRESHOLD = 20;
 
 const normalizeQueryText = (value: string) => value.trim().toLowerCase();
 

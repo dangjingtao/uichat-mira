@@ -115,7 +115,6 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       expect.objectContaining({
         toolId: "read_locate",
         actionProfileId: "read_locate",
-        preferredForQuery: true,
       }),
     ]);
     expect(result.toolExposure.exposedToolIds).toEqual(["read_list", "read_locate"]);
@@ -123,7 +122,7 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
   });
 
   it("scores late registry tools before applying the maxTools cutoff", async () => {
-    for (let index = 0; index < 10; index += 1) {
+    for (let index = 0; index < 20; index += 1) {
       registerCapability({
         definition: {
           id: `noise_tool_${index}`,
@@ -170,7 +169,7 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       embeddingModelConfigId: "test-embedding-config",
       embeddings: [
         [1, 0],
-        ...Array.from({ length: 10 }, () => [0, 1]),
+         ...Array.from({ length: 20 }, () => [0, 1]),
         [1, 0],
       ],
     });
@@ -183,7 +182,7 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
           probability: 0.97,
           rank: 1,
         },
-        ...Array.from({ length: 10 }, (_, index) => ({
+         ...Array.from({ length: 20 }, (_, index) => ({
           id: `noise_tool_${index}`,
           text: `Noise Tool ${index}`,
           score: 0.1,
@@ -204,16 +203,135 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
     });
 
     expect(result.toolCandidates).toHaveLength(3);
-    expect(result.toolCandidates[0]).toMatchObject({
-      toolId: "tail_target_tool",
-      preferredForQuery: true,
-    });
+      expect(result.toolCandidates[0]).toMatchObject({
+        toolId: "tail_target_tool",
+      });
     expect(result.toolExposure.exposedToolIds).toContain("tail_target_tool");
     expect(result.toolExposure.exposedToolIds).not.toEqual([
       "noise_tool_0",
       "noise_tool_1",
       "noise_tool_2",
     ]);
+  });
+
+  it.each([0, 1, 20])("exposes every eligible tool and skips recall for %s tools", async (count) => {
+    for (let index = 0; index < count; index += 1) {
+      registerCapability({
+        definition: {
+          id: `eligible_tool_${index}`,
+          title: `Eligible Tool ${index}`,
+          description: "eligible test tool",
+          domain: "read",
+          source: "internal",
+          mode: "sync",
+          inputSchema: { type: "object" },
+          tags: [],
+          capabilities: { sideEffect: "none", requiresApproval: false },
+        },
+        execute() {
+          return {};
+        },
+      });
+    }
+
+    const embeddingSpy = vi.spyOn(embedding, "executeLocalEmbedding").mockRejectedValue(
+      new Error("recall must not run"),
+    );
+    const result = await resolveHarnessToolCandidatesForTurn({
+      query: "你好",
+      source: "agent_intent",
+      maxTools: 1,
+      topK: 1,
+    });
+
+    expect(embeddingSpy).not.toHaveBeenCalled();
+    expect(result.toolExposure.exposedToolIds).toHaveLength(count);
+    expect(result.toolCandidates).toHaveLength(count);
+    expect(result).not.toHaveProperty("selectedToolIds");
+  });
+
+  it.each([21, 50])("runs recall only above 20 tools and preserves all eligible tools on recall failure: %s", async (count) => {
+    for (let index = 0; index < count; index += 1) {
+      registerCapability({
+        definition: {
+          id: `large_set_tool_${index}`,
+          title: `Large Set Tool ${index}`,
+          description: "eligible test tool",
+          domain: "read",
+          source: "internal",
+          mode: "sync",
+          inputSchema: { type: "object" },
+          tags: [],
+          capabilities: { sideEffect: "none", requiresApproval: false },
+        },
+        execute() {
+          return {};
+        },
+      });
+    }
+
+    const embeddingSpy = vi.spyOn(embedding, "executeLocalEmbedding").mockRejectedValue(
+      new Error("embedding unavailable"),
+    );
+    const result = await resolveHarnessToolCandidatesForTurn({
+      query: "没有关键词也不能隐藏工具",
+      source: "agent_intent",
+      maxTools: 1,
+      topK: 1,
+    });
+
+    expect(embeddingSpy).toHaveBeenCalledOnce();
+    expect(result.toolExposure.exposedToolIds).toHaveLength(count);
+    expect(result.toolCandidates).toHaveLength(count);
+    expect(result.retrievalError).toBe("embedding unavailable");
+    expect(result.toolExposure.reason).toContain(
+      "Candidate recall failed; all eligible tools remain visible as the conservative fallback.",
+    );
+    expect(result).not.toHaveProperty("selectedToolIds");
+  });
+
+  it("falls back to all eligible tools when successful recall has no threshold matches", async () => {
+    const count = 21;
+    for (let index = 0; index < count; index += 1) {
+      registerCapability({
+        definition: {
+          id: `no_match_tool_${index}`,
+          title: `No Match Tool ${index}`,
+          description: "eligible test tool",
+          domain: "read",
+          source: "internal",
+          mode: "sync",
+          inputSchema: { type: "object" },
+          tags: [],
+          capabilities: { sideEffect: "none", requiresApproval: false },
+        },
+        execute() {
+          return {};
+        },
+      });
+    }
+
+    vi.spyOn(embedding, "executeLocalEmbedding").mockResolvedValue({
+      embeddingModel: "test-embedding",
+      embeddingModelConfigId: "test-embedding-config",
+      embeddings: Array.from({ length: count + 1 }, (_, index) =>
+        index === 0 ? [0, 1] : [1, 0],
+      ),
+    });
+
+    const result = await resolveHarnessToolCandidatesForTurn({
+      query: "no semantic match",
+      source: "agent_intent",
+      minScore: 0.15,
+    });
+
+    expect(result.toolExposure.exposedToolIds).toHaveLength(count);
+    expect(result.toolCandidates).toHaveLength(count);
+    expect(result.toolExposure.reason).toContain(
+      "Candidate recall returned no matches above the score threshold; all eligible tools remain visible as the conservative fallback.",
+    );
+    expect(result.toolCandidates.every((candidate) => !("preferredForQuery" in candidate))).toBe(true);
+    expect(result).not.toHaveProperty("selectedToolIds");
   });
 
   it.each([
@@ -223,11 +341,11 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       source: "agent_intent" as const,
       tools: [readOpenTool, webSearchTool, externalFakeTool],
       rerankOrder: ["read_open"],
-      expectedExposedToolIds: ["read_open"],
-      expectedBlockedCapabilityIds: ["web_search", "external_fake_tool"],
-      expectedReasons: [WORKSPACE_WEB_HIDDEN_REASON, EXTERNAL_HIDDEN_REASON],
+       expectedExposedToolIds: ["read_open", "web_search"],
+       expectedBlockedCapabilityIds: ["external_fake_tool"],
+       expectedReasons: [EXTERNAL_HIDDEN_REASON],
       expectedTopToolIds: ["read_open"],
-      expectedPreferredToolIds: ["read_open"],
+       expectedPreferredToolIds: [],
     },
     {
       label: "workspace directory listing prefers read_list",
@@ -239,7 +357,7 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       expectedBlockedCapabilityIds: ["external_fake_tool"],
       expectedReasons: [EXTERNAL_HIDDEN_REASON],
       expectedTopToolIds: ["read_list"],
-      expectedPreferredToolIds: ["read_list"],
+       expectedPreferredToolIds: [],
     },
     {
       label: "workspace fuzzy lookup prefers read_locate",
@@ -251,7 +369,7 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       expectedBlockedCapabilityIds: ["external_fake_tool"],
       expectedReasons: [EXTERNAL_HIDDEN_REASON],
       expectedTopToolIds: ["read_locate"],
-      expectedPreferredToolIds: ["read_locate"],
+       expectedPreferredToolIds: [],
     },
     {
       label: "explicit latest-news query keeps web_search",
@@ -263,7 +381,7 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       expectedBlockedCapabilityIds: ["external_fake_tool"],
       expectedReasons: [EXTERNAL_HIDDEN_REASON],
       expectedTopToolIds: ["web_search"],
-      expectedPreferredToolIds: ["web_search"],
+       expectedPreferredToolIds: [],
     },
     {
       label: "small talk keeps no tool surface",
@@ -271,15 +389,10 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       source: "agent_intent" as const,
       tools: [readOpenTool, webSearchTool, terminalSessionTool, externalFakeTool],
       rerankOrder: [],
-      expectedExposedToolIds: [],
-      expectedBlockedCapabilityIds: [
-        "read_open",
-        "web_search",
-        "terminal_session",
-        "external_fake_tool",
-      ],
-      expectedReasons: [LOW_INTENT_REASON],
-      expectedTopToolIds: [],
+       expectedExposedToolIds: ["read_open", "web_search", "terminal_session"],
+       expectedBlockedCapabilityIds: ["external_fake_tool"],
+       expectedReasons: [EXTERNAL_HIDDEN_REASON],
+       expectedTopToolIds: ["read_open", "web_search", "terminal_session"],
       expectedPreferredToolIds: [],
     },
     {
@@ -300,11 +413,11 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       source: "chat_surface" as const,
       tools: [readOpenTool, webSearchTool, terminalSessionTool, externalFakeTool],
       rerankOrder: ["web_research", "read_open"],
-      expectedExposedToolIds: ["web_search"],
+       expectedExposedToolIds: ["read_open", "web_search"],
       expectedBlockedCapabilityIds: ["terminal_session", "external_fake_tool"],
       expectedReasons: [CHAT_SAFE_DOMAIN_REASON, EXTERNAL_HIDDEN_REASON],
-      expectedTopToolIds: ["web_search"],
-      expectedPreferredToolIds: ["web_search"],
+       expectedTopToolIds: ["read_open", "web_search"],
+       expectedPreferredToolIds: [],
     },
     {
       label: "explicit terminal command keeps terminal_session",
@@ -317,7 +430,7 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       expectedBlockedCapabilityIds: ["external_fake_tool"],
       expectedReasons: [EXTERNAL_HIDDEN_REASON],
       expectedTopToolIds: ["terminal_session"],
-      expectedPreferredToolIds: ["terminal_session"],
+       expectedPreferredToolIds: [],
     },
     {
       label: "non-command request keeps terminal_session hidden",
@@ -325,10 +438,10 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       source: "agent_intent" as const,
       tools: [terminalSessionTool, externalFakeTool],
       rerankOrder: [],
-      expectedExposedToolIds: [],
-      expectedBlockedCapabilityIds: ["terminal_session", "external_fake_tool"],
-      expectedReasons: [TERMINAL_HIDDEN_REASON, EXTERNAL_HIDDEN_REASON],
-      expectedTopToolIds: [],
+       expectedExposedToolIds: ["terminal_session"],
+       expectedBlockedCapabilityIds: ["external_fake_tool"],
+       expectedReasons: [EXTERNAL_HIDDEN_REASON],
+       expectedTopToolIds: ["terminal_session"],
       expectedPreferredToolIds: [],
     },
     {
@@ -354,7 +467,7 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       expectedBlockedCapabilityIds: [],
       expectedReasons: [],
       expectedTopToolIds: ["external_fake_tool"],
-      expectedPreferredToolIds: ["external_fake_tool"],
+       expectedPreferredToolIds: [],
     },
     {
       label: "sandbox-unavailable command does not surface terminal",
@@ -409,11 +522,7 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       expect(result.toolCandidates.slice(0, expectedTopToolIds.length).map((candidate) => candidate.toolId)).toEqual(
         expectedTopToolIds,
       );
-      expect(
-        result.toolCandidates
-          .filter((candidate) => candidate.preferredForQuery === true)
-          .map((candidate) => candidate.toolId),
-      ).toEqual(expectedPreferredToolIds);
+      expect(result.toolCandidates.every((candidate) => !("preferredForQuery" in candidate))).toBe(true);
     },
   );
 });

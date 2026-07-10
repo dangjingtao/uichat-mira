@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/project-control-ledger.md
-task_state: TODO
+task_state: DONE
 ---
 
 # Agent V1.5 T02：Tool Exposure 收敛
@@ -121,3 +121,12 @@ task_state: TODO
 5. 实际执行的测试命令、原始结果与 typecheck 结果；
 6. 明确说明是否影响既有 Agent 主线黑盒；
 7. 所有测试源码与报告均须为 git tracked files，不接受只贴口头摘要。
+
+## Review Evidence
+
+- 2026-07-11 R02 复审通过：Harness 专项测试 3 个文件共 66/66 通过，完整 Harness 测试 11 个文件共 100/100 通过。
+- `git diff --check` 通过。
+- `selectedToolIds`、`preferredForQuery` 和 final selected tool 不再由 T02 exposure/diagnostics 输出生成。
+- eligible tools 不超过 20 个时全量暴露；超过 20 个才进入召回；召回异常或无匹配时保留全部 eligible tools 并记录 fallback reason。
+- external、sandbox、chat surface、审批元数据等硬过滤保持有效；关键词意图 router 已删除。
+- server typecheck 仍受既有 `server/src/microapps/codegraph/index.ts:543` 阻断，未发现本次 T02 改动新增的 typecheck 错误。
