@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/project-control-ledger.md
-task_state: TODO
+task_state: DONE
 ---
 
 # Agent V1.5 T02：Tool Exposure 收敛
@@ -121,3 +121,10 @@ task_state: TODO
 5. 实际执行的测试命令、原始结果与 typecheck 结果；
 6. 明确说明是否影响既有 Agent 主线黑盒；
 7. 所有测试源码与报告均须为 git tracked files，不接受只贴口头摘要。
+
+## Review Evidence
+
+- 施工线程复整改复审通过：T02 相关测试 3 个文件共 67/67 通过。
+- `git diff --check` 通过。
+- 移除 rule-based scoring 和默认 8 工具截断，召回结果不再受语义关键词影响。
+- server typecheck 仍受既有 `server/src/microapps/codegraph/index.ts:543` 阻断，未发现本次整改新增的 typecheck 错误。

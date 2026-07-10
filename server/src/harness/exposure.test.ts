@@ -48,7 +48,7 @@ describe("resolveHarnessToolExposure", () => {
     expect(properties.sessionMode).toBeDefined();
   });
 
-  it("does not expose terminal_session to agent_intent for file-read requests", () => {
+  it("exposes eligible terminal_session regardless of user wording", () => {
     registerCapability(terminalSessionTool);
     registerCapability(readOpenTool);
 
@@ -58,10 +58,10 @@ describe("resolveHarnessToolExposure", () => {
     });
 
     expect(decision.exposedToolIds).toContain("read_open");
-    expect(decision.exposedToolIds).not.toContain("terminal_session");
+    expect(decision.exposedToolIds).toContain("terminal_session");
   });
 
-  it("does not expose terminal_session to agent_intent for small talk", () => {
+  it("does not use small talk to change exposure", () => {
     registerCapability(terminalSessionTool);
 
     const decision = resolveHarnessToolExposure({
@@ -69,7 +69,7 @@ describe("resolveHarnessToolExposure", () => {
       query: "你好",
     });
 
-    expect(decision.exposedToolIds).not.toContain("terminal_session");
+    expect(decision.exposedToolIds).toContain("terminal_session");
   });
 
   it.each([
@@ -81,7 +81,7 @@ describe("resolveHarnessToolExposure", () => {
     "执行",
     "执行命令",
     "运行命令",
-  ])("does not expose terminal_session for weak command wording: %s", (query) => {
+  ])("exposes terminal_session for any wording when hard boundaries pass: %s", (query) => {
     registerCapability(terminalSessionTool);
 
     const decision = resolveHarnessToolExposure({
@@ -89,7 +89,7 @@ describe("resolveHarnessToolExposure", () => {
       query,
     });
 
-    expect(decision.exposedToolIds).not.toContain("terminal_session");
+    expect(decision.exposedToolIds).toContain("terminal_session");
   });
 
   it("exposes terminal_session with approval metadata only when default L1 command sandbox is available", () => {
@@ -167,15 +167,15 @@ describe("resolveHarnessToolExposure", () => {
       label: "weak English command wording",
       input: { source: "agent_intent" as const, query: "run a local command" },
       requiresApproval: true,
-      expectedExposed: false,
-      expectedSchemaKeys: [],
+      expectedExposed: true,
+      expectedSchemaKeys: ["command", "cwd", "timeoutMs"],
     },
     {
       label: "weak Chinese command wording",
       input: { source: "agent_intent" as const, query: "执行命令" },
       requiresApproval: true,
-      expectedExposed: false,
-      expectedSchemaKeys: [],
+      expectedExposed: true,
+      expectedSchemaKeys: ["command", "cwd", "timeoutMs"],
     },
     {
       label: "explicit command with sandbox available",
@@ -271,7 +271,7 @@ describe("resolveHarnessToolExposure", () => {
       query: "帮我看看当前工作空间里有哪些文件",
     }).visibleDefinitions.map((definition) => definition.id);
 
-    expect(chatIds).not.toContain("web_search");
+    expect(chatIds).toContain("web_search");
   });
 
   it("keeps web_search in chat_surface when the query is realtime-oriented", () => {
@@ -294,11 +294,8 @@ describe("resolveHarnessToolExposure", () => {
       query: "看看文件夹下面有无读我文件，有的话，内容是啥",
     });
 
-    expect(decision.exposedToolIds).not.toContain("web_search");
+    expect(decision.exposedToolIds).toContain("web_search");
     expect(decision.exposedToolIds).toContain("read_open");
-    expect(decision.reasons).toContain(
-      "Workspace-local query hides web_search for agent_intent; local read evidence should be preferred.",
-    );
   });
 
   it("hides web_search from agent_intent for README Runtime file-content requests", () => {
@@ -311,7 +308,7 @@ describe("resolveHarnessToolExposure", () => {
     });
 
     expect(decision.exposedToolIds).toContain("read_open");
-    expect(decision.exposedToolIds).not.toContain("web_search");
+    expect(decision.exposedToolIds).toContain("web_search");
   });
 
   it("keeps web_search in agent_intent for explicit external web queries", () => {
@@ -344,17 +341,15 @@ describe("resolveHarnessToolExposure", () => {
 
   it.each([
     {
-      label: "workspace README content hides web_search",
+       label: "workspace README wording does not hide web_search",
       input: {
         source: "agent_intent" as const,
         query: "README.md 的 Runtime 一节具体列了哪些运行组件？请基于文件内容回答。",
       },
       tools: [readOpenTool, webSearchTool, externalFakeTool],
-      expectedExposed: ["read_open"],
-      expectedBlocked: ["web_search", "external_fake_tool"],
-      expectedReasons: [
-        "Workspace-local query hides web_search for agent_intent; local read evidence should be preferred.",
-      ],
+       expectedExposed: ["read_open", "web_search"],
+       expectedBlocked: ["external_fake_tool"],
+       expectedReasons: ["External MCP capabilities are hidden unless explicitly enabled."],
     },
     {
       label: "workspace directory listing exposes read_list",
@@ -403,26 +398,26 @@ describe("resolveHarnessToolExposure", () => {
       expectedApprovalToolId: "terminal_session",
     },
     {
-      label: "non-command turn hides terminal",
+       label: "non-command wording does not hide terminal",
       input: {
         source: "agent_intent" as const,
         query: "帮我总结 README.md",
       },
       tools: [terminalSessionTool, externalFakeTool],
-      expectedExposed: [],
-      expectedBlocked: ["terminal_session", "external_fake_tool"],
-      expectedReasons: ["Terminal tools are hidden unless the turn clearly asks to run a command."],
+       expectedExposed: ["terminal_session"],
+       expectedBlocked: ["external_fake_tool"],
+       expectedReasons: ["External MCP capabilities are hidden unless explicitly enabled."],
     },
     {
-      label: "small talk exposes no tool",
+       label: "small talk does not change exposure",
       input: {
         source: "agent_intent" as const,
         query: "谢谢",
       },
       tools: [readOpenTool, webSearchTool, terminalSessionTool, externalFakeTool],
-      expectedExposed: [],
-      expectedBlocked: ["read_open", "web_search", "terminal_session", "external_fake_tool"],
-      expectedReasons: ["Greeting or low-intent input should stay in pure conversation mode."],
+       expectedExposed: ["read_open", "web_search", "terminal_session"],
+       expectedBlocked: ["external_fake_tool"],
+       expectedReasons: ["External MCP capabilities are hidden unless explicitly enabled."],
     },
     {
       label: "allowExternal is required before external MCP becomes visible",

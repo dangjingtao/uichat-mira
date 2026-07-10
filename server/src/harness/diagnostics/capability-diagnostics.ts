@@ -51,7 +51,6 @@ export interface HarnessCapabilityDiagnosticsResult {
     actionProfileId?: string;
     actionProfileTitle?: string;
     actionProfileDescription?: string;
-    preferredForQuery?: boolean;
   }>;
   retrievalModel?: {
     provider?: string;
@@ -86,18 +85,12 @@ export interface HarnessCapabilityDiagnosticsResult {
     tags: string[];
   }>;
   candidates: ToolIntentCandidate[];
-  selectedToolIds: string[];
 }
-
-const DEFAULT_SELECTED_TOP_K = 1;
-const DEFAULT_SELECTED_MIN_SCORE = 0.3;
 
 export const resolveHarnessCapabilityDiagnostics = async (
   input: HarnessCapabilityDiagnosticsInput,
 ): Promise<HarnessCapabilityDiagnosticsResult> => {
   const source = input.source ?? "agent_intent";
-  const selectedTopK = Math.max(0, input.selectedTopK ?? DEFAULT_SELECTED_TOP_K);
-  const selectedMinScore = input.selectedMinScore ?? DEFAULT_SELECTED_MIN_SCORE;
 
   const candidateResolution = await resolveHarnessToolCandidatesForTurn({
     query: input.query,
@@ -132,14 +125,8 @@ export const resolveHarnessCapabilityDiagnostics = async (
           actionProfileDescription: candidate.actionProfileDescription,
         }
       : {}),
-    ...(candidate.preferredForQuery === true ? { preferredForQuery: true } : {}),
     ...(candidate.reason ? { reason: candidate.reason } : {}),
   }));
-
-  const selectedToolIds = candidates
-    .filter((candidate) => (candidate.finalScore ?? candidate.score) >= selectedMinScore)
-    .slice(0, selectedTopK)
-    .map((candidate) => candidate.toolId);
 
   return {
     query: input.query,
@@ -185,7 +172,6 @@ export const resolveHarnessCapabilityDiagnostics = async (
             actionProfileDescription: candidate.actionProfileDescription,
           }
         : {}),
-      ...(candidate.preferredForQuery === true ? { preferredForQuery: true } : {}),
     })),
     ...(candidateResolution.retrievalModel
       ? { retrievalModel: candidateResolution.retrievalModel }
@@ -223,6 +209,5 @@ export const resolveHarnessCapabilityDiagnostics = async (
       tags: profile.tags,
     })),
     candidates,
-    selectedToolIds,
   };
 };

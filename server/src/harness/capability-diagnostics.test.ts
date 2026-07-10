@@ -127,6 +127,7 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
       source: "agent_intent",
     });
 
+    expect(result).not.toHaveProperty("selectedToolIds");
     expect(result.candidates).toHaveLength(2);
     expect(result.candidates[0]).toMatchObject({
       toolId: "read_list",
@@ -136,7 +137,6 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
       toolId: "read_locate",
       actionProfileId: "read_locate",
     });
-    expect(result.selectedToolIds).toEqual(["read_list"]);
     expect(result.toolCandidates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -149,13 +149,8 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
         }),
       ]),
     );
-    expect(result.retrievalModel).toMatchObject({
-      provider: "local",
-      model: "Xenova/multilingual-e5-small",
-    });
-    expect(result.rerankModel).toMatchObject({
-      model: "Xenova/ms-marco-MiniLM-L-6-v2",
-    });
+    expect(result.retrievalModel).toBeUndefined();
+    expect(result.rerankModel).toBeUndefined();
   });
 
   it("keeps rule-based workspace candidates when local embedding is unavailable", async () => {
@@ -230,13 +225,12 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
       toolId: "read_locate",
       actionProfileId: "read_locate",
     });
-    expect(result.selectedToolIds).toEqual(["read_list"]);
     expect(result.retrievalModel).toBeUndefined();
-    expect(result.retrievalError).toBe("LOCAL_MODEL_RAW_ROOT is not set.");
+    expect(result.retrievalError).toBeUndefined();
     expect(result.exposureReasons).toContain(
-      "Local embedding capability is unavailable for intent recall: LOCAL_MODEL_RAW_ROOT is not set.",
+      "All eligible tools are exposed because the eligible set is at most 20 tools.",
     );
-    expect(rerankSpy).toHaveBeenCalledTimes(1);
+    expect(rerankSpy).not.toHaveBeenCalled();
   });
 
   it("returns action profile metadata for terminal capability diagnostics", async () => {
@@ -371,29 +365,29 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
       source: "agent_intent",
     });
 
-    expect(result.toolExposure.exposedToolIds).toEqual(["read_open"]);
-    expect(result.blockedCapabilityIds).toContain("web_search");
+    expect(result.toolExposure.exposedToolIds).toEqual(["read_open", "web_search"]);
+    expect(result.blockedCapabilityIds).not.toContain("web_search");
     expect(result.exposureReasons).toContain(
-      "Workspace-local query hides web_search for agent_intent; local read evidence should be preferred.",
+      "All eligible tools are exposed because the eligible set is at most 20 tools.",
     );
     expect(result.toolCandidates[0]).toMatchObject({
       toolId: "read_open",
     });
-    expect(result.toolCandidates[0]?.finalScore).toBeGreaterThan(0);
+    expect(result.toolCandidates[0]?.finalScore).toBe(0);
   });
 
   it.each([
     {
-      label: "workspace-local README query stays on read_open",
+       label: "workspace-local README query keeps all eligible tools visible",
       query: "请打开 README.md 看看 Runtime 部分",
       source: "agent_intent" as const,
       tools: [readOpenTool, webSearchTool, externalFakeTool],
       rerankOrder: ["read_open"],
-      expectedExposedToolIds: ["read_open"],
-      expectedBlockedCapabilityIds: ["web_search", "external_fake_tool"],
-      expectedReason: "Workspace-local query hides web_search for agent_intent; local read evidence should be preferred.",
+       expectedExposedToolIds: ["read_open", "web_search"],
+       expectedBlockedCapabilityIds: ["external_fake_tool"],
+       expectedReason: "All eligible tools are exposed because the eligible set is at most 20 tools.",
       expectedTopToolId: "read_open",
-      expectedPreferredToolId: "read_open",
+       expectedPreferredToolId: undefined,
     },
     {
       label: "chat surface keeps safe built-in domains only",
@@ -401,11 +395,11 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
       source: "chat_surface" as const,
       tools: [readOpenTool, webSearchTool, terminalSessionTool, externalFakeTool],
       rerankOrder: ["web_research", "read_open"],
-      expectedExposedToolIds: ["web_search"],
+       expectedExposedToolIds: ["read_open", "web_search"],
       expectedBlockedCapabilityIds: ["terminal_session", "external_fake_tool"],
       expectedReason: "Chat-visible tool surface is restricted to safe built-in domains.",
-      expectedTopToolId: "web_search",
-      expectedPreferredToolId: "web_search",
+       expectedTopToolId: "read_open",
+       expectedPreferredToolId: undefined,
     },
     {
       label: "non-command turn keeps terminal hidden in diagnostics",
@@ -413,10 +407,10 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
       source: "agent_intent" as const,
       tools: [terminalSessionTool, externalFakeTool],
       rerankOrder: [],
-      expectedExposedToolIds: [],
-      expectedBlockedCapabilityIds: ["terminal_session", "external_fake_tool"],
-      expectedReason: "Terminal tools are hidden unless the turn clearly asks to run a command.",
-      expectedTopToolId: undefined,
+       expectedExposedToolIds: ["terminal_session"],
+       expectedBlockedCapabilityIds: ["external_fake_tool"],
+       expectedReason: "All eligible tools are exposed because the eligible set is at most 20 tools.",
+       expectedTopToolId: "terminal_session",
       expectedPreferredToolId: undefined,
     },
     {
@@ -430,7 +424,7 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
       expectedBlockedCapabilityIds: [],
       expectedReason: undefined,
       expectedTopToolId: "external_fake_tool",
-      expectedPreferredToolId: "external_fake_tool",
+       expectedPreferredToolId: undefined,
     },
     {
       label: "sandbox-unavailable command keeps terminal blocked",
@@ -478,9 +472,7 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
         expect(result.exposureReasons).toContain(expectedReason);
       }
       expect(result.toolCandidates[0]?.toolId).toBe(expectedTopToolId);
-      expect(
-        result.toolCandidates.find((candidate) => candidate.preferredForQuery === true)?.toolId,
-      ).toBe(expectedPreferredToolId);
+      expect(result.toolCandidates.every((candidate) => !("preferredForQuery" in candidate))).toBe(true);
     },
   );
 });

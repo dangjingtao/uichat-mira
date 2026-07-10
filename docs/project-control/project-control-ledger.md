@@ -159,7 +159,7 @@ related:
 | Task | Ledger State | Task Card State | Dependency / Scope |
 | --- | --- | --- | --- |
 | [agent_v15_T01](tasks/agent_v15_T01-state-ssot.md) | `DONE` | `DONE` | State 单一事实源与字段所有权；R01 复审通过，专项测试 46/46 |
-| [agent_v15_T02](tasks/agent_v15_T02-tool-exposure.md) | `TODO` | `TODO` | Tool Exposure 收敛；依赖 T01 |
+| [agent_v15_T02](tasks/agent_v15_T02-tool-exposure.md) | `DONE` | `DONE` | Tool Exposure 收敛；整改复审通过，T02 相关测试 67/67 |
 | [agent_v15_T03](tasks/agent_v15_T03-remove-pretool-selector.md) | `TODO` | `TODO` | 移除 Planner 前置工具选择链路；依赖 T01、T02 |
 | [agent_v15_T04](tasks/agent_v15_T04-remove-static-plan.md) | `TODO` | `TODO` | 移除静态 Plan 层；依赖 T01，可与 T02 并行但需独立 PR |
 | [agent_v15_T05](tasks/agent_v15_T05-remove-shadow-deciders.md) | `TODO` | `TODO` | 移除 Shadow Deciders、桥接器与 Action Rewrite；依赖 T03、T04 |

@@ -1,43 +1,8 @@
 import type { McpToolDefinition } from "../../mcp/core/definitions.js";
-import {
-  SAFE_CHAT_DOMAINS,
-  querySuggestsTerminalCommand,
-  querySuggestsWebSearch,
-  querySuggestsWorkspaceRead,
-} from "./intent-hints.js";
 import type { HarnessExposurePolicyInput } from "./types.js";
 
+const SAFE_CHAT_DOMAINS = new Set(["read", "web_search"]);
 const INTERNAL_INTENT_ONLY_TOOL_IDS = new Set(["read", "read_slice"]);
-
-export const shouldExposeWebSearchForQuery = (query: string | undefined) => {
-  if (!query?.trim()) {
-    return true;
-  }
-
-  if (querySuggestsWorkspaceRead(query)) {
-    return false;
-  }
-
-  return querySuggestsWebSearch(query);
-};
-
-export const shouldHideWebSearchForWorkspaceLocalAgentIntent = (
-  input: HarnessExposurePolicyInput,
-) => {
-  if (input.source !== "agent_intent") {
-    return false;
-  }
-
-  if (!querySuggestsWorkspaceRead(input.query)) {
-    return false;
-  }
-
-  if (querySuggestsWebSearch(input.query)) {
-    return false;
-  }
-
-  return true;
-};
 
 export const isInternalIntentOnlyTool = (definition: McpToolDefinition) =>
   definition.source === "internal" && INTERNAL_INTENT_ONLY_TOOL_IDS.has(definition.id);
@@ -67,10 +32,6 @@ export const shouldExposeTerminalForAgentIntent = (
 ) => {
   if (input.source !== "agent_intent" || definition.domain !== "terminal") {
     return true;
-  }
-
-  if (!querySuggestsTerminalCommand(input.query)) {
-    return false;
   }
 
   if (definition.capabilities.requiresApproval !== true) {
@@ -110,14 +71,6 @@ export const shouldIncludeDefinition = (
   if (
     (input.source === "agent_intent" || input.source === "chat_surface") &&
     isInternalIntentOnlyTool(definition)
-  ) {
-    return false;
-  }
-
-  if (
-    (input.source === "chat_surface" || shouldHideWebSearchForWorkspaceLocalAgentIntent(input)) &&
-    definition.id === "web_search" &&
-    !shouldExposeWebSearchForQuery(input.query)
   ) {
     return false;
   }

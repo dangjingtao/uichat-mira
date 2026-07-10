@@ -33,7 +33,6 @@ export interface HarnessToolCandidate {
   actionProfileId?: string;
   actionProfileTitle?: string;
   actionProfileDescription?: string;
-  preferredForQuery?: boolean;
 }
 
 export interface HarnessToolExposure {
@@ -42,6 +41,7 @@ export interface HarnessToolExposure {
   reason: string[];
   blockedCapabilityIds: string[];
 }
+
 
 export interface ResolveHarnessToolCandidatesForTurnInput {
   query: string;
