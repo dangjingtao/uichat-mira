@@ -1,5 +1,5 @@
 import { agentGraph } from "./graph";
-import { createAgentGoal, createAgentPlan } from "./nodes/index";
+import { createAgentGoal } from "./nodes/index";
 import { agentRunStore, configureAgentRunPersistence } from "./run-store";
 import type { AgentGraphInput } from "./types";
 import { agentRunRepository } from "@/db/repositories/agent-run.repository";
@@ -15,19 +15,17 @@ configureAgentRunPersistence({
 });
 
 export const createAndRunAgent = async (
-  input: Omit<AgentGraphInput, "runId" | "goal" | "plan"> & {
+  input: Omit<AgentGraphInput, "runId" | "goal"> & {
     goalText: string;
     assistantMessageId?: string;
     assistantParentId?: string | null;
   },
 ) => {
   const goal = createAgentGoal(input.goalText);
-  const plan = createAgentPlan(goal);
   const run = agentRunStore.create({
     threadId: input.threadId,
     userId: input.userId,
     goal,
-    plan,
     assistantMessageId: input.assistantMessageId,
     assistantParentId: input.assistantParentId,
     runtimeInput: {
@@ -49,7 +47,6 @@ export const createAndRunAgent = async (
       ...input,
       runId: run.id,
       goal,
-      plan,
       approvedInvocations: [],
     });
 
@@ -60,7 +57,6 @@ export const createAndRunAgent = async (
     if (output.pendingApproval) {
       agentRunStore.update(run.id, {
         status: "waiting_approval",
-        currentStepId: output.pendingApproval.stepId,
         blockedReason: output.blockedReason,
         terminalReason: output.terminalReason,
         pendingApproval: output.pendingApproval,
@@ -73,7 +69,6 @@ export const createAndRunAgent = async (
 
     agentRunStore.complete(run.id, {
       status: output.status,
-      currentStepId: output.pendingApproval ? output.pendingApproval.stepId : undefined,
       contextBudget: output.contextBudget,
       blockedReason: output.blockedReason,
       terminalReason: output.terminalReason,
@@ -84,9 +79,6 @@ export const createAndRunAgent = async (
       ...(output.pendingApproval
         ? { pendingApproval: output.pendingApproval }
         : { pendingApproval: undefined }),
-      ...(output.errorSourceNodeId
-        ? { currentStepId: output.errorSourceNodeId }
-        : {}),
     });
 
     return {
@@ -96,7 +88,6 @@ export const createAndRunAgent = async (
   } catch (error) {
     agentRunStore.update(run.id, {
       status: "failed",
-      currentStepId: undefined,
     });
     throw error;
   }

@@ -4,7 +4,7 @@ import { agentGraph } from "../graph";
 import { resumeApprovedAgentRun } from "../resume";
 import { agentRunStore } from "../run-store";
 import { createInvocationInputHash } from "../approval-fingerprint";
-import { createAgentGoal, createAgentPlan } from "../nodes/index";
+import { createAgentGoal } from "../nodes/index";
 import * as messagePersistenceModule from "@/routes/proxy-provider/message-persistence";
 import { threadService } from "@/services/thread.service";
 
@@ -15,7 +15,6 @@ test("resumeApprovedAgentRun resumes a pending run and keeps approval state", as
     threadId: "thread-1",
     userId: 1,
     goal,
-    plan: createAgentPlan(goal),
     assistantMessageId: "assistant-1",
     assistantParentId: "user-1",
     runtimeInput: {
@@ -202,7 +201,6 @@ test("resumeApprovedAgentRun updates assistant message when run returns waiting 
     threadId: "thread-1",
     userId: 1,
     goal,
-    plan: createAgentPlan(goal),
     assistantMessageId: "assistant-1",
     assistantParentId: "user-1",
     runtimeInput: {
@@ -364,7 +362,6 @@ test("resumeApprovedAgentRun updates assistant message when resumed run fails", 
     threadId: "thread-1",
     userId: 1,
     goal,
-    plan: createAgentPlan(goal),
     assistantMessageId: "assistant-1",
     assistantParentId: "user-1",
     runtimeInput: {
@@ -508,7 +505,6 @@ test("resumeApprovedAgentRun blocks execution when approval toolCallId does not 
     threadId: "thread-1",
     userId: 1,
     goal,
-    plan: createAgentPlan(goal),
     runtimeInput: {
       messages: [
         {
@@ -646,7 +642,6 @@ test("resumeApprovedAgentRun blocks terminal_session when the approved inputHash
     threadId: "thread-1",
     userId: 1,
     goal,
-    plan: createAgentPlan(goal),
     runtimeInput: {
       messages: [
         {
@@ -717,7 +712,6 @@ test("resumeApprovedAgentRun keeps a legacy root-relative workspace path and can
     threadId: "thread-1",
     userId: 1,
     goal,
-    plan: createAgentPlan(goal),
     assistantMessageId: "assistant-workspace-1",
     assistantParentId: "user-1",
     runtimeInput: {

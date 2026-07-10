@@ -13,7 +13,7 @@ import { hasSqliteColumn } from "@/db/sqlite-utils";
 import { threadService } from "@/services/thread.service";
 import { configureAgentRunPersistence, agentRunStore } from "../run-store";
 import { agentRunRepository } from "@/db/repositories/agent-run.repository";
-import { createAgentGoal, createAgentPlan } from "../nodes/index";
+import { createAgentGoal } from "../nodes/index";
 import { getAgentRunById } from "../run-read";
 import { persistAgentAssistantState, resumeApprovedAgentRun } from "../resume";
 import { agentGraph } from "../graph";
@@ -95,7 +95,6 @@ const createPersistedWaitingApprovalRun = (options?: {
     threadId: thread.id,
     userId: 1,
     goal,
-    plan: createAgentPlan(goal),
     assistantMessageId: "assistant-persisted-1",
     assistantParentId: "user-persisted-1",
     ...(options?.withRuntimeInput === false
@@ -116,7 +115,6 @@ const createPersistedWaitingApprovalRun = (options?: {
 
   agentRunStore.update(run.id, {
     status: "waiting_approval",
-    currentStepId: "approval",
     selectedToolId: "web-search",
     pendingApproval: {
       id: "approval-1",
@@ -215,14 +213,12 @@ test("resumeApprovedAgentRun can continue from repository after in-memory state 
     assert.equal(result.run?.status, "completed");
     assert.equal(result.run?.pendingApproval, undefined);
     assert.equal(result.run?.pendingToolCall, undefined);
-    assert.equal(result.run?.currentStepId, undefined);
     assert.equal(result.run?.selectedToolId, "web-search");
     agentRunStore.clear();
     const restored = getAgentRunById(run.id);
     assert.equal(restored?.status, "completed");
     assert.equal(restored?.pendingApproval, undefined);
     assert.equal(restored?.pendingToolCall, undefined);
-    assert.equal(restored?.currentStepId, undefined);
     const persistedThread = threadService.getThreadById(run.threadId, 1);
     const assistantMessage = persistedThread?.messages.find(
       (message) => message.id === "assistant-persisted-1",
@@ -264,7 +260,6 @@ test("persisted reject clears approval state across repository reload", () => {
 
   const next = agentRunStore.complete(run.id, {
     status: "blocked",
-    currentStepId: undefined,
     pendingApproval: undefined,
     pendingToolCall: undefined,
     selectedToolId: undefined,
@@ -286,7 +281,6 @@ test("persisted reject clears approval state across repository reload", () => {
   assert.equal(restored?.status, "blocked");
   assert.equal(restored?.pendingApproval, undefined);
   assert.equal(restored?.pendingToolCall, undefined);
-  assert.equal(restored?.currentStepId, undefined);
   assert.equal(restored?.selectedToolId, undefined);
   assert.equal(restored?.terminalReason, "approval_rejected");
 });
@@ -315,7 +309,6 @@ test("mismatch approval clears persisted approval state across repository reload
     assert.equal(restored?.status, "blocked");
     assert.equal(restored?.pendingApproval, undefined);
     assert.equal(restored?.pendingToolCall, undefined);
-    assert.equal(restored?.currentStepId, undefined);
     assert.equal(restored?.selectedToolId, undefined);
     assert.equal(restored?.terminalReason, "approval_resume_mismatch");
   } finally {
@@ -363,6 +356,8 @@ test("initializeThreadDatabase upgrades legacy agent_runs columns for execution 
   assert.equal(hasSqliteColumn(sqlite, "agent_runs", "pending_tool_call_json"), true);
   assert.equal(hasSqliteColumn(sqlite, "agent_runs", "last_tool_execution_json"), true);
   assert.equal(hasSqliteColumn(sqlite, "agent_runs", "selected_tool_id"), true);
+  assert.equal(hasSqliteColumn(sqlite, "agent_runs", "plan_json"), false);
+  assert.equal(hasSqliteColumn(sqlite, "agent_runs", "current_step_id"), false);
   assert.equal(hasSqliteColumn(sqlite, "agent_runs", "blocked_reason"), true);
   assert.equal(hasSqliteColumn(sqlite, "agent_runs", "terminal_reason"), true);
   activeDbPath = dbPath;

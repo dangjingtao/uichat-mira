@@ -249,7 +249,6 @@ export const resumeApprovedAgentRun = async (runId: string) => {
   if (mismatchReason) {
     const blockedRun = agentRunStore.complete(runId, {
       status: "blocked",
-      currentStepId: undefined,
       pendingApproval: undefined,
       pendingToolCall: undefined,
       selectedToolId: undefined,
@@ -312,7 +311,6 @@ export const resumeApprovedAgentRun = async (runId: string) => {
     threadId: run.threadId,
     userId: run.userId,
     goal: run.goal,
-    plan: run.plan,
     messages: runtimeInput.messages,
     requestContextMessages: runtimeInput.requestContextMessages,
     params: runtimeInput.params,
@@ -334,7 +332,6 @@ export const resumeApprovedAgentRun = async (runId: string) => {
 
   agentRunStore.complete(runId, {
     status: output.status,
-    currentStepId: output.pendingApproval?.stepId ?? output.errorSourceNodeId,
     contextBudget: output.contextBudget,
     blockedReason: output.blockedReason,
     terminalReason: output.terminalReason,

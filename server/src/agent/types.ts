@@ -19,22 +19,6 @@ export type AgentRunStatus =
   | "blocked"
   | "cancelled";
 
-export type AgentStepStatus =
-  | "pending"
-  | "running"
-  | "completed"
-  | "failed"
-  | "skipped";
-
-export type AgentStepKind =
-  | "reason"
-  | "retrieve"
-  | "tool"
-  | "generate"
-  | "memory"
-  | "ask_user"
-  | "approval";
-
 export type AgentRiskLevel = "low" | "medium" | "high";
 
 export interface AgentGoal {
@@ -43,24 +27,6 @@ export interface AgentGoal {
   successCriteria: string[];
   constraints: string[];
   riskLevel: AgentRiskLevel;
-}
-
-export interface AgentPlanStep {
-  id: string;
-  kind: AgentStepKind;
-  title: string;
-  status: AgentStepStatus;
-  riskLevel: AgentRiskLevel;
-  requiresApproval: boolean;
-  toolId?: string;
-  input?: Record<string, unknown>;
-}
-
-export interface AgentPlan {
-  id: string;
-  goalId: string;
-  version: number;
-  steps: AgentPlanStep[];
 }
 
 export interface AgentObservation {
@@ -484,11 +450,9 @@ export interface AgentRun {
   threadId: string;
   userId: number;
   goal: AgentGoal;
-  plan: AgentPlan;
   status: AgentRunStatus;
   observations: AgentObservation[];
   traceId: string;
-  currentStepId?: string;
   blockedReason?: string;
   terminalReason?: string;
   pendingApproval?: AgentApprovalRequest;
@@ -525,7 +489,6 @@ export interface AgentRunStore {
     threadId: string;
     userId: number;
     goal: AgentGoal;
-    plan: AgentPlan;
     assistantMessageId?: string;
     assistantParentId?: string | null;
     runtimeInput?: Pick<
@@ -560,7 +523,6 @@ export interface AgentGraphInput {
   threadId: string;
   userId: number;
   goal: AgentGoal;
-  plan: AgentPlan;
   messages: NormalizedChatMessage[];
   requestContextMessages?: NormalizedChatMessage[];
   params?: Record<string, unknown>;

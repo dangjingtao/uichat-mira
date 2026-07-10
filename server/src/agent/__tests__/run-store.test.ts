@@ -28,11 +28,9 @@ test("InMemoryAgentRunStore creates and updates agent runs", () => {
 
   const updated = store.update(run.id, {
     status: "running",
-    currentStepId: "retrieve",
   });
 
   assert.equal(updated.status, "running");
-  assert.equal(updated.currentStepId, "retrieve");
   assert.equal(store.get(run.id)?.status, "running");
 });
 
@@ -146,7 +144,6 @@ test("InMemoryAgentRunStore completes runs with final status", () => {
 
   const next = store.complete(run.id, {
     status: "blocked",
-    currentStepId: undefined,
     pendingApproval: undefined,
   });
 

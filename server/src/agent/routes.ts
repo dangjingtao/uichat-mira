@@ -36,7 +36,6 @@ const agentRunSchema = {
     "threadId",
     "userId",
     "goal",
-    "plan",
     "status",
     "observations",
     "traceId",
@@ -48,7 +47,6 @@ const agentRunSchema = {
     threadId: { type: "string" },
     userId: { type: "number" },
     goal: { type: "object", additionalProperties: true },
-    plan: { type: "object", additionalProperties: true },
     status: {
       type: "string",
       enum: ["queued", "running", "waiting_approval", "waiting_user", "completed", "failed", "blocked", "cancelled"],
@@ -58,7 +56,6 @@ const agentRunSchema = {
       items: { type: "object", additionalProperties: true },
     },
     traceId: { type: "string" },
-    currentStepId: { type: "string" },
     blockedReason: { type: "string" },
     terminalReason: { type: "string" },
     pendingApproval: agentApprovalRequestSchema,
@@ -181,7 +178,6 @@ const registerAgentRoutes: FastifyPluginAsync = async (app: FastifyInstance) => 
 
       const next = agentRunStore.complete(visibleRun.id, {
         status: "blocked",
-        currentStepId: undefined,
         pendingApproval: undefined,
         pendingToolCall: undefined,
         selectedToolId: undefined,
@@ -227,7 +223,6 @@ const registerAgentRoutes: FastifyPluginAsync = async (app: FastifyInstance) => 
 
       const next = agentRunStore.complete(visibleRun.id, {
         status: "cancelled",
-        currentStepId: undefined,
         pendingApproval: undefined,
         pendingToolCall: undefined,
         selectedToolId: undefined,

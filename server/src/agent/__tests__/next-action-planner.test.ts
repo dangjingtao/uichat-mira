@@ -4219,6 +4219,39 @@ test("nextActionPlannerNode only writes nextAction in its state patch", async ()
   }
 });
 
+test("nextActionPlannerNode ignores an injected legacy plan field", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"ask_user","question":"Which file should I inspect?","reason":"The target is ambiguous."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode({
+      ...createState(),
+      plan: {
+        steps: [
+          {
+            id: "legacy-step",
+            kind: "retrieve",
+            status: "pending",
+          },
+        ],
+      },
+    } as AgentNodeState);
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "ask_user",
+        question: "Which file should I inspect?",
+        reason: "The target is ambiguous.",
+      },
+    });
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
 test("nextActionPlannerNode is the primary writer for runtime currentTaskFrame updates", async () => {
   const streamSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
