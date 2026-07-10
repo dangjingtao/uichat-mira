@@ -13,7 +13,6 @@ test("cosineSimilarity returns descending similarity as vectors diverge", () => 
   assert.equal(identical, 1);
   assert.equal(orthogonal, 0);
 });
-
 test("matchToolCandidatesByEmbedding returns exposed tool candidates without selecting one", async () => {
   const resolveHarnessToolCandidatesForTurnSpy = vi
     .spyOn(toolCandidates, "resolveHarnessToolCandidatesForTurn")
@@ -33,7 +32,6 @@ test("matchToolCandidatesByEmbedding returns exposed tool candidates without sel
           ruleScore: 0.2,
           rerankScore: 0.88,
           finalScore: 0.82,
-          preferredForQuery: true,
         },
         {
           toolId: "read_open",
@@ -96,7 +94,6 @@ test("matchToolCandidatesByEmbedding returns exposed tool candidates without sel
       query: "查一下最新新闻",
       config: {
         topK: 2,
-        selectedTopK: 2,
       },
     });
 
@@ -108,8 +105,6 @@ test("matchToolCandidatesByEmbedding returns exposed tool candidates without sel
     );
     assert.equal(result.topCandidates[0]?.embeddingScore, 0.76);
     assert.equal(result.topCandidates[0]?.rerankScore, 0.88);
-    assert.deepEqual(result.candidateToolIds, []);
-    assert.deepEqual(result.selectedToolIds, []);
     assert.deepEqual(result.exposureReasons, []);
     assert.equal(result.retrievalModel, undefined);
     assert.deepEqual(result.rerankModel, {
@@ -142,7 +137,6 @@ test("matchToolCandidatesByEmbedding short-circuits low-intent greeting queries 
     });
 
     assert.deepEqual(result.topCandidates, []);
-    assert.deepEqual(result.selectedToolIds, []);
     assert.deepEqual(result.exposureReasons, [
       "Greeting or low-intent input should stay in pure conversation mode.",
     ]);
@@ -171,7 +165,6 @@ test("matchToolCandidatesByEmbedding respects topK while keeping selection empty
           ruleScore: 0.3,
           rerankScore: 0.71,
           finalScore: 0.66,
-          preferredForQuery: true,
         },
         {
           toolId: "edit_file",
@@ -222,7 +215,6 @@ test("matchToolCandidatesByEmbedding respects topK while keeping selection empty
       result.topCandidates.map((candidate) => candidate.toolId),
       ["read_list"],
     );
-    assert.deepEqual(result.selectedToolIds, []);
   } finally {
     resolveHarnessToolCandidatesForTurnSpy.mockRestore();
   }

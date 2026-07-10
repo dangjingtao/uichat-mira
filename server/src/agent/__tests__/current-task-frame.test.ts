@@ -128,7 +128,8 @@ test("prepareContextNode keeps the initialized currentTaskFrame unchanged", asyn
     }),
   );
 
-  assert.deepEqual(patch, {});
+  assert.deepEqual(patch.toolExposure?.exposedTools, []);
+  assert.equal(patch.toolIntent?.query, "inspect docs");
   assert.deepEqual(initialState.currentTaskFrame, {
     currentGoal: "inspect docs",
     currentSubtask: "Prepare context and determine the next action.",

@@ -24,7 +24,7 @@ import agentRoute from "@/agent/routes";
 import { getAgentRunById } from "@/agent/run-read";
 import { agentRunStore } from "@/agent/run-store";
 import * as intentMatcherModule from "@/agent/intent/embedding-capability-matcher";
-import * as taskSelectorModule from "@/agent/intent/task-capability-selector";
+
 import * as runnablesModule from "@/agent/runnables";
 import proxyProviderRoute from "./index.js";
 import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
@@ -181,12 +181,7 @@ const makeToolIntentResult = (
     exposedDefinitions: definitions,
     reason: [],
     blockedCapabilityIds: [],
-  },
-  selectedToolIds: definitions.slice(0, 1).map((definition) => definition.id),
-  candidateToolIds: definitions.map((definition) => definition.id),
-  decisionSource: "task-model" as const,
-  decisionReason: "chat-agent-approval-smoke",
-});
+  },});
 
 const setupToolExposure = (
   query: string,
@@ -196,11 +191,6 @@ const setupToolExposure = (
   vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
     makeToolIntentResult(query, definitions),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: definitions.slice(0, 1).map((definition) => definition.id),
-    decisionSource: "task-model",
-    decisionReason: "chat-agent-approval-smoke",
-  });
 };
 
 const createAuthedApp = async () => {
@@ -494,6 +484,7 @@ describe("chat route approval resume smoke", () => {
       operation: "delete",
       targetPath: "ONLY_ALT_WORKSPACE.txt",
     });
+
 
     const resumedAssistant = getLatestAssistantMessage(thread.id, user.id);
     const resumedAgent = (resumedAssistant?.metadata as {

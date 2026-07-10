@@ -8,8 +8,6 @@ export interface AgentIntentEmbeddingConfig {
   requestedProvider?: ProxyProviderParam;
   topK?: number;
   minScore?: number;
-  selectedTopK?: number;
-  selectedMinScore?: number;
 }
 
 export interface CapabilityIntentDocument {
@@ -39,7 +37,6 @@ export interface ToolIntentCandidate {
   actionProfileId?: string;
   actionProfileTitle?: string;
   actionProfileDescription?: string;
-  preferredForQuery?: boolean;
   reason?: string;
 }
 
@@ -48,11 +45,7 @@ export interface ToolIntentResult {
   topCandidates: ToolIntentCandidate[];
   toolCandidates: HarnessToolCandidate[];
   toolExposure: HarnessToolExposure;
-  selectedToolIds: string[];
-  candidateToolIds: string[];
   exposureReasons?: string[];
-  decisionSource?: "task-model" | "rule" | "guard";
-  decisionReason?: string;
   retrievalModel?: {
     provider?: string;
     model?: string;

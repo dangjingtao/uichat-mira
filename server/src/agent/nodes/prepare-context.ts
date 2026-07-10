@@ -5,6 +5,24 @@ import { listCapabilityDefinitions } from "@/harness/registry";
 import { evaluateAgentToolPolicy } from "../policy";
 import { emitStepNode } from "../node-runtime";
 import type { AgentNodeState, EmitAgentExecutionNode } from "../node-runtime";
+import { matchToolCandidatesByEmbedding } from "../intent/embedding-capability-matcher";
+import { getLatestUserQuestion } from "./shared";
+
+const toAgentToolExposureState = (
+  toolIntent: Awaited<ReturnType<typeof matchToolCandidatesByEmbedding>>,
+) => ({
+  exposedTools: toolIntent.toolExposure.exposedToolIds,
+  toolMeta: toolIntent.toolExposure.exposedDefinitions.map((definition) => ({
+    toolId: definition.id,
+    title: definition.title,
+    description: definition.description,
+    inputSchema: definition.inputSchema,
+    domain: definition.domain,
+    source: definition.source,
+    tags: definition.tags,
+    capabilities: definition.capabilities,
+  })),
+});
 
 export const prepareContextNode = async (
   state: AgentNodeState,
@@ -23,6 +41,11 @@ export const prepareContextNode = async (
   const autoAllowedTools = toolDefinitions
     .filter((definition) => evaluateAgentToolPolicy(definition).type === "allow")
     .map((definition) => definition.id);
+  const query = getLatestUserQuestion(state.messages) || state.goal.text;
+  const toolIntent = await matchToolCandidatesByEmbedding({
+    query,
+    config: state.intentConfig,
+  });
 
   await emitStepNode(emit, {
     runId: state.runId,
@@ -35,9 +58,13 @@ export const prepareContextNode = async (
       messageCount: state.messages.length,
       requestContextCount: state.requestContextMessages?.length ?? 0,
       autoAllowedTools,
+      exposedToolCount: toolIntent.toolExposure.exposedToolIds.length,
       currentTaskFrameWriter: "prepareContextNode reads the initialized task frame only",
     },
   });
 
-  return {};
+  return {
+    toolIntent,
+    toolExposure: toAgentToolExposureState(toolIntent),
+  };
 };

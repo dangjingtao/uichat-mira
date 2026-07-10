@@ -9,7 +9,7 @@ import { resolveHarnessCapabilityDiagnostics } from "@/harness/capability-diagno
 import { contextBudgetService } from "@/services/context-budget/index";
 import { providerProxyService } from "@/services/provider-proxy.service/index";
 import * as intentMatcherModule from "../intent/embedding-capability-matcher";
-import * as taskSelectorModule from "../intent/task-capability-selector";
+
 import * as policyModule from "../policy";
 import * as runnablesModule from "../runnables";
 import { agentGraph } from "../graph";
@@ -143,12 +143,7 @@ const makeToolIntentResult = (
     exposedDefinitions: definitions,
     reason: [],
     blockedCapabilityIds: [],
-  },
-  selectedToolIds: definitions.slice(0, 1).map((definition) => definition.id),
-  candidateToolIds: definitions.map((definition) => definition.id),
-  decisionSource: "task-model" as const,
-  decisionReason: "test",
-});
+  },});
 
 const setupToolExposure = (
   query: string,
@@ -158,11 +153,6 @@ const setupToolExposure = (
   vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
     makeToolIntentResult(query, definitions),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: definitions.slice(0, 1).map((definition) => definition.id),
-    decisionSource: "task-model",
-    decisionReason: "test",
-  });
 };
 
 const mockRecallOrder = (preferredCapabilityIds: string[] = []) => {
@@ -495,6 +485,7 @@ test("diagnostics closure keeps generate grounded when the model fabricates work
       runId: "run-diagnostics-generate-guard",
       threadId: "thread-1",
       userId: 1,
+
       goal: {
         ...baseGoal,
         text: "看看当前 workspace 有哪些文件",

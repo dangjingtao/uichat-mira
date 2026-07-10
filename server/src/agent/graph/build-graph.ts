@@ -12,7 +12,6 @@ import {
   toolCallNormalizeNode,
   toolNode,
 } from "../nodes/index";
-import { toolGuardNode, toolSelectNode } from "../intent/index";
 import { AgentGraphStateAnnotation, createAgentNode } from "./state";
 import {
   routeAfterApproval,
@@ -25,8 +24,6 @@ import {
   routeAfterRetrieve,
   routeAfterTool,
   routeAfterToolCallNormalize,
-  routeAfterToolGuard,
-  routeAfterToolSelect,
 } from "./routes";
 
 export const compiledAgentStateGraph = new StateGraph(AgentGraphStateAnnotation)
@@ -35,8 +32,6 @@ export const compiledAgentStateGraph = new StateGraph(AgentGraphStateAnnotation)
     createAgentNode("prepareContext", prepareContextNode),
   )
   .addNode("planStep", createAgentNode("planStep", planNode))
-  .addNode("toolSelectStep", createAgentNode("toolSelectStep", toolSelectNode))
-  .addNode("toolGuardStep", createAgentNode("toolGuardStep", toolGuardNode))
   .addNode(
     "nextActionPlanner",
     createAgentNode("nextActionPlanner", nextActionPlannerNode),
@@ -59,14 +54,6 @@ export const compiledAgentStateGraph = new StateGraph(AgentGraphStateAnnotation)
   ])
   .addConditionalEdges("planStep", routeAfterPlanStep, [
     "policyStep",
-    "toolSelectStep",
-    "error",
-  ])
-  .addConditionalEdges("toolSelectStep", routeAfterToolSelect, [
-    "toolGuardStep",
-    "error",
-  ])
-  .addConditionalEdges("toolGuardStep", routeAfterToolGuard, [
     "nextActionPlanner",
     "error",
   ])
@@ -90,14 +77,14 @@ export const compiledAgentStateGraph = new StateGraph(AgentGraphStateAnnotation)
   ])
   .addConditionalEdges("approval", routeAfterApproval, [END, "error"])
   .addConditionalEdges("retrieve", routeAfterRetrieve, [
-    "toolSelectStep",
+    "nextActionPlanner",
     "generate",
     "error",
   ])
   .addConditionalEdges("tool", routeAfterTool, [
     "approval",
     "generate",
-    "toolSelectStep",
+    "nextActionPlanner",
     "error",
   ])
   .addConditionalEdges("generate", routeAfterGenerate, ["evaluate", "error"])

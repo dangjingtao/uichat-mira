@@ -25,10 +25,6 @@ import {
   getReadOpenBridgeActionFromLocateEvidence,
 } from "./locate-open-bridge";
 import {
-  getWorkspaceLocalIntentGuardAction,
-  LOCAL_INTENT_GUARD_REASON,
-} from "./local-intent-guard";
-import {
   parseNextActionPlannerOutputWithDiagnostics,
 } from "./parse";
 import {
@@ -162,8 +158,6 @@ export const nextActionPlannerNode = async (
   let parseErrorReason: string | undefined;
   let parseWarnings: string[] | undefined;
   let repeatedActionGuard: AgentRepeatedActionGuardResult | undefined;
-  let localIntentGuardTriggered = false;
-  let localIntentGuardReason: string | undefined;
   let coverageTransitionReason: string | undefined;
   const pendingApprovalActive = Boolean(observationContext.pendingApproval);
   const recoveryExhausted =
@@ -257,19 +251,6 @@ export const nextActionPlannerNode = async (
         sanitizedOutput = initialPlannerDecision.sanitizedOutput;
         parseErrorReason = initialPlannerDecision.parseErrorReason;
         parseWarnings = initialPlannerDecision.parseWarnings;
-
-        const localIntentGuardAction = getWorkspaceLocalIntentGuardAction({
-          question,
-          nextAction,
-          toolExposure,
-          workspaceRoot: state.workspaceRoot,
-          knowledgeBaseId: state.knowledgeBaseId,
-        });
-        if (localIntentGuardAction?.guarded) {
-          nextAction = localIntentGuardAction.nextAction;
-          localIntentGuardTriggered = true;
-          localIntentGuardReason = localIntentGuardAction.reason;
-        }
 
         repeatedActionGuard = getPlannerRepeatedActionGuardResult({
           evidence: plannerEvidence,
@@ -386,14 +367,11 @@ export const nextActionPlannerNode = async (
       guardedQuery: repeatedActionGuard?.guardedQuery,
       matchedEvidenceIndex: repeatedActionGuard?.matchedEvidenceIndex,
       matchedToolCallId: repeatedActionGuard?.matchedToolCallId,
-      localIntentGuardTriggered,
-      localIntentGuardReason: localIntentGuardReason ?? null,
       schemaReplanAttemptCount: observationContext.recovery.attemptCount,
       schemaReplanError: observationContext.recovery.schemaError ?? null,
       pendingApprovalActive,
       recoveryExhausted,
       allowedActionTypes: [...ALLOWED_ACTION_TYPES],
-      localIntentLegacyGuardReason: LOCAL_INTENT_GUARD_REASON,
     },
   });
 

@@ -13,7 +13,7 @@ import { contextBudgetService } from "@/services/context-budget/index";
 import { providerProxyService } from "@/services/provider-proxy.service/index";
 import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 import * as intentMatcherModule from "../intent/embedding-capability-matcher";
-import * as taskSelectorModule from "../intent/task-capability-selector";
+
 import * as runnablesModule from "../runnables";
 import { agentGraph } from "../graph";
 
@@ -157,12 +157,7 @@ const makeToolIntentResult = (
     exposedDefinitions: definitions,
     reason: [],
     blockedCapabilityIds: [],
-  },
-  selectedToolIds: definitions.slice(0, 1).map((definition) => definition.id),
-  candidateToolIds: definitions.map((definition) => definition.id),
-  decisionSource: "task-model" as const,
-  decisionReason: "blackbox-test",
-});
+  },});
 
 const setupToolExposure = (
   query: string,
@@ -172,11 +167,6 @@ const setupToolExposure = (
   vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
     makeToolIntentResult(query, definitions),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: definitions.slice(0, 1).map((definition) => definition.id),
-    decisionSource: "task-model",
-    decisionReason: "blackbox-test",
-  });
 };
 
 const runBlackbox = (input: {
@@ -495,6 +485,7 @@ test("A7 waiting_approval stops the run before ToolNode executes", async () => {
   const generateSpy = vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke");
 
   const result = await runBlackbox({
+
     runId: "blackbox-a7-waiting-approval",
     question: "run dir",
     onExecutionNode: async (event) => {
