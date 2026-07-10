@@ -5,7 +5,7 @@ import * as registry from "@/harness/registry";
 import { contextBudgetService } from "@/services/context-budget/index";
 import { providerProxyService } from "@/services/provider-proxy.service/index";
 import * as intentMatcherModule from "../intent/embedding-capability-matcher";
-import * as taskSelectorModule from "../intent/task-capability-selector";
+
 import * as runnablesModule from "../runnables";
 import { agentGraph } from "../graph";
 import {
@@ -98,12 +98,7 @@ const makeToolIntentResult = (input: {
     exposedDefinitions: input.exposedDefinitions,
     reason: [],
     blockedCapabilityIds: [],
-  },
-  selectedToolIds: [input.toolId],
-  candidateToolIds: [input.toolId],
-  decisionSource: "task-model" as const,
-  decisionReason: "test",
-});
+  },});
 
 vi.spyOn(contextBudgetService, "pack").mockImplementation((input) => {
   const messages = [
@@ -182,11 +177,6 @@ test("agentGraph tracing stays disabled by default", async () => {
       exposedDefinitions: [readOpen],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["read_open"],
-    decisionSource: "task-model",
-    decisionReason: "Read tool available.",
-  });
   vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementationOnce(
     async function* () {
       yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need the file content."}';
@@ -267,11 +257,6 @@ test("agentGraph tracing emits sanitized Phoenix-ready node spans when enabled",
       exposedDefinitions: [readOpen],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["read_open"],
-    decisionSource: "task-model",
-    decisionReason: "Read tool is available.",
-  });
   vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementationOnce(
     async function* () {
       yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md","apiKey":"sk-secret-123456789","nested":{"token":"Bearer super-secret-token"}},"reason":"Need the file content."}';

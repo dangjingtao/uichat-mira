@@ -40,8 +40,6 @@ export const matchToolCandidatesByEmbedding = async (input: {
     topCandidates,
     toolCandidates: candidateResolution.toolCandidates ?? [],
     toolExposure: candidateResolution.toolExposure,
-    selectedToolIds: [],
-    candidateToolIds: [],
     exposureReasons: candidateResolution.toolExposure.reason,
     ...(candidateResolution.retrievalModel
       ? { retrievalModel: candidateResolution.retrievalModel }

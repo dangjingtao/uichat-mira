@@ -118,6 +118,7 @@ const cleanTrailingPunctuation = (value: string) =>
 const extractExplicitPathTarget = (query: string) => {
   const quoted = query.match(/["'`](.+?)["'`]/)?.[1];
   if (quoted) {
+
     return cleanTrailingPunctuation(trimWrappedPath(quoted));
   }
 
@@ -238,6 +239,7 @@ export const getWorkspaceLocalIntentGuardAction = (input: {
       },
       reason: LOCAL_INTENT_GUARD_REASON,
     };
+
   }
 
   if (wantsRetrieve && (isWebSearchAction || isRetrieveWithoutKnowledgeBase)) {

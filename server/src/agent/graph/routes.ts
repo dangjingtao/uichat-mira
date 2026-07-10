@@ -13,14 +13,6 @@ const hasFrozenPendingToolCall = (
       pendingToolCall.status === "frozen",
   );
 
-export const routeAfterToolGuard = (state: AgentGraphStateType) => {
-  if (state.errorMessage) {
-    return "error";
-  }
-
-  return "nextActionPlanner";
-};
-
 export const routeAfterPrepareContext = (state: AgentGraphStateType) => {
   if (state.errorMessage) {
     return "error";
@@ -38,15 +30,7 @@ export const routeAfterPlanStep = (state: AgentGraphStateType) => {
     return "policyStep";
   }
 
-  return "toolSelectStep";
-};
-
-export const routeAfterToolSelect = (state: AgentGraphStateType) => {
-  if (state.errorMessage) {
-    return "error";
-  }
-
-  return "toolGuardStep";
+  return "nextActionPlanner";
 };
 
 export const routeAfterNextAction = (state: AgentGraphStateType) => {
@@ -127,7 +111,7 @@ export const routeAfterTool = (state: AgentGraphStateType) => {
       return "generate";
     }
 
-    return "toolSelectStep";
+    return "nextActionPlanner";
   }
 
   if (state.errorMessage) {
@@ -140,7 +124,7 @@ export const routeAfterTool = (state: AgentGraphStateType) => {
     return "generate";
   }
 
-  return "toolSelectStep";
+  return "nextActionPlanner";
 };
 
 export const routeAfterRetrieve = (state: AgentGraphStateType) => {
@@ -154,7 +138,7 @@ export const routeAfterRetrieve = (state: AgentGraphStateType) => {
     return "generate";
   }
 
-  return "toolSelectStep";
+  return "nextActionPlanner";
 };
 
 export const routeAfterGenerate = (state: AgentGraphStateType) => {

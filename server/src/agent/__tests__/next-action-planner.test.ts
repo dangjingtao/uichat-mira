@@ -498,6 +498,7 @@ test("nextActionPlannerNode returns answer action from task model JSON", async (
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementation(async function* () {
       yield '{"type":"answer","reason":"Evidence is already sufficient."}';
+
     });
 
   try {
@@ -797,6 +798,7 @@ test("nextActionPlannerNode does not short-circuit to answer when codebase_explo
           latestSummary: {
             source: "retrieval",
             status: "completed",
+
             actionTaken: "Codebase explore verified 1 workspace chunk.",
             keyFindings: ["verifiedChunkCount=1"],
             answerReadiness: {
@@ -998,6 +1000,7 @@ test("nextActionPlannerNode does not short-circuit to answer when a multi-target
               tags: ["read"],
               capabilities: {
                 sideEffect: "none",
+
                 requiresApproval: false,
               },
             },
@@ -1498,6 +1501,7 @@ test("getTaskCompletionDecision extracts Chinese bare mutation targets into requ
             status: "completed",
             toolId: "workspace_mutation",
             actionTaken: "Deleted the first target.",
+
             keyFindings: ["targetPath=如何被美丽女孩爱上"],
             answerReadiness: {
               canAnswer: true,
@@ -1595,6 +1599,7 @@ test("getTaskCompletionDecision does not treat terminal failed read tools as mut
       ],
     },
   });
+
 
   assert.deepEqual(decision.requiredTargets, ["notes.txt"]);
   assert.deepEqual(decision.coveredTargets, []);
@@ -1998,6 +2003,7 @@ test("nextActionPlannerNode returns use_tool action when toolId is exposed", asy
         toolId: "read_open",
         args: {
           path: "README.md",
+
         },
         reason: "Need the file content.",
       },
@@ -2394,6 +2400,7 @@ test("nextActionPlannerNode keeps a legal local read_locate action unchanged for
               {
                 type: "text",
                 text: "请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答。",
+
               },
             ],
           },
@@ -2498,6 +2505,7 @@ test("nextActionPlannerNode bridges completed read_locate evidence into read_ope
                 query: "读我文件",
               },
               invocationId: "invocation-read-locate-1",
+
               status: "completed",
               result: {
                 type: "locate",
@@ -2998,6 +3006,7 @@ test("nextActionPlannerNode does not let repeated read_open evidence close a mul
           },
           status: "completed",
           summary: {
+
             source: "tool",
             status: "completed",
             toolId: "read_open",
@@ -3192,6 +3201,7 @@ test('nextActionPlannerNode treats read_list "/workspace" and "." as the same re
       "read_list",
     );
     assert.equal(
+
       (doneEvent?.details as Record<string, unknown>)?.guardedArgsHash,
       readListDotArgsHash,
     );
@@ -3498,6 +3508,7 @@ test("nextActionPlannerNode keeps missing-reason use_tool output as a valid acti
 });
 
 test("nextActionPlannerNode accepts ask_user output for missing information", async () => {
+
   const streamSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementation(async function* () {
@@ -3991,6 +4002,7 @@ test("nextActionPlannerNode falls back when task model selects an unexposed tool
     assert.deepEqual(patch, {
       nextAction: {
         type: "error",
+
         reason:
           "Planner selected a tool that was not exposed for this turn; planner must stop.",
       },
@@ -3998,6 +4010,7 @@ test("nextActionPlannerNode falls back when task model selects an unexposed tool
         "Planner selected a tool that was not exposed for this turn; planner must stop.",
       blockedReason:
         "Planner selected a tool that was not exposed for this turn; planner must stop.",
+
       errorSourceNodeId: "agent-next-action-planner",
     });
   } finally {
@@ -4174,8 +4187,6 @@ test("nextActionPlannerNode can derive tool exposure from toolIntent when explic
           query: "open README.md",
           topCandidates: [],
           toolCandidates: [],
-          selectedToolIds: [],
-          candidateToolIds: [],
           toolExposure: {
             exposedToolIds: ["read_open"],
             exposedDefinitions: [

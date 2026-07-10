@@ -5,7 +5,7 @@ import * as registry from "@/harness/registry";
 import { contextBudgetService } from "@/services/context-budget/index";
 import { providerProxyService } from "@/services/provider-proxy.service/index";
 import * as intentMatcherModule from "../intent/embedding-capability-matcher";
-import * as taskSelectorModule from "../intent/task-capability-selector";
+
 import * as runnablesModule from "../runnables";
 import { agentGraph } from "../graph";
 import type {
@@ -218,12 +218,7 @@ const makeToolIntentResult = (
     exposedDefinitions: definitions,
     reason: [],
     blockedCapabilityIds: [],
-  },
-  selectedToolIds: definitions.slice(0, 1).map((definition) => definition.id),
-  candidateToolIds: definitions.map((definition) => definition.id),
-  decisionSource: "task-model" as const,
-  decisionReason: "blackbox-trio-test",
-});
+  },});
 
 const setupToolExposure = (
   query: string,
@@ -233,11 +228,6 @@ const setupToolExposure = (
   vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
     makeToolIntentResult(query, definitions),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: definitions.slice(0, 1).map((definition) => definition.id),
-    decisionSource: "task-model",
-    decisionReason: "blackbox-trio-test",
-  });
 };
 
 const runGraph = async (input: {
@@ -495,6 +485,7 @@ test("T028 scenario 1: autonomous source review keeps advancing from locate to r
     .mockImplementationOnce(async function* () {
       yield '{"type":"use_tool","toolId":"read_locate","args":{"query":"approval resume trace"},"reason":"The first clue was off-target, so narrow the query to approval resume evidence."}';
     });
+
   const executeSpy = vi
     .spyOn(harnessInvocations, "executeHarnessInvocation")
     .mockResolvedValueOnce(
@@ -799,6 +790,7 @@ test("T028 scenario 3: minimal fix closes read, proposal, write approval, test a
     nodeId: string;
     phase: string;
     summary?: string;
+
     details?: Record<string, unknown>;
   }> = [];
   const firstRun = await runGraph({

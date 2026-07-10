@@ -5,7 +5,6 @@ import * as registry from "@/harness/registry";
 import { contextBudgetService } from "@/services/context-budget/index";
 import { providerProxyService } from "@/services/provider-proxy.service/index";
 import * as intentMatcherModule from "../intent/embedding-capability-matcher";
-import * as taskSelectorModule from "../intent/task-capability-selector";
 import * as runnablesModule from "../runnables";
 import { createInvocationInputHash } from "../approval-fingerprint";
 import { agentGraph } from "../graph";
@@ -14,6 +13,8 @@ import {
   routeAfterRetrieve,
   routeAfterTool,
 } from "../graph/routes";
+
+
 
 const baseGoal = {
   id: "goal-1",
@@ -35,7 +36,6 @@ const makeMessage = (content: string) => ({
   content,
   parts: [{ type: "text" as const, text: content }],
 });
-
 const makeRouteState = (overrides: Record<string, unknown> = {}) =>
   ({
     iterationCount: 0,
@@ -156,12 +156,7 @@ const makeToolIntentResult = (input: {
       exposedDefinitions,
       reason: [],
       blockedCapabilityIds: [],
-    },
-    selectedToolIds: [],
-    candidateToolIds: [],
-    decisionSource: "task-model" as const,
-    decisionReason: "test",
-  };
+    },  };
 };
 
 beforeEach(() => {
@@ -232,11 +227,6 @@ test("agentGraph routes planner answer to generate without entering normalize or
       exposedDefinitions: [webSearch],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["web_search"],
-    decisionSource: "task-model",
-    decisionReason: "The old selector still sees a tool candidate.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementation(async function* () {
@@ -311,11 +301,6 @@ test("agentGraph preserves planner error reason instead of falling back to Unkno
       query: "broken planner output",
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: [],
-    decisionSource: "task-model",
-    decisionReason: "No direct tool candidate is required.",
-  });
   vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
     async function* () {
       yield "not-json";
@@ -377,11 +362,6 @@ test("agentGraph routes retrieve evidence back to planner and answer stop rule w
       query: "summarize the knowledge base",
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: [],
-    decisionSource: "task-model",
-    decisionReason: "No tool is needed for this turn.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -395,6 +375,7 @@ test("agentGraph routes retrieve evidence back to planner and answer stop rule w
         {
           chunkId: "chunk-1",
           documentName: "Release Notes",
+
           score: 0.91,
           content: "Version 2.0 shipped.",
         },
@@ -488,11 +469,7 @@ test("agentGraph reroutes workspace-local planner web_search into local read evi
       exposedDefinitions: [readLocate, webSearch],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["web_search"],
-    decisionSource: "task-model",
-    decisionReason: "A web tool candidate exists.",
-  });
+
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -569,11 +546,6 @@ test("agentGraph routes planner use_tool through normalize and answer stop rule 
       exposedDefinitions: [readOpen],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["read_open"],
-    decisionSource: "task-model",
-    decisionReason: "A read tool is available for inspection.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -699,11 +671,6 @@ test("agentGraph routes recoverable tool failure back to the planner chain for r
       exposedDefinitions: [readOpen],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["read_open"],
-    decisionSource: "task-model",
-    decisionReason: "A read tool is available for inspection.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -795,12 +762,14 @@ test("agentGraph routes recoverable tool failure back to the planner chain for r
 });
 
 test("agentGraph stops retrying after two recoverable tool failures and does not re-enter planner or tool again", async () => {
+
   const readOpen = makeToolDefinition({
     id: "read_open",
     domain: "read",
     inputSchema: {
       type: "object",
       required: ["path"],
+
       properties: {
         path: { type: "string" },
       },
@@ -815,11 +784,6 @@ test("agentGraph stops retrying after two recoverable tool failures and does not
       exposedDefinitions: [readOpen],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["read_open"],
-    decisionSource: "task-model",
-    decisionReason: "A read tool is available for inspection.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -929,11 +893,6 @@ test("agentGraph keeps terminal tool failure on the global error path", async ()
       exposedDefinitions: [readOpen],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["read_open"],
-    decisionSource: "task-model",
-    decisionReason: "A read tool is available for inspection.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -992,17 +951,13 @@ test("agentGraph blocks a repeated completed tool call in the same run and does 
   });
   vi.spyOn(registry, "listCapabilityDefinitions").mockReturnValue([customReadTool]);
   vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
+
     makeToolIntentResult({
       query: "inspect NOTE.md",
       topCandidates: [{ toolId: "read_note", domain: "read" }],
       exposedDefinitions: [customReadTool],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["read_note"],
-    decisionSource: "task-model",
-    decisionReason: "A custom read tool is available.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -1074,11 +1029,6 @@ test("agentGraph blocks a repeated retrieval query in the same run and does not 
       query: "search missing knowledge",
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: [],
-    decisionSource: "task-model",
-    decisionReason: "No tool is required for this turn.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -1164,11 +1114,6 @@ test('agentGraph treats read_list "/workspace" and "." as the same repeated call
       exposedDefinitions: [readList],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["read_list"],
-    decisionSource: "task-model",
-    decisionReason: "Directory listing is available.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -1195,6 +1140,7 @@ test('agentGraph treats read_list "/workspace" and "." as the same repeated call
     .spyOn(runnablesModule.agentGenerateTextRunnable, "invoke")
     .mockResolvedValue("best effort answer from the first workspace listing");
   const executionNodes: Array<{
+
     nodeId: string;
     phase: string;
     details?: Record<string, unknown>;
@@ -1266,11 +1212,6 @@ test("agentGraph preserves /README.md for downstream workspace checks and execut
       exposedDefinitions: [readOpen],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["read_open"],
-    decisionSource: "task-model",
-    decisionReason: "A read tool is available for inspection.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -1347,11 +1288,6 @@ test("agentGraph answers after a single read_list execution when the user asked 
       exposedDefinitions: [readList],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["read_list"],
-    decisionSource: "task-model",
-    decisionReason: "Directory listing is available.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -1452,11 +1388,6 @@ test("agentGraph normalizes /workspace before policy and executes read_list", as
       exposedDefinitions: [readList],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["read_list"],
-    decisionSource: "task-model",
-    decisionReason: "Directory listing is available.",
-  });
   const plannerSpy = vi.spyOn(providerProxyService, "streamTaskChatText");
   const executeHarnessInvocationSpy = vi
     .spyOn(harnessInvocations, "executeHarnessInvocation")
@@ -1491,6 +1422,7 @@ test("agentGraph normalizes /workspace before policy and executes read_list", as
     goal: {
       ...baseGoal,
       text: "看看当前 workspace 有哪些文件",
+
     },
     plan: basePlan,
     messages: [makeMessage("看看当前 workspace 有哪些文件")],
@@ -1554,11 +1486,6 @@ test("agentGraph answers after a single web_search execution when search evidenc
       exposedDefinitions: [webSearch],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["web_search"],
-    decisionSource: "task-model",
-    decisionReason: "Web search is available.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -1595,6 +1522,7 @@ test("agentGraph answers after a single web_search execution when search evidenc
   }> = [];
 
   const result = await agentGraph.run({
+
     runId: "run-web-search-answer",
     threadId: "thread-1",
     userId: 1,
@@ -1606,6 +1534,7 @@ test("agentGraph answers after a single web_search execution when search evidenc
     messages: [makeMessage("search latest release notes")],
     onExecutionNode: async (event) => {
       executionNodes.push({
+
         nodeId: event.nodeId,
         phase: event.phase,
         details:
@@ -1662,11 +1591,6 @@ test("agentGraph answers after a single terminal_session execution when command 
       exposedDefinitions: [terminalSession],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["terminal_session"],
-    decisionSource: "task-model",
-    decisionReason: "Terminal execution is available.",
-  });
   const plannerSpy = vi.spyOn(providerProxyService, "streamTaskChatText");
   const executeHarnessInvocationSpy = vi
     .spyOn(harnessInvocations, "executeHarnessInvocation")
@@ -1783,11 +1707,6 @@ test("agentGraph replans once after normalize schema failure and then executes t
       exposedDefinitions: [readOpen],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["read_open"],
-    decisionSource: "task-model",
-    decisionReason: "A read tool is available for inspection.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -1887,11 +1806,6 @@ test("agentGraph returns a safe answer when bounded schema replan is exhausted",
       exposedDefinitions: [readOpen],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["read_open"],
-    decisionSource: "task-model",
-    decisionReason: "A read tool is available for inspection.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementation(async function* () {
@@ -1947,11 +1861,6 @@ test("agentGraph stops when planner selects a tool that is not exposed for this 
       exposedDefinitions: [readOpen],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["read_open"],
-    decisionSource: "task-model",
-    decisionReason: "A read tool is available for inspection.",
-  });
   vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
     async function* () {
       yield '{"type":"use_tool","toolId":"terminal_session","args":{"command":"dir"},"reason":"Need a tool."}';
@@ -1991,10 +1900,12 @@ test("agentGraph stops when planner selects a tool that is not exposed for this 
   );
 });
 
+
 test("agentGraph does not let selectedToolIds bypass planner and normalize", async () => {
   const webSearch = makeToolDefinition({
     id: "web_search",
     domain: "web_search",
+
     inputSchema: {
       type: "object",
       required: ["query"],
@@ -2013,11 +1924,6 @@ test("agentGraph does not let selectedToolIds bypass planner and normalize", asy
       exposedDefinitions: [webSearch],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["web_search"],
-    decisionSource: "task-model",
-    decisionReason: "A tool candidate exists.",
-  });
   const plannerSpy = vi.spyOn(providerProxyService, "streamTaskChatText");
   const executeHarnessInvocationSpy = vi
     .spyOn(harnessInvocations, "executeHarnessInvocation")
@@ -2125,12 +2031,6 @@ test("agentGraph stops on normalize rejection for capability-like ids and never 
       }),
     );
   const selectToolSpy = vi
-    .spyOn(taskSelectorModule, "selectToolWithTaskModel")
-    .mockResolvedValue({
-      selectedToolIds: ["read_open"],
-      decisionSource: "task-model",
-      decisionReason: "A read tool is available.",
-    });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementation(async function* () {
@@ -2190,7 +2090,6 @@ test("agentGraph stops on normalize rejection for capability-like ids and never 
   } finally {
     listCapabilityDefinitionsSpy.mockRestore();
     matchToolCandidatesSpy.mockRestore();
-    selectToolSpy.mockRestore();
     plannerSpy.mockRestore();
     executeHarnessInvocationSpy.mockRestore();
   }
@@ -2203,11 +2102,6 @@ test("agentGraph stops re-planning after maxIterations and does not issue a seco
       query: "summarize the knowledge base",
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: [],
-    decisionSource: "task-model",
-    decisionReason: "No tool is needed for this turn.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -2288,7 +2182,7 @@ test("routeAfterTool returns the declared tool graph branches", () => {
         },
       }),
     ),
-    "toolSelectStep",
+    "nextActionPlanner",
   );
   assert.equal(
     routeAfterTool(
@@ -2306,7 +2200,7 @@ test("routeAfterTool returns the declared tool graph branches", () => {
         },
       }),
     ),
-    "toolSelectStep",
+    "nextActionPlanner",
   );
   assert.equal(
     routeAfterTool(
@@ -2379,7 +2273,7 @@ test("routeAfterNextAction returns approval when pendingApproval is still presen
 });
 
 test("routeAfterRetrieve returns the declared retrieve graph branches", () => {
-  assert.equal(routeAfterRetrieve(makeRouteState()), "toolSelectStep");
+  assert.equal(routeAfterRetrieve(makeRouteState()), "nextActionPlanner");
   assert.equal(
     routeAfterRetrieve(
       makeRouteState({
@@ -2395,6 +2289,7 @@ test("routeAfterRetrieve returns the declared retrieve graph branches", () => {
       }),
     ),
     "error",
+
   );
 });
 
@@ -2405,13 +2300,9 @@ test("agentGraph counts skipped retrieve iterations without a knowledge base and
       query: "请检索 workspace 中关于 UIChat Mira 的说明",
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: [],
-    decisionSource: "task-model",
-    decisionReason: "No tool is needed for this turn.",
-  });
 
   const plannerSpy = vi
+
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
       yield '{"type":"retrieve","query":"UIChat Mira 说明","reason":"Need workspace evidence first."}';
@@ -2477,17 +2368,13 @@ test("agentGraph reroutes workspace retrieve intent without a knowledge base int
       exposedDefinitions: [readLocate],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["read_locate"],
-    decisionSource: "task-model",
-    decisionReason: "Workspace search should use a local read tool.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
       yield '{"type":"retrieve","query":"请检索 workspace 中关于 UIChat Mira 的说明，然后基于检索结果回答。","reason":"Need workspace evidence first."}';
     });
   const executeHarnessInvocationSpy = vi
+
     .spyOn(harnessInvocations, "executeHarnessInvocation")
     .mockResolvedValue({
       id: "invocation-read-locate-1",
@@ -2560,11 +2447,6 @@ test("agentGraph answers after a single read_locate execution when the user only
       exposedDefinitions: [readLocate],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["read_locate"],
-    decisionSource: "task-model",
-    decisionReason: "A locate tool is enough for a path-only question.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -2679,11 +2561,6 @@ test("agentGraph opens README.md after read_locate when the question still asks 
       exposedDefinitions: [readOpen, readLocate],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["read_locate"],
-    decisionSource: "task-model",
-    decisionReason: "Locate the file first, then open it if content is still required.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -2795,6 +2672,7 @@ test("agentGraph opens README.md after read_locate when the question still asks 
 });
 
 test("agentGraph opens README.md after read_list when the workspace question still asks for file content", async () => {
+
   const readOpen = makeToolDefinition({
     id: "read_open",
     domain: "read",
@@ -2839,11 +2717,6 @@ test("agentGraph opens README.md after read_list when the workspace question sti
       exposedDefinitions: [readOpen, readList, readLocate],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["read_list"],
-    decisionSource: "task-model",
-    decisionReason: "Workspace inspection should start from a directory listing.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -2967,11 +2840,6 @@ test("agentGraph only answers after README.md and AGENTS.md are both opened for 
       exposedDefinitions: [readOpen],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["read_open"],
-    decisionSource: "task-model",
-    decisionReason: "This task needs both file contents before answering.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -2987,6 +2855,7 @@ test("agentGraph only answers after README.md and AGENTS.md are both opened for 
         type: "open",
         path: "README.md",
         source: {
+
           kind: "text",
           mimeType: "text/markdown",
           text: "# README\n\nProject overview",
@@ -3107,12 +2976,6 @@ test("agentGraph stops the current loop when policy requires approval and never 
       }),
     );
   const selectToolSpy = vi
-    .spyOn(taskSelectorModule, "selectToolWithTaskModel")
-    .mockResolvedValue({
-      selectedToolIds: ["terminal_session"],
-      decisionSource: "task-model",
-      decisionReason: "Terminal is available.",
-    });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -3163,7 +3026,6 @@ test("agentGraph stops the current loop when policy requires approval and never 
   } finally {
     listCapabilityDefinitionsSpy.mockRestore();
     matchToolCandidatesSpy.mockRestore();
-    selectToolSpy.mockRestore();
     plannerSpy.mockRestore();
     executeHarnessInvocationSpy.mockRestore();
     generateInvokeSpy.mockRestore();
@@ -3195,6 +3057,7 @@ test("agentGraph preserves the frozen pendingToolCall resume entry and goes stra
   const executeHarnessInvocationSpy = vi
     .spyOn(harnessInvocations, "executeHarnessInvocation")
     .mockResolvedValue({
+
       id: "invocation-approved-1",
       toolId: "web_search",
       status: "completed",
@@ -3215,6 +3078,7 @@ test("agentGraph preserves the frozen pendingToolCall resume entry and goes stra
     userId: 1,
     goal: {
       ...baseGoal,
+
       text: "approved query",
     },
     plan: basePlan,
@@ -3326,11 +3190,6 @@ test("agentGraph resume path does not repeat a normalized workspace_mutation aft
       exposedDefinitions: [workspaceMutation],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["workspace_mutation"],
-    decisionSource: "task-model",
-    decisionReason: "Workspace mutation is the selected tool for this request.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementation(async function* () {
@@ -3480,12 +3339,8 @@ test("agentGraph does not answer after locating all mutation targets and instead
       exposedDefinitions: [readLocate, workspaceMutation],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["read_locate", "workspace_mutation"],
-    decisionSource: "task-model",
-    decisionReason: "Locate first, then mutate after confirmation and approval.",
-  });
   const plannerSpy = vi
+
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
       yield '{"type":"use_tool","toolId":"read_locate","args":{"query":"README.md AGENTS.md"},"reason":"Need to locate both targets first."}';
@@ -3595,6 +3450,7 @@ test("agentGraph does not answer immediately after mutation execution when verif
           enum: ["delete", "move", "write"],
         },
         targetPath: { type: "string" },
+
         content: { type: "string" },
         overwrite: { type: "boolean" },
       },
@@ -3628,11 +3484,6 @@ test("agentGraph does not answer immediately after mutation execution when verif
       exposedDefinitions: [workspaceMutation, readOpen],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["workspace_mutation", "read_open"],
-    decisionSource: "task-model",
-    decisionReason: "Mutate first, then verify the file content.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -3779,11 +3630,6 @@ test("agentGraph treats terminal mutation failure as a terminal outcome without 
       exposedDefinitions: [workspaceMutation],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["workspace_mutation"],
-    decisionSource: "task-model",
-    decisionReason: "Workspace mutation is available.",
-  });
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -3872,11 +3718,6 @@ test("agentGraph reports a Harness approval request as an owner-contract failure
       exposedDefinitions: [webSearch],
     }),
   );
-  vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: ["web_search"],
-    decisionSource: "task-model",
-    decisionReason: "Web search is required.",
-  });
   vi.spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
       yield '{"type":"use_tool","toolId":"web_search","args":{"query":"search docs"},"reason":"Need web results."}';

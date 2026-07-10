@@ -13,7 +13,7 @@ import { contextBudgetService } from "@/services/context-budget/index";
 import { providerProxyService } from "@/services/provider-proxy.service/index";
 import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 import * as intentMatcherModule from "../intent/embedding-capability-matcher";
-import * as taskSelectorModule from "../intent/task-capability-selector";
+
 import * as policyModule from "../policy";
 import * as runnablesModule from "../runnables";
 import { agentGraph } from "../graph";
@@ -137,12 +137,7 @@ const makeToolIntentResult = (
     exposedDefinitions: definitions,
     reason: [],
     blockedCapabilityIds: [],
-  },
-  selectedToolIds: definitions.slice(0, 1).map((definition) => definition.id),
-  candidateToolIds: definitions.map((definition) => definition.id),
-  decisionSource: "task-model" as const,
-  decisionReason: "test",
-});
+  },});
 
 const setupToolExposure = (
   query: string,
@@ -152,14 +147,6 @@ const setupToolExposure = (
   vi.spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding").mockResolvedValue(
     makeToolIntentResult(query, definitions),
   );
-  const selectToolSpy = vi.spyOn(taskSelectorModule, "selectToolWithTaskModel").mockResolvedValue({
-    selectedToolIds: definitions.slice(0, 1).map((definition) => definition.id),
-    decisionSource: "task-model",
-    decisionReason: "test",
-  });
-  return {
-    selectToolSpy,
-  };
 };
 
 const setupGenerate = (answer = "final answer") =>
@@ -391,7 +378,6 @@ test("toolCall loop ignores selectedToolIds unless planner emits use_tool", asyn
     latestSummary: "present",
     terminalField: "answer",
   });
-  assert.deepEqual(toolSelectEvents[0]?.selectedToolIds, ["read_open"]);
   assert.equal(plannerSpy.mock.calls.length, 1);
   assert.equal(executeSpy.mock.calls.length, 0);
   assert.equal(generateSpy.mock.calls.length, 1);
@@ -495,6 +481,7 @@ test("toolCall loop policy approval stops at waiting_approval without ToolNode e
   assert.equal(result.pendingApproval?.toolCallId, "id" in result.pendingToolCall! ? result.pendingToolCall.id : undefined);
   assert.equal(executeSpy.mock.calls.length, 0);
   assert.equal(generateSpy.mock.calls.length, 0);
+
 });
 
 test("toolCall loop reports Harness awaiting approval as an owner-contract failure", async () => {
