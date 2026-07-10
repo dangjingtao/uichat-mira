@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/project-control-ledger.md
-task_state: TODO
+task_state: DONE
 ---
 
 # Agent V1.5 T04：移除静态 Plan 层与 AgentPlan 运行时影响
@@ -98,3 +98,11 @@ task_state: TODO
 5. 实际执行的测试命令、原始结果与 typecheck 结果；
 6. 明确说明是否影响既有 Agent 主线黑盒；
 7. 所有测试源码与报告均须为 git tracked files，不接受只贴口头摘要。
+
+## Review Evidence
+
+- 2026-07-11 复审通过：Graph 不再注册或路由 `planStep`，首轮请求直接进入 `nextActionPlanner`。
+- `AgentPlan`、`AgentPlanStep`、`createAgentPlan`、`currentStepId` 已从 Agent 类型、创建、run store、恢复和数据库持久化链路移除；旧数据库通过迁移重建 `agent_runs`，删除 `plan_json` 与 `current_step_id`。
+- Planner prompt 不再读取或注入静态 plan；legacy plan 注入测试确认不影响 `nextAction`。
+- T04 定向测试通过：Planner、persistence、resume、run-store、routes、pretool-selector-removal 共 6 个测试文件全部通过。
+- `git diff --check` 通过；server typecheck 仍受既有 `server/src/microapps/codegraph/index.ts:543` 阻断。

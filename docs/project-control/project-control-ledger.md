@@ -161,7 +161,7 @@ related:
 | [agent_v15_T01](tasks/agent_v15_T01-state-ssot.md) | `DONE` | `DONE` | State 单一事实源与字段所有权；R01 复审通过，专项测试 46/46 |
 | [agent_v15_T02](tasks/agent_v15_T02-tool-exposure.md) | `DONE` | `DONE` | Tool Exposure 收敛；整改复审通过，T02 相关测试 67/67 |
 | [agent_v15_T03](tasks/agent_v15_T03-remove-pretool-selector.md) | `DONE` | `DONE` | 移除 Planner 前置工具选择链路；按 Mira PR #4 口径复审通过，专项测试 7/7 |
-| [agent_v15_T04](tasks/agent_v15_T04-remove-static-plan.md) | `TODO` | `TODO` | 移除静态 Plan 层；依赖 T01，可与 T02 并行但需独立 PR |
+| [agent_v15_T04](tasks/agent_v15_T04-remove-static-plan.md) | `DONE` | `DONE` | 移除静态 Plan 层与 AgentPlan 持久化状态；复审通过，T04 定向测试通过 |
 | [agent_v15_T05](tasks/agent_v15_T05-remove-shadow-deciders.md) | `TODO` | `TODO` | 移除 Shadow Deciders、桥接器与 Action Rewrite；依赖 T03、T04 |
 | [agent_v15_T06](tasks/agent_v15_T06-evidence-boundary.md) | `TODO` | `TODO` | Evidence 单一职责与显式回流节点；依赖 T01、T05 |
 | [agent_v15_T07](tasks/agent_v15_T07-read-surface.md) | `TODO` | `TODO` | Read 公共工具面收敛；依赖 T02、T03 |

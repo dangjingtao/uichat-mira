@@ -1,11 +1,10 @@
 /**
  * nodes 模块入口：聚合所有 Agent 图节点的导出。
  */
-export { createAgentGoal, createAgentPlan } from "./goal-plan";
+export { createAgentGoal } from "./goal-plan";
 export { getLatestUserQuestion } from "./shared";
 
 export { prepareContextNode } from "./prepare-context";
-export { planNode } from "./plan";
 export { approvalNode } from "./approval";
 export { errorNode } from "./error";
 export { retrieveNode } from "./retrieve";

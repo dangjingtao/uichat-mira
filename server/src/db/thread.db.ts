@@ -63,11 +63,9 @@ const createAgentRunTables = () => {
       thread_id TEXT NOT NULL,
       user_id INTEGER NOT NULL,
       goal_json TEXT NOT NULL,
-      plan_json TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'waiting_approval', 'waiting_user', 'completed', 'failed', 'blocked', 'cancelled')),
       observations_json TEXT NOT NULL DEFAULT '[]',
       trace_id TEXT NOT NULL,
-      current_step_id TEXT,
       blocked_reason TEXT,
       terminal_reason TEXT,
       pending_approval_json TEXT,
@@ -90,6 +88,73 @@ const createAgentRunTables = () => {
     CREATE INDEX IF NOT EXISTS idx_agent_runs_trace_id ON agent_runs(trace_id);
     CREATE INDEX IF NOT EXISTS idx_agent_runs_updated_at ON agent_runs(updated_at);
   `);
+};
+
+const rebuildAgentRunsWithoutStaticPlan = () => {
+  const sqlite = getSqlite();
+  if (
+    !hasSqliteTable(sqlite, "agent_runs") ||
+    (!hasSqliteColumn(sqlite, "agent_runs", "plan_json") &&
+      !hasSqliteColumn(sqlite, "agent_runs", "current_step_id"))
+  ) {
+    return;
+  }
+
+  // Existing databases may still have the old NOT NULL plan column. Rebuild
+  // the table once so runtime persistence no longer carries static plan state.
+  sqlite.exec("PRAGMA foreign_keys = OFF");
+  sqlite.exec("BEGIN");
+  try {
+    sqlite.exec("ALTER TABLE agent_runs RENAME TO agent_runs_static_plan_legacy");
+    createAgentRunTables();
+
+    const legacyColumns = new Set(
+      (sqlite
+        .prepare("PRAGMA table_info(agent_runs_static_plan_legacy)")
+        .all() as Array<{ name: string }>).map((column) => column.name),
+    );
+    const column = (name: string, fallback: string) =>
+      legacyColumns.has(name) ? name : fallback;
+
+    sqlite.exec(`
+      INSERT INTO agent_runs (
+        id, thread_id, user_id, goal_json, status, observations_json,
+        trace_id, blocked_reason, terminal_reason, pending_approval_json,
+        approved_invocations_json, context_budget_json, selected_tool_id,
+        pending_tool_call_json, last_tool_execution_json, assistant_message_id,
+        assistant_parent_id, runtime_input_json, created_at, updated_at
+      )
+      SELECT
+        id,
+        thread_id,
+        user_id,
+        goal_json,
+        status,
+        ${column("observations_json", "'[]'")},
+        trace_id,
+        ${column("blocked_reason", "NULL")},
+        ${column("terminal_reason", "NULL")},
+        ${column("pending_approval_json", "NULL")},
+        ${column("approved_invocations_json", "'[]'")},
+        ${column("context_budget_json", "NULL")},
+        ${column("selected_tool_id", "NULL")},
+        ${column("pending_tool_call_json", "NULL")},
+        ${column("last_tool_execution_json", "NULL")},
+        ${column("assistant_message_id", "NULL")},
+        ${column("assistant_parent_id", "NULL")},
+        ${column("runtime_input_json", "NULL")},
+        created_at,
+        updated_at
+      FROM agent_runs_static_plan_legacy;
+    `);
+    sqlite.exec("DROP TABLE agent_runs_static_plan_legacy");
+    sqlite.exec("COMMIT");
+  } catch (error) {
+    sqlite.exec("ROLLBACK");
+    throw error;
+  } finally {
+    sqlite.exec("PRAGMA foreign_keys = ON");
+  }
 };
 
 const hasMessagesForeignKeyToLegacyThreads = () => {
@@ -451,6 +516,7 @@ export const initializeThreadDatabase = () => {
     ensureThreadAgentEnabledColumn();
     ensureThreadContextSummaryColumns();
     ensureMessagePartsJsonColumn();
+    rebuildAgentRunsWithoutStaticPlan();
     createAgentRunTables();
     ensureAgentRunExecutionStateColumns();
     ensureAgentRunMessageLinkColumns();

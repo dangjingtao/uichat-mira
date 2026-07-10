@@ -1,7 +1,6 @@
 import type {
   AgentGoal,
   AgentObservation,
-  AgentPlan,
   AgentRun,
   AgentRunStore,
 } from "./types";
@@ -82,7 +81,6 @@ export class InMemoryAgentRunStore implements AgentRunStore {
     threadId: string;
     userId: number;
     goal: AgentGoal;
-    plan: AgentPlan;
     assistantMessageId?: string;
     assistantParentId?: string | null;
     runtimeInput?: AgentRun["runtimeInput"];
@@ -93,7 +91,6 @@ export class InMemoryAgentRunStore implements AgentRunStore {
       threadId: input.threadId,
       userId: input.userId,
       goal: input.goal,
-      plan: input.plan,
       status: "queued",
       observations: [],
       traceId: crypto.randomUUID(),

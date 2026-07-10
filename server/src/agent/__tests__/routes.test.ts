@@ -5,7 +5,7 @@ import { getLoggerConfig } from "@/logger";
 import { sendRouteError } from "@/utils/route-errors";
 import agentRoute from "../routes";
 import { agentRunStore } from "../run-store";
-import { createAgentGoal, createAgentPlan } from "../nodes/index";
+import { createAgentGoal } from "../nodes/index";
 import * as resumeModule from "../resume";
 import * as messagePersistenceModule from "@/routes/proxy-provider/message-persistence";
 import { threadService } from "@/services/thread.service";
@@ -30,7 +30,6 @@ const createRun = () => {
     threadId: "thread-1",
     userId: 1,
     goal,
-    plan: createAgentPlan(goal),
   });
 };
 
@@ -106,10 +105,6 @@ describe("agent routes", () => {
     expect(
       (rejectResponse.json() as { data: { status: string } }).data.status,
     ).toBe("blocked");
-    expect(
-      (rejectResponse.json() as { data: { currentStepId?: string } }).data.currentStepId,
-    ).toBeUndefined();
-
     const cancelResponse = await app.inject({
       method: "POST",
       url: `/agent/runs/${run.id}/cancel`,
@@ -118,10 +113,6 @@ describe("agent routes", () => {
     expect(
       (cancelResponse.json() as { data: { status: string } }).data.status,
     ).toBe("cancelled");
-    expect(
-      (cancelResponse.json() as { data: { currentStepId?: string } }).data.currentStepId,
-    ).toBeUndefined();
-
     await app.close();
     resumeSpy.mockRestore();
   });
@@ -157,7 +148,6 @@ describe("agent routes", () => {
     agentRunStore.update(run.id, {
       status: "completed",
       pendingApproval: undefined,
-      currentStepId: undefined,
     });
 
     const response = await app.inject({
@@ -187,7 +177,6 @@ describe("agent routes", () => {
     const rejectedRun = createRun();
     agentRunStore.update(rejectedRun.id, {
       status: "waiting_approval",
-      currentStepId: "approval-step",
       assistantMessageId: "assistant-reject-1",
       assistantParentId: "user-1",
       pendingApproval: {
@@ -224,14 +213,12 @@ describe("agent routes", () => {
         status: string;
         pendingApproval?: unknown;
         pendingToolCall?: unknown;
-        currentStepId?: string;
         terminalReason?: string;
       };
     };
     expect(rejectData.data.status).toBe("blocked");
     expect(rejectData.data.pendingApproval).toBeUndefined();
     expect(rejectData.data.pendingToolCall).toBeUndefined();
-    expect(rejectData.data.currentStepId).toBeUndefined();
     expect(rejectData.data.terminalReason).toBe("approval_rejected");
     expect(persistAssistantMessageSpy).toHaveBeenCalledWith({
       threadId: "thread-1",
@@ -259,7 +246,6 @@ describe("agent routes", () => {
     const cancelledRun = createRun();
     agentRunStore.update(cancelledRun.id, {
       status: "waiting_approval",
-      currentStepId: "approval-step",
       pendingApproval: {
         id: "approval-cancel",
         runId: cancelledRun.id,
@@ -280,14 +266,12 @@ describe("agent routes", () => {
         status: string;
         pendingApproval?: unknown;
         pendingToolCall?: unknown;
-        currentStepId?: string;
         terminalReason?: string;
       };
     };
     expect(cancelData.data.status).toBe("cancelled");
     expect(cancelData.data.pendingApproval).toBeUndefined();
     expect(cancelData.data.pendingToolCall).toBeUndefined();
-    expect(cancelData.data.currentStepId).toBeUndefined();
     expect(cancelData.data.terminalReason).toBe("cancelled");
     expect(persistAssistantMessageSpy).toHaveBeenCalledTimes(1);
 
@@ -309,7 +293,6 @@ describe("agent routes", () => {
       threadId: "thread-1",
       userId: 1,
       goal,
-      plan: createAgentPlan(goal),
       runtimeInput: {
         messages: [
           {
@@ -339,7 +322,6 @@ describe("agent routes", () => {
         agentRunStore.complete(runId, {
           status: "completed",
           pendingApproval: undefined,
-          currentStepId: undefined,
         });
         return {
           run: agentRunStore.get(runId),

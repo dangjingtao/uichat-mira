@@ -29,7 +29,6 @@ import type {
   AgentGoal,
   AgentNextAction,
   AgentObservation,
-  AgentPlan,
   AgentPolicyDecision,
   AgentRetrievalEvidence,
   AgentSchemaReplanDiagnostics,
@@ -64,7 +63,6 @@ export interface AgentNodeState {
   threadId: string;
   userId: number;
   goal: AgentGoal;
-  plan: AgentPlan;
   question?: string;
   currentTaskFrame?: CurrentTaskFrame;
   messages: NormalizedChatMessage[];

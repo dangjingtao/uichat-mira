@@ -13,7 +13,6 @@ import type {
   AgentGoal,
   AgentNextAction,
   AgentObservation,
-  AgentPlan,
   AgentSchemaReplanDiagnostics,
   AgentToolExposureState,
 } from "../types";
@@ -28,7 +27,6 @@ export const AgentGraphStateAnnotation = Annotation.Root({
   threadId: Annotation<string>,
   userId: Annotation<number>,
   goal: Annotation<AgentGoal>,
-  plan: Annotation<AgentPlan>,
   currentTaskFrame: Annotation<AgentGraphOutput["currentTaskFrame"] | undefined>,
   messages: Annotation<NormalizedChatMessage[]>,
   requestContextMessages: Annotation<NormalizedChatMessage[] | undefined>,
@@ -106,7 +104,6 @@ export const createInitialAgentGraphState = (
   threadId: input.threadId,
   userId: input.userId,
   goal: input.goal,
-  plan: input.plan,
   currentTaskFrame:
     input.currentTaskFrame ??
     createInitialCurrentTaskFrame({

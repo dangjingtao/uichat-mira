@@ -7,7 +7,6 @@ import type {
   AgentApprovalRequest,
   AgentGoal,
   AgentObservation,
-  AgentPlan,
   AgentRun,
   AgentRunStatus,
   AgentRunStore,
@@ -45,16 +44,9 @@ const rowToRun = (row: AgentRunRow): AgentRun => ({
     constraints: [],
     riskLevel: "low",
   }),
-  plan: parseJson<AgentPlan>(row.planJson, {
-    id: "",
-    goalId: "",
-    version: 1,
-    steps: [],
-  }),
   status: row.status as AgentRunStatus,
   observations: parseJson<AgentObservation[]>(row.observationsJson, []),
   traceId: row.traceId,
-  currentStepId: row.currentStepId ?? undefined,
   blockedReason: row.blockedReason ?? undefined,
   terminalReason: row.terminalReason ?? undefined,
   pendingApproval: parseJson<AgentApprovalRequest | undefined>(
@@ -90,9 +82,6 @@ const toPatch = (
   if (hasPatchField(patch, "goal") && patch.goal !== undefined) {
     next.goalJson = serializeJson(patch.goal);
   }
-  if (hasPatchField(patch, "plan") && patch.plan !== undefined) {
-    next.planJson = serializeJson(patch.plan);
-  }
   if (hasPatchField(patch, "status") && patch.status !== undefined) {
     next.status = patch.status;
   }
@@ -101,9 +90,6 @@ const toPatch = (
   }
   if (hasPatchField(patch, "traceId") && patch.traceId !== undefined) {
     next.traceId = patch.traceId;
-  }
-  if (hasPatchField(patch, "currentStepId")) {
-    next.currentStepId = patch.currentStepId ?? null;
   }
   if (hasPatchField(patch, "blockedReason")) {
     next.blockedReason = patch.blockedReason ?? null;
@@ -158,11 +144,9 @@ const createPersistedRun = (run: AgentRun) => {
       threadId: run.threadId,
       userId: run.userId,
       goalJson: serializeJson(run.goal),
-      planJson: serializeJson(run.plan),
       status: run.status,
       observationsJson: serializeJson(run.observations),
       traceId: run.traceId,
-      currentStepId: null,
       blockedReason: null,
       terminalReason: null,
       pendingApprovalJson: null,
@@ -192,7 +176,6 @@ export const agentRunRepository: AgentRunStore & {
       threadId: input.threadId,
       userId: input.userId,
       goal: input.goal,
-      plan: input.plan,
       status: "queued",
       observations: [],
       traceId: crypto.randomUUID(),

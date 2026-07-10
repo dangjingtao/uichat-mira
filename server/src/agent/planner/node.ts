@@ -221,7 +221,6 @@ export const nextActionPlannerNode = async (
     } else {
       const messages: NormalizedChatMessage[] = buildNextActionPlannerMessages({
         question,
-        plan: state.plan,
         observationContext,
         toolExposure,
         iteration,
@@ -294,7 +293,6 @@ export const nextActionPlannerNode = async (
           if (!taskCompletionDecision.taskCompleted) {
             const completionReplanMessages = buildAnswerCompletionReplanMessages({
               question,
-              plan: state.plan,
               observationContext,
               toolExposure,
               iteration,

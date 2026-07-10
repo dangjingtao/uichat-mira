@@ -5,7 +5,6 @@ import {
   errorNode,
   generateNode,
   nextActionPlannerNode,
-  planNode,
   policyNode,
   prepareContextNode,
   retrieveNode,
@@ -18,7 +17,6 @@ import {
   routeAfterEvaluate,
   routeAfterGenerate,
   routeAfterNextAction,
-  routeAfterPlanStep,
   routeAfterPolicy,
   routeAfterPrepareContext,
   routeAfterRetrieve,
@@ -31,7 +29,6 @@ export const compiledAgentStateGraph = new StateGraph(AgentGraphStateAnnotation)
     "prepareContext",
     createAgentNode("prepareContext", prepareContextNode),
   )
-  .addNode("planStep", createAgentNode("planStep", planNode))
   .addNode(
     "nextActionPlanner",
     createAgentNode("nextActionPlanner", nextActionPlannerNode),
@@ -49,12 +46,8 @@ export const compiledAgentStateGraph = new StateGraph(AgentGraphStateAnnotation)
   .addNode("error", createAgentNode("error", errorNode))
   .addEdge(START, "prepareContext")
   .addConditionalEdges("prepareContext", routeAfterPrepareContext, [
-    "planStep",
-    "error",
-  ])
-  .addConditionalEdges("planStep", routeAfterPlanStep, [
-    "policyStep",
     "nextActionPlanner",
+    "policyStep",
     "error",
   ])
   .addConditionalEdges("nextActionPlanner", routeAfterNextAction, [

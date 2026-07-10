@@ -28,12 +28,6 @@ const createState = (
     constraints: ["safe"],
     riskLevel: "low",
   },
-  plan: {
-    id: "plan-1",
-    goalId: "goal-1",
-    version: 1,
-    steps: [],
-  },
   question: "What should we do next?",
   messages: [
     {
@@ -431,7 +425,6 @@ test("buildNextActionPlannerMessages reads planner observation context instead o
 
   const messages = buildNextActionPlannerMessages({
     question: "Open README.md",
-    plan: createState().plan,
     observationContext,
     toolExposure: createState().toolExposure!,
     iteration: 0,
@@ -471,7 +464,6 @@ test("buildNextActionPlannerMessages uses tool failure recovery budget in the ma
 
   const messages = buildNextActionPlannerMessages({
     question: "Open missing.md",
-    plan: createState().plan,
     observationContext,
     toolExposure: createState().toolExposure!,
     iteration: 0,
@@ -4103,21 +4095,6 @@ test("nextActionPlannerNode writes decision trace and includes prompt context fo
   try {
     const patch = await nextActionPlannerNode(
       createState({
-        plan: {
-          id: "plan-1",
-          goalId: "goal-1",
-          version: 1,
-          steps: [
-            {
-              id: "retrieve",
-              kind: "retrieve",
-              title: "collect evidence",
-              status: "pending",
-              riskLevel: "low",
-              requiresApproval: false,
-            },
-          ],
-        },
         evidence: {
           observations: [
             {
@@ -4158,7 +4135,7 @@ test("nextActionPlannerNode writes decision trace and includes prompt context fo
     assert.equal(plannerMessages.length, 2);
     assert.match(String(plannerMessages[1]?.content ?? ""), /"toolExposure"/);
     assert.match(String(plannerMessages[1]?.content ?? ""), /"exposedTools"/);
-    assert.match(String(plannerMessages[1]?.content ?? ""), /"plan"/);
+    assert.doesNotMatch(String(plannerMessages[1]?.content ?? ""), /"plan"/);
 
     const doneEvent = events.find(
       (event) =>
@@ -4237,6 +4214,39 @@ test("nextActionPlannerNode only writes nextAction in its state patch", async ()
   try {
     const patch = await nextActionPlannerNode(createState());
     assert.deepEqual(Object.keys(patch), ["nextAction"]);
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode ignores an injected legacy plan field", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"ask_user","question":"Which file should I inspect?","reason":"The target is ambiguous."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode({
+      ...createState(),
+      plan: {
+        steps: [
+          {
+            id: "legacy-step",
+            kind: "retrieve",
+            status: "pending",
+          },
+        ],
+      },
+    } as AgentNodeState);
+
+    assert.deepEqual(patch, {
+      nextAction: {
+        type: "ask_user",
+        question: "Which file should I inspect?",
+        reason: "The target is ambiguous.",
+      },
+    });
   } finally {
     streamSpy.mockRestore();
   }

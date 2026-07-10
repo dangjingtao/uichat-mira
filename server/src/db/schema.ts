@@ -1134,7 +1134,6 @@ export const agentRuns = sqliteTable(
     threadId: text("thread_id").notNull(),
     userId: integer("user_id").notNull(),
     goalJson: text("goal_json").notNull(),
-    planJson: text("plan_json").notNull(),
     status: text("status", {
       enum: [
         "queued",
@@ -1151,7 +1150,6 @@ export const agentRuns = sqliteTable(
       .default("queued"),
     observationsJson: text("observations_json").notNull().default("[]"),
     traceId: text("trace_id").notNull(),
-    currentStepId: text("current_step_id"),
     blockedReason: text("blocked_reason"),
     terminalReason: text("terminal_reason"),
     pendingApprovalJson: text("pending_approval_json"),

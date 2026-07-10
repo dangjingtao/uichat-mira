@@ -1,5 +1,5 @@
 import type { AssistantExecutionNodeEvent } from "@/services/chat-stream-events";
-import type { AgentNextAction, AgentPlanStep } from "./types";
+import type { AgentNextAction } from "./types";
 
 export const toAgentExecutionNode = (input: {
   runId: string;
@@ -53,17 +53,6 @@ export const toAgentApprovalExecutionNode = (input: {
     nodeType: "approval",
     phase: "start",
   });
-
-export const toPlanNodeDetails = (steps: AgentPlanStep[]) => ({
-  steps: steps.map((step) => ({
-    id: step.id,
-    kind: step.kind,
-    title: step.title,
-    riskLevel: step.riskLevel,
-    requiresApproval: step.requiresApproval,
-    ...(step.toolId ? { toolId: step.toolId } : {}),
-  })),
-});
 
 const getTraceValuePreview = (value: unknown) => {
   if (typeof value !== "string") {

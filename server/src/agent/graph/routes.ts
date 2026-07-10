@@ -18,14 +18,6 @@ export const routeAfterPrepareContext = (state: AgentGraphStateType) => {
     return "error";
   }
 
-  return "planStep";
-};
-
-export const routeAfterPlanStep = (state: AgentGraphStateType) => {
-  if (state.errorMessage) {
-    return "error";
-  }
-
   if (hasFrozenPendingToolCall(state.pendingToolCall)) {
     return "policyStep";
   }
