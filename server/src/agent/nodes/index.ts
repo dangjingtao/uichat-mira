@@ -5,7 +5,6 @@ export { createAgentGoal, createAgentPlan } from "./goal-plan";
 export { getLatestUserQuestion } from "./shared";
 
 export { prepareContextNode } from "./prepare-context";
-export { planNode } from "./plan";
 export { approvalNode } from "./approval";
 export { errorNode } from "./error";
 export { retrieveNode } from "./retrieve";

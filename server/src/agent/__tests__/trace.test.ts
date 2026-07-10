@@ -8,7 +8,6 @@ import {
   toAgentApprovalExecutionNode,
   toAgentErrorExecutionNode,
   toAgentExecutionNode,
-  toPlanNodeDetails,
 } from "../trace";
 
 test("toAgentExecutionNode prefixes runId into node details", () => {
@@ -63,33 +62,6 @@ test("toAgentApprovalExecutionNode emits approval phase", () => {
   assert.equal(event.nodeType, "approval");
   assert.equal(event.phase, "start");
   assert.equal(event.summary, "waiting");
-});
-
-test("toPlanNodeDetails preserves tool and approval metadata", () => {
-  const details = toPlanNodeDetails([
-    {
-      id: "step-1",
-      kind: "tool",
-      title: "web search",
-      status: "pending",
-      riskLevel: "low",
-      requiresApproval: true,
-      toolId: "web-search",
-    },
-  ]);
-
-  assert.deepEqual(details, {
-    steps: [
-      {
-        id: "step-1",
-        kind: "tool",
-        title: "web search",
-        riskLevel: "low",
-        requiresApproval: true,
-        toolId: "web-search",
-      },
-    ],
-  });
 });
 
 test("summarizePlannerNextAction turns use_tool into a user-visible next step", () => {

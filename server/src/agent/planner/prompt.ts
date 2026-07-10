@@ -1,7 +1,6 @@
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol";
 import type { ToolIntentResult } from "../intent/index";
 import type {
-  AgentPlan,
   AgentToolExposureState,
   PlannerObservationContext,
 } from "../types";
@@ -159,7 +158,6 @@ const buildSchemaReplanMessages = (input: {
 
 export const buildAnswerCompletionReplanMessages = (input: {
   question: string;
-  plan: AgentPlan;
   observationContext: PlannerObservationContext;
   toolExposure: AgentToolExposureState;
   iteration: number;
@@ -189,7 +187,6 @@ export const buildAnswerCompletionReplanMessages = (input: {
     content: JSON.stringify(
       {
         question: input.question,
-        plan: input.plan,
         observationContext: input.observationContext,
         blockedAnswerReason: input.blockedAnswerReason,
         previousAnswerReason: input.previousAnswerReason,
@@ -209,7 +206,6 @@ export const buildAnswerCompletionReplanMessages = (input: {
 
 export const buildNextActionPlannerMessages = (input: {
   question: string;
-  plan: AgentPlan;
   observationContext: PlannerObservationContext;
   toolExposure: AgentToolExposureState;
   iteration: number;
@@ -264,7 +260,6 @@ export const buildNextActionPlannerMessages = (input: {
       content: JSON.stringify(
         {
           question: input.question,
-          plan: input.plan,
           observationContext: input.observationContext,
           progression: {
             remainingRecoveryAttempts: getRemainingRecoveryAttempts(

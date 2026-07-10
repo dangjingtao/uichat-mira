@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import { toolCallNormalizeNode } from "../nodes/tool-call-normalize";
-import { routeAfterPlanStep, routeAfterRetrieve } from "../graph/routes";
+import { routeAfterPrepareContext, routeAfterRetrieve } from "../graph/routes";
 
 const makeState = (toolId: string, exposedTools: string[]) =>
   ({
@@ -33,8 +33,8 @@ const makeState = (toolId: string, exposedTools: string[]) =>
     errorSourceNodeId: undefined,
   }) as never;
 
-test("planStep and post-retrieval route directly to Planner", () => {
-  assert.equal(routeAfterPlanStep({} as never), "nextActionPlanner");
+test("the first request and post-retrieval route directly to Planner", () => {
+  assert.equal(routeAfterPrepareContext({} as never), "nextActionPlanner");
   assert.equal(routeAfterRetrieve({ iterationCount: 0, maxIterations: 3 } as never), "nextActionPlanner");
 });
 

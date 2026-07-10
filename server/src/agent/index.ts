@@ -42,7 +42,6 @@ export const createAndRunAgent = async (
 
   agentRunStore.update(run.id, {
     status: "running",
-    currentStepId: plan.steps[0]?.id,
   });
 
   try {
