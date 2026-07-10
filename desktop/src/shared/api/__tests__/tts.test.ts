@@ -15,6 +15,7 @@ vi.mock("@/shared/platform/desktopRuntime", () => ({
 
 import { client, get, post, put } from "@/shared/lib/request";
 import {
+  getApiProviderCatalog,
   createGptSovitsSynthesis,
   createTtsSynthesis,
   getGptSovitsCatalog,
@@ -117,6 +118,27 @@ describe("tts api", () => {
     await getGptSovitsCatalog();
 
     expect(get).toHaveBeenCalledWith("/microapps/tts/gpt-sovits/catalog");
+  });
+
+  it("loads API provider catalog from the dedicated route", async () => {
+    vi.mocked(get).mockResolvedValueOnce({
+      catalog: {
+        configured: false,
+        supported: false,
+        providerConnectionId: null,
+        providerDisplayName: "",
+        providerCode: null,
+        providerTemplateCode: null,
+        baseUrl: "",
+        modelId: "",
+        modelName: "",
+        errorMessage: "voice model is not configured",
+      },
+    });
+
+    await getApiProviderCatalog();
+
+    expect(get).toHaveBeenCalledWith("/microapps/tts/api-provider/catalog");
   });
 
   it("creates GPT-SoVITS synthesis requests without timeout limit", async () => {

@@ -2,17 +2,29 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { afterAll, beforeEach, test, vi } from "vitest";
+import { initializeModelConfigDatabase } from "@/db/model-config.db.js";
 import { resetDatabaseClients } from "@/db/index.js";
+import { modelConfigRepository } from "@/db/repositories/model-config.repository.js";
+import { providerConnectionRepository } from "@/db/repositories/provider-settings.repository.js";
 import { ttsProviderConfigsRepository } from "@/db/repositories/tts-provider-configs.repository.js";
 import { ttsSynthesisJobsRepository } from "@/db/repositories/tts-synthesis-jobs.repository.js";
+import { llmService } from "@/services/llm.service.js";
 import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
+import { encryptSecret } from "@/utils/crypto.js";
 
 const synthesizeWithGptSovitsMock = vi.fn();
+const llmGenerateTextMock = vi.fn();
 
 vi.mock("./gpt-sovits-gradio.js", async () => ({
   getDefaultGptSovitsServiceUrl: () => "http://127.0.0.1:9872",
   loadGptSovitsCatalog: vi.fn(),
   synthesizeWithGptSovits: synthesizeWithGptSovitsMock,
+}));
+
+vi.mock("@/services/llm.service.js", async () => ({
+  llmService: {
+    generateText: llmGenerateTextMock,
+  },
 }));
 
 const testDbPath = createTimestampedTestArtifactPath(
@@ -29,6 +41,7 @@ const refAudioPath = createTimestampedTestArtifactPath(
   "rag-demo-tts-gpt-sovits-ref",
   ".wav",
 );
+const remoteSpeechResponse = Buffer.from("remote-speech-audio");
 
 process.env.DATABASE_URL = `file:${testDbPath}`;
 
@@ -42,6 +55,7 @@ beforeEach(() => {
   fs.mkdirSync(path.dirname(testDbPath), { recursive: true });
   fs.mkdirSync(path.dirname(artifactRoot), { recursive: true });
   fs.writeFileSync(refAudioPath, Buffer.from("RIFF"));
+  initializeModelConfigDatabase();
   ttsProviderConfigsRepository.initialize();
   ttsSynthesisJobsRepository.initialize();
   synthesizeWithGptSovitsMock.mockReset();
@@ -52,6 +66,17 @@ beforeEach(() => {
       sourcePath: null,
     },
   });
+  llmGenerateTextMock.mockReset();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: true,
+      headers: {
+        get: (name: string) => (name === "content-type" ? "audio/mpeg" : null),
+      },
+      arrayBuffer: async () => remoteSpeechResponse,
+    }),
+  );
 });
 
 afterAll(() => {
@@ -186,5 +211,648 @@ test("synthesizeGptSovits stores uploaded ref audio under backend static route",
   assert.match(
     String(job.requestConfig.refAudioPath),
     /^http:\/\/127\.0\.0\.1:8787\/microapps\/tts\/ref-audios\//u,
+  );
+});
+
+test("synthesizeGptSovits rewrites cantonese texts through task model before synthesis", async () => {
+  llmGenerateTextMock
+    .mockResolvedValueOnce("噉样讲先啱")
+    .mockResolvedValueOnce("你好，呢度系粤语版。");
+
+  ttsProviderConfigsRepository.upsert("gpt_sovits", {
+    enabled: true,
+    displayName: "GPT-SoVITS",
+    config: {
+      baseUrl: "http://127.0.0.1:9872",
+      promptText: "这样说才对",
+      promptLanguage: "粤语",
+      textLanguage: "粤语+英文",
+      gptModel: "不训练直接推v2底模！",
+      sovitsModel: "不训练直接推v2ProPlus底模！",
+      cutMethod: "凑四句一切",
+      sampleSteps: 8,
+      speed: 1.1,
+      pauseSecond: 0.3,
+      temperature: 0,
+      topK: 20,
+      topP: 0,
+    },
+  });
+
+  const service = createTtsService({ artifactRoot });
+  const job = await service.synthesizeGptSovits({
+    text: "你好，这里是粤语版。",
+    refAudioPath,
+    promptText: "",
+    promptLanguage: "",
+    textLanguage: "",
+    gptModel: "",
+    sovitsModel: "",
+    cutMethod: "",
+    sampleSteps: Number.NaN,
+    speed: Number.NaN,
+    pauseSecond: Number.NaN,
+    temperature: Number.NaN,
+    topK: Number.NaN,
+    topP: Number.NaN,
+  });
+
+  assert.equal(llmGenerateTextMock.mock.calls.length, 2);
+  assert.equal(llmGenerateTextMock.mock.calls[0][0].roleType, "task");
+  assert.equal(llmGenerateTextMock.mock.calls[1][0].roleType, "task");
+  const [input] = synthesizeWithGptSovitsMock.mock.calls[0] as Array<[{
+    providerConfig: Record<string, unknown>;
+    request: Record<string, unknown>;
+    outputPath: string;
+  }]>;
+  assert.equal(input.request.promptText, "噉样讲先啱");
+  assert.equal(input.request.text, "你好，呢度系粤语版。");
+  assert.equal(job.text, "你好，呢度系粤语版。");
+});
+
+test("synthesizeGptSovits does not rewrite non-cantonese texts", async () => {
+  ttsProviderConfigsRepository.upsert("gpt_sovits", {
+    enabled: true,
+    displayName: "GPT-SoVITS",
+    config: {
+      baseUrl: "http://127.0.0.1:9872",
+      promptText: "保存的参考文本",
+      promptLanguage: "中文",
+      textLanguage: "中文",
+      gptModel: "不训练直接推v2底模！",
+      sovitsModel: "不训练直接推v2ProPlus底模！",
+      cutMethod: "凑四句一切",
+      sampleSteps: 8,
+      speed: 1.1,
+      pauseSecond: 0.3,
+      temperature: 0,
+      topK: 20,
+      topP: 0,
+    },
+  });
+
+  const service = createTtsService({ artifactRoot });
+  await service.synthesizeGptSovits({
+    text: "你好，这里是普通话版。",
+    refAudioPath,
+    promptText: "",
+    promptLanguage: "",
+    textLanguage: "",
+    gptModel: "",
+    sovitsModel: "",
+    cutMethod: "",
+    sampleSteps: Number.NaN,
+    speed: Number.NaN,
+    pauseSecond: Number.NaN,
+    temperature: Number.NaN,
+    topK: Number.NaN,
+    topP: Number.NaN,
+  });
+
+  assert.equal(llmGenerateTextMock.mock.calls.length, 0);
+});
+
+test("synthesizeGptSovits falls back to source text when task model is not configured", async () => {
+  llmGenerateTextMock.mockRejectedValueOnce(new Error("No TASK model configured"));
+
+  ttsProviderConfigsRepository.upsert("gpt_sovits", {
+    enabled: true,
+    displayName: "GPT-SoVITS",
+    config: {
+      baseUrl: "http://127.0.0.1:9872",
+      promptText: "这样说才对",
+      promptLanguage: "粤语",
+      textLanguage: "中文",
+      gptModel: "不训练直接推v2底模！",
+      sovitsModel: "不训练直接推v2ProPlus底模！",
+      cutMethod: "凑四句一切",
+      sampleSteps: 8,
+      speed: 1.1,
+      pauseSecond: 0.3,
+      temperature: 0,
+      topK: 20,
+      topP: 0,
+    },
+  });
+
+  const service = createTtsService({ artifactRoot });
+  const job = await service.synthesizeGptSovits({
+    text: "你好，这里是普通话版。",
+    refAudioPath,
+    promptText: "",
+    promptLanguage: "",
+    textLanguage: "",
+    gptModel: "",
+    sovitsModel: "",
+    cutMethod: "",
+    sampleSteps: Number.NaN,
+    speed: Number.NaN,
+    pauseSecond: Number.NaN,
+    temperature: Number.NaN,
+    topK: Number.NaN,
+    topP: Number.NaN,
+  });
+
+  const [input] = synthesizeWithGptSovitsMock.mock.calls[0] as Array<[{
+    providerConfig: Record<string, unknown>;
+    request: Record<string, unknown>;
+    outputPath: string;
+  }]>;
+  assert.equal(llmGenerateTextMock.mock.calls.length, 1);
+  assert.equal(input.request.promptText, "这样说才对");
+  assert.equal(job.requestConfig.promptText, "这样说才对");
+});
+
+test("synthesizeGptSovits falls back to source text when task model request fails", async () => {
+  llmGenerateTextMock.mockRejectedValueOnce(new Error("task provider timeout"));
+
+  ttsProviderConfigsRepository.upsert("gpt_sovits", {
+    enabled: true,
+    displayName: "GPT-SoVITS",
+    config: {
+      baseUrl: "http://127.0.0.1:9872",
+      promptText: "这样说才对",
+      promptLanguage: "粤语",
+      textLanguage: "中文",
+      gptModel: "不训练直接推v2底模！",
+      sovitsModel: "不训练直接推v2ProPlus底模！",
+      cutMethod: "凑四句一切",
+      sampleSteps: 8,
+      speed: 1.1,
+      pauseSecond: 0.3,
+      temperature: 0,
+      topK: 20,
+      topP: 0,
+    },
+  });
+
+  const service = createTtsService({ artifactRoot });
+  const job = await service.synthesizeGptSovits({
+    text: "你好，这里是普通话版。",
+    refAudioPath,
+    promptText: "",
+    promptLanguage: "",
+    textLanguage: "",
+    gptModel: "",
+    sovitsModel: "",
+    cutMethod: "",
+    sampleSteps: Number.NaN,
+    speed: Number.NaN,
+    pauseSecond: Number.NaN,
+    temperature: Number.NaN,
+    topK: Number.NaN,
+    topP: Number.NaN,
+  });
+
+  const [input] = synthesizeWithGptSovitsMock.mock.calls[0] as Array<[{
+    providerConfig: Record<string, unknown>;
+    request: Record<string, unknown>;
+    outputPath: string;
+  }]>;
+  assert.equal(llmGenerateTextMock.mock.calls.length, 1);
+  assert.equal(input.request.promptText, "这样说才对");
+  assert.equal(job.requestConfig.promptText, "这样说才对");
+});
+
+test("synthesize uses current voice provider model for API provider tab", async () => {
+  providerConnectionRepository.update("openai", {
+    baseUrl: "https://api.openai.com/v1",
+    apiKeyEncrypted: encryptSecret("test-openai-key"),
+    isEnabled: true,
+  });
+  modelConfigRepository.upsertDefault({
+    type: "voice",
+    name: "gpt-4o-mini-tts",
+    params: JSON.stringify({ enabled: true }),
+    providerConnectionId: "openai",
+    remoteModelId: "gpt-4o-mini-tts",
+  });
+  ttsProviderConfigsRepository.upsert("api_provider", {
+    enabled: true,
+    displayName: "API 服务商",
+    config: {
+      voice: "alloy",
+      responseFormat: "mp3",
+      speed: 1.1,
+    },
+  });
+
+  const service = createTtsService({ artifactRoot });
+  const job = await service.synthesize({
+    providerId: "api_provider",
+    text: "你好，远程语音。",
+  });
+
+  assert.equal(job.status, "succeeded");
+  assert.equal(job.providerId, "api_provider");
+  assert.equal(job.mimeType, "audio/mpeg");
+  assert.equal(job.voice, "alloy");
+  assert.equal(job.requestConfig.responseFormat, "mp3");
+  assert.equal(job.requestConfig.speed, 1.1);
+  assert.match(String(job.outputPath), /\.mp3$/u);
+
+  const fetchMock = vi.mocked(fetch);
+  assert.equal(fetchMock.mock.calls.length, 1);
+  const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+  assert.equal(url, "https://api.openai.com/v1/audio/speech");
+  assert.equal(init.method, "POST");
+  assert.equal((init.headers as Record<string, string>).Authorization, "Bearer test-openai-key");
+  assert.deepEqual(JSON.parse(String(init.body)), {
+    model: "gpt-4o-mini-tts",
+    input: "你好，远程语音。",
+    voice: "alloy",
+    response_format: "mp3",
+    speed: 1.1,
+  });
+});
+
+test("synthesize routes volcengine voice model through unidirectional ark endpoint", async () => {
+  const audioBytes = Buffer.from([11, 22, 33, 44]);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: true,
+      headers: {
+        get: (name: string) => (name === "content-type" ? "text/plain; charset=utf-8" : null),
+      },
+      arrayBuffer: async () =>
+        Buffer.from(
+          `${JSON.stringify({ code: 0, message: "ok", data: audioBytes.toString("base64") })}\n`,
+          "utf-8",
+        ),
+    }),
+  );
+
+  providerConnectionRepository.update("volcengine", {
+    baseUrl: "https://openspeech.bytedance.com/api/v3/plan/tts/unidirectional",
+    apiKeyEncrypted: encryptSecret("test-volcengine-key"),
+    isEnabled: true,
+  });
+  modelConfigRepository.upsertDefault({
+    type: "voice",
+    name: "doubao-seed-tts-2.0",
+    params: JSON.stringify({ enabled: true }),
+    providerConnectionId: "volcengine",
+    remoteModelId: "doubao-seed-tts-2.0",
+  });
+  ttsProviderConfigsRepository.upsert("api_provider", {
+    enabled: true,
+    displayName: "API 服务商",
+    config: {
+      voice: "zh_female_yujie_mars_bigtts",
+      responseFormat: "wav",
+      speed: 1.2,
+    },
+  });
+
+  const service = createTtsService({ artifactRoot });
+  const job = await service.synthesize({
+    providerId: "api_provider",
+    text: "你好，火山方舟语音。",
+  });
+
+  assert.equal(job.status, "succeeded");
+  assert.equal(job.mimeType, "audio/wav");
+
+  const fetchMock = vi.mocked(fetch);
+  assert.equal(fetchMock.mock.calls.length, 1);
+  const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+  assert.equal(url, "https://openspeech.bytedance.com/api/v3/plan/tts/unidirectional");
+  assert.equal(init.method, "POST");
+  assert.deepEqual(init.headers, {
+    "Content-Type": "application/json",
+    "X-Api-Key": "test-volcengine-key",
+    "X-Api-Resource-Id": "doubao-seed-tts-2.0",
+    "X-Api-Request-Id": (init.headers as Record<string, string>)["X-Api-Request-Id"],
+  });
+  assert.deepEqual(JSON.parse(String(init.body)), {
+    user: {
+      uid: "uichat-mira-tts-studio",
+    },
+    req_params: {
+      text: "你好，火山方舟语音。",
+      speaker: "zh_female_yujie_mars_bigtts",
+      audio_params: {
+        format: "wav",
+        sample_rate: 24000,
+      },
+    },
+  });
+});
+
+test("synthesize surfaces actionable volcengine auth guidance on 401", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      headers: {
+        get: () => "text/plain",
+      },
+      text: async () => "Unauthorized",
+      json: async () => null,
+    }),
+  );
+
+  providerConnectionRepository.update("volcengine", {
+    baseUrl: "https://ark.cn-beijing.volces.com/api/plan",
+    apiKeyEncrypted: encryptSecret("test-volcengine-key"),
+    isEnabled: true,
+  });
+  modelConfigRepository.upsertDefault({
+    type: "voice",
+    name: "doubao-seed-tts-2.0",
+    params: JSON.stringify({ enabled: true }),
+    providerConnectionId: "volcengine",
+    remoteModelId: "doubao-seed-tts-2.0",
+  });
+  ttsProviderConfigsRepository.upsert("api_provider", {
+    enabled: true,
+    displayName: "API 服务商",
+    config: {
+      voice: "zh_female_yujie_mars_bigtts",
+      responseFormat: "wav",
+      speed: 1,
+    },
+  });
+
+  const service = createTtsService({ artifactRoot });
+  const job = await service.synthesize({
+    providerId: "api_provider",
+    text: "你好，火山方舟语音。",
+  });
+
+  assert.equal(job.status, "failed");
+  assert.match(String(job.errorMessage), /Unauthorized|X-Api-Key/u);
+});
+
+test("synthesize fails when volcengine returns 200 with json error payload", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: true,
+      headers: {
+        get: (name: string) => (name === "content-type" ? "text/plain; charset=utf-8" : null),
+      },
+      arrayBuffer: async () =>
+        Buffer.from(
+          JSON.stringify({
+            reqid: "debug-req-id",
+            code: 45000030,
+            message:
+              "Forbidden.AgentPlanDeductNotEnabled: Agent Plan deduction is not enabled for this account or seat.",
+          }),
+          "utf-8",
+        ),
+    }),
+  );
+
+  providerConnectionRepository.update("volcengine", {
+    baseUrl: "https://openspeech.bytedance.com/api/v3/plan/tts/unidirectional",
+    apiKeyEncrypted: encryptSecret("test-volcengine-key"),
+    isEnabled: true,
+  });
+  modelConfigRepository.upsertDefault({
+    type: "voice",
+    name: "seed-tts-2.0",
+    params: JSON.stringify({ enabled: true }),
+    providerConnectionId: "volcengine",
+    remoteModelId: "seed-tts-2.0",
+  });
+  ttsProviderConfigsRepository.upsert("api_provider", {
+    enabled: true,
+    displayName: "API 服务商",
+    config: {
+      voice: "zh_female_cancan_uranus_bigtts",
+      responseFormat: "wav",
+      speed: 1,
+    },
+  });
+
+  const service = createTtsService({ artifactRoot });
+  const job = await service.synthesize({
+    providerId: "api_provider",
+    text: "你好，火山方舟语音。",
+  });
+
+  assert.equal(job.status, "failed");
+  assert.match(
+    String(job.errorMessage),
+    /Forbidden\.AgentPlanDeductNotEnabled|deduction is not enabled/u,
+  );
+});
+
+test("synthesize decodes volcengine chunked audio payload into playable bytes", async () => {
+  const audioBytes = Buffer.from([1, 2, 3, 4, 5, 6]);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: true,
+      headers: {
+        get: (name: string) => (name === "content-type" ? "text/plain; charset=utf-8" : null),
+      },
+      arrayBuffer: async () =>
+        Buffer.from(
+          `${JSON.stringify({ code: 0, message: "ok", data: audioBytes.toString("base64") })}\n`,
+          "utf-8",
+        ),
+    }),
+  );
+
+  providerConnectionRepository.update("volcengine", {
+    baseUrl: "https://openspeech.bytedance.com/api/v3/plan/tts/unidirectional",
+    apiKeyEncrypted: encryptSecret("test-volcengine-key"),
+    isEnabled: true,
+  });
+  modelConfigRepository.upsertDefault({
+    type: "voice",
+    name: "seed-tts-2.0",
+    params: JSON.stringify({ enabled: true }),
+    providerConnectionId: "volcengine",
+    remoteModelId: "seed-tts-2.0",
+  });
+  ttsProviderConfigsRepository.upsert("api_provider", {
+    enabled: true,
+    displayName: "API 服务商",
+    config: {
+      voice: "zh_female_gaolengyujie_uranus_bigtts",
+      responseFormat: "mp3",
+      speed: 1,
+    },
+  });
+
+  const service = createTtsService({ artifactRoot });
+  const job = await service.synthesize({
+    providerId: "api_provider",
+    text: "你好，火山方舟语音。",
+  });
+
+  assert.equal(job.status, "succeeded");
+  assert.equal(job.mimeType, "audio/mpeg");
+  const written = fs.readFileSync(String(job.outputPath));
+  assert.deepEqual(written, audioBytes);
+});
+
+test("synthesize detects volcengine speech protocol from openspeech base url even on openai connection code", async () => {
+  const audioBytes = Buffer.from([7, 8, 9, 10]);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: true,
+      headers: {
+        get: (name: string) => (name === "content-type" ? "text/plain; charset=utf-8" : null),
+      },
+      arrayBuffer: async () =>
+        Buffer.from(
+          `${JSON.stringify({ code: 0, message: "OK", data: audioBytes.toString("base64") })}\n`,
+          "utf-8",
+        ),
+    }),
+  );
+
+  providerConnectionRepository.update("openai", {
+    baseUrl: "https://openspeech.bytedance.com/api/v3/plan/tts/unidirectional",
+    apiKeyEncrypted: encryptSecret("test-volcengine-key"),
+    isEnabled: true,
+  });
+  modelConfigRepository.upsertDefault({
+    type: "voice",
+    name: "seed-tts-2.0",
+    params: JSON.stringify({ enabled: true }),
+    providerConnectionId: "openai",
+    remoteModelId: "seed-tts-2.0",
+  });
+  ttsProviderConfigsRepository.upsert("api_provider", {
+    enabled: true,
+    displayName: "API 服务商",
+    config: {
+      voice: "zh_female_gaolengyujie_uranus_bigtts",
+      responseFormat: "mp3",
+      speed: 1,
+    },
+  });
+
+  const service = createTtsService({ artifactRoot });
+  const job = await service.synthesize({
+    providerId: "api_provider",
+    text: "你好，火山方舟语音。",
+  });
+
+  assert.equal(job.status, "succeeded");
+  assert.equal(job.mimeType, "audio/mpeg");
+
+  const fetchMock = vi.mocked(fetch);
+  const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+  assert.equal(url, "https://openspeech.bytedance.com/api/v3/plan/tts/unidirectional");
+  assert.deepEqual(init.headers, {
+    "Content-Type": "application/json",
+    "X-Api-Key": "test-volcengine-key",
+    "X-Api-Resource-Id": "seed-tts-2.0",
+    "X-Api-Request-Id": (init.headers as Record<string, string>)["X-Api-Request-Id"],
+  });
+  assert.deepEqual(fs.readFileSync(String(job.outputPath)), audioBytes);
+});
+
+test("synthesize accepts volcengine successful terminal status after audio chunks", async () => {
+  const audioBytes = Buffer.from([11, 12, 13]);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: true,
+      headers: {
+        get: (name: string) => (name === "content-type" ? "text/plain; charset=utf-8" : null),
+      },
+      arrayBuffer: async () =>
+        Buffer.from(
+          [
+            JSON.stringify({ code: 0, message: "", data: audioBytes.toString("base64") }),
+            JSON.stringify({ code: 20000000, message: "OK", data: null }),
+          ].join("\n"),
+          "utf-8",
+        ),
+    }),
+  );
+
+  providerConnectionRepository.update("volcengine", {
+    baseUrl: "https://openspeech.bytedance.com/api/v3/plan/tts/unidirectional",
+    apiKeyEncrypted: encryptSecret("test-volcengine-key"),
+    isEnabled: true,
+  });
+  modelConfigRepository.upsertDefault({
+    type: "voice",
+    name: "seed-tts-2.0",
+    params: JSON.stringify({ enabled: true }),
+    providerConnectionId: "volcengine",
+    remoteModelId: "seed-tts-2.0",
+  });
+  ttsProviderConfigsRepository.upsert("api_provider", {
+    enabled: true,
+    displayName: "API 服务商",
+    config: {
+      voice: "zh_female_gaolengyujie_uranus_bigtts",
+      responseFormat: "wav",
+      speed: 1,
+    },
+  });
+
+  const service = createTtsService({ artifactRoot });
+  const job = await service.synthesize({
+    providerId: "api_provider",
+    text: "你好，火山方舟语音。",
+  });
+
+  assert.equal(job.status, "succeeded");
+  assert.equal(job.mimeType, "audio/wav");
+  assert.deepEqual(fs.readFileSync(String(job.outputPath)), audioBytes);
+});
+
+test("synthesize surfaces clear guidance when volcengine returns success without audio data", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: true,
+      headers: {
+        get: (name: string) => (name === "content-type" ? "text/plain; charset=utf-8" : null),
+      },
+      arrayBuffer: async () =>
+        Buffer.from(
+          `${JSON.stringify({ code: 0, message: "OK" })}\n`,
+          "utf-8",
+        ),
+    }),
+  );
+
+  providerConnectionRepository.update("volcengine", {
+    baseUrl: "https://openspeech.bytedance.com/api/v3/plan/tts/unidirectional",
+    apiKeyEncrypted: encryptSecret("test-volcengine-key"),
+    isEnabled: true,
+  });
+  modelConfigRepository.upsertDefault({
+    type: "voice",
+    name: "seed-tts-2.0",
+    params: JSON.stringify({ enabled: true }),
+    providerConnectionId: "volcengine",
+    remoteModelId: "seed-tts-2.0",
+  });
+  ttsProviderConfigsRepository.upsert("api_provider", {
+    enabled: true,
+    displayName: "API 服务商",
+    config: {
+      voice: "zh_female_gaolengyujie_uranus_bigtts",
+      responseFormat: "mp3",
+      speed: 1,
+    },
+  });
+
+  const service = createTtsService({ artifactRoot });
+  const job = await service.synthesize({
+    providerId: "api_provider",
+    text: "你好，火山方舟语音。",
+  });
+
+  assert.equal(job.status, "failed");
+  assert.match(
+    String(job.errorMessage),
+    /没有返回音频数据|speaker \/ 音色 ID|voice 模型 ID/u,
   );
 });

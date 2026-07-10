@@ -2,7 +2,11 @@ import { asc, eq } from "drizzle-orm";
 import { getDb, getSqlite } from "../index";
 import { ttsProviderConfigs } from "../schema";
 
-export type TtsProviderId = "windows_builtin" | "piper_local" | "gpt_sovits";
+export type TtsProviderId =
+  | "windows_builtin"
+  | "piper_local"
+  | "gpt_sovits"
+  | "api_provider";
 
 export type TtsProviderConfigRecord = {
   id: string;
@@ -57,6 +61,16 @@ const defaultSeeds: Array<{
       baseUrl: "http://127.0.0.1:9872",
       gptModel: "",
       sovitsModel: "",
+    },
+  },
+  {
+    providerId: "api_provider",
+    displayName: "API 服务商",
+    enabled: true,
+    config: {
+      voice: "alloy",
+      responseFormat: "mp3",
+      speed: 1,
     },
   },
 ];

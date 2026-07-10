@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import TtsStudioPage from "../index";
 
 const apiMocks = vi.hoisted(() => ({
+  getApiProviderCatalog: vi.fn(),
   createGptSovitsSynthesis: vi.fn(),
   createTtsSynthesis: vi.fn(),
   getGptSovitsCatalog: vi.fn(),
@@ -27,6 +28,7 @@ const messageMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/shared/api/tts", () => ({
+  getApiProviderCatalog: apiMocks.getApiProviderCatalog,
   createGptSovitsSynthesis: apiMocks.createGptSovitsSynthesis,
   createTtsSynthesis: apiMocks.createTtsSynthesis,
   getGptSovitsCatalog: apiMocks.getGptSovitsCatalog,
@@ -190,12 +192,14 @@ vi.mock("@/shared/ui", async (importOriginal) => {
     ),
     TextInput: ({
       label,
+      labelHelp,
       value,
       onChange,
       disabled,
       placeholder,
     }: {
       label?: string;
+      labelHelp?: string;
       value: string;
       onChange: (value: string) => void;
       disabled?: boolean;
@@ -203,6 +207,7 @@ vi.mock("@/shared/ui", async (importOriginal) => {
     }) => (
       <label>
         <span>{label}</span>
+        {labelHelp ? <span data-testid={`label-help-${label}`}>{labelHelp}</span> : null}
         <input
           aria-label={label}
           value={value}
@@ -234,7 +239,7 @@ vi.mock("@/shared/ui/NavigationCardTabs", () => ({
   }: {
     tabs: Array<{ value: string; label: string }>;
     value: string;
-    onChange: (value: "piper" | "gpt_sovits") => void;
+    onChange: (value: "piper" | "gpt_sovits" | "api_provider") => void;
   }) => (
     <div>
       {tabs.map((tab) => (
@@ -242,7 +247,7 @@ vi.mock("@/shared/ui/NavigationCardTabs", () => ({
           key={tab.value}
           type="button"
           aria-pressed={value === tab.value}
-          onClick={() => onChange(tab.value as "piper" | "gpt_sovits")}
+          onClick={() => onChange(tab.value as "piper" | "gpt_sovits" | "api_provider")}
         >
           {tab.label}
         </button>
@@ -300,6 +305,15 @@ const providers = [
     createdAt: "2026-07-10T09:00:00.000Z",
     updatedAt: "2026-07-10T09:00:00.000Z",
   },
+  {
+    id: "provider-api",
+    providerId: "api_provider",
+    displayName: "API服务商",
+    enabled: true,
+    config: { voice: "alloy", responseFormat: "mp3", speed: 1 },
+    createdAt: "2026-07-10T09:00:00.000Z",
+    updatedAt: "2026-07-10T09:00:00.000Z",
+  },
 ];
 
 const gptCatalog = {
@@ -330,6 +344,7 @@ describe("TtsStudioPage", () => {
   beforeEach(() => {
     apiMocks.createGptSovitsSynthesis.mockReset();
     apiMocks.createTtsSynthesis.mockReset();
+    apiMocks.getApiProviderCatalog.mockReset();
     apiMocks.getGptSovitsCatalog.mockReset();
     apiMocks.getTtsAudioPreviewUrl.mockReset();
     apiMocks.getTtsOverview.mockReset();
@@ -344,6 +359,20 @@ describe("TtsStudioPage", () => {
 
     apiMocks.getTtsVoices.mockResolvedValue({ voices: [] });
     apiMocks.getGptSovitsCatalog.mockResolvedValue({ catalog: gptCatalog });
+    apiMocks.getApiProviderCatalog.mockResolvedValue({
+      catalog: {
+        configured: true,
+        supported: true,
+        providerConnectionId: "openai",
+        providerDisplayName: "OpenAI",
+        providerCode: "openai",
+        providerTemplateCode: "openai",
+        baseUrl: "https://api.openai.com/v1",
+        modelId: "gpt-4o-mini-tts",
+        modelName: "gpt-4o-mini-tts",
+        errorMessage: null,
+      },
+    });
     storeMocks.listStoredGptSovitsRefAudios.mockResolvedValue([]);
     URL.revokeObjectURL = vi.fn();
   });
@@ -470,5 +499,81 @@ describe("TtsStudioPage", () => {
     expect(within(player).getByText("成功任务")).toBeInTheDocument();
     expect(screen.queryByText("音频预览还在加载，请稍等。")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "播放" })).not.toBeDisabled();
+  });
+
+  it("runs API provider synthesis from the third tab", async () => {
+    apiMocks.getTtsOverview.mockResolvedValue({
+      providers,
+      recentJobs: [],
+    });
+    apiMocks.createTtsSynthesis.mockResolvedValue({
+      job: {
+        id: "job-api-succeeded",
+      },
+    });
+
+    render(<TtsStudioPage />);
+
+    await waitFor(() => {
+      expect(apiMocks.getTtsOverview).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "API服务商" }));
+
+    await waitFor(() => {
+      expect(apiMocks.getApiProviderCatalog).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "开始合成" }));
+
+    await waitFor(() => {
+      expect(apiMocks.createTtsSynthesis).toHaveBeenCalledWith(
+        expect.objectContaining({
+          providerId: "api_provider",
+          text: "你好，这里是 UIChat Mira 的 API 服务商 TTS 微应用调试页。",
+          voice: "alloy",
+          responseFormat: "mp3",
+          speed: 1,
+        }),
+      );
+    });
+  });
+
+  it("shows exact voice-field guidance for volcengine providers", async () => {
+    apiMocks.getTtsOverview.mockResolvedValue({
+      providers,
+      recentJobs: [],
+    });
+    apiMocks.getApiProviderCatalog.mockResolvedValue({
+      catalog: {
+        configured: true,
+        supported: true,
+        providerConnectionId: "volcengine",
+        providerDisplayName: "火山方舟",
+        providerCode: "volcengine",
+        providerTemplateCode: "volcengine",
+        baseUrl: "https://ark.cn-beijing.volces.com/api/plan",
+        modelId: "doubao-seed-tts-2.0",
+        modelName: "doubao-seed-tts-2.0",
+        errorMessage: null,
+      },
+    });
+
+    render(<TtsStudioPage />);
+
+    await waitFor(() => {
+      expect(apiMocks.getTtsOverview).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "API服务商" }));
+
+    await waitFor(() => {
+      expect(apiMocks.getApiProviderCatalog).toHaveBeenCalledTimes(1);
+    });
+
+    expect(screen.getByText("音色 / Speaker ID")).toBeInTheDocument();
+    expect(screen.getByTestId("label-help-音色 / Speaker ID")).toHaveTextContent(
+      "这里要填火山方舟语音文档里的 speaker / 音色 ID",
+    );
   });
 });

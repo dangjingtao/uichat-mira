@@ -2,7 +2,11 @@ import { desc, eq } from "drizzle-orm";
 import { getDb, getSqlite } from "../index";
 import { ttsSynthesisJobs } from "../schema";
 
-export type TtsProviderId = "windows_builtin" | "piper_local" | "gpt_sovits";
+export type TtsProviderId =
+  | "windows_builtin"
+  | "piper_local"
+  | "gpt_sovits"
+  | "api_provider";
 export type TtsSynthesisStatus = "queued" | "running" | "succeeded" | "failed";
 
 export type TtsSynthesisJobRecord = {

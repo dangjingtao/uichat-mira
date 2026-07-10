@@ -2,7 +2,11 @@ import { client, get, post, put } from "@/shared/lib/request";
 
 const TTS_ROUTE = "/microapps/tts";
 
-export type TtsProviderId = "windows_builtin" | "piper_local" | "gpt_sovits";
+export type TtsProviderId =
+  | "windows_builtin"
+  | "piper_local"
+  | "gpt_sovits"
+  | "api_provider";
 export type TtsSynthesisStatus = "queued" | "running" | "succeeded" | "failed";
 
 export interface TtsProviderConfigRecord {
@@ -53,6 +57,21 @@ export interface CreateTtsSynthesisPayload {
   voice?: string;
   rate?: number;
   volume?: number;
+  speed?: number;
+  responseFormat?: string;
+}
+
+export interface ApiProviderCatalog {
+  configured: boolean;
+  supported: boolean;
+  providerConnectionId: string | null;
+  providerDisplayName: string;
+  providerCode: string | null;
+  providerTemplateCode: string | null;
+  baseUrl: string;
+  modelId: string;
+  modelName: string;
+  errorMessage: string | null;
 }
 
 export interface GptSovitsCatalog {
@@ -125,6 +144,10 @@ export function createTtsSynthesis(payload: CreateTtsSynthesisPayload) {
 
 export function getGptSovitsCatalog() {
   return get<{ catalog: GptSovitsCatalog }>(`${TTS_ROUTE}/gpt-sovits/catalog`);
+}
+
+export function getApiProviderCatalog() {
+  return get<{ catalog: ApiProviderCatalog }>(`${TTS_ROUTE}/api-provider/catalog`);
 }
 
 export function createGptSovitsSynthesis(payload: CreateGptSovitsSynthesisPayload) {
