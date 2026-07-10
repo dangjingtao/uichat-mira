@@ -50,8 +50,10 @@ test("createInitialAgentGraphState initializes the runtime-minimum currentTaskFr
       steps: [],
     },
     messages: [],
+    selectedToolId: "legacy-tool-should-not-enter-state",
   });
 
+  assert.equal("selectedToolId" in state, false);
   assert.deepEqual(state.currentTaskFrame, {
     currentGoal: "inspect docs",
     currentSubtask: "Prepare context and determine the next action.",
@@ -149,7 +151,7 @@ test("prepareContextNode keeps the initialized currentTaskFrame unchanged", asyn
   });
 });
 
-test("retrieveNode writes only an objective blocker into currentTaskFrame when no knowledge base is bound", async () => {
+test("retrieveNode does not write currentTaskFrame when no knowledge base is bound", async () => {
   const patch = await retrieveNode(
     createBaseState({
       currentTaskFrame: {
@@ -169,15 +171,10 @@ test("retrieveNode writes only an objective blocker into currentTaskFrame when n
     }),
   );
 
-  assert.equal(
-    patch.currentTaskFrame?.currentBlocker,
-    "No knowledge base is bound to the current thread.",
-  );
-  assert.equal(patch.currentTaskFrame?.currentGoal, "inspect docs");
-  assert.equal(patch.currentTaskFrame?.currentSubtask, "Gather evidence");
+  assert.equal("currentTaskFrame" in patch, false);
 });
 
-test("toolNode appends a confirmed object to currentTaskFrame without taking over task inference", async () => {
+test("toolNode does not write currentTaskFrame", async () => {
   const executeHarnessInvocationSpy = vi
     .spyOn(harnessInvocations, "executeHarnessInvocation")
     .mockResolvedValue({
@@ -225,23 +222,7 @@ test("toolNode appends a confirmed object to currentTaskFrame without taking ove
     );
 
     assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
-    assert.equal(patch.currentTaskFrame?.currentGoal, "inspect docs");
-    assert.equal(patch.currentTaskFrame?.currentSubtask, "Gather evidence");
-    assert.equal(patch.currentTaskFrame?.currentBlocker, undefined);
-    assert.deepEqual(patch.currentTaskFrame?.confirmedObjects, [
-      {
-        type: "knowledge",
-        id: "kb-1",
-        label: "kb-1",
-        confidence: 1,
-      },
-      {
-        type: "file",
-        id: "README.md",
-        label: "README.md",
-        confidence: 1,
-      },
-    ]);
+    assert.equal("currentTaskFrame" in patch, false);
   } finally {
     executeHarnessInvocationSpy.mockRestore();
   }

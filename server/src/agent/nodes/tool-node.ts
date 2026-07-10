@@ -7,7 +7,6 @@ import { runWithWorkspaceRootOverride } from "@/mcp/workspace";
 import type { McpInvocationFailureCode } from "@/mcp/core/definitions";
 import { createInvocationInputHash } from "../approval-fingerprint";
 import {
-  appendConfirmedObjectToTaskFrame,
   emitStepNode,
   getToolTraceTargetPreview,
   getIterativeNodeId,
@@ -16,7 +15,6 @@ import {
   summarizeToolExecutionFailure,
   summarizeToolExecutionStart,
   summarizeToolExecutionWaitingApproval,
-  updateTaskFrameBlocker,
   type AgentNodeState,
   type EmitAgentExecutionNode,
 } from "../node-runtime";
@@ -27,13 +25,11 @@ import {
   getEvidenceCounts,
 } from "../evidence";
 import type {
-  AgentApprovalRequest,
   AgentEvidenceSummary,
   AgentObservation,
   AgentRetrievalEvidence,
   AgentToolCallRequest,
   AgentToolExecutionResult,
-  CurrentTaskFrameConfirmedObject,
   PendingToolCall,
 } from "../types";
 import type { CodebaseExploreToolResult } from "@/mcp/managed-codegraph/types";
@@ -65,25 +61,6 @@ const createObservation = (input: {
   createdAt: nowIso(),
 });
 
-const createPendingApproval = (input: {
-  runId: string;
-  toolId: string;
-  toolCallId: string;
-  reason: string;
-  args: Record<string, unknown>;
-  inputHash: string;
-}): AgentApprovalRequest => ({
-  id: crypto.randomUUID(),
-  runId: input.runId,
-  stepId: "approval",
-  toolId: input.toolId,
-  toolCallId: input.toolCallId,
-  reason: input.reason,
-  input: input.args,
-  inputHash: input.inputHash,
-  createdAt: nowIso(),
-});
-
 const isFrozenPlannerPendingToolCall = (
   pendingToolCall: AgentToolCallRequest | undefined,
 ): pendingToolCall is PendingToolCall =>
@@ -106,7 +83,6 @@ const buildExecutionRecord = (input: {
   recoveryAttemptCount?: number;
   errorMessage?: string;
   result?: unknown;
-  approval?: AgentApprovalRequest;
 }): AgentToolExecutionResult => ({
   toolCallId: input.pendingToolCall.id,
   toolId: input.toolId,
@@ -119,7 +95,6 @@ const buildExecutionRecord = (input: {
   recoveryAttemptCount: input.recoveryAttemptCount,
   errorMessage: input.errorMessage,
   result: input.result,
-  approval: input.approval,
   startedAt: input.startedAt,
   finishedAt: input.finishedAt,
 });
@@ -162,52 +137,6 @@ const getDurationMs = (startedAt: string, finishedAt: string) => {
   }
 
   return Math.max(0, endMs - startMs);
-};
-
-const getConfirmedObjectFromToolExecution = (
-  pendingToolCall: PendingToolCall,
-): CurrentTaskFrameConfirmedObject => {
-  if (pendingToolCall.toolId === "codebase_explore") {
-    return {
-      type: "tool",
-      id: pendingToolCall.inputHash,
-      label: "codebase_explore",
-      confidence: 1,
-    };
-  }
-
-  if (pendingToolCall.toolId === "terminal_session") {
-    return {
-      type: "command",
-      id: pendingToolCall.inputHash,
-      label:
-        typeof pendingToolCall.args.command === "string"
-          ? pendingToolCall.args.command
-          : pendingToolCall.toolId,
-      confidence: 1,
-    };
-  }
-
-  if (
-    (pendingToolCall.toolId === "read_open" ||
-      pendingToolCall.toolId === "read_list" ||
-      pendingToolCall.toolId === "read_locate") &&
-    typeof pendingToolCall.args.path === "string"
-  ) {
-    return {
-      type: "file",
-      id: pendingToolCall.args.path,
-      label: pendingToolCall.args.path,
-      confidence: 1,
-    };
-  }
-
-  return {
-    type: "tool",
-    id: pendingToolCall.toolId,
-    label: pendingToolCall.toolId,
-    confidence: 1,
-  };
 };
 
 const isCodebaseExploreToolResult = (
@@ -313,7 +242,6 @@ export const toolNode = async (
     });
     return {
       pendingToolCall: undefined,
-      selectedToolId: undefined,
       errorMessage,
       errorSourceNodeId: "agent-tool",
       blockedReason: errorMessage,
@@ -343,7 +271,6 @@ export const toolNode = async (
     });
     return {
       pendingToolCall: undefined,
-      selectedToolId: undefined,
       errorMessage,
       errorSourceNodeId: "agent-tool",
       blockedReason: errorMessage,
@@ -381,7 +308,6 @@ export const toolNode = async (
     });
     return {
       pendingToolCall: undefined,
-      selectedToolId: undefined,
       errorMessage,
       errorSourceNodeId: "agent-tool",
       blockedReason: errorMessage,
@@ -441,21 +367,17 @@ export const toolNode = async (
   const durationMs = getDurationMs(startedAt, finishedAt);
 
   if (invocation.status === "awaiting_approval") {
-    const approval = createPendingApproval({
-      runId: state.runId,
-      toolId: pendingToolCall.toolId,
-      toolCallId: pendingToolCall.id,
-      reason: invocation.approval?.reason ?? `${pendingToolCall.toolId} requires approval.`,
-      args: pendingToolCall.args,
-      inputHash: pendingToolCall.inputHash,
-    });
+    const approvalReason =
+      invocation.approval?.reason ?? `${pendingToolCall.toolId} requires approval.`;
+    const ownerContractError =
+      "Harness requested approval after Policy allowed the frozen call; Policy must create pendingApproval before ToolNode execution.";
 
     const observation = createObservation({
       runId: state.runId,
       stepId: "tool",
       status: "blocked",
       facts: [`${pendingToolCall.toolId} paused for approval before completion.`],
-      errorMessage: approval.reason,
+      errorMessage: approvalReason,
     });
 
     const executionRecord = buildExecutionRecord({
@@ -463,7 +385,6 @@ export const toolNode = async (
       toolId: pendingToolCall.toolId,
       invocationId: invocation.id,
       status: "awaiting_approval",
-      approval,
       startedAt,
       finishedAt,
     });
@@ -514,27 +435,13 @@ export const toolNode = async (
     });
 
     return {
-      pendingApproval: approval,
-      policyDecision: {
-        type: "require_approval",
-        toolId: pendingToolCall.toolId,
-        inputHash: pendingToolCall.inputHash,
-        reason: approval.reason,
-      },
-      selectedToolId: undefined,
       pendingToolCall,
       lastToolExecution: executionRecord,
       observations: [...(state.observations ?? []), observation],
       evidence,
-      currentTaskFrame: updateTaskFrameBlocker(
-        appendConfirmedObjectToTaskFrame(state.currentTaskFrame, {
-          type: "approval",
-          id: approval.id,
-          label: approval.toolId,
-          confidence: 1,
-        }),
-        approval.reason,
-      ),
+      errorMessage: ownerContractError,
+      errorSourceNodeId: nodeId,
+      blockedReason: ownerContractError,
       continueIteration: false,
       postToolReviewPending: false,
     };
@@ -633,18 +540,8 @@ export const toolNode = async (
     return {
       observations: [...(state.observations ?? []), observation],
       evidence,
-      policyDecision: undefined,
-      selectedToolId: undefined,
-      pendingApproval: undefined,
       pendingToolCall: undefined,
       lastToolExecution: executionRecord,
-      currentTaskFrame: updateTaskFrameBlocker(
-        appendConfirmedObjectToTaskFrame(
-          state.currentTaskFrame,
-          getConfirmedObjectFromToolExecution(pendingToolCall),
-        ),
-        errorMessage,
-      ),
       ...(failureKind === "terminal"
         ? {
             blockedReason: errorMessage,
@@ -742,17 +639,8 @@ export const toolNode = async (
   return {
     observations: [...(state.observations ?? []), observation],
     evidence: finalEvidence,
-    policyDecision: undefined,
-    selectedToolId: undefined,
     pendingToolCall: undefined,
     lastToolExecution: executionRecord,
-    currentTaskFrame: updateTaskFrameBlocker(
-      appendConfirmedObjectToTaskFrame(
-        state.currentTaskFrame,
-        getConfirmedObjectFromToolExecution(pendingToolCall),
-      ),
-      undefined,
-    ),
     iterationCount: (state.iterationCount ?? 0) + 1,
     continueIteration: false,
     postToolReviewPending: false,

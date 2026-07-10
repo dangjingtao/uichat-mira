@@ -1,3 +1,18 @@
+---
+status: current
+priority: P1
+owner: agent-runtime
+last_verified: 2026-07-11
+layer: project-control
+module: AgentRuntime
+feature: PretoolSelectorRemoval
+doc_type: task-card
+canonical: true
+related:
+  - docs/project-control/project-control-ledger.md
+task_state: TODO
+---
+
 # Agent V1.5 T03：移除 Planner 前置工具选择与 selectedToolIds 链路
 
 ## 项目与阶段
@@ -87,17 +102,3 @@
 5. 实际执行的测试命令、原始结果与 typecheck 结果；
 6. 明确说明是否影响既有 Agent 主线黑盒；
 7. 所有测试源码与报告均须为 git tracked files，不接受只贴口头摘要。
----
-status: current
-priority: P1
-owner: agent-runtime
-last_verified: 2026-07-11
-layer: project-control
-module: AgentRuntime
-feature: PretoolSelectorRemoval
-doc_type: task-card
-canonical: true
-related:
-  - docs/project-control/project-control-ledger.md
-task_state: TODO
----

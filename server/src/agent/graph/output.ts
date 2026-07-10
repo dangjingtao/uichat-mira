@@ -18,7 +18,6 @@ export const mapGraphStateToOutput = (
     pendingApproval: state.pendingApproval,
     policyDecision: state.policyDecision,
     selectedToolId:
-      state.selectedToolId ??
       state.lastToolExecution?.toolId ??
       state.pendingApproval?.toolId,
     pendingToolCall: state.pendingToolCall,

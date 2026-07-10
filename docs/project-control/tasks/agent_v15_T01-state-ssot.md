@@ -1,3 +1,18 @@
+---
+status: current
+priority: P1
+owner: agent-runtime
+last_verified: 2026-07-11
+layer: project-control
+module: AgentRuntime
+feature: StateOwnership
+doc_type: task-card
+canonical: true
+related:
+  - docs/project-control/project-control-ledger.md
+task_state: DONE
+---
+
 # Agent V1.5 T01：State 单一事实源与字段所有权
 
 ## 项目与阶段
@@ -105,17 +120,11 @@
 5. 实际执行的测试命令、原始结果与 typecheck 结果；
 6. 明确说明是否影响既有 Agent 主线黑盒；
 7. 所有测试源码与报告均须为 git tracked files，不接受只贴口头摘要。
----
-status: current
-priority: P1
-owner: agent-runtime
-last_verified: 2026-07-11
-layer: project-control
-module: AgentRuntime
-feature: StateOwnership
-doc_type: task-card
-canonical: true
-related:
-  - docs/project-control/project-control-ledger.md
-task_state: TODO
----
+
+## Review Evidence
+
+- 2026-07-11 R01 复审通过：T01 专项 owner、persistence、resume 和 tool-node 测试 5 个文件共 46/46 通过。
+- `git diff --check` 通过。
+- `origin/test..HEAD` 在 `server/src/agent` 无已提交差异；本次变更未修改 Planner、coverage-transition 或 CodeGraph。
+- 全量 server test 中的 Planner/coverage、CodeGraph、微应用和 observability 失败均按相对基线记录；未发现由 T01 本次变更新增的失败。
+- server typecheck 与 `pnpm check` 仍受既有 `server/src/microapps/codegraph/index.ts:543` 阻断，非 T01 变更。

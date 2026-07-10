@@ -294,9 +294,8 @@ test("policyNode blocks execution when policy denies the frozen call", async () 
     assert.equal(result.pendingToolCall, undefined);
     assert.equal(result.pendingApproval, undefined);
     assert.equal(result.policyDecision?.type, "deny");
-    assert.equal(result.lastToolExecution?.status, "denied");
-    assert.equal(result.evidence?.latestSummary?.status, "denied");
-    assert.equal(result.evidence?.latestSummary?.answerReadiness.canAnswer, false);
+    assert.equal(result.lastToolExecution, undefined);
+    assert.equal(result.evidence, undefined);
     assert.equal(result.blockedReason, "Denied by policy for test coverage.");
     assert.equal(result.errorMessage, "Denied by policy for test coverage.");
   } finally {

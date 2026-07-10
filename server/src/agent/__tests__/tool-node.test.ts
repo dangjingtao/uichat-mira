@@ -307,7 +307,7 @@ test("toolNode ignores selectedToolId drift and only executes the frozen pending
   }
 });
 
-test("toolNode keeps frozen pendingToolCall when Harness requests approval", async () => {
+test("toolNode reports a Harness approval request without creating Policy approval state", async () => {
   const executeHarnessInvocationSpy = vi
     .spyOn(harnessInvocations, "executeHarnessInvocation")
     .mockResolvedValue({
@@ -347,15 +347,12 @@ test("toolNode keeps frozen pendingToolCall when Harness requests approval", asy
     );
 
     assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
-    assert.equal(result.pendingApproval?.toolId, "terminal_session");
-    assert.equal(result.pendingApproval?.toolCallId, pendingToolCall.id);
-    assert.equal(result.pendingApproval?.inputHash, pendingToolCall.inputHash);
+    assert.equal(result.pendingApproval, undefined);
+    assert.equal(result.policyDecision, undefined);
     assert.deepEqual(result.pendingToolCall, pendingToolCall);
-    assert.equal(result.selectedToolId, undefined);
     assert.equal(result.lastToolExecution?.status, "awaiting_approval");
     assert.equal(result.lastToolExecution?.toolCallId, pendingToolCall.id);
-    assert.equal(result.lastToolExecution?.approval?.inputHash, pendingToolCall.inputHash);
-    assert.equal(result.policyDecision?.type, "require_approval");
+    assert.match(result.errorMessage ?? "", /Policy must create pendingApproval/i);
   } finally {
     executeHarnessInvocationSpy.mockRestore();
   }

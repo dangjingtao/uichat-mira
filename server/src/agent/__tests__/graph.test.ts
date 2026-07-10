@@ -3849,7 +3849,7 @@ test("agentGraph treats terminal mutation failure as a terminal outcome without 
   assert.doesNotMatch(result.answer ?? "", /删除成功|delete succeeded/i);
 });
 
-test("agentGraph keeps pendingApproval and frozen pendingToolCall when Harness pauses for approval", async () => {
+test("agentGraph reports a Harness approval request as an owner-contract failure", async () => {
   const webSearch = makeToolDefinition({
     id: "web_search",
     domain: "web_search",
@@ -3906,10 +3906,10 @@ test("agentGraph keeps pendingApproval and frozen pendingToolCall when Harness p
   });
 
   assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
-  assert.equal(result.status, "waiting_approval");
-  assert.equal(result.pendingApproval?.toolId, "web_search");
+  assert.equal(result.status, "failed");
+  assert.equal(result.pendingApproval, undefined);
   assert.equal(result.pendingToolCall?.toolId, "web_search");
-  assert.equal(result.pendingApproval?.inputHash, result.pendingToolCall?.inputHash);
-  assert.equal(result.policyDecision?.type, "require_approval");
+  assert.equal(result.policyDecision?.type, "allow");
+  assert.match(result.errorMessage ?? "", /Policy must create pendingApproval/i);
   assert.equal(result.selectedToolId, "web_search");
 });

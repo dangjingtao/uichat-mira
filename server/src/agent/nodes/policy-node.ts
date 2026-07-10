@@ -3,7 +3,6 @@
  */
 import { listCapabilityDefinitions } from "@/harness/registry";
 import { evaluateAgentToolPolicy } from "../policy";
-import { appendToolExecutionEvidence } from "../evidence";
 import {
   emitStepNode,
   getIterativeNodeId,
@@ -134,7 +133,6 @@ export const policyNode = async (
         type: "skip",
         reason,
       },
-      selectedToolId: undefined,
       pendingApproval: undefined,
       blockedReason: undefined,
       errorMessage: undefined,
@@ -167,7 +165,6 @@ export const policyNode = async (
         inputHash: pendingToolCall.inputHash,
         reason,
       },
-      selectedToolId: undefined,
       pendingToolCall: undefined,
       pendingApproval: undefined,
       blockedReason: reason,
@@ -201,7 +198,6 @@ export const policyNode = async (
         inputHash: pendingToolCall.inputHash,
         reason,
       },
-      selectedToolId: undefined,
       pendingToolCall: undefined,
       pendingApproval: undefined,
       blockedReason: reason,
@@ -238,7 +234,6 @@ export const policyNode = async (
         inputHash: pendingToolCall.inputHash,
         reason: decision.reason,
       },
-      selectedToolId: undefined,
       pendingApproval: undefined,
       pendingToolCall,
       blockedReason: undefined,
@@ -248,19 +243,6 @@ export const policyNode = async (
   }
 
   if (decision.type === "deny") {
-    const deniedAt = nowIso();
-    const deniedExecution = {
-      toolCallId: pendingToolCall.id,
-      toolId: pendingToolCall.toolId,
-      inputHash: pendingToolCall.inputHash,
-      args: pendingToolCall.args,
-      status: "denied" as const,
-      errorMessage: decision.reason,
-      startedAt: deniedAt,
-      finishedAt: deniedAt,
-    };
-    const evidence = appendToolExecutionEvidence(state, deniedExecution);
-
     await emitStepNode(emit, {
       runId: state.runId,
       nodeId,
@@ -287,9 +269,6 @@ export const policyNode = async (
         inputHash: pendingToolCall.inputHash,
         reason: decision.reason,
       },
-      evidence,
-      lastToolExecution: deniedExecution,
-      selectedToolId: undefined,
       pendingToolCall: undefined,
       pendingApproval: undefined,
       blockedReason: decision.reason,
@@ -324,7 +303,6 @@ export const policyNode = async (
         inputHash: pendingToolCall.inputHash,
         reason: "Frozen tool call already approved for this exact inputHash.",
       },
-      selectedToolId: undefined,
       pendingApproval: undefined,
       pendingToolCall,
       blockedReason: undefined,
@@ -369,7 +347,6 @@ export const policyNode = async (
       reason: decision.reason,
     },
     pendingApproval,
-    selectedToolId: undefined,
     pendingToolCall,
     blockedReason: undefined,
     errorMessage: undefined,

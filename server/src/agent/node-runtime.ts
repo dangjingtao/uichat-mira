@@ -84,12 +84,6 @@ export interface AgentNodeState {
   pendingApproval?: AgentApprovalRequest;
   approvedInvocations?: AgentApprovedInvocation[];
   policyDecision?: AgentPolicyDecision;
-  /**
-   * Legacy / trace / UI compatibility only.
-   * Node execution must never branch to policy / tool from this field.
-   * The only execution entry is pendingToolCall.
-   */
-  selectedToolId?: string;
   pendingToolCall?: AgentToolCallRequest;
   lastToolExecution?: AgentToolExecutionResult;
   evidence?: AgentEvidencePayload;
@@ -407,44 +401,6 @@ export const createInitialCurrentTaskFrame = (input: {
   };
 };
 
-export const appendConfirmedObjectToTaskFrame = (
-  frame: CurrentTaskFrame | undefined,
-  confirmedObject: CurrentTaskFrameConfirmedObject,
-): CurrentTaskFrame | undefined => {
-  if (!frame) {
-    return frame;
-  }
-
-  const exists = frame.confirmedObjects.some(
-    (item) =>
-      item.type === confirmedObject.type &&
-      item.id === confirmedObject.id &&
-      item.label === confirmedObject.label,
-  );
-  if (exists) {
-    return frame;
-  }
-
-  return {
-    ...frame,
-    confirmedObjects: [...frame.confirmedObjects, confirmedObject],
-  };
-};
-
-export const updateTaskFrameBlocker = (
-  frame: CurrentTaskFrame | undefined,
-  blocker?: string,
-): CurrentTaskFrame | undefined => {
-  if (!frame) {
-    return frame;
-  }
-
-  return {
-    ...frame,
-    currentBlocker: blocker,
-  };
-};
-
 const getPlannerSubtask = (nextAction: AgentNextAction): string => {
   switch (nextAction.type) {
     case "retrieve":
@@ -463,8 +419,8 @@ const getPlannerSubtask = (nextAction: AgentNextAction): string => {
 };
 
 /**
- * PlannerNode is the primary runtime writer for goal/subtask/completion state.
- * Executor nodes may only append objective confirmed objects or blocker facts.
+ * PlannerNode is the only runtime writer for goal/subtask/completion state.
+ * Executor nodes report facts through evidence and observations instead.
  */
 export const updateCurrentTaskFrameFromPlanner = (input: {
   frame: CurrentTaskFrame | undefined;
