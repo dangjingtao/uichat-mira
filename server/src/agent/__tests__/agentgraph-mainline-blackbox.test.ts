@@ -273,7 +273,7 @@ test("A1 direct answer completes without entering the tool chain", async () => {
   assert.equal(executeSpy.mock.calls.length, 0);
 });
 
-test("A2 use_tool goes through normalize and executes one concrete Harness call", async () => {
+test("A2 use_tool goes through normalize and follows Planner repeat decisions", async () => {
   setupToolExposure("list workspace", [readListTool()]);
   vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
     async function* () {
@@ -307,7 +307,7 @@ test("A2 use_tool goes through normalize and executes one concrete Harness call"
   });
 
   assert.equal(result.status, "completed");
-  assert.equal(executeSpy.mock.calls.length, 1);
+  assert.equal(executeSpy.mock.calls.length, 3);
   assert.equal(executeSpy.mock.calls[0]?.[0]?.toolId, "read_list");
   assert.deepEqual(executeSpy.mock.calls[0]?.[0]?.args, { path: "." });
   assert.equal(executeSpy.mock.calls[0]?.[0]?.userId, 1);
@@ -374,7 +374,7 @@ test("A4 capability-like ids are rejected before Harness execution", async () =>
   );
 });
 
-test("A5 repeated same tool call is guarded and does not execute twice", async () => {
+test("A5 repeated same tool call is not rewritten by a runtime guard", async () => {
   setupToolExposure("open README.md", [readOpenTool()]);
   vi.spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -402,7 +402,6 @@ test("A5 repeated same tool call is guarded and does not execute twice", async (
       startedAt: "2026-07-05T00:00:00.000Z",
       finishedAt: "2026-07-05T00:00:01.000Z",
     } as never);
-  const plannerEvents: Array<Record<string, unknown>> = [];
   vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke").mockResolvedValue(
     "README answer",
   );
@@ -410,23 +409,14 @@ test("A5 repeated same tool call is guarded and does not execute twice", async (
   const result = await runBlackbox({
     runId: "blackbox-a5-repeat-guard",
     question: "open README.md",
-    onExecutionNode: async (event) => {
-      if (event.nodeId === "agent-next-action-planner" && event.phase === "done") {
-        plannerEvents.push((event.details ?? {}) as Record<string, unknown>);
-      }
-    },
   });
 
   assert.equal(result.status, "completed");
-  assert.equal(executeSpy.mock.calls.length, 1);
+  assert.equal(executeSpy.mock.calls.length, 3);
   assert.equal(result.evidence.toolExecutions.length, 1);
-  assert.equal(
-    plannerEvents.some((event) => event.repeatedToolGuardTriggered === true),
-    true,
-  );
 });
 
-test('A6 "." and "/workspace" normalize to the same repeated fingerprint', async () => {
+test('A6 Planner receives both distinct path arguments without a repeated-call rewrite', async () => {
   setupToolExposure("inspect workspace root twice", [readListTool()]);
   vi.spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementationOnce(async function* () {
@@ -449,7 +439,6 @@ test('A6 "." and "/workspace" normalize to the same repeated fingerprint', async
       startedAt: "2026-07-05T00:00:00.000Z",
       finishedAt: "2026-07-05T00:00:01.000Z",
     } as never);
-  const plannerEvents: Array<Record<string, unknown>> = [];
   vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke").mockResolvedValue(
     "workspace answer",
   );
@@ -457,20 +446,11 @@ test('A6 "." and "/workspace" normalize to the same repeated fingerprint', async
   const result = await runBlackbox({
     runId: "blackbox-a6-workspace-equivalence",
     question: "inspect workspace root twice",
-    onExecutionNode: async (event) => {
-      if (event.nodeId === "agent-next-action-planner" && event.phase === "done") {
-        plannerEvents.push((event.details ?? {}) as Record<string, unknown>);
-      }
-    },
   });
 
   assert.equal(result.status, "completed");
-  assert.equal(executeSpy.mock.calls.length, 1);
+  assert.equal(executeSpy.mock.calls.length, 2);
   assert.equal(result.evidence.toolExecutions.length, 1);
-  assert.equal(
-    plannerEvents.some((event) => event.repeatedToolGuardTriggered === true),
-    true,
-  );
 });
 
 test("A7 waiting_approval stops the run before ToolNode executes", async () => {

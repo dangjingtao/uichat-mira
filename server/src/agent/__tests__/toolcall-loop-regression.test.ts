@@ -301,7 +301,7 @@ afterEach(() => {
   }
 });
 
-test("toolCall loop freezes valid use_tool, allows policy, executes ToolNode, writes evidence, and generates from answer-ready summary", async () => {
+test("toolCall loop executes the Planner-selected repeated action without a runtime guard", async () => {
   const readOpen = readOpenTool();
   setupToolExposure("open README.md", [readOpen]);
   const plannerSpy = vi
@@ -333,15 +333,12 @@ test("toolCall loop freezes valid use_tool, allows policy, executes ToolNode, wr
     latestSummary: "present",
     terminalField: "answer",
   });
-  assert.equal(plannerSpy.mock.calls.length, 1);
-  assert.equal(executeSpy.mock.calls.length, 1);
+  assert.equal(plannerSpy.mock.calls.length, 3);
+  assert.equal(executeSpy.mock.calls.length, 3);
   assert.equal(generateSpy.mock.calls.length, 1);
   assert.equal(normalizeEvents[0]?.status, "frozen");
   assert.equal(result.lastToolExecution?.toolId, "read_open");
   assert.equal(result.evidence.toolExecutions.length, 1);
-  assert.equal(result.evidence.toolExecutions[0]?.toolCallId, result.lastToolExecution?.toolCallId);
-  assert.equal(result.evidence.latestSummary?.toolId, "read_open");
-  assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, true);
 });
 
 test("toolCall loop ignores selectedToolIds unless planner emits use_tool", async () => {
@@ -524,7 +521,7 @@ test("toolCall loop reports Harness awaiting approval as an owner-contract failu
   assert.match(result.errorMessage ?? "", /Policy must create pendingApproval/i);
 });
 
-test("toolCall loop repeated same tool args triggers the repeated guard and skips the duplicate execution", async () => {
+test("toolCall loop repeated same tool args remains a planner decision and does not use a runtime guard", async () => {
   const readOpen = readOpenTool();
   setupToolExposure("open README.md", [readOpen]);
   const plannerSpy = vi
@@ -539,16 +536,10 @@ test("toolCall loop repeated same tool args triggers the repeated guard and skip
     .spyOn(harnessInvocations, "executeHarnessInvocation")
     .mockResolvedValue(completedReadOpenInvocation(""));
   const generateSpy = setupGenerate("README content answer");
-  const plannerEvents: Array<Record<string, unknown>> = [];
 
   const result = await runToolLoop({
     runId: "run-regression-repeated-guard",
     question: "open README.md",
-    onExecutionNode: async (event) => {
-      if (event.nodeId === "agent-next-action-planner" && event.phase === "done") {
-        plannerEvents.push(event.details as Record<string, unknown>);
-      }
-    },
   });
 
   assertMatrixFields(result, {
@@ -559,14 +550,10 @@ test("toolCall loop repeated same tool args triggers the repeated guard and skip
     latestSummary: "present",
     terminalField: "answer",
   });
-  assert.equal(plannerSpy.mock.calls.length, 2);
-  assert.equal(executeSpy.mock.calls.length, 1);
+  assert.equal(plannerSpy.mock.calls.length, 3);
+  assert.equal(executeSpy.mock.calls.length, 3);
   assert.equal(generateSpy.mock.calls.length, 1);
-  assert.equal(result.evidence.toolExecutions.length, 1);
-  assert.equal(
-    plannerEvents.some((event) => event.repeatedToolGuardTriggered === true),
-    true,
-  );
+  assert.equal(result.evidence.toolExecutions.length, 2);
 });
 
 test("toolCall loop maxIterations routes to generate instead of a second tool execution", async () => {
@@ -601,7 +588,7 @@ test("toolCall loop maxIterations routes to generate instead of a second tool ex
   assert.equal(generateSpy.mock.calls.length, 1);
 });
 
-test("toolCall loop failed tool writes failed evidence and never reports fake success", async () => {
+test("toolCall loop lets Planner decide how to proceed after recoverable failure", async () => {
   const readOpen = readOpenTool();
   setupToolExposure("open README.md", [readOpen]);
   vi.spyOn(providerProxyService, "streamTaskChatText")
@@ -631,20 +618,19 @@ test("toolCall loop failed tool writes failed evidence and never reports fake su
   });
 
   assertMatrixFields(result, {
-    status: "failed",
+    status: "completed",
     pendingToolCall: "absent",
     pendingApproval: "absent",
     lastToolExecution: "present",
     latestSummary: "present",
-    terminalField: "errorMessage",
+    terminalField: "answer",
   });
-  assert.equal(executeSpy.mock.calls.length, 2);
-  assert.equal(generateSpy.mock.calls.length, 0);
+  assert.equal(executeSpy.mock.calls.length, 1);
+  assert.equal(generateSpy.mock.calls.length, 1);
   assert.equal(result.lastToolExecution?.status, "failed");
   assert.equal(result.lastToolExecution?.failureKind, "recoverable");
   assert.equal(result.evidence.latestSummary?.status, "failed");
   assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, false);
-  assert.match(result.errorMessage ?? "", /planner cannot continue safely|planner output was invalid json/i);
 }, 15000);
 
 test("toolCall loop terminal failed tool still fails the graph and does not generate a guarded answer", async () => {

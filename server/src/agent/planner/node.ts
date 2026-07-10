@@ -1,8 +1,7 @@
 import { providerProxyService } from "@/services/provider-proxy.service/index";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol";
 import { writeStructuredLog } from "@/logger";
-import { getEvidencePayload, getTaskCompletionDecision } from "../evidence";
-import type { AgentNextAction, AgentRepeatedActionGuardResult } from "../types";
+import type { AgentNextAction } from "../types";
 import {
   buildPlannerObservationContext,
   emitStepNode,
@@ -19,27 +18,11 @@ import {
   toNextActionFallback,
   toPreview,
 } from "./action-types";
-import { getPlannerAnswerStopDecision } from "./answer-stop";
-import {
-  getReadOpenBridgeActionFromListEvidence,
-  getReadOpenBridgeActionFromLocateEvidence,
-} from "./locate-open-bridge";
-import {
-  getWorkspaceLocalIntentGuardAction,
-  LOCAL_INTENT_GUARD_REASON,
-} from "./local-intent-guard";
 import {
   parseNextActionPlannerOutputWithDiagnostics,
 } from "./parse";
-import {
-  buildAnswerCompletionReplanMessages,
-  buildNextActionPlannerMessages,
-  normalizeToolExposure,
-} from "./prompt";
-import { getPlannerRepeatedActionGuardResult } from "./repeated-action-guard";
+import { buildNextActionPlannerMessages, normalizeToolExposure } from "./prompt";
 import { validateNextAction } from "./validate";
-import { getCoverageTransitionDecision } from "./coverage-transition";
-import { reduceAgentCoverageState } from "../coverage-state";
 
 const getRecoveryExhaustedPlannerConclusion = (observationContext: ReturnType<
   typeof buildPlannerObservationContext
@@ -68,14 +51,12 @@ const logPlannerDecisionDebug = (input: {
   threadId: string;
   iteration: number;
   maxIterations: number;
-  answerStopRuleTriggered: boolean;
   taskModelInvoked: boolean;
   nextAction?: AgentNextAction;
   rawOutput: string;
   sanitizedOutput: string;
   parseErrorReason?: string;
   parseWarnings?: string[];
-  repeatedActionGuard?: AgentRepeatedActionGuardResult;
 }) => {
   writeStructuredLog(input.parseErrorReason ? "warn" : "info", {
     msg: "Planner decision debug",
@@ -84,7 +65,6 @@ const logPlannerDecisionDebug = (input: {
     threadId: input.threadId,
     iteration: input.iteration,
     maxIterations: input.maxIterations,
-    answerStopRuleTriggered: input.answerStopRuleTriggered,
     taskModelInvoked: input.taskModelInvoked,
     selectedActionType: input.nextAction?.type ?? null,
     selectedToolId:
@@ -92,14 +72,6 @@ const logPlannerDecisionDebug = (input: {
     reason: input.nextAction?.reason ?? null,
     parseErrorReason: input.parseErrorReason,
     parseWarnings: input.parseWarnings,
-    repeatedToolGuardTriggered: input.repeatedActionGuard?.triggered ?? false,
-    repeatedToolGuardReason: input.repeatedActionGuard?.reason,
-    guardedActionType: input.repeatedActionGuard?.guardedActionType,
-    guardedToolId: input.repeatedActionGuard?.guardedToolId,
-    guardedArgsHash: input.repeatedActionGuard?.guardedArgsHash,
-    guardedQuery: input.repeatedActionGuard?.guardedQuery,
-    matchedEvidenceIndex: input.repeatedActionGuard?.matchedEvidenceIndex,
-    matchedToolCallId: input.repeatedActionGuard?.matchedToolCallId,
     rawOutputPreview: input.rawOutput ? toPreview(input.rawOutput) : undefined,
     sanitizedOutputPreview: input.sanitizedOutput
       ? toPreview(input.sanitizedOutput)
@@ -117,24 +89,9 @@ export const nextActionPlannerNode = async (
   const question =
     state.question?.trim() || getLatestUserQuestion(state.messages) || state.goal.text;
   const toolExposure = normalizeToolExposure(state);
-  const plannerEvidence = getEvidencePayload(state);
   const observationContext = buildPlannerObservationContext(state);
   const latestEvidenceSummary = observationContext.latestEvidenceSummary;
   const taskCoverageView = observationContext.taskCoverageView;
-  const coverageState = reduceAgentCoverageState({
-    question,
-    currentTaskFrame: state.currentTaskFrame,
-    evidence: plannerEvidence,
-    latestSummary: latestEvidenceSummary,
-  });
-  const answerStopDecision = getPlannerAnswerStopDecision({
-    latestSummary: latestEvidenceSummary,
-    pendingApproval: observationContext.pendingApproval,
-    errorMessage: state.errorMessage,
-    question,
-    currentTaskFrame: state.currentTaskFrame,
-    evidence: plannerEvidence,
-  });
 
   await emitStepNode(emit, {
     runId: state.runId,
@@ -149,8 +106,6 @@ export const nextActionPlannerNode = async (
       maxIterations,
       latestEvidenceSummary: latestEvidenceSummary ?? null,
       taskCoverageView: taskCoverageView ?? null,
-      answerStopRuleTriggered: answerStopDecision.shouldAnswer,
-      answerStopRuleReason: answerStopDecision.reason,
       schemaReplanAttemptCount: observationContext.recovery.attemptCount,
       schemaReplanError: observationContext.recovery.schemaError ?? null,
     },
@@ -161,26 +116,16 @@ export const nextActionPlannerNode = async (
   let sanitizedOutput = "";
   let parseErrorReason: string | undefined;
   let parseWarnings: string[] | undefined;
-  let repeatedActionGuard: AgentRepeatedActionGuardResult | undefined;
-  let localIntentGuardTriggered = false;
-  let localIntentGuardReason: string | undefined;
-  let coverageTransitionReason: string | undefined;
   const pendingApprovalActive = Boolean(observationContext.pendingApproval);
   const recoveryExhausted =
     observationContext.recovery.source !== "none" &&
     observationContext.recovery.exhausted;
   const taskModelInvoked =
-    !answerStopDecision.shouldAnswer &&
     !pendingApprovalActive &&
     !recoveryExhausted &&
     !(maxIterations > 0 && iteration >= maxIterations);
 
-  if (answerStopDecision.shouldAnswer) {
-    nextAction = {
-      type: "answer",
-      reason: answerStopDecision.reason,
-    };
-  } else if (pendingApprovalActive) {
+  if (pendingApprovalActive) {
     nextAction = undefined;
   } else if (recoveryExhausted) {
     nextAction = getRecoveryExhaustedPlannerConclusion(observationContext);
@@ -189,140 +134,50 @@ export const nextActionPlannerNode = async (
       "Planner reached the iteration limit and must stop.",
     );
   } else {
-    const coverageTransitionDecision = getCoverageTransitionDecision({
+    const messages: NormalizedChatMessage[] = buildNextActionPlannerMessages({
       question,
-      coverageState,
+      observationContext,
       toolExposure,
-      recovery: observationContext.recovery,
-      latestObservation: observationContext.latestObservation,
-      pendingApproval: observationContext.pendingApproval,
       iteration,
       maxIterations,
     });
-    coverageTransitionReason = coverageTransitionDecision.reason;
 
-    const listToOpenBridgeAction = getReadOpenBridgeActionFromListEvidence({
-      question,
-      toolExposure,
-      evidence: plannerEvidence,
-    });
-    const locateToOpenBridgeAction = getReadOpenBridgeActionFromLocateEvidence({
-      question,
-      toolExposure,
-      evidence: plannerEvidence,
-    });
-
-    if (coverageTransitionDecision.nextAction) {
-      nextAction = coverageTransitionDecision.nextAction;
-    } else if (listToOpenBridgeAction) {
-      nextAction = listToOpenBridgeAction;
-    } else if (locateToOpenBridgeAction) {
-      nextAction = locateToOpenBridgeAction;
-    } else {
-      const messages: NormalizedChatMessage[] = buildNextActionPlannerMessages({
-        question,
-        observationContext,
-        toolExposure,
-        iteration,
-        maxIterations,
-      });
-
-      const resolvePlannerModelAction = async (
-        plannerMessages: NormalizedChatMessage[],
-      ) => {
-        let resolvedRawOutput = "";
-        for await (const delta of providerProxyService.streamTaskChatText(plannerMessages)) {
-          resolvedRawOutput += delta;
-        }
-
-        const validationResult = validateNextAction(
-          parseNextActionPlannerOutputWithDiagnostics(resolvedRawOutput),
-          toolExposure.exposedTools,
-        );
-
-        return {
-          action: validationResult.action,
-          rawOutput: resolvedRawOutput,
-          sanitizedOutput: validationResult.sanitizedOutput ?? "",
-          parseErrorReason: validationResult.parseErrorReason,
-          parseWarnings: validationResult.parseWarnings,
-        };
-      };
-
-      try {
-        const initialPlannerDecision = await resolvePlannerModelAction(messages);
-        nextAction = initialPlannerDecision.action;
-        rawOutput = initialPlannerDecision.rawOutput;
-        sanitizedOutput = initialPlannerDecision.sanitizedOutput;
-        parseErrorReason = initialPlannerDecision.parseErrorReason;
-        parseWarnings = initialPlannerDecision.parseWarnings;
-
-        const localIntentGuardAction = getWorkspaceLocalIntentGuardAction({
-          question,
-          nextAction,
-          toolExposure,
-          workspaceRoot: state.workspaceRoot,
-          knowledgeBaseId: state.knowledgeBaseId,
-        });
-        if (localIntentGuardAction?.guarded) {
-          nextAction = localIntentGuardAction.nextAction;
-          localIntentGuardTriggered = true;
-          localIntentGuardReason = localIntentGuardAction.reason;
-        }
-
-        repeatedActionGuard = getPlannerRepeatedActionGuardResult({
-          evidence: plannerEvidence,
-          nextAction,
-        });
-        if (repeatedActionGuard.triggered) {
-          nextAction = {
-            type: "answer",
-            reason:
-              repeatedActionGuard.reason ??
-              "Repeated action guard blocked a duplicate action and will answer from existing evidence.",
-          };
-        }
-
-        if (nextAction?.type === "answer") {
-          const taskCompletionDecision = getTaskCompletionDecision({
-            question,
-            currentTaskFrame: state.currentTaskFrame,
-            evidence: plannerEvidence,
-            latestSummary: latestEvidenceSummary,
-          });
-          if (!taskCompletionDecision.taskCompleted) {
-            const completionReplanMessages = buildAnswerCompletionReplanMessages({
-              question,
-              observationContext,
-              toolExposure,
-              iteration,
-              maxIterations,
-              blockedAnswerReason: taskCompletionDecision.reason,
-              previousAnswerReason: nextAction.reason,
-            });
-            const completionReplanDecision = await resolvePlannerModelAction(
-              completionReplanMessages,
-            );
-            nextAction = completionReplanDecision.action;
-            rawOutput = completionReplanDecision.rawOutput;
-            sanitizedOutput = completionReplanDecision.sanitizedOutput;
-            parseErrorReason = completionReplanDecision.parseErrorReason;
-            parseWarnings = completionReplanDecision.parseWarnings;
-
-            if (nextAction?.type === "answer") {
-              nextAction = toNextActionFallback(
-                `Planner proposed answer again after completion check blocked it: ${taskCompletionDecision.reason}`,
-              );
-            }
-          }
-        }
-      } catch (error) {
-        nextAction = toNextActionFallback(
-          error instanceof Error && error.message.trim()
-            ? `Planner task model call failed: ${error.message.trim()}`
-            : NEXT_ACTION_PLANNER_FALLBACK_REASON,
-        );
+    const resolvePlannerModelAction = async (
+      plannerMessages: NormalizedChatMessage[],
+    ) => {
+      let resolvedRawOutput = "";
+      for await (const delta of providerProxyService.streamTaskChatText(plannerMessages)) {
+        resolvedRawOutput += delta;
       }
+
+      const validationResult = validateNextAction(
+        parseNextActionPlannerOutputWithDiagnostics(resolvedRawOutput),
+        toolExposure.exposedTools,
+      );
+
+      return {
+        action: validationResult.action,
+        rawOutput: resolvedRawOutput,
+        sanitizedOutput: validationResult.sanitizedOutput ?? "",
+        parseErrorReason: validationResult.parseErrorReason,
+        parseWarnings: validationResult.parseWarnings,
+      };
+    };
+
+    try {
+      const initialPlannerDecision = await resolvePlannerModelAction(messages);
+      nextAction = initialPlannerDecision.action;
+      rawOutput = initialPlannerDecision.rawOutput;
+      sanitizedOutput = initialPlannerDecision.sanitizedOutput;
+      parseErrorReason = initialPlannerDecision.parseErrorReason;
+      parseWarnings = initialPlannerDecision.parseWarnings;
+
+    } catch (error) {
+      nextAction = toNextActionFallback(
+        error instanceof Error && error.message.trim()
+          ? `Planner task model call failed: ${error.message.trim()}`
+          : NEXT_ACTION_PLANNER_FALLBACK_REASON,
+      );
     }
   }
 
@@ -331,14 +186,12 @@ export const nextActionPlannerNode = async (
     threadId: state.threadId,
     iteration,
     maxIterations,
-    answerStopRuleTriggered: answerStopDecision.shouldAnswer,
     taskModelInvoked,
     nextAction,
     rawOutput,
     sanitizedOutput,
     parseErrorReason,
     parseWarnings,
-    repeatedActionGuard,
   });
 
   await emitStepNode(emit, {
@@ -369,29 +222,15 @@ export const nextActionPlannerNode = async (
       maxIterations,
       latestEvidenceSummary: latestEvidenceSummary ?? null,
       taskCoverageView: taskCoverageView ?? null,
-      answerStopRuleTriggered: answerStopDecision.shouldAnswer,
-      answerStopRuleReason: answerStopDecision.reason,
-      coverageTransitionReason: coverageTransitionReason ?? null,
       rawOutputPreview: rawOutput ? toPreview(rawOutput) : undefined,
       sanitizedOutputPreview: sanitizedOutput ? toPreview(sanitizedOutput) : undefined,
       parseErrorReason,
       parseWarnings,
-      repeatedToolGuardTriggered: repeatedActionGuard?.triggered ?? false,
-      repeatedToolGuardReason: repeatedActionGuard?.reason,
-      guardedActionType: repeatedActionGuard?.guardedActionType,
-      guardedToolId: repeatedActionGuard?.guardedToolId ?? null,
-      guardedArgsHash: repeatedActionGuard?.guardedArgsHash,
-      guardedQuery: repeatedActionGuard?.guardedQuery,
-      matchedEvidenceIndex: repeatedActionGuard?.matchedEvidenceIndex,
-      matchedToolCallId: repeatedActionGuard?.matchedToolCallId,
-      localIntentGuardTriggered,
-      localIntentGuardReason: localIntentGuardReason ?? null,
       schemaReplanAttemptCount: observationContext.recovery.attemptCount,
       schemaReplanError: observationContext.recovery.schemaError ?? null,
       pendingApprovalActive,
       recoveryExhausted,
       allowedActionTypes: [...ALLOWED_ACTION_TYPES],
-      localIntentLegacyGuardReason: LOCAL_INTENT_GUARD_REASON,
     },
   });
 

@@ -296,17 +296,6 @@ export interface AgentEvidenceSummary {
   };
 }
 
-export interface AgentRepeatedActionGuardResult {
-  triggered: boolean;
-  reason?: string;
-  guardedActionType?: "use_tool" | "retrieve";
-  guardedToolId?: string;
-  guardedArgsHash?: string;
-  guardedQuery?: string;
-  matchedEvidenceIndex?: number;
-  matchedToolCallId?: string;
-}
-
 export interface AgentTaskCoverageView {
   requiredTargets: string[];
   coveredTargets: string[];
@@ -314,16 +303,6 @@ export interface AgentTaskCoverageView {
   pendingActions: string[];
   blockedReason?: string;
   taskCompletable: boolean;
-}
-
-export interface AgentTaskCompletionDecision {
-  taskCompleted: boolean;
-  requiredTargets: string[];
-  coveredTargets: string[];
-  missingTargets: string[];
-  pendingActions: string[];
-  reason: string;
-  taskCoverageView: AgentTaskCoverageView;
 }
 
 export type AgentNextAction =
