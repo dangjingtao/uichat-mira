@@ -1,5 +1,6 @@
 import type {
   AgentEvidencePayload,
+  AgentEvidenceResolution,
   AgentEvidenceSummary,
   AgentObservation,
   AgentRetrievalEvidence,
@@ -21,6 +22,9 @@ const preview = (value: string, limit = TEXT_PREVIEW_LIMIT) => {
   const text = value.replace(/\s+/g, " ").trim();
   return text.length > limit ? `${text.slice(0, limit).trimEnd()}...` : text;
 };
+
+const hasUnreadableTerminalText = (value: string) =>
+  /[\uFFFD�]|锟|\?{3,}/u.test(value);
 
 const rawRef = (execution: AgentToolExecutionResult, evidenceIndex: number) => ({
   evidenceIndex,
@@ -351,6 +355,32 @@ const summarizeToolResult = (
       : null;
     const stdout = typeof result.stdout === "string" ? preview(result.stdout) : "";
     const stderr = typeof result.stderr === "string" ? preview(result.stderr) : "";
+    const stdoutEncoding = result.stdoutEncoding ?? "unknown";
+    const stderrEncoding = result.stderrEncoding ?? "unknown";
+    const binaryDetected = result.binaryDetected === true;
+    const unreadableReason = binaryDetected
+      ? "Terminal output contains binary data."
+      : stdoutEncoding === "unknown" || stderrEncoding === "unknown"
+        ? "Terminal output encoding is unknown."
+        : hasUnreadableTerminalText(stdout) || hasUnreadableTerminalText(stderr)
+          ? "Terminal output contains replacement, mojibake, or placeholder characters."
+          : undefined;
+    const outputInterpretable =
+      unreadableReason === undefined;
+    const commandSucceeded: AgentEvidenceResolution = timedOut
+      ? "unknown"
+      : exitCode === 0
+        ? "true"
+        : typeof exitCode === "number"
+          ? "false"
+          : "unknown";
+    const gaps = [
+      ...(timedOut ? ["Command did not finish."] : []),
+      ...(truncated ? ["Terminal output is truncated."] : []),
+      ...(!outputInterpretable
+        ? ["Terminal output encoding or text is not reliably interpretable."]
+        : []),
+    ];
     return baseSummary({
       execution,
       evidenceIndex,
@@ -362,25 +392,32 @@ const summarizeToolResult = (
         ...(stdout ? [`stdout=${stdout}`] : []),
         ...(stderr ? [`stderr=${stderr}`] : []),
       ],
-      ...(timedOut ? { status: "timed_out", gaps: ["Command did not finish."] } : {}),
-      ...(truncated ? { status: "truncated", gaps: ["Terminal output is truncated."] } : {}),
+      ...(timedOut
+        ? { status: "timed_out" as const }
+        : truncated
+          ? { status: "truncated" as const }
+          : !outputInterpretable
+            ? { status: binaryDetected ? "binaryDetected" as const : "partial" as const }
+            : {}),
+      ...(gaps.length ? { gaps } : {}),
       data: {
         kind: "terminal_session",
         command: result.command,
         exitCode,
         processCompleted: !timedOut,
-        commandSucceeded: !timedOut && exitCode === 0,
+        commandSucceeded,
         stdoutPreview: stdout,
         stderrPreview: stderr,
-        stdoutEncoding: result.stdoutEncoding ?? "unknown",
-        stderrEncoding: result.stderrEncoding ?? "unknown",
+        stdoutEncoding,
+        stderrEncoding,
         timedOut,
         truncated,
-        binaryDetected: result.binaryDetected === true,
+        binaryDetected,
         violations: Array.isArray(result.violations)
           ? result.violations.filter((item): item is string => typeof item === "string")
           : [],
-        outputInterpretable: result.binaryDetected !== true,
+        outputInterpretable,
+        ...(unreadableReason ? { unreadableReason } : {}),
       },
     });
   }

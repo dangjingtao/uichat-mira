@@ -721,10 +721,8 @@ test("toolCall loop timedOut tool evidence is not marked answer-ready", async ()
   assert.equal(result.evidence.latestSummary?.data?.kind, "terminal_session");
   if (result.evidence.latestSummary?.data?.kind === "terminal_session") {
     assert.equal(result.evidence.latestSummary.data.processCompleted, false);
-    assert.equal(result.evidence.latestSummary.data.commandSucceeded, false);
-    assert.equal("taskSatisfied" in result.evidence.latestSummary.data, false);
+    assert.equal(result.evidence.latestSummary.data.commandSucceeded, "unknown");
     assert.equal(result.evidence.latestSummary.data.timedOut, true);
-    assert.equal(result.evidence.latestSummary.data.outputInterpretable, true);
-    assert.equal("canAnswerCommandQuestion" in result.evidence.latestSummary.data, false);
+    assert.equal(result.evidence.latestSummary.data.outputInterpretable, false);
   }
 });
