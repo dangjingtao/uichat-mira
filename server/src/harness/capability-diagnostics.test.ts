@@ -62,7 +62,7 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
   it("returns tool diagnostics with grouped tool meta and scores", async () => {
     registerCapability({
       definition: {
-        id: "read_list",
+        id: "read_discover",
         title: "Read List",
         description: "list workspace",
         domain: "read",
@@ -82,7 +82,7 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
 
     registerCapability({
       definition: {
-        id: "read_locate",
+        id: "read_open",
         title: "Read Locate",
         description: "locate workspace files",
         domain: "read",
@@ -130,22 +130,18 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
     expect(result).not.toHaveProperty("selectedToolIds");
     expect(result.candidates).toHaveLength(2);
     expect(result.candidates[0]).toMatchObject({
-      toolId: "read_list",
-      actionProfileId: "read_locate",
+      toolId: "read_discover",
     });
     expect(result.candidates[1]).toMatchObject({
-      toolId: "read_locate",
-      actionProfileId: "read_locate",
+      toolId: "read_open",
     });
     expect(result.toolCandidates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          toolId: "read_list",
-          actionProfileId: "read_locate",
+          toolId: "read_discover",
         }),
         expect.objectContaining({
-          toolId: "read_locate",
-          actionProfileId: "read_locate",
+          toolId: "read_open",
         }),
       ]),
     );
@@ -156,7 +152,7 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
   it("keeps rule-based workspace candidates when local embedding is unavailable", async () => {
     registerCapability({
       definition: {
-        id: "read_list",
+        id: "read_discover",
         title: "Read List",
         description: "list workspace",
         domain: "read",
@@ -176,7 +172,7 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
 
     registerCapability({
       definition: {
-        id: "read_locate",
+        id: "read_open",
         title: "Read Locate",
         description: "locate workspace files",
         domain: "read",
@@ -218,12 +214,10 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
 
     expect(result.candidates).toHaveLength(2);
     expect(result.candidates[0]).toMatchObject({
-      toolId: "read_list",
-      actionProfileId: "read_locate",
+      toolId: "read_discover",
     });
     expect(result.candidates[1]).toMatchObject({
-      toolId: "read_locate",
-      actionProfileId: "read_locate",
+      toolId: "read_open",
     });
     expect(result.retrievalModel).toBeUndefined();
     expect(result.retrievalError).toBeUndefined();

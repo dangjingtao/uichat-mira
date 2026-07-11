@@ -20,9 +20,8 @@ const INTERNAL_PROFILE_BLUEPRINTS: Array<{
       "Find, inspect, and read relevant workspace files and excerpts for the current task.",
     domain: "read",
     tags: ["workspace", "read", "lookup", "locate", "open"],
-    preferredToolId: "read_locate",
-    supportingToolIds: ["read", "read_list", "read_locate", "read_open", "read_extract", "read_slice"],
-    actionProfileId: "read_locate",
+    preferredToolId: "read_open",
+    supportingToolIds: ["read_discover", "read_open"],
   },
   {
     id: "codebase_understanding",

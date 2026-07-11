@@ -2,7 +2,13 @@ import type { McpToolDefinition } from "../../mcp/core/definitions.js";
 import type { HarnessExposurePolicyInput } from "./types.js";
 
 const SAFE_CHAT_DOMAINS = new Set(["read", "web_search"]);
-const INTERNAL_INTENT_ONLY_TOOL_IDS = new Set(["read", "read_slice"]);
+const INTERNAL_INTENT_ONLY_TOOL_IDS = new Set([
+  "read",
+  "read_list",
+  "read_locate",
+  "read_extract",
+  "read_slice",
+]);
 
 export const isInternalIntentOnlyTool = (definition: McpToolDefinition) =>
   definition.source === "internal" && INTERNAL_INTENT_ONLY_TOOL_IDS.has(definition.id);
@@ -68,10 +74,7 @@ export const shouldIncludeDefinition = (
     return false;
   }
 
-  if (
-    (input.source === "agent_intent" || input.source === "chat_surface") &&
-    isInternalIntentOnlyTool(definition)
-  ) {
+  if (input.source === "agent_intent" && isInternalIntentOnlyTool(definition)) {
     return false;
   }
 

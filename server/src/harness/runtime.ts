@@ -10,6 +10,7 @@ import { readExtractTool } from "../mcp/tools/read-extract.tool.js";
 import { readListTool } from "../mcp/tools/read-list.tool.js";
 import { readLocateTool } from "../mcp/tools/read-locate.tool.js";
 import { readOpenTool } from "../mcp/tools/read-open.tool.js";
+import { readDiscoverTool } from "../mcp/tools/read-discover.tool.js";
 import { readSliceTool } from "../mcp/tools/read-slice.tool.js";
 import { readTool } from "../mcp/tools/read.tool.js";
 import { terminalSessionTool } from "../mcp/tools/terminal-session.tool.js";
@@ -33,6 +34,7 @@ export const initializeHarnessRuntime = () => {
   registerCapability(readListTool);
   registerCapability(readLocateTool);
   registerCapability(readOpenTool);
+  registerCapability(readDiscoverTool);
   registerCapability(readExtractTool);
   registerCapability(readSliceTool);
   registerCapability(readTool);

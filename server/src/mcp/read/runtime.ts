@@ -12,10 +12,11 @@ import {
   describeReadPlan,
   listDirectory,
   readStructuredDocument,
+  sliceExtractedText,
 } from "../document-readers.js";
 import { executeReadLocate, describeLocatePlan } from "./locate.js";
 import { resolveWorkspacePath } from "../workspace.js";
-import type { ReadListResult, ReadOpenResult } from "./types.js";
+import type { ReadListResult, ReadOpenResult, ReadSelection } from "./types.js";
 
 type ReadExecutionContext = {
   args: Record<string, unknown>;
@@ -49,10 +50,13 @@ export const executeReadList = async ({
   });
 
   const entries = listDirectory(environment, targetPath);
+  const maxResults = typeof args.maxResults === "number" && Number.isInteger(args.maxResults)
+    ? Math.min(Math.max(args.maxResults, 1), 100)
+    : undefined;
   const contents: ReadListResult = {
     type: "list",
     path: String(args.path),
-    entries,
+    entries: maxResults ? entries.slice(0, maxResults) : entries,
   };
   return {
     contents,
@@ -60,7 +64,7 @@ export const executeReadList = async ({
       createArtifact({
         kind: "table",
         title: `Directory ${String(args.path)}`,
-        data: entries,
+        data: contents.entries,
         metadata: { path: args.path },
       }),
     ],
@@ -89,10 +93,19 @@ export const executeReadOpen = async ({
   });
 
   const result = await readStructuredDocument(harnessEnvironment, targetPath);
+  const selection = parseReadSelection(args.selection);
+  const selectedText = selection
+    ? sliceExtractedText(result.text, {
+        startLine: selection.start,
+        endLine: selection.end,
+      }).text
+    : result.text;
   const contents: ReadOpenResult = {
     type: "open",
     path: String(args.path),
-    source: result,
+    operation: selection ? "extract" : "open",
+    ...(selection ? { selection } : {}),
+    source: { ...result, text: selectedText },
   };
   return {
     contents,
@@ -101,11 +114,35 @@ export const executeReadOpen = async ({
         kind: result.kind,
         title: `Read ${String(args.path)}`,
         mimeType: result.mimeType,
-        data: result.text,
-        metadata: result.metadata,
+        data: selectedText,
+        metadata: { ...result.metadata, ...(selection ? { selection } : {}) },
       }),
     ],
   };
+};
+
+const parseReadSelection = (value: unknown): ReadSelection | undefined => {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw mcpBadRequest("selection must be an object");
+  }
+  const selection = value as Record<string, unknown>;
+  if (selection.kind !== "lines" && selection.kind !== "range") {
+    throw mcpBadRequest("selection.kind must be one of: lines, range");
+  }
+  if (!Number.isInteger(selection.start) || !Number.isInteger(selection.end)) {
+    throw mcpBadRequest("selection.start and selection.end must be integers");
+  }
+  const start = selection.start as number;
+  const end = selection.end as number;
+  if (start < 1 || end < start) {
+    throw mcpBadRequest("selection must use a positive inclusive range");
+  }
+  const keys = Object.keys(selection);
+  if (keys.some((key) => !["kind", "start", "end"].includes(key))) {
+    throw mcpBadRequest("selection contains unsupported fields");
+  }
+  return selection as ReadSelection;
 };
 
 export const executeReadLocateRuntime = async ({

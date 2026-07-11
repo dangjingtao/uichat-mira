@@ -62,6 +62,28 @@ const validateAgainstSchema = (
   schema: JsonSchema,
   pathSegments: string[],
 ) => {
+  if (Array.isArray(schema.oneOf)) {
+    const errors: unknown[] = [];
+    let matches = 0;
+    for (const candidate of schema.oneOf) {
+      if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+        continue;
+      }
+      try {
+        validateAgainstSchema(value, candidate as JsonSchema, pathSegments);
+        matches += 1;
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (matches !== 1) {
+      throw mcpBadRequest(
+        `${describePath(pathSegments)} must match exactly one schema variant`,
+      );
+    }
+    return;
+  }
+
   const schemaType = typeof schema.type === "string" ? schema.type : undefined;
 
   if (schemaType === "object") {

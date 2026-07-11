@@ -33,7 +33,13 @@ export type ReadOpenResult = {
   type: "open";
   path: string;
   source: ReadSource;
+  operation?: "open" | "extract";
+  selection?: ReadSelection;
 };
+
+export type ReadSelection =
+  | { kind: "lines"; start: number; end: number }
+  | { kind: "range"; start: number; end: number };
 
 export type ReadLocateMatch = {
   path: string;
