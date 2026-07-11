@@ -16,7 +16,6 @@ const appDataRoot = getTestArtifactDir("codegraph-studio-appdata");
 const isolatedWorkspaceRoot = getTestArtifactDir("codegraph-studio-workspace");
 
 const originalEnv = {
-  UI_CHAT_CODEGRAPH_PLANNER_ENABLED: process.env.UI_CHAT_CODEGRAPH_PLANNER_ENABLED,
   UI_CHAT_CODEGRAPH_APP_DATA_ROOT: process.env.UI_CHAT_CODEGRAPH_APP_DATA_ROOT,
   UI_CHAT_CODEGRAPH_COMMAND: process.env.UI_CHAT_CODEGRAPH_COMMAND,
   UI_CHAT_CODEGRAPH_START_ARGS: process.env.UI_CHAT_CODEGRAPH_START_ARGS,
@@ -43,7 +42,6 @@ describe("CodeGraph Studio service", () => {
     fs.mkdirSync(storageRoot, { recursive: true });
     fs.mkdirSync(appDataRoot, { recursive: true });
     fs.mkdirSync(isolatedWorkspaceRoot, { recursive: true });
-    delete process.env.UI_CHAT_CODEGRAPH_PLANNER_ENABLED;
     delete process.env.UI_CHAT_CODEGRAPH_APP_DATA_ROOT;
     delete process.env.UI_CHAT_CODEGRAPH_COMMAND;
     delete process.env.UI_CHAT_CODEGRAPH_START_ARGS;
@@ -68,7 +66,8 @@ describe("CodeGraph Studio service", () => {
 
     expect(report.status).toBe("blocked");
     expect(report.config.command).toBe("codegraph");
-    expect(report.config.plannerExposureEnabled).toBe(false);
+    expect(report.config.agentCapabilityEnabled).toBe(false);
+    expect(report.config.capabilityRegistered).toBe(false);
     expect(
       report.blockedReasons.map((reason) => reason.code),
     ).toContain("external_index_root_unsupported");
@@ -121,7 +120,7 @@ describe("CodeGraph Studio service", () => {
     }
   });
 
-  it("saves config and uses the fake provider for ready smoke query without enabling planner exposure by default", async () => {
+  it("saves config and uses the fake provider for ready smoke query while keeping capability registration opt-in", async () => {
     const caseRoot = path.join(
       getTestArtifactDir("codegraph-studio-cases"),
       `ready-${Date.now()}`,
@@ -138,6 +137,7 @@ describe("CodeGraph Studio service", () => {
     });
 
     service.saveConfig({
+      agentCapabilityEnabled: true,
       command: process.execPath,
       startArgs: [fixturePath, "--mcp"],
       versionProbeArgs: [fixturePath, "--version"],
@@ -149,15 +149,18 @@ describe("CodeGraph Studio service", () => {
     });
 
     const started = await service.start();
+    const healthy = await service.health();
     const smoke = await service.smokeQuery("microapps architecture flow overview");
 
     expect(started.report.status).toBe("ready");
+    expect(healthy.report.status).toBe("ready");
     expect(smoke.ok).toBe(true);
     expect(smoke.kind).toBe("query");
     expect(smoke.report.config.command).toBe(process.execPath);
     expect(smoke.report.config.queryLimit).toBe(4);
     expect(smoke.report.config.maxResults).toBe(7);
-    expect(smoke.report.config.plannerExposureEnabled).toBe(false);
+    expect(smoke.report.capability.available).toBe(true);
+    expect(smoke.report.config.capabilityRegistered).toBe(false);
   });
 
   it("rejects appDataRoot when it is the workspace root", async () => {

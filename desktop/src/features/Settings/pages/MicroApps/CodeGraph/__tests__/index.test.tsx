@@ -23,7 +23,7 @@ const translations = {
     "如需验证页面流程，可切换 Fake Provider",
   "settings.microApps.codeGraphStudio.overview.nextSteps.step3.description":
     "使用 Fake Provider 运行 Smoke，验证页面流程，不代表真实 CodeGraph 可用。",
-  "settings.microApps.codeGraphStudio.overview.chips.planner": "Planner 暴露：{{value}}",
+  "settings.microApps.codeGraphStudio.overview.chips.agentCapability": "智能体能力：{{value}}",
   "settings.microApps.codeGraphStudio.overview.chips.telemetry": "Telemetry：{{value}}",
   "settings.microApps.codeGraphStudio.overview.chips.pollution": "仓库污染：{{value}}",
   "settings.microApps.codeGraphStudio.overview.chips.fakeProvider": "Fake Provider：{{value}}",
@@ -62,6 +62,16 @@ const translations = {
     "这里只保留 owner 常用参数。Probe args、索引路径和日志路径统一收进高级配置。",
   "settings.microApps.codeGraphStudio.cards.config.appDataRootHelp":
     "用于保存日志与临时状态。必须位于仓库外部，建议选择长期可用的目录。",
+  "settings.microApps.codeGraphStudio.cards.capability.microAppHint":
+    "关闭后，CodeGraph 微应用本身不再参与受控 capability 注册。",
+  "settings.microApps.codeGraphStudio.cards.capability.agentCapabilityHint":
+    "允许智能体使用 CodeGraph。只有 runtime ready、telemetry verified_off、workspace 匹配、repo pollution guard safe 且 App Data Root 合法时才会真正生效。",
+  "settings.microApps.codeGraphStudio.cards.capability.statusTitle":
+    "当前 capability 状态：{{value}}",
+  "settings.microApps.codeGraphStudio.cards.capability.registered":
+    "Harness 已注册 `codebase_explore`，但仍只暴露受控 capability，不会把原生命令暴露给 Planner。",
+  "settings.microApps.codeGraphStudio.cards.capability.unavailable":
+    "当前还不能注册 `codebase_explore`，请先满足上面的 ready gate。",
   "settings.microApps.codeGraphStudio.cards.advanced.title": "高级配置（可选）",
   "settings.microApps.codeGraphStudio.cards.advanced.meta":
     "默认折叠。这里放 probe args、logRoot、indexRoot 等开发调试字段。",
@@ -110,6 +120,10 @@ const translations = {
   "settings.microApps.codeGraphStudio.fields.behavior": "行为",
   "settings.microApps.codeGraphStudio.fields.workspaceRootReadonly":
     "Workspace Root（只读）",
+  "settings.microApps.codeGraphStudio.fields.microAppEnabled":
+    "启用 CodeGraph 微应用",
+  "settings.microApps.codeGraphStudio.fields.agentCapabilityEnabled":
+    "允许智能体使用 CodeGraph",
   "settings.microApps.codeGraphStudio.fields.command": "Command",
   "settings.microApps.codeGraphStudio.fields.appDataRootRequired":
     "App Data Root（必填）",
@@ -221,6 +235,8 @@ const baseReport = {
     appDataRootResolved: null,
     logRoot: null,
     indexRoot: null,
+    microAppEnabled: true,
+    agentCapabilityEnabled: false,
     command: "codegraph",
     startArgs: ["serve", "--mcp"],
     versionProbeArgs: ["--version"],
@@ -228,7 +244,27 @@ const baseReport = {
     timeoutMs: 2000,
     maxResults: 5,
     queryLimit: 5,
-    plannerExposureEnabled: false,
+    capabilityRegistered: false,
+  },
+  capability: {
+    available: false,
+    registered: false,
+    reasons: [
+      {
+        code: "agent_capability_disabled",
+        message: "Owner has not allowed the agent to use CodeGraph.",
+      },
+    ],
+    checks: {
+      microAppEnabled: true,
+      agentCapabilityEnabled: false,
+      runtimeReady: false,
+      telemetryVerifiedOff: false,
+      workspaceMatched: true,
+      repoPollutionSafe: false,
+      appDataRootValid: false,
+      capabilityRegistrationReady: false,
+    },
   },
   pollutionGuard: {
     status: "blocked" as const,
@@ -336,6 +372,19 @@ describe("CodeGraphStudioPage", () => {
 
     expect(
       screen.getByPlaceholderText("请选择或输入一个仓库外部目录作为 App Data Root"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the owner-facing capability switches", async () => {
+    render(<CodeGraphStudioPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("启用 CodeGraph 微应用")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("允许智能体使用 CodeGraph")).toBeInTheDocument();
+    expect(
+      screen.getByText("Owner has not allowed the agent to use CodeGraph."),
     ).toBeInTheDocument();
   });
 

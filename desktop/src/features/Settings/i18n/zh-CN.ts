@@ -182,6 +182,7 @@ const settingsPending = {
           },
           chips: {
             planner: "Planner 暴露：{{value}}",
+            agentCapability: "智能体能力：{{value}}",
             telemetry: "Telemetry：{{value}}",
             pollution: "仓库污染：{{value}}",
             fakeProvider: "Fake Provider：{{value}}",
@@ -219,6 +220,14 @@ const settingsPending = {
             description: "这里只保留 owner 常用参数。Probe args、索引路径和日志路径统一收进高级配置。",
             appDataRootHelp:
               "用于保存日志与临时状态。必须位于仓库外部，建议选择长期可用的目录。",
+          },
+          capability: {
+            microAppHint: "关闭后，CodeGraph 微应用本身不再参与受控 capability 注册。",
+            agentCapabilityHint:
+              "允许智能体使用 CodeGraph。只有 runtime ready、telemetry verified_off、workspace 匹配、repo pollution guard safe 且 App Data Root 合法时才会真正生效。",
+            statusTitle: "当前 capability 状态：{{value}}",
+            registered: "Harness 已注册 `codebase_explore`，但仍只暴露受控 capability，不会把原生命令暴露给 Planner。",
+            unavailable: "当前还不能注册 `codebase_explore`，请先满足上面的 ready gate。",
           },
           advanced: {
             title: "高级配置（可选）",
@@ -269,6 +278,8 @@ const settingsPending = {
           exists: "exists",
           behavior: "行为",
           workspaceRootReadonly: "Workspace Root（只读）",
+          microAppEnabled: "启用 CodeGraph 微应用",
+          agentCapabilityEnabled: "允许智能体使用 CodeGraph",
           command: "Command",
           appDataRootRequired: "App Data Root（必填）",
           logRoot: "logRoot",

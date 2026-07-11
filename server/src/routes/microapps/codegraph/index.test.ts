@@ -214,6 +214,8 @@ test("CodeGraph microapp routes expose report, config save, and smoke query acti
         appDataRootResolved: null,
         logRoot: null,
         indexRoot: null,
+        microAppEnabled: true,
+        agentCapabilityEnabled: false,
         command: "codegraph",
         startArgs: ["serve", "--mcp"],
         versionProbeArgs: ["--version"],
@@ -221,7 +223,27 @@ test("CodeGraph microapp routes expose report, config save, and smoke query acti
         timeoutMs: 2000,
         maxResults: 5,
         queryLimit: 5,
-        plannerExposureEnabled: false,
+        capabilityRegistered: false,
+      },
+      capability: {
+        available: false,
+        registered: false,
+        reasons: [
+          {
+            code: "agent_capability_disabled",
+            message: "Owner has not allowed the agent to use CodeGraph.",
+          },
+        ],
+        checks: {
+          microAppEnabled: true,
+          agentCapabilityEnabled: false,
+          runtimeReady: false,
+          telemetryVerifiedOff: false,
+          workspaceMatched: true,
+          repoPollutionSafe: false,
+          appDataRootValid: false,
+          capabilityRegistrationReady: false,
+        },
       },
       pollutionGuard: {
         status: "blocked",
@@ -294,6 +316,8 @@ test("CodeGraph microapp routes expose report, config save, and smoke query acti
     })),
     getDraft: vi.fn(),
     getStoragePath: vi.fn(),
+    getCapabilityGate: vi.fn(),
+    getManagedCapabilityContext: vi.fn(),
   };
 
   const app = await createApp(codeGraphStudioService);
@@ -379,6 +403,8 @@ test("CodeGraph config route returns 400 when appDataRoot validation fails", asy
     }),
     getDraft: vi.fn(),
     getStoragePath: vi.fn(),
+    getCapabilityGate: vi.fn(),
+    getManagedCapabilityContext: vi.fn(),
   };
 
   const app = await createApp(codeGraphStudioService);

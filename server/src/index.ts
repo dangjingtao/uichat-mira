@@ -35,7 +35,10 @@ import {
 } from "@/microapps/image-generation/index.js";
 import { createMailCenterService } from "@/microapps/mail-center/index.js";
 import { createNewsHubService } from "@/microapps/news-hub/index.js";
-import { createCodeGraphStudioService } from "@/microapps/codegraph/index.js";
+import {
+  createCodeGraphStudioService,
+  setActiveCodeGraphStudioService,
+} from "@/microapps/codegraph/index.js";
 import { createTtsService } from "@/microapps/tts/index.js";
 import healthRoute from "@/routes/health";
 import appMetaRoute from "@/routes/app-meta";
@@ -112,6 +115,8 @@ import { configureInvocationRetention } from "@/mcp/core/invocations.js";
 import {
   migrateLegacyMicroAppBindings,
 } from "@/microapps/legacy-sync.js";
+import { reconcileCodeGraphHarnessCapability } from "@/harness/codegraph-capability.js";
+import { getCapabilityImplementation } from "@/harness/registry.js";
 
 const app = Fastify({
   bodyLimit: MAX_UPLOAD_FILE_BYTES,
@@ -517,7 +522,14 @@ const computerUseRuntimeService = {
 
 const mailCenterService = createMailCenterService();
 const newsHubService = createNewsHubService();
-const codeGraphStudioService = createCodeGraphStudioService();
+const codeGraphStudioService = createCodeGraphStudioService({
+  getCapabilityRegistrationState: () =>
+    Boolean(getCapabilityImplementation("codebase_explore")),
+  onStateChanged: () => {
+    reconcileCodeGraphHarnessCapability();
+  },
+});
+setActiveCodeGraphStudioService(codeGraphStudioService);
 const ttsService = createTtsService();
 
 const setupPlugins = async () => {
@@ -816,6 +828,7 @@ const setupDatabase = async () => {
   initializeExternalMcpDatabase();
   registerAllExternalMcpCapabilities();
   evaluationService.initializePersistence();
+  reconcileCodeGraphHarnessCapability();
 
   const vectorStoreHealth = initializeVectorStore();
   if (vectorStoreHealth.ok) {
