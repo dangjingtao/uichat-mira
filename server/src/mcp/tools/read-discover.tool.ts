@@ -2,6 +2,7 @@ import type { McpToolImplementation } from "../core/definitions.js";
 import { mcpBadRequest } from "../core/errors.js";
 import { executeReadList, executeReadLocateRuntime } from "../read/runtime.js";
 import { emitArtifacts } from "./artifact-utils.js";
+import type { ReadDiscoverResult } from "../read/types.js";
 
 export const readDiscoverTool: McpToolImplementation = {
   definition: {
@@ -62,7 +63,14 @@ export const readDiscoverTool: McpToolImplementation = {
         pushEvent: context.pushEvent,
       });
       emitArtifacts(context, result.artifacts);
-      return { result: { ...result.contents as object, type: "discover", mode, operation: "list" } };
+      const list = result.contents as Record<string, unknown>;
+      const discover: ReadDiscoverResult = {
+        ...list,
+        type: "discover",
+        mode,
+        operation: "list",
+      } as ReadDiscoverResult;
+      return { result: discover };
     }
 
     if (mode === "locate") {
@@ -79,7 +87,15 @@ export const readDiscoverTool: McpToolImplementation = {
         pushEvent: context.pushEvent,
       });
       emitArtifacts(context, result.artifacts);
-      return { result: { ...result.contents as object, type: "discover", mode, operation: "locate" } };
+      const locate = result.contents as Record<string, unknown>;
+      const discover: ReadDiscoverResult = {
+        ...locate,
+        type: "discover",
+        mode,
+        operation: "locate",
+        ...(typeof context.args.root === "string" ? { root: context.args.root } : {}),
+      } as ReadDiscoverResult;
+      return { result: discover };
     }
 
     throw mcpBadRequest("mode must be one of: list, locate");

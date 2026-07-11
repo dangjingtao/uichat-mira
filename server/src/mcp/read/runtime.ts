@@ -53,10 +53,16 @@ export const executeReadList = async ({
   const maxResults = typeof args.maxResults === "number" && Number.isInteger(args.maxResults)
     ? Math.min(Math.max(args.maxResults, 1), 100)
     : undefined;
+  const totalCount = entries.length;
+  const visibleEntries = maxResults ? entries.slice(0, maxResults) : entries;
   const contents: ReadListResult = {
     type: "list",
     path: String(args.path),
-    entries: maxResults ? entries.slice(0, maxResults) : entries,
+    entries: visibleEntries,
+    returnedCount: visibleEntries.length,
+    totalCount,
+    hasMore: visibleEntries.length < totalCount,
+    truncated: visibleEntries.length < totalCount,
   };
   return {
     contents,

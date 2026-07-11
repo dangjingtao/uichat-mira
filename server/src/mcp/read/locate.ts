@@ -304,6 +304,7 @@ export const executeReadLocate = async (
       ? rawArgs.searchMode
       : "auto";
   const limit = clampLimit(rawArgs.limit);
+  const providerLimit = limit + 1;
   const extensions = normalizeExtensions(rawArgs.extensions);
   const scope = resolveScope(rawArgs.path);
 
@@ -345,7 +346,7 @@ export const executeReadLocate = async (
         workspaceRoot: scope.workspaceRoot,
         basePath: scope.basePath,
         extensions,
-        limit,
+        limit: providerLimit,
         provider: capability,
       });
     } else if (capability.id === "ripgrep-locate") {
@@ -354,7 +355,7 @@ export const executeReadLocate = async (
         workspaceRoot: scope.workspaceRoot,
         basePath: scope.basePath,
         extensions,
-        limit,
+        limit: providerLimit,
         provider: capability,
       });
     } else if (capability.id === "node-content-scan-locate") {
@@ -363,7 +364,7 @@ export const executeReadLocate = async (
         workspaceRoot: scope.workspaceRoot,
         basePath: scope.basePath,
         extensions,
-        limit,
+        limit: providerLimit,
         provider: capability,
       });
     }
@@ -375,17 +376,22 @@ export const executeReadLocate = async (
       }
     }
 
-    if (matches.size >= limit) {
+    if (matches.size >= providerLimit) {
       break;
     }
   }
 
+  const allMatches = [...matches.values()];
+  const visibleMatches = allMatches.slice(0, limit);
   const result: ReadLocateResult = {
     type: "locate",
-    matches: [...matches.values()].slice(0, limit),
+    matches: visibleMatches,
     scope: scope.relativeBasePath,
     query,
     searchMode,
+    returnedCount: visibleMatches.length,
+    hasMore: allMatches.length > limit,
+    truncated: allMatches.length > limit,
   };
   return result;
 };

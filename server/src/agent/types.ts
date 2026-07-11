@@ -152,6 +152,21 @@ export interface AgentReadListEvidenceData {
   truncated: boolean;
 }
 
+export interface AgentReadDiscoverEvidenceData {
+  kind: "read_discover";
+  mode: "list" | "locate";
+  operation: "list" | "locate";
+  path?: string;
+  root?: string;
+  query?: string;
+  candidateCount: number;
+  candidatePaths: string[];
+  returnedCount: number;
+  totalCount?: number;
+  hasMore: boolean;
+  truncated: boolean;
+}
+
 export interface AgentReadOpenEvidenceData {
   kind: "read_open";
   path: string;
@@ -248,6 +263,7 @@ export interface AgentEditFileEvidenceData {
 }
 
 export type AgentEvidenceSummaryData =
+  | AgentReadDiscoverEvidenceData
   | AgentReadListEvidenceData
   | AgentReadOpenEvidenceData
   | AgentReadLocateEvidenceData

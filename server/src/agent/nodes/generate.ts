@@ -112,7 +112,13 @@ const buildToolEvidenceBlock = (execution: AgentToolExecutionResult) => {
     `actionTaken: ${summary.actionTaken}`,
   ];
 
-  if (summary.data?.kind === "read_list") {
+  if (summary.data?.kind === "read_discover") {
+    lines.push(`operation: ${summary.data.operation}`);
+    lines.push(`candidateCount: ${summary.data.candidateCount}`);
+    lines.push(`candidatePaths: ${summary.data.candidatePaths.join(" | ") || "(none)"}`);
+    lines.push(`hasMore: ${summary.data.hasMore}`);
+    lines.push(`truncated: ${summary.data.truncated}`);
+  } else if (summary.data?.kind === "read_list") {
     lines.push(`path: ${summary.data.path}`);
     lines.push(`entryCount: ${summary.data.entryCount}`);
     lines.push(
@@ -464,6 +470,14 @@ const renderSummaryBasedAnswer = (summary: AgentEvidenceSummary) => {
     return summary.data.entryCount > 0
       ? `当前 workspace 下共找到 ${summary.data.entryCount} 项，其中预览包括 ${preview}${summary.data.truncated ? " 等内容。" : "。"}`
       : `当前 workspace 路径 ${summary.data.path} 下没有列出任何条目。`;
+  }
+
+  if (summary.source === "tool" && summary.data?.kind === "read_discover") {
+    const preview = summary.data.candidatePaths.slice(0, 3).join("、");
+    const suffix = summary.data.truncated ? " 结果已截断，仍可能存在更多候选。" : "";
+    return summary.data.candidateCount > 0
+      ? `本次通过 ${summary.data.operation} 发现 ${summary.data.candidateCount} 个候选：${preview || "候选项"}。${suffix}`
+      : `本次 ${summary.data.operation} 没有发现候选对象。${suffix}`;
   }
 
   if (summary.source === "tool" && summary.data?.kind === "read_open") {

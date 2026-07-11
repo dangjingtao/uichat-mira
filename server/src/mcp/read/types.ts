@@ -27,6 +27,10 @@ export type ReadListResult = {
   type: "list";
   path: string;
   entries: ReadDirectoryEntry[];
+  returnedCount: number;
+  totalCount: number;
+  hasMore: boolean;
+  truncated: boolean;
 };
 
 export type ReadOpenResult = {
@@ -55,7 +59,14 @@ export type ReadLocateResult = {
   query: string;
   searchMode: "auto" | "path" | "content";
   matches: ReadLocateMatch[];
+  returnedCount: number;
+  hasMore: boolean;
+  truncated: boolean;
 };
+
+export type ReadDiscoverResult =
+  | ({ type: "discover"; mode: "list"; operation: "list" } & Omit<ReadListResult, "type">)
+  | ({ type: "discover"; mode: "locate"; operation: "locate"; root?: string } & Omit<ReadLocateResult, "type">);
 
 export type ReadExtractResult = {
   type: "extract";

@@ -133,6 +133,95 @@ test("createToolExecutionEvidenceSummary prioritizes documentation content over 
   );
 });
 
+test("createToolExecutionEvidenceSummary preserves read_discover facts and truncation", () => {
+  const summary = createToolExecutionEvidenceSummary({
+    execution: {
+      toolId: "read_discover",
+      args: { mode: "list", path: "docs", maxResults: 1 },
+      status: "completed",
+      inputHash: "hash-read-discover",
+      result: {
+        type: "discover",
+        mode: "list",
+        operation: "list",
+        path: "docs",
+        entries: [{ name: "settings.md", type: "file" }],
+        returnedCount: 1,
+        totalCount: 3,
+        hasMore: true,
+        truncated: true,
+      },
+      startedAt: "2026-07-11T00:00:00.000Z",
+      finishedAt: "2026-07-11T00:00:01.000Z",
+    },
+    evidenceIndex: 0,
+  });
+
+  assert.equal(summary.data?.kind, "read_discover");
+  if (summary.data?.kind === "read_discover") {
+    assert.equal(summary.data.mode, "list");
+    assert.equal(summary.data.operation, "list");
+    assert.equal(summary.data.path, "docs");
+    assert.deepEqual(summary.data.candidatePaths, ["settings.md"]);
+    assert.equal(summary.data.candidateCount, 1);
+    assert.equal(summary.data.returnedCount, 1);
+    assert.equal(summary.data.totalCount, 3);
+    assert.equal(summary.data.hasMore, true);
+    assert.equal(summary.status, "truncated");
+    assert.match(summary.facts.join("\n"), /path=docs/);
+    assert.match(summary.facts.join("\n"), /returnedCount=1/);
+    assert.match(summary.facts.join("\n"), /totalCount=3/);
+    assert.match(summary.facts.join("\n"), /candidatePath=settings\.md/);
+  }
+});
+
+test("createToolExecutionEvidenceSummary limits read_discover candidatePaths to preview size", () => {
+  const summary = createToolExecutionEvidenceSummary({
+    execution: {
+      toolId: "read_discover",
+      args: { mode: "locate", query: "settings" },
+      status: "completed",
+      inputHash: "hash-read-discover-preview-limit",
+      result: {
+        type: "discover",
+        mode: "locate",
+        operation: "locate",
+        root: "workspace-root",
+        query: "settings",
+        matches: [
+          { path: "docs/settings-1.md", matchType: "path" },
+          { path: "docs/settings-2.md", matchType: "path" },
+          { path: "docs/settings-3.md", matchType: "path" },
+          { path: "docs/settings-4.md", matchType: "path" },
+          { path: "docs/settings-5.md", matchType: "path" },
+          { path: "docs/settings-6.md", matchType: "path" },
+        ],
+        returnedCount: 6,
+        hasMore: true,
+        truncated: true,
+      },
+      startedAt: "2026-07-11T00:00:00.000Z",
+      finishedAt: "2026-07-11T00:00:01.000Z",
+    },
+    evidenceIndex: 0,
+  });
+
+  assert.equal(summary.data?.kind, "read_discover");
+  if (summary.data?.kind === "read_discover") {
+    assert.equal(summary.data.candidateCount, 6);
+    assert.equal(summary.data.returnedCount, 6);
+    assert.equal(summary.data.candidatePaths.length, 5);
+    assert.deepEqual(summary.data.candidatePaths, [
+      "docs/settings-1.md",
+      "docs/settings-2.md",
+      "docs/settings-3.md",
+      "docs/settings-4.md",
+      "docs/settings-5.md",
+    ]);
+    assert.equal(summary.facts.some((fact) => fact.includes("settings-6.md")), false);
+  }
+});
+
 test("generateNode rewrites tool-style output into a natural read_list answer grounded in evidence", async () => {
   const state = createBaseState("看看当前 workspace 有哪些文件");
   state.evidence = {
