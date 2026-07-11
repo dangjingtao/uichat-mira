@@ -704,16 +704,8 @@ test("multi-target requests do not answer after only one target is covered", asy
   assert.equal(secondPlannerPayload.observationContext?.latestEvidenceSummary?.toolId, "read_open");
   assert.equal(secondPlannerPayload.observationContext?.latestEvidenceSummary?.data?.path, "README.md");
   assert.equal(
-    secondPlannerPayload.observationContext?.currentTaskFrame?.coveredProgress?.includes(
-      "Covered target: readme.md",
-    ),
-    true,
-  );
-  assert.equal(
-    secondPlannerPayload.observationContext?.currentTaskFrame?.remainingWork?.includes(
-      "Need evidence for target: package.json",
-    ),
-    true,
+    secondPlannerPayload.observationContext?.currentTaskFrame?.remainingWork,
+    undefined,
   );
 });
 

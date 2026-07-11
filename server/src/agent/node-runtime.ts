@@ -10,7 +10,6 @@ export {
   summarizeToolExecutionStart,
   summarizeToolExecutionWaitingApproval,
 } from "./trace";
-import { reduceAgentCoverageState } from "./coverage-state";
 import { getEvidencePayload, getLatestEvidenceSummary } from "./evidence";
 import { buildPlannerRecoveryContext } from "./recovery";
 import type {
@@ -385,7 +384,6 @@ const buildCurrentTaskFrameCoverageView = (input: {
   frame: CurrentTaskFrame;
   goal: AgentGoal;
   latestQuestion?: string;
-  evidence?: AgentEvidencePayload;
   latestEvidenceSummary?: AgentEvidenceSummary;
 }) => {
   const currentGoal = getCurrentTaskFrameGoalText({
@@ -399,18 +397,7 @@ const buildCurrentTaskFrameCoverageView = (input: {
         ? [...input.goal.successCriteria]
         : [currentGoal];
   const latestEvidenceSummary = input.latestEvidenceSummary;
-  const coverageState = reduceAgentCoverageState({
-    question: input.latestQuestion ?? currentGoal,
-    currentTaskFrame: {
-      ...input.frame,
-      currentGoal,
-      completionCriteria,
-    },
-    evidence: input.evidence,
-    latestSummary: latestEvidenceSummary,
-  });
   const coveredProgress = [
-    ...coverageState.coveredTargets.map((target) => `Covered target: ${target}`),
     ...(latestEvidenceSummary
       ? [
           latestEvidenceSummary.actionTaken,
@@ -421,14 +408,7 @@ const buildCurrentTaskFrameCoverageView = (input: {
   ]
     .filter((item, index, items) => item && items.indexOf(item) === index)
     .slice(0, 5);
-  const remainingWork = [
-    ...(latestEvidenceSummary?.gaps ?? []),
-    ...coverageState.pendingTargets.map((target) => `Need evidence for target: ${target}`),
-    ...coverageState.targets.flatMap((target) =>
-      target.pendingActions.map((action) => `Need ${action} for target: ${target.target}`),
-    ),
-    ...coverageState.globalPendingActions.map((action) => `Need action: ${action}`),
-  ]
+  const remainingWork = [...(latestEvidenceSummary?.gaps ?? [])]
     .filter((item, index, items) => item && items.indexOf(item) === index)
     .slice(0, 5);
 
@@ -444,7 +424,6 @@ export const refreshCurrentTaskFrameFromEvidence = (input: {
   frame: CurrentTaskFrame | undefined;
   goal: AgentGoal;
   latestQuestion?: string;
-  evidence?: AgentEvidencePayload;
   latestEvidenceSummary?: AgentEvidenceSummary;
 }): CurrentTaskFrame | undefined => {
   if (!input.frame) {
@@ -455,7 +434,6 @@ export const refreshCurrentTaskFrameFromEvidence = (input: {
     frame: CurrentTaskFrame;
     goal: AgentGoal;
     latestQuestion?: string;
-    evidence?: AgentEvidencePayload;
     latestEvidenceSummary?: AgentEvidenceSummary;
   });
 
@@ -463,12 +441,10 @@ export const refreshCurrentTaskFrameFromEvidence = (input: {
     ...input.frame,
     currentGoal: coverageView.currentGoal,
     completionCriteria: coverageView.completionCriteria,
-    ...(coverageView.coveredProgress.length > 0
-      ? { coveredProgress: coverageView.coveredProgress }
-      : {}),
-    ...(coverageView.remainingWork.length > 0
-      ? { remainingWork: coverageView.remainingWork }
-      : {}),
+    coveredProgress:
+      coverageView.coveredProgress.length > 0 ? coverageView.coveredProgress : undefined,
+    remainingWork:
+      coverageView.remainingWork.length > 0 ? coverageView.remainingWork : undefined,
   };
 };
 
@@ -481,7 +457,6 @@ export const updateCurrentTaskFrameFromPlanner = (input: {
   goal: AgentGoal;
   nextAction: AgentNextAction;
   latestQuestion?: string;
-  evidence?: AgentEvidencePayload;
   latestEvidenceSummary?: AgentEvidenceSummary;
 }): CurrentTaskFrame | undefined => {
   if (!input.frame) {
@@ -492,7 +467,6 @@ export const updateCurrentTaskFrameFromPlanner = (input: {
     frame: input.frame,
     goal: input.goal,
     latestQuestion: input.latestQuestion,
-    evidence: input.evidence,
     latestEvidenceSummary: input.latestEvidenceSummary,
   });
 
@@ -501,12 +475,10 @@ export const updateCurrentTaskFrameFromPlanner = (input: {
     currentGoal: coverageView.currentGoal,
     currentSubtask: getPlannerSubtask(input.nextAction),
     completionCriteria: coverageView.completionCriteria,
-    ...(coverageView.coveredProgress.length > 0
-      ? { coveredProgress: coverageView.coveredProgress }
-      : {}),
-    ...(coverageView.remainingWork.length > 0
-      ? { remainingWork: coverageView.remainingWork }
-      : {}),
+    coveredProgress:
+      coverageView.coveredProgress.length > 0 ? coverageView.coveredProgress : undefined,
+    remainingWork:
+      coverageView.remainingWork.length > 0 ? coverageView.remainingWork : undefined,
     currentBlocker:
       input.nextAction.type === "error"
         ? input.nextAction.reason

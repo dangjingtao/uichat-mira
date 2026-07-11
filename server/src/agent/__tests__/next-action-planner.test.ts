@@ -494,7 +494,7 @@ test("buildNextActionPlannerMessages reads planner observation context instead o
   const promptObservationContext = payload.observationContext as Record<string, unknown>;
 
   assert.ok("observationContext" in payload);
-  assert.equal(payload.lastUserRequest, "Open README.md");
+  assert.equal(payload.currentUserRequest, "Open README.md");
   assert.equal("recentConversationHistory" in payload, false);
   assert.equal("taskFrame" in payload, false);
   assert.equal("lastToolExecution" in payload, false);
@@ -1193,6 +1193,8 @@ test("nextActionPlannerNode accepts ask_user output for missing information", as
         currentBlocker: undefined,
         confirmedObjects: [],
         completionCriteria: ["Identify the right repository"],
+        coveredProgress: undefined,
+        remainingWork: undefined,
       },
     });
   } finally {
@@ -1967,10 +1969,8 @@ test("nextActionPlannerNode is the primary writer for runtime currentTaskFrame u
           },
         ],
         completionCriteria: ["Inspect README.md"],
-        remainingWork: [
-          "Need evidence for target: readme.md",
-          "Need verify for target: readme.md",
-        ],
+        coveredProgress: undefined,
+        remainingWork: undefined,
       },
     });
   } finally {
@@ -1978,7 +1978,7 @@ test("nextActionPlannerNode is the primary writer for runtime currentTaskFrame u
   }
 });
 
-test("nextActionPlannerNode updates currentTaskFrame remainingWork from uncovered targets instead of only evidence gaps", async () => {
+test("nextActionPlannerNode updates currentTaskFrame from explicit evidence facts and gaps only", async () => {
   const streamSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementation(async function* () {
@@ -2006,10 +2006,11 @@ test("nextActionPlannerNode updates currentTaskFrame remainingWork from uncovere
               status: "completed",
               summary: {
                 source: "tool",
-                status: "completed",
+                status: "partial",
                 toolId: "read_open",
                 actionTaken: "Opened README.md.",
                 keyFindings: ["path=README.md"],
+                gaps: ["package.json is still missing."],
                 data: {
                   kind: "read_open",
                   path: "README.md",
@@ -2024,10 +2025,11 @@ test("nextActionPlannerNode updates currentTaskFrame remainingWork from uncovere
           ],
           latestSummary: {
             source: "tool",
-            status: "completed",
+            status: "partial",
             toolId: "read_open",
             actionTaken: "Opened README.md.",
             keyFindings: ["path=README.md"],
+            gaps: ["package.json is still missing."],
             data: {
               kind: "read_open",
               path: "README.md",
@@ -2040,14 +2042,71 @@ test("nextActionPlannerNode updates currentTaskFrame remainingWork from uncovere
       }),
     );
 
-    assert.equal(patch.currentTaskFrame?.coveredProgress?.includes("Covered target: readme.md"), true);
-    assert.equal(
-      patch.currentTaskFrame?.remainingWork?.includes("Need evidence for target: package.json"),
-      true,
-    );
+    assert.deepEqual(patch.currentTaskFrame?.coveredProgress, [
+      "Opened README.md.",
+      "path=README.md",
+    ]);
+    assert.deepEqual(patch.currentTaskFrame?.remainingWork, [
+      "package.json is still missing.",
+    ]);
   } finally {
     streamSpy.mockRestore();
   }
+});
+
+test("buildNextActionPlannerMessages preserves read_discover oneOf inputSchema", () => {
+  const messages = buildNextActionPlannerMessages({
+    question: "Find settings files",
+    messages: createState().messages,
+    observationContext: buildPlannerObservationContext(createState()),
+    toolExposure: {
+      exposedTools: ["read_discover"],
+      toolMeta: [
+        {
+          toolId: "read_discover",
+          title: "read_discover",
+          description: "discover files",
+          inputSchema: {
+            oneOf: [
+              {
+                type: "object",
+                required: ["mode", "path"],
+                additionalProperties: false,
+                properties: {
+                  mode: { type: "string", enum: ["list"] },
+                  path: { type: "string" },
+                },
+              },
+              {
+                type: "object",
+                required: ["mode", "query"],
+                additionalProperties: false,
+                properties: {
+                  mode: { type: "string", enum: ["locate"] },
+                  query: { type: "string" },
+                },
+              },
+            ],
+          },
+          domain: "read",
+          source: "internal",
+          tags: ["read"],
+          capabilities: { sideEffect: "none", requiresApproval: false },
+        },
+      ],
+    },
+    iteration: 0,
+    maxIterations: 3,
+  });
+
+  const payload = JSON.parse(String(messages[1]?.content ?? "{}")) as {
+    toolExposure: {
+      toolMeta: Array<{ toolId: string; inputSchema?: { oneOf?: unknown[] } }>;
+    };
+  };
+
+  assert.equal(payload.toolExposure.toolMeta[0]?.toolId, "read_discover");
+  assert.equal(payload.toolExposure.toolMeta[0]?.inputSchema?.oneOf?.length, 2);
 });
 
 test("nextActionPlannerNode writes planner error fields only for error actions", async () => {

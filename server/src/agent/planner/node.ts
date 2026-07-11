@@ -95,7 +95,6 @@ export const nextActionPlannerNode = async (
     frame: state.currentTaskFrame,
     goal: state.goal,
     latestQuestion: question,
-    evidence: state.evidence,
     latestEvidenceSummary: getLatestEvidenceSummary(state),
   });
   const observationContext = buildPlannerObservationContext({
@@ -250,7 +249,6 @@ export const nextActionPlannerNode = async (
         goal: state.goal,
         nextAction,
         latestQuestion: question,
-        evidence: state.evidence,
         latestEvidenceSummary: observationContext.latestEvidenceSummary,
       })
     : undefined;

@@ -18,13 +18,6 @@ export const normalizeToolExposure = (
 
 const summarizeToolSchemas = (toolExposure: AgentToolExposureState) =>
   toolExposure.toolMeta.map((tool) => {
-    const schema = tool.inputSchema as
-      | {
-          properties?: Record<string, { type?: string }>;
-          required?: string[];
-          additionalProperties?: boolean;
-        }
-      | undefined;
     const capabilities = tool.capabilities;
     const plannerDescription =
       tool.toolId === "read_discover"
@@ -54,15 +47,7 @@ const summarizeToolSchemas = (toolExposure: AgentToolExposureState) =>
             ? "read-only or observation-only"
             : "may mutate state or spawn runtime side effects",
       },
-      required: Array.isArray(schema?.required) ? schema.required : [],
-      properties: Object.entries(schema?.properties ?? {}).map(([key, value]) => ({
-        name: key,
-        type: value?.type ?? "unknown",
-      })),
-      additionalProperties:
-        typeof schema?.additionalProperties === "boolean"
-          ? schema.additionalProperties
-          : undefined,
+      inputSchema: tool.inputSchema,
     };
   });
 
@@ -179,7 +164,7 @@ const buildSchemaReplanMessages = (input: {
     role: "user",
     content: JSON.stringify(
       {
-        lastUserRequest: input.question,
+        currentUserRequest: input.question,
         workspaceBound: true,
         previousSchemaError: input.observationContext.recovery.schemaError ?? null,
         previousInvalidAction: input.observationContext.recovery.invalidAction ?? null,
