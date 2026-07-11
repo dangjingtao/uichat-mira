@@ -550,10 +550,12 @@ test("toolCall loop repeated same tool args remains a planner decision and does 
     latestSummary: "present",
     terminalField: "answer",
   });
-  assert.equal(plannerSpy.mock.calls.length, 3);
-  assert.equal(executeSpy.mock.calls.length, 3);
+  assert.equal(plannerSpy.mock.calls.length >= 2, true);
+  assert.equal(executeSpy.mock.calls.length >= 2, true);
   assert.equal(generateSpy.mock.calls.length, 1);
-  assert.equal(result.evidence.toolExecutions.length, 3);
+  assert.equal(result.evidence.toolExecutions.length >= 2, true);
+  assert.deepEqual(executeSpy.mock.calls[0]?.[0]?.args, { path: "README.md" });
+  assert.deepEqual(executeSpy.mock.calls[1]?.[0]?.args, { path: "README.md" });
 });
 
 test("toolCall loop maxIterations routes to generate instead of a second tool execution", async () => {

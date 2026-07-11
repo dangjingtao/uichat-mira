@@ -91,10 +91,6 @@ export interface AgentNodeState {
   generatedAnswerEmptyFallback?: boolean;
   iterationCount?: number;
   maxIterations?: number;
-  continueIteration?: boolean;
-  postToolReviewPending?: boolean;
-  reviewDecision?: "tool" | "generate";
-  reviewReason?: string;
 }
 
 export type AgentGraphState = AgentNodeState;
@@ -294,11 +290,8 @@ const comparePlannerObservationItems = (
 /**
  * Fact-source boundary for T021:
  * - retrieve executor facts come from evidence.retrievals
- * - tool executor facts come from lastToolExecution
+ * - tool executor facts come from evidence.toolExecutions
  * - approval facts come from pendingApproval
- * - generic node observations remain a fallback fact source for actions that
- *   still do not have a dedicated executor-result record, currently generate
- *   and legacy retrieve/tool observations
  *
  * Planner must not consume those scattered structures directly.
  * Planner only consumes the unified execution-observation view built here.
@@ -306,9 +299,7 @@ const comparePlannerObservationItems = (
 export const buildExecutionObservationView = (
   state: Pick<
     AgentNodeState,
-    | "observations"
     | "evidence"
-    | "lastToolExecution"
     | "pendingApproval"
   >,
 ): AgentExecutionObservation[] => {
@@ -319,38 +310,12 @@ export const buildExecutionObservationView = (
     items.push(toExecutionObservationFromRetrievalResult(retrieval));
   }
 
-  if (state.lastToolExecution) {
-    items.push(toExecutionObservationFromToolExecution(state.lastToolExecution));
+  for (const execution of evidence.toolExecutions) {
+    items.push(toExecutionObservationFromToolExecution(execution));
   }
 
   if (state.pendingApproval) {
-    items.push(
-      toExecutionObservationFromPendingApproval(
-        state.pendingApproval,
-        state.lastToolExecution?.summary,
-      ),
-    );
-  }
-
-  const hasRetrievalFacts = evidence.retrievals.length > 0;
-  for (const observation of evidence.observations) {
-    if (observation.stepId === "generate") {
-      items.push(toExecutionObservationFromObservation(observation));
-      continue;
-    }
-
-    if (observation.stepId === "retrieve" && !hasRetrievalFacts) {
-      items.push(toExecutionObservationFromObservation(observation));
-      continue;
-    }
-
-    if (
-      observation.stepId !== "retrieve" &&
-      observation.stepId !== "tool" &&
-      observation.stepId !== "approval"
-    ) {
-      items.push(toExecutionObservationFromObservation(observation));
-    }
+    items.push(toExecutionObservationFromPendingApproval(state.pendingApproval));
   }
 
   items.sort(comparePlannerObservationItems);
@@ -415,20 +380,12 @@ const getPlannerSubtask = (nextAction: AgentNextAction): string => {
   }
 };
 
-/**
- * PlannerNode is the only runtime writer for goal/subtask/completion state.
- * Executor nodes report facts through evidence and observations instead.
- */
-export const updateCurrentTaskFrameFromPlanner = (input: {
-  frame: CurrentTaskFrame | undefined;
+const buildCurrentTaskFrameCoverageView = (input: {
+  frame: CurrentTaskFrame;
   goal: AgentGoal;
-  nextAction: AgentNextAction;
   latestQuestion?: string;
-}): CurrentTaskFrame | undefined => {
-  if (!input.frame) {
-    return input.frame;
-  }
-
+  latestEvidenceSummary?: AgentEvidenceSummary;
+}) => {
   const currentGoal = getCurrentTaskFrameGoalText({
     goal: input.goal,
     latestQuestion: input.latestQuestion,
@@ -439,12 +396,89 @@ export const updateCurrentTaskFrameFromPlanner = (input: {
       : input.goal.successCriteria.length > 0
         ? [...input.goal.successCriteria]
         : [currentGoal];
+  const latestEvidenceSummary = input.latestEvidenceSummary;
+  const coveredProgress = [
+    ...(latestEvidenceSummary
+      ? [
+          latestEvidenceSummary.actionTaken,
+          ...latestEvidenceSummary.keyFindings,
+          ...(latestEvidenceSummary.facts ?? []),
+        ]
+      : []),
+  ]
+    .filter((item, index, items) => item && items.indexOf(item) === index)
+    .slice(0, 5);
+  const remainingWork = [...(latestEvidenceSummary?.gaps ?? [])]
+    .filter((item, index, items) => item && items.indexOf(item) === index)
+    .slice(0, 5);
+
+  return {
+    currentGoal,
+    completionCriteria,
+    coveredProgress,
+    remainingWork,
+  };
+};
+
+export const refreshCurrentTaskFrameFromEvidence = (input: {
+  frame: CurrentTaskFrame | undefined;
+  goal: AgentGoal;
+  latestQuestion?: string;
+  latestEvidenceSummary?: AgentEvidenceSummary;
+}): CurrentTaskFrame | undefined => {
+  if (!input.frame) {
+    return input.frame;
+  }
+
+  const coverageView = buildCurrentTaskFrameCoverageView(input as {
+    frame: CurrentTaskFrame;
+    goal: AgentGoal;
+    latestQuestion?: string;
+    latestEvidenceSummary?: AgentEvidenceSummary;
+  });
 
   return {
     ...input.frame,
-    currentGoal,
+    currentGoal: coverageView.currentGoal,
+    completionCriteria: coverageView.completionCriteria,
+    coveredProgress:
+      coverageView.coveredProgress.length > 0 ? coverageView.coveredProgress : undefined,
+    remainingWork:
+      coverageView.remainingWork.length > 0 ? coverageView.remainingWork : undefined,
+  };
+};
+
+/**
+ * PlannerNode is the only runtime writer for goal/subtask/completion state.
+ * Executor nodes report facts through evidence and observations instead.
+ */
+export const updateCurrentTaskFrameFromPlanner = (input: {
+  frame: CurrentTaskFrame | undefined;
+  goal: AgentGoal;
+  nextAction: AgentNextAction;
+  latestQuestion?: string;
+  latestEvidenceSummary?: AgentEvidenceSummary;
+}): CurrentTaskFrame | undefined => {
+  if (!input.frame) {
+    return input.frame;
+  }
+
+  const coverageView = buildCurrentTaskFrameCoverageView({
+    frame: input.frame,
+    goal: input.goal,
+    latestQuestion: input.latestQuestion,
+    latestEvidenceSummary: input.latestEvidenceSummary,
+  });
+
+  return {
+    ...input.frame,
+    currentGoal: coverageView.currentGoal,
     currentSubtask: getPlannerSubtask(input.nextAction),
-    completionCriteria,
+    completionCriteria: coverageView.completionCriteria,
+    coveredProgress:
+      coverageView.coveredProgress.length > 0 ? coverageView.coveredProgress : undefined,
+    remainingWork:
+      coverageView.remainingWork.length > 0 ? coverageView.remainingWork : undefined,
     currentBlocker:
       input.nextAction.type === "error"
         ? input.nextAction.reason
@@ -464,15 +498,29 @@ export const buildPlannerObservationContext = (
   >,
 ): PlannerObservationContext => {
   const latestEvidenceSummary = getLatestEvidenceSummary(state);
+  const evidence = getEvidencePayload(state);
   const items = buildExecutionObservationView(state);
   const recentObservations = items.slice(-5).reverse();
   const latestObservation = recentObservations[0];
+  const latestToolExecution = evidence.toolExecutions.at(-1);
 
   return {
     currentTaskFrame: state.currentTaskFrame,
     latestObservation,
     recentObservations,
     latestEvidenceSummary,
+    latestToolCall: latestToolExecution
+      ? {
+          toolId: latestToolExecution.toolId,
+          args: latestToolExecution.args,
+          inputHash: latestToolExecution.inputHash,
+          status: latestToolExecution.status,
+          resultSummary: latestToolExecution.summary,
+          failureKind: latestToolExecution.failureKind,
+          failureCode: latestToolExecution.failureCode,
+          retryCount: latestToolExecution.recoveryAttemptCount ?? 0,
+        }
+      : undefined,
     recovery: buildPlannerRecoveryContext(state),
     pendingApproval: state.pendingApproval
       ? {

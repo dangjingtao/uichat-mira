@@ -218,6 +218,59 @@ test("policyNode allows low-risk frozen pendingToolCall without modifying it", a
   }
 });
 
+test("policyNode uses frozen pendingToolCall.toolMeta as the primary SSOT", async () => {
+  const listCapabilityDefinitionsSpy = vi
+    .spyOn(registry, "listCapabilityDefinitions")
+    .mockReturnValue([
+      createTool({
+        id: "web_search",
+        domain: "edit",
+        capabilities: {
+          sideEffect: "local-write",
+          requiresApproval: true,
+        },
+      }),
+    ]);
+  const pendingToolCall = {
+    ...createPendingToolCall("web_search", {
+      query: "search docs",
+    }),
+    toolMeta: {
+      toolId: "web_search",
+      title: "Web Search",
+      description: "Search the public web",
+      inputSchema: {
+        type: "object",
+        required: ["query"],
+        properties: {
+          query: { type: "string" },
+        },
+      },
+      domain: "web_search" as const,
+      source: "internal" as const,
+      tags: ["web"],
+      capabilities: {
+        sideEffect: "network" as const,
+        requiresApproval: false,
+      },
+    },
+  };
+
+  try {
+    const result = await policyNode(
+      createBaseState({
+        pendingToolCall,
+      }),
+    );
+
+    assert.equal(result.policyDecision?.type, "allow");
+    assert.equal(result.pendingApproval, undefined);
+    assert.deepEqual(result.pendingToolCall, pendingToolCall);
+  } finally {
+    listCapabilityDefinitionsSpy.mockRestore();
+  }
+});
+
 test("policyNode raises approval for risky frozen pendingToolCall", async () => {
   const listCapabilityDefinitionsSpy = vi
     .spyOn(registry, "listCapabilityDefinitions")
@@ -409,6 +462,49 @@ test("policyNode blocks unknown tool ids instead of guessing fallbacks", async (
     );
 
     assert.equal(result.selectedToolId, undefined);
+    assert.equal(result.pendingToolCall, undefined);
+    assert.equal(result.pendingApproval, undefined);
+    assert.equal(result.policyDecision?.type, "error");
+    assert.match(result.errorMessage ?? "", /unknown tool/i);
+  } finally {
+    listCapabilityDefinitionsSpy.mockRestore();
+  }
+});
+
+test("policyNode does not read toolIntent.toolExposure as a fallback execution source", async () => {
+  const listCapabilityDefinitionsSpy = vi
+    .spyOn(registry, "listCapabilityDefinitions")
+    .mockReturnValue([]);
+
+  try {
+    const result = await policyNode(
+      createBaseState({
+        toolIntent: {
+          query: "search docs",
+          topCandidates: [],
+          toolCandidates: [],
+          toolExposure: {
+            exposedToolIds: ["web_search"],
+            exposedDefinitions: [
+              createTool({
+                id: "web_search",
+                domain: "web_search",
+                capabilities: {
+                  sideEffect: "network",
+                  requiresApproval: false,
+                },
+              }),
+            ],
+            reason: [],
+            blockedCapabilityIds: [],
+          },
+        },
+        pendingToolCall: createPendingToolCall("web_search", {
+          query: "search docs",
+        }),
+      }),
+    );
+
     assert.equal(result.pendingToolCall, undefined);
     assert.equal(result.pendingApproval, undefined);
     assert.equal(result.policyDecision?.type, "error");

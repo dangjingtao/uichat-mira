@@ -357,6 +357,8 @@ export interface CurrentTaskFrame {
   currentBlocker?: string;
   confirmedObjects: CurrentTaskFrameConfirmedObject[];
   completionCriteria: string[];
+  coveredProgress?: string[];
+  remainingWork?: string[];
 }
 
 export type AgentExecutionObservationStatus =
@@ -410,6 +412,16 @@ export interface PlannerObservationContext {
   latestObservation?: AgentExecutionObservation;
   recentObservations: AgentExecutionObservation[];
   latestEvidenceSummary?: AgentEvidenceSummary;
+  latestToolCall?: {
+    toolId: string;
+    args: Record<string, unknown>;
+    inputHash?: string;
+    status: AgentToolExecutionResult["status"];
+    resultSummary?: AgentEvidenceSummary;
+    failureKind?: AgentToolExecutionResult["failureKind"];
+    failureCode?: AgentToolExecutionResult["failureCode"];
+    retryCount: number;
+  };
   recovery: PlannerObservationRecoveryContext;
   pendingApproval?: {
     toolId: string;
@@ -513,8 +525,6 @@ export interface AgentGraphInput {
   pendingToolCall?: AgentToolCallRequest;
   currentTaskFrame?: CurrentTaskFrame;
   maxIterations?: number;
-  continueIteration?: boolean;
-  postToolReviewPending?: boolean;
   onExecutionNode?: (
     event: AssistantExecutionNodeEvent,
   ) => Promise<void> | void;

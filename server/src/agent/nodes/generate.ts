@@ -12,9 +12,6 @@ import {
   createObservation,
   getLatestUserQuestion,
   nowIso,
-  queryMentionsWorkspace,
-  queryRequestsDirectoryOverview,
-  queryRequestsFileContent,
 } from "./shared";
 import type {
   AgentNodeState,
@@ -409,40 +406,6 @@ const buildGenerateContextBudget = (state: AgentNodeState) =>
       },
     },
   });
-
-const normalizeIntentText = (value: string) => value.trim().toLowerCase();
-
-const answerLooksLikeFabricatedWorkspaceResult = (input: {
-  question: string;
-  answer: string;
-}) => {
-  const normalizedQuestion = normalizeIntentText(input.question);
-  if (
-    !queryMentionsWorkspace(normalizedQuestion) &&
-    !queryRequestsDirectoryOverview(normalizedQuestion) &&
-    !queryRequestsFileContent(normalizedQuestion)
-  ) {
-    return false;
-  }
-
-  const answer = input.answer.trim();
-  if (!answer) {
-    return false;
-  }
-
-  const resultClaimPatterns = [
-    /(当前|这个|该)?\s*(workspace|目录|文件夹|文件|folder|directory)\s*(下|里|中)?\s*(有|包含|包括|contains|includes|has)\s+/iu,
-    /(workspace|directory|folder)\s+(contains|includes|has)\s+/iu,
-  ];
-  const filenamePattern = /\b[\w.-]+\.[a-z0-9]{1,12}\b/iu;
-  const listPattern =
-    /(?:^|[：:]\s*|有\s*)(?:[\w.-]+(?:\.[a-z0-9]{1,12})?)(?:\s*[、,，]\s*[\w.-]+(?:\.[a-z0-9]{1,12})?){1,}/iu;
-
-  return (
-    resultClaimPatterns.some((pattern) => pattern.test(answer)) &&
-    (filenamePattern.test(answer) || listPattern.test(answer))
-  );
-};
 
 const renderSummaryBasedAnswer = (summary: AgentEvidenceSummary) => {
   if (summary.source === "tool" && summary.status === "denied") {
@@ -975,11 +938,7 @@ export const generateNode = async (
     if (
       !hasCompletedToolEvidence &&
       !hasRetrievalEvidence &&
-      (answerClaimsUnverifiedObservation(answer) ||
-        answerLooksLikeFabricatedWorkspaceResult({
-          question: getLatestUserQuestion(state.messages) || state.goal.text,
-          answer,
-        }))
+      answerClaimsUnverifiedObservation(answer)
     ) {
       outputGuardReason =
         "generate output claimed grounded observation without completed evidence";

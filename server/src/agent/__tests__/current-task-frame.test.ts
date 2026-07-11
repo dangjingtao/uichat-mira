@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { test, vi } from "vitest";
 import * as harnessInvocations from "@/harness/invocations";
+import * as intentMatcherModule from "../intent/embedding-capability-matcher";
 import { createInitialAgentGraphState } from "../graph/state";
 import { buildPlannerObservationContext } from "../node-runtime";
 import { prepareContextNode } from "../nodes/prepare-context";
 import { retrieveNode } from "../nodes/retrieve";
 import { toolNode } from "../nodes/tool-node";
+import { buildNextActionPlannerMessages } from "../planner/prompt";
 import type { AgentNodeState } from "../node-runtime";
 
 const createBaseState = (
@@ -29,6 +31,17 @@ const createBaseState = (
   },
   messages: [],
   ...overrides,
+});
+
+const makeToolDefinition = (toolId: string, domain = "read") => ({
+  id: toolId,
+  title: toolId,
+  description: toolId,
+  inputSchema: { type: "object", properties: {} },
+  domain,
+  source: "internal" as const,
+  tags: [domain],
+  capabilities: { sideEffect: "none" as const, requiresApproval: false },
 });
 
 test("createInitialAgentGraphState initializes the runtime-minimum currentTaskFrame from goal when no newer user question exists", () => {
@@ -150,6 +163,78 @@ test("prepareContextNode keeps the initialized currentTaskFrame unchanged", asyn
     ],
     completionCriteria: ["inspect docs", "report findings"],
   });
+});
+
+test("prepareContextNode initializes runtime toolExposure independently from toolIntent diagnostics", async () => {
+  const readOpen = makeToolDefinition("read_open");
+  const webSearch = makeToolDefinition("web_search", "research");
+  const matcherSpy = vi
+    .spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding")
+    .mockResolvedValue({
+      query: "inspect docs",
+      topCandidates: [],
+      toolCandidates: [],
+      toolExposure: {
+        exposedToolIds: ["read_open"],
+        exposedDefinitions: [readOpen],
+        reason: ["matched read_open"],
+      },
+      exposureReasons: ["matched read_open"],
+    });
+
+  try {
+    const patch = await prepareContextNode(createBaseState());
+    assert.deepEqual(patch.toolExposure, {
+      exposedTools: ["read_open"],
+      toolMeta: [
+        {
+          toolId: "read_open",
+          title: "read_open",
+          description: "read_open",
+          inputSchema: { type: "object", properties: {} },
+          domain: "read",
+          source: "internal",
+          tags: ["read"],
+          capabilities: { sideEffect: "none", requiresApproval: false },
+        },
+      ],
+    });
+
+    const conflictingState = createBaseState({
+      ...patch,
+      toolIntent: {
+        ...patch.toolIntent!,
+        toolExposure: {
+          exposedToolIds: ["web_search"],
+          exposedDefinitions: [webSearch],
+          reason: ["diagnostic mismatch"],
+        },
+        exposureReasons: ["diagnostic mismatch"],
+      },
+    });
+    const plannerMessages = buildNextActionPlannerMessages({
+      question: "Open README.md",
+      messages: conflictingState.messages,
+      observationContext: buildPlannerObservationContext(conflictingState),
+      toolExposure: conflictingState.toolExposure!,
+      iteration: 0,
+      maxIterations: 3,
+    });
+    const payload = JSON.parse(String(plannerMessages[1]?.content ?? "{}")) as {
+      toolExposure: {
+        exposedTools: string[];
+        toolMeta: Array<{ toolId: string }>;
+      };
+    };
+
+    assert.deepEqual(payload.toolExposure.exposedTools, ["read_open"]);
+    assert.deepEqual(
+      payload.toolExposure.toolMeta.map((tool) => tool.toolId),
+      ["read_open"],
+    );
+  } finally {
+    matcherSpy.mockRestore();
+  }
 });
 
 test("retrieveNode does not write currentTaskFrame when no knowledge base is bound", async () => {

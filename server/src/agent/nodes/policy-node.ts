@@ -59,12 +59,29 @@ const isFrozenPlannerPendingToolCall = (
   );
 
 const resolvePolicyToolDefinition = (
-  state: Pick<AgentNodeState, "toolIntent">,
-  toolId: string,
-) =>
-  state.toolIntent?.toolExposure.exposedDefinitions.find(
-    (definition) => definition.id === toolId,
-  ) ?? listCapabilityDefinitions().find((definition) => definition.id === toolId);
+  pendingToolCall: PendingToolCall,
+) => {
+  if (pendingToolCall.toolMeta) {
+    return {
+      id: pendingToolCall.toolMeta.toolId,
+      title: pendingToolCall.toolMeta.title,
+      description: pendingToolCall.toolMeta.description,
+      domain: pendingToolCall.toolMeta.domain ?? "read",
+      source: pendingToolCall.toolMeta.source ?? "internal",
+      mode: "sync" as const,
+      inputSchema: pendingToolCall.toolMeta.inputSchema ?? {},
+      tags: pendingToolCall.toolMeta.tags ?? [],
+      capabilities: pendingToolCall.toolMeta.capabilities ?? {
+        sideEffect: "none" as const,
+        requiresApproval: false,
+      },
+    };
+  }
+
+  return listCapabilityDefinitions().find(
+    (definition) => definition.id === pendingToolCall.toolId,
+  );
+};
 
 const getPolicyRiskDetails = (
   definition: ReturnType<typeof listCapabilityDefinitions>[number],
@@ -173,7 +190,7 @@ export const policyNode = async (
     };
   }
 
-  const selectedDefinition = resolvePolicyToolDefinition(state, pendingToolCall.toolId);
+  const selectedDefinition = resolvePolicyToolDefinition(pendingToolCall);
   if (!selectedDefinition) {
     const reason = `Pending tool call references unknown tool: ${pendingToolCall.toolId}`;
     await emitStepNode(emit, {
@@ -188,6 +205,40 @@ export const policyNode = async (
         toolId: pendingToolCall.toolId,
         inputHash: pendingToolCall.inputHash,
         decisionType: "error",
+        reason,
+      },
+    });
+    return {
+      policyDecision: {
+        type: "error",
+        toolId: pendingToolCall.toolId,
+        inputHash: pendingToolCall.inputHash,
+        reason,
+      },
+      pendingToolCall: undefined,
+      pendingApproval: undefined,
+      blockedReason: reason,
+      errorMessage: reason,
+      errorSourceNodeId: nodeId,
+    };
+  }
+
+  if (selectedDefinition.id !== pendingToolCall.toolId) {
+    const reason =
+      "Policy resolved a mismatched tool definition for the frozen pendingToolCall.";
+    await emitStepNode(emit, {
+      runId: state.runId,
+      nodeId,
+      ...traceAttemptMeta,
+      nodeType: "policy",
+      phase: "done",
+      label: "审批策略",
+      summary: "冻结调用与工具定义不一致，已阻断执行",
+      details: {
+        toolId: pendingToolCall.toolId,
+        inputHash: pendingToolCall.inputHash,
+        decisionType: "error",
+        resolvedToolId: selectedDefinition.id,
         reason,
       },
     });

@@ -37,9 +37,17 @@ const getPlannerPayload = (plannerContext: string) => {
   const userMessage = [...messages].reverse().find((message) => message.role === "user");
   assert.ok(userMessage, "planner user payload should exist");
   return JSON.parse(userMessage.content) as {
+    currentUserRequest?: string;
+    recentConversationHistory?: Array<{ role: string; content: string }>;
     observationContext?: {
+      currentTaskFrame?: {
+        coveredProgress?: string[];
+        remainingWork?: string[];
+      };
       latestEvidenceSummary?: {
+        status?: string;
         toolId?: string;
+        gaps?: string[];
         data?: Record<string, unknown>;
       } | null;
     };
@@ -55,6 +63,12 @@ const testDbPath = createTimestampedTestArtifactPath(
 
 const makeMessage = (content: string) => ({
   role: "user" as const,
+  content,
+  parts: [{ type: "text" as const, text: content }],
+});
+
+const makeAssistantMessage = (content: string) => ({
+  role: "assistant" as const,
   content,
   parts: [{ type: "text" as const, text: content }],
 });
@@ -218,6 +232,7 @@ const setupToolExposure = (
 const runBlackbox = (input: {
   runId: string;
   question: string;
+  messages?: Array<ReturnType<typeof makeMessage> | ReturnType<typeof makeAssistantMessage>>;
   maxIterations?: number;
   onExecutionNode?: Parameters<typeof agentGraph.run>[0]["onExecutionNode"];
 }) =>
@@ -230,7 +245,7 @@ const runBlackbox = (input: {
       text: input.question,
     },
     plan: basePlan,
-    messages: [makeMessage(input.question)],
+    messages: input.messages ?? [makeMessage(input.question)],
     workspaceRoot: "D:\\workspace\\rag-demo",
     maxIterations: input.maxIterations,
     onExecutionNode: input.onExecutionNode,
@@ -476,6 +491,328 @@ test("read_discover flows through Evidence back to Planner without automatic rea
   );
   assert.match(result.evidence.latestSummary?.facts.join("\n") ?? "", /returnedCount=6/);
   assert.match(result.evidence.latestSummary?.facts.join("\n") ?? "", /hasMore=true/);
+});
+
+test("read_discover can flow through Evidence back to Planner and then into read_open before answering", async () => {
+  setupToolExposure("find the approval resume implementation and open it", [
+    readDiscoverTool(),
+    readOpenTool(),
+  ]);
+  const plannerPayloads: string[] = [];
+  vi.spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_discover","args":{"mode":"locate","query":"approval resume","maxResults":5},"reason":"Find the likely implementation file first."}';
+    })
+    .mockImplementationOnce(async function* (messages) {
+      plannerPayloads.push(JSON.stringify(messages));
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"server/src/agent/resume.ts"},"reason":"The discover result only found candidates; now open the implementation file."}';
+    })
+    .mockImplementationOnce(async function* (messages) {
+      plannerPayloads.push(JSON.stringify(messages));
+      yield '{"type":"answer","reason":"The located file content is now sufficient."}';
+    });
+  const executeSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValueOnce({
+      id: "invocation-discover-open-chain-discover",
+      toolId: "read_discover",
+      status: "completed",
+      result: {
+        type: "discover",
+        mode: "locate",
+        operation: "locate",
+        root: ".",
+        scope: ".",
+        query: "approval resume",
+        searchMode: "auto",
+        matches: [
+          { path: "docs/approval-notes.md", matchType: "content" },
+          { path: "server/src/agent/resume.ts", matchType: "content" },
+        ],
+        returnedCount: 2,
+        hasMore: false,
+        truncated: false,
+      },
+      startedAt: "2026-07-11T00:00:00.000Z",
+      finishedAt: "2026-07-11T00:00:01.000Z",
+    } as never)
+    .mockResolvedValueOnce({
+      id: "invocation-discover-open-chain-open",
+      toolId: "read_open",
+      status: "completed",
+      result: {
+        type: "open",
+        path: "server/src/agent/resume.ts",
+        source: {
+          kind: "text",
+          mimeType: "text/plain",
+          text: "resumeApprovedAgentRun clears pendingApproval before rerunning agentGraph.",
+          metadata: {},
+        },
+      },
+      startedAt: "2026-07-11T00:00:02.000Z",
+      finishedAt: "2026-07-11T00:00:03.000Z",
+    } as never);
+  vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke").mockResolvedValue(
+    "The approval resume implementation is in server/src/agent/resume.ts.",
+  );
+
+  const result = await runBlackbox({
+    runId: "blackbox-read-discover-open-chain",
+    question: "find the approval resume implementation and open it",
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(executeSpy.mock.calls.length, 2);
+  assert.equal(executeSpy.mock.calls[0]?.[0]?.toolId, "read_discover");
+  assert.equal(executeSpy.mock.calls[1]?.[0]?.toolId, "read_open");
+  assert.equal(result.evidence.toolExecutions.length, 2);
+  assert.equal(result.evidence.latestSummary?.toolId, "read_open");
+  const secondPlannerPayload = getPlannerPayload(plannerPayloads[0] ?? "");
+  assert.equal(secondPlannerPayload.observationContext?.latestEvidenceSummary?.toolId, "read_discover");
+  assert.equal(secondPlannerPayload.observationContext?.latestEvidenceSummary?.data?.kind, "read_discover");
+  const thirdPlannerPayload = getPlannerPayload(plannerPayloads[1] ?? "");
+  assert.equal(thirdPlannerPayload.observationContext?.latestEvidenceSummary?.toolId, "read_open");
+  assert.equal(thirdPlannerPayload.observationContext?.latestEvidenceSummary?.data?.kind, "read_open");
+});
+
+test("Planner payload keeps a bounded recent history window even when the follow-up uses Chinese continuation", async () => {
+  setupToolExposure("那一段展开说说", [readOpenTool()]);
+  let plannerContext = "";
+  vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementationOnce(
+    async function* (messages) {
+      plannerContext = JSON.stringify(messages);
+      yield '{"type":"answer","reason":"No tool is needed for this prompt assembly check."}';
+    },
+  );
+  vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke").mockResolvedValue(
+    "history payload checked",
+  );
+
+  const result = await runBlackbox({
+    runId: "blackbox-relevant-history-filter",
+    question: "那一段展开说说",
+    messages: [
+      makeMessage("第一轮无关的旧问题"),
+      makeAssistantMessage("第一轮无关的旧回答"),
+      makeMessage("先看审批恢复这块"),
+      makeAssistantMessage("好的，我先去找相关实现。"),
+      makeMessage("我找到 resume.ts 了"),
+      makeAssistantMessage("里面有 resumeApprovedAgentRun。"),
+      makeMessage("继续"),
+      makeAssistantMessage("好，我继续看它怎么清 pending approval。"),
+      makeMessage("然后呢？"),
+      makeAssistantMessage("我再确认一下调用链。"),
+      makeMessage("那一段展开说说"),
+    ],
+  });
+
+  assert.equal(result.status, "completed");
+  const plannerPayload = getPlannerPayload(plannerContext);
+  assert.deepEqual(plannerPayload.recentConversationHistory, [
+    {
+      role: "user",
+      content: "我找到 resume.ts 了",
+    },
+    {
+      role: "assistant",
+      content: "里面有 resumeApprovedAgentRun。",
+    },
+    {
+      role: "user",
+      content: "继续",
+    },
+    {
+      role: "assistant",
+      content: "好，我继续看它怎么清 pending approval。",
+    },
+    {
+      role: "user",
+      content: "然后呢？",
+    },
+    {
+      role: "assistant",
+      content: "我再确认一下调用链。",
+    },
+  ]);
+});
+
+test("multi-target requests do not answer after only one target is covered", async () => {
+  setupToolExposure("compare README.md and package.json", [readOpenTool()]);
+  const plannerPayloads: string[] = [];
+  vi.spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Open the first target before comparing both files."}';
+    })
+    .mockImplementationOnce(async function* (messages) {
+      plannerPayloads.push(JSON.stringify(messages));
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"package.json"},"reason":"Only README.md is covered so far; open package.json before answering."}';
+    })
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"answer","reason":"Both files are now covered."}';
+    });
+  const executeSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValueOnce({
+      id: "invocation-multi-target-readme",
+      toolId: "read_open",
+      status: "completed",
+      result: {
+        type: "open",
+        path: "README.md",
+        source: {
+          kind: "text",
+          mimeType: "text/markdown",
+          text: "# README\nUIChat Mira",
+          metadata: {},
+        },
+      },
+      startedAt: "2026-07-11T00:00:00.000Z",
+      finishedAt: "2026-07-11T00:00:01.000Z",
+    } as never)
+    .mockResolvedValueOnce({
+      id: "invocation-multi-target-package",
+      toolId: "read_open",
+      status: "completed",
+      result: {
+        type: "open",
+        path: "package.json",
+        source: {
+          kind: "text",
+          mimeType: "application/json",
+          text: '{"name":"ui-chat-mira"}',
+          metadata: {},
+        },
+      },
+      startedAt: "2026-07-11T00:00:02.000Z",
+      finishedAt: "2026-07-11T00:00:03.000Z",
+    } as never);
+  vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke").mockResolvedValue(
+    "Compared README.md and package.json.",
+  );
+
+  const result = await runBlackbox({
+    runId: "blackbox-multi-target-partial",
+    question: "compare README.md and package.json",
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(executeSpy.mock.calls.length, 2);
+  assert.equal(executeSpy.mock.calls[0]?.[0]?.args.path, "README.md");
+  assert.equal(executeSpy.mock.calls[1]?.[0]?.args.path, "package.json");
+  const secondPlannerPayload = getPlannerPayload(plannerPayloads[0] ?? "");
+  assert.equal(secondPlannerPayload.observationContext?.latestEvidenceSummary?.toolId, "read_open");
+  assert.equal(secondPlannerPayload.observationContext?.latestEvidenceSummary?.data?.path, "README.md");
+  assert.equal(
+    secondPlannerPayload.observationContext?.currentTaskFrame?.remainingWork,
+    undefined,
+  );
+});
+
+test("truncated read evidence does not force an early answer when full content is still needed", async () => {
+  setupToolExposure("read the full README and then summarize it", [readOpenTool()]);
+  const plannerPayloads: string[] = [];
+  vi.spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Start by opening the file."}';
+    })
+    .mockImplementationOnce(async function* (messages) {
+      plannerPayloads.push(JSON.stringify(messages));
+      yield '{"type":"ask_user","question":"README.md is truncated in the current evidence. Should I open a more specific section?","reason":"The current file evidence is truncated and not enough for a grounded full-summary answer."}';
+    });
+  vi.spyOn(harnessInvocations, "executeHarnessInvocation").mockResolvedValueOnce({
+    id: "invocation-truncated-read-open",
+    toolId: "read_open",
+    status: "completed",
+    result: {
+      type: "open",
+      path: "README.md",
+      source: {
+        kind: "text",
+        mimeType: "text/markdown",
+        text: `${"A".repeat(600)}\n${"B".repeat(600)}`,
+        metadata: {},
+      },
+    },
+    startedAt: "2026-07-11T00:00:00.000Z",
+    finishedAt: "2026-07-11T00:00:01.000Z",
+  } as never);
+  vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke").mockResolvedValue(
+    "Need a user decision because the file preview is truncated.",
+  );
+
+  const result = await runBlackbox({
+    runId: "blackbox-truncated-read-open",
+    question: "read the full README and then summarize it",
+  });
+
+  assert.equal(result.status, "completed");
+  const secondPlannerPayload = getPlannerPayload(plannerPayloads[0] ?? "");
+  assert.equal(secondPlannerPayload.observationContext?.latestEvidenceSummary?.status, "truncated");
+  assert.match(
+    secondPlannerPayload.observationContext?.latestEvidenceSummary?.gaps?.join(" ") ?? "",
+    /truncated/i,
+  );
+  assert.match(result.answer, /truncated/i);
+});
+
+test("explicit evidence gaps can drive ask_user instead of an early answer", async () => {
+  setupToolExposure("find all workspace settings files and tell me whether the list is complete", [
+    readDiscoverTool(),
+  ]);
+  const plannerPayloads: string[] = [];
+  vi.spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_discover","args":{"mode":"locate","query":"settings","maxResults":5},"reason":"Collect candidate settings files first."}';
+    })
+    .mockImplementationOnce(async function* (messages) {
+      plannerPayloads.push(JSON.stringify(messages));
+      yield '{"type":"ask_user","question":"The current discover results are truncated and may be incomplete. Do you want me to continue with a narrower query or a specific path?","reason":"The latest evidence explicitly says more candidates may exist, so I should not answer as if the list is complete."}';
+    });
+  vi.spyOn(harnessInvocations, "executeHarnessInvocation").mockResolvedValueOnce({
+    id: "invocation-gap-discover",
+    toolId: "read_discover",
+    status: "completed",
+    result: {
+      type: "discover",
+      mode: "locate",
+      operation: "locate",
+      root: ".",
+      scope: ".",
+      query: "settings",
+      searchMode: "auto",
+      matches: [
+        { path: "docs/settings-1.md", matchType: "path" },
+        { path: "docs/settings-2.md", matchType: "path" },
+        { path: "docs/settings-3.md", matchType: "path" },
+        { path: "docs/settings-4.md", matchType: "path" },
+        { path: "docs/settings-5.md", matchType: "path" },
+        { path: "docs/settings-6.md", matchType: "path" },
+      ],
+      returnedCount: 6,
+      hasMore: true,
+      truncated: true,
+    },
+    startedAt: "2026-07-11T00:00:00.000Z",
+    finishedAt: "2026-07-11T00:00:01.000Z",
+  } as never);
+  vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke").mockResolvedValue(
+    "The candidate list may still be incomplete.",
+  );
+
+  const result = await runBlackbox({
+    runId: "blackbox-explicit-gap-ask-user",
+    question: "find all workspace settings files and tell me whether the list is complete",
+  });
+
+  assert.equal(result.status, "completed");
+  const secondPlannerPayload = getPlannerPayload(plannerPayloads[0] ?? "");
+  assert.equal(secondPlannerPayload.observationContext?.latestEvidenceSummary?.toolId, "read_discover");
+  assert.match(
+    secondPlannerPayload.observationContext?.latestEvidenceSummary?.gaps?.join(" ") ?? "",
+    /more candidates may exist/i,
+  );
+  assert.match(result.answer, /incomplete|candidate/i);
 });
 
 test("A4 capability-like ids are rejected before Harness execution", async () => {

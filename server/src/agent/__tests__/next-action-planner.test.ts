@@ -120,6 +120,7 @@ test("buildPlannerObservationContext handles empty planner state", () => {
   assert.equal(context.latestObservation, undefined);
   assert.deepEqual(context.recentObservations, []);
   assert.equal(context.latestEvidenceSummary, undefined);
+  assert.equal(context.latestToolCall, undefined);
   assert.equal(context.taskCoverageView, undefined);
   assert.deepEqual(context.recovery, {
     source: "none",
@@ -130,7 +131,47 @@ test("buildPlannerObservationContext handles empty planner state", () => {
   assert.equal(context.pendingApproval, undefined);
 });
 
-test("buildPlannerObservationContext includes lastToolExecution as the latest planner observation", () => {
+test("buildPlannerObservationContext reads completed tool facts from evidence.toolExecutions", () => {
+  const context = buildPlannerObservationContext(
+    createState({
+      evidence: {
+        observations: [],
+        retrievals: [],
+        toolExecutions: [
+          {
+            toolId: "read_open",
+            args: { path: "README.md" },
+            status: "completed",
+            summary: {
+              source: "tool",
+              status: "completed",
+              toolId: "read_open",
+              actionTaken: "Opened README.md.",
+              keyFindings: ["contentLength=120"],
+              answerReadiness: {
+                canAnswer: true,
+                reason: "Opened file content is available for answer generation.",
+              },
+            },
+            startedAt: "2026-07-06T10:00:00.000Z",
+            finishedAt: "2026-07-06T10:00:01.000Z",
+          },
+        ],
+      },
+      observations: undefined,
+    }),
+  );
+
+  assert.equal(context.latestObservation?.source, "tool_execution");
+  assert.equal(context.latestObservation?.actionType, "tool");
+  assert.equal(context.latestObservation?.toolId, "read_open");
+  assert.equal(context.latestObservation?.status, "completed");
+  assert.deepEqual(context.latestObservation?.argsPreview, { path: "README.md" });
+  assert.equal(context.latestObservation?.summary?.toolId, "read_open");
+  assert.equal(context.latestToolCall?.toolId, "read_open");
+});
+
+test("buildPlannerObservationContext does not use lastToolExecution as a planner fact source after Evidence", () => {
   const context = buildPlannerObservationContext(
     createState({
       lastToolExecution: {
@@ -143,42 +184,43 @@ test("buildPlannerObservationContext includes lastToolExecution as the latest pl
           toolId: "read_open",
           actionTaken: "Opened README.md.",
           keyFindings: ["contentLength=120"],
-          answerReadiness: {
-            canAnswer: true,
-            reason: "Opened file content is available for answer generation.",
-          },
         },
         startedAt: "2026-07-06T10:00:00.000Z",
         finishedAt: "2026-07-06T10:00:01.000Z",
       },
-      evidence: undefined,
+      evidence: {
+        observations: [],
+        retrievals: [],
+        toolExecutions: [],
+      },
       observations: undefined,
     }),
   );
 
-  assert.equal(context.latestObservation?.source, "tool_execution");
-  assert.equal(context.latestObservation?.actionType, "tool");
-  assert.equal(context.latestObservation?.toolId, "read_open");
-  assert.equal(context.latestObservation?.status, "completed");
-  assert.deepEqual(context.latestObservation?.argsPreview, { path: "README.md" });
-  assert.equal(context.latestObservation?.summary?.toolId, "read_open");
+  assert.equal(context.latestObservation, undefined);
+  assert.equal(context.latestToolCall, undefined);
 });
 
-test("buildPlannerObservationContext keeps terminal tool failure as failed_terminal", () => {
+test("buildPlannerObservationContext keeps terminal tool failure from evidence as failed_terminal", () => {
   const context = buildPlannerObservationContext(
     createState({
-      lastToolExecution: {
-        toolCallId: "tool-call-terminal-failed",
-        toolId: "read_open",
-        inputHash: "hash-read-open-terminal",
-        args: { path: "README.md" },
-        status: "failed",
-        failureKind: "terminal",
-        errorMessage: "Tool protocol mismatch: result payload is invalid",
-        startedAt: "2026-07-06T10:00:00.000Z",
-        finishedAt: "2026-07-06T10:00:01.000Z",
+      evidence: {
+        observations: [],
+        retrievals: [],
+        toolExecutions: [
+          {
+            toolCallId: "tool-call-terminal-failed",
+            toolId: "read_open",
+            inputHash: "hash-read-open-terminal",
+            args: { path: "README.md" },
+            status: "failed",
+            failureKind: "terminal",
+            errorMessage: "Tool protocol mismatch: result payload is invalid",
+            startedAt: "2026-07-06T10:00:00.000Z",
+            finishedAt: "2026-07-06T10:00:01.000Z",
+          },
+        ],
       },
-      evidence: undefined,
       observations: undefined,
     }),
   );
@@ -192,7 +234,7 @@ test("buildPlannerObservationContext keeps terminal tool failure as failed_termi
   ]);
 });
 
-test("buildPlannerObservationContext keeps recoverable tool failure as failed_recoverable", () => {
+test("buildPlannerObservationContext keeps recoverable tool failure from evidence as failed_recoverable", () => {
   const context = buildPlannerObservationContext(
     createState({
       lastToolExecution: {
@@ -207,7 +249,24 @@ test("buildPlannerObservationContext keeps recoverable tool failure as failed_re
         startedAt: "2026-07-06T10:00:00.000Z",
         finishedAt: "2026-07-06T10:00:01.000Z",
       },
-      evidence: undefined,
+      evidence: {
+        observations: [],
+        retrievals: [],
+        toolExecutions: [
+          {
+            toolCallId: "tool-call-recoverable-failed",
+            toolId: "read_open",
+            inputHash: "hash-read-open-recoverable",
+            args: { path: "missing.md" },
+            status: "failed",
+            failureKind: "recoverable",
+            recoveryAttemptCount: 1,
+            errorMessage: "File not found",
+            startedAt: "2026-07-06T10:00:00.000Z",
+            finishedAt: "2026-07-06T10:00:01.000Z",
+          },
+        ],
+      },
       observations: undefined,
     }),
   );
@@ -379,23 +438,31 @@ test("buildNextActionPlannerMessages reads planner observation context instead o
         confirmedObjects: [],
         completionCriteria: ["Inspect README.md"],
       },
-      lastToolExecution: {
-        toolId: "read_open",
-        args: { path: "README.md" },
-        status: "completed",
-        summary: {
-          source: "tool",
-          status: "completed",
-          toolId: "read_open",
-          actionTaken: "Opened README.md.",
-          keyFindings: ["contentLength=120"],
-          answerReadiness: {
-            canAnswer: true,
-            reason: "Opened file content is available for answer generation.",
+      evidence: {
+        observations: [],
+        retrievals: [],
+        toolExecutions: [
+          {
+            toolCallId: "tool-call-readme-open",
+            toolId: "read_open",
+            inputHash: "hash-readme-open",
+            args: { path: "README.md" },
+            status: "completed",
+            summary: {
+              source: "tool",
+              status: "completed",
+              toolId: "read_open",
+              actionTaken: "Opened README.md.",
+              keyFindings: ["contentLength=120"],
+              answerReadiness: {
+                canAnswer: true,
+                reason: "Opened file content is available for answer generation.",
+              },
+            },
+            startedAt: "2026-07-06T10:00:00.000Z",
+            finishedAt: "2026-07-06T10:00:01.000Z",
           },
-        },
-        startedAt: "2026-07-06T10:00:00.000Z",
-        finishedAt: "2026-07-06T10:00:01.000Z",
+        ],
       },
       pendingApproval: {
         id: "approval-1",
@@ -417,6 +484,7 @@ test("buildNextActionPlannerMessages reads planner observation context instead o
 
   const messages = buildNextActionPlannerMessages({
     question: "Open README.md",
+    messages: createState().messages,
     observationContext,
     toolExposure: createState().toolExposure!,
     iteration: 0,
@@ -426,12 +494,18 @@ test("buildNextActionPlannerMessages reads planner observation context instead o
   const promptObservationContext = payload.observationContext as Record<string, unknown>;
 
   assert.ok("observationContext" in payload);
+  assert.equal(payload.currentUserRequest, "Open README.md");
+  assert.equal("recentConversationHistory" in payload, false);
   assert.equal("taskFrame" in payload, false);
   assert.equal("lastToolExecution" in payload, false);
   assert.equal("pendingApproval" in payload, false);
   assert.equal("schemaReplanDiagnostics" in payload, false);
   assert.equal("latestEvidenceSummary" in payload, false);
   assert.equal("taskCoverageView" in promptObservationContext, false);
+  assert.equal(
+    (promptObservationContext.latestToolCall as Record<string, unknown>).toolId,
+    "read_open",
+  );
 });
 
 test("buildNextActionPlannerMessages uses tool failure recovery budget in the main planner prompt", () => {
@@ -456,6 +530,7 @@ test("buildNextActionPlannerMessages uses tool failure recovery budget in the ma
 
   const messages = buildNextActionPlannerMessages({
     question: "Open missing.md",
+    messages: createState().messages,
     observationContext,
     toolExposure: createState().toolExposure!,
     iteration: 0,
@@ -475,6 +550,146 @@ test("buildNextActionPlannerMessages uses tool failure recovery budget in the ma
     String(messages[0]?.content ?? ""),
     /当前恢复预算还剩 1 次；如果继续恢复，必须说明这次为什么与上次不同。/,
   );
+});
+
+test("buildNextActionPlannerMessages only uses toolExposure as the planner-visible tool source", () => {
+  const messages = buildNextActionPlannerMessages({
+    question: "Open README.md",
+    messages: createState().messages,
+    observationContext: buildPlannerObservationContext(createState()),
+    toolExposure: {
+      exposedTools: ["read_open"],
+      toolMeta: [baseToolExposure.toolMeta[0]!],
+    },
+    iteration: 0,
+    maxIterations: 3,
+  });
+
+  const payload = JSON.parse(String(messages[1]?.content ?? "{}")) as {
+    toolExposure: {
+      exposedTools: string[];
+      toolMeta: Array<{ toolId: string }>;
+    };
+  };
+
+  assert.deepEqual(payload.toolExposure.exposedTools, ["read_open"]);
+  assert.deepEqual(
+    payload.toolExposure.toolMeta.map((tool) => tool.toolId),
+    ["read_open"],
+  );
+});
+
+test("buildNextActionPlannerMessages keeps a bounded recent user and assistant history window", () => {
+  const messages = buildNextActionPlannerMessages({
+    question: "那一段展开说说",
+    messages: [
+      {
+        role: "user",
+        content: "第一轮无关的旧问题",
+        parts: [{ type: "text", text: "第一轮无关的旧问题" }],
+      },
+      {
+        role: "assistant",
+        content: "第一轮无关的旧回答",
+        parts: [{ type: "text", text: "第一轮无关的旧回答" }],
+      },
+      {
+        role: "user",
+        content: "先看审批恢复这块",
+        parts: [
+          {
+            type: "text",
+            text: "先看审批恢复这块",
+          },
+        ],
+      },
+      {
+        role: "assistant",
+        content: "好的，我先去找相关实现。",
+        parts: [
+          {
+            type: "text",
+            text: "好的，我先去找相关实现。",
+          },
+        ],
+      },
+      {
+        role: "user",
+        content: "我找到 resume.ts 了",
+        parts: [
+          {
+            type: "text",
+            text: "我找到 resume.ts 了",
+          },
+        ],
+      },
+      {
+        role: "assistant",
+        content: "里面有 resumeApprovedAgentRun。",
+        parts: [{ type: "text", text: "里面有 resumeApprovedAgentRun。" }],
+      },
+      {
+        role: "user",
+        content: "继续",
+        parts: [{ type: "text", text: "继续" }],
+      },
+      {
+        role: "assistant",
+        content: "好，我继续看它怎么清 pending approval。",
+        parts: [{ type: "text", text: "好，我继续看它怎么清 pending approval。" }],
+      },
+      {
+        role: "user",
+        content: "然后呢？",
+        parts: [{ type: "text", text: "然后呢？" }],
+      },
+      {
+        role: "assistant",
+        content: "我再确认一下调用链。",
+        parts: [{ type: "text", text: "我再确认一下调用链。" }],
+      },
+      {
+        role: "user",
+        content: "那一段展开说说",
+        parts: [{ type: "text", text: "那一段展开说说" }],
+      },
+    ],
+    observationContext: buildPlannerObservationContext(createState()),
+    toolExposure: createState().toolExposure!,
+    iteration: 0,
+    maxIterations: 3,
+  });
+
+  const payload = JSON.parse(String(messages[1]?.content ?? "{}")) as {
+    recentConversationHistory?: Array<{ role: string; content: string }>;
+  };
+
+  assert.deepEqual(payload.recentConversationHistory, [
+    {
+      role: "user",
+      content: "我找到 resume.ts 了",
+    },
+    {
+      role: "assistant",
+      content: "里面有 resumeApprovedAgentRun。",
+    },
+    {
+      role: "user",
+      content: "继续",
+    },
+    {
+      role: "assistant",
+      content: "好，我继续看它怎么清 pending approval。",
+    },
+    {
+      role: "user",
+      content: "然后呢？",
+    },
+    {
+      role: "assistant",
+      content: "我再确认一下调用链。",
+    },
+  ]);
 });
 
 test("nextActionPlannerNode returns answer action from task model JSON", async () => {
@@ -978,6 +1193,8 @@ test("nextActionPlannerNode accepts ask_user output for missing information", as
         currentBlocker: undefined,
         confirmedObjects: [],
         completionCriteria: ["Identify the right repository"],
+        coveredProgress: undefined,
+        remainingWork: undefined,
       },
     });
   } finally {
@@ -1596,7 +1813,7 @@ test("nextActionPlannerNode writes decision trace and includes prompt context fo
   }
 });
 
-test("nextActionPlannerNode can derive tool exposure from toolIntent when explicit toolExposure is absent", async () => {
+test("nextActionPlannerNode does not derive tool exposure from toolIntent when explicit toolExposure is absent", async () => {
   const streamSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementation(async function* () {
@@ -1638,13 +1855,15 @@ test("nextActionPlannerNode can derive tool exposure from toolIntent when explic
 
     assert.deepEqual(patch, {
       nextAction: {
-        type: "use_tool",
-        toolId: "read_open",
-        args: {
-          path: "README.md",
-        },
-        reason: "Need file content.",
+        type: "error",
+        reason:
+          "Planner selected a tool that was not exposed for this turn; planner must stop.",
       },
+      errorMessage:
+        "Planner selected a tool that was not exposed for this turn; planner must stop.",
+      blockedReason:
+        "Planner selected a tool that was not exposed for this turn; planner must stop.",
+      errorSourceNodeId: "agent-next-action-planner",
     });
   } finally {
     streamSpy.mockRestore();
@@ -1750,11 +1969,144 @@ test("nextActionPlannerNode is the primary writer for runtime currentTaskFrame u
           },
         ],
         completionCriteria: ["Inspect README.md"],
+        coveredProgress: undefined,
+        remainingWork: undefined,
       },
     });
   } finally {
     streamSpy.mockRestore();
   }
+});
+
+test("nextActionPlannerNode updates currentTaskFrame from explicit evidence facts and gaps only", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"package.json"},"reason":"README.md is already covered; package.json is still missing."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        currentTaskFrame: {
+          currentGoal: "compare README.md and package.json",
+          currentSubtask: "Old subtask",
+          currentBlocker: undefined,
+          confirmedObjects: [],
+          completionCriteria: ["compare README.md and package.json"],
+        },
+        question: "compare README.md and package.json",
+        evidence: {
+          observations: [],
+          retrievals: [],
+          toolExecutions: [
+            {
+              toolId: "read_open",
+              args: { path: "README.md" },
+              status: "completed",
+              summary: {
+                source: "tool",
+                status: "partial",
+                toolId: "read_open",
+                actionTaken: "Opened README.md.",
+                keyFindings: ["path=README.md"],
+                gaps: ["package.json is still missing."],
+                data: {
+                  kind: "read_open",
+                  path: "README.md",
+                  contentPreview: "# README",
+                  contentLength: 8,
+                  keySections: [],
+                },
+              },
+              startedAt: "2026-07-11T00:00:00.000Z",
+              finishedAt: "2026-07-11T00:00:01.000Z",
+            },
+          ],
+          latestSummary: {
+            source: "tool",
+            status: "partial",
+            toolId: "read_open",
+            actionTaken: "Opened README.md.",
+            keyFindings: ["path=README.md"],
+            gaps: ["package.json is still missing."],
+            data: {
+              kind: "read_open",
+              path: "README.md",
+              contentPreview: "# README",
+              contentLength: 8,
+              keySections: [],
+            },
+          },
+        },
+      }),
+    );
+
+    assert.deepEqual(patch.currentTaskFrame?.coveredProgress, [
+      "Opened README.md.",
+      "path=README.md",
+    ]);
+    assert.deepEqual(patch.currentTaskFrame?.remainingWork, [
+      "package.json is still missing.",
+    ]);
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("buildNextActionPlannerMessages preserves read_discover oneOf inputSchema", () => {
+  const messages = buildNextActionPlannerMessages({
+    question: "Find settings files",
+    messages: createState().messages,
+    observationContext: buildPlannerObservationContext(createState()),
+    toolExposure: {
+      exposedTools: ["read_discover"],
+      toolMeta: [
+        {
+          toolId: "read_discover",
+          title: "read_discover",
+          description: "discover files",
+          inputSchema: {
+            oneOf: [
+              {
+                type: "object",
+                required: ["mode", "path"],
+                additionalProperties: false,
+                properties: {
+                  mode: { type: "string", enum: ["list"] },
+                  path: { type: "string" },
+                },
+              },
+              {
+                type: "object",
+                required: ["mode", "query"],
+                additionalProperties: false,
+                properties: {
+                  mode: { type: "string", enum: ["locate"] },
+                  query: { type: "string" },
+                },
+              },
+            ],
+          },
+          domain: "read",
+          source: "internal",
+          tags: ["read"],
+          capabilities: { sideEffect: "none", requiresApproval: false },
+        },
+      ],
+    },
+    iteration: 0,
+    maxIterations: 3,
+  });
+
+  const payload = JSON.parse(String(messages[1]?.content ?? "{}")) as {
+    toolExposure: {
+      toolMeta: Array<{ toolId: string; inputSchema?: { oneOf?: unknown[] } }>;
+    };
+  };
+
+  assert.equal(payload.toolExposure.toolMeta[0]?.toolId, "read_discover");
+  assert.equal(payload.toolExposure.toolMeta[0]?.inputSchema?.oneOf?.length, 2);
 });
 
 test("nextActionPlannerNode writes planner error fields only for error actions", async () => {

@@ -2,9 +2,11 @@ import { providerProxyService } from "@/services/provider-proxy.service/index";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol";
 import { writeStructuredLog } from "@/logger";
 import type { AgentNextAction } from "../types";
+import { getLatestEvidenceSummary } from "../evidence";
 import {
   buildPlannerObservationContext,
   emitStepNode,
+  refreshCurrentTaskFrameFromEvidence,
   getToolTraceTargetPreview,
   summarizePlannerNextAction,
   updateCurrentTaskFrameFromPlanner,
@@ -89,7 +91,16 @@ export const nextActionPlannerNode = async (
   const question =
     state.question?.trim() || getLatestUserQuestion(state.messages) || state.goal.text;
   const toolExposure = normalizeToolExposure(state);
-  const observationContext = buildPlannerObservationContext(state);
+  const plannerVisibleTaskFrame = refreshCurrentTaskFrameFromEvidence({
+    frame: state.currentTaskFrame,
+    goal: state.goal,
+    latestQuestion: question,
+    latestEvidenceSummary: getLatestEvidenceSummary(state),
+  });
+  const observationContext = buildPlannerObservationContext({
+    ...state,
+    currentTaskFrame: plannerVisibleTaskFrame,
+  });
   const latestEvidenceSummary = observationContext.latestEvidenceSummary;
 
   await emitStepNode(emit, {
@@ -134,6 +145,7 @@ export const nextActionPlannerNode = async (
   } else {
     const messages: NormalizedChatMessage[] = buildNextActionPlannerMessages({
       question,
+      messages: state.messages,
       observationContext,
       toolExposure,
       iteration,
@@ -237,6 +249,7 @@ export const nextActionPlannerNode = async (
         goal: state.goal,
         nextAction,
         latestQuestion: question,
+        latestEvidenceSummary: observationContext.latestEvidenceSummary,
       })
     : undefined;
 

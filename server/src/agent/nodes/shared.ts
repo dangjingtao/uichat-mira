@@ -9,54 +9,6 @@ import type { AgentObservation } from "../types";
 
 export const nowIso = () => new Date().toISOString();
 
-const HIGH_RISK_WORKSPACE_MUTATION_PATTERNS = [
-  /\b(delete|remove|rm|move|mv|rename|write|overwrite|modify|patch|replace)\b/i,
-  /(删除|移除|删掉|移动|重命名|写入|覆盖|修改|替换)/,
-];
-
-const isHighRiskWorkspaceMutationRequest = (query: string) =>
-  HIGH_RISK_WORKSPACE_MUTATION_PATTERNS.some((pattern) => pattern.test(query));
-
-const getTerminalAutoExecutionBlockReason = (query: string) =>
-  isHighRiskWorkspaceMutationRequest(query)
-    ? "High-risk workspace mutations are blocked until a managed workspace tool exists for this operation."
-    : "Agent does not auto-build terminal_session.command. Terminal execution must wait for explicit, reviewed parameters.";
-
-const trimWrappedPath = (value: string) =>
-  value
-    .trim()
-    .replace(/^["'`]/, "")
-    .replace(/["'`]$/, "")
-    .trim();
-
-const extractQuotedValue = (query: string) => {
-  const match = query.match(/["'`](.+?)["'`]/);
-  return match ? trimWrappedPath(match[1]) : null;
-};
-
-const cleanTrailingPunctuation = (value: string) =>
-  value.replace(/[。．，,；;！!？?]+$/u, "").trim();
-
-export const extractExplicitPathTarget = (query: string) => {
-  const quoted = extractQuotedValue(query);
-  if (quoted) {
-    return cleanTrailingPunctuation(quoted);
-  }
-
-  const directPathMatch = query.match(/(?:^|[\s(])([a-zA-Z]:\\[^\s)]+|[.~]{0,2}[\\/][^\s)]+)/u);
-  if (directPathMatch?.[1]) {
-    return cleanTrailingPunctuation(trimWrappedPath(directPathMatch[1]));
-  }
-
-  const fileNameMatch = query.match(/\b[\w.-]+\.[a-z0-9]{1,12}\b/i);
-  return fileNameMatch?.[0] ? cleanTrailingPunctuation(fileNameMatch[0]) : null;
-};
-
-const getWorkspaceMutationBlockReason = (query: string) =>
-  isHighRiskWorkspaceMutationRequest(query)
-    ? "High-risk workspace mutation request could not be converted into reviewed structured parameters."
-    : "Workspace mutation execution requires explicit structured parameters.";
-
 export const createObservation = (input: {
   runId: string;
   stepId: string;
@@ -143,73 +95,6 @@ export const emitEvidenceUpdateNode = async (
     details: input.details,
   });
 };
-
-const DIRECTORY_OVERVIEW_TOKENS = [
-  "list",
-  "show",
-  "what's in",
-  "what is in",
-  "contents",
-  "under",
-  "inside",
-  "有哪些",
-  "有啥",
-  "有什么",
-  "列出",
-  "内容",
-  "看看",
-];
-
-const FILE_CONTENT_TOKENS = [
-  "open",
-  "read",
-  "content",
-  "contents",
-  "inside",
-  "详情",
-  "内容",
-  "打开",
-  "读取",
-  "阅读",
-  "查看",
-];
-
-const WORKSPACE_TOKENS = [
-  "workspace",
-  "folder",
-  "directory",
-  "repo",
-  "repository",
-  "project",
-  "file",
-  "files",
-  "文件",
-  "文件夹",
-  "目录",
-  "工作区",
-  "项目",
-  "仓库",
-];
-
-const normalizeIntentText = (value: string) => value.trim().toLowerCase();
-
-const includesAnyToken = (value: string, tokens: string[]) =>
-  tokens.some((token) => value.includes(token));
-
-export const queryRequestsDirectoryOverview = (query: string) =>
-  includesAnyToken(normalizeIntentText(query), DIRECTORY_OVERVIEW_TOKENS);
-
-export const queryRequestsFileContent = (query: string) => {
-  const normalized = normalizeIntentText(query);
-  if (includesAnyToken(normalized, FILE_CONTENT_TOKENS)) {
-    return true;
-  }
-
-  return /[\w-]+\.[a-z0-9]{1,12}\b/i.test(query);
-};
-
-export const queryMentionsWorkspace = (query: string) =>
-  includesAnyToken(normalizeIntentText(query), WORKSPACE_TOKENS);
 
 export const answerClaimsUnverifiedObservation = (answer: string) => {
   const normalized = answer.trim().toLowerCase();

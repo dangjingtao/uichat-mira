@@ -82,12 +82,16 @@ test("list and locate evidence do not cause an automatic read_open action", asyn
         args: { path: "." },
         status: "completed" as const,
         result: { type: "list", path: ".", entries: [{ name: "README.md", type: "file" }] },
+        startedAt: "2026-07-11T00:00:00.000Z",
+        finishedAt: "2026-07-11T00:00:01.000Z",
       },
       {
         toolId: "read_locate",
         args: { query: "README.md" },
         status: "completed" as const,
         result: { type: "locate", matches: [{ path: "README.md" }] },
+        startedAt: "2026-07-11T00:00:02.000Z",
+        finishedAt: "2026-07-11T00:00:03.000Z",
       },
     ],
   };

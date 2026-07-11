@@ -203,8 +203,6 @@ export const toolNode = async (
       errorMessage,
       errorSourceNodeId: "agent-tool",
       blockedReason: errorMessage,
-      continueIteration: false,
-      postToolReviewPending: false,
     };
   }
 
@@ -232,8 +230,6 @@ export const toolNode = async (
       errorMessage,
       errorSourceNodeId: "agent-tool",
       blockedReason: errorMessage,
-      continueIteration: false,
-      postToolReviewPending: false,
     };
   }
 
@@ -269,8 +265,6 @@ export const toolNode = async (
       errorMessage,
       errorSourceNodeId: "agent-tool",
       blockedReason: errorMessage,
-      continueIteration: false,
-      postToolReviewPending: false,
     };
   }
 
@@ -381,8 +375,6 @@ export const toolNode = async (
       errorMessage: ownerContractError,
       errorSourceNodeId: nodeId,
       blockedReason: ownerContractError,
-      continueIteration: false,
-      postToolReviewPending: false,
     };
   }
 
@@ -475,8 +467,6 @@ export const toolNode = async (
             errorMessage: undefined,
             errorSourceNodeId: undefined,
           }),
-      continueIteration: false,
-      postToolReviewPending: false,
     };
   }
 
@@ -535,7 +525,5 @@ export const toolNode = async (
     lastToolExecution: executionRecord,
     pendingToolExecution: executionRecord,
     iterationCount: (state.iterationCount ?? 0) + 1,
-    continueIteration: false,
-    postToolReviewPending: false,
   };
 };
