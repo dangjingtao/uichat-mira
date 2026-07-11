@@ -63,7 +63,7 @@ const configureStudioService = async (
     storageRoot,
   });
   setActiveCodeGraphStudioService(service);
-  service.saveConfig({
+  await service.saveConfig({
     microAppEnabled: true,
     agentCapabilityEnabled: overrides?.agentCapabilityEnabled ?? true,
     command: overrides?.command ?? process.env.UI_CHAT_CODEGRAPH_COMMAND ?? process.execPath,
@@ -266,7 +266,7 @@ test("codebaseExploreTool keeps repo pollution risk blocked instead of treating 
     storageRoot,
   });
   setActiveCodeGraphStudioService(service);
-  service.saveConfig({
+  await service.saveConfig({
     microAppEnabled: true,
     agentCapabilityEnabled: true,
     command: "codegraph",

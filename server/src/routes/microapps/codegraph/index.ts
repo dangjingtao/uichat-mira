@@ -256,7 +256,7 @@ const codeGraphRoutes: FastifyPluginAsync<{
       },
     },
     routeHandler("Failed to save CodeGraph Studio config", async (request) => {
-      codeGraphStudioService.saveConfig(request.body);
+      await codeGraphStudioService.saveConfig(request.body);
       return success(await codeGraphStudioService.getReport(), "CodeGraph Studio config saved");
     }),
   );

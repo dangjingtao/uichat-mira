@@ -86,6 +86,34 @@ type CodeGraphCapabilityStatusSource = {
   workspaceMatches?: boolean;
 } | null;
 
+type CodeGraphStudioSnapshotShape = {
+  status: ManagedCodeGraphStatusSnapshot["status"];
+  telemetryStatus: ManagedCodeGraphStatusSnapshot["telemetryStatus"];
+  workspaceMatches: boolean;
+  providerVersion: string | null;
+  handshakeStatus: ManagedCodeGraphStatusSnapshot["handshakeStatus"];
+  initializedNotificationSent: boolean;
+  processAlive: boolean;
+  startedAt: number | null;
+  stoppedAt: number | null;
+  durationMs: number | null;
+  exitCode: number | null;
+  lastStatus: ManagedCodeGraphStatusSnapshot["lastStatus"];
+  lastError: string | null;
+  crashCount: number;
+  startDisposition: string | null;
+};
+
+type CodeGraphRuntimeConfigFields = Pick<
+  CodeGraphStudioConfigDraft,
+  | "command"
+  | "startArgs"
+  | "versionProbeArgs"
+  | "telemetryProbeArgs"
+  | "appDataRoot"
+  | "timeoutMs"
+>;
+
 export type CodeGraphStudioBlockedReason = {
   code: CodeGraphStudioBlockedReasonCode;
   label: string;
@@ -197,6 +225,24 @@ const normalizeBoolean = (value: unknown, fallback: boolean) => {
 
   return value;
 };
+
+const toComparableRuntimeConfig = (
+  draft: CodeGraphStudioConfigDraft,
+): CodeGraphRuntimeConfigFields => ({
+  command: draft.command,
+  startArgs: [...draft.startArgs],
+  versionProbeArgs: [...draft.versionProbeArgs],
+  telemetryProbeArgs: [...draft.telemetryProbeArgs],
+  appDataRoot: draft.appDataRoot,
+  timeoutMs: draft.timeoutMs,
+});
+
+const hasRuntimeConfigChanged = (
+  current: CodeGraphStudioConfigDraft,
+  next: CodeGraphStudioConfigDraft,
+) =>
+  JSON.stringify(toComparableRuntimeConfig(current)) !==
+  JSON.stringify(toComparableRuntimeConfig(next));
 
 const parseJsonFile = <T>(filePath: string, fallback: T): T => {
   try {
@@ -341,6 +387,33 @@ export const createCodeGraphStudioService = (options?: {
   let manager: ManagedCodeGraphProcessManager | null = null;
   let latestCapabilityStatusSource: CodeGraphCapabilityStatusSource = null;
 
+  const updateLatestCapabilityStatusSource = (snapshot: {
+    status: ManagedCodeGraphStatusSnapshot["status"];
+    telemetryStatus?: ManagedCodeGraphStatusSnapshot["telemetryStatus"];
+    workspaceMatches?: boolean;
+  } | null) => {
+    latestCapabilityStatusSource = snapshot
+      ? {
+          status: snapshot.status,
+          telemetryStatus: snapshot.telemetryStatus,
+          workspaceMatches: snapshot.workspaceMatches,
+        }
+      : null;
+  };
+
+  const handleManagerStatusChanged = (snapshot: ManagedCodeGraphStatusSnapshot) => {
+    updateLatestCapabilityStatusSource(snapshot);
+    if (!snapshot.processAlive && manager?.getStatus().workspaceHash === snapshot.workspaceHash) {
+      const managerLifecycleClosed =
+        snapshot.status === "failed" ||
+        (snapshot.status === "stopped" && snapshot.startedAt !== null);
+      if (managerLifecycleClosed) {
+        manager = null;
+      }
+    }
+    onStateChanged?.();
+  };
+
   const getDraft = (): CodeGraphStudioConfigDraft => {
     const defaults = createDefaultDraft(workspaceRoot);
     const saved = parseJsonFile<Partial<CodeGraphStudioConfigDraft>>(configFilePath, {});
@@ -476,6 +549,7 @@ export const createCodeGraphStudioService = (options?: {
       healthTimeoutMs: runtime.draft.timeoutMs,
       stopTimeoutMs: runtime.draft.timeoutMs,
       repoPollutionGuard: toRepoPollutionGuard(runtime),
+      onStatusChanged: handleManagerStatusChanged,
     });
     return manager;
   };
@@ -506,8 +580,8 @@ export const createCodeGraphStudioService = (options?: {
     const activeManager = ensureManager();
     const snapshot =
       statusSource ??
-      latestCapabilityStatusSource ??
       activeManager?.getStatus() ??
+      latestCapabilityStatusSource ??
       null;
     const workspaceMatched = requestedWorkspaceRoot
       ? isSamePath(requestedWorkspaceRoot, workspaceRoot)
@@ -592,6 +666,57 @@ export const createCodeGraphStudioService = (options?: {
     };
   };
 
+  const toRuntimeSnapshot = (
+    snapshot: CodeGraphStudioStatusSource | null,
+    detect: ManagedCodeGraphDetectResult | null,
+  ): CodeGraphStudioSnapshotShape => {
+    const managedSnapshot =
+      snapshot && "handshakeStatus" in snapshot
+        ? (snapshot as ManagedCodeGraphStatusSnapshot)
+        : null;
+
+    if (managedSnapshot) {
+      return {
+        status: managedSnapshot.status,
+        telemetryStatus: managedSnapshot.telemetryStatus,
+        workspaceMatches: managedSnapshot.workspaceMatches,
+        providerVersion: managedSnapshot.providerVersion,
+        handshakeStatus: managedSnapshot.handshakeStatus,
+        initializedNotificationSent: managedSnapshot.initializedNotificationSent,
+        processAlive: managedSnapshot.processAlive,
+        startedAt: managedSnapshot.startedAt,
+        stoppedAt: managedSnapshot.stoppedAt,
+        durationMs: managedSnapshot.durationMs,
+        exitCode: managedSnapshot.exitCode,
+        lastStatus: managedSnapshot.lastStatus,
+        lastError: managedSnapshot.lastError,
+        crashCount: managedSnapshot.crashCount,
+        startDisposition: managedSnapshot.startDisposition,
+      };
+    }
+
+    return {
+      status: snapshot?.status ?? detect?.status ?? "unavailable",
+      telemetryStatus: snapshot?.telemetryStatus ?? detect?.telemetryStatus ?? "unavailable",
+      workspaceMatches:
+        snapshot && "workspaceMatches" in snapshot && typeof snapshot.workspaceMatches === "boolean"
+          ? snapshot.workspaceMatches
+          : true,
+      providerVersion: detect?.providerVersion ?? null,
+      handshakeStatus: "not_started",
+      initializedNotificationSent: false,
+      processAlive: false,
+      startedAt: null,
+      stoppedAt: null,
+      durationMs: null,
+      exitCode: null,
+      lastStatus: null,
+      lastError: null,
+      crashCount: 0,
+      startDisposition: null,
+    };
+  };
+
   const collectBlockedReasons = (
     runtime: ReturnType<typeof buildRuntimeConfig>,
     detect: ManagedCodeGraphDetectResult | null,
@@ -656,23 +781,37 @@ export const createCodeGraphStudioService = (options?: {
   ): Promise<CodeGraphStudioReport> => {
     const runtimeConfig = buildRuntimeConfig();
     const activeManager = ensureManager();
-    const detect = detectOverride ?? (activeManager ? await activeManager.detect() : null);
+    const liveSnapshot = activeManager?.getStatus() ?? null;
     const snapshot =
       statusSource && "processAlive" in statusSource
         ? statusSource
-        : activeManager?.getStatus() ?? null;
-    latestCapabilityStatusSource = snapshot
-      ? {
-          status: snapshot.status,
-          telemetryStatus: snapshot.telemetryStatus,
-          workspaceMatches:
-            "workspaceMatches" in snapshot &&
-            typeof snapshot.workspaceMatches === "boolean"
-              ? snapshot.workspaceMatches
-              : undefined,
-        }
-      : null;
-    const rawStatus = snapshot?.status ?? statusSource?.status ?? detect?.status ?? "unavailable";
+        : liveSnapshot ?? latestCapabilityStatusSource;
+    const detect =
+      detectOverride ??
+      ((!liveSnapshot || !liveSnapshot.processAlive) && activeManager
+        ? await activeManager.detect()
+        : null);
+    const runtimeSnapshot = toRuntimeSnapshot(snapshot, detect);
+    updateLatestCapabilityStatusSource(
+      liveSnapshot
+        ? {
+            status: liveSnapshot.status,
+            telemetryStatus: liveSnapshot.telemetryStatus,
+            workspaceMatches: liveSnapshot.workspaceMatches,
+          }
+        : snapshot
+          ? {
+              status: snapshot.status,
+              telemetryStatus: snapshot.telemetryStatus,
+              workspaceMatches:
+                "workspaceMatches" in snapshot &&
+                typeof snapshot.workspaceMatches === "boolean"
+                  ? snapshot.workspaceMatches
+                  : undefined,
+            }
+          : null,
+    );
+    const rawStatus = runtimeSnapshot.status;
     const blockedReasons = collectBlockedReasons(runtimeConfig, detect);
 
     return {
@@ -689,27 +828,26 @@ export const createCodeGraphStudioService = (options?: {
       capability: buildCapabilityGate(runtimeConfig, snapshot),
       pollutionGuard: runtimeConfig.pollutionGuard,
       runtime: {
-        providerVersion: snapshot?.providerVersion ?? detect?.providerVersion ?? null,
-        telemetryStatus:
-          snapshot?.telemetryStatus ?? detect?.telemetryStatus ?? "unavailable",
-        handshakeStatus: snapshot?.handshakeStatus ?? "not_started",
-        initializedNotificationSent: snapshot?.initializedNotificationSent ?? false,
-        processAlive: snapshot?.processAlive ?? false,
-        startedAt: snapshot?.startedAt ?? null,
-        stoppedAt: snapshot?.stoppedAt ?? null,
-        durationMs: snapshot?.durationMs ?? null,
-        exitCode: snapshot?.exitCode ?? null,
-        lastStatus: snapshot?.lastStatus ?? null,
-        lastError: snapshot?.lastError ?? null,
-        crashCount: snapshot?.crashCount ?? 0,
-        startDisposition: snapshot?.startDisposition ?? null,
+        providerVersion: runtimeSnapshot.providerVersion,
+        telemetryStatus: runtimeSnapshot.telemetryStatus,
+        handshakeStatus: runtimeSnapshot.handshakeStatus,
+        initializedNotificationSent: runtimeSnapshot.initializedNotificationSent,
+        processAlive: runtimeSnapshot.processAlive,
+        startedAt: runtimeSnapshot.startedAt,
+        stoppedAt: runtimeSnapshot.stoppedAt,
+        durationMs: runtimeSnapshot.durationMs,
+        exitCode: runtimeSnapshot.exitCode,
+        lastStatus: runtimeSnapshot.lastStatus,
+        lastError: runtimeSnapshot.lastError,
+        crashCount: runtimeSnapshot.crashCount,
+        startDisposition: runtimeSnapshot.startDisposition,
       },
       debug: {
         workspaceHash,
         plannerStorage: runtimeConfig.plannerStorage,
         externalIndexSupport: runtimeConfig.externalIndexSupport,
         detectReasons: detect?.reasons ?? [],
-        rawManagerStatus: rawStatus,
+        rawManagerStatus: runtimeSnapshot.status,
       },
     };
   };
@@ -725,7 +863,7 @@ export const createCodeGraphStudioService = (options?: {
       return await buildReport();
     },
 
-    saveConfig(input: Partial<CodeGraphStudioConfigDraft>) {
+    async saveConfig(input: Partial<CodeGraphStudioConfigDraft>) {
       const current = getDraft();
       const next: CodeGraphStudioConfigDraft = {
         microAppEnabled: normalizeBoolean(input.microAppEnabled, current.microAppEnabled),
@@ -770,30 +908,40 @@ export const createCodeGraphStudioService = (options?: {
         next.appDataRoot = runtime.config.appDataRootResolved;
       }
 
+      const runtimeConfigChanged = hasRuntimeConfigChanged(current, next);
+      const currentManager = manager;
+      if (runtimeConfigChanged && currentManager) {
+        await currentManager.dispose();
+        if (manager === currentManager) {
+          manager = null;
+        }
+      } else if (runtimeConfigChanged) {
+        updateLatestCapabilityStatusSource(null);
+      }
+
       ensureDirectory(storageRoot);
       fs.writeFileSync(configFilePath, JSON.stringify(next, null, 2), "utf8");
-      manager = null;
-      latestCapabilityStatusSource = null;
       onStateChanged?.();
       return next;
     },
 
     getCapabilityGate(requestedWorkspaceRoot?: string) {
+      const activeManager = ensureManager();
       return buildCapabilityGate(
         buildRuntimeConfig(),
-        latestCapabilityStatusSource ?? manager?.getStatus() ?? null,
+        activeManager?.getStatus() ?? latestCapabilityStatusSource ?? null,
         requestedWorkspaceRoot,
       );
     },
 
     getManagedCapabilityContext(requestedWorkspaceRoot: string) {
       const runtime = buildRuntimeConfig();
+      const activeManager = ensureManager();
       const gate = buildCapabilityGate(
         runtime,
-        latestCapabilityStatusSource ?? manager?.getStatus() ?? null,
+        activeManager?.getStatus() ?? latestCapabilityStatusSource ?? null,
         requestedWorkspaceRoot,
       );
-      const activeManager = ensureManager();
 
       if (!gate.available || !activeManager) {
         return {
@@ -816,6 +964,9 @@ export const createCodeGraphStudioService = (options?: {
     async detect() {
       const activeManager = ensureManager();
       const detect = activeManager ? await activeManager.detect() : null;
+      updateLatestCapabilityStatusSource(
+        activeManager?.getStatus() ?? (detect ? { status: detect.status, telemetryStatus: detect.telemetryStatus, workspaceMatches: detect.workspaceAllowed } : null),
+      );
       onStateChanged?.();
       return {
         report: await buildReport(detect, detect),
@@ -825,6 +976,7 @@ export const createCodeGraphStudioService = (options?: {
     async start() {
       const activeManager = ensureManager();
       const started = activeManager ? await activeManager.start() : null;
+      updateLatestCapabilityStatusSource(started ?? null);
       onStateChanged?.();
       return {
         report: await buildReport(started),
@@ -834,6 +986,7 @@ export const createCodeGraphStudioService = (options?: {
     async health() {
       const activeManager = ensureManager();
       const status = activeManager ? await activeManager.health() : null;
+      updateLatestCapabilityStatusSource(status ?? null);
       onStateChanged?.();
       return {
         report: await buildReport(status),
@@ -843,6 +996,10 @@ export const createCodeGraphStudioService = (options?: {
     async stop() {
       const activeManager = ensureManager();
       const status = activeManager ? await activeManager.stop() : null;
+      if (activeManager && manager === activeManager) {
+        manager = null;
+      }
+      updateLatestCapabilityStatusSource(status ?? null);
       onStateChanged?.();
       return {
         report: await buildReport(status),

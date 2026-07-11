@@ -229,7 +229,7 @@ export class ManagedCodeGraphProcessManager {
       reasons,
     };
 
-    this.snapshot = {
+    this.setSnapshot({
       ...this.snapshot,
       status,
       providerVersion,
@@ -244,7 +244,7 @@ export class ManagedCodeGraphProcessManager {
                 ? "telemetry_not_verified"
                 : null)
           : null,
-    };
+    });
 
     return this.detectCache;
   }
@@ -292,7 +292,7 @@ export class ManagedCodeGraphProcessManager {
 
     this.primaryLeaseKey = leaseKey;
     this.stoppingIntentional = false;
-    this.snapshot = {
+    this.setSnapshot({
       ...this.snapshot,
       status: "starting",
       startDisposition: "primary",
@@ -304,7 +304,7 @@ export class ManagedCodeGraphProcessManager {
       exitCode: null,
       lastError: null,
       processAlive: false,
-    };
+    });
 
     this.writeManagerLog(`start requested for ${this.workspaceHash}`);
     this.session = new ManagedJsonRpcSession({
@@ -340,7 +340,7 @@ export class ManagedCodeGraphProcessManager {
         this.options.startTimeoutMs ?? DEFAULT_TIMEOUT_MS,
       );
 
-      this.snapshot = {
+      this.setSnapshot({
         ...this.snapshot,
         handshakeStatus: "ok",
         providerVersion:
@@ -348,27 +348,27 @@ export class ManagedCodeGraphProcessManager {
           detectResult.providerVersion ??
           this.snapshot.providerVersion,
         processAlive: this.session.isAlive(),
-      };
+      });
 
       this.session.notify(STANDARD_INITIALIZED_NOTIFICATION_METHOD);
       this.session.notify(INITIALIZED_NOTIFICATION_METHOD);
-      this.snapshot = {
+      this.setSnapshot({
         ...this.snapshot,
         initializedNotificationSent: true,
-      };
+      });
 
       ManagedCodeGraphProcessManager.leaseRegistry.set(leaseKey, this);
       this.writeManagerLog(`initialize ok for ${this.workspaceHash}`);
       return await this.health();
     } catch (error) {
-      this.snapshot = {
+      this.setSnapshot({
         ...this.snapshot,
         status: "failed",
         handshakeStatus: "failed",
         initializedNotificationSent: false,
         processAlive: Boolean(this.session?.isAlive()),
         lastError: error instanceof Error ? error.message : String(error),
-      };
+      });
       this.writeManagerLog(`start failed: ${this.snapshot.lastError}`);
       if (this.primaryLeaseKey) {
         ManagedCodeGraphProcessManager.leaseRegistry.delete(this.primaryLeaseKey);
@@ -391,98 +391,72 @@ export class ManagedCodeGraphProcessManager {
     }
 
     if (!this.snapshot.initializedNotificationSent) {
-      this.snapshot = {
+      this.setSnapshot({
         ...this.snapshot,
         status: this.session.isAlive() ? "degraded" : "failed",
         processAlive: this.session.isAlive(),
         lastError: "notifications/initialized was not sent before health",
-      };
+      });
       return this.getStatus();
     }
 
     if (!this.session.isAlive()) {
       if (this.snapshot.status === "ready" || this.snapshot.status === "starting") {
-        this.snapshot = {
+        this.setSnapshot({
           ...this.snapshot,
           status: "degraded",
           processAlive: false,
-        };
+        });
       }
       return this.getStatus();
     }
 
     const repoPollution = this.inspectRepoPollution();
     if (repoPollution.exists || repoPollution.blockedReason) {
-      this.snapshot = {
+      this.setSnapshot({
         ...this.snapshot,
         status: "blocked",
         processAlive: this.session.isAlive(),
         lastError: this.getRepoPollutionBlockedMessage(repoPollution),
-      };
+      });
       return this.getStatus();
     }
 
     try {
-      const standardHealth = await this.tryStandardMcpHealth();
-      if (standardHealth) {
-        this.snapshot = {
+      const customHealth = await this.tryCustomHealth();
+      if (customHealth) {
+        this.setSnapshot({
           ...this.snapshot,
-          ...standardHealth,
+          ...customHealth,
           processAlive: this.session.isAlive(),
-        };
+        });
         return this.getStatus();
       }
 
-      const probe = await this.session.request<ManagedCodeGraphHealthProbe>(
-        "codegraph/health",
-        {
-          workspaceHash: this.workspaceHash,
-          workspaceRoot: this.workspaceRoot,
-          indexRoot: this.indexRoot,
-          logRoot: this.logRoot,
-        },
-        this.options.healthTimeoutMs ?? DEFAULT_TIMEOUT_MS,
-      );
-
-      const providerVersion = probe.providerVersion ?? this.snapshot.providerVersion;
-      const telemetryStatus = isVerifiedOffTelemetry(
-        probe.telemetryStatus,
-        this.options.telemetryProbe?.disabledTokens ?? DEFAULT_DISABLED_TOKENS,
-      )
-        ? "verified_off"
-        : "not_verified";
-      const workspaceMatches = probe.workspaceHash === this.workspaceHash;
-
-      let status: ManagedCodeGraphRuntimeStatus = "ready";
-      let lastError: string | null = null;
-
-      if (!workspaceMatches) {
-        status = "blocked";
-        lastError = "workspace_mismatch";
-      } else if (telemetryStatus !== "verified_off") {
-        status = "blocked";
-        lastError = "telemetry_not_verified";
-      } else if ((probe.status ?? "").toLowerCase() === "degraded") {
-        status = "degraded";
+      const standardHealth = await this.tryStandardMcpHealth();
+      if (standardHealth) {
+        this.setSnapshot({
+          ...this.snapshot,
+          ...standardHealth,
+          processAlive: this.session.isAlive(),
+        });
+        return this.getStatus();
       }
 
-      this.snapshot = {
+      this.setSnapshot({
         ...this.snapshot,
-        status,
-        providerVersion,
-        telemetryStatus,
-        workspaceMatches,
+        status: "degraded",
         processAlive: this.session.isAlive(),
-        lastError,
-      };
+        lastError: "health_probe_unavailable",
+      });
       return this.getStatus();
     } catch (error) {
-      this.snapshot = {
+      this.setSnapshot({
         ...this.snapshot,
         status: this.session.isAlive() ? "degraded" : "failed",
         processAlive: this.session.isAlive(),
         lastError: error instanceof Error ? error.message : String(error),
-      };
+      });
       return this.getStatus();
     }
   }
@@ -539,31 +513,31 @@ export class ManagedCodeGraphProcessManager {
   async stop() {
     if (this.delegateOwner) {
       this.delegateOwner = null;
-      this.snapshot = {
+      this.setSnapshot({
         ...this.snapshot,
         status: "stopped",
         initializedNotificationSent: false,
         stoppedAt: now(),
         processAlive: false,
-      };
+      });
       return this.getStatus();
     }
 
     const priorStatus = this.snapshot.status;
-    this.snapshot = {
+    this.setSnapshot({
       ...this.snapshot,
       lastStatus: priorStatus,
-    };
+    });
 
     if (!this.session) {
-      this.snapshot = {
+      this.setSnapshot({
         ...this.snapshot,
         status: "stopped",
         initializedNotificationSent: false,
         stoppedAt: now(),
         durationMs: this.snapshot.startedAt ? now() - this.snapshot.startedAt : null,
         processAlive: false,
-      };
+      });
       return this.getStatus();
     }
 
@@ -592,7 +566,7 @@ export class ManagedCodeGraphProcessManager {
         );
         this.finalizeStop(exitInfo, priorStatus);
       } catch (error) {
-        this.snapshot = {
+        this.setSnapshot({
           ...this.snapshot,
           status: "failed",
           initializedNotificationSent: false,
@@ -601,7 +575,7 @@ export class ManagedCodeGraphProcessManager {
           durationMs: this.snapshot.startedAt ? now() - this.snapshot.startedAt : null,
           lastStatus: priorStatus,
           lastError: error instanceof Error ? error.message : String(error),
-        };
+        });
       }
     }
 
@@ -613,8 +587,19 @@ export class ManagedCodeGraphProcessManager {
     return this.getStatus();
   }
 
+  async dispose() {
+    await this.stop();
+    if (this.primaryLeaseKey) {
+      ManagedCodeGraphProcessManager.leaseRegistry.delete(this.primaryLeaseKey);
+      this.primaryLeaseKey = null;
+    }
+    this.delegateOwner = null;
+    this.detectCache = null;
+    this.session = null;
+  }
+
   private finalizeStop(exitInfo: ManagedJsonRpcExitInfo, priorStatus: ManagedCodeGraphRuntimeStatus) {
-    this.snapshot = {
+    this.setSnapshot({
       ...this.snapshot,
       status: "stopped",
       initializedNotificationSent: false,
@@ -624,7 +609,7 @@ export class ManagedCodeGraphProcessManager {
       exitCode: normalizeExitCode(exitInfo.message, exitInfo.code),
       lastStatus: priorStatus,
       lastError: null,
-    };
+    });
     this.writeManagerLog(`stop completed with code ${this.snapshot.exitCode ?? "null"}`);
   }
 
@@ -720,7 +705,7 @@ export class ManagedCodeGraphProcessManager {
   private handleExit(info: ManagedJsonRpcExitInfo) {
     const intentional = this.stoppingIntentional;
     const priorStatus = this.snapshot.status;
-    this.snapshot = {
+    this.setSnapshot({
       ...this.snapshot,
       processAlive: false,
       exitCode: normalizeExitCode(info.message, info.code),
@@ -737,10 +722,73 @@ export class ManagedCodeGraphProcessManager {
         ? false
         : this.snapshot.initializedNotificationSent,
       crashCount: intentional ? this.snapshot.crashCount : this.snapshot.crashCount + 1,
-    };
+    });
     this.writeManagerLog(`process exit: ${info.message}`);
     if (!intentional && this.primaryLeaseKey) {
       ManagedCodeGraphProcessManager.leaseRegistry.delete(this.primaryLeaseKey);
+    }
+  }
+
+  private setSnapshot(nextSnapshot: ManagedCodeGraphStatusSnapshot) {
+    this.snapshot = nextSnapshot;
+    this.emitStatusChanged();
+  }
+
+  private emitStatusChanged() {
+    this.options.onStatusChanged?.(cloneSnapshot(this.snapshot));
+  }
+
+  private async tryCustomHealth() {
+    try {
+      const probe = await this.session!.request<ManagedCodeGraphHealthProbe>(
+        "codegraph/health",
+        {
+          workspaceHash: this.workspaceHash,
+          workspaceRoot: this.workspaceRoot,
+          indexRoot: this.indexRoot,
+          logRoot: this.logRoot,
+        },
+        this.options.healthTimeoutMs ?? DEFAULT_TIMEOUT_MS,
+      );
+
+      const providerVersion = probe.providerVersion ?? this.snapshot.providerVersion;
+      const telemetryStatus = isVerifiedOffTelemetry(
+        probe.telemetryStatus,
+        this.options.telemetryProbe?.disabledTokens ?? DEFAULT_DISABLED_TOKENS,
+      )
+        ? "verified_off"
+        : "not_verified";
+      const workspaceMatches = probe.workspaceHash === this.workspaceHash;
+
+      let status: ManagedCodeGraphRuntimeStatus = "ready";
+      let lastError: string | null = null;
+
+      if (!workspaceMatches) {
+        status = "blocked";
+        lastError = "workspace_mismatch";
+      } else if (telemetryStatus !== "verified_off") {
+        status = "blocked";
+        lastError = "telemetry_not_verified";
+      } else if ((probe.status ?? "").toLowerCase() === "degraded") {
+        status = "degraded";
+      }
+
+      return {
+        status,
+        providerVersion,
+        telemetryStatus,
+        workspaceMatches,
+        lastError,
+      } satisfies Pick<
+        ManagedCodeGraphStatusSnapshot,
+        "status" | "providerVersion" | "telemetryStatus" | "workspaceMatches" | "lastError"
+      >;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/Method not found|timed out/i.test(message)) {
+        return null;
+      }
+      throw error;
     }
   }
 

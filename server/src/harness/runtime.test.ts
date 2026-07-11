@@ -7,6 +7,7 @@ import {
   setActiveCodeGraphStudioService,
 } from "@/microapps/codegraph/index.js";
 import { getTestArtifactDir } from "@/test-support/artifacts.js";
+import { reconcileCodeGraphHarnessCapability } from "./codegraph-capability.js";
 import { resolveHarnessToolExposure } from "./exposure.js";
 import {
   clearHarnessRegistry,
@@ -59,11 +60,14 @@ describe("initializeHarnessRuntime codebase_explore registration", () => {
       storageRoot,
       getCapabilityRegistrationState: () =>
         listCapabilityDefinitions().some((item) => item.id === "codebase_explore"),
+      onStateChanged: () => {
+        reconcileCodeGraphHarnessCapability();
+      },
     });
     setActiveCodeGraphStudioService(activeService);
-    activeService.saveConfig({
+    await activeService.saveConfig({
       microAppEnabled: true,
-      agentCapabilityEnabled: true,
+      agentCapabilityEnabled: false,
       command: process.execPath,
       startArgs: [fixturePath, "--mcp"],
       versionProbeArgs: [fixturePath, "--version"],
@@ -74,6 +78,14 @@ describe("initializeHarnessRuntime codebase_explore registration", () => {
     await activeService.health();
 
     initializeHarnessRuntime();
+
+    expect(listCapabilityDefinitions().map((definition) => definition.id)).not.toContain(
+      "codebase_explore",
+    );
+
+    await activeService.saveConfig({
+      agentCapabilityEnabled: true,
+    });
 
     const definition = listCapabilityDefinitions().find(
       (item) => item.id === "codebase_explore",
@@ -104,5 +116,16 @@ describe("initializeHarnessRuntime codebase_explore registration", () => {
         .map((item) => item.id)
         .filter((toolId) => toolId.startsWith("codegraph/")),
     ).toEqual([]);
+
+    await activeService.saveConfig({
+      agentCapabilityEnabled: false,
+    });
+
+    expect(listCapabilityDefinitions().map((definition) => definition.id)).not.toContain(
+      "codebase_explore",
+    );
+    const disabledReport = await activeService.getReport();
+    expect(disabledReport.config.capabilityRegistered).toBe(false);
+    expect(disabledReport.capability.registered).toBe(false);
   });
 });

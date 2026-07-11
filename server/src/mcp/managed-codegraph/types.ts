@@ -46,6 +46,7 @@ export interface ManagedCodeGraphProcessManagerOptions {
   healthTimeoutMs?: number;
   stopTimeoutMs?: number;
   repoPollutionGuard?: ManagedCodeGraphRepoPollutionGuard;
+  onStatusChanged?: (snapshot: ManagedCodeGraphStatusSnapshot) => void;
 }
 
 export interface ManagedCodeGraphRepoPollutionGuard {

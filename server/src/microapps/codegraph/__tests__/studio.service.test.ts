@@ -4,7 +4,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   createCodeGraphStudioService,
+  setActiveCodeGraphStudioService,
 } from "../index.js";
+import { reconcileCodeGraphHarnessCapability } from "@/harness/codegraph-capability.js";
+import {
+  clearHarnessRegistry,
+  listCapabilityDefinitions,
+} from "@/harness/registry.js";
+import { initializeHarnessRuntime, resetHarnessRuntime } from "@/harness/runtime.js";
 import { getTestArtifactDir } from "@/test-support/artifacts.js";
 
 const fixturePath = path.resolve(
@@ -51,6 +58,9 @@ describe("CodeGraph Studio service", () => {
 
   afterEach(() => {
     resetCodeGraphEnv();
+    setActiveCodeGraphStudioService(null);
+    clearHarnessRegistry();
+    resetHarnessRuntime();
     fs.rmSync(storageRoot, { recursive: true, force: true });
     fs.rmSync(appDataRoot, { recursive: true, force: true });
     fs.rmSync(isolatedWorkspaceRoot, { recursive: true, force: true });
@@ -136,7 +146,7 @@ describe("CodeGraph Studio service", () => {
       storageRoot: caseStorageRoot,
     });
 
-    service.saveConfig({
+    await service.saveConfig({
       agentCapabilityEnabled: true,
       command: process.execPath,
       startArgs: [fixturePath, "--mcp"],
@@ -169,11 +179,11 @@ describe("CodeGraph Studio service", () => {
       storageRoot,
     });
 
-    expect(() =>
+    await expect(
       service.saveConfig({
         appDataRoot: isolatedWorkspaceRoot,
       }),
-    ).toThrowError("App Data Root cannot be the workspace root.");
+    ).rejects.toThrowError("App Data Root cannot be the workspace root.");
     expect(fs.existsSync(service.getStoragePath())).toBe(false);
   });
 
@@ -184,11 +194,11 @@ describe("CodeGraph Studio service", () => {
     });
     const nestedRoot = path.join(isolatedWorkspaceRoot, "tmp", "codegraph");
 
-    expect(() =>
+    await expect(
       service.saveConfig({
         appDataRoot: nestedRoot,
       }),
-    ).toThrowError("App Data Root must stay outside the workspace root.");
+    ).rejects.toThrowError("App Data Root must stay outside the workspace root.");
     expect(fs.existsSync(service.getStoragePath())).toBe(false);
   });
 
@@ -208,7 +218,7 @@ describe("CodeGraph Studio service", () => {
       storageRoot: caseStorageRoot,
     });
 
-    service.saveConfig({
+    await service.saveConfig({
       appDataRoot: caseAppDataRoot,
     });
 
@@ -223,11 +233,11 @@ describe("CodeGraph Studio service", () => {
     });
     const invalidRoot = path.join(isolatedWorkspaceRoot, ".codegraph", "appdata");
 
-    expect(() =>
+    await expect(
       service.saveConfig({
         appDataRoot: invalidRoot,
       }),
-    ).toThrowError(
+    ).rejects.toThrowError(
       "App Data Root cannot point to repo-root `.codegraph` or any path inside it.",
     );
 
@@ -235,5 +245,188 @@ describe("CodeGraph Studio service", () => {
     expect(started.report.status).toBe("blocked");
     expect(started.report.runtime.processAlive).toBe(false);
     expect(fs.existsSync(service.getStoragePath())).toBe(false);
+  });
+
+  it("keeps a ready manager live across auth-only config changes and updates capability registration immediately", async () => {
+    const caseRoot = path.join(
+      getTestArtifactDir("codegraph-studio-cases"),
+      `auth-only-${Date.now()}`,
+    );
+    const caseStorageRoot = path.join(caseRoot, "storage");
+    const caseAppDataRoot = path.join(caseRoot, "appdata");
+    const caseWorkspaceRoot = path.join(caseRoot, "workspace");
+    fs.mkdirSync(caseStorageRoot, { recursive: true });
+    fs.mkdirSync(caseAppDataRoot, { recursive: true });
+    fs.mkdirSync(caseWorkspaceRoot, { recursive: true });
+
+    const service = createCodeGraphStudioService({
+      workspaceRoot: caseWorkspaceRoot,
+      storageRoot: caseStorageRoot,
+      getCapabilityRegistrationState: () =>
+        listCapabilityDefinitions().some((item) => item.id === "codebase_explore"),
+      onStateChanged: () => {
+        reconcileCodeGraphHarnessCapability();
+      },
+    });
+    setActiveCodeGraphStudioService(service);
+    initializeHarnessRuntime();
+
+    await service.saveConfig({
+      microAppEnabled: true,
+      agentCapabilityEnabled: false,
+      command: process.execPath,
+      startArgs: [fixturePath, "--mcp"],
+      versionProbeArgs: [fixturePath, "--version"],
+      telemetryProbeArgs: [fixturePath, "--telemetry-status"],
+      appDataRoot: caseAppDataRoot,
+    });
+
+    const started = await service.start();
+    const healthy = await service.health();
+
+    expect(started.report.runtime.processAlive).toBe(true);
+    expect(healthy.report.status).toBe("ready");
+    expect(listCapabilityDefinitions().map((item) => item.id)).not.toContain("codebase_explore");
+
+    await service.saveConfig({
+      agentCapabilityEnabled: true,
+    });
+
+    const enabledReport = await service.getReport();
+    expect(enabledReport.status).toBe("ready");
+    expect(enabledReport.runtime.processAlive).toBe(true);
+    expect(enabledReport.capability.available).toBe(true);
+    expect(enabledReport.capability.registered).toBe(true);
+    expect(enabledReport.config.capabilityRegistered).toBe(true);
+    expect(listCapabilityDefinitions().map((item) => item.id)).toContain("codebase_explore");
+
+    await service.saveConfig({
+      agentCapabilityEnabled: false,
+    });
+
+    const disabledReport = await service.getReport();
+    expect(disabledReport.status).toBe("ready");
+    expect(disabledReport.runtime.processAlive).toBe(true);
+    expect(disabledReport.capability.available).toBe(false);
+    expect(disabledReport.capability.registered).toBe(false);
+    expect(disabledReport.config.capabilityRegistered).toBe(false);
+    expect(listCapabilityDefinitions().map((item) => item.id)).not.toContain("codebase_explore");
+  });
+
+  it("stops the old manager on runtime config changes and keeps capability unavailable until an explicit restart", async () => {
+    const caseRoot = path.join(
+      getTestArtifactDir("codegraph-studio-cases"),
+      `runtime-change-${Date.now()}`,
+    );
+    const caseStorageRoot = path.join(caseRoot, "storage");
+    const caseAppDataRoot = path.join(caseRoot, "appdata");
+    const caseWorkspaceRoot = path.join(caseRoot, "workspace");
+    fs.mkdirSync(caseStorageRoot, { recursive: true });
+    fs.mkdirSync(caseAppDataRoot, { recursive: true });
+    fs.mkdirSync(caseWorkspaceRoot, { recursive: true });
+
+    const service = createCodeGraphStudioService({
+      workspaceRoot: caseWorkspaceRoot,
+      storageRoot: caseStorageRoot,
+      getCapabilityRegistrationState: () =>
+        listCapabilityDefinitions().some((item) => item.id === "codebase_explore"),
+      onStateChanged: () => {
+        reconcileCodeGraphHarnessCapability();
+      },
+    });
+    setActiveCodeGraphStudioService(service);
+    initializeHarnessRuntime();
+
+    await service.saveConfig({
+      microAppEnabled: true,
+      agentCapabilityEnabled: true,
+      command: process.execPath,
+      startArgs: [fixturePath, "--mcp"],
+      versionProbeArgs: [fixturePath, "--version"],
+      telemetryProbeArgs: [fixturePath, "--telemetry-status"],
+      appDataRoot: caseAppDataRoot,
+    });
+
+    const started = await service.start();
+    expect(started.report.status).toBe("ready");
+    expect(listCapabilityDefinitions().map((item) => item.id)).toContain("codebase_explore");
+
+    const previousContext = service.getManagedCapabilityContext(caseWorkspaceRoot);
+    expect(previousContext.ok).toBe(true);
+
+    await service.saveConfig({
+      startArgs: [fixturePath, "--mcp", "--session-id", `case-${Date.now()}`],
+    });
+
+    const changedReport = await service.getReport();
+    expect(["stopped", "unavailable"]).toContain(changedReport.status);
+    expect(changedReport.runtime.processAlive).toBe(false);
+    expect(changedReport.capability.available).toBe(false);
+    expect(changedReport.capability.registered).toBe(false);
+    expect(changedReport.config.capabilityRegistered).toBe(false);
+    expect(listCapabilityDefinitions().map((item) => item.id)).not.toContain("codebase_explore");
+
+    const currentContext = service.getManagedCapabilityContext(caseWorkspaceRoot);
+    expect(currentContext.ok).toBe(false);
+  });
+
+  it("keeps ready runtime on report refresh and clears capability after provider exit", async () => {
+    const caseRoot = path.join(
+      getTestArtifactDir("codegraph-studio-cases"),
+      `report-refresh-${Date.now()}`,
+    );
+    const caseStorageRoot = path.join(caseRoot, "storage");
+    const caseAppDataRoot = path.join(caseRoot, "appdata");
+    const caseWorkspaceRoot = path.join(caseRoot, "workspace");
+    fs.mkdirSync(caseStorageRoot, { recursive: true });
+    fs.mkdirSync(caseAppDataRoot, { recursive: true });
+    fs.mkdirSync(caseWorkspaceRoot, { recursive: true });
+
+    const service = createCodeGraphStudioService({
+      workspaceRoot: caseWorkspaceRoot,
+      storageRoot: caseStorageRoot,
+      getCapabilityRegistrationState: () =>
+        listCapabilityDefinitions().some((item) => item.id === "codebase_explore"),
+      onStateChanged: () => {
+        reconcileCodeGraphHarnessCapability();
+      },
+    });
+    setActiveCodeGraphStudioService(service);
+    initializeHarnessRuntime();
+
+    await service.saveConfig({
+      microAppEnabled: true,
+      agentCapabilityEnabled: true,
+      command: process.execPath,
+      startArgs: [fixturePath, "--mcp"],
+      versionProbeArgs: [fixturePath, "--version"],
+      telemetryProbeArgs: [fixturePath, "--telemetry-status"],
+      appDataRoot: caseAppDataRoot,
+      timeoutMs: 1500,
+    });
+
+    await service.start();
+    await service.health();
+
+    const refreshedReport = await service.getReport();
+    expect(refreshedReport.status).toBe("ready");
+    expect(refreshedReport.runtime.processAlive).toBe(true);
+    expect(refreshedReport.capability.registered).toBe(true);
+    expect(refreshedReport.config.capabilityRegistered).toBe(true);
+
+    const activeContext = service.getManagedCapabilityContext(caseWorkspaceRoot);
+    expect(activeContext.ok).toBe(true);
+
+    const stopped = await service.stop();
+    expect(["stopped", "degraded", "blocked"]).toContain(stopped.report.status);
+
+    const afterExitReport = await service.getReport();
+    expect(afterExitReport.runtime.processAlive).toBe(false);
+    expect(afterExitReport.capability.registered).toBe(false);
+    expect(afterExitReport.config.capabilityRegistered).toBe(false);
+    expect(listCapabilityDefinitions().map((item) => item.id)).not.toContain("codebase_explore");
+
+    const afterExitContext = service.getManagedCapabilityContext(caseWorkspaceRoot);
+    expect(afterExitContext.ok).toBe(false);
   });
 });

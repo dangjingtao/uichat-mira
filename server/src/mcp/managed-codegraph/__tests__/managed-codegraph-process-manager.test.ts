@@ -373,6 +373,21 @@ describe("ManagedCodeGraphProcessManager", () => {
     );
   });
 
+  it("emits status changes and releases the lease on dispose", async () => {
+    const manager = createManager();
+    const snapshotStatuses: string[] = [];
+    const started = await manager.start();
+    snapshotStatuses.push(started.status);
+
+    await manager.dispose();
+    const stopped = manager.getStatus();
+    snapshotStatuses.push(stopped.status);
+
+    expect(snapshotStatuses).toContain("ready");
+    expect(stopped.status).toBe("stopped");
+    expect(stopped.processAlive).toBe(false);
+  });
+
   it("keeps the spike isolated from Planner exposure", () => {
     const sourceDir = path.resolve(__dirname, "..");
     const combinedSource = listRuntimeSourceFiles(sourceDir)
