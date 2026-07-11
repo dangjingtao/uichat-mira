@@ -16,6 +16,7 @@ export { nextActionPlannerNode } from "./next-action-planner";
 export { policyNode } from "./policy-node";
 export { toolCallNormalizeNode } from "./tool-call-normalize";
 export { toolNode } from "./tool-node";
+export { evidenceNode } from "./evidence";
 
 export {
   emitStepNode,

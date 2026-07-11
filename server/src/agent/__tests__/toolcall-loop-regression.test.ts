@@ -338,7 +338,7 @@ test("toolCall loop executes the Planner-selected repeated action without a runt
   assert.equal(generateSpy.mock.calls.length, 1);
   assert.equal(normalizeEvents[0]?.status, "frozen");
   assert.equal(result.lastToolExecution?.toolId, "read_open");
-  assert.equal(result.evidence.toolExecutions.length, 1);
+  assert.equal(result.evidence.toolExecutions.length, 3);
 });
 
 test("toolCall loop ignores selectedToolIds unless planner emits use_tool", async () => {
@@ -372,7 +372,7 @@ test("toolCall loop ignores selectedToolIds unless planner emits use_tool", asyn
     pendingToolCall: "absent",
     pendingApproval: "absent",
     lastToolExecution: "absent",
-    latestSummary: "present",
+    latestSummary: "absent",
     terminalField: "answer",
   });
   assert.equal(plannerSpy.mock.calls.length, 1);
@@ -405,7 +405,7 @@ test("toolCall loop schema-invalid args do not execute the tool and replan at mo
     pendingToolCall: "absent",
     pendingApproval: "absent",
     lastToolExecution: "absent",
-    latestSummary: "present",
+    latestSummary: "absent",
     terminalField: "answer",
   });
   assert.equal(plannerSpy.mock.calls.length, 2);
@@ -517,7 +517,7 @@ test("toolCall loop reports Harness awaiting approval as an owner-contract failu
   assert.equal(executeSpy.mock.calls.length, 1);
   assert.equal(result.lastToolExecution?.status, "awaiting_approval");
   assert.equal(result.evidence.latestSummary?.status, "blocked");
-  assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, false);
+  assert.equal(result.evidence.latestSummary?.answerReadiness, undefined);
   assert.match(result.errorMessage ?? "", /Policy must create pendingApproval/i);
 });
 
@@ -553,7 +553,7 @@ test("toolCall loop repeated same tool args remains a planner decision and does 
   assert.equal(plannerSpy.mock.calls.length, 3);
   assert.equal(executeSpy.mock.calls.length, 3);
   assert.equal(generateSpy.mock.calls.length, 1);
-  assert.equal(result.evidence.toolExecutions.length, 2);
+  assert.equal(result.evidence.toolExecutions.length, 3);
 });
 
 test("toolCall loop maxIterations routes to generate instead of a second tool execution", async () => {
@@ -630,7 +630,7 @@ test("toolCall loop lets Planner decide how to proceed after recoverable failure
   assert.equal(result.lastToolExecution?.status, "failed");
   assert.equal(result.lastToolExecution?.failureKind, "recoverable");
   assert.equal(result.evidence.latestSummary?.status, "failed");
-  assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, false);
+  assert.equal(result.evidence.latestSummary?.answerReadiness, undefined);
 }, 15000);
 
 test("toolCall loop terminal failed tool still fails the graph and does not generate a guarded answer", async () => {
@@ -673,7 +673,7 @@ test("toolCall loop terminal failed tool still fails the graph and does not gene
   assert.equal(result.lastToolExecution?.status, "failed");
   assert.equal(result.lastToolExecution?.failureKind, "terminal");
   assert.equal(result.evidence.latestSummary?.status, "failed");
-  assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, false);
+  assert.equal(result.evidence.latestSummary?.answerReadiness, undefined);
   assert.match(result.errorMessage ?? "", /protocol mismatch/i);
   assert.match(result.terminalReason ?? "", /protocol mismatch/i);
   assert.equal(result.answer, "");
@@ -716,18 +716,15 @@ test("toolCall loop timedOut tool evidence is not marked answer-ready", async ()
   assert.equal(result.lastToolExecution?.status, "completed");
   assert.equal(result.evidence.latestSummary?.status, "timed_out");
   assert.equal(result.evidence.latestSummary?.toolId, "terminal_session");
-  assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, false);
-  assert.match(
-    result.evidence.latestSummary?.answerReadiness.reason ?? "",
-    /timed out/i,
-  );
+  assert.equal(result.evidence.latestSummary?.answerReadiness, undefined);
+  assert.match(result.evidence.latestSummary?.gaps?.join(" ") ?? "", /finish|complete|stable/i);
   assert.equal(result.evidence.latestSummary?.data?.kind, "terminal_session");
   if (result.evidence.latestSummary?.data?.kind === "terminal_session") {
     assert.equal(result.evidence.latestSummary.data.processCompleted, false);
-    assert.equal(result.evidence.latestSummary.data.commandSucceeded, "unknown");
-    assert.equal(result.evidence.latestSummary.data.taskSatisfied, "unknown");
+    assert.equal(result.evidence.latestSummary.data.commandSucceeded, false);
+    assert.equal("taskSatisfied" in result.evidence.latestSummary.data, false);
     assert.equal(result.evidence.latestSummary.data.timedOut, true);
     assert.equal(result.evidence.latestSummary.data.outputInterpretable, true);
-    assert.equal(result.evidence.latestSummary.data.canAnswerCommandQuestion, false);
+    assert.equal("canAnswerCommandQuestion" in result.evidence.latestSummary.data, false);
   }
 });

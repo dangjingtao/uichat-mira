@@ -93,30 +93,19 @@ export const routeAfterTool = (state: AgentGraphStateType) => {
     return "approval";
   }
 
-  const recovery = buildPlannerRecoveryContext(state);
   if (state.lastToolExecution?.status === "failed") {
     if (state.lastToolExecution.failureKind === "terminal") {
-      return "error";
+      return "evidenceStage";
     }
-
-    if (recovery.source === "tool_failure" && recovery.exhausted) {
-      return "generate";
-    }
-
-    return "nextActionPlanner";
   }
 
   if (state.errorMessage) {
-    return "error";
+    return state.pendingToolExecution ? "evidenceStage" : "error";
   }
 
   const iterationCount = state.iterationCount ?? 0;
   const maxIterations = state.maxIterations ?? DEFAULT_AGENT_MAX_ITERATIONS;
-  if (maxIterations > 0 && iterationCount >= maxIterations) {
-    return "generate";
-  }
-
-  return "nextActionPlanner";
+  return "evidenceStage";
 };
 
 export const routeAfterRetrieve = (state: AgentGraphStateType) => {
@@ -126,11 +115,28 @@ export const routeAfterRetrieve = (state: AgentGraphStateType) => {
 
   const iterationCount = state.iterationCount ?? 0;
   const maxIterations = state.maxIterations ?? DEFAULT_AGENT_MAX_ITERATIONS;
-  if (maxIterations > 0 && iterationCount >= maxIterations) {
+  return "evidenceStage";
+};
+
+export const routeAfterEvidence = (state: AgentGraphStateType) => {
+  if (state.errorMessage) {
+    return "error";
+  }
+
+  const recovery = buildPlannerRecoveryContext(state);
+  if (
+    state.lastToolExecution?.status === "failed" &&
+    recovery.source === "tool_failure" &&
+    recovery.exhausted
+  ) {
     return "generate";
   }
 
-  return "nextActionPlanner";
+  const iterationCount = state.iterationCount ?? 0;
+  const maxIterations = state.maxIterations ?? DEFAULT_AGENT_MAX_ITERATIONS;
+  return maxIterations > 0 && iterationCount >= maxIterations
+    ? "generate"
+    : "nextActionPlanner";
 };
 
 export const routeAfterGenerate = (state: AgentGraphStateType) => {

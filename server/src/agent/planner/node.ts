@@ -91,7 +91,6 @@ export const nextActionPlannerNode = async (
   const toolExposure = normalizeToolExposure(state);
   const observationContext = buildPlannerObservationContext(state);
   const latestEvidenceSummary = observationContext.latestEvidenceSummary;
-  const taskCoverageView = observationContext.taskCoverageView;
 
   await emitStepNode(emit, {
     runId: state.runId,
@@ -105,7 +104,6 @@ export const nextActionPlannerNode = async (
       iteration,
       maxIterations,
       latestEvidenceSummary: latestEvidenceSummary ?? null,
-      taskCoverageView: taskCoverageView ?? null,
       schemaReplanAttemptCount: observationContext.recovery.attemptCount,
       schemaReplanError: observationContext.recovery.schemaError ?? null,
     },
@@ -221,7 +219,6 @@ export const nextActionPlannerNode = async (
       iteration,
       maxIterations,
       latestEvidenceSummary: latestEvidenceSummary ?? null,
-      taskCoverageView: taskCoverageView ?? null,
       rawOutputPreview: rawOutput ? toPreview(rawOutput) : undefined,
       sanitizedOutputPreview: sanitizedOutput ? toPreview(sanitizedOutput) : undefined,
       parseErrorReason,

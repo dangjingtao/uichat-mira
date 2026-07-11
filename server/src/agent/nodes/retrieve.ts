@@ -2,16 +2,9 @@
  * 检索节点：基于用户问题执行 RAG 检索，并将结果加入证据。
  */
 import { agentRagRunnable } from "../runnables";
-import {
-  appendObservationEvidence,
-  appendRetrievalEvidence,
-  getEvidenceCounts,
-  getLatestEvidenceSummary,
-} from "../evidence";
 import { emitStepNode } from "../node-runtime";
 import {
   createObservation,
-  emitEvidenceUpdateNode,
   getLatestUserQuestion,
   nowIso,
 } from "./shared";
@@ -57,24 +50,11 @@ export const retrieveNode = async (
         retrievedCount: 0,
       },
     });
-    const evidence = appendObservationEvidence(state, observation);
-    await emitEvidenceUpdateNode(emit, {
-      runId: state.runId,
-      nodeId: "agent-evidence-update-retrieve",
-      summary: "检索跳过结果已写入 evidence",
-      details: {
-        sourceNode: "retrieveNode",
-        retrievalChunkCount: 0,
-        latestEvidenceSummary: evidence.latestSummary ?? getLatestEvidenceSummary({ evidence }),
-        evidenceCounts: getEvidenceCounts({ evidence }),
-        iteration: state.iterationCount ?? 0,
-        maxIterations: state.maxIterations ?? null,
-      },
-    });
     return {
       retrievedChunks: [],
       observations: [...(state.observations ?? []), observation],
-      evidence,
+      pendingEvidenceObservation: observation,
+      pendingRetrievalEvidence: undefined,
       iterationCount: (state.iterationCount ?? 0) + 1,
     };
   }
@@ -124,32 +104,11 @@ export const retrieveNode = async (
       })),
     },
   });
-  const evidence = appendRetrievalEvidence(
-    {
-      ...state,
-      evidence: appendObservationEvidence(state, observation),
-    },
-    retrievalEvidence,
-  );
-  await emitEvidenceUpdateNode(emit, {
-    runId: state.runId,
-    nodeId: "agent-evidence-update-retrieve",
-    summary: "检索结果已写入 evidence",
-    details: {
-      sourceNode: "retrieveNode",
-      query: retrievalQuery,
-      retrievalChunkCount: retrievedChunks.length,
-      latestEvidenceSummary: evidence.latestSummary ?? getLatestEvidenceSummary({ evidence }),
-      evidenceCounts: getEvidenceCounts({ evidence }),
-      iteration: (state.iterationCount ?? 0) + 1,
-      maxIterations: state.maxIterations ?? null,
-    },
-  });
-
   return {
     retrievedChunks,
     observations: [...(state.observations ?? []), observation],
-    evidence,
+    pendingEvidenceObservation: observation,
+    pendingRetrievalEvidence: retrievalEvidence,
     iterationCount: (state.iterationCount ?? 0) + 1,
   };
 };

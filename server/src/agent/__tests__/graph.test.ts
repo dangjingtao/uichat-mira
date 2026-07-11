@@ -463,7 +463,7 @@ test("agentGraph stops retrying after two recoverable tool failures and does not
   assert.equal(plannerDoneEvents.length >= 2, true);
   assert.equal(toolStartEvents.length, 2);
   assert.equal(result.evidence.latestSummary?.status, "failed");
-  assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, false);
+  assert.equal(result.evidence.latestSummary?.answerReadiness, undefined);
   assert.match(result.answer ?? "", /当前还没有足够的已完成证据|current evidence/i);
   assert.equal(result.status, "completed");
   assert.equal(result.terminalReason, "completed");
@@ -716,7 +716,7 @@ test("agentGraph answers after a single read_list execution when the user asked 
   );
   if (result.evidence.latestSummary?.data?.kind === "read_list") {
     assert.equal(result.evidence.latestSummary.data.entryCount, 3);
-    assert.equal(result.evidence.latestSummary.data.canAnswerDirectoryQuestion, true);
+    assert.equal("canAnswerDirectoryQuestion" in result.evidence.latestSummary.data, false);
     assert.equal(result.evidence.latestSummary.data.entriesPreview.length > 0, true);
   }
 });
@@ -823,7 +823,7 @@ test("agentGraph answers after a single web_search execution when search evidenc
   assert.equal(result.evidence.latestSummary?.data?.kind, "web_search");
   if (result.evidence.latestSummary?.data?.kind === "web_search") {
     assert.equal(result.evidence.latestSummary.data.resultCount, 1);
-    assert.equal(result.evidence.latestSummary.data.canAnswerSearchQuestion, true);
+    assert.equal("canAnswerSearchQuestion" in result.evidence.latestSummary.data, false);
     assert.equal(result.evidence.latestSummary.data.citationsPreview.length, 1);
   }
 });
@@ -1121,7 +1121,7 @@ test("routeAfterTool returns the declared tool graph branches", () => {
         },
       }),
     ),
-    "nextActionPlanner",
+    "evidenceStage",
   );
   assert.equal(
     routeAfterTool(
@@ -1139,7 +1139,7 @@ test("routeAfterTool returns the declared tool graph branches", () => {
         },
       }),
     ),
-    "nextActionPlanner",
+    "evidenceStage",
   );
   assert.equal(
     routeAfterTool(
@@ -1157,7 +1157,7 @@ test("routeAfterTool returns the declared tool graph branches", () => {
         },
       }),
     ),
-    "generate",
+    "evidenceStage",
   );
   assert.equal(
     routeAfterTool(
@@ -1175,7 +1175,7 @@ test("routeAfterTool returns the declared tool graph branches", () => {
         errorMessage: "tool failed",
       }),
     ),
-    "error",
+    "evidenceStage",
   );
   assert.equal(
     routeAfterTool(
@@ -1193,7 +1193,7 @@ test("routeAfterTool returns the declared tool graph branches", () => {
         iterationCount: 3,
       }),
     ),
-    "generate",
+    "evidenceStage",
   );
 });
 
@@ -1212,14 +1212,14 @@ test("routeAfterNextAction returns approval when pendingApproval is still presen
 });
 
 test("routeAfterRetrieve returns the declared retrieve graph branches", () => {
-  assert.equal(routeAfterRetrieve(makeRouteState()), "nextActionPlanner");
+  assert.equal(routeAfterRetrieve(makeRouteState()), "evidenceStage");
   assert.equal(
     routeAfterRetrieve(
       makeRouteState({
         iterationCount: 3,
       }),
     ),
-    "generate",
+    "evidenceStage",
   );
   assert.equal(
     routeAfterRetrieve(

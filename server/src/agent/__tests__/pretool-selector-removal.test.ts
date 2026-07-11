@@ -35,7 +35,7 @@ const makeState = (toolId: string, exposedTools: string[]) =>
 
 test("the first request and post-retrieval route directly to Planner", () => {
   assert.equal(routeAfterPrepareContext({} as never), "nextActionPlanner");
-  assert.equal(routeAfterRetrieve({ iterationCount: 0, maxIterations: 3 } as never), "nextActionPlanner");
+  assert.equal(routeAfterRetrieve({ iterationCount: 0, maxIterations: 3 } as never), "evidenceStage");
 });
 
 test("Normalize accepts any exposed Planner tool without top1 replacement", async () => {

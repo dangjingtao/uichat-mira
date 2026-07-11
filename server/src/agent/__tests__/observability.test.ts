@@ -177,11 +177,13 @@ test("agentGraph tracing stays disabled by default", async () => {
       exposedDefinitions: [readOpen],
     }),
   );
-  vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementationOnce(
-    async function* () {
+  vi.spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
       yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need the file content."}';
-    },
-  );
+    })
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"answer","reason":"The opened README facts are sufficient."}';
+    });
   vi.spyOn(harnessInvocations, "executeHarnessInvocation").mockResolvedValue({
     id: "invocation-read-open-obs",
     toolId: "read_open",
@@ -257,11 +259,13 @@ test("agentGraph tracing emits sanitized Phoenix-ready node spans when enabled",
       exposedDefinitions: [readOpen],
     }),
   );
-  vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementationOnce(
-    async function* () {
+  vi.spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
       yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md","apiKey":"sk-secret-123456789","nested":{"token":"Bearer super-secret-token"}},"reason":"Need the file content."}';
-    },
-  );
+    })
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"answer","reason":"The opened README facts are sufficient."}';
+    });
   vi.spyOn(harnessInvocations, "executeHarnessInvocation").mockResolvedValue({
     id: "invocation-read-open-obs",
     toolId: "read_open",

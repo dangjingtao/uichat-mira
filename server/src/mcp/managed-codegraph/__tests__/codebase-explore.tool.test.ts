@@ -115,11 +115,10 @@ test("codebaseExploreTool returns controlled exposure traces and verified eviden
   assert.equal(payload.plannerExposure, "controlled_tool_only");
   assert.equal(retrieval.chunkCount, 1);
   assert.equal(
-    (retrieval.summary as Record<string, unknown>).answerReadiness
-      ? ((retrieval.summary as Record<string, unknown>).answerReadiness as Record<string, unknown>)
-          .canAnswer
-      : undefined,
-    false,
+    ((retrieval.summary as Record<string, unknown>).keyFindings as string[]).some(
+      (fact) => fact === "verifiedChunkCount=1",
+    ),
+    true,
   );
   assert.equal(exploreTrace.exposureMode, "controlled_tool_only");
   assert.equal(exploreTrace.provider, "codegraph");

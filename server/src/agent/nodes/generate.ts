@@ -5,11 +5,7 @@ import type { NormalizedChatMessage } from "@/services/provider-proxy.message-pr
 import { providerProxyService } from "@/services/provider-proxy.service/index";
 import { contextBudgetService } from "@/services/context-budget/index";
 import { agentGenerateTextRunnable } from "../runnables";
-import {
-  appendObservationEvidence,
-  getEvidencePayload,
-  getLatestEvidenceSummary,
-} from "../evidence";
+import { getEvidencePayload, getLatestEvidenceSummary } from "../evidence";
 import { emitStepNode } from "../node-runtime";
 import {
   answerClaimsUnverifiedObservation,
@@ -149,7 +145,6 @@ const buildToolEvidenceBlock = (execution: AgentToolExecutionResult) => {
     );
     lines.push(`processCompleted: ${summary.data.processCompleted}`);
     lines.push(`commandSucceeded: ${summary.data.commandSucceeded}`);
-    lines.push(`taskSatisfied: ${summary.data.taskSatisfied}`);
     lines.push(`stdoutPreview: ${summary.data.stdoutPreview || "(empty)"}`);
     lines.push(`stderrPreview: ${summary.data.stderrPreview || "(empty)"}`);
     lines.push(`stdoutEncoding: ${summary.data.stdoutEncoding}`);
@@ -466,12 +461,6 @@ const renderSummaryBasedAnswer = (summary: AgentEvidenceSummary) => {
 
   if (summary.source === "tool" && summary.data?.kind === "read_list") {
     const preview = summary.data.entriesPreview.join("、");
-    if (!summary.data.canAnswerDirectoryQuestion) {
-      return summary.data.entryCount > 0
-        ? `当前只有目录概览证据：workspace 路径 ${summary.data.path} 下列出了 ${summary.data.entryCount} 项，预览包括 ${preview}${summary.data.truncated ? " 等内容，但这还不能回答文件内容问题。" : "，但这还不能回答文件内容问题。"}`
-        : `当前只有目录概览证据：workspace 路径 ${summary.data.path} 下没有列出任何条目。`;
-    }
-
     return summary.data.entryCount > 0
       ? `当前 workspace 下共找到 ${summary.data.entryCount} 项，其中预览包括 ${preview}${summary.data.truncated ? " 等内容。" : "。"}`
       : `当前 workspace 路径 ${summary.data.path} 下没有列出任何条目。`;
@@ -542,13 +531,6 @@ const renderSummaryBasedAnswer = (summary: AgentEvidenceSummary) => {
     }
     if (summary.data.truncated) {
       parts.push("这次输出被截断了。");
-    }
-    if (summary.data.taskSatisfied === "unknown") {
-      parts.push("这只能说明命令执行状态；是否已经满足任务目标，目前仍不能直接下结论。");
-    } else if (summary.data.taskSatisfied === "false") {
-      parts.push("现有证据表明任务目标尚未满足。");
-    } else {
-      parts.push("现有证据表明任务目标已经满足。");
     }
     return parts.join(" ");
   }
@@ -780,7 +762,7 @@ const answerOverclaimsTerminalTaskSuccess = (input: {
     return true;
   }
 
-  return summary.data.taskSatisfied !== "true";
+  return false;
 };
 
 const answerPretendsUnavailableEvidenceWasUsable = (input: {
@@ -866,7 +848,6 @@ export const generateNode = async (
     return {
       answer,
       observations: [...(state.observations ?? []), observation],
-      evidence: appendObservationEvidence(state, observation),
       contextBudget: budget.audit,
       schemaReplanDiagnostics: undefined,
       generatedAnswerEmptyFallback: false,
@@ -906,7 +887,6 @@ export const generateNode = async (
 
     return {
       observations: [...(state.observations ?? []), observation],
-      evidence: appendObservationEvidence(state, observation),
       errorMessage,
       errorSourceNodeId: "agent-generate",
       contextBudget: budget.audit,
@@ -1023,7 +1003,6 @@ export const generateNode = async (
     return {
       answer: fallbackAnswer,
       observations: [...(state.observations ?? []), observation],
-      evidence: appendObservationEvidence(state, observation),
       generatedAnswerEmptyFallback: true,
     };
   }
@@ -1055,7 +1034,6 @@ export const generateNode = async (
   return {
     answer,
     observations: [...(state.observations ?? []), observation],
-    evidence: appendObservationEvidence(state, observation),
     contextBudget: budget.audit,
     schemaReplanDiagnostics: undefined,
     generatedAnswerEmptyFallback: false,

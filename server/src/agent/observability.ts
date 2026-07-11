@@ -234,7 +234,6 @@ const summarizeState = (state: Partial<AgentGraphState>) => {
     lastToolExecutionToolId: state.lastToolExecution?.toolId ?? null,
     latestEvidenceSource: latestSummary?.source ?? null,
     latestEvidenceToolId: latestSummary?.toolId ?? null,
-    latestEvidenceCanAnswer: latestSummary?.answerReadiness.canAnswer ?? null,
     retrievedChunkCount: state.retrievedChunks?.length ?? 0,
     observationCount: state.observations?.length ?? 0,
     answerExists: Boolean(state.answer?.trim()),
@@ -273,8 +272,6 @@ const summarizeGraphOutput = (output: AgentGraphOutput) => ({
   observationCount: output.observations.length,
   latestEvidenceSource: output.evidence.latestSummary?.source ?? null,
   latestEvidenceToolId: output.evidence.latestSummary?.toolId ?? null,
-  latestEvidenceCanAnswer:
-    output.evidence.latestSummary?.answerReadiness.canAnswer ?? null,
 });
 
 const getVerboseStatePayload = (state: Partial<AgentGraphState>) => ({
@@ -440,8 +437,6 @@ export const runWithAgentNodeSpan = async <T>(input: {
           "agent.blocked_reason_after": after.blockedReason,
           "agent.latest_evidence_source_after": after.latestEvidenceSource,
           "agent.latest_evidence_tool_id_after": after.latestEvidenceToolId,
-          "agent.latest_evidence_can_answer_after":
-            after.latestEvidenceCanAnswer,
           "agent.latency_ms": latencyMs,
         });
 

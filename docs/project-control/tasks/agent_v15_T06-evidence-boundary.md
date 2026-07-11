@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/project-control-ledger.md
-task_state: TODO
+task_state: DONE
 ---
 
 # Agent V1.5 T06：Evidence 单一职责与显式回流节点
@@ -127,3 +127,11 @@ task_state: TODO
 5. 实际执行的测试命令、原始结果与 typecheck 结果；
 6. 明确说明是否影响既有 Agent 主线黑盒；
 7. 所有测试源码与报告均须为 git tracked files，不接受只贴口头摘要。
+
+## Review Evidence
+
+- 2026-07-11 复审通过：Graph 已接入 `Tool/Retrieve -> evidenceStage -> Planner`，Evidence 节点是 `evidence` 的唯一 writer。
+- Evidence 已移除 `answerReadiness/canAnswer`、关键词意图判断、任务覆盖和 nextAction 语义，summary 仅保留事实、gaps、error、status、truncated 与 rawRef。
+- ToolNode、Retrieve、Policy 不直接写入 accumulated evidence；waiting approval、terminal failure、recoverable failure、recovery exhausted 和 grounded Generate 回归均通过。
+- T06 定向回归 14 个测试文件、152/152 通过；`git diff --check` 通过。
+- server typecheck 仍受既有 `server/src/microapps/codegraph/index.ts:543` 阻断。

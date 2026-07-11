@@ -178,17 +178,10 @@ test("toolNode appends only verified codebase_explore chunks into retrieval evid
     );
 
     assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
-    assert.equal(result.evidence?.toolExecutions.length, 1);
-    assert.equal(result.evidence?.retrievals.length, 1);
-    assert.equal(result.evidence?.retrievals[0]?.chunkCount, 1);
+    assert.equal(result.evidence, undefined);
+    assert.equal(result.pendingToolExecution?.toolId, "codebase_explore");
+    assert.equal(result.pendingRetrievalEvidence?.chunkCount, 1);
     assert.equal(result.retrievedChunks, undefined);
-    assert.equal(result.evidence?.latestSummary?.source, "retrieval");
-    assert.equal(result.evidence?.latestSummary?.status, "partial");
-    assert.equal(result.evidence?.latestSummary?.answerReadiness.canAnswer, false);
-    assert.equal(
-      result.evidence?.latestSummary?.answerReadiness.reason,
-      "verified chunks are available for planner review",
-    );
   } finally {
     executeHarnessInvocationSpy.mockRestore();
   }
@@ -313,10 +306,11 @@ test("toolNode does not append retrieval evidence when codebase_explore verifica
       }),
     );
 
-    assert.equal(result.evidence?.toolExecutions.length, 1);
-    assert.equal(result.evidence?.retrievals.length, 0);
+    assert.equal(result.evidence, undefined);
+    assert.equal(result.pendingToolExecution?.toolId, "codebase_explore");
+    assert.equal(result.pendingRetrievalEvidence, undefined);
     assert.equal(result.retrievedChunks, undefined);
-    assert.equal(result.evidence?.latestSummary?.source, "tool");
+    assert.equal(result.pendingToolExecution?.status, "completed");
   } finally {
     executeHarnessInvocationSpy.mockRestore();
   }

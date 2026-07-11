@@ -18,12 +18,6 @@ import {
   type AgentNodeState,
   type EmitAgentExecutionNode,
 } from "../node-runtime";
-import {
-  appendObservationEvidence,
-  appendRetrievalEvidence,
-  appendToolExecutionEvidence,
-  getEvidenceCounts,
-} from "../evidence";
 import type {
   AgentEvidenceSummary,
   AgentObservation,
@@ -180,42 +174,6 @@ const toHarnessApprovedInvocations = (
     toolId: invocation.toolId,
     inputHash: createInvocationInputHash(invocation.input),
   }));
-
-const emitEvidenceUpdateNode = async (
-  emit: EmitAgentExecutionNode | undefined,
-  input: {
-    runId: string;
-    summary: string;
-    toolId: string;
-    toolCallId?: string;
-    inputHash?: string;
-    status: AgentToolExecutionResult["status"];
-    evidenceCounts: ReturnType<typeof getEvidenceCounts>;
-    latestEvidenceSummary?: AgentToolExecutionResult["summary"];
-    iteration: number;
-    maxIterations?: number;
-  },
-) => {
-  await emitStepNode(emit, {
-    runId: input.runId,
-    nodeId: "agent-evidence-update-tool",
-    nodeType: "reason",
-    phase: "done",
-    label: "证据写回",
-    summary: input.summary,
-    details: {
-      sourceNode: "toolNode",
-      toolId: input.toolId,
-      toolCallId: input.toolCallId ?? null,
-      inputHash: input.inputHash ?? null,
-      toolExecutionStatus: input.status,
-      latestEvidenceSummary: input.latestEvidenceSummary ?? null,
-      evidenceCounts: input.evidenceCounts,
-      iteration: input.iteration,
-      maxIterations: input.maxIterations ?? null,
-    },
-  });
-};
 
 export const toolNode = async (
   state: AgentNodeState,
@@ -414,31 +372,12 @@ export const toolNode = async (
         durationMs: durationMs ?? null,
       },
     });
-    const evidence = appendToolExecutionEvidence(
-      {
-        ...state,
-        evidence: appendObservationEvidence(state, observation),
-      },
-      executionRecord,
-    );
-    await emitEvidenceUpdateNode(emit, {
-      runId: state.runId,
-      summary: "工具审批等待结果已写入 evidence",
-      toolId: pendingToolCall.toolId,
-      toolCallId: pendingToolCall.id,
-      inputHash: pendingToolCall.inputHash,
-      status: executionRecord.status,
-      evidenceCounts: getEvidenceCounts({ evidence }),
-      latestEvidenceSummary: evidence.latestSummary,
-      iteration: state.iterationCount ?? 0,
-      maxIterations: state.maxIterations,
-    });
-
     return {
       pendingToolCall,
       lastToolExecution: executionRecord,
+      pendingToolExecution: executionRecord,
       observations: [...(state.observations ?? []), observation],
-      evidence,
+      pendingEvidenceObservation: observation,
       errorMessage: ownerContractError,
       errorSourceNodeId: nodeId,
       blockedReason: ownerContractError,
@@ -517,31 +456,12 @@ export const toolNode = async (
         durationMs: durationMs ?? null,
       },
     });
-    const evidence = appendToolExecutionEvidence(
-      {
-        ...state,
-        evidence: appendObservationEvidence(state, observation),
-      },
-      executionRecord,
-    );
-    await emitEvidenceUpdateNode(emit, {
-      runId: state.runId,
-      summary: "工具失败结果已写入 evidence",
-      toolId: pendingToolCall.toolId,
-      toolCallId: pendingToolCall.id,
-      inputHash: pendingToolCall.inputHash,
-      status: executionRecord.status,
-      evidenceCounts: getEvidenceCounts({ evidence }),
-      latestEvidenceSummary: evidence.latestSummary,
-      iteration: state.iterationCount ?? 0,
-      maxIterations: state.maxIterations,
-    });
-
     return {
       observations: [...(state.observations ?? []), observation],
-      evidence,
+      pendingEvidenceObservation: observation,
       pendingToolCall: undefined,
       lastToolExecution: executionRecord,
+      pendingToolExecution: executionRecord,
       ...(failureKind === "terminal"
         ? {
             blockedReason: errorMessage,
@@ -601,46 +521,19 @@ export const toolNode = async (
       durationMs: durationMs ?? null,
     },
   });
-  const evidence = appendToolExecutionEvidence(
-    {
-      ...state,
-      evidence: appendObservationEvidence(state, observation),
-    },
-    executionRecord,
-  );
   const codebaseRetrieval =
     pendingToolCall.toolId === "codebase_explore" &&
     isCodebaseExploreToolResult(invocation.result) &&
     invocation.result.verifiedEvidenceInput.chunkCount > 0
       ? toCodebaseRetrievalEvidence(invocation.result.verifiedEvidenceInput)
       : null;
-  const finalEvidence = codebaseRetrieval
-    ? appendRetrievalEvidence(
-        {
-          ...state,
-          evidence,
-        },
-        codebaseRetrieval,
-      )
-    : evidence;
-  await emitEvidenceUpdateNode(emit, {
-    runId: state.runId,
-    summary: "工具执行结果已写入 evidence",
-    toolId: pendingToolCall.toolId,
-    toolCallId: pendingToolCall.id,
-    inputHash: pendingToolCall.inputHash,
-    status: executionRecord.status,
-    evidenceCounts: getEvidenceCounts({ evidence: finalEvidence }),
-    latestEvidenceSummary: finalEvidence.latestSummary,
-    iteration: (state.iterationCount ?? 0) + 1,
-    maxIterations: state.maxIterations,
-  });
-
   return {
     observations: [...(state.observations ?? []), observation],
-    evidence: finalEvidence,
+    pendingEvidenceObservation: observation,
+    pendingRetrievalEvidence: codebaseRetrieval ?? undefined,
     pendingToolCall: undefined,
     lastToolExecution: executionRecord,
+    pendingToolExecution: executionRecord,
     iterationCount: (state.iterationCount ?? 0) + 1,
     continueIteration: false,
     postToolReviewPending: false,

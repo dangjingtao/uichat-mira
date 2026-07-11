@@ -1,10 +1,7 @@
 /**
  * 评估节点：检查 Agent 最终回答是否基于真实证据，并生成评估观察。
  */
-import {
-  appendObservationEvidence,
-  getEvidencePayload,
-} from "../evidence";
+import { getEvidencePayload } from "../evidence";
 import { emitStepNode } from "../node-runtime";
 import {
   answerClaimsUnverifiedObservation,
@@ -72,7 +69,6 @@ export const evaluateNode = async (
 
   return {
     observations: [...(state.observations ?? []), observation],
-    evidence: appendObservationEvidence(state, observation),
     ...(ok
       ? { terminalReason: "completed" }
       : {

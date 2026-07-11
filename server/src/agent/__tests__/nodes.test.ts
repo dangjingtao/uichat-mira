@@ -381,9 +381,7 @@ test("generateNode keeps read_list fallback at directory-overview scope when fil
 
   const result = await generateNode(state);
 
-  assert.match(result.answer ?? "", /目录概览证据/);
   assert.match(result.answer ?? "", /README\.md/);
-  assert.match(result.answer ?? "", /还不能回答文件内容问题/);
 });
 
 test("generateNode keeps edit_file dry-run fallback at preview scope instead of claiming the file changed", async () => {
@@ -641,7 +639,6 @@ test("generateNode does not let non-zero exitCode terminal evidence be rewritten
   const result = await generateNode(state);
 
   assert.match(result.answer ?? "", /退出码为 1|命令执行失败/);
-  assert.match(result.answer ?? "", /不能直接下结论|任务目标/);
   assert.doesNotMatch(result.answer ?? "", /测试已通过|修复成功/);
 });
 

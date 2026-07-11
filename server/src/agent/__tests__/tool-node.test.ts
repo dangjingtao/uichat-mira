@@ -402,8 +402,8 @@ test("toolNode records recoverable Harness failure without promoting it to a glo
     assert.equal(result.lastToolExecution?.failureKind, "recoverable");
     assert.equal(result.lastToolExecution?.failureCode, undefined);
     assert.equal(result.lastToolExecution?.recoveryAttemptCount, 1);
-    assert.equal(result.evidence?.latestSummary?.status, "failed");
-    assert.match(result.evidence?.latestSummary?.actionTaken ?? "", /can be retried or adjusted/i);
+    assert.equal(result.evidence, undefined);
+    assert.equal(result.pendingToolExecution?.status, "failed");
     assert.deepEqual(result.observations?.at(-1)?.facts, [
       "read_open failed during Harness execution but can be retried.",
     ]);
@@ -454,8 +454,8 @@ test("toolNode prioritizes structured failureCode over terminal-looking message 
     assert.equal(result.lastToolExecution?.failureKind, "recoverable");
     assert.equal(result.errorMessage, undefined);
     assert.match(
-      result.evidence?.latestSummary?.keyFindings.join(" | ") ?? "",
-      /failureCode=tool_runtime_failed/,
+      result.pendingToolExecution?.failureCode ?? "",
+      /^tool_runtime_failed$/,
     );
   } finally {
     executeHarnessInvocationSpy.mockRestore();
@@ -502,8 +502,8 @@ test("toolNode treats schema_invalid failureCode as terminal even without schema
     assert.equal(result.lastToolExecution?.failureCode, "schema_invalid");
     assert.equal(result.lastToolExecution?.failureKind, "terminal");
     assert.match(
-      result.evidence?.latestSummary?.keyFindings.join(" | ") ?? "",
-      /failureCode=schema_invalid/,
+      result.pendingToolExecution?.failureCode ?? "",
+      /^schema_invalid$/,
     );
     assert.match(result.errorMessage ?? "", /malformed payload/i);
   } finally {
@@ -555,11 +555,8 @@ test("toolNode keeps terminal Harness failure on the global error path", async (
     assert.match(result.terminalReason ?? "", /protocol mismatch/i);
     assert.match(result.blockedReason ?? "", /protocol mismatch/i);
     assert.equal(result.observations?.at(-1)?.status, "blocked");
-    assert.equal(result.evidence?.latestSummary?.status, "failed");
-    assert.match(
-      result.evidence?.latestSummary?.actionTaken ?? "",
-      /stopped the current tool loop/i,
-    );
+    assert.equal(result.evidence, undefined);
+    assert.equal(result.pendingToolExecution?.status, "failed");
   } finally {
     executeHarnessInvocationSpy.mockRestore();
   }
@@ -605,8 +602,8 @@ test("toolNode treats workspace_escape failureCode as terminal and exposes it in
     assert.equal(result.lastToolExecution?.failureCode, "workspace_escape");
     assert.equal(result.lastToolExecution?.failureKind, "terminal");
     assert.match(
-      result.evidence?.latestSummary?.keyFindings.join(" | ") ?? "",
-      /failureCode=workspace_escape/,
+      result.pendingToolExecution?.failureCode ?? "",
+      /^workspace_escape$/,
     );
     assert.match(result.errorMessage ?? "", /File not found/);
   } finally {
@@ -655,8 +652,8 @@ test("toolNode treats timeout failureCode as recoverable even when the message m
     assert.equal(result.lastToolExecution?.failureKind, "recoverable");
     assert.equal(result.errorMessage, undefined);
     assert.match(
-      result.evidence?.latestSummary?.keyFindings.join(" | ") ?? "",
-      /failureCode=timeout/,
+      result.pendingToolExecution?.failureCode ?? "",
+      /^timeout$/,
     );
   } finally {
     executeHarnessInvocationSpy.mockRestore();
@@ -701,10 +698,7 @@ test("toolNode falls back to legacy terminal message patterns when failureCode i
     assert.equal(executeHarnessInvocationSpy.mock.calls.length, 1);
     assert.equal(result.lastToolExecution?.failureCode, undefined);
     assert.equal(result.lastToolExecution?.failureKind, "terminal");
-    assert.doesNotMatch(
-      result.evidence?.latestSummary?.keyFindings.join(" | ") ?? "",
-      /failureCode=/,
-    );
+    assert.equal(result.evidence, undefined);
     assert.match(result.errorMessage ?? "", /approval mismatch/i);
   } finally {
     executeHarnessInvocationSpy.mockRestore();

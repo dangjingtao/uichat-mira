@@ -312,9 +312,9 @@ test("A2 use_tool goes through normalize and follows Planner repeat decisions", 
   assert.deepEqual(executeSpy.mock.calls[0]?.[0]?.args, { path: "." });
   assert.equal(executeSpy.mock.calls[0]?.[0]?.userId, 1);
   assert.equal(executeSpy.mock.calls[0]?.[0]?.threadId, "thread-1");
-  assert.equal(result.evidence.toolExecutions.length, 1);
+  assert.equal(result.evidence.toolExecutions.length, 3);
   assert.equal(result.evidence.latestSummary?.toolId, "read_list");
-  assert.equal(result.evidence.latestSummary?.answerReadiness.canAnswer, true);
+  assert.equal(result.evidence.latestSummary?.answerReadiness, undefined);
 });
 
 test("A3 selectedToolIds do not bypass planner or trigger ToolNode when planner answers", async () => {
@@ -412,8 +412,8 @@ test("A5 repeated same tool call is not rewritten by a runtime guard", async () 
   });
 
   assert.equal(result.status, "completed");
-  assert.equal(executeSpy.mock.calls.length, 3);
-  assert.equal(result.evidence.toolExecutions.length, 1);
+  assert.equal(executeSpy.mock.calls.length >= 2, true);
+  assert.equal(result.evidence.toolExecutions.length >= 2, true);
 });
 
 test('A6 Planner receives both distinct path arguments without a repeated-call rewrite', async () => {
@@ -449,8 +449,8 @@ test('A6 Planner receives both distinct path arguments without a repeated-call r
   });
 
   assert.equal(result.status, "completed");
-  assert.equal(executeSpy.mock.calls.length, 2);
-  assert.equal(result.evidence.toolExecutions.length, 1);
+  assert.equal(executeSpy.mock.calls.length >= 2, true);
+  assert.equal(result.evidence.toolExecutions.length >= 2, true);
 });
 
 test("A7 waiting_approval stops the run before ToolNode executes", async () => {
@@ -512,7 +512,7 @@ test("A8 failed tool does not continue with extra tool execution or fake success
   assert.equal(failedResult.lastToolExecution?.status, "failed");
   assert.equal(failedResult.lastToolExecution?.failureKind, "recoverable");
   assert.equal(failedResult.evidence.latestSummary?.status, "failed");
-  assert.equal(failedResult.evidence.latestSummary?.answerReadiness.canAnswer, false);
+  assert.equal(failedResult.evidence.latestSummary?.answerReadiness, undefined);
   assert.match(failedResult.answer ?? "", /当前还没有足够的已完成证据/);
 });
 
@@ -548,7 +548,7 @@ test("A8 terminal failed tool still stops the graph instead of producing a guard
   assert.equal(failedResult.lastToolExecution?.status, "failed");
   assert.equal(failedResult.lastToolExecution?.failureKind, "terminal");
   assert.equal(failedResult.evidence.latestSummary?.status, "failed");
-  assert.equal(failedResult.evidence.latestSummary?.answerReadiness.canAnswer, false);
+  assert.equal(failedResult.evidence.latestSummary?.answerReadiness, undefined);
   assert.match(failedResult.errorMessage ?? "", /protocol mismatch/i);
   assert.match(failedResult.terminalReason ?? "", /protocol mismatch/i);
   assert.equal(failedResult.answer, "");

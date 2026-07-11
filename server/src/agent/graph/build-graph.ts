@@ -3,6 +3,7 @@ import {
   evaluateNode,
   approvalNode,
   errorNode,
+  evidenceNode,
   generateNode,
   nextActionPlannerNode,
   policyNode,
@@ -15,6 +16,7 @@ import { AgentGraphStateAnnotation, createAgentNode } from "./state";
 import {
   routeAfterApproval,
   routeAfterEvaluate,
+  routeAfterEvidence,
   routeAfterGenerate,
   routeAfterNextAction,
   routeAfterPolicy,
@@ -41,6 +43,7 @@ export const compiledAgentStateGraph = new StateGraph(AgentGraphStateAnnotation)
   .addNode("approval", createAgentNode("approval", approvalNode))
   .addNode("retrieve", createAgentNode("retrieve", retrieveNode))
   .addNode("tool", createAgentNode("tool", toolNode))
+  .addNode("evidenceStage", createAgentNode("evidenceStage", evidenceNode))
   .addNode("generate", createAgentNode("generate", generateNode))
   .addNode("evaluate", createAgentNode("evaluate", evaluateNode))
   .addNode("error", createAgentNode("error", errorNode))
@@ -70,14 +73,19 @@ export const compiledAgentStateGraph = new StateGraph(AgentGraphStateAnnotation)
   ])
   .addConditionalEdges("approval", routeAfterApproval, [END, "error"])
   .addConditionalEdges("retrieve", routeAfterRetrieve, [
-    "nextActionPlanner",
+    "evidenceStage",
     "generate",
     "error",
   ])
   .addConditionalEdges("tool", routeAfterTool, [
     "approval",
     "generate",
+    "evidenceStage",
+    "error",
+  ])
+  .addConditionalEdges("evidenceStage", routeAfterEvidence, [
     "nextActionPlanner",
+    "generate",
     "error",
   ])
   .addConditionalEdges("generate", routeAfterGenerate, ["evaluate", "error"])
