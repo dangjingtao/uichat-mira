@@ -91,10 +91,6 @@ export interface AgentNodeState {
   generatedAnswerEmptyFallback?: boolean;
   iterationCount?: number;
   maxIterations?: number;
-  continueIteration?: boolean;
-  postToolReviewPending?: boolean;
-  reviewDecision?: "tool" | "generate";
-  reviewReason?: string;
 }
 
 export type AgentGraphState = AgentNodeState;
@@ -424,6 +420,7 @@ export const updateCurrentTaskFrameFromPlanner = (input: {
   goal: AgentGoal;
   nextAction: AgentNextAction;
   latestQuestion?: string;
+  latestEvidenceSummary?: AgentEvidenceSummary;
 }): CurrentTaskFrame | undefined => {
   if (!input.frame) {
     return input.frame;
@@ -439,12 +436,33 @@ export const updateCurrentTaskFrameFromPlanner = (input: {
       : input.goal.successCriteria.length > 0
         ? [...input.goal.successCriteria]
         : [currentGoal];
+  const latestEvidenceSummary = input.latestEvidenceSummary;
+  const coveredProgress = latestEvidenceSummary
+    ? [
+        latestEvidenceSummary.actionTaken,
+        ...latestEvidenceSummary.keyFindings,
+        ...(latestEvidenceSummary.facts ?? []),
+      ].slice(0, 5)
+    : input.frame.coveredProgress;
+  const remainingWork =
+    input.nextAction.type === "answer"
+      ? []
+      : latestEvidenceSummary?.gaps?.length
+        ? [
+            ...latestEvidenceSummary.gaps,
+            ...completionCriteria,
+          ]
+            .filter((item, index, items) => item && items.indexOf(item) === index)
+            .slice(0, 5)
+        : input.frame.remainingWork;
 
   return {
     ...input.frame,
     currentGoal,
     currentSubtask: getPlannerSubtask(input.nextAction),
     completionCriteria,
+    ...(coveredProgress ? { coveredProgress } : {}),
+    ...(typeof remainingWork !== "undefined" ? { remainingWork } : {}),
     currentBlocker:
       input.nextAction.type === "error"
         ? input.nextAction.reason
@@ -473,6 +491,18 @@ export const buildPlannerObservationContext = (
     latestObservation,
     recentObservations,
     latestEvidenceSummary,
+    latestToolCall: state.lastToolExecution
+      ? {
+          toolId: state.lastToolExecution.toolId,
+          args: state.lastToolExecution.args,
+          inputHash: state.lastToolExecution.inputHash,
+          status: state.lastToolExecution.status,
+          resultSummary: state.lastToolExecution.summary,
+          failureKind: state.lastToolExecution.failureKind,
+          failureCode: state.lastToolExecution.failureCode,
+          retryCount: state.lastToolExecution.recoveryAttemptCount ?? 0,
+        }
+      : undefined,
     recovery: buildPlannerRecoveryContext(state),
     pendingApproval: state.pendingApproval
       ? {

@@ -134,6 +134,7 @@ export const nextActionPlannerNode = async (
   } else {
     const messages: NormalizedChatMessage[] = buildNextActionPlannerMessages({
       question,
+      messages: state.messages,
       observationContext,
       toolExposure,
       iteration,
@@ -237,6 +238,7 @@ export const nextActionPlannerNode = async (
         goal: state.goal,
         nextAction,
         latestQuestion: question,
+        latestEvidenceSummary: observationContext.latestEvidenceSummary,
       })
     : undefined;
 

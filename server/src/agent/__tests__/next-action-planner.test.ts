@@ -120,6 +120,7 @@ test("buildPlannerObservationContext handles empty planner state", () => {
   assert.equal(context.latestObservation, undefined);
   assert.deepEqual(context.recentObservations, []);
   assert.equal(context.latestEvidenceSummary, undefined);
+  assert.equal(context.latestToolCall, undefined);
   assert.equal(context.taskCoverageView, undefined);
   assert.deepEqual(context.recovery, {
     source: "none",
@@ -417,6 +418,7 @@ test("buildNextActionPlannerMessages reads planner observation context instead o
 
   const messages = buildNextActionPlannerMessages({
     question: "Open README.md",
+    messages: createState().messages,
     observationContext,
     toolExposure: createState().toolExposure!,
     iteration: 0,
@@ -426,12 +428,18 @@ test("buildNextActionPlannerMessages reads planner observation context instead o
   const promptObservationContext = payload.observationContext as Record<string, unknown>;
 
   assert.ok("observationContext" in payload);
+  assert.equal(payload.lastUserRequest, "Open README.md");
+  assert.equal("relevantHistory" in payload, false);
   assert.equal("taskFrame" in payload, false);
   assert.equal("lastToolExecution" in payload, false);
   assert.equal("pendingApproval" in payload, false);
   assert.equal("schemaReplanDiagnostics" in payload, false);
   assert.equal("latestEvidenceSummary" in payload, false);
   assert.equal("taskCoverageView" in promptObservationContext, false);
+  assert.equal(
+    (promptObservationContext.latestToolCall as Record<string, unknown>).toolId,
+    "read_open",
+  );
 });
 
 test("buildNextActionPlannerMessages uses tool failure recovery budget in the main planner prompt", () => {
@@ -456,6 +464,7 @@ test("buildNextActionPlannerMessages uses tool failure recovery budget in the ma
 
   const messages = buildNextActionPlannerMessages({
     question: "Open missing.md",
+    messages: createState().messages,
     observationContext,
     toolExposure: createState().toolExposure!,
     iteration: 0,
@@ -475,6 +484,100 @@ test("buildNextActionPlannerMessages uses tool failure recovery budget in the ma
     String(messages[0]?.content ?? ""),
     /当前恢复预算还剩 1 次；如果继续恢复，必须说明这次为什么与上次不同。/,
   );
+});
+
+test("buildNextActionPlannerMessages only uses toolExposure as the planner-visible tool source", () => {
+  const messages = buildNextActionPlannerMessages({
+    question: "Open README.md",
+    messages: createState().messages,
+    observationContext: buildPlannerObservationContext(createState()),
+    toolExposure: {
+      exposedTools: ["read_open"],
+      toolMeta: [baseToolExposure.toolMeta[0]!],
+    },
+    iteration: 0,
+    maxIterations: 3,
+  });
+
+  const payload = JSON.parse(String(messages[1]?.content ?? "{}")) as {
+    toolExposure: {
+      exposedTools: string[];
+      toolMeta: Array<{ toolId: string }>;
+    };
+  };
+
+  assert.deepEqual(payload.toolExposure.exposedTools, ["read_open"]);
+  assert.deepEqual(
+    payload.toolExposure.toolMeta.map((tool) => tool.toolId),
+    ["read_open"],
+  );
+});
+
+test("buildNextActionPlannerMessages keeps only task-related finite history", () => {
+  const messages = buildNextActionPlannerMessages({
+    question: "open server/src/agent/resume.ts and summarize the approval flow",
+    messages: [
+      {
+        role: "user",
+        content: "what is the weather tomorrow",
+        parts: [{ type: "text", text: "what is the weather tomorrow" }],
+      },
+      {
+        role: "assistant",
+        content: "Tomorrow should be sunny.",
+        parts: [{ type: "text", text: "Tomorrow should be sunny." }],
+      },
+      {
+        role: "user",
+        content: "inspect the agent resume flow around approval handling",
+        parts: [
+          {
+            type: "text",
+            text: "inspect the agent resume flow around approval handling",
+          },
+        ],
+      },
+      {
+        role: "assistant",
+        content: "I found resume.ts and approval handling notes in the agent runtime.",
+        parts: [
+          {
+            type: "text",
+            text: "I found resume.ts and approval handling notes in the agent runtime.",
+          },
+        ],
+      },
+      {
+        role: "user",
+        content: "open server/src/agent/resume.ts and summarize the approval flow",
+        parts: [
+          {
+            type: "text",
+            text: "open server/src/agent/resume.ts and summarize the approval flow",
+          },
+        ],
+      },
+    ],
+    observationContext: buildPlannerObservationContext(createState()),
+    toolExposure: createState().toolExposure!,
+    iteration: 0,
+    maxIterations: 3,
+  });
+
+  const payload = JSON.parse(String(messages[1]?.content ?? "{}")) as {
+    relevantHistory?: Array<{ role: string; content: string }>;
+  };
+
+  assert.deepEqual(payload.relevantHistory, [
+    {
+      role: "user",
+      content: "inspect the agent resume flow around approval handling",
+    },
+    {
+      role: "assistant",
+      content: "I found resume.ts and approval handling notes in the agent runtime.",
+    },
+  ]);
 });
 
 test("nextActionPlannerNode returns answer action from task model JSON", async () => {
@@ -1596,7 +1699,7 @@ test("nextActionPlannerNode writes decision trace and includes prompt context fo
   }
 });
 
-test("nextActionPlannerNode can derive tool exposure from toolIntent when explicit toolExposure is absent", async () => {
+test("nextActionPlannerNode does not derive tool exposure from toolIntent when explicit toolExposure is absent", async () => {
   const streamSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementation(async function* () {
@@ -1638,13 +1741,15 @@ test("nextActionPlannerNode can derive tool exposure from toolIntent when explic
 
     assert.deepEqual(patch, {
       nextAction: {
-        type: "use_tool",
-        toolId: "read_open",
-        args: {
-          path: "README.md",
-        },
-        reason: "Need file content.",
+        type: "error",
+        reason:
+          "Planner selected a tool that was not exposed for this turn; planner must stop.",
       },
+      errorMessage:
+        "Planner selected a tool that was not exposed for this turn; planner must stop.",
+      blockedReason:
+        "Planner selected a tool that was not exposed for this turn; planner must stop.",
+      errorSourceNodeId: "agent-next-action-planner",
     });
   } finally {
     streamSpy.mockRestore();

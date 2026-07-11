@@ -59,10 +59,6 @@ export const AgentGraphStateAnnotation = Annotation.Root({
   approvedInvocations: Annotation<AgentGraphInput["approvedInvocations"] | undefined>,
   iterationCount: Annotation<number | undefined>,
   maxIterations: Annotation<number | undefined>,
-  continueIteration: Annotation<boolean | undefined>,
-  postToolReviewPending: Annotation<boolean | undefined>,
-  reviewDecision: Annotation<"tool" | "generate" | undefined>,
-  reviewReason: Annotation<string | undefined>,
 });
 
 export type AgentGraphStateType = typeof AgentGraphStateAnnotation.State;
@@ -146,8 +142,4 @@ export const createInitialAgentGraphState = (
   generatedAnswerEmptyFallback: false,
   iterationCount: 0,
   maxIterations: input.maxIterations ?? DEFAULT_AGENT_MAX_ITERATIONS,
-  continueIteration: false,
-  postToolReviewPending: false,
-  reviewDecision: undefined,
-  reviewReason: undefined,
 });

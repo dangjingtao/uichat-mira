@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/project-control-ledger.md
-task_state: TODO
+task_state: DONE
 ---
 
 # Agent V1.5 T08：Planner 正向增强与主线收口
@@ -454,6 +454,14 @@ type AgentNextAction =
 9. 说明是否影响既有 Agent 主线黑盒。
 10. 工作区必须干净。
 11. 不得提前把任务卡或 ledger 写成“正式评审通过”；本地复审通过可以记录，但最终通过以 PR 评审为准。
+
+## Review Evidence
+
+- 2026-07-11 本地复审通过：Planner 仅从 `toolExposure` 读取可见工具；Policy 使用冻结 `pendingToolCall.toolMeta` 并校验工具 ID 一致性。
+- `continueIteration`、`postToolReviewPending`、`reviewDecision`、`reviewReason` 已从真实运行态和 `route-step` 节点移除。
+- Planner 已接收有限相关历史、当前任务请求、工具 schema/risk/boundary、currentTaskFrame、latest Evidence、最近调用事实、recovery、approval 和 iteration 状态。
+- Planner 行为回归覆盖 discover 到 open 的真实链路、多目标部分完成、truncated、explicit gap、相关历史裁剪和无意义重复调用；核心回归 `179/179` 通过，`git diff --check` 通过。
+- server typecheck 仍受既有 `server/src/microapps/codegraph/index.ts:543` 阻断，未发现 T08 新增 typecheck 错误。
 
 ---
 

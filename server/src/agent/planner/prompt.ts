@@ -1,5 +1,4 @@
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol";
-import type { ToolIntentResult } from "../intent/index";
 import type {
   AgentToolExposureState,
   PlannerObservationContext,
@@ -9,26 +8,11 @@ import { getRemainingPlannerRecoveryAttempts } from "../recovery";
 export const normalizeToolExposure = (
   state: {
     toolExposure?: AgentToolExposureState;
-    toolIntent?: ToolIntentResult;
   },
 ): AgentToolExposureState => {
-  if (state.toolExposure) {
-    return state.toolExposure;
-  }
-
-  const exposedDefinitions = state.toolIntent?.toolExposure.exposedDefinitions ?? [];
-  return {
-    exposedTools: state.toolIntent?.toolExposure.exposedToolIds ?? [],
-    toolMeta: exposedDefinitions.map((definition) => ({
-      toolId: definition.id,
-      title: definition.title,
-      description: definition.description,
-      inputSchema: definition.inputSchema,
-      domain: definition.domain,
-      source: definition.source,
-      tags: definition.tags,
-      capabilities: definition.capabilities,
-    })),
+  return state.toolExposure ?? {
+    exposedTools: [],
+    toolMeta: [],
   };
 };
 
@@ -41,10 +25,35 @@ const summarizeToolSchemas = (toolExposure: AgentToolExposureState) =>
           additionalProperties?: boolean;
         }
       | undefined;
+    const capabilities = tool.capabilities;
+    const plannerDescription =
+      tool.toolId === "read_discover"
+        ? "Discover candidate files, directories, symbols, or keyword locations without opening file bodies."
+        : tool.toolId === "read_open"
+          ? "Open a known target and optionally read only a selected section; do not use it for fuzzy discovery."
+          : tool.description;
 
     return {
       toolId: tool.toolId,
+      description: plannerDescription,
       domain: tool.domain ?? null,
+      source: tool.source ?? null,
+      risk: {
+        requiresApproval: capabilities?.requiresApproval ?? false,
+        sideEffect: capabilities?.sideEffect ?? "unknown",
+        workspaceBound: capabilities?.workspaceBound ?? false,
+        longRunning: capabilities?.longRunning ?? false,
+      },
+      boundaries: {
+        workspace:
+          capabilities?.workspaceBound === true
+            ? "workspace-bound"
+            : "not workspace-bound",
+        sandbox:
+          capabilities?.sideEffect === "none"
+            ? "read-only or observation-only"
+            : "may mutate state or spawn runtime side effects",
+      },
       required: Array.isArray(schema?.required) ? schema.required : [],
       properties: Object.entries(schema?.properties ?? {}).map(([key, value]) => ({
         name: key,
@@ -59,6 +68,123 @@ const summarizeToolSchemas = (toolExposure: AgentToolExposureState) =>
 
 const getRemainingRecoveryAttempts = (observationContext: PlannerObservationContext) =>
   getRemainingPlannerRecoveryAttempts(observationContext.recovery);
+
+const PLANNER_HISTORY_LIMIT = 6;
+const PLANNER_HISTORY_ITEM_CHAR_LIMIT = 500;
+const PLANNER_MIN_RELEVANCE_SCORE = 1;
+const HISTORY_STOPWORDS = new Set([
+  "the",
+  "and",
+  "for",
+  "with",
+  "that",
+  "this",
+  "from",
+  "into",
+  "what",
+  "which",
+  "when",
+  "where",
+  "should",
+  "would",
+  "could",
+  "need",
+  "please",
+  "help",
+  "then",
+  "open",
+  "read",
+  "file",
+  "about",
+  "user",
+  "assistant",
+  "next",
+  "step",
+]);
+
+const trimText = (value: string, limit: number) =>
+  value.length <= limit ? value : `${value.slice(0, Math.max(0, limit - 1))}…`;
+
+const normalizeHistoryToken = (token: string) =>
+  token
+    .trim()
+    .toLowerCase()
+    .replace(/\\/g, "/")
+    .replace(/^\.\/+/, "")
+    .replace(/^[`"'“”‘’]+|[`"'“”‘’]+$/g, "");
+
+const extractHistoryTokens = (value: string) => {
+  const tokens = new Set<string>();
+  const matches = value.matchAll(/[\p{L}\p{N}_./:-]{2,}/gu);
+
+  for (const match of matches) {
+    const normalized = normalizeHistoryToken(match[0] ?? "");
+    if (!normalized || HISTORY_STOPWORDS.has(normalized)) {
+      continue;
+    }
+
+    tokens.add(normalized);
+
+    if (normalized.includes("/")) {
+      for (const part of normalized.split("/")) {
+        if (part.length >= 2 && !HISTORY_STOPWORDS.has(part)) {
+          tokens.add(part);
+        }
+      }
+    }
+  }
+
+  return tokens;
+};
+
+const scoreHistoryMessage = (input: {
+  message: string;
+  currentRequest: string;
+}) => {
+  const requestTokens = extractHistoryTokens(input.currentRequest);
+  const messageTokens = extractHistoryTokens(input.message);
+  let score = 0;
+
+  for (const token of messageTokens) {
+    if (requestTokens.has(token)) {
+      score += token.includes("/") || token.includes(".") ? 2 : 1;
+    }
+  }
+
+  return score;
+};
+
+const buildRelevantConversationHistory = (
+  messages: NormalizedChatMessage[] | undefined,
+  currentRequest: string,
+) => {
+  if (!messages?.length) {
+    return undefined;
+  }
+
+  const filtered = messages
+    .filter((message) => message.role === "user" || message.role === "assistant")
+    .map((message) => ({
+      role: message.role,
+      content: trimText(message.content, PLANNER_HISTORY_ITEM_CHAR_LIMIT),
+      score: scoreHistoryMessage({
+        message: message.content,
+        currentRequest,
+      }),
+    }))
+    .filter(
+      (message) =>
+        message.score >= PLANNER_MIN_RELEVANCE_SCORE &&
+        !(message.role === "user" && message.content.trim() === currentRequest.trim()),
+    )
+    .slice(-PLANNER_HISTORY_LIMIT)
+    .map((message) => ({
+      role: message.role,
+      content: message.content,
+    }));
+
+  return filtered.length > 0 ? filtered : undefined;
+};
 
 const buildProgressionRules = (input: {
   observationContext: PlannerObservationContext;
@@ -158,6 +284,7 @@ const buildSchemaReplanMessages = (input: {
 
 export const buildNextActionPlannerMessages = (input: {
   question: string;
+  messages?: NormalizedChatMessage[];
   observationContext: PlannerObservationContext;
   toolExposure: AgentToolExposureState;
   iteration: number;
@@ -187,19 +314,27 @@ export const buildNextActionPlannerMessages = (input: {
         '{"type":"use_tool","toolId":"...","args":{},"reason":"..."}',
         '{"type":"ask_user","question":"...","reason":"..."}',
         '{"type":"error","reason":"..."}',
-      "如果你选择 use_tool，toolId 必须来自当前暴露的真实工具列表，args 必须是 JSON object。",
-      "不要输出 capabilityId，不要发明未暴露工具，不要输出额外字段。",
-      "对 workspace-bound read 工具的 path 参数，当前 workspace 根目录一律用 '.' 表示。",
-      "不要输出 '/workspace' 作为 path。",
-      "不要把 workspace 根目录下的文件写成 '/README.md' 这类类 Unix 绝对路径；应写成 'README.md'。",
-      "如果要读取 workspace 根目录下的嵌套文件，应写成 'docs/README.md' 这类 workspace-relative path。",
-      "对 terminal_session.cwd，只能输出 workspace-relative directory。",
-      "如果命令就在 workspace 根目录执行，优先省略 cwd，或把 cwd 写成 '.'。",
-      "不要把 terminal_session.cwd 写成 Windows 绝对路径、POSIX 绝对路径或父级跳转，例如 'D:\\workspace\\rag-demo'、'/workspace'、'..'、'../server'。",
-      "Evidence 只记录工具、检索和策略事实；它不是完成命令，也不提供 answer readiness。",
-      "是否回答、继续、检索或询问用户，必须由 Planner 根据用户目标、事实、gaps、error 和当前状态自主决定。",
-      ...buildProgressionRules({
-        observationContext: input.observationContext,
+        "如果你选择 use_tool，toolId 必须来自当前暴露的真实工具列表，args 必须是 JSON object。",
+        "不要输出 capabilityId，不要发明未暴露工具，不要输出额外字段。",
+        "对 workspace-bound read 工具的 path 参数，当前 workspace 根目录一律用 '.' 表示。",
+        "不要输出 '/workspace' 作为 path。",
+        "不要把 workspace 根目录下的文件写成 '/README.md' 这类类 Unix 绝对路径；应写成 'README.md'。",
+        "如果要读取 workspace 根目录下的嵌套文件，应写成 'docs/README.md' 这类 workspace-relative path。",
+        "对 terminal_session.cwd，只能输出 workspace-relative directory。",
+        "如果命令就在 workspace 根目录执行，优先省略 cwd，或把 cwd 写成 '.'。",
+        "不要把 terminal_session.cwd 写成 Windows 绝对路径、POSIX 绝对路径或父级跳转，例如 'D:\\workspace\\rag-demo'、'/workspace'、'..'、'../server'。",
+        "先判断完整用户目标是否已经覆盖，再决定 answer。",
+        "某一条 evidence 可解释，不等于整项任务已经完成。",
+        "如果任务有多个目标，只完成一部分时不要提前 answer。",
+        "如果最新 evidence 仍有 gaps、missing、truncated、timed_out 或明确 error，不要只因为拿到结果就 answer。",
+        "discover 只负责发现对象；需要正文时应继续选择 read_open。",
+        "如果 discover 的结构化结果已经足够支撑结论，可以直接 answer，不要机械追加 open。",
+        "只有关键目标或关键参数确实无法从当前请求、有限历史和证据中推断时，才 ask_user。",
+        "如果相同 toolId 和 args 已经有成功 evidence 且没有新 gap，通常应复用证据而不是重复调用。",
+        "任何 answer 都必须基于已有 Evidence，不能编造工具执行、检索结果或文件事实。",
+        "Evidence 只记录工具、检索和策略事实；是否回答、继续、检索或询问用户，必须由 Planner 自主决定。",
+        ...buildProgressionRules({
+          observationContext: input.observationContext,
         iteration: input.iteration,
           maxIterations: input.maxIterations,
         }),
@@ -210,7 +345,11 @@ export const buildNextActionPlannerMessages = (input: {
       role: "user",
       content: JSON.stringify(
         {
-          question: input.question,
+          currentUserRequest: input.question,
+          relevantHistory: buildRelevantConversationHistory(
+            input.messages,
+            input.question,
+          ),
           observationContext: input.observationContext,
           progression: {
             remainingRecoveryAttempts: getRemainingRecoveryAttempts(
@@ -223,7 +362,7 @@ export const buildNextActionPlannerMessages = (input: {
           },
           toolExposure: {
             exposedTools: input.toolExposure.exposedTools,
-            toolMeta: input.toolExposure.toolMeta,
+            toolMeta: summarizeToolSchemas(input.toolExposure),
           },
           iteration: input.iteration,
           maxIterations: input.maxIterations,

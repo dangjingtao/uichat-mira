@@ -8,7 +8,6 @@ export { prepareContextNode } from "./prepare-context";
 export { approvalNode } from "./approval";
 export { errorNode } from "./error";
 export { retrieveNode } from "./retrieve";
-export { routeStepNode } from "./route-step";
 export { generateNode } from "./generate";
 export { evaluateNode } from "./evaluate";
 
