@@ -15,6 +15,7 @@ const healthSequence = (process.env.FAKE_HEALTH_SEQUENCE ?? "ready")
   .filter(Boolean);
 const strictInitializedMode = process.env.FAKE_STRICT_INITIALIZED_MODE === "1";
 const messageLogPath = process.env.FAKE_MESSAGE_LOG_PATH ?? null;
+const startupArgsLogPath = process.env.FAKE_STARTUP_ARGS_LOG_PATH ?? null;
 
 let healthIndex = 0;
 let initializedReceived = false;
@@ -35,6 +36,22 @@ const appendMessageLog = (message) => {
     );
   } catch {
     // test fixture logging should not break protocol flow
+  }
+};
+
+const appendStartupArgsLog = () => {
+  if (!startupArgsLogPath) {
+    return;
+  }
+
+  try {
+    fs.appendFileSync(
+      startupArgsLogPath,
+      `${JSON.stringify({ argv: process.argv.slice(2) })}\n`,
+      "utf8",
+    );
+  } catch {
+    // startup logging should not break fixture behavior
   }
 };
 
@@ -121,6 +138,8 @@ if (command !== "--mcp") {
   process.stderr.write(`unknown command ${command}\n`);
   process.exit(2);
 }
+
+appendStartupArgsLog();
 
 if (Number(process.env.FAKE_CRASH_AFTER_MS ?? "0") > 0) {
   setTimeout(() => {
@@ -335,7 +354,7 @@ process.stdin.on("data", (chunk) => {
       }
       setTimeout(() => {
         process.exit(Number(process.env.FAKE_EXIT_CODE ?? "0"));
-      }, 10);
+      }, Number(process.env.FAKE_SHUTDOWN_DELAY_MS ?? "10"));
       continue;
     }
 

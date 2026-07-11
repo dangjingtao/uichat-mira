@@ -36,6 +36,7 @@ export interface ManagedCodeGraphProcessManagerOptions {
   startArgs: string[];
   versionProbe: ManagedCodeGraphVersionProbe;
   telemetryProbe?: ManagedCodeGraphTelemetryProbe;
+  runtimeFingerprint?: string;
   env?: Record<string, string>;
   workspaceRoot: string;
   allowedWorkspaceRoot: string;

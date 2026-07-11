@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 
 import CONFIG from "@/config/index.js";
 import {
@@ -113,6 +114,16 @@ type CodeGraphRuntimeConfigFields = Pick<
   | "appDataRoot"
   | "timeoutMs"
 >;
+
+type CodeGraphRuntimeTransitionState =
+  | {
+      inProgress: false;
+      reason: null;
+    }
+  | {
+      inProgress: true;
+      reason: "reconfiguring" | "stopping";
+    };
 
 export type CodeGraphStudioBlockedReason = {
   code: CodeGraphStudioBlockedReasonCode;
@@ -243,6 +254,31 @@ const hasRuntimeConfigChanged = (
 ) =>
   JSON.stringify(toComparableRuntimeConfig(current)) !==
   JSON.stringify(toComparableRuntimeConfig(next));
+
+const createRuntimeFingerprint = (input: {
+  command: string;
+  startArgs: string[];
+  versionProbeArgs: string[];
+  telemetryProbeArgs: string[];
+  workspaceRoot: string;
+  logRoot: string;
+  indexRoot: string;
+  timeoutMs: number;
+}) =>
+  createHash("sha256")
+    .update(
+      JSON.stringify({
+        command: input.command,
+        startArgs: input.startArgs,
+        versionProbeArgs: input.versionProbeArgs,
+        telemetryProbeArgs: input.telemetryProbeArgs,
+        workspaceRoot: normalizeComparablePath(input.workspaceRoot),
+        logRoot: normalizeComparablePath(input.logRoot),
+        indexRoot: normalizeComparablePath(input.indexRoot),
+        timeoutMs: input.timeoutMs,
+      }),
+    )
+    .digest("hex");
 
 const parseJsonFile = <T>(filePath: string, fallback: T): T => {
   try {
@@ -386,6 +422,10 @@ export const createCodeGraphStudioService = (options?: {
   const configFilePath = path.join(storageRoot, `${workspaceHash}.json`);
   let manager: ManagedCodeGraphProcessManager | null = null;
   let latestCapabilityStatusSource: CodeGraphCapabilityStatusSource = null;
+  let runtimeTransitionState: CodeGraphRuntimeTransitionState = {
+    inProgress: false,
+    reason: null,
+  };
 
   const updateLatestCapabilityStatusSource = (snapshot: {
     status: ManagedCodeGraphStatusSnapshot["status"];
@@ -399,6 +439,17 @@ export const createCodeGraphStudioService = (options?: {
           workspaceMatches: snapshot.workspaceMatches,
         }
       : null;
+  };
+
+  const setRuntimeTransitionState = (
+    nextState: CodeGraphRuntimeTransitionState,
+    options?: { clearSnapshot?: boolean },
+  ) => {
+    runtimeTransitionState = nextState;
+    if (options?.clearSnapshot) {
+      updateLatestCapabilityStatusSource(null);
+    }
+    onStateChanged?.();
   };
 
   const handleManagerStatusChanged = (snapshot: ManagedCodeGraphStatusSnapshot) => {
@@ -486,6 +537,19 @@ export const createCodeGraphStudioService = (options?: {
       plannerStorage,
       externalIndexSupport,
       pollutionGuard,
+      runtimeFingerprint:
+        plannerStorage.logRoot && plannerStorage.indexRoot
+          ? createRuntimeFingerprint({
+              command: draft.command,
+              startArgs: draft.startArgs,
+              versionProbeArgs: draft.versionProbeArgs,
+              telemetryProbeArgs: draft.telemetryProbeArgs,
+              workspaceRoot,
+              logRoot: plannerStorage.logRoot,
+              indexRoot: plannerStorage.indexRoot,
+              timeoutMs: draft.timeoutMs,
+            })
+          : null,
       config: {
         workspaceRoot,
         appDataRootResolved,
@@ -517,6 +581,10 @@ export const createCodeGraphStudioService = (options?: {
   });
 
   const ensureManager = () => {
+    if (runtimeTransitionState.inProgress) {
+      return null;
+    }
+
     const runtime = buildRuntimeConfig();
     if (!runtime.plannerStorage.logRoot || !runtime.plannerStorage.indexRoot) {
       manager = null;
@@ -525,6 +593,7 @@ export const createCodeGraphStudioService = (options?: {
 
     if (
       manager &&
+      manager.getRuntimeFingerprint() === runtime.runtimeFingerprint &&
       manager.getStatus().workspaceRoot === workspaceRoot &&
       manager.getStatus().logRoot === runtime.plannerStorage.logRoot &&
       manager.getStatus().indexRoot === runtime.plannerStorage.indexRoot
@@ -541,6 +610,7 @@ export const createCodeGraphStudioService = (options?: {
       telemetryProbe: {
         args: runtime.draft.telemetryProbeArgs,
       },
+      runtimeFingerprint: runtime.runtimeFingerprint ?? undefined,
       workspaceRoot,
       allowedWorkspaceRoot: workspaceRoot,
       logRoot: runtime.plannerStorage.logRoot,
@@ -577,6 +647,37 @@ export const createCodeGraphStudioService = (options?: {
     statusSource?: CodeGraphCapabilityStatusSource,
     requestedWorkspaceRoot?: string,
   ): CodeGraphStudioCapabilityGate => {
+    if (runtimeTransitionState.inProgress) {
+      return {
+        available: false,
+        registered: false,
+        reasons: [
+          {
+            code: "runtime_not_ready",
+            message:
+              runtimeTransitionState.reason === "reconfiguring"
+                ? "CodeGraph runtime is reconfiguring."
+                : "CodeGraph runtime is stopping.",
+          },
+        ],
+        checks: {
+          microAppEnabled: runtime.draft.microAppEnabled,
+          agentCapabilityEnabled: runtime.draft.agentCapabilityEnabled,
+          runtimeReady: false,
+          telemetryVerifiedOff: false,
+          workspaceMatched: requestedWorkspaceRoot
+            ? isSamePath(requestedWorkspaceRoot, workspaceRoot)
+            : true,
+          repoPollutionSafe:
+            runtime.externalIndexSupport.status === "ready" &&
+            !runtime.pollutionGuard.exists &&
+            runtime.pollutionGuard.status === "ready",
+          appDataRootValid: runtime.plannerStorage.status === "ready",
+          capabilityRegistrationReady: false,
+        },
+      };
+    }
+
     const activeManager = ensureManager();
     const snapshot =
       statusSource ??
@@ -911,17 +1012,37 @@ export const createCodeGraphStudioService = (options?: {
       const runtimeConfigChanged = hasRuntimeConfigChanged(current, next);
       const currentManager = manager;
       if (runtimeConfigChanged && currentManager) {
+        setRuntimeTransitionState(
+          {
+            inProgress: true,
+            reason: "reconfiguring",
+          },
+          { clearSnapshot: true },
+        );
+        manager = null;
         await currentManager.dispose();
-        if (manager === currentManager) {
-          manager = null;
-        }
+        updateLatestCapabilityStatusSource(null);
       } else if (runtimeConfigChanged) {
+        setRuntimeTransitionState(
+          {
+            inProgress: true,
+            reason: "reconfiguring",
+          },
+          { clearSnapshot: true },
+        );
         updateLatestCapabilityStatusSource(null);
       }
 
       ensureDirectory(storageRoot);
       fs.writeFileSync(configFilePath, JSON.stringify(next, null, 2), "utf8");
-      onStateChanged?.();
+      if (runtimeConfigChanged) {
+        setRuntimeTransitionState({
+          inProgress: false,
+          reason: null,
+        });
+      } else {
+        onStateChanged?.();
+      }
       return next;
     },
 
@@ -995,12 +1116,25 @@ export const createCodeGraphStudioService = (options?: {
 
     async stop() {
       const activeManager = ensureManager();
+      if (activeManager) {
+        setRuntimeTransitionState({
+          inProgress: true,
+          reason: "stopping",
+        });
+      }
       const status = activeManager ? await activeManager.stop() : null;
       if (activeManager && manager === activeManager) {
         manager = null;
       }
       updateLatestCapabilityStatusSource(status ?? null);
-      onStateChanged?.();
+      if (activeManager) {
+        setRuntimeTransitionState({
+          inProgress: false,
+          reason: null,
+        });
+      } else {
+        onStateChanged?.();
+      }
       return {
         report: await buildReport(status),
       };

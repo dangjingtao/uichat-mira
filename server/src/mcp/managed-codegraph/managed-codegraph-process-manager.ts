@@ -162,6 +162,10 @@ export class ManagedCodeGraphProcessManager {
     return cloneSnapshot(this.snapshot);
   }
 
+  getRuntimeFingerprint() {
+    return this.options.runtimeFingerprint ?? null;
+  }
+
   async detect(): Promise<ManagedCodeGraphDetectResult> {
     const reasons: string[] = [];
     const commandFound = this.commandExists();

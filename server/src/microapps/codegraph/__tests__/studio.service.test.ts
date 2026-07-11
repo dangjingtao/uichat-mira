@@ -370,6 +370,195 @@ describe("CodeGraph Studio service", () => {
     expect(currentContext.ok).toBe(false);
   });
 
+  it("keeps capability unavailable during runtime reconfiguration and starts with the new startArgs only after an explicit restart", async () => {
+    const caseRoot = path.join(
+      getTestArtifactDir("codegraph-studio-cases"),
+      `runtime-transition-${Date.now()}`,
+    );
+    const caseStorageRoot = path.join(caseRoot, "storage");
+    const caseAppDataRoot = path.join(caseRoot, "appdata");
+    const caseWorkspaceRoot = path.join(caseRoot, "workspace");
+    const startupArgsLogPath = path.join(caseRoot, "provider-startup-args.log");
+    fs.mkdirSync(caseStorageRoot, { recursive: true });
+    fs.mkdirSync(caseAppDataRoot, { recursive: true });
+    fs.mkdirSync(caseWorkspaceRoot, { recursive: true });
+
+    const service = createCodeGraphStudioService({
+      workspaceRoot: caseWorkspaceRoot,
+      storageRoot: caseStorageRoot,
+      getCapabilityRegistrationState: () =>
+        listCapabilityDefinitions().some((item) => item.id === "codebase_explore"),
+      onStateChanged: () => {
+        reconcileCodeGraphHarnessCapability();
+      },
+    });
+    setActiveCodeGraphStudioService(service);
+    initializeHarnessRuntime();
+
+    process.env.FAKE_STARTUP_ARGS_LOG_PATH = startupArgsLogPath;
+    await service.saveConfig({
+      microAppEnabled: true,
+      agentCapabilityEnabled: true,
+      command: process.execPath,
+      startArgs: [fixturePath, "--mcp"],
+      versionProbeArgs: [fixturePath, "--version"],
+      telemetryProbeArgs: [fixturePath, "--telemetry-status"],
+      appDataRoot: caseAppDataRoot,
+      timeoutMs: 1500,
+    });
+
+    await service.start();
+    await service.health();
+    expect(listCapabilityDefinitions().map((item) => item.id)).toContain("codebase_explore");
+
+    process.env.FAKE_SHUTDOWN_DELAY_MS = "250";
+    const nextStartArgs = [fixturePath, "--mcp", "--session-id", `new-${Date.now()}`];
+    const savePromise = service.saveConfig({
+      startArgs: nextStartArgs,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(listCapabilityDefinitions().map((item) => item.id)).not.toContain("codebase_explore");
+    expect(service.getManagedCapabilityContext(caseWorkspaceRoot).ok).toBe(false);
+
+    await savePromise;
+
+    const afterSaveReport = await service.getReport();
+    expect(afterSaveReport.runtime.processAlive).toBe(false);
+    expect(afterSaveReport.capability.registered).toBe(false);
+
+    const beforeRestartStartupCount = fs.existsSync(startupArgsLogPath)
+      ? fs
+          .readFileSync(startupArgsLogPath, "utf8")
+          .split(/\r?\n/)
+          .filter(Boolean).length
+      : 0;
+
+    await service.start();
+    await service.health();
+
+    const startupEntries = fs
+      .readFileSync(startupArgsLogPath, "utf8")
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as { argv: string[] });
+    const latestStartupEntry = startupEntries.at(-1);
+
+    expect(latestStartupEntry?.argv).toEqual(nextStartArgs.slice(1));
+    expect(
+      startupEntries.length,
+    ).toBeGreaterThan(beforeRestartStartupCount);
+  });
+
+  it("does not reuse the old manager when command changes", async () => {
+    const caseRoot = path.join(
+      getTestArtifactDir("codegraph-studio-cases"),
+      `command-change-${Date.now()}`,
+    );
+    const caseStorageRoot = path.join(caseRoot, "storage");
+    const caseAppDataRoot = path.join(caseRoot, "appdata");
+    const caseWorkspaceRoot = path.join(caseRoot, "workspace");
+    fs.mkdirSync(caseStorageRoot, { recursive: true });
+    fs.mkdirSync(caseAppDataRoot, { recursive: true });
+    fs.mkdirSync(caseWorkspaceRoot, { recursive: true });
+
+    const service = createCodeGraphStudioService({
+      workspaceRoot: caseWorkspaceRoot,
+      storageRoot: caseStorageRoot,
+      getCapabilityRegistrationState: () =>
+        listCapabilityDefinitions().some((item) => item.id === "codebase_explore"),
+      onStateChanged: () => {
+        reconcileCodeGraphHarnessCapability();
+      },
+    });
+    setActiveCodeGraphStudioService(service);
+    initializeHarnessRuntime();
+
+    await service.saveConfig({
+      microAppEnabled: true,
+      agentCapabilityEnabled: true,
+      command: process.execPath,
+      startArgs: [fixturePath, "--mcp"],
+      versionProbeArgs: [fixturePath, "--version"],
+      telemetryProbeArgs: [fixturePath, "--telemetry-status"],
+      appDataRoot: caseAppDataRoot,
+      timeoutMs: 1500,
+    });
+
+    await service.start();
+    await service.health();
+    const beforeChangeContext = service.getManagedCapabilityContext(caseWorkspaceRoot);
+    expect(beforeChangeContext.ok).toBe(true);
+    const previousFingerprint = beforeChangeContext.ok
+      ? beforeChangeContext.manager.getRuntimeFingerprint()
+      : null;
+
+    await service.saveConfig({
+      command: "node",
+    });
+
+    expect(service.getManagedCapabilityContext(caseWorkspaceRoot).ok).toBe(false);
+    await service.start();
+    await service.health();
+
+    const afterRestartContext = service.getManagedCapabilityContext(caseWorkspaceRoot);
+    expect(afterRestartContext.ok).toBe(true);
+    if (afterRestartContext.ok) {
+      expect(afterRestartContext.manager.getRuntimeFingerprint()).not.toBe(previousFingerprint);
+    }
+  });
+
+  it("makes capability unavailable for the whole explicit stop window", async () => {
+    const caseRoot = path.join(
+      getTestArtifactDir("codegraph-studio-cases"),
+      `stop-window-${Date.now()}`,
+    );
+    const caseStorageRoot = path.join(caseRoot, "storage");
+    const caseAppDataRoot = path.join(caseRoot, "appdata");
+    const caseWorkspaceRoot = path.join(caseRoot, "workspace");
+    fs.mkdirSync(caseStorageRoot, { recursive: true });
+    fs.mkdirSync(caseAppDataRoot, { recursive: true });
+    fs.mkdirSync(caseWorkspaceRoot, { recursive: true });
+
+    const service = createCodeGraphStudioService({
+      workspaceRoot: caseWorkspaceRoot,
+      storageRoot: caseStorageRoot,
+      getCapabilityRegistrationState: () =>
+        listCapabilityDefinitions().some((item) => item.id === "codebase_explore"),
+      onStateChanged: () => {
+        reconcileCodeGraphHarnessCapability();
+      },
+    });
+    setActiveCodeGraphStudioService(service);
+    initializeHarnessRuntime();
+
+    process.env.FAKE_SHUTDOWN_DELAY_MS = "300";
+    await service.saveConfig({
+      microAppEnabled: true,
+      agentCapabilityEnabled: true,
+      command: process.execPath,
+      startArgs: [fixturePath, "--mcp"],
+      versionProbeArgs: [fixturePath, "--version"],
+      telemetryProbeArgs: [fixturePath, "--telemetry-status"],
+      appDataRoot: caseAppDataRoot,
+      timeoutMs: 1000,
+    });
+
+    await service.start();
+    await service.health();
+    expect(listCapabilityDefinitions().map((item) => item.id)).toContain("codebase_explore");
+
+    const stopPromise = service.stop();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    expect(listCapabilityDefinitions().map((item) => item.id)).not.toContain("codebase_explore");
+    expect(service.getManagedCapabilityContext(caseWorkspaceRoot).ok).toBe(false);
+
+    const stopResult = await stopPromise;
+    expect(stopResult.report.capability.registered).toBe(false);
+    expect(stopResult.report.runtime.processAlive).toBe(false);
+  });
+
   it("keeps ready runtime on report refresh and clears capability after provider exit", async () => {
     const caseRoot = path.join(
       getTestArtifactDir("codegraph-studio-cases"),
