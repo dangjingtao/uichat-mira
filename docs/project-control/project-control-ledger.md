@@ -166,6 +166,7 @@ related:
 | [agent_v15_T06](tasks/agent_v15_T06-evidence-boundary.md) | `DONE` | `DONE` | Evidence 单一职责与显式回流节点；已接入显式 Evidence 回流节点并移除执行节点直接写入 |
 | [agent_v15_T07](tasks/agent_v15_T07-read-surface.md) | `DONE` | `DONE` | Read 公共工具面收敛；复审通过，公共面仅保留 `read_discover/read_open`，相关测试 160/160 通过 |
 | [agent_v15_T08](tasks/agent_v15_T08-strengthen-planner.md) | `DONE` | `DONE` | Planner 正向增强与主线收口；本地复审通过，核心回归 179/179，待 Mira PR 复审 |
+| [agent_v15_T08-R01-global-audit-remediation](reviews/agent_v15_T08-R01-global-audit-remediation.md) | `TODO` | `N/A` | T08 前置全局审计整改：清理死状态、收紧 Tool Exposure SSOT、统一 Evidence 后事实读取关系；完成并复审通过后再进入 T08 正向增强 |
 
 ## Core Tools Index
 
