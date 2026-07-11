@@ -32,6 +32,20 @@ const basePlan = {
   steps: [],
 };
 
+const getPlannerPayload = (plannerContext: string) => {
+  const messages = JSON.parse(plannerContext) as Array<{ role: string; content: string }>;
+  const userMessage = [...messages].reverse().find((message) => message.role === "user");
+  assert.ok(userMessage, "planner user payload should exist");
+  return JSON.parse(userMessage.content) as {
+    observationContext?: {
+      latestEvidenceSummary?: {
+        toolId?: string;
+        data?: Record<string, unknown>;
+      } | null;
+    };
+  };
+};
+
 const originalDatabaseUrl = process.env.DATABASE_URL;
 const testDbPath = createTimestampedTestArtifactPath(
   "db",
@@ -101,6 +115,38 @@ const readListTool = () =>
         path: { type: "string" },
       },
       additionalProperties: false,
+    },
+    workspaceBound: true,
+  });
+
+const readDiscoverTool = () =>
+  makeToolDefinition({
+    id: "read_discover",
+    domain: "read",
+    inputSchema: {
+      oneOf: [
+        {
+          type: "object",
+          required: ["mode", "path"],
+          additionalProperties: false,
+          properties: {
+            mode: { type: "string", enum: ["list"] },
+            path: { type: "string" },
+            maxResults: { type: "integer" },
+          },
+        },
+        {
+          type: "object",
+          required: ["mode", "query"],
+          additionalProperties: false,
+          properties: {
+            mode: { type: "string", enum: ["locate"] },
+            query: { type: "string" },
+            root: { type: "string" },
+            maxResults: { type: "integer" },
+          },
+        },
+      ],
     },
     workspaceBound: true,
   });
@@ -345,6 +391,91 @@ test("A3 selectedToolIds do not bypass planner or trigger ToolNode when planner 
     executionNodes.some((nodeId) => nodeId === "agent-tool-call-normalize"),
     false,
   );
+});
+
+test("read_discover flows through Evidence back to Planner without automatic read_open", async () => {
+  setupToolExposure("find workspace settings", [readDiscoverTool(), readOpenTool()]);
+  let plannerContext = "";
+  vi.spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementationOnce(async function* () {
+      yield '{"type":"use_tool","toolId":"read_discover","args":{"mode":"locate","query":"settings","maxResults":1},"reason":"Find candidate files first."}';
+    })
+    .mockImplementationOnce(async function* (messages) {
+      plannerContext = JSON.stringify(messages);
+      yield '{"type":"answer","reason":"The discovery evidence is enough to report candidates."}';
+    });
+  const executeSpy = vi
+    .spyOn(harnessInvocations, "executeHarnessInvocation")
+    .mockResolvedValue({
+      id: "invocation-discover",
+      toolId: "read_discover",
+      status: "completed",
+      result: {
+        type: "discover",
+        mode: "locate",
+        operation: "locate",
+        root: "workspace-root",
+        scope: ".",
+        query: "settings",
+        searchMode: "auto",
+        matches: [
+          { path: "docs/settings-1.md", matchType: "path" },
+          { path: "docs/settings-2.md", matchType: "path" },
+          { path: "docs/settings-3.md", matchType: "path" },
+          { path: "docs/settings-4.md", matchType: "path" },
+          { path: "docs/settings-5.md", matchType: "path" },
+          { path: "docs/settings-6.md", matchType: "path" },
+        ],
+        returnedCount: 6,
+        hasMore: true,
+        truncated: true,
+      },
+      startedAt: "2026-07-11T00:00:00.000Z",
+      finishedAt: "2026-07-11T00:00:01.000Z",
+    } as never);
+  vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke").mockResolvedValue(
+    "settings candidates discovered",
+  );
+
+  const result = await runBlackbox({
+    runId: "blackbox-read-discover-evidence",
+    question: "find workspace settings",
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.evidence.latestSummary?.toolId, "read_discover");
+  assert.equal(result.evidence.latestSummary?.data?.kind, "read_discover");
+  assert.equal(executeSpy.mock.calls.length, 1);
+  assert.equal(executeSpy.mock.calls.some((call) => call[0]?.toolId === "read_open"), false);
+  const plannerPayload = getPlannerPayload(plannerContext);
+  const latestEvidenceSummary = plannerPayload.observationContext?.latestEvidenceSummary;
+  assert.equal(latestEvidenceSummary?.toolId, "read_discover");
+  assert.deepEqual(latestEvidenceSummary?.data, {
+    kind: "read_discover",
+    mode: "locate",
+    operation: "locate",
+    root: "workspace-root",
+    query: "settings",
+    candidateCount: 6,
+    candidatePaths: [
+      "docs/settings-1.md",
+      "docs/settings-2.md",
+      "docs/settings-3.md",
+      "docs/settings-4.md",
+      "docs/settings-5.md",
+    ],
+    returnedCount: 6,
+    hasMore: true,
+    truncated: true,
+  });
+  assert.match(plannerContext, /read_discover/);
+  assert.match(result.evidence.latestSummary?.facts.join("\n") ?? "", /candidatePath=docs\/settings-5\.md/);
+  assert.equal(
+    (result.evidence.latestSummary?.facts.join("\n") ?? "").includes("docs/settings-6.md"),
+    false,
+  );
+  assert.match(result.evidence.latestSummary?.facts.join("\n") ?? "", /returnedCount=6/);
+  assert.match(result.evidence.latestSummary?.facts.join("\n") ?? "", /hasMore=true/);
 });
 
 test("A4 capability-like ids are rejected before Harness execution", async () => {

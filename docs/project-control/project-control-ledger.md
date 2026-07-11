@@ -164,7 +164,7 @@ related:
 | [agent_v15_T04](tasks/agent_v15_T04-remove-static-plan.md) | `DONE` | `DONE` | 移除静态 Plan 层与 AgentPlan 持久化状态；复审通过，T04 定向测试通过 |
 | [agent_v15_T05](tasks/agent_v15_T05-remove-shadow-deciders.md) | `DONE` | `DONE` | 移除 Shadow Deciders、桥接器与 Action Rewrite；复审通过，T05 定向测试 73/73 通过 |
 | [agent_v15_T06](tasks/agent_v15_T06-evidence-boundary.md) | `DONE` | `DONE` | Evidence 单一职责与显式回流节点；已接入显式 Evidence 回流节点并移除执行节点直接写入 |
-| [agent_v15_T07](tasks/agent_v15_T07-read-surface.md) | `TODO` | `TODO` | Read 公共工具面收敛；依赖 T02、T03 |
+| [agent_v15_T07](tasks/agent_v15_T07-read-surface.md) | `DONE` | `DONE` | Read 公共工具面收敛；复审通过，公共面仅保留 `read_discover/read_open`，相关测试 160/160 通过 |
 | [agent_v15_T08](tasks/agent_v15_T08-strengthen-planner.md) | `TODO` | `TODO` | Planner 正向决策能力强化；依赖 T05、T06、T07，最后合并 |
 
 ## Core Tools Index

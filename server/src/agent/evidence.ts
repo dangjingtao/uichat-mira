@@ -147,6 +147,72 @@ const summarizeToolResult = (
   }
 
   const type = typeof result.type === "string" ? result.type : undefined;
+  if (
+    type === "discover" &&
+    (result.operation === "list" || result.operation === "locate")
+  ) {
+    const candidates = result.operation === "list"
+      ? (Array.isArray(result.entries) ? result.entries.filter(isRecord).map((entry) =>
+          typeof entry.name === "string" ? entry.name : "unknown",
+        ) : [])
+      : (Array.isArray(result.matches) ? result.matches.filter(isRecord).map((match) =>
+          typeof match.path === "string" ? match.path : "unknown",
+        ) : []);
+    const returnedCount = typeof result.returnedCount === "number"
+      ? result.returnedCount
+      : candidates.length;
+    const totalCount = typeof result.totalCount === "number"
+      ? result.totalCount
+      : undefined;
+    const candidatePreview = candidates.slice(0, PREVIEW_ITEM_LIMIT);
+    const hasMore =
+      result.hasMore === true ||
+      (typeof totalCount === "number" && returnedCount < totalCount);
+    const truncated =
+      result.truncated === true ||
+      hasMore ||
+      (typeof totalCount === "number" && returnedCount < totalCount);
+    const path = typeof result.path === "string" ? result.path : undefined;
+    const root = typeof result.root === "string"
+      ? result.root
+      : typeof result.scope === "string" ? result.scope : undefined;
+    const query = typeof result.query === "string" ? result.query : undefined;
+    return baseSummary({
+      execution,
+      evidenceIndex,
+      actionTaken: `Discovered ${returnedCount} workspace candidate(s) using ${result.operation}.`,
+      facts: [
+        `toolId=${execution.toolId}`,
+        `operation=${result.operation}`,
+        ...(path ? [`path=${path}`] : []),
+        ...(root ? [`root=${root}`] : []),
+        ...(query ? [`query=${query}`] : []),
+        `candidateCount=${returnedCount}`,
+        `returnedCount=${returnedCount}`,
+        ...(typeof totalCount === "number" ? [`totalCount=${totalCount}`] : []),
+        `hasMore=${hasMore}`,
+        `truncated=${truncated}`,
+        ...candidatePreview.map((candidate) => `candidatePath=${candidate}`),
+      ],
+      ...(truncated ? { gaps: ["Discovery results are truncated; more candidates may exist."] } : {}),
+      status: truncated ? "truncated" : "completed",
+      data: {
+        kind: "read_discover",
+        mode: result.operation,
+        operation: result.operation,
+        ...(path ? { path } : {}),
+        ...(root ? { root } : {}),
+        ...(query ? { query } : {}),
+        candidateCount: returnedCount,
+        candidatePaths: candidatePreview,
+        returnedCount,
+        ...(typeof totalCount === "number" ? { totalCount } : {}),
+        hasMore,
+        truncated,
+      },
+    });
+  }
+
   if (type === "list" && typeof result.path === "string" && Array.isArray(result.entries)) {
     const entries = result.entries.filter(isRecord).map((entry) => ({
       name: typeof entry.name === "string" ? entry.name : "unknown",
@@ -155,7 +221,7 @@ const summarizeToolResult = (
     const entriesPreview = entries.slice(0, PREVIEW_ITEM_LIMIT).map((entry) =>
       `${entry.type === "directory" ? "[D]" : "[F]"} ${entry.name}`,
     );
-    const truncated = entries.length > PREVIEW_ITEM_LIMIT;
+    const truncated = result.truncated === true || entries.length > PREVIEW_ITEM_LIMIT;
     return baseSummary({
       execution,
       evidenceIndex,
@@ -171,7 +237,7 @@ const summarizeToolResult = (
       data: {
         kind: "read_list",
         path: result.path,
-        entryCount: entries.length,
+        entryCount: typeof result.totalCount === "number" ? result.totalCount : entries.length,
         fileCount: entries.filter((entry) => entry.type === "file").length,
         directoryCount: entries.filter((entry) => entry.type === "directory").length,
         entriesPreview,
@@ -217,7 +283,7 @@ const summarizeToolResult = (
       const rightPriority = /^(docs[\\/]|readme\.md$|agents\.md$)/iu.test(right.path) ? 0 : 1;
       return leftPriority - rightPriority || left.path.localeCompare(right.path);
     });
-    const truncated = matches.length > PREVIEW_ITEM_LIMIT;
+    const truncated = result.truncated === true || matches.length > PREVIEW_ITEM_LIMIT;
     return baseSummary({
       execution,
       evidenceIndex,

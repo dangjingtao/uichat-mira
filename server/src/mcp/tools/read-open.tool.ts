@@ -14,8 +14,19 @@ export const readOpenTool: McpToolImplementation = {
     inputSchema: {
       type: "object",
       required: ["path"],
+      additionalProperties: false,
       properties: {
         path: { type: "string" },
+        selection: {
+          type: "object",
+          additionalProperties: false,
+          required: ["kind", "start", "end"],
+          properties: {
+            kind: { type: "string", enum: ["lines", "range"] },
+            start: { type: "integer" },
+            end: { type: "integer" },
+          },
+        },
       },
     },
     outputSchema: {
@@ -40,6 +51,7 @@ export const readOpenTool: McpToolImplementation = {
     const result = await executeReadOpen({
       args: {
         path: pathValue,
+        ...(context.args.selection !== undefined ? { selection: context.args.selection } : {}),
       },
       environment: context.environment,
       pushEvent: context.pushEvent,

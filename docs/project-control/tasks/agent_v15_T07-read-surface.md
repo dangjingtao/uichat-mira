@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/project-control-ledger.md
-task_state: TODO
+task_state: DONE
 ---
 
 # Agent V1.5 T07：Read 公共工具面收敛
@@ -152,3 +152,10 @@ Planner 不可见：
 5. 实际执行的测试命令、原始结果与 typecheck 结果；
 6. 明确说明是否影响既有 Agent 主线黑盒；
 7. 所有测试源码与报告均须为 git tracked files，不接受只贴口头摘要。
+
+## Review Evidence
+
+- 2026-07-11 复审通过：Planner Read exposure 仅保留 `read_discover` 与 `read_open`；`read_list/read_locate/read_extract/read_slice/read` 保留为内部能力并被 agent_intent 过滤。
+- `read_discover` 使用 `list/locate` discriminated union 机械分派，不读取正文；`read_open` 支持 `lines/range` selection，并对非法或不支持 selection 明确失败。
+- capability/exposure/tool/schema/workspace/normalize/runtime 相关测试通过：`101/101` 与 `59/59`。
+- server typecheck 仍受既有 `server/src/microapps/codegraph/index.ts:543` 阻断；本次未修改 CodeGraph。

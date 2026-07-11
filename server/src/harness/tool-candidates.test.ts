@@ -6,6 +6,7 @@ import { resolveHarnessToolCandidatesForTurn } from "./tool-candidates.js";
 import { readListTool } from "../mcp/tools/read-list.tool.js";
 import { readLocateTool } from "../mcp/tools/read-locate.tool.js";
 import { readOpenTool } from "../mcp/tools/read-open.tool.js";
+import { readDiscoverTool } from "../mcp/tools/read-discover.tool.js";
 import { readTool } from "../mcp/tools/read.tool.js";
 import { readSliceTool } from "../mcp/tools/read-slice.tool.js";
 import { webSearchTool } from "../mcp/tools/web-search.tool.js";
@@ -78,7 +79,7 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
   });
 
   it("returns tool candidates and exposed tool ids without invocation payloads", async () => {
-    registerTools([readListTool, readLocateTool]);
+    registerTools([readDiscoverTool, readOpenTool]);
     vi.spyOn(embedding, "executeLocalEmbedding").mockResolvedValue({
       embeddingModel: "test-embedding",
       embeddingModelConfigId: "test-embedding-config",
@@ -109,15 +110,13 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
 
     expect(result.toolCandidates).toEqual([
       expect.objectContaining({
-        toolId: "read_list",
-        actionProfileId: "read_locate",
+        toolId: "read_discover",
       }),
       expect.objectContaining({
-        toolId: "read_locate",
-        actionProfileId: "read_locate",
+        toolId: "read_open",
       }),
     ]);
-    expect(result.toolExposure.exposedToolIds).toEqual(["read_list", "read_locate"]);
+    expect(result.toolExposure.exposedToolIds).toEqual(["read_discover", "read_open"]);
     expect(result).not.toHaveProperty("pendingToolCall");
   });
 
@@ -396,27 +395,27 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
        expectedPreferredToolIds: [],
     },
     {
-      label: "workspace directory listing prefers read_list",
+      label: "workspace discovery covers directory listing",
       query: "帮我看看工作区目录里有哪些文件夹",
       source: "agent_intent" as const,
-      tools: [readListTool, externalFakeTool],
-      rerankOrder: ["read_list"],
-      expectedExposedToolIds: ["read_list"],
+      tools: [readDiscoverTool, externalFakeTool],
+      rerankOrder: ["workspace_lookup"],
+      expectedExposedToolIds: ["read_discover"],
       expectedBlockedCapabilityIds: ["external_fake_tool"],
       expectedReasons: [EXTERNAL_HIDDEN_REASON],
-      expectedTopToolIds: ["read_list"],
+      expectedTopToolIds: ["read_discover"],
        expectedPreferredToolIds: [],
     },
     {
-      label: "workspace fuzzy lookup prefers read_locate",
+      label: "workspace discovery covers fuzzy lookup",
       query: "帮我找一下 settings 相关文件",
       source: "agent_intent" as const,
-      tools: [readLocateTool, externalFakeTool],
+      tools: [readDiscoverTool, externalFakeTool],
       rerankOrder: ["workspace_lookup"],
-      expectedExposedToolIds: ["read_locate"],
+      expectedExposedToolIds: ["read_discover"],
       expectedBlockedCapabilityIds: ["external_fake_tool"],
       expectedReasons: [EXTERNAL_HIDDEN_REASON],
-      expectedTopToolIds: ["read_locate"],
+      expectedTopToolIds: ["read_discover"],
        expectedPreferredToolIds: [],
     },
     {

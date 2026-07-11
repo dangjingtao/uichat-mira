@@ -64,6 +64,15 @@ Doc Type: current-contract
 - `web_search`
 - `terminal`
 
+### Planner Read 公共面
+
+Planner 的 Read 工具面固定为两个互斥合同：
+
+- `read_discover`：通过结构化 `mode: "list" | "locate"` 发现目录对象或定位候选目标，只返回候选、路径、类型和有限 preview，不打开正文。
+- `read_open`：打开已知路径，可选结构化 `selection`。当前支持 `kind: "lines"` 和 `kind: "range"`，二者均使用正数闭区间 `start/end`。
+
+`read_list`、`read_locate`、`read_extract`、`read_slice` 和兼容别名 `read` 仍是 Harness/runtime 内部能力，不进入 Planner `agent_intent` exposure。`read_discover` 的 mode 只做机械分派，不根据自然语言猜测分支；不支持的 selection 会明确失败。
+
 外部工具来自用户接入的 MCP server。
 
 它们不直接替代内置 capability。

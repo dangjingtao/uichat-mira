@@ -62,4 +62,29 @@ describe("read_open tool", () => {
 
     expect((result.result as { type: string }).type).toBe("open");
   });
+
+  it("opens a declared line selection", async () => {
+    fs.writeFileSync(path.join(tempRoot, "notes.log"), "one\ntwo\nthree");
+    const result = await readOpenTool.execute({
+      invocationId: "read-open-selection-1",
+      args: { path: "notes.log", selection: { kind: "lines", start: 2, end: 2 } },
+      signal: new AbortController().signal,
+      environment: createHarnessEnvironmentSnapshot(),
+      pushEvent() {},
+      addArtifact(artifact) { return { id: "artifact-1", ...artifact }; },
+    });
+    expect((result.result as { source: { text: string } }).source.text).toBe("two");
+    expect((result.result as { operation: string }).operation).toBe("extract");
+  });
+
+  it("rejects unsupported selection kinds", async () => {
+    await expect(readOpenTool.execute({
+      invocationId: "read-open-selection-2",
+      args: { path: "notes.log", selection: { kind: "pages", start: 1, end: 2 } },
+      signal: new AbortController().signal,
+      environment: createHarnessEnvironmentSnapshot(),
+      pushEvent() {},
+      addArtifact(artifact) { return { id: "artifact-1", ...artifact }; },
+    })).rejects.toThrow("selection.kind must be one of: lines, range");
+  });
 });

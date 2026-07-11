@@ -4,6 +4,7 @@ import { resolveHarnessToolExposure } from "./exposure.js";
 import { terminalSessionTool } from "../mcp/tools/terminal-session.tool.js";
 import { readTool } from "../mcp/tools/read.tool.js";
 import { readOpenTool } from "../mcp/tools/read-open.tool.js";
+import { readDiscoverTool } from "../mcp/tools/read-discover.tool.js";
 import { readListTool } from "../mcp/tools/read-list.tool.js";
 import { readLocateTool } from "../mcp/tools/read-locate.tool.js";
 import { readSliceTool } from "../mcp/tools/read-slice.tool.js";
@@ -352,24 +353,24 @@ describe("resolveHarnessToolExposure", () => {
        expectedReasons: ["External MCP capabilities are hidden unless explicitly enabled."],
     },
     {
-      label: "workspace directory listing exposes read_list",
+      label: "workspace discovery exposes read_discover",
       input: {
         source: "agent_intent" as const,
         query: "帮我看看工作区目录里有哪些文件夹",
       },
-      tools: [readListTool, externalFakeTool],
-      expectedExposed: ["read_list"],
+      tools: [readDiscoverTool, externalFakeTool],
+      expectedExposed: ["read_discover"],
       expectedBlocked: ["external_fake_tool"],
       expectedReasons: ["External MCP capabilities are hidden unless explicitly enabled."],
     },
     {
-      label: "workspace fuzzy search exposes read_locate",
+      label: "workspace discovery covers fuzzy lookup",
       input: {
         source: "agent_intent" as const,
         query: "帮我找一下 settings 相关文件",
       },
-      tools: [readLocateTool, externalFakeTool],
-      expectedExposed: ["read_locate"],
+      tools: [readDiscoverTool, externalFakeTool],
+      expectedExposed: ["read_discover"],
       expectedBlocked: ["external_fake_tool"],
       expectedReasons: ["External MCP capabilities are hidden unless explicitly enabled."],
     },
@@ -451,4 +452,20 @@ describe("resolveHarnessToolExposure", () => {
       }
     },
   );
+
+  it("exposes only the two public read contracts to Planner", () => {
+    registerCapability(readDiscoverTool);
+    registerCapability(readOpenTool);
+    registerCapability(readListTool);
+    registerCapability(readLocateTool);
+    registerCapability(readTool);
+    registerCapability(readSliceTool);
+
+    const decision = resolveHarnessToolExposure({ source: "agent_intent", query: "read workspace" });
+
+    expect(decision.exposedToolIds).toEqual(["read_discover", "read_open"]);
+    expect(decision.blockedCapabilityIds).toEqual(
+      expect.arrayContaining(["read_list", "read_locate", "read", "read_slice"]),
+    );
+  });
 });
