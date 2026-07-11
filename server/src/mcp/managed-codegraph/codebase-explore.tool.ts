@@ -49,11 +49,6 @@ const createCodebaseExploreRetrievalSummary = (input: {
         : []),
       ...documentsPreview.map((name) => `document=${name}`),
     ],
-    answerReadiness: {
-      canAnswer: false,
-      reason: "verified chunks are available for planner review",
-      missingInfo: ["planner must decide task completion based on task coverage"],
-    },
     data: {
       kind: "retrieval",
       query: input.retrieval.query,

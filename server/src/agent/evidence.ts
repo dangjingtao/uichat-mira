@@ -4,94 +4,64 @@ import type {
   AgentEvidenceSummary,
   AgentObservation,
   AgentRetrievalEvidence,
-  AgentTaskCoverageView,
   AgentToolExecutionResult,
-  CurrentTaskFrame,
 } from "./types";
-import {
-  normalizeTaskTargetPath,
-} from "./task-intent";
-import { reduceAgentCoverageState } from "./coverage-state";
 
-type EvidenceState = Pick<
-  {
-    goal?: { text: string };
-    messages?: Array<{ role: string; content: string }>;
-    observations?: AgentObservation[];
-    evidence?: AgentEvidencePayload;
-  },
-  "goal" | "messages" | "observations" | "evidence"
->;
+type EvidenceState = {
+  observations?: AgentObservation[];
+  evidence?: AgentEvidencePayload;
+};
 
 const PREVIEW_ITEM_LIMIT = 5;
 const TEXT_PREVIEW_LIMIT = 280;
 
-const DIRECTORY_OVERVIEW_TOKENS = [
-  "list",
-  "show",
-  "what's in",
-  "what is in",
-  "contents",
-  "under",
-  "inside",
-  "有哪些",
-  "有啥",
-  "有什么",
-  "列出",
-  "内容",
-  "看看",
-];
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
-const FILE_CONTENT_TOKENS = [
-  "open",
-  "read",
-  "content",
-  "contents",
-  "inside",
-  "详情",
-  "内容",
-  "打开",
-  "读取",
-  "阅读",
-  "查看",
-];
-const FILE_CONTENT_INTENT_PATTERNS = [
-  /\b(open|read|content|contents|inside)\b/i,
-  /详情|内容|打开|读取|阅读|查看/u,
-] as const;
+const preview = (value: string, limit = TEXT_PREVIEW_LIMIT) => {
+  const text = value.replace(/\s+/g, " ").trim();
+  return text.length > limit ? `${text.slice(0, limit).trimEnd()}...` : text;
+};
 
-const WEB_SEARCH_TOKENS = [
-  "search",
-  "search for",
-  "web",
-  "online",
-  "latest",
-  "news",
-  "联网",
-  "搜索",
-  "查一下",
-  "网上",
-  "最新",
-];
+const hasUnreadableTerminalText = (value: string) =>
+  /[\uFFFD�]|锟|\?{3,}/u.test(value);
 
-const COMMAND_TOKENS = [
-  "run",
-  "command",
-  "terminal",
-  "shell",
-  "execute",
-  "执行",
-  "命令",
-  "终端",
-  "运行",
-];
+const rawRef = (execution: AgentToolExecutionResult, evidenceIndex: number) => ({
+  evidenceIndex,
+  toolCallId: execution.toolCallId,
+  invocationId: execution.invocationId,
+});
 
-const WORKSPACE_MUTATION_TOOL_IDS = new Set([
-  "workspace_mutation",
-  "edit_file",
-]);
+const statusForExecution = (
+  execution: AgentToolExecutionResult,
+): AgentEvidenceSummary["status"] => {
+  if (execution.status === "awaiting_approval") return "blocked";
+  if (execution.status === "failed") return "failed";
+  return "completed";
+};
 
-const TERMINAL_GARBLED_TEXT_PATTERNS = [/�/u, /锟斤拷/u, /\?\?\?/u];
+const baseSummary = (input: {
+  execution: AgentToolExecutionResult;
+  evidenceIndex: number;
+  status?: AgentEvidenceSummary["status"];
+  actionTaken: string;
+  facts: string[];
+  gaps?: string[];
+  error?: string;
+  data?: unknown;
+}): AgentEvidenceSummary => ({
+  source: "tool",
+  status: input.status ?? statusForExecution(input.execution),
+  toolId: input.execution.toolId,
+  inputHash: input.execution.inputHash,
+  actionTaken: input.actionTaken,
+  keyFindings: input.facts,
+  facts: input.facts,
+  ...(input.gaps?.length ? { gaps: input.gaps } : {}),
+  ...(input.error ? { error: input.error } : {}),
+  ...(input.data ? { data: input.data as AgentEvidenceSummary["data"] } : {}),
+  rawRef: rawRef(input.execution, input.evidenceIndex),
+});
 
 export const getEvidencePayload = (state: EvidenceState): AgentEvidencePayload => ({
   observations: state.evidence?.observations ?? state.observations ?? [],
@@ -104,1337 +74,414 @@ export const getEvidencePayload = (state: EvidenceState): AgentEvidencePayload =
     state.evidence?.observations.at(-1)?.summary,
 });
 
-const normalizeIntentText = (value: string) => value.trim().toLowerCase();
-
-const includesAnyToken = (value: string, tokens: string[]) =>
-  tokens.some((token) => value.includes(token));
-
-const explicitlyRequestsFileContent = (value: string) =>
-  FILE_CONTENT_INTENT_PATTERNS.some((pattern) => pattern.test(value));
-
-const trimTextPreview = (value: string, limit = TEXT_PREVIEW_LIMIT) => {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  if (!normalized) {
-    return "";
-  }
-
-  return normalized.length > limit
-      ? `${normalized.slice(0, limit).trimEnd()}...`
-    : normalized;
-};
-
-const toEvidenceResolutionFinding = (
-  label: string,
-  value: AgentEvidenceResolution,
-) => `${label}=${value}`;
-
-const containsVisibleText = (value: string) => value.trim().length > 0;
-const containsNonAsciiText = (value: string) => /[^\x00-\x7F]/.test(value);
-
-const getTerminalUnreadableReason = (input: {
-  stdout: string;
-  stderr: string;
-  stdoutEncoding: string;
-  stderrEncoding: string;
-  binaryDetected: boolean;
-}) => {
-  if (input.binaryDetected) {
-    return "Terminal output contains binary data and cannot be treated as natural-language evidence.";
-  }
-
-  const combinedText = `${input.stdout}\n${input.stderr}`;
-  if (
-    input.stdoutEncoding === "unknown" ||
-    input.stderrEncoding === "unknown"
-  ) {
-    if (
-      containsVisibleText(combinedText) &&
-      containsNonAsciiText(combinedText)
-    ) {
-      return "Terminal output encoding could not be determined, so the text is not reliable enough to interpret.";
-    }
-  }
-
-  if (
-    TERMINAL_GARBLED_TEXT_PATTERNS.some((pattern) => pattern.test(combinedText))
-  ) {
-    return "Terminal output appears garbled, so the agent must not pretend it understood the text.";
-  }
-
-  return undefined;
-};
-
-const NOISY_WORKSPACE_ARTIFACT_PREFIXES = [
-  "release/",
-  "tauri/target/",
-  "node_modules/",
-  "server/logs/",
-  "desktop/dist/",
-  "dist/",
-  "build/",
-] as const;
-
-const isNoisyWorkspaceArtifactPath = (value: string) => {
-  const normalized = value.replace(/\\/g, "/").toLowerCase();
-  return NOISY_WORKSPACE_ARTIFACT_PREFIXES.some((prefix) => normalized.startsWith(prefix));
-};
-
-const isDocumentationLikePath = (value: string) => {
-  const normalized = value.replace(/\\/g, "/").toLowerCase();
-  return (
-    normalized === "agents.md" ||
-    normalized === "readme.md" ||
-    normalized.endsWith("/readme.md") ||
-    normalized.endsWith("/agents.md") ||
-    normalized.startsWith("docs/")
-  );
-};
-
-const scoreReadLocateMatch = (input: {
-  path: string;
-  matchType: string;
-}) => {
-  const segments = input.path.replace(/\\/g, "/").split("/").filter(Boolean).length;
-  return [
-    isNoisyWorkspaceArtifactPath(input.path) ? 0 : 1,
-    input.matchType === "content" ? 1 : 0,
-    isDocumentationLikePath(input.path) ? 1 : 0,
-    -segments,
-    input.path.length * -1,
-  ] as const;
-};
-
-const compareReadLocateMatchPriority = (
-  left: { path: string; matchType: string },
-  right: { path: string; matchType: string },
-) => {
-  const leftScore = scoreReadLocateMatch(left);
-  const rightScore = scoreReadLocateMatch(right);
-  for (let index = 0; index < leftScore.length; index += 1) {
-    if (leftScore[index] !== rightScore[index]) {
-      return rightScore[index] - leftScore[index];
-    }
-  }
-
-  return left.path.localeCompare(right.path);
-};
-
-const getLatestUserQuestion = (state: EvidenceState) => {
-  const latest = [...(state.messages ?? [])]
-    .reverse()
-    .find((message) => message.role === "user");
-  return latest?.content.trim() ?? state.goal?.text?.trim() ?? "";
-};
-
-const collectMutationResolvedTargets = (evidence: AgentEvidencePayload | undefined) => {
-  const targets = new Set<string>();
-
-  for (const execution of evidence?.toolExecutions ?? []) {
-    if (
-      execution.status === "failed" &&
-      execution.failureKind === "terminal" &&
-      WORKSPACE_MUTATION_TOOL_IDS.has(execution.toolId)
-    ) {
-      for (const target of collectCoveredTargetsFromExecutionArgs(execution.args)) {
-        if (target.length > 0) {
-          targets.add(target);
-        }
-      }
-      continue;
-    }
-
-    if (execution.status !== "completed" || !execution.summary?.data) {
-      continue;
-    }
-
-    const summaryData = execution.summary.data;
-    if (
-      summaryData.kind === "edit_file" &&
-      summaryData.changed &&
-      !summaryData.dryRun &&
-      typeof summaryData.targetPath === "string"
-    ) {
-      targets.add(normalizeTaskTargetPath(summaryData.targetPath));
-    }
-
-    if (
-      summaryData.kind === "workspace_mutation" &&
-      summaryData.changed &&
-      !summaryData.dryRun
-    ) {
-      if (typeof summaryData.targetPath === "string") {
-        targets.add(normalizeTaskTargetPath(summaryData.targetPath));
-      }
-      if (typeof summaryData.destinationPath === "string") {
-        targets.add(normalizeTaskTargetPath(summaryData.destinationPath));
-      }
-    }
-  }
-
-  return [...targets];
-};
-
-const collectCoveredTargetsFromSummary = (summary: AgentEvidenceSummary | undefined) => {
-  if (summary?.source !== "tool" || !summary.data) {
-    return [];
-  }
-
-  switch (summary.data.kind) {
-    case "read_locate":
-      return summary.data.matchedPaths.map((path) => normalizeTaskTargetPath(path));
-    case "read_open":
-    case "read_list":
-      return [normalizeTaskTargetPath(summary.data.path)];
-    case "workspace_mutation": {
-      const targets: string[] = [];
-      if (typeof summary.data.targetPath === "string") {
-        targets.push(normalizeTaskTargetPath(summary.data.targetPath));
-      }
-      if (typeof summary.data.destinationPath === "string") {
-        targets.push(normalizeTaskTargetPath(summary.data.destinationPath));
-      }
-      return targets;
-    }
-    case "edit_file":
-      return typeof summary.data.targetPath === "string"
-        ? [normalizeTaskTargetPath(summary.data.targetPath)]
-        : [];
-    default:
-      return [];
-  }
-};
-
-const collectCoveredTargetsFromExecutionArgs = (
-  args: AgentToolExecutionResult["args"] | undefined,
-) => {
-  const targets: string[] = [];
-  for (const key of ["path", "targetPath", "destinationPath"] as const) {
-    const value = args?.[key];
-    if (typeof value === "string" && value.trim().length > 0) {
-      targets.push(normalizeTaskTargetPath(value));
-    }
-  }
-
-  return targets;
-};
-
-const collectEvidenceCoveredTargets = (input: {
-  evidence?: AgentEvidencePayload;
-  latestSummary?: AgentEvidenceSummary;
-}) => {
-  const targets = new Set<string>();
-
-  for (const execution of input.evidence?.toolExecutions ?? []) {
-    if (execution.status !== "completed") {
-      continue;
-    }
-
-    for (const target of collectCoveredTargetsFromSummary(execution.summary)) {
-      if (target.length > 0) {
-        targets.add(target);
-      }
-    }
-
-    if (!execution.summary) {
-      for (const target of collectCoveredTargetsFromExecutionArgs(execution.args)) {
-        if (target.length > 0) {
-          targets.add(target);
-        }
-      }
-    }
-  }
-
-  for (const target of collectCoveredTargetsFromSummary(input.latestSummary)) {
-    if (target.length > 0) {
-      targets.add(target);
-    }
-  }
-
-  return [...targets];
-};
-
-const collectReadVerifiedTargets = (input: {
-  evidence?: AgentEvidencePayload;
-  latestSummary?: AgentEvidenceSummary;
-}) => {
-  const targets = new Set<string>();
-
-  const addSummaryTargets = (summary: AgentEvidenceSummary | undefined) => {
-    if (summary?.source !== "tool" || !summary.data) {
-      return;
-    }
-
-    if (
-      summary.data.kind === "read_list" ||
-      summary.data.kind === "read_open" ||
-      summary.data.kind === "read_locate"
-    ) {
-      for (const target of collectCoveredTargetsFromSummary(summary)) {
-        if (target.length > 0) {
-          targets.add(target);
-        }
-      }
-    }
-  };
-
-  for (const execution of input.evidence?.toolExecutions ?? []) {
-    if (execution.status !== "completed") {
-      continue;
-    }
-
-    addSummaryTargets(execution.summary);
-  }
-
-  addSummaryTargets(input.latestSummary);
-
-  return [...targets];
-};
-
-const collectReadOpenedTargets = (input: {
-  evidence?: AgentEvidencePayload;
-  latestSummary?: AgentEvidenceSummary;
-}) => {
-  const targets = new Set<string>();
-
-  const addSummaryTargets = (summary: AgentEvidenceSummary | undefined) => {
-    if (summary?.source !== "tool" || !summary.data) {
-      return;
-    }
-
-    if (summary.data.kind === "read_open") {
-      for (const target of collectCoveredTargetsFromSummary(summary)) {
-        if (target.length > 0) {
-          targets.add(target);
-        }
-      }
-    }
-  };
-
-  for (const execution of input.evidence?.toolExecutions ?? []) {
-    if (execution.status !== "completed") {
-      continue;
-    }
-
-    addSummaryTargets(execution.summary);
-  }
-
-  addSummaryTargets(input.latestSummary);
-
-  return [...targets];
-};
-
-export const getTaskCoverageView = (input: {
-  question?: string;
-  currentTaskFrame?: CurrentTaskFrame;
-  evidence?: AgentEvidencePayload;
-  latestSummary?: AgentEvidenceSummary;
-}): AgentTaskCoverageView => {
-  const state = reduceAgentCoverageState(input);
-
-  return {
-    requiredTargets: state.requiredTargets,
-    coveredTargets: state.coveredTargets,
-    pendingTargets: state.pendingTargets,
-    pendingActions: state.pendingActions,
-    blockedReason: state.blockedReason,
-    taskCompletable: state.taskCompletable,
-  };
-};
-
-const queryRequestsDirectoryOverview = (query: string) =>
-  includesAnyToken(normalizeIntentText(query), DIRECTORY_OVERVIEW_TOKENS);
-
-const queryRequestsFileContent = (query: string) => {
-  const normalized = normalizeIntentText(query);
-  if (includesAnyToken(normalized, FILE_CONTENT_TOKENS)) {
-    return true;
-  }
-
-  return /[\w-]+\.[a-z0-9]{1,12}\b/i.test(query);
-};
-
-const queryRequestsWebSearch = (query: string) =>
-  includesAnyToken(normalizeIntentText(query), WEB_SEARCH_TOKENS);
-
-const queryRequestsCommandResult = (query: string) =>
-  includesAnyToken(normalizeIntentText(query), COMMAND_TOKENS);
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === "object" && !Array.isArray(value);
-
-const unwrapResultRecord = (result: unknown) => {
-  if (!isRecord(result)) {
-    return null;
-  }
-
-  if (isRecord(result.result)) {
-    return {
-      value: result.result,
-      meta: result,
-    };
-  }
-
-  if (isRecord(result.payload)) {
-    return {
-      value: result.payload,
-      meta: result,
-    };
-  }
-
-  return {
-    value: result,
-    meta: result,
-  };
-};
-
-const toObservationSummaryStatus = (
-  status: AgentObservation["status"],
-): AgentEvidenceSummary["status"] => {
-  switch (status) {
-    case "ok":
-      return "completed";
-    case "partial":
-      return "partial";
-    case "failed":
-      return "failed";
-    case "blocked":
-      return "blocked";
-  }
-};
-
 export const createObservationEvidenceSummary = (input: {
   observation: AgentObservation;
   evidenceIndex: number;
 }): AgentEvidenceSummary => ({
   source: "observation",
-  status: toObservationSummaryStatus(input.observation.status),
+  status:
+    input.observation.status === "ok"
+      ? "completed"
+      : input.observation.status === "partial"
+        ? "partial"
+        : input.observation.status,
   actionTaken: `Recorded observation for ${input.observation.stepId}.`,
-  keyFindings: input.observation.facts.slice(0, 3),
-  answerReadiness: {
-    canAnswer: false,
-    reason: "Observation evidence alone does not satisfy the answer stop rule.",
-    missingInfo: ["grounded retrieval or tool result"],
-  },
+  keyFindings: input.observation.facts.slice(0, PREVIEW_ITEM_LIMIT),
+  facts: input.observation.facts.slice(0, PREVIEW_ITEM_LIMIT),
+  ...(input.observation.errorMessage
+    ? { error: input.observation.errorMessage }
+    : {}),
   data: {
     kind: "observation",
     stepId: input.observation.stepId,
-    factsPreview: input.observation.facts.slice(0, 3),
+    factsPreview: input.observation.facts.slice(0, PREVIEW_ITEM_LIMIT),
   },
-  rawRef: {
-    evidenceIndex: input.evidenceIndex,
-  },
+  rawRef: { evidenceIndex: input.evidenceIndex },
 });
 
 export const createRetrievalEvidenceSummary = (input: {
   retrieval: AgentRetrievalEvidence;
-  question: string;
+  question?: string;
   evidenceIndex: number;
 }): AgentEvidenceSummary => {
   const documentsPreview = input.retrieval.chunks
     .slice(0, PREVIEW_ITEM_LIMIT)
     .map((chunk) => chunk.documentName);
-  const canAnswer = input.retrieval.chunkCount > 0;
-
+  const facts = [
+    `query=${input.retrieval.query}`,
+    `chunkCount=${input.retrieval.chunkCount}`,
+    ...documentsPreview.map((name) => `document=${name}`),
+  ];
   return {
     source: "retrieval",
-    status: "completed",
-    actionTaken: `Retrieved ${input.retrieval.chunkCount} knowledge chunk(s) for query "${input.retrieval.query}".`,
-    keyFindings:
-      input.retrieval.chunkCount > 0
-        ? [
-            `query=${input.retrieval.query}`,
-            `chunkCount=${input.retrieval.chunkCount}`,
-            ...documentsPreview.map((name) => `document=${name}`),
-          ]
-        : [`query=${input.retrieval.query}`, "chunkCount=0"],
-    answerReadiness: canAnswer
-      ? {
-          canAnswer: true,
-          reason: "Retrieved knowledge evidence is available for answer generation.",
-        }
-      : {
-          canAnswer: false,
-          reason: "Retrieval returned no knowledge chunks.",
-          missingInfo: [`more evidence for "${input.question}"`],
-        },
+    status: input.retrieval.chunkCount > 0 ? "completed" : "partial",
+    actionTaken: `Retrieved ${input.retrieval.chunkCount} knowledge chunk(s).`,
+    keyFindings: facts,
+    facts,
+    ...(input.retrieval.chunkCount === 0
+      ? { gaps: ["No retrieval chunks were returned."] }
+      : {}),
     data: {
       kind: "retrieval",
       query: input.retrieval.query,
       chunkCount: input.retrieval.chunkCount,
       documentsPreview,
     },
-    rawRef: {
-      evidenceIndex: input.evidenceIndex,
-    },
+    rawRef: { evidenceIndex: input.evidenceIndex },
   };
 };
 
-const createReadListSummary = (input: {
-  question: string;
-  execution: AgentToolExecutionResult;
-  evidenceIndex: number;
-}): AgentEvidenceSummary | null => {
-  const result = input.execution.result;
-  if (!result || typeof result !== "object") {
-    return null;
+const summarizeToolResult = (
+  execution: AgentToolExecutionResult,
+  evidenceIndex: number,
+): AgentEvidenceSummary => {
+  const result = execution.result;
+  if (!isRecord(result)) {
+    return baseSummary({
+      execution,
+      evidenceIndex,
+      actionTaken: `${execution.toolId} completed.`,
+      facts: [`toolId=${execution.toolId}`, `status=${execution.status}`],
+      gaps: ["The tool returned no structured result."],
+    });
   }
 
-  const value = result as Record<string, unknown>;
-  if (value.type !== "list" || typeof value.path !== "string" || !Array.isArray(value.entries)) {
-    return null;
-  }
-
-  const entries = value.entries
-    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object")
-    .map((entry) => ({
+  const type = typeof result.type === "string" ? result.type : undefined;
+  if (type === "list" && typeof result.path === "string" && Array.isArray(result.entries)) {
+    const entries = result.entries.filter(isRecord).map((entry) => ({
       name: typeof entry.name === "string" ? entry.name : "unknown",
       type: entry.type === "directory" ? "directory" : "file",
     }));
-  const entryCount = entries.length;
-  const fileCount = entries.filter((entry) => entry.type === "file").length;
-  const directoryCount = entries.filter((entry) => entry.type === "directory").length;
-  const entriesPreview = entries
-    .slice(0, PREVIEW_ITEM_LIMIT)
-    .map((entry) => `${entry.type === "directory" ? "[D]" : "[F]"} ${entry.name}`);
-  const truncated = entryCount > PREVIEW_ITEM_LIMIT;
-  const canAnswerDirectoryQuestion =
-    queryRequestsDirectoryOverview(input.question) &&
-    !queryRequestsFileContent(input.question);
-
-  return {
-    source: "tool",
-    status: truncated ? "truncated" : "completed",
-    toolId: input.execution.toolId,
-    inputHash: input.execution.inputHash,
-    actionTaken: `Listed workspace directory ${value.path}.`,
-    keyFindings: [
-      `entryCount=${entryCount}`,
-      `fileCount=${fileCount}`,
-      `directoryCount=${directoryCount}`,
-      ...entriesPreview,
-    ],
-    answerReadiness: canAnswerDirectoryQuestion
-      ? {
-          canAnswer: true,
-          reason: "Directory listing is sufficient for the user's workspace overview question.",
-        }
-      : {
-          canAnswer: false,
-          reason: "Directory listing alone does not satisfy a file-content question.",
-          missingInfo: ["target file content or a narrower path"],
-        },
-    data: {
-      kind: "read_list",
-      path: value.path,
-      entryCount,
-      fileCount,
-      directoryCount,
-      entriesPreview,
-      truncated,
-      canAnswerDirectoryQuestion,
-    },
-    rawRef: {
-      evidenceIndex: input.evidenceIndex,
-      toolCallId: input.execution.toolCallId,
-      invocationId: input.execution.invocationId,
-    },
-  };
-};
-
-const createReadOpenSummary = (input: {
-  execution: AgentToolExecutionResult;
-  evidenceIndex: number;
-}): AgentEvidenceSummary | null => {
-  const result = input.execution.result;
-  if (!result || typeof result !== "object") {
-    return null;
-  }
-
-  const value = result as Record<string, unknown>;
-  const source =
-    value.type === "open" && value.source && typeof value.source === "object"
-      ? (value.source as Record<string, unknown>)
-      : null;
-  if (value.type !== "open" || typeof value.path !== "string" || !source) {
-    return null;
-  }
-
-  const text = typeof source.text === "string" ? source.text : "";
-  const contentPreview = trimTextPreview(text);
-  const contentLength = text.length;
-  const truncated = contentPreview.length < contentLength;
-  const keySections = text
-    .split(/\r?\n+/)
-    .map((line) => line.trim())
-    .filter((line) => /^#{1,6}\s+/.test(line))
-    .slice(0, PREVIEW_ITEM_LIMIT)
-    .map((line) => line.replace(/^#{1,6}\s+/, ""));
-  const canAnswerFileQuestion = contentLength > 0;
-
-  return {
-    source: "tool",
-    status: truncated ? "truncated" : "completed",
-    toolId: input.execution.toolId,
-    inputHash: input.execution.inputHash,
-    actionTaken: `Opened file ${value.path}.`,
-    keyFindings: [
-      `contentLength=${contentLength}`,
-      ...(contentPreview ? [contentPreview] : []),
-    ],
-    answerReadiness: canAnswerFileQuestion
-      ? {
-          canAnswer: true,
-          reason: "Opened file content is available for answer generation.",
-        }
-      : {
-          canAnswer: false,
-          reason: "The opened file returned no usable content preview.",
-          missingInfo: [`usable content from ${value.path}`],
-        },
-    data: {
-      kind: "read_open",
-      path: value.path,
-      contentPreview,
-      contentLength,
-      truncated,
-      ...(keySections.length > 0 ? { keySections } : {}),
-      canAnswerFileQuestion,
-    },
-    rawRef: {
-      evidenceIndex: input.evidenceIndex,
-      toolCallId: input.execution.toolCallId,
-      invocationId: input.execution.invocationId,
-    },
-  };
-};
-
-const createReadLocateSummary = (input: {
-  question: string;
-  execution: AgentToolExecutionResult;
-  evidenceIndex: number;
-}): AgentEvidenceSummary | null => {
-  const result = input.execution.result;
-  if (!result || typeof result !== "object") {
-    return null;
-  }
-
-  const value = result as Record<string, unknown>;
-  if (
-    value.type !== "locate" ||
-    typeof value.scope !== "string" ||
-    typeof value.query !== "string" ||
-    !Array.isArray(value.matches)
-  ) {
-    return null;
-  }
-
-  const matches = value.matches
-    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object")
-    .map((entry) => {
-      const path = typeof entry.path === "string" ? entry.path : "unknown";
-      const matchType = entry.matchType === "content" ? "content" : "path";
-      const preview =
-        typeof entry.preview === "string" && entry.preview.trim()
-          ? trimTextPreview(entry.preview, 120)
-          : "";
-      return { path, matchType, preview };
-    })
-    .sort(compareReadLocateMatchPriority);
-  const matchCount = matches.length;
-  const matchedPaths = matches.map((match) => match.path);
-  const matchesPreview = matches
-    .slice(0, PREVIEW_ITEM_LIMIT)
-    .map((match) =>
-      match.preview
-        ? `[${match.matchType}] ${match.path}: ${match.preview}`
-        : `[${match.matchType}] ${match.path}`,
+    const entriesPreview = entries.slice(0, PREVIEW_ITEM_LIMIT).map((entry) =>
+      `${entry.type === "directory" ? "[D]" : "[F]"} ${entry.name}`,
     );
-  const truncated = matchCount > PREVIEW_ITEM_LIMIT;
-  const canAnswerLocateQuestion =
-    matchCount > 0 && !queryRequestsFileContent(input.question);
-
-  return {
-    source: "tool",
-    status: truncated ? "truncated" : "completed",
-    toolId: input.execution.toolId,
-    inputHash: input.execution.inputHash,
-    actionTaken: `Located ${matchCount} workspace match(es) for "${value.query}".`,
-    keyFindings:
-      matchCount > 0
-        ? [`matchCount=${matchCount}`, ...matchesPreview]
-        : [`matchCount=0`, `query=${value.query}`],
-    answerReadiness: canAnswerLocateQuestion
-      ? {
-          canAnswer: true,
-          reason: "Workspace locate results are available for answer generation.",
-        }
-      : {
-          canAnswer: false,
-          reason:
-            matchCount === 0
-              ? "Workspace locate returned no matches."
-              : "Locate results found targets, but the question still needs file content.",
-          missingInfo:
-            matchCount === 0
-              ? [`workspace matches for "${value.query}"`]
-              : ["opened file content for the matched workspace target"],
-        },
-    data: {
-      kind: "read_locate",
-      scope: value.scope,
-      query: value.query,
-      searchMode:
-        value.searchMode === "path" || value.searchMode === "content"
-          ? value.searchMode
-          : "auto",
-      matchCount,
-      matchedPaths,
-      matchesPreview,
-      truncated,
-      canAnswerLocateQuestion,
-    },
-    rawRef: {
-      evidenceIndex: input.evidenceIndex,
-      toolCallId: input.execution.toolCallId,
-      invocationId: input.execution.invocationId,
-    },
-  };
-};
-
-const createWebSearchSummary = (input: {
-  question: string;
-  execution: AgentToolExecutionResult;
-  evidenceIndex: number;
-}): AgentEvidenceSummary | null => {
-  const result = input.execution.result;
-  if (!result || typeof result !== "object") {
-    return null;
+    const truncated = entries.length > PREVIEW_ITEM_LIMIT;
+    return baseSummary({
+      execution,
+      evidenceIndex,
+      actionTaken: `Listed workspace directory ${result.path}.`,
+      facts: [
+        `entryCount=${entries.length}`,
+        `fileCount=${entries.filter((entry) => entry.type === "file").length}`,
+        `directoryCount=${entries.filter((entry) => entry.type === "directory").length}`,
+        ...entriesPreview,
+      ],
+      ...(truncated ? { gaps: ["Directory listing is truncated."] } : {}),
+      status: truncated ? "truncated" : "completed",
+      data: {
+        kind: "read_list",
+        path: result.path,
+        entryCount: entries.length,
+        fileCount: entries.filter((entry) => entry.type === "file").length,
+        directoryCount: entries.filter((entry) => entry.type === "directory").length,
+        entriesPreview,
+        truncated,
+      },
+    });
   }
 
-  const value = result as Record<string, unknown>;
-  if (typeof value.query !== "string" || !Array.isArray(value.results)) {
-    return null;
+  if (type === "open" && typeof result.path === "string" && isRecord(result.source)) {
+    const text = typeof result.source.text === "string" ? result.source.text : "";
+    const contentPreview = preview(text);
+    const truncated = contentPreview.length < text.length;
+    return baseSummary({
+      execution,
+      evidenceIndex,
+      actionTaken: `Opened file ${result.path}.`,
+      facts: [`contentLength=${text.length}`, ...(contentPreview ? [contentPreview] : [])],
+      ...(truncated ? { gaps: ["File content is truncated."] } : {}),
+      status: truncated ? "truncated" : "completed",
+      data: {
+        kind: "read_open",
+        path: result.path,
+        contentPreview,
+        contentLength: text.length,
+        truncated,
+        keySections: text
+          .split(/\r?\n+/)
+          .map((line) => line.trim())
+          .filter((line) => /^#{1,6}\s+/.test(line))
+          .slice(0, PREVIEW_ITEM_LIMIT)
+          .map((line) => line.replace(/^#{1,6}\s+/, "")),
+      },
+    });
   }
 
-  const results = value.results
-    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object");
-  const resultCount = results.length;
-  const topFindings = results.slice(0, PREVIEW_ITEM_LIMIT).map((entry) =>
-    trimTextPreview(
-      [entry.title, entry.snippet].filter((part) => typeof part === "string" && part.trim()).join(": "),
-      180,
-    ),
-  );
-  const citationsPreview = results.slice(0, PREVIEW_ITEM_LIMIT).map((entry) => ({
-    title: typeof entry.title === "string" ? entry.title : "",
-    link: typeof entry.link === "string" ? entry.link : "",
-  }));
-  const canAnswerSearchQuestion = resultCount > 0;
-
-  return {
-    source: "tool",
-    status: "completed",
-    toolId: input.execution.toolId,
-    inputHash: input.execution.inputHash,
-    actionTaken: `Searched the web for "${value.query}".`,
-    keyFindings:
-      resultCount > 0
-        ? [`resultCount=${resultCount}`, ...topFindings]
-        : [`resultCount=0`, `query=${value.query}`],
-    answerReadiness: canAnswerSearchQuestion
-      ? {
-          canAnswer: true,
-          reason: "Web search returned results that can ground the answer.",
-        }
-      : {
-          canAnswer: false,
-          reason: "Web search returned no results.",
-          missingInfo: [
-            queryRequestsWebSearch(input.question)
-              ? `more web results for "${value.query}"`
-              : `grounded evidence for "${input.question}"`,
-          ],
-        },
-    data: {
-      kind: "web_search",
-      query: value.query,
-      resultCount,
-      topFindings,
-      citationsPreview,
-      canAnswerSearchQuestion,
-    },
-    rawRef: {
-      evidenceIndex: input.evidenceIndex,
-      toolCallId: input.execution.toolCallId,
-      invocationId: input.execution.invocationId,
-    },
-  };
-};
-
-const createEditFileSummary = (input: {
-  execution: AgentToolExecutionResult;
-  evidenceIndex: number;
-}): AgentEvidenceSummary | null => {
-  const unwrapped = unwrapResultRecord(input.execution.result);
-  if (!unwrapped) {
-    return null;
+  if (type === "locate" && typeof result.query === "string" && Array.isArray(result.matches)) {
+    const matches = result.matches.filter(isRecord).map((match) => ({
+      path: typeof match.path === "string" ? match.path : "unknown",
+      matchType: match.matchType === "content" ? "content" : "path",
+      preview: typeof match.preview === "string" ? preview(match.preview, 120) : "",
+    })).sort((left, right) => {
+      const leftPriority = /^(docs[\\/]|readme\.md$|agents\.md$)/iu.test(left.path) ? 0 : 1;
+      const rightPriority = /^(docs[\\/]|readme\.md$|agents\.md$)/iu.test(right.path) ? 0 : 1;
+      return leftPriority - rightPriority || left.path.localeCompare(right.path);
+    });
+    const truncated = matches.length > PREVIEW_ITEM_LIMIT;
+    return baseSummary({
+      execution,
+      evidenceIndex,
+      actionTaken: `Located ${matches.length} workspace match(es) for "${result.query}".`,
+      facts: [
+        `matchCount=${matches.length}`,
+        ...matches.slice(0, PREVIEW_ITEM_LIMIT).map((match) =>
+          match.preview ? `[${match.matchType}] ${match.path}: ${match.preview}` : `[${match.matchType}] ${match.path}`,
+        ),
+      ],
+      ...(matches.length === 0 ? { gaps: ["No workspace matches were returned."] } : {}),
+      ...(truncated ? { status: "truncated" } : {}),
+      data: {
+        kind: "read_locate",
+        scope: typeof result.scope === "string" ? result.scope : "workspace",
+        query: result.query,
+        searchMode:
+          result.searchMode === "path" || result.searchMode === "content"
+            ? result.searchMode
+            : "auto",
+        matchCount: matches.length,
+        matchedPaths: matches.map((match) => match.path),
+        matchesPreview: matches.slice(0, PREVIEW_ITEM_LIMIT).map((match) =>
+          match.preview ? `[${match.matchType}] ${match.path}: ${match.preview}` : `[${match.matchType}] ${match.path}`,
+        ),
+        truncated,
+      },
+    });
   }
 
-  const { value, meta } = unwrapped;
+  const unwrapped = isRecord(result.result) ? result.result : result;
   if (
-    typeof value.path !== "string" ||
-    (value.operation !== "write_file" && value.operation !== "replace_block")
+    isRecord(unwrapped) &&
+    typeof unwrapped.path === "string" &&
+    (unwrapped.operation === "write_file" || unwrapped.operation === "replace_block")
   ) {
-    return null;
+    const dryRun = unwrapped.dryRun === true;
+    const operation = unwrapped.operation === "replace_block" ? "replace" : "create";
+    const meta = isRecord(result.result) ? result : {};
+    return baseSummary({
+      execution,
+      evidenceIndex,
+      actionTaken: dryRun
+        ? `Prepared a dry-run edit for workspace file ${unwrapped.path}.`
+        : `Changed workspace file ${unwrapped.path}.`,
+      facts: [
+        `operation=${operation}`,
+        `targetPath=${unwrapped.path}`,
+        `dryRun=${dryRun}`,
+        `changed=${!dryRun}`,
+      ],
+      data: {
+        kind: "edit_file",
+        operation,
+        targetPath: unwrapped.path,
+        dryRun,
+        changed: !dryRun,
+        created: !dryRun && operation === "create",
+        replaced: !dryRun && operation === "replace",
+        ...(typeof meta.actionProfileId === "string" ? { actionProfileId: meta.actionProfileId } : {}),
+        ...(typeof meta.runtimeToolId === "string" ? { runtimeToolId: meta.runtimeToolId } : {}),
+      },
+    });
   }
 
-  const dryRun = value.dryRun === true;
-  const actionProfileId =
-    typeof meta.actionProfileId === "string" ? meta.actionProfileId : undefined;
-  const runtimeToolId =
-    typeof meta.runtimeToolId === "string"
-      ? meta.runtimeToolId
-      : input.execution.toolId;
-  const operation =
-    value.operation === "replace_block"
-      ? "replace"
-      : actionProfileId === "edit_overwrite_file"
-        ? "overwrite"
-        : actionProfileId === "edit_create_file"
-          ? "create"
-          : dryRun
-            ? "unknown"
-            : "create";
-  const changed = !dryRun;
-  const created = changed && operation === "create";
-  const replaced =
-    changed && (operation === "replace" || operation === "overwrite");
-  const canAnswerMutationQuestion = true;
-  const actionTaken = dryRun
-    ? operation === "overwrite"
-      ? `Prepared a dry-run preview to overwrite workspace file ${value.path}.`
-      : operation === "replace"
-        ? `Prepared a dry-run preview to replace content in workspace file ${value.path}.`
-        : operation === "create"
-          ? `Prepared a dry-run preview to create workspace file ${value.path}.`
-          : `Prepared a dry-run preview edit for workspace file ${value.path}.`
-    : operation === "replace"
-      ? `Replaced content in workspace file ${value.path}.`
-      : operation === "overwrite"
-        ? `Overwrote workspace file ${value.path}.`
-        : `Created workspace file ${value.path}.`;
-
-  return {
-    source: "tool",
-    status: "completed",
-    toolId: input.execution.toolId,
-    inputHash: input.execution.inputHash,
-    actionTaken,
-    keyFindings: [
-      `operation=${operation}`,
-      `targetPath=${value.path}`,
-      `dryRun=${dryRun}`,
-      `changed=${changed}`,
-      ...(created ? ["created=true"] : []),
-      ...(replaced ? ["replaced=true"] : []),
-      ...(typeof value.bytes === "number" ? [`bytes=${value.bytes}`] : []),
-      ...(actionProfileId ? [`actionProfileId=${actionProfileId}`] : []),
-      ...(runtimeToolId ? [`runtimeToolId=${runtimeToolId}`] : []),
-    ],
-    answerReadiness: {
-      canAnswer: canAnswerMutationQuestion,
-      reason: dryRun
-        ? "This edit result is only a preview, so the answer must describe the proposed change without claiming the file was modified."
-        : "This edit result completed and can ground a file-mutation answer.",
-    },
-    data: {
-      kind: "edit_file",
-      operation,
-      targetPath: value.path,
-      dryRun,
-      changed,
-      created,
-      replaced,
-      deleted: false,
-      runtimeToolId,
-      actionProfileId,
-      canAnswerMutationQuestion,
-    },
-    rawRef: {
-      evidenceIndex: input.evidenceIndex,
-      toolCallId: input.execution.toolCallId,
-      invocationId: input.execution.invocationId,
-    },
-  };
-};
-
-const createWorkspaceMutationSummary = (input: {
-  execution: AgentToolExecutionResult;
-  evidenceIndex: number;
-}): AgentEvidenceSummary | null => {
-  const unwrapped = unwrapResultRecord(input.execution.result);
-  if (!unwrapped) {
-    return null;
-  }
-
-  const { value, meta } = unwrapped;
   if (
-    typeof value.targetPath !== "string" ||
-    (value.operation !== "write" &&
-      value.operation !== "delete" &&
-      value.operation !== "move")
+    isRecord(unwrapped) &&
+    typeof unwrapped.targetPath === "string" &&
+    (unwrapped.operation === "write" ||
+      unwrapped.operation === "delete" ||
+      unwrapped.operation === "move")
   ) {
-    return null;
+    const dryRun = unwrapped.dryRun === true;
+    const operation = unwrapped.operation === "write"
+      ? unwrapped.overwrite === true ? "overwrite" : "create"
+      : unwrapped.operation;
+    return baseSummary({
+      execution,
+      evidenceIndex,
+      actionTaken: dryRun
+        ? `Prepared a dry-run workspace mutation for ${unwrapped.targetPath}.`
+        : `Applied workspace mutation to ${unwrapped.targetPath}.`,
+      facts: [
+        `operation=${operation}`,
+        `targetPath=${unwrapped.targetPath}`,
+        `dryRun=${dryRun}`,
+        `changed=${!dryRun}`,
+      ],
+      data: {
+        kind: "workspace_mutation",
+        operation,
+        targetPath: unwrapped.targetPath,
+        ...(typeof unwrapped.destinationPath === "string"
+          ? { destinationPath: unwrapped.destinationPath }
+          : {}),
+        dryRun,
+        changed: !dryRun,
+        created: !dryRun && operation === "create",
+        replaced: !dryRun && operation === "overwrite",
+        deleted: !dryRun && operation === "delete",
+        moved: !dryRun && operation === "move",
+      },
+    });
   }
 
-  const dryRun = value.dryRun === true;
-  const actionProfileId =
-    typeof meta.actionProfileId === "string" ? meta.actionProfileId : undefined;
-  const runtimeToolId =
-    typeof meta.runtimeToolId === "string"
-      ? meta.runtimeToolId
-      : input.execution.toolId;
-  const operation =
-    value.operation === "delete"
-      ? "delete"
-      : value.operation === "move"
-        ? "move"
-        : value.overwrite === true
-          ? "overwrite"
-          : "create";
-  const changed = !dryRun;
-  const created = changed && operation === "create";
-  const replaced = changed && operation === "overwrite";
-  const deleted = changed && operation === "delete";
-  const moved = changed && operation === "move";
-  const canAnswerMutationQuestion = true;
-  const destinationPath =
-    typeof value.destinationPath === "string" ? value.destinationPath : undefined;
-
-  let actionTaken: string;
-  if (dryRun) {
-    if (operation === "delete") {
-      actionTaken = `Prepared a dry-run preview to delete workspace target ${value.targetPath}.`;
-    } else if (operation === "move" && destinationPath) {
-      actionTaken = `Prepared a dry-run preview to move workspace target ${value.targetPath} to ${destinationPath}.`;
-    } else if (operation === "overwrite") {
-      actionTaken = `Prepared a dry-run preview to overwrite workspace target ${value.targetPath}.`;
-    } else {
-      actionTaken = `Prepared a dry-run preview to create workspace target ${value.targetPath}.`;
-    }
-  } else if (operation === "delete") {
-    actionTaken = `Deleted workspace target ${value.targetPath}.`;
-  } else if (operation === "move" && destinationPath) {
-    actionTaken = `Moved workspace target ${value.targetPath} to ${destinationPath}.`;
-  } else if (operation === "overwrite") {
-    actionTaken = `Overwrote workspace target ${value.targetPath}.`;
-  } else {
-    actionTaken = `Created workspace target ${value.targetPath}.`;
+  if (typeof result.query === "string" && Array.isArray(result.results)) {
+    const results = result.results.filter(isRecord);
+    const topFindings = results.slice(0, PREVIEW_ITEM_LIMIT).map((item) =>
+      preview([item.title, item.snippet].filter((part) => typeof part === "string").join(": "), 180),
+    );
+    return baseSummary({
+      execution,
+      evidenceIndex,
+      actionTaken: `Searched the web for "${result.query}".`,
+      facts: [`resultCount=${results.length}`, ...topFindings],
+      ...(results.length === 0 ? { gaps: ["No web results were returned."] } : {}),
+      data: {
+        kind: "web_search",
+        query: result.query,
+        resultCount: results.length,
+        topFindings,
+        citationsPreview: results.slice(0, PREVIEW_ITEM_LIMIT).map((item) => ({
+          title: typeof item.title === "string" ? item.title : "",
+          link: typeof item.link === "string" ? item.link : "",
+        })),
+      },
+    });
   }
 
-  return {
-    source: "tool",
-    status: "completed",
-    toolId: input.execution.toolId,
-    inputHash: input.execution.inputHash,
-    actionTaken,
-    keyFindings: [
-      `operation=${operation}`,
-      `targetPath=${value.targetPath}`,
-      `dryRun=${dryRun}`,
-      `changed=${changed}`,
-      ...(created ? ["created=true"] : []),
-      ...(replaced ? ["replaced=true"] : []),
-      ...(deleted ? ["deleted=true"] : []),
-      ...(moved ? ["moved=true"] : []),
-      ...(destinationPath ? [`destinationPath=${destinationPath}`] : []),
-      ...(typeof value.bytes === "number" ? [`bytes=${value.bytes}`] : []),
-      ...(actionProfileId ? [`actionProfileId=${actionProfileId}`] : []),
-      ...(runtimeToolId ? [`runtimeToolId=${runtimeToolId}`] : []),
-    ],
-    answerReadiness: {
-      canAnswer: canAnswerMutationQuestion,
-      reason: dryRun
-        ? "This workspace mutation result is only a preview, so the answer must not claim the target was already changed."
-        : "This workspace mutation completed and can ground a mutation answer.",
-    },
-    data: {
-      kind: "workspace_mutation",
-      operation,
-      targetPath: value.targetPath,
-      ...(destinationPath ? { destinationPath } : {}),
-      dryRun,
-      changed,
-      created,
-      replaced,
-      deleted,
-      moved,
-      runtimeToolId,
-      actionProfileId,
-      canAnswerMutationQuestion,
-    },
-    rawRef: {
-      evidenceIndex: input.evidenceIndex,
-      toolCallId: input.execution.toolCallId,
-      invocationId: input.execution.invocationId,
-    },
-  };
-};
-
-const createTerminalSessionSummary = (input: {
-  question: string;
-  execution: AgentToolExecutionResult;
-  evidenceIndex: number;
-}): AgentEvidenceSummary | null => {
-  const result = input.execution.result;
-  if (!result || typeof result !== "object") {
-    return null;
-  }
-
-  const value = result as Record<string, unknown>;
-  if (typeof value.command !== "string" || !("timedOut" in value)) {
-    return null;
-  }
-
-  const stdoutPreview = trimTextPreview(typeof value.stdout === "string" ? value.stdout : "");
-  const stderrPreview = trimTextPreview(typeof value.stderr === "string" ? value.stderr : "");
-  const timedOut = Boolean(value.timedOut);
-  const stdoutEncoding =
-    value.stdoutEncoding === "utf8" ||
-    value.stdoutEncoding === "gbk" ||
-    value.stdoutEncoding === "utf16le" ||
-    value.stdoutEncoding === "unknown"
-      ? value.stdoutEncoding
-      : "utf8";
-  const stderrEncoding =
-    value.stderrEncoding === "utf8" ||
-    value.stderrEncoding === "gbk" ||
-    value.stderrEncoding === "utf16le" ||
-    value.stderrEncoding === "unknown"
-      ? value.stderrEncoding
-      : "utf8";
-  const truncated = Boolean(value.truncated);
-  const binaryDetected = Boolean(value.binaryDetected);
-  const violations = Array.isArray(value.violations)
-    ? value.violations.filter((item): item is string => typeof item === "string")
-    : [];
-  const exitCode =
-    typeof value.exitCode === "number" || value.exitCode === null
-      ? (value.exitCode as number | null)
+  if (typeof result.command === "string" && "timedOut" in result) {
+    const timedOut = result.timedOut === true;
+    const truncated = result.truncated === true;
+    const exitCode = typeof result.exitCode === "number" || result.exitCode === null
+      ? result.exitCode
       : null;
-  const unreadableReason = getTerminalUnreadableReason({
-    stdout: typeof value.stdout === "string" ? value.stdout : "",
-    stderr: typeof value.stderr === "string" ? value.stderr : "",
-    stdoutEncoding,
-    stderrEncoding,
-    binaryDetected,
-  });
-  const outputInterpretable = !unreadableReason;
-  const processCompleted = !timedOut;
-  const commandSucceeded: AgentEvidenceResolution = processCompleted
-    ? exitCode === 0
-      ? "true"
-      : typeof exitCode === "number"
-        ? "false"
-        : "unknown"
-    : "unknown";
-  const taskSatisfied: AgentEvidenceResolution = "unknown";
-  const terminalStatus = binaryDetected
-    ? "binaryDetected"
-    : timedOut
-      ? "timed_out"
-      : truncated
-        ? "truncated"
-        : unreadableReason
-          ? "blocked"
-          : "completed";
-  const canAnswerCommandQuestion =
-    processCompleted &&
-    !truncated &&
-    !binaryDetected &&
-    outputInterpretable &&
-    queryRequestsCommandResult(input.question);
+    const stdout = typeof result.stdout === "string" ? preview(result.stdout) : "";
+    const stderr = typeof result.stderr === "string" ? preview(result.stderr) : "";
+    const stdoutEncoding = result.stdoutEncoding ?? "unknown";
+    const stderrEncoding = result.stderrEncoding ?? "unknown";
+    const binaryDetected = result.binaryDetected === true;
+    const unreadableReason = binaryDetected
+      ? "Terminal output contains binary data."
+      : stdoutEncoding === "unknown" || stderrEncoding === "unknown"
+        ? "Terminal output encoding is unknown."
+        : hasUnreadableTerminalText(stdout) || hasUnreadableTerminalText(stderr)
+          ? "Terminal output contains replacement, mojibake, or placeholder characters."
+          : undefined;
+    const outputInterpretable =
+      unreadableReason === undefined;
+    const commandSucceeded: AgentEvidenceResolution = timedOut
+      ? "unknown"
+      : exitCode === 0
+        ? "true"
+        : typeof exitCode === "number"
+          ? "false"
+          : "unknown";
+    const gaps = [
+      ...(timedOut ? ["Command did not finish."] : []),
+      ...(truncated ? ["Terminal output is truncated."] : []),
+      ...(!outputInterpretable
+        ? ["Terminal output encoding or text is not reliably interpretable."]
+        : []),
+    ];
+    return baseSummary({
+      execution,
+      evidenceIndex,
+      actionTaken: `Executed terminal command "${result.command}".`,
+      facts: [
+        `exitCode=${exitCode === null ? "null" : exitCode}`,
+        `timedOut=${timedOut}`,
+        `truncated=${truncated}`,
+        ...(stdout ? [`stdout=${stdout}`] : []),
+        ...(stderr ? [`stderr=${stderr}`] : []),
+      ],
+      ...(timedOut
+        ? { status: "timed_out" as const }
+        : truncated
+          ? { status: "truncated" as const }
+          : !outputInterpretable
+            ? { status: binaryDetected ? "binaryDetected" as const : "partial" as const }
+            : {}),
+      ...(gaps.length ? { gaps } : {}),
+      data: {
+        kind: "terminal_session",
+        command: result.command,
+        exitCode,
+        processCompleted: !timedOut,
+        commandSucceeded,
+        stdoutPreview: stdout,
+        stderrPreview: stderr,
+        stdoutEncoding,
+        stderrEncoding,
+        timedOut,
+        truncated,
+        binaryDetected,
+        violations: Array.isArray(result.violations)
+          ? result.violations.filter((item): item is string => typeof item === "string")
+          : [],
+        outputInterpretable,
+        ...(unreadableReason ? { unreadableReason } : {}),
+      },
+    });
+  }
 
-  return {
-    source: "tool",
-    status: terminalStatus,
-    toolId: input.execution.toolId,
-    inputHash: input.execution.inputHash,
-    actionTaken: `Executed terminal command "${value.command}".`,
-    keyFindings: [
-      `exitCode=${exitCode === null ? "null" : exitCode}`,
-      `processCompleted=${processCompleted}`,
-      toEvidenceResolutionFinding("commandSucceeded", commandSucceeded),
-      toEvidenceResolutionFinding("taskSatisfied", taskSatisfied),
-      ...(stdoutPreview ? [`stdout=${stdoutPreview}`] : []),
-      ...(stderrPreview ? [`stderr=${stderrPreview}`] : []),
-      `stdoutEncoding=${stdoutEncoding}`,
-      `stderrEncoding=${stderrEncoding}`,
-      `timedOut=${timedOut}`,
-      `truncated=${truncated}`,
-      `binaryDetected=${binaryDetected}`,
-      ...violations.slice(0, 3),
-    ],
-    answerReadiness: canAnswerCommandQuestion
-      ? {
-          canAnswer: true,
-          reason:
-            commandSucceeded === "true"
-              ? "Terminal command completed successfully, but task satisfaction still requires answer-time interpretation."
-              : "Terminal command completed with a non-zero exit code, so the answer must describe command failure without claiming the task succeeded.",
-        }
-      : {
-          canAnswer: false,
-          reason: binaryDetected
-            ? "Terminal output included binary data and cannot be treated as natural-language evidence."
-            : timedOut
-              ? "Terminal session timed out before producing a stable result."
-              : truncated
-                ? "Terminal output was truncated before a stable natural-language result was available."
-                : unreadableReason ??
-                  "Terminal result is not yet enough for a command-oriented answer.",
-          missingInfo:
-            binaryDetected || unreadableReason
-              ? ["a readable terminal result"]
-              : timedOut || truncated
-                ? ["a completed command result"]
-                : ["clear command result intent"],
-        },
-    data: {
-      kind: "terminal_session",
-      command: value.command,
-      exitCode,
-      processCompleted,
-      commandSucceeded,
-      taskSatisfied,
-      stdoutPreview,
-      stderrPreview,
-      stdoutEncoding,
-      stderrEncoding,
-      timedOut,
-      truncated,
-      binaryDetected,
-      violations,
-      outputInterpretable,
-      ...(unreadableReason ? { unreadableReason } : {}),
-      canAnswerCommandQuestion,
-    },
-    rawRef: {
-      evidenceIndex: input.evidenceIndex,
-      toolCallId: input.execution.toolCallId,
-      invocationId: input.execution.invocationId,
-    },
-  };
+  return baseSummary({
+    execution,
+    evidenceIndex,
+    actionTaken: `${execution.toolId} completed.`,
+    facts: [`toolId=${execution.toolId}`, `status=${execution.status}`],
+  });
 };
 
 export const createToolExecutionEvidenceSummary = (input: {
   execution: AgentToolExecutionResult;
-  question: string;
+  question?: string;
   evidenceIndex: number;
 }): AgentEvidenceSummary => {
   if (input.execution.status === "awaiting_approval") {
-    return {
-      source: "tool",
+    return baseSummary({
+      execution: input.execution,
+      evidenceIndex: input.evidenceIndex,
       status: "blocked",
-      toolId: input.execution.toolId,
-      inputHash: input.execution.inputHash,
       actionTaken: `${input.execution.toolId} is waiting for approval.`,
-      keyFindings: [
-        `toolId=${input.execution.toolId}`,
-        ...(input.execution.approval?.reason ? [input.execution.approval.reason] : []),
-      ],
-      answerReadiness: {
-        canAnswer: false,
-        reason: "Tool execution is paused for approval and cannot satisfy the answer stop rule.",
-        missingInfo: ["approval decision"],
-      },
-      rawRef: {
-        evidenceIndex: input.evidenceIndex,
-        toolCallId: input.execution.toolCallId,
-        invocationId: input.execution.invocationId,
-      },
-    };
+      facts: [`toolId=${input.execution.toolId}`],
+      gaps: ["Approval decision is pending."],
+    });
   }
-
-  if (input.execution.status === "denied") {
-    return {
-      source: "tool",
-      status: "denied",
-      toolId: input.execution.toolId,
-      inputHash: input.execution.inputHash,
-      actionTaken: `${input.execution.toolId} was denied before execution.`,
-      keyFindings: [
-        `toolId=${input.execution.toolId}`,
-        ...(input.execution.errorMessage ? [input.execution.errorMessage] : []),
-      ],
-      answerReadiness: {
-        canAnswer: false,
-        reason: "Denied tool execution does not satisfy the answer stop rule.",
-        missingInfo: ["allowed grounded evidence"],
-      },
-      rawRef: {
-        evidenceIndex: input.evidenceIndex,
-        toolCallId: input.execution.toolCallId,
-        invocationId: input.execution.invocationId,
-      },
-    };
-  }
-
   if (input.execution.status === "failed") {
-    const failureKind = input.execution.failureKind ?? "recoverable";
-    return {
-      source: "tool",
+    return baseSummary({
+      execution: input.execution,
+      evidenceIndex: input.evidenceIndex,
       status: "failed",
-      toolId: input.execution.toolId,
-      inputHash: input.execution.inputHash,
-      actionTaken:
-        failureKind === "terminal"
-          ? `${input.execution.toolId} failed and stopped the current tool loop.`
-          : `${input.execution.toolId} failed and can be retried or adjusted.`,
-      keyFindings: [
+      actionTaken: `${input.execution.toolId} failed during execution.`,
+      facts: [
         `toolId=${input.execution.toolId}`,
-        `failureKind=${failureKind}`,
-        ...(input.execution.failureCode
-          ? [`failureCode=${input.execution.failureCode}`]
-          : []),
-        ...(typeof input.execution.recoveryAttemptCount === "number"
-          ? [`recoveryAttemptCount=${input.execution.recoveryAttemptCount}`]
-          : []),
-        ...(input.execution.errorMessage ? [input.execution.errorMessage] : []),
+        `failureKind=${input.execution.failureKind ?? "recoverable"}`,
+        ...(input.execution.failureCode ? [`failureCode=${input.execution.failureCode}`] : []),
       ],
-      answerReadiness: {
-        canAnswer: false,
-        reason:
-          failureKind === "terminal"
-            ? "Terminal tool failure does not satisfy the answer stop rule."
-            : "Recoverable tool failure does not satisfy the answer stop rule yet.",
-        missingInfo: ["successful grounded evidence"],
-      },
-      rawRef: {
-        evidenceIndex: input.evidenceIndex,
-        toolCallId: input.execution.toolCallId,
-        invocationId: input.execution.invocationId,
-      },
-    };
+      error: input.execution.errorMessage,
+      gaps: [
+        input.execution.failureKind === "terminal"
+          ? "Execution stopped after a terminal failure."
+          : "A successful or adjusted execution result is still missing.",
+      ],
+    });
   }
-
-  return (
-    createReadListSummary(input) ??
-    createReadOpenSummary(input) ??
-    createReadLocateSummary(input) ??
-    createWebSearchSummary(input) ??
-    createEditFileSummary(input) ??
-    createWorkspaceMutationSummary(input) ??
-    createTerminalSessionSummary(input) ?? {
-      source: "tool",
-      status: "completed",
-      toolId: input.execution.toolId,
-      inputHash: input.execution.inputHash,
-      actionTaken: `${input.execution.toolId} completed.`,
-      keyFindings: [`toolId=${input.execution.toolId}`, "result=completed"],
-      answerReadiness: {
-        canAnswer: false,
-        reason: "The completed tool result does not have a stable summary contract yet.",
-        missingInfo: [`summary contract for ${input.execution.toolId}`],
-      },
-      rawRef: {
-        evidenceIndex: input.evidenceIndex,
-        toolCallId: input.execution.toolCallId,
-        invocationId: input.execution.invocationId,
-      },
-    }
-  );
+  return summarizeToolResult(input.execution, input.evidenceIndex);
 };
 
 export const getLatestEvidenceSummary = (state: EvidenceState) =>
   getEvidencePayload(state).latestSummary;
-
-const appendUniqueObservation = (
-  observations: AgentObservation[],
-  observation: AgentObservation,
-) => {
-  if (observations.some((item) => item.id === observation.id)) {
-    return observations;
-  }
-
-  return [...observations, observation];
-};
-
-const isSameToolExecution = (
-  left: AgentToolExecutionResult,
-  right: AgentToolExecutionResult,
-) =>
-  Boolean(
-    (left.toolCallId &&
-      right.toolCallId &&
-      left.toolCallId === right.toolCallId &&
-      left.status === right.status) ||
-      (left.inputHash &&
-        right.inputHash &&
-        left.inputHash === right.inputHash &&
-        left.toolId === right.toolId &&
-        left.status === right.status &&
-        left.startedAt === right.startedAt),
-  );
-
-const appendUniqueToolExecution = (
-  executions: AgentToolExecutionResult[],
-  execution: AgentToolExecutionResult,
-) => {
-  if (executions.some((item) => isSameToolExecution(item, execution))) {
-    return executions;
-  }
-
-  return [...executions, execution];
-};
-
-const isSameRetrieval = (
-  left: AgentRetrievalEvidence,
-  right: AgentRetrievalEvidence,
-) => {
-  if (left.query !== right.query || left.chunkCount !== right.chunkCount) {
-    return false;
-  }
-
-  const leftChunkIds = left.chunks.map((chunk) => String(chunk.chunkId)).join("|");
-  const rightChunkIds = right.chunks.map((chunk) => String(chunk.chunkId)).join("|");
-  return leftChunkIds === rightChunkIds;
-};
-
-const appendUniqueRetrieval = (
-  retrievals: AgentRetrievalEvidence[],
-  retrieval: AgentRetrievalEvidence,
-) => {
-  if (retrievals.some((item) => isSameRetrieval(item, retrieval))) {
-    return retrievals;
-  }
-
-  return [...retrievals, retrieval];
-};
 
 export const appendObservationEvidence = (
   state: EvidenceState,
   observation: AgentObservation,
 ): AgentEvidencePayload => {
   const current = getEvidencePayload(state);
-  const summary =
-    observation.summary ??
-    createObservationEvidenceSummary({
-      observation,
-      evidenceIndex: current.observations.length,
-    });
-  const keepExistingLatestSummary =
-    Boolean(current.latestSummary) &&
-    (observation.stepId === "generate" || observation.stepId === "evaluate") &&
-    observation.status === "ok";
-  return {
-    ...current,
-    observations: appendUniqueObservation(current.observations, {
-      ...observation,
-      summary,
-    }),
-    latestSummary: keepExistingLatestSummary ? current.latestSummary : summary,
-  };
+  if (current.observations.some((item) => item.id === observation.id)) return current;
+  const observations = [...current.observations, observation];
+  const summary = createObservationEvidenceSummary({
+    observation,
+    evidenceIndex: observations.length - 1,
+  });
+  return { ...current, observations: observations.map((item) => item), latestSummary: summary };
 };
 
 export const appendToolExecutionEvidence = (
@@ -1442,19 +489,14 @@ export const appendToolExecutionEvidence = (
   execution: AgentToolExecutionResult,
 ): AgentEvidencePayload => {
   const current = getEvidencePayload(state);
-  const summary =
-    execution.summary ??
-    createToolExecutionEvidenceSummary({
-      execution,
-      question: getLatestUserQuestion(state),
-      evidenceIndex: current.toolExecutions.length,
-    });
+  const executions = [...current.toolExecutions, execution];
+  const summary = createToolExecutionEvidenceSummary({
+    execution,
+    evidenceIndex: executions.length - 1,
+  });
   return {
     ...current,
-    toolExecutions: appendUniqueToolExecution(current.toolExecutions, {
-      ...execution,
-      summary,
-    }),
+    toolExecutions: [...executions.slice(0, -1), { ...execution, summary }],
     latestSummary: summary,
   };
 };
@@ -1464,19 +506,14 @@ export const appendRetrievalEvidence = (
   retrieval: AgentRetrievalEvidence,
 ): AgentEvidencePayload => {
   const current = getEvidencePayload(state);
-  const summary =
-    retrieval.summary ??
-    createRetrievalEvidenceSummary({
-      retrieval,
-      question: getLatestUserQuestion(state),
-      evidenceIndex: current.retrievals.length,
-    });
+  const retrievals = [...current.retrievals, retrieval];
+  const summary = createRetrievalEvidenceSummary({
+    retrieval,
+    evidenceIndex: retrievals.length - 1,
+  });
   return {
     ...current,
-    retrievals: appendUniqueRetrieval(current.retrievals, {
-      ...retrieval,
-      summary,
-    }),
+    retrievals: [...retrievals.slice(0, -1), { ...retrieval, summary }],
     latestSummary: summary,
   };
 };

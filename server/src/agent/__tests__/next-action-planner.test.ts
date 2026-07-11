@@ -120,14 +120,7 @@ test("buildPlannerObservationContext handles empty planner state", () => {
   assert.equal(context.latestObservation, undefined);
   assert.deepEqual(context.recentObservations, []);
   assert.equal(context.latestEvidenceSummary, undefined);
-  assert.deepEqual(context.taskCoverageView, {
-    requiredTargets: [],
-    coveredTargets: [],
-    pendingTargets: [],
-    pendingActions: [],
-    blockedReason: undefined,
-    taskCompletable: true,
-  });
+  assert.equal(context.taskCoverageView, undefined);
   assert.deepEqual(context.recovery, {
     source: "none",
     attemptCount: 0,
@@ -438,7 +431,7 @@ test("buildNextActionPlannerMessages reads planner observation context instead o
   assert.equal("pendingApproval" in payload, false);
   assert.equal("schemaReplanDiagnostics" in payload, false);
   assert.equal("latestEvidenceSummary" in payload, false);
-  assert.ok("taskCoverageView" in promptObservationContext);
+  assert.equal("taskCoverageView" in promptObservationContext, false);
 });
 
 test("buildNextActionPlannerMessages uses tool failure recovery budget in the main planner prompt", () => {

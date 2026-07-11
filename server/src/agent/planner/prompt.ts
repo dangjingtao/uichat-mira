@@ -196,9 +196,8 @@ export const buildNextActionPlannerMessages = (input: {
       "对 terminal_session.cwd，只能输出 workspace-relative directory。",
       "如果命令就在 workspace 根目录执行，优先省略 cwd，或把 cwd 写成 '.'。",
       "不要把 terminal_session.cwd 写成 Windows 绝对路径、POSIX 绝对路径或父级跳转，例如 'D:\\workspace\\rag-demo'、'/workspace'、'..'、'../server'。",
-      "必须同时区分“latest evidence 可局部回答”和“当前任务已经完成”。",
-      "只有当 observationContext.taskCoverageView.taskCompletable 为 true，且 pendingTargets 与 pendingActions 都为空时，answer 才是合法输出。",
-      "如果 observationContext.taskCoverageView 仍有 pendingTargets 或 pendingActions，你必须输出能继续补齐覆盖缺口的 retrieve、use_tool、ask_user 或 error，而不是提前 answer。",
+      "Evidence 只记录工具、检索和策略事实；它不是完成命令，也不提供 answer readiness。",
+      "是否回答、继续、检索或询问用户，必须由 Planner 根据用户目标、事实、gaps、error 和当前状态自主决定。",
       ...buildProgressionRules({
         observationContext: input.observationContext,
         iteration: input.iteration,

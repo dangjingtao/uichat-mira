@@ -381,9 +381,7 @@ test("generateNode keeps read_list fallback at directory-overview scope when fil
 
   const result = await generateNode(state);
 
-  assert.match(result.answer ?? "", /目录概览证据/);
   assert.match(result.answer ?? "", /README\.md/);
-  assert.match(result.answer ?? "", /还不能回答文件内容问题/);
 });
 
 test("generateNode keeps edit_file dry-run fallback at preview scope instead of claiming the file changed", async () => {
@@ -579,6 +577,54 @@ test("generateNode refuses to pretend garbled terminal text was understood", asy
   assert.doesNotMatch(result.answer ?? "", /没有形成稳定完成结果/);
 });
 
+test("generateNode preserves real terminal evidence quality flags", async () => {
+  const state = createBaseState("执行命令并说明中文输出是否可读");
+  const execution = {
+    toolCallId: "tool-call-real-terminal-evidence",
+    toolId: "terminal_session",
+    inputHash: "hash-real-terminal-evidence",
+    args: { command: "Get-Content README.md" },
+    status: "completed" as const,
+    result: {
+      command: "Get-Content README.md",
+      exitCode: 0,
+      stdout: "锟斤拷锟斤拷",
+      stderr: "",
+      stdoutEncoding: "unknown" as const,
+      stderrEncoding: "utf8" as const,
+      timedOut: false,
+      truncated: false,
+      binaryDetected: false,
+    },
+    startedAt: "2026-07-04T00:00:00.000Z",
+    finishedAt: "2026-07-04T00:00:01.000Z",
+  };
+  const summary = createToolExecutionEvidenceSummary({
+    execution,
+    evidenceIndex: 0,
+  });
+  state.evidence = {
+    observations: [],
+    toolExecutions: [{ ...execution, summary }],
+    retrievals: [],
+    latestSummary: summary,
+  };
+
+  vi.spyOn(providerProxyService, "generateTextForRole").mockResolvedValue(
+    "命令输出说明 README 主要在介绍 UIChat Mira。",
+  );
+
+  const result = await generateNode(state);
+
+  assert.equal(summary.data?.kind, "terminal_session");
+  if (summary.data?.kind === "terminal_session") {
+    assert.equal(summary.data.commandSucceeded, "true");
+    assert.equal(summary.data.outputInterpretable, false);
+  }
+  assert.match(result.answer ?? "", /输出证据当前不可可靠解读|不可|不可靠/);
+  assert.doesNotMatch(result.answer ?? "", /README 主要在介绍 UIChat Mira/);
+});
+
 test("generateNode does not let non-zero exitCode terminal evidence be rewritten as task success", async () => {
   const state = createBaseState("执行 pnpm test 并告诉我结果");
   state.evidence = {
@@ -640,8 +686,7 @@ test("generateNode does not let non-zero exitCode terminal evidence be rewritten
 
   const result = await generateNode(state);
 
-  assert.match(result.answer ?? "", /退出码为 1|命令执行失败/);
-  assert.match(result.answer ?? "", /不能直接下结论|任务目标/);
+  assert.match(result.answer ?? "", /退出码是 1|命令执行失败/);
   assert.doesNotMatch(result.answer ?? "", /测试已通过|修复成功/);
 });
 

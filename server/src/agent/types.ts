@@ -142,12 +142,6 @@ export interface AgentEvidencePayload {
   latestSummary?: AgentEvidenceSummary;
 }
 
-export interface AgentEvidenceAnswerReadiness {
-  canAnswer: boolean;
-  reason: string;
-  missingInfo?: string[];
-}
-
 export interface AgentReadListEvidenceData {
   kind: "read_list";
   path: string;
@@ -156,7 +150,6 @@ export interface AgentReadListEvidenceData {
   directoryCount: number;
   entriesPreview: string[];
   truncated: boolean;
-  canAnswerDirectoryQuestion: boolean;
 }
 
 export interface AgentReadOpenEvidenceData {
@@ -166,7 +159,6 @@ export interface AgentReadOpenEvidenceData {
   contentLength: number;
   truncated: boolean;
   keySections?: string[];
-  canAnswerFileQuestion: boolean;
 }
 
 export interface AgentReadLocateEvidenceData {
@@ -178,7 +170,6 @@ export interface AgentReadLocateEvidenceData {
   matchedPaths: string[];
   matchesPreview: string[];
   truncated: boolean;
-  canAnswerLocateQuestion: boolean;
 }
 
 export interface AgentWebSearchEvidenceData {
@@ -190,7 +181,6 @@ export interface AgentWebSearchEvidenceData {
     title: string;
     link: string;
   }>;
-  canAnswerSearchQuestion: boolean;
 }
 
 export type AgentEvidenceResolution =
@@ -204,7 +194,6 @@ export interface AgentTerminalSessionEvidenceData {
   exitCode: number | null;
   processCompleted: boolean;
   commandSucceeded: AgentEvidenceResolution;
-  taskSatisfied: AgentEvidenceResolution;
   stdoutPreview: string;
   stderrPreview: string;
   stdoutEncoding: SandboxOutputEncoding;
@@ -215,7 +204,6 @@ export interface AgentTerminalSessionEvidenceData {
   violations: string[];
   outputInterpretable: boolean;
   unreadableReason?: string;
-  canAnswerCommandQuestion: boolean;
 }
 
 export interface AgentRetrievalEvidenceData {
@@ -244,7 +232,6 @@ export interface AgentWorkspaceMutationEvidenceData {
   moved?: boolean;
   runtimeToolId?: string;
   actionProfileId?: string;
-  canAnswerMutationQuestion: boolean;
 }
 
 export interface AgentEditFileEvidenceData {
@@ -258,7 +245,6 @@ export interface AgentEditFileEvidenceData {
   deleted?: boolean;
   runtimeToolId?: string;
   actionProfileId?: string;
-  canAnswerMutationQuestion: boolean;
 }
 
 export type AgentEvidenceSummaryData =
@@ -287,22 +273,15 @@ export interface AgentEvidenceSummary {
   inputHash?: string;
   actionTaken: string;
   keyFindings: string[];
-  answerReadiness: AgentEvidenceAnswerReadiness;
+  facts?: string[];
+  gaps?: string[];
+  error?: string;
   data?: AgentEvidenceSummaryData;
   rawRef?: {
     evidenceIndex?: number;
     toolCallId?: string;
     invocationId?: string;
   };
-}
-
-export interface AgentTaskCoverageView {
-  requiredTargets: string[];
-  coveredTargets: string[];
-  pendingTargets: string[];
-  pendingActions: string[];
-  blockedReason?: string;
-  taskCompletable: boolean;
 }
 
 export type AgentNextAction =
@@ -415,7 +394,6 @@ export interface PlannerObservationContext {
   latestObservation?: AgentExecutionObservation;
   recentObservations: AgentExecutionObservation[];
   latestEvidenceSummary?: AgentEvidenceSummary;
-  taskCoverageView?: AgentTaskCoverageView;
   recovery: PlannerObservationRecoveryContext;
   pendingApproval?: {
     toolId: string;
