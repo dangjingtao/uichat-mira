@@ -38,8 +38,12 @@ const getPlannerPayload = (plannerContext: string) => {
   assert.ok(userMessage, "planner user payload should exist");
   return JSON.parse(userMessage.content) as {
     currentUserRequest?: string;
-    relevantHistory?: Array<{ role: string; content: string }>;
+    recentConversationHistory?: Array<{ role: string; content: string }>;
     observationContext?: {
+      currentTaskFrame?: {
+        coveredProgress?: string[];
+        remainingWork?: string[];
+      };
       latestEvidenceSummary?: {
         status?: string;
         toolId?: string;
@@ -572,8 +576,8 @@ test("read_discover can flow through Evidence back to Planner and then into read
   assert.equal(thirdPlannerPayload.observationContext?.latestEvidenceSummary?.data?.kind, "read_open");
 });
 
-test("Planner payload excludes unrelated recent history and keeps relevant recent task history", async () => {
-  setupToolExposure("open resume.ts and summarize approval flow", [readOpenTool()]);
+test("Planner payload keeps a bounded recent history window even when the follow-up uses Chinese continuation", async () => {
+  setupToolExposure("那一段展开说说", [readOpenTool()]);
   let plannerContext = "";
   vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementationOnce(
     async function* (messages) {
@@ -587,26 +591,48 @@ test("Planner payload excludes unrelated recent history and keeps relevant recen
 
   const result = await runBlackbox({
     runId: "blackbox-relevant-history-filter",
-    question: "open resume.ts and summarize approval flow",
+    question: "那一段展开说说",
     messages: [
-      makeMessage("what is the weather tomorrow"),
-      makeAssistantMessage("Tomorrow should be sunny."),
-      makeMessage("inspect the approval resume flow in the agent runtime"),
-      makeAssistantMessage("I already found resume.ts and approval notes."),
-      makeMessage("open resume.ts and summarize approval flow"),
+      makeMessage("第一轮无关的旧问题"),
+      makeAssistantMessage("第一轮无关的旧回答"),
+      makeMessage("先看审批恢复这块"),
+      makeAssistantMessage("好的，我先去找相关实现。"),
+      makeMessage("我找到 resume.ts 了"),
+      makeAssistantMessage("里面有 resumeApprovedAgentRun。"),
+      makeMessage("继续"),
+      makeAssistantMessage("好，我继续看它怎么清 pending approval。"),
+      makeMessage("然后呢？"),
+      makeAssistantMessage("我再确认一下调用链。"),
+      makeMessage("那一段展开说说"),
     ],
   });
 
   assert.equal(result.status, "completed");
   const plannerPayload = getPlannerPayload(plannerContext);
-  assert.deepEqual(plannerPayload.relevantHistory, [
+  assert.deepEqual(plannerPayload.recentConversationHistory, [
     {
       role: "user",
-      content: "inspect the approval resume flow in the agent runtime",
+      content: "我找到 resume.ts 了",
     },
     {
       role: "assistant",
-      content: "I already found resume.ts and approval notes.",
+      content: "里面有 resumeApprovedAgentRun。",
+    },
+    {
+      role: "user",
+      content: "继续",
+    },
+    {
+      role: "assistant",
+      content: "好，我继续看它怎么清 pending approval。",
+    },
+    {
+      role: "user",
+      content: "然后呢？",
+    },
+    {
+      role: "assistant",
+      content: "我再确认一下调用链。",
     },
   ]);
 });
@@ -677,6 +703,18 @@ test("multi-target requests do not answer after only one target is covered", asy
   const secondPlannerPayload = getPlannerPayload(plannerPayloads[0] ?? "");
   assert.equal(secondPlannerPayload.observationContext?.latestEvidenceSummary?.toolId, "read_open");
   assert.equal(secondPlannerPayload.observationContext?.latestEvidenceSummary?.data?.path, "README.md");
+  assert.equal(
+    secondPlannerPayload.observationContext?.currentTaskFrame?.coveredProgress?.includes(
+      "Covered target: readme.md",
+    ),
+    true,
+  );
+  assert.equal(
+    secondPlannerPayload.observationContext?.currentTaskFrame?.remainingWork?.includes(
+      "Need evidence for target: package.json",
+    ),
+    true,
+  );
 });
 
 test("truncated read evidence does not force an early answer when full content is still needed", async () => {

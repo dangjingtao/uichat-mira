@@ -10,6 +10,7 @@ export {
   summarizeToolExecutionStart,
   summarizeToolExecutionWaitingApproval,
 } from "./trace";
+import { reduceAgentCoverageState } from "./coverage-state";
 import { getEvidencePayload, getLatestEvidenceSummary } from "./evidence";
 import { buildPlannerRecoveryContext } from "./recovery";
 import type {
@@ -411,21 +412,13 @@ const getPlannerSubtask = (nextAction: AgentNextAction): string => {
   }
 };
 
-/**
- * PlannerNode is the only runtime writer for goal/subtask/completion state.
- * Executor nodes report facts through evidence and observations instead.
- */
-export const updateCurrentTaskFrameFromPlanner = (input: {
-  frame: CurrentTaskFrame | undefined;
+const buildCurrentTaskFrameCoverageView = (input: {
+  frame: CurrentTaskFrame;
   goal: AgentGoal;
-  nextAction: AgentNextAction;
   latestQuestion?: string;
+  evidence?: AgentEvidencePayload;
   latestEvidenceSummary?: AgentEvidenceSummary;
-}): CurrentTaskFrame | undefined => {
-  if (!input.frame) {
-    return input.frame;
-  }
-
+}) => {
   const currentGoal = getCurrentTaskFrameGoalText({
     goal: input.goal,
     latestQuestion: input.latestQuestion,
@@ -437,32 +430,114 @@ export const updateCurrentTaskFrameFromPlanner = (input: {
         ? [...input.goal.successCriteria]
         : [currentGoal];
   const latestEvidenceSummary = input.latestEvidenceSummary;
-  const coveredProgress = latestEvidenceSummary
-    ? [
-        latestEvidenceSummary.actionTaken,
-        ...latestEvidenceSummary.keyFindings,
-        ...(latestEvidenceSummary.facts ?? []),
-      ].slice(0, 5)
-    : input.frame.coveredProgress;
-  const remainingWork =
-    input.nextAction.type === "answer"
-      ? []
-      : latestEvidenceSummary?.gaps?.length
-        ? [
-            ...latestEvidenceSummary.gaps,
-            ...completionCriteria,
-          ]
-            .filter((item, index, items) => item && items.indexOf(item) === index)
-            .slice(0, 5)
-        : input.frame.remainingWork;
+  const coverageState = reduceAgentCoverageState({
+    question: input.latestQuestion ?? currentGoal,
+    currentTaskFrame: {
+      ...input.frame,
+      currentGoal,
+      completionCriteria,
+    },
+    evidence: input.evidence,
+    latestSummary: latestEvidenceSummary,
+  });
+  const coveredProgress = [
+    ...coverageState.coveredTargets.map((target) => `Covered target: ${target}`),
+    ...(latestEvidenceSummary
+      ? [
+          latestEvidenceSummary.actionTaken,
+          ...latestEvidenceSummary.keyFindings,
+          ...(latestEvidenceSummary.facts ?? []),
+        ]
+      : []),
+  ]
+    .filter((item, index, items) => item && items.indexOf(item) === index)
+    .slice(0, 5);
+  const remainingWork = [
+    ...(latestEvidenceSummary?.gaps ?? []),
+    ...coverageState.pendingTargets.map((target) => `Need evidence for target: ${target}`),
+    ...coverageState.targets.flatMap((target) =>
+      target.pendingActions.map((action) => `Need ${action} for target: ${target.target}`),
+    ),
+    ...coverageState.globalPendingActions.map((action) => `Need action: ${action}`),
+  ]
+    .filter((item, index, items) => item && items.indexOf(item) === index)
+    .slice(0, 5);
+
+  return {
+    currentGoal,
+    completionCriteria,
+    coveredProgress,
+    remainingWork,
+  };
+};
+
+export const refreshCurrentTaskFrameFromEvidence = (input: {
+  frame: CurrentTaskFrame | undefined;
+  goal: AgentGoal;
+  latestQuestion?: string;
+  evidence?: AgentEvidencePayload;
+  latestEvidenceSummary?: AgentEvidenceSummary;
+}): CurrentTaskFrame | undefined => {
+  if (!input.frame) {
+    return input.frame;
+  }
+
+  const coverageView = buildCurrentTaskFrameCoverageView(input as {
+    frame: CurrentTaskFrame;
+    goal: AgentGoal;
+    latestQuestion?: string;
+    evidence?: AgentEvidencePayload;
+    latestEvidenceSummary?: AgentEvidenceSummary;
+  });
 
   return {
     ...input.frame,
-    currentGoal,
+    currentGoal: coverageView.currentGoal,
+    completionCriteria: coverageView.completionCriteria,
+    ...(coverageView.coveredProgress.length > 0
+      ? { coveredProgress: coverageView.coveredProgress }
+      : {}),
+    ...(coverageView.remainingWork.length > 0
+      ? { remainingWork: coverageView.remainingWork }
+      : {}),
+  };
+};
+
+/**
+ * PlannerNode is the only runtime writer for goal/subtask/completion state.
+ * Executor nodes report facts through evidence and observations instead.
+ */
+export const updateCurrentTaskFrameFromPlanner = (input: {
+  frame: CurrentTaskFrame | undefined;
+  goal: AgentGoal;
+  nextAction: AgentNextAction;
+  latestQuestion?: string;
+  evidence?: AgentEvidencePayload;
+  latestEvidenceSummary?: AgentEvidenceSummary;
+}): CurrentTaskFrame | undefined => {
+  if (!input.frame) {
+    return input.frame;
+  }
+
+  const coverageView = buildCurrentTaskFrameCoverageView({
+    frame: input.frame,
+    goal: input.goal,
+    latestQuestion: input.latestQuestion,
+    evidence: input.evidence,
+    latestEvidenceSummary: input.latestEvidenceSummary,
+  });
+
+  return {
+    ...input.frame,
+    currentGoal: coverageView.currentGoal,
     currentSubtask: getPlannerSubtask(input.nextAction),
-    completionCriteria,
-    ...(coveredProgress ? { coveredProgress } : {}),
-    ...(typeof remainingWork !== "undefined" ? { remainingWork } : {}),
+    completionCriteria: coverageView.completionCriteria,
+    ...(coverageView.coveredProgress.length > 0
+      ? { coveredProgress: coverageView.coveredProgress }
+      : {}),
+    ...(coverageView.remainingWork.length > 0
+      ? { remainingWork: coverageView.remainingWork }
+      : {}),
     currentBlocker:
       input.nextAction.type === "error"
         ? input.nextAction.reason

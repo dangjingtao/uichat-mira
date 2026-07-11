@@ -429,7 +429,7 @@ test("buildNextActionPlannerMessages reads planner observation context instead o
 
   assert.ok("observationContext" in payload);
   assert.equal(payload.lastUserRequest, "Open README.md");
-  assert.equal("relevantHistory" in payload, false);
+  assert.equal("recentConversationHistory" in payload, false);
   assert.equal("taskFrame" in payload, false);
   assert.equal("lastToolExecution" in payload, false);
   assert.equal("pendingApproval" in payload, false);
@@ -513,49 +513,79 @@ test("buildNextActionPlannerMessages only uses toolExposure as the planner-visib
   );
 });
 
-test("buildNextActionPlannerMessages keeps only task-related finite history", () => {
+test("buildNextActionPlannerMessages keeps a bounded recent user and assistant history window", () => {
   const messages = buildNextActionPlannerMessages({
-    question: "open server/src/agent/resume.ts and summarize the approval flow",
+    question: "那一段展开说说",
     messages: [
       {
         role: "user",
-        content: "what is the weather tomorrow",
-        parts: [{ type: "text", text: "what is the weather tomorrow" }],
+        content: "第一轮无关的旧问题",
+        parts: [{ type: "text", text: "第一轮无关的旧问题" }],
       },
       {
         role: "assistant",
-        content: "Tomorrow should be sunny.",
-        parts: [{ type: "text", text: "Tomorrow should be sunny." }],
+        content: "第一轮无关的旧回答",
+        parts: [{ type: "text", text: "第一轮无关的旧回答" }],
       },
       {
         role: "user",
-        content: "inspect the agent resume flow around approval handling",
+        content: "先看审批恢复这块",
         parts: [
           {
             type: "text",
-            text: "inspect the agent resume flow around approval handling",
+            text: "先看审批恢复这块",
           },
         ],
       },
       {
         role: "assistant",
-        content: "I found resume.ts and approval handling notes in the agent runtime.",
+        content: "好的，我先去找相关实现。",
         parts: [
           {
             type: "text",
-            text: "I found resume.ts and approval handling notes in the agent runtime.",
+            text: "好的，我先去找相关实现。",
           },
         ],
       },
       {
         role: "user",
-        content: "open server/src/agent/resume.ts and summarize the approval flow",
+        content: "我找到 resume.ts 了",
         parts: [
           {
             type: "text",
-            text: "open server/src/agent/resume.ts and summarize the approval flow",
+            text: "我找到 resume.ts 了",
           },
         ],
+      },
+      {
+        role: "assistant",
+        content: "里面有 resumeApprovedAgentRun。",
+        parts: [{ type: "text", text: "里面有 resumeApprovedAgentRun。" }],
+      },
+      {
+        role: "user",
+        content: "继续",
+        parts: [{ type: "text", text: "继续" }],
+      },
+      {
+        role: "assistant",
+        content: "好，我继续看它怎么清 pending approval。",
+        parts: [{ type: "text", text: "好，我继续看它怎么清 pending approval。" }],
+      },
+      {
+        role: "user",
+        content: "然后呢？",
+        parts: [{ type: "text", text: "然后呢？" }],
+      },
+      {
+        role: "assistant",
+        content: "我再确认一下调用链。",
+        parts: [{ type: "text", text: "我再确认一下调用链。" }],
+      },
+      {
+        role: "user",
+        content: "那一段展开说说",
+        parts: [{ type: "text", text: "那一段展开说说" }],
       },
     ],
     observationContext: buildPlannerObservationContext(createState()),
@@ -565,17 +595,33 @@ test("buildNextActionPlannerMessages keeps only task-related finite history", ()
   });
 
   const payload = JSON.parse(String(messages[1]?.content ?? "{}")) as {
-    relevantHistory?: Array<{ role: string; content: string }>;
+    recentConversationHistory?: Array<{ role: string; content: string }>;
   };
 
-  assert.deepEqual(payload.relevantHistory, [
+  assert.deepEqual(payload.recentConversationHistory, [
     {
       role: "user",
-      content: "inspect the agent resume flow around approval handling",
+      content: "我找到 resume.ts 了",
     },
     {
       role: "assistant",
-      content: "I found resume.ts and approval handling notes in the agent runtime.",
+      content: "里面有 resumeApprovedAgentRun。",
+    },
+    {
+      role: "user",
+      content: "继续",
+    },
+    {
+      role: "assistant",
+      content: "好，我继续看它怎么清 pending approval。",
+    },
+    {
+      role: "user",
+      content: "然后呢？",
+    },
+    {
+      role: "assistant",
+      content: "我再确认一下调用链。",
     },
   ]);
 });
@@ -1855,8 +1901,84 @@ test("nextActionPlannerNode is the primary writer for runtime currentTaskFrame u
           },
         ],
         completionCriteria: ["Inspect README.md"],
+        remainingWork: [
+          "Need evidence for target: readme.md",
+          "Need verify for target: readme.md",
+        ],
       },
     });
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode updates currentTaskFrame remainingWork from uncovered targets instead of only evidence gaps", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"package.json"},"reason":"README.md is already covered; package.json is still missing."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        currentTaskFrame: {
+          currentGoal: "compare README.md and package.json",
+          currentSubtask: "Old subtask",
+          currentBlocker: undefined,
+          confirmedObjects: [],
+          completionCriteria: ["compare README.md and package.json"],
+        },
+        question: "compare README.md and package.json",
+        evidence: {
+          observations: [],
+          retrievals: [],
+          toolExecutions: [
+            {
+              toolId: "read_open",
+              args: { path: "README.md" },
+              status: "completed",
+              summary: {
+                source: "tool",
+                status: "completed",
+                toolId: "read_open",
+                actionTaken: "Opened README.md.",
+                keyFindings: ["path=README.md"],
+                data: {
+                  kind: "read_open",
+                  path: "README.md",
+                  contentPreview: "# README",
+                  contentLength: 8,
+                  keySections: [],
+                },
+              },
+              startedAt: "2026-07-11T00:00:00.000Z",
+              finishedAt: "2026-07-11T00:00:01.000Z",
+            },
+          ],
+          latestSummary: {
+            source: "tool",
+            status: "completed",
+            toolId: "read_open",
+            actionTaken: "Opened README.md.",
+            keyFindings: ["path=README.md"],
+            data: {
+              kind: "read_open",
+              path: "README.md",
+              contentPreview: "# README",
+              contentLength: 8,
+              keySections: [],
+            },
+          },
+        },
+      }),
+    );
+
+    assert.equal(patch.currentTaskFrame?.coveredProgress?.includes("Covered target: readme.md"), true);
+    assert.equal(
+      patch.currentTaskFrame?.remainingWork?.includes("Need evidence for target: package.json"),
+      true,
+    );
   } finally {
     streamSpy.mockRestore();
   }

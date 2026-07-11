@@ -71,88 +71,9 @@ const getRemainingRecoveryAttempts = (observationContext: PlannerObservationCont
 
 const PLANNER_HISTORY_LIMIT = 6;
 const PLANNER_HISTORY_ITEM_CHAR_LIMIT = 500;
-const PLANNER_MIN_RELEVANCE_SCORE = 1;
-const HISTORY_STOPWORDS = new Set([
-  "the",
-  "and",
-  "for",
-  "with",
-  "that",
-  "this",
-  "from",
-  "into",
-  "what",
-  "which",
-  "when",
-  "where",
-  "should",
-  "would",
-  "could",
-  "need",
-  "please",
-  "help",
-  "then",
-  "open",
-  "read",
-  "file",
-  "about",
-  "user",
-  "assistant",
-  "next",
-  "step",
-]);
 
 const trimText = (value: string, limit: number) =>
   value.length <= limit ? value : `${value.slice(0, Math.max(0, limit - 1))}…`;
-
-const normalizeHistoryToken = (token: string) =>
-  token
-    .trim()
-    .toLowerCase()
-    .replace(/\\/g, "/")
-    .replace(/^\.\/+/, "")
-    .replace(/^[`"'“”‘’]+|[`"'“”‘’]+$/g, "");
-
-const extractHistoryTokens = (value: string) => {
-  const tokens = new Set<string>();
-  const matches = value.matchAll(/[\p{L}\p{N}_./:-]{2,}/gu);
-
-  for (const match of matches) {
-    const normalized = normalizeHistoryToken(match[0] ?? "");
-    if (!normalized || HISTORY_STOPWORDS.has(normalized)) {
-      continue;
-    }
-
-    tokens.add(normalized);
-
-    if (normalized.includes("/")) {
-      for (const part of normalized.split("/")) {
-        if (part.length >= 2 && !HISTORY_STOPWORDS.has(part)) {
-          tokens.add(part);
-        }
-      }
-    }
-  }
-
-  return tokens;
-};
-
-const scoreHistoryMessage = (input: {
-  message: string;
-  currentRequest: string;
-}) => {
-  const requestTokens = extractHistoryTokens(input.currentRequest);
-  const messageTokens = extractHistoryTokens(input.message);
-  let score = 0;
-
-  for (const token of messageTokens) {
-    if (requestTokens.has(token)) {
-      score += token.includes("/") || token.includes(".") ? 2 : 1;
-    }
-  }
-
-  return score;
-};
 
 const buildRelevantConversationHistory = (
   messages: NormalizedChatMessage[] | undefined,
@@ -167,14 +88,9 @@ const buildRelevantConversationHistory = (
     .map((message) => ({
       role: message.role,
       content: trimText(message.content, PLANNER_HISTORY_ITEM_CHAR_LIMIT),
-      score: scoreHistoryMessage({
-        message: message.content,
-        currentRequest,
-      }),
     }))
     .filter(
       (message) =>
-        message.score >= PLANNER_MIN_RELEVANCE_SCORE &&
         !(message.role === "user" && message.content.trim() === currentRequest.trim()),
     )
     .slice(-PLANNER_HISTORY_LIMIT)
@@ -346,7 +262,7 @@ export const buildNextActionPlannerMessages = (input: {
       content: JSON.stringify(
         {
           currentUserRequest: input.question,
-          relevantHistory: buildRelevantConversationHistory(
+          recentConversationHistory: buildRelevantConversationHistory(
             input.messages,
             input.question,
           ),
