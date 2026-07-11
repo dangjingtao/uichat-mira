@@ -302,19 +302,8 @@ test("maps terminal_session awaiting approval tool execution into a waiting_appr
 
 test("buildExecutionObservationView treats evidence structures as fact sources and emits a unified planner view", () => {
   const observations = buildExecutionObservationView({
-    observations: [],
     evidence: {
-      observations: [
-        {
-          id: "obs-generate-1",
-          runId: "run-1",
-          stepId: "generate",
-          status: "failed",
-          facts: ["Agent final answer generation failed."],
-          errorMessage: "provider unavailable",
-          createdAt: "2026-07-06T10:00:03.000Z",
-        },
-      ],
+      observations: [],
       retrievals: [
         {
           knowledgeBaseId: "kb-1",
@@ -330,17 +319,18 @@ test("buildExecutionObservationView treats evidence structures as fact sources a
           createdAt: "2026-07-06T10:00:00.000Z",
         },
       ],
-      toolExecutions: [],
-    },
-    lastToolExecution: {
-      toolCallId: "tool-call-1",
-      toolId: "read_open",
-      inputHash: "hash-read-open",
-      args: { path: "README.md" },
-      status: "completed",
-      result: { type: "open", path: "README.md" },
-      startedAt: "2026-07-06T10:00:01.000Z",
-      finishedAt: "2026-07-06T10:00:02.000Z",
+      toolExecutions: [
+        {
+          toolCallId: "tool-call-1",
+          toolId: "read_open",
+          inputHash: "hash-read-open",
+          args: { path: "README.md" },
+          status: "completed",
+          result: { type: "open", path: "README.md" },
+          startedAt: "2026-07-06T10:00:01.000Z",
+          finishedAt: "2026-07-06T10:00:02.000Z",
+        },
+      ],
     },
     pendingApproval: {
       id: "approval-1",
@@ -359,8 +349,42 @@ test("buildExecutionObservationView treats evidence structures as fact sources a
     [
       ["retrieve", "retrieval", "completed"],
       ["tool", "tool_execution", "completed"],
-      ["generate", "observation", "failed_terminal"],
       ["approval", "approval", "waiting_approval"],
     ],
   );
+});
+
+test("buildExecutionObservationView does not treat lastToolExecution as a parallel fact source after Evidence", () => {
+  const observations = buildExecutionObservationView({
+    evidence: {
+      observations: [],
+      retrievals: [],
+      toolExecutions: [],
+    },
+    pendingApproval: undefined,
+  });
+
+  assert.deepEqual(observations, []);
+});
+
+test("buildExecutionObservationView ignores observation-only retrieve facts after Evidence", () => {
+  const observations = buildExecutionObservationView({
+    evidence: {
+      observations: [
+        {
+          id: "obs-retrieve-1",
+          runId: "run-1",
+          stepId: "retrieve",
+          status: "ok",
+          facts: ["Found README.md in retrieval fallback."],
+          createdAt: "2026-07-06T10:00:00.000Z",
+        },
+      ],
+      retrievals: [],
+      toolExecutions: [],
+    },
+    pendingApproval: undefined,
+  });
+
+  assert.deepEqual(observations, []);
 });

@@ -64,7 +64,7 @@ const baseSummary = (input: {
 });
 
 export const getEvidencePayload = (state: EvidenceState): AgentEvidencePayload => ({
-  observations: state.evidence?.observations ?? state.observations ?? [],
+  observations: state.evidence?.observations ?? [],
   toolExecutions: state.evidence?.toolExecutions ?? [],
   retrievals: state.evidence?.retrievals ?? [],
   latestSummary:

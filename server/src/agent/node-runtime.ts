@@ -291,11 +291,8 @@ const comparePlannerObservationItems = (
 /**
  * Fact-source boundary for T021:
  * - retrieve executor facts come from evidence.retrievals
- * - tool executor facts come from lastToolExecution
+ * - tool executor facts come from evidence.toolExecutions
  * - approval facts come from pendingApproval
- * - generic node observations remain a fallback fact source for actions that
- *   still do not have a dedicated executor-result record, currently generate
- *   and legacy retrieve/tool observations
  *
  * Planner must not consume those scattered structures directly.
  * Planner only consumes the unified execution-observation view built here.
@@ -303,9 +300,7 @@ const comparePlannerObservationItems = (
 export const buildExecutionObservationView = (
   state: Pick<
     AgentNodeState,
-    | "observations"
     | "evidence"
-    | "lastToolExecution"
     | "pendingApproval"
   >,
 ): AgentExecutionObservation[] => {
@@ -316,38 +311,12 @@ export const buildExecutionObservationView = (
     items.push(toExecutionObservationFromRetrievalResult(retrieval));
   }
 
-  if (state.lastToolExecution) {
-    items.push(toExecutionObservationFromToolExecution(state.lastToolExecution));
+  for (const execution of evidence.toolExecutions) {
+    items.push(toExecutionObservationFromToolExecution(execution));
   }
 
   if (state.pendingApproval) {
-    items.push(
-      toExecutionObservationFromPendingApproval(
-        state.pendingApproval,
-        state.lastToolExecution?.summary,
-      ),
-    );
-  }
-
-  const hasRetrievalFacts = evidence.retrievals.length > 0;
-  for (const observation of evidence.observations) {
-    if (observation.stepId === "generate") {
-      items.push(toExecutionObservationFromObservation(observation));
-      continue;
-    }
-
-    if (observation.stepId === "retrieve" && !hasRetrievalFacts) {
-      items.push(toExecutionObservationFromObservation(observation));
-      continue;
-    }
-
-    if (
-      observation.stepId !== "retrieve" &&
-      observation.stepId !== "tool" &&
-      observation.stepId !== "approval"
-    ) {
-      items.push(toExecutionObservationFromObservation(observation));
-    }
+    items.push(toExecutionObservationFromPendingApproval(state.pendingApproval));
   }
 
   items.sort(comparePlannerObservationItems);
@@ -557,25 +526,27 @@ export const buildPlannerObservationContext = (
   >,
 ): PlannerObservationContext => {
   const latestEvidenceSummary = getLatestEvidenceSummary(state);
+  const evidence = getEvidencePayload(state);
   const items = buildExecutionObservationView(state);
   const recentObservations = items.slice(-5).reverse();
   const latestObservation = recentObservations[0];
+  const latestToolExecution = evidence.toolExecutions.at(-1);
 
   return {
     currentTaskFrame: state.currentTaskFrame,
     latestObservation,
     recentObservations,
     latestEvidenceSummary,
-    latestToolCall: state.lastToolExecution
+    latestToolCall: latestToolExecution
       ? {
-          toolId: state.lastToolExecution.toolId,
-          args: state.lastToolExecution.args,
-          inputHash: state.lastToolExecution.inputHash,
-          status: state.lastToolExecution.status,
-          resultSummary: state.lastToolExecution.summary,
-          failureKind: state.lastToolExecution.failureKind,
-          failureCode: state.lastToolExecution.failureCode,
-          retryCount: state.lastToolExecution.recoveryAttemptCount ?? 0,
+          toolId: latestToolExecution.toolId,
+          args: latestToolExecution.args,
+          inputHash: latestToolExecution.inputHash,
+          status: latestToolExecution.status,
+          resultSummary: latestToolExecution.summary,
+          failureKind: latestToolExecution.failureKind,
+          failureCode: latestToolExecution.failureCode,
+          retryCount: latestToolExecution.recoveryAttemptCount ?? 0,
         }
       : undefined,
     recovery: buildPlannerRecoveryContext(state),

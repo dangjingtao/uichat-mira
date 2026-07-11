@@ -131,7 +131,47 @@ test("buildPlannerObservationContext handles empty planner state", () => {
   assert.equal(context.pendingApproval, undefined);
 });
 
-test("buildPlannerObservationContext includes lastToolExecution as the latest planner observation", () => {
+test("buildPlannerObservationContext reads completed tool facts from evidence.toolExecutions", () => {
+  const context = buildPlannerObservationContext(
+    createState({
+      evidence: {
+        observations: [],
+        retrievals: [],
+        toolExecutions: [
+          {
+            toolId: "read_open",
+            args: { path: "README.md" },
+            status: "completed",
+            summary: {
+              source: "tool",
+              status: "completed",
+              toolId: "read_open",
+              actionTaken: "Opened README.md.",
+              keyFindings: ["contentLength=120"],
+              answerReadiness: {
+                canAnswer: true,
+                reason: "Opened file content is available for answer generation.",
+              },
+            },
+            startedAt: "2026-07-06T10:00:00.000Z",
+            finishedAt: "2026-07-06T10:00:01.000Z",
+          },
+        ],
+      },
+      observations: undefined,
+    }),
+  );
+
+  assert.equal(context.latestObservation?.source, "tool_execution");
+  assert.equal(context.latestObservation?.actionType, "tool");
+  assert.equal(context.latestObservation?.toolId, "read_open");
+  assert.equal(context.latestObservation?.status, "completed");
+  assert.deepEqual(context.latestObservation?.argsPreview, { path: "README.md" });
+  assert.equal(context.latestObservation?.summary?.toolId, "read_open");
+  assert.equal(context.latestToolCall?.toolId, "read_open");
+});
+
+test("buildPlannerObservationContext does not use lastToolExecution as a planner fact source after Evidence", () => {
   const context = buildPlannerObservationContext(
     createState({
       lastToolExecution: {
@@ -144,42 +184,43 @@ test("buildPlannerObservationContext includes lastToolExecution as the latest pl
           toolId: "read_open",
           actionTaken: "Opened README.md.",
           keyFindings: ["contentLength=120"],
-          answerReadiness: {
-            canAnswer: true,
-            reason: "Opened file content is available for answer generation.",
-          },
         },
         startedAt: "2026-07-06T10:00:00.000Z",
         finishedAt: "2026-07-06T10:00:01.000Z",
       },
-      evidence: undefined,
+      evidence: {
+        observations: [],
+        retrievals: [],
+        toolExecutions: [],
+      },
       observations: undefined,
     }),
   );
 
-  assert.equal(context.latestObservation?.source, "tool_execution");
-  assert.equal(context.latestObservation?.actionType, "tool");
-  assert.equal(context.latestObservation?.toolId, "read_open");
-  assert.equal(context.latestObservation?.status, "completed");
-  assert.deepEqual(context.latestObservation?.argsPreview, { path: "README.md" });
-  assert.equal(context.latestObservation?.summary?.toolId, "read_open");
+  assert.equal(context.latestObservation, undefined);
+  assert.equal(context.latestToolCall, undefined);
 });
 
-test("buildPlannerObservationContext keeps terminal tool failure as failed_terminal", () => {
+test("buildPlannerObservationContext keeps terminal tool failure from evidence as failed_terminal", () => {
   const context = buildPlannerObservationContext(
     createState({
-      lastToolExecution: {
-        toolCallId: "tool-call-terminal-failed",
-        toolId: "read_open",
-        inputHash: "hash-read-open-terminal",
-        args: { path: "README.md" },
-        status: "failed",
-        failureKind: "terminal",
-        errorMessage: "Tool protocol mismatch: result payload is invalid",
-        startedAt: "2026-07-06T10:00:00.000Z",
-        finishedAt: "2026-07-06T10:00:01.000Z",
+      evidence: {
+        observations: [],
+        retrievals: [],
+        toolExecutions: [
+          {
+            toolCallId: "tool-call-terminal-failed",
+            toolId: "read_open",
+            inputHash: "hash-read-open-terminal",
+            args: { path: "README.md" },
+            status: "failed",
+            failureKind: "terminal",
+            errorMessage: "Tool protocol mismatch: result payload is invalid",
+            startedAt: "2026-07-06T10:00:00.000Z",
+            finishedAt: "2026-07-06T10:00:01.000Z",
+          },
+        ],
       },
-      evidence: undefined,
       observations: undefined,
     }),
   );
@@ -193,7 +234,7 @@ test("buildPlannerObservationContext keeps terminal tool failure as failed_termi
   ]);
 });
 
-test("buildPlannerObservationContext keeps recoverable tool failure as failed_recoverable", () => {
+test("buildPlannerObservationContext keeps recoverable tool failure from evidence as failed_recoverable", () => {
   const context = buildPlannerObservationContext(
     createState({
       lastToolExecution: {
@@ -208,7 +249,24 @@ test("buildPlannerObservationContext keeps recoverable tool failure as failed_re
         startedAt: "2026-07-06T10:00:00.000Z",
         finishedAt: "2026-07-06T10:00:01.000Z",
       },
-      evidence: undefined,
+      evidence: {
+        observations: [],
+        retrievals: [],
+        toolExecutions: [
+          {
+            toolCallId: "tool-call-recoverable-failed",
+            toolId: "read_open",
+            inputHash: "hash-read-open-recoverable",
+            args: { path: "missing.md" },
+            status: "failed",
+            failureKind: "recoverable",
+            recoveryAttemptCount: 1,
+            errorMessage: "File not found",
+            startedAt: "2026-07-06T10:00:00.000Z",
+            finishedAt: "2026-07-06T10:00:01.000Z",
+          },
+        ],
+      },
       observations: undefined,
     }),
   );
@@ -380,23 +438,31 @@ test("buildNextActionPlannerMessages reads planner observation context instead o
         confirmedObjects: [],
         completionCriteria: ["Inspect README.md"],
       },
-      lastToolExecution: {
-        toolId: "read_open",
-        args: { path: "README.md" },
-        status: "completed",
-        summary: {
-          source: "tool",
-          status: "completed",
-          toolId: "read_open",
-          actionTaken: "Opened README.md.",
-          keyFindings: ["contentLength=120"],
-          answerReadiness: {
-            canAnswer: true,
-            reason: "Opened file content is available for answer generation.",
+      evidence: {
+        observations: [],
+        retrievals: [],
+        toolExecutions: [
+          {
+            toolCallId: "tool-call-readme-open",
+            toolId: "read_open",
+            inputHash: "hash-readme-open",
+            args: { path: "README.md" },
+            status: "completed",
+            summary: {
+              source: "tool",
+              status: "completed",
+              toolId: "read_open",
+              actionTaken: "Opened README.md.",
+              keyFindings: ["contentLength=120"],
+              answerReadiness: {
+                canAnswer: true,
+                reason: "Opened file content is available for answer generation.",
+              },
+            },
+            startedAt: "2026-07-06T10:00:00.000Z",
+            finishedAt: "2026-07-06T10:00:01.000Z",
           },
-        },
-        startedAt: "2026-07-06T10:00:00.000Z",
-        finishedAt: "2026-07-06T10:00:01.000Z",
+        ],
       },
       pendingApproval: {
         id: "approval-1",

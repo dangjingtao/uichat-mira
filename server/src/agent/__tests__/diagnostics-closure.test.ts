@@ -469,7 +469,7 @@ test("diagnostics closure records runtime timedOut evidence as not answer-ready"
   );
 });
 
-test("diagnostics closure keeps generate grounded when the model fabricates workspace evidence", async () => {
+test("diagnostics closure keeps generate grounded when the model fabricates observations without completed evidence", async () => {
   vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke").mockResolvedValue(
     "当前 workspace 下有 README.md、docs、server，我已经查看过它们的内容。",
   );
@@ -483,11 +483,11 @@ test("diagnostics closure keeps generate grounded when the model fabricates work
 
       goal: {
         ...baseGoal,
-        text: "看看当前 workspace 有哪些文件",
+        text: "那结论是什么",
       },
       plan: basePlan,
       workspaceRoot: "D:\\workspace\\rag-demo",
-      messages: [makeMessage("看看当前 workspace 有哪些文件")],
+      messages: [makeMessage("那结论是什么")],
       evidence: {
         observations: [],
         retrievals: [],
