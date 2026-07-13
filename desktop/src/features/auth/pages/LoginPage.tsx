@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowRight, Boxes, FileSearch2, Leaf } from "lucide-react";
 import { useTypewriter } from "react-typewriter-plus";
@@ -30,6 +30,7 @@ const fallbackMeta: AppMetaData = {
 function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { authErrorMessage, consumeAuthError, login } = useAuth();
   const isLoggingInRef = useRef(false);
   const quoteBodyRef = useRef<HTMLDivElement | null>(null);
@@ -231,7 +232,7 @@ function LoginPage() {
         user: result.user,
       });
 
-      navigate("/chat", { replace: true });
+      navigate(searchParams.get("returnTo") || "/chat", { replace: true });
     } catch (requestError) {
       if (requestError instanceof ApiError) {
         setError(requestError.message);

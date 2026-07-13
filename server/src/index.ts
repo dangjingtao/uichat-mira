@@ -40,12 +40,14 @@ import {
   setActiveCodeGraphStudioService,
 } from "@/microapps/codegraph/index.js";
 import { createTtsService } from "@/microapps/tts/index.js";
+import { createEvolvingKnowledgeService } from "@/microapps/evolving-knowledge/index.js";
 import healthRoute from "@/routes/health";
 import appMetaRoute from "@/routes/app-meta";
 import dbHealthRoute from "@/routes/dbHealth";
 import generalSettingsRoute from "@/routes/general-settings";
 import logsRoute from "@/routes/logs";
 import loginRoute from "@/routes/login";
+import oauthRoute from "@/routes/oauth";
 import meRoute from "@/routes/me";
 import attachmentRoute from "@/routes/attachments";
 import proxyProviderRoute from "@/routes/proxy-provider/index.js";
@@ -83,6 +85,7 @@ import { mailMessagesRepository } from "@/db/repositories/mail-messages.reposito
 import { newsHubSettingsRepository } from "@/db/repositories/news-hub-settings.repository.js";
 import { comfyUiStudioRepository } from "@/db/repositories/comfyui-studio.repository.js";
 import { microAppsRepository } from "@/db/repositories/micro-apps.repository.js";
+import { evolvingKnowledgeRepository } from "@/db/repositories/evolving-knowledge.repository.js";
 import { newsItemsRepository } from "@/db/repositories/news-items.repository.js";
 import { generalSettingsRepository } from "@/db/repositories/general-settings.repository.js";
 import { webSearchSettingsRepository } from "@/db/repositories/web-search-settings.repository.js";
@@ -531,6 +534,7 @@ const codeGraphStudioService = createCodeGraphStudioService({
 });
 setActiveCodeGraphStudioService(codeGraphStudioService);
 const ttsService = createTtsService();
+const evolvingKnowledgeService = createEvolvingKnowledgeService();
 
 const setupPlugins = async () => {
   const appMeta = getAppMeta();
@@ -746,6 +750,7 @@ const setupRoutes = async () => {
   await app.register(generalSettingsRoute);
   await app.register(logsRoute);
   await app.register(loginRoute);
+  await app.register(oauthRoute);
   await app.register(meRoute);
   await app.register(attachmentRoute);
   await app.register(accountRoute);
@@ -767,6 +772,7 @@ const setupRoutes = async () => {
     mailCenterService,
     newsHubService,
     ttsService,
+    evolvingKnowledgeService,
   });
   await app.register(wecomRoute);
   await app.register(agentRoute);
@@ -815,6 +821,7 @@ const setupDatabase = async () => {
   integrationInstancesRepository.initialize();
   integrationCapabilitiesRepository.initialize();
   microAppsRepository.initialize();
+  evolvingKnowledgeRepository.initialize();
   comfyUiStudioRepository.initialize();
   integrationCapabilityMicroAppsRepository.initialize();
   mailAccountsRepository.initialize();

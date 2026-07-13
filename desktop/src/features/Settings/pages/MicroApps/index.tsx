@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowRight, AudioLines, Bot, BookOpen, Boxes, Image, Mail, MonitorSmartphone, Newspaper } from "lucide-react";
+import { ArrowRight, AudioLines, Bot, BookOpen, Boxes, BrainCircuit, Image, KeyRound, Mail, MonitorSmartphone, Newspaper } from "lucide-react";
 import { Link } from "react-router-dom";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import Alert from "@/shared/ui/Alert";
@@ -22,6 +22,10 @@ const microAppSummary = (microApp: MicroAppRecord) => {
 };
 
 const featuredStudioEntries = [
+  {
+    key: "evolvingKnowledge",
+    route: "/settings/micro-apps/evolving-knowledge-studio",
+  },
   {
     key: "newsHub",
     route: "/settings/micro-apps/news-hub",
@@ -46,15 +50,21 @@ const featuredStudioEntries = [
     key: "codeGraph",
     route: "/settings/micro-apps/codegraph-studio",
   },
+  {
+    key: "browserExtension",
+    route: "/settings/micro-apps/browser-extension",
+  },
 ] as const;
 
 const featuredStudioIcons = {
+  evolvingKnowledge: BrainCircuit,
   newsHub: Newspaper,
   mailCenter: Mail,
   computerUse: MonitorSmartphone,
   imageGeneration: Image,
   ttsStudio: AudioLines,
   codeGraph: Boxes,
+  browserExtension: KeyRound,
 } as const;
 
 export default function MicroAppsSettings() {

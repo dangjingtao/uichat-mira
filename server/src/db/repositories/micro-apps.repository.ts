@@ -8,7 +8,8 @@ export type MicroAppType =
   | "image_generation"
   | "computer_use"
   | "tts"
-  | "codegraph";
+  | "codegraph"
+  | "evolving_knowledge";
 
 export type MicroAppSupportedAccessPoint =
   | "wecom.smart_robot"
@@ -16,7 +17,8 @@ export type MicroAppSupportedAccessPoint =
   | "desktop.image_generation_studio"
   | "desktop.computer_use_studio"
   | "desktop.tts_studio"
-  | "desktop.codegraph_studio";
+  | "desktop.codegraph_studio"
+  | "desktop.evolving_knowledge_studio";
 
 export type MicroAppBindingFieldType =
   | "knowledge_base_select"
@@ -269,6 +271,16 @@ const defaultDefinitionSeeds: Array<
     supportedAccessPoints: ["desktop.codegraph_studio"],
     bindingSchema: codeGraphBindingSchema,
     runtimeKey: "codegraph",
+    enabled: true,
+  },
+  {
+    type: "evolving_knowledge",
+    name: "智识进化库",
+    description:
+      "多媒体知识捕获与 AI 自我整理系统。捕获网页、图片、音频、视频，AI 自动重写、标签、发现概念关联与跨时间洞见。",
+    supportedAccessPoints: ["desktop.evolving_knowledge_studio"],
+    bindingSchema: { fields: [] },
+    runtimeKey: "evolving_knowledge",
     enabled: true,
   },
 ];
