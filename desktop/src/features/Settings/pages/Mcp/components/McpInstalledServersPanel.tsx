@@ -2,6 +2,7 @@ import { BookOpenText, ExternalLink, Loader2, PlugZap, Radar, Settings2, Trash2 
 import Badge from "@/shared/ui/Badge";
 import { Button } from "@/shared/ui/Button";
 import CollapsiblePanel from "@/shared/ui/CollapsiblePanel";
+import Switch from "@/shared/ui/Switch";
 import type { ExternalMcpServerRecord } from "@/shared/api/tools";
 import { resolveGithubMirrorUrl } from "@/shared/github";
 
@@ -32,11 +33,16 @@ type McpInstalledServersPanelProps = {
     docs: string;
     repository: string;
     packageName: string;
+    installed: string;
+    enabled: string;
+    disabled: string;
+    agentAccess: string;
   };
   onConfigure: (server: ExternalMcpServerRecord) => void;
   onConnect: (serverId: string) => void;
   onDiscover: (serverId: string) => void;
   onDelete: (server: ExternalMcpServerRecord) => void;
+  onToggleAgentAccess: (server: ExternalMcpServerRecord, enabled: boolean) => void;
 };
 
 const getStatusLabel = (
@@ -61,6 +67,7 @@ export default function McpInstalledServersPanel({
   onConnect,
   onDiscover,
   onDelete,
+  onToggleAgentAccess,
 }: McpInstalledServersPanelProps) {
   return (
     <div className="min-h-0">
@@ -91,6 +98,10 @@ export default function McpInstalledServersPanel({
                         <div className="truncate text-sm font-medium text-text-primary">
                           {server.displayName}
                         </div>
+                        <Badge variant="muted">{labels.installed}</Badge>
+                        <Badge variant={server.enabled ? "success" : "muted"}>
+                          {server.enabled ? labels.enabled : labels.disabled}
+                        </Badge>
                         <Badge variant="muted">{getStatusLabel(server, labels)}</Badge>
                         {server.discoveredTools.length > 0 ? (
                           <Badge variant="success">
@@ -148,6 +159,14 @@ export default function McpInstalledServersPanel({
                   </div>
 
                   <div className="min-w-0">
+                    <div className="mt-1 flex items-center gap-3 border-b border-border pb-3">
+                      <Switch
+                        checked={server.agentEnabled}
+                        onChange={() => onToggleAgentAccess(server, !server.agentEnabled)}
+                        disabled={isPending || !server.enabled}
+                      />
+                      <span className="text-sm text-text-secondary">{labels.agentAccess}</span>
+                    </div>
 
                     {server.description ? (
                       <div className="mt-2 text-sm leading-6 text-text-secondary">

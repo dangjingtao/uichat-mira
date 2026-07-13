@@ -14,6 +14,7 @@ const deleteExternalMcpServerMock = vi.fn();
 const getExternalMcpServerConfigSchemaMock = vi.fn();
 const getExternalMcpServerConfigMock = vi.fn();
 const updateExternalMcpServerConfigMock = vi.fn();
+const updateExternalMcpAccessMock = vi.fn();
 const modalConfirmMock = vi.fn();
 const modalShowMock = vi.fn();
 const modalCloseMock = vi.fn();
@@ -37,6 +38,7 @@ vi.mock("@/shared/api/tools", () => ({
   getExternalMcpServerConfigSchema: (...args: unknown[]) => getExternalMcpServerConfigSchemaMock(...args),
   getExternalMcpServerConfig: (...args: unknown[]) => getExternalMcpServerConfigMock(...args),
   updateExternalMcpServerConfig: (...args: unknown[]) => updateExternalMcpServerConfigMock(...args),
+  updateExternalMcpAccess: (...args: unknown[]) => updateExternalMcpAccessMock(...args),
 }));
 
 vi.mock("@/shared/ui/Modal", () => ({
@@ -65,6 +67,7 @@ describe("McpSettings", () => {
     getExternalMcpServerConfigSchemaMock.mockReset();
     getExternalMcpServerConfigMock.mockReset();
     updateExternalMcpServerConfigMock.mockReset();
+    updateExternalMcpAccessMock.mockReset();
     modalConfirmMock.mockReset();
     modalShowMock.mockReset();
     modalCloseMock.mockReset();
@@ -145,6 +148,10 @@ describe("McpSettings", () => {
       timeoutMs: 45000,
       customHeadersJson: '{\n  "X-Org-Id": "demo"\n}',
       hasBearerToken: true,
+    });
+    updateExternalMcpAccessMock.mockResolvedValue({
+      id: "remote-docs",
+      agentEnabled: true,
     });
   });
 
@@ -248,6 +255,50 @@ describe("McpSettings", () => {
 
     await waitFor(() => {
       expect(screen.getByText("settings.mcp.installed.emptyTitle")).toBeInTheDocument();
+    });
+  });
+
+  it("renders and toggles Agent Access, then reports update failures", async () => {
+    const user = userEvent.setup();
+    const server = {
+      id: "remote-docs",
+      source: "registry" as const,
+      displayName: "Remote Docs",
+      transport: {
+        kind: "streamable-http" as const,
+        url: "https://remote.example/mcp",
+      },
+      status: "connected" as const,
+      enabled: true,
+      agentEnabled: false,
+      createdAt: "2026-06-25T00:00:00.000Z",
+      updatedAt: "2026-06-25T00:00:00.000Z",
+      discoveredTools: [],
+    };
+    getExternalMcpServersMock.mockResolvedValueOnce([server]);
+    getExternalMcpServersMock.mockResolvedValueOnce([{ ...server, agentEnabled: true }]);
+    updateExternalMcpAccessMock.mockResolvedValueOnce({ ...server, agentEnabled: true });
+
+    render(<McpSettings />);
+    await user.click(
+      await screen.findByRole("button", {
+        name: /settings\.mcp\.tabs\.installed/i,
+      }),
+    );
+
+    const accessSwitch = await screen.findByRole("switch");
+    expect(accessSwitch).toHaveAttribute("aria-checked", "false");
+    await user.click(accessSwitch);
+
+    await waitFor(() => {
+      expect(updateExternalMcpAccessMock).toHaveBeenCalledWith("remote-docs", true);
+    });
+    expect(await screen.findByRole("switch")).toHaveAttribute("aria-checked", "true");
+
+    updateExternalMcpAccessMock.mockRejectedValueOnce(new Error("access update failed"));
+    await user.click(screen.getByRole("switch"));
+    await waitFor(() => {
+      expect(messageErrorMock).toHaveBeenCalledWith("access update failed");
     });
   });
 

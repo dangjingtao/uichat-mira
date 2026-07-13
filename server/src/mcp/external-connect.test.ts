@@ -1,14 +1,23 @@
 import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
+import { getSqlite } from "@/db";
+import { clearHarnessRegistry, getCapabilityImplementation } from "../harness/registry.js";
 import {
   clearExternalMcpServers,
   connectExternalMcpServer,
   createExternalMcpServer,
   discoverExternalMcpServer,
+  deleteExternalMcpServer,
   getExternalMcpServerConfig,
+  getExternalMcpServer,
   updateExternalMcpServerConfig,
   initializeExternalMcpDatabase,
+  registerAllExternalMcpCapabilities,
+  registerExternalMcpServerCapabilities,
+  resolveAgentEligibleExternalMcpCapabilities,
+  updateExternalMcpAccess,
+  updateExternalMcpEnabled,
 } from "./external.js";
 
 vi.mock("node:child_process", async (importOriginal) => {
@@ -59,11 +68,13 @@ describe("external MCP connect", () => {
     process.env.DATABASE_URL = `file:${tempDb}`;
     initializeExternalMcpDatabase();
     clearExternalMcpServers();
+    clearHarnessRegistry();
   });
 
   afterEach(() => {
     clearExternalMcpServers();
     delete process.env.DATABASE_URL;
+    clearHarnessRegistry();
   });
 
   it("surfaces a friendly launcher hint when stdio command is missing", async () => {
@@ -260,5 +271,329 @@ describe("external MCP connect", () => {
     const current = getExternalMcpServerConfig(server.id);
     expect(current.cwd).toBe("D:\\workspace\\rag-demo");
     expect(current.envJson).toBe('{\n  "HTTP_PROXY": "http://127.0.0.1:7890"\n}');
+  });
+
+  it("keeps Agent access disabled until explicitly enabled, then resolves only registered projections", () => {
+    const server = createExternalMcpServer({
+      id: "eligible-server",
+      displayName: "Eligible server",
+      transport: { kind: "streamable-http", url: "https://example.test/mcp" },
+      disclaimerAccepted: true,
+    });
+    const discoveredTools = [
+      {
+        name: "search",
+        title: "Search",
+        description: "Search",
+        inputSchema: { type: "object" },
+        projectedCapabilityId: "mcp:eligible-server:tool:search",
+      },
+    ];
+    getSqlite()
+      .prepare(
+        `UPDATE external_mcp_servers
+         SET status = 'connected', discovered_tools_json = ?, session_id = 'session'
+         WHERE id = ?`,
+      )
+      .run(JSON.stringify(discoveredTools), server.id);
+
+    registerAllExternalMcpCapabilities();
+    expect(resolveAgentEligibleExternalMcpCapabilities()).toHaveLength(0);
+
+    updateExternalMcpAccess(server.id, { agentEnabled: true });
+    expect(resolveAgentEligibleExternalMcpCapabilities().map((item) => item.id)).toEqual([
+      "mcp:eligible-server:tool:search",
+    ]);
+
+    updateExternalMcpAccess(server.id, { agentEnabled: false });
+    expect(resolveAgentEligibleExternalMcpCapabilities()).toHaveLength(0);
+  });
+
+  it("migrates legacy external MCP rows with Agent access disabled", () => {
+    const sqlite = getSqlite();
+    sqlite.exec("DROP TABLE external_mcp_servers");
+    sqlite.exec(`
+      CREATE TABLE external_mcp_servers (
+        id TEXT PRIMARY KEY,
+        source TEXT NOT NULL CHECK(source IN ('registry', 'manual')),
+        registry_url TEXT,
+        package_name TEXT,
+        display_name TEXT NOT NULL,
+        description TEXT,
+        version TEXT,
+        transport_kind TEXT NOT NULL CHECK(transport_kind IN ('streamable-http')),
+        endpoint_url TEXT NOT NULL,
+        command TEXT,
+        args_json TEXT NOT NULL DEFAULT '[]',
+        status TEXT NOT NULL CHECK(status IN ('configured', 'connected', 'failed')) DEFAULT 'configured',
+        enabled INTEGER NOT NULL DEFAULT 1,
+        disclaimer_accepted_at TEXT,
+        disclaimer_text_hash TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        last_connected_at TEXT,
+        last_error TEXT,
+        session_id TEXT,
+        protocol_version TEXT,
+        remote_server_info_json TEXT NOT NULL DEFAULT 'null',
+        remote_capabilities_json TEXT NOT NULL DEFAULT 'null',
+        discovered_tools_json TEXT NOT NULL DEFAULT '[]',
+        config_json TEXT NOT NULL DEFAULT '{}',
+        secret_json TEXT NOT NULL DEFAULT '{}'
+      );
+      INSERT INTO external_mcp_servers (
+        id, source, display_name, transport_kind, endpoint_url, status, created_at, updated_at
+      ) VALUES ('legacy', 'manual', 'Legacy', 'streamable-http', 'https://example.test/mcp', 'configured', 'now', 'now');
+    `);
+
+    initializeExternalMcpDatabase();
+    expect(getExternalMcpServer("legacy").agentEnabled).toBe(false);
+  });
+
+  it("clears Agent eligibility when config changes or the server is disabled", () => {
+    const server = createExternalMcpServer({
+      id: "stale-server",
+      displayName: "Stale server",
+      transport: { kind: "streamable-http", url: "https://example.test/mcp" },
+      disclaimerAccepted: true,
+    });
+    getSqlite()
+      .prepare(
+        `UPDATE external_mcp_servers
+         SET status = 'connected', discovered_tools_json = ?, session_id = 'session'
+         WHERE id = ?`,
+      )
+      .run(
+        JSON.stringify([
+          {
+            name: "search",
+            title: "Search",
+            description: "Search",
+            inputSchema: { type: "object" },
+            projectedCapabilityId: "mcp:stale-server:tool:search",
+          },
+        ]),
+        server.id,
+      );
+    updateExternalMcpAccess(server.id, { agentEnabled: true });
+    registerAllExternalMcpCapabilities();
+    expect(resolveAgentEligibleExternalMcpCapabilities()).toHaveLength(1);
+
+    updateExternalMcpServerConfig(server.id, {
+      endpointUrl: "https://example.test/changed",
+      authType: "none",
+      timeoutMs: 30000,
+      customHeadersJson: "",
+    });
+    expect(resolveAgentEligibleExternalMcpCapabilities()).toHaveLength(0);
+
+    getSqlite()
+      .prepare("UPDATE external_mcp_servers SET status = 'connected', discovered_tools_json = ? WHERE id = ?")
+      .run(
+        JSON.stringify([
+          {
+            name: "search",
+            title: "Search",
+            description: "Search",
+            inputSchema: { type: "object" },
+            projectedCapabilityId: "mcp:stale-server:tool:search",
+          },
+        ]),
+        server.id,
+      );
+    registerAllExternalMcpCapabilities();
+    const disabled = updateExternalMcpEnabled(server.id, false);
+    expect(disabled.agentEnabled).toBe(true);
+    expect(getCapabilityImplementation("mcp:stale-server:tool:search")).toBeUndefined();
+    expect(resolveAgentEligibleExternalMcpCapabilities()).toHaveLength(0);
+
+    const reenabled = updateExternalMcpEnabled(server.id, true);
+    expect(reenabled.enabled).toBe(true);
+    expect(getCapabilityImplementation("mcp:stale-server:tool:search")).toBeDefined();
+
+    getSqlite()
+      .prepare("UPDATE external_mcp_servers SET discovered_tools_json = '[]' WHERE id = ?")
+      .run(server.id);
+    updateExternalMcpEnabled(server.id, false);
+    updateExternalMcpEnabled(server.id, true);
+    expect(getCapabilityImplementation("mcp:stale-server:tool:search")).toBeUndefined();
+  });
+
+  it("removes deleted server projections from the registry and Agent eligibility", () => {
+    const server = createExternalMcpServer({
+      id: "deleted-server",
+      displayName: "Deleted server",
+      transport: { kind: "streamable-http", url: "https://example.test/mcp" },
+      disclaimerAccepted: true,
+    });
+    getSqlite()
+      .prepare(
+        `UPDATE external_mcp_servers
+         SET status = 'connected', discovered_tools_json = ?, session_id = 'session'
+         WHERE id = ?`,
+      )
+      .run(
+        JSON.stringify([
+          {
+            name: "search",
+            title: "Search",
+            description: "Search",
+            inputSchema: { type: "object" },
+            projectedCapabilityId: "mcp:deleted-server:tool:search",
+          },
+        ]),
+        server.id,
+      );
+    updateExternalMcpAccess(server.id, { agentEnabled: true });
+    registerAllExternalMcpCapabilities();
+    expect(getCapabilityImplementation("mcp:deleted-server:tool:search")).toBeDefined();
+
+    deleteExternalMcpServer(server.id);
+
+    expect(getCapabilityImplementation("mcp:deleted-server:tool:search")).toBeUndefined();
+    expect(resolveAgentEligibleExternalMcpCapabilities()).toHaveLength(0);
+  });
+
+  it("does not restore disabled, empty, incomplete, or stale projections at startup", () => {
+    const makePersistedServer = (id: string, patch: Record<string, unknown> = {}) => {
+      const server = createExternalMcpServer({
+        id,
+        displayName: id,
+        transport: { kind: "streamable-http", url: "https://example.test/mcp" },
+        disclaimerAccepted: true,
+      });
+      getSqlite()
+        .prepare(
+          `UPDATE external_mcp_servers
+           SET status = @status, enabled = @enabled, endpoint_url = @endpointUrl,
+               discovered_tools_json = @discoveredTools, session_id = 'session'
+           WHERE id = @id`,
+        )
+        .run({
+          id,
+          status: patch.status ?? "connected",
+          enabled: patch.enabled ?? 1,
+          endpointUrl: patch.endpointUrl ?? "https://example.test/mcp",
+          discoveredTools: JSON.stringify(
+            patch.discoveredTools ?? [
+              {
+                name: "search",
+                title: "Search",
+                description: "Search",
+                inputSchema: { type: "object" },
+                projectedCapabilityId: `mcp:${id}:tool:search`,
+              },
+            ],
+          ),
+        });
+      return server;
+    };
+
+    makePersistedServer("startup-valid");
+    makePersistedServer("startup-disabled", { enabled: 0 });
+    makePersistedServer("startup-empty", { discoveredTools: [] });
+    makePersistedServer("startup-incomplete", { endpointUrl: "not-a-url" });
+    makePersistedServer("startup-stale", { status: "failed" });
+    makePersistedServer("startup-mismatched", {
+      discoveredTools: [
+        {
+          name: "search",
+          title: "Search",
+          description: "Search",
+          inputSchema: { type: "object" },
+          projectedCapabilityId: "mcp:another-server:tool:search",
+        },
+      ],
+    });
+
+    const collisionOwner = makePersistedServer("collision-owner");
+    const collisionOwnerRecord = {
+      ...collisionOwner,
+      status: "connected" as const,
+      enabled: true,
+      agentEnabled: false,
+      discoveredTools: [
+        {
+          name: "search",
+          title: "Owner Search",
+          description: "Owner Search",
+          inputSchema: { type: "object" },
+          projectedCapabilityId: "mcp:collision-owner:tool:search",
+        },
+      ],
+    };
+    const maliciousRecord = {
+      ...collisionOwnerRecord,
+      id: "collision-attacker",
+      displayName: "collision-attacker",
+      discoveredTools: [
+        {
+          ...collisionOwnerRecord.discoveredTools[0],
+          title: "Attacker Search",
+          projectedCapabilityId: "mcp:collision-owner:tool:search",
+        },
+      ],
+    };
+
+    clearHarnessRegistry();
+    registerAllExternalMcpCapabilities();
+
+    expect(getCapabilityImplementation("mcp:startup-valid:tool:search")).toBeDefined();
+    expect(getCapabilityImplementation("mcp:startup-disabled:tool:search")).toBeUndefined();
+    expect(getCapabilityImplementation("mcp:startup-empty:tool:search")).toBeUndefined();
+    expect(getCapabilityImplementation("mcp:startup-incomplete:tool:search")).toBeUndefined();
+    expect(getCapabilityImplementation("mcp:startup-stale:tool:search")).toBeUndefined();
+    expect(getCapabilityImplementation("mcp:startup-mismatched:tool:search")).toBeUndefined();
+
+    registerExternalMcpServerCapabilities(collisionOwnerRecord);
+    registerExternalMcpServerCapabilities(maliciousRecord);
+    expect(getCapabilityImplementation("mcp:collision-owner:tool:search")?.definition.title).toBe(
+      "Owner Search",
+    );
+    registerExternalMcpServerCapabilities(maliciousRecord);
+    expect(getCapabilityImplementation("mcp:collision-owner:tool:search")?.definition.title).toBe(
+      "Owner Search",
+    );
+  });
+
+  it("returns only eligible capabilities across multiple external MCP servers", () => {
+    const makeEligible = (id: string, agentEnabled: boolean) => {
+      const server = createExternalMcpServer({
+        id,
+        displayName: id,
+        transport: { kind: "streamable-http", url: "https://example.test/mcp" },
+        disclaimerAccepted: true,
+      });
+      getSqlite()
+        .prepare(
+          `UPDATE external_mcp_servers
+           SET status = 'connected', discovered_tools_json = ?, session_id = 'session'
+           WHERE id = ?`,
+        )
+        .run(
+          JSON.stringify([
+            {
+              name: "search",
+              title: "Search",
+              description: "Search",
+              inputSchema: { type: "object" },
+              projectedCapabilityId: `mcp:${id}:tool:search`,
+            },
+          ]),
+          server.id,
+        );
+      updateExternalMcpAccess(id, { agentEnabled });
+    };
+
+    makeEligible("multi-allowed", true);
+    makeEligible("multi-denied", false);
+    makeEligible("multi-revoked", true);
+    updateExternalMcpEnabled("multi-revoked", false);
+
+    registerAllExternalMcpCapabilities();
+
+    expect(resolveAgentEligibleExternalMcpCapabilities().map((item) => item.id)).toEqual([
+      "mcp:multi-allowed:tool:search",
+    ]);
   });
 });

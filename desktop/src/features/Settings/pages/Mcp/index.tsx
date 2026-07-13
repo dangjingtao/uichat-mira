@@ -18,6 +18,7 @@ import {
   getExternalMcpServers,
   getMcpMarketplaceServers,
   updateExternalMcpServerConfig,
+  updateExternalMcpAccess,
   type ExternalMcpConfigSchemaResolution,
   type ExternalMcpServerConfigRecord,
   type ExternalMcpServerRecord,
@@ -449,6 +450,19 @@ export default function McpSettings() {
     }
   };
 
+  const toggleAgentAccess = async (server: ExternalMcpServerRecord, agentEnabled: boolean) => {
+    setPendingServerId(server.id);
+    try {
+      await updateExternalMcpAccess(server.id, agentEnabled);
+      await loadInstalledServers();
+      message.success(agentEnabled ? "已允许 Agent 使用此 MCP" : "已禁止 Agent 使用此 MCP");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "更新 Agent Access 失败");
+    } finally {
+      setPendingServerId(null);
+    }
+  };
+
   const removeServer = (server: ExternalMcpServerRecord) => {
     Modal.confirm({
       title: t("settings.mcp.deleteDialog.title"),
@@ -780,11 +794,16 @@ export default function McpSettings() {
                 docs: "Docs",
                 repository: "GitHub",
                 packageName: "Package",
+                installed: "已安装",
+                enabled: "enabled",
+                disabled: "disabled",
+                agentAccess: "允许 Agent 使用",
               }}
               onConfigure={(server) => void openConfig(server)}
               onConnect={(serverId) => void runServerAction(serverId, "connect")}
               onDiscover={(serverId) => void runServerAction(serverId, "discover")}
               onDelete={removeServer}
+              onToggleAgentAccess={toggleAgentAccess}
             />
           )}
         </div>

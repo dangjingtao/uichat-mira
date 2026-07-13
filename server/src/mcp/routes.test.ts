@@ -686,6 +686,36 @@ describe("mcp routes", () => {
     expect(createdServer.id).toBe("remote-docs");
     expect(createdServer.status).toBe("configured");
 
+    const agentAccessEnabledResponse = await app.inject({
+      method: "PATCH",
+      url: `/mcp/external/servers/${createdServer.id}/access`,
+      payload: { agentEnabled: true },
+    });
+    expect(agentAccessEnabledResponse.statusCode).toBe(200);
+    expect((agentAccessEnabledResponse.json() as { data: { agentEnabled: boolean } }).data.agentEnabled).toBe(true);
+
+    const agentAccessRevokedResponse = await app.inject({
+      method: "PATCH",
+      url: `/mcp/external/servers/${createdServer.id}/access`,
+      payload: { agentEnabled: false },
+    });
+    expect(agentAccessRevokedResponse.statusCode).toBe(200);
+    expect((agentAccessRevokedResponse.json() as { data: { agentEnabled: boolean } }).data.agentEnabled).toBe(false);
+
+    const invalidAgentAccessResponse = await app.inject({
+      method: "PATCH",
+      url: `/mcp/external/servers/${createdServer.id}/access`,
+      payload: {},
+    });
+    expect(invalidAgentAccessResponse.statusCode).toBe(400);
+
+    const invalidEnabledResponse = await app.inject({
+      method: "PATCH",
+      url: `/mcp/external/servers/${createdServer.id}/enabled`,
+      payload: { enabled: "yes" },
+    });
+    expect(invalidEnabledResponse.statusCode).toBe(400);
+
     const connectResponse = await app.inject({
       method: "POST",
       url: `/mcp/external/servers/${createdServer.id}/connect`,
