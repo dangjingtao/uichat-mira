@@ -231,6 +231,7 @@ export type ExternalMcpServerRecord = {
       };
   status: "configured" | "connected" | "failed";
   enabled: boolean;
+  agentEnabled: boolean;
   disclaimerAcceptedAt?: string;
   disclaimerTextHash?: string;
   createdAt: string;
@@ -363,6 +364,18 @@ export function connectExternalMcpServer(id: string) {
 
 export function discoverExternalMcpServer(id: string) {
   return post<ExternalMcpServerRecord>(`/mcp/external/servers/${id}/discover`, undefined, {
+    timeout: MCP_REQUEST_TIMEOUT_MS,
+  });
+}
+
+export function updateExternalMcpAccess(id: string, agentEnabled: boolean) {
+  return patch<ExternalMcpServerRecord>(`/mcp/external/servers/${id}/access`, { agentEnabled }, {
+    timeout: MCP_REQUEST_TIMEOUT_MS,
+  });
+}
+
+export function updateExternalMcpEnabled(id: string, enabled: boolean) {
+  return patch<ExternalMcpServerRecord>(`/mcp/external/servers/${id}/enabled`, { enabled }, {
     timeout: MCP_REQUEST_TIMEOUT_MS,
   });
 }

@@ -92,6 +92,7 @@ UIChat Mira 将来要怎样消费第三方 MCP server。
 - projected capability 注册
 - 手动 invocation
 - 前端展示已安装 server、连接状态、Discover 结果与 projected capability id
+- Agent Access 需要用户在 Settings -> MCP 中单独开启，不随安装、Connect 或 Discover 自动开启
 
 ### 当前还没打通
 
@@ -99,6 +100,14 @@ UIChat Mira 将来要怎样消费第三方 MCP server。
 - 复杂 approval 流程
 - 完整 secret 管理面板
 - 非核心内置 MCP package 管理闭环
+
+### Agent eligibility contract
+
+`enabled` 表示 server 的运行开关，`agentEnabled` 表示用户是否允许 Agent 使用该 server；两者不是同一个状态。新安装和历史数据库迁移的 `agentEnabled` 都是 `false`。
+
+Agent 候选只能通过后端单点 resolver 取得。resolver 同时要求 server 已启用、Agent Access 已开启、免责声明已接受、状态为 connected、transport 配置完整、Discover 结果非空，并确认 projected capability 仍存在于 Harness Registry。配置更新会清空 Discover 结果并移除投影；删除、禁用和撤销 Agent Access 立即使其退出资格集合。
+
+启动恢复只注册满足最小 runtime 条件的已发现投影，不恢复 disabled、空 Discover、配置不完整或 stale projection。注册存在不代表 Agent 获得授权，Agent 必须继续经过 eligibility resolver。
 
 ## 产品概念边界
 
@@ -263,6 +272,7 @@ type ExternalMcpServerRecord = {
   transport: ExternalMcpTransportConfig;
   status: "configured" | "connected" | "disabled" | "failed";
   enabled: boolean;
+  agentEnabled: boolean;
   createdAt: string;
   updatedAt: string;
   lastConnectedAt?: string;

@@ -33,6 +33,8 @@ import {
   getExternalMcpServerConfigSchema,
   listExternalMcpServers,
   updateExternalMcpServerConfig,
+  updateExternalMcpAccess,
+  updateExternalMcpEnabled,
 } from "./external.js";
 import { webSearchSettingsRepository } from "@/db/repositories/web-search-settings.repository.js";
 import { integrationCapabilitiesRepository } from "@/db/repositories/integration-capabilities.repository.js";
@@ -290,6 +292,38 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
     },
     routeHandler("Failed to connect external MCP server", async (request) =>
       success(await connectExternalMcpServer(request.params.id))),
+  );
+
+  app.patch<{
+    Params: { id: string };
+    Body: { agentEnabled: boolean };
+  }>(
+    "/mcp/external/servers/:id/access",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Update Agent access for one external MCP server",
+        response: { 200: successEnvelope(objectSchema) },
+      },
+    },
+    routeHandler("Failed to update external MCP Agent access", async (request) =>
+      success(updateExternalMcpAccess(request.params.id, request.body))),
+  );
+
+  app.patch<{
+    Params: { id: string };
+    Body: { enabled: boolean };
+  }>(
+    "/mcp/external/servers/:id/enabled",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Enable or disable one external MCP server",
+        response: { 200: successEnvelope(objectSchema) },
+      },
+    },
+    routeHandler("Failed to update external MCP enabled state", async (request) =>
+      success(updateExternalMcpEnabled(request.params.id, request.body.enabled))),
   );
 
   app.post<{ Params: { id: string } }>(

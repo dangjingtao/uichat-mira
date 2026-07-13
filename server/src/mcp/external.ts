@@ -1,7 +1,11 @@
 import { getSqlite } from "@/db";
 import { mcpBadRequest, mcpInternalError, mcpNotFound } from "./core/errors.js";
 import type { McpToolDefinition, McpToolImplementation } from "./core/definitions.js";
-import { registerCapability, unregisterCapability } from "../harness/registry.js";
+import {
+  getCapabilityImplementation,
+  registerCapability,
+  unregisterCapability,
+} from "../harness/registry.js";
 import { StdioMcpSession } from "./stdio-session.js";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
@@ -113,6 +117,7 @@ export interface ExternalMcpServerRecord {
   transport: ExternalMcpTransportConfig;
   status: ExternalMcpServerStatus;
   enabled: boolean;
+  agentEnabled: boolean;
   disclaimerAcceptedAt?: string;
   disclaimerTextHash?: string;
   createdAt: string;
@@ -156,6 +161,7 @@ interface ExternalMcpServerRow {
   env_json: string;
   status: ExternalMcpServerStatus;
   enabled: number;
+  agent_enabled: number;
   disclaimer_accepted_at: string | null;
   disclaimer_text_hash: string | null;
   created_at: string;
@@ -422,6 +428,7 @@ const toRecord = (row: ExternalMcpServerRow): ExternalMcpServerRecord => ({
         },
   status: row.status,
   enabled: Boolean(row.enabled),
+  agentEnabled: Boolean(row.agent_enabled),
   ...(row.disclaimer_accepted_at ? { disclaimerAcceptedAt: row.disclaimer_accepted_at } : {}),
   ...(row.disclaimer_text_hash ? { disclaimerTextHash: row.disclaimer_text_hash } : {}),
   createdAt: row.created_at,
@@ -458,6 +465,7 @@ export const initializeExternalMcpDatabase = () => {
       args_json TEXT NOT NULL DEFAULT '[]',
       status TEXT NOT NULL CHECK(status IN ('configured', 'connected', 'failed')) DEFAULT 'configured',
       enabled INTEGER NOT NULL DEFAULT 1,
+      agent_enabled INTEGER NOT NULL DEFAULT 0,
       disclaimer_accepted_at TEXT,
       disclaimer_text_hash TEXT,
       created_at TEXT NOT NULL,
@@ -512,6 +520,7 @@ export const initializeExternalMcpDatabase = () => {
         env_json TEXT NOT NULL DEFAULT '{}',
         status TEXT NOT NULL CHECK(status IN ('configured', 'connected', 'failed')) DEFAULT 'configured',
         enabled INTEGER NOT NULL DEFAULT 1,
+        agent_enabled INTEGER NOT NULL DEFAULT 0,
         disclaimer_accepted_at TEXT,
         disclaimer_text_hash TEXT,
         created_at TEXT NOT NULL,
@@ -543,6 +552,7 @@ export const initializeExternalMcpDatabase = () => {
         args_json,
         status,
         enabled,
+        agent_enabled,
         disclaimer_accepted_at,
         disclaimer_text_hash,
         created_at,
@@ -571,10 +581,9 @@ export const initializeExternalMcpDatabase = () => {
         endpoint_url,
         command,
         COALESCE(args_json, '[]'),
-        NULL,
-        '{}',
         status,
         enabled,
+        0,
         disclaimer_accepted_at,
         disclaimer_text_hash,
         created_at,
@@ -660,6 +669,12 @@ export const initializeExternalMcpDatabase = () => {
       "ALTER TABLE external_mcp_servers ADD COLUMN repository_url TEXT",
     );
   }
+
+  if (!columns.includes("agent_enabled")) {
+    sqlite.exec(
+      "ALTER TABLE external_mcp_servers ADD COLUMN agent_enabled INTEGER NOT NULL DEFAULT 0",
+    );
+  }
 };
 
 const getServerRow = (serverId: string): ExternalMcpServerRow | undefined => {
@@ -687,6 +702,56 @@ export const listExternalMcpServers = (): ExternalMcpServerRecord[] => {
       .prepare("SELECT * FROM external_mcp_servers ORDER BY updated_at DESC")
       .all() as ExternalMcpServerRow[]
   ).map(toRecord);
+};
+
+export type UpdateExternalMcpAccessInput = {
+  agentEnabled: boolean;
+};
+
+export const updateExternalMcpAccess = (
+  serverId: string,
+  input: UpdateExternalMcpAccessInput,
+): ExternalMcpServerRecord => {
+  if (typeof input.agentEnabled !== "boolean") {
+    throw mcpBadRequest("agentEnabled must be a boolean");
+  }
+  const existing = getRequiredServer(serverId);
+  initializeExternalMcpDatabase();
+  getSqlite()
+    .prepare(
+      `UPDATE external_mcp_servers
+       SET agent_enabled = @agentEnabled, updated_at = @updatedAt
+       WHERE id = @id`,
+    )
+    .run({
+      id: serverId,
+      agentEnabled: input.agentEnabled ? 1 : 0,
+      updatedAt: nowIso(),
+    });
+  return getRequiredServer(existing.id);
+};
+
+export const updateExternalMcpEnabled = (
+  serverId: string,
+  enabled: boolean,
+): ExternalMcpServerRecord => {
+  if (typeof enabled !== "boolean") {
+    throw mcpBadRequest("enabled must be a boolean");
+  }
+  const existing = getRequiredServer(serverId);
+  initializeExternalMcpDatabase();
+  getSqlite()
+    .prepare(
+      `UPDATE external_mcp_servers
+       SET enabled = @enabled, updated_at = @updatedAt
+       WHERE id = @id`,
+    )
+    .run({ id: serverId, enabled: enabled ? 1 : 0, updatedAt: nowIso() });
+  if (!enabled) {
+    unregisterExternalMcpServerCapabilities(existing);
+    disposeExternalMcpServerSession(serverId);
+  }
+  return getRequiredServer(serverId);
 };
 
 export const clearExternalMcpServers = () => {
@@ -798,6 +863,7 @@ export const createExternalMcpServer = (
     argsJson: JSON.stringify(args),
     status: "configured" as const,
     enabled: 1,
+    agentEnabled: existing ? Number(existing.agent_enabled ?? 0) : 0,
     disclaimerAcceptedAt: createdAt,
     disclaimerTextHash: input.disclaimerTextHash ?? DISCLAIMER_TEXT_HASH,
     createdAt: existing?.created_at ?? createdAt,
@@ -832,6 +898,7 @@ export const createExternalMcpServer = (
               args_json = @argsJson,
               status = @status,
               enabled = @enabled,
+              agent_enabled = @agentEnabled,
               disclaimer_accepted_at = @disclaimerAcceptedAt,
               disclaimer_text_hash = @disclaimerTextHash,
               last_connected_at = @lastConnectedAt,
@@ -852,12 +919,12 @@ export const createExternalMcpServer = (
         `
           INSERT INTO external_mcp_servers (
             id, source, registry_url, package_name, documentation_url, repository_url, display_name, description, version,
-            transport_kind, endpoint_url, command, args_json, status, enabled, disclaimer_accepted_at,
+            transport_kind, endpoint_url, command, args_json, status, enabled, agent_enabled, disclaimer_accepted_at,
             disclaimer_text_hash, created_at, updated_at, remote_server_info_json,
             remote_capabilities_json, discovered_tools_json, config_json, secret_json
           )
           VALUES (@id, @source, @registryUrl, @packageName, @documentationUrl, @repositoryUrl, @displayName, @description, @version,
-            @transportKind, @endpointUrl, @command, @argsJson, @status, @enabled, @disclaimerAcceptedAt,
+            @transportKind, @endpointUrl, @command, @argsJson, @status, @enabled, @agentEnabled, @disclaimerAcceptedAt,
             @disclaimerTextHash, @createdAt, @updatedAt, @remoteServerInfoJson,
             @remoteCapabilitiesJson, @discoveredToolsJson, @configJson, @secretJson)
         `,
@@ -1446,6 +1513,9 @@ export const registerExternalMcpServerCapabilities = (
   server: ExternalMcpServerRecord,
 ) => {
   unregisterExternalMcpServerCapabilities(server);
+  if (!isExternalMcpRuntimeEligible(server)) {
+    return;
+  }
   for (const tool of server.discoveredTools) {
     registerProjectedTool(server, tool);
   }
@@ -1455,6 +1525,45 @@ export const registerAllExternalMcpCapabilities = () => {
   for (const server of listExternalMcpServers()) {
     registerExternalMcpServerCapabilities(server);
   }
+};
+
+const isExternalMcpTransportConfigured = (server: ExternalMcpServerRecord) => {
+  if (server.transport.kind === "streamable-http") {
+    try {
+      const url = new URL(server.transport.url);
+      return ["http:", "https:"].includes(url.protocol);
+    } catch {
+      return false;
+    }
+  }
+  return Boolean(server.transport.command.trim());
+};
+
+const isExternalMcpRuntimeEligible = (server: ExternalMcpServerRecord) =>
+  server.enabled &&
+  server.status === "connected" &&
+  Boolean(server.disclaimerAcceptedAt && server.disclaimerTextHash) &&
+  server.discoveredTools.length > 0 &&
+  isExternalMcpTransportConfigured(server);
+
+export const resolveAgentEligibleExternalMcpCapabilities = (): McpToolDefinition[] => {
+  const eligible: McpToolDefinition[] = [];
+  for (const server of listExternalMcpServers()) {
+    if (!isExternalMcpRuntimeEligible(server) || !server.agentEnabled) {
+      continue;
+    }
+    for (const tool of server.discoveredTools) {
+      const implementation = getCapabilityImplementation(tool.projectedCapabilityId);
+      if (!implementation || implementation.definition.source !== "external") {
+        continue;
+      }
+      if (!server.discoveredTools.some((candidate) => candidate.projectedCapabilityId === implementation.definition.id)) {
+        continue;
+      }
+      eligible.push(implementation.definition);
+    }
+  }
+  return eligible;
 };
 
 export const discoverExternalMcpServer = async (
