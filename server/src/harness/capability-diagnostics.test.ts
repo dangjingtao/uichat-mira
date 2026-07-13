@@ -6,6 +6,11 @@ import { resolveHarnessCapabilityDiagnostics } from "./capability-diagnostics.js
 import { readOpenTool } from "../mcp/tools/read-open.tool.js";
 import { webSearchTool } from "../mcp/tools/web-search.tool.js";
 import { terminalSessionTool } from "../mcp/tools/terminal-session.tool.js";
+import { resolveAgentEligibleExternalMcpCapabilities } from "@/mcp/external";
+
+vi.mock("@/mcp/external", () => ({
+  resolveAgentEligibleExternalMcpCapabilities: vi.fn(() => []),
+}));
 
 const externalFakeTool = {
   definition: {
@@ -413,6 +418,7 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
       source: "agent_intent" as const,
       tools: [externalFakeTool],
       allowExternal: true,
+      allowedExternalToolIds: ["external_fake_tool"],
       rerankOrder: ["external_fake_tool"],
       expectedExposedToolIds: ["external_fake_tool"],
       expectedBlockedCapabilityIds: [],
@@ -440,6 +446,7 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
       source,
       tools,
       allowExternal,
+      allowedExternalToolIds,
       sandboxProfiles,
       rerankOrder,
       expectedExposedToolIds,
@@ -457,6 +464,7 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
         query,
         source,
         allowExternal,
+        allowedExternalToolIds,
         sandboxProfiles,
       });
 
@@ -469,4 +477,80 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
       expect(result.toolCandidates.every((candidate) => !("preferredForQuery" in candidate))).toBe(true);
     },
   );
+
+  it("reports eligible, blocked, exposed, and candidate external states without secrets", async () => {
+    const eligibleTools = Array.from({ length: 21 }, (_, index) => ({
+      definition: {
+        id: `mcp:diagnostics-server:tool:search_${index}`,
+        title: `Documentation search ${index}`,
+        description: "Search product documentation.",
+        domain: "external_mcp" as const,
+        source: "external" as const,
+        sourceLabel: "Diagnostics Server",
+        mode: "sync" as const,
+        inputSchema: { type: "object", properties: { query: { type: "string" } } },
+        tags: ["docs", "search"],
+        capabilities: { sideEffect: "network" as const, requiresApproval: true },
+      },
+      execute() {
+        return {};
+      },
+    }));
+    const blockedTool = {
+      definition: {
+        id: "mcp:blocked-server:tool:restricted_lookup",
+        title: "Blocked lookup",
+        description: "Should remain outside the eligible allowlist.",
+        domain: "external_mcp" as const,
+        source: "external" as const,
+        mode: "sync" as const,
+        inputSchema: { type: "object" },
+        tags: ["blocked"],
+        capabilities: { sideEffect: "network" as const, requiresApproval: true },
+      },
+      execute() {
+        return {};
+      },
+    };
+    [...eligibleTools, blockedTool].forEach(registerCapability);
+    vi.mocked(resolveAgentEligibleExternalMcpCapabilities).mockReturnValue(
+      eligibleTools.map((tool) => tool.definition),
+    );
+    vi.spyOn(embedding, "executeLocalEmbedding").mockResolvedValue({
+      embeddingModel: "test-embedding",
+      embeddingModelConfigId: "test-embedding-config",
+      embeddings: Array.from({ length: eligibleTools.length + 2 }, () => [1, 0]),
+    });
+    vi.spyOn(rerank, "executeLocalRerank").mockResolvedValue({
+      rerankedCandidates: [{
+        id: eligibleTools[0]!.definition.id,
+        text: eligibleTools[0]!.definition.title,
+        score: 1,
+        probability: 0.99,
+        rank: 1,
+      }],
+      rerankModel: "test-rerank",
+      rerankModelConfigId: "test-rerank-config",
+    });
+
+    const allowedExternalToolIds = eligibleTools.map((tool) => tool.definition.id);
+    const result = await resolveHarnessCapabilityDiagnostics({
+      query: "search product documentation",
+      source: "agent_intent",
+      allowExternal: true,
+      allowedExternalToolIds,
+      topK: 1,
+    });
+
+    expect(result.eligibleExternalCapabilityIds).toEqual(allowedExternalToolIds);
+    expect(result.externalExposure.find((item) => item.status === "candidate")?.id).toBe(
+      eligibleTools[0]!.definition.id,
+    );
+    expect(result.externalExposure.some((item) => item.status === "exposed")).toBe(true);
+    expect(result.externalExposure.find((item) => item.status === "blocked")?.id).toBe(
+      blockedTool.definition.id,
+    );
+    expect(result.registeredBlockedExternalCapabilityIds).toContain(blockedTool.definition.id);
+    expect(JSON.stringify(result)).not.toMatch(/bearerToken|customHeaders|envJson|top-secret-token/i);
+  });
 });

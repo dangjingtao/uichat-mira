@@ -85,6 +85,8 @@ const createFallbackProfile = (
   domain: definition.domain,
   source: definition.source,
   tags: definition.tags,
+  inputSchema: definition.inputSchema,
+  sourceLabel: definition.sourceLabel,
   preferredToolId: definition.id,
   supportingToolIds: [definition.id],
 });

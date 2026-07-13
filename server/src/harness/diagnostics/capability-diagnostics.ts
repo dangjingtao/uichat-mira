@@ -2,8 +2,11 @@ import type { McpSandboxProfile } from "../../mcp/core/definitions.js";
 import { resolveHarnessActionProfiles } from "../action-profiles.js";
 import { resolveHarnessCapabilityProfiles } from "../profiles/index.js";
 import { resolveHarnessToolCandidatesForTurn } from "../candidates-core/index.js";
+import { resolveHarnessToolExposure } from "../exposure-core/index.js";
 import type { ToolIntentCandidate } from "@/agent/intent/types.js";
 import type { HarnessTurnSource } from "../shared/types.js";
+import { listCapabilityDefinitions } from "../registry.js";
+import { resolveAgentEligibleExternalMcpCapabilities } from "@/mcp/external";
 
 export interface HarnessCapabilityDiagnosticsInput {
   query: string;
@@ -13,6 +16,7 @@ export interface HarnessCapabilityDiagnosticsInput {
   selectedTopK?: number;
   selectedMinScore?: number;
   allowExternal?: boolean;
+  allowedExternalToolIds?: string[];
   sandboxProfiles?: Partial<Record<McpSandboxProfile, boolean>>;
 }
 
@@ -21,6 +25,10 @@ export interface HarnessCapabilityDiagnosticsResult {
   source: HarnessTurnSource;
   exposureReasons: string[];
   blockedCapabilityIds: string[];
+  blockedCapabilityReasons: Record<string, string>;
+  eligibleExternalCapabilityIds: string[];
+  registeredBlockedExternalCapabilityIds: string[];
+  externalExposure: Array<{ id: string; status: "exposed" | "candidate" | "blocked"; reason: string }>;
   toolExposure: {
     exposedToolIds: string[];
     exposedDefinitions: Array<{
@@ -98,6 +106,7 @@ export const resolveHarnessCapabilityDiagnostics = async (
     topK: input.topK,
     minScore: input.minScore,
     allowExternal: input.allowExternal,
+    allowedExternalToolIds: input.allowedExternalToolIds,
     sandboxProfiles: input.sandboxProfiles,
   });
   const profiles = resolveHarnessCapabilityProfiles(
@@ -106,6 +115,18 @@ export const resolveHarnessCapabilityDiagnostics = async (
   const actionProfiles = resolveHarnessActionProfiles(
     candidateResolution.toolExposure.exposedDefinitions,
   );
+  const eligibleExternalCapabilityIds = resolveAgentEligibleExternalMcpCapabilities().map((item) => item.id);
+  const eligibleSet = new Set(input.allowedExternalToolIds ?? eligibleExternalCapabilityIds);
+  const registeredExternal = listCapabilityDefinitions().filter((item) => item.source === "external");
+  const exposureDecision = resolveHarnessToolExposure({
+    source,
+    query: input.query,
+    allowExternal: input.allowExternal,
+    allowedExternalToolIds: input.allowedExternalToolIds,
+    sandboxProfiles: input.sandboxProfiles,
+  });
+  const exposureSet = new Set(exposureDecision.exposedToolIds);
+  const candidateSet = new Set(candidateResolution.toolCandidates.map((candidate) => candidate.toolId));
   const candidates: ToolIntentCandidate[] = candidateResolution.toolCandidates.map((candidate) => ({
     toolId: candidate.toolId,
     title: candidate.title,
@@ -138,6 +159,17 @@ export const resolveHarnessCapabilityDiagnostics = async (
         ]
       : candidateResolution.toolExposure.reason,
     blockedCapabilityIds: candidateResolution.toolExposure.blockedCapabilityIds,
+    blockedCapabilityReasons: candidateResolution.toolExposure.blockedCapabilityReasons,
+    eligibleExternalCapabilityIds,
+    registeredBlockedExternalCapabilityIds: registeredExternal
+      .filter((item) => !exposureSet.has(item.id))
+      .map((item) => item.id),
+    externalExposure: registeredExternal.map((item) => ({
+      id: item.id,
+      status: candidateSet.has(item.id) ? "candidate" : exposureSet.has(item.id) ? "exposed" : "blocked",
+      reason: exposureDecision.blockedCapabilityReasons[item.id] ??
+        (eligibleSet.has(item.id) ? "External capability passed exposure." : "External capability is not in the explicit eligible allowlist."),
+    })),
     toolExposure: {
       exposedToolIds: candidateResolution.toolExposure.exposedToolIds,
       exposedDefinitions: candidateResolution.toolExposure.exposedDefinitions.map((definition) => ({

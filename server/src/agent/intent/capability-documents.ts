@@ -9,10 +9,31 @@ const toCompactJson = (value: unknown) => {
   }
 };
 
+const toSchemaSummary = (schema: Record<string, unknown>) => {
+  const properties = schema.properties;
+  if (!properties || typeof properties !== "object" || Array.isArray(properties)) {
+    return "input schema: object";
+  }
+  const entries = Object.entries(properties as Record<string, unknown>).slice(0, 24);
+  const required = new Set(
+    Array.isArray(schema.required)
+      ? schema.required.filter((item): item is string => typeof item === "string")
+      : [],
+  );
+  const fields = entries.map(([name, value]) => {
+    const type = value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>).type
+      : undefined;
+    return `${name}${required.has(name) ? " (required)" : ""}${typeof type === "string" ? `: ${type}` : ""}`;
+  });
+  return `input schema: ${fields.join(", ") || "object"}`;
+};
+
 export const toCapabilityIntentDocument = (
   profile: HarnessCapabilityProfile,
 ): CapabilityIntentDocument => {
   const supportingToolsText = toCompactJson(profile.supportingToolIds);
+  const schemaSummary = profile.inputSchema ? toSchemaSummary(profile.inputSchema) : "";
   const text = [
     profile.title,
     profile.id,
@@ -21,6 +42,8 @@ export const toCapabilityIntentDocument = (
     profile.tags.join(" "),
     profile.preferredToolId,
     supportingToolsText,
+    schemaSummary,
+    profile.sourceLabel,
   ]
     .filter((value) => typeof value === "string" && value.trim().length > 0)
     .join("\n");
@@ -32,6 +55,8 @@ export const toCapabilityIntentDocument = (
     source: profile.source,
     domain: profile.domain,
     tags: profile.tags,
+    ...(profile.inputSchema ? { inputSchema: profile.inputSchema } : {}),
+    ...(profile.sourceLabel ? { sourceLabel: profile.sourceLabel } : {}),
     preferredToolId: profile.preferredToolId,
     supportingToolIds: profile.supportingToolIds,
     actionProfileId: profile.actionProfileId,

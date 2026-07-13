@@ -334,10 +334,39 @@ describe("resolveHarnessToolExposure", () => {
       source: "agent_intent",
       query: "use external system",
       allowExternal: true,
+      allowedExternalToolIds: ["external_fake_tool"],
     }).exposedToolIds;
 
     expect(hiddenIds).not.toContain("external_fake_tool");
     expect(visibleIds).toContain("external_fake_tool");
+  });
+
+  it("never opens external capabilities with an empty or non-registry allowlist", () => {
+    registerCapability(externalFakeTool);
+
+    expect(resolveHarnessToolExposure({
+      source: "agent_intent",
+      allowExternal: true,
+      allowedExternalToolIds: [],
+    }).exposedToolIds).not.toContain("external_fake_tool");
+    expect(resolveHarnessToolExposure({
+      source: "agent_intent",
+      allowExternal: true,
+      allowedExternalToolIds: ["mcp:missing-server:tool:missing"],
+    }).exposedToolIds).not.toContain("external_fake_tool");
+  });
+
+  it("does not expose registered external capabilities omitted from the eligible allowlist", () => {
+    registerCapability(externalFakeTool);
+
+    const decision = resolveHarnessToolExposure({
+      source: "agent_intent",
+      allowExternal: true,
+      allowedExternalToolIds: ["mcp:other-server:tool:eligible"],
+    });
+
+    expect(decision.exposedToolIds).not.toContain("external_fake_tool");
+    expect(decision.blockedCapabilityReasons.external_fake_tool).toMatch(/allowlist/i);
   });
 
   it.each([
@@ -426,6 +455,7 @@ describe("resolveHarnessToolExposure", () => {
         source: "agent_intent" as const,
         query: "use external system",
         allowExternal: true,
+        allowedExternalToolIds: ["external_fake_tool"],
       },
       tools: [externalFakeTool],
       expectedExposed: ["external_fake_tool"],

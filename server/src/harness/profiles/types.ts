@@ -8,6 +8,8 @@ export interface HarnessCapabilityProfile {
   domain: McpToolDefinition["domain"];
   source: HarnessDefinitionSource;
   tags: string[];
+  inputSchema?: Record<string, unknown>;
+  sourceLabel?: string;
   preferredToolId: string;
   supportingToolIds: string[];
   actionProfileId?: string;

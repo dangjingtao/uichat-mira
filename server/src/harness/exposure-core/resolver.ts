@@ -26,6 +26,7 @@ export const resolveHarnessToolExposure = (
 ): HarnessExposureDecision => {
   const definitions = listCapabilityDefinitions();
   const blockedCapabilityIds: string[] = [];
+  const blockedCapabilityReasons: Record<string, string> = {};
   const reasons: string[] = [];
   const sandboxCoverage = getSandboxProfileCoverage();
   const policyInput: HarnessExposurePolicyInput = {
@@ -45,6 +46,12 @@ export const resolveHarnessToolExposure = (
       const allowed = shouldIncludeDefinition(definition, policyInput);
       if (!allowed) {
         blockedCapabilityIds.push(definition.id);
+        blockedCapabilityReasons[definition.id] =
+          definition.source === "external"
+            ? !policyInput.allowExternal
+              ? "External MCP is disabled for this exposure request."
+              : "External capability is not in the explicit eligible allowlist."
+            : "Capability is blocked by the Harness exposure policy.";
       }
       return allowed;
     })
@@ -65,6 +72,8 @@ export const resolveHarnessToolExposure = (
   }
   if (!policyInput.allowExternal) {
     reasons.push("External MCP capabilities are hidden unless explicitly enabled.");
+  } else if (!policyInput.allowedExternalToolIds?.length) {
+    reasons.push("External MCP capabilities require a non-empty explicit eligible allowlist.");
   }
 
   return {
@@ -73,6 +82,7 @@ export const resolveHarnessToolExposure = (
     reason: reasons,
     visibleDefinitions,
     blockedCapabilityIds,
+    blockedCapabilityReasons,
     reasons,
   };
 };

@@ -509,6 +509,7 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       source: "agent_intent" as const,
       tools: [externalFakeTool],
       allowExternal: true,
+      allowedExternalToolIds: ["external_fake_tool"],
       rerankOrder: ["external_fake_tool"],
       expectedExposedToolIds: ["external_fake_tool"],
       expectedBlockedCapabilityIds: [],
@@ -539,6 +540,7 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       source,
       tools,
       allowExternal,
+      allowedExternalToolIds,
       sandboxProfiles,
       rerankOrder,
       expectedExposedToolIds,
@@ -554,6 +556,7 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
         query,
         source,
         allowExternal,
+        allowedExternalToolIds,
         sandboxProfiles,
         topK: 8,
         maxTools: 8,
@@ -572,4 +575,85 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       expect(result.toolCandidates.every((candidate) => !("preferredForQuery" in candidate))).toBe(true);
     },
   );
+
+  it("limits multiple eligible external capabilities by topK and maxTools", async () => {
+    const tools = Array.from({ length: 21 }, (_, index) => ({
+      definition: {
+        id: `mcp:multi-server:tool:search_${index}`,
+        title: `Search documentation ${index}`,
+        description: "Search product documentation on an external MCP server.",
+        domain: "external_mcp" as const,
+        source: "external" as const,
+        mode: "sync" as const,
+        inputSchema: { type: "object" },
+        tags: ["docs", "search"],
+        capabilities: { sideEffect: "network" as const, requiresApproval: true },
+      },
+      execute() {
+        return {};
+      },
+    }));
+    tools.forEach(registerCapability);
+
+    vi.spyOn(embedding, "executeLocalEmbedding").mockResolvedValue({
+      embeddingModel: "test-embedding",
+      embeddingModelConfigId: "test-embedding-config",
+      embeddings: Array.from({ length: tools.length + 1 }, () => [1, 0]),
+    });
+    vi.spyOn(rerank, "executeLocalRerank").mockResolvedValue({
+      rerankedCandidates: tools.slice(0, 2).map((tool, index) => ({
+        id: tool.definition.id,
+        text: tool.definition.title,
+        score: 1 - index * 0.1,
+        probability: 0.95 - index * 0.1,
+        rank: index + 1,
+      })),
+      rerankModel: "test-rerank",
+      rerankModelConfigId: "test-rerank-config",
+    });
+
+    const result = await resolveHarnessToolCandidatesForTurn({
+      query: "search product documentation",
+      source: "agent_intent",
+      allowExternal: true,
+      allowedExternalToolIds: tools.map((tool) => tool.definition.id),
+      topK: 2,
+      maxTools: 1,
+      minScore: 0,
+    });
+
+    expect(result.toolCandidates).toHaveLength(1);
+    expect(result.toolCandidates[0]?.source).toBe("external");
+  });
+
+  it("limits a small eligible external set by maxTools too", async () => {
+    const tools = Array.from({ length: 3 }, (_, index) => ({
+      definition: {
+        id: `mcp:small-server:tool:search_${index}`,
+        title: `Small search ${index}`,
+        description: "Search product documentation.",
+        domain: "external_mcp" as const,
+        source: "external" as const,
+        mode: "sync" as const,
+        inputSchema: { type: "object" },
+        tags: ["docs"],
+        capabilities: { sideEffect: "network" as const, requiresApproval: true },
+      },
+      execute() {
+        return {};
+      },
+    }));
+    tools.forEach(registerCapability);
+
+    const result = await resolveHarnessToolCandidatesForTurn({
+      query: "search product documentation",
+      source: "agent_intent",
+      allowExternal: true,
+      allowedExternalToolIds: tools.map((tool) => tool.definition.id),
+      maxTools: 1,
+    });
+
+    expect(result.toolCandidates).toHaveLength(1);
+    expect(result.toolExposure.exposedToolIds).toHaveLength(1);
+  });
 });

@@ -51,8 +51,13 @@ export const shouldIncludeDefinition = (
   definition: McpToolDefinition,
   input: HarnessExposurePolicyInput,
 ) => {
-  if (!input.allowExternal && definition.source === "external") {
-    return false;
+  if (definition.source === "external") {
+    if (!input.allowExternal) {
+      return false;
+    }
+    if (!input.allowedExternalToolIds?.includes(definition.id)) {
+      return false;
+    }
   }
 
   if (input.source === "chat_surface" && definition.source === "external") {

@@ -33,6 +33,7 @@ export const resolveHarnessToolCandidatesForTurn = async (
     source,
     query: input.query,
     allowExternal: input.allowExternal,
+    allowedExternalToolIds: input.allowedExternalToolIds,
     sandboxProfiles: input.sandboxProfiles,
   });
   const visibleDefinitions = exposureDecision.exposedDefinitions;
@@ -42,21 +43,34 @@ export const resolveHarnessToolCandidatesForTurn = async (
     exposedDefinitions: visibleDefinitions,
     reason: exposureDecision.reason,
     blockedCapabilityIds: exposureDecision.blockedCapabilityIds,
+    blockedCapabilityReasons: exposureDecision.blockedCapabilityReasons,
   };
 
   if (visibleDefinitions.length <= TOOL_EXPOSURE_RECALL_THRESHOLD) {
     const exposureReason =
       "All eligible tools are exposed because the eligible set is at most 20 tools.";
-    const toolCandidates = exposeAllHarnessToolCandidates({
+    const allToolCandidates = exposeAllHarnessToolCandidates({
       definitions: visibleDefinitions,
       reason: exposureReason,
     });
+    const toolCandidates = visibleDefinitions.some((definition) => definition.source === "external")
+      ? allToolCandidates.slice(0, maxTools)
+      : allToolCandidates;
+    const candidateDefinitionIds = new Set(toolCandidates.map((candidate) => candidate.toolId));
     return {
       query: input.query,
       source,
       toolCandidates,
       toolExposure: {
         ...initialToolExposure,
+        exposedToolIds: visibleDefinitions.some((definition) => definition.source === "external")
+          ? visibleDefinitions
+              .filter((definition) => candidateDefinitionIds.has(definition.id))
+              .map((definition) => definition.id)
+          : initialToolExposure.exposedToolIds,
+        exposedDefinitions: visibleDefinitions.some((definition) => definition.source === "external")
+          ? visibleDefinitions.filter((definition) => candidateDefinitionIds.has(definition.id))
+          : initialToolExposure.exposedDefinitions,
         reason: [...initialToolExposure.reason, exposureReason],
       },
     };
@@ -114,6 +128,7 @@ export const resolveHarnessToolCandidatesForTurn = async (
       toolExposure: {
         ...initialToolExposure,
         reason: [...initialToolExposure.reason, fallbackReason],
+        blockedCapabilityReasons: exposureDecision.blockedCapabilityReasons,
       },
       retrievalError,
     };
@@ -217,6 +232,7 @@ export const resolveHarnessToolCandidatesForTurn = async (
     exposedDefinitions,
     reason: exposureDecision.reason,
     blockedCapabilityIds: exposureDecision.blockedCapabilityIds,
+    blockedCapabilityReasons: exposureDecision.blockedCapabilityReasons,
   };
 
   return {
