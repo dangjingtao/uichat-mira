@@ -21,6 +21,7 @@ export const mapGraphStateToOutput = (
       state.lastToolExecution?.toolId ??
       state.pendingApproval?.toolId,
     pendingToolCall: state.pendingToolCall,
+    approvedInvocations: state.approvedInvocations,
     lastToolExecution: state.lastToolExecution,
     currentTaskFrame: state.currentTaskFrame,
     blockedReason: state.blockedReason,

@@ -2,6 +2,7 @@
  * 工具执行节点：执行已审批或免审的工具调用，并将结果加入证据。
  */
 import { executeHarnessInvocation } from "@/harness/invocations";
+import { getCapabilityImplementation } from "@/harness/registry";
 import { createHarnessEnvironmentSnapshot } from "@/harness/environment";
 import { runWithWorkspaceRootOverride } from "@/mcp/workspace";
 import type { McpInvocationFailureCode } from "@/mcp/core/definitions";
@@ -27,6 +28,7 @@ import type {
   PendingToolCall,
 } from "../types";
 import type { CodebaseExploreToolResult } from "@/mcp/managed-codegraph/types";
+import { redactExternalMcpValue } from "@/mcp/external-redaction";
 
 const nowIso = () => new Date().toISOString();
 
@@ -81,7 +83,11 @@ const buildExecutionRecord = (input: {
   toolCallId: input.pendingToolCall.id,
   toolId: input.toolId,
   inputHash: input.pendingToolCall.inputHash,
-  args: input.pendingToolCall.args,
+  args:
+    (getCapabilityImplementation(input.toolId)?.definition.source === "external" ||
+      input.toolId.startsWith("mcp:"))
+      ? (redactExternalMcpValue(input.pendingToolCall.args) as Record<string, unknown>)
+      : input.pendingToolCall.args,
   invocationId: input.invocationId,
   status: input.status,
   failureKind: input.failureKind,
@@ -174,6 +180,17 @@ const toHarnessApprovedInvocations = (
     toolId: invocation.toolId,
     inputHash: createInvocationInputHash(invocation.input),
   }));
+
+const consumeApprovedInvocation = (
+  approvedInvocations: AgentNodeState["approvedInvocations"],
+  pendingToolCall: PendingToolCall,
+) =>
+  approvedInvocations?.filter(
+    (invocation) =>
+      invocation.toolId !== pendingToolCall.toolId ||
+      (invocation.inputHash !== pendingToolCall.inputHash &&
+        createInvocationInputHash(invocation.input) !== pendingToolCall.inputHash),
+  );
 
 export const toolNode = async (
   state: AgentNodeState,
@@ -317,6 +334,13 @@ export const toolNode = async (
   const startedAt = invocation.startedAt ?? pendingToolCall.createdAt;
   const finishedAt = nowIso();
   const durationMs = getDurationMs(startedAt, finishedAt);
+  // Approval is a one-shot authorization for this exact frozen call. Consume
+  // it after the Harness attempt so a later Planner iteration cannot execute
+  // the same call again without a new approval.
+  const remainingApprovedInvocations = consumeApprovedInvocation(
+    state.approvedInvocations,
+    pendingToolCall,
+  );
 
   if (invocation.status === "awaiting_approval") {
     const approvalReason =
@@ -367,6 +391,7 @@ export const toolNode = async (
       },
     });
     return {
+      approvedInvocations: remainingApprovedInvocations,
       pendingToolCall,
       lastToolExecution: executionRecord,
       pendingToolExecution: executionRecord,
@@ -449,6 +474,7 @@ export const toolNode = async (
       },
     });
     return {
+      approvedInvocations: remainingApprovedInvocations,
       observations: [...(state.observations ?? []), observation],
       pendingEvidenceObservation: observation,
       pendingToolCall: undefined,
@@ -518,6 +544,7 @@ export const toolNode = async (
       ? toCodebaseRetrievalEvidence(invocation.result.verifiedEvidenceInput)
       : null;
   return {
+    approvedInvocations: remainingApprovedInvocations,
     observations: [...(state.observations ?? []), observation],
     pendingEvidenceObservation: observation,
     pendingRetrievalEvidence: codebaseRetrieval ?? undefined,

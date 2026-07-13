@@ -148,6 +148,40 @@ const summarizeToolResult = (
 
   const type = typeof result.type === "string" ? result.type : undefined;
   if (
+    type === "external_mcp" &&
+    typeof result.serverId === "string" &&
+    typeof result.remoteToolName === "string"
+  ) {
+    const nestedResult = result.result;
+    const resultPreview =
+      typeof nestedResult === "string"
+        ? preview(nestedResult)
+        : nestedResult && typeof nestedResult === "object"
+          ? preview(JSON.stringify(nestedResult))
+          : undefined;
+    const recoveryOccurred = result.recoveryOccurred === true;
+    return baseSummary({
+      execution,
+      evidenceIndex,
+      actionTaken: `Called remote MCP tool ${result.remoteToolName}.`,
+      facts: [
+        `serverId=${result.serverId}`,
+        `remoteToolName=${result.remoteToolName}`,
+        "invocationStatus=completed",
+        `recoveryOccurred=${recoveryOccurred}`,
+        ...(resultPreview ? [`result=${resultPreview}`] : []),
+      ],
+      data: {
+        kind: "external_mcp",
+        serverId: result.serverId,
+        remoteToolName: result.remoteToolName,
+        invocationStatus: "completed",
+        recoveryOccurred,
+        ...(resultPreview ? { resultPreview } : {}),
+      },
+    });
+  }
+  if (
     type === "discover" &&
     (result.operation === "list" || result.operation === "locate")
   ) {

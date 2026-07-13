@@ -335,7 +335,7 @@ export const resumeApprovedAgentRun = async (runId: string) => {
     contextBudget: output.contextBudget,
     blockedReason: output.blockedReason,
     terminalReason: output.terminalReason,
-    approvedInvocations,
+    approvedInvocations: output.approvedInvocations ?? approvedInvocations,
     // Resume output follows the same compatibility rule: no execution may be
     // derived from selectedToolId.
     selectedToolId:

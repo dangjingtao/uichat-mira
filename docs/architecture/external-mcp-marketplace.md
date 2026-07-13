@@ -1,6 +1,6 @@
 # 外部 MCP Marketplace 接入
 
-Status: Planned
+Status: Current
 Owner: runtime
 Last verified: 2026-06-26
 Layer: raw-source
@@ -72,13 +72,9 @@ UIChat Mira 将来要怎样消费第三方 MCP server。
 8. backend 把远端 MCP protocol tools 投影为本地 harness capability
 9. 通过现有 `/mcp/invocations` 或 `/mcp/invocations/stream` 做手动调用
 
-换句话说，当前 MCP 走的是：
+当前 MCP Agent 主线是：
 
-`市场 -> 安装 -> 连接 -> Discover -> 投影 -> 手动调用`
-
-Agent 候选接入已经通过独立的 Agent Access 开关接通，但仍不执行远端调用：
-
-`市场 -> 安装 -> 连接 -> Discover -> 用户开启 Agent Access -> eligibility -> Harness candidates -> task model`
+`市场 -> 安装 -> 连接 -> Discover -> 用户授权 Agent 使用 -> Agent 语义选择 -> 审批 -> Harness 调用 -> Evidence -> 回答`
 
 ### 当前已经打通
 
@@ -97,8 +93,9 @@ Agent 候选接入已经通过独立的 Agent Access 开关接通，但仍不执
 ### 当前还没打通
 
 - chat_surface 自动暴露 MCP capability（默认持续屏蔽）
-- Agent 通过候选结果直接执行远端 MCP capability；实际执行仍必须进入现有 Tool Guard / invocation 链路
-- 复杂 approval 流程
+- Agent 通过候选结果选择 external capability；执行必须进入现有 Planner -> Normalize -> Policy -> ToolNode -> Harness -> Evidence 链路
+- external MCP 首次执行进入现有 approval 流程，批准后只执行冻结的 pendingToolCall
+- 执行前重新核验 server、Agent Access、Discover 条目和 Harness Registry；stdio / streamable-http session 失效时最多自动恢复一次
 - 完整 secret 管理面板
 - 非核心内置 MCP package 管理闭环
 
@@ -115,6 +112,12 @@ Agent 候选只能通过后端单点 resolver 取得。resolver 同时要求 ser
 Agent intent matcher 每轮从 `resolveAgentEligibleExternalMcpCapabilities()` 取得精确的 projected capability id，并将它们作为 `allowedExternalToolIds` 传给 Harness candidate resolver。`allowExternal` 只是 external 分支的显式开关，不能单独放开全部 external capability；allowlist 为空、包含未注册 id 或不包含某个已注册 external id 时，该 capability 都不会进入 exposure。
 
 external capability 与 internal capability 共用同一套 exposure、topK、minScore、embedding、rerank、task model 和 Tool Guard 链路。候选文档包含 capability id、title、description、tags、有限长度的 input schema 摘要和 server display name；不会把完整 schema、headers、env 或 token 放进模型上下文。`chat_surface` 不使用该 Agent allowlist，仍默认隐藏 external capability。
+
+### Agent Invocation Contract
+
+external capability 不在 Planner 或 Agent 节点内直接调用 MCP `tools/call`。ToolNode 只执行 Policy 已批准的冻结调用，Harness Registry 中的 projected capability 才是唯一执行入口。普通 MCP 网络、session、timeout、JSON-RPC 或非法结果失败进入现有 recoverable tool failure 合同；恢复耗尽后生成受保护的失败回答，Graph 保持 completed / stop，除非命中既有 terminal 条件。
+
+Evidence 记录 projected capability id、external server id、远端 tool 名称、调用状态、结果或错误摘要和 recovery 是否发生。bearer token、secret、custom headers 敏感值和环境变量不会写入 Evidence、trace、日志或最终回答。
 
 ## 产品概念边界
 
@@ -827,6 +830,16 @@ Electron 打包态通过内置 Node runtime 跑 backend。
 - [x] 确认产品边界：`Tool` 和 `MCP` 分离，`Settings -> MCP` 作为独立产品域
 - [x] 完成 MCP 市场浏览 MVP：独立页面、市场拉取、基础文档与文案
 - [x] 完成 Phase 1 后端：external MCP server record、`streamable-http` connect/discover、capability projection、手动 invocation
+- [x] MCP Agent Job Release Complete：市场安装、连接、Discover、用户授权 Agent、语义选择、审批、Harness 调用、Evidence 和回答已完成
+
+当前 Agent 调用主链路：
+
+```text
+市场 → 安装 → 连接 → Discover → 用户授权 Agent 使用
+→ Agent 语义选择 → 审批 → Harness 调用 → Evidence → 回答
+```
+
+本期仍不包含：OAuth、MCP resources、MCP prompts、server 自动更新、自动安装、自动 Discover、每工具细粒度权限和多 MCP 编排。
 
 我已完成的自动化测试：
 
