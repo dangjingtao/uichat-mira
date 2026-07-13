@@ -249,6 +249,15 @@ export interface AgentWorkspaceMutationEvidenceData {
   actionProfileId?: string;
 }
 
+export interface AgentExternalMcpEvidenceData {
+  kind: "external_mcp";
+  serverId: string;
+  remoteToolName: string;
+  invocationStatus: "completed" | "failed";
+  recoveryOccurred: boolean;
+  resultPreview?: string;
+}
+
 export interface AgentEditFileEvidenceData {
   kind: "edit_file";
   operation: "create" | "overwrite" | "replace" | "delete" | "move" | "unknown";
@@ -271,6 +280,7 @@ export type AgentEvidenceSummaryData =
   | AgentTerminalSessionEvidenceData
   | AgentRetrievalEvidenceData
   | AgentObservationEvidenceData
+  | AgentExternalMcpEvidenceData
   | AgentWorkspaceMutationEvidenceData
   | AgentEditFileEvidenceData;
 

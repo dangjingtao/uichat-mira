@@ -8,7 +8,7 @@ module: Agent
 feature: ExternalMcpAgentInvocationBlackbox
 doc_type: task-card
 canonical: true
-task_state: BLOCKED_BY_T002
+task_state: BLOCKED_BY_FRONTEND_SMOKE_AND_CHECK
 related:
   - docs/project-control/tasks/mcp_agent_T001-external-mcp-agent-eligibility.md
   - docs/project-control/tasks/mcp_agent_T002-external-mcp-agent-exposure-and-selection.md
@@ -433,3 +433,43 @@ pnpm package:electron:win
 - 黑盒与真实smoke证据核验
 - 建议的最小修复
 
+## Implementation Evidence
+
+### Changed Files
+
+- `server/src/mcp/external.ts`
+- `server/src/mcp/core/invocations.ts`
+- `server/src/agent/nodes/tool-node.ts`
+- `server/src/agent/evidence.ts`
+- `server/src/agent/types.ts`
+- `server/src/agent/__tests__/agentgraph-mainline-blackbox.test.ts`
+- `docs/architecture/external-mcp-marketplace.md`
+
+### Verified
+
+- T003 Agent blackbox: `1 passed`，覆盖 external candidate、`waiting_approval`、审批前 Harness 调用次数为 `0`、精确 approved frozen call、Harness 调用次数为 `1`、Evidence 来源元数据和 secret redaction。
+- MCP / approval / normalization 定向回归：`4 files, 77 tests passed`。
+- server typecheck：通过。
+- A5 repeated-tool guard 单测：通过，单独使用 `--testTimeout=15000`。
+
+### Blocking Evidence
+
+- 完整 `agentgraph-mainline-blackbox.test.ts`：`17 tests` 中 `16 passed`；A5 在默认 5 秒超时下偶发超时，单独提高该测试超时后通过。
+- `pnpm check` 未完成：其他 workspace typecheck 已运行，`packages/deepagents-spike` 的 TypeScript 进程以 Windows 状态码 `3221225477` 崩溃，未输出类型错误。
+- 真实前台 smoke 未执行：当前环境没有可核验的已配置低风险 external MCP server、实际安装/Connect/Discover/Agent Access 状态和桌面前台运行证据；没有伪造该结果。
+
+### Real Chrome Smoke Evidence (2026-07-14)
+
+- 页面：`http://localhost:5173/#/settings/mcp`
+- 已安装 MCP：`io.github.06ketan/slideshot`、`com.devexpress-docs`、`ac.tandem/docs-mcp`
+- 三个 server 均显示 installed / enabled / connected，Discover 数量分别为 `6 / 2 / 13`。
+- 只有 `io.github.06ketan/slideshot` 开启了“允许 Agent 使用”；其 projected tools 包含 `health_check`、`list_themes`、`discover_themes`。
+- 按前台手测指引通过输入框 `+ -> Workspace -> Add to workspace` 绑定 `TEST_FOLDER_ALT -> D:\CODEX_TEST_FOLDER_ALT`，Agent 按钮变为可用并切换为 Agent 模式。
+- 用例 1：自然语言请求 `health_check`；Agent 选中 `mcp:io.github.06ketan-slideshot:tool:health_check`，进入审批，批准后页面显示恢复执行、工具执行完成、证据整理、最终回答和结果检查；回答返回 slideshot `v4.4.0`、`win32 x64`、Node `v22.17.0`。
+- 用例 2：自然语言请求 `list_themes`；Agent 选中 `mcp:io.github.06ketan-slideshot:tool:list_themes`，进入审批，批准后页面显示工具执行完成并返回主题数据。
+- 用例 3：自然语言请求 `discover_themes`；Agent 选中 `mcp:io.github.06ketan-slideshot:tool:discover_themes`，进入审批，拒绝后页面显示“工具没有执行”和“Agent 已阻断”。
+- 真实 smoke 结论：slideshot MCP 已从前台 Agent 入口进入真实调用，审批合同和拒绝路径均可核验。
+
+### Remaining Work
+
+- 解决或隔离 `deepagents-spike` typecheck 进程崩溃，并重新执行 `pnpm check`。

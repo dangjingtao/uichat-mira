@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { initializeAuthDatabase } from "@/db/auth.db";
@@ -80,12 +81,13 @@ const makeToolDefinition = (input: {
   sideEffect?: "none" | "network" | "process" | "local-write";
   requiresApproval?: boolean;
   workspaceBound?: boolean;
+  source?: "internal" | "external";
 }) => ({
   id: input.id,
   title: input.id,
   description: input.id,
   domain: input.domain,
-  source: "internal" as const,
+  source: input.source ?? ("internal" as const),
   mode: "sync" as const,
   inputSchema: input.inputSchema,
   tags: [input.domain],
@@ -234,6 +236,7 @@ const runBlackbox = (input: {
   question: string;
   messages?: Array<ReturnType<typeof makeMessage> | ReturnType<typeof makeAssistantMessage>>;
   maxIterations?: number;
+  approvedInvocations?: Array<{ toolId: string; input: Record<string, unknown>; inputHash: string }>;
   onExecutionNode?: Parameters<typeof agentGraph.run>[0]["onExecutionNode"];
 }) =>
   agentGraph.run({
@@ -248,6 +251,7 @@ const runBlackbox = (input: {
     messages: input.messages ?? [makeMessage(input.question)],
     workspaceRoot: "D:\\workspace\\rag-demo",
     maxIterations: input.maxIterations,
+    approvedInvocations: input.approvedInvocations,
     onExecutionNode: input.onExecutionNode,
   });
 
@@ -946,6 +950,84 @@ test("A7 waiting_approval stops the run before ToolNode executes", async () => {
   assert.equal(executeSpy.mock.calls.length, 0);
   assert.equal(generateSpy.mock.calls.length, 0);
   assert.equal(executionNodes.includes("agent-approval"), true);
+});
+
+test("T003 external MCP follows selection, approval, Harness, and Evidence boundaries", async () => {
+  const externalTool = makeToolDefinition({
+    id: "mcp:docs-server:tool:search_docs",
+    domain: "external_mcp",
+    inputSchema: {
+      type: "object",
+      required: ["query"],
+      properties: {
+        query: { type: "string" },
+        token: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    sideEffect: "network",
+    requiresApproval: true,
+    source: "external",
+  });
+  setupToolExposure("search project docs", [externalTool]);
+  const args = { query: "project docs", token: "should-not-be-recorded" };
+  const inputHash = createHash("sha256")
+    .update(JSON.stringify({ args, source: "planner", toolId: externalTool.id }))
+    .digest("hex");
+  const executeSpy = vi.spyOn(harnessInvocations, "executeHarnessInvocation");
+  vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
+    async function* () {
+      yield `{"type":"use_tool","toolId":"${externalTool.id}","args":${JSON.stringify(args)},"reason":"Search the project docs."}`;
+    },
+  );
+
+  const waiting = await runBlackbox({
+    runId: "t003-external-waiting-approval",
+    question: "search project docs",
+  });
+  assert.equal(waiting.status, "waiting_approval");
+  assert.equal(waiting.pendingApproval?.toolId, externalTool.id);
+  assert.equal(executeSpy.mock.calls.length, 0);
+
+  vi.mocked(providerProxyService.streamTaskChatText).mockReset();
+  let approvedPlannerCall = 0;
+  vi.mocked(providerProxyService.streamTaskChatText).mockImplementation(
+    async function* () {
+      approvedPlannerCall += 1;
+      yield approvedPlannerCall === 1
+        ? `{"type":"use_tool","toolId":"${externalTool.id}","args":${JSON.stringify(args)},"reason":"Search the project docs."}`
+        : '{"type":"answer","reason":"The approved search returned grounded evidence."}';
+    },
+  );
+  vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke").mockResolvedValue(
+    "grounded external answer",
+  );
+  executeSpy.mockResolvedValue({
+    id: "t003-external-invocation",
+    toolId: externalTool.id,
+    status: "completed",
+    result: {
+      type: "external_mcp",
+      serverId: "docs-server",
+      remoteToolName: "search_docs",
+      invocationStatus: "completed",
+      recoveryOccurred: false,
+      result: { matches: ["docs/README.md"] },
+    },
+    startedAt: "2026-07-14T00:00:00.000Z",
+    finishedAt: "2026-07-14T00:00:01.000Z",
+  } as never);
+
+  const approved = await runBlackbox({
+    runId: "t003-external-approved",
+    question: "search project docs",
+    approvedInvocations: [{ toolId: externalTool.id, input: args, inputHash }],
+  });
+  assert.equal(approved.status, "completed");
+  assert.equal(executeSpy.mock.calls.length, 1);
+  assert.equal(approved.evidence.latestSummary?.data?.kind, "external_mcp");
+  assert.equal(approved.evidence.latestSummary?.data?.serverId, "docs-server");
+  assert.equal(JSON.stringify(approved.evidence).includes("should-not-be-recorded"), false);
 });
 
 test("A8 failed tool does not continue with extra tool execution or fake success", async () => {

@@ -320,6 +320,28 @@ const parseSecretJson = (
 const DEFAULT_TIMEOUT_MS = 30000;
 const stdioSessions = new Map<string, StdioMcpSession>();
 
+const redactExternalMcpText = (value: string, row?: ExternalMcpServerRow) => {
+  let redacted = value;
+  const secret = row ? parseSecretJson(row.secret_json).bearerToken : undefined;
+  if (secret) {
+    redacted = redacted.split(secret).join("[REDACTED]");
+  }
+  return redacted.replace(
+    /((?:authorization|bearer|token|secret|password|api[-_]?key)\s*[:=]\s*)([^\s,;]+)/giu,
+    "$1[REDACTED]",
+  );
+};
+
+const externalMcpFailure = (error: unknown, row?: ExternalMcpServerRow) =>
+  new Error(redactExternalMcpText(error instanceof Error ? error.message : String(error), row));
+
+const canRecoverExternalMcpSession = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  return /session|initialize|timed out|HTTP (?:400|404|405|406|410)|not available|closed unexpectedly/iu.test(
+    message,
+  );
+};
+
 const toRuntimeConfig = (row: ExternalMcpServerRow): ExternalMcpRuntimeConfig => {
   const config = parseConfigJson(row.config_json);
   const secret = parseSecretJson(row.secret_json);
@@ -1220,13 +1242,17 @@ const postJsonRpc = async <T>(
   }
   const runtimeConfig = toRuntimeConfig(row);
   if (row.transport_kind === "stdio") {
-    const session = getOrCreateStdioSession(server.id, row);
-    const result = await session.request<T>(method, params, runtimeConfig.timeoutMs);
-    return {
-      result,
-      sessionId: server.sessionId,
-      protocolVersion: server.protocolVersion ?? MCP_PROTOCOL_VERSION,
-    };
+    try {
+      const session = getOrCreateStdioSession(server.id, row);
+      const result = await session.request<T>(method, params, runtimeConfig.timeoutMs);
+      return {
+        result,
+        sessionId: server.sessionId,
+        protocolVersion: server.protocolVersion ?? MCP_PROTOCOL_VERSION,
+      };
+    } catch (error) {
+      throw externalMcpFailure(error, row);
+    }
   }
   if (!runtimeConfig.endpointUrl) {
     throw new Error("External MCP endpoint URL is not configured");
@@ -1257,14 +1283,19 @@ const postJsonRpc = async <T>(
     }),
   });
   if (!response.ok) {
-    throw new Error(`MCP ${method} failed with HTTP ${response.status}`);
+    throw externalMcpFailure(`MCP ${method} failed with HTTP ${response.status}`, row);
   }
-  const message = await parseJsonRpcResponse<T>(response);
+  let message: JsonRpcResponse<T>;
+  try {
+    message = await parseJsonRpcResponse<T>(response);
+  } catch (error) {
+    throw externalMcpFailure(error, row);
+  }
   if (message.error) {
-    throw new Error(message.error.message ?? `MCP ${method} failed`);
+    throw externalMcpFailure(message.error.message ?? `MCP ${method} failed`, row);
   }
   if (message.result === undefined) {
-    throw new Error(`MCP ${method} response did not include result`);
+    throw externalMcpFailure(`MCP ${method} response did not include result`, row);
   }
   return {
     result: message.result,
@@ -1491,17 +1522,52 @@ const registerProjectedTool = (
         type: "invocation:progress",
         message: `Calling MCP capability ${tool.name} on ${server.displayName}`,
       });
-      const latestServer = getRequiredServer(server.id);
-      const response = await postJsonRpc<unknown>(
-        latestServer,
-        "tools/call",
-        {
-          name: tool.name,
-          arguments: context.args,
-        },
-        latestServer.sessionId,
-      );
-      return { result: response.result };
+      const invoke = async (candidate: ExternalMcpServerRecord, recoveryOccurred: boolean) => {
+        const current = getRequiredServer(candidate.id);
+        const discovered = current.discoveredTools.find(
+          (item) => item.name === tool.name && item.projectedCapabilityId === tool.projectedCapabilityId,
+        );
+        const registered = getCapabilityImplementation(tool.projectedCapabilityId);
+        if (
+          !current.enabled ||
+          !current.agentEnabled ||
+          !isExternalMcpRuntimeEligible(current) ||
+          !discovered ||
+          !registered ||
+          registered.definition.source !== "external"
+        ) {
+          throw new Error("External MCP capability is no longer eligible for Agent execution");
+        }
+        const response = await postJsonRpc<unknown>(
+          current,
+          "tools/call",
+          { name: tool.name, arguments: context.args },
+          current.sessionId,
+        );
+        return {
+          result: {
+            type: "external_mcp",
+            serverId: current.id,
+            remoteToolName: tool.name,
+            invocationStatus: "completed",
+            recoveryOccurred,
+            result: response.result,
+          },
+        };
+      };
+
+      try {
+        return await invoke(getRequiredServer(server.id), false);
+      } catch (firstError) {
+        const latest = getRequiredServer(server.id);
+        if (!latest.enabled || !latest.agentEnabled || !canRecoverExternalMcpSession(firstError)) {
+          throw firstError;
+        }
+        // One reinitialize handles stale persisted sessions without unbounded retries.
+        disposeExternalMcpServerSession(server.id);
+        const reinitialized = await connectExternalMcpServer(server.id);
+        return await invoke(reinitialized, true);
+      }
     },
   };
   registerCapability(implementation);

@@ -56,6 +56,21 @@ const sweepInvocations = () => {
   sweepInvocationTraces();
 };
 
+const redactExternalInvocationValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map(redactExternalInvocationValue);
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, child]) => {
+      const sensitive = /authorization|bearer|token|secret|password|api[-_]?key|header/iu.test(key);
+      return [key, sensitive ? "[REDACTED]" : redactExternalInvocationValue(child)];
+    }),
+  );
+};
+
 export const getInvocation = (invocationId: string) =>
   invocationMap.get(invocationId);
 
@@ -129,7 +144,7 @@ export const executeInvocation = async (
     id: invocationId,
     toolId: input.toolId,
     status: "running",
-    args,
+    args: tool.definition.source === "external" ? redactExternalInvocationValue(args) as Record<string, unknown> : args,
     artifacts,
     traceId: trace.traceId,
     ...(input.threadId ? { threadId: input.threadId } : {}),

@@ -2,6 +2,7 @@
  * 工具执行节点：执行已审批或免审的工具调用，并将结果加入证据。
  */
 import { executeHarnessInvocation } from "@/harness/invocations";
+import { getCapabilityImplementation } from "@/harness/registry";
 import { createHarnessEnvironmentSnapshot } from "@/harness/environment";
 import { runWithWorkspaceRootOverride } from "@/mcp/workspace";
 import type { McpInvocationFailureCode } from "@/mcp/core/definitions";
@@ -29,6 +30,19 @@ import type {
 import type { CodebaseExploreToolResult } from "@/mcp/managed-codegraph/types";
 
 const nowIso = () => new Date().toISOString();
+
+const redactExternalArgs = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(redactExternalArgs);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, child]) => [
+      key,
+      /authorization|bearer|token|secret|password|api[-_]?key|header/iu.test(key)
+        ? "[REDACTED]"
+        : redactExternalArgs(child),
+    ]),
+  );
+};
 
 const TERMINAL_FAILURE_PATTERNS = [
   /\bapproval mismatch\b/i,
@@ -81,7 +95,11 @@ const buildExecutionRecord = (input: {
   toolCallId: input.pendingToolCall.id,
   toolId: input.toolId,
   inputHash: input.pendingToolCall.inputHash,
-  args: input.pendingToolCall.args,
+  args:
+    (getCapabilityImplementation(input.toolId)?.definition.source === "external" ||
+      input.toolId.startsWith("mcp:"))
+      ? (redactExternalArgs(input.pendingToolCall.args) as Record<string, unknown>)
+      : input.pendingToolCall.args,
   invocationId: input.invocationId,
   status: input.status,
   failureKind: input.failureKind,

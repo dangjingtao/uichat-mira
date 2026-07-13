@@ -20,14 +20,24 @@ export const assertSandboxCommandPolicy = (command: string) => {
   const args = tokens.slice(1).map((token) => token.toLowerCase());
 
   if (executable === "node") {
-    if (args.some((token) => startsWithAny(token, ["-e", "--eval", "-p", "--print"]))) {
+    if (
+      args.some((token) =>
+        startsWithAny(token, ["-e", "--eval", "-p", "--print"]),
+      )
+    ) {
       throw mcpBadRequest("inline Node execution is blocked by sandbox policy");
     }
   }
 
-  if (executable === "python" || executable === "python3" || executable === "py") {
+  if (
+    executable === "python" ||
+    executable === "python3" ||
+    executable === "py"
+  ) {
     if (args.some((token) => startsWithAny(token, ["-c", "-m"]))) {
-      throw mcpBadRequest("inline or module Python execution is blocked by sandbox policy");
+      throw mcpBadRequest(
+        "inline or module Python execution is blocked by sandbox policy",
+      );
     }
   }
 
@@ -36,13 +46,17 @@ export const assertSandboxCommandPolicy = (command: string) => {
       ["exec", "create", "init"].includes(token),
     );
     if (blockedSubcommand) {
-      throw mcpBadRequest(`npm ${blockedSubcommand} is blocked by sandbox policy`);
+      throw mcpBadRequest(
+        `npm ${blockedSubcommand} is blocked by sandbox policy`,
+      );
     }
   }
 
   if (executable === "git" && args[0] === "config") {
     if (args.includes("--global") || args.includes("--system")) {
-      throw mcpBadRequest("git config outside local workspace scope is blocked by sandbox policy");
+      throw mcpBadRequest(
+        "git config outside local workspace scope is blocked by sandbox policy",
+      );
     }
   }
 };
