@@ -1,4 +1,5 @@
 import { resolveHarnessToolCandidatesForTurn } from "@/harness/tool-candidates";
+import { resolveAgentEligibleExternalMcpCapabilities } from "@/mcp/external";
 import type {
   AgentIntentEmbeddingConfig,
   ToolIntentCandidate,
@@ -25,11 +26,16 @@ export const matchToolCandidatesByEmbedding = async (input: {
   query: string;
   config?: AgentIntentEmbeddingConfig;
 }): Promise<ToolIntentResult> => {
+  const eligibleExternalToolIds = resolveAgentEligibleExternalMcpCapabilities().map(
+    (definition) => definition.id,
+  );
   const candidateResolution = await resolveHarnessToolCandidatesForTurn({
     query: input.query,
     source: "agent_intent",
     topK: input.config?.topK,
     minScore: input.config?.minScore,
+    allowExternal: true,
+    allowedExternalToolIds: eligibleExternalToolIds,
   });
   const topK = Math.max(1, input.config?.topK ?? 10);
   const topCandidates: ToolIntentCandidate[] = (candidateResolution.toolCandidates ?? [])

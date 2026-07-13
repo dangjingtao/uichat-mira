@@ -168,6 +168,7 @@ export interface McpToolDefinition {
   description: string;
   domain: McpToolDomain;
   source: "internal" | "external";
+  sourceLabel?: string;
   mode: McpToolMode;
   inputSchema: Record<string, unknown>;
   inputSchemaByExposure?: Partial<

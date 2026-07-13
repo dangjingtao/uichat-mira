@@ -1870,6 +1870,60 @@ test("nextActionPlannerNode does not derive tool exposure from toolIntent when e
   }
 });
 
+test("task model can select an exposed projected MCP capability", async () => {
+  const projectedToolId = "mcp:docs-server:tool:search_docs";
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield JSON.stringify({
+        type: "use_tool",
+        toolId: projectedToolId,
+        args: { query: "installation guides" },
+        reason: "Search the connected documentation server.",
+      });
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question: "Find the installation guide in the connected documentation server.",
+        toolExposure: {
+          exposedTools: [projectedToolId],
+          toolMeta: [
+            {
+              toolId: projectedToolId,
+              title: "Search product documentation",
+              description: "Search the connected documentation server for product guides.",
+              inputSchema: {
+                type: "object",
+                required: ["query"],
+                properties: { query: { type: "string" } },
+                additionalProperties: false,
+              },
+              domain: "external_mcp",
+              source: "external",
+              tags: ["docs", "search", "docs-server"],
+              capabilities: {
+                sideEffect: "network",
+                requiresApproval: true,
+              },
+            },
+          ],
+        },
+      }),
+    );
+
+    assert.deepEqual(patch.nextAction, {
+      type: "use_tool",
+      toolId: projectedToolId,
+      args: { query: "installation guides" },
+      reason: "Search the connected documentation server.",
+    });
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
 test("nextActionPlannerNode only writes nextAction in its state patch", async () => {
   const streamSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")

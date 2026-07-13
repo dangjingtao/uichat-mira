@@ -33,6 +33,7 @@ export const resolveHarnessToolCandidatesForTurn = async (
     source,
     query: input.query,
     allowExternal: input.allowExternal,
+    allowedExternalToolIds: input.allowedExternalToolIds,
     sandboxProfiles: input.sandboxProfiles,
   });
   const visibleDefinitions = exposureDecision.exposedDefinitions;
@@ -42,6 +43,7 @@ export const resolveHarnessToolCandidatesForTurn = async (
     exposedDefinitions: visibleDefinitions,
     reason: exposureDecision.reason,
     blockedCapabilityIds: exposureDecision.blockedCapabilityIds,
+    blockedCapabilityReasons: exposureDecision.blockedCapabilityReasons,
   };
 
   if (visibleDefinitions.length <= TOOL_EXPOSURE_RECALL_THRESHOLD) {
@@ -114,6 +116,7 @@ export const resolveHarnessToolCandidatesForTurn = async (
       toolExposure: {
         ...initialToolExposure,
         reason: [...initialToolExposure.reason, fallbackReason],
+        blockedCapabilityReasons: exposureDecision.blockedCapabilityReasons,
       },
       retrievalError,
     };
@@ -217,6 +220,7 @@ export const resolveHarnessToolCandidatesForTurn = async (
     exposedDefinitions,
     reason: exposureDecision.reason,
     blockedCapabilityIds: exposureDecision.blockedCapabilityIds,
+    blockedCapabilityReasons: exposureDecision.blockedCapabilityReasons,
   };
 
   return {

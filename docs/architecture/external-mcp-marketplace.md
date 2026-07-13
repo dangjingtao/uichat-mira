@@ -76,9 +76,9 @@ UIChat Mira 将来要怎样消费第三方 MCP server。
 
 `市场 -> 安装 -> 连接 -> Discover -> 投影 -> 手动调用`
 
-而不是：
+Agent 候选接入已经通过独立的 Agent Access 开关接通，但仍不执行远端调用：
 
-`市场 -> 安装 -> 聊天自动使用`
+`市场 -> 安装 -> 连接 -> Discover -> 用户开启 Agent Access -> eligibility -> Harness candidates -> task model`
 
 ### 当前已经打通
 
@@ -96,7 +96,8 @@ UIChat Mira 将来要怎样消费第三方 MCP server。
 
 ### 当前还没打通
 
-- chat 自动调用 MCP capability
+- chat_surface 自动暴露 MCP capability（默认持续屏蔽）
+- Agent 通过候选结果直接执行远端 MCP capability；实际执行仍必须进入现有 Tool Guard / invocation 链路
 - 复杂 approval 流程
 - 完整 secret 管理面板
 - 非核心内置 MCP package 管理闭环
@@ -108,6 +109,12 @@ UIChat Mira 将来要怎样消费第三方 MCP server。
 Agent 候选只能通过后端单点 resolver 取得。resolver 同时要求 server 已启用、Agent Access 已开启、免责声明已接受、状态为 connected、transport 配置完整、Discover 结果非空，并确认 projected capability 仍存在于 Harness Registry。配置更新会清空 Discover 结果并移除投影；删除、禁用和撤销 Agent Access 立即使其退出资格集合。
 
 启动恢复只注册满足最小 runtime 条件的已发现投影，不恢复 disabled、空 Discover、配置不完整或 stale projection。注册存在不代表 Agent 获得授权，Agent 必须继续经过 eligibility resolver。
+
+### Agent 候选接线合同
+
+Agent intent matcher 每轮从 `resolveAgentEligibleExternalMcpCapabilities()` 取得精确的 projected capability id，并将它们作为 `allowedExternalToolIds` 传给 Harness candidate resolver。`allowExternal` 只是 external 分支的显式开关，不能单独放开全部 external capability；allowlist 为空、包含未注册 id 或不包含某个已注册 external id 时，该 capability 都不会进入 exposure。
+
+external capability 与 internal capability 共用同一套 exposure、topK、minScore、embedding、rerank、task model 和 Tool Guard 链路。候选文档包含 capability id、title、description、tags、有限长度的 input schema 摘要和 server display name；不会把完整 schema、headers、env 或 token 放进模型上下文。`chat_surface` 不使用该 Agent allowlist，仍默认隐藏 external capability。
 
 ## 产品概念边界
 

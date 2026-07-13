@@ -1474,6 +1474,7 @@ const registerProjectedTool = (
       description: tool.description || `MCP capability ${tool.name} from ${server.displayName}`,
       domain: "external_mcp",
       source: "external",
+      sourceLabel: server.displayName,
       mode: "sync",
       inputSchema: tool.inputSchema,
       outputSchema: tool.outputSchema,

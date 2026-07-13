@@ -40,6 +40,7 @@ export interface HarnessToolExposure {
   exposedDefinitions: McpToolDefinition[];
   reason: string[];
   blockedCapabilityIds: string[];
+  blockedCapabilityReasons: Record<string, string>;
 }
 
 
@@ -50,6 +51,7 @@ export interface ResolveHarnessToolCandidatesForTurnInput {
   topK?: number;
   minScore?: number;
   allowExternal?: boolean;
+  allowedExternalToolIds?: string[];
   sandboxProfiles?: Partial<Record<McpSandboxProfile, boolean>>;
 }
 

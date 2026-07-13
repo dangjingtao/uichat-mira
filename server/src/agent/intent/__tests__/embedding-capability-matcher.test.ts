@@ -1,10 +1,41 @@
 import assert from "node:assert/strict";
-import { test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import * as toolCandidates from "@/harness/tool-candidates";
+import { clearHarnessRegistry, registerCapability } from "@/harness/registry";
+import { resolveAgentEligibleExternalMcpCapabilities } from "@/mcp/external";
 import {
   cosineSimilarity,
   matchToolCandidatesByEmbedding,
 } from "../embedding-capability-matcher";
+
+vi.mock("@/mcp/external", () => ({
+  resolveAgentEligibleExternalMcpCapabilities: vi.fn(() => []),
+}));
+
+const eligibleProjectedCapability = {
+  definition: {
+    id: "mcp:docs-server:tool:search_docs",
+    title: "Search product documentation",
+    description: "Search the connected documentation server for product guides.",
+    domain: "external_mcp" as const,
+    source: "external" as const,
+    sourceLabel: "Docs Server",
+    mode: "sync" as const,
+    inputSchema: {
+      type: "object",
+      required: ["query"],
+      properties: { query: { type: "string" } },
+      additionalProperties: false,
+    },
+    tags: ["docs", "search", "product-guides", "docs-server"],
+    capabilities: {
+      sideEffect: "network" as const,
+      requiresApproval: true,
+      networkAccess: true,
+    },
+  },
+  execute: vi.fn(),
+};
 
 test("cosineSimilarity returns descending similarity as vectors diverge", () => {
   const identical = cosineSimilarity([1, 0], [1, 0]);
@@ -98,6 +129,11 @@ test("matchToolCandidatesByEmbedding returns exposed tool candidates without sel
     });
 
     assert.equal(resolveHarnessToolCandidatesForTurnSpy.mock.calls.length, 1);
+    assert.equal(resolveHarnessToolCandidatesForTurnSpy.mock.calls[0]?.[0].allowExternal, true);
+    assert.deepEqual(
+      resolveHarnessToolCandidatesForTurnSpy.mock.calls[0]?.[0].allowedExternalToolIds,
+      [],
+    );
     assert.equal(result.topCandidates.length, 2);
     assert.deepEqual(
       result.topCandidates.map((candidate) => candidate.toolId),
@@ -113,6 +149,70 @@ test("matchToolCandidatesByEmbedding returns exposed tool candidates without sel
     });
   } finally {
     resolveHarnessToolCandidatesForTurnSpy.mockRestore();
+  }
+});
+
+test("matchToolCandidatesByEmbedding carries a T001-eligible projected capability into real candidates", async () => {
+  clearHarnessRegistry();
+  registerCapability(eligibleProjectedCapability);
+  vi.mocked(resolveAgentEligibleExternalMcpCapabilities).mockReturnValue([
+    eligibleProjectedCapability.definition,
+  ]);
+
+  try {
+    const result = await matchToolCandidatesByEmbedding({
+      query: "Search product documentation for installation guides",
+    });
+
+    assert.deepEqual(result.topCandidates.map((candidate) => candidate.toolId), [
+      "mcp:docs-server:tool:search_docs",
+    ]);
+    assert.equal(result.topCandidates[0]?.source, "external");
+    assert.equal(result.topCandidates[0]?.title, "Search product documentation");
+    assert.equal(result.toolExposure.exposedDefinitions[0]?.sourceLabel, "Docs Server");
+    assert.deepEqual(result.toolExposure.exposedDefinitions[0]?.inputSchema, {
+      type: "object",
+      required: ["query"],
+      properties: { query: { type: "string" } },
+      additionalProperties: false,
+    });
+  } finally {
+    vi.mocked(resolveAgentEligibleExternalMcpCapabilities).mockReturnValue([]);
+    clearHarnessRegistry();
+  }
+});
+
+test("matchToolCandidatesByEmbedding excludes unauthorized, disabled, stale, and absent-allowlist projections", async () => {
+  clearHarnessRegistry();
+  const blockedDefinitions = [
+    "mcp:unauthorized-server:tool:search",
+    "mcp:disabled-server:tool:search",
+    "mcp:stale-server:tool:search",
+  ].map((id) => ({
+    ...eligibleProjectedCapability,
+    definition: { ...eligibleProjectedCapability.definition, id },
+  }));
+  registerCapability(eligibleProjectedCapability);
+  blockedDefinitions.forEach(registerCapability);
+  vi.mocked(resolveAgentEligibleExternalMcpCapabilities).mockReturnValue([
+    eligibleProjectedCapability.definition,
+  ]);
+
+  try {
+    const result = await matchToolCandidatesByEmbedding({ query: "search product docs" });
+    const candidateIds = result.toolCandidates.map((candidate) => candidate.toolId);
+
+    assert.deepEqual(candidateIds, [eligibleProjectedCapability.definition.id]);
+    for (const blocked of blockedDefinitions) {
+      assert.equal(candidateIds.includes(blocked.definition.id), false);
+    }
+    assert.equal(
+      result.toolExposure.blockedCapabilityIds.includes("mcp:unauthorized-server:tool:search"),
+      true,
+    );
+  } finally {
+    vi.mocked(resolveAgentEligibleExternalMcpCapabilities).mockReturnValue([]);
+    clearHarnessRegistry();
   }
 });
 

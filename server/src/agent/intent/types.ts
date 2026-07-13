@@ -17,6 +17,8 @@ export interface CapabilityIntentDocument {
   source: "internal" | "external";
   domain: string;
   tags: string[];
+  inputSchema?: Record<string, unknown>;
+  sourceLabel?: string;
   preferredToolId?: string;
   supportingToolIds?: string[];
   actionProfileId?: string;

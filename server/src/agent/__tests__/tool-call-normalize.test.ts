@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "vitest";
+import { expect, test } from "vitest";
 import type { AgentNodeState } from "../node-runtime";
 import { toolCallNormalizeNode } from "../nodes/tool-call-normalize";
 
@@ -747,6 +747,78 @@ test("toolCallNormalizeNode fails when toolId is not exposed", async () => {
 
   assert.equal(patch.pendingToolCall, undefined);
   assert.match(patch.errorMessage ?? "", /not exposed/i);
+});
+
+test("toolCallNormalizeNode applies the schema guard to a projected MCP capability", async () => {
+  const projectedToolId = "mcp:docs-server:tool:search_docs";
+  const projectedMeta = {
+    toolId: projectedToolId,
+    title: "Search product documentation",
+    description: "Search the connected documentation server.",
+    inputSchema: {
+      type: "object",
+      required: ["query"],
+      properties: { query: { type: "string" } },
+      additionalProperties: false,
+    },
+    domain: "external_mcp",
+    source: "external" as const,
+    tags: ["docs", "search"],
+    capabilities: {
+      sideEffect: "network" as const,
+      requiresApproval: true,
+    },
+  };
+
+  const valid = await toolCallNormalizeNode(
+    createState({
+      toolExposure: { exposedTools: [projectedToolId], toolMeta: [projectedMeta] },
+      nextAction: {
+        type: "use_tool",
+        toolId: projectedToolId,
+        args: { query: "installation guides" },
+        reason: "Search docs.",
+      },
+    }),
+  );
+  expect(valid.pendingToolCall?.toolId).toBe(projectedToolId);
+  expect(valid.pendingToolCall?.args).toEqual({ query: "installation guides" });
+});
+
+test("projected MCP capability rejects schema-invalid task model args", async () => {
+  const projectedToolId = "mcp:docs-server:tool:search_docs";
+  const invalid = await toolCallNormalizeNode(
+    createState({
+      toolExposure: {
+        exposedTools: [projectedToolId],
+        toolMeta: [{
+          toolId: projectedToolId,
+          title: "Search product documentation",
+          description: "Search the connected documentation server.",
+          inputSchema: {
+            type: "object",
+            required: ["query"],
+            properties: { query: { type: "string" } },
+            additionalProperties: false,
+          },
+          domain: "external_mcp",
+          source: "external",
+          tags: ["docs", "search"],
+          capabilities: { sideEffect: "network", requiresApproval: true },
+        }],
+      },
+      nextAction: {
+        type: "use_tool",
+        toolId: projectedToolId,
+        args: { unexpected: "value" },
+        reason: "Search docs.",
+      },
+    }),
+  );
+
+  expect(invalid.pendingToolCall).toBeUndefined();
+  expect(invalid.schemaReplanDiagnostics?.toolId).toBe(projectedToolId);
+  expect(invalid.schemaReplanDiagnostics?.schemaError).toMatch(/required|not allowed/i);
 });
 
 test("toolCallNormalizeNode does not treat capability-like ids as valid tool ids unless exposed", async () => {

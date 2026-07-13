@@ -8,7 +8,7 @@ module: Agent
 feature: ExternalMcpAgentExposureAndSelection
 doc_type: task-card
 canonical: true
-task_state: BLOCKED_BY_T001
+task_state: DONE
 related:
   - docs/project-control/tasks/mcp_agent_T001-external-mcp-agent-eligibility.md
   - server/src/mcp/harness/exposure.ts
@@ -270,3 +270,11 @@ pnpm check
 - 回归测试核验
 - 建议的最小修复
 
+## Review Evidence
+
+- 结论：PASS
+- T001 eligibility resolver 的真实结果已传入 `allowedExternalToolIds`，并进入现有 Harness exposure、candidate resolution 和 Agent intent 链路。
+- 已覆盖未授权、disabled、stale、空 allowlist、不存在 allowlist、多 external topK/maxTools、task model 选择、Tool Guard/schema validation、chat_surface 隔离和 diagnostics 四态输出。
+- server T002 定向测试：190/190 通过。
+- `pnpm check`：通过。
+- 未执行远端 MCP `tools/call`，未修改 Agent Graph、OAuth、resources/prompts 或多 MCP 编排。
