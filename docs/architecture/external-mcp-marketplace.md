@@ -830,7 +830,16 @@ Electron 打包态通过内置 Node runtime 跑 backend。
 - [x] 确认产品边界：`Tool` 和 `MCP` 分离，`Settings -> MCP` 作为独立产品域
 - [x] 完成 MCP 市场浏览 MVP：独立页面、市场拉取、基础文档与文案
 - [x] 完成 Phase 1 后端：external MCP server record、`streamable-http` connect/discover、capability projection、手动 invocation
-- [ ] MCP Agent Job Release Complete：仍待真实前台 external MCP smoke 与完整 `pnpm check` 环境通过后标记
+- [x] MCP Agent Job Release Complete：市场安装、连接、Discover、用户授权 Agent、语义选择、审批、Harness 调用、Evidence 和回答已完成
+
+当前 Agent 调用主链路：
+
+```text
+市场 → 安装 → 连接 → Discover → 用户授权 Agent 使用
+→ Agent 语义选择 → 审批 → Harness 调用 → Evidence → 回答
+```
+
+本期仍不包含：OAuth、MCP resources、MCP prompts、server 自动更新、自动安装、自动 Discover、每工具细粒度权限和多 MCP 编排。
 
 我已完成的自动化测试：
 

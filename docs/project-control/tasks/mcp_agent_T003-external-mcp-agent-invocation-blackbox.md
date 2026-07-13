@@ -1,5 +1,5 @@
 ---
-status: current
+status: complete
 priority: P0
 owner: agent-runtime
 last_verified: 2026-07-14
@@ -8,7 +8,7 @@ module: Agent
 feature: ExternalMcpAgentInvocationBlackbox
 doc_type: task-card
 canonical: true
-task_state: BLOCKED_BY_FRONTEND_SMOKE_AND_CHECK
+task_state: DONE
 related:
   - docs/project-control/tasks/mcp_agent_T001-external-mcp-agent-eligibility.md
   - docs/project-control/tasks/mcp_agent_T002-external-mcp-agent-exposure-and-selection.md
@@ -438,11 +438,16 @@ pnpm package:electron:win
 ### Changed Files
 
 - `server/src/mcp/external.ts`
+- `server/src/mcp/external-redaction.ts`
+- `server/src/mcp/external-agent-blackbox.test.ts`
+- `server/src/mcp/external-redaction.test.ts`
 - `server/src/mcp/core/invocations.ts`
 - `server/src/agent/nodes/tool-node.ts`
+- `server/src/agent/resume.ts`
 - `server/src/agent/evidence.ts`
 - `server/src/agent/types.ts`
 - `server/src/agent/__tests__/agentgraph-mainline-blackbox.test.ts`
+- `server/src/routes/proxy-provider/chat-agent-approval.smoke.test.ts`
 - `docs/architecture/external-mcp-marketplace.md`
 
 ### Verified
@@ -452,11 +457,13 @@ pnpm package:electron:win
 - server typecheck：通过。
 - A5 repeated-tool guard 单测：通过，单独使用 `--testTimeout=15000`。
 
-### Blocking Evidence
+### Verification Evidence
 
-- 完整 `agentgraph-mainline-blackbox.test.ts`：`17 tests` 中 `16 passed`；A5 在默认 5 秒超时下偶发超时，单独提高该测试超时后通过。
-- `pnpm check` 未完成：其他 workspace typecheck 已运行，`packages/deepagents-spike` 的 TypeScript 进程以 Windows 状态码 `3221225477` 崩溃，未输出类型错误。
-- 真实前台 smoke 未执行：当前环境没有可核验的已配置低风险 external MCP server、实际安装/Connect/Discover/Agent Access 状态和桌面前台运行证据；没有伪造该结果。
+- `agentgraph-mainline-blackbox.test.ts`: `18 tests passed`，包含 external recoverable failure 和 repeated-tool guard。
+- `chat-agent-approval.smoke.test.ts`: S1 与 S2-S3 定向通过；批准后的调用次数为 `1`，第二次 approve 后仍为 `1`。
+- `external-agent-blackbox.test.ts` 与 `external-redaction.test.ts`: `9 tests passed`，包含 HTTP/stdio recovery、二次失败、timeout、JSON-RPC error、非法结果、revoke、Rediscover 和递归脱敏。
+- `pnpm check`: 首次并行执行出现一次 Windows 进程状态码 `3221225477`，随后按原命令重跑成功；成功原始输出见 `.test-artifact/t003-pnpm-check-rerun.txt`，失败原始输出保留在 `.test-artifact/t003-pnpm-check.txt`。
+- server typecheck: 通过，原始输出见 `.test-artifact/t003-server-typecheck.txt`。
 
 ### Real Chrome Smoke Evidence (2026-07-14)
 
@@ -472,4 +479,4 @@ pnpm package:electron:win
 
 ### Remaining Work
 
-- 解决或隔离 `deepagents-spike` typecheck 进程崩溃，并重新执行 `pnpm check`。
+- 无。已知非目标仍按架构文档所列范围保留。

@@ -1030,6 +1030,52 @@ test("T003 external MCP follows selection, approval, Harness, and Evidence bound
   assert.equal(JSON.stringify(approved.evidence).includes("should-not-be-recorded"), false);
 });
 
+test("T003 external runtime failure stays recoverable and ends with a guarded answer", async () => {
+  const externalTool = makeToolDefinition({
+    id: "mcp:docs-server:tool:search_docs_failure",
+    domain: "external_mcp",
+    inputSchema: { type: "object", additionalProperties: false },
+    sideEffect: "network",
+    requiresApproval: false,
+    source: "external",
+  });
+  setupToolExposure("search external docs", [externalTool]);
+  vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
+    async function* () {
+      yield `{"type":"use_tool","toolId":"${externalTool.id}","args":{},"reason":"Search external docs."}`;
+    },
+  );
+  const executeSpy = vi.spyOn(harnessInvocations, "executeHarnessInvocation").mockResolvedValue({
+    id: "t003-external-failure",
+    toolId: externalTool.id,
+    status: "failed",
+    error: { message: "External MCP recovery exhausted after one recovery attempt: timeout", failureCode: "timeout" },
+    startedAt: "2026-07-14T00:00:00.000Z",
+    finishedAt: "2026-07-14T00:00:01.000Z",
+  } as never);
+  vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke").mockResolvedValue(
+    "当前还没有足够的已完成证据，无法给出可靠的外部 MCP 结果。",
+  );
+
+  const result = await runBlackbox({
+    runId: "t003-external-recoverable-failure",
+    question: "search external docs",
+    maxIterations: 1,
+    approvedInvocations: [{
+      toolId: externalTool.id,
+      input: {},
+      inputHash: createHash("sha256")
+        .update(JSON.stringify({ args: {}, source: "planner", toolId: externalTool.id }))
+        .digest("hex"),
+    }],
+  });
+  assert.equal(result.status, "completed");
+  assert.equal(executeSpy.mock.calls.length, 2);
+  assert.equal(result.lastToolExecution?.failureKind, "recoverable");
+  assert.equal(result.evidence.latestSummary?.status, "failed");
+  assert.match(result.answer, /没有足够的已完成证据/);
+});
+
 test("A8 failed tool does not continue with extra tool execution or fake success", async () => {
   setupToolExposure("open README.md", [readOpenTool()]);
   vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(

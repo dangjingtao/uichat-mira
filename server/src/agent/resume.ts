@@ -317,6 +317,9 @@ export const resumeApprovedAgentRun = async (runId: string) => {
     knowledgeBaseId: runtimeInput.knowledgeBaseId,
     intentConfig: runtimeInput.intentConfig,
     workspaceRoot: runtimeInput.workspaceRoot,
+    // Approval resume executes the already frozen call once. A later Planner
+    // iteration must not reuse the approved hash and invoke the same tool again.
+    maxIterations: 1,
     approvedInvocations,
     // Compatibility input only; createInitialAgentGraphState does not store or read it.
     selectedToolId: pendingToolCall.toolId,

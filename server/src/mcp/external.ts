@@ -8,6 +8,7 @@ import {
   unregisterCapability,
 } from "../harness/registry.js";
 import { StdioMcpSession } from "./stdio-session.js";
+import { redactExternalMcpValue } from "./external-redaction.js";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 const DISCLAIMER_TEXT_HASH = "external-mcp-disclaimer-v1";
@@ -321,15 +322,8 @@ const DEFAULT_TIMEOUT_MS = 30000;
 const stdioSessions = new Map<string, StdioMcpSession>();
 
 const redactExternalMcpText = (value: string, row?: ExternalMcpServerRow) => {
-  let redacted = value;
   const secret = row ? parseSecretJson(row.secret_json).bearerToken : undefined;
-  if (secret) {
-    redacted = redacted.split(secret).join("[REDACTED]");
-  }
-  return redacted.replace(
-    /((?:authorization|bearer|token|secret|password|api[-_]?key)\s*[:=]\s*)([^\s,;]+)/giu,
-    "$1[REDACTED]",
-  );
+  return String(redactExternalMcpValue(value, secret ? [secret] : []));
 };
 
 const externalMcpFailure = (error: unknown, row?: ExternalMcpServerRow) =>
@@ -1241,12 +1235,13 @@ const postJsonRpc = async <T>(
     throw mcpNotFound(`External MCP server not found: ${server.id}`);
   }
   const runtimeConfig = toRuntimeConfig(row);
+  const secrets = runtimeConfig.bearerToken ? [runtimeConfig.bearerToken] : [];
   if (row.transport_kind === "stdio") {
     try {
       const session = getOrCreateStdioSession(server.id, row);
       const result = await session.request<T>(method, params, runtimeConfig.timeoutMs);
       return {
-        result,
+        result: redactExternalMcpValue(result, secrets) as T,
         sessionId: server.sessionId,
         protocolVersion: server.protocolVersion ?? MCP_PROTOCOL_VERSION,
       };
@@ -1298,7 +1293,7 @@ const postJsonRpc = async <T>(
     throw externalMcpFailure(`MCP ${method} response did not include result`, row);
   }
   return {
-    result: message.result,
+    result: redactExternalMcpValue(message.result, secrets) as T,
     sessionId: response.headers.get("mcp-session-id") ?? undefined,
     protocolVersion: response.headers.get("mcp-protocol-version") ?? undefined,
   };
@@ -1565,8 +1560,18 @@ const registerProjectedTool = (
         }
         // One reinitialize handles stale persisted sessions without unbounded retries.
         disposeExternalMcpServerSession(server.id);
-        const reinitialized = await connectExternalMcpServer(server.id);
-        return await invoke(reinitialized, true);
+        try {
+          const reinitialized = await connectExternalMcpServer(server.id);
+          return await invoke(reinitialized, true);
+        } catch (secondError) {
+          const row = getServerRow(server.id);
+          throw externalMcpFailure(
+            `External MCP recovery exhausted after one recovery attempt: ${
+              secondError instanceof Error ? secondError.message : String(secondError)
+            }`,
+            row ?? undefined,
+          );
+        }
       }
     },
   };

@@ -335,11 +335,13 @@ describe("chat route approval resume smoke", () => {
     const { user, thread, token } = createUserThread();
 
     setupToolExposure("看看当前 workspace 有哪些文件。", [readListTool()]);
-    vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
-      async function* () {
+    vi.spyOn(providerProxyService, "streamTaskChatText")
+      .mockImplementationOnce(async function* () {
         yield '{"type":"use_tool","toolId":"read_list","args":{"path":"/workspace"},"reason":"Need the workspace listing."}';
-      },
-    );
+      })
+      .mockImplementationOnce(async function* () {
+        yield '{"type":"answer","reason":"The workspace listing is sufficient."}';
+      });
     const executeSpy = vi
       .spyOn(harnessInvocations, "executeHarnessInvocation")
       .mockResolvedValue({

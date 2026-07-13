@@ -30,6 +30,7 @@ import { ErrorCodes } from "@/utils/response.js";
 import { evaluateInvocationApproval } from "./permissions.js";
 import { createInvocationInputHash } from "@/agent/approval-fingerprint.js";
 import { validateInvocationArgs } from "./schema.js";
+import { redactExternalMcpValue } from "../external-redaction.js";
 
 const invocationMap = new Map<string, McpInvocationRecord>();
 const invocationEvents = new Map<string, McpStreamEvent[]>();
@@ -54,21 +55,6 @@ const sweepInvocations = () => {
     getUpdatedAt: (_events) => undefined,
   });
   sweepInvocationTraces();
-};
-
-const redactExternalInvocationValue = (value: unknown): unknown => {
-  if (Array.isArray(value)) {
-    return value.map(redactExternalInvocationValue);
-  }
-  if (!value || typeof value !== "object") {
-    return value;
-  }
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).map(([key, child]) => {
-      const sensitive = /authorization|bearer|token|secret|password|api[-_]?key|header/iu.test(key);
-      return [key, sensitive ? "[REDACTED]" : redactExternalInvocationValue(child)];
-    }),
-  );
 };
 
 export const getInvocation = (invocationId: string) =>
@@ -144,7 +130,9 @@ export const executeInvocation = async (
     id: invocationId,
     toolId: input.toolId,
     status: "running",
-    args: tool.definition.source === "external" ? redactExternalInvocationValue(args) as Record<string, unknown> : args,
+    args: tool.definition.source === "external"
+      ? redactExternalMcpValue(args) as Record<string, unknown>
+      : args,
     artifacts,
     traceId: trace.traceId,
     ...(input.threadId ? { threadId: input.threadId } : {}),
@@ -154,7 +142,10 @@ export const executeInvocation = async (
   invocationMap.set(invocationId, record);
 
   const emit = async (event: McpStreamEventInput) => {
-    const full = withEventMeta(invocationId, event);
+    const safeEvent = tool.definition.source === "external"
+      ? redactExternalMcpValue(event) as McpStreamEventInput
+      : event;
+    const full = withEventMeta(invocationId, safeEvent);
     appendEvent(invocationId, full);
     await input.onEvent?.(full);
   };
@@ -213,14 +204,17 @@ export const executeInvocation = async (
           },
         });
         const next = createArtifact(artifact);
-        artifacts.push(next);
+        const safeArtifact = tool.definition.source === "external"
+          ? redactExternalMcpValue(next) as typeof next
+          : next;
+        artifacts.push(safeArtifact);
         void emit({
           type: "invocation:artifact",
-          artifact: next,
+          artifact: safeArtifact,
         });
         artifactSpan.end({
           metadata: {
-            artifactId: next.id,
+            artifactId: safeArtifact.id,
           },
         });
         return next;
@@ -230,6 +224,9 @@ export const executeInvocation = async (
           startTraceSpan({
             invocationId,
             ...spanInput,
+            ...(tool.definition.source === "external" && spanInput.metadata
+              ? { metadata: redactExternalMcpValue(spanInput.metadata) as Record<string, unknown> }
+              : {}),
           }),
       },
     })) as McpToolExecutionResult;
@@ -241,10 +238,12 @@ export const executeInvocation = async (
         name: "Normalize result",
         kind: "result_normalization",
       });
-      record.result = response.result;
+      record.result = tool.definition.source === "external"
+        ? redactExternalMcpValue(response.result)
+        : response.result;
       await emit({
         type: "invocation:result",
-        result: response.result,
+        result: record.result,
       });
       resultSpan.end();
     }
@@ -268,6 +267,9 @@ export const executeInvocation = async (
     return record;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const safeMessage = tool.definition.source === "external"
+      ? String(redactExternalMcpValue(message))
+      : message;
     if (error instanceof McpApprovalRequiredError) {
       record.status = "awaiting_approval";
       record.approval = {
@@ -301,7 +303,7 @@ export const executeInvocation = async (
 
     const failureCode = inferInvocationFailureCode({
       error,
-      message,
+      message: safeMessage,
       signal,
     });
     record.status = signal.aborted ? "cancelled" : "failed";
@@ -314,7 +316,7 @@ export const executeInvocation = async (
       status: signal.aborted ? "cancelled" : "failed",
       metadata: {
         status: record.status,
-        message,
+        message: safeMessage,
         failureCode,
       },
     });
@@ -322,7 +324,7 @@ export const executeInvocation = async (
 
     await emit({
       type: "invocation:error",
-      message,
+      message: safeMessage,
     });
     await emit({
       type: "invocation:finish",

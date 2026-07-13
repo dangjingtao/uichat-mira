@@ -28,21 +28,9 @@ import type {
   PendingToolCall,
 } from "../types";
 import type { CodebaseExploreToolResult } from "@/mcp/managed-codegraph/types";
+import { redactExternalMcpValue } from "@/mcp/external-redaction";
 
 const nowIso = () => new Date().toISOString();
-
-const redactExternalArgs = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(redactExternalArgs);
-  if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).map(([key, child]) => [
-      key,
-      /authorization|bearer|token|secret|password|api[-_]?key|header/iu.test(key)
-        ? "[REDACTED]"
-        : redactExternalArgs(child),
-    ]),
-  );
-};
 
 const TERMINAL_FAILURE_PATTERNS = [
   /\bapproval mismatch\b/i,
@@ -98,7 +86,7 @@ const buildExecutionRecord = (input: {
   args:
     (getCapabilityImplementation(input.toolId)?.definition.source === "external" ||
       input.toolId.startsWith("mcp:"))
-      ? (redactExternalArgs(input.pendingToolCall.args) as Record<string, unknown>)
+      ? (redactExternalMcpValue(input.pendingToolCall.args) as Record<string, unknown>)
       : input.pendingToolCall.args,
   invocationId: input.invocationId,
   status: input.status,
