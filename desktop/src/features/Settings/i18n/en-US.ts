@@ -76,19 +76,6 @@ const settingsPending = {
         smartRobotEntry: "Smart robot entry",
       },
       studioEntries: {
-        browserExtension: {
-          title: "Browser Extension",
-          description: "Manage Mira Clipper authorization so browser text and images can be saved to the evolving knowledge library.",
-          hint: "Generate a one-time authorization code and paste it into the browser extension.",
-          badges: {
-            debug: "Browser access",
-            focus: "Text + image capture",
-            runtime: "One-time authorization",
-          },
-          actions: {
-            open: "Manage authorization",
-          },
-        },
         newsHub: {
           title: "News Hub",
           description: "Bring no-key tech news sources into one local news table and expose a direct entry for browsing, searching, and further use.",
