@@ -1,12 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 
 import CONFIG from "@/config/index.js";
 import {
   ManagedCodeGraphProcessManager,
   createManagedCodeGraphPlannerStorageFromAppDataRoot,
   createManagedCodeGraphWorkspaceHash,
-  isCodebaseExplorePlannerExposureEnabled,
   resolveManagedCodeGraphExternalIndexSupport,
   resolveManagedCodeGraphPlannerConfig,
   type ManagedCodeGraphDetectResult,
@@ -32,6 +32,8 @@ export type CodeGraphStudioBlockedReasonCode =
   | "provider_missing";
 
 export type CodeGraphStudioConfigDraft = {
+  microAppEnabled: boolean;
+  agentCapabilityEnabled: boolean;
   command: string;
   startArgs: string[];
   versionProbeArgs: string[];
@@ -47,8 +49,81 @@ export type CodeGraphStudioConfig = CodeGraphStudioConfigDraft & {
   appDataRootResolved: string | null;
   logRoot: string | null;
   indexRoot: string | null;
-  plannerExposureEnabled: boolean;
+  capabilityRegistered: boolean;
 };
+
+export type CodeGraphStudioCapabilityGateReasonCode =
+  | "microapp_disabled"
+  | "agent_capability_disabled"
+  | "runtime_not_ready"
+  | "telemetry_not_verified_off"
+  | "workspace_mismatch"
+  | "repo_pollution_risk"
+  | "app_data_root_unavailable"
+  | "registration_unavailable";
+
+export type CodeGraphStudioCapabilityGate = {
+  available: boolean;
+  registered: boolean;
+  reasons: Array<{
+    code: CodeGraphStudioCapabilityGateReasonCode;
+    message: string;
+  }>;
+  checks: {
+    microAppEnabled: boolean;
+    agentCapabilityEnabled: boolean;
+    runtimeReady: boolean;
+    telemetryVerifiedOff: boolean;
+    workspaceMatched: boolean;
+    repoPollutionSafe: boolean;
+    appDataRootValid: boolean;
+    capabilityRegistrationReady: boolean;
+  };
+};
+
+type CodeGraphCapabilityStatusSource = {
+  status: ManagedCodeGraphStatusSnapshot["status"];
+  telemetryStatus?: ManagedCodeGraphStatusSnapshot["telemetryStatus"];
+  workspaceMatches?: boolean;
+} | null;
+
+type CodeGraphStudioSnapshotShape = {
+  status: ManagedCodeGraphStatusSnapshot["status"];
+  telemetryStatus: ManagedCodeGraphStatusSnapshot["telemetryStatus"];
+  workspaceMatches: boolean;
+  providerVersion: string | null;
+  handshakeStatus: ManagedCodeGraphStatusSnapshot["handshakeStatus"];
+  initializedNotificationSent: boolean;
+  processAlive: boolean;
+  startedAt: number | null;
+  stoppedAt: number | null;
+  durationMs: number | null;
+  exitCode: number | null;
+  lastStatus: ManagedCodeGraphStatusSnapshot["lastStatus"];
+  lastError: string | null;
+  crashCount: number;
+  startDisposition: string | null;
+};
+
+type CodeGraphRuntimeConfigFields = Pick<
+  CodeGraphStudioConfigDraft,
+  | "command"
+  | "startArgs"
+  | "versionProbeArgs"
+  | "telemetryProbeArgs"
+  | "appDataRoot"
+  | "timeoutMs"
+>;
+
+type CodeGraphRuntimeTransitionState =
+  | {
+      inProgress: false;
+      reason: null;
+    }
+  | {
+      inProgress: true;
+      reason: "reconfiguring" | "stopping";
+    };
 
 export type CodeGraphStudioBlockedReason = {
   code: CodeGraphStudioBlockedReasonCode;
@@ -92,6 +167,7 @@ export type CodeGraphStudioReport = {
   status: CodeGraphStudioStatus;
   blockedReasons: CodeGraphStudioBlockedReason[];
   config: CodeGraphStudioConfig;
+  capability: CodeGraphStudioCapabilityGate;
   pollutionGuard: CodeGraphStudioPollutionGuard;
   runtime: CodeGraphStudioRuntimeReport;
   debug: CodeGraphStudioDebugReport;
@@ -152,6 +228,57 @@ const normalizePositiveNumber = (value: unknown, fallback: number) => {
   const next = Math.trunc(value);
   return next > 0 ? next : fallback;
 };
+
+const normalizeBoolean = (value: unknown, fallback: boolean) => {
+  if (typeof value !== "boolean") {
+    return fallback;
+  }
+
+  return value;
+};
+
+const toComparableRuntimeConfig = (
+  draft: CodeGraphStudioConfigDraft,
+): CodeGraphRuntimeConfigFields => ({
+  command: draft.command,
+  startArgs: [...draft.startArgs],
+  versionProbeArgs: [...draft.versionProbeArgs],
+  telemetryProbeArgs: [...draft.telemetryProbeArgs],
+  appDataRoot: draft.appDataRoot,
+  timeoutMs: draft.timeoutMs,
+});
+
+const hasRuntimeConfigChanged = (
+  current: CodeGraphStudioConfigDraft,
+  next: CodeGraphStudioConfigDraft,
+) =>
+  JSON.stringify(toComparableRuntimeConfig(current)) !==
+  JSON.stringify(toComparableRuntimeConfig(next));
+
+const createRuntimeFingerprint = (input: {
+  command: string;
+  startArgs: string[];
+  versionProbeArgs: string[];
+  telemetryProbeArgs: string[];
+  workspaceRoot: string;
+  logRoot: string;
+  indexRoot: string;
+  timeoutMs: number;
+}) =>
+  createHash("sha256")
+    .update(
+      JSON.stringify({
+        command: input.command,
+        startArgs: input.startArgs,
+        versionProbeArgs: input.versionProbeArgs,
+        telemetryProbeArgs: input.telemetryProbeArgs,
+        workspaceRoot: normalizeComparablePath(input.workspaceRoot),
+        logRoot: normalizeComparablePath(input.logRoot),
+        indexRoot: normalizeComparablePath(input.indexRoot),
+        timeoutMs: input.timeoutMs,
+      }),
+    )
+    .digest("hex");
 
 const parseJsonFile = <T>(filePath: string, fallback: T): T => {
   try {
@@ -255,6 +382,8 @@ const resolveStudioStorageRoot = () =>
 const createDefaultDraft = (workspaceRoot: string): CodeGraphStudioConfigDraft => {
   const plannerConfig = resolveManagedCodeGraphPlannerConfig(workspaceRoot);
   return {
+    microAppEnabled: true,
+    agentCapabilityEnabled: false,
     command: plannerConfig.command,
     startArgs: [...plannerConfig.startArgs],
     versionProbeArgs: [...plannerConfig.versionProbeArgs],
@@ -281,17 +410,70 @@ const toBlockedReason = (
 export const createCodeGraphStudioService = (options?: {
   workspaceRoot?: string;
   storageRoot?: string;
+  onStateChanged?: () => void;
+  getCapabilityRegistrationState?: () => boolean;
 }) => {
   const workspaceRoot = path.resolve(options?.workspaceRoot ?? process.cwd());
   const storageRoot = path.resolve(options?.storageRoot ?? resolveStudioStorageRoot());
+  const onStateChanged = options?.onStateChanged;
+  const getCapabilityRegistrationState =
+    options?.getCapabilityRegistrationState ?? (() => false);
   const workspaceHash = createManagedCodeGraphWorkspaceHash(workspaceRoot);
   const configFilePath = path.join(storageRoot, `${workspaceHash}.json`);
   let manager: ManagedCodeGraphProcessManager | null = null;
+  let latestCapabilityStatusSource: CodeGraphCapabilityStatusSource = null;
+  let runtimeTransitionState: CodeGraphRuntimeTransitionState = {
+    inProgress: false,
+    reason: null,
+  };
+
+  const updateLatestCapabilityStatusSource = (snapshot: {
+    status: ManagedCodeGraphStatusSnapshot["status"];
+    telemetryStatus?: ManagedCodeGraphStatusSnapshot["telemetryStatus"];
+    workspaceMatches?: boolean;
+  } | null) => {
+    latestCapabilityStatusSource = snapshot
+      ? {
+          status: snapshot.status,
+          telemetryStatus: snapshot.telemetryStatus,
+          workspaceMatches: snapshot.workspaceMatches,
+        }
+      : null;
+  };
+
+  const setRuntimeTransitionState = (
+    nextState: CodeGraphRuntimeTransitionState,
+    options?: { clearSnapshot?: boolean },
+  ) => {
+    runtimeTransitionState = nextState;
+    if (options?.clearSnapshot) {
+      updateLatestCapabilityStatusSource(null);
+    }
+    onStateChanged?.();
+  };
+
+  const handleManagerStatusChanged = (snapshot: ManagedCodeGraphStatusSnapshot) => {
+    updateLatestCapabilityStatusSource(snapshot);
+    if (!snapshot.processAlive && manager?.getStatus().workspaceHash === snapshot.workspaceHash) {
+      const managerLifecycleClosed =
+        snapshot.status === "failed" ||
+        (snapshot.status === "stopped" && snapshot.startedAt !== null);
+      if (managerLifecycleClosed) {
+        manager = null;
+      }
+    }
+    onStateChanged?.();
+  };
 
   const getDraft = (): CodeGraphStudioConfigDraft => {
     const defaults = createDefaultDraft(workspaceRoot);
     const saved = parseJsonFile<Partial<CodeGraphStudioConfigDraft>>(configFilePath, {});
     return {
+      microAppEnabled: normalizeBoolean(saved.microAppEnabled, defaults.microAppEnabled),
+      agentCapabilityEnabled: normalizeBoolean(
+        saved.agentCapabilityEnabled,
+        defaults.agentCapabilityEnabled,
+      ),
       command: normalizeText(saved.command, defaults.command),
       startArgs: normalizeStringArray(saved.startArgs, defaults.startArgs),
       versionProbeArgs: normalizeStringArray(
@@ -328,8 +510,8 @@ export const createCodeGraphStudioService = (options?: {
     const plannerStorage =
       appDataRootValidation.error && appDataRootValidation.appDataRootResolved
         ? {
-            status: "blocked",
-            source: "unresolved",
+            status: "blocked" as const,
+            source: "unresolved" as const,
             appDataRoot: appDataRootValidation.appDataRootResolved,
             logRoot: null,
             indexRoot: null,
@@ -355,12 +537,27 @@ export const createCodeGraphStudioService = (options?: {
       plannerStorage,
       externalIndexSupport,
       pollutionGuard,
+      runtimeFingerprint:
+        plannerStorage.logRoot && plannerStorage.indexRoot
+          ? createRuntimeFingerprint({
+              command: draft.command,
+              startArgs: draft.startArgs,
+              versionProbeArgs: draft.versionProbeArgs,
+              telemetryProbeArgs: draft.telemetryProbeArgs,
+              workspaceRoot,
+              logRoot: plannerStorage.logRoot,
+              indexRoot: plannerStorage.indexRoot,
+              timeoutMs: draft.timeoutMs,
+            })
+          : null,
       config: {
         workspaceRoot,
         appDataRootResolved,
         logRoot: plannerStorage.logRoot,
         indexRoot: plannerStorage.indexRoot,
-        plannerExposureEnabled: isCodebaseExplorePlannerExposureEnabled(),
+        microAppEnabled: draft.microAppEnabled,
+        agentCapabilityEnabled: draft.agentCapabilityEnabled,
+        capabilityRegistered: getCapabilityRegistrationState(),
       } satisfies Omit<
         CodeGraphStudioConfig,
         | "command"
@@ -384,6 +581,10 @@ export const createCodeGraphStudioService = (options?: {
   });
 
   const ensureManager = () => {
+    if (runtimeTransitionState.inProgress) {
+      return null;
+    }
+
     const runtime = buildRuntimeConfig();
     if (!runtime.plannerStorage.logRoot || !runtime.plannerStorage.indexRoot) {
       manager = null;
@@ -392,6 +593,7 @@ export const createCodeGraphStudioService = (options?: {
 
     if (
       manager &&
+      manager.getRuntimeFingerprint() === runtime.runtimeFingerprint &&
       manager.getStatus().workspaceRoot === workspaceRoot &&
       manager.getStatus().logRoot === runtime.plannerStorage.logRoot &&
       manager.getStatus().indexRoot === runtime.plannerStorage.indexRoot
@@ -408,6 +610,7 @@ export const createCodeGraphStudioService = (options?: {
       telemetryProbe: {
         args: runtime.draft.telemetryProbeArgs,
       },
+      runtimeFingerprint: runtime.runtimeFingerprint ?? undefined,
       workspaceRoot,
       allowedWorkspaceRoot: workspaceRoot,
       logRoot: runtime.plannerStorage.logRoot,
@@ -416,6 +619,7 @@ export const createCodeGraphStudioService = (options?: {
       healthTimeoutMs: runtime.draft.timeoutMs,
       stopTimeoutMs: runtime.draft.timeoutMs,
       repoPollutionGuard: toRepoPollutionGuard(runtime),
+      onStatusChanged: handleManagerStatusChanged,
     });
     return manager;
   };
@@ -436,6 +640,182 @@ export const createCodeGraphStudioService = (options?: {
       return "stopped";
     }
     return "degraded";
+  };
+
+  const buildCapabilityGate = (
+    runtime: ReturnType<typeof buildRuntimeConfig>,
+    statusSource?: CodeGraphCapabilityStatusSource,
+    requestedWorkspaceRoot?: string,
+  ): CodeGraphStudioCapabilityGate => {
+    if (runtimeTransitionState.inProgress) {
+      return {
+        available: false,
+        registered: false,
+        reasons: [
+          {
+            code: "runtime_not_ready",
+            message:
+              runtimeTransitionState.reason === "reconfiguring"
+                ? "CodeGraph runtime is reconfiguring."
+                : "CodeGraph runtime is stopping.",
+          },
+        ],
+        checks: {
+          microAppEnabled: runtime.draft.microAppEnabled,
+          agentCapabilityEnabled: runtime.draft.agentCapabilityEnabled,
+          runtimeReady: false,
+          telemetryVerifiedOff: false,
+          workspaceMatched: requestedWorkspaceRoot
+            ? isSamePath(requestedWorkspaceRoot, workspaceRoot)
+            : true,
+          repoPollutionSafe:
+            runtime.externalIndexSupport.status === "ready" &&
+            !runtime.pollutionGuard.exists &&
+            runtime.pollutionGuard.status === "ready",
+          appDataRootValid: runtime.plannerStorage.status === "ready",
+          capabilityRegistrationReady: false,
+        },
+      };
+    }
+
+    const activeManager = ensureManager();
+    const snapshot =
+      statusSource ??
+      activeManager?.getStatus() ??
+      latestCapabilityStatusSource ??
+      null;
+    const workspaceMatched = requestedWorkspaceRoot
+      ? isSamePath(requestedWorkspaceRoot, workspaceRoot)
+      : (snapshot?.workspaceMatches ?? true);
+    const runtimeReady = snapshot?.status === "ready";
+    const telemetryVerifiedOff = snapshot?.telemetryStatus === "verified_off";
+    const repoPollutionSafe =
+      runtime.externalIndexSupport.status === "ready" &&
+      !runtime.pollutionGuard.exists &&
+      runtime.pollutionGuard.status === "ready";
+    const appDataRootValid = runtime.plannerStorage.status === "ready";
+    const capabilityRegistrationReady =
+      runtime.draft.microAppEnabled &&
+      runtime.draft.agentCapabilityEnabled &&
+      runtimeReady &&
+      telemetryVerifiedOff &&
+      workspaceMatched &&
+      repoPollutionSafe &&
+      appDataRootValid;
+    const reasons: CodeGraphStudioCapabilityGate["reasons"] = [];
+
+    if (!runtime.draft.microAppEnabled) {
+      reasons.push({
+        code: "microapp_disabled",
+        message: "CodeGraph microapp is disabled.",
+      });
+    }
+    if (!runtime.draft.agentCapabilityEnabled) {
+      reasons.push({
+        code: "agent_capability_disabled",
+        message: "Owner has not allowed the agent to use CodeGraph.",
+      });
+    }
+    if (!runtimeReady) {
+      reasons.push({
+        code: "runtime_not_ready",
+        message: "CodeGraph runtime is not ready.",
+      });
+    }
+    if (!telemetryVerifiedOff) {
+      reasons.push({
+        code: "telemetry_not_verified_off",
+        message: "Telemetry is not verified off.",
+      });
+    }
+    if (!workspaceMatched) {
+      reasons.push({
+        code: "workspace_mismatch",
+        message: "The active workspace does not match the CodeGraph studio workspace.",
+      });
+    }
+    if (!repoPollutionSafe) {
+      reasons.push({
+        code: "repo_pollution_risk",
+        message:
+          runtime.pollutionGuard.blockedReason ??
+          "Repo pollution protection is blocking CodeGraph capability registration.",
+      });
+    }
+    if (!appDataRootValid) {
+      reasons.push({
+        code: "app_data_root_unavailable",
+        message:
+          runtime.plannerStorage.reason ?? "CodeGraph app-data root is unavailable.",
+      });
+    }
+
+    return {
+      available: capabilityRegistrationReady,
+      registered: capabilityRegistrationReady && getCapabilityRegistrationState(),
+      reasons,
+      checks: {
+        microAppEnabled: runtime.draft.microAppEnabled,
+        agentCapabilityEnabled: runtime.draft.agentCapabilityEnabled,
+        runtimeReady,
+        telemetryVerifiedOff,
+        workspaceMatched,
+        repoPollutionSafe,
+        appDataRootValid,
+        capabilityRegistrationReady,
+      },
+    };
+  };
+
+  const toRuntimeSnapshot = (
+    snapshot: CodeGraphStudioStatusSource | null,
+    detect: ManagedCodeGraphDetectResult | null,
+  ): CodeGraphStudioSnapshotShape => {
+    const managedSnapshot =
+      snapshot && "handshakeStatus" in snapshot
+        ? (snapshot as ManagedCodeGraphStatusSnapshot)
+        : null;
+
+    if (managedSnapshot) {
+      return {
+        status: managedSnapshot.status,
+        telemetryStatus: managedSnapshot.telemetryStatus,
+        workspaceMatches: managedSnapshot.workspaceMatches,
+        providerVersion: managedSnapshot.providerVersion,
+        handshakeStatus: managedSnapshot.handshakeStatus,
+        initializedNotificationSent: managedSnapshot.initializedNotificationSent,
+        processAlive: managedSnapshot.processAlive,
+        startedAt: managedSnapshot.startedAt,
+        stoppedAt: managedSnapshot.stoppedAt,
+        durationMs: managedSnapshot.durationMs,
+        exitCode: managedSnapshot.exitCode,
+        lastStatus: managedSnapshot.lastStatus,
+        lastError: managedSnapshot.lastError,
+        crashCount: managedSnapshot.crashCount,
+        startDisposition: managedSnapshot.startDisposition,
+      };
+    }
+
+    return {
+      status: snapshot?.status ?? detect?.status ?? "unavailable",
+      telemetryStatus: snapshot?.telemetryStatus ?? detect?.telemetryStatus ?? "unavailable",
+      workspaceMatches:
+        snapshot && "workspaceMatches" in snapshot && typeof snapshot.workspaceMatches === "boolean"
+          ? snapshot.workspaceMatches
+          : true,
+      providerVersion: detect?.providerVersion ?? null,
+      handshakeStatus: "not_started",
+      initializedNotificationSent: false,
+      processAlive: false,
+      startedAt: null,
+      stoppedAt: null,
+      durationMs: null,
+      exitCode: null,
+      lastStatus: null,
+      lastError: null,
+      crashCount: 0,
+      startDisposition: null,
+    };
   };
 
   const collectBlockedReasons = (
@@ -502,12 +882,37 @@ export const createCodeGraphStudioService = (options?: {
   ): Promise<CodeGraphStudioReport> => {
     const runtimeConfig = buildRuntimeConfig();
     const activeManager = ensureManager();
-    const detect = detectOverride ?? (activeManager ? await activeManager.detect() : null);
+    const liveSnapshot = activeManager?.getStatus() ?? null;
     const snapshot =
       statusSource && "processAlive" in statusSource
         ? statusSource
-        : activeManager?.getStatus() ?? null;
-    const rawStatus = snapshot?.status ?? statusSource?.status ?? detect?.status ?? "unavailable";
+        : liveSnapshot ?? latestCapabilityStatusSource;
+    const detect =
+      detectOverride ??
+      ((!liveSnapshot || !liveSnapshot.processAlive) && activeManager
+        ? await activeManager.detect()
+        : null);
+    const runtimeSnapshot = toRuntimeSnapshot(snapshot, detect);
+    updateLatestCapabilityStatusSource(
+      liveSnapshot
+        ? {
+            status: liveSnapshot.status,
+            telemetryStatus: liveSnapshot.telemetryStatus,
+            workspaceMatches: liveSnapshot.workspaceMatches,
+          }
+        : snapshot
+          ? {
+              status: snapshot.status,
+              telemetryStatus: snapshot.telemetryStatus,
+              workspaceMatches:
+                "workspaceMatches" in snapshot &&
+                typeof snapshot.workspaceMatches === "boolean"
+                  ? snapshot.workspaceMatches
+                  : undefined,
+            }
+          : null,
+    );
+    const rawStatus = runtimeSnapshot.status;
     const blockedReasons = collectBlockedReasons(runtimeConfig, detect);
 
     return {
@@ -518,32 +923,32 @@ export const createCodeGraphStudioService = (options?: {
         appDataRootResolved: runtimeConfig.config.appDataRootResolved,
         logRoot: runtimeConfig.config.logRoot,
         indexRoot: runtimeConfig.config.indexRoot,
-        plannerExposureEnabled: runtimeConfig.config.plannerExposureEnabled,
+        capabilityRegistered: runtimeConfig.config.capabilityRegistered,
         ...runtimeConfig.draft,
       },
+      capability: buildCapabilityGate(runtimeConfig, snapshot),
       pollutionGuard: runtimeConfig.pollutionGuard,
       runtime: {
-        providerVersion: snapshot?.providerVersion ?? detect?.providerVersion ?? null,
-        telemetryStatus:
-          snapshot?.telemetryStatus ?? detect?.telemetryStatus ?? "unavailable",
-        handshakeStatus: snapshot?.handshakeStatus ?? "not_started",
-        initializedNotificationSent: snapshot?.initializedNotificationSent ?? false,
-        processAlive: snapshot?.processAlive ?? false,
-        startedAt: snapshot?.startedAt ?? null,
-        stoppedAt: snapshot?.stoppedAt ?? null,
-        durationMs: snapshot?.durationMs ?? null,
-        exitCode: snapshot?.exitCode ?? null,
-        lastStatus: snapshot?.lastStatus ?? null,
-        lastError: snapshot?.lastError ?? null,
-        crashCount: snapshot?.crashCount ?? 0,
-        startDisposition: snapshot?.startDisposition ?? null,
+        providerVersion: runtimeSnapshot.providerVersion,
+        telemetryStatus: runtimeSnapshot.telemetryStatus,
+        handshakeStatus: runtimeSnapshot.handshakeStatus,
+        initializedNotificationSent: runtimeSnapshot.initializedNotificationSent,
+        processAlive: runtimeSnapshot.processAlive,
+        startedAt: runtimeSnapshot.startedAt,
+        stoppedAt: runtimeSnapshot.stoppedAt,
+        durationMs: runtimeSnapshot.durationMs,
+        exitCode: runtimeSnapshot.exitCode,
+        lastStatus: runtimeSnapshot.lastStatus,
+        lastError: runtimeSnapshot.lastError,
+        crashCount: runtimeSnapshot.crashCount,
+        startDisposition: runtimeSnapshot.startDisposition,
       },
       debug: {
         workspaceHash,
         plannerStorage: runtimeConfig.plannerStorage,
         externalIndexSupport: runtimeConfig.externalIndexSupport,
         detectReasons: detect?.reasons ?? [],
-        rawManagerStatus: rawStatus,
+        rawManagerStatus: runtimeSnapshot.status,
       },
     };
   };
@@ -559,9 +964,14 @@ export const createCodeGraphStudioService = (options?: {
       return await buildReport();
     },
 
-    saveConfig(input: Partial<CodeGraphStudioConfigDraft>) {
+    async saveConfig(input: Partial<CodeGraphStudioConfigDraft>) {
       const current = getDraft();
       const next: CodeGraphStudioConfigDraft = {
+        microAppEnabled: normalizeBoolean(input.microAppEnabled, current.microAppEnabled),
+        agentCapabilityEnabled: normalizeBoolean(
+          input.agentCapabilityEnabled,
+          current.agentCapabilityEnabled,
+        ),
         command:
           typeof input.command === "string"
             ? normalizeText(input.command, current.command)
@@ -599,15 +1009,86 @@ export const createCodeGraphStudioService = (options?: {
         next.appDataRoot = runtime.config.appDataRootResolved;
       }
 
+      const runtimeConfigChanged = hasRuntimeConfigChanged(current, next);
+      const currentManager = manager;
+      if (runtimeConfigChanged && currentManager) {
+        setRuntimeTransitionState(
+          {
+            inProgress: true,
+            reason: "reconfiguring",
+          },
+          { clearSnapshot: true },
+        );
+        manager = null;
+        await currentManager.dispose();
+        updateLatestCapabilityStatusSource(null);
+      } else if (runtimeConfigChanged) {
+        setRuntimeTransitionState(
+          {
+            inProgress: true,
+            reason: "reconfiguring",
+          },
+          { clearSnapshot: true },
+        );
+        updateLatestCapabilityStatusSource(null);
+      }
+
       ensureDirectory(storageRoot);
       fs.writeFileSync(configFilePath, JSON.stringify(next, null, 2), "utf8");
-      manager = null;
+      if (runtimeConfigChanged) {
+        setRuntimeTransitionState({
+          inProgress: false,
+          reason: null,
+        });
+      } else {
+        onStateChanged?.();
+      }
       return next;
+    },
+
+    getCapabilityGate(requestedWorkspaceRoot?: string) {
+      const activeManager = ensureManager();
+      return buildCapabilityGate(
+        buildRuntimeConfig(),
+        activeManager?.getStatus() ?? latestCapabilityStatusSource ?? null,
+        requestedWorkspaceRoot,
+      );
+    },
+
+    getManagedCapabilityContext(requestedWorkspaceRoot: string) {
+      const runtime = buildRuntimeConfig();
+      const activeManager = ensureManager();
+      const gate = buildCapabilityGate(
+        runtime,
+        activeManager?.getStatus() ?? latestCapabilityStatusSource ?? null,
+        requestedWorkspaceRoot,
+      );
+
+      if (!gate.available || !activeManager) {
+        return {
+          ok: false as const,
+          gate,
+          draft: runtime.draft,
+          plannerStorage: runtime.plannerStorage,
+          externalIndexSupport: runtime.externalIndexSupport,
+        };
+      }
+
+      return {
+        ok: true as const,
+        gate,
+        draft: runtime.draft,
+        manager: activeManager,
+      };
     },
 
     async detect() {
       const activeManager = ensureManager();
       const detect = activeManager ? await activeManager.detect() : null;
+      updateLatestCapabilityStatusSource(
+        activeManager?.getStatus() ?? (detect ? { status: detect.status, telemetryStatus: detect.telemetryStatus, workspaceMatches: detect.workspaceAllowed } : null),
+      );
+      onStateChanged?.();
       return {
         report: await buildReport(detect, detect),
       };
@@ -616,6 +1097,8 @@ export const createCodeGraphStudioService = (options?: {
     async start() {
       const activeManager = ensureManager();
       const started = activeManager ? await activeManager.start() : null;
+      updateLatestCapabilityStatusSource(started ?? null);
+      onStateChanged?.();
       return {
         report: await buildReport(started),
       };
@@ -624,6 +1107,8 @@ export const createCodeGraphStudioService = (options?: {
     async health() {
       const activeManager = ensureManager();
       const status = activeManager ? await activeManager.health() : null;
+      updateLatestCapabilityStatusSource(status ?? null);
+      onStateChanged?.();
       return {
         report: await buildReport(status),
       };
@@ -631,7 +1116,25 @@ export const createCodeGraphStudioService = (options?: {
 
     async stop() {
       const activeManager = ensureManager();
+      if (activeManager) {
+        setRuntimeTransitionState({
+          inProgress: true,
+          reason: "stopping",
+        });
+      }
       const status = activeManager ? await activeManager.stop() : null;
+      if (activeManager && manager === activeManager) {
+        manager = null;
+      }
+      updateLatestCapabilityStatusSource(status ?? null);
+      if (activeManager) {
+        setRuntimeTransitionState({
+          inProgress: false,
+          reason: null,
+        });
+      } else {
+        onStateChanged?.();
+      }
       return {
         report: await buildReport(status),
       };
@@ -719,3 +1222,13 @@ export const createCodeGraphStudioService = (options?: {
 export type CodeGraphStudioService = ReturnType<
   typeof createCodeGraphStudioService
 >;
+
+let activeCodeGraphStudioService: CodeGraphStudioService | null = null;
+
+export const setActiveCodeGraphStudioService = (
+  service: CodeGraphStudioService | null,
+) => {
+  activeCodeGraphStudioService = service;
+};
+
+export const getActiveCodeGraphStudioService = () => activeCodeGraphStudioService;

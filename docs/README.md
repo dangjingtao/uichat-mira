@@ -98,6 +98,7 @@ Related:
 
 - `development/agent-observability.md`
 - `developments/README.md`
+- `developments/project-general-cleanup.md`
 - `developments/frontend-route-navigation-protocol.md`
 - `developments/release-management.md`
 - `developments/request-wrapper.md`

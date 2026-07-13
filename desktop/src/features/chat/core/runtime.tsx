@@ -166,6 +166,21 @@ export function AppChatRuntimeProvider({
     };
   }, [runtime]);
 
+  useEffect(() => {
+    const handleThreadsCleaned = () => {
+      void runtime.loadThreads().then(() => {
+        if (!runtime.getState().activeThreadId) {
+          runtime.enterWelcomeState();
+        }
+      });
+    };
+
+    window.addEventListener("uichat:threads-cleaned", handleThreadsCleaned);
+    return () => {
+      window.removeEventListener("uichat:threads-cleaned", handleThreadsCleaned);
+    };
+  }, [runtime]);
+
   // Knowledge base availability affects only UI-facing composer actions. The
   // runtime instance must stay stable so thread state survives chat re-entry.
   useEffect(() => {

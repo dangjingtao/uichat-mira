@@ -425,6 +425,51 @@ export const threadRouteSchemas = {
       500: errorEnvelope,
     },
   },
+  cleanupThreads: {
+    tags: ["Thread"],
+    summary: "Delete the current user's conversation threads",
+    operationId: "cleanupThreads",
+    response: {
+      200: successEnvelope({
+        type: "object",
+        required: ["deletedThreads", "deletedMessages", "failedThreads", "deletedWorkspaces", "clearedLogBytes"],
+        properties: {
+          deletedThreads: { type: "integer", minimum: 0 },
+          deletedMessages: { type: "integer", minimum: 0 },
+          failedThreads: { type: "integer", minimum: 0 },
+          deletedWorkspaces: { type: "integer", minimum: 0 },
+          clearedLogBytes: { type: "integer", minimum: 0 },
+          media: {
+            type: "object",
+            required: ["attachments", "generatedImages", "generatedAudio", "generatedVideos"],
+            properties: {
+              attachments: {
+                type: "object",
+                required: ["files", "bytes"],
+                properties: { files: { type: "integer", minimum: 0 }, bytes: { type: "integer", minimum: 0 } },
+              },
+              generatedImages: {
+                type: "object",
+                required: ["files", "bytes"],
+                properties: { files: { type: "integer", minimum: 0 }, bytes: { type: "integer", minimum: 0 } },
+              },
+              generatedAudio: {
+                type: "object",
+                required: ["files", "bytes"],
+                properties: { files: { type: "integer", minimum: 0 }, bytes: { type: "integer", minimum: 0 } },
+              },
+              generatedVideos: {
+                type: "object",
+                required: ["files", "bytes"],
+                properties: { files: { type: "integer", minimum: 0 }, bytes: { type: "integer", minimum: 0 } },
+              },
+            },
+          },
+        },
+      }),
+      500: errorEnvelope,
+    },
+  },
   getMessages: {
     tags: ["Thread"],
     summary: "Get thread messages",

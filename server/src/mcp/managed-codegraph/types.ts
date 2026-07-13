@@ -36,6 +36,7 @@ export interface ManagedCodeGraphProcessManagerOptions {
   startArgs: string[];
   versionProbe: ManagedCodeGraphVersionProbe;
   telemetryProbe?: ManagedCodeGraphTelemetryProbe;
+  runtimeFingerprint?: string;
   env?: Record<string, string>;
   workspaceRoot: string;
   allowedWorkspaceRoot: string;
@@ -46,6 +47,7 @@ export interface ManagedCodeGraphProcessManagerOptions {
   healthTimeoutMs?: number;
   stopTimeoutMs?: number;
   repoPollutionGuard?: ManagedCodeGraphRepoPollutionGuard;
+  onStatusChanged?: (snapshot: ManagedCodeGraphStatusSnapshot) => void;
 }
 
 export interface ManagedCodeGraphRepoPollutionGuard {

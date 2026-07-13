@@ -76,6 +76,19 @@ const settingsPending = {
         smartRobotEntry: "智能机器人入口",
       },
       studioEntries: {
+        evolvingKnowledge: {
+          title: "智识进化库",
+          description: "多媒体知识捕获与 AI 自我整理系统。捕获网页、图片、音频、视频后，AI 自动重写、标签、发现概念关联与跨时间洞见。",
+          hint: "这是你的第二大脑。它不是传统 RAG，而是让 AI 主动整理、进化洞见。",
+          badges: {
+            debug: "知识捕获",
+            focus: "AI 自我整理",
+            runtime: "洞见引擎",
+          },
+          actions: {
+            open: "进入进化库",
+          },
+        },
         newsHub: {
           title: "资讯聚合台",
           description: "把免 Key 的科技资讯源汇成一张本地资讯表，给你一个可以直接浏览、检索和继续消费的科技资讯入口。",
@@ -182,6 +195,7 @@ const settingsPending = {
           },
           chips: {
             planner: "Planner 暴露：{{value}}",
+            agentCapability: "智能体能力：{{value}}",
             telemetry: "Telemetry：{{value}}",
             pollution: "仓库污染：{{value}}",
             fakeProvider: "Fake Provider：{{value}}",
@@ -219,6 +233,14 @@ const settingsPending = {
             description: "这里只保留 owner 常用参数。Probe args、索引路径和日志路径统一收进高级配置。",
             appDataRootHelp:
               "用于保存日志与临时状态。必须位于仓库外部，建议选择长期可用的目录。",
+          },
+          capability: {
+            microAppHint: "关闭后，CodeGraph 微应用本身不再参与受控 capability 注册。",
+            agentCapabilityHint:
+              "允许智能体使用 CodeGraph。只有 runtime ready、telemetry verified_off、workspace 匹配、repo pollution guard safe 且 App Data Root 合法时才会真正生效。",
+            statusTitle: "当前 capability 状态：{{value}}",
+            registered: "Harness 已注册 `codebase_explore`，但仍只暴露受控 capability，不会把原生命令暴露给 Planner。",
+            unavailable: "当前还不能注册 `codebase_explore`，请先满足上面的 ready gate。",
           },
           advanced: {
             title: "高级配置（可选）",
@@ -269,6 +291,8 @@ const settingsPending = {
           exists: "exists",
           behavior: "行为",
           workspaceRootReadonly: "Workspace Root（只读）",
+          microAppEnabled: "启用 CodeGraph 微应用",
+          agentCapabilityEnabled: "允许智能体使用 CodeGraph",
           command: "Command",
           appDataRootRequired: "App Data Root（必填）",
           logRoot: "logRoot",

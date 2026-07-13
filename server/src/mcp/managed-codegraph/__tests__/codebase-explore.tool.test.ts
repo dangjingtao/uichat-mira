@@ -5,12 +5,16 @@ import path from "node:path";
 import { afterEach, test } from "vitest";
 
 import { createHarnessEnvironmentSnapshot } from "@/harness/environment.js";
+import {
+  createCodeGraphStudioService,
+  setActiveCodeGraphStudioService,
+} from "@/microapps/codegraph/index.js";
 import { codebaseExploreTool } from "../codebase-explore.tool.js";
 
 const fixturePath = path.join(__dirname, "fixtures", "fake-codegraph-provider.mjs");
+const storageRoot = path.join(os.tmpdir(), "codebase-explore-tool-storage");
 
 const originalEnv = {
-  UI_CHAT_CODEGRAPH_PLANNER_ENABLED: process.env.UI_CHAT_CODEGRAPH_PLANNER_ENABLED,
   UI_CHAT_CODEGRAPH_APP_DATA_ROOT: process.env.UI_CHAT_CODEGRAPH_APP_DATA_ROOT,
   UI_CHAT_LOG_DIR: process.env.UI_CHAT_LOG_DIR,
   UI_CHAT_DATABASE_DIR: process.env.UI_CHAT_DATABASE_DIR,
@@ -26,7 +30,6 @@ const originalEnv = {
 };
 
 const applyToolEnv = () => {
-  process.env.UI_CHAT_CODEGRAPH_PLANNER_ENABLED = "1";
   process.env.UI_CHAT_CODEGRAPH_APP_DATA_ROOT = path.join(
     os.tmpdir(),
     "codebase-explore-tool-appdata",
@@ -45,7 +48,41 @@ const applyToolEnv = () => {
   delete process.env.FAKE_EXPLORE_CANDIDATES;
 };
 
+const configureStudioService = async (
+  workspaceRoot: string,
+  overrides?: {
+    agentCapabilityEnabled?: boolean;
+    appDataRoot?: string;
+    command?: string;
+  },
+) => {
+  fs.rmSync(storageRoot, { recursive: true, force: true });
+  fs.mkdirSync(storageRoot, { recursive: true });
+  const service = createCodeGraphStudioService({
+    workspaceRoot,
+    storageRoot,
+  });
+  setActiveCodeGraphStudioService(service);
+  await service.saveConfig({
+    microAppEnabled: true,
+    agentCapabilityEnabled: overrides?.agentCapabilityEnabled ?? true,
+    command: overrides?.command ?? process.env.UI_CHAT_CODEGRAPH_COMMAND ?? process.execPath,
+    startArgs: [fixturePath, "--mcp"],
+    versionProbeArgs: [fixturePath, "--version"],
+    telemetryProbeArgs: [fixturePath, "--telemetry-status"],
+    appDataRoot:
+      overrides?.appDataRoot ??
+      process.env.UI_CHAT_CODEGRAPH_APP_DATA_ROOT ??
+      path.join(os.tmpdir(), "codebase-explore-tool-appdata"),
+  });
+  await service.start();
+  await service.health();
+  return service;
+};
+
 afterEach(() => {
+  setActiveCodeGraphStudioService(null);
+  fs.rmSync(storageRoot, { recursive: true, force: true });
   for (const [key, value] of Object.entries(originalEnv)) {
     if (value === undefined) {
       delete process.env[key];
@@ -80,6 +117,7 @@ test("codebaseExploreTool returns controlled exposure traces and verified eviden
       score: 0.94,
     },
   ]);
+  await configureStudioService(workspaceRoot);
 
   const artifacts: unknown[] = [];
   const result = await codebaseExploreTool.execute({
@@ -134,6 +172,7 @@ test("codebaseExploreTool keeps provider unavailable runs degraded and does not 
   const workspaceRoot = fs.mkdtempSync(
     path.join(os.tmpdir(), "codebase-explore-tool-blocked-"),
   );
+  await configureStudioService(workspaceRoot);
 
   const result = await codebaseExploreTool.execute({
     invocationId: "invocation-2",
@@ -177,6 +216,11 @@ test("codebaseExploreTool reports blocked provider status when app-data root can
   const workspaceRoot = fs.mkdtempSync(
     path.join(os.tmpdir(), "codebase-explore-tool-no-appdata-"),
   );
+  const service = createCodeGraphStudioService({
+    workspaceRoot,
+    storageRoot,
+  });
+  setActiveCodeGraphStudioService(service);
 
   const result = await codebaseExploreTool.execute({
     invocationId: "invocation-3",
@@ -215,6 +259,22 @@ test("codebaseExploreTool keeps repo pollution risk blocked instead of treating 
   const workspaceRoot = fs.mkdtempSync(
     path.join(os.tmpdir(), "codebase-explore-tool-pollution-risk-"),
   );
+  const blockedAppDataRoot = path.join(os.tmpdir(), "codebase-explore-tool-blocked-appdata");
+  fs.mkdirSync(blockedAppDataRoot, { recursive: true });
+  const service = createCodeGraphStudioService({
+    workspaceRoot,
+    storageRoot,
+  });
+  setActiveCodeGraphStudioService(service);
+  await service.saveConfig({
+    microAppEnabled: true,
+    agentCapabilityEnabled: true,
+    command: "codegraph",
+    startArgs: ["serve", "--mcp"],
+    versionProbeArgs: ["--version"],
+    telemetryProbeArgs: ["telemetry", "status"],
+    appDataRoot: blockedAppDataRoot,
+  });
 
   const result = await codebaseExploreTool.execute({
     invocationId: "invocation-4",

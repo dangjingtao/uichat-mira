@@ -11,7 +11,7 @@ const stringArraySchema = {
 
 const reportSchema = {
   type: "object",
-  required: ["status", "blockedReasons", "config", "pollutionGuard", "runtime", "debug"],
+  required: ["status", "blockedReasons", "config", "capability", "pollutionGuard", "runtime", "debug"],
   properties: {
     status: {
       type: "string",
@@ -44,7 +44,9 @@ const reportSchema = {
         "timeoutMs",
         "maxResults",
         "queryLimit",
-        "plannerExposureEnabled",
+        "microAppEnabled",
+        "agentCapabilityEnabled",
+        "capabilityRegistered",
       ],
       properties: {
         workspaceRoot: { type: "string" },
@@ -59,7 +61,51 @@ const reportSchema = {
         timeoutMs: { type: "integer" },
         maxResults: { type: "integer" },
         queryLimit: { type: "integer" },
-        plannerExposureEnabled: { type: "boolean" },
+        microAppEnabled: { type: "boolean" },
+        agentCapabilityEnabled: { type: "boolean" },
+        capabilityRegistered: { type: "boolean" },
+      },
+    },
+    capability: {
+      type: "object",
+      required: ["available", "registered", "reasons", "checks"],
+      properties: {
+        available: { type: "boolean" },
+        registered: { type: "boolean" },
+        reasons: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["code", "message"],
+            properties: {
+              code: { type: "string" },
+              message: { type: "string" },
+            },
+          },
+        },
+        checks: {
+          type: "object",
+          required: [
+            "microAppEnabled",
+            "agentCapabilityEnabled",
+            "runtimeReady",
+            "telemetryVerifiedOff",
+            "workspaceMatched",
+            "repoPollutionSafe",
+            "appDataRootValid",
+            "capabilityRegistrationReady",
+          ],
+          properties: {
+            microAppEnabled: { type: "boolean" },
+            agentCapabilityEnabled: { type: "boolean" },
+            runtimeReady: { type: "boolean" },
+            telemetryVerifiedOff: { type: "boolean" },
+            workspaceMatched: { type: "boolean" },
+            repoPollutionSafe: { type: "boolean" },
+            appDataRootValid: { type: "boolean" },
+            capabilityRegistrationReady: { type: "boolean" },
+          },
+        },
       },
     },
     pollutionGuard: {
@@ -171,6 +217,8 @@ const codeGraphRoutes: FastifyPluginAsync<{
   app.put<{
     Body: {
       command?: string;
+      microAppEnabled?: boolean;
+      agentCapabilityEnabled?: boolean;
       startArgs?: string[];
       versionProbeArgs?: string[];
       telemetryProbeArgs?: string[];
@@ -191,6 +239,8 @@ const codeGraphRoutes: FastifyPluginAsync<{
           additionalProperties: false,
           properties: {
             command: { type: "string" },
+            microAppEnabled: { type: "boolean" },
+            agentCapabilityEnabled: { type: "boolean" },
             startArgs: stringArraySchema,
             versionProbeArgs: stringArraySchema,
             telemetryProbeArgs: stringArraySchema,
@@ -206,7 +256,7 @@ const codeGraphRoutes: FastifyPluginAsync<{
       },
     },
     routeHandler("Failed to save CodeGraph Studio config", async (request) => {
-      codeGraphStudioService.saveConfig(request.body);
+      await codeGraphStudioService.saveConfig(request.body);
       return success(await codeGraphStudioService.getReport(), "CodeGraph Studio config saved");
     }),
   );

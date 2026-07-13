@@ -52,6 +52,8 @@ const FAKE_PROVIDER_FIXTURE_SEGMENTS = [
 type SmokeMode = "real" | "fake";
 
 type CodeGraphDraft = {
+  microAppEnabled: boolean;
+  agentCapabilityEnabled: boolean;
   command: string;
   startArgsText: string;
   versionProbeArgsText: string;
@@ -81,6 +83,8 @@ const textToArgs = (value: string) =>
     .filter(Boolean);
 
 const createDraft = (report: CodeGraphStudioReport): CodeGraphDraft => ({
+  microAppEnabled: report.config.microAppEnabled,
+  agentCapabilityEnabled: report.config.agentCapabilityEnabled,
   command: report.config.command,
   startArgsText: argsToText(report.config.startArgs),
   versionProbeArgsText: argsToText(report.config.versionProbeArgs),
@@ -139,6 +143,8 @@ const buildFakeProviderFixturePath = (workspaceRoot: string) =>
   joinPathSegments(workspaceRoot, ...FAKE_PROVIDER_FIXTURE_SEGMENTS);
 
 const buildSavePayload = (draft: CodeGraphDraft) => ({
+  microAppEnabled: draft.microAppEnabled,
+  agentCapabilityEnabled: draft.agentCapabilityEnabled,
   command: draft.command.trim(),
   startArgs: textToArgs(draft.startArgsText),
   versionProbeArgs: textToArgs(draft.versionProbeArgsText),
@@ -153,6 +159,8 @@ const isConfigDirty = (report: CodeGraphStudioReport, draft: CodeGraphDraft) =>
   JSON.stringify(buildSavePayload(draft)) !==
   JSON.stringify({
     command: report.config.command,
+    microAppEnabled: report.config.microAppEnabled,
+    agentCapabilityEnabled: report.config.agentCapabilityEnabled,
     startArgs: report.config.startArgs,
     versionProbeArgs: report.config.versionProbeArgs,
     telemetryProbeArgs: report.config.telemetryProbeArgs,
@@ -475,8 +483,8 @@ export default function CodeGraphStudioPage() {
     {
       key: "planner",
       icon: LockKeyhole,
-      text: t("settings.microApps.codeGraphStudio.overview.chips.planner", {
-        value: report.config.plannerExposureEnabled
+      text: t("settings.microApps.codeGraphStudio.overview.chips.agentCapability", {
+        value: report.config.capabilityRegistered
           ? t("settings.microApps.codeGraphStudio.values.enabled")
           : t("settings.microApps.codeGraphStudio.values.disabled"),
       }),
@@ -486,7 +494,7 @@ export default function CodeGraphStudioPage() {
       icon: SquareTerminal,
       text: t("settings.microApps.codeGraphStudio.overview.chips.telemetry", {
         value:
-          report.runtime.telemetryStatus === "disabled"
+          report.runtime.telemetryStatus === "verified_off"
             ? t("settings.microApps.codeGraphStudio.values.available")
             : t("settings.microApps.codeGraphStudio.values.unavailable"),
       }),
@@ -701,14 +709,77 @@ export default function CodeGraphStudioPage() {
       <div className="grid gap-4 md:grid-cols-2">
         <div data-testid="codegraph-config-card" className="h-full">
           <Card className="h-full p-4">
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <div className="text-lg font-semibold text-text-primary">
-                  {t("settings.microApps.codeGraphStudio.cards.config.title")}
-                </div>
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <div className="text-lg font-semibold text-text-primary">
+                    {t("settings.microApps.codeGraphStudio.cards.config.title")}
+                  </div>
                 <div className="text-sm leading-6 text-text-secondary">
                   {t("settings.microApps.codeGraphStudio.cards.config.description")}
                 </div>
+                </div>
+
+              <div className="space-y-3 rounded-ui-panel border border-border/70 bg-surface-secondary/20 p-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium text-text-primary">
+                      {t("settings.microApps.codeGraphStudio.fields.microAppEnabled")}
+                    </div>
+                    <div className="text-sm leading-6 text-text-secondary">
+                      {t("settings.microApps.codeGraphStudio.cards.capability.microAppHint")}
+                    </div>
+                  </div>
+                  <Switch
+                    checked={draft.microAppEnabled}
+                    onChange={() =>
+                      setDraft((current) =>
+                        current
+                          ? { ...current, microAppEnabled: !current.microAppEnabled }
+                          : current,
+                      )
+                    }
+                    ariaLabel={t("settings.microApps.codeGraphStudio.fields.microAppEnabled")}
+                  />
+                </div>
+
+                <div className="flex items-start justify-between gap-4 border-t border-border/60 pt-3">
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium text-text-primary">
+                      {t("settings.microApps.codeGraphStudio.fields.agentCapabilityEnabled")}
+                    </div>
+                    <div className="text-sm leading-6 text-text-secondary">
+                      {t("settings.microApps.codeGraphStudio.cards.capability.agentCapabilityHint")}
+                    </div>
+                  </div>
+                  <Switch
+                    checked={draft.agentCapabilityEnabled}
+                    onChange={() =>
+                      setDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              agentCapabilityEnabled: !current.agentCapabilityEnabled,
+                            }
+                          : current,
+                      )
+                    }
+                    ariaLabel={t("settings.microApps.codeGraphStudio.fields.agentCapabilityEnabled")}
+                  />
+                </div>
+
+                <Alert
+                  variant={report.config.capabilityRegistered ? "success" : "warning"}
+                  title={t("settings.microApps.codeGraphStudio.cards.capability.statusTitle", {
+                    value: report.config.capabilityRegistered
+                      ? t("settings.microApps.codeGraphStudio.values.enabled")
+                      : t("settings.microApps.codeGraphStudio.values.disabled"),
+                  })}
+                >
+                  {report.config.capabilityRegistered
+                    ? t("settings.microApps.codeGraphStudio.cards.capability.registered")
+                    : report.capability.reasons[0]?.message ??
+                      t("settings.microApps.codeGraphStudio.cards.capability.unavailable")}
+                </Alert>
               </div>
 
               <div className="grid gap-3 md:grid-cols-2">

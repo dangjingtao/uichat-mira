@@ -1,17 +1,19 @@
-import { FileSearch, Globe, MousePointerClick, PencilLine, SquareTerminal } from "lucide-react";
+import { FileSearch, Globe, MousePointerClick, PencilLine, SquareTerminal, Wrench } from "lucide-react";
 import Badge from "@/shared/ui/Badge";
 import type { ToolDomainSummary, ToolWorkbenchDomain } from "../types";
+import { formatToolDomain } from "../utils";
 
-const domainIcons: Record<ToolWorkbenchDomain, typeof FileSearch> = {
-  read: FileSearch,
-  edit: PencilLine,
-  web_search: Globe,
+const domainIcons: Record<string, typeof FileSearch> = {
+  "file-search": FileSearch,
+  pencil: PencilLine,
+  globe: Globe,
   terminal: SquareTerminal,
-  browser_action: MousePointerClick,
+  "mouse-pointer": MousePointerClick,
+  wrench: Wrench,
 };
 
 type ToolsSidebarProps = {
-  activeDomain: ToolWorkbenchDomain;
+  activeDomain: ToolWorkbenchDomain | null;
   summaries: ToolDomainSummary[];
   onSelectDomain: (domain: ToolWorkbenchDomain) => void;
 };
@@ -25,7 +27,7 @@ export default function ToolsSidebar({
     <div className="stable-scrollbar flex min-h-0 flex-col gap-3 overflow-y-auto border-r border-border pr-4">
       <div className="space-y-2 pb-2">
         {summaries.map((summary) => {
-          const Icon = domainIcons[summary.id];
+          const Icon = domainIcons[summary.icon] ?? Wrench;
           const isActive = summary.id === activeDomain;
 
           return (
@@ -48,7 +50,9 @@ export default function ToolsSidebar({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <div className="truncate text-sm font-medium text-text-primary">{summary.label}</div>
+                  <div className="truncate text-sm font-medium text-text-primary">
+                    {summary.label || formatToolDomain(summary.id)}
+                  </div>
                   <Badge variant="muted">{summary.count}</Badge>
                 </div>
                 <div className="mt-1 text-xs leading-5 text-text-secondary">{summary.description}</div>

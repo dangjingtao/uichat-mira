@@ -1,5 +1,13 @@
+import fs from "node:fs";
+import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import {
+  createCodeGraphStudioService,
+  setActiveCodeGraphStudioService,
+} from "@/microapps/codegraph/index.js";
+import { getTestArtifactDir } from "@/test-support/artifacts.js";
+import { reconcileCodeGraphHarnessCapability } from "./codegraph-capability.js";
 import { resolveHarnessToolExposure } from "./exposure.js";
 import {
   clearHarnessRegistry,
@@ -7,22 +15,27 @@ import {
 } from "./registry.js";
 import { initializeHarnessRuntime, resetHarnessRuntime } from "./runtime.js";
 
-const originalFlag = process.env.UI_CHAT_CODEGRAPH_PLANNER_ENABLED;
+const fixturePath = path.resolve(
+  "src/mcp/managed-codegraph/__tests__/fixtures/fake-codegraph-provider.mjs",
+);
+
+const storageRoot = getTestArtifactDir("harness-runtime-codegraph-storage");
+const appDataRoot = getTestArtifactDir("harness-runtime-codegraph-appdata");
+let activeWorkspaceRoot = "";
+let activeService: ReturnType<typeof createCodeGraphStudioService> | null = null;
 
 describe("initializeHarnessRuntime codebase_explore registration", () => {
   afterEach(() => {
-    if (originalFlag === undefined) {
-      delete process.env.UI_CHAT_CODEGRAPH_PLANNER_ENABLED;
-    } else {
-      process.env.UI_CHAT_CODEGRAPH_PLANNER_ENABLED = originalFlag;
-    }
+    void activeService?.stop();
+    activeService = null;
+    setActiveCodeGraphStudioService(null);
     clearHarnessRegistry();
     resetHarnessRuntime();
+    fs.rmSync(storageRoot, { recursive: true, force: true });
+    fs.rmSync(appDataRoot, { recursive: true, force: true });
   });
 
-  it("keeps codebase_explore hidden when the planner feature flag is off", () => {
-    delete process.env.UI_CHAT_CODEGRAPH_PLANNER_ENABLED;
-
+  it("keeps codebase_explore hidden by default", () => {
     initializeHarnessRuntime();
 
     expect(listCapabilityDefinitions().map((definition) => definition.id)).not.toContain(
@@ -36,10 +49,43 @@ describe("initializeHarnessRuntime codebase_explore registration", () => {
     expect(decision.exposedToolIds).not.toContain("codebase_explore");
   });
 
-  it("registers only the controlled codebase_explore schema when the flag is on", () => {
-    process.env.UI_CHAT_CODEGRAPH_PLANNER_ENABLED = "1";
+  it("registers only the controlled codebase_explore schema after the fake provider is ready and explicitly enabled", async () => {
+    fs.mkdirSync(storageRoot, { recursive: true });
+    activeWorkspaceRoot = getTestArtifactDir(`harness-runtime-codegraph-workspace-${Date.now()}`);
+    fs.mkdirSync(activeWorkspaceRoot, { recursive: true });
+    fs.mkdirSync(appDataRoot, { recursive: true });
+
+    activeService = createCodeGraphStudioService({
+      workspaceRoot: activeWorkspaceRoot,
+      storageRoot,
+      getCapabilityRegistrationState: () =>
+        listCapabilityDefinitions().some((item) => item.id === "codebase_explore"),
+      onStateChanged: () => {
+        reconcileCodeGraphHarnessCapability();
+      },
+    });
+    setActiveCodeGraphStudioService(activeService);
+    await activeService.saveConfig({
+      microAppEnabled: true,
+      agentCapabilityEnabled: false,
+      command: process.execPath,
+      startArgs: [fixturePath, "--mcp"],
+      versionProbeArgs: [fixturePath, "--version"],
+      telemetryProbeArgs: [fixturePath, "--telemetry-status"],
+      appDataRoot,
+    });
+    await activeService.start();
+    await activeService.health();
 
     initializeHarnessRuntime();
+
+    expect(listCapabilityDefinitions().map((definition) => definition.id)).not.toContain(
+      "codebase_explore",
+    );
+
+    await activeService.saveConfig({
+      agentCapabilityEnabled: true,
+    });
 
     const definition = listCapabilityDefinitions().find(
       (item) => item.id === "codebase_explore",
@@ -70,5 +116,16 @@ describe("initializeHarnessRuntime codebase_explore registration", () => {
         .map((item) => item.id)
         .filter((toolId) => toolId.startsWith("codegraph/")),
     ).toEqual([]);
+
+    await activeService.saveConfig({
+      agentCapabilityEnabled: false,
+    });
+
+    expect(listCapabilityDefinitions().map((definition) => definition.id)).not.toContain(
+      "codebase_explore",
+    );
+    const disabledReport = await activeService.getReport();
+    expect(disabledReport.config.capabilityRegistered).toBe(false);
+    expect(disabledReport.capability.registered).toBe(false);
   });
 });

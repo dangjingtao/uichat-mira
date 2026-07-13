@@ -1,21 +1,19 @@
 import type {
   McpArtifact,
   McpInvocationEvent,
-  McpToolDomain,
   McpToolDefinition,
   McpWorkspaceSelection,
 } from "@/shared/api/tools";
 
-export type ToolWorkbenchDomain = Extract<
-  McpToolDomain,
-  "read" | "edit" | "web_search" | "terminal" | "browser_action"
->;
+export type ToolWorkbenchDomain = McpToolDefinition["domain"];
 
 export type ToolDomainSummary = {
   id: ToolWorkbenchDomain;
   label: string;
   description: string;
   count: number;
+  order: number;
+  icon: string;
 };
 
 export type WorkbenchToolDefinition = McpToolDefinition & {

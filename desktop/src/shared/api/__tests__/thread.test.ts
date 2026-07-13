@@ -18,6 +18,7 @@ import {
   archiveThread,
   restoreThread,
   deleteThread,
+  cleanupThreads,
   listChatWorkspaces,
   createChatWorkspace,
   updateChatWorkspace,
@@ -190,6 +191,28 @@ describe("thread api", () => {
 
     expect(del).toHaveBeenCalledWith("/threads/thread-1", noTimeoutConfig);
     expect(result).toEqual({ deleted: true });
+  });
+
+  it("cleanupThreads 清理对话", async () => {
+    const cleanupResult = {
+      deletedThreads: 2,
+      deletedMessages: 5,
+      failedThreads: 0,
+      deletedWorkspaces: 1,
+      clearedLogBytes: 1024,
+      media: {
+        attachments: { files: 1, bytes: 100 },
+        generatedImages: { files: 1, bytes: 200 },
+        generatedAudio: { files: 1, bytes: 300 },
+        generatedVideos: { files: 0, bytes: 0 },
+      },
+    };
+    vi.mocked(del).mockResolvedValueOnce(cleanupResult);
+
+    const result = await cleanupThreads();
+
+    expect(del).toHaveBeenCalledWith("/threads/history", noTimeoutConfig);
+    expect(result).toEqual(cleanupResult);
   });
 
   it("listChatWorkspaces 获取工作区列表", async () => {

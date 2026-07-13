@@ -8,6 +8,7 @@
 
 - `Button`
 - `Alert`
+- `Result`
 - `AvatarPicker`
 - `Badge`
 - `Card`
@@ -149,6 +150,30 @@
 - 状态色只表达语义反馈，不替代页面主结构色
 - 标题与正文仍使用 `text-*` 建立阅读层级，避免整块文字过度染色
 - 操作区域建议放轻量按钮或链接，不承载复杂表单
+
+## Result
+
+用于承载页面结果区域，支持空结果提示和透明内容列表。组件默认使用 `min-h-0 flex-1`，适合放在固定工具栏或吸顶筛选器之后填充剩余空间。
+
+### Props
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `type` | `"empty" \| "content"` | `"empty"` | 结果类型；`empty` 显示空态，`content` 直接承载 children |
+| `variant` | `"info" \| "success" \| "warning" \| "danger"` | `"info"` | 空结果提示的语义状态 |
+| `size` | `"sm" \| "md" \| "lg"` | `"md"` | 空态的垂直留白、图标徽标和文字尺寸 |
+| `title` | `React.ReactNode` | - | 空结果标题 |
+| `description` | `React.ReactNode` | - | 空结果说明 |
+| `icon` | `React.ReactNode` | 信息图标 | 空结果图标 |
+| `action` | `React.ReactNode` | - | 空结果操作 |
+| `children` | `React.ReactNode` | - | 有结果时直接承载内容，不额外包裹卡片 |
+| `className` | `string` | `""` | 结果区域样式 |
+
+### 使用建议
+
+- 有结果时传入透明列表或工作区内容，避免卡片套卡片
+- 无结果时使用 `title` 与 `description`，空态采用无边框居中布局，状态颜色只表达结果语义
+- 放在吸顶工具栏之后时，保留 `min-h-0 flex-1`，让结果区填满剩余空间
 
 ## AvatarPicker
 

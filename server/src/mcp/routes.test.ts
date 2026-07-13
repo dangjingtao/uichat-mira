@@ -187,6 +187,23 @@ describe("mcp routes", () => {
         (tool) => tool.id === "read_locate",
       ),
     ).toBe(true);
+    const readTool = (toolsResponse.json() as {
+      data: Array<{
+        id: string;
+        workbench?: {
+          domainLabel: string;
+          domainDescription: string;
+          domainOrder: number;
+          icon: string;
+          defaultArgs?: Record<string, unknown>;
+        };
+      }>;
+    }).data.find((tool) => tool.id === "read_open");
+    expect(readTool?.workbench).toMatchObject({
+      domainLabel: "阅读",
+      domainOrder: 10,
+      icon: "file-search",
+    });
 
     const resourceReadResponse = await app.inject({
       method: "POST",

@@ -1,5 +1,6 @@
 export { Button, IconButton } from "./Button";
 export { default as Alert } from "./Alert";
+export { default as Result } from "./Result";
 export { default as AvatarPicker } from "./AvatarPicker";
 export { default as Badge } from "./Badge";
 export { default as Card } from "./Card";

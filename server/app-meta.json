@@ -38,11 +38,11 @@
         {
           "version": "0.7.1",
           "commit": {
-            "hash": "a74db3be046bab132231eb0e17bfdaed08f08719",
-            "shortHash": "a74db3b",
-            "message": "feat: T16",
-            "author": "Tomz",
-            "date": "2026-07-10T09:31:52+08:00"
+            "hash": "6209a680fecd5d064263e6545c288fd12dc519af",
+            "shortHash": "6209a68",
+            "message": "Merge pull request #12 from dangjingtao/codex/fix-evolving-knowledge-auth",
+            "author": "DangJingtao",
+            "date": "2026-07-14T01:21:18+08:00"
           }
         },
         {

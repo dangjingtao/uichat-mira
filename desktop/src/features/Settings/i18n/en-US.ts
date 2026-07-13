@@ -141,6 +141,20 @@ const settingsPending = {
             open: "Open Studio",
           },
         },
+        evolvingKnowledge: {
+          title: "Evolving Knowledge",
+          description:
+            "A multimedia knowledge capture and AI self-organization system. Capture web pages, images, audio, and video; AI automatically rewrites, tags, discovers concept connections, and cross-time insights.",
+          hint: "This is your second brain. It is not traditional RAG, but lets AI actively organize and evolve insights.",
+          badges: {
+            debug: "Knowledge capture",
+            focus: "AI self-organization",
+            runtime: "Insight engine",
+          },
+          actions: {
+            open: "Open evolving knowledge",
+          },
+        },
         codeGraph: {
           title: "CodeGraph Studio",
           description: "A CodeGraph workspace for blocked-safe runtime status, config tuning, and smoke-debug results.",
@@ -182,6 +196,7 @@ const settingsPending = {
           },
           chips: {
             planner: "Planner exposure: {{value}}",
+            agentCapability: "Agent capability: {{value}}",
             telemetry: "Telemetry: {{value}}",
             pollution: "Repo pollution: {{value}}",
             fakeProvider: "Fake Provider: {{value}}",
@@ -219,6 +234,17 @@ const settingsPending = {
             description: "Only the common owner-facing fields stay here. Probe args, log paths, and index paths move into Advanced Config.",
             appDataRootHelp:
               "This directory stores logs and temporary state. It must stay outside the repository and should be a durable location.",
+          },
+          capability: {
+            microAppHint:
+              "When this is off, the CodeGraph microapp itself no longer participates in controlled capability registration.",
+            agentCapabilityHint:
+              "Allow the agent to use CodeGraph. It only becomes effective when runtime is ready, telemetry is verified off, the workspace matches, repo pollution guard is safe, and App Data Root is valid.",
+            statusTitle: "Current capability status: {{value}}",
+            registered:
+              "Harness has registered `codebase_explore`, but only as a controlled capability. Raw CodeGraph commands are still hidden from Planner.",
+            unavailable:
+              "The system cannot register `codebase_explore` yet. Satisfy the ready gate above first.",
           },
           advanced: {
             title: "Advanced Config (Optional)",
@@ -269,6 +295,8 @@ const settingsPending = {
           exists: "exists",
           behavior: "Behavior",
           workspaceRootReadonly: "Workspace Root (Read-only)",
+          microAppEnabled: "Enable CodeGraph Microapp",
+          agentCapabilityEnabled: "Allow Agent To Use CodeGraph",
           command: "Command",
           appDataRootRequired: "App Data Root (Required)",
           logRoot: "logRoot",

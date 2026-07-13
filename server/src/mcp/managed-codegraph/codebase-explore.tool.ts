@@ -1,4 +1,5 @@
 import type { AgentEvidenceSummary, AgentRetrievalEvidence } from "@/agent/types";
+import { getActiveCodeGraphStudioService } from "@/microapps/codegraph/index.js";
 import type { McpToolImplementation } from "../core/definitions.js";
 import { mcpBadRequest, mcpInternalError } from "../core/errors.js";
 import {
@@ -10,9 +11,7 @@ import {
   toAgentRetrievalEvidenceFromVerification,
   verifyCodebaseExploreResult,
 } from "./codegraph-verification-bridge.js";
-import { ManagedCodeGraphProcessManager } from "./managed-codegraph-process-manager.js";
 import {
-  isCodebaseExplorePlannerExposureEnabled,
   resolveManagedCodeGraphPlannerConfig,
 } from "./planner-exposure-config.js";
 import { createCodebaseExploreTrace } from "./codegraph-trace-diagnostics.js";
@@ -86,12 +85,6 @@ export const codebaseExploreTool: McpToolImplementation = {
     },
   },
   execute: async (context) => {
-    if (!isCodebaseExplorePlannerExposureEnabled()) {
-      throw mcpBadRequest(
-        "codebase_explore is disabled. Enable UI_CHAT_CODEGRAPH_PLANNER_ENABLED=1 before exposing it to Planner.",
-      );
-    }
-
     const queryValue = context.args.query;
     if (typeof queryValue !== "string" || !queryValue.trim()) {
       throw mcpBadRequest("query is required");
@@ -104,14 +97,18 @@ export const codebaseExploreTool: McpToolImplementation = {
       );
     }
 
+    const studioService = getActiveCodeGraphStudioService();
     const plannerConfig = resolveManagedCodeGraphPlannerConfig(workspaceRoot);
-    if (
-      plannerConfig.storage.status !== "ready" ||
-      plannerConfig.externalIndexSupport.status !== "ready" ||
-      !plannerConfig.logRoot ||
-      !plannerConfig.indexRoot
-    ) {
+    const managedContext = studioService?.getManagedCapabilityContext(workspaceRoot) ?? null;
+    if (!managedContext?.ok) {
+      const gateReasonRecord = managedContext?.gate.reasons ?? [];
+      const prioritizedGateReason =
+        gateReasonRecord.find((reason) => reason.code === "repo_pollution_risk") ??
+        gateReasonRecord.find((reason) => reason.code === "app_data_root_unavailable") ??
+        gateReasonRecord.find((reason) => reason.code === "workspace_mismatch") ??
+        gateReasonRecord[0];
       const blockedReason =
+        prioritizedGateReason?.message ??
         plannerConfig.externalIndexSupport.reason ??
         plannerConfig.storage.reason ??
         "Managed CodeGraph app-data root is unavailable.";
@@ -192,25 +189,7 @@ export const codebaseExploreTool: McpToolImplementation = {
       };
     }
 
-    const manager = new ManagedCodeGraphProcessManager({
-      command: plannerConfig.command,
-      startArgs: plannerConfig.startArgs,
-      versionProbe: {
-        args: plannerConfig.versionProbeArgs,
-      },
-      telemetryProbe: {
-        args: plannerConfig.telemetryProbeArgs,
-      },
-      workspaceRoot,
-      allowedWorkspaceRoot: workspaceRoot,
-      logRoot: plannerConfig.logRoot,
-      indexRoot: plannerConfig.indexRoot,
-      repoPollutionGuard: {
-        status: plannerConfig.externalIndexSupport.status,
-        repoDataDirName: plannerConfig.externalIndexSupport.repoDataDirName,
-        blockedReason: plannerConfig.externalIndexSupport.reason,
-      },
-    });
+    const manager = managedContext.manager;
     const wrapper = new CodebaseExploreWrapper(manager);
     const exploreResult = await wrapper.explore({
       query: queryValue,

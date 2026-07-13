@@ -24,7 +24,8 @@ export type McpToolDomain =
   | "web_search"
   | "terminal"
   | "browser_action"
-  | "external_mcp";
+  | "external_mcp"
+  | (string & {});
 
 export type McpToolDefinition = {
   id: string;
@@ -42,6 +43,13 @@ export type McpToolDefinition = {
     workspaceBound?: boolean;
     networkAccess?: boolean;
     longRunning?: boolean;
+  };
+  workbench?: {
+    domainLabel: string;
+    domainDescription: string;
+    domainOrder: number;
+    icon: string;
+    defaultArgs?: Record<string, unknown>;
   };
 };
 

@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { threadService } from "@/services/thread.service";
+import { logFilesService } from "@/services/log-files.service.js";
+import { managedMediaCleanupService } from "@/services/managed-media-cleanup.service.js";
 import {
   success,
   THREAD_NOT_FOUND_MESSAGE,
@@ -184,6 +186,28 @@ export const registerThreadRoutes = async (app: FastifyInstance) => {
         throw notFound(THREAD_NOT_FOUND_MESSAGE);
       }
       return success(result, "Thread restored");
+    }),
+  );
+
+  app.delete(
+    "/threads/history",
+    { schema: threadRouteSchemas.cleanupThreads },
+    routeHandler("Failed to clean conversation threads", async (request) => {
+      const threadResult = threadService.cleanupThreads(request.authUser!.id);
+      const logResult = await logFilesService.clearLogs();
+      const mediaResult = await managedMediaCleanupService.clear();
+      const clearedLogBytes = logResult.clearedFiles.reduce(
+        (total, file) => total + file.previousSize,
+        0,
+      );
+      return success(
+        {
+          ...threadResult,
+          clearedLogBytes,
+          media: mediaResult,
+        },
+        "Conversations, workspaces, server logs, and media cleaned",
+      );
     }),
   );
 

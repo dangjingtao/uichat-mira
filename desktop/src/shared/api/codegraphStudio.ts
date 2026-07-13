@@ -27,6 +27,8 @@ export type CodeGraphStudioReport = {
     appDataRootResolved: string | null;
     logRoot: string | null;
     indexRoot: string | null;
+    microAppEnabled: boolean;
+    agentCapabilityEnabled: boolean;
     command: string;
     startArgs: string[];
     versionProbeArgs: string[];
@@ -34,7 +36,25 @@ export type CodeGraphStudioReport = {
     timeoutMs: number;
     maxResults: number;
     queryLimit: number;
-    plannerExposureEnabled: boolean;
+    capabilityRegistered: boolean;
+  };
+  capability: {
+    available: boolean;
+    registered: boolean;
+    reasons: Array<{
+      code: string;
+      message: string;
+    }>;
+    checks: {
+      microAppEnabled: boolean;
+      agentCapabilityEnabled: boolean;
+      runtimeReady: boolean;
+      telemetryVerifiedOff: boolean;
+      workspaceMatched: boolean;
+      repoPollutionSafe: boolean;
+      appDataRootValid: boolean;
+      capabilityRegistrationReady: boolean;
+    };
   };
   pollutionGuard: {
     status: "ready" | "blocked";
@@ -79,6 +99,8 @@ export const getCodeGraphStudioReport = () =>
   get<CodeGraphStudioReport>("/microapps/codegraph/report");
 
 export const saveCodeGraphStudioConfig = (input: {
+  microAppEnabled?: boolean;
+  agentCapabilityEnabled?: boolean;
   command?: string;
   startArgs?: string[];
   versionProbeArgs?: string[];

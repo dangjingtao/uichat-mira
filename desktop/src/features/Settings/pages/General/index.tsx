@@ -1,9 +1,10 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CheckCircle2, KeyRound, Network } from "lucide-react";
+import { CheckCircle2, KeyRound, Network, Trash2 } from "lucide-react";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { useLanguagePreferences } from "@/app/providers/LanguageProvider";
 import { changePassword } from "@/shared/api";
+import { cleanupThreads } from "@/shared/api/thread";
 import {
   getGeneralSettings,
   updateGeneralSettings,
@@ -16,6 +17,7 @@ import Badge from "@/shared/ui/Badge";
 import { Button } from "@/shared/ui/Button";
 import Card from "@/shared/ui/Card";
 import { TextInput } from "@/shared/ui/Input";
+import { message } from "@/shared/ui/Message";
 import { Modal } from "@/shared/ui/Modal";
 import { Select } from "@/shared/ui/Select";
 import Switch from "@/shared/ui/Switch";
@@ -169,6 +171,7 @@ export default function General() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [isCleaningConversations, setIsCleaningConversations] = useState(false);
   const themeMetadata = useMemo(
     () =>
       ({
@@ -333,6 +336,55 @@ export default function General() {
     });
   };
 
+  const handleCleanupConversations = () => {
+    Modal.confirm({
+      title: t("settings.general.cleanup.title"),
+      description: t("settings.general.cleanup.confirmDescription"),
+      tone: "danger",
+      confirmText: t("settings.general.cleanup.confirm"),
+      cancelText: t("common.actions.cancel"),
+      onConfirm: async () => {
+        try {
+          setIsCleaningConversations(true);
+          const result = await cleanupThreads();
+          const mediaFiles = Object.values(result.media).reduce(
+            (total, summary) => total + summary.files,
+            0,
+          );
+          if (result.deletedThreads === 0 && result.failedThreads === 0) {
+            message.success(t("settings.general.cleanup.empty"));
+            return;
+          }
+          message.success(
+            t(
+              result.failedThreads > 0
+                ? "settings.general.cleanup.partial"
+                : "settings.general.cleanup.success",
+              {
+                threads: result.deletedThreads,
+                messages: result.deletedMessages,
+                failed: result.failedThreads,
+                logs: (result.clearedLogBytes / 1024).toFixed(1),
+                workspaces: result.deletedWorkspaces,
+                media: mediaFiles,
+              },
+            ),
+          );
+          window.dispatchEvent(new Event("uichat:threads-cleaned"));
+        } catch (requestError) {
+          message.error(
+            requestError instanceof ApiError
+              ? requestError.message
+              : t("settings.general.cleanup.failed"),
+          );
+        } finally {
+          setIsCleaningConversations(false);
+        }
+      },
+      onCancel: () => void 0,
+    });
+  };
+
   const handleProxyFieldChange = (patch: Partial<ProxyFormState>) => {
     setProxyForm((previous) => ({ ...previous, ...patch }));
     setProxyError("");
@@ -471,6 +523,29 @@ export default function General() {
                 }
                 ariaLabel={t("settings.general.darkMode.ariaLabel")}
               />
+            </div>
+          </div>
+
+          <div className="border-t border-border/70">
+            <div className="flex items-center justify-between gap-4 px-3.5 py-3">
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-text-primary">
+                  {t("settings.general.cleanup.label")}
+                </div>
+                <div className="mt-0.5 text-xs leading-5 text-text-secondary">
+                  {t("settings.general.cleanup.description")}
+                </div>
+              </div>
+              <Button
+                variant="danger-ghost"
+                size="sm"
+                className="shrink-0 gap-1.5"
+                onClick={handleCleanupConversations}
+                disabled={isCleaningConversations}
+              >
+                <Trash2 className="h-4 w-4" />
+                {t("settings.general.cleanup.action")}
+              </Button>
             </div>
           </div>
         </div>

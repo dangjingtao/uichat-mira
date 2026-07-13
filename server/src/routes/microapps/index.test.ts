@@ -324,6 +324,8 @@ const createApp = async (
           appDataRootResolved: null,
           logRoot: null,
           indexRoot: null,
+          microAppEnabled: true,
+          agentCapabilityEnabled: false,
           command: "codegraph",
           startArgs: [],
           versionProbeArgs: ["--version"],
@@ -331,7 +333,22 @@ const createApp = async (
           timeoutMs: 2000,
           maxResults: 5,
           queryLimit: 5,
-          plannerExposureEnabled: false,
+          capabilityRegistered: false,
+        },
+        capability: {
+          available: false,
+          registered: false,
+          reasons: [],
+          checks: {
+            microAppEnabled: true,
+            agentCapabilityEnabled: false,
+            runtimeReady: false,
+            telemetryVerifiedOff: false,
+            workspaceMatched: true,
+            repoPollutionSafe: true,
+            appDataRootValid: false,
+            capabilityRegistrationReady: false,
+          },
         },
         pollutionGuard: {
           status: "ready",
@@ -342,8 +359,8 @@ const createApp = async (
         },
         runtime: {
           providerVersion: null,
-          telemetryStatus: "unknown",
-          handshakeStatus: "unknown",
+          telemetryStatus: "unavailable",
+          handshakeStatus: "not_started",
           initializedNotificationSent: false,
           processAlive: false,
           startedAt: null,
@@ -366,16 +383,16 @@ const createApp = async (
     },
     saveConfig() {},
     async detect() {
-      return this.getReport();
+      return { report: await this.getReport() };
     },
     async start() {
-      return this.getReport();
+      return { report: await this.getReport() };
     },
     async health() {
-      return this.getReport();
+      return { report: await this.getReport() };
     },
     async stop() {
-      return this.getReport();
+      return { report: await this.getReport() };
     },
     async smokeStatus() {
       return {
@@ -394,6 +411,18 @@ const createApp = async (
         payload: {},
         report: await this.getReport(),
       };
+    },
+    getDraft() {
+      throw new Error("not implemented");
+    },
+    getStoragePath() {
+      return "";
+    },
+    getCapabilityGate() {
+      throw new Error("not implemented");
+    },
+    getManagedCapabilityContext() {
+      throw new Error("not implemented");
     },
   },
 ) => {

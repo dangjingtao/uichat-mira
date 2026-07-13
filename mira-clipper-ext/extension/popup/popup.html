@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div id="app">
+    <section id="authGate" class="auth-gate">
+      <div class="brand-lockup">
+        <div class="brand-mark">M</div>
+        <div class="brand-copy">
+          <div class="brand-title">Mira Clipper</div>
+          <div class="brand-subtitle">连接 UIChat Mira 后即可剪藏当前页面</div>
+        </div>
+      </div>
+      <label for="authorizationCode">Mira 授权码</label>
+      <div class="auth-row">
+        <input id="authorizationCode" type="text" placeholder="从 Mira 设置生成后粘贴" autocomplete="off" />
+        <button id="exchangeCodeBtn" type="button">授权</button>
+      </div>
+      <div class="auth-hint">在 Mira：设置 → 微应用 → 智识进化库 → 生成授权码</div>
+      <div id="authStatus" class="status"></div>
+    </section>
+
+    <section id="captureView" class="capture-view hidden">
+      <div class="header">
+        <div class="attachment-chip">
+          <img id="favicon" src="" alt="" hidden />
+        </div>
+        <div class="meta">
+          <input id="title" type="text" placeholder="页面标题" autocomplete="off" />
+          <div id="url" class="url"></div>
+        </div>
+      </div>
+
+      <div id="selectedTextBox" class="field preview-field hidden">
+        <label id="previewLabel" for="selectedText">提取正文预览</label>
+        <textarea id="selectedText" rows="3" placeholder="未选中文字"></textarea>
+        <div id="imagePreview" class="image-preview-list hidden" aria-label="采集的图片"></div>
+      </div>
+
+      <details class="field manual-details">
+        <summary>人工标签和备注</summary>
+        <div class="manual-body">
+          <div class="field compact-field">
+            <label>标签</label>
+            <div id="tagList" class="tag-list"></div>
+            <input id="tagInput" type="text" placeholder="输入标签后回车…" autocomplete="off" />
+          </div>
+
+          <div class="field compact-field">
+            <label>备注</label>
+            <textarea id="note" rows="2" placeholder=""></textarea>
+          </div>
+        </div>
+      </details>
+
+      <label class="rebuild-option" for="processAi">
+        <input id="processAi" type="checkbox" />
+        <span>触发洞见全量重建</span>
+      </label>
+
+      <div class="actions">
+        <button id="saveBtn" type="button" disabled>
+          <span class="spinner hidden"></span>
+          <span class="label">保存到 Mira</span>
+        </button>
+        <div id="status" class="status"></div>
+      </div>
+    </section>
+  </div>
+
+  <script src="../lib/authorization-code.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

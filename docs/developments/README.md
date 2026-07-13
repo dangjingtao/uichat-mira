@@ -48,6 +48,7 @@ Related:
 - `coding-standards.md`
 - `defect-log.md`
 - `product-roadmap-priorities.md`
+- `project-general-cleanup.md`
 
 ## 阅读原则
 

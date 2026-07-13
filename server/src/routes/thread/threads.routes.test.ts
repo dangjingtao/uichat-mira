@@ -14,6 +14,7 @@ import { getLoggerConfig } from "@/logger";
 import { llmService } from "@/services/llm.service.js";
 import { sendRouteError } from "@/utils/route-errors.js";
 import { threadService } from "@/services/thread.service.js";
+import { managedMediaCleanupService } from "@/services/managed-media-cleanup.service.js";
 import { vi } from "vitest";
 import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 
@@ -94,6 +95,101 @@ test("PATCH /threads/:id returns 200 when unbinding knowledgeBaseId to null", as
   assert.equal(body.data.id, thread.id);
   assert.equal(body.data.knowledgeBaseId, null);
 
+  await app.close();
+});
+
+test("DELETE /threads/history removes all user threads and keeps workspaces", async () => {
+  const app = Fastify({
+    logger: getLoggerConfig(),
+    serializerOpts: { encoding: "utf8" },
+  });
+  app.setErrorHandler(sendRouteError);
+  await app.register(threadRoute);
+
+  const user = userRepository.create({
+    username: `user-${crypto.randomUUID()}`,
+    passwordHash: "hash",
+    role: "user",
+    isActive: true,
+  });
+  const otherUser = userRepository.create({
+    username: `user-${crypto.randomUUID()}`,
+    passwordHash: "hash",
+    role: "user",
+    isActive: true,
+  });
+  const token = createAccessToken({
+    id: user.id,
+    username: user.username,
+    role: user.role,
+  });
+  const workspace = threadService.createChatWorkspace({
+    userId: user.id,
+    name: "Keep me",
+    rootPath: "D:\\workspace\\keep-me",
+  });
+  const archived = threadService.createThread({
+    userId: user.id,
+    workspaceId: workspace.id,
+  });
+  threadService.createMessage(archived.id, user.id, {
+    role: "user",
+    content: "history",
+    parts: [{ type: "text", text: "history" }],
+  });
+  threadService.archiveThread(archived.id, user.id);
+  const active = threadService.createThread({ userId: user.id });
+  const otherArchived = threadService.createThread({ userId: otherUser.id });
+  threadService.archiveThread(otherArchived.id, otherUser.id);
+
+  const mediaCleanupSpy = vi
+    .spyOn(managedMediaCleanupService, "clear")
+    .mockResolvedValue({
+      attachments: { files: 1, bytes: 100 },
+      generatedImages: { files: 1, bytes: 200 },
+      generatedAudio: { files: 1, bytes: 300 },
+      generatedVideos: { files: 0, bytes: 0 },
+    });
+
+  const response = await app.inject({
+    method: "DELETE",
+    url: "/threads/history",
+    headers: { authorization: `Bearer ${token}` },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  const cleanupData = response.json() as {
+    data: {
+      deletedThreads: number;
+      deletedMessages: number;
+      failedThreads: number;
+      deletedWorkspaces: number;
+      clearedLogBytes: number;
+      media: unknown;
+    };
+  };
+  assert.deepEqual(
+    {
+      deletedThreads: cleanupData.data.deletedThreads,
+      deletedMessages: cleanupData.data.deletedMessages,
+      failedThreads: cleanupData.data.failedThreads,
+      deletedWorkspaces: cleanupData.data.deletedWorkspaces,
+    },
+    { deletedThreads: 2, deletedMessages: 1, failedThreads: 0, deletedWorkspaces: 1 },
+  );
+  assert.equal(typeof cleanupData.data.clearedLogBytes, "number");
+  assert.deepEqual(cleanupData.data.media, {
+    attachments: { files: 1, bytes: 100 },
+    generatedImages: { files: 1, bytes: 200 },
+    generatedAudio: { files: 1, bytes: 300 },
+    generatedVideos: { files: 0, bytes: 0 },
+  });
+  assert.equal(threadService.getThreadById(archived.id, user.id), null);
+  assert.equal(threadService.getThreadById(active.id, user.id), null);
+  assert.ok(threadService.getThreadById(otherArchived.id, otherUser.id));
+  assert.deepEqual(threadService.listChatWorkspaces(user.id), []);
+
+  mediaCleanupSpy.mockRestore();
   await app.close();
 });
 
