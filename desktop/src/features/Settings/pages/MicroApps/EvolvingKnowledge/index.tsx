@@ -1,28 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
 import {
-  BrainCircuit,
+  Copy,
   FileText,
   Image,
+  KeyRound,
   Search,
   Sparkles,
   X,
-  Zap,
   AlertTriangle,
   Clock,
   ChevronLeft,
   ChevronRight,
-  TrendingUp,
   Lightbulb,
   Trash2,
   Link2,
   Pin,
+  ShieldCheck,
 } from "lucide-react";
 import MicroAppPageLayout from "../components/MicroAppPageLayout";
-import Card from "@/shared/ui/Card";
 import Badge from "@/shared/ui/Badge";
-import { Button, Result, Skeleton } from "@/shared/ui";
+import { Button, Modal, Result, Skeleton } from "@/shared/ui";
 import { message } from "@/shared/ui/Message";
+import { ApiError, post } from "@/shared/lib/request";
 import {
   listCaptures,
   listInsights,
@@ -73,7 +72,6 @@ const insightTypeConfig: Record<
 };
 
 export default function EvolvingKnowledgeStudioPage() {
-  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [captures, setCaptures] = useState<KnowledgeCapture[]>([]);
   const [insights, setInsights] = useState<KnowledgeInsight[]>([]);
@@ -95,6 +93,9 @@ export default function EvolvingKnowledgeStudioPage() {
     Record<string, KnowledgeRelation[]>
   >({});
   const [relationsLoadingId, setRelationsLoadingId] = useState<string | null>(null);
+  const [extensionCode, setExtensionCode] = useState("");
+  const [extensionCodeLoading, setExtensionCodeLoading] = useState(false);
+  const [extensionModalOpen, setExtensionModalOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -114,6 +115,27 @@ export default function EvolvingKnowledgeStudioPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const generateExtensionCode = async () => {
+    setExtensionCodeLoading(true);
+    try {
+      const result = await post<{ code: string }>(
+        "/oauth/extension/authorization-code",
+      );
+      setExtensionCode(result.code);
+      message.success("授权码已生成，5 分钟内有效且只能使用一次");
+    } catch (error) {
+      message.error(error instanceof ApiError ? error.message : "生成授权码失败");
+    } finally {
+      setExtensionCodeLoading(false);
+    }
+  };
+
+  const copyExtensionCode = async () => {
+    if (!extensionCode) return;
+    await navigator.clipboard.writeText(extensionCode);
+    message.success("授权码已复制");
   };
 
   useEffect(() => {
@@ -212,13 +234,24 @@ export default function EvolvingKnowledgeStudioPage() {
   const hasTimelineContent = loading || filteredCaptures.length > 0;
 
   return (
-    <MicroAppPageLayout
-      miniTitle="智识进化库"
-      title="智识进化库"
-      description="多媒体知识捕获与 AI 自我整理。捕获内容后，AI 自动重写、标签、发现概念关联与跨时间洞见。"
-      contentClassName="h-full min-h-0 space-y-6 pt-6"
-      enableSticky
-    >
+    <>
+      <MicroAppPageLayout
+        miniTitle="智识进化库"
+        title="智识进化库"
+        description="多媒体知识捕获与 AI 自我整理。捕获内容后，AI 自动重写、标签、发现概念关联与跨时间洞见。"
+        slot={
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setExtensionModalOpen(true)}
+          >
+            <KeyRound className="h-4 w-4" />
+            浏览器扩展授权
+          </Button>
+        }
+        contentClassName="h-full min-h-0 space-y-6 pt-6"
+        enableSticky
+      >
       {stats && (
         <div className="shrink-0 flex flex-wrap items-baseline gap-x-8 gap-y-2 border-y border-border py-4">
           <div className="flex items-baseline gap-2"><span className="text-xl font-semibold text-text-primary">{stats.totalCaptures}</span><span className="text-xs text-text-secondary">捕获总数</span></div>
@@ -463,6 +496,60 @@ export default function EvolvingKnowledgeStudioPage() {
         )}
         </Result>
       </div>
-    </MicroAppPageLayout>
+      </MicroAppPageLayout>
+
+      <Modal
+        open={extensionModalOpen}
+        title="浏览器扩展授权"
+        width={560}
+        onClose={() => setExtensionModalOpen(false)}
+        footer={
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setExtensionModalOpen(false)}
+          >
+            关闭
+          </Button>
+        }
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-text-secondary" />
+            <p className="text-sm leading-6 text-text-secondary">
+              使用 Mira Clipper 捕获网页文本和图片。生成一次性授权码后，粘贴到扩展的授权入口即可连接。
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              disabled={extensionCodeLoading}
+              onClick={() => void generateExtensionCode()}
+            >
+              <KeyRound className="h-4 w-4" />
+              {extensionCodeLoading ? "生成中..." : "生成授权码"}
+            </Button>
+            {extensionCode ? (
+              <>
+                <code className="rounded-ui-control border border-border bg-surface-secondary px-3 py-2 text-sm font-semibold tracking-[0.16em] text-text-primary">
+                  {extensionCode}
+                </code>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void copyExtensionCode()}
+                >
+                  <Copy className="h-4 w-4" />
+                  复制
+                </Button>
+              </>
+            ) : null}
+          </div>
+          <p className="text-xs leading-5 text-text-tertiary">
+            授权码 5 分钟内有效且只能使用一次。生成后打开 Mira Clipper，在授权码输入框中粘贴并确认。
+          </p>
+        </div>
+      </Modal>
+    </>
   );
 }

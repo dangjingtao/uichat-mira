@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowRight, AudioLines, Bot, BookOpen, Boxes, BrainCircuit, Image, KeyRound, Mail, MonitorSmartphone, Newspaper } from "lucide-react";
+import { ArrowRight, AudioLines, Bot, BookOpen, Boxes, BrainCircuit, Image, Mail, MonitorSmartphone, Newspaper } from "lucide-react";
 import { Link } from "react-router-dom";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import Alert from "@/shared/ui/Alert";
@@ -50,10 +50,6 @@ const featuredStudioEntries = [
     key: "codeGraph",
     route: "/settings/micro-apps/codegraph-studio",
   },
-  {
-    key: "browserExtension",
-    route: "/settings/micro-apps/browser-extension",
-  },
 ] as const;
 
 const featuredStudioIcons = {
@@ -64,7 +60,6 @@ const featuredStudioIcons = {
   imageGeneration: Image,
   ttsStudio: AudioLines,
   codeGraph: Boxes,
-  browserExtension: KeyRound,
 } as const;
 
 export default function MicroAppsSettings() {
