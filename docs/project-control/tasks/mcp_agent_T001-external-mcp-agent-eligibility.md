@@ -1,6 +1,3 @@
-Exit code: 0
-Wall time: 1.5 seconds
-Output:
 ---
 status: current
 priority: P0
@@ -256,4 +253,3 @@ pnpm check
 - desktop typecheck：通过。
 - `pnpm check`：通过。
 - T001 未修改 Agent Graph、Planner、Normalize、Policy、ToolNode、Evidence 主合同，也未接入 resources/prompts。
-

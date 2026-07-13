@@ -1,6 +1,3 @@
-Exit code: 0
-Wall time: 1.6 seconds
-Output:
 ---
 status: current
 priority: P0
@@ -435,5 +432,4 @@ pnpm package:electron:win
 - Secret安全核验
 - 黑盒与真实smoke证据核验
 - 建议的最小修复
-
 

@@ -1,6 +1,3 @@
-Exit code: 0
-Wall time: 1.6 seconds
-Output:
 ---
 status: current
 priority: P0
@@ -272,5 +269,4 @@ pnpm check
 - Agent选择链路核验
 - 回归测试核验
 - 建议的最小修复
-
 

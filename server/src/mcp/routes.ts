@@ -303,6 +303,14 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
       schema: {
         tags: ["Tools"],
         summary: "Update Agent access for one external MCP server",
+        body: {
+          type: "object",
+          required: ["agentEnabled"],
+          additionalProperties: false,
+          properties: {
+            agentEnabled: { type: "boolean" },
+          },
+        },
         response: { 200: successEnvelope(objectSchema) },
       },
     },
@@ -319,6 +327,14 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
       schema: {
         tags: ["Tools"],
         summary: "Enable or disable one external MCP server",
+        body: {
+          type: "object",
+          required: ["enabled"],
+          additionalProperties: false,
+          properties: {
+            enabled: { type: "boolean" },
+          },
+        },
         response: { 200: successEnvelope(objectSchema) },
       },
     },
