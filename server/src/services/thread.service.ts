@@ -639,6 +639,48 @@ export const threadService = {
     return threadRepository.deleteById(id);
   },
 
+  cleanupThreads(userId: number): {
+    deletedThreads: number;
+    deletedMessages: number;
+    failedThreads: number;
+    deletedWorkspaces: number;
+  } {
+    const threadsToDelete = [
+      ...threadRepository.list({ userId, status: "active", sortBy: "updatedAt", sortOrder: "asc" }),
+      ...threadRepository.list({ userId, status: "archived", sortBy: "updatedAt", sortOrder: "asc" }),
+    ];
+    let deletedThreads = 0;
+    let deletedMessages = 0;
+    let failedThreads = 0;
+    let deletedWorkspaces = 0;
+
+    for (const thread of threadsToDelete) {
+      try {
+        const messages = messageRepository.listByThread(thread.id);
+        if (!threadRepository.deleteById(thread.id)) {
+          failedThreads += 1;
+          continue;
+        }
+        deletedThreads += 1;
+        deletedMessages += messages.length;
+      } catch {
+        failedThreads += 1;
+      }
+    }
+
+    const workspacesToDelete = [
+      ...chatWorkspaceRepository.list({ userId, status: "active", sortOrder: "asc" }),
+      ...chatWorkspaceRepository.list({ userId, status: "archived", sortOrder: "asc" }),
+    ];
+    for (const workspace of workspacesToDelete) {
+      if (chatWorkspaceRepository.deleteById(workspace.id)) {
+        deletedWorkspaces += 1;
+      }
+    }
+
+    return { deletedThreads, deletedMessages, failedThreads, deletedWorkspaces };
+  },
+
   createMessage(
     threadId: string,
     userId: number,

@@ -4,7 +4,8 @@ export type McpToolDomain =
   | "web_search"
   | "terminal"
   | "browser_action"
-  | "external_mcp";
+  | "external_mcp"
+  | (string & {});
 
 export type McpToolMode = "sync" | "stream";
 
@@ -175,6 +176,13 @@ export interface McpToolDefinition {
   outputSchema?: Record<string, unknown>;
   tags: string[];
   capabilities: McpCapabilityMetadata;
+  workbench?: {
+    domainLabel: string;
+    domainDescription: string;
+    domainOrder: number;
+    icon: string;
+    defaultArgs?: Record<string, unknown>;
+  };
   legacyProjection?: {
     category: "rag" | "system" | "tool";
     name?: string;

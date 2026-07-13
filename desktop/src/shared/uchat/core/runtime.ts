@@ -279,6 +279,13 @@ export class ChatRuntime {
       this.store.getState().setThreads(threads);
       this.store.getState().setThreadListStatus("ready");
 
+      if (
+        this.getState().activeThreadId &&
+        !threads.some((thread) => thread.id === this.getState().activeThreadId)
+      ) {
+        this.store.getState().setActiveThreadId(null);
+      }
+
       const autoSelectAfterLoad =
         this.policies.threadSelection?.autoSelectAfterLoad ?? "first";
       if (

@@ -188,6 +188,24 @@ export async function deleteThread(id: string): Promise<{ deleted: boolean }> {
   return del<{ deleted: boolean }>(`/threads/${id}`, CHAT_REQUEST_CONFIG);
 }
 
+export interface CleanupThreadsResult {
+  deletedThreads: number;
+  deletedMessages: number;
+  failedThreads: number;
+  deletedWorkspaces: number;
+  clearedLogBytes: number;
+  media: {
+    attachments: { files: number; bytes: number };
+    generatedImages: { files: number; bytes: number };
+    generatedAudio: { files: number; bytes: number };
+    generatedVideos: { files: number; bytes: number };
+  };
+}
+
+export async function cleanupThreads(): Promise<CleanupThreadsResult> {
+  return del<CleanupThreadsResult>("/threads/history", CHAT_REQUEST_CONFIG);
+}
+
 export async function listChatWorkspaces(): Promise<ChatWorkspace[]> {
   return get<ChatWorkspace[]>("/chat-workspaces", CHAT_REQUEST_CONFIG);
 }

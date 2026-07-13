@@ -3,8 +3,8 @@ import {
   buildToolDraft,
   compactJson,
   findPrimaryArtifact,
+  getToolDomains,
   getTerminalResultSummary,
-  TOOL_DOMAIN_ORDER,
 } from "./utils";
 import type { McpArtifact, McpToolDefinition } from "@/shared/api/tools";
 
@@ -29,14 +29,13 @@ const createTool = (id: McpToolDefinition["id"]): McpToolDefinition => ({
   },
 });
 
-describe("TOOL_DOMAIN_ORDER", () => {
-  it("contains the expected domains in order", () => {
-    expect(TOOL_DOMAIN_ORDER).toEqual([
-      "read",
-      "edit",
-      "web_search",
-      "terminal",
-    ]);
+describe("getToolDomains", () => {
+  it("derives unique domains from the backend tool list", () => {
+    expect(getToolDomains([
+      createTool("a"),
+      { ...createTool("b"), domain: "custom_domain" },
+      { ...createTool("c"), domain: "read" },
+    ])).toEqual(["custom_domain", "read"]);
   });
 });
 
@@ -113,10 +112,10 @@ describe("findPrimaryArtifact", () => {
 
 describe("buildToolDraft", () => {
   it.each([
-    ["read", '{\n  "path": "docs/role.md"\n}'],
-    ["read_list", '{\n  "path": "docs"\n}'],
-    ["web_search", '{\n  "query": "OpenAI Codex"\n}'],
-    ["terminal_session", '{\n  "command": "pwd",\n  "sessionMode": "ephemeral",\n  "timeoutMs": 2000\n}'],
+    ["read", "{}"],
+    ["read_list", "{}"],
+    ["web_search", "{}"],
+    ["terminal_session", "{}"],
   ])("builds draft for %s", (id, expected) => {
     expect(buildToolDraft(createTool(id as McpToolDefinition["id"]))).toBe(expected);
   });

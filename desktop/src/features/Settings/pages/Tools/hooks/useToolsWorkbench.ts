@@ -22,14 +22,13 @@ import type {
 import {
   buildToolDraft,
   findPrimaryArtifact,
+  getToolDomains,
+  formatToolDomain,
   getTerminalResultSummary,
-  TOOL_DOMAIN_ORDER,
 } from "../utils";
 const WEB_SEARCH_DEFAULT_MAX_RESULTS = 4;
 const WEB_SEARCH_MIN_RESULTS = 1;
 const WEB_SEARCH_MAX_RESULTS = 10;
-const WORKSPACE_REQUIRED_DOMAINS = new Set<ToolWorkbenchDomain>(["read", "edit", "terminal"]);
-
 type WebSearchConfig = {
   apiKey: string;
   baseUrl: string;
@@ -42,15 +41,8 @@ const defaultWebSearchConfig: WebSearchConfig = {
   maxResults: WEB_SEARCH_DEFAULT_MAX_RESULTS,
 };
 
-const isWorkbenchDomain = (domain: McpToolDefinition["domain"]): domain is ToolWorkbenchDomain =>
-  domain === "read" ||
-  domain === "edit" ||
-  domain === "web_search" ||
-  domain === "terminal" ||
-  domain === "browser_action";
-
 const isWorkbenchTool = (tool: McpToolDefinition): tool is WorkbenchToolDefinition =>
-  tool.source === "internal" && isWorkbenchDomain(tool.domain);
+  tool.source === "internal";
 
 const normalizeWebSearchMaxResults = (value: unknown) => {
   if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -65,7 +57,7 @@ const normalizeWebSearchMaxResults = (value: unknown) => {
 
 export function useToolsWorkbench() {
   const { t } = useTranslation();
-  const [activeDomain, setActiveDomain] = useState<ToolWorkbenchDomain>("read");
+  const [activeDomain, setActiveDomain] = useState<ToolWorkbenchDomain | null>(null);
   const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
   const [argsDraft, setArgsDraft] = useState("{}");
   const [tools, setTools] = useState<WorkbenchToolDefinition[]>([]);
@@ -119,11 +111,7 @@ export function useToolsWorkbench() {
           maxResults: normalizeWebSearchMaxResults(persistedWebSearchConfig.maxResults),
         });
 
-        const nextSelectedTool =
-          sortedTools.find((tool) => tool.id === "read_open") ??
-          sortedTools.find((tool) => tool.domain === "read") ??
-          sortedTools[0] ??
-          null;
+        const nextSelectedTool = sortedTools[0] ?? null;
         if (nextSelectedTool) {
           setSelectedToolId(nextSelectedTool.id);
           setActiveDomain(nextSelectedTool.domain);
@@ -157,7 +145,7 @@ export function useToolsWorkbench() {
 
   const groupedTools = useMemo(
     () =>
-      TOOL_DOMAIN_ORDER.map((domain) => ({
+      getToolDomains(tools).map((domain) => ({
         domain,
         tools: tools.filter((tool) => tool.domain === domain),
       })),
@@ -166,12 +154,17 @@ export function useToolsWorkbench() {
 
   const domainSummaries = useMemo<ToolDomainSummary[]>(
     () =>
-      groupedTools.map(({ domain, tools: domainTools }) => ({
-        id: domain,
-        count: domainTools.length,
-        label: t(`settings.tools.domains.${domain}.label`),
-        description: t(`settings.tools.domains.${domain}.description`),
-      })),
+      groupedTools.map(({ domain, tools: domainTools }) => {
+        const metadata = domainTools[0]?.workbench;
+        return {
+          id: domain,
+          count: domainTools.length,
+          label: metadata?.domainLabel ?? formatToolDomain(domain),
+          description: metadata?.domainDescription ?? `${domainTools.length} tool(s) in this capability domain.`,
+          order: metadata?.domainOrder ?? Number.MAX_SAFE_INTEGER,
+          icon: metadata?.icon ?? "wrench",
+        };
+      }),
     [groupedTools, t],
   );
 
@@ -254,7 +247,7 @@ export function useToolsWorkbench() {
       return;
     }
 
-    if (WORKSPACE_REQUIRED_DOMAINS.has(selectedTool.domain) && !workspaceSelection?.rootPath) {
+    if (selectedTool.capabilities.workspaceBound && !workspaceSelection?.rootPath) {
       message.error(t("settings.tools.messages.workspaceRootRequired"));
       return;
     }
@@ -334,15 +327,15 @@ export function useToolsWorkbench() {
     runError,
     runStatus,
     selectedTool,
-    requiresWorkspace: WORKSPACE_REQUIRED_DOMAINS.has(activeDomain),
+    requiresWorkspace: Boolean(selectedTool?.capabilities.workspaceBound),
     terminalSummary,
     trace,
     tools,
     webSearchConfig,
-    workspaceRootInput: WORKSPACE_REQUIRED_DOMAINS.has(activeDomain)
+    workspaceRootInput: selectedTool?.capabilities.workspaceBound
       ? workspaceRootInput
       : "",
-    workspaceSelection: WORKSPACE_REQUIRED_DOMAINS.has(activeDomain)
+    workspaceSelection: selectedTool?.capabilities.workspaceBound
       ? workspaceSelection
       : null,
     setArgsDraft,
