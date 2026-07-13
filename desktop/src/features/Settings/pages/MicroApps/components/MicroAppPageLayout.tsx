@@ -13,6 +13,7 @@ export interface MicroAppPageLayoutProps {
   contentClassName?: string;
   containerClassName?: string;
   scrollBody?: boolean;
+  enableSticky?: boolean;
 }
 
 export default function MicroAppPageLayout({
@@ -26,6 +27,7 @@ export default function MicroAppPageLayout({
   contentClassName = "",
   containerClassName = "",
   scrollBody = true,
+  enableSticky = false,
 }: MicroAppPageLayoutProps) {
   const containerClasses = ["mx-auto w-full max-w-[1180px]", containerClassName]
     .filter(Boolean)
@@ -37,7 +39,7 @@ export default function MicroAppPageLayout({
 
   return (
     <div
-      className={`mx-auto flex h-full min-h-0 w-full flex-col overflow-hidden ${className}`}
+      className={`mx-auto flex h-full min-h-0 w-full flex-col ${enableSticky ? "overflow-visible" : "overflow-hidden"} ${className}`}
     >
       <div className={`shrink-0 ${containerClasses}`}>
         <div className="shrink-0 space-y-2 bg-transparent px-2 pt-6">

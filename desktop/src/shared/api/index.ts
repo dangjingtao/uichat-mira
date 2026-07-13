@@ -11,3 +11,4 @@ export * from "./codegraphStudio";
 export * from "./mailCenter";
 export * from "./newsHub";
 export * from "./tts";
+export * from "./evolvingKnowledge";

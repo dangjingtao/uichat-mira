@@ -76,6 +76,32 @@ const settingsPending = {
         smartRobotEntry: "智能机器人入口",
       },
       studioEntries: {
+        browserExtension: {
+          title: "浏览器扩展",
+          description: "管理 Mira Clipper 授权，让浏览器中的文本和图片可以保存到智识进化库。",
+          hint: "生成一次性授权码，粘贴到浏览器扩展即可连接。",
+          badges: {
+            debug: "浏览器接入",
+            focus: "图文采集",
+            runtime: "一次性授权",
+          },
+          actions: {
+            open: "管理授权",
+          },
+        },
+        evolvingKnowledge: {
+          title: "智识进化库",
+          description: "多媒体知识捕获与 AI 自我整理系统。捕获网页、图片、音频、视频后，AI 自动重写、标签、发现概念关联与跨时间洞见。",
+          hint: "这是你的第二大脑。它不是传统 RAG，而是让 AI 主动整理、进化洞见。",
+          badges: {
+            debug: "知识捕获",
+            focus: "AI 自我整理",
+            runtime: "洞见引擎",
+          },
+          actions: {
+            open: "进入进化库",
+          },
+        },
         newsHub: {
           title: "资讯聚合台",
           description: "把免 Key 的科技资讯源汇成一张本地资讯表，给你一个可以直接浏览、检索和继续消费的科技资讯入口。",

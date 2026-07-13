@@ -76,6 +76,19 @@ const settingsPending = {
         smartRobotEntry: "Smart robot entry",
       },
       studioEntries: {
+        browserExtension: {
+          title: "Browser Extension",
+          description: "Manage Mira Clipper authorization so browser text and images can be saved to the evolving knowledge library.",
+          hint: "Generate a one-time authorization code and paste it into the browser extension.",
+          badges: {
+            debug: "Browser access",
+            focus: "Text + image capture",
+            runtime: "One-time authorization",
+          },
+          actions: {
+            open: "Manage authorization",
+          },
+        },
         newsHub: {
           title: "News Hub",
           description: "Bring no-key tech news sources into one local news table and expose a direct entry for browsing, searching, and further use.",
@@ -139,6 +152,20 @@ const settingsPending = {
           },
           actions: {
             open: "Open Studio",
+          },
+        },
+        evolvingKnowledge: {
+          title: "Evolving Knowledge",
+          description:
+            "A multimedia knowledge capture and AI self-organization system. Capture web pages, images, audio, and video; AI automatically rewrites, tags, discovers concept connections, and cross-time insights.",
+          hint: "This is your second brain. It is not traditional RAG, but lets AI actively organize and evolve insights.",
+          badges: {
+            debug: "Knowledge capture",
+            focus: "AI self-organization",
+            runtime: "Insight engine",
+          },
+          actions: {
+            open: "Open evolving knowledge",
           },
         },
         codeGraph: {

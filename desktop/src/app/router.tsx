@@ -3,6 +3,7 @@ import App from "../App";
 import { GuestOnly } from "./route-guards/GuestOnly";
 import { RequireAuth } from "./route-guards/RequireAuth";
 import LoginPage from "../features/auth/pages/LoginPage";
+import ExtensionAuthorizePage from "../features/auth/pages/ExtensionAuthorizePage";
 import BaseLayout from "@/app/Layouts/BaseLayout";
 import HomePage from "@/features/dashboard/pages/HomePage";
 import { RouteErrorBoundary } from "@/shared/ui/ErrorBoundary";
@@ -32,6 +33,9 @@ export const router = createHashRouter([
       {
         element: <GuestOnly />,
         children: [{ path: "login", element: <LoginPage /> }],
+      },
+      {
+        children: [{ path: "oauth/authorize", element: <ExtensionAuthorizePage /> }],
       },
     ],
   },

@@ -46,6 +46,8 @@ import MailCenterPage from "@/features/Settings/pages/MicroApps/MailCenter";
 import NewsHubPage from "@/features/Settings/pages/MicroApps/NewsHub";
 import TtsStudioPage from "@/features/Settings/pages/MicroApps/Tts";
 import CodeGraphStudioPage from "@/features/Settings/pages/MicroApps/CodeGraph";
+import EvolvingKnowledgeStudioPage from "@/features/Settings/pages/MicroApps/EvolvingKnowledge";
+import BrowserExtensionPage from "@/features/Settings/pages/MicroApps/BrowserExtension";
 
 export type SettingsNavGroup =
   | "general"
@@ -152,6 +154,14 @@ const settingsRouteTree: SettingsRouteConfig[] = [
       {
         path: "codegraph-studio",
         element: <CodeGraphStudioPage />,
+      },
+      {
+        path: "evolving-knowledge-studio",
+        element: <EvolvingKnowledgeStudioPage />,
+      },
+      {
+        path: "browser-extension",
+        element: <BrowserExtensionPage />,
       },
     ],
   },

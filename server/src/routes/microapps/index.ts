@@ -26,10 +26,12 @@ import {
   type ImageGenerationCreateRequest,
   type ImageGenerationJob,
 } from "@/microapps/image-generation/index.js";
+import type { EvolvingKnowledgeService } from "@/microapps/evolving-knowledge/index.js";
 import { success } from "@/utils/index.js";
 import { badRequest, notFound, routeHandler } from "@/utils/route-errors.js";
 import computerUseRoutes from "./computer-use/index.js";
 import codeGraphRoutes from "./codegraph/index.js";
+import evolvingKnowledgeRoutes from "./evolving-knowledge/index.js";
 import mailCenterRoutes from "./mail-center/index.js";
 import newsHubRoutes from "./news-hub/index.js";
 import ttsRoutes from "./tts/index.js";
@@ -123,6 +125,7 @@ type MicroappsRouteOptions = {
   mailCenterService?: MailCenterRouteService;
   newsHubService?: NewsHubRouteService;
   ttsService?: TtsService;
+  evolvingKnowledgeService?: EvolvingKnowledgeService;
 };
 
 export type CodeGraphStudioRouteService = CodeGraphStudioService;
@@ -272,6 +275,7 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
       "microappsRoute requires ttsService to be injected from the server composition root.",
     );
   }
+  const evolvingKnowledgeService = options.evolvingKnowledgeService;
 
   app.post<{ Body: ImageGenerationCreateRequest }>(
     "/microapps/image-generation/generations",
@@ -566,6 +570,12 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
   await app.register(ttsRoutes, {
     ttsService,
   });
+
+  if (evolvingKnowledgeService) {
+    await app.register(evolvingKnowledgeRoutes, {
+      service: evolvingKnowledgeService,
+    });
+  }
 };
 
 export default microappsRoute;

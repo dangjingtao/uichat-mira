@@ -9,6 +9,7 @@ import {
 } from "./legacy-sync.js";
 import { computerUseMicroApp } from "./apps/computer-use.microapp.js";
 import { codeGraphMicroApp } from "./apps/codegraph.microapp.js";
+import { evolvingKnowledgeMicroApp } from "./apps/evolving-knowledge.microapp.js";
 import { imageGenerationMicroApp } from "./apps/image-generation.microapp.js";
 import { knowledgeQueryMicroApp } from "./apps/knowledge-query.microapp.js";
 import { newsHubMicroApp } from "./apps/news-hub.microapp.js";
@@ -26,6 +27,7 @@ const definitions = new Map<string, MicroAppDefinition>([
   [computerUseMicroApp.type, computerUseMicroApp],
   [codeGraphMicroApp.type, codeGraphMicroApp],
   [ttsMicroApp.type, ttsMicroApp],
+  [evolvingKnowledgeMicroApp.type, evolvingKnowledgeMicroApp],
 ]);
 
 const getDefinition = (type: string) => definitions.get(type) ?? null;
