@@ -50,38 +50,43 @@ export const shouldExposeTerminalForAgentIntent = (
 export const shouldIncludeDefinition = (
   definition: McpToolDefinition,
   input: HarnessExposurePolicyInput,
-) => {
-  if (definition.source === "external") {
-    if (!input.allowExternal) {
-      return false;
-    }
-    if (!input.allowedExternalToolIds?.includes(definition.id)) {
-      return false;
-    }
+) => !getDefinitionBlockReason(definition, input);
+
+export const getDefinitionBlockReason = (
+  definition: McpToolDefinition,
+  input: HarnessExposurePolicyInput,
+): string | undefined => {
+  if (input.source === "chat_surface" && definition.source === "external") {
+    return "External MCP capabilities are hidden from chat_surface.";
   }
 
-  if (input.source === "chat_surface" && definition.source === "external") {
-    return false;
+  if (definition.source === "external") {
+    if (!input.allowExternal) {
+      return "External MCP capabilities are disabled for this exposure request.";
+    }
+    if (!input.allowedExternalToolIds?.includes(definition.id)) {
+      return "External capability is not in the explicit eligible allowlist.";
+    }
   }
 
   if (input.source === "chat_surface" && !isSafeChatSurfaceTool(definition)) {
-    return false;
+    return "Capability is outside the chat_surface safe domain policy.";
   }
 
   if (
     (input.source === "agent_intent" || input.source === "chat_surface") &&
     !isSandboxAvailableForDefinition(definition, input)
   ) {
-    return false;
+    return "Sandbox-required capability is unavailable for this exposure request.";
   }
 
   if (!shouldExposeTerminalForAgentIntent(definition, input)) {
-    return false;
+    return "Terminal capability is not eligible for agent_intent exposure.";
   }
 
   if (input.source === "agent_intent" && isInternalIntentOnlyTool(definition)) {
-    return false;
+    return "Internal capability is reserved for the public read contract.";
   }
 
-  return true;
+  return undefined;
 };

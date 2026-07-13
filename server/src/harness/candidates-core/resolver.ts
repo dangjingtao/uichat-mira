@@ -49,28 +49,16 @@ export const resolveHarnessToolCandidatesForTurn = async (
   if (visibleDefinitions.length <= TOOL_EXPOSURE_RECALL_THRESHOLD) {
     const exposureReason =
       "All eligible tools are exposed because the eligible set is at most 20 tools.";
-    const allToolCandidates = exposeAllHarnessToolCandidates({
+    const toolCandidates = exposeAllHarnessToolCandidates({
       definitions: visibleDefinitions,
       reason: exposureReason,
     });
-    const toolCandidates = visibleDefinitions.some((definition) => definition.source === "external")
-      ? allToolCandidates.slice(0, maxTools)
-      : allToolCandidates;
-    const candidateDefinitionIds = new Set(toolCandidates.map((candidate) => candidate.toolId));
     return {
       query: input.query,
       source,
       toolCandidates,
       toolExposure: {
         ...initialToolExposure,
-        exposedToolIds: visibleDefinitions.some((definition) => definition.source === "external")
-          ? visibleDefinitions
-              .filter((definition) => candidateDefinitionIds.has(definition.id))
-              .map((definition) => definition.id)
-          : initialToolExposure.exposedToolIds,
-        exposedDefinitions: visibleDefinitions.some((definition) => definition.source === "external")
-          ? visibleDefinitions.filter((definition) => candidateDefinitionIds.has(definition.id))
-          : initialToolExposure.exposedDefinitions,
         reason: [...initialToolExposure.reason, exposureReason],
       },
     };

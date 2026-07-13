@@ -2,6 +2,7 @@ import type { McpToolDefinition } from "../../mcp/core/definitions.js";
 import { getSandboxProfileCoverage } from "../sandbox/index.js";
 import { listCapabilityDefinitions } from "../registry.js";
 import {
+  getDefinitionBlockReason,
   shouldIncludeDefinition,
 } from "./filters.js";
 import type { HarnessExposureDecision, HarnessExposurePolicyInput, HarnessExposureSource } from "./types.js";
@@ -47,11 +48,8 @@ export const resolveHarnessToolExposure = (
       if (!allowed) {
         blockedCapabilityIds.push(definition.id);
         blockedCapabilityReasons[definition.id] =
-          definition.source === "external"
-            ? !policyInput.allowExternal
-              ? "External MCP is disabled for this exposure request."
-              : "External capability is not in the explicit eligible allowlist."
-            : "Capability is blocked by the Harness exposure policy.";
+          getDefinitionBlockReason(definition, policyInput) ??
+          "Capability is blocked by the Harness exposure policy.";
       }
       return allowed;
     })

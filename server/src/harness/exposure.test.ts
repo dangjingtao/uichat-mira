@@ -369,6 +369,21 @@ describe("resolveHarnessToolExposure", () => {
     expect(decision.blockedCapabilityReasons.external_fake_tool).toMatch(/allowlist/i);
   });
 
+  it("reports chat_surface as the blocking reason even with an external allowlist", () => {
+    registerCapability(externalFakeTool);
+
+    const decision = resolveHarnessToolExposure({
+      source: "chat_surface",
+      allowExternal: true,
+      allowedExternalToolIds: ["external_fake_tool"],
+    });
+
+    expect(decision.exposedToolIds).not.toContain("external_fake_tool");
+    expect(decision.blockedCapabilityReasons.external_fake_tool).toBe(
+      "External MCP capabilities are hidden from chat_surface.",
+    );
+  });
+
   it.each([
     {
        label: "workspace README wording does not hide web_search",

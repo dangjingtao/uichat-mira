@@ -626,7 +626,7 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
     expect(result.toolCandidates[0]?.source).toBe("external");
   });
 
-  it("limits a small eligible external set by maxTools too", async () => {
+  it("keeps a small eligible external set fully exposed regardless of maxTools", async () => {
     const tools = Array.from({ length: 3 }, (_, index) => ({
       definition: {
         id: `mcp:small-server:tool:search_${index}`,
@@ -653,7 +653,44 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       maxTools: 1,
     });
 
-    expect(result.toolCandidates).toHaveLength(1);
-    expect(result.toolExposure.exposedToolIds).toHaveLength(1);
+    expect(result.toolCandidates).toHaveLength(3);
+    expect(result.toolExposure.exposedToolIds).toEqual(tools.map((tool) => tool.definition.id));
+  });
+
+  it("keeps mixed internal and external tools fully exposed in the <=20 path", async () => {
+    registerCapability(readOpenTool);
+    const externalTools = Array.from({ length: 2 }, (_, index) => ({
+      definition: {
+        id: `mcp:mixed-server:tool:search_${index}`,
+        title: `Mixed search ${index}`,
+        description: "Search product documentation.",
+        domain: "external_mcp" as const,
+        source: "external" as const,
+        mode: "sync" as const,
+        inputSchema: { type: "object" },
+        tags: ["docs"],
+        capabilities: { sideEffect: "network" as const, requiresApproval: true },
+      },
+      execute() {
+        return {};
+      },
+    }));
+    externalTools.forEach(registerCapability);
+
+    const result = await resolveHarnessToolCandidatesForTurn({
+      query: "search product documentation",
+      source: "agent_intent",
+      allowExternal: true,
+      allowedExternalToolIds: externalTools.map((tool) => tool.definition.id),
+      maxTools: 1,
+    });
+
+    expect(result.toolCandidates.map((candidate) => candidate.toolId)).toEqual([
+      "read_open",
+      ...externalTools.map((tool) => tool.definition.id),
+    ]);
+    expect(result.toolExposure.reason).toContain(
+      "All eligible tools are exposed because the eligible set is at most 20 tools.",
+    );
   });
 });
