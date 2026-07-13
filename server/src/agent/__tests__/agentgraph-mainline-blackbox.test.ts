@@ -1030,7 +1030,7 @@ test("T003 external MCP follows selection, approval, Harness, and Evidence bound
   assert.equal(JSON.stringify(approved.evidence).includes("should-not-be-recorded"), false);
 });
 
-test("T003 external runtime failure stays recoverable and ends with a guarded answer", async () => {
+test("T003 external runtime failure does not reuse a consumed approval on replan", async () => {
   const externalTool = makeToolDefinition({
     id: "mcp:docs-server:tool:search_docs_failure",
     domain: "external_mcp",
@@ -1069,11 +1069,11 @@ test("T003 external runtime failure stays recoverable and ends with a guarded an
         .digest("hex"),
     }],
   });
-  assert.equal(result.status, "completed");
-  assert.equal(executeSpy.mock.calls.length, 2);
+  assert.equal(result.status, "waiting_approval");
+  assert.equal(executeSpy.mock.calls.length, 1);
   assert.equal(result.lastToolExecution?.failureKind, "recoverable");
   assert.equal(result.evidence.latestSummary?.status, "failed");
-  assert.match(result.answer, /没有足够的已完成证据/);
+  assert.equal(result.answer, "");
 });
 
 test("A8 failed tool does not continue with extra tool execution or fake success", async () => {

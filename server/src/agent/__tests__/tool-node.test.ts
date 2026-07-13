@@ -102,7 +102,7 @@ test("toolNode remaps approvedInvocations to Harness arg hashes before execution
     });
 
   try {
-    await toolNode(
+    const result = await toolNode(
       createBaseState({
         policyDecision: {
           type: "allow",
@@ -138,6 +138,7 @@ test("toolNode remaps approvedInvocations to Harness arg hashes before execution
         inputHash: createInvocationInputHash(frozenArgs),
       },
     ]);
+    assert.deepEqual(result.approvedInvocations, []);
   } finally {
     executeHarnessInvocationSpy.mockRestore();
   }

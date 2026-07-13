@@ -461,7 +461,7 @@ pnpm package:electron:win
 
 - `agentgraph-mainline-blackbox.test.ts`: `18 tests passed`，包含 external recoverable failure 和 repeated-tool guard。
 - `chat-agent-approval.smoke.test.ts`: S1 与 S2-S3 定向通过；批准后的调用次数为 `1`，第二次 approve 后仍为 `1`。
-- `external-agent-blackbox.test.ts` 与 `external-redaction.test.ts`: `9 tests passed`，包含 HTTP/stdio recovery、二次失败、timeout、JSON-RPC error、非法结果、revoke、Rediscover 和递归脱敏。
+- `external-agent-blackbox.test.ts` 与 `external-redaction.test.ts`: 定向测试通过，覆盖 HTTP/stdio recovery、二次失败、timeout、JSON-RPC error、非法结果、revoke、Rediscover 和递归脱敏。
 - `pnpm check`: 首次并行执行出现一次 Windows 进程状态码 `3221225477`，随后按原命令重跑成功；成功原始输出见 `.test-artifact/t003-pnpm-check-rerun.txt`，失败原始输出保留在 `.test-artifact/t003-pnpm-check.txt`。
 - server typecheck: 通过，原始输出见 `.test-artifact/t003-server-typecheck.txt`。
 
@@ -479,4 +479,4 @@ pnpm package:electron:win
 
 ### Remaining Work
 
-- 无。已知非目标仍按架构文档所列范围保留。
+- 已知债务，不作为当前合并阻断：custom header/env 的全面脱敏、完整真实端到端黑盒链路、复杂 recovery 策略，以及 external 失败后的自动重试收敛。

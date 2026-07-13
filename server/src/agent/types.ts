@@ -555,6 +555,7 @@ export interface AgentGraphOutput {
    */
   selectedToolId?: string;
   pendingToolCall?: AgentToolCallRequest;
+  approvedInvocations?: AgentApprovedInvocation[];
   lastToolExecution?: AgentToolExecutionResult;
   currentTaskFrame?: CurrentTaskFrame;
   blockedReason?: string;

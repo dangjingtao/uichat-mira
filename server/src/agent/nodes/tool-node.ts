@@ -181,6 +181,17 @@ const toHarnessApprovedInvocations = (
     inputHash: createInvocationInputHash(invocation.input),
   }));
 
+const consumeApprovedInvocation = (
+  approvedInvocations: AgentNodeState["approvedInvocations"],
+  pendingToolCall: PendingToolCall,
+) =>
+  approvedInvocations?.filter(
+    (invocation) =>
+      invocation.toolId !== pendingToolCall.toolId ||
+      (invocation.inputHash !== pendingToolCall.inputHash &&
+        createInvocationInputHash(invocation.input) !== pendingToolCall.inputHash),
+  );
+
 export const toolNode = async (
   state: AgentNodeState,
   emit?: EmitAgentExecutionNode,
@@ -323,6 +334,13 @@ export const toolNode = async (
   const startedAt = invocation.startedAt ?? pendingToolCall.createdAt;
   const finishedAt = nowIso();
   const durationMs = getDurationMs(startedAt, finishedAt);
+  // Approval is a one-shot authorization for this exact frozen call. Consume
+  // it after the Harness attempt so a later Planner iteration cannot execute
+  // the same call again without a new approval.
+  const remainingApprovedInvocations = consumeApprovedInvocation(
+    state.approvedInvocations,
+    pendingToolCall,
+  );
 
   if (invocation.status === "awaiting_approval") {
     const approvalReason =
@@ -373,6 +391,7 @@ export const toolNode = async (
       },
     });
     return {
+      approvedInvocations: remainingApprovedInvocations,
       pendingToolCall,
       lastToolExecution: executionRecord,
       pendingToolExecution: executionRecord,
@@ -455,6 +474,7 @@ export const toolNode = async (
       },
     });
     return {
+      approvedInvocations: remainingApprovedInvocations,
       observations: [...(state.observations ?? []), observation],
       pendingEvidenceObservation: observation,
       pendingToolCall: undefined,
@@ -524,6 +544,7 @@ export const toolNode = async (
       ? toCodebaseRetrievalEvidence(invocation.result.verifiedEvidenceInput)
       : null;
   return {
+    approvedInvocations: remainingApprovedInvocations,
     observations: [...(state.observations ?? []), observation],
     pendingEvidenceObservation: observation,
     pendingRetrievalEvidence: codebaseRetrieval ?? undefined,

@@ -1235,13 +1235,12 @@ const postJsonRpc = async <T>(
     throw mcpNotFound(`External MCP server not found: ${server.id}`);
   }
   const runtimeConfig = toRuntimeConfig(row);
-  const secrets = runtimeConfig.bearerToken ? [runtimeConfig.bearerToken] : [];
   if (row.transport_kind === "stdio") {
     try {
       const session = getOrCreateStdioSession(server.id, row);
       const result = await session.request<T>(method, params, runtimeConfig.timeoutMs);
       return {
-        result: redactExternalMcpValue(result, secrets) as T,
+        result,
         sessionId: server.sessionId,
         protocolVersion: server.protocolVersion ?? MCP_PROTOCOL_VERSION,
       };
@@ -1293,7 +1292,7 @@ const postJsonRpc = async <T>(
     throw externalMcpFailure(`MCP ${method} response did not include result`, row);
   }
   return {
-    result: redactExternalMcpValue(message.result, secrets) as T,
+    result: message.result,
     sessionId: response.headers.get("mcp-session-id") ?? undefined,
     protocolVersion: response.headers.get("mcp-protocol-version") ?? undefined,
   };

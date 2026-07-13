@@ -415,11 +415,13 @@ describe("chat route approval resume smoke", () => {
     const { user, thread, token } = createUserThread();
 
     setupToolExposure("删除 ONLY_ALT_WORKSPACE.txt。", [workspaceMutationTool()]);
-    vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
-      async function* () {
+    vi.spyOn(providerProxyService, "streamTaskChatText")
+      .mockImplementationOnce(async function* () {
         yield '{"type":"use_tool","toolId":"workspace_mutation","args":{"operation":"delete","targetPath":"/ONLY_ALT_WORKSPACE.txt"},"reason":"Need to delete the file."}';
-      },
-    );
+      })
+      .mockImplementationOnce(async function* () {
+        yield '{"type":"answer","reason":"The approved mutation is complete."}';
+      });
     const executeSpy = vi
       .spyOn(harnessInvocations, "executeHarnessInvocation")
       .mockResolvedValue({
