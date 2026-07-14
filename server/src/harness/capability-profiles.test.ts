@@ -133,4 +133,36 @@ describe("resolveHarnessCapabilityProfiles", () => {
       }),
     ]);
   });
+
+  it("maps news research and mail reading to their governed tools", () => {
+    const profiles = resolveHarnessCapabilityProfiles([
+      {
+        id: "web_search",
+        title: "Web Search",
+        description: "search",
+        domain: "web_search",
+        source: "internal",
+        mode: "sync",
+        inputSchema: {},
+        tags: ["search"],
+        capabilities: { sideEffect: "network", requiresApproval: false },
+      },
+      {
+        id: "mail_query",
+        title: "Mail Query",
+        description: "mail",
+        domain: "mail",
+        source: "internal",
+        mode: "sync",
+        inputSchema: {},
+        tags: ["mail"],
+        capabilities: { sideEffect: "network", requiresApproval: false },
+      },
+    ]);
+
+    expect(profiles).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "news_research", preferredToolId: "web_search" }),
+      expect.objectContaining({ id: "mail_reading", preferredToolId: "mail_query" }),
+    ]));
+  });
 });

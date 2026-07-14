@@ -163,7 +163,7 @@ tauri/resources/micro-apps/tts/piper/
 - 内置 `Piper runtime` 还不能稳定支持 `phoneme_type=pinyin` 的中文语音包
 - 因此当前“Piper 稳定支持中英文”的能力边界并不完整
 - 如果产品后续要求 `Piper` 路线稳定覆盖更多中文语音包，需要单独升级运行时兼容策略，而不是继续在 UI 层修补
-- `TTS Studio` 当前把参考音频和合成产物音频分别放在静态目录与后端 artifact 目录，但前台没有把这层差异明确暴露，运行时排查很容易误判“产物没生成”
+- `TTS Studio` 的参考音频作为用户素材存入 SQLite BLOB，合成产物继续落在后端 artifact 目录；前台应区分参考素材和生成产物的生命周期
 
 相关台账：
 

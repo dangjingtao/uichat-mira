@@ -217,6 +217,12 @@ export interface McpInvocationRecord {
     required: true;
     reason: string;
     scope?: string;
+    resolution?: {
+      decision: "approved" | "rejected";
+      resolutionInvocationId?: string;
+      resolvedAt: string;
+      reason?: string;
+    };
   };
   artifacts: McpArtifact[];
   threadId?: string;
@@ -347,6 +353,10 @@ export interface McpInvocationContext {
   invocationId: string;
   args: Record<string, unknown>;
   userId?: number;
+  approval?: {
+    inputHash: string;
+    granted: boolean;
+  };
   threadId?: string;
   turnId?: string;
   pushEvent: (event: McpStreamEventInput) => void;

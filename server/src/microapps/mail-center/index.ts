@@ -6,6 +6,7 @@ import {
   mailFoldersRepository,
   mailMessagesRepository,
   type MailAccountRecord,
+  type MailAttachmentSummary,
 } from "@/db/repositories/index.js";
 
 export type MailAccountUpsertInput = {
@@ -44,6 +45,7 @@ export type MailMessageSummary = {
   isRead: boolean;
   isFlagged: boolean;
   hasAttachments: boolean;
+  attachments?: MailAttachmentSummary[];
 };
 
 export type MailMessageDetail = MailMessageSummary & {
@@ -51,6 +53,55 @@ export type MailMessageDetail = MailMessageSummary & {
   textContent: string;
   htmlContent: string;
   rawHeaders: Record<string, string>;
+};
+
+export type MailQueryInput = {
+  userId: number;
+  accountId?: string;
+  messageIds?: string[];
+  query?: string;
+  from?: string;
+  to?: string;
+  subject?: string;
+  since?: string;
+  until?: string;
+  unreadOnly?: boolean;
+  flaggedOnly?: boolean;
+  hasAttachments?: boolean;
+  includeBody?: boolean;
+  sync?: "none" | "if-stale" | "force";
+  limit?: number;
+  cursor?: string;
+};
+
+export type MailQueryItem = {
+  id: string;
+  accountId: string;
+  subject: string;
+  from: { name: string; address: string };
+  to: Array<{ name?: string; address?: string }>;
+  previewText: string;
+  textContent?: string;
+  sentAt: string | null;
+  receivedAt: string | null;
+  isRead: boolean;
+  isFlagged: boolean;
+  hasAttachments: boolean;
+  attachments?: MailAttachmentSummary[];
+};
+
+export type MailQueryResult = {
+  sync: {
+    requested: NonNullable<MailQueryInput["sync"]>;
+    performed: boolean;
+    status: "skipped" | "succeeded" | "failed";
+    syncedCount: number;
+    lastSyncedAt: string | null;
+    error: string | null;
+  };
+  items: MailQueryItem[];
+  total: number;
+  nextCursor: string | null;
 };
 
 type ParsedMailLike = {
@@ -61,7 +112,11 @@ type ParsedMailLike = {
   messageId?: string;
   subject?: string;
   date?: Date;
-  attachments?: unknown[];
+  attachments?: Array<{
+    filename?: string;
+    contentType?: string;
+    size?: number;
+  }>;
 };
 
 export type MailCenterOverview = {
@@ -82,10 +137,33 @@ const normalizeText = (value: string) => value.trim();
 const normalizePreview = (value: string) =>
   value.replace(/\s+/g, " ").trim().slice(0, 240);
 
+const safeSyncError = () => "邮件同步失败，请检查账号连接状态";
+
+const isStale = (lastSyncedAt: string | null) => {
+  if (!lastSyncedAt) return true;
+  const timestamp = Date.parse(lastSyncedAt);
+  return !Number.isFinite(timestamp) || Date.now() - timestamp >= 15 * 60 * 1000;
+};
+
+const encodeCursor = (item: { receivedAt: string | null; remoteUid: number; id: string }) =>
+  Buffer.from(JSON.stringify(item), "utf8").toString("base64url");
+
 const formatAddress = (address?: MessageAddressObject | null) => ({
   name: normalizeText(address?.name ?? ""),
   address: normalizeText(address?.address ?? ""),
 });
+
+const mapAttachmentSummaries = (
+  attachments: ParsedMailLike["attachments"],
+): MailAttachmentSummary[] =>
+  (attachments ?? []).map((attachment) => ({
+    filename: normalizeText(attachment.filename ?? "") || "(unnamed attachment)",
+    ...(attachment.contentType ? { mimeType: normalizeText(attachment.contentType) } : {}),
+    ...(typeof attachment.size === "number" && attachment.size >= 0
+      ? { size: attachment.size }
+      : {}),
+    available: false,
+  }));
 
 const assertRequired = (value: string | undefined, label: string) => {
   if (!value || !value.trim()) {
@@ -109,6 +187,7 @@ const mapMessageSummaries = (
     isRead: item.isRead,
     isFlagged: item.isFlagged,
     hasAttachments: item.hasAttachments,
+    ...(item.attachments.length > 0 ? { attachments: item.attachments } : {}),
   }));
 
 const validateAccountInput = (
@@ -159,6 +238,96 @@ const createImapClient = (account: MailAccountRecord) =>
   });
 
 export const createMailCenterService = () => ({
+  async queryMail(input: MailQueryInput): Promise<MailQueryResult> {
+    const requestedSync = input.sync ?? "none";
+    const accounts = mailAccountsRepository.listByUser(input.userId);
+    const account = input.accountId
+      ? accounts.find((item) => item.id === input.accountId) ?? null
+      : null;
+    if (input.accountId && !account) {
+      throw new Error(`Mail account not found: ${input.accountId}`);
+    }
+
+    const selectedAccounts = account ? [account] : accounts;
+    const sync = {
+      requested: requestedSync,
+      performed: false,
+      status: "skipped" as "skipped" | "succeeded" | "failed",
+      syncedCount: 0,
+      lastSyncedAt: selectedAccounts.reduce<string | null>(
+        (latest, item) =>
+          !latest || (item.lastSyncedAt && item.lastSyncedAt > latest)
+            ? item.lastSyncedAt
+            : latest,
+        null,
+      ),
+      error: null as string | null,
+    };
+
+    const shouldSync =
+      selectedAccounts.length > 0 &&
+      (requestedSync === "force" ||
+        (requestedSync === "if-stale" && selectedAccounts.some((item) => isStale(item.lastSyncedAt))));
+    if (shouldSync) {
+      sync.performed = true;
+      sync.status = "succeeded";
+      for (const selected of selectedAccounts) {
+        if (requestedSync === "if-stale" && !isStale(selected.lastSyncedAt)) continue;
+        try {
+          const result = await this.syncInbox(input.userId, selected.id);
+          sync.syncedCount += result.syncedCount;
+          sync.lastSyncedAt = result.lastSyncedAt;
+        } catch {
+          sync.status = "failed";
+          sync.error = safeSyncError();
+        }
+      }
+    }
+
+    const limit = Math.min(Math.max(Math.floor(input.limit ?? 20), 1), 100);
+    const queried = mailMessagesRepository.query({
+      accountIds: selectedAccounts.map((item) => item.id),
+      messageIds: input.messageIds,
+      query: input.query,
+      from: input.from,
+      to: input.to,
+      subject: input.subject,
+      since: input.since,
+      until: input.until,
+      unreadOnly: input.unreadOnly,
+      flaggedOnly: input.flaggedOnly,
+      hasAttachments: input.hasAttachments,
+      limit,
+      cursor: input.cursor,
+    });
+    const items = queried.items.map((message) => ({
+      id: message.id,
+      accountId: message.accountId,
+      subject: message.subject,
+      from: { name: message.fromDisplay, address: message.fromAddress },
+      to: message.to,
+      previewText: message.previewText,
+      ...(input.includeBody ? { textContent: message.textContent } : {}),
+      sentAt: message.sentAt,
+      receivedAt: message.receivedAt,
+      isRead: message.isRead,
+      isFlagged: message.isFlagged,
+      hasAttachments: message.hasAttachments,
+      ...(message.attachments.length > 0 ? { attachments: message.attachments } : {}),
+    }));
+
+    const last = queried.items.at(-1);
+    return {
+      sync,
+      items,
+      total: queried.total,
+        nextCursor:
+        queried.hasMore && last
+          ? encodeCursor({ receivedAt: last.receivedAt, remoteUid: last.remoteUid, id: last.id })
+          : null,
+    };
+  },
+
   getOverview(userId: number, accountId?: string | null): MailCenterOverview {
     const accounts = mailAccountsRepository.listByUser(userId);
     if (accounts.length === 0) {
@@ -393,6 +562,7 @@ export const createMailCenterService = () => ({
           isRead: boolean;
           isFlagged: boolean;
           hasAttachments: boolean;
+          attachments: MailAttachmentSummary[];
           rawHeaders: Record<string, string>;
         }> = [];
 
@@ -458,6 +628,7 @@ export const createMailCenterService = () => ({
               isRead: Boolean(message.flags?.has("\\Seen")),
               isFlagged: Boolean(message.flags?.has("\\Flagged")),
               hasAttachments: Boolean(parsed?.attachments?.length),
+              attachments: mapAttachmentSummaries(parsed?.attachments),
               rawHeaders: {
                 subject: normalizeText(message.envelope?.subject ?? ""),
                 messageId: normalizeText(message.envelope?.messageId ?? ""),
@@ -508,7 +679,7 @@ export const createMailCenterService = () => ({
         lock.release();
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to sync inbox";
+      const message = safeSyncError();
       mailFoldersRepository.update(folder.id, {
         syncStatus: "failed",
         lastError: message,
@@ -518,7 +689,7 @@ export const createMailCenterService = () => ({
         lastError: message,
         lastSyncedAt: account.lastSyncedAt,
       });
-      throw error;
+      throw new Error(message);
     } finally {
       await client.logout().catch(() => {
         client.close();

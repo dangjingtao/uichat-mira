@@ -3,6 +3,7 @@ import type {
   McpTraceSpan,
   McpTraceSpanKind,
 } from "./definitions.js";
+import { computerUseRepository } from "@/db/repositories/computer-use/repository.js";
 import {
   DEFAULT_RETENTION_CONFIG,
   sweepRetentionMap,
@@ -35,6 +36,11 @@ const attachDebugView = (trace: McpInvocationTrace): McpInvocationTrace => {
   return trace;
 };
 
+const persistIfComputerUse = (trace: McpInvocationTrace) => {
+  if (!trace.toolId.startsWith("browser_")) return;
+  try { computerUseRepository.persistTrace(trace); } catch { /* optional before database startup */ }
+};
+
 export const createInvocationTrace = (input: {
   invocationId: string;
   toolId: string;
@@ -49,12 +55,14 @@ export const createInvocationTrace = (input: {
     spans: [],
   };
   traceMap.set(input.invocationId, trace);
+  persistIfComputerUse(trace);
   return attachDebugView(trace);
 };
 
 export const getInvocationTrace = (invocationId: string) => {
   const trace = traceMap.get(invocationId);
-  return trace ? attachDebugView(trace) : trace;
+  if (trace) return attachDebugView(trace);
+  return computerUseRepository.getTrace(invocationId) ?? undefined;
 };
 
 export const clearInvocationTraces = () => {
@@ -81,6 +89,7 @@ export const finishInvocationTrace = (invocationId: string) => {
   }
 
   trace.finishedAt = new Date().toISOString();
+  persistIfComputerUse(trace);
   sweepTraces();
   return attachDebugView(trace);
 };
@@ -109,6 +118,7 @@ export const startTraceSpan = (input: {
     ...(input.metadata ? { metadata: input.metadata } : {}),
   };
   trace.spans.push(span);
+  persistIfComputerUse(trace);
   attachDebugView(trace);
 
   return {
@@ -130,6 +140,7 @@ export const startTraceSpan = (input: {
         };
       }
       attachDebugView(trace);
+      persistIfComputerUse(trace);
     },
   };
 };

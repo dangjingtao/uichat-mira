@@ -23,3 +23,5 @@ export * from "./mail-messages.repository";
 export * from "./news-items.repository";
 export * from "./news-hub-settings.repository";
 export * from "./comfyui-studio.repository";
+export * from "./micro-app-capability-bindings.repository";
+export * from "./tts-ref-audios.repository";

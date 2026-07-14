@@ -1,6 +1,7 @@
 import {
   index,
   integer,
+  blob,
   primaryKey,
   real,
   sqliteTable,
@@ -551,10 +552,98 @@ export const ttsSynthesisJobs = sqliteTable(
 export type TtsSynthesisJobRow = typeof ttsSynthesisJobs.$inferSelect;
 export type NewTtsSynthesisJobRow = typeof ttsSynthesisJobs.$inferInsert;
 
+export const ttsRefAudios = sqliteTable(
+  "tts_ref_audios",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    originalName: text("original_name").notNull().default("ref-audio.wav"),
+    mimeType: text("mime_type").notNull().default("audio/wav"),
+    byteSize: integer("byte_size").notNull(),
+    sha256: text("sha256").notNull(),
+    audioBlob: blob("audio_blob", { mode: "buffer" }).notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    lastUsedAt: text("last_used_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    hashIdx: uniqueIndex("idx_tts_ref_audios_sha256").on(table.sha256),
+    lastUsedIdx: index("idx_tts_ref_audios_last_used_at").on(table.lastUsedAt),
+  }),
+);
+
+export type TtsRefAudioRow = typeof ttsRefAudios.$inferSelect;
+export type NewTtsRefAudioRow = typeof ttsRefAudios.$inferInsert;
+
 export type IntegrationCapabilityMicroApp =
   typeof integrationCapabilityMicroApps.$inferSelect;
 export type NewIntegrationCapabilityMicroApp =
   typeof integrationCapabilityMicroApps.$inferInsert;
+
+export const microAppCapabilityBindings = sqliteTable(
+  "micro_app_capability_bindings",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    microAppCode: text("micro_app_code").notNull(),
+    capabilityCode: text("capability_code").notNull(),
+    providerId: text("provider_id").notNull(),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    capabilityIdx: uniqueIndex("idx_micro_app_capability_bindings_capability").on(
+      table.microAppCode,
+      table.capabilityCode,
+    ),
+    providerIdx: index("idx_micro_app_capability_bindings_provider").on(
+      table.providerId,
+    ),
+  }),
+);
+
+export const computerUseTasks = sqliteTable(
+  "computer_use_tasks",
+  {
+    id: text("id").primaryKey(),
+    payloadJson: text("payload_json").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => ({ updatedAtIdx: index("idx_computer_use_tasks_updated_at").on(table.updatedAt) }),
+);
+
+export type ComputerUseTaskRow = typeof computerUseTasks.$inferSelect;
+export type NewComputerUseTaskRow = typeof computerUseTasks.$inferInsert;
+
+export const computerUseInvocations = sqliteTable(
+  "computer_use_invocations",
+  {
+    id: text("id").primaryKey(),
+    payloadJson: text("payload_json").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    traceJson: text("trace_json"),
+    eventsJson: text("events_json"),
+  },
+  (table) => ({ updatedAtIdx: index("idx_computer_use_invocations_updated_at").on(table.updatedAt) }),
+);
+
+export type ComputerUseInvocationRow = typeof computerUseInvocations.$inferSelect;
+
+export type MicroAppCapabilityBindingRow =
+  typeof microAppCapabilityBindings.$inferSelect;
+export type NewMicroAppCapabilityBindingRow =
+  typeof microAppCapabilityBindings.$inferInsert;
 
 export const mailAccounts = sqliteTable(
   "mail_accounts",

@@ -1,4 +1,16 @@
-import { and, desc, eq } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  like,
+  lt,
+  lte,
+  or,
+} from "drizzle-orm";
 import { getDb, getSqlite } from "../index";
 import { mailMessages } from "../schema";
 import { nowIso } from "@/utils/time.js";
@@ -21,6 +33,7 @@ export type MailMessageRecord = {
   isRead: boolean;
   isFlagged: boolean;
   hasAttachments: boolean;
+  attachments: MailAttachmentSummary[];
   rawHeaders: Record<string, string>;
   createdAt: string;
   updatedAt: string;
@@ -30,6 +43,35 @@ type MailMessageUpsertInput = Omit<
   MailMessageRecord,
   "id" | "createdAt" | "updatedAt"
 >;
+
+export type MailMessageQueryInput = {
+  accountIds: string[];
+  messageIds?: string[];
+  query?: string;
+  from?: string;
+  to?: string;
+  subject?: string;
+  since?: string;
+  until?: string;
+  unreadOnly?: boolean;
+  flaggedOnly?: boolean;
+  hasAttachments?: boolean;
+  limit: number;
+  cursor?: string;
+};
+
+export type MailAttachmentSummary = {
+  filename: string;
+  mimeType?: string;
+  size?: number;
+  available: boolean;
+};
+
+export type MailMessageQueryResult = {
+  items: MailMessageRecord[];
+  total: number;
+  hasMore: boolean;
+};
 
 const normalizeText = (value: string) => value.trim();
 
@@ -62,6 +104,7 @@ const ensureTable = () => {
       is_read INTEGER NOT NULL DEFAULT 0,
       is_flagged INTEGER NOT NULL DEFAULT 0,
       has_attachments INTEGER NOT NULL DEFAULT 0,
+      attachments_json TEXT NOT NULL DEFAULT '[]',
       raw_headers_json TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -69,6 +112,14 @@ const ensureTable = () => {
       FOREIGN KEY (folder_id) REFERENCES mail_folders(id) ON DELETE CASCADE
     )
   `);
+  const existingColumns = sqlite
+    .prepare("PRAGMA table_info(mail_messages)")
+    .all() as Array<{ name?: string }>;
+  if (!existingColumns.some((column) => column.name === "attachments_json")) {
+    sqlite.exec(
+      "ALTER TABLE mail_messages ADD COLUMN attachments_json TEXT NOT NULL DEFAULT '[]'",
+    );
+  }
   sqlite.exec(`
     CREATE INDEX IF NOT EXISTS idx_mail_messages_folder_received
     ON mail_messages(folder_id, received_at)
@@ -112,6 +163,14 @@ const toRecord = (row: typeof mailMessages.$inferSelect): MailMessageRecord => (
   isRead: Boolean(row.isRead),
   isFlagged: Boolean(row.isFlagged),
   hasAttachments: Boolean(row.hasAttachments),
+  attachments: parseJson(
+    (
+      (getSqlite()
+        .prepare("SELECT attachments_json AS value FROM mail_messages WHERE id = ?")
+        .get(row.id) as { value?: string } | undefined)?.value ?? "[]"
+    ),
+    [],
+  ),
   rawHeaders: parseJson(row.rawHeadersJson, {}),
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
@@ -148,6 +207,105 @@ export const mailMessagesRepository = {
       .map(toRecord);
   },
 
+  query(input: MailMessageQueryInput): MailMessageQueryResult {
+    if (input.accountIds.length === 0) {
+      return { items: [], total: 0, hasMore: false };
+    }
+
+    const conditions = [inArray(mailMessages.accountId, input.accountIds)];
+    const query = input.query?.trim();
+    const from = input.from?.trim();
+    const to = input.to?.trim();
+    const subject = input.subject?.trim();
+
+    if (input.messageIds && input.messageIds.length > 0) {
+      conditions.push(inArray(mailMessages.id, input.messageIds));
+    }
+    if (query) {
+      const pattern = `%${query}%`;
+      conditions.push(
+        or(
+          like(mailMessages.subject, pattern),
+          like(mailMessages.fromDisplay, pattern),
+          like(mailMessages.fromAddress, pattern),
+          like(mailMessages.toJson, pattern),
+          like(mailMessages.previewText, pattern),
+          like(mailMessages.textContent, pattern),
+        )!,
+      );
+    }
+    if (from) {
+      conditions.push(
+        or(
+          like(mailMessages.fromDisplay, `%${from}%`),
+          like(mailMessages.fromAddress, `%${from}%`),
+        )!,
+      );
+    }
+    if (to) conditions.push(like(mailMessages.toJson, `%${to}%`));
+    if (subject) conditions.push(like(mailMessages.subject, `%${subject}%`));
+    if (input.since) conditions.push(gte(mailMessages.receivedAt, input.since));
+    if (input.until) conditions.push(lte(mailMessages.receivedAt, input.until));
+    if (input.unreadOnly) conditions.push(eq(mailMessages.isRead, false));
+    if (input.flaggedOnly) conditions.push(eq(mailMessages.isFlagged, true));
+    if (typeof input.hasAttachments === "boolean") {
+      conditions.push(eq(mailMessages.hasAttachments, input.hasAttachments));
+    }
+
+    const baseWhere = and(...conditions);
+    const cursor = decodeCursor(input.cursor);
+    if (cursor) {
+      conditions.push(
+        cursor.receivedAt === null
+          ? and(
+              isNull(mailMessages.receivedAt),
+              or(
+                lt(mailMessages.remoteUid, cursor.remoteUid),
+                and(
+                  eq(mailMessages.remoteUid, cursor.remoteUid),
+                  lt(mailMessages.id, cursor.id),
+                ),
+              )!,
+            )!
+          : or(
+              isNull(mailMessages.receivedAt),
+              lt(mailMessages.receivedAt, cursor.receivedAt),
+              and(
+                eq(mailMessages.receivedAt, cursor.receivedAt),
+                or(
+                  lt(mailMessages.remoteUid, cursor.remoteUid),
+                  and(
+                    eq(mailMessages.remoteUid, cursor.remoteUid),
+                    lt(mailMessages.id, cursor.id),
+                  ),
+                )!,
+              ),
+            )!,
+      );
+    }
+
+    const where = and(...conditions);
+    const rows = getDb()
+      .select()
+      .from(mailMessages)
+      .where(where)
+      .orderBy(
+        desc(mailMessages.receivedAt),
+        desc(mailMessages.remoteUid),
+        desc(mailMessages.id),
+      )
+      .limit(input.limit + 1)
+      .all();
+    const total = getDb().select({ value: count() }).from(mailMessages).where(baseWhere).get()
+      ?.value ?? 0;
+
+    return {
+      items: rows.slice(0, input.limit).map(toRecord),
+      total,
+      hasMore: rows.length > input.limit,
+    };
+  },
+
   upsertMany(messages: MailMessageUpsertInput[]) {
     const sqlite = getSqlite();
     const tx = sqlite.transaction((items: MailMessageUpsertInput[]) => {
@@ -179,12 +337,15 @@ export const mailMessagesRepository = {
               receivedAt: item.receivedAt,
               isRead: item.isRead,
               isFlagged: item.isFlagged,
-              hasAttachments: item.hasAttachments,
+          hasAttachments: item.hasAttachments,
               rawHeadersJson: JSON.stringify(item.rawHeaders),
               updatedAt: nowIso(),
             })
             .where(eq(mailMessages.id, existing.id))
             .run();
+          sqlite
+            .prepare("UPDATE mail_messages SET attachments_json = ? WHERE id = ?")
+            .run(JSON.stringify(item.attachments), existing.id);
           continue;
         }
 
@@ -210,9 +371,48 @@ export const mailMessagesRepository = {
             rawHeadersJson: JSON.stringify(item.rawHeaders),
           })
           .run();
+        const inserted = getDb()
+          .select({ id: mailMessages.id })
+          .from(mailMessages)
+          .where(
+            and(
+              eq(mailMessages.folderId, item.folderId),
+              eq(mailMessages.remoteUid, item.remoteUid),
+            ),
+          )
+          .get();
+        if (inserted) {
+          sqlite
+            .prepare("UPDATE mail_messages SET attachments_json = ? WHERE id = ?")
+            .run(JSON.stringify(item.attachments), inserted.id);
+        }
       }
     });
 
     tx(messages);
   },
+};
+
+type MailCursor = { receivedAt: string | null; remoteUid: number; id: string };
+
+const decodeCursor = (value?: string): MailCursor | null => {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as Partial<MailCursor>;
+    if (
+      (typeof parsed.receivedAt !== "string" && parsed.receivedAt !== null) ||
+      !Number.isInteger(parsed.remoteUid) ||
+      typeof parsed.id !== "string" ||
+      parsed.id.length === 0
+    ) {
+      return null;
+    }
+    return {
+      receivedAt: parsed.receivedAt,
+      remoteUid: parsed.remoteUid as number,
+      id: parsed.id,
+    };
+  } catch {
+    return null;
+  }
 };

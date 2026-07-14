@@ -13,14 +13,17 @@ import crypto from "node:crypto";
 import {
   createComputerUsePlan,
   createComputerUseService,
-  createInMemoryComputerUseEvidenceStore,
-  createInMemoryComputerUseTaskStore,
   type ComputerUseExecutor,
   type ComputerUseRuntimeState,
   type ComputerUseTask,
   type ComputerUseTaskError,
 } from "@/microapps/computer-use/index.js";
 import { ComputerUseRuntimeManager } from "@/microapps/computer-use/runtime/manager.js";
+import { BrowserSessionManager } from "@/microapps/computer-use/session/manager.js";
+import { BrowserService } from "@/microapps/computer-use/browser/service.js";
+import { createComputerUseDebuggerService } from "@/routes/microapps/computer-use/debugger-service.js";
+import { createComputerUseBrowserTools } from "@/mcp/tools/browser-tools.tool.js";
+import { ComputerUseModelExecutor } from "@/agent/computer-use/model-loop.js";
 import { runComputerUseActions } from "@/microapps/computer-use/executor/runner.js";
 import {
   createComfyUiLocalAdapter,
@@ -92,6 +95,8 @@ import { webSearchSettingsRepository } from "@/db/repositories/web-search-settin
 import { wecomSettingsRepository } from "@/db/repositories/wecom-settings.repository.js";
 import { ttsProviderConfigsRepository } from "@/db/repositories/tts-provider-configs.repository.js";
 import { ttsSynthesisJobsRepository } from "@/db/repositories/tts-synthesis-jobs.repository.js";
+import { microAppCapabilityBindingsRepository } from "@/db/repositories/micro-app-capability-bindings.repository.js";
+import { ttsRefAudiosRepository } from "@/db/repositories/tts-ref-audios.repository.js";
 import {
   modelConfigRepository,
   providerConnectionRepository,
@@ -120,6 +125,8 @@ import {
 } from "@/microapps/legacy-sync.js";
 import { reconcileCodeGraphHarnessCapability } from "@/harness/codegraph-capability.js";
 import { getCapabilityImplementation } from "@/harness/registry.js";
+import { registerCapability } from "@/harness/registry.js";
+import { computerUseRepository, createPersistentComputerUseTaskStore, createPersistentComputerUseEvidenceStore } from "@/db/repositories/computer-use/repository.js";
 
 const app = Fastify({
   bodyLimit: MAX_UPLOAD_FILE_BYTES,
@@ -244,6 +251,14 @@ const imageGenerationService = createImageGenerationService({
 const computerUseRuntimeManager = new ComputerUseRuntimeManager({
   storageRoot: computerUseRuntimeRoot,
 });
+const computerUseBrowserSessions = new BrowserSessionManager({
+  runtime: { resolveRuntime: () => computerUseRuntimeManager.resolveRuntime() },
+  artifactRoot: path.join(computerUseArtifactRoot, "browser"),
+});
+const computerUseBrowserService = new BrowserService(computerUseBrowserSessions);
+for (const tool of createComputerUseBrowserTools(computerUseBrowserService)) {
+  registerCapability(tool);
+}
 
 const nowIso = () => new Date().toISOString();
 
@@ -420,7 +435,7 @@ const executeBrowserTask = async (
   };
 };
 
-const computerUseExecutor: ComputerUseExecutor = {
+const fixedRuleComputerUseExecutor: ComputerUseExecutor = {
   async createPlan({ goal, siteScope }) {
     const targetUrl = extractFirstUrl(goal) ?? normalizeSiteTarget(siteScope[0]);
     return createComputerUsePlan({
@@ -497,6 +512,22 @@ const computerUseExecutor: ComputerUseExecutor = {
   },
 };
 
+const computerUseDebuggerService = createComputerUseDebuggerService({
+  sessions: computerUseBrowserSessions,
+  browser: computerUseBrowserService,
+  runtimeStatus: () => toComputerUseRuntimeState(nowIso()),
+});
+
+const computerUseExecutor: ComputerUseExecutor = new ComputerUseModelExecutor({
+  browserSessionManager: computerUseBrowserSessions,
+  approvedInvocations: (task) => task.approvals.flatMap((approval) => {
+    const meta = approval.meta;
+    return approval.status === "approved" && typeof meta?.toolId === "string" && typeof meta.inputHash === "string"
+      ? [{ toolId: meta.toolId, inputHash: meta.inputHash }]
+      : [];
+  }),
+});
+
 const computerUseService = createComputerUseService({
   runtimeManager: {
     async getRuntimeState() {
@@ -504,8 +535,8 @@ const computerUseService = createComputerUseService({
     },
   },
   executor: computerUseExecutor,
-  evidenceStore: createInMemoryComputerUseEvidenceStore(),
-  taskStore: createInMemoryComputerUseTaskStore(),
+  evidenceStore: createPersistentComputerUseEvidenceStore(),
+  taskStore: createPersistentComputerUseTaskStore(),
 });
 
 const computerUseRuntimeService = {
@@ -768,6 +799,7 @@ const setupRoutes = async () => {
     comfyUiStudioService,
     computerUseService,
     computerUseRuntimeService,
+    computerUseDebuggerService,
     codeGraphStudioService,
     mailCenterService,
     newsHubService,
@@ -831,6 +863,9 @@ const setupDatabase = async () => {
   newsItemsRepository.initialize();
   ttsProviderConfigsRepository.initialize();
   ttsSynthesisJobsRepository.initialize();
+  microAppCapabilityBindingsRepository.initialize();
+  ttsRefAudiosRepository.initialize();
+  computerUseRepository.initialize();
   migrateLegacyMicroAppBindings();
   initializeExternalMcpDatabase();
   registerAllExternalMcpCapabilities();

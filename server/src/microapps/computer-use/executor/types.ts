@@ -19,13 +19,13 @@ export type ComputerUseExecutionResult = {
 };
 
 export type PlaywrightPageLike = {
-  goto(url: string, options?: { waitUntil?: "load" | "domcontentloaded" | "networkidle" }): Promise<unknown>;
-  click(selector: string): Promise<unknown>;
+  goto(url: string, options?: { waitUntil?: "load" | "domcontentloaded" | "networkidle"; timeout?: number }): Promise<unknown>;
+  click(selector: string, options?: { timeout?: number }): Promise<unknown>;
   fill(selector: string, value: string, options?: { timeout?: number }): Promise<unknown>;
   type(
     selector: string,
     value: string,
-    options?: { delay?: number },
+    options?: { delay?: number; timeout?: number },
   ): Promise<unknown>;
   waitForSelector(
     selector: string,

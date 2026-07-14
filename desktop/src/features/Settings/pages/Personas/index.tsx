@@ -83,7 +83,7 @@ export default function RoleSettings() {
         description={t("page.description")}
         contentClassName="pt-6"
       >
-        <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)] gap-3">
+        <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[280px_minmax(0,1fr)] gap-3">
           <RoleList
             roles={roles}
             isLoading={isLoading}

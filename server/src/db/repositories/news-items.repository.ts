@@ -2,6 +2,7 @@ import { and, desc, eq, like, or, sql } from "drizzle-orm";
 import { getDb, getSqlite } from "../index";
 import { newsItems } from "../schema";
 import { nowIso } from "@/utils/time.js";
+import { newsItemsVectorRepository } from "./news-items-vector.repository.js";
 
 export type NewsItemRecord = {
   id: string;
@@ -36,6 +37,10 @@ export type NewsItemsListFilters = {
   sourceKey?: string;
   sourceKeys?: string[];
   query?: string;
+};
+
+export type NewsKeywordSearchResult = NewsItemRecord & {
+  keywordScore: number;
 };
 
 type SourceStatsRow = {
@@ -125,6 +130,7 @@ const ensureTable = () => {
 export const newsItemsRepository = {
   initialize() {
     ensureTable();
+    newsItemsVectorRepository.initialize();
   },
 
   upsertMany(items: NewsItemUpsertInput[]) {
@@ -238,6 +244,59 @@ export const newsItemsRepository = {
       items: rows.map(toRecord),
       total: totalRow?.count ?? 0,
     };
+  },
+
+  listAll() {
+    return getDb()
+      .select()
+      .from(newsItems)
+      .orderBy(desc(newsItems.publishedAt), desc(newsItems.ingestedAt))
+      .all()
+      .map(toRecord);
+  },
+
+  searchKeyword(query: string, limit = 50): NewsKeywordSearchResult[] {
+    const normalizedQuery = query.trim();
+    if (!normalizedQuery) {
+      return [];
+    }
+
+    const terms = normalizedQuery.toLocaleLowerCase().split(/\s+/).filter(Boolean);
+    const likeValue = `%${normalizedQuery}%`;
+    const rows = getDb()
+      .select()
+      .from(newsItems)
+      .where(
+        or(
+          like(newsItems.title, likeValue),
+          like(newsItems.summary, likeValue),
+          like(newsItems.contentText, likeValue),
+          ...terms.map((term) => {
+            const termLike = `%${term}%`;
+            return or(
+              like(newsItems.title, termLike),
+              like(newsItems.summary, termLike),
+              like(newsItems.contentText, termLike),
+            )!;
+          }),
+        )!,
+      )
+      .limit(Math.min(Math.max(limit, 1), 200))
+      .all();
+
+    return rows
+      .map((row) => {
+        const item = toRecord(row);
+        const lowerQuery = normalizedQuery.toLocaleLowerCase();
+        const title = item.title.toLocaleLowerCase();
+        const body = `${item.summary} ${item.contentText}`.toLocaleLowerCase();
+        const score =
+          (title === lowerQuery ? 1 : 0) * 5 +
+          (title.includes(lowerQuery) ? 2 : 0) +
+          terms.reduce((sum, term) => sum + (title.includes(term) ? 1 : body.includes(term) ? 0.25 : 0), 0);
+        return { ...item, keywordScore: score };
+      })
+      .sort((left, right) => right.keywordScore - left.keywordScore);
   },
 
   listSourceStats() {

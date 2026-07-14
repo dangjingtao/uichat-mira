@@ -122,6 +122,8 @@
 - `surface-secondary`：次一级分区、hover 弱反馈、列表背景切换
 - `surface-tertiary`：更强一点的区分层，适合禁用轨道、弱分层容器
 - `surface-elevated`：浮层、下拉、Tooltip、Modal 内容承托
+
+默认 `warm-neutral` 主题的浅色 `surface-primary` 为 `#FCFBF9`，`border` 为 `#E5DFD7`；深色主题及其他主题由主题预设分别定义。
 - `border`：通用描边和结构分隔
 
 规则：

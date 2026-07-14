@@ -5,6 +5,7 @@ import {
 } from "@/db/repositories/index.js";
 import { DEFAULT_FETCH_TIMEOUT_MS } from "@/utils/http.js";
 import { nowIso } from "@/utils/time.js";
+import { indexNewsHubCache } from "./news-search.adapter.js";
 
 export type NewsHubSourceKey =
   | "hn-frontpage"
@@ -681,6 +682,8 @@ export const createNewsHubService = (input?: {
       }
     }
 
+    await indexNewsHubCache();
+
     return {
       startedAt,
       finishedAt: nowIso(),
@@ -704,8 +707,10 @@ export const createNewsHubService = (input?: {
 
     async getOverview(filters: NewsHubOverviewFilters = {}): Promise<NewsHubOverview> {
       await refreshInternal(false);
-      newsItemsRepository.deleteBySourceKeysExcluding(allowedSourceKeys);
+      return this.getCachedOverview(filters);
+    },
 
+    async getCachedOverview(filters: NewsHubOverviewFilters = {}): Promise<NewsHubOverview> {
       const list = newsItemsRepository.listRecent({
         limit: filters.limit,
         query: filters.query ?? undefined,

@@ -113,7 +113,18 @@ export interface CreateGptSovitsSynthesisPayload {
   topK?: number;
   topP?: number;
   refAudioPath?: string;
+  refAudioId?: string;
   refAudioFile?: File;
+}
+
+export interface TtsReferenceAudioSummary {
+  id: string;
+  originalName: string;
+  mimeType: string;
+  byteSize: number;
+  sha256: string;
+  createdAt: string;
+  lastUsedAt: string;
 }
 
 export function getTtsOverview() {
@@ -155,6 +166,7 @@ export function createGptSovitsSynthesis(payload: CreateGptSovitsSynthesisPayloa
     const formData = new FormData();
     formData.append("refAudioFile", payload.refAudioFile);
     formData.append("text", payload.text);
+    if (payload.refAudioId !== undefined) formData.append("refAudioId", payload.refAudioId);
     if (payload.promptText !== undefined) formData.append("promptText", payload.promptText);
     if (payload.promptLanguage !== undefined) {
       formData.append("promptLanguage", payload.promptLanguage);
@@ -192,6 +204,19 @@ export function createGptSovitsSynthesis(payload: CreateGptSovitsSynthesisPayloa
     `${TTS_ROUTE}/gpt-sovits/syntheses`,
     payload,
     {
+      timeout: 0,
+    },
+  );
+}
+
+export function saveTtsReferenceAudio(file: File) {
+  const formData = new FormData();
+  formData.append("refAudioFile", file);
+  return post<{ refAudio: TtsReferenceAudioSummary }>(
+    `${TTS_ROUTE}/ref-audios`,
+    formData,
+    {
+      headers: { "Content-Type": "multipart/form-data" },
       timeout: 0,
     },
   );

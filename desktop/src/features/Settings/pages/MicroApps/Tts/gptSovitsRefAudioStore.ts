@@ -10,6 +10,7 @@ export type StoredGptSovitsRefAudio = {
   lastModified: number;
   createdAt: string;
   blob: Blob;
+  serverRefAudioId?: string;
 };
 
 const openDb = () =>
@@ -95,4 +96,18 @@ export const toStoredGptSovitsRefAudioFile = (record: StoredGptSovitsRefAudio) =
   new File([record.blob], record.name, {
     type: record.type || "audio/wav",
     lastModified: record.lastModified,
+  });
+
+export const setStoredGptSovitsRefAudioServerId = async (
+  id: string,
+  serverRefAudioId: string,
+) =>
+  withStore("readwrite", async (store) => {
+    const record = await readRequest(
+      store.get(id) as IDBRequest<StoredGptSovitsRefAudio | undefined>,
+    );
+    if (record) {
+      store.put({ ...record, serverRefAudioId });
+    }
+    return undefined;
   });

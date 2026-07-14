@@ -68,7 +68,7 @@ function FieldCard({
     <button
       type="button"
       onClick={onClick}
-      className="rounded-ui-panel border border-border bg-surface-primary p-3 text-left transition-colors hover:bg-surface-secondary"
+      className="min-w-0 rounded-ui-panel border border-border bg-surface-primary p-3 text-left transition-colors hover:bg-surface-secondary"
     >
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 flex flex-1 items-center gap-3">
@@ -123,7 +123,7 @@ export default function RoleEditor({
   const { t: globalT } = useTranslation();
 
   return (
-    <Card className="flex min-h-0 flex-col overflow-hidden p-0">
+    <Card className="flex min-h-0 min-w-0 flex-col overflow-hidden p-0">
       <div className="border-b border-border px-3.5 py-3">
         <div className="flex items-start justify-between gap-3">
           <RoleSectionTitle

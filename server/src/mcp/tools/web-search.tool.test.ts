@@ -10,9 +10,16 @@ const webSearchSettingsMock = vi.hoisted(() => ({
   })),
 }));
 
+const newsSearchMock = vi.hoisted(() => ({
+  hasNewsIntent: vi.fn(() => false),
+  searchNewsHubCache: vi.fn(),
+}));
+
 vi.mock("@/db/repositories/web-search-settings.repository.js", () => ({
   webSearchSettingsRepository: webSearchSettingsMock,
 }));
+
+vi.mock("@/microapps/news-hub/news-search.adapter.js", () => newsSearchMock);
 
 describe("web search tool", () => {
   afterEach(() => {
@@ -679,5 +686,54 @@ describe("web search tool", () => {
     expect(JSON.stringify(artifacts[0])).not.toContain("SEARXNG_BASE_URL");
     expect(JSON.stringify(artifacts[0])).not.toContain("TAVILY_API_KEY");
     expect(JSON.stringify(artifacts[0])).not.toContain("headers");
+  });
+
+  it("uses the local news strategy for an explicit news query without contacting a provider", async () => {
+    newsSearchMock.hasNewsIntent.mockReturnValue(true);
+    newsSearchMock.searchNewsHubCache.mockResolvedValue({
+      results: [
+        {
+          title: "Cached release news",
+          link: "https://example.com/news",
+          snippet: "Cached snippet",
+          metadata: {
+            provider: "local_news_hub",
+            sourceKey: "github-changelog",
+            sourceName: "GitHub Changelog",
+            publishedAt: "2026-07-14T00:00:00.000Z",
+            tags: ["github", "changelog"],
+          },
+        },
+      ],
+      diagnostics: {
+        keyword: 1,
+        vector: 0,
+        fused: 1,
+        reranked: 1,
+        embedding: "not_configured",
+        rerank: "used",
+      },
+    });
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const result = await webSearchTool.execute({
+      invocationId: "news-cache",
+      args: { query: "latest news" },
+      signal: new AbortController().signal,
+      environment: createHarnessEnvironmentSnapshot(),
+      pushEvent() {},
+      addArtifact(artifact) {
+        return { id: "news-artifact", ...artifact };
+      },
+      trace: {
+        startSpan() {
+          return { spanId: "news-span", end() {} };
+        },
+      },
+    });
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(result.result.provider).toBe("local_news_hub");
+    expect(result.result.results[0]?.metadata?.sourceKey).toBe("github-changelog");
   });
 });

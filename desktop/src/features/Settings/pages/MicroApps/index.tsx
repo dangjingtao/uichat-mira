@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowRight, AudioLines, Bot, BookOpen, Boxes, BrainCircuit, Image, Mail, MonitorSmartphone, Newspaper } from "lucide-react";
+import { ArrowRight, AudioLines, BookOpen, Boxes, BrainCircuit, Image, Mail, MonitorSmartphone, Newspaper, Settings } from "lucide-react";
 import { Link } from "react-router-dom";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import Alert from "@/shared/ui/Alert";
 import Card from "@/shared/ui/Card";
-import Badge from "@/shared/ui/Badge";
 import { Skeleton } from "@/shared/ui";
 import { message } from "@/shared/ui/Message";
 import {
@@ -13,42 +12,55 @@ import {
   getIntegrationMicroApps,
   type MicroAppRecord,
 } from "@/shared/api/integrations";
+import {
+  getMicroAppCapabilities,
+  type MicroAppCapabilityBinding,
+  type MicroAppCapabilityCode,
+} from "@/shared/api/microAppCapabilities";
+import { openCapabilityBindingModal } from "./CapabilityBindingModal";
 
-const microAppSummary = (microApp: MicroAppRecord) => {
+const microAppSummaryKey = (microApp: MicroAppRecord) => {
   if (microApp.type === "knowledge_query") {
-    return "接收外部入口文本问题，调用本地知识库检索链路，并返回一条稳定回复。";
+    return "settings.microApps.summaries.knowledgeQuery";
   }
-  return "企业集成微应用。";
+  return "settings.microApps.summaries.integration";
 };
 
 const featuredStudioEntries = [
   {
     key: "evolvingKnowledge",
     route: "/settings/micro-apps/evolving-knowledge-studio",
+    capability: undefined,
   },
   {
     key: "newsHub",
     route: "/settings/micro-apps/news-hub",
+    capability: undefined,
   },
   {
     key: "mailCenter",
     route: "/settings/micro-apps/mail-center",
+    capability: undefined,
   },
   {
     key: "computerUse",
     route: "/settings/micro-apps/computer-use-studio",
+    capability: undefined,
   },
   {
     key: "imageGeneration",
     route: "/settings/micro-apps/image-generation-studio",
+    capability: "imageGeneration",
   },
   {
     key: "ttsStudio",
     route: "/settings/micro-apps/tts-studio",
+    capability: "tts",
   },
   {
     key: "codeGraph",
     route: "/settings/micro-apps/codegraph-studio",
+    capability: undefined,
   },
 ] as const;
 
@@ -66,16 +78,19 @@ export default function MicroAppsSettings() {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [microApps, setMicroApps] = useState<MicroAppRecord[]>([]);
+  const [capabilityBindings, setCapabilityBindings] = useState<MicroAppCapabilityBinding[]>([]);
 
   const load = async () => {
     setLoading(true);
     try {
-      const [microAppResult] = await Promise.all([
+      const [microAppResult, , capabilityResult] = await Promise.all([
         getIntegrationMicroApps({ type: "knowledge_query" }),
         getIntegrationInstances({ provider: "wecom", includeCapabilities: true }),
+        getMicroAppCapabilities(),
       ]);
 
       setMicroApps(microAppResult.microApps);
+      setCapabilityBindings(capabilityResult);
     } catch (error) {
       message.error(error instanceof Error ? error.message : t("settings.microApps.messages.loadFailed"));
     } finally {
@@ -104,13 +119,8 @@ export default function MicroAppsSettings() {
           </Card>
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-            <Card className="border-primary/15 bg-primary/5 p-5">
+            <Card className="border-border bg-primary/5 p-5">
               <div className="space-y-4">
-                <div className="flex flex-wrap gap-2">
-                  <Skeleton height={22} width={72} className="rounded-full" />
-                  <Skeleton height={22} width={84} className="rounded-full" />
-                  <Skeleton height={22} width={76} className="rounded-full" />
-                </div>
                 <Skeleton height={20} width="34%" />
                 <Skeleton.Text lines={4} lastLineWidth="58%" />
                 <Skeleton height={40} width={160} />
@@ -165,26 +175,23 @@ export default function MicroAppsSettings() {
         {featuredStudioEntries.map((entry) => {
           const key = `settings.microApps.studioEntries.${entry.key}` as const;
           const EntryIcon = featuredStudioIcons[entry.key];
+          const capability = entry.capability as MicroAppCapabilityCode | undefined;
+          const binding = capability
+            ? capabilityBindings.find((item) => item.capabilityCode === capability) ?? null
+            : null;
+          const capabilityName = capability
+            ? t(`settings.microApps.capabilityBinding.capabilityNames.${capability}`)
+            : "";
 
           return (
-            <Card key={entry.route} className="border-primary/15 bg-primary/5 p-5">
+            <Card key={entry.route} className="border-border bg-primary/5 p-5">
               <div className="flex h-full flex-col gap-4 lg:justify-between">
                 <div className="space-y-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="primary" size="sm">
-                      {t(`${key}.badges.debug`)}
-                    </Badge>
-                    {entry.key === "imageGeneration" ? null : (
-                      <Badge variant="muted" size="sm">
-                        {t(`${key}.badges.focus`)}
-                      </Badge>
-                    )}
-                  </div>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span
                         data-testid={`studio-entry-icon-${entry.key}`}
-                        className="flex h-9 w-9 items-center justify-center rounded-ui-control bg-primary/10 text-primary"
+                        className="flex h-9 w-9 items-center justify-center text-icon-secondary"
                       >
                         <EntryIcon className="h-4.5 w-4.5" />
                       </span>
@@ -195,19 +202,50 @@ export default function MicroAppsSettings() {
                     <div className="text-sm leading-6 text-text-secondary">
                       {t(`${key}.description`)}
                     </div>
-                    <div className="text-xs leading-5 text-text-tertiary">
-                      {t(`${key}.hint`)}
-                    </div>
                   </div>
                 </div>
 
-                <Link
-                  to={entry.route}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-ui-control border border-primary/20 bg-transparent px-4 text-sm font-medium text-primary transition-all duration-150 ease-out hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary"
-                >
-                  {t(`${key}.actions.open`)}
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
+                <div className="flex items-center gap-2">
+                  <Link
+                    to={entry.route}
+                    className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-ui-control border border-primary/20 bg-transparent px-4 text-sm font-medium text-primary transition-all duration-150 ease-out hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary"
+                  >
+                    {t(`${key}.actions.open`)}
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                  {capability ? (
+                    <button
+                      type="button"
+                      aria-label={t("settings.microApps.capabilityBinding.configureAriaLabel", {
+                        capability: capabilityName,
+                      })}
+                      title={t("settings.microApps.capabilityBinding.configureAriaLabel", {
+                        capability: capabilityName,
+                      })}
+                      data-testid={`studio-entry-settings-${entry.key}`}
+                      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-ui-control border border-primary/20 bg-transparent text-primary transition-all duration-150 ease-out hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary"
+                      onClick={() =>
+                        openCapabilityBindingModal({
+                          capability,
+                          title: t("settings.microApps.capabilityBinding.title", {
+                            capability: capabilityName,
+                          }),
+                          currentBinding: binding,
+                          onSaved: (nextBinding) => {
+                            setCapabilityBindings((current) => [
+                              ...current.filter(
+                                (item) => item.capabilityCode !== capability,
+                              ),
+                              nextBinding,
+                            ]);
+                          },
+                        })
+                      }
+                    >
+                      <Settings className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
               </div>
             </Card>
           );
@@ -221,38 +259,21 @@ export default function MicroAppsSettings() {
               className="block"
               data-testid={`micro-app-card-${microApp.id}`}
             >
-              <Card interactive className="h-full border-primary/15 bg-primary/5 p-5">
+              <Card interactive className="h-full border-border bg-primary/5 p-5">
                 <div className="flex h-full flex-col gap-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="primary" size="sm">
-                      {microApp.type === "knowledge_query"
-                        ? t("settings.microApps.labels.knowledgeQuery")
-                        : microApp.type}
-                    </Badge>
-                    <Badge variant="muted" size="sm">
-                      <Bot className="mr-1 h-3.5 w-3.5" />
-                      {t("settings.microApps.labels.supportsWecomSmartRobot")}
-                    </Badge>
-                  </div>
-
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-3">
                       <div className="flex items-center gap-2">
-                        <span className="flex h-9 w-9 items-center justify-center rounded-ui-control bg-primary/10 text-primary">
+                        <span className="flex h-9 w-9 items-center justify-center text-icon-secondary">
                           <BookOpen className="h-4.5 w-4.5" />
                         </span>
                         <div>
                           <div className="text-base font-semibold text-text-primary">{microApp.name}</div>
                         </div>
                       </div>
-                      <div className="space-y-1">
+                      <div>
                         <div className="text-sm leading-6 text-text-secondary">
-                          {microAppSummary(microApp)}
-                        </div>
-                        <div className="text-xs leading-5 text-text-tertiary">
-                          {microApp.enabled
-                            ? "当前已经接入企业问答流程，可继续承接企业微信智能机器人入口。"
-                            : "当前已完成微应用注册，后续启用后即可继续承接真实入口。"}
+                          {t(microAppSummaryKey(microApp))}
                         </div>
                       </div>
                     </div>

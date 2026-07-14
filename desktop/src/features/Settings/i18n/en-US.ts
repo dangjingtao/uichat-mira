@@ -59,6 +59,33 @@ const settingsPending = {
         refresh: "Refresh",
         save: "Save",
       },
+      capabilityBinding: {
+        capabilityNames: {
+          imageGeneration: "Text-to-image",
+          tts: "TTS",
+        },
+        provider: "Provider",
+        providers: {
+          apiProvider: "API provider",
+          comfyui: "ComfyUI",
+          piper: "Piper",
+          gptSovits: "GPT-SoVITS",
+        },
+        title: "Configure {{capability}} capability",
+        description: "Choose the provider for this micro app. Detailed settings remain in the existing workspace.",
+        unconfigured: "Not configured",
+        configureAriaLabel: "Configure {{capability}} capability",
+        selectProvider: "Select a provider",
+        cancel: "Cancel",
+        confirm: "Confirm",
+        saving: "Saving...",
+        saved: "Capability saved",
+        saveFailed: "Failed to save capability",
+      },
+      summaries: {
+        knowledgeQuery: "Accepts text from external entry points, runs the local knowledge retrieval flow, and returns a stable response.",
+        integration: "Enterprise integration micro app.",
+      },
       labels: {
         knowledgeQuery: "Knowledge Query",
         enabled: "Enabled",
@@ -79,12 +106,6 @@ const settingsPending = {
         newsHub: {
           title: "News Hub",
           description: "Bring no-key tech news sources into one local news table and expose a direct entry for browsing, searching, and further use.",
-          hint: "The first pass starts with Hacker News Front Page, and more sources will continue to expand through the same entry.",
-          badges: {
-            debug: "Local news base",
-            focus: "Tech aggregation",
-            runtime: "No-key sources",
-          },
           actions: {
             open: "Open news hub",
           },
@@ -92,12 +113,6 @@ const settingsPending = {
         mailCenter: {
           title: "Mail Center",
           description: "The mail center connects directly to real SMTP and IMAP so account setup, send capability, and inbox sync stay in one place.",
-          hint: "Connect the mailbox first, then continue with send tests and inbox sync, with future mail assets staying in the same entry.",
-          badges: {
-            debug: "Live mailbox",
-            focus: "Multi-account mail center",
-            runtime: "SMTP + IMAP",
-          },
           actions: {
             open: "Open mail center",
           },
@@ -105,52 +120,34 @@ const settingsPending = {
         computerUse: {
           title: "Computer Use Studio",
           description: "A browser task workspace for reviewing plans, approvals, execution progress, and evidence playback in one place.",
-          hint: "Use this entry to manage browser tasks continuously instead of switching into enterprise integration setup flows.",
-          badges: {
-            debug: "Browser workspace",
-            focus: "Browser task workspace",
-            runtime: "Plan + Approval + Evidence",
-          },
           actions: {
             open: "Open Studio",
           },
         },
         imageGeneration: {
-          title: "Image Generation Studio",
-          description: "An image generation workspace for prompt creation, workflow submission, and ComfyUI Local outputs in one place.",
-          hint: "Future parameters, results, and generated assets for image creation will continue to live in this same entry.",
-          badges: {
-            debug: "Image workspace",
-            focus: "Prompt + Workflow",
-            runtime: "Includes ComfyUI Local",
-          },
+          title: "Text to Image",
+          description: "Turn text into images with API providers or ComfyUI.",
           actions: {
-            open: "Open Studio",
+            open: "Debug",
           },
         },
         ttsStudio: {
-          title: "TTS Studio",
-          description: "A speech synthesis workspace for Windows built-in voices and local Piper synthesis in one debug loop.",
-          hint: "Provider setup, synthesis requests, audio artifacts, and playback now stay inside the same entry.",
-          badges: {
-            debug: "Speech workspace",
-            focus: "Windows Voice + Piper",
-            runtime: "Local audio loop",
+          page: {
+            miniTitle: "Micro Apps",
+            title: "Speech Synthesis",
+            description: "Turn text into speech.",
+            refresh: "Refresh",
           },
+          title: "Speech Synthesis",
+          description: "Turn text into speech with Piper, GPT-SoVITS, or API providers.",
           actions: {
-            open: "Open Studio",
+            open: "Debug",
           },
         },
         evolvingKnowledge: {
           title: "Evolving Knowledge",
           description:
             "A multimedia knowledge capture and AI self-organization system. Capture web pages, images, audio, and video; AI automatically rewrites, tags, discovers concept connections, and cross-time insights.",
-          hint: "This is your second brain. It is not traditional RAG, but lets AI actively organize and evolve insights.",
-          badges: {
-            debug: "Knowledge capture",
-            focus: "AI self-organization",
-            runtime: "Insight engine",
-          },
           actions: {
             open: "Open evolving knowledge",
           },
@@ -158,12 +155,6 @@ const settingsPending = {
         codeGraph: {
           title: "CodeGraph Studio",
           description: "A CodeGraph workspace for blocked-safe runtime status, config tuning, and smoke-debug results.",
-          hint: "It does not expose CodeGraph to Planner by default and does not relax the real provider external-index risk gate.",
-          badges: {
-            debug: "CodeGraph workspace",
-            focus: "Status + Config + Debug",
-            runtime: "Blocked-safe",
-          },
           actions: {
             open: "Open Studio",
           },
@@ -660,9 +651,9 @@ const settingsPending = {
       imageGenerationStudio: {
         page: {
           miniTitle: "Image Generation Workbench",
-          title: "Image Generation Workbench",
-          subtitle: "Organize a generation run around a provider target and workflow input.",
-          description: "Choose the execution mode, prepare the input surface, and review results in a stable preview and diagnostics workspace.",
+          title: "Text to Image",
+          subtitle: "Turn text into images.",
+          description: "Choose a provider, write a prompt, and review the result.",
         },
         banner: {
           title: "Current boundary",
@@ -1145,6 +1136,18 @@ const settingsPending = {
           outputText: "Output text",
           error: "Error",
         },
+      },
+      computerUseDebugger: {
+        page: { miniTitle: "Computer Use Debugger", title: "Computer Use Debugger", description: "Inspect structured browser sessions and tool results." },
+        runtime: { ready: "Runtime ready", not_installed: "Runtime unavailable", broken: "Runtime broken" },
+        model: { unavailable: "Model: Not connected", connected: "Model connected", unavailableTitle: "Model Run unavailable" },
+        runConfig: { title: "Run Config", runtime: "Runtime", url: "Initial URL", allowedDomains: "Allowed domains", timeout: "Timeout", snapshot: "Snapshot limit", approvalPolicy: "Approval policy" },
+        browserState: { title: "Browser State", titleLabel: "Title", visibleText: "Visible text", screenshot: "Screenshot", empty: "No observation yet." },
+        manual: { title: "Manual Debug", action: "Action", ref: "Element ref", value: "URL / value", assertion: "Assertion", expected: "Expected" },
+        feedback: { title: "Execution Feedback", events: "Events", empty: "No invocations yet." },
+        modelRun: { title: "Model Run", run: "Run model" },
+        actions: { newSession: "New Session", inspect: "Inspect", execute: "Execute Action", assert: "Assert", approve: "Approve Action", reject: "Reject Action", stop: "Stop", reset: "Reset" },
+        errors: { title: "Debugger error" },
       },
     },
     tools: {

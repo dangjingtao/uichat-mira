@@ -3,7 +3,6 @@ import fsSync from "node:fs";
 import path from "node:path";
 import CONFIG from "@/config/index.js";
 import { attachmentStorageRoot } from "@/services/attachment-storage.service.js";
-import { ttsRefAudioStorageRoot } from "@/services/tts-ref-audio-storage.service.js";
 
 const findProjectRoot = (startDir: string) => {
   let currentDir = path.resolve(startDir);
@@ -28,10 +27,7 @@ const projectRoot = findProjectRoot(process.cwd());
 const managedMediaRoots = {
   attachments: attachmentStorageRoot,
   generatedImages: path.resolve(process.cwd(), ".artifacts", "image-generation"),
-  generatedAudio: [
-    path.join(projectRoot, ".artifacts", "tts", "outputs"),
-    ttsRefAudioStorageRoot,
-  ],
+  generatedAudio: [path.join(projectRoot, ".artifacts", "tts", "outputs")],
   generatedVideos: [path.join(projectRoot, ".artifacts", "video")],
 };
 

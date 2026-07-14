@@ -38,11 +38,11 @@
         {
           "version": "0.7.1",
           "commit": {
-            "hash": "6209a680fecd5d064263e6545c288fd12dc519af",
-            "shortHash": "6209a68",
-            "message": "Merge pull request #12 from dangjingtao/codex/fix-evolving-knowledge-auth",
-            "author": "DangJingtao",
-            "date": "2026-07-14T01:21:18+08:00"
+            "hash": "fbbb098ebbcf679a95c94c496c42f6d80373d474",
+            "shortHash": "fbbb098",
+            "message": "fix: consume external MCP approvals once",
+            "author": "Tomz",
+            "date": "2026-07-14T06:46:21+08:00"
           }
         },
         {

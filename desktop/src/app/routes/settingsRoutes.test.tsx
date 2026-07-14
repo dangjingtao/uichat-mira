@@ -88,7 +88,7 @@ vi.mock("@/features/Settings/pages/MicroApps/ImageGeneration", () => ({
   default: () => <div data-testid="image-generation-studio-page">image-generation-studio-page</div>,
 }));
 vi.mock("@/features/Settings/pages/MicroApps/ComputerUse", () => ({
-  default: () => <div data-testid="computer-use-studio-page">computer-use-studio-page</div>,
+  default: () => <div data-testid="computer-use-debugger-page">computer-use-debugger-page</div>,
 }));
 vi.mock("@/features/Settings/pages/MicroApps/MailCenter", () => ({
   default: () => <div data-testid="mail-center-page">mail-center-page</div>,
@@ -249,7 +249,7 @@ describe("settings routes", () => {
     expect(screen.getByTestId("image-generation-studio-page")).toBeInTheDocument();
   });
 
-  it("includes the computer use studio route under the micro apps path", () => {
+  it("includes the computer use route under the micro apps path", () => {
     const microAppsRoute = settingsRoutes.find((route) => route.path === "micro-apps");
     expect(
       microAppsRoute?.children?.some(
@@ -258,7 +258,7 @@ describe("settings routes", () => {
     ).toBe(true);
   });
 
-  it("mounts the computer use studio page at /settings/micro-apps/computer-use-studio", () => {
+  it("mounts the debugger page at /settings/micro-apps/computer-use-studio", () => {
     const router = createMemoryRouter(
       [
         {
@@ -273,7 +273,7 @@ describe("settings routes", () => {
 
     render(<RouterProvider router={router} />);
 
-    expect(screen.getByTestId("computer-use-studio-page")).toBeInTheDocument();
+    expect(screen.getByTestId("computer-use-debugger-page")).toBeInTheDocument();
   });
 
   it("includes the mail center route under the micro apps path", () => {

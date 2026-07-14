@@ -281,13 +281,13 @@ export const themePresets: ThemePreset[] = [
           "#797264",
         ],
         surface: {
-          primary: "#fffefd",
+          primary: "#fcfbf9",
           auth: "#faf9f5",
           secondary: "#f8f8f6",
           tertiary: "#f7f7f5",
           elevated: "#fdfbf8",
         },
-        border: "#d7d0c5",
+        border: "#e5dfd7",
         text: {
           primary: "#1f1b18",
           secondary: "#575149",

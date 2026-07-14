@@ -5,6 +5,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { modelConfigRepository } from "@/db/repositories/model-config.repository.js";
 import { providerConnectionRepository } from "@/db/repositories/provider-settings.repository.js";
+import { ttsRefAudiosRepository } from "@/db/repositories/tts-ref-audios.repository.js";
 import {
   ttsProviderConfigsRepository,
   type TtsProviderConfigRecord,
@@ -24,6 +25,7 @@ import {
 import { getProviderDefinition } from "@/providers/catalog.js";
 import { llmService } from "@/services/llm.service.js";
 import { resolveProviderForRole } from "@/services/provider-proxy.service/resolution.js";
+import CONFIG from "@/config/index.js";
 export type {
   GptSovitsCatalog,
   GptSovitsSynthesisRequest,
@@ -51,6 +53,9 @@ export type TtsSynthesisRequest = {
   speed?: number;
   responseFormat?: string;
 };
+
+const resolveTtsRefAudioUrl = (id: string) =>
+  `http://${CONFIG.HOST}:${CONFIG.PORT}/microapps/tts/ref-audios/${encodeURIComponent(id)}`;
 
 type ResolvedBaseSynthesisRequest = {
   voice: string | null;
@@ -1046,9 +1051,15 @@ export const createTtsService = (options?: { artifactRoot?: string }) => {
   return {
     async getOverview(): Promise<TtsOverview> {
       await ensureDir(artifactRoot);
+      const recentJobs = ttsSynthesisJobsRepository
+        .listRecent(20)
+        .filter((job) =>
+          job.status !== "succeeded" ||
+          (job.outputPath !== null && fsSync.existsSync(job.outputPath)),
+        );
       return {
         providers: ttsProviderConfigsRepository.list(),
-        recentJobs: ttsSynthesisJobsRepository.listRecent(20),
+        recentJobs,
       };
     },
 
@@ -1217,7 +1228,7 @@ export const createTtsService = (options?: { artifactRoot?: string }) => {
 
     async synthesizeGptSovits(
       request: GptSovitsSynthesisRequest,
-      upload?: { buffer: Buffer; fileName: string },
+      upload?: { buffer: Buffer; fileName: string; mimeType?: string },
     ) {
       const text = request.text.trim();
       if (!text) {
@@ -1232,12 +1243,21 @@ export const createTtsService = (options?: { artifactRoot?: string }) => {
       }
 
       let refAudioPath = (request.refAudioPath ?? "").trim();
+      if (request.refAudioId) {
+        const storedRefAudio = ttsRefAudiosRepository.getById(request.refAudioId);
+        if (!storedRefAudio) {
+          throw new Error(`GPT-SoVITS 参考音频不存在：${request.refAudioId}`);
+        }
+        ttsRefAudiosRepository.touch(storedRefAudio.id);
+        refAudioPath = resolveTtsRefAudioUrl(storedRefAudio.id);
+      }
       if (upload) {
-        const storedRefAudio = await ttsRefAudioStorageService.save({
+        const storedRefAudio = ttsRefAudiosRepository.saveOrGet({
           buffer: upload.buffer,
           originalName: upload.fileName,
+          mimeType: upload.mimeType,
         });
-        refAudioPath = storedRefAudio.absoluteUrl;
+        refAudioPath = resolveTtsRefAudioUrl(storedRefAudio.summary.id);
       } else if (refAudioPath.startsWith("/microapps/tts/ref-audios/")) {
         refAudioPath = ttsRefAudioStorageService.resolveAbsoluteUrlFromPublicPath(refAudioPath);
       } else if (refAudioPath && !isHttpUrl(refAudioPath)) {

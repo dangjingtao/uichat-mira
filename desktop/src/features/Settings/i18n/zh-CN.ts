@@ -59,6 +59,33 @@ const settingsPending = {
         refresh: "刷新",
         save: "保存",
       },
+      capabilityBinding: {
+        capabilityNames: {
+          imageGeneration: "文生图",
+          tts: "TTS",
+        },
+        provider: "服务商",
+        providers: {
+          apiProvider: "API 服务商",
+          comfyui: "ComfyUI",
+          piper: "Piper",
+          gptSovits: "GPT-SoVITS",
+        },
+        title: "配置 {{capability}} 服务能力",
+        description: "这里只指定当前微应用的服务商。具体配置继续使用对应工作区已有的配置。",
+        unconfigured: "未配置",
+        configureAriaLabel: "配置 {{capability}} 服务能力",
+        selectProvider: "请选择服务商",
+        cancel: "取消",
+        confirm: "确定",
+        saving: "保存中...",
+        saved: "服务能力已保存",
+        saveFailed: "保存服务能力失败",
+      },
+      summaries: {
+        knowledgeQuery: "接收外部入口文本问题，调用本地知识库检索链路，并返回一条稳定回复。",
+        integration: "企业集成微应用。",
+      },
       labels: {
         knowledgeQuery: "知识库调用",
         enabled: "已启用",
@@ -79,12 +106,6 @@ const settingsPending = {
         evolvingKnowledge: {
           title: "智识进化库",
           description: "多媒体知识捕获与 AI 自我整理系统。捕获网页、图片、音频、视频后，AI 自动重写、标签、发现概念关联与跨时间洞见。",
-          hint: "这是你的第二大脑。它不是传统 RAG，而是让 AI 主动整理、进化洞见。",
-          badges: {
-            debug: "知识捕获",
-            focus: "AI 自我整理",
-            runtime: "洞见引擎",
-          },
           actions: {
             open: "进入进化库",
           },
@@ -92,12 +113,6 @@ const settingsPending = {
         newsHub: {
           title: "资讯聚合台",
           description: "把免 Key 的科技资讯源汇成一张本地资讯表，给你一个可以直接浏览、检索和继续消费的科技资讯入口。",
-          hint: "当前先聚合 Hacker News Front Page，后续会在同一入口继续扩充来源。",
-          badges: {
-            debug: "本地资讯底座",
-            focus: "科技资讯聚合",
-            runtime: "免 Key Sources",
-          },
           actions: {
             open: "进入资讯台",
           },
@@ -105,12 +120,6 @@ const settingsPending = {
         mailCenter: {
           title: "邮件中心",
           description: "邮件中心直接连接真实 SMTP / IMAP，统一管理账号配置、发信能力和收件箱同步。",
-          hint: "先完成邮箱账号接入，再继续发信测试和收件箱同步，后续邮件资产都会留在同一入口里。",
-          badges: {
-            debug: "真实邮箱接入",
-            focus: "多账号邮件中心",
-            runtime: "SMTP + IMAP",
-          },
           actions: {
             open: "进入邮件中心",
           },
@@ -118,51 +127,33 @@ const settingsPending = {
         computerUse: {
           title: "Computer Use Studio",
           description: "这是浏览器任务工作台，用来统一查看计划、审批、执行进度和证据回放。",
-          hint: "你可以在这里持续管理浏览器任务，而不必切换到企业集成配置流程里。",
-          badges: {
-            debug: "浏览器工作台",
-            focus: "浏览器任务工作台",
-            runtime: "计划 + 审批 + 证据",
-          },
           actions: {
             open: "进入工作区",
           },
         },
         imageGeneration: {
-          title: "Image Generation Studio",
-          description: "这是图像生成工作台，用来统一承接 Prompt 生图、Workflow 提交和 ComfyUI Local 产出。",
-          hint: "后续与图像生成相关的参数、结果和产物流转都会继续沉淀在这个入口里。",
-          badges: {
-            debug: "图像生成工作台",
-            focus: "Prompt + Workflow",
-            runtime: "包含 ComfyUI Local",
-          },
+          title: "文生图",
+          description: "输入文字生成图片，支持 API 服务商与 ComfyUI。",
           actions: {
-            open: "进入工作区",
+            open: "调试",
           },
         },
         ttsStudio: {
-          title: "TTS Studio",
-          description: "这是语音合成工作台，用来统一承接 Windows 内置语音和 Piper 本地合成的调试闭环。",
-          hint: "当前先把 provider 配置、文本合成、音频产物和回放都收在这个入口里。",
-          badges: {
-            debug: "语音合成工作台",
-            focus: "Windows Voice + Piper",
-            runtime: "本地音频闭环",
+          page: {
+            miniTitle: "微应用",
+            title: "语音合成",
+            description: "把文字转换成语音。",
+            refresh: "刷新",
           },
+          title: "语音合成",
+          description: "把文字转换成语音，支持 Piper、GPT-SoVITS 与 API 服务商。",
           actions: {
-            open: "进入工作区",
+            open: "调试",
           },
         },
         codeGraph: {
           title: "CodeGraph Studio",
           description: "这是 CodeGraph 微应用工作台，用来查看 blocked-safe 状态、参数配置和 smoke 调试结果。",
-          hint: "它不会默认暴露给 Planner，也不会替真实 provider 放宽 external index root 风险门槛。",
-          badges: {
-            debug: "CodeGraph 工作台",
-            focus: "状态 + 参数 + 调试",
-            runtime: "blocked-safe",
-          },
           actions: {
             open: "进入工作区",
           },
@@ -655,9 +646,9 @@ const settingsPending = {
       imageGenerationStudio: {
         page: {
           miniTitle: "生图工作台",
-          title: "Image Generation Workbench",
-          subtitle: "围绕 provider 和 workflow 组织一次可回看的生成任务。",
-          description: "选择执行模式，整理输入参数，并在一个稳定的结果区里查看生成结果和诊断信息。",
+          title: "文生图",
+          subtitle: "输入文字，生成图片。",
+          description: "选择服务商，填写提示词，查看生成结果。",
         },
         banner: {
           title: "当前边界",
@@ -1140,6 +1131,18 @@ const settingsPending = {
           outputText: "输出文本",
           error: "错误信息",
         },
+      },
+      computerUseDebugger: {
+        page: { miniTitle: "Computer Use Debugger", title: "Computer Use Debugger", description: "查看结构化浏览器 session 和工具执行结果。" },
+        runtime: { ready: "运行时已就绪", not_installed: "运行时不可用", broken: "运行时异常" },
+        model: { unavailable: "模型：未连接", connected: "模型已连接", unavailableTitle: "Model Run 不可用" },
+        runConfig: { title: "运行配置", runtime: "运行时", url: "初始 URL", allowedDomains: "允许的域名", timeout: "超时", snapshot: "快照上限", approvalPolicy: "审批策略" },
+        browserState: { title: "浏览器状态", titleLabel: "标题", visibleText: "可见文本", screenshot: "截图", empty: "还没有观察结果。" },
+        manual: { title: "手动调试", action: "动作", ref: "元素 ref", value: "URL / 值", assertion: "断言", expected: "期望值" },
+        feedback: { title: "执行反馈", events: "事件", empty: "还没有 invocation。" },
+        modelRun: { title: "模型运行", run: "运行模型" },
+        actions: { newSession: "新建 Session", inspect: "Inspect", execute: "执行动作", assert: "断言", approve: "批准动作", reject: "拒绝动作", stop: "停止", reset: "重置" },
+        errors: { title: "Debugger 错误" },
       },
     },
     tools: {

@@ -8,6 +8,7 @@ const apiMocks = vi.hoisted(() => ({
   getIntegrationCapabilityMicroAppBinding: vi.fn(),
   getIntegrationInstances: vi.fn(),
   getIntegrationMicroApps: vi.fn(),
+  getMicroAppCapabilities: vi.fn(),
 }));
 
 vi.mock("react-i18next", () => ({
@@ -23,6 +24,10 @@ vi.mock("@/shared/api/integrations", () => ({
   getIntegrationMicroApps: apiMocks.getIntegrationMicroApps,
 }));
 
+vi.mock("@/shared/api/microAppCapabilities", () => ({
+  getMicroAppCapabilities: apiMocks.getMicroAppCapabilities,
+}));
+
 describe("MicroAppsSettings", () => {
   beforeEach(() => {
     apiMocks.getIntegrationMicroApps.mockResolvedValue({
@@ -31,6 +36,7 @@ describe("MicroAppsSettings", () => {
     apiMocks.getIntegrationInstances.mockResolvedValue({
       instances: [],
     });
+    apiMocks.getMicroAppCapabilities.mockResolvedValue([]);
     apiMocks.getIntegrationCapabilityMicroAppBinding.mockReset();
   });
 
@@ -86,8 +92,8 @@ describe("MicroAppsSettings", () => {
       screen.queryByText("settings.microApps.studioEntries.computerUse.badges.runtime"),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByText("settings.microApps.studioEntries.computerUse.badges.focus"),
-    ).toBeInTheDocument();
+      screen.queryByText("settings.microApps.studioEntries.computerUse.badges.focus"),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", {
         name: /settings\.microApps\.studioEntries\.computerUse\.actions\.open/,
@@ -112,6 +118,8 @@ describe("MicroAppsSettings", () => {
     expect(screen.getByTestId("studio-entry-icon-mailCenter")).toBeInTheDocument();
     expect(screen.getByTestId("studio-entry-icon-imageGeneration")).toBeInTheDocument();
     expect(screen.getByTestId("studio-entry-icon-ttsStudio")).toBeInTheDocument();
+    expect(screen.getByTestId("studio-entry-settings-imageGeneration")).toBeInTheDocument();
+    expect(screen.getByTestId("studio-entry-settings-ttsStudio")).toBeInTheDocument();
     expect(screen.getByTestId("studio-entry-icon-codeGraph")).toBeInTheDocument();
     expect(
       screen.queryByText("settings.microApps.studioEntries.imageGeneration.badges.focus"),
@@ -147,12 +155,12 @@ describe("MicroAppsSettings", () => {
 
     const microAppCard = await screen.findByTestId("micro-app-card-microapp-knowledge-query");
     expect(microAppCard).toHaveClass("block");
-    expect(microAppCard.firstChild).toHaveClass("border-primary/15");
+    expect(microAppCard.firstChild).toHaveClass("border-border");
     expect(microAppCard.firstChild).toHaveClass("bg-primary/5");
     expect(screen.queryByText("settings.microApps.labels.enabled")).not.toBeInTheDocument();
     expect(screen.queryByText("支持接入点")).not.toBeInTheDocument();
     expect(screen.queryByText("配置字段")).not.toBeInTheDocument();
-    expect(screen.getByText("settings.microApps.labels.supportsWecomSmartRobot")).toBeInTheDocument();
+    expect(screen.queryByText("settings.microApps.labels.supportsWecomSmartRobot")).not.toBeInTheDocument();
     expect(screen.queryByText("settings.microApps.labels.boundCount")).not.toBeInTheDocument();
     expect(screen.queryByText("支持绑定企业微信智能机器人")).not.toBeInTheDocument();
     expect(screen.queryByText("接入点绑定时动态填写知识库配置")).not.toBeInTheDocument();

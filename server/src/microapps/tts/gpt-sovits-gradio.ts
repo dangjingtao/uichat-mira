@@ -90,6 +90,7 @@ export type GptSovitsSynthesisRequest = {
   topK: number;
   topP: number;
   refAudioPath: string;
+  refAudioId?: string;
 };
 
 const normalizeBaseUrl = (value: unknown) => {

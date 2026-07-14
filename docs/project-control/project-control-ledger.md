@@ -53,6 +53,8 @@ related:
 | MicroAPP Computer Use Feature Design | `READY_FOR_REVIEW` | `computer_use` 第一阶段浏览器工作台功能设计：入口、状态、审批、安装引导、结果回放 | [microapp_T003](tasks/microapp_T003-computer-use-feature-design.md), [computer-use-feature-design.md](../microapp/computer-use-feature-design.md) | 当前只提交 docs-only 功能设计；未批准 runtime / DB / UI / browser runtime implementation |
 | MicroAPP Computer Use Parallel Build | `READY_FOR_REVIEW` | 并行施工代码隔离：共享注册层、server core、runtime/executor、route、desktop API、desktop 工作台，以及产品入口衔接卡 | [microapp_T020](tasks/microapp_T020-computer-use-parallel-code-isolation.md), [microapp_T110-T116](tasks/microapp_T110-computer-use-shared-registry-and-seed.md) | 当前已补入口衔接任务卡；实现与评审按各自任务状态推进 |
 | MicroAPP Computer Use Smoke | `READY_FOR_REVIEW` | `Computer Use Studio` 产品入口级冒烟已补第二轮真实证据：即使目标明确要求输出页面标题和主标题文本，当前链路仍只生成“导航 + 截图”plan，并返回同样的截图型结果摘要 | [microapp_T117](tasks/microapp_T117-computer-use-browser-smoke.md) | 证据目录已回填到 `.test-artifact/computer-use-smoke/2026-07-06-T117/`；当前阻塞已收敛为一期能力边界，不再只是证据缺失 |
+| MicroAPP Computer Use Debugger Rebuild | `READY_FOR_REVIEW` | 用 5 张新任务卡重建真实浏览器调试闭环：运行时、浏览器工具、MCP/模型治理、全新 Debugger UI、集成验收 | [microapp_T118-T122](tasks/microapp_T118-computer-use-runtime-and-managed-browser.md) | T118 已完成；T122 已补齐验收测试和证据，真实 provider / 真实浏览器二进制 smoke 因运行条件未配置而明确记为 `SKIPPED` |
+| MicroAPP Info MCP | `DONE` | 资讯中心接入 `web_search` 内部来源，邮件中心接入单一 `mail_query`，复用 Harness embedding / rerank 能力并补齐 MCP 治理 | [microapp_info_mcp_001](tasks/microapp_info_mcp_001-news-search-integration.md), [microapp_info_mcp_002](tasks/microapp_info_mcp_002-mail-query.md), [microapp_info_mcp_003](tasks/microapp_info_mcp_003-harness-mcp-governance.md) | 三张任务卡已完成；OpenAI tunnel / 倾城时光不在本包 |
 | MicroAPP Image Generation Parallel Build | `IN_PROGRESS` | 并行施工代码隔离：共享注册层、server domain、adapter、route、desktop API、desktop 调试页，以及产品入口衔接卡 | [microapp_T010](tasks/microapp_T010-image-generation-parallel-code-isolation.md), [microapp_T100](tasks/microapp_T100-image-generation-shared-registry-and-seed.md), [microapp_T106](tasks/microapp_T106-image-generation-desktop-entry-integration.md) | `T100`、`T101`、`T103`、`T104`、`T105`、`T106` 已 DONE；`T102` 待评审 |
 | MicroAPP Image Generation Smoke | `DONE` | `ComfyUI Local` 产品入口级冒烟：从当前微应用列表页进入 `Image Generation Studio`，使用合法 workflow 跑真实任务终态并保留证据 | [microapp_T107](tasks/microapp_T107-image-generation-comfyui-smoke.md), [image-generation-comfyui-smoke-guide.md](../microapp/image-generation-comfyui-smoke-guide.md) | 已完成两轮真实冒烟；第二轮在补齐 `UI_CHAT_IMAGE_GENERATION_COMFYUI_BASE_URL` 并重启 backend 后成功到 `succeeded` |
 
@@ -123,6 +125,24 @@ related:
 | [microapp_T115](tasks/microapp_T115-computer-use-desktop-studio-workspace.md) | `DONE` | 浏览器工作台、settings route 挂载和 settings i18n 文案 |
 | [microapp_T116](tasks/microapp_T116-computer-use-desktop-entry-integration.md) | `DONE` | 当前微应用列表页 / 详情页到 `Computer Use Studio` 的产品入口衔接 |
 | [microapp_T117](tasks/microapp_T117-computer-use-browser-smoke.md) | `READY_FOR_REVIEW` | 两轮真实证据都只证明“导航 + 截图”成功；当前仍未证明能把页面标题和主标题文本产出到结果里 |
+
+## MicroAPP Info MCP Task Index
+
+| Task | Ledger State | Scope |
+| --- | --- | --- |
+| [microapp_info_mcp_001](tasks/microapp_info_mcp_001-news-search-integration.md) | `DONE` | 通用检索基础适配与资讯接入 `web_search` |
+| [microapp_info_mcp_002](tasks/microapp_info_mcp_002-mail-query.md) | `DONE` | 邮件丰富查询、详情读取和显式 IMAP 同步 |
+| [microapp_info_mcp_003](tasks/microapp_info_mcp_003-harness-mcp-governance.md) | `DONE` | MCP tool、capability profile、Harness exposure、审批、trace 和测试 |
+
+### MicroAPP Computer Use Debugger Rebuild Task Index
+
+| Task | Ledger State | Notes |
+| --- | --- | --- |
+| [microapp_T118](tasks/microapp_T118-computer-use-runtime-and-managed-browser.md) | `DONE` | 固定受管 Chromium 配置、运行时探测、下载、校验和安装状态；任务卡已有定向测试和 `pnpm check` 证据 |
+| [microapp_T119](tasks/microapp_T119-computer-use-browser-session-and-tools.md) | `TODO` | 浏览器 session 与 `browser_observe / browser_act / browser_assert` 执行能力 |
+| [microapp_T120](tasks/microapp_T120-computer-use-mcp-model-governance.md) | `TODO` | MCP 注册、真实模型循环、审批、trace、evidence 和调用持久化 |
+| [microapp_T121](tasks/microapp_T121-computer-use-debugger-rebuild.md) | `TODO` | 从零重建 Debugger 页面，不参考当前 `Computer Use Studio` 界面 |
+| [microapp_T122](tasks/microapp_T122-computer-use-integration-and-acceptance.md) | `READY_FOR_REVIEW` | 集成验收、旧固定规则主路径清理和端到端证据；server `5/5`、MCP `2/2`、desktop `1/1`，真实 provider smoke `SKIPPED` |
 
 ## Agent Nodes Index
 

@@ -1,5 +1,6 @@
 import { FileSearch, Globe, MousePointerClick, PencilLine, SquareTerminal, Wrench } from "lucide-react";
 import Badge from "@/shared/ui/Badge";
+import { UChatOverflowTooltip } from "@/shared/uchat/ui/UChatOverflowTooltip";
 import type { ToolDomainSummary, ToolWorkbenchDomain } from "../types";
 import { formatToolDomain } from "../utils";
 
@@ -35,7 +36,7 @@ export default function ToolsSidebar({
               key={summary.id}
               type="button"
               onClick={() => onSelectDomain(summary.id)}
-              className={`flex w-full items-start gap-3 rounded-ui-control border px-3 py-2 text-left transition-colors ${
+              className={`flex h-[84px] w-full items-start gap-3 overflow-hidden rounded-ui-control border px-3 py-2 text-left transition-colors ${
                 isActive
                   ? "border-primary/30 bg-primary/5"
                   : "border-border bg-surface-primary hover:bg-surface-secondary"
@@ -50,12 +51,21 @@ export default function ToolsSidebar({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <div className="truncate text-sm font-medium text-text-primary">
-                    {summary.label || formatToolDomain(summary.id)}
-                  </div>
+                  <UChatOverflowTooltip
+                    text={summary.label || formatToolDomain(summary.id)}
+                    placement="right"
+                  >
+                    <div className="min-w-0 flex-1 truncate text-sm font-medium text-text-primary">
+                      {summary.label || formatToolDomain(summary.id)}
+                    </div>
+                  </UChatOverflowTooltip>
                   <Badge variant="muted">{summary.count}</Badge>
                 </div>
-                <div className="mt-1 text-xs leading-5 text-text-secondary">{summary.description}</div>
+                <UChatOverflowTooltip text={summary.description} placement="right">
+                  <div className="mt-1 line-clamp-2 text-xs leading-5 text-text-secondary">
+                    {summary.description}
+                  </div>
+                </UChatOverflowTooltip>
               </div>
             </button>
           );

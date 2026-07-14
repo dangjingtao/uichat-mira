@@ -1,4 +1,5 @@
 import Badge from "@/shared/ui/Badge";
+import { UChatOverflowTooltip } from "@/shared/uchat/ui/UChatOverflowTooltip";
 import type { RoleRecord } from "../types";
 import { getStatusLabel, isDraftStatus, statusTone } from "../utils";
 import RoleAvatar from "./RoleAvatar";
@@ -48,9 +49,11 @@ export default function RoleCard({
             <div className="truncate text-sm font-semibold text-text-primary">
               {role.name}
             </div>
-            <div className="mt-1 text-xs leading-5 text-text-secondary">
-              {role.summary}
-            </div>
+            <UChatOverflowTooltip text={role.summary} placement="right">
+              <div className="mt-1 line-clamp-2 text-xs leading-5 text-text-secondary">
+                {role.summary}
+              </div>
+            </UChatOverflowTooltip>
           </div>
         </div>
       </div>

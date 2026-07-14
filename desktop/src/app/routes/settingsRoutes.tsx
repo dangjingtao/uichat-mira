@@ -41,7 +41,7 @@ import RoleSettings from "@/features/Settings/pages/Personas/index";
 import MicroAppsSettings from "@/features/Settings/pages/MicroApps/index";
 import MicroAppDetailPage from "@/features/Settings/pages/MicroApps/Detail";
 import ImageGenerationStudioPage from "@/features/Settings/pages/MicroApps/ImageGeneration";
-import ComputerUseStudioPage from "@/features/Settings/pages/MicroApps/ComputerUse";
+import ComputerUseDebuggerPage from "@/features/Settings/pages/MicroApps/ComputerUse";
 import MailCenterPage from "@/features/Settings/pages/MicroApps/MailCenter";
 import NewsHubPage from "@/features/Settings/pages/MicroApps/NewsHub";
 import TtsStudioPage from "@/features/Settings/pages/MicroApps/Tts";
@@ -140,7 +140,7 @@ const settingsRouteTree: SettingsRouteConfig[] = [
       },
       {
         path: "computer-use-studio",
-        element: <ComputerUseStudioPage />,
+        element: <ComputerUseDebuggerPage />,
       },
       {
         path: "mail-center",

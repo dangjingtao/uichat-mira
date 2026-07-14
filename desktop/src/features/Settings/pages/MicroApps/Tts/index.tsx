@@ -9,6 +9,7 @@ import {
   Waves,
   X,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import Card from "@/shared/ui/Card";
 import Alert from "@/shared/ui/Alert";
 import Badge from "@/shared/ui/Badge";
@@ -24,6 +25,7 @@ import {
   Tooltip,
 } from "@/shared/ui";
 import { message } from "@/shared/ui/Message";
+import { ApiError, ErrorCodes } from "@/shared/lib/request";
 import MicroAppPageLayout from "../components/MicroAppPageLayout";
 import {
   getApiProviderCatalog,
@@ -34,6 +36,7 @@ import {
   getTtsAudioPreviewUrl,
   getTtsOverview,
   getTtsVoices,
+  saveTtsReferenceAudio,
   updateTtsProvider,
   type GptSovitsCatalog,
   type TtsProviderConfigRecord,
@@ -45,6 +48,7 @@ import {
   deleteStoredGptSovitsRefAudio,
   listStoredGptSovitsRefAudios,
   saveStoredGptSovitsRefAudio,
+  setStoredGptSovitsRefAudioServerId,
   toStoredGptSovitsRefAudioFile,
   type StoredGptSovitsRefAudio,
 } from "./gptSovitsRefAudioStore";
@@ -237,6 +241,7 @@ const buildGptFormFromCatalog = (
 const stringifyComparable = (value: unknown) => JSON.stringify(value);
 
 export default function TtsStudioPage() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<StudioTab>("piper");
   const [loading, setLoading] = useState(true);
   const [savingProviderId, setSavingProviderId] = useState<TtsProviderId | "">(
@@ -245,6 +250,7 @@ export default function TtsStudioPage() {
   const [synthesizing, setSynthesizing] = useState(false);
   const [voicesLoading, setVoicesLoading] = useState(false);
   const [gptCatalogLoading, setGptCatalogLoading] = useState(false);
+  const [gptCatalogError, setGptCatalogError] = useState("");
   const [apiProviderCatalogLoading, setApiProviderCatalogLoading] =
     useState(false);
   const [providers, setProviders] = useState<TtsProviderConfigRecord[]>([]);
@@ -464,6 +470,7 @@ export default function TtsStudioPage() {
 
   const loadGptSovits = async () => {
     setGptCatalogLoading(true);
+    setGptCatalogError("");
     try {
       const result = await getGptSovitsCatalog();
       setGptCatalog(result.catalog);
@@ -475,8 +482,9 @@ export default function TtsStudioPage() {
         ),
       );
     } catch (error) {
-      message.error(
-        error instanceof Error ? error.message : "加载 GPT-SoVITS 配置失败",
+      setGptCatalog(null);
+      setGptCatalogError(
+        error instanceof Error ? error.message : "GPT-SoVITS 服务当前不可用",
       );
     } finally {
       setGptCatalogLoading(false);
@@ -568,9 +576,11 @@ export default function TtsStudioPage() {
             }
             return "";
           });
-          message.error(
-            error instanceof Error ? error.message : "加载音频预览失败",
-          );
+          if (!(error instanceof ApiError && error.code === ErrorCodes.NOT_FOUND)) {
+            message.error(
+              error instanceof Error ? error.message : "加载音频预览失败",
+            );
+          }
         }
       });
 
@@ -878,10 +888,20 @@ export default function TtsStudioPage() {
 
     setSynthesizing(true);
     try {
-      const refAudioFile = toStoredGptSovitsRefAudioFile(selectedRefAudio);
+      let serverRefAudioId = selectedRefAudio.serverRefAudioId;
+      if (!serverRefAudioId) {
+        const refAudioFile = toStoredGptSovitsRefAudioFile(selectedRefAudio);
+        const saved = await saveTtsReferenceAudio(refAudioFile);
+        serverRefAudioId = saved.refAudio.id;
+        await setStoredGptSovitsRefAudioServerId(
+          selectedRefAudio.id,
+          serverRefAudioId,
+        );
+        await loadStoredRefAudios();
+      }
       const { job } = await createGptSovitsSynthesis({
         text: gptForm.text.trim(),
-        refAudioFile,
+        refAudioId: serverRefAudioId,
       });
       if (job.status !== "succeeded") {
         throw new Error(job.errorMessage || "语音合成失败");
@@ -962,9 +982,9 @@ export default function TtsStudioPage() {
 
   return (
     <MicroAppPageLayout
-      miniTitle="MicroAPP"
-      title="TTS Studio"
-      description="微应用边界内的桌面语音合成工作台。"
+      miniTitle={t("settings.microApps.studioEntries.ttsStudio.page.miniTitle")}
+      title={t("settings.microApps.studioEntries.ttsStudio.page.title")}
+      description={t("settings.microApps.studioEntries.ttsStudio.page.description")}
       contentClassName="pt-6"
       scrollBody={false}
       slot={
@@ -975,7 +995,7 @@ export default function TtsStudioPage() {
           disabled={loading}
         >
           <RefreshCcw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          刷新
+          {t("settings.microApps.studioEntries.ttsStudio.page.refresh")}
         </Button>
       }
     >
@@ -1079,6 +1099,12 @@ export default function TtsStudioPage() {
                           </div>
                         </div>
                       </div>
+
+                      {gptCatalogError ? (
+                        <Alert variant="warning" title="GPT-SoVITS 未连接">
+                          当前无法读取 GPT-SoVITS 配置。请先启动 GPT-SoVITS 服务；这不会影响 Piper 和 API 服务商。
+                        </Alert>
+                      ) : null}
 
                       {selectedGptDraft ? (
                         <div className="flex h-full min-h-0 flex-1 flex-col">
@@ -1454,18 +1480,6 @@ export default function TtsStudioPage() {
                                   }
                                 >
                                   {apiProviderCatalog.errorMessage}
-                                </Alert>
-                              ) : null}
-
-                              {isVolcengineVoiceProvider ? (
-                                <Alert
-                                  variant="warning"
-                                  title="火山方舟语音模型有专用要求"
-                                >
-                                  这里的“音色”需要填写方舟语音文档里的 speaker /
-                                  音色 ID，不能直接用 OpenAI 默认音色名，比如
-                                  alloy。当前输出格式建议用 mp3、wav、pcm 或
-                                  opus。
                                 </Alert>
                               ) : null}
 
