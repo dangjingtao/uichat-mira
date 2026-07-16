@@ -288,7 +288,7 @@ function LoginPage() {
                   {t("auth.login.badge")}
                 </div>
 
-                <h1 className="max-w-[11.5ch] text-[31px] font-semibold leading-[1.2] tracking-[-0.04em] text-text-primary sm:text-[36px]">
+                <h1 className="max-w-[11.5ch] font-serif text-[31px] font-semibold leading-[1.2] tracking-[-0.04em] text-text-primary sm:text-[36px]">
                   {t("auth.login.titlePrefix")}
                   <span className="text-primary">
                     {t("auth.login.titleHighlight")}

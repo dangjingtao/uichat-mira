@@ -22,6 +22,14 @@ module.exports = {
           '"Segoe UI"',
           "sans-serif",
         ],
+        serif: [
+          '"Source Han Serif CN"',
+          '"Source Han Serif"',
+          '"Noto Serif SC"',
+          "ui-serif",
+          "Georgia",
+          "serif",
+        ],
         mono: [
           '"Geist Mono"',
           "ui-monospace",
