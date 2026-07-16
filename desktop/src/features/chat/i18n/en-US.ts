@@ -68,6 +68,7 @@ const chatPending = {
         titleLine2: "with traceable evidence.",
         description:
           "Turn documents into knowledge you can query directly in real retrieval scenarios.",
+        emptyComposerTitle: "Start with chat",
       },
       assistantTyping: "Assistant is typing a reply",
       roles: {

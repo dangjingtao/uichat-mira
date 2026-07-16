@@ -33,6 +33,7 @@ import type {
   ChatThreadContextTag,
 } from "../core";
 import ImagePreviewOverlay from "@/shared/ui/ImagePreviewOverlay";
+import chatStartLogo from "@/assets/branding/chat-start-logo.png";
 import { getChatMediaPreviewUrl } from "@/shared/api/thread";
 import MarkdownText from "@/shared/ui/MarkdownText";
 import Badge from "@/shared/ui/Badge";
@@ -470,10 +471,12 @@ export function UChatThreadView({
                     <div
                       className={`${contentColumnClassName} max-w-3xl xl:max-w-4xl`}
                     >
-                      <UChatWelcomeEmptyState
-                        activeThreadId={activeThreadId}
-                        isVisible={showWelcomeEmptyState}
-                      />
+                      <div className={showWelcomeEmptyState ? "hidden" : undefined}>
+                        <UChatWelcomeEmptyState
+                          activeThreadId={activeThreadId}
+                          isVisible={showWelcomeEmptyState}
+                        />
+                      </div>
 
                       {isHydratingPersistedThread ? (
                         <UChatThreadLoadingSkeleton />
@@ -548,10 +551,34 @@ export function UChatThreadView({
                   </div>
                 </div>
 
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20">
-                  <div className="bg-gradient-to-t from-surface-secondary via-surface-secondary/95 to-transparent px-4 pb-5 pt-8 sm:px-6 lg:px-8">
+                <div
+                  className={`pointer-events-none absolute inset-x-0 z-20 ${
+                    showWelcomeEmptyState
+                      ? "inset-y-0 flex translate-y-[10px] items-center"
+                      : "bottom-0"
+                  }`}
+                >
+                  <div
+                    className={
+                      showWelcomeEmptyState
+                        ? "w-full px-4 py-5 sm:px-6 lg:px-8"
+                        : "bg-gradient-to-t from-surface-secondary via-surface-secondary/95 to-transparent px-4 pb-5 pt-8 sm:px-6 lg:px-8"
+                    }
+                  >
                     <div className="pointer-events-auto mx-auto w-full max-w-3xl xl:max-w-4xl">
-                      <div className="overflow-hidden rounded-[24px] border border-cloudy-4/70 bg-pampas-2/90 shadow-[0_8px_22px_rgba(15,23,42,0.035)] backdrop-blur-xl">
+                      {showWelcomeEmptyState ? (
+                        <div className="mb-[80px] flex translate-y-[30px] items-center justify-center gap-3 font-serif text-[36px] font-semibold leading-tight tracking-[0.02em] text-ink">
+                          <img
+                            src={chatStartLogo}
+                            alt=""
+                            aria-hidden="true"
+                            className="h-9 w-auto shrink-0 object-contain sm:h-10"
+                            draggable={false}
+                          />
+                          <span>{t("chat.thread.welcome.emptyComposerTitle")}</span>
+                        </div>
+                      ) : null}
+                      <div className="overflow-hidden rounded-[20px] border border-cloudy-4/70 bg-pampas-2/90 shadow-[0_8px_22px_rgba(15,23,42,0.035)] backdrop-blur-xl">
                         {composer.attachments.length > 0 ? (
                           <div className="flex flex-wrap gap-2 border-b border-cloudy-4/55 px-4 pb-3 pt-3">
                             {composer.attachments.map((attachment) => (
@@ -605,7 +632,7 @@ export function UChatThreadView({
                             }
                           }}
                           placeholder={placeholder}
-                          className={`min-h-[40px] w-full resize-none bg-transparent px-4 py-2.5 text-[15px] leading-6 text-text-primary placeholder:text-cloudy-6 focus:outline-none ${
+                          className={`h-16 min-h-[40px] w-full resize-none bg-transparent px-4 py-2.5 text-[15px] leading-6 text-text-primary placeholder:text-cloudy-6 focus:outline-none ${
                             isSendDisabled
                               ? "cursor-not-allowed opacity-60"
                               : ""
@@ -1795,7 +1822,7 @@ function UChatComposerActions({
 
               void onSend();
             }}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-text-primary text-text-inverted transition-all duration-150 hover:scale-[1.02] hover:bg-text-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-ink text-text-inverted transition-all duration-150 hover:scale-[1.02] hover:bg-ink/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary disabled:cursor-not-allowed disabled:opacity-50"
             aria-label={
               isRunning
                 ? t("chat.thread.composer.cancelGeneration")

@@ -67,6 +67,7 @@ const chatPending = {
         titleSuffix: "，",
         titleLine2: "答案有据可查。",
         description: "把文档变成可提问的知识来源，直连真实检索场景。",
+        emptyComposerTitle: "从聊天出发",
       },
       assistantTyping: "助手正在输入回复",
       roles: {

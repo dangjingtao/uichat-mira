@@ -103,6 +103,7 @@ module.exports = {
           tertiary: "rgb(var(--color-text-tertiary) / <alpha-value>)",
           inverted: "rgb(var(--color-text-inverted) / <alpha-value>)",
         },
+        ink: "rgb(var(--color-ink) / <alpha-value>)",
         icon: {
           primary: "rgb(var(--color-icon-primary) / <alpha-value>)",
           secondary: "rgb(var(--color-icon-secondary) / <alpha-value>)",

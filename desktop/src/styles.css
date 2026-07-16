@@ -130,6 +130,7 @@
     --color-text-secondary: 87 81 73;
     --color-text-tertiary: 119 111 102;
     --color-text-inverted: 250 250 250;
+    --color-ink: 20 20 19;
 
     --color-icon-primary: 31 27 24;
     --color-icon-secondary: 87 81 73;
@@ -212,6 +213,7 @@
     --color-text-secondary: 199 192 181;
     --color-text-tertiary: 161 151 140;
     --color-text-inverted: 24 24 27;
+    --color-ink: 243 239 232;
 
     --color-icon-primary: 243 239 232;
     --color-icon-secondary: 199 192 181;
