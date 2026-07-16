@@ -1,5 +1,5 @@
 ---
-task_state: READY_FOR_REVIEW
+task_state: DONE
 owner: project-owner
 repository: dangjingtao/uichat-mira
 baseline_branch: dev
@@ -7,7 +7,7 @@ baseline_branch: dev
 
 # A18_T004 — MicroAPP Definition 版本化迁移
 
-- 状态：READY_FOR_REVIEW
+- 状态：DONE
 - 仓库：`dangjingtao/uichat-mira`
 - 基线分支：`dev`
 - 类型：P1 技术债 / 数据兼容
@@ -199,4 +199,4 @@ git diff --check
 - 当前版本为 `1`，后续 definition schema 变化必须新增明确的版本迁移步骤；不能复用本次迁移覆盖用户字段的行为。
 - 非法 JSON 会使初始化失败，这是显式中断策略；数据库内容不会被静默修复，需由上层记录错误并人工处理损坏数据。
 - `toRecord()` 对非迁移读取仍保留已有的安全解析 fallback；本卡只要求迁移路径对待迁移 JSON 显式失败。
-- A18_T004 尚未完成独立评审；本卡状态保持 `READY_FOR_REVIEW`。总台账继续保持 `TASK_CARD_STATE_INVALID`，不在本卡中预写完成状态。
+- A18_T004 已完成独立评审；定向 repository 测试、server typecheck、`pnpm check` 和 `git diff --check` 均通过。代码未触碰 runtime、AgentGraph、Sandbox、前端或注册中心；后续 definition schema 变化必须新增明确版本迁移步骤。
