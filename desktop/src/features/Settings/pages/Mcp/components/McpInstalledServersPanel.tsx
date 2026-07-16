@@ -1,8 +1,7 @@
-import { BookOpenText, ExternalLink, Loader2, PlugZap, Radar, Settings2, Trash2 } from "lucide-react";
+import { BookOpenText, ExternalLink, Loader2, PlugZap, Power, Radar, Settings2, Trash2 } from "lucide-react";
 import Badge from "@/shared/ui/Badge";
-import { Button } from "@/shared/ui/Button";
+import { Button, IconButton } from "@/shared/ui/Button";
 import CollapsiblePanel from "@/shared/ui/CollapsiblePanel";
-import Switch from "@/shared/ui/Switch";
 import type { ExternalMcpServerRecord } from "@/shared/api/tools";
 import { resolveGithubMirrorUrl } from "@/shared/github";
 
@@ -89,10 +88,10 @@ export default function McpInstalledServersPanel({
             return (
               <div
                 key={server.id}
-                className="border-t border-border px-5 py-4 first:border-t"
+                className="border-t border-border px-5 py-3 first:border-t"
               >
-                <div className="flex flex-col gap-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex flex-wrap items-start justify-between gap-2.5">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <div className="truncate text-sm font-medium text-text-primary">
@@ -146,6 +145,18 @@ export default function McpInstalledServersPanel({
                         {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radar className="h-4 w-4" />}
                         {labels.discover}
                       </Button>
+                      <IconButton
+                        size="sm"
+                        styleType={server.agentEnabled ? "filled" : "outline"}
+                        tone={server.agentEnabled ? "primary" : "default"}
+                        onClick={() => onToggleAgentAccess(server, !server.agentEnabled)}
+                        disabled={isPending || !server.enabled}
+                        ariaLabel={labels.agentAccess}
+                        aria-pressed={server.agentEnabled}
+                        title={labels.agentAccess}
+                      >
+                        <Power className="h-4 w-4" />
+                      </IconButton>
                       <Button
                         variant="danger-outline"
                         size="sm"
@@ -159,39 +170,61 @@ export default function McpInstalledServersPanel({
                   </div>
 
                   <div className="min-w-0">
-                    <div className="mt-1 flex items-center gap-3 border-b border-border pb-3">
-                      <Switch
-                        checked={server.agentEnabled}
-                        onChange={() => onToggleAgentAccess(server, !server.agentEnabled)}
-                        disabled={isPending || !server.enabled}
-                      />
-                      <span className="text-sm text-text-secondary">{labels.agentAccess}</span>
-                    </div>
-
                     {server.description ? (
-                      <div className="mt-2 text-sm leading-6 text-text-secondary">
+                      <div className="mt-1 text-sm leading-5 text-text-secondary">
                         {server.description}
                       </div>
                     ) : null}
 
-                    {server.remoteServerInfo ? (
-                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-text-tertiary">
-                        <span>{labels.remote}:</span>
-                        {server.remoteServerInfo.title || server.remoteServerInfo.name ? (
-                          <span>
-                            {server.remoteServerInfo.title ?? server.remoteServerInfo.name}
-                            {server.remoteServerInfo.name &&
-                            server.remoteServerInfo.title &&
-                            server.remoteServerInfo.name !== server.remoteServerInfo.title
-                              ? ` (${server.remoteServerInfo.name})`
-                              : ""}
+                    {server.remoteServerInfo || server.documentationUrl || server.repositoryUrl ? (
+                      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-tertiary">
+                        {server.remoteServerInfo ? (
+                          <>
+                            <span>{labels.remote}:</span>
+                            {server.remoteServerInfo.title || server.remoteServerInfo.name ? (
+                              <span>
+                                {server.remoteServerInfo.title ?? server.remoteServerInfo.name}
+                                {server.remoteServerInfo.name &&
+                                server.remoteServerInfo.title &&
+                                server.remoteServerInfo.name !== server.remoteServerInfo.title
+                                  ? ` (${server.remoteServerInfo.name})`
+                                  : ""}
+                              </span>
+                            ) : null}
+                            {server.remoteServerInfo.version ? <span>v{server.remoteServerInfo.version}</span> : null}
+                          </>
+                        ) : null}
+
+                        {server.documentationUrl || server.repositoryUrl ? (
+                          <span className="inline-flex items-center gap-2 border-l border-border pl-2">
+                            {server.documentationUrl ? (
+                              <a
+                                href={server.documentationUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-text-secondary underline underline-offset-4 hover:text-text-primary"
+                              >
+                                <BookOpenText className="h-3.5 w-3.5" />
+                                {labels.docs}
+                              </a>
+                            ) : null}
+                            {server.repositoryUrl ? (
+                              <a
+                                href={resolveGithubMirrorUrl(server.repositoryUrl)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-text-secondary underline underline-offset-4 hover:text-text-primary"
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                                {labels.repository}
+                              </a>
+                            ) : null}
                           </span>
                         ) : null}
-                        {server.remoteServerInfo.version ? <span>v{server.remoteServerInfo.version}</span> : null}
                       </div>
                     ) : null}
 
-                    <div className="mt-3 text-xs text-text-tertiary">
+                    <div className="mt-2 text-xs leading-5 text-text-tertiary">
                       {labels.endpoint}:{" "}
                       {server.transport.kind === "streamable-http"
                         ? server.transport.url
@@ -203,13 +236,13 @@ export default function McpInstalledServersPanel({
                     </div>
 
                     {server.packageName ? (
-                      <div className="mt-2 text-xs text-text-tertiary">
+                      <div className="mt-1 text-xs text-text-tertiary">
                         {labels.packageName}: {server.packageName}
                       </div>
                     ) : null}
 
                     {server.remoteCapabilities ? (
-                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-text-tertiary">
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-text-tertiary">
                         <span>{labels.capabilities}:</span>
                         {server.remoteCapabilities.hasTools ? <Badge variant="muted">{labels.tools}</Badge> : null}
                         {server.remoteCapabilities.hasResources ? (
@@ -219,50 +252,23 @@ export default function McpInstalledServersPanel({
                       </div>
                     ) : null}
 
-                    {server.documentationUrl || server.repositoryUrl ? (
-                      <div className="mt-3 flex flex-wrap items-center gap-3">
-                        {server.documentationUrl ? (
-                          <a
-                            href={server.documentationUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1.5 text-xs text-text-secondary underline underline-offset-4 hover:text-text-primary"
-                          >
-                            <BookOpenText className="h-3.5 w-3.5" />
-                            {labels.docs}
-                          </a>
-                        ) : null}
-                        {server.repositoryUrl ? (
-                          <a
-                            href={resolveGithubMirrorUrl(server.repositoryUrl)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1.5 text-xs text-text-secondary underline underline-offset-4 hover:text-text-primary"
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                            {labels.repository}
-                          </a>
-                        ) : null}
-                      </div>
-                    ) : null}
-
                     {server.lastError ? (
-                      <div className="mt-3 rounded-ui-control border border-danger/20 bg-danger/5 px-3 py-2 text-xs text-danger">
+                    <div className="mt-2 rounded-ui-control border border-danger/20 bg-danger/5 px-3 py-2 text-xs text-danger">
                         {server.lastError}
                       </div>
                     ) : null}
 
                     {server.discoveredTools.length > 0 ? (
                       <CollapsiblePanel
-                        className="mt-3"
+                        className="mt-2"
                         title={`${labels.discoveredToolsSummary} ${server.discoveredTools.length} ${labels.tools}`}
                         meta={server.discoveredTools.map((tool) => tool.title).join(" / ")}
-                        contentClassName="space-y-2 border-t border-border px-3 py-3"
+                        contentClassName="border-t border-border bg-surface-primary px-3 py-2"
                       >
                         {server.discoveredTools.map((tool) => (
                           <div
                             key={`${server.id}-${tool.projectedCapabilityId}`}
-                            className="rounded-ui-control border border-border bg-surface-primary px-3 py-2"
+                            className="border-b border-border py-2 last:border-b-0"
                           >
                             <div className="text-xs font-medium text-text-primary">
                               {tool.title}

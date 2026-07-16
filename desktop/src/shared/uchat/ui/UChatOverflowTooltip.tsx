@@ -44,7 +44,7 @@ export function UChatOverflowTooltip({
 
   const content = React.cloneElement(children as React.ReactElement, {
     ref: contentRef,
-    className,
+    className: className ?? (children as React.ReactElement).props.className,
   });
 
   if (!isOverflowing) {

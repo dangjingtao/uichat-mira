@@ -3,6 +3,32 @@ import type { RoleSummary } from "@/shared/api/roles";
 import type { BuiltinAvatarOption } from "@/shared/avatars";
 import type { ChatThreadContextTag } from "@/shared/uchat/core";
 
+export type ChatMediaSettings = {
+  ttsEnabled: boolean;
+  imageEnabled: boolean;
+};
+
+export const resolveChatMediaSettings = ({
+  hasPersistedThread,
+  persistedSettings,
+  welcomeSettings,
+  hasRole,
+  hasKnowledgeBase,
+}: {
+  hasPersistedThread: boolean;
+  persistedSettings?: Partial<ChatMediaSettings>;
+  welcomeSettings: ChatMediaSettings;
+  hasRole: boolean;
+  hasKnowledgeBase: boolean;
+}): ChatMediaSettings => ({
+  ttsEnabled: hasPersistedThread
+    ? persistedSettings?.ttsEnabled === true
+    : welcomeSettings.ttsEnabled,
+  imageEnabled: hasPersistedThread
+    ? persistedSettings?.imageEnabled ?? (hasRole && !hasKnowledgeBase)
+    : welcomeSettings.imageEnabled,
+});
+
 export const resolveActiveRoleId = ({
   hasPersistedThread,
   persistedRoleId,

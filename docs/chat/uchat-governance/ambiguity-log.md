@@ -96,6 +96,8 @@ Related:
 
 ### 5. 附件、文生图、TTS 是否属于同一消息模型
 
+状态：已明确。
+
 当前 `ChatMessagePart` 已支持：
 
 - `text`
@@ -103,15 +105,16 @@ Related:
 - `file`
 - `data`
 
-但还不清楚未来：
+已确定：
 
-- 文生图结果是不是普通 `image` part
-- TTS 是不是 `audio` part
-- 生成中状态是不是 message part、metadata、还是 execution node
+- 文生图结果不是现有用户输入用的 `image` part
+- TTS 不新增 `audio` part
+- 生成中、成功、失败和任务关联信息放在助手消息 `metadata.media` 扩展中
+- 数据库保存媒体产物的绝对路径，并由 backend 提供受控读取接口
+- 媒体必须绑定 `threadId`、`messageId` 和任务 ID
+- 重新生成、删除消息、清理分支和删除线程时，必须清理关联文件和记录
 
-当前动作：
-
-- 未明确前，不草率扩大 `ChatMessagePart`，也不把媒体任务状态塞进现有 `image/file` 语义里
+因此不修改现有 `ChatMessagePart`，不改变 provider 请求、附件处理、RAG 来源和执行 trace 的既有语义。
 
 ### 6. execution trace 的产品边界
 
@@ -137,6 +140,17 @@ Related:
 - 未明确前，不往 `ChatSidebarEntry` 持续添加业务专属字段
 
 ## 产品能力矩阵关注项
+
+## 本次 TTS / 生图接入的硬边界
+
+本次只接入现有助手消息完成后的媒体能力，不改变以下核心逻辑：
+
+- AgentGraph 的图编排、节点、状态、工具循环和审批
+- RAG 的检索与生成链路
+- Chat 的文本发送、流式协议和历史上下文
+- Role 的角色模型、prompt 注入和请求编排
+
+媒体接入只允许读取现有消息结果和现有 Role/RAG 状态，并负责媒体按钮、TTS/生图任务、消息关联、绝对路径持久化、读取和清理。
 
 后续每接一类能力，都先判断它属于哪类：
 

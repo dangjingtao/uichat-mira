@@ -67,6 +67,7 @@ const chatPending = {
         titleSuffix: "，",
         titleLine2: "答案有据可查。",
         description: "把文档变成可提问的知识来源，直连真实检索场景。",
+        emptyComposerTitle: "从聊天出发",
       },
       assistantTyping: "助手正在输入回复",
       roles: {
@@ -140,6 +141,20 @@ const chatPending = {
         previousBranch: "上一分支",
         nextBranch: "下一分支",
         branchPosition: "{{current}} / {{total}}",
+      },
+      media: {
+        imageGenerating: "图片生成中",
+        imageFailed: "图片生成失败",
+        generatedImage: "生成的图片",
+        previewImage: "预览生成的图片",
+        generateImage: "生成图片",
+        retry: "重试",
+        loadFailed: "图片加载失败",
+        audioLoadFailed: "音频加载失败",
+        audioPlayFailed: "音频播放失败",
+        audioFailed: "TTS 生成失败",
+        unknownError: "未知错误",
+        playAudio: "播放助手音频",
       },
       status: {
         incomplete: "回复未完整生成",

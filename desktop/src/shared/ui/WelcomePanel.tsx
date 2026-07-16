@@ -30,7 +30,7 @@ function WelcomePanel({
         <div className="relative z-[1] flex min-h-[18rem] max-w-[32rem] flex-col justify-center gap-4 px-2 py-4 lg:min-h-[26rem] lg:max-w-[34rem] lg:justify-start lg:pt-[5.4rem]">
           {badge}
           <div className="space-y-4">
-            <div className="max-w-[15ch] text-[30px] font-semibold tracking-tight text-text-primary sm:text-[38px] sm:leading-[1.16] lg:max-w-[15ch] lg:text-[42px]">
+            <div className="max-w-[15ch] font-serif text-[30px] font-semibold tracking-tight text-text-primary sm:text-[38px] sm:leading-[1.16] lg:max-w-[15ch] lg:text-[42px]">
               {title}
             </div>
             {description ? (

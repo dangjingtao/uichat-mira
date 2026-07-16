@@ -9,6 +9,7 @@ import type {
   TtsService,
   TtsSynthesisRequest,
 } from "@/microapps/tts/index.js";
+import { ttsRefAudiosRepository } from "@/db/repositories/tts-ref-audios.repository.js";
 
 type TtsRouteOptions = {
   ttsService: TtsService;
@@ -73,20 +74,23 @@ const ttsRoutes: FastifyPluginAsync<TtsRouteOptions> = async (app, options) => {
       fields[part.fieldname] = String(part.value ?? "");
     }
 
-    if (!upload) {
+    if (!upload && !fields.refAudioId) {
       throw badRequest("请上传参考音频文件");
     }
-    const lowerFileName = upload.fileName.trim().toLowerCase();
-    if (!lowerFileName.endsWith(".wav")) {
-      throw badRequest("参考音频文件必须是 wav");
-    }
-    if (upload.mimeType && upload.mimeType !== "audio/wav" && upload.mimeType !== "audio/x-wav") {
-      throw badRequest("参考音频文件必须是 wav");
+    if (upload) {
+      const lowerFileName = upload.fileName.trim().toLowerCase();
+      if (!lowerFileName.endsWith(".wav")) {
+        throw badRequest("参考音频文件必须是 wav");
+      }
+      if (upload.mimeType && upload.mimeType !== "audio/wav" && upload.mimeType !== "audio/x-wav") {
+        throw badRequest("参考音频文件必须是 wav");
+      }
     }
 
     const body: GptSovitsSynthesisRequest = {
       text: fields.text ?? "",
       refAudioPath: "",
+      refAudioId: fields.refAudioId,
       promptText: fields.promptText ?? "",
       promptLanguage: fields.promptLanguage ?? "",
       textLanguage: fields.textLanguage ?? "",
@@ -108,6 +112,71 @@ const ttsRoutes: FastifyPluginAsync<TtsRouteOptions> = async (app, options) => {
     "/microapps/tts/overview",
     routeHandler("Failed to load TTS overview", async () =>
       success(await ttsService.getOverview())),
+  );
+
+  app.post(
+    "/microapps/tts/ref-audios",
+    routeHandler("Failed to save TTS reference audio", async (request) => {
+      if (!request.isMultipart()) {
+        throw badRequest("参考音频必须通过 multipart/form-data 上传");
+      }
+
+      const { upload } = await readGptSovitsMultipartRequest(request);
+      if (!upload) {
+        throw badRequest("请上传参考音频文件");
+      }
+
+      const saved = ttsRefAudiosRepository.saveOrGet({
+        buffer: upload.buffer,
+        originalName: upload.fileName,
+        mimeType: upload.mimeType,
+      });
+      return success({ refAudio: saved.summary }, "TTS reference audio saved");
+    }),
+  );
+
+  app.get(
+    "/microapps/tts/ref-audios/:id",
+    routeHandler("Failed to load TTS reference audio", async (request, reply) => {
+      const params = request.params as { id: string };
+      const audio = ttsRefAudiosRepository.getById(params.id);
+      if (!audio) {
+        throw notFound(`TTS reference audio not found: ${params.id}`);
+      }
+      ttsRefAudiosRepository.touch(audio.id);
+      reply.header("Cache-Control", "no-store");
+      reply.type(audio.mimeType || "audio/wav");
+      return reply.send(audio.audioBlob);
+    }),
+  );
+
+  app.get(
+    "/microapps/tts/providers/gpt_sovits/ref-audio",
+    routeHandler("Failed to resolve GPT-SoVITS reference audio", async () => {
+      try {
+        return success({ refAudioId: ttsService.resolveGptSovitsReferenceAudioId() });
+      } catch (error) {
+        throw badRequest(error instanceof Error ? error.message : "GPT-SoVITS 参考音频未完成服务端绑定");
+      }
+    }),
+  );
+
+  app.put(
+    "/microapps/tts/providers/gpt_sovits/ref-audio-binding",
+    routeHandler("Failed to bind GPT-SoVITS reference audio", async (request) => {
+      try {
+        const body = request.body as { clientRefAudioId?: string; serverRefAudioId?: string };
+        return success(
+          ttsService.bindGptSovitsReferenceAudio({
+            clientRefAudioId: body.clientRefAudioId ?? "",
+            serverRefAudioId: body.serverRefAudioId ?? "",
+          }),
+          "GPT-SoVITS reference audio bound",
+        );
+      } catch (error) {
+        throw badRequest(error instanceof Error ? error.message : "GPT-SoVITS 参考音频绑定失败");
+      }
+    }),
   );
 
   app.put(
@@ -224,7 +293,15 @@ const ttsRoutes: FastifyPluginAsync<TtsRouteOptions> = async (app, options) => {
         throw notFound(`TTS synthesis audio not found: ${params.id}`);
       }
 
-      const bytes = await fs.readFile(job.outputPath);
+      let bytes: Buffer;
+      try {
+        bytes = await fs.readFile(job.outputPath);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+          throw notFound(`TTS synthesis audio not found: ${params.id}`);
+        }
+        throw error;
+      }
       reply.header("Cache-Control", "no-store");
       reply.type(job.mimeType || "audio/wav");
       return reply.send(bytes);

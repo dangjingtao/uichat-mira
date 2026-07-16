@@ -68,6 +68,7 @@ const chatPending = {
         titleLine2: "with traceable evidence.",
         description:
           "Turn documents into knowledge you can query directly in real retrieval scenarios.",
+        emptyComposerTitle: "Start with chat",
       },
       assistantTyping: "Assistant is typing a reply",
       roles: {
@@ -143,6 +144,20 @@ const chatPending = {
         previousBranch: "Previous branch",
         nextBranch: "Next branch",
         branchPosition: "{{current}} / {{total}}",
+      },
+      media: {
+        imageGenerating: "Generating image",
+        imageFailed: "Image generation failed",
+        generatedImage: "Generated image",
+        previewImage: "Preview generated image",
+        generateImage: "Generate image",
+        retry: "Retry",
+        loadFailed: "Failed to load image",
+        audioLoadFailed: "Failed to load audio",
+        audioPlayFailed: "Failed to play audio",
+        audioFailed: "TTS generation failed",
+        unknownError: "Unknown error",
+        playAudio: "Play assistant audio",
       },
       status: {
         incomplete: "The reply did not finish completely",

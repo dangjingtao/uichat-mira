@@ -36,12 +36,16 @@ export const resolveHarnessToolCandidatesForTurn = async (
     allowedExternalToolIds: input.allowedExternalToolIds,
     sandboxProfiles: input.sandboxProfiles,
   });
-  const visibleDefinitions = exposureDecision.exposedDefinitions;
+  const browserIntent = source === "agent_intent" && /https?:\/\/|browser|webpage|website|网页|页面|网站|浏览器|打开网页|访问网页|页面标题/i.test(input.query);
+  const browserDefinitions = exposureDecision.exposedDefinitions.filter((definition) => definition.domain === "browser_action" && definition.tags.includes("computer-use"));
+  const visibleDefinitions = browserIntent && browserDefinitions.length > 0 ? browserDefinitions : exposureDecision.exposedDefinitions;
   const profiles = resolveHarnessCapabilityProfiles(visibleDefinitions);
   const initialToolExposure: HarnessToolExposure = {
     exposedToolIds: visibleDefinitions.map((definition) => definition.id),
     exposedDefinitions: visibleDefinitions,
-    reason: exposureDecision.reason,
+    reason: browserIntent && browserDefinitions.length > 0
+      ? [...exposureDecision.reason, "Browser intent is isolated to the Computer Use browser tool set."]
+      : exposureDecision.reason,
     blockedCapabilityIds: exposureDecision.blockedCapabilityIds,
     blockedCapabilityReasons: exposureDecision.blockedCapabilityReasons,
   };

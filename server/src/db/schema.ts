@@ -1,6 +1,7 @@
 import {
   index,
   integer,
+  blob,
   primaryKey,
   real,
   sqliteTable,
@@ -551,10 +552,131 @@ export const ttsSynthesisJobs = sqliteTable(
 export type TtsSynthesisJobRow = typeof ttsSynthesisJobs.$inferSelect;
 export type NewTtsSynthesisJobRow = typeof ttsSynthesisJobs.$inferInsert;
 
+export const ttsRefAudios = sqliteTable(
+  "tts_ref_audios",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    originalName: text("original_name").notNull().default("ref-audio.wav"),
+    mimeType: text("mime_type").notNull().default("audio/wav"),
+    byteSize: integer("byte_size").notNull(),
+    sha256: text("sha256").notNull(),
+    audioBlob: blob("audio_blob", { mode: "buffer" }).notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    lastUsedAt: text("last_used_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    hashIdx: uniqueIndex("idx_tts_ref_audios_sha256").on(table.sha256),
+    lastUsedIdx: index("idx_tts_ref_audios_last_used_at").on(table.lastUsedAt),
+  }),
+);
+
+export type TtsRefAudioRow = typeof ttsRefAudios.$inferSelect;
+export type NewTtsRefAudioRow = typeof ttsRefAudios.$inferInsert;
+
+export const chatMedia = sqliteTable(
+  "chat_media",
+  {
+    id: text("id").primaryKey(),
+    threadId: text("thread_id").notNull(),
+    messageId: text("message_id").notNull(),
+    taskId: text("task_id").notNull(),
+    mediaType: text("media_type", { enum: ["audio", "image"] }).notNull(),
+    absolutePath: text("absolute_path").notNull(),
+    mimeType: text("mime_type").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    messageIdx: index("idx_chat_media_message_id").on(table.messageId),
+    threadIdx: index("idx_chat_media_thread_id").on(table.threadId),
+    taskIdx: index("idx_chat_media_task_id").on(table.taskId),
+    pathUniqueIdx: uniqueIndex("idx_chat_media_absolute_path").on(table.absolutePath),
+  }),
+);
+
+export type ChatMediaRow = typeof chatMedia.$inferSelect;
+export type NewChatMediaRow = typeof chatMedia.$inferInsert;
+
+export const imageGenerationJobs = sqliteTable("image_generation_jobs", {
+  id: text("id").primaryKey(),
+  jobJson: text("job_json").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export type ImageGenerationJobRow = typeof imageGenerationJobs.$inferSelect;
+export type NewImageGenerationJobRow = typeof imageGenerationJobs.$inferInsert;
+
 export type IntegrationCapabilityMicroApp =
   typeof integrationCapabilityMicroApps.$inferSelect;
 export type NewIntegrationCapabilityMicroApp =
   typeof integrationCapabilityMicroApps.$inferInsert;
+
+export const microAppCapabilityBindings = sqliteTable(
+  "micro_app_capability_bindings",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    microAppCode: text("micro_app_code").notNull(),
+    capabilityCode: text("capability_code").notNull(),
+    providerId: text("provider_id").notNull(),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    capabilityIdx: uniqueIndex("idx_micro_app_capability_bindings_capability").on(
+      table.microAppCode,
+      table.capabilityCode,
+    ),
+    providerIdx: index("idx_micro_app_capability_bindings_provider").on(
+      table.providerId,
+    ),
+  }),
+);
+
+export const computerUseTasks = sqliteTable(
+  "computer_use_tasks",
+  {
+    id: text("id").primaryKey(),
+    payloadJson: text("payload_json").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => ({ updatedAtIdx: index("idx_computer_use_tasks_updated_at").on(table.updatedAt) }),
+);
+
+export type ComputerUseTaskRow = typeof computerUseTasks.$inferSelect;
+export type NewComputerUseTaskRow = typeof computerUseTasks.$inferInsert;
+
+export const computerUseInvocations = sqliteTable(
+  "computer_use_invocations",
+  {
+    id: text("id").primaryKey(),
+    payloadJson: text("payload_json").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    traceJson: text("trace_json"),
+    eventsJson: text("events_json"),
+  },
+  (table) => ({ updatedAtIdx: index("idx_computer_use_invocations_updated_at").on(table.updatedAt) }),
+);
+
+export type ComputerUseInvocationRow = typeof computerUseInvocations.$inferSelect;
+
+export type MicroAppCapabilityBindingRow =
+  typeof microAppCapabilityBindings.$inferSelect;
+export type NewMicroAppCapabilityBindingRow =
+  typeof microAppCapabilityBindings.$inferInsert;
 
 export const mailAccounts = sqliteTable(
   "mail_accounts",
@@ -1068,6 +1190,12 @@ export const threads = sqliteTable(
       onDelete: "set null",
     }),
     agentEnabled: integer("agent_enabled", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    ttsEnabled: integer("tts_enabled", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    imageEnabled: integer("image_enabled", { mode: "boolean" })
       .notNull()
       .default(false),
     contextSummary: text("context_summary"),

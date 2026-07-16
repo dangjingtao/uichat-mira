@@ -7,11 +7,19 @@ import { mcpBadRequest, mcpInternalError } from "../core/errors.js";
 import { webSearchSettingsRepository } from "@/db/repositories/web-search-settings.repository.js";
 import { createRouteError } from "@/utils/route-errors.js";
 import { ErrorCodes } from "@/utils/response.js";
+import { hasNewsIntent, searchNewsHubCache } from "@/microapps/news-hub/news-search.adapter.js";
 
 export interface SearchResult {
   title: string;
   link: string;
   snippet: string;
+  metadata?: {
+    provider: "local_news_hub";
+    sourceKey: string;
+    sourceName: string;
+    publishedAt: string | null;
+    tags: string[];
+  };
 }
 
 type NormalizedWebSearchResult = {
@@ -374,7 +382,10 @@ export const webSearchTool: McpToolImplementation = {
       required: ["query", "provider", "capabilityId", "results"],
       properties: {
         query: { type: "string" },
-        provider: { type: "string", enum: ["tavily", "searxng"] },
+        provider: {
+          type: "string",
+          enum: ["tavily", "searxng", "local_news_hub"],
+        },
         capabilityId: { type: "string" },
         results: {
           type: "array",
@@ -385,6 +396,7 @@ export const webSearchTool: McpToolImplementation = {
               title: { type: "string" },
               link: { type: "string" },
               snippet: { type: "string" },
+              metadata: { type: "object" },
             },
           },
         },
@@ -399,6 +411,52 @@ export const webSearchTool: McpToolImplementation = {
   execute: async (context) => {
     const query = normalizeQuery(context.args.query);
     const maxResults = normalizeMaxResults(resolveDefaultMaxResults(context.args));
+
+    if (hasNewsIntent(query)) {
+      const newsSpan = context.trace.startSpan({
+        name: "Read local news cache",
+        kind: "result_normalization",
+      });
+      const news = await searchNewsHubCache({ query, maxResults });
+      newsSpan.end({
+        metadata: {
+          keywordCandidates: news.diagnostics.keyword,
+          vectorCandidates: news.diagnostics.vector,
+          fusedCandidates: news.diagnostics.fused,
+          rerankedCandidates: news.diagnostics.reranked,
+          embedding: news.diagnostics.embedding,
+          rerank: news.diagnostics.rerank,
+        },
+      });
+
+      if (news.results.length > 0) {
+        context.pushEvent({
+          type: "invocation:progress",
+          message: `Read ${news.results.length} cached news results`,
+        });
+        context.addArtifact({
+          kind: "search-results",
+          title: `Cached news results for ${query}`,
+          data: news.results,
+          metadata: {
+            query,
+            provider: "local_news_hub",
+            capabilityId: "local-news-hub",
+            resultCount: news.results.length,
+            retrieval: news.diagnostics,
+          },
+        });
+        return {
+          result: {
+            query,
+            provider: "local_news_hub" as const,
+            capabilityId: "local-news-hub",
+            results: news.results,
+          },
+        };
+      }
+    }
+
     const resolvedApiKey = resolveTavilyApiKey(context.environment);
     const resolvedBaseUrl = resolveSearxngBaseUrl(context.environment);
     const harnessEnvironment = assertWebSearchEnvironment(context.environment);

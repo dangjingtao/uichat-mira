@@ -35,7 +35,7 @@ export function Switch({
       disabled={disabled}
       onClick={onChange}
       className={`relative inline-flex items-center rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary disabled:cursor-not-allowed disabled:opacity-50 ${
-        checked ? "bg-primary" : "bg-surface-tertiary"
+        checked ? "bg-primary" : "bg-border"
       } ${sizeClasses.track}`}
     >
       <span

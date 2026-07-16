@@ -13,6 +13,7 @@ Related:
   - ../integrations/third-party-integration-consumption-model.md
   - ../integrations/wecom-microapp-interface-design.md
   - image-generation-microapp-poc.md
+  - media-capability-packaging-design.md
   - computer-use-microapp-poc.md
   - computer-use-feature-design.md
   - tts-studio-runtime-notes.md
@@ -263,6 +264,7 @@ Platform
 
 ## 当前活跃文档
 
+- `media-capability-packaging-design.md`
 - `image-generation-microapp-poc.md`
 - `computer-use-microapp-poc.md`
 - `gpt-sovits-microapp-poc.md`

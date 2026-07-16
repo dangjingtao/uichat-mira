@@ -55,7 +55,7 @@ describe("Switch", () => {
 
   it("applies checked background color", () => {
     const { rerender } = render(<Switch checked={false} onChange={() => {}} />);
-    expect(screen.getByRole("switch")).toHaveClass("bg-surface-tertiary");
+    expect(screen.getByRole("switch")).toHaveClass("bg-border");
 
     rerender(<Switch checked onChange={() => {}} />);
     expect(screen.getByRole("switch")).toHaveClass("bg-primary");

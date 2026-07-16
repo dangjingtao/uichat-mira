@@ -3,7 +3,7 @@ import type { NormalizedChatMessage } from "@/services/provider-proxy.message-pr
 import type { RetrievedChunk } from "@/services/rag-nodes";
 import type { ContextBudgetAudit } from "@/services/context-budget/index";
 import type { SandboxOutputEncoding } from "@/harness/sandbox/contract";
-import type { McpInvocationFailureCode, McpToolDefinition } from "@/mcp/core/definitions";
+import type { McpInvocationFailureCode, McpToolDefinition, McpToolEvidence } from "@/mcp/core/definitions";
 import type {
   AgentIntentEmbeddingConfig,
   ToolIntentResult,
@@ -114,6 +114,7 @@ export interface AgentToolExecutionResult {
   failureCode?: McpInvocationFailureCode;
   recoveryAttemptCount?: number;
   result?: unknown;
+  evidence?: McpToolEvidence;
   errorMessage?: string;
   approval?: AgentApprovalRequest;
   summary?: AgentEvidenceSummary;

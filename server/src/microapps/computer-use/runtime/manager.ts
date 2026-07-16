@@ -7,7 +7,9 @@ import type {
   BrowserRuntimeManagerOptions,
   BrowserRuntimeRecord,
   BrowserRuntimeStatus,
+  ManagedChromiumConfig,
 } from "./types.js";
+import { DEFAULT_MANAGED_CHROMIUM_CONFIG } from "./types.js";
 
 const METADATA_FILE = "managed-chromium.json";
 
@@ -32,6 +34,20 @@ const sha256File = (filePath: string) => {
   const hash = crypto.createHash("sha256");
   hash.update(fs.readFileSync(filePath));
   return hash.digest("hex");
+};
+
+const isWithin = (rootPath: string, targetPath: string) => {
+  const root = path.resolve(rootPath);
+  const target = path.resolve(targetPath);
+  return target === root || target.startsWith(`${root}${path.sep}`);
+};
+
+const isRegularFile = (filePath: string) => {
+  try {
+    return fs.statSync(filePath).isFile();
+  } catch {
+    return false;
+  }
 };
 
 const isSafeRelativePath = (relativePath: string) => {
@@ -115,6 +131,7 @@ export class ComputerUseRuntimeManager {
   private readonly metadataPath: string;
   private readonly fetchImpl: typeof fetch;
   private readonly now: () => Date;
+  private readonly managedRuntimeConfig: ManagedChromiumConfig;
   private readonly systemBrowserPaths: BrowserRuntimeManagerOptions["systemBrowserPaths"];
   private readonly archiveEntriesReader: NonNullable<
     BrowserRuntimeManagerOptions["archiveEntriesReader"]
@@ -127,6 +144,8 @@ export class ComputerUseRuntimeManager {
     this.metadataPath = path.join(this.managedRoot, METADATA_FILE);
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.now = options.now ?? (() => new Date());
+    this.managedRuntimeConfig =
+      options.managedRuntimeConfig ?? DEFAULT_MANAGED_CHROMIUM_CONFIG;
     this.systemBrowserPaths =
       options.systemBrowserPaths ?? createDefaultSystemBrowserPaths();
     this.archiveEntriesReader =
@@ -139,11 +158,27 @@ export class ComputerUseRuntimeManager {
       return null;
     }
 
-    const parsed = JSON.parse(
-      fs.readFileSync(this.metadataPath, "utf8"),
-    ) as BrowserRuntimeRecord;
+    let parsed: BrowserRuntimeRecord;
+    try {
+      parsed = JSON.parse(fs.readFileSync(this.metadataPath, "utf8")) as BrowserRuntimeRecord;
+    } catch {
+      return null;
+    }
 
-    if (!parsed.executablePath || !fs.existsSync(parsed.executablePath)) {
+    const expectedRoot = path.join(
+      this.managedRoot,
+      `chromium-${this.managedRuntimeConfig.version}`,
+    );
+    if (
+      parsed.source !== "managed" ||
+      parsed.channel !== "chromium" ||
+      parsed.version !== this.managedRuntimeConfig.version ||
+      parsed.archiveSha256?.toLowerCase() !==
+        this.managedRuntimeConfig.archiveSha256.toLowerCase() ||
+      !parsed.executablePath ||
+      !isWithin(expectedRoot, parsed.executablePath) ||
+      !isRegularFile(parsed.executablePath)
+    ) {
       return null;
     }
 
@@ -189,7 +224,7 @@ export class ComputerUseRuntimeManager {
     }
 
     return {
-      status: "download_required",
+      status: "not_installed",
       strategy: "download",
       inspectedCandidates,
       reason:
@@ -198,78 +233,106 @@ export class ComputerUseRuntimeManager {
   }
 
   async installManagedRuntime(
-    request: BrowserRuntimeDownloadRequest,
+    request?: BrowserRuntimeDownloadRequest,
   ): Promise<BrowserRuntimeRecord> {
-    const archiveUrl = new URL(request.archiveUrl);
-    if (!["https:", "http:"].includes(archiveUrl.protocol)) {
-      throw new Error("Browser runtime download only supports http/https URLs.");
+    const config = this.managedRuntimeConfig;
+    if (
+      request &&
+      (request.version !== config.version ||
+        request.archiveUrl !== config.archiveUrl ||
+        request.executableRelativePath !== config.executableRelativePath ||
+        (request.expectedSha256 ?? config.archiveSha256).toLowerCase() !==
+          config.archiveSha256.toLowerCase())
+    ) {
+      throw new Error(
+        "Browser runtime install request does not match the fixed managed Chromium configuration.",
+      );
+    }
+    const archiveUrl = new URL(config.archiveUrl);
+    if (archiveUrl.protocol !== "https:") {
+      throw new Error("Browser runtime download only supports HTTPS URLs.");
     }
 
-    if (!isSafeRelativePath(request.executableRelativePath)) {
+    if (!isSafeRelativePath(config.executableRelativePath)) {
       throw new Error("Browser runtime executableRelativePath must stay inside the managed runtime directory.");
+    }
+
+    const existing = this.inspectManagedRuntime();
+    if (existing) {
+      return existing;
     }
 
     const archiveFilePath = path.join(
       this.downloadsRoot,
-      `chromium-${request.version}.zip`,
+      `chromium-${config.version}-${crypto.randomUUID()}.zip`,
     );
 
-    const response = await this.fetchImpl(request.archiveUrl);
-    if (!response.ok) {
-      throw new Error(`Browser runtime download failed with status ${response.status}.`);
-    }
-
-    const buffer = Buffer.from(await response.arrayBuffer());
-    fs.writeFileSync(archiveFilePath, buffer);
-
-    const actualSha256 = sha256File(archiveFilePath);
-    if (
-      request.expectedSha256 &&
-      actualSha256.toLowerCase() !== request.expectedSha256.toLowerCase()
-    ) {
-      throw new Error("Browser runtime archive SHA-256 mismatch.");
-    }
-
-    const installRoot = ensureDir(
-      path.join(this.managedRoot, `chromium-${request.version}`),
-    );
-    for (const entry of this.archiveEntriesReader(archiveFilePath)) {
-      const normalizedEntryName = entry.entryName.replace(/\\/g, "/");
-      if (
-        normalizedEntryName.startsWith("/") ||
-        /^[a-zA-Z]:\//.test(normalizedEntryName)
-      ) {
-        throw new Error("Browser runtime archive contains an absolute entry path.");
+    const installRoot = path.join(this.managedRoot, `chromium-${config.version}`);
+    const partialRoot = `${installRoot}.partial-${crypto.randomUUID()}`;
+    try {
+      let response: Response;
+      try {
+        response = await this.fetchImpl(config.archiveUrl);
+      } catch (error) {
+        throw new Error(
+          `Browser runtime download failed: ${error instanceof Error ? error.message : String(error)}.`,
+        );
+      }
+      if (!response.ok) {
+        throw new Error(`Browser runtime download failed with status ${response.status}.`);
       }
 
-      const targetPath = resolveInsideRoot(installRoot, normalizedEntryName);
-      if (entry.isDirectory) {
-        ensureDir(targetPath);
-        continue;
+      fs.writeFileSync(archiveFilePath, Buffer.from(await response.arrayBuffer()));
+      const actualSha256 = sha256File(archiveFilePath);
+      if (actualSha256.toLowerCase() !== config.archiveSha256.toLowerCase()) {
+        throw new Error(
+          `Browser runtime archive SHA-256 mismatch: expected ${config.archiveSha256}, got ${actualSha256}.`,
+        );
       }
 
-      ensureDir(path.dirname(targetPath));
-      fs.writeFileSync(targetPath, entry.getData());
+      ensureDir(partialRoot);
+      for (const entry of this.archiveEntriesReader(archiveFilePath)) {
+        const normalizedEntryName = entry.entryName.replace(/\\/g, "/");
+        if (
+          normalizedEntryName.startsWith("/") ||
+          /^[a-zA-Z]:\//.test(normalizedEntryName)
+        ) {
+          throw new Error("Browser runtime archive contains an absolute entry path.");
+        }
+
+        const targetPath = resolveInsideRoot(partialRoot, normalizedEntryName);
+        if (entry.isDirectory) {
+          ensureDir(targetPath);
+          continue;
+        }
+        ensureDir(path.dirname(targetPath));
+        fs.writeFileSync(targetPath, entry.getData());
+      }
+
+      const executablePath = path.join(partialRoot, config.executableRelativePath);
+      if (!isWithin(partialRoot, executablePath) || !isRegularFile(executablePath)) {
+        throw new Error("Browser runtime executable was not found after extraction.");
+      }
+
+      fs.rmSync(installRoot, { recursive: true, force: true });
+      fs.renameSync(partialRoot, installRoot);
+      const record: BrowserRuntimeRecord = {
+        source: "managed",
+        channel: "chromium",
+        executablePath: path.join(installRoot, config.executableRelativePath),
+        version: config.version,
+        installedAt: this.now().toISOString(),
+        archiveSha256: actualSha256,
+      };
+      const metadataTempPath = `${this.metadataPath}.tmp-${crypto.randomUUID()}`;
+      fs.writeFileSync(metadataTempPath, JSON.stringify(record, null, 2));
+      fs.renameSync(metadataTempPath, this.metadataPath);
+      return record;
+    } catch (error) {
+      fs.rmSync(partialRoot, { recursive: true, force: true });
+      throw error;
+    } finally {
+      fs.rmSync(archiveFilePath, { force: true });
     }
-
-    const executablePath = path.join(
-      installRoot,
-      request.executableRelativePath,
-    );
-    if (!fs.existsSync(executablePath)) {
-      throw new Error("Browser runtime executable was not found after extraction.");
-    }
-
-    const record: BrowserRuntimeRecord = {
-      source: "managed",
-      channel: "chromium",
-      executablePath,
-      version: request.version,
-      installedAt: this.now().toISOString(),
-      archiveSha256: actualSha256,
-    };
-
-    fs.writeFileSync(this.metadataPath, JSON.stringify(record, null, 2));
-    return record;
   }
 }

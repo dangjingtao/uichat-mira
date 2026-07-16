@@ -20,7 +20,7 @@ export default function RoleLlmProfileCard({
     <button
       type="button"
       onClick={onClick}
-      className="rounded-ui-panel border border-border bg-surface-primary p-3 text-left transition-colors hover:bg-surface-secondary"
+    className="min-w-0 rounded-ui-panel border border-border bg-surface-primary p-3 text-left transition-colors hover:bg-surface-secondary"
     >
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 flex flex-1 items-center gap-3">

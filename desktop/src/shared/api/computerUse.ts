@@ -1,66 +1,23 @@
 import { get, post } from "@/shared/lib/request";
+import { getApiBaseUrl } from "@/shared/platform/desktopRuntime";
 
-const COMPUTER_USE_RUNTIME_ROUTE = "/microapps/computer-use/runtime";
-const COMPUTER_USE_RUNTIME_INSTALL_ROUTE =
-  "/microapps/computer-use/runtime/install";
-const COMPUTER_USE_TASKS_ROUTE = "/microapps/computer-use/tasks";
+const BASE = "/microapps/computer-use";
 
-export type ComputerUseTaskStatus =
-  | "queued"
-  | "planning"
-  | "awaiting_approval"
-  | "running"
-  | "blocked"
-  | "succeeded"
-  | "failed"
-  | "cancelled";
-
-export type ComputerUseRuntimeStatus =
-  | "ready"
-  | "not_installed"
-  | "downloading"
-  | "broken";
-
-export type ComputerUsePlanStepStatus =
-  | "pending"
-  | "running"
-  | "awaiting_approval"
-  | "completed"
-  | "failed"
-  | "cancelled";
-
-export type ComputerUseApprovalStatus =
-  | "pending"
-  | "approved"
-  | "rejected"
-  | "expired";
-
-export type ComputerUseArtifactKind =
-  | "screenshot"
-  | "dom_snapshot"
-  | "log"
-  | "json"
-  | "download";
-
-export type ComputerUseEvidenceEntryKind =
-  | "status"
-  | "action"
-  | "observation"
-  | "approval"
-  | "error";
-
-export type ComputerUseResultStatus =
-  | "blocked"
-  | "succeeded"
-  | "failed"
-  | "cancelled";
-
-export interface ComputerUseRuntimeInstallRequest {
-  version: string;
-  archiveUrl: string;
-  executableRelativePath: string;
-  expectedSha256?: string;
+export function resolveComputerUseArtifactUrl(uri: string): string {
+  if (/^(https?:|data:|blob:)/.test(uri)) return uri;
+  return `${getApiBaseUrl()}${uri.startsWith("/") ? uri : `/${uri}`}`;
 }
+
+export type ComputerUseRuntimeStatus = "ready" | "not_installed" | "downloading" | "broken";
+export type ComputerUseModelStatus = "connected" | "unavailable";
+export type ComputerUseSessionStatus = "empty" | "ready" | "failed" | "stopped";
+export type ComputerUseInvocationStatus =
+  | "idle"
+  | "running"
+  | "awaiting_approval"
+  | "succeeded"
+  | "failed"
+  | "cancelled";
 
 export interface ComputerUseRuntimeState {
   status: ComputerUseRuntimeStatus;
@@ -68,178 +25,125 @@ export interface ComputerUseRuntimeState {
   version?: string;
   message?: string;
   checkedAt: string;
-  details?: Record<string, unknown>;
 }
 
-export interface ComputerUsePlanStep {
-  id: string;
-  title: string;
-  description: string;
-  status: ComputerUsePlanStepStatus;
-  requiresApproval: boolean;
-  approvalReason?: string;
-  riskSummary?: string;
-  startedAt?: string;
-  completedAt?: string;
-  meta?: Record<string, unknown>;
-}
-
-export interface ComputerUsePlan {
-  steps: ComputerUsePlanStep[];
-  summary: string;
-  riskSummary?: string;
-  createdAt: string;
-  updatedAt: string;
-  version: number;
-}
-
-export interface ComputerUseApprovalRequest {
-  id: string;
-  stepId: string;
-  status: ComputerUseApprovalStatus;
-  title: string;
-  reason: string;
-  requestedAt: string;
-  resolvedAt?: string;
-  expiresAt?: string;
-  requestedBy?: string;
-  resolvedBy?: string;
-  resolutionNote?: string;
-  meta?: Record<string, unknown>;
-}
-
-export interface ComputerUseArtifactSummary {
-  id: string;
-  kind: ComputerUseArtifactKind;
-  label: string;
-  mimeType?: string;
-  filePath?: string;
-  url?: string;
-  createdAt: string;
-  byteSize?: number;
-  meta?: Record<string, unknown>;
-}
-
-export interface ComputerUseEvidenceEntry {
-  id: string;
-  kind: ComputerUseEvidenceEntryKind;
+export interface ComputerUseModelState {
+  status: ComputerUseModelStatus;
+  provider?: string;
   message: string;
-  createdAt: string;
-  stepId?: string;
-  artifactIds?: string[];
-  meta?: Record<string, unknown>;
+  checkedAt: string;
 }
 
-export interface ComputerUseEvidence {
-  entries: ComputerUseEvidenceEntry[];
-  artifacts: ComputerUseArtifactSummary[];
-  lastUpdatedAt?: string;
+export interface ComputerUseDebuggerStatus {
+  runtime: ComputerUseRuntimeState;
+  model: ComputerUseModelState;
 }
 
-export interface ComputerUseTaskError {
-  code: string;
-  message: string;
-  retryable?: boolean;
-  details?: Record<string, unknown>;
-}
-
-export interface ComputerUseResult {
-  status: ComputerUseResultStatus;
-  summary: string;
-  completedAt: string;
-  finalUrl?: string;
-  outputText?: string;
-  error?: ComputerUseTaskError;
-  meta?: Record<string, unknown>;
-}
-
-export interface ComputerUseTask {
+export interface ComputerUseTaskRun {
   taskId: string;
+  status: string;
+  result?: Record<string, unknown>;
+  pendingApproval?: Record<string, unknown>;
+  evidence?: { entries: Array<Record<string, unknown>>; artifacts: Array<Record<string, unknown>> };
+  error?: { code?: string; message?: string };
+}
+
+export interface ComputerUseSessionConfig {
+  runtime: "managed" | "system";
+  url: string;
+  allowedDomains: string[];
+  limits: { timeoutMs: number; maxSnapshotChars: number };
+  approvalPolicy: "always" | "write_actions" | "never";
+}
+
+export interface ComputerUseBrowserState {
+  url?: string;
+  title?: string;
+  snapshot?: string;
+  visibleText?: string;
+  screenshotArtifact?: string;
+  snapshotHash?: string;
+}
+
+export interface ComputerUseInvocation {
+  invocationId: string;
+  tool: "browser_observe" | "browser_act" | "browser_assert";
+  args: Record<string, unknown>;
+  status: ComputerUseInvocationStatus;
+  error?: { code: string; message: string };
+  artifactIds?: string[];
+  createdAt: string;
+}
+
+export interface ComputerUseSession {
+  sessionId: string;
+  status: ComputerUseSessionStatus;
+  config: ComputerUseSessionConfig;
+  browser: ComputerUseBrowserState;
+  invocations: ComputerUseInvocation[];
+  approval?: { status: "pending" | "approved" | "rejected" | "expired"; reason?: string; approvalId?: string; invocationId?: string };
+  evidence?: { entries: Array<Record<string, unknown>>; artifacts: Array<Record<string, unknown>> };
+  result?: Record<string, unknown>;
+  error?: { code: string; message: string };
+}
+
+export interface ComputerUseActionInput {
+  pageUrl: string;
+  snapshotHash: string;
+  action: { kind: "navigate"; url: string } | { kind: "click"; ref: string } | { kind: "type"; ref: string; text: string } | { kind: "select"; ref: string; value: string } | { kind: "press"; ref: string; key: string } | { kind: "scroll"; x?: number; y?: number } | { kind: "wait"; timeoutMs?: number };
+}
+
+export interface ComputerUseAssertionInput {
+  assertion: { kind: "title" | "url" | "text"; expected: string } | { kind: "visible"; ref: string } | { kind: "value"; ref: string; expected: string };
+}
+
+export async function getComputerUseDebuggerStatus(): Promise<ComputerUseDebuggerStatus> {
+  return get<ComputerUseDebuggerStatus>(`${BASE}/debugger/status`);
+}
+
+export async function runComputerUseTask(input: {
   goal: string;
   siteScope: string[];
-  requestedBy?: string;
-  status: ComputerUseTaskStatus;
-  runtime: ComputerUseRuntimeState;
-  plan?: ComputerUsePlan;
-  pendingApproval?: ComputerUseApprovalRequest;
-  approvals: ComputerUseApprovalRequest[];
-  evidence: ComputerUseEvidence;
-  result?: ComputerUseResult;
-  currentStepId?: string;
-  meta?: Record<string, unknown>;
-  createdAt: string;
-  updatedAt: string;
-  startedAt?: string;
-  completedAt?: string;
+}): Promise<ComputerUseTaskRun> {
+  return post<ComputerUseTaskRun>(`${BASE}/tasks`, { ...input, autoStart: true });
 }
 
-export interface CreateComputerUseTaskRequest {
-  goal: string;
-  siteScope?: string[];
-  requestedBy?: string;
-  meta?: Record<string, unknown>;
-  autoStart?: boolean;
+export async function createComputerUseSession(
+  config: ComputerUseSessionConfig,
+): Promise<ComputerUseSession> {
+  return post<ComputerUseSession>(`${BASE}/sessions`, config);
 }
 
-export interface ResolveComputerUseApprovalRequest {
-  approvalId: string;
-  decision: "approved" | "rejected";
-  resolvedBy?: string;
-  resolutionNote?: string;
+export async function getComputerUseSession(sessionId: string): Promise<ComputerUseSession> {
+  return get<ComputerUseSession>(`${BASE}/sessions/${encodeURIComponent(sessionId)}`);
 }
 
-export interface CancelComputerUseTaskRequest {
-  reason?: string;
+export async function observeComputerUseSession(sessionId: string): Promise<ComputerUseSession> {
+  return post<ComputerUseSession>(`${BASE}/sessions/${encodeURIComponent(sessionId)}/observe`);
 }
 
-export async function getComputerUseRuntime(): Promise<ComputerUseRuntimeState> {
-  return get<ComputerUseRuntimeState>(COMPUTER_USE_RUNTIME_ROUTE);
+export async function executeComputerUseAction(
+  sessionId: string,
+  input: ComputerUseActionInput,
+): Promise<ComputerUseSession> {
+  return post<ComputerUseSession>(`${BASE}/sessions/${encodeURIComponent(sessionId)}/action`, input);
 }
 
-export async function installComputerUseRuntime(
-  payload: ComputerUseRuntimeInstallRequest,
-): Promise<ComputerUseRuntimeState> {
-  return post<ComputerUseRuntimeState>(COMPUTER_USE_RUNTIME_INSTALL_ROUTE, payload);
+export async function assertComputerUseSession(
+  sessionId: string,
+  input: ComputerUseAssertionInput,
+): Promise<ComputerUseSession> {
+  return post<ComputerUseSession>(`${BASE}/sessions/${encodeURIComponent(sessionId)}/assert`, input);
 }
 
-export async function createComputerUseTask(
-  payload: CreateComputerUseTaskRequest,
-): Promise<ComputerUseTask> {
-  return post<ComputerUseTask>(COMPUTER_USE_TASKS_ROUTE, payload);
+export async function stopComputerUseSession(sessionId: string): Promise<ComputerUseSession> {
+  return post<ComputerUseSession>(`${BASE}/sessions/${encodeURIComponent(sessionId)}/stop`);
 }
 
-export async function getComputerUseTask(
-  taskId: string,
-): Promise<ComputerUseTask> {
-  return get<ComputerUseTask>(
-    `${COMPUTER_USE_TASKS_ROUTE}/${encodeURIComponent(taskId)}`,
-  );
+export async function approveComputerUseSession(sessionId: string, invocationId: string): Promise<ComputerUseSession> {
+  return post<ComputerUseSession>(`${BASE}/sessions/${encodeURIComponent(sessionId)}/approval`, { invocationId });
 }
 
-export async function startComputerUseTask(
-  taskId: string,
-): Promise<ComputerUseTask> {
-  return post<ComputerUseTask>(
-    `${COMPUTER_USE_TASKS_ROUTE}/${encodeURIComponent(taskId)}/start`,
-  );
-}
-
-export async function resolveComputerUseApproval(
-  taskId: string,
-  payload: ResolveComputerUseApprovalRequest,
-): Promise<ComputerUseTask> {
-  return post<ComputerUseTask>(
-    `${COMPUTER_USE_TASKS_ROUTE}/${encodeURIComponent(taskId)}/approval`,
-    payload,
-  );
-}
-
-export async function cancelComputerUseTask(
-  taskId: string,
-  payload?: CancelComputerUseTaskRequest,
-): Promise<ComputerUseTask> {
-  return post<ComputerUseTask>(
-    `${COMPUTER_USE_TASKS_ROUTE}/${encodeURIComponent(taskId)}/cancel`,
-    payload,
-  );
+export async function rejectComputerUseSession(sessionId: string, invocationId: string, reason?: string): Promise<ComputerUseSession> {
+  return post<ComputerUseSession>(`${BASE}/sessions/${encodeURIComponent(sessionId)}/approval/reject`, { invocationId, reason });
 }

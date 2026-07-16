@@ -416,6 +416,21 @@ describe("TtsStudioPage", () => {
     expect(apiMocks.getTtsAudioPreviewUrl).not.toHaveBeenCalled();
   });
 
+  it("shows GPT-SoVITS unavailable state without repeated error toasts", async () => {
+    apiMocks.getTtsOverview.mockResolvedValue({
+      providers,
+      recentJobs: [],
+    });
+    apiMocks.getGptSovitsCatalog.mockRejectedValue(new Error("GPT-SoVITS unavailable"));
+
+    render(<TtsStudioPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "GPT-SoVITS" }));
+
+    expect(await screen.findByText("GPT-SoVITS 未连接")).toBeInTheDocument();
+    expect(messageMocks.error).not.toHaveBeenCalledWith("GPT-SoVITS unavailable");
+  });
+
   it("keeps the player visible for failed GPT-SoVITS jobs after switching tabs", async () => {
     apiMocks.getTtsOverview.mockResolvedValue({
       providers,

@@ -27,10 +27,17 @@ import {
 } from "@/utils/retention.js";
 import { isAppError } from "@/utils/errors.js";
 import { ErrorCodes } from "@/utils/response.js";
-import { evaluateInvocationApproval } from "./permissions.js";
+import { evaluateInvocationApproval, hasExactApprovedInvocation } from "./permissions.js";
 import { createInvocationInputHash } from "@/agent/approval-fingerprint.js";
 import { validateInvocationArgs } from "./schema.js";
 import { redactExternalMcpValue } from "../external-redaction.js";
+import { computerUseRepository } from "@/db/repositories/computer-use/repository.js";
+
+const isComputerUseInvocation = (toolId: string) => toolId.startsWith("browser_");
+const persistComputerUseInvocation = (record: McpInvocationRecord) => {
+  if (!isComputerUseInvocation(record.toolId) || !process.env.DATABASE_URL) return;
+  try { computerUseRepository.persistInvocation(record); } catch { /* database initialization is completed by server startup */ }
+};
 
 const invocationMap = new Map<string, McpInvocationRecord>();
 const invocationEvents = new Map<string, McpStreamEvent[]>();
@@ -42,6 +49,9 @@ const appendEvent = (invocationId: string, event: McpStreamEvent) => {
   const events = invocationEvents.get(invocationId) ?? [];
   events.push(event);
   invocationEvents.set(invocationId, events);
+  if (isComputerUseInvocation(getInvocation(invocationId)?.toolId ?? "")) {
+    try { computerUseRepository.persistEvents(invocationId, events); } catch { /* optional before database startup */ }
+  }
 };
 
 const sweepInvocations = () => {
@@ -58,10 +68,44 @@ const sweepInvocations = () => {
 };
 
 export const getInvocation = (invocationId: string) =>
-  invocationMap.get(invocationId);
+  invocationMap.get(invocationId) ?? computerUseRepository.getInvocation(invocationId) ?? undefined;
 
 export const listInvocationEvents = (invocationId: string) =>
-  invocationEvents.get(invocationId) ?? [];
+  invocationEvents.get(invocationId) ?? computerUseRepository.getEvents(invocationId);
+
+export const resolveInvocationApproval = (input: {
+  invocationId: string;
+  decision: "approved" | "rejected";
+  resolutionInvocationId?: string;
+  reason?: string;
+}) => {
+  const record = getInvocation(input.invocationId);
+  if (!record) throw new Error(`Invocation was not found: ${input.invocationId}`);
+  if (record.status !== "awaiting_approval") throw new Error(`Invocation is not awaiting approval: ${input.invocationId}`);
+  const resolvedAt = new Date().toISOString();
+  record.status = input.decision === "approved" ? "completed" : "cancelled";
+  record.finishedAt = resolvedAt;
+  record.approval = {
+    ...(record.approval ?? { required: true, reason: "Approval required." }),
+    resolution: {
+      decision: input.decision,
+      resolutionInvocationId: input.resolutionInvocationId,
+      resolvedAt,
+      reason: input.reason,
+    },
+  };
+  if (input.decision === "approved") {
+    record.result = { approvalResolution: record.approval.resolution };
+    delete record.error;
+  } else {
+    record.error = { message: input.reason ?? "Invocation approval was rejected.", failureCode: "cancelled" };
+    record.result = { approvalResolution: record.approval.resolution };
+  }
+  invocationMap.set(record.id, record);
+  persistComputerUseInvocation(record);
+  appendEvent(record.id, { type: "invocation:finish", status: record.status, at: resolvedAt, invocationId: record.id });
+  return record;
+};
 
 export const clearInvocations = () => {
   invocationMap.clear();
@@ -140,6 +184,7 @@ export const executeInvocation = async (
     startedAt,
   };
   invocationMap.set(invocationId, record);
+  persistComputerUseInvocation(record);
 
   const emit = async (event: McpStreamEventInput) => {
     const safeEvent = tool.definition.source === "external"
@@ -181,10 +226,20 @@ export const executeInvocation = async (
       );
     }
 
+    const approvalGranted = hasExactApprovedInvocation({
+      toolId: input.toolId,
+      inputHash,
+      approvedInvocations: input.approvedInvocations,
+    });
+
     const response = (await tool.execute({
       invocationId,
       args,
       userId: input.userId,
+      approval: {
+        inputHash,
+        granted: approvalGranted,
+      },
       threadId: input.threadId,
       turnId: input.turnId,
       signal,
@@ -231,6 +286,12 @@ export const executeInvocation = async (
       },
     })) as McpToolExecutionResult;
 
+    if (response.evidence !== undefined) {
+      record.evidence = tool.definition.source === "external"
+        ? redactExternalMcpValue(response.evidence) as typeof response.evidence
+        : response.evidence;
+    }
+
     if (response.result !== undefined) {
       const resultSpan = startTraceSpan({
         invocationId,
@@ -263,6 +324,7 @@ export const executeInvocation = async (
       status: record.status,
     });
     sweepInvocations();
+    persistComputerUseInvocation(record);
 
     return record;
   } catch (error) {
@@ -297,6 +359,7 @@ export const executeInvocation = async (
         status: record.status,
       });
       sweepInvocations();
+      persistComputerUseInvocation(record);
 
       return record;
     }
@@ -331,6 +394,7 @@ export const executeInvocation = async (
       status: record.status,
     });
     sweepInvocations();
+    persistComputerUseInvocation(record);
 
     return record;
   }

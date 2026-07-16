@@ -41,6 +41,10 @@ import {
 } from "./roleChatState";
 import { isValidWorkspaceRootPath } from "../core/runtimePolicies";
 import ThreadContextSummaryModalContent from "./ThreadContextSummaryModalContent";
+import {
+  generateChatMessageImage,
+  synthesizeChatMessageTts,
+} from "../adapters/chatMediaOrchestration";
 
 const modelBadgeMeta = {
   llm: { label: "LLM", icon: EthernetPort },
@@ -93,6 +97,7 @@ export default function UChatThread() {
     setDraftRoleId,
     setDraftAgentEnabled,
     setDraftWorkspaceId,
+    setDraftImageEnabled,
   } = useChatThreadDraftState();
   const [isKnowledgeBasePickerOpen, setKnowledgeBasePickerOpen] = useState(false);
   const [isRolePickerOpen, setRolePickerOpen] = useState(false);
@@ -202,6 +207,15 @@ export default function UChatThread() {
       disposed = true;
     };
   }, [t]);
+
+  useEffect(() => {
+    const handleMediaUpdated = (event: Event) => {
+      const threadId = (event as CustomEvent<{ threadId?: string }>).detail?.threadId;
+      if (threadId && threadId === activeThreadId) void runtime.refreshThread(threadId);
+    };
+    window.addEventListener("uichat:chat-media-updated", handleMediaUpdated);
+    return () => window.removeEventListener("uichat:chat-media-updated", handleMediaUpdated);
+  }, [activeThreadId, runtime]);
 
   useEffect(() => {
     let disposed = false;
@@ -340,12 +354,14 @@ export default function UChatThread() {
         metadata: {
           ...((activeThread?.metadata ?? {}) as Record<string, unknown>),
           roleId,
+          ...(activeKnowledgeBaseId ? {} : { imageEnabled: true }),
         },
       });
       await runtime.refreshThread(activeThreadId);
       setDraftRoleId(null);
     } else {
       setDraftRoleId(roleId);
+      setDraftImageEnabled(true);
     }
     return true;
   };
@@ -372,6 +388,7 @@ export default function UChatThread() {
         setDraftRoleId(null);
       } else {
         setDraftRoleId(null);
+        setDraftImageEnabled(false);
       }
       return;
     }
@@ -500,6 +517,27 @@ export default function UChatThread() {
     }
   };
 
+  const handleRequestTts = async (assistantMessage: (typeof messages)[number]) => {
+    if (!activeThread) return;
+    await synthesizeChatMessageTts(activeThread, assistantMessage);
+    if (activeThreadId) await runtime.refreshThread(activeThreadId);
+  };
+
+  const handleRequestImage = async (assistantMessage: (typeof messages)[number]) => {
+    if (!activeThread || !activeRoleId || hasKnowledgeBase) return;
+    try {
+      await generateChatMessageImage(activeThread, assistantMessage);
+      if (activeThreadId) await runtime.refreshThread(activeThreadId);
+    } catch (error) {
+      if (activeThreadId) {
+        await runtime.refreshThread(activeThreadId).catch(() => undefined);
+      }
+      const detail = error instanceof Error ? error.message : t("chat.thread.media.unknownError");
+      message.error(`${t("chat.thread.media.imageFailed")}: ${detail}`);
+    }
+  };
+  const showImageAction = Boolean(activeRoleId && !hasKnowledgeBase && !isAgentEnabled);
+
   return (
     <>
       <UChatThreadView
@@ -552,6 +590,9 @@ export default function UChatThread() {
               : undefined,
         }}
         onToggleAgentEnabled={handleToggleAgentEnabled}
+        onRequestTts={handleRequestTts}
+        onRequestImage={showImageAction ? handleRequestImage : undefined}
+        showImageAction={showImageAction}
       />
 
       <SearchSelectModal<RoleSummary[]>

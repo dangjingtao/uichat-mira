@@ -59,6 +59,33 @@ const settingsPending = {
         refresh: "Refresh",
         save: "Save",
       },
+      capabilityBinding: {
+        capabilityNames: {
+          imageGeneration: "Text-to-image",
+          tts: "TTS",
+        },
+        provider: "Provider",
+        providers: {
+          apiProvider: "API provider",
+          comfyui: "ComfyUI",
+          piper: "Piper",
+          gptSovits: "GPT-SoVITS",
+        },
+        title: "Configure {{capability}} capability",
+        description: "Choose the provider for this micro app. Detailed settings remain in the existing workspace.",
+        unconfigured: "Not configured",
+        configureAriaLabel: "Configure {{capability}} capability",
+        selectProvider: "Select a provider",
+        cancel: "Cancel",
+        confirm: "Confirm",
+        saving: "Saving...",
+        saved: "Capability saved",
+        saveFailed: "Failed to save capability",
+      },
+      summaries: {
+        knowledgeQuery: "Accepts text from external entry points, runs the local knowledge retrieval flow, and returns a stable response.",
+        integration: "Enterprise integration micro app.",
+      },
       labels: {
         knowledgeQuery: "Knowledge Query",
         enabled: "Enabled",
@@ -79,12 +106,6 @@ const settingsPending = {
         newsHub: {
           title: "News Hub",
           description: "Bring no-key tech news sources into one local news table and expose a direct entry for browsing, searching, and further use.",
-          hint: "The first pass starts with Hacker News Front Page, and more sources will continue to expand through the same entry.",
-          badges: {
-            debug: "Local news base",
-            focus: "Tech aggregation",
-            runtime: "No-key sources",
-          },
           actions: {
             open: "Open news hub",
           },
@@ -92,12 +113,6 @@ const settingsPending = {
         mailCenter: {
           title: "Mail Center",
           description: "The mail center connects directly to real SMTP and IMAP so account setup, send capability, and inbox sync stay in one place.",
-          hint: "Connect the mailbox first, then continue with send tests and inbox sync, with future mail assets staying in the same entry.",
-          badges: {
-            debug: "Live mailbox",
-            focus: "Multi-account mail center",
-            runtime: "SMTP + IMAP",
-          },
           actions: {
             open: "Open mail center",
           },
@@ -105,52 +120,34 @@ const settingsPending = {
         computerUse: {
           title: "Computer Use Studio",
           description: "A browser task workspace for reviewing plans, approvals, execution progress, and evidence playback in one place.",
-          hint: "Use this entry to manage browser tasks continuously instead of switching into enterprise integration setup flows.",
-          badges: {
-            debug: "Browser workspace",
-            focus: "Browser task workspace",
-            runtime: "Plan + Approval + Evidence",
-          },
           actions: {
             open: "Open Studio",
           },
         },
         imageGeneration: {
-          title: "Image Generation Studio",
-          description: "An image generation workspace for prompt creation, workflow submission, and ComfyUI Local outputs in one place.",
-          hint: "Future parameters, results, and generated assets for image creation will continue to live in this same entry.",
-          badges: {
-            debug: "Image workspace",
-            focus: "Prompt + Workflow",
-            runtime: "Includes ComfyUI Local",
-          },
+          title: "Text to Image",
+          description: "Turn text into images with API providers or ComfyUI.",
           actions: {
-            open: "Open Studio",
+            open: "Debug",
           },
         },
         ttsStudio: {
-          title: "TTS Studio",
-          description: "A speech synthesis workspace for Windows built-in voices and local Piper synthesis in one debug loop.",
-          hint: "Provider setup, synthesis requests, audio artifacts, and playback now stay inside the same entry.",
-          badges: {
-            debug: "Speech workspace",
-            focus: "Windows Voice + Piper",
-            runtime: "Local audio loop",
+          page: {
+            miniTitle: "Micro Apps",
+            title: "Speech Synthesis",
+            description: "Turn text into speech.",
+            refresh: "Refresh",
           },
+          title: "Speech Synthesis",
+          description: "Turn text into speech with Piper, GPT-SoVITS, or API providers.",
           actions: {
-            open: "Open Studio",
+            open: "Debug",
           },
         },
         evolvingKnowledge: {
           title: "Evolving Knowledge",
           description:
             "A multimedia knowledge capture and AI self-organization system. Capture web pages, images, audio, and video; AI automatically rewrites, tags, discovers concept connections, and cross-time insights.",
-          hint: "This is your second brain. It is not traditional RAG, but lets AI actively organize and evolve insights.",
-          badges: {
-            debug: "Knowledge capture",
-            focus: "AI self-organization",
-            runtime: "Insight engine",
-          },
           actions: {
             open: "Open evolving knowledge",
           },
@@ -158,12 +155,6 @@ const settingsPending = {
         codeGraph: {
           title: "CodeGraph Studio",
           description: "A CodeGraph workspace for blocked-safe runtime status, config tuning, and smoke-debug results.",
-          hint: "It does not expose CodeGraph to Planner by default and does not relax the real provider external-index risk gate.",
-          badges: {
-            debug: "CodeGraph workspace",
-            focus: "Status + Config + Debug",
-            runtime: "Blocked-safe",
-          },
           actions: {
             open: "Open Studio",
           },
@@ -660,9 +651,9 @@ const settingsPending = {
       imageGenerationStudio: {
         page: {
           miniTitle: "Image Generation Workbench",
-          title: "Image Generation Workbench",
-          subtitle: "Organize a generation run around a provider target and workflow input.",
-          description: "Choose the execution mode, prepare the input surface, and review results in a stable preview and diagnostics workspace.",
+          title: "Text to Image",
+          subtitle: "Turn text into images.",
+          description: "Choose a provider, write a prompt, and review the result.",
         },
         banner: {
           title: "Current boundary",
@@ -1146,6 +1137,26 @@ const settingsPending = {
           error: "Error",
         },
       },
+      computerUseDebugger: {
+        page: { miniTitle: "Computer Use Debugger", title: "Computer Use Debugger", description: "Inspect structured browser sessions and tool results." },
+        runtime: { ready: "Runtime ready", not_installed: "Runtime unavailable", downloading: "Runtime downloading", broken: "Runtime broken" },
+        model: { unavailable: "Model: Not connected", connected: "Model connected", unavailableTitle: "Model Run unavailable" },
+        runConfig: { title: "Run Config", runtime: "Runtime", url: "Initial URL", allowedDomains: "Allowed domains", timeout: "Timeout", snapshot: "Snapshot limit", approvalPolicy: "Approval policy" },
+        browserState: { title: "Browser State", urlLabel: "URL", titleLabel: "Title", snapshotHashLabel: "Snapshot hash", visibleText: "Visible text", screenshot: "Screenshot", empty: "No observation yet." },
+        manual: { title: "Manual Debug", action: "Action", ref: "Element ref", value: "URL / value", assertion: "Assertion", expected: "Expected" },
+        feedback: { title: "Execution Feedback", events: "Events", json: "JSON", empty: "No invocations yet.", approval: "Approval", toolArgs: "Tool args", artifacts: "Artifacts", evidence: "Evidence", result: "Result" },
+        modelRun: { title: "AgentTaskModel", run: "Run model", result: "Model Run Result" },
+        actions: { newSession: "New Session", inspect: "Inspect", execute: "Execute Action", assert: "Assert", approve: "Approve Action", reject: "Reject Action", stop: "Stop", reset: "Reset", openGuide: "User guide" },
+        errors: { title: "Debugger error", requestFailed: "Request failed" },
+        common: { emptyValue: "-" },
+        runtimeOptions: { managed: "Managed Chromium", system: "System browser" },
+        approvalOptions: { always: "Always approve", writeActions: "Write actions", never: "No approval" },
+        placeholders: { url: "https://example.com", domain: "example.com", ref: "Element ref", value: "URL or value", expected: "Expected value" },
+        actionOptions: { navigate: "Navigate", click: "Click", type: "Type", select: "Select", press: "Press", scroll: "Scroll", wait: "Wait" },
+        assertionOptions: { title: "Title", url: "URL", text: "Text", visible: "Visibility", value: "Value" },
+        status: { idle: "Idle", running: "Running", failed: "Failed", succeeded: "Succeeded", awaiting_approval: "Awaiting approval", cancelled: "Cancelled", pending: "Pending" },
+        guide: { title: "Computer Use user guide", intro: "Computer Use uses a controlled browser to perform observable, reviewable, and replayable web actions.", capabilityTitle: "Capabilities", capabilityBody: "Create browser sessions, inspect page structure and screenshots, perform navigation and page actions, validate page state, and retain invocation, trace, and evidence records for every call.", environmentTitle: "Environment configuration", environmentBody: "Managed Chromium is the preferred runtime. Provide an initial URL and allowed domains. The domain scope limits navigation, while the approval policy controls whether write actions require human confirmation.", setupTitle: "Before you start", setupBody: "Make sure the browser runtime is ready and AgentTaskModel is connected. Manual debugging remains available without a model, but model tasks cannot run.", stepsTitle: "How to use it", stepsBody: "Create a Session, then click Inspect to obtain the page snapshot and refs. Choose an action, provide its parameters, and execute it. After approval, inspect again and use an assertion to verify the result.", approvalTitle: "Approval and feedback", approvalBody: "Write actions enter an approval state. They run only after approval; rejection leaves an explicit cancelled result. The feedback panel shows tool arguments, status, artifacts, and evidence.", boundaryTitle: "Product boundaries", boundaryBody: "This capability is for controlled browser web actions. It does not include host desktop control, credential storage, browser extension takeover, or CAPTCHA bypass.", close: "Close user guide" },
+      },
     },
     tools: {
       miniTitle: "Tools",
@@ -1234,7 +1245,7 @@ const settingsPending = {
       miniTitle: "MCP",
       title: "MCP",
       description:
-        "Manage MCP marketplace discovery, third-party MCP servers, and future non-core built-in MCP packages. The MVP starts with marketplace browsing and does not connect chat tool-calling yet.",
+        "Manage MCP marketplace discovery, third-party MCP servers, and future non-core built-in MCP packages.",
       tabs: {
         marketplace: "Marketplace",
         installed: "Installed",
@@ -1330,9 +1341,8 @@ const settingsPending = {
               "The installed list shows projected IDs, remote server info, capability summaries, error state, and current protocol status.",
           },
           boundary: {
-            title: "Current boundary",
-            body:
-              "MCP is still a standalone workbench and does not connect to chat auto-calling yet. Tools remain the internal core concept.",
+            title: "Connect Agent mode",
+            body: "Click Enable to connect Agent mode.",
           },
           officialSource: {
             title: "Official source",

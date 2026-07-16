@@ -79,6 +79,7 @@ const buildExecutionRecord = (input: {
   recoveryAttemptCount?: number;
   errorMessage?: string;
   result?: unknown;
+  evidence?: AgentToolExecutionResult["evidence"];
 }): AgentToolExecutionResult => ({
   toolCallId: input.pendingToolCall.id,
   toolId: input.toolId,
@@ -95,6 +96,7 @@ const buildExecutionRecord = (input: {
   recoveryAttemptCount: input.recoveryAttemptCount,
   errorMessage: input.errorMessage,
   result: input.result,
+  ...(input.evidence ? { evidence: input.evidence } : {}),
   startedAt: input.startedAt,
   finishedAt: input.finishedAt,
 });
@@ -508,6 +510,7 @@ export const toolNode = async (
     invocationId: invocation.id,
     status: "completed",
     result: invocation.result,
+    evidence: invocation.evidence,
     startedAt,
     finishedAt,
   });

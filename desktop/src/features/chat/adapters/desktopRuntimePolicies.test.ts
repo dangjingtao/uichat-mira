@@ -169,6 +169,20 @@ test("desktop thread creation policy keeps roleId on welcome-state drafts", () =
   });
 });
 
+test("desktop thread creation policy forwards welcome media switches", () => {
+  const policy = createDesktopThreadCreationPolicy(() => ({
+    ttsEnabled: true,
+    imageEnabled: true,
+  }));
+
+  assert.deepEqual(policy.buildCreateInput?.(createState()), {
+    metadata: {
+      ttsEnabled: true,
+      imageEnabled: true,
+    },
+  });
+});
+
 test("desktop composer actions keep knowledge base picker visible even when no knowledge base exists", () => {
   const actions = createDesktopComposerActions({});
 

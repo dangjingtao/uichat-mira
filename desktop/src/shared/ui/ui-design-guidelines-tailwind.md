@@ -122,6 +122,8 @@
 - `surface-secondary`：次一级分区、hover 弱反馈、列表背景切换
 - `surface-tertiary`：更强一点的区分层，适合禁用轨道、弱分层容器
 - `surface-elevated`：浮层、下拉、Tooltip、Modal 内容承托
+
+默认 `warm-neutral` 主题的浅色 `surface-primary` 为 `#FCFBF9`，`border` 为 `#E5DFD7`；深色主题及其他主题由主题预设分别定义。
 - `border`：通用描边和结构分隔
 
 规则：
@@ -249,10 +251,18 @@
 ### 8.1 字体角色
 
 - UI 主字体：优先 `font-sans`
+- 设计参考衬线字体：使用 `font-serif` 或 `var(--font-serif)`，当前引入思源宋体简体中文可变字体；它是可选角色，不改变全局默认字体
 - 代码、日志、ID、路径：优先 `font-mono`
+- 品牌墨水色：使用 `text-ink`，浅色模式为 `#141413`；仅用于品牌标题等明确的墨色强调，不替代主题文本层级
 - 不额外引入“未来感”或装饰性字体破坏可读性
 
-当前项目默认字体栈已覆盖 Windows 中文与等宽场景，应继续沿用统一入口，不在业务页私自切换字体。
+当前项目默认字体栈已覆盖 Windows 中文与等宽场景，应继续沿用统一入口，不在业务页私自切换字体。需要做标题、长文阅读或品牌气质探索时，再显式使用 `font-serif`。
+
+字体入口：
+
+- `--font-sans` / `font-sans`：现有 UI 默认字体，不变
+- `--font-serif` / `font-serif`：思源宋体设计参考字体，按需使用
+- `--font-mono` / `font-mono`：代码、日志、ID、路径
 
 ### 8.2 字号层级
 

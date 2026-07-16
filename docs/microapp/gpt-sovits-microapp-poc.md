@@ -105,7 +105,7 @@ Related:
 
 - `GET /microapps/tts/gpt-sovits/catalog`
 - `POST /microapps/tts/gpt-sovits/syntheses`
-- `GET /microapps/tts/ref-audios/:file`
+- `GET /microapps/tts/ref-audios/:id`
 
 设计目标是把上游 `Gradio` 的数组式输入收敛成项目自己的对象契约。
 
@@ -128,11 +128,10 @@ Related:
 
 真实行为是：
 
-- renderer 把用户上传的 `wav` 存进浏览器 `IndexedDB`
-- 存储只发生在当前桌面前端环境内
-- backend 不直接读取 `IndexedDB`
-- 真正发起合成时，renderer 再把选中的 `wav` 作为 `multipart/form-data` 上传给 backend
-- backend 收到文件后，会把它保存到自己的受控目录，并通过本地静态路由暴露给 `GPT-SoVITS Gradio`
+- renderer 把用户选择的 `wav` 暂存进浏览器 `IndexedDB`
+- 第一次用于合成时，renderer 把 `wav` 上传给 backend，backend 按 SHA-256 去重后保存到 SQLite BLOB
+- backend 返回 `refAudioId`，后续合成只提交这个 ID，不重复上传完整文件
+- backend 通过 `/microapps/tts/ref-audios/:id` 从 SQLite 读取音频并提供给 `GPT-SoVITS Gradio`
 
 当前 `IndexedDB` 落点是：
 
@@ -151,8 +150,9 @@ Related:
 
 这意味着一件事必须说清楚：
 
-- 浏览器里“已经上传过”只代表前端缓存里有这份音频
-- 不代表 backend 已经持有一份长期可复用的本地文件
+- 浏览器里“已经选择过”只代表前端缓存里有这份音频
+- backend 入库成功后，前端记录会关联 `refAudioId`
+- 服务端复用以 SQLite 记录为准，不依赖浏览器 IndexedDB
 
 ## 字段映射
 
@@ -241,7 +241,7 @@ type CreateGptSovitsSynthesisPayload = {
 
 ## 文件生命周期真相
 
-当前参考音频文件会先落到 backend 自己的受控静态目录，再作为本地 HTTP 资源提供给上游。
+当前参考音频素材落到 SQLite BLOB，再通过本地 HTTP 接口提供给上游。
 
 具体流程：
 
@@ -249,8 +249,8 @@ type CreateGptSovitsSynthesisPayload = {
 2. renderer 存入 `IndexedDB`
 3. 用户点击“开始合成”
 4. renderer 把选中的 `wav` 连同表单字段一起提交给 backend
-5. backend 把这份文件保存到 `data/microapps/tts/ref-audios`
-6. backend 通过 `GET /microapps/tts/ref-audios/:file` 把它暴露成本地静态资源
+5. backend 按 SHA-256 将这份文件保存到 SQLite `tts_ref_audios.audio_blob`
+6. backend 通过 `GET /microapps/tts/ref-audios/:id` 从数据库返回音频
 7. backend 用这个静态 URL 调用上游 `GPT-SoVITS`
 
 所以当前真实落盘分成两类：
@@ -258,17 +258,16 @@ type CreateGptSovitsSynthesisPayload = {
 - 浏览器持久缓存
   - `IndexedDB`
   - 用于前端下次还能看到和复用这份 `wav`
-- backend 参考音频文件
-  - `data/microapps/tts/ref-audios`
-  - 通过本地静态路由提供给 `Gradio` 读取
+- backend 参考音频素材
+  - SQLite `tts_ref_audios`
+  - 通过内部读取接口提供给 `Gradio` 读取
 - backend 输出文件
   - `.artifacts/tts/outputs`
   - 作为合成结果产物保留
 
 当前实现没有做的事：
 
-- 没有把参考音频纳入后端长期素材库
-- 没有给参考音频建立数据库记录表
+- 参考音频仍未做跨设备同步
 - 没有跨设备同步浏览器里的 `IndexedDB`
 
 ## 后端执行流程
@@ -279,8 +278,9 @@ type CreateGptSovitsSynthesisPayload = {
 renderer
   -> 用户上传 wav 到浏览器 IndexedDB
   -> POST /microapps/tts/gpt-sovits/syntheses
-  -> 如果是上传文件，backend 先保存到 data/microapps/tts/ref-audios
-  -> backend 通过 /microapps/tts/ref-audios/:file 生成本地静态 URL
+  -> 第一次使用时 backend 按 SHA-256 写入 SQLite 并返回 refAudioId
+  -> 后续请求只传 refAudioId
+  -> backend 通过 /microapps/tts/ref-audios/:id 生成本地 URL
   -> backend 读取 provider 配置
   -> backend 调 /call/change_gpt_weights
   -> backend 调 /call/change_sovits_weights
@@ -298,20 +298,19 @@ renderer
 
 ## 数据落盘
 
-当前复用现有两张表：
+当前复用现有表，并新增参考音频素材表：
 
 - `tts_provider_configs`
 - `tts_synthesis_jobs`
-
-没有新开表，原因是这次仍然是同一个 `TTS Studio` 微应用里的 provider 扩展，不是独立任务域。
+- `tts_ref_audios`
 
 音频产物继续落盘到：
 
 - `.artifacts/tts/outputs`
 
-上传参考音频的 backend 受控目录是：
+参考音频素材保存到：
 
-- `data/microapps/tts/ref-audios`
+- SQLite `tts_ref_audios.audio_blob`
 
 ## 当前限制
 
@@ -319,7 +318,7 @@ renderer
 
 1. 依赖用户自己先把 `GPT-SoVITS Gradio WebUI` 跑起来。
 2. 默认服务地址是 `http://127.0.0.1:9872`，当前不负责拉起或守护这个进程。
-3. 上传文件虽然会在前端 `IndexedDB` 里保存，但真正合成时仍会走一次后端受控落盘和本地静态资源暴露。
+3. 参考音频首次使用时写入 SQLite，后续合成通过 `refAudioId` 复用，不重复上传。
 4. 当前没有接 `aux_ref_audio_paths`、`ref_free`、`super_sampling`、`streaming_mode` 等高级参数。
 5. 当前 catalog 主要取自 `Gradio` 的元信息和模型列表，没有进一步抽象到跨供应商统一参数层。
 6. 当前 `IndexedDB` 里的参考音频删除后不可恢复，也不会联动删除历史任务里已经生成的输出文件。

@@ -18,6 +18,9 @@ import {
   UserRound,
   Square,
   X,
+  LoaderCircle,
+  Volume2,
+  Image as ImageIcon,
 } from "lucide-react";
 import type {
   ChatComposerAction,
@@ -30,6 +33,8 @@ import type {
   ChatThreadContextTag,
 } from "../core";
 import ImagePreviewOverlay from "@/shared/ui/ImagePreviewOverlay";
+import chatStartLogo from "@/assets/branding/chat-start-logo.png";
+import { getChatMediaPreviewUrl } from "@/shared/api/thread";
 import MarkdownText from "@/shared/ui/MarkdownText";
 import Badge from "@/shared/ui/Badge";
 import DropdownMenu from "@/shared/ui/DropdownMenu";
@@ -302,6 +307,9 @@ export function UChatThreadView({
   agentToggleAvailability,
   agentAvailability,
   onToggleAgentEnabled,
+  onRequestTts,
+  onRequestImage,
+  showImageAction,
 }: {
   activeThreadId: string | null;
   title: string;
@@ -353,6 +361,9 @@ export function UChatThreadView({
     disabledReason?: string;
   };
   onToggleAgentEnabled?: () => void | Promise<void>;
+  onRequestTts?: (message: ChatMessage) => void | Promise<void>;
+  onRequestImage?: (message: ChatMessage) => void | Promise<void>;
+  showImageAction?: boolean;
 }) {
   const { t } = useTranslation();
   const isRunning = runStatus.type === "running";
@@ -460,10 +471,12 @@ export function UChatThreadView({
                     <div
                       className={`${contentColumnClassName} max-w-3xl xl:max-w-4xl`}
                     >
-                      <UChatWelcomeEmptyState
-                        activeThreadId={activeThreadId}
-                        isVisible={showWelcomeEmptyState}
-                      />
+                      <div className={showWelcomeEmptyState ? "hidden" : undefined}>
+                        <UChatWelcomeEmptyState
+                          activeThreadId={activeThreadId}
+                          isVisible={showWelcomeEmptyState}
+                        />
+                      </div>
 
                       {isHydratingPersistedThread ? (
                         <UChatThreadLoadingSkeleton />
@@ -482,6 +495,9 @@ export function UChatThreadView({
                           messagePresentation={messagePresentation}
                           resolveAttachmentSource={resolveAttachmentSource}
                           onRequestScrollToBottom={requestScrollToBottom}
+                          onRequestTts={onRequestTts}
+                          onRequestImage={onRequestImage}
+                          showImageAction={showImageAction === true}
                           onPreviewImage={setImagePreview}
                           onOpenProgressDetail={(detail) => {
                             setSelectedRagSourceDetail(null);
@@ -535,10 +551,34 @@ export function UChatThreadView({
                   </div>
                 </div>
 
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20">
-                  <div className="bg-gradient-to-t from-surface-secondary via-surface-secondary/95 to-transparent px-4 pb-5 pt-8 sm:px-6 lg:px-8">
+                <div
+                  className={`pointer-events-none absolute inset-x-0 z-20 ${
+                    showWelcomeEmptyState
+                      ? "inset-y-0 flex translate-y-[10px] items-center"
+                      : "bottom-0"
+                  }`}
+                >
+                  <div
+                    className={
+                      showWelcomeEmptyState
+                        ? "w-full px-4 py-5 sm:px-6 lg:px-8"
+                        : "bg-gradient-to-t from-surface-secondary via-surface-secondary/95 to-transparent px-4 pb-5 pt-8 sm:px-6 lg:px-8"
+                    }
+                  >
                     <div className="pointer-events-auto mx-auto w-full max-w-3xl xl:max-w-4xl">
-                      <div className="overflow-hidden rounded-[24px] border border-cloudy-4/70 bg-pampas-2/90 shadow-[0_8px_22px_rgba(15,23,42,0.035)] backdrop-blur-xl">
+                      {showWelcomeEmptyState ? (
+                        <div className="mb-[80px] flex translate-y-[30px] items-center justify-center gap-3 font-serif text-[36px] font-semibold leading-tight tracking-[0.02em] text-ink">
+                          <img
+                            src={chatStartLogo}
+                            alt=""
+                            aria-hidden="true"
+                            className="h-9 w-auto shrink-0 object-contain sm:h-10"
+                            draggable={false}
+                          />
+                          <span>{t("chat.thread.welcome.emptyComposerTitle")}</span>
+                        </div>
+                      ) : null}
+                      <div className="overflow-hidden rounded-[20px] border border-cloudy-4/70 bg-pampas-2/90 shadow-[0_8px_22px_rgba(15,23,42,0.035)] backdrop-blur-xl">
                         {composer.attachments.length > 0 ? (
                           <div className="flex flex-wrap gap-2 border-b border-cloudy-4/55 px-4 pb-3 pt-3">
                             {composer.attachments.map((attachment) => (
@@ -592,7 +632,7 @@ export function UChatThreadView({
                             }
                           }}
                           placeholder={placeholder}
-                          className={`min-h-[40px] w-full resize-none bg-transparent px-4 py-2.5 text-[15px] leading-6 text-text-primary placeholder:text-cloudy-6 focus:outline-none ${
+                          className={`h-16 min-h-[40px] w-full resize-none bg-transparent px-4 py-2.5 text-[15px] leading-6 text-text-primary placeholder:text-cloudy-6 focus:outline-none ${
                             isSendDisabled
                               ? "cursor-not-allowed opacity-60"
                               : ""
@@ -659,6 +699,180 @@ export function UChatThreadView({
   );
 }
 
+type ChatMediaEntry = {
+  status?: "queued" | "running" | "succeeded" | "failed";
+  mediaId?: string;
+  errorMessage?: string;
+};
+
+const revokeObjectUrl = (value: string | null) => {
+  if (value && typeof URL.revokeObjectURL === "function") {
+    URL.revokeObjectURL(value);
+  }
+};
+
+function ChatMediaOutput({
+  threadId,
+  message,
+  onPreviewImage,
+  onRequestImage,
+}: {
+  threadId: string;
+  message: ChatMessage;
+  onPreviewImage: (value: ImagePreviewState) => void;
+  onRequestImage?: (message: ChatMessage) => void | Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const media = message.metadata?.media as
+    | { image?: ChatMediaEntry; tts?: ChatMediaEntry }
+    | undefined;
+  const image = media?.image;
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageLoading, setImageLoading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let disposed = false;
+    let objectUrl: string | null = null;
+    setImageUrl(null);
+    setImageError(null);
+    if (image?.status === "succeeded" && image.mediaId) {
+      setImageLoading(true);
+      void getChatMediaPreviewUrl(threadId, image.mediaId).then((url) => {
+        if (disposed) revokeObjectUrl(url);
+        else { objectUrl = url; setImageUrl(url); }
+      }).catch((error) => {
+        if (!disposed) {
+          setImageError(error instanceof Error ? error.message : t("chat.thread.media.loadFailed"));
+        }
+      }).finally(() => {
+        if (!disposed) setImageLoading(false);
+      });
+    } else setImageLoading(false);
+    return () => { disposed = true; revokeObjectUrl(objectUrl); };
+  }, [image?.mediaId, image?.status, t, threadId]);
+
+  if (!image) return null;
+
+  return (
+    <div className="mt-3 space-y-2">
+      {image?.status === "queued" || image?.status === "running" || imageLoading ? (
+        <div className="inline-flex items-center gap-2 text-xs text-text-secondary">
+          <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+          {t("chat.thread.media.imageGenerating")}
+        </div>
+      ) : null}
+      {image?.status === "failed" || imageError ? (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-danger-text">
+          <span>{t("chat.thread.media.imageFailed")}: {image.errorMessage ?? imageError}</span>
+          {onRequestImage ? (
+            <button type="button" className="font-medium underline underline-offset-2" onClick={() => void onRequestImage(message)}>
+              {t("chat.thread.media.retry")}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {imageUrl ? <button type="button" className="block max-w-[min(100%,22rem)] overflow-hidden rounded-[14px] border border-border/70" onClick={() => onPreviewImage({ src: imageUrl })} aria-label={t("chat.thread.media.previewImage")}><img src={imageUrl} alt={t("chat.thread.media.generatedImage")} className="block max-h-[18rem] w-full object-contain" /></button> : null}
+    </div>
+  );
+}
+
+function ChatMediaAudioAction({
+  threadId,
+  message,
+  onRequestTts,
+}: {
+  threadId: string;
+  message: ChatMessage;
+  onRequestTts?: (message: ChatMessage) => void | Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const tts = (message.metadata?.media as { tts?: ChatMediaEntry } | undefined)?.tts;
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    let disposed = false;
+    let objectUrl: string | null = null;
+    setAudioError(null);
+    if (tts?.status === "succeeded" && tts.mediaId) {
+      void getChatMediaPreviewUrl(threadId, tts.mediaId).then((url) => {
+        if (disposed) revokeObjectUrl(url);
+        else {
+          objectUrl = url;
+          setAudioUrl(url);
+          const audio = audioRef.current;
+          if (audio) {
+            audio.src = url;
+            audio.load();
+          }
+        }
+      }).catch((error) => {
+        if (!disposed) {
+          setAudioUrl(null);
+          setAudioError(error instanceof Error ? error.message : t("chat.thread.media.audioLoadFailed"));
+        }
+      });
+    } else setAudioUrl(null);
+    return () => { disposed = true; revokeObjectUrl(objectUrl); };
+  }, [threadId, t, tts?.mediaId, tts?.status]);
+
+  const play = async () => {
+    setBusy(true);
+    setAudioError(null);
+    try {
+      let playableUrl = audioUrl;
+      if (!playableUrl && tts?.status === "succeeded" && tts.mediaId) {
+        playableUrl = await getChatMediaPreviewUrl(threadId, tts.mediaId);
+        setAudioUrl(playableUrl);
+      }
+      if (playableUrl) {
+        const audio = audioRef.current ?? new Audio(playableUrl);
+        if (audio.src !== playableUrl) {
+          audio.src = playableUrl;
+          audio.load();
+        }
+        await audio.play();
+      } else if (onRequestTts) {
+        await onRequestTts(message);
+      }
+    } catch (error) {
+      if (tts?.status === "succeeded" && tts.mediaId && onRequestTts) {
+        setAudioUrl(null);
+        try {
+          await onRequestTts(message);
+          return;
+        } catch (regenerationError) {
+          setAudioError(
+            regenerationError instanceof Error
+              ? regenerationError.message
+              : t("chat.thread.media.audioPlayFailed"),
+          );
+        }
+      } else {
+        setAudioError(
+          error instanceof Error
+            ? error.message
+            : t("chat.thread.media.audioPlayFailed"),
+        );
+      }
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      <audio ref={audioRef} preload="auto" aria-hidden="true" />
+      <button type="button" className={actionButtonClassName} onClick={() => void play()} disabled={busy || tts?.status === "running"} aria-label={t("chat.thread.media.playAudio")} title={t("chat.thread.media.playAudio")}>
+        {busy || tts?.status === "running" ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Volume2 className="h-3.5 w-3.5" />}
+      </button>
+      {tts?.status === "failed" ? <span className="text-xs text-danger-text">{t("chat.thread.media.audioFailed")}: {tts.errorMessage ?? t("chat.thread.media.unknownError")}</span> : null}
+      {audioError ? <span className="text-xs text-danger-text">{t("chat.thread.media.audioPlayFailed")}: {audioError}</span> : null}
+    </span>
+  );
+}
+
 // UChatMessageRow renders either a user or assistant message row from the
 // canonical message model.
 function UChatMessageRow({
@@ -687,6 +901,9 @@ function UChatMessageRow({
   onResetEditUserMessage,
   onCancelEditUserMessage,
   onRequestScrollToBottom,
+  onRequestTts,
+  onRequestImage,
+  showImageAction,
 }: {
   message: ChatMessage;
   isRunning: boolean;
@@ -731,6 +948,9 @@ function UChatMessageRow({
   onResetEditUserMessage?: (messageId: string) => void;
   onCancelEditUserMessage?: () => void;
   onRequestScrollToBottom: () => void;
+  onRequestTts?: (message: ChatMessage) => void | Promise<void>;
+  onRequestImage?: (message: ChatMessage) => void | Promise<void>;
+  showImageAction: boolean;
 }) {
   const { t } = useTranslation();
   const ragProgress = useMemo(
@@ -803,6 +1023,15 @@ function UChatMessageRow({
     agentRunActionError.runId === agentMetadata?.runId
       ? agentRunActionError.message
       : null;
+  const mediaMetadata =
+    message.metadata?.media &&
+    typeof message.metadata.media === "object" &&
+    !Array.isArray(message.metadata.media)
+      ? (message.metadata.media as { image?: ChatMediaEntry })
+      : undefined;
+  const imageMedia = mediaMetadata?.image;
+  const imageActionRunning =
+    imageMedia?.status === "queued" || imageMedia?.status === "running";
   const preferMarkdownForText =
     messagePresentation.preferMarkdownForText !== false;
   const assistantBubbleWidthClassName = resolveBubbleWidthClassName(
@@ -811,6 +1040,17 @@ function UChatMessageRow({
   const userBubbleWidthClassName = resolveBubbleWidthClassName(
     messagePresentation.userMaxWidth,
   );
+  const [imageActionPending, setImageActionPending] = useState(false);
+  const requestImage = async () => {
+    if (!onRequestImage) return;
+    setImageActionPending(true);
+    try {
+      await onRequestImage(message);
+    } finally {
+      setImageActionPending(false);
+    }
+  };
+  const isImageActionRunning = imageActionPending || imageActionRunning;
 
   if (message.role === "user") {
     const isEditingThisMessage = editingUserMessage?.id === message.id;
@@ -963,6 +1203,13 @@ function UChatMessageRow({
               />
             ))}
 
+            <ChatMediaOutput
+              threadId={message.threadId}
+              message={message}
+              onPreviewImage={onPreviewImage}
+              onRequestImage={showImageAction ? requestImage : undefined}
+            />
+
             {failurePresentation ? (
               <div
                 className={`${
@@ -1093,6 +1340,27 @@ function UChatMessageRow({
           </UChatAssistantBubbleShell>
 
           <div className="mt-1 flex items-center gap-2 pl-1">
+            <ChatMediaAudioAction
+              threadId={message.threadId}
+              message={message}
+              onRequestTts={onRequestTts}
+            />
+            {showImageAction && onRequestImage ? (
+              <button
+                type="button"
+                className={actionButtonClassName}
+                onClick={() => void requestImage()}
+                disabled={isImageActionRunning}
+                aria-label={t("chat.thread.media.generateImage")}
+                title={t("chat.thread.media.generateImage")}
+              >
+                {isImageActionRunning ? (
+                  <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ImageIcon className="h-3.5 w-3.5" />
+                )}
+              </button>
+            ) : null}
             <button
               type="button"
               className={actionButtonClassName}
@@ -1554,7 +1822,7 @@ function UChatComposerActions({
 
               void onSend();
             }}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-text-primary text-text-inverted transition-all duration-150 hover:scale-[1.02] hover:bg-text-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-ink text-text-inverted transition-all duration-150 hover:scale-[1.02] hover:bg-ink/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary disabled:cursor-not-allowed disabled:opacity-50"
             aria-label={
               isRunning
                 ? t("chat.thread.composer.cancelGeneration")

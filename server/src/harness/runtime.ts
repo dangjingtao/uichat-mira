@@ -12,6 +12,7 @@ import { readSliceTool } from "../mcp/tools/read-slice.tool.js";
 import { readTool } from "../mcp/tools/read.tool.js";
 import { terminalSessionTool } from "../mcp/tools/terminal-session.tool.js";
 import { webSearchTool } from "../mcp/tools/web-search.tool.js";
+import { mailQueryTool } from "../mcp/tools/mail-query.tool.js";
 import { workspaceMutationTool } from "../mcp/tools/workspace-mutation.tool.js";
 import {
   initializeExternalMcpDatabase,
@@ -39,6 +40,7 @@ export const initializeHarnessRuntime = () => {
   registerCapability(editFileTool);
   registerCapability(workspaceMutationTool);
   registerCapability(webSearchTool);
+  registerCapability(mailQueryTool);
   registerCapability(terminalSessionTool);
   reconcileCodeGraphHarnessCapability();
   // External MCP persistence is optional at bootstrap time. Some callers

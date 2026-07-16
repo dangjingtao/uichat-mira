@@ -1,2 +1,0 @@
-$ C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\@colbymchenry\codegraph\npm-shim.js --version
-1.3.0

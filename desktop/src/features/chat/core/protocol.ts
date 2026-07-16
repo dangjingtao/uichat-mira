@@ -86,6 +86,8 @@ const normalizeThreadSummary = (thread: ThreadApiSummary): ChatThreadSummary => 
     knowledgeBaseId: thread.knowledgeBaseId,
     roleId: thread.roleId,
     agentEnabled: thread.agentEnabled,
+    ttsEnabled: thread.ttsEnabled,
+    imageEnabled: thread.imageEnabled,
     contextSummary: thread.contextSummary,
     contextSummaryUpdatedAt: thread.contextSummaryUpdatedAt,
     status: thread.status,
@@ -445,6 +447,14 @@ export class DesktopChatRepository implements ChatRepository {
       createInput?.agentEnabled === null
         ? { agentEnabled: createInput.agentEnabled }
         : {}),
+      ...(typeof createInput?.ttsEnabled === "boolean" ||
+      createInput?.ttsEnabled === null
+        ? { ttsEnabled: createInput.ttsEnabled }
+        : {}),
+      ...(typeof createInput?.imageEnabled === "boolean" ||
+      createInput?.imageEnabled === null
+        ? { imageEnabled: createInput.imageEnabled }
+        : {}),
       ...(typeof createInput?.modelName === "string"
         ? { modelName: createInput.modelName }
         : {}),
@@ -560,6 +570,18 @@ export class DesktopChatRepository implements ChatRepository {
           ? metadata.agentEnabled
           : undefined
         : undefined;
+    const nextTtsEnabled =
+      metadata && Object.prototype.hasOwnProperty.call(metadata, "ttsEnabled")
+        ? typeof metadata.ttsEnabled === "boolean" || metadata.ttsEnabled === null
+          ? metadata.ttsEnabled
+          : undefined
+        : undefined;
+    const nextImageEnabled =
+      metadata && Object.prototype.hasOwnProperty.call(metadata, "imageEnabled")
+        ? typeof metadata.imageEnabled === "boolean" || metadata.imageEnabled === null
+          ? metadata.imageEnabled
+          : undefined
+        : undefined;
     const nextContextSummary =
       metadata && Object.prototype.hasOwnProperty.call(metadata, "contextSummary")
         ? typeof metadata.contextSummary === "string" ||
@@ -581,6 +603,12 @@ export class DesktopChatRepository implements ChatRepository {
         : {}),
       ...(typeof nextAgentEnabled === "boolean" || nextAgentEnabled === null
         ? { agentEnabled: nextAgentEnabled }
+        : {}),
+      ...(typeof nextTtsEnabled === "boolean" || nextTtsEnabled === null
+        ? { ttsEnabled: nextTtsEnabled }
+        : {}),
+      ...(typeof nextImageEnabled === "boolean" || nextImageEnabled === null
+        ? { imageEnabled: nextImageEnabled }
         : {}),
       ...(typeof nextContextSummary === "string" || nextContextSummary === null
         ? { contextSummary: nextContextSummary }

@@ -613,8 +613,7 @@ const enUS = {
       },
       proxy: {
         title: "SOCKS5 Proxy",
-        description:
-          "This step only persists backend outbound proxy settings. No request flow uses it yet.",
+        description: "Leave host or port empty to keep the proxy disabled.",
         host: "SOCKS5 Host",
         hostPlaceholder: "For example 127.0.0.1",
         port: "SOCKS5 Port",
@@ -623,8 +622,6 @@ const enUS = {
         usernamePlaceholder: "Optional",
         password: "Password",
         passwordPlaceholder: "Optional",
-        hint:
-          "Leave host or port empty to keep the proxy disabled. The config is stored now and can be wired into provider traffic later.",
         save: "Save proxy settings",
         saving: "Saving...",
         saveSuccess: "Proxy settings saved",

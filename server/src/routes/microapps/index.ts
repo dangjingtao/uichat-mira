@@ -30,12 +30,15 @@ import type { EvolvingKnowledgeService } from "@/microapps/evolving-knowledge/in
 import { success } from "@/utils/index.js";
 import { badRequest, notFound, routeHandler } from "@/utils/route-errors.js";
 import computerUseRoutes from "./computer-use/index.js";
+import type { ComputerUseDebuggerService } from "./computer-use/debugger-service.js";
 import codeGraphRoutes from "./codegraph/index.js";
 import evolvingKnowledgeRoutes from "./evolving-knowledge/index.js";
 import mailCenterRoutes from "./mail-center/index.js";
 import newsHubRoutes from "./news-hub/index.js";
 import ttsRoutes from "./tts/index.js";
 import { imageGenerationRouteSchemas } from "./schemas.js";
+import { microAppCapabilityService } from "@/services/micro-app-capability.service.js";
+import type { MicroAppProviderId } from "@/db/repositories/micro-app-capability-bindings.repository.js";
 
 export type ImageGenerationRouteService = {
   createGeneration(request: ImageGenerationCreateRequest): Promise<ImageGenerationJob>;
@@ -121,6 +124,7 @@ type MicroappsRouteOptions = {
   comfyUiStudioService?: ComfyUiStudioRouteService;
   computerUseService?: ComputerUseRouteService;
   computerUseRuntimeService?: ComputerUseRuntimeRouteService;
+  computerUseDebuggerService?: ComputerUseDebuggerService;
   codeGraphStudioService?: CodeGraphStudioService;
   mailCenterService?: MailCenterRouteService;
   newsHubService?: NewsHubRouteService;
@@ -203,8 +207,9 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
 ) => {
   app.addHook("preHandler", async (request, reply) => {
     if (
-      request.url.includes("/microapps/image-generation/generations/") &&
-      request.url.includes("/events")
+      (request.url.includes("/microapps/image-generation/generations/") &&
+        request.url.includes("/events")) ||
+      request.url.includes("/microapps/tts/ref-audios/")
     ) {
       return;
     }
@@ -231,6 +236,7 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
   const comfyUiStudioService = options.comfyUiStudioService;
   const computerUseService = options.computerUseService;
   const computerUseRuntimeService = options.computerUseRuntimeService;
+  const computerUseDebuggerService = options.computerUseDebuggerService;
   const codeGraphStudioService = options.codeGraphStudioService;
   const mailCenterService = options.mailCenterService;
   const newsHubService = options.newsHubService;
@@ -276,6 +282,36 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
     );
   }
   const evolvingKnowledgeService = options.evolvingKnowledgeService;
+
+  app.get(
+    "/microapps/capabilities",
+    routeHandler("Failed to load micro-app capabilities", async () =>
+      success(microAppCapabilityService.list()),
+    ),
+  );
+
+  app.put<{
+    Params: { capability: "imageGeneration" | "tts" };
+    Body: { providerId: string };
+  }>(
+    "/microapps/capabilities/:capability",
+    routeHandler("Failed to save micro-app capability", async (request) => {
+      const params = request.params as { capability: "imageGeneration" | "tts" };
+      const body = request.body as {
+        providerId: string;
+      };
+      if (params.capability !== "imageGeneration" && params.capability !== "tts") {
+        throw badRequest(`不支持的微应用能力：${params.capability}`);
+      }
+      return success(
+        microAppCapabilityService.save({
+          capabilityCode: params.capability,
+          providerId: body.providerId as MicroAppProviderId,
+        }),
+        "Micro-app capability saved",
+      );
+    }),
+  );
 
   app.post<{ Body: ImageGenerationCreateRequest }>(
     "/microapps/image-generation/generations",
@@ -557,6 +593,7 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
   await app.register(computerUseRoutes, {
     computerUseService,
     computerUseRuntimeService,
+    computerUseDebuggerService,
   });
   await app.register(codeGraphRoutes, {
     codeGraphStudioService,

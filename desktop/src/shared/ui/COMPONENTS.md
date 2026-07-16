@@ -774,7 +774,7 @@ message.destroy();
 
 - 用于启停、布尔配置、列表行内状态切换
 - 不承担带文案的主操作，通常与 Tooltip 或标签搭配
-- 打开态使用 `primary`，关闭态回到 `surface-tertiary`
+- 打开态使用 `primary`，关闭态使用 `border`，保证浅色模式下滑轨仍然可辨识
 
 ## Table
 

@@ -603,10 +603,6 @@ export default function General() {
           />
         </div>
 
-        <SettingsNotice tone="info">
-          {t("settings.general.proxy.hint")}
-        </SettingsNotice>
-
         {proxyError ? (
           <SettingsNotice tone="danger">{proxyError}</SettingsNotice>
         ) : null}

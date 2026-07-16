@@ -126,7 +126,7 @@ export async function getProviderTemplates(): Promise<ProviderTemplateSummary[]>
 }
 
 export async function getProviderDetail(
-  providerCode: ProviderCode,
+  providerCode: string,
 ): Promise<ProviderDetail> {
   return get<ProviderDetail>(`/providers/${providerCode}`);
 }

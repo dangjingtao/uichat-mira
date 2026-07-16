@@ -1,15 +1,0 @@
-$ C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\@colbymchenry\codegraph\npm-shim.js init C:\Users\ADMINI~1\AppData\Local\Temp\uichat-mira-codegraph-external-index-root\2026-07-09T14-24-18-412Z\clean-repo
-T  Initializing CodeGraph
-|
-*  Initialized in C:\Users\ADMINI~1\AppData\Local\Temp\uichat-mira-codegraph-external-index-root\2026-07-09T14-24-18-412Z\clean-repo
-[2m|[0m
-[K[2m|[0m  [32m*[0m Scanning files - 1 found
-[K[2m|[0m  [38;2;206;146;23m[1m.[0m Parsing code  [2m-------------------------[0m  0%[K[2m|[0m  [38;2;227;167;29m[1m.[0m Parsing code  [2m-------------------------[0m  0%[K[2m|[0m  [32m*[0m Parsing code - done
-[K[2m|[0m  [32m*[0m Resolving refs
-|
-*  Indexed 1 files
-|
-•  2 nodes, 1 edges in 164ms
-|
-—  Done
-[codegraph] Ignoring invalid CODEGRAPH_DIR="C:\Users\ADMINI~1\AppData\Local\Temp\uichat-mira-codegraph-external-index-root\2026-07-09T14-24-18-412Z\external-index-root" — it must be a plain directory name (no path separators, no "..", not absolute). Using ".codegraph".

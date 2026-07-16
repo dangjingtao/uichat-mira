@@ -7,6 +7,7 @@ import "@/shared/i18n";
 import i18n from "@/shared/i18n";
 import { UChatThreadView } from "./UChatThreadView";
 import type { ChatMessage } from "../core";
+import { getChatMediaPreviewUrl } from "@/shared/api/thread";
 
 vi.mock("@/app/providers/ThemeProvider", () => ({
   useThemePreferences: () => ({
@@ -16,6 +17,12 @@ vi.mock("@/app/providers/ThemeProvider", () => ({
     setThemeMode: () => {},
     themePresets: [],
   }),
+}));
+
+vi.mock("@/shared/api/thread", () => ({
+  getChatMediaPreviewUrl: vi.fn(async (_threadId: string, mediaId: string) =>
+    `blob:http://localhost/${mediaId}`,
+  ),
 }));
 
 const baseAssistantMessage = (
@@ -86,6 +93,131 @@ test("UChatThreadView hides legacy tool trace card when execution trace parts ex
 
   assert.ok(screen.getByText("web_search"));
   assert.equal(screen.queryByText("Tool Calls"), null);
+});
+
+test("UChatThreadView renders generated image below assistant text and gates image action", async () => {
+  const onRequestImage = vi.fn(() => Promise.resolve());
+  const { rerender } = render(
+    <UChatThreadView
+      activeThreadId="thread-1"
+      title="Thread"
+      badges={[]}
+      messages={[baseAssistantMessage({
+        metadata: { media: { image: { status: "succeeded", mediaId: "image-1" } } },
+      })]}
+      composer={{ text: "", attachments: [] }}
+      runStatus={{ type: "idle" }}
+      threadStatus="ready"
+      capabilities={{ composerActions: [], messagePresentation: {} }}
+      hasKnowledgeBase={false}
+      placeholder="Type"
+      isSendDisabled={false}
+      onComposerTextChange={() => {}}
+      onComposerAttachmentsChange={() => {}}
+      onSend={() => {}}
+      onComposerAction={() => {}}
+      threadContextTags={[]}
+      resolveAttachmentSource={(value) => value}
+      onRequestImage={onRequestImage}
+      showImageAction
+    />,
+  );
+
+  await waitFor(() => assert.ok(screen.getByRole("img", { name: /generated image|生成的图片/i })));
+  const answer = screen.getByText("answer");
+  const image = screen.getByRole("img", { name: /generated image|生成的图片/i });
+  assert.ok(answer.compareDocumentPosition(image) & Node.DOCUMENT_POSITION_FOLLOWING);
+  fireEvent.click(screen.getByRole("button", { name: /generate image|生成图片/i }));
+  assert.equal(onRequestImage.mock.calls.length, 1);
+
+  rerender(
+    <UChatThreadView
+      activeThreadId="thread-1"
+      title="Thread"
+      badges={[]}
+      messages={[baseAssistantMessage({ metadata: { media: { image: { status: "failed" } } } })]}
+      composer={{ text: "", attachments: [] }}
+      runStatus={{ type: "idle" }}
+      threadStatus="ready"
+      capabilities={{ composerActions: [], messagePresentation: {} }}
+      hasKnowledgeBase
+      placeholder="Type"
+      isSendDisabled={false}
+      onComposerTextChange={() => {}}
+      onComposerAttachmentsChange={() => {}}
+      onSend={() => {}}
+      onComposerAction={() => {}}
+      threadContextTags={[]}
+      resolveAttachmentSource={(value) => value}
+      onRequestImage={onRequestImage}
+      showImageAction={false}
+    />,
+  );
+  assert.equal(screen.queryByRole("button", { name: /generate image|生成图片|retry|重试/i }), null);
+});
+
+test("UChatThreadView requests TTS when a message has no completed audio", async () => {
+  const onRequestTts = vi.fn(() => Promise.resolve());
+  render(
+    <UChatThreadView
+      activeThreadId="thread-1"
+      title="Thread"
+      badges={[]}
+      messages={[baseAssistantMessage()]}
+      composer={{ text: "", attachments: [] }}
+      runStatus={{ type: "idle" }}
+      threadStatus="ready"
+      capabilities={{ composerActions: [], messagePresentation: {} }}
+      hasKnowledgeBase
+      placeholder="Type"
+      isSendDisabled={false}
+      onComposerTextChange={() => {}}
+      onComposerAttachmentsChange={() => {}}
+      onSend={() => {}}
+      onComposerAction={() => {}}
+      threadContextTags={[]}
+      resolveAttachmentSource={(value) => value}
+      onRequestTts={onRequestTts}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: /play assistant audio|播放助手音频/i }));
+  await waitFor(() => assert.equal(onRequestTts.mock.calls.length, 1));
+});
+
+test("UChatThreadView regenerates TTS when a succeeded media file is unavailable", async () => {
+  const onRequestTts = vi.fn(() => Promise.resolve());
+  const getPreviewUrl = vi.mocked(getChatMediaPreviewUrl);
+  getPreviewUrl.mockRejectedValue(new Error("media not found"));
+
+  render(
+    <UChatThreadView
+      activeThreadId="thread-1"
+      title="Thread"
+      badges={[]}
+      messages={[baseAssistantMessage({
+        metadata: { media: { tts: { status: "succeeded", mediaId: "audio-1" } } },
+      })]}
+      composer={{ text: "", attachments: [] }}
+      runStatus={{ type: "idle" }}
+      threadStatus="ready"
+      capabilities={{ composerActions: [], messagePresentation: {} }}
+      hasKnowledgeBase
+      placeholder="Type"
+      isSendDisabled={false}
+      onComposerTextChange={() => {}}
+      onComposerAttachmentsChange={() => {}}
+      onSend={() => {}}
+      onComposerAction={() => {}}
+      threadContextTags={[]}
+      resolveAttachmentSource={(value) => value}
+      onRequestTts={onRequestTts}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: /play assistant audio|播放助手音频/i }));
+  await waitFor(() => assert.equal(onRequestTts.mock.calls.length, 1));
+  getPreviewUrl.mockImplementation(async (_threadId, mediaId) => `blob:http://localhost/${mediaId}`);
 });
 
 test("UChatThreadView shows loading skeleton instead of welcome hero while hydrating a persisted thread", () => {

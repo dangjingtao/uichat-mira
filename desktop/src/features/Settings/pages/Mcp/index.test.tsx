@@ -286,17 +286,23 @@ describe("McpSettings", () => {
       }),
     );
 
-    const accessSwitch = await screen.findByRole("switch");
-    expect(accessSwitch).toHaveAttribute("aria-checked", "false");
-    await user.click(accessSwitch);
+    const accessButton = await screen.findByRole("button", {
+      name: "允许 Agent 使用",
+    });
+    expect(accessButton).toHaveAttribute("aria-pressed", "false");
+    await user.click(accessButton);
 
     await waitFor(() => {
       expect(updateExternalMcpAccessMock).toHaveBeenCalledWith("remote-docs", true);
     });
-    expect(await screen.findByRole("switch")).toHaveAttribute("aria-checked", "true");
+    expect(await screen.findByRole("button", {
+      name: "允许 Agent 使用",
+    })).toHaveAttribute("aria-pressed", "true");
 
     updateExternalMcpAccessMock.mockRejectedValueOnce(new Error("access update failed"));
-    await user.click(screen.getByRole("switch"));
+    await user.click(screen.getByRole("button", {
+      name: "允许 Agent 使用",
+    }));
     await waitFor(() => {
       expect(messageErrorMock).toHaveBeenCalledWith("access update failed");
     });

@@ -582,7 +582,7 @@ const zhCN = {
       },
       proxy: {
         title: "SOCKS5 代理",
-        description: "这里只保存后端出站代理配置，当前阶段还不会接入任何实际请求链路。",
+        description: "留空 Host 或 Port，就表示当前不启用代理。",
         host: "SOCKS5 Host",
         hostPlaceholder: "例如 127.0.0.1",
         port: "SOCKS5 Port",
@@ -591,7 +591,6 @@ const zhCN = {
         usernamePlaceholder: "可留空",
         password: "密码",
         passwordPlaceholder: "可留空",
-        hint: "留空 Host 或 Port，就表示当前不启用代理。",
         save: "保存代理配置",
         saving: "保存中...",
         saveSuccess: "代理配置已保存",

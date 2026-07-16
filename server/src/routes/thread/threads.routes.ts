@@ -4,6 +4,7 @@ import path from "node:path";
 import { threadService } from "@/services/thread.service";
 import { logFilesService } from "@/services/log-files.service.js";
 import { managedMediaCleanupService } from "@/services/managed-media-cleanup.service.js";
+import { chatMediaService } from "@/services/chat-media.service.js";
 import {
   success,
   THREAD_NOT_FOUND_MESSAGE,
@@ -228,6 +229,29 @@ export const registerThreadRoutes = async (app: FastifyInstance) => {
         }
         throw err;
       }
+    }),
+  );
+
+  app.post<{
+    Params: { id: string };
+    Body: { messageId: string; taskId: string; mediaType: "audio" | "image"; absolutePath: string; mimeType: string };
+  }>("/threads/:id/media", { schema: threadRouteSchemas.attachChatMedia }, routeHandler("Failed to attach chat media", async (request) => {
+    const params = request.params as { id: string };
+    const body = request.body as { messageId: string; taskId: string; mediaType: "audio" | "image"; absolutePath: string; mimeType: string };
+    const thread = threadService.getThreadById(params.id, request.authUser!.id);
+    if (!thread) throw notFound(THREAD_NOT_FOUND_MESSAGE);
+    return success(await chatMediaService.attach({ threadId: params.id, ...body }), "Chat media attached");
+  }));
+
+  app.get<{ Params: { id: string; mediaId: string } }>(
+    "/threads/:id/media/:mediaId/content",
+    routeHandler("Failed to read chat media", async (request, reply) => {
+      const params = request.params as { id: string; mediaId: string };
+      const media = chatMediaService.getForThreadRead(params.mediaId, params.id, request.authUser!.id);
+      if (!media) throw notFound("Chat media not found");
+      reply.header("Cache-Control", "no-store");
+      reply.type(media.mimeType || "application/octet-stream");
+      return reply.send(await fs.readFile(media.absolutePath));
     }),
   );
 

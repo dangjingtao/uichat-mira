@@ -4,9 +4,29 @@ import {
   buildThreadContextTags,
   formatRoleReplyingLabel,
   resolveActiveRoleId,
+  resolveChatMediaSettings,
   resolveRoleAvatarSrc,
   upsertRoleSummary,
 } from "./roleChatState";
+
+test("resolveChatMediaSettings keeps persisted image state when RAG hides the control", () => {
+  assert.deepEqual(resolveChatMediaSettings({
+    hasPersistedThread: true,
+    persistedSettings: { imageEnabled: true, ttsEnabled: true },
+    welcomeSettings: { imageEnabled: false, ttsEnabled: false },
+    hasRole: true,
+    hasKnowledgeBase: true,
+  }), { imageEnabled: true, ttsEnabled: true });
+});
+
+test("resolveChatMediaSettings defaults welcome RP image generation on", () => {
+  assert.equal(resolveChatMediaSettings({
+    hasPersistedThread: false,
+    welcomeSettings: { imageEnabled: true, ttsEnabled: false },
+    hasRole: true,
+    hasKnowledgeBase: false,
+  }).imageEnabled, true);
+});
 
 test("resolveActiveRoleId prefers the persisted thread role over the welcome draft", () => {
   const roleId = resolveActiveRoleId({
