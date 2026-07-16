@@ -3,7 +3,10 @@ import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import type { PlaywrightChromiumLauncherLike } from "./types.js";
 
-const require = createRequire(import.meta.url);
+// The packaged backend runs from resources/server, which contains its generated
+// package.json. Using the working directory keeps this loader valid in both
+// ESM development and the CommonJS server bundle.
+const require = createRequire(path.join(process.cwd(), "package.json"));
 
 const workspaceModuleCandidates = () => [
   path.join(

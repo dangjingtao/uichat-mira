@@ -8,7 +8,7 @@ export function resolveComputerUseArtifactUrl(uri: string): string {
   return `${getApiBaseUrl()}${uri.startsWith("/") ? uri : `/${uri}`}`;
 }
 
-export type ComputerUseRuntimeStatus = "ready" | "not_installed" | "broken";
+export type ComputerUseRuntimeStatus = "ready" | "not_installed" | "downloading" | "broken";
 export type ComputerUseModelStatus = "connected" | "unavailable";
 export type ComputerUseSessionStatus = "empty" | "ready" | "failed" | "stopped";
 export type ComputerUseInvocationStatus =
@@ -37,6 +37,15 @@ export interface ComputerUseModelState {
 export interface ComputerUseDebuggerStatus {
   runtime: ComputerUseRuntimeState;
   model: ComputerUseModelState;
+}
+
+export interface ComputerUseTaskRun {
+  taskId: string;
+  status: string;
+  result?: Record<string, unknown>;
+  pendingApproval?: Record<string, unknown>;
+  evidence?: { entries: Array<Record<string, unknown>>; artifacts: Array<Record<string, unknown>> };
+  error?: { code?: string; message?: string };
 }
 
 export interface ComputerUseSessionConfig {
@@ -90,6 +99,13 @@ export interface ComputerUseAssertionInput {
 
 export async function getComputerUseDebuggerStatus(): Promise<ComputerUseDebuggerStatus> {
   return get<ComputerUseDebuggerStatus>(`${BASE}/debugger/status`);
+}
+
+export async function runComputerUseTask(input: {
+  goal: string;
+  siteScope: string[];
+}): Promise<ComputerUseTaskRun> {
+  return post<ComputerUseTaskRun>(`${BASE}/tasks`, { ...input, autoStart: true });
 }
 
 export async function createComputerUseSession(

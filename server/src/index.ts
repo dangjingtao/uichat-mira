@@ -32,7 +32,6 @@ import {
 import { LocalImageGenerationArtifactStore } from "@/microapps/image-generation/artifacts/index.js";
 import {
   createImageGenerationService,
-  createInMemoryImageGenerationJobStore,
   createInMemoryImageGenerationRealtimeStore,
   comfyUiStudioService,
 } from "@/microapps/image-generation/index.js";
@@ -95,8 +94,13 @@ import { webSearchSettingsRepository } from "@/db/repositories/web-search-settin
 import { wecomSettingsRepository } from "@/db/repositories/wecom-settings.repository.js";
 import { ttsProviderConfigsRepository } from "@/db/repositories/tts-provider-configs.repository.js";
 import { ttsSynthesisJobsRepository } from "@/db/repositories/tts-synthesis-jobs.repository.js";
+import { chatMediaRepository } from "@/db/repositories/chat-media.repository.js";
+import { imageGenerationJobsRepository } from "@/db/repositories/image-generation-jobs.repository.js";
+import { chatMediaService } from "@/services/chat-media.service.js";
+import { managedMediaCleanupService } from "@/services/managed-media-cleanup.service.js";
 import { microAppCapabilityBindingsRepository } from "@/db/repositories/micro-app-capability-bindings.repository.js";
 import { ttsRefAudiosRepository } from "@/db/repositories/tts-ref-audios.repository.js";
+import { ttsRefAudioBindingsRepository } from "@/db/repositories/tts-ref-audio-bindings.repository.js";
 import {
   modelConfigRepository,
   providerConnectionRepository,
@@ -104,6 +108,7 @@ import {
 import type { ProviderCode } from "@/db/schema.js";
 import { decryptSecret } from "@/utils/crypto.js";
 import { getProviderCapabilities } from "@/providers/catalog.js";
+import { resolveAgentTaskProvider } from "@/services/provider-proxy.service/resolution.js";
 import { initializeVectorStore } from "@/db";
 import CONFIG from "@/config";
 import { isAuthExemptPath, OPENAPI_PUBLIC_TAGS } from "@/config/public-api.js";
@@ -145,6 +150,7 @@ const imageGenerationArtifactRoot = path.resolve(
   "image-generation",
 );
 const imageGenerationArtifactPublicPrefix = "/artifacts/image-generation/";
+const ttsArtifactRoot = path.resolve(process.cwd(), ".artifacts", "tts", "outputs");
 const computerUseArtifactRoot = path.resolve(
   process.cwd(),
   ".artifacts",
@@ -184,7 +190,9 @@ const createImageGenerationAdapterRegistry = () => {
     const targetConnection =
       providerConnectionRepository.findById(providerId) ??
       providerConnectionRepository.findByCode(providerId as ProviderCode) ??
-      (providerId === "openai_images" ? defaultConnection : undefined);
+      (providerId === "openai_images" || providerId === "api_provider"
+        ? defaultConnection
+        : undefined);
 
     if (!targetConnection) {
       return null;
@@ -244,7 +252,7 @@ const imageGenerationService = createImageGenerationService({
   }),
   // Current strategy is intentionally temporary: jobs stay in process memory
   // until a dedicated persistent store is approved and implemented.
-  jobStore: createInMemoryImageGenerationJobStore(),
+  jobStore: imageGenerationJobsRepository,
   realtimeStore: imageGenerationRealtimeStore,
 });
 
@@ -256,7 +264,7 @@ const computerUseBrowserSessions = new BrowserSessionManager({
   artifactRoot: path.join(computerUseArtifactRoot, "browser"),
 });
 const computerUseBrowserService = new BrowserService(computerUseBrowserSessions);
-for (const tool of createComputerUseBrowserTools(computerUseBrowserService)) {
+for (const tool of createComputerUseBrowserTools(computerUseBrowserService, { sessionManager: computerUseBrowserSessions })) {
   registerCapability(tool);
 }
 
@@ -516,6 +524,14 @@ const computerUseDebuggerService = createComputerUseDebuggerService({
   sessions: computerUseBrowserSessions,
   browser: computerUseBrowserService,
   runtimeStatus: () => toComputerUseRuntimeState(nowIso()),
+  modelStatus: () => {
+    try {
+      const provider = resolveAgentTaskProvider("default");
+      return { status: "connected" as const, message: `AgentTaskModel: ${provider.providerCode} / ${provider.model}` };
+    } catch (error) {
+      return { status: "unavailable" as const, message: error instanceof Error ? error.message : "AgentTaskModel is not configured." };
+    }
+  },
 });
 
 const computerUseExecutor: ComputerUseExecutor = new ComputerUseModelExecutor({
@@ -564,7 +580,9 @@ const codeGraphStudioService = createCodeGraphStudioService({
   },
 });
 setActiveCodeGraphStudioService(codeGraphStudioService);
-const ttsService = createTtsService();
+const ttsService = createTtsService({ artifactRoot: ttsArtifactRoot });
+chatMediaService.configureRoots({ imageGenerationRoot: imageGenerationArtifactRoot, ttsRoot: ttsArtifactRoot });
+managedMediaCleanupService.configureRoots({ imageGenerationRoot: imageGenerationArtifactRoot, ttsRoot: ttsArtifactRoot });
 const evolvingKnowledgeService = createEvolvingKnowledgeService();
 
 const setupPlugins = async () => {
@@ -863,8 +881,11 @@ const setupDatabase = async () => {
   newsItemsRepository.initialize();
   ttsProviderConfigsRepository.initialize();
   ttsSynthesisJobsRepository.initialize();
+  chatMediaRepository.initialize();
+  imageGenerationJobsRepository.initialize();
   microAppCapabilityBindingsRepository.initialize();
   ttsRefAudiosRepository.initialize();
+  ttsRefAudioBindingsRepository.initialize();
   computerUseRepository.initialize();
   migrateLegacyMicroAppBindings();
   initializeExternalMcpDatabase();

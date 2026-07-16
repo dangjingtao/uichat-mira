@@ -10,6 +10,7 @@ import type { Message, MessageRole, Thread, ThreadStatus } from "@/db/schema";
 import { threadContextSummaryNode } from "@/services/shared-nodes/thread-context-summary.node.js";
 import { isValidWorkspaceRootPath } from "@/services/workspace-path-validation.js";
 import { THREAD_ACCESS_ERROR_MESSAGE } from "@/utils/errors.js";
+import { chatMediaService } from "@/services/chat-media.service.js";
 
 export interface ThreadResponse {
   id: string;
@@ -19,6 +20,8 @@ export interface ThreadResponse {
   knowledgeBaseId: string | null;
   roleId: string | null;
   agentEnabled: boolean;
+  ttsEnabled: boolean;
+  imageEnabled: boolean;
   contextSummary: string | null;
   contextSummaryUpdatedAt: string | null;
   status: ThreadStatus;
@@ -74,6 +77,8 @@ export interface CreateThreadInput {
   knowledgeBaseId?: string | null;
   roleId?: string | null;
   agentEnabled?: boolean | null;
+  ttsEnabled?: boolean | null;
+  imageEnabled?: boolean | null;
   contextSummary?: string | null;
 }
 
@@ -168,6 +173,7 @@ const pruneThreadTail = (
     }
 
     messageRepository.deleteById(message.id);
+    chatMediaService.removeForMessages([message.id]);
   }
 };
 
@@ -214,6 +220,8 @@ const toThreadResponse = (
     knowledgeBaseId: thread.knowledgeBaseId,
     roleId: thread.roleId ?? null,
     agentEnabled: thread.agentEnabled ?? false,
+    ttsEnabled: thread.ttsEnabled ?? false,
+    imageEnabled: thread.imageEnabled ?? false,
     contextSummary: thread.contextSummary ?? null,
     contextSummaryUpdatedAt: thread.contextSummaryUpdatedAt ?? null,
     status: thread.status,
@@ -241,6 +249,8 @@ const toThreadResponseFromStats = (
     knowledgeBaseId: thread.knowledgeBaseId,
     roleId: thread.roleId ?? null,
     agentEnabled: thread.agentEnabled ?? false,
+    ttsEnabled: thread.ttsEnabled ?? false,
+    imageEnabled: thread.imageEnabled ?? false,
     contextSummary: thread.contextSummary ?? null,
     contextSummaryUpdatedAt: thread.contextSummaryUpdatedAt ?? null,
     status: thread.status,
@@ -478,6 +488,8 @@ export const threadService = {
     const knowledgeBaseId = input.knowledgeBaseId?.trim();
     const roleId = input.roleId?.trim();
     const agentEnabled = input.agentEnabled;
+    const ttsEnabled = input.ttsEnabled;
+    const imageEnabled = input.imageEnabled;
     const contextSummary = input.contextSummary?.trim();
 
     if (workspaceId && !chatWorkspaceRepository.findById(workspaceId, input.userId)) {
@@ -496,6 +508,10 @@ export const threadService = {
       knowledgeBaseId: knowledgeBaseId ?? null,
       roleId: roleId ?? null,
       agentEnabled: typeof agentEnabled === "boolean" ? agentEnabled : false,
+      ttsEnabled: typeof ttsEnabled === "boolean" ? ttsEnabled : false,
+      imageEnabled: typeof imageEnabled === "boolean"
+        ? imageEnabled
+        : Boolean(roleId && !knowledgeBaseId),
       contextSummary: contextSummary || null,
       contextSummaryUpdatedAt: contextSummary ? new Date().toISOString() : null,
       status: "active",
@@ -522,6 +538,8 @@ export const threadService = {
       input.knowledgeBaseId === undefined &&
       input.roleId === undefined &&
       input.agentEnabled === undefined &&
+      input.ttsEnabled === undefined &&
+      input.imageEnabled === undefined &&
       input.contextSummary === undefined
     ) {
       return toThreadResponse(
@@ -580,6 +598,10 @@ export const threadService = {
     if (input.agentEnabled === null) {
       updateData.agentEnabled = null;
     }
+    if (typeof input.ttsEnabled === "boolean") updateData.ttsEnabled = input.ttsEnabled;
+    if (input.ttsEnabled === null) updateData.ttsEnabled = false;
+    if (typeof input.imageEnabled === "boolean") updateData.imageEnabled = input.imageEnabled;
+    if (input.imageEnabled === null) updateData.imageEnabled = false;
     if (typeof input.contextSummary === "string") {
       const normalizedSummary = input.contextSummary.trim();
       updateData.contextSummary = normalizedSummary || null;
@@ -636,6 +658,10 @@ export const threadService = {
     if (!existing) {
       return false;
     }
+    const mediaCleanup = chatMediaService.removeForThread(id);
+    if (mediaCleanup.failed > 0) {
+      throw new Error(`Failed to remove ${mediaCleanup.failed} media record(s): ${mediaCleanup.errors.map((item) => item.mediaId).join(", ")}`);
+    }
     return threadRepository.deleteById(id);
   },
 
@@ -657,6 +683,10 @@ export const threadService = {
     for (const thread of threadsToDelete) {
       try {
         const messages = messageRepository.listByThread(thread.id);
+        const mediaCleanup = chatMediaService.removeForMessages(messages.map((message) => message.id));
+        if (mediaCleanup.failed > 0) {
+          throw new Error(`Failed to remove ${mediaCleanup.failed} media record(s)`);
+        }
         if (!threadRepository.deleteById(thread.id)) {
           failedThreads += 1;
           continue;
@@ -720,7 +750,7 @@ export const threadService = {
     }
 
     if (existing) {
-    if (
+      if (
       existing.role !== input.role ||
       existing.content !== normalizedContent ||
       (existing.metadata || "{}") !== normalizedMetadata ||
@@ -730,6 +760,10 @@ export const threadService = {
           ) ?? [],
         ) !== JSON.stringify(input.parts ?? [])
       ) {
+        const mediaCleanup = chatMediaService.removeForMessages([existing.id]);
+        if (mediaCleanup.failed > 0) {
+          throw new Error(`Failed to remove ${mediaCleanup.failed} media record(s): ${mediaCleanup.errors.map((item) => item.mediaId).join(", ")}`);
+        }
         const updated = messageRepository.updateById(existing.id, {
           role: input.role,
           content: normalizedContent,
@@ -777,6 +811,21 @@ export const threadService = {
     threadRepository.updateById(threadId, {});
 
     return toMessageResponse(created);
+  },
+
+  updateMessageMetadata(
+    threadId: string,
+    messageId: string,
+    userId: number,
+    metadata: Record<string, unknown>,
+  ): MessageResponse | null {
+    const thread = threadRepository.findById(threadId, userId);
+    const existing = messageRepository.findById(messageId);
+    if (!thread || !existing || existing.threadId !== threadId) return null;
+    const updated = messageRepository.updateById(messageId, {
+      metadata: JSON.stringify(metadata),
+    });
+    return updated ? toMessageResponse(updated) : null;
   },
 
   createMessages(
@@ -843,6 +892,10 @@ export const threadService = {
       return false;
     }
 
+    const mediaCleanup = chatMediaService.removeForMessages([id]);
+    if (mediaCleanup.failed > 0) {
+      throw new Error(`Failed to remove ${mediaCleanup.failed} media record(s): ${mediaCleanup.errors.map((item) => item.mediaId).join(", ")}`);
+    }
     const deleted = messageRepository.deleteById(id);
     if (deleted) {
       threadRepository.updateById(message.threadId, {});

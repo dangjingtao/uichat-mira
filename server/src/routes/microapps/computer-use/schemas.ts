@@ -80,15 +80,9 @@ const debuggerAction = {
   type: "object", required: ["pageUrl", "snapshotHash", "action"], additionalProperties: false,
   properties: {
     pageUrl: { type: "string", minLength: 1 }, snapshotHash: { type: "string", minLength: 1 },
-    action: { oneOf: [
-      { type: "object", required: ["kind", "url"], additionalProperties: false, properties: { kind: { const: "navigate" }, url: { type: "string", minLength: 1 } } },
-      { type: "object", required: ["kind", "ref"], additionalProperties: false, properties: { kind: { const: "click" }, ref: { type: "string", minLength: 1 } } },
-      { type: "object", required: ["kind", "ref", "text"], additionalProperties: false, properties: { kind: { const: "type" }, ref: { type: "string", minLength: 1 }, text: { type: "string" } } },
-      { type: "object", required: ["kind", "ref", "value"], additionalProperties: false, properties: { kind: { const: "select" }, ref: { type: "string", minLength: 1 }, value: { type: "string" } } },
-      { type: "object", required: ["kind", "ref", "key"], additionalProperties: false, properties: { kind: { const: "press" }, ref: { type: "string", minLength: 1 }, key: { type: "string", minLength: 1 } } },
-      { type: "object", required: ["kind"], additionalProperties: false, properties: { kind: { const: "scroll" }, x: { type: "number" }, y: { type: "number" } } },
-      { type: "object", required: ["kind"], additionalProperties: false, properties: { kind: { const: "wait" }, ref: { type: "string", minLength: 1 }, text: { type: "string" }, timeoutMs: { type: "integer", minimum: 1 } } },
-    ] },
+    // MCP owns the strict action union. Keeping this route-level object open
+    // prevents Fastify/Ajv from deleting fields while trying oneOf branches.
+    action: { type: "object", additionalProperties: true },
   },
 } as const;
 const debuggerAssertion = {

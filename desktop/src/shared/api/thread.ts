@@ -16,6 +16,8 @@ export interface Thread {
   knowledgeBaseId: string | null;
   roleId: string | null;
   agentEnabled?: boolean | null;
+  ttsEnabled?: boolean | null;
+  imageEnabled?: boolean | null;
   contextSummary: string | null;
   contextSummaryUpdatedAt: string | null;
   status: ThreadStatus;
@@ -71,6 +73,8 @@ export interface CreateThreadInput {
   roleId?: string | null;
   agentEnabled?: boolean | null;
   contextSummary?: string | null;
+  ttsEnabled?: boolean | null;
+  imageEnabled?: boolean | null;
 }
 
 export interface CreateMessageInput {
@@ -161,6 +165,47 @@ export async function updateThread(
   input: Partial<CreateThreadInput>,
 ): Promise<Thread> {
   return patch<Thread>(`/threads/${id}`, input, CHAT_REQUEST_CONFIG);
+}
+
+export interface AttachChatMediaInput {
+  messageId: string;
+  taskId: string;
+  mediaType: "audio" | "image";
+  absolutePath: string;
+  mimeType: string;
+}
+
+export interface ChatMediaRecord extends AttachChatMediaInput {
+  id: string;
+  threadId: string;
+  createdAt: string;
+}
+
+export function attachChatMedia(threadId: string, input: AttachChatMediaInput) {
+  return post<ChatMediaRecord>(`/threads/${encodeURIComponent(threadId)}/media`, input, CHAT_REQUEST_CONFIG);
+}
+
+export function getChatMediaContentUrl(threadId: string, mediaId: string) {
+  return `/threads/${encodeURIComponent(threadId)}/media/${encodeURIComponent(mediaId)}/content`;
+}
+
+export async function getChatMediaPreviewUrl(threadId: string, mediaId: string) {
+  const response = await import("@/shared/lib/request").then(({ client }) =>
+    client.get<Blob>(getChatMediaContentUrl(threadId, mediaId), { responseType: "blob" }),
+  );
+  return URL.createObjectURL(response.data);
+}
+
+export function updateChatMessageMetadata(
+  threadId: string,
+  messageId: string,
+  metadata: Record<string, unknown>,
+) {
+  return patch<Record<string, unknown>>(
+    `/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/metadata`,
+    { metadata },
+    CHAT_REQUEST_CONFIG,
+  );
 }
 
 export async function generateThreadContextSummary(

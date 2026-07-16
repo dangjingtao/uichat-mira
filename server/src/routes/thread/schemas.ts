@@ -48,6 +48,14 @@ export const threadSchema = {
       type: ["boolean", "null"],
       description: "Whether built-in agent tools are enabled for this thread.",
     },
+    ttsEnabled: {
+      type: ["boolean", "null"],
+      description: "Whether assistant TTS is enabled for this thread.",
+    },
+    imageEnabled: {
+      type: ["boolean", "null"],
+      description: "Whether automatic role image generation is enabled for this thread.",
+    },
     contextSummary: {
       type: ["string", "null"],
       description: "Persisted thread context summary.",
@@ -208,6 +216,8 @@ const threadMutationBodySchema = {
       type: ["string", "null"],
       description: "Replacement thread context summary.",
     },
+    ttsEnabled: { type: ["boolean", "null"] },
+    imageEnabled: { type: ["boolean", "null"] },
   },
 } as const;
 
@@ -221,6 +231,26 @@ const threadContextSummarySchema = {
       format: "date-time",
     },
   },
+} as const;
+
+const attachChatMediaSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["messageId", "taskId", "mediaType", "absolutePath", "mimeType"],
+  properties: {
+    messageId: { type: "string" },
+    taskId: { type: "string" },
+    mediaType: { type: "string", enum: ["audio", "image"] },
+    absolutePath: { type: "string", minLength: 1 },
+    mimeType: { type: "string", minLength: 1 },
+  },
+} as const;
+
+const updateMessageMetadataSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["metadata"],
+  properties: { metadata: { type: "object" } },
 } as const;
 
 const chatWorkspaceSchema = {
@@ -326,6 +356,8 @@ const createMessageBodySchema = {
 // OpenAPI route schemas grouped away from the handlers so thread routes remain
 // focused on auth ownership, service calls, and response mapping.
 export const threadRouteSchemas = {
+  updateMessageMetadata: { body: updateMessageMetadataSchema },
+  attachChatMedia: { body: attachChatMediaSchema },
   listThreads: {
     tags: ["Thread"],
     summary: "List threads",

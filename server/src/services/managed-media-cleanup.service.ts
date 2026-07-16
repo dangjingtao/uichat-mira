@@ -3,6 +3,7 @@ import fsSync from "node:fs";
 import path from "node:path";
 import CONFIG from "@/config/index.js";
 import { attachmentStorageRoot } from "@/services/attachment-storage.service.js";
+import { chatMediaRepository } from "@/db/repositories/chat-media.repository.js";
 
 const findProjectRoot = (startDir: string) => {
   let currentDir = path.resolve(startDir);
@@ -24,7 +25,7 @@ const findProjectRoot = (startDir: string) => {
 };
 
 const projectRoot = findProjectRoot(process.cwd());
-const managedMediaRoots = {
+let managedMediaRoots = {
   attachments: attachmentStorageRoot,
   generatedImages: path.resolve(process.cwd(), ".artifacts", "image-generation"),
   generatedAudio: [path.join(projectRoot, ".artifacts", "tts", "outputs")],
@@ -33,7 +34,7 @@ const managedMediaRoots = {
 
 type CleanupSummary = { files: number; bytes: number };
 
-const clearDirectoryContents = async (rootDir: string): Promise<CleanupSummary> => {
+const clearDirectoryContents = async (rootDir: string, protectedPaths = new Set<string>()): Promise<CleanupSummary> => {
   let entries;
   try {
     entries = await fs.readdir(rootDir, { withFileTypes: true });
@@ -49,12 +50,17 @@ const clearDirectoryContents = async (rootDir: string): Promise<CleanupSummary> 
   for (const entry of entries) {
     const entryPath = path.join(rootDir, entry.name);
     if (entry.isDirectory()) {
-      const nested = await clearDirectoryContents(entryPath);
+      const nested = await clearDirectoryContents(entryPath, protectedPaths);
       files += nested.files;
       bytes += nested.bytes;
-      await fs.rm(entryPath, { recursive: true, force: true });
+      const hasProtectedChild = [...protectedPaths].some((protectedPath) =>
+        protectedPath.startsWith(`${path.resolve(entryPath)}${path.sep}`),
+      );
+      if (!hasProtectedChild) await fs.rm(entryPath, { recursive: true, force: true });
       continue;
     }
+
+    if (protectedPaths.has(path.resolve(entryPath))) continue;
 
     try {
       const stats = await fs.stat(entryPath);
@@ -68,8 +74,11 @@ const clearDirectoryContents = async (rootDir: string): Promise<CleanupSummary> 
 };
 
 const clearRoots = async (roots: string | string[]) => {
+  const protectedPaths = new Set(
+    chatMediaRepository.listAll().map((media) => path.resolve(media.absolutePath)),
+  );
   const summaries = await Promise.all(
-    (Array.isArray(roots) ? roots : [roots]).map(clearDirectoryContents),
+    (Array.isArray(roots) ? roots : [roots]).map((root) => clearDirectoryContents(root, protectedPaths)),
   );
   return summaries.reduce<CleanupSummary>(
     (total, summary) => ({
@@ -81,6 +90,13 @@ const clearRoots = async (roots: string | string[]) => {
 };
 
 export const managedMediaCleanupService = {
+  configureRoots(input: { imageGenerationRoot: string; ttsRoot: string }) {
+    managedMediaRoots = {
+      ...managedMediaRoots,
+      generatedImages: path.resolve(input.imageGenerationRoot),
+      generatedAudio: [path.resolve(input.ttsRoot)],
+    };
+  },
   async clear() {
     const [attachments, generatedImages, generatedAudio, generatedVideos] =
       await Promise.all([

@@ -48,6 +48,7 @@ describe("Computer Use debugger routes", () => {
     const action = await server.inject({ method: "POST", url: "/microapps/computer-use/sessions/session-1/action", payload: { pageUrl: "https://example.com", snapshotHash: "hash-1", action: { kind: "click", ref: "e1" } } });
     expect(action.statusCode).toBe(200);
     expect(action.json().data.invocations[0].tool).toBe("browser_act");
+    expect(action.json().data.invocations[0].args.action).toEqual({ kind: "click", ref: "e1" });
     const invalidAction = await server.inject({ method: "POST", url: "/microapps/computer-use/sessions/session-1/action", payload: { action: "click", value: "e1" } });
     expect(invalidAction.statusCode).toBe(400);
     expect((await server.inject({ method: "POST", url: "/microapps/computer-use/sessions/session-1/assert", payload: { assertion: { kind: "title", expected: "Example" } } })).statusCode).toBe(200);

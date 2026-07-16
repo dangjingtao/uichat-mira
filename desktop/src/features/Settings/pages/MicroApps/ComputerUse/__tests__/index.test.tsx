@@ -1,9 +1,26 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import ComputerUseDebuggerPage, { buildActionInput, buildAssertionInput } from "../index";
 
-vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+const guideLabels = {
+  title: "Computer Use user guide",
+  intro: "Controlled browser actions",
+  capabilityTitle: "Capabilities",
+  capabilityBody: "Inspect and operate pages",
+  environmentTitle: "Environment configuration",
+  environmentBody: "Configure the browser runtime",
+  setupTitle: "Before you start",
+  setupBody: "Connect the model",
+  stepsTitle: "How to use it",
+  stepsBody: "Create, inspect, act, and assert",
+  approvalTitle: "Approval and feedback",
+  approvalBody: "Review write actions",
+  boundaryTitle: "Product boundaries",
+  boundaryBody: "Controlled browser only",
+  close: "Close user guide",
+};
+vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string, options?: { returnObjects?: boolean }) => options?.returnObjects ? guideLabels : key }) }));
 const debuggerState = vi.hoisted(() => ({ current: undefined as Record<string, unknown> | undefined }));
 vi.mock("../useComputerUseDebuggerState", () => ({
   useComputerUseDebuggerState: () => debuggerState.current ?? ({
@@ -46,5 +63,15 @@ describe("Computer Use Debugger", () => {
     expect(buildActionInput("type", "ref-1", "hello", "https://example.com", "hash")).toEqual({ pageUrl: "https://example.com", snapshotHash: "hash", action: { kind: "type", ref: "ref-1", text: "hello" } });
     expect(buildAssertionInput("visible", "ref-1", "ignored")).toEqual({ assertion: { kind: "visible", ref: "ref-1" } });
     expect(buildAssertionInput("title", "ignored", "Example")).toEqual({ assertion: { kind: "title", expected: "Example" } });
+  });
+
+  it("opens the user guide in the right drawer and closes it", async () => {
+    render(<ComputerUseDebuggerPage />);
+    fireEvent.click(screen.getByRole("button", { name: "settings.microApps.computerUseDebugger.actions.openGuide" }));
+    expect(screen.getByRole("complementary")).toBeInTheDocument();
+    expect(screen.getByText("Computer Use user guide")).toBeInTheDocument();
+    expect(screen.getByText("Capabilities")).toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole("complementary")).getByRole("button", { name: "Close user guide" }));
+    await waitFor(() => expect(screen.queryByRole("complementary")).not.toBeInTheDocument());
   });
 });

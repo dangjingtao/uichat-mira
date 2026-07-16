@@ -286,6 +286,12 @@ export const executeInvocation = async (
       },
     })) as McpToolExecutionResult;
 
+    if (response.evidence !== undefined) {
+      record.evidence = tool.definition.source === "external"
+        ? redactExternalMcpValue(response.evidence) as typeof response.evidence
+        : response.evidence;
+    }
+
     if (response.result !== undefined) {
       const resultSpan = startTraceSpan({
         invocationId,

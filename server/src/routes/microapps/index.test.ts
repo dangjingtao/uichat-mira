@@ -23,6 +23,9 @@ import microappsRoute, { type ImageGenerationRouteService } from "./index.js";
 import type { ComfyUiStudioRouteService } from "./index.js";
 import type { CodeGraphStudioRouteService } from "./index.js";
 import type { TtsService } from "@/microapps/tts/index.js";
+import { createImageGenerationService } from "@/microapps/image-generation/core/service.js";
+import { LocalImageGenerationArtifactStore } from "@/microapps/image-generation/artifacts/store.js";
+import { imageGenerationJobsRepository } from "@/db/repositories/image-generation-jobs.repository.js";
 
 const testDbPath = createTimestampedTestArtifactPath(
   "db",
@@ -38,6 +41,7 @@ initializeModelConfigDatabase();
 initializeKnowledgeBaseDatabase();
 initializeThreadDatabase();
 initializeRoleDatabase();
+imageGenerationJobsRepository.initialize();
 
 afterAll(() => {
   resetDatabaseClients();
@@ -543,6 +547,27 @@ test("microapps image generation routes create and query jobs", async () => {
   );
 
   await app.close();
+});
+
+test("HTTP job query and artifact content survive an image service restart", async () => {
+  const artifactRoot = createTimestampedTestArtifactPath("media", "http-image-restart");
+  const artifactStore = new LocalImageGenerationArtifactStore({ rootDir: artifactRoot });
+  const adapter = { providerId: "http-restart-provider", executionKind: "sync-http" as const, async startGeneration() {
+    return { status: "succeeded" as const, artifacts: [{ type: "image" as const, mimeType: "image/png", source: "base64" as const, base64Data: Buffer.from("http-png").toString("base64"), fileName: "http.png" }] };
+  } };
+  const makeService = () => createImageGenerationService({ adapterRegistry: { getAdapter: (id) => id === adapter.providerId ? adapter : null }, artifactStore, jobStore: imageGenerationJobsRepository, createId: () => "http-restart-job" });
+  const created = await makeService().createGeneration({ providerId: adapter.providerId, prompt: "http restart" });
+  resetDatabaseClients();
+  imageGenerationJobsRepository.initialize();
+  const app = await createApp(makeService());
+  const token = createToken();
+  const jobResponse = await app.inject({ method: "GET", url: `/microapps/image-generation/generations/${created.id}`, headers: { authorization: `Bearer ${token}` } });
+  assert.equal(jobResponse.statusCode, 200);
+  const artifactId = created.artifacts[0]!.id;
+  const contentResponse = await app.inject({ method: "GET", url: `/microapps/image-generation/generations/${created.id}/artifacts/${artifactId}/content`, headers: { authorization: `Bearer ${token}` } });
+  assert.equal(contentResponse.statusCode, 200);
+  assert.equal(contentResponse.body, "http-png");
+  fs.rmSync(artifactRoot, { recursive: true, force: true });
 });
 
 test("microapps image generation routes reject missing auth", async () => {

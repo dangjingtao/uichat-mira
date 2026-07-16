@@ -10,6 +10,12 @@ const INTERNAL_INTENT_ONLY_TOOL_IDS = new Set([
   "read_slice",
 ]);
 
+const COMPUTER_USE_TOOL_IDS = new Set([
+  "browser_observe",
+  "browser_act",
+  "browser_assert",
+]);
+
 export const isInternalIntentOnlyTool = (definition: McpToolDefinition) =>
   definition.source === "internal" && INTERNAL_INTENT_ONLY_TOOL_IDS.has(definition.id);
 
@@ -71,6 +77,12 @@ export const getDefinitionBlockReason = (
 
   if (input.source === "chat_surface" && !isSafeChatSurfaceTool(definition)) {
     return "Capability is outside the chat_surface safe domain policy.";
+  }
+
+  if (input.source === "agent_intent" && COMPUTER_USE_TOOL_IDS.has(definition.id)) {
+    if (!definition.capabilities.networkAccess) {
+      return "Computer Use requires network access metadata for agent_intent exposure.";
+    }
   }
 
   if (

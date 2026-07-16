@@ -21,6 +21,8 @@ export const createDesktopThreadCreationPolicy =
           knowledgeBaseId?: string | null;
           roleId?: string | null;
           agentEnabled?: boolean | null;
+          ttsEnabled?: boolean | null;
+          imageEnabled?: boolean | null;
         }
       | undefined,
   ): ChatThreadCreationPolicy => ({
@@ -57,6 +59,13 @@ export const createDesktopThreadCreationPolicy =
           createInput.agentEnabled === null)
       ) {
         metadata.agentEnabled = createInput.agentEnabled;
+      }
+
+      if (createInput && typeof createInput.ttsEnabled === "boolean") {
+        metadata.ttsEnabled = createInput.ttsEnabled;
+      }
+      if (createInput && typeof createInput.imageEnabled === "boolean") {
+        metadata.imageEnabled = createInput.imageEnabled;
       }
 
       return Object.keys(metadata).length > 0 ? { metadata } : undefined;

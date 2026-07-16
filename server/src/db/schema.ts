@@ -579,6 +579,39 @@ export const ttsRefAudios = sqliteTable(
 export type TtsRefAudioRow = typeof ttsRefAudios.$inferSelect;
 export type NewTtsRefAudioRow = typeof ttsRefAudios.$inferInsert;
 
+export const chatMedia = sqliteTable(
+  "chat_media",
+  {
+    id: text("id").primaryKey(),
+    threadId: text("thread_id").notNull(),
+    messageId: text("message_id").notNull(),
+    taskId: text("task_id").notNull(),
+    mediaType: text("media_type", { enum: ["audio", "image"] }).notNull(),
+    absolutePath: text("absolute_path").notNull(),
+    mimeType: text("mime_type").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    messageIdx: index("idx_chat_media_message_id").on(table.messageId),
+    threadIdx: index("idx_chat_media_thread_id").on(table.threadId),
+    taskIdx: index("idx_chat_media_task_id").on(table.taskId),
+    pathUniqueIdx: uniqueIndex("idx_chat_media_absolute_path").on(table.absolutePath),
+  }),
+);
+
+export type ChatMediaRow = typeof chatMedia.$inferSelect;
+export type NewChatMediaRow = typeof chatMedia.$inferInsert;
+
+export const imageGenerationJobs = sqliteTable("image_generation_jobs", {
+  id: text("id").primaryKey(),
+  jobJson: text("job_json").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export type ImageGenerationJobRow = typeof imageGenerationJobs.$inferSelect;
+export type NewImageGenerationJobRow = typeof imageGenerationJobs.$inferInsert;
+
 export type IntegrationCapabilityMicroApp =
   typeof integrationCapabilityMicroApps.$inferSelect;
 export type NewIntegrationCapabilityMicroApp =
@@ -1157,6 +1190,12 @@ export const threads = sqliteTable(
       onDelete: "set null",
     }),
     agentEnabled: integer("agent_enabled", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    ttsEnabled: integer("tts_enabled", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    imageEnabled: integer("image_enabled", { mode: "boolean" })
       .notNull()
       .default(false),
     contextSummary: text("context_summary"),

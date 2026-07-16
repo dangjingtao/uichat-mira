@@ -5,6 +5,8 @@ import { resolveAgentTaskProvider } from "@/services/provider-proxy.service/reso
 import type { ComputerUseExecutor, ComputerUseExecutionCheckpoint, ComputerUseTask, ComputerUseRuntimeState, ComputerUseApprovalRequest, ComputerUsePlan } from "@/microapps/computer-use/core/types.js";
 import { createComputerUsePlan } from "@/microapps/computer-use/core/planning.js";
 import type { McpInvocationRecord } from "@/mcp/core/definitions.js";
+import { createOpenAICompatibleChatUrl } from "@/services/openai-compatible-provider.js";
+import { getProviderDefinition } from "@/providers/catalog.js";
 
 export const COMPUTER_USE_TOOL_IDS = ["browser_observe", "browser_act", "browser_assert"] as const;
 type ToolId = (typeof COMPUTER_USE_TOOL_IDS)[number];
@@ -38,13 +40,18 @@ export class ComputerUseModelTimeoutError extends Error {
 type PendingRun = { sessionId: string; messages: ComputerUseModelMessage[]; pendingArgs: Record<string, unknown>; pendingToolId: ToolId; invocationId: string; pendingCallId: string };
 
 const toolSchemas = COMPUTER_USE_TOOL_IDS.map((name) => {
-  const common = { type: "object", properties: { sessionId: { type: "string" } }, additionalProperties: false };
+  const common = { type: "object", additionalProperties: false };
   const parameters = name === "browser_observe"
-    ? { ...common, required: ["sessionId"], properties: { ...common.properties, includeScreenshot: { type: "boolean" } } }
+    ? { ...common, required: ["url"], properties: { url: { type: "string" }, includeScreenshot: { type: "boolean" } } }
     : name === "browser_act"
-      ? { type: "object", required: ["sessionId", "pageUrl", "snapshotHash", "action"], properties: { sessionId: { type: "string" }, pageUrl: { type: "string" }, snapshotHash: { type: "string" }, action: { type: "object", required: ["kind"], properties: { kind: { type: "string", enum: ["navigate", "click", "type", "select", "press", "scroll", "wait"] }, url: { type: "string" }, ref: { type: "string" }, text: { type: "string" }, value: { type: "string" }, key: { type: "string" }, x: { type: "number" }, y: { type: "number" }, timeoutMs: { type: "integer" } }, additionalProperties: false } }, additionalProperties: false }
-      : { type: "object", required: ["sessionId", "assertion"], properties: { sessionId: { type: "string" }, assertion: { type: "object", required: ["kind"], properties: { kind: { type: "string", enum: ["title", "url", "text", "visible", "value"] }, expected: { type: "string" }, ref: { type: "string" } }, additionalProperties: false } }, additionalProperties: false };
-  return { type: "function", function: { name, description: name === "browser_observe" ? "Observe the managed browser." : name === "browser_act" ? "Act on the managed browser using a current ref." : "Assert managed browser state.", parameters } };
+      ? { type: "object", required: ["pageUrl", "snapshotHash", "action"], properties: { pageUrl: { type: "string" }, snapshotHash: { type: "string" }, action: { type: "object", required: ["kind"], properties: { kind: { type: "string", enum: ["navigate", "click", "type", "select", "press", "scroll", "wait"] }, url: { type: "string" }, ref: { type: "string" }, text: { type: "string" }, value: { type: "string" }, key: { type: "string" }, x: { type: "number" }, y: { type: "number" }, timeoutMs: { type: "integer" } }, additionalProperties: false } }, additionalProperties: false }
+      : { type: "object", required: ["assertion"], properties: { assertion: { type: "object", required: ["kind"], properties: { kind: { type: "string", enum: ["title", "url", "text", "visible", "value"] }, expected: { type: "string" }, ref: { type: "string" } }, additionalProperties: false } }, additionalProperties: false };
+  const description = name === "browser_observe"
+    ? "Observe the managed browser. Provide the target url on the first call; sessionId is managed internally and must never be requested from the user. The result includes page.url, page.title, page.snapshotHash, observation.snapshot, and observation.visibleText."
+    : name === "browser_act"
+      ? "Perform one approved structured browser action using pageUrl and snapshotHash from the latest browser_observe result. Supported actions: navigate(url), click(ref), type(ref,text), select(ref,value), press(ref,key), scroll(x,y), wait(ref?,text?,timeoutMs?). Use exact current refs; sessionId is managed internally."
+      : "Assert the managed browser using one of title(expected), url(expected), text(expected), visible(ref), or value(ref,expected). Use the latest observation. The result includes assertion.passed and current page state; do not treat a failed assertion as success.";
+  return { type: "function", function: { name, description, parameters } };
 });
 
 const realProvider = (): ComputerUseModelProvider => ({
@@ -53,8 +60,9 @@ const realProvider = (): ComputerUseModelProvider => ({
   },
   async complete({ messages, signal }) {
     const resolved = resolveAgentTaskProvider("default");
-    const endpoint = `${resolved.baseUrl.replace(/\/+$/, "")}${resolved.providerCode === "ollama" ? "/api/chat" : "/v1/chat/completions"}`;
-    const body = resolved.providerCode === "ollama"
+    const protocol = getProviderDefinition(resolved.providerCode).chatAdapter;
+    const endpoint = protocol === "ollama" ? `${resolved.baseUrl.replace(/\/+$/, "")}/api/chat` : createOpenAICompatibleChatUrl(resolved.baseUrl);
+    const body = protocol === "ollama"
       ? { model: resolved.model, messages: messages.map(({ role, content }) => ({ role, content })), tools: toolSchemas, stream: false }
       : { model: resolved.model, messages, tools: toolSchemas, tool_choice: "auto", stream: false };
     const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json", ...(resolved.apiKey ? { authorization: `Bearer ${resolved.apiKey}` } : {}) }, body: JSON.stringify(body), signal });
@@ -157,7 +165,7 @@ export class ComputerUseModelExecutor implements ComputerUseExecutor {
       const call = response.message.tool_calls?.[0];
       if (!call) { this.pending.delete(task.id); return { status: "succeeded", currentStepId: "model-loop", evidenceEntries: [...runEvidence, { id: crypto.randomUUID(), kind: "observation", message: response.message.content || "Model completed the browser task.", createdAt: new Date().toISOString(), meta: { model: true } }], result: { status: "succeeded", summary: response.message.content || "Computer Use model completed the task.", completedAt: new Date().toISOString(), meta: { invocationCount: runEvidence.length } } }; }
       const args = parseArgs(call.function.arguments);
-      if (call.function.name === "browser_observe" && args.sessionId === undefined) args.sessionId = pending.sessionId;
+      if (args.sessionId === undefined) args.sessionId = pending.sessionId;
       const record: McpInvocationRecord = await executeInvocation({ toolId: call.function.name, args, approvedInvocations: approved, threadId: task.id, turnId: `computer-use-${round}` });
       runEvidence.push({ id: crypto.randomUUID(), kind: call.function.name === "browser_act" ? "action" : "observation", message: `${call.function.name} invocation ${record.status}.`, createdAt: new Date().toISOString(), meta: { invocationId: record.id, traceId: record.traceId, toolId: record.toolId, args: record.args, status: record.status, result: record.result, error: record.error } });
       pending.messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(record.result ?? record.error ?? record.approval ?? {}) });

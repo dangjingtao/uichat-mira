@@ -53,9 +53,16 @@ export type ComputerUseDebuggerService = {
 
 const now = () => new Date().toISOString();
 const toArtifactIds = (artifacts: BrowserArtifact[]) => artifacts.map((artifact) => artifact.id);
-const browserResultFromRecord = (record: McpInvocationRecord): BrowserToolResult => {
-  const result = (record.result as { result?: BrowserToolResult } | undefined)?.result;
-  if (result) return result;
+export const getDebuggerInvocationStatus = (invocationStatus: McpInvocationRecord["status"], resultOk: boolean): Invocation["status"] =>
+  invocationStatus === "awaiting_approval"
+    ? "awaiting_approval"
+    : invocationStatus === "completed" && resultOk
+      ? "succeeded"
+      : "failed";
+export const browserResultFromRecord = (record: McpInvocationRecord): BrowserToolResult => {
+  const result = record.result as BrowserToolResult | { result?: BrowserToolResult } | undefined;
+  if (result && "ok" in result && typeof result.ok === "boolean") return result;
+  if (result && "result" in result && result.result) return result.result;
   return { ok: false, sessionId: String(record.args.sessionId ?? ""), invocationId: record.id, page: { url: String(record.args.pageUrl ?? ""), title: "" }, artifacts: [], error: { code: record.status === "awaiting_approval" ? "approval_required" : record.error?.failureCode ?? "invocation_failed", message: record.approval?.reason ?? record.error?.message ?? "Computer Use invocation failed.", retryable: record.status === "awaiting_approval" } };
 };
 
@@ -76,13 +83,13 @@ export const createComputerUseDebuggerService = (input: {
     const result = browserResultFromRecord(invocation);
     const screenshot = result.artifacts.find((artifact) => artifact.kind === "screenshot");
     record.browser = { url: result.page.url, title: result.page.title, snapshotHash: result.page.snapshotHash, snapshot: result.observation?.snapshot, visibleText: result.observation?.visibleText, screenshotArtifact: screenshot ? `/microapps/computer-use/sessions/${record.sessionId}/artifacts/${encodeURIComponent(screenshot.id)}/content` : undefined };
-    const status = invocation.status === "completed" ? "succeeded" : invocation.status === "awaiting_approval" ? "awaiting_approval" : "failed";
+    const status = getDebuggerInvocationStatus(invocation.status, result.ok);
     record.invocations.push({ invocationId: invocation.id, tool, args, status, error: result.error ? { code: result.error.code, message: result.error.message } : undefined, artifactIds: toArtifactIds(result.artifacts), createdAt: now() });
     record.evidence.artifacts.push(...result.artifacts.map((artifact) => ({ id: artifact.id, kind: artifact.kind, title: artifact.title, uri: artifact.uri })));
     record.evidence.entries.push({ id: `evidence_${invocation.id}`, kind: tool === "browser_act" ? "action" : "observation", message: `${tool} completed with ${status}.`, createdAt: now(), artifactIds: toArtifactIds(result.artifacts), meta: { args, invocationId: invocation.id, traceId: invocation.traceId, status: invocation.status } });
     if (invocation.status === "awaiting_approval") record.approval = { status: "pending", approvalId: `approval_${invocation.id}`, invocationId: invocation.id, reason: invocation.approval?.reason };
     if (invocation.status === "completed" && tool === "browser_act") record.approval = record.approval ? { ...record.approval, status: "approved" } : undefined;
-    if (invocation.status === "failed") record.error = result.error ? { code: result.error.code, message: result.error.message } : undefined;
+    if (status === "failed") record.error = result.error ? { code: result.error.code, message: result.error.message } : { code: "browser_tool_failed", message: "Computer Use browser tool returned a failed result." };
     return record;
   };
   const invoke = async (record: DebuggerSession, tool: Invocation["tool"], args: Record<string, unknown>, approvedInvocations?: Array<{ toolId: string; inputHash: string }>) => apply(record, tool, args, await executeInvocation({ toolId: tool, args, approvedInvocations, threadId: record.sessionId, turnId: `debugger-${tool}` }));
@@ -102,7 +109,16 @@ export const createComputerUseDebuggerService = (input: {
     async assert(sessionId, value) { const record = getRecord(sessionId); if (!record) throw new Error("Browser session is not available."); return invoke(record, "browser_assert", { sessionId, ...value }, [{ toolId: "browser_assert", inputHash: createInvocationInputHash({ sessionId, ...value }) }]); },
     async approve(sessionId, invocationId) { const record = getRecord(sessionId); if (!record?.pending || record.pending.invocationId !== invocationId) throw new Error("Computer Use approval is not pending."); const args = record.pending.args; const next = await invoke(record, "browser_act", args, [{ toolId: "browser_act", inputHash: createInvocationInputHash(args) }]); resolveInvocationApproval({ invocationId, decision: "approved", resolutionInvocationId: next.invocations.at(-1)?.invocationId }); next.pending = undefined; return next; },
     async reject(sessionId, invocationId, reason) { const record = getRecord(sessionId); if (!record?.pending || record.pending.invocationId !== invocationId) throw new Error("Computer Use approval is not pending."); resolveInvocationApproval({ invocationId, decision: "rejected", reason: reason ?? "Browser action rejected." }); record.pending = undefined; record.approval = { ...record.approval, status: "rejected", invocationId, reason: reason ?? "Browser action rejected." }; record.invocations.push({ invocationId, tool: "browser_act", args: {}, status: "cancelled", error: { code: "COMPUTER_USE_APPROVAL_REJECTED", message: reason ?? "Browser action rejected." }, createdAt: now() }); record.evidence.entries.push({ id: `evidence_rejected_${invocationId}`, kind: "approval", message: reason ?? "Browser action rejected.", createdAt: now(), meta: { invocationId } }); record.result = { status: "cancelled", summary: "Browser action was rejected.", completedAt: now(), error: { code: "COMPUTER_USE_APPROVAL_REJECTED", message: reason ?? "Browser action rejected." } }; return record; },
-    async stop(sessionId) { const record = getRecord(sessionId); if (!record) throw new Error("Browser session is not available."); await input.sessions.stop(sessionId); record.status = "stopped"; record.result = { status: "cancelled", summary: "Browser session stopped.", completedAt: now() }; return record; },
+    async stop(sessionId) {
+      const record = getRecord(sessionId);
+      if (!record) throw new Error("Browser session is not available.");
+      if (record.status !== "stopped") await input.sessions.stop(sessionId);
+      record.status = "stopped";
+      record.pending = undefined;
+      record.approval = record.approval?.status === "pending" ? { ...record.approval, status: "rejected", reason: "Browser session stopped." } : record.approval;
+      record.result = { status: "cancelled", summary: "Browser session stopped.", completedAt: now() };
+      return record;
+    },
     async readArtifact(sessionId, artifactId) { const managedSession = managed(sessionId); const filePath = path.resolve(managedSession.artifactRoot, `${artifactId}.png`); if (path.dirname(filePath) !== path.resolve(managedSession.artifactRoot)) throw new Error("Artifact path is outside the session artifact root."); return { bytes: await fs.readFile(filePath), contentType: "image/png" }; },
   };
 };

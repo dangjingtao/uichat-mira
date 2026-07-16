@@ -171,3 +171,28 @@ Related:
   - 在 `powershell.exe` 不可用时切换到 `pwsh.exe`
   - 或通过统一 shell resolver 收口
 - 修复后补 capability 级单测和 chat 侧回归验证
+
+### 生图尺寸未持久化到服务商配置
+
+- Layer: image generation / provider configuration persistence
+- Status: Confirmed technical debt
+- Severity: Medium for image generation configuration reuse
+
+现象：
+
+- 生图界面可以选择输出尺寸；
+- 但选择结果没有稳定写入对应服务商配置；
+- 刷新页面、重新进入或聊天链路复用服务商配置时，尺寸可能恢复为默认值或丢失。
+
+边界：
+
+- 这是生图服务商配置持久化问题；
+- 不属于 T003 聊天媒体 UI 阻断；
+- 不修改已完成的 T001/T002/T003 行为作为临时规避。
+
+下一步：
+
+- 核对尺寸字段在生图表单、Provider 保存接口、数据库配置和读取回填链路中的字段名与归属；
+- 补 Provider 配置保存/刷新回填测试；
+- 补聊天侧复用当前服务商尺寸配置的回归测试；
+- 单独建立修复任务后再关闭本技术债。

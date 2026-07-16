@@ -33,6 +33,7 @@ import {
   createTtsSynthesis,
   type ApiProviderCatalog,
   getGptSovitsCatalog,
+  bindGptSovitsReferenceAudio,
   getTtsAudioPreviewUrl,
   getTtsOverview,
   getTtsVoices,
@@ -788,28 +789,41 @@ export default function TtsStudioPage() {
 
     setSavingProviderId("gpt_sovits");
     try {
+      let serverRefAudioId = selectedRefAudio?.serverRefAudioId;
+      if (selectedRefAudio && !serverRefAudioId) {
+        const saved = await saveTtsReferenceAudio(
+          toStoredGptSovitsRefAudioFile(selectedRefAudio),
+        );
+        serverRefAudioId = saved.refAudio.id;
+        await setStoredGptSovitsRefAudioServerId(selectedRefAudio.id, serverRefAudioId);
+        await bindGptSovitsReferenceAudio({
+          clientRefAudioId: selectedRefAudio.id,
+          serverRefAudioId,
+        });
+        await loadStoredRefAudios(selectedRefAudio.id);
+      }
+      const nextGptConfig = {
+        ...(draft.config ?? {}),
+        baseUrl: String(draft.config.baseUrl ?? "").trim(),
+        selectedRefAudioId,
+        ...(serverRefAudioId ? { serverRefAudioId } : {}),
+        promptText: gptForm.promptText.trim(),
+        gptModel: gptForm.gptModel,
+        sovitsModel: gptForm.sovitsModel,
+        promptLanguage: gptForm.promptLanguage,
+        textLanguage: gptForm.textLanguage,
+        cutMethod: gptForm.cutMethod,
+        sampleSteps: Number(gptForm.sampleSteps),
+        speed: Number(gptForm.speed),
+        pauseSecond: Number(gptForm.pauseSecond),
+        temperature: Number(gptForm.temperature),
+        topK: Number(gptForm.topK),
+        topP: Number(gptForm.topP),
+      };
       await updateTtsProvider("gpt_sovits", {
-        ...(gptProviderSavePayload ?? {
-          enabled: true,
-          displayName: draft.displayName.trim() || providerTitle.gpt_sovits,
-          config: {
-            ...(draft.config ?? {}),
-            baseUrl: String(draft.config.baseUrl ?? "").trim(),
-            selectedRefAudioId,
-            promptText: gptForm.promptText.trim(),
-            gptModel: gptForm.gptModel,
-            sovitsModel: gptForm.sovitsModel,
-            promptLanguage: gptForm.promptLanguage,
-            textLanguage: gptForm.textLanguage,
-            cutMethod: gptForm.cutMethod,
-            sampleSteps: Number(gptForm.sampleSteps),
-            speed: Number(gptForm.speed),
-            pauseSecond: Number(gptForm.pauseSecond),
-            temperature: Number(gptForm.temperature),
-            topK: Number(gptForm.topK),
-            topP: Number(gptForm.topP),
-          },
-        }),
+        enabled: true,
+        displayName: draft.displayName.trim() || providerTitle.gpt_sovits,
+        config: nextGptConfig,
       });
       message.success("GPT-SoVITS 配置已保存");
       await loadOverview();
@@ -899,6 +913,10 @@ export default function TtsStudioPage() {
         );
         await loadStoredRefAudios();
       }
+      await bindGptSovitsReferenceAudio({
+        clientRefAudioId: selectedRefAudio.id,
+        serverRefAudioId,
+      });
       const { job } = await createGptSovitsSynthesis({
         text: gptForm.text.trim(),
         refAudioId: serverRefAudioId,

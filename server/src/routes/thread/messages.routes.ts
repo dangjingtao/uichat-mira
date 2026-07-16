@@ -59,4 +59,22 @@ export const registerThreadMessageRoutes = async (app: FastifyInstance) => {
       return success({ deleted: true }, "Message deleted");
     }),
   );
+
+  app.patch<{
+    Params: { id: string; messageId: string };
+    Body: { metadata: Record<string, unknown> };
+  }>(
+    "/threads/:id/messages/:messageId/metadata",
+    { schema: threadRouteSchemas.updateMessageMetadata },
+    routeHandler("Failed to update message metadata", async (request) => {
+      const result = threadService.updateMessageMetadata(
+        request.params.id,
+        request.params.messageId,
+        request.authUser!.id,
+        request.body.metadata,
+      );
+      if (!result) throw notFound("Message not found");
+      return success(result, "Message metadata updated");
+    }),
+  );
 };

@@ -22,6 +22,10 @@ export interface ThreadMutationBody {
   roleId?: string | null;
   /** Whether built-in agent tools are enabled for this thread. */
   agentEnabled?: boolean | null;
+  /** Whether assistant TTS is enabled for this thread. */
+  ttsEnabled?: boolean | null;
+  /** Whether automatic role image generation is enabled for this thread. */
+  imageEnabled?: boolean | null;
   /** Optional persisted thread context summary. */
   contextSummary?: string | null;
 }

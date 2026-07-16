@@ -131,6 +131,20 @@ export function getTtsOverview() {
   return get<TtsOverview>(`${TTS_ROUTE}/overview`);
 }
 
+export function getGptSovitsReferenceAudioId() {
+  return get<{ refAudioId: string }>(`${TTS_ROUTE}/providers/gpt_sovits/ref-audio`);
+}
+
+export function bindGptSovitsReferenceAudio(input: {
+  clientRefAudioId: string;
+  serverRefAudioId: string;
+}) {
+  return put<{ providerId: string; clientRefAudioId: string; serverRefAudioId: string }>(
+    `${TTS_ROUTE}/providers/gpt_sovits/ref-audio-binding`,
+    input,
+  );
+}
+
 export function updateTtsProvider(
   providerId: TtsProviderId,
   payload: UpdateTtsProviderPayload,

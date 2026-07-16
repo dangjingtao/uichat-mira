@@ -150,6 +150,35 @@ const ttsRoutes: FastifyPluginAsync<TtsRouteOptions> = async (app, options) => {
     }),
   );
 
+  app.get(
+    "/microapps/tts/providers/gpt_sovits/ref-audio",
+    routeHandler("Failed to resolve GPT-SoVITS reference audio", async () => {
+      try {
+        return success({ refAudioId: ttsService.resolveGptSovitsReferenceAudioId() });
+      } catch (error) {
+        throw badRequest(error instanceof Error ? error.message : "GPT-SoVITS 参考音频未完成服务端绑定");
+      }
+    }),
+  );
+
+  app.put(
+    "/microapps/tts/providers/gpt_sovits/ref-audio-binding",
+    routeHandler("Failed to bind GPT-SoVITS reference audio", async (request) => {
+      try {
+        const body = request.body as { clientRefAudioId?: string; serverRefAudioId?: string };
+        return success(
+          ttsService.bindGptSovitsReferenceAudio({
+            clientRefAudioId: body.clientRefAudioId ?? "",
+            serverRefAudioId: body.serverRefAudioId ?? "",
+          }),
+          "GPT-SoVITS reference audio bound",
+        );
+      } catch (error) {
+        throw badRequest(error instanceof Error ? error.message : "GPT-SoVITS 参考音频绑定失败");
+      }
+    }),
+  );
+
   app.put(
     "/microapps/tts/providers/:providerId",
     routeHandler("Failed to update TTS provider config", async (request) => {

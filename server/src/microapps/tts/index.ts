@@ -6,6 +6,7 @@ import { spawn } from "node:child_process";
 import { modelConfigRepository } from "@/db/repositories/model-config.repository.js";
 import { providerConnectionRepository } from "@/db/repositories/provider-settings.repository.js";
 import { ttsRefAudiosRepository } from "@/db/repositories/tts-ref-audios.repository.js";
+import { ttsRefAudioBindingsRepository } from "@/db/repositories/tts-ref-audio-bindings.repository.js";
 import {
   ttsProviderConfigsRepository,
   type TtsProviderConfigRecord,
@@ -86,6 +87,70 @@ export type TtsService = ReturnType<typeof createTtsService>;
 const WINDOWS_PROVIDER_ID: TtsProviderId = "windows_builtin";
 const PIPER_PROVIDER_ID: TtsProviderId = "piper_local";
 const GPT_SOVITS_PROVIDER_ID: TtsProviderId = "gpt_sovits";
+
+const resolveConfiguredGptReferenceAudio = () => {
+  const provider = ttsProviderConfigsRepository.getByProviderId(GPT_SOVITS_PROVIDER_ID);
+  const configuredServerRefAudioId = provider?.config.serverRefAudioId;
+  if (typeof configuredServerRefAudioId === "string" && configuredServerRefAudioId.trim()) {
+    const refAudio = ttsRefAudiosRepository.getById(configuredServerRefAudioId.trim());
+    if (!refAudio) {
+      throw new Error("GPT-SoVITS 服务端参考音频不存在");
+    }
+    return {
+      clientRefAudioId: typeof provider?.config.selectedRefAudioId === "string"
+        ? provider.config.selectedRefAudioId
+        : null,
+      serverRefAudioId: refAudio.id,
+    };
+  }
+  const clientRefAudioId = provider?.config.selectedRefAudioId;
+  if (typeof clientRefAudioId !== "string" || !clientRefAudioId.trim()) {
+    throw new Error("GPT-SoVITS 参考音频未完成服务端绑定");
+  }
+  const binding = ttsRefAudioBindingsRepository.get(GPT_SOVITS_PROVIDER_ID, clientRefAudioId);
+  if (!binding) {
+    const promptText = typeof provider?.config.promptText === "string"
+      ? provider.config.promptText.trim()
+      : "";
+    const matches = promptText
+      ? ttsRefAudiosRepository.listSummaries().filter((audio) => {
+          const marker = audio.originalName.indexOf("]");
+          const embeddedPrompt = marker >= 0
+            ? audio.originalName.slice(marker + 1).replace(/\.wav$/iu, "").trim()
+            : "";
+          return embeddedPrompt === promptText;
+        })
+      : [];
+    if (matches.length === 1) {
+      const resolved = matches[0];
+      ttsRefAudioBindingsRepository.upsert(
+        GPT_SOVITS_PROVIDER_ID,
+        clientRefAudioId,
+        resolved.id,
+      );
+      ttsProviderConfigsRepository.upsert(GPT_SOVITS_PROVIDER_ID, {
+        enabled: provider?.enabled ?? true,
+        displayName: provider?.displayName ?? "GPT-SoVITS",
+        config: {
+          ...(provider?.config ?? {}),
+          serverRefAudioId: resolved.id,
+        },
+      });
+      return { clientRefAudioId, serverRefAudioId: resolved.id };
+    }
+    if (matches.length > 1) {
+      throw new Error("GPT-SoVITS 参考音频服务端匹配不唯一");
+    }
+  }
+  if (!binding) {
+    throw new Error("GPT-SoVITS 参考音频未完成服务端绑定");
+  }
+  const refAudio = ttsRefAudiosRepository.getById(binding.serverRefAudioId);
+  if (!refAudio) {
+    throw new Error("GPT-SoVITS 服务端参考音频不存在");
+  }
+  return { clientRefAudioId, serverRefAudioId: refAudio.id };
+};
 const API_PROVIDER_ID: TtsProviderId = "api_provider";
 const OPENAI_COMPATIBLE_VOICE_PROVIDER_CODES = new Set([
   "openai",
@@ -403,12 +468,12 @@ const basenameWithoutExt = (filePath: string) =>
 const isHttpUrl = (value: string) => /^https?:\/\//iu.test(value);
 
 const pickRequestString = (
-  value: string,
+  value: string | undefined,
   providerConfig: Record<string, unknown>,
   key: string,
   fallback = "",
 ) => {
-  const trimmed = value.trim();
+  const trimmed = (value ?? "").trim();
   if (trimmed) {
     return trimmed;
   }
@@ -1067,6 +1132,42 @@ export const createTtsService = (options?: { artifactRoot?: string }) => {
       return ttsProviderConfigsRepository.getByProviderId(providerId);
     },
 
+    resolveGptSovitsReferenceAudioId() {
+      return resolveConfiguredGptReferenceAudio().serverRefAudioId;
+    },
+
+    bindGptSovitsReferenceAudio(input: {
+      clientRefAudioId: string;
+      serverRefAudioId: string;
+    }) {
+      const clientRefAudioId = input.clientRefAudioId.trim();
+      const serverRefAudioId = input.serverRefAudioId.trim();
+      if (!clientRefAudioId || !serverRefAudioId) {
+        throw new Error("GPT-SoVITS 参考音频绑定参数不完整");
+      }
+      if (!ttsRefAudiosRepository.getById(serverRefAudioId)) {
+        throw new Error("GPT-SoVITS 服务端参考音频不存在");
+      }
+      const binding = ttsRefAudioBindingsRepository.upsert(
+        GPT_SOVITS_PROVIDER_ID,
+        clientRefAudioId,
+        serverRefAudioId,
+      );
+      const provider = ttsProviderConfigsRepository.getByProviderId(GPT_SOVITS_PROVIDER_ID);
+      if (provider) {
+        ttsProviderConfigsRepository.upsert(GPT_SOVITS_PROVIDER_ID, {
+          enabled: provider.enabled,
+          displayName: provider.displayName,
+          config: {
+            ...provider.config,
+            selectedRefAudioId: clientRefAudioId,
+            serverRefAudioId,
+          },
+        });
+      }
+      return binding;
+    },
+
     updateProvider(
       providerId: TtsProviderId,
       input: {
@@ -1242,9 +1343,15 @@ export const createTtsService = (options?: { artifactRoot?: string }) => {
         throw new Error(`TTS provider is unavailable: ${GPT_SOVITS_PROVIDER_ID}`);
       }
 
-      let refAudioPath = (request.refAudioPath ?? "").trim();
-      if (request.refAudioId) {
-        const storedRefAudio = ttsRefAudiosRepository.getById(request.refAudioId);
+      const requestedRefAudioId = request.refAudioId?.trim();
+      const requestedRefAudioPath = request.refAudioPath?.trim();
+      const configuredReference = upload || requestedRefAudioId || requestedRefAudioPath
+        ? null
+        : resolveConfiguredGptReferenceAudio();
+      let effectiveRefAudioId = requestedRefAudioId ?? configuredReference?.serverRefAudioId ?? "";
+      let refAudioPath = requestedRefAudioPath ?? "";
+      if (effectiveRefAudioId) {
+        const storedRefAudio = ttsRefAudiosRepository.getById(effectiveRefAudioId);
         if (!storedRefAudio) {
           throw new Error(`GPT-SoVITS 参考音频不存在：${request.refAudioId}`);
         }
@@ -1257,6 +1364,7 @@ export const createTtsService = (options?: { artifactRoot?: string }) => {
           originalName: upload.fileName,
           mimeType: upload.mimeType,
         });
+        effectiveRefAudioId = storedRefAudio.summary.id;
         refAudioPath = resolveTtsRefAudioUrl(storedRefAudio.summary.id);
       } else if (refAudioPath.startsWith("/microapps/tts/ref-audios/")) {
         refAudioPath = ttsRefAudioStorageService.resolveAbsoluteUrlFromPublicPath(refAudioPath);
@@ -1296,6 +1404,7 @@ export const createTtsService = (options?: { artifactRoot?: string }) => {
               ? provider.config.baseUrl.trim()
               : getDefaultGptSovitsServiceUrl(),
           refAudioPath: resolvedRequest.refAudioPath,
+          refAudioId: effectiveRefAudioId,
           promptText: resolvedRequest.promptText,
           promptLanguage: resolvedRequest.promptLanguage,
           textLanguage: resolvedRequest.textLanguage,

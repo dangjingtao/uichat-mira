@@ -202,6 +202,15 @@ export interface McpArtifact {
   metadata?: Record<string, unknown>;
 }
 
+export interface McpToolEvidence {
+  actionTaken: string;
+  facts: string[];
+  gaps?: string[];
+  error?: string;
+  status?: "completed" | "failed" | "partial" | "blocked" | "denied" | "timed_out" | "truncated" | "binaryDetected";
+  data?: unknown;
+}
+
 export interface McpInvocationRecord {
   id: string;
   toolId: string;
@@ -209,6 +218,7 @@ export interface McpInvocationRecord {
   args: Record<string, unknown>;
   traceId?: string;
   result?: unknown;
+  evidence?: McpToolEvidence;
   error?: {
     message: string;
     failureCode?: McpInvocationFailureCode;
@@ -381,6 +391,7 @@ export interface McpInvocationContext {
 
 export interface McpToolExecutionResult {
   result?: unknown;
+  evidence?: McpToolEvidence;
 }
 
 export interface McpToolImplementation {

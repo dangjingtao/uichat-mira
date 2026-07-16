@@ -8,6 +8,8 @@ import { modelConfigRepository } from "@/db/repositories/model-config.repository
 import { providerConnectionRepository } from "@/db/repositories/provider-settings.repository.js";
 import { ttsProviderConfigsRepository } from "@/db/repositories/tts-provider-configs.repository.js";
 import { ttsSynthesisJobsRepository } from "@/db/repositories/tts-synthesis-jobs.repository.js";
+import { ttsRefAudiosRepository } from "@/db/repositories/tts-ref-audios.repository.js";
+import { ttsRefAudioBindingsRepository } from "@/db/repositories/tts-ref-audio-bindings.repository.js";
 import { llmService } from "@/services/llm.service.js";
 import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 import { encryptSecret } from "@/utils/crypto.js";
@@ -58,6 +60,8 @@ beforeEach(() => {
   initializeModelConfigDatabase();
   ttsProviderConfigsRepository.initialize();
   ttsSynthesisJobsRepository.initialize();
+  ttsRefAudiosRepository.initialize();
+  ttsRefAudioBindingsRepository.initialize();
   synthesizeWithGptSovitsMock.mockReset();
   synthesizeWithGptSovitsMock.mockResolvedValue({
     mimeType: "audio/wav",
@@ -113,18 +117,6 @@ test("synthesizeGptSovits merges saved provider config into sparse request paylo
   const job = await service.synthesizeGptSovits({
     text: "你好",
     refAudioPath,
-    promptText: "",
-    promptLanguage: "",
-    textLanguage: "",
-    gptModel: "",
-    sovitsModel: "",
-    cutMethod: "",
-    sampleSteps: Number.NaN,
-    speed: Number.NaN,
-    pauseSecond: Number.NaN,
-    temperature: Number.NaN,
-    topK: Number.NaN,
-    topP: Number.NaN,
   });
 
   assert.equal(synthesizeWithGptSovitsMock.mock.calls.length, 1);
@@ -149,6 +141,90 @@ test("synthesizeGptSovits merges saved provider config into sparse request paylo
   assert.equal(job.requestConfig.sovitsModel, "不训练直接推v2ProPlus底模！");
   assert.equal(job.requestConfig.temperature, 0);
   assert.equal(job.requestConfig.topP, 0);
+});
+
+test("synthesizeGptSovits resolves the server reference audio from the persisted binding", async () => {
+  const stored = ttsRefAudiosRepository.saveOrGet({
+    buffer: Buffer.from("RIFF-bound"),
+    originalName: "bound.wav",
+    mimeType: "audio/wav",
+  });
+  ttsProviderConfigsRepository.upsert("gpt_sovits", {
+    enabled: true,
+    config: {
+      selectedRefAudioId: "indexed-db-local-id",
+      baseUrl: "http://127.0.0.1:9872",
+      gptModel: "gpt-model",
+      sovitsModel: "sovits-model",
+    },
+  });
+  ttsRefAudioBindingsRepository.upsert("gpt_sovits", "indexed-db-local-id", stored.summary.id);
+
+  const job = await createTtsService({ artifactRoot }).synthesizeGptSovits({ text: "你好" });
+  const [input] = synthesizeWithGptSovitsMock.mock.calls[0] as Array<[{
+    request: Record<string, unknown>;
+  }]>;
+  assert.match(String(input.request.refAudioPath), /\/microapps\/tts\/ref-audios\//u);
+  assert.equal(job.requestConfig.refAudioId, stored.summary.id);
+  assert.match(String(job.requestConfig.refAudioPath), /\/microapps\/tts\/ref-audios\//u);
+});
+
+test("synthesizeGptSovits uses the provider's persisted server reference audio id", async () => {
+  const stored = ttsRefAudiosRepository.saveOrGet({
+    buffer: Buffer.from("RIFF-configured"),
+    originalName: "configured.wav",
+    mimeType: "audio/wav",
+  });
+  ttsProviderConfigsRepository.upsert("gpt_sovits", {
+    enabled: true,
+    config: {
+      selectedRefAudioId: "indexed-db-local-id",
+      serverRefAudioId: stored.summary.id,
+      gptModel: "gpt-model",
+      sovitsModel: "sovits-model",
+    },
+  });
+
+  const job = await createTtsService({ artifactRoot }).synthesizeGptSovits({ text: "你好" });
+  assert.equal(job.requestConfig.refAudioId, stored.summary.id);
+  assert.equal(ttsRefAudioBindingsRepository.get("gpt_sovits", "indexed-db-local-id"), null);
+});
+
+test("synthesizeGptSovits resolves an unbound local selection from persisted reference metadata", async () => {
+  const stored = ttsRefAudiosRepository.saveOrGet({
+    buffer: Buffer.from("RIFF-metadata-match"),
+    originalName: "[白洁]白洁，今年二十四岁，毕业于一所地方师范学院.wav",
+    mimeType: "audio/wav",
+  });
+  ttsProviderConfigsRepository.upsert("gpt_sovits", {
+    enabled: true,
+    config: {
+      selectedRefAudioId: "indexed-db-local-id",
+      promptText: "白洁，今年二十四岁，毕业于一所地方师范学院",
+      gptModel: "gpt-model",
+      sovitsModel: "sovits-model",
+    },
+  });
+
+  const job = await createTtsService({ artifactRoot }).synthesizeGptSovits({ text: "你好" });
+  assert.equal(job.requestConfig.refAudioId, stored.summary.id);
+  assert.equal(
+    ttsRefAudioBindingsRepository.get("gpt_sovits", "indexed-db-local-id")?.serverRefAudioId,
+    stored.summary.id,
+  );
+});
+
+test("synthesizeGptSovits rejects an unbound selected local reference audio id", async () => {
+  ttsProviderConfigsRepository.upsert("gpt_sovits", {
+    enabled: true,
+    config: { selectedRefAudioId: "unbound-indexed-db-id" },
+  });
+
+  await assert.rejects(
+    () => createTtsService({ artifactRoot }).synthesizeGptSovits({ text: "你好" }),
+    /GPT-SoVITS 参考音频未完成服务端绑定/u,
+  );
+  assert.equal(synthesizeWithGptSovitsMock.mock.calls.length, 0);
 });
 
 test("synthesizeGptSovits stores uploaded ref audio under backend static route", async () => {

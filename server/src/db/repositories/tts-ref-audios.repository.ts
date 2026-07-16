@@ -94,6 +94,15 @@ export const ttsRefAudiosRepository = {
       .get();
   },
 
+  listSummaries() {
+    ensureTable();
+    return getDb()
+      .select()
+      .from(ttsRefAudios)
+      .all()
+      .map(toSummary);
+  },
+
   touch(id: string) {
     ensureTable();
     getDb()

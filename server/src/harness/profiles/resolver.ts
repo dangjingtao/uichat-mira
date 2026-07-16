@@ -63,6 +63,15 @@ const INTERNAL_PROFILE_BLUEPRINTS: Array<{
     supportingToolIds: ["web_search"],
   },
   {
+    id: "browser_computer_use",
+    title: "Browser Computer Use",
+    description: "Inspect and operate an explicitly scoped managed browser session, returning structured page evidence.",
+    domain: "browser_action",
+    tags: ["browser", "website", "webpage", "page", "open", "visit", "navigate", "title", "inspect", "computer-use", "网页", "页面", "打开", "访问"],
+    preferredToolId: "browser_observe",
+    supportingToolIds: ["browser_observe", "browser_act", "browser_assert"],
+  },
+  {
     id: "news_research",
     title: "News Research",
     description: "Search configured local news sources and public web results.",

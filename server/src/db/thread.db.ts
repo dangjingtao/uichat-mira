@@ -405,6 +405,13 @@ const ensureThreadAgentEnabledColumn = () => {
       ADD COLUMN agent_enabled INTEGER NOT NULL DEFAULT 0 CHECK (agent_enabled IN (0, 1));
     `);
   }
+
+  if (!hasSqliteColumn(sqlite, "threads", "tts_enabled")) {
+    sqlite.exec("ALTER TABLE threads ADD COLUMN tts_enabled INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!hasSqliteColumn(sqlite, "threads", "image_enabled")) {
+    sqlite.exec("ALTER TABLE threads ADD COLUMN image_enabled INTEGER NOT NULL DEFAULT 0");
+  }
 };
 
 const ensureThreadContextSummaryColumns = () => {

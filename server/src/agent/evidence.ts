@@ -135,6 +135,19 @@ const summarizeToolResult = (
   execution: AgentToolExecutionResult,
   evidenceIndex: number,
 ): AgentEvidenceSummary => {
+  if (execution.evidence) {
+    return baseSummary({
+      execution,
+      evidenceIndex,
+      actionTaken: execution.evidence.actionTaken,
+      facts: execution.evidence.facts,
+      gaps: execution.evidence.gaps,
+      error: execution.evidence.error,
+      status: execution.evidence.status,
+      data: execution.evidence.data,
+    });
+  }
+
   const result = execution.result;
   if (!isRecord(result)) {
     return baseSummary({

@@ -98,6 +98,40 @@ test("PATCH /threads/:id returns 200 when unbinding knowledgeBaseId to null", as
   await app.close();
 });
 
+test("thread media switches persist through create and patch", async () => {
+  const app = Fastify({ logger: getLoggerConfig(), serializerOpts: { encoding: "utf8" } });
+  app.setErrorHandler(sendRouteError);
+  await app.register(threadRoute);
+  const user = userRepository.create({
+    username: `user-${crypto.randomUUID()}`,
+    passwordHash: "hash",
+    role: "user",
+    isActive: true,
+  });
+  const token = createAccessToken({ id: user.id, username: user.username, role: user.role });
+  const created = await app.inject({
+    method: "POST",
+    url: "/threads",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    payload: { ttsEnabled: true, imageEnabled: true },
+  });
+  assert.equal(created.statusCode, 200, created.body);
+  const createdThread = created.json().data as { id: string; ttsEnabled: boolean; imageEnabled: boolean };
+  assert.equal(createdThread.ttsEnabled, true);
+  assert.equal(createdThread.imageEnabled, true);
+
+  const updated = await app.inject({
+    method: "PATCH",
+    url: `/threads/${createdThread.id}`,
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    payload: { ttsEnabled: false, imageEnabled: false },
+  });
+  assert.equal(updated.statusCode, 200, updated.body);
+  assert.equal(updated.json().data.ttsEnabled, false);
+  assert.equal(updated.json().data.imageEnabled, false);
+  await app.close();
+});
+
 test("DELETE /threads/history removes all user threads and keeps workspaces", async () => {
   const app = Fastify({
     logger: getLoggerConfig(),

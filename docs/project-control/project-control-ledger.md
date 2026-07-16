@@ -53,10 +53,11 @@ related:
 | MicroAPP Computer Use Feature Design | `READY_FOR_REVIEW` | `computer_use` 第一阶段浏览器工作台功能设计：入口、状态、审批、安装引导、结果回放 | [microapp_T003](tasks/microapp_T003-computer-use-feature-design.md), [computer-use-feature-design.md](../microapp/computer-use-feature-design.md) | 当前只提交 docs-only 功能设计；未批准 runtime / DB / UI / browser runtime implementation |
 | MicroAPP Computer Use Parallel Build | `READY_FOR_REVIEW` | 并行施工代码隔离：共享注册层、server core、runtime/executor、route、desktop API、desktop 工作台，以及产品入口衔接卡 | [microapp_T020](tasks/microapp_T020-computer-use-parallel-code-isolation.md), [microapp_T110-T116](tasks/microapp_T110-computer-use-shared-registry-and-seed.md) | 当前已补入口衔接任务卡；实现与评审按各自任务状态推进 |
 | MicroAPP Computer Use Smoke | `READY_FOR_REVIEW` | `Computer Use Studio` 产品入口级冒烟已补第二轮真实证据：即使目标明确要求输出页面标题和主标题文本，当前链路仍只生成“导航 + 截图”plan，并返回同样的截图型结果摘要 | [microapp_T117](tasks/microapp_T117-computer-use-browser-smoke.md) | 证据目录已回填到 `.test-artifact/computer-use-smoke/2026-07-06-T117/`；当前阻塞已收敛为一期能力边界，不再只是证据缺失 |
-| MicroAPP Computer Use Debugger Rebuild | `READY_FOR_REVIEW` | 用 5 张新任务卡重建真实浏览器调试闭环：运行时、浏览器工具、MCP/模型治理、全新 Debugger UI、集成验收 | [microapp_T118-T122](tasks/microapp_T118-computer-use-runtime-and-managed-browser.md) | T118 已完成；T122 已补齐验收测试和证据，真实 provider / 真实浏览器二进制 smoke 因运行条件未配置而明确记为 `SKIPPED` |
+| MicroAPP Computer Use Debugger Rebuild | `READY_FOR_REVIEW` | 用 5 张新任务卡重建真实浏览器调试闭环：运行时、浏览器工具、MCP/模型治理、全新 Debugger UI、集成验收 | [microapp_T118-T122](tasks/microapp_T118-computer-use-runtime-and-managed-browser.md) | T122-fix 已完成代码和前台 Debugger 复测；observe/stop HTTP 500 已修复，Agent 真实 provider tool-loop 因模型未配置仍待条件复测 |
 | MicroAPP Info MCP | `DONE` | 资讯中心接入 `web_search` 内部来源，邮件中心接入单一 `mail_query`，复用 Harness embedding / rerank 能力并补齐 MCP 治理 | [microapp_info_mcp_001](tasks/microapp_info_mcp_001-news-search-integration.md), [microapp_info_mcp_002](tasks/microapp_info_mcp_002-mail-query.md), [microapp_info_mcp_003](tasks/microapp_info_mcp_003-harness-mcp-governance.md) | 三张任务卡已完成；OpenAI tunnel / 倾城时光不在本包 |
 | MicroAPP Image Generation Parallel Build | `IN_PROGRESS` | 并行施工代码隔离：共享注册层、server domain、adapter、route、desktop API、desktop 调试页，以及产品入口衔接卡 | [microapp_T010](tasks/microapp_T010-image-generation-parallel-code-isolation.md), [microapp_T100](tasks/microapp_T100-image-generation-shared-registry-and-seed.md), [microapp_T106](tasks/microapp_T106-image-generation-desktop-entry-integration.md) | `T100`、`T101`、`T103`、`T104`、`T105`、`T106` 已 DONE；`T102` 待评审 |
 | MicroAPP Image Generation Smoke | `DONE` | `ComfyUI Local` 产品入口级冒烟：从当前微应用列表页进入 `Image Generation Studio`，使用合法 workflow 跑真实任务终态并保留证据 | [microapp_T107](tasks/microapp_T107-image-generation-comfyui-smoke.md), [image-generation-comfyui-smoke-guide.md](../microapp/image-generation-comfyui-smoke-guide.md) | 已完成两轮真实冒烟；第二轮在补齐 `UI_CHAT_IMAGE_GENERATION_COMFYUI_BASE_URL` 并重启 backend 后成功到 `succeeded` |
+| MicroAPP Chat Media Integration | `DONE` | 在现有聊天消息完成后接入 TTS 和 RP 生图；只扩展媒体任务、线程开关、消息关联、界面展示和清理，不修改 AgentGraph、RAG、Chat、Role 核心逻辑 | [microapp_chat_T001](tasks/microapp_chat_T001-media-persistence-and-lifecycle.md), [microapp_chat_T002](tasks/microapp_chat_T002-thread-media-capabilities-and-orchestration.md), [microapp_chat_T003](tasks/microapp_chat_T003-chat-media-ui.md), [microapp_chat_T004](tasks/microapp_chat_T004-integration-acceptance.md) | T001、T002、T003 已 DONE；T004 仍为 `TODO`，按 T001 → T002 → T003 → T004 执行 |
 
 ## Active Review Queue
 
@@ -113,6 +114,15 @@ related:
 | [microapp_T106](tasks/microapp_T106-image-generation-desktop-entry-integration.md) | `DONE` | 已补列表页稳定主入口、详情页边界说明和页面测试证据；用户无需手输 URL 即可进入 `Image Generation Studio` |
 | [microapp_T107](tasks/microapp_T107-image-generation-comfyui-smoke.md) | `DONE` | 已完成 `ComfyUI Local` 冒烟；第二轮已真实跑通 `queued -> running -> succeeded`，并回收到本地预览图 |
 
+## MicroAPP Chat Media Integration Task Index
+
+| Task | Ledger State | Notes |
+| --- | --- | --- |
+| [microapp_chat_T001](tasks/microapp_chat_T001-media-persistence-and-lifecycle.md) | `DONE` | 媒体消息关联、绝对路径持久化、读取接口、删除和生图任务持久化；不修改 ChatMessagePart；定向测试 5 files / 44 tests，server typecheck 通过 |
+| [microapp_chat_T002](tasks/microapp_chat_T002-thread-media-capabilities-and-orchestration.md) | `DONE` | GPT-SoVITS 聊天调用链已接入；桌面定向 20 项、服务端定向 27 项、两端 typecheck 与带堆上限的 `pnpm check` 通过。Provider 配置使用权威 `serverRefAudioId`，真实专用合成已验证 |
+| [microapp_chat_T003](tasks/microapp_chat_T003-chat-media-ui.md) | `DONE` | TTS 播放按钮、图片按钮显示规则、助手文字下方图片和媒体状态展示；前台烟测通过，定向 UI 回归 39 tests passed |
+| [microapp_chat_T004](tasks/microapp_chat_T004-integration-acceptance.md) | `DONE` | 完成 Chat/RAG/Role/Role+RAG 集成验收；服务端媒体回归 6 files / 62 tests、桌面媒体回归 5 files / 50 tests、两端 typecheck、带堆上限的 `pnpm check` 通过；未修改产品业务代码 |
+
 ## MicroAPP Computer Use Parallel Task Index
 
 | Task | Ledger State | Notes |
@@ -142,7 +152,10 @@ related:
 | [microapp_T119](tasks/microapp_T119-computer-use-browser-session-and-tools.md) | `TODO` | 浏览器 session 与 `browser_observe / browser_act / browser_assert` 执行能力 |
 | [microapp_T120](tasks/microapp_T120-computer-use-mcp-model-governance.md) | `TODO` | MCP 注册、真实模型循环、审批、trace、evidence 和调用持久化 |
 | [microapp_T121](tasks/microapp_T121-computer-use-debugger-rebuild.md) | `TODO` | 从零重建 Debugger 页面，不参考当前 `Computer Use Studio` 界面 |
-| [microapp_T122](tasks/microapp_T122-computer-use-integration-and-acceptance.md) | `READY_FOR_REVIEW` | 集成验收、旧固定规则主路径清理和端到端证据；server `5/5`、MCP `2/2`、desktop `1/1`，真实 provider smoke `SKIPPED` |
+| [microapp_T122](tasks/microapp_T122-computer-use-integration-and-acceptance.md) | `READY_FOR_REVIEW` | 集成验收、前端黑盒用例和端到端证据；第二轮前台黑盒 `PASS=9`、`FAIL=8`、`SKIPPED=3`；剩余 browser_act action schema 和正确标题断言缺陷 |
+| [microapp_T122-fix](tasks/microapp_T122-fix-computer-use-runtime-and-agent-entry.md) | `READY_FOR_REVIEW` | Debugger observe/stop HTTP 500 已修复；浏览器意图只暴露 `browser_*`，真实 provider 前台复测待模型配置；明确不得修改 AgentGraph |
+| [microapp_T122-hotFix](tasks/microapp_T122-hotFix-computer-use-tool-session-lifecycle.md) | `READY_FOR_REVIEW` | 工具侧完成 Session 创建、复用和内部注入；Agent-facing schema 不再要求 `sessionId`；定向 12 测试和 `pnpm check` 通过，待真实 AgentTaskModel 前台复测 |
+| [microapp_T123](tasks/microapp_T123-computer-use-agent-task-model-config-and-run.md) | `DONE` | Debugger 已显示 AgentTaskModel 并完成真实 Computer Use task run；不得修改 AgentGraph |
 
 ## Agent Nodes Index
 
@@ -272,6 +285,12 @@ related:
 | [T-014](tasks/T-014-cross-layer-diagnostics-closure.md) | `DONE` | cross-layer diagnostics closure（dedicated regression + evidence/generate fix） |
 | [T-DeepAgents-01](tasks/T-DeepAgents-01-deepagents-js-spike.md) | `READY_FOR_REVIEW` | deepagents 独立集成验证已完成，结论是“有条件通过”，不进入现有 Harness 主线 |
 | [T-DeepAgents-02](tasks/T-DeepAgents-02-selector-middleware-baseline.md) | `READY_FOR_REVIEW` | baseline 已整改为诚实口径：middleware wiring 通过，real selector baseline 在当前环境 `SKIPPED`，selector quality `NOT PROVEN`，不进入现有 Harness 主线 |
+
+## Technical Debt Index
+
+| Debt ID | Status | Summary | Evidence |
+| --- | --- | --- | --- |
+| `TD-AGENT-02` | `OPEN` | AgentGraph 最终回答阶段未可靠消费结构化工具结果；当前不修改 AgentGraph 主链 | [TD-AGENT-02](decisions/TD-AGENT-02-tool-result-answer-context-gap.md) |
 
 ## Non-Ledger Evidence Files
 
