@@ -1,6 +1,13 @@
+---
+task_state: DONE
+owner: project-owner
+repository: dangjingtao/uichat-mira
+baseline_branch: dev
+---
+
 # A18_T004 — MicroAPP Definition 版本化迁移
 
-- 状态：READY
+- 状态：DONE
 - 仓库：`dangjingtao/uichat-mira`
 - 基线分支：`dev`
 - 类型：P1 技术债 / 数据兼容
@@ -130,3 +137,66 @@ definitionSchemaVersion: number
 - 是否影响现有黑盒、审批、Evidence、Trace。
 - 已知限制。
 - 一个独立提交；不得夹带全仓格式化、依赖升级或无关清理。
+
+## 施工证据
+
+### 改动文件
+
+- `server/src/db/schema.ts`
+  - 增加 `micro_app_definitions.definition_schema_version` 持久化字段，默认旧版本 `0`。
+- `server/src/db/repositories/micro-apps.repository.ts`
+  - 增加当前版本常量 `CURRENT_MICRO_APP_DEFINITION_SCHEMA_VERSION = 1`。
+  - 每个默认 seed 显式声明版本 `1`。
+  - 初始化时补列，顺序为建表/补列、legacy 迁移、缺失 seed、版本迁移。
+  - 已知 seed 的系统字段按版本迁移，保留 `name`、`enabled` 和绑定记录。
+  - 已知定义迁移使用 SQLite 事务；非法 JSON 显式抛错并回滚本批迁移。
+- `server/src/db/repositories/micro-apps.repository.test.ts`
+  - 覆盖旧表、全部已知 seed、版本迁移、用户字段、未知 type、幂等、非法 JSON 回滚及 `list/getByType`。
+
+### 实现提交
+
+- `3f2ea4b4 feat: migrate micro-app definitions by schema version`
+- 当前整改提交：补充全部 seed 可见性证据、非法 JSON 回滚证据及任务卡验收记录。
+
+## 验收证据矩阵
+
+| # | 必测场景 | 证据 | 结果 |
+|---|---|---|---|
+| 1 | 新数据库默认 definitions 带当前 version | `seeds every default definition with the current version`；断言所有返回记录版本为 `CURRENT_MICRO_APP_DEFINITION_SCHEMA_VERSION` | 通过 |
+| 2 | 旧表缺 version 列时安全补列并迁移 | `backfills stale knowledge_query definitions so the settings card remains visible`；测试先创建无版本列旧表，再执行 `initialize()`，断言旧记录迁移为版本 `1` | 通过 |
+| 3 | version 低且字段非空但语义过期时能升级 | `migrates non-empty stale system fields without overwriting user fields`；断言非空旧 description/access point/runtime/binding schema 被系统版本更新 | 通过 |
+| 4 | 用户字段不被覆盖 | 同上；断言用户 `name` 与 `enabled=false` 迁移后保持不变 | 通过 |
+| 5 | 当前 version 幂等 | `is idempotent at the current version and preserves unknown types`；连续两次 `initialize()`，断言 ID 与版本不变；版本迁移只处理低版本 | 通过 |
+| 6 | 未知 type 保持原样 | 同上；插入 `vendor_custom` 后断言 type、name、description、版本均未改变 | 通过 |
+| 7 | 非法 JSON / 迁移中断有明确策略 | `fails explicitly and rolls back all definition updates on invalid JSON`；断言抛出 `Cannot migrate micro-app definition JSON`，且同批其他旧记录与非法记录均保持迁移前状态 | 通过 |
+| 8 | 迁移后 list/getByType 正常 | `returns every known seed through list and getByType with visible card metadata`；7 个已知 seed 逐一比较 `list()` 与 `getByType()` 结果 | 通过 |
+| 9 | access point/runtime key/binding schema 升级后不隐藏卡片 | 同上；逐一断言 7 个 seed 的 access point、runtime key、binding field keys、`enabled=true` 与当前版本 | 通过 |
+
+### 实际验证命令
+
+```text
+pnpm --filter @ui-chat-mira/server exec vitest run src/db/repositories/micro-apps.repository.test.ts
+结果：1 个测试文件，6/6 tests passed。
+
+pnpm --filter @ui-chat-mira/server typecheck
+结果：通过。
+
+pnpm check
+结果：workspace 内 desktop、server、packages/core、packages/deepagents-spike、packages/docs-site typecheck 全部通过。
+
+git diff --check
+结果：通过。
+```
+
+## 影响边界
+
+- 不影响现有黑盒测试、审批、Evidence、Trace；本卡只改 MicroAPP definition 数据表和 repository 初始化迁移。
+- 未修改 AgentGraph、Agent capability、runtime、Sandbox、前端或注册中心。
+- 未修改 `pnpm-lock.yaml`，未升级依赖，未修改总台账。
+
+## 已知风险与未完成项
+
+- 当前版本为 `1`，后续 definition schema 变化必须新增明确的版本迁移步骤；不能复用本次迁移覆盖用户字段的行为。
+- 非法 JSON 会使初始化失败，这是显式中断策略；数据库内容不会被静默修复，需由上层记录错误并人工处理损坏数据。
+- `toRecord()` 对非迁移读取仍保留已有的安全解析 fallback；本卡只要求迁移路径对待迁移 JSON 显式失败。
+- A18_T004 已完成独立评审；定向 repository 测试、server typecheck、`pnpm check` 和 `git diff --check` 均通过。代码未触碰 runtime、AgentGraph、Sandbox、前端或注册中心；后续 definition schema 变化必须新增明确版本迁移步骤。

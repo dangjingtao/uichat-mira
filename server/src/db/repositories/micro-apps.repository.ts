@@ -51,6 +51,7 @@ export type MicroAppBindingSchema = {
 export type MicroAppRecord = {
   id: string;
   type: MicroAppType;
+  definitionSchemaVersion: number;
   name: string;
   description: string;
   supportedAccessPoints: MicroAppSupportedAccessPoint[];
@@ -61,7 +62,11 @@ export type MicroAppRecord = {
   updatedAt: string;
 };
 
-type MicroAppInput = Partial<Omit<MicroAppRecord, "id" | "createdAt" | "updatedAt">>;
+type MicroAppInput = Partial<
+  Omit<MicroAppRecord, "id" | "definitionSchemaVersion" | "createdAt" | "updatedAt">
+>;
+
+export const CURRENT_MICRO_APP_DEFINITION_SCHEMA_VERSION = 1;
 
 const normalizeText = (value: string) => value.trim();
 
@@ -217,6 +222,7 @@ const defaultDefinitionSeeds: Array<
 > = [
   {
     type: "knowledge_query",
+    definitionSchemaVersion: CURRENT_MICRO_APP_DEFINITION_SCHEMA_VERSION,
     name: "Knowledge Query",
     description: "接收外部问答入口的文本问题，调用本地知识库检索链路，并返回一条稳定文本回复。",
     supportedAccessPoints: ["wecom.smart_robot"],
@@ -226,6 +232,7 @@ const defaultDefinitionSeeds: Array<
   },
   {
     type: "news_hub",
+    definitionSchemaVersion: CURRENT_MICRO_APP_DEFINITION_SCHEMA_VERSION,
     name: "News Hub",
     description:
       "为桌面内的 NewsHub 新闻聚合设置页保留共享注册定义和稳定 runtime key，不在这里承接外部接入点执行逻辑。",
@@ -236,6 +243,7 @@ const defaultDefinitionSeeds: Array<
   },
   {
     type: "image_generation",
+    definitionSchemaVersion: CURRENT_MICRO_APP_DEFINITION_SCHEMA_VERSION,
     name: "Image Generation",
     description: "为桌面内的生图调试工作区保留共享注册定义和稳定 runtime key，不在这里承接实际生成逻辑。",
     supportedAccessPoints: ["desktop.image_generation_studio"],
@@ -245,6 +253,7 @@ const defaultDefinitionSeeds: Array<
   },
   {
     type: "computer_use",
+    definitionSchemaVersion: CURRENT_MICRO_APP_DEFINITION_SCHEMA_VERSION,
     name: "Computer Use",
     description:
       "为桌面内的浏览器任务工作台保留共享注册定义和稳定 runtime key，不在这里承接实际浏览器执行逻辑。",
@@ -255,6 +264,7 @@ const defaultDefinitionSeeds: Array<
   },
   {
     type: "tts",
+    definitionSchemaVersion: CURRENT_MICRO_APP_DEFINITION_SCHEMA_VERSION,
     name: "TTS",
     description:
       "为桌面内的语音合成工作台保留共享注册定义和稳定 runtime key，不在这里承接实际语音合成逻辑。",
@@ -265,6 +275,7 @@ const defaultDefinitionSeeds: Array<
   },
   {
     type: "codegraph",
+    definitionSchemaVersion: CURRENT_MICRO_APP_DEFINITION_SCHEMA_VERSION,
     name: "CodeGraph Studio",
     description:
       "为桌面内的 CodeGraph 调试工作台保留共享注册定义和稳定 runtime key，不在这里改动 Planner 主链或默认启用 provider。",
@@ -275,6 +286,7 @@ const defaultDefinitionSeeds: Array<
   },
   {
     type: "evolving_knowledge",
+    definitionSchemaVersion: CURRENT_MICRO_APP_DEFINITION_SCHEMA_VERSION,
     name: "智识进化库",
     description:
       "多媒体知识捕获与 AI 自我整理系统。捕获网页、图片、音频、视频，AI 自动重写、标签、发现概念关联与跨时间洞见。",
@@ -284,6 +296,23 @@ const defaultDefinitionSeeds: Array<
     enabled: true,
   },
 ];
+
+type MicroAppDefinitionSeed = (typeof defaultDefinitionSeeds)[number];
+
+const definitionSeedValues = (definition: MicroAppDefinitionSeed) => ({
+  name: definition.name,
+  description: definition.description,
+  supportedAccessPointsJson: JSON.stringify(definition.supportedAccessPoints),
+  bindingSchemaJson: JSON.stringify(definition.bindingSchema),
+  runtimeKey: definition.runtimeKey,
+  definitionSchemaVersion: definition.definitionSchemaVersion,
+  enabled: definition.enabled,
+});
+
+const hasColumn = (tableName: string, columnName: string) =>
+  (getSqlite()
+    .prepare(`PRAGMA table_info(${tableName})`)
+    .all() as Array<{ name: string }>).some((column) => column.name === columnName);
 
 const ensureTable = () => {
   const sqlite = getSqlite();
@@ -296,11 +325,18 @@ const ensureTable = () => {
       supported_access_points_json TEXT NOT NULL DEFAULT '[]',
       binding_schema_json TEXT NOT NULL DEFAULT '{"fields":[]}',
       runtime_key TEXT NOT NULL DEFAULT '',
+      definition_schema_version INTEGER NOT NULL DEFAULT 0,
       enabled INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
+  if (!hasColumn("micro_app_definitions", "definition_schema_version")) {
+    sqlite.exec(`
+      ALTER TABLE micro_app_definitions
+      ADD COLUMN definition_schema_version INTEGER NOT NULL DEFAULT 0
+    `);
+  }
   sqlite.exec(`
     CREATE INDEX IF NOT EXISTS idx_micro_apps_type
     ON micro_app_definitions(type)
@@ -333,86 +369,65 @@ const seedDefaults = () => {
       .insert(microApps)
       .values({
         type: definition.type,
-        name: definition.name,
-        description: definition.description,
-        supportedAccessPointsJson: JSON.stringify(definition.supportedAccessPoints),
-        bindingSchemaJson: JSON.stringify(definition.bindingSchema),
-        runtimeKey: definition.runtimeKey,
-        enabled: definition.enabled,
+        ...definitionSeedValues(definition),
       })
       .run();
   }
 };
 
-const hasNonEmptyText = (value: string | null | undefined) =>
-  typeof value === "string" && value.trim().length > 0;
+const parseDefinitionJson = <T>(value: string | null | undefined, label: string): T => {
+  try {
+    return JSON.parse(value ?? "") as T;
+  } catch (error) {
+    throw new Error(
+      `Cannot migrate micro-app definition JSON (${label}): ${
+        error instanceof Error ? error.message : "invalid JSON"
+      }`,
+    );
+  }
+};
 
-const shouldBackfillAccessPoints = (
-  accessPoints: MicroAppSupportedAccessPoint[],
-  seed: Omit<MicroAppRecord, "id" | "createdAt" | "updatedAt">,
-) => accessPoints.length === 0 && seed.supportedAccessPoints.length > 0;
-
-const shouldBackfillBindingSchema = (
-  schema: MicroAppBindingSchema,
-  seed: Omit<MicroAppRecord, "id" | "createdAt" | "updatedAt">,
-) => schema.fields.length === 0 && seed.bindingSchema.fields.length > 0;
-
-const reconcileSeededDefinitions = () => {
+const migrateSeededDefinitions = () => {
   const seededByType = new Map(
     defaultDefinitionSeeds.map((definition) => [definition.type, definition]),
   );
-  const existingRows = getDb().select().from(microApps).all();
+  getSqlite()
+    .transaction(() => {
+      const existingRows = getDb().select().from(microApps).all();
 
-  for (const row of existingRows) {
-    const seed = seededByType.get(row.type as MicroAppType);
-    if (!seed) {
-      continue;
-    }
+      for (const row of existingRows) {
+        const seed = seededByType.get(row.type as MicroAppType);
+        if (!seed) {
+          continue;
+        }
 
-    const parsedAccessPoints = parseJson<MicroAppSupportedAccessPoint[]>(
-      row.supportedAccessPointsJson ?? "[]",
-      [],
-    );
-    const parsedBindingSchema = parseJson<MicroAppBindingSchema>(
-      row.bindingSchemaJson ?? "{\"fields\":[]}",
-      { fields: [] },
-    );
+        if (row.definitionSchemaVersion >= CURRENT_MICRO_APP_DEFINITION_SCHEMA_VERSION) {
+          continue;
+        }
 
-    const nextDescription = hasNonEmptyText(row.description)
-      ? row.description
-      : seed.description;
-    const nextAccessPoints = shouldBackfillAccessPoints(parsedAccessPoints, seed)
-      ? seed.supportedAccessPoints
-      : parsedAccessPoints;
-    const nextBindingSchema = shouldBackfillBindingSchema(parsedBindingSchema, seed)
-      ? seed.bindingSchema
-      : parsedBindingSchema;
-    const nextRuntimeKey = hasNonEmptyText(row.runtimeKey)
-      ? row.runtimeKey
-      : seed.runtimeKey;
+        parseDefinitionJson<MicroAppSupportedAccessPoint[]>(
+          row.supportedAccessPointsJson,
+          `${row.id}.supported_access_points_json`,
+        );
+        parseDefinitionJson<MicroAppBindingSchema>(
+          row.bindingSchemaJson,
+          `${row.id}.binding_schema_json`,
+        );
 
-    const changed =
-      nextDescription !== row.description ||
-      JSON.stringify(nextAccessPoints) !== row.supportedAccessPointsJson ||
-      JSON.stringify(nextBindingSchema) !== row.bindingSchemaJson ||
-      nextRuntimeKey !== row.runtimeKey;
-
-    if (!changed) {
-      continue;
-    }
-
-    getDb()
-      .update(microApps)
-      .set({
-        description: nextDescription,
-        supportedAccessPointsJson: JSON.stringify(nextAccessPoints),
-        bindingSchemaJson: JSON.stringify(nextBindingSchema),
-        runtimeKey: nextRuntimeKey,
-        updatedAt: new Date().toISOString(),
-      })
-      .where(eq(microApps.id, row.id))
-      .run();
-  }
+        getDb()
+          .update(microApps)
+          .set({
+            description: seed.description,
+            supportedAccessPointsJson: JSON.stringify(seed.supportedAccessPoints),
+            bindingSchemaJson: JSON.stringify(seed.bindingSchema),
+            runtimeKey: seed.runtimeKey,
+            definitionSchemaVersion: CURRENT_MICRO_APP_DEFINITION_SCHEMA_VERSION,
+            updatedAt: new Date().toISOString(),
+          })
+          .where(eq(microApps.id, row.id))
+          .run();
+      }
+    })();
 };
 
 const migrateFromLegacyMicroAppsTable = () => {
@@ -455,6 +470,7 @@ const migrateFromLegacyMicroAppsTable = () => {
         ),
         bindingSchemaJson: JSON.stringify(defaultDefinitionSeeds[0].bindingSchema),
         runtimeKey: defaultDefinitionSeeds[0].runtimeKey,
+        definitionSchemaVersion: CURRENT_MICRO_APP_DEFINITION_SCHEMA_VERSION,
         enabled: Boolean(legacyKnowledgeQuery.enabled),
       })
     .run();
@@ -463,6 +479,7 @@ const migrateFromLegacyMicroAppsTable = () => {
 const toRecord = (row: typeof microApps.$inferSelect): MicroAppRecord => ({
   id: row.id,
   type: row.type as MicroAppType,
+  definitionSchemaVersion: row.definitionSchemaVersion,
   name: normalizeText(row.name),
   description: normalizeText(row.description),
   supportedAccessPoints: parseJson<MicroAppSupportedAccessPoint[]>(
@@ -484,7 +501,7 @@ export const microAppsRepository = {
     ensureTable();
     migrateFromLegacyMicroAppsTable();
     seedDefaults();
-    reconcileSeededDefinitions();
+    migrateSeededDefinitions();
   },
 
   list(type?: MicroAppType) {

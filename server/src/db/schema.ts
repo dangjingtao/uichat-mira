@@ -377,6 +377,9 @@ export const microApps = sqliteTable(
       .default("[]"),
     bindingSchemaJson: text("binding_schema_json").notNull().default("{\"fields\":[]}"),
     runtimeKey: text("runtime_key").notNull().default(""),
+    definitionSchemaVersion: integer("definition_schema_version")
+      .notNull()
+      .default(0),
     enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
     createdAt: text("created_at")
       .notNull()
