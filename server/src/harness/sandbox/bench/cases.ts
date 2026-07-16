@@ -19,7 +19,8 @@ interface SandboxBenchCaseDefinition {
   };
 }
 
-const benchArtifactPath = ".artifacts/sandbox-bench/sandbox-bench-artifact.txt";
+const benchArtifactPath = ".test-artifact/sandbox-bench/sandbox-bench-artifact.txt";
+const benchArtifactDirectory = ".test-artifact/sandbox-bench";
 
 const buildCommandSet = () => {
   if (process.platform === "win32") {
@@ -30,7 +31,7 @@ const buildCommandSet = () => {
       exitCode: "exit 7",
       timeout: "Start-Sleep -Seconds 2",
       hugeOutput: "1..9000 | ForEach-Object { '0123456789' }",
-      artifactWrite: `New-Item -ItemType Directory -Force -Path '.artifacts/sandbox-bench' | Out-Null; Set-Content -Path '${benchArtifactPath}' -Value 'artifact output'`,
+      artifactWrite: `New-Item -ItemType Directory -Force -Path '${benchArtifactDirectory}' | Out-Null; Set-Content -Path '${benchArtifactPath}' -Value 'artifact output'`,
     };
   }
 
@@ -40,7 +41,7 @@ const buildCommandSet = () => {
     exitCode: "exit 7",
     timeout: "sleep 2",
     hugeOutput: "yes 0123456789 | head -n 9000",
-    artifactWrite: `mkdir -p .artifacts/sandbox-bench && printf 'artifact output\\n' > '${benchArtifactPath}'`,
+     artifactWrite: `mkdir -p '${benchArtifactDirectory}' && printf 'artifact output\\n' > '${benchArtifactPath}'`,
   };
 };
 
@@ -55,7 +56,7 @@ const createFutureProfileCase = (
 ): SandboxBenchCaseDefinition => ({
   id: `coverage-${profile}-future-profile`,
   group: "coverage",
-  description: `${profile} is declared as a future profile and must stay out of the V1.6 gate`,
+  description: `${profile} is declared but blocked and must stay out of the V1.6 gate`,
   request: {
     profile,
     workspaceRoot,
@@ -63,13 +64,13 @@ const createFutureProfileCase = (
     timeoutMs: 1_000,
   },
   evaluate: (result) => {
-    const passed = result.violations.some((item) => item.startsWith("future_profile:"));
+    const passed = result.status === "blocked" && result.violations.some((item) => item.startsWith("blocked_profile:"));
     return {
-      status: passed ? "future_profile" : "failed",
+      status: passed ? "blocked" : "failed",
       notes: createNotes(
         passed,
-        `${profile} 已明确标记为 future profile，不计入 V1.6 gate`,
-        `期望 future_profile，实际 status=${result.status} violations=${JSON.stringify(result.violations)}`,
+        `${profile} 已明确标记为 blocked，不计入 V1.6 gate`,
+        `期望 blocked，不计入 V1.6 gate，实际 status=${result.status} violations=${JSON.stringify(result.violations)}`,
       ),
     };
   },

@@ -1,6 +1,13 @@
+---
+task_state: DONE
+owner: project-owner
+repository: dangjingtao/uichat-mira
+baseline_branch: dev
+---
+
 # A18_T005 — Sandbox 能力合同与 Runner 收口
 
-- 状态：READY
+- 状态：DONE
 - 仓库：`dangjingtao/uichat-mira`
 - 基线分支：`dev`
 - 类型：Sandbox 基础能力 / 安全合同
@@ -176,3 +183,49 @@ blocked / timed_out / failed / completed 明确区分。
 - 是否影响现有黑盒、审批、Evidence、Trace。
 - 已知限制。
 - 一个独立提交；不得夹带全仓格式化、依赖升级或无关清理。
+
+## 整改交付证据
+
+### 改动文件清单
+
+- `server/src/harness/sandbox/contract.ts`
+- `server/src/harness/sandbox/index.ts`
+- `server/src/harness/sandbox/index.test.ts`
+- `server/src/harness/sandbox/bench/cases.ts`
+- `server/src/harness/sandbox/bench/runner.ts`
+- `server/src/harness/sandbox/bench/README.md`
+- `docs/harness/sandbox-module.md`
+- `docs/project-control/tasks/A18_T005-sandbox-contract-and-runner.md`
+- `docs/project-control/project-control-ledger.md`
+
+### 行为变化
+
+- 未实现的 `read_only`、`workspace_write`、`networked_command` profile 查询和执行结果统一明确为 `blocked`。
+- POSIX 与 Windows direct bench 的 artifact 创建目录和注册路径统一使用 `.test-artifact/sandbox-bench`。
+- direct contract 测试覆盖 POSIX absolute、Windows absolute、parent traversal、`/workspace/../outside` cwd，以及 workspace 外 artifact 注册拒绝。
+- 整改期间任务卡保持 `READY_FOR_REVIEW`，评审通过后由监工更新为 `DONE`。
+
+### 测试与验收证据
+
+- `pnpm --filter @ui-chat-mira/server test -- src/harness/sandbox/index.test.ts src/mcp/core/permissions.test.ts src/agent/__tests__/execution-observation.test.ts`
+  - 结果：3 test files passed，36 tests passed。
+- `pnpm --filter @ui-chat-mira/server bench:sandbox:direct`
+  - 结果：10 cases，`gatePassed=7`，`gateFailed=0`，`blockedProfile=3`，`v16GateSatisfied=true`。
+- `pnpm check`
+  - 结果：desktop、packages/core、packages/deepagents-spike、packages/docs-site、server typecheck 全部通过。
+- `git diff --check`
+  - 结果：通过。
+- 分支证据：`codex/a18-t005-remediation` 从 `origin/test` 建立；`git diff origin/test --name-only` 仅包含本卡 Sandbox、任务卡和台账文件，不包含 A18_T004 实现文件。
+
+### 黑盒、审批、Evidence、Trace 影响
+
+- 未新增 Graph 节点，未改变 `Planner -> Normalize -> Policy -> ToolNode -> Evidence -> Planner` 主链。
+- 未改变审批风险模型；`permissions.test.ts` 验证 command、cwd、env、timeout 参数变化不会复用旧 `inputHash`。
+- `execution-observation.test.ts` 验证 terminal 结果继续进入通用 Evidence 观察结构。
+- 本次未重跑完整 AgentGraph 黑盒套件；原因是整改范围仅涉及 Sandbox 合同、direct bench、审批定向测试和任务证据文档。
+
+### 已知限制与风险
+
+- 当前仅实现 `command` L1 workspace runner；其他 profile 仍为 `blocked`。
+- 当前实现不宣称完整网络隔离、完整文件系统隔离、可靠阻止所有子进程、Windows 完整 kill tree 或 hostile-code 强隔离。
+- direct bench 本次在 Windows 环境执行；POSIX 分支已修正为同一 artifact 目录与注册路径，但未在本机运行 POSIX shell。

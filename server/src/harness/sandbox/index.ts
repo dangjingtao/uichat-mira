@@ -15,11 +15,11 @@ import type {
 const DEFAULT_TIMEOUT_MS = 5_000;
 const DEFAULT_OUTPUT_LIMIT_BYTES = 64 * 1024;
 
-type SandboxProfileCoverageStatus = "implemented" | "not_implemented";
+type SandboxProfileCoverageStatus = "implemented" | "blocked";
 
 type SandboxDeclaredContractStatus =
   | SandboxProfileCoverageStatus
-  | "future_profile";
+  | "blocked";
 
 type SandboxL1Requirement =
   | "workspace_cwd_lock"
@@ -34,10 +34,10 @@ type SandboxL1Requirement =
 type SandboxL1RequirementChecks = Record<SandboxL1Requirement, boolean>;
 
 const PROFILE_COVERAGE_BASE: Record<SandboxProfile, SandboxProfileCoverageStatus> = {
-  read_only: "not_implemented",
-  workspace_write: "not_implemented",
-  command: "not_implemented",
-  networked_command: "not_implemented",
+  read_only: "blocked",
+  workspace_write: "blocked",
+  command: "blocked",
+  networked_command: "blocked",
 };
 
 const V16_GATE_PROFILES: SandboxV16Profile[] = ["command"];
@@ -70,11 +70,11 @@ const isBlockedError = (message: string) =>
 const isOutputLimitError = (message: string) =>
   message.includes("terminal output exceeded limit");
 
-const toFutureProfileViolation = (profile: SandboxFutureProfile) =>
-  `future_profile: profile ${profile} is declared for future Sandbox coverage and is not part of the UIChat Mira V1.6 gate`;
+const toBlockedProfileViolation = (profile: SandboxFutureProfile) =>
+  `blocked_profile: profile ${profile} is declared but has no implemented Sandbox runner`;
 
 const toCommandUnavailableViolation = () =>
-  "not_implemented: command profile is part of the UIChat Mira V1.6 gate, but the L1 workspace runner requirements are not satisfied";
+  "blocked_profile: command profile is unavailable because the L1 workspace runner requirements are not satisfied";
 
 export const evaluateSandboxL1WorkspaceRunnerStatus = (
   checks: SandboxL1RequirementChecks = SANDBOX_L1_WORKSPACE_RUNNER_CHECKS,
@@ -97,7 +97,7 @@ export const getSandboxProfileCoverage = () => {
   const l1Status = getSandboxL1WorkspaceRunnerStatus();
   return {
     ...PROFILE_COVERAGE_BASE,
-    command: l1Status.available ? "implemented" : "not_implemented",
+    command: l1Status.available ? "implemented" : "blocked",
   } satisfies Record<SandboxProfile, SandboxProfileCoverageStatus>;
 };
 
@@ -107,8 +107,8 @@ export const getSandboxContractCoverage = () => {
     V16_GATE_PROFILES.map((profile) => [profile, profileCoverage[profile]]),
   ) as Record<SandboxV16Profile, SandboxProfileCoverageStatus>;
   const futureProfiles = Object.fromEntries(
-    FUTURE_PROFILES.map((profile) => [profile, "future_profile"]),
-  ) as Record<SandboxFutureProfile, "future_profile">;
+    FUTURE_PROFILES.map((profile) => [profile, "blocked"]),
+  ) as Record<SandboxFutureProfile, "blocked">;
 
   return {
     declaredProfiles: {
@@ -136,13 +136,13 @@ export const runSandboxCommandDirect = async (
       durationMs: Math.round(performance.now() - startedAt),
       truncated: false,
       binaryDetected: false,
-      violations: [toFutureProfileViolation(request.profile)],
+      violations: [toBlockedProfileViolation(request.profile)],
       artifacts: [],
     };
   }
 
   const coverage = getSandboxProfileCoverage()[request.profile];
-  if (coverage === "not_implemented") {
+  if (coverage === "blocked") {
     return {
       status: "blocked",
       exitCode: null,
