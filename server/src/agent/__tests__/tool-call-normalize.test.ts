@@ -198,6 +198,30 @@ test("toolCallNormalizeNode freezes a valid planner use_tool action", async () =
   assert.ok(patch.pendingToolCall?.inputHash);
 });
 
+test("candidate intent without a Planner action cannot create pendingToolCall", async () => {
+  const patch = await toolCallNormalizeNode(
+    createState({
+      messages: [
+        {
+          role: "user",
+          content: "修改 README.md",
+          parts: [{ type: "text", text: "修改 README.md" }],
+        },
+      ],
+      currentTaskFrame: {
+        currentGoal: "修改 README.md",
+        currentSubtask: "Awaiting Planner confirmation.",
+        confirmedObjects: [],
+        completionCriteria: ["修改 README.md"],
+      },
+      nextAction: undefined,
+    }),
+  );
+
+  assert.equal(patch.pendingToolCall, undefined);
+  assert.match(String(patch.errorMessage ?? ""), /Missing nextAction/i);
+});
+
 test("toolCallNormalizeNode normalizes read_list /workspace to workspace root dot", async () => {
   const patch = await toolCallNormalizeNode(
     createState({

@@ -366,6 +366,7 @@ export interface CurrentTaskFrameConfirmedObject {
   id?: string;
   label: string;
   confidence?: number;
+  source?: "planner" | "evidence" | "user" | "approval" | "workspace";
 }
 
 /**

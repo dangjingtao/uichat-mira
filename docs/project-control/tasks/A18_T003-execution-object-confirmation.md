@@ -1,6 +1,13 @@
+---
+task_state: READY_FOR_REVIEW
+owner: project-owner
+repository: dangjingtao/uichat-mira
+baseline_branch: dev
+---
+
 # A18_T003 — 收紧执行对象确认边界
 
-- 状态：READY
+- 状态：READY_FOR_REVIEW
 - 仓库：`dangjingtao/uichat-mira`
 - 基线分支：`dev`
 - 类型：P0/P1 技术债 / 禁止硬编码
@@ -116,6 +123,17 @@
 8. 如统一合同不足，停止施工并提交“合同缺口说明”，不得自行扩大架构。
 9. 不顺手重构无关模块，不升级依赖，不改大前端。
 10. 测试必须保护合同，不得继续保护已确认的错误行为。
+
+## 本次实现证据
+
+- `server/src/agent/task-intent.ts` 保留粗粒度动作分类，新增 `candidateTargets`；`requiredTargets` 只从带来源的 confirmed object 产生，不读取 raw user text。
+- `server/src/agent/__tests__/task-intent.test.ts` 覆盖 mutation、相对路径、absolute path 和多目标候选不确认。
+- `server/src/agent/__tests__/coverage-state.test.ts` 覆盖候选不进入 coverage target，确认 coverage 未重新接入。
+- 定向测试：task-intent、coverage、tool-call-normalize 共 73/73 通过；coverage 原有多目标读取、locate 后 read、mutation 失败与完成状态回归均保留并通过。
+- 执行边界测试：Planner/selectedToolIds/Policy/ToolNode/Harness 相关测试 92/92 通过；覆盖 Planner 选定 confirmed object、Normalize/Schema/Boundary/Policy 链路及非 Planner 字段不触发执行。
+- 类型检查：`pnpm check`，6 个 workspace typecheck 通过。
+- 当前 task-frame 全量测试中 1 个 prepare-context 测试因环境未设置 `DATABASE_URL` 失败，未经过本次修改逻辑；其余相关测试通过。
+- Black-box smoke：未运行；本卡不改变 AgentGraph 主链或用户入口，保留为后续独立 smoke 风险。任务等待复审，不预写 `DONE`。
 
 ## 交付要求
 

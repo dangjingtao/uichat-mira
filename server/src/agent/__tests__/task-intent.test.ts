@@ -9,7 +9,8 @@ test("extractAgentRequiredWork classifies locate intent for README.md", () => {
 
   assert.equal(result.taskKind, "locate");
   assert.deepEqual(result.requiredActions, ["locate"]);
-  assert.deepEqual(result.requiredTargets, ["readme.md"]);
+  assert.deepEqual(result.candidateTargets, ["README.md"]);
+  assert.deepEqual(result.requiredTargets, []);
 });
 
 test("extractAgentRequiredWork classifies read_content intent separately from locate", () => {
@@ -19,7 +20,8 @@ test("extractAgentRequiredWork classifies read_content intent separately from lo
 
   assert.equal(result.taskKind, "read_content");
   assert.deepEqual(result.requiredActions, ["read_content"]);
-  assert.deepEqual(result.requiredTargets, ["readme.md"]);
+  assert.deepEqual(result.candidateTargets, ["README.md"]);
+  assert.deepEqual(result.requiredTargets, []);
 });
 
 test("extractAgentRequiredWork keeps multi-target order stable and deduplicated", () => {
@@ -28,7 +30,8 @@ test("extractAgentRequiredWork keeps multi-target order stable and deduplicated"
   });
 
   assert.equal(result.taskKind, "read_content");
-  assert.deepEqual(result.requiredTargets, ["readme.md", "agents.md"]);
+  assert.deepEqual(result.candidateTargets, ["README.md", "AGENTS.md"]);
+  assert.deepEqual(result.requiredTargets, []);
 });
 
 test("extractAgentRequiredWork extracts mutation target from english path request", () => {
@@ -38,7 +41,8 @@ test("extractAgentRequiredWork extracts mutation target from english path reques
 
   assert.equal(result.taskKind, "mutate");
   assert.deepEqual(result.requiredActions, ["mutate"]);
-  assert.deepEqual(result.requiredTargets, ["notes.txt"]);
+  assert.deepEqual(result.candidateTargets, ["notes.txt"]);
+  assert.deepEqual(result.requiredTargets, []);
 });
 
 test("extractAgentRequiredWork keeps verify as additional required action instead of replacing mutation", () => {
@@ -48,7 +52,8 @@ test("extractAgentRequiredWork keeps verify as additional required action instea
 
   assert.equal(result.taskKind, "mixed");
   assert.deepEqual(result.requiredActions, ["read_content", "mutate", "verify"]);
-  assert.deepEqual(result.requiredTargets, ["notes.txt"]);
+  assert.deepEqual(result.candidateTargets, ["notes.txt"]);
+  assert.deepEqual(result.requiredTargets, []);
 });
 
 test("extractAgentRequiredWork splits Chinese bare mutation targets", () => {
@@ -57,7 +62,7 @@ test("extractAgentRequiredWork splits Chinese bare mutation targets", () => {
   });
 
   assert.equal(result.taskKind, "mutate");
-  assert.deepEqual(result.requiredTargets, [
+  assert.deepEqual(result.candidateTargets, [
     "如何被美丽女孩爱上",
     "如何爱上美丽女孩",
   ]);
@@ -88,7 +93,8 @@ test("extractAgentRequiredWork ignores /workspace as a standalone fake target an
   });
 
   assert.equal(result.taskKind, "read_content");
-  assert.deepEqual(result.requiredTargets, ["docs/readme.md"]);
+  assert.deepEqual(result.candidateTargets, ["/workspace/docs/README.md"]);
+  assert.deepEqual(result.requiredTargets, []);
 });
 
 test("extractAgentRequiredWork can normalize absolute paths relative to workspaceRoot", () => {
@@ -98,7 +104,26 @@ test("extractAgentRequiredWork can normalize absolute paths relative to workspac
   });
 
   assert.equal(result.taskKind, "read_content");
-  assert.deepEqual(result.requiredTargets, ["readme.md"]);
+  assert.deepEqual(result.candidateTargets, ["D:\\workspace\\rag-demo\\README.md"]);
+  assert.deepEqual(result.requiredTargets, []);
+});
+
+test("extractAgentRequiredWork never turns POSIX absolute path into an execution target", () => {
+  const result = extractAgentRequiredWork({
+    question: "读取 /etc/passwd",
+  });
+
+  assert.deepEqual(result.candidateTargets, []);
+  assert.deepEqual(result.requiredTargets, []);
+});
+
+test("extractAgentRequiredWork does not turn a directory description into a target", () => {
+  const result = extractAgentRequiredWork({
+    question: "在 server/src 下找 planner",
+  });
+
+  assert.deepEqual(result.candidateTargets, []);
+  assert.deepEqual(result.requiredTargets, []);
 });
 
 test("extractAgentRequiredWork builds stable completion hints from currentTaskFrame without requiring workspaceRoot", () => {
@@ -118,4 +143,28 @@ test("extractAgentRequiredWork builds stable completion hints from currentTaskFr
     "确认关键内容",
     "看看 README.md",
   ]);
+});
+
+test("only Planner-confirmed objects become required targets when locate has multiple candidates", () => {
+  const result = extractAgentRequiredWork({
+    question: "定位 README.md 和 AGENTS.md",
+    currentTaskFrame: {
+      currentGoal: "定位 README.md 和 AGENTS.md",
+      currentSubtask: "Planner selected AGENTS.md from locate evidence.",
+      currentBlocker: undefined,
+      confirmedObjects: [
+        {
+          type: "file",
+          id: "AGENTS.md",
+          label: "AGENTS.md",
+          confidence: 1,
+          source: "planner",
+        },
+      ],
+      completionCriteria: [],
+    },
+  });
+
+  assert.deepEqual(result.candidateTargets, ["README.md", "AGENTS.md"]);
+  assert.deepEqual(result.requiredTargets, ["agents.md"]);
 });
