@@ -296,6 +296,146 @@ test("generateNode rewrites tool-style output into a natural read_list answer gr
   assert.equal(generateDoneEvent?.details?.outputGuardTriggered, true);
 });
 
+test("generateNode gives generic non-empty structured results to the model and does not answer as empty", async () => {
+  const state = createBaseState("列出查询到的项目");
+  const execution = {
+    toolId: "generic-list",
+    args: {},
+    status: "completed" as const,
+    result: {
+      items: [{ name: "Project Alpha" }, { name: "Project Beta" }],
+      total: 2,
+      nextCursor: null,
+    },
+    startedAt: "2026-07-15T00:00:00.000Z",
+    finishedAt: "2026-07-15T00:00:01.000Z",
+  };
+  const summary = createToolExecutionEvidenceSummary({ execution, evidenceIndex: 0 });
+  state.evidence = {
+    observations: [],
+    toolExecutions: [{ ...execution, summary }],
+    retrievals: [],
+    latestSummary: summary,
+  };
+  let capturedMessages: Array<{ content: string }> = [];
+  const invokeSpy = vi.spyOn(providerProxyService, "generateTextForRole").mockImplementation(
+    async (_role, messages) => {
+      capturedMessages = messages as Array<{ content: string }>;
+      return "找到 2 条结果：Project Alpha 和 Project Beta。";
+    },
+  );
+
+  const result = await generateNode(state);
+  const evidencePrompt = capturedMessages.map((message) => message.content).join("\n");
+
+  assert.equal(invokeSpy.mock.calls.length, 1);
+  assert.match(evidencePrompt, /structuredPreview/);
+  assert.match(evidencePrompt, /Project Alpha/);
+  assert.match(evidencePrompt, /total=2/);
+  assert.doesNotMatch(evidencePrompt, /没有数据/);
+  assert.match(result.answer ?? "", /Project Alpha/);
+  assert.doesNotMatch(result.answer ?? "", /没有数据/);
+});
+
+test("generateNode includes browser_observe page fields in the answer context", async () => {
+  const state = createBaseState("页面上显示了什么？");
+  const summary = {
+    source: "tool" as const,
+    status: "completed" as const,
+    toolId: "browser_observe",
+    actionTaken: "Completed managed browser observe.",
+    keyFindings: [
+      "url=https://example.com",
+      "title=Example Domain",
+      "visibleText=Example Domain content",
+    ],
+    facts: [
+      "url=https://example.com",
+      "title=Example Domain",
+      "visibleText=Example Domain content",
+    ],
+    data: {
+      kind: "computer_use_browser",
+      operation: "observe",
+      page: { url: "https://example.com", title: "Example Domain", snapshotHash: "snapshot-1" },
+      observation: { visibleText: "Example Domain content" },
+    } as never,
+  };
+  state.evidence = {
+    observations: [],
+    toolExecutions: [{
+      toolId: "browser_observe",
+      args: { url: "https://example.com" },
+      status: "completed",
+      summary,
+      startedAt: "2026-07-15T00:00:00.000Z",
+      finishedAt: "2026-07-15T00:00:01.000Z",
+    }],
+    retrievals: [],
+    latestSummary: summary,
+  };
+  const invokeSpy = vi.spyOn(providerProxyService, "generateTextForRole").mockImplementation(
+    async (_role, messages) => {
+      const content = (messages as Array<{ content: string }>).map((message) => message.content).join("\n");
+      assert.match(content, /title=Example Domain/);
+      assert.match(content, /visibleText=Example Domain content/);
+      return "页面标题是 Example Domain，页面显示 Example Domain content。";
+    },
+  );
+
+  const result = await generateNode(state);
+
+  assert.equal(invokeSpy.mock.calls.length, 1);
+  assert.match(result.answer ?? "", /Example Domain content/);
+});
+
+test("generateNode does not place external MCP secrets in the model prompt", async () => {
+  const state = createBaseState("查询客户信息");
+  const summary = {
+    source: "tool" as const,
+    status: "partial" as const,
+    toolId: "external-mcp-tool",
+    actionTaken: "Called remote MCP tool remote_lookup.",
+    keyFindings: ["result={\"customer\":\"Example Customer\"}"],
+    gaps: ["External MCP result is truncated or contains removed sensitive fields."],
+    data: {
+      kind: "external_mcp",
+      serverId: "remote-server",
+      remoteToolName: "remote_lookup",
+      invocationStatus: "completed" as const,
+      recoveryOccurred: false,
+      resultPreview: "{\"customer\":\"Example Customer\"}",
+    },
+  };
+  state.evidence = {
+    observations: [],
+    toolExecutions: [{
+      toolId: "external-mcp-tool",
+      args: {},
+      status: "completed",
+      result: { type: "external_mcp", result: { customer: "Example Customer", token: "secret-token-value" } },
+      summary,
+      startedAt: "2026-07-15T00:00:00.000Z",
+      finishedAt: "2026-07-15T00:00:01.000Z",
+    }],
+    retrievals: [],
+    latestSummary: summary,
+  };
+  const invokeSpy = vi.spyOn(providerProxyService, "generateTextForRole").mockImplementation(
+    async (_role, messages) => {
+      const content = (messages as Array<{ content: string }>).map((message) => message.content).join("\n");
+      assert.match(content, /Example Customer/);
+      assert.doesNotMatch(content, /secret-token-value/);
+      return "客户是 Example Customer。";
+    },
+  );
+
+  const result = await generateNode(state);
+
+  assert.equal(invokeSpy.mock.calls.length, 1);
+  assert.doesNotMatch(result.answer ?? "", /secret-token-value/);
+});
+
 test("generateNode rewrites pseudo-execution wording into a grounded read_open summary", async () => {
   const state = createBaseState("打开 README.md 看看内容");
   state.evidence = {

@@ -194,6 +194,10 @@ const buildToolEvidenceBlock = (execution: AgentToolExecutionResult) => {
     if (summary.data.actionProfileId) {
       lines.push(`actionProfileId: ${summary.data.actionProfileId}`);
     }
+  } else if (summary.data?.kind === "generic_structured") {
+    lines.push(`truncated: ${summary.data.truncated}`);
+    lines.push(`redacted: ${summary.data.redacted}`);
+    lines.push(`structuredPreview: ${JSON.stringify(summary.data.preview)}`);
   }
 
   lines.push("keyFindings:");
