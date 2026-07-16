@@ -1,6 +1,13 @@
+---
+task_state: DONE
+owner: project-owner
+repository: dangjingtao/uichat-mira
+baseline_branch: dev
+---
+
 # A18_T002 — 通用结构化 Tool Result 回流 Evidence
 
-- 状态：READY
+- 状态：DONE
 - 仓库：`dangjingtao/uichat-mira`
 - 基线分支：`dev`
 - 类型：P0 技术债 / Grounding
@@ -158,3 +165,40 @@ type McpToolEvidence = {
 - 是否影响现有黑盒、审批、Evidence、Trace。
 - 已知限制。
 - 一个独立提交；不得夹带全仓格式化、依赖升级或无关清理。
+
+## Verification Evidence
+
+### 实际命令
+
+| 验证层级 | 命令 | 结果 |
+| --- | --- | --- |
+| Unit / Contract | `cd server && pnpm test -- src/agent/__tests__/generic-tool-evidence.test.ts` | 7/7 通过；包含 generic list、generic observation、oversized/nested、空结果、实际 `mail_query` 适配器输出和实际 `browser_observe` 适配器 evidence |
+| Contract | `cd server && pnpm test -- src/agent/__tests__/next-action-planner.test.ts` | 55/55 通过；generic `data.preview` 进入 Planner `resultPreview`，原始结果字段未进入 Planner |
+| Contract | `cd server && pnpm test -- src/agent/__tests__/nodes.test.ts` | 19/19 通过；Generate 收到 generic structured preview 和 `browser_observe` 页面字段，非空结果回答不包含“没有数据” |
+| Typecheck | `cd server && pnpm run typecheck` | 通过 |
+| Project check | `pnpm check` | 未通过：`packages/docs-site` typecheck 以退出码 `3221225477` 终止；server typecheck 单独通过 |
+
+### Acceptance Evidence Matrix
+
+| Acceptance Criterion | Evidence | Result |
+| --- | --- | --- |
+| 新工具只需遵守 `McpToolEvidence` 即可接入 | `generic-tool-evidence.test.ts` 的显式 browser evidence 测试；无 AgentGraph 工具分支 | passed |
+| Generic fallback 保留有界结构化结果 | `evidence.ts` 的深度、数组、文本、总大小限制；generic fixture 及 oversized 测试 | passed |
+| 非空 `items` 不回答成“没有数据” | `nodes.test.ts` Generate 测试断言 prompt 含 `Project Alpha`、`total=2`，最终回答不含“没有数据” | passed |
+| Planner 能消费 generic preview | `next-action-planner.test.ts` 断言 `latestObservation.resultPreview` 含页面字段且不含 raw 字段 | passed |
+| `mail_query` 非空结果进入 Evidence | 实际调用 `mailQueryTool.execute`，输入真实 adapter 返回形状 `sync/items/total/nextCursor`，断言 itemCount、total 和邮件主题 | passed |
+| `browser_observe` 页面字段进入 Evidence 和 Generate 上下文 | 实际调用 `browser_observe` adapter，断言 `page.title`、`observation.visibleText`；Generate generic preview 测试覆盖上下文消费 | passed |
+| Graph 主链未改变 | 本次只修改 Evidence 类型、Evidence 摘要、Generate 序列化和测试；未新增节点或边 | passed by diff inspection |
+
+### Environment / Mock / Smoke
+
+- 本次未新增或修改环境变量、路径、provider、model 或 workspace 配置。
+- `mail_query` 测试使用 mock mail-center service；`browser_observe` 测试使用 mock browser runtime，但调用的是实际 MCP tool adapter 和实际 Evidence 映射合同。
+- Generate 测试使用 mock model response，仅用于检查发送给模型的证据上下文和最终回答 guard。
+- 本次未运行真实账号邮件服务、真实浏览器网络入口或完整 Agent 黑盒 smoke；因此外部 provider 连通性和真实用户入口仍需独立验收。
+
+### Remaining Risks
+
+- `pnpm check` 仍受 `packages/docs-site` typecheck 进程异常退出影响，需单独修复或复测该 workspace 环境问题。
+- 完整 `cd server && pnpm test` 本轮仍有既有 Graph resume、数据库环境和 microapps 注入测试失败；本任务定向测试和 server typecheck 均通过，未修改这些失败路径。
+- 真实 mail provider、浏览器会话和最终模型生成未在本机外部服务上执行；当前证据证明的是实际适配器合同和 Agent 内部回流，不替代真实外部服务 smoke。

@@ -273,6 +273,7 @@ export interface AgentEditFileEvidenceData {
 }
 
 export type AgentEvidenceSummaryData =
+  | AgentGenericStructuredEvidenceData
   | AgentReadDiscoverEvidenceData
   | AgentReadListEvidenceData
   | AgentReadOpenEvidenceData
@@ -284,6 +285,17 @@ export type AgentEvidenceSummaryData =
   | AgentExternalMcpEvidenceData
   | AgentWorkspaceMutationEvidenceData
   | AgentEditFileEvidenceData;
+
+export interface AgentGenericStructuredEvidenceData {
+  kind: "generic_structured";
+  preview: unknown;
+  truncated: boolean;
+  redacted: boolean;
+  unsupported: boolean;
+  itemCount?: number;
+  total?: number;
+  hasNextCursor?: boolean;
+}
 
 export interface AgentEvidenceSummary {
   source: "tool" | "retrieval" | "observation";
