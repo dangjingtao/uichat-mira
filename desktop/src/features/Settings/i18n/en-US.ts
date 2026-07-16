@@ -1245,7 +1245,7 @@ const settingsPending = {
       miniTitle: "MCP",
       title: "MCP",
       description:
-        "Manage MCP marketplace discovery, third-party MCP servers, and future non-core built-in MCP packages. The MVP starts with marketplace browsing and does not connect chat tool-calling yet.",
+        "Manage MCP marketplace discovery, third-party MCP servers, and future non-core built-in MCP packages.",
       tabs: {
         marketplace: "Marketplace",
         installed: "Installed",
@@ -1341,9 +1341,8 @@ const settingsPending = {
               "The installed list shows projected IDs, remote server info, capability summaries, error state, and current protocol status.",
           },
           boundary: {
-            title: "Current boundary",
-            body:
-              "MCP is still a standalone workbench and does not connect to chat auto-calling yet. Tools remain the internal core concept.",
+            title: "Connect Agent mode",
+            body: "Click Enable to connect Agent mode.",
           },
           officialSource: {
             title: "Official source",

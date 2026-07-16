@@ -1236,7 +1236,7 @@ const settingsPending = {
       miniTitle: "MCP",
       title: "MCP",
       description:
-        "管理 MCP 市场、第三方 MCP server，以及后续非核心内置 MCP 包。当前 MVP 先做市场浏览，不接入聊天自动工具调用。",
+        "管理 MCP 市场、第三方 MCP server，以及后续非核心内置 MCP 包。",
       tabs: {
         marketplace: "市场",
         installed: "已安装",
@@ -1325,8 +1325,8 @@ const settingsPending = {
             body: "已安装列表里可以看到 projected ID、远端 serverInfo、能力摘要、错误信息和当前协议状态。",
           },
           boundary: {
-            title: "当前边界",
-            body: "MCP 现在还是独立工作台，不接聊天自动调用。Tool 仍然是内部核心概念，MCP 是另一条产品线。",
+            title: "连接 Agent 模式",
+            body: "点击启用，即可连接 Agent 模式。",
           },
           officialSource: {
             title: "官方来源",
