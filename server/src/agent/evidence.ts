@@ -290,12 +290,13 @@ const summarizeToolResult = (
     typeof result.remoteToolName === "string"
   ) {
     const nestedResult = result.result;
+    const bounded = boundedStructuredPreview(nestedResult);
     const resultPreview =
-      typeof nestedResult === "string"
-        ? preview(nestedResult)
-        : nestedResult && typeof nestedResult === "object"
-          ? preview(JSON.stringify(nestedResult))
-          : undefined;
+      typeof bounded.preview === "string"
+        ? preview(bounded.preview)
+        : bounded.preview === undefined
+          ? undefined
+          : preview(JSON.stringify(bounded.preview));
     const recoveryOccurred = result.recoveryOccurred === true;
     return baseSummary({
       execution,
@@ -308,6 +309,8 @@ const summarizeToolResult = (
         `recoveryOccurred=${recoveryOccurred}`,
         ...(resultPreview ? [`result=${resultPreview}`] : []),
       ],
+      ...(bounded.truncated ? { gaps: ["External MCP result is truncated or contains removed sensitive fields."] } : {}),
+      status: bounded.truncated ? "partial" : "completed",
       data: {
         kind: "external_mcp",
         serverId: result.serverId,

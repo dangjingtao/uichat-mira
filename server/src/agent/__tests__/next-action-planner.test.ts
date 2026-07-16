@@ -228,6 +228,50 @@ test("buildPlannerObservationContext exposes generic structured data without the
   assert.deepEqual(context.latestToolCall?.resultSummary?.data, context.latestObservation?.resultPreview);
 });
 
+test("buildPlannerObservationContext keeps external MCP secrets out of resultPreview", () => {
+  const context = buildPlannerObservationContext(
+    createState({
+      evidence: {
+        observations: [],
+        retrievals: [],
+        toolExecutions: [{
+          toolId: "external-mcp-tool",
+          args: {},
+          status: "completed",
+          result: {
+            type: "external_mcp",
+            result: { customer: "Example Customer", token: "secret-token-value" },
+          },
+          summary: {
+            source: "tool",
+            status: "partial",
+            toolId: "external-mcp-tool",
+            actionTaken: "Called remote MCP tool remote_lookup.",
+            keyFindings: ["result={\"customer\":\"Example Customer\"}"],
+            gaps: ["External MCP result is truncated or contains removed sensitive fields."],
+            data: {
+              kind: "external_mcp",
+              serverId: "remote-server",
+              remoteToolName: "remote_lookup",
+              invocationStatus: "completed",
+              recoveryOccurred: false,
+              resultPreview: "{\"customer\":\"Example Customer\"}",
+            },
+          },
+          startedAt: "2026-07-15T00:00:00.000Z",
+          finishedAt: "2026-07-15T00:00:01.000Z",
+        }],
+      },
+      observations: undefined,
+    }),
+  );
+
+  const preview = JSON.stringify(context.latestObservation?.resultPreview);
+  assert.match(preview, /Example Customer/);
+  assert.doesNotMatch(preview, /secret-token-value/);
+  assert.match(context.latestObservation?.summary?.gaps?.join(" ") ?? "", /sensitive/i);
+});
+
 test("buildPlannerObservationContext does not use lastToolExecution as a planner fact source after Evidence", () => {
   const context = buildPlannerObservationContext(
     createState({

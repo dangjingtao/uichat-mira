@@ -103,12 +103,12 @@ related:
 
 ## A18 AgentGraph Tech Debt / Sandbox Task Index
 
-任务卡元数据已补齐，A18_T001 与 A18_T002 已完成独立评审；其余 A18 任务仍按各自任务卡状态管理。
+任务卡元数据已补齐，A18_T001 已完成独立评审；A18_T002 已补充整改内容，等待正式复审；其余 A18 任务仍按各自任务卡状态管理。
 
 | Task | Ledger State | Area | Required Next Step |
 | --- | --- | --- | --- |
 | [A18_T001](tasks/A18_T001-workspace-path-contract.md) | `DONE` | AgentGraph / Workspace Path | 评审通过；sentinel-only path normalization、boundary、approval smoke、定向 76/76 与 server typecheck 有证据；其余 A18 任务不受本卡结论影响；评审提示词见 [review prompt](reviews/A18_T001-workspace-path-contract-review-prompt.md) |
-| [A18_T002](tasks/A18_T002-structured-tool-evidence.md) | `DONE` | AgentGraph / Evidence | 评审通过；generic 7/7、Planner 55/55、Generate 19/19、server typecheck 通过，mail_query/browser_observe 适配器样本及有界敏感字段证据已记录；`pnpm check` 与完整 server 测试的既有失败已记录；评审提示词见 [review prompt](reviews/A18_T002-structured-tool-evidence-review-prompt.md) |
+| [A18_T002](tasks/A18_T002-structured-tool-evidence.md) | `READY_FOR_REVIEW` | AgentGraph / Evidence | 已补 external MCP 统一有界脱敏及 Evidence/Planner/Generate 回归；generic 8/8、Planner 56/56、Generate 20/20、server typecheck 通过；待正式复审，禁止预写 DONE；T001 状态不在本卡范围内；评审提示词见 [review prompt](reviews/A18_T002-structured-tool-evidence-review-prompt.md) |
 | [A18_T003](tasks/A18_T003-execution-object-confirmation.md) | `TASK_CARD_STATE_INVALID` | AgentGraph / Execution Object | 补齐合法 `task_state`，等待 A18_T001；评审提示词见 [review prompt](reviews/A18_T003-execution-object-confirmation-review-prompt.md) |
 | [A18_T004](tasks/A18_T004-microapp-definition-migration.md) | `TASK_CARD_STATE_INVALID` | MicroAPP / Definition Migration | 补齐合法 `task_state`，确认后独立施工与 PR；评审提示词见 [review prompt](reviews/A18_T004-microapp-definition-migration-review-prompt.md) |
 | [A18_T005](tasks/A18_T005-sandbox-contract-and-runner.md) | `TASK_CARD_STATE_INVALID` | Harness / Sandbox | 补齐合法 `task_state`，等待 A18_T001/A18_T002/A18_T003；评审提示词见 [review prompt](reviews/A18_T005-sandbox-contract-and-runner-review-prompt.md) |

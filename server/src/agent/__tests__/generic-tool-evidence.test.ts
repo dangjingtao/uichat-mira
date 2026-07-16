@@ -30,6 +30,43 @@ describe("generic MCP tool evidence", () => {
     expect(summary.data).toEqual({ kind: "opaque-tool-data", title: "Example Domain" });
   });
 
+  it("sanitizes nested external MCP secrets while preserving business fields", () => {
+    const summary = createToolExecutionEvidenceSummary({
+      evidenceIndex: 0,
+      execution: {
+        toolId: "external-mcp-tool",
+        args: {},
+        status: "completed",
+        result: {
+          type: "external_mcp",
+          serverId: "remote-server",
+          remoteToolName: "remote_lookup",
+          result: {
+            customer: { name: "Example Customer", accountId: "acct-1" },
+            token: "secret-token-value",
+            authorization: "Bearer secret-auth-value",
+            cookie: "session=secret-cookie-value",
+            apiKey: "secret-api-key-value",
+            env: { SERVICE_SECRET: "secret-env-value" },
+          },
+        },
+        startedAt: "2026-07-15T00:00:00.000Z",
+        finishedAt: "2026-07-15T00:00:01.000Z",
+      },
+    });
+
+    const serialized = JSON.stringify(summary);
+    expect(serialized).toContain("Example Customer");
+    expect(serialized).toContain("acct-1");
+    expect(serialized).not.toContain("secret-token-value");
+    expect(serialized).not.toContain("secret-auth-value");
+    expect(serialized).not.toContain("secret-cookie-value");
+    expect(serialized).not.toContain("secret-api-key-value");
+    expect(serialized).not.toContain("secret-env-value");
+    expect(summary.status).toBe("partial");
+    expect(summary.gaps?.join(" ")).toMatch(/sensitive/i);
+  });
+
   it("preserves a bounded generic list result without turning it into an empty result", () => {
     const summary = createToolExecutionEvidenceSummary({
       evidenceIndex: 0,

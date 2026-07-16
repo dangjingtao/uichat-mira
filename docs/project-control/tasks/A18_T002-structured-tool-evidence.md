@@ -1,5 +1,5 @@
 ---
-task_state: DONE
+task_state: READY_FOR_REVIEW
 owner: project-owner
 repository: dangjingtao/uichat-mira
 baseline_branch: dev
@@ -7,7 +7,7 @@ baseline_branch: dev
 
 # A18_T002 — 通用结构化 Tool Result 回流 Evidence
 
-- 状态：DONE
+- 状态：READY_FOR_REVIEW
 - 仓库：`dangjingtao/uichat-mira`
 - 基线分支：`dev`
 - 类型：P0 技术债 / Grounding
@@ -172,9 +172,9 @@ type McpToolEvidence = {
 
 | 验证层级 | 命令 | 结果 |
 | --- | --- | --- |
-| Unit / Contract | `cd server && pnpm test -- src/agent/__tests__/generic-tool-evidence.test.ts` | 7/7 通过；包含 generic list、generic observation、oversized/nested、空结果、实际 `mail_query` 适配器输出和实际 `browser_observe` 适配器 evidence |
-| Contract | `cd server && pnpm test -- src/agent/__tests__/next-action-planner.test.ts` | 55/55 通过；generic `data.preview` 进入 Planner `resultPreview`，原始结果字段未进入 Planner |
-| Contract | `cd server && pnpm test -- src/agent/__tests__/nodes.test.ts` | 19/19 通过；Generate 收到 generic structured preview 和 `browser_observe` 页面字段，非空结果回答不包含“没有数据” |
+| Unit / Contract | `cd server && pnpm test -- src/agent/__tests__/generic-tool-evidence.test.ts` | 8/8 通过；包含 generic list、generic observation、oversized/nested、空结果、实际 `mail_query` 适配器输出、实际 `browser_observe` 适配器 evidence 和 external MCP 敏感字段回归 |
+| Contract | `cd server && pnpm test -- src/agent/__tests__/next-action-planner.test.ts` | 56/56 通过；generic `data.preview` 和 external MCP 安全预览进入 Planner `resultPreview`，原始结果字段未进入 Planner |
+| Contract | `cd server && pnpm test -- src/agent/__tests__/nodes.test.ts` | 20/20 通过；Generate 收到 generic structured、`browser_observe` 页面字段和 external MCP 安全预览，非空结果回答不包含“没有数据” |
 | Typecheck | `cd server && pnpm run typecheck` | 通过 |
 | Project check | `pnpm check` | 未通过：`packages/docs-site` typecheck 以退出码 `3221225477` 终止；server typecheck 单独通过 |
 

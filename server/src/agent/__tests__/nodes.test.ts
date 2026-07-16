@@ -389,6 +389,53 @@ test("generateNode includes browser_observe page fields in the answer context", 
   assert.match(result.answer ?? "", /Example Domain content/);
 });
 
+test("generateNode does not place external MCP secrets in the model prompt", async () => {
+  const state = createBaseState("查询客户信息");
+  const summary = {
+    source: "tool" as const,
+    status: "partial" as const,
+    toolId: "external-mcp-tool",
+    actionTaken: "Called remote MCP tool remote_lookup.",
+    keyFindings: ["result={\"customer\":\"Example Customer\"}"],
+    gaps: ["External MCP result is truncated or contains removed sensitive fields."],
+    data: {
+      kind: "external_mcp",
+      serverId: "remote-server",
+      remoteToolName: "remote_lookup",
+      invocationStatus: "completed" as const,
+      recoveryOccurred: false,
+      resultPreview: "{\"customer\":\"Example Customer\"}",
+    },
+  };
+  state.evidence = {
+    observations: [],
+    toolExecutions: [{
+      toolId: "external-mcp-tool",
+      args: {},
+      status: "completed",
+      result: { type: "external_mcp", result: { customer: "Example Customer", token: "secret-token-value" } },
+      summary,
+      startedAt: "2026-07-15T00:00:00.000Z",
+      finishedAt: "2026-07-15T00:00:01.000Z",
+    }],
+    retrievals: [],
+    latestSummary: summary,
+  };
+  const invokeSpy = vi.spyOn(providerProxyService, "generateTextForRole").mockImplementation(
+    async (_role, messages) => {
+      const content = (messages as Array<{ content: string }>).map((message) => message.content).join("\n");
+      assert.match(content, /Example Customer/);
+      assert.doesNotMatch(content, /secret-token-value/);
+      return "客户是 Example Customer。";
+    },
+  );
+
+  const result = await generateNode(state);
+
+  assert.equal(invokeSpy.mock.calls.length, 1);
+  assert.doesNotMatch(result.answer ?? "", /secret-token-value/);
+});
+
 test("generateNode rewrites pseudo-execution wording into a grounded read_open summary", async () => {
   const state = createBaseState("打开 README.md 看看内容");
   state.evidence = {
