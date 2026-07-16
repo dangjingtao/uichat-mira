@@ -101,6 +101,19 @@ related:
 | [microapp_T117](tasks/microapp_T117-computer-use-browser-smoke.md) | `READY_FOR_REVIEW` | MicroAPP | 评审两轮真实冒烟证据，并确认当前阻塞应按一期能力边界处理，还是另开实现卡修复 |
 | [microapp_T010](tasks/microapp_T010-image-generation-parallel-code-isolation.md) | `READY_FOR_REVIEW` | MicroAPP | 评审 `image_generation` 并行施工的代码隔离、共享文件归属和推荐批次是否可接受 |
 
+## A18 AgentGraph Tech Debt / Sandbox Task Index
+
+任务包已接收，但原始任务卡使用 `状态：READY`，缺少项目控制要求的合法 `task_state` 元数据。按规范不得将其推断为可施工状态；补齐元数据前统一登记为 `TASK_CARD_STATE_INVALID`。
+
+| Task | Ledger State | Area | Required Next Step |
+| --- | --- | --- | --- |
+| [A18_T001](tasks/A18_T001-workspace-path-contract.md) | `TASK_CARD_STATE_INVALID` | AgentGraph / Workspace Path | 补齐合法 `task_state`，确认后按第 1 张分派；评审提示词见 [review prompt](reviews/A18_T001-workspace-path-contract-review-prompt.md) |
+| [A18_T002](tasks/A18_T002-structured-tool-evidence.md) | `TASK_CARD_STATE_INVALID` | AgentGraph / Evidence | 补齐合法 `task_state`，确认后可与 A18_T001 并行；评审提示词见 [review prompt](reviews/A18_T002-structured-tool-evidence-review-prompt.md) |
+| [A18_T003](tasks/A18_T003-execution-object-confirmation.md) | `TASK_CARD_STATE_INVALID` | AgentGraph / Execution Object | 补齐合法 `task_state`，等待 A18_T001；评审提示词见 [review prompt](reviews/A18_T003-execution-object-confirmation-review-prompt.md) |
+| [A18_T004](tasks/A18_T004-microapp-definition-migration.md) | `TASK_CARD_STATE_INVALID` | MicroAPP / Definition Migration | 补齐合法 `task_state`，确认后独立施工与 PR；评审提示词见 [review prompt](reviews/A18_T004-microapp-definition-migration-review-prompt.md) |
+| [A18_T005](tasks/A18_T005-sandbox-contract-and-runner.md) | `TASK_CARD_STATE_INVALID` | Harness / Sandbox | 补齐合法 `task_state`，等待 A18_T001/A18_T002/A18_T003；评审提示词见 [review prompt](reviews/A18_T005-sandbox-contract-and-runner-review-prompt.md) |
+| [A18_T006](tasks/A18_T006-managed-python-sandbox.md) | `TASK_CARD_STATE_INVALID` | Harness / Managed Python Sandbox | 补齐合法 `task_state`，等待 A18_T005/A18_T002；评审提示词见 [review prompt](reviews/A18_T006-managed-python-sandbox-review-prompt.md) |
+
 ## MicroAPP Image Generation Parallel Task Index
 
 | Task | Ledger State | Notes |
