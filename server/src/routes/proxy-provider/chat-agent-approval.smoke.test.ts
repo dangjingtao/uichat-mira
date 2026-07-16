@@ -486,7 +486,7 @@ describe("chat route approval resume smoke", () => {
     assert.equal(executeSpy.mock.calls[0]?.[0]?.toolId, "workspace_mutation");
     assert.deepEqual(executeSpy.mock.calls[0]?.[0]?.args, {
       operation: "delete",
-      targetPath: "ONLY_ALT_WORKSPACE.txt",
+      targetPath: "/ONLY_ALT_WORKSPACE.txt",
     });
 
 

@@ -1,3 +1,10 @@
+---
+task_state: DONE
+owner: project-owner
+repository: dangjingtao/uichat-mira
+baseline_branch: dev
+---
+
 # A18_T001 — 恢复 Workspace Path 参数合同
 
 - 状态：READY
@@ -121,3 +128,53 @@ Directory / cwd 继续维持：
 - 是否影响现有黑盒、审批、Evidence、Trace。
 - 已知限制。
 - 一个独立提交；不得夹带全仓格式化、依赖升级或无关清理。
+
+## Environment Contract
+
+- Normalize and boundary tests use the repository test runtime and temporary workspace fixtures.
+- No new environment variables, hardcoded local paths, or production fallbacks are introduced.
+
+## Mock / Fixture Policy
+
+- Unit and contract tests use existing in-memory capability registrations and repository temporary workspace fixtures.
+- No production mock or test-only default is added.
+
+## Black-Box Smoke
+
+- This task changes the normalize/boundary contract and does not change the AgentGraph mainline or user-facing runtime entry point.
+- Required black-box evidence is the existing harness boundary black-box suite covering absolute, traversal, and Windows/UNC paths.
+
+## Evidence
+
+## Verification Evidence
+
+- Changed files:
+  - `server/src/mcp/workspace-path-args.ts`
+  - `server/src/agent/__tests__/tool-call-normalize.test.ts`
+  - `server/src/mcp/core/invocations.test.ts`
+  - `server/src/mcp/core/invocations.blackbox.test.ts`
+  - `server/src/mcp/tools/workspace-mutation.tool.test.ts`
+  - `server/src/routes/proxy-provider/chat-agent-approval.smoke.test.ts`
+  - this task card and `project-control-ledger.md`
+- Unit / contract: `pnpm exec vitest run src/agent/__tests__/tool-call-normalize.test.ts src/mcp/core/invocations.test.ts src/mcp/core/invocations.blackbox.test.ts src/mcp/tools/workspace-mutation.tool.test.ts` -> 4 files, 76 tests passed.
+- Approval / resume smoke: `pnpm exec vitest run src/routes/proxy-provider/chat-agent-approval.smoke.test.ts -t "approve/resume executes the approved workspace mutation"` -> 1 test passed; frozen and executed target remains `/ONLY_ALT_WORKSPACE.txt` and approval occurs before execution.
+- Resume contract: `pnpm exec vitest run src/agent/__tests__/resume.test.ts -t "legacy root-relative"` -> 1 test passed.
+- Server typecheck: `pnpm --filter @ui-chat-mira/server typecheck` -> passed.
+- Workspace typecheck: `pnpm check` -> packages/core, packages/deepagents-spike, desktop, packages/docs-site, and server passed.
+- Full server Vitest was attempted. The task-specific approval smoke failure was corrected and passed in isolation. Remaining full-suite failures are unrelated baseline/environment failures, including the existing frozen web-search graph test, external MCP fetch mocks, missing database environment, and microapp service injection.
+
+## Acceptance Evidence Matrix
+
+| Acceptance Criterion | Evidence | Result |
+| --- | --- | --- |
+| Only `/workspace` and its children normalize | `workspace-path-args.ts`; normalize tests for `/workspace`, `/workspace/`, and sentinel traversal | passed |
+| Non-sentinel POSIX absolute paths preserve leading slash | normalize tests for `/README.md`, `/docs/README.md`, `/etc/passwd`, `/bin/sh`, `/usr/bin/env`, `/C:/Windows/System32` | passed |
+| Windows drive absolute and UNC paths remain unchanged | normalize and invocation boundary tests | passed |
+| Traversal and cwd contracts do not regress | normalize tests and resume/cwd contract tests | passed |
+| `workspace_mutation.targetPath` reaches downstream boundary unchanged | invocation unit/black-box tests and approval smoke | passed |
+| No AgentGraph / Planner / ToolNode / Evidence change | diff inspection; only path helper, tests, task records changed | passed |
+
+## Remaining Risks
+
+- No production AgentGraph topology, Policy, ToolNode, Evidence, or external MCP path semantics were changed.
+- Full-suite Vitest remains non-green because of unrelated existing failures listed above; the directly affected unit, contract, smoke, resume, server typecheck, and repository typecheck evidence is green.

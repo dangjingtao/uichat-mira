@@ -224,7 +224,7 @@ describe("harness invocation boundary blackbox", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it("H5 allows Windows root-relative slash paths inside the workspace root", async () => {
+  it("H5 keeps POSIX absolute slash paths visible to the workspace boundary", async () => {
     const execute = vi.fn(() => ({
       result: { ok: true },
     }));
@@ -265,9 +265,11 @@ describe("harness invocation boundary blackbox", () => {
       environment: createBoundaryEnvironment(),
     });
 
-    expect(record.status).toBe("completed");
-    expect(record.approval).toBeUndefined();
-    expect(execute).toHaveBeenCalledTimes(1);
+    expect(record.status).toBe("awaiting_approval");
+    expect(record.approval?.reason).toBe(
+      "blackbox_windows_root_relative requests targetPath outside the current workspace root.",
+    );
+    expect(execute).not.toHaveBeenCalled();
   });
 
   it.each([

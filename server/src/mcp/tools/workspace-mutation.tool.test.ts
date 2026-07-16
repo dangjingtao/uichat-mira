@@ -147,23 +147,17 @@ describe("workspace_mutation tool", () => {
     );
   });
 
-  it("treats /notes.txt as workspace-root-relative during execution", async () => {
+  it("rejects POSIX absolute deletion targets during execution", async () => {
     fs.writeFileSync(path.join(tempRoot, "notes.txt"), "remove me", "utf-8");
     const invocation = createInvocationContext({
       operation: "delete",
       targetPath: "/notes.txt",
     });
 
-    const result = await workspaceMutationTool.execute(invocation.context);
-
-    expect(fs.existsSync(path.join(tempRoot, "notes.txt"))).toBe(false);
-    expect(result.result).toEqual({
-      operation: "delete",
-      targetPath: "/notes.txt",
-      dryRun: false,
-      deletedType: "file",
-      recursive: false,
-    });
+    await expect(workspaceMutationTool.execute(invocation.context)).rejects.toThrow(
+      "path must stay inside workspace root",
+    );
+    expect(fs.existsSync(path.join(tempRoot, "notes.txt"))).toBe(true);
   });
 
   it("rejects directory deletion without recursive=true", async () => {
