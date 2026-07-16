@@ -4,6 +4,7 @@ import { runWithWorkspaceRootOverride } from "@/mcp/workspace.js";
 import {
   executeSandboxedCommand,
 } from "@/sandbox/executor.js";
+import { getPythonSandboxStatus, runManagedPython } from "@/sandbox/python-executor.js";
 import type {
   SandboxFutureProfile,
   SandboxProfile,
@@ -34,10 +35,12 @@ type SandboxL1Requirement =
 type SandboxL1RequirementChecks = Record<SandboxL1Requirement, boolean>;
 
 const PROFILE_COVERAGE_BASE: Record<SandboxProfile, SandboxProfileCoverageStatus> = {
+  // Python is managed separately from the command profile.
   read_only: "not_implemented",
   workspace_write: "not_implemented",
   command: "not_implemented",
   networked_command: "not_implemented",
+  python: "blocked",
 };
 
 const V16_GATE_PROFILES: SandboxV16Profile[] = ["command"];
@@ -98,6 +101,7 @@ export const getSandboxProfileCoverage = () => {
   return {
     ...PROFILE_COVERAGE_BASE,
     command: l1Status.available ? "implemented" : "not_implemented",
+    python: getPythonSandboxStatus(createHarnessEnvironmentSnapshot().toolConfig?.python).available ? "implemented" : "blocked",
   } satisfies Record<SandboxProfile, SandboxProfileCoverageStatus>;
 };
 
@@ -113,6 +117,7 @@ export const getSandboxContractCoverage = () => {
   return {
     declaredProfiles: {
       ...futureProfiles,
+      python: profileCoverage.python,
       ...v16GateProfiles,
     } satisfies Record<SandboxProfile, SandboxDeclaredContractStatus>,
     v16GateProfiles,
@@ -210,3 +215,6 @@ export const runSandboxCommandDirect = async (
     };
   }
 };
+
+export const runSandboxPythonDirect = async (input: Parameters<typeof runManagedPython>[0]) =>
+  runManagedPython(input);

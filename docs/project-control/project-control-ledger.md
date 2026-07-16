@@ -111,8 +111,8 @@ related:
 | [A18_T002](tasks/A18_T002-structured-tool-evidence.md) | `READY_FOR_REVIEW` | AgentGraph / Evidence | 已补 external MCP 统一有界脱敏及 Evidence/Planner/Generate 回归；generic 8/8、Planner 56/56、Generate 20/20、server typecheck 通过；待正式复审，禁止预写 DONE；T001 状态不在本卡范围内；评审提示词见 [review prompt](reviews/A18_T002-structured-tool-evidence-review-prompt.md) |
 | [A18_T003](tasks/A18_T003-execution-object-confirmation.md) | `TASK_CARD_STATE_INVALID` | AgentGraph / Execution Object | 补齐合法 `task_state`，等待 A18_T001；评审提示词见 [review prompt](reviews/A18_T003-execution-object-confirmation-review-prompt.md) |
 | [A18_T004](tasks/A18_T004-microapp-definition-migration.md) | `TASK_CARD_STATE_INVALID` | MicroAPP / Definition Migration | 补齐合法 `task_state`，确认后独立施工与 PR；评审提示词见 [review prompt](reviews/A18_T004-microapp-definition-migration-review-prompt.md) |
-| [A18_T005](tasks/A18_T005-sandbox-contract-and-runner.md) | `TASK_CARD_STATE_INVALID` | Harness / Sandbox | 补齐合法 `task_state`，等待 A18_T001/A18_T002/A18_T003；评审提示词见 [review prompt](reviews/A18_T005-sandbox-contract-and-runner-review-prompt.md) |
-| [A18_T006](tasks/A18_T006-managed-python-sandbox.md) | `TASK_CARD_STATE_INVALID` | Harness / Managed Python Sandbox | 补齐合法 `task_state`，等待 A18_T005/A18_T002；评审提示词见 [review prompt](reviews/A18_T006-managed-python-sandbox-review-prompt.md) |
+| [A18_T005](tasks/A18_T005-sandbox-contract-and-runner.md) | `DONE` | Harness / Sandbox | 独立评审通过；profile、runner、cwd/env/timeout/output/artifact、审批 hash、Evidence 和 Graph 主链均有测试证据；定向 36/36、direct bench 0 failed、AgentGraph 黑盒 18/18、`pnpm check` 通过；评审提示词见 [review prompt](reviews/A18_T005-sandbox-contract-and-runner-review-prompt.md) |
+| [A18_T006](tasks/A18_T006-managed-python-sandbox.md) | `READY_FOR_REVIEW` | Harness / Managed Python Sandbox | `python_session` 默认关闭；固定 runtime、health、workspace/approval/timeout/output/artifact、Evidence、安装阻止与安全负例已实现；待独立评审；评审提示词见 [review prompt](reviews/A18_T006-managed-python-sandbox-review-prompt.md) |
 
 ## MicroAPP Image Generation Parallel Task Index
 

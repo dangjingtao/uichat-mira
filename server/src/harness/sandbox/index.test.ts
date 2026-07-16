@@ -8,7 +8,9 @@ import {
   getSandboxL1WorkspaceRunnerStatus,
   getSandboxProfileCoverage,
   runSandboxCommandDirect,
+  runSandboxPythonDirect,
 } from "./index.js";
+import { getPythonSandboxStatus } from "@/sandbox/python-executor.js";
 
 const workspaceRoot = process.cwd();
 const tempDirs: string[] = [];
@@ -100,7 +102,14 @@ describe("sandbox direct contract", () => {
       workspace_write: "not_implemented",
       command: "implemented",
       networked_command: "not_implemented",
+      python: "blocked",
     });
+  });
+
+  it("keeps Python unavailable without managed runtime configuration", async () => {
+    expect(getPythonSandboxStatus()).toMatchObject({ available: false });
+    const result = await runSandboxPythonDirect({ code: "print('no')", workspaceRoot });
+    expect(result.status).toBe("blocked");
   });
 
   it("separates V1.6 gate coverage from future profile declarations", () => {
@@ -110,6 +119,7 @@ describe("sandbox direct contract", () => {
         workspace_write: "future_profile",
         command: "implemented",
         networked_command: "future_profile",
+        python: "blocked",
       },
       v16GateProfiles: {
         command: "implemented",

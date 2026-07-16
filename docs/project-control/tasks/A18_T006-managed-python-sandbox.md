@@ -1,3 +1,10 @@
+---
+task_state: READY_FOR_REVIEW
+owner: project-owner
+repository: dangjingtao/uichat-mira
+baseline_branch: dev
+---
+
 # A18_T006 — 受管 Python Sandbox
 
 - 状态：READY
@@ -210,3 +217,39 @@ Graph 不检查 Python exitCode，也不解析 pandas/matplotlib 结果。
 - 是否影响现有黑盒、审批、Evidence、Trace。
 - 已知限制。
 - 一个独立提交；不得夹带全仓格式化、依赖升级或无关清理。
+
+## 实现证据
+
+### 改动文件
+
+- `server/src/sandbox/python-executor.ts`
+- `server/src/sandbox/python-executor.test.ts`
+- `server/src/mcp/tools/python-session.tool.ts`
+- `server/src/harness/sandbox/contract.ts`
+- `server/src/harness/sandbox/index.ts`
+- `server/src/harness/sandbox/index.test.ts`
+- `server/src/harness/environment.ts`
+- `server/src/harness/runtime.ts`
+- `server/src/mcp/core/definitions.ts`
+- `server/src/config/index.ts`
+- `docs/harness/sandbox-module.md`
+
+### 行为变化
+
+- 新增默认关闭的 `python_session`；只接受 `code`、workspace-relative `cwd`、`timeoutMs` 和 artifact registrations。
+- 解释器、预装包 allowlist 和 enabled 状态来自可信 runtime configuration；运行时健康检查通过后才进入 Python sandbox profile exposure。
+- Python 以每次调用一个临时脚本、固定解释器、`-I -B` 模式运行；不创建长驻 kernel，不继承 `HOME`/`USERPROFILE` 等宿主 profile 环境。
+- cwd、timeout、output、artifact、approval 复用 Harness/Sandbox 统一合同；结果和失败状态回传通用 `McpToolEvidence`。
+- pip、conda、uv、poetry 的包安装入口被 Sandbox policy 阻止；不宣称完整网络、CPU、内存、子进程、文件系统或 hostile-code 强隔离。
+
+### 验证证据
+
+- `pnpm --filter @ui-chat-mira/server test -- src/harness/sandbox/index.test.ts src/sandbox/python-executor.test.ts src/harness/exposure.test.ts src/mcp/core/permissions.test.ts`：4 个 test files、71 tests passed。
+- `pnpm --filter @ui-chat-mira/server typecheck`：通过。
+- `git diff --check`：通过。
+- `pnpm check`：6 个 workspace typecheck 全部通过。
+
+### 影响与限制
+
+- 未新增 AgentGraph 节点、专属 Graph 分支、Planner action 或 terminal_session 语义；审批 inputHash 仍由通用 invocation args 计算，Python code/cwd/timeout/artifact 变化会产生新 hash。
+- 当前实现是一次性脚本执行，不是 Notebook 或 persistent kernel；Windows 进程终止沿用当前 best-effort 限制，CPU/内存和 hostile-code 隔离未验证。

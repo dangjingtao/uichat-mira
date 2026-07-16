@@ -15,6 +15,7 @@ export type McpSandboxProfile =
   | "read_only"
   | "workspace_write"
   | "command"
+  | "python"
   | "networked_command";
 
 export type McpInvocationStatus =
@@ -127,6 +128,11 @@ export interface McpExecutionEnvironment {
     web_search?: {
       apiKey?: string;
       baseUrl?: string;
+    };
+    python?: {
+      enabled?: boolean;
+      executable?: string;
+      packages?: string[];
     };
   };
 }

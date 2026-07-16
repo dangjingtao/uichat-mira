@@ -51,6 +51,9 @@ const CONFIG = {
   HARNESS_RETENTION_TTL_MS: Number(
     process.env.UI_CHAT_HARNESS_RETENTION_TTL_MS ?? 1000 * 60 * 30,
   ),
+  PYTHON_SANDBOX: runtimeConfig.pythonSandbox ?? {
+    enabled: false,
+  },
 };
 
 export default CONFIG;

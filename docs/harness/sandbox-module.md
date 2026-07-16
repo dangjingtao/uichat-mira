@@ -52,6 +52,12 @@ Doc Type: current-contract
 - L1 workspace runner status；条件不满足时 `command` profile 不可用
 - direct bench 最小合同与结构化 JSON runner
 
+## Managed Python
+
+`python_session` is a separate, default-off managed runtime. It is exposed only when trusted runtime configuration enables a fixed interpreter and its health check succeeds. The model can provide `code`, workspace-relative `cwd`, bounded `timeoutMs`, and workspace-bound artifact registrations; it cannot select an interpreter, environment, network mode, or package installer.
+
+The first version runs one temporary script per invocation with no persistent kernel. It does not provide complete network, CPU, memory, subprocess, filesystem, or hostile-code isolation. Package installation through pip, conda, uv, or poetry is blocked, and the configured runtime must use a preinstalled package allowlist. The allowlist is reported as configuration metadata and is not hardcoded in Planner or Graph.
+
 相关实现：
 
 - [executor.ts](/D:/workspace/rag-demo/server/src/sandbox/executor.ts)
