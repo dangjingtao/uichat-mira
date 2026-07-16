@@ -241,6 +241,7 @@ Graph 不检查 Python exitCode，也不解析 pandas/matplotlib 结果。
 - Python 以每次调用一个临时脚本、固定解释器、`-I -B` 模式运行；不创建长驻 kernel，不继承 `HOME`/`USERPROFILE` 等宿主 profile 环境。
 - cwd、timeout、output、artifact、approval 复用 Harness/Sandbox 统一合同；结果和失败状态回传通用 `McpToolEvidence`。
 - pip、conda、uv、poetry 的包安装入口被 Sandbox policy 阻止；不宣称完整网络、CPU、内存、子进程、文件系统或 hostile-code 强隔离。
+- Python audit hook 在执行前阻止 subprocess、os.system、exec/spawn、ctypes 动态库、socket 网络和 workspace 外文件访问；输出超限会终止进程树，不依赖源码关键词拦截。
 
 ### 验证证据
 

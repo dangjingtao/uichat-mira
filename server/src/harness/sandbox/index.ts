@@ -40,7 +40,7 @@ const PROFILE_COVERAGE_BASE: Record<SandboxProfile, SandboxProfileCoverageStatus
   workspace_write: "not_implemented",
   command: "not_implemented",
   networked_command: "not_implemented",
-  python: "blocked",
+  python: "not_implemented",
 };
 
 const V16_GATE_PROFILES: SandboxV16Profile[] = ["command"];
@@ -73,7 +73,7 @@ const isBlockedError = (message: string) =>
 const isOutputLimitError = (message: string) =>
   message.includes("terminal output exceeded limit");
 
-const toFutureProfileViolation = (profile: SandboxFutureProfile) =>
+const toFutureProfileViolation = (profile: SandboxProfile) =>
   `future_profile: profile ${profile} is declared for future Sandbox coverage and is not part of the UIChat Mira V1.6 gate`;
 
 const toCommandUnavailableViolation = () =>
@@ -101,7 +101,7 @@ export const getSandboxProfileCoverage = () => {
   return {
     ...PROFILE_COVERAGE_BASE,
     command: l1Status.available ? "implemented" : "not_implemented",
-    python: getPythonSandboxStatus(createHarnessEnvironmentSnapshot().toolConfig?.python).available ? "implemented" : "blocked",
+    python: getPythonSandboxStatus(createHarnessEnvironmentSnapshot().toolConfig?.python).available ? "implemented" : "not_implemented",
   } satisfies Record<SandboxProfile, SandboxProfileCoverageStatus>;
 };
 

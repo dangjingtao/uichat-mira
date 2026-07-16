@@ -50,8 +50,43 @@ const resolvePythonEnv = () => {
   return env;
 };
 
-const hasPackageInstallAttempt = (code: string) =>
-  /(?:python\s+-m\s+pip|pip(?:3)?\s+install|conda\s+(?:install|create)|uv\s+(?:pip\s+)?install|poetry\s+(?:add|install))/i.test(code);
+const createManagedScript = (code: string, workspaceRoot: string, tempRoot: string) => `
+import os as _os
+import sys as _sys
+
+_workspace = ${JSON.stringify(path.resolve(workspaceRoot))}
+_temp_root = ${JSON.stringify(path.resolve(tempRoot))}
+_stdlib = ${JSON.stringify(path.resolve(process.execPath, ".."))}
+_blocked = (
+    "subprocess", "os.system", "os.exec", "os.posix_spawn", "os.spawn",
+    "ctypes.dlopen", "socket", "socket.connect", "socket.getaddrinfo",
+    "os.kill", "signal.pthread_kill"
+)
+
+def _inside(path_value, roots):
+    try:
+        candidate = _os.path.realpath(path_value)
+    except (TypeError, ValueError):
+        return False
+    return any(candidate == root or candidate.startswith(root + _os.sep) for root in roots)
+
+def _audit(event, args):
+    if event == "open" or event == "os.open":
+        target = args[0] if args else None
+        if isinstance(target, (str, bytes)) and not _inside(target, (_workspace, _temp_root, _stdlib, _sys.prefix)):
+            raise PermissionError("MANAGED_PYTHON_BLOCKED: file access outside workspace")
+    if any(event == item or event.startswith(item + ".") for item in _blocked):
+        raise PermissionError("MANAGED_PYTHON_BLOCKED: process, shell, network, or dynamic library access")
+
+_sys.addaudithook(_audit)
+try:
+    exec(compile(${JSON.stringify(code)}, "<python_session>", "exec"), {"__name__": "__main__", "__file__": "<python_session>"})
+except PermissionError as _error:
+    if str(_error).startswith("MANAGED_PYTHON_BLOCKED:"):
+        print(str(_error), file=_sys.stderr)
+        _sys.exit(77)
+    raise
+`;
 
 export const getPythonSandboxStatus = (config?: ManagedPythonConfig) => {
   const executable = resolveExecutable(config);
@@ -96,9 +131,6 @@ export const runManagedPython = async (input: ManagedPythonInput): Promise<Sandb
   const executable = resolveExecutable(config);
   if (!executable) return { status: "blocked", exitCode: null, stdoutText: "", stderrText: "", stdoutEncoding: "unknown", stderrEncoding: "unknown", durationMs: 0, truncated: false, binaryDetected: false, violations: ["python runtime is unavailable"], artifacts: [] };
   const { timeoutMs, outputLimitBytes } = normalizeLimits(input);
-  if (hasPackageInstallAttempt(input.code)) {
-    return { status: "blocked", exitCode: null, stdoutText: "", stderrText: "", stdoutEncoding: "unknown", stderrEncoding: "unknown", durationMs: 0, truncated: false, binaryDetected: false, violations: ["package installation is blocked in the managed Python runtime"], artifacts: [] };
-  }
   const violations: string[] = [];
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "mira-python-"));
   const scriptPath = path.join(tempRoot, "script.py");
@@ -106,22 +138,46 @@ export const runManagedPython = async (input: ManagedPythonInput): Promise<Sandb
     const cwd = await runWithWorkspaceRootOverride(input.workspaceRoot, async () =>
       resolveWorkspaceDirectoryPath(input.cwd?.trim() || "."),
     );
-    await writeFile(scriptPath, input.code, "utf8");
+    await writeFile(scriptPath, createManagedScript(input.code, input.workspaceRoot, tempRoot), "utf8");
     const stdout = { text: "", bytes: 0, truncated: false };
     const stderr = { text: "", bytes: 0, truncated: false };
-    const child = spawn(executable, ["-I", "-B", scriptPath], { cwd, env: resolvePythonEnv(), windowsHide: true, stdio: ["ignore", "pipe", "pipe"] }) as any;
+    const child = spawn(executable, ["-I", "-B", scriptPath], { cwd, env: resolvePythonEnv(), windowsHide: true, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] }) as any;
     let timedOut = false;
-    const kill = () => { if (!child.killed) child.kill(); };
+    let outputLimitReached = false;
+    let terminated = false;
+    const terminateProcessTree = async () => {
+      if (terminated) return;
+      terminated = true;
+      if (!child.pid) return;
+      if (process.platform === "win32") {
+        await new Promise<void>((resolve) => {
+          const killer = spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { windowsHide: true });
+          killer.once("close", () => resolve());
+          killer.once("error", () => resolve());
+        });
+      } else {
+        try { process.kill(-child.pid, "SIGKILL"); } catch { child.kill("SIGKILL"); }
+      }
+    };
+    const kill = () => { void terminateProcessTree(); };
     const timer = setTimeout(() => { timedOut = true; violations.push("python execution timed out"); kill(); }, timeoutMs);
     input.signal?.addEventListener("abort", kill, { once: true });
-    child.stdout.on("data", (chunk: Buffer) => appendOutput(stdout, chunk, outputLimitBytes));
-    child.stderr.on("data", (chunk: Buffer) => appendOutput(stderr, chunk, outputLimitBytes));
+    const onOutput = (state: { text: string; bytes: number; truncated: boolean }, chunk: Buffer) => {
+      appendOutput(state, chunk, outputLimitBytes);
+      if (state.truncated && !outputLimitReached) {
+        outputLimitReached = true;
+        violations.push("python output exceeded limit; process terminated");
+        kill();
+      }
+    };
+    child.stdout.on("data", (chunk: Buffer) => onOutput(stdout, chunk));
+    child.stderr.on("data", (chunk: Buffer) => onOutput(stderr, chunk));
     const exitCode = await new Promise<number | null>((resolve, reject) => { child.once("error", reject); child.once("close", resolve); });
     clearTimeout(timer);
     const truncated = stdout.truncated || stderr.truncated;
-    if (truncated) violations.push("python output exceeded limit");
     const artifacts = await runWithWorkspaceRootOverride(input.workspaceRoot, () => collectArtifacts(input.artifactRegistrations, violations));
-    return { status: timedOut ? "timed_out" : exitCode === 0 && !truncated ? "completed" : "failed", exitCode, stdoutText: stdout.text, stderrText: stderr.text, stdoutEncoding: "utf8", stderrEncoding: "utf8", durationMs: Math.round(performance.now() - startedAt), truncated, binaryDetected: false, violations, artifacts };
+    const blocked = stderr.text.includes("MANAGED_PYTHON_BLOCKED:");
+    return { status: timedOut ? "timed_out" : blocked ? "blocked" : exitCode === 0 && !truncated ? "completed" : "failed", exitCode, stdoutText: stdout.text, stderrText: stderr.text, stdoutEncoding: "utf8", stderrEncoding: "utf8", durationMs: Math.round(performance.now() - startedAt), truncated, binaryDetected: false, violations: blocked ? [...violations, stderr.text.trim()] : violations, artifacts };
   } catch (error) {
     return { status: "failed", exitCode: null, stdoutText: "", stderrText: error instanceof Error ? error.message : String(error), stdoutEncoding: "unknown", stderrEncoding: "unknown", durationMs: Math.round(performance.now() - startedAt), truncated: false, binaryDetected: false, violations, artifacts: [] };
   } finally { await rm(tempRoot, { recursive: true, force: true }); }

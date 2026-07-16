@@ -56,7 +56,7 @@ Doc Type: current-contract
 
 `python_session` is a separate, default-off managed runtime. It is exposed only when trusted runtime configuration enables a fixed interpreter and its health check succeeds. The model can provide `code`, workspace-relative `cwd`, bounded `timeoutMs`, and workspace-bound artifact registrations; it cannot select an interpreter, environment, network mode, or package installer.
 
-The first version runs one temporary script per invocation with no persistent kernel. It does not provide complete network, CPU, memory, subprocess, filesystem, or hostile-code isolation. Package installation through pip, conda, uv, or poetry is blocked, and the configured runtime must use a preinstalled package allowlist. The allowlist is reported as configuration metadata and is not hardcoded in Planner or Graph.
+The first version runs one temporary script per invocation with no persistent kernel. Before user code runs, a Python audit hook blocks process creation, shell execution, dynamic library loading, network APIs, and file access outside the workspace or managed temporary directory. Package installation is therefore blocked by the process policy rather than a source-text match. The runtime still does not claim complete network, CPU, memory, or hostile-code isolation; Windows process-tree termination remains best-effort.
 
 相关实现：
 

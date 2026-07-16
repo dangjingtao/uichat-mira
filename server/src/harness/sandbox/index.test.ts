@@ -102,7 +102,7 @@ describe("sandbox direct contract", () => {
       workspace_write: "not_implemented",
       command: "implemented",
       networked_command: "not_implemented",
-      python: "blocked",
+      python: "not_implemented",
     });
   });
 
@@ -119,7 +119,7 @@ describe("sandbox direct contract", () => {
         workspace_write: "future_profile",
         command: "implemented",
         networked_command: "future_profile",
-        python: "blocked",
+        python: "not_implemented",
       },
       v16GateProfiles: {
         command: "implemented",
