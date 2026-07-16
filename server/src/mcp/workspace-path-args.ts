@@ -57,7 +57,10 @@ export const normalizeWorkspaceRelativePathArg = (
   } else if (trimmed.startsWith(`${WORKSPACE_ROOT_SENTINEL}/`)) {
     candidate = trimmed.slice(WORKSPACE_ROOT_SENTINEL.length + 1);
   } else if (trimmed.startsWith("/")) {
-    candidate = trimmed.slice(1);
+    return {
+      type: "unchanged",
+      value: trimmed,
+    };
   }
 
   const normalizedCandidate = path.posix.normalize(

@@ -533,7 +533,7 @@ describe("mcp invocations", () => {
     expect(executed).toBe(false);
   });
 
-  it("allows workspace-root-relative slash paths after normalization on Windows-style workspace roots", async () => {
+  it("keeps POSIX absolute paths visible to the workspace boundary on Windows-style roots", async () => {
     let executed = false;
 
     registerCapability({
@@ -611,9 +611,9 @@ describe("mcp invocations", () => {
       },
     });
 
-    expect(record.status).toBe("completed");
-    expect(record.approval).toBeUndefined();
-    expect(executed).toBe(true);
+    expect(record.status).toBe("awaiting_approval");
+    expect(record.approval?.reason).toContain("targetPath outside the current workspace root");
+    expect(executed).toBe(false);
   });
 
   it("sweeps finished invocations beyond retention limit", async () => {
