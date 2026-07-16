@@ -33,5 +33,5 @@ pnpm --filter @ui-chat-mira/server exec tsx src/harness/sandbox/bench/runner.ts 
 - 正向：`echo hello`、中文输出、非零 `exitCode`
 - 负向：`cwd` 越界、超短 `timeout`、巨量输出
 - V1.6 gate：只看 `command` profile 是否满足 direct contract
-- future profile：`read_only`、`workspace_write`、`networked_command` 会明确输出 `future_profile`
-- future profile 只提供边界证据，不计入 V1.6 gate 通过与否
+- 未实现 profile：`read_only`、`workspace_write`、`networked_command` 会明确输出 `blocked`
+- blocked profile 只提供边界证据，不计入 V1.6 gate 通过与否

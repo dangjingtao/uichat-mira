@@ -96,28 +96,28 @@ describe("sandbox direct contract", () => {
 
   it("reports unsupported profiles as not implemented coverage", () => {
     expect(getSandboxProfileCoverage()).toEqual({
-      read_only: "not_implemented",
-      workspace_write: "not_implemented",
+      read_only: "blocked",
+      workspace_write: "blocked",
       command: "implemented",
-      networked_command: "not_implemented",
+      networked_command: "blocked",
     });
   });
 
   it("separates V1.6 gate coverage from future profile declarations", () => {
     expect(getSandboxContractCoverage()).toEqual({
       declaredProfiles: {
-        read_only: "future_profile",
-        workspace_write: "future_profile",
+        read_only: "blocked",
+        workspace_write: "blocked",
         command: "implemented",
-        networked_command: "future_profile",
+        networked_command: "blocked",
       },
       v16GateProfiles: {
         command: "implemented",
       },
       futureProfiles: {
-        read_only: "future_profile",
-        workspace_write: "future_profile",
-        networked_command: "future_profile",
+        read_only: "blocked",
+        workspace_write: "blocked",
+        networked_command: "blocked",
       },
       v16GateSatisfied: true,
     });
@@ -193,20 +193,23 @@ describe("sandbox direct contract", () => {
     );
   });
 
-  it("blocks absolute cwd attempts", async () => {
-    const result = await runSandboxCommandDirect({
-      profile: "command",
-      workspaceRoot,
-      cwd: "C:\\",
-      command: buildCommand("echo"),
-      timeoutMs: 1_000,
-    });
+  it.each(["C:\\", "/tmp", "../outside", "/workspace/../outside"])(
+    "blocks unsafe cwd input %s",
+    async (cwd) => {
+      const result = await runSandboxCommandDirect({
+        profile: "command",
+        workspaceRoot,
+        cwd,
+        command: buildCommand("echo"),
+        timeoutMs: 1_000,
+      });
 
-    expect(result.status).toBe("blocked");
-    expect(result.violations.join(" ")).toContain(
-      "cwd must be a relative workspace directory without parent traversal",
-    );
-  });
+      expect(result.status).toBe("blocked");
+      expect(result.violations.join(" ")).toContain(
+        "cwd must be a relative workspace directory without parent traversal",
+      );
+    },
+  );
 
   it("does not pass env values outside the allowlist", async () => {
     const result = await runSandboxCommandDirect({
@@ -278,7 +281,7 @@ describe("sandbox direct contract", () => {
     });
 
     expect(result.status).toBe("blocked");
-    expect(result.violations[0]).toContain("future_profile");
+    expect(result.violations[0]).toContain("blocked_profile");
   });
 
   it("reports output limit failures as truncated", async () => {
@@ -321,5 +324,19 @@ describe("sandbox direct contract", () => {
       path: path.join(artifactRoot, artifactRelativePath),
       mime: "text/plain",
     });
+  });
+
+  it("rejects artifact registrations outside the workspace", async () => {
+    const result = await runSandboxCommandDirect({
+      profile: "command",
+      workspaceRoot,
+      command: buildCommand("echo"),
+      timeoutMs: 5_000,
+      artifactRegistrations: [{ path: "../outside-artifact.txt" }],
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.artifacts).toHaveLength(0);
+    expect(result.violations.join(" ")).toContain("artifact registration skipped");
   });
 });

@@ -17,7 +17,7 @@ const main = async () => {
       total: cases.length,
       gatePassed: cases.filter((item) => item.status === "passed").length,
       gateFailed: cases.filter((item) => item.status === "failed").length,
-      futureProfile: cases.filter((item) => item.status === "future_profile").length,
+      blockedProfile: cases.filter((item) => item.status === "blocked").length,
     },
     cases,
   };
