@@ -81,9 +81,85 @@ describe("microAppsRepository.initialize", () => {
 
   it("seeds every default definition with the current version", () => {
     microAppsRepository.initialize();
-    expect(microAppsRepository.list().every(
-      (definition) => definition.definitionSchemaVersion === CURRENT_MICRO_APP_DEFINITION_SCHEMA_VERSION,
-    )).toBe(true);
+    expect(
+      microAppsRepository.list().every(
+        (definition) =>
+          definition.definitionSchemaVersion ===
+          CURRENT_MICRO_APP_DEFINITION_SCHEMA_VERSION,
+      ),
+    ).toBe(true);
+  });
+
+  it("returns every known seed through list and getByType with visible card metadata", () => {
+    microAppsRepository.initialize();
+    const expected = {
+      knowledge_query: {
+        accessPoint: "wecom.smart_robot",
+        runtimeKey: "knowledge-query",
+        bindingKeys: ["knowledgeBaseId"],
+      },
+      news_hub: {
+        accessPoint: "desktop.news_hub",
+        runtimeKey: "news_hub",
+        bindingKeys: [],
+      },
+      image_generation: {
+        accessPoint: "desktop.image_generation_studio",
+        runtimeKey: "image_generation",
+        bindingKeys: [
+          "providerId",
+          "model",
+          "defaultSize",
+          "defaultStylePreset",
+          "workflowRunnerProfile",
+        ],
+      },
+      computer_use: {
+        accessPoint: "desktop.computer_use_studio",
+        runtimeKey: "computer_use",
+        bindingKeys: [
+          "defaultStartUrl",
+          "allowedOrigins",
+          "requireApprovalForExternalNavigation",
+        ],
+      },
+      tts: {
+        accessPoint: "desktop.tts_studio",
+        runtimeKey: "tts",
+        bindingKeys: ["defaultProviderId"],
+      },
+      codegraph: {
+        accessPoint: "desktop.codegraph_studio",
+        runtimeKey: "codegraph",
+        bindingKeys: ["command", "appDataRoot"],
+      },
+      evolving_knowledge: {
+        accessPoint: "desktop.evolving_knowledge_studio",
+        runtimeKey: "evolving_knowledge",
+        bindingKeys: [],
+      },
+    } as const;
+
+    const definitions = microAppsRepository.list();
+    expect(definitions.map((definition) => definition.type).sort()).toEqual(
+      Object.keys(expected).sort(),
+    );
+
+    for (const [type, contract] of Object.entries(expected)) {
+      const fromList = definitions.find((definition) => definition.type === type);
+      const fromType = microAppsRepository.getByType(type as keyof typeof expected);
+      expect(fromType).toEqual(fromList);
+      expect(fromType).toMatchObject({
+        type,
+        enabled: true,
+        definitionSchemaVersion: CURRENT_MICRO_APP_DEFINITION_SCHEMA_VERSION,
+        supportedAccessPoints: [contract.accessPoint],
+        runtimeKey: contract.runtimeKey,
+      });
+      expect(fromType?.bindingSchema.fields.map((field) => field.key)).toEqual(
+        contract.bindingKeys,
+      );
+    }
   });
 
   it("migrates non-empty stale system fields without overwriting user fields", () => {
@@ -131,15 +207,38 @@ describe("microAppsRepository.initialize", () => {
     });
   });
 
-  it("fails explicitly when a known old definition contains invalid JSON", () => {
+  it("fails explicitly and rolls back all definition updates on invalid JSON", () => {
     microAppsRepository.initialize();
+    const sqlite = getSqlite();
     const current = microAppsRepository.getByType("knowledge_query");
+    const news = microAppsRepository.getByType("news_hub");
     getSqlite().prepare(`
+      UPDATE micro_app_definitions
+      SET description = ?, definition_schema_version = 0
+      WHERE id = ?
+    `).run("old knowledge description", current?.id);
+    sqlite.prepare(`
       UPDATE micro_app_definitions
       SET supported_access_points_json = ?, definition_schema_version = 0
       WHERE id = ?
-    `).run("{invalid", current?.id);
+    `).run("{invalid", news?.id);
 
     expect(() => microAppsRepository.initialize()).toThrow(/Cannot migrate micro-app definition JSON/);
+    expect(
+      sqlite
+        .prepare("SELECT description, definition_schema_version FROM micro_app_definitions WHERE id = ?")
+        .get(current?.id),
+    ).toMatchObject({
+      description: "old knowledge description",
+      definition_schema_version: 0,
+    });
+    expect(
+      sqlite
+        .prepare("SELECT supported_access_points_json, definition_schema_version FROM micro_app_definitions WHERE id = ?")
+        .get(news?.id),
+    ).toMatchObject({
+      supported_access_points_json: "{invalid",
+      definition_schema_version: 0,
+    });
   });
 });

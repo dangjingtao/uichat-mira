@@ -391,40 +391,43 @@ const migrateSeededDefinitions = () => {
   const seededByType = new Map(
     defaultDefinitionSeeds.map((definition) => [definition.type, definition]),
   );
-  const existingRows = getDb().select().from(microApps).all();
+  getSqlite()
+    .transaction(() => {
+      const existingRows = getDb().select().from(microApps).all();
 
-  for (const row of existingRows) {
-    const seed = seededByType.get(row.type as MicroAppType);
-    if (!seed) {
-      continue;
-    }
+      for (const row of existingRows) {
+        const seed = seededByType.get(row.type as MicroAppType);
+        if (!seed) {
+          continue;
+        }
 
-    if (row.definitionSchemaVersion >= CURRENT_MICRO_APP_DEFINITION_SCHEMA_VERSION) {
-      continue;
-    }
+        if (row.definitionSchemaVersion >= CURRENT_MICRO_APP_DEFINITION_SCHEMA_VERSION) {
+          continue;
+        }
 
-    parseDefinitionJson<MicroAppSupportedAccessPoint[]>(
-      row.supportedAccessPointsJson,
-      `${row.id}.supported_access_points_json`,
-    );
-    parseDefinitionJson<MicroAppBindingSchema>(
-      row.bindingSchemaJson,
-      `${row.id}.binding_schema_json`,
-    );
+        parseDefinitionJson<MicroAppSupportedAccessPoint[]>(
+          row.supportedAccessPointsJson,
+          `${row.id}.supported_access_points_json`,
+        );
+        parseDefinitionJson<MicroAppBindingSchema>(
+          row.bindingSchemaJson,
+          `${row.id}.binding_schema_json`,
+        );
 
-    getDb()
-      .update(microApps)
-      .set({
-        description: seed.description,
-        supportedAccessPointsJson: JSON.stringify(seed.supportedAccessPoints),
-        bindingSchemaJson: JSON.stringify(seed.bindingSchema),
-        runtimeKey: seed.runtimeKey,
-        definitionSchemaVersion: CURRENT_MICRO_APP_DEFINITION_SCHEMA_VERSION,
-        updatedAt: new Date().toISOString(),
-      })
-      .where(eq(microApps.id, row.id))
-      .run();
-  }
+        getDb()
+          .update(microApps)
+          .set({
+            description: seed.description,
+            supportedAccessPointsJson: JSON.stringify(seed.supportedAccessPoints),
+            bindingSchemaJson: JSON.stringify(seed.bindingSchema),
+            runtimeKey: seed.runtimeKey,
+            definitionSchemaVersion: CURRENT_MICRO_APP_DEFINITION_SCHEMA_VERSION,
+            updatedAt: new Date().toISOString(),
+          })
+          .where(eq(microApps.id, row.id))
+          .run();
+      }
+    })();
 };
 
 const migrateFromLegacyMicroAppsTable = () => {
