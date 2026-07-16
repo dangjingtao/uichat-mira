@@ -14,6 +14,10 @@ type EvidenceState = {
 
 const PREVIEW_ITEM_LIMIT = 5;
 const TEXT_PREVIEW_LIMIT = 280;
+const STRUCTURED_PREVIEW_MAX_DEPTH = 3;
+const STRUCTURED_PREVIEW_MAX_KEYS = 12;
+const STRUCTURED_PREVIEW_MAX_SIZE = 4_000;
+const SENSITIVE_KEY = /(?:token|authorization|cookie|password|secret|api[-_]?key|header|env)/iu;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -25,6 +29,123 @@ const preview = (value: string, limit = TEXT_PREVIEW_LIMIT) => {
 
 const hasUnreadableTerminalText = (value: string) =>
   /[\uFFFD�]|锟|\?{3,}/u.test(value);
+
+type StructuredPreviewState = {
+  size: number;
+  truncated: boolean;
+  redacted: boolean;
+  unsupported: boolean;
+};
+
+const boundedStructuredPreview = (value: unknown) => {
+  const state: StructuredPreviewState = {
+    size: 0,
+    truncated: false,
+    redacted: false,
+    unsupported: false,
+  };
+
+  const visit = (current: unknown, depth: number): unknown => {
+    if (state.size >= STRUCTURED_PREVIEW_MAX_SIZE) {
+      state.truncated = true;
+      return "...[truncated]";
+    }
+    if (current === null || typeof current === "boolean" || typeof current === "number") {
+      state.size += String(current).length;
+      return current;
+    }
+    if (typeof current === "string") {
+      const result = preview(current);
+      state.size += result.length;
+      if (result !== current.replace(/\s+/g, " ").trim()) state.truncated = true;
+      return result;
+    }
+    if (depth >= STRUCTURED_PREVIEW_MAX_DEPTH) {
+      state.truncated = true;
+      return "...[depth limit]";
+    }
+    if (Array.isArray(current)) {
+      const result = current.slice(0, PREVIEW_ITEM_LIMIT).map((item) => visit(item, depth + 1));
+      if (current.length > PREVIEW_ITEM_LIMIT) state.truncated = true;
+      return result;
+    }
+    if (typeof current === "object") {
+      const record = current as Record<string, unknown>;
+      const entries = Object.entries(record);
+      const result: Record<string, unknown> = {};
+      for (const [key, item] of entries.slice(0, STRUCTURED_PREVIEW_MAX_KEYS)) {
+        if (SENSITIVE_KEY.test(key)) {
+          state.redacted = true;
+          state.truncated = true;
+          continue;
+        }
+        result[key] = visit(item, depth + 1);
+      }
+      if (entries.length > STRUCTURED_PREVIEW_MAX_KEYS) state.truncated = true;
+      return result;
+    }
+    state.unsupported = true;
+    state.truncated = true;
+    return "...[unsupported]";
+  };
+
+  let previewValue: unknown;
+  try {
+    previewValue = visit(value, 0);
+    if (JSON.stringify(previewValue).length > STRUCTURED_PREVIEW_MAX_SIZE) {
+      state.truncated = true;
+      previewValue = "...[size limit]";
+    }
+  } catch {
+    state.unsupported = true;
+    state.truncated = true;
+    previewValue = undefined;
+  }
+  return { preview: previewValue, ...state };
+};
+
+const createGenericStructuredSummary = (
+  execution: AgentToolExecutionResult,
+  evidenceIndex: number,
+  result: Record<string, unknown>,
+): AgentEvidenceSummary => {
+  const bounded = boundedStructuredPreview(result);
+  const items = Array.isArray(result.items) ? result.items : undefined;
+  const total = typeof result.total === "number" ? result.total : undefined;
+  const hasNextCursor = typeof result.nextCursor === "string" && result.nextCursor.length > 0;
+  const itemCount = items?.length;
+  const gaps = [
+    ...(items?.length === 0 ? ["The structured result contains no items."] : []),
+    ...(Object.keys(result).length === 0 ? ["The structured result contains no fields."] : []),
+    ...(bounded.truncated ? ["Structured tool result is truncated to a bounded preview."] : []),
+    ...(bounded.redacted ? ["Sensitive fields were removed from the structured preview."] : []),
+    ...(bounded.unsupported ? ["Some result values could not be represented safely."] : []),
+  ];
+  const facts = [
+    `resultKeys=${Object.keys(result).filter((key) => !SENSITIVE_KEY.test(key)).slice(0, STRUCTURED_PREVIEW_MAX_KEYS).join(",")}`,
+    ...(typeof itemCount === "number" ? [`itemCount=${itemCount}`] : []),
+    ...(typeof total === "number" ? [`total=${total}`] : []),
+    ...(hasNextCursor ? ["hasNextCursor=true"] : []),
+  ];
+  return baseSummary({
+    execution,
+    evidenceIndex,
+    actionTaken: `${execution.toolId} returned structured data.`,
+    facts,
+    gaps,
+    status: gaps.length ? "partial" : "completed",
+    data: {
+      kind: "generic_structured",
+      preview: bounded.preview,
+      truncated: bounded.truncated,
+      redacted: bounded.redacted,
+      unsupported: bounded.unsupported,
+      ...(typeof itemCount === "number" ? { itemCount } : {}),
+      ...(typeof total === "number" ? { total } : {}),
+      ...(hasNextCursor ? { hasNextCursor } : {}),
+    },
+  });
+};
 
 const rawRef = (execution: AgentToolExecutionResult, evidenceIndex: number) => ({
   evidenceIndex,
@@ -149,7 +270,7 @@ const summarizeToolResult = (
   }
 
   const result = execution.result;
-  if (!isRecord(result)) {
+  if (result === null || typeof result === "undefined") {
     return baseSummary({
       execution,
       evidenceIndex,
@@ -157,6 +278,9 @@ const summarizeToolResult = (
       facts: [`toolId=${execution.toolId}`, `status=${execution.status}`],
       gaps: ["The tool returned no structured result."],
     });
+  }
+  if (!isRecord(result)) {
+    return createGenericStructuredSummary(execution, evidenceIndex, { value: result });
   }
 
   const type = typeof result.type === "string" ? result.type : undefined;
@@ -535,12 +659,7 @@ const summarizeToolResult = (
     });
   }
 
-  return baseSummary({
-    execution,
-    evidenceIndex,
-    actionTaken: `${execution.toolId} completed.`,
-    facts: [`toolId=${execution.toolId}`, `status=${execution.status}`],
-  });
+  return createGenericStructuredSummary(execution, evidenceIndex, result);
 };
 
 export const createToolExecutionEvidenceSummary = (input: {
