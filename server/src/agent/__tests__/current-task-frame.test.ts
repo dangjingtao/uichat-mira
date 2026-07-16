@@ -153,6 +153,7 @@ test("prepareContextNode keeps the initialized currentTaskFrame unchanged", asyn
         id: "D:\\workspace\\rag-demo",
         label: "D:\\workspace\\rag-demo",
         confidence: 1,
+        source: "workspace",
       },
       {
         type: "knowledge",

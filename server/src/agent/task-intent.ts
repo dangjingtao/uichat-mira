@@ -18,6 +18,9 @@ export type AgentTaskKind =
 
 export interface AgentRequiredWork {
   taskKind: AgentTaskKind;
+  /** User-language candidates are hints for Planner observation only. */
+  candidateTargets: string[];
+  /** Targets confirmed by structured Planner/evidence context, never raw text. */
   requiredTargets: string[];
   requiredActions: Exclude<AgentTaskKind, "mixed">[];
   completionHints: string[];
@@ -210,22 +213,36 @@ const classifyTextActions = (text: string): Exclude<AgentTaskKind, "mixed">[] =>
   return actions;
 };
 
-const extractTargetsFromTexts = (texts: string[], workspaceRoot?: string | null) => {
+const extractCandidateTargetsFromTexts = (texts: string[]) => {
   const targets: string[] = [];
 
   for (const text of texts) {
     const matches = text.match(PATH_TARGET_PATTERN) ?? [];
     for (const match of matches) {
-      const normalized = normalizeTaskTargetPath(match, workspaceRoot);
-      uniqPush(targets, normalized);
+      uniqPush(targets, trimQuotedText(match));
     }
 
     for (const namedTarget of extractNamedTargetsFromMutationText(text)) {
-      const normalized = normalizeTaskTargetPath(namedTarget, workspaceRoot);
-      uniqPush(targets, normalized);
+      uniqPush(targets, namedTarget);
     }
   }
 
+  return targets;
+};
+
+const extractConfirmedTargetsFromFrame = (frame?: CurrentTaskFrame) => {
+  const targets: string[] = [];
+  for (const object of frame?.confirmedObjects ?? []) {
+    if (
+      object.type !== "file" ||
+      !object.source ||
+      object.source === "workspace"
+    ) {
+      continue;
+    }
+    const target = normalizeTaskTargetPath(object.id ?? object.label);
+    uniqPush(targets, target);
+  }
   return targets;
 };
 
@@ -256,7 +273,8 @@ export const extractAgentRequiredWork = (input: {
   workspaceRoot?: string | null;
 }): AgentRequiredWork => {
   const texts = collectTaskIntentTexts(input);
-  const requiredTargets = extractTargetsFromTexts(texts, input.workspaceRoot);
+  const candidateTargets = extractCandidateTargetsFromTexts(texts);
+  const requiredTargets = extractConfirmedTargetsFromFrame(input.currentTaskFrame);
   const actionSet = new Set<Exclude<AgentTaskKind, "mixed">>();
 
   for (const text of texts) {
@@ -271,12 +289,13 @@ export const extractAgentRequiredWork = (input: {
       ? requiredActions[0]
       : requiredActions.length > 1
         ? "mixed"
-        : requiredTargets.length > 0
+        : requiredTargets.length > 0 || candidateTargets.length > 0
           ? "read_content"
           : "mixed";
 
   return {
     taskKind,
+    candidateTargets,
     requiredTargets,
     requiredActions,
     completionHints: extractCompletionHints(input),

@@ -341,6 +341,7 @@ export const createInitialCurrentTaskFrame = (input: {
       id: input.workspaceRoot,
       label: input.workspaceRoot,
       confidence: 1,
+      source: "workspace",
     });
   }
 

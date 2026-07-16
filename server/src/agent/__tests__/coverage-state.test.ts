@@ -2,6 +2,18 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 import { reduceAgentCoverageState } from "../coverage-state";
 
+const confirmedTaskFrame = (targets: string[]) => ({
+  currentGoal: "Planner-confirmed target contract test",
+  confirmedObjects: targets.map((target) => ({
+    type: "file" as const,
+    id: target,
+    label: target,
+    confidence: 1,
+    source: "planner" as const,
+  })),
+  completionCriteria: [],
+});
+
 test("coverage reducer completes list task from read_list evidence", () => {
   const state = reduceAgentCoverageState({
     question: "列出当前目录有哪些文件",
@@ -45,9 +57,31 @@ test("coverage reducer completes list task from read_list evidence", () => {
   assert.deepEqual(state.globalPendingActions, []);
 });
 
+test.each([
+  "删除配置文件",
+  "修改 README.md",
+  "读取 /etc/passwd",
+  "在 server/src 下找 planner",
+])("coverage does not consume candidate target from %s", (question) => {
+  const state = reduceAgentCoverageState({
+    question,
+    evidence: {
+      observations: [],
+      retrievals: [],
+      toolExecutions: [],
+    },
+  });
+
+  assert.deepEqual(state.requiredTargets, []);
+  assert.deepEqual(state.targets, []);
+  assert.deepEqual(state.coveredTargets, []);
+  assert.deepEqual(state.pendingTargets, []);
+});
+
 test("coverage reducer completes locate-only task from read_locate evidence", () => {
   const state = reduceAgentCoverageState({
     question: "README.md 在哪里？",
+    currentTaskFrame: confirmedTaskFrame(["README.md"]),
     latestSummary: {
       source: "tool",
       status: "completed",
@@ -86,6 +120,7 @@ test("coverage reducer completes locate-only task from read_locate evidence", ()
 test("coverage reducer keeps read_content pending after locate-only evidence", () => {
   const state = reduceAgentCoverageState({
     question: "README.md 的内容是什么？",
+    currentTaskFrame: confirmedTaskFrame(["README.md"]),
     latestSummary: {
       source: "tool",
       status: "completed",
@@ -118,6 +153,7 @@ test("coverage reducer keeps read_content pending after locate-only evidence", (
 test("coverage reducer keeps multi-target read_content incomplete until all targets are opened", () => {
   const state = reduceAgentCoverageState({
     question: "README.md 和 AGENTS.md 的内容分别是什么？",
+    currentTaskFrame: confirmedTaskFrame(["README.md", "AGENTS.md"]),
     evidence: {
       observations: [],
       retrievals: [],
@@ -161,6 +197,7 @@ test("coverage reducer keeps multi-target read_content incomplete until all targ
 test("coverage reducer completes multi-target read_content when both targets are opened", () => {
   const state = reduceAgentCoverageState({
     question: "README.md 和 AGENTS.md 的内容分别是什么？",
+    currentTaskFrame: confirmedTaskFrame(["README.md", "AGENTS.md"]),
     evidence: {
       observations: [],
       retrievals: [],
@@ -224,6 +261,7 @@ test("coverage reducer completes multi-target read_content when both targets are
 test("coverage reducer does not treat locate-only mutation evidence as mutation completion", () => {
   const state = reduceAgentCoverageState({
     question: "删除 notes.txt",
+    currentTaskFrame: confirmedTaskFrame(["notes.txt"]),
     latestSummary: {
       source: "tool",
       status: "completed",
@@ -253,6 +291,7 @@ test("coverage reducer does not treat locate-only mutation evidence as mutation 
 test("coverage reducer keeps mutation verification pending until read_open exists", () => {
   const state = reduceAgentCoverageState({
     question: "写入 notes.txt 后验证内容是否正确",
+    currentTaskFrame: confirmedTaskFrame(["notes.txt"]),
     evidence: {
       observations: [],
       retrievals: [],
@@ -295,6 +334,7 @@ test("coverage reducer keeps mutation verification pending until read_open exist
 test("coverage reducer completes mutation verification after read_open evidence", () => {
   const state = reduceAgentCoverageState({
     question: "写入 notes.txt 后验证内容是否正确",
+    currentTaskFrame: confirmedTaskFrame(["notes.txt"]),
     evidence: {
       observations: [],
       retrievals: [],
@@ -362,6 +402,7 @@ test("coverage reducer completes mutation verification after read_open evidence"
 test("coverage reducer keeps recoverable read failure incomplete", () => {
   const state = reduceAgentCoverageState({
     question: "打开 README.md 看看内容",
+    currentTaskFrame: confirmedTaskFrame(["README.md"]),
     evidence: {
       observations: [],
       retrievals: [],
@@ -386,6 +427,7 @@ test("coverage reducer keeps recoverable read failure incomplete", () => {
 test("coverage reducer marks terminal mutation failure as blocked target without pretending it was covered", () => {
   const state = reduceAgentCoverageState({
     question: "删除 notes.txt",
+    currentTaskFrame: confirmedTaskFrame(["notes.txt"]),
     evidence: {
       observations: [],
       retrievals: [],
