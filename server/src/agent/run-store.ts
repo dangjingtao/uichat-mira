@@ -138,6 +138,9 @@ export class InMemoryAgentRunStore implements AgentRunStore {
     if (!current) {
       throw new Error(`AgentRun not found: ${runId}`);
     }
+    if (current.observations.some((item) => item.id === observation.id)) {
+      return current;
+    }
 
     const next: AgentRun = {
       ...current,
