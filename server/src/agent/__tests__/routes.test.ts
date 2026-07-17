@@ -33,32 +33,25 @@ const createRun = () => {
   });
 };
 
+const mockScheduledResume = () =>
+  vi
+    .spyOn(resumeModule, "scheduleApprovedAgentRunResume")
+    .mockImplementation((runId) =>
+      agentRunStore.update(runId, {
+        status: "running",
+        pendingApproval: undefined,
+      }),
+    );
+
 describe("agent routes", () => {
   afterEach(() => {
     agentRunStore.clear();
     requireAuthMock.mockClear();
+    vi.restoreAllMocks();
   });
 
   test("returns and updates runs", async () => {
-    const resumeSpy = vi
-      .spyOn(resumeModule, "resumeApprovedAgentRun")
-      .mockResolvedValue({
-        run: {
-          ...createRun(),
-          status: "completed",
-        },
-        output: {
-          answer: "resumed answer",
-          observations: [],
-          evidence: {
-            observations: [],
-            toolExecutions: [],
-            retrievals: [],
-          },
-          retrievedChunks: [],
-          status: "completed",
-        },
-      } as never);
+    const scheduleSpy = mockScheduledResume();
 
     const app = Fastify({
       logger: getLoggerConfig(),
@@ -95,7 +88,10 @@ describe("agent routes", () => {
       payload: {},
     });
     expect(approveResponse.statusCode).toBe(200);
-    expect(resumeSpy).toHaveBeenCalledWith(run.id);
+    expect(scheduleSpy).toHaveBeenCalledWith(run.id);
+    expect(
+      (approveResponse.json() as { data: { status: string } }).data.status,
+    ).toBe("running");
 
     const rejectResponse = await app.inject({
       method: "POST",
@@ -114,7 +110,6 @@ describe("agent routes", () => {
       (cancelResponse.json() as { data: { status: string } }).data.status,
     ).toBe("cancelled");
     await app.close();
-    resumeSpy.mockRestore();
   });
 
   test("returns 404 for unknown runs", async () => {
@@ -136,7 +131,7 @@ describe("agent routes", () => {
   });
 
   test("approve is idempotent when run is not waiting approval", async () => {
-    const resumeSpy = vi.spyOn(resumeModule, "resumeApprovedAgentRun");
+    const scheduleSpy = vi.spyOn(resumeModule, "scheduleApprovedAgentRunResume");
     const app = Fastify({
       logger: getLoggerConfig(),
       serializerOpts: { encoding: "utf8" },
@@ -160,10 +155,9 @@ describe("agent routes", () => {
     expect((response.json() as { data: { status: string } }).data.status).toBe(
       "completed",
     );
-    expect(resumeSpy).not.toHaveBeenCalled();
+    expect(scheduleSpy).not.toHaveBeenCalled();
 
     await app.close();
-    resumeSpy.mockRestore();
   });
 
   test("reject and cancel clear pending approval state", async () => {
@@ -191,17 +185,15 @@ describe("agent routes", () => {
     const persistAssistantMessageSpy = vi
       .spyOn(messagePersistenceModule, "persistAssistantMessage")
       .mockImplementation(() => {});
-    const getMessageByIdSpy = vi
-      .spyOn(threadService, "getMessageById")
-      .mockReturnValue({
-        id: "assistant-reject-1",
-        threadId: "thread-1",
-        role: "assistant",
-        content: "等待审批",
-        parts: [{ type: "text", text: "等待审批" }],
-        metadata: {},
-        createdAt: "2026-06-28T00:00:00.000Z",
-      });
+    vi.spyOn(threadService, "getMessageById").mockReturnValue({
+      id: "assistant-reject-1",
+      threadId: "thread-1",
+      role: "assistant",
+      content: "等待审批",
+      parts: [{ type: "text", text: "等待审批" }],
+      metadata: {},
+      createdAt: "2026-06-28T00:00:00.000Z",
+    });
 
     const rejectResponse = await app.inject({
       method: "POST",
@@ -276,11 +268,9 @@ describe("agent routes", () => {
     expect(persistAssistantMessageSpy).toHaveBeenCalledTimes(1);
 
     await app.close();
-    persistAssistantMessageSpy.mockRestore();
-    getMessageByIdSpy.mockRestore();
   });
 
-  test("approve returns resumed run state from resume helper", async () => {
+  test("approve returns running before the resumed graph completes", async () => {
     const app = Fastify({
       logger: getLoggerConfig(),
       serializerOpts: { encoding: "utf8" },
@@ -316,28 +306,7 @@ describe("agent routes", () => {
       },
     });
 
-    const resumeSpy = vi
-      .spyOn(resumeModule, "resumeApprovedAgentRun")
-      .mockImplementation(async (runId) => {
-        agentRunStore.complete(runId, {
-          status: "completed",
-          pendingApproval: undefined,
-        });
-        return {
-          run: agentRunStore.get(runId),
-          output: {
-            answer: "resumed answer",
-            observations: [],
-            evidence: {
-              observations: [],
-              toolExecutions: [],
-              retrievals: [],
-            },
-            retrievedChunks: [],
-            status: "completed",
-          },
-        } as never;
-      });
+    const scheduleSpy = mockScheduledResume();
 
     const approveResponse = await app.inject({
       method: "POST",
@@ -346,14 +315,13 @@ describe("agent routes", () => {
     });
 
     expect(approveResponse.statusCode).toBe(200);
-    expect(resumeSpy).toHaveBeenCalledWith(run.id);
+    expect(scheduleSpy).toHaveBeenCalledWith(run.id);
     const approveData = approveResponse.json() as {
       data: { status: string; pendingApproval?: unknown };
     };
-    expect(approveData.data.status).toBe("completed");
+    expect(approveData.data.status).toBe("running");
     expect(approveData.data.pendingApproval).toBeUndefined();
 
     await app.close();
-    resumeSpy.mockRestore();
   });
 });
