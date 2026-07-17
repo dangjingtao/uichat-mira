@@ -145,3 +145,25 @@ test("runtime checkpoint survives persistence and restores planner state", () =>
   );
   assert.equal(restoredInput.pendingToolCall?.toolId, "edit_file");
 });
+
+test("runtime checkpoint is cleared after the run leaves approval state", () => {
+  const withCheckpoint = persistAgentRuntimeCheckpoint(runtimeInput, output);
+  const completedOutput: AgentGraphOutput = {
+    ...output,
+    answer: "README.md was fixed and verified.",
+    pendingApproval: undefined,
+    pendingToolCall: undefined,
+    blockedReason: undefined,
+    terminalReason: "completed",
+    status: "completed",
+  };
+
+  const clearedRuntimeInput = persistAgentRuntimeCheckpoint(
+    withCheckpoint,
+    completedOutput,
+  );
+
+  assert.equal(getAgentRuntimeCheckpoint(clearedRuntimeInput), undefined);
+  assert.equal(clearedRuntimeInput.messages, runtimeInput.messages);
+  assert.equal(clearedRuntimeInput.workspaceRoot, runtimeInput.workspaceRoot);
+});
