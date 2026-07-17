@@ -4,6 +4,7 @@ import { runWithWorkspaceRootOverride } from "@/mcp/workspace.js";
 import {
   executeSandboxedCommand,
 } from "@/sandbox/executor.js";
+import { getPythonSandboxStatus, runManagedPython } from "@/sandbox/python-executor.js";
 import type {
   SandboxFutureProfile,
   SandboxProfile,
@@ -17,9 +18,7 @@ const DEFAULT_OUTPUT_LIMIT_BYTES = 64 * 1024;
 
 type SandboxProfileCoverageStatus = "implemented" | "blocked";
 
-type SandboxDeclaredContractStatus =
-  | SandboxProfileCoverageStatus
-  | "blocked";
+type SandboxDeclaredContractStatus = SandboxProfileCoverageStatus;
 
 type SandboxL1Requirement =
   | "workspace_cwd_lock"
@@ -37,6 +36,7 @@ const PROFILE_COVERAGE_BASE: Record<SandboxProfile, SandboxProfileCoverageStatus
   read_only: "blocked",
   workspace_write: "blocked",
   command: "blocked",
+  python: "blocked",
   networked_command: "blocked",
 };
 
@@ -70,7 +70,7 @@ const isBlockedError = (message: string) =>
 const isOutputLimitError = (message: string) =>
   message.includes("terminal output exceeded limit");
 
-const toBlockedProfileViolation = (profile: SandboxFutureProfile) =>
+const toBlockedProfileViolation = (profile: SandboxProfile) =>
   `blocked_profile: profile ${profile} is declared but has no implemented Sandbox runner`;
 
 const toCommandUnavailableViolation = () =>
@@ -98,6 +98,9 @@ export const getSandboxProfileCoverage = () => {
   return {
     ...PROFILE_COVERAGE_BASE,
     command: l1Status.available ? "implemented" : "blocked",
+    python: getPythonSandboxStatus(createHarnessEnvironmentSnapshot().toolConfig?.python).available
+      ? "implemented"
+      : "blocked",
   } satisfies Record<SandboxProfile, SandboxProfileCoverageStatus>;
 };
 
@@ -113,6 +116,7 @@ export const getSandboxContractCoverage = () => {
   return {
     declaredProfiles: {
       ...futureProfiles,
+      python: profileCoverage.python,
       ...v16GateProfiles,
     } satisfies Record<SandboxProfile, SandboxDeclaredContractStatus>,
     v16GateProfiles,
@@ -210,3 +214,6 @@ export const runSandboxCommandDirect = async (
     };
   }
 };
+
+export const runSandboxPythonDirect = async (input: Parameters<typeof runManagedPython>[0]) =>
+  runManagedPython(input);

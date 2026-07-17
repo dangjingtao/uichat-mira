@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createInvocationInputHash } from "@/agent/approval-fingerprint.js";
 import { evaluateInvocationApproval, hasExactApprovedInvocation } from "./permissions.js";
+import { pythonSessionTool } from "../tools/python-session.tool.js";
 
 const terminalDefinition = {
   id: "terminal_session",
@@ -32,6 +33,25 @@ const terminalDefinition = {
 };
 
 describe("permissions exact approval reuse", () => {
+  it.each([
+    ["code", { code: "print(1)", cwd: ".", timeoutMs: 1000, artifactRegistrations: [{ path: "result.txt" }] }, { code: "print(2)", cwd: ".", timeoutMs: 1000, artifactRegistrations: [{ path: "result.txt" }] }],
+    ["cwd", { code: "print(1)", cwd: "server", timeoutMs: 1000, artifactRegistrations: [{ path: "result.txt" }] }, { code: "print(1)", cwd: "desktop", timeoutMs: 1000, artifactRegistrations: [{ path: "result.txt" }] }],
+    ["timeout", { code: "print(1)", cwd: ".", timeoutMs: 1000, artifactRegistrations: [{ path: "result.txt" }] }, { code: "print(1)", cwd: ".", timeoutMs: 2000, artifactRegistrations: [{ path: "result.txt" }] }],
+    ["artifacts", { code: "print(1)", cwd: ".", timeoutMs: 1000, artifactRegistrations: [{ path: "result.txt" }] }, { code: "print(1)", cwd: ".", timeoutMs: 1000, artifactRegistrations: [{ path: "other.txt" }] }],
+  ])("requires new approval when python_session changes %s", (_label, approvedArgs, nextArgs) => {
+    const result = evaluateInvocationApproval({
+      definition: pythonSessionTool.definition,
+      args: nextArgs,
+      approvedInvocations: [{ toolId: "python_session", inputHash: createInvocationInputHash(approvedArgs) }],
+      inputHash: createInvocationInputHash(nextArgs),
+    });
+    expect(result).toEqual({
+      type: "require_approval",
+      reason: "python_session requires explicit approval before execution.",
+      scope: "terminal",
+    });
+  });
+
   it("matches only the same toolId and exact inputHash", () => {
     const approvedArgs = {
       command: "pwd",

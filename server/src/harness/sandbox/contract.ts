@@ -2,11 +2,12 @@ export type SandboxProfile =
   | "read_only"
   | "workspace_write"
   | "command"
+  | "python"
   | "networked_command";
 
 export type SandboxV16Profile = "command";
 
-export type SandboxFutureProfile = Exclude<SandboxProfile, SandboxV16Profile>;
+export type SandboxFutureProfile = Exclude<SandboxProfile, SandboxV16Profile | "python">;
 
 export type SandboxArtifactKind = "file" | "directory" | "patch" | "log" | "report";
 

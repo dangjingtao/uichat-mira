@@ -2,11 +2,17 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import type { McpExecutionEnvironment } from "../mcp/core/definitions.js";
 import { getWorkspaceSelection } from "../mcp/workspace.js";
+import CONFIG from "../config/index.js";
 
 export interface HarnessToolConfig {
   web_search?: {
     apiKey?: string;
     baseUrl?: string;
+  };
+  python?: {
+    enabled?: boolean;
+    executable?: string;
+    packages?: string[];
   };
 }
 
@@ -253,7 +259,10 @@ export const createHarnessEnvironmentSnapshot = (
         defaultTerminalCapabilities.map((capability) => ({ ...capability })),
       shellProfile: overrides.terminal?.shellProfile ?? { ...defaultTerminalShellProfile },
     },
-    ...(overrides.toolConfig ? { toolConfig: overrides.toolConfig } : {}),
+    toolConfig: {
+      python: CONFIG.PYTHON_SANDBOX,
+      ...overrides.toolConfig,
+    },
   };
 };
 
