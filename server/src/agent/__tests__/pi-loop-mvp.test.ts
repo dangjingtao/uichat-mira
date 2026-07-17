@@ -61,7 +61,7 @@ const createState = (): AgentNodeState => {
           domain: "edit",
           source: "internal",
           capabilities: {
-            sideEffect: "workspace_write",
+            sideEffect: "local-write",
             requiresApproval: false,
             workspaceBound: true,
           },
@@ -151,7 +151,7 @@ test("the default loop budget supports a multi-step read compare edit verify tas
 test("planner receives accumulated execution history and continues after read steps", async () => {
   let capturedMessages: NormalizedChatMessage[] = [];
   vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
-    async function* (messages) {
+    async function* (messages: NormalizedChatMessage[]) {
       capturedMessages = messages;
       yield JSON.stringify({
         type: "use_tool",
