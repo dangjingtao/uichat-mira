@@ -5,6 +5,7 @@ import { toAgentErrorExecutionNode, toAgentResumeExecutionNode } from "./trace";
 import type {
   AgentApprovalRequest,
   AgentApprovedInvocation,
+  AgentRun,
   AgentToolCallRequest,
 } from "./types";
 import { persistAssistantMessage } from "@/routes/proxy-provider/message-persistence";
@@ -14,7 +15,7 @@ import type { AssistantExecutionNodeEvent } from "@/services/chat-stream-events"
 const buildAssistantMetadata = (input: {
   runId: string;
   traceId: string;
-  status: "completed" | "failed" | "blocked" | "waiting_approval";
+  status: "running" | "completed" | "failed" | "blocked" | "waiting_approval";
   pendingApproval?: {
     id: string;
     stepId: string;
@@ -177,7 +178,7 @@ export const persistAgentAssistantState = (input: {
     assistantMessageId?: string;
     assistantParentId?: string | null;
   };
-  status: "completed" | "failed" | "blocked" | "waiting_approval";
+  status: "running" | "completed" | "failed" | "blocked" | "waiting_approval";
   content: string;
   pendingApproval?: AgentApprovalRequest;
   blockedReason?: string;
@@ -225,7 +226,19 @@ export const persistAgentAssistantState = (input: {
   });
 };
 
-export const resumeApprovedAgentRun = async (runId: string) => {
+type PreparedApprovedAgentRunResume = {
+  run: AgentRun;
+  runtimeInput: NonNullable<AgentRun["runtimeInput"]>;
+  pendingApproval: AgentApprovalRequest;
+  pendingToolCall: AgentToolCallRequest;
+  approvedInvocations: AgentApprovedInvocation[];
+  resumeExecutionNode: AssistantExecutionNodeEvent;
+};
+
+const prepareApprovedAgentRunResume = (
+  runId: string,
+  options: { persistRunningState: boolean },
+): PreparedApprovedAgentRunResume => {
   const run = getAgentRunById(runId);
   if (!run) {
     throw new Error(`AgentRun not found: ${runId}`);
@@ -289,7 +302,7 @@ export const resumeApprovedAgentRun = async (runId: string) => {
     approvedInvocation,
   ];
 
-  agentRunStore.update(runId, {
+  const runningRun = agentRunStore.update(runId, {
     status: "running",
     pendingApproval: undefined,
     approvedInvocations,
@@ -297,17 +310,60 @@ export const resumeApprovedAgentRun = async (runId: string) => {
     selectedToolId: pendingToolCall.toolId,
     pendingToolCall,
   });
+  const resumeExecutionNode = toAgentResumeExecutionNode({
+    runId,
+    toolId: pendingToolCall.toolId,
+    toolCallId: "id" in pendingToolCall ? pendingToolCall.id : undefined,
+    inputHash: pendingToolCall.inputHash,
+  });
 
+  if (options.persistRunningState) {
+    persistAgentAssistantState({
+      run: runningRun,
+      status: "running",
+      content: "",
+      executionNodes: [resumeExecutionNode],
+    });
+  }
+
+  return {
+    run: runningRun,
+    runtimeInput,
+    pendingApproval,
+    pendingToolCall,
+    approvedInvocations,
+    resumeExecutionNode,
+  };
+};
+
+const persistIncrementalResumeNode = (
+  runId: string,
+  event: AssistantExecutionNodeEvent,
+) => {
+  const currentRun = getAgentRunById(runId);
+  if (!currentRun || currentRun.status !== "running") {
+    return;
+  }
+
+  persistAgentAssistantState({
+    run: currentRun,
+    status: "running",
+    content: "",
+    executionNodes: [event],
+  });
+};
+
+const executePreparedApprovedAgentRunResume = async (
+  prepared: PreparedApprovedAgentRunResume,
+  options: { persistIncrementally: boolean },
+) => {
+  const { run, runtimeInput, pendingApproval, pendingToolCall, approvedInvocations } =
+    prepared;
   const resumedExecutionNodes: AssistantExecutionNodeEvent[] = [
-    toAgentResumeExecutionNode({
-      runId,
-      toolId: pendingToolCall.toolId,
-      toolCallId: "id" in pendingToolCall ? pendingToolCall.id : undefined,
-      inputHash: pendingToolCall.inputHash,
-    }),
+    prepared.resumeExecutionNode,
   ];
   const output = await agentGraph.run({
-    runId,
+    runId: run.id,
     threadId: run.threadId,
     userId: run.userId,
     goal: run.goal,
@@ -323,14 +379,25 @@ export const resumeApprovedAgentRun = async (runId: string) => {
     pendingToolCall,
     onExecutionNode: (event) => {
       resumedExecutionNodes.push(event);
+      if (options.persistIncrementally) {
+        persistIncrementalResumeNode(run.id, event);
+      }
     },
   });
 
   for (const observation of output.observations) {
-    agentRunStore.addObservation(runId, observation);
+    agentRunStore.addObservation(run.id, observation);
   }
 
-  agentRunStore.complete(runId, {
+  const currentRun = getAgentRunById(run.id);
+  if (currentRun?.status === "cancelled") {
+    return {
+      run: currentRun,
+      output,
+    };
+  }
+
+  agentRunStore.complete(run.id, {
     status: output.status,
     contextBudget: output.contextBudget,
     blockedReason: output.blockedReason,
@@ -352,7 +419,7 @@ export const resumeApprovedAgentRun = async (runId: string) => {
       : {}),
   });
 
-  const nextRun = getAgentRunById(runId);
+  const nextRun = getAgentRunById(run.id);
 
   if (nextRun) {
     persistAgentAssistantState({
@@ -372,4 +439,78 @@ export const resumeApprovedAgentRun = async (runId: string) => {
     run: nextRun,
     output,
   };
+};
+
+const failScheduledApprovedAgentRunResume = (
+  prepared: PreparedApprovedAgentRunResume,
+  error: unknown,
+) => {
+  const currentRun = getAgentRunById(prepared.run.id);
+  if (!currentRun || currentRun.status !== "running") {
+    return;
+  }
+
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  const failedRun = agentRunStore.complete(prepared.run.id, {
+    status: "failed",
+    pendingApproval: undefined,
+    pendingToolCall: undefined,
+    selectedToolId: prepared.pendingToolCall.toolId,
+    blockedReason: errorMessage,
+    terminalReason: "approval_resume_failed",
+  });
+  persistAgentAssistantState({
+    run: failedRun,
+    status: "failed",
+    content: "审批通过后恢复执行失败，请检查执行过程后重试。",
+    blockedReason: errorMessage,
+    terminalReason: "approval_resume_failed",
+    errorMessage,
+    errorSourceNodeId: "agent-resume-execution",
+    executionNodes: [
+      toAgentErrorExecutionNode({
+        runId: prepared.run.id,
+        nodeId: "agent-resume-execution",
+        label: "恢复执行",
+        summary: "审批后的恢复执行失败",
+        details: {
+          toolId: prepared.pendingToolCall.toolId,
+          errorMessage,
+        },
+      }),
+    ],
+  });
+};
+
+/**
+ * Compatibility path used by existing callers and tests that need the resumed
+ * result synchronously. The public approve route uses the scheduled variant.
+ */
+export const resumeApprovedAgentRun = async (runId: string) => {
+  const prepared = prepareApprovedAgentRunResume(runId, {
+    persistRunningState: false,
+  });
+  return executePreparedApprovedAgentRunResume(prepared, {
+    persistIncrementally: false,
+  });
+};
+
+/**
+ * Starts approval resume work without holding the HTTP request open. The run is
+ * synchronously moved to `running`; execution continues in the next microtask.
+ */
+export const scheduleApprovedAgentRunResume = (runId: string) => {
+  const prepared = prepareApprovedAgentRunResume(runId, {
+    persistRunningState: true,
+  });
+
+  queueMicrotask(() => {
+    void executePreparedApprovedAgentRunResume(prepared, {
+      persistIncrementally: true,
+    }).catch((error) => {
+      failScheduledApprovedAgentRunResume(prepared, error);
+    });
+  });
+
+  return prepared.run;
 };
