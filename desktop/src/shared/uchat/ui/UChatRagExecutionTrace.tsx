@@ -14,7 +14,9 @@ import {
 } from "./executionParsers";
 import type { RagNodeLike } from "./ragTypes";
 
-const isApprovalWaitTrace = (steps: RagNodeLike[]) => {
+type ApprovalTraceState = "waiting_approval" | "running" | null;
+
+const getApprovalTraceState = (steps: RagNodeLike[]): ApprovalTraceState => {
   const hasTerminalState = steps.some(
     (step) =>
       step.phase === "error" ||
@@ -22,23 +24,25 @@ const isApprovalWaitTrace = (steps: RagNodeLike[]) => {
         (step.nodeType === "generate" || step.nodeType === "evaluate")),
   );
   if (hasTerminalState) {
-    return false;
+    return null;
   }
 
   const hasResumedExecution = steps.some(
     (step) => step.details?.resumedFromApproval === true,
   );
   if (hasResumedExecution) {
-    return false;
+    return "running";
   }
 
-  return steps.some(
+  const isWaitingForApproval = steps.some(
     (step) =>
       step.nodeType === "approval" &&
       step.phase === "done" &&
       (typeof step.details?.approvalId === "string" ||
         step.summary?.includes("审批等待") === true),
   );
+
+  return isWaitingForApproval ? "waiting_approval" : null;
 };
 
 // UChatExecutionTrace renders the inline retrieval/generation progress row.
@@ -58,12 +62,17 @@ export function UChatExecutionTrace({
     return null;
   }
 
-  const waitingForApproval = isApprovalWaitTrace(steps);
-  const summary = waitingForApproval
-    ? t("chat.thread.agent.waitingApprovalTitle")
-    : summarizeRagProgress(steps);
+  const approvalTraceState = getApprovalTraceState(steps);
+  const summary =
+    approvalTraceState === "waiting_approval"
+      ? t("chat.thread.agent.waitingApprovalTitle")
+      : approvalTraceState === "running"
+        ? t("chat.thread.agent.running")
+        : summarizeRagProgress(steps);
   const runningCount = steps.filter((step) => step.phase === "start").length;
   const completedCount = steps.filter((step) => step.phase === "done").length;
+  const showActiveSpinner =
+    approvalTraceState === "running" || runningCount > 0;
 
   return (
     <div className="mt-4 border-b border-border/60 pb-2 transition-[border-color] duration-200">
@@ -76,7 +85,7 @@ export function UChatExecutionTrace({
           <p className="min-w-0 truncate text-text-secondary">{summary}</p>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          {!waitingForApproval ? (
+          {approvalTraceState === null ? (
             <span className="hidden text-[11px] text-text-tertiary sm:inline">
               {t("chat.executionTrace.stepCount", {
                 completed: completedCount,
@@ -84,7 +93,7 @@ export function UChatExecutionTrace({
               })}
             </span>
           ) : null}
-          {runningCount > 0 ? (
+          {showActiveSpinner ? (
             <LoaderCircle className="h-3.5 w-3.5 shrink-0 animate-spin text-text-tertiary" />
           ) : null}
           {expanded ? (
