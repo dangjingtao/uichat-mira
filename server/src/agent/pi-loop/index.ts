@@ -1,14 +1,14 @@
 import {
-  approvalNode,
-  errorNode,
-  evaluateNode,
-  evidenceNode,
+  appendPendingEvidence,
+  finishWithError,
+  finalizeRun,
   generateNode,
   nextActionPlannerNode,
+  normalizeAndFreezeToolCall,
+  pauseForApproval,
   policyNode,
   prepareContextNode,
   retrieveNode,
-  toolCallNormalizeNode,
   toolNode,
 } from "../nodes/index";
 import { mapGraphStateToOutput } from "../graph/output";
@@ -30,11 +30,40 @@ import type {
   EmitAgentExecutionNode,
 } from "../node-runtime";
 
-export type PiAgentLoopNodeHandler = (
+export type PiAgentLoopStepHandler = (
   state: AgentNodeState,
   emit?: EmitAgentExecutionNode,
 ) => Promise<Partial<AgentNodeState>>;
 
+/**
+ * Backward-compatible name for callers that still model Pi-loop dependencies as nodes.
+ */
+export type PiAgentLoopNodeHandler = PiAgentLoopStepHandler;
+
+/**
+ * Pi-loop's internal single-responsibility contract.
+ *
+ * These are semantic runtime steps, not graph nodes. Trace node ids and external state
+ * contracts remain unchanged inside the implementations for compatibility.
+ */
+export interface PiAgentLoopSemantics {
+  prepareContext: PiAgentLoopStepHandler;
+  planner: PiAgentLoopStepHandler;
+  normalizeAndFreeze: PiAgentLoopStepHandler;
+  evaluatePolicy: PiAgentLoopStepHandler;
+  pauseForApproval: PiAgentLoopStepHandler;
+  retrieve: PiAgentLoopStepHandler;
+  executeTool: PiAgentLoopStepHandler;
+  appendEvidence: PiAgentLoopStepHandler;
+  generate: PiAgentLoopStepHandler;
+  finalize: PiAgentLoopStepHandler;
+  finishWithError: PiAgentLoopStepHandler;
+}
+
+/**
+ * Legacy dependency-injection contract retained so existing tests and adapters do not
+ * need to migrate in lockstep with the Pi-loop orchestration cleanup.
+ */
 export interface PiAgentLoopNodes {
   prepareContext: PiAgentLoopNodeHandler;
   planner: PiAgentLoopNodeHandler;
@@ -49,18 +78,44 @@ export interface PiAgentLoopNodes {
   error: PiAgentLoopNodeHandler;
 }
 
-const defaultNodes: PiAgentLoopNodes = {
+const defaultSemantics: PiAgentLoopSemantics = {
   prepareContext: prepareContextNode,
   planner: nextActionPlannerNode,
-  normalizeToolCall: toolCallNormalizeNode,
-  policy: policyNode,
-  approval: approvalNode,
+  normalizeAndFreeze: normalizeAndFreezeToolCall,
+  evaluatePolicy: policyNode,
+  pauseForApproval,
   retrieve: retrieveNode,
-  tool: toolNode,
-  evidence: evidenceNode,
+  executeTool: toolNode,
+  appendEvidence: appendPendingEvidence,
   generate: generateNode,
-  evaluate: evaluateNode,
-  error: errorNode,
+  finalize: finalizeRun,
+  finishWithError,
+};
+
+const isSemanticRuntime = (
+  runtime: PiAgentLoopSemantics | PiAgentLoopNodes,
+): runtime is PiAgentLoopSemantics => "normalizeAndFreeze" in runtime;
+
+const resolveSemantics = (
+  runtime: PiAgentLoopSemantics | PiAgentLoopNodes,
+): PiAgentLoopSemantics => {
+  if (isSemanticRuntime(runtime)) {
+    return runtime;
+  }
+
+  return {
+    prepareContext: runtime.prepareContext,
+    planner: runtime.planner,
+    normalizeAndFreeze: runtime.normalizeToolCall,
+    evaluatePolicy: runtime.policy,
+    pauseForApproval: runtime.approval,
+    retrieve: runtime.retrieve,
+    executeTool: runtime.tool,
+    appendEvidence: runtime.evidence,
+    generate: runtime.generate,
+    finalize: runtime.evaluate,
+    finishWithError: runtime.error,
+  };
 };
 
 const mergeStatePatch = (
@@ -70,23 +125,23 @@ const mergeStatePatch = (
   Object.assign(state, patch);
 };
 
-const toNodeFailurePatch = (
-  nodeName: string,
+const toStepFailurePatch = (
+  stepName: string,
   error: unknown,
 ): Partial<AgentNodeState> => ({
   errorMessage: error instanceof Error ? error.message : String(error),
-  errorSourceNodeId: nodeName,
+  errorSourceNodeId: stepName,
 });
 
-const runNode = async (input: {
-  nodeName: string;
-  handler: PiAgentLoopNodeHandler;
+const runStep = async (input: {
+  traceNodeName: string;
+  handler: PiAgentLoopStepHandler;
   state: AgentGraphStateType;
   emit?: EmitAgentExecutionNode;
 }) => {
   try {
     const patch = await runWithAgentNodeSpan({
-      nodeName: input.nodeName,
+      nodeName: input.traceNodeName,
       state: input.state,
       run: () => input.handler(input.state, input.emit),
       mergeResult: (result) => result,
@@ -95,7 +150,7 @@ const runNode = async (input: {
   } catch (error) {
     mergeStatePatch(
       input.state,
-      toNodeFailurePatch(input.nodeName, error),
+      toStepFailurePatch(input.traceNodeName, error),
     );
   }
 };
@@ -114,70 +169,70 @@ const shouldGenerateAfterRecoverableFailure = (
   return recovery.source === "tool_failure" && recovery.exhausted;
 };
 
-const createPiAgentLoopRunner = (nodes: PiAgentLoopNodes) => {
-  const finishWithError = async (
+const createPiAgentLoopRunner = (steps: PiAgentLoopSemantics) => {
+  const finishRunWithError = async (
     state: AgentGraphStateType,
     emit?: EmitAgentExecutionNode,
   ): Promise<AgentGraphOutput> => {
-    await runNode({
-      nodeName: "error",
-      handler: nodes.error,
+    await runStep({
+      traceNodeName: "error",
+      handler: steps.finishWithError,
       state,
       emit,
     });
     return mapGraphStateToOutput(state);
   };
 
-  const finishWithAnswer = async (
+  const finishRunWithAnswer = async (
     state: AgentGraphStateType,
     emit?: EmitAgentExecutionNode,
   ): Promise<AgentGraphOutput> => {
-    await runNode({
-      nodeName: "generate",
-      handler: nodes.generate,
+    await runStep({
+      traceNodeName: "generate",
+      handler: steps.generate,
       state,
       emit,
     });
     if (state.errorMessage) {
-      return finishWithError(state, emit);
+      return finishRunWithError(state, emit);
     }
 
-    await runNode({
-      nodeName: "evaluate",
-      handler: nodes.evaluate,
+    await runStep({
+      traceNodeName: "evaluate",
+      handler: steps.finalize,
       state,
       emit,
     });
     if (state.errorMessage) {
-      return finishWithError(state, emit);
+      return finishRunWithError(state, emit);
     }
 
     return mapGraphStateToOutput(state);
   };
 
-  const finishWaitingApproval = async (
+  const pauseRunForApproval = async (
     state: AgentGraphStateType,
     emit?: EmitAgentExecutionNode,
   ): Promise<AgentGraphOutput> => {
-    await runNode({
-      nodeName: "approval",
-      handler: nodes.approval,
+    await runStep({
+      traceNodeName: "approval",
+      handler: steps.pauseForApproval,
       state,
       emit,
     });
     if (state.errorMessage) {
-      return finishWithError(state, emit);
+      return finishRunWithError(state, emit);
     }
     return mapGraphStateToOutput(state);
   };
 
-  const collectPendingEvidence = async (
+  const appendPendingEvidence = async (
     state: AgentGraphStateType,
     emit?: EmitAgentExecutionNode,
   ) => {
-    await runNode({
-      nodeName: "evidenceStage",
-      handler: nodes.evidence,
+    await runStep({
+      traceNodeName: "evidenceStage",
+      handler: steps.appendEvidence,
       state,
       emit,
     });
@@ -187,41 +242,41 @@ const createPiAgentLoopRunner = (nodes: PiAgentLoopNodes) => {
     state: AgentGraphStateType,
     emit?: EmitAgentExecutionNode,
   ): Promise<AgentGraphOutput | null> => {
-    await runNode({
-      nodeName: "policyStep",
-      handler: nodes.policy,
+    await runStep({
+      traceNodeName: "policyStep",
+      handler: steps.evaluatePolicy,
       state,
       emit,
     });
 
     if (state.pendingApproval) {
-      return finishWaitingApproval(state, emit);
+      return pauseRunForApproval(state, emit);
     }
     if (state.errorMessage) {
-      return finishWithError(state, emit);
+      return finishRunWithError(state, emit);
     }
     if (state.policyDecision?.type !== "allow") {
-      return finishWithAnswer(state, emit);
+      return finishRunWithAnswer(state, emit);
     }
 
-    await runNode({
-      nodeName: "tool",
-      handler: nodes.tool,
+    await runStep({
+      traceNodeName: "tool",
+      handler: steps.executeTool,
       state,
       emit,
     });
 
     if (state.pendingApproval) {
-      return finishWaitingApproval(state, emit);
+      return pauseRunForApproval(state, emit);
     }
 
-    await collectPendingEvidence(state, emit);
+    await appendPendingEvidence(state, emit);
 
     if (shouldGenerateAfterRecoverableFailure(state)) {
-      return finishWithAnswer(state, emit);
+      return finishRunWithAnswer(state, emit);
     }
     if (state.errorMessage) {
-      return finishWithError(state, emit);
+      return finishRunWithError(state, emit);
     }
 
     return null;
@@ -236,14 +291,14 @@ const createPiAgentLoopRunner = (nodes: PiAgentLoopNodes) => {
         const maxPlannerTurns = Math.max(state.maxIterations ?? 1, 1);
         let plannerTurnCount = 0;
 
-        await runNode({
-          nodeName: "prepareContext",
-          handler: nodes.prepareContext,
+        await runStep({
+          traceNodeName: "prepareContext",
+          handler: steps.prepareContext,
           state,
           emit,
         });
         if (state.errorMessage) {
-          return finishWithError(state, emit);
+          return finishRunWithError(state, emit);
         }
 
         if (state.pendingToolCall) {
@@ -262,58 +317,58 @@ const createPiAgentLoopRunner = (nodes: PiAgentLoopNodes) => {
               },
               terminalReason: "planner_turn_limit",
             });
-            return finishWithAnswer(state, emit);
+            return finishRunWithAnswer(state, emit);
           }
           plannerTurnCount += 1;
 
-          await runNode({
-            nodeName: "nextActionPlanner",
-            handler: nodes.planner,
+          await runStep({
+            traceNodeName: "nextActionPlanner",
+            handler: steps.planner,
             state,
             emit,
           });
 
           if (state.pendingApproval) {
-            return finishWaitingApproval(state, emit);
+            return pauseRunForApproval(state, emit);
           }
           if (state.errorMessage) {
-            return finishWithError(state, emit);
+            return finishRunWithError(state, emit);
           }
 
           switch (state.nextAction?.type) {
             case "answer":
             case "ask_user":
-              return finishWithAnswer(state, emit);
+              return finishRunWithAnswer(state, emit);
 
             case "retrieve":
-              await runNode({
-                nodeName: "retrieve",
-                handler: nodes.retrieve,
+              await runStep({
+                traceNodeName: "retrieve",
+                handler: steps.retrieve,
                 state,
                 emit,
               });
-              await collectPendingEvidence(state, emit);
+              await appendPendingEvidence(state, emit);
               if (state.errorMessage) {
-                return finishWithError(state, emit);
+                return finishRunWithError(state, emit);
               }
               continue;
 
             case "use_tool": {
-              await runNode({
-                nodeName: "toolCallNormalize",
-                handler: nodes.normalizeToolCall,
+              await runStep({
+                traceNodeName: "toolCallNormalize",
+                handler: steps.normalizeAndFreeze,
                 state,
                 emit,
               });
 
               if (state.errorMessage) {
-                return finishWithError(state, emit);
+                return finishRunWithError(state, emit);
               }
               if (state.schemaReplanDiagnostics) {
                 if (state.schemaReplanDiagnostics.attemptCount <= 1) {
                   continue;
                 }
-                return finishWithAnswer(state, emit);
+                return finishRunWithAnswer(state, emit);
               }
               if (!state.pendingToolCall) {
                 mergeStatePatch(state, {
@@ -321,7 +376,7 @@ const createPiAgentLoopRunner = (nodes: PiAgentLoopNodes) => {
                     "Pi agent loop did not receive a frozen pendingToolCall after normalization.",
                   errorSourceNodeId: "toolCallNormalize",
                 });
-                return finishWithError(state, emit);
+                return finishRunWithError(state, emit);
               }
 
               const toolResult = await executeFrozenToolCall(state, emit);
@@ -332,7 +387,7 @@ const createPiAgentLoopRunner = (nodes: PiAgentLoopNodes) => {
             }
 
             case "error":
-              return finishWithError(state, emit);
+              return finishRunWithError(state, emit);
 
             default:
               mergeStatePatch(state, {
@@ -340,7 +395,7 @@ const createPiAgentLoopRunner = (nodes: PiAgentLoopNodes) => {
                   "Pi agent loop planner did not return a supported next action.",
                 errorSourceNodeId: "nextActionPlanner",
               });
-              return finishWithError(state, emit);
+              return finishRunWithError(state, emit);
           }
         }
       },
@@ -351,7 +406,7 @@ const createPiAgentLoopRunner = (nodes: PiAgentLoopNodes) => {
 };
 
 export const createPiAgentLoop = (
-  nodes: PiAgentLoopNodes = defaultNodes,
-) => createPiAgentLoopRunner(nodes);
+  runtime: PiAgentLoopSemantics | PiAgentLoopNodes = defaultSemantics,
+) => createPiAgentLoopRunner(resolveSemantics(runtime));
 
 export const piAgentLoop = createPiAgentLoop();
