@@ -109,7 +109,7 @@ const serializeExternalMcpResult = (value: unknown, limit: number) => {
     serialized =
       typeof projected === "string"
         ? projected
-        : JSON.stringify(projected, null, 2);
+        : JSON.stringify(projected, null, 2) ?? "[unserializable result]";
   } catch (error) {
     serialized = `[external MCP result serialization failed: ${
       error instanceof Error ? error.message : String(error)
@@ -204,7 +204,7 @@ export const buildExternalMcpGenerateContextText = (
       serialized.text || "(empty result)",
     ].join("\n");
     sections.push(section);
-    usedChars += section.length;
+    usedChars += section.length + 2;
 
     if (usedChars >= totalCharLimit) {
       break;
@@ -212,9 +212,13 @@ export const buildExternalMcpGenerateContextText = (
   }
 
   const text = sections.join("\n\n");
-  return text.length > totalCharLimit
-    ? text.slice(0, totalCharLimit)
-    : text;
+  if (text.length <= totalCharLimit) {
+    return text;
+  }
+
+  const marker = "\n...[external MCP generate context truncated by total budget]";
+  const boundedLength = Math.max(0, totalCharLimit - marker.length);
+  return `${text.slice(0, boundedLength).trimEnd()}${marker}`;
 };
 
 const insertBeforeLatestMessage = (
