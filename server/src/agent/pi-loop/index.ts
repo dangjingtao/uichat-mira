@@ -233,6 +233,8 @@ const createPiAgentLoopRunner = (nodes: PiAgentLoopNodes) => {
       run: async () => {
         const state = createInitialAgentGraphState(input);
         const emit = input.onExecutionNode;
+        const maxPlannerTurns = Math.max(state.maxIterations ?? 1, 1);
+        let plannerTurnCount = 0;
 
         await runNode({
           nodeName: "prepareContext",
@@ -252,6 +254,18 @@ const createPiAgentLoopRunner = (nodes: PiAgentLoopNodes) => {
         }
 
         while (true) {
+          if (plannerTurnCount >= maxPlannerTurns) {
+            mergeStatePatch(state, {
+              nextAction: {
+                type: "answer",
+                reason: `Pi agent loop reached the planner turn limit (${maxPlannerTurns}); report completed evidence, unfinished work, and the blocking limit without claiming full completion.`,
+              },
+              terminalReason: "planner_turn_limit",
+            });
+            return finishWithAnswer(state, emit);
+          }
+          plannerTurnCount += 1;
+
           await runNode({
             nodeName: "nextActionPlanner",
             handler: nodes.planner,
