@@ -122,7 +122,7 @@ test("approval wait trace does not claim the Agent run is completed", () => {
   );
 });
 
-test("approval resume trace is not mistaken for a new approval wait", () => {
+test("approval resume trace stays active until a terminal step arrives", () => {
   const resumedSteps: RagNodeLike[] = [
     ...approvalWaitSteps,
     {
@@ -147,13 +147,15 @@ test("approval resume trace is not mistaken for a new approval wait", () => {
     screen.queryByText(i18n.t("chat.thread.agent.waitingApprovalTitle")),
     null,
   );
-  assert.ok(
-    screen.getByText(
+  assert.ok(screen.getByText(i18n.t("chat.thread.agent.running")));
+  assert.equal(
+    screen.queryByText(
       i18n.t("chat.executionTrace.stepCount", {
         completed: resumedSteps.length,
         total: resumedSteps.length,
       }),
     ),
+    null,
   );
 });
 
