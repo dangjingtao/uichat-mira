@@ -285,7 +285,7 @@ export const nextActionPlannerNode = async (
     },
   });
 
-  const plannerTaskFrame = nextAction
+  const updatedPlannerTaskFrame = nextAction
     ? updateCurrentTaskFrameFromPlanner({
         frame: plannerVisibleTaskFrame ?? state.currentTaskFrame,
         goal: state.goal,
@@ -294,6 +294,10 @@ export const nextActionPlannerNode = async (
         latestEvidenceSummary: observationContext.latestEvidenceSummary,
       })
     : undefined;
+  const plannerTaskFrame = mergePlannerTaskFrameProgress(
+    plannerVisibleTaskFrame,
+    updatedPlannerTaskFrame,
+  );
 
   return {
     ...(nextAction ? { nextAction } : {}),
