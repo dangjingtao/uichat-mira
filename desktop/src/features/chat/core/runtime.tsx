@@ -13,6 +13,10 @@ import {
   useUChatRuntime,
   useUChatSelector,
 } from "@/shared/uchat/ui";
+import {
+  AGENT_RUN_UPDATED_EVENT,
+  type AgentRunUpdatedEventDetail,
+} from "@/shared/api/thread";
 import { useChatKnowledgeBaseState } from "./knowledgeBaseState";
 import {
   DesktopChatAttachmentDriver,
@@ -193,6 +197,31 @@ export function AppChatRuntimeProvider({
     window.addEventListener("uichat:threads-cleaned", handleThreadsCleaned);
     return () => {
       window.removeEventListener("uichat:threads-cleaned", handleThreadsCleaned);
+    };
+  }, [runtime]);
+
+  useEffect(() => {
+    let refreshChain = Promise.resolve();
+
+    const handleAgentRunUpdated = (event: Event) => {
+      const run = (event as CustomEvent<AgentRunUpdatedEventDetail>).detail?.run;
+      if (!run?.threadId) {
+        return;
+      }
+
+      refreshChain = refreshChain
+        .then(async () => {
+          await runtime.refreshThread(run.threadId);
+          if (run.status !== "queued" && run.status !== "running") {
+            await runtime.loadThreads();
+          }
+        })
+        .catch(() => undefined);
+    };
+
+    window.addEventListener(AGENT_RUN_UPDATED_EVENT, handleAgentRunUpdated);
+    return () => {
+      window.removeEventListener(AGENT_RUN_UPDATED_EVENT, handleAgentRunUpdated);
     };
   }, [runtime]);
 
