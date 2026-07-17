@@ -23,7 +23,7 @@ type RuntimeInputWithCheckpoint = PersistedRuntimeInput & {
   checkpoint?: AgentRuntimeCheckpoint;
 };
 
-type AgentInputWithCheckpoint = AgentGraphInput & AgentRuntimeCheckpoint;
+export type AgentInputWithCheckpoint = AgentGraphInput & AgentRuntimeCheckpoint;
 type AgentOutputWithCheckpoint = AgentGraphOutput & {
   iterationCount?: number;
 };
@@ -36,25 +36,23 @@ export const getAgentRuntimeCheckpoint = (
 export const applyAgentRuntimeCheckpoint = (
   input: AgentGraphInput,
   checkpoint: AgentRuntimeCheckpoint | undefined,
-): AgentInputWithCheckpoint => ({
-  ...input,
-  ...(checkpoint?.currentTaskFrame
-    ? { currentTaskFrame: checkpoint.currentTaskFrame }
-    : {}),
-  ...(checkpoint?.observations
-    ? { observations: checkpoint.observations }
-    : {}),
-  ...(checkpoint?.evidence ? { evidence: checkpoint.evidence } : {}),
-  ...(checkpoint?.retrievedChunks
-    ? { retrievedChunks: checkpoint.retrievedChunks }
-    : {}),
-  ...(checkpoint?.lastToolExecution
-    ? { lastToolExecution: checkpoint.lastToolExecution }
-    : {}),
-  ...(typeof checkpoint?.iterationCount === "number"
-    ? { iterationCount: checkpoint.iterationCount }
-    : {}),
-});
+): AgentInputWithCheckpoint => {
+  const explicitInput = input as AgentInputWithCheckpoint;
+
+  return {
+    ...input,
+    currentTaskFrame:
+      explicitInput.currentTaskFrame ?? checkpoint?.currentTaskFrame,
+    observations: explicitInput.observations ?? checkpoint?.observations,
+    evidence: explicitInput.evidence ?? checkpoint?.evidence,
+    retrievedChunks:
+      explicitInput.retrievedChunks ?? checkpoint?.retrievedChunks,
+    lastToolExecution:
+      explicitInput.lastToolExecution ?? checkpoint?.lastToolExecution,
+    iterationCount:
+      explicitInput.iterationCount ?? checkpoint?.iterationCount,
+  };
+};
 
 export const persistAgentRuntimeCheckpoint = (
   runtimeInput: PersistedRuntimeInput,
