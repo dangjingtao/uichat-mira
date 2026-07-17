@@ -226,7 +226,7 @@ const createPiAgentLoopRunner = (steps: PiAgentLoopSemantics) => {
     return mapGraphStateToOutput(state);
   };
 
-  const appendPendingEvidence = async (
+  const commitPendingEvidence = async (
     state: AgentGraphStateType,
     emit?: EmitAgentExecutionNode,
   ) => {
@@ -270,7 +270,7 @@ const createPiAgentLoopRunner = (steps: PiAgentLoopSemantics) => {
       return pauseRunForApproval(state, emit);
     }
 
-    await appendPendingEvidence(state, emit);
+    await commitPendingEvidence(state, emit);
 
     if (shouldGenerateAfterRecoverableFailure(state)) {
       return finishRunWithAnswer(state, emit);
@@ -347,7 +347,7 @@ const createPiAgentLoopRunner = (steps: PiAgentLoopSemantics) => {
                 state,
                 emit,
               });
-              await appendPendingEvidence(state, emit);
+              await commitPendingEvidence(state, emit);
               if (state.errorMessage) {
                 return finishRunWithError(state, emit);
               }
