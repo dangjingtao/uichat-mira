@@ -1,6 +1,5 @@
 import { END } from "@langchain/langgraph";
 import { buildPlannerRecoveryContext } from "../recovery";
-import { DEFAULT_AGENT_MAX_ITERATIONS } from "./state";
 import type { AgentGraphStateType } from "./state";
 
 const hasFrozenPendingToolCall = (
@@ -103,8 +102,6 @@ export const routeAfterTool = (state: AgentGraphStateType) => {
     return state.pendingToolExecution ? "evidenceStage" : "error";
   }
 
-  const iterationCount = state.iterationCount ?? 0;
-  const maxIterations = state.maxIterations ?? DEFAULT_AGENT_MAX_ITERATIONS;
   return "evidenceStage";
 };
 
@@ -113,8 +110,6 @@ export const routeAfterRetrieve = (state: AgentGraphStateType) => {
     return "error";
   }
 
-  const iterationCount = state.iterationCount ?? 0;
-  const maxIterations = state.maxIterations ?? DEFAULT_AGENT_MAX_ITERATIONS;
   return "evidenceStage";
 };
 
@@ -132,11 +127,7 @@ export const routeAfterEvidence = (state: AgentGraphStateType) => {
     return "generate";
   }
 
-  const iterationCount = state.iterationCount ?? 0;
-  const maxIterations = state.maxIterations ?? DEFAULT_AGENT_MAX_ITERATIONS;
-  return maxIterations > 0 && iterationCount >= maxIterations
-    ? "generate"
-    : "nextActionPlanner";
+  return "nextActionPlanner";
 };
 
 export const routeAfterGenerate = (state: AgentGraphStateType) => {
