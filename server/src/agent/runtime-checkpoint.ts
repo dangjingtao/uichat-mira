@@ -54,10 +54,22 @@ export const applyAgentRuntimeCheckpoint = (
   };
 };
 
+const clearRuntimeCheckpoint = (
+  runtimeInput: PersistedRuntimeInput,
+): RuntimeInputWithCheckpoint => {
+  const { checkpoint: _checkpoint, ...baseRuntimeInput } =
+    runtimeInput as RuntimeInputWithCheckpoint;
+  return baseRuntimeInput;
+};
+
 export const persistAgentRuntimeCheckpoint = (
   runtimeInput: PersistedRuntimeInput,
   output: AgentGraphOutput,
 ): RuntimeInputWithCheckpoint => {
+  if (!output.pendingApproval) {
+    return clearRuntimeCheckpoint(runtimeInput);
+  }
+
   const checkpointOutput = output as AgentOutputWithCheckpoint;
   const derivedIterationCount =
     output.evidence.toolExecutions.length + output.evidence.retrievals.length;
