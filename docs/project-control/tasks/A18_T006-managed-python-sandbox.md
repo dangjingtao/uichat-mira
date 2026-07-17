@@ -1,5 +1,5 @@
 ---
-task_state: READY_FOR_REVIEW
+task_state: DONE
 owner: project-owner
 repository: dangjingtao/uichat-mira
 baseline_branch: dev
@@ -7,7 +7,7 @@ baseline_branch: dev
 
 # A18_T006 — 受管 Python Sandbox
 
-- 状态：READY_FOR_REVIEW
+- 状态：DONE
 - 仓库：`dangjingtao/uichat-mira`
 - 基线分支：`dev`
 - 类型：Sandbox 执行能力

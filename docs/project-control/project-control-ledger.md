@@ -112,7 +112,7 @@ related:
 | [A18_T003](tasks/A18_T003-execution-object-confirmation.md) | `TASK_CARD_STATE_INVALID` | AgentGraph / Execution Object | 补齐合法 `task_state`，等待 A18_T001；评审提示词见 [review prompt](reviews/A18_T003-execution-object-confirmation-review-prompt.md) |
 | [A18_T004](tasks/A18_T004-microapp-definition-migration.md) | `TASK_CARD_STATE_INVALID` | MicroAPP / Definition Migration | 补齐合法 `task_state`，确认后独立施工与 PR；评审提示词见 [review prompt](reviews/A18_T004-microapp-definition-migration-review-prompt.md) |
 | [A18_T005](tasks/A18_T005-sandbox-contract-and-runner.md) | `DONE` | Harness / Sandbox | 独立评审通过；profile、runner、cwd/env/timeout/output/artifact、审批 hash、Evidence 和 Graph 主链均有测试证据；定向 36/36、direct bench 0 failed、AgentGraph 黑盒 18/18、`pnpm check` 通过；评审提示词见 [review prompt](reviews/A18_T005-sandbox-contract-and-runner-review-prompt.md) |
-| [A18_T006](tasks/A18_T006-managed-python-sandbox.md) | `READY_FOR_REVIEW` | Harness / Managed Python Sandbox | `python_session` 默认关闭；固定 runtime、health、workspace/approval/timeout/output/artifact、Evidence、安装阻止与安全负例已实现；待独立评审；评审提示词见 [review prompt](reviews/A18_T006-managed-python-sandbox-review-prompt.md) |
+| [A18_T006](tasks/A18_T006-managed-python-sandbox.md) | `DONE` | Harness / Managed Python Sandbox | 独立评审通过；Python runtime、audit/filesystem/import policy、artifact 限制、参数审批、Evidence/Generate 链路及安全负例均有证据；5 个 test files、79 tests、server typecheck 与 `pnpm check` 通过；评审提示词见 [review prompt](reviews/A18_T006-managed-python-sandbox-review-prompt.md) |
 
 ## MicroAPP Image Generation Parallel Task Index
 
