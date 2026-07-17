@@ -17,6 +17,7 @@ import type {
   AgentSchemaReplanDiagnostics,
   AgentToolExposureState,
 } from "../types";
+import type { AgentRuntimeCheckpoint } from "../runtime-checkpoint";
 import type { EmitAgentExecutionNode } from "../node-runtime";
 import { createInitialCurrentTaskFrame } from "../node-runtime";
 
@@ -63,6 +64,8 @@ export const AgentGraphStateAnnotation = Annotation.Root({
 
 export type AgentGraphStateType = typeof AgentGraphStateAnnotation.State;
 
+type AgentGraphInputWithCheckpoint = AgentGraphInput & AgentRuntimeCheckpoint;
+
 export const getEmitter = (
   config?: LangGraphRunnableConfig,
 ): EmitAgentExecutionNode | undefined => {
@@ -99,47 +102,51 @@ export const createAgentNode =
 
 export const createInitialAgentGraphState = (
   input: AgentGraphInput,
-): AgentGraphStateType => ({
-  runId: input.runId,
-  threadId: input.threadId,
-  userId: input.userId,
-  goal: input.goal,
-  currentTaskFrame:
-    input.currentTaskFrame ??
-    createInitialCurrentTaskFrame({
-      goal: input.goal,
-      messages: input.messages,
-      workspaceRoot: input.workspaceRoot,
-      knowledgeBaseId: input.knowledgeBaseId,
-    }),
-  messages: input.messages,
-  requestContextMessages: input.requestContextMessages,
-  params: input.params,
-  knowledgeBaseId: input.knowledgeBaseId,
-  intentConfig: input.intentConfig,
-  workspaceRoot: input.workspaceRoot,
-  toolIntent: undefined,
-  observations: [],
-  approvedInvocations: input.approvedInvocations,
-  policyDecision: input.policyDecision,
-  toolExposure: undefined,
-  pendingToolCall: input.pendingToolCall,
-  nextAction: undefined,
-  lastToolExecution: undefined,
-  pendingEvidenceObservation: undefined,
-  pendingToolExecution: undefined,
-  pendingRetrievalEvidence: undefined,
-  answer: undefined,
-  retrievedChunks: undefined,
-  evidence: undefined,
-  blockedReason: undefined,
-  terminalReason: undefined,
-  contextBudget: undefined,
-  errorMessage: undefined,
-  errorSourceNodeId: undefined,
-  pendingApproval: undefined,
-  schemaReplanDiagnostics: undefined,
-  generatedAnswerEmptyFallback: false,
-  iterationCount: 0,
-  maxIterations: input.maxIterations ?? DEFAULT_AGENT_MAX_ITERATIONS,
-});
+): AgentGraphStateType => {
+  const checkpointInput = input as AgentGraphInputWithCheckpoint;
+
+  return {
+    runId: input.runId,
+    threadId: input.threadId,
+    userId: input.userId,
+    goal: input.goal,
+    currentTaskFrame:
+      checkpointInput.currentTaskFrame ??
+      createInitialCurrentTaskFrame({
+        goal: input.goal,
+        messages: input.messages,
+        workspaceRoot: input.workspaceRoot,
+        knowledgeBaseId: input.knowledgeBaseId,
+      }),
+    messages: input.messages,
+    requestContextMessages: input.requestContextMessages,
+    params: input.params,
+    knowledgeBaseId: input.knowledgeBaseId,
+    intentConfig: input.intentConfig,
+    workspaceRoot: input.workspaceRoot,
+    toolIntent: undefined,
+    observations: checkpointInput.observations ?? [],
+    approvedInvocations: input.approvedInvocations,
+    policyDecision: input.policyDecision,
+    toolExposure: undefined,
+    pendingToolCall: input.pendingToolCall,
+    nextAction: undefined,
+    lastToolExecution: checkpointInput.lastToolExecution,
+    pendingEvidenceObservation: undefined,
+    pendingToolExecution: undefined,
+    pendingRetrievalEvidence: undefined,
+    answer: undefined,
+    retrievedChunks: checkpointInput.retrievedChunks,
+    evidence: checkpointInput.evidence,
+    blockedReason: undefined,
+    terminalReason: undefined,
+    contextBudget: undefined,
+    errorMessage: undefined,
+    errorSourceNodeId: undefined,
+    pendingApproval: undefined,
+    schemaReplanDiagnostics: undefined,
+    generatedAnswerEmptyFallback: false,
+    iterationCount: checkpointInput.iterationCount ?? 0,
+    maxIterations: input.maxIterations ?? DEFAULT_AGENT_MAX_ITERATIONS,
+  };
+};
