@@ -15,12 +15,20 @@ import {
 import type { RagNodeLike } from "./ragTypes";
 
 const isApprovalWaitTrace = (steps: RagNodeLike[]) => {
-  const hasTerminalAnswerStep = steps.some(
+  const hasTerminalState = steps.some(
     (step) =>
-      step.phase === "done" &&
-      (step.nodeType === "generate" || step.nodeType === "evaluate"),
+      step.phase === "error" ||
+      (step.phase === "done" &&
+        (step.nodeType === "generate" || step.nodeType === "evaluate")),
   );
-  if (hasTerminalAnswerStep) {
+  if (hasTerminalState) {
+    return false;
+  }
+
+  const hasResumedExecution = steps.some(
+    (step) => step.details?.resumedFromApproval === true,
+  );
+  if (hasResumedExecution) {
     return false;
   }
 
@@ -29,7 +37,6 @@ const isApprovalWaitTrace = (steps: RagNodeLike[]) => {
       step.nodeType === "approval" &&
       step.phase === "done" &&
       (typeof step.details?.approvalId === "string" ||
-        typeof step.details?.toolId === "string" ||
         step.summary?.includes("审批等待") === true),
   );
 };
