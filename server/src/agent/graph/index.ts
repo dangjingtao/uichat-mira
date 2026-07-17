@@ -6,7 +6,11 @@ import {
   getAgentRuntimeCheckpoint,
   persistAgentRuntimeCheckpoint,
 } from "../runtime-checkpoint";
-import type { AgentGraphInput, AgentGraphOutput } from "../types";
+import type {
+  AgentGraphInput,
+  AgentGraphOutput,
+  AgentRun,
+} from "../types";
 import { compiledAgentStateGraph } from "./build-graph";
 import { mapGraphStateToOutput } from "./output";
 import {
@@ -52,11 +56,7 @@ const restorePersistedRuntimeInput = (input: AgentGraphInput) => {
 
 const persistRuntimeOutput = (input: {
   runId: string;
-  runtimeInput: ReturnType<typeof agentRunStore.get> extends infer T
-    ? T extends { runtimeInput?: infer R }
-      ? R
-      : never
-    : never;
+  runtimeInput: AgentRun["runtimeInput"];
   output: AgentGraphOutput;
 }) => {
   if (!input.runtimeInput) {
