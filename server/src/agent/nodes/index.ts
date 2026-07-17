@@ -8,7 +8,12 @@ export { prepareContextNode } from "./prepare-context";
 export { approvalNode } from "./approval";
 export { errorNode } from "./error";
 export { retrieveNode } from "./retrieve";
-export { generateNode } from "./generate";
+export { generateNode as baseGenerateNode } from "./generate";
+export {
+  externalMcpAwareGenerateNode as generateNode,
+  buildExternalMcpGenerateContextText,
+  createExternalMcpAwareGenerateNode,
+} from "./external-mcp-generate-context";
 export { evaluateNode } from "./evaluate";
 
 export { nextActionPlannerNode } from "./next-action-planner";
