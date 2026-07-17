@@ -12,6 +12,9 @@ const DEFAULT_TIMEOUT_MS = 5_000;
 const MAX_TIMEOUT_MS = 60_000;
 const DEFAULT_OUTPUT_LIMIT_BYTES = 64 * 1024;
 const MAX_OUTPUT_LIMIT_BYTES = 1024 * 1024;
+const MAX_ARTIFACT_COUNT = 16;
+const MAX_ARTIFACT_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_ARTIFACT_TOTAL_BYTES = 16 * 1024 * 1024;
 
 export interface ManagedPythonConfig {
   enabled?: boolean;
@@ -150,11 +153,25 @@ const appendOutput = (state: { text: string; bytes: number; truncated: boolean }
 
 const collectArtifacts = async (registrations: SandboxArtifactRegistration[] | undefined, violations: string[]) => {
   const artifacts: SandboxRunResult["artifacts"] = [];
+  let totalBytes = 0;
   for (const registration of registrations ?? []) {
+    if (artifacts.length >= MAX_ARTIFACT_COUNT) {
+      violations.push(`artifact registration skipped: maximum artifact count is ${MAX_ARTIFACT_COUNT}`);
+      break;
+    }
     try {
       const target = resolveWorkspacePath(registration.path);
       const stat = await import("node:fs/promises").then((fs) => fs.stat(target));
+      if (stat.size > MAX_ARTIFACT_SIZE_BYTES) {
+        violations.push(`artifact registration skipped: ${registration.path} exceeds the ${MAX_ARTIFACT_SIZE_BYTES}-byte artifact limit`);
+        continue;
+      }
+      if (totalBytes + stat.size > MAX_ARTIFACT_TOTAL_BYTES) {
+        violations.push(`artifact registration skipped: total artifact size exceeds ${MAX_ARTIFACT_TOTAL_BYTES} bytes`);
+        continue;
+      }
       artifacts.push({ id: crypto.randomUUID(), kind: registration.kind ?? (stat.isDirectory() ? "directory" : "file"), path: target, size: stat.size, createdAt: stat.birthtime.toISOString() });
+      totalBytes += stat.size;
     } catch (error) {
       violations.push(`artifact registration skipped: ${registration.path} (${error instanceof Error ? error.message : String(error)})`);
     }

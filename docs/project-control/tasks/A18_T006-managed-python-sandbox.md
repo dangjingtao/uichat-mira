@@ -245,7 +245,7 @@ Graph 不检查 Python exitCode，也不解析 pandas/matplotlib 结果。
 
 ### 验证证据
 
-- `pnpm --filter @ui-chat-mira/server test -- src/harness/sandbox/index.test.ts src/sandbox/python-executor.test.ts src/harness/exposure.test.ts src/mcp/core/permissions.test.ts`：4 个 test files、73 tests passed。
+- `pnpm --filter @ui-chat-mira/server test -- src/harness/sandbox/index.test.ts src/sandbox/python-executor.test.ts src/harness/exposure.test.ts src/mcp/core/permissions.test.ts src/agent/__tests__/python-evidence-chain.test.ts`：5 个 test files、79 tests passed。
 - `pnpm --filter @ui-chat-mira/server typecheck`：通过。
 - `git diff --check`：通过。
 - `pnpm check`：6 个 workspace typecheck 全部通过。

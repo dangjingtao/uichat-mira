@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, truncate, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { getTestArtifactDir } from "@/test-support/artifacts.js";
@@ -118,6 +118,54 @@ describe("managed Python sandbox", () => {
   it("keeps artifacts workspace-bound", async () => {
     const escaped = await runManagedPython({ code: "print('x')", cwd: "..", workspaceRoot, config: { enabled: true, executable }, artifactRegistrations: [{ path: "../outside.txt" }] });
     expect(escaped.status).toBe("failed");
+  });
+
+  it("enforces artifact count, single-file size and total-size limits", async () => {
+    const artifactWorkspace = await mkdtemp(path.join(os.tmpdir(), "mira-python-artifacts-"));
+    try {
+      const smallFiles: string[] = [];
+      for (let index = 0; index < 17; index += 1) {
+        const name = `small-${index}.txt`;
+        await writeFile(path.join(artifactWorkspace, name), "x");
+        smallFiles.push(name);
+      }
+      const countResult = await runManagedPython({
+        code: "print('artifacts')",
+        workspaceRoot: artifactWorkspace,
+        config: { enabled: true, executable },
+        artifactRegistrations: smallFiles.map((file) => ({ path: file })),
+      });
+      expect(countResult.artifacts).toHaveLength(16);
+      expect(countResult.violations.join(" ")).toContain("maximum artifact count");
+
+      const oversized = "oversized.bin";
+      await writeFile(path.join(artifactWorkspace, oversized), "");
+      await truncate(path.join(artifactWorkspace, oversized), 10 * 1024 * 1024 + 1);
+      const sizeResult = await runManagedPython({
+        code: "print('artifacts')",
+        workspaceRoot: artifactWorkspace,
+        config: { enabled: true, executable },
+        artifactRegistrations: [{ path: oversized }],
+      });
+      expect(sizeResult.artifacts).toHaveLength(0);
+      expect(sizeResult.violations.join(" ")).toContain("artifact limit");
+
+      const totalFiles = ["total-a.bin", "total-b.bin", "total-c.bin"];
+      for (const file of totalFiles) {
+        await writeFile(path.join(artifactWorkspace, file), "");
+        await truncate(path.join(artifactWorkspace, file), 6 * 1024 * 1024);
+      }
+      const totalResult = await runManagedPython({
+        code: "print('artifacts')",
+        workspaceRoot: artifactWorkspace,
+        config: { enabled: true, executable },
+        artifactRegistrations: totalFiles.map((file) => ({ path: file })),
+      });
+      expect(totalResult.artifacts).toHaveLength(2);
+      expect(totalResult.violations.join(" ")).toContain("total artifact size");
+    } finally {
+      await rm(artifactWorkspace, { recursive: true, force: true });
+    }
   });
 
   it("keeps test artifacts under the repository artifact directory", () => {

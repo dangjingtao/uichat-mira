@@ -67,7 +67,12 @@ export const pythonSessionTool: McpToolImplementation = {
       result,
       evidence: {
         actionTaken: "Run managed Python code",
-        facts: [`Python execution status: ${result.status}`, `exitCode: ${result.exitCode ?? "null"}`],
+        facts: [
+          `Python execution status: ${result.status}`,
+          `exitCode: ${result.exitCode ?? "null"}`,
+          ...(result.stdoutText ? [`stdout: ${result.stdoutText}`] : []),
+          ...(result.stderrText ? [`stderr: ${result.stderrText}`] : []),
+        ],
         ...(result.violations.length ? { gaps: result.violations } : {}),
         ...(result.status === "completed" ? {} : { error: result.stderrText || result.status }),
         status: result.status === "timed_out" ? "timed_out" : result.status === "blocked" ? "blocked" : result.status === "completed" ? "completed" : result.truncated ? "truncated" : "failed",
