@@ -15,6 +15,7 @@ import {
 } from "@/shared/uchat/ui";
 import {
   AGENT_RUN_UPDATED_EVENT,
+  type AgentRun,
   type AgentRunUpdatedEventDetail,
 } from "@/shared/api/thread";
 import { useChatKnowledgeBaseState } from "./knowledgeBaseState";
@@ -60,6 +61,26 @@ const desktopRuntimeBaseCapabilities = {
   attachments: true,
   messagePresentation: desktopMessagePresentationHints,
 } as const;
+
+const syncRuntimeStatusFromAgentRun = (runtime: ChatRuntime, run: AgentRun) => {
+  if (run.status === "queued" || run.status === "running") {
+    runtime.store.getState().setRunStatus({ type: "running" });
+    return;
+  }
+  if (run.status === "failed") {
+    runtime.store.getState().setRunStatus({
+      type: "error",
+      message: run.blockedReason ?? "Agent run failed",
+    });
+    return;
+  }
+  if (run.status === "cancelled") {
+    runtime.store.getState().setRunStatus({ type: "cancelled" });
+    return;
+  }
+
+  runtime.store.getState().setRunStatus({ type: "idle" });
+};
 
 export const createStableAppChatRuntime = (
   getCreateThreadInput: () =>
@@ -209,6 +230,7 @@ export function AppChatRuntimeProvider({
         return;
       }
 
+      syncRuntimeStatusFromAgentRun(runtime, run);
       refreshChain = refreshChain
         .then(async () => {
           await runtime.refreshThread(run.threadId);
