@@ -19,7 +19,12 @@ export {
 export { retrieveNode } from "./retrieve";
 export { generateNode as baseGenerateNode } from "./generate";
 export {
-  externalMcpAwareGenerateNode as generateNode,
+  harnessAwareGenerateNode as generateNode,
+  buildHarnessGenerateContextText,
+  createHarnessAwareGenerateNode,
+} from "./harness-generate-context";
+export {
+  externalMcpAwareGenerateNode,
   buildExternalMcpGenerateContextText,
   createExternalMcpAwareGenerateNode,
 } from "./external-mcp-generate-context";
@@ -34,7 +39,12 @@ export {
   toolCallNormalizeNode,
   toolCallNormalizeNode as normalizeAndFreezeToolCall,
 } from "./tool-call-normalize";
-export { toolNode } from "./tool-node";
+export { toolNode as baseToolNode } from "./tool-node";
+export {
+  harnessAwareToolNode as toolNode,
+  attachHarnessLlmContentToExecution,
+  type AgentToolExecutionWithLlmContent,
+} from "./harness-tool-result";
 export {
   evidenceNode,
   evidenceNode as appendPendingEvidence,
