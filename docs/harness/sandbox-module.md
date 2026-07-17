@@ -156,13 +156,13 @@ UIChat Mira V1.6 当前 gate 只承诺：
 
 - `command`
 
-当前声明但不计入 V1.6 gate 的 future profile：
+当前声明但不计入 V1.6 gate 的 blocked profile：
 
 - `read_only`
 - `workspace_write`
 - `networked_command`
 
-这些 future profile 会被 direct bench 明确标成 `future_profile`，用于保留合同边界证据，不会伪装成 V1.6 已覆盖或已通过。
+这些 blocked profile 会被 direct bench 明确标成 `blocked`，用于保留合同边界证据，不会伪装成 V1.6 已覆盖或已通过。
 
 ## 后续方向
 
@@ -173,4 +173,3 @@ UIChat Mira V1.6 当前 gate 只承诺：
 - 并发限制
 - 联网命令专门风险标记
 - 更强的跨平台执行后端抽象
-
