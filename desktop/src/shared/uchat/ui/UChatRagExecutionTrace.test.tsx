@@ -4,6 +4,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { test } from "vitest";
 import i18n from "@/shared/i18n";
 import { UChatExecutionTrace } from "./UChatRagExecutionTrace";
+import type { RagNodeLike } from "./ragTypes";
 
 test("UChatExecutionTrace renders tool nodes in the shared execution timeline", () => {
   render(
@@ -69,4 +70,82 @@ test("UChatExecutionTrace renders agent nodes in the shared execution timeline",
   fireEvent.click(screen.getByRole("button"));
   assert.ok(screen.getByText("已生成最小 Agent 计划"));
   assert.ok(screen.getAllByText("等待人工审批").length >= 2);
+});
+
+const completedStep = (
+  nodeId: string,
+  nodeType: RagNodeLike["nodeType"],
+  label: string,
+): RagNodeLike => ({
+  nodeId,
+  nodeType,
+  phase: "done",
+  label,
+  traceDomain: "agent",
+});
+
+const approvalWaitSteps: RagNodeLike[] = [
+  completedStep("agent-prepare-context", "context", "准备上下文"),
+  completedStep("agent-plan", "plan", "执行计划"),
+  completedStep("agent-tool-normalize", "reason", "工具调用规范化"),
+  completedStep("agent-policy", "reason", "审批策略"),
+  {
+    ...completedStep("agent-approval", "approval", "审批节点"),
+    summary: "已进入审批等待",
+    details: {
+      approvalId: "approval-1",
+      toolId: "browser_observe",
+    },
+  },
+];
+
+test("approval wait trace does not claim the Agent run is completed", () => {
+  render(
+    <UChatExecutionTrace
+      messageId="assistant-approval-wait"
+      steps={approvalWaitSteps}
+      onOpenDetail={() => {}}
+    />,
+  );
+
+  assert.ok(
+    screen.getByText(i18n.t("chat.thread.agent.waitingApprovalTitle")),
+  );
+  assert.equal(
+    screen.queryByText(
+      i18n.t("chat.executionTrace.stepCount", {
+        completed: approvalWaitSteps.length,
+        total: approvalWaitSteps.length,
+      }),
+    ),
+    null,
+  );
+});
+
+test("completed answer step restores the normal trace completion state", () => {
+  const completedSteps = [
+    ...approvalWaitSteps,
+    completedStep("agent-generate", "generate", "组织最终回答"),
+  ];
+
+  render(
+    <UChatExecutionTrace
+      messageId="assistant-completed"
+      steps={completedSteps}
+      onOpenDetail={() => {}}
+    />,
+  );
+
+  assert.equal(
+    screen.queryByText(i18n.t("chat.thread.agent.waitingApprovalTitle")),
+    null,
+  );
+  assert.ok(
+    screen.getByText(
+      i18n.t("chat.executionTrace.stepCount", {
+        completed: completedSteps.length,
+        total: completedSteps.length,
+      }),
+    ),
+  );
 });
