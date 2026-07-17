@@ -3,10 +3,22 @@
  */
 import type { AgentGoal } from "../types";
 
-export const createAgentGoal = (text: string): AgentGoal => ({
-  id: crypto.randomUUID(),
-  text,
-  successCriteria: ["回答用户当前问题，并说明不确定性。"],
-  constraints: ["复用当前项目已有 RAG、Harness、provider 和 trace 基建。"],
-  riskLevel: "low",
-});
+const normalizeGoalText = (text: string) => text.trim() || "Complete the user's request.";
+
+export const createAgentGoal = (text: string): AgentGoal => {
+  const goalText = normalizeGoalText(text);
+
+  return {
+    id: crypto.randomUUID(),
+    text: goalText,
+    successCriteria: [
+      `Complete every explicit requirement in the user's request: ${goalText}`,
+      "Only finish when all explicit requirements are complete, or when continuation is impossible and the unfinished work plus blocking reason are reported.",
+    ],
+    constraints: [
+      "Reuse the current project RAG, Harness, provider, and trace infrastructure.",
+      "Keep MCP tool contracts and frontend integration contracts unchanged.",
+    ],
+    riskLevel: "low",
+  };
+};
