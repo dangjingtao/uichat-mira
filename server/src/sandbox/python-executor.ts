@@ -50,18 +50,27 @@ const resolvePythonEnv = () => {
   return env;
 };
 
-const createManagedScript = (code: string, workspaceRoot: string, tempRoot: string) => `
+const createManagedScript = (code: string, workspaceRoot: string, tempRoot: string, packages: string[] = []) => `
 import os as _os
 import sys as _sys
+import sysconfig as _sysconfig
 
 _workspace = ${JSON.stringify(path.resolve(workspaceRoot))}
 _temp_root = ${JSON.stringify(path.resolve(tempRoot))}
 _stdlib = ${JSON.stringify(path.resolve(process.execPath, ".."))}
+_allowed_imports = ${JSON.stringify(packages)}
+_stdlib_roots = tuple(_root for _root in (_sysconfig.get_path("stdlib"), _sysconfig.get_path("platstdlib")) if _root)
+_stdlib_imports = {"os", "sys", "json", "math", "time", "pathlib", "re", "csv", "io", "datetime", "decimal", "statistics", "subprocess", "ctypes", "socket", "shutil", "tempfile", "typing", "collections", "itertools", "functools", "urllib", "xml", "sqlite3", "hashlib", "base64", "struct", "enum", "dataclasses", "traceback", "logging", "unittest", "pickle", "copy", "glob", "fnmatch", "linecache", "textwrap", "string", "random", "numbers", "fractions", "secrets", "sysconfig", "platform"}
 _blocked = (
     "subprocess", "os.system", "os.exec", "os.posix_spawn", "os.spawn",
     "ctypes.dlopen", "socket", "socket.connect", "socket.getaddrinfo",
     "os.kill", "signal.pthread_kill"
 )
+_blocked_writes = {
+    "os.remove", "os.unlink", "os.rename", "os.replace", "os.mkdir", "os.makedirs",
+    "os.rmdir", "os.removedirs", "os.chmod", "os.chown", "os.lchown", "os.symlink",
+    "os.link", "os.truncate", "os.utime"
+}
 
 def _inside(path_value, roots):
     try:
@@ -71,10 +80,24 @@ def _inside(path_value, roots):
     return any(candidate == root or candidate.startswith(root + _os.sep) for root in roots)
 
 def _audit(event, args):
+    if event == "import":
+        module = args[0] if args else ""
+        filename = args[1] if len(args) > 1 else None
+        top_level = module.split(".", 1)[0]
+        if top_level not in _stdlib_imports and top_level not in _allowed_imports:
+            raise PermissionError("MANAGED_PYTHON_BLOCKED: import is outside the configured package allowlist")
+        if filename and isinstance(filename, (str, bytes)):
+            roots = _stdlib_roots if top_level in _stdlib_imports else (_sys.prefix,)
+            if not _inside(filename, roots):
+                raise PermissionError("MANAGED_PYTHON_BLOCKED: import source is outside the configured runtime roots")
     if event == "open" or event == "os.open":
         target = args[0] if args else None
         if isinstance(target, (str, bytes)) and not _inside(target, (_workspace, _temp_root, _stdlib, _sys.prefix)):
             raise PermissionError("MANAGED_PYTHON_BLOCKED: file access outside workspace")
+    if event in _blocked_writes:
+        for target in args[:2]:
+            if isinstance(target, (str, bytes)) and not _inside(target, (_workspace, _temp_root)):
+                raise PermissionError("MANAGED_PYTHON_BLOCKED: file mutation outside workspace")
     if any(event == item or event.startswith(item + ".") for item in _blocked):
         raise PermissionError("MANAGED_PYTHON_BLOCKED: process, shell, network, or dynamic library access")
 
@@ -138,7 +161,7 @@ export const runManagedPython = async (input: ManagedPythonInput): Promise<Sandb
     const cwd = await runWithWorkspaceRootOverride(input.workspaceRoot, async () =>
       resolveWorkspaceDirectoryPath(input.cwd?.trim() || "."),
     );
-    await writeFile(scriptPath, createManagedScript(input.code, input.workspaceRoot, tempRoot), "utf8");
+    await writeFile(scriptPath, createManagedScript(input.code, input.workspaceRoot, tempRoot, config?.packages), "utf8");
     const stdout = { text: "", bytes: 0, truncated: false };
     const stderr = { text: "", bytes: 0, truncated: false };
     const child = spawn(executable, ["-I", "-B", scriptPath], { cwd, env: resolvePythonEnv(), windowsHide: true, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] }) as any;

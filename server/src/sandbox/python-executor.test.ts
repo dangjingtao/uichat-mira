@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { getTestArtifactDir } from "@/test-support/artifacts.js";
 import { getPythonSandboxStatus, runManagedPython } from "./python-executor.js";
 
@@ -55,6 +58,44 @@ describe("managed Python sandbox", () => {
     const blocked = await runManagedPython({ code: "import subprocess\nsubprocess.run(['pip', 'install', 'x'])", workspaceRoot, config: { enabled: true, executable } });
     expect(blocked.status).toBe("blocked");
     expect(blocked.stderrText).toContain("MANAGED_PYTHON_BLOCKED");
+  });
+
+  it("blocks workspace-external file mutations", async () => {
+    const outsideRoot = await mkdtemp(path.join(os.tmpdir(), "mira-python-outside-"));
+    try {
+      const targets = [
+        path.join(outsideRoot, "write.txt"),
+        path.join(outsideRoot, "remove.txt"),
+        path.join(outsideRoot, "rename.txt"),
+        path.join(outsideRoot, "replace.txt"),
+        path.join(outsideRoot, "directory"),
+      ];
+      for (const target of targets) {
+        const code = target.endsWith("directory")
+          ? `import os\nos.mkdir(${JSON.stringify(target)})`
+          : `import os\nopen(${JSON.stringify(target)}, 'w').write('x')\nos.rename(${JSON.stringify(target)}, ${JSON.stringify(`${target}.renamed`)})\nos.replace(${JSON.stringify(`${target}.renamed`)}, ${JSON.stringify(`${target}.replaced`)})\nos.remove(${JSON.stringify(`${target}.replaced`)})`;
+        const result = await runManagedPython({ code, workspaceRoot, config: { enabled: true, executable } });
+        expect(result.status, target).toBe("blocked");
+        expect(result.stderrText).toContain("file");
+      }
+    } finally {
+      await rm(outsideRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("blocks imports outside the standard library and configured package allowlist", async () => {
+    const importWorkspace = await mkdtemp(path.join(os.tmpdir(), "mira-python-import-"));
+    try {
+      const result = await runManagedPython({
+        code: "import pip",
+        workspaceRoot: importWorkspace,
+        config: { enabled: true, executable, packages: [] },
+      });
+      expect(result.status).toBe("blocked");
+      expect(result.stderrText).toContain("import is outside");
+    } finally {
+      await rm(importWorkspace, { recursive: true, force: true });
+    }
   });
 
   it("keeps artifacts workspace-bound", async () => {

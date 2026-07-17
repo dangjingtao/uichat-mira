@@ -7,7 +7,7 @@ baseline_branch: dev
 
 # A18_T006 — 受管 Python Sandbox
 
-- 状态：READY
+- 状态：READY_FOR_REVIEW
 - 仓库：`dangjingtao/uichat-mira`
 - 基线分支：`dev`
 - 类型：Sandbox 执行能力
