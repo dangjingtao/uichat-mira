@@ -54,7 +54,7 @@ export interface SandboxRunResult {
 
 export type SandboxBenchCaseGroup = "positive" | "negative" | "coverage";
 
-export type SandboxBenchCaseStatus = "passed" | "failed" | "future_profile";
+export type SandboxBenchCaseStatus = "passed" | "failed" | "blocked";
 
 export interface SandboxBenchCaseResult {
   id: string;
@@ -71,16 +71,16 @@ export interface SandboxBenchReport {
   generatedAt: string;
   workspaceRoot: string;
   contractCoverage: {
-    declaredProfiles: Record<SandboxProfile, "implemented" | "not_implemented" | "future_profile">;
-    v16GateProfiles: Record<SandboxV16Profile, "implemented" | "not_implemented">;
-    futureProfiles: Record<SandboxFutureProfile, "future_profile">;
+    declaredProfiles: Record<SandboxProfile, "implemented" | "blocked">;
+    v16GateProfiles: Record<SandboxV16Profile, "implemented" | "blocked">;
+    futureProfiles: Record<SandboxFutureProfile, "blocked">;
     v16GateSatisfied: boolean;
   };
   summary: {
     total: number;
     gatePassed: number;
     gateFailed: number;
-    futureProfile: number;
+    blockedProfile: number;
   };
   cases: SandboxBenchCaseResult[];
 }
