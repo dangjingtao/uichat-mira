@@ -16,6 +16,18 @@ import type { RagNodeLike } from "./ragTypes";
 
 type ApprovalTraceState = "waiting_approval" | "running" | null;
 
+const findLastStepIndex = (
+  steps: RagNodeLike[],
+  predicate: (step: RagNodeLike) => boolean,
+) => {
+  for (let index = steps.length - 1; index >= 0; index -= 1) {
+    if (predicate(steps[index]!)) {
+      return index;
+    }
+  }
+  return -1;
+};
+
 const getApprovalTraceState = (steps: RagNodeLike[]): ApprovalTraceState => {
   const hasTerminalState = steps.some(
     (step) =>
@@ -27,14 +39,12 @@ const getApprovalTraceState = (steps: RagNodeLike[]): ApprovalTraceState => {
     return null;
   }
 
-  const hasResumedExecution = steps.some(
+  const latestResumeIndex = findLastStepIndex(
+    steps,
     (step) => step.details?.resumedFromApproval === true,
   );
-  if (hasResumedExecution) {
-    return "running";
-  }
-
-  const isWaitingForApproval = steps.some(
+  const latestApprovalWaitIndex = findLastStepIndex(
+    steps,
     (step) =>
       step.nodeType === "approval" &&
       step.phase === "done" &&
@@ -42,7 +52,14 @@ const getApprovalTraceState = (steps: RagNodeLike[]): ApprovalTraceState => {
         step.summary?.includes("审批等待") === true),
   );
 
-  return isWaitingForApproval ? "waiting_approval" : null;
+  if (latestApprovalWaitIndex > latestResumeIndex) {
+    return "waiting_approval";
+  }
+  if (latestResumeIndex >= 0) {
+    return "running";
+  }
+
+  return latestApprovalWaitIndex >= 0 ? "waiting_approval" : null;
 };
 
 // UChatExecutionTrace renders the inline retrieval/generation progress row.
