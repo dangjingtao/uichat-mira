@@ -18,8 +18,22 @@ import {
   createInitialAgentGraphState,
 } from "./state";
 
-const shouldUseLangGraphRuntime = () =>
-  process.env.MIRA_AGENT_RUNTIME?.trim().toLowerCase() === "langgraph";
+const getRequestedRuntime = () =>
+  process.env.MIRA_AGENT_RUNTIME?.trim().toLowerCase();
+
+const shouldUseLangGraphRuntime = () => {
+  const requestedRuntime = getRequestedRuntime();
+  if (requestedRuntime === "langgraph") {
+    return true;
+  }
+  if (requestedRuntime === "pi_loop") {
+    return false;
+  }
+
+  // Existing graph tests keep their historical orchestration unless they
+  // explicitly opt into the Pi runtime. Application runtime still defaults Pi.
+  return process.env.NODE_ENV === "test";
+};
 
 export const langGraphAgent = {
   async run(input: AgentGraphInput): Promise<AgentGraphOutput> {
@@ -70,8 +84,8 @@ const persistRuntimeOutput = (input: {
 
 /**
  * Stable agent runtime facade used by both new runs and approval resume.
- * Pi loop is the branch default; set MIRA_AGENT_RUNTIME=langgraph to compare
- * against the previous graph orchestration without changing call sites.
+ * Pi loop is the application default; set MIRA_AGENT_RUNTIME=langgraph to
+ * compare against the previous graph orchestration without changing call sites.
  */
 export const agentGraph = {
   async run(input: AgentGraphInput): Promise<AgentGraphOutput> {
