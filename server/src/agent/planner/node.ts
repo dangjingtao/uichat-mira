@@ -112,7 +112,8 @@ export const nextActionPlannerNode = async (
   emit?: EmitAgentExecutionNode,
 ): Promise<Partial<AgentGraphState>> => {
   const iteration = state.iterationCount ?? 0;
-  const maxIterations = state.maxIterations ?? 0;
+  // Compatibility/diagnostic field only. Planner execution is not capped by it.
+  const maxIterations = 0;
   const question =
     state.question?.trim() || getLatestUserQuestion(state.messages) || state.goal.text;
   const toolExposure = normalizeToolExposure(state);
@@ -170,19 +171,12 @@ export const nextActionPlannerNode = async (
   const recoveryExhausted =
     observationContext.recovery.source !== "none" &&
     observationContext.recovery.exhausted;
-  const taskModelInvoked =
-    !pendingApprovalActive &&
-    !recoveryExhausted &&
-    !(maxIterations > 0 && iteration >= maxIterations);
+  const taskModelInvoked = !pendingApprovalActive && !recoveryExhausted;
 
   if (pendingApprovalActive) {
     nextAction = undefined;
   } else if (recoveryExhausted) {
     nextAction = getRecoveryExhaustedPlannerConclusion(observationContext);
-  } else if (maxIterations > 0 && iteration >= maxIterations) {
-    nextAction = toNextActionFallback(
-      "Planner reached the iteration limit and must stop.",
-    );
   } else {
     const messages: NormalizedChatMessage[] = buildNextActionPlannerMessages({
       question,
