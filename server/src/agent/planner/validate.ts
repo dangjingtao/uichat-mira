@@ -79,7 +79,7 @@ export const validateNextAction = (
   ) {
     return {
       action: toNextActionFallback(
-        "Planner selected a tool that was not exposed for this turn.",
+        "Planner selected a tool that was not exposed for this turn; planner must stop.",
       ),
       sanitizedOutput: parseResult.sanitizedOutput,
       parseWarnings: parseResult.parseWarnings,
