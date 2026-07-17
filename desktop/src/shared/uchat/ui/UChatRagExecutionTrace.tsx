@@ -14,6 +14,26 @@ import {
 } from "./executionParsers";
 import type { RagNodeLike } from "./ragTypes";
 
+const isApprovalWaitTrace = (steps: RagNodeLike[]) => {
+  const hasTerminalAnswerStep = steps.some(
+    (step) =>
+      step.phase === "done" &&
+      (step.nodeType === "generate" || step.nodeType === "evaluate"),
+  );
+  if (hasTerminalAnswerStep) {
+    return false;
+  }
+
+  return steps.some(
+    (step) =>
+      step.nodeType === "approval" &&
+      step.phase === "done" &&
+      (typeof step.details?.approvalId === "string" ||
+        typeof step.details?.toolId === "string" ||
+        step.summary?.includes("审批等待") === true),
+  );
+};
+
 // UChatExecutionTrace renders the inline retrieval/generation progress row.
 export function UChatExecutionTrace({
   messageId,
@@ -31,7 +51,10 @@ export function UChatExecutionTrace({
     return null;
   }
 
-  const summary = summarizeRagProgress(steps);
+  const waitingForApproval = isApprovalWaitTrace(steps);
+  const summary = waitingForApproval
+    ? t("chat.thread.agent.waitingApprovalTitle")
+    : summarizeRagProgress(steps);
   const runningCount = steps.filter((step) => step.phase === "start").length;
   const completedCount = steps.filter((step) => step.phase === "done").length;
 
@@ -46,12 +69,14 @@ export function UChatExecutionTrace({
           <p className="min-w-0 truncate text-text-secondary">{summary}</p>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          <span className="hidden text-[11px] text-text-tertiary sm:inline">
-            {t("chat.executionTrace.stepCount", {
-              completed: completedCount,
-              total: steps.length,
-            })}
-          </span>
+          {!waitingForApproval ? (
+            <span className="hidden text-[11px] text-text-tertiary sm:inline">
+              {t("chat.executionTrace.stepCount", {
+                completed: completedCount,
+                total: steps.length,
+              })}
+            </span>
+          ) : null}
           {runningCount > 0 ? (
             <LoaderCircle className="h-3.5 w-3.5 shrink-0 animate-spin text-text-tertiary" />
           ) : null}
