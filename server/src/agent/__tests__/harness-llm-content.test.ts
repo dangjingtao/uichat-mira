@@ -44,26 +44,40 @@ test("read_list keeps all returned entries instead of the first five", () => {
   assert.equal(content?.truncated, false);
 });
 
-test("external mail results keep the twentieth message", () => {
+test("the real mail_query shape preserves all twenty messages with fair item budgets", () => {
   const result = {
-    type: "external_mcp",
-    serverId: "mail",
-    remoteToolName: "mail_query",
-    result: {
-      total: 111,
-      messages: Array.from({ length: 20 }, (_, index) => ({
-        sender: `sender-${index + 1}@example.com`,
-        subject: `Subject ${index + 1}`,
-        receivedAt: `2026-07-${String(index + 1).padStart(2, "0")}T00:00:00Z`,
-      })),
+    sync: {
+      requested: "none",
+      performed: false,
+      status: "skipped",
+      syncedCount: 0,
+      lastSyncedAt: null,
+      error: null,
     },
+    items: Array.from({ length: 20 }, (_, index) => ({
+      id: `mail-${index + 1}`,
+      subject: `Subject ${index + 1}`,
+      from: { name: `Sender ${index + 1}`, address: `sender-${index + 1}@example.com` },
+      previewText: `${`Long preview ${index + 1} `.repeat(200)}END-${index + 1}`,
+      receivedAt: `2026-07-${String(index + 1).padStart(2, "0")}T00:00:00Z`,
+      isRead: false,
+      isFlagged: index === 19,
+      hasAttachments: false,
+      attachments: [],
+    })),
+    total: 111,
+    nextCursor: "next-page",
   };
 
-  const text = getHarnessLlmContentText(projectHarnessResultForLlm(result));
+  const content = projectHarnessResultForLlm(result);
+  const text = getHarnessLlmContentText(content);
 
+  assert.equal(content?.collectionPath, "items");
+  assert.equal(content?.collectionItemCount, 20);
   assert.match(text, /Subject 1/);
   assert.match(text, /Subject 20/);
   assert.match(text, /sender-20@example\.com/);
+  assert.match(text, /\[20\/20\]/);
 });
 
 test("read_extract and read_slice content survives without result-type special cases", () => {
