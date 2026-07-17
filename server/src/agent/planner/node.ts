@@ -4,6 +4,7 @@ import { writeStructuredLog } from "@/logger";
 import type { AgentNextAction } from "../types";
 import { getLatestEvidenceSummary } from "../evidence";
 import {
+  buildExecutionObservationView,
   buildPlannerObservationContext,
   emitStepNode,
   refreshCurrentTaskFrameFromEvidence,
@@ -25,6 +26,30 @@ import {
 } from "./parse";
 import { buildNextActionPlannerMessages, normalizeToolExposure } from "./prompt";
 import { validateNextAction } from "./validate";
+
+const PLANNER_EXECUTION_HISTORY_LIMIT = 12;
+const PLANNER_COVERED_PROGRESS_LIMIT = 20;
+
+const mergePlannerTaskFrameProgress = (
+  previousFrame: AgentGraphState["currentTaskFrame"],
+  refreshedFrame: AgentGraphState["currentTaskFrame"],
+): AgentGraphState["currentTaskFrame"] => {
+  if (!refreshedFrame) {
+    return refreshedFrame;
+  }
+
+  const coveredProgress = [
+    ...(previousFrame?.coveredProgress ?? []),
+    ...(refreshedFrame.coveredProgress ?? []),
+  ]
+    .filter((item, index, items) => item && items.indexOf(item) === index)
+    .slice(-PLANNER_COVERED_PROGRESS_LIMIT);
+
+  return {
+    ...refreshedFrame,
+    coveredProgress: coveredProgress.length > 0 ? coveredProgress : undefined,
+  };
+};
 
 const getRecoveryExhaustedPlannerConclusion = (observationContext: ReturnType<
   typeof buildPlannerObservationContext
@@ -91,16 +116,30 @@ export const nextActionPlannerNode = async (
   const question =
     state.question?.trim() || getLatestUserQuestion(state.messages) || state.goal.text;
   const toolExposure = normalizeToolExposure(state);
-  const plannerVisibleTaskFrame = refreshCurrentTaskFrameFromEvidence({
+  const refreshedTaskFrame = refreshCurrentTaskFrameFromEvidence({
     frame: state.currentTaskFrame,
     goal: state.goal,
     latestQuestion: question,
     latestEvidenceSummary: getLatestEvidenceSummary(state),
   });
-  const observationContext = buildPlannerObservationContext({
+  const plannerVisibleTaskFrame = mergePlannerTaskFrameProgress(
+    state.currentTaskFrame,
+    refreshedTaskFrame,
+  );
+  const plannerState = {
     ...state,
     currentTaskFrame: plannerVisibleTaskFrame,
-  });
+  };
+  const executionHistory = buildExecutionObservationView(plannerState).slice(
+    -PLANNER_EXECUTION_HISTORY_LIMIT,
+  );
+  const observationContext = {
+    ...buildPlannerObservationContext(plannerState),
+    executionHistory,
+    evidenceHistory: executionHistory.flatMap((item) =>
+      item.summary ? [item.summary] : [],
+    ),
+  };
   const latestEvidenceSummary = observationContext.latestEvidenceSummary;
 
   await emitStepNode(emit, {
@@ -115,6 +154,8 @@ export const nextActionPlannerNode = async (
       iteration,
       maxIterations,
       latestEvidenceSummary: latestEvidenceSummary ?? null,
+      executionHistoryCount: executionHistory.length,
+      evidenceHistoryCount: observationContext.evidenceHistory.length,
       schemaReplanAttemptCount: observationContext.recovery.attemptCount,
       schemaReplanError: observationContext.recovery.schemaError ?? null,
     },
@@ -181,7 +222,6 @@ export const nextActionPlannerNode = async (
       sanitizedOutput = initialPlannerDecision.sanitizedOutput;
       parseErrorReason = initialPlannerDecision.parseErrorReason;
       parseWarnings = initialPlannerDecision.parseWarnings;
-
     } catch (error) {
       nextAction = toNextActionFallback(
         error instanceof Error && error.message.trim()
@@ -231,6 +271,8 @@ export const nextActionPlannerNode = async (
       iteration,
       maxIterations,
       latestEvidenceSummary: latestEvidenceSummary ?? null,
+      executionHistoryCount: executionHistory.length,
+      evidenceHistoryCount: observationContext.evidenceHistory.length,
       rawOutputPreview: rawOutput ? toPreview(rawOutput) : undefined,
       sanitizedOutputPreview: sanitizedOutput ? toPreview(sanitizedOutput) : undefined,
       parseErrorReason,
@@ -245,7 +287,7 @@ export const nextActionPlannerNode = async (
 
   const plannerTaskFrame = nextAction
     ? updateCurrentTaskFrameFromPlanner({
-        frame: state.currentTaskFrame,
+        frame: plannerVisibleTaskFrame ?? state.currentTaskFrame,
         goal: state.goal,
         nextAction,
         latestQuestion: question,
