@@ -21,7 +21,7 @@ import type { EmitAgentExecutionNode } from "../node-runtime";
 import { createInitialCurrentTaskFrame } from "../node-runtime";
 
 export const AGENT_EMIT_CONFIG_KEY = "agent:emitExecutionNode";
-export const DEFAULT_AGENT_MAX_ITERATIONS = 3;
+export const DEFAULT_AGENT_MAX_ITERATIONS = 8;
 
 export const AgentGraphStateAnnotation = Annotation.Root({
   runId: Annotation<string>,
