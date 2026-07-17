@@ -18,12 +18,20 @@ export interface HarnessLlmContent {
   includedCharCount: number;
   omittedArrayItems: number;
   omittedObjectKeys: number;
+  collectionPath?: string;
+  collectionItemCount?: number;
 }
 
 type ProjectionStats = {
   omittedArrayItems: number;
   omittedObjectKeys: number;
   structuralTruncation: boolean;
+  budgetTruncation: boolean;
+};
+
+type ArrayCandidate = {
+  value: unknown[];
+  path: string[];
 };
 
 const tryParseJsonText = (value: string): unknown => {
@@ -45,12 +53,49 @@ const tryParseJsonText = (value: string): unknown => {
   }
 };
 
+const findPrimaryArray = (
+  value: unknown,
+  depth = 0,
+  path: string[] = [],
+  seen = new WeakSet<object>(),
+): ArrayCandidate | null => {
+  if (depth > 6 || !value || typeof value !== "object") {
+    return null;
+  }
+  if (seen.has(value)) {
+    return null;
+  }
+  seen.add(value);
+
+  let best: ArrayCandidate | null = Array.isArray(value)
+    ? { value, path }
+    : null;
+  const entries = Array.isArray(value)
+    ? value.slice(0, HARNESS_LLM_MAX_ARRAY_ITEMS).map((item, index) => [String(index), item] as const)
+    : Object.entries(value).slice(0, HARNESS_LLM_MAX_OBJECT_KEYS);
+
+  for (const [key, child] of entries) {
+    const candidate = findPrimaryArray(child, depth + 1, [...path, key], seen);
+    if (candidate && (!best || candidate.value.length > best.value.length)) {
+      best = candidate;
+    }
+  }
+
+  return best && best.value.length > 1 ? best : null;
+};
+
 const projectValue = (
   value: unknown,
   depth: number,
   seen: WeakSet<object>,
   stats: ProjectionStats,
+  primaryArray?: unknown[],
+  primaryArrayPath?: string,
 ): unknown => {
+  if (value === primaryArray) {
+    return `[${primaryArray.length} item(s) projected separately from ${primaryArrayPath || "root"}]`;
+  }
+
   if (value === null || typeof value === "boolean" || typeof value === "number") {
     return value;
   }
@@ -62,7 +107,14 @@ const projectValue = (
   if (typeof value === "string") {
     const parsed = tryParseJsonText(value);
     if (parsed !== value) {
-      return projectValue(parsed, depth, seen, stats);
+      return projectValue(
+        parsed,
+        depth,
+        seen,
+        stats,
+        primaryArray,
+        primaryArrayPath,
+      );
     }
     if (value.length <= HARNESS_LLM_MAX_STRING_CHARS) {
       return value;
@@ -96,7 +148,16 @@ const projectValue = (
   if (Array.isArray(value)) {
     const projected = value
       .slice(0, HARNESS_LLM_MAX_ARRAY_ITEMS)
-      .map((item) => projectValue(item, depth + 1, seen, stats));
+      .map((item) =>
+        projectValue(
+          item,
+          depth + 1,
+          seen,
+          stats,
+          primaryArray,
+          primaryArrayPath,
+        ),
+      );
     if (value.length > HARNESS_LLM_MAX_ARRAY_ITEMS) {
       const omitted = value.length - HARNESS_LLM_MAX_ARRAY_ITEMS;
       stats.omittedArrayItems += omitted;
@@ -109,7 +170,14 @@ const projectValue = (
   const entries = Object.entries(value);
   const projected: Record<string, unknown> = {};
   for (const [key, entryValue] of entries.slice(0, HARNESS_LLM_MAX_OBJECT_KEYS)) {
-    projected[key] = projectValue(entryValue, depth + 1, seen, stats);
+    projected[key] = projectValue(
+      entryValue,
+      depth + 1,
+      seen,
+      stats,
+      primaryArray,
+      primaryArrayPath,
+    );
   }
   if (entries.length > HARNESS_LLM_MAX_OBJECT_KEYS) {
     const omitted = entries.length - HARNESS_LLM_MAX_OBJECT_KEYS;
@@ -120,9 +188,21 @@ const projectValue = (
   return projected;
 };
 
-const serializeProjectedValue = (value: unknown, stats: ProjectionStats) => {
+const serializeProjectedValue = (
+  value: unknown,
+  stats: ProjectionStats,
+  primaryArray?: unknown[],
+  primaryArrayPath?: string,
+) => {
   try {
-    const projected = projectValue(value, 0, new WeakSet<object>(), stats);
+    const projected = projectValue(
+      value,
+      0,
+      new WeakSet<object>(),
+      stats,
+      primaryArray,
+      primaryArrayPath,
+    );
     return typeof projected === "string"
       ? projected
       : JSON.stringify(projected, null, 2) ?? "[unserializable result]";
@@ -134,6 +214,99 @@ const serializeProjectedValue = (value: unknown, stats: ProjectionStats) => {
   }
 };
 
+const boundText = (
+  text: string,
+  limit: number,
+  stats: ProjectionStats,
+  marker: string,
+) => {
+  if (text.length <= limit) {
+    return text;
+  }
+  stats.budgetTruncation = true;
+  const boundedLength = Math.max(0, limit - marker.length);
+  return `${text.slice(0, boundedLength).trimEnd()}${marker}`;
+};
+
+const serializeCollectionFairly = (
+  result: unknown,
+  candidate: ArrayCandidate,
+  charLimit: number,
+  stats: ProjectionStats,
+) => {
+  const collectionPath = candidate.path.length ? candidate.path.join(".") : "root";
+  const selectedItems = candidate.value.slice(0, HARNESS_LLM_MAX_ARRAY_ITEMS);
+  if (candidate.value.length > selectedItems.length) {
+    const omitted = candidate.value.length - selectedItems.length;
+    stats.omittedArrayItems += omitted;
+    stats.structuralTruncation = true;
+  }
+
+  const metadataRaw = serializeProjectedValue(
+    result,
+    stats,
+    candidate.value,
+    collectionPath,
+  );
+  const metadataBudget = Math.min(4_000, Math.max(800, Math.floor(charLimit * 0.2)));
+  const metadata = boundText(
+    metadataRaw,
+    metadataBudget,
+    stats,
+    "\n...[collection metadata clipped]",
+  );
+  const collectionHeader = [
+    `collectionPath: ${collectionPath}`,
+    `collectionItemCount: ${candidate.value.length}`,
+    `includedCollectionItems: ${selectedItems.length}`,
+    "collectionItems:",
+  ].join("\n");
+  const itemHeaders = selectedItems.map(
+    (_item, index) => `[${index + 1}/${candidate.value.length}]`,
+  );
+  const fixedChars =
+    metadata.length +
+    collectionHeader.length +
+    itemHeaders.reduce((sum, header) => sum + header.length + 2, 0) +
+    selectedItems.length * 2;
+  const availableForItems = Math.max(0, charLimit - fixedChars);
+  const perItemBudget = selectedItems.length
+    ? Math.max(32, Math.floor(availableForItems / selectedItems.length))
+    : 0;
+  const itemSections = selectedItems.map((item, index) => {
+    const raw = serializeProjectedValue(item, stats);
+    const bounded = boundText(raw, perItemBudget, stats, "...[item clipped]");
+    return `${itemHeaders[index]}\n${bounded}`;
+  });
+
+  const omittedMarker =
+    candidate.value.length > selectedItems.length
+      ? `\n[${candidate.value.length - selectedItems.length} collection item(s) omitted]`
+      : "";
+  const text = [metadata, collectionHeader, ...itemSections].join("\n\n") + omittedMarker;
+  return {
+    text: boundText(
+      text,
+      charLimit,
+      stats,
+      "\n...[Harness collection result clipped by total LLM budget]",
+    ),
+    collectionPath,
+    collectionItemCount: candidate.value.length,
+    originalCharCount:
+      metadataRaw.length +
+      selectedItems.reduce(
+        (sum, item) => sum + serializeProjectedValue(item, {
+          omittedArrayItems: 0,
+          omittedObjectKeys: 0,
+          structuralTruncation: false,
+          budgetTruncation: false,
+        }).length,
+        0,
+      ),
+  };
+};
+
 export const projectHarnessResultForLlm = (
   result: unknown,
   charLimit = HARNESS_LLM_RESULT_CHAR_LIMIT,
@@ -142,30 +315,53 @@ export const projectHarnessResultForLlm = (
     return undefined;
   }
 
+  const normalizedResult =
+    typeof result === "string" ? tryParseJsonText(result) : result;
   const stats: ProjectionStats = {
     omittedArrayItems: 0,
     omittedObjectKeys: 0,
     structuralTruncation: false,
+    budgetTruncation: false,
   };
-  const serialized = serializeProjectedValue(result, stats);
-  const originalCharCount = serialized.length;
-  let text = serialized;
-  let budgetTruncated = false;
+  const primaryArray = findPrimaryArray(normalizedResult);
+  let text: string;
+  let originalCharCount: number;
+  let collectionPath: string | undefined;
+  let collectionItemCount: number | undefined;
 
-  if (serialized.length > charLimit) {
-    budgetTruncated = true;
-    const marker = `\n...[Harness result truncated by LLM budget; originalCharCount=${serialized.length}]`;
-    const boundedLength = Math.max(0, charLimit - marker.length);
-    text = `${serialized.slice(0, boundedLength).trimEnd()}${marker}`;
+  if (primaryArray) {
+    const projected = serializeCollectionFairly(
+      normalizedResult,
+      primaryArray,
+      charLimit,
+      stats,
+    );
+    text = projected.text;
+    originalCharCount = projected.originalCharCount;
+    collectionPath = projected.collectionPath;
+    collectionItemCount = projected.collectionItemCount;
+  } else {
+    const serialized = serializeProjectedValue(normalizedResult, stats);
+    originalCharCount = serialized.length;
+    text = boundText(
+      serialized,
+      charLimit,
+      stats,
+      `\n...[Harness result truncated by LLM budget; originalCharCount=${serialized.length}]`,
+    );
   }
 
-  const truncated = stats.structuralTruncation || budgetTruncated;
+  const truncated = stats.structuralTruncation || stats.budgetTruncation;
   const metadata = [
     `truncated=${truncated}`,
     `originalCharCount=${originalCharCount}`,
     `includedCharCount=${text.length}`,
     `omittedArrayItems=${stats.omittedArrayItems}`,
     `omittedObjectKeys=${stats.omittedObjectKeys}`,
+    ...(collectionPath ? [`collectionPath=${collectionPath}`] : []),
+    ...(typeof collectionItemCount === "number"
+      ? [`collectionItemCount=${collectionItemCount}`]
+      : []),
   ].join("\n");
 
   return {
@@ -182,6 +378,10 @@ export const projectHarnessResultForLlm = (
     includedCharCount: text.length,
     omittedArrayItems: stats.omittedArrayItems,
     omittedObjectKeys: stats.omittedObjectKeys,
+    ...(collectionPath ? { collectionPath } : {}),
+    ...(typeof collectionItemCount === "number"
+      ? { collectionItemCount }
+      : {}),
   };
 };
 
