@@ -71,6 +71,7 @@ _blocked_writes = {
     "os.rmdir", "os.removedirs", "os.chmod", "os.chown", "os.lchown", "os.symlink",
     "os.link", "os.truncate", "os.utime"
 }
+_write_modes = set("wax+")
 
 def _inside(path_value, roots):
     try:
@@ -92,8 +93,21 @@ def _audit(event, args):
                 raise PermissionError("MANAGED_PYTHON_BLOCKED: import source is outside the configured runtime roots")
     if event == "open" or event == "os.open":
         target = args[0] if args else None
-        if isinstance(target, (str, bytes)) and not _inside(target, (_workspace, _temp_root, _stdlib, _sys.prefix)):
-            raise PermissionError("MANAGED_PYTHON_BLOCKED: file access outside workspace")
+        if isinstance(target, (str, bytes)):
+            if event == "open":
+                mode = args[1] if len(args) > 1 else "r"
+                if isinstance(mode, int):
+                    flags = args[2] if len(args) > 2 and isinstance(args[2], int) else mode
+                    writing = bool(flags & (_os.O_WRONLY | _os.O_RDWR | _os.O_CREAT | _os.O_TRUNC | _os.O_APPEND))
+                else:
+                    writing = isinstance(mode, str) and any(_flag in mode for _flag in _write_modes)
+            else:
+                flags = args[1] if len(args) > 1 and isinstance(args[1], int) else 0
+                writing = bool(flags & (_os.O_WRONLY | _os.O_RDWR | _os.O_CREAT | _os.O_TRUNC | _os.O_APPEND))
+            roots = (_workspace, _temp_root) if writing else (_workspace, _temp_root, _stdlib, _sys.prefix)
+            if not _inside(target, roots):
+                reason = "file write outside workspace" if writing else "file access outside workspace"
+                raise PermissionError("MANAGED_PYTHON_BLOCKED: " + reason)
     if event in _blocked_writes:
         for target in args[:2]:
             if isinstance(target, (str, bytes)) and not _inside(target, (_workspace, _temp_root)):

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { spawnSync } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -80,6 +81,22 @@ describe("managed Python sandbox", () => {
       }
     } finally {
       await rm(outsideRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("blocks writes to the managed runtime and site-packages roots", async () => {
+    const runtimeRoot = String(spawnSync(executable, ["-c", "import sys; print(sys.prefix)"], { encoding: "utf8" }).stdout).trim();
+    const target = path.join(runtimeRoot, "mira-python-write-policy-test.txt");
+    try {
+      const result = await runManagedPython({
+        code: `open(${JSON.stringify(target)}, 'w').write('must be blocked')`,
+        workspaceRoot,
+        config: { enabled: true, executable },
+      });
+      expect(result.status).toBe("blocked");
+      expect(result.stderrText).toContain("file write outside workspace");
+    } finally {
+      await rm(target, { force: true });
     }
   });
 
