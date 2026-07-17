@@ -122,6 +122,41 @@ test("approval wait trace does not claim the Agent run is completed", () => {
   );
 });
 
+test("approval resume trace is not mistaken for a new approval wait", () => {
+  const resumedSteps: RagNodeLike[] = [
+    ...approvalWaitSteps,
+    {
+      ...completedStep("agent-resume-execution", "approval", "恢复执行"),
+      summary: "审批已通过，继续恢复 browser_observe 的执行",
+      details: {
+        toolId: "browser_observe",
+        resumedFromApproval: true,
+      },
+    },
+  ];
+
+  render(
+    <UChatExecutionTrace
+      messageId="assistant-resumed"
+      steps={resumedSteps}
+      onOpenDetail={() => {}}
+    />,
+  );
+
+  assert.equal(
+    screen.queryByText(i18n.t("chat.thread.agent.waitingApprovalTitle")),
+    null,
+  );
+  assert.ok(
+    screen.getByText(
+      i18n.t("chat.executionTrace.stepCount", {
+        completed: resumedSteps.length,
+        total: resumedSteps.length,
+      }),
+    ),
+  );
+});
+
 test("completed answer step restores the normal trace completion state", () => {
   const completedSteps = [
     ...approvalWaitSteps,
