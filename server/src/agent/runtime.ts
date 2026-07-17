@@ -1,5 +1,4 @@
 import { agentGraph } from "./graph";
-import { piAgentLoop } from "./pi-loop";
 import type { AgentGraphInput, AgentGraphOutput } from "./types";
 
 export type AgentRuntimeName = "pi_loop" | "langgraph";
@@ -13,7 +12,4 @@ export const resolveAgentRuntimeName = (): AgentRuntimeName =>
 
 export const runAgentRuntime = (
   input: AgentGraphInput,
-): Promise<AgentGraphOutput> =>
-  resolveAgentRuntimeName() === "langgraph"
-    ? agentGraph.run(input)
-    : piAgentLoop.run(input);
+): Promise<AgentGraphOutput> => agentGraph.run(input);
