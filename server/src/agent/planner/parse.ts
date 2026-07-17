@@ -17,6 +17,12 @@ export type PlannerOutputParseResult = {
   sanitizedOutput: string;
   parseErrorReason: string | null;
   parseWarnings: string[];
+  /**
+   * Parsed decision object retained for the validation/normalization boundary.
+   * Parser does not need tool exposure knowledge; Validator may normalize a
+   * direct tool action whose `type` equals an exposed tool id.
+   */
+  rawDecision?: Record<string, unknown>;
 };
 
 const MISSING_REASON_DEFAULTED_WARNING = "missing_reason_defaulted";
@@ -104,6 +110,7 @@ const parseNextActionPlannerObject = (
       sanitizedOutput: "",
       parseErrorReason: 'Planner JSON object must include a string "type" field.',
       parseWarnings: [],
+      rawDecision: parsed,
     };
   }
 
@@ -115,7 +122,7 @@ const parseNextActionPlannerObject = (
           parseWarnings.push(MISSING_REASON_DEFAULTED_WARNING);
           return (
             getDefaultPlannerReason(parsed.type as AgentNextAction["type"], parsed) ??
-            "Planner returned an error action without a reason."
+            "Planner returned an action without a reason."
           );
         })();
 
@@ -129,6 +136,7 @@ const parseNextActionPlannerObject = (
         sanitizedOutput: "",
         parseErrorReason: null,
         parseWarnings,
+        rawDecision: parsed,
       };
     case "retrieve":
       if (typeof parsed.query !== "string" || !parsed.query.trim()) {
@@ -138,6 +146,7 @@ const parseNextActionPlannerObject = (
           parseErrorReason:
             'Planner "retrieve" action must include a non-empty string "query" field.',
           parseWarnings: [],
+          rawDecision: parsed,
         };
       }
       return {
@@ -149,6 +158,7 @@ const parseNextActionPlannerObject = (
         sanitizedOutput: "",
         parseErrorReason: null,
         parseWarnings,
+        rawDecision: parsed,
       };
     case "use_tool":
       if (typeof parsed.toolId !== "string" || !parsed.toolId.trim()) {
@@ -158,6 +168,7 @@ const parseNextActionPlannerObject = (
           parseErrorReason:
             'Planner "use_tool" action must include a non-empty string "toolId" field.',
           parseWarnings: [],
+          rawDecision: parsed,
         };
       }
       if (!isPlainObject(parsed.args)) {
@@ -167,6 +178,7 @@ const parseNextActionPlannerObject = (
           parseErrorReason:
             'Planner "use_tool" action must include an object-valued "args" field.',
           parseWarnings: [],
+          rawDecision: parsed,
         };
       }
       return {
@@ -179,6 +191,7 @@ const parseNextActionPlannerObject = (
         sanitizedOutput: "",
         parseErrorReason: null,
         parseWarnings,
+        rawDecision: parsed,
       };
     case "error":
       return {
@@ -189,6 +202,7 @@ const parseNextActionPlannerObject = (
         sanitizedOutput: "",
         parseErrorReason: null,
         parseWarnings,
+        rawDecision: parsed,
       };
     case "ask_user":
       if (typeof parsed.question !== "string" || !parsed.question.trim()) {
@@ -198,6 +212,7 @@ const parseNextActionPlannerObject = (
           parseErrorReason:
             'Planner "ask_user" action must include a non-empty string "question" field.',
           parseWarnings: [],
+          rawDecision: parsed,
         };
       }
       return {
@@ -209,13 +224,15 @@ const parseNextActionPlannerObject = (
         sanitizedOutput: "",
         parseErrorReason: null,
         parseWarnings,
+        rawDecision: parsed,
       };
     default:
       return {
         action: null,
         sanitizedOutput: "",
-        parseErrorReason: `Planner action type "${parsed.type}" is not allowed.`,
-        parseWarnings: [],
+        parseErrorReason: `Planner action type "${parsed.type}" is not a canonical action type.`,
+        parseWarnings,
+        rawDecision: parsed,
       };
   }
 };
@@ -270,6 +287,7 @@ export const parseNextActionPlannerOutputWithDiagnostics = (
       sanitizedOutput: sanitized,
       parseErrorReason: result.parseErrorReason,
       parseWarnings: result.parseWarnings,
+      rawDecision: result.rawDecision,
     };
   } catch (error) {
     return {
