@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
+import { projectHarnessResultForLlm } from "@/harness/llm-content";
 import type { AgentExecutionObservation } from "../types";
 import type { AgentGraphState } from "../node-runtime";
 import {
   buildPlannerAccumulatedActionLedger,
   buildPlannerLatestEvidenceContent,
-} from "../planner/node";
+} from "../planner/runtime-memory";
 
 const createReadObservation = (input: {
   id: string;
@@ -59,8 +60,13 @@ test("planner accumulated action ledger survives the recent execution window and
   assert.deepEqual(entry.inputHashes, ["hash-0", "hash-14"]);
 });
 
-test("planner latest evidence content exposes bounded real tool output beyond the Evidence preview", () => {
+test("planner latest evidence content exposes canonical bounded tool output beyond the Evidence preview", () => {
   const longSource = `${"A".repeat(600)}\nEND_MARKER_FROM_REAL_TOOL_RESULT`;
+  const result = {
+    type: "open",
+    path: "src/entry.ts",
+    source: { text: longSource },
+  };
   const state = {
     evidence: {
       observations: [],
@@ -72,11 +78,8 @@ test("planner latest evidence content exposes bounded real tool output beyond th
           inputHash: "hash-read-open",
           args: { path: "src/entry.ts" },
           status: "completed",
-          result: {
-            type: "open",
-            path: "src/entry.ts",
-            source: { text: longSource },
-          },
+          result,
+          llmContent: projectHarnessResultForLlm(result),
           summary: {
             source: "tool",
             status: "truncated",
