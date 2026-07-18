@@ -30,6 +30,13 @@ import {
   buildPlannerAccumulatedActionLedger,
   buildPlannerLatestEvidenceContent,
 } from "./runtime-memory";
+import {
+  applyPlannerTaskPlan,
+  getPlannerTaskPlanDiagnostics,
+  parsePlannerTaskPlanUpdate,
+  withPlannerTaskPlanContract,
+  type PlannerTaskPlanUpdate,
+} from "./task-plan";
 import { validateNextAction } from "./validate";
 
 const PLANNER_EXECUTION_HISTORY_LIMIT = 12;
@@ -263,6 +270,7 @@ export const nextActionPlannerNode = async (
     ),
   };
   const latestEvidenceSummary = observationContext.latestEvidenceSummary;
+  const currentPlanDiagnostics = getPlannerTaskPlanDiagnostics(plannerVisibleTaskFrame);
   const plannerStartDetails = {
     exposedToolCount: toolExposure.exposedTools.length,
     exposedToolIds: toolExposure.exposedTools,
@@ -280,6 +288,7 @@ export const nextActionPlannerNode = async (
       observationContext.accumulatedActionLedger.uniqueSemanticActions,
     repeatedSemanticActionCount:
       observationContext.accumulatedActionLedger.repeatedSemanticActions,
+    ...currentPlanDiagnostics,
     schemaReplanAttemptCount: observationContext.recovery.attemptCount,
     schemaReplanError: observationContext.recovery.schemaError ?? null,
   };
@@ -291,11 +300,12 @@ export const nextActionPlannerNode = async (
     nodeType: "plan",
     phase: "start",
     label: "下一步动作决策",
-    summary: "正在调用 task model 决定本轮下一步动作",
+    summary: "正在调用 task model 维护任务计划并决定本轮下一步动作",
     details: plannerStartDetails,
   });
 
   let nextAction: AgentNextAction | undefined;
+  let plannerTaskPlanUpdate: PlannerTaskPlanUpdate | undefined;
   let rawOutput = "";
   let sanitizedOutput = "";
   let parseErrorReason: string | undefined;
@@ -311,14 +321,16 @@ export const nextActionPlannerNode = async (
   } else if (recoveryExhausted) {
     nextAction = getRecoveryExhaustedPlannerConclusion(observationContext);
   } else {
-    const messages: NormalizedChatMessage[] = buildNextActionPlannerMessages({
-      question,
-      messages: state.messages,
-      observationContext,
-      toolExposure,
-      iteration,
-      maxIterations,
-    });
+    const messages: NormalizedChatMessage[] = withPlannerTaskPlanContract(
+      buildNextActionPlannerMessages({
+        question,
+        messages: state.messages,
+        observationContext,
+        toolExposure,
+        iteration,
+        maxIterations,
+      }),
+    );
 
     const resolvePlannerModelAction = async (
       plannerMessages: NormalizedChatMessage[],
@@ -340,7 +352,7 @@ export const nextActionPlannerNode = async (
             nodeType: "plan",
             phase: "start",
             label: "下一步动作决策",
-            summary: "正在调用 task model 决定本轮下一步动作",
+            summary: "正在调用 task model 维护任务计划并决定本轮下一步动作",
             details: {
               ...plannerStartDetails,
               plannerThought: visibleThought,
@@ -350,13 +362,16 @@ export const nextActionPlannerNode = async (
         }
       }
 
+      const parsedPlannerOutput =
+        parseNextActionPlannerOutputWithDiagnostics(resolvedRawOutput);
       const validationResult = validateNextAction(
-        parseNextActionPlannerOutputWithDiagnostics(resolvedRawOutput),
+        parsedPlannerOutput,
         toolExposure.exposedTools,
       );
 
       return {
         action: validationResult.action,
+        taskPlanUpdate: parsePlannerTaskPlanUpdate(parsedPlannerOutput.rawDecision),
         rawOutput: resolvedRawOutput,
         sanitizedOutput: validationResult.sanitizedOutput ?? "",
         parseErrorReason: validationResult.parseErrorReason,
@@ -367,10 +382,17 @@ export const nextActionPlannerNode = async (
     try {
       const initialPlannerDecision = await resolvePlannerModelAction(messages);
       nextAction = initialPlannerDecision.action;
+      plannerTaskPlanUpdate = initialPlannerDecision.taskPlanUpdate;
       rawOutput = initialPlannerDecision.rawOutput;
       sanitizedOutput = initialPlannerDecision.sanitizedOutput;
       parseErrorReason = initialPlannerDecision.parseErrorReason;
       parseWarnings = initialPlannerDecision.parseWarnings;
+      if (!plannerTaskPlanUpdate && currentPlanDiagnostics.planItemCount === 0) {
+        parseWarnings = [
+          ...(parseWarnings ?? []),
+          "planner_task_plan_missing_on_initial_turn",
+        ];
+      }
     } catch (error) {
       nextAction = toNextActionFallback(
         error instanceof Error && error.message.trim()
@@ -379,6 +401,25 @@ export const nextActionPlannerNode = async (
       );
     }
   }
+
+  const updatedPlannerTaskFrame = nextAction
+    ? updateCurrentTaskFrameFromPlanner({
+        frame: plannerVisibleTaskFrame ?? state.currentTaskFrame,
+        goal: state.goal,
+        nextAction,
+        latestQuestion: question,
+        latestEvidenceSummary: observationContext.latestEvidenceSummary,
+      })
+    : plannerVisibleTaskFrame ?? state.currentTaskFrame;
+  const plannerTaskFrame = mergePlannerTaskFrameProgress(
+    plannerVisibleTaskFrame,
+    updatedPlannerTaskFrame,
+  );
+  const plannedTaskFrame = applyPlannerTaskPlan(
+    plannerTaskFrame,
+    plannerTaskPlanUpdate,
+  );
+  const nextPlanDiagnostics = getPlannerTaskPlanDiagnostics(plannedTaskFrame);
 
   logPlannerDecisionDebug({
     runId: state.runId,
@@ -435,6 +476,9 @@ export const nextActionPlannerNode = async (
         observationContext.accumulatedActionLedger.uniqueSemanticActions,
       repeatedSemanticActionCount:
         observationContext.accumulatedActionLedger.repeatedSemanticActions,
+      ...nextPlanDiagnostics,
+      planUpdated: Boolean(plannerTaskPlanUpdate),
+      planRevisionReason: plannerTaskPlanUpdate?.revisionReason ?? null,
       rawOutputPreview: rawOutput ? toPreview(rawOutput) : undefined,
       sanitizedOutputPreview: sanitizedOutput ? toPreview(sanitizedOutput) : undefined,
       parseErrorReason,
@@ -447,23 +491,9 @@ export const nextActionPlannerNode = async (
     },
   });
 
-  const updatedPlannerTaskFrame = nextAction
-    ? updateCurrentTaskFrameFromPlanner({
-        frame: plannerVisibleTaskFrame ?? state.currentTaskFrame,
-        goal: state.goal,
-        nextAction,
-        latestQuestion: question,
-        latestEvidenceSummary: observationContext.latestEvidenceSummary,
-      })
-    : undefined;
-  const plannerTaskFrame = mergePlannerTaskFrameProgress(
-    plannerVisibleTaskFrame,
-    updatedPlannerTaskFrame,
-  );
-
   return {
     ...(nextAction ? { nextAction } : {}),
-    ...(plannerTaskFrame ? { currentTaskFrame: plannerTaskFrame } : {}),
+    ...(plannedTaskFrame ? { currentTaskFrame: plannedTaskFrame } : {}),
     ...(nextAction?.type === "error" && observationContext.recovery.schemaError
       ? {
           schemaReplanDiagnostics: {
