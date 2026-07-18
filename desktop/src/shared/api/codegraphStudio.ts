@@ -28,6 +28,7 @@ export type CodeGraphStudioReport = {
     logRoot: string | null;
     indexRoot: string | null;
     microAppEnabled: boolean;
+    /** Legacy compatibility field. Product enablement follows microAppEnabled. */
     agentCapabilityEnabled: boolean;
     command: string;
     startArgs: string[];
@@ -100,6 +101,7 @@ const DECLARED_REPO_LOCAL_SOFT_REASONS = new Set([
   "repo_pollution_risk",
 ]);
 const LAZY_RUNTIME_GATE_REASONS = new Set([
+  "agent_capability_disabled",
   "repo_pollution_risk",
   "runtime_not_ready",
   "telemetry_not_verified_off",
@@ -146,13 +148,12 @@ export const normalizeCodeGraphStudioReport = (
   );
   const checks = {
     ...report.capability.checks,
+    agentCapabilityEnabled: report.config.microAppEnabled,
     workspaceMatched: true,
     repoPollutionSafe: true,
   };
   const capabilityRegistrationReady =
-    checks.microAppEnabled &&
-    checks.agentCapabilityEnabled &&
-    checks.appDataRootValid;
+    checks.microAppEnabled && checks.appDataRootValid;
   const rawRuntimeStatus = normalizeRuntimeStatus(report.debug.rawManagerStatus);
   const resolvedAppDataRoot =
     report.config.appDataRoot.trim() || report.config.appDataRootResolved || "";
@@ -169,6 +170,7 @@ export const normalizeCodeGraphStudioReport = (
     config: {
       ...report.config,
       appDataRoot: resolvedAppDataRoot,
+      agentCapabilityEnabled: report.config.microAppEnabled,
     },
     capability: {
       ...report.capability,
@@ -203,6 +205,7 @@ export const getCodeGraphStudioReport = async () =>
 
 export const saveCodeGraphStudioConfig = async (input: {
   microAppEnabled?: boolean;
+  /** Legacy compatibility only. Prefer microAppEnabled. */
   agentCapabilityEnabled?: boolean;
   command?: string;
   startArgs?: string[];
