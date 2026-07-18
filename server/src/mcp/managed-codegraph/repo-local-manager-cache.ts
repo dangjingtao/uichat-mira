@@ -138,10 +138,11 @@ export const getRepoLocalManagedCodeGraphManagerForAgentWorkspace = async (
   context: RepoLocalRuntimeContext,
   access: {
     microAppEnabled: boolean;
+    /** Legacy compatibility only; product access now follows microAppEnabled. */
     agentCapabilityEnabled: boolean;
   },
 ) => {
-  if (!access.microAppEnabled || !access.agentCapabilityEnabled) {
+  if (!access.microAppEnabled) {
     return null;
   }
   return await getOrCreateRepoLocalManager(workspaceRoot, context);
@@ -149,7 +150,7 @@ export const getRepoLocalManagedCodeGraphManagerForAgentWorkspace = async (
 
 /**
  * Studio smoke validates the runtime itself and therefore does not depend on
- * the owner switch that grants Planner access to `codebase_explore`.
+ * the product enable switch that grants Planner access to `codebase_explore`.
  */
 export const getRepoLocalManagedCodeGraphManagerForStudio = async (
   workspaceRoot: string,
