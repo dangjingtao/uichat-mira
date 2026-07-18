@@ -53,7 +53,7 @@ function terminateHost(reason, exitCode = 1) {
 
 function schedulePipeReconnect() {
   if (terminating || authRequired || reconnectTimer || pipeConnecting || !config) return;
-  const delay = Math.min(1000 * (2 ** Math.min(reconnectAttempts, 5)), 30000);
+  const delay = Math.min(500 * (2 ** Math.min(reconnectAttempts, 4)), 5000);
   reconnectAttempts += 1;
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
@@ -121,7 +121,9 @@ function connectMiraPipe() {
 
   nextSocket.on("error", (error) => {
     if (pipeSocket !== nextSocket) return;
-    console.error("Mira pipe connection error", error?.message || error);
+    if (!['ENOENT', 'ECONNREFUSED'].includes(String(error?.code || ''))) {
+      console.error("Mira pipe connection error", error?.message || error);
+    }
   });
 }
 
