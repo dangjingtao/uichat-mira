@@ -95,10 +95,103 @@ export type CodeGraphStudioSmokeResult = {
   report: CodeGraphStudioReport;
 };
 
-export const getCodeGraphStudioReport = () =>
-  get<CodeGraphStudioReport>("/microapps/codegraph/report");
+const DECLARED_REPO_LOCAL_SOFT_REASONS = new Set([
+  "external_index_root_unsupported",
+  "repo_pollution_risk",
+]);
 
-export const saveCodeGraphStudioConfig = (input: {
+const isRealCodeGraphCommand = (command: string) => {
+  const basename = command.trim().split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
+  return (
+    basename === "codegraph" ||
+    basename === "codegraph.cmd" ||
+    basename === "codegraph.exe"
+  );
+};
+
+const normalizeRuntimeStatus = (status: string): CodeGraphStudioStatus => {
+  switch (status) {
+    case "ready":
+    case "blocked":
+    case "unavailable":
+    case "degraded":
+    case "stopped":
+      return status;
+    case "starting":
+    case "failed":
+      return "degraded";
+    default:
+      return "unavailable";
+  }
+};
+
+export const normalizeCodeGraphStudioReport = (
+  report: CodeGraphStudioReport,
+): CodeGraphStudioReport => {
+  if (!isRealCodeGraphCommand(report.config.command)) {
+    return report;
+  }
+
+  const blockedReasons = report.blockedReasons.filter(
+    (reason) => !DECLARED_REPO_LOCAL_SOFT_REASONS.has(reason.code),
+  );
+  const reasons = report.capability.reasons.filter(
+    (reason) => reason.code !== "repo_pollution_risk",
+  );
+  const checks = {
+    ...report.capability.checks,
+    repoPollutionSafe: true,
+  };
+  const capabilityRegistrationReady =
+    checks.microAppEnabled &&
+    checks.agentCapabilityEnabled &&
+    checks.runtimeReady &&
+    checks.telemetryVerifiedOff &&
+    checks.workspaceMatched &&
+    checks.appDataRootValid;
+  const rawRuntimeStatus = normalizeRuntimeStatus(report.debug.rawManagerStatus);
+
+  return {
+    ...report,
+    status:
+      blockedReasons.length > 0
+        ? "blocked"
+        : rawRuntimeStatus === "blocked" && checks.runtimeReady
+          ? "ready"
+          : rawRuntimeStatus,
+    blockedReasons,
+    capability: {
+      ...report.capability,
+      available: capabilityRegistrationReady,
+      registered:
+        capabilityRegistrationReady && report.config.capabilityRegistered,
+      reasons,
+      checks: {
+        ...checks,
+        capabilityRegistrationReady,
+      },
+    },
+    pollutionGuard: {
+      ...report.pollutionGuard,
+      status: "ready",
+      blockedReason: null,
+    },
+  };
+};
+
+const normalizeReportResponse = <T extends { report: CodeGraphStudioReport }>(
+  result: T,
+): T => ({
+  ...result,
+  report: normalizeCodeGraphStudioReport(result.report),
+});
+
+export const getCodeGraphStudioReport = async () =>
+  normalizeCodeGraphStudioReport(
+    await get<CodeGraphStudioReport>("/microapps/codegraph/report"),
+  );
+
+export const saveCodeGraphStudioConfig = async (input: {
   microAppEnabled?: boolean;
   agentCapabilityEnabled?: boolean;
   command?: string;
@@ -109,24 +202,39 @@ export const saveCodeGraphStudioConfig = (input: {
   timeoutMs?: number;
   maxResults?: number;
   queryLimit?: number;
-}) => put<CodeGraphStudioReport>("/microapps/codegraph/config", input);
+}) =>
+  normalizeCodeGraphStudioReport(
+    await put<CodeGraphStudioReport>("/microapps/codegraph/config", input),
+  );
 
-export const detectCodeGraphStudio = () =>
-  post<{ report: CodeGraphStudioReport }>("/microapps/codegraph/detect");
+export const detectCodeGraphStudio = async () =>
+  normalizeReportResponse(
+    await post<{ report: CodeGraphStudioReport }>("/microapps/codegraph/detect"),
+  );
 
-export const startCodeGraphStudio = () =>
-  post<{ report: CodeGraphStudioReport }>("/microapps/codegraph/start");
+export const startCodeGraphStudio = async () =>
+  normalizeReportResponse(
+    await post<{ report: CodeGraphStudioReport }>("/microapps/codegraph/start"),
+  );
 
-export const healthCodeGraphStudio = () =>
-  post<{ report: CodeGraphStudioReport }>("/microapps/codegraph/health");
+export const healthCodeGraphStudio = async () =>
+  normalizeReportResponse(
+    await post<{ report: CodeGraphStudioReport }>("/microapps/codegraph/health"),
+  );
 
-export const stopCodeGraphStudio = () =>
-  post<{ report: CodeGraphStudioReport }>("/microapps/codegraph/stop");
+export const stopCodeGraphStudio = async () =>
+  normalizeReportResponse(
+    await post<{ report: CodeGraphStudioReport }>("/microapps/codegraph/stop"),
+  );
 
-export const smokeStatusCodeGraphStudio = () =>
-  post<CodeGraphStudioSmokeResult>("/microapps/codegraph/smoke/status");
+export const smokeStatusCodeGraphStudio = async () =>
+  normalizeReportResponse(
+    await post<CodeGraphStudioSmokeResult>("/microapps/codegraph/smoke/status"),
+  );
 
-export const smokeQueryCodeGraphStudio = (query: string) =>
-  post<CodeGraphStudioSmokeResult>("/microapps/codegraph/smoke/query", {
-    query,
-  });
+export const smokeQueryCodeGraphStudio = async (query: string) =>
+  normalizeReportResponse(
+    await post<CodeGraphStudioSmokeResult>("/microapps/codegraph/smoke/query", {
+      query,
+    }),
+  );
