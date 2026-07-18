@@ -17,8 +17,44 @@ import {
   unregisterCapability,
 } from "./registry.js";
 
+let managedAutoStart: Promise<unknown> | null = null;
+let autoStartAttemptedFingerprint: string | null = null;
+
 const disposeRepoLocalRuntime = () => {
   void disposeRepoLocalManagedCodeGraphManagers();
+};
+
+const maybeAutoStartManagedRuntime = (
+  service: NonNullable<ReturnType<typeof getActiveCodeGraphStudioService>>,
+) => {
+  const draft = service.getDraft();
+  const gate = service.getCapabilityGate();
+  const fingerprint = JSON.stringify({
+    command: draft.command,
+    startArgs: draft.startArgs,
+    versionProbeArgs: draft.versionProbeArgs,
+    telemetryProbeArgs: draft.telemetryProbeArgs,
+    appDataRoot: draft.appDataRoot,
+  });
+  const shouldStart =
+    draft.microAppEnabled &&
+    isRealCodeGraphCommand(draft.command) &&
+    gate.checks.appDataRootValid &&
+    !gate.checks.runtimeReady &&
+    !managedAutoStart &&
+    autoStartAttemptedFingerprint !== fingerprint;
+
+  if (!shouldStart) {
+    return;
+  }
+
+  autoStartAttemptedFingerprint = fingerprint;
+  managedAutoStart = service
+    .start()
+    .catch(() => undefined)
+    .finally(() => {
+      managedAutoStart = null;
+    });
 };
 
 export const reconcileCodeGraphHarnessCapability = () => {
@@ -30,8 +66,12 @@ export const reconcileCodeGraphHarnessCapability = () => {
       unregisterCapability("codebase_explore");
     }
     disposeRepoLocalRuntime();
+    managedAutoStart = null;
+    autoStartAttemptedFingerprint = null;
     return false;
   }
+
+  maybeAutoStartManagedRuntime(service);
 
   const gate = service.getCapabilityGate();
   const repoLocalAvailable =
