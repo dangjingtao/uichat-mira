@@ -107,6 +107,7 @@ const createCodebaseExploreRetrievalSummary = (input: {
     status: partial ? "partial" : "completed",
     actionTaken: `Codebase explore verified ${input.retrieval.chunkCount} workspace chunk(s) for "${input.retrieval.query}". Verified excerpts below are already source-body evidence re-read from the workspace.`,
     keyFindings: [
+      ...verifiedSourceFindings,
       `verifiedChunkCount=${input.retrieval.chunkCount}`,
       `verifiedCandidateCount=${input.verification.verified.length}`,
       `rejectedCandidateCount=${input.verification.rejected.length}`,
@@ -116,7 +117,6 @@ const createCodebaseExploreRetrievalSummary = (input: {
       ...(input.exploreTrace.fallbackReason
         ? [`fallbackReason=${input.exploreTrace.fallbackReason}`]
         : []),
-      ...verifiedSourceFindings,
     ],
     ...(gaps.length > 0 ? { gaps } : {}),
     data: {
