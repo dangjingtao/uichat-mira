@@ -150,6 +150,8 @@ export const normalizeCodeGraphStudioReport = (
     checks.workspaceMatched &&
     checks.appDataRootValid;
   const rawRuntimeStatus = normalizeRuntimeStatus(report.debug.rawManagerStatus);
+  const resolvedAppDataRoot =
+    report.config.appDataRoot.trim() || report.config.appDataRootResolved || "";
 
   return {
     ...report,
@@ -160,6 +162,10 @@ export const normalizeCodeGraphStudioReport = (
           ? "ready"
           : rawRuntimeStatus,
     blockedReasons,
+    config: {
+      ...report.config,
+      appDataRoot: resolvedAppDataRoot,
+    },
     capability: {
       ...report.capability,
       available: capabilityRegistrationReady,
