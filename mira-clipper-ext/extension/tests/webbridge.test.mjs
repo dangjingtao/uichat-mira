@@ -61,6 +61,26 @@ describe('WebBridge tool surface', () => {
     assert.doesNotMatch(source, /chrome-extension:\/\//);
   });
 
+  it('keeps Native Messaging attached while the host reconnects Mira backend', async () => {
+    const source = await readExtensionFile('background.js');
+    const hostSource = await readExtensionFile('../native-host/host.mjs');
+
+    assert.match(source, /startNativeHostReadyTimer\(nativeSocket\)/);
+    assert.doesNotMatch(source, /startWebBridgeHandshakeTimer\(nativeSocket\)/);
+    assert.match(source, /request\.status === 'native_ready'/);
+    assert.match(source, /request\.status === 'backend_connecting'/);
+    assert.match(hostSource, /sendStatus\('native_ready', 'NATIVE_HOST_READY'\)/);
+    assert.match(hostSource, /sendStatus\('backend_connecting', 'BACKEND_CONNECTING'\)/);
+  });
+
+  it('keeps direct WebSocket transport active within the MV3 service-worker window', async () => {
+    const source = await readExtensionFile('background.js');
+    assert.match(source, /WEBBRIDGE_KEEPALIVE_INTERVAL_MS = 20000/);
+    assert.match(source, /startWebSocketKeepAlive\(socket\)/);
+    assert.match(source, /type: 'keepalive'/);
+    assert.match(source, /stopWebSocketKeepAlive/);
+  });
+
   it('supports the page-side execution messages', async () => {
     const source = await readExtensionFile('content/content.js');
     for (const message of [
