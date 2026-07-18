@@ -1,308 +1,412 @@
-# AgentGraph 与 Harness 协议
+# AgentGraph 与 Harness 当前协议
 
 Status: Current
-Owner: runtime
-Last verified: 2026-07-04
+Owner: agent-runtime
+Last verified: 2026-07-18
 Layer: wiki
-Module: Harness
+Module: Agent Runtime / Harness
 Feature: AgentGraphProtocol
 Doc Type: current-contract
 Canonical: true
 Related:
-  - harness-assessment-2026-06-28.md
-  - harness-phase-1-implementation-checklist.md
+  - ../ENGINEERING_MEMORY.md
   - ../chat/agent-runtime-design.md
+  - ../development/agent-observability.md
+  - ../tooling-runtime/tools-protocol.md
 
 ## 这页回答什么
 
-这页只回答一件事：
+这页记录当前代码中 AgentRun、AgentGraph 门面、Pi Loop、LangGraph 兼容运行时与 Harness 的真实协作关系。
 
-**当前代码里，AgentGraph 和 Harness 之间到底通过什么对象、什么状态、什么边界在协作。**
+它不是未来设计草图，也不是任务卡汇总。
 
-它不是未来设计草图，也不是产品愿景页。
+## 当前结论
 
-## 结论
+`AgentGraph` 当前是稳定运行时门面，不等同于 LangGraph 本身。
 
-当前已经有一版**可运行的最小协议**，但还不是最终版。
+应用默认运行时是 `pi_loop`：
 
-更准确地说：
+```text
+AgentRun
+  -> agentGraph.run
+  -> Pi Loop（默认）
+  -> Planner
+  -> Normalize
+  -> Policy
+  -> Tool / Retrieve
+  -> Evidence
+  -> Planner
+  -> Generate
+  -> Finalize
+  -> AgentRun
+```
 
-- `AgentRun` 是产品运行真相
-- `AgentGraphInput / AgentGraphOutput` 是图执行协议
-- Harness 仍是 tool registry、tool execution、trace / invocation 的执行面
-- Agent 目前主要在“能力选择、审批判断、结果收口”这层和 Harness 协作
+LangGraph 只保留为显式兼容运行时、测试对照与回归比较。
 
-## V1 当前不变量
+## 运行时选择
 
-当前 Agent Decision Loop v1 可以对外确认的，只是下面这组最小不变量：
+统一入口：
 
-- Planner 只负责输出 `nextAction`
-- Normalize 只负责把 `nextAction.use_tool` 校验并冻结成 `pendingToolCall`
-- Policy 只审批 frozen `pendingToolCall`
-- ToolNode 只执行 frozen `pendingToolCall`
-- retrieve / tool 完成后，结果必须写回 evidence，再进入下一轮 Planner 或 generate
-- `selectedToolId`、`capabilityIntent.selectedToolIds`、capability 语义都不得作为真实执行入口
+```ts
+agentGraph.run(input: AgentGraphInput): Promise<AgentGraphOutput>
+```
 
-当前最小执行链是：
+| 条件 | 实际运行时 |
+| --- | --- |
+| 正常应用启动，未设置环境变量 | `pi_loop` |
+| `MIRA_AGENT_RUNTIME=pi_loop` | `pi_loop` |
+| `MIRA_AGENT_RUNTIME=langgraph` | LangGraph 兼容运行时 |
+| 测试环境且未显式指定 | LangGraph，保留历史测试行为 |
+
+必须区分：
+
+- Agent Runtime / AgentGraph 门面：稳定对外合同
+- Pi Loop：应用默认编排器
+- LangGraph：兼容与对照运行时
+
+## 主线不变量
+
+1. Planner 只输出 `nextAction`。
+2. Normalize 只校验并冻结 `nextAction.use_tool`，生成 frozen `pendingToolCall`。
+3. Policy 只审批 frozen `pendingToolCall`。
+4. Tool 只执行与 Policy 决策一致的 frozen `pendingToolCall`。
+5. Tool / Retrieve 只写 pending 事实，不直接改写累计 Evidence。
+6. Evidence 是累计证据的单一写入者。
+7. Tool / Retrieve 完成后必须先进入 Evidence，再回 Planner。
+8. `capabilityIntent.selectedToolIds` 不得进入真实执行链。
+9. `selectedToolId` 只保留 UI、trace、diagnostics 与兼容语义。
+10. waiting approval、terminal error、recovery exhausted 状态不得继续执行工具。
+11. Generate 必须依据已经进入 Evidence 的真实结果回答。
+
+核心闭环：
 
 ```text
 Planner
--> Normalize
--> Policy
--> ToolNode
--> Evidence
--> Planner
+  -> Normalize
+  -> Policy
+  -> Tool
+  -> Evidence
+  -> Planner
 ```
 
-这里有三条口径必须说清：
+检索闭环：
 
-1. `planNode` 当前仍是 placeholder trace 节点，不是完整 `TaskFrame` 实现。
-2. `selectedToolId` 只保留给 UI / trace / diagnostics 或兼容读取，不能驱动真实执行。
-3. `generate` 阶段对超大 `tool result` 的 size guard / summary contract 还没定稿；如果当前代码仍会直接拼接结果体，只能记为待办，不能宣称已经完成。
+```text
+Planner
+  -> Retrieve
+  -> Evidence
+  -> Planner
+```
 
-## 协议分层
+收口路径：
 
-### 1. 持久化与产品真相层
+```text
+Planner(answer / ask_user)
+  -> Generate
+  -> Finalize
+```
 
-当前 Agent 的外部运行真相是 `AgentRun`。
+## Planner 当前合同
 
-它至少包含：
+Planner 是 task model 驱动的下一步决策器，不是静态计划表推进器。
 
-- `id`
-- `threadId`
-- `userId`
-- `goal`
-- `plan`
-- `status`
-- `observations`
-- `traceId`
-- `pendingApproval`
-- `approvedInvocations`
-- `selectedToolId`
-- `pendingToolCall`
-
-这层负责回答：
-
-- 当前 run 是谁
-- 当前 run 处于什么状态
-- 是否在等待审批
-- 已有哪些观察结果
-- UI 和恢复逻辑该读什么
-
-### 2. 图执行协议层
-
-当前 `AgentGraph` 的稳定协议面是：
-
-- `AgentGraphInput`
-- `AgentGraphOutput`
-
-`AgentGraphInput` 当前至少包括：
-
-- `runId`
-- `threadId`
-- `userId`
-- `goal`
-- `plan`
-- `messages`
-
-可选输入包括：
-
-- `requestContextMessages`
-- `params`
-- `knowledgeBaseId`
-- `intentConfig`
-- `approvedInvocations`
-- `selectedToolId`
-- `pendingToolCall`
-- `onExecutionNode`
-
-`AgentGraphOutput` 当前至少包括：
+允许动作：
 
 - `answer`
-- `observations`
-- `evidence`
-- `retrievedChunks`
-- `toolIntent`
-- `pendingApproval`
-- `policyDecision`
-- `selectedToolId`
-- `pendingToolCall`
-- `lastToolExecution`
-- `contextBudget`
-- `errorMessage`
-- `status`
-
-### 3. Harness 执行层
-
-Harness 当前负责：
-
-- capability registry
-- tool metadata
-- tool execution
-- invocation record
-- invocation trace
-- external MCP projection
-
-AgentGraph 不直接替代这些能力，而是消费它们。
-
-## 当前实际调用链
-
-当前最真实的一条链路是：
-
-1. 外部入口创建 `AgentRun`
-2. 入口把 `goal / plan / messages` 组装成 `AgentGraphInput`
-3. `AgentGraph` 在图节点里做：
-   - 上下文准备
-   - 计划推进
-   - 候选暴露后的调用前守卫
-   - policy 判断
-   - retrieve / tool / generate / evaluate
-4. 图返回 `AgentGraphOutput`
-5. 外层把输出写回 `AgentRunStore`
-
-也就是说，当前不是 “AgentGraph 直接拥有产品真相”，而是：
-
-- `AgentRun` 持有运行真相
-- `AgentGraph` 负责一次图执行
-- Harness 负责工具运行真相
-
-## 当前节点协议
-
-当前 `AgentGraph` 节点顺序大致是：
-
-- `prepareContext`
-- `planStep`
-- `toolSelectStep`
-- `toolGuardStep`
-- `nextActionPlanner`
-- `toolCallNormalize`
-- `policyStep`
-- `approval`
+- `ask_user`
 - `retrieve`
-- `tool`
-- `generate`
-- `evaluate`
+- `use_tool`
 - `error`
 
-其中真正和 Harness 紧密耦合的是三类节点：
+Planner 读取：
 
-- `toolGuardStep`
-  - 消费 Harness 已暴露候选，并做本地调用前守卫收口
-- `policyStep`
-  - 只根据 frozen `pendingToolCall` 和 tool metadata 判断是否允许直接执行
-- `tool`
-  - 只执行 frozen `pendingToolCall`，并通过兼容适配层真正调用 Harness invocation
+- 用户目标
+- `currentTaskFrame`
+- exposed tools
+- observations
+- Evidence 历史与最新摘要
+- 最近 Tool / Retrieve 结果
+- schema replan 上下文
+- recoverable failure 上下文
+- pending approval 状态
 
-## 当前审批协议
+Planner 必须区分：
 
-当前审批协议已经不只停留在 Agent 层，核心 Harness invocation 主链也已有统一前置 gate。
+- evidence answerable
+- task completable
 
-现在的规则是：
+局部证据可解释，不代表整个任务已完成。
 
-- Agent 命中高风险 capability 时，先进入 `policyStep`
-- `policyStep` 产出 `pendingApproval`
-- Graph 输出 `status: waiting_approval`
-- 外层把 `pendingApproval` 写回 `AgentRun`
+Pi Loop 没有全局 iteration cap。`maxIterations = 0` 只保留兼容与诊断语义。
 
-这意味着当前 Agent 和 Harness 的审批协作协议是：
+局部恢复仍有预算：
 
-- Harness 提供 capability 风险元数据
-- Harness invocation 在执行前先做统一审批判定
-- Agent policy 消费这些元数据
-- AgentRun 保存审批等待状态
+- schema replan
+- recoverable tool failure
 
-当前已经成立的是：
+## 可见 Planner OS
 
-- Agent tool path 会经过 Harness 统一 approval gate
-- direct MCP invocation 会经过 Harness 统一 approval gate
-- 普通 chat tool loop 调用 Harness 时，也会把 `awaiting_approval` 显式回传上层
+前端展示的“思考下一步”只来自 Planner JSON 中公开的 `reason` 字段。
 
-## 当前 trace / 事件协议
+它不是：
 
-当前 AgentGraph 通过 `onExecutionNode` 向外发 execution node 事件。
+- 隐藏 chain of thought
+- 原始完整模型输出
+- 未脱敏 prompt
 
-这条链目前更像：
+产品合同：
 
-- 图执行事件通道
+- Planner 决策期间展示公开 reason
+- 回答组织完成后 OS 消失
+- 执行轨迹按真实语义顺序展示
+- 重复语义节点使用 `attemptKey` 保留每次执行
 
-而不是：
+## Tool Exposure 与真实执行入口
 
-- 完整业务协议对象
+Harness Tool Exposure 只回答：
 
-它已经足够支持：
+> 本轮 Planner 可以看见哪些工具及其 schema？
 
-- execution trace UI
-- run 中间过程观察
-- 节点级别状态展示
+它不决定最终执行哪个工具。
 
-但还没有完全和 Harness invocation trace 统一成一个总协议。
+不得恢复为执行入口的对象：
 
-## 当前已经定下来的边界
+- capability id
+- capability match
+- preferredToolId
+- `capabilityIntent.selectedToolIds`
+- `selectedToolId`
+- query keyword rule
+- UI 选中状态
 
-下面这些边界已经比较明确：
+真实执行永远从 frozen `pendingToolCall` 开始。
 
-- `AgentRun` 不是 `AgentGraphState`
-- `AgentGraph` 不直接替代 Harness
-- Agent 不直接维护 tool registry
-- 审批等待状态要进入 `AgentRun`
-- external MCP 继续走 Harness 专门治理，不让 Agent 自己绕开
+## frozen `pendingToolCall`
 
-## 当前已落地的兼容适配
+至少包含：
 
-由于 `AgentGraph` 先于这轮 Harness 收口完成，当前实现遵循的是：
+- tool call id
+- `toolId`
+- `args`
+- `inputHash`
+- `reason`
+- `source: planner`
+- `status: frozen`
+- 当前工具 metadata
 
-- 保持现有 `AgentGraphInput / AgentGraphOutput` 主形状不倒退
-- 旧兼容字段允许保留给 UI / trace / diagnostics，但不得重新变回执行入口
-- `toolNode` 现在已经不是占位节点，而是会真实调用 Harness invocation
+Normalize 完成后，后续节点不得根据用户文本、capability intent 或旧 selectedToolId 重建参数。
 
-当前这层兼容适配已经补上的协议对象包括：
+`inputHash` 用于：
 
-- `pendingToolCall`
-- `lastToolExecution`
+- Policy 对齐
+- Approval 对齐
+- Resume 对齐
+- Harness invocation 对齐
+- 防止审批后参数漂移
 
-其中：
+## Policy、Approval 与 Resume
 
-- `pendingToolCall` 表示 AgentGraph 已决定“要调用哪个 toolId，以及准备用什么参数调用”
-- `lastToolExecution` 表示 Harness 执行后的回填结果，包括：
-  - `invocationId`
-  - `status`
-  - `result`
-  - `errorMessage`
-  - `approval`
+审批绑定 exact invocation：
 
-这意味着当前主链已经从：
+- `toolId`
+- `toolCallId`
+- `inputHash`
 
-- 选中工具，等待 Harness
+命令、参数、cwd、env、timeout 变化后必须重新判断。
 
-变成：
+等待审批时保存 checkpoint：
 
-- 选中工具
-- 生成兼容参数
-- 调用 Harness invocation
-- 把执行结果回填进 AgentGraph 输出和 AgentRun 状态
+- `currentTaskFrame`
+- observations
+- Evidence
+- retrieved chunks
+- last tool execution
+- iteration count
+- frozen `pendingToolCall`
 
-## 当前还没定死的部分
+Approve 路由快速返回 `running`，后续在异步任务中恢复执行。
 
-下面这些还不能说完全定稿：
+恢复时优先消费原 frozen 调用，不重新根据自然语言猜参数。
 
-- Agent tool call 和 Harness invocation 之间是否需要独立桥接对象
-- AgentGraph 与 Harness trace 是否统一成同一套跨层 trace id / span contract
-- generate 阶段的大结果 size guard / summary contract
-- replan / ask_user / memory / retry 的高级状态协议
-- 多轮恢复时是否需要更强的 graph checkpoint contract
+## Harness 当前职责
 
-## 当前判断
+Harness 是 Agent 的工具控制平面，不是 Agent 的大脑。
 
-如果只问“有没有协议”，答案是：
+Harness 负责：
 
-- 有，而且已经能跑
+- capability / tool registry
+- tool exposure
+- schema 与 metadata
+- risk / approval boundary
+- workspace boundary
+- invocation
+- external MCP projection
+- trace / audit
+- 结果到 `llmContent` 的统一投影
 
-如果问“是不是最终版协议”，答案是：
+Harness 不负责：
 
-- 还不是
+- 多步任务下一步决策
+- 工具参数生成
+- 任务完成判断
+- 最终自然语言回答
 
-更准确的描述应当是：
+## Evidence 与 Generate
 
-- 当前已经有一版 MVP 协议
-- 它足够支撑 `AgentRun -> AgentGraph -> Harness -> AgentRun`
-- 但 approval gate、trace 统一、复杂状态恢复还在后续收口范围内
+Tool / Retrieve 先写 pending facts，再由 Evidence 统一写入累计对象。
+
+成功 Harness 调用会生成模型可消费的 `llmContent`。
+
+Generate 当前：
+
+- 只消费 completed executions
+- 优先使用真实 `llmContent`
+- 总字符预算为 `48_000`
+- 明确标记 truncated
+- 超预算只截断上下文，不终止工具进程
+- 要求回答只依据已展示事实
+
+External MCP 结果同样需要进入 Evidence，并经过 Generate context 适配。
+
+## 失败合同
+
+### Recoverable failure
+
+- Tool execution 记录 failed
+- 失败事实进入 Evidence
+- 回 Planner 尝试恢复
+- 恢复耗尽后 Generate guarded answer
+- Graph status 为 completed
+- Chat finish reason 为 stop
+
+### Terminal failure
+
+- Graph status 为 failed
+- finish reason 为 error
+- Generate 不执行
+
+工具自身拒绝输入属于工具层能力边界。是否恢复由 Evidence 与 Planner 决定，不能被误判成审批仍在等待。
+
+## Workspace 与 Terminal cwd
+
+Read / Edit 工作区工具继续遵守工作区边界。
+
+`terminal_session.cwd` 使用 Host Runtime 特例：
+
+- 默认 `cwd = workspace`
+- 相对路径从 workspace 解析
+- 绝对路径与 `..` 可以进入正常审批
+- 审批通过后 Runtime 不再二次按旧 sandbox 规则拒绝
+- 越界关系记录为 `outside`
+
+Terminal 的能力释放不等于全局放开 Read / Edit 边界。
+
+## Terminal Runtime
+
+`terminal_session` 是稳定能力合同，不拆成 Python、Node、Git、PowerShell 等多个工具。
+
+当前默认 Runtime：
+
+- `host_spawn`
+- 完整 Shell
+- Python / Node / Git / package manager
+- pipeline 与 shell-native syntax
+- persistent PTY
+- `attachSessionId`
+- watcher / dev server / REPL / 长进程
+- Windows Job Object
+- Job Object 不可用时 `taskkill /t /f`
+- POSIX process group
+
+旧 command sandbox 已退出 `terminal_session` 主执行链。
+
+`sandbox_runtime` 只保留未来可选 Provider 名称，当前未实现，也不会偷偷退回旧 sandbox executor。
+
+## CodeGraph 受控合同
+
+Planner 只看见 `codebase_explore`。
+
+原生 `query / explore / affected` 留在 wrapper 内部。
+
+CodeGraph 返回候选，不直接构成最终 Evidence。
+
+进入 Evidence 前必须经过 `read_file_slice` 或等价原文验证。
+
+降级链：
+
+```text
+CodeGraph
+  -> scoped search_text
+  -> workspace_inventory
+  -> read_file_slice
+```
+
+必须保护：
+
+- CodeGraph 失败不能直接回答“没有”
+- broad explore 结果不能裸传 Planner
+- telemetry 默认关闭
+- 索引不能默认污染仓库
+- capability id 不能穿透为 invocation tool id
+
+CodeGraph 是代码理解加速器，不是第二个 Planner。
+
+## Trace 与 UI 状态
+
+产品 execution node 用于：
+
+- Planner 公开 reason
+- tool / retrieval / evidence / generate 状态
+- approval / resume
+- failure / blocked / completed
+
+重复语义节点通过 `attemptKey` 保留每次执行。
+
+approval / resume 通过 `toolCallId` 对齐。
+
+最终页面状态必须服从 AgentRun 的 running / waiting / completed / failed 状态，不能被历史审批节点覆盖。
+
+Phoenix / OpenTelemetry 用于开发诊断，默认关闭，不改变业务路由。
+
+## 当前明确没有的能力
+
+当前主线不是：
+
+- Agent V2
+- 多 Agent 系统
+- DAG scheduler
+- 并发工具执行器
+- 多工具并行 fan-out
+- 通用 durable workflow engine
+- 长期记忆系统
+- 自动 sandbox 快照与回滚
+
+Pi Loop 是有状态、可审批、可恢复、Evidence 驱动的顺序决策循环。
+
+## 已过期说法
+
+不得继续传播：
+
+- AgentGraph 应用主链就是 LangGraph
+- Pi Loop 只是未来计划
+- selectedToolId 可以驱动工具执行
+- Tool / Retrieve 完成后可以直接 Generate
+- 审批恢复只保存 pendingApproval
+- Generate 仍无边界拼接全部工具结果
+- terminal_session 必须经过旧 command sandbox
+- Agent 有固定全局 maxIterations 上限
+
+## 最终判断
+
+```text
+AgentRun（产品真相）
+  -> AgentGraph 稳定门面
+  -> Pi Loop 默认顺序编排
+  -> Harness 执行与审批控制
+  -> Evidence 统一证据
+  -> Planner 决定下一步
+  -> Grounded Generate
+  -> AgentRun 持久化与 UI trace
+```
+
+这是 Agent V1.5 稳定化架构，不应在没有明确授权时扩成 Agent V2、DAG 或多 Agent 系统。
