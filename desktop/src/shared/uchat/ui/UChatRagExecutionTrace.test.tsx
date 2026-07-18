@@ -72,6 +72,39 @@ test("UChatExecutionTrace renders agent nodes in the shared execution timeline",
   assert.ok(screen.getAllByText("等待人工审批").length >= 2);
 });
 
+test("different attempt keys keep repeated semantic nodes visible", () => {
+  render(
+    <UChatExecutionTrace
+      messageId="assistant-iterations"
+      onOpenDetail={() => {}}
+      steps={[
+        {
+          nodeId: "agent-next-action-planner",
+          attemptKey: "agent-next-action-planner#1",
+          iteration: 1,
+          nodeType: "plan",
+          phase: "done",
+          label: "执行计划",
+          summary: "第一轮动作",
+        },
+        {
+          nodeId: "agent-next-action-planner",
+          attemptKey: "agent-next-action-planner#2",
+          iteration: 2,
+          nodeType: "plan",
+          phase: "done",
+          label: "执行计划",
+          summary: "第二轮动作",
+        },
+      ]}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("button"));
+  assert.ok(screen.getByText("第一轮动作"));
+  assert.ok(screen.getByText("第二轮动作"));
+});
+
 const completedStep = (
   nodeId: string,
   nodeType: RagNodeLike["nodeType"],
@@ -95,6 +128,7 @@ const approvalWaitSteps: RagNodeLike[] = [
     details: {
       approvalId: "approval-1",
       toolId: "browser_observe",
+      toolCallId: "tool-call-1",
     },
   },
 ];
@@ -130,6 +164,7 @@ test("approval resume trace stays active until a terminal step arrives", () => {
       summary: "审批已通过，继续恢复 browser_observe 的执行",
       details: {
         toolId: "browser_observe",
+        toolCallId: "tool-call-1",
         resumedFromApproval: true,
       },
     },
@@ -156,6 +191,40 @@ test("approval resume trace stays active until a terminal step arrives", () => {
       }),
     ),
     null,
+  );
+});
+
+test("a new unmatched approval remains visible after an earlier resume", () => {
+  const reapprovalSteps: RagNodeLike[] = [
+    ...approvalWaitSteps,
+    {
+      ...completedStep("agent-resume-execution", "approval", "恢复执行"),
+      details: {
+        toolCallId: "tool-call-1",
+        resumedFromApproval: true,
+      },
+    },
+    {
+      ...completedStep("agent-approval", "approval", "审批节点"),
+      attemptKey: "agent-approval#2",
+      summary: "已进入审批等待",
+      details: {
+        approvalId: "approval-2",
+        toolCallId: "tool-call-2",
+      },
+    },
+  ];
+
+  render(
+    <UChatExecutionTrace
+      messageId="assistant-reapproval"
+      steps={reapprovalSteps}
+      onOpenDetail={() => {}}
+    />,
+  );
+
+  assert.ok(
+    screen.getByText(i18n.t("chat.thread.agent.waitingApprovalTitle")),
   );
 });
 
