@@ -71,6 +71,7 @@ async function connectBackend() {
     return;
   }
   backendConnecting = true;
+  sendStatus('backend_connecting', 'BACKEND_CONNECTING');
   try {
     const backend = getBackendUrl(config.backendUrl);
     const nextSocket = new WebSocket(backend);
@@ -118,13 +119,13 @@ async function connectBackend() {
           sendStatus('auth_required', 'AUTH_REQUIRED');
         }
       } else {
-        sendStatus('disconnected', 'BRIDGE_DISCONNECTED');
+        sendStatus('backend_connecting', 'BRIDGE_DISCONNECTED');
       }
       scheduleBackendReconnect();
     });
     nextSocket.addEventListener("error", () => {
       if (socket !== nextSocket) return;
-      sendStatus('error', 'BRIDGE_CONNECTION_ERROR');
+      sendStatus('backend_connecting', 'BRIDGE_CONNECTION_ERROR');
     });
   } catch (error) {
     backendConfigInvalid = true;
@@ -159,6 +160,9 @@ async function handle(message) {
     authStatusSent = false;
     backendConfigInvalid = false;
     reconnectAttempts = 0;
+    // The Chrome <-> Native Host port is ready independently of Mira backend readiness.
+    // A backend outage must not make the extension tear down this long-lived native port.
+    sendStatus('native_ready', 'NATIVE_HOST_READY');
     await connectBackend();
     return;
   }
