@@ -112,7 +112,7 @@ export const evaluateInvocationApproval = (input: {
           workspaceRoot,
           boundaryCandidate.value,
         );
-        if (target.isOutside) {
+        if (target.isOutside && !isApproved) {
           return {
             type: "require_approval",
             reason: `${input.definition.id} requests ${boundaryCandidate.key} outside the current workspace root.`,
@@ -135,4 +135,3 @@ export const evaluateInvocationApproval = (input: {
     type: "allow",
   };
 };
-
