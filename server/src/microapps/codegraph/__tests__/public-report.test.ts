@@ -102,6 +102,37 @@ describe("normalizeCodeGraphStudioReport", () => {
     expect(normalized.capability.checks.capabilityRegistrationReady).toBe(true);
   });
 
+  it("treats the legacy agent capability flag as following microapp enablement", () => {
+    const source = createReport({
+      config: {
+        ...createReport().config,
+        microAppEnabled: true,
+        agentCapabilityEnabled: false,
+      },
+      capability: {
+        ...createReport().capability,
+        reasons: [
+          {
+            code: "agent_capability_disabled",
+            message: "Owner has not allowed the agent to use CodeGraph.",
+          },
+        ],
+        checks: {
+          ...createReport().capability.checks,
+          microAppEnabled: true,
+          agentCapabilityEnabled: false,
+          capabilityRegistrationReady: false,
+        },
+      },
+    });
+
+    const normalized = normalizeCodeGraphStudioReport(source);
+    expect(normalized.config.agentCapabilityEnabled).toBe(true);
+    expect(normalized.capability.checks.agentCapabilityEnabled).toBe(true);
+    expect(normalized.capability.available).toBe(true);
+    expect(normalized.capability.reasons).toEqual([]);
+  });
+
   it("keeps the controlled capability registered before the workspace runtime is started", () => {
     const source = createReport({
       capability: {
