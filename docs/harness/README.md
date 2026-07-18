@@ -2,138 +2,212 @@
 
 Status: Current
 Owner: runtime
-Last verified: 2026-07-04
+Last verified: 2026-07-18
 Layer: wiki
 Module: Harness
 Feature: Overview
 Doc Type: overview
 Canonical: true
 Related:
+  - agentgraph-harness-protocol.md
+  - ../tooling-runtime/tools-protocol.md
   - harness-assessment-2026-06-28.md
   - harness-phase-1-implementation-checklist.md
-  - harness-gap-review-checklist.md
-  - sandbox-module.md
-  - agentgraph-harness-protocol.md
 
 ## 单点真相范围
 
-这页是当前 `Harness` 模块的入口。
+这页是 Harness 模块入口。
 
-它主要回答：
+Agent Runtime 的完整主线以：
 
-- Harness 负责什么
-- 风控边界怎么理解
-- 为什么沙箱比单纯加严审批更合适
+- [AgentGraph 与 Harness 当前协议](agentgraph-harness-protocol.md)
 
-## 推荐入口
+为准。
 
-1. `harness-assessment-2026-06-28.md`
-2. `harness-phase-1-implementation-checklist.md`
-3. `harness-gap-review-checklist.md`
-4. `sandbox-module.md`
-5. `agentgraph-harness-protocol.md`
+## 当前定位
 
-## 当前结论
+Harness 不是全局编排器，也不是最终回答器。
 
-当前 Harness 的定位不是“全局审批机”，也不是“全局编排层”，而是：
+它负责：
 
-- 候选工具暴露治理层
-- 语义能力匹配层
-- 风险与边界判定层
-- invocation 执行与审计主链
+- capability / tool registry
+- 工具定义与 exposure schema
+- eligible tool surface
+- invocation 执行
+- risk / approval boundary
+- workspace boundary
+- external MCP projection
+- invocation trace / audit
+- Harness result 到 LLM content 的统一投影
 
-当前明确不上收给 Harness 的职责：
+它不负责：
 
-- 多步工具编排
-- 最终选择哪一个 toolId 作为本轮执行
-- args 生成
-- 对话推进与结果叙述
+- 决定一个多步任务下一步做什么
+- 生成工具参数
+- 维护 Agent task completion
+- 决定何时回答用户
+- 组织最终自然语言答案
 
-这些职责应继续上抛给编排层或 Agent 层。
+这些属于 Agent Runtime / Planner / Generate。
 
-## 当前契约分层
+## 当前三层合同
 
-当前文档与代码统一按三层理解：
+### 1. Capability
 
-- `CapabilityMatch`
-  - Harness 内部语义匹配结果
-  - 例如：`workspace_lookup`
-- `ToolExposure`
-  - 当前轮真正暴露给 LLM 的候选工具面
-  - 例如：`read_list`、`read_locate`
-- `Invocation`
-  - 真正执行的具体工具调用
-  - 例如：`executeHarnessInvocation({ toolId: "read_list", ... })`
+Harness 内部用于描述能力与治理信息，例如：
 
-这三层不能混。
+- read
+- web search
+- terminal
+- external MCP
+- codebase understanding
 
-尤其要注意：
+Capability 可以参与诊断、治理、可见性与排序，但不能直接进入执行。
 
-- `preferredToolId` 只是 hint
-- 它可以参与排序、展示顺序、trace 解释
-- 它不能直接等于 executed tool
-- capability id 不能直接传给 invocation 层
-- Agent 内部如果要从能力走到执行，必须先显式产出 `invocationCandidateToolIds`
-- `pendingToolCall` 只能从明确的 `toolId` 候选生成，不能从 capability match 直接生成
+### 2. Tool Exposure
 
-## 当前代码真相
+Tool Exposure 是本轮 Planner 可以看见的工具面：
 
-截至当前版本，Harness 已新增一条更明确的候选解析入口：
+- tool id
+- title / description
+- input schema
+- capability metadata
+- approval / side-effect metadata
 
-- `resolveHarnessToolCandidatesForTurn(...)`
+Tool Exposure 只提供候选，不产生执行对象。
 
-其输出语义是：
+### 3. Invocation
+
+Invocation 是具体执行：
+
+```ts
+executeHarnessInvocation({
+  toolId,
+  args,
+  inputHash,
+  approvedInvocations,
+  environment,
+})
+```
+
+只有 frozen `pendingToolCall` 才能进入 Agent 的 Invocation 路径。
+
+## 与 Agent Runtime 的当前边界
+
+当前应用默认主链：
+
+```text
+Planner
+  -> Normalize
+  -> Policy
+  -> Tool
+  -> Evidence
+  -> Planner
+```
+
+Harness 参与其中的方式：
+
+| Agent 步骤 | Harness 角色 |
+| --- | --- |
+| Planner | 提供 exposed tool definitions；不替 Planner 选最终工具 |
+| Normalize | 提供 schema 与 metadata；不重建参数 |
+| Policy | 提供 side effect、approval、workspace boundary 信息 |
+| Tool | 执行 frozen `pendingToolCall` |
+| Evidence | 接收 Invocation 的真实结果与 `llmContent` |
+| Generate | 提供 bounded result projection，不直接生成回答 |
+
+## 不得恢复的旧入口
+
+以下内容不得重新变成执行入口：
+
+- capability id
+- capability match
+- preferredToolId
+- `capabilityIntent.selectedToolIds`
+- `selectedToolId`
+- query keyword rule
+- UI 选中状态
+
+`selectedToolId` 可以保留给 UI、trace、diagnostics 与兼容读取，但真实执行必须由 frozen `pendingToolCall` 驱动。
+
+## 当前 Tool Exposure 真相
+
+`resolveHarnessToolCandidatesForTurn(...)` 返回的是：
 
 - `toolCandidates`
 - `toolExposure.exposedToolIds`
 - `toolExposure.exposedDefinitions`
 
-这里要明确一条边界：
+当前 eligible 工具面不会因为用户措辞弱或 recall 失败就被静默缩成一个“选中工具”。
 
-- Harness 可以继续在内部使用 capability profile / capability match 做筛选、解释和风控
-- 但对 Agent 编排层上抛的，不再是 `selectedCapabilityIds`、`capabilityId`、`capabilityMatch`
-- Agent 只消费：
-  - `toolCandidates`
-  - `toolExposure`
-  - `selectedToolIds`
-  - `candidateToolIds`
+当候选集合较小，所有 eligible tools 可以完整暴露给 Planner；候选集合较大时，recall 只服务上下文压缩与排序，不能建立影子执行决策。
 
-当前 Agent 侧也已按同一边界调整：
+## Approval 与 Workspace Boundary
 
-- `toolSelectNode` 只产出工具级候选和 `selectedToolIds`
-- `toolGuardNode` 只保留通过本地守卫后的 `candidateToolIds`
-- `policyNode` 只能基于明确 `toolId` 的 `pendingToolCall` 进入审批和执行
-- `selectedToolId` 只保留给 UI、trace、diagnostics 或兼容读取；不得作为真实执行入口
-- `planNode` 当前仍只是 V1 placeholder trace 节点，不能对外宣称 `TaskFrame` 已完成
+Harness invocation 在执行前会验证：
 
-这意味着：
+- 工具是否要求审批
+- exact `toolId / inputHash` 是否已获批准
+- workspace-bound 参数是否越界
+- 外部 MCP 是否满足 eligible allowlist
 
-- AgentGraph 不再维护伪造的 capability 选择状态
-- `pendingToolCall` 只能从明确 `toolId` 候选生成，不能从 capability match 直接生成
-- trace 与运行态状态机现在也统一按 tool 语义表达
+审批通过只授权当前 exact invocation。
 
-当前还要明确一个未完成项：
+参数、cwd、env、timeout 或命令发生变化时，hash 变化，必须重新判断。
 
-- `generate` 阶段目前还没有为超大 `tool result` 建立正式的 size guard / summary contract
-- 现阶段只能把这件事当成已知待办，不能对外说“generate 已经安全处理大结果体”
+## Harness Result 与 Generate
 
-同时，外层越界的 `web_search` 预取已删除。
+成功 Invocation 会投影为 `llmContent`：
 
-也就是说：
+- 真实结果正文
+- 截断标记
+- original / included char count
+- 结构化工具结果文本
 
-- 外层 route 不再在进入主回答前自行执行 `web_search`
-- `web_search` 是否可见，应该由 Harness 工具暴露治理决定
-- 真正执行工具时，仍必须走 `executeHarnessInvocation({ toolId })`
+Agent ToolNode 把它附加到 execution，Evidence 统一累计。
 
-## 本轮结论
+Generate 当前有正式的大结果边界：
 
-这次改动不是字段重命名，而是职责边界重定：
+- Harness Generate context 总字符预算 `48_000`
+- 只消费 completed executions
+- 明确标记 truncated
+- 超预算只截断上下文，不停止工具进程
+- 模型必须依据已展示结果回答
 
-- Harness 负责根据语境筛选能力，再投影成当前轮的工具候选面
-- Agent 负责编排、守卫、审批和执行，但它的状态模型只保留 tool 语义
-- capability 现在是 Harness 内部治理模型，不再是 Agent 运行态协议的一部分
+因此，“Generate 仍无边界拼接 tool result”已经过期。
 
-当前剩余风险：
+## Terminal Runtime 边界
 
-- 文档与代码已经去掉 `selectedCapabilityId`，但已有本地数据库如果保留历史列，只是结构遗留，不影响当前运行
-- `CapabilityMatch` 仍然是 Harness 内部实现概念，后续如果要继续对外暴露诊断信息，需要单独定义只读诊断协议，不能再混回 Agent 主状态
+`terminal_session` 仍通过 Harness 注册、Exposure、Policy 与 Invocation。
+
+当前执行 Runtime 是：
+
+- `host_spawn`
+- persistent PTY
+- Windows Job Object / taskkill tree fallback
+- POSIX process group
+
+它不再要求旧 command sandbox。
+
+`requiresApproval` 仍保留；Host Runtime 放开执行能力，不等于绕开 Policy。
+
+## External MCP
+
+External MCP 必须：
+
+- 先成为 eligible capability
+- 进入显式 allowlist
+- 投影为具体 tool definition
+- 由 Planner 生成具体 `use_tool`
+- 经过 Normalize / Policy / Invocation
+- 将结果进入 Evidence
+
+Agent 不得直接调用 provider 私有命令，也不得让 capability id 穿透成 invocation tool id。
+
+## 当前判断
+
+Harness 当前是：
+
+> **Agent 的工具控制平面，而不是 Agent 的大脑。**
+
+Planner 决定下一步；Harness 保证候选、审批、边界、执行、结果和审计可信。
