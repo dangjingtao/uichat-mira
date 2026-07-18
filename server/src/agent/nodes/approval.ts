@@ -1,14 +1,16 @@
 /**
  * 审批节点：当存在待审批的工具调用时，暂停执行并等待用户审批。
  */
-import { emitStepNode } from "../node-runtime";
-import { emitApprovalNode, emitNodeError } from "./shared";
+import { emitStepNode, getTraceAttemptMeta } from "../node-runtime";
+import { emitNodeError } from "./shared";
 import type { AgentNodeState, EmitAgentExecutionNode } from "../node-runtime";
 
 export const approvalNode = async (
   state: AgentNodeState,
   emit?: EmitAgentExecutionNode,
 ): Promise<Partial<AgentNodeState>> => {
+  const traceAttemptMeta = getTraceAttemptMeta("agent-approval", state);
+
   if (!state.pendingApproval) {
     const errorMessage = "Approval node entered without a pending approval request";
     await emitNodeError(emit, {
@@ -26,6 +28,7 @@ export const approvalNode = async (
   await emitStepNode(emit, {
     runId: state.runId,
     nodeId: "agent-approval",
+    ...traceAttemptMeta,
     nodeType: "approval",
     phase: "start",
     label: "审批节点",
@@ -39,9 +42,12 @@ export const approvalNode = async (
     },
   });
 
-  await emitApprovalNode(emit, {
+  await emitStepNode(emit, {
     runId: state.runId,
     nodeId: "agent-approval",
+    ...traceAttemptMeta,
+    nodeType: "approval",
+    phase: "done",
     label: "审批节点",
     summary: "已进入审批等待",
     details: {
