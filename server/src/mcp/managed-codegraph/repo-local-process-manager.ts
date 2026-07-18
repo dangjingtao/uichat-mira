@@ -7,6 +7,8 @@ import {
 import type { ManagedCodeGraphProcessManagerOptions } from "./types.js";
 
 const DEFAULT_REPO_DATA_DIR_NAME = ".codegraph";
+const DECLARED_REPO_LOCAL_REASON =
+  /external index|index-root|workspace[\\/].*\.codegraph|serve --mcp/i;
 
 export const isRealCodeGraphCommand = (command: string) => {
   const normalized = command.trim().toLowerCase();
@@ -31,11 +33,20 @@ export const isRealCodeGraphCommand = (command: string) => {
  */
 export const shouldAllowDeclaredRepoLocalCodeGraphData = (
   options: ManagedCodeGraphProcessManagerOptions,
-) =>
-  isRealCodeGraphCommand(options.command) &&
-  options.repoPollutionGuard?.status === "ready" &&
-  (options.repoPollutionGuard.repoDataDirName.trim() ||
-    DEFAULT_REPO_DATA_DIR_NAME) === DEFAULT_REPO_DATA_DIR_NAME;
+) => {
+  const guard = options.repoPollutionGuard;
+  const repoDataDirName =
+    guard?.repoDataDirName.trim() || DEFAULT_REPO_DATA_DIR_NAME;
+  const knownStorageConstraint =
+    guard?.status === "ready" ||
+    DECLARED_REPO_LOCAL_REASON.test(guard?.blockedReason ?? "");
+
+  return (
+    isRealCodeGraphCommand(options.command) &&
+    repoDataDirName === DEFAULT_REPO_DATA_DIR_NAME &&
+    knownStorageConstraint
+  );
+};
 
 const normalizeRepoLocalOptions = (
   options: ManagedCodeGraphProcessManagerOptions,
