@@ -153,7 +153,7 @@ const settingsPending = {
           },
         },
         codeGraph: {
-          title: "CodeGraph Studio",
+          title: "CodeGraph",
           description: "A CodeGraph workspace for blocked-safe runtime status, config tuning, and smoke-debug results.",
           actions: {
             open: "Open Studio",
@@ -162,7 +162,7 @@ const settingsPending = {
       },
       codeGraphStudio: {
         page: {
-          title: "CodeGraph Studio",
+          title: "CodeGraph",
           description:
             "CodeGraph is used to understand repository structure, trace symbol relationships, and provide indexing for later code search and code exploration. This page lets you see whether it is currently usable and debug the local integration state.",
         },
@@ -328,15 +328,15 @@ const settingsPending = {
           copyDebug: "Copy Debug Report",
         },
         states: {
-          loading: "Loading CodeGraph Studio...",
+          loading: "Loading CodeGraph...",
           emptySmokeTitle: "No usable result yet",
           emptySmoke:
             "When the real provider is blocked, this area will say blocked explicitly instead of being interpreted as an empty result.",
         },
         messages: {
-          loadFailed: "Failed to load CodeGraph Studio",
-          configSaved: "CodeGraph Studio config saved",
-          configSaveFailed: "Failed to save CodeGraph Studio config",
+          loadFailed: "Failed to load CodeGraph",
+          configSaved: "CodeGraph config saved",
+          configSaveFailed: "Failed to save CodeGraph config",
           actionExecuted: "{{action}} executed",
           actionFailed: "CodeGraph action failed",
           debugCopied: "Raw debug report copied",

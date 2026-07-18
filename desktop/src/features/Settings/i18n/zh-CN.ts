@@ -152,7 +152,7 @@ const settingsPending = {
           },
         },
         codeGraph: {
-          title: "CodeGraph Studio",
+          title: "CodeGraph",
           description: "这是 CodeGraph 微应用工作台，用来查看 blocked-safe 状态、参数配置和 smoke 调试结果。",
           actions: {
             open: "进入工作区",
@@ -161,7 +161,7 @@ const settingsPending = {
       },
       codeGraphStudio: {
         page: {
-          title: "CodeGraph Studio",
+          title: "CodeGraph",
           description:
             "CodeGraph 用来理解代码仓结构、定位符号关系，并为后续代码检索和代码探索提供索引能力。这里可以查看它当前是否可用，并调试本地接入状态。",
         },
@@ -324,15 +324,15 @@ const settingsPending = {
           copyDebug: "复制调试报告",
         },
         states: {
-          loading: "正在加载 CodeGraph Studio...",
+          loading: "正在加载 CodeGraph...",
           emptySmokeTitle: "当前没有可用结果",
           emptySmoke:
             "真实 provider blocked 时，这里会明确显示 blocked，不会被解释成空结果。",
         },
         messages: {
-          loadFailed: "加载 CodeGraph Studio 失败",
-          configSaved: "CodeGraph Studio 参数已保存",
-          configSaveFailed: "保存 CodeGraph Studio 参数失败",
+          loadFailed: "加载 CodeGraph 失败",
+          configSaved: "CodeGraph 参数已保存",
+          configSaveFailed: "保存 CodeGraph 参数失败",
           actionExecuted: "{{action}} 已执行",
           actionFailed: "CodeGraph 操作失败",
           debugCopied: "原始调试报告已复制",

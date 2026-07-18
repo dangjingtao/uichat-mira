@@ -53,11 +53,14 @@ describe("Switch", () => {
     expect(screen.getByRole("switch")).toHaveClass("h-6");
   });
 
-  it("applies checked background color", () => {
+  it("applies visible track colors", () => {
     const { rerender } = render(<Switch checked={false} onChange={() => {}} />);
-    expect(screen.getByRole("switch")).toHaveClass("bg-border");
+    expect(screen.getByRole("switch")).toHaveClass(
+      "border-border",
+      "bg-surface-secondary",
+    );
 
     rerender(<Switch checked onChange={() => {}} />);
-    expect(screen.getByRole("switch")).toHaveClass("bg-primary");
+    expect(screen.getByRole("switch")).toHaveClass("border-primary", "bg-primary");
   });
 });

@@ -18,6 +18,7 @@ import {
   Button,
   IconButton,
   SegmentedTabs,
+  Result,
   Skeleton,
   Switch,
   TextArea,
@@ -627,29 +628,38 @@ export default function CodeGraphStudioPage() {
                 {t("settings.microApps.codeGraphStudio.cards.blockedReasons.title")}
               </div>
               <div className="divide-y divide-border rounded-ui-panel border border-border bg-surface-primary">
-                {blockedSummaryCards.map((item) => {
-                  const ItemIcon = item.icon;
-                  return (
-                    <div
-                      key={item.key}
-                      data-testid={`blocked-summary-${item.key}`}
-                      className="flex items-start gap-3 px-3.5 py-3"
-                    >
-                      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-secondary text-primary">
-                        <ItemIcon className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0 flex-1 space-y-0.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <div className="text-sm font-semibold text-text-primary">{item.title}</div>
-                          <Badge variant={item.badgeVariant} size="sm">
-                            {item.badgeLabel}
-                          </Badge>
+                {blockedSummaryCards.length > 0 ? (
+                  blockedSummaryCards.map((item) => {
+                    const ItemIcon = item.icon;
+                    return (
+                      <div
+                        key={item.key}
+                        data-testid={`blocked-summary-${item.key}`}
+                        className="flex items-start gap-3 px-3.5 py-3"
+                      >
+                        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-secondary text-primary">
+                          <ItemIcon className="h-4 w-4" />
                         </div>
-                        <div className="text-[13px] leading-5 text-text-secondary">{item.description}</div>
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="text-sm font-semibold text-text-primary">{item.title}</div>
+                            <Badge variant={item.badgeVariant} size="sm">
+                              {item.badgeLabel}
+                            </Badge>
+                          </div>
+                          <div className="text-[13px] leading-5 text-text-secondary">{item.description}</div>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                ) : (
+                  <Result
+                    size="sm"
+                    variant="success"
+                    title={t("settings.microApps.codeGraphStudio.cards.blockedReasons.emptyTitle")}
+                    description={t("settings.microApps.codeGraphStudio.cards.blockedReasons.emptyDescription")}
+                  />
+                )}
               </div>
             </div>
           </Card>
@@ -696,11 +706,6 @@ export default function CodeGraphStudioPage() {
                   </div>
                 ))}
               </div>
-              <Alert
-                className="mt-auto"
-                variant="warning"
-                title={t("settings.microApps.codeGraphStudio.cards.pollutionSummary.noticeTitle")}
-              />
             </div>
           </Card>
         </div>
@@ -720,51 +725,51 @@ export default function CodeGraphStudioPage() {
                 </div>
 
               <div className="space-y-3 rounded-ui-panel border border-border/70 bg-surface-secondary/20 p-3">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-1">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-4">
                     <div className="text-sm font-medium text-text-primary">
                       {t("settings.microApps.codeGraphStudio.fields.microAppEnabled")}
                     </div>
-                    <div className="text-sm leading-6 text-text-secondary">
-                      {t("settings.microApps.codeGraphStudio.cards.capability.microAppHint")}
-                    </div>
+                    <Switch
+                      checked={draft.microAppEnabled}
+                      onChange={() =>
+                        setDraft((current) =>
+                          current
+                            ? { ...current, microAppEnabled: !current.microAppEnabled }
+                            : current,
+                        )
+                      }
+                      ariaLabel={t("settings.microApps.codeGraphStudio.fields.microAppEnabled")}
+                    />
                   </div>
-                  <Switch
-                    checked={draft.microAppEnabled}
-                    onChange={() =>
-                      setDraft((current) =>
-                        current
-                          ? { ...current, microAppEnabled: !current.microAppEnabled }
-                          : current,
-                      )
-                    }
-                    ariaLabel={t("settings.microApps.codeGraphStudio.fields.microAppEnabled")}
-                  />
+                  <div className="text-sm leading-6 text-text-secondary">
+                    {t("settings.microApps.codeGraphStudio.cards.capability.microAppHint")}
+                  </div>
                 </div>
 
-                <div className="flex items-start justify-between gap-4 border-t border-border/60 pt-3">
-                  <div className="space-y-1">
+                <div className="space-y-2 border-t border-border/60 pt-3">
+                  <div className="flex items-center justify-between gap-4">
                     <div className="text-sm font-medium text-text-primary">
                       {t("settings.microApps.codeGraphStudio.fields.agentCapabilityEnabled")}
                     </div>
-                    <div className="text-sm leading-6 text-text-secondary">
-                      {t("settings.microApps.codeGraphStudio.cards.capability.agentCapabilityHint")}
-                    </div>
+                    <Switch
+                      checked={draft.agentCapabilityEnabled}
+                      onChange={() =>
+                        setDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                agentCapabilityEnabled: !current.agentCapabilityEnabled,
+                              }
+                            : current,
+                        )
+                      }
+                      ariaLabel={t("settings.microApps.codeGraphStudio.fields.agentCapabilityEnabled")}
+                    />
                   </div>
-                  <Switch
-                    checked={draft.agentCapabilityEnabled}
-                    onChange={() =>
-                      setDraft((current) =>
-                        current
-                          ? {
-                              ...current,
-                              agentCapabilityEnabled: !current.agentCapabilityEnabled,
-                            }
-                          : current,
-                      )
-                    }
-                    ariaLabel={t("settings.microApps.codeGraphStudio.fields.agentCapabilityEnabled")}
-                  />
+                  <div className="text-sm leading-6 text-text-secondary">
+                    {t("settings.microApps.codeGraphStudio.cards.capability.agentCapabilityHint")}
+                  </div>
                 </div>
 
                 <Alert
@@ -1000,12 +1005,7 @@ export default function CodeGraphStudioPage() {
                   ]}
                 />
 
-                {smokeMode === "real" ? (
-                  <Alert
-                    variant={report.status === "ready" ? "success" : "warning"}
-                    title={t("settings.microApps.codeGraphStudio.cards.smoke.realTitle")}
-                  />
-                ) : (
+                {smokeMode === "fake" ? (
                   <div className="space-y-3">
                     <Alert
                       variant="info"
@@ -1013,23 +1013,23 @@ export default function CodeGraphStudioPage() {
                     >
                       {t("settings.microApps.codeGraphStudio.cards.smoke.fakeDescription")}
                     </Alert>
-                    <div className="flex items-center justify-between rounded-ui-panel border border-border bg-surface-secondary/30 px-4 py-3">
-                      <div className="space-y-1">
+                    <div className="space-y-2 rounded-ui-panel border border-border bg-surface-secondary/30 px-4 py-3">
+                      <div className="flex items-center justify-between gap-4">
                         <div className="text-sm font-medium text-text-primary">
                           {t("settings.microApps.codeGraphStudio.cards.smoke.fakeToggleTitle")}
                         </div>
-                        <div className="text-sm text-text-secondary">
-                          {t("settings.microApps.codeGraphStudio.cards.smoke.fakeToggleHint")}
-                        </div>
+                        <Switch
+                          checked={isFakeProviderSelected}
+                          onChange={toggleFakeProviderMode}
+                          ariaLabel={t("settings.microApps.codeGraphStudio.cards.smoke.fakeToggleTitle")}
+                        />
                       </div>
-                      <Switch
-                        checked={isFakeProviderSelected}
-                        onChange={toggleFakeProviderMode}
-                        ariaLabel={t("settings.microApps.codeGraphStudio.cards.smoke.fakeToggleTitle")}
-                      />
+                      <div className="text-sm text-text-secondary">
+                        {t("settings.microApps.codeGraphStudio.cards.smoke.fakeToggleHint")}
+                      </div>
                     </div>
                   </div>
-                )}
+                ) : null}
 
                 <TextArea
                   label={t("settings.microApps.codeGraphStudio.fields.smokeQuery")}

@@ -3,7 +3,7 @@ const codeGraphZh = {
     microApps: {
       studioEntries: {
         codeGraph: {
-          title: "CodeGraph Studio",
+          title: "CodeGraph",
           description:
             "管理代码仓索引、运行时状态和智能体代码理解能力。真实 CodeGraph 可直接启动并由 Mira 受控调用。",
           actions: {
@@ -45,6 +45,10 @@ const codeGraphZh = {
           },
         },
         cards: {
+          blockedReasons: {
+            emptyTitle: "当前没有阻断原因",
+            emptyDescription: "当前状态未检测到会阻止 CodeGraph 运行的条件。",
+          },
           pollutionSummary: {
             title: "本地索引摘要",
             behavior: "受控使用 workspace/.codegraph，不自动删除",

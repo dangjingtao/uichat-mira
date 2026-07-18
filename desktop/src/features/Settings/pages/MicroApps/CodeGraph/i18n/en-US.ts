@@ -3,7 +3,7 @@ const codeGraphEn = {
     microApps: {
       studioEntries: {
         codeGraph: {
-          title: "CodeGraph Studio",
+          title: "CodeGraph",
           description:
             "Manage codebase indexing, runtime status, and the Agent's controlled code-understanding capability.",
           actions: {
@@ -45,6 +45,10 @@ const codeGraphEn = {
           },
         },
         cards: {
+          blockedReasons: {
+            emptyTitle: "No blockers detected",
+            emptyDescription: "The current state has no conditions preventing CodeGraph from running.",
+          },
           pollutionSummary: {
             title: "Local index summary",
             behavior: "Controlled workspace/.codegraph usage; never auto-delete",

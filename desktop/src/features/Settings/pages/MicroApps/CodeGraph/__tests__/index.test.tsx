@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import CodeGraphStudioPage from "../index";
 
 const translations = {
-  "settings.microApps.codeGraphStudio.page.title": "CodeGraph Studio",
+  "settings.microApps.codeGraphStudio.page.title": "CodeGraph",
   "settings.microApps.codeGraphStudio.page.description":
     "CodeGraph 用来理解代码仓结构、定位符号关系，并为后续代码检索和代码探索提供索引能力。这里可以查看它当前是否可用，并调试本地接入状态。",
   "settings.microApps.codeGraphStudio.overview.statusLabel": "当前状态：",
@@ -50,6 +50,10 @@ const translations = {
     "如果 repo root 出现 `.codegraph`，系统会阻断 ready，且不会删除用户文件。",
   "settings.microApps.codeGraphStudio.blockedCards.pollutionGuard.badge": "保护中",
   "settings.microApps.codeGraphStudio.cards.blockedReasons.title": "阻断原因",
+  "settings.microApps.codeGraphStudio.cards.blockedReasons.emptyTitle":
+    "当前没有阻断原因",
+  "settings.microApps.codeGraphStudio.cards.blockedReasons.emptyDescription":
+    "当前状态未检测到会阻止 CodeGraph 运行的条件。",
   "settings.microApps.codeGraphStudio.cards.pollutionSummary.title": "污染保护摘要",
   "settings.microApps.codeGraphStudio.cards.pollutionSummary.behavior":
     "发现污染即阻断，不删除用户文件",
@@ -153,17 +157,17 @@ const translations = {
     "使用推荐目录",
   "settings.microApps.codeGraphStudio.actions.copyDebug": "复制调试报告",
   "settings.microApps.codeGraphStudio.states.loading":
-    "正在加载 CodeGraph Studio...",
+    "正在加载 CodeGraph...",
   "settings.microApps.codeGraphStudio.states.emptySmokeTitle":
     "当前没有可用结果",
   "settings.microApps.codeGraphStudio.states.emptySmoke":
     "真实 provider blocked 时，这里会明确显示 blocked，不会被解释成空结果。",
   "settings.microApps.codeGraphStudio.messages.loadFailed":
-    "加载 CodeGraph Studio 失败",
+    "加载 CodeGraph 失败",
   "settings.microApps.codeGraphStudio.messages.configSaved":
-    "CodeGraph Studio 参数已保存",
+    "CodeGraph 参数已保存",
   "settings.microApps.codeGraphStudio.messages.configSaveFailed":
-    "保存 CodeGraph Studio 参数失败",
+    "保存 CodeGraph 参数失败",
   "settings.microApps.codeGraphStudio.messages.actionExecuted":
     "{{action}} 已执行",
   "settings.microApps.codeGraphStudio.messages.actionFailed":
@@ -361,6 +365,32 @@ describe("CodeGraphStudioPage", () => {
       screen.getByText("C. 污染保护已启用"),
     ).toBeInTheDocument();
     expect(screen.queryByText("raw external index issue")).not.toBeInTheDocument();
+  });
+
+  it("shows an empty state when no blocked reasons are reported", async () => {
+    apiMocks.getCodeGraphStudioReport.mockResolvedValueOnce({
+      ...baseReport,
+      blockedReasons: [],
+      config: {
+        ...baseReport.config,
+        appDataRoot: "D:\\app-data",
+        appDataRootResolved: "D:\\app-data",
+      },
+      pollutionGuard: {
+        ...baseReport.pollutionGuard,
+        status: "ready",
+        blockedReason: null,
+      },
+    });
+
+    render(<CodeGraphStudioPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("当前没有阻断原因")).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText("当前状态未检测到会阻止 CodeGraph 运行的条件。"),
+    ).toBeInTheDocument();
   });
 
   it("shows the recommended app data root action when appDataRoot is empty", async () => {
