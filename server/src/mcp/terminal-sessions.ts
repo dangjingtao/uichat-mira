@@ -4,15 +4,19 @@ import { mcpBadRequest } from "./core/errors.js";
 import { resolveSandboxCwd, resolveSandboxEnv } from "@/sandbox/executor.js";
 import type { McpExecutionEnvironment } from "./core/definitions.js";
 import {
-  createWindowsJobPtyArgs,
-  getWindowsJobMarker,
   resolveHostCwd,
   resolveHostEnv,
+} from "./terminal/host-spawn-runtime.js";
+import {
   resolveTerminalRuntimeId,
   type HostWorkspaceRelation,
   type TerminalProcessTreeMode,
   type TerminalRuntimeId,
-} from "./terminal/host-runtime.js";
+} from "./terminal/runtime-contract.js";
+import {
+  createWindowsJobPtyArgs,
+  getWindowsJobMarker,
+} from "./terminal/windows-job-object.js";
 import { killTerminalProcessTree } from "./terminal/process-tree.js";
 
 export interface TerminalSessionRecord {
