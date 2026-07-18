@@ -14,19 +14,20 @@ const codeGraphZh = {
       codeGraphStudio: {
         overview: {
           description:
-            "真实 CodeGraph 已接入 Managed Runtime。首次启动会初始化并建立当前工作区索引，后续复用本地索引并由 CodeGraph 自动同步变更。",
+            "真实 CodeGraph 已接入 Managed Runtime。首次使用会为当前 Agent 工作区按需初始化索引，后续复用本地索引并由 CodeGraph 自动同步变更。",
           nextSteps: {
             step1: {
               title: "确认 App Data Root",
               description: "日志和 Mira 管理数据放在仓库外部目录。",
             },
             step2: {
-              title: "启动 CodeGraph",
-              description: "Mira 会检查 Provider、Telemetry，并在需要时初始化工作区索引。",
+              title: "启用 CodeGraph",
+              description: "一个开关同时启用微应用和受控智能体能力，无需额外权限开关。",
             },
             step3: {
-              title: "允许智能体使用",
-              description: "开启后，Planner 只会看到受控的 codebase_explore，不会暴露 CodeGraph 原生命令。",
+              title: "直接用于智能体",
+              description:
+                "启用后，Planner 自动获得唯一受控工具 codebase_explore；CodeGraph 原生命令仍保持内部封装。",
             },
           },
         },
@@ -57,17 +58,19 @@ const codeGraphZh = {
               "真实 CodeGraph 当前需要 workspace/.codegraph。Mira 会把它作为声明过的 Runtime 数据使用，并继续把日志等管理数据放在 App Data Root。",
           },
           capability: {
+            microAppHint:
+              "开启后，CodeGraph 微应用和智能体 codebase_explore 一起启用；关闭时一起停用。无需第二个权限开关。",
             agentCapabilityHint:
-              "允许智能体使用 CodeGraph。Runtime ready、Telemetry 关闭、Workspace 匹配且 App Data Root 合法后，Harness 会注册唯一受控工具 codebase_explore。",
+              "兼容字段会跟随“启用 CodeGraph 微应用”，不再作为独立权限开关。",
             unavailable:
-              "当前还不能注册 codebase_explore，请检查 Provider、Telemetry、Workspace 和 App Data Root。",
+              "当前还不能注册 codebase_explore，请检查 Provider 和 App Data Root。Runtime 会在具体 Agent 工作区首次使用时按需启动。",
           },
           actions: {
             title: "CodeGraph Runtime",
             description:
-              "启动会自动检查 Provider，并在工作区尚未初始化时建立索引；Stop 只停止运行时，不删除索引。",
+              "这里用于手动检测和调试 Runtime。Agent 正常使用不要求你先点击 Start；启用微应用后会按工作区懒启动。Stop 只停止运行时，不删除索引。",
             startHintBlocked:
-              "当前存在真正的启动阻断，请检查 Provider、Telemetry 或 App Data Root。",
+              "当前存在真正的启动阻断，请检查 Provider 或 App Data Root。",
             startHintFake:
               "当前使用 Fake Provider，仅用于开发验证。切回真实 Provider 后可启动实际 CodeGraph。",
           },
@@ -93,7 +96,7 @@ const codeGraphZh = {
         },
         states: {
           emptySmoke:
-            "还没有 Smoke 结果。启动 CodeGraph 后可以验证 Runtime 和代码查询链。",
+            "还没有 Smoke 结果。需要手动验证时可以启动 CodeGraph，再检查 Runtime 和代码查询链。",
         },
       },
     },
