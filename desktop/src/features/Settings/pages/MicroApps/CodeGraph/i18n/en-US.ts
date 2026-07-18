@@ -14,19 +14,21 @@ const codeGraphEn = {
       codeGraphStudio: {
         overview: {
           description:
-            "Real CodeGraph now runs as a managed runtime. First start initializes and indexes the active workspace when needed; later runs reuse the local project index and CodeGraph keeps it synchronized.",
+            "Real CodeGraph runs as a managed runtime. On first use, Mira initializes the index for the active Agent workspace when needed; later runs reuse the local project index and CodeGraph keeps it synchronized.",
           nextSteps: {
             step1: {
               title: "Confirm App Data Root",
               description: "Keep logs and Mira-managed runtime data outside the repository.",
             },
             step2: {
-              title: "Start CodeGraph",
-              description: "Mira checks the provider and telemetry, then initializes the workspace index when required.",
+              title: "Enable CodeGraph",
+              description:
+                "One switch enables both the microapp and the controlled Agent capability. No second permission switch is required.",
             },
             step3: {
-              title: "Allow Agent access",
-              description: "Planner only sees the controlled codebase_explore tool; native CodeGraph commands remain internal.",
+              title: "Use it from Agent",
+              description:
+                "Once enabled, Planner automatically gets the single controlled codebase_explore tool while native CodeGraph commands remain internal.",
             },
           },
         },
@@ -57,17 +59,19 @@ const codeGraphEn = {
               "Real CodeGraph currently requires workspace/.codegraph. Mira treats it as declared runtime data while keeping logs and other managed data under App Data Root.",
           },
           capability: {
+            microAppHint:
+              "Enabling CodeGraph also enables the controlled codebase_explore Agent capability. Disabling it disables both; there is no second permission switch.",
             agentCapabilityHint:
-              "Allow the Agent to use CodeGraph. When runtime, telemetry, workspace, and App Data Root checks pass, Harness registers the single controlled codebase_explore tool.",
+              "This legacy compatibility field follows the CodeGraph enable switch and is no longer an independent permission.",
             unavailable:
-              "codebase_explore is not available yet. Check the provider, telemetry, workspace, and App Data Root.",
+              "codebase_explore is not available yet. Check the provider and App Data Root. The runtime starts lazily for the active Agent workspace on first use.",
           },
           actions: {
             title: "CodeGraph Runtime",
             description:
-              "Start checks the provider and initializes the workspace index when needed. Stop only stops the runtime; it does not delete the index.",
+              "These controls are for manual runtime inspection and debugging. Normal Agent use does not require pressing Start first; enabling CodeGraph allows lazy startup per workspace. Stop only stops the runtime and does not delete the index.",
             startHintBlocked:
-              "A real startup blocker remains. Check the provider, telemetry, or App Data Root.",
+              "A real startup blocker remains. Check the provider or App Data Root.",
             startHintFake:
               "Fake Provider is selected for development validation. Switch back to the real provider to run CodeGraph.",
           },
@@ -93,7 +97,7 @@ const codeGraphEn = {
         },
         states: {
           emptySmoke:
-            "No smoke result yet. Start CodeGraph, then verify the runtime and code-query chain.",
+            "No smoke result yet. Start CodeGraph only when you want a manual validation, then verify the runtime and code-query chain.",
         },
       },
     },
