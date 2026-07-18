@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import {
   getDisplayExecutionStep,
+  normalizeInlineText,
   summarizeRagProgress,
   type UChatExecutionProgressDetail,
 } from "./executionParsers";
@@ -85,6 +86,69 @@ const getApprovalTraceState = (
   return approvalWaitSteps.length > 0 ? "waiting_approval" : null;
 };
 
+const getLatestPlannerThought = (steps: RagNodeLike[]) => {
+  const plannerStep = [...steps]
+    .reverse()
+    .find((step) => step.nodeType === "plan" && step.phase === "done");
+  if (!plannerStep) {
+    return null;
+  }
+
+  const reason = getStepDetailString(plannerStep, "reason");
+  const text = reason || plannerStep.summary;
+  return text ? normalizeInlineText(text) : null;
+};
+
+const getAgentInnerStatus = (
+  steps: RagNodeLike[],
+  approvalTraceState: ApprovalTraceState,
+) => {
+  const hasFinishedAnswer = steps.some(
+    (step) =>
+      step.phase === "done" &&
+      (step.nodeType === "generate" || step.nodeType === "evaluate"),
+  );
+  const hasFailed = steps.some((step) => step.phase === "error");
+  if (hasFinishedAnswer || hasFailed) {
+    return null;
+  }
+
+  const plannerThought = getLatestPlannerThought(steps);
+  const activeStep = [...steps].reverse().find((step) => step.phase === "start");
+
+  if (activeStep?.nodeType === "generate" && plannerThought) {
+    return plannerThought;
+  }
+
+  if (activeStep) {
+    const display = getDisplayExecutionStep(activeStep);
+    const activeText = display.summary || activeStep.summary;
+    if (activeText) {
+      return normalizeInlineText(activeText);
+    }
+  }
+
+  if (approvalTraceState === "waiting_approval" && plannerThought) {
+    return `${plannerThought}，等你确认后继续。`;
+  }
+
+  if (plannerThought) {
+    return plannerThought;
+  }
+
+  const latestMeaningfulStep = [...steps]
+    .reverse()
+    .find(
+      (step) =>
+        step.phase === "done" &&
+        step.nodeType !== "approval" &&
+        Boolean(step.summary),
+    );
+  return latestMeaningfulStep?.summary
+    ? normalizeInlineText(latestMeaningfulStep.summary)
+    : null;
+};
+
 // UChatExecutionTrace renders the inline retrieval/generation progress row.
 export function UChatExecutionTrace({
   messageId,
@@ -105,6 +169,7 @@ export function UChatExecutionTrace({
   }
 
   const approvalTraceState = getApprovalTraceState(steps, agentStatus);
+  const innerStatus = getAgentInnerStatus(steps, approvalTraceState);
   const summary =
     approvalTraceState === "waiting_approval"
       ? t("chat.thread.agent.waitingApprovalTitle")
@@ -243,6 +308,19 @@ export function UChatExecutionTrace({
           </div>
         </div>
       </div>
+
+      {innerStatus ? (
+        <div
+          data-testid="agent-inner-status"
+          className="mt-2 flex items-start gap-2 px-1 text-[13px] leading-5 text-text-secondary"
+        >
+          <span
+            className="mt-[7px] h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-primary/70"
+            aria-hidden="true"
+          />
+          <p className="min-w-0 break-words">{innerStatus}</p>
+        </div>
+      ) : null}
     </div>
   );
 }
