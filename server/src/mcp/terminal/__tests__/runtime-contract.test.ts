@@ -18,9 +18,9 @@ describe("terminal runtime contract", () => {
     expect(resolveTerminalRuntimeId()).toBe("host_spawn");
   });
 
-  it("keeps sandbox_runtime as an explicit compatibility provider", () => {
+  it("reserves sandbox_runtime without falling back to the legacy executor", () => {
     process.env.MIRA_TERMINAL_RUNTIME = "sandbox_runtime";
-    expect(resolveTerminalRuntimeId()).toBe("sandbox_runtime");
+    expect(() => resolveTerminalRuntimeId()).toThrow(/reserved|not implemented/i);
   });
 
   it("does not accept unknown runtime names", () => {
