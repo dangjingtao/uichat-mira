@@ -17,9 +17,25 @@ import {
   unregisterCapability,
 } from "./registry.js";
 
+let lastRuntimeConfigFingerprint: string | null = null;
+
 const disposeRepoLocalRuntime = () => {
   void disposeRepoLocalManagedCodeGraphManagers();
 };
+
+const getRuntimeConfigFingerprint = (
+  draft: ReturnType<
+    NonNullable<ReturnType<typeof getActiveCodeGraphStudioService>>["getDraft"]
+  >,
+) =>
+  JSON.stringify({
+    command: draft.command,
+    startArgs: draft.startArgs,
+    versionProbeArgs: draft.versionProbeArgs,
+    telemetryProbeArgs: draft.telemetryProbeArgs,
+    appDataRoot: draft.appDataRoot,
+    timeoutMs: draft.timeoutMs,
+  });
 
 export const reconcileCodeGraphHarnessCapability = () => {
   const service = getActiveCodeGraphStudioService();
@@ -32,10 +48,20 @@ export const reconcileCodeGraphHarnessCapability = () => {
       unregisterCapability("codebase_explore");
     }
     disposeRepoLocalRuntime();
+    lastRuntimeConfigFingerprint = null;
     return false;
   }
 
   const draft = service.getDraft();
+  const runtimeConfigFingerprint = getRuntimeConfigFingerprint(draft);
+  if (
+    lastRuntimeConfigFingerprint &&
+    lastRuntimeConfigFingerprint !== runtimeConfigFingerprint
+  ) {
+    disposeRepoLocalRuntime();
+  }
+  lastRuntimeConfigFingerprint = runtimeConfigFingerprint;
+
   const gate = normalizeDeclaredRepoLocalCapabilityGate(
     service.getCapabilityGate(),
     {
