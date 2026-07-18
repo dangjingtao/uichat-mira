@@ -40,14 +40,14 @@ describe("evolving-knowledge service", () => {
     const capture = await service.processCapture({
       sourceUrl: "https://example.com/article",
       title: "测试文章",
-      contentType: "text",
+      contentType: "webpage",
       rawContent: "这是一篇关于 AI 的文章。",
     }, { userId: 1 });
 
     expect(capture).toMatchObject({
       sourceUrl: "https://example.com/article",
       title: "测试文章",
-      contentType: "text",
+      contentType: "webpage",
       rewrittenSummary: "AI 重写的摘要",
       aiTags: ["AI", "测试"],
     });
@@ -57,6 +57,21 @@ describe("evolving-knowledge service", () => {
     const stored = service.getCaptureById(capture.id, 1);
     expect(stored).not.toBeNull();
     expect(stored?.rewrittenSummary).toBe("AI 重写的摘要");
+
+    const concepts = service.listConcepts(1);
+    expect(concepts.some((concept) => concept.displayName === "AI")).toBe(true);
+    expect(concepts.some((concept) => concept.displayName === "GPT")).toBe(true);
+
+    const evidence = evolvingKnowledgeRepository.listEvidenceUnitsByCapture(
+      capture.id,
+      1,
+    );
+    expect(evidence).toHaveLength(1);
+    expect(evidence[0].content).toBe("这是一篇关于 AI 的文章。");
+    expect(evidence[0].sourceLocator).toEqual({
+      startOffset: 0,
+      endOffset: "这是一篇关于 AI 的文章。".length,
+    });
   });
 
   it("lists captures ordered by capturedAt desc", async () => {
@@ -72,13 +87,13 @@ describe("evolving-knowledge service", () => {
     await service.processCapture({
       sourceUrl: "https://a.com",
       title: "A",
-      contentType: "text",
+      contentType: "webpage",
       rawContent: "content A",
     }, { userId: 1 });
     await service.processCapture({
       sourceUrl: "https://b.com",
       title: "B",
-      contentType: "text",
+      contentType: "webpage",
       rawContent: "content B",
     }, { userId: 1 });
 
@@ -101,13 +116,13 @@ describe("evolving-knowledge service", () => {
     const c1 = await service.processCapture({
       sourceUrl: "https://a.com",
       title: "A",
-      contentType: "text",
+      contentType: "webpage",
       rawContent: "content A",
     }, { userId: 1 });
     const c2 = await service.processCapture({
       sourceUrl: "https://b.com",
       title: "B",
-      contentType: "text",
+      contentType: "webpage",
       rawContent: "content B",
     }, { userId: 1 });
 
@@ -121,9 +136,19 @@ describe("evolving-knowledge service", () => {
       aiReasoning: "两者主题相似",
     });
 
+    const duplicate = evolvingKnowledgeRepository.createRelation({
+      userId: 1,
+      sourceCaptureId: c1.id,
+      targetCaptureId: c2.id,
+      relationType: "similar",
+      confidence: 0.9,
+      aiReasoning: "重复关系不应再次写入",
+    });
+
     const relations = service.listRelationsForCapture(c1.id, 1);
     expect(relations.length).toBeGreaterThan(0);
     expect(relations[0].relationType).toBe("similar");
+    expect(duplicate.id).toBe(relations[0].id);
   });
 
   it("deletes a capture", async () => {
@@ -139,7 +164,7 @@ describe("evolving-knowledge service", () => {
     const capture = await service.processCapture({
       sourceUrl: "https://example.com",
       title: "Test",
-      contentType: "text",
+      contentType: "webpage",
       rawContent: "content",
     }, { userId: 1 });
 
@@ -191,19 +216,19 @@ describe("evolving-knowledge service", () => {
     await service.processCapture({
       sourceUrl: "https://a.com",
       title: "A",
-      contentType: "text",
+      contentType: "webpage",
       rawContent: "content",
     }, { userId: 1 });
     await service.processCapture({
       sourceUrl: "https://b.com",
       title: "B",
-      contentType: "text",
+      contentType: "webpage",
       rawContent: "content",
     }, { userId: 1 });
     await service.processCapture({
       sourceUrl: "https://c.com",
       title: "C",
-      contentType: "text",
+      contentType: "webpage",
       rawContent: "content",
     }, { userId: 1 });
 
@@ -230,7 +255,7 @@ describe("evolving-knowledge service", () => {
     await service.processCapture({
       sourceUrl: "https://ml.com",
       title: "机器学习入门",
-      contentType: "text",
+      contentType: "webpage",
       rawContent: "机器学习是人工智能的一个分支。",
     }, { userId: 1 });
 
@@ -246,7 +271,7 @@ describe("evolving-knowledge service", () => {
     const capture = await service.processCapture({
       sourceUrl: "https://example.com/failure",
       title: "保留原文",
-      contentType: "text",
+      contentType: "webpage",
       rawContent: "必须保留的完整原文",
     }, { userId: 1 });
 
@@ -256,12 +281,145 @@ describe("evolving-knowledge service", () => {
     expect(service.getCaptureById(capture.id, 2)).toBeNull();
   });
 
+  it("rebuilds a bounded batch and records the maintenance run", async () => {
+    const service = createEvolvingKnowledgeService();
+    const first = await service.processCapture(
+      {
+        sourceUrl: "https://a.com",
+        title: "机器学习方法",
+        contentType: "webpage",
+        rawContent: "机器学习方法需要可验证的实验。",
+      },
+      { userId: 1, processAi: false },
+    );
+    const second = await service.processCapture(
+      {
+        sourceUrl: "https://b.com",
+        title: "机器学习实验",
+        contentType: "webpage",
+        rawContent: "机器学习实验需要记录指标。",
+      },
+      { userId: 1, processAi: false },
+    );
+    evolvingKnowledgeRepository.updateCapture(first.id, 1, {
+      rewrittenSummary: "机器学习方法",
+      aiTags: ["机器学习"],
+      processingStatus: "completed",
+      markUserEdited: false,
+    });
+    evolvingKnowledgeRepository.updateCapture(second.id, 1, {
+      rewrittenSummary: "机器学习实验",
+      aiTags: ["机器学习"],
+      processingStatus: "completed",
+      markUserEdited: false,
+    });
+    mockGenerateText
+      .mockResolvedValueOnce(
+        JSON.stringify([
+          {
+            sourceIndex: 0,
+            targetIndex: 1,
+            relationType: "similar",
+            confidence: 0.9,
+            reasoning: "共享机器学习主题",
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify([
+          {
+            insightType: "synthesis",
+            title: "机器学习主题",
+            description: "两条材料共同讨论机器学习实践。",
+            confidence: 0.8,
+            triggerIndex: 0,
+            relatedIndices: [1],
+          },
+        ]),
+      );
+
+    const result = await service.rebuildKnowledge(1, { limit: 1, offset: 0 });
+
+    expect(result.capturesScanned).toBe(1);
+    expect(result.hasMore).toBe(true);
+    expect(result.nextOffset).toBe(1);
+    const run = evolvingKnowledgeRepository.getMaintenanceRun(result.runId, 1);
+    expect(run?.status).toBe("completed");
+    expect(run?.capturesScanned).toBe(1);
+    expect(evolvingKnowledgeRepository.listRelationsForCapture(first.id, 1)).toHaveLength(1);
+  });
+
+  it("compiles a topic and preserves viewpoint revisions with evidence", async () => {
+    const service = createEvolvingKnowledgeService();
+    const first = await service.processCapture(
+      {
+        sourceUrl: "https://a.com/topic",
+        title: "Agent 记忆方法",
+        contentType: "webpage",
+        rawContent: "Agent 需要记录上下文。",
+      },
+      { userId: 1, processAi: false },
+    );
+    const second = await service.processCapture(
+      {
+        sourceUrl: "https://b.com/topic",
+        title: "Agent 记忆实验",
+        contentType: "webpage",
+        rawContent: "Agent 需要验证记忆是否有效。",
+      },
+      { userId: 1, processAi: false },
+    );
+    for (const capture of [first, second]) {
+      evolvingKnowledgeRepository.updateCapture(capture.id, 1, {
+        rewrittenSummary: capture.title,
+        aiTags: ["Agent", "记忆"],
+        processingStatus: "completed",
+        markUserEdited: false,
+      });
+      evolvingKnowledgeRepository.syncConceptsForCapture(capture.id, 1);
+    }
+
+    const concept = service.listConcepts(1).find((item) => item.displayName === "Agent");
+    expect(concept).toBeDefined();
+    mockGenerateText.mockResolvedValue(
+      JSON.stringify({
+        summary: "材料共同说明 Agent 记忆需要保存上下文并验证效果。",
+        pendingQuestions: ["还需要更多长期运行数据"],
+        viewpoint: {
+          title: "Agent 记忆需要验证",
+          statement: "Agent 记忆机制必须同时保存上下文并通过效果验证。",
+          confidence: 0.82,
+          supportingIndices: [0, 1],
+          opposingIndices: [],
+        },
+      }),
+    );
+
+    const compiled = await service.compileTopicForConcept(concept!.id, 1);
+
+    expect(compiled.topic?.summary).toContain("Agent 记忆");
+    expect(compiled.viewpoint?.status).toBe("needs_review");
+    expect(compiled.version?.versionNumber).toBe(1);
+    expect(
+      evolvingKnowledgeRepository.listViewpointEvidence(compiled.version!.id, 1),
+    ).toHaveLength(2);
+
+    mockGenerateText.mockReset();
+    const reviewed = await service.reviewViewpoint(compiled.viewpoint!.id, 1, {
+      decision: "confirm",
+      statement: "修订后的 Agent 记忆观点。",
+    });
+    expect(reviewed?.viewpoint?.status).toBe("active");
+    expect(reviewed?.version?.versionNumber).toBe(2);
+    expect(service.listViewpointVersions(compiled.viewpoint!.id, 1)).toHaveLength(2);
+  });
+
   it("deduplicates recent insights and excludes expired insights", () => {
     const trigger = evolvingKnowledgeRepository.createCapture({
       userId: 1,
       sourceUrl: "https://example.com",
       title: "Trigger",
-      contentType: "text",
+      contentType: "webpage",
       rawContent: "content",
       rewrittenSummary: "summary",
       aiTags: [],

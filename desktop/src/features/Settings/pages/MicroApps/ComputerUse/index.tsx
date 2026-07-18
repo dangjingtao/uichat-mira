@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Activity, CircleStop, Eye, HelpCircle, Play, Plus, RotateCcw } from "lucide-react";
-import { Alert, Badge, Button, Card, Select, TextInput } from "@/shared/ui";
+import { Activity, CircleStop, Download, Eye, HelpCircle, Play, Plus, RotateCcw } from "lucide-react";
+import { Alert, Badge, Button, Card, Modal, NavigationCardTabs, Select, TextInput } from "@/shared/ui";
 import { resolveComputerUseArtifactUrl, type ComputerUseActionInput, type ComputerUseAssertionInput } from "@/shared/api/computerUse";
 import MicroAppPageLayout from "../components/MicroAppPageLayout";
 import { useComputerUseDebuggerState, type ComputerUseDebuggerApi } from "./useComputerUseDebuggerState";
@@ -20,16 +20,43 @@ export default function ComputerUseDebuggerPage({ api }: { api?: ComputerUseDebu
   const [assertion, setAssertion] = useState("title");
   const [expected, setExpected] = useState("");
   const [guideOpen, setGuideOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"playwright">("playwright");
   const browser = state.session?.browser;
   const config = state.config;
   const modelUnavailable = state.model.status === "unavailable";
   const rawJson = useMemo(() => JSON.stringify(state.session ?? state.status, null, 2), [state.session, state.status]);
+  const runtimeCandidates = state.runtime.details?.inspectedCandidates ?? [];
+  const hasManagedRuntime = runtimeCandidates.some((candidate) => candidate.source === "managed");
+  const hasSystemBrowser = runtimeCandidates.some((candidate) => candidate.source === "system");
 
   useEffect(() => { void state.refreshStatus(); }, [state.refreshStatus]);
 
   const runAction = () => {
     if (!browser?.url || !browser.snapshotHash) return;
     void state.executeAction(buildActionInput(action, ref, value, browser.url, browser.snapshotHash));
+  };
+
+  const requestRuntimeInstall = () => {
+    const needsConfirmation = hasManagedRuntime || hasSystemBrowser;
+    if (!needsConfirmation) {
+      void state.installRuntime();
+      return;
+    }
+
+    Modal.confirm({
+      title: hasManagedRuntime
+        ? t("settings.microApps.computerUseDebugger.runtimeCard.reinstallTitle")
+        : t("settings.microApps.computerUseDebugger.runtimeCard.systemBrowserTitle"),
+      description: hasManagedRuntime
+        ? t("settings.microApps.computerUseDebugger.runtimeCard.reinstallDescription")
+        : t("settings.microApps.computerUseDebugger.runtimeCard.systemBrowserDescription"),
+      confirmText: t("settings.microApps.computerUseDebugger.runtimeCard.confirmDownload"),
+      cancelText: t("settings.microApps.computerUseDebugger.runtimeCard.cancel"),
+      tone: "warning",
+      onConfirm: async () => {
+        await state.installRuntime(true);
+      },
+    });
   };
 
   return (
@@ -43,6 +70,32 @@ export default function ComputerUseDebuggerPage({ api }: { api?: ComputerUseDebu
       <ComputerUseGuideDrawer open={guideOpen} onClose={() => setGuideOpen(false)} labels={t("settings.microApps.computerUseDebugger.guide", { returnObjects: true }) as never} />
       {modelUnavailable && <Alert variant="info" title={t("settings.microApps.computerUseDebugger.model.unavailableTitle")}>{state.model.message}</Alert>}
       {state.error && <Alert variant="danger" title={t("settings.microApps.computerUseDebugger.errors.title")}>{state.error}</Alert>}
+      <NavigationCardTabs
+        tabs={[{ value: "playwright", label: t("settings.microApps.computerUseDebugger.tabs.playwright") }]}
+        value={activeTab}
+        onChange={setActiveTab}
+      />
+      <Card className="space-y-4" padding="md">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <SectionTitle icon={<Download className="h-4 w-4" />} title={t("settings.microApps.computerUseDebugger.runtimeCard.title")} />
+            <p className="mt-1 text-sm text-text-secondary">{t("settings.microApps.computerUseDebugger.runtimeCard.description")}</p>
+          </div>
+          <Button size="sm" variant="primary" onClick={requestRuntimeInstall} disabled={state.busy}>
+            <Download className="h-4 w-4" />
+            {t("settings.microApps.computerUseDebugger.actions.installRuntime")}
+          </Button>
+        </div>
+        <div className="grid gap-3 text-sm md:grid-cols-3">
+          <RuntimeFact label={t("settings.microApps.computerUseDebugger.runtimeCard.status")} value={t(`settings.microApps.computerUseDebugger.runtime.${state.runtime.status}`)} tone={state.runtime.status === "ready" ? "success" : "warning"} />
+          <RuntimeFact label={t("settings.microApps.computerUseDebugger.runtimeCard.managed")} value={hasManagedRuntime ? t("settings.microApps.computerUseDebugger.runtimeCard.detected") : t("settings.microApps.computerUseDebugger.runtimeCard.notDetected")} tone={hasManagedRuntime ? "success" : "muted"} />
+          <RuntimeFact label={t("settings.microApps.computerUseDebugger.runtimeCard.system")} value={hasSystemBrowser ? t("settings.microApps.computerUseDebugger.runtimeCard.detected") : t("settings.microApps.computerUseDebugger.runtimeCard.notDetected")} tone={hasSystemBrowser ? "success" : "muted"} />
+        </div>
+        <div className="rounded-ui-control border border-border bg-surface-secondary/40 px-3 py-2 text-xs text-text-tertiary">
+          <span className="font-medium text-text-secondary">{t("settings.microApps.computerUseDebugger.runtimeCard.path")}: </span>
+          <span className="break-all font-mono">{state.runtime.details?.executablePath ?? t("settings.microApps.computerUseDebugger.runtimeCard.pathEmpty")}</span>
+        </div>
+      </Card>
       <div className="grid min-h-0 gap-4 xl:grid-cols-[300px_minmax(0,1fr)_360px]">
         <Card className="space-y-4" padding="md">
           <SectionTitle icon={<Activity className="h-4 w-4" />} title={t("settings.microApps.computerUseDebugger.runConfig.title")} />
@@ -66,6 +119,7 @@ export default function ComputerUseDebuggerPage({ api }: { api?: ComputerUseDebu
 function SectionTitle({ icon, title }: { icon?: React.ReactNode; title: string }) { return <h2 className="flex items-center gap-2 text-heading-2 text-text-primary">{icon}{title}</h2>; }
 function Field({ label, value, empty }: { label: string; value?: string; empty: string }) { return <div className="flex justify-between gap-3 border-b border-border pb-1"><span className="text-text-tertiary">{label}</span><span className="truncate font-mono text-text-primary">{value || empty}</span></div>; }
 function FeedbackBlock({ title, value }: { title: string; value: unknown }) { return <div className="mt-2"><div className="text-caption uppercase text-text-tertiary">{title}</div><pre className="mt-1 max-h-32 overflow-auto rounded-ui-control bg-surface-secondary p-2 font-mono text-xs text-text-secondary">{typeof value === "string" ? value : JSON.stringify(value, null, 2)}</pre></div>; }
+function RuntimeFact({ label, value, tone }: { label: string; value: string; tone: "success" | "warning" | "muted" }) { return <div className="flex items-center justify-between gap-3 rounded-ui-control border border-border bg-surface-secondary/30 px-3 py-2"><span className="text-text-tertiary">{label}</span><Badge variant={tone}>{value}</Badge></div>; }
 
 export function buildActionInput(action: string, ref: string, value: string, pageUrl: string, snapshotHash: string): ComputerUseActionInput {
   if (action === "navigate") return { pageUrl, snapshotHash, action: { kind: "navigate", url: value } };

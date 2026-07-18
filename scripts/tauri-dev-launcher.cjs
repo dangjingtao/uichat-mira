@@ -4,7 +4,7 @@ const fs = require("fs");
 const { spawn, spawnSync } = require("child_process");
 const { pathToFileURL } = require("url");
 
-const DESKTOP_PORT = 5173;
+const DESKTOP_PORT = 5273;
 const STARTUP_TIMEOUT_MS = 60000;
 const childProcesses = [];
 let isShuttingDown = false;

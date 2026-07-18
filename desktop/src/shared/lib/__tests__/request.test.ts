@@ -81,7 +81,7 @@ describe("request", () => {
     expect(vi.mocked(axios.create)).toHaveBeenCalledWith(
       expect.objectContaining({
         baseURL: "http://localhost:3000",
-        timeout: 30000,
+        timeout: 300000,
         headers: { "Content-Type": "application/json" },
       }),
     );

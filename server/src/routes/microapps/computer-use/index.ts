@@ -8,7 +8,6 @@ import {
   type ComputerUseRuntimeState,
   type ComputerUseTask,
 } from "@/microapps/computer-use/index.js";
-import type { BrowserRuntimeDownloadRequest } from "@/microapps/computer-use/runtime/types.js";
 import { success } from "@/utils/index.js";
 import {
   badRequest,
@@ -35,9 +34,7 @@ export type ComputerUseRouteService = {
 
 export type ComputerUseRuntimeRouteService = {
   getRuntimeState(): Promise<ComputerUseRuntimeState>;
-  installRuntime(
-    request: BrowserRuntimeDownloadRequest,
-  ): Promise<ComputerUseRuntimeState>;
+  installRuntime(request?: { force?: boolean }): Promise<ComputerUseRuntimeState>;
 };
 
 export type ComputerUseRouteOptions = {
@@ -215,10 +212,10 @@ const computerUseRoutes: FastifyPluginAsync<ComputerUseRouteOptions> = async (
     }),
   );
 
-  app.post<{ Body: BrowserRuntimeDownloadRequest }>(
+  app.post<{ Body: { force?: boolean } }>(
     "/microapps/computer-use/runtime/install",
     { schema: computerUseRouteSchemas.installRuntime },
-    routeHandler("Failed to install computer use runtime", async (request) => {
+    routeHandler<{ Body: { force?: boolean } }>("Failed to install computer use runtime", async (request) => {
       try {
         const runtime = await computerUseRuntimeService.installRuntime(
           request.body,

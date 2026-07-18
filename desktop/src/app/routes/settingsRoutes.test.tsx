@@ -81,6 +81,9 @@ vi.mock("@/features/Settings/pages/MicroApps/index", () => ({
 vi.mock("@/features/Settings/pages/MicroApps/Detail", () => ({
   default: () => null,
 }));
+vi.mock("@/features/Settings/pages/MicroApps/Notion", () => ({
+  default: () => <div data-testid="notion-micro-app-page">notion-micro-app-page</div>,
+}));
 vi.mock("@/features/Settings/pages/MicroApps/NewsHub", () => ({
   default: () => <div data-testid="news-hub-page">news-hub-page</div>,
 }));
@@ -220,6 +223,24 @@ describe("settings routes", () => {
     render(<RouterProvider router={router} />);
 
     expect(screen.getByTestId("news-hub-page")).toBeInTheDocument();
+  });
+
+  it("mounts the Notion micro app at /settings/micro-apps/notion", () => {
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/settings",
+          children: settingsRoutes,
+        },
+      ],
+      {
+        initialEntries: ["/settings/micro-apps/notion"],
+      },
+    );
+
+    render(<RouterProvider router={router} />);
+
+    expect(screen.getByTestId("notion-micro-app-page")).toBeInTheDocument();
   });
 
   it("includes the image generation studio route under the micro apps path", () => {

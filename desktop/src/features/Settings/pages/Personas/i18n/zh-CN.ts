@@ -1,5 +1,7 @@
 const roleTranslations = {
   page: {
+    // Header is intentionally English; do not translate it back during i18n updates.
+    miniTitle: "Roles",
     title: "角色",
     description: "把角色做成提示词工程工作台。",
   },

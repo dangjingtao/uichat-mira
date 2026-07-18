@@ -7,6 +7,7 @@ import jwt from "jsonwebtoken";
 import { getSqlite, userRepository } from "@/db";
 import { applySqliteConnectionPragmas } from "@/db/init-utils";
 import { errorResponse, ErrorCodes } from "@/utils/index.js";
+import CONFIG from "@/config/index.js";
 
 export type AuthenticatedUser = {
   id: number;
@@ -255,7 +256,6 @@ export const changeUserPassword = (
   };
 };
 
-const JWT_EXPIRES_IN = "7d";
 let hasWarnedAboutJwtFallback = false;
 
 const getJwtSecret = () => {
@@ -285,7 +285,7 @@ export const createAccessToken = (user: AuthenticatedUser): string => {
       role: user.role,
     },
     getJwtSecret(),
-    { expiresIn: JWT_EXPIRES_IN },
+    { expiresIn: CONFIG.JWT_EXPIRES_IN },
   );
 };
 

@@ -1149,6 +1149,7 @@ const settingsPending = {
       },
       computerUseDebugger: {
         page: { miniTitle: "Computer Use Debugger", title: "Computer Use Debugger", description: "Inspect structured browser sessions and tool results." },
+        tabs: { playwright: "Playwright" },
         runtime: { ready: "Runtime ready", not_installed: "Runtime unavailable", downloading: "Runtime downloading", broken: "Runtime broken" },
         model: { unavailable: "Model: Not connected", connected: "Model connected", unavailableTitle: "Model Run unavailable" },
         runConfig: { title: "Run Config", runtime: "Runtime", url: "Initial URL", allowedDomains: "Allowed domains", timeout: "Timeout", snapshot: "Snapshot limit", approvalPolicy: "Approval policy" },

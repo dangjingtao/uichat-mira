@@ -43,7 +43,7 @@ export default function MicroAppPageLayout({
     >
       <div className={`shrink-0 ${containerClasses}`}>
         <div className="shrink-0 space-y-2 bg-transparent px-2 pt-6">
-          <div className="flex w-full items-start gap-3 sm:gap-4">
+          <div className="flex w-full items-end gap-3 sm:gap-4">
             <div className="min-w-0 flex-1 space-y-1">
               <div className="flex items-center gap-2">
                 <button
@@ -62,7 +62,7 @@ export default function MicroAppPageLayout({
                 </p>
               ) : null}
             </div>
-            {slot ? <div className="shrink-0 self-start sm:ml-auto">{slot}</div> : null}
+            {slot ? <div className="shrink-0 self-end sm:ml-auto">{slot}</div> : null}
           </div>
           <Divider />
         </div>

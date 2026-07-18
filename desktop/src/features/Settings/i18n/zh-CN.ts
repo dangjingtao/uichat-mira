@@ -1145,6 +1145,7 @@ const settingsPending = {
       },
       computerUseDebugger: {
         page: { miniTitle: "Computer Use Debugger", title: "Computer Use Debugger", description: "查看结构化浏览器 session 和工具执行结果。" },
+        tabs: { playwright: "Playwright" },
         runtime: { ready: "运行时已就绪", not_installed: "运行时不可用", downloading: "运行时下载中", broken: "运行时异常" },
         model: { unavailable: "模型：未连接", connected: "模型已连接", unavailableTitle: "Model Run 不可用" },
         runConfig: { title: "运行配置", runtime: "运行时", url: "初始 URL", allowedDomains: "允许的域名", timeout: "超时", snapshot: "快照上限", approvalPolicy: "审批策略" },

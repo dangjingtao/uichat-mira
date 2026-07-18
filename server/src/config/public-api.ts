@@ -24,6 +24,8 @@ export const AUTH_EXEMPT_ROUTES: AuthExemptRoute[] = [
   { path: "/docs", match: "prefix" },
   { path: "/client-coverage", match: "prefix" },
   { path: "/server-coverage", match: "prefix" },
+  // WebSocket clients authenticate in the first hello message because browser WebSocket cannot set Authorization headers.
+  { path: "/webbridge", match: "exact" },
   { path: CONFIG.SWAGGER_PREFIX, match: "prefix" },
 ];
 

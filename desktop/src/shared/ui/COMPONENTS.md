@@ -326,6 +326,23 @@
 - 抽屉主体优先 `bg-surface-primary`，避免过强颜色干扰主列表
 - 共享组件只负责遮罩、滑入、滚动锁和头尾壳层；业务内容仍留在 feature 内
 
+## AccessPointPreviewDrawer
+
+用于展示外部接入点的统一只读预览。业务适配器负责返回统一的 `AccessPointPreview` 数据，组件不读取任何具体 Provider 的字段。
+
+### 统一内容
+
+- 资源名称、资源类型和来源
+- 权限范围与资源元数据
+- 表格字段和示例数据，或文档正文摘要
+- 可选的原站打开操作
+
+### 使用约定
+
+- 仅接收 `document`、`table`、`collection` 三类资源类型
+- 加载和错误状态由组件统一呈现
+- Notion、飞书、Google Drive、Sheets、Airtable 等适配器不得把 Provider 原始响应直接传入组件
+
 ## FileIcon
 
 根据文件扩展名展示统一图标。

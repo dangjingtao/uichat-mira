@@ -5,8 +5,8 @@ const { spawn } = require("child_process");
 const electronBinary = require("electron");
 const { pathToFileURL } = require("url");
 
-const DESKTOP_PORT = 5173;
-const DOCS_SITE_PORT = 4180;
+const DESKTOP_PORT = 5273;
+const DOCS_SITE_PORT = 4280;
 const STARTUP_TIMEOUT_MS = 60000;
 const childProcesses = [];
 let isShuttingDown = false;

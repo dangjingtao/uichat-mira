@@ -9,7 +9,7 @@ const require = createRequire(import.meta.url);
 const runtimeConfig = require("../runtime.config.cjs");
 const apiProxyPrefix = runtimeConfig.dev.apiProxyPrefix;
 const backendOrigin = `http://${runtimeConfig.backend.host}:${runtimeConfig.backend.port}`;
-const docsSiteOrigin = "http://127.0.0.1:4180";
+const docsSiteOrigin = "http://127.0.0.1:4280";
 
 const mimeTypes: Record<string, string> = {
   ".html": "text/html",
@@ -97,7 +97,7 @@ export default defineConfig({
   base: "./",
   server: {
     host: "127.0.0.1",
-    port: 5173,
+    port: 5273,
     strictPort: true,
     proxy: {
       [apiProxyPrefix]: {

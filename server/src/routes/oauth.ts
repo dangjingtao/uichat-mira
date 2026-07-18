@@ -114,7 +114,7 @@ const oauthRoute: FastifyPluginAsync = async (app) => {
         return {
           tokenType: "Bearer",
           accessToken: createAccessToken(manualRecord.user),
-          expiresIn: "7d",
+          expiresIn: CONFIG.JWT_EXPIRES_IN,
         };
       }
       const record = body.code ? codes.get(body.code) : undefined;
@@ -134,7 +134,7 @@ const oauthRoute: FastifyPluginAsync = async (app) => {
       return {
         tokenType: "Bearer",
         accessToken: createAccessToken(record.user),
-        expiresIn: "7d",
+        expiresIn: CONFIG.JWT_EXPIRES_IN,
       };
     }),
   );

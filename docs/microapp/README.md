@@ -16,6 +16,7 @@ Related:
   - media-capability-packaging-design.md
   - computer-use-microapp-poc.md
   - computer-use-feature-design.md
+  - notion-microapp-functional-design.md
   - tts-studio-runtime-notes.md
   - gpt-sovits-microapp-poc.md
 

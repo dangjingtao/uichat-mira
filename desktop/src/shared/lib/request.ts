@@ -11,6 +11,8 @@ import {
   isDesktopShell,
 } from "@/shared/platform/desktopRuntime";
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
+
 // ==================== 类型定义 ====================
 
 // API 统一响应格式
@@ -125,7 +127,7 @@ const createApiClient = () => {
   // 创建原生 axios 实例
   const client = axios.create({
     baseURL: getApiBaseUrl(),
-    timeout: 30000,
+    timeout: DEFAULT_REQUEST_TIMEOUT_MS,
     headers: {
       "Content-Type": "application/json",
     },

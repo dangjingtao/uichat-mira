@@ -1,13 +1,14 @@
 import { llmService } from "@/services/llm.service.js";
 import { evolvingKnowledgeRepository } from "@/db/repositories/evolving-knowledge.repository.js";
 import type { CaptureInput as RepositoryCaptureInput } from "@/db/repositories/evolving-knowledge.repository.js";
+import { convertCapturedHtmlToMarkdown } from "@/services/evolving-knowledge-html.service.js";
 
 export type CaptureRequestInput = Omit<
   RepositoryCaptureInput,
   "userId" | "rewrittenSummary" | "aiTags" | "aiEntities" | "attachments"
-> & { attachments?: ImageAttachmentInput[] };
+> & { attachments?: ImageAttachmentInput[]; rawHtml?: string };
 
-type ImageAttachmentInput = { filePath: string; mimeType: string };
+type ImageAttachmentInput = { filePath: string; mimeType: string; sourceUrl?: string };
 
 const saveImageAttachments = async (
   captureId: string,
@@ -82,6 +83,28 @@ const INSIGHT_PROMPT = `你是一位洞见发现专家。用户收藏了一系�
 
 只输出最强的 2-5 条洞见。不要强行凑数。只输出 JSON 数组，不要任何其他文字。`;
 
+const TOPIC_PROMPT = `你是一位知识库编辑。请根据同一主题下的多条材料，维护一页可持续更新的主题知识页，并提出一个待人工确认的核心观点。
+
+只输出严格 JSON，不要 markdown 代码块：
+{
+  "summary": "基于材料形成的主题总结，具体说明共识、差异和边界",
+  "pendingQuestions": ["仍缺少证据或需要继续调查的问题"],
+  "viewpoint": {
+    "title": "核心观点标题",
+    "statement": "一句可被证据支持或反驳的明确判断",
+    "confidence": 0.75,
+    "supportingIndices": [0],
+    "opposingIndices": [1]
+  }
+}
+
+规则：
+1. 只能根据输入材料归纳，不得补写输入中没有的事实。
+2. summary 必须区分材料共识、分歧和适用边界。
+3. 没有足够证据形成观点时，viewpoint.statement 输出空字符串。
+4. supportingIndices 和 opposingIndices 只能引用输入数组中的索引。
+5. 图片只作为原始资料存在，不要要求 OCR 或视觉理解。`;
+
 function cleanJsonOutput(raw: string): string {
   return raw.replace(/^```json\s*/i, "").replace(/\s*```$/, "").trim();
 }
@@ -94,18 +117,131 @@ function safeJsonParse<T>(raw: string, fallback: T): T {
   }
 }
 
+function parseJsonValue<T>(raw: string | null | undefined, fallback: T): T {
+  try {
+    return JSON.parse(raw ?? "") as T;
+  } catch {
+    return fallback;
+  }
+}
+
+const EVIDENCE_CHUNK_SIZE = 1200;
+const REBUILD_BATCH_SIZE = 25;
+const MAX_REBUILD_BATCH_SIZE = 50;
+
+const createTextEvidenceUnits = (capture: {
+  id: string;
+  rawContent: string;
+}, userId: number) => {
+  const content = capture.rawContent;
+  if (!content) return [];
+
+  const units = [];
+  for (let start = 0; start < content.length; start += EVIDENCE_CHUNK_SIZE) {
+    const end = Math.min(start + EVIDENCE_CHUNK_SIZE, content.length);
+    const chunk = content.slice(start, end);
+    if (!chunk.trim()) continue;
+
+    units.push(
+      evolvingKnowledgeRepository.createEvidenceUnit({
+        userId,
+        captureId: capture.id,
+        unitType: "text",
+        content: chunk,
+        sourceLocator: { startOffset: start, endOffset: end },
+        extractionMethod: "capture_markdown",
+      }),
+    );
+  }
+  return units;
+};
+
+const getEvidenceUnits = (captureId: string, userId: number) =>
+  evolvingKnowledgeRepository.listEvidenceUnitsByCapture(captureId, userId);
+
+const extractTerms = (capture: {
+  title: string;
+  rawContent: string;
+  rewrittenSummary: string;
+  aiTags: string[];
+  aiEntities: Array<{ name: string }>;
+}) => {
+  const source = [
+    capture.title,
+    capture.rewrittenSummary,
+    capture.rawContent.slice(0, 5000),
+    ...capture.aiTags,
+    ...capture.aiEntities.map((entity) => entity.name),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  const terms = new Set<string>();
+  for (const match of source.matchAll(/[a-z0-9_]{2,}|[\u4e00-\u9fff]{2,}/g)) {
+    terms.add(match[0]);
+  }
+
+  return terms;
+};
+
+const selectCandidateCaptures = (
+  target: ReturnType<typeof evolvingKnowledgeRepository.getRecentCaptures>[number],
+  captures: ReturnType<typeof evolvingKnowledgeRepository.getRecentCaptures>,
+  limit = 15,
+) => {
+  const targetTerms = extractTerms(target);
+  return captures
+    .filter(
+      (capture) =>
+        capture.id !== target.id &&
+        capture.processingStatus === "completed" &&
+        extractTerms(capture).size > 0,
+    )
+    .map((capture) => {
+      const candidateTerms = extractTerms(capture);
+      let overlap = 0;
+      for (const term of targetTerms) {
+        if (candidateTerms.has(term)) overlap += 1;
+      }
+      const sameDomain =
+        target.captureMetadata.domain &&
+        target.captureMetadata.domain === capture.captureMetadata.domain;
+      return { capture, score: overlap + (sameDomain ? 1 : 0) };
+    })
+    .filter(({ score }) => score > 0)
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        right.capture.capturedAt.localeCompare(left.capture.capturedAt),
+    )
+    .slice(0, limit)
+    .map(({ capture }) => capture);
+};
+
 export async function processCapture(
   input: CaptureRequestInput,
   options: { userId: number; processAi?: boolean },
 ) {
-  const { attachments, ...captureInput } = input;
+  const { attachments, rawHtml, ...captureInput } = input;
+  const normalizedContent = rawHtml
+    ? convertCapturedHtmlToMarkdown({
+        html: rawHtml,
+        sourceUrl: input.sourceUrl,
+        title: input.title,
+        fallbackMarkdown: input.rawContent,
+        images: attachments,
+      })
+    : { title: input.title, markdown: input.rawContent };
   const capture = evolvingKnowledgeRepository.createCapture({
     ...captureInput,
+    title: normalizedContent.title,
+    rawContent: normalizedContent.markdown,
     userId: options.userId,
-    rewrittenSummary: input.rawContent.slice(0, 200),
+    rewrittenSummary: normalizedContent.markdown.slice(0, 200),
     aiTags: [],
     aiEntities: [],
   });
+  createTextEvidenceUnits(capture, options.userId);
   try {
     await saveImageAttachments(capture.id, attachments);
   } catch (error) {
@@ -134,7 +270,7 @@ export async function processCapture(
       roleType: "llm",
       messages: [
         { role: "system", content: SUMMARY_PROMPT },
-        { role: "user", content: `标题: ${input.title}\n\n内容:\n${input.rawContent}` },
+        { role: "user", content: `标题: ${normalizedContent.title}\n\n内容:\n${normalizedContent.markdown}` },
       ],
       params: { temperature: 0.3, max_tokens: 800 },
     });
@@ -154,7 +290,7 @@ export async function processCapture(
     const safeEntities = Array.isArray(parsed.entities) ? parsed.entities : [];
 
     const updated = evolvingKnowledgeRepository.updateCapture(capture.id, options.userId, {
-      rewrittenSummary: parsed.rewrittenSummary || input.rawContent.slice(0, 200),
+      rewrittenSummary: parsed.rewrittenSummary || normalizedContent.markdown.slice(0, 200),
       aiTags: safeTags,
       aiEntities: safeEntities,
       processingStatus: "completed",
@@ -164,6 +300,11 @@ export async function processCapture(
 
     for (const tag of safeTags) {
       evolvingKnowledgeRepository.upsertTag(tag, options.userId);
+    }
+    try {
+      evolvingKnowledgeRepository.syncConceptsForCapture(capture.id, options.userId);
+    } catch {
+      // 概念索引是第四期派生层，索引失败不能回滚已保存的原始资料和摘要。
     }
 
     void generateRelationsAndInsights(capture.id, options.userId).catch(() => {});
@@ -184,15 +325,17 @@ async function generateRelationsAndInsights(
   userId: number,
   fullCaptureSet?: ReturnType<typeof evolvingKnowledgeRepository.getRecentCaptures>,
 ) {
-  const recent = fullCaptureSet ?? evolvingKnowledgeRepository.getRecentCaptures(userId, 20);
-  if (recent.length < 2) return;
+  const allCaptures =
+    fullCaptureSet ?? evolvingKnowledgeRepository.getRecentCaptures(userId, 100);
 
-  const newCapture = recent.find((c) => c.id === newCaptureId);
+  const newCapture = allCaptures.find((c) => c.id === newCaptureId);
   if (!newCapture) return;
 
-  // 只和新捕获比较（避免全量 O(N²)）
-  const candidates = recent.filter((c) => c.id !== newCaptureId).slice(0, fullCaptureSet ? 30 : 15);
+  const candidates = selectCandidateCaptures(newCapture, allCaptures);
+  if (candidates.length === 0) return;
   const all = [newCapture, ...candidates];
+  let relationsCreated = 0;
+  let insightsCreated = 0;
 
   const context = all
     .map(
@@ -227,6 +370,10 @@ async function generateRelationsAndInsights(
       const tgt = all[r.targetIndex];
       if (!src || !tgt || r.confidence < 0.6) continue;
 
+      const evidenceUnitIds = [src.id, tgt.id].flatMap((captureId) =>
+        getEvidenceUnits(captureId, userId).map((unit) => unit.id),
+      );
+
       evolvingKnowledgeRepository.createRelation({
         userId,
         sourceCaptureId: src.id,
@@ -234,17 +381,19 @@ async function generateRelationsAndInsights(
         relationType: r.relationType,
         confidence: r.confidence,
         aiReasoning: r.reasoning,
+        evidenceUnitIds,
       });
+      relationsCreated += 1;
     }
   } catch {
     // 关系检测失败不影响主流程
   }
 
-  // 洞见生成（只在最近 5 条内做，控制 token）
-  if (recent.length >= 2) {
+  // 洞见生成只使用候选集合，避免每次把无关材料重新送入模型。
+  if (all.length >= 2) {
     try {
-      const insightContext = recent
-        .slice(0, 8)
+      const insightContext = all
+        .slice(0, 16)
         .map(
           (c, i) =>
             `[${i}] ${c.title}\n时间: ${c.capturedAt}\n摘要: ${c.rewrittenSummary}\n标签: ${c.aiTags.join(", ")}`,
@@ -272,12 +421,15 @@ async function generateRelationsAndInsights(
       >(insightRaw, []);
 
       for (const ins of insights) {
-        const trigger = recent[ins.triggerIndex];
+        const trigger = all[ins.triggerIndex];
         if (!trigger || ins.confidence < 0.6) continue;
 
         const relatedIds = ins.relatedIndices
-          .map((i) => recent[i]?.id)
+          .map((i) => all[i]?.id)
           .filter(Boolean) as string[];
+        const evidenceUnitIds = [trigger.id, ...relatedIds].flatMap((captureId) =>
+          getEvidenceUnits(captureId, userId).map((unit) => unit.id),
+        );
 
         evolvingKnowledgeRepository.createInsight({
           userId,
@@ -287,35 +439,292 @@ async function generateRelationsAndInsights(
           triggerCaptureId: trigger.id,
           relatedCaptureIds: relatedIds,
           confidence: ins.confidence,
+          evidenceUnitIds,
         });
+        insightsCreated += 1;
       }
     } catch {
       // 洞见生成失败不影响主流程
     }
   }
+
+  return { relationsCreated, insightsCreated };
 }
 
-async function rebuildKnowledge(userId: number) {
-  const captures = evolvingKnowledgeRepository.listCaptures({ userId, limit: 1000 });
+type TopicCompileResult = {
+  topic: ReturnType<typeof evolvingKnowledgeRepository.getTopic> | null;
+  viewpoint: ReturnType<typeof evolvingKnowledgeRepository.getViewpoint> | null;
+  version: ReturnType<typeof evolvingKnowledgeRepository.createViewpointVersion> | null;
+  capturesUsed: number;
+};
+
+async function compileTopicForConcept(
+  conceptId: string,
+  userId: number,
+): Promise<TopicCompileResult> {
+  const topic = evolvingKnowledgeRepository.getOrCreateTopicForConcept(
+    conceptId,
+    userId,
+  );
+  if (!topic) throw new Error("Concept not found");
+
+  const conceptEvidence = evolvingKnowledgeRepository.listConceptEvidence(
+    conceptId,
+    userId,
+  );
+  const captureIds = [...new Set(conceptEvidence.map((item) => item.captureId))];
+  const captures = evolvingKnowledgeRepository
+    .listCaptures({ userId, limit: 1000 })
+    .filter((capture) => captureIds.includes(capture.id))
+    .slice(0, 30);
+
   for (const capture of captures) {
-    await generateRelationsAndInsights(capture.id, userId, captures);
+    const evidenceUnitId = evolvingKnowledgeRepository.listEvidenceUnitsByCapture(
+      capture.id,
+      userId,
+    )[0]?.id;
+    evolvingKnowledgeRepository.addTopicEvidence({
+      userId,
+      topicId: topic.id,
+      captureId: capture.id,
+      evidenceUnitId,
+      evidenceRole: "context",
+    });
   }
+
+  if (captures.length === 0) {
+    return {
+      topic,
+      viewpoint: null,
+      version: null,
+      capturesUsed: 0,
+    };
+  }
+
+  const context = captures
+    .map(
+      (capture, index) =>
+        `[${index}] ${capture.title}\n摘要: ${capture.rewrittenSummary}\n标签: ${capture.aiTags.join(", ")}\n实体: ${capture.aiEntities.map((entity) => entity.name).join(", ")}`,
+    )
+    .join("\n\n---\n\n");
+  const raw = await llmService.generateText({
+    roleType: "llm",
+    messages: [
+      { role: "system", content: TOPIC_PROMPT },
+      { role: "user", content: `主题: ${topic.name}\n\n材料:\n${context}` },
+    ],
+    params: { temperature: 0.2, max_tokens: 1800 },
+  });
+  const parsed = safeJsonParse<{
+    summary: string;
+    pendingQuestions: string[];
+    viewpoint?: {
+      title: string;
+      statement: string;
+      confidence: number;
+      supportingIndices: number[];
+      opposingIndices: number[];
+    };
+  }>(raw, { summary: "", pendingQuestions: [] });
+
+  const nextTopic = evolvingKnowledgeRepository.updateTopic(topic.id, userId, {
+    summary: parsed.summary?.trim() || topic.summary,
+    pendingQuestions: Array.isArray(parsed.pendingQuestions)
+      ? parsed.pendingQuestions.filter((item) => typeof item === "string")
+      : [],
+    sourceCount: captures.length,
+    currentVersion: topic.currentVersion + 1,
+  });
+
+  const viewpointInput = parsed.viewpoint;
+  if (!viewpointInput?.statement?.trim()) {
+    return {
+      topic: nextTopic,
+      viewpoint: null,
+      version: null,
+      capturesUsed: captures.length,
+    };
+  }
+
+  const title = viewpointInput.title?.trim() || `${topic.name}核心观点`;
+  let viewpoint = evolvingKnowledgeRepository.getViewpointByTopicTitle(
+    topic.id,
+    title,
+    userId,
+  );
+  if (!viewpoint) {
+    viewpoint = evolvingKnowledgeRepository.createViewpoint({
+      userId,
+      topicId: topic.id,
+      title,
+      statement: "",
+      status: "draft",
+    });
+  }
+
+  const evidenceForVersion = (indices: number[], stance: "supports" | "opposes") =>
+    indices
+      .filter((index) => Number.isInteger(index) && captures[index])
+      .map((index) => {
+        const capture = captures[index];
+        const evidenceUnitId = evolvingKnowledgeRepository.listEvidenceUnitsByCapture(
+          capture.id,
+          userId,
+        )[0]?.id;
+        return {
+          captureId: capture.id,
+          evidenceUnitId,
+          stance,
+        };
+      });
+
+  const sameStatement = viewpoint.statement.trim() === viewpointInput.statement.trim();
+  const version = sameStatement
+    ? null
+    : evolvingKnowledgeRepository.createViewpointVersion({
+        userId,
+        viewpointId: viewpoint.id,
+        statement: viewpointInput.statement.trim(),
+        changeType: viewpoint.statement ? "revised" : "formed",
+        triggerReason: `Topic ${topic.name} was recompiled from ${captures.length} captures.`,
+        inputScope: { conceptId, topicId: topic.id, captureIds: captures.map((capture) => capture.id) },
+        modelInfo: { roleType: "llm" },
+        confidence: Math.max(0, Math.min(1, Number(viewpointInput.confidence) || 0.5)),
+        status: "needs_review",
+        evidence: [
+          ...evidenceForVersion(viewpointInput.supportingIndices ?? [], "supports"),
+          ...evidenceForVersion(viewpointInput.opposingIndices ?? [], "opposes"),
+        ],
+      });
+
   return {
-    status: "completed" as const,
-    capturesScanned: captures.length,
+    topic: nextTopic,
+    viewpoint: version
+      ? evolvingKnowledgeRepository.getViewpoint(viewpoint.id, userId)
+      : viewpoint,
+    version,
+    capturesUsed: captures.length,
   };
+}
+
+async function reviewViewpoint(
+  id: string,
+  userId: number,
+  input: { decision: "confirm" | "reject"; statement?: string },
+) {
+  const viewpoint = evolvingKnowledgeRepository.getViewpoint(id, userId);
+  if (!viewpoint) return null;
+
+  let version = null;
+  const nextStatement = input.statement?.trim();
+  if (input.decision === "confirm" && nextStatement && nextStatement !== viewpoint.statement) {
+    const previousEvidence = viewpoint.currentVersionId
+      ? evolvingKnowledgeRepository.listViewpointEvidence(viewpoint.currentVersionId, userId)
+      : [];
+    version = evolvingKnowledgeRepository.createViewpointVersion({
+      userId,
+      viewpointId: id,
+      statement: nextStatement,
+      changeType: "revised",
+      triggerReason: "User revised the viewpoint during confirmation.",
+      inputScope: { viewpointId: id, source: "user" },
+      modelInfo: {},
+      confidence: viewpoint.confidence,
+      status: "active",
+      evidence: previousEvidence.map((evidence) => ({
+        captureId: evidence.captureId ?? undefined,
+        evidenceUnitId: evidence.evidenceUnitId ?? undefined,
+        insightId: evidence.insightId ?? undefined,
+        stance: evidence.stance,
+        locator: parseJsonValue<Record<string, unknown>>(evidence.locatorJson, {}),
+      })),
+    });
+  }
+
+  const updated = evolvingKnowledgeRepository.updateViewpointReviewState(id, userId, {
+    status: input.decision === "confirm" ? "active" : "rejected",
+    userConfirmed: input.decision === "confirm",
+  });
+  return { viewpoint: updated, version };
+}
+
+async function rebuildKnowledge(
+  userId: number,
+  options?: { limit?: number; offset?: number },
+) {
+  const limit = Math.min(
+    Math.max(options?.limit ?? REBUILD_BATCH_SIZE, 1),
+    MAX_REBUILD_BATCH_SIZE,
+  );
+  const offset = Math.max(options?.offset ?? 0, 0);
+  const captures = evolvingKnowledgeRepository.listCaptures({
+    userId,
+    limit: 1000,
+  });
+  const batch = captures.slice(offset, offset + limit);
+  const run = evolvingKnowledgeRepository.startMaintenanceRun({
+    userId,
+    scope: { offset, limit, totalCaptures: captures.length },
+  });
+
+  try {
+    let relationsCreated = 0;
+    let insightsCreated = 0;
+    for (const capture of batch) {
+      const result = await generateRelationsAndInsights(capture.id, userId, captures);
+      relationsCreated += result?.relationsCreated ?? 0;
+      insightsCreated += result?.insightsCreated ?? 0;
+    }
+
+    evolvingKnowledgeRepository.completeMaintenanceRun(run.id, userId, {
+      capturesScanned: batch.length,
+      relationsCreated,
+      insightsCreated,
+    });
+
+    const nextOffset = offset + batch.length;
+    return {
+      status: "completed" as const,
+      runId: run.id,
+      capturesScanned: batch.length,
+      relationsCreated,
+      insightsCreated,
+      nextOffset,
+      hasMore: nextOffset < captures.length,
+      totalCaptures: captures.length,
+    };
+  } catch (error) {
+    evolvingKnowledgeRepository.failMaintenanceRun(
+      run.id,
+      userId,
+      error instanceof Error ? error.message : "Knowledge rebuild failed",
+    );
+    throw error;
+  }
 }
 
 export function createEvolvingKnowledgeService() {
   return {
     processCapture,
     rebuildKnowledge,
+    compileTopicForConcept,
+    reviewViewpoint,
+    listConcepts: (userId: number, options?: { status?: string; limit?: number }) => evolvingKnowledgeRepository.listConcepts(userId, options),
+    mergeConcepts: (sourceId: string, targetId: string, userId: number) => evolvingKnowledgeRepository.mergeConcepts(sourceId, targetId, userId),
+    listTopics: (userId: number, limit?: number) => evolvingKnowledgeRepository.listTopics(userId, limit),
+    getTopic: (id: string, userId: number) => evolvingKnowledgeRepository.getTopic(id, userId),
+    listTopicEvidence: (id: string, userId: number) => evolvingKnowledgeRepository.listTopicEvidence(id, userId),
+    listViewpoints: (userId: number, topicId?: string) => evolvingKnowledgeRepository.listViewpoints(userId, topicId),
+    getViewpoint: (id: string, userId: number) => evolvingKnowledgeRepository.getViewpoint(id, userId),
+    listViewpointVersions: (id: string, userId: number) => evolvingKnowledgeRepository.listViewpointVersions(id, userId),
+    listViewpointEvidence: (id: string, userId: number) => evolvingKnowledgeRepository.listViewpointEvidence(id, userId),
     listCaptures: (userId: number, options?: Omit<Parameters<typeof evolvingKnowledgeRepository.listCaptures>[0], "userId">) => evolvingKnowledgeRepository.listCaptures({ userId, ...options }),
     getCaptureById: (id: string, userId: number) => evolvingKnowledgeRepository.getCaptureById(id, userId),
     searchCaptures: (q: string, userId: number) => evolvingKnowledgeRepository.searchCapturesByText(q, userId),
     listActiveInsights: (userId: number, options?: { type?: string; limit?: number }) => evolvingKnowledgeRepository.listActiveInsights(userId, options),
     dismissInsight: (id: string, userId: number) => evolvingKnowledgeRepository.dismissInsight(id, userId),
     listRelationsForCapture: (id: string, userId: number) => evolvingKnowledgeRepository.listRelationsForCapture(id, userId),
+    listEvidenceUnits: (id: string, userId: number) => evolvingKnowledgeRepository.listEvidenceUnitsByCapture(id, userId),
     listPopularTags: (userId: number, limit?: number) => evolvingKnowledgeRepository.listPopularTags(userId, limit),
     updateCapture: (id: string, userId: number, input: Parameters<typeof evolvingKnowledgeRepository.updateCapture>[2]) => evolvingKnowledgeRepository.updateCapture(id, userId, input),
     deleteCapture: (id: string, userId: number) => evolvingKnowledgeRepository.deleteCapture(id, userId),

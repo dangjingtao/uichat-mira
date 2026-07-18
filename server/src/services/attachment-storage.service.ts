@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import sharp from "sharp";
 import CONFIG from "@/config/index.js";
 
 const MIME_EXTENSION_MAP: Record<string, string> = {
@@ -16,6 +17,14 @@ const EXTENSION_MIME_MAP: Record<string, string> = {
   ".jpeg": "image/jpeg",
   ".gif": "image/gif",
 };
+
+const WEBP_CONVERTIBLE_MIME_TYPES = new Set([
+  "image/avif",
+  "image/bmp",
+  "image/jpeg",
+  "image/png",
+  "image/tiff",
+]);
 
 const attachmentRoot = path.resolve(process.cwd(), CONFIG.ATTACHMENTS_DIR);
 
@@ -84,19 +93,25 @@ export const attachmentStorageService = {
   }) {
     await fs.mkdir(attachmentRoot, { recursive: true });
 
+    const inputMimeType = input.mimeType.toLowerCase().split(";", 1)[0].trim();
+    const shouldConvertToWebp = WEBP_CONVERTIBLE_MIME_TYPES.has(inputMimeType);
+    const storedBuffer = shouldConvertToWebp
+      ? await sharp(input.buffer).webp({ quality: 82 }).toBuffer()
+      : input.buffer;
+    const storedMimeType = shouldConvertToWebp ? "image/webp" : inputMimeType;
     const id = crypto.randomUUID();
-    const extension = getExtension(input.mimeType, input.originalName);
+    const extension = getExtension(storedMimeType, input.originalName);
     const fileName = `${id}${extension}`;
     const filePath = getSafeAttachmentPath(fileName);
 
-    await fs.writeFile(filePath, input.buffer);
+    await fs.writeFile(filePath, storedBuffer);
 
     return {
       id,
       fileName,
       url: toPublicUrl(fileName),
       contentType: getContentType(fileName),
-      size: input.buffer.byteLength,
+      size: storedBuffer.byteLength,
     };
   },
 

@@ -24,6 +24,18 @@ export type KnowledgeRelation = {
   relationType: "similar" | "contradicts" | "evolves" | "references";
   confidence: number;
   aiReasoning: string;
+  evidenceUnitIdsJson: string;
+  createdAt: string;
+};
+
+export type KnowledgeEvidenceUnit = {
+  id: string;
+  captureId: string;
+  unitType: "text";
+  content: string;
+  sourceLocator: Record<string, unknown>;
+  extractionMethod: string;
+  processingVersion: string;
   createdAt: string;
 };
 
@@ -35,6 +47,7 @@ export type KnowledgeInsight = {
   triggerCaptureId: string | null;
   relatedCaptureIdsJson: string;
   relatedConceptIdsJson: string;
+  evidenceUnitIdsJson: string;
   dismissedByUser: boolean;
   confidence: number;
   createdAt: string;
@@ -48,11 +61,66 @@ export type KnowledgeTag = {
   usageCount: number;
 };
 
+export type KnowledgeConcept = {
+  id: string;
+  userId: number | null;
+  canonicalName: string;
+  displayName: string;
+  aliasesJson: string;
+  aliases?: string[];
+  status: "active" | "merged" | "hidden";
+  mergedIntoConceptId: string | null;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  sourceCount: number;
+};
+
+export type KnowledgeTopic = {
+  id: string;
+  userId: number | null;
+  conceptId: string | null;
+  name: string;
+  summary: string;
+  pendingQuestionsJson: string;
+  status: "active" | "stale" | "archived";
+  currentVersion: number;
+  sourceCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type KnowledgeViewpoint = {
+  id: string;
+  userId: number | null;
+  topicId: string | null;
+  title: string;
+  statement: string;
+  status: "draft" | "active" | "needs_review" | "revised" | "split" | "retired" | "rejected";
+  currentVersionId: string | null;
+  confidence: number;
+  userConfirmed: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type KnowledgeViewpointVersion = {
+  id: string;
+  viewpointId: string;
+  versionNumber: number;
+  statement: string;
+  changeType: "formed" | "strengthened" | "revised" | "split" | "retired";
+  triggerReason: string;
+  inputScopeJson: string;
+  schemaVersion: string;
+  modelInfoJson: string;
+  createdAt: string;
+};
+
 export type CaptureInput = {
   sourceUrl: string;
   title: string;
   favicon?: string;
-  contentType: "text" | "image";
+  contentType: "webpage";
   rawContent: string;
   metadata?: Record<string, unknown>;
   attachments?: Array<{ filePath: string; mimeType: string }>;
@@ -90,6 +158,12 @@ export async function getCaptureRelations(id: string) {
   );
 }
 
+export async function getCaptureEvidence(id: string) {
+  return get<KnowledgeEvidenceUnit[]>(
+    `/microapps/evolving-knowledge/captures/${id}/evidence`,
+  );
+}
+
 export async function deleteCapture(id: string) {
   return del<null>(`/microapps/evolving-knowledge/captures/${id}`);
 }
@@ -116,8 +190,67 @@ export async function getStats() {
   }>("/microapps/evolving-knowledge/stats");
 }
 
-export async function rebuildKnowledge() {
-  return post<{ status: "completed"; capturesScanned: number }>(
+export async function listConcepts(options?: { status?: string; limit?: number }) {
+  const params = new URLSearchParams();
+  if (options?.status) params.set("status", options.status);
+  if (options?.limit) params.set("limit", String(options.limit));
+  return get<KnowledgeConcept[]>(`/microapps/evolving-knowledge/concepts?${params.toString()}`);
+}
+
+export async function mergeConcepts(sourceId: string, targetId: string) {
+  return post<KnowledgeConcept>(
+    `/microapps/evolving-knowledge/concepts/${sourceId}/merge`,
+    { targetConceptId: targetId },
+  );
+}
+
+export async function listTopics(limit?: number) {
+  const query = limit ? `?limit=${encodeURIComponent(String(limit))}` : "";
+  return get<KnowledgeTopic[]>(`/microapps/evolving-knowledge/topics${query}`);
+}
+
+export async function compileTopicForConcept(conceptId: string) {
+  return post<{
+    topic: KnowledgeTopic | null;
+    viewpoint: KnowledgeViewpoint | null;
+    version: KnowledgeViewpointVersion | null;
+    capturesUsed: number;
+  }>("/microapps/evolving-knowledge/topics/compile", { conceptId });
+}
+
+export async function listViewpoints(topicId?: string) {
+  const query = topicId ? `?topicId=${encodeURIComponent(topicId)}` : "";
+  return get<KnowledgeViewpoint[]>(`/microapps/evolving-knowledge/viewpoints${query}`);
+}
+
+export async function listViewpointVersions(viewpointId: string) {
+  return get<KnowledgeViewpointVersion[]>(
+    `/microapps/evolving-knowledge/viewpoints/${viewpointId}/versions`,
+  );
+}
+
+export async function reviewViewpoint(
+  viewpointId: string,
+  input: { decision: "confirm" | "reject"; statement?: string },
+) {
+  return post<{ viewpoint: KnowledgeViewpoint; version: KnowledgeViewpointVersion | null }>(
+    `/microapps/evolving-knowledge/viewpoints/${viewpointId}/review`,
+    input,
+  );
+}
+
+export async function rebuildKnowledge(options?: { limit?: number; offset?: number }) {
+  return post<{
+    status: "completed";
+    runId: string;
+    capturesScanned: number;
+    relationsCreated: number;
+    insightsCreated: number;
+    nextOffset: number;
+    hasMore: boolean;
+    totalCaptures: number;
+  }>(
     "/microapps/evolving-knowledge/rebuild",
+    options,
   );
 }
