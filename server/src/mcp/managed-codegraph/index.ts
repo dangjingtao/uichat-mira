@@ -1,7 +1,9 @@
 export {
   ManagedCodeGraphProcessManager,
   createManagedCodeGraphWorkspaceHash,
-} from "./managed-codegraph-process-manager.js";
+  isRealCodeGraphCommand,
+  shouldAllowDeclaredRepoLocalCodeGraphData,
+} from "./repo-local-process-manager.js";
 export { CodebaseExploreWrapper } from "./codebase-explore-wrapper.js";
 export { codebaseExploreTool } from "./codebase-explore.tool.js";
 export {
@@ -9,6 +11,9 @@ export {
   verifyCodebaseExploreResult,
 } from "./codegraph-verification-bridge.js";
 export { createCodebaseExploreTrace } from "./codegraph-trace-diagnostics.js";
+export {
+  canUseDeclaredRepoLocalCodeGraphCapability,
+} from "./repo-local-capability.js";
 export {
   createManagedCodeGraphPlannerStorageFromAppDataRoot,
   isCodebaseExplorePlannerExposureEnabled,
@@ -21,6 +26,7 @@ export type {
   ManagedCodeGraphPlannerStorage,
   ManagedCodeGraphPlannerStorageSource,
 } from "./planner-exposure-config.js";
+export type { RepoLocalCodeGraphGate } from "./repo-local-capability.js";
 export type {
   CodebaseCandidate,
   CodebaseExploreCommand,
