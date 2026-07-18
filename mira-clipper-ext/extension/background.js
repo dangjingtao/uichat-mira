@@ -7,6 +7,7 @@ const CAPTURE_MENU_ID = 'mira-clipper-capture';
 const WEBBRIDGE_PROTOCOL_VERSION = 1;
 const WEBBRIDGE_PATH = '/webbridge';
 const WEBBRIDGE_REQUEST_TIMEOUT_MS = 30000;
+const WEBBRIDGE_KEEPALIVE_INTERVAL_MS = 20000;
 
 const WEBBRIDGE_TOOL_DEFINITIONS = [
   {
@@ -90,6 +91,7 @@ const webBridge = {
   connecting: null,
   reconnectRequested: false,
   handshakeTimer: null,
+  keepAliveTimer: null,
   transport: null,
 };
 
@@ -206,10 +208,28 @@ function publishWebBridgeEvent(event, detail = {}) {
   socket.send(JSON.stringify({ version: WEBBRIDGE_PROTOCOL_VERSION, type: 'status', status: 'operation', event, ...detail }));
 }
 
+function stopWebSocketKeepAlive() {
+  if (!webBridge.keepAliveTimer) return;
+  clearInterval(webBridge.keepAliveTimer);
+  webBridge.keepAliveTimer = null;
+}
+
+function startWebSocketKeepAlive(socket) {
+  stopWebSocketKeepAlive();
+  webBridge.keepAliveTimer = setInterval(() => {
+    if (webBridge.socket !== socket || webBridge.transport !== 'websocket' || socket.readyState !== WebSocket.OPEN) {
+      stopWebSocketKeepAlive();
+      return;
+    }
+    socket.send(JSON.stringify({ version: WEBBRIDGE_PROTOCOL_VERSION, type: 'keepalive' }));
+  }, WEBBRIDGE_KEEPALIVE_INTERVAL_MS);
+}
+
 function closeTransport() {
   const socket = webBridge.socket;
   webBridge.socket = null;
   webBridge.ready = false;
+  stopWebSocketKeepAlive();
   if (webBridge.handshakeTimer) {
     clearTimeout(webBridge.handshakeTimer);
     webBridge.handshakeTimer = null;
@@ -224,9 +244,26 @@ function startWebBridgeHandshakeTimer(socket) {
     if (webBridge.socket !== socket || webBridge.ready) return;
     webBridge.socket = null;
     webBridge.ready = false;
+    stopWebSocketKeepAlive();
     publishWebBridgeStatus('error', {
       code: 'BRIDGE_HANDSHAKE_TIMEOUT',
       message: '见行扩展握手超时，正在重新连接',
+    });
+    socket.close();
+    scheduleWebBridgeReconnect();
+  }, 5000);
+}
+
+function startNativeHostReadyTimer(socket) {
+  if (webBridge.handshakeTimer) clearTimeout(webBridge.handshakeTimer);
+  webBridge.handshakeTimer = setTimeout(() => {
+    webBridge.handshakeTimer = null;
+    if (webBridge.socket !== socket) return;
+    webBridge.socket = null;
+    webBridge.ready = false;
+    publishWebBridgeStatus('error', {
+      code: 'NATIVE_HOST_READY_TIMEOUT',
+      message: 'Native Messaging Host 未响应，正在重新连接',
     });
     socket.close();
     scheduleWebBridgeReconnect();
@@ -340,7 +377,9 @@ async function connectWebBridge() {
       };
       webBridge.socket = nativeSocket;
       webBridge.ready = false;
-      startWebBridgeHandshakeTimer(nativeSocket);
+      // Native readiness and backend readiness are two separate states. Only tear down
+      // this port when the Native Host itself fails to acknowledge within the timeout.
+      startNativeHostReadyTimer(nativeSocket);
       port.onMessage.addListener((message) => handleWebBridgeMessage(nativeSocket, JSON.stringify(message)).catch((error) => publishWebBridgeStatus('error', { code: 'MESSAGE_HANDLER_ERROR', message: error.message })));
       port.onDisconnect.addListener(() => {
         if (webBridge.socket !== nativeSocket) return;
@@ -367,6 +406,7 @@ async function connectWebBridge() {
   startWebBridgeHandshakeTimer(socket);
 
   socket.addEventListener('open', () => {
+    startWebSocketKeepAlive(socket);
     socket.send(JSON.stringify({
       version: WEBBRIDGE_PROTOCOL_VERSION,
       protocolVersion: WEBBRIDGE_PROTOCOL_VERSION,
@@ -396,6 +436,7 @@ async function connectWebBridge() {
     if (webBridge.socket !== socket) return;
     webBridge.socket = null;
     webBridge.ready = false;
+    stopWebSocketKeepAlive();
     if (webBridge.handshakeTimer) {
       clearTimeout(webBridge.handshakeTimer);
       webBridge.handshakeTimer = null;
@@ -464,6 +505,41 @@ async function handleWebBridgeMessage(socket, rawMessage) {
     webBridge.authRequired = false;
     webBridge.reconnectAttempts = 0;
     connectWebBridge();
+    return;
+  }
+
+  if (request.type === 'status' && request.status === 'native_ready') {
+    if (webBridge.socket !== socket) return;
+    if (webBridge.handshakeTimer) {
+      clearTimeout(webBridge.handshakeTimer);
+      webBridge.handshakeTimer = null;
+    }
+    webBridge.reconnectAttempts = 0;
+    publishWebBridgeStatus('connecting', {
+      code: request.code || 'NATIVE_HOST_READY',
+      message: 'Native Host 已连接，正在等待 Mira 后端',
+    });
+    return;
+  }
+
+  if (request.type === 'status' && request.status === 'backend_connecting') {
+    if (webBridge.socket !== socket) return;
+    publishWebBridgeStatus('connecting', {
+      code: request.code || 'BACKEND_CONNECTING',
+      message: 'Native Host 已连接，正在连接 Mira 后端',
+    });
+    return;
+  }
+
+  if (request.type === 'status' && request.status === 'auth_required') {
+    webBridge.authRequired = true;
+    await chrome.storage.local.remove(['accessToken']);
+    publishWebBridgeStatus('auth_required', {
+      code: 'AUTH_REQUIRED',
+      message: '见行授权已失效，请重新输入 Mira 授权码',
+    });
+    await openAuthorizationPageIfNeeded();
+    if (webBridge.socket === socket) socket.close();
     return;
   }
 
