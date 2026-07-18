@@ -53,15 +53,6 @@ const getSemanticActionKey = (observation: AgentExecutionObservation) => {
     const query = observation.argsPreview.query;
 
     if (
-      observation.actionType === "tool" &&
-      observation.toolId?.startsWith("read_") &&
-      typeof path === "string" &&
-      path.trim()
-    ) {
-      return `${observation.actionType}:${observation.toolId}:path:${path.trim()}`;
-    }
-
-    if (
       (observation.actionType === "retrieve" ||
         observation.toolId === "read_discover" ||
         observation.toolId === "read_locate" ||
@@ -70,6 +61,15 @@ const getSemanticActionKey = (observation: AgentExecutionObservation) => {
       query.trim()
     ) {
       return `${observation.actionType}:${observation.toolId ?? "retrieval"}:query:${query.trim()}`;
+    }
+
+    if (
+      observation.actionType === "tool" &&
+      observation.toolId?.startsWith("read_") &&
+      typeof path === "string" &&
+      path.trim()
+    ) {
+      return `${observation.actionType}:${observation.toolId}:path:${path.trim()}`;
     }
   }
 
