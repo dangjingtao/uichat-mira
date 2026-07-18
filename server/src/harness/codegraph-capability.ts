@@ -1,3 +1,5 @@
+import fs from "node:fs";
+
 import {
   getActiveCodeGraphStudioService,
 } from "@/microapps/codegraph/index.js";
@@ -17,23 +19,43 @@ import {
   unregisterCapability,
 } from "./registry.js";
 
-let managedAutoStart: Promise<unknown> | null = null;
+let managedLifecycleBusy = false;
+let managedLifecyclePromise: Promise<unknown> | null = null;
 let autoStartAttemptedFingerprint: string | null = null;
 
 const disposeRepoLocalRuntime = () => {
   void disposeRepoLocalManagedCodeGraphManagers();
 };
 
-const maybeAutoStartManagedRuntime = (
+const beginManagedLifecycle = (
+  task: () => Promise<unknown>,
+  fingerprint: string,
+) => {
+  if (managedLifecycleBusy) {
+    return;
+  }
+  managedLifecycleBusy = true;
+  autoStartAttemptedFingerprint = fingerprint;
+  managedLifecyclePromise = task()
+    .catch(() => undefined)
+    .finally(() => {
+      managedLifecycleBusy = false;
+      managedLifecyclePromise = null;
+    });
+};
+
+const maybeBootstrapManagedRuntime = (
   service: NonNullable<ReturnType<typeof getActiveCodeGraphStudioService>>,
 ) => {
   const draft = service.getDraft();
+  const hasSavedConfig = fs.existsSync(service.getStoragePath());
+  const currentRegistration = Boolean(
+    getCapabilityImplementation("codebase_explore"),
+  );
   const rawGate = service.getCapabilityGate();
   const gate = normalizeDeclaredRepoLocalCapabilityGate(rawGate, {
     command: draft.command,
-    capabilityRegistered: Boolean(
-      getCapabilityImplementation("codebase_explore"),
-    ),
+    capabilityRegistered: currentRegistration,
   });
   const fingerprint = JSON.stringify({
     command: draft.command,
@@ -42,25 +64,38 @@ const maybeAutoStartManagedRuntime = (
     telemetryProbeArgs: draft.telemetryProbeArgs,
     appDataRoot: draft.appDataRoot,
   });
+
+  if (
+    !hasSavedConfig &&
+    draft.microAppEnabled &&
+    !draft.agentCapabilityEnabled &&
+    !managedLifecycleBusy
+  ) {
+    beginManagedLifecycle(
+      async () => {
+        await service.saveConfig({
+          agentCapabilityEnabled: true,
+        });
+        await service.start();
+      },
+      fingerprint,
+    );
+    return;
+  }
+
   const shouldStart =
     draft.microAppEnabled &&
     isRealCodeGraphCommand(draft.command) &&
     gate.checks.appDataRootValid &&
     !gate.checks.runtimeReady &&
-    !managedAutoStart &&
+    !managedLifecycleBusy &&
     autoStartAttemptedFingerprint !== fingerprint;
 
   if (!shouldStart) {
     return;
   }
 
-  autoStartAttemptedFingerprint = fingerprint;
-  managedAutoStart = service
-    .start()
-    .catch(() => undefined)
-    .finally(() => {
-      managedAutoStart = null;
-    });
+  beginManagedLifecycle(async () => await service.start(), fingerprint);
 };
 
 export const reconcileCodeGraphHarnessCapability = () => {
@@ -74,12 +109,13 @@ export const reconcileCodeGraphHarnessCapability = () => {
       unregisterCapability("codebase_explore");
     }
     disposeRepoLocalRuntime();
-    managedAutoStart = null;
+    managedLifecycleBusy = false;
+    managedLifecyclePromise = null;
     autoStartAttemptedFingerprint = null;
     return false;
   }
 
-  maybeAutoStartManagedRuntime(service);
+  maybeBootstrapManagedRuntime(service);
 
   const draft = service.getDraft();
   const gate = normalizeDeclaredRepoLocalCapabilityGate(
@@ -103,3 +139,9 @@ export const reconcileCodeGraphHarnessCapability = () => {
   disposeRepoLocalRuntime();
   return false;
 };
+
+export const getCodeGraphManagedLifecycleState = () => ({
+  busy: managedLifecycleBusy,
+  pending: Boolean(managedLifecyclePromise),
+  attemptedFingerprint: autoStartAttemptedFingerprint,
+});
