@@ -7,10 +7,6 @@ import type {
 import { createArtifact } from "../core/artifacts.js";
 import { mcpBadRequest, mcpInternalError } from "../core/errors.js";
 import {
-  createSandboxShellProfile,
-  executeSandboxedCommand,
-} from "@/sandbox/executor.js";
-import {
   executeHostCommand,
   toHostShellProfile,
 } from "./host-spawn-runtime.js";
@@ -311,100 +307,20 @@ export const executeTerminalSessionRuntime = async ({
   }
 
   const spawnSpan = trace?.startSpan({
-    name:
-      runtimeId === "host_spawn"
-        ? "Spawn host shell command"
-        : "Run sandbox compatibility command",
+    name: "Spawn host shell command",
     kind: "process_spawn",
     metadata: {
       runtimeId,
     },
   });
-
-  if (runtimeId === "host_spawn") {
-    const result = await executeHostCommand({
-      command,
-      cwd: typeof args.cwd === "string" ? args.cwd : undefined,
-      env,
-      timeoutMs,
-      signal,
-      shellProfile: toHostShellProfile(shellProfile),
-      workspaceRoot: harnessEnvironment.workspace.rootPath,
-      pushStdout: (chunk) =>
-        pushEvent?.({
-          type: "invocation:stdout",
-          chunk,
-          stream: "stdout",
-        }),
-      pushStderr: (chunk) =>
-        pushEvent?.({
-          type: "invocation:stdout",
-          chunk,
-          stream: "stderr",
-        }),
-    });
-    spawnSpan?.end({
-      status: signal.aborted ? "cancelled" : "completed",
-      metadata: {
-        runtimeId,
-        cwd: result.cwd,
-        workspaceRelation: result.workspaceRelation,
-        processTreeMode: result.processTreeMode,
-        exitCode: result.exitCode,
-        timedOut: result.timedOut,
-      },
-    });
-
-    const contents: TerminalContents = {
-      runtimeId,
-      sessionId: crypto.randomUUID(),
-      command,
-      cwd: result.cwd,
-      workspaceRelation: result.workspaceRelation,
-      processTreeMode: result.processTreeMode,
-      exitCode: result.exitCode,
-      output: result.output,
-      stdout: result.stdout,
-      stderr: result.stderr,
-      timedOut: result.timedOut,
-      reusedSession: false,
-      sessionMode: "ephemeral",
-      streamMode: "split",
-      stderrSeparated: true,
-      stdoutEncoding: result.stdoutEncoding,
-      stderrEncoding: result.stderrEncoding,
-      truncated: result.truncated,
-      binaryDetected: result.binaryDetected,
-      violations: result.violations,
-    };
-    return {
-      contents,
-      artifacts: [
-        createTerminalArtifact({
-          command,
-          output: result.output,
-          metadata: {
-            runtimeId,
-            cwd: result.cwd,
-            workspaceRelation: result.workspaceRelation,
-            processTreeMode: result.processTreeMode,
-            exitCode: result.exitCode,
-            timedOut: result.timedOut,
-            sessionMode: "ephemeral",
-            truncated: result.truncated,
-          },
-        }),
-      ],
-    };
-  }
-
-  const result = await executeSandboxedCommand({
+  const result = await executeHostCommand({
     command,
     cwd: typeof args.cwd === "string" ? args.cwd : undefined,
     env,
     timeoutMs,
     signal,
-    shellProfile: createSandboxShellProfile(shellProfile),
+    shellProfile: toHostShellProfile(shellProfile),
+    workspaceRoot: harnessEnvironment.workspace.rootPath,
     pushStdout: (chunk) =>
       pushEvent?.({
         type: "invocation:stdout",
@@ -423,8 +339,8 @@ export const executeTerminalSessionRuntime = async ({
     metadata: {
       runtimeId,
       cwd: result.cwd,
-      workspaceRelation: "inside",
-      processTreeMode: "child_process",
+      workspaceRelation: result.workspaceRelation,
+      processTreeMode: result.processTreeMode,
       exitCode: result.exitCode,
       timedOut: result.timedOut,
     },
@@ -435,8 +351,8 @@ export const executeTerminalSessionRuntime = async ({
     sessionId: crypto.randomUUID(),
     command,
     cwd: result.cwd,
-    workspaceRelation: "inside",
-    processTreeMode: "child_process",
+    workspaceRelation: result.workspaceRelation,
+    processTreeMode: result.processTreeMode,
     exitCode: result.exitCode,
     output: result.output,
     stdout: result.stdout,
@@ -461,8 +377,8 @@ export const executeTerminalSessionRuntime = async ({
         metadata: {
           runtimeId,
           cwd: result.cwd,
-          workspaceRelation: "inside",
-          processTreeMode: "child_process",
+          workspaceRelation: result.workspaceRelation,
+          processTreeMode: result.processTreeMode,
           exitCode: result.exitCode,
           timedOut: result.timedOut,
           sessionMode: "ephemeral",
