@@ -13,6 +13,7 @@ const DEFAULT_REPO_DATA_DIR_NAME = ".codegraph";
 const DEFAULT_INDEX_BOOTSTRAP_TIMEOUT_MS = 120_000;
 const DECLARED_REPO_LOCAL_REASON =
   /external index|index-root|workspace[\\/].*\.codegraph|serve --mcp/i;
+const CODEGRAPH_GIT_EXCLUDE_PATTERN = ".codegraph/";
 
 export const isRealCodeGraphCommand = (command: string) => {
   const normalized = command.trim().toLowerCase();
@@ -114,6 +115,76 @@ const runManagedCodeGraphCli = async (input: {
   });
 };
 
+const resolveGitDirectory = (workspaceRoot: string) => {
+  const dotGit = path.join(workspaceRoot, ".git");
+  try {
+    const stat = fs.statSync(dotGit);
+    if (stat.isDirectory()) {
+      return dotGit;
+    }
+    if (!stat.isFile()) {
+      return null;
+    }
+
+    const pointer = fs.readFileSync(dotGit, "utf8").trim();
+    const match = pointer.match(/^gitdir:\s*(.+)$/i);
+    if (!match?.[1]) {
+      return null;
+    }
+    return path.resolve(workspaceRoot, match[1].trim());
+  } catch {
+    return null;
+  }
+};
+
+const resolveGitCommonDirectory = (workspaceRoot: string) => {
+  const gitDir = resolveGitDirectory(workspaceRoot);
+  if (!gitDir) {
+    return null;
+  }
+
+  const commonDirPath = path.join(gitDir, "commondir");
+  try {
+    if (!fs.existsSync(commonDirPath)) {
+      return gitDir;
+    }
+    const relative = fs.readFileSync(commonDirPath, "utf8").trim();
+    return relative ? path.resolve(gitDir, relative) : gitDir;
+  } catch {
+    return gitDir;
+  }
+};
+
+export const ensureCodeGraphGitLocalExclude = (workspaceRoot: string) => {
+  const gitCommonDir = resolveGitCommonDirectory(workspaceRoot);
+  if (!gitCommonDir) {
+    return false;
+  }
+
+  try {
+    const infoDir = path.join(gitCommonDir, "info");
+    const excludePath = path.join(infoDir, "exclude");
+    fs.mkdirSync(infoDir, { recursive: true });
+    const current = fs.existsSync(excludePath)
+      ? fs.readFileSync(excludePath, "utf8")
+      : "";
+    const lines = current.split(/\r?\n/).map((line) => line.trim());
+    if (lines.includes(CODEGRAPH_GIT_EXCLUDE_PATTERN)) {
+      return true;
+    }
+
+    const prefix = current && !current.endsWith("\n") ? "\n" : "";
+    fs.appendFileSync(
+      excludePath,
+      `${prefix}# UIChat Mira managed CodeGraph runtime\n${CODEGRAPH_GIT_EXCLUDE_PATTERN}\n`,
+      "utf8",
+    );
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const hasCodeGraphIndexData = (repoDataDirPath: string) => {
   try {
     return fs
@@ -145,6 +216,8 @@ export const ensureDeclaredRepoLocalCodeGraphIndex = async (
       message: "Repo-local CodeGraph index bootstrap does not apply to this provider.",
     };
   }
+
+  ensureCodeGraphGitLocalExclude(options.workspaceRoot);
 
   if (hasCodeGraphIndexData(repoDataDirPath)) {
     return {
