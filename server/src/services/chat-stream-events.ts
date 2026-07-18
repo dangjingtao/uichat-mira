@@ -34,6 +34,8 @@ export interface AssistantExecutionNodeEvent {
   slotKey?: string;
   attemptKey?: string;
   iteration?: number;
+  /** Actual emission time used to restore chronological order after refresh/resume merges. */
+  emittedAt?: string;
   summary?: string;
   details?: Record<string, unknown>;
   environment?: Record<string, unknown>;
