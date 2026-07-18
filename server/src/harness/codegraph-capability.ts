@@ -1,5 +1,3 @@
-import fs from "node:fs";
-
 import {
   getActiveCodeGraphStudioService,
 } from "@/microapps/codegraph/index.js";
@@ -19,34 +17,8 @@ import {
   unregisterCapability,
 } from "./registry.js";
 
-let freshInstallBootstrapBusy = false;
-
 const disposeRepoLocalRuntime = () => {
   void disposeRepoLocalManagedCodeGraphManagers();
-};
-
-const maybeEnableFreshInstallCapability = (
-  service: NonNullable<ReturnType<typeof getActiveCodeGraphStudioService>>,
-) => {
-  const draft = service.getDraft();
-  if (
-    freshInstallBootstrapBusy ||
-    fs.existsSync(service.getStoragePath()) ||
-    !draft.microAppEnabled ||
-    draft.agentCapabilityEnabled
-  ) {
-    return;
-  }
-
-  freshInstallBootstrapBusy = true;
-  void service
-    .saveConfig({
-      agentCapabilityEnabled: true,
-    })
-    .catch(() => undefined)
-    .finally(() => {
-      freshInstallBootstrapBusy = false;
-    });
 };
 
 export const reconcileCodeGraphHarnessCapability = () => {
@@ -60,11 +32,8 @@ export const reconcileCodeGraphHarnessCapability = () => {
       unregisterCapability("codebase_explore");
     }
     disposeRepoLocalRuntime();
-    freshInstallBootstrapBusy = false;
     return false;
   }
-
-  maybeEnableFreshInstallCapability(service);
 
   const draft = service.getDraft();
   const gate = normalizeDeclaredRepoLocalCapabilityGate(
