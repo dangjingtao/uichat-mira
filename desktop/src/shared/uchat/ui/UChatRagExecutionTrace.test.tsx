@@ -228,6 +228,72 @@ test("a new unmatched approval remains visible after an earlier resume", () => {
   );
 });
 
+test("shows Planner decision as transient inner status while Generate is running", () => {
+  render(
+    <UChatExecutionTrace
+      messageId="assistant-inner-status"
+      onOpenDetail={() => {}}
+      steps={[
+        {
+          nodeId: "agent-next-action-planner",
+          attemptKey: "agent-next-action-planner#1",
+          nodeType: "plan",
+          phase: "done",
+          label: "执行计划",
+          summary: "当前证据已足够，开始组织最终回答",
+          details: {
+            reason: "邮件已经查到，我正在判断哪些内容值得你优先关注。",
+          },
+        },
+        {
+          nodeId: "agent-generate",
+          attemptKey: "agent-generate#1",
+          nodeType: "generate",
+          phase: "start",
+          label: "组织最终回答",
+          summary: "正在生成 Agent 最终回答",
+        },
+      ]}
+    />,
+  );
+
+  assert.equal(
+    screen.getByTestId("agent-inner-status").textContent,
+    "邮件已经查到，我正在判断哪些内容值得你优先关注。",
+  );
+});
+
+test("inner status disappears after final answer organization completes", () => {
+  render(
+    <UChatExecutionTrace
+      messageId="assistant-inner-status-complete"
+      onOpenDetail={() => {}}
+      steps={[
+        {
+          nodeId: "agent-next-action-planner",
+          attemptKey: "agent-next-action-planner#1",
+          nodeType: "plan",
+          phase: "done",
+          label: "执行计划",
+          details: {
+            reason: "邮件已经查到，我正在判断哪些内容值得你优先关注。",
+          },
+        },
+        {
+          nodeId: "agent-generate",
+          attemptKey: "agent-generate#1",
+          nodeType: "generate",
+          phase: "done",
+          label: "组织最终回答",
+          summary: "已生成 Agent 最终回答",
+        },
+      ]}
+    />,
+  );
+
+  assert.equal(screen.queryByTestId("agent-inner-status"), null);
+});
+
 test("completed answer step restores the normal trace completion state", () => {
   const completedSteps = [
     ...approvalWaitSteps,
