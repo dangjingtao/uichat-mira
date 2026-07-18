@@ -1,10 +1,10 @@
 import {
   getActiveCodeGraphStudioService,
 } from "@/microapps/codegraph/index.js";
-import { codebaseExploreTool } from "@/mcp/managed-codegraph/codebase-explore.tool.js";
 import {
-  canUseDeclaredRepoLocalCodeGraphCapability,
-} from "@/mcp/managed-codegraph/repo-local-capability.js";
+  normalizeDeclaredRepoLocalCapabilityGate,
+} from "@/microapps/codegraph/public-report.js";
+import { codebaseExploreTool } from "@/mcp/managed-codegraph/codebase-explore.tool.js";
 import {
   disposeRepoLocalManagedCodeGraphManagers,
 } from "@/mcp/managed-codegraph/repo-local-manager-cache.js";
@@ -28,7 +28,13 @@ const maybeAutoStartManagedRuntime = (
   service: NonNullable<ReturnType<typeof getActiveCodeGraphStudioService>>,
 ) => {
   const draft = service.getDraft();
-  const gate = service.getCapabilityGate();
+  const rawGate = service.getCapabilityGate();
+  const gate = normalizeDeclaredRepoLocalCapabilityGate(rawGate, {
+    command: draft.command,
+    capabilityRegistered: Boolean(
+      getCapabilityImplementation("codebase_explore"),
+    ),
+  });
   const fingerprint = JSON.stringify({
     command: draft.command,
     startArgs: draft.startArgs,
@@ -59,7 +65,9 @@ const maybeAutoStartManagedRuntime = (
 
 export const reconcileCodeGraphHarnessCapability = () => {
   const service = getActiveCodeGraphStudioService();
-  const currentRegistration = Boolean(getCapabilityImplementation("codebase_explore"));
+  const currentRegistration = Boolean(
+    getCapabilityImplementation("codebase_explore"),
+  );
 
   if (!service) {
     if (currentRegistration) {
@@ -73,13 +81,16 @@ export const reconcileCodeGraphHarnessCapability = () => {
 
   maybeAutoStartManagedRuntime(service);
 
-  const gate = service.getCapabilityGate();
-  const repoLocalAvailable =
-    isRealCodeGraphCommand(service.getDraft().command) &&
-    canUseDeclaredRepoLocalCodeGraphCapability(gate);
-  const available = gate.available || repoLocalAvailable;
+  const draft = service.getDraft();
+  const gate = normalizeDeclaredRepoLocalCapabilityGate(
+    service.getCapabilityGate(),
+    {
+      command: draft.command,
+      capabilityRegistered: currentRegistration,
+    },
+  );
 
-  if (available) {
+  if (gate.available) {
     if (!currentRegistration) {
       registerCapability(codebaseExploreTool);
     }
