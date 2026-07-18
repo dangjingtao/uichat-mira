@@ -14,17 +14,23 @@ export interface PlannerTaskPlanItem {
   completionCriteria?: string[];
 }
 
-export interface PlannerTaskPlanUpdate {
-  items: PlannerTaskPlanItem[];
+export interface PlannerTaskPlanPatch {
+  addItems?: PlannerTaskPlanItem[];
+  updates?: Array<{
+    id: string;
+    status: PlannerTaskPlanItemStatus;
+  }>;
   activeItemId?: string;
   revisionReason?: string;
 }
 
 type CurrentTaskFrameWithPlan = CurrentTaskFrame & {
-  taskPlan?: PlannerTaskPlanItem[];
+  planList?: PlannerTaskPlanItem[];
   activePlanItemId?: string;
   planRevision?: number;
   planRevisionReason?: string;
+  // Temporary compatibility for task frames produced by the previous dev implementation.
+  taskPlan?: PlannerTaskPlanItem[];
 };
 
 const PLAN_ITEM_STATUSES = new Set<PlannerTaskPlanItemStatus>([
@@ -46,20 +52,20 @@ const normalizeStrings = (value: unknown, limit = 8) =>
         .slice(0, limit)
     : [];
 
-const normalizePlanItem = (value: unknown): PlannerTaskPlanItem | null => {
+const normalizeStatus = (value: unknown): PlannerTaskPlanItemStatus | null =>
+  typeof value === "string" && PLAN_ITEM_STATUSES.has(value as PlannerTaskPlanItemStatus)
+    ? (value as PlannerTaskPlanItemStatus)
+    : null;
+
+const normalizeNewPlanItem = (value: unknown): PlannerTaskPlanItem | null => {
   if (!isRecord(value)) {
     return null;
   }
 
   const id = typeof value.id === "string" ? value.id.trim() : "";
   const title = typeof value.title === "string" ? value.title.trim() : "";
-  const status =
-    typeof value.status === "string" &&
-    PLAN_ITEM_STATUSES.has(value.status as PlannerTaskPlanItemStatus)
-      ? (value.status as PlannerTaskPlanItemStatus)
-      : null;
-
-  if (!id || !title || !status) {
+  const status = normalizeStatus(value.status) ?? "pending";
+  if (!id || !title) {
     return null;
   }
 
@@ -72,26 +78,76 @@ const normalizePlanItem = (value: unknown): PlannerTaskPlanItem | null => {
   };
 };
 
-export const parsePlannerTaskPlanUpdate = (
+export const parsePlannerTaskPlanPatch = (
   rawDecision: Record<string, unknown> | undefined,
-): PlannerTaskPlanUpdate | undefined => {
-  const rawPlan = rawDecision?.plan;
-  if (!isRecord(rawPlan) || !Array.isArray(rawPlan.items)) {
+): PlannerTaskPlanPatch | undefined => {
+  const rawPatch = rawDecision?.planPatch;
+  if (!isRecord(rawPatch)) {
     return undefined;
   }
 
-  const items = rawPlan.items
-    .map(normalizePlanItem)
-    .filter((item): item is PlannerTaskPlanItem => Boolean(item))
-    .filter((item, index, allItems) => allItems.findIndex((other) => other.id === item.id) === index);
+  const addItems = Array.isArray(rawPatch.addItems)
+    ? rawPatch.addItems
+        .map(normalizeNewPlanItem)
+        .filter((item): item is PlannerTaskPlanItem => Boolean(item))
+        .filter(
+          (item, index, items) =>
+            items.findIndex((candidate) => candidate.id === item.id) === index,
+        )
+    : [];
 
-  if (items.length === 0) {
+  const updates = Array.isArray(rawPatch.updates)
+    ? rawPatch.updates
+        .map((value) => {
+          if (!isRecord(value)) {
+            return null;
+          }
+          const id = typeof value.id === "string" ? value.id.trim() : "";
+          const status = normalizeStatus(value.status);
+          return id && status ? { id, status } : null;
+        })
+        .filter(
+          (item): item is { id: string; status: PlannerTaskPlanItemStatus } =>
+            Boolean(item),
+        )
+    : [];
+
+  const activeItemId =
+    typeof rawPatch.activeItemId === "string" && rawPatch.activeItemId.trim()
+      ? rawPatch.activeItemId.trim()
+      : undefined;
+  const revisionReason =
+    typeof rawPatch.revisionReason === "string" && rawPatch.revisionReason.trim()
+      ? rawPatch.revisionReason.trim()
+      : undefined;
+
+  if (
+    addItems.length === 0 &&
+    updates.length === 0 &&
+    !activeItemId &&
+    !revisionReason
+  ) {
     return undefined;
   }
 
-  const requestedActiveItemId =
-    typeof rawPlan.activeItemId === "string" ? rawPlan.activeItemId.trim() : "";
-  const requestedActive = requestedActiveItemId
+  return {
+    ...(addItems.length > 0 ? { addItems } : {}),
+    ...(updates.length > 0 ? { updates } : {}),
+    ...(activeItemId ? { activeItemId } : {}),
+    ...(revisionReason ? { revisionReason } : {}),
+  };
+};
+
+const getCurrentPlanList = (frame: CurrentTaskFrame | undefined) => {
+  const plannedFrame = frame as CurrentTaskFrameWithPlan | undefined;
+  return plannedFrame?.planList ?? plannedFrame?.taskPlan ?? [];
+};
+
+const normalizeActivePlan = (
+  items: PlannerTaskPlanItem[],
+  requestedActiveItemId?: string,
+) => {
+  const requested = requestedActiveItemId
     ? items.find(
         (item) =>
           item.id === requestedActiveItemId &&
@@ -99,65 +155,76 @@ export const parsePlannerTaskPlanUpdate = (
           item.status !== "blocked",
       )
     : undefined;
-  const inferredActive =
-    requestedActive ??
+  const active =
+    requested ??
     items.find((item) => item.status === "in_progress") ??
     items.find((item) => item.status === "pending");
 
-  const normalizedItems = items.map((item) => {
-    if (!inferredActive) {
-      return item.status === "in_progress" ? { ...item, status: "pending" as const } : item;
-    }
-    if (item.id === inferredActive.id) {
-      return item.status === "pending" ? { ...item, status: "in_progress" as const } : item;
-    }
-    return item.status === "in_progress" ? { ...item, status: "pending" as const } : item;
-  });
-
-  const revisionReason =
-    typeof rawPlan.revisionReason === "string" && rawPlan.revisionReason.trim()
-      ? rawPlan.revisionReason.trim()
-      : undefined;
-
   return {
-    items: normalizedItems,
-    ...(inferredActive ? { activeItemId: inferredActive.id } : {}),
-    ...(revisionReason ? { revisionReason } : {}),
+    activeItemId: active?.id,
+    items: items.map((item) => {
+      if (!active) {
+        return item.status === "in_progress"
+          ? { ...item, status: "pending" as const }
+          : item;
+      }
+      if (item.id === active.id) {
+        return item.status === "pending"
+          ? { ...item, status: "in_progress" as const }
+          : item;
+      }
+      return item.status === "in_progress"
+        ? { ...item, status: "pending" as const }
+        : item;
+    }),
   };
 };
 
-const getPlanSnapshot = (frame: CurrentTaskFrame | undefined) => {
-  const plannedFrame = frame as CurrentTaskFrameWithPlan | undefined;
-  return plannedFrame?.taskPlan
-    ? {
-        items: plannedFrame.taskPlan,
-        activeItemId: plannedFrame.activePlanItemId,
-      }
-    : undefined;
-};
-
-export const applyPlannerTaskPlan = (
+/**
+ * Runtime owns planList identity and history. The model can only patch status, append new
+ * semantic items, and select the active item. Existing items cannot be deleted or silently
+ * rewritten by returning a new full plan.
+ */
+export const applyPlannerTaskPlanPatch = (
   frame: CurrentTaskFrame | undefined,
-  update: PlannerTaskPlanUpdate | undefined,
+  patch: PlannerTaskPlanPatch | undefined,
 ): CurrentTaskFrame | undefined => {
-  if (!frame || !update) {
+  if (!frame) {
     return frame;
   }
 
   const plannedFrame = frame as CurrentTaskFrameWithPlan;
-  const previousSnapshot = getPlanSnapshot(frame);
-  const nextSnapshot = {
-    items: update.items,
-    activeItemId: update.activeItemId,
-  };
-  const changed = JSON.stringify(previousSnapshot) !== JSON.stringify(nextSnapshot);
-  const activeItem = update.activeItemId
-    ? update.items.find((item) => item.id === update.activeItemId)
+  const previousItems = getCurrentPlanList(frame);
+  const itemsById = new Map(previousItems.map((item) => [item.id, { ...item }]));
+
+  for (const item of patch?.addItems ?? []) {
+    if (!itemsById.has(item.id)) {
+      itemsById.set(item.id, { ...item });
+    }
+  }
+
+  for (const update of patch?.updates ?? []) {
+    const current = itemsById.get(update.id);
+    if (current) {
+      itemsById.set(update.id, { ...current, status: update.status });
+    }
+  }
+
+  const mergedItems = [...itemsById.values()];
+  const normalized = normalizeActivePlan(
+    mergedItems,
+    patch?.activeItemId ?? plannedFrame.activePlanItemId,
+  );
+  const changed =
+    JSON.stringify(previousItems) !== JSON.stringify(normalized.items) ||
+    plannedFrame.activePlanItemId !== normalized.activeItemId;
+  const activeItem = normalized.activeItemId
+    ? normalized.items.find((item) => item.id === normalized.activeItemId)
     : undefined;
-  const remainingWork = update.items
+  const remainingWork = normalized.items
     .filter((item) => item.status === "pending" || item.status === "in_progress")
     .map((item) => item.title);
-  const completedProgress = update.items
+  const completedProgress = normalized.items
     .filter((item) => item.status === "completed")
     .map((item) => `Plan completed: ${item.title}`);
   const coveredProgress = [
@@ -171,25 +238,35 @@ export const applyPlannerTaskPlan = (
     ...frame,
     ...(activeItem
       ? { currentSubtask: activeItem.title }
-      : update.items.every((item) => item.status === "completed")
-        ? { currentSubtask: "Verify the completed plan against the full user goal and answer." }
+      : normalized.items.length > 0 &&
+          normalized.items.every(
+            (item) => item.status === "completed" || item.status === "blocked",
+          )
+        ? {
+            currentSubtask:
+              "Verify the completed runtime plan against the full user goal and decide whether to answer or revise the plan.",
+          }
         : {}),
     coveredProgress: coveredProgress.length > 0 ? coveredProgress : undefined,
     remainingWork: remainingWork.length > 0 ? remainingWork : undefined,
-    taskPlan: update.items,
-    activePlanItemId: update.activeItemId,
-    planRevision: changed ? (plannedFrame.planRevision ?? 0) + 1 : plannedFrame.planRevision ?? 0,
-    ...(update.revisionReason
-      ? { planRevisionReason: update.revisionReason }
+    planList: normalized.items,
+    activePlanItemId: normalized.activeItemId,
+    planRevision: changed
+      ? (plannedFrame.planRevision ?? 0) + 1
+      : plannedFrame.planRevision ?? 0,
+    ...(patch?.revisionReason
+      ? { planRevisionReason: patch.revisionReason }
       : plannedFrame.planRevisionReason
         ? { planRevisionReason: plannedFrame.planRevisionReason }
         : {}),
+    // Remove the previous experimental full-plan field when a frame is rewritten.
+    taskPlan: undefined,
   } as CurrentTaskFrame;
 };
 
 export const getPlannerTaskPlanDiagnostics = (frame: CurrentTaskFrame | undefined) => {
   const plannedFrame = frame as CurrentTaskFrameWithPlan | undefined;
-  const items = plannedFrame?.taskPlan ?? [];
+  const items = getCurrentPlanList(frame);
   return {
     planRevision: plannedFrame?.planRevision ?? 0,
     planItemCount: items.length,
@@ -200,9 +277,8 @@ export const getPlannerTaskPlanDiagnostics = (frame: CurrentTaskFrame | undefine
 };
 
 /**
- * Adds the task-plan contract without changing AgentNextAction itself.
- * The canonical action remains the only execution decision; `plan` is planner-owned
- * semantic state that is persisted inside currentTaskFrame.
+ * Adds a patch-only plan contract. AgentNextAction remains the only execution decision.
+ * planList is runtime-owned state; the model never replaces the full list after creation.
  */
 export const withPlannerTaskPlanContract = (
   messages: NormalizedChatMessage[],
@@ -212,18 +288,20 @@ export const withPlannerTaskPlanContract = (
   }
 
   const planContract = [
-    "TASK PLAN CONTRACT (applies to this Planner response):",
-    "Before choosing nextAction, maintain a persistent semantic task plan for the full user goal.",
-    "The plan is NOT a precomputed list of tool calls. Plan items describe semantic subgoals/outcomes; tools are selected later only to advance the active item.",
-    "On the first planning turn, create the plan. On later turns, first evaluate the latest Evidence against the active plan item, mark completed work, then either continue that item, advance to the next item, or revise the plan when Evidence proves the old plan incomplete.",
-    "Keep stable item ids across turns. Do not reset the plan just because a new tool result arrived.",
+    "RUNTIME PLAN CONTRACT (applies to this Planner response):",
+    "Maintain a persistent runtime-owned planList for the full user goal before choosing nextAction.",
+    "Plan items are semantic subgoals/outcomes, never a precomputed list of tool calls.",
+    "The runtime owns existing plan item identity. You MUST NOT return a full replacement plan.",
+    "Return only a top-level planPatch when plan state must change.",
+    'planPatch schema: {"addItems":[{"id":"P1","title":"semantic subgoal","status":"pending|in_progress|completed|blocked","completionCriteria":["observable condition"]}],"updates":[{"id":"P1","status":"completed"}],"activeItemId":"P2","revisionReason":"optional concise reason"}',
+    "First planning turn: add the initial semantic items and select exactly one active item.",
+    "Later turns: evaluate the latest continuous action/result context against the active item, patch completed/blocked status, then continue it, activate the next item, or append genuinely new semantic work discovered from Evidence.",
+    "Keep stable ids. Never delete old items, renumber them, or rewrite an existing item's identity just because a new tool result arrived.",
     "nextAction must directly advance the active plan item. Do not wander into unrelated discovery or documentation.",
-    "Return the FULL current plan on every normal Planner response as one additional top-level field named plan. This is the only allowed extra top-level field beyond the canonical action fields.",
-    'plan schema: {"items":[{"id":"P1","title":"semantic subgoal","status":"pending|in_progress|completed|blocked","completionCriteria":["observable completion condition"]}],"activeItemId":"P1","revisionReason":"optional concise reason"}',
-    "Exactly one unfinished item should normally be in_progress. If all plan items are completed, verify the full user goal/completion criteria and choose answer; if something is still missing, revise the plan before choosing another tool.",
-    "Runtime memory comes only from currentTaskFrame, accumulatedActionLedger, Evidence, and recent observations. There is NO implicit engineering-memory-file feature.",
-    "Do NOT search for or open docs/ENGINEERING_MEMORY.md, ENGINEERING_MEMORY.md, MEMORY.md, memory notes, or similarly named files merely to remember prior work, recover a plan, or understand Agent state. Only inspect such a file when the user explicitly asks about that file or the file itself is directly part of the requested task.",
-    "The earlier 'no extra fields' rule has exactly one exception: the top-level plan field defined above. The action type is still exactly one of answer/retrieve/use_tool/ask_user/error.",
+    "If all plan items are completed, verify the full user goal before answer. If the goal is still not covered, append the missing semantic item before taking another action.",
+    "Runtime working memory comes from continuous Agent Loop Context, planList, accumulatedActionLedger, Evidence, and recent observations. There is NO implicit engineering-memory-file feature.",
+    "Do NOT search for or open docs/ENGINEERING_MEMORY.md, ENGINEERING_MEMORY.md, MEMORY.md, memory notes, or similarly named files merely to remember prior work, recover a plan, or understand Agent state. Only inspect such a file when the user explicitly asks about that file or it is directly part of the requested task.",
+    "The earlier no-extra-fields rule has exactly one exception: top-level planPatch. The canonical action type is still exactly one of answer/retrieve/use_tool/ask_user/error.",
   ].join("\n");
 
   const firstSystemIndex = messages.findIndex((message) => message.role === "system");
