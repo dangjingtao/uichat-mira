@@ -1,641 +1,114 @@
 ---
-status: current
+status: archived
 owner: agent-runtime
-last_verified: 2026-07-06
-layer: project-control
+last_verified: 2026-07-18
+layer: project-control-history
 module: ProjectControl
 feature: AgentNodesWorkboard
-doc_type: workboard
-canonical: true
+doc_type: historical-workboard
+canonical: false
+superseded_by:
+  - ../harness/agentgraph-harness-protocol.md
 related:
-  - docs/project-control/README.md
-  - docs/project-control/decisions/TD-AGENT-01-hardcoded-user-input-routing-and-execution.md
-  - docs/project-control/tasks/agent_node_T001-next-action-planner-node.md
-  - docs/project-control/tasks/agent_node_T002-tool-call-normalize-node.md
-  - docs/project-control/tasks/agent_node_T003-agent-graph-wiring.md
-  - docs/project-control/tasks/agent_node_T004-policy-node-consume-pending-tool-call.md
-  - docs/project-control/tasks/agent_node_T005-tool-node-execute-frozen-pending-tool-call.md
-  - docs/project-control/tasks/agent_node_T006-evidence-loop-routing.md
-  - docs/project-control/tasks/agent_node_T007-decision-loop-acceptance-regression-guardrails.md
-  - docs/project-control/tasks/agent_node_T008-v1-cleanup-release-hardening.md
-  - docs/project-control/tasks/agent_node_T009-evidence-summary-answer-stop-rule.md
-  - docs/project-control/tasks/agent_node_T010-next-action-planner-json-contract-hardening.md
-  - docs/project-control/tasks/agent_node_T011-workspace-path-argument-contract.md
-  - docs/project-control/tasks/agent_node_T012-repeated-tool-guard.md
-  - docs/project-control/tasks/agent_node_T013-evidence-grounded-final-answer.md
-  - docs/project-control/tasks/agent_node_T014-approval-resume-contract.md
-  - docs/project-control/tasks/agent_node_T015-phoenix-minimum-human-observability.md
-  - docs/project-control/tasks/agent_node_T016-local-tool-routing-and-schema-guard.md
-  - docs/project-control/tasks/agent_node_T017-toolcall-loop-regression-matrix.md
-  - docs/project-control/tasks/agent_node_T018-invocation-result-evidence-truth-contract.md
-  - docs/project-control/tasks/agent_node_T019-planner-observation-context.md
-  - docs/project-control/tasks/agent_node_T020-current-task-frame.md
-  - docs/project-control/tasks/agent_node_T021-agent-execution-observation.md
-  - docs/project-control/tasks/agent_node_T022-tool-node-recoverable-failure.md
-  - docs/project-control/tasks/agent_node_T023-route-after-tool-back-to-planner.md
-  - docs/project-control/tasks/agent_node_T024-planner-node-progression-rules.md
-  - docs/project-control/tasks/agent_node_T025-terminal-session-primary-executor.md
-  - docs/project-control/tasks/agent_node_T026-user-visible-execution-trace.md
-  - docs/project-control/tasks/agent_node_T027-blackbox-test-plan-v17.md
-  - docs/project-control/tasks/agent_node_T028-blackbox-autonomous-source-review.md
-  - docs/chat/agent-runtime-design.md
-  - docs/harness/agentgraph-harness-protocol.md
+  - project-control-ledger.md
+  - tasks/agent_node_T001-next-action-planner-node.md
+  - tasks/agent_node_T043-coverage-driven-blackbox-regression-suite.md
 ---
 
-# AgentNodes Workboard
+# AgentNodes Workboard（历史任务台账）
 
-Agent node 专属总台账。
+> 本页已归档，不再作为 AgentGraph 当前实现或任务状态的 authoritative 来源。
 
-本页只做三件事：
+当前实现真相：
 
-- 记录当前正在拆分和治理的 Agent graph node 任务
-- 给每个 node 任务分配独立任务编号 `agent_node_T+编号`
-- 把“节点职责”与“非目标”分开，避免一次任务扩大成整条 Agent loop 重写
+- [AgentGraph 与 Harness 当前协议](../harness/agentgraph-harness-protocol.md)
+- [Agent Observability](../development/agent-observability.md)
 
-## Priority Read First
+## 为什么归档
 
-所有 `agent_node_` 任务在开工前，先读这份技术债：
+本 Workboard 最初用于把 Agent V1 / V1.5 的节点治理拆成独立任务：
 
-- [TD-AGENT-01-hardcoded-user-input-routing-and-execution.md](D:/workspace/rag-demo/docs/project-control/decisions/TD-AGENT-01-hardcoded-user-input-routing-and-execution.md)
+- Planner
+- Normalize
+- Policy
+- ToolNode
+- Evidence
+- Generate
+- Approval Resume
+- Observability
+- Planner task coverage
 
-原因：
+这些任务后来经过多轮施工、评审、整改与合并。旧表格中仍存在大量 `TODO / READY_FOR_REVIEW`、placeholder 和 LangGraph-first 描述，继续维护它会产生两个问题：
 
-- 严禁把用户输入硬编码成所谓智能决策
-- 严禁把自然语言片段直接落成 `path / targetPath / command / content`
-- 类似问题优先通过 task model 合同、prompt 示例、对象确认步骤处理，不再继续堆局部规则
+1. 历史任务状态被误读为当前代码状态。
+2. 施工线程根据旧 node 列表重建已经退役的执行入口。
 
-## Naming Rule
+因此，本页不再继续滚动更新。
 
-- 任务编号格式：`agent_node_T001`、`agent_node_T002`、`agent_node_T003`
-- 一张任务卡只处理一个 node 或一个非常明确的 node contract
-- 不允许把 Harness、policy、tool execution、UI、模型配置系统混进同一张 node 任务卡，除非项目 owner 明确批准
+## 当前需要保护的结果
 
-## AgentNodes Workboard
+当前主链已经收敛为：
 
-| ID | Node / Topic | Current Judgment | Status | Task Card |
-| --- | --- | --- | --- | --- |
-| `agent_node_T001` | `nextActionPlannerNode` | 节点评审已通过；当前节点只负责 `AgentNextAction` 决策与 `error` 输出，route / normalize 接入前提已确认但不在本节点实现范围内 | `DONE` | [agent_node_T001-next-action-planner-node.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T001-next-action-planner-node.md) |
-| `agent_node_T002` | `toolCallNormalizeNode` | 当前只实现 Planner 后的“工具调用规范化/冻结节点”，只负责把 `nextAction.use_tool` 校验并冻结成 `pendingToolCall`；不得顺手改 Harness / policy / toolNode / Planner / 完整 loop | `TODO` | [agent_node_T002-tool-call-normalize-node.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T002-tool-call-normalize-node.md) |
-| `agent_node_T003` | `AgentGraph wiring for planner -> normalize -> policy -> tool loop` | 当前任务只做主链路接线：把 `nextActionPlannerNode` 与 `toolCallNormalizeNode` 接入 `AgentGraph`，并让旧的 `capabilityIntent.selectedToolIds -> policyNode` 执行入口失效；不得借机重写 Planner / Normalize / Harness / policy / toolNode | `TODO` | [agent_node_T003-agent-graph-wiring.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T003-agent-graph-wiring.md) |
-| `agent_node_T004` | `policyNode` 只消费 `pendingToolCall` | 当前任务只收敛 `policyNode`：它只能审批冻结后的 `pendingToolCall`，不得自己造工具调用，不得从 `capabilityIntent / query / selectedToolId` 推导执行对象，也不得把 `capabilityId` 当执行对象 | `TODO` | [agent_node_T004-policy-node-consume-pending-tool-call.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T004-policy-node-consume-pending-tool-call.md) |
-| `agent_node_T005` | `toolNode` 只执行 frozen `pendingToolCall` | `toolNode` 收敛与独立模块拆分已评审通过：它现在只在 `policyDecision.allow` 与 frozen `pendingToolCall` 对齐时执行；执行结果会保留 `toolCallId / inputHash`，成功或失败后会清理 `pendingToolCall`；整仓打包阻断项已明确为非本任务问题 | `DONE` | [agent_node_T005-tool-node-execute-frozen-pending-tool-call.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T005-tool-node-execute-frozen-pending-tool-call.md) |
-| `agent_node_T006` | `evidence` 回流与 Agent loop 路由闭环 | `retrieveNode / toolNode -> evidence -> Planner` 的最小闭环已接通；retrieval / tool evidence 写回、evidence-update trace、去重 helper、`maxIterations` 收口和旧入口阻断都已有定向验证，评审已通过 | `DONE` | [agent_node_T006-evidence-loop-routing.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T006-evidence-loop-routing.md) |
-| `agent_node_T007` | Agent Decision Loop v1 验收测试与回归护栏 | 已补齐当前 commit 专属验收证据：4 个定向测试源码、vitest JSON 报告、typecheck 报告、场景映射、运行时间与剩余风险均已回填到任务卡；当前证据不再引用 `2026-07-03` 的旧失败报告 | `DONE` | [agent_node_T007-decision-loop-acceptance-regression-guardrails.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T007-decision-loop-acceptance-regression-guardrails.md) |
-| `agent_node_T008` | V1 cleanup / release hardening | V1 收尾任务已完成：主分支误留的大型报告与 sqlite 临时文件已清理；`planNode` placeholder、`selectedToolId` 兼容语义、generate 阶段大结果 TODO，以及 V1 当前不变量都已回填到正式代码注释和契约文档；没有把 `TaskFrame` 或 generate size guard 误报成已完成能力 | `DONE` | [agent_node_T008-v1-cleanup-release-hardening.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T008-v1-cleanup-release-hardening.md) |
-| `agent_node_T009` | Evidence Summary + Answer Stop Rule | `AgentEvidenceSummary`、Planner 前置 answer stop rule、`read_list / read_open / web_search / terminal_session` 最小摘要 schema 与 trace 可审计字段已落地；`2026-07-04` 已基于非默认 workspace 完成 `read_list -> evidence -> final answer`、`read_open -> evidence -> final answer`、`terminal_session -> waiting_approval` 真实黑盒复测，因此状态更新为 `DONE` | `DONE` | [agent_node_T009-evidence-summary-answer-stop-rule.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T009-evidence-summary-answer-stop-rule.md) |
-| `agent_node_T010` | `nextActionPlannerNode` JSON Contract Hardening | `T010` 是 `T009` 前台 smoke blocker 修复任务：planner 现已支持 fenced JSON / 前缀 JSON / think 后 JSON，并且对缺失 `reason` 的合法 action 自动补默认值并记录 `missing_reason_defaulted` warning。`2026-07-04` 前台 smoke 已确认 4 条请求都不再失败于 `Planner output was invalid JSON`；当前新 blocker 已转移到 `agent-approval` 与 workspace path argument contract / approval path，path 问题不再归入 `T010` | `DONE` | [agent_node_T010-next-action-planner-json-contract-hardening.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T010-next-action-planner-json-contract-hardening.md) |
-| `agent_node_T011` | Workspace Path Argument Contract | `T011` 当前已把 root-relative read path normalizer 收紧到只识别 `/workspace` sentinel：`/etc/passwd` 不会再被 normalize 成 `etc/passwd`，root-relative path normalizer 也不再无脑处理所有 `/xxx`。`/README.md`、`/docs/README.md` 现在同样保持原值，继续交给下游 workspace root 校验；T011 安全边界回归测试与真实前台 workspace 绑定 smoke 证据已补齐，线程配置里的 workspace path 已确认进入 Agent 执行链路 | `DONE` | [agent_node_T011-workspace-path-argument-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T011-workspace-path-argument-contract.md) |
-| `agent_node_T012` | Repeated Tool Guard | `T012` 是 `Agent V1.5 runtime hardening` 任务，不是 `T009 / T010 / T011` 的补丁返工。当前实现只防同一 run 内 identical completed `use_tool` / identical retrieval query 的重复执行；`2026-07-04` 评审修订已补 `/workspace` sentinel 与 `.` 在 repeated guard 比较中的等价判定，但没有恢复通用 path normalize。真实前台 smoke 已证明 `read_list` / `read_open` 没有重复执行；但旧线程仍存在 `<function_calls> . </function_calls>` 生成阶段 / 回答组织异常。该异常不属于 T012 repeated guard 缺陷，但会影响前台完整 smoke 通过，因此状态保持 `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | [agent_node_T012-repeated-tool-guard.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T012-repeated-tool-guard.md) |
-| `agent_node_T013` | Evidence Grounded Final Answer | `T013` 是 `Agent V1.5 final answer grounding` 任务，不是 `T009 / T010 / T011 / T012` 的补丁返工。`2026-07-04` 评审意见要求的最小整改 2 点已完成并通过复审：retrieval fallback 现已优先基于 chunk 内容回答；no-evidence guard 已覆盖“模型直接编造 workspace / 文件结果”的场景；同时补了裸 `toolId` 泄漏回归测试。整个任务没有改 Graph 主路由，没有改 ToolNode 直答，没有改 Planner / Normalize / Policy / ToolNode 边界 | `DONE` | [agent_node_T013-evidence-grounded-final-answer.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T013-evidence-grounded-final-answer.md) |
-| `agent_node_T014` | Approval Resume Contract | `T014` 原始 resume 对象对齐仍成立；`T014R` 补完了 approve / reject 之后的 state finalization。项目 owner 已完成真实前台 smoke：`terminal_session` 会正常停在等待审批，approve 后 UI 不再停留在等待审批并继续执行，reject 后明确显示已拒绝且按钮消失，刷新线程后审批状态不复活；因此当前状态更新为 `DONE` | `DONE` | [agent_node_T014-approval-resume-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T014-approval-resume-contract.md) |
-| `agent_node_T015` | Phoenix Minimum Human Observability (`T_phonex`) | `T015 / T_phonex` 是 `Agent V1.5` 的开发态最小人眼可观测性任务。当前实现只在 `graph.ts` 组装层统一包装节点和 run 根 span：默认关闭，`AGENT_TRACE_PHOENIX=true` 时导出到 Phoenix，`AGENT_TRACE_VERBOSE=true` 时追加脱敏后的 state 摘要。实现没有改各 node 业务逻辑，没有改 AgentGraph 路由，也没有把 tracing 扩大成自研 observability 平台 | `DONE` | [agent_node_T015-phoenix-minimum-human-observability.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T015-phoenix-minimum-human-observability.md) |
-| `agent_node_T016` | Local Tool Routing and Schema Guard Under Weak Task Model | `T016` 是 `Agent V1.5 P0` 修复任务，只补 workspace local intent、防 schema invalid 直接打死前台、以及 generate 空回答 fallback 的最小防线。`2026-07-05` 最新真实前台 smoke 已补齐：`P0-8` 会稳定进入本地 `read_locate`，不再误走 `web_search`；`P0-9` 新线程在绑定 `ragDemo / D:\workspace\rag-demo` 并开启 Agent 后，已稳定进入 `read_open("README.md")`，没有 Normalize schema error、没有 approval wait，最终回答已按 README 原文列出 `React + Vite renderer`、`Electron / Tauri shell`、`Fastify backend` 与 `runtime.config.cjs`。当前剩余只记录非阻断说明，例如“第二次完全相同检索”没有单独形成第二条 completed evidence，以及打包过程中暴露的仓库现存非 `T016` 测试失败 | `READY_FOR_REVIEW` | [agent_node_T016-local-tool-routing-and-schema-guard.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T016-local-tool-routing-and-schema-guard.md) |
-| `agent_node_T017` | ToolCall Loop Regression Matrix | `T017` 只新增后端黑盒回归矩阵，覆盖 `nextAction.use_tool -> toolCallNormalize -> policy -> tool -> evidence -> planner / generate` 主链。已验证 valid use_tool freeze、policy allow、tool evidence、answer-ready generate、schema invalid bounded replan、policy deny、policy / Harness approval、repeated guard、maxIterations、failed / timedOut 非 answer-ready、以及 `selectedToolIds` 不得进入执行链；没有改 Harness exposure、sandbox、UI 或 Agent V2 | `DONE` | [agent_node_T017-toolcall-loop-regression-matrix.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T017-toolcall-loop-regression-matrix.md) |
-| `agent_node_T018` | Invocation Result -> Evidence Truth Contract | `T018` 只补 evidence 真值合同和 generate 防伪回答。`2026-07-05` 已把 `policy deny` 写成 `denied` evidence，把 Harness `awaiting_approval` 映射成 `blocked` summary，把 terminal 的 `timedOut / truncated / binaryDetected / stdoutEncoding / stderrEncoding / violations` 透传进 summary，并阻断“乱码 / 不可读 / 非 completed 证据”被 generate 假装成已成功理解的结果；没有改 Tool Exposure、Sandbox Runner 实现、UI 或 Agent V2 | `DONE` | [agent_node_T018-invocation-result-evidence-truth-contract.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T018-invocation-result-evidence-truth-contract.md) |
-| `agent_node_T019` | PlannerObservationContext | `v1.7` A 组第一张卡。只建立 Planner 的统一观察入口，禁止继续散读 `evidence / observations / lastToolExecution / pendingApproval`；A 组必须单线程串行推进 | `TODO` | [agent_node_T019-planner-observation-context.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T019-planner-observation-context.md) |
-| `agent_node_T020` | currentTaskFrame | `v1.7` A 组第二张卡。把当前目标、当前子任务、当前阻塞点、已确认对象、完成判据落成运行时最小任务板；不引入大型计划系统 | `TODO` | [agent_node_T020-current-task-frame.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T020-current-task-frame.md) |
-| `agent_node_T021` | AgentExecutionObservation | `v1.7` A 组第三张卡。把 Executor 执行结果收口成统一 observation 结构，供 `PlannerObservationContext` 消费；A1-A3 稳定后 B/C 组才能启动并行准备 | `TODO` | [agent_node_T021-agent-execution-observation.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T021-agent-execution-observation.md) |
-| `agent_node_T022` | toolNode recoverable failure | `v1.7` A 组第四张卡已完成：`toolNode` 现在会把 Harness 失败区分为 recoverable / terminal，recoverable failure 不再默认写全局 `errorMessage`，并且 `PlannerObservationContext` 读取 `lastToolExecution.failureKind` 后，terminal failure 仍保持 `failed_terminal`，不会被误判成可恢复 | `DONE` | [agent_node_T022-tool-node-recoverable-failure.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T022-tool-node-recoverable-failure.md) |
-| `agent_node_T023` | routeAfterTool back to Planner | `v1.7` A 组第五张卡。把工具后路由改成 `waiting_approval -> approval`、`failed_recoverable -> toolSelectStep`、`failed_terminal -> error` | `DONE` | [agent_node_T023-route-after-tool-back-to-planner.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T023-route-after-tool-back-to-planner.md) |
-| `agent_node_T024` | PlannerNode progression rules | `T024` 已补齐 planner 合同里的 `ask_user`、失败恢复、恢复预算和迭代预算规则；本轮又修正了 `pendingApproval` 语义，planner 在待审批时不会继续调模型，也不会把审批中的工具调用收成最终回答，`routeAfterNextAction` 会直接回 `approval` 保持等待审批态。恢复预算耗尽时，planner 会直接给出明确终局，不会继续 `use_tool`，也不会把失败 observation 误当成成功 evidence。定向验证：`next-action-planner` `63 passed`，`graph` `32 passed`，仓库级 `pnpm check` 通过；此前由本轮改动引入的 `server/src/agent/planner/node.ts` 类型合同缺陷已消除 | `DONE` | [agent_node_T024-planner-node-progression-rules.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T024-planner-node-progression-rules.md) |
-| `agent_node_T025` | terminal_session primary executor | `v1.7` B 组任务卡。A1-A3 稳定后只允许开始 terminal observation mapping 设计与测试准备；凡涉及 `tool-node.ts / resume.ts / approval` 的实际接入，必须等 `T022` 完成 | `TODO` | [agent_node_T025-terminal-session-primary-executor.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T025-terminal-session-primary-executor.md) |
-| `agent_node_T026` | User-visible execution trace | `T026` 已把 planner / tool / approval-resume 的 execution node 文案改成用户可读推进轨迹，覆盖失败、再决策、新动作、审批等待和恢复执行；`2026-07-06` 已复跑定向测试与 `pnpm check`，结论符合本卡验收范围 | `DONE` | [agent_node_T026-user-visible-execution-trace.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T026-user-visible-execution-trace.md) |
-| `agent_node_T027` | v1.7 blackbox test plan | `T027` 已通过方案审查：3 个黑盒场景都补齐了输入、前置条件、可见行为、关键断言、禁止行为、结束条件和 mock / fixture 策略，并明确了 `T028` 的 trio 入口与 helper 边界；本轮仍只做方案设计，没有提前落测试代码 | `DONE` | [agent_node_T027-blackbox-test-plan-v17.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T027-blackbox-test-plan-v17.md) |
-| `agent_node_T028` | v1.7 blackbox trio implementation | `T028` 已落地 trio 黑盒入口：自主源码审查覆盖“首次定位失败后继续查读并基于 evidence 回答”，终端失败场景覆盖“失败后读取 package.json、改命令并重新审批”，小范围修复场景覆盖 `read -> proposal -> write approval -> test approval -> verify -> answer` 闭环；定向验证 `agentgraph-v17-blackbox-trio.test.ts` 通过（`3` tests）。 | `DONE` | [agent_node_T028-blackbox-autonomous-source-review.md](D:/workspace/rag-demo/docs/project-control/tasks/agent_node_T028-blackbox-autonomous-source-review.md) |
+```text
+AgentRun
+  -> AgentGraph 稳定门面
+  -> Pi Loop（默认）
+  -> Planner
+  -> Normalize
+  -> Policy
+  -> Tool / Retrieve
+  -> Evidence
+  -> Planner
+  -> Generate
+  -> Finalize
+```
 
-## Current Ground Truth
+当前硬边界：
 
-- `T1-8` 属于 `V1` 内容。
-- 所有 `agent_node_` 任务在设计对象识别、参数冻结、planner prompt、tool 执行前，先阅读 [TD-AGENT-01-hardcoded-user-input-routing-and-execution.md](D:/workspace/rag-demo/docs/project-control/decisions/TD-AGENT-01-hardcoded-user-input-routing-and-execution.md)。
+1. Planner 只输出 `nextAction`。
+2. Normalize 只冻结 `pendingToolCall`。
+3. Policy 只审批 frozen 调用。
+4. Tool 只执行 frozen 调用。
+5. Tool / Retrieve 结果必须进入 Evidence。
+6. Evidence 后回 Planner。
+7. `selectedToolId` 与 capability selector 不得驱动执行。
+8. Approval resume 必须恢复 exact input hash 与 checkpoint。
+9. Generate 必须基于真实 Harness / retrieval 结果。
+10. 应用默认编排器是 Pi Loop，LangGraph 只作兼容对照。
 
-- `nextActionPlannerNode` 当前任务已经明确：
-  - 不允许硬编码上下文假设
-  - 不允许规则化直接判断“这类问题就该 retrieve / use_tool”
-  - 具体下一步动作必须调用现有 task model 产出
-- 当前任务只允许写入 `state.nextAction`
-- 当前任务不允许直接写入：
-  - `state.pendingToolCall`
-  - `state.selectedToolId`
-  - `state.selectedCapabilityId`
-  - `state.pendingApproval`
-- `toolCallNormalizeNode` 当前任务已经明确：
-  - 只处理 `state.nextAction.type === "use_tool"` 的规范化
-  - 只允许把合法 `nextAction.use_tool` 冻结成 `state.pendingToolCall`
-  - 不允许读取 `capabilityIntent.selectedToolIds` 作为执行依据
-  - 不允许替换 `toolId`、猜测参数、自动修复 schema
-  - 不允许执行工具、审批工具或调用 Harness invocation
-- `agent_node_T003` 当前任务已经明确：
-  - 只做 `AgentGraph` 主链路接线，不重写节点内部逻辑
-  - 新的工具执行入口必须是 `nextAction.use_tool -> toolCallNormalizeNode -> pendingToolCall -> policyNode -> toolNode`
-  - `capabilityIntent.selectedToolIds` 只能继续用于暴露面、trace、diagnostics，不得直接触发执行
-  - `toolNode` / `retrieve` 完成后必须回到 Planner 再决策，不能直接默认 `generate`
-  - `maxIterations` 到达后不得继续进入 retrieve / normalize / policy / tool
-- `agent_node_T004` 当前任务已经明确：
-  - `policyNode` 的核心入口必须是 `state.pendingToolCall`
-  - `policyNode` 只审批冻结调用，不选择工具、不生成参数、不创建工具调用
-  - `policyNode` 不得再从 `capabilityIntent.selectedToolIds`、`selectedToolId`、`selectedCapabilityId` 推导执行对象
-  - 无 `pendingToolCall` 时必须 `skip` 或进入现有 error flow，不得继续进入 `toolNode`
-  - 已审批恢复必须至少校验 `toolId + inputHash`，避免审批对象与真实执行对象错位
-- `agent_node_T005` 当前任务已经明确：
-  - `toolNode` 的唯一执行入口必须是 `state.pendingToolCall`
-  - `toolNode` 只执行 frozen 调用，不选择工具、不生成参数、不审批、不理解 capability
-  - `toolNode` 不得再从 `selectedToolId`、`selectedCapabilityId`、`capabilityIntent.selectedToolIds`、`toolIntent.selectedToolIds` 推导执行对象
-  - 无 `pendingToolCall` 时必须阻断执行并写入明确错误或 trace，不得从旧字段恢复工具
-  - 只有 `policy` 明确 `allow` 时才允许执行；`require_approval / deny / skip / error / missing policy decision` 均不得执行
-  - 工具执行结束后必须清理 `pendingToolCall`，避免下一轮误执行旧调用
-  - 当前代码已拆出独立 `tool-node.ts`，并补齐最小 `policyDecision` 状态与 `toolCallId / inputHash` writeback
-- `agent_node_T006` 当前任务已经明确：
-  - `retrieveNode` 与 `toolNode` 的执行结果必须稳定写入 `state.evidence`
-  - `retrieve` / `tool` 完成后必须回到下一轮 Planner，而不是固定直接 `generate`
-  - Planner 下一轮必须能看到最新 retrieval evidence、tool execution result、iteration / maxIterations、toolExposure、taskFrame / plan
-  - `use_tool` 必须继续走 `nextAction -> toolCallNormalize -> policyNode -> toolNode`，不得从旧 `selectedToolId / selectedToolIds` 入口绕过
-  - `approval pending` 时不得继续进入 `toolNode` 或 Planner loop；必须等待用户审批恢复原 frozen `pendingToolCall`
-  - `maxIterations` 到达后不得继续进入 `retrieve / toolCallNormalize / policyNode / toolNode`
-  - trace 必须能看到 `evidence update`、`iteration` 与关键字段：`nextActionType / toolId / toolCallId / inputHash / policyDecision / retrievalChunkCount / evidenceCounts`
-- `agent_node_T007` 当前任务已经明确：
-  - 只做 Agent Decision Loop v1 的验收测试、回归护栏和必要的最小修复
-  - 必须覆盖 `answer / retrieve / use_tool / normalize reject / policy reject / approval pending / maxIterations` 等关键闭环场景
-  - 必须证明 `capabilityIntent.selectedToolIds`、`selectedToolId`、capabilityId 已不能绕过 `Normalize -> Policy -> Tool`
-  - 测试必须 mock provider、retrieve、Harness invocation、trace，不得真实执行外部模型、危险工具或网络请求
-  - 除非测试直接暴露实现缺陷，否则不得借机改 Planner、Harness、MCP registry、Provider Gateway 或架构边界
-- `agent_node_T008` 当前任务已经明确：
-  - 这是 V1 收尾与发布加固任务，不是新功能任务
-  - 只允许处理以下 5 项：
-    - 清理 `main` 上的生成报告、coverage、大型 `test-report`、临时 sqlite `-wal / -shm` 文件
-    - 明确 `planNode` 目前仍是 placeholder，不得对外宣称 `TaskFrame` 已完成
-    - 为 `selectedToolId` 增加迁移说明：只供 UI / trace，不得执行
-    - 为 `generate` 阶段增加 tool result size guard / summary TODO
-    - 把 Agent Decision Loop v1 当前架构不变量写入正式文档
-  - 不得借机扩展到 Planner / Harness / UI / Provider / 打包链重构
-  - 不得把“文档已写明”误报成“实现已落地”
-- `agent_node_T009` 当前任务已经明确：
-  - 这是 `Agent V1.5` 的第一张正式任务卡
-  - 只定义 `Evidence Summary` 协议、`Answer Stop Rule`、Planner evidence 摘要输入、4 类工具最小 summary schema 与 trace 要求
-  - 当前真实问题不是工具结果没写回，而是 Planner 能看到的 summary 太弱，无法稳定判断“已经足够回答”
-  - `toolNode` / `retrieveNode` 仍然只负责执行和写 evidence，不直接决定 answer
-  - 不得把 full result JSON 全量塞进 Planner
-  - T009 保证的是：
-    - answer stop rule 命中时，不再二次调用 `nextActionPlanner` 的 task model
-    - 不再二次执行相同工具
-    - 不再进入 `use_tool / retrieve` 的重复执行链路
-  - T009 不保证的是：
-    - 工具完成后完全跳过 `toolSelectStep`
-    - 工具完成后完全跳过 `toolGuardStep`
-    - 前台 trace 中完全不出现候选选择节点
-  - 不得借机改成 Agent V2、DAG、并发、多智能体、长期记忆或 Harness 大改
-  - `Repeated Tool Guard` 不在 T009，实现边界预留给 `agent_node_T010-repeated-tool-guard`
-  - 当前实现已完成：
-    - `AgentEvidencePayload.latestSummary` 与 item-level `summary` 已接入
-    - `nextActionPlannerNode` 会在 latest summary 可回答时直接触发 answer stop rule
-    - `read_list / read_open / web_search / terminal_session` 已有最小 summary schema
-    - retrieval / tool evidence update trace 已暴露 `latestEvidenceSummary`
-    - `generate / evaluate` observation 不再覆盖最后一条可回答 evidence summary
-  - 当前已知限制：
-    - `state.evidence.toolExecutions[n].summary` 已接入
-    - `state.evidence.latestSummary` 已接入
-    - `state.lastToolExecution.summary` 可能仍为空
-    - 该问题当前不阻断 T009，因为 answer stop rule 依赖 `state.evidence.latestSummary`
-  - T009 不修改前端组件、trace UI、状态映射、样式和 i18n；前台展示可读性后续拆到 `T012 / T013`
+## 历史任务卡如何使用
 
-## 当前 V1 总结
+`docs/project-control/tasks/agent_node_T*.md` 仍保留，用于：
 
-- 代码闭环已通过 `T010` 当前边界内验证。
-- 前台 smoke 已离开 `Planner output was invalid JSON`。
-- `T011` 的 root-relative path normalizer blocker 已修复，当前代码回归测试与真实前台 smoke 证据都已补齐。
-- `read_list / read_open / README` 内容查询路径当前都可进入 `ToolNode -> evidence -> answer stop rule -> generate`。
-- `terminal_session` 当前仍按既有高风险策略要求显式审批；这不是 workspace path defect。
-- `T009` 当前状态已更新为 `DONE`。
-- `T010` 原始 blocker 已解除，状态维持 `DONE`。
-- `T011` 当前红线修复、回归测试和前台 smoke 证据已完成，状态更新为 `DONE`。
-- `T012` 当前只处理同一 run 内重复 `use_tool / retrieve` 执行防护，不扩到工具选择策略、前端 trace UI 或 approval resume 大改。
-- `T013` 当前只处理 completed evidence 到最终回答之间的用户可读性与真实性，不改前端 UI，不改 Provider Gateway，也不让 ToolNode 直接 answer。
-- `T014` 当前只处理审批暂停与恢复合同，不改前端审批 UI，不改 Provider Gateway，不把批准后的最终回答质量问题混进本任务。
-- `T015` 当前只处理开发环境 Phoenix tracing 与最小脱敏 state 摘要，不改 AgentGraph 路由，不改各 node 业务实现，也不扩成通用 observability 平台。
-- `T016` 当前只处理 workspace local intent、tool schema invalid、generate empty answer fallback 三个最小防线，不改前端大结构，不改 Agent V2，不把“换更强模型”当成唯一修复。
-- `T014` 当前真实前台 smoke 已由项目 owner 补齐：审批等待、批准继续执行、拒绝终结、刷新不复活都已确认，因此状态更新为 `DONE`。
-- `v1.7` 当前采用分组施工边界：
-  - `A` 组：`T019-T024`，核心闭环主线，严格串行，单线程
-  - `B` 组：`T025`，A1-A3 稳定后只允许开始设计与测试准备；涉及 `tool-node.ts / resume.ts / approval` 的接入必须等 `T022`
-  - `C` 组：`T026-T028`，`T026/T027` 可在 A1-A3 稳定后并行准备；`T028` 必须等 `T019-T024` 全部完成
-- `v1.7` 并改禁区：
-  - `server/src/agent/planner/prompt.ts`
-  - `server/src/agent/graph/state.ts`
-  - `server/src/agent/graph/routes.ts`
-  - `server/src/agent/nodes/tool-node.ts`
+- 查询某次缺陷的原因与整改过程
+- 查看当时的验收证据
+- 理解合同为何形成
+- 追溯特定 regression guard
 
-## Work Rules
+但不得：
 
-- 节点级任务先确认节点职责，再动代码
-- 若节点真实职责仍不清楚，先补任务卡或设计说明，不直接实现
-- 节点任务完成后，只更新自己的任务卡和本页对应条目
-- 不把单个节点任务的完成，误报成整个 Agent graph 收口
+- 用单张旧任务卡覆盖 current contract
+- 因旧卡仍写 `TODO` 就判断生产代码未实现
+- 从旧 task card 恢复 `capabilityIntent.selectedToolIds -> execution`
+- 把历史 placeholder 节点重新塞回 Pi Loop
+- 把 V1.5 稳定化工作扩成 Agent V2
 
-## Update Log
+## 当前项目控制入口
 
-- `2026-07-03`
-  - 新建 `AgentNodes` 总台账
-  - 确认第一个节点任务编号为 `agent_node_T001`
-  - 记录 `nextActionPlannerNode` 的当前真相：必须调用现有 task model，不允许硬编码上下文假设
-  - `agent_node_T001` 已完成代码实现与定向验证，状态更新为 `READY_FOR_REVIEW`
-  - `agent_node_T001` 评审通过，状态更新为 `DONE`
-  - 记录接入前提：
-    - `routeAfterNextAction` 后续必须处理 `error`
-    - normalize 节点后续必须负责 schema 校验和 `pendingToolCall` freeze
-    - 上述两点不属于 `agent_node_T001` 当前实现范围
-  - 追加第二个节点任务编号 `agent_node_T002`
-  - 记录 `toolCallNormalizeNode` 的当前真相：只负责 `nextAction.use_tool -> validate -> freeze -> pendingToolCall`
-  - 追加第三个节点任务编号 `agent_node_T003`
-  - 明确第三个任务只做 `AgentGraph` 主链路接线：`Planner -> Normalize -> Policy -> Tool -> Evidence -> Planner`
-  - 明确旧执行入口 `capabilityIntent.selectedToolIds -> policyNode` 必须失效，不得继续作为工具执行入口
-- `2026-07-04`
-  - 追加第四个节点任务编号 `agent_node_T004`
-  - 明确第四个任务只收敛 `policyNode`：只审批 `pendingToolCall`，不再生成工具调用
-  - 补齐 `agent_node_T004` 任务卡链接与当前真相说明
-  - 追加第五个节点任务编号 `agent_node_T005`
-  - 明确第五个任务只收敛 `toolNode`：只执行 frozen `pendingToolCall`，不再从旧字段推导工具或参数
-  - 补齐 `agent_node_T005` 任务卡链接与当前真相说明
-  - `agent_node_T005` 已完成实现并提交评审：`toolNode` 已拆分为独立模块，执行入口只保留 frozen `pendingToolCall`
-  - 定向 `server` typecheck、`tool-node / policy / graph / resume` 测试与 `pnpm check` 已通过
-  - `pnpm package:electron:win` 仍被仓库现有的前端 / server 非本任务失败项阻断，当前状态更新为 `READY_FOR_REVIEW`
-  - `agent_node_T005` 评审通过，状态更新为 `DONE`
-  - 追加第六个节点任务编号 `agent_node_T006`
-  - 明确第六个任务只接通 `evidence` 回流与 Agent loop 路由闭环：`行动 -> 证据 -> 再决策`
-  - 补齐 `agent_node_T006` 任务卡链接、路由约束、`approval pending` 限制与 `maxIterations` 停止条件
-  - `agent_node_T006` 已完成实现并进入 `READY_FOR_REVIEW`
-  - 当前实现已补：
-    - retrieval / tool evidence 写回去重 helper
-    - `agent-evidence-update-retrieve` / `agent-evidence-update-tool` trace 事件
-    - `routeAfterNextAction` 默认错误分支与 `routeAfterTool` 的 `maxIterations` 停止收口
-  - 定向验证已通过：`graph.test.ts`、`tool-node.test.ts`、`server` typecheck、`pnpm check`
-  - `agent_node_T006` 评审通过，状态更新为 `DONE`
-  - 追加第七个节点任务编号 `agent_node_T007`
-  - 把 Agent Decision Loop v1 的验收测试与回归护栏正式纳入 `AgentNodes` 总台账
-  - 明确第七个任务只负责闭环验证、测试覆盖、最小护栏和旧执行路径回流防护
-  - `agent_node_T007` 已补齐当前 commit 专属验收证据，状态保持 `DONE`
-  - 当前验收只引用以下新报告，不再引用 `2026-07-03` 的旧全量失败报告：
-    - `server/test-report/agent-node-T007-vitest.json`
-    - `server/test-report/agent-node-T007-vitest.meta.txt`
-    - `server/test-report/agent-node-T007-typecheck.txt`
-    - `server/test-report/agent-node-T007-summary.md`
-  - 定向验证结果：
-    - `pnpm --filter @ui-chat-mira/server test -- src/agent/graph.test.ts src/agent/tool-call-normalize.test.ts src/agent/tool-node.test.ts src/agent/policy.test.ts`
-      - 结果：通过，`46 passed`
-    - `pnpm --filter @ui-chat-mira/server typecheck`
-      - 结果：通过
-  - 项目 owner 已审查通过，`agent_node_T007` 状态维持 `DONE`
-  - 追加第八个节点任务编号 `agent_node_T008`
-  - 项目 owner 已明确批准本次把 V1 收尾与 release hardening 作为单独任务卡打包管理
-  - 当前任务范围限定为 5 项：
-    - 清理 `main` 中误留的生成报告、coverage、大型测试报告与临时 sqlite `wal/shm`
-    - 校正 `planNode` / `TaskFrame` 的对外口径
-    - 为 `selectedToolId` 增加迁移说明
-    - 为 `generate` 阶段补 `tool result size guard / summary` 待办
-    - 将 V1 架构不变量落入文档
-  - 当前只建立任务卡与总台账条目，状态初始化为 `TODO`
-  - `agent_node_T008` 已完成：
-    - 清理了主分支中被跟踪的大型 `test-report` / coverage 产物和 sqlite `wal/shm`
-    - 在代码与正式文档中明确 `planNode` 当前仍是 placeholder，不宣称 `TaskFrame` 已完成
-    - 为 `selectedToolId` 补齐“只供 UI / trace，不得执行”的迁移说明
-    - 在 generate 组装 tool result 的入口补了 size guard / summary TODO
-    - 在 Harness 当前契约文档中补齐 V1 当前不变量
-  - 本任务没有实现真正的 `TaskFrame`，也没有实现 generate 大结果裁剪；这两项仍保持为后续工作
-  - 追加第九个节点任务编号 `agent_node_T009`
-  - 明确 `T009` 是 `Agent V1.5` 第一张正式任务卡，只定义 `Evidence Summary + Answer Stop Rule`
-  - 当前任务卡已记录真实代码现状：
-    - `toolNode` 与 `retrieveNode` 已把结果写入 evidence
-    - `next-action-planner.ts` 当前只向 Planner 暴露弱摘要，缺少“是否足够回答”的稳定协议
-    - `generateNode` 仍可能吃到 full result JSON，但这不是 Planner 收口协议
-  - 明确 `T009` 非目标：
-    - 不做 Agent V2
-    - 不做 DAG / 并发 / 多智能体 / 长期记忆
-    - 不改 Harness / MCP registry / Provider Gateway / UI / 模型配置
-    - 不让 ToolNode 直接决定 answer
-  - 预留后续任务：`agent_node_T010-repeated-tool-guard`
-  - `agent_node_T009` 已完成后端实现与定向测试：
-    - 在 `server/src/agent/types.ts` 与 `evidence.ts` 接入 `AgentEvidenceSummary`
-    - 在 `next-action-planner.ts` 落地 Planner 前置 answer stop rule
-    - 在 `tool-node.ts` 与 `nodes.ts` 落地 tool / retrieval summary trace
-    - 已补充 `graph.test.ts` 与 `next-action-planner.test.ts` 的 T009 场景覆盖
-  - 定向验证结果：
-    - `pnpm --filter @ui-chat-mira/server test -- src/agent/graph.test.ts src/agent/next-action-planner.test.ts src/agent/tool-node.test.ts src/agent/policy.test.ts src/agent/tool-call-normalize.test.ts`
-      - 结果：通过，`65 passed`
-    - `pnpm --filter @ui-chat-mira/server typecheck`
-      - 结果：通过
-    - `pnpm check`
-      - 结果：通过
-  - `2026-07-04` 前台 black-box smoke test 结果：
-    - 测试入口：内置浏览器，账号 `Tomz`，线程绑定 `T009 Smoke Workspace -> D:\workspace\rag-demo`
-    - `看看当前 workspace 有哪些文件`：`FAIL`
-    - `打开 README.md 看看内容`：`FAIL`
-    - `看看 README.md 的内容`：`FAIL`
-    - `执行 dir 命令看看结果`：`FAIL`
-    - 共同现象：均在工具执行前失败于 `Planner output was invalid JSON; planner must stop instead of pretending an answer is ready.`
-  - 因此前台验收不成立，`agent_node_T009` 状态更新为 `READY_FOR_REVIEW`
-  - 追加第十个节点任务编号 `agent_node_T010`
-  - 明确 `T010` 是 `T009` 的前台 smoke blocker 修复任务，只处理 `nextActionPlannerNode` 的 JSON 契约加固
-  - 明确 `Repeated Tool Guard` 不是当前正式任务，本次不做；后续可作为 `agent_node_T011-repeated-tool-guard`
-  - `agent_node_T010` 已完成当前后端实现：
-    - planner 支持 fenced JSON、中文前缀 + JSON、`<think>...</think>` + JSON
-    - 多个 JSON object 时直接失败，不猜
-    - schema 非法时直接失败，不猜
-    - trace 已补 `rawOutputPreview / sanitizedOutputPreview / parseErrorReason / allowedActionTypes`
-  - 定向验证结果：
-    - `pnpm --filter @ui-chat-mira/server test -- src/agent/next-action-planner.test.ts`
-      - 结果：通过，`21 passed`
-    - `pnpm --filter @ui-chat-mira/server test -- src/agent/graph.test.ts src/agent/next-action-planner.test.ts src/agent/tool-node.test.ts src/agent/policy.test.ts src/agent/tool-call-normalize.test.ts`
-      - 结果：通过，`70 passed`
-    - `pnpm --filter @ui-chat-mira/server typecheck`
-      - 结果：通过
-    - `pnpm check`
-      - 结果：通过
-  - `2026-07-04` 前台黑盒复测：
-    - 运行时 workspace 已切到 `D:\workspace\rag-demo`
-    - `看看当前 workspace 有哪些文件`
-      - 不再失败于 `Planner output was invalid JSON`
-      - Planner 接受缺失 `reason` 的 `use_tool read_list` 并自动补 `reason`
-      - 当前新停点为 `agent-approval`
-      - approval reason: `read_list` 请求 path 超出当前 workspace root
-    - `打开 README.md 看看内容`
-      - 不再失败于 `Planner output was invalid JSON`
-      - Planner 接受缺失 `reason` 的 `use_tool read_open` 并自动补 `reason`
-      - 当前新停点为 `agent-approval`
-    - `看看 README.md 的内容`
-      - 不再失败于 `Planner output was invalid JSON`
-      - Planner 接受缺失 `reason` 的 `retrieve`
-      - 后续又进入 `web_search`，并带 `missing_reason_defaulted` warning
-      - 当前暴露的是回答内容 / 生成质量问题
-    - `执行 dir 命令看看结果`
-      - 不再失败于 `Planner output was invalid JSON`
-      - Planner 接受缺失 `reason` 的 `use_tool terminal_session` 并自动补 `reason`
-      - 当前新停点为 `agent-approval`
-  - `T010` 原始 blocker 已解除，状态更新为 `DONE`
-  - 当前新 blocker 不再归入 `T010`，后续建议新建 `agent_node_T011-workspace-path-argument-contract`
-  - 追加第十一个节点任务编号 `agent_node_T011`
-  - 明确 `T011` 只处理 workspace-bound read 工具的 path 参数契约，不改前端、PolicyNode 大结构、ToolNode 大结构或 runtime 安全边界
-  - `agent_node_T011` 已完成：
-    - 在 planner prompt 中明确 workspace-relative path 契约
-    - 在 normalize 层对 `read` 域 workspace-bound 工具做单点 path 规范化
-    - `"/workspace"` -> `.`
-    - `"/README.md"` -> `README.md`
-    - `"/docs/README.md"` -> `docs/README.md`
-    - 对规范化后仍逃出 workspace root 的路径直接拒绝
-  - 定向验证结果：
-    - `pnpm --filter @ui-chat-mira/server test -- src/agent/tool-call-normalize.test.ts`
-      - 结果：通过，`24 passed`
-    - `pnpm --filter @ui-chat-mira/server test -- src/agent/graph.test.ts src/agent/tool-call-normalize.test.ts`
-      - 结果：通过，`41 passed`
-  - `2026-07-04` smoke 复测：
-    - 运行前先把 `/mcp/workspace/select` 切到 `D:\workspace\rag-demo`
-    - `看看当前 workspace 有哪些文件`
-      - 不再失败于 planner invalid JSON
-      - 不再卡在 workspace path approval
-      - 已进入 `ToolNode`、写入 `agent-evidence-update-tool`，再经 answer stop rule 进入 `generate/evaluate`
-      - 最终回答基于真实 workspace listing
-    - 以上前台 smoke 结论暂停采信
-    - 原因：`server/src/mcp/workspace.ts` 与 `electron/dev-launcher.cjs` 曾存在运行态默认 workspace root 注入，`D:\testData` 可能绕过线程绑定链路，形成假 smoke
-    - 删除所有运行态默认 workspace root 后，必须重跑 black-box smoke
-  - `agent_node_T011` 状态回退为 `BLOCK`
-  - `2026-07-04` T011 复评补充：
-    - 当前评审确认 `server/src/agent/tool-call-normalize.ts` 的 root-relative path normalizer 过宽
-    - 红线问题是 `/etc/passwd` 会被静默改写成 `etc/passwd`
-    - 已进一步收紧为“只识别 `/workspace` sentinel”的语义：`/etc/passwd` 不会再被 normalize 成 `etc/passwd`
-    - root-relative path normalizer 不再无脑处理所有 `/xxx`
-    - `/README.md`、`/docs/README.md` 也不再在 normalize 阶段被静默洗成 workspace-relative path
-    - 已补齐 `/etc/passwd`、`/bin/sh`、`/usr/bin/env`、`/C:/Windows/System32`、`../outside.txt` 等定向回归测试
-    - `pnpm --filter @ui-chat-mira/server test -- src/agent/tool-call-normalize.test.ts`、`pnpm --filter @ui-chat-mira/server test -- src/agent/graph.test.ts src/agent/tool-call-normalize.test.ts`、`pnpm check` 均通过
-    - 之前基于 `PW Test -> D:\testData` 的前台 smoke 证据作废
-    - 作废原因是 `server/mcp workspace fallback` 与 `electron/dev-launcher env` 注入污染了 workspace root
-    - `agent_node_T011` 当前不得维持 `DONE`
-    - 当前状态：`BLOCK`
-  - `2026-07-04` 追加复测结论：
-    - 已删除 runtime workspace fallback / 默认注入后重新验收
-    - `D:\CODEX_TEST_FOLDER` 绑定线程 `08e02db0cc87952b5a54d53e5af06ac2` 已跑通：
-      - `read_list -> evidence -> final answer`
-      - `read_open -> evidence -> final answer`
-      - `README.md` 最终回答引用真实文件内容
-    - 同一绑定线程的 `terminal_session` 请求已通过真实 `/proxy/chat/default` 进入：
-      - `selectedToolId = terminal_session`
-      - `waiting_approval`
-      - 持久化 assistant 内容仅为 `等待审批`
-    - `D:\CODEX_TEST_FOLDER_ALT` 绑定线程 `a1f97cab6404e7837c032d7f305bc187` 已跑通：
-      - `read_list -> latestEvidenceSummary.kind = read_list -> answer stop rule -> final answer`
-      - 最终回答只包含 `ONLY_ALT_WORKSPACE.txt`
-    - `agent_node_T009` 状态更新为 `DONE`
-    - `agent_node_T011` 状态更新为 `DONE`
-  - 追加第十二个节点任务编号 `agent_node_T012`
-  - 明确 `T012` 是 `Agent V1.5 runtime hardening` 任务，不是 `T009 / T010 / T011` 的返工
-  - 当前任务只处理同一 run 内 identical completed `use_tool` / identical retrieval query 的重复执行防护
-  - 当前实现已完成：
-    - 在 Planner 输出后对 `use_tool` 和 `retrieve` 接入 repeated guard
-    - guard 命中时改成 `answer`，不再重复执行相同动作
-    - trace / structured log 已补 `repeatedToolGuardTriggered`、`guardedActionType`、`guardedToolId`、`guardedArgsHash`、`guardedQuery`、`matchedEvidenceIndex`、`matchedToolCallId`
-    - `next-action-planner.test.ts` 与 `graph.test.ts` 已补齐重复动作、different args、failed / awaiting approval、不重复二次执行等定向场景
-  - 定向验证结果：
-    - `pnpm --filter @ui-chat-mira/server test -- src/agent/next-action-planner.test.ts src/agent/graph.test.ts`
-      - 结果：通过，`54 passed`
-    - `pnpm --filter @ui-chat-mira/server typecheck`
-      - 结果：通过
-    - `pnpm check`
-      - 结果：通过
-    - `pnpm package:electron:win`
-      - 结果：命令返回成功；产物目录 `release/v0.7.1_20260704_205127/electron`
-    - `curl http://127.0.0.1:8787/health`
-      - 结果：通过
-  - `2026-07-04` 真实前台绑定 smoke：
-    - 入口：`http://127.0.0.1:5173/#/chat`
-    - 线程通过 `Composer menu -> Workspace -> Add to workspace` 绑定 `ragDemo -> D:\workspace\rag-demo`
-    - `Agent` 按钮从禁用态恢复为可点击
-    - `看看当前 workspace 有哪些文件`
-      - `PASS`
-      - `read_list` 只执行 1 次，没有重复执行
-    - `打开 README.md 看看内容`
-      - `PARTIAL`
-      - `read_open` 只执行 1 次，没有重复执行
-      - 页面最终回答出现 `<function_calls> . </function_calls>`，属于非 T012 的生成阶段问题
-    - `看看 README.md 的内容`
-      - `PARTIAL`
-      - `read_open` 只执行 1 次，没有重复执行
-      - 当前停在 `组织最终回答`，属于非 T012 的生成阶段阻塞
-  - 因为 4 条 smoke 未完整跑完，状态先记为 `READY_FOR_REVIEW`
-  - `2026-07-04` T012 评审修订：
-    - 评审指出 repeated guard 当前比较的是 Planner 原始参数 hash，因此 `{"path":"."}` 与 `{"path":"/workspace"}` 会被误判成两次不同的 `read_list`
-    - 已在 `server/src/agent/evidence.ts` 为 repeated guard 增加最小等价归一化，只对 workspace read 工具识别 `/workspace` 与 `/workspace/` sentinel，并在比较 hash 时按 `.` 处理
-    - 此修订不修改 Planner 原始 `nextAction.args`，也不恢复通用 root-relative path normalize
-    - 已补 planner-level 与 graph-level `/workspace` vs `.` 重复 `read_list` 定向测试
-    - 定向验证结果：
-      - `pnpm --filter @ui-chat-mira/server test -- src/agent/next-action-planner.test.ts src/agent/graph.test.ts`
-        - 结果：通过，`56 passed`
-      - `pnpm --filter @ui-chat-mira/server typecheck`
-        - 结果：通过
-    - 新线程前台复测：
-      - 新对话绑定 `ragDemo -> D:\workspace\rag-demo`
-      - `看看当前 workspace 有哪些文件`
-        - `PASS`
-        - 页面完整经过 `read_list -> evidence -> final answer`
-        - 页面只看到 1 次 `工具执行`
-    - 复审结论：
-      - T012 repeated guard 后端实现与评审修订已通过复审
-      - 当前状态保持 `READY_FOR_REVIEW`，不是 `DONE`
-      - 原因是旧线程仍存在 `<function_calls> . </function_calls>` 生成阶段 / 回答组织异常
-      - 该异常不属于 T012 repeated guard 缺陷，不在 T012 内顺手修复，也不误报为已解决
-  - 追加第十三个节点任务编号 `agent_node_T013`
-  - 明确 `T013` 是 `Agent V1.5 final answer grounding` 任务
-  - 当前任务只处理 `generate` 阶段基于 completed evidence 的最终回答真实性与可读性
-  - 当前实现已完成：
-    - `generate` 改为优先消费稳定 evidence 摘要块，而不是直接依赖完整工具 `result` JSON
-    - 新增 generate 输出防护，拦截 `<function_calls>`、tool JSON、`pendingToolCall`、`toolId/args` 协议文本和伪执行话术
-    - 新增基于 `read_list / read_open / retrieval / pendingApproval / no evidence` 的最小保底回答
-    - `server/src/agent/nodes.test.ts` 已补 5 条定向用例
-  - 定向验证结果：
-    - `pnpm --filter @ui-chat-mira/server test -- src/agent/nodes.test.ts src/agent/graph.test.ts src/agent/next-action-planner.test.ts`
-      - 结果：通过，`61 passed`
-    - `pnpm --filter @ui-chat-mira/server typecheck`
-      - 结果：通过
-    - `pnpm check`
-      - 结果：通过
-  - 打包验证结果：
-    - `pnpm package:electron:win`
-      - 结果：失败
-      - 失败原因是仓库当前已有的 desktop / server 非本任务测试与依赖缺口，不是 T013 改动引入的新 blocker
-  - `2026-07-04` T013 评审意见：
-    - 结论：`REVISE`
-    - 主方向通过，但还差 2 个最小整改：
-      - retrieval fallback 不能只说命中文档，要优先基于 chunk 内容回答
-      - no-evidence guard 要补“模型直接编造 workspace / 文件结果”的覆盖
-    - 可选补强：补 1 条裸 `toolId` 泄漏回归测试
-  - `2026-07-04` T013 整改提交：
-    - `server/src/agent/nodes.ts` 已把 retrieval fallback 收紧为优先使用最新 retrieval chunk 内容生成保底回答
-    - 无 completed evidence 且用户明显在问 workspace / 文件结果时，generate 现已拦截“直接编造目录 / 文件结果”的回答
-    - `server/src/agent/nodes.test.ts` 已补：
-      - retrieval chunk grounded answer
-      - no-evidence direct fabrication guard
-      - bare `read_open` toolId leakage guard
-    - 验证结果：
-      - `pnpm --filter @ui-chat-mira/server test -- src/agent/nodes.test.ts src/agent/graph.test.ts src/agent/next-action-planner.test.ts`
-        - 结果：通过，`63 passed`
-      - `pnpm --filter @ui-chat-mira/server typecheck`
-        - 结果：通过
-      - `pnpm check`
-        - 结果：通过
-    - 当前状态更新为 `READY_FOR_REVIEW`
-  - `2026-07-04` T013 整改评审通过
-    - `agent_node_T013` 状态更新为 `DONE`
-  - 追加第十四个节点任务编号 `agent_node_T014`
-  - 明确 `T014` 是 `Agent V1.5 approval resume contract` 任务，可与 `T013` 并行，但不覆盖 `T013`
-  - 当前任务只处理：
-    - `pendingApproval` 绑定原 frozen `pendingToolCall`
-    - 批准后恢复原冻结调用
-    - 拒绝后不执行工具
-    - `ToolNode -> evidence` 真实写回
-  - 当前实现已完成：
-    - `AgentApprovalRequest` 补齐 `toolCallId`
-    - `policy-node.ts`、`tool-node.ts`、trace details 均已带上 `toolCallId`
-    - `resume.ts` 已补 `toolId / inputHash / toolCallId` 恢复一致性校验
-    - 恢复不一致时会阻断执行并写 `approval_resume_mismatch`
-    - `reject / cancel` 会清理 `pendingApproval / pendingToolCall / selectedToolId`
-    - `tool-node.ts` 已把 Agent 审批记录桥接成 Harness 认得的参数哈希，不再在 Harness 层二次卡回审批
-  - 定向验证结果：
-    - `pnpm --filter @ui-chat-mira/server test -- src/agent/tool-node.test.ts src/agent/graph.test.ts src/agent/resume.test.ts`
-      - 结果：通过，`33 passed`
-    - `pnpm --filter @ui-chat-mira/server test -- src/agent/policy.test.ts src/agent/tool-node.test.ts src/agent/resume.test.ts src/agent/routes.test.ts src/agent/persistence.test.ts src/agent/graph.test.ts`
-      - 结果：通过，`54 passed`
-    - `pnpm --filter @ui-chat-mira/server typecheck`
-      - 结果：通过
-  - `2026-07-04` 前台 smoke 复测：
-    - 线程通过 `Composer menu -> Workspace -> Add to workspace -> ragDemo (D:\workspace\rag-demo)` 绑定 workspace
-    - `Agent` 按钮从禁用变为可点击
-    - 请求 `执行 dir 命令看看结果`
-    - 批准路径：
-      - 先进入 `等待审批`
-      - 点击 `批准` 后，已不再停在“等待审批后无法恢复执行”
-      - trace 已进入 `工具执行 -> 证据写回`
-      - `terminal_session` 显示已由 Harness 执行完成
-      - 新暴露问题是 `组织最终回答` 失败于 `Model returned empty answer`，不属于 `T014`
-    - 拒绝路径：
-      - toast 显示 `已拒绝本次 Agent 执行。`
-      - trace 未进入 `工具执行`
-      - 当前主区仍残留 `等待审批` 展示，属于前端状态同步候选，不改变 `T014` 的后端合同结论
-  - 结论：
-    - `agent_node_T014` 状态更新为 `DONE`
-  - 追加第十五个节点任务编号 `agent_node_T015`
-  - 按项目 owner 指定别名记录为 `T_phonex`
-  - 明确 `T015` 只处理 AgentGraph 开发态最小人眼可观测性：
-    - 默认关闭
-    - 环境变量显式开启
-    - Phoenix / OpenTelemetry 导出
-    - 组装层统一 wrapper
-    - 脱敏后的 state 摘要
-  - 当前实现已完成：
-    - 新增 `server/src/agent/observability.ts`
-    - 在 `server/src/agent/graph.ts` 为 run 根 span 与各节点统一包装
-    - 新增 `docs/development/agent-observability.md`
-    - 新增 `server/src/agent/observability.test.ts`
-  - 定向验证结果：
-    - `pnpm --filter @ui-chat-mira/server typecheck`
-      - 结果：通过
-    - `pnpm --filter @ui-chat-mira/server test -- src/agent/observability.test.ts`
-      - 结果：通过，`2 passed`
-    - `pnpm --filter @ui-chat-mira/server test -- src/agent/graph.test.ts src/agent/next-action-planner.test.ts src/agent/tool-call-normalize.test.ts src/agent/policy.test.ts src/agent/tool-node.test.ts src/agent/nodes.test.ts src/agent/observability.test.ts`
-      - 结果：通过，`115 passed`
-  - 结论：
-    - `agent_node_T015` 状态更新为 `DONE`
-  - `2026-07-05` 追加第十六个节点任务编号 `agent_node_T016`
-  - 明确 `T016` 是 `Agent V1.5 P0` 修复任务，不是 `T015` 的追加实现，也不是工具选择大改或 `Agent V2`
-  - 当前任务只处理三件事：
-    - workspace local intent guard，阻断本地文件 / workspace 问题误走外部 `web_search`
-    - planner / normalize tool schema invalid guard，最多一次 bounded replan，失败时 safe error 收口
-    - generate 空回答 fallback，避免工具已执行后前台仍因空回答 failed
-  - 当前任务卡已创建：
-    - `docs/project-control/tasks/agent_node_T016-local-tool-routing-and-schema-guard.md`
-  - 当前状态初始化为：
-    - `TODO`
-  - `2026-07-05` 已完成第一轮后端施工：
-    - `nextActionPlanner` 已补 workspace local intent guard，明确本地 workspace / 文件问题误走 `web_search` 时会改走本地证据路径
-    - `toolCallNormalize` 遇到 schema invalid 时不再直接 failed，而是记录 `schemaReplanDiagnostics` 并允许一次 bounded replan
-    - bounded replan 用尽后会转成 deterministic safe error answer，不执行工具、不伪造 evidence
-    - `generate` 遇到空回答时会返回 deterministic fallback，并记录 `generatedAnswerEmptyFallback`
-  - 后端验证结果：
-    - `pnpm --filter @ui-chat-mira/server test -- src/agent/next-action-planner.test.ts src/agent/tool-call-normalize.test.ts src/agent/graph.test.ts src/agent/nodes.test.ts`
-      - 结果：通过，`103 passed`
-    - `pnpm check`
-      - 结果：通过
-  - 当前未完成：
-    - 前台 `P0-8 / P0-9 / P0-10` smoke
-    - 打包验证
-  - 当前状态更新为：
-    - `IN_PROGRESS`
-  - `2026-07-05` 追加第十八个节点任务编号 `agent_node_T018`
-  - 明确 `T018` 只处理 `invocation result -> evidence truth contract` 与 generate 防伪回答，不改 Tool Exposure、Sandbox Runner 实现、UI 或 Agent V2
-  - 当前实现已完成：
-    - `policy deny` 现在会写入 `denied` evidence，并回填 `lastToolExecution`
-    - Harness `awaiting_approval` 现在会映射成 `blocked` evidence summary，而不是假装成 completed
-    - `terminal_session` 结果现在会透传 `timedOut / truncated / binaryDetected / stdoutEncoding / stderrEncoding / violations`
-    - `terminal` evidence summary 现在会显式区分 `timed_out / truncated / binaryDetected / blocked`
-    - `generate` 现在会阻断“非 completed 证据被假装成已稳定理解结果”的输出
-    - `read_list` fallback 只回答目录概览；`read_locate` fallback 只回答定位结果
-  - 定向验证结果：
-    - `pnpm --filter @ui-chat-mira/server test -- src/agent/__tests__/policy.test.ts src/agent/__tests__/toolcall-loop-regression.test.ts src/agent/__tests__/nodes.test.ts`
-      - 结果：通过，`36 passed`
-    - `pnpm --filter @ui-chat-mira/server typecheck`
-      - 结果：通过
-    - `pnpm check`
-      - 结果：通过
-  - 结论：
-    - `agent_node_T018` 状态更新为 `DONE`
-  - `2026-07-04` T014 局部评审结论：
-    - 结论：`PASS`
-    - 本次评审只覆盖 `pendingApproval -> 用户审批 -> 恢复原 frozen pendingToolCall -> ToolNode -> evidence -> 回到 Planner / Generate`
-    - 已确认：
-      - `pendingApproval` 绑定原 frozen `pendingToolCall`
-      - 恢复前会校验 `toolId + inputHash + toolCallId`
-      - mismatch 时阻断并清理审批状态
-      - reject / cancel 不会执行工具
-      - 批准后恢复的是原 frozen 调用，不是重新规划一次工具调用
-      - `ToolNode` 仍只执行 frozen `pendingToolCall`
-      - completed tool execution 会真实写入 evidence
-      - Agent 审批 hash 与 Harness args hash 的差异已通过桥接处理
-    - 本次 `PASS` 不覆盖：
-      - `T013 final answer grounding`
-      - generate 阶段空回答
-      - 前端审批 UI 展示残留
-      - Provider Gateway / MCP registry / Agent V2 / DAG / 并发 / 多智能体 / 长期记忆
+新 AgentGraph 工作应先判断：
+
+1. 是否违反 current contract。
+2. 是否是独立缺陷，而不是架构重写机会。
+3. 是否需要新任务卡。
+4. 是否会影响 Planner -> Normalize -> Policy -> Tool -> Evidence -> Planner 主线。
+
+正式状态以：
+
+- 当前代码
+- canonical current contract
+- `project-control-ledger.md` 中最新条目
+- 对应 PR / commit / test evidence
+
+为准。
+
+旧 Workboard 的完整表格仍可通过 Git 历史查看。
