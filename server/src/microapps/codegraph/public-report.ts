@@ -19,7 +19,6 @@ const toStudioStatus = (value: string): CodeGraphStudioStatus => {
     case "stopped":
       return value;
     case "starting":
-      return "degraded";
     case "failed":
       return "degraded";
     default:
@@ -91,6 +90,8 @@ export const normalizeCodeGraphStudioReport = (
     },
   );
   const runtimeStatus = toStudioStatus(report.debug.rawManagerStatus);
+  const resolvedAppDataRoot =
+    report.config.appDataRoot.trim() || report.config.appDataRootResolved || "";
 
   return {
     ...report,
@@ -101,6 +102,10 @@ export const normalizeCodeGraphStudioReport = (
           ? "ready"
           : runtimeStatus,
     blockedReasons,
+    config: {
+      ...report.config,
+      appDataRoot: resolvedAppDataRoot,
+    },
     capability,
     pollutionGuard: {
       ...report.pollutionGuard,
