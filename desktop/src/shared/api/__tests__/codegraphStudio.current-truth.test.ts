@@ -97,4 +97,36 @@ describe("CodeGraph Studio current-truth normalization", () => {
     expect(normalized.capability.available).toBe(true);
     expect(normalized.capability.registered).toBe(true);
   });
+
+  it("treats a stale legacy Agent flag as following the single microapp switch", () => {
+    const staleLegacyReport: CodeGraphStudioReport = {
+      ...report,
+      config: {
+        ...report.config,
+        microAppEnabled: true,
+        agentCapabilityEnabled: false,
+      },
+      capability: {
+        ...report.capability,
+        reasons: [
+          {
+            code: "agent_capability_disabled",
+            message: "legacy owner flag is false",
+          },
+        ],
+        checks: {
+          ...report.capability.checks,
+          microAppEnabled: true,
+          agentCapabilityEnabled: false,
+          capabilityRegistrationReady: false,
+        },
+      },
+    };
+
+    const normalized = normalizeCodeGraphStudioReport(staleLegacyReport);
+    expect(normalized.config.agentCapabilityEnabled).toBe(true);
+    expect(normalized.capability.checks.agentCapabilityEnabled).toBe(true);
+    expect(normalized.capability.available).toBe(true);
+    expect(normalized.capability.reasons).toEqual([]);
+  });
 });
