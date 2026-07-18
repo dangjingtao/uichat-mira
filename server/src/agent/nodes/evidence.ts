@@ -25,6 +25,20 @@ export const evidenceNode = async (
     } as AgentNodeState;
   }
 
+  const preserveCodebaseToolSummaryAsLatest =
+    state.pendingToolExecution?.toolId === "codebase_explore" &&
+    Boolean(state.pendingRetrievalEvidence);
+
+  if (state.pendingRetrievalEvidence && preserveCodebaseToolSummaryAsLatest) {
+    nextState = {
+      ...nextState,
+      evidence: appendRetrievalEvidence(
+        nextState,
+        state.pendingRetrievalEvidence,
+      ),
+    } as AgentNodeState;
+  }
+
   if (state.pendingToolExecution) {
     nextState = {
       ...nextState,
@@ -32,7 +46,7 @@ export const evidenceNode = async (
     } as AgentNodeState;
   }
 
-  if (state.pendingRetrievalEvidence) {
+  if (state.pendingRetrievalEvidence && !preserveCodebaseToolSummaryAsLatest) {
     nextState = {
       ...nextState,
       evidence: appendRetrievalEvidence(
