@@ -11,6 +11,8 @@ import chatPendingZh from "@/features/chat/i18n/zh-CN";
 import chatPendingEn from "@/features/chat/i18n/en-US";
 import settingsPendingZh from "@/features/Settings/i18n/zh-CN";
 import settingsPendingEn from "@/features/Settings/i18n/en-US";
+import codeGraphZh from "@/features/Settings/pages/MicroApps/CodeGraph/i18n/zh-CN";
+import codeGraphEn from "@/features/Settings/pages/MicroApps/CodeGraph/i18n/en-US";
 
 /* ── App & shared UI i18n shards ──────────────────────────── */
 import appZh from "@/app/i18n/zh-CN";
@@ -54,8 +56,22 @@ const baseResources = {
 } as const;
 
 const shards = {
-  "zh-CN": [dashboardZh, chatPendingZh, settingsPendingZh, appZh, uiZh],
-  "en-US": [dashboardEn, chatPendingEn, settingsPendingEn, appEn, uiEn],
+  "zh-CN": [
+    dashboardZh,
+    chatPendingZh,
+    settingsPendingZh,
+    codeGraphZh,
+    appZh,
+    uiZh,
+  ],
+  "en-US": [
+    dashboardEn,
+    chatPendingEn,
+    settingsPendingEn,
+    codeGraphEn,
+    appEn,
+    uiEn,
+  ],
 } as const;
 
 const resources = {
