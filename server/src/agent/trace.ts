@@ -10,6 +10,7 @@ export const toAgentExecutionNode = (input: {
   slotKey?: string;
   attemptKey?: string;
   iteration?: number;
+  emittedAt?: string;
   summary?: string;
   details?: Record<string, unknown>;
 }): AssistantExecutionNodeEvent => ({
@@ -21,6 +22,7 @@ export const toAgentExecutionNode = (input: {
   ...(input.slotKey ? { slotKey: input.slotKey } : {}),
   ...(input.attemptKey ? { attemptKey: input.attemptKey } : {}),
   ...(typeof input.iteration === "number" ? { iteration: input.iteration } : {}),
+  emittedAt: input.emittedAt ?? new Date().toISOString(),
   ...(input.summary ? { summary: input.summary } : {}),
   details: {
     runId: input.runId,
