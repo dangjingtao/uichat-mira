@@ -1,7 +1,6 @@
 import os from "node:os";
 import pty from "node-pty";
 import { mcpBadRequest } from "./core/errors.js";
-import { resolveSandboxCwd, resolveSandboxEnv } from "@/sandbox/executor.js";
 import type { McpExecutionEnvironment } from "./core/definitions.js";
 import {
   resolveHostCwd,
@@ -122,27 +121,23 @@ export const createTerminalSession = async (input: {
   shellProfile?: McpExecutionEnvironment["terminal"]["shellProfile"];
 }) => {
   const runtimeId = input.runtimeId ?? resolveTerminalRuntimeId();
+  if (runtimeId !== "host_spawn") {
+    throw mcpBadRequest(
+      "sandbox_runtime is reserved for a future isolated provider and cannot create terminal sessions yet.",
+    );
+  }
+
   const shellProfile = input.shellProfile;
   const shell =
     shellProfile?.shell ??
     (process.platform === "win32" ? "powershell.exe" : process.env.SHELL || "bash");
   const encoding = shellProfile?.stdoutEncoding ?? "utf8";
-  const hostResolution =
-    runtimeId === "host_spawn"
-      ? resolveHostCwd({
-          cwd: input.cwd,
-          workspaceRoot: input.workspaceRoot,
-        })
-      : {
-          cwd: resolveSandboxCwd(input.cwd),
-          workspaceRelation: "inside" as const,
-        };
-  const environment =
-    runtimeId === "host_spawn"
-      ? resolveHostEnv(input.env)
-      : resolveSandboxEnv(input.env);
+  const hostResolution = resolveHostCwd({
+    cwd: input.cwd,
+    workspaceRoot: input.workspaceRoot,
+  });
+  const environment = resolveHostEnv(input.env);
   const useWindowsJobObject =
-    runtimeId === "host_spawn" &&
     process.platform === "win32" &&
     shellProfile?.shellFamily === "powershell";
   const processTreeMode: TerminalProcessTreeMode = useWindowsJobObject
