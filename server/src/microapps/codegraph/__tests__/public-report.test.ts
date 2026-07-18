@@ -102,6 +102,62 @@ describe("normalizeCodeGraphStudioReport", () => {
     expect(normalized.capability.checks.capabilityRegistrationReady).toBe(true);
   });
 
+  it("keeps the controlled capability registered before the workspace runtime is started", () => {
+    const source = createReport({
+      capability: {
+        ...createReport().capability,
+        reasons: [
+          { code: "runtime_not_ready", message: "runtime not ready" },
+          {
+            code: "telemetry_not_verified_off",
+            message: "telemetry not checked yet",
+          },
+          { code: "workspace_mismatch", message: "different studio workspace" },
+          { code: "repo_pollution_risk", message: "repo-local index" },
+        ],
+        checks: {
+          ...createReport().capability.checks,
+          runtimeReady: false,
+          telemetryVerifiedOff: false,
+          workspaceMatched: false,
+          repoPollutionSafe: false,
+          capabilityRegistrationReady: false,
+        },
+      },
+      runtime: {
+        ...createReport().runtime,
+        telemetryStatus: "unavailable",
+        processAlive: false,
+        startedAt: null,
+        initializedNotificationSent: false,
+      },
+      debug: {
+        ...createReport().debug,
+        rawManagerStatus: "stopped",
+      },
+    });
+
+    const normalized = normalizeCodeGraphStudioReport(source);
+    expect(normalized.capability.available).toBe(true);
+    expect(normalized.capability.registered).toBe(true);
+    expect(normalized.capability.reasons).toEqual([]);
+    expect(normalized.capability.checks.runtimeReady).toBe(false);
+  });
+
+  it("fills the resolved app-data root for the desktop draft", () => {
+    const source = createReport({
+      config: {
+        ...createReport().config,
+        appDataRoot: "",
+        appDataRootResolved: "/resolved-app-data",
+      },
+    });
+
+    expect(normalizeCodeGraphStudioReport(source).config.appDataRoot).toBe(
+      "/resolved-app-data",
+    );
+  });
+
   it("preserves real blockers such as a missing provider", () => {
     const source = createReport({
       blockedReasons: [
