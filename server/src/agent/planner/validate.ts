@@ -23,7 +23,7 @@ const normalizeDirectToolAction = (
     ? rawDecision.args
     : Object.fromEntries(
         Object.entries(rawDecision ?? {}).filter(
-          ([key]) => !["type", "reason", "toolId", "args"].includes(key),
+          ([key]) => !["type", "reason", "toolId", "args", "plan"].includes(key),
         ),
       );
   const reason =
