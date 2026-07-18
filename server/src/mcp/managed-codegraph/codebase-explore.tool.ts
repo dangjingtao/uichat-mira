@@ -29,6 +29,48 @@ import {
 } from "./repo-local-manager-cache.js";
 
 const nowIso = () => new Date().toISOString();
+const PLANNER_VERIFIED_SOURCE_LIMIT = 5;
+const PLANNER_VERIFIED_EXCERPT_CHAR_LIMIT = 900;
+const PLANNER_VERIFIED_SUMMARY_CHAR_LIMIT = 240;
+
+const compactPlannerText = (value: string | null | undefined, limit: number) => {
+  const normalized = (value ?? "").replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+  return normalized.length <= limit
+    ? normalized
+    : `${normalized.slice(0, Math.max(0, limit - 1))}…`;
+};
+
+const createVerifiedSourceFindings = (
+  verification: CodebaseVerificationResult,
+) =>
+  verification.verified
+    .slice(0, PLANNER_VERIFIED_SOURCE_LIMIT)
+    .map((entry, index) => {
+      const sourcePath = entry.verifiedPath ?? entry.path;
+      const lineRange =
+        entry.verifiedStartLine && entry.verifiedEndLine
+          ? `L${entry.verifiedStartLine}-L${entry.verifiedEndLine}`
+          : "verified-range-unavailable";
+      const summary = compactPlannerText(
+        entry.verifiedSummary,
+        PLANNER_VERIFIED_SUMMARY_CHAR_LIMIT,
+      );
+      const excerpt = compactPlannerText(
+        entry.minimalExcerpt,
+        PLANNER_VERIFIED_EXCERPT_CHAR_LIMIT,
+      );
+
+      return [
+        `verifiedSource[${index + 1}]`,
+        `path=${sourcePath}`,
+        `lines=${lineRange}`,
+        summary ? `summary=${summary}` : null,
+        excerpt ? `excerpt=${excerpt}` : null,
+      ]
+        .filter(Boolean)
+        .join(" | ");
+    });
 
 const createCodebaseExploreRetrievalSummary = (input: {
   retrieval: AgentRetrievalEvidence;
@@ -37,17 +79,33 @@ const createCodebaseExploreRetrievalSummary = (input: {
   verificationTrace: CodebaseExploreTrace;
 }): AgentEvidenceSummary => {
   const documentsPreview = input.retrieval.chunks
-    .slice(0, 5)
+    .slice(0, PLANNER_VERIFIED_SOURCE_LIMIT)
     .map((chunk) => chunk.documentName);
+  const verifiedSourceFindings = createVerifiedSourceFindings(input.verification);
   const partial =
     input.exploreTrace.status !== "ok" ||
     input.verificationTrace.status !== "ok" ||
     input.exploreTrace.fallbackUsed;
+  const gaps = [
+    ...(input.verification.rejected.length > 0
+      ? [
+          `${input.verification.rejected.length} CodeGraph candidate(s) were rejected during workspace source verification; only open a rejected target if the remaining task explicitly requires that missing context.`,
+        ]
+      : []),
+    ...(input.verification.unverifiable.length > 0
+      ? [
+          `${input.verification.unverifiable.length} CodeGraph candidate(s) lacked a stable verifiable range; targeted read_open is appropriate only for those specific unresolved targets.`,
+        ]
+      : []),
+    ...(input.exploreTrace.fallbackReason
+      ? [`CodeGraph fallback reason: ${input.exploreTrace.fallbackReason}`]
+      : []),
+  ];
 
   return {
     source: "retrieval",
     status: partial ? "partial" : "completed",
-    actionTaken: `Codebase explore verified ${input.retrieval.chunkCount} workspace chunk(s) for "${input.retrieval.query}".`,
+    actionTaken: `Codebase explore verified ${input.retrieval.chunkCount} workspace chunk(s) for "${input.retrieval.query}". Verified excerpts below are already source-body evidence re-read from the workspace.`,
     keyFindings: [
       `verifiedChunkCount=${input.retrieval.chunkCount}`,
       `verifiedCandidateCount=${input.verification.verified.length}`,
@@ -58,8 +116,9 @@ const createCodebaseExploreRetrievalSummary = (input: {
       ...(input.exploreTrace.fallbackReason
         ? [`fallbackReason=${input.exploreTrace.fallbackReason}`]
         : []),
-      ...documentsPreview.map((name) => `document=${name}`),
+      ...verifiedSourceFindings,
     ],
+    ...(gaps.length > 0 ? { gaps } : {}),
     data: {
       kind: "retrieval",
       query: input.retrieval.query,
@@ -109,7 +168,7 @@ export const codebaseExploreTool: McpToolImplementation = {
     id: "codebase_explore",
     title: "Codebase Explore",
     description:
-      "Explore code architecture, symbols, relationships, and impact through the controlled CodeGraph wrapper. Returned candidates are re-read from the workspace before they enter Agent Evidence.",
+      "Primary local code-understanding tool for architecture, symbols, relationships, and impact. Candidates are re-read from the workspace before Evidence. Successful results include bounded verified source excerpts with paths and line ranges; treat those verified excerpts as source-body evidence and do not mechanically read_open the same files unless a specific unresolved line/context gap remains.",
     domain: "read",
     source: "internal",
     mode: "sync",
