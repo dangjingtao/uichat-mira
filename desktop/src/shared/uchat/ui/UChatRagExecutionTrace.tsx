@@ -14,6 +14,7 @@ import {
   type UChatExecutionProgressDetail,
 } from "./executionParsers";
 import type { RagNodeLike } from "./ragTypes";
+import "./UChatExecutionTrace.css";
 
 type ApprovalTraceState = "waiting_approval" | "running" | null;
 type AgentTraceStatus =
@@ -204,7 +205,10 @@ export function UChatExecutionTrace({
     approvalTraceState === "running" || runningCount > 0;
 
   return (
-    <div className="mt-4 border-b border-border/60 pb-2 transition-[border-color] duration-200">
+    <div
+      data-uchat-execution-trace="true"
+      className="mt-4 border-b border-border/60 pb-2 transition-[border-color] duration-200"
+    >
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
