@@ -63,16 +63,17 @@ describe('WebBridge tool surface', () => {
     assert.doesNotMatch(source, /chrome-extension:\/\//);
   });
 
-  it('keeps Native Messaging attached while the host reconnects Mira backend', async () => {
+  it('keeps Native Messaging attached while the proxy reconnects Mira over local IPC', async () => {
     const source = await readExtensionFile('background.js');
     const hostSource = await readExtensionFile('../native-host/host.mjs');
 
     assert.match(source, /startNativeHostReadyTimer\(nativeSocket\)/);
     assert.doesNotMatch(source, /startWebBridgeHandshakeTimer\(nativeSocket\)/);
     assert.match(source, /request\.status === 'native_ready'/);
-    assert.match(source, /request\.status === 'backend_connecting'/);
-    assert.match(hostSource, /sendStatus\('native_ready', 'NATIVE_HOST_READY'\)/);
-    assert.match(hostSource, /sendStatus\('backend_connecting', 'BACKEND_CONNECTING'\)/);
+    assert.match(hostSource, /node:net/);
+    assert.match(hostSource, /NATIVE_HOST_READY/);
+    assert.match(hostSource, /MIRA_PIPE_CONNECTING/);
+    assert.doesNotMatch(hostSource, /new WebSocket|\/webbridge/);
   });
 
   it('keeps direct WebSocket transport active within the MV3 service-worker window', async () => {
