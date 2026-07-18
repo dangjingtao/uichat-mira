@@ -81,6 +81,7 @@ export type RagNodeLike = {
   slotKey?: string;
   attemptKey?: string;
   iteration?: number;
+  emittedAt?: string;
   nodeType:
     | "rewrite"
     | "embed"
