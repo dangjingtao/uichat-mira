@@ -3,6 +3,7 @@ import {
   type RepoLocalCodeGraphGate,
 } from "./repo-local-capability.js";
 import {
+  isRealCodeGraphCommand,
   ManagedCodeGraphProcessManager,
 } from "./repo-local-process-manager.js";
 
@@ -48,14 +49,14 @@ const createRepoLocalRuntimeFingerprint = (
     timeoutMs: context.draft.timeoutMs,
   });
 
-export const getRepoLocalManagedCodeGraphManager = async (
+const getOrCreateRepoLocalManager = async (
   workspaceRoot: string,
   context: RepoLocalManagedContext,
 ) => {
   if (
-    !canUseDeclaredRepoLocalCodeGraphCapability(context.gate) ||
     !context.plannerStorage.logRoot ||
-    !context.plannerStorage.indexRoot
+    !context.plannerStorage.indexRoot ||
+    !isRealCodeGraphCommand(context.draft.command)
   ) {
     return null;
   }
@@ -101,6 +102,25 @@ export const getRepoLocalManagedCodeGraphManager = async (
   });
   return manager;
 };
+
+export const getRepoLocalManagedCodeGraphManager = async (
+  workspaceRoot: string,
+  context: RepoLocalManagedContext,
+) => {
+  if (!canUseDeclaredRepoLocalCodeGraphCapability(context.gate)) {
+    return null;
+  }
+  return await getOrCreateRepoLocalManager(workspaceRoot, context);
+};
+
+/**
+ * Studio smoke validates the runtime itself and therefore does not depend on
+ * the owner switch that grants Planner access to `codebase_explore`.
+ */
+export const getRepoLocalManagedCodeGraphManagerForStudio = async (
+  workspaceRoot: string,
+  context: RepoLocalManagedContext,
+) => await getOrCreateRepoLocalManager(workspaceRoot, context);
 
 export const disposeRepoLocalManagedCodeGraphManagers = async () => {
   const managers = [...repoLocalManagerCache.values()].map((entry) => entry.manager);
