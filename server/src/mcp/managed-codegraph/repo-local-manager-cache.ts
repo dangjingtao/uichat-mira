@@ -7,8 +7,7 @@ import {
   ManagedCodeGraphProcessManager,
 } from "./repo-local-process-manager.js";
 
-export type RepoLocalManagedContext = {
-  gate: RepoLocalCodeGraphGate;
+export type RepoLocalRuntimeContext = {
   draft: {
     command: string;
     startArgs: string[];
@@ -27,6 +26,10 @@ export type RepoLocalManagedContext = {
   };
 };
 
+export type RepoLocalManagedContext = RepoLocalRuntimeContext & {
+  gate: RepoLocalCodeGraphGate;
+};
+
 type CachedRepoLocalManager = {
   fingerprint: string;
   manager: ManagedCodeGraphProcessManager;
@@ -36,7 +39,7 @@ const repoLocalManagerCache = new Map<string, CachedRepoLocalManager>();
 
 const createRepoLocalRuntimeFingerprint = (
   workspaceRoot: string,
-  context: RepoLocalManagedContext,
+  context: RepoLocalRuntimeContext,
 ) =>
   JSON.stringify({
     workspaceRoot,
@@ -51,7 +54,7 @@ const createRepoLocalRuntimeFingerprint = (
 
 const getOrCreateRepoLocalManager = async (
   workspaceRoot: string,
-  context: RepoLocalManagedContext,
+  context: RepoLocalRuntimeContext,
 ) => {
   if (
     !context.plannerStorage.logRoot ||
@@ -113,13 +116,27 @@ export const getRepoLocalManagedCodeGraphManager = async (
   return await getOrCreateRepoLocalManager(workspaceRoot, context);
 };
 
+export const getRepoLocalManagedCodeGraphManagerForAgentWorkspace = async (
+  workspaceRoot: string,
+  context: RepoLocalRuntimeContext,
+  access: {
+    microAppEnabled: boolean;
+    agentCapabilityEnabled: boolean;
+  },
+) => {
+  if (!access.microAppEnabled || !access.agentCapabilityEnabled) {
+    return null;
+  }
+  return await getOrCreateRepoLocalManager(workspaceRoot, context);
+};
+
 /**
  * Studio smoke validates the runtime itself and therefore does not depend on
  * the owner switch that grants Planner access to `codebase_explore`.
  */
 export const getRepoLocalManagedCodeGraphManagerForStudio = async (
   workspaceRoot: string,
-  context: RepoLocalManagedContext,
+  context: RepoLocalRuntimeContext,
 ) => await getOrCreateRepoLocalManager(workspaceRoot, context);
 
 export const disposeRepoLocalManagedCodeGraphManagers = async () => {
