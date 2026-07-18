@@ -10,6 +10,15 @@ import { readLocateTool } from "../mcp/tools/read-locate.tool.js";
 import { readSliceTool } from "../mcp/tools/read-slice.tool.js";
 import { webSearchTool } from "../mcp/tools/web-search.tool.js";
 
+const terminalSchemaKeys = [
+  "command",
+  "cwd",
+  "env",
+  "timeoutMs",
+  "attachSessionId",
+  "sessionMode",
+];
+
 const externalFakeTool = {
   definition: {
     id: "external_fake_tool",
@@ -41,12 +50,12 @@ describe("resolveHarnessToolExposure", () => {
     const [definition] = resolveHarnessToolExposure({
       source: "tools_list",
     }).visibleDefinitions;
+    const properties = (definition?.inputSchema.properties ?? {}) as Record<
+      string,
+      unknown
+    >;
 
-    const properties = (definition?.inputSchema.properties ?? {}) as Record<string, unknown>;
-
-    expect(properties.env).toBeDefined();
-    expect(properties.attachSessionId).toBeDefined();
-    expect(properties.sessionMode).toBeDefined();
+    expect(Object.keys(properties)).toEqual(terminalSchemaKeys);
   });
 
   it("exposes eligible terminal_session regardless of user wording", () => {
@@ -55,14 +64,15 @@ describe("resolveHarnessToolExposure", () => {
 
     const decision = resolveHarnessToolExposure({
       source: "agent_intent",
-      query: "README.md 的 Runtime 一节具体列了哪些运行组件？请基于文件内容回答。",
+      query:
+        "README.md 的 Runtime 一节具体列了哪些运行组件？请基于文件内容回答。",
     });
 
     expect(decision.exposedToolIds).toContain("read_open");
     expect(decision.exposedToolIds).toContain("terminal_session");
   });
 
-  it("does not use small talk to change exposure", () => {
+  it("does not use small talk to change terminal exposure", () => {
     registerCapability(terminalSessionTool);
 
     const decision = resolveHarnessToolExposure({
@@ -82,37 +92,37 @@ describe("resolveHarnessToolExposure", () => {
     "执行",
     "执行命令",
     "运行命令",
-  ])("exposes terminal_session for any wording when hard boundaries pass: %s", (query) => {
-    registerCapability(terminalSessionTool);
+  ])(
+    "exposes terminal_session for any wording when approval metadata passes: %s",
+    (query) => {
+      registerCapability(terminalSessionTool);
 
-    const decision = resolveHarnessToolExposure({
-      source: "agent_intent",
-      query,
-    });
+      const decision = resolveHarnessToolExposure({
+        source: "agent_intent",
+        query,
+      });
 
-    expect(decision.exposedToolIds).toContain("terminal_session");
-  });
+      expect(decision.exposedToolIds).toContain("terminal_session");
+    },
+  );
 
-  it("exposes terminal_session with approval metadata only when default L1 command sandbox is available", () => {
+  it("exposes full host runtime metadata to Planner", () => {
     registerCapability(terminalSessionTool);
 
     const [definition] = resolveHarnessToolExposure({
       source: "agent_intent",
       query: "run pnpm check",
     }).visibleDefinitions;
+    const properties = (definition?.inputSchema.properties ?? {}) as Record<
+      string,
+      unknown
+    >;
 
-    const properties = (definition?.inputSchema.properties ?? {}) as Record<string, unknown>;
-
-    expect(properties.command).toBeDefined();
-    expect(properties.cwd).toBeDefined();
-    expect(properties.timeoutMs).toBeDefined();
-    expect(properties.env).toBeUndefined();
-    expect(properties.attachSessionId).toBeUndefined();
-    expect(properties.sessionMode).toBeUndefined();
+    expect(Object.keys(properties)).toEqual(terminalSchemaKeys);
     expect(definition?.inputSchema.additionalProperties).toBe(false);
     expect(definition?.capabilities.requiresApproval).toBe(true);
-    expect(definition?.capabilities.sandboxRequired).toBe(true);
-    expect(definition?.capabilities.sandboxProfile).toBe("command");
+    expect(definition?.capabilities.sandboxRequired).toBe(false);
+    expect(definition?.capabilities.sandboxProfile).toBeUndefined();
   });
 
   it("does not expose terminal_session to agent_intent when approval metadata is missing", () => {
@@ -135,7 +145,7 @@ describe("resolveHarnessToolExposure", () => {
     expect(decision.exposedToolIds).not.toContain("terminal_session");
   });
 
-  it("does not expose terminal_session to agent_intent when L1 command sandbox is unavailable", () => {
+  it("keeps host terminal available when the legacy command sandbox profile is unavailable", () => {
     registerCapability(terminalSessionTool);
 
     const decision = resolveHarnessToolExposure({
@@ -146,8 +156,8 @@ describe("resolveHarnessToolExposure", () => {
       },
     });
 
-    expect(decision.exposedToolIds).not.toContain("terminal_session");
-    expect(decision.reasons).toContain(
+    expect(decision.exposedToolIds).toContain("terminal_session");
+    expect(decision.reasons).not.toContain(
       "Sandbox-required tools are hidden when their sandbox profile is unavailable.",
     );
   });
@@ -169,21 +179,25 @@ describe("resolveHarnessToolExposure", () => {
       input: { source: "agent_intent" as const, query: "run a local command" },
       requiresApproval: true,
       expectedExposed: true,
-      expectedSchemaKeys: ["command", "cwd", "timeoutMs"],
+      expectedSchemaKeys: terminalSchemaKeys,
     },
     {
       label: "weak Chinese command wording",
       input: { source: "agent_intent" as const, query: "执行命令" },
       requiresApproval: true,
       expectedExposed: true,
-      expectedSchemaKeys: ["command", "cwd", "timeoutMs"],
+      expectedSchemaKeys: terminalSchemaKeys,
     },
     {
       label: "explicit command with sandbox available",
-      input: { source: "agent_intent" as const, query: "run pnpm check" },
+      input: {
+        source: "agent_intent" as const,
+        query: "run pnpm check",
+        sandboxProfiles: { command: true },
+      },
       requiresApproval: true,
       expectedExposed: true,
-      expectedSchemaKeys: ["command", "cwd", "timeoutMs"],
+      expectedSchemaKeys: terminalSchemaKeys,
     },
     {
       label: "explicit command without approval metadata",
@@ -193,22 +207,22 @@ describe("resolveHarnessToolExposure", () => {
       expectedSchemaKeys: [],
     },
     {
-      label: "explicit command with sandbox unavailable",
+      label: "explicit host command with sandbox unavailable",
       input: {
         source: "agent_intent" as const,
         query: "run pnpm check",
         sandboxProfiles: { command: false },
       },
       requiresApproval: true,
-      expectedExposed: false,
-      expectedSchemaKeys: [],
+      expectedExposed: true,
+      expectedSchemaKeys: terminalSchemaKeys,
     },
     {
       label: "tools_list keeps runtime schema",
       input: { source: "tools_list" as const },
       requiresApproval: true,
       expectedExposed: true,
-      expectedSchemaKeys: ["command", "cwd", "env", "timeoutMs", "attachSessionId", "sessionMode"],
+      expectedSchemaKeys: terminalSchemaKeys,
     },
     {
       label: "chat_surface hides terminal",
@@ -236,13 +250,21 @@ describe("resolveHarnessToolExposure", () => {
         (definition) => definition.id === "terminal_session",
       );
       const schemaKeys = terminalDefinition
-        ? Object.keys((terminalDefinition.inputSchema.properties ?? {}) as Record<string, unknown>)
+        ? Object.keys(
+            (terminalDefinition.inputSchema.properties ?? {}) as Record<
+              string,
+              unknown
+            >,
+          )
         : [];
 
-      expect(decision.exposedToolIds.includes("terminal_session")).toBe(expectedExposed);
+      expect(decision.exposedToolIds.includes("terminal_session")).toBe(
+        expectedExposed,
+      );
       expect(schemaKeys).toEqual(expectedSchemaKeys);
       if (terminalDefinition) {
         expect(terminalDefinition.capabilities.requiresApproval).toBe(true);
+        expect(terminalDefinition.capabilities.sandboxRequired).toBe(false);
       }
     },
   );
@@ -259,12 +281,14 @@ describe("resolveHarnessToolExposure", () => {
       query: "open README.md",
     }).visibleDefinitions.map((definition) => definition.id);
 
-    expect(toolsListIds).toEqual(expect.arrayContaining(["read", "read_slice"]));
+    expect(toolsListIds).toEqual(
+      expect.arrayContaining(["read", "read_slice"]),
+    );
     expect(intentIds).not.toContain("read");
     expect(intentIds).not.toContain("read_slice");
   });
 
-  it("hides web_search from chat_surface when the query is a workspace file request", () => {
+  it("keeps web_search in chat_surface for workspace file wording", () => {
     registerCapability(webSearchTool);
 
     const chatIds = resolveHarnessToolExposure({
@@ -286,7 +310,7 @@ describe("resolveHarnessToolExposure", () => {
     expect(chatIds).toContain("web_search");
   });
 
-  it("hides web_search from agent_intent for workspace-local folder/readme requests", () => {
+  it("keeps read_open and web_search in agent_intent for workspace-local wording", () => {
     registerCapability(readOpenTool);
     registerCapability(webSearchTool);
 
@@ -299,13 +323,14 @@ describe("resolveHarnessToolExposure", () => {
     expect(decision.exposedToolIds).toContain("read_open");
   });
 
-  it("hides web_search from agent_intent for README Runtime file-content requests", () => {
+  it("keeps read_open and web_search for README Runtime file-content requests", () => {
     registerCapability(readOpenTool);
     registerCapability(webSearchTool);
 
     const decision = resolveHarnessToolExposure({
       source: "agent_intent",
-      query: "README.md 的 Runtime 一节具体列了哪些运行组件？请基于文件内容回答。",
+      query:
+        "README.md 的 Runtime 一节具体列了哪些运行组件？请基于文件内容回答。",
     });
 
     expect(decision.exposedToolIds).toContain("read_open");
@@ -344,16 +369,20 @@ describe("resolveHarnessToolExposure", () => {
   it("never opens external capabilities with an empty or non-registry allowlist", () => {
     registerCapability(externalFakeTool);
 
-    expect(resolveHarnessToolExposure({
-      source: "agent_intent",
-      allowExternal: true,
-      allowedExternalToolIds: [],
-    }).exposedToolIds).not.toContain("external_fake_tool");
-    expect(resolveHarnessToolExposure({
-      source: "agent_intent",
-      allowExternal: true,
-      allowedExternalToolIds: ["mcp:missing-server:tool:missing"],
-    }).exposedToolIds).not.toContain("external_fake_tool");
+    expect(
+      resolveHarnessToolExposure({
+        source: "agent_intent",
+        allowExternal: true,
+        allowedExternalToolIds: [],
+      }).exposedToolIds,
+    ).not.toContain("external_fake_tool");
+    expect(
+      resolveHarnessToolExposure({
+        source: "agent_intent",
+        allowExternal: true,
+        allowedExternalToolIds: ["mcp:missing-server:tool:missing"],
+      }).exposedToolIds,
+    ).not.toContain("external_fake_tool");
   });
 
   it("does not expose registered external capabilities omitted from the eligible allowlist", () => {
@@ -366,7 +395,9 @@ describe("resolveHarnessToolExposure", () => {
     });
 
     expect(decision.exposedToolIds).not.toContain("external_fake_tool");
-    expect(decision.blockedCapabilityReasons.external_fake_tool).toMatch(/allowlist/i);
+    expect(decision.blockedCapabilityReasons.external_fake_tool).toMatch(
+      /allowlist/i,
+    );
   });
 
   it("reports chat_surface as the blocking reason even with an external allowlist", () => {
@@ -386,15 +417,18 @@ describe("resolveHarnessToolExposure", () => {
 
   it.each([
     {
-       label: "workspace README wording does not hide web_search",
+      label: "workspace README wording does not hide web_search",
       input: {
         source: "agent_intent" as const,
-        query: "README.md 的 Runtime 一节具体列了哪些运行组件？请基于文件内容回答。",
+        query:
+          "README.md 的 Runtime 一节具体列了哪些运行组件？请基于文件内容回答。",
       },
       tools: [readOpenTool, webSearchTool, externalFakeTool],
-       expectedExposed: ["read_open", "web_search"],
-       expectedBlocked: ["external_fake_tool"],
-       expectedReasons: ["External MCP capabilities are hidden unless explicitly enabled."],
+      expectedExposed: ["read_open", "web_search"],
+      expectedBlocked: ["external_fake_tool"],
+      expectedReasons: [
+        "External MCP capabilities are hidden unless explicitly enabled.",
+      ],
     },
     {
       label: "workspace discovery exposes read_discover",
@@ -405,7 +439,9 @@ describe("resolveHarnessToolExposure", () => {
       tools: [readDiscoverTool, externalFakeTool],
       expectedExposed: ["read_discover"],
       expectedBlocked: ["external_fake_tool"],
-      expectedReasons: ["External MCP capabilities are hidden unless explicitly enabled."],
+      expectedReasons: [
+        "External MCP capabilities are hidden unless explicitly enabled.",
+      ],
     },
     {
       label: "workspace discovery covers fuzzy lookup",
@@ -416,7 +452,9 @@ describe("resolveHarnessToolExposure", () => {
       tools: [readDiscoverTool, externalFakeTool],
       expectedExposed: ["read_discover"],
       expectedBlocked: ["external_fake_tool"],
-      expectedReasons: ["External MCP capabilities are hidden unless explicitly enabled."],
+      expectedReasons: [
+        "External MCP capabilities are hidden unless explicitly enabled.",
+      ],
     },
     {
       label: "chat surface keeps only safe domains",
@@ -424,45 +462,63 @@ describe("resolveHarnessToolExposure", () => {
         source: "chat_surface" as const,
         query: "今天最新新闻是什么",
       },
-      tools: [readOpenTool, webSearchTool, terminalSessionTool, externalFakeTool],
+      tools: [
+        readOpenTool,
+        webSearchTool,
+        terminalSessionTool,
+        externalFakeTool,
+      ],
       expectedExposed: ["read_open", "web_search"],
       expectedBlocked: ["terminal_session", "external_fake_tool"],
-      expectedReasons: ["Chat-visible tool surface is restricted to safe built-in domains."],
+      expectedReasons: [
+        "Chat-visible tool surface is restricted to safe built-in domains.",
+      ],
     },
     {
-      label: "terminal command keeps requiresApproval schema",
+      label: "terminal command keeps requiresApproval metadata",
       input: {
         source: "agent_intent" as const,
         query: "run pnpm check",
-        sandboxProfiles: { command: true },
+        sandboxProfiles: { command: false },
       },
       tools: [terminalSessionTool, externalFakeTool],
       expectedExposed: ["terminal_session"],
       expectedBlocked: ["external_fake_tool"],
-      expectedReasons: ["External MCP capabilities are hidden unless explicitly enabled."],
+      expectedReasons: [
+        "External MCP capabilities are hidden unless explicitly enabled.",
+      ],
       expectedApprovalToolId: "terminal_session",
     },
     {
-       label: "non-command wording does not hide terminal",
+      label: "non-command wording does not hide terminal",
       input: {
         source: "agent_intent" as const,
         query: "帮我总结 README.md",
       },
       tools: [terminalSessionTool, externalFakeTool],
-       expectedExposed: ["terminal_session"],
-       expectedBlocked: ["external_fake_tool"],
-       expectedReasons: ["External MCP capabilities are hidden unless explicitly enabled."],
+      expectedExposed: ["terminal_session"],
+      expectedBlocked: ["external_fake_tool"],
+      expectedReasons: [
+        "External MCP capabilities are hidden unless explicitly enabled.",
+      ],
     },
     {
-       label: "small talk does not change exposure",
+      label: "small talk does not change exposure",
       input: {
         source: "agent_intent" as const,
         query: "谢谢",
       },
-      tools: [readOpenTool, webSearchTool, terminalSessionTool, externalFakeTool],
-       expectedExposed: ["read_open", "web_search", "terminal_session"],
-       expectedBlocked: ["external_fake_tool"],
-       expectedReasons: ["External MCP capabilities are hidden unless explicitly enabled."],
+      tools: [
+        readOpenTool,
+        webSearchTool,
+        terminalSessionTool,
+        externalFakeTool,
+      ],
+      expectedExposed: ["read_open", "web_search", "terminal_session"],
+      expectedBlocked: ["external_fake_tool"],
+      expectedReasons: [
+        "External MCP capabilities are hidden unless explicitly enabled.",
+      ],
     },
     {
       label: "allowExternal is required before external MCP becomes visible",
@@ -479,7 +535,14 @@ describe("resolveHarnessToolExposure", () => {
     },
   ])(
     "applies the exposure regression pack directly: $label",
-    ({ input, tools, expectedExposed, expectedBlocked, expectedReasons, expectedApprovalToolId }) => {
+    ({
+      input,
+      tools,
+      expectedExposed,
+      expectedBlocked,
+      expectedReasons,
+      expectedApprovalToolId,
+    }) => {
       for (const tool of tools) {
         registerCapability(tool);
       }
@@ -487,13 +550,18 @@ describe("resolveHarnessToolExposure", () => {
       const decision = resolveHarnessToolExposure(input);
 
       expect(decision.exposedToolIds).toEqual(expectedExposed);
-      expect(decision.blockedCapabilityIds).toEqual(expect.arrayContaining(expectedBlocked));
+      expect(decision.blockedCapabilityIds).toEqual(
+        expect.arrayContaining(expectedBlocked),
+      );
       for (const reason of expectedReasons) {
         expect(decision.reasons).toContain(reason);
       }
       if (expectedApprovalToolId) {
-        const definition = decision.visibleDefinitions.find((item) => item.id === expectedApprovalToolId);
+        const definition = decision.visibleDefinitions.find(
+          (item) => item.id === expectedApprovalToolId,
+        );
         expect(definition?.capabilities.requiresApproval).toBe(true);
+        expect(definition?.capabilities.sandboxRequired).toBe(false);
       }
     },
   );
@@ -506,11 +574,19 @@ describe("resolveHarnessToolExposure", () => {
     registerCapability(readTool);
     registerCapability(readSliceTool);
 
-    const decision = resolveHarnessToolExposure({ source: "agent_intent", query: "read workspace" });
+    const decision = resolveHarnessToolExposure({
+      source: "agent_intent",
+      query: "read workspace",
+    });
 
     expect(decision.exposedToolIds).toEqual(["read_discover", "read_open"]);
     expect(decision.blockedCapabilityIds).toEqual(
-      expect.arrayContaining(["read_list", "read_locate", "read", "read_slice"]),
+      expect.arrayContaining([
+        "read_list",
+        "read_locate",
+        "read",
+        "read_slice",
+      ]),
     );
   });
 });
