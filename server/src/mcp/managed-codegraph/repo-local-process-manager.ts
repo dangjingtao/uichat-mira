@@ -13,8 +13,6 @@ const DEFAULT_REPO_DATA_DIR_NAME = ".codegraph";
 const DEFAULT_INDEX_BOOTSTRAP_TIMEOUT_MS = 120_000;
 const DECLARED_REPO_LOCAL_REASON =
   /external index|index-root|workspace[\\/].*\.codegraph|serve --mcp/i;
-const NOT_INITIALIZED_PATTERN =
-  /not initialized|isn't indexed|no \.codegraph[\\/] index exists|run [`']?codegraph init/i;
 
 export const isRealCodeGraphCommand = (command: string) => {
   const normalized = command.trim().toLowerCase();
@@ -116,6 +114,16 @@ const runManagedCodeGraphCli = async (input: {
   });
 };
 
+const hasCodeGraphIndexData = (repoDataDirPath: string) => {
+  try {
+    return fs
+      .readdirSync(repoDataDirPath)
+      .some((entry) => entry !== ".gitignore");
+  } catch {
+    return false;
+  }
+};
+
 export type DeclaredRepoLocalIndexBootstrapResult = {
   status: "skipped" | "ready" | "initialized" | "failed";
   repoDataDirPath: string;
@@ -138,25 +146,12 @@ export const ensureDeclaredRepoLocalCodeGraphIndex = async (
     };
   }
 
-  if (fs.existsSync(repoDataDirPath)) {
-    const statusProbe = await runManagedCodeGraphCli({
-      command: options.command,
-      args: ["status"],
-      cwd: options.workspaceRoot,
-      env: options.env,
-      timeoutMs: Math.max(options.healthTimeoutMs ?? 0, 10_000),
-    });
-    const statusText = `${statusProbe.stdout}\n${statusProbe.stderr}`.trim();
-    if (
-      statusProbe.exitCode === 0 &&
-      !NOT_INITIALIZED_PATTERN.test(statusText)
-    ) {
-      return {
-        status: "ready",
-        repoDataDirPath,
-        message: statusText || "Existing CodeGraph index is ready.",
-      };
-    }
+  if (hasCodeGraphIndexData(repoDataDirPath)) {
+    return {
+      status: "ready",
+      repoDataDirPath,
+      message: "Existing CodeGraph project index data found.",
+    };
   }
 
   const initialized = await runManagedCodeGraphCli({
@@ -173,7 +168,7 @@ export const ensureDeclaredRepoLocalCodeGraphIndex = async (
   if (
     initialized.exitCode !== 0 ||
     initialized.timedOut ||
-    !fs.existsSync(repoDataDirPath)
+    !hasCodeGraphIndexData(repoDataDirPath)
   ) {
     return {
       status: "failed",
@@ -228,10 +223,13 @@ export class ManagedCodeGraphProcessManager extends BaseManagedCodeGraphProcessM
     if (shouldAllowDeclaredRepoLocalCodeGraphData(this.originalOptions)) {
       this.indexBootstrapPromise ??=
         ensureDeclaredRepoLocalCodeGraphIndex(this.originalOptions);
-      const bootstrap = await this.indexBootstrapPromise;
-      if (bootstrap.status === "failed") {
+      try {
+        const bootstrap = await this.indexBootstrapPromise;
+        if (bootstrap.status === "failed") {
+          throw new Error(`CodeGraph index bootstrap failed: ${bootstrap.message}`);
+        }
+      } finally {
         this.indexBootstrapPromise = null;
-        throw new Error(`CodeGraph index bootstrap failed: ${bootstrap.message}`);
       }
     }
     return await super.start();
