@@ -43,7 +43,7 @@ function readFrame(stream, timeoutMs = 3000) {
   });
 }
 
-test("Native Host keeps stdio framing when backend URL is invalid", async () => {
+test("Native Host acknowledges Chrome transport before backend validation", async () => {
   const child = spawn(process.execPath, [hostPath], {
     stdio: ["pipe", "pipe", "pipe"],
     windowsHide: true,
@@ -53,15 +53,21 @@ test("Native Host keeps stdio framing when backend URL is invalid", async () => 
     child.stdin.write(frame({ type: "hello", backendUrl: "not-a-url", accessToken: "test-token" }));
     const message = await readFrame(child.stdout);
     assert.equal(message.type, "status");
-    assert.equal(message.status, "error");
-    assert.equal(message.code, "ERR_INVALID_URL");
-    assert.match(message.message, /Invalid URL|Invalid URL string/);
+    assert.equal(message.status, "native_ready");
+    assert.equal(message.code, "NATIVE_HOST_READY");
   } finally {
     child.stdin.destroy();
     child.stdout.destroy();
     child.stderr.destroy();
     child.kill();
   }
+});
+
+test("Native Host source keeps backend reconnect separate from native readiness", async () => {
+  const source = await readFile(path.join(path.dirname(hostPath), "host.mjs"), "utf8");
+  assert.match(source, /sendStatus\('native_ready', 'NATIVE_HOST_READY'\)/);
+  assert.match(source, /sendStatus\('backend_connecting', 'BACKEND_CONNECTING'\)/);
+  assert.match(source, /scheduleBackendReconnect/);
 });
 
 test("Native Host source keeps diagnostics out of stdout", async () => {
