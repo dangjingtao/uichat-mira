@@ -55,7 +55,10 @@ export function UChatUserBubbleShell({ children }: PropsWithChildren) {
 // style while leaving message rendering itself runtime-driven.
 export function UChatAssistantBubbleShell({ children }: PropsWithChildren) {
   return (
-    <div className="block w-full rounded-[14px] bg-[linear-gradient(180deg,rgba(var(--color-surface-primary),0.56)_0%,rgba(var(--color-surface-primary),0.32)_100%)] px-1 py-2.5 text-[15px] leading-[1.72] text-text-primary">
+    <div
+      data-uchat-assistant-bubble="true"
+      className="block w-full rounded-[14px] bg-[linear-gradient(180deg,rgba(var(--color-surface-primary),0.56)_0%,rgba(var(--color-surface-primary),0.32)_100%)] px-1 py-2.5 text-[15px] leading-[1.72] text-text-primary"
+    >
       {children}
     </div>
   );
