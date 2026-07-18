@@ -33,16 +33,16 @@
       }
     ],
     "git": {
-      "branch": "dev",
+      "branch": "codex/pi-agent-loop-mvp",
       "versions": [
         {
           "version": "0.7.1",
           "commit": {
-            "hash": "f8519b8cb49fb7b127fa115f6f68413d66eb7820",
-            "shortHash": "f8519b8",
-            "message": "feat: complete microapp capability and browser integration",
-            "author": "Tomz",
-            "date": "2026-07-15T00:10:38+08:00"
+            "hash": "a3c116875528ed024827510d543e889fe5767c67",
+            "shortHash": "a3c1168",
+            "message": "test(runtime): allow inline language and npm command forms",
+            "author": "DangJingtao",
+            "date": "2026-07-18T07:07:07+08:00"
           }
         },
         {
