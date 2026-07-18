@@ -54,6 +54,7 @@ type SmokeMode = "real" | "fake";
 
 type CodeGraphDraft = {
   microAppEnabled: boolean;
+  /** Legacy compatibility only. Product enablement follows microAppEnabled. */
   agentCapabilityEnabled: boolean;
   command: string;
   startArgsText: string;
@@ -85,7 +86,7 @@ const textToArgs = (value: string) =>
 
 const createDraft = (report: CodeGraphStudioReport): CodeGraphDraft => ({
   microAppEnabled: report.config.microAppEnabled,
-  agentCapabilityEnabled: report.config.agentCapabilityEnabled,
+  agentCapabilityEnabled: report.config.microAppEnabled,
   command: report.config.command,
   startArgsText: argsToText(report.config.startArgs),
   versionProbeArgsText: argsToText(report.config.versionProbeArgs),
@@ -145,7 +146,9 @@ const buildFakeProviderFixturePath = (workspaceRoot: string) =>
 
 const buildSavePayload = (draft: CodeGraphDraft) => ({
   microAppEnabled: draft.microAppEnabled,
-  agentCapabilityEnabled: draft.agentCapabilityEnabled,
+  // Keep the persisted legacy field synchronized so older builds/config readers
+  // cannot reintroduce a second independent switch.
+  agentCapabilityEnabled: draft.microAppEnabled,
   command: draft.command.trim(),
   startArgs: textToArgs(draft.startArgsText),
   versionProbeArgs: textToArgs(draft.versionProbeArgsText),
@@ -161,7 +164,7 @@ const isConfigDirty = (report: CodeGraphStudioReport, draft: CodeGraphDraft) =>
   JSON.stringify({
     command: report.config.command,
     microAppEnabled: report.config.microAppEnabled,
-    agentCapabilityEnabled: report.config.agentCapabilityEnabled,
+    agentCapabilityEnabled: report.config.microAppEnabled,
     startArgs: report.config.startArgs,
     versionProbeArgs: report.config.versionProbeArgs,
     telemetryProbeArgs: report.config.telemetryProbeArgs,
@@ -248,6 +251,36 @@ export default function CodeGraphStudioPage() {
       setDraft(createDraft(nextReport));
       message.success(t("settings.microApps.codeGraphStudio.messages.configSaved"));
     } catch (error) {
+      message.error(
+        error instanceof Error
+          ? error.message
+          : t("settings.microApps.codeGraphStudio.messages.configSaveFailed"),
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const setMicroAppEnabled = async (enabled: boolean) => {
+    if (!draft) {
+      return;
+    }
+
+    const nextDraft: CodeGraphDraft = {
+      ...draft,
+      microAppEnabled: enabled,
+      agentCapabilityEnabled: enabled,
+    };
+    setDraft(nextDraft);
+    setSaving(true);
+    try {
+      const nextReport = await saveCodeGraphStudioConfig(buildSavePayload(nextDraft));
+      setReport(nextReport);
+      setDraft(createDraft(nextReport));
+      setSmokeResult(null);
+    } catch (error) {
+      // Restore persisted truth if the immediate toggle save fails.
+      setDraft(createDraft(report!));
       message.error(
         error instanceof Error
           ? error.message
@@ -732,43 +765,13 @@ export default function CodeGraphStudioPage() {
                     </div>
                     <Switch
                       checked={draft.microAppEnabled}
-                      onChange={() =>
-                        setDraft((current) =>
-                          current
-                            ? { ...current, microAppEnabled: !current.microAppEnabled }
-                            : current,
-                        )
-                      }
+                      onChange={() => void setMicroAppEnabled(!draft.microAppEnabled)}
                       ariaLabel={t("settings.microApps.codeGraphStudio.fields.microAppEnabled")}
+                      disabled={saving}
                     />
                   </div>
                   <div className="text-sm leading-6 text-text-secondary">
                     {t("settings.microApps.codeGraphStudio.cards.capability.microAppHint")}
-                  </div>
-                </div>
-
-                <div className="space-y-2 border-t border-border/60 pt-3">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="text-sm font-medium text-text-primary">
-                      {t("settings.microApps.codeGraphStudio.fields.agentCapabilityEnabled")}
-                    </div>
-                    <Switch
-                      checked={draft.agentCapabilityEnabled}
-                      onChange={() =>
-                        setDraft((current) =>
-                          current
-                            ? {
-                                ...current,
-                                agentCapabilityEnabled: !current.agentCapabilityEnabled,
-                              }
-                            : current,
-                        )
-                      }
-                      ariaLabel={t("settings.microApps.codeGraphStudio.fields.agentCapabilityEnabled")}
-                    />
-                  </div>
-                  <div className="text-sm leading-6 text-text-secondary">
-                    {t("settings.microApps.codeGraphStudio.cards.capability.agentCapabilityHint")}
                   </div>
                 </div>
 
