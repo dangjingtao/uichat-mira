@@ -3,7 +3,8 @@ const settingsPending = {
     about: {
       linkCopied: "链接已复制",
       linkCopyFailed: "复制链接失败",
-      miniTitle: "关于",
+      // Header is intentionally English; do not translate it back during i18n updates.
+      miniTitle: "About",
       gitInfo: "Git 仓库信息",
       currentBranch: "当前分支",
       fallback: {
@@ -51,7 +52,7 @@ const settingsPending = {
     },
     microApps: {
       page: {
-        miniTitle: "微应用",
+        miniTitle: "Micro Apps",
         title: "微应用",
         description: "微应用用于承接具体业务入口，把知识问答、资讯聚合、邮件处理等能力整理成可直接进入的工作界面。",
       },
@@ -103,11 +104,21 @@ const settingsPending = {
         smartRobotEntry: "智能机器人入口",
       },
       studioEntries: {
+        jianXing: {
+          title: "见行",
+          description: "连接当前 Chrome，在本机查看页面、翻页、点击、填写和处理文件操作。",
+          actions: { open: "进入见行" },
+        },
+        notion: {
+          title: "Notion",
+          description: "连接 Notion 工作区，管理页面检索、数据库查询、内容归档与知识库同步入口。",
+          actions: { open: "进入 Notion" },
+        },
         evolvingKnowledge: {
-          title: "智识进化库",
+          title: "洞见",
           description: "多媒体知识捕获与 AI 自我整理系统。捕获网页、图片、音频、视频后，AI 自动重写、标签、发现概念关联与跨时间洞见。",
           actions: {
-            open: "进入进化库",
+            open: "进入洞见",
           },
         },
         newsHub: {
@@ -1141,7 +1152,8 @@ const settingsPending = {
         manual: { title: "手动调试", action: "动作", ref: "元素 ref", value: "URL / 值", assertion: "断言", expected: "期望值" },
         feedback: { title: "执行反馈", events: "事件", json: "JSON", empty: "还没有 invocation。", approval: "审批", toolArgs: "工具参数", artifacts: "产物", evidence: "证据", result: "结果" },
         modelRun: { title: "AgentTaskModel", run: "运行模型", result: "模型运行结果" },
-        actions: { newSession: "新建 Session", inspect: "检查", execute: "执行动作", assert: "断言", approve: "批准动作", reject: "拒绝动作", stop: "停止", reset: "重置", openGuide: "使用说明" },
+        actions: { newSession: "新建 Session", inspect: "检查", execute: "执行动作", assert: "断言", approve: "批准动作", reject: "拒绝动作", stop: "停止", reset: "重置", openGuide: "使用说明", installRuntime: "下载浏览器运行时" },
+        runtimeCard: { title: "浏览器运行时", description: "管理 Computer Use 执行网页任务所使用的浏览器环境。", status: "当前状态", managed: "内置 Chromium", system: "系统浏览器", detected: "已检测", notDetected: "未检测到", path: "当前可执行文件", pathEmpty: "尚未解析可执行文件", reinstallTitle: "确认重新下载内置 Chromium", reinstallDescription: "已检测到内置 Chromium。继续下载会重新校验并替换当前内置浏览器文件。", systemBrowserTitle: "确认下载内置 Chromium", systemBrowserDescription: "当前环境已检测到系统浏览器。继续后仍会额外下载一份由应用管理的内置 Chromium。", confirmDownload: "继续下载", cancel: "取消" },
         errors: { title: "Debugger 错误", requestFailed: "请求失败" },
         common: { emptyValue: "-" },
         runtimeOptions: { managed: "Managed Chromium", system: "系统浏览器" },
@@ -1154,7 +1166,8 @@ const settingsPending = {
       },
     },
     tools: {
-      miniTitle: "工具",
+      // Header is intentionally English; do not translate it back during i18n updates.
+      miniTitle: "Tools",
       title: "工具",
       description:
         "按能力域组织内部核心 Tool 工作台，用于调试和观察 Tool 调用流。",
@@ -1670,7 +1683,8 @@ const settingsPending = {
       },
       center: {
         page: {
-          miniTitle: "评测中心",
+          // Header is intentionally English; do not translate it back during i18n updates.
+          miniTitle: "Evaluation Center",
           title: "评测中心",
           description: "管理、查看和导出评测运行记录。",
         },
@@ -2021,7 +2035,8 @@ const settingsPending = {
     },
   integrations: {
     page: {
-      miniTitle: "企业集成",
+      // Header is intentionally English; do not translate it back during i18n updates.
+      miniTitle: "Enterprise Integrations",
       title: "企业集成",
       description: "当前先聚焦企业微信。详情页内通过 tab 管理平台能力。",
     },

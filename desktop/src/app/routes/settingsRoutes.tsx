@@ -47,6 +47,8 @@ import NewsHubPage from "@/features/Settings/pages/MicroApps/NewsHub";
 import TtsStudioPage from "@/features/Settings/pages/MicroApps/Tts";
 import CodeGraphStudioPage from "@/features/Settings/pages/MicroApps/CodeGraph";
 import EvolvingKnowledgeStudioPage from "@/features/Settings/pages/MicroApps/EvolvingKnowledge";
+import NotionMicroAppPage from "@/features/Settings/pages/MicroApps/Notion";
+import JianXingPage from "@/features/Settings/pages/MicroApps/JianXing";
 
 export type SettingsNavGroup =
   | "general"
@@ -127,6 +129,10 @@ const settingsRouteTree: SettingsRouteConfig[] = [
         element: <MicroAppsSettings />,
       },
       {
+        path: "notion",
+        element: <NotionMicroAppPage />,
+      },
+      {
         path: ":appId",
         element: <MicroAppDetailPage />,
       },
@@ -141,6 +147,10 @@ const settingsRouteTree: SettingsRouteConfig[] = [
       {
         path: "computer-use-studio",
         element: <ComputerUseDebuggerPage />,
+      },
+      {
+        path: "jian-xing",
+        element: <JianXingPage />,
       },
       {
         path: "mail-center",

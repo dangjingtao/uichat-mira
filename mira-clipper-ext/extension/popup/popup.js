@@ -1,5 +1,5 @@
 /**
- * Mira Clipper - Popup Logic
+ * MiraWebBrige - Popup Logic
  * 状态机：LOADING → READY → SAVING → SUCCESS / ERROR
  */
 
@@ -11,6 +11,7 @@
   let backendUrl = '';
   let accessToken = '';
   let pendingCapture = null;
+  let currentPageHtml = '';
   let extractionStatus = 'empty';
   let connectionState = 'disconnected';
   const tags = [];
@@ -43,6 +44,8 @@
     authorizationCode: document.getElementById('authorizationCode'),
     exchangeCodeBtn: document.getElementById('exchangeCodeBtn'),
     authStatus: document.getElementById('authStatus'),
+    openAuthorizationPage: document.getElementById('openAuthorizationPage'),
+    transport: document.getElementById('transport'),
   };
 
   // ===== Init =====
@@ -50,8 +53,9 @@
     setState('LOADING');
 
     try {
-      const stored = await chrome.storage.sync.get(['backendUrl']);
+      const stored = await chrome.storage.sync.get(['backendUrl', 'transport']);
       if (stored.backendUrl) backendUrl = stored.backendUrl;
+      els.transport.value = stored.transport === 'websocket' ? 'websocket' : 'native';
       const tokenStore = await chrome.storage.local.get(['accessToken']);
       if (tokenStore.accessToken) accessToken = tokenStore.accessToken;
       if (chrome.storage.session) {
@@ -70,6 +74,15 @@
     await syncConnectionState();
     await loadActiveTabInfo();
   }
+
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message?.type !== 'WEBBRIDGE_STATUS' || message.status !== 'auth_required') return;
+    accessToken = '';
+    showAuthGate();
+    connectionState = 'disconnected';
+    setState('LOCKED');
+    showAuthStatus('授权已失效，请重新输入 Mira 授权码', true);
+  });
 
   async function syncConnectionState() {
     const isConnected = await checkBackendHealth();
@@ -96,6 +109,7 @@
       return;
     }
     currentTabId = tab.id;
+    chrome.runtime.sendMessage({ type: 'WEBBRIDGE_ACTIVATE_TAB', tabId: currentTabId }).catch(() => {});
 
     // 获取页面信息（先尝试 sendMessage，失败则注入 extractor + content script）
     let info;
@@ -119,13 +133,13 @@
       }
     }
 
-    if (pendingCapture?.contentType === 'image' && pendingCapture.imageUrl) {
+    if (pendingCapture?.imageUrl) {
       info = {
         ...info,
         title: pendingCapture.title || info.title,
         url: pendingCapture.url || info.url,
         favicon: pendingCapture.favicon || info.favicon,
-        contentType: 'image',
+        contentType: 'webpage',
         imageUrl: pendingCapture.imageUrl,
       };
       if (chrome.storage.session) {
@@ -219,6 +233,7 @@
 
   // ===== Form =====
   function fillForm(info) {
+    currentPageHtml = typeof info.pageHtml === 'string' ? info.pageHtml : '';
     els.title.value = (info.title || '').trim();
     els.url.textContent = info.url || '';
     els.url.dataset.rawUrl = info.url || '';
@@ -240,7 +255,7 @@
       ...(imageUrl ? [imageUrl] : []),
     ].filter(Boolean)));
     const imageDataUrls = Array.isArray(info.imageDataUrls) ? info.imageDataUrls : [];
-    const contentType = info.contentType === 'image' || imageUrls.length ? 'image' : 'text';
+    const contentType = 'webpage';
     const hasContent = !!(info.contentMarkdown || '').trim();
     const hasTextPreview = !!selected || hasContent;
 
@@ -249,19 +264,19 @@
     els.imagePreview.classList.add('hidden');
     els.imagePreview.replaceChildren();
     if (selected) {
-      els.previewLabel.textContent = contentType === 'image' ? '正文与图片预览' : '选中文字';
+      els.previewLabel.textContent = imageUrls.length ? '正文与图片预览' : '选中文字';
       els.selectedText.value = selected;
       els.selectedBox.classList.remove('hidden');
     } else if (hasContent) {
       const preview = info.contentPlainText.slice(0, 300) + (info.contentPlainText.length > 300 ? '…' : '');
-      els.previewLabel.textContent = contentType === 'image' ? '正文与图片预览' : '提取正文预览';
+      els.previewLabel.textContent = imageUrls.length ? '正文与图片预览' : '提取正文预览';
       els.selectedText.value = preview;
       els.selectedBox.classList.remove('hidden');
     } else if (!imageUrl) {
       els.selectedBox.classList.add('hidden');
     }
 
-    if (contentType === 'image' && imageUrls.length) {
+    if (imageUrls.length) {
       imageUrls.forEach((url, index) => {
         const image = document.createElement('img');
         image.src = url;
@@ -357,7 +372,7 @@
       if (!response.ok || !body.success || !body.data?.url) {
         throw new Error(`图片保存失败（${response.status}）`);
       }
-      uploaded.push({ filePath: body.data.url, mimeType: body.data.contentType || image.mimeType || 'image/png' });
+      uploaded.push({ filePath: body.data.url, mimeType: body.data.contentType || image.mimeType || 'image/png', sourceUrl: image.sourceUrl });
     }
     return uploaded;
   }
@@ -395,12 +410,12 @@
 
     // 用户明确选中的内容优先于自动提取正文，保证“主动选择后抓取”语义成立。
     const selectedText = els.saveBtn.dataset.selectedText || '';
-    const contentType = els.saveBtn.dataset.contentType || 'text';
+    const contentType = 'webpage';
     const imageUrl = els.saveBtn.dataset.imageUrl || '';
     const imageUrls = JSON.parse(els.saveBtn.dataset.imageUrls || '[]');
     const imageDataUrls = JSON.parse(els.saveBtn.dataset.imageDataUrls || '[]');
     const textContent = selectedText || preExtracted.contentMarkdown || preExtracted.contentPlainText;
-    const rawContent = contentType === 'image'
+    const rawContent = imageUrls.length
       ? [
         textContent,
         ...imageUrls.map((url, index) => `![${title} ${index + 1}](${url})`),
@@ -416,6 +431,7 @@
       favicon: els.saveBtn.dataset.favicon || undefined,
       contentType,
       rawContent,
+      rawHtml: currentPageHtml || undefined,
       processAi: true,
       rebuild: els.processAi.checked,
       metadata: {
@@ -550,5 +566,19 @@
 
   // ===== Boot =====
   els.exchangeCodeBtn.addEventListener('click', exchangeAuthorizationCode);
+  els.openAuthorizationPage.addEventListener('click', () => {
+    const prefix = extensionAssetPrefix;
+    chrome.tabs.create({ url: chrome.runtime.getURL(`${prefix}auth/authorize.html`) });
+  });
+  els.transport.addEventListener('change', async () => {
+    const transport = els.transport.value === 'native' ? 'native' : 'websocket';
+    try {
+      await chrome.storage.sync.set({ transport });
+      await chrome.runtime.sendMessage({ type: 'WEBBRIDGE_RECONNECT' });
+      showAuthStatus(`已切换为${transport === 'native' ? ' Native Messaging' : ' WebSocket'}，正在重连…`, false);
+    } catch (error) {
+      showAuthStatus(`连接方式切换失败：${error?.message || '未知错误'}`, true);
+    }
+  });
   init();
 })();

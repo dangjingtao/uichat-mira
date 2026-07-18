@@ -129,3 +129,44 @@ export async function openExternalUrl(url: string) {
 
   globalThis.window?.open(trimmedUrl, "_blank", "noopener,noreferrer");
 }
+
+export async function downloadBrowserExtension(): Promise<string> {
+  const runtime = getDesktopRuntime();
+
+  if (runtime.hostKind === "electron" && globalThis.window?.electronAPI?.invoke) {
+    return String(
+      await globalThis.window.electronAPI.invoke("desktop:download-browser-extension"),
+    );
+  }
+
+  const tauriInvoke = (globalThis.window as any)?.__TAURI_INTERNALS__?.invoke;
+  if (runtime.hostKind === "tauri" && typeof tauriInvoke === "function") {
+    return String(await tauriInvoke("download_browser_extension"));
+  }
+
+  throw new Error("浏览器扩展下载仅支持 Electron 或 Tauri 桌面端");
+}
+
+export async function installNativeMessagingHost(): Promise<unknown> {
+  const runtime = getDesktopRuntime();
+  if (runtime.hostKind === "electron" && globalThis.window?.electronAPI?.invoke) {
+    return globalThis.window.electronAPI.invoke("desktop:install-native-host");
+  }
+  const tauriInvoke = (globalThis.window as any)?.__TAURI_INTERNALS__?.invoke;
+  if (runtime.hostKind === "tauri" && typeof tauriInvoke === "function") {
+    return tauriInvoke("install_native_messaging_host");
+  }
+  throw new Error("Native Messaging 安装仅支持 Electron 或 Tauri 桌面端");
+}
+
+export async function uninstallNativeMessagingHost(): Promise<unknown> {
+  const runtime = getDesktopRuntime();
+  if (runtime.hostKind === "electron" && globalThis.window?.electronAPI?.invoke) {
+    return globalThis.window.electronAPI.invoke("desktop:uninstall-native-host");
+  }
+  const tauriInvoke = (globalThis.window as any)?.__TAURI_INTERNALS__?.invoke;
+  if (runtime.hostKind === "tauri" && typeof tauriInvoke === "function") {
+    return tauriInvoke("uninstall_native_messaging_host");
+  }
+  throw new Error("Native Messaging 注销仅支持 Electron 或 Tauri 桌面端");
+}

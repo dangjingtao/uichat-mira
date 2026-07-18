@@ -6,7 +6,16 @@
 </head>
 <body>
   <div class="container">
-    <h1>Mira Clipper 设置</h1>
+    <h1>见行设置</h1>
+
+    <div class="field">
+      <label for="transport">连接方式</label>
+      <select id="transport">
+        <option value="websocket">WebSocket（开发/兼容）</option>
+        <option value="native">Native Messaging（稳定连接）</option>
+      </select>
+      <p class="hint">Native Messaging 需要 Mira 安装连接组件；未安装时会明确报错，不会自动切换。</p>
+    </div>
 
     <div class="field">
       <label for="webAppUrl">Mira 前端地址</label>
@@ -29,6 +38,7 @@
         <input id="authorizationCode" type="text" placeholder="粘贴 Mira 前端生成的授权码" />
         <button id="exchangeCodeBtn" type="button">使用授权码</button>
       </div>
+      <button id="openAuthorizationPage" type="button">打开独立授权页</button>
     </div>
 
     <div class="field">

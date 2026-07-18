@@ -146,6 +146,18 @@ body {
   font-size: 11px;
 }
 
+.secondary-auth-button {
+  width: 100%;
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+}
+
+.secondary-auth-button:hover {
+  background: var(--panel-secondary);
+}
+
 .capture-view {
   padding: 4px 0 0;
   background: transparent;
@@ -160,6 +172,26 @@ body {
   align-items: center;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.transport-control {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 92px;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.transport-control select {
+  min-height: 28px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #1e293b;
+  font-size: 12px;
+  padding: 0 6px;
 }
 
 .attachment-chip {

@@ -1,4 +1,4 @@
-# Mira Clipper 图标占位
+# MiraWebBrige 图标占位
 
 请在此目录放置扩展图标文件：
 

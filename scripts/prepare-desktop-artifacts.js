@@ -18,6 +18,7 @@ const runtimeConfigArtifactsPath = path.join(
   "runtime.config.cjs",
 );
 const nodeRuntimeArtifactsRoot = path.join(artifactsRoot, "node-runtime");
+const browserExtensionArtifactsRoot = path.join(artifactsRoot, "browser-extension");
 const piperRuntimeArtifactsRoot = path.join(
   artifactsRoot,
   "micro-apps",
@@ -110,6 +111,18 @@ function copyTestResults(sourceDir, destinationDir, label) {
 
 console.log("Preparing shared desktop artifacts...");
 
+execSync("npm run prod", {
+  cwd: path.join(projectRoot, "mira-clipper-ext"),
+  stdio: "inherit",
+  env: process.env,
+});
+
+execSync("npm run native:build", {
+  cwd: path.join(projectRoot, "mira-clipper-ext"),
+  stdio: "inherit",
+  env: process.env,
+});
+
 removeDir(legacyServerArtifactsRoot, "legacy staged server bundle");
 
 const { writeAppMetaJsons } = await import(appMetaGeneratorUrl);
@@ -184,6 +197,27 @@ copyPath(
   runtimeConfigArtifactsPath,
   "runtime config",
 );
+copyPath(
+  path.join(
+    projectRoot,
+    "mira-clipper-ext",
+    "dist",
+    "prod",
+    "MiraClipper.crx",
+  ),
+  path.join(browserExtensionArtifactsRoot, "MiraClipper.crx"),
+  "production browser extension",
+);
+copyPath(
+  path.join(projectRoot, "mira-clipper-ext", "dist", "native", "MiraWebBridgeHost.exe"),
+  path.join(browserExtensionArtifactsRoot, "native", "MiraWebBridgeHost.exe"),
+  "production Native Messaging host",
+);
+copyPath(
+  path.join(projectRoot, "mira-clipper-ext", "dist", "native", "host.mjs"),
+  path.join(browserExtensionArtifactsRoot, "native", "host.mjs"),
+  "production Native Messaging host script",
+);
 
 fs.mkdirSync(nodeRuntimeArtifactsRoot, { recursive: true });
 const nodeRuntimeDest = path.join(
@@ -235,6 +269,11 @@ copyPath(
   iconsArtifactsRoot,
   path.join(electronArtifactsRoot, "icons"),
   "staged icons",
+);
+copyPath(
+  browserExtensionArtifactsRoot,
+  path.join(electronArtifactsRoot, "browser-extension"),
+  "staged browser extension",
 );
 copyPath(
   nodeRuntimeArtifactsRoot,

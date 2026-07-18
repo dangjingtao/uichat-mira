@@ -1,15 +1,19 @@
 {
   "name": "mira-clipper-ext",
-  "version": "1.0.0",
-  "description": "Mira Clipper - 个人工作台剪藏系统",
+  "version": "0.7.1",
+  "description": "见行（MiraWebBrige）- Mira 浏览器连接与用户主动剪藏扩展",
   "type": "module",
   "scripts": {
+    "dev": "node scripts/build-native-host.mjs --reuse-running && node scripts/package-extension.mjs --mode dev",
+    "prod": "node scripts/package-extension.mjs --mode prod",
+    "native:build": "node scripts/build-native-host.mjs",
     "test": "npm run test:extension",
-    "test:extension": "node --test extension/tests/*.test.mjs extension/tests/*.mjs",
-    "check": "node --check extension/background.js && node --check extension/content/content.js && node --check extension/popup/popup.js && node --check extension/options/options.js"
+    "test:extension": "node --test extension/tests/*.test.mjs extension/tests/*.mjs native-host/host-smoke.mjs",
+    "check": "node --check extension/background.js && node --check extension/content/content.js && node --check extension/popup/popup.js && node --check extension/options/options.js && node --check extension/auth/authorize.js && node --check native-host/host.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
+    "crx3": "^1.1.3",
     "playwright": "^1.61.1"
   },
   "engines": {

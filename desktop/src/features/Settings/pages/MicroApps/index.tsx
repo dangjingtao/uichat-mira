@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowRight, AudioLines, BookOpen, Boxes, BrainCircuit, Image, Mail, MonitorSmartphone, Newspaper, Settings } from "lucide-react";
+import { ArrowRight, AudioLines, BookOpen, Boxes, BrainCircuit, Image, Mail, MonitorSmartphone, Newspaper, PlugZap, Settings, StickyNote } from "lucide-react";
 import { Link } from "react-router-dom";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import Alert from "@/shared/ui/Alert";
@@ -27,6 +27,16 @@ const microAppSummaryKey = (microApp: MicroAppRecord) => {
 };
 
 const featuredStudioEntries = [
+  {
+    key: "jianXing",
+    route: "/settings/micro-apps/jian-xing",
+    capability: undefined,
+  },
+  {
+    key: "notion",
+    route: "/settings/micro-apps/notion",
+    capability: undefined,
+  },
   {
     key: "evolvingKnowledge",
     route: "/settings/micro-apps/evolving-knowledge-studio",
@@ -65,6 +75,8 @@ const featuredStudioEntries = [
 ] as const;
 
 const featuredStudioIcons = {
+  jianXing: PlugZap,
+  notion: StickyNote,
   evolvingKnowledge: BrainCircuit,
   newsHub: Newspaper,
   mailCenter: Mail,

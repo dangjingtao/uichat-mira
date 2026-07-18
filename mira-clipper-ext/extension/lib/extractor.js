@@ -1,5 +1,5 @@
 /**
- * Mira Clipper - 浏览器端正文提取 + Markdown 转换
+ * MiraWebBrige - 浏览器端正文提取 + Markdown 转换
  * 零依赖，纯原生 JS，在 Content Script 中运行。
  * 核心逻辑：文本密度启发式 → 提取正文区 → 清洗 HTML → 转 Markdown
  */
@@ -228,6 +228,52 @@
     };
   }
 
+  function collectImageUrls(doc) {
+    const urls = [];
+    const seen = new Set();
+    const imageAttributes = [
+      'src',
+      'data-src',
+      'data-original',
+      'data-lazy-src',
+      'data-url',
+    ];
+
+    for (const image of doc.querySelectorAll('img')) {
+      const candidate = image.currentSrc || imageAttributes
+        .map((attribute) => image.getAttribute(attribute))
+        .find(Boolean);
+      if (!candidate) continue;
+
+      const url = resolveUrl(candidate);
+      if (!/^https?:\/\//i.test(url) || /\.svg(?:[?#]|$)/i.test(url) || seen.has(url)) continue;
+
+      const rect = image.getBoundingClientRect?.();
+      const width = image.naturalWidth || rect?.width || 0;
+      const height = image.naturalHeight || rect?.height || 0;
+      if (width > 0 && height > 0 && (width < 100 || height < 100)) continue;
+
+      seen.add(url);
+      urls.push(url);
+    }
+
+    const coverImage = doc.querySelector('meta[property="og:image"]')?.content;
+    if (coverImage) {
+      const url = resolveUrl(coverImage);
+      if (/^https?:\/\//i.test(url) && !seen.has(url)) urls.unshift(url);
+    }
+
+    return urls.slice(0, 50);
+  }
+
+  function imageOnlyMarkdown(title, imageUrls) {
+    if (!imageUrls.length) return '';
+    const heading = title ? `# ${title}\n\n` : '';
+    return heading + imageUrls
+      .map((url, index) => `![${title || '网页图片'} ${index + 1}](${url})`)
+      .join('\n\n');
+  }
+
   // ===== 5. 主入口 =====
 
   function extractPage(doc) {
@@ -235,13 +281,15 @@
     const contentEl = extractContent(doc);
 
     if (!contentEl) {
+      const imageUrls = collectImageUrls(doc);
+      const imageMarkdown = imageOnlyMarkdown(meta.title, imageUrls);
       return {
         ...meta,
-        contentMarkdown: '',
-        contentPlainText: (doc.body?.innerText || '').trim(),
-        imageUrls: [],
+        contentMarkdown: imageMarkdown,
+        contentPlainText: imageUrls.length ? meta.title : (doc.body?.innerText || '').trim(),
+        imageUrls,
         wordCount: 0,
-        extractionStatus: 'empty',
+        extractionStatus: imageUrls.length ? 'image_only' : 'empty',
       };
     }
 

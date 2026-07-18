@@ -228,6 +228,9 @@ test('popup 应正确填充和提交剪藏表单', async ({ context }) => {
         window.__savedPayload = JSON.parse(opts.body);
         return { status: 200, ok: true, json: async () => ({ success: true, data: { id: 'test-id' } }) };
       }
+      if (typeof url === 'string' && url.includes('/microapps/evolving-knowledge/rebuild')) {
+        return { status: 200, ok: true, json: async () => ({ success: true }) };
+      }
       return window.originalFetch(url, opts);
     };
   });
@@ -245,7 +248,7 @@ test('popup 应正确填充和提交剪藏表单', async ({ context }) => {
   expect(payload).toBeTruthy();
   expect(payload.sourceUrl).toBe(mockUrl);
   expect(payload.title).toBe('深入浅出 React Server Components — 前端技术周刊');
-  expect(payload.contentType).toBe('text');
+  expect(payload.contentType).toBe('webpage');
   expect(payload.rawContent).toContain('React Server Components');
   expect(payload.processAi).toBe(true);
   expect(payload.metadata.userTags).toEqual(['React', '前端']);
@@ -337,7 +340,7 @@ test('popup 无正文时应提交选中文字作为 rawContent', async ({ contex
   });
 
   const payload = await popup.evaluate(() => window.__savedPayload);
-  expect(payload.contentType).toBe('text');
+  expect(payload.contentType).toBe('webpage');
   expect(payload.rawContent).toBe('用户选中的正文片段');
 
   await popup.close();
@@ -373,7 +376,7 @@ test('popup 有自动提取正文时仍应优先提交用户选中文字', async
         local: { get: async () => ({ accessToken: 'test-token' }) },
         session: { get: async () => ({}), remove: async () => {} },
       },
-      runtime: { lastError: null, onMessage: { addListener: () => {} } },
+      runtime: { lastError: null, sendMessage: async () => ({ ok: true }), onMessage: { addListener: () => {} } },
     };
     window.fetch = async (url, opts) => {
       if (typeof url === 'string' && url.includes('/health')) {
@@ -406,7 +409,7 @@ test('popup 有自动提取正文时仍应优先提交用户选中文字', async
   await popup.close();
 });
 
-test('popup 采集图片时应显示图片预览并提交 image 类型', async ({ context }) => {
+test('popup 采集图片时应显示图片预览并提交网页类型', async ({ context }) => {
   const mockUrl = `${serverUrl}/image-page`;
   const imageUrl = `${serverUrl}/assets/sample.png`;
   const popup = await context.newPage();
@@ -420,7 +423,7 @@ test('popup 采集图片时应显示图片预览并提交 image 类型', async (
       favicon: null,
       contentMarkdown: '# 图片页面正文\n\n这段文字和图片一起采集。',
       contentPlainText: '图片页面正文 这段文字和图片一起采集。',
-      contentType: 'image',
+      contentType: 'webpage',
       imageUrl: selectedImageUrl,
       imageUrls: [selectedImageUrl, secondImageUrl],
       extractionStatus: 'empty',
@@ -435,7 +438,7 @@ test('popup 采集图片时应显示图片预览并提交 image 类型', async (
         local: { get: async () => ({ accessToken: 'test-token' }), remove: async () => {} },
         session: { get: async () => ({}), remove: async () => {} },
       },
-      runtime: { lastError: null, onMessage: { addListener: () => {} } },
+      runtime: { lastError: null, sendMessage: async () => ({ ok: true }), onMessage: { addListener: () => {} } },
     };
     window.fetch = async (url, opts) => {
       if (typeof url === 'string' && url.includes('/health')) {
@@ -459,7 +462,7 @@ test('popup 采集图片时应显示图片预览并提交 image 类型', async (
   await popup.locator('#saveBtn').click();
   await popup.waitForFunction(() => document.querySelector('#status')?.textContent.includes('已保存'));
   const payload = await popup.evaluate(() => window.__savedPayload);
-  expect(payload.contentType).toBe('image');
+  expect(payload.contentType).toBe('webpage');
   expect(payload.rawContent).toContain('图片页面正文');
   expect(payload.rawContent).toContain(`![图片采集测试 1](${imageUrl})`);
   expect(payload.rawContent).toContain(`![图片采集测试 2](${serverUrl}/assets/second.png)`);

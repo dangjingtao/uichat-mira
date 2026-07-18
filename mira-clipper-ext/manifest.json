@@ -1,22 +1,41 @@
 {
   "manifest_version": 3,
-  "name": "Mira Clipper",
-  "version": "1.0.0",
-  "description": "将网页剪藏到你的 Mira 个人工作台",
+  "name": "见行",
+  "version": "0.7.1",
+  "description": "连接 Mira，操作网页并支持用户主动剪藏",
   "permissions": [
     "activeTab",
+    "tabs",
+    "tabGroups",
+    "nativeMessaging",
     "storage",
     "scripting",
     "contextMenus",
-    "identity"
+    "identity",
+    "downloads"
   ],
   "host_permissions": [
+    "<all_urls>",
     "http://localhost:*/",
     "http://127.0.0.1:*/"
   ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["extension/lib/extractor.js", "extension/content/content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
   "action": {
     "default_popup": "extension/popup/popup.html",
-    "default_title": "剪藏当前页面到 Mira"
+    "default_title": "打开见行"
+  },
+  "icons": {
+    "16": "extension/icons/icon-16.png",
+    "32": "extension/icons/icon-32.png",
+    "48": "extension/icons/icon-48.png",
+    "128": "extension/icons/icon-128.png"
   },
   "background": {
     "service_worker": "extension/background.js"
@@ -27,7 +46,7 @@
         "default": "Ctrl+Shift+S",
         "mac": "Command+Shift+S"
       },
-      "description": "打开 Mira Clipper"
+      "description": "打开见行"
     }
   },
   "options_page": "extension/options/options.html"

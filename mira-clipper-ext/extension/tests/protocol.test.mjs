@@ -13,7 +13,7 @@ describe('POST /microapps/evolving-knowledge/captures 请求体契约', () => {
       sourceUrl: 'https://example.com/article',
       title: '标题',
       favicon: 'https://example.com/favicon.ico',
-      contentType: 'text',
+      contentType: 'webpage',
       rawContent: '# 标题\n\n正文内容',
       metadata: {
         selectedText: '选中文字',
@@ -29,7 +29,7 @@ describe('POST /microapps/evolving-knowledge/captures 请求体契约', () => {
 
     assert.ok(typeof payload.sourceUrl === 'string' && payload.sourceUrl.length > 0);
     assert.ok(typeof payload.title === 'string' && payload.title.length > 0);
-    assert.equal(payload.contentType, 'text');
+    assert.equal(payload.contentType, 'webpage');
     assert.ok(typeof payload.rawContent === 'string');
     assert.ok(typeof payload.favicon === 'string');
     assert.ok(Array.isArray(payload.metadata.userTags));
@@ -39,7 +39,7 @@ describe('POST /microapps/evolving-knowledge/captures 请求体契约', () => {
     const payload = {
       sourceUrl: 'https://example.com',
       title: '标题',
-      contentType: 'text',
+      contentType: 'webpage',
       rawContent: '正文',
     };
 

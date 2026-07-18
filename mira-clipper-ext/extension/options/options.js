@@ -1,5 +1,5 @@
 /**
- * Mira Clipper - Options Page Logic
+ * MiraWebBrige - Options Page Logic
  */
 
 (function () {
@@ -9,6 +9,7 @@
 
   const els = {
     backendUrl: document.getElementById('backendUrl'),
+    transport: document.getElementById('transport'),
     webAppUrl: document.getElementById('webAppUrl'),
     authorizeBtn: document.getElementById('authorizeBtn'),
     authorizeResult: document.getElementById('authorizeResult'),
@@ -18,12 +19,17 @@
     testResult: document.getElementById('testResult'),
     saveBtn: document.getElementById('saveBtn'),
     saveResult: document.getElementById('saveResult'),
+    openAuthorizationPage: document.getElementById('openAuthorizationPage'),
   };
+
+  const loadedManifest = chrome.runtime.getManifest?.() || {};
+  const extensionAssetPrefix = loadedManifest.options_page?.startsWith('extension/') ? 'extension/' : '';
 
   async function load() {
     try {
-      const stored = await chrome.storage.sync.get(['backendUrl']);
+      const stored = await chrome.storage.sync.get(['backendUrl', 'transport']);
       els.backendUrl.value = stored.backendUrl || '';
+      els.transport.value = stored.transport === 'native' ? 'native' : 'websocket';
       els.webAppUrl.value = stored.webAppUrl || DEFAULT_WEB_APP_URL;
     } catch (_) {
       els.backendUrl.value = '';
@@ -36,6 +42,7 @@
     try {
       await chrome.storage.sync.set({
         backendUrl: url,
+        transport: els.transport.value,
         webAppUrl: els.webAppUrl.value.trim() || DEFAULT_WEB_APP_URL,
       });
       showSaveResult('已保存', false);
@@ -184,6 +191,9 @@
   els.testBtn.addEventListener('click', testConnection);
   els.authorizeBtn.addEventListener('click', authorize);
   els.exchangeCodeBtn.addEventListener('click', exchangeAuthorizationCode);
+  els.openAuthorizationPage.addEventListener('click', () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL(`${extensionAssetPrefix}auth/authorize.html`) });
+  });
 
   load();
 })();

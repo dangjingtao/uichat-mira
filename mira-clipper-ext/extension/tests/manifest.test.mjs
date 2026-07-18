@@ -24,30 +24,28 @@ describe('manifest.json', () => {
     assert.equal(manifest.manifest_version, 3);
   });
 
-  it('应声明最小必要权限', () => {
+  it('应声明持续页面操作所需权限', () => {
     const required = ['activeTab', 'storage', 'scripting', 'contextMenus', 'identity'];
     const perms = manifest.permissions || [];
     for (const p of required) {
       assert.ok(perms.includes(p), `缺少权限: ${p}`);
     }
+    assert.ok((manifest.host_permissions || []).includes('<all_urls>'));
+    assert.ok(perms.includes('nativeMessaging'));
+    assert.equal(manifest.content_scripts?.[0]?.matches?.[0], '<all_urls>');
   });
 
   it('不应请求敏感权限', () => {
-    const forbidden = ['history', 'tabs', 'webNavigation', 'cookies', 'bookmarks'];
+    const forbidden = ['history', 'webNavigation', 'cookies', 'bookmarks'];
     const perms = [...(manifest.permissions || []), ...(manifest.host_permissions || [])];
     for (const p of forbidden) {
       assert.ok(!perms.includes(p), `不应包含敏感权限: ${p}`);
     }
   });
 
-  it('host_permissions 应只包含本地地址', () => {
+  it('host_permissions 应覆盖可操作网页', () => {
     const hosts = manifest.host_permissions || [];
-    for (const h of hosts) {
-      assert.ok(
-        h.includes('localhost') || h.includes('127.0.0.1'),
-        `host_permissions 应限制本地: ${h}`
-      );
-    }
+    assert.ok(hosts.includes('<all_urls>'));
   });
 
   it('应配置快捷键', () => {
@@ -59,6 +57,12 @@ describe('manifest.json', () => {
     assert.ok(manifest.action);
     assert.ok(manifest.action.default_popup);
     assert.ok(manifest.action.default_popup.endsWith('popup/popup.html'));
+  });
+
+  it('应包含独立授权页入口资源', async () => {
+    assert.equal(manifest.options_page, 'options/options.html');
+    await readFile(join(__dirname, '../auth/authorize.html'), 'utf-8');
+    await readFile(join(__dirname, '../auth/authorize.js'), 'utf-8');
   });
 });
 
