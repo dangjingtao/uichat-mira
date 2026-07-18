@@ -15,8 +15,111 @@ import {
   resolveManagedCodeGraphPlannerConfig,
 } from "./planner-exposure-config.js";
 import { createCodebaseExploreTrace } from "./codegraph-trace-diagnostics.js";
+import {
+  ManagedCodeGraphProcessManager,
+} from "./repo-local-process-manager.js";
+import {
+  canUseDeclaredRepoLocalCodeGraphCapability,
+  type RepoLocalCodeGraphGate,
+} from "./repo-local-capability.js";
 
 const nowIso = () => new Date().toISOString();
+
+type RepoLocalManagedContext = {
+  gate: RepoLocalCodeGraphGate;
+  draft: {
+    command: string;
+    startArgs: string[];
+    versionProbeArgs: string[];
+    telemetryProbeArgs: string[];
+    timeoutMs: number;
+  };
+  plannerStorage: {
+    logRoot: string | null;
+    indexRoot: string | null;
+  };
+  externalIndexSupport: {
+    status: "ready" | "blocked";
+    repoDataDirName: string;
+    reason: string | null;
+  };
+};
+
+type CachedRepoLocalManager = {
+  fingerprint: string;
+  manager: ManagedCodeGraphProcessManager;
+};
+
+const repoLocalManagerCache = new Map<string, CachedRepoLocalManager>();
+
+const createRepoLocalRuntimeFingerprint = (
+  workspaceRoot: string,
+  context: RepoLocalManagedContext,
+) =>
+  JSON.stringify({
+    workspaceRoot,
+    command: context.draft.command,
+    startArgs: context.draft.startArgs,
+    versionProbeArgs: context.draft.versionProbeArgs,
+    telemetryProbeArgs: context.draft.telemetryProbeArgs,
+    logRoot: context.plannerStorage.logRoot,
+    indexRoot: context.plannerStorage.indexRoot,
+    timeoutMs: context.draft.timeoutMs,
+  });
+
+const getRepoLocalManagedManager = async (
+  workspaceRoot: string,
+  context: RepoLocalManagedContext,
+) => {
+  if (
+    !canUseDeclaredRepoLocalCodeGraphCapability(context.gate) ||
+    !context.plannerStorage.logRoot ||
+    !context.plannerStorage.indexRoot
+  ) {
+    return null;
+  }
+
+  const fingerprint = createRepoLocalRuntimeFingerprint(workspaceRoot, context);
+  const cached = repoLocalManagerCache.get(workspaceRoot);
+  if (cached?.fingerprint === fingerprint) {
+    return cached.manager;
+  }
+
+  if (cached) {
+    await cached.manager.dispose();
+    repoLocalManagerCache.delete(workspaceRoot);
+  }
+
+  const manager = new ManagedCodeGraphProcessManager({
+    command: context.draft.command,
+    startArgs: [...context.draft.startArgs],
+    versionProbe: {
+      args: [...context.draft.versionProbeArgs],
+    },
+    telemetryProbe: {
+      args: [...context.draft.telemetryProbeArgs],
+    },
+    runtimeFingerprint: fingerprint,
+    workspaceRoot,
+    allowedWorkspaceRoot: workspaceRoot,
+    logRoot: context.plannerStorage.logRoot,
+    indexRoot: context.plannerStorage.indexRoot,
+    startTimeoutMs: context.draft.timeoutMs,
+    healthTimeoutMs: context.draft.timeoutMs,
+    stopTimeoutMs: context.draft.timeoutMs,
+    repoPollutionGuard: {
+      status: context.externalIndexSupport.status,
+      repoDataDirName: context.externalIndexSupport.repoDataDirName,
+      blockedReason: context.externalIndexSupport.reason,
+    },
+  });
+
+  repoLocalManagerCache.set(workspaceRoot, {
+    fingerprint,
+    manager,
+  });
+  return manager;
+};
 
 const createCodebaseExploreRetrievalSummary = (input: {
   retrieval: AgentRetrievalEvidence;
@@ -62,7 +165,7 @@ export const codebaseExploreTool: McpToolImplementation = {
     id: "codebase_explore",
     title: "Codebase Explore",
     description:
-      "Use the managed CodeGraph wrapper to explore relevant workspace areas and return only verification-bridge-ready candidates.",
+      "Explore code architecture, symbols, relationships, and impact through the controlled CodeGraph wrapper. Returned candidates are re-read from the workspace before they enter Agent Evidence.",
     domain: "read",
     source: "internal",
     mode: "sync",
@@ -100,7 +203,20 @@ export const codebaseExploreTool: McpToolImplementation = {
     const studioService = getActiveCodeGraphStudioService();
     const plannerConfig = resolveManagedCodeGraphPlannerConfig(workspaceRoot);
     const managedContext = studioService?.getManagedCapabilityContext(workspaceRoot) ?? null;
-    if (!managedContext?.ok) {
+    let manager: ManagedCodeGraphProcessManager | null = null;
+    let runtimeMode: "studio" | "repo_local" = "studio";
+
+    if (managedContext?.ok) {
+      manager = managedContext.manager;
+    } else if (managedContext) {
+      manager = await getRepoLocalManagedManager(
+        workspaceRoot,
+        managedContext as RepoLocalManagedContext,
+      );
+      runtimeMode = "repo_local";
+    }
+
+    if (!manager) {
       const gateReasonRecord = managedContext?.gate.reasons ?? [];
       const prioritizedGateReason =
         gateReasonRecord.find((reason) => reason.code === "repo_pollution_risk") ??
@@ -111,7 +227,7 @@ export const codebaseExploreTool: McpToolImplementation = {
         prioritizedGateReason?.message ??
         plannerConfig.externalIndexSupport.reason ??
         plannerConfig.storage.reason ??
-        "Managed CodeGraph app-data root is unavailable.";
+        "Managed CodeGraph runtime is unavailable.";
       const trace = createCodebaseExploreTrace({
         originalQuery: queryValue,
         normalizedQuery: queryValue.trim(),
@@ -150,20 +266,34 @@ export const codebaseExploreTool: McpToolImplementation = {
       };
 
       return {
+        evidence: {
+          actionTaken: `Attempted controlled CodeGraph exploration for "${queryValue.trim()}".`,
+          facts: [
+            "capabilityId=codebase_explore",
+            "plannerExposure=controlled_tool_only",
+            "verifiedChunkCount=0",
+          ],
+          gaps: [blockedReason],
+          status: "partial",
+          data: {
+            kind: "codebase_explore",
+            runtimeMode: "unavailable",
+            fallbackRequired: true,
+          },
+        },
         result: {
           capabilityId: "codebase_explore",
           plannerExposure: "controlled_tool_only",
           query: queryValue.trim(),
           scope: ["workspace-general"],
           verifiedEvidenceInput: retrieval,
+          retrievalEvidence: retrieval,
           exploreResult: {
             status: "degraded",
             truncated: false,
             degraded: true,
             limitations: ["provider_unavailable", "query_failed"],
-            followUpHints: [
-              blockedReason,
-            ],
+            followUpHints: [blockedReason],
             fallbackSignal: {
               required: true,
               reason: "provider_unavailable",
@@ -182,6 +312,7 @@ export const codebaseExploreTool: McpToolImplementation = {
           },
           trace: {
             exposureMode: "controlled_tool_only",
+            runtimeMode: "unavailable",
             explore: trace,
             verification: trace,
           },
@@ -189,7 +320,6 @@ export const codebaseExploreTool: McpToolImplementation = {
       };
     }
 
-    const manager = managedContext.manager;
     const wrapper = new CodebaseExploreWrapper(manager);
     const exploreResult = await wrapper.explore({
       query: queryValue,
@@ -210,6 +340,7 @@ export const codebaseExploreTool: McpToolImplementation = {
       kind: "search-results",
       title: `Codebase explore trace for ${queryValue.trim()}`,
       data: {
+        runtimeMode,
         exploreTrace: exploreResult.trace,
         verificationTrace: verification.trace,
       },
@@ -217,16 +348,33 @@ export const codebaseExploreTool: McpToolImplementation = {
         capabilityId: "codebase_explore",
         plannerExposure: "controlled_tool_only",
         verifiedChunkCount: retrieval.chunkCount,
+        runtimeMode,
       },
     });
 
     return {
+      evidence: {
+        actionTaken: retrieval.summary.actionTaken,
+        facts: retrieval.summary.keyFindings,
+        ...(retrieval.summary.gaps?.length
+          ? { gaps: retrieval.summary.gaps }
+          : {}),
+        status:
+          retrieval.summary.status === "completed" ? "completed" : "partial",
+        data: {
+          kind: "codebase_explore",
+          runtimeMode,
+          query: retrieval.query,
+          verifiedChunkCount: retrieval.chunkCount,
+        },
+      },
       result: {
         capabilityId: "codebase_explore",
         plannerExposure: "controlled_tool_only",
         query: exploreResult.query,
         scope: exploreResult.scope,
         verifiedEvidenceInput: retrieval,
+        retrievalEvidence: retrieval,
         exploreResult: {
           status: exploreResult.status,
           truncated: exploreResult.truncated,
@@ -242,6 +390,7 @@ export const codebaseExploreTool: McpToolImplementation = {
         },
         trace: {
           exposureMode: "controlled_tool_only",
+          runtimeMode,
           explore: exploreResult.trace,
           verification: verification.trace,
         },
