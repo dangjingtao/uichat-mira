@@ -138,9 +138,27 @@ export const normalizeWorkspaceRelativeDirectoryArg = (
   };
 };
 
+const isDeclaredHostProcessCwd = (input: {
+  argKey: string;
+  capabilities?: {
+    sideEffect?: string;
+    sandboxRequired?: boolean;
+    workspaceBoundary?: {
+      argTypes?: Partial<Record<string, "path" | "directory">>;
+    };
+  };
+}) =>
+  input.argKey === "cwd" &&
+  input.capabilities?.sideEffect === "process" &&
+  input.capabilities.sandboxRequired === false &&
+  input.capabilities.workspaceBoundary?.argTypes?.[input.argKey] ===
+    "directory";
+
 export const normalizeWorkspaceBoundaryArgs = <
   TDefinition extends {
     capabilities?: {
+      sideEffect?: string;
+      sandboxRequired?: boolean;
       workspaceBound?: boolean;
       workspaceBoundary?: {
         argKeys?: string[];
@@ -167,6 +185,19 @@ export const normalizeWorkspaceBoundaryArgs = <
   for (const argKey of argKeys) {
     const value = args[argKey];
     if (typeof value !== "string") {
+      continue;
+    }
+
+    // Host process cwd remains byte-for-byte stable so the exact input hash,
+    // approval review, Harness boundary check, and final execution all refer
+    // to the same directory. Other workspace-bound file/directory tools retain
+    // their strict normalization contract.
+    if (
+      isDeclaredHostProcessCwd({
+        argKey,
+        capabilities: definition.capabilities,
+      })
+    ) {
       continue;
     }
 
