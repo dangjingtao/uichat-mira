@@ -32,6 +32,11 @@ export type BrowserSessionManagerOptions = {
 };
 
 const error = (code: string, message: string, retryable = false) => ({ code, message, retryable });
+const DEFAULT_ALLOWED_SCHEMES = ["http:", "https:", "file:"];
+
+const isLocalFileUrl = (url: URL) =>
+  url.protocol === "file:" &&
+  (url.hostname === "" || url.hostname.toLowerCase() === "localhost");
 
 export class BrowserActionTimeoutError extends Error {
   constructor(public readonly operation: Promise<unknown>) {
@@ -135,12 +140,20 @@ export class BrowserSessionManager {
 
   async navigate(session: ManagedBrowserSession, url: string) {
     const parsed = new URL(url);
-    const schemes = session.info.config.allowedSchemes ?? ["http:", "https:"];
+    const schemes = session.info.config.allowedSchemes ?? DEFAULT_ALLOWED_SCHEMES;
     if (!schemes.includes(parsed.protocol)) throw new Error(`URL scheme is not allowed: ${parsed.protocol}`);
-    const domains = session.info.config.allowedDomains.map((domain) => domain.toLowerCase().replace(/^\.+/, ""));
-    if (!domains.some((domain) => parsed.hostname.toLowerCase() === domain || parsed.hostname.toLowerCase().endsWith(`.${domain}`))) {
-      throw new Error(`Navigation domain is not allowed: ${parsed.hostname}`);
+
+    if (parsed.protocol === "file:") {
+      if (!isLocalFileUrl(parsed)) {
+        throw new Error(`Remote file URL is not allowed: ${parsed.hostname}`);
+      }
+    } else {
+      const domains = session.info.config.allowedDomains.map((domain) => domain.toLowerCase().replace(/^\.+/, ""));
+      if (!domains.some((domain) => parsed.hostname.toLowerCase() === domain || parsed.hostname.toLowerCase().endsWith(`.${domain}`))) {
+        throw new Error(`Navigation domain is not allowed: ${parsed.hostname}`);
+      }
     }
+
     const operation = Promise.resolve().then(() => session.page.goto(url, {
       waitUntil: "domcontentloaded",
       timeout: session.info.config.actionTimeoutMs,
