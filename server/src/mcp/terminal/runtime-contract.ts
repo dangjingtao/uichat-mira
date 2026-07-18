@@ -8,7 +8,12 @@ export type TerminalProcessTreeMode =
 
 export type HostWorkspaceRelation = "inside" | "outside" | "unresolved";
 
-export const resolveTerminalRuntimeId = (): TerminalRuntimeId =>
-  process.env.MIRA_TERMINAL_RUNTIME?.trim().toLowerCase() === "sandbox_runtime"
-    ? "sandbox_runtime"
-    : "host_spawn";
+export const resolveTerminalRuntimeId = (): TerminalRuntimeId => {
+  const requested = process.env.MIRA_TERMINAL_RUNTIME?.trim().toLowerCase();
+  if (requested === "sandbox_runtime") {
+    throw new Error(
+      "sandbox_runtime is reserved for a future isolated provider and is not implemented in the current terminal runtime.",
+    );
+  }
+  return "host_spawn";
+};
