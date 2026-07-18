@@ -3,6 +3,7 @@ import { successEnvelope } from "@/routes/schema-helpers.js";
 import { success } from "@/utils/index.js";
 import { routeHandler } from "@/utils/route-errors.js";
 import type { CodeGraphStudioService } from "@/microapps/codegraph/index.js";
+import { normalizeCodeGraphStudioReport } from "@/microapps/codegraph/public-report.js";
 
 const stringArraySchema = {
   type: "array",
@@ -190,6 +191,13 @@ const smokeSchema = {
   },
 } as const;
 
+const normalizeReportEnvelope = <T extends { report: Awaited<ReturnType<CodeGraphStudioService["getReport"]>> }>(
+  result: T,
+): T => ({
+  ...result,
+  report: normalizeCodeGraphStudioReport(result.report),
+});
+
 const codeGraphRoutes: FastifyPluginAsync<{
   codeGraphStudioService: CodeGraphStudioService;
 }> = async (app, options) => {
@@ -211,7 +219,7 @@ const codeGraphRoutes: FastifyPluginAsync<{
       },
     },
     routeHandler("Failed to load CodeGraph Studio report", async () =>
-      success(await codeGraphStudioService.getReport())),
+      success(normalizeCodeGraphStudioReport(await codeGraphStudioService.getReport()))),
   );
 
   app.put<{
@@ -257,7 +265,10 @@ const codeGraphRoutes: FastifyPluginAsync<{
     },
     routeHandler("Failed to save CodeGraph Studio config", async (request) => {
       await codeGraphStudioService.saveConfig(request.body);
-      return success(await codeGraphStudioService.getReport(), "CodeGraph Studio config saved");
+      return success(
+        normalizeCodeGraphStudioReport(await codeGraphStudioService.getReport()),
+        "CodeGraph Studio config saved",
+      );
     }),
   );
 
@@ -272,7 +283,7 @@ const codeGraphRoutes: FastifyPluginAsync<{
       },
     },
     routeHandler("Failed to detect CodeGraph Studio runtime", async () =>
-      success(await codeGraphStudioService.detect())),
+      success(normalizeReportEnvelope(await codeGraphStudioService.detect()))),
   );
 
   app.post(
@@ -286,7 +297,7 @@ const codeGraphRoutes: FastifyPluginAsync<{
       },
     },
     routeHandler("Failed to start CodeGraph Studio runtime", async () =>
-      success(await codeGraphStudioService.start())),
+      success(normalizeReportEnvelope(await codeGraphStudioService.start()))),
   );
 
   app.post(
@@ -300,7 +311,7 @@ const codeGraphRoutes: FastifyPluginAsync<{
       },
     },
     routeHandler("Failed to check CodeGraph Studio runtime health", async () =>
-      success(await codeGraphStudioService.health())),
+      success(normalizeReportEnvelope(await codeGraphStudioService.health()))),
   );
 
   app.post(
@@ -314,7 +325,7 @@ const codeGraphRoutes: FastifyPluginAsync<{
       },
     },
     routeHandler("Failed to stop CodeGraph Studio runtime", async () =>
-      success(await codeGraphStudioService.stop())),
+      success(normalizeReportEnvelope(await codeGraphStudioService.stop()))),
   );
 
   app.post(
@@ -328,7 +339,7 @@ const codeGraphRoutes: FastifyPluginAsync<{
       },
     },
     routeHandler("Failed to run CodeGraph Studio smoke status", async () =>
-      success(await codeGraphStudioService.smokeStatus())),
+      success(normalizeReportEnvelope(await codeGraphStudioService.smokeStatus()))),
   );
 
   app.post<{ Body: { query: string } }>(
@@ -350,7 +361,7 @@ const codeGraphRoutes: FastifyPluginAsync<{
       },
     },
     routeHandler("Failed to run CodeGraph Studio smoke query", async (request) =>
-      success(await codeGraphStudioService.smokeQuery(request.body.query))),
+      success(normalizeReportEnvelope(await codeGraphStudioService.smokeQuery(request.body.query)))),
   );
 };
 
