@@ -6,10 +6,17 @@ import {
   canUseDeclaredRepoLocalCodeGraphCapability,
 } from "@/mcp/managed-codegraph/repo-local-capability.js";
 import {
+  disposeRepoLocalManagedCodeGraphManagers,
+} from "@/mcp/managed-codegraph/repo-local-manager-cache.js";
+import {
   getCapabilityImplementation,
   registerCapability,
   unregisterCapability,
 } from "./registry.js";
+
+const disposeRepoLocalRuntime = () => {
+  void disposeRepoLocalManagedCodeGraphManagers();
+};
 
 export const reconcileCodeGraphHarnessCapability = () => {
   const service = getActiveCodeGraphStudioService();
@@ -19,6 +26,7 @@ export const reconcileCodeGraphHarnessCapability = () => {
     if (currentRegistration) {
       unregisterCapability("codebase_explore");
     }
+    disposeRepoLocalRuntime();
     return false;
   }
 
@@ -36,5 +44,6 @@ export const reconcileCodeGraphHarnessCapability = () => {
   if (currentRegistration) {
     unregisterCapability("codebase_explore");
   }
+  disposeRepoLocalRuntime();
   return false;
 };
