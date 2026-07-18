@@ -53,12 +53,24 @@ describe("repo-local CodeGraph manager cache", () => {
     expect(getRepoLocalManagedCodeGraphManagerCount()).toBe(2);
   });
 
-  it("does not create a manager when owner access is disabled", async () => {
-    const workspace = path.resolve("/workspace-disabled");
+  it("ignores the legacy agent capability flag when the microapp is enabled", async () => {
+    const workspace = path.resolve("/workspace-legacy-owner-flag");
     const manager = await getRepoLocalManagedCodeGraphManagerForAgentWorkspace(
       workspace,
       createContext(workspace),
       { microAppEnabled: true, agentCapabilityEnabled: false },
+    );
+
+    expect(manager).toBeTruthy();
+    expect(getRepoLocalManagedCodeGraphManagerCount()).toBe(1);
+  });
+
+  it("does not create a manager when the CodeGraph microapp is disabled", async () => {
+    const workspace = path.resolve("/workspace-disabled");
+    const manager = await getRepoLocalManagedCodeGraphManagerForAgentWorkspace(
+      workspace,
+      createContext(workspace),
+      { microAppEnabled: false, agentCapabilityEnabled: true },
     );
 
     expect(manager).toBeNull();
