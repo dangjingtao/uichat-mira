@@ -10,6 +10,7 @@ const DECLARED_REPO_LOCAL_SOFT_REASONS = new Set([
   "repo_pollution_risk",
 ]);
 const LAZY_RUNTIME_GATE_REASONS = new Set([
+  "agent_capability_disabled",
   "repo_pollution_risk",
   "runtime_not_ready",
   "telemetry_not_verified_off",
@@ -48,13 +49,15 @@ export const normalizeDeclaredRepoLocalCapabilityGate = (
   );
   const checks = {
     ...gate.checks,
+    // Product contract: enabling the CodeGraph microapp also enables the
+    // controlled Agent capability. The legacy field remains report-compatible
+    // but is no longer a second owner decision.
+    agentCapabilityEnabled: gate.checks.microAppEnabled,
     workspaceMatched: true,
     repoPollutionSafe: true,
   };
   const capabilityRegistrationReady =
-    checks.microAppEnabled &&
-    checks.agentCapabilityEnabled &&
-    checks.appDataRootValid;
+    checks.microAppEnabled && checks.appDataRootValid;
 
   return {
     available: capabilityRegistrationReady,
@@ -109,6 +112,7 @@ export const normalizeCodeGraphStudioReport = (
     config: {
       ...report.config,
       appDataRoot: resolvedAppDataRoot,
+      agentCapabilityEnabled: report.config.microAppEnabled,
     },
     capability,
     pollutionGuard: {
