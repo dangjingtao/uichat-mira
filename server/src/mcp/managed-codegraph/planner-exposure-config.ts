@@ -178,11 +178,11 @@ export const resolveManagedCodeGraphExternalIndexSupport = (
   }
 
   return {
-    status: "blocked",
+    status: "ready",
     externalIndexRootSupported: false,
     repoDataDirName: DEFAULT_REPO_DATA_DIR_NAME,
     reason:
-      "CodeGraph 1.3.0 does not provide a reliable external index root. `serve --mcp` has no index-root CLI flag, `CODEGRAPH_DIR` only accepts a single directory name inside the project root, and current docs/source do not expose a config-file path override for repo-external index data. Managed CodeGraph must stay blocked because using the real provider would require a repo-root .codegraph directory.",
+      "CodeGraph 1.3.x stores its index in workspace/.codegraph because serve --mcp does not expose a reliable external index-root override. UIChat Mira treats that directory as declared repo-local runtime data for the controlled codebase_explore capability; logs and other managed artifacts remain outside the workspace.",
     investigation: {
       cliArgSupported: false,
       envPathSupported: false,
