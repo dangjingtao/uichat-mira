@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 
-import type { TerminalProcessTreeMode } from "./host-runtime.js";
+import type { TerminalProcessTreeMode } from "./runtime-contract.js";
 
 export const killTerminalProcessTree = async (input: {
   pid?: number;
