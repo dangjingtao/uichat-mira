@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: docs
-Last verified: 2026-06-25
+Last verified: 2026-07-18
 Layer: schema
 Module: Docs
 Feature: DocsSystem
@@ -12,6 +12,7 @@ Related:
   - VAULT_HOME.md
   - WIKI_SYSTEM_SCHEMA.md
   - knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md
+  - harness/agentgraph-harness-protocol.md
 
 ## 这页干什么
 
@@ -23,6 +24,8 @@ Related:
 - `WIKI_SYSTEM_SCHEMA.md`
 - `knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md`
 - `architecture/README.md`
+- `harness/agentgraph-harness-protocol.md`
+- `harness/README.md`
 - `tooling-runtime/README.md`
 - `concepts/CONCEPT_MCP.md`
 - `uchat.md`
@@ -34,10 +37,12 @@ Related:
 2. `VAULT_HOME.md`
 3. `architecture/README.md`
 4. `uchat.md`
-5. `tooling-runtime/README.md`
-6. `concepts/CONCEPT_MCP.md`
-7. `platform/tauri.md`
-8. `knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md`
+5. `harness/agentgraph-harness-protocol.md`
+6. `harness/README.md`
+7. `tooling-runtime/README.md`
+8. `concepts/CONCEPT_MCP.md`
+9. `platform/tauri.md`
+10. `knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md`
 
 ## 目录
 
@@ -77,7 +82,7 @@ Related:
 - `chat/chat-tool-integration-poc.md`
 - `chat/chat-tool-integration-checklist.md`
 - `chat/agent-swot-plan.md`
-- `chat/agent-runtime-design.md`
+- `chat/agent-runtime-design.md`（历史设计输入，非当前合同）
 
 ### 知识库
 
@@ -140,13 +145,14 @@ Related:
 - `tooling-runtime/tools-ecosystem-research.md`
 - `tooling-runtime/tool-runtime-retrospective-2026-06-27.md`
 
-### Harness
+### Harness / Agent Runtime
 
+- `harness/agentgraph-harness-protocol.md`（Agent 当前运行时单点真相）
 - `harness/README.md`
+- `development/agent-observability.md`
 - `harness/harness-assessment-2026-06-28.md`
 - `harness/harness-phase-1-implementation-checklist.md`
-- `harness/sandbox-module.md`
-- `harness/agentgraph-harness-protocol.md`
+- `harness/sandbox-module.md`（历史沙箱资料，不能覆盖当前 Host Runtime 合同）
 
 ### 文档系统 schema
 
@@ -201,10 +207,12 @@ Related:
 
 - 先读总纲页，再读细页。
 - 先把 current-contract 和 reference 页读清，再看 design / plan。
-- `archive/` 只在明确需要历史背景时再进。
+- Agent 相关施工、评审和架构说明必须先读 `harness/agentgraph-harness-protocol.md`。
+- `archive/` 和 superseded 文档只在明确需要历史背景时再进。
 
 ## 相关页
 
 - `WIKI_SYSTEM_SCHEMA.md`
 - `knowledge-system/DOCUMENTATION_STANDARDS.md`
 - `knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md`
+- `harness/agentgraph-harness-protocol.md`
