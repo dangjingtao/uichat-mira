@@ -254,6 +254,8 @@ export const nextActionPlannerNode = async (
   const latestEvidenceSummary = observationContext.latestEvidenceSummary;
   const plannerStartDetails = {
     exposedToolCount: toolExposure.exposedTools.length,
+    exposedToolIds: toolExposure.exposedTools,
+    codebaseExploreExposed: toolExposure.exposedTools.includes("codebase_explore"),
     iteration,
     maxIterations,
     latestEvidenceSummary: latestEvidenceSummary ?? null,
@@ -386,6 +388,8 @@ export const nextActionPlannerNode = async (
     }),
     details: {
       exposedToolCount: toolExposure.exposedTools.length,
+      exposedToolIds: toolExposure.exposedTools,
+      codebaseExploreExposed: toolExposure.exposedTools.includes("codebase_explore"),
       selectedActionType: nextAction?.type ?? null,
       selectedToolId: nextAction?.type === "use_tool" ? nextAction.toolId : null,
       selectedToolTarget:
