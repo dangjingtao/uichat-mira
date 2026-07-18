@@ -1,368 +1,125 @@
 /**
- * 生成节点：基于检索证据和工具执行结果，生成面向用户的最终回答。
+ * Generate: turn the Agent's accumulated runtime context into the user-facing answer.
+ *
+ * Pi-style rule: real tool/retrieval results are model context. Generate does not act as a
+ * second semantic judge over Evidence and must not replace a grounded model answer merely
+ * because an Evidence summary is partial, truncated, generic, or otherwise conservative.
  */
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol";
 import { providerProxyService } from "@/services/provider-proxy.service/index";
 import { contextBudgetService } from "@/services/context-budget/index";
 import { agentGenerateTextRunnable } from "../runnables";
-import { getEvidencePayload, getLatestEvidenceSummary } from "../evidence";
+import { getEvidencePayload } from "../evidence";
 import { emitStepNode } from "../node-runtime";
 import {
-  answerClaimsUnverifiedObservation,
   createObservation,
   getLatestUserQuestion,
-  nowIso,
 } from "./shared";
 import type {
   AgentNodeState,
   EmitAgentExecutionNode,
 } from "../node-runtime";
-import type {
-  AgentEvidenceSummary,
-  AgentToolExecutionResult,
-} from "../types";
 
-const buildGenerateMessages = (
-  state: AgentNodeState,
-): NormalizedChatMessage[] => {
-  const baseMessages = [
-    ...(state.requestContextMessages ?? []),
-    ...buildGenerateInstructionMessages(state),
-  ];
-  const evidenceMessages = buildGenerateEvidenceMessages(state);
+const CONTEXT_PREVIEW_LIMIT = 48_000;
 
-  return [
-    ...baseMessages,
-    ...evidenceMessages,
-    ...state.messages
-      .slice(0, -1)
-      .filter(
-        (message) => message.role === "user" || message.role === "system",
-      ),
-    state.messages[state.messages.length - 1]!,
-  ];
-};
+const clipText = (value: string, limit: number) =>
+  value.length <= limit
+    ? value
+    : `${value.slice(0, Math.max(0, limit - 48)).trimEnd()}\n...[context clipped]`;
 
-const GENERATE_OUTPUT_GUARD_PATTERNS = [
-  /<function_calls?>/i,
-  /^\s*\{[\s\S]*"type"\s*:\s*"(?:answer|retrieve|use_tool|error)"/i,
-  /^\s*\{[\s\S]*"toolId"\s*:/i,
-  /pendingToolCall\s*:/i,
-  /toolId\s*:/i,
-  /\bargs\s*:/i,
-  /(我将调用|下一步我会|我会先调用|I will call|next step I will)/i,
-];
-
-const PENDING_APPROVAL_FAKE_EXECUTION_PATTERNS = [
-  /(已经执行|已执行|执行完成|输出如下|结果如下)/u,
-  /(already executed|executed successfully|output is|result is)/i,
-];
-
-const LIMITATION_DISCLOSURE_PATTERNS = [
-  /等待审批|还没有真实执行结果|需要审批/u,
-  /拒绝|denied/i,
-  /阻断|blocked/i,
-  /超时|timed out/i,
-  /截断|truncated/i,
-  /二进制|binary/i,
-  /乱码|garbled|不可读|不可靠/u,
-];
-
-const TERMINAL_TASK_SUCCESS_CLAIM_PATTERNS = [
-  /任务已完成|任务完成|已经完成任务/u,
-  /测试已通过|测试通过|tests?\s+passed/i,
-  /修复成功|已经修复|fixed successfully|issue is fixed/i,
-  /命令成功|执行成功|command succeeded|ran successfully/i,
-];
-
-const toPreviewText = (value: string, limit = 220) => {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  if (!normalized) {
-    return "";
+const safeStringify = (value: unknown) => {
+  try {
+    return JSON.stringify(value, null, 2) ?? "";
+  } catch {
+    return "[unserializable]";
   }
-
-  return normalized.length > limit
-    ? `${normalized.slice(0, limit).trimEnd()}...`
-    : normalized;
-};
-
-const formatEvidenceBulletList = (items: string[]) =>
-  items
-    .filter((item) => item.trim())
-    .map((item) => `- ${item}`)
-    .join("\n");
-
-const buildToolEvidenceBlock = (execution: AgentToolExecutionResult) => {
-  const summary = execution.summary;
-  if (!summary) {
-    return [
-      `toolId: ${execution.toolId}`,
-      `status: ${execution.status}`,
-      "keyFindings:",
-      "- This tool completed, but no stable answer summary was attached.",
-    ].join("\n");
-  }
-
-  const lines = [
-    `toolId: ${execution.toolId}`,
-    `status: ${summary.status}`,
-    `actionTaken: ${summary.actionTaken}`,
-  ];
-
-  if (summary.data?.kind === "read_discover") {
-    lines.push(`operation: ${summary.data.operation}`);
-    lines.push(`candidateCount: ${summary.data.candidateCount}`);
-    lines.push(`candidatePaths: ${summary.data.candidatePaths.join(" | ") || "(none)"}`);
-    lines.push(`hasMore: ${summary.data.hasMore}`);
-    lines.push(`truncated: ${summary.data.truncated}`);
-  } else if (summary.data?.kind === "read_list") {
-    lines.push(`path: ${summary.data.path}`);
-    lines.push(`entryCount: ${summary.data.entryCount}`);
-    lines.push(
-      `entriesPreview: ${summary.data.entriesPreview.join(" | ") || "(none)"}`,
-    );
-    lines.push(`truncated: ${summary.data.truncated}`);
-  } else if (summary.data?.kind === "read_locate") {
-    lines.push(`scope: ${summary.data.scope}`);
-    lines.push(`query: ${summary.data.query}`);
-    lines.push(`searchMode: ${summary.data.searchMode}`);
-    lines.push(`matchCount: ${summary.data.matchCount}`);
-    lines.push(
-      `matchesPreview: ${summary.data.matchesPreview.join(" | ") || "(none)"}`,
-    );
-    lines.push(`truncated: ${summary.data.truncated}`);
-  } else if (summary.data?.kind === "read_open") {
-    lines.push(`path: ${summary.data.path}`);
-    lines.push(`contentPreview: ${summary.data.contentPreview || "(empty)"}`);
-    lines.push(`contentLength: ${summary.data.contentLength}`);
-  } else if (summary.data?.kind === "web_search") {
-    lines.push(`query: ${summary.data.query}`);
-    lines.push(`resultCount: ${summary.data.resultCount}`);
-    lines.push(
-      `topFindings: ${summary.data.topFindings.join(" | ") || "(none)"}`,
-    );
-  } else if (summary.data?.kind === "terminal_session") {
-    lines.push(`command: ${summary.data.command}`);
-    lines.push(
-      `exitCode: ${summary.data.exitCode === null ? "null" : summary.data.exitCode}`,
-    );
-    lines.push(`processCompleted: ${summary.data.processCompleted}`);
-    lines.push(`commandSucceeded: ${summary.data.commandSucceeded}`);
-    lines.push(`stdoutPreview: ${summary.data.stdoutPreview || "(empty)"}`);
-    lines.push(`stderrPreview: ${summary.data.stderrPreview || "(empty)"}`);
-    lines.push(`stdoutEncoding: ${summary.data.stdoutEncoding}`);
-    lines.push(`stderrEncoding: ${summary.data.stderrEncoding}`);
-    lines.push(`timedOut: ${summary.data.timedOut}`);
-    lines.push(`truncated: ${summary.data.truncated}`);
-    lines.push(`binaryDetected: ${summary.data.binaryDetected}`);
-    lines.push(`outputInterpretable: ${summary.data.outputInterpretable}`);
-    if (summary.data.unreadableReason) {
-      lines.push(`unreadableReason: ${summary.data.unreadableReason}`);
-    }
-  } else if (
-    summary.data?.kind === "edit_file" ||
-    summary.data?.kind === "workspace_mutation"
-  ) {
-    lines.push(`operation: ${summary.data.operation}`);
-    if (summary.data.targetPath) {
-      lines.push(`targetPath: ${summary.data.targetPath}`);
-    }
-    if ("destinationPath" in summary.data && summary.data.destinationPath) {
-      lines.push(`destinationPath: ${summary.data.destinationPath}`);
-    }
-    if (typeof summary.data.dryRun === "boolean") {
-      lines.push(`dryRun: ${summary.data.dryRun}`);
-    }
-    if (typeof summary.data.changed === "boolean") {
-      lines.push(`changed: ${summary.data.changed}`);
-    }
-    if (typeof summary.data.created === "boolean") {
-      lines.push(`created: ${summary.data.created}`);
-    }
-    if (typeof summary.data.replaced === "boolean") {
-      lines.push(`replaced: ${summary.data.replaced}`);
-    }
-    if (typeof summary.data.deleted === "boolean") {
-      lines.push(`deleted: ${summary.data.deleted}`);
-    }
-    if ("moved" in summary.data && typeof summary.data.moved === "boolean") {
-      lines.push(`moved: ${summary.data.moved}`);
-    }
-    if (summary.data.runtimeToolId) {
-      lines.push(`runtimeToolId: ${summary.data.runtimeToolId}`);
-    }
-    if (summary.data.actionProfileId) {
-      lines.push(`actionProfileId: ${summary.data.actionProfileId}`);
-    }
-  } else if (summary.data?.kind === "generic_structured") {
-    lines.push(`truncated: ${summary.data.truncated}`);
-    lines.push(`redacted: ${summary.data.redacted}`);
-    lines.push(`structuredPreview: ${JSON.stringify(summary.data.preview)}`);
-  }
-
-  lines.push("keyFindings:");
-  lines.push(formatEvidenceBulletList(summary.keyFindings));
-  return lines.join("\n");
-};
-
-const READ_OPEN_FULL_TEXT_LIMIT = 4000;
-
-const buildReadOpenRawContentBlock = (execution: AgentToolExecutionResult) => {
-  if (!execution.result || typeof execution.result !== "object") {
-    return null;
-  }
-
-  const value = execution.result as Record<string, unknown>;
-  const source =
-    value.type === "open" && value.source && typeof value.source === "object"
-      ? (value.source as Record<string, unknown>)
-      : null;
-  const text =
-    source && typeof source.text === "string" ? source.text.trim() : "";
-  if (!text) {
-    return null;
-  }
-
-  const boundedText =
-    text.length > READ_OPEN_FULL_TEXT_LIMIT
-      ? `${text.slice(0, READ_OPEN_FULL_TEXT_LIMIT).trimEnd()}\n...[truncated]`
-      : text;
-
-  return ["rawContent:", boundedText].join("\n");
-};
-
-const buildRetrievalEvidenceBlock = (retrieval: {
-  query: string;
-  chunkCount: number;
-  chunks: Array<{ documentName: string; content: string }>;
-  summary?: AgentEvidenceSummary;
-}) => {
-  const summary = retrieval.summary;
-  const chunkPreview = retrieval.chunks
-    .slice(0, 3)
-    .map(
-      (chunk, index) =>
-        `[${index + 1}] ${chunk.documentName}: ${toPreviewText(chunk.content, 160)}`,
-    )
-    .join("\n");
-
-  return [
-    `query: ${retrieval.query}`,
-    `chunkCount: ${retrieval.chunkCount}`,
-    ...(summary?.data?.kind === "retrieval" &&
-    summary.data.documentsPreview.length > 0
-      ? [`documentsPreview: ${summary.data.documentsPreview.join(" | ")}`]
-      : []),
-    "chunks:",
-    chunkPreview || "- (none)",
-  ].join("\n");
-};
-
-const buildGenerateEvidenceMessages = (
-  state: AgentNodeState,
-): NormalizedChatMessage[] => {
-  const evidence = getEvidencePayload(state);
-  const evidenceMessages: NormalizedChatMessage[] = [];
-
-  const completedToolExecutions = evidence.toolExecutions.filter(
-    (execution) => execution.status === "completed",
-  );
-
-  if (completedToolExecutions.length > 0) {
-    const toolEvidenceText = [
-      "以下是本轮 Agent 已实际执行完成的工具证据摘要。",
-      ...completedToolExecutions.map((execution, index) => {
-        const sections = [`#${index + 1}`, buildToolEvidenceBlock(execution)];
-        const rawContentBlock =
-          execution.toolId === "read_open"
-            ? buildReadOpenRawContentBlock(execution)
-            : null;
-        if (rawContentBlock) {
-          sections.push(rawContentBlock);
-        }
-        return sections.join("\n");
-      }),
-      "你只能基于这些真实证据回答；不要复述工具协议，也不要输出工具 JSON。",
-    ].join("\n\n");
-    evidenceMessages.push({
-      role: "system",
-      content: toolEvidenceText,
-      parts: [
-        {
-          type: "text",
-          text: toolEvidenceText,
-        },
-      ],
-    });
-  }
-
-  const retrievalEvidenceChunks =
-    evidence.retrievals.length > 0
-      ? evidence.retrievals
-      : (state.retrievedChunks ?? []).map((chunk) => ({
-          query: getLatestUserQuestion(state.messages) || state.goal.text,
-          chunkCount: 1,
-          chunks: [
-            {
-              chunkId: chunk.chunkId,
-              documentName: chunk.documentName,
-              score: chunk.score,
-              content: chunk.content,
-            },
-          ],
-          createdAt: nowIso(),
-        }));
-
-  if (retrievalEvidenceChunks.length > 0) {
-    const contextText = retrievalEvidenceChunks
-      .map((retrieval, index) =>
-        [`#${index + 1}`, buildRetrievalEvidenceBlock(retrieval)].join("\n"),
-      )
-      .join("\n\n");
-
-    evidenceMessages.push({
-      role: "system",
-      content: `以下是 Agent 检索到的真实上下文证据，请优先依据这些内容回答，并说明不确定性。\n\n${contextText}`,
-      parts: [
-        {
-          type: "text",
-          text: `以下是 Agent 检索到的真实上下文证据，请优先依据这些内容回答，并说明不确定性。\n\n${contextText}`,
-        },
-      ],
-    });
-  }
-
-  return evidenceMessages;
 };
 
 const buildGenerateInstructionMessages = (
   state: AgentNodeState,
-): NormalizedChatMessage[] => {
+): NormalizedChatMessage[] => [
+  {
+    role: "system",
+    content: [
+      "你现在处于 Agent 的最终回答阶段，不是 Planner。",
+      "请直接面向用户回答，不要输出 nextAction、toolId、args、pendingToolCall、function_calls 或其他内部协议。",
+      "优先使用本轮 Agent 已实际执行得到的真实工具结果、检索结果和连续运行上下文。",
+      "Evidence summary 只是辅助描述，不是第二套事实裁判：真实 execution.status=completed 和真实 tool result 不得因为 summary.status=partial/generic/truncated 而被当成不存在。",
+      "若真实结果本身明确包含失败、超时、截断、审批等待或不可读信息，请按结果本身如实说明，不要编造。",
+      state.pendingApproval
+        ? "当前仍有工具等待审批；只能说明审批状态，不能假装该工具已经执行。"
+        : "当前没有审批等待时，请基于已有真实结果正常回答，不要额外自我否定。",
+    ].join("\n"),
+    parts: [],
+  },
+];
+
+const buildToolSummaryContext = (state: AgentNodeState) => {
   const evidence = getEvidencePayload(state);
-  const hasCompletedToolEvidence = evidence.toolExecutions.some(
-    (execution) => execution.status === "completed",
-  );
-  const hasRetrievalEvidence = evidence.retrievals.some(
-    (retrieval) => retrieval.chunkCount > 0,
-  );
+  const executions = evidence.toolExecutions;
+  if (executions.length === 0) {
+    return undefined;
+  }
+
+  const text = [
+    "AGENT TOOL EXECUTION RECORDS",
+    "These are compact execution records. Canonical tool result payloads may also be present in the surrounding runtime context.",
+    ...executions.map((execution, index) =>
+      [
+        `#${index + 1}`,
+        `toolId=${execution.toolId}`,
+        `executionStatus=${execution.status}`,
+        `args=${safeStringify(execution.args)}`,
+        execution.errorMessage ? `error=${execution.errorMessage}` : "",
+        execution.summary ? `summary=${safeStringify(execution.summary)}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    ),
+  ].join("\n\n");
+
+  return clipText(text, CONTEXT_PREVIEW_LIMIT);
+};
+
+const buildRetrievalContext = (state: AgentNodeState) => {
+  const evidence = getEvidencePayload(state);
+  if (evidence.retrievals.length === 0) {
+    return undefined;
+  }
+
+  const text = [
+    "AGENT RETRIEVAL RESULTS",
+    ...evidence.retrievals.map((retrieval, index) =>
+      [
+        `#${index + 1} query=${retrieval.query}`,
+        ...retrieval.chunks.map(
+          (chunk) => `${chunk.documentName}\n${chunk.content}`,
+        ),
+      ].join("\n\n"),
+    ),
+  ].join("\n\n");
+
+  return clipText(text, CONTEXT_PREVIEW_LIMIT);
+};
+
+const toSystemMessage = (content: string): NormalizedChatMessage => ({
+  role: "system",
+  content,
+  parts: [{ type: "text", text: content }],
+});
+
+const buildGenerateMessages = (
+  state: AgentNodeState,
+): NormalizedChatMessage[] => {
+  const toolContext = buildToolSummaryContext(state);
+  const retrievalContext = buildRetrievalContext(state);
 
   return [
-    {
-      role: "system",
-      content: [
-        "你现在处于 Agent 的最终回答阶段，不是 Planner。",
-        "你的输出必须是直接面向用户的自然语言最终回答。",
-        "不要输出工具调用 JSON、nextAction JSON、trace 文本、pendingToolCall、toolId、args、<function_calls> 或类似协议内容。",
-        "不要说“我将调用工具”“下一步我会”或任何伪执行话术。",
-        state.pendingApproval
-          ? "当前存在 pendingApproval。你只能说明工具仍在等待审批，当前还没有真实执行结果，不能假装命令或工具已经执行。"
-          : "如果已存在 completed evidence，请只基于这些真实 evidence 回答。",
-        "如果 evidence status 是 blocked、denied、timed_out、truncated 或 binaryDetected，必须忠实说明限制，不能把它们伪装成已稳定完成的自然语言证据。",
-        hasCompletedToolEvidence || hasRetrievalEvidence
-          ? "如果 evidence 足够，请直接总结事实；如果 evidence 仍不足，请明确说明缺什么。"
-          : "当前没有真实检索结果或已完成工具结果时，不要声称自己已经查看过文件、目录、网页、知识库或外部系统。",
-      ].join("\n"),
-    },
+    ...(state.requestContextMessages ?? []),
+    ...buildGenerateInstructionMessages(state),
+    ...(toolContext ? [toSystemMessage(toolContext)] : []),
+    ...(retrievalContext ? [toSystemMessage(retrievalContext)] : []),
+    ...state.messages,
   ];
 };
 
@@ -373,37 +130,8 @@ const buildGenerateContextBudget = (state: AgentNodeState) =>
     sections: {
       prefaceMessages: state.requestContextMessages,
       instructionMessages: buildGenerateInstructionMessages(state),
-      payloads: getEvidencePayload(state).retrievals.length
-        ? [
-            {
-              id: "agent-retrieval-payload",
-              required: true,
-              messages: getEvidencePayload(state).retrievals.flatMap(
-                (retrieval) =>
-                  retrieval.chunks.map((chunk, index) => ({
-                    role: "system" as const,
-                    content: `[${index + 1}] ${chunk.documentName}\n${chunk.content}`,
-                  })),
-              ),
-            },
-          ]
-        : state.retrievedChunks?.length
-          ? [
-              {
-                id: "agent-retrieval-payload",
-                required: true,
-                messages: state.retrievedChunks.map((chunk, index) => ({
-                  role: "system" as const,
-                  content: `[${index + 1}] ${chunk.documentName}\n${chunk.content}`,
-                })),
-              },
-            ]
-          : [],
-      historyMessages: state.messages
-        .slice(0, -1)
-        .filter(
-          (message) => message.role === "user" || message.role === "system",
-        ),
+      payloads: [],
+      historyMessages: state.messages.slice(0, -1),
       latestUserMessage: {
         role: "user",
         content: getLatestUserQuestion(state.messages) || state.goal.text,
@@ -411,362 +139,26 @@ const buildGenerateContextBudget = (state: AgentNodeState) =>
     },
   });
 
-const renderSummaryBasedAnswer = (summary: AgentEvidenceSummary) => {
-  if (summary.source === "tool" && summary.status === "denied") {
-    return "这次工具调用在执行前被策略拒绝了，所以当前没有新的可用执行结果。";
-  }
-
-  if (
-    summary.source === "tool" &&
-    summary.status === "blocked" &&
-    summary.data?.kind !== "terminal_session"
-  ) {
-    return "当前这条工具证据还处于阻断状态，不能当成已经稳定完成的执行结果来回答。";
-  }
-
-  if (summary.source === "tool" && summary.status === "timed_out") {
-    return "这次工具执行发生超时，当前没有形成稳定完整的结果。";
-  }
-
-  if (summary.source === "tool" && summary.status === "binaryDetected") {
-    return "这次工具输出包含二进制内容，不能当成自然语言证据直接解读。";
-  }
-
-  if (summary.source === "tool" && summary.data?.kind === "read_list") {
-    const preview = summary.data.entriesPreview.join("、");
-    return summary.data.entryCount > 0
-      ? `当前 workspace 下共找到 ${summary.data.entryCount} 项，其中预览包括 ${preview}${summary.data.truncated ? " 等内容。" : "。"}`
-      : `当前 workspace 路径 ${summary.data.path} 下没有列出任何条目。`;
-  }
-
-  if (summary.source === "tool" && summary.data?.kind === "read_discover") {
-    const preview = summary.data.candidatePaths.slice(0, 3).join("、");
-    const suffix = summary.data.truncated ? " 结果已截断，仍可能存在更多候选。" : "";
-    return summary.data.candidateCount > 0
-      ? `本次通过 ${summary.data.operation} 发现 ${summary.data.candidateCount} 个候选：${preview || "候选项"}。${suffix}`
-      : `本次 ${summary.data.operation} 没有发现候选对象。${suffix}`;
-  }
-
-  if (summary.source === "tool" && summary.data?.kind === "read_open") {
-    const keySections =
-      summary.data.keySections && summary.data.keySections.length > 0
-        ? `重点段落包括 ${summary.data.keySections.join("、")}。`
-        : "";
-    return summary.data.contentPreview
-      ? `${summary.data.path} 的已读取内容显示：${summary.data.contentPreview}${keySections ? ` ${keySections}` : ""}`
-      : `${summary.data.path} 已打开，但当前可用内容为空，暂时无法给出可靠概括。`;
-  }
-
-  if (summary.source === "tool" && summary.data?.kind === "read_locate") {
-    const preview = summary.data.matchesPreview.slice(0, 3).join("；");
-    return summary.data.matchCount > 0
-      ? `当前只拿到了定位结果：共找到 ${summary.data.matchCount} 处匹配，预览包括 ${preview || "匹配项"}。如果要回答文件内容，还需要继续打开对应文件。`
-      : `这次定位没有找到匹配项，所以当前还没有文件内容证据可供回答。`;
-  }
-
-  if (summary.source === "tool" && summary.data?.kind === "web_search") {
-    const finding = summary.data.topFindings[0];
-    return finding
-      ? `当前检索到 ${summary.data.resultCount} 条网页结果，最相关信息是：${finding}`
-      : `这次网页搜索没有返回可用结果，暂时无法基于真实搜索证据回答。`;
-  }
-
-  if (summary.source === "tool" && summary.data?.kind === "terminal_session") {
-    if (!summary.data.outputInterpretable) {
-      const reason = summary.data.unreadableReason
-        ? `${summary.data.unreadableReason}`
-        : "这次终端输出当前不可可靠解读。";
-      if (summary.data.processCompleted) {
-        return `命令 \`${summary.data.command}\` 已执行完成，但输出证据当前不可可靠解读。${reason}`;
-      }
-      return `命令 \`${summary.data.command}\` 还没有形成稳定完成结果，而且输出证据当前不可可靠解读。${reason}`;
-    }
-
-    const parts: string[] = [];
-    if (summary.data.binaryDetected) {
-      parts.push(`命令 \`${summary.data.command}\` 已执行完成，但输出包含二进制内容，当前不能作为自然语言证据解读。`);
-    } else if (summary.data.truncated) {
-      parts.push(`命令 \`${summary.data.command}\` 已执行完成，但输出证据被截断了。`);
-    } else if (!summary.data.processCompleted) {
-      parts.push(`命令 \`${summary.data.command}\` 没有形成稳定完成结果。`);
-    } else if (summary.data.commandSucceeded === "true") {
-      parts.push(`命令 \`${summary.data.command}\` 已执行完成，且退出码为 0。`);
-    } else if (summary.data.commandSucceeded === "false") {
-      parts.push(
-        `命令 \`${summary.data.command}\` 已执行完成，但退出码为 ${summary.data.exitCode === null ? "null" : summary.data.exitCode}，说明命令执行失败。`,
-      );
-    } else {
-      parts.push(`命令 \`${summary.data.command}\` 已执行，但命令成功状态当前无法确认。`);
-    }
-    if (summary.data.exitCode !== null) {
-      parts.push(`退出码是 ${summary.data.exitCode}。`);
-    }
-    if (summary.data.stdoutPreview) {
-      parts.push(`stdout 预览：${summary.data.stdoutPreview}`);
-    }
-    if (summary.data.stderrPreview) {
-      parts.push(`stderr 预览：${summary.data.stderrPreview}`);
-    }
-    if (summary.data.timedOut) {
-      parts.push("这次执行发生超时，结果可能不完整。");
-    }
-    if (summary.data.truncated) {
-      parts.push("这次输出被截断了。");
-    }
-    return parts.join(" ");
-  }
-
-  if (summary.source === "tool" && summary.data?.kind === "edit_file") {
-    if (summary.data.dryRun) {
-      return summary.data.targetPath
-        ? `当前只有文件修改预览证据：${summary.data.targetPath} 的变更方案已经生成，但还没有真实写入，不能说这个文件已经被修改。`
-        : "当前只有文件修改预览证据，还没有真实写入结果。";
-    }
-
-    if (summary.data.operation === "replace") {
-      return summary.data.targetPath
-        ? `已实际修改 ${summary.data.targetPath}，并完成了指定内容替换。`
-        : "已实际完成一次文件内容替换。";
-    }
-
-    if (summary.data.operation === "overwrite") {
-      return summary.data.targetPath
-        ? `已实际覆盖写入 ${summary.data.targetPath}。`
-        : "已实际完成一次覆盖写入。";
-    }
-
-    return summary.data.targetPath
-      ? `已实际创建文件 ${summary.data.targetPath}。`
-      : "已实际完成一次文件写入。";
-  }
-
-  if (summary.source === "tool" && summary.data?.kind === "workspace_mutation") {
-    if (summary.data.dryRun) {
-      if (
-        summary.data.operation === "move" &&
-        summary.data.targetPath &&
-        summary.data.destinationPath
-      ) {
-        return `当前只有 workspace 变更预览证据：计划把 ${summary.data.targetPath} 移动到 ${summary.data.destinationPath}，但还没有真实执行。`;
-      }
-
-      return summary.data.targetPath
-        ? `当前只有 workspace 变更预览证据：${summary.data.targetPath} 的变更计划已经生成，但还没有真实执行。`
-        : "当前只有 workspace 变更预览证据，还没有真实执行结果。";
-    }
-
-    if (summary.data.operation === "delete") {
-      return summary.data.targetPath
-        ? `已实际删除 workspace 目标 ${summary.data.targetPath}。`
-        : "已实际删除一个 workspace 目标。";
-    }
-
-    if (
-      summary.data.operation === "move" &&
-      summary.data.targetPath &&
-      summary.data.destinationPath
-    ) {
-      return `已实际把 ${summary.data.targetPath} 移动到 ${summary.data.destinationPath}。`;
-    }
-
-    if (summary.data.operation === "overwrite") {
-      return summary.data.targetPath
-        ? `已实际覆盖写入 workspace 目标 ${summary.data.targetPath}。`
-        : "已实际完成一次 workspace 覆盖写入。";
-    }
-
-    return summary.data.targetPath
-      ? `已实际创建 workspace 目标 ${summary.data.targetPath}。`
-      : "已实际完成一次 workspace 写入。";
-  }
-
-  if (summary.source === "retrieval" && summary.data?.kind === "retrieval") {
-    return summary.data.documentsPreview.length > 0
-      ? `当前检索已命中 ${summary.data.chunkCount} 条上下文，主要来自 ${summary.data.documentsPreview.join("、")}。`
-      : `当前检索已命中 ${summary.data.chunkCount} 条上下文，可以基于这些检索证据回答。`;
-  }
-
-  return "";
-};
-
-const buildEvidenceGroundedFallbackAnswer = (state: AgentNodeState) => {
-  if (state.pendingApproval) {
-    return `这个${state.pendingApproval.toolId === "terminal_session" ? "命令" : "工具调用"}需要你审批后才能执行，当前还没有真实执行结果。`;
-  }
-
+const buildEmptyAnswerFallback = (state: AgentNodeState) => {
   const evidence = getEvidencePayload(state);
   const latestRetrieval = evidence.retrievals.at(-1);
-  if (latestRetrieval && latestRetrieval.chunkCount > 0) {
-    const chunkPreviews = latestRetrieval.chunks
-      .slice(0, 3)
-      .map((chunk) => ({
-        documentName: chunk.documentName,
-        preview: toPreviewText(chunk.content, 220),
-      }))
-      .filter((chunk) => chunk.preview);
-    if (chunkPreviews.length > 0) {
-      const [firstChunk, ...restChunks] = chunkPreviews;
-      const extraPreview =
-        restChunks.length > 0
-          ? ` 另外还有 ${restChunks
-              .map((chunk) => `${chunk.documentName} 片段：${chunk.preview}`)
-              .join("；")}`
-          : "";
-      return `根据当前检索证据，${firstChunk.documentName} 片段提到：${firstChunk.preview}${extraPreview}`;
-    }
-  }
-
-  const latestSummary =
-    evidence.latestSummary ?? getLatestEvidenceSummary({ evidence });
-  if (latestSummary) {
-    const summaryAnswer = renderSummaryBasedAnswer(latestSummary);
-    if (summaryAnswer) {
-      return summaryAnswer;
-    }
+  const firstChunk = latestRetrieval?.chunks[0];
+  if (firstChunk?.content?.trim()) {
+    return `模型没有生成有效回答。当前至少有这条真实检索结果可用：${firstChunk.documentName}：${clipText(firstChunk.content.trim(), 600)}`;
   }
 
   const latestCompletedTool = [...evidence.toolExecutions]
     .reverse()
     .find((execution) => execution.status === "completed");
-  if (latestCompletedTool?.summary) {
-    const summaryAnswer = renderSummaryBasedAnswer(latestCompletedTool.summary);
-    if (summaryAnswer) {
-      return summaryAnswer;
+  if (latestCompletedTool) {
+    const findings = latestCompletedTool.summary?.keyFindings?.filter(Boolean) ?? [];
+    if (findings.length > 0) {
+      return `模型没有生成有效回答。工具已实际执行完成，当前可用结果摘要：${findings.join("；")}`;
     }
+    return "模型没有生成有效回答，但本轮工具已经实际执行完成。请重试生成回答。";
   }
 
-  return "当前还没有足够的已完成证据来可靠回答这个问题，所以我不能声称自己已经查看过相关文件、目录、网页或命令结果。";
-};
-
-const buildSchemaReplanSafeErrorAnswer = (state: AgentNodeState) => {
-  const schemaError = state.schemaReplanDiagnostics?.schemaError;
-  if (!schemaError) {
-    return "当前没有可用证据，而且工具参数规划没有形成可执行调用，所以我不能可靠回答这个问题。";
-  }
-
-  return `这次没有执行任何工具，因为生成的工具参数不符合要求：${schemaError}。我目前也没有可用证据可以基于文件或检索结果回答，请重试，或把要读取的文件和目标说得更明确一些。`;
-};
-
-const buildGenerateEmptyAnswerFallback = (state: AgentNodeState) => {
-  const evidence = getEvidencePayload(state);
-  const latestSummary =
-    evidence.latestSummary ?? getLatestEvidenceSummary({ evidence });
-  if (latestSummary) {
-    const summaryAnswer = renderSummaryBasedAnswer(latestSummary);
-    if (summaryAnswer) {
-      return `工具已执行，但模型没有生成有效回答。以下是当前可用证据摘要：${summaryAnswer}`;
-    }
-  }
-
-  const latestCompletedTool = [...evidence.toolExecutions]
-    .reverse()
-    .find((execution) => execution.status === "completed");
-  if (latestCompletedTool?.summary) {
-    const summaryAnswer = renderSummaryBasedAnswer(latestCompletedTool.summary);
-    if (summaryAnswer) {
-      return `工具已执行，但模型没有生成有效回答。以下是当前可用证据摘要：${summaryAnswer}`;
-    }
-  }
-
-  const latestRetrieval = evidence.retrievals.at(-1);
-  if (latestRetrieval && latestRetrieval.chunkCount > 0) {
-    const firstChunk = latestRetrieval.chunks[0];
-    if (firstChunk?.content?.trim()) {
-      return `工具已执行，但模型没有生成有效回答。当前至少有这条检索证据可用：${firstChunk.documentName} 提到 ${toPreviewText(firstChunk.content, 220)}`;
-    }
-  }
-
-  return "模型没有生成有效回答，而且当前也没有可用证据可供总结。";
-};
-
-const detectGenerateOutputGuardReason = (answer: string) => {
-  if (!answer.trim()) {
-    return undefined;
-  }
-
-  if (GENERATE_OUTPUT_GUARD_PATTERNS.some((pattern) => pattern.test(answer))) {
-    return "generate output exposed tool-style protocol text instead of a user-facing final answer";
-  }
-
-  return undefined;
-};
-
-const answerLeaksCompletedToolId = (input: {
-  answer: string;
-  completedToolIds: string[];
-}) => {
-  const normalized = input.answer.trim();
-  if (!normalized) {
-    return false;
-  }
-
-  return input.completedToolIds.some((toolId) => {
-    const escapedToolId = toolId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const leakagePatterns = [
-      new RegExp(`\\b${escapedToolId}\\s+completed\\b`, "i"),
-      new RegExp(`^${escapedToolId}\\b`, "i"),
-    ];
-    return leakagePatterns.some((pattern) => pattern.test(normalized));
-  });
-};
-
-const answerAcknowledgesUnreadableTerminalEvidence = (answer: string) =>
-  /(garbled|unreadable|not reliable|cannot reliably|不可|不可靠|无法可靠|不能可靠|乱码)/iu.test(
-    answer,
-  );
-
-const answerOverclaimsTerminalTaskSuccess = (input: {
-  answer: string;
-  latestSummary: AgentEvidenceSummary | undefined;
-}) => {
-  const summary = input.latestSummary;
-  if (
-    summary?.source !== "tool" ||
-    summary.data?.kind !== "terminal_session"
-  ) {
-    return false;
-  }
-
-  const normalized = input.answer.trim();
-  if (!normalized) {
-    return false;
-  }
-
-  const claimsTaskSuccess = TERMINAL_TASK_SUCCESS_CLAIM_PATTERNS.some((pattern) =>
-    pattern.test(normalized),
-  );
-  if (!claimsTaskSuccess) {
-    return false;
-  }
-
-  if (summary.data.commandSucceeded !== "true") {
-    return true;
-  }
-
-  return false;
-};
-
-const answerPretendsUnavailableEvidenceWasUsable = (input: {
-  answer: string;
-  latestSummary: AgentEvidenceSummary | undefined;
-}) => {
-  const summary = input.latestSummary;
-  if (!summary || summary.source !== "tool") {
-    return false;
-  }
-
-  if (summary.status === "completed" || summary.status === "truncated") {
-    return false;
-  }
-
-  const normalized = input.answer.trim();
-  if (!normalized) {
-    return false;
-  }
-
-  return !LIMITATION_DISCLOSURE_PATTERNS.some((pattern) =>
-    pattern.test(normalized),
-  );
+  return "模型没有生成有效回答，请重试。";
 };
 
 export const generateNode = async (
@@ -783,59 +175,13 @@ export const generateNode = async (
   });
 
   const budget = buildGenerateContextBudget(state);
-  const messages = buildGenerateMessages(state);
-  const generationMessages = messages;
+  const generationMessages = buildGenerateMessages(state);
   const generationInvocation = providerProxyService.describeChatInvocation(
     "default",
     generationMessages,
   );
-  if (
-    state.schemaReplanDiagnostics &&
-    state.schemaReplanDiagnostics.attemptCount > 1 &&
-    !getEvidencePayload(state).toolExecutions.some(
-      (execution) => execution.status === "completed",
-    ) &&
-    !getEvidencePayload(state).retrievals.some(
-      (retrieval) => retrieval.chunkCount > 0,
-    )
-  ) {
-    const answer = buildSchemaReplanSafeErrorAnswer(state);
-    const observation = createObservation({
-      runId: state.runId,
-      stepId: "generate",
-      status: "partial",
-      facts: [
-        "Schema-safe fallback answer was returned after bounded replan was exhausted.",
-      ],
-    });
 
-    await emitStepNode(emit, {
-      runId: state.runId,
-      nodeId: "agent-generate",
-      nodeType: "generate",
-      phase: "done",
-      label: "生成回答",
-      summary: "bounded replan 已用尽，返回安全收口回答",
-      details: {
-        answerLength: Array.from(answer).length,
-        invocation: generationInvocation,
-        contextBudget: budget.audit,
-        messageCount: generationMessages.length,
-        schemaSafeErrorFallback: true,
-        schemaError: state.schemaReplanDiagnostics.schemaError,
-      },
-    });
-
-    return {
-      answer,
-      observations: [...(state.observations ?? []), observation],
-      contextBudget: budget.audit,
-      schemaReplanDiagnostics: undefined,
-      generatedAnswerEmptyFallback: false,
-    };
-  }
   let answer: string;
-  let outputGuardReason: string | undefined;
   try {
     answer = await agentGenerateTextRunnable.invoke({
       messages: generationMessages,
@@ -873,101 +219,23 @@ export const generateNode = async (
       contextBudget: budget.audit,
     };
   }
-  outputGuardReason = detectGenerateOutputGuardReason(answer);
-  if (!outputGuardReason) {
-    if (
-      state.pendingApproval &&
-      PENDING_APPROVAL_FAKE_EXECUTION_PATTERNS.some((pattern) =>
-        pattern.test(answer),
-      )
-    ) {
-      outputGuardReason =
-        "generate output pretended a pending-approval tool had already executed";
-    }
-  }
-  if (!outputGuardReason) {
-    const evidence = getEvidencePayload(state);
-    const completedToolIds = evidence.toolExecutions
-      .filter((execution) => execution.status === "completed")
-      .map((execution) => execution.toolId);
-    if (answerLeaksCompletedToolId({ answer, completedToolIds })) {
-      outputGuardReason =
-        "generate output leaked completed tool id text instead of a user-facing final answer";
-    }
-  }
-  if (!outputGuardReason) {
-    const latestSummary = getEvidencePayload(state).latestSummary;
-    if (
-      answerPretendsUnavailableEvidenceWasUsable({
-        answer,
-        latestSummary,
-      })
-    ) {
-      outputGuardReason =
-        "generate output treated unavailable or unreadable tool evidence as if it were a stable completed result";
-    }
-  }
-  if (!outputGuardReason) {
-    const latestSummary = getEvidencePayload(state).latestSummary;
-    if (
-      latestSummary?.source === "tool" &&
-      latestSummary.data?.kind === "terminal_session" &&
-      !latestSummary.data.outputInterpretable &&
-      !answerAcknowledgesUnreadableTerminalEvidence(answer)
-    ) {
-      outputGuardReason =
-        "generate output interpreted unreadable terminal evidence as grounded content";
-    }
-  }
-  if (!outputGuardReason) {
-    const latestSummary = getEvidencePayload(state).latestSummary;
-    if (
-      answerOverclaimsTerminalTaskSuccess({
-        answer,
-        latestSummary,
-      })
-    ) {
-      outputGuardReason =
-        "generate output overclaimed terminal task success beyond the available evidence";
-    }
-  }
-  if (!outputGuardReason) {
-    const evidence = getEvidencePayload(state);
-    const hasCompletedToolEvidence = evidence.toolExecutions.some(
-      (execution) => execution.status === "completed",
-    );
-    const hasRetrievalEvidence = evidence.retrievals.some(
-      (retrieval) => retrieval.chunkCount > 0,
-    );
-    if (
-      !hasCompletedToolEvidence &&
-      !hasRetrievalEvidence &&
-      answerClaimsUnverifiedObservation(answer)
-    ) {
-      outputGuardReason =
-        "generate output claimed grounded observation without completed evidence";
-    }
-  }
-  if (outputGuardReason) {
-    answer = buildEvidenceGroundedFallbackAnswer(state);
-  }
+
   if (!answer.trim()) {
+    const fallbackAnswer = buildEmptyAnswerFallback(state);
     const observation = createObservation({
       runId: state.runId,
       stepId: "generate",
       status: "partial",
-      facts: [
-        "Generated answer was empty; deterministic fallback answer was returned.",
-      ],
+      facts: ["Generated answer was empty; a minimal fallback was returned."],
     });
-    const fallbackAnswer = buildGenerateEmptyAnswerFallback(state);
+
     await emitStepNode(emit, {
       runId: state.runId,
       nodeId: "agent-generate",
       nodeType: "generate",
       phase: "done",
       label: "生成回答",
-      summary: "模型回答为空，已返回保底回答",
+      summary: "模型回答为空，已返回最小保底回答",
       details: {
         answerLength: 0,
         invocation: generationInvocation,
@@ -980,9 +248,12 @@ export const generateNode = async (
     return {
       answer: fallbackAnswer,
       observations: [...(state.observations ?? []), observation],
+      contextBudget: budget.audit,
+      schemaReplanDiagnostics: undefined,
       generatedAnswerEmptyFallback: true,
     };
   }
+
   const observation = createObservation({
     runId: state.runId,
     stepId: "generate",
@@ -994,16 +265,14 @@ export const generateNode = async (
     runId: state.runId,
     nodeId: "agent-generate",
     nodeType: "generate",
-    phase: answer.trim() ? "done" : "error",
+    phase: "done",
     label: "生成回答",
-    summary: answer.trim() ? "已生成 Agent 回答" : "Agent 回答为空",
+    summary: "已生成 Agent 回答",
     details: {
       answerLength: Array.from(answer).length,
       invocation: generationInvocation,
       contextBudget: budget.audit,
       messageCount: generationMessages.length,
-      outputGuardTriggered: Boolean(outputGuardReason),
-      outputGuardReason: outputGuardReason ?? null,
       generatedAnswerEmptyFallback: false,
     },
   });
