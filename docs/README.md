@@ -9,6 +9,7 @@ Feature: DocsSystem
 Doc Type: current-contract
 Canonical: true
 Related:
+  - ENGINEERING_MEMORY.md
   - VAULT_HOME.md
   - WIKI_SYSTEM_SCHEMA.md
   - knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md
@@ -20,6 +21,7 @@ Related:
 
 ## 先看
 
+- `ENGINEERING_MEMORY.md`
 - `VAULT_HOME.md`
 - `WIKI_SYSTEM_SCHEMA.md`
 - `knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md`
@@ -34,20 +36,22 @@ Related:
 ## 推荐阅读顺序
 
 1. `../README.md`
-2. `VAULT_HOME.md`
-3. `architecture/README.md`
-4. `uchat.md`
-5. `harness/agentgraph-harness-protocol.md`
-6. `harness/README.md`
-7. `tooling-runtime/README.md`
-8. `concepts/CONCEPT_MCP.md`
-9. `platform/tauri.md`
-10. `knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md`
+2. `ENGINEERING_MEMORY.md`
+3. `VAULT_HOME.md`
+4. `architecture/README.md`
+5. `uchat.md`
+6. `harness/agentgraph-harness-protocol.md`
+7. `harness/README.md`
+8. `tooling-runtime/README.md`
+9. `concepts/CONCEPT_MCP.md`
+10. `platform/tauri.md`
+11. `knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md`
 
 ## 目录
 
 ### 文档系统
 
+- `ENGINEERING_MEMORY.md`
 - `VAULT_HOME.md`
 - `concepts/CONCEPTS_INDEX.md`
 - `concepts/CONCEPT_AGENT.md`
@@ -205,6 +209,7 @@ Related:
 
 ## 阅读顺序
 
+- 先读 `ENGINEERING_MEMORY.md`，再进入具体 current-contract。
 - 先读总纲页，再读细页。
 - 先把 current-contract 和 reference 页读清，再看 design / plan。
 - Agent 相关施工、评审和架构说明必须先读 `harness/agentgraph-harness-protocol.md`。
@@ -212,6 +217,7 @@ Related:
 
 ## 相关页
 
+- `ENGINEERING_MEMORY.md`
 - `WIKI_SYSTEM_SCHEMA.md`
 - `knowledge-system/DOCUMENTATION_STANDARDS.md`
 - `knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md`
