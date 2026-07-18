@@ -83,6 +83,8 @@ const toRagNodeLike = (value: unknown): RagNodeLike | null => {
       typeof candidate.attemptKey === "string" ? candidate.attemptKey : undefined,
     iteration:
       typeof candidate.iteration === "number" ? candidate.iteration : undefined,
+    emittedAt:
+      typeof candidate.emittedAt === "string" ? candidate.emittedAt : undefined,
     nodeType: candidate.nodeType,
     phase: candidate.phase as RagProgressStatus,
     label: candidate.label,
@@ -114,6 +116,15 @@ export const toUChatRenderableParts = (message: ChatMessage): UChatRenderablePar
     return [];
   });
 
+const toEventTime = (event: RagNodeLike) => {
+  if (!event.emittedAt) {
+    return null;
+  }
+
+  const parsed = Date.parse(event.emittedAt);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 // getExecutionProgressFromRenderableParts reconstructs pipeline progress rows from
 // canonical `data` parts emitted by the run driver.
 export const getExecutionProgressFromRenderableParts = (
@@ -126,7 +137,25 @@ export const getExecutionProgressFromRenderableParts = (
         (part.name === "rag-node" || part.name === "execution-node"),
     )
     .map((part) => toRagNodeLike(part.data))
-    .filter((part): part is RagNodeLike => part !== null);
+    .filter((part): part is RagNodeLike => part !== null)
+    .map((event, index) => ({
+      event,
+      index,
+      emittedAt: toEventTime(event),
+    }))
+    .sort((left, right) => {
+      if (left.emittedAt !== null && right.emittedAt !== null) {
+        return left.emittedAt - right.emittedAt || left.index - right.index;
+      }
+      if (left.emittedAt === null && right.emittedAt !== null) {
+        return -1;
+      }
+      if (left.emittedAt !== null && right.emittedAt === null) {
+        return 1;
+      }
+      return left.index - right.index;
+    })
+    .map((entry) => entry.event);
 
   if (events.length === 0) {
     return [];
