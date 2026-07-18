@@ -178,11 +178,11 @@ export const resolveManagedCodeGraphExternalIndexSupport = (
   }
 
   return {
-    status: "ready",
+    status: "blocked",
     externalIndexRootSupported: false,
     repoDataDirName: DEFAULT_REPO_DATA_DIR_NAME,
     reason:
-      "CodeGraph 1.3.x stores its index in workspace/.codegraph because serve --mcp does not expose a reliable external index-root override. UIChat Mira treats that directory as declared repo-local runtime data for the controlled codebase_explore capability; logs and other managed artifacts remain outside the workspace.",
+      "CodeGraph 1.3.x cannot relocate its serve --mcp index outside workspace/.codegraph. CodeGraph Studio keeps reporting this as a repo-local runtime risk; the owner-enabled controlled codebase_explore capability may use that directory only through the declared repo-local managed runtime, with telemetry, workspace, and verification checks preserved.",
     investigation: {
       cliArgSupported: false,
       envPathSupported: false,
