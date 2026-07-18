@@ -9,6 +9,9 @@ import {
   disposeRepoLocalManagedCodeGraphManagers,
 } from "@/mcp/managed-codegraph/repo-local-manager-cache.js";
 import {
+  isRealCodeGraphCommand,
+} from "@/mcp/managed-codegraph/repo-local-process-manager.js";
+import {
   getCapabilityImplementation,
   registerCapability,
   unregisterCapability,
@@ -31,8 +34,10 @@ export const reconcileCodeGraphHarnessCapability = () => {
   }
 
   const gate = service.getCapabilityGate();
-  const available =
-    gate.available || canUseDeclaredRepoLocalCodeGraphCapability(gate);
+  const repoLocalAvailable =
+    isRealCodeGraphCommand(service.getDraft().command) &&
+    canUseDeclaredRepoLocalCodeGraphCapability(gate);
+  const available = gate.available || repoLocalAvailable;
 
   if (available) {
     if (!currentRegistration) {
