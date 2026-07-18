@@ -71,7 +71,6 @@ export const reconcileCodeGraphHarnessCapability = () => {
   );
   const lazyManagedWorkspaceAvailable =
     draft.microAppEnabled &&
-    draft.agentCapabilityEnabled &&
     isRealCodeGraphCommand(draft.command) &&
     gate.checks.appDataRootValid;
   const available = gate.available || lazyManagedWorkspaceAvailable;
