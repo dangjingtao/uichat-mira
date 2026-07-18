@@ -2,8 +2,15 @@ import type { FastifyPluginAsync } from "fastify";
 import { successEnvelope } from "@/routes/schema-helpers.js";
 import { success } from "@/utils/index.js";
 import { routeHandler } from "@/utils/route-errors.js";
-import type { CodeGraphStudioService } from "@/microapps/codegraph/index.js";
+import type {
+  CodeGraphStudioReport,
+  CodeGraphStudioService,
+} from "@/microapps/codegraph/index.js";
 import { normalizeCodeGraphStudioReport } from "@/microapps/codegraph/public-report.js";
+import {
+  runCodeGraphStudioSmokeQuery,
+  runCodeGraphStudioSmokeStatus,
+} from "@/microapps/codegraph/public-smoke.js";
 
 const stringArraySchema = {
   type: "array",
@@ -191,7 +198,7 @@ const smokeSchema = {
   },
 } as const;
 
-const normalizeReportEnvelope = <T extends { report: Awaited<ReturnType<CodeGraphStudioService["getReport"]>> }>(
+const normalizeReportEnvelope = <T extends { report: CodeGraphStudioReport }>(
   result: T,
 ): T => ({
   ...result,
@@ -339,7 +346,7 @@ const codeGraphRoutes: FastifyPluginAsync<{
       },
     },
     routeHandler("Failed to run CodeGraph Studio smoke status", async () =>
-      success(normalizeReportEnvelope(await codeGraphStudioService.smokeStatus()))),
+      success(await runCodeGraphStudioSmokeStatus(codeGraphStudioService))),
   );
 
   app.post<{ Body: { query: string } }>(
@@ -361,7 +368,12 @@ const codeGraphRoutes: FastifyPluginAsync<{
       },
     },
     routeHandler("Failed to run CodeGraph Studio smoke query", async (request) =>
-      success(normalizeReportEnvelope(await codeGraphStudioService.smokeQuery(request.body.query)))),
+      success(
+        await runCodeGraphStudioSmokeQuery(
+          codeGraphStudioService,
+          request.body.query,
+        ),
+      )),
   );
 };
 
