@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import {
   canUseDeclaredRepoLocalCodeGraphCapability,
   type RepoLocalCodeGraphGate,
@@ -37,6 +39,14 @@ type CachedRepoLocalManager = {
 
 const repoLocalManagerCache = new Map<string, CachedRepoLocalManager>();
 
+const isPathInside = (parent: string, candidate: string) => {
+  const relative = path.relative(path.resolve(parent), path.resolve(candidate));
+  return (
+    relative === "" ||
+    (!relative.startsWith("..") && !path.isAbsolute(relative))
+  );
+};
+
 const createRepoLocalRuntimeFingerprint = (
   workspaceRoot: string,
   context: RepoLocalRuntimeContext,
@@ -60,6 +70,13 @@ const getOrCreateRepoLocalManager = async (
     !context.plannerStorage.logRoot ||
     !context.plannerStorage.indexRoot ||
     !isRealCodeGraphCommand(context.draft.command)
+  ) {
+    return null;
+  }
+
+  if (
+    isPathInside(workspaceRoot, context.plannerStorage.logRoot) ||
+    isPathInside(workspaceRoot, context.plannerStorage.indexRoot)
   ) {
     return null;
   }
