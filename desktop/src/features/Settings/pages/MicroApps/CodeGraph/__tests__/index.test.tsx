@@ -67,7 +67,7 @@ const translations = {
   "settings.microApps.codeGraphStudio.cards.config.appDataRootHelp":
     "用于保存日志与临时状态。必须位于仓库外部，建议选择长期可用的目录。",
   "settings.microApps.codeGraphStudio.cards.capability.microAppHint":
-    "关闭后，CodeGraph 微应用本身不再参与受控 capability 注册。",
+    "开启后，CodeGraph 微应用和智能体 codebase_explore 一起启用；关闭时一起停用。",
   "settings.microApps.codeGraphStudio.cards.capability.agentCapabilityHint":
     "允许智能体使用 CodeGraph。只有 runtime ready、telemetry verified_off、workspace 匹配、repo pollution guard safe 且 App Data Root 合法时才会真正生效。",
   "settings.microApps.codeGraphStudio.cards.capability.statusTitle":
@@ -405,17 +405,26 @@ describe("CodeGraphStudioPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows the owner-facing capability switches", async () => {
+  it("uses one immediate product switch for CodeGraph and Agent capability", async () => {
     render(<CodeGraphStudioPage />);
 
-    await waitFor(() => {
-      expect(screen.getByText("启用 CodeGraph 微应用")).toBeInTheDocument();
+    const productSwitch = await screen.findByRole("switch", {
+      name: "启用 CodeGraph 微应用",
     });
 
-    expect(screen.getByText("允许智能体使用 CodeGraph")).toBeInTheDocument();
-    expect(
-      screen.getByText("Owner has not allowed the agent to use CodeGraph."),
-    ).toBeInTheDocument();
+    expect(screen.getAllByRole("switch")).toHaveLength(1);
+    expect(screen.queryByText("允许智能体使用 CodeGraph")).not.toBeInTheDocument();
+
+    fireEvent.click(productSwitch);
+
+    await waitFor(() => {
+      expect(apiMocks.saveCodeGraphStudioConfig).toHaveBeenCalledWith(
+        expect.objectContaining({
+          microAppEnabled: false,
+          agentCapabilityEnabled: false,
+        }),
+      );
+    });
   });
 
   it("keeps start disabled when the real provider is blocked", async () => {
