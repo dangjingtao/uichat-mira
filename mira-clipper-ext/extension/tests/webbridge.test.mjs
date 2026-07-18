@@ -106,12 +106,15 @@ describe('WebBridge tool surface', () => {
     assert.match(source, /chrome\.runtime\.sendMessage/);
   });
 
-  it('exposes connection transport selection in the popup', async () => {
+  it('does not expose WebSocket transport selection in the popup', async () => {
     const html = await readExtensionFile('popup/popup.html');
     const source = await readExtensionFile('popup/popup.js');
-    assert.match(html, /id="transport"/);
-    assert.match(source, /WEBBRIDGE_RECONNECT/);
-    assert.match(source, /storage\.sync\.set\(\{ transport \}\)/);
+    assert.doesNotMatch(html, /id="transport"/);
+    assert.doesNotMatch(source, /storage\.sync\.set\(\{ transport \}\)/);
+    const optionsHtml = await readExtensionFile('options/options.html');
+    const optionsSource = await readExtensionFile('options/options.js');
+    assert.doesNotMatch(optionsHtml, /WebSocket|id="transport"/);
+    assert.doesNotMatch(optionsSource, /transport/);
   });
 });
 
@@ -132,11 +135,30 @@ describe('WebBridge permission boundary', () => {
 });
 
 describe('WebBridge authorization entry', () => {
+  it('keeps authorization-code exchange only on the standalone authorization page', async () => {
+    const [popupHtml, popupSource, optionsHtml, optionsSource, authHtml, authSource] = await Promise.all([
+      readExtensionFile('popup/popup.html'),
+      readExtensionFile('popup/popup.js'),
+      readExtensionFile('options/options.html'),
+      readExtensionFile('options/options.js'),
+      readExtensionFile('auth/authorize.html'),
+      readExtensionFile('auth/authorize.js'),
+    ]);
+
+    for (const source of [popupHtml, popupSource, optionsHtml, optionsSource]) {
+      assert.doesNotMatch(source, /authorizationCode|exchangeCodeBtn|\/oauth\/token|authorization-code\.js/);
+    }
+    assert.match(authHtml, /id="authorizationCode"/);
+    assert.match(authHtml, /id="exchangeCodeBtn"/);
+    assert.match(authHtml, /authorization-code\.js/);
+    assert.equal(authSource.match(/\/oauth\/token/g)?.length, 1);
+  });
+
   it('defaults the standalone authorization page to Native Messaging', async () => {
     const source = await readExtensionFile('auth/authorize.js');
-    assert.match(source, /stored\.transport === 'websocket' \? 'websocket' : 'native'/);
+    assert.match(source, /chrome\.storage\.sync\.set\(\{ backendUrl: parsed\.backendUrl \}\)/);
     const html = await readExtensionFile('auth/authorize.html');
-    assert.match(html, /<option value="native">/);
-    assert.match(html, /<option value="websocket">/);
+    assert.doesNotMatch(html, /transport|WebSocket/);
+    assert.doesNotMatch(source, /transport/);
   });
 });

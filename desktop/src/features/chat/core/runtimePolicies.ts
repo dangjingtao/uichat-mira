@@ -23,6 +23,7 @@ export const createDesktopThreadCreationPolicy =
           agentEnabled?: boolean | null;
           ttsEnabled?: boolean | null;
           imageEnabled?: boolean | null;
+          evolvingKnowledgeEnabled?: boolean | null;
         }
       | undefined,
   ): ChatThreadCreationPolicy => ({
@@ -66,6 +67,10 @@ export const createDesktopThreadCreationPolicy =
       }
       if (createInput && typeof createInput.imageEnabled === "boolean") {
         metadata.imageEnabled = createInput.imageEnabled;
+      }
+
+      if (createInput && typeof createInput.evolvingKnowledgeEnabled === "boolean") {
+        metadata.evolvingKnowledgeEnabled = createInput.evolvingKnowledgeEnabled;
       }
 
       return Object.keys(metadata).length > 0 ? { metadata } : undefined;
@@ -128,6 +133,12 @@ export const createDesktopComposerActions = ({
     kind: "command",
     label: "Knowledge base",
     title: "Open knowledge base picker",
+  },
+  {
+    id: "evolving-knowledge-toggle",
+    kind: "command",
+    label: "洞见",
+    title: "切换洞见知识源",
   },
   {
     id: "context-summary",

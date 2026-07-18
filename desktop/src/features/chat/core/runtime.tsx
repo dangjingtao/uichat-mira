@@ -35,12 +35,14 @@ type ChatThreadDraftStateValue = {
   draftTtsEnabled: boolean;
   draftImageEnabled: boolean;
   draftWorkspaceId: string | null;
+  draftEvolvingKnowledgeEnabled: boolean;
   setDraftKnowledgeBaseId: (knowledgeBaseId: string | null) => void;
   setDraftRoleId: (roleId: string | null) => void;
   setDraftAgentEnabled: (enabled: boolean) => void;
   setDraftTtsEnabled: (enabled: boolean) => void;
   setDraftImageEnabled: (enabled: boolean) => void;
   setDraftWorkspaceId: (workspaceId: string | null) => void;
+  setDraftEvolvingKnowledgeEnabled: (enabled: boolean) => void;
   resetDraft: () => void;
 };
 
@@ -66,6 +68,7 @@ export const createStableAppChatRuntime = (
           agentEnabled?: boolean | null;
           ttsEnabled?: boolean | null;
           imageEnabled?: boolean | null;
+          evolvingKnowledgeEnabled?: boolean | null;
         }
     | undefined,
 ) =>
@@ -98,12 +101,14 @@ export function AppChatRuntimeProvider({
   const [draftTtsEnabled, setDraftTtsEnabled] = useState(false);
   const [draftImageEnabled, setDraftImageEnabled] = useState(false);
   const [draftWorkspaceId, setDraftWorkspaceId] = useState<string | null>(null);
+  const [draftEvolvingKnowledgeEnabled, setDraftEvolvingKnowledgeEnabled] = useState(false);
   const draftWorkspaceIdRef = useRef<string | null>(draftWorkspaceId);
   const draftKnowledgeBaseIdRef = useRef<string | null>(draftKnowledgeBaseId);
   const draftRoleIdRef = useRef<string | null>(draftRoleId);
   const draftAgentEnabledRef = useRef<boolean>(draftAgentEnabled);
   const draftTtsEnabledRef = useRef<boolean>(draftTtsEnabled);
   const draftImageEnabledRef = useRef<boolean>(draftImageEnabled);
+  const draftEvolvingKnowledgeEnabledRef = useRef<boolean>(draftEvolvingKnowledgeEnabled);
   const hasBootstrappedActiveThreadRef = useRef(false);
   draftWorkspaceIdRef.current = draftWorkspaceId;
   draftKnowledgeBaseIdRef.current = draftKnowledgeBaseId;
@@ -111,6 +116,7 @@ export function AppChatRuntimeProvider({
   draftAgentEnabledRef.current = draftAgentEnabled;
   draftTtsEnabledRef.current = draftTtsEnabled;
   draftImageEnabledRef.current = draftImageEnabled;
+  draftEvolvingKnowledgeEnabledRef.current = draftEvolvingKnowledgeEnabled;
   const runtimeRef = useRef<ChatRuntime | null>(null);
 
   if (!runtimeRef.current) {
@@ -121,6 +127,7 @@ export function AppChatRuntimeProvider({
       agentEnabled: draftAgentEnabledRef.current,
       ttsEnabled: draftTtsEnabledRef.current,
       imageEnabled: draftImageEnabledRef.current,
+      evolvingKnowledgeEnabled: draftEvolvingKnowledgeEnabledRef.current,
     }));
   }
 
@@ -216,12 +223,14 @@ export function AppChatRuntimeProvider({
       draftTtsEnabled,
       draftImageEnabled,
       draftWorkspaceId,
+      draftEvolvingKnowledgeEnabled,
       setDraftKnowledgeBaseId,
       setDraftRoleId,
       setDraftAgentEnabled,
       setDraftTtsEnabled,
       setDraftImageEnabled,
       setDraftWorkspaceId,
+      setDraftEvolvingKnowledgeEnabled,
       resetDraft: () => {
         setDraftWorkspaceId(null);
         setDraftKnowledgeBaseId(null);
@@ -229,9 +238,10 @@ export function AppChatRuntimeProvider({
         setDraftAgentEnabled(false);
         setDraftTtsEnabled(false);
         setDraftImageEnabled(false);
+        setDraftEvolvingKnowledgeEnabled(false);
       },
     }),
-    [draftAgentEnabled, draftImageEnabled, draftKnowledgeBaseId, draftRoleId, draftTtsEnabled, draftWorkspaceId],
+    [draftAgentEnabled, draftEvolvingKnowledgeEnabled, draftImageEnabled, draftKnowledgeBaseId, draftRoleId, draftTtsEnabled, draftWorkspaceId],
   );
 
   return (

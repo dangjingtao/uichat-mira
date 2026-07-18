@@ -1198,6 +1198,9 @@ export const threads = sqliteTable(
     imageEnabled: integer("image_enabled", { mode: "boolean" })
       .notNull()
       .default(false),
+    evolvingKnowledgeEnabled: integer("evolving_knowledge_enabled", { mode: "boolean" })
+      .notNull()
+      .default(false),
     contextSummary: text("context_summary"),
     contextSummaryUpdatedAt: text("context_summary_updated_at"),
     status: text("status", { enum: THREAD_STATUS_VALUES })
@@ -1638,6 +1641,28 @@ export const knowledgeMaintenanceRuns = sqliteTable(
 
 export type KnowledgeMaintenanceRun = typeof knowledgeMaintenanceRuns.$inferSelect;
 export type NewKnowledgeMaintenanceRun = typeof knowledgeMaintenanceRuns.$inferInsert;
+
+export const knowledgeQueryLogs = sqliteTable(
+  "knowledge_query_logs",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    query: text("query").notNull().default(""),
+    intent: text("intent").notNull().default("mixed"),
+    resultCount: integer("result_count").notNull().default(0),
+    sourceIdsJson: text("source_ids_json").notNull().default("[]"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    userIdx: index("idx_knowledge_query_logs_user_id").on(table.userId),
+    createdAtIdx: index("idx_knowledge_query_logs_created_at").on(table.createdAt),
+  }),
+);
+
+export type KnowledgeQueryLog = typeof knowledgeQueryLogs.$inferSelect;
+export type NewKnowledgeQueryLog = typeof knowledgeQueryLogs.$inferInsert;
 
 export const knowledgeConcepts = sqliteTable(
   "knowledge_concepts",

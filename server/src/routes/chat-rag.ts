@@ -23,6 +23,7 @@ const chatRagRoute: FastifyPluginAsync = async (app) => {
           properties: {
             question: { type: "string", minLength: 1 },
             knowledgeBaseId: { type: "string" },
+            evolvingKnowledgeEnabled: { type: "boolean" },
             topK: { type: "number", minimum: 1, maximum: 50 },
             topN: { type: "number", minimum: 1, maximum: 20 },
             systemPrompt: { type: "string" },
@@ -58,7 +59,7 @@ const chatRagRoute: FastifyPluginAsync = async (app) => {
       },
     },
     routeHandler("Failed to run RAG chat", async (request) => {
-      const result = await ragPipeline.run(request.body);
+      const result = await ragPipeline.run({ ...request.body, userId: request.authUser!.id });
       return success(result);
     })
   );
@@ -79,6 +80,7 @@ const chatRagRoute: FastifyPluginAsync = async (app) => {
           properties: {
             question: { type: "string", minLength: 1 },
             knowledgeBaseId: { type: "string" },
+            evolvingKnowledgeEnabled: { type: "boolean" },
             topK: { type: "number", minimum: 1, maximum: 50 },
             topN: { type: "number", minimum: 1, maximum: 20 },
             systemPrompt: { type: "string" },
@@ -87,7 +89,7 @@ const chatRagRoute: FastifyPluginAsync = async (app) => {
       },
     },
     routeHandler("Failed to stream RAG chat", async (request, reply) => {
-      const stream = ragPipeline.stream(request.body);
+      const stream = ragPipeline.stream({ ...request.body, userId: request.authUser!.id });
 
       reply.header("Content-Type", "text/event-stream");
       reply.header("Cache-Control", "no-cache");
@@ -113,6 +115,7 @@ const chatRagRoute: FastifyPluginAsync = async (app) => {
           properties: {
             question: { type: "string", minLength: 1 },
             knowledgeBaseId: { type: "string" },
+            evolvingKnowledgeEnabled: { type: "boolean" },
             topK: { type: "number", minimum: 1, maximum: 50 },
             topN: { type: "number", minimum: 1, maximum: 20 },
           },
@@ -141,7 +144,7 @@ const chatRagRoute: FastifyPluginAsync = async (app) => {
       },
     },
     routeHandler("Failed to retrieve RAG chunks", async (request) => {
-      const chunks = await ragPipeline.retrieveOnly(request.body);
+      const chunks = await ragPipeline.retrieveOnly({ ...request.body, userId: request.authUser!.id });
       return success(chunks);
     })
   );

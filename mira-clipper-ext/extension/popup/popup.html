@@ -14,13 +14,8 @@
           <div class="brand-subtitle">连接 UIChat Mira 后操作浏览器或主动剪藏页面</div>
         </div>
       </div>
-      <label for="authorizationCode">Mira 授权码</label>
-      <div class="auth-row">
-        <input id="authorizationCode" type="text" placeholder="从 Mira 设置生成后粘贴" autocomplete="off" />
-        <button id="exchangeCodeBtn" type="button">授权</button>
-      </div>
-      <div class="auth-hint">在 Mira：设置 → 微应用 → 智识进化库 → 生成授权码</div>
-      <button id="openAuthorizationPage" type="button" class="secondary-auth-button">打开独立授权页</button>
+      <p class="auth-hint">授权需要在独立页面完成，授权成功后返回这里继续剪藏。</p>
+      <button id="openAuthorizationPage" type="button" class="secondary-auth-button">打开授权页</button>
       <div id="authStatus" class="status"></div>
     </section>
 
@@ -33,13 +28,7 @@
           <input id="title" type="text" placeholder="页面标题" autocomplete="off" />
           <div id="url" class="url"></div>
         </div>
-        <label class="transport-control" for="transport">
-          <span>连接</span>
-          <select id="transport">
-            <option value="native">Native Messaging</option>
-            <option value="websocket">WebSocket</option>
-          </select>
-        </label>
+        <span class="transport-control">Native Messaging</span>
       </div>
 
       <div id="selectedTextBox" class="field preview-field hidden">
@@ -66,7 +55,12 @@
 
       <label class="rebuild-option" for="processAi">
         <input id="processAi" type="checkbox" />
-        <span>触发洞见全量重建</span>
+        <span>生成 AI 摘要、标签和实体</span>
+      </label>
+
+      <label class="rebuild-option" for="rebuildKnowledge">
+        <input id="rebuildKnowledge" type="checkbox" />
+        <span>重建关联与洞见</span>
       </label>
 
       <div class="actions">
@@ -79,7 +73,6 @@
     </section>
   </div>
 
-  <script src="../lib/authorization-code.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

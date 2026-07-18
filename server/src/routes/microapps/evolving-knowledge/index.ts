@@ -3,12 +3,15 @@ import { getAuthUserFromRequest } from "@/db/auth.db.js";
 import { success } from "@/utils/index.js";
 import { badRequest, routeHandler, unauthorized } from "@/utils/route-errors.js";
 import type { EvolvingKnowledgeService } from "@/microapps/evolving-knowledge/index.js";
+import type { KnowledgeQueryMode } from "@/microapps/evolving-knowledge/index.js";
+import type { KnowledgeWritebackInput } from "@/microapps/evolving-knowledge/index.js";
 
 export type EvolvingKnowledgeRouteOptions = {
   service: EvolvingKnowledgeService;
 };
 
 const contentTypes = new Set(["webpage"]);
+const captureModes = new Set(["page", "selection", "image"]);
 
 const parseCaptureBody = (body: unknown) => {
   if (!body || typeof body !== "object") {
@@ -26,6 +29,10 @@ const parseCaptureBody = (body: unknown) => {
     throw badRequest(
       "sourceUrl, title, rawContent, and a valid contentType are required",
     );
+  }
+
+  if (input.captureMode !== undefined && (typeof input.captureMode !== "string" || !captureModes.has(input.captureMode))) {
+    throw badRequest("captureMode must be page, selection, or image");
   }
 
   if (input.attachments !== undefined) {
@@ -66,6 +73,7 @@ const parseCaptureBody = (body: unknown) => {
     title: input.title,
     favicon: input.favicon ?? "",
     contentType: "webpage" as const,
+    captureMode: (input.captureMode ?? "page") as "page" | "selection" | "image",
     rawContent: input.rawContent,
     rawHtml: typeof input.rawHtml === "string" ? input.rawHtml : undefined,
     captureMetadata: (input.metadata ?? {}) as Record<string, unknown>,
@@ -86,7 +94,7 @@ const evolvingKnowledgeRoutes: FastifyPluginAsync<
       const body = request.body as Record<string, unknown>;
       const capture = await service.processCapture(parseCaptureBody(body), {
         userId: user.id,
-        processAi: body.processAi !== false,
+        processAi: body.processAi === true,
       });
 
       return success(
@@ -95,6 +103,65 @@ const evolvingKnowledgeRoutes: FastifyPluginAsync<
           ? "Capture created and processed"
           : "Capture created without AI processing",
       );
+    }),
+  );
+
+  app.post(
+    "/microapps/evolving-knowledge/writeback",
+    routeHandler("Failed to write back evolving knowledge", async (request) => {
+      const user = getAuthUserFromRequest(request);
+      if (!user) throw unauthorized("Missing auth token");
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      if (body.kind !== "topic" && body.kind !== "viewpoint") {
+        throw badRequest("kind must be topic or viewpoint");
+      }
+      if (typeof body.title !== "string" || !body.title.trim()) {
+        throw badRequest("title is required");
+      }
+      if (typeof body.content !== "string" || !body.content.trim()) {
+        throw badRequest("content is required");
+      }
+      if (body.viewpointId !== undefined && typeof body.viewpointId !== "string") {
+        throw badRequest("viewpointId must be a string");
+      }
+      for (const field of ["captureIds", "evidenceUnitIds"] as const) {
+        if (body[field] !== undefined && (!Array.isArray(body[field]) || body[field].some((item) => typeof item !== "string"))) {
+          throw badRequest(`${field} must be an array of strings`);
+        }
+      }
+      if (body.stance !== undefined && !["supports", "opposes", "context"].includes(body.stance as string)) {
+        throw badRequest("stance must be supports, opposes, or context");
+      }
+
+      return success(await service.writeBackKnowledge({
+        kind: body.kind,
+        title: body.title,
+        content: body.content,
+        captureIds: body.captureIds as string[] | undefined,
+        evidenceUnitIds: body.evidenceUnitIds as string[] | undefined,
+        topicId: body.topicId as string | undefined,
+        viewpointId: body.viewpointId as string | undefined,
+        stance: body.stance as KnowledgeWritebackInput["stance"],
+      }, user.id), "Knowledge writeback saved");
+    }),
+  );
+
+  app.get(
+    "/microapps/evolving-knowledge/health",
+    routeHandler("Failed to check evolving knowledge health", async (request) => {
+      const user = getAuthUserFromRequest(request);
+      if (!user) throw unauthorized("Missing auth token");
+      return success(service.getKnowledgeHealth(user.id));
+    }),
+  );
+
+  app.get(
+    "/microapps/evolving-knowledge/query-logs",
+    routeHandler("Failed to list evolving knowledge query logs", async (request) => {
+      const user = getAuthUserFromRequest(request);
+      if (!user) throw unauthorized("Missing auth token");
+      const query = request.query as { limit?: string };
+      return success(service.listQueryLogs(user.id, query.limit ? Number.parseInt(query.limit, 10) : undefined));
     }),
   );
 
@@ -125,6 +192,40 @@ const evolvingKnowledgeRoutes: FastifyPluginAsync<
       if (!user) throw unauthorized("Missing auth token");
       const captures = service.searchCaptures(query.q ?? "", user.id);
       return success(captures);
+    }),
+  );
+
+  app.post(
+    "/microapps/evolving-knowledge/query",
+    routeHandler("Failed to query evolving knowledge", async (request) => {
+      const user = getAuthUserFromRequest(request);
+      if (!user) throw unauthorized("Missing auth token");
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      if (typeof body.query !== "string" || !body.query.trim()) {
+        throw badRequest("query is required");
+      }
+      if (
+        body.mode !== undefined &&
+        body.mode !== "fact" &&
+        body.mode !== "viewpoint" &&
+        body.mode !== "mixed" &&
+        body.mode !== "conflict"
+      ) {
+        throw badRequest("mode must be fact, viewpoint, mixed, or conflict");
+      }
+      if (
+        body.limit !== undefined &&
+        (typeof body.limit !== "number" || !Number.isInteger(body.limit) || body.limit < 1 || body.limit > 50)
+      ) {
+        throw badRequest("limit must be an integer between 1 and 50");
+      }
+
+      return success(
+        service.queryKnowledge(body.query, user.id, {
+          mode: body.mode as KnowledgeQueryMode | undefined,
+          limit: body.limit as number | undefined,
+        }),
+      );
     }),
   );
 

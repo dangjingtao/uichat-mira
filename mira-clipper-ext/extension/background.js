@@ -164,8 +164,20 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const selectedText = (info.selectionText || '').trim();
   await chrome.storage.session.set({
     pendingCapture: imageUrl
-      ? { imageUrl }
-      : { selectedText },
+      ? {
+        captureMode: 'image',
+        imageUrl,
+        title: tab?.title || '',
+        url: tab?.url || '',
+        favicon: tab?.favIconUrl || '',
+      }
+      : {
+        captureMode: 'selection',
+        selectedText,
+        title: tab?.title || '',
+        url: tab?.url || '',
+        favicon: tab?.favIconUrl || '',
+      },
   });
   chrome.action.openPopup();
 });
@@ -188,12 +200,12 @@ function toWebSocketUrl(backendUrl) {
 
 async function getWebBridgeConfig() {
   const [syncStore, localStore] = await Promise.all([
-    chrome.storage.sync.get(['backendUrl', 'transport']),
+    chrome.storage.sync.get(['backendUrl']),
     chrome.storage.local.get(['accessToken']),
   ]);
   return {
     url: toWebSocketUrl(syncStore.backendUrl),
-    transport: syncStore.transport === 'websocket' ? 'websocket' : 'native',
+    transport: 'native',
     accessToken: typeof localStore.accessToken === 'string' ? localStore.accessToken : '',
     backendUrl: typeof syncStore.backendUrl === 'string' ? syncStore.backendUrl : '',
   };
@@ -359,7 +371,7 @@ async function connectWebBridge() {
     webBridge.authRequired = true;
     publishWebBridgeStatus('auth_required', {
       code: 'AUTH_REQUIRED',
-      message: '见行授权已失效，请重新输入 Mira 授权码',
+      message: '见行授权已失效，请打开授权页重新授权',
     });
     await openAuthorizationPageIfNeeded();
     return;
@@ -541,7 +553,7 @@ async function handleWebBridgeMessage(socket, rawMessage) {
     await chrome.storage.local.remove(['accessToken']);
     publishWebBridgeStatus('auth_required', {
       code: 'AUTH_REQUIRED',
-      message: '见行授权已失效，请重新输入 Mira 授权码',
+      message: '见行授权已失效，请打开授权页重新授权',
     });
     await openAuthorizationPageIfNeeded();
     if (webBridge.socket === socket) socket.close();
@@ -565,7 +577,7 @@ async function handleWebBridgeMessage(socket, rawMessage) {
     await chrome.storage.local.remove(['accessToken']);
     publishWebBridgeStatus('auth_required', {
       code: 'AUTH_REQUIRED',
-      message: '见行授权已失效，请重新输入 Mira 授权码',
+      message: '见行授权已失效，请打开授权页重新授权',
     });
     await openAuthorizationPageIfNeeded();
     if (webBridge.socket === socket) socket.close();

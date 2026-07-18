@@ -303,7 +303,7 @@ export default function EvolvingKnowledgeStudioPage() {
       <MicroAppPageLayout
         miniTitle="洞见"
         title="洞见"
-        description="多媒体知识捕获与 AI 自我整理。捕获内容后，AI 自动重写、标签、发现概念关联与跨时间洞见。"
+        description="多媒体知识捕获。默认只保存原文和图片；勾选后才生成 AI 摘要、标签和实体，关联与洞见需要单独触发。"
         slot={
           <Button
             size="sm"

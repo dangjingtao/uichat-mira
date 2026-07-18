@@ -120,7 +120,7 @@ export interface ChatMessagePresentationHints {
 
 export interface ChatThreadContextTag {
   id: string;
-  kind: "knowledge-base" | "role";
+  kind: "knowledge-base" | "evolving-knowledge" | "role";
   label: string;
   tooltip?: string;
   removable?: boolean;

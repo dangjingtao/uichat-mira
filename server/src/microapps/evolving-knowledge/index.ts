@@ -6,7 +6,7 @@ import { convertCapturedHtmlToMarkdown } from "@/services/evolving-knowledge-htm
 export type CaptureRequestInput = Omit<
   RepositoryCaptureInput,
   "userId" | "rewrittenSummary" | "aiTags" | "aiEntities" | "attachments"
-> & { attachments?: ImageAttachmentInput[]; rawHtml?: string };
+> & { attachments?: ImageAttachmentInput[]; rawHtml?: string; captureMode?: "page" | "selection" | "image" };
 
 type ImageAttachmentInput = { filePath: string; mimeType: string; sourceUrl?: string };
 
@@ -25,6 +25,16 @@ const saveImageAttachments = async (
     });
   }
 };
+
+const localizeAttachmentReferences = (
+  markdown: string,
+  attachments: ImageAttachmentInput[] | undefined,
+) => (attachments ?? []).reduce(
+  (value, attachment) => attachment.sourceUrl
+    ? value.replaceAll(attachment.sourceUrl, attachment.filePath)
+    : value,
+  markdown,
+);
 
 const SUMMARY_PROMPT = `你是一位知识管理专家，擅长"卡帕西式笔记法"：看完内容后，用自己的话重新提炼核心论点，而不是摘抄原文。
 
@@ -129,6 +139,110 @@ const EVIDENCE_CHUNK_SIZE = 1200;
 const REBUILD_BATCH_SIZE = 25;
 const MAX_REBUILD_BATCH_SIZE = 50;
 
+export type KnowledgeQueryMode = "fact" | "viewpoint" | "mixed" | "conflict";
+
+export type KnowledgeQueryCitation = {
+  sourceType:
+    | "capture"
+    | "evidence"
+    | "topic"
+    | "insight"
+    | "viewpoint"
+    | "viewpoint_version";
+  sourceId: string;
+  title: string;
+  content: string;
+  score: number;
+  captureId: string | null;
+  evidenceUnitId: string | null;
+  topicId: string | null;
+  viewpointVersionId: string | null;
+  references: Array<{
+    captureId: string | null;
+    evidenceUnitId: string | null;
+    sourceLocator?: Record<string, unknown>;
+  }>;
+};
+
+export type KnowledgeQueryResult = {
+  query: string;
+  intent: KnowledgeQueryMode;
+  results: KnowledgeQueryCitation[];
+  total: number;
+};
+
+export type KnowledgeWritebackInput = {
+  kind: "topic" | "viewpoint";
+  title: string;
+  content: string;
+  captureIds?: string[];
+  evidenceUnitIds?: string[];
+  topicId?: string;
+  viewpointId?: string;
+  stance?: "supports" | "opposes" | "context";
+};
+
+const normalizeQueryText = (value: string) => value.trim().toLocaleLowerCase();
+
+const queryTerms = (value: string) => {
+  const normalized = normalizeQueryText(value);
+  const terms = new Set<string>();
+
+  for (const match of normalized.matchAll(/[a-z0-9_]{2,}/g)) {
+    terms.add(match[0]);
+  }
+
+  for (const match of normalized.matchAll(/[\u4e00-\u9fff]+/g)) {
+    const phrase = match[0];
+    if (phrase.length >= 2) terms.add(phrase);
+    for (let index = 0; index < phrase.length - 1; index += 1) {
+      terms.add(phrase.slice(index, index + 2));
+    }
+  }
+
+  if (terms.size === 0 && normalized) terms.add(normalized);
+  return terms;
+};
+
+const scoreQueryMatch = (query: string, fields: Array<{ value: string; weight: number }>) => {
+  const terms = queryTerms(query);
+  if (!terms.size) return 0;
+
+  let score = 0;
+  let matched = 0;
+  for (const term of terms) {
+    let termMatched = false;
+    for (const field of fields) {
+      if (normalizeQueryText(field.value).includes(term)) {
+        score += field.weight;
+        termMatched = true;
+        break;
+      }
+    }
+    if (termMatched) matched += 1;
+  }
+
+  if (!matched) return 0;
+  return Math.min(1, (matched / terms.size) * (score / Math.max(1, fields.length)));
+};
+
+const inferKnowledgeQueryMode = (query: string): KnowledgeQueryMode => {
+  const normalized = normalizeQueryText(query);
+  if (/(冲突|矛盾|分歧|争议|空白|缺口|不足|contradiction|gap)/i.test(normalized)) {
+    return "conflict";
+  }
+  if (/(观点|认识|结论|主题|理解|怎么看|viewpoint|topic)/i.test(normalized)) {
+    return "viewpoint";
+  }
+  if (/(原文|文章|事实|依据|说了什么|fact|source)/i.test(normalized)) {
+    return "fact";
+  }
+  return "mixed";
+};
+
+const clampQueryLimit = (limit: number | undefined) =>
+  Math.max(1, Math.min(50, limit ?? 20));
+
 const createTextEvidenceUnits = (capture: {
   id: string;
   rawContent: string;
@@ -222,8 +336,8 @@ export async function processCapture(
   input: CaptureRequestInput,
   options: { userId: number; processAi?: boolean },
 ) {
-  const { attachments, rawHtml, ...captureInput } = input;
-  const normalizedContent = rawHtml
+  const { attachments, rawHtml, captureMode = "page", ...captureInput } = input;
+  const normalizedContent = rawHtml && captureMode === "page"
     ? convertCapturedHtmlToMarkdown({
         html: rawHtml,
         sourceUrl: input.sourceUrl,
@@ -231,11 +345,15 @@ export async function processCapture(
         fallbackMarkdown: input.rawContent,
         images: attachments,
       })
-    : { title: input.title, markdown: input.rawContent };
+    : { title: input.title, markdown: localizeAttachmentReferences(input.rawContent, attachments) };
   const capture = evolvingKnowledgeRepository.createCapture({
     ...captureInput,
     title: normalizedContent.title,
     rawContent: normalizedContent.markdown,
+    captureMetadata: {
+      ...(captureInput.captureMetadata ?? {}),
+      captureMode,
+    },
     userId: options.userId,
     rewrittenSummary: normalizedContent.markdown.slice(0, 200),
     aiTags: [],
@@ -449,6 +567,282 @@ async function generateRelationsAndInsights(
   }
 
   return { relationsCreated, insightsCreated };
+}
+
+function buildQueryCitation(input: Omit<KnowledgeQueryCitation, "score"> & { score: number }): KnowledgeQueryCitation {
+  return {
+    ...input,
+    score: Math.max(0, Math.min(1, Number(input.score.toFixed(4)))),
+  };
+}
+
+function queryKnowledge(
+  query: string,
+  userId: number,
+  options?: { mode?: KnowledgeQueryMode; limit?: number },
+): KnowledgeQueryResult {
+  const normalizedQuery = query.trim();
+  if (!normalizedQuery) {
+    return { query: normalizedQuery, intent: options?.mode ?? "mixed", results: [], total: 0 };
+  }
+
+  const intent = options?.mode ?? inferKnowledgeQueryMode(normalizedQuery);
+  const limit = clampQueryLimit(options?.limit);
+  const captures = evolvingKnowledgeRepository.listCaptures({ userId, limit: 1000 });
+  const candidates: KnowledgeQueryCitation[] = [];
+  const includeFacts = intent === "fact" || intent === "mixed";
+  const includeKnowledge = intent === "viewpoint" || intent === "mixed";
+
+  if (includeFacts) {
+    for (const capture of captures) {
+      const score = scoreQueryMatch(normalizedQuery, [
+        { value: capture.title, weight: 4 },
+        { value: capture.rewrittenSummary, weight: 3 },
+        { value: capture.rawContent, weight: 1 },
+        { value: capture.aiTags.join(" "), weight: 2 },
+        { value: capture.aiEntities.map((entity) => entity.name).join(" "), weight: 2 },
+      ]);
+      if (!score) continue;
+
+      const evidence = evolvingKnowledgeRepository.listEvidenceUnitsByCapture(capture.id, userId);
+      candidates.push(buildQueryCitation({
+        sourceType: "capture",
+        sourceId: capture.id,
+        title: capture.title,
+        content: capture.rawContent,
+        score,
+        captureId: capture.id,
+        evidenceUnitId: evidence[0]?.id ?? null,
+        topicId: null,
+        viewpointVersionId: null,
+        references: evidence.map((unit) => ({
+          captureId: capture.id,
+          evidenceUnitId: unit.id,
+          sourceLocator: unit.sourceLocator,
+        })),
+      }));
+
+      for (const unit of evidence) {
+        const evidenceScore = scoreQueryMatch(normalizedQuery, [
+          { value: unit.content, weight: 4 },
+          { value: capture.title, weight: 2 },
+        ]);
+        if (!evidenceScore) continue;
+        candidates.push(buildQueryCitation({
+          sourceType: "evidence",
+          sourceId: unit.id,
+          title: capture.title,
+          content: unit.content,
+          score: Math.min(1, evidenceScore * 1.05),
+          captureId: capture.id,
+          evidenceUnitId: unit.id,
+          topicId: null,
+          viewpointVersionId: null,
+          references: [{
+            captureId: capture.id,
+            evidenceUnitId: unit.id,
+            sourceLocator: unit.sourceLocator,
+          }],
+        }));
+      }
+    }
+  }
+
+  if (includeKnowledge) {
+    const topics = evolvingKnowledgeRepository.listTopics(userId, 1000);
+    for (const topic of topics) {
+      const topicEvidence = evolvingKnowledgeRepository.listTopicEvidence(topic.id, userId);
+      const score = scoreQueryMatch(normalizedQuery, [
+        { value: topic.name, weight: 4 },
+        { value: topic.summary, weight: 3 },
+        { value: parseJsonValue<string[]>(topic.pendingQuestionsJson, []).join(" "), weight: 2 },
+      ]);
+      if (!score) continue;
+      candidates.push(buildQueryCitation({
+        sourceType: "topic",
+        sourceId: topic.id,
+        title: topic.name,
+        content: topic.summary,
+        score,
+        captureId: topicEvidence.find((item) => item.captureId)?.captureId ?? null,
+        evidenceUnitId: topicEvidence.find((item) => item.evidenceUnitId)?.evidenceUnitId ?? null,
+        topicId: topic.id,
+        viewpointVersionId: null,
+        references: topicEvidence.map((item) => ({
+          captureId: item.captureId ?? null,
+          evidenceUnitId: item.evidenceUnitId ?? null,
+        })),
+      }));
+    }
+
+    const viewpoints = evolvingKnowledgeRepository.listViewpoints(userId);
+    for (const viewpoint of viewpoints) {
+      const versions = evolvingKnowledgeRepository.listViewpointVersions(viewpoint.id, userId);
+      const currentVersion = versions.find((version) => version.id === viewpoint.currentVersionId) ?? versions[0];
+      const versionEvidence = currentVersion
+        ? evolvingKnowledgeRepository.listViewpointEvidence(currentVersion.id, userId)
+        : [];
+      const score = scoreQueryMatch(normalizedQuery, [
+        { value: viewpoint.title, weight: 4 },
+        { value: viewpoint.statement, weight: 4 },
+        { value: currentVersion?.statement ?? "", weight: 3 },
+      ]);
+      if (!score) continue;
+
+      const sourceId = currentVersion?.id ?? viewpoint.id;
+      candidates.push(buildQueryCitation({
+        sourceType: currentVersion ? "viewpoint_version" : "viewpoint",
+        sourceId,
+        title: viewpoint.title,
+        content: currentVersion?.statement ?? viewpoint.statement,
+        score: viewpoint.status === "needs_review" ? score * 0.9 : score,
+        captureId: versionEvidence.find((item) => item.captureId)?.captureId ?? null,
+        evidenceUnitId: versionEvidence.find((item) => item.evidenceUnitId)?.evidenceUnitId ?? null,
+        topicId: viewpoint.topicId ?? null,
+        viewpointVersionId: currentVersion?.id ?? null,
+        references: versionEvidence.map((item) => ({
+          captureId: item.captureId ?? null,
+          evidenceUnitId: item.evidenceUnitId ?? null,
+          sourceLocator: parseJsonValue<Record<string, unknown>>(item.locatorJson, {}),
+        })),
+      }));
+    }
+
+  }
+
+  if (includeKnowledge || intent === "conflict") {
+    const insights = evolvingKnowledgeRepository.listActiveInsights(userId, { limit: 1000 });
+    for (const insight of insights) {
+      if (intent === "conflict" && insight.insightType !== "contradiction" && insight.insightType !== "gap") continue;
+      const score = scoreQueryMatch(normalizedQuery, [
+        { value: insight.title, weight: 4 },
+        { value: insight.description, weight: 3 },
+        { value: insight.insightType, weight: intent === "conflict" ? 4 : 1 },
+      ]);
+      if (!score) continue;
+      const relatedCaptureIds = parseJsonValue<string[]>(insight.relatedCaptureIdsJson, []);
+      const evidenceUnitIds = parseJsonValue<string[]>(insight.evidenceUnitIdsJson, []);
+      candidates.push(buildQueryCitation({
+        sourceType: "insight",
+        sourceId: insight.id,
+        title: insight.title,
+        content: insight.description,
+        score: intent === "conflict" ? Math.min(1, score * 1.1) : score,
+        captureId: insight.triggerCaptureId,
+        evidenceUnitId: evidenceUnitIds[0] ?? null,
+        topicId: null,
+        viewpointVersionId: null,
+        references: [insight.triggerCaptureId, ...relatedCaptureIds].map((captureId, index) => ({
+          captureId: captureId ?? null,
+          evidenceUnitId: evidenceUnitIds[index] ?? null,
+        })),
+      }));
+    }
+  }
+
+  const deduplicated = new Map<string, KnowledgeQueryCitation>();
+  for (const candidate of candidates) {
+    const key = `${candidate.sourceType}:${candidate.sourceId}`;
+    const existing = deduplicated.get(key);
+    if (!existing || candidate.score > existing.score) deduplicated.set(key, candidate);
+  }
+  const results = [...deduplicated.values()]
+    .sort((left, right) => right.score - left.score || left.title.localeCompare(right.title))
+  const total = results.length;
+
+  const response = { query: normalizedQuery, intent, results: results.slice(0, limit), total };
+  evolvingKnowledgeRepository.createQueryLog({
+    userId,
+    query: normalizedQuery,
+    intent,
+    resultCount: response.results.length,
+    sourceIds: response.results.map((item) => item.sourceId),
+  });
+  return response;
+}
+
+function writeBackKnowledge(input: KnowledgeWritebackInput, userId: number) {
+  const title = input.title.trim();
+  const content = input.content.trim();
+  if (!title || !content) throw new Error("title and content are required");
+  const captureIds = [...new Set(input.captureIds ?? [])];
+  const evidenceUnitIds = [...new Set(input.evidenceUnitIds ?? [])];
+
+  for (const captureId of captureIds) {
+    if (!evolvingKnowledgeRepository.getCaptureById(captureId, userId)) {
+      throw new Error(`Capture not found: ${captureId}`);
+    }
+  }
+  for (const evidenceUnitId of evidenceUnitIds) {
+    const capture = evolvingKnowledgeRepository.listCaptures({ userId, limit: 1000 })
+      .find((item) => evolvingKnowledgeRepository.listEvidenceUnitsByCapture(item.id, userId)
+        .some((unit) => unit.id === evidenceUnitId));
+    if (!capture) throw new Error(`Evidence unit not found: ${evidenceUnitId}`);
+  }
+
+  if (input.kind === "topic") {
+    const topic = evolvingKnowledgeRepository.createTopic({
+      userId,
+      name: title,
+      summary: content,
+    });
+    const referencedCaptureIds = new Set(captureIds);
+    const units = evidenceUnitIds.length
+      ? evolvingKnowledgeRepository.listCaptures({ userId, limit: 1000 })
+        .flatMap((capture) => evolvingKnowledgeRepository.listEvidenceUnitsByCapture(capture.id, userId)
+          .filter((unit) => evidenceUnitIds.includes(unit.id))
+          .map((unit) => ({ captureId: capture.id, evidenceUnitId: unit.id })))
+      : [];
+    for (const reference of units) {
+      referencedCaptureIds.add(reference.captureId);
+      evolvingKnowledgeRepository.addTopicEvidence({
+        userId,
+        topicId: topic.id,
+        captureId: reference.captureId,
+        evidenceUnitId: reference.evidenceUnitId,
+        evidenceRole: input.stance ?? "context",
+      });
+    }
+    const unitCaptureIds = new Set(units.map((reference) => reference.captureId));
+    for (const captureId of referencedCaptureIds) {
+      if (unitCaptureIds.has(captureId)) continue;
+      evolvingKnowledgeRepository.addTopicEvidence({
+        userId,
+        topicId: topic.id,
+        captureId,
+        evidenceRole: input.stance ?? "context",
+      });
+    }
+    return { kind: input.kind, topic };
+  }
+
+  if (!input.viewpointId) throw new Error("viewpointId is required for viewpoint writeback");
+  const viewpoint = evolvingKnowledgeRepository.getViewpoint(input.viewpointId, userId);
+  if (!viewpoint) throw new Error("Viewpoint not found");
+  const evidence = [
+    ...captureIds.map((captureId) => ({
+      captureId,
+      stance: input.stance ?? "context" as const,
+    })),
+    ...evidenceUnitIds.map((evidenceUnitId) => ({
+      evidenceUnitId,
+      stance: input.stance ?? "context" as const,
+    })),
+  ];
+  const version = evolvingKnowledgeRepository.createViewpointVersion({
+    userId,
+    viewpointId: viewpoint.id,
+    statement: content,
+    changeType: "revised",
+    triggerReason: "User explicitly saved a conversation analysis.",
+    inputScope: { captureIds, evidenceUnitIds, source: "conversation" },
+    modelInfo: { source: "user_writeback" },
+    confidence: viewpoint.confidence,
+    status: "needs_review",
+    evidence,
+  });
+  if (!version) throw new Error("Failed to create viewpoint version");
+  return { kind: input.kind, viewpoint, version };
 }
 
 type TopicCompileResult = {
@@ -707,6 +1101,10 @@ export function createEvolvingKnowledgeService() {
   return {
     processCapture,
     rebuildKnowledge,
+    queryKnowledge,
+    writeBackKnowledge,
+    getKnowledgeHealth: (userId: number) => evolvingKnowledgeRepository.listKnowledgeHealth(userId),
+    listQueryLogs: (userId: number, limit?: number) => evolvingKnowledgeRepository.listQueryLogs(userId, limit),
     compileTopicForConcept,
     reviewViewpoint,
     listConcepts: (userId: number, options?: { status?: string; limit?: number }) => evolvingKnowledgeRepository.listConcepts(userId, options),

@@ -264,6 +264,109 @@ describe("evolving-knowledge service", () => {
     expect(results[0].title).toBe("机器学习入门");
   });
 
+  it("queries facts through evidence and keeps results isolated by user", async () => {
+    const service = createEvolvingKnowledgeService();
+    const capture = await service.processCapture(
+      {
+        sourceUrl: "https://example.com/fact",
+        title: "机器学习实验",
+        contentType: "webpage",
+        rawContent: "机器学习实验需要记录指标和实验条件。",
+      },
+      { userId: 1, processAi: false },
+    );
+
+    const result = service.queryKnowledge("机器学习", 1, { mode: "fact" });
+    expect(result.intent).toBe("fact");
+    expect(result.results.some((item) => item.sourceType === "capture")).toBe(true);
+    const evidence = result.results.find((item) => item.sourceType === "evidence");
+    expect(evidence?.captureId).toBe(capture.id);
+    expect(evidence?.evidenceUnitId).toBeTruthy();
+    expect(evidence?.references[0]?.sourceLocator).toEqual({
+      startOffset: 0,
+      endOffset: "机器学习实验需要记录指标和实验条件。".length,
+    });
+    expect(service.queryKnowledge("机器学习", 2).results).toHaveLength(0);
+  });
+
+  it("queries viewpoint versions and filters conflict results to contradiction or gap insights", async () => {
+    const service = createEvolvingKnowledgeService();
+    const capture = await service.processCapture(
+      {
+        sourceUrl: "https://example.com/viewpoint",
+        title: "Agent 记忆材料",
+        contentType: "webpage",
+        rawContent: "Agent 记忆需要验证。",
+      },
+      { userId: 1, processAi: false },
+    );
+    evolvingKnowledgeRepository.updateCapture(capture.id, 1, {
+      rewrittenSummary: "Agent 记忆观点材料",
+      aiTags: ["Agent", "记忆"],
+      processingStatus: "completed",
+      markUserEdited: false,
+    });
+    const concept = evolvingKnowledgeRepository.syncConceptsForCapture(capture.id, 1)[0];
+    const topic = evolvingKnowledgeRepository.getOrCreateTopicForConcept(concept.id, 1)!;
+    evolvingKnowledgeRepository.updateTopic(topic.id, 1, {
+      summary: "Agent 记忆需要可验证。",
+      pendingQuestions: [],
+      sourceCount: 1,
+      currentVersion: 1,
+    });
+    const viewpoint = evolvingKnowledgeRepository.createViewpoint({
+      userId: 1,
+      topicId: topic.id,
+      title: "Agent 记忆观点",
+      statement: "Agent 记忆必须可验证。",
+      status: "active",
+    });
+    const version = evolvingKnowledgeRepository.createViewpointVersion({
+      userId: 1,
+      viewpointId: viewpoint.id,
+      statement: "Agent 记忆必须可验证。",
+      changeType: "formed",
+      triggerReason: "test",
+      inputScope: { captureIds: [capture.id] },
+      confidence: 0.8,
+      status: "active",
+      evidence: [{ captureId: capture.id, stance: "supports" }],
+    })!;
+    evolvingKnowledgeRepository.createInsight({
+      userId: 1,
+      insightType: "contradiction",
+      title: "Agent 记忆存在冲突",
+      description: "两条材料对 Agent 记忆的验证要求存在冲突。",
+      triggerCaptureId: capture.id,
+      relatedCaptureIds: [],
+      confidence: 0.8,
+    });
+    evolvingKnowledgeRepository.createInsight({
+      userId: 1,
+      insightType: "synthesis",
+      title: "Agent 记忆聚合",
+      description: "这是普通聚合结果。",
+      triggerCaptureId: capture.id,
+      relatedCaptureIds: [],
+      confidence: 0.8,
+    });
+
+    const viewpointResult = service.queryKnowledge("Agent 记忆观点", 1, {
+      mode: "viewpoint",
+    });
+    const viewpointHit = viewpointResult.results.find((item) => item.sourceType === "viewpoint_version");
+    expect(viewpointHit?.sourceId).toBe(version.id);
+    expect(viewpointHit?.viewpointVersionId).toBe(version.id);
+    expect(viewpointHit?.references[0]?.captureId).toBe(capture.id);
+
+    const conflictResult = service.queryKnowledge("Agent 记忆 冲突", 1, {
+      mode: "conflict",
+    });
+    expect(conflictResult.results.every((item) => item.sourceType === "insight")).toBe(true);
+    expect(conflictResult.results.map((item) => item.title)).toContain("Agent 记忆存在冲突");
+    expect(conflictResult.results.map((item) => item.title)).not.toContain("Agent 记忆聚合");
+  });
+
   it("keeps captures isolated by user and preserves raw content when AI fails", async () => {
     mockGenerateText.mockRejectedValue(new Error("provider unavailable"));
 
@@ -452,5 +555,37 @@ describe("evolving-knowledge service", () => {
     ).run("2000-01-01T00:00:00.000Z", first.id);
 
     expect(evolvingKnowledgeRepository.listActiveInsights(1)).toHaveLength(0);
+  });
+
+  it("audits queries, reports health, and writes back a topic with evidence", async () => {
+    const service = createEvolvingKnowledgeService();
+    const capture = await service.processCapture(
+      {
+        sourceUrl: "https://example.com/maintenance",
+        title: "维护材料",
+        contentType: "webpage",
+        rawContent: "知识维护需要保留证据。",
+      },
+      { userId: 1, processAi: false },
+    );
+
+    const query = service.queryKnowledge("知识维护", 1, { mode: "fact" });
+    expect(query.results.length).toBeGreaterThan(0);
+    expect(service.listQueryLogs(1)).toHaveLength(1);
+
+    const evidenceUnit = evolvingKnowledgeRepository.listEvidenceUnitsByCapture(capture.id, 1)[0];
+    const writeback = service.writeBackKnowledge({
+      kind: "topic",
+      title: "知识维护实践",
+      content: "知识维护需要保留可追溯证据。",
+      captureIds: [capture.id],
+      evidenceUnitIds: evidenceUnit ? [evidenceUnit.id] : [],
+    }, 1);
+    expect(writeback.topic?.name).toBe("知识维护实践");
+    expect(evolvingKnowledgeRepository.listTopicEvidence(writeback.topic!.id, 1)).toHaveLength(1);
+
+    const health = service.getKnowledgeHealth(1);
+    expect(health.status).toBe("healthy");
+    expect(health.missingEvidenceCaptureIds).toHaveLength(0);
   });
 });

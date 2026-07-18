@@ -9,36 +9,20 @@
     <h1>见行设置</h1>
 
     <div class="field">
-      <label for="transport">连接方式</label>
-      <select id="transport">
-        <option value="websocket">WebSocket（开发/兼容）</option>
-        <option value="native">Native Messaging（稳定连接）</option>
-      </select>
-      <p class="hint">Native Messaging 需要 Mira 安装连接组件；未安装时会明确报错，不会自动切换。</p>
-    </div>
-
-    <div class="field">
-      <label for="webAppUrl">Mira 前端地址</label>
-      <input id="webAppUrl" type="text" placeholder="填写 Mira 前端地址" />
-      <p class="hint">仅自动 OAuth 登录需要；使用 Mira 生成的授权码时可以留空。</p>
+      <label>连接方式</label>
+      <p class="hint">见行使用 Native Messaging 连接 Mira。请先在 Mira 中安装或修复连接组件。</p>
     </div>
 
     <div class="field">
       <label for="backendUrl">Mira 后端地址</label>
       <input id="backendUrl" type="text" placeholder="授权后自动识别，可留空" />
-      <p class="hint">授权码会携带桌面端口，完成授权后自动写入；此处仅用于手动测试或覆盖地址。</p>
+      <p class="hint">授权页会从授权码自动写入地址。这里仅用于连接诊断或手动覆盖。</p>
     </div>
 
     <div class="field">
       <label>登录授权</label>
-      <button id="authorizeBtn" type="button" class="primary">登录并授权 Mira</button>
-      <span id="authorizeResult" class="save-result"></span>
-      <p class="hint">扩展通过 Mira 的授权页面完成登录，不需要复制或填写访问令牌。</p>
-      <div class="code-login">
-        <input id="authorizationCode" type="text" placeholder="粘贴 Mira 前端生成的授权码" />
-        <button id="exchangeCodeBtn" type="button">使用授权码</button>
-      </div>
-      <button id="openAuthorizationPage" type="button">打开独立授权页</button>
+      <button id="openAuthorizationPage" type="button" class="primary">打开授权页</button>
+      <p class="hint">授权码输入和登录只在独立授权页完成。</p>
     </div>
 
     <div class="field">
@@ -53,7 +37,6 @@
     </div>
   </div>
 
-  <script src="../lib/authorization-code.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

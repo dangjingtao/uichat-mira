@@ -125,6 +125,29 @@ describe("evolving-knowledge routes", () => {
     expect(JSON.parse(res.payload).code).toBe("VALIDATION_ERROR");
   });
 
+  it("POST /captures preserves a selection and does not call AI by default", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/microapps/evolving-knowledge/captures",
+      headers: { authorization: `Bearer ${authToken}` },
+      payload: {
+        sourceUrl: "https://example.com/selection",
+        title: "选中内容",
+        contentType: "webpage",
+        captureMode: "selection",
+        rawContent: "用户选中的一小段文字",
+        rawHtml: "<html><body><article><p>整篇文章不应覆盖选中内容。</p></article></body></html>",
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.payload);
+    expect(body.data.rawContent).toBe("用户选中的一小段文字");
+    expect(body.data.captureMetadata.captureMode).toBe("selection");
+    expect(body.data.processingStatus).toBe("skipped");
+    expect(mockGenerateText).not.toHaveBeenCalled();
+  });
+
   it("POST /captures rejects deferred audio and video types", async () => {
     const res = await app.inject({
       method: "POST",
@@ -308,6 +331,113 @@ describe("evolving-knowledge routes", () => {
     expect(body.data.length).toBeGreaterThan(0);
   });
 
+  it("POST /query returns cited knowledge results", async () => {
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/microapps/evolving-knowledge/captures",
+      headers: { authorization: `Bearer ${authToken}` },
+      payload: {
+        sourceUrl: "https://example.com/query",
+        title: "查询材料",
+        contentType: "webpage",
+        rawContent: "知识查询必须保留原始证据。",
+        processAi: false,
+      },
+    });
+    expect(createRes.statusCode).toBe(200);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/microapps/evolving-knowledge/query",
+      headers: { authorization: `Bearer ${authToken}` },
+      payload: { query: "原始证据", mode: "fact", limit: 5 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.payload);
+    expect(body.success).toBe(true);
+    expect(body.data.intent).toBe("fact");
+    expect(body.data.results.some((item: { sourceType: string }) => item.sourceType === "evidence")).toBe(true);
+  });
+
+  it("POST /query validates query options", async () => {
+    const missingQuery = await app.inject({
+      method: "POST",
+      url: "/microapps/evolving-knowledge/query",
+      headers: { authorization: `Bearer ${authToken}` },
+      payload: {},
+    });
+    expect(missingQuery.statusCode).toBe(400);
+
+    const invalidMode = await app.inject({
+      method: "POST",
+      url: "/microapps/evolving-knowledge/query",
+      headers: { authorization: `Bearer ${authToken}` },
+      payload: { query: "test", mode: "unknown" },
+    });
+    expect(invalidMode.statusCode).toBe(400);
+
+    const invalidLimit = await app.inject({
+      method: "POST",
+      url: "/microapps/evolving-knowledge/query",
+      headers: { authorization: `Bearer ${authToken}` },
+      payload: { query: "test", limit: 51 },
+    });
+    expect(invalidLimit.statusCode).toBe(400);
+  });
+
+  it("supports explicit writeback, health, and query log routes", async () => {
+    const captureRes = await app.inject({
+      method: "POST",
+      url: "/microapps/evolving-knowledge/captures",
+      headers: { authorization: `Bearer ${authToken}` },
+      payload: {
+        sourceUrl: "https://example.com/writeback",
+        title: "写回材料",
+        contentType: "webpage",
+        rawContent: "写回必须由用户明确触发。",
+        processAi: false,
+      },
+    });
+    const captureId = JSON.parse(captureRes.payload).data.id as string;
+    const evidenceRes = await app.inject({
+      method: "GET",
+      url: `/microapps/evolving-knowledge/captures/${captureId}/evidence`,
+      headers: { authorization: `Bearer ${authToken}` },
+    });
+    const evidenceId = JSON.parse(evidenceRes.payload).data[0].id as string;
+
+    const writebackRes = await app.inject({
+      method: "POST",
+      url: "/microapps/evolving-knowledge/writeback",
+      headers: { authorization: `Bearer ${authToken}` },
+      payload: {
+        kind: "topic",
+        title: "写回规则",
+        content: "写回必须由用户明确触发。",
+        captureIds: [captureId],
+        evidenceUnitIds: [evidenceId],
+      },
+    });
+    expect(writebackRes.statusCode).toBe(200);
+
+    const healthRes = await app.inject({
+      method: "GET",
+      url: "/microapps/evolving-knowledge/health",
+      headers: { authorization: `Bearer ${authToken}` },
+    });
+    expect(healthRes.statusCode).toBe(200);
+    expect(JSON.parse(healthRes.payload).data.counts.topics).toBeGreaterThan(0);
+
+    const logsRes = await app.inject({
+      method: "GET",
+      url: "/microapps/evolving-knowledge/query-logs?limit=5",
+      headers: { authorization: `Bearer ${authToken}` },
+    });
+    expect(logsRes.statusCode).toBe(200);
+    expect(Array.isArray(JSON.parse(logsRes.payload).data)).toBe(true);
+  });
+
   it("GET /insights returns active insights", async () => {
     let callCount = 0;
     mockGenerateText.mockImplementation(() => {
@@ -405,6 +535,7 @@ describe("evolving-knowledge routes", () => {
         title: "Test",
         contentType: "webpage",
         rawContent: "content",
+        processAi: true,
       },
     });
 

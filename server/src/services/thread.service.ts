@@ -22,6 +22,7 @@ export interface ThreadResponse {
   agentEnabled: boolean;
   ttsEnabled: boolean;
   imageEnabled: boolean;
+  evolvingKnowledgeEnabled: boolean;
   contextSummary: string | null;
   contextSummaryUpdatedAt: string | null;
   status: ThreadStatus;
@@ -79,6 +80,7 @@ export interface CreateThreadInput {
   agentEnabled?: boolean | null;
   ttsEnabled?: boolean | null;
   imageEnabled?: boolean | null;
+  evolvingKnowledgeEnabled?: boolean | null;
   contextSummary?: string | null;
 }
 
@@ -222,6 +224,7 @@ const toThreadResponse = (
     agentEnabled: thread.agentEnabled ?? false,
     ttsEnabled: thread.ttsEnabled ?? false,
     imageEnabled: thread.imageEnabled ?? false,
+    evolvingKnowledgeEnabled: thread.evolvingKnowledgeEnabled ?? false,
     contextSummary: thread.contextSummary ?? null,
     contextSummaryUpdatedAt: thread.contextSummaryUpdatedAt ?? null,
     status: thread.status,
@@ -251,6 +254,7 @@ const toThreadResponseFromStats = (
     agentEnabled: thread.agentEnabled ?? false,
     ttsEnabled: thread.ttsEnabled ?? false,
     imageEnabled: thread.imageEnabled ?? false,
+    evolvingKnowledgeEnabled: thread.evolvingKnowledgeEnabled ?? false,
     contextSummary: thread.contextSummary ?? null,
     contextSummaryUpdatedAt: thread.contextSummaryUpdatedAt ?? null,
     status: thread.status,
@@ -490,6 +494,7 @@ export const threadService = {
     const agentEnabled = input.agentEnabled;
     const ttsEnabled = input.ttsEnabled;
     const imageEnabled = input.imageEnabled;
+    const evolvingKnowledgeEnabled = input.evolvingKnowledgeEnabled;
     const contextSummary = input.contextSummary?.trim();
 
     if (workspaceId && !chatWorkspaceRepository.findById(workspaceId, input.userId)) {
@@ -512,6 +517,7 @@ export const threadService = {
       imageEnabled: typeof imageEnabled === "boolean"
         ? imageEnabled
         : Boolean(roleId && !knowledgeBaseId),
+      evolvingKnowledgeEnabled: typeof evolvingKnowledgeEnabled === "boolean" ? evolvingKnowledgeEnabled : false,
       contextSummary: contextSummary || null,
       contextSummaryUpdatedAt: contextSummary ? new Date().toISOString() : null,
       status: "active",
@@ -540,6 +546,7 @@ export const threadService = {
       input.agentEnabled === undefined &&
       input.ttsEnabled === undefined &&
       input.imageEnabled === undefined &&
+      input.evolvingKnowledgeEnabled === undefined &&
       input.contextSummary === undefined
     ) {
       return toThreadResponse(
@@ -602,6 +609,12 @@ export const threadService = {
     if (input.ttsEnabled === null) updateData.ttsEnabled = false;
     if (typeof input.imageEnabled === "boolean") updateData.imageEnabled = input.imageEnabled;
     if (input.imageEnabled === null) updateData.imageEnabled = false;
+    if (typeof input.evolvingKnowledgeEnabled === "boolean") {
+      updateData.evolvingKnowledgeEnabled = input.evolvingKnowledgeEnabled;
+    }
+    if (input.evolvingKnowledgeEnabled === null) {
+      updateData.evolvingKnowledgeEnabled = false;
+    }
     if (typeof input.contextSummary === "string") {
       const normalizedSummary = input.contextSummary.trim();
       updateData.contextSummary = normalizedSummary || null;

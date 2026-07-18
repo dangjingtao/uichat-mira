@@ -96,6 +96,7 @@ export const threadRepository = {
         knowledgeBaseId: threads.knowledgeBaseId,
         roleId: threads.roleId,
         agentEnabled: threads.agentEnabled,
+        evolvingKnowledgeEnabled: threads.evolvingKnowledgeEnabled,
         contextSummary: threads.contextSummary,
         contextSummaryUpdatedAt: threads.contextSummaryUpdatedAt,
         status: threads.status,

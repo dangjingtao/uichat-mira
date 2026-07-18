@@ -37,15 +37,13 @@
     tagInput: document.getElementById('tagInput'),
     note: document.getElementById('note'),
     processAi: document.getElementById('processAi'),
+    rebuildKnowledge: document.getElementById('rebuildKnowledge'),
     saveBtn: document.getElementById('saveBtn'),
     status: document.getElementById('status'),
     spinner: document.querySelector('#saveBtn .spinner'),
     btnLabel: document.querySelector('#saveBtn .label'),
-    authorizationCode: document.getElementById('authorizationCode'),
-    exchangeCodeBtn: document.getElementById('exchangeCodeBtn'),
     authStatus: document.getElementById('authStatus'),
     openAuthorizationPage: document.getElementById('openAuthorizationPage'),
-    transport: document.getElementById('transport'),
   };
 
   // ===== Init =====
@@ -53,9 +51,8 @@
     setState('LOADING');
 
     try {
-      const stored = await chrome.storage.sync.get(['backendUrl', 'transport']);
+      const stored = await chrome.storage.sync.get(['backendUrl']);
       if (stored.backendUrl) backendUrl = stored.backendUrl;
-      els.transport.value = stored.transport === 'websocket' ? 'websocket' : 'native';
       const tokenStore = await chrome.storage.local.get(['accessToken']);
       if (tokenStore.accessToken) accessToken = tokenStore.accessToken;
       if (chrome.storage.session) {
@@ -81,7 +78,7 @@
     showAuthGate();
     connectionState = 'disconnected';
     setState('LOCKED');
-    showAuthStatus('授权已失效，请重新输入 Mira 授权码', true);
+    showAuthStatus('授权已失效，请打开授权页重新授权', true);
   });
 
   async function syncConnectionState() {
@@ -114,7 +111,11 @@
     // 获取页面信息（先尝试 sendMessage，失败则注入 extractor + content script）
     let info;
     try {
-      info = await sendMessageToTab(currentTabId, { type: 'GET_PAGE_INFO' });
+      info = await sendMessageToTab(currentTabId, {
+        type: 'GET_PAGE_INFO',
+        captureMode: pendingCapture?.captureMode || 'auto',
+        imageUrl: pendingCapture?.imageUrl || '',
+      });
     } catch (_) {
       try {
         // 先注入 extractor（content.js 依赖它）
@@ -126,7 +127,11 @@
           target: { tabId: currentTabId },
           files: [`${extensionAssetPrefix}content/content.js`]
         });
-        info = await sendMessageToTab(currentTabId, { type: 'GET_PAGE_INFO' });
+        info = await sendMessageToTab(currentTabId, {
+          type: 'GET_PAGE_INFO',
+          captureMode: pendingCapture?.captureMode || 'auto',
+          imageUrl: pendingCapture?.imageUrl || '',
+        });
       } catch (e) {
         setState('ERROR', '无法读取页面信息：' + e.message);
         return;
@@ -136,10 +141,15 @@
     if (pendingCapture?.imageUrl) {
       info = {
         ...info,
+        captureMode: 'image',
         title: pendingCapture.title || info.title,
         url: pendingCapture.url || info.url,
         favicon: pendingCapture.favicon || info.favicon,
         contentType: 'webpage',
+        contentMarkdown: '',
+        contentPlainText: '',
+        selectedText: '',
+        imageUrls: [pendingCapture.imageUrl],
         imageUrl: pendingCapture.imageUrl,
       };
       if (chrome.storage.session) {
@@ -149,10 +159,15 @@
     } else if (pendingCapture?.selectedText) {
       info = {
         ...info,
+        captureMode: 'selection',
         selectedText: pendingCapture.selectedText,
         title: pendingCapture.title || info.title,
         url: pendingCapture.url || info.url,
         favicon: pendingCapture.favicon || info.favicon,
+        contentMarkdown: '',
+        contentPlainText: '',
+        imageUrls: [],
+        imageDataUrls: [],
       };
       if (chrome.storage.session) {
         await chrome.storage.session.remove(['pendingCapture']);
@@ -162,45 +177,6 @@
 
     if (fillForm(info)) {
       setState('READY');
-    }
-  }
-
-  async function exchangeAuthorizationCode() {
-    const encodedCode = els.authorizationCode.value.trim();
-    if (!encodedCode) {
-      showAuthStatus('请先粘贴授权码', true);
-      return;
-    }
-    els.exchangeCodeBtn.disabled = true;
-    showAuthStatus('授权中…', false);
-    try {
-      const parsed = window.MiraAuthorizationCode.unwrap(encodedCode);
-      backendUrl = parsed.backendUrl;
-      await chrome.storage.sync.set({ backendUrl });
-      const response = await fetch(`${backendUrl}/oauth/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          grant_type: 'authorization_code',
-          client_id: 'mira-clipper',
-          code: parsed.code,
-        }),
-      });
-      const result = await response.json();
-      if (!response.ok || !result.accessToken) {
-        throw new Error(result.message || `授权失败（${response.status}）`);
-      }
-      accessToken = result.accessToken;
-      await chrome.storage.local.set({ accessToken });
-      els.authorizationCode.value = '';
-      showAuthStatus('授权成功', false);
-      showCaptureView();
-      await syncConnectionState();
-      await loadActiveTabInfo();
-    } catch (error) {
-      showAuthStatus(error.message || '授权失败', true);
-    } finally {
-      els.exchangeCodeBtn.disabled = false;
     }
   }
 
@@ -307,6 +283,7 @@
     els.saveBtn.dataset.imageUrl = imageUrl;
     els.saveBtn.dataset.imageUrls = JSON.stringify(imageUrls);
     els.saveBtn.dataset.imageDataUrls = JSON.stringify(imageDataUrls);
+    els.saveBtn.dataset.captureMode = info.captureMode === 'selection' || info.captureMode === 'image' ? info.captureMode : 'page';
     extractionStatus = info.extractionStatus || 'empty';
     if (extractionStatus !== 'ok' && !selected && !imageUrls.length) {
       setState('ERROR', '未提取到可用正文，请先选中页面中的文字后重试');
@@ -393,7 +370,7 @@
         showAuthGate();
         connectionState = 'disconnected';
         setState('LOCKED');
-        showAuthStatus('请先输入 Mira 授权码', true);
+        showAuthStatus('请先打开授权页完成授权', true);
         return;
       }
 
@@ -431,9 +408,10 @@
       favicon: els.saveBtn.dataset.favicon || undefined,
       contentType,
       rawContent,
-      rawHtml: currentPageHtml || undefined,
-      processAi: true,
-      rebuild: els.processAi.checked,
+      captureMode: els.saveBtn.dataset.captureMode || 'page',
+      rawHtml: els.saveBtn.dataset.captureMode === 'page' ? currentPageHtml || undefined : undefined,
+      processAi: els.processAi.checked,
+      rebuild: els.rebuildKnowledge.checked,
       metadata: {
         canonicalUrl: els.saveBtn.dataset.canonicalUrl || undefined,
         selectedText: selectedText || undefined,
@@ -461,7 +439,7 @@
       });
 
       if (res.ok) {
-        if (els.processAi.checked) {
+        if (els.rebuildKnowledge.checked) {
           const rebuildResponse = await fetch(`${backendUrl.replace(/\/$/, '')}/microapps/evolving-knowledge/rebuild`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${accessToken}` },
@@ -483,7 +461,7 @@
         showAuthGate();
         connectionState = 'disconnected';
         setState('LOCKED');
-        showAuthStatus('授权已失效，请重新输入 Mira 授权码', true);
+        showAuthStatus('授权已失效，请打开授权页重新授权', true);
         return;
       }
       try {
@@ -565,20 +543,9 @@
   }
 
   // ===== Boot =====
-  els.exchangeCodeBtn.addEventListener('click', exchangeAuthorizationCode);
   els.openAuthorizationPage.addEventListener('click', () => {
     const prefix = extensionAssetPrefix;
     chrome.tabs.create({ url: chrome.runtime.getURL(`${prefix}auth/authorize.html`) });
-  });
-  els.transport.addEventListener('change', async () => {
-    const transport = els.transport.value === 'native' ? 'native' : 'websocket';
-    try {
-      await chrome.storage.sync.set({ transport });
-      await chrome.runtime.sendMessage({ type: 'WEBBRIDGE_RECONNECT' });
-      showAuthStatus(`已切换为${transport === 'native' ? ' Native Messaging' : ' WebSocket'}，正在重连…`, false);
-    } catch (error) {
-      showAuthStatus(`连接方式切换失败：${error?.message || '未知错误'}`, true);
-    }
   });
   init();
 })();

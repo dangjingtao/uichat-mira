@@ -34,6 +34,8 @@ import { NO_CONTEXT_ANSWER } from "./rag-response-constants";
 const RAGGraphState = Annotation.Root({
   // 用户当前问题，是整个 RAG 流程的核心输入。
   question: Annotation<string>,
+  userId: Annotation<number | undefined>,
+  evolvingKnowledgeEnabled: Annotation<boolean | undefined>,
   // 检索阶段实际使用的问题，可由 rewrite 节点在必要时改写。
   retrievalQuestion: Annotation<string | undefined>,
   // 当前查询是否发生过改写。
@@ -75,6 +77,8 @@ export type RAGGraphStateType = typeof RAGGraphState.State;
 // RAG 图的外部输入。调用方只需要提供问题，其他字段都是调优或上下文参数。
 export interface RAGGraphInput {
   question: string;
+  userId?: number;
+  evolvingKnowledgeEnabled?: boolean;
   knowledgeBaseId?: string;
   topK?: number;
   topN?: number;
@@ -200,6 +204,9 @@ const rewriteNode = createObservableNode("rewrite", async (state) => {
     });
   });
 
+const routeAfterRewrite = (state: RAGGraphStateType) =>
+  state.evolvingKnowledgeEnabled ? "retrieve" : "embed";
+
 // embedding 节点：把用户问题转成向量，并记录模型元信息。
 // 后续检索节点会使用这些字段去匹配同维度、同模型配置的知识库向量。
 const embedNode = createObservableNode("embed", async (state) => {
@@ -213,11 +220,13 @@ const embedNode = createObservableNode("embed", async (state) => {
 const retrieveNode = createObservableNode("retrieve", async (state) => {
     const result = await retrieveService.runNode({
       question: state.retrievalQuestion ?? state.question,
+      userId: state.userId,
       embedding: state.embedding ?? [],
       embeddingDimensions: state.embeddingDimensions,
       embeddingModel: state.embeddingModel,
       embeddingModelConfigId: state.embeddingModelConfigId,
       knowledgeBaseId: state.knowledgeBaseId,
+      evolvingKnowledgeEnabled: state.evolvingKnowledgeEnabled,
       topK: state.topK ?? 10,
     });
 
@@ -376,7 +385,7 @@ const ragStateGraph = new StateGraph(RAGGraphState)
   .addNode("fallbackAnswer", fallbackAnswerNode)
   .addNode("generate", generateNode)
   .addEdge(START, "rewrite")
-  .addEdge("rewrite", "embed")
+  .addConditionalEdges("rewrite", routeAfterRewrite, ["embed", "retrieve"])
   .addEdge("embed", "retrieve")
   .addConditionalEdges("retrieve", routeAfterRetrieve, ["rerank", "fallbackAnswer"])
   .addConditionalEdges("rerank", routeAfterRerank, ["generate", "fallbackAnswer"])

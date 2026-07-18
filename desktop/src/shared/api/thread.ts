@@ -18,6 +18,7 @@ export interface Thread {
   agentEnabled?: boolean | null;
   ttsEnabled?: boolean | null;
   imageEnabled?: boolean | null;
+  evolvingKnowledgeEnabled?: boolean | null;
   contextSummary: string | null;
   contextSummaryUpdatedAt: string | null;
   status: ThreadStatus;
@@ -75,6 +76,7 @@ export interface CreateThreadInput {
   contextSummary?: string | null;
   ttsEnabled?: boolean | null;
   imageEnabled?: boolean | null;
+  evolvingKnowledgeEnabled?: boolean | null;
 }
 
 export interface CreateMessageInput {

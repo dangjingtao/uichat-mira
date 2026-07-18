@@ -6,6 +6,11 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const extensionRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 
 describe('POST /microapps/evolving-knowledge/captures 请求体契约', () => {
   it('扩展应提交洞见捕获所需字段', () => {
@@ -68,5 +73,35 @@ describe('Popup 状态机输出', () => {
   it('SUCCESS 状态应自动关闭 popup', () => {
     // 契约：SUCCESS 后 1.5s 内关闭
     assert.ok(true); // 文档约束，运行时验证在 popup.js 中
+  });
+});
+
+describe('剪藏模式和 AI 开关', () => {
+  it('扩展应区分整页、选中文字和单图片剪藏', async () => {
+    const [background, content, popup] = await Promise.all([
+      readFile(join(extensionRoot, 'background.js'), 'utf8'),
+      readFile(join(extensionRoot, 'content/content.js'), 'utf8'),
+      readFile(join(extensionRoot, 'popup/popup.js'), 'utf8'),
+    ]);
+
+    assert.match(background, /captureMode: 'image'/);
+    assert.match(background, /captureMode: 'selection'/);
+    assert.match(content, /captureMode === 'image'/);
+    assert.match(content, /captureMode === 'selection'/);
+    assert.match(popup, /captureMode: pendingCapture\?\.captureMode \|\| 'auto'/);
+    assert.match(popup, /rawHtml: els\.saveBtn\.dataset\.captureMode === 'page'/);
+  });
+
+  it('AI 摘要和关联重建必须由两个独立开关控制', async () => {
+    const html = await readFile(join(extensionRoot, 'popup/popup.html'), 'utf8');
+    const source = await readFile(join(extensionRoot, 'popup/popup.js'), 'utf8');
+
+    assert.match(html, /id="processAi"/);
+    assert.match(html, /生成 AI 摘要、标签和实体/);
+    assert.match(html, /id="rebuildKnowledge"/);
+    assert.match(html, /重建关联与洞见/);
+    assert.match(source, /processAi: els\.processAi\.checked/);
+    assert.match(source, /rebuild: els\.rebuildKnowledge\.checked/);
+    assert.match(source, /if \(els\.rebuildKnowledge\.checked\)/);
   });
 });

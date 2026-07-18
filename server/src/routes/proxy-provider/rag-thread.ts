@@ -37,6 +37,7 @@ export const toPersistedRagSources = (sources: RetrievedChunk[]) =>
     content: source.content,
     ...(source.matchType ? { matchType: source.matchType } : {}),
     ...(source.hitModes ? { hitModes: source.hitModes } : {}),
+    ...(source.citation ? { citation: source.citation } : {}),
   }));
 
 /** Extract the latest user question and history from normalized chat messages. */
@@ -125,6 +126,7 @@ export const createRagAssistantStream = (input: RagAssistantStreamInput) => {
   const assistantMessageId = crypto.randomUUID();
   const latestThread = threadService.getThreadSummaryById(threadId, userId);
   const knowledgeBaseId = latestThread?.knowledgeBaseId;
+  const evolvingKnowledgeEnabled = latestThread?.evolvingKnowledgeEnabled === true;
 
   const persistRagAssistantMessage = async ({
     answer,
@@ -191,15 +193,15 @@ export const createRagAssistantStream = (input: RagAssistantStreamInput) => {
     }
   };
 
-  const currentKnowledgeBase = knowledgeBaseId
+  const currentKnowledgeBase = !evolvingKnowledgeEnabled && knowledgeBaseId
     ? knowledgeBaseService.getKnowledgeBaseById(knowledgeBaseId)
     : null;
 
-  if (!currentKnowledgeBase) {
+  if (!evolvingKnowledgeEnabled && !currentKnowledgeBase) {
     throw new Error("Thread knowledge base is missing or no longer available");
   }
 
-  if (currentKnowledgeBase.enabledDocumentCount === 0) {
+  if (!evolvingKnowledgeEnabled && currentKnowledgeBase?.enabledDocumentCount === 0) {
     log.info(
       {
         scope: "proxy-provider",
@@ -274,7 +276,9 @@ export const createRagAssistantStream = (input: RagAssistantStreamInput) => {
           {
             question: ragInput.question,
             conversationHistory: ragInput.conversationHistory,
-            knowledgeBaseId: currentKnowledgeBase.id,
+            ...(evolvingKnowledgeEnabled
+              ? { userId, evolvingKnowledgeEnabled: true }
+              : { knowledgeBaseId: currentKnowledgeBase!.id }),
             requestContextMessages,
           },
           {

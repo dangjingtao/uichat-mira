@@ -26,6 +26,8 @@ export interface ThreadMutationBody {
   ttsEnabled?: boolean | null;
   /** Whether automatic role image generation is enabled for this thread. */
   imageEnabled?: boolean | null;
+  /** Whether this thread uses the evolving knowledge microapp as its RAG source. */
+  evolvingKnowledgeEnabled?: boolean | null;
   /** Optional persisted thread context summary. */
   contextSummary?: string | null;
 }

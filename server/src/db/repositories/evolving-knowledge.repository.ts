@@ -17,6 +17,7 @@ import {
   knowledgeViewpoints,
   knowledgeViewpointVersions,
   knowledgeViewpointEvidence,
+  knowledgeQueryLogs,
 } from "../schema";
 
 const parseJson = <T>(value: string | null, fallback: T): T => {
@@ -535,6 +536,32 @@ export const evolvingKnowledgeRepository = {
       .all();
   },
 
+  createTopic(input: {
+    userId: number;
+    name: string;
+    summary: string;
+    pendingQuestions?: string[];
+  }) {
+    const existing = getDb()
+      .select()
+      .from(knowledgeTopics)
+      .where(and(eq(knowledgeTopics.userId, input.userId), eq(knowledgeTopics.name, input.name)))
+      .get();
+    if (existing) return existing;
+    return getDb()
+      .insert(knowledgeTopics)
+      .values({
+        userId: input.userId,
+        name: input.name,
+        summary: input.summary,
+        pendingQuestionsJson: JSON.stringify(input.pendingQuestions ?? []),
+        sourceCount: 0,
+        currentVersion: 1,
+      })
+      .returning()
+      .get();
+  },
+
   updateTopic(id: string, userId: number, input: {
     summary: string;
     pendingQuestions: string[];
@@ -1023,6 +1050,84 @@ export const evolvingKnowledgeRepository = {
       .get();
   },
 
+  createQueryLog(input: {
+    userId: number;
+    query: string;
+    intent: string;
+    resultCount: number;
+    sourceIds: string[];
+  }) {
+    return getDb()
+      .insert(knowledgeQueryLogs)
+      .values({
+        userId: input.userId,
+        query: input.query,
+        intent: input.intent,
+        resultCount: input.resultCount,
+        sourceIdsJson: JSON.stringify(input.sourceIds),
+      })
+      .returning()
+      .get();
+  },
+
+  listQueryLogs(userId: number, limit = 50) {
+    return getDb()
+      .select()
+      .from(knowledgeQueryLogs)
+      .where(eq(knowledgeQueryLogs.userId, userId))
+      .orderBy(desc(knowledgeQueryLogs.createdAt))
+      .limit(Math.max(1, Math.min(100, limit)))
+      .all()
+      .map((log) => ({ ...log, sourceIds: parseJson<string[]>(log.sourceIdsJson, []) }));
+  },
+
+  listKnowledgeHealth(userId: number) {
+    const captures = this.listCaptures({ userId, limit: 1000 });
+    const concepts = this.listConcepts(userId, { limit: 1000 });
+    const topics = this.listTopics(userId, 1000);
+    const viewpoints = this.listViewpoints(userId);
+    const insights = this.listActiveInsights(userId, { limit: 1000 });
+    const missingEvidenceCaptureIds = captures
+      .filter((capture) => this.listEvidenceUnitsByCapture(capture.id, userId).length === 0)
+      .map((capture) => capture.id);
+    const orphanTopicIds = topics
+      .filter((topic) => this.listTopicEvidence(topic.id, userId).length === 0)
+      .map((topic) => topic.id);
+    const orphanViewpointIds = viewpoints
+      .filter((viewpoint) => {
+        if (!viewpoint.currentVersionId) return true;
+        return this.listViewpointEvidence(viewpoint.currentVersionId, userId).length === 0;
+      })
+      .map((viewpoint) => viewpoint.id);
+    const expiredInsights = getDb()
+      .select({ id: knowledgeInsights.id })
+      .from(knowledgeInsights)
+      .where(and(
+        eq(knowledgeInsights.userId, userId),
+        sql`${knowledgeInsights.expiresAt} IS NOT NULL AND ${knowledgeInsights.expiresAt} <= ${new Date().toISOString()}`,
+      ))
+      .all()
+      .map((row) => row.id);
+
+    return {
+      status:
+        missingEvidenceCaptureIds.length || orphanTopicIds.length || orphanViewpointIds.length || expiredInsights.length
+          ? "attention"
+          : "healthy",
+      counts: {
+        captures: captures.length,
+        concepts: concepts.length,
+        topics: topics.length,
+        viewpoints: viewpoints.length,
+        activeInsights: insights.length,
+      },
+      missingEvidenceCaptureIds,
+      orphanTopicIds,
+      orphanViewpointIds,
+      expiredInsightIds: expiredInsights,
+    } as const;
+  },
+
   initialize() {
     const sqlite = getSqlite();
     const ensureColumn = (table: string, column: string, definition: string) => {
@@ -1232,6 +1337,20 @@ export const evolvingKnowledgeRepository = {
     sqlite.exec("CREATE INDEX IF NOT EXISTS idx_knowledge_maintenance_runs_user_id ON knowledge_maintenance_runs(user_id)");
     sqlite.exec("CREATE INDEX IF NOT EXISTS idx_knowledge_maintenance_runs_status ON knowledge_maintenance_runs(status)");
     sqlite.exec("CREATE INDEX IF NOT EXISTS idx_knowledge_maintenance_runs_created_at ON knowledge_maintenance_runs(created_at)");
+
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS knowledge_query_logs (
+        id TEXT PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(16)))),
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        query TEXT NOT NULL DEFAULT '',
+        intent TEXT NOT NULL DEFAULT 'mixed',
+        result_count INTEGER NOT NULL DEFAULT 0,
+        source_ids_json TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+    sqlite.exec("CREATE INDEX IF NOT EXISTS idx_knowledge_query_logs_user_id ON knowledge_query_logs(user_id)");
+    sqlite.exec("CREATE INDEX IF NOT EXISTS idx_knowledge_query_logs_created_at ON knowledge_query_logs(created_at)");
 
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS knowledge_concepts (

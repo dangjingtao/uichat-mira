@@ -20,13 +20,7 @@
       <p class="hint">授权码由 Mira 生成，包含本机后端地址和一次性登录凭证，不需要手动填写端口。</p>
       <div id="authStatus" class="status" role="status" aria-live="polite"></div>
 
-      <div class="connection-row">
-        <label for="transport">连接方式</label>
-        <select id="transport">
-          <option value="native">Native Messaging（主连接）</option>
-          <option value="websocket">WebSocket（开发调试）</option>
-        </select>
-      </div>
+      <p class="hint">授权成功后，见行会通过 Native Messaging 连接 Chrome。</p>
     </section>
   </main>
   <script src="../lib/authorization-code.js"></script>

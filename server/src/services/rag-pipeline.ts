@@ -25,6 +25,8 @@ import {
 
 export interface RAGPipelineInput {
   question: string;
+  userId?: number;
+  evolvingKnowledgeEnabled?: boolean;
   knowledgeBaseId?: string;
   topK?: number;
   topN?: number;
@@ -59,6 +61,7 @@ const toUiRagSources = (sources: RetrievedChunk[]) =>
     content: source.content,
     ...(source.matchType ? { matchType: source.matchType } : {}),
     ...(source.hitModes ? { hitModes: source.hitModes } : {}),
+    ...(source.citation ? { citation: source.citation } : {}),
   }));
 
 const toRagNodeChunk = (payload: RagNodeEventPayload) =>

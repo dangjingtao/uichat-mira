@@ -5,17 +5,11 @@
     code: document.getElementById('authorizationCode'),
     exchange: document.getElementById('exchangeCodeBtn'),
     status: document.getElementById('authStatus'),
-    transport: document.getElementById('transport'),
   };
 
   function setStatus(message, kind) {
     els.status.textContent = message;
     els.status.className = `status ${kind || ''}`;
-  }
-
-  async function load() {
-    const stored = await chrome.storage.sync.get(['transport']);
-    els.transport.value = stored.transport === 'websocket' ? 'websocket' : 'native';
   }
 
   async function exchange() {
@@ -43,7 +37,7 @@
         throw new Error(result.message || `授权失败（${response.status}）`);
       }
 
-      await chrome.storage.sync.set({ backendUrl: parsed.backendUrl, transport: els.transport.value });
+      await chrome.storage.sync.set({ backendUrl: parsed.backendUrl });
       await chrome.storage.local.set({ accessToken: result.accessToken });
       chrome.runtime.sendMessage({ type: 'WEBBRIDGE_RECONNECT' }).catch(() => {});
       els.code.value = '';
@@ -66,8 +60,4 @@
   els.code.addEventListener('keydown', (event) => {
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') void exchange();
   });
-  els.transport.addEventListener('change', () => {
-    chrome.storage.sync.set({ transport: els.transport.value }).catch(() => {});
-  });
-  void load();
 })();

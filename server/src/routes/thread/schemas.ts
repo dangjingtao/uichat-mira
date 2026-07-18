@@ -56,6 +56,10 @@ export const threadSchema = {
       type: ["boolean", "null"],
       description: "Whether automatic role image generation is enabled for this thread.",
     },
+    evolvingKnowledgeEnabled: {
+      type: ["boolean", "null"],
+      description: "Whether the thread uses the evolving knowledge source.",
+    },
     contextSummary: {
       type: ["string", "null"],
       description: "Persisted thread context summary.",
@@ -218,6 +222,7 @@ const threadMutationBodySchema = {
     },
     ttsEnabled: { type: ["boolean", "null"] },
     imageEnabled: { type: ["boolean", "null"] },
+    evolvingKnowledgeEnabled: { type: ["boolean", "null"] },
   },
 } as const;
 

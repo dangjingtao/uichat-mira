@@ -70,15 +70,23 @@
     });
   }
 
-  async function getPageInfo() {
+  async function getPageInfo(request = {}) {
     await waitForPageToSettle();
     const extracted = window.MiraExtractor
       ? window.MiraExtractor.extractPage(document)
       : { contentMarkdown: '', contentPlainText: '', wordCount: 0 };
     const selectedText = window.getSelection().toString().trim();
     const imageDataUrls = [];
+    const captureMode = request.captureMode === 'image'
+      ? 'image'
+      : request.captureMode === 'selection' || (request.captureMode !== 'page' && selectedText)
+        ? 'selection'
+        : 'page';
+    const imageUrls = captureMode === 'image' && typeof request.imageUrl === 'string' && request.imageUrl.trim()
+      ? [request.imageUrl.trim()]
+      : captureMode === 'page' ? (extracted.imageUrls || []) : [];
 
-    for (const imageUrl of (extracted.imageUrls || []).slice(0, 10)) {
+    for (const imageUrl of imageUrls.slice(0, 10)) {
       try {
         const response = await fetch(imageUrl, { credentials: 'include' });
         if (!response.ok) continue;
@@ -104,7 +112,7 @@
       favicon: extracted.faviconUrl,
       contentMarkdown: extracted.contentMarkdown || '',
       contentPlainText: extracted.contentPlainText || '',
-      imageUrls: extracted.imageUrls || [],
+      imageUrls,
       imageDataUrls,
       excerpt: extracted.excerpt || '',
       author: extracted.author || '',
@@ -113,6 +121,7 @@
       wordCount: extracted.wordCount || 0,
       extractionStatus: extracted.extractionStatus || 'empty',
       pageHtml: document.documentElement?.outerHTML || document.body?.outerHTML || '',
+      captureMode,
     };
   }
 
@@ -355,7 +364,7 @@
       showBridgeStatus(request.status, request.operation, request.error);
       sendResponse({ ok: true });
     } else if (request?.type === 'GET_PAGE_INFO') {
-      getPageInfo().then(sendResponse);
+      getPageInfo(request).then(sendResponse);
     } else if (request?.type === 'WEBBRIDGE_SNAPSHOT') {
       sendResponse(buildSnapshot());
     } else if (request?.type === 'WEBBRIDGE_GET_HREF') {

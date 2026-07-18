@@ -116,6 +116,63 @@ export type KnowledgeViewpointVersion = {
   createdAt: string;
 };
 
+export type KnowledgeQueryMode = "fact" | "viewpoint" | "mixed" | "conflict";
+
+export type KnowledgeQueryCitation = {
+  sourceType:
+    | "capture"
+    | "evidence"
+    | "topic"
+    | "insight"
+    | "viewpoint"
+    | "viewpoint_version";
+  sourceId: string;
+  title: string;
+  content: string;
+  score: number;
+  captureId: string | null;
+  evidenceUnitId: string | null;
+  topicId: string | null;
+  viewpointVersionId: string | null;
+  references: Array<{
+    captureId: string | null;
+    evidenceUnitId: string | null;
+    sourceLocator?: Record<string, unknown>;
+  }>;
+};
+
+export type KnowledgeQueryResult = {
+  query: string;
+  intent: KnowledgeQueryMode;
+  results: KnowledgeQueryCitation[];
+  total: number;
+};
+
+export type KnowledgeHealth = {
+  status: "healthy" | "attention";
+  counts: {
+    captures: number;
+    concepts: number;
+    topics: number;
+    viewpoints: number;
+    activeInsights: number;
+  };
+  missingEvidenceCaptureIds: string[];
+  orphanTopicIds: string[];
+  orphanViewpointIds: string[];
+  expiredInsightIds: string[];
+};
+
+export type KnowledgeQueryLog = {
+  id: string;
+  query: string;
+  intent: KnowledgeQueryMode;
+  resultCount: number;
+  sourceIdsJson: string;
+  sourceIds: string[];
+  createdAt: string;
+};
+
 export type CaptureInput = {
   sourceUrl: string;
   title: string;
@@ -146,6 +203,41 @@ export async function searchCaptures(q: string) {
   return get<KnowledgeCapture[]>(
     `/microapps/evolving-knowledge/captures/search?q=${encodeURIComponent(q)}`,
   );
+}
+
+export async function queryKnowledge(input: {
+  query: string;
+  mode?: KnowledgeQueryMode;
+  limit?: number;
+}) {
+  return post<KnowledgeQueryResult>("/microapps/evolving-knowledge/query", input);
+}
+
+export async function writeBackKnowledge(input: {
+  kind: "topic" | "viewpoint";
+  title: string;
+  content: string;
+  captureIds?: string[];
+  evidenceUnitIds?: string[];
+  topicId?: string;
+  viewpointId?: string;
+  stance?: "supports" | "opposes" | "context";
+}) {
+  return post<{
+    kind: "topic" | "viewpoint";
+    topic?: KnowledgeTopic;
+    viewpoint?: KnowledgeViewpoint;
+    version?: KnowledgeViewpointVersion;
+  }>("/microapps/evolving-knowledge/writeback", input);
+}
+
+export async function getKnowledgeHealth() {
+  return get<KnowledgeHealth>("/microapps/evolving-knowledge/health");
+}
+
+export async function listKnowledgeQueryLogs(limit?: number) {
+  const query = limit ? `?limit=${encodeURIComponent(String(limit))}` : "";
+  return get<KnowledgeQueryLog[]>(`/microapps/evolving-knowledge/query-logs${query}`);
 }
 
 export async function getCapture(id: string) {

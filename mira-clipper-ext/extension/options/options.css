@@ -75,17 +75,6 @@ input[type="text"]:focus {
   color: var(--muted);
 }
 
-.code-login {
-  display: flex;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.code-login input {
-  min-width: 0;
-  flex: 1;
-}
-
 button {
   padding: 8px 16px;
   font-size: 14px;

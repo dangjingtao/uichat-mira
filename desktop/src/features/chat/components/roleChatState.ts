@@ -69,10 +69,12 @@ export const upsertRoleSummary = (
 
 export const buildThreadContextTags = ({
   knowledgeBase,
+  evolvingKnowledgeEnabled = false,
   role,
   roleAvatarSrc,
 }: {
   knowledgeBase: KnowledgeBaseSummary | null;
+  evolvingKnowledgeEnabled?: boolean;
   role: RoleSummary | null;
   roleAvatarSrc: string | null;
 }): ChatThreadContextTag[] => {
@@ -95,6 +97,16 @@ export const buildThreadContextTags = ({
       kind: "knowledge-base",
       label: knowledgeBase.name,
       tooltip: `${knowledgeBase.name} (${knowledgeBase.enabledDocumentCount} enabled documents)`,
+      removable: true,
+    });
+  }
+
+  if (evolvingKnowledgeEnabled) {
+    tags.push({
+      id: "evolving-knowledge",
+      kind: "evolving-knowledge",
+      label: "洞见",
+      tooltip: "使用洞见知识层检索",
       removable: true,
     });
   }
