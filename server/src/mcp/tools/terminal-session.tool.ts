@@ -1,7 +1,10 @@
 import type { McpToolImplementation } from "../core/definitions.js";
 import { mcpBadRequest } from "../core/errors.js";
-import { executeTerminalSessionRuntime } from "../terminal/runtime.js";
+import { executeTerminalSessionRuntime } from "../terminal/runtime-host.js";
 import { emitArtifacts } from "./artifact-utils.js";
+
+const cwdDescription =
+  "Execution directory. Defaults to the selected workspace. Relative paths resolve from the workspace; absolute paths and parent traversal are allowed after the normal approval review.";
 
 const terminalSessionLlmInputSchema = {
   type: "object",
@@ -10,10 +13,13 @@ const terminalSessionLlmInputSchema = {
     command: { type: "string" },
     cwd: {
       type: "string",
-      description:
-        "Workspace-relative directory only. Use '.' for the workspace root. Absolute paths and parent traversal are invalid.",
+      description: cwdDescription,
     },
-    timeoutMs: { type: "number" },
+    timeoutMs: {
+      type: "number",
+      description:
+        "Command observation timeout in milliseconds. Persistent PTY sessions remain available when a command is still running.",
+    },
   },
   additionalProperties: false,
 } as const;
@@ -22,7 +28,8 @@ export const terminalSessionTool: McpToolImplementation = {
   definition: {
     id: "terminal_session",
     title: "Terminal Session",
-    description: "Start a PTY-backed terminal session and stream output.",
+    description:
+      "Run full host shell commands or PTY-backed persistent sessions with process-tree ownership and streamed output.",
     domain: "terminal",
     source: "internal",
     mode: "stream",
@@ -33,10 +40,13 @@ export const terminalSessionTool: McpToolImplementation = {
         command: { type: "string" },
         cwd: {
           type: "string",
-          description:
-            "Workspace-relative directory only. Use '.' for the workspace root. Absolute paths and parent traversal are invalid.",
+          description: cwdDescription,
         },
-        env: { type: "object" },
+        env: {
+          type: "object",
+          description:
+            "Environment overrides merged onto the inherited host environment.",
+        },
         timeoutMs: { type: "number" },
         attachSessionId: { type: "string" },
         sessionMode: {
@@ -49,7 +59,7 @@ export const terminalSessionTool: McpToolImplementation = {
       agent_intent: terminalSessionLlmInputSchema,
       chat_surface: terminalSessionLlmInputSchema,
     },
-    tags: ["terminal", "pty"],
+    tags: ["terminal", "pty", "host-runtime", "process-tree"],
     capabilities: {
       sideEffect: "process",
       requiresApproval: true,
@@ -61,8 +71,7 @@ export const terminalSessionTool: McpToolImplementation = {
         },
       },
       longRunning: true,
-      sandboxRequired: true,
-      sandboxProfile: "command",
+      sandboxRequired: false,
     },
   },
   execute: async (context) => {
