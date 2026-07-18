@@ -75,19 +75,22 @@ const waitForWindowsJobBootstrap = async (process: pty.IPty) => {
   return await new Promise<boolean>((resolve) => {
     let buffer = "";
     let settled = false;
+    let timer: NodeJS.Timeout | undefined;
+    let dataDisposable: ReturnType<pty.IPty["onData"]> | undefined;
+    let exitDisposable: ReturnType<pty.IPty["onExit"]> | undefined;
 
     const finish = (assigned: boolean) => {
       if (settled) {
         return;
       }
       settled = true;
-      clearTimeout(timer);
-      dataDisposable.dispose();
-      exitDisposable.dispose();
+      if (timer) clearTimeout(timer);
+      dataDisposable?.dispose();
+      exitDisposable?.dispose();
       resolve(assigned);
     };
 
-    const dataDisposable = process.onData((chunk) => {
+    dataDisposable = process.onData((chunk) => {
       buffer += chunk;
       const match = buffer.match(
         new RegExp(`${marker}:(assigned|unavailable)`),
@@ -101,8 +104,8 @@ const waitForWindowsJobBootstrap = async (process: pty.IPty) => {
         finish(false);
       }
     });
-    const exitDisposable = process.onExit(() => finish(false));
-    const timer = setTimeout(() => finish(false), 1_500);
+    exitDisposable = process.onExit(() => finish(false));
+    timer = setTimeout(() => finish(false), 1_500);
   });
 };
 
