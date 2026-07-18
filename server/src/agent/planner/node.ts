@@ -7,6 +7,7 @@ import {
   buildExecutionObservationView,
   buildPlannerObservationContext,
   emitStepNode,
+  getTraceAttemptMeta,
   refreshCurrentTaskFrameFromEvidence,
   getToolTraceTargetPreview,
   summarizePlannerNextAction,
@@ -114,6 +115,10 @@ export const nextActionPlannerNode = async (
   const iteration = state.iterationCount ?? 0;
   // Compatibility/diagnostic field only. Planner execution is not capped by it.
   const maxIterations = 0;
+  const traceAttemptMeta = getTraceAttemptMeta(
+    "agent-next-action-planner",
+    state,
+  );
   const question =
     state.question?.trim() || getLatestUserQuestion(state.messages) || state.goal.text;
   const toolExposure = normalizeToolExposure(state);
@@ -146,6 +151,7 @@ export const nextActionPlannerNode = async (
   await emitStepNode(emit, {
     runId: state.runId,
     nodeId: "agent-next-action-planner",
+    ...traceAttemptMeta,
     nodeType: "plan",
     phase: "start",
     label: "下一步动作决策",
@@ -241,6 +247,7 @@ export const nextActionPlannerNode = async (
   await emitStepNode(emit, {
     runId: state.runId,
     nodeId: "agent-next-action-planner",
+    ...traceAttemptMeta,
     nodeType: "plan",
     phase: "done",
     label: "下一步动作决策",
