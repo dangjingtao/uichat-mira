@@ -220,6 +220,11 @@ export class ManagedCodeGraphProcessManager extends BaseManagedCodeGraphProcessM
   }
 
   override async start() {
+    const detected = await super.detect();
+    if (detected.status === "unavailable" || detected.status === "blocked") {
+      return this.getStatus();
+    }
+
     if (shouldAllowDeclaredRepoLocalCodeGraphData(this.originalOptions)) {
       this.indexBootstrapPromise ??=
         ensureDeclaredRepoLocalCodeGraphIndex(this.originalOptions);
