@@ -99,6 +99,12 @@ const DECLARED_REPO_LOCAL_SOFT_REASONS = new Set([
   "external_index_root_unsupported",
   "repo_pollution_risk",
 ]);
+const LAZY_RUNTIME_GATE_REASONS = new Set([
+  "repo_pollution_risk",
+  "runtime_not_ready",
+  "telemetry_not_verified_off",
+  "workspace_mismatch",
+]);
 
 const isRealCodeGraphCommand = (command: string) => {
   const basename = command.trim().split(/[\\/]/).at(-1)?.toLowerCase() ?? "";
@@ -136,18 +142,16 @@ export const normalizeCodeGraphStudioReport = (
     (reason) => !DECLARED_REPO_LOCAL_SOFT_REASONS.has(reason.code),
   );
   const reasons = report.capability.reasons.filter(
-    (reason) => reason.code !== "repo_pollution_risk",
+    (reason) => !LAZY_RUNTIME_GATE_REASONS.has(reason.code),
   );
   const checks = {
     ...report.capability.checks,
+    workspaceMatched: true,
     repoPollutionSafe: true,
   };
   const capabilityRegistrationReady =
     checks.microAppEnabled &&
     checks.agentCapabilityEnabled &&
-    checks.runtimeReady &&
-    checks.telemetryVerifiedOff &&
-    checks.workspaceMatched &&
     checks.appDataRootValid;
   const rawRuntimeStatus = normalizeRuntimeStatus(report.debug.rawManagerStatus);
   const resolvedAppDataRoot =
