@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  executeHostCommand,
   resolveHostCwd,
   resolveHostEnv,
 } from "../host-spawn-runtime.js";
@@ -16,6 +17,23 @@ const makeTempRoot = () => {
   tempRoots.push(root);
   return root;
 };
+
+const createShellProfile = () =>
+  process.platform === "win32"
+    ? {
+        shell: "powershell.exe",
+        shellFamily: "powershell" as const,
+        argsMode: "powershell" as const,
+        stdoutEncoding: "utf16le",
+        stderrEncoding: "utf16le",
+      }
+    : {
+        shell: "/bin/sh",
+        shellFamily: "posix" as const,
+        argsMode: "posix" as const,
+        stdoutEncoding: "utf8",
+        stderrEncoding: "utf8",
+      };
 
 afterEach(() => {
   for (const root of tempRoots.splice(0)) {
@@ -82,5 +100,32 @@ describe("host spawn environment", () => {
     if (process.env.PATH) {
       expect(result.PATH).toBe(process.env.PATH);
     }
+  });
+});
+
+describe("host spawn execution", () => {
+  it("runs a real child process with inherited environment", async () => {
+    const workspaceRoot = makeTempRoot();
+    const controller = new AbortController();
+    const command =
+      process.platform === "win32"
+        ? "[Console]::WriteLine($env:MIRA_TEST_RUNTIME_VALUE)"
+        : "printf '%s' \"$MIRA_TEST_RUNTIME_VALUE\"";
+
+    const result = await executeHostCommand({
+      command,
+      workspaceRoot,
+      timeoutMs: 15_000,
+      signal: controller.signal,
+      shellProfile: createShellProfile(),
+      env: {
+        MIRA_TEST_RUNTIME_VALUE: "host-runtime-ok",
+      },
+    });
+
+    expect(result.runtimeId).toBe("host_spawn");
+    expect(result.workspaceRelation).toBe("inside");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("host-runtime-ok");
   });
 });
