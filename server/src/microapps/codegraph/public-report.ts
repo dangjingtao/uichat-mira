@@ -9,6 +9,12 @@ const DECLARED_REPO_LOCAL_SOFT_REASONS = new Set([
   "external_index_root_unsupported",
   "repo_pollution_risk",
 ]);
+const LAZY_RUNTIME_GATE_REASONS = new Set([
+  "repo_pollution_risk",
+  "runtime_not_ready",
+  "telemetry_not_verified_off",
+  "workspace_mismatch",
+]);
 
 const toStudioStatus = (value: string): CodeGraphStudioStatus => {
   switch (value) {
@@ -38,18 +44,16 @@ export const normalizeDeclaredRepoLocalCapabilityGate = (
   }
 
   const reasons = gate.reasons.filter(
-    (reason) => reason.code !== "repo_pollution_risk",
+    (reason) => !LAZY_RUNTIME_GATE_REASONS.has(reason.code),
   );
   const checks = {
     ...gate.checks,
+    workspaceMatched: true,
     repoPollutionSafe: true,
   };
   const capabilityRegistrationReady =
     checks.microAppEnabled &&
     checks.agentCapabilityEnabled &&
-    checks.runtimeReady &&
-    checks.telemetryVerifiedOff &&
-    checks.workspaceMatched &&
     checks.appDataRootValid;
 
   return {
@@ -68,9 +72,9 @@ export const normalizeDeclaredRepoLocalCapabilityGate = (
  * Public/runtime truth for the real CodeGraph provider.
  *
  * CodeGraph's workspace-local `.codegraph` directory is an accepted runtime
- * requirement for the controlled integration. It remains visible in the
- * report for diagnostics, but it no longer turns an otherwise healthy runtime
- * into a fake `blocked` state.
+ * requirement for the controlled integration. Runtime readiness is diagnostic;
+ * `codebase_explore` can be registered earlier and lazily start the manager for
+ * the invocation workspace.
  */
 export const normalizeCodeGraphStudioReport = (
   report: CodeGraphStudioReport,
