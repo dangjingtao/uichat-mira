@@ -23,8 +23,10 @@ const summarizeToolSchemas = (toolExposure: AgentToolExposureState) =>
       tool.toolId === "read_discover"
         ? "Discover candidate files, directories, symbols, or keyword locations without opening file bodies."
         : tool.toolId === "read_open"
-          ? "Open a known target and optionally read only a selected section; do not use it for fuzzy discovery."
-          : tool.description;
+          ? "Open a known target and optionally read only a selected section; do not use it for fuzzy discovery or to mechanically reopen CodeGraph-verified source excerpts."
+          : tool.toolId === "codebase_explore"
+            ? "Primary local code-understanding tool. Successful results include bounded workspace-verified source excerpts with paths and line ranges. Those verified excerpts already count as source-body evidence; use read_open only for a specific unresolved target or missing surrounding context."
+            : tool.description;
 
     return {
       toolId: tool.toolId,
@@ -104,6 +106,9 @@ const buildProgressionRules = (input: {
     "把每次工具或检索结果视为新的 observation；基于完整原始目标和累计执行历史滚动决定下一步。",
     "answer 是终止动作。只有完整用户目标中的每一项明确要求都已被执行证据覆盖时，才能选择 answer。",
     "不要只看 latestEvidenceSummary；必须同时检查 currentTaskFrame.completionCriteria、累计 executionHistory 和 evidenceHistory。",
+    "CodeGraph 的 verifiedSource[...] 是已经重新读取 workspace 原文件后得到的正文证据，包含 path、line range、summary 与 excerpt；它不是普通 discover 候选。",
+    "如果 CodeGraph verifiedSource 已覆盖当前问题所需实现细节，不要为了形式验证而逐个 read_open 同一批文件。只有存在明确 gap、缺失行号、被截断上下文、unverifiable/rejected candidate，或必须展开某个具体函数的相邻上下文时，才针对那个具体目标使用 read_open。",
+    "代码架构/调用链任务优先先用 codebase_explore 缩小并解释搜索空间，再按明确缺口做少量 targeted read_open；禁止退化成无目标的逐文件 read_open crawl。",
     "如果上一次工具或检索失败但仍可恢复，不要默认输出 error。",
     "可恢复失败时，你可以：换参数重试同一工具、换另一个工具、先读取辅助文件或目录、ask_user，或在确实无法继续时选择 answer 并明确说明未完成项与失败影响。",
     "任何 use_tool 都只是提出动作，后续仍然必须经过 normalize / policy / approval；不要假装工具已经成功。",
@@ -158,6 +163,7 @@ const buildSchemaReplanMessages = (input: {
       "当前 workspace 已绑定。",
       "如果问题明显在问本地 workspace 或本地文件，不要使用 web_search 代替本地证据路径。",
       "如果选择 use_tool，toolId 必须来自允许工具列表，args 必须严格符合 schema。",
+      "CodeGraph verifiedSource 是已重新读取原文件的正文证据；不要机械 read_open 同一批已验证文件，只补明确缺口。",
       "这次 replan 的目标是修正上一次失败动作：你可以改参数、换工具、ask_user，或在确实无法继续时输出明确终局。",
       "answer 是终止动作；只有完整用户目标已经覆盖，或确实无法继续且会明确报告未完成项时才能选择。",
       "不要假装上一次工具已经成功，也不要重复同一个错误参数。",
@@ -234,7 +240,9 @@ export const buildNextActionPlannerMessages = (input: {
         "如果任务有多个目标，只完成一部分时不要提前 answer。",
         "读到一个文件只证明该读取动作完成；如果用户还要求比较、修改、发送、运行或验证，必须继续。",
         "如果最新 evidence 仍有 gaps、missing、truncated、timed_out 或明确 error，不要只因为拿到结果就 answer。",
-        "discover 只负责发现对象；需要正文时应继续选择 read_open。",
+        "read_discover 只负责发现对象；需要正文时应继续选择 read_open。",
+        "codebase_explore 不属于普通 discover：其 verifiedSource[...] 是经过 workspace 原文件复读验证的正文证据，已覆盖的文件和行范围不得机械再次 read_open。",
+        "只有当 CodeGraph 明确留下 gap、unverifiable/rejected candidate、缺少所需行范围、excerpt 被截断，或当前任务必须展开一个具体函数的相邻上下文时，才对那个具体目标执行 targeted read_open。",
         "如果 discover 的结构化结果已经足够支撑完整目标，可以直接 answer，不要机械追加 open。",
         "只有关键目标或关键参数确实无法从当前请求、有限历史和证据中推断时，才 ask_user。",
         "如果相同 toolId 和 args 已经有成功 evidence 且没有新 gap，通常应复用证据而不是重复调用。",
