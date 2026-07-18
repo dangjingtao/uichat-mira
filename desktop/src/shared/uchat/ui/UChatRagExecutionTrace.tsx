@@ -15,6 +15,15 @@ import {
 import type { RagNodeLike } from "./ragTypes";
 
 type ApprovalTraceState = "waiting_approval" | "running" | null;
+type AgentTraceStatus =
+  | "queued"
+  | "running"
+  | "waiting_approval"
+  | "waiting_user"
+  | "completed"
+  | "failed"
+  | "blocked"
+  | "cancelled";
 
 const findLastStepIndex = (
   steps: RagNodeLike[],
@@ -28,7 +37,21 @@ const findLastStepIndex = (
   return -1;
 };
 
-const getApprovalTraceState = (steps: RagNodeLike[]): ApprovalTraceState => {
+const getApprovalTraceState = (
+  steps: RagNodeLike[],
+  agentStatus?: AgentTraceStatus,
+): ApprovalTraceState => {
+  if (agentStatus === "waiting_approval") {
+    return "waiting_approval";
+  }
+  if (agentStatus === "queued" || agentStatus === "running") {
+    return "running";
+  }
+  if (agentStatus) {
+    return null;
+  }
+
+  // Legacy fallback for persisted messages that predate explicit Agent status.
   const hasTerminalState = steps.some(
     (step) =>
       step.phase === "error" ||
@@ -66,10 +89,12 @@ const getApprovalTraceState = (steps: RagNodeLike[]): ApprovalTraceState => {
 export function UChatExecutionTrace({
   messageId,
   steps,
+  agentStatus,
   onOpenDetail,
 }: {
   messageId?: string;
   steps: RagNodeLike[];
+  agentStatus?: AgentTraceStatus;
   onOpenDetail: (detail: UChatExecutionProgressDetail) => void;
 }) {
   const { t } = useTranslation();
@@ -79,7 +104,7 @@ export function UChatExecutionTrace({
     return null;
   }
 
-  const approvalTraceState = getApprovalTraceState(steps);
+  const approvalTraceState = getApprovalTraceState(steps, agentStatus);
   const summary =
     approvalTraceState === "waiting_approval"
       ? t("chat.thread.agent.waitingApprovalTitle")
@@ -146,7 +171,7 @@ export function UChatExecutionTrace({
               return (
                 <button
                   type="button"
-                  key={step.nodeId}
+                  key={step.attemptKey ?? step.nodeId}
                   disabled={!clickable || !messageId}
                   onClick={() => {
                     if (!clickable || !messageId) {
