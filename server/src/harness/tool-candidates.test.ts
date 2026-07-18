@@ -3,8 +3,6 @@ import * as embedding from "@/services/internal-capabilities/local-embedding.js"
 import * as rerank from "@/services/internal-capabilities/local-rerank.js";
 import { clearHarnessRegistry, registerCapability } from "./registry.js";
 import { resolveHarnessToolCandidatesForTurn } from "./tool-candidates.js";
-import { readListTool } from "../mcp/tools/read-list.tool.js";
-import { readLocateTool } from "../mcp/tools/read-locate.tool.js";
 import { readOpenTool } from "../mcp/tools/read-open.tool.js";
 import { readDiscoverTool } from "../mcp/tools/read-discover.tool.js";
 import { readTool } from "../mcp/tools/read.tool.js";
@@ -12,13 +10,10 @@ import { readSliceTool } from "../mcp/tools/read-slice.tool.js";
 import { webSearchTool } from "../mcp/tools/web-search.tool.js";
 import { terminalSessionTool } from "../mcp/tools/terminal-session.tool.js";
 
-const EXTERNAL_HIDDEN_REASON = "External MCP capabilities are hidden unless explicitly enabled.";
-const TERMINAL_HIDDEN_REASON =
-  "Terminal tools are hidden unless the turn clearly asks to run a command.";
-const WORKSPACE_WEB_HIDDEN_REASON =
-  "Workspace-local query hides web_search for agent_intent; local read evidence should be preferred.";
-const LOW_INTENT_REASON = "Greeting or low-intent input should stay in pure conversation mode.";
-const CHAT_SAFE_DOMAIN_REASON = "Chat-visible tool surface is restricted to safe built-in domains.";
+const EXTERNAL_HIDDEN_REASON =
+  "External MCP capabilities are hidden unless explicitly enabled.";
+const CHAT_SAFE_DOMAIN_REASON =
+  "Chat-visible tool surface is restricted to safe built-in domains.";
 
 const externalFakeTool = {
   definition: {
@@ -40,7 +35,9 @@ const externalFakeTool = {
   },
 };
 
-const registerTools = (tools: Array<{ definition: { id: string } } & Record<string, unknown>>) => {
+const registerTools = (
+  tools: Array<{ definition: { id: string } } & Record<string, unknown>>,
+) => {
   for (const tool of tools) {
     registerCapability(tool as never);
   }
@@ -50,27 +47,53 @@ const mockRecallOrder = (preferredCapabilityIds: string[] = []) => {
   vi.spyOn(embedding, "executeLocalEmbedding").mockRejectedValue(
     new Error("LOCAL_MODEL_RAW_ROOT is not set."),
   );
-  vi.spyOn(rerank, "executeLocalRerank").mockImplementation(async ({ candidates }) => {
-    const scored = candidates
-      .map((candidate) => {
-        const orderIndex = preferredCapabilityIds.indexOf(candidate.id);
-        return {
-          id: candidate.id,
-          text: candidate.text,
-          score: orderIndex === -1 ? 0.1 : 1 - orderIndex * 0.1,
-          probability: orderIndex === -1 ? 0.1 : 0.95 - orderIndex * 0.1,
-          rank: orderIndex === -1 ? preferredCapabilityIds.length + 1 : orderIndex + 1,
-        };
-      })
-      .sort((left, right) => right.probability - left.probability);
+  vi.spyOn(rerank, "executeLocalRerank").mockImplementation(
+    async ({ candidates }) => {
+      const scored = candidates
+        .map((candidate) => {
+          const orderIndex = preferredCapabilityIds.indexOf(candidate.id);
+          return {
+            id: candidate.id,
+            text: candidate.text,
+            score: orderIndex === -1 ? 0.1 : 1 - orderIndex * 0.1,
+            probability:
+              orderIndex === -1 ? 0.1 : 0.95 - orderIndex * 0.1,
+            rank:
+              orderIndex === -1
+                ? preferredCapabilityIds.length + 1
+                : orderIndex + 1,
+          };
+        })
+        .sort((left, right) => right.probability - left.probability);
 
-    return {
-      rerankedCandidates: scored,
-      rerankModel: "test-rerank",
-      rerankModelConfigId: "test-rerank-config",
-    };
-  });
+      return {
+        rerankedCandidates: scored,
+        rerankModel: "test-rerank",
+        rerankModelConfigId: "test-rerank-config",
+      };
+    },
+  );
 };
+
+const createEligibleTool = (id: string) => ({
+  definition: {
+    id,
+    title: id,
+    description: "eligible test tool",
+    domain: "read",
+    source: "internal" as const,
+    mode: "sync" as const,
+    inputSchema: { type: "object" },
+    tags: [] as string[],
+    capabilities: {
+      sideEffect: "none" as const,
+      requiresApproval: false,
+    },
+  },
+  execute() {
+    return {};
+  },
+});
 
 describe("resolveHarnessToolCandidatesForTurn", () => {
   beforeEach(() => {
@@ -78,7 +101,7 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns tool candidates and exposed tool ids without invocation payloads", async () => {
+  it("returns candidates and exposed tool ids without invocation payloads", async () => {
     registerTools([readDiscoverTool, readOpenTool]);
     vi.spyOn(embedding, "executeLocalEmbedding").mockResolvedValue({
       embeddingModel: "test-embedding",
@@ -109,66 +132,28 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
     });
 
     expect(result.toolCandidates).toEqual([
-      expect.objectContaining({
-        toolId: "read_discover",
-      }),
-      expect.objectContaining({
-        toolId: "read_open",
-      }),
+      expect.objectContaining({ toolId: "read_discover" }),
+      expect.objectContaining({ toolId: "read_open" }),
     ]);
-    expect(result.toolExposure.exposedToolIds).toEqual(["read_discover", "read_open"]);
+    expect(result.toolExposure.exposedToolIds).toEqual([
+      "read_discover",
+      "read_open",
+    ]);
     expect(result).not.toHaveProperty("pendingToolCall");
   });
 
   it("scores late registry tools before applying the maxTools cutoff", async () => {
     for (let index = 0; index < 20; index += 1) {
-      registerCapability({
-        definition: {
-          id: `noise_tool_${index}`,
-          title: `Noise Tool ${index}`,
-          description: "irrelevant helper",
-          domain: "read",
-          source: "internal",
-          mode: "sync",
-          inputSchema: {},
-          tags: ["noise"],
-          capabilities: {
-            sideEffect: "none",
-            requiresApproval: false,
-          },
-        },
-        execute() {
-          return {};
-        },
-      });
+      registerCapability(createEligibleTool(`noise_tool_${index}`));
     }
-
-    registerCapability({
-      definition: {
-        id: "tail_target_tool",
-        title: "Tail Target Tool",
-        description: "the relevant tool registered last",
-        domain: "read",
-        source: "internal",
-        mode: "sync",
-        inputSchema: {},
-        tags: ["target"],
-        capabilities: {
-          sideEffect: "none",
-          requiresApproval: false,
-        },
-      },
-      execute() {
-        return {};
-      },
-    });
+    registerCapability(createEligibleTool("tail_target_tool"));
 
     vi.spyOn(embedding, "executeLocalEmbedding").mockResolvedValue({
       embeddingModel: "test-embedding",
       embeddingModelConfigId: "test-embedding-config",
       embeddings: [
         [1, 0],
-         ...Array.from({ length: 20 }, () => [0, 1]),
+        ...Array.from({ length: 20 }, () => [0, 1]),
         [1, 0],
       ],
     });
@@ -181,7 +166,7 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
           probability: 0.97,
           rank: 1,
         },
-         ...Array.from({ length: 20 }, (_, index) => ({
+        ...Array.from({ length: 20 }, (_, index) => ({
           id: `noise_tool_${index}`,
           text: `Noise Tool ${index}`,
           score: 0.1,
@@ -201,108 +186,68 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
     });
 
     expect(result.toolCandidates).toHaveLength(20);
-      expect(result.toolCandidates[0]).toMatchObject({
-        toolId: "tail_target_tool",
-      });
+    expect(result.toolCandidates[0]).toMatchObject({
+      toolId: "tail_target_tool",
+    });
     expect(result.toolExposure.exposedToolIds).toHaveLength(20);
     expect(result.toolExposure.exposedToolIds).toContain("tail_target_tool");
   });
 
-  it.each([0, 1, 20])("exposes every eligible tool and skips recall for %s tools", async (count) => {
-    for (let index = 0; index < count; index += 1) {
-      registerCapability({
-        definition: {
-          id: `eligible_tool_${index}`,
-          title: `Eligible Tool ${index}`,
-          description: "eligible test tool",
-          domain: "read",
-          source: "internal",
-          mode: "sync",
-          inputSchema: { type: "object" },
-          tags: [],
-          capabilities: { sideEffect: "none", requiresApproval: false },
-        },
-        execute() {
-          return {};
-        },
+  it.each([0, 1, 20])(
+    "exposes every eligible tool and skips recall for %s tools",
+    async (count) => {
+      for (let index = 0; index < count; index += 1) {
+        registerCapability(createEligibleTool(`eligible_tool_${index}`));
+      }
+
+      const embeddingSpy = vi
+        .spyOn(embedding, "executeLocalEmbedding")
+        .mockRejectedValue(new Error("recall must not run"));
+      const result = await resolveHarnessToolCandidatesForTurn({
+        query: "你好",
+        source: "agent_intent",
+        maxTools: 1,
+        topK: 1,
       });
-    }
 
-    const embeddingSpy = vi.spyOn(embedding, "executeLocalEmbedding").mockRejectedValue(
-      new Error("recall must not run"),
-    );
-    const result = await resolveHarnessToolCandidatesForTurn({
-      query: "你好",
-      source: "agent_intent",
-      maxTools: 1,
-      topK: 1,
-    });
+      expect(embeddingSpy).not.toHaveBeenCalled();
+      expect(result.toolExposure.exposedToolIds).toHaveLength(count);
+      expect(result.toolCandidates).toHaveLength(count);
+      expect(result).not.toHaveProperty("selectedToolIds");
+    },
+  );
 
-    expect(embeddingSpy).not.toHaveBeenCalled();
-    expect(result.toolExposure.exposedToolIds).toHaveLength(count);
-    expect(result.toolCandidates).toHaveLength(count);
-    expect(result).not.toHaveProperty("selectedToolIds");
-  });
+  it.each([21, 50])(
+    "preserves all eligible tools on recall failure above 20 tools: %s",
+    async (count) => {
+      for (let index = 0; index < count; index += 1) {
+        registerCapability(createEligibleTool(`large_set_tool_${index}`));
+      }
 
-  it.each([21, 50])("runs recall only above 20 tools and preserves all eligible tools on recall failure: %s", async (count) => {
-    for (let index = 0; index < count; index += 1) {
-      registerCapability({
-        definition: {
-          id: `large_set_tool_${index}`,
-          title: `Large Set Tool ${index}`,
-          description: "eligible test tool",
-          domain: "read",
-          source: "internal",
-          mode: "sync",
-          inputSchema: { type: "object" },
-          tags: [],
-          capabilities: { sideEffect: "none", requiresApproval: false },
-        },
-        execute() {
-          return {};
-        },
+      const embeddingSpy = vi
+        .spyOn(embedding, "executeLocalEmbedding")
+        .mockRejectedValue(new Error("embedding unavailable"));
+      const result = await resolveHarnessToolCandidatesForTurn({
+        query: "没有关键词也不能隐藏工具",
+        source: "agent_intent",
+        maxTools: 1,
+        topK: 1,
       });
-    }
 
-    const embeddingSpy = vi.spyOn(embedding, "executeLocalEmbedding").mockRejectedValue(
-      new Error("embedding unavailable"),
-    );
-    const result = await resolveHarnessToolCandidatesForTurn({
-      query: "没有关键词也不能隐藏工具",
-      source: "agent_intent",
-      maxTools: 1,
-      topK: 1,
-    });
+      expect(embeddingSpy).toHaveBeenCalledOnce();
+      expect(result.toolExposure.exposedToolIds).toHaveLength(count);
+      expect(result.toolCandidates).toHaveLength(count);
+      expect(result.retrievalError).toBe("embedding unavailable");
+      expect(result.toolExposure.reason).toContain(
+        "Candidate recall failed; all eligible tools remain visible as the conservative fallback.",
+      );
+    },
+  );
 
-    expect(embeddingSpy).toHaveBeenCalledOnce();
-    expect(result.toolExposure.exposedToolIds).toHaveLength(count);
-    expect(result.toolCandidates).toHaveLength(count);
-    expect(result.retrievalError).toBe("embedding unavailable");
-    expect(result.toolExposure.reason).toContain(
-      "Candidate recall failed; all eligible tools remain visible as the conservative fallback.",
-    );
-    expect(result).not.toHaveProperty("selectedToolIds");
-  });
-
-  it("falls back to all eligible tools when successful recall has no threshold matches", async () => {
+  it("falls back to all eligible tools when recall has no threshold matches", async () => {
     const count = 21;
     for (let index = 0; index < count; index += 1) {
-      registerCapability({
-        definition: {
-          id: `no_match_tool_${index}`,
-          title: `No Match Tool ${index}`,
-          description: "eligible test tool",
-          domain: "read",
-          source: "internal",
-          mode: "sync",
-          inputSchema: { type: "object" },
-          tags: [],
-          capabilities: { sideEffect: "none", requiresApproval: false },
-        },
-        execute() {
-          return {};
-        },
-      });
+      registerCapability(createEligibleTool(`no_match_tool_${index}`));
     }
 
     vi.spyOn(embedding, "executeLocalEmbedding").mockResolvedValue({
@@ -324,36 +269,21 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
     expect(result.toolExposure.reason).toContain(
       "Candidate recall returned no matches above the score threshold; all eligible tools remain visible as the conservative fallback.",
     );
-    expect(result.toolCandidates.every((candidate) => !("preferredForQuery" in candidate))).toBe(true);
-    expect(result).not.toHaveProperty("selectedToolIds");
   });
 
   it("does not use semantic keyword rules to change successful recall exposure", async () => {
     const count = 21;
     for (let index = 0; index < count; index += 1) {
-      registerCapability({
-        definition: {
-          id: `keyword_neutral_tool_${index}`,
-          title: `Keyword Neutral Tool ${index}`,
-          description: "eligible test tool",
-          domain: "read",
-          source: "internal",
-          mode: "sync",
-          inputSchema: { type: "object" },
-          tags: [],
-          capabilities: { sideEffect: "none", requiresApproval: false },
-        },
-        execute() {
-          return {};
-        },
-      });
+      registerCapability(createEligibleTool(`keyword_neutral_tool_${index}`));
     }
 
-    vi.spyOn(embedding, "executeLocalEmbedding").mockImplementation(async ({ texts }) => ({
-      embeddingModel: "test-embedding",
-      embeddingModelConfigId: "test-embedding-config",
-      embeddings: texts.map(() => [1, 0]),
-    }));
+    vi.spyOn(embedding, "executeLocalEmbedding").mockImplementation(
+      async ({ texts }) => ({
+        embeddingModel: "test-embedding",
+        embeddingModelConfigId: "test-embedding-config",
+        embeddings: texts.map(() => [1, 0]),
+      }),
+    );
     vi.spyOn(rerank, "executeLocalRerank").mockResolvedValue({
       rerankedCandidates: [],
       rerankModel: "test-rerank",
@@ -378,21 +308,23 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       neutralResult.toolCandidates.map((candidate) => candidate.toolId),
     );
     expect(keywordResult.toolCandidates).toHaveLength(20);
-    expect(keywordResult.toolCandidates.every((candidate) => candidate.ruleScore === 0)).toBe(true);
+    expect(
+      keywordResult.toolCandidates.every((candidate) => candidate.ruleScore === 0),
+    ).toBe(true);
   });
 
   it.each([
     {
       label: "workspace README file content stays local",
-      query: "README.md 的 Runtime 一节具体列了哪些运行组件？请基于文件内容回答。",
+      query:
+        "README.md 的 Runtime 一节具体列了哪些运行组件？请基于文件内容回答。",
       source: "agent_intent" as const,
       tools: [readOpenTool, webSearchTool, externalFakeTool],
       rerankOrder: ["read_open"],
-       expectedExposedToolIds: ["read_open", "web_search"],
-       expectedBlockedCapabilityIds: ["external_fake_tool"],
-       expectedReasons: [EXTERNAL_HIDDEN_REASON],
+      expectedExposedToolIds: ["read_open", "web_search"],
+      expectedBlockedCapabilityIds: ["external_fake_tool"],
+      expectedReasons: [EXTERNAL_HIDDEN_REASON],
       expectedTopToolIds: ["read_open"],
-       expectedPreferredToolIds: [],
     },
     {
       label: "workspace discovery covers directory listing",
@@ -404,7 +336,6 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       expectedBlockedCapabilityIds: ["external_fake_tool"],
       expectedReasons: [EXTERNAL_HIDDEN_REASON],
       expectedTopToolIds: ["read_discover"],
-       expectedPreferredToolIds: [],
     },
     {
       label: "workspace discovery covers fuzzy lookup",
@@ -416,7 +347,6 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       expectedBlockedCapabilityIds: ["external_fake_tool"],
       expectedReasons: [EXTERNAL_HIDDEN_REASON],
       expectedTopToolIds: ["read_discover"],
-       expectedPreferredToolIds: [],
     },
     {
       label: "explicit latest-news query keeps web_search",
@@ -428,19 +358,17 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       expectedBlockedCapabilityIds: ["external_fake_tool"],
       expectedReasons: [EXTERNAL_HIDDEN_REASON],
       expectedTopToolIds: ["web_search"],
-       expectedPreferredToolIds: [],
     },
     {
-      label: "small talk keeps no tool surface",
+      label: "small talk keeps all eligible built-ins visible",
       query: "谢谢",
       source: "agent_intent" as const,
       tools: [readOpenTool, webSearchTool, terminalSessionTool, externalFakeTool],
       rerankOrder: [],
-       expectedExposedToolIds: ["read_open", "web_search", "terminal_session"],
-       expectedBlockedCapabilityIds: ["external_fake_tool"],
-       expectedReasons: [EXTERNAL_HIDDEN_REASON],
-       expectedTopToolIds: ["read_open", "web_search", "terminal_session"],
-      expectedPreferredToolIds: [],
+      expectedExposedToolIds: ["read_open", "web_search", "terminal_session"],
+      expectedBlockedCapabilityIds: ["external_fake_tool"],
+      expectedReasons: [EXTERNAL_HIDDEN_REASON],
+      expectedTopToolIds: ["read_open", "web_search", "terminal_session"],
     },
     {
       label: "read fallback aliases stay hidden for normal agent intent",
@@ -452,7 +380,6 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       expectedBlockedCapabilityIds: ["read", "read_slice", "external_fake_tool"],
       expectedReasons: [EXTERNAL_HIDDEN_REASON],
       expectedTopToolIds: [],
-      expectedPreferredToolIds: [],
     },
     {
       label: "chat surface only keeps safe built-in domains",
@@ -460,11 +387,10 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       source: "chat_surface" as const,
       tools: [readOpenTool, webSearchTool, terminalSessionTool, externalFakeTool],
       rerankOrder: ["web_research", "read_open"],
-       expectedExposedToolIds: ["read_open", "web_search"],
+      expectedExposedToolIds: ["read_open", "web_search"],
       expectedBlockedCapabilityIds: ["terminal_session", "external_fake_tool"],
       expectedReasons: [CHAT_SAFE_DOMAIN_REASON, EXTERNAL_HIDDEN_REASON],
-       expectedTopToolIds: ["read_open", "web_search"],
-       expectedPreferredToolIds: [],
+      expectedTopToolIds: ["read_open", "web_search"],
     },
     {
       label: "explicit terminal command keeps terminal_session",
@@ -477,19 +403,17 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       expectedBlockedCapabilityIds: ["external_fake_tool"],
       expectedReasons: [EXTERNAL_HIDDEN_REASON],
       expectedTopToolIds: ["terminal_session"],
-       expectedPreferredToolIds: [],
     },
     {
-      label: "non-command request keeps terminal_session hidden",
+      label: "non-command request does not hide terminal_session",
       query: "帮我总结 README.md",
       source: "agent_intent" as const,
       tools: [terminalSessionTool, externalFakeTool],
       rerankOrder: [],
-       expectedExposedToolIds: ["terminal_session"],
-       expectedBlockedCapabilityIds: ["external_fake_tool"],
-       expectedReasons: [EXTERNAL_HIDDEN_REASON],
-       expectedTopToolIds: ["terminal_session"],
-      expectedPreferredToolIds: [],
+      expectedExposedToolIds: ["terminal_session"],
+      expectedBlockedCapabilityIds: ["external_fake_tool"],
+      expectedReasons: [EXTERNAL_HIDDEN_REASON],
+      expectedTopToolIds: ["terminal_session"],
     },
     {
       label: "external MCP stays hidden by default",
@@ -501,7 +425,6 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       expectedBlockedCapabilityIds: ["external_fake_tool"],
       expectedReasons: [EXTERNAL_HIDDEN_REASON],
       expectedTopToolIds: [],
-      expectedPreferredToolIds: [],
     },
     {
       label: "allowExternal exposes external MCP",
@@ -515,23 +438,18 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       expectedBlockedCapabilityIds: [],
       expectedReasons: [],
       expectedTopToolIds: ["external_fake_tool"],
-       expectedPreferredToolIds: [],
     },
     {
-      label: "sandbox-unavailable command does not surface terminal",
+      label: "sandbox-unavailable profile does not hide host terminal",
       query: "run pnpm check",
       source: "agent_intent" as const,
       tools: [terminalSessionTool, externalFakeTool],
       sandboxProfiles: { command: false },
-      rerankOrder: [],
-      expectedExposedToolIds: [],
-      expectedBlockedCapabilityIds: ["terminal_session", "external_fake_tool"],
-      expectedReasons: [
-        "Sandbox-required tools are hidden when their sandbox profile is unavailable.",
-        EXTERNAL_HIDDEN_REASON,
-      ],
-      expectedTopToolIds: [],
-      expectedPreferredToolIds: [],
+      rerankOrder: ["terminal_execution"],
+      expectedExposedToolIds: ["terminal_session"],
+      expectedBlockedCapabilityIds: ["external_fake_tool"],
+      expectedReasons: [EXTERNAL_HIDDEN_REASON],
+      expectedTopToolIds: ["terminal_session"],
     },
   ])(
     "keeps the tool-exposure regression pack green: $label",
@@ -547,7 +465,6 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       expectedBlockedCapabilityIds,
       expectedReasons,
       expectedTopToolIds,
-      expectedPreferredToolIds,
     }) => {
       registerTools(tools);
       mockRecallOrder(rerankOrder);
@@ -569,10 +486,16 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       for (const reason of expectedReasons) {
         expect(result.toolExposure.reason).toContain(reason);
       }
-      expect(result.toolCandidates.slice(0, expectedTopToolIds.length).map((candidate) => candidate.toolId)).toEqual(
-        expectedTopToolIds,
-      );
-      expect(result.toolCandidates.every((candidate) => !("preferredForQuery" in candidate))).toBe(true);
+      expect(
+        result.toolCandidates
+          .slice(0, expectedTopToolIds.length)
+          .map((candidate) => candidate.toolId),
+      ).toEqual(expectedTopToolIds);
+      expect(
+        result.toolCandidates.every(
+          (candidate) => !("preferredForQuery" in candidate),
+        ),
+      ).toBe(true);
     },
   );
 
@@ -587,7 +510,10 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
         mode: "sync" as const,
         inputSchema: { type: "object" },
         tags: ["docs", "search"],
-        capabilities: { sideEffect: "network" as const, requiresApproval: true },
+        capabilities: {
+          sideEffect: "network" as const,
+          requiresApproval: true,
+        },
       },
       execute() {
         return {};
@@ -637,7 +563,10 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
         mode: "sync" as const,
         inputSchema: { type: "object" },
         tags: ["docs"],
-        capabilities: { sideEffect: "network" as const, requiresApproval: true },
+        capabilities: {
+          sideEffect: "network" as const,
+          requiresApproval: true,
+        },
       },
       execute() {
         return {};
@@ -654,7 +583,9 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
     });
 
     expect(result.toolCandidates).toHaveLength(3);
-    expect(result.toolExposure.exposedToolIds).toEqual(tools.map((tool) => tool.definition.id));
+    expect(result.toolExposure.exposedToolIds).toEqual(
+      tools.map((tool) => tool.definition.id),
+    );
   });
 
   it("keeps mixed internal and external tools fully exposed in the <=20 path", async () => {
@@ -669,7 +600,10 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
         mode: "sync" as const,
         inputSchema: { type: "object" },
         tags: ["docs"],
-        capabilities: { sideEffect: "network" as const, requiresApproval: true },
+        capabilities: {
+          sideEffect: "network" as const,
+          requiresApproval: true,
+        },
       },
       execute() {
         return {};

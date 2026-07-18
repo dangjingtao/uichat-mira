@@ -36,26 +36,32 @@ const mockRecallOrder = (preferredCapabilityIds: string[] = []) => {
   vi.spyOn(embedding, "executeLocalEmbedding").mockRejectedValue(
     new Error("LOCAL_MODEL_RAW_ROOT is not set."),
   );
-  vi.spyOn(rerank, "executeLocalRerank").mockImplementation(async ({ candidates }) => {
-    const scored = candidates
-      .map((candidate) => {
-        const orderIndex = preferredCapabilityIds.indexOf(candidate.id);
-        return {
-          id: candidate.id,
-          text: candidate.text,
-          score: orderIndex === -1 ? 0.1 : 1 - orderIndex * 0.1,
-          probability: orderIndex === -1 ? 0.1 : 0.95 - orderIndex * 0.1,
-          rank: orderIndex === -1 ? preferredCapabilityIds.length + 1 : orderIndex + 1,
-        };
-      })
-      .sort((left, right) => right.probability - left.probability);
+  vi.spyOn(rerank, "executeLocalRerank").mockImplementation(
+    async ({ candidates }) => {
+      const scored = candidates
+        .map((candidate) => {
+          const orderIndex = preferredCapabilityIds.indexOf(candidate.id);
+          return {
+            id: candidate.id,
+            text: candidate.text,
+            score: orderIndex === -1 ? 0.1 : 1 - orderIndex * 0.1,
+            probability:
+              orderIndex === -1 ? 0.1 : 0.95 - orderIndex * 0.1,
+            rank:
+              orderIndex === -1
+                ? preferredCapabilityIds.length + 1
+                : orderIndex + 1,
+          };
+        })
+        .sort((left, right) => right.probability - left.probability);
 
-    return {
-      rerankedCandidates: scored,
-      rerankModel: "test-rerank",
-      rerankModelConfigId: "test-rerank-config",
-    };
-  });
+      return {
+        rerankedCandidates: scored,
+        rerankModel: "test-rerank",
+        rerankModelConfigId: "test-rerank-config",
+      };
+    },
+  );
 };
 
 describe("resolveHarnessCapabilityDiagnostics", () => {
@@ -64,17 +70,17 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns tool diagnostics with grouped tool meta and scores", async () => {
+  it("returns grouped tool diagnostics without selecting tools", async () => {
     registerCapability({
       definition: {
         id: "read_discover",
-        title: "Read List",
-        description: "list workspace",
+        title: "Read Discover",
+        description: "discover workspace",
         domain: "read",
         source: "internal",
         mode: "sync",
         inputSchema: {},
-        tags: ["workspace", "list"],
+        tags: ["workspace", "discover"],
         capabilities: {
           sideEffect: "none",
           requiresApproval: false,
@@ -84,17 +90,16 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
         return {};
       },
     });
-
     registerCapability({
       definition: {
         id: "read_open",
-        title: "Read Locate",
-        description: "locate workspace files",
+        title: "Read Open",
+        description: "open workspace files",
         domain: "read",
         source: "internal",
         mode: "sync",
         inputSchema: {},
-        tags: ["workspace", "locate"],
+        tags: ["workspace", "open"],
         capabilities: {
           sideEffect: "none",
           requiresApproval: false,
@@ -134,57 +139,30 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
 
     expect(result).not.toHaveProperty("selectedToolIds");
     expect(result.candidates).toHaveLength(2);
-    expect(result.candidates[0]).toMatchObject({
-      toolId: "read_discover",
-    });
-    expect(result.candidates[1]).toMatchObject({
-      toolId: "read_open",
-    });
+    expect(result.candidates[0]).toMatchObject({ toolId: "read_discover" });
+    expect(result.candidates[1]).toMatchObject({ toolId: "read_open" });
     expect(result.toolCandidates).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          toolId: "read_discover",
-        }),
-        expect.objectContaining({
-          toolId: "read_open",
-        }),
+        expect.objectContaining({ toolId: "read_discover" }),
+        expect.objectContaining({ toolId: "read_open" }),
       ]),
     );
     expect(result.retrievalModel).toBeUndefined();
     expect(result.rerankModel).toBeUndefined();
   });
 
-  it("keeps rule-based workspace candidates when local embedding is unavailable", async () => {
+  it("keeps eligible workspace candidates when local embedding is unavailable", async () => {
+    registerCapability(readOpenTool);
     registerCapability({
       definition: {
         id: "read_discover",
-        title: "Read List",
-        description: "list workspace",
+        title: "Read Discover",
+        description: "discover workspace",
         domain: "read",
         source: "internal",
         mode: "sync",
         inputSchema: {},
-        tags: ["workspace", "list"],
-        capabilities: {
-          sideEffect: "none",
-          requiresApproval: false,
-        },
-      },
-      execute() {
-        return {};
-      },
-    });
-
-    registerCapability({
-      definition: {
-        id: "read_open",
-        title: "Read Locate",
-        description: "locate workspace files",
-        domain: "read",
-        source: "internal",
-        mode: "sync",
-        inputSchema: {},
-        tags: ["workspace", "locate"],
+        tags: ["workspace", "discover"],
         capabilities: {
           sideEffect: "none",
           requiresApproval: false,
@@ -198,19 +176,13 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
     vi.spyOn(embedding, "executeLocalEmbedding").mockRejectedValue(
       new Error("LOCAL_MODEL_RAW_ROOT is not set."),
     );
-    const rerankSpy = vi.spyOn(rerank, "executeLocalRerank").mockResolvedValue({
-      rerankedCandidates: [
-        {
-          id: "workspace_lookup",
-          text: "Workspace Lookup",
-          score: 1,
-          probability: 0.61,
-          rank: 1,
-        },
-      ],
-      rerankModel: "Xenova/ms-marco-MiniLM-L-6-v2",
-      rerankModelConfigId: "local:ms-marco-MiniLM-L-6-v2",
-    });
+    const rerankSpy = vi
+      .spyOn(rerank, "executeLocalRerank")
+      .mockResolvedValue({
+        rerankedCandidates: [],
+        rerankModel: "test-rerank",
+        rerankModelConfigId: "test-rerank-config",
+      });
 
     const result = await resolveHarnessCapabilityDiagnostics({
       query: "帮我看看文件夹下有啥",
@@ -218,13 +190,10 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
     });
 
     expect(result.candidates).toHaveLength(2);
-    expect(result.candidates[0]).toMatchObject({
-      toolId: "read_discover",
-    });
-    expect(result.candidates[1]).toMatchObject({
-      toolId: "read_open",
-    });
-    expect(result.retrievalModel).toBeUndefined();
+    expect(result.toolExposure.exposedToolIds).toEqual([
+      "read_open",
+      "read_discover",
+    ]);
     expect(result.retrievalError).toBeUndefined();
     expect(result.exposureReasons).toContain(
       "All eligible tools are exposed because the eligible set is at most 20 tools.",
@@ -233,25 +202,7 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
   });
 
   it("returns action profile metadata for terminal capability diagnostics", async () => {
-    registerCapability({
-      definition: {
-        id: "terminal_session",
-        title: "Terminal Session",
-        description: "terminal",
-        domain: "terminal",
-        source: "internal",
-        mode: "stream",
-        inputSchema: {},
-        tags: ["terminal"],
-        capabilities: {
-          sideEffect: "process",
-          requiresApproval: true,
-        },
-      },
-      execute() {
-        return {};
-      },
-    });
+    registerCapability(terminalSessionTool);
 
     vi.spyOn(embedding, "executeLocalEmbedding").mockResolvedValue({
       embeddingModel: "test",
@@ -278,7 +229,7 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
     const result = await resolveHarnessCapabilityDiagnostics({
       query: "run pnpm check",
       source: "agent_intent",
-      sandboxProfiles: { command: true },
+      sandboxProfiles: { command: false },
     });
 
     expect(result.profiles).toEqual(
@@ -294,48 +245,12 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
       toolId: "terminal_session",
       actionProfileId: "terminal_execute_command",
     });
+    expect(result.toolExposure.exposedToolIds).toContain("terminal_session");
   });
 
-  it("keeps exposure reasons, blocked ids, and candidate scores for workspace-local diagnostics", async () => {
-    registerCapability({
-      definition: {
-        id: "read_open",
-        title: "Read Open",
-        description: "open workspace file",
-        domain: "read",
-        source: "internal",
-        mode: "sync",
-        inputSchema: {},
-        tags: ["workspace", "open", "readme"],
-        capabilities: {
-          sideEffect: "none",
-          requiresApproval: false,
-        },
-      },
-      execute() {
-        return {};
-      },
-    });
-
-    registerCapability({
-      definition: {
-        id: "web_search",
-        title: "Web Search",
-        description: "search the public web",
-        domain: "web_search",
-        source: "internal",
-        mode: "sync",
-        inputSchema: {},
-        tags: ["web", "search", "latest"],
-        capabilities: {
-          sideEffect: "network",
-          requiresApproval: false,
-        },
-      },
-      execute() {
-        return {};
-      },
-    });
+  it("keeps exposure reasons and candidate facts for workspace diagnostics", async () => {
+    registerCapability(readOpenTool);
+    registerCapability(webSearchTool);
 
     vi.spyOn(embedding, "executeLocalEmbedding").mockResolvedValue({
       embeddingModel: "test",
@@ -364,29 +279,29 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
       source: "agent_intent",
     });
 
-    expect(result.toolExposure.exposedToolIds).toEqual(["read_open", "web_search"]);
+    expect(result.toolExposure.exposedToolIds).toEqual([
+      "read_open",
+      "web_search",
+    ]);
     expect(result.blockedCapabilityIds).not.toContain("web_search");
     expect(result.exposureReasons).toContain(
       "All eligible tools are exposed because the eligible set is at most 20 tools.",
     );
-    expect(result.toolCandidates[0]).toMatchObject({
-      toolId: "read_open",
-    });
-    expect(result.toolCandidates[0]?.finalScore).toBe(0);
+    expect(result.toolCandidates[0]).toMatchObject({ toolId: "read_open" });
   });
 
   it.each([
     {
-       label: "workspace-local README query keeps all eligible tools visible",
+      label: "workspace-local README query keeps all eligible tools visible",
       query: "请打开 README.md 看看 Runtime 部分",
       source: "agent_intent" as const,
       tools: [readOpenTool, webSearchTool, externalFakeTool],
       rerankOrder: ["read_open"],
-       expectedExposedToolIds: ["read_open", "web_search"],
-       expectedBlockedCapabilityIds: ["external_fake_tool"],
-       expectedReason: "All eligible tools are exposed because the eligible set is at most 20 tools.",
+      expectedExposedToolIds: ["read_open", "web_search"],
+      expectedBlockedCapabilityIds: ["external_fake_tool"],
+      expectedReason:
+        "All eligible tools are exposed because the eligible set is at most 20 tools.",
       expectedTopToolId: "read_open",
-       expectedPreferredToolId: undefined,
     },
     {
       label: "chat surface keeps safe built-in domains only",
@@ -394,23 +309,23 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
       source: "chat_surface" as const,
       tools: [readOpenTool, webSearchTool, terminalSessionTool, externalFakeTool],
       rerankOrder: ["web_research", "read_open"],
-       expectedExposedToolIds: ["read_open", "web_search"],
+      expectedExposedToolIds: ["read_open", "web_search"],
       expectedBlockedCapabilityIds: ["terminal_session", "external_fake_tool"],
-      expectedReason: "Chat-visible tool surface is restricted to safe built-in domains.",
-       expectedTopToolId: "read_open",
-       expectedPreferredToolId: undefined,
+      expectedReason:
+        "Chat-visible tool surface is restricted to safe built-in domains.",
+      expectedTopToolId: "read_open",
     },
     {
-      label: "non-command turn keeps terminal hidden in diagnostics",
+      label: "non-command turn keeps terminal visible in diagnostics",
       query: "帮我总结 README.md",
       source: "agent_intent" as const,
       tools: [terminalSessionTool, externalFakeTool],
       rerankOrder: [],
-       expectedExposedToolIds: ["terminal_session"],
-       expectedBlockedCapabilityIds: ["external_fake_tool"],
-       expectedReason: "All eligible tools are exposed because the eligible set is at most 20 tools.",
-       expectedTopToolId: "terminal_session",
-      expectedPreferredToolId: undefined,
+      expectedExposedToolIds: ["terminal_session"],
+      expectedBlockedCapabilityIds: ["external_fake_tool"],
+      expectedReason:
+        "All eligible tools are exposed because the eligible set is at most 20 tools.",
+      expectedTopToolId: "terminal_session",
     },
     {
       label: "allowExternal propagates to diagnostics",
@@ -424,20 +339,19 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
       expectedBlockedCapabilityIds: [],
       expectedReason: undefined,
       expectedTopToolId: "external_fake_tool",
-       expectedPreferredToolId: undefined,
     },
     {
-      label: "sandbox-unavailable command keeps terminal blocked",
+      label: "sandbox-unavailable profile does not block host terminal",
       query: "run pnpm check",
       source: "agent_intent" as const,
       tools: [terminalSessionTool, externalFakeTool],
       sandboxProfiles: { command: false },
-      rerankOrder: [],
-      expectedExposedToolIds: [],
-      expectedBlockedCapabilityIds: ["terminal_session", "external_fake_tool"],
-      expectedReason: "Sandbox-required tools are hidden when their sandbox profile is unavailable.",
-      expectedTopToolId: undefined,
-      expectedPreferredToolId: undefined,
+      rerankOrder: ["terminal_execution"],
+      expectedExposedToolIds: ["terminal_session"],
+      expectedBlockedCapabilityIds: ["external_fake_tool"],
+      expectedReason:
+        "All eligible tools are exposed because the eligible set is at most 20 tools.",
+      expectedTopToolId: "terminal_session",
     },
   ])(
     "mirrors the exposure regression pack in diagnostics: $label",
@@ -453,7 +367,6 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
       expectedBlockedCapabilityIds,
       expectedReason,
       expectedTopToolId,
-      expectedPreferredToolId,
     }) => {
       for (const tool of tools) {
         registerCapability(tool);
@@ -468,13 +381,21 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
         sandboxProfiles,
       });
 
-      expect(result.toolExposure.exposedToolIds).toEqual(expectedExposedToolIds);
-      expect(result.blockedCapabilityIds).toEqual(expect.arrayContaining(expectedBlockedCapabilityIds));
+      expect(result.toolExposure.exposedToolIds).toEqual(
+        expectedExposedToolIds,
+      );
+      expect(result.blockedCapabilityIds).toEqual(
+        expect.arrayContaining(expectedBlockedCapabilityIds),
+      );
       if (expectedReason) {
         expect(result.exposureReasons).toContain(expectedReason);
       }
       expect(result.toolCandidates[0]?.toolId).toBe(expectedTopToolId);
-      expect(result.toolCandidates.every((candidate) => !("preferredForQuery" in candidate))).toBe(true);
+      expect(
+        result.toolCandidates.every(
+          (candidate) => !("preferredForQuery" in candidate),
+        ),
+      ).toBe(true);
     },
   );
 
@@ -488,9 +409,15 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
         source: "external" as const,
         sourceLabel: "Diagnostics Server",
         mode: "sync" as const,
-        inputSchema: { type: "object", properties: { query: { type: "string" } } },
+        inputSchema: {
+          type: "object",
+          properties: { query: { type: "string" } },
+        },
         tags: ["docs", "search"],
-        capabilities: { sideEffect: "network" as const, requiresApproval: true },
+        capabilities: {
+          sideEffect: "network" as const,
+          requiresApproval: true,
+        },
       },
       execute() {
         return {};
@@ -506,7 +433,10 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
         mode: "sync" as const,
         inputSchema: { type: "object" },
         tags: ["blocked"],
-        capabilities: { sideEffect: "network" as const, requiresApproval: true },
+        capabilities: {
+          sideEffect: "network" as const,
+          requiresApproval: true,
+        },
       },
       execute() {
         return {};
@@ -522,18 +452,22 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
       embeddings: Array.from({ length: eligibleTools.length + 2 }, () => [1, 0]),
     });
     vi.spyOn(rerank, "executeLocalRerank").mockResolvedValue({
-      rerankedCandidates: [{
-        id: eligibleTools[0]!.definition.id,
-        text: eligibleTools[0]!.definition.title,
-        score: 1,
-        probability: 0.99,
-        rank: 1,
-      }],
+      rerankedCandidates: [
+        {
+          id: eligibleTools[0]!.definition.id,
+          text: eligibleTools[0]!.definition.title,
+          score: 1,
+          probability: 0.99,
+          rank: 1,
+        },
+      ],
       rerankModel: "test-rerank",
       rerankModelConfigId: "test-rerank-config",
     });
 
-    const allowedExternalToolIds = eligibleTools.map((tool) => tool.definition.id);
+    const allowedExternalToolIds = eligibleTools.map(
+      (tool) => tool.definition.id,
+    );
     const result = await resolveHarnessCapabilityDiagnostics({
       query: "search product documentation",
       source: "agent_intent",
@@ -542,15 +476,23 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
       topK: 1,
     });
 
-    expect(result.eligibleExternalCapabilityIds).toEqual(allowedExternalToolIds);
-    expect(result.externalExposure.find((item) => item.status === "candidate")?.id).toBe(
-      eligibleTools[0]!.definition.id,
+    expect(result.eligibleExternalCapabilityIds).toEqual(
+      allowedExternalToolIds,
     );
-    expect(result.externalExposure.some((item) => item.status === "exposed")).toBe(true);
-    expect(result.externalExposure.find((item) => item.status === "blocked")?.id).toBe(
+    expect(
+      result.externalExposure.find((item) => item.status === "candidate")?.id,
+    ).toBe(eligibleTools[0]!.definition.id);
+    expect(
+      result.externalExposure.some((item) => item.status === "exposed"),
+    ).toBe(true);
+    expect(
+      result.externalExposure.find((item) => item.status === "blocked")?.id,
+    ).toBe(blockedTool.definition.id);
+    expect(result.registeredBlockedExternalCapabilityIds).toContain(
       blockedTool.definition.id,
     );
-    expect(result.registeredBlockedExternalCapabilityIds).toContain(blockedTool.definition.id);
-    expect(JSON.stringify(result)).not.toMatch(/bearerToken|customHeaders|envJson|top-secret-token/i);
+    expect(JSON.stringify(result)).not.toMatch(
+      /bearerToken|customHeaders|envJson|top-secret-token/i,
+    );
   });
 });
