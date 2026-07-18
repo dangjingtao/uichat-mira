@@ -9,7 +9,7 @@ import {
   getEvidenceCounts,
   getLatestEvidenceSummary,
 } from "../evidence";
-import { emitStepNode } from "../node-runtime";
+import { emitStepNode, getTraceAttemptMeta } from "../node-runtime";
 import type { AgentNodeState, EmitAgentExecutionNode } from "../node-runtime";
 
 export const evidenceNode = async (
@@ -46,6 +46,7 @@ export const evidenceNode = async (
   await emitStepNode(emit, {
     runId: state.runId,
     nodeId: "agent-evidence",
+    ...getTraceAttemptMeta("agent-evidence", state),
     nodeType: "reason",
     phase: "done",
     label: "整理证据",

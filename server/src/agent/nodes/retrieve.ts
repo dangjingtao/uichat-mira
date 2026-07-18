@@ -2,7 +2,7 @@
  * 检索节点：基于用户问题执行 RAG 检索，并将结果加入证据。
  */
 import { agentRagRunnable } from "../runnables";
-import { emitStepNode } from "../node-runtime";
+import { emitStepNode, getTraceAttemptMeta } from "../node-runtime";
 import {
   createObservation,
   getLatestUserQuestion,
@@ -20,9 +20,11 @@ export const retrieveNode = async (
     state.nextAction?.type === "retrieve" && state.nextAction.query.trim()
       ? state.nextAction.query.trim()
       : question;
+  const traceAttemptMeta = getTraceAttemptMeta("agent-retrieve", state);
   await emitStepNode(emit, {
     runId: state.runId,
     nodeId: "agent-retrieve",
+    ...traceAttemptMeta,
     nodeType: "retrieve",
     phase: "start",
     label: "检索上下文",
@@ -42,6 +44,7 @@ export const retrieveNode = async (
     await emitStepNode(emit, {
       runId: state.runId,
       nodeId: "agent-retrieve",
+      ...traceAttemptMeta,
       nodeType: "retrieve",
       phase: "done",
       label: "检索上下文",
@@ -88,6 +91,7 @@ export const retrieveNode = async (
   await emitStepNode(emit, {
     runId: state.runId,
     nodeId: "agent-retrieve",
+    ...traceAttemptMeta,
     nodeType: "retrieve",
     phase: "done",
     label: "检索上下文",

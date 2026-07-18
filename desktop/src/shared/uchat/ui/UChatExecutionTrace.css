@@ -1,0 +1,10 @@
+/*
+ * The execution trace owns Agent runtime status once it exists. The generic
+ * assistant typing indicator remains available for normal chat and for the
+ * brief interval before the first execution node is emitted.
+ */
+[data-uchat-execution-trace="true"]
+  + [data-uchat-assistant-bubble="true"]
+  > .inline-flex.items-center.gap-2.text-sm.text-text-secondary:first-child {
+  display: none;
+}

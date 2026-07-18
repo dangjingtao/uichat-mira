@@ -9,19 +9,179 @@ import {
 } from "lucide-react";
 import {
   getDisplayExecutionStep,
+  normalizeInlineText,
   summarizeRagProgress,
   type UChatExecutionProgressDetail,
 } from "./executionParsers";
 import type { RagNodeLike } from "./ragTypes";
+import "./UChatExecutionTrace.css";
+
+type ApprovalTraceState = "waiting_approval" | "running" | null;
+type AgentTraceStatus =
+  | "queued"
+  | "running"
+  | "waiting_approval"
+  | "waiting_user"
+  | "completed"
+  | "failed"
+  | "blocked"
+  | "cancelled";
+
+const getStepDetailString = (step: RagNodeLike, key: string) => {
+  const value = step.details?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+};
+
+const getApprovalTraceState = (
+  steps: RagNodeLike[],
+  agentStatus?: AgentTraceStatus,
+): ApprovalTraceState => {
+  if (agentStatus === "waiting_approval") {
+    return "waiting_approval";
+  }
+  if (agentStatus === "queued" || agentStatus === "running") {
+    return "running";
+  }
+  if (agentStatus) {
+    return null;
+  }
+
+  // Legacy fallback for persisted messages that predate explicit Agent status.
+  const hasTerminalState = steps.some(
+    (step) =>
+      step.phase === "error" ||
+      (step.phase === "done" &&
+        (step.nodeType === "generate" || step.nodeType === "evaluate")),
+  );
+  if (hasTerminalState) {
+    return null;
+  }
+
+  const resumeSteps = steps.filter(
+    (step) => step.details?.resumedFromApproval === true,
+  );
+  const resumedToolCallIds = new Set(
+    resumeSteps
+      .map((step) => getStepDetailString(step, "toolCallId"))
+      .filter((value): value is string => Boolean(value)),
+  );
+  const approvalWaitSteps = steps.filter(
+    (step) =>
+      step.nodeType === "approval" &&
+      step.phase === "done" &&
+      (typeof step.details?.approvalId === "string" ||
+        step.summary?.includes("审批等待") === true),
+  );
+
+  const hasUnresolvedApproval = approvalWaitSteps.some((step) => {
+    const toolCallId = getStepDetailString(step, "toolCallId");
+    return !toolCallId || !resumedToolCallIds.has(toolCallId);
+  });
+  if (hasUnresolvedApproval) {
+    return "waiting_approval";
+  }
+  if (resumeSteps.length > 0) {
+    return "running";
+  }
+
+  return approvalWaitSteps.length > 0 ? "waiting_approval" : null;
+};
+
+const getLatestPlannerThought = (steps: RagNodeLike[]) => {
+  const plannerStep = [...steps]
+    .reverse()
+    .find((step) => step.nodeType === "plan" && step.phase === "done");
+  if (!plannerStep) {
+    return null;
+  }
+
+  const thought = getStepDetailString(plannerStep, "plannerThought");
+  const reason = getStepDetailString(plannerStep, "reason");
+  const text = thought || reason || plannerStep.summary;
+  return text ? normalizeInlineText(text) : null;
+};
+
+const getPlannerStartingThought = (step: RagNodeLike) => {
+  const latestEvidenceSummary = getStepDetailString(
+    step,
+    "latestEvidenceSummary",
+  );
+  return latestEvidenceSummary
+    ? "我正在根据刚刚拿到的结果判断下一步怎么做。"
+    : "我正在梳理你的目标，判断这一轮先做什么。";
+};
+
+const getAgentInnerStatus = (
+  steps: RagNodeLike[],
+  approvalTraceState: ApprovalTraceState,
+) => {
+  const hasFinishedAnswer = steps.some(
+    (step) =>
+      step.phase === "done" &&
+      (step.nodeType === "generate" || step.nodeType === "evaluate"),
+  );
+  const hasFailed = steps.some((step) => step.phase === "error");
+  if (hasFinishedAnswer || hasFailed) {
+    return null;
+  }
+
+  const plannerThought = getLatestPlannerThought(steps);
+  const activeStep = [...steps].reverse().find((step) => step.phase === "start");
+  const activePlannerThought = activeStep
+    ? getStepDetailString(activeStep, "plannerThought")
+    : null;
+
+  if (activePlannerThought) {
+    return normalizeInlineText(activePlannerThought);
+  }
+
+  if (activeStep?.nodeType === "plan") {
+    return getPlannerStartingThought(activeStep);
+  }
+
+  if (activeStep?.nodeType === "generate" && plannerThought) {
+    return plannerThought;
+  }
+
+  if (activeStep) {
+    const display = getDisplayExecutionStep(activeStep);
+    const activeText = display.summary || activeStep.summary;
+    if (activeText) {
+      return normalizeInlineText(activeText);
+    }
+  }
+
+  if (approvalTraceState === "waiting_approval" && plannerThought) {
+    return `${plannerThought}，等你确认后继续。`;
+  }
+
+  if (plannerThought) {
+    return plannerThought;
+  }
+
+  const latestMeaningfulStep = [...steps]
+    .reverse()
+    .find(
+      (step) =>
+        step.phase === "done" &&
+        step.nodeType !== "approval" &&
+        Boolean(step.summary),
+    );
+  return latestMeaningfulStep?.summary
+    ? normalizeInlineText(latestMeaningfulStep.summary)
+    : null;
+};
 
 // UChatExecutionTrace renders the inline retrieval/generation progress row.
 export function UChatExecutionTrace({
   messageId,
   steps,
+  agentStatus,
   onOpenDetail,
 }: {
   messageId?: string;
   steps: RagNodeLike[];
+  agentStatus?: AgentTraceStatus;
   onOpenDetail: (detail: UChatExecutionProgressDetail) => void;
 }) {
   const { t } = useTranslation();
@@ -31,12 +191,24 @@ export function UChatExecutionTrace({
     return null;
   }
 
-  const summary = summarizeRagProgress(steps);
+  const approvalTraceState = getApprovalTraceState(steps, agentStatus);
+  const innerStatus = getAgentInnerStatus(steps, approvalTraceState);
+  const summary =
+    approvalTraceState === "waiting_approval"
+      ? t("chat.thread.agent.waitingApprovalTitle")
+      : approvalTraceState === "running"
+        ? t("chat.thread.agent.running")
+        : summarizeRagProgress(steps);
   const runningCount = steps.filter((step) => step.phase === "start").length;
   const completedCount = steps.filter((step) => step.phase === "done").length;
+  const showActiveSpinner =
+    approvalTraceState === "running" || runningCount > 0;
 
   return (
-    <div className="mt-4 border-b border-border/60 pb-2 transition-[border-color] duration-200">
+    <div
+      data-uchat-execution-trace="true"
+      className="mt-4 border-b border-border/60 pb-2 transition-[border-color] duration-200"
+    >
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
@@ -46,13 +218,15 @@ export function UChatExecutionTrace({
           <p className="min-w-0 truncate text-text-secondary">{summary}</p>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          <span className="hidden text-[11px] text-text-tertiary sm:inline">
-            {t("chat.executionTrace.stepCount", {
-              completed: completedCount,
-              total: steps.length,
-            })}
-          </span>
-          {runningCount > 0 ? (
+          {approvalTraceState === null ? (
+            <span className="hidden text-[11px] text-text-tertiary sm:inline">
+              {t("chat.executionTrace.stepCount", {
+                completed: completedCount,
+                total: steps.length,
+              })}
+            </span>
+          ) : null}
+          {showActiveSpinner ? (
             <LoaderCircle className="h-3.5 w-3.5 shrink-0 animate-spin text-text-tertiary" />
           ) : null}
           {expanded ? (
@@ -88,7 +262,7 @@ export function UChatExecutionTrace({
               return (
                 <button
                   type="button"
-                  key={step.nodeId}
+                  key={step.attemptKey ?? step.nodeId}
                   disabled={!clickable || !messageId}
                   onClick={() => {
                     if (!clickable || !messageId) {
@@ -160,6 +334,19 @@ export function UChatExecutionTrace({
           </div>
         </div>
       </div>
+
+      {innerStatus ? (
+        <div
+          data-testid="agent-inner-status"
+          className="mt-2 flex items-start gap-2 px-1 text-[13px] leading-5 text-text-secondary"
+        >
+          <span
+            className="mt-[7px] h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-primary/70"
+            aria-hidden="true"
+          />
+          <p className="min-w-0 break-words">{innerStatus}</p>
+        </div>
+      ) : null}
     </div>
   );
 }

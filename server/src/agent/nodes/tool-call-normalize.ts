@@ -5,7 +5,11 @@ import crypto from "node:crypto";
 import { validateInvocationArgs } from "@/mcp/core/schema";
 import { normalizeWorkspaceBoundaryArgs } from "@/mcp/workspace-path-args";
 import { toAgentExecutionNode } from "../trace";
-import type { EmitAgentExecutionNode, AgentGraphState } from "../node-runtime";
+import {
+  getTraceAttemptMeta,
+  type EmitAgentExecutionNode,
+  type AgentGraphState,
+} from "../node-runtime";
 import type { AgentNextAction, AgentToolMeta, PendingToolCall } from "../types";
 
 const nowIso = () => new Date().toISOString();
@@ -66,6 +70,7 @@ const emitNormalizeFailure = async (
   await emitStepNode(emit, {
     runId: state.runId,
     nodeId: "agent-tool-call-normalize",
+    ...getTraceAttemptMeta("agent-tool-call-normalize", state),
     nodeType: "tool",
     phase: "error",
     label: "工具调用规范化失败",
@@ -266,6 +271,7 @@ export const toolCallNormalizeNode = async (
   await emitStepNode(emit, {
     runId: state.runId,
     nodeId: "agent-tool-call-normalize",
+    ...getTraceAttemptMeta("agent-tool-call-normalize", state),
     nodeType: "tool",
     phase: "done",
     label: "工具调用规范化",

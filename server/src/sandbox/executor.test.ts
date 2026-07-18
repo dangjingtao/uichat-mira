@@ -43,6 +43,32 @@ const createMockSpawnProcess = () => {
   return child;
 };
 
+const executeAllowedCommand = async (command: string, stdoutText = "ok\n") => {
+  const child = createMockSpawnProcess();
+  sandboxMocks.spawnMock.mockReturnValue(child);
+
+  const promise = executeSandboxedCommand({
+    command,
+    timeoutMs: 500,
+    signal: new AbortController().signal,
+    shellProfile,
+  });
+
+  child.stdout.emit("data", stdoutText);
+  child.emit("close", 0);
+
+  const result = await promise;
+  expect(result.stdout).toBe(stdoutText.trim());
+  expect(sandboxMocks.spawnMock).toHaveBeenCalledWith(
+    expect.stringContaining("powershell.exe"),
+    ["-NoProfile", "-Command", command],
+    expect.objectContaining({
+      shell: false,
+      windowsHide: true,
+    }),
+  );
+};
+
 describe("SandboxExecutor", () => {
   const tempDirs: string[] = [];
 
@@ -97,15 +123,8 @@ describe("SandboxExecutor", () => {
     await expect(promise).rejects.toThrow("terminal output exceeded limit");
   });
 
-  it("blocks inline node execution", async () => {
-    await expect(
-      executeSandboxedCommand({
-        command: "node -e \"console.log('hi')\"",
-        timeoutMs: 500,
-        signal: new AbortController().signal,
-        shellProfile,
-      }),
-    ).rejects.toThrow("inline Node execution is blocked by sandbox policy");
+  it("allows inline Node execution", async () => {
+    await executeAllowedCommand("node -e \"console.log('hi')\"", "hi\n");
   });
 
   it("blocks git config --global", async () => {
@@ -119,26 +138,20 @@ describe("SandboxExecutor", () => {
     ).rejects.toThrow("git config outside local workspace scope is blocked by sandbox policy");
   });
 
-  it("blocks inline Python execution", async () => {
-    await expect(
-      executeSandboxedCommand({
-        command: "python -c \"print('hi')\"",
-        timeoutMs: 500,
-        signal: new AbortController().signal,
-        shellProfile,
-      }),
-    ).rejects.toThrow("inline or module Python execution is blocked by sandbox policy");
+  it("allows inline Python execution", async () => {
+    await executeAllowedCommand("python -c \"print('hi')\"", "hi\n");
   });
 
-  it("blocks npm exec", async () => {
-    await expect(
-      executeSandboxedCommand({
-        command: "npm exec prettier --version",
-        timeoutMs: 500,
-        signal: new AbortController().signal,
-        shellProfile,
-      }),
-    ).rejects.toThrow("npm exec is blocked by sandbox policy");
+  it("allows Python module execution", async () => {
+    await executeAllowedCommand("python -m pytest --version", "pytest 9.0\n");
+  });
+
+  it("allows npm exec, create, and init commands", async () => {
+    await executeAllowedCommand("npm exec prettier --version", "3.0.0\n");
+    sandboxMocks.spawnMock.mockReset();
+    await executeAllowedCommand("npm create vite@latest demo", "created\n");
+    sandboxMocks.spawnMock.mockReset();
+    await executeAllowedCommand("npm init -y", "written\n");
   });
 
   it("rejects cwd that is not an existing directory", async () => {

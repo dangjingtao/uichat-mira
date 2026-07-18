@@ -6,9 +6,11 @@ import { successEnvelope, errorEnvelope } from "@/routes/schema-helpers";
 import { agentRunStore } from "./run-store";
 import { notFound } from "@/utils/route-errors";
 import type { AgentRun } from "./types";
-import { resumeApprovedAgentRun } from "./resume";
+import {
+  persistAgentAssistantState,
+  scheduleApprovedAgentRunResume,
+} from "./resume";
 import { getAgentRunById } from "./run-read";
-import { persistAgentAssistantState } from "./resume";
 
 const agentApprovalRequestSchema = {
   type: "object",
@@ -146,8 +148,8 @@ const registerAgentRoutes: FastifyPluginAsync = async (app: FastifyInstance) => 
         return success(visibleRun);
       }
 
-      const result = await resumeApprovedAgentRun(visibleRun.id);
-      return success(result.run ?? visibleRun);
+      const runningRun = scheduleApprovedAgentRunResume(visibleRun.id);
+      return success(runningRun);
     }),
   );
 

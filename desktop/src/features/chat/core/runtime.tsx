@@ -13,6 +13,11 @@ import {
   useUChatRuntime,
   useUChatSelector,
 } from "@/shared/uchat/ui";
+import {
+  AGENT_RUN_UPDATED_EVENT,
+  type AgentRun,
+  type AgentRunUpdatedEventDetail,
+} from "@/shared/api/thread";
 import { useChatKnowledgeBaseState } from "./knowledgeBaseState";
 import {
   DesktopChatAttachmentDriver,
@@ -56,6 +61,26 @@ const desktopRuntimeBaseCapabilities = {
   attachments: true,
   messagePresentation: desktopMessagePresentationHints,
 } as const;
+
+const syncRuntimeStatusFromAgentRun = (runtime: ChatRuntime, run: AgentRun) => {
+  if (run.status === "queued" || run.status === "running") {
+    runtime.store.getState().setRunStatus({ type: "running" });
+    return;
+  }
+  if (run.status === "failed") {
+    runtime.store.getState().setRunStatus({
+      type: "error",
+      message: run.blockedReason ?? "Agent run failed",
+    });
+    return;
+  }
+  if (run.status === "cancelled") {
+    runtime.store.getState().setRunStatus({ type: "cancelled" });
+    return;
+  }
+
+  runtime.store.getState().setRunStatus({ type: "idle" });
+};
 
 export const createStableAppChatRuntime = (
   getCreateThreadInput: () =>
@@ -193,6 +218,32 @@ export function AppChatRuntimeProvider({
     window.addEventListener("uichat:threads-cleaned", handleThreadsCleaned);
     return () => {
       window.removeEventListener("uichat:threads-cleaned", handleThreadsCleaned);
+    };
+  }, [runtime]);
+
+  useEffect(() => {
+    let refreshChain = Promise.resolve();
+
+    const handleAgentRunUpdated = (event: Event) => {
+      const run = (event as CustomEvent<AgentRunUpdatedEventDetail>).detail?.run;
+      if (!run?.threadId) {
+        return;
+      }
+
+      syncRuntimeStatusFromAgentRun(runtime, run);
+      refreshChain = refreshChain
+        .then(async () => {
+          await runtime.refreshThread(run.threadId);
+          if (run.status !== "queued" && run.status !== "running") {
+            await runtime.loadThreads();
+          }
+        })
+        .catch(() => undefined);
+    };
+
+    window.addEventListener(AGENT_RUN_UPDATED_EVENT, handleAgentRunUpdated);
+    return () => {
+      window.removeEventListener(AGENT_RUN_UPDATED_EVENT, handleAgentRunUpdated);
     };
   }, [runtime]);
 

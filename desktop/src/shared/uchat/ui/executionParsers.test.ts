@@ -103,6 +103,68 @@ test("getExecutionProgressFromRenderableParts keeps separate agent attempts by a
   assert.equal(steps[1]?.attemptKey, "agent-capability-intent#1");
 });
 
+test("getExecutionProgressFromRenderableParts restores real order after refresh merges", () => {
+  const steps = getExecutionProgressFromRenderableParts([
+    {
+      type: "data",
+      name: "execution-node",
+      data: {
+        nodeId: "agent-resume-execution",
+        nodeType: "approval",
+        phase: "done",
+        label: "恢复执行",
+        emittedAt: "2026-07-18T05:20:03.000Z",
+      },
+    },
+    {
+      type: "data",
+      name: "execution-node",
+      data: {
+        nodeId: "agent-tool",
+        attemptKey: "agent-tool#1",
+        nodeType: "tool",
+        phase: "done",
+        label: "mail_query",
+        emittedAt: "2026-07-18T05:20:04.000Z",
+      },
+    },
+    {
+      type: "data",
+      name: "execution-node",
+      data: {
+        nodeId: "agent-next-action-planner",
+        attemptKey: "agent-next-action-planner#0",
+        nodeType: "plan",
+        phase: "done",
+        label: "执行计划",
+        emittedAt: "2026-07-18T05:20:01.000Z",
+      },
+    },
+    {
+      type: "data",
+      name: "execution-node",
+      data: {
+        nodeId: "agent-approval",
+        attemptKey: "agent-approval#0",
+        nodeType: "approval",
+        phase: "done",
+        label: "审批节点",
+        emittedAt: "2026-07-18T05:20:02.000Z",
+      },
+    },
+  ]);
+
+  assert.deepEqual(
+    steps.map((step) => step.nodeId),
+    [
+      "agent-next-action-planner",
+      "agent-approval",
+      "agent-resume-execution",
+      "agent-tool",
+    ],
+  );
+});
+
 test("getExecutionFailurePresentation uses agent copy for agent-domain errors", () => {
   const presentation = getExecutionFailurePresentation(
     [

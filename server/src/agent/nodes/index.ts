@@ -1,21 +1,54 @@
 /**
- * nodes 模块入口：聚合所有 Agent 图节点的导出。
+ * nodes 模块入口：聚合 Agent 图兼容节点与 Pi-loop 语义步骤。
+ *
+ * `*Node` 导出继续服务旧 LangGraph 和现有外部适配；
+ * 语义命名导出供 Pi-loop 直接调用，避免把内部职责继续绑定为图节点。
  */
 export { createAgentGoal } from "./goal-plan";
 export { getLatestUserQuestion } from "./shared";
 
 export { prepareContextNode } from "./prepare-context";
-export { approvalNode } from "./approval";
-export { errorNode } from "./error";
+export {
+  approvalNode,
+  approvalNode as pauseForApproval,
+} from "./approval";
+export {
+  errorNode,
+  errorNode as finishWithError,
+} from "./error";
 export { retrieveNode } from "./retrieve";
-export { generateNode } from "./generate";
-export { evaluateNode } from "./evaluate";
+export { generateNode as baseGenerateNode } from "./generate";
+export {
+  harnessAwareGenerateNode as generateNode,
+  buildHarnessGenerateContextText,
+  createHarnessAwareGenerateNode,
+} from "./harness-generate-context";
+export {
+  externalMcpAwareGenerateNode,
+  buildExternalMcpGenerateContextText,
+  createExternalMcpAwareGenerateNode,
+} from "./external-mcp-generate-context";
+export {
+  evaluateNode,
+  evaluateNode as finalizeRun,
+} from "./evaluate";
 
 export { nextActionPlannerNode } from "./next-action-planner";
 export { policyNode } from "./policy-node";
-export { toolCallNormalizeNode } from "./tool-call-normalize";
-export { toolNode } from "./tool-node";
-export { evidenceNode } from "./evidence";
+export {
+  toolCallNormalizeNode,
+  toolCallNormalizeNode as normalizeAndFreezeToolCall,
+} from "./tool-call-normalize";
+export { toolNode as baseToolNode } from "./tool-node";
+export {
+  harnessAwareToolNode as toolNode,
+  attachHarnessLlmContentToExecution,
+  type AgentToolExecutionWithLlmContent,
+} from "./harness-tool-result";
+export {
+  evidenceNode,
+  evidenceNode as appendPendingEvidence,
+} from "./evidence";
 
 export {
   emitStepNode,

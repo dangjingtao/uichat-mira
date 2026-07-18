@@ -7,9 +7,6 @@ const normalizeTokens = (command: string) =>
     .map((token) => token.trim())
     .filter(Boolean);
 
-const startsWithAny = (value: string, prefixes: string[]) =>
-  prefixes.some((prefix) => value === prefix || value.startsWith(`${prefix}=`));
-
 export const assertSandboxCommandPolicy = (command: string) => {
   const tokens = normalizeTokens(command);
   if (tokens.length === 0) {
@@ -19,38 +16,11 @@ export const assertSandboxCommandPolicy = (command: string) => {
   const executable = tokens[0]?.toLowerCase() ?? "";
   const args = tokens.slice(1).map((token) => token.toLowerCase());
 
-  if (executable === "node") {
-    if (
-      args.some((token) =>
-        startsWithAny(token, ["-e", "--eval", "-p", "--print"]),
-      )
-    ) {
-      throw mcpBadRequest("inline Node execution is blocked by sandbox policy");
-    }
-  }
-
-  if (
-    executable === "python" ||
-    executable === "python3" ||
-    executable === "py"
-  ) {
-    if (args.some((token) => startsWithAny(token, ["-c", "-m"]))) {
-      throw mcpBadRequest(
-        "inline or module Python execution is blocked by sandbox policy",
-      );
-    }
-  }
-
-  if (executable === "npm") {
-    const blockedSubcommand = args.find((token) =>
-      ["exec", "create", "init"].includes(token),
-    );
-    if (blockedSubcommand) {
-      throw mcpBadRequest(
-        `npm ${blockedSubcommand} is blocked by sandbox policy`,
-      );
-    }
-  }
+  // Runtime command forms such as `python -c`, `python -m`, `node -e`,
+  // `npm exec`, `npm create`, and `npm init` are normal terminal capabilities.
+  // They are intentionally not blocked here. Approval, workspace/runtime context,
+  // timeout, output limits, cancellation, and process-tree ownership are enforced
+  // by their dedicated layers instead of a command-shape blacklist.
 
   if (executable === "git" && args[0] === "config") {
     if (args.includes("--global") || args.includes("--system")) {

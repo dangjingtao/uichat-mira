@@ -4,8 +4,10 @@ import { writeStructuredLog } from "@/logger";
 import type { AgentNextAction } from "../types";
 import { getLatestEvidenceSummary } from "../evidence";
 import {
+  buildExecutionObservationView,
   buildPlannerObservationContext,
   emitStepNode,
+  getTraceAttemptMeta,
   refreshCurrentTaskFrameFromEvidence,
   getToolTraceTargetPreview,
   summarizePlannerNextAction,
@@ -25,6 +27,135 @@ import {
 } from "./parse";
 import { buildNextActionPlannerMessages, normalizeToolExposure } from "./prompt";
 import { validateNextAction } from "./validate";
+
+const PLANNER_EXECUTION_HISTORY_LIMIT = 12;
+const PLANNER_COVERED_PROGRESS_LIMIT = 20;
+const PLANNER_VISIBLE_THOUGHT_MIN_DELTA = 12;
+
+const decodeJsonStringFragment = (value: string) => {
+  let decoded = "";
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (char !== "\\") {
+      decoded += char;
+      continue;
+    }
+
+    const escaped = value[index + 1];
+    if (!escaped) {
+      break;
+    }
+
+    switch (escaped) {
+      case "\"":
+      case "\\":
+      case "/":
+        decoded += escaped;
+        index += 1;
+        break;
+      case "b":
+        decoded += "\b";
+        index += 1;
+        break;
+      case "f":
+        decoded += "\f";
+        index += 1;
+        break;
+      case "n":
+        decoded += "\n";
+        index += 1;
+        break;
+      case "r":
+        decoded += "\r";
+        index += 1;
+        break;
+      case "t":
+        decoded += "\t";
+        index += 1;
+        break;
+      case "u": {
+        const codePoint = value.slice(index + 2, index + 6);
+        if (!/^[0-9a-fA-F]{4}$/.test(codePoint)) {
+          return decoded;
+        }
+        decoded += String.fromCharCode(Number.parseInt(codePoint, 16));
+        index += 5;
+        break;
+      }
+      default:
+        decoded += escaped;
+        index += 1;
+        break;
+    }
+  }
+
+  return decoded;
+};
+
+/**
+ * Extracts only the public `reason` field from a partially streamed Planner JSON.
+ * It intentionally does not expose raw model output or hidden reasoning fields.
+ */
+export const extractPlannerVisibleThought = (value: string) => {
+  const match = /"reason"\s*:\s*"/.exec(value);
+  if (!match) {
+    return null;
+  }
+
+  const startIndex = match.index + match[0].length;
+  let rawReason = "";
+  let escaping = false;
+
+  for (let index = startIndex; index < value.length; index += 1) {
+    const char = value[index]!;
+    if (escaping) {
+      rawReason += `\\${char}`;
+      escaping = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaping = true;
+      continue;
+    }
+    if (char === "\"") {
+      break;
+    }
+    rawReason += char;
+  }
+
+  const decoded = decodeJsonStringFragment(rawReason).replace(/\s+/g, " ").trim();
+  return decoded || null;
+};
+
+const shouldEmitPlannerVisibleThought = (
+  current: string,
+  previous: string,
+) =>
+  current !== previous &&
+  (current.length - previous.length >= PLANNER_VISIBLE_THOUGHT_MIN_DELTA ||
+    /[。！？!?；;，,：:]$/.test(current));
+
+const mergePlannerTaskFrameProgress = (
+  previousFrame: AgentGraphState["currentTaskFrame"],
+  refreshedFrame: AgentGraphState["currentTaskFrame"],
+): AgentGraphState["currentTaskFrame"] => {
+  if (!refreshedFrame) {
+    return refreshedFrame;
+  }
+
+  const coveredProgress = [
+    ...(previousFrame?.coveredProgress ?? []),
+    ...(refreshedFrame.coveredProgress ?? []),
+  ]
+    .filter((item, index, items) => item && items.indexOf(item) === index)
+    .slice(-PLANNER_COVERED_PROGRESS_LIMIT);
+
+  return {
+    ...refreshedFrame,
+    coveredProgress: coveredProgress.length > 0 ? coveredProgress : undefined,
+  };
+};
 
 const getRecoveryExhaustedPlannerConclusion = (observationContext: ReturnType<
   typeof buildPlannerObservationContext
@@ -87,37 +218,60 @@ export const nextActionPlannerNode = async (
   emit?: EmitAgentExecutionNode,
 ): Promise<Partial<AgentGraphState>> => {
   const iteration = state.iterationCount ?? 0;
-  const maxIterations = state.maxIterations ?? 0;
+  // Compatibility/diagnostic field only. Planner execution is not capped by it.
+  const maxIterations = 0;
+  const traceAttemptMeta = getTraceAttemptMeta(
+    "agent-next-action-planner",
+    state,
+  );
   const question =
     state.question?.trim() || getLatestUserQuestion(state.messages) || state.goal.text;
   const toolExposure = normalizeToolExposure(state);
-  const plannerVisibleTaskFrame = refreshCurrentTaskFrameFromEvidence({
+  const refreshedTaskFrame = refreshCurrentTaskFrameFromEvidence({
     frame: state.currentTaskFrame,
     goal: state.goal,
     latestQuestion: question,
     latestEvidenceSummary: getLatestEvidenceSummary(state),
   });
-  const observationContext = buildPlannerObservationContext({
+  const plannerVisibleTaskFrame = mergePlannerTaskFrameProgress(
+    state.currentTaskFrame,
+    refreshedTaskFrame,
+  );
+  const plannerState = {
     ...state,
     currentTaskFrame: plannerVisibleTaskFrame,
-  });
+  };
+  const executionHistory = buildExecutionObservationView(plannerState).slice(
+    -PLANNER_EXECUTION_HISTORY_LIMIT,
+  );
+  const observationContext = {
+    ...buildPlannerObservationContext(plannerState),
+    executionHistory,
+    evidenceHistory: executionHistory.flatMap((item) =>
+      item.summary ? [item.summary] : [],
+    ),
+  };
   const latestEvidenceSummary = observationContext.latestEvidenceSummary;
+  const plannerStartDetails = {
+    exposedToolCount: toolExposure.exposedTools.length,
+    iteration,
+    maxIterations,
+    latestEvidenceSummary: latestEvidenceSummary ?? null,
+    executionHistoryCount: executionHistory.length,
+    evidenceHistoryCount: observationContext.evidenceHistory.length,
+    schemaReplanAttemptCount: observationContext.recovery.attemptCount,
+    schemaReplanError: observationContext.recovery.schemaError ?? null,
+  };
 
   await emitStepNode(emit, {
     runId: state.runId,
     nodeId: "agent-next-action-planner",
+    ...traceAttemptMeta,
     nodeType: "plan",
     phase: "start",
     label: "下一步动作决策",
     summary: "正在调用 task model 决定本轮下一步动作",
-    details: {
-      exposedToolCount: toolExposure.exposedTools.length,
-      iteration,
-      maxIterations,
-      latestEvidenceSummary: latestEvidenceSummary ?? null,
-      schemaReplanAttemptCount: observationContext.recovery.attemptCount,
-      schemaReplanError: observationContext.recovery.schemaError ?? null,
-    },
+    details: plannerStartDetails,
   });
 
   let nextAction: AgentNextAction | undefined;
@@ -129,19 +283,12 @@ export const nextActionPlannerNode = async (
   const recoveryExhausted =
     observationContext.recovery.source !== "none" &&
     observationContext.recovery.exhausted;
-  const taskModelInvoked =
-    !pendingApprovalActive &&
-    !recoveryExhausted &&
-    !(maxIterations > 0 && iteration >= maxIterations);
+  const taskModelInvoked = !pendingApprovalActive && !recoveryExhausted;
 
   if (pendingApprovalActive) {
     nextAction = undefined;
   } else if (recoveryExhausted) {
     nextAction = getRecoveryExhaustedPlannerConclusion(observationContext);
-  } else if (maxIterations > 0 && iteration >= maxIterations) {
-    nextAction = toNextActionFallback(
-      "Planner reached the iteration limit and must stop.",
-    );
   } else {
     const messages: NormalizedChatMessage[] = buildNextActionPlannerMessages({
       question,
@@ -156,8 +303,30 @@ export const nextActionPlannerNode = async (
       plannerMessages: NormalizedChatMessage[],
     ) => {
       let resolvedRawOutput = "";
+      let lastEmittedThought = "";
       for await (const delta of providerProxyService.streamTaskChatText(plannerMessages)) {
         resolvedRawOutput += delta;
+        const visibleThought = extractPlannerVisibleThought(resolvedRawOutput);
+        if (
+          visibleThought &&
+          shouldEmitPlannerVisibleThought(visibleThought, lastEmittedThought)
+        ) {
+          lastEmittedThought = visibleThought;
+          await emitStepNode(emit, {
+            runId: state.runId,
+            nodeId: "agent-next-action-planner",
+            ...traceAttemptMeta,
+            nodeType: "plan",
+            phase: "start",
+            label: "下一步动作决策",
+            summary: "正在调用 task model 决定本轮下一步动作",
+            details: {
+              ...plannerStartDetails,
+              plannerThought: visibleThought,
+              plannerThoughtStreaming: true,
+            },
+          });
+        }
       }
 
       const validationResult = validateNextAction(
@@ -181,7 +350,6 @@ export const nextActionPlannerNode = async (
       sanitizedOutput = initialPlannerDecision.sanitizedOutput;
       parseErrorReason = initialPlannerDecision.parseErrorReason;
       parseWarnings = initialPlannerDecision.parseWarnings;
-
     } catch (error) {
       nextAction = toNextActionFallback(
         error instanceof Error && error.message.trim()
@@ -207,6 +375,7 @@ export const nextActionPlannerNode = async (
   await emitStepNode(emit, {
     runId: state.runId,
     nodeId: "agent-next-action-planner",
+    ...traceAttemptMeta,
     nodeType: "plan",
     phase: "done",
     label: "下一步动作决策",
@@ -228,9 +397,13 @@ export const nextActionPlannerNode = async (
               ? nextAction.question
               : null,
       reason: nextAction?.reason ?? null,
+      plannerThought: nextAction?.reason ?? null,
+      plannerThoughtStreaming: false,
       iteration,
       maxIterations,
       latestEvidenceSummary: latestEvidenceSummary ?? null,
+      executionHistoryCount: executionHistory.length,
+      evidenceHistoryCount: observationContext.evidenceHistory.length,
       rawOutputPreview: rawOutput ? toPreview(rawOutput) : undefined,
       sanitizedOutputPreview: sanitizedOutput ? toPreview(sanitizedOutput) : undefined,
       parseErrorReason,
@@ -243,15 +416,19 @@ export const nextActionPlannerNode = async (
     },
   });
 
-  const plannerTaskFrame = nextAction
+  const updatedPlannerTaskFrame = nextAction
     ? updateCurrentTaskFrameFromPlanner({
-        frame: state.currentTaskFrame,
+        frame: plannerVisibleTaskFrame ?? state.currentTaskFrame,
         goal: state.goal,
         nextAction,
         latestQuestion: question,
         latestEvidenceSummary: observationContext.latestEvidenceSummary,
       })
     : undefined;
+  const plannerTaskFrame = mergePlannerTaskFrameProgress(
+    plannerVisibleTaskFrame,
+    updatedPlannerTaskFrame,
+  );
 
   return {
     ...(nextAction ? { nextAction } : {}),

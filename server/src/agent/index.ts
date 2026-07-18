@@ -1,4 +1,4 @@
-import { agentGraph } from "./graph";
+import { runAgentRuntime } from "./runtime";
 import { createAgentGoal } from "./nodes/index";
 import { agentRunStore, configureAgentRunPersistence } from "./run-store";
 import type { AgentGraphInput } from "./types";
@@ -43,7 +43,7 @@ export const createAndRunAgent = async (
   });
 
   try {
-    const output = await agentGraph.run({
+    const output = await runAgentRuntime({
       ...input,
       runId: run.id,
       goal,

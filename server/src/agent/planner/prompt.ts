@@ -54,8 +54,8 @@ const summarizeToolSchemas = (toolExposure: AgentToolExposureState) =>
 const getRemainingRecoveryAttempts = (observationContext: PlannerObservationContext) =>
   getRemainingPlannerRecoveryAttempts(observationContext.recovery);
 
-const PLANNER_HISTORY_LIMIT = 6;
-const PLANNER_HISTORY_ITEM_CHAR_LIMIT = 500;
+const PLANNER_HISTORY_LIMIT = 12;
+const PLANNER_HISTORY_ITEM_CHAR_LIMIT = 700;
 
 const trimText = (value: string, limit: number) =>
   value.length <= limit ? value : `${value.slice(0, Math.max(0, limit - 1))}…`;
@@ -101,8 +101,11 @@ const buildProgressionRules = (input: {
   const latestRecoverable = latestObservation?.recoverable === true;
   const rules = [
     "你必须根据 PlannerObservationContext 决定下一步，而不是忽略最近一次执行结果。",
+    "把每次工具或检索结果视为新的 observation；基于完整原始目标和累计执行历史滚动决定下一步。",
+    "answer 是终止动作。只有完整用户目标中的每一项明确要求都已被执行证据覆盖时，才能选择 answer。",
+    "不要只看 latestEvidenceSummary；必须同时检查 currentTaskFrame.completionCriteria、累计 executionHistory 和 evidenceHistory。",
     "如果上一次工具或检索失败但仍可恢复，不要默认输出 error。",
-    "可恢复失败时，你可以：换参数重试同一工具、换另一个工具、先读取辅助文件或目录、ask_user，或在已有证据足够时直接 answer 说明失败影响。",
+    "可恢复失败时，你可以：换参数重试同一工具、换另一个工具、先读取辅助文件或目录、ask_user，或在确实无法继续时选择 answer 并明确说明未完成项与失败影响。",
     "任何 use_tool 都只是提出动作，后续仍然必须经过 normalize / policy / approval；不要假装工具已经成功。",
     "不要无理由重复同一个失败调用；相同 toolId 只有在参数明显变化或理由明确时才能重试。",
   ];
@@ -133,7 +136,7 @@ const buildProgressionRules = (input: {
 
   if (input.maxIterations > 0) {
     rules.push(
-      `当前迭代进度为 ${input.iteration}/${input.maxIterations}；接近上限时优先收成明确结论，不要空转。`,
+      `当前迭代进度为 ${input.iteration}/${input.maxIterations}；接近上限时优先执行最关键的剩余动作。迭代上限不是任务已经完成的证据，不得因此提前 answer。`,
     );
   }
 
@@ -156,6 +159,7 @@ const buildSchemaReplanMessages = (input: {
       "如果问题明显在问本地 workspace 或本地文件，不要使用 web_search 代替本地证据路径。",
       "如果选择 use_tool，toolId 必须来自允许工具列表，args 必须严格符合 schema。",
       "这次 replan 的目标是修正上一次失败动作：你可以改参数、换工具、ask_user，或在确实无法继续时输出明确终局。",
+      "answer 是终止动作；只有完整用户目标已经覆盖，或确实无法继续且会明确报告未完成项时才能选择。",
       "不要假装上一次工具已经成功，也不要重复同一个错误参数。",
     ].join("\n"),
     parts: [],
@@ -174,7 +178,7 @@ const buildSchemaReplanMessages = (input: {
         allowedTools: summarizeToolSchemas(input.toolExposure),
         observationContext: input.observationContext,
         instruction:
-          "Return exactly one valid nextAction JSON. Prefer a concrete recovery move; if a missing fact must come from the user, return ask_user; only return error when you can explain why no safe progression remains.",
+          "Return exactly one valid nextAction JSON. Prefer a concrete recovery move; if a missing fact must come from the user, return ask_user; only return answer/error when you can explain why no executable progression remains or why the complete goal is already covered.",
       },
       null,
       2,
@@ -208,6 +212,7 @@ export const buildNextActionPlannerMessages = (input: {
       content: [
         "你是 Agent graph 的 nextAction planner。",
         "你的唯一任务是决定当前这一轮的下一步动作。",
+        "你是完整用户任务的唯一语义控制器：Harness 和 Evidence 只报告事实，不能替你宣布任务完成。",
         "你必须只输出 JSON，不要输出解释性自然语言，不要输出 Markdown，不要输出代码块。",
         "允许输出的 JSON 只有五种：",
         '{"type":"answer","reason":"..."}',
@@ -224,19 +229,21 @@ export const buildNextActionPlannerMessages = (input: {
         "对 terminal_session.cwd，只能输出 workspace-relative directory。",
         "如果命令就在 workspace 根目录执行，优先省略 cwd，或把 cwd 写成 '.'。",
         "不要把 terminal_session.cwd 写成 Windows 绝对路径、POSIX 绝对路径或父级跳转，例如 'D:\\workspace\\rag-demo'、'/workspace'、'..'、'../server'。",
-        "先判断完整用户目标是否已经覆盖，再决定 answer。",
+        "先逐项核对完整用户目标，再决定 answer。answer 等于停止整个 Agent Loop，不等于当前步骤完成。",
         "某一条 evidence 可解释，不等于整项任务已经完成。",
         "如果任务有多个目标，只完成一部分时不要提前 answer。",
+        "读到一个文件只证明该读取动作完成；如果用户还要求比较、修改、发送、运行或验证，必须继续。",
         "如果最新 evidence 仍有 gaps、missing、truncated、timed_out 或明确 error，不要只因为拿到结果就 answer。",
         "discover 只负责发现对象；需要正文时应继续选择 read_open。",
-        "如果 discover 的结构化结果已经足够支撑结论，可以直接 answer，不要机械追加 open。",
+        "如果 discover 的结构化结果已经足够支撑完整目标，可以直接 answer，不要机械追加 open。",
         "只有关键目标或关键参数确实无法从当前请求、有限历史和证据中推断时，才 ask_user。",
         "如果相同 toolId 和 args 已经有成功 evidence 且没有新 gap，通常应复用证据而不是重复调用。",
-        "任何 answer 都必须基于已有 Evidence，不能编造工具执行、检索结果或文件事实。",
+        "任何 answer 都必须基于累计 Evidence，不能编造工具执行、检索结果或文件事实。",
+        "选择 answer 时，reason 必须逐项说明 completionCriteria 如何被累计 executionHistory/evidenceHistory 覆盖；存在未覆盖项就必须继续行动。",
         "Evidence 只记录工具、检索和策略事实；是否回答、继续、检索或询问用户，必须由 Planner 自主决定。",
         ...buildProgressionRules({
           observationContext: input.observationContext,
-        iteration: input.iteration,
+          iteration: input.iteration,
           maxIterations: input.maxIterations,
         }),
       ].join("\n"),
@@ -251,6 +258,16 @@ export const buildNextActionPlannerMessages = (input: {
             input.messages,
             input.question,
           ),
+          completionContract: {
+            originalGoal:
+              input.observationContext.currentTaskFrame?.currentGoal ?? input.question,
+            completionCriteria:
+              input.observationContext.currentTaskFrame?.completionCriteria ?? [
+                input.question,
+              ],
+            rule:
+              "Choose answer only after every explicit requirement is covered by accumulated execution evidence. Otherwise choose the next executable action.",
+          },
           observationContext: input.observationContext,
           progression: {
             remainingRecoveryAttempts: getRemainingRecoveryAttempts(

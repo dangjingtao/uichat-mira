@@ -15,6 +15,13 @@ import {
   resolveManagedCodeGraphPlannerConfig,
 } from "./planner-exposure-config.js";
 import { createCodebaseExploreTrace } from "./codegraph-trace-diagnostics.js";
+import type {
+  ManagedCodeGraphProcessManager,
+} from "./repo-local-process-manager.js";
+import {
+  getRepoLocalManagedCodeGraphManager,
+  type RepoLocalManagedContext,
+} from "./repo-local-manager-cache.js";
 
 const nowIso = () => new Date().toISOString();
 
@@ -62,7 +69,7 @@ export const codebaseExploreTool: McpToolImplementation = {
     id: "codebase_explore",
     title: "Codebase Explore",
     description:
-      "Use the managed CodeGraph wrapper to explore relevant workspace areas and return only verification-bridge-ready candidates.",
+      "Explore code architecture, symbols, relationships, and impact through the controlled CodeGraph wrapper. Returned candidates are re-read from the workspace before they enter Agent Evidence.",
     domain: "read",
     source: "internal",
     mode: "sync",
@@ -100,7 +107,20 @@ export const codebaseExploreTool: McpToolImplementation = {
     const studioService = getActiveCodeGraphStudioService();
     const plannerConfig = resolveManagedCodeGraphPlannerConfig(workspaceRoot);
     const managedContext = studioService?.getManagedCapabilityContext(workspaceRoot) ?? null;
-    if (!managedContext?.ok) {
+    let manager: ManagedCodeGraphProcessManager | null = null;
+    let runtimeMode: "studio" | "repo_local" = "studio";
+
+    if (managedContext?.ok) {
+      manager = managedContext.manager;
+    } else if (managedContext) {
+      manager = await getRepoLocalManagedCodeGraphManager(
+        workspaceRoot,
+        managedContext as RepoLocalManagedContext,
+      );
+      runtimeMode = "repo_local";
+    }
+
+    if (!manager) {
       const gateReasonRecord = managedContext?.gate.reasons ?? [];
       const prioritizedGateReason =
         gateReasonRecord.find((reason) => reason.code === "repo_pollution_risk") ??
@@ -111,7 +131,7 @@ export const codebaseExploreTool: McpToolImplementation = {
         prioritizedGateReason?.message ??
         plannerConfig.externalIndexSupport.reason ??
         plannerConfig.storage.reason ??
-        "Managed CodeGraph app-data root is unavailable.";
+        "Managed CodeGraph runtime is unavailable.";
       const trace = createCodebaseExploreTrace({
         originalQuery: queryValue,
         normalizedQuery: queryValue.trim(),
@@ -150,20 +170,34 @@ export const codebaseExploreTool: McpToolImplementation = {
       };
 
       return {
+        evidence: {
+          actionTaken: `Attempted controlled CodeGraph exploration for "${queryValue.trim()}".`,
+          facts: [
+            "capabilityId=codebase_explore",
+            "plannerExposure=controlled_tool_only",
+            "verifiedChunkCount=0",
+          ],
+          gaps: [blockedReason],
+          status: "partial",
+          data: {
+            kind: "codebase_explore",
+            runtimeMode: "unavailable",
+            fallbackRequired: true,
+          },
+        },
         result: {
           capabilityId: "codebase_explore",
           plannerExposure: "controlled_tool_only",
           query: queryValue.trim(),
           scope: ["workspace-general"],
           verifiedEvidenceInput: retrieval,
+          retrievalEvidence: retrieval,
           exploreResult: {
             status: "degraded",
             truncated: false,
             degraded: true,
             limitations: ["provider_unavailable", "query_failed"],
-            followUpHints: [
-              blockedReason,
-            ],
+            followUpHints: [blockedReason],
             fallbackSignal: {
               required: true,
               reason: "provider_unavailable",
@@ -182,6 +216,7 @@ export const codebaseExploreTool: McpToolImplementation = {
           },
           trace: {
             exposureMode: "controlled_tool_only",
+            runtimeMode: "unavailable",
             explore: trace,
             verification: trace,
           },
@@ -189,7 +224,6 @@ export const codebaseExploreTool: McpToolImplementation = {
       };
     }
 
-    const manager = managedContext.manager;
     const wrapper = new CodebaseExploreWrapper(manager);
     const exploreResult = await wrapper.explore({
       query: queryValue,
@@ -199,17 +233,19 @@ export const codebaseExploreTool: McpToolImplementation = {
     });
     const retrieval = toAgentRetrievalEvidenceFromVerification(verification);
     retrieval.createdAt = nowIso();
-    retrieval.summary = createCodebaseExploreRetrievalSummary({
+    const retrievalSummary = createCodebaseExploreRetrievalSummary({
       retrieval,
       verification,
       exploreTrace: exploreResult.trace,
       verificationTrace: verification.trace,
     });
+    retrieval.summary = retrievalSummary;
 
     context.addArtifact({
       kind: "search-results",
       title: `Codebase explore trace for ${queryValue.trim()}`,
       data: {
+        runtimeMode,
         exploreTrace: exploreResult.trace,
         verificationTrace: verification.trace,
       },
@@ -217,16 +253,33 @@ export const codebaseExploreTool: McpToolImplementation = {
         capabilityId: "codebase_explore",
         plannerExposure: "controlled_tool_only",
         verifiedChunkCount: retrieval.chunkCount,
+        runtimeMode,
       },
     });
 
     return {
+      evidence: {
+        actionTaken: retrievalSummary.actionTaken,
+        facts: retrievalSummary.keyFindings,
+        ...(retrievalSummary.gaps?.length
+          ? { gaps: retrievalSummary.gaps }
+          : {}),
+        status:
+          retrievalSummary.status === "completed" ? "completed" : "partial",
+        data: {
+          kind: "codebase_explore",
+          runtimeMode,
+          query: retrieval.query,
+          verifiedChunkCount: retrieval.chunkCount,
+        },
+      },
       result: {
         capabilityId: "codebase_explore",
         plannerExposure: "controlled_tool_only",
         query: exploreResult.query,
         scope: exploreResult.scope,
         verifiedEvidenceInput: retrieval,
+        retrievalEvidence: retrieval,
         exploreResult: {
           status: exploreResult.status,
           truncated: exploreResult.truncated,
@@ -242,6 +295,7 @@ export const codebaseExploreTool: McpToolImplementation = {
         },
         trace: {
           exposureMode: "controlled_tool_only",
+          runtimeMode,
           explore: exploreResult.trace,
           verification: verification.trace,
         },

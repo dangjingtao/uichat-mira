@@ -148,6 +148,31 @@ export interface PersistAssistantMessageInput {
   metadata?: Record<string, unknown>;
 }
 
+const shouldClearStaleApprovalPlaceholder = (
+  content: string,
+  metadata: Record<string, unknown> | undefined,
+) => {
+  if (content.trim() !== "等待审批") {
+    return false;
+  }
+
+  const agent =
+    metadata?.agent &&
+    typeof metadata.agent === "object" &&
+    !Array.isArray(metadata.agent)
+      ? (metadata.agent as { status?: unknown })
+      : undefined;
+
+  return (
+    agent?.status === "queued" ||
+    agent?.status === "running" ||
+    agent?.status === "completed" ||
+    agent?.status === "failed" ||
+    agent?.status === "blocked" ||
+    agent?.status === "cancelled"
+  );
+};
+
 export const persistAssistantMessage = ({
   threadId,
   userId,
@@ -157,19 +182,29 @@ export const persistAssistantMessage = ({
   parts,
   metadata,
 }: PersistAssistantMessageInput) => {
+  const clearApprovalPlaceholder = shouldClearStaleApprovalPlaceholder(
+    content,
+    metadata,
+  );
+  const normalizedContent = clearApprovalPlaceholder ? "" : content;
+  const cleanedParts = clearApprovalPlaceholder
+    ? parts?.filter(
+        (part) => part.type !== "text" || part.text.trim() !== "等待审批",
+      )
+    : parts;
   const normalizedParts =
-    parts && parts.length > 0
-      ? parts
-      : content.trim()
+    cleanedParts && cleanedParts.length > 0
+      ? cleanedParts
+      : normalizedContent.trim()
         ? [
             {
               type: "text" as const,
-              text: content,
+              text: normalizedContent,
             },
           ]
         : [];
 
-  if (!content.trim() && normalizedParts.length === 0) {
+  if (!normalizedContent.trim() && normalizedParts.length === 0) {
     return;
   }
 
@@ -177,7 +212,7 @@ export const persistAssistantMessage = ({
     id: assistantMessageId,
     parentId,
     role: "assistant",
-    content,
+    content: normalizedContent,
     parts: normalizedParts,
     metadata,
   });

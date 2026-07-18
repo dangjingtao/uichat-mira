@@ -4,6 +4,11 @@ import { get, post, patch, del, ApiError } from "../lib/request";
 export { ApiError };
 
 const CHAT_REQUEST_CONFIG = { timeout: 0 } as const;
+const AGENT_RUN_POLL_INTERVAL_MS = 800;
+const AGENT_RUN_POLL_MAX_ATTEMPTS = 900;
+const AGENT_RUN_POLL_MAX_CONSECUTIVE_FAILURES = 3;
+
+export const AGENT_RUN_UPDATED_EVENT = "uichat:agent-run-updated";
 
 export type ThreadStatus = "active" | "archived" | "deleted";
 export type MessageRole = "user" | "assistant" | "system";
@@ -135,6 +140,70 @@ export interface AgentRun {
   createdAt: string;
   updatedAt: string;
 }
+
+export type AgentRunUpdatedEventDetail = {
+  run: AgentRun;
+};
+
+const activeAgentRunPolls = new Map<string, Promise<void>>();
+
+const shouldPollAgentRun = (run: AgentRun) =>
+  run.status === "queued" || run.status === "running";
+
+const waitForAgentRunPoll = () =>
+  new Promise<void>((resolve) => {
+    globalThis.setTimeout(resolve, AGENT_RUN_POLL_INTERVAL_MS);
+  });
+
+const notifyAgentRunUpdated = (run: AgentRun) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent<AgentRunUpdatedEventDetail>(AGENT_RUN_UPDATED_EVENT, {
+      detail: { run },
+    }),
+  );
+};
+
+const pollAgentRunUntilSettled = async (initialRun: AgentRun) => {
+  let currentRun = initialRun;
+  let consecutiveFailures = 0;
+
+  for (
+    let attempt = 0;
+    attempt < AGENT_RUN_POLL_MAX_ATTEMPTS && shouldPollAgentRun(currentRun);
+    attempt += 1
+  ) {
+    await waitForAgentRunPoll();
+
+    try {
+      currentRun = await getAgentRun(currentRun.id);
+      consecutiveFailures = 0;
+      notifyAgentRunUpdated(currentRun);
+    } catch {
+      consecutiveFailures += 1;
+      if (consecutiveFailures >= AGENT_RUN_POLL_MAX_CONSECUTIVE_FAILURES) {
+        return;
+      }
+    }
+  }
+};
+
+const startAgentRunPolling = (run: AgentRun) => {
+  if (typeof window === "undefined" || !shouldPollAgentRun(run)) {
+    return;
+  }
+  if (activeAgentRunPolls.has(run.id)) {
+    return;
+  }
+
+  const polling = pollAgentRunUntilSettled(run).finally(() => {
+    activeAgentRunPolls.delete(run.id);
+  });
+  activeAgentRunPolls.set(run.id, polling);
+};
 
 // 获取对话列表
 export async function getThreads(
@@ -278,7 +347,10 @@ export async function getAgentRun(runId: string): Promise<AgentRun> {
 }
 
 export async function approveAgentRun(runId: string): Promise<AgentRun> {
-  return post<AgentRun>(`/agent/runs/${runId}/approve`, {}, CHAT_REQUEST_CONFIG);
+  const run = await post<AgentRun>(`/agent/runs/${runId}/approve`, {}, CHAT_REQUEST_CONFIG);
+  notifyAgentRunUpdated(run);
+  startAgentRunPolling(run);
+  return run;
 }
 
 export async function rejectAgentRun(runId: string): Promise<AgentRun> {

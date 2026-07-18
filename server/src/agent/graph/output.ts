@@ -1,9 +1,13 @@
 import type { AgentGraphOutput } from "../types";
 import type { AgentGraphStateType } from "./state";
 
+export type AgentGraphOutputWithRuntimeState = AgentGraphOutput & {
+  iterationCount?: number;
+};
+
 export const mapGraphStateToOutput = (
   state: AgentGraphStateType,
-): AgentGraphOutput => {
+): AgentGraphOutputWithRuntimeState => {
   const answer = state.answer?.trim() ?? "";
   return {
     answer,
@@ -48,5 +52,6 @@ export const mapGraphStateToOutput = (
           : answer
             ? "completed"
             : "blocked",
+    iterationCount: state.iterationCount,
   };
 };
