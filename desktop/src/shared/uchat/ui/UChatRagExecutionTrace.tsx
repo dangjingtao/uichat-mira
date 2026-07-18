@@ -25,16 +25,9 @@ type AgentTraceStatus =
   | "blocked"
   | "cancelled";
 
-const findLastStepIndex = (
-  steps: RagNodeLike[],
-  predicate: (step: RagNodeLike) => boolean,
-) => {
-  for (let index = steps.length - 1; index >= 0; index -= 1) {
-    if (predicate(steps[index]!)) {
-      return index;
-    }
-  }
-  return -1;
+const getStepDetailString = (step: RagNodeLike, key: string) => {
+  const value = step.details?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 };
 
 const getApprovalTraceState = (
@@ -62,12 +55,15 @@ const getApprovalTraceState = (
     return null;
   }
 
-  const latestResumeIndex = findLastStepIndex(
-    steps,
+  const resumeSteps = steps.filter(
     (step) => step.details?.resumedFromApproval === true,
   );
-  const latestApprovalWaitIndex = findLastStepIndex(
-    steps,
+  const resumedToolCallIds = new Set(
+    resumeSteps
+      .map((step) => getStepDetailString(step, "toolCallId"))
+      .filter((value): value is string => Boolean(value)),
+  );
+  const approvalWaitSteps = steps.filter(
     (step) =>
       step.nodeType === "approval" &&
       step.phase === "done" &&
@@ -75,14 +71,18 @@ const getApprovalTraceState = (
         step.summary?.includes("审批等待") === true),
   );
 
-  if (latestApprovalWaitIndex > latestResumeIndex) {
+  const hasUnresolvedApproval = approvalWaitSteps.some((step) => {
+    const toolCallId = getStepDetailString(step, "toolCallId");
+    return !toolCallId || !resumedToolCallIds.has(toolCallId);
+  });
+  if (hasUnresolvedApproval) {
     return "waiting_approval";
   }
-  if (latestResumeIndex >= 0) {
+  if (resumeSteps.length > 0) {
     return "running";
   }
 
-  return latestApprovalWaitIndex >= 0 ? "waiting_approval" : null;
+  return approvalWaitSteps.length > 0 ? "waiting_approval" : null;
 };
 
 // UChatExecutionTrace renders the inline retrieval/generation progress row.
