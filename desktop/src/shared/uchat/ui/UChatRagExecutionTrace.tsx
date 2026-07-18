@@ -94,8 +94,9 @@ const getLatestPlannerThought = (steps: RagNodeLike[]) => {
     return null;
   }
 
+  const thought = getStepDetailString(plannerStep, "plannerThought");
   const reason = getStepDetailString(plannerStep, "reason");
-  const text = reason || plannerStep.summary;
+  const text = thought || reason || plannerStep.summary;
   return text ? normalizeInlineText(text) : null;
 };
 
@@ -115,6 +116,13 @@ const getAgentInnerStatus = (
 
   const plannerThought = getLatestPlannerThought(steps);
   const activeStep = [...steps].reverse().find((step) => step.phase === "start");
+  const activePlannerThought = activeStep
+    ? getStepDetailString(activeStep, "plannerThought")
+    : null;
+
+  if (activePlannerThought) {
+    return normalizeInlineText(activePlannerThought);
+  }
 
   if (activeStep?.nodeType === "generate" && plannerThought) {
     return plannerThought;
