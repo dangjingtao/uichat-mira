@@ -60,12 +60,18 @@ test("planner accumulated action ledger survives the recent execution window and
   assert.deepEqual(entry.inputHashes, ["hash-0", "hash-14"]);
 });
 
-test("planner latest evidence content exposes canonical bounded tool output beyond the Evidence preview", () => {
-  const longSource = `${"A".repeat(600)}\nEND_MARKER_FROM_REAL_TOOL_RESULT`;
-  const result = {
+test("planner recent evidence content keeps multiple canonical tool outputs beyond Evidence previews", () => {
+  const firstSource = `${"A".repeat(600)}\nFIRST_REAL_TOOL_MARKER`;
+  const secondSource = `${"B".repeat(600)}\nSECOND_REAL_TOOL_MARKER`;
+  const firstResult = {
     type: "open",
-    path: "src/entry.ts",
-    source: { text: longSource },
+    path: "src/first.ts",
+    source: { text: firstSource },
+  };
+  const secondResult = {
+    type: "open",
+    path: "src/second.ts",
+    source: { text: secondSource },
   };
   const state = {
     evidence: {
@@ -73,37 +79,35 @@ test("planner latest evidence content exposes canonical bounded tool output beyo
       retrievals: [],
       toolExecutions: [
         {
-          toolCallId: "call-read-open",
+          toolCallId: "call-first",
           toolId: "read_open",
-          inputHash: "hash-read-open",
-          args: { path: "src/entry.ts" },
+          inputHash: "hash-first",
+          args: { path: "src/first.ts" },
           status: "completed",
-          result,
-          llmContent: projectHarnessResultForLlm(result),
-          summary: {
-            source: "tool",
-            status: "truncated",
-            toolId: "read_open",
-            inputHash: "hash-read-open",
-            actionTaken: "Opened file src/entry.ts.",
-            keyFindings: [longSource.slice(0, 280)],
-            gaps: ["File content is truncated."],
-          },
+          result: firstResult,
+          llmContent: projectHarnessResultForLlm(firstResult),
           startedAt: "2026-07-19T00:00:00.000Z",
           finishedAt: "2026-07-19T00:00:01.000Z",
+        },
+        {
+          toolCallId: "call-second",
+          toolId: "read_open",
+          inputHash: "hash-second",
+          args: { path: "src/second.ts" },
+          status: "completed",
+          result: secondResult,
+          llmContent: projectHarnessResultForLlm(secondResult),
+          startedAt: "2026-07-19T00:00:02.000Z",
+          finishedAt: "2026-07-19T00:00:03.000Z",
         },
       ],
     },
   } as AgentGraphState;
-  const latestObservation = createReadObservation({
-    id: "call-read-open",
-    path: "src/entry.ts",
-    inputHash: "hash-read-open",
-    createdAt: "2026-07-19T00:00:01.000Z",
-  });
 
-  const content = buildPlannerLatestEvidenceContent(state, latestObservation);
+  const content = buildPlannerLatestEvidenceContent(state, undefined);
 
-  assert.equal(content?.source, "tool");
-  assert.match(content?.content ?? "", /END_MARKER_FROM_REAL_TOOL_RESULT/);
+  assert.equal(content?.source, "continuous");
+  assert.equal(content?.itemCount, 2);
+  assert.match(content?.content ?? "", /FIRST_REAL_TOOL_MARKER/);
+  assert.match(content?.content ?? "", /SECOND_REAL_TOOL_MARKER/);
 });
