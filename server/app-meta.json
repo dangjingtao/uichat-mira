@@ -38,11 +38,11 @@
         {
           "version": "0.7.1",
           "commit": {
-            "hash": "756f4802f1d91f9da67493a1deb4d7e5d8205dec",
-            "shortHash": "756f480",
-            "message": "docs: record JianXing WebBridge debug status",
-            "author": "Tomz",
-            "date": "2026-07-19T02:32:55+08:00"
+            "hash": "14f7f8152b35614412b7bf24f6d97d91e778b1c1",
+            "shortHash": "14f7f81",
+            "message": "test: cover native readiness split and websocket keepalive",
+            "author": "DangJingtao",
+            "date": "2026-07-19T03:46:29+08:00"
           }
         },
         {

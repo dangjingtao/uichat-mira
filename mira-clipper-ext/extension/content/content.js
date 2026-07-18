@@ -9,6 +9,30 @@
   if (window.__miraClipperReady) return;
   window.__miraClipperReady = true;
 
+  window.addEventListener('message', (event) => {
+    if (event.source !== window || event.origin !== window.location.origin) return;
+    if (event.data?.source !== 'mira-webbridge-ui' || event.data?.type !== 'WEBBRIDGE_OPEN_AUTHORIZATION_PAGE') return;
+
+    chrome.runtime.sendMessage({ type: 'WEBBRIDGE_OPEN_AUTHORIZATION_PAGE' })
+      .then((result) => {
+        window.postMessage({
+          source: 'mira-webbridge-extension',
+          type: 'WEBBRIDGE_OPEN_AUTHORIZATION_PAGE_RESULT',
+          requestId: event.data.requestId,
+          ...result,
+        }, window.location.origin);
+      })
+      .catch((error) => {
+        window.postMessage({
+          source: 'mira-webbridge-extension',
+          type: 'WEBBRIDGE_OPEN_AUTHORIZATION_PAGE_RESULT',
+          requestId: event.data.requestId,
+          ok: false,
+          message: error?.message || '无法打开见行授权页',
+        }, window.location.origin);
+      });
+  });
+
   let statusNode = null;
   function showBridgeStatus(status, operation, error) {
     if (!statusNode) {

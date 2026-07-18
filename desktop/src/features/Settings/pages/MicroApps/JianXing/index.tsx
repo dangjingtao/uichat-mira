@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Circle, Copy, Download, Eye, FileDown, FileUp, Globe2, KeyRound, MousePointer2, PlugZap, RotateCcw, Send, ShieldCheck } from "lucide-react";
+import { Circle, Copy, Download, Eye, ExternalLink, FileDown, FileUp, Globe2, KeyRound, MousePointer2, PlugZap, RotateCcw, Send, ShieldCheck } from "lucide-react";
 import { Alert, Badge, Button, Card, Modal, Select, TextInput } from "@/shared/ui";
 import { message } from "@/shared/ui/Message";
 import { ApiError, post } from "@/shared/lib/request";
@@ -85,6 +85,19 @@ export default function JianXingPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleExtensionMessage = (event: MessageEvent) => {
+      if (event.source !== window || event.origin !== window.location.origin) return;
+      if (event.data?.source !== "mira-webbridge-extension" || event.data?.type !== "WEBBRIDGE_OPEN_AUTHORIZATION_PAGE_RESULT") return;
+      if (event.data.ok === false) {
+        setError(String(event.data.message || "无法打开见行授权页，请重新加载扩展"));
+      }
+    };
+
+    window.addEventListener("message", handleExtensionMessage);
+    return () => window.removeEventListener("message", handleExtensionMessage);
+  }, []);
+
   const connected = status.status === "connected";
   const extensionConnected = status.extensionConnected === true;
   const effectiveTransport = status.transport || transport;
@@ -165,12 +178,25 @@ export default function JianXingPage() {
     try {
       const response = await post<{ code: string }>("/oauth/extension/authorization-code");
       setExtensionCode(response.code);
+      window.postMessage({
+        source: "mira-webbridge-ui",
+        type: "WEBBRIDGE_OPEN_AUTHORIZATION_PAGE",
+        requestId: `authorize_${Date.now()}`,
+      }, window.location.origin);
       message.success("授权码已生成，5 分钟内有效且只能使用一次");
     } catch (cause) {
       message.error(cause instanceof ApiError ? cause.message : "生成授权码失败");
     } finally {
       setExtensionCodeLoading(false);
     }
+  };
+
+  const openExtensionAuthorizationPage = () => {
+    window.postMessage({
+      source: "mira-webbridge-ui",
+      type: "WEBBRIDGE_OPEN_AUTHORIZATION_PAGE",
+      requestId: `authorize_${Date.now()}`,
+    }, window.location.origin);
   };
 
   const copyExtensionCode = async () => {
@@ -309,6 +335,7 @@ export default function JianXingPage() {
             {extensionCode ? <>
               <code className="rounded-ui-control border border-border bg-surface-secondary px-3 py-2 text-sm font-semibold tracking-[0.16em] text-text-primary">{extensionCode}</code>
               <Button variant="ghost" size="sm" onClick={() => void copyExtensionCode()}><Copy className="h-4 w-4" />复制</Button>
+              <Button variant="ghost" size="sm" onClick={openExtensionAuthorizationPage}><ExternalLink className="h-4 w-4" />打开授权页</Button>
             </> : null}
           </div>
           <p className="text-xs leading-5 text-text-tertiary">授权码 5 分钟内有效且只能使用一次。生成后切到 Chrome 的见行授权页，粘贴并点击“授权并连接”。授权成功后回到这里点击“连接”。</p>

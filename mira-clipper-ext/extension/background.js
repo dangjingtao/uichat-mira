@@ -115,18 +115,23 @@ async function openAuthorizationPageIfNeeded() {
     const { accessToken } = await chrome.storage.local.get(['accessToken']);
     if (typeof accessToken === 'string' && accessToken.trim()) return;
 
-    const url = getAuthorizationPageUrl();
-    const tabs = await chrome.tabs.query({});
-    const existingTab = tabs.find((tab) => tab.url === url && Number.isInteger(tab.id));
-    if (existingTab?.id !== undefined) {
-      await chrome.tabs.update(existingTab.id, { active: true });
-      return;
-    }
-
-    await chrome.tabs.create({ url, active: true });
+    await openAuthorizationPage();
   } catch (error) {
     console.warn('无法打开见行授权页', error);
   }
+}
+
+async function openAuthorizationPage() {
+  const url = getAuthorizationPageUrl();
+  const tabs = await chrome.tabs.query({});
+  const existingTab = tabs.find((tab) => tab.url === url && Number.isInteger(tab.id));
+  if (existingTab?.id !== undefined) {
+    await chrome.tabs.update(existingTab.id, { active: true });
+    return { ok: true, url, tabId: existingTab.id };
+  }
+
+  const createdTab = await chrome.tabs.create({ url, active: true });
+  return { ok: true, url, tabId: createdTab.id };
 }
 
 async function ensureContextMenus() {
@@ -950,6 +955,13 @@ async function waitForAfter(tabId, after = {}) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === 'WEBBRIDGE_OPEN_AUTHORIZATION_PAGE') {
+    openAuthorizationPage()
+      .then(sendResponse)
+      .catch((error) => sendResponse({ ok: false, message: error?.message || '无法打开见行授权页' }));
+    return true;
+  }
+
   if (message?.type === 'WEBBRIDGE_ACTIVATE_TAB' && Number.isInteger(message.tabId)) {
     webBridge.activeTabId = message.tabId;
     sendResponse({ ok: true, tabId: message.tabId });

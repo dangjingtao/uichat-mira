@@ -23,7 +23,6 @@ import { BrowserSessionManager } from "@/microapps/computer-use/session/manager.
 import { BrowserService } from "@/microapps/computer-use/browser/service.js";
 import { createComputerUseDebuggerService } from "@/routes/microapps/computer-use/debugger-service.js";
 import { createComputerUseBrowserTools } from "@/mcp/tools/browser-tools.tool.js";
-import { createWebBridgeTools } from "@/mcp/tools/webbridge.tool.js";
 import { ComputerUseModelExecutor } from "@/agent/computer-use/model-loop.js";
 import { runComputerUseActions } from "@/microapps/computer-use/executor/runner.js";
 import {
@@ -273,10 +272,6 @@ const computerUseBrowserService = new BrowserService(computerUseBrowserSessions)
 for (const tool of createComputerUseBrowserTools(computerUseBrowserService, { sessionManager: computerUseBrowserSessions })) {
   registerCapability(tool);
 }
-for (const tool of createWebBridgeTools()) {
-  registerCapability(tool);
-}
-
 const nowIso = () => new Date().toISOString();
 
 const toComputerUseRuntimeState = (

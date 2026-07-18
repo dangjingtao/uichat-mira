@@ -57,6 +57,8 @@ describe('WebBridge tool surface', () => {
     assert.match(source, /chrome\.tabs\.query\(\{\}\)/);
     assert.match(source, /reconnectRequested/);
     assert.match(source, /requestWebBridgeReconnect/);
+    assert.match(source, /WEBBRIDGE_OPEN_AUTHORIZATION_PAGE/);
+    assert.match(source, /openAuthorizationPage\(\)/);
     assert.doesNotMatch(source, /type === ['"]WEBBRIDGE_ACTIVATE['"]/);
     assert.doesNotMatch(source, /chrome-extension:\/\//);
   });
@@ -94,6 +96,13 @@ describe('WebBridge tool surface', () => {
     ]) {
       assert.match(source, new RegExp(message));
     }
+  });
+
+  it('opens the authorization page from the local Mira page through the content bridge', async () => {
+    const source = await readExtensionFile('content/content.js');
+    assert.match(source, /mira-webbridge-ui/);
+    assert.match(source, /WEBBRIDGE_OPEN_AUTHORIZATION_PAGE/);
+    assert.match(source, /chrome\.runtime\.sendMessage/);
   });
 
   it('exposes connection transport selection in the popup', async () => {
