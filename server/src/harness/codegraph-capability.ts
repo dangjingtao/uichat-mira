@@ -3,6 +3,9 @@ import {
 } from "@/microapps/codegraph/index.js";
 import { codebaseExploreTool } from "@/mcp/managed-codegraph/codebase-explore.tool.js";
 import {
+  canUseDeclaredRepoLocalCodeGraphCapability,
+} from "@/mcp/managed-codegraph/repo-local-capability.js";
+import {
   getCapabilityImplementation,
   registerCapability,
   unregisterCapability,
@@ -20,7 +23,10 @@ export const reconcileCodeGraphHarnessCapability = () => {
   }
 
   const gate = service.getCapabilityGate();
-  if (gate.available) {
+  const available =
+    gate.available || canUseDeclaredRepoLocalCodeGraphCapability(gate);
+
+  if (available) {
     if (!currentRegistration) {
       registerCapability(codebaseExploreTool);
     }
