@@ -9,7 +9,9 @@ import type {
 import type { AgentGraphState } from "../node-runtime";
 import { getToolTraceTargetPreview } from "../trace";
 
-const PLANNER_LATEST_EVIDENCE_CONTENT_CHAR_LIMIT = 12_000;
+const PLANNER_RECENT_EVIDENCE_CONTENT_CHAR_LIMIT = 36_000;
+const PLANNER_SINGLE_EVIDENCE_CONTENT_CHAR_LIMIT = 12_000;
+const PLANNER_RECENT_EVIDENCE_ITEM_LIMIT = 6;
 const PLANNER_ACTION_LEDGER_CHAR_LIMIT = 24_000;
 const PLANNER_LEDGER_FINDING_CHAR_LIMIT = 320;
 
@@ -26,6 +28,11 @@ const trimPlannerText = (value: string, limit: number) => {
     ? normalized
     : `${normalized.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
 };
+
+const clipEvidenceText = (value: string, limit: number) =>
+  value.length <= limit
+    ? value
+    : `${value.slice(0, Math.max(0, limit - 48)).trimEnd()}\n...[canonical result clipped]`;
 
 const getObservationTarget = (observation: AgentExecutionObservation) => {
   if (
@@ -176,92 +183,101 @@ export const buildPlannerAccumulatedActionLedger = (
   };
 };
 
+type CanonicalEvidenceItem = {
+  createdAt: string;
+  header: string;
+  content: string;
+};
+
+const collectRecentCanonicalEvidence = (state: AgentGraphState) => {
+  const items: CanonicalEvidenceItem[] = [];
+
+  for (const execution of state.evidence?.toolExecutions ?? []) {
+    if (execution.status !== "completed") {
+      continue;
+    }
+    const llmContent = (execution as AgentToolExecutionWithLlmContent).llmContent;
+    const text = getHarnessLlmContentText(llmContent).trim();
+    if (!llmContent || !text) {
+      continue;
+    }
+    items.push({
+      createdAt: execution.finishedAt || execution.startedAt,
+      header: [
+        `source=tool`,
+        `toolId=${execution.toolId}`,
+        `args=${JSON.stringify(execution.args)}`,
+        ...(execution.inputHash ? [`inputHash=${execution.inputHash}`] : []),
+      ].join("\n"),
+      content: clipEvidenceText(text, PLANNER_SINGLE_EVIDENCE_CONTENT_CHAR_LIMIT),
+    });
+  }
+
+  for (const retrieval of state.evidence?.retrievals ?? []) {
+    const text = retrieval.chunks
+      .map((chunk) =>
+        [
+          `document=${chunk.documentName}`,
+          `chunkId=${chunk.chunkId}`,
+          chunk.content,
+        ].join("\n"),
+      )
+      .join("\n\n")
+      .trim();
+    if (!text) {
+      continue;
+    }
+    items.push({
+      createdAt: retrieval.createdAt,
+      header: `source=retrieval\nquery=${retrieval.query}\nchunkCount=${retrieval.chunkCount}`,
+      content: clipEvidenceText(text, PLANNER_SINGLE_EVIDENCE_CONTENT_CHAR_LIMIT),
+    });
+  }
+
+  items.sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  return items.slice(-PLANNER_RECENT_EVIDENCE_ITEM_LIMIT);
+};
+
 /**
- * Exposes only the latest canonical LLM-safe executor payload to Planner. Do not rebuild
- * this from arbitrary raw result objects here: if Harness did not attach llmContent, the
- * Planner falls back to the normal Evidence summary instead of crossing that boundary.
+ * Exposes recent canonical LLM-safe executor payloads to Planner, not just the latest one.
+ * Older work is represented by execution summaries + accumulatedActionLedger, mirroring a
+ * Pi-style continuous context with bounded compaction instead of replaying an unbounded log.
+ * Never rebuild arbitrary raw tool results here: only Harness llmContent and retrieval
+ * chunks that already belong to Evidence may enter this model context.
  */
 export const buildPlannerLatestEvidenceContent = (
   state: AgentGraphState,
-  latestObservation: AgentExecutionObservation | undefined,
+  _latestObservation: AgentExecutionObservation | undefined,
 ) => {
-  if (latestObservation?.actionType === "tool") {
-    const executions = state.evidence?.toolExecutions ?? [];
-    const execution = latestObservation.toolCallId
-      ? [...executions]
-          .reverse()
-          .find((item) => item.toolCallId === latestObservation.toolCallId)
-      : executions.at(-1);
-
-    if (!execution || execution.status !== "completed") {
-      return undefined;
-    }
-
-    const llmContent = (execution as AgentToolExecutionWithLlmContent).llmContent;
-    const text = getHarnessLlmContentText(llmContent);
-    if (!llmContent || !text.trim()) {
-      return undefined;
-    }
-
-    return {
-      source: "tool" as const,
-      toolId: execution.toolId,
-      inputHash: execution.inputHash,
-      truncated: llmContent.truncated,
-      originalCharCount: llmContent.originalCharCount,
-      includedCharCount: Math.min(
-        llmContent.includedCharCount,
-        PLANNER_LATEST_EVIDENCE_CONTENT_CHAR_LIMIT,
-      ),
-      content:
-        text.length <= PLANNER_LATEST_EVIDENCE_CONTENT_CHAR_LIMIT
-          ? text
-          : `${text
-              .slice(0, PLANNER_LATEST_EVIDENCE_CONTENT_CHAR_LIMIT)
-              .trimEnd()}\n...[latest tool evidence clipped for Planner]`,
-    };
+  const items = collectRecentCanonicalEvidence(state);
+  if (items.length === 0) {
+    return undefined;
   }
 
-  if (latestObservation?.actionType === "retrieve") {
-    const retrieval = state.evidence?.retrievals.at(-1);
-    if (!retrieval) {
-      return undefined;
+  const selected: string[] = [];
+  let usedChars = 0;
+  let truncated = false;
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]!;
+    const section = [
+      `CANONICAL RESULT ${index + 1}/${items.length}`,
+      item.header,
+      "result:",
+      item.content,
+    ].join("\n");
+    if (usedChars + section.length > PLANNER_RECENT_EVIDENCE_CONTENT_CHAR_LIMIT) {
+      truncated = true;
+      break;
     }
-
-    const sections: string[] = [];
-    let usedChars = 0;
-    let truncated = false;
-    for (const chunk of retrieval.chunks) {
-      const section = [
-        `document: ${chunk.documentName}`,
-        `chunkId: ${chunk.chunkId}`,
-        "content:",
-        chunk.content,
-      ].join("\n");
-      const remaining = PLANNER_LATEST_EVIDENCE_CONTENT_CHAR_LIMIT - usedChars;
-      if (remaining <= 0) {
-        truncated = true;
-        break;
-      }
-      if (section.length > remaining) {
-        sections.push(
-          `${section.slice(0, remaining).trimEnd()}\n...[latest retrieval evidence clipped for Planner]`,
-        );
-        truncated = true;
-        break;
-      }
-      sections.push(section);
-      usedChars += section.length + 2;
-    }
-
-    return {
-      source: "retrieval" as const,
-      query: retrieval.query,
-      chunkCount: retrieval.chunkCount,
-      truncated,
-      content: sections.join("\n\n"),
-    };
+    selected.unshift(section);
+    usedChars += section.length + 2;
   }
 
-  return undefined;
+  return {
+    source: "continuous" as const,
+    itemCount: selected.length,
+    truncated,
+    includedCharCount: usedChars,
+    content: selected.join("\n\n"),
+  };
 };
