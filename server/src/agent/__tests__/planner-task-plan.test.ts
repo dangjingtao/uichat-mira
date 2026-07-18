@@ -8,40 +8,27 @@ import {
   withPlannerTaskPlanContract,
 } from "../planner/task-plan";
 
-test("planner task plan parses patch metadata without changing nextAction", () => {
+test("planner task plan parses a minimal todo patch without changing nextAction", () => {
   const patch = parsePlannerTaskPlanUpdate({
     type: "use_tool",
     toolId: "read_open",
     args: { path: "server/src/agent/planner/node.ts" },
-    reason: "Inspect the planner implementation for the active subgoal.",
+    reason: "Inspect the planner implementation for the current todo item.",
     planPatch: {
       addItems: [
-        {
-          id: "P1",
-          title: "Locate the planner control path",
-          status: "pending",
-          completionCriteria: ["Planner entry point is identified"],
-        },
-        {
-          id: "P2",
-          title: "Verify how plan state advances after Evidence",
-          status: "pending",
-          completionCriteria: ["State transition is verified from source"],
-        },
+        { id: "P1", text: "Locate the planner control path" },
+        { id: "P2", text: "Verify how results return to the model context" },
       ],
-      updates: [{ id: "P1", status: "completed" }],
-      activeItemId: "P2",
-      revisionReason: "P1 is covered by existing evidence.",
+      completeIds: ["P1"],
     },
   });
 
   assert.ok(patch);
-  assert.equal(patch.activeItemId, "P2");
   assert.equal(patch.addItems?.length, 2);
-  assert.deepEqual(patch.updates, [{ id: "P1", status: "completed" }]);
+  assert.deepEqual(patch.completeIds, ["P1"]);
 });
 
-test("runtime-owned planList preserves old item identity and applies patches", () => {
+test("runtime-owned planList keeps item identity and only tracks text plus done", () => {
   const frame: CurrentTaskFrame = {
     currentGoal: "Review the Pi-loop planner",
     currentSubtask: "Determine the next action",
@@ -51,40 +38,34 @@ test("runtime-owned planList preserves old item identity and applies patches", (
 
   const initialized = applyPlannerTaskPlan(frame, {
     addItems: [
-      { id: "P1", title: "Locate planner entry", status: "pending" },
-      {
-        id: "P2",
-        title: "Trace Evidence back into Planner",
-        status: "pending",
-      },
-      { id: "P3", title: "Form the final diagnosis", status: "pending" },
+      { id: "P1", text: "Locate planner entry" },
+      { id: "P2", text: "Trace tool results back into model context" },
+      { id: "P3", text: "Form the final diagnosis" },
     ],
-    activeItemId: "P1",
   });
   assert.ok(initialized);
 
   const updated = applyPlannerTaskPlan(initialized, {
-    // A duplicate add cannot rewrite the runtime-owned item title.
-    addItems: [{ id: "P1", title: "REWRITTEN TITLE", status: "pending" }],
-    updates: [{ id: "P1", status: "completed" }],
-    activeItemId: "P2",
+    // Duplicate ids cannot rewrite runtime-owned todo text.
+    addItems: [{ id: "P1", text: "REWRITTEN TITLE" }],
+    completeIds: ["P1"],
   });
 
   assert.ok(updated);
-  assert.equal(updated.currentSubtask, "Trace Evidence back into Planner");
+  assert.equal(updated.currentSubtask, "Trace tool results back into model context");
   assert.deepEqual(updated.remainingWork, [
-    "Trace Evidence back into Planner",
+    "Trace tool results back into model context",
     "Form the final diagnosis",
   ]);
-  assert.match(
-    updated.coveredProgress?.join("\n") ?? "",
-    /Plan completed: Locate planner entry/,
-  );
 
   const runtimeFrame = updated as CurrentTaskFrame & {
-    planList?: Array<{ id: string; title: string; status: string }>;
+    planList?: Array<{ id: string; text: string; done: boolean }>;
   };
-  assert.equal(runtimeFrame.planList?.[0]?.title, "Locate planner entry");
+  assert.deepEqual(runtimeFrame.planList, [
+    { id: "P1", text: "Locate planner entry", done: true },
+    { id: "P2", text: "Trace tool results back into model context", done: false },
+    { id: "P3", text: "Form the final diagnosis", done: false },
+  ]);
 
   const diagnostics = getPlannerTaskPlanDiagnostics(updated);
   assert.equal(diagnostics.planItemCount, 3);
@@ -92,7 +73,7 @@ test("runtime-owned planList preserves old item identity and applies patches", (
   assert.equal(diagnostics.completedPlanItemCount, 1);
 });
 
-test("planner contract injects continuous action/result context and forbids implicit memory-file wandering", () => {
+test("planner contract keeps plan light and injects continuous action/result context", () => {
   const payload = {
     currentUserRequest: "Inspect the agent runtime.",
     observationContext: {
@@ -100,9 +81,7 @@ test("planner contract injects continuous action/result context and forbids impl
         currentGoal: "Inspect the agent runtime",
         confirmedObjects: [],
         completionCriteria: ["Explain the runtime"],
-        planList: [
-          { id: "P1", title: "Locate planner", status: "in_progress" },
-        ],
+        planList: [{ id: "P1", text: "Locate planner", done: false }],
       },
       executionHistory: [
         {
@@ -118,7 +97,7 @@ test("planner contract injects continuous action/result context and forbids impl
         },
       ],
       latestEvidenceContent: {
-        source: "tool",
+        source: "continuous",
         content: "REAL_TOOL_BODY_MARKER",
       },
       accumulatedActionLedger: {
@@ -142,12 +121,12 @@ test("planner contract injects continuous action/result context and forbids impl
   ]);
 
   const joined = messages.map((message) => message.content).join("\n");
-  assert.match(joined, /runtime-owned planList/i);
+  assert.match(joined, /lightweight runtime-owned todo list/i);
+  assert.match(joined, /Each item is only \{id, text, done\}/i);
   assert.match(joined, /planPatch schema/i);
   assert.match(joined, /CONTINUOUS AGENT LOOP CONTEXT/);
   assert.match(joined, /REAL_TOOL_BODY_MARKER/);
-  assert.match(joined, /docs\/ENGINEERING_MEMORY\.md/);
-  assert.match(joined, /Do NOT search for or open/i);
+  assert.match(joined, /ENGINEERING_MEMORY\.md/);
 
   const rewrittenPayload = JSON.parse(messages.at(-1)?.content ?? "{}") as {
     observationContext?: Record<string, unknown>;
