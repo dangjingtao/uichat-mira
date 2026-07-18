@@ -100,6 +100,16 @@ const getLatestPlannerThought = (steps: RagNodeLike[]) => {
   return text ? normalizeInlineText(text) : null;
 };
 
+const getPlannerStartingThought = (step: RagNodeLike) => {
+  const latestEvidenceSummary = getStepDetailString(
+    step,
+    "latestEvidenceSummary",
+  );
+  return latestEvidenceSummary
+    ? "我正在根据刚刚拿到的结果判断下一步怎么做。"
+    : "我正在梳理你的目标，判断这一轮先做什么。";
+};
+
 const getAgentInnerStatus = (
   steps: RagNodeLike[],
   approvalTraceState: ApprovalTraceState,
@@ -122,6 +132,10 @@ const getAgentInnerStatus = (
 
   if (activePlannerThought) {
     return normalizeInlineText(activePlannerThought);
+  }
+
+  if (activeStep?.nodeType === "plan") {
+    return getPlannerStartingThought(activeStep);
   }
 
   if (activeStep?.nodeType === "generate" && plannerThought) {
