@@ -335,21 +335,33 @@ const codeGraphRoutes: FastifyPluginAsync<{
       success(normalizeReportEnvelope(await codeGraphStudioService.stop()))),
   );
 
-  app.post(
+  app.post<{ Body: { workspacePath?: string } }>(
     "/microapps/codegraph/smoke/status",
     {
       schema: {
         tags: ["Tools"],
         summary: "Run CodeGraph Studio smoke status",
         security: [{ bearerAuth: [] }],
+        body: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            workspacePath: { type: "string" },
+          },
+        },
         response: { 200: successEnvelope(smokeSchema) },
       },
     },
-    routeHandler("Failed to run CodeGraph Studio smoke status", async () =>
-      success(await runCodeGraphStudioSmokeStatus(codeGraphStudioService))),
+    routeHandler("Failed to run CodeGraph Studio smoke status", async (request) =>
+      success(
+        await runCodeGraphStudioSmokeStatus(
+          codeGraphStudioService,
+          request.body?.workspacePath,
+        ),
+      )),
   );
 
-  app.post<{ Body: { query: string } }>(
+  app.post<{ Body: { query: string; workspacePath?: string } }>(
     "/microapps/codegraph/smoke/query",
     {
       schema: {
@@ -362,6 +374,7 @@ const codeGraphRoutes: FastifyPluginAsync<{
           required: ["query"],
           properties: {
             query: { type: "string", minLength: 1 },
+            workspacePath: { type: "string" },
           },
         },
         response: { 200: successEnvelope(smokeSchema) },
@@ -372,6 +385,7 @@ const codeGraphRoutes: FastifyPluginAsync<{
         await runCodeGraphStudioSmokeQuery(
           codeGraphStudioService,
           request.body.query,
+          request.body.workspacePath,
         ),
       )),
   );
