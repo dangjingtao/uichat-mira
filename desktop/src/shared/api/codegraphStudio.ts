@@ -240,14 +240,20 @@ export const stopCodeGraphStudio = async () =>
     await post<{ report: CodeGraphStudioReport }>("/microapps/codegraph/stop"),
   );
 
-export const smokeStatusCodeGraphStudio = async () =>
+export const smokeStatusCodeGraphStudio = async (workspacePath?: string) =>
   normalizeReportResponse(
-    await post<CodeGraphStudioSmokeResult>("/microapps/codegraph/smoke/status"),
+    await post<CodeGraphStudioSmokeResult>("/microapps/codegraph/smoke/status", {
+      workspacePath: workspacePath?.trim() || undefined,
+    }),
   );
 
-export const smokeQueryCodeGraphStudio = async (query: string) =>
+export const smokeQueryCodeGraphStudio = async (
+  query: string,
+  workspacePath?: string,
+) =>
   normalizeReportResponse(
     await post<CodeGraphStudioSmokeResult>("/microapps/codegraph/smoke/query", {
       query,
+      workspacePath: workspacePath?.trim() || undefined,
     }),
   );
