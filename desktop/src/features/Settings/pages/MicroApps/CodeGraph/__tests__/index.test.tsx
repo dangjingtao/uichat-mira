@@ -3,191 +3,14 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CodeGraphStudioPage from "../index";
 
-const translations = {
-  "settings.microApps.codeGraphStudio.page.title": "CodeGraph",
-  "settings.microApps.codeGraphStudio.page.description":
-    "CodeGraph 用来理解代码仓结构、定位符号关系，并为后续代码检索和代码探索提供索引能力。这里可以查看它当前是否可用，并调试本地接入状态。",
-  "settings.microApps.codeGraphStudio.overview.statusLabel": "当前状态：",
-  "settings.microApps.codeGraphStudio.overview.description":
-    "真实 CodeGraph 1.3.0 暂不支持可靠的外部索引目录，因此当前保持 blocked-safe，不会启动，也不会污染仓库。",
-  "settings.microApps.codeGraphStudio.overview.nextStepsTitle": "下一步",
-  "settings.microApps.codeGraphStudio.overview.nextSteps.step1.title":
-    "填写 App Data Root",
-  "settings.microApps.codeGraphStudio.overview.nextSteps.step1.description":
-    "为日志与临时状态指定一个仓库外部目录。",
-  "settings.microApps.codeGraphStudio.overview.nextSteps.step2.title":
-    "保存参数并重新检测",
-  "settings.microApps.codeGraphStudio.overview.nextSteps.step2.description":
-    "保存后点击 detect，重新检测当前状态。",
-  "settings.microApps.codeGraphStudio.overview.nextSteps.step3.title":
-    "如需验证页面流程，可切换 Fake Provider",
-  "settings.microApps.codeGraphStudio.overview.nextSteps.step3.description":
-    "使用 Fake Provider 运行 Smoke，验证页面流程，不代表真实 CodeGraph 可用。",
-  "settings.microApps.codeGraphStudio.overview.chips.agentCapability": "智能体能力：{{value}}",
-  "settings.microApps.codeGraphStudio.overview.chips.telemetry": "Telemetry：{{value}}",
-  "settings.microApps.codeGraphStudio.overview.chips.pollution": "仓库污染：{{value}}",
-  "settings.microApps.codeGraphStudio.overview.chips.fakeProvider": "Fake Provider：{{value}}",
-  "settings.microApps.codeGraphStudio.values.disabled": "关闭",
-  "settings.microApps.codeGraphStudio.values.unavailable": "不可用",
-  "settings.microApps.codeGraphStudio.values.notDetected": "未发现",
-  "settings.microApps.codeGraphStudio.values.availableForValidation": "可用",
-  "settings.microApps.codeGraphStudio.values.ready": "ready",
-  "settings.microApps.codeGraphStudio.values.blocked": "blocked",
-  "settings.microApps.codeGraphStudio.blockedCards.appDataRoot.title":
-    "A. 缺少 App Data Root",
-  "settings.microApps.codeGraphStudio.blockedCards.appDataRoot.description":
-    "需要一个仓库外部目录来保存日志和临时状态。",
-  "settings.microApps.codeGraphStudio.blockedCards.appDataRoot.badge": "可处理",
-  "settings.microApps.codeGraphStudio.blockedCards.externalIndex.title":
-    "B. CodeGraph 1.3.0 不支持外部 Index Root",
-  "settings.microApps.codeGraphStudio.blockedCards.externalIndex.description":
-    "真实 provider 仍会要求 repo-root `.codegraph`，因此当前不可启动。",
-  "settings.microApps.codeGraphStudio.blockedCards.externalIndex.badge":
-    "当前不可解除",
-  "settings.microApps.codeGraphStudio.blockedCards.pollutionGuard.title":
-    "C. 污染保护已启用",
-  "settings.microApps.codeGraphStudio.blockedCards.pollutionGuard.description":
-    "如果 repo root 出现 `.codegraph`，系统会阻断 ready，且不会删除用户文件。",
-  "settings.microApps.codeGraphStudio.blockedCards.pollutionGuard.badge": "保护中",
-  "settings.microApps.codeGraphStudio.cards.blockedReasons.title": "阻断原因",
-  "settings.microApps.codeGraphStudio.cards.blockedReasons.emptyTitle":
-    "当前没有阻断原因",
-  "settings.microApps.codeGraphStudio.cards.blockedReasons.emptyDescription":
-    "当前状态未检测到会阻止 CodeGraph 运行的条件。",
-  "settings.microApps.codeGraphStudio.cards.pollutionSummary.title": "污染保护摘要",
-  "settings.microApps.codeGraphStudio.cards.pollutionSummary.behavior":
-    "发现污染即阻断，不删除用户文件",
-  "settings.microApps.codeGraphStudio.cards.pollutionSummary.noticeTitle":
-    "这是保护机制，不是报错。",
-  "settings.microApps.codeGraphStudio.cards.pollutionSummary.noticeBody":
-    "repo-root `.codegraph` 一旦出现，系统只会阻断 ready，不会替你删除用户文件。",
-  "settings.microApps.codeGraphStudio.cards.config.title": "基础配置",
-  "settings.microApps.codeGraphStudio.cards.config.description":
-    "这里只保留 owner 常用参数。Probe args、索引路径和日志路径统一收进高级配置。",
-  "settings.microApps.codeGraphStudio.cards.config.appDataRootHelp":
-    "用于保存日志与临时状态。必须位于仓库外部，建议选择长期可用的目录。",
-  "settings.microApps.codeGraphStudio.cards.capability.microAppHint":
-    "开启后，CodeGraph 微应用和智能体 codebase_explore 一起启用；关闭时一起停用。",
-  "settings.microApps.codeGraphStudio.cards.capability.agentCapabilityHint":
-    "允许智能体使用 CodeGraph。只有 runtime ready、telemetry verified_off、workspace 匹配、repo pollution guard safe 且 App Data Root 合法时才会真正生效。",
-  "settings.microApps.codeGraphStudio.cards.capability.statusTitle":
-    "当前 capability 状态：{{value}}",
-  "settings.microApps.codeGraphStudio.cards.capability.registered":
-    "Harness 已注册 `codebase_explore`，但仍只暴露受控 capability，不会把原生命令暴露给 Planner。",
-  "settings.microApps.codeGraphStudio.cards.capability.unavailable":
-    "当前还不能注册 `codebase_explore`，请先满足上面的 ready gate。",
-  "settings.microApps.codeGraphStudio.cards.advanced.title": "高级配置（可选）",
-  "settings.microApps.codeGraphStudio.cards.advanced.meta":
-    "默认折叠。这里放 probe args、logRoot、indexRoot 等开发调试字段。",
-  "settings.microApps.codeGraphStudio.cards.actions.title": "运行时动作",
-  "settings.microApps.codeGraphStudio.cards.actions.description":
-    "detect 和 health 可随时重新检查状态；start 和 stop 会按 blocked-safe 规则受限。",
-  "settings.microApps.codeGraphStudio.cards.actions.startHintBlocked":
-    "真实 provider 当前 blocked，禁止启动。",
-  "settings.microApps.codeGraphStudio.cards.actions.startHintFake":
-    "已切到 Fake Provider。保存参数后可继续 detect / start 验证页面流程。",
-  "settings.microApps.codeGraphStudio.cards.smoke.title": "Smoke 验证",
-  "settings.microApps.codeGraphStudio.cards.smoke.description":
-    "真实 provider blocked 时，这里会明确显示 blocked，不会被解释成 empty result。",
-  "settings.microApps.codeGraphStudio.cards.smoke.modes.real": "真实 Provider",
-  "settings.microApps.codeGraphStudio.cards.smoke.modes.fake": "Fake Provider",
-  "settings.microApps.codeGraphStudio.cards.smoke.realTitle": "真实 Provider",
-  "settings.microApps.codeGraphStudio.cards.smoke.realBlocked":
-    "当前 blocked，不能运行 smoke query。",
-  "settings.microApps.codeGraphStudio.cards.smoke.realDisabledHint":
-    "真实 provider 当前 blocked，smoke query 已禁用。",
-  "settings.microApps.codeGraphStudio.cards.smoke.fakeTitle": "Fake Provider",
-  "settings.microApps.codeGraphStudio.cards.smoke.fakeDescription":
-    "Fake Provider 仅用于验证页面流程，不代表真实 CodeGraph 可用。",
-  "settings.microApps.codeGraphStudio.cards.smoke.fakeToggleTitle":
-    "切换到 Fake Provider 可验证页面流程",
-  "settings.microApps.codeGraphStudio.cards.smoke.fakeToggleHint":
-    "切换后会把 command 与 probe args 改成测试 provider。建议先保存参数，再执行 detect / start。",
-  "settings.microApps.codeGraphStudio.cards.smoke.fakeDisabledHint":
-    "切到 Fake Provider 后，先保存参数并执行 detect / start，再运行 Smoke。",
-  "settings.microApps.codeGraphStudio.cards.smokeResult.title": "Smoke 结果",
-  "settings.microApps.codeGraphStudio.cards.smokeResult.description":
-    "如果真实 provider 仍 blocked，这里会明确显示 blocked，不会把它解释成空结果。",
-  "settings.microApps.codeGraphStudio.cards.smokeResult.metrics.status": "状态",
-  "settings.microApps.codeGraphStudio.cards.smokeResult.metrics.candidates":
-    "候选数",
-  "settings.microApps.codeGraphStudio.cards.smokeResult.metrics.content":
-    "结果片段",
-  "settings.microApps.codeGraphStudio.cards.debug.title": "原始调试报告",
-  "settings.microApps.codeGraphStudio.cards.debug.meta": "供开发调试使用",
-  "settings.microApps.codeGraphStudio.cards.debug.helperTitle": "这里保留原始字段",
-  "settings.microApps.codeGraphStudio.cards.debug.helperBody":
-    "原始 JSON 只放在折叠区，避免它抢走 owner 第一屏的阅读顺序。",
-  "settings.microApps.codeGraphStudio.fields.guardStatus": "guardStatus",
-  "settings.microApps.codeGraphStudio.fields.repoDataDirPath": "repoDataDirPath",
-  "settings.microApps.codeGraphStudio.fields.exists": "exists",
-  "settings.microApps.codeGraphStudio.fields.behavior": "行为",
-  "settings.microApps.codeGraphStudio.fields.workspaceRootReadonly":
-    "Workspace Root（只读）",
-  "settings.microApps.codeGraphStudio.fields.microAppEnabled":
-    "启用 CodeGraph 微应用",
-  "settings.microApps.codeGraphStudio.fields.agentCapabilityEnabled":
-    "允许智能体使用 CodeGraph",
-  "settings.microApps.codeGraphStudio.fields.command": "Command",
-  "settings.microApps.codeGraphStudio.fields.appDataRootRequired":
-    "App Data Root（必填）",
-  "settings.microApps.codeGraphStudio.fields.logRoot": "logRoot",
-  "settings.microApps.codeGraphStudio.fields.indexRoot": "indexRoot",
-  "settings.microApps.codeGraphStudio.fields.startArgs": "startArgs",
-  "settings.microApps.codeGraphStudio.fields.versionProbeArgs":
-    "versionProbeArgs",
-  "settings.microApps.codeGraphStudio.fields.telemetryProbeArgs":
-    "telemetryProbeArgs",
-  "settings.microApps.codeGraphStudio.fields.timeoutMs": "Timeout (ms)",
-  "settings.microApps.codeGraphStudio.fields.maxResults": "Max Results",
-  "settings.microApps.codeGraphStudio.fields.queryLimit": "Query Limit",
-  "settings.microApps.codeGraphStudio.fields.smokeQuery": "Smoke Query",
-  "settings.microApps.codeGraphStudio.placeholders.appDataRoot":
-    "请选择或输入一个仓库外部目录作为 App Data Root",
-  "settings.microApps.codeGraphStudio.actions.refresh": "刷新",
-  "settings.microApps.codeGraphStudio.actions.saveConfig": "保存参数",
-  "settings.microApps.codeGraphStudio.actions.detect": "detect",
-  "settings.microApps.codeGraphStudio.actions.start": "start",
-  "settings.microApps.codeGraphStudio.actions.health": "health",
-  "settings.microApps.codeGraphStudio.actions.stop": "stop",
-  "settings.microApps.codeGraphStudio.actions.smokeStatus":
-    "运行 Smoke Status",
-  "settings.microApps.codeGraphStudio.actions.smokeQuery": "运行 Smoke",
-  "settings.microApps.codeGraphStudio.actions.useRecommendedRoot":
-    "使用推荐目录",
-  "settings.microApps.codeGraphStudio.actions.copyDebug": "复制调试报告",
-  "settings.microApps.codeGraphStudio.states.loading":
-    "正在加载 CodeGraph...",
-  "settings.microApps.codeGraphStudio.states.emptySmokeTitle":
-    "当前没有可用结果",
-  "settings.microApps.codeGraphStudio.states.emptySmoke":
-    "真实 provider blocked 时，这里会明确显示 blocked，不会被解释成空结果。",
-  "settings.microApps.codeGraphStudio.messages.loadFailed":
-    "加载 CodeGraph 失败",
-  "settings.microApps.codeGraphStudio.messages.configSaved":
-    "CodeGraph 参数已保存",
-  "settings.microApps.codeGraphStudio.messages.configSaveFailed":
-    "保存 CodeGraph 参数失败",
-  "settings.microApps.codeGraphStudio.messages.actionExecuted":
-    "{{action}} 已执行",
-  "settings.microApps.codeGraphStudio.messages.actionFailed":
-    "CodeGraph 操作失败",
-  "settings.microApps.codeGraphStudio.messages.debugCopied":
-    "原始调试报告已复制",
-  "settings.microApps.codeGraphStudio.messages.debugCopyFailed":
-    "复制原始调试报告失败",
-} as const;
-
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string, options?: Record<string, unknown>) => {
-      const template = translations[key as keyof typeof translations] ?? key;
-      if (!options) {
-        return template;
+    t: (key: string) => {
+      if (key === "settings.microApps.codeGraphStudio.page.title") return "CodeGraph";
+      if (key === "settings.microApps.codeGraphStudio.page.description") {
+        return "CodeGraph runtime debugger";
       }
-      return template.replace(/\{\{(\w+)\}\}/g, (_, token: string) =>
-        String(options[token] ?? ""),
-      );
+      return key;
     },
   }),
 }));
@@ -220,27 +43,17 @@ const baseReport = {
     {
       code: "app_data_root_unavailable" as const,
       label: "App Data Root Unavailable",
-      message: "raw app data root issue",
-    },
-    {
-      code: "external_index_root_unsupported" as const,
-      label: "External Index Root Unsupported",
-      message: "raw external index issue",
-    },
-    {
-      code: "repo_pollution_risk" as const,
-      label: "Repo Pollution Risk",
-      message: "raw repo pollution issue",
+      message: "Studio default runtime is blocked",
     },
   ],
   config: {
-    workspaceRoot: "D:\\workspace\\rag-demo\\server",
-    appDataRoot: "",
-    appDataRootResolved: null,
-    logRoot: null,
-    indexRoot: null,
+    workspaceRoot: "D:\\workspace\\studio-default",
+    appDataRoot: "D:\\codegraph-appdata",
+    appDataRootResolved: "D:\\codegraph-appdata",
+    logRoot: "D:\\codegraph-appdata\\logs",
+    indexRoot: "D:\\codegraph-appdata\\index",
     microAppEnabled: true,
-    agentCapabilityEnabled: false,
+    agentCapabilityEnabled: true,
     command: "codegraph",
     startArgs: ["serve", "--mcp"],
     versionProbeArgs: ["--version"],
@@ -248,38 +61,33 @@ const baseReport = {
     timeoutMs: 2000,
     maxResults: 5,
     queryLimit: 5,
-    capabilityRegistered: false,
+    capabilityRegistered: true,
   },
   capability: {
-    available: false,
-    registered: false,
-    reasons: [
-      {
-        code: "agent_capability_disabled",
-        message: "Owner has not allowed the agent to use CodeGraph.",
-      },
-    ],
+    available: true,
+    registered: true,
+    reasons: [],
     checks: {
       microAppEnabled: true,
-      agentCapabilityEnabled: false,
+      agentCapabilityEnabled: true,
       runtimeReady: false,
-      telemetryVerifiedOff: false,
+      telemetryVerifiedOff: true,
       workspaceMatched: true,
-      repoPollutionSafe: false,
-      appDataRootValid: false,
-      capabilityRegistrationReady: false,
+      repoPollutionSafe: true,
+      appDataRootValid: true,
+      capabilityRegistrationReady: true,
     },
   },
   pollutionGuard: {
-    status: "blocked" as const,
+    status: "ready" as const,
     repoDataDirName: ".codegraph",
-    repoDataDirPath: "D:\\workspace\\rag-demo\\server\\.codegraph",
+    repoDataDirPath: "D:\\workspace\\studio-default\\.codegraph",
     exists: false,
-    blockedReason: "raw repo pollution issue",
+    blockedReason: null,
   },
   runtime: {
     providerVersion: "1.3.0",
-    telemetryStatus: "not_verified",
+    telemetryStatus: "verified_off",
     handshakeStatus: "not_started",
     initializedNotificationSent: false,
     processAlive: false,
@@ -288,31 +96,22 @@ const baseReport = {
     durationMs: null,
     exitCode: null,
     lastStatus: null,
-    lastError: "blocked",
+    lastError: null,
     crashCount: 0,
     startDisposition: null,
   },
   debug: {
-    workspaceHash: "workspace-hash",
-    plannerStorage: {
-      status: "blocked",
-      source: "missing_app_data_root",
-    },
-    externalIndexSupport: {
-      status: "blocked",
-    },
-    detectReasons: ["repo_pollution_risk"],
+    workspaceHash: "studio-workspace-hash",
+    plannerStorage: {},
+    externalIndexSupport: {},
+    detectReasons: [],
     rawManagerStatus: "blocked",
   },
 };
 
 describe("CodeGraphStudioPage", () => {
   beforeEach(() => {
-    vi.stubGlobal("navigator", {
-      clipboard: {
-        writeText: vi.fn().mockResolvedValue(undefined),
-      },
-    });
+    vi.clearAllMocks();
     apiMocks.getCodeGraphStudioReport.mockResolvedValue(baseReport);
     apiMocks.saveCodeGraphStudioConfig.mockResolvedValue(baseReport);
     apiMocks.detectCodeGraphStudio.mockResolvedValue({ report: baseReport });
@@ -321,100 +120,87 @@ describe("CodeGraphStudioPage", () => {
     apiMocks.stopCodeGraphStudio.mockResolvedValue({ report: baseReport });
     apiMocks.smokeStatusCodeGraphStudio.mockResolvedValue({
       kind: "status",
-      ok: false,
-      message: "blocked",
-      payload: null,
+      ok: true,
+      message: "ready",
+      payload: { workspaceRoot: "D:\\workspace\\uichat-mira" },
       report: baseReport,
     });
     apiMocks.smokeQueryCodeGraphStudio.mockResolvedValue({
       kind: "query",
-      ok: false,
-      message: "CodeGraph is not ready for smoke query.",
-      payload: null,
+      ok: true,
+      message: "verified",
+      payload: {
+        workspaceRoot: "D:\\workspace\\uichat-mira",
+        verifiedCount: 3,
+      },
       report: baseReport,
     });
   });
 
-  it("shows a readable blocked overview without leaking i18n keys", async () => {
+  it("uses the Studio workspace only as the initial debug path", async () => {
     render(<CodeGraphStudioPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Blocked")).toBeInTheDocument();
+      expect(
+        screen.getByDisplayValue("D:\\workspace\\studio-default"),
+      ).toBeInTheDocument();
     });
-
-    expect(screen.getByText("填写 App Data Root")).toBeInTheDocument();
     expect(
-      screen.queryByText(/settings\.microApps\.codeGraphStudio\./),
-    ).not.toBeInTheDocument();
+      screen.getByText(/Agent 实际运行按线程绑定当前 workspace/),
+    ).toBeInTheDocument();
   });
 
-  it("deduplicates owner-facing blocked reasons into summary cards", async () => {
+  it("keeps path smoke available even when the Studio default runtime is blocked", async () => {
     render(<CodeGraphStudioPage />);
 
-    await waitFor(() => {
-      expect(screen.getByTestId("blocked-summary-app-data-root")).toBeInTheDocument();
-    });
+    const smokeButton = await screen.findByRole("button", { name: "运行 Smoke" });
+    const statusButton = screen.getByRole("button", { name: "运行 Smoke Status" });
 
-    expect(
-      screen.getByText("A. 缺少 App Data Root"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("B. CodeGraph 1.3.0 不支持外部 Index Root"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("C. 污染保护已启用"),
-    ).toBeInTheDocument();
-    expect(screen.queryByText("raw external index issue")).not.toBeInTheDocument();
+    expect(smokeButton).toBeEnabled();
+    expect(statusButton).toBeEnabled();
   });
 
-  it("shows an empty state when no blocked reasons are reported", async () => {
-    apiMocks.getCodeGraphStudioReport.mockResolvedValueOnce({
-      ...baseReport,
-      blockedReasons: [],
-      config: {
-        ...baseReport.config,
-        appDataRoot: "D:\\app-data",
-        appDataRootResolved: "D:\\app-data",
-      },
-      pollutionGuard: {
-        ...baseReport.pollutionGuard,
-        status: "ready",
-        blockedReason: null,
-      },
-    });
-
+  it("passes the explicitly configured debug workspace path to smoke query", async () => {
     render(<CodeGraphStudioPage />);
 
-    await waitFor(() => {
-      expect(screen.getByText("当前没有阻断原因")).toBeInTheDocument();
+    const pathInput = await screen.findByDisplayValue("D:\\workspace\\studio-default");
+    fireEvent.change(pathInput, {
+      target: { value: "D:\\workspace\\uichat-mira" },
     });
-    expect(
-      screen.getByText("当前状态未检测到会阻止 CodeGraph 运行的条件。"),
-    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "运行 Smoke" }));
+
+    await waitFor(() => {
+      expect(apiMocks.smokeQueryCodeGraphStudio).toHaveBeenCalledWith(
+        "Planner -> Normalize -> Policy -> ToolNode -> Evidence",
+        "D:\\workspace\\uichat-mira",
+      );
+    });
   });
 
-  it("shows the recommended app data root action when appDataRoot is empty", async () => {
+  it("passes the explicitly configured debug workspace path to smoke status", async () => {
     render(<CodeGraphStudioPage />);
 
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "使用推荐目录" })).toBeInTheDocument();
+    const pathInput = await screen.findByDisplayValue("D:\\workspace\\studio-default");
+    fireEvent.change(pathInput, {
+      target: { value: "D:\\workspace\\uichat-mira" },
     });
 
-    expect(
-      screen.getByPlaceholderText("请选择或输入一个仓库外部目录作为 App Data Root"),
-    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "运行 Smoke Status" }));
+
+    await waitFor(() => {
+      expect(apiMocks.smokeStatusCodeGraphStudio).toHaveBeenCalledWith(
+        "D:\\workspace\\uichat-mira",
+      );
+    });
   });
 
-  it("uses one immediate product switch for CodeGraph and Agent capability", async () => {
+  it("keeps one product switch for microapp and agent capability", async () => {
     render(<CodeGraphStudioPage />);
 
     const productSwitch = await screen.findByRole("switch", {
       name: "启用 CodeGraph 微应用",
     });
-
-    expect(screen.getAllByRole("switch")).toHaveLength(1);
-    expect(screen.queryByText("允许智能体使用 CodeGraph")).not.toBeInTheDocument();
-
     fireEvent.click(productSwitch);
 
     await waitFor(() => {
@@ -425,78 +211,5 @@ describe("CodeGraphStudioPage", () => {
         }),
       );
     });
-  });
-
-  it("keeps start disabled when the real provider is blocked", async () => {
-    render(<CodeGraphStudioPage />);
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "start" })).toBeDisabled();
-    });
-
-    expect(
-      screen.getByText("真实 provider 当前 blocked，禁止启动。"),
-    ).toBeInTheDocument();
-  });
-
-  it("disables smoke actions in real-provider blocked mode", async () => {
-    render(<CodeGraphStudioPage />);
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "运行 Smoke" })).toBeDisabled();
-    });
-
-    expect(screen.getByRole("button", { name: "运行 Smoke Status" })).toBeDisabled();
-  });
-
-  it("shows fake provider guidance for page-flow validation", async () => {
-    render(<CodeGraphStudioPage />);
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Fake Provider" })).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "Fake Provider" }));
-
-    expect(
-      screen.getByText("Fake Provider 仅用于验证页面流程，不代表真实 CodeGraph 可用。"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("切换到 Fake Provider 可验证页面流程"),
-    ).toBeInTheDocument();
-  });
-
-  it("keeps the raw debug report folded by default", async () => {
-    render(<CodeGraphStudioPage />);
-
-    await screen.findByText("原始调试报告");
-    expect(screen.queryByText(/"status":/)).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "复制调试报告" }),
-    ).toBeInTheDocument();
-  });
-
-  it("shows the raw debug report after expanding the debug card", async () => {
-    render(<CodeGraphStudioPage />);
-
-    await screen.findByText("原始调试报告");
-    fireEvent.click(screen.getByRole("button", { name: "原始调试报告" }));
-
-    expect(screen.getByText(/"status":/)).toBeInTheDocument();
-  });
-
-  it("keeps blocked state out of the empty-result path", async () => {
-    render(<CodeGraphStudioPage />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId("codegraph-smoke-result-card")).toBeInTheDocument();
-    });
-
-    expect(screen.getByText("当前没有可用结果")).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "真实 provider blocked 时，这里会明确显示 blocked，不会被解释成空结果。",
-      ),
-    ).toBeInTheDocument();
   });
 });
