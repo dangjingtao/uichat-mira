@@ -39,6 +39,21 @@ type CachedRepoLocalManager = {
 
 const repoLocalManagerCache = new Map<string, CachedRepoLocalManager>();
 
+const normalizeWorkspaceRoot = (workspaceRoot: string) => {
+  const resolved = path.resolve(workspaceRoot).replace(/[\\/]+$/, "");
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+};
+
+/**
+ * Runtime ownership is scoped to the caller binding plus workspace root.
+ * Agent callers use thread:<threadId>; Studio smoke uses studio. The lower-level
+ * process manager may still share one healthy provider process for the same project.
+ */
+export const createRepoLocalManagerCacheKey = (
+  workspaceRoot: string,
+  bindingKey = "workspace",
+) => `${bindingKey.trim() || "workspace"}::${normalizeWorkspaceRoot(workspaceRoot)}`;
+
 const isPathInside = (parent: string, candidate: string) => {
   const relative = path.relative(path.resolve(parent), path.resolve(candidate));
   return (
@@ -52,7 +67,7 @@ const createRepoLocalRuntimeFingerprint = (
   context: RepoLocalRuntimeContext,
 ) =>
   JSON.stringify({
-    workspaceRoot,
+    workspaceRoot: normalizeWorkspaceRoot(workspaceRoot),
     command: context.draft.command,
     startArgs: context.draft.startArgs,
     versionProbeArgs: context.draft.versionProbeArgs,
@@ -65,6 +80,7 @@ const createRepoLocalRuntimeFingerprint = (
 const getOrCreateRepoLocalManager = async (
   workspaceRoot: string,
   context: RepoLocalRuntimeContext,
+  bindingKey?: string,
 ) => {
   if (
     !context.plannerStorage.logRoot ||
@@ -82,14 +98,15 @@ const getOrCreateRepoLocalManager = async (
   }
 
   const fingerprint = createRepoLocalRuntimeFingerprint(workspaceRoot, context);
-  const cached = repoLocalManagerCache.get(workspaceRoot);
+  const cacheKey = createRepoLocalManagerCacheKey(workspaceRoot, bindingKey);
+  const cached = repoLocalManagerCache.get(cacheKey);
   if (cached?.fingerprint === fingerprint) {
     return cached.manager;
   }
 
   if (cached) {
     await cached.manager.dispose();
-    repoLocalManagerCache.delete(workspaceRoot);
+    repoLocalManagerCache.delete(cacheKey);
   }
 
   const manager = new ManagedCodeGraphProcessManager({
@@ -116,7 +133,7 @@ const getOrCreateRepoLocalManager = async (
     },
   });
 
-  repoLocalManagerCache.set(workspaceRoot, {
+  repoLocalManagerCache.set(cacheKey, {
     fingerprint,
     manager,
   });
@@ -141,11 +158,15 @@ export const getRepoLocalManagedCodeGraphManagerForAgentWorkspace = async (
     /** Legacy compatibility only; product access now follows microAppEnabled. */
     agentCapabilityEnabled: boolean;
   },
+  threadId?: string,
 ) => {
   if (!access.microAppEnabled) {
     return null;
   }
-  return await getOrCreateRepoLocalManager(workspaceRoot, context);
+  const bindingKey = threadId?.trim()
+    ? `thread:${threadId.trim()}`
+    : "agent-workspace";
+  return await getOrCreateRepoLocalManager(workspaceRoot, context, bindingKey);
 };
 
 /**
@@ -155,7 +176,7 @@ export const getRepoLocalManagedCodeGraphManagerForAgentWorkspace = async (
 export const getRepoLocalManagedCodeGraphManagerForStudio = async (
   workspaceRoot: string,
   context: RepoLocalRuntimeContext,
-) => await getOrCreateRepoLocalManager(workspaceRoot, context);
+) => await getOrCreateRepoLocalManager(workspaceRoot, context, "studio");
 
 export const disposeRepoLocalManagedCodeGraphManagers = async () => {
   const managers = [...repoLocalManagerCache.values()].map((entry) => entry.manager);
