@@ -172,31 +172,67 @@ export const buildPlannerStructuredOutputJsonSchema = (
   additionalProperties: false,
 });
 
-const stripGeneratedNulls = (value: unknown): unknown => {
+const stripSyntheticOptionalNulls = (
+  value: unknown,
+  originalSchema: unknown,
+): unknown => {
   if (Array.isArray(value)) {
-    return value.map(stripGeneratedNulls);
+    const itemSchema = isRecord(originalSchema) ? originalSchema.items : undefined;
+    return value.map((item) => stripSyntheticOptionalNulls(item, itemSchema));
   }
-  if (!isRecord(value)) {
+
+  if (!isRecord(value) || !isRecord(originalSchema)) {
     return value;
   }
+
+  const properties = isRecord(originalSchema.properties)
+    ? originalSchema.properties
+    : {};
+  const required = new Set(
+    Array.isArray(originalSchema.required)
+      ? originalSchema.required.filter(
+          (item): item is string => typeof item === "string",
+        )
+      : [],
+  );
+
   return Object.fromEntries(
-    Object.entries(value)
-      .filter(([, child]) => child !== null)
-      .map(([key, child]) => [key, stripGeneratedNulls(child)]),
+    Object.entries(value).flatMap(([key, child]) => {
+      if (child === null && !required.has(key)) {
+        return [];
+      }
+      return [[key, stripSyntheticOptionalNulls(child, properties[key])]];
+    }),
   );
 };
 
 export const normalizePlannerStructuredDecision = (
   envelope: PlannerStructuredDecisionEnvelope,
+  toolExposure?: AgentToolExposureState,
 ): Record<string, unknown> => {
-  const decision = stripGeneratedNulls({
+  const decision: Record<string, unknown> = {
     type: envelope.type,
     reason: envelope.reason,
-    query: envelope.query,
-    toolId: envelope.toolId,
-    args: envelope.args,
-    question: envelope.question,
-  }) as Record<string, unknown>;
+  };
+
+  if (envelope.query !== null) {
+    decision.query = envelope.query;
+  }
+  if (envelope.toolId !== null) {
+    decision.toolId = envelope.toolId;
+  }
+  if (envelope.args !== null) {
+    const toolSchema = toolExposure?.toolMeta.find(
+      (item) => item.toolId === envelope.toolId,
+    )?.inputSchema;
+    decision.args = toolSchema
+      ? stripSyntheticOptionalNulls(envelope.args, toolSchema)
+      : envelope.args;
+  }
+  if (envelope.question !== null) {
+    decision.question = envelope.question;
+  }
+
   const addItems = Array.isArray(envelope.planPatch?.addItems)
     ? envelope.planPatch.addItems
     : [];
