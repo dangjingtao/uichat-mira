@@ -10,6 +10,7 @@ import {
   setActiveCodeGraphStudioService,
 } from "@/microapps/codegraph/index.js";
 import { codebaseExploreTool } from "../codebase-explore.tool.js";
+import { disposeRepoLocalManagedCodeGraphManagers } from "../repo-local-manager-cache.js";
 
 const fixturePath = path.join(__dirname, "fixtures", "fake-codegraph-provider.mjs");
 const storageRoot = path.join(os.tmpdir(), "codebase-explore-tool-storage");
@@ -80,8 +81,9 @@ const configureStudioService = async (
   return service;
 };
 
-afterEach(() => {
+afterEach(async () => {
   setActiveCodeGraphStudioService(null);
+  await disposeRepoLocalManagedCodeGraphManagers();
   fs.rmSync(storageRoot, { recursive: true, force: true });
   for (const [key, value] of Object.entries(originalEnv)) {
     if (value === undefined) {
@@ -252,17 +254,19 @@ test("codebaseExploreTool reports blocked provider status when app-data root can
   assert.equal(exploreTrace.workspaceHash, null);
 });
 
-test("codebaseExploreTool keeps repo pollution risk blocked instead of treating it as empty results", async () => {
+test("real CodeGraph Agent workspace does not inherit Studio workspace mismatch", async () => {
   applyToolEnv();
-  process.env.UI_CHAT_CODEGRAPH_COMMAND = "codegraph";
-
-  const workspaceRoot = fs.mkdtempSync(
-    path.join(os.tmpdir(), "codebase-explore-tool-pollution-risk-"),
+  const studioWorkspace = fs.mkdtempSync(
+    path.join(os.tmpdir(), "codebase-explore-studio-workspace-"),
   );
-  const blockedAppDataRoot = path.join(os.tmpdir(), "codebase-explore-tool-blocked-appdata");
-  fs.mkdirSync(blockedAppDataRoot, { recursive: true });
+  const agentWorkspace = fs.mkdtempSync(
+    path.join(os.tmpdir(), "codebase-explore-agent-workspace-"),
+  );
+  const appDataRoot = path.join(os.tmpdir(), "codebase-explore-real-appdata");
+  fs.mkdirSync(appDataRoot, { recursive: true });
+
   const service = createCodeGraphStudioService({
-    workspaceRoot,
+    workspaceRoot: studioWorkspace,
     storageRoot,
   });
   setActiveCodeGraphStudioService(service);
@@ -273,24 +277,25 @@ test("codebaseExploreTool keeps repo pollution risk blocked instead of treating 
     startArgs: ["serve", "--mcp"],
     versionProbeArgs: ["--version"],
     telemetryProbeArgs: ["telemetry", "status"],
-    appDataRoot: blockedAppDataRoot,
+    appDataRoot,
   });
 
   const result = await codebaseExploreTool.execute({
-    invocationId: "invocation-4",
+    invocationId: "invocation-real-thread-workspace",
     args: { query: "planner function" },
+    threadId: "thread-agent-workspace",
     pushEvent: () => {},
-    addArtifact: (artifact) => ({ id: "artifact-4", ...artifact }),
+    addArtifact: (artifact) => ({ id: "artifact-real", ...artifact }),
     trace: {
       startSpan: () => ({
-        spanId: "span-4",
+        spanId: "span-real",
         end: () => {},
       }),
     },
     signal: new AbortController().signal,
     environment: createHarnessEnvironmentSnapshot({
       workspace: {
-        rootPath: workspaceRoot,
+        rootPath: agentWorkspace,
         source: "selected",
       },
     }),
@@ -298,13 +303,13 @@ test("codebaseExploreTool keeps repo pollution risk blocked instead of treating 
 
   const payload = result.result as Record<string, unknown>;
   const exploreResult = payload.exploreResult as Record<string, unknown>;
-  const exploreTrace = (payload.trace as Record<string, unknown>)
-    .explore as Record<string, unknown>;
-  const retrieval = payload.verifiedEvidenceInput as Record<string, unknown>;
-  const hints = exploreResult.followUpHints as string[];
+  const hints = (exploreResult.followUpHints as string[] | undefined) ?? [];
+  const serialized = JSON.stringify(result);
 
-  assert.equal(exploreResult.status, "degraded");
-  assert.equal(retrieval.chunkCount, 0);
-  assert.equal(exploreTrace.fallbackReason, "provider_unavailable");
-  assert.equal(hints.some((hint) => hint.includes("repo-root .codegraph")), true);
+  assert.equal(payload.workspaceRoot, agentWorkspace);
+  assert.equal(
+    hints.some((hint) => /active workspace does not match|studio workspace/i.test(hint)),
+    false,
+  );
+  assert.doesNotMatch(serialized, /active workspace does not match the CodeGraph studio workspace/i);
 });
