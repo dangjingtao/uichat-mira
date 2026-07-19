@@ -18,9 +18,12 @@ const exposure: AgentToolExposureState = {
         type: "object",
         properties: {
           path: { type: "string" },
+          cursor: {
+            anyOf: [{ type: "string" }, { type: "null" }],
+          },
           startLine: { type: "number" },
         },
-        required: ["path"],
+        required: ["path", "cursor"],
         additionalProperties: false,
       },
       domain: "read",
@@ -51,7 +54,7 @@ describe("planner structured output", () => {
     const argsVariants = properties.args.anyOf as Array<Record<string, any>>;
     const readOpenArgs = argsVariants[0];
     expect(readOpenArgs.additionalProperties).toBe(false);
-    expect(readOpenArgs.required).toEqual(["path", "startLine"]);
+    expect(readOpenArgs.required).toEqual(["path", "cursor", "startLine"]);
     expect(readOpenArgs.properties.path.type).toBe("string");
     expect(readOpenArgs.properties.startLine.anyOf).toEqual([
       { type: "number" },
@@ -59,7 +62,7 @@ describe("planner structured output", () => {
     ]);
   });
 
-  it("strips structured null placeholders before the existing planner validator", () => {
+  it("strips only synthetic optional null placeholders before planner validation", () => {
     const envelope: PlannerStructuredDecisionEnvelope = {
       type: "use_tool",
       reason: "Open the known target.",
@@ -67,6 +70,7 @@ describe("planner structured output", () => {
       toolId: "read_open",
       args: {
         path: "server/src/agent/planner/node.ts",
+        cursor: null,
         startLine: null,
       },
       question: null,
@@ -76,12 +80,13 @@ describe("planner structured output", () => {
       },
     };
 
-    expect(normalizePlannerStructuredDecision(envelope)).toEqual({
+    expect(normalizePlannerStructuredDecision(envelope, exposure)).toEqual({
       type: "use_tool",
       reason: "Open the known target.",
       toolId: "read_open",
       args: {
         path: "server/src/agent/planner/node.ts",
+        cursor: null,
       },
     });
   });
@@ -100,7 +105,7 @@ describe("planner structured output", () => {
       },
     };
 
-    expect(normalizePlannerStructuredDecision(envelope)).toEqual({
+    expect(normalizePlannerStructuredDecision(envelope, exposure)).toEqual({
       type: "answer",
       reason: "All requested work is complete.",
       planPatch: {
