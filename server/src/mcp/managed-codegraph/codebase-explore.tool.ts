@@ -19,6 +19,7 @@ import {
 import { createCodebaseExploreTrace } from "./codegraph-trace-diagnostics.js";
 import {
   createManagedCodeGraphWorkspaceHash,
+  isRealCodeGraphCommand,
   type ManagedCodeGraphProcessManager,
 } from "./repo-local-process-manager.js";
 import {
@@ -204,24 +205,20 @@ export const codebaseExploreTool: McpToolImplementation = {
     }
 
     const studioService = getActiveCodeGraphStudioService();
-    const plannerConfig = resolveManagedCodeGraphPlannerConfig(workspaceRoot);
-    const managedContext =
-      studioService?.getManagedCapabilityContext(workspaceRoot) ?? null;
     const studioDraft = studioService?.getDraft() ?? null;
+    const plannerConfig = resolveManagedCodeGraphPlannerConfig(workspaceRoot);
+    const realProvider = Boolean(
+      studioDraft && isRealCodeGraphCommand(studioDraft.command),
+    );
+    const managedContext = realProvider
+      ? null
+      : (studioService?.getManagedCapabilityContext(workspaceRoot) ?? null);
     let manager: ManagedCodeGraphProcessManager | null = null;
     let runtimeMode: "studio" | "repo_local" = "studio";
 
-    if (managedContext?.ok) {
-      manager = managedContext.manager;
-    } else if (managedContext) {
-      manager = await getRepoLocalManagedCodeGraphManager(
-        workspaceRoot,
-        managedContext as RepoLocalManagedContext,
-      );
-      runtimeMode = "repo_local";
-    }
-
-    if (!manager && studioDraft) {
+    // Real Agent invocations are owned by the current thread/workspace, not by the
+    // singleton Studio workspace. Studio only supplies provider configuration.
+    if (realProvider && studioDraft) {
       manager = await getRepoLocalManagedCodeGraphManagerForAgentWorkspace(
         workspaceRoot,
         createInvocationWorkspaceRuntimeContext({
@@ -232,6 +229,36 @@ export const codebaseExploreTool: McpToolImplementation = {
           microAppEnabled: studioDraft.microAppEnabled,
           agentCapabilityEnabled: studioDraft.agentCapabilityEnabled,
         },
+        context.threadId,
+      );
+      if (manager) {
+        runtimeMode = "repo_local";
+      }
+    } else if (managedContext?.ok) {
+      // Keep the managed Studio path for fake/test providers.
+      manager = managedContext.manager;
+    } else if (managedContext) {
+      manager = await getRepoLocalManagedCodeGraphManager(
+        workspaceRoot,
+        managedContext as RepoLocalManagedContext,
+      );
+      if (manager) {
+        runtimeMode = "repo_local";
+      }
+    }
+
+    if (!manager && studioDraft && !realProvider) {
+      manager = await getRepoLocalManagedCodeGraphManagerForAgentWorkspace(
+        workspaceRoot,
+        createInvocationWorkspaceRuntimeContext({
+          workspaceRoot,
+          studioDraft,
+        }),
+        {
+          microAppEnabled: studioDraft.microAppEnabled,
+          agentCapabilityEnabled: studioDraft.agentCapabilityEnabled,
+        },
+        context.threadId,
       );
       if (manager) {
         runtimeMode = "repo_local";
@@ -243,11 +270,14 @@ export const codebaseExploreTool: McpToolImplementation = {
       const prioritizedGateReason =
         gateReasonRecord.find((reason) => reason.code === "app_data_root_unavailable") ??
         gateReasonRecord.find((reason) => reason.code === "agent_capability_disabled") ??
-        gateReasonRecord.find((reason) => reason.code === "workspace_mismatch") ??
         gateReasonRecord.find((reason) => reason.code === "repo_pollution_risk") ??
         gateReasonRecord[0];
       const blockedReason =
-        prioritizedGateReason?.message ??
+        (!studioDraft
+          ? "CodeGraph microapp configuration is unavailable."
+          : !studioDraft.microAppEnabled
+            ? "CodeGraph microapp is disabled."
+            : prioritizedGateReason?.message) ??
         plannerConfig.externalIndexSupport.reason ??
         plannerConfig.storage.reason ??
         "Managed CodeGraph runtime is unavailable.";
