@@ -37,7 +37,7 @@ const generateOpenAICompatibleStructuredOutput = async <T>(
   const resolved = resolveAgentTaskProvider("default");
   const client = createOpenAICompatibleClient(resolved.baseUrl, resolved.apiKey);
   const params = toOpenAICompatibleChatOptions(resolved.params);
-  const response = await client.chat.completions.create({
+  const response = (await client.chat.completions.create({
     ...params,
     model: resolved.model,
     messages: toTextOnlyMessages(input.messages),
@@ -51,9 +51,9 @@ const generateOpenAICompatibleStructuredOutput = async <T>(
         schema: input.schema,
       },
     },
-  } as never);
+  } as any)) as any;
 
-  const content = response.choices[0]?.message?.content ?? "";
+  const content = response.choices?.[0]?.message?.content ?? "";
   return parseStructuredJson<T>(content);
 };
 
@@ -78,7 +78,7 @@ const generateOllamaStructuredOutput = async <T>(
   }
 
   const client = new Ollama(options);
-  const response = await client.chat({
+  const response = (await client.chat({
     model: resolved.model,
     messages: toTextOnlyMessages(input.messages),
     stream: false,
@@ -87,7 +87,7 @@ const generateOllamaStructuredOutput = async <T>(
     ...(resolved.params.think !== undefined
       ? { think: resolved.params.think }
       : {}),
-  } as never);
+  } as any)) as any;
 
   return parseStructuredJson<T>(response.message?.content ?? "");
 };
