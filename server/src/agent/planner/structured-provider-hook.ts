@@ -9,11 +9,7 @@ import {
   type PlannerStructuredDecisionEnvelope,
 } from "./structured-output";
 
-const INSTALL_KEY = Symbol.for("uichat-mira.planner-structured-output-installed");
-
-type MutableProviderProxyService = typeof providerProxyService & {
-  [INSTALL_KEY]?: boolean;
-};
+let installed = false;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -88,12 +84,14 @@ const isPlannerStructuredRequest = (messages: NormalizedChatMessage[]) =>
  * parser/validator boundary remains intact.
  */
 export const installPlannerStructuredOutputHook = () => {
-  const service = providerProxyService as MutableProviderProxyService;
-  if (service[INSTALL_KEY]) return;
+  if (installed) return;
+  installed = true;
 
-  const originalStreamTaskChatText = service.streamTaskChatText.bind(service);
+  const originalStreamTaskChatText = providerProxyService.streamTaskChatText.bind(
+    providerProxyService,
+  );
 
-  service.streamTaskChatText = ((messages: NormalizedChatMessage[]) => {
+  providerProxyService.streamTaskChatText = ((messages: NormalizedChatMessage[]) => {
     if (!isPlannerStructuredRequest(messages)) {
       return originalStreamTaskChatText(messages);
     }
@@ -119,9 +117,7 @@ export const installPlannerStructuredOutputHook = () => {
         yield* originalStreamTaskChatText(messages);
       }
     })();
-  }) as typeof service.streamTaskChatText;
-
-  service[INSTALL_KEY] = true;
+  }) as typeof providerProxyService.streamTaskChatText;
 };
 
 installPlannerStructuredOutputHook();
