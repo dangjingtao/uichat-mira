@@ -1,23 +1,11 @@
-import { useEffect, useState, type ComponentType } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  ChevronDown,
-  Copy,
-  FlaskConical,
-  FolderCog,
-  LockKeyhole,
-  RefreshCcw,
-  ShieldCheck,
-  Siren,
-  SquareTerminal,
-} from "lucide-react";
+import { RefreshCcw } from "lucide-react";
 import Alert from "@/shared/ui/Alert";
 import Badge from "@/shared/ui/Badge";
 import Card from "@/shared/ui/Card";
 import {
   Button,
-  IconButton,
-  SegmentedTabs,
   Result,
   Skeleton,
   Switch,
@@ -35,27 +23,12 @@ import {
   smokeStatusCodeGraphStudio,
   startCodeGraphStudio,
   stopCodeGraphStudio,
-  type CodeGraphStudioBlockedReasonCode,
   type CodeGraphStudioReport,
   type CodeGraphStudioSmokeResult,
-  type CodeGraphStudioStatus,
 } from "@/shared/api/codegraphStudio";
-
-const FAKE_PROVIDER_FIXTURE_SEGMENTS = [
-  "src",
-  "mcp",
-  "managed-codegraph",
-  "__tests__",
-  "fixtures",
-  "fake-codegraph-provider.mjs",
-] as const;
-
-type SmokeMode = "real" | "fake";
 
 type CodeGraphDraft = {
   microAppEnabled: boolean;
-  /** Legacy compatibility only. Product enablement follows microAppEnabled. */
-  agentCapabilityEnabled: boolean;
   command: string;
   startArgsText: string;
   versionProbeArgsText: string;
@@ -64,20 +37,9 @@ type CodeGraphDraft = {
   timeoutMs: string;
   maxResults: string;
   queryLimit: string;
-  smokeQuery: string;
-};
-
-type SummaryReasonCard = {
-  key: string;
-  title: string;
-  description: string;
-  badgeLabel: string;
-  badgeVariant: "success" | "warning" | "danger" | "muted" | "primary";
-  icon: ComponentType<{ className?: string }>;
 };
 
 const argsToText = (value: string[]) => value.join("\n");
-
 const textToArgs = (value: string) =>
   value
     .split(/\r?\n/)
@@ -86,7 +48,6 @@ const textToArgs = (value: string) =>
 
 const createDraft = (report: CodeGraphStudioReport): CodeGraphDraft => ({
   microAppEnabled: report.config.microAppEnabled,
-  agentCapabilityEnabled: report.config.microAppEnabled,
   command: report.config.command,
   startArgsText: argsToText(report.config.startArgs),
   versionProbeArgsText: argsToText(report.config.versionProbeArgs),
@@ -95,59 +56,10 @@ const createDraft = (report: CodeGraphStudioReport): CodeGraphDraft => ({
   timeoutMs: String(report.config.timeoutMs),
   maxResults: String(report.config.maxResults),
   queryLimit: String(report.config.queryLimit),
-  smokeQuery: "microapps architecture flow overview",
 });
-
-const trimTrailingSeparators = (value: string) => value.replace(/[\\/]+$/, "");
-
-const getLastSeparatorIndex = (value: string) =>
-  Math.max(value.lastIndexOf("/"), value.lastIndexOf("\\"));
-
-const getParentPath = (value: string) => {
-  const normalized = trimTrailingSeparators(value);
-  const separatorIndex = getLastSeparatorIndex(normalized);
-  if (separatorIndex <= 0) {
-    return normalized;
-  }
-  return normalized.slice(0, separatorIndex);
-};
-
-const getLeafName = (value: string) => {
-  const normalized = trimTrailingSeparators(value);
-  const separatorIndex = getLastSeparatorIndex(normalized);
-  if (separatorIndex === -1) {
-    return normalized;
-  }
-  return normalized.slice(separatorIndex + 1);
-};
-
-const joinPathSegments = (basePath: string, ...segments: string[]) => {
-  const separator = basePath.includes("\\") ? "\\" : "/";
-  const normalizedBase = trimTrailingSeparators(basePath);
-  return [normalizedBase, ...segments.filter(Boolean)]
-    .join(separator)
-    .replace(/[\\/]+/g, separator);
-};
-
-const buildRecommendedAppDataRoot = (workspaceRoot: string, currentResolved: string | null) => {
-  if (currentResolved?.trim()) {
-    return currentResolved;
-  }
-
-  const repoRoot = getParentPath(workspaceRoot);
-  const outerRoot = getParentPath(repoRoot);
-  const repoName = getLeafName(repoRoot) || "uichat-mira";
-  const safeBase = outerRoot && outerRoot !== repoRoot ? outerRoot : getParentPath(workspaceRoot);
-  return joinPathSegments(safeBase, `${repoName}-codegraph-appdata`);
-};
-
-const buildFakeProviderFixturePath = (workspaceRoot: string) =>
-  joinPathSegments(workspaceRoot, ...FAKE_PROVIDER_FIXTURE_SEGMENTS);
 
 const buildSavePayload = (draft: CodeGraphDraft) => ({
   microAppEnabled: draft.microAppEnabled,
-  // Keep the persisted legacy field synchronized so older builds/config readers
-  // cannot reintroduce a second independent switch.
   agentCapabilityEnabled: draft.microAppEnabled,
   command: draft.command.trim(),
   startArgs: textToArgs(draft.startArgsText),
@@ -159,41 +71,10 @@ const buildSavePayload = (draft: CodeGraphDraft) => ({
   queryLimit: Number(draft.queryLimit),
 });
 
-const isConfigDirty = (report: CodeGraphStudioReport, draft: CodeGraphDraft) =>
-  JSON.stringify(buildSavePayload(draft)) !==
-  JSON.stringify({
-    command: report.config.command,
-    microAppEnabled: report.config.microAppEnabled,
-    agentCapabilityEnabled: report.config.microAppEnabled,
-    startArgs: report.config.startArgs,
-    versionProbeArgs: report.config.versionProbeArgs,
-    telemetryProbeArgs: report.config.telemetryProbeArgs,
-    appDataRoot: report.config.appDataRoot,
-    timeoutMs: report.config.timeoutMs,
-    maxResults: report.config.maxResults,
-    queryLimit: report.config.queryLimit,
-  });
-
-const normalizeReasonCodes = (
-  reasons: Array<{ code: CodeGraphStudioBlockedReasonCode }>,
-) => new Set(reasons.map((reason) => reason.code));
-
-const toStatusLabel = (status: CodeGraphStudioStatus) =>
-  status.charAt(0).toUpperCase() + status.slice(1);
-
-const summarizeSmokePayload = (payload: unknown) => {
-  if (!payload || typeof payload !== "object") {
-    return null;
-  }
-
-  const record = payload as Record<string, unknown>;
-  const candidates = Array.isArray(record.candidates) ? record.candidates.length : null;
-  const content = Array.isArray(record.content) ? record.content.length : null;
-
-  return {
-    candidates,
-    content,
-  };
+const toStatusVariant = (status: CodeGraphStudioReport["status"]) => {
+  if (status === "ready") return "success" as const;
+  if (status === "blocked" || status === "unavailable") return "warning" as const;
+  return "muted" as const;
 };
 
 export default function CodeGraphStudioPage() {
@@ -202,10 +83,9 @@ export default function CodeGraphStudioPage() {
   const [saving, setSaving] = useState(false);
   const [report, setReport] = useState<CodeGraphStudioReport | null>(null);
   const [draft, setDraft] = useState<CodeGraphDraft | null>(null);
+  const [debugWorkspacePath, setDebugWorkspacePath] = useState("");
+  const [smokeQuery, setSmokeQuery] = useState("Planner -> Normalize -> Policy -> ToolNode -> Evidence");
   const [smokeResult, setSmokeResult] = useState<CodeGraphStudioSmokeResult | null>(null);
-  const [smokeMode, setSmokeMode] = useState<SmokeMode>("real");
-  const [realDraftBackup, setRealDraftBackup] = useState<CodeGraphDraft | null>(null);
-  const [debugExpanded, setDebugExpanded] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -213,12 +93,9 @@ export default function CodeGraphStudioPage() {
       const nextReport = await getCodeGraphStudioReport();
       setReport(nextReport);
       setDraft(createDraft(nextReport));
+      setDebugWorkspacePath((current) => current.trim() || nextReport.config.workspaceRoot);
     } catch (error) {
-      message.error(
-        error instanceof Error
-          ? error.message
-          : t("settings.microApps.codeGraphStudio.messages.loadFailed"),
-      );
+      message.error(error instanceof Error ? error.message : "加载 CodeGraph 失败");
     } finally {
       setLoading(false);
     }
@@ -228,151 +105,85 @@ export default function CodeGraphStudioPage() {
     void load();
   }, []);
 
-  const persistDraftIfNeeded = async (currentDraft: CodeGraphDraft, currentReport: CodeGraphStudioReport) => {
-    if (!isConfigDirty(currentReport, currentDraft)) {
-      return currentReport;
-    }
-
-    const nextReport = await saveCodeGraphStudioConfig(buildSavePayload(currentDraft));
+  const saveConfig = async (nextDraft = draft) => {
+    if (!nextDraft) return null;
+    const nextReport = await saveCodeGraphStudioConfig(buildSavePayload(nextDraft));
     setReport(nextReport);
     setDraft(createDraft(nextReport));
     return nextReport;
   };
 
-  const saveConfig = async () => {
-    if (!draft) {
-      return;
-    }
-
+  const handleSave = async () => {
     setSaving(true);
     try {
-      const nextReport = await saveCodeGraphStudioConfig(buildSavePayload(draft));
-      setReport(nextReport);
-      setDraft(createDraft(nextReport));
-      message.success(t("settings.microApps.codeGraphStudio.messages.configSaved"));
+      await saveConfig();
+      message.success("CodeGraph 参数已保存");
     } catch (error) {
-      message.error(
-        error instanceof Error
-          ? error.message
-          : t("settings.microApps.codeGraphStudio.messages.configSaveFailed"),
-      );
+      message.error(error instanceof Error ? error.message : "保存 CodeGraph 参数失败");
     } finally {
       setSaving(false);
     }
   };
 
-  const setMicroAppEnabled = async (enabled: boolean) => {
-    if (!draft) {
-      return;
-    }
-
-    const nextDraft: CodeGraphDraft = {
-      ...draft,
-      microAppEnabled: enabled,
-      agentCapabilityEnabled: enabled,
-    };
+  const toggleEnabled = async () => {
+    if (!draft) return;
+    const nextDraft = { ...draft, microAppEnabled: !draft.microAppEnabled };
     setDraft(nextDraft);
     setSaving(true);
     try {
-      const nextReport = await saveCodeGraphStudioConfig(buildSavePayload(nextDraft));
-      setReport(nextReport);
-      setDraft(createDraft(nextReport));
-      setSmokeResult(null);
+      await saveConfig(nextDraft);
     } catch (error) {
-      // Restore persisted truth if the immediate toggle save fails.
-      setDraft(createDraft(report!));
-      message.error(
-        error instanceof Error
-          ? error.message
-          : t("settings.microApps.codeGraphStudio.messages.configSaveFailed"),
-      );
+      setDraft(draft);
+      message.error(error instanceof Error ? error.message : "保存 CodeGraph 参数失败");
     } finally {
       setSaving(false);
     }
   };
 
-  const runAction = async (
-    action: "detect" | "start" | "health" | "stop" | "smoke-status" | "smoke-query",
-  ) => {
-    if (!draft || !report) {
-      return;
-    }
-
+  const runRuntimeAction = async (action: "detect" | "start" | "health" | "stop") => {
     setSaving(true);
     try {
-      const nextReport =
-        action === "stop"
-          ? report
-          : await persistDraftIfNeeded(draft, report);
-
-      if (action === "detect") {
-        const result = await detectCodeGraphStudio();
-        setReport(result.report);
-        setSmokeResult(null);
-        message.success(
-          t("settings.microApps.codeGraphStudio.messages.actionExecuted", {
-            action: "detect",
-          }),
-        );
-      } else if (action === "start") {
-        const result = await startCodeGraphStudio();
-        setReport(result.report);
-        setSmokeResult(null);
-        message.success(
-          t("settings.microApps.codeGraphStudio.messages.actionExecuted", {
-            action: "start",
-          }),
-        );
-      } else if (action === "health") {
-        const result = await healthCodeGraphStudio();
-        setReport(result.report);
-        setSmokeResult(null);
-        message.success(
-          t("settings.microApps.codeGraphStudio.messages.actionExecuted", {
-            action: "health",
-          }),
-        );
-      } else if (action === "stop") {
-        const result = await stopCodeGraphStudio();
-        setReport(result.report);
-        setSmokeResult(null);
-        message.success(
-          t("settings.microApps.codeGraphStudio.messages.actionExecuted", {
-            action: "stop",
-          }),
-        );
-      } else if (action === "smoke-status") {
-        const result = await smokeStatusCodeGraphStudio();
-        setSmokeResult(result);
-        setReport(result.report);
-        setDraft(createDraft(result.report));
-      } else {
-        const result = await smokeQueryCodeGraphStudio(draft.smokeQuery);
-        setSmokeResult(result);
-        setReport(result.report);
-        setDraft(createDraft(result.report));
+      if (action !== "stop") {
+        await saveConfig();
       }
+      const result =
+        action === "detect"
+          ? await detectCodeGraphStudio()
+          : action === "start"
+            ? await startCodeGraphStudio()
+            : action === "health"
+              ? await healthCodeGraphStudio()
+              : await stopCodeGraphStudio();
+      setReport(result.report);
+      setDraft(createDraft(result.report));
+      message.success(`${action} 已执行`);
     } catch (error) {
-      message.error(
-        error instanceof Error
-          ? error.message
-          : t("settings.microApps.codeGraphStudio.messages.actionFailed"),
-      );
+      message.error(error instanceof Error ? error.message : "CodeGraph 操作失败");
     } finally {
       setSaving(false);
     }
   };
 
-  const copyDebugReport = async () => {
-    if (!report) {
+  const runSmoke = async (kind: "status" | "query") => {
+    const workspacePath = debugWorkspacePath.trim();
+    if (!workspacePath) {
+      message.error("请先填写 Debug Workspace Path");
       return;
     }
-
+    setSaving(true);
     try {
-      await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
-      message.success(t("settings.microApps.codeGraphStudio.messages.debugCopied"));
-    } catch {
-      message.error(t("settings.microApps.codeGraphStudio.messages.debugCopyFailed"));
+      await saveConfig();
+      const result =
+        kind === "status"
+          ? await smokeStatusCodeGraphStudio(workspacePath)
+          : await smokeQueryCodeGraphStudio(smokeQuery, workspacePath);
+      setSmokeResult(result);
+      setReport(result.report);
+      setDraft(createDraft(result.report));
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "CodeGraph Smoke 失败");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -384,194 +195,11 @@ export default function CodeGraphStudioPage() {
         description={t("settings.microApps.codeGraphStudio.page.description")}
         contentClassName="space-y-4 pt-4"
       >
-        <div aria-hidden="true" className="space-y-4">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_320px]">
-            <div className="space-y-4 rounded-ui-panel border border-transparent px-4 py-5">
-              <div className="flex items-start gap-4">
-                <Skeleton.Circle size={44} />
-                <div className="min-w-0 flex-1 space-y-3 pt-1">
-                  <Skeleton width="28%" height={34} radius="control" />
-                  <Skeleton.Text lines={2} lastLineWidth="70%" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                {Array.from({ length: 4 }).map((_, index) => (
-                  <Skeleton key={index} height={40} radius="panel" />
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-3 rounded-ui-panel border border-transparent px-4 py-5">
-              <Skeleton width="34%" height={20} radius="control" />
-              <div className="space-y-3">
-                {Array.from({ length: 3 }).map((_, index) => (
-                  <div key={index} className="flex items-start gap-3">
-                    <Skeleton.Circle size={24} />
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <Skeleton width="58%" height={14} radius="control" />
-                      <Skeleton.Text lines={2} lastLineWidth="74%" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-4 rounded-ui-panel border border-transparent px-4 py-4">
-              <Skeleton width="24%" height={22} radius="control" />
-              <Skeleton height={300} radius="panel" />
-            </div>
-            <div className="space-y-4 rounded-ui-panel border border-transparent px-4 py-4">
-              <Skeleton width="28%" height={22} radius="control" />
-              <Skeleton height={300} radius="panel" />
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-4 rounded-ui-panel border border-transparent px-4 py-4">
-              <Skeleton width="26%" height={22} radius="control" />
-              <Skeleton height={420} radius="panel" />
-            </div>
-            <div className="space-y-4 rounded-ui-panel border border-transparent px-4 py-4">
-              <Skeleton width="24%" height={22} radius="control" />
-              <Skeleton height={420} radius="panel" />
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-4 rounded-ui-panel border border-transparent px-4 py-4">
-              <Skeleton width="22%" height={22} radius="control" />
-              <Skeleton height={420} radius="panel" />
-            </div>
-            <div className="space-y-4 rounded-ui-panel border border-transparent px-4 py-4">
-              <div className="flex items-center justify-between gap-3">
-                <Skeleton width="26%" height={22} radius="control" />
-                <Skeleton width={28} height={28} radius="full" />
-              </div>
-              <Skeleton height={420} radius="panel" />
-            </div>
-          </div>
-        </div>
+        <Skeleton height={180} radius="panel" />
+        <Skeleton height={360} radius="panel" />
       </MicroAppPageLayout>
     );
   }
-
-  const reasonCodeSet = normalizeReasonCodes(report.blockedReasons);
-  const appDataRootRecommended = buildRecommendedAppDataRoot(
-    report.config.workspaceRoot,
-    report.config.appDataRootResolved,
-  );
-  const fakeProviderFixturePath = buildFakeProviderFixturePath(report.config.workspaceRoot);
-  const isFakeProviderSelected =
-    draft.command.trim().toLowerCase() === "node" &&
-    textToArgs(draft.startArgsText)[0] === fakeProviderFixturePath;
-  const appDataRootMissing =
-    reasonCodeSet.has("app_data_root_unavailable") || !draft.appDataRoot.trim();
-  const canStartRealProvider = !report.blockedReasons.some(
-    (reason) =>
-      reason.code === "external_index_root_unsupported" ||
-      reason.code === "repo_pollution_risk",
-  );
-  const startDisabled =
-    saving ||
-    appDataRootMissing ||
-    (!isFakeProviderSelected && !canStartRealProvider);
-  const stopDisabled = saving || !report.runtime.processAlive;
-  const smokeDisabled = saving || (smokeMode === "real" && report.status !== "ready");
-  const hasSmokeSummary = summarizeSmokePayload(smokeResult?.payload ?? null);
-
-  const blockedSummaryCards: SummaryReasonCard[] = [];
-  if (reasonCodeSet.has("app_data_root_unavailable") || !draft.appDataRoot.trim()) {
-    blockedSummaryCards.push({
-      key: "app-data-root",
-      title: t("settings.microApps.codeGraphStudio.blockedCards.appDataRoot.title"),
-      description: t("settings.microApps.codeGraphStudio.blockedCards.appDataRoot.description"),
-      badgeLabel: t("settings.microApps.codeGraphStudio.blockedCards.appDataRoot.badge"),
-      badgeVariant: "warning",
-      icon: FolderCog,
-    });
-  }
-  if (reasonCodeSet.has("external_index_root_unsupported")) {
-    blockedSummaryCards.push({
-      key: "external-index-root",
-      title: t("settings.microApps.codeGraphStudio.blockedCards.externalIndex.title"),
-      description: t("settings.microApps.codeGraphStudio.blockedCards.externalIndex.description"),
-      badgeLabel: t("settings.microApps.codeGraphStudio.blockedCards.externalIndex.badge"),
-      badgeVariant: "danger",
-      icon: Siren,
-    });
-  }
-  if (reasonCodeSet.has("repo_pollution_risk") || report.pollutionGuard.status === "blocked") {
-    blockedSummaryCards.push({
-      key: "pollution-guard",
-      title: t("settings.microApps.codeGraphStudio.blockedCards.pollutionGuard.title"),
-      description: t("settings.microApps.codeGraphStudio.blockedCards.pollutionGuard.description"),
-      badgeLabel: t("settings.microApps.codeGraphStudio.blockedCards.pollutionGuard.badge"),
-      badgeVariant: "primary",
-      icon: ShieldCheck,
-    });
-  }
-
-  const overviewChips = [
-    {
-      key: "planner",
-      icon: LockKeyhole,
-      text: t("settings.microApps.codeGraphStudio.overview.chips.agentCapability", {
-        value: report.config.capabilityRegistered
-          ? t("settings.microApps.codeGraphStudio.values.enabled")
-          : t("settings.microApps.codeGraphStudio.values.disabled"),
-      }),
-    },
-    {
-      key: "telemetry",
-      icon: SquareTerminal,
-      text: t("settings.microApps.codeGraphStudio.overview.chips.telemetry", {
-        value:
-          report.runtime.telemetryStatus === "verified_off"
-            ? t("settings.microApps.codeGraphStudio.values.available")
-            : t("settings.microApps.codeGraphStudio.values.unavailable"),
-      }),
-    },
-    {
-      key: "pollution",
-      icon: ShieldCheck,
-      text: t("settings.microApps.codeGraphStudio.overview.chips.pollution", {
-        value: report.pollutionGuard.exists
-          ? t("settings.microApps.codeGraphStudio.values.detected")
-          : t("settings.microApps.codeGraphStudio.values.notDetected"),
-      }),
-    },
-    {
-      key: "fake-provider",
-      icon: FlaskConical,
-      text: t("settings.microApps.codeGraphStudio.overview.chips.fakeProvider", {
-        value: isFakeProviderSelected
-          ? t("settings.microApps.codeGraphStudio.values.selected")
-          : t("settings.microApps.codeGraphStudio.values.availableForValidation"),
-      }),
-    },
-  ];
-
-  const toggleFakeProviderMode = () => {
-    if (isFakeProviderSelected) {
-      const fallbackDraft = realDraftBackup ?? createDraft(report);
-      setDraft(fallbackDraft);
-      setSmokeMode("real");
-      return;
-    }
-
-    setRealDraftBackup(draft);
-    setSmokeMode("fake");
-    setDraft({
-      ...draft,
-      command: "node",
-      startArgsText: argsToText([fakeProviderFixturePath, "--mcp"]),
-      versionProbeArgsText: argsToText([fakeProviderFixturePath, "--version"]),
-      telemetryProbeArgsText: argsToText([fakeProviderFixturePath, "--telemetry-status"]),
-      appDataRoot: draft.appDataRoot.trim() || appDataRootRecommended,
-    });
-  };
 
   return (
     <MicroAppPageLayout
@@ -579,612 +207,221 @@ export default function CodeGraphStudioPage() {
       title={t("settings.microApps.codeGraphStudio.page.title")}
       description={t("settings.microApps.codeGraphStudio.page.description")}
       slot={
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading || saving}>
-            <RefreshCcw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            {t("settings.microApps.codeGraphStudio.actions.refresh")}
-          </Button>
-          <Button variant="primary" size="sm" onClick={() => void saveConfig()} disabled={saving}>
-            {t("settings.microApps.codeGraphStudio.actions.saveConfig")}
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" onClick={() => void load()} disabled={saving}>
+          <RefreshCcw className="h-4 w-4" />
+          刷新
+        </Button>
       }
-      contentClassName="space-y-3 pt-4"
+      contentClassName="space-y-4 pt-4"
     >
-      <Card className="shrink-0 overflow-hidden p-0">
-        <div className="grid grid-cols-[minmax(0,1.1fr)_260px] gap-0 sm:grid-cols-[minmax(0,1.15fr)_280px] xl:grid-cols-[minmax(0,1.3fr)_320px]">
-          <div className="flex h-full flex-col justify-between gap-4 px-3.5 pb-0 pt-3.5 lg:px-4 lg:pb-0 lg:pt-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/5 text-primary">
-                  <LockKeyhole className="h-5.5 w-5.5" />
-                </div>
-                <div className="text-[2rem] font-semibold leading-none tracking-tight text-primary lg:text-[1.75rem]">
-                  {toStatusLabel(report.status)}
-                </div>
-              </div>
-              <p className="max-w-2xl text-xs leading-5 text-text-secondary sm:text-sm">
-                {t("settings.microApps.codeGraphStudio.overview.description")}
-              </p>
+      <Card className="p-4" data-testid="codegraph-status-card">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="text-lg font-semibold text-text-primary">Runtime</div>
+              <Badge variant={toStatusVariant(report.status)} size="sm">
+                {report.status}
+              </Badge>
             </div>
-
-            <div className="mt-auto grid grid-cols-2 gap-2.5">
-              {overviewChips.map((chip) => {
-                const ChipIcon = chip.icon;
-                return (
-                  <div
-                    key={chip.key}
-                    className="rounded-ui-panel border border-border bg-surface-secondary/40 px-3.5 py-2.5 text-sm text-text-primary"
-                  >
-                    <div className="flex items-center gap-2">
-                      <ChipIcon className="h-4 w-4 text-primary" />
-                      <span>{chip.text}</span>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="text-sm text-text-secondary">
+              Studio 默认路径只用于本页默认值；Agent 实际运行按线程绑定当前 workspace。
             </div>
           </div>
-
-          <div className="border-l border-border/80 bg-surface-secondary/30 p-3.5 lg:p-4">
-            <div className="space-y-2.5">
-              <div className="text-sm font-semibold text-text-primary lg:text-[15px]">
-                {t("settings.microApps.codeGraphStudio.overview.nextStepsTitle")}
-              </div>
-              <div className="space-y-2.5">
-                {[1, 2, 3].map((index) => (
-                  <div key={index} className="flex items-start gap-2">
-                    <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold leading-none text-white">
-                      {index}
-                    </div>
-                    <div className="space-y-0.5">
-                      <div className="text-[13px] font-semibold leading-4 text-text-primary lg:text-sm">
-                        {t(`settings.microApps.codeGraphStudio.overview.nextSteps.step${index}.title`)}
-                      </div>
-                      <div className="text-xs leading-4.5 text-text-secondary lg:text-[13px]">
-                        {t(`settings.microApps.codeGraphStudio.overview.nextSteps.step${index}.description`)}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+          <div className="text-right text-xs leading-5 text-text-secondary">
+            <div>Provider: {report.runtime.providerVersion ?? "unknown"}</div>
+            <div>Capability: {report.config.capabilityRegistered ? "registered" : "not registered"}</div>
           </div>
         </div>
+        {report.blockedReasons.length > 0 ? (
+          <Alert variant="warning" title="Studio runtime diagnostics">
+            {report.blockedReasons.map((reason) => reason.message).join(" · ")}
+          </Alert>
+        ) : null}
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div data-testid="codegraph-status-card" className="h-full">
-          <Card className="h-full p-4">
-            <div className="space-y-3">
-              <div className="text-lg font-semibold text-text-primary">
-                {t("settings.microApps.codeGraphStudio.cards.blockedReasons.title")}
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card className="p-4" data-testid="codegraph-config-card">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-lg font-semibold text-text-primary">基础配置</div>
+                <div className="text-sm text-text-secondary">这里只保留运行和验证需要的参数。</div>
               </div>
-              <div className="divide-y divide-border rounded-ui-panel border border-border bg-surface-primary">
-                {blockedSummaryCards.length > 0 ? (
-                  blockedSummaryCards.map((item) => {
-                    const ItemIcon = item.icon;
-                    return (
-                      <div
-                        key={item.key}
-                        data-testid={`blocked-summary-${item.key}`}
-                        className="flex items-start gap-3 px-3.5 py-3"
-                      >
-                        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-secondary text-primary">
-                          <ItemIcon className="h-4 w-4" />
-                        </div>
-                        <div className="min-w-0 flex-1 space-y-0.5">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <div className="text-sm font-semibold text-text-primary">{item.title}</div>
-                            <Badge variant={item.badgeVariant} size="sm">
-                              {item.badgeLabel}
-                            </Badge>
-                          </div>
-                          <div className="text-[13px] leading-5 text-text-secondary">{item.description}</div>
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <Result
-                    size="sm"
-                    variant="success"
-                    title={t("settings.microApps.codeGraphStudio.cards.blockedReasons.emptyTitle")}
-                    description={t("settings.microApps.codeGraphStudio.cards.blockedReasons.emptyDescription")}
-                  />
-                )}
-              </div>
+              <Switch
+                checked={draft.microAppEnabled}
+                onChange={() => void toggleEnabled()}
+                ariaLabel="启用 CodeGraph 微应用"
+                disabled={saving}
+              />
             </div>
-          </Card>
-        </div>
 
-        <div data-testid="codegraph-pollution-card" className="h-full">
-          <Card className="h-full p-4">
-            <div className="flex h-full flex-col gap-4">
-              <div className="text-lg font-semibold text-text-primary">
-                {t("settings.microApps.codeGraphStudio.cards.pollutionSummary.title")}
-              </div>
-              <div className="divide-y divide-border rounded-ui-panel border border-border bg-surface-primary">
-                {[
-                  {
-                    key: "guardStatus",
-                    label: t("settings.microApps.codeGraphStudio.fields.guardStatus"),
-                    value: report.pollutionGuard.status,
-                    emphasize: true,
-                  },
-                  {
-                    key: "repoDataDirPath",
-                    label: t("settings.microApps.codeGraphStudio.fields.repoDataDirPath"),
-                    value: report.pollutionGuard.repoDataDirPath,
-                  },
-                  {
-                    key: "exists",
-                    label: t("settings.microApps.codeGraphStudio.fields.exists"),
-                    value: report.pollutionGuard.exists ? "true" : "false",
-                  },
-                  {
-                    key: "behavior",
-                    label: t("settings.microApps.codeGraphStudio.fields.behavior"),
-                    value: t("settings.microApps.codeGraphStudio.cards.pollutionSummary.behavior"),
-                  },
-                ].map((row) => (
-                  <div
-                    key={row.key}
-                    className="grid gap-2 px-4 py-3 text-sm md:grid-cols-[148px_minmax(0,1fr)]"
-                  >
-                    <div className="text-text-secondary">{row.label}</div>
-                    <div className={row.emphasize ? "font-medium text-primary" : "break-all text-text-primary"}>
-                      {row.value}
-                    </div>
-                  </div>
-                ))}
-              </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <TextInput
+                compact
+                label="Command"
+                value={draft.command}
+                onChange={(value) => setDraft((current) => current ? { ...current, command: value } : current)}
+                disabled={saving}
+              />
+              <TextInput
+                compact
+                label="App Data Root"
+                value={draft.appDataRoot}
+                onChange={(value) => setDraft((current) => current ? { ...current, appDataRoot: value } : current)}
+                disabled={saving}
+              />
             </div>
-          </Card>
-        </div>
-      </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div data-testid="codegraph-config-card" className="h-full">
-          <Card className="h-full p-4">
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <div className="text-lg font-semibold text-text-primary">
-                    {t("settings.microApps.codeGraphStudio.cards.config.title")}
-                  </div>
-                <div className="text-sm leading-6 text-text-secondary">
-                  {t("settings.microApps.codeGraphStudio.cards.config.description")}
-                </div>
-                </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <TextInput
+                compact
+                label="Timeout (ms)"
+                value={draft.timeoutMs}
+                onChange={(value) => setDraft((current) => current ? { ...current, timeoutMs: value } : current)}
+                disabled={saving}
+              />
+              <TextInput
+                compact
+                label="Max Results"
+                value={draft.maxResults}
+                onChange={(value) => setDraft((current) => current ? { ...current, maxResults: value } : current)}
+                disabled={saving}
+              />
+              <TextInput
+                compact
+                label="Query Limit"
+                value={draft.queryLimit}
+                onChange={(value) => setDraft((current) => current ? { ...current, queryLimit: value } : current)}
+                disabled={saving}
+              />
+            </div>
 
-              <div className="space-y-3 rounded-ui-panel border border-border/70 bg-surface-secondary/20 p-3">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="text-sm font-medium text-text-primary">
-                      {t("settings.microApps.codeGraphStudio.fields.microAppEnabled")}
-                    </div>
-                    <Switch
-                      checked={draft.microAppEnabled}
-                      onChange={() => void setMicroAppEnabled(!draft.microAppEnabled)}
-                      ariaLabel={t("settings.microApps.codeGraphStudio.fields.microAppEnabled")}
-                      disabled={saving}
-                    />
-                  </div>
-                  <div className="text-sm leading-6 text-text-secondary">
-                    {t("settings.microApps.codeGraphStudio.cards.capability.microAppHint")}
-                  </div>
-                </div>
+            <TextArea
+              compact
+              label="Start Args"
+              value={draft.startArgsText}
+              onChange={(value) => setDraft((current) => current ? { ...current, startArgsText: value } : current)}
+              rows={3}
+              disabled={saving}
+            />
 
-                <Alert
-                  variant={report.config.capabilityRegistered ? "success" : "warning"}
-                  title={t("settings.microApps.codeGraphStudio.cards.capability.statusTitle", {
-                    value: report.config.capabilityRegistered
-                      ? t("settings.microApps.codeGraphStudio.values.enabled")
-                      : t("settings.microApps.codeGraphStudio.values.disabled"),
-                  })}
-                >
-                  {report.config.capabilityRegistered
-                    ? t("settings.microApps.codeGraphStudio.cards.capability.registered")
-                    : report.capability.reasons[0]?.message ??
-                      t("settings.microApps.codeGraphStudio.cards.capability.unavailable")}
-                </Alert>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2">
-                <TextInput
-                  compact
-                  label={t("settings.microApps.codeGraphStudio.fields.workspaceRootReadonly")}
-                  value={report.config.workspaceRoot}
-                  onChange={() => {}}
-                  disabled
-                />
-                <TextInput
-                  compact
-                  label={t("settings.microApps.codeGraphStudio.fields.command")}
-                  value={draft.command}
-                  onChange={(value) =>
-                    setDraft((current) => (current ? { ...current, command: value } : current))
-                  }
-                  disabled={saving}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_152px]">
-                  <TextInput
-                    compact
-                    label={t("settings.microApps.codeGraphStudio.fields.appDataRootRequired")}
-                    labelHelp={t("settings.microApps.codeGraphStudio.cards.config.appDataRootHelp")}
-                    value={draft.appDataRoot}
-                    placeholder={t("settings.microApps.codeGraphStudio.placeholders.appDataRoot")}
-                    onChange={(value) =>
-                      setDraft((current) => (current ? { ...current, appDataRoot: value } : current))
-                    }
-                    disabled={saving}
-                  />
-                  <div className="flex items-end">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full"
-                      onClick={() =>
-                        setDraft((current) =>
-                          current
-                            ? {
-                                ...current,
-                                appDataRoot: appDataRootRecommended,
-                              }
-                            : current,
-                        )
-                      }
-                      disabled={saving}
-                    >
-                      {t("settings.microApps.codeGraphStudio.actions.useRecommendedRoot")}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-3">
-                <TextInput
-                  compact
-                  label={t("settings.microApps.codeGraphStudio.fields.timeoutMs")}
-                  value={draft.timeoutMs}
-                  onChange={(value) =>
-                    setDraft((current) => (current ? { ...current, timeoutMs: value } : current))
-                  }
-                  disabled={saving}
-                />
-                <TextInput
-                  compact
-                  label={t("settings.microApps.codeGraphStudio.fields.maxResults")}
-                  value={draft.maxResults}
-                  onChange={(value) =>
-                    setDraft((current) => (current ? { ...current, maxResults: value } : current))
-                  }
-                  disabled={saving}
-                />
-                <TextInput
-                  compact
-                  label={t("settings.microApps.codeGraphStudio.fields.queryLimit")}
-                  value={draft.queryLimit}
-                  onChange={(value) =>
-                    setDraft((current) => (current ? { ...current, queryLimit: value } : current))
-                  }
-                  disabled={saving}
-                />
-              </div>
-
-              <div className="space-y-3 border-t border-border/70 pt-3">
-                <div className="grid gap-3 md:grid-cols-2">
-                  <TextInput
-                    compact
-                    label={t("settings.microApps.codeGraphStudio.fields.logRoot")}
-                    value={report.config.logRoot ?? ""}
-                    onChange={() => {}}
-                    disabled
-                  />
-                  <TextInput
-                    compact
-                    label={t("settings.microApps.codeGraphStudio.fields.indexRoot")}
-                    value={report.config.indexRoot ?? ""}
-                    onChange={() => {}}
-                    disabled
-                  />
-                </div>
+            <details className="rounded-ui-panel border border-border p-3">
+              <summary className="cursor-pointer text-sm font-medium text-text-primary">Probe 参数</summary>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
                 <TextArea
                   compact
-                  label={t("settings.microApps.codeGraphStudio.fields.startArgs")}
-                  value={draft.startArgsText}
-                  onChange={(value) =>
-                    setDraft((current) => (current ? { ...current, startArgsText: value } : current))
-                  }
+                  label="Version Probe Args"
+                  value={draft.versionProbeArgsText}
+                  onChange={(value) => setDraft((current) => current ? { ...current, versionProbeArgsText: value } : current)}
                   rows={3}
                   disabled={saving}
                 />
-                <div className="grid gap-3 md:grid-cols-2">
-                  <TextArea
-                    compact
-                    label={t("settings.microApps.codeGraphStudio.fields.versionProbeArgs")}
-                    value={draft.versionProbeArgsText}
-                    onChange={(value) =>
-                      setDraft((current) =>
-                        current ? { ...current, versionProbeArgsText: value } : current,
-                      )
-                    }
-                    rows={3}
-                    disabled={saving}
-                  />
-                  <TextArea
-                    compact
-                    label={t("settings.microApps.codeGraphStudio.fields.telemetryProbeArgs")}
-                    value={draft.telemetryProbeArgsText}
-                    onChange={(value) =>
-                      setDraft((current) =>
-                        current ? { ...current, telemetryProbeArgsText: value } : current,
-                      )
-                    }
-                    rows={3}
-                    disabled={saving}
-                  />
-                </div>
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        <div data-testid="codegraph-actions-card" className="h-full">
-          <Card className="h-full p-4">
-            <div className="flex h-full flex-col gap-5">
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <div className="text-lg font-semibold text-text-primary">
-                    {t("settings.microApps.codeGraphStudio.cards.actions.title")}
-                  </div>
-                  <div className="text-sm leading-6 text-text-secondary">
-                    {t("settings.microApps.codeGraphStudio.cards.actions.description")}
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Button size="sm" variant="outline" onClick={() => void runAction("detect")} disabled={saving}>
-                    {t("settings.microApps.codeGraphStudio.actions.detect")}
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => void runAction("health")} disabled={saving}>
-                    {t("settings.microApps.codeGraphStudio.actions.health")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => void runAction("start")}
-                    disabled={startDisabled}
-                  >
-                    {t("settings.microApps.codeGraphStudio.actions.start")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="danger-outline"
-                    onClick={() => void runAction("stop")}
-                    disabled={stopDisabled}
-                  >
-                    {t("settings.microApps.codeGraphStudio.actions.stop")}
-                  </Button>
-                </div>
-
-                {startDisabled ? (
-                  <div className="text-sm leading-5 text-warning">
-                    {isFakeProviderSelected
-                      ? t("settings.microApps.codeGraphStudio.cards.actions.startHintFake")
-                      : t("settings.microApps.codeGraphStudio.cards.actions.startHintBlocked")}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="h-px bg-border" />
-
-              <div data-testid="codegraph-smoke-card" className="space-y-4">
-                <div className="space-y-1">
-                  <div className="text-lg font-semibold text-text-primary">
-                    {t("settings.microApps.codeGraphStudio.cards.smoke.title")}
-                  </div>
-                  <div className="text-sm leading-6 text-text-secondary">
-                    {t("settings.microApps.codeGraphStudio.cards.smoke.description")}
-                  </div>
-                </div>
-
-                <SegmentedTabs<SmokeMode>
-                  size="sm"
-                  value={smokeMode}
-                  onChange={setSmokeMode}
-                  items={[
-                    {
-                      value: "real",
-                      label: t("settings.microApps.codeGraphStudio.cards.smoke.modes.real"),
-                    },
-                    {
-                      value: "fake",
-                      label: t("settings.microApps.codeGraphStudio.cards.smoke.modes.fake"),
-                    },
-                  ]}
-                />
-
-                {smokeMode === "fake" ? (
-                  <div className="space-y-3">
-                    <Alert
-                      variant="info"
-                      title={t("settings.microApps.codeGraphStudio.cards.smoke.fakeTitle")}
-                    >
-                      {t("settings.microApps.codeGraphStudio.cards.smoke.fakeDescription")}
-                    </Alert>
-                    <div className="space-y-2 rounded-ui-panel border border-border bg-surface-secondary/30 px-4 py-3">
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="text-sm font-medium text-text-primary">
-                          {t("settings.microApps.codeGraphStudio.cards.smoke.fakeToggleTitle")}
-                        </div>
-                        <Switch
-                          checked={isFakeProviderSelected}
-                          onChange={toggleFakeProviderMode}
-                          ariaLabel={t("settings.microApps.codeGraphStudio.cards.smoke.fakeToggleTitle")}
-                        />
-                      </div>
-                      <div className="text-sm text-text-secondary">
-                        {t("settings.microApps.codeGraphStudio.cards.smoke.fakeToggleHint")}
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-
                 <TextArea
-                  label={t("settings.microApps.codeGraphStudio.fields.smokeQuery")}
-                  value={draft.smokeQuery}
-                  onChange={(value) =>
-                    setDraft((current) => (current ? { ...current, smokeQuery: value } : current))
-                  }
+                  compact
+                  label="Telemetry Probe Args"
+                  value={draft.telemetryProbeArgsText}
+                  onChange={(value) => setDraft((current) => current ? { ...current, telemetryProbeArgsText: value } : current)}
                   rows={3}
                   disabled={saving}
                 />
+              </div>
+            </details>
 
+            <Button variant="primary" size="sm" onClick={() => void handleSave()} disabled={saving}>
+              保存参数
+            </Button>
+          </div>
+        </Card>
+
+        <Card className="p-4" data-testid="codegraph-actions-card">
+          <div className="space-y-4">
+            <div>
+              <div className="text-lg font-semibold text-text-primary">运行时动作</div>
+              <div className="text-sm text-text-secondary">这些动作只调试 Studio 默认 runtime，不决定 Agent 线程绑定。</div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Button size="sm" variant="outline" onClick={() => void runRuntimeAction("detect")} disabled={saving}>detect</Button>
+              <Button size="sm" variant="outline" onClick={() => void runRuntimeAction("health")} disabled={saving}>health</Button>
+              <Button size="sm" variant="secondary" onClick={() => void runRuntimeAction("start")} disabled={saving}>start</Button>
+              <Button size="sm" variant="danger-outline" onClick={() => void runRuntimeAction("stop")} disabled={saving || !report.runtime.processAlive}>stop</Button>
+            </div>
+
+            <div className="border-t border-border pt-4" data-testid="codegraph-smoke-card">
+              <div className="mb-3">
+                <div className="text-lg font-semibold text-text-primary">Path Smoke 验证</div>
+                <div className="text-sm text-text-secondary">
+                  直接指定项目根目录。Smoke 会按这个 path 建立/复用 CodeGraph runtime，不要求它匹配 Studio 默认 workspace。
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <TextInput
+                  compact
+                  label="Debug Workspace Path"
+                  value={debugWorkspacePath}
+                  placeholder="D:\\path\\to\\project"
+                  onChange={setDebugWorkspacePath}
+                  disabled={saving}
+                />
+                <TextArea
+                  label="Smoke Query"
+                  value={smokeQuery}
+                  onChange={setSmokeQuery}
+                  rows={3}
+                  disabled={saving}
+                />
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => void runAction("smoke-status")}
-                    disabled={smokeDisabled}
+                    onClick={() => void runSmoke("status")}
+                    disabled={saving || !debugWorkspacePath.trim()}
                   >
-                    {t("settings.microApps.codeGraphStudio.actions.smokeStatus")}
+                    运行 Smoke Status
                   </Button>
                   <Button
                     size="sm"
                     variant="secondary"
-                    onClick={() => void runAction("smoke-query")}
-                    disabled={smokeDisabled}
+                    onClick={() => void runSmoke("query")}
+                    disabled={saving || !debugWorkspacePath.trim() || !smokeQuery.trim()}
                   >
-                    {t("settings.microApps.codeGraphStudio.actions.smokeQuery")}
+                    运行 Smoke
                   </Button>
                 </div>
-
               </div>
             </div>
-          </Card>
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <div data-testid="codegraph-smoke-result-card">
-          <Card className="h-[500px] p-4">
-          <div className="flex h-full flex-col gap-4">
-            <div className="space-y-1">
-              <div className="text-lg font-semibold text-text-primary">
-                {t("settings.microApps.codeGraphStudio.cards.smokeResult.title")}
-              </div>
-              <div className="text-sm leading-6 text-text-secondary">
-                {t("settings.microApps.codeGraphStudio.cards.smokeResult.description")}
-              </div>
-            </div>
-
-            {smokeResult ? (
-              <div className="space-y-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={smokeResult.ok ? "success" : "danger"} size="sm">
-                    {smokeMode === "fake"
-                      ? t("settings.microApps.codeGraphStudio.cards.smoke.modes.fake")
-                      : t("settings.microApps.codeGraphStudio.cards.smoke.modes.real")}
-                  </Badge>
-                  <Badge variant={smokeResult.ok ? "success" : "warning"} size="sm">
-                    {smokeResult.kind} ·{" "}
-                    {smokeResult.ok
-                      ? t("settings.microApps.codeGraphStudio.values.ready")
-                      : t("settings.microApps.codeGraphStudio.values.blocked")}
-                  </Badge>
-                </div>
-
-                <div className="rounded-ui-panel border border-border bg-surface-secondary/30 px-4 py-3 text-sm leading-6 text-text-primary">
-                  {smokeResult.message}
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <Card
-                    variant="subtle"
-                    label={t("settings.microApps.codeGraphStudio.cards.smokeResult.metrics.status")}
-                    value={smokeResult.ok ? t("settings.microApps.codeGraphStudio.values.ready") : t("settings.microApps.codeGraphStudio.values.blocked")}
-                    padding="sm"
-                  />
-                  <Card
-                    variant="subtle"
-                    label={t("settings.microApps.codeGraphStudio.cards.smokeResult.metrics.candidates")}
-                    value={hasSmokeSummary?.candidates ?? "—"}
-                    padding="sm"
-                  />
-                  <Card
-                    variant="subtle"
-                    label={t("settings.microApps.codeGraphStudio.cards.smokeResult.metrics.content")}
-                    value={hasSmokeSummary?.content ?? "—"}
-                    padding="sm"
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-ui-panel border border-dashed border-border bg-surface-secondary/20 px-6 text-center">
-                <div className="text-5xl text-text-tertiary/60">≌</div>
-                <div className="space-y-1">
-                  <div className="text-base font-medium text-text-primary">
-                    {t("settings.microApps.codeGraphStudio.states.emptySmokeTitle")}
-                  </div>
-                  <div className="max-w-xl text-sm leading-6 text-text-secondary">
-                    {t("settings.microApps.codeGraphStudio.states.emptySmoke")}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-          </Card>
-        </div>
-
-        <Card className="h-[500px] p-4">
-          <div className="flex h-full flex-col gap-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 items-center gap-0">
-                  <IconButton
-                    size="sm"
-                    styleType="ghost"
-                    ariaLabel={t("settings.microApps.codeGraphStudio.actions.copyDebug")}
-                    onClick={() => void copyDebugReport()}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </IconButton>
-                  <div className="text-lg font-semibold text-text-primary">
-                    {t("settings.microApps.codeGraphStudio.cards.debug.title")}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center">
-                <IconButton
-                  size="sm"
-                  styleType="ghost"
-                  ariaLabel={t("settings.microApps.codeGraphStudio.cards.debug.title")}
-                  aria-expanded={debugExpanded}
-                  onClick={() => setDebugExpanded((value) => !value)}
-                >
-                  <ChevronDown
-                    className={`h-4 w-4 text-text-tertiary transition-transform duration-200 ${
-                      debugExpanded ? "rotate-180" : ""
-                    }`}
-                  />
-                </IconButton>
-              </div>
-            </div>
-
-            {debugExpanded ? (
-              <div className="min-h-0 flex-1 border-t border-border/70 pt-3">
-                <pre className="h-full overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-all rounded-ui-panel border border-border bg-surface-secondary/20 p-3 text-xs text-text-secondary">
-                  {JSON.stringify(report, null, 2)}
-                </pre>
-              </div>
-            ) : null}
           </div>
         </Card>
       </div>
+
+      <Card className="p-4" data-testid="codegraph-smoke-result-card">
+        <div className="space-y-3">
+          <div className="text-lg font-semibold text-text-primary">Smoke 结果</div>
+          {smokeResult ? (
+            <>
+              <Alert variant={smokeResult.ok ? "success" : "warning"} title={smokeResult.ok ? "通过" : "未通过"}>
+                {smokeResult.message}
+              </Alert>
+              <pre className="max-h-[360px] overflow-auto rounded-ui-panel border border-border bg-surface-secondary/40 p-3 text-xs leading-5 text-text-primary">
+                {JSON.stringify(smokeResult.payload, null, 2)}
+              </pre>
+            </>
+          ) : (
+            <Result
+              size="sm"
+              title="还没有 Smoke 结果"
+              description="填入要验证的项目 path，然后运行 Smoke Status 或 Smoke Query。"
+            />
+          )}
+        </div>
+      </Card>
+
+      <details className="rounded-ui-panel border border-border bg-surface-primary p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-text-primary">原始调试报告</summary>
+        <pre className="mt-3 max-h-[420px] overflow-auto text-xs leading-5 text-text-secondary">
+          {JSON.stringify(report, null, 2)}
+        </pre>
+      </details>
     </MicroAppPageLayout>
   );
 }
