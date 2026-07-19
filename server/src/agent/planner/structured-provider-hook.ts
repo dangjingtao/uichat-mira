@@ -106,7 +106,7 @@ export const installPlannerStructuredOutputHook = () => {
           description:
             "Exactly one next-action Planner decision plus a lightweight runtime todo patch.",
         });
-        const decision = normalizePlannerStructuredDecision(envelope);
+        const decision = normalizePlannerStructuredDecision(envelope, toolExposure);
         yield JSON.stringify(decision);
       } catch (error) {
         writeStructuredLog("warn", {
