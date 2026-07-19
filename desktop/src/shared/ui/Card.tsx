@@ -3,7 +3,7 @@ import React from "react";
 export type CardVariant = "default" | "subtle" | "dashed" | "ghost";
 export type CardPadding = "none" | "sm" | "md" | "lg";
 
-interface CardProps {
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   label?: React.ReactNode;
   value?: React.ReactNode;
   description?: React.ReactNode;
@@ -37,9 +37,11 @@ function Card({
   variant = "default",
   padding = "md",
   className = "",
+  ...divProps
 }: CardProps) {
   return (
     <div
+      {...divProps}
       className={`
         rounded-ui-panel
         ${cardVariantClassNames[variant]}
