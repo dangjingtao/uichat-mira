@@ -6,7 +6,12 @@ export type PlannerStructuredPlanPatch = {
 };
 
 export type PlannerStructuredDecisionEnvelope = {
-  decision: Record<string, unknown>;
+  type: "answer" | "retrieve" | "use_tool" | "ask_user" | "error";
+  reason: string;
+  query: string | null;
+  toolId: string | null;
+  args: Record<string, unknown> | null;
+  question: string | null;
   planPatch: PlannerStructuredPlanPatch;
 };
 
@@ -85,115 +90,87 @@ const toStrictGenerationSchema = (
   return requiredByParent ? schema : nullableSchema(schema);
 };
 
-const actionSchema = (
-  properties: Record<string, JsonSchema>,
-  required: string[],
-): JsonSchema => ({
-  type: "object",
-  properties,
-  required,
-  additionalProperties: false,
-});
-
-const literalStringSchema = (value: string): JsonSchema => ({
-  type: "string",
-  enum: [value],
-});
-
-export const buildPlannerStructuredOutputJsonSchema = (
-  toolExposure: AgentToolExposureState,
-): JsonSchema => {
-  const decisionVariants: JsonSchema[] = [
-    actionSchema(
-      {
-        type: literalStringSchema("answer"),
-        reason: { type: "string" },
-      },
-      ["type", "reason"],
-    ),
-    actionSchema(
-      {
-        type: literalStringSchema("retrieve"),
-        query: { type: "string" },
-        reason: { type: "string" },
-      },
-      ["type", "query", "reason"],
-    ),
-    actionSchema(
-      {
-        type: literalStringSchema("ask_user"),
-        question: { type: "string" },
-        reason: { type: "string" },
-      },
-      ["type", "question", "reason"],
-    ),
-    actionSchema(
-      {
-        type: literalStringSchema("error"),
-        reason: { type: "string" },
-      },
-      ["type", "reason"],
-    ),
-  ];
-
-  for (const toolId of toolExposure.exposedTools) {
-    const meta = toolExposure.toolMeta.find((item) => item.toolId === toolId);
-    const argsSchema = toStrictGenerationSchema(
-      meta?.inputSchema ?? {
-        type: "object",
-        properties: {},
-        required: [],
-        additionalProperties: false,
-      },
-      true,
-    );
-    decisionVariants.push(
-      actionSchema(
-        {
-          type: literalStringSchema("use_tool"),
-          toolId: literalStringSchema(toolId),
-          args: argsSchema,
-          reason: { type: "string" },
-        },
-        ["type", "toolId", "args", "reason"],
-      ),
-    );
+const buildToolArgsSchema = (toolExposure: AgentToolExposureState): JsonSchema => {
+  if (toolExposure.exposedTools.length === 0) {
+    return { type: "null" };
   }
 
   return {
-    type: "object",
-    properties: {
-      decision: {
-        anyOf: decisionVariants,
-      },
-      planPatch: {
-        type: "object",
-        properties: {
-          addItems: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                id: { type: "string" },
-                text: { type: "string" },
-              },
-              required: ["id", "text"],
-              additionalProperties: false,
-            },
+    anyOf: [
+      ...toolExposure.exposedTools.map((toolId) => {
+        const meta = toolExposure.toolMeta.find((item) => item.toolId === toolId);
+        return toStrictGenerationSchema(
+          meta?.inputSchema ?? {
+            type: "object",
+            properties: {},
+            required: [],
+            additionalProperties: false,
           },
-          completeIds: {
-            type: "array",
-            items: { type: "string" },
-          },
-        },
-        required: ["addItems", "completeIds"],
-        additionalProperties: false,
-      },
-    },
-    required: ["decision", "planPatch"],
-    additionalProperties: false,
+          true,
+        );
+      }),
+      { type: "null" },
+    ],
   };
 };
+
+export const buildPlannerStructuredOutputJsonSchema = (
+  toolExposure: AgentToolExposureState,
+): JsonSchema => ({
+  type: "object",
+  properties: {
+    type: {
+      type: "string",
+      enum: ["answer", "retrieve", "use_tool", "ask_user", "error"],
+    },
+    reason: { type: "string" },
+    query: nullableSchema({ type: "string" }),
+    toolId:
+      toolExposure.exposedTools.length > 0
+        ? {
+            anyOf: [
+              { type: "string", enum: toolExposure.exposedTools },
+              { type: "null" },
+            ],
+          }
+        : { type: "null" },
+    args: buildToolArgsSchema(toolExposure),
+    question: nullableSchema({ type: "string" }),
+    planPatch: {
+      type: "object",
+      properties: {
+        addItems: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              text: { type: "string" },
+            },
+            required: ["id", "text"],
+            additionalProperties: false,
+          },
+        },
+        completeIds: {
+          type: "array",
+          items: { type: "string" },
+        },
+      },
+      required: ["addItems", "completeIds"],
+      additionalProperties: false,
+    },
+  },
+  required: [
+    "type",
+    "reason",
+    "query",
+    "toolId",
+    "args",
+    "question",
+    "planPatch",
+  ],
+  additionalProperties: false,
+});
 
 const stripGeneratedNulls = (value: unknown): unknown => {
   if (Array.isArray(value)) {
@@ -212,7 +189,14 @@ const stripGeneratedNulls = (value: unknown): unknown => {
 export const normalizePlannerStructuredDecision = (
   envelope: PlannerStructuredDecisionEnvelope,
 ): Record<string, unknown> => {
-  const decision = stripGeneratedNulls(envelope.decision) as Record<string, unknown>;
+  const decision = stripGeneratedNulls({
+    type: envelope.type,
+    reason: envelope.reason,
+    query: envelope.query,
+    toolId: envelope.toolId,
+    args: envelope.args,
+    question: envelope.question,
+  }) as Record<string, unknown>;
   const addItems = Array.isArray(envelope.planPatch?.addItems)
     ? envelope.planPatch.addItems
     : [];
