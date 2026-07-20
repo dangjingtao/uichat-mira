@@ -198,12 +198,13 @@ function toWebSocketUrl(backendUrl) {
 
 async function getWebBridgeConfig() {
   const [syncStore, localStore] = await Promise.all([
-    chrome.storage.sync.get(['backendUrl']),
+    chrome.storage.sync.get(['backendUrl', 'transport']),
     chrome.storage.local.get(['accessToken']),
   ]);
+  const transport = syncStore.transport === 'websocket' ? 'websocket' : 'native';
   return {
     url: toWebSocketUrl(syncStore.backendUrl),
-    transport: 'native',
+    transport,
     accessToken: typeof localStore.accessToken === 'string' ? localStore.accessToken : '',
     backendUrl: typeof syncStore.backendUrl === 'string' ? syncStore.backendUrl : '',
   };
@@ -531,12 +532,16 @@ async function connectWebBridge() {
     return;
   }
 
-  publishWebBridgeStatus('connecting');
+  publishWebBridgeStatus('connecting', {
+    transport: config.transport,
+    code: config.transport === 'native' ? 'NATIVE_CONNECT_REQUESTED' : 'WEBSOCKET_CONNECT_REQUESTED',
+    message: config.transport === 'native' ? '正在连接 Native Messaging Host' : '正在连接 Mira WebSocket',
+  });
   webBridge.transport = config.transport;
   if (config.transport === 'native') {
     try {
       const port = chrome.runtime.connectNative('com.tomz.uichat.webbridge');
-       const nativeSocket = {
+      const nativeSocket = {
         readyState: WebSocket.OPEN,
         send(payload) { port.postMessage(JSON.parse(payload)); },
         close() { port.disconnect(); },
@@ -550,6 +555,7 @@ async function connectWebBridge() {
       port.onMessage.addListener((message) => handleWebBridgeMessage(nativeSocket, JSON.stringify(message)).catch((error) => publishWebBridgeStatus('error', { code: 'MESSAGE_HANDLER_ERROR', message: error.message })));
       port.onDisconnect.addListener(() => {
         if (webBridge.socket !== nativeSocket) return;
+        const nativeError = chrome.runtime.lastError?.message || '';
         webBridge.socket = null;
         webBridge.ready = false;
         webBridge.miraReady = false;
@@ -557,13 +563,23 @@ async function connectWebBridge() {
           clearTimeout(webBridge.handshakeTimer);
           webBridge.handshakeTimer = null;
         }
-        publishWebBridgeStatus('disconnected', { code: chrome.runtime.lastError?.message || 'BRIDGE_DISCONNECTED' });
+        publishWebBridgeStatus('disconnected', {
+          code: nativeError ? 'NATIVE_PORT_DISCONNECTED' : 'BRIDGE_DISCONNECTED',
+          message: nativeError || 'Native Messaging 连接已断开',
+          transport: 'native',
+          stage: 'native_port',
+        });
         scheduleWebBridgeReconnect();
       });
-       nativeSocket.send(JSON.stringify({ version: 1, protocolVersion: WEBBRIDGE_PROTOCOL_VERSION, type: 'hello', client: 'mira-webbridge-extension', extensionName: '触界', extensionVersion: EXTENSION_VERSION, backendUrl: config.backendUrl, accessToken: config.accessToken, transport: config.transport, capabilities: ['look', 'browse', 'act', 'transfer', 'clip_rules'], tools: WEBBRIDGE_TOOL_DEFINITIONS }));
+      nativeSocket.send(JSON.stringify({ version: 1, protocolVersion: WEBBRIDGE_PROTOCOL_VERSION, type: 'hello', client: 'mira-webbridge-extension', extensionName: '触界', extensionVersion: EXTENSION_VERSION, backendUrl: config.backendUrl, accessToken: config.accessToken, transport: config.transport, capabilities: ['look', 'browse', 'act', 'transfer', 'clip_rules'], tools: WEBBRIDGE_TOOL_DEFINITIONS }));
       return;
     } catch (error) {
-      publishWebBridgeStatus('error', { code: 'NATIVE_HOST_UNAVAILABLE', message: error.message || 'Native Messaging Host 未安装' });
+      publishWebBridgeStatus('error', {
+        code: 'NATIVE_HOST_UNAVAILABLE',
+        message: error.message || 'Native Messaging Host 未安装',
+        transport: 'native',
+        stage: 'connect_native',
+      });
       scheduleWebBridgeReconnect();
       return;
     }
@@ -585,10 +601,10 @@ async function connectWebBridge() {
       extensionVersion: EXTENSION_VERSION,
       accessToken: config.accessToken || undefined,
       transport: config.transport,
-       capabilities: ['look', 'browse', 'act', 'transfer', 'clip_rules'],
+      capabilities: ['look', 'browse', 'act', 'transfer', 'clip_rules'],
       tools: WEBBRIDGE_TOOL_DEFINITIONS,
     }));
-    publishWebBridgeStatus('connecting', { message: '正在完成触界握手' });
+    publishWebBridgeStatus('connecting', { transport: 'websocket', message: '正在完成触界 WebSocket 握手' });
   });
 
   socket.addEventListener('message', (event) => {
@@ -598,7 +614,7 @@ async function connectWebBridge() {
   });
 
   socket.addEventListener('error', () => {
-    publishWebBridgeStatus('error', { code: 'BRIDGE_CONNECTION_ERROR' });
+    publishWebBridgeStatus('error', { code: 'BRIDGE_CONNECTION_ERROR', transport: 'websocket', message: '触界 WebSocket 连接失败' });
   });
 
   socket.addEventListener('close', () => {
@@ -611,7 +627,7 @@ async function connectWebBridge() {
       clearTimeout(webBridge.handshakeTimer);
       webBridge.handshakeTimer = null;
     }
-    publishWebBridgeStatus('disconnected', { code: 'BRIDGE_DISCONNECTED' });
+    publishWebBridgeStatus('disconnected', { code: 'BRIDGE_DISCONNECTED', transport: 'websocket', message: '触界 WebSocket 已断开' });
     scheduleWebBridgeReconnect();
   });
   })();
