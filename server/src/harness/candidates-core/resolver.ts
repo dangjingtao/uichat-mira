@@ -36,16 +36,17 @@ export const resolveHarnessToolCandidatesForTurn = async (
     allowedExternalToolIds: input.allowedExternalToolIds,
     sandboxProfiles: input.sandboxProfiles,
   });
-  const browserIntent = source === "agent_intent" && /https?:\/\/|browser|webpage|website|网页|页面|网站|浏览器|打开网页|访问网页|页面标题/i.test(input.query);
-  const browserDefinitions = exposureDecision.exposedDefinitions.filter((definition) => definition.domain === "browser_action" && definition.tags.includes("computer-use"));
-  const visibleDefinitions = browserIntent && browserDefinitions.length > 0 ? browserDefinitions : exposureDecision.exposedDefinitions;
+
+  // Harness exposure only answers whether a tool is eligible to be used.
+  // It must not infer a task phase and remove otherwise-eligible core tools.
+  // In particular, browser intent must not isolate Browser tools from Edit,
+  // Terminal, Read, or Search during a multi-step Agent run.
+  const visibleDefinitions = exposureDecision.exposedDefinitions;
   const profiles = resolveHarnessCapabilityProfiles(visibleDefinitions);
   const initialToolExposure: HarnessToolExposure = {
     exposedToolIds: visibleDefinitions.map((definition) => definition.id),
     exposedDefinitions: visibleDefinitions,
-    reason: browserIntent && browserDefinitions.length > 0
-      ? [...exposureDecision.reason, "Browser intent is isolated to the Computer Use browser tool set."]
-      : exposureDecision.reason,
+    reason: exposureDecision.reason,
     blockedCapabilityIds: exposureDecision.blockedCapabilityIds,
     blockedCapabilityReasons: exposureDecision.blockedCapabilityReasons,
   };
