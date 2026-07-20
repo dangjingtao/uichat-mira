@@ -229,19 +229,27 @@ function publishWebBridgeEvent(event, detail = {}) {
   socket.send(JSON.stringify({ version: WEBBRIDGE_PROTOCOL_VERSION, type: 'status', status: 'operation', event, ...detail }));
 }
 
+async function updateActionUiSafely(tasks) {
+  const results = await Promise.allSettled(tasks.map((task) => Promise.resolve().then(task)));
+  const failures = results.filter((result) => result.status === 'rejected');
+  if (failures.length) {
+    console.warn('触界工具栏状态更新失败', failures.map((failure) => failure.reason?.message || failure.reason));
+  }
+}
+
 async function markAuthorizationRequired() {
-  await Promise.all([
-    chrome.action.setBadgeText({ text: '' }),
-    chrome.action.setIcon({ path: actionIconPaths('-attention') }),
-    chrome.action.setTitle({ title: '触界 - 待授权' }),
+  await updateActionUiSafely([
+    () => chrome.action.setBadgeText({ text: '' }),
+    () => chrome.action.setIcon({ path: actionIconPaths('-attention') }),
+    () => chrome.action.setTitle({ title: '触界 - 待授权' }),
   ]);
 }
 
 async function markAuthorizationReady() {
-  await Promise.all([
-    chrome.action.setBadgeText({ text: '' }),
-    chrome.action.setIcon({ path: actionIconPaths() }),
-    chrome.action.setTitle({ title: '打开触界' }),
+  await updateActionUiSafely([
+    () => chrome.action.setBadgeText({ text: '' }),
+    () => chrome.action.setIcon({ path: actionIconPaths() }),
+    () => chrome.action.setTitle({ title: '打开触界' }),
   ]);
 }
 
