@@ -42,18 +42,6 @@ const INTERNAL_PROFILE_BLUEPRINTS: Array<{
     supportingToolIds: ["codebase_explore"],
   },
   {
-    id: "workspace_edit",
-    title: "Workspace Edit",
-    description: "Modify workspace files through managed, structured workspace operations.",
-    domain: "edit",
-    tags: ["workspace", "edit", "write", "replace", "delete", "move", "rename", "mutation"],
-    preferredToolId: "edit_file",
-    supportingToolIds: ["workspace_mutation", "edit_file"],
-    actionProfileId: "edit_create_file",
-    actionProfileTitle: "Edit Create File",
-    actionProfileDescription: "Create a new workspace file through managed file editing.",
-  },
-  {
     id: "web_research",
     title: "Web Research",
     description: "Search current public web information and summarize the findings.",
