@@ -96,21 +96,35 @@ export const installPlannerStructuredOutputHook = () => {
     }
 
     return (async function* () {
+      let emittedNativeDelta = false;
       try {
         const toolExposure = extractPlannerToolExposure(messages);
-        yield* streamTaskStructuredOutputText({
+        for await (const delta of streamTaskStructuredOutputText({
           messages,
           schema: buildPlannerStructuredOutputJsonSchema(toolExposure),
           name: "planner_decision",
           description:
             "Exactly one next-action Planner decision plus a lightweight runtime todo patch.",
-        });
+        })) {
+          emittedNativeDelta = true;
+          yield delta;
+        }
       } catch (error) {
         writeStructuredLog("warn", {
-          msg: "Planner native structured output streaming unavailable; falling back to text JSON",
+          msg: emittedNativeDelta
+            ? "Planner native structured output stream failed after partial output"
+            : "Planner native structured output streaming unavailable; falling back to text JSON",
           event: "agent-next-action-planner-structured-fallback",
+          partialNativeOutput: emittedNativeDelta,
           reason: error instanceof Error ? error.message : String(error),
         });
+
+        // Never concatenate a second JSON generation after native JSON has already
+        // started streaming; that would manufacture an invalid multi-object Planner
+        // response. Text fallback is safe only before the first native delta.
+        if (emittedNativeDelta) {
+          throw error;
+        }
         yield* originalStreamTaskChatText(messages);
       }
     })();
