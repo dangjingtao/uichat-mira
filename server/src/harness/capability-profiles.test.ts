@@ -36,7 +36,7 @@ describe("resolveHarnessCapabilityProfiles", () => {
 
     expect(profiles).toEqual(
       expect.arrayContaining([
-      expect.objectContaining({
+        expect.objectContaining({
           id: "workspace_lookup",
           preferredToolId: "read_open",
           supportingToolIds: ["read_discover", "read_open"],
@@ -134,18 +134,29 @@ describe("resolveHarnessCapabilityProfiles", () => {
     ]);
   });
 
-  it("maps news research and mail reading to their governed tools", () => {
+  it("maps web, local news, and mail research to distinct governed tools", () => {
     const profiles = resolveHarnessCapabilityProfiles([
       {
         id: "web_search",
         title: "Web Search",
-        description: "search",
+        description: "public web search",
         domain: "web_search",
         source: "internal",
         mode: "sync",
         inputSchema: {},
-        tags: ["search"],
+        tags: ["search", "web"],
         capabilities: { sideEffect: "network", requiresApproval: false },
+      },
+      {
+        id: "news_search",
+        title: "News Search",
+        description: "local news search",
+        domain: "web_search",
+        source: "internal",
+        mode: "sync",
+        inputSchema: {},
+        tags: ["news", "local-news"],
+        capabilities: { sideEffect: "none", requiresApproval: false },
       },
       {
         id: "mail_query",
@@ -160,9 +171,12 @@ describe("resolveHarnessCapabilityProfiles", () => {
       },
     ]);
 
-    expect(profiles).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: "news_research", preferredToolId: "web_search" }),
-      expect.objectContaining({ id: "mail_reading", preferredToolId: "mail_query" }),
-    ]));
+    expect(profiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "web_research", preferredToolId: "web_search" }),
+        expect.objectContaining({ id: "news_research", preferredToolId: "news_search" }),
+        expect.objectContaining({ id: "mail_reading", preferredToolId: "mail_query" }),
+      ]),
+    );
   });
 });
