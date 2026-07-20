@@ -1,12 +1,10 @@
 import { writeStructuredLog } from "@/logger";
 import { providerProxyService } from "@/services/provider-proxy.service/index";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol";
-import { generateTaskStructuredOutput } from "@/services/provider-proxy.service/task-structured-output";
+import { streamTaskStructuredOutputText } from "@/services/provider-proxy.service/task-structured-output";
 import type { AgentToolExposureState } from "../types";
 import {
   buildPlannerStructuredOutputJsonSchema,
-  normalizePlannerStructuredDecision,
-  type PlannerStructuredDecisionEnvelope,
 } from "./structured-output";
 
 const INSTALL_KEY = Symbol.for("uichat-mira.planner-structured-output-installed");
@@ -78,10 +76,11 @@ const isPlannerStructuredRequest = (messages: NormalizedChatMessage[]) =>
   );
 
 /**
- * Planner keeps the existing streamTaskChatText call site for compatibility,
- * but planner-marked requests are fulfilled by one native schema-constrained
- * generation. The resulting object is yielded once as JSON so the existing
- * parser/validator boundary remains intact.
+ * Planner keeps the existing streamTaskChatText call site for compatibility.
+ * Planner-marked requests use native schema-constrained generation, but the
+ * provider text deltas are forwarded immediately so `reason` can drive the
+ * existing plannerThought/plannerThoughtStreaming UI before the complete JSON
+ * decision is validated and executed.
  */
 export const installPlannerStructuredOutputHook = () => {
   const installState = providerProxyService as unknown as Record<PropertyKey, unknown>;
@@ -99,18 +98,16 @@ export const installPlannerStructuredOutputHook = () => {
     return (async function* () {
       try {
         const toolExposure = extractPlannerToolExposure(messages);
-        const envelope = await generateTaskStructuredOutput<PlannerStructuredDecisionEnvelope>({
+        yield* streamTaskStructuredOutputText({
           messages,
           schema: buildPlannerStructuredOutputJsonSchema(toolExposure),
           name: "planner_decision",
           description:
             "Exactly one next-action Planner decision plus a lightweight runtime todo patch.",
         });
-        const decision = normalizePlannerStructuredDecision(envelope, toolExposure);
-        yield JSON.stringify(decision);
       } catch (error) {
         writeStructuredLog("warn", {
-          msg: "Planner native structured output unavailable; falling back to text JSON",
+          msg: "Planner native structured output streaming unavailable; falling back to text JSON",
           event: "agent-next-action-planner-structured-fallback",
           reason: error instanceof Error ? error.message : String(error),
         });
