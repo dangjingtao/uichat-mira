@@ -4,10 +4,7 @@ import {
   canUseDeclaredRepoLocalCodeGraphCapability,
   type RepoLocalCodeGraphGate,
 } from "./repo-local-capability.js";
-import {
-  isRealCodeGraphCommand,
-  ManagedCodeGraphProcessManager,
-} from "./repo-local-process-manager.js";
+import { ManagedCodeGraphProcessManager } from "./repo-local-process-manager.js";
 
 export type RepoLocalRuntimeContext = {
   draft: {
@@ -83,9 +80,9 @@ const getOrCreateRepoLocalManager = async (
   bindingKey?: string,
 ) => {
   if (
+    !context.draft.command.trim() ||
     !context.plannerStorage.logRoot ||
-    !context.plannerStorage.indexRoot ||
-    !isRealCodeGraphCommand(context.draft.command)
+    !context.plannerStorage.indexRoot
   ) {
     return null;
   }
@@ -109,6 +106,11 @@ const getOrCreateRepoLocalManager = async (
     repoLocalManagerCache.delete(cacheKey);
   }
 
+  // The CodeGraph Studio command is configuration, not an ownership signal.
+  // Agent invocations must bind the managed runtime to the active conversation
+  // workspace even when the configured launcher is a wrapper (for example npx,
+  // node, a shim, or another compatible command). Runtime detect/start remains
+  // responsible for proving that the configured provider is actually usable.
   const manager = new ManagedCodeGraphProcessManager({
     command: context.draft.command,
     startArgs: [...context.draft.startArgs],
