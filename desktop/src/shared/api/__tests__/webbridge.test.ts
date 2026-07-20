@@ -59,6 +59,16 @@ describe("WebBridgeClient", () => {
     window.location.hash = "#/chat";
   });
 
+  it("connects automatically when the UI subscribes to bridge status", () => {
+    const client = new WebBridgeClient();
+
+    client.onStatus(() => {});
+
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(FakeWebSocket.instances[0].url).toBe("ws://127.0.0.1:3000/webbridge");
+    client.close();
+  });
+
   it("delegates AUTH_REQUIRED to the auth owner without navigating directly", async () => {
     const client = new WebBridgeClient();
     const statuses: unknown[] = [];
