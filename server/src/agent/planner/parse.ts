@@ -12,6 +12,20 @@ const sanitizePlannerJson = (value: string) =>
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
+const stripSyntheticNullObjectFields = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripSyntheticNullObjectFields(item));
+  }
+  if (!isPlainObject(value)) {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([key, child]) =>
+      child === null ? [] : [[key, stripSyntheticNullObjectFields(child)]],
+    ),
+  );
+};
+
 export type PlannerOutputParseResult = {
   action: AgentNextAction | null;
   sanitizedOutput: string;
@@ -185,7 +199,7 @@ const parseNextActionPlannerObject = (
         action: {
           type: "use_tool",
           toolId: parsed.toolId.trim(),
-          args: parsed.args,
+          args: stripSyntheticNullObjectFields(parsed.args) as Record<string, unknown>,
           reason,
         },
         sanitizedOutput: "",
