@@ -17,11 +17,11 @@ const INTERNAL_PROFILE_BLUEPRINTS: Array<{
     id: "workspace_lookup",
     title: "Workspace Lookup",
     description:
-      "Find, inspect, and read relevant workspace files and excerpts for the current task.",
+      "Find, search text, inspect, and read relevant workspace files and excerpts for the current task.",
     domain: "read",
-    tags: ["workspace", "read", "lookup", "locate", "open"],
+    tags: ["workspace", "read", "lookup", "locate", "search", "grep", "symbol", "reference", "open"],
     preferredToolId: "read_open",
-    supportingToolIds: ["read_discover", "read_open"],
+    supportingToolIds: ["grep", "read_discover", "read_open"],
   },
   {
     id: "codebase_understanding",
