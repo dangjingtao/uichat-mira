@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import { createManagedCodeGraphWorkspaceHash } from "../index.js";
 import { ManagedJsonRpcSession } from "../managed-jsonrpc-session.js";
-import { createManagedCodeGraphWorkspaceHash } from "../repo-local-process-manager.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturePath = path.join(__dirname, "fixtures", "fake-codegraph-provider.mjs");
