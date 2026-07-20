@@ -125,7 +125,25 @@ codegraph.exe
 
 Wrapper launchers such as `node`, shims, or other compatible commands are valid configuration inputs. Detect/start/health prove whether the provider actually works.
 
-### 2.4 `.codegraph` presence is not a generic provider blocker
+### 2.4 Fake provider retrieval output is explicit-only
+
+The fake CodeGraph provider is a protocol/runtime fixture. It must not fabricate plausible code-search candidates by default.
+
+Current contract:
+
+```text
+no FAKE_QUERY_CANDIDATES / FAKE_EXPLORE_CANDIDATES / FAKE_AFFECTED_CANDIDATES
+-> candidates: []
+
+explicit FAKE_*_CANDIDATES JSON
+-> return only those injected candidates
+```
+
+There are no built-in canned paths such as `server/src/agent/planner.ts`, `docs/architecture/README.md`, or other pseudo-search results.
+
+This distinction matters because a fake provider may validate process startup, MCP handshake, health, query transport, candidate normalization, and verification plumbing, but it must never look like it actually searched an arbitrary workspace unless the test explicitly injected matching fixture data.
+
+### 2.5 `.codegraph` presence is not a generic provider blocker
 
 A previous bug applied the repo-pollution guard to every configured provider. That meant a provider declaring external-index support could be rejected merely because the target workspace already contained a `.codegraph` directory.
 
@@ -136,7 +154,7 @@ Current rule:
 
 This is important for arbitrary Agent workspaces: the contents of a target project must not make an otherwise valid configured provider appear generically `provider_unavailable` for an unrelated guard.
 
-### 2.5 Studio smoke and Agent invocation are separate concerns
+### 2.6 Studio smoke and Agent invocation are separate concerns
 
 Studio actions (`detect`, `start`, `health`, Smoke Status, Smoke Query) validate the Studio debug runtime.
 
@@ -144,7 +162,7 @@ Agent invocation uses the same provider configuration but binds it to the conver
 
 A Studio `ready` status therefore means the configured provider/runtime passed Studio validation for the debug workspace. Agent E2E success is separately proven when `codebase_explore` on the active conversation workspace returns candidates that pass source verification.
 
-### 2.6 CodeGraph Evidence contract remains unchanged
+### 2.7 CodeGraph Evidence contract remains unchanged
 
 - Planner sees `codebase_explore`, not raw native CodeGraph tools.
 - Candidate output is not automatically Evidence.
@@ -154,7 +172,7 @@ A Studio `ready` status therefore means the configured provider/runtime passed S
 
 Do not redesign this contract as part of workspace/runtime fixes.
 
-### 2.7 Acceptance condition
+### 2.8 Acceptance condition
 
 CodeGraph integration is E2E-healthy for an Agent workspace when:
 
@@ -169,6 +187,8 @@ microapp provider config enabled
 ```
 
 A generic `provider_unavailable` with `verifiedChunkCount=0` is not a successful CodeGraph result and must not be treated as proof that the integration is connected.
+
+A fake provider returning zero candidates by default is also not proof of real CodeGraph retrieval. Real retrieval acceptance requires a real provider or an explicitly injected fixture candidate that matches source created by the test.
 
 ## 3. Planner structured output and live public narration
 
@@ -282,10 +302,11 @@ A Cloudflare-hosted protocol gateway was discussed as an architectural option, b
 5. Do not create one CodeGraph process per conversation when conversations share the same workspace/configuration.
 6. Do not treat an existing `.codegraph` directory as a generic blocker for providers that support external indexes.
 7. Do not special-case Fake vs Real provider ownership semantics.
-8. Do not expose raw CodeGraph native tools to Planner; keep `codebase_explore` as the controlled surface.
-9. Do not trust CodeGraph candidates as Evidence until workspace source verification succeeds.
-10. Do not execute partial Planner structured output.
-11. Do not claim CodeGraph E2E is fixed merely because Studio says `ready`; verify an Agent workspace call with real verified chunks.
+8. Do not let the fake CodeGraph provider return canned retrieval candidates when no test explicitly injected candidates.
+9. Do not expose raw CodeGraph native tools to Planner; keep `codebase_explore` as the controlled surface.
+10. Do not trust CodeGraph candidates as Evidence until workspace source verification succeeds.
+11. Do not execute partial Planner structured output.
+12. Do not claim CodeGraph E2E is fixed merely because Studio says `ready`; verify an Agent workspace call with real verified chunks.
 
 ## 6. Current validation notes
 
@@ -296,9 +317,11 @@ Implemented on `dev` in this working thread:
 - wrapper launchers allowed for Agent-owned CodeGraph managers.
 - Agent CodeGraph manager cache changed from thread-scoped to workspace-scoped reuse.
 - repo-pollution guard narrowed so externally indexed providers are not blocked merely by an existing `.codegraph` directory.
+- fake CodeGraph canned retrieval candidates removed; candidate results now require explicit `FAKE_*_CANDIDATES` injection.
+- regression coverage added for fake-provider empty-by-default retrieval and explicit candidate injection.
 - regression coverage added for wrapper launchers, cross-thread same-workspace reuse, and arbitrary workspaces containing `.codegraph` when external-index support is available.
 - Planner native structured output changed to stream public narration while preserving complete-decision validation.
 
 Still requires real-environment verification:
 
-> Run `codebase_explore` from a conversation whose workspace is independent of the Studio debug path and confirm the workspace-bound runtime reaches `ready`, returns expected CodeGraph candidates, and produces verified chunks.
+> Run `codebase_explore` from a conversation whose workspace is independent of the Studio debug path and confirm the workspace-bound runtime reaches `ready`, returns expected **real-provider** CodeGraph candidates, and produces verified chunks.
