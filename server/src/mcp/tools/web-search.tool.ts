@@ -7,20 +7,14 @@ import { mcpBadRequest, mcpInternalError } from "../core/errors.js";
 import { webSearchSettingsRepository } from "@/db/repositories/web-search-settings.repository.js";
 import { createRouteError } from "@/utils/route-errors.js";
 import { ErrorCodes } from "@/utils/response.js";
-import { hasNewsIntent, searchNewsHubCache } from "@/microapps/news-hub/news-search.adapter.js";
 
 export interface SearchResult {
   title: string;
   link: string;
   snippet: string;
-  metadata?: {
-    provider: "local_news_hub";
-    sourceKey: string;
-    sourceName: string;
-    publishedAt: string | null;
-    tags: string[];
-  };
 }
+
+type WebSearchProvider = "tavily" | "searxng";
 
 type NormalizedWebSearchResult = {
   query: string;
@@ -43,8 +37,6 @@ type WebSearchProviderError = {
   message: string;
   statusCode?: number;
 };
-
-type WebSearchProvider = "tavily" | "searxng";
 
 type TavilyResponse = {
   results?: Array<{ title?: string; url?: string; content?: string }>;
@@ -114,7 +106,6 @@ const normalizeQuery = (value: unknown) => {
   if (!query) {
     throw mcpBadRequest("query is required");
   }
-
   return query;
 };
 
@@ -122,15 +113,10 @@ const normalizeMaxResults = (value: unknown) => {
   if (value === undefined) {
     return DEFAULT_MAX_RESULTS;
   }
-
   if (typeof value !== "number" || !Number.isFinite(value)) {
     throw mcpBadRequest("maxResults must be a finite number");
   }
-
-  return Math.min(
-    MAX_MAX_RESULTS,
-    Math.max(MIN_MAX_RESULTS, Math.trunc(value)),
-  );
+  return Math.min(MAX_MAX_RESULTS, Math.max(MIN_MAX_RESULTS, Math.trunc(value)));
 };
 
 const resolveStoredWebSearchSettings = () => webSearchSettingsRepository.get();
@@ -177,11 +163,12 @@ const sortProviderPlans = (
       } satisfies WebSearchProviderPlan;
     })
     .filter((plan) =>
-      plan.provider === "tavily"
-        ? Boolean(tavilyApiKey)
-        : Boolean(searxngBaseUrl),
+      plan.provider === "tavily" ? Boolean(tavilyApiKey) : Boolean(searxngBaseUrl),
     )
-    .sort((left, right) => right.priority - left.priority || left.provider.localeCompare(right.provider));
+    .sort(
+      (left, right) =>
+        right.priority - left.priority || left.provider.localeCompare(right.provider),
+    );
 };
 
 const fetchTavilySearch = async (
@@ -215,7 +202,6 @@ const fetchTavilySearch = async (
   }
 
   const data = (await response.json()) as TavilyResponse;
-
   return (data.results ?? []).map((item) => ({
     title: item.title ?? "",
     link: item.url ?? "",
@@ -223,10 +209,7 @@ const fetchTavilySearch = async (
   }));
 };
 
-const buildSearxngSearchUrl = (input: {
-  baseUrl: string;
-  query: string;
-}) => {
+const buildSearxngSearchUrl = (input: { baseUrl: string; query: string }) => {
   const searchParams = new URLSearchParams({
     q: input.query,
     format: "json",
@@ -234,7 +217,6 @@ const buildSearxngSearchUrl = (input: {
     safesearch: "0",
     pageno: "1",
   });
-
   return `${input.baseUrl}/search?${searchParams.toString()}`;
 };
 
@@ -246,9 +228,7 @@ const fetchSearxngSearch = async (
 ): Promise<SearchResult[]> => {
   const response = await fetch(buildSearxngSearchUrl({ baseUrl, query }), {
     method: "GET",
-    headers: {
-      Accept: "application/json",
-    },
+    headers: { Accept: "application/json" },
     signal: withTimeoutSignal(),
   });
 
@@ -265,13 +245,11 @@ const fetchSearxngSearch = async (
   }
 
   const data = (await response.json()) as SearxngResponse;
-  const results = (data.results ?? [])
-    .slice(0, maxResults)
-    .map((item) => ({
-      title: item.title ?? "",
-      link: item.url ?? "",
-      snippet: item.content ?? "",
-    }));
+  const results = (data.results ?? []).slice(0, maxResults).map((item) => ({
+    title: item.title ?? "",
+    link: item.url ?? "",
+    snippet: item.content ?? "",
+  }));
 
   if (results.length === 0 && (data.unresponsive_engines?.length ?? 0) > 0) {
     const engineSummary = data.unresponsive_engines
@@ -288,50 +266,6 @@ const fetchSearxngSearch = async (
   }
 
   return results;
-};
-
-const selectWebSearchPlan = ({
-  args,
-  environment,
-  pushEvent,
-  trace,
-}: WebSearchExecutionContext) => {
-  const harnessEnvironment = assertWebSearchEnvironment(environment);
-  const planSpan = trace?.startSpan({
-    name: "Resolve web search provider plan",
-    kind: "strategy_selection",
-  });
-
-  const plans = sortProviderPlans(harnessEnvironment, {
-    args,
-    environment,
-    pushEvent,
-    trace,
-  });
-  const selected = plans[0];
-
-  if (!selected) {
-    planSpan?.end({
-      status: "failed",
-    });
-    throw mcpInternalError(
-      "No web search provider is available. Configure Tavily apiKey or SearXNG baseUrl.",
-    );
-  }
-
-  pushEvent({
-    type: "invocation:progress",
-    message: `Web search plan: ${selected.capabilityId}`,
-  });
-
-  planSpan?.end({
-    metadata: {
-      provider: selected.provider,
-      capabilityId: selected.capabilityId,
-    },
-  });
-
-  return selected;
 };
 
 const executeWebSearchPlan = async (input: {
@@ -363,7 +297,7 @@ export const webSearchTool: McpToolImplementation = {
     id: "web_search",
     title: "Web Search",
     description:
-      "Search the public web through a harness-selected provider such as Tavily or SearXNG.",
+      "Search the current public web through a harness-selected provider such as Tavily or SearXNG. This tool does not search the local News Hub cache; use news_search for collected local news sources.",
     domain: "web_search",
     source: "internal",
     mode: "sync",
@@ -376,16 +310,13 @@ export const webSearchTool: McpToolImplementation = {
       },
       additionalProperties: false,
     },
-    tags: ["search", "web"],
+    tags: ["search", "web", "public", "current", "realtime"],
     outputSchema: {
       type: "object",
       required: ["query", "provider", "capabilityId", "results"],
       properties: {
         query: { type: "string" },
-        provider: {
-          type: "string",
-          enum: ["tavily", "searxng", "local_news_hub"],
-        },
+        provider: { type: "string", enum: ["tavily", "searxng"] },
         capabilityId: { type: "string" },
         results: {
           type: "array",
@@ -396,7 +327,6 @@ export const webSearchTool: McpToolImplementation = {
               title: { type: "string" },
               link: { type: "string" },
               snippet: { type: "string" },
-              metadata: { type: "object" },
             },
           },
         },
@@ -411,52 +341,6 @@ export const webSearchTool: McpToolImplementation = {
   execute: async (context) => {
     const query = normalizeQuery(context.args.query);
     const maxResults = normalizeMaxResults(resolveDefaultMaxResults(context.args));
-
-    if (hasNewsIntent(query)) {
-      const newsSpan = context.trace.startSpan({
-        name: "Read local news cache",
-        kind: "result_normalization",
-      });
-      const news = await searchNewsHubCache({ query, maxResults });
-      newsSpan.end({
-        metadata: {
-          keywordCandidates: news.diagnostics.keyword,
-          vectorCandidates: news.diagnostics.vector,
-          fusedCandidates: news.diagnostics.fused,
-          rerankedCandidates: news.diagnostics.reranked,
-          embedding: news.diagnostics.embedding,
-          rerank: news.diagnostics.rerank,
-        },
-      });
-
-      if (news.results.length > 0) {
-        context.pushEvent({
-          type: "invocation:progress",
-          message: `Read ${news.results.length} cached news results`,
-        });
-        context.addArtifact({
-          kind: "search-results",
-          title: `Cached news results for ${query}`,
-          data: news.results,
-          metadata: {
-            query,
-            provider: "local_news_hub",
-            capabilityId: "local-news-hub",
-            resultCount: news.results.length,
-            retrieval: news.diagnostics,
-          },
-        });
-        return {
-          result: {
-            query,
-            provider: "local_news_hub" as const,
-            capabilityId: "local-news-hub",
-            results: news.results,
-          },
-        };
-      }
-    }
-
     const resolvedApiKey = resolveTavilyApiKey(context.environment);
     const resolvedBaseUrl = resolveSearxngBaseUrl(context.environment);
     const harnessEnvironment = assertWebSearchEnvironment(context.environment);
@@ -484,7 +368,6 @@ export const webSearchTool: McpToolImplementation = {
       type: "invocation:progress",
       message: `Web search plan: ${planSummary.capabilityId}`,
     });
-
     planningSpan.end({
       metadata: {
         provider: planSummary.provider,
@@ -497,13 +380,10 @@ export const webSearchTool: McpToolImplementation = {
         type: "invocation:progress",
         message: `Searching web with ${plan.provider}`,
       });
-
       const executionSpan = context.trace.startSpan({
         name: `Execute ${plan.provider} search`,
         kind: "command_execution",
-        metadata: {
-          provider: plan.provider,
-        },
+        metadata: { provider: plan.provider },
       });
 
       try {
@@ -514,12 +394,8 @@ export const webSearchTool: McpToolImplementation = {
           apiKey: resolvedApiKey,
           baseUrl: resolvedBaseUrl,
         });
-
         executionSpan.end({
-          metadata: {
-            provider: plan.provider,
-            resultCount: nextResults.length,
-          },
+          metadata: { provider: plan.provider, resultCount: nextResults.length },
         });
         results = nextResults;
         selectedProvider = plan.provider;
@@ -535,19 +411,12 @@ export const webSearchTool: McpToolImplementation = {
                 category: "unknown_error",
                 message: error instanceof Error ? error.message : String(error),
               });
-        const message = detail.message;
         executionSpan.end({
           status: "failed",
-          metadata: {
-            provider: plan.provider,
-            error: message,
-          },
+          metadata: { provider: plan.provider, error: detail.message },
         });
         providerErrors.push(detail);
-        executionAttempts.push({
-          ...plan,
-          reason: message,
-        });
+        executionAttempts.push({ ...plan, reason: detail.message });
       }
     }
 
@@ -584,8 +453,6 @@ export const webSearchTool: McpToolImplementation = {
       },
     });
 
-    return {
-      result: normalizedResult,
-    };
+    return { result: normalizedResult };
   },
 };
