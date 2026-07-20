@@ -59,13 +59,32 @@ describe("WebBridgeClient", () => {
     window.location.hash = "#/chat";
   });
 
-  it("connects automatically when the UI subscribes to bridge status", () => {
+  it("connects automatically when the UI subscribes and reflects extension registration", async () => {
     const client = new WebBridgeClient();
+    const statuses: unknown[] = [];
 
-    client.onStatus(() => {});
+    client.onStatus((status) => statuses.push(status));
 
     expect(FakeWebSocket.instances).toHaveLength(1);
-    expect(FakeWebSocket.instances[0].url).toBe("ws://127.0.0.1:3000/webbridge");
+    const socket = FakeWebSocket.instances[0];
+    expect(socket.url).toBe("ws://127.0.0.1:3000/webbridge");
+
+    socket.open();
+    socket.receive({
+      type: "hello_ack",
+      extensionConnected: true,
+      transport: "native",
+      capabilities: ["clip_rules"],
+      tools: [],
+    });
+
+    await Promise.resolve();
+    expect(statuses).toContainEqual(expect.objectContaining({
+      status: "connected",
+      extensionConnected: true,
+      transport: "native",
+      capabilities: ["clip_rules"],
+    }));
     client.close();
   });
 
