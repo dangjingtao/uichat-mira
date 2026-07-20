@@ -313,12 +313,12 @@ describe("tools api", () => {
     expect(result).toBe(sampleWorkspaceSelection);
   });
 
-  it("getMcpTools 获取 MCP 工具列表", async () => {
+  it("getMcpTools 获取 Agent 可见 MCP 工具列表", async () => {
     vi.mocked(get).mockResolvedValueOnce([sampleMcpTool]);
 
     const result = await getMcpTools();
 
-    expect(get).toHaveBeenCalledWith("/mcp/tools");
+    expect(get).toHaveBeenCalledWith("/mcp/tools?source=agent_intent");
     expect(result).toEqual([sampleMcpTool]);
   });
 
