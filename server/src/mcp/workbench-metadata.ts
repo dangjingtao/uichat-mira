@@ -15,7 +15,7 @@ const DOMAIN_METADATA: Record<string, Omit<NonNullable<McpToolDefinition["workbe
   },
   web_search: {
     domainLabel: "网络搜索",
-    domainDescription: "联网搜索、抓取结果与外部情报补充。",
+    domainDescription: "公网实时搜索与本地新闻源检索。",
     domainOrder: 30,
     icon: "globe",
   },
@@ -36,6 +36,7 @@ const DEFAULT_ARGS: Record<string, Record<string, unknown>> = {
   read_slice: { text: "" },
   edit_file: { path: "" },
   web_search: { query: "" },
+  news_search: { query: "" },
   terminal_session: { command: "" },
 };
 
