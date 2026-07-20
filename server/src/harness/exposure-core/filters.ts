@@ -22,22 +22,28 @@ export const isInternalEditCompatibilityTool = (definition: McpToolDefinition) =
 
 export const shouldIncludeDefinition = (
   definition: McpToolDefinition,
-  _input: HarnessExposurePolicyInput,
-) => !getDefinitionBlockReason(definition);
+  input: HarnessExposurePolicyInput,
+) => !getDefinitionBlockReason(definition, input);
 
 export const getDefinitionBlockReason = (
   definition: McpToolDefinition,
-  _input?: HarnessExposurePolicyInput,
+  input?: HarnessExposurePolicyInput,
 ): string | undefined => {
   // These are implementation/compatibility primitives, not public Agent tools.
-  // Harness does not otherwise infer task intent, sandbox suitability, domain
-  // safety, terminal eligibility, or relevance to hide registered public tools.
   if (isInternalIntentOnlyTool(definition)) {
     return "Internal read primitive is not part of the public Read contract.";
   }
 
   if (isInternalEditCompatibilityTool(definition)) {
     return "Legacy edit wrapper is not part of the public Edit contract.";
+  }
+
+  // External MCP exposure follows the user's explicit Agent Access switch only.
+  // Harness does not apply semantic, domain, sandbox, browser, or terminal heuristics.
+  if (definition.source === "external") {
+    if (!input?.allowExternal || !input.allowedExternalToolIds?.includes(definition.id)) {
+      return "External MCP capability is not explicitly enabled for Agent access.";
+    }
   }
 
   return undefined;
