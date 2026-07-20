@@ -2,11 +2,11 @@
 
 > Status: current truth for `dev` after the 2026-07-21 working thread.
 >
-> Scope: Agent-visible read/edit/search tools, CodeGraph runtime ownership, Planner structured-output narration, and provider compatibility boundaries.
+> Scope: Agent-visible tools, Harness exposure/ranking, approval boundaries, CodeGraph runtime ownership, Planner public narration, and provider compatibility.
 >
-> This file is the single source of truth for the scope above. When old task cards, screenshots, chat history, or older notes conflict with this document, this document wins until implementation and this file are updated together.
+> When older task cards, screenshots, chat history, or notes conflict with this file, this file wins until implementation and this file are updated together.
 
-## 1. Agent-visible tool contracts
+## 1. Public Agent tool surface
 
 ### 1.1 Read is exactly four cognitive actions
 
@@ -18,24 +18,14 @@ Read
 └─ codebase_explore
 ```
 
-Semantics:
+- `read_discover`: directory / filename / path discovery.
+- `grep`: deterministic literal, symbol, reference, config-key, and text search.
+- `read_open`: read a known file/target/range.
+- `codebase_explore`: architecture, dependency, call-flow, relationship, and impact exploration through the controlled CodeGraph wrapper.
 
-- `read_discover`: directory, filename, and path discovery. It does not silently become general full-text search.
-- `grep`: deterministic workspace text/pattern search for literals, symbols, references, imports, config keys, error strings, and similar exact search work.
-- `read_open`: read a known target, including line/range selection.
-- `codebase_explore`: code relationships, architecture, call/dependency paths, and impact analysis. Candidates must be re-read/verified against the active workspace before becoming Evidence.
+Legacy operations such as `read`, `read_list`, `read_locate`, `read_extract`, and `read_slice` may remain implementation primitives or compatibility surfaces. They are not public Planner tools.
 
-Older operations such as `read`, `read_list`, `read_locate`, `read_extract`, and `read_slice` may remain runtime primitives / compatibility surfaces, but they are not normal Planner-visible cognitive actions.
-
-Rule:
-
-> Planner-visible tools describe user-level cognitive actions. Lower-level providers and primitives are implementation details.
-
-### 1.2 `grep` belongs to Read
-
-`grep` is observation/search, not process execution. Its runtime may use ripgrep or another provider internally, but Planner should not need to shell out through `terminal_session` for normal code search.
-
-### 1.3 Edit is exactly four direct actions
+### 1.2 Edit is exactly four direct actions
 
 ```text
 Edit
@@ -45,22 +35,18 @@ Edit
 └─ move_path
 ```
 
-Semantics:
-
-- `write_file`: create/write full file content.
-- `replace_block`: perform one exact bounded text replacement in an existing file.
-- `delete_path`: delete a file or directory; directories require explicit recursive intent.
+- `write_file`: create a file or replace full file content with explicit overwrite semantics.
+- `replace_block`: exact bounded text replacement.
+- `delete_path`: delete a file or directory; recursive directory deletion must be explicit.
 - `move_path`: move or rename a file or directory.
 
-The older `edit_file(operation=...)` and `workspace_mutation(operation=...)` wrappers are not part of the registered core Agent tool surface.
+The older `edit_file(operation=...)` and `workspace_mutation(operation=...)` implementations may remain registered for persisted/legacy invocation compatibility, but they are not public Planner tools.
 
 Invariant:
 
-> Planner chooses the concrete edit action directly. Do not add an extra tool-selection layer merely to choose between write / replace / delete / move.
+> Planner chooses the concrete edit action directly. There is no public executable wrapper layer whose only job is to choose write / replace / delete / move.
 
-The internal `workspace_edit` capability profile may still group the four tools for recall/organization. Capability grouping is not an executable tool and must not replace Planner tool choice.
-
-### 1.4 Public web and local news are separate
+### 1.3 Network Search has two distinct tools
 
 ```text
 Network Search
@@ -68,160 +54,200 @@ Network Search
 └─ news_search
 ```
 
-- `web_search`: public internet search through Tavily / SearXNG behind Harness.
-- `news_search`: local News Hub retrieval over already-ingested news/cache data.
+- `web_search`: public internet search.
+- `news_search`: local News Hub / locally collected news-source retrieval.
+
+`web_search` must not silently inspect wording and route into local News Hub instead of performing the requested public search.
+
+### 1.4 Terminal is a full execution capability
+
+```text
+Terminal
+└─ terminal_session
+```
+
+`terminal_session` is the stable execution contract for shell, Node, Python, Git, package managers, scripts, PTY-backed persistent sessions, long processes, and process-tree ownership.
+
+It is not a generic integration container, but Harness must not hide it because a request initially looks like a Read, Browser, Search, or other task.
+
+### 1.5 Browser / Mail / future capability packs
+
+Browser Action, Mail, external MCP, Feishu, WeCom, and future capabilities extend what Mira can act on. They do not replace the core Read/Edit/Search/Terminal tool surface.
+
+A multi-step task may legitimately move between domains:
+
+```text
+Browser
+-> Read / transform
+-> Edit
+-> Terminal verification
+-> Browser assert
+```
+
+No task-domain heuristic may permanently isolate one domain from the others.
+
+## 2. Harness exposure and ranking contract
+
+### 2.1 Harness is not a shadow Planner
+
+Harness does not decide which task phase the Agent is in.
+
+Harness must not hide a registered public tool because of:
+
+- browser intent;
+- query keywords;
+- semantic relevance score;
+- task-domain guesses;
+- sandbox suitability guesses;
+- terminal-need guesses;
+- chat-vs-agent domain heuristics.
+
+The core rule is:
+
+> Registered public tools remain available to Planner. Harness only ranks when the public tool count exceeds the context budget.
+
+### 2.2 <= 20 public tools: expose all
+
+```text
+publicToolCount <= 20
+-> expose every public tool
+-> do not run candidate ranking
+-> caller topK / maxTools / minScore must not shrink the tool set
+```
+
+This means a normal Mira installation with roughly 15 core tools should give Planner the full tool set every turn.
+
+### 2.3 > 20 public tools: expose ranked top 20
+
+```text
+publicToolCount > 20
+-> rank available public tools for the current turn
+-> expose exactly the best available 20
+```
+
+Ranking may use embedding / rerank infrastructure, but ranking is only a context-budget mechanism.
+
+It is not an authorization mechanism.
+
+Rules:
+
+- no score threshold may reduce exposure below the top-20 budget;
+- `topK`, `maxTools`, or `minScore` supplied by older callers must not arbitrarily shrink the Planner-visible set;
+- if ranking infrastructure fails, expose a deterministic 20-tool fallback rather than applying extra policy gates;
+- Browser intent does not create a Browser-only tool set.
+
+### 2.4 The only availability distinctions before ranking
+
+Public-surface classification and explicit user enablement remain factual availability inputs, not semantic filtering:
+
+- internal Read primitives are not public tools;
+- legacy Edit wrappers are not public tools;
+- external MCP tools require the user's explicit Agent Access enablement.
+
+Harness must not add additional semantic/runtime policy blocks on top of those facts.
+
+## 3. Approval is execution-time policy, not exposure-time censorship
+
+Approval remains enabled.
+
+Current approval contract is invocation-bound:
+
+```text
+toolId + exact inputHash
+```
+
+Changing reviewed arguments such as command, cwd, env, timeout, or other inputs requires a new approval when the tool contract requires approval.
+
+Workspace-bound operations may also require approval when targeting outside the active workspace according to their execution contract.
 
 Invariant:
 
-> `web_search` must not inspect a query, infer news intent, query News Hub first, and silently short-circuit the public web request.
+> Approval may stop execution pending user consent. It must not be used by Harness as a reason to pretend the tool does not exist.
 
-Capability mapping:
+Core side-effect tools keep their declared approval metadata, including `terminal_session` and public Edit actions.
 
-```text
-Web Research  -> web_search
-News Research -> news_search
-```
+## 4. CodeGraph / `codebase_explore` runtime contract
 
-## 2. CodeGraph / `codebase_explore` runtime contract
+### 4.1 Microapp configuration is provider configuration, not workspace ownership
 
-### 2.1 Microapp configuration is provider configuration, not workspace ownership
-
-The CodeGraph microapp configures and validates a CodeGraph provider/runtime:
+The CodeGraph microapp owns provider/runtime configuration:
 
 ```text
-CodeGraph microapp
-├─ command
-├─ start args
-├─ version / telemetry probes
-├─ app-data root
-├─ timeout
-└─ enabled state
+command
+start args
+version / telemetry probes
+app-data root
+timeout
+enabled state
 ```
 
-The directory used by CodeGraph Studio is only a **debug/smoke workspace**.
+The Studio workspace is only a debug/smoke target.
 
 It is not:
 
-- an authorization boundary for Agent conversations;
+- an Agent authorization boundary;
 - the only directory CodeGraph may inspect;
 - a required match for the current conversation workspace.
 
-After the microapp is enabled/configured, any conversation with a resolved active workspace may invoke `codebase_explore` against that workspace.
-
-```text
-Studio debug workspace: D:\some\debug-project
-                         │
-                         └─ proves provider/config can run
-
-Conversation A workspace: D:\project-a -> CodeGraph runtime/index for project-a
-Conversation B workspace: D:\project-b -> CodeGraph runtime/index for project-b
-Conversation C workspace: D:\project-a -> reuses project-a runtime when config matches
-```
-
-### 2.2 Agent runtime ownership is workspace-scoped
+### 4.2 Agent runtime ownership is workspace-scoped
 
 For Agent calls:
 
 ```text
-workspaceRoot = Harness active conversation workspace
+workspaceRoot = current Harness conversation workspace
 provider config = active CodeGraph microapp config
 runtime cache ownership = workspace + provider/runtime fingerprint
 ```
 
 Threads do not own CodeGraph processes.
 
-Multiple conversations using the same workspace and same provider configuration should reuse one healthy workspace runtime/index rather than spawning one process per thread.
+Multiple conversations using the same workspace/configuration should reuse the same healthy workspace runtime/index.
 
 Different workspaces get distinct workspace-bound runtimes/indexes.
 
-Provider configuration changes invalidate the fingerprint and replace the cached runtime as needed.
+### 4.3 Fake and real providers use the same ownership rule
 
-### 2.3 Fake and real providers obey the same ownership rule
+A fake/test provider is just another provider implementation for protocol/runtime testing.
 
-A fake/test provider may remain available for Studio/runtime testing. It is simply another configured provider implementation.
+Agent ownership must not depend on the launcher basename being literally `codegraph`, `codegraph.cmd`, or `codegraph.exe`. Wrappers such as `node`, shims, or compatible launch commands are valid configuration inputs.
 
-The Agent ownership rule must not branch on whether the configured command basename is literally:
+### 4.4 Fake provider retrieval is explicit-only
 
-```text
-codegraph
-codegraph.cmd
-codegraph.exe
-```
-
-Wrapper launchers such as `node`, shims, or other compatible commands are valid configuration inputs. Detect/start/health prove whether the provider actually works.
-
-### 2.4 Fake provider retrieval output is explicit-only
-
-The fake CodeGraph provider is a protocol/runtime fixture. It must not fabricate plausible code-search candidates by default.
-
-Current contract:
+The fake CodeGraph provider must never fabricate plausible code-search results by default.
 
 ```text
 no FAKE_QUERY_CANDIDATES / FAKE_EXPLORE_CANDIDATES / FAKE_AFFECTED_CANDIDATES
 -> candidates: []
 
 explicit FAKE_*_CANDIDATES JSON
--> return only those injected candidates
+-> return only injected candidates
 ```
 
-There are no built-in canned paths such as `server/src/agent/planner.ts`, `docs/architecture/README.md`, or other pseudo-search results.
+There are no canned pseudo-results such as `server/src/agent/planner.ts` or other hard-coded fake search targets.
 
-This distinction matters because a fake provider may validate process startup, MCP handshake, health, query transport, candidate normalization, and verification plumbing, but it must never look like it actually searched an arbitrary workspace unless the test explicitly injected matching fixture data.
-
-### 2.5 `.codegraph` presence is not a generic provider blocker
-
-A previous bug applied the repo-pollution guard to every configured provider. That meant a provider declaring external-index support could be rejected merely because the target workspace already contained a `.codegraph` directory.
-
-Current rule:
-
-- If the provider reports external-index support as `ready`, an existing `.codegraph` directory is not by itself a runtime blocker.
-- The repo-local pollution/index guard is applied only when the provider explicitly cannot relocate its index and the declared repo-local `.codegraph` behavior is required.
-
-This is important for arbitrary Agent workspaces: the contents of a target project must not make an otherwise valid configured provider appear generically `provider_unavailable` for an unrelated guard.
-
-### 2.6 Studio smoke and Agent invocation are separate concerns
-
-Studio actions (`detect`, `start`, `health`, Smoke Status, Smoke Query) validate the Studio debug runtime.
-
-Agent invocation uses the same provider configuration but binds it to the conversation workspace.
-
-A Studio `ready` status therefore means the configured provider/runtime passed Studio validation for the debug workspace. Agent E2E success is separately proven when `codebase_explore` on the active conversation workspace returns candidates that pass source verification.
-
-### 2.7 CodeGraph Evidence contract remains unchanged
+### 4.5 CodeGraph Evidence contract
 
 - Planner sees `codebase_explore`, not raw native CodeGraph tools.
-- Candidate output is not automatically Evidence.
-- Candidate source must be re-read/verified from the active workspace.
-- Verified excerpts with paths/ranges may enter Evidence.
-- Fallback remains available when the provider truly cannot answer.
+- Provider candidates are not automatically Evidence.
+- Candidate source must be re-read/verified against the active workspace.
+- Only verified source excerpts may become workspace Evidence.
 
-Do not redesign this contract as part of workspace/runtime fixes.
-
-### 2.8 Acceptance condition
-
-CodeGraph integration is E2E-healthy for an Agent workspace when:
+Real E2E acceptance requires:
 
 ```text
-microapp provider config enabled
--> conversation resolves workspaceRoot
--> workspace-bound manager is created/reused
--> manager reaches ready
--> CodeGraph query/explore returns candidates
--> workspace verification succeeds
--> verifiedChunkCount > 0 for a query that should have matches
+workspace-bound runtime ready
+-> real provider query/explore returns expected candidates
+-> source verification succeeds
+-> verifiedChunkCount > 0 for a query that should match
 ```
 
-A generic `provider_unavailable` with `verifiedChunkCount=0` is not a successful CodeGraph result and must not be treated as proof that the integration is connected.
+Studio `ready` alone is not E2E proof.
 
-A fake provider returning zero candidates by default is also not proof of real CodeGraph retrieval. Real retrieval acceptance requires a real provider or an explicitly injected fixture candidate that matches source created by the test.
+## 5. Planner structured output and public live narration
 
-## 3. Planner structured output and live public narration
+Planner still calls AgentTaskModel to maintain the runtime plan and choose the next action.
 
-### 3.1 Planner still calls AgentTaskModel
-
-Planner invokes AgentTaskModel to maintain the runtime plan and select the next action.
-
-The structured decision envelope contains fields such as:
+The structured decision envelope includes fields such as:
 
 ```text
 type
@@ -233,27 +259,7 @@ question
 planPatch
 ```
 
-Execution waits for a complete parsed/validated decision.
-
-### 3.2 Live “inner OS” is public Planner narration
-
-The UI narration area should surface the model-generated public `reason` while the structured decision is streaming, for example:
-
-```text
-正在确认当前目标和剩余任务……
-正在检查 CodeGraph workspace 绑定……
-发现还需要确认 manager 创建路径……
-下一步准备定位相关实现。
-```
-
-This is user-facing working narration, not exposure of hidden private chain-of-thought.
-
-### 3.3 Structured output streams while execution remains gated
-
-Supported structured paths currently stream text deltas:
-
-- OpenAI-compatible: `stream: true` with `response_format: json_schema`.
-- Ollama: `stream: true` with schema format.
+Supported native structured paths stream JSON deltas so public `reason` narration can update while the decision is being generated.
 
 Flow:
 
@@ -263,48 +269,23 @@ AgentTaskModel
 -> accumulate raw decision text
 -> extract public reason from incomplete JSON
 -> plannerThought / plannerThoughtStreaming
--> UI updates narration
+-> UI updates public working narration
 -> complete JSON
 -> parse / normalize / validate
 -> execute next action
 ```
 
-Invariant:
+Partial structured output may update public narration, but partial decisions are never executable.
 
-> Partial structured output may update narration, but it is never executable as a partial decision.
+If native structured streaming fails before emitting any native delta, fallback may be used. If partial native JSON has already been emitted, a second independent JSON stream must not be concatenated onto it.
 
-### 3.4 Stream failure boundary
+Strict-schema synthetic `null` values for optional tool arguments are normalized back to omitted optional fields before Harness schema validation.
 
-- If native structured streaming fails before any native delta, text-JSON fallback may be used.
-- If native structured streaming already emitted partial JSON, do not concatenate a second independently generated JSON object. Propagate the failure instead.
+## 6. Provider compatibility boundary
 
-### 3.5 Strict-schema synthetic null normalization
+`openai-compatible` describes a broad protocol family. It does not prove behavioral identity for advanced features.
 
-Strict schemas may encode optional tool fields as nullable. Synthetic `null` object fields are removed before Harness validates tool args so optional fields recover normal omission semantics.
-
-Example:
-
-```json
-{
-  "pattern": "Planner",
-  "root": null,
-  "extensions": null
-}
-```
-
-normalizes to:
-
-```json
-{
-  "pattern": "Planner"
-}
-```
-
-## 4. Provider compatibility remains an open boundary
-
-`openai-compatible` describes a broad protocol family. It does not prove behavioral identity for every advanced feature.
-
-Do not assume identical vendor behavior for:
+Do not assume identical behavior for:
 
 - `response_format: json_schema`;
 - `strict: true`;
@@ -314,42 +295,48 @@ Do not assume identical vendor behavior for:
 - reasoning/thinking fields;
 - usage and finish-reason normalization.
 
-Provider-specific compatibility should be isolated behind provider/gateway contracts rather than leaking vendor conditionals through Planner/Harness.
+Provider-specific compatibility should remain isolated behind provider/gateway contracts rather than leaking vendor conditionals through Planner/Harness.
 
-A Cloudflare-hosted protocol gateway was discussed as an architectural option, but no such gateway is implemented by the changes documented here.
+A Cloudflare-hosted protocol gateway was discussed as an architectural option but is not implemented by the changes documented here.
 
-## 5. Do-not-regress rules
+## 7. Do-not-regress rules
 
-1. Keep the Planner-visible Read surface at four cognitive actions unless a proven semantic gap requires change.
-2. Keep the Planner-visible Edit surface at four direct actions: `write_file`, `replace_block`, `delete_path`, `move_path`.
-3. Do not reintroduce `edit_file(operation=...)` or `workspace_mutation(operation=...)` as public core tools.
-4. Do not make `read_discover` a hidden full-text search tool again.
-5. Do not route public web searches into local News Hub based on query wording.
-6. Do not use Studio debug workspace identity as an Agent CodeGraph authorization/availability condition.
-7. Do not create one CodeGraph process per conversation when conversations share the same workspace/configuration.
-8. Do not treat an existing `.codegraph` directory as a generic blocker for providers that support external indexes.
-9. Do not special-case Fake vs Real provider ownership semantics.
-10. Do not let the fake CodeGraph provider return canned retrieval candidates when no test explicitly injected candidates.
-11. Do not expose raw CodeGraph native tools to Planner; keep `codebase_explore` as the controlled surface.
-12. Do not trust CodeGraph candidates as Evidence until workspace source verification succeeds.
-13. Do not execute partial Planner structured output.
-14. Do not claim CodeGraph E2E is fixed merely because Studio says `ready`; verify an Agent workspace call with real verified chunks.
+1. Keep public Read at `read_discover`, `grep`, `read_open`, `codebase_explore`.
+2. Keep public Edit at `write_file`, `replace_block`, `delete_path`, `move_path`.
+3. Do not expose legacy Read primitives or Edit wrappers as normal Planner tools.
+4. Do not let Harness infer Browser/task intent and isolate tool domains.
+5. Do not let Harness hide registered public tools based on sandbox/domain/relevance heuristics.
+6. If public tools are <=20, expose all of them.
+7. If public tools are >20, ranking exists only to produce the Planner-visible top 20.
+8. Do not let caller `topK`, `maxTools`, or `minScore` arbitrarily shrink the <=20 set or reduce overflow exposure below the top-20 budget.
+9. Keep explicit external MCP Agent Access as the user-controlled availability switch.
+10. Keep approval at execution time; do not turn approval into exposure-time tool censorship.
+11. Do not route public web search into local News Hub based on wording.
+12. Do not use Studio debug workspace identity as an Agent CodeGraph availability condition.
+13. Do not create one CodeGraph process per conversation when conversations share the same workspace/configuration.
+14. Do not let fake CodeGraph return canned retrieval candidates without explicit fixture injection.
+15. Do not trust CodeGraph candidates as Evidence until workspace source verification succeeds.
+16. Do not expose raw CodeGraph native tools to Planner.
+17. Do not execute partial Planner structured output.
 
-## 6. Current validation notes
+## 8. Current validation notes
 
 Implemented on `dev` in this working thread:
 
-- `grep` added to Read and Read exposure reduced to four public actions.
-- Edit surface replaced with four direct tools: `write_file`, `replace_block`, `delete_path`, `move_path`; the old two wrapper tools are no longer registered as core tools.
+- Read converged to four public actions and `grep` added as a first-class Read action.
+- Edit converged to four direct public actions without a public operation-wrapper layer.
 - `web_search` and local `news_search` separated.
-- wrapper launchers allowed for Agent-owned CodeGraph managers.
-- Agent CodeGraph manager cache changed from thread-scoped to workspace-scoped reuse.
-- repo-pollution guard narrowed so externally indexed providers are not blocked merely by an existing `.codegraph` directory.
-- fake CodeGraph canned retrieval candidates removed; candidate results now require explicit `FAKE_*_CANDIDATES` injection.
-- regression coverage added for fake-provider empty-by-default retrieval and explicit candidate injection.
-- regression coverage added for wrapper launchers, cross-thread same-workspace reuse, and arbitrary workspaces containing `.codegraph` when external-index support is available.
-- Planner native structured output changed to stream public narration while preserving complete-decision validation.
+- Browser-intent hard isolation removed.
+- Harness semantic/domain/sandbox/terminal exposure gates removed for registered public tools.
+- Harness changed to expose all public tools at <=20 and rank/expose top 20 only when the set exceeds 20.
+- Explicit external MCP Agent Access remains the user-controlled external availability gate.
+- Execution-time approval remains unchanged.
+- CodeGraph Agent runtime ownership changed to workspace-scoped reuse independent of Studio debug workspace.
+- Fake CodeGraph canned candidates removed; fixture candidates require explicit injection.
+- Planner native structured output streams public narration while preserving complete-decision validation.
 
 Still requires real-environment verification:
 
-> Run `codebase_explore` from a conversation whose workspace is independent of the Studio debug path and confirm the workspace-bound runtime reaches `ready`, returns expected **real-provider** CodeGraph candidates, and produces verified chunks.
+> Run the previous Browser -> HTML -> save workflow and confirm Planner can naturally transition from Browser tools to `write_file` / `terminal_session` without the tool surface claiming those tools are unavailable.
+
+> Run `codebase_explore` from a conversation workspace independent of Studio debug path and confirm a real provider returns verified chunks.
