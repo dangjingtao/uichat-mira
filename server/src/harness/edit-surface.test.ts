@@ -35,8 +35,9 @@ describe("public edit tool surface", () => {
       source: "agent_intent",
       query: "创建文件，精确修改代码，删除旧目录并重命名文件",
     });
-    const exposedEditToolIds = decision.exposedDefinitions
-      .filter((definition) => definition.domain === "edit")
+    const exposedEditDefinitions = decision.exposedDefinitions
+      .filter((definition) => definition.domain === "edit");
+    const exposedEditToolIds = exposedEditDefinitions
       .map((definition) => definition.id)
       .sort();
 
@@ -48,5 +49,10 @@ describe("public edit tool surface", () => {
     ]);
     expect(exposedEditToolIds).not.toContain("edit_file");
     expect(exposedEditToolIds).not.toContain("workspace_mutation");
+
+    for (const definition of exposedEditDefinitions) {
+      const properties = (definition.inputSchema.properties ?? {}) as Record<string, unknown>;
+      expect(properties).not.toHaveProperty("operation");
+    }
   });
 });
