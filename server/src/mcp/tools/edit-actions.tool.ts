@@ -2,21 +2,20 @@ import type { McpToolImplementation } from "../core/definitions.js";
 import { editFileTool } from "./edit-file.tool.js";
 import { workspaceMutationTool } from "./workspace-mutation.tool.js";
 
-const delegateEditFile = (
+const delegateReplaceBlock = (
   context: Parameters<McpToolImplementation["execute"]>[0],
-  operation: "write_file" | "replace_block",
 ) =>
   editFileTool.execute({
     ...context,
     args: {
       ...context.args,
-      operation,
+      operation: "replace_block",
     },
   });
 
 const delegateWorkspaceMutation = (
   context: Parameters<McpToolImplementation["execute"]>[0],
-  operation: "delete" | "move",
+  operation: "write" | "delete" | "move",
 ) =>
   workspaceMutationTool.execute({
     ...context,
@@ -24,6 +23,7 @@ const delegateWorkspaceMutation = (
       operation,
       targetPath: context.args.path,
       destinationPath: context.args.destinationPath,
+      content: context.args.content,
       recursive: context.args.recursive,
       overwrite: context.args.overwrite,
       dryRun: context.args.dryRun,
@@ -34,7 +34,8 @@ export const writeFileTool: McpToolImplementation = {
   definition: {
     id: "write_file",
     title: "Write File",
-    description: "Create or replace the full contents of a workspace file.",
+    description:
+      "Create a workspace file or replace its full contents when overwrite=true is explicitly provided.",
     domain: "edit",
     source: "internal",
     mode: "sync",
@@ -44,10 +45,12 @@ export const writeFileTool: McpToolImplementation = {
       properties: {
         path: { type: "string" },
         content: { type: "string" },
+        overwrite: { type: "boolean" },
         dryRun: { type: "boolean" },
       },
+      additionalProperties: false,
     },
-    tags: ["edit", "write", "create", "file", "workspace"],
+    tags: ["edit", "write", "create", "overwrite", "file", "workspace"],
     capabilities: {
       sideEffect: "local-write",
       requiresApproval: true,
@@ -57,7 +60,7 @@ export const writeFileTool: McpToolImplementation = {
       },
     },
   },
-  execute: async (context) => delegateEditFile(context, "write_file"),
+  execute: async (context) => delegateWorkspaceMutation(context, "write"),
 };
 
 export const replaceBlockTool: McpToolImplementation = {
@@ -77,6 +80,7 @@ export const replaceBlockTool: McpToolImplementation = {
         newText: { type: "string" },
         dryRun: { type: "boolean" },
       },
+      additionalProperties: false,
     },
     tags: ["edit", "replace", "patch", "file", "workspace"],
     capabilities: {
@@ -88,14 +92,14 @@ export const replaceBlockTool: McpToolImplementation = {
       },
     },
   },
-  execute: async (context) => delegateEditFile(context, "replace_block"),
+  execute: async (context) => delegateReplaceBlock(context),
 };
 
 export const deletePathTool: McpToolImplementation = {
   definition: {
     id: "delete_path",
     title: "Delete Path",
-    description: "Delete a workspace file or directory.",
+    description: "Delete a workspace file or directory; directories require recursive=true.",
     domain: "edit",
     source: "internal",
     mode: "sync",
@@ -107,6 +111,7 @@ export const deletePathTool: McpToolImplementation = {
         recursive: { type: "boolean" },
         dryRun: { type: "boolean" },
       },
+      additionalProperties: false,
     },
     tags: ["edit", "delete", "remove", "file", "directory", "workspace"],
     capabilities: {
@@ -138,6 +143,7 @@ export const movePathTool: McpToolImplementation = {
         overwrite: { type: "boolean" },
         dryRun: { type: "boolean" },
       },
+      additionalProperties: false,
     },
     tags: ["edit", "move", "rename", "file", "directory", "workspace"],
     capabilities: {
