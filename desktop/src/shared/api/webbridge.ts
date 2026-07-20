@@ -108,6 +108,9 @@ export class WebBridgeClient {
 
   onStatus(listener: (status: WebBridgeStatus) => void) {
     this.statusListeners.add(listener);
+    if (this.statusListeners.size === 1 && this.manuallyClosed && !this.authRequired) {
+      void this.connect().catch(() => {});
+    }
     return () => this.statusListeners.delete(listener);
   }
 
