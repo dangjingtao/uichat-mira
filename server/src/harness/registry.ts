@@ -15,14 +15,6 @@ import {
   unregisterTool,
 } from "../mcp/core/registry.js";
 
-const INTERNAL_READ_PRIMITIVE_TOOL_IDS = new Set([
-  "read",
-  "read_list",
-  "read_locate",
-  "read_extract",
-  "read_slice",
-]);
-
 export const registerCapability = (capability: McpToolImplementation) =>
   registerTool(capability);
 
@@ -39,11 +31,7 @@ export const listHarnessToolDefinitions = (): McpToolDefinition[] =>
   listToolDefinitions();
 
 export const listInternalCapabilityDefinitions = (): McpToolDefinition[] =>
-  listToolDefinitions().filter(
-    (definition) =>
-      definition.source === "internal" &&
-      !INTERNAL_READ_PRIMITIVE_TOOL_IDS.has(definition.id),
-  );
+  listToolDefinitions().filter((definition) => definition.source === "internal");
 
 export const listReadableResourceDefinitions = (): McpResourceDefinition[] =>
   listResourceDefinitions();
