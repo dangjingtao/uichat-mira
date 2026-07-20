@@ -78,42 +78,6 @@ const parseCandidates = (rawValue, fallbackKind) => {
   }
 };
 
-const defaultCommandCandidates = {
-  query: [
-    {
-      path: "server/src/agent/planner.ts",
-      startLine: 10,
-      endLine: 18,
-      kind: "symbol-definition",
-      summary: "planner entry point",
-      snippet: "export function planner() {\n  return 'planner';\n}",
-      score: 0.92,
-    },
-  ],
-  explore: [
-    {
-      path: "docs/architecture/README.md",
-      startLine: 20,
-      endLine: 35,
-      kind: "text-hit",
-      summary: "architecture overview",
-      snippet: "renderer -> preload -> backend",
-      score: 0.76,
-    },
-  ],
-  affected: [
-    {
-      path: "server/src/mcp/router.ts",
-      startLine: 42,
-      endLine: 58,
-      kind: "impact-edge",
-      summary: "MCP route impact",
-      snippet: "registerRoute('mcp')",
-      score: 0.83,
-    },
-  ],
-};
-
 const writeFrame = (payload) => {
   process.stdout.write(`${JSON.stringify(payload)}\n`);
 };
@@ -342,7 +306,9 @@ process.stdin.on("data", (chunk) => {
         jsonrpc: "2.0",
         id: message.id,
         result: {
-          candidates: candidates.length > 0 ? candidates : defaultCommandCandidates[command],
+          // Fake providers never invent retrieval results. Tests that need
+          // candidates must inject them explicitly through FAKE_*_CANDIDATES.
+          candidates,
         },
       });
       continue;
