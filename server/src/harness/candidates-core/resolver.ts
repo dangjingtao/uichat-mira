@@ -7,27 +7,35 @@ import {
   exposeAllHarnessToolCandidates,
 } from "./expand-tool-candidates.js";
 import {
-  DEFAULT_MIN_SCORE,
-  DEFAULT_TOP_K,
   TOOL_EXPOSURE_RECALL_THRESHOLD,
   cosineSimilarity,
 } from "./scoring.js";
 import { rerankHarnessCapabilityMatches } from "./rerank.js";
 import type {
+  HarnessToolCandidate,
   HarnessToolExposure,
   ResolveHarnessToolCandidatesForTurnInput,
   ResolveHarnessToolCandidatesForTurnResult,
   ResolvedHarnessCapabilityMatch,
 } from "./types.js";
 
+const MAX_PLANNER_TOOLS = TOOL_EXPOSURE_RECALL_THRESHOLD;
+
+const dedupeCandidates = (candidates: HarnessToolCandidate[]) => {
+  const seen = new Set<string>();
+  return candidates.filter((candidate) => {
+    if (seen.has(candidate.toolId)) {
+      return false;
+    }
+    seen.add(candidate.toolId);
+    return true;
+  });
+};
+
 export const resolveHarnessToolCandidatesForTurn = async (
   input: ResolveHarnessToolCandidatesForTurnInput,
 ): Promise<ResolveHarnessToolCandidatesForTurnResult> => {
   const source = input.source ?? "agent_intent";
-  const topK = Math.max(1, input.topK ?? DEFAULT_TOP_K);
-  const minScore = input.minScore ?? DEFAULT_MIN_SCORE;
-  const maxTools =
-    input.maxTools === undefined ? Number.POSITIVE_INFINITY : Math.max(1, input.maxTools);
 
   const exposureDecision = resolveHarnessToolExposure({
     source,
@@ -37,12 +45,11 @@ export const resolveHarnessToolCandidatesForTurn = async (
     sandboxProfiles: input.sandboxProfiles,
   });
 
-  // Harness exposure only answers whether a tool is eligible to be used.
-  // It must not infer a task phase and remove otherwise-eligible core tools.
-  // In particular, browser intent must not isolate Browser tools from Edit,
-  // Terminal, Read, or Search during a multi-step Agent run.
+  // Registered public tools are available to Planner. Harness does not infer
+  // task phases, domains, browser intent, sandbox suitability, terminal need,
+  // or semantic relevance to hide them. Ranking is only used when the public
+  // tool set exceeds the 20-tool context budget.
   const visibleDefinitions = exposureDecision.exposedDefinitions;
-  const profiles = resolveHarnessCapabilityProfiles(visibleDefinitions);
   const initialToolExposure: HarnessToolExposure = {
     exposedToolIds: visibleDefinitions.map((definition) => definition.id),
     exposedDefinitions: visibleDefinitions,
@@ -51,9 +58,9 @@ export const resolveHarnessToolCandidatesForTurn = async (
     blockedCapabilityReasons: exposureDecision.blockedCapabilityReasons,
   };
 
-  if (visibleDefinitions.length <= TOOL_EXPOSURE_RECALL_THRESHOLD) {
+  if (visibleDefinitions.length <= MAX_PLANNER_TOOLS) {
     const exposureReason =
-      "All eligible tools are exposed because the eligible set is at most 20 tools.";
+      "All public tools are exposed because the tool set is at most 20 tools.";
     const toolCandidates = exposeAllHarnessToolCandidates({
       definitions: visibleDefinitions,
       reason: exposureReason,
@@ -69,23 +76,32 @@ export const resolveHarnessToolCandidatesForTurn = async (
     };
   }
 
-  if (!input.query.trim() || profiles.length === 0) {
+  const profiles = resolveHarnessCapabilityProfiles(visibleDefinitions);
+  const fallbackTop20 = (reason: string, retrievalError?: string) => {
+    const selectedDefinitions = visibleDefinitions.slice(0, MAX_PLANNER_TOOLS);
     const toolCandidates = exposeAllHarnessToolCandidates({
-      definitions: visibleDefinitions,
-      reason: "Candidate recall was not run; all eligible tools remain visible as the conservative fallback.",
+      definitions: selectedDefinitions,
+      reason,
     });
     return {
       query: input.query,
       source,
       toolCandidates,
       toolExposure: {
-        ...initialToolExposure,
-        reason: [
-          ...initialToolExposure.reason,
-          "Candidate recall was not run; all eligible tools remain visible as the conservative fallback.",
-        ],
+        exposedToolIds: selectedDefinitions.map((definition) => definition.id),
+        exposedDefinitions: selectedDefinitions,
+        reason: [...initialToolExposure.reason, reason],
+        blockedCapabilityIds: initialToolExposure.blockedCapabilityIds,
+        blockedCapabilityReasons: initialToolExposure.blockedCapabilityReasons,
       },
-    };
+      ...(retrievalError ? { retrievalError } : {}),
+    } satisfies ResolveHarnessToolCandidatesForTurnResult;
+  };
+
+  if (!input.query.trim() || profiles.length === 0) {
+    return fallbackTop20(
+      "Tool set exceeds 20; ranking input is unavailable, so Harness exposes a deterministic first 20 without applying any additional policy filter.",
+    );
   }
 
   const documents = toCapabilityIntentDocuments(profiles);
@@ -108,23 +124,10 @@ export const resolveHarnessToolCandidatesForTurn = async (
   }
 
   if (retrievalError) {
-    const fallbackReason =
-      "Candidate recall failed; all eligible tools remain visible as the conservative fallback.";
-    const toolCandidates = exposeAllHarnessToolCandidates({
-      definitions: visibleDefinitions,
-      reason: fallbackReason,
-    });
-    return {
-      query: input.query,
-      source,
-      toolCandidates,
-      toolExposure: {
-        ...initialToolExposure,
-        reason: [...initialToolExposure.reason, fallbackReason],
-        blockedCapabilityReasons: exposureDecision.blockedCapabilityReasons,
-      },
+    return fallbackTop20(
+      "Tool set exceeds 20 and ranking failed; Harness exposes a deterministic first 20 rather than blocking tools by policy.",
       retrievalError,
-    };
+    );
   }
 
   let matches: ResolvedHarnessCapabilityMatch[] = documents
@@ -139,26 +142,20 @@ export const resolveHarnessToolCandidatesForTurn = async (
         queryEmbedding && documentEmbedding
           ? cosineSimilarity(queryEmbedding, documentEmbedding)
           : 0;
-      const score = queryEmbedding && documentEmbedding ? embeddingScore : 0;
 
       return {
         capabilityId: profile.id,
         title: profile.title,
-        score,
+        score: embeddingScore,
         embeddingScore,
         ruleScore: 0,
         rerankScore: 0,
-        finalScore: score,
+        finalScore: embeddingScore,
         candidateToolIds: profile.supportingToolIds,
         preferredToolId: profile.preferredToolId,
       } satisfies ResolvedHarnessCapabilityMatch;
     })
-    .filter(
-      (
-        match,
-      ): match is NonNullable<typeof match> =>
-        match !== null && match.finalScore >= minScore,
-    )
+    .filter((match): match is NonNullable<typeof match> => match !== null)
     .sort((left, right) => right.finalScore - left.finalScore);
 
   let rerankModel:
@@ -178,52 +175,43 @@ export const resolveHarnessToolCandidatesForTurn = async (
       matches = reranked.matches;
       rerankModel = reranked.rerankModel;
     } catch {
-      // Keep pre-rerank order when local rerank is unavailable.
+      // Embedding order remains a valid ranking fallback.
     }
   }
 
-  if (matches.length === 0) {
-    const fallbackReason =
-      "Candidate recall returned no matches above the score threshold; all eligible tools remain visible as the conservative fallback.";
-    const toolCandidates = exposeAllHarnessToolCandidates({
+  const rankedToolCandidates = dedupeCandidates(
+    expandHarnessToolCandidates({
+      matches,
       definitions: visibleDefinitions,
-      reason: fallbackReason,
-    });
-    return {
-      query: input.query,
-      source,
-      toolCandidates,
-      toolExposure: {
-        ...initialToolExposure,
-        reason: [...initialToolExposure.reason, fallbackReason],
-      },
-      ...(embeddingResult
-        ? {
-            retrievalModel: {
-              provider: "local",
-              model: embeddingResult.embeddingModel,
-              modelConfigId: embeddingResult.embeddingModelConfigId,
-            },
-          }
-        : {}),
-      ...(rerankModel ? { rerankModel } : {}),
-    };
-  }
+    }).sort((left, right) => right.finalScore - left.finalScore),
+  );
 
-  const rankedMatches = matches.slice(0, topK);
-  const rankedToolCandidates = expandHarnessToolCandidates({
-    matches: rankedMatches,
-    definitions: visibleDefinitions,
-  }).sort((left, right) => right.finalScore - left.finalScore);
-  const toolCandidates = rankedToolCandidates.slice(0, maxTools);
-  const definitionMap = new Map(visibleDefinitions.map((definition) => [definition.id, definition]));
+  // Every public definition has a fallback capability profile, but fill any
+  // unexpected gap deterministically so overflow exposure is always exactly
+  // the best available 20 rather than silently shrinking Planner's tool set.
+  const rankedIds = new Set(rankedToolCandidates.map((candidate) => candidate.toolId));
+  const fillCandidates = exposeAllHarnessToolCandidates({
+    definitions: visibleDefinitions.filter((definition) => !rankedIds.has(definition.id)),
+    reason: "Unranked public tool retained as deterministic overflow fallback.",
+  });
+  const toolCandidates = [...rankedToolCandidates, ...fillCandidates].slice(
+    0,
+    MAX_PLANNER_TOOLS,
+  );
+
+  const definitionMap = new Map(
+    visibleDefinitions.map((definition) => [definition.id, definition]),
+  );
   const exposedDefinitions = toolCandidates
     .map((candidate) => definitionMap.get(candidate.toolId))
     .filter((definition): definition is NonNullable<typeof definition> => Boolean(definition));
+
+  const rankingReason =
+    "Public tool set exceeds 20; Harness ranks the available tools for this turn and exposes the top 20. No additional semantic or runtime policy filtering is applied here.";
   const toolExposure: HarnessToolExposure = {
     exposedToolIds: exposedDefinitions.map((definition) => definition.id),
     exposedDefinitions,
-    reason: exposureDecision.reason,
+    reason: [...exposureDecision.reason, rankingReason],
     blockedCapabilityIds: exposureDecision.blockedCapabilityIds,
     blockedCapabilityReasons: exposureDecision.blockedCapabilityReasons,
   };
@@ -233,7 +221,6 @@ export const resolveHarnessToolCandidatesForTurn = async (
     source,
     toolCandidates,
     toolExposure,
-    ...(retrievalError ? { retrievalError } : {}),
     ...(embeddingResult
       ? {
           retrievalModel: {
