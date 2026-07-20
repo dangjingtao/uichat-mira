@@ -58,7 +58,7 @@ const INTERNAL_PROFILE_BLUEPRINTS: Array<{
     title: "Web Research",
     description: "Search current public web information and summarize the findings.",
     domain: "web_search",
-    tags: ["web", "search", "current", "realtime", "research"],
+    tags: ["web", "search", "public", "current", "realtime", "research", "internet"],
     preferredToolId: "web_search",
     supportingToolIds: ["web_search"],
   },
@@ -74,11 +74,11 @@ const INTERNAL_PROFILE_BLUEPRINTS: Array<{
   {
     id: "news_research",
     title: "News Research",
-    description: "Search configured local news sources and public web results.",
+    description: "Search the locally collected News Hub cache from configured news feeds and sources.",
     domain: "web_search",
-    tags: ["news", "资讯", "新闻", "latest", "recent"],
-    preferredToolId: "web_search",
-    supportingToolIds: ["web_search"],
+    tags: ["news", "local-news", "news-hub", "feed", "rss", "headline", "资讯", "新闻", "订阅源"],
+    preferredToolId: "news_search",
+    supportingToolIds: ["news_search"],
   },
   {
     id: "mail_reading",
@@ -123,7 +123,6 @@ export const resolveHarnessCapabilityProfiles = (
 ): HarnessCapabilityProfile[] => {
   const definitionMap = new Map(definitions.map((definition) => [definition.id, definition]));
   const consumed = new Set<string>();
-
   const profiles: HarnessCapabilityProfile[] = [];
 
   for (const blueprint of INTERNAL_PROFILE_BLUEPRINTS) {
