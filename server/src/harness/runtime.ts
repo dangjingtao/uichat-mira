@@ -4,6 +4,7 @@ import {
 } from "../mcp/managed-codegraph/codebase-explore.tool.js";
 import { editFileTool } from "../mcp/tools/edit-file.tool.js";
 import { grepTool } from "../mcp/tools/grep.tool.js";
+import { newsSearchTool } from "../mcp/tools/news-search.tool.js";
 import { readExtractTool } from "../mcp/tools/read-extract.tool.js";
 import { readListTool } from "../mcp/tools/read-list.tool.js";
 import { readLocateTool } from "../mcp/tools/read-locate.tool.js";
@@ -42,6 +43,7 @@ export const initializeHarnessRuntime = () => {
   registerCapability(editFileTool);
   registerCapability(workspaceMutationTool);
   registerCapability(webSearchTool);
+  registerCapability(newsSearchTool);
   registerCapability(mailQueryTool);
   registerCapability(terminalSessionTool);
   reconcileCodeGraphHarnessCapability();
