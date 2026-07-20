@@ -9,6 +9,10 @@ const INTERNAL_READ_PRIMITIVE_TOOL_IDS = new Set([
   "read_extract",
   "read_slice",
 ]);
+const INTERNAL_EDIT_COMPAT_TOOL_IDS = new Set([
+  "edit_file",
+  "workspace_mutation",
+]);
 
 const COMPUTER_USE_TOOL_IDS = new Set([
   "browser_observe",
@@ -17,7 +21,9 @@ const COMPUTER_USE_TOOL_IDS = new Set([
 ]);
 
 export const isInternalIntentOnlyTool = (definition: McpToolDefinition) =>
-  definition.source === "internal" && INTERNAL_READ_PRIMITIVE_TOOL_IDS.has(definition.id);
+  definition.source === "internal" &&
+  (INTERNAL_READ_PRIMITIVE_TOOL_IDS.has(definition.id) ||
+    INTERNAL_EDIT_COMPAT_TOOL_IDS.has(definition.id));
 
 export const isSafeChatSurfaceTool = (definition: McpToolDefinition) =>
   SAFE_CHAT_DOMAINS.has(definition.domain);
@@ -97,7 +103,7 @@ export const getDefinitionBlockReason = (
   }
 
   if (input.source === "agent_intent" && isInternalIntentOnlyTool(definition)) {
-    return "Internal read primitive is hidden behind the public read contract.";
+    return "Internal compatibility primitive is hidden behind the public tool contract.";
   }
 
   return undefined;
