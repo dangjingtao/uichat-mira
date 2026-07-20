@@ -62,10 +62,6 @@ export const getDefinitionBlockReason = (
   definition: McpToolDefinition,
   input: HarnessExposurePolicyInput,
 ): string | undefined => {
-  if (isInternalIntentOnlyTool(definition)) {
-    return "Internal read primitive is hidden behind the public read contract.";
-  }
-
   if (input.source === "chat_surface" && definition.source === "external") {
     return "External MCP capabilities are hidden from chat_surface.";
   }
@@ -98,6 +94,10 @@ export const getDefinitionBlockReason = (
 
   if (!shouldExposeTerminalForAgentIntent(definition, input)) {
     return "Terminal capability is not eligible for agent_intent exposure.";
+  }
+
+  if (input.source === "agent_intent" && isInternalIntentOnlyTool(definition)) {
+    return "Internal read primitive is hidden behind the public read contract.";
   }
 
   return undefined;
