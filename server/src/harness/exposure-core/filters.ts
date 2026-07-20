@@ -21,9 +21,10 @@ const COMPUTER_USE_TOOL_IDS = new Set([
 ]);
 
 export const isInternalIntentOnlyTool = (definition: McpToolDefinition) =>
-  definition.source === "internal" &&
-  (INTERNAL_READ_PRIMITIVE_TOOL_IDS.has(definition.id) ||
-    INTERNAL_EDIT_COMPAT_TOOL_IDS.has(definition.id));
+  definition.source === "internal" && INTERNAL_READ_PRIMITIVE_TOOL_IDS.has(definition.id);
+
+export const isInternalEditCompatibilityTool = (definition: McpToolDefinition) =>
+  definition.source === "internal" && INTERNAL_EDIT_COMPAT_TOOL_IDS.has(definition.id);
 
 export const isSafeChatSurfaceTool = (definition: McpToolDefinition) =>
   SAFE_CHAT_DOMAINS.has(definition.domain);
@@ -103,7 +104,11 @@ export const getDefinitionBlockReason = (
   }
 
   if (input.source === "agent_intent" && isInternalIntentOnlyTool(definition)) {
-    return "Internal compatibility primitive is hidden behind the public tool contract.";
+    return "Internal read primitive is hidden behind the public read contract.";
+  }
+
+  if (input.source === "agent_intent" && isInternalEditCompatibilityTool(definition)) {
+    return "Legacy edit wrapper is hidden behind the four-action public edit contract.";
   }
 
   return undefined;
