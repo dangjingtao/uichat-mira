@@ -42,6 +42,18 @@ const INTERNAL_PROFILE_BLUEPRINTS: Array<{
     supportingToolIds: ["codebase_explore"],
   },
   {
+    id: "workspace_edit",
+    title: "Workspace Edit",
+    description: "Create, patch, delete, move, or rename workspace paths through direct edit tools.",
+    domain: "edit",
+    tags: ["workspace", "edit", "write", "replace", "delete", "move", "rename"],
+    preferredToolId: "write_file",
+    supportingToolIds: ["write_file", "replace_block", "delete_path", "move_path"],
+    actionProfileId: "edit_create_file",
+    actionProfileTitle: "Edit Create File",
+    actionProfileDescription: "Create a new workspace file with write_file.",
+  },
+  {
     id: "web_research",
     title: "Web Research",
     description: "Search current public web information and summarize the findings.",
