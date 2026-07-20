@@ -217,10 +217,10 @@ export default function JianXingPage() {
   };
 
   useEffect(() => {
-    if (workspaceTab === "clipper" && connected && extensionConnected) void loadClipRules();
-    // 连接状态变化时重新读取，避免显示断开前的旧规则。
+    if (connected && extensionConnected) void loadClipRules();
+    // 扩展上线后立即从插件读取规则；插件是运行时规则唯一真源。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceTab, connected, extensionConnected]);
+  }, [connected, extensionConnected]);
 
   const selectRuleHost = (host: string) => {
     const normalizedHost = normalizeHost(host);
@@ -634,14 +634,14 @@ export default function JianXingPage() {
                 disabled={rulesLoading}
               >
                 <RefreshCw className={`h-4 w-4 ${rulesLoading ? "animate-spin" : ""}`} />
-                {rulesLoading ? "同步中…" : "同步规则"}
+                {rulesLoading ? "刷新中…" : "刷新规则"}
               </Button>
               <Button size="sm" onClick={openNewRuleDrawer}>
                 <Plus className="h-4 w-4" />新增规则
               </Button>
             </div>
           </div>
-          {rulesError ? <Alert variant="danger" title="规则同步失败">{rulesError}</Alert> : null}
+          {rulesError ? <Alert variant="danger" title="规则刷新失败">{rulesError}</Alert> : null}
           {rulesMessage ? <Alert variant="success" title="规则状态">{rulesMessage}</Alert> : null}
           <div className="min-h-0 flex-1 overflow-hidden rounded-ui-control border border-border">
             <Table
@@ -699,7 +699,7 @@ export default function JianXingPage() {
               <Button variant="ghost" size="sm" onClick={openExtensionAuthorizationPage}><ExternalLink className="h-4 w-4" />打开授权页</Button>
             </> : null}
           </div>
-          <p className="text-xs leading-5 text-text-tertiary">授权码 5 分钟内有效且只能使用一次。生成后切到 Chrome 的触界授权页，粘贴并点击“授权并连接”。授权成功后回到这里点击“连接”。</p>
+          <p className="text-xs leading-5 text-text-tertiary">授权码 5 分钟内有效且只能使用一次。生成后切到 Chrome 的触界授权页，粘贴并点击“授权并连接”；授权成功后扩展会自动连接 Mira，无需再手动点击连接。</p>
         </div>
       </Modal>
     </MicroAppPageLayout>
