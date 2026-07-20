@@ -2,7 +2,12 @@ import { workspaceResource } from "../mcp/resources/workspace-resource.js";
 import {
   codebaseExploreTool,
 } from "../mcp/managed-codegraph/codebase-explore.tool.js";
-import { editFileTool } from "../mcp/tools/edit-file.tool.js";
+import {
+  deletePathTool,
+  movePathTool,
+  replaceBlockTool,
+  writeFileTool,
+} from "../mcp/tools/edit-actions.tool.js";
 import { grepTool } from "../mcp/tools/grep.tool.js";
 import { newsSearchTool } from "../mcp/tools/news-search.tool.js";
 import { readExtractTool } from "../mcp/tools/read-extract.tool.js";
@@ -15,7 +20,6 @@ import { readTool } from "../mcp/tools/read.tool.js";
 import { terminalSessionTool } from "../mcp/tools/terminal-session.tool.js";
 import { webSearchTool } from "../mcp/tools/web-search.tool.js";
 import { mailQueryTool } from "../mcp/tools/mail-query.tool.js";
-import { workspaceMutationTool } from "../mcp/tools/workspace-mutation.tool.js";
 import {
   initializeExternalMcpDatabase,
   registerAllExternalMcpCapabilities,
@@ -40,8 +44,10 @@ export const initializeHarnessRuntime = () => {
   registerCapability(readExtractTool);
   registerCapability(readSliceTool);
   registerCapability(readTool);
-  registerCapability(editFileTool);
-  registerCapability(workspaceMutationTool);
+  registerCapability(writeFileTool);
+  registerCapability(replaceBlockTool);
+  registerCapability(deletePathTool);
+  registerCapability(movePathTool);
   registerCapability(webSearchTool);
   registerCapability(newsSearchTool);
   registerCapability(mailQueryTool);
