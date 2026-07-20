@@ -8,6 +8,7 @@ import {
   replaceBlockTool,
   writeFileTool,
 } from "../mcp/tools/edit-actions.tool.js";
+import { editFileTool } from "../mcp/tools/edit-file.tool.js";
 import { grepTool } from "../mcp/tools/grep.tool.js";
 import { newsSearchTool } from "../mcp/tools/news-search.tool.js";
 import { readExtractTool } from "../mcp/tools/read-extract.tool.js";
@@ -20,6 +21,7 @@ import { readTool } from "../mcp/tools/read.tool.js";
 import { terminalSessionTool } from "../mcp/tools/terminal-session.tool.js";
 import { webSearchTool } from "../mcp/tools/web-search.tool.js";
 import { mailQueryTool } from "../mcp/tools/mail-query.tool.js";
+import { workspaceMutationTool } from "../mcp/tools/workspace-mutation.tool.js";
 import {
   initializeExternalMcpDatabase,
   registerAllExternalMcpCapabilities,
@@ -44,10 +46,18 @@ export const initializeHarnessRuntime = () => {
   registerCapability(readExtractTool);
   registerCapability(readSliceTool);
   registerCapability(readTool);
+
+  // Public Edit contract: four direct actions.
   registerCapability(writeFileTool);
   registerCapability(replaceBlockTool);
   registerCapability(deletePathTool);
   registerCapability(movePathTool);
+
+  // Compatibility-only implementations for persisted/legacy invocations.
+  // Exposure policy keeps these out of the Agent-visible edit surface.
+  registerCapability(editFileTool);
+  registerCapability(workspaceMutationTool);
+
   registerCapability(webSearchTool);
   registerCapability(newsSearchTool);
   registerCapability(mailQueryTool);
