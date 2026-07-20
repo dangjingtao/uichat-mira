@@ -2,7 +2,7 @@ import type { McpToolDefinition } from "../../mcp/core/definitions.js";
 import type { HarnessExposurePolicyInput } from "./types.js";
 
 const SAFE_CHAT_DOMAINS = new Set(["read", "web_search"]);
-const INTERNAL_INTENT_ONLY_TOOL_IDS = new Set([
+const INTERNAL_READ_PRIMITIVE_TOOL_IDS = new Set([
   "read",
   "read_list",
   "read_locate",
@@ -17,7 +17,7 @@ const COMPUTER_USE_TOOL_IDS = new Set([
 ]);
 
 export const isInternalIntentOnlyTool = (definition: McpToolDefinition) =>
-  definition.source === "internal" && INTERNAL_INTENT_ONLY_TOOL_IDS.has(definition.id);
+  definition.source === "internal" && INTERNAL_READ_PRIMITIVE_TOOL_IDS.has(definition.id);
 
 export const isSafeChatSurfaceTool = (definition: McpToolDefinition) =>
   SAFE_CHAT_DOMAINS.has(definition.domain);
@@ -62,6 +62,10 @@ export const getDefinitionBlockReason = (
   definition: McpToolDefinition,
   input: HarnessExposurePolicyInput,
 ): string | undefined => {
+  if (isInternalIntentOnlyTool(definition)) {
+    return "Internal read primitive is hidden behind the public read contract.";
+  }
+
   if (input.source === "chat_surface" && definition.source === "external") {
     return "External MCP capabilities are hidden from chat_surface.";
   }
@@ -94,10 +98,6 @@ export const getDefinitionBlockReason = (
 
   if (!shouldExposeTerminalForAgentIntent(definition, input)) {
     return "Terminal capability is not eligible for agent_intent exposure.";
-  }
-
-  if (input.source === "agent_intent" && isInternalIntentOnlyTool(definition)) {
-    return "Internal capability is reserved for the public read contract.";
   }
 
   return undefined;
