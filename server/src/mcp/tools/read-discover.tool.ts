@@ -8,7 +8,8 @@ export const readDiscoverTool: McpToolImplementation = {
   definition: {
     id: "read_discover",
     title: "Read Discover",
-    description: "Discover workspace objects or locate a target without opening its contents.",
+    description:
+      "Discover workspace objects by listing directories or locating files by path/name. Use grep for text, symbols, references, or content matches.",
     domain: "read",
     source: "internal",
     mode: "sync",
@@ -38,7 +39,7 @@ export const readDiscoverTool: McpToolImplementation = {
       ],
     },
     outputSchema: { type: "object" },
-    tags: ["read", "workspace", "discover", "locate", "directory"],
+    tags: ["read", "workspace", "discover", "locate", "directory", "path", "filename"],
     capabilities: {
       sideEffect: "none",
       requiresApproval: false,
@@ -81,6 +82,7 @@ export const readDiscoverTool: McpToolImplementation = {
         args: {
           query: context.args.query,
           path: context.args.root,
+          searchMode: "path",
           limit: maxResults,
         },
         environment: context.environment,
