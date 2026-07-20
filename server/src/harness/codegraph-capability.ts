@@ -14,7 +14,6 @@ import {
 import {
   getCapabilityImplementation,
   registerCapability,
-  unregisterCapability,
 } from "./registry.js";
 
 let lastRuntimeConfigFingerprint: string | null = null;
@@ -38,15 +37,16 @@ const getRuntimeConfigFingerprint = (
   });
 
 export const reconcileCodeGraphHarnessCapability = () => {
+  // Keep the public read contract stable: codebase_explore is always registered.
+  // Runtime/provider availability is reported by the tool result itself and can
+  // degrade to its controlled fallback signal without changing the tool surface.
+  if (!getCapabilityImplementation("codebase_explore")) {
+    registerCapability(codebaseExploreTool);
+  }
+
   const service = getActiveCodeGraphStudioService();
-  const currentRegistration = Boolean(
-    getCapabilityImplementation("codebase_explore"),
-  );
 
   if (!service) {
-    if (currentRegistration) {
-      unregisterCapability("codebase_explore");
-    }
     disposeRepoLocalRuntime();
     lastRuntimeConfigFingerprint = null;
     return false;
@@ -66,7 +66,7 @@ export const reconcileCodeGraphHarnessCapability = () => {
     service.getCapabilityGate(),
     {
       command: draft.command,
-      capabilityRegistered: currentRegistration,
+      capabilityRegistered: true,
     },
   );
   const lazyManagedWorkspaceAvailable =
@@ -76,15 +76,9 @@ export const reconcileCodeGraphHarnessCapability = () => {
   const available = gate.available || lazyManagedWorkspaceAvailable;
 
   if (available) {
-    if (!currentRegistration) {
-      registerCapability(codebaseExploreTool);
-    }
     return true;
   }
 
-  if (currentRegistration) {
-    unregisterCapability("codebase_explore");
-  }
   disposeRepoLocalRuntime();
   return false;
 };
