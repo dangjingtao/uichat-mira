@@ -1,16 +1,14 @@
 # UIChat Mira Agent Runtime / Tooling SSOT
 
-> Status: current truth for the `dev` branch changes made in the 2026-07-21 working thread.
+> Status: current truth for `dev` after the 2026-07-21 working thread.
 >
-> Scope: Agent-visible read/search tools, CodeGraph runtime ownership, Planner structured-output streaming, and the currently unresolved provider-compatibility boundary.
+> Scope: Agent-visible read/search tools, CodeGraph runtime ownership, Planner structured-output narration, and provider compatibility boundaries.
 >
-> This document is the single source of truth for the scope above. When chat history, old task cards, screenshots, or older design notes conflict with this document, this document wins until it is explicitly updated together with the implementation.
+> This file is the single source of truth for the scope above. When old task cards, screenshots, chat history, or older notes conflict with this document, this document wins until implementation and this file are updated together.
 
-## 1. Current top-level contracts
+## 1. Agent-visible tool contracts
 
-### 1.1 Agent-visible Read surface is exactly four cognitive actions
-
-The public Read surface is intentionally small:
+### 1.1 Read is exactly four cognitive actions
 
 ```text
 Read
@@ -22,34 +20,22 @@ Read
 
 Semantics:
 
-- `read_discover`: discover objects. Directory listing, file/path discovery, filename-oriented locate. It must not silently become general full-text search.
-- `grep`: deterministic text/pattern search. Use for literals, symbols, references, imports, config keys, error strings, and regex-like workspace search.
-- `read_open`: read known content. Use when the target file/object is already known; line/range selection belongs here.
-- `codebase_explore`: relationship-oriented code understanding. Use for architecture, symbol relationships, call/dependency paths, and impact analysis. Candidate evidence must be re-read/verified against the active workspace before becoming Evidence.
+- `read_discover`: directory, filename, and path discovery. It does not silently become general full-text search.
+- `grep`: deterministic workspace text/pattern search for literals, symbols, references, imports, config keys, error strings, and similar exact search work.
+- `read_open`: read a known target, including line/range selection.
+- `codebase_explore`: code relationships, architecture, call/dependency paths, and impact analysis. Candidates must be re-read/verified against the active workspace before becoming Evidence.
 
-The following older read operations remain implementation primitives / compatibility surfaces and are not part of the normal Agent-visible cognitive surface:
-
-```text
-read
-read_list
-read_locate
-read_extract
-read_slice
-```
+Older operations such as `read`, `read_list`, `read_locate`, `read_extract`, and `read_slice` may remain runtime primitives / compatibility surfaces, but they are not normal Planner-visible cognitive actions.
 
 Rule:
 
-> Tool names exposed to Planner describe user-level cognitive actions. Lower-level primitives/providers are runtime implementation details and should not be re-exposed unless a real semantic gap is proven.
+> Planner-visible tools describe user-level cognitive actions. Lower-level providers and primitives are implementation details.
 
-### 1.2 `grep` belongs to Read, not Terminal
+### 1.2 `grep` belongs to Read
 
-`grep` is classified as observation/search over workspace content, not as process execution.
+`grep` is observation/search, not process execution. Its runtime may use ripgrep or another provider internally, but Planner should not need to shell out through `terminal_session` for normal code search.
 
-The runtime may use ripgrep or another implementation internally, but Planner should reason about the action as `grep`, not about shelling out to `rg` through `terminal_session`.
-
-### 1.3 Network search is split into two explicit tools
-
-The public search surface is:
+### 1.3 Public web and local news are separate
 
 ```text
 Network Search
@@ -57,16 +43,12 @@ Network Search
 └─ news_search
 ```
 
-Semantics:
+- `web_search`: public internet search through Tavily / SearXNG behind Harness.
+- `news_search`: local News Hub retrieval over already-ingested news/cache data.
 
-- `web_search`: public internet search only. Current providers are Tavily / SearXNG behind Harness.
-- `news_search`: local News Hub search only. It searches already-ingested local news/cache data through the News Hub retrieval path (keyword/vector/fusion/rerank as configured).
+Invariant:
 
-Important invariant:
-
-> `web_search` must not inspect the query, infer “news intent”, search the local News Hub first, and short-circuit the public web search.
-
-Planner chooses between `web_search` and `news_search`; the tool itself must not silently change information domains.
+> `web_search` must not inspect a query, infer news intent, query News Hub first, and silently short-circuit the public web request.
 
 Capability mapping:
 
@@ -75,36 +57,65 @@ Web Research  -> web_search
 News Research -> news_search
 ```
 
-## 2. CodeGraph / `codebase_explore` runtime truth
+## 2. CodeGraph / `codebase_explore` runtime contract
 
-### 2.1 Ownership model
+### 2.1 Microapp configuration is provider configuration, not workspace ownership
 
-For Agent invocations, the active conversation/thread workspace owns the CodeGraph runtime binding.
+The CodeGraph microapp configures and validates a CodeGraph provider/runtime:
 
 ```text
-Agent invocation
-  workspaceRoot = Harness active workspace
-  thread binding = current thread (when available)
-
-CodeGraph Studio
-  supplies runtime/provider configuration
-  does NOT own the Agent invocation workspace
+CodeGraph microapp
+├─ command
+├─ start args
+├─ version / telemetry probes
+├─ app-data root
+├─ timeout
+└─ enabled state
 ```
 
-Studio may provide:
+The directory used by CodeGraph Studio is only a **debug/smoke workspace**.
 
-- command
-- start args
-- version probe args
-- telemetry probe args
-- app-data root
-- timeout / enable configuration
+It is not:
 
-Studio workspace identity must not be used as the Agent workspace ownership contract.
+- an authorization boundary for Agent conversations;
+- the only directory CodeGraph may inspect;
+- a required match for the current conversation workspace.
 
-### 2.2 Wrapper launchers are valid configuration inputs
+After the microapp is enabled/configured, any conversation with a resolved active workspace may invoke `codebase_explore` against that workspace.
 
-Agent-owned repo-local manager creation must not require the configured command basename to be literally one of:
+```text
+Studio debug workspace: D:\some\debug-project
+                         │
+                         └─ proves provider/config can run
+
+Conversation A workspace: D:\project-a -> CodeGraph runtime/index for project-a
+Conversation B workspace: D:\project-b -> CodeGraph runtime/index for project-b
+Conversation C workspace: D:\project-a -> reuses project-a runtime when config matches
+```
+
+### 2.2 Agent runtime ownership is workspace-scoped
+
+For Agent calls:
+
+```text
+workspaceRoot = Harness active conversation workspace
+provider config = active CodeGraph microapp config
+runtime cache ownership = workspace + provider/runtime fingerprint
+```
+
+Threads do not own CodeGraph processes.
+
+Multiple conversations using the same workspace and same provider configuration should reuse one healthy workspace runtime/index rather than spawning one process per thread.
+
+Different workspaces get distinct workspace-bound runtimes/indexes.
+
+Provider configuration changes invalidate the fingerprint and replace the cached runtime as needed.
+
+### 2.3 Fake and real providers obey the same ownership rule
+
+A fake/test provider may remain available for Studio/runtime testing. It is simply another configured provider implementation.
+
+The Agent ownership rule must not branch on whether the configured command basename is literally:
 
 ```text
 codegraph
@@ -112,52 +123,60 @@ codegraph.cmd
 codegraph.exe
 ```
 
-Wrapper/launcher configurations such as `node`, shims, or other compatible launch commands may still create an Agent-owned manager. Provider usability is proven later by runtime detect/start/health, not by a filename heuristic during ownership selection.
+Wrapper launchers such as `node`, shims, or other compatible commands are valid configuration inputs. Detect/start/health prove whether the provider actually works.
 
-The Agent manager binds:
+### 2.4 `.codegraph` presence is not a generic provider blocker
 
-```text
-workspaceRoot        = active Agent workspace
-allowedWorkspaceRoot = active Agent workspace
-```
+A previous bug applied the repo-pollution guard to every configured provider. That meant a provider declaring external-index support could be rejected merely because the target workspace already contained a `.codegraph` directory.
 
-Therefore a Studio workspace mismatch must not by itself force the Agent path back to the Studio singleton manager.
+Current rule:
 
-### 2.3 What remains true about CodeGraph safety/verification
+- If the provider reports external-index support as `ready`, an existing `.codegraph` directory is not by itself a runtime blocker.
+- The repo-local pollution/index guard is applied only when the provider explicitly cannot relocate its index and the declared repo-local `.codegraph` behavior is required.
 
-The existing CodeGraph contract is not being redesigned here:
+This is important for arbitrary Agent workspaces: the contents of a target project must not make an otherwise valid configured provider appear generically `provider_unavailable` for an unrelated guard.
+
+### 2.5 Studio smoke and Agent invocation are separate concerns
+
+Studio actions (`detect`, `start`, `health`, Smoke Status, Smoke Query) validate the Studio debug runtime.
+
+Agent invocation uses the same provider configuration but binds it to the conversation workspace.
+
+A Studio `ready` status therefore means the configured provider/runtime passed Studio validation for the debug workspace. Agent E2E success is separately proven when `codebase_explore` on the active conversation workspace returns candidates that pass source verification.
+
+### 2.6 CodeGraph Evidence contract remains unchanged
 
 - Planner sees `codebase_explore`, not raw native CodeGraph tools.
-- Candidate results are not automatically Evidence.
-- Workspace source verification/re-read remains required before verified evidence is trusted.
-- Repo-local `.codegraph` handling remains a provider/runtime concern.
-- Telemetry/workspace/runtime checks remain relevant; this SSOT only removes incorrect Studio-workspace ownership coupling from the Agent path.
+- Candidate output is not automatically Evidence.
+- Candidate source must be re-read/verified from the active workspace.
+- Verified excerpts with paths/ranges may enter Evidence.
+- Fallback remains available when the provider truly cannot answer.
 
-### 2.4 Verification status of the latest workspace-mismatch fix
+Do not redesign this contract as part of workspace/runtime fixes.
 
-Implementation for the workspace-ownership regression has landed on `dev`, including a regression test that creates an Agent-owned manager with a wrapper launcher and verifies:
+### 2.7 Acceptance condition
+
+CodeGraph integration is E2E-healthy for an Agent workspace when:
 
 ```text
-workspaceRoot == active Agent workspace
-allowedWorkspaceRoot == active Agent workspace
-workspaceMatches == true
+microapp provider config enabled
+-> conversation resolves workspaceRoot
+-> workspace-bound manager is created/reused
+-> manager reaches ready
+-> CodeGraph query/explore returns candidates
+-> workspace verification succeeds
+-> verifiedChunkCount > 0 for a query that should have matches
 ```
 
-However:
-
-> End-to-end local runtime verification against the user's actual CodeGraph setup is still pending.
-
-Do not describe the CodeGraph issue as fully closed until an actual Agent `codebase_explore` run in a non-Studio workspace returns verified chunks without the old `workspace_mismatch` gap.
-
-Also note: wrapper launchers that ultimately invoke CodeGraph may still expose provider-specific repo-local index behavior; that is separate from the Studio-workspace ownership bug.
+A generic `provider_unavailable` with `verifiedChunkCount=0` is not a successful CodeGraph result and must not be treated as proof that the integration is connected.
 
 ## 3. Planner structured output and live public narration
 
-### 3.1 Planner still uses AgentTaskModel
+### 3.1 Planner still calls AgentTaskModel
 
-The Planner node invokes the AgentTaskModel to maintain the task plan and decide the next action.
+Planner invokes AgentTaskModel to maintain the runtime plan and select the next action.
 
-The relevant public decision envelope remains structured and contains fields such as:
+The structured decision envelope contains fields such as:
 
 ```text
 type
@@ -169,11 +188,11 @@ question
 planPatch
 ```
 
-The final action must only execute after the complete structured decision has been parsed/validated.
+Execution waits for a complete parsed/validated decision.
 
-### 3.2 Live “inner OS” means public Planner narration, not hidden chain-of-thought
+### 3.2 Live “inner OS” is public Planner narration
 
-The UI red-box narration area should show a live, user-facing `reason`/working narration such as:
+The UI narration area should surface the model-generated public `reason` while the structured decision is streaming, for example:
 
 ```text
 正在确认当前目标和剩余任务……
@@ -182,49 +201,41 @@ The UI red-box narration area should show a live, user-facing `reason`/working n
 下一步准备定位相关实现。
 ```
 
-This is public working narration about what the Agent is checking / finding / preparing to do.
+This is user-facing working narration, not exposure of hidden private chain-of-thought.
 
-It is not a requirement to expose hidden private chain-of-thought.
+### 3.3 Structured output streams while execution remains gated
 
-### 3.3 Native structured Planner output now streams text deltas
+Supported structured paths currently stream text deltas:
 
-The Planner structured-output path now supports streaming for the currently handled adapters:
-
-- OpenAI-compatible: structured request with `stream: true` and `response_format: json_schema`.
-- Ollama: structured generation with `stream: true` and `format: schema`.
+- OpenAI-compatible: `stream: true` with `response_format: json_schema`.
+- Ollama: `stream: true` with schema format.
 
 Flow:
 
 ```text
 AgentTaskModel
-  -> structured stream deltas
-  -> Planner accumulates raw JSON text
-  -> extract public `reason` while JSON is incomplete
-  -> emit plannerThought / plannerThoughtStreaming
-  -> UI updates narration live
-  -> complete JSON arrives
-  -> parse / validate / Harness schema validation
-  -> execute next action
+-> structured JSON deltas
+-> accumulate raw decision text
+-> extract public reason from incomplete JSON
+-> plannerThought / plannerThoughtStreaming
+-> UI updates narration
+-> complete JSON
+-> parse / normalize / validate
+-> execute next action
 ```
 
-Important invariant:
+Invariant:
 
-> Streaming narration does not make partially generated decisions executable.
+> Partial structured output may update narration, but it is never executable as a partial decision.
 
-Only the public narration is surfaced early; action execution still waits for a complete validated decision object.
+### 3.4 Stream failure boundary
 
-### 3.4 Stream failure behavior
-
-Fallback behavior is deliberately bounded:
-
-- If native structured streaming fails before any native delta is emitted, the Planner may fall back to the existing text-JSON path.
-- If native structured streaming has already emitted partial JSON, do not append a second independently generated JSON object. That would manufacture an invalid multi-object Planner response. The error must propagate instead.
+- If native structured streaming fails before any native delta, text-JSON fallback may be used.
+- If native structured streaming already emitted partial JSON, do not concatenate a second independently generated JSON object. Propagate the failure instead.
 
 ### 3.5 Strict-schema synthetic null normalization
 
-Strict JSON-schema generation may represent optional tool fields as required-but-nullable fields.
-
-Before Harness validates tool args, synthetic `null` object fields are stripped so optional arguments return to normal omission semantics.
+Strict schemas may encode optional tool fields as nullable. Synthetic `null` object fields are removed before Harness validates tool args so optional fields recover normal omission semantics.
 
 Example:
 
@@ -244,115 +255,50 @@ normalizes to:
 }
 ```
 
-before the existing Harness tool schema validator sees the args.
+## 4. Provider compatibility remains an open boundary
 
-## 4. Provider compatibility: still unresolved as a general problem
+`openai-compatible` describes a broad protocol family. It does not prove behavioral identity for every advanced feature.
 
-The current Provider catalog still classifies multiple vendors through the broad `openai-compatible` chat adapter.
+Do not assume identical vendor behavior for:
 
-That does **not** prove behavioral compatibility for every advanced feature.
+- `response_format: json_schema`;
+- `strict: true`;
+- structured-output streaming;
+- supported JSON Schema subsets;
+- tool-call deltas / parallel calls;
+- reasoning/thinking fields;
+- usage and finish-reason normalization.
 
-In particular, do not assume that every OpenAI-compatible provider/model has identical behavior for:
+Provider-specific compatibility should be isolated behind provider/gateway contracts rather than leaking vendor conditionals through Planner/Harness.
 
-- `response_format: json_schema`
-- `strict: true`
-- structured-output streaming
-- supported JSON Schema subset
-- tool choice / parallel tool calling
-- reasoning/thinking fields
-- streaming delta shape
-- finish reasons / usage fields
+A Cloudflare-hosted protocol gateway was discussed as an architectural option, but no such gateway is implemented by the changes documented here.
 
-The observed Planner error:
+## 5. Do-not-regress rules
 
-```text
-Planner output was invalid JSON; planner must stop instead of pretending an answer is ready.
-```
+1. Keep the Planner-visible Read surface at four cognitive actions unless a proven semantic gap requires change.
+2. Do not make `read_discover` a hidden full-text search tool again.
+3. Do not route public web searches into local News Hub based on query wording.
+4. Do not use Studio debug workspace identity as an Agent CodeGraph authorization/availability condition.
+5. Do not create one CodeGraph process per conversation when conversations share the same workspace/configuration.
+6. Do not treat an existing `.codegraph` directory as a generic blocker for providers that support external indexes.
+7. Do not special-case Fake vs Real provider ownership semantics.
+8. Do not expose raw CodeGraph native tools to Planner; keep `codebase_explore` as the controlled surface.
+9. Do not trust CodeGraph candidates as Evidence until workspace source verification succeeds.
+10. Do not execute partial Planner structured output.
+11. Do not claim CodeGraph E2E is fixed merely because Studio says `ready`; verify an Agent workspace call with real verified chunks.
 
-is a Mira fallback error string, not a provider-native diagnostic. It can hide more specific upstream structured-output failures when a native path fails and the Planner falls back.
+## 6. Current validation notes
 
-Current truth:
+Implemented on `dev` in this working thread:
 
-> Provider-specific structured-output capability/strategy is not yet fully modeled. Volcengine compatibility must be validated against the actual model/endpoint behavior rather than inferred solely from `openai-compatible` classification.
+- `grep` added to Read and Read exposure reduced to four public actions.
+- `web_search` and local `news_search` separated.
+- wrapper launchers allowed for Agent-owned CodeGraph managers.
+- Agent CodeGraph manager cache changed from thread-scoped to workspace-scoped reuse.
+- repo-pollution guard narrowed so externally indexed providers are not blocked merely by an existing `.codegraph` directory.
+- regression coverage added for wrapper launchers, cross-thread same-workspace reuse, and arbitrary workspaces containing `.codegraph` when external-index support is available.
+- Planner native structured output changed to stream public narration while preserving complete-decision validation.
 
-A future protocol gateway / adapter platform on Cloudflare was discussed, but **no CF gateway implementation was made in this thread**. Do not treat that discussion as shipped architecture.
+Still requires real-environment verification:
 
-## 5. Files / implementation areas touched by this truth
-
-Primary implementation areas include:
-
-```text
-server/src/mcp/tools/
-server/src/mcp/managed-codegraph/
-server/src/agent/planner/
-server/src/services/provider-proxy.service/
-server/src/harness/profiles/
-server/src/microapps/news-hub/
-```
-
-Key concrete files involved in the latest fixes include:
-
-```text
-server/src/mcp/managed-codegraph/repo-local-manager-cache.ts
-server/src/mcp/managed-codegraph/repo-local-manager-cache.test.ts
-server/src/agent/planner/structured-provider-hook.ts
-server/src/agent/planner/parse.ts
-server/src/agent/planner/streamed-structured-output.test.ts
-server/src/services/provider-proxy.service/task-structured-output.ts
-```
-
-## 6. Validation matrix
-
-| Area | Implementation state | Runtime verification state |
-| --- | --- | --- |
-| Read surface reduced to 4 public actions | Landed on `dev` | Contract tests added previously; do not re-expand casually |
-| `grep` as Read tool | Landed on `dev` | Uses existing search runtime; normal integration validation still applies |
-| `web_search` / `news_search` split | Landed on `dev` | Search-domain contract implemented; provider/local-news behavior should be regression-tested in app |
-| CodeGraph Agent workspace ownership | Fix landed on `dev` | **Pending end-to-end validation in user's real workspace/setup** |
-| Wrapper launcher can create Agent-owned CodeGraph manager | Landed + regression test | Unit/regression coverage added; actual provider behavior may still differ |
-| Planner public narration streaming | Landed on `dev` | **Needs real provider validation, especially Volcengine structured streaming** |
-| Generic provider structured-output capability strategy | Not solved | Open design/implementation issue |
-| Cloudflare protocol gateway | Discussion only | Not implemented |
-
-## 7. Known key commits from this working thread
-
-These are useful anchors, not a substitute for the contracts above:
-
-```text
-074e8bd  test: cover grep read tool
-
-e436d98  test: lock public read surface to four tools
-
-ae8511b  test: keep web search independent from local news cache
-
-97587a1  fix: decouple agent CodeGraph runtime from studio workspace
-ea6e78d  test: bind agent CodeGraph runtime to active workspace
-
-a5142fd  feat: stream native planner structured output
-e894a5b  feat: surface streamed planner narration
-3bc29a4  fix: normalize streamed structured planner args
-1903d3f  test: cover streamed planner narration contract
-74c04f9  fix: avoid mixed planner streams after partial native output
-```
-
-## 8. Do-not-regress rules
-
-1. Do not grow the public Read surface by exposing implementation primitives just because a runtime primitive exists.
-2. Do not let `read_discover` silently become a second full-text search tool; content search belongs to `grep`.
-3. Do not let `web_search` silently route to local News Hub based on query wording.
-4. Do not bind Agent `codebase_explore` ownership to the CodeGraph Studio workspace.
-5. Do not use the configured command basename as the Agent workspace ownership decision.
-6. Do not trust CodeGraph candidates as Evidence before workspace source verification.
-7. Do not fake Planner narration with arbitrary loading phrases when real public `reason` deltas are available.
-8. Do not execute a partially streamed Planner decision.
-9. Do not concatenate text fallback JSON after a native structured JSON stream has already begun.
-10. Do not equate `openai-compatible` with complete advanced-feature compatibility across providers.
-
-## 9. Next verification targets
-
-Before declaring this scope stable, verify in the actual desktop app:
-
-1. Run `codebase_explore` from a conversation whose active workspace differs from the Studio workspace. Confirm the result no longer contains the old Studio `workspace_mismatch` gap and returns verified chunks.
-2. Test the actual configured CodeGraph launcher form (literal executable vs wrapper/shim) and confirm repo-local index behavior does not introduce a different blocker.
-3. With the user's Volcengine AgentTaskModel, observe whether structured JSON deltas arrive incrementally and whether the UI red-box narration updates before the final Planner decision completes.
-4. If Volcengine rejects or buffers `json_schema + stream`, capture the provider-native error/response and model that as an explicit provider/model capability instead of hiding it behind generic `openai-compatible` behavior.
+> Run `codebase_explore` from a conversation whose workspace is independent of the Studio debug path and confirm the workspace-bound runtime reaches `ready`, returns expected CodeGraph candidates, and produces verified chunks.
