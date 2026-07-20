@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { resolveHarnessToolExposure } from "./exposure.js";
 import {
   clearHarnessRegistry,
   listCapabilityDefinitions,
@@ -20,21 +21,32 @@ describe("public edit tool surface", () => {
     clearHarnessRegistry();
   });
 
-  it("exposes exactly four direct edit actions without edit_file/workspace_mutation wrappers", () => {
+  it("exposes exactly four direct edit actions while keeping legacy wrappers compatibility-only", () => {
     initializeHarnessRuntime();
 
-    const editToolIds = listCapabilityDefinitions()
+    const registeredEditToolIds = listCapabilityDefinitions()
+      .filter((definition) => definition.domain === "edit")
+      .map((definition) => definition.id)
+      .sort();
+    expect(registeredEditToolIds).toContain("edit_file");
+    expect(registeredEditToolIds).toContain("workspace_mutation");
+
+    const decision = resolveHarnessToolExposure({
+      source: "agent_intent",
+      query: "创建文件，精确修改代码，删除旧目录并重命名文件",
+    });
+    const exposedEditToolIds = decision.exposedDefinitions
       .filter((definition) => definition.domain === "edit")
       .map((definition) => definition.id)
       .sort();
 
-    expect(editToolIds).toEqual([
+    expect(exposedEditToolIds).toEqual([
       "delete_path",
       "move_path",
       "replace_block",
       "write_file",
     ]);
-    expect(editToolIds).not.toContain("edit_file");
-    expect(editToolIds).not.toContain("workspace_mutation");
+    expect(exposedEditToolIds).not.toContain("edit_file");
+    expect(exposedEditToolIds).not.toContain("workspace_mutation");
   });
 });
