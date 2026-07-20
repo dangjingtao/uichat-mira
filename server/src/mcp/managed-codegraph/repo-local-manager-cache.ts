@@ -42,9 +42,10 @@ const normalizeWorkspaceRoot = (workspaceRoot: string) => {
 };
 
 /**
- * Runtime ownership is scoped to the caller binding plus workspace root.
- * Agent callers use thread:<threadId>; Studio smoke uses studio. The lower-level
- * process manager may still share one healthy provider process for the same project.
+ * Runtime ownership is workspace-scoped. Studio smoke owns its own binding, while
+ * Agent calls for the same active workspace share one managed runtime regardless
+ * of conversation/thread. Provider configuration changes are handled by the
+ * runtime fingerprint and replace the cached manager when necessary.
  */
 export const createRepoLocalManagerCacheKey = (
   workspaceRoot: string,
@@ -106,11 +107,24 @@ const getOrCreateRepoLocalManager = async (
     repoLocalManagerCache.delete(cacheKey);
   }
 
-  // The CodeGraph Studio command is configuration, not an ownership signal.
-  // Agent invocations must bind the managed runtime to the active conversation
-  // workspace even when the configured launcher is a wrapper (for example npx,
-  // node, a shim, or another compatible command). Runtime detect/start remains
-  // responsible for proving that the configured provider is actually usable.
+  // The CodeGraph microapp supplies provider configuration only. Every Agent
+  // invocation binds that configuration to the active workspace selected by the
+  // conversation. The Studio debug workspace is never an Agent authorization or
+  // ownership boundary.
+  //
+  // A repo-pollution guard is meaningful only when the provider explicitly says
+  // it cannot relocate its index and therefore requires the declared repo-local
+  // `.codegraph` path. Providers with external-index support must not be blocked
+  // merely because the target workspace already contains a `.codegraph` folder.
+  const repoPollutionGuard =
+    context.externalIndexSupport.status === "blocked"
+      ? {
+          status: context.externalIndexSupport.status,
+          repoDataDirName: context.externalIndexSupport.repoDataDirName,
+          blockedReason: context.externalIndexSupport.reason,
+        }
+      : undefined;
+
   const manager = new ManagedCodeGraphProcessManager({
     command: context.draft.command,
     startArgs: [...context.draft.startArgs],
@@ -128,11 +142,7 @@ const getOrCreateRepoLocalManager = async (
     startTimeoutMs: context.draft.timeoutMs,
     healthTimeoutMs: context.draft.timeoutMs,
     stopTimeoutMs: context.draft.timeoutMs,
-    repoPollutionGuard: {
-      status: context.externalIndexSupport.status,
-      repoDataDirName: context.externalIndexSupport.repoDataDirName,
-      blockedReason: context.externalIndexSupport.reason,
-    },
+    ...(repoPollutionGuard ? { repoPollutionGuard } : {}),
   });
 
   repoLocalManagerCache.set(cacheKey, {
@@ -160,15 +170,21 @@ export const getRepoLocalManagedCodeGraphManagerForAgentWorkspace = async (
     /** Legacy compatibility only; product access now follows microAppEnabled. */
     agentCapabilityEnabled: boolean;
   },
-  threadId?: string,
+  _threadId?: string,
 ) => {
   if (!access.microAppEnabled) {
     return null;
   }
-  const bindingKey = threadId?.trim()
-    ? `thread:${threadId.trim()}`
-    : "agent-workspace";
-  return await getOrCreateRepoLocalManager(workspaceRoot, context, bindingKey);
+
+  // A CodeGraph microapp configuration is global provider configuration. Agent
+  // conversations may bind it to any active workspace; threads sharing a
+  // workspace reuse the same healthy runtime/index instead of spawning one
+  // process per conversation.
+  return await getOrCreateRepoLocalManager(
+    workspaceRoot,
+    context,
+    "agent-workspace",
+  );
 };
 
 /**
