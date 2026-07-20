@@ -146,6 +146,33 @@ Public-surface classification and explicit user enablement remain factual availa
 
 Harness must not add additional semantic/runtime policy blocks on top of those facts.
 
+### 2.5 Eligibility, ranking, and approval are three separate layers
+
+```text
+Tool registry / explicit enablement
+        ↓
+public eligible tools
+        ↓
+<= 20: expose all
+> 20: rank and expose top 20
+        ↓
+Planner chooses an action
+        ↓
+Policy / approval evaluates that concrete invocation
+        ↓
+Tool executes
+```
+
+These concepts must not be collapsed:
+
+- **Eligibility** answers whether a tool is part of the usable public surface at all.
+- **Ranking** only solves tool-context overflow when more than 20 public tools are available.
+- **Approval** controls execution of a concrete side-effecting invocation.
+
+Invariant:
+
+> Harness has no authority to hide a public tool merely because it predicts the tool is unnecessary, risky, irrelevant, sandbox-inappropriate, or outside the current task phase. Risk is handled by execution-time approval/policy, not by pretending the tool does not exist.
+
 ## 3. Approval is execution-time policy, not exposure-time censorship
 
 Approval remains enabled.
@@ -305,19 +332,20 @@ A Cloudflare-hosted protocol gateway was discussed as an architectural option bu
 2. Keep public Edit at `write_file`, `replace_block`, `delete_path`, `move_path`.
 3. Do not expose legacy Read primitives or Edit wrappers as normal Planner tools.
 4. Do not let Harness infer Browser/task intent and isolate tool domains.
-5. Do not let Harness hide registered public tools based on sandbox/domain/relevance heuristics.
+5. Do not let Harness hide registered public tools based on sandbox/domain/relevance/risk/task-phase heuristics.
 6. If public tools are <=20, expose all of them.
 7. If public tools are >20, ranking exists only to produce the Planner-visible top 20.
 8. Do not let caller `topK`, `maxTools`, or `minScore` arbitrarily shrink the <=20 set or reduce overflow exposure below the top-20 budget.
 9. Keep explicit external MCP Agent Access as the user-controlled availability switch.
 10. Keep approval at execution time; do not turn approval into exposure-time tool censorship.
-11. Do not route public web search into local News Hub based on wording.
-12. Do not use Studio debug workspace identity as an Agent CodeGraph availability condition.
-13. Do not create one CodeGraph process per conversation when conversations share the same workspace/configuration.
-14. Do not let fake CodeGraph return canned retrieval candidates without explicit fixture injection.
-15. Do not trust CodeGraph candidates as Evidence until workspace source verification succeeds.
-16. Do not expose raw CodeGraph native tools to Planner.
-17. Do not execute partial Planner structured output.
+11. Keep eligibility, ranking, and approval as separate layers.
+12. Do not route public web search into local News Hub based on wording.
+13. Do not use Studio debug workspace identity as an Agent CodeGraph availability condition.
+14. Do not create one CodeGraph process per conversation when conversations share the same workspace/configuration.
+15. Do not let fake CodeGraph return canned retrieval candidates without explicit fixture injection.
+16. Do not trust CodeGraph candidates as Evidence until workspace source verification succeeds.
+17. Do not expose raw CodeGraph native tools to Planner.
+18. Do not execute partial Planner structured output.
 
 ## 8. Current validation notes
 
@@ -330,7 +358,7 @@ Implemented on `dev` in this working thread:
 - Harness semantic/domain/sandbox/terminal exposure gates removed for registered public tools.
 - Harness changed to expose all public tools at <=20 and rank/expose top 20 only when the set exceeds 20.
 - Explicit external MCP Agent Access remains the user-controlled external availability gate.
-- Execution-time approval remains unchanged.
+- Execution-time approval remains unchanged and separate from Harness exposure/ranking.
 - CodeGraph Agent runtime ownership changed to workspace-scoped reuse independent of Studio debug workspace.
 - Fake CodeGraph canned candidates removed; fixture candidates require explicit injection.
 - Planner native structured output streams public narration while preserving complete-decision validation.
