@@ -434,7 +434,7 @@ export function selectMcpWorkspaceRoot(rootPath: string) {
 }
 
 export function getMcpTools() {
-  return get<McpToolDefinition[]>("/mcp/tools");
+  return get<McpToolDefinition[]>("/mcp/tools?source=tools_list");
 }
 
 export function getMcpInvocationTrace(invocationId: string) {
