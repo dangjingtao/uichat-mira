@@ -2,7 +2,7 @@
 
 > Status: current truth for `dev` after the 2026-07-21 working thread.
 >
-> Scope: Agent-visible read/search tools, CodeGraph runtime ownership, Planner structured-output narration, and provider compatibility boundaries.
+> Scope: Agent-visible read/edit/search tools, CodeGraph runtime ownership, Planner structured-output narration, and provider compatibility boundaries.
 >
 > This file is the single source of truth for the scope above. When old task cards, screenshots, chat history, or older notes conflict with this document, this document wins until implementation and this file are updated together.
 
@@ -35,7 +35,32 @@ Rule:
 
 `grep` is observation/search, not process execution. Its runtime may use ripgrep or another provider internally, but Planner should not need to shell out through `terminal_session` for normal code search.
 
-### 1.3 Public web and local news are separate
+### 1.3 Edit is exactly four direct actions
+
+```text
+Edit
+├─ write_file
+├─ replace_block
+├─ delete_path
+└─ move_path
+```
+
+Semantics:
+
+- `write_file`: create/write full file content.
+- `replace_block`: perform one exact bounded text replacement in an existing file.
+- `delete_path`: delete a file or directory; directories require explicit recursive intent.
+- `move_path`: move or rename a file or directory.
+
+The older `edit_file(operation=...)` and `workspace_mutation(operation=...)` wrappers are not part of the registered core Agent tool surface.
+
+Invariant:
+
+> Planner chooses the concrete edit action directly. Do not add an extra tool-selection layer merely to choose between write / replace / delete / move.
+
+The internal `workspace_edit` capability profile may still group the four tools for recall/organization. Capability grouping is not an executable tool and must not replace Planner tool choice.
+
+### 1.4 Public web and local news are separate
 
 ```text
 Network Search
@@ -296,23 +321,26 @@ A Cloudflare-hosted protocol gateway was discussed as an architectural option, b
 ## 5. Do-not-regress rules
 
 1. Keep the Planner-visible Read surface at four cognitive actions unless a proven semantic gap requires change.
-2. Do not make `read_discover` a hidden full-text search tool again.
-3. Do not route public web searches into local News Hub based on query wording.
-4. Do not use Studio debug workspace identity as an Agent CodeGraph authorization/availability condition.
-5. Do not create one CodeGraph process per conversation when conversations share the same workspace/configuration.
-6. Do not treat an existing `.codegraph` directory as a generic blocker for providers that support external indexes.
-7. Do not special-case Fake vs Real provider ownership semantics.
-8. Do not let the fake CodeGraph provider return canned retrieval candidates when no test explicitly injected candidates.
-9. Do not expose raw CodeGraph native tools to Planner; keep `codebase_explore` as the controlled surface.
-10. Do not trust CodeGraph candidates as Evidence until workspace source verification succeeds.
-11. Do not execute partial Planner structured output.
-12. Do not claim CodeGraph E2E is fixed merely because Studio says `ready`; verify an Agent workspace call with real verified chunks.
+2. Keep the Planner-visible Edit surface at four direct actions: `write_file`, `replace_block`, `delete_path`, `move_path`.
+3. Do not reintroduce `edit_file(operation=...)` or `workspace_mutation(operation=...)` as public core tools.
+4. Do not make `read_discover` a hidden full-text search tool again.
+5. Do not route public web searches into local News Hub based on query wording.
+6. Do not use Studio debug workspace identity as an Agent CodeGraph authorization/availability condition.
+7. Do not create one CodeGraph process per conversation when conversations share the same workspace/configuration.
+8. Do not treat an existing `.codegraph` directory as a generic blocker for providers that support external indexes.
+9. Do not special-case Fake vs Real provider ownership semantics.
+10. Do not let the fake CodeGraph provider return canned retrieval candidates when no test explicitly injected candidates.
+11. Do not expose raw CodeGraph native tools to Planner; keep `codebase_explore` as the controlled surface.
+12. Do not trust CodeGraph candidates as Evidence until workspace source verification succeeds.
+13. Do not execute partial Planner structured output.
+14. Do not claim CodeGraph E2E is fixed merely because Studio says `ready`; verify an Agent workspace call with real verified chunks.
 
 ## 6. Current validation notes
 
 Implemented on `dev` in this working thread:
 
 - `grep` added to Read and Read exposure reduced to four public actions.
+- Edit surface replaced with four direct tools: `write_file`, `replace_block`, `delete_path`, `move_path`; the old two wrapper tools are no longer registered as core tools.
 - `web_search` and local `news_search` separated.
 - wrapper launchers allowed for Agent-owned CodeGraph managers.
 - Agent CodeGraph manager cache changed from thread-scoped to workspace-scoped reuse.
