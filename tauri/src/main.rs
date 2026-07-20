@@ -371,19 +371,19 @@ fn get_browser_extension_source_path() -> PathBuf {
             .join("mira-clipper-ext")
             .join("dist")
             .join("dev")
-            .join("MiraClipper.crx");
+            .join("Chujie.crx");
     }
 
     #[cfg(not(debug_assertions))]
     {
         get_packaged_resources_root()
             .join("browser-extension")
-            .join("MiraClipper.crx")
+            .join("Chujie.crx")
     }
 }
 
 fn available_download_path(downloads_dir: &Path) -> PathBuf {
-    let base_name = "MiraClipper";
+    let base_name = "Chujie";
     let mut candidate = downloads_dir.join(format!("{base_name}.crx"));
     let mut suffix = 1;
     while candidate.exists() {
@@ -501,6 +501,100 @@ fn get_native_host_source_path() -> PathBuf {
     }
 }
 
+const NATIVE_MESSAGING_HOST_NAME: &str = "com.tomz.uichat.webbridge";
+const NATIVE_MESSAGING_REGISTRY_KEY: &str = "HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.tomz.uichat.webbridge";
+const NATIVE_MESSAGING_ALLOWED_ORIGIN: &str = "chrome-extension://gmgdbphkmkdedfabchklghghdcpjepoc/";
+
+fn native_paths_equal(left: &Path, right: &Path) -> bool {
+    left.to_string_lossy().eq_ignore_ascii_case(&right.to_string_lossy())
+}
+
+#[cfg(windows)]
+fn get_registered_native_host_manifest_path() -> Option<PathBuf> {
+    let output = std::process::Command::new("reg.exe")
+        .args(["QUERY", NATIVE_MESSAGING_REGISTRY_KEY, "/ve"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .find_map(|line| line.find("REG_SZ").map(|index| line[index + "REG_SZ".len()..].trim().to_string()))
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+
+#[tauri::command]
+fn get_native_messaging_host_status_command<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<serde_json::Value, String> {
+    #[cfg(not(windows))]
+    {
+        let _ = app;
+        return Ok(serde_json::json!({
+            "status": "unsupported",
+            "installed": false,
+            "reason": "Native Messaging 当前仅支持 Windows"
+        }));
+    }
+
+    #[cfg(windows)]
+    {
+        let manifest_path = app
+            .path()
+            .app_local_data_dir()
+            .map_err(|error| format!("Failed to resolve app data directory: {error}"))?
+            .join("native-host")
+            .join(format!("{NATIVE_MESSAGING_HOST_NAME}.json"));
+        let registered_manifest_path = get_registered_native_host_manifest_path();
+        let manifest_exists = manifest_path.exists();
+
+        if registered_manifest_path.is_none() && !manifest_exists {
+            return Ok(serde_json::json!({ "status": "not_installed", "installed": false }));
+        }
+        let Some(registered_manifest_path) = registered_manifest_path else {
+            return Ok(serde_json::json!({ "status": "repair_needed", "installed": false, "reason": "Chrome Native 注册项缺失" }));
+        };
+        if !native_paths_equal(&registered_manifest_path, &manifest_path) {
+            return Ok(serde_json::json!({ "status": "repair_needed", "installed": false, "reason": "Chrome 注册项未指向当前 Mira" }));
+        }
+        if !manifest_exists {
+            return Ok(serde_json::json!({ "status": "repair_needed", "installed": false, "reason": "Native manifest 文件缺失" }));
+        }
+
+        let manifest: serde_json::Value = match std::fs::read_to_string(&manifest_path)
+            .ok()
+            .and_then(|content| serde_json::from_str(&content).ok()) {
+            Some(manifest) => manifest,
+            None => return Ok(serde_json::json!({ "status": "repair_needed", "installed": false, "reason": "Native manifest 无法读取" })),
+        };
+        let host_path = manifest.get("path").and_then(|value| value.as_str()).map(PathBuf::from);
+        let allowed_origin_matches = manifest
+            .get("allowed_origins")
+            .and_then(|value| value.as_array())
+            .map(|origins| origins.iter().any(|origin| origin.as_str() == Some(NATIVE_MESSAGING_ALLOWED_ORIGIN)))
+            .unwrap_or(false);
+        if manifest.get("name").and_then(|value| value.as_str()) != Some(NATIVE_MESSAGING_HOST_NAME)
+            || manifest.get("type").and_then(|value| value.as_str()) != Some("stdio")
+            || !allowed_origin_matches {
+            return Ok(serde_json::json!({ "status": "repair_needed", "installed": false, "reason": "Native manifest 配置不匹配" }));
+        }
+        let Some(host_path) = host_path else {
+            return Ok(serde_json::json!({ "status": "repair_needed", "installed": false, "reason": "Native Host 文件缺失" }));
+        };
+        let host_script_path = host_path.parent().map(|path| path.join("host.mjs"));
+        let host_script_exists = host_script_path.as_ref().map(|path| path.exists()).unwrap_or(false);
+        if !host_path.exists() || !host_script_exists {
+            return Ok(serde_json::json!({ "status": "repair_needed", "installed": false, "reason": "Native Host 文件缺失" }));
+        }
+        if !native_paths_equal(&host_path, &get_native_host_source_path()) {
+            return Ok(serde_json::json!({ "status": "repair_needed", "installed": false, "reason": "Native Host 需要更新" }));
+        }
+
+        return Ok(serde_json::json!({ "status": "installed", "installed": true }));
+    }
+}
+
 #[tauri::command]
 fn install_native_messaging_host_command<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<serde_json::Value, String> {
     #[cfg(not(windows))]
@@ -523,22 +617,21 @@ fn install_native_messaging_host_command<R: tauri::Runtime>(app: tauri::AppHandl
             .join("native-host");
         std::fs::create_dir_all(&host_dir)
             .map_err(|error| format!("Failed to create Native Host directory: {error}"))?;
-        let manifest_path = host_dir.join("com.tomz.uichat.webbridge.json");
+        let manifest_path = host_dir.join(format!("{NATIVE_MESSAGING_HOST_NAME}.json"));
         let host_path = source_path;
 
         let manifest = serde_json::json!({
-            "name": "com.tomz.uichat.webbridge",
-            "description": "见行 Native Messaging Host",
+            "name": NATIVE_MESSAGING_HOST_NAME,
+            "description": "触界 Native Messaging Host",
             "path": host_path,
             "type": "stdio",
-            "allowed_origins": ["chrome-extension://gmgdbphkmkdedfabchklghghdcpjepoc/"]
+            "allowed_origins": [NATIVE_MESSAGING_ALLOWED_ORIGIN]
         });
         std::fs::write(&manifest_path, serde_json::to_vec_pretty(&manifest).map_err(|error| error.to_string())?)
             .map_err(|error| format!("Failed to write Native Messaging manifest: {error}"))?;
 
-        let registry_key = "HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.tomz.uichat.webbridge";
         let status = std::process::Command::new("reg.exe")
-            .args(["ADD", registry_key, "/ve", "/t", "REG_SZ", "/d"])
+            .args(["ADD", NATIVE_MESSAGING_REGISTRY_KEY, "/ve", "/t", "REG_SZ", "/d"])
             .arg(&manifest_path)
             .arg("/f")
             .status()
@@ -571,9 +664,9 @@ fn uninstall_native_messaging_host_command<R: tauri::Runtime>(app: tauri::AppHan
             .app_local_data_dir()
             .map_err(|error| format!("Failed to resolve app data directory: {error}"))?
             .join("native-host")
-            .join("com.tomz.uichat.webbridge.json");
+            .join(format!("{NATIVE_MESSAGING_HOST_NAME}.json"));
         let status = std::process::Command::new("reg.exe")
-            .args(["DELETE", "HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.tomz.uichat.webbridge", "/f"])
+            .args(["DELETE", NATIVE_MESSAGING_REGISTRY_KEY, "/f"])
             .status()
             .map_err(|error| format!("Failed to unregister Native Messaging Host: {error}"))?;
         if !status.success() && manifest_path.exists() {
@@ -601,6 +694,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_backend_url_command,
             download_browser_extension_command,
+            get_native_messaging_host_status_command,
             install_native_messaging_host_command,
             uninstall_native_messaging_host_command,
             check_backend_health_command,

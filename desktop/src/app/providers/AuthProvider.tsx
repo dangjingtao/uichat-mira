@@ -5,9 +5,12 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
+  AUTH_REQUIRED_EVENT,
+  AuthRequiredEventDetail,
   clearSessionFromStorage,
   readSessionFromStorage,
   writeSessionToStorage,
@@ -43,14 +46,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
   );
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [authErrorMessage, setAuthErrorMessage] = useState("");
+  const sessionRevisionRef = useRef(0);
 
   const logout = useCallback((message = "") => {
+    sessionRevisionRef.current += 1;
     clearSessionFromStorage();
     setSession(null);
     setAuthErrorMessage(message);
   }, []);
 
   const login = useCallback((nextSession: SessionState) => {
+    sessionRevisionRef.current += 1;
     writeSessionToStorage(nextSession);
     setSession(nextSession);
     setAuthErrorMessage("");
@@ -61,8 +67,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   useEffect(() => {
+    const handleAuthRequired = (event: Event) => {
+      const detail = (event as CustomEvent<AuthRequiredEventDetail>).detail;
+      logout(detail?.message || "登录状态已过期，请重新登录。");
+    };
+
+    globalThis.addEventListener(AUTH_REQUIRED_EVENT, handleAuthRequired);
+    return () => {
+      globalThis.removeEventListener(AUTH_REQUIRED_EVENT, handleAuthRequired);
+    };
+  }, [logout]);
+
+  useEffect(() => {
     let mounted = true;
     const currentToken = session?.token;
+    const validationRevision = sessionRevisionRef.current;
 
     const validateCurrentSession = async () => {
       if (!currentToken) {
@@ -75,14 +94,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         const { user } = await getCurrentUser();
 
-        if (mounted) {
+        if (mounted && sessionRevisionRef.current === validationRevision) {
           login({
             token: currentToken,
             user,
           });
         }
       } catch {
-        if (mounted) {
+        if (mounted && sessionRevisionRef.current === validationRevision) {
           logout("登录状态已过期，请重新登录。");
         }
       } finally {

@@ -337,7 +337,8 @@ export async function processCapture(
   options: { userId: number; processAi?: boolean },
 ) {
   const { attachments, rawHtml, captureMode = "page", ...captureInput } = input;
-  const normalizedContent = rawHtml && captureMode === "page"
+  const hasRuleExtractedContent = captureInput.captureMetadata?.ruleHasIncludeRegion === true;
+  const normalizedContent = rawHtml && captureMode === "page" && !hasRuleExtractedContent
     ? convertCapturedHtmlToMarkdown({
         html: rawHtml,
         sourceUrl: input.sourceUrl,

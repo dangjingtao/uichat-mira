@@ -12,7 +12,6 @@ const ui = {
       routeErrorTitle: "Page Load Failed",
     },
     fileUploadDropzone: {
-      dragAndDrop: "Drag and drop files or folders here, or",
       selectFile: "select files",
     },
     fileListItem: {

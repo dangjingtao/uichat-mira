@@ -58,7 +58,7 @@ describe('POST /microapps/evolving-knowledge/captures 请求体契约', () => {
   });
 });
 
-describe('Popup 状态机输出', () => {
+describe('Side Panel 剪藏状态机输出', () => {
   const states = ['LOADING', 'READY', 'SAVING', 'SUCCESS', 'ERROR'];
 
   it('应支持 5 个状态', () => {
@@ -70,8 +70,8 @@ describe('Popup 状态机输出', () => {
     assert.ok(true); // 文档约束，运行时验证在 popup.js 中
   });
 
-  it('SUCCESS 状态应自动关闭 popup', () => {
-    // 契约：SUCCESS 后 1.5s 内关闭
+  it('SUCCESS 状态应保留侧栏并显示成功状态', () => {
+    // 契约：侧栏不因保存成功被关闭，用户可以继续使用
     assert.ok(true); // 文档约束，运行时验证在 popup.js 中
   });
 });

@@ -38,9 +38,22 @@ body {
   padding: 0 20px;
 }
 
+.brand-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.brand-header img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
 h1 {
   font-size: 22px;
-  margin: 0 0 24px;
+  margin: 0;
 }
 
 .field {

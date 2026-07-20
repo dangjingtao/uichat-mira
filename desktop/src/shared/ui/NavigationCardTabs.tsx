@@ -12,6 +12,7 @@ interface NavigationCardTabsProps<T extends string> {
   value: T;
   onChange: (value: T) => void;
   className?: string;
+  activeTabStyle?: "default" | "plain";
 }
 
 export default function NavigationCardTabs<T extends string>({
@@ -19,6 +20,7 @@ export default function NavigationCardTabs<T extends string>({
   value,
   onChange,
   className = "",
+  activeTabStyle = "default",
 }: NavigationCardTabsProps<T>) {
   return (
     <Tabs.Root value={value} onValueChange={(nextValue) => onChange(nextValue as T)}>
@@ -40,7 +42,10 @@ export default function NavigationCardTabs<T extends string>({
               "group relative -mb-px flex shrink-0 items-center gap-2 rounded-t-ui-panel border px-3.5 py-2.5 text-sm text-text-secondary transition-all outline-none",
               "border-transparent bg-transparent hover:border-border/70 hover:bg-surface-secondary hover:text-text-primary",
               "focus-visible:z-20 focus-visible:border-primary/30 focus-visible:bg-surface-primary focus-visible:text-text-primary focus-visible:ring-2 focus-visible:ring-primary/20",
-              "data-[state=active]:z-10 data-[state=active]:border-border data-[state=active]:border-b-transparent data-[state=active]:bg-surface-primary data-[state=active]:text-text-primary data-[state=active]:shadow-shadow-sm",
+              "data-[state=active]:z-10 data-[state=active]:border-border data-[state=active]:border-b-transparent data-[state=active]:text-text-primary",
+              activeTabStyle === "plain"
+                ? "data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:after:absolute data-[state=active]:after:inset-x-0 data-[state=active]:after:bottom-[-1px] data-[state=active]:after:z-20 data-[state=active]:after:h-0.5 data-[state=active]:after:content-[''] data-[state=active]:after:bg-surface-primary"
+                : "data-[state=active]:bg-surface-primary data-[state=active]:shadow-shadow-sm",
             ].join(" ")}
           >
             {tab.icon ? (

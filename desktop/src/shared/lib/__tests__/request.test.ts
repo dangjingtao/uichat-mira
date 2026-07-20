@@ -23,22 +23,20 @@ vi.mock("axios", () => ({
 
 vi.mock("@/shared/platform/desktopRuntime", () => ({
   getApiBaseUrl: vi.fn(() => "http://localhost:3000"),
-  isDesktopShell: vi.fn(() => false),
 }));
 
 vi.mock("@/shared/lib/sessionStorage", () => ({
   getSession: vi.fn(() => null),
-  clearSessionFromStorage: vi.fn(),
+  notifyAuthRequired: vi.fn(),
 }));
 
 import axios from "axios";
 import {
   getApiBaseUrl,
-  isDesktopShell,
 } from "@/shared/platform/desktopRuntime";
 import {
   getSession,
-  clearSessionFromStorage,
+  notifyAuthRequired,
 } from "@/shared/lib/sessionStorage";
 import {
   get,
@@ -62,7 +60,7 @@ describe("request", () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
     vi.mocked(getSession).mockReturnValue(null);
-    vi.mocked(isDesktopShell).mockReturnValue(false);
+    vi.mocked(notifyAuthRequired).mockClear();
     mockClient.get.mockReset();
     mockClient.post.mockReset();
     mockClient.put.mockReset();
@@ -211,7 +209,7 @@ describe("request", () => {
       });
     });
 
-    it("UNAUTHORIZED 时清除会话并跳转浏览器登录页", async () => {
+    it("axios UNAUTHORIZED 时通知认证状态所有者", async () => {
       vi.mocked(client.get).mockRejectedValueOnce({
         isAxiosError: true,
         response: {
@@ -224,26 +222,26 @@ describe("request", () => {
         },
       });
       await expect(get("/items")).rejects.toThrow(ApiError);
-      expect(clearSessionFromStorage).toHaveBeenCalled();
-      expect(window.location.href).toBe("/login");
+      expect(notifyAuthRequired).toHaveBeenCalledTimes(1);
+      expect(notifyAuthRequired).toHaveBeenCalledWith("unauthorized");
+      expect(window.location.href).toBe("http://localhost/");
+      expect(window.location.hash).toBe("");
     });
 
-    it("桌面端 UNAUTHORIZED 时跳转到 #/login", async () => {
-      vi.mocked(isDesktopShell).mockReturnValue(true);
-      vi.mocked(client.get).mockRejectedValueOnce({
-        isAxiosError: true,
-        response: {
-          data: {
-            success: false,
-            message: "unauthorized",
-            code: ErrorCodes.UNAUTHORIZED,
-            timestamp: "t4",
-          },
+    it("业务 UNAUTHORIZED 响应也通知认证状态所有者", async () => {
+      vi.mocked(client.get).mockResolvedValueOnce({
+        data: {
+          success: false,
+          message: "session expired",
+          code: ErrorCodes.UNAUTHORIZED,
+          timestamp: "t4",
         },
       });
       await expect(get("/items")).rejects.toThrow(ApiError);
-      expect(clearSessionFromStorage).toHaveBeenCalled();
-      expect(window.location.hash).toBe("#/login");
+      expect(notifyAuthRequired).toHaveBeenCalledTimes(1);
+      expect(notifyAuthRequired).toHaveBeenCalledWith("session expired");
+      expect(window.location.href).toBe("http://localhost/");
+      expect(window.location.hash).toBe("");
     });
   });
 

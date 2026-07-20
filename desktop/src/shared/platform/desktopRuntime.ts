@@ -130,6 +130,18 @@ export async function openExternalUrl(url: string) {
   globalThis.window?.open(trimmedUrl, "_blank", "noopener,noreferrer");
 }
 
+export type NativeMessagingHostStatusKind =
+  | "installed"
+  | "not_installed"
+  | "repair_needed"
+  | "unsupported";
+
+export interface NativeMessagingHostStatus {
+  status: NativeMessagingHostStatusKind;
+  installed: boolean;
+  reason?: string;
+}
+
 export async function downloadBrowserExtension(): Promise<string> {
   const runtime = getDesktopRuntime();
 
@@ -157,6 +169,22 @@ export async function installNativeMessagingHost(): Promise<unknown> {
     return tauriInvoke("install_native_messaging_host");
   }
   throw new Error("Native Messaging 安装仅支持 Electron 或 Tauri 桌面端");
+}
+
+export async function getNativeMessagingHostStatus(): Promise<NativeMessagingHostStatus> {
+  const runtime = getDesktopRuntime();
+  if (runtime.hostKind === "electron" && globalThis.window?.electronAPI?.invoke) {
+    return globalThis.window.electronAPI.invoke("desktop:get-native-host-status") as Promise<NativeMessagingHostStatus>;
+  }
+  const tauriInvoke = (globalThis.window as any)?.__TAURI_INTERNALS__?.invoke;
+  if (runtime.hostKind === "tauri" && typeof tauriInvoke === "function") {
+    return tauriInvoke("get_native_messaging_host_status") as Promise<NativeMessagingHostStatus>;
+  }
+  return {
+    status: "unsupported",
+    installed: false,
+    reason: "Native Messaging 仅在桌面版 Windows 上可用",
+  };
 }
 
 export async function uninstallNativeMessagingHost(): Promise<unknown> {

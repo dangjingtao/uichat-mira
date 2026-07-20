@@ -32,6 +32,12 @@ describe('WebBridge tool surface', () => {
     assert.match(source, /WEBBRIDGE_TOOL_DEFINITIONS/);
     assert.match(source, /STALE_ELEMENT_REF|USER_ACTIVATION_REQUIRED/);
     assert.match(source, /AUTH_REQUIRED/);
+    assert.match(source, /ACCESS_TOKEN_EXPIRED/);
+    assert.match(source, /function isAccessTokenExpired/);
+    assert.match(source, /function isAccessTokenInvalid/);
+    assert.match(source, /function ensureWebBridgeOperationReady/);
+    assert.match(source, /MIRA_NOT_READY/);
+    assert.match(source, /await ensureWebBridgeOperationReady()/);
     assert.match(source, /storage\.local\.remove\(\['accessToken'\]\)/);
     assert.match(source, /auth_required/);
     assert.match(source, /ensurePageBridge/);
@@ -41,35 +47,78 @@ describe('WebBridge tool surface', () => {
     assert.match(source, /chrome\.tabs\.remove/);
     assert.match(source, /'tabs'\]/);
     assert.match(source, /tabGroups\.update/);
-    assert.match(source, /setBadgeText/);
+    assert.match(source, /setIcon/);
+    assert.match(source, /icon-128\$\{suffix\}\.png/);
+    assert.doesNotMatch(source, /setBadgeBackgroundColor/);
     assert.match(source, /publishWebBridgeEvent/);
     assert.match(source, /extensionVersion/);
     assert.match(source, /protocolVersion/);
   });
 
-  it('lets the extension own connection startup instead of exposing an activation page', async () => {
+  it('requires a valid JWT and Mira readiness before browser-side operations', async () => {
+    const source = await readExtensionFile('background.js');
+    assert.match(source, /isAccessTokenInvalid\(accessToken\)/);
+    assert.match(source, /webBridge\.transport !== 'native' \|\| webBridge\.miraReady/);
+    assert.match(source, /openOperationRecoveryPanel/);
+    assert.match(source, /bridgeError\(\s*\n?\s*expired \? 'ACCESS_TOKEN_EXPIRED' : 'AUTH_REQUIRED'/);
+    assert.match(source, /bridgeError\('MIRA_NOT_READY', message, 'start_mira'/);
+  });
+
+  it('revalidates the JWT for every established WebBridge message', async () => {
+    const server = await readFile(join(extensionRoot, '../../server/src/routes/webbridge.ts'), 'utf8');
+    assert.match(server, /accessToken\?: string/);
+    assert.match(server, /authenticate\(client\.accessToken\)/);
+    assert.match(server, /授权已失效，请重新登录/);
+  });
+
+  it('keeps website clipping rules as a UI control channel, outside the browser tool surface', async () => {
+    const background = await readExtensionFile('background.js');
+    const server = await readFile(join(extensionRoot, '../../server/src/routes/webbridge.ts'), 'utf8');
+    assert.match(background, /clip_rules_get/);
+    assert.match(background, /clip_rules_set/);
+    assert.match(background, /clip_region_pick/);
+    const content = await readExtensionFile('content/content.js');
+    assert.match(content, /WEBBRIDGE_CLIP_REGION_PICK/);
+    assert.match(content, /startClipRegionPicker/);
+    assert.match(content, /buildStableSelector/);
+    assert.match(background, /capabilities: \['look', 'browse', 'act', 'transfer', 'clip_rules'\]/);
+    assert.match(background, /chrome\.storage\.sync\.set\(\{ clipRules \}\)/);
+    assert.match(server, /clip_rules_get/);
+    assert.match(server, /client\.role === "ui"/);
+    assert.doesNotMatch(background, /name: ['"]clip_rules_(?:get|set)['"]/);
+  });
+
+  it('lets the extension own connection startup through the Side Panel', async () => {
     const source = await readExtensionFile('background.js');
     assert.match(source, /chrome\.runtime\.onInstalled/);
     assert.match(source, /chrome\.runtime\.onStartup/);
     assert.match(source, /connectWebBridge\(\);/);
-    assert.match(source, /openAuthorizationPageIfNeeded/);
-    assert.match(source, /auth\/authorize\.html/);
-    assert.match(source, /chrome\.tabs\.query\(\{\}\)/);
+    assert.match(source, /sidePanel\.setPanelBehavior/);
+    assert.match(source, /sidePanel\.open/);
+    assert.doesNotMatch(source, /openAuthorizationPageIfNeeded/);
+    assert.doesNotMatch(source, /auth\/authorize\.html/);
     assert.match(source, /reconnectRequested/);
     assert.match(source, /requestWebBridgeReconnect/);
-    assert.match(source, /WEBBRIDGE_OPEN_AUTHORIZATION_PAGE/);
-    assert.match(source, /openAuthorizationPage\(\)/);
+    assert.match(source, /function queueWebBridgeReconnect/);
+    assert.match(source, /Wait for both change events before reading the connection configuration/);
+    assert.match(source, /WEBBRIDGE_OPEN_SIDE_PANEL/);
     assert.doesNotMatch(source, /type === ['"]WEBBRIDGE_ACTIVATE['"]/);
     assert.doesNotMatch(source, /chrome-extension:\/\//);
   });
 
-  it('keeps Native Messaging attached while the proxy reconnects Mira over local IPC', async () => {
+  it('treats Native Host readiness separately from Mira registration', async () => {
     const source = await readExtensionFile('background.js');
     const hostSource = await readExtensionFile('../native-host/host.mjs');
 
     assert.match(source, /startNativeHostReadyTimer\(nativeSocket\)/);
     assert.doesNotMatch(source, /startWebBridgeHandshakeTimer\(nativeSocket\)/);
     assert.match(source, /request\.status === 'native_ready'/);
+    assert.match(source, /webBridge\.ready = true;\s*webBridge\.miraReady = false;/);
+    assert.match(source, /\['mira_connecting', 'backend_connecting'\]/);
+    assert.match(source, /webBridge\.miraReady = true;/);
+    assert.match(source, /function startNativeHostReadyTimer[\s\S]*?webBridge\.miraReady = false;/);
+    assert.match(source, /message: 'Native Host 已连接；Mira 后端正在同步'/);
+    assert.match(source, /message: 'Native Host 已连接；Mira 后端正在重连'/);
     assert.match(hostSource, /node:net/);
     assert.match(hostSource, /NATIVE_HOST_READY/);
     assert.match(hostSource, /MIRA_PIPE_CONNECTING/);
@@ -99,22 +148,36 @@ describe('WebBridge tool surface', () => {
     }
   });
 
-  it('opens the authorization page from the local Mira page through the content bridge', async () => {
+  it('opens the Side Panel from the local Mira page through the content bridge', async () => {
     const source = await readExtensionFile('content/content.js');
     assert.match(source, /mira-webbridge-ui/);
     assert.match(source, /WEBBRIDGE_OPEN_AUTHORIZATION_PAGE/);
     assert.match(source, /chrome\.runtime\.sendMessage/);
   });
 
-  it('does not expose WebSocket transport selection in the popup', async () => {
+  it('does not expose WebSocket transport selection in the Side Panel', async () => {
     const html = await readExtensionFile('popup/popup.html');
     const source = await readExtensionFile('popup/popup.js');
+    assert.match(html, /id="workspaceView"/);
+    assert.match(html, /id="jianxingTab"/);
+    assert.match(html, /id="clipTab"/);
+    assert.match(html, /id="authorizationCode"/);
+    assert.match(source, /WEBBRIDGE_GET_STATUS/);
+    assert.match(source, /tabs\.onActivated/);
+    assert.match(source, /tabs\.onUpdated/);
     assert.doesNotMatch(html, /id="transport"/);
     assert.doesNotMatch(source, /storage\.sync\.set\(\{ transport \}\)/);
     const optionsHtml = await readExtensionFile('options/options.html');
     const optionsSource = await readExtensionFile('options/options.js');
     assert.doesNotMatch(optionsHtml, /WebSocket|id="transport"/);
     assert.doesNotMatch(optionsSource, /transport/);
+    assert.match(optionsHtml, /id="openSidePanel"/);
+  });
+
+  it('pins the unpacked development extension identity for Native Messaging', async () => {
+    const manifest = JSON.parse(await readExtensionFile('../manifest.json'));
+    assert.equal(typeof manifest.key, 'string');
+    assert.ok(manifest.key.length > 0);
   });
 });
 
@@ -135,30 +198,39 @@ describe('WebBridge permission boundary', () => {
 });
 
 describe('WebBridge authorization entry', () => {
-  it('keeps authorization-code exchange only on the standalone authorization page', async () => {
-    const [popupHtml, popupSource, optionsHtml, optionsSource, authHtml, authSource] = await Promise.all([
+  it('keeps authorization-code exchange inside the Side Panel', async () => {
+    const [popupHtml, popupSource, optionsHtml, optionsSource, authCodeSource] = await Promise.all([
       readExtensionFile('popup/popup.html'),
       readExtensionFile('popup/popup.js'),
       readExtensionFile('options/options.html'),
       readExtensionFile('options/options.js'),
-      readExtensionFile('auth/authorize.html'),
-      readExtensionFile('auth/authorize.js'),
+      readExtensionFile('lib/authorization-code.js'),
     ]);
 
-    for (const source of [popupHtml, popupSource, optionsHtml, optionsSource]) {
-      assert.doesNotMatch(source, /authorizationCode|exchangeCodeBtn|\/oauth\/token|authorization-code\.js/);
-    }
-    assert.match(authHtml, /id="authorizationCode"/);
-    assert.match(authHtml, /id="exchangeCodeBtn"/);
-    assert.match(authHtml, /authorization-code\.js/);
-    assert.equal(authSource.match(/\/oauth\/token/g)?.length, 1);
+    assert.match(popupHtml, /id="authorizationCode"/);
+    assert.match(popupHtml, /id="exchangeCodeBtn"/);
+    assert.match(popupSource, /function isAccessTokenExpired/);
+    assert.match(popupSource, /授权已过期，请重新输入 Mira 授权码/);
+    assert.match(popupHtml, /authorization-code\.js/);
+    assert.equal(popupSource.match(/\/oauth\/token/g)?.length, 1);
+    assert.match(authCodeSource, /MiraAuthorizationCode/);
+    assert.doesNotMatch(optionsHtml, /authorizationCode|exchangeCodeBtn|\/oauth\/token/);
+    assert.doesNotMatch(optionsSource, /authorizationCode|exchangeCodeBtn|\/oauth\/token/);
   });
 
-  it('defaults the standalone authorization page to Native Messaging', async () => {
-    const source = await readExtensionFile('auth/authorize.js');
-    assert.match(source, /chrome\.storage\.sync\.set\(\{ backendUrl: parsed\.backendUrl \}\)/);
-    const html = await readExtensionFile('auth/authorize.html');
-    assert.doesNotMatch(html, /transport|WebSocket/);
+  it('refreshes the page bridge before popup clipping so stale content scripts cannot keep old rules', async () => {
+    const popup = await readExtensionFile('popup/popup.js');
+    const content = await readExtensionFile('content/content.js');
+    assert.match(popup, /每次活动页面变化都重新注入页面桥接/);
+    assert.match(popup, /files: \[`\$\{extensionAssetPrefix\}lib\/clip-rules\.js`\]/);
+    assert.match(content, /__miraClipperDispose/);
+    assert.match(content, /removeListener\(handleRuntimeMessage\)/);
+  });
+
+  it('keeps inline authorization on the Native Messaging path', async () => {
+    const source = await readExtensionFile('popup/popup.js');
+    assert.match(source, /chrome\.storage\.sync\.set\(\{ backendUrl \}\)/);
+    assert.match(source, /chrome\.runtime\.sendMessage\(\{ type: 'WEBBRIDGE_RECONNECT' \}\)/);
     assert.doesNotMatch(source, /transport/);
   });
 });

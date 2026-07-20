@@ -1,16 +1,16 @@
-# 见行 WebBridge 调试状态
+# 触界 WebBridge 调试状态
 
 Status: Current debugging record
 Owner: browser-extension / runtime
-Last verified: 2026-07-18
+Last verified: 2026-07-21
 Layer: raw-source
-Module: JianXing / MiraWebBrige
+Module: 触界 / WebBridge
 Doc Type: debugging-status
 Canonical: true
 
 ## 这页记录什么
 
-这页记录见行（MiraWebBrige）当前在本地调试环境中的真实状态，供继续排查和评审使用。
+这页记录触界当前在本地调试环境中的真实状态，供继续排查和评审使用。
 
 这不是最终设计，也不是“已完成”说明。文档把已经观察到的事实、当前仍然不稳定的行为、未完成的能力和后续验证条件分开记录。
 
@@ -24,12 +24,24 @@ Canonical: true
 - 扩展授权成功只代表授权码换取 token 成功，不代表扩展已经完成 WebSocket 或 Native Messaging 握手。
 - 当前本地开发加载应使用 `mira-clipper-ext/` 根目录；`extension/` 子目录也有一份 manifest，但它会产生不同的扩展 ID，不能直接视为同一个运行实例。
 
+## 本轮现场复核（2026-07-21）
+
+本轮只复核了 Native 连接链路，没有把 WebSocket 的历史结果当作 Native 结果：
+
+- 当前 Chrome 使用的 Default Profile 的 `Preferences` 中没有扩展注册项，扩展数量为 `0`，没有发现开发扩展 ID `omdcdmcedejkenmjmkepgpinnehhmfkj`。
+- 当前系统没有运行中的 `MiraWebBridgeHost.exe`。
+- Chrome Native Messaging 注册表项存在，manifest 指向 `D:\uichat-mira\mira-clipper-ext\dist\native\MiraWebBridgeHost.exe`，Host exe 和 `host.mjs` 文件均存在。
+- 因此本轮没有观察到 `chrome.runtime.connectNative()` 被执行，也没有观察到 Native Host 启动、扩展 `hello`、backend 扩展会话登记或 UI 收到 `extension_connected`。
+- 应用页面能连接 backend，只能证明 UI WebBridge 客户端存在；当前“等待扩展”与上述现场证据一致。
+
+这意味着当前状态是“Native Host 已注册但 Native 未连接”，不是“Native 已接通”。上述 Profile 检查只代表当前 Chrome 选中的 Profile；如果用户实际加载扩展的是另一个 Chrome Profile，需要在那个 Profile 中重复检查。
+
 ## 连接拓扑
 
 ### WebSocket
 
 ```text
-见行扩展 Service Worker
+触界扩展 Service Worker
   └─ WebSocket /webbridge
        └─ Mira Fastify backend
             └─ 应用页面 WebBridgeClient
@@ -40,20 +52,26 @@ Canonical: true
 ### Native Messaging
 
 ```text
-见行扩展 Service Worker
+触界扩展 Service Worker
   └─ chrome.runtime.connectNative()
        └─ MiraWebBridgeHost.exe
             └─ host.mjs
-                 └─ WebSocket /webbridge
-                      └─ Mira Fastify backend
+                 └─ 本机命名管道 / Unix socket
+                      └─ Mira Fastify backend 的 WebBridge 路由
 ```
 
-Native Messaging 的 stdio 消息使用 Chrome 规定的 framing：4 字节消息长度，后接 UTF-8 JSON。Native Host 到 backend 的通信仍然使用 `/webbridge` WebSocket。
+Native Messaging 的 stdio 消息使用 Chrome 规定的 framing：4 字节消息长度，后接 UTF-8 JSON。Native Host 只连接本机 IPC；Mira backend 在同一应用进程内处理该连接并完成 `/webbridge` 的扩展会话登记。
 
 Host 的当前状态边界：
 
-- backend 暂时不可用时，Host 保持 Native Port，并使用有界指数退避重连 backend。
-- backend 返回 `AUTH_REQUIRED` 时，Host 转发原始错误和一次 `auth_required` 状态，停止 backend 重连；扩展负责清理 token 并打开授权页。
+- `native_ready` 只表示 Chrome 扩展与 Native Host 的 Port 已就绪；它不等待 Mira backend 注册完成。
+- Host 通过本机命名管道（Windows）或 Unix socket（其他平台）接入 Mira。backend 暂时不可用时，Host 保持 Native Port，并使用有界指数退避重连本机 IPC。
+- `mira_connecting` 仅表示 Host 正在同步 Mira backend。扩展侧栏仍显示 Native Host 已连接，不把它误报为 Native 正在连接。
+- `hello_ack` 完成 backend 的扩展会话注册、工具和能力同步；它不决定 Native Host 是否存活。
+- 扩展在 Service Worker 和 Side Panel 启动时会主动识别已到期的 JWT；backend 返回 `AUTH_REQUIRED` 时，Host 转发原始错误和一次 `auth_required` 状态。两种情况都会停止本机 IPC 重连、清理 token，并让 Side Panel 回到授权状态。
+- 浏览器操作的执行资格同时要求扩展本地 JWT 有效，以及 Native Host 已连接并完成 Mira `hello_ack` 同步。缺少或过期 JWT 时进入授权入口；Mira 未启动或仍在同步时拒绝执行，但不删除仍有效的 JWT。
+- backend 不只在 `hello` 校验 JWT。连接建立后收到的每条 WebBridge 消息都会重新验证原始 JWT；令牌过期后返回 `AUTH_REQUIRED`、通知客户端并关闭连接。
+- 开发加载必须使用 `mira-clipper-ext/` 根目录。该 manifest 固定开发扩展 ID；`extension/` 子目录是打包源，单独加载会产生不同身份，Native Host 不会接受它。
 - backend URL 无效时，Host 返回 framing 完整的错误状态，不进入重连循环。
 - Chrome stdin 结束时，Host 才结束进程；Host 不通过 stdout 输出诊断日志。
 
@@ -80,8 +98,8 @@ Host 的当前状态边界：
 
 | 加载目录 | Service Worker 路径 | 当前观察到的扩展 ID | 当前用途 |
 | --- | --- | --- | --- |
-| `mira-clipper-ext/` | `extension/background.js` | `gmgdbphkmkdedfabchklghghdcpjepoc` | 当前本地开发加载目录 |
-| `mira-clipper-ext/extension/` | `background.js` | `nmokeaddhccicikbkemfpgkodojchhdb` | 备用目录形态，必须单独管理 ID 和 Native 注册 |
+| `mira-clipper-ext/` | `extension/background.js` | `omdcdmcedejkenmjmkepgpinnehhmfkj` | 当前本地开发加载目录，manifest 携带开发公钥 |
+| `mira-clipper-ext/extension/` | `background.js` | 未固定，取决于加载方式和签名 | 打包源，不应作为当前开发扩展加载目录 |
 
 这两个目录不是同一个 Chrome 扩展实例。Chrome 会根据 manifest 和目录内容分别加载它们。
 
@@ -94,9 +112,9 @@ Host 的当前状态边界：
 
 ### Native Messaging
 
-- 直接运行 `host.mjs` 并发送合法 Native Messaging hello 后，曾收到 backend 返回的 `hello_ack`。
-- 通过 `MiraWebBridgeHost.exe` 启动时，曾出现没有收到 Native 返回帧的情况。
-- 这两条观察结果仅用于缩小后续验证范围，不能单独作为 Native 根因结论。
+- 直接运行 `host.mjs` 并发送合法 Native Messaging hello 后，历史上曾收到 `native_ready`，并可通过本机 IPC 收到 backend 返回的 `hello_ack`。
+- 通过 `MiraWebBridgeHost.exe` 启动时，历史上曾出现没有收到 Native 返回帧的情况。
+- 本轮真实 Chrome 现场没有启动 Host 进程，因此无法用本轮结果判断 launcher、Native framing 或本机 IPC 是否仍有问题。
 - 当前 Native 仍未完成真实 Chrome 用户流程验收。
 
 ### 自动化检查
@@ -105,10 +123,10 @@ Host 的当前状态边界：
 
 - `npm run check`：通过。
 - 扩展和 Native Host 契约测试：38 项通过。
-- Popup / content script E2E：7/7 通过。
+- Side Panel / content script E2E：以当前测试输出为准。
 - 使用本地 backend 的无效 token smoke：收到 `AUTH_REQUIRED` response 和一次 `auth_required` 状态，未观察到重复鉴权通知。
 - 使用临时编译 launcher 的 framing smoke：`MiraWebBridgeHost.exe -> host.mjs` 能转发错误状态帧。
-- 这些测试覆盖脚本语法、manifest、Popup、content script 和部分协议契约。
+- 这些测试覆盖脚本语法、manifest、Side Panel、content script 和部分协议契约。
 - 这些测试不等价于真实 Chrome 中的长期 WebSocket 稳定性，也不等价于 Native Messaging 安装、注册、启动和升级验收。
 
 ## 当前问题
@@ -136,11 +154,37 @@ Host 的当前状态边界：
 当前尚未完成以下闭环：
 
 - Chrome 扩展调用 `connectNative()` 的真实用户流程。
-- Chrome 启动安装目录中的 Native Host，并完成真实 `hello_ack` 验收。
+- Chrome 启动安装目录中的 Native Host，并完成真实 `native_ready`、本机 IPC 同步和 `hello_ack` 验收。
 - Native Host 正确继承 Chrome 的 stdin/stdout/stderr，并在真实 Chrome 流程下完成验证。
 - Native Port 断开后 Host 退出且不会遗留旧进程的真实 Chrome 验收。
 - Mira 升级后 Native manifest、launcher、host script 和扩展 ID 仍然匹配。
 - 开发解压扩展、dev CRX、prod CRX 的 Native 注册边界清晰且可重复验证。
+
+### 待 Mira 解决的疑问
+
+以下不是已经确认的根因，而是需要 Mira 根据架构和实际运行环境确认的问题：
+
+1. **为什么当前 Chrome Profile 没有扩展实例？**
+   - Electron 的下载或授权流程是否只生成了 CRX/ZIP，却没有让用户明确加载解压目录？
+   - 用户加载扩展后，是否加载到了另一个 Chrome Profile，导致 Electron 检查的 Profile 与用户测试的 Profile 不一致？
+   - “加载 `D:\uichat-mira\mira-clipper-ext`”是否仍是当前推荐路径，还是应该由 Mira 提供明确的安装/更新入口？
+
+2. **Native Host 的启动责任是否已经设计清楚？**
+   - 当前实现要求扩展 Service Worker 执行 `chrome.runtime.connectNative()`；Electron 的“连接”按钮不能直接调用 Chrome 扩展 API。产品上是否应该取消这个按钮，改为显示“等待扩展连接”及具体诊断？
+   - 授权成功后，扩展是否一定会通知 Service Worker 重连，并在重连后自动启动 Native Host？
+   - 如果扩展已加载但 `connectNative()` 失败，真实的 `chrome.runtime.lastError` 是否能在侧栏和 Mira 页面可见？
+
+3. **Native manifest 的开发边界是否需要调整？**
+   - 当前 manifest 允许开发 ID `omdcdmcedejkenmjmkepgpinnehhmfkj` 和生产 CRX ID `dfmdfjipkdhegdgojlhkmlehnanljppg`。这是否与 Mira 当前实际加载的扩展签名一致？
+   - 是否存在旧注册项、旧扩展 ID 或旧 Mira 用户目录，使得“Native 已安装”检查通过，但 Chrome 实际找不到当前扩展对应的 Host？
+
+4. **界面状态是否需要拆成三层？**
+   - `应用 UI ↔ backend`
+   - `Chrome 扩展 ↔ Native Host`
+   - `Native Host ↔ Mira backend`
+   当前 UI 的“连接中/等待扩展”是否应分别显示这三层，而不是用一个 `connected` 状态承载全部含义？
+
+在没有完成以下事实观测前，不应把 Native 标记为已完成：Host 进程启动、扩展发送 hello、backend 登记 extension client、UI 收到 `extension_connected`。
 
 ## 参考信息，不是已确认原因
 
@@ -159,7 +203,7 @@ Host 的当前状态边界：
 按下面顺序验证，避免把两套传输机制的结果混在一起：
 
 1. 只加载 `D:\uichat-mira\mira-clipper-ext` 根目录扩展。
-2. 只选择 WebSocket，完成授权后记录扩展 Popup、Service Worker 和 Mira 页面三处状态。
+2. 完成授权后记录扩展 Side Panel、Service Worker 和 Mira 页面三处状态。
 3. 保持同一个授权 token，验证应用页面刷新、扩展重新加载、Chrome 放置一段时间后的重连行为。
 4. 清理旧 Native Host 进程后，再单独选择 Native Messaging。
 5. 查看 Chrome 扩展错误、Native Host 进程树、Native manifest 的 `allowed_origins` 和 backend WebSocket client 数量。
@@ -169,7 +213,7 @@ Host 的当前状态边界：
 
 Native 只有同时满足以下条件，才能标记为完成：
 
-- Chrome `connectNative()` 能稳定收到 Native Host 返回的 `hello_ack`。
+- Chrome `connectNative()` 能稳定收到 Native Host 返回的 `native_ready`；Mira 本机 IPC 恢复时无需重建 Native Port，并能随后收到 `hello_ack`。
 - backend 能看到一条对应扩展 client，且没有重复 client 持续增长。
 - 切换 Native / WebSocket 后旧通道会关闭，新的通道只建立一次。
 - Native Host 断开时进程可以退出，不遗留旧 launcher 或 Node 子进程。

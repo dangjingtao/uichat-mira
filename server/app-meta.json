@@ -38,11 +38,11 @@
         {
           "version": "0.7.1",
           "commit": {
-            "hash": "ba95660c6e94333b1ab78619b375f8976143cd24",
-            "shortHash": "ba95660",
-            "message": "fix: keep local IPC reconnect responsive",
-            "author": "DangJingtao",
-            "date": "2026-07-19T06:02:42+08:00"
+            "hash": "5bc5c70131d9dc18f8f75a918b0ea2c7585c84f5",
+            "shortHash": "5bc5c70",
+            "message": "feat: complete evolving knowledge and JianXing integration",
+            "author": "Tomz",
+            "date": "2026-07-19T07:51:58+08:00"
           }
         },
         {

@@ -104,9 +104,9 @@ const settingsPending = {
       },
       studioEntries: {
         jianXing: {
-          title: "见行",
+          title: "触界",
           description: "Connect to the current Chrome session to inspect, browse, act on pages, and handle file operations locally.",
-          actions: { open: "Open 见行" },
+          actions: { open: "Open 触界" },
         },
         notion: {
           title: "Notion",

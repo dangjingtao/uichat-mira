@@ -1,5 +1,5 @@
 /**
- * MiraWebBrige - Background Service Worker
+ * 触界 - Background Service Worker
  * 职责：右键菜单注册、跨域请求兜底
  */
 
@@ -83,7 +83,9 @@ const WEBBRIDGE_TOOL_DEFINITIONS = [
 
 const webBridge = {
   socket: null,
+  // `ready` tracks Chrome <-> Native Host readiness. Mira registration is separate.
   ready: false,
+  miraReady: false,
   reconnectTimer: null,
   reconnectAttempts: 0,
   activeTabId: null,
@@ -97,7 +99,6 @@ const webBridge = {
 
 const visibleControl = {
   groupByWindow: new Map(),
-  badgeTimer: null,
 };
 
 const loadedManifest = chrome.runtime.getManifest?.() || {};
@@ -105,33 +106,26 @@ const EXTENSION_VERSION = loadedManifest.version || 'unknown';
 const extensionAssetPrefix = loadedManifest.background?.service_worker?.startsWith('extension/')
   ? 'extension/'
   : '';
+const actionIconPaths = (suffix = '') => ({
+  16: `${extensionAssetPrefix}icons/icon-16${suffix}.png`,
+  32: `${extensionAssetPrefix}icons/icon-32${suffix}.png`,
+  48: `${extensionAssetPrefix}icons/icon-48${suffix}.png`,
+  128: `${extensionAssetPrefix}icons/icon-128${suffix}.png`,
+});
 
-function getAuthorizationPageUrl() {
-  return chrome.runtime.getURL(`${extensionAssetPrefix}auth/authorize.html`);
+async function configureSidePanel() {
+  await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 }
 
-async function openAuthorizationPageIfNeeded() {
-  try {
-    const { accessToken } = await chrome.storage.local.get(['accessToken']);
-    if (typeof accessToken === 'string' && accessToken.trim()) return;
-
-    await openAuthorizationPage();
-  } catch (error) {
-    console.warn('无法打开见行授权页', error);
+async function openSidePanel(windowId) {
+  let targetWindowId = windowId;
+  if (!Number.isInteger(targetWindowId)) {
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    targetWindowId = activeTab?.windowId;
   }
-}
-
-async function openAuthorizationPage() {
-  const url = getAuthorizationPageUrl();
-  const tabs = await chrome.tabs.query({});
-  const existingTab = tabs.find((tab) => tab.url === url && Number.isInteger(tab.id));
-  if (existingTab?.id !== undefined) {
-    await chrome.tabs.update(existingTab.id, { active: true });
-    return { ok: true, url, tabId: existingTab.id };
-  }
-
-  const createdTab = await chrome.tabs.create({ url, active: true });
-  return { ok: true, url, tabId: createdTab.id };
+  if (!Number.isInteger(targetWindowId)) throw new Error('无法确定当前 Chrome 窗口');
+  await chrome.sidePanel.open({ windowId: targetWindowId });
+  return { ok: true, windowId: targetWindowId };
 }
 
 async function ensureContextMenus() {
@@ -144,16 +138,19 @@ async function ensureContextMenus() {
 }
 
 chrome.runtime.onInstalled.addListener(() => {
+  configureSidePanel().catch((error) => console.warn('无法配置触界侧栏', error));
   ensureContextMenus();
   connectWebBridge();
 });
 
 chrome.runtime.onStartup.addListener(() => {
+  configureSidePanel().catch((error) => console.warn('无法配置触界侧栏', error));
   ensureContextMenus();
   connectWebBridge();
 });
 
 // 扩展更新或后台脚本重新加载时，也确保已有安装实例能看到菜单。
+configureSidePanel().catch((error) => console.warn('无法配置触界侧栏', error));
 ensureContextMenus();
 connectWebBridge();
 
@@ -163,6 +160,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const imageUrl = (info.srcUrl || '').trim();
   const selectedText = (info.selectionText || '').trim();
   await chrome.storage.session.set({
+    sidePanelSection: 'clip',
     pendingCapture: imageUrl
       ? {
         captureMode: 'image',
@@ -179,7 +177,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         favicon: tab?.favIconUrl || '',
       },
   });
-  chrome.action.openPopup();
+  await openSidePanel(tab?.windowId);
 });
 
 function toWebSocketUrl(backendUrl) {
@@ -220,9 +218,148 @@ function publishWebBridgeStatus(status, detail = {}) {
 }
 
 function publishWebBridgeEvent(event, detail = {}) {
+  chrome.runtime.sendMessage({
+    type: 'WEBBRIDGE_OPERATION',
+    event,
+    ...detail,
+  }).catch(() => {});
   const socket = webBridge.socket;
   if (!webBridge.ready || socket?.readyState !== WebSocket.OPEN) return;
   socket.send(JSON.stringify({ version: WEBBRIDGE_PROTOCOL_VERSION, type: 'status', status: 'operation', event, ...detail }));
+}
+
+async function markAuthorizationRequired() {
+  await Promise.all([
+    chrome.action.setBadgeText({ text: '' }),
+    chrome.action.setIcon({ path: actionIconPaths('-attention') }),
+    chrome.action.setTitle({ title: '触界 - 待授权' }),
+  ]);
+}
+
+async function markAuthorizationReady() {
+  await Promise.all([
+    chrome.action.setBadgeText({ text: '' }),
+    chrome.action.setIcon({ path: actionIconPaths() }),
+    chrome.action.setTitle({ title: '打开触界' }),
+  ]);
+}
+
+function isAccessTokenExpired(accessToken) {
+  if (typeof accessToken !== 'string') return false;
+  const payloadPart = accessToken.split('.')[1];
+  if (!payloadPart) return false;
+  try {
+    const base64 = payloadPart.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(payloadPart.length / 4) * 4, '=');
+    const payload = JSON.parse(atob(base64));
+    return typeof payload.exp === 'number' && payload.exp * 1000 <= Date.now();
+  } catch (_) {
+    return false;
+  }
+}
+
+function isAccessTokenInvalid(accessToken) {
+  if (typeof accessToken !== 'string' || !accessToken.trim()) return true;
+  const parts = accessToken.split('.');
+  if (parts.length !== 3 || parts.some((part) => !part)) return true;
+  const payloadPart = parts[1];
+  try {
+    const base64 = payloadPart.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(payloadPart.length / 4) * 4, '=');
+    const payload = JSON.parse(atob(base64));
+    return typeof payload.exp !== 'number' || payload.exp * 1000 <= Date.now();
+  } catch (_) {
+    return true;
+  }
+}
+
+async function enterAuthorizationRequired(code, message) {
+  webBridge.authRequired = true;
+  await chrome.storage.local.remove(['accessToken']);
+  publishWebBridgeStatus('auth_required', { code, message });
+  await markAuthorizationRequired();
+}
+
+async function openOperationRecoveryPanel() {
+  try {
+    await openSidePanel();
+  } catch (error) {
+    // sidePanel.open may require a user gesture. The status and stored state still
+    // ensure the next toolbar click opens the correct authorization/status view.
+    console.warn('无法自动打开触界侧栏', error?.message || error);
+  }
+}
+
+async function ensureWebBridgeOperationReady() {
+  const { accessToken } = await chrome.storage.local.get(['accessToken']);
+  if (isAccessTokenInvalid(accessToken) || webBridge.authRequired) {
+    const expired = Boolean(accessToken) && isAccessTokenExpired(accessToken);
+    await enterAuthorizationRequired(
+      expired ? 'ACCESS_TOKEN_EXPIRED' : 'AUTH_REQUIRED',
+      expired ? '触界授权已过期，请在侧栏重新授权' : '触界需要有效的 Mira 授权令牌，请在侧栏授权',
+    );
+    await openOperationRecoveryPanel();
+    throw Object.assign(new Error(expired ? '触界授权已过期，请在侧栏重新授权' : '触界需要有效的 Mira 授权令牌，请在侧栏授权'), {
+      bridgeError: bridgeError(
+        expired ? 'ACCESS_TOKEN_EXPIRED' : 'AUTH_REQUIRED',
+        expired ? '触界授权已过期，请在侧栏重新授权' : '触界需要有效的 Mira 授权令牌，请在侧栏授权',
+        'authorize',
+        true,
+      ),
+    });
+  }
+
+  const miraReady = webBridge.ready && (webBridge.transport !== 'native' || webBridge.miraReady);
+  if (!miraReady) {
+    const message = webBridge.transport === 'native' && webBridge.ready
+      ? 'Mira 应用尚未启动或正在连接，请先启动 Mira'
+      : 'Mira 应用尚未连接，请先启动 Mira';
+    publishWebBridgeStatus('error', {
+      code: 'MIRA_NOT_READY',
+      message,
+    });
+    await openOperationRecoveryPanel();
+    throw Object.assign(new Error(message), {
+      bridgeError: bridgeError('MIRA_NOT_READY', message, 'start_mira', true),
+    });
+  }
+
+  return accessToken;
+}
+
+async function getSidePanelStatus() {
+  const { accessToken } = await chrome.storage.local.get(['accessToken']);
+  if (isAccessTokenInvalid(accessToken)) {
+    const expired = Boolean(accessToken) && isAccessTokenExpired(accessToken);
+    await enterAuthorizationRequired(
+      expired ? 'ACCESS_TOKEN_EXPIRED' : 'AUTH_REQUIRED',
+      expired ? '触界授权已过期，请在侧栏重新授权' : '触界需要有效的 Mira 授权令牌，请在侧栏授权',
+    );
+    return { ok: true, status: 'auth_required', connected: false, code: expired ? 'ACCESS_TOKEN_EXPIRED' : 'AUTH_REQUIRED' };
+  }
+  if (!accessToken || webBridge.authRequired) {
+    return { ok: true, status: 'auth_required', connected: false };
+  }
+  if (webBridge.ready) {
+    const waitingForMira = webBridge.transport === 'native' && !webBridge.miraReady;
+    return {
+      ok: true,
+      status: waitingForMira ? 'connecting' : 'connected',
+      connected: !waitingForMira,
+      transport: webBridge.transport,
+      miraConnected: !waitingForMira,
+      message: waitingForMira ? 'Native Host 已连接；Mira 后端正在同步' : '触界已连接 Mira',
+    };
+  }
+  if (webBridge.connecting || webBridge.socket) {
+    return { ok: true, status: 'connecting', connected: false, transport: webBridge.transport };
+  }
+  return {
+    ok: true,
+    status: 'error',
+    code: 'MIRA_NOT_READY',
+    connected: false,
+    transport: webBridge.transport,
+    message: 'Mira 应用尚未启动，请先启动 Mira',
+  };
 }
 
 function stopWebSocketKeepAlive() {
@@ -246,6 +383,7 @@ function closeTransport() {
   const socket = webBridge.socket;
   webBridge.socket = null;
   webBridge.ready = false;
+  webBridge.miraReady = false;
   stopWebSocketKeepAlive();
   if (webBridge.handshakeTimer) {
     clearTimeout(webBridge.handshakeTimer);
@@ -261,10 +399,11 @@ function startWebBridgeHandshakeTimer(socket) {
     if (webBridge.socket !== socket || webBridge.ready) return;
     webBridge.socket = null;
     webBridge.ready = false;
+    webBridge.miraReady = false;
     stopWebSocketKeepAlive();
     publishWebBridgeStatus('error', {
       code: 'BRIDGE_HANDSHAKE_TIMEOUT',
-      message: '见行扩展握手超时，正在重新连接',
+      message: '触界扩展握手超时，正在重新连接',
     });
     socket.close();
     scheduleWebBridgeReconnect();
@@ -278,6 +417,7 @@ function startNativeHostReadyTimer(socket) {
     if (webBridge.socket !== socket) return;
     webBridge.socket = null;
     webBridge.ready = false;
+    webBridge.miraReady = false;
     publishWebBridgeStatus('error', {
       code: 'NATIVE_HOST_READY_TIMEOUT',
       message: 'Native Messaging Host 未响应，正在重新连接',
@@ -301,8 +441,6 @@ async function ensureVisibleControl(tabId, operation) {
     catch (_) { groupId = await chrome.tabs.group({ tabIds: [tabId] }); visibleControl.groupByWindow.set(tab.windowId, groupId); }
   }
   await chrome.tabGroups.update(groupId, { title: '见行 · AI 操作中', color: 'blue', collapsed: false });
-  await chrome.action.setBadgeText({ tabId, text: 'AI' });
-  await chrome.action.setBadgeBackgroundColor({ tabId, color: '#2563eb' });
   await sendPageMessage(tabId, { type: 'WEBBRIDGE_STATUS', status: 'running', operation });
   publishWebBridgeEvent('started', { tabId, operation });
 }
@@ -310,11 +448,8 @@ async function ensureVisibleControl(tabId, operation) {
 async function finishVisibleControl(tabId, operation, ok, error) {
   try {
     await sendPageMessage(tabId, { type: 'WEBBRIDGE_STATUS', status: ok ? 'completed' : 'failed', operation, error });
-    await chrome.action.setBadgeText({ tabId, text: ok ? '✓' : '!' });
-    await chrome.action.setBadgeBackgroundColor({ tabId, color: ok ? '#16a34a' : '#dc2626' });
   } catch (_) {}
   publishWebBridgeEvent('finished', { tabId, operation, ok, ...(error ? { error } : {}) });
-  setTimeout(() => chrome.action.setBadgeText({ tabId, text: '' }).catch(() => {}), 3000);
 }
 
 function describeOperation(tool, params) {
@@ -334,6 +469,20 @@ function scheduleWebBridgeReconnect() {
     webBridge.reconnectTimer = null;
     connectWebBridge();
   }, delay);
+}
+
+function queueWebBridgeReconnect() {
+  closeTransport();
+  webBridge.authRequired = false;
+  webBridge.reconnectAttempts = 0;
+  webBridge.reconnectRequested = true;
+  if (webBridge.reconnectTimer) clearTimeout(webBridge.reconnectTimer);
+  // Authorization writes backendUrl and accessToken in separate storage areas.
+  // Wait for both change events before reading the connection configuration.
+  webBridge.reconnectTimer = setTimeout(() => {
+    webBridge.reconnectTimer = null;
+    void connectWebBridge();
+  }, 100);
 }
 
 function requestWebBridgeReconnect() {
@@ -367,15 +516,15 @@ async function connectWebBridge() {
     return;
   }
 
-  if (!config.accessToken) {
-    webBridge.authRequired = true;
-    publishWebBridgeStatus('auth_required', {
-      code: 'AUTH_REQUIRED',
-      message: '见行授权已失效，请打开授权页重新授权',
-    });
-    await openAuthorizationPageIfNeeded();
+  if (isAccessTokenInvalid(config.accessToken)) {
+    await enterAuthorizationRequired(
+      config.accessToken ? 'ACCESS_TOKEN_EXPIRED' : 'AUTH_REQUIRED',
+      config.accessToken ? '触界授权已过期，请在侧栏重新授权' : '触界需要 Mira 授权码',
+    );
     return;
   }
+
+  await markAuthorizationReady();
 
   if (!config.url) {
     publishWebBridgeStatus('disconnected', { code: 'BACKEND_NOT_CONFIGURED' });
@@ -387,13 +536,14 @@ async function connectWebBridge() {
   if (config.transport === 'native') {
     try {
       const port = chrome.runtime.connectNative('com.tomz.uichat.webbridge');
-      const nativeSocket = {
+       const nativeSocket = {
         readyState: WebSocket.OPEN,
         send(payload) { port.postMessage(JSON.parse(payload)); },
         close() { port.disconnect(); },
       };
       webBridge.socket = nativeSocket;
       webBridge.ready = false;
+      webBridge.miraReady = false;
       // Native readiness and backend readiness are two separate states. Only tear down
       // this port when the Native Host itself fails to acknowledge within the timeout.
       startNativeHostReadyTimer(nativeSocket);
@@ -402,6 +552,7 @@ async function connectWebBridge() {
         if (webBridge.socket !== nativeSocket) return;
         webBridge.socket = null;
         webBridge.ready = false;
+        webBridge.miraReady = false;
         if (webBridge.handshakeTimer) {
           clearTimeout(webBridge.handshakeTimer);
           webBridge.handshakeTimer = null;
@@ -409,7 +560,7 @@ async function connectWebBridge() {
         publishWebBridgeStatus('disconnected', { code: chrome.runtime.lastError?.message || 'BRIDGE_DISCONNECTED' });
         scheduleWebBridgeReconnect();
       });
-      nativeSocket.send(JSON.stringify({ version: 1, protocolVersion: WEBBRIDGE_PROTOCOL_VERSION, type: 'hello', client: 'mira-webbridge-extension', extensionName: '见行', extensionVersion: EXTENSION_VERSION, backendUrl: config.backendUrl, accessToken: config.accessToken, transport: config.transport, capabilities: ['look', 'browse', 'act', 'transfer'], tools: WEBBRIDGE_TOOL_DEFINITIONS }));
+       nativeSocket.send(JSON.stringify({ version: 1, protocolVersion: WEBBRIDGE_PROTOCOL_VERSION, type: 'hello', client: 'mira-webbridge-extension', extensionName: '触界', extensionVersion: EXTENSION_VERSION, backendUrl: config.backendUrl, accessToken: config.accessToken, transport: config.transport, capabilities: ['look', 'browse', 'act', 'transfer', 'clip_rules'], tools: WEBBRIDGE_TOOL_DEFINITIONS }));
       return;
     } catch (error) {
       publishWebBridgeStatus('error', { code: 'NATIVE_HOST_UNAVAILABLE', message: error.message || 'Native Messaging Host 未安装' });
@@ -420,6 +571,7 @@ async function connectWebBridge() {
   const socket = new WebSocket(config.url);
   webBridge.socket = socket;
   webBridge.ready = false;
+  webBridge.miraReady = false;
   startWebBridgeHandshakeTimer(socket);
 
   socket.addEventListener('open', () => {
@@ -429,14 +581,14 @@ async function connectWebBridge() {
       protocolVersion: WEBBRIDGE_PROTOCOL_VERSION,
       type: 'hello',
       client: 'mira-webbridge-extension',
-      extensionName: '见行',
+      extensionName: '触界',
       extensionVersion: EXTENSION_VERSION,
       accessToken: config.accessToken || undefined,
       transport: config.transport,
-      capabilities: ['look', 'browse', 'act', 'transfer'],
+       capabilities: ['look', 'browse', 'act', 'transfer', 'clip_rules'],
       tools: WEBBRIDGE_TOOL_DEFINITIONS,
     }));
-    publishWebBridgeStatus('connecting', { message: '正在完成见行握手' });
+    publishWebBridgeStatus('connecting', { message: '正在完成触界握手' });
   });
 
   socket.addEventListener('message', (event) => {
@@ -453,6 +605,7 @@ async function connectWebBridge() {
     if (webBridge.socket !== socket) return;
     webBridge.socket = null;
     webBridge.ready = false;
+    webBridge.miraReady = false;
     stopWebSocketKeepAlive();
     if (webBridge.handshakeTimer) {
       clearTimeout(webBridge.handshakeTimer);
@@ -525,6 +678,56 @@ async function handleWebBridgeMessage(socket, rawMessage) {
     return;
   }
 
+  if (request.type === 'control' && (request.command === 'clip_rules_get' || request.command === 'clip_rules_set')) {
+    try {
+      await ensureWebBridgeOperationReady();
+      if (request.command === 'clip_rules_get') {
+        const stored = await chrome.storage.sync.get(['clipRules']);
+        sendWebBridgeResponse(socket, request.id, { ok: true, result: { clipRules: stored.clipRules && typeof stored.clipRules === 'object' && !Array.isArray(stored.clipRules) ? stored.clipRules : {} } });
+      } else {
+        const clipRules = request.clipRules && typeof request.clipRules === 'object' && !Array.isArray(request.clipRules)
+          ? request.clipRules
+          : {};
+        await chrome.storage.sync.set({ clipRules });
+        sendWebBridgeResponse(socket, request.id, { ok: true, result: { clipRules } });
+      }
+    } catch (error) {
+      sendWebBridgeResponse(socket, request.id, error?.bridgeError || bridgeError('CLIP_RULES_FAILED', error?.message || '剪藏规则同步失败', 'retry', true));
+    }
+    return;
+  }
+
+  if (request.type === 'control' && request.command === 'clip_region_pick') {
+    try {
+      await ensureWebBridgeOperationReady();
+      const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      const tabId = activeTab?.id;
+      if (!Number.isInteger(tabId)) {
+        sendWebBridgeResponse(socket, request.id, bridgeError('CLIP_REGION_PAGE_UNAVAILABLE', '请先在 Chrome 中打开要配置的网站', 'open_page', true));
+        return;
+      }
+      const tab = await chrome.tabs.get(tabId);
+      if (!tab?.url || !/^https?:/i.test(tab.url)) {
+        sendWebBridgeResponse(socket, request.id, bridgeError('CLIP_REGION_PAGE_UNAVAILABLE', '请先在 Chrome 中打开要配置的网站', 'open_page', true));
+        return;
+      }
+      await chrome.windows.update(tab.windowId, { focused: true });
+      await chrome.tabs.update(tabId, { active: true });
+      const response = await sendPageMessage(tabId, {
+        type: 'WEBBRIDGE_CLIP_REGION_PICK',
+        kind: request.kind === 'exclude' ? 'exclude' : 'include',
+      });
+      if (response?.ok === false) {
+        sendWebBridgeResponse(socket, request.id, bridgeError(response.error?.code || 'CLIP_REGION_PICK_FAILED', response.error?.message || '区域选择失败', 'retry', true));
+        return;
+      }
+      sendWebBridgeResponse(socket, request.id, { ok: true, result: response?.result || response });
+    } catch (error) {
+      sendWebBridgeResponse(socket, request.id, error?.bridgeError || bridgeError('CLIP_REGION_PICK_FAILED', error?.message || '区域选择失败', 'retry', true));
+    }
+    return;
+  }
+
   if (request.type === 'status' && request.status === 'native_ready') {
     if (webBridge.socket !== socket) return;
     if (webBridge.handshakeTimer) {
@@ -532,18 +735,21 @@ async function handleWebBridgeMessage(socket, rawMessage) {
       webBridge.handshakeTimer = null;
     }
     webBridge.reconnectAttempts = 0;
+    webBridge.ready = true;
+    webBridge.miraReady = false;
     publishWebBridgeStatus('connecting', {
       code: request.code || 'NATIVE_HOST_READY',
-      message: 'Native Host 已连接，正在等待 Mira 后端',
+      message: 'Native Host 已连接；Mira 后端正在同步',
     });
     return;
   }
 
-  if (request.type === 'status' && request.status === 'backend_connecting') {
+  if (request.type === 'status' && ['mira_connecting', 'backend_connecting'].includes(request.status)) {
     if (webBridge.socket !== socket) return;
+    webBridge.miraReady = false;
     publishWebBridgeStatus('connecting', {
-      code: request.code || 'BACKEND_CONNECTING',
-      message: 'Native Host 已连接，正在连接 Mira 后端',
+      code: request.code || 'MIRA_CONNECTING',
+      message: 'Native Host 已连接；Mira 后端正在重连',
     });
     return;
   }
@@ -553,9 +759,9 @@ async function handleWebBridgeMessage(socket, rawMessage) {
     await chrome.storage.local.remove(['accessToken']);
     publishWebBridgeStatus('auth_required', {
       code: 'AUTH_REQUIRED',
-      message: '见行授权已失效，请打开授权页重新授权',
+      message: '触界授权已失效，请在侧栏重新授权',
     });
-    await openAuthorizationPageIfNeeded();
+    await markAuthorizationRequired();
     if (webBridge.socket === socket) socket.close();
     return;
   }
@@ -563,12 +769,17 @@ async function handleWebBridgeMessage(socket, rawMessage) {
   if (request.type === 'hello_ack') {
     if (webBridge.socket !== socket) return;
     webBridge.ready = true;
+    webBridge.miraReady = true;
     if (webBridge.handshakeTimer) {
       clearTimeout(webBridge.handshakeTimer);
       webBridge.handshakeTimer = null;
     }
     webBridge.reconnectAttempts = 0;
-    publishWebBridgeStatus('connected', { tools: request.tools || [] });
+    publishWebBridgeStatus('connected', {
+      tools: request.tools || [],
+      capabilities: request.capabilities || [],
+      message: webBridge.transport === 'native' ? 'Native Host 与 Mira 已同步' : '触界已连接 Mira',
+    });
     return;
   }
 
@@ -577,9 +788,9 @@ async function handleWebBridgeMessage(socket, rawMessage) {
     await chrome.storage.local.remove(['accessToken']);
     publishWebBridgeStatus('auth_required', {
       code: 'AUTH_REQUIRED',
-      message: '见行授权已失效，请打开授权页重新授权',
+      message: '触界授权已失效，请在侧栏重新授权',
     });
-    await openAuthorizationPageIfNeeded();
+    await markAuthorizationRequired();
     if (webBridge.socket === socket) socket.close();
     return;
   }
@@ -587,6 +798,7 @@ async function handleWebBridgeMessage(socket, rawMessage) {
   if (request.type !== 'request' || typeof request.id !== 'string') return;
 
   try {
+    await ensureWebBridgeOperationReady();
     const operation = describeOperation(request.tool, request.params || {});
     const tabId = await getAuthorizedTabId();
     await ensureVisibleControl(tabId, operation);
@@ -636,6 +848,10 @@ async function ensurePageBridge(tabId) {
   try {
     await chrome.scripting.executeScript({
       target: { tabId },
+      files: [`${extensionAssetPrefix}lib/clip-rules.js`],
+    });
+    await chrome.scripting.executeScript({
+      target: { tabId },
       files: [`${extensionAssetPrefix}lib/extractor.js`],
     });
     await chrome.scripting.executeScript({
@@ -666,8 +882,8 @@ async function sendPageMessage(tabId, message) {
     return response;
   } catch (error) {
     if (error?.bridgeError) throw error;
-    throw Object.assign(new Error('当前页面尚未授权给见行，请先打开一次扩展 Popup'), {
-      bridgeError: bridgeError('USER_ACTIVATION_REQUIRED', '当前页面尚未授权给见行，请先打开一次扩展 Popup', 'open_extension', true),
+    throw Object.assign(new Error('当前页面尚未授权给触界，请先打开触界侧栏'), {
+      bridgeError: bridgeError('USER_ACTIVATION_REQUIRED', '当前页面尚未授权给触界，请先打开触界侧栏', 'open_extension', true),
     });
   }
 }
@@ -967,10 +1183,24 @@ async function waitForAfter(tabId, after = {}) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type === 'WEBBRIDGE_OPEN_AUTHORIZATION_PAGE') {
-    openAuthorizationPage()
+  if (message?.type === 'MIRA_FETCH_IMAGE' && typeof message.url === 'string') {
+    fetchImageForCapture(message.url)
+      .then((result) => sendResponse({ ok: true, ...result }))
+      .catch((error) => sendResponse({ ok: false, message: error?.message || '图片读取失败' }));
+    return true;
+  }
+
+  if (message?.type === 'WEBBRIDGE_OPEN_AUTHORIZATION_PAGE' || message?.type === 'WEBBRIDGE_OPEN_SIDE_PANEL') {
+    openSidePanel(sender.tab?.windowId)
       .then(sendResponse)
-      .catch((error) => sendResponse({ ok: false, message: error?.message || '无法打开见行授权页' }));
+      .catch((error) => sendResponse({ ok: false, message: error?.message || '无法打开触界侧栏' }));
+    return true;
+  }
+
+  if (message?.type === 'WEBBRIDGE_GET_STATUS') {
+    getSidePanelStatus()
+      .then(sendResponse)
+      .catch((error) => sendResponse({ ok: false, status: 'error', message: error?.message || '无法读取触界连接状态' }));
     return true;
   }
 
@@ -989,13 +1219,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName === 'sync' && (changes.backendUrl || changes.transport)) {
-    requestWebBridgeReconnect();
+    queueWebBridgeReconnect();
   }
 
   if (areaName === 'local' && changes.accessToken) {
-    closeTransport();
-    webBridge.authRequired = !changes.accessToken.newValue;
-    webBridge.reconnectAttempts = 0;
-    if (!webBridge.authRequired) requestWebBridgeReconnect();
+    if (!changes.accessToken.newValue) {
+      closeTransport();
+      webBridge.authRequired = true;
+      webBridge.reconnectAttempts = 0;
+      return;
+    }
+    queueWebBridgeReconnect();
+    if (changes.accessToken.newValue) {
+      markAuthorizationReady().catch(() => {});
+    }
   }
 });
+
+async function fetchImageForCapture(url) {
+  if (!/^https?:\/\//i.test(url)) throw new Error('图片地址必须是 HTTP(S) 地址');
+  const response = await fetch(url, { credentials: 'include' });
+  if (!response.ok) throw new Error(`图片读取失败（${response.status}）`);
+  const mimeType = (response.headers.get('content-type') || '').split(';', 1)[0].trim();
+  if (!mimeType.startsWith('image/')) throw new Error('目标地址不是图片');
+  const buffer = await response.arrayBuffer();
+  if (buffer.byteLength > 8 * 1024 * 1024) throw new Error('图片超过 8 MB 限制');
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return { dataUrl: `data:${mimeType};base64,${btoa(binary)}`, mimeType };
+}

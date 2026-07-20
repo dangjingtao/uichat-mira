@@ -88,7 +88,6 @@ const normalizeThreadSummary = (thread: ThreadApiSummary): ChatThreadSummary => 
     agentEnabled: thread.agentEnabled,
     ttsEnabled: thread.ttsEnabled,
     imageEnabled: thread.imageEnabled,
-    evolvingKnowledgeEnabled: thread.evolvingKnowledgeEnabled,
     contextSummary: thread.contextSummary,
     contextSummaryUpdatedAt: thread.contextSummaryUpdatedAt,
     status: thread.status,
@@ -456,10 +455,6 @@ export class DesktopChatRepository implements ChatRepository {
       createInput?.imageEnabled === null
         ? { imageEnabled: createInput.imageEnabled }
         : {}),
-      ...(typeof createInput?.evolvingKnowledgeEnabled === "boolean" ||
-      createInput?.evolvingKnowledgeEnabled === null
-        ? { evolvingKnowledgeEnabled: createInput.evolvingKnowledgeEnabled }
-        : {}),
       ...(typeof createInput?.modelName === "string"
         ? { modelName: createInput.modelName }
         : {}),
@@ -587,12 +582,6 @@ export class DesktopChatRepository implements ChatRepository {
           ? metadata.imageEnabled
           : undefined
         : undefined;
-    const nextEvolvingKnowledgeEnabled =
-      metadata && Object.prototype.hasOwnProperty.call(metadata, "evolvingKnowledgeEnabled")
-        ? typeof metadata.evolvingKnowledgeEnabled === "boolean" || metadata.evolvingKnowledgeEnabled === null
-          ? metadata.evolvingKnowledgeEnabled
-          : undefined
-        : undefined;
     const nextContextSummary =
       metadata && Object.prototype.hasOwnProperty.call(metadata, "contextSummary")
         ? typeof metadata.contextSummary === "string" ||
@@ -620,9 +609,6 @@ export class DesktopChatRepository implements ChatRepository {
         : {}),
       ...(typeof nextImageEnabled === "boolean" || nextImageEnabled === null
         ? { imageEnabled: nextImageEnabled }
-        : {}),
-      ...(typeof nextEvolvingKnowledgeEnabled === "boolean" || nextEvolvingKnowledgeEnabled === null
-        ? { evolvingKnowledgeEnabled: nextEvolvingKnowledgeEnabled }
         : {}),
       ...(typeof nextContextSummary === "string" || nextContextSummary === null
         ? { contextSummary: nextContextSummary }

@@ -17,8 +17,8 @@ const outputRoot = path.join(extensionRoot, "dist", mode);
 const keyRoot = path.join(extensionRoot, ".keys");
 const keyPath = process.env.MIRA_CLIPPER_CRX_KEY_PATH?.trim() ||
   path.join(keyRoot, `mira-clipper-${mode}.pem`);
-const crxPath = path.join(outputRoot, "MiraClipper.crx");
-const zipPath = path.join(outputRoot, "MiraClipper.zip");
+const crxPath = path.join(outputRoot, "Chujie.crx");
+const zipPath = path.join(outputRoot, "Chujie.zip");
 const manifestPath = path.join(sourceRoot, "manifest.json");
 
 await fs.access(manifestPath);
@@ -31,7 +31,7 @@ await crx3([manifestPath], {
   zipPath,
 });
 
-console.log(`Packaged 见行 / MiraWebBrige (${mode})`);
+console.log(`Packaged 触界 (${mode})`);
 console.log(`CRX: ${crxPath}`);
 console.log(`ZIP: ${zipPath}`);
 console.log(`Signing key: ${keyPath}`);

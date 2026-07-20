@@ -73,7 +73,7 @@ if (!fs.existsSync(serverBundleArtifactsRoot)) {
 if (!fs.existsSync(runtimeConfigArtifactsPath)) {
   throw new Error(`Missing staged runtime config: ${runtimeConfigArtifactsPath}`);
 }
-if (!fs.existsSync(path.join(browserExtensionArtifactsRoot, "MiraClipper.crx"))) {
+if (!fs.existsSync(path.join(browserExtensionArtifactsRoot, "Chujie.crx"))) {
   throw new Error(`Missing staged browser extension: ${browserExtensionArtifactsRoot}`);
 }
 if (!fs.existsSync(path.join(browserExtensionArtifactsRoot, "native", "MiraWebBridgeHost.exe"))) {

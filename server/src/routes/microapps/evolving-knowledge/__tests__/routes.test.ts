@@ -148,6 +148,31 @@ describe("evolving-knowledge routes", () => {
     expect(mockGenerateText).not.toHaveBeenCalled();
   });
 
+  it("POST /captures preserves rule-extracted page content instead of reparsing full-page HTML", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/microapps/evolving-knowledge/captures",
+      headers: { authorization: `Bearer ${authToken}` },
+      payload: {
+        sourceUrl: "https://example.com/article/42",
+        title: "规则正文",
+        contentType: "webpage",
+        captureMode: "page",
+        rawContent: "识别码：ABC-42\n\n发行日期：2026-05-18",
+        rawHtml: "<html><body><footer>Copyright only</footer></body></html>",
+        metadata: {
+          ruleApplied: true,
+          ruleHasIncludeRegion: true,
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.payload);
+    expect(body.data.rawContent).toBe("识别码：ABC-42\n\n发行日期：2026-05-18");
+    expect(body.data.rawContent).not.toContain("Copyright only");
+  });
+
   it("POST /captures rejects deferred audio and video types", async () => {
     const res = await app.inject({
       method: "POST",

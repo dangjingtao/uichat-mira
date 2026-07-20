@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import MicroAppPageLayout from "../components/MicroAppPageLayout";
 import Badge from "@/shared/ui/Badge";
-import { Button, Drawer, MarkdownText, Result, Skeleton } from "@/shared/ui";
+import { Button, Drawer, MarkdownText, Modal, Result, Skeleton } from "@/shared/ui";
 import { message } from "@/shared/ui/Message";
 import {
   listCaptures,
@@ -33,6 +33,12 @@ import {
   type KnowledgeInsight,
   type KnowledgeRelation,
 } from "@/shared/api/evolvingKnowledge";
+import { resolveAttachmentUrl } from "@/shared/api/attachments";
+
+const resolveCaptureMarkdown = (content: string) =>
+  content.replace(/(!\[[^\]]*\]\()((?:\/attachments\/)[^\s)]+)(\))/g, (_match, prefix, url, suffix) =>
+    `${prefix}${resolveAttachmentUrl(url)}${suffix}`,
+  );
 
 const contentTypeIcons: Record<string, React.ReactNode> = {
   webpage: <FileText className="h-4 w-4" />,
@@ -283,14 +289,20 @@ export default function EvolvingKnowledgeStudioPage() {
     [insights, pinnedInsightIds],
   );
 
-  const handleDeleteCapture = async (id: string) => {
-    try {
-      await deleteCapture(id);
-      setCaptures((prev) => prev.filter((c) => c.id !== id));
-      message.success("已删除");
-    } catch {
-      message.error("删除失败");
-    }
+  const handleDeleteCapture = (capture: KnowledgeCapture) => {
+    Modal.confirm({
+      title: "删除捕获内容",
+      description: `删除“${capture.title || "无标题"}”后，原文、附件和相关派生数据都会被永久移除，此操作不可恢复。`,
+      tone: "danger",
+      confirmText: "确认删除",
+      cancelText: "取消",
+      loadingText: "删除中...",
+      onConfirm: async () => {
+        await deleteCapture(capture.id);
+        message.success("已删除");
+        await load();
+      },
+    });
   };
 
   const featuredInsight = visibleInsights.length
@@ -492,7 +504,7 @@ export default function EvolvingKnowledgeStudioPage() {
                       <button
                         type="button"
                         aria-label="删除捕获"
-                        onClick={() => void handleDeleteCapture(capture.id)}
+                        onClick={() => handleDeleteCapture(capture)}
                         className="shrink-0 text-text-tertiary opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -631,7 +643,7 @@ export default function EvolvingKnowledgeStudioPage() {
                     </a>
                   </div>
                   <MarkdownText className="text-sm leading-7">
-                    {insightDetailCapture.rawContent}
+                    {resolveCaptureMarkdown(insightDetailCapture.rawContent)}
                   </MarkdownText>
                 </div>
               ) : (
@@ -652,7 +664,7 @@ export default function EvolvingKnowledgeStudioPage() {
               </a>
             </div>
             <MarkdownText className="text-sm leading-7">
-              {selectedCapture.rawContent}
+              {resolveCaptureMarkdown(selectedCapture.rawContent)}
             </MarkdownText>
           </div>
         ) : null}

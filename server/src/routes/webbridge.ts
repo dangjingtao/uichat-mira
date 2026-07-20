@@ -21,8 +21,10 @@ type WebBridgeClient = {
   socket: WebBridgeSocket;
   role: "unknown" | "extension" | "ui";
   authenticated: boolean;
+  accessToken?: string;
   userId?: number;
   transport?: "websocket" | "native";
+  capabilities?: unknown[];
   cleanedUp?: boolean;
 };
 
@@ -43,6 +45,7 @@ const pending = new Map<string, PendingRequest>();
 const extensionClients = new Map<number, WebBridgeClient>();
 let clientSequence = 0;
 let extensionTools: unknown[] = [];
+let extensionCapabilities: unknown[] = [];
 
 const send = (client: WebBridgeClient, payload: Record<string, unknown>) => {
   if (client.socket.readyState === 1) client.socket.send(JSON.stringify(payload));
@@ -68,6 +71,7 @@ const broadcastStatus = (status: string) => {
       extensionConnected: client.userId !== undefined && extensionClients.has(client.userId),
       transport: client.userId === undefined ? undefined : extensionClients.get(client.userId)?.transport,
       tools: extensionTools,
+      capabilities: extensionCapabilities,
     });
   }
 };
@@ -80,7 +84,7 @@ export const invokeWebBridge = (input: {
 }) => new Promise<unknown>((resolve, reject) => {
   const extensionClient = extensionClients.get(input.userId);
   if (!extensionClient) {
-    reject(new Error("见行扩展尚未连接"));
+    reject(new Error("触界扩展尚未连接"));
     return;
   }
   const id = `server_${crypto.randomUUID()}`;
@@ -139,19 +143,21 @@ const attachWebBridgeClient = (socket: WebBridgeSocket) => {
         return;
       }
       clearTimeout(helloTimer);
-      const user = authenticate(message.accessToken);
+      const accessToken = typeof message.accessToken === "string" ? message.accessToken : "";
+      const user = authenticate(accessToken);
       if (!user) {
         sendError(client, null, "AUTH_REQUIRED", "WebBridge 需要有效的 Mira 授权令牌");
         client.socket.close();
         return;
       }
       client.authenticated = true;
+      client.accessToken = accessToken;
       client.userId = user.id;
       if (message.client === "mira-webbridge-extension") {
         const extensionVersion = typeof message.extensionVersion === "string" ? message.extensionVersion : "unknown";
         const protocolVersion = Number(message.protocolVersion ?? message.version);
         if (protocolVersion !== PROTOCOL_VERSION) {
-          sendError(client, null, "PROTOCOL_VERSION_UNSUPPORTED", `见行协议版本不兼容，需要协议 ${PROTOCOL_VERSION}`);
+          sendError(client, null, "PROTOCOL_VERSION_UNSUPPORTED", `触界协议版本不兼容，需要协议 ${PROTOCOL_VERSION}`);
           client.socket.close();
           return;
         }
@@ -161,6 +167,7 @@ const attachWebBridgeClient = (socket: WebBridgeSocket) => {
         if (existingExtension && existingExtension !== client) existingExtension.socket.close();
         extensionClients.set(user.id, client);
         extensionTools = Array.isArray(message.tools) ? message.tools : [];
+        extensionCapabilities = Array.isArray(message.capabilities) ? message.capabilities : [];
         send(client, {
           version: PROTOCOL_VERSION,
           type: "hello_ack",
@@ -170,6 +177,7 @@ const attachWebBridgeClient = (socket: WebBridgeSocket) => {
           extensionVersion,
           transport: client.transport,
           tools: extensionTools,
+          capabilities: extensionCapabilities,
         });
         broadcastStatus("extension_connected");
         return;
@@ -183,6 +191,7 @@ const attachWebBridgeClient = (socket: WebBridgeSocket) => {
           extensionConnected: extensionClients.has(user.id),
           transport: extensionClients.get(user.id)?.transport,
           tools: extensionTools,
+          capabilities: extensionCapabilities,
         });
         return;
       }
@@ -191,12 +200,36 @@ const attachWebBridgeClient = (socket: WebBridgeSocket) => {
       return;
     }
 
-    if (!client.authenticated) return;
+    if (!client.authenticated || !client.accessToken) return;
+
+    // WebBridge connections can outlive the 30-minute JWT. Revalidate before
+    // every post-handshake message so an expired session cannot keep invoking
+    // browser operations until the socket happens to reconnect.
+    const currentUser = authenticate(client.accessToken);
+    if (!currentUser) {
+      client.authenticated = false;
+      sendError(client, typeof message.id === "string" ? message.id : null, "AUTH_REQUIRED", "WebBridge 授权已失效，请重新登录");
+      send(client, {
+        version: PROTOCOL_VERSION,
+        type: "status",
+        status: "auth_required",
+        code: "AUTH_REQUIRED",
+        message: "WebBridge 授权已失效，请重新登录",
+      });
+      client.socket.close();
+      return;
+    }
+    if (currentUser.id !== client.userId) {
+      client.authenticated = false;
+      sendError(client, typeof message.id === "string" ? message.id : null, "AUTH_REQUIRED", "WebBridge 用户身份已变化，请重新登录");
+      client.socket.close();
+      return;
+    }
 
     if (client.role === "ui" && message.type === "request") {
       const extensionClient = client.userId === undefined ? null : extensionClients.get(client.userId);
       if (!extensionClient) {
-        sendError(client, typeof message.id === "string" ? message.id : null, "BRIDGE_DISCONNECTED", "见行扩展尚未连接");
+        sendError(client, typeof message.id === "string" ? message.id : null, "BRIDGE_DISCONNECTED", "触界扩展尚未连接");
         return;
       }
       if (typeof message.id !== "string" || typeof message.tool !== "string") {
@@ -212,10 +245,26 @@ const attachWebBridgeClient = (socket: WebBridgeSocket) => {
     if (client.role === "ui" && message.type === "control" && message.command === "set_transport") {
       const extensionClient = client.userId === undefined ? null : extensionClients.get(client.userId);
       if (!extensionClient || !["websocket", "native"].includes(String(message.transport))) {
-        sendError(client, null, "INVALID_TRANSPORT", "连接方式不可用或见行扩展未连接");
+        sendError(client, null, "INVALID_TRANSPORT", "连接方式不可用或触界扩展未连接");
         return;
       }
       send(extensionClient, { version: PROTOCOL_VERSION, type: "control", command: "set_transport", transport: message.transport });
+      return;
+    }
+
+    if (client.role === "ui" && message.type === "control" && ["clip_rules_get", "clip_rules_set", "clip_region_pick"].includes(String(message.command))) {
+      const extensionClient = client.userId === undefined ? null : extensionClients.get(client.userId);
+      if (!extensionClient) {
+        sendError(client, typeof message.id === "string" ? message.id : null, "BRIDGE_DISCONNECTED", "触界扩展尚未连接");
+        return;
+      }
+      if (typeof message.id !== "string") {
+        sendError(client, null, "INVALID_REQUEST", "剪藏规则请求缺少 id");
+        return;
+      }
+      const relayId = `${client.id}:${message.id}`;
+      pending.set(relayId, { client, userId: client.userId, originalId: message.id });
+      send(extensionClient, { ...message, id: relayId, version: PROTOCOL_VERSION });
       return;
     }
 
@@ -237,7 +286,7 @@ const attachWebBridgeClient = (socket: WebBridgeSocket) => {
     if (client.role === "extension" && message.type === "status") {
       for (const uiClient of clients.values()) {
         if (uiClient.role !== "ui" || uiClient.userId !== client.userId || !uiClient.authenticated) continue;
-        send(uiClient, { ...message, type: "status", extensionConnected: true, transport: client.transport, tools: extensionTools });
+        send(uiClient, { ...message, type: "status", extensionConnected: true, transport: client.transport, tools: extensionTools, capabilities: extensionCapabilities });
       }
     }
   });
@@ -251,16 +300,17 @@ const attachWebBridgeClient = (socket: WebBridgeSocket) => {
       if (request.client === client || (client.role === "extension" && request.userId === client.userId)) {
         pending.delete(id);
         if (request.client && request.client !== client) {
-          sendError(request.client, request.originalId, "BRIDGE_DISCONNECTED", "见行扩展已断开");
+          sendError(request.client, request.originalId, "BRIDGE_DISCONNECTED", "触界扩展已断开");
         } else if (!request.client) {
           if (request.timer) clearTimeout(request.timer);
-          request.reject?.(new Error("见行扩展已断开"));
+          request.reject?.(new Error("触界扩展已断开"));
         }
       }
     }
     if (client.userId !== undefined && extensionClients.get(client.userId) === client) {
       extensionClients.delete(client.userId);
       extensionTools = [];
+      extensionCapabilities = [];
       broadcastStatus("extension_disconnected");
     }
   };

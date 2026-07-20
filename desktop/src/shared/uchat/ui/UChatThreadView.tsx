@@ -1669,7 +1669,7 @@ function UChatComposerActions({
         <Paperclip className="h-4 w-4" />
       ) : null,
     })),
-    leadingIcon: action.id.includes("knowledge-base") || action.id.includes("evolving-knowledge") ? (
+    leadingIcon: action.id.includes("knowledge-base") ? (
       <LibraryBig className="h-4 w-4" />
     ) : action.id.includes("role") ? (
       <UserRound className="h-4 w-4" />
@@ -1757,8 +1757,6 @@ function UChatComposerActions({
                   className="h-4 w-4 rounded-full object-cover"
                   draggable={false}
                 />
-              ) : tag.kind === "evolving-knowledge" ? (
-                <MessageSquareText className="h-3.5 w-3.5" />
               ) : (
                 <LibraryBig className="h-3.5 w-3.5" />
               )}

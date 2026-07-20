@@ -1,12 +1,12 @@
-# MiraWebBrige 图标占位
+# 触界图标
 
-请在此目录放置扩展图标文件：
+图标使用 UIChat Mira 安装包的正式品牌 Logo，源文件为仓库根目录 `icons/icon_512.png`。
 
-- `icon16.png` — 16×16
-- `icon32.png` — 32×32
-- `icon48.png` — 48×48
-- `icon128.png` — 128×128
+- `icon-16.png` — 16×16
+- `icon-32.png` — 32×32
+- `icon-48.png` — 48×48
+- `icon-128.png` — 128×128
 
-之后需要在 `manifest.json` 中取消注释 `icons` 和 `action.default_icon` 字段。
+同尺寸的 `icon-*-attention.png` 在正式图标右下角增加一个小黄色圆点，仅用于待授权状态。工具栏不使用 Chrome Badge，避免出现固定尺寸的方形徽标。
 
-若不放置图标，扩展仍可正常加载，只是会显示 Chrome 默认拼图图标。
+两个 manifest 的 `icons` 与 `action.default_icon` 都引用这组文件。更新品牌 Logo 时必须从同一正式源文件重新生成全部尺寸。

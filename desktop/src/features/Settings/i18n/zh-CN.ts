@@ -105,9 +105,9 @@ const settingsPending = {
       },
       studioEntries: {
         jianXing: {
-          title: "见行",
+          title: "触界",
           description: "连接当前 Chrome，在本机查看页面、翻页、点击、填写和处理文件操作。",
-          actions: { open: "进入见行" },
+          actions: { open: "进入触界" },
         },
         notion: {
           title: "Notion",

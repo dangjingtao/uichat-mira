@@ -1,5 +1,5 @@
 /**
- * MiraWebBrige - Options Page Logic
+ * 触界 - Options Page Logic
  */
 
 (function () {
@@ -11,12 +11,10 @@
     testResult: document.getElementById('testResult'),
     saveBtn: document.getElementById('saveBtn'),
     saveResult: document.getElementById('saveResult'),
-    openAuthorizationPage: document.getElementById('openAuthorizationPage'),
+    openSidePanel: document.getElementById('openSidePanel'),
   };
 
   const loadedManifest = chrome.runtime.getManifest?.() || {};
-  const extensionAssetPrefix = loadedManifest.options_page?.startsWith('extension/') ? 'extension/' : '';
-
   async function load() {
     try {
       const stored = await chrome.storage.sync.get(['backendUrl']);
@@ -86,8 +84,12 @@
 
   els.saveBtn.addEventListener('click', save);
   els.testBtn.addEventListener('click', testConnection);
-  els.openAuthorizationPage.addEventListener('click', () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL(`${extensionAssetPrefix}auth/authorize.html`) });
+  els.openSidePanel.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ type: 'WEBBRIDGE_OPEN_SIDE_PANEL' })
+      .then((result) => {
+        if (!result?.ok) showSaveResult(result?.message || '无法打开触界侧栏', true);
+      })
+      .catch((error) => showSaveResult(error?.message || '无法打开触界侧栏', true));
   });
 
   load();

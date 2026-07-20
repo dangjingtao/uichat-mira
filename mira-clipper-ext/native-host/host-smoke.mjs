@@ -165,6 +165,14 @@ test("Native Host keeps Chrome attached and bridges Mira over local IPC", async 
     assert.equal(response.type, "response");
     assert.equal(response.id, "req-1");
     assert.deepEqual(response.result, { title: "ok" });
+
+    connected.write(`${JSON.stringify({ version: 1, type: "control", command: "clip_region_pick", id: "clip-1", kind: "include" })}\n`);
+    const control = await nextMatching(nextNativeFrame, (message) => message?.command === "clip_region_pick");
+    assert.equal(control.id, "clip-1");
+    child.stdin.write(frame({ version: 1, type: "response", id: "clip-1", ok: true, result: { selector: "article" } }));
+    const controlResponse = await nextPipeLine();
+    assert.equal(controlResponse.id, "clip-1");
+    assert.deepEqual(controlResponse.result, { selector: "article" });
   } finally {
     child.stdin.destroy();
     child.stdout.destroy();

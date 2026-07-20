@@ -17,6 +17,8 @@ describe("FileUploadDropzone", () => {
       />,
     );
     expect(screen.getByRole("button")).toBeInTheDocument();
+    expect(screen.queryByText("ui.fileUploadDropzone.dragAndDrop")).not.toBeInTheDocument();
+    expect(screen.getByText("ui.fileUploadDropzone.selectFile")).toBeInTheDocument();
     expect(screen.getByText("PDF only")).toBeInTheDocument();
   });
 

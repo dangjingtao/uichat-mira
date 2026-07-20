@@ -93,12 +93,10 @@ export default function UChatThread() {
     draftRoleId,
     draftAgentEnabled,
     draftWorkspaceId,
-    draftEvolvingKnowledgeEnabled,
     setDraftKnowledgeBaseId,
     setDraftRoleId,
     setDraftAgentEnabled,
     setDraftWorkspaceId,
-    setDraftEvolvingKnowledgeEnabled,
     setDraftImageEnabled,
   } = useChatThreadDraftState();
   const [isKnowledgeBasePickerOpen, setKnowledgeBasePickerOpen] = useState(false);
@@ -146,10 +144,6 @@ export default function UChatThread() {
       ? threadKnowledgeBaseId
       : draftKnowledgeBaseId;
   const hasKnowledgeBase = Boolean(activeKnowledgeBaseId);
-  const activeEvolvingKnowledgeEnabled = activeThreadId
-    ? activeThread?.metadata?.evolvingKnowledgeEnabled === true
-    : draftEvolvingKnowledgeEnabled;
-  const hasKnowledgeSource = hasKnowledgeBase || activeEvolvingKnowledgeEnabled;
   const persistedRoleId =
     typeof activeThread?.metadata?.roleId === "string" ||
     activeThread?.metadata?.roleId === null
@@ -158,7 +152,7 @@ export default function UChatThread() {
 
   const { isSendDisabled, placeholder } = useUChatComposerState({
     isRunning,
-    hasKnowledgeBase: hasKnowledgeBase && !activeEvolvingKnowledgeEnabled,
+    hasKnowledgeBase,
     hasDefaultLlm,
     hasDefaultEmbedding,
   });
@@ -266,11 +260,10 @@ export default function UChatThread() {
     () =>
       buildThreadContextTags({
         knowledgeBase: activeKnowledgeBase,
-        evolvingKnowledgeEnabled: activeEvolvingKnowledgeEnabled,
         role: activeRole,
         roleAvatarSrc: activeRoleAvatarSrc,
       }),
-    [activeEvolvingKnowledgeEnabled, activeKnowledgeBase, activeRole, activeRoleAvatarSrc],
+    [activeKnowledgeBase, activeRole, activeRoleAvatarSrc],
   );
 
   const handleUpdateThreadKnowledgeBase = async (nextKnowledgeBaseId: string | null) => {
@@ -278,7 +271,6 @@ export default function UChatThread() {
     await runtime.updateThread(activeThreadId, {
       metadata: {
         knowledgeBaseId: nextKnowledgeBaseId,
-        evolvingKnowledgeEnabled: false,
       },
     });
     await runtime.refreshThread(activeThreadId);
@@ -297,24 +289,6 @@ export default function UChatThread() {
 
     if (action.id === "knowledge-base-picker") {
       setKnowledgeBasePickerOpen(true);
-      return;
-    }
-
-    if (action.id === "evolving-knowledge-toggle") {
-      const nextEnabled = !activeEvolvingKnowledgeEnabled;
-      if (!activeThreadId || !activeThread) {
-        setDraftEvolvingKnowledgeEnabled(nextEnabled);
-        if (nextEnabled) setDraftKnowledgeBaseId(null);
-        return;
-      }
-      await runtime.updateThread(activeThreadId, {
-        metadata: {
-          ...((activeThread.metadata ?? {}) as Record<string, unknown>),
-          evolvingKnowledgeEnabled: nextEnabled,
-          ...(nextEnabled ? { knowledgeBaseId: null } : {}),
-        },
-      });
-      await runtime.refreshThread(activeThreadId);
       return;
     }
 
@@ -382,7 +356,7 @@ export default function UChatThread() {
         metadata: {
           ...((activeThread?.metadata ?? {}) as Record<string, unknown>),
           roleId,
-          ...(hasKnowledgeSource ? {} : { imageEnabled: true }),
+          ...(!hasKnowledgeBase ? { imageEnabled: true } : {}),
         },
       });
       await runtime.refreshThread(activeThreadId);
@@ -397,7 +371,6 @@ export default function UChatThread() {
   const handleSelectKnowledgeBase = async (knowledgeBaseId: string) => {
     if (!activeThreadId || !activeThread) {
       setDraftKnowledgeBaseId(knowledgeBaseId);
-      setDraftEvolvingKnowledgeEnabled(false);
       return true;
     }
     await handleUpdateThreadKnowledgeBase(knowledgeBaseId);
@@ -424,20 +397,6 @@ export default function UChatThread() {
 
     if (!activeThreadId || !activeThread) {
       setDraftKnowledgeBaseId(null);
-      setDraftEvolvingKnowledgeEnabled(false);
-      return;
-    }
-    if (tag.kind === "evolving-knowledge") {
-      setDraftEvolvingKnowledgeEnabled(false);
-      if (activeThreadId && activeThread) {
-        await runtime.updateThread(activeThreadId, {
-          metadata: {
-            ...((activeThread.metadata ?? {}) as Record<string, unknown>),
-            evolvingKnowledgeEnabled: false,
-          },
-        });
-        await runtime.refreshThread(activeThreadId);
-      }
       return;
     }
     await handleUpdateThreadKnowledgeBase(null);
@@ -567,7 +526,7 @@ export default function UChatThread() {
   };
 
   const handleRequestImage = async (assistantMessage: (typeof messages)[number]) => {
-    if (!activeThread || !activeRoleId || hasKnowledgeSource) return;
+    if (!activeThread || !activeRoleId || hasKnowledgeBase) return;
     try {
       await generateChatMessageImage(activeThread, assistantMessage);
       if (activeThreadId) await runtime.refreshThread(activeThreadId);
@@ -579,7 +538,7 @@ export default function UChatThread() {
       message.error(`${t("chat.thread.media.imageFailed")}: ${detail}`);
     }
   };
-  const showImageAction = Boolean(activeRoleId && !hasKnowledgeSource && !isAgentEnabled);
+  const showImageAction = Boolean(activeRoleId && !hasKnowledgeBase && !isAgentEnabled);
 
   return (
     <>
@@ -595,7 +554,7 @@ export default function UChatThread() {
         runStatus={runStatus}
         threadStatus={threadStatus}
         capabilities={capabilities}
-        hasKnowledgeBase={hasKnowledgeSource}
+        hasKnowledgeBase={hasKnowledgeBase}
         placeholder={placeholder}
         isSendDisabled={isSendDisabled}
         onComposerTextChange={(value) => runtime.setComposerText(value)}

@@ -24,8 +24,23 @@ describe('manifest.json', () => {
     assert.equal(manifest.manifest_version, 3);
   });
 
+  it('应使用触界作为扩展总名', async () => {
+    assert.equal(manifest.name, '触界');
+    assert.equal(manifest.action.default_title, '打开触界');
+    assert.equal(manifest.action.default_icon['16'], 'icons/icon-16.png');
+    assert.equal(manifest.action.default_icon['128'], 'icons/icon-128.png');
+    const [popup, options] = await Promise.all([
+      readFile(join(__dirname, '../popup/popup.html'), 'utf-8'),
+      readFile(join(__dirname, '../options/options.html'), 'utf-8'),
+    ]);
+    assert.match(popup, /brand-title">触界</);
+    assert.match(popup, /src="\.\.\/icons\/icon-128\.png"/);
+    assert.match(options, /触界设置/);
+    assert.match(options, /src="\.\.\/icons\/icon-128\.png"/);
+  });
+
   it('应声明持续页面操作所需权限', () => {
-    const required = ['activeTab', 'storage', 'scripting', 'contextMenus', 'identity'];
+    const required = ['activeTab', 'storage', 'scripting', 'contextMenus', 'identity', 'sidePanel'];
     const perms = manifest.permissions || [];
     for (const p of required) {
       assert.ok(perms.includes(p), `缺少权限: ${p}`);
@@ -53,23 +68,42 @@ describe('manifest.json', () => {
     assert.ok(manifest.commands._execute_action);
   });
 
-  it('应包含 popup 入口', () => {
+  it('应包含 Side Panel 入口', () => {
     assert.ok(manifest.action);
-    assert.ok(manifest.action.default_popup);
-    assert.ok(manifest.action.default_popup.endsWith('popup/popup.html'));
+    assert.equal(manifest.action.default_popup, undefined);
+    assert.equal(manifest.side_panel?.default_path, 'popup/popup.html');
   });
 
-  it('应包含独立授权页入口资源', async () => {
+  it('应包含侧栏页面入口资源', async () => {
     assert.equal(manifest.options_page, 'options/options.html');
-    await readFile(join(__dirname, '../auth/authorize.html'), 'utf-8');
-    await readFile(join(__dirname, '../auth/authorize.js'), 'utf-8');
+    await readFile(join(__dirname, '../popup/popup.html'), 'utf-8');
+    await readFile(join(__dirname, '../popup/popup.js'), 'utf-8');
+  });
+
+  it('应包含待授权状态图标', async () => {
+    await Promise.all([16, 32, 48, 128].map((size) => (
+      readFile(join(__dirname, `../icons/icon-${size}-attention.png`))
+    )));
+  });
+
+  it('应在页面脚本加载规则模块后再加载提取器', () => {
+    assert.deepEqual(manifest.content_scripts?.[0]?.js, [
+      'lib/clip-rules.js',
+      'lib/extractor.js',
+      'content/content.js',
+    ]);
   });
 });
 
 describe('项目根目录 manifest.json', () => {
   it('应指向 extension/ 下的运行入口', async () => {
     const root = JSON.parse(await readFile(join(__dirname, '../../manifest.json'), 'utf-8'));
-    assert.equal(root.action.default_popup, 'extension/popup/popup.html');
+    assert.equal(root.name, '触界');
+    assert.equal(root.action.default_title, '打开触界');
+    assert.equal(root.action.default_icon['16'], 'extension/icons/icon-16.png');
+    assert.equal(root.action.default_icon['128'], 'extension/icons/icon-128.png');
+    assert.equal(root.action.default_popup, undefined);
+    assert.equal(root.side_panel?.default_path, 'extension/popup/popup.html');
     assert.equal(root.background.service_worker, 'extension/background.js');
     assert.equal(root.options_page, 'extension/options/options.html');
   });

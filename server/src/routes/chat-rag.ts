@@ -23,7 +23,6 @@ const chatRagRoute: FastifyPluginAsync = async (app) => {
           properties: {
             question: { type: "string", minLength: 1 },
             knowledgeBaseId: { type: "string" },
-            evolvingKnowledgeEnabled: { type: "boolean" },
             topK: { type: "number", minimum: 1, maximum: 50 },
             topN: { type: "number", minimum: 1, maximum: 20 },
             systemPrompt: { type: "string" },
@@ -80,7 +79,6 @@ const chatRagRoute: FastifyPluginAsync = async (app) => {
           properties: {
             question: { type: "string", minLength: 1 },
             knowledgeBaseId: { type: "string" },
-            evolvingKnowledgeEnabled: { type: "boolean" },
             topK: { type: "number", minimum: 1, maximum: 50 },
             topN: { type: "number", minimum: 1, maximum: 20 },
             systemPrompt: { type: "string" },
@@ -115,7 +113,6 @@ const chatRagRoute: FastifyPluginAsync = async (app) => {
           properties: {
             question: { type: "string", minLength: 1 },
             knowledgeBaseId: { type: "string" },
-            evolvingKnowledgeEnabled: { type: "boolean" },
             topK: { type: "number", minimum: 1, maximum: 50 },
             topN: { type: "number", minimum: 1, maximum: 20 },
           },

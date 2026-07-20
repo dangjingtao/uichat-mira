@@ -13,7 +13,6 @@ export interface RagRetrievedChunk {
 export interface RetrieveRagSourcesPayload {
   question: string;
   knowledgeBaseId?: string;
-  evolvingKnowledgeEnabled?: boolean;
   topK?: number;
   topN?: number;
 }

@@ -203,9 +203,9 @@ copyPath(
     "mira-clipper-ext",
     "dist",
     "prod",
-    "MiraClipper.crx",
+    "Chujie.crx",
   ),
-  path.join(browserExtensionArtifactsRoot, "MiraClipper.crx"),
+  path.join(browserExtensionArtifactsRoot, "Chujie.crx"),
   "production browser extension",
 );
 copyPath(

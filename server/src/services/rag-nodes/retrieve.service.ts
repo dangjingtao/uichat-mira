@@ -12,7 +12,6 @@ import {
   createRetrievalObservation,
 } from "@/services/rag-node-observation";
 import { writeStructuredLog } from "@/logger";
-import { createEvolvingKnowledgeService } from "@/microapps/evolving-knowledge/index.js";
 
 const RRF_K = 60;
 
@@ -24,7 +23,6 @@ export interface RetrieveInput {
   embeddingModel?: string;
   embeddingModelConfigId?: string;
   knowledgeBaseId?: string;
-  evolvingKnowledgeEnabled?: boolean;
   topK?: number;
 }
 
@@ -68,49 +66,6 @@ export interface RetrieveOutput {
     fusedCandidates: RetrievedChunk[];
   };
 }
-
-const evolvingKnowledgeService = createEvolvingKnowledgeService();
-
-const retrieveEvolvingKnowledge = (input: RetrieveInput): RetrieveOutput => {
-  if (!input.userId) throw new Error("Authenticated user id is required for evolving knowledge retrieval");
-  const queryResult = evolvingKnowledgeService.queryKnowledge(
-    input.question?.trim() ?? "",
-    input.userId,
-    { mode: "mixed", limit: input.topK ?? 10 },
-  );
-  const chunks = queryResult.results.map((result, index) => ({
-    chunkId: index + 1,
-    documentId: `evolving-knowledge:${result.sourceType}:${result.sourceId}`,
-    documentName: `[洞见] ${result.title}`,
-    content: result.content,
-    score: result.score,
-    rawScore: result.score,
-    matchType: "lexical" as const,
-    hitModes: ["lexical" as const],
-    citation: {
-      sourceType: result.sourceType,
-      sourceId: result.sourceId,
-      captureId: result.captureId,
-      evidenceUnitId: result.evidenceUnitId,
-      topicId: result.topicId,
-      viewpointVersionId: result.viewpointVersionId,
-      references: result.references,
-    },
-  }));
-  return {
-    chunks,
-    knowledgeBaseId: "evolving-knowledge",
-    execution: {
-      strategy: "hybrid",
-      vectorCount: 0,
-      lexicalCount: chunks.length,
-      fusedCount: chunks.length,
-      vectorCandidates: [],
-      lexicalCandidates: chunks,
-      fusedCandidates: chunks,
-    },
-  };
-};
 
 export interface RetrieveStatePatch {
   retrievedChunks: RetrievedChunk[];
@@ -410,9 +365,6 @@ const fuseHybridChunks = (
  */
 export const retrieveService = {
   async retrieve(input: RetrieveInput): Promise<RetrieveOutput> {
-    if (input.evolvingKnowledgeEnabled) {
-      return retrieveEvolvingKnowledge(input);
-    }
     const kbId = input.knowledgeBaseId?.trim();
     if (!kbId) {
       throw new Error("Knowledge base id is required for retrieval");

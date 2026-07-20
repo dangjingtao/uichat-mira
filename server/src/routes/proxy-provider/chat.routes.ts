@@ -43,13 +43,12 @@ import type {
 
 export const shouldUseThreadRag = (input: {
   knowledgeBaseId: string | null | undefined;
-  evolvingKnowledgeEnabled?: boolean;
   ragInput: ReturnType<typeof toRagInput>;
   threadId?: string;
   hasAuthUser: boolean;
 }) =>
   Boolean(
-    (input.knowledgeBaseId || input.evolvingKnowledgeEnabled) &&
+    input.knowledgeBaseId &&
       input.ragInput &&
       typeof input.threadId === "string" &&
       input.hasAuthUser,
@@ -454,7 +453,6 @@ export const registerProxyProviderChatRoutes = async (
         const roleLlmParams = resolveThreadRoleLlmParams(threadId, authUser?.id);
         const useThreadRag = shouldUseThreadRag({
           knowledgeBaseId: thread?.knowledgeBaseId,
-          evolvingKnowledgeEnabled: thread?.evolvingKnowledgeEnabled,
           ragInput,
           threadId,
           hasAuthUser: Boolean(authUser),
@@ -481,7 +479,7 @@ export const registerProxyProviderChatRoutes = async (
           ...messages,
         ];
 
-        if (thread?.knowledgeBaseId || thread?.evolvingKnowledgeEnabled) {
+        if (thread?.knowledgeBaseId) {
           app.log.warn(
             {
               scope: "proxy-provider",
@@ -491,7 +489,6 @@ export const registerProxyProviderChatRoutes = async (
               hasRagInput: Boolean(ragInput),
               threadFound: Boolean(thread),
               knowledgeBaseId: thread.knowledgeBaseId,
-              evolvingKnowledgeEnabled: thread.evolvingKnowledgeEnabled,
               threadId,
             },
             "[proxy-provider] knowledge-base thread skipped RAG branch",

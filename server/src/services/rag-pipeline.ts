@@ -26,7 +26,6 @@ import {
 export interface RAGPipelineInput {
   question: string;
   userId?: number;
-  evolvingKnowledgeEnabled?: boolean;
   knowledgeBaseId?: string;
   topK?: number;
   topN?: number;

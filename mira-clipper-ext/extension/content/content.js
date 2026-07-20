@@ -1,15 +1,26 @@
 /**
- * MiraWebBrige - page execution bridge
+ * 触界 - page execution bridge
  * Handles user clipping extraction and the local WebBridge action contract.
  */
 
 (function () {
   'use strict';
 
-  if (window.__miraClipperReady) return;
+  let disposed = false;
+  const cleanup = [];
+  function dispose() {
+    if (disposed) return;
+    disposed = true;
+    if (activeClipRegionPicker) activeClipRegionPicker.cancel('页面桥接已刷新');
+    while (cleanup.length) cleanup.pop()();
+    if (statusNode) statusNode.remove();
+    if (window.__miraClipperDispose === dispose) delete window.__miraClipperDispose;
+  }
+  if (typeof window.__miraClipperDispose === 'function') window.__miraClipperDispose();
+  window.__miraClipperDispose = dispose;
   window.__miraClipperReady = true;
 
-  window.addEventListener('message', (event) => {
+  function handleWindowMessage(event) {
     if (event.source !== window || event.origin !== window.location.origin) return;
     if (event.data?.source !== 'mira-webbridge-ui' || event.data?.type !== 'WEBBRIDGE_OPEN_AUTHORIZATION_PAGE') return;
 
@@ -28,10 +39,12 @@
           type: 'WEBBRIDGE_OPEN_AUTHORIZATION_PAGE_RESULT',
           requestId: event.data.requestId,
           ok: false,
-          message: error?.message || '无法打开见行授权页',
+          message: error?.message || '无法打开触界侧栏',
         }, window.location.origin);
       });
-  });
+  }
+  window.addEventListener('message', handleWindowMessage);
+  cleanup.push(() => window.removeEventListener('message', handleWindowMessage));
 
   let statusNode = null;
   function showBridgeStatus(status, operation, error) {
@@ -44,6 +57,185 @@
     statusNode.textContent = status === 'running' ? `见行 · ${operation || 'AI 正在操作'}` : status === 'completed' ? `见行 · 已完成${operation ? ` · ${operation}` : ''}` : `见行 · 操作失败${error ? `：${error}` : ''}`;
     statusNode.style.opacity = '1';
     if (status !== 'running') setTimeout(() => { if (statusNode) statusNode.style.opacity = '0'; }, 2600);
+  }
+
+  let activeClipRegionPicker = null;
+
+  function selectorMatchesExactly(selector, element) {
+    try {
+      const matches = document.querySelectorAll(selector);
+      return matches.length === 1 && matches[0] === element;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function stableSelectorToken(value) {
+    return typeof value === 'string'
+      && value.length > 0
+      && value.length <= 64
+      && !/\d{5,}/.test(value)
+      && !/^[a-f\d]{8,}$/i.test(value);
+  }
+
+  function selectorSegment(element) {
+    const tag = element.tagName.toLowerCase();
+    if (stableSelectorToken(element.id)) return `#${CSS.escape(element.id)}`;
+
+    const stableClasses = Array.from(element.classList)
+      .filter(stableSelectorToken)
+      .slice(0, 2);
+    if (stableClasses.length) {
+      const classSelector = `${tag}.${stableClasses.map((name) => CSS.escape(name)).join('.')}`;
+      if (selectorMatchesExactly(classSelector, element)) return classSelector;
+    }
+
+    const parent = element.parentElement;
+    if (!parent) return tag;
+    const siblings = Array.from(parent.children).filter((child) => child.tagName === element.tagName);
+    return siblings.length > 1 ? `${tag}:nth-of-type(${siblings.indexOf(element) + 1})` : tag;
+  }
+
+  function buildStableSelector(element) {
+    if (stableSelectorToken(element.id)) {
+      const selector = `#${CSS.escape(element.id)}`;
+      if (selectorMatchesExactly(selector, element)) return selector;
+    }
+
+    for (const attribute of ['data-testid', 'data-test', 'data-qa', 'itemprop']) {
+      const value = element.getAttribute(attribute);
+      if (!stableSelectorToken(value)) continue;
+      const selector = `${element.tagName.toLowerCase()}[${attribute}="${CSS.escape(value)}"]`;
+      if (selectorMatchesExactly(selector, element)) return selector;
+    }
+
+    const segments = [];
+    let current = element;
+    while (current && current !== document.documentElement && segments.length < 7) {
+      segments.unshift(selectorSegment(current));
+      const selector = segments.join(' > ');
+      if (selectorMatchesExactly(selector, element)) return selector;
+      current = current.parentElement;
+    }
+    return segments.join(' > ');
+  }
+
+  function regionCandidate(target) {
+    if (!(target instanceof Element)) return null;
+    if (target.closest('[data-mira-clip-picker-ui]')) return null;
+    const preferred = target.closest('article, main, section, [role="main"], div, p, ul, ol, table, figure');
+    return preferred instanceof Element ? preferred : target;
+  }
+
+  function describeRegion(element) {
+    const text = (element.innerText || element.textContent || '').replace(/\s+/g, ' ').trim();
+    return {
+      tag: element.tagName.toLowerCase(),
+      text: text.slice(0, 120),
+      elementCount: element.querySelectorAll('*').length,
+      imageCount: element.querySelectorAll('img').length,
+    };
+  }
+
+  function startClipRegionPicker(request = {}) {
+    activeClipRegionPicker?.cancel('新的区域选择已开始');
+
+    return new Promise((resolve, reject) => {
+      const overlay = document.createElement('div');
+      overlay.dataset.miraClipPickerUi = 'true';
+      overlay.style.cssText = 'position:fixed;z-index:2147483645;pointer-events:none;border:2px solid #c15f3c;background:rgba(193,95,60,.12);box-shadow:0 0 0 1px rgba(255,255,255,.8) inset;display:none;transition:top .05s,left .05s,width .05s,height .05s';
+
+      const toolbar = document.createElement('div');
+      toolbar.dataset.miraClipPickerUi = 'true';
+      toolbar.style.cssText = 'position:fixed;z-index:2147483647;top:16px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;max-width:calc(100vw - 32px);padding:9px 12px;border:1px solid rgba(255,255,255,.18);border-radius:8px;background:#20242a;color:#fff;font:13px/1.4 system-ui,sans-serif;box-shadow:0 8px 28px rgba(0,0,0,.28)';
+      const label = document.createElement('span');
+      label.textContent = request.kind === 'exclude' ? '选择要排除的区域' : '选择正文区域';
+      const parentButton = document.createElement('button');
+      parentButton.type = 'button';
+      parentButton.textContent = '上一级';
+      parentButton.title = '扩大到当前区域的上一级容器';
+      parentButton.style.cssText = 'padding:3px 7px;border:1px solid rgba(255,255,255,.28);border-radius:5px;background:transparent;color:#fff;font:12px system-ui,sans-serif;cursor:pointer';
+      const confirmButton = document.createElement('button');
+      confirmButton.type = 'button';
+      confirmButton.textContent = '确认';
+      confirmButton.title = '确认当前高亮区域';
+      confirmButton.style.cssText = 'padding:3px 8px;border:1px solid #d97757;border-radius:5px;background:#c15f3c;color:#fff;font:12px system-ui,sans-serif;cursor:pointer';
+      const cancelButton = document.createElement('button');
+      cancelButton.type = 'button';
+      cancelButton.textContent = '取消';
+      cancelButton.title = '取消区域选择（Esc）';
+      cancelButton.style.cssText = 'padding:3px 7px;border:1px solid rgba(255,255,255,.28);border-radius:5px;background:transparent;color:#fff;font:12px system-ui,sans-serif;cursor:pointer';
+      toolbar.append(label, parentButton, confirmButton, cancelButton);
+      (document.body || document.documentElement).append(overlay, toolbar);
+
+      let candidate = null;
+      const showCandidate = (next) => {
+        if (!next || next === candidate) return;
+        candidate = next;
+        const rect = candidate.getBoundingClientRect();
+        overlay.style.display = rect.width > 0 && rect.height > 0 ? 'block' : 'none';
+        overlay.style.left = `${rect.left}px`;
+        overlay.style.top = `${rect.top}px`;
+        overlay.style.width = `${rect.width}px`;
+        overlay.style.height = `${rect.height}px`;
+      };
+      const updateCandidate = (event) => {
+        const next = regionCandidate(event.target);
+        showCandidate(next);
+      };
+      const cleanup = () => {
+        document.removeEventListener('mousemove', updateCandidate, true);
+        document.removeEventListener('click', selectCandidate, true);
+        document.removeEventListener('keydown', onKeyDown, true);
+        overlay.remove();
+        toolbar.remove();
+        if (activeClipRegionPicker?.cancel === cancel) activeClipRegionPicker = null;
+      };
+      const cancel = (reason = '已取消区域选择') => {
+        cleanup();
+        const error = new Error(reason);
+        error.code = 'CLIP_REGION_PICK_CANCELLED';
+        reject(error);
+      };
+      const confirmCandidate = (selected) => {
+        if (!selected) return;
+        const selector = buildStableSelector(selected);
+        if (!selector || !selectorMatchesExactly(selector, selected)) {
+          cancel('无法为该区域生成稳定定位规则，请选择外层区域');
+          return;
+        }
+        const result = {
+          host: window.MiraClipRules?.normalizeHostname(location.hostname) || location.hostname,
+          url: location.href,
+          selector,
+          summary: describeRegion(selected),
+        };
+        cleanup();
+        resolve(result);
+      };
+      const selectCandidate = (event) => {
+        if (event.target instanceof Element && event.target.closest('[data-mira-clip-picker-ui]')) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        confirmCandidate(regionCandidate(event.target) || candidate);
+      };
+      const onKeyDown = (event) => {
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        cancel();
+      };
+
+      cancelButton.addEventListener('click', () => cancel());
+      parentButton.addEventListener('click', () => {
+        const parent = candidate?.parentElement;
+        if (parent && parent !== document.documentElement && !parent.closest('[data-mira-clip-picker-ui]')) showCandidate(parent);
+      });
+      confirmButton.addEventListener('click', () => confirmCandidate(candidate));
+      document.addEventListener('mousemove', updateCandidate, true);
+      document.addEventListener('click', selectCandidate, true);
+      document.addEventListener('keydown', onKeyDown, true);
+      activeClipRegionPicker = { cancel };
+    });
   }
 
   function waitForPageToSettle() {
@@ -72,8 +264,22 @@
 
   async function getPageInfo(request = {}) {
     await waitForPageToSettle();
+    let siteRule = request.ruleOverride || null;
+    if (siteRule && window.MiraClipRules) {
+      const currentHost = window.MiraClipRules.normalizeHostname(location.hostname);
+      const ruleHost = window.MiraClipRules.normalizeHostname(siteRule.host);
+      if (!ruleHost || ruleHost !== currentHost || !window.MiraClipRules.matchesUrlPattern(siteRule.urlPattern, location.href, siteRule.urlPatternMode)) siteRule = null;
+    }
+    if (!siteRule && window.MiraClipRules) {
+      try {
+        const stored = await chrome.storage.sync.get(['clipRules']);
+        siteRule = window.MiraClipRules.getRule(stored.clipRules, location.hostname, location.href);
+      } catch (_) {
+        siteRule = null;
+      }
+    }
     const extracted = window.MiraExtractor
-      ? window.MiraExtractor.extractPage(document)
+      ? window.MiraExtractor.extractPage(document, siteRule)
       : { contentMarkdown: '', contentPlainText: '', wordCount: 0 };
     const selectedText = window.getSelection().toString().trim();
     const imageDataUrls = [];
@@ -88,7 +294,7 @@
 
     for (const imageUrl of imageUrls.slice(0, 10)) {
       try {
-        const response = await fetch(imageUrl, { credentials: 'include' });
+        const response = await fetch(imageUrl, { credentials: 'include', mode: 'cors' });
         if (!response.ok) continue;
         const blob = await response.blob();
         if (!blob.type.startsWith('image/') || blob.size > 8 * 1024 * 1024) continue;
@@ -100,7 +306,14 @@
         });
         if (typeof dataUrl === 'string') imageDataUrls.push({ dataUrl, mimeType: blob.type, sourceUrl: imageUrl });
       } catch (_) {
-        // Cross-origin images may not be readable from the page context.
+        try {
+          const result = await chrome.runtime.sendMessage({ type: 'MIRA_FETCH_IMAGE', url: imageUrl });
+          if (result?.ok && typeof result.dataUrl === 'string') {
+            imageDataUrls.push({ dataUrl: result.dataUrl, mimeType: result.mimeType || 'image/png', sourceUrl: imageUrl });
+          }
+        } catch (_) {
+          // The URL stays in Markdown when both page and extension reads are blocked.
+        }
       }
     }
 
@@ -120,6 +333,9 @@
       coverImageUrl: extracted.coverImageUrl || null,
       wordCount: extracted.wordCount || 0,
       extractionStatus: extracted.extractionStatus || 'empty',
+      ruleStatus: extracted.ruleStatus || (siteRule ? 'applied' : 'not_configured'),
+      ruleApplied: Boolean(siteRule),
+      ruleHasIncludeRegion: Boolean(siteRule?.includeSelector),
       pageHtml: document.documentElement?.outerHTML || document.body?.outerHTML || '',
       captureMode,
     };
@@ -357,7 +573,7 @@
     return { summary: '已上传文件', name: file.name || 'upload.bin', size: blob.size };
   }
 
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  function handleRuntimeMessage(request, sender, sendResponse) {
     if (request?.type === 'WEBBRIDGE_PING') {
       sendResponse({ ok: true });
     } else if (request?.type === 'WEBBRIDGE_STATUS') {
@@ -365,6 +581,11 @@
       sendResponse({ ok: true });
     } else if (request?.type === 'GET_PAGE_INFO') {
       getPageInfo(request).then(sendResponse);
+    } else if (request?.type === 'WEBBRIDGE_CLIP_REGION_PICK') {
+      startClipRegionPicker(request).then((result) => sendResponse({ ok: true, result })).catch((error) => sendResponse({
+        ok: false,
+        error: { code: error.code || 'CLIP_REGION_PICK_FAILED', message: error.message || '区域选择失败' },
+      }));
     } else if (request?.type === 'WEBBRIDGE_SNAPSHOT') {
       sendResponse(buildSnapshot());
     } else if (request?.type === 'WEBBRIDGE_GET_HREF') {
@@ -397,5 +618,7 @@
       }));
     }
     return true;
-  });
+  }
+  chrome.runtime.onMessage.addListener(handleRuntimeMessage);
+  cleanup.push(() => chrome.runtime.onMessage.removeListener(handleRuntimeMessage));
 })();

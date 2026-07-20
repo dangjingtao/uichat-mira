@@ -13,7 +13,7 @@ const createWebBridgeTool = (tool: keyof typeof modes): McpToolImplementation =>
   definition: {
     id: `webbridge_${tool}`,
     title: `见行 ${tool}`,
-    description: `通过当前用户已连接的见行 Chrome 扩展执行浏览器${tool}操作。先使用 webbridge_look 观察页面，再使用稳定 ref 执行操作。`,
+    description: `通过当前用户已连接的触界 Chrome 扩展执行浏览器${tool}操作。先使用 webbridge_look 观察页面，再使用稳定 ref 执行操作。`,
     domain: "browser_action",
     source: "internal",
     mode: "sync",

@@ -8,6 +8,7 @@ import {
   getRuntimeDisplayLabel,
   getRuntimeDescription,
   openExternalUrl,
+  getNativeMessagingHostStatus,
   type DesktopRuntimeInfo,
 } from "../desktopRuntime";
 
@@ -233,6 +234,31 @@ describe("desktopRuntime", () => {
       "desktop:open-external",
       "https://example.com",
     );
+  });
+
+  it("getNativeMessagingHostStatus electron 环境使用原生状态查询", async () => {
+    const nativeStatus = { status: "installed", installed: true };
+    const invoke = vi.fn().mockResolvedValue(nativeStatus);
+    setWindow({
+      ...window,
+      desktopRuntime: {
+        hostKind: "electron",
+        platform: "win32",
+        isPackaged: true,
+        backendUrl: "",
+      },
+      electronAPI: { invoke },
+    } as unknown as typeof globalThis.window);
+
+    await expect(getNativeMessagingHostStatus()).resolves.toEqual(nativeStatus);
+    expect(invoke).toHaveBeenCalledWith("desktop:get-native-host-status");
+  });
+
+  it("getNativeMessagingHostStatus 浏览器环境返回不支持", async () => {
+    await expect(getNativeMessagingHostStatus()).resolves.toMatchObject({
+      status: "unsupported",
+      installed: false,
+    });
   });
 
   it("openExternalUrl 拒绝非 http(s) 链接", async () => {
