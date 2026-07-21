@@ -3,11 +3,17 @@
  * 职责：右键菜单注册、跨域请求兜底
  */
 
+importScripts('lib/clip-rules.js');
+
 const CAPTURE_MENU_ID = 'mira-clipper-capture';
 const WEBBRIDGE_PROTOCOL_VERSION = 1;
 const WEBBRIDGE_PATH = '/webbridge';
 const WEBBRIDGE_REQUEST_TIMEOUT_MS = 30000;
 const WEBBRIDGE_KEEPALIVE_INTERVAL_MS = 20000;
+
+function normalizeClipRules(value) {
+  return self.MiraClipRules?.normalizeRules(value) || {};
+}
 
 const WEBBRIDGE_TOOL_DEFINITIONS = [
   {
@@ -707,11 +713,13 @@ async function handleWebBridgeMessage(socket, rawMessage) {
       await ensureWebBridgeOperationReady();
       if (request.command === 'clip_rules_get') {
         const stored = await chrome.storage.sync.get(['clipRules']);
-        sendWebBridgeResponse(socket, request.id, { ok: true, result: { clipRules: stored.clipRules && typeof stored.clipRules === 'object' && !Array.isArray(stored.clipRules) ? stored.clipRules : {} } });
+        const clipRules = normalizeClipRules(stored.clipRules);
+        if (JSON.stringify(stored.clipRules || {}) !== JSON.stringify(clipRules)) {
+          await chrome.storage.sync.set({ clipRules });
+        }
+        sendWebBridgeResponse(socket, request.id, { ok: true, result: { clipRules } });
       } else {
-        const clipRules = request.clipRules && typeof request.clipRules === 'object' && !Array.isArray(request.clipRules)
-          ? request.clipRules
-          : {};
+        const clipRules = normalizeClipRules(request.clipRules);
         await chrome.storage.sync.set({ clipRules });
         sendWebBridgeResponse(socket, request.id, { ok: true, result: { clipRules } });
       }

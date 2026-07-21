@@ -34,6 +34,7 @@ export const convertCapturedHtmlToMarkdown = (input: {
   ) as Array<{
     getAttribute(name: string): string | null;
     setAttribute(name: string, value: string): void;
+    remove(): void;
   }>;
 
   for (const image of imageElements) {
@@ -42,6 +43,8 @@ export const convertCapturedHtmlToMarkdown = (input: {
     const localPath = localImages.get(toAbsoluteUrl(source, input.sourceUrl));
     if (localPath) {
       image.setAttribute("src", localPath);
+    } else {
+      image.remove();
     }
   }
 

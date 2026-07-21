@@ -47,6 +47,9 @@
   cleanup.push(() => window.removeEventListener('message', handleWindowMessage));
 
   let statusNode = null;
+  const MAX_CAPTURE_IMAGE_BYTES = 8 * 1024 * 1024;
+  const IMAGE_CAPTURE_CONCURRENCY = 3;
+  const IMAGE_CAPTURE_TIMEOUT_MS = 20000;
   function showBridgeStatus(status, operation, error) {
     if (!statusNode) {
       statusNode = document.createElement('div');
@@ -205,7 +208,6 @@
           return;
         }
         const result = {
-          host: window.MiraClipRules?.normalizeHostname(location.hostname) || location.hostname,
           url: location.href,
           selector,
           summary: describeRegion(selected),
@@ -264,16 +266,11 @@
 
   async function getPageInfo(request = {}) {
     await waitForPageToSettle();
-    let siteRule = request.ruleOverride || null;
-    if (siteRule && window.MiraClipRules) {
-      const currentHost = window.MiraClipRules.normalizeHostname(location.hostname);
-      const ruleHost = window.MiraClipRules.normalizeHostname(siteRule.host);
-      if (!ruleHost || ruleHost !== currentHost || !window.MiraClipRules.matchesUrlPattern(siteRule.urlPattern, location.href, siteRule.urlPatternMode)) siteRule = null;
-    }
-    if (!siteRule && window.MiraClipRules) {
+    let siteRule = null;
+    if (window.MiraClipRules) {
       try {
         const stored = await chrome.storage.sync.get(['clipRules']);
-        siteRule = window.MiraClipRules.getRule(stored.clipRules, location.hostname, location.href);
+        siteRule = window.MiraClipRules.getRule(stored.clipRules, location.href);
       } catch (_) {
         siteRule = null;
       }
@@ -282,7 +279,6 @@
       ? window.MiraExtractor.extractPage(document, siteRule)
       : { contentMarkdown: '', contentPlainText: '', wordCount: 0 };
     const selectedText = window.getSelection().toString().trim();
-    const imageDataUrls = [];
     const captureMode = request.captureMode === 'image'
       ? 'image'
       : request.captureMode === 'selection' || (request.captureMode !== 'page' && selectedText)
@@ -291,31 +287,6 @@
     const imageUrls = captureMode === 'image' && typeof request.imageUrl === 'string' && request.imageUrl.trim()
       ? [request.imageUrl.trim()]
       : captureMode === 'page' ? (extracted.imageUrls || []) : [];
-
-    for (const imageUrl of imageUrls.slice(0, 10)) {
-      try {
-        const response = await fetch(imageUrl, { credentials: 'include', mode: 'cors' });
-        if (!response.ok) continue;
-        const blob = await response.blob();
-        if (!blob.type.startsWith('image/') || blob.size > 8 * 1024 * 1024) continue;
-        const dataUrl = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-        if (typeof dataUrl === 'string') imageDataUrls.push({ dataUrl, mimeType: blob.type, sourceUrl: imageUrl });
-      } catch (_) {
-        try {
-          const result = await chrome.runtime.sendMessage({ type: 'MIRA_FETCH_IMAGE', url: imageUrl });
-          if (result?.ok && typeof result.dataUrl === 'string') {
-            imageDataUrls.push({ dataUrl: result.dataUrl, mimeType: result.mimeType || 'image/png', sourceUrl: imageUrl });
-          }
-        } catch (_) {
-          // The URL stays in Markdown when both page and extension reads are blocked.
-        }
-      }
-    }
 
     return {
       url: location.href,
@@ -326,7 +297,6 @@
       contentMarkdown: extracted.contentMarkdown || '',
       contentPlainText: extracted.contentPlainText || '',
       imageUrls,
-      imageDataUrls,
       excerpt: extracted.excerpt || '',
       author: extracted.author || '',
       siteName: extracted.siteName || '',
@@ -334,10 +304,141 @@
       wordCount: extracted.wordCount || 0,
       extractionStatus: extracted.extractionStatus || 'empty',
       ruleStatus: extracted.ruleStatus || (siteRule ? 'applied' : 'not_configured'),
-      ruleApplied: Boolean(siteRule),
-      ruleHasIncludeRegion: Boolean(siteRule?.includeSelector),
+      ruleApplied: extracted.ruleStatus === 'applied',
+      ruleHasIncludeRegion: extracted.ruleStatus === 'applied' && Boolean(siteRule?.includeSelector),
+      matchedRuleAlias: siteRule?.alias || '',
+      matchedRulePattern: siteRule?.urlPattern || '',
       pageHtml: document.documentElement?.outerHTML || document.body?.outerHTML || '',
       captureMode,
+    };
+  }
+
+  function createCaptureError(message, code) {
+    return Object.assign(new Error(message), { code });
+  }
+
+  function imageExtension(mimeType) {
+    const extensions = {
+      'image/avif': 'avif',
+      'image/gif': 'gif',
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+    };
+    return extensions[mimeType] || 'img';
+  }
+
+  function imageFileName(sourceUrl, mimeType, index) {
+    try {
+      const sourceName = new URL(sourceUrl).pathname.split('/').pop() || '';
+      if (/^[a-z0-9][a-z0-9._-]{0,120}$/i.test(sourceName)) return sourceName;
+    } catch (_) {}
+    return `capture-image-${index + 1}.${imageExtension(mimeType)}`;
+  }
+
+  async function readImageBlobFromPage(imageUrl) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), IMAGE_CAPTURE_TIMEOUT_MS);
+    try {
+      const response = await fetch(imageUrl, {
+        credentials: 'include',
+        signal: controller.signal,
+      });
+      if (!response.ok) throw createCaptureError(`图片读取失败（${response.status}）`, 'IMAGE_FETCH_FAILED');
+      const contentLength = Number(response.headers.get('content-length'));
+      if (Number.isFinite(contentLength) && contentLength > MAX_CAPTURE_IMAGE_BYTES) {
+        throw createCaptureError('图片超过 8 MB 限制', 'IMAGE_TOO_LARGE');
+      }
+      const blob = await response.blob();
+      if (!blob.type.startsWith('image/')) throw createCaptureError('目标地址不是图片', 'IMAGE_NOT_SUPPORTED');
+      if (blob.size > MAX_CAPTURE_IMAGE_BYTES) throw createCaptureError('图片超过 8 MB 限制', 'IMAGE_TOO_LARGE');
+      return blob;
+    } catch (error) {
+      if (error?.name === 'AbortError') throw createCaptureError('图片读取超时', 'IMAGE_FETCH_TIMEOUT');
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async function readImageBlobFromExtension(imageUrl) {
+    const result = await chrome.runtime.sendMessage({ type: 'MIRA_FETCH_IMAGE', url: imageUrl });
+    if (!result?.ok || typeof result.dataUrl !== 'string') {
+      throw createCaptureError(result?.message || '扩展无法读取图片', 'IMAGE_FETCH_FAILED');
+    }
+    const blob = await (await fetch(result.dataUrl)).blob();
+    if (!blob.type.startsWith('image/')) throw createCaptureError('目标地址不是图片', 'IMAGE_NOT_SUPPORTED');
+    if (blob.size > MAX_CAPTURE_IMAGE_BYTES) throw createCaptureError('图片超过 8 MB 限制', 'IMAGE_TOO_LARGE');
+    return blob;
+  }
+
+  async function readImageBlob(imageUrl) {
+    try {
+      return await readImageBlobFromPage(imageUrl);
+    } catch (_) {
+      return readImageBlobFromExtension(imageUrl);
+    }
+  }
+
+  async function uploadCapturedImage(blob, sourceUrl, backendUrl, accessToken, index) {
+    const formData = new FormData();
+    formData.append('file', blob, imageFileName(sourceUrl, blob.type, index));
+    const response = await fetch(`${backendUrl.replace(/\/$/, '')}/attachments`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: formData,
+    });
+    const body = await response.json().catch(() => ({}));
+    if (response.status === 401) throw createCaptureError('Mira 授权已失效，请重新授权', 'AUTH_REQUIRED');
+    if (!response.ok || !body.success || !body.data?.url) {
+      throw createCaptureError(body.message || `图片保存失败（${response.status}）`, 'IMAGE_UPLOAD_FAILED');
+    }
+    return {
+      filePath: body.data.url,
+      mimeType: body.data.contentType || blob.type,
+      sourceUrl,
+    };
+  }
+
+  async function captureAndUploadImages(request) {
+    const imageUrls = Array.from(new Set((Array.isArray(request.imageUrls) ? request.imageUrls : [])
+      .filter((url) => typeof url === 'string' && /^https?:\/\//i.test(url))));
+    if (!imageUrls.length) return { ok: true, attachments: [], failures: [] };
+    if (typeof request.backendUrl !== 'string' || !/^https?:\/\//i.test(request.backendUrl)) {
+      throw createCaptureError('Mira 后端地址无效', 'BACKEND_UNAVAILABLE');
+    }
+    if (typeof request.accessToken !== 'string' || !request.accessToken) {
+      throw createCaptureError('Mira 授权已失效，请重新授权', 'AUTH_REQUIRED');
+    }
+
+    const results = new Array(imageUrls.length);
+    let nextIndex = 0;
+    const worker = async () => {
+      while (nextIndex < imageUrls.length) {
+        const index = nextIndex++;
+        const sourceUrl = imageUrls[index];
+        try {
+          const blob = await readImageBlob(sourceUrl);
+          results[index] = { attachment: await uploadCapturedImage(blob, sourceUrl, request.backendUrl, request.accessToken, index) };
+        } catch (error) {
+          results[index] = {
+            failure: {
+              sourceUrl,
+              reason: error?.message || '图片无法读取或保存',
+              code: error?.code || 'IMAGE_CAPTURE_FAILED',
+            },
+          };
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(IMAGE_CAPTURE_CONCURRENCY, imageUrls.length) }, worker));
+    const failures = results.flatMap((result) => result?.failure ? [result.failure] : []);
+    const authFailure = failures.find((failure) => failure.code === 'AUTH_REQUIRED');
+    if (authFailure) throw createCaptureError(authFailure.reason, authFailure.code);
+    return {
+      ok: true,
+      attachments: results.flatMap((result) => result?.attachment ? [result.attachment] : []),
+      failures,
     };
   }
 
@@ -581,6 +682,11 @@
       sendResponse({ ok: true });
     } else if (request?.type === 'GET_PAGE_INFO') {
       getPageInfo(request).then(sendResponse);
+    } else if (request?.type === 'MIRA_CAPTURE_IMAGES') {
+      captureAndUploadImages(request).then(sendResponse).catch((error) => sendResponse({
+        ok: false,
+        error: { code: error.code || 'IMAGE_CAPTURE_FAILED', message: error.message || '图片采集失败' },
+      }));
     } else if (request?.type === 'WEBBRIDGE_CLIP_REGION_PICK') {
       startClipRegionPicker(request).then((result) => sendResponse({ ok: true, result })).catch((error) => sendResponse({
         ok: false,

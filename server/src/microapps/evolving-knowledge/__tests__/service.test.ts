@@ -74,6 +74,31 @@ describe("evolving-knowledge service", () => {
     });
   });
 
+  it("persists every accepted image attachment and localizes its markdown reference", async () => {
+    const attachments = Array.from({ length: 12 }, (_, index) => ({
+      filePath: `/attachments/capture-${index + 1}.png`,
+      mimeType: "image/png",
+      sourceUrl: `https://images.example.com/capture-${index + 1}.png`,
+    }));
+    const rawContent = attachments
+      .map((attachment, index) => `![图片 ${index + 1}](${attachment.sourceUrl})`)
+      .join("\n\n");
+
+    const service = createEvolvingKnowledgeService();
+    const capture = await service.processCapture({
+      sourceUrl: "https://example.com/gallery",
+      title: "图集",
+      contentType: "webpage",
+      rawContent,
+      attachments,
+    }, { userId: 1, processAi: false });
+
+    const storedAttachments = evolvingKnowledgeRepository.listAttachmentsByCapture(capture.id);
+    expect(storedAttachments).toHaveLength(12);
+    expect(capture.rawContent).toContain("/attachments/capture-12.png");
+    expect(capture.rawContent).not.toContain("https://images.example.com/capture-12.png");
+  });
+
   it("lists captures ordered by capturedAt desc", async () => {
     mockGenerateText.mockResolvedValue(
       JSON.stringify({

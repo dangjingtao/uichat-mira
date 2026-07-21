@@ -16,7 +16,7 @@ const saveImageAttachments = async (
 ) => {
   if (!attachments?.length) return;
 
-  for (const attachment of attachments.slice(0, 10)) {
+  for (const attachment of attachments) {
     evolvingKnowledgeRepository.createAttachment({
       captureId,
       filePath: attachment.filePath,

@@ -1,7 +1,7 @@
 /**
  * 触界网站剪藏规则
  *
- * 规则是站点级配置。定位表达式是扩展执行细节，由页面点选流程生成；
+ * 规则由完整 URL 模式标识。定位表达式是扩展执行细节，由页面点选流程生成；
  * 未命中规则时，剪藏继续使用默认正文提取器。
  */
 (function (global) {
@@ -12,21 +12,6 @@
   const MAX_EXCLUDE_SELECTORS = 20;
   const MAX_EXCLUDE_SELECTOR_LENGTH = 300;
   const MAX_IMAGE_LIMIT = 50;
-
-  function normalizeHostname(value) {
-    if (typeof value !== 'string') return '';
-    let input = value.trim().toLowerCase();
-    if (!input) return '';
-
-    try {
-      if (!/^[a-z][a-z\d+.-]*:\/\//i.test(input)) input = `https://${input}`;
-      input = new URL(input).hostname;
-    } catch (_) {
-      input = value.trim().toLowerCase().split('/')[0].split(':')[0];
-    }
-
-    return input.replace(/^www\./, '').replace(/\.$/, '');
-  }
 
   function normalizeSelector(value, maxLength = MAX_SELECTOR_LENGTH) {
     if (typeof value !== 'string') return '';
@@ -86,10 +71,10 @@
     };
   }
 
-  function normalizeRule(rule, host) {
+  function normalizeRule(rule) {
     if (!rule || typeof rule !== 'object') return null;
-    const normalizedHost = normalizeHostname(host || rule.host);
-    if (!normalizedHost) return null;
+    const urlPattern = normalizeUrlPattern(rule.urlPattern);
+    if (!urlPattern) return null;
 
     const rawExclude = Array.isArray(rule.excludeSelectors)
       ? rule.excludeSelectors
@@ -107,13 +92,9 @@
     })).filter((region) => region.selector);
 
     return {
-      host: normalizedHost,
-      ...(normalizeUrlPattern(rule.urlPattern) ? {
-        urlPattern: normalizeUrlPattern(rule.urlPattern),
-        // urlPatternMode was added after the first URL-pattern release. Old
-        // records were regular expressions and must keep that meaning.
-        urlPatternMode: rule.urlPatternMode === undefined ? 'regex' : normalizeUrlPatternMode(rule.urlPatternMode),
-      } : {}),
+      ...(normalizeSelector(rule.alias, 80) ? { alias: normalizeSelector(rule.alias, 80) } : {}),
+      urlPattern,
+      urlPatternMode: rule.urlPatternMode === undefined ? 'regex' : normalizeUrlPatternMode(rule.urlPatternMode),
       enabled: rule.enabled !== false,
       includeSelector: normalizeSelector(rule.includeSelector),
       excludeSelectors,
@@ -129,36 +110,54 @@
 
   function normalizeRules(rules) {
     if (!rules || typeof rules !== 'object' || Array.isArray(rules)) return {};
-    return Object.entries(rules).reduce((result, [host, rule]) => {
-      const normalized = normalizeRule(rule, host);
-      if (normalized) result[normalized.host] = normalized;
+    return Object.values(rules).reduce((result, rule) => {
+      const normalized = normalizeRule(rule);
+      if (normalized) result[getRuleKey(normalized)] = normalized;
       return result;
     }, {});
   }
 
-  function getRule(rules, hostname, url) {
-    const host = normalizeHostname(hostname);
-    const normalized = normalizeRules(rules);
-    const rule = host && normalized[host] ? normalized[host] : null;
-    return rule && matchesUrlPattern(rule.urlPattern, url || hostname, rule.urlPatternMode) ? rule : null;
+  function getRuleKey(rule) {
+    const normalized = normalizeRule(rule);
+    return normalized ? `${normalized.urlPatternMode}:${normalized.urlPattern}` : '';
   }
 
-  function validateRule(rule, host) {
-    const normalizedHost = normalizeHostname(host || rule?.host);
+  function ruleSpecificity(rule) {
+    const pattern = rule.urlPattern || '';
+    const literalLength = rule.urlPatternMode === 'regex'
+      ? pattern.replace(/\\./g, 'x').replace(/[\\^$.*+?()[\]{}|]/g, '').length
+      : pattern.replace(/[?*]/g, '').length;
+    return [literalLength, pattern.length, rule.urlPatternMode === 'regex' ? 1 : 0];
+  }
+
+  function getRule(rules, url) {
+    const normalized = normalizeRules(rules);
+    const candidates = Object.entries(normalized)
+      .filter(([, rule]) => matchesUrlPattern(rule.urlPattern, url, rule.urlPatternMode))
+      .sort(([leftKey, leftRule], [rightKey, rightRule]) => {
+        const left = ruleSpecificity(leftRule);
+        const right = ruleSpecificity(rightRule);
+        for (let index = 0; index < left.length; index += 1) {
+          if (left[index] !== right[index]) return right[index] - left[index];
+        }
+        return leftKey.localeCompare(rightKey);
+      });
+    return candidates[0]?.[1] || null;
+  }
+
+  function validateRule(rule) {
     const errors = [];
-    if (!normalizedHost || !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/i.test(normalizedHost)) {
-      errors.push('请输入有效的网站域名');
-    }
     const rawUrlPattern = typeof rule?.urlPattern === 'string' ? rule.urlPattern.trim() : '';
     const urlPattern = normalizeUrlPattern(rawUrlPattern);
-    if (rawUrlPattern) {
-      if (rawUrlPattern.length > MAX_URL_PATTERN_LENGTH) errors.push('URL 正则不能超过 500 个字符');
-      else {
-        try {
-          compileUrlPattern(urlPattern, rule?.urlPatternMode);
-        } catch (_) {
-          errors.push(normalizeUrlPatternMode(rule?.urlPatternMode) === 'regex' ? 'URL 正则格式无效' : 'URL 通配符格式无效');
-        }
+    if (!rawUrlPattern) {
+      errors.push('请输入 URL 通配符或正则');
+    } else if (rawUrlPattern.length > MAX_URL_PATTERN_LENGTH) {
+      errors.push('URL 匹配规则不能超过 500 个字符');
+    } else {
+      try {
+        compileUrlPattern(urlPattern, rule?.urlPatternMode);
+      } catch (_) {
+        errors.push(normalizeUrlPatternMode(rule?.urlPatternMode) === 'regex' ? 'URL 正则格式无效' : 'URL 通配符格式无效');
       }
     }
     if (rule?.includeSelector && rule.includeSelector.length > MAX_SELECTOR_LENGTH) {
@@ -171,19 +170,19 @@
     if (excludes.some((selector) => typeof selector !== 'string' || selector.length > MAX_EXCLUDE_SELECTOR_LENGTH)) {
       errors.push('每条排除区域选择器不能超过 300 个字符');
     }
-    return { ok: errors.length === 0, errors, host: normalizedHost };
+    return { ok: errors.length === 0, errors, ruleKey: getRuleKey({ ...rule, urlPattern }) };
   }
 
   global.MiraClipRules = {
     MAX_IMAGE_LIMIT,
     MAX_URL_PATTERN_LENGTH,
-    normalizeHostname,
     normalizeUrlPattern,
     normalizeUrlPatternMode,
     compileUrlPattern,
     matchesUrlPattern,
     normalizeRule,
     normalizeRules,
+    getRuleKey,
     getRule,
     validateRule,
   };

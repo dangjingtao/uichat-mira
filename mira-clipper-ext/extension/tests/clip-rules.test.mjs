@@ -13,74 +13,85 @@ const sandbox = { URL };
 vm.runInNewContext(source, sandbox);
 const rules = sandbox.MiraClipRules;
 
-describe('网站剪藏规则', () => {
-  it('按 hostname 归一化，并去掉 www', () => {
-    assert.equal(rules.normalizeHostname('https://www.Example.com/article'), 'example.com');
-    assert.equal(rules.normalizeHostname('example.com:8443/path'), 'example.com');
-  });
-
-  it('只命中完全相同的站点，不向父域名扩散', () => {
+describe('URL 剪藏规则', () => {
+  it('废弃没有 URL 模式的旧域名规则', () => {
     const configured = {
-      'example.com': { includeSelector: 'article' },
+      'example.com': { host: 'example.com', includeSelector: 'article' },
+      'wildcard:https://example.com/*': { urlPattern: 'https://example.com/*', urlPatternMode: 'wildcard', includeSelector: 'main' },
     };
-    assert.equal(rules.getRule(configured, 'www.example.com').host, 'example.com');
-    assert.equal(rules.getRule(configured, 'docs.example.com'), null);
-    assert.equal(rules.getRule(configured, 'other.example.net'), null);
+    const normalized = rules.normalizeRules(configured);
+    assert.deepEqual(Object.keys(normalized), ['wildcard:https://example.com/*']);
+    assert.equal(rules.getRule(configured, 'https://example.com/article').includeSelector, 'main');
   });
 
   it('支持按完整 URL 的简单正则限制规则', () => {
     const configured = {
-      'example.com': { urlPattern: '^https://example\\.com/articles/\\d+$', includeSelector: 'article' },
+      article: { urlPattern: '^https://example\\.com/articles/\\d+$', includeSelector: 'article' },
     };
-    assert.equal(rules.getRule(configured, 'example.com', 'https://example.com/articles/42').includeSelector, 'article');
-    assert.equal(rules.getRule(configured, 'example.com', 'https://example.com/about'), null);
-    assert.equal(rules.getRule(configured, 'docs.example.com', 'https://docs.example.com/articles/42'), null);
+    assert.equal(rules.getRule(configured, 'https://example.com/articles/42').includeSelector, 'article');
+    assert.equal(rules.getRule(configured, 'https://example.com/about'), null);
+    assert.equal(rules.getRule(configured, 'https://docs.example.com/articles/42'), null);
   });
 
   it('支持按完整 URL 的通配符限制规则', () => {
     const configured = {
-      'example.com': { urlPattern: 'https://example.com/articles/*', urlPatternMode: 'wildcard', includeSelector: 'article' },
+      article: { urlPattern: 'https://example.com/articles/*', urlPatternMode: 'wildcard', includeSelector: 'article' },
     };
-    assert.equal(rules.getRule(configured, 'example.com', 'https://example.com/articles/42').includeSelector, 'article');
-    assert.equal(rules.getRule(configured, 'example.com', 'https://example.com/about'), null);
+    assert.equal(rules.getRule(configured, 'https://example.com/articles/42').includeSelector, 'article');
+    assert.equal(rules.getRule(configured, 'https://example.com/about'), null);
     assert.equal(rules.matchesUrlPattern('https://example.com/a?x=?', 'https://example.com/a?x=1'), true);
   });
 
   it('旧版 URL 正则没有模式字段时仍按正则解释', () => {
-    const legacy = rules.normalizeRule({ urlPattern: '^https://example\\.com/article/\\d+$' }, 'example.com');
+    const legacy = rules.normalizeRule({ urlPattern: '^https://example\\.com/article/\\d+$' });
     assert.equal(legacy.urlPatternMode, 'regex');
-    assert.equal(rules.getRule({ 'example.com': legacy }, 'example.com', 'https://example.com/article/42').urlPatternMode, 'regex');
-    assert.equal(rules.getRule({ 'example.com': legacy }, 'example.com', 'https://example.com/article/x'), null);
+    assert.equal(rules.getRule({ legacy }, 'https://example.com/article/42').urlPatternMode, 'regex');
+    assert.equal(rules.getRule({ legacy }, 'https://example.com/article/x'), null);
   });
 
-  it('拒绝无效 URL 正则，并保留没有正则的旧规则行为', () => {
-    const invalid = rules.validateRule({ urlPattern: '[article', urlPatternMode: 'regex' }, 'example.com');
+  it('拒绝无效或缺失的 URL 匹配规则', () => {
+    const invalid = rules.validateRule({ urlPattern: '[article', urlPatternMode: 'regex' });
     assert.equal(invalid.ok, false);
     assert.ok(invalid.errors.some((message) => message.includes('URL 正则')));
-    assert.equal(rules.getRule({ 'example.com': { urlPattern: '^https://example\\.com/article$', includeSelector: 'article' } }, 'example.com', 'https://example.com/any'), null);
-    assert.equal(rules.getRule({ 'example.com': { includeSelector: 'article' } }, 'example.com').includeSelector, 'article');
+    assert.equal(rules.getRule({ article: { urlPattern: '^https://example\\.com/article$', includeSelector: 'article' } }, 'https://example.com/any'), null);
+    assert.equal(rules.validateRule({ includeSelector: 'article' }).ok, false);
   });
 
-  it('保留停用规则，使提取器可以显示停用状态', () => {
-    const rule = rules.getRule({ 'example.com': { enabled: false } }, 'example.com');
+  it('最具体的规则优先，停用规则也可作为更具体的例外', () => {
+    const configured = {
+      broad: { alias: '通用文档', urlPattern: 'https://example.com/docs/*', urlPatternMode: 'wildcard', includeSelector: 'main' },
+      exact: { alias: '安装页', urlPattern: 'https://example.com/docs/install/*', urlPatternMode: 'wildcard', includeSelector: 'article' },
+      disabled: { alias: '禁用页', urlPattern: 'https://example.com/docs/install/legacy/*', urlPatternMode: 'wildcard', enabled: false, includeSelector: 'article' },
+    };
+    const matched = rules.getRule(configured, 'https://example.com/docs/install/latest');
+    assert.equal(matched.alias, '安装页');
+    assert.equal(matched.includeSelector, 'article');
+    const rule = rules.getRule(configured, 'https://example.com/docs/install/legacy/v1');
     assert.equal(rule.enabled, false);
   });
 
   it('规范化排除选择器和图片参数', () => {
     const rule = rules.normalizeRule({
+      urlPattern: 'https://example.com/*',
       excludeSelectors: '.comments\n .ads',
       imagePolicy: { minWidth: 240.4, minHeight: -2, maxCount: 999 },
-    }, 'example.com');
+    });
     assert.deepEqual(Array.from(rule.excludeSelectors), ['.comments', '.ads']);
     assert.equal(rule.imagePolicy.minWidth, 240);
     assert.equal(rule.imagePolicy.minHeight, 0);
     assert.equal(rule.imagePolicy.maxCount, 50);
   });
 
-  it('拒绝无效站点和过长选择器', () => {
-    const result = rules.validateRule({ includeSelector: 'a'.repeat(501) }, 'not a host');
+  it('保留别名并使用 URL 模式作为规则键', () => {
+    const rule = rules.normalizeRule({ alias: 'JavBus 影片库', urlPattern: 'https://javbus.com/*', urlPatternMode: 'wildcard', includeSelector: 'article' });
+    assert.equal(rule.alias, 'JavBus 影片库');
+    assert.equal(rules.getRuleKey(rule), 'wildcard:https://javbus.com/*');
+    assert.equal(rules.getRule({ rule }, 'https://javbus.com/abc').alias, 'JavBus 影片库');
+  });
+
+  it('拒绝过长选择器', () => {
+    const result = rules.validateRule({ urlPattern: 'https://example.com/*', includeSelector: 'a'.repeat(501) });
     assert.equal(result.ok, false);
-    assert.ok(result.errors.some((message) => message.includes('有效的网站域名')));
     assert.ok(result.errors.some((message) => message.includes('500')));
   });
 });

@@ -54,4 +54,27 @@ describe("convertCapturedHtmlToMarkdown", () => {
 
     expect(result.markdown).toContain("![Gallery 1](/attachments/gallery-1.jpg)");
   });
+
+  it("drops HTML images that were not captured as local attachments", () => {
+    const result = convertCapturedHtmlToMarkdown({
+      sourceUrl: "https://example.com/article",
+      title: "Article",
+      html: `
+        <html><body><article>
+          <p>正文内容。</p>
+          <img src="/saved.png" alt="已保存" />
+          <img src="https://cdn.example.com/expired.png" alt="未保存" />
+        </article></body></html>
+      `,
+      images: [
+        {
+          sourceUrl: "https://example.com/saved.png",
+          filePath: "/attachments/saved.png",
+        },
+      ],
+    });
+
+    expect(result.markdown).toContain("![已保存](/attachments/saved.png)");
+    expect(result.markdown).not.toContain("https://cdn.example.com/expired.png");
+  });
 });

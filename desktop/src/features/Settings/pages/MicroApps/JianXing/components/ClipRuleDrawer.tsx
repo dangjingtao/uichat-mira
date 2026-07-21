@@ -5,7 +5,7 @@ import type { ClipRule, ClipRules } from "@/shared/api/webbridge";
 interface ClipRuleDrawerProps {
   open: boolean;
   onClose: () => void;
-  ruleHost: string;
+  ruleKey: string;
   ruleForm: ClipRule;
   clipRules: ClipRules;
   rulesSaving: boolean;
@@ -13,7 +13,6 @@ interface ClipRuleDrawerProps {
   extensionConnected: boolean;
   rulesError: string;
   rulesMessage: string;
-  onRuleHostChange: (value: string) => void;
   onRuleFormChange: (patch: Partial<ClipRule>) => void;
   onPickRuleRegion: (kind: "include" | "exclude") => void;
   onRemoveExcludeRegion: (selector: string) => void;
@@ -24,7 +23,7 @@ interface ClipRuleDrawerProps {
 export default function ClipRuleDrawer({
   open,
   onClose,
-  ruleHost,
+  ruleKey,
   ruleForm,
   clipRules,
   rulesSaving,
@@ -32,14 +31,13 @@ export default function ClipRuleDrawer({
   extensionConnected,
   rulesError,
   rulesMessage,
-  onRuleHostChange,
   onRuleFormChange,
   onPickRuleRegion,
   onRemoveExcludeRegion,
   onDelete,
   onSave,
 }: ClipRuleDrawerProps) {
-  const hasSavedRule = Boolean(clipRules[ruleHost]);
+  const hasSavedRule = Boolean(clipRules[ruleKey]);
 
   return (
     <Drawer
@@ -51,10 +49,10 @@ export default function ClipRuleDrawer({
       header={
         <div>
           <div className="text-sm font-semibold text-text-primary">
-            {hasSavedRule ? "编辑网站规则" : "新增网站规则"}
+            {hasSavedRule ? "编辑 URL 剪藏规则" : "新增 URL 剪藏规则"}
           </div>
           <div className="mt-1 text-xs text-text-secondary">
-            配置网页正文、排除区域和图片提取条件
+            配置 URL 匹配、网页正文、排除区域和图片提取条件
           </div>
         </div>
       }
@@ -64,7 +62,7 @@ export default function ClipRuleDrawer({
             <Trash2 className="h-4 w-4" />删除规则
           </Button>
           <Button size="sm" variant="primary" onClick={onSave} disabled={rulesSaving || !extensionConnected}>
-            <Save className="h-4 w-4" />{rulesSaving ? "保存中…" : "保存网站规则"}
+            <Save className="h-4 w-4" />{rulesSaving ? "保存中…" : "保存 URL 规则"}
           </Button>
         </>
       }
@@ -74,15 +72,15 @@ export default function ClipRuleDrawer({
         {rulesMessage ? <Alert variant="success" title="规则状态">{rulesMessage}</Alert> : null}
 
         <TextInput
-          label="编辑网站域名"
-          value={ruleHost}
-          onChange={onRuleHostChange}
-          placeholder="例如 example.com"
+          label="网站别名（可选）"
+          value={ruleForm.alias || ""}
+          onChange={(value) => onRuleFormChange({ alias: value })}
+          placeholder="例如 产品帮助中心"
           compact
         />
         <TextInput
-          label="URL 匹配规则（可选）"
-          value={ruleForm.urlPattern || ""}
+          label="URL 匹配规则"
+          value={ruleForm.urlPattern}
           onChange={(value) => onRuleFormChange({ urlPattern: value })}
           placeholder={ruleForm.urlPatternMode === "regex" ? "例如 ^https://example\\.com/article/.*" : "例如 https://example.com/article/*"}
           compact
@@ -94,15 +92,15 @@ export default function ClipRuleDrawer({
           options={[{ value: "wildcard", label: "通配符" }, { value: "regex", label: "正则" }]}
         />
         <p className="text-xs leading-5 text-text-tertiary">
-          留空匹配该网站全部页面。通配符中 `*` 匹配任意长度文本，`?` 匹配一个字符；正则模式填写 JavaScript 正则表达式，不填写标志。
+          必填。通配符中 `*` 匹配任意长度文本，`?` 匹配一个字符；正则模式填写 JavaScript 正则表达式，不填写标志。多个规则命中同一页面时，扩展使用约束最具体的一条。
         </p>
 
         <div className="flex items-center justify-between rounded-ui-control border border-border bg-surface-secondary px-3 py-2">
           <div>
             <div className="text-sm font-medium text-text-primary">启用当前规则</div>
-            <div className="text-xs text-text-tertiary">停用后该网站回到默认提取</div>
+            <div className="text-xs text-text-tertiary">停用后当前 URL 范围回到默认提取</div>
           </div>
-          <Switch checked={ruleForm.enabled} onChange={() => onRuleFormChange({ enabled: !ruleForm.enabled })} ariaLabel="启用当前网站规则" size="sm" />
+          <Switch checked={ruleForm.enabled} onChange={() => onRuleFormChange({ enabled: !ruleForm.enabled })} ariaLabel="启用当前 URL 规则" size="sm" />
         </div>
 
         <div className="space-y-2">

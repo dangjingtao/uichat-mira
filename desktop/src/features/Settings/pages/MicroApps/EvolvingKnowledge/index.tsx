@@ -445,9 +445,6 @@ export default function EvolvingKnowledgeStudioPage() {
                 className="h-10 w-full rounded-ui-control border border-border bg-surface-secondary pl-9 pr-4 text-sm text-text-primary placeholder:text-text-tertiary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20"
               />
             </div>
-            <Button variant="primary" size="sm" onClick={() => void handleSearch()}>
-              搜索
-            </Button>
           </div>
           <div className="flex flex-wrap gap-2">
             {(["webpage"] as const).map((type) => (

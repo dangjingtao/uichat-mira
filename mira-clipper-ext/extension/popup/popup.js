@@ -240,7 +240,6 @@
         contentMarkdown: '',
         contentPlainText: '',
         imageUrls: [],
-        imageDataUrls: [],
       };
       if (chrome.storage.session) {
         await chrome.storage.session.remove(['pendingCapture']);
@@ -399,7 +398,6 @@
       ...(Array.isArray(info.imageUrls) ? info.imageUrls : []),
       ...(imageUrl ? [imageUrl] : []),
     ].filter(Boolean)));
-    const imageDataUrls = Array.isArray(info.imageDataUrls) ? info.imageDataUrls : [];
     const contentType = 'webpage';
     const hasContent = !!(info.contentMarkdown || '').trim();
     const hasTextPreview = !!selected || hasContent;
@@ -427,7 +425,7 @@
         image.src = url;
         image.alt = `采集的图片 ${index + 1}`;
         image.onerror = () => {
-          image.alt = `图片 ${index + 1} 无法加载，但仍会提交图片地址`;
+          image.alt = `图片 ${index + 1} 预览不可用，保存时会从当前页面读取`;
         };
         els.imagePreview.appendChild(image);
       });
@@ -451,11 +449,10 @@
     els.saveBtn.dataset.contentType = contentType;
     els.saveBtn.dataset.imageUrl = imageUrl;
     els.saveBtn.dataset.imageUrls = JSON.stringify(imageUrls);
-    els.saveBtn.dataset.imageDataUrls = JSON.stringify(imageDataUrls);
     els.saveBtn.dataset.captureMode = info.captureMode === 'selection' || info.captureMode === 'image' ? info.captureMode : 'page';
     els.saveBtn.dataset.ruleApplied = info.ruleApplied === true ? 'true' : 'false';
     els.saveBtn.dataset.ruleHasIncludeRegion = info.ruleHasIncludeRegion === true ? 'true' : 'false';
-    renderRuleStatus(info.ruleStatus, info.captureMode, info.ruleApplied, info.ruleHasIncludeRegion);
+    renderRuleStatus(info.ruleStatus, info.captureMode, info.ruleApplied, info.ruleHasIncludeRegion, info.matchedRuleAlias);
     extractionStatus = info.extractionStatus || 'empty';
     if (extractionStatus !== 'ok' && !selected && !imageUrls.length) {
       setState('ERROR', '未提取到可用正文，请先选中页面中的文字后重试');
@@ -464,17 +461,18 @@
     return true;
   }
 
-  function renderRuleStatus(ruleStatus, captureMode, ruleApplied, ruleHasIncludeRegion) {
+  function renderRuleStatus(ruleStatus, captureMode, ruleApplied, ruleHasIncludeRegion, ruleAlias) {
     if (captureMode === 'selection' || captureMode === 'image') {
       els.ruleStatus.classList.add('hidden');
       return;
     }
+    const ruleName = typeof ruleAlias === 'string' && ruleAlias.trim() ? `「${ruleAlias.trim()}」` : '';
     const messages = {
-      applied: ruleHasIncludeRegion ? '已应用当前网站的剪藏规则（已限定正文区域）' : '已命中当前网站规则（正文区域未限定，使用默认正文判断）',
+      applied: ruleHasIncludeRegion ? `已应用剪藏规则${ruleName}（已限定正文区域）` : `已应用剪藏规则${ruleName}（正文区域未限定，使用默认正文判断）`,
       not_configured: '当前网站未配置规则，使用默认提取',
-      disabled: '当前网站规则已停用，使用默认提取',
-      rule_not_matched: '当前网站规则未找到正文区域，已回退默认提取',
-      rule_invalid: '当前网站规则无效，已回退默认提取',
+      disabled: `当前匹配规则${ruleName}已停用，使用默认提取`,
+      rule_not_matched: `当前匹配规则${ruleName}未找到正文区域，已回退默认提取`,
+      rule_invalid: `当前匹配规则${ruleName}无效，已回退默认提取`,
     };
     els.ruleStatus.textContent = messages[ruleStatus] || messages.not_configured;
     els.ruleStatus.className = `rule-status ${ruleApplied && ruleStatus === 'applied' ? 'applied' : 'fallback'}`;
@@ -521,25 +519,23 @@
   });
 
   // ===== Save =====
-  async function uploadCapturedImages(imageDataUrls) {
-    const uploaded = [];
-    for (const image of imageDataUrls.slice(0, 10)) {
-      if (!image || typeof image.dataUrl !== 'string') continue;
-      const blob = await (await fetch(image.dataUrl)).blob();
-      const formData = new FormData();
-      formData.append('file', blob, `capture-image-${uploaded.length}.png`);
-      const response = await fetch(`${backendUrl.replace(/\/$/, '')}/attachments`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}` },
-        body: formData,
-      });
-      const body = await response.json();
-      if (!response.ok || !body.success || !body.data?.url) {
-        throw new Error(`图片保存失败（${response.status}）`);
-      }
-      uploaded.push({ filePath: body.data.url, mimeType: body.data.contentType || image.mimeType || 'image/png', sourceUrl: image.sourceUrl });
-    }
-    return uploaded;
+  function escapeRegExp(value) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function removeRemoteImageMarkdown(content, imageUrls) {
+    return imageUrls.reduce((value, imageUrl) => value.replace(
+      new RegExp(`!\\[[^\\]]*\\]\\(${escapeRegExp(imageUrl)}\\)`, 'g'),
+      '',
+    ), content).replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  function buildLocalizedCaptureContent(textContent, title, imageUrls, attachments) {
+    const textWithoutRemoteImages = removeRemoteImageMarkdown(textContent, imageUrls);
+    const localizedImages = attachments
+      .filter((attachment) => typeof attachment.sourceUrl === 'string')
+      .map((attachment, index) => `![${title} ${index + 1}](${attachment.sourceUrl})`);
+    return [textWithoutRemoteImages, ...localizedImages].filter(Boolean).join('\n\n');
   }
 
   els.saveBtn.addEventListener('click', async () => {
@@ -581,17 +577,10 @@
     const contentType = 'webpage';
     const imageUrl = els.saveBtn.dataset.imageUrl || '';
     const imageUrls = JSON.parse(els.saveBtn.dataset.imageUrls || '[]');
-    const imageDataUrls = JSON.parse(els.saveBtn.dataset.imageDataUrls || '[]');
     const ruleApplied = els.saveBtn.dataset.ruleApplied === 'true';
     const ruleHasIncludeRegion = els.saveBtn.dataset.ruleHasIncludeRegion === 'true';
     const textContent = selectedText || preExtracted.contentMarkdown || preExtracted.contentPlainText;
-    const rawContent = imageUrls.length
-      ? [
-        textContent,
-        ...imageUrls.map((url, index) => `![${title} ${index + 1}](${url})`),
-      ].filter(Boolean).join('\n\n')
-      : textContent;
-    if (!rawContent.trim()) {
+    if (!textContent.trim() && !imageUrls.length) {
       setState('ERROR', '没有可保存的正文内容');
       return;
     }
@@ -600,7 +589,7 @@
       title,
       favicon: els.saveBtn.dataset.favicon || undefined,
       contentType,
-      rawContent,
+      rawContent: '',
       captureMode: els.saveBtn.dataset.captureMode || 'page',
       rawHtml: els.saveBtn.dataset.captureMode === 'page' && !ruleHasIncludeRegion ? currentPageHtml || undefined : undefined,
       processAi: els.processAi.checked,
@@ -624,7 +613,26 @@
     };
 
     try {
-      payload.attachments = await uploadCapturedImages(imageDataUrls);
+      setState('SAVING', imageUrls.length ? `正在本地化 ${imageUrls.length} 张图片…` : '正在保存…');
+      const imageCapture = await sendMessageToTab(currentTabId, {
+        type: 'MIRA_CAPTURE_IMAGES',
+        imageUrls,
+        backendUrl,
+        accessToken,
+      });
+      if (!imageCapture?.ok) {
+        const error = new Error(imageCapture?.error?.message || '图片采集失败');
+        error.code = imageCapture?.error?.code;
+        throw error;
+      }
+      payload.attachments = Array.isArray(imageCapture.attachments) ? imageCapture.attachments : [];
+      payload.rawContent = buildLocalizedCaptureContent(textContent, title, imageUrls, payload.attachments);
+      if (!payload.rawContent.trim()) throw new Error('没有可保存的正文内容');
+      payload.metadata.imageCapture = {
+        requestedCount: imageUrls.length,
+        uploadedCount: payload.attachments.length,
+        failures: Array.isArray(imageCapture.failures) ? imageCapture.failures : [],
+      };
       const headers = { 'Content-Type': 'application/json' };
       if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
       const res = await fetch(`${backendUrl.replace(/\/$/, '')}/microapps/evolving-knowledge/captures`, {
@@ -645,7 +653,11 @@
         }
         connectionState = 'connected';
         renderConnectionState('connected');
-        setState('SUCCESS', '已保存到 Mira！');
+        const failureCount = payload.metadata.imageCapture.failures.length;
+        const imageStatus = imageUrls.length
+          ? `已本地化 ${payload.attachments.length}/${imageUrls.length} 张图片${failureCount ? `，${failureCount} 张未保存` : ''}`
+          : '';
+        setState('SUCCESS', ['已保存到 Mira！', imageStatus].filter(Boolean).join(' '));
         return;
       }
 
@@ -666,6 +678,15 @@
       setState('ERROR', msg);
     } catch (e) {
       const text = e.message || '';
+      if (e.code === 'AUTH_REQUIRED') {
+        accessToken = '';
+        await chrome.storage.local.remove(['accessToken']);
+        showAuthGate();
+        connectionState = 'disconnected';
+        setState('LOCKED');
+        showAuthStatus('授权已失效，请重新输入 Mira 授权码', true);
+        return;
+      }
       if (text.includes('Failed to fetch') || text.includes('ECONNREFUSED') || text.includes('fetch')) {
         accessToken = '';
         await chrome.storage.local.remove(['accessToken']);

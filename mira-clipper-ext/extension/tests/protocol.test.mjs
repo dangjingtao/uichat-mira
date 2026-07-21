@@ -92,6 +92,25 @@ describe('剪藏模式和 AI 开关', () => {
     assert.match(popup, /rawHtml: els\.saveBtn\.dataset\.captureMode === 'page'/);
   });
 
+  it('保存时应按规则数量逐张本地化图片，不传递聚合 base64 数据', async () => {
+    const [content, popup, extractor, service] = await Promise.all([
+      readFile(join(extensionRoot, 'content/content.js'), 'utf8'),
+      readFile(join(extensionRoot, 'popup/popup.js'), 'utf8'),
+      readFile(join(extensionRoot, 'lib/extractor.js'), 'utf8'),
+      readFile(join(extensionRoot, '../../server/src/microapps/evolving-knowledge/index.ts'), 'utf8'),
+    ]);
+
+    assert.match(content, /MIRA_CAPTURE_IMAGES/);
+    assert.match(content, /IMAGE_CAPTURE_CONCURRENCY = 3/);
+    assert.match(content, /uploadCapturedImage/);
+    assert.doesNotMatch(content, /imageUrls\.slice\(0, 10\)/);
+    assert.match(popup, /MIRA_CAPTURE_IMAGES/);
+    assert.doesNotMatch(popup, /imageDataUrls/);
+    assert.match(extractor, /data-srcset/);
+    assert.match(extractor, /data-zoom-image/);
+    assert.doesNotMatch(service, /attachments\.slice\(0, 10\)/);
+  });
+
   it('AI 摘要和关联重建必须由两个独立开关控制', async () => {
     const html = await readFile(join(extensionRoot, 'popup/popup.html'), 'utf8');
     const source = await readFile(join(extensionRoot, 'popup/popup.js'), 'utf8');
@@ -103,5 +122,19 @@ describe('剪藏模式和 AI 开关', () => {
     assert.match(source, /processAi: els\.processAi\.checked/);
     assert.match(source, /rebuild: els\.rebuildKnowledge\.checked/);
     assert.match(source, /if \(els\.rebuildKnowledge\.checked\)/);
+  });
+
+  it('侧栏只显示经过 URL 规则排序后命中的别名', async () => {
+    const [rules, content, popup] = await Promise.all([
+      readFile(join(extensionRoot, 'lib/clip-rules.js'), 'utf8'),
+      readFile(join(extensionRoot, 'content/content.js'), 'utf8'),
+      readFile(join(extensionRoot, 'popup/popup.js'), 'utf8'),
+    ]);
+
+    assert.match(rules, /function ruleSpecificity/);
+    assert.match(rules, /function getRule\(rules, url\)/);
+    assert.match(rules, /if \(!urlPattern\) return null/);
+    assert.match(content, /matchedRuleAlias/);
+    assert.match(popup, /已应用剪藏规则\$\{ruleName\}/);
   });
 });

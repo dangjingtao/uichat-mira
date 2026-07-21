@@ -12,6 +12,7 @@ export type EvolvingKnowledgeRouteOptions = {
 
 const contentTypes = new Set(["webpage"]);
 const captureModes = new Set(["page", "selection", "image"]);
+const MAX_CAPTURE_IMAGE_ATTACHMENTS = 50;
 
 const parseCaptureBody = (body: unknown) => {
   if (!body || typeof body !== "object") {
@@ -38,6 +39,9 @@ const parseCaptureBody = (body: unknown) => {
   if (input.attachments !== undefined) {
     if (!Array.isArray(input.attachments)) {
       throw badRequest("attachments must be an array");
+    }
+    if (input.attachments.length > MAX_CAPTURE_IMAGE_ATTACHMENTS) {
+      throw badRequest(`attachments cannot exceed ${MAX_CAPTURE_IMAGE_ATTACHMENTS} images`);
     }
     for (const attachment of input.attachments) {
       const attachmentInput = attachment as Record<string, unknown>;

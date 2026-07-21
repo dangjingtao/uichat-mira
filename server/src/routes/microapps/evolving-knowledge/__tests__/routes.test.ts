@@ -125,6 +125,29 @@ describe("evolving-knowledge routes", () => {
     expect(JSON.parse(res.payload).code).toBe("VALIDATION_ERROR");
   });
 
+  it("POST /captures rejects more than 50 image attachments", async () => {
+    const attachments = Array.from({ length: 51 }, (_, index) => ({
+      filePath: `/attachments/image-${index + 1}.png`,
+      mimeType: "image/png",
+      sourceUrl: `https://images.example.com/image-${index + 1}.png`,
+    }));
+    const res = await app.inject({
+      method: "POST",
+      url: "/microapps/evolving-knowledge/captures",
+      headers: { authorization: `Bearer ${authToken}` },
+      payload: {
+        sourceUrl: "https://example.com/gallery",
+        title: "超出图片数上限",
+        contentType: "webpage",
+        rawContent: "正文",
+        attachments,
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.payload).message).toContain("cannot exceed 50 images");
+  });
+
   it("POST /captures preserves a selection and does not call AI by default", async () => {
     const res = await app.inject({
       method: "POST",

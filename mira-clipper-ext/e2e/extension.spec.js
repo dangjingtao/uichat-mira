@@ -572,7 +572,6 @@ test('正文区域应通过页面高亮点选生成内部定位规则', async ({
   const response = await page.evaluate(() => window.__pickResponse);
 
   expect(response.ok).toBe(true);
-  expect(response.result.host).toBe('localhost');
   expect(response.result.selector).toBe('article');
   expect(response.result.summary.text).toContain('React Server Components');
   expect(response.result.summary.elementCount).toBeGreaterThan(3);
@@ -587,8 +586,8 @@ test('网站规则应按完整 URL 通配符控制正文提取', async ({ contex
   await page.addScriptTag({ path: join(EXTENSION_PATH, 'lib/extractor.js') });
 
   const result = await page.evaluate(() => {
-    const rule = { host: 'localhost', urlPattern: 'http://localhost:9876/art*', urlPatternMode: 'wildcard', includeSelector: 'article' };
-    const matched = window.MiraClipRules.getRule({ localhost: rule }, location.hostname, location.href);
+    const rule = { urlPattern: 'http://localhost:9876/art*', urlPatternMode: 'wildcard', includeSelector: 'article' };
+    const matched = window.MiraClipRules.getRule({ rule }, location.href);
     const extracted = window.MiraExtractor.extractPage(document, matched);
     return { ruleStatus: extracted.ruleStatus, text: extracted.contentPlainText };
   });
@@ -604,7 +603,7 @@ test('侧栏剪藏应读取命中的 URL 规则并应用正文区域', async ({ 
     window.__miraMessageListener = null;
     window.chrome = {
       storage: {
-        sync: { get: async (keys) => keys.includes('clipRules') ? { clipRules: { localhost: { host: 'localhost', urlPattern: 'http://localhost:9876/art*', urlPatternMode: 'wildcard', includeSelector: 'article', enabled: true } } } : { backendUrl: 'http://localhost:9876' } },
+        sync: { get: async (keys) => keys.includes('clipRules') ? { clipRules: { article: { urlPattern: 'http://localhost:9876/art*', urlPatternMode: 'wildcard', includeSelector: 'article', enabled: true } } } : { backendUrl: 'http://localhost:9876' } },
       },
       runtime: {
         sendMessage: async (message) => message?.type === 'WEBBRIDGE_ACTIVATE_TAB' ? { ok: true } : { ok: true },

@@ -26,9 +26,9 @@ export type WebBridgeResponse = {
 };
 
 export type ClipRule = {
-  host: string;
-  urlPattern?: string;
-  urlPatternMode?: "wildcard" | "regex";
+  alias?: string;
+  urlPattern: string;
+  urlPatternMode: "wildcard" | "regex";
   enabled: boolean;
   includeSelector: string;
   excludeSelectors: string[];
@@ -51,7 +51,6 @@ export type ClipRegionSummary = {
 };
 
 export type ClipRegionPickResult = {
-  host: string;
   url: string;
   selector: string;
   summary: ClipRegionSummary;

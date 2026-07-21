@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Circle, CircleHelp, Copy, Download, Eye, ExternalLink, FileDown, FileUp, Globe2, KeyRound, MousePointer2, Plus, PlugZap, RefreshCw, RotateCcw, Send, ShieldCheck } from "lucide-react";
-import { Alert, Badge, Button, Card, FileUploadDropzone, Modal, NavigationCardTabs, Select, Table, TextInput, Tooltip } from "@/shared/ui";
+import { BookOpen, Circle, CircleHelp, Copy, Download, Eye, ExternalLink, FileDown, FileUp, Globe2, KeyRound, MousePointer2, Pencil, Plus, PlugZap, RefreshCw, RotateCcw, Send, ShieldCheck } from "lucide-react";
+import { Alert, Badge, Button, Card, FileUploadDropzone, IconButton, Modal, NavigationCardTabs, Select, Table, TextInput, Tooltip } from "@/shared/ui";
 import type { ColumnDef } from "@tanstack/react-table";
 import { message } from "@/shared/ui/Message";
 import { ApiError, post } from "@/shared/lib/request";
@@ -8,10 +8,20 @@ import { downloadBrowserExtension, getNativeMessagingHostStatus, installNativeMe
 import { WebBridgeClient, WebBridgeRequestError, type ClipRule, type ClipRules, type WebBridgeStatus } from "@/shared/api/webbridge";
 import MicroAppPageLayout from "../components/MicroAppPageLayout";
 import ClipRuleDrawer from "./components/ClipRuleDrawer";
+import JianXingGuideDrawer from "./components/JianXingGuideDrawer";
 
 type Mode = "look" | "browse" | "act" | "transfer";
 type WorkspaceTab = "jianxing" | "clipper";
-type ConfiguredSiteRow = { host: string; enabled: boolean };
+type ConfiguredRuleRow = {
+  key: string;
+  alias: string;
+  urlPattern: string;
+  urlPatternMode: "wildcard" | "regex";
+  enabled: boolean;
+  includeSelector: string;
+  includeRegion?: ClipRule["includeRegion"];
+  imagePolicy: ClipRule["imagePolicy"];
+};
 type ToolResult = Record<string, unknown>;
 
 const workspaceTabs: Array<{ value: WorkspaceTab; label: string }> = [
@@ -64,20 +74,8 @@ const actions: Record<Mode, Array<{ value: string; label: string }>> = {
 
 const jsonText = (value: unknown) => JSON.stringify(value, null, 2);
 
-const normalizeHost = (value: string) => {
-  let input = value.trim().toLowerCase();
-  if (!input) return "";
-  try {
-    if (!/^[a-z][a-z\d+.-]*:\/\//i.test(input)) input = `https://${input}`;
-    return new URL(input).hostname.replace(/^www\./, "").replace(/\.$/, "");
-  } catch {
-    return input.split("/")[0].split(":")[0].replace(/^www\./, "").replace(/\.$/, "");
-  }
-};
-
-const emptyRule = (host = ""): ClipRule => ({
-  host,
-  urlPattern: "",
+const emptyRule = (urlPattern = ""): ClipRule => ({
+  urlPattern,
   urlPatternMode: "wildcard",
   enabled: true,
   includeSelector: "",
@@ -87,10 +85,19 @@ const emptyRule = (host = ""): ClipRule => ({
 
 const ruleForEditor = (rule: ClipRule): ClipRule => ({
   ...rule,
-  urlPatternMode: rule.urlPattern
-    ? rule.urlPatternMode === "wildcard" ? "wildcard" : "regex"
-    : "wildcard",
+  urlPatternMode: rule.urlPatternMode === "regex" ? "regex" : "wildcard",
 });
+
+const clipRuleKey = (rule: Pick<ClipRule, "urlPattern" | "urlPatternMode">) =>
+  `${rule.urlPatternMode}:${rule.urlPattern.trim()}`;
+
+const defaultWildcardPattern = (url: string) => {
+  try {
+    return `${new URL(url).origin}/*`;
+  } catch {
+    return "";
+  }
+};
 
 export default function JianXingPage() {
   const clientRef = useRef<WebBridgeClient | null>(null);
@@ -112,7 +119,7 @@ export default function JianXingPage() {
   const [nativeHostChecking, setNativeHostChecking] = useState(true);
   const [nativeHostStatus, setNativeHostStatus] = useState<NativeMessagingHostStatus | null>(null);
   const [clipRules, setClipRules] = useState<ClipRules>({});
-  const [ruleHost, setRuleHost] = useState("");
+  const [ruleKey, setRuleKey] = useState("");
   const [ruleForm, setRuleForm] = useState<ClipRule>(() => emptyRule());
   const [rulesSaving, setRulesSaving] = useState(false);
   const [rulesLoading, setRulesLoading] = useState(false);
@@ -120,6 +127,7 @@ export default function JianXingPage() {
   const [rulesMessage, setRulesMessage] = useState("");
   const [rulesError, setRulesError] = useState("");
   const [ruleDrawerOpen, setRuleDrawerOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const refreshNativeHostStatus = useCallback(async () => {
     setNativeHostChecking(true);
@@ -205,12 +213,12 @@ export default function JianXingPage() {
     try {
       const nextRules = await clientRef.current.requestClipRules("clip_rules_get");
       setClipRules(nextRules);
-      const selectedHost = normalizeHost(ruleHost) || Object.keys(nextRules).sort()[0] || "";
-      setRuleHost(selectedHost);
-      setRuleForm(nextRules[selectedHost] ? ruleForEditor(nextRules[selectedHost]) : emptyRule(selectedHost));
-      setRulesMessage("网站规则已从触界扩展加载");
+      const selectedKey = nextRules[ruleKey] ? ruleKey : Object.keys(nextRules).sort()[0] || "";
+      setRuleKey(selectedKey);
+      setRuleForm(nextRules[selectedKey] ? ruleForEditor(nextRules[selectedKey]) : emptyRule());
+      setRulesMessage("URL 剪藏规则已从触界扩展加载");
     } catch (cause) {
-      setRulesError(cause instanceof Error ? cause.message : "无法读取网站规则");
+      setRulesError(cause instanceof Error ? cause.message : "无法读取 URL 剪藏规则");
     } finally {
       setRulesLoading(false);
     }
@@ -222,21 +230,20 @@ export default function JianXingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected, extensionConnected]);
 
-  const selectRuleHost = (host: string) => {
-    const normalizedHost = normalizeHost(host);
-    setRuleHost(normalizedHost);
-    setRuleForm(clipRules[normalizedHost] ? ruleForEditor(clipRules[normalizedHost]) : emptyRule(normalizedHost));
+  const selectRule = (key: string) => {
+    setRuleKey(key);
+    setRuleForm(clipRules[key] ? ruleForEditor(clipRules[key]) : emptyRule());
     setRulesMessage("");
     setRulesError("");
   };
 
-  const openRuleEditor = (host: string) => {
-    selectRuleHost(host);
+  const openRuleEditor = (key: string) => {
+    selectRule(key);
     setRuleDrawerOpen(true);
   };
 
   const openNewRuleDrawer = () => {
-    setRuleHost("");
+    setRuleKey("");
     setRuleForm(emptyRule());
     setRulesMessage("");
     setRulesError("");
@@ -245,25 +252,61 @@ export default function JianXingPage() {
 
   const updateRuleForm = (patch: Partial<ClipRule>) => setRuleForm((current) => ({ ...current, ...patch }));
 
-  const configuredSiteRows = useMemo<ConfiguredSiteRow[]>(
-    () => Object.keys(clipRules).sort().map((host) => ({ host, enabled: clipRules[host].enabled })),
+  const configuredRuleRows = useMemo<ConfiguredRuleRow[]>(
+    () => Object.entries(clipRules).sort(([left], [right]) => left.localeCompare(right)).map(([key, rule]) => ({
+      key,
+      alias: rule.alias?.trim() || "",
+      urlPattern: rule.urlPattern,
+      urlPatternMode: rule.urlPatternMode,
+      enabled: rule.enabled,
+      includeSelector: rule.includeSelector,
+      includeRegion: rule.includeRegion,
+      imagePolicy: rule.imagePolicy,
+    })),
     [clipRules],
   );
 
-  const configuredSiteColumns = useMemo<ColumnDef<ConfiguredSiteRow>[]>(
+  const configuredRuleColumns = useMemo<ColumnDef<ConfiguredRuleRow>[]>(
     () => [
       {
-        header: "网站",
-        accessorKey: "host",
-        meta: { ellipsisTooltip: true },
+        header: "别名",
+        accessorKey: "alias",
+        meta: { width: 160, ellipsisTooltip: true },
         cell: ({ row }) => (
-          <button
-            type="button"
-            className={`max-w-full truncate text-left text-sm font-medium ${row.original.host === ruleHost ? "text-primary" : "text-text-primary"}`}
-            onClick={() => openRuleEditor(row.original.host)}
-          >
-            {row.original.host}
-          </button>
+          <span className={`block truncate text-sm font-medium ${row.original.alias ? "text-text-primary" : "text-text-tertiary"}`}>
+            {row.original.alias || "未命名"}
+          </span>
+        ),
+      },
+      {
+        header: "网址匹配",
+        id: "urlPattern",
+        meta: { width: 320, ellipsisTooltip: true },
+        cell: ({ row }) => (
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="shrink-0 text-xs text-text-tertiary">{row.original.urlPatternMode === "regex" ? "正则" : "通配"}</span>
+            <span className="truncate font-mono text-xs text-text-secondary">{row.original.urlPattern}</span>
+          </div>
+        ),
+      },
+      {
+        header: "正文",
+        id: "content",
+        meta: { width: 120, ellipsisTooltip: true },
+        cell: ({ row }) => (
+          <span className="text-xs text-text-secondary">
+            {row.original.includeRegion ? `已点选 · ${row.original.includeRegion.tag}` : row.original.includeSelector ? "已配置区域" : "默认提取"}
+          </span>
+        ),
+      },
+      {
+        header: "图片",
+        id: "images",
+        meta: { width: 140, nowrap: true },
+        cell: ({ row }) => (
+          <span className="text-xs text-text-secondary">
+            ≥ {row.original.imagePolicy.minWidth} × {row.original.imagePolicy.minHeight} · {row.original.imagePolicy.maxCount} 张
+          </span>
         ),
       },
       {
@@ -276,8 +319,24 @@ export default function JianXingPage() {
           </Badge>
         ),
       },
+      {
+        header: "操作",
+        id: "actions",
+        meta: { width: 64, align: "center" },
+        cell: ({ row }) => (
+          <Tooltip text="编辑规则" placement="top">
+            <IconButton
+              size="xs"
+              ariaLabel={`编辑 ${row.original.alias || row.original.urlPattern} 规则`}
+              onClick={() => openRuleEditor(row.original.key)}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </IconButton>
+          </Tooltip>
+        ),
+      },
     ],
-    [openRuleEditor, ruleHost],
+    [openRuleEditor],
   );
 
   const pickRuleRegion = async (kind: "include" | "exclude") => {
@@ -290,16 +349,12 @@ export default function JianXingPage() {
     setRulesMessage(kind === "include" ? "请在 Chrome 中点击正文区域" : "请在 Chrome 中点击要排除的区域");
     try {
       const picked = await clientRef.current.pickClipRegion(kind);
-      const currentHost = normalizeHost(ruleHost);
-      const baseRule = currentHost === picked.host
-        ? ruleForm
-        : clipRules[picked.host] ? ruleForEditor(clipRules[picked.host]) : emptyRule(picked.host);
+      const baseRule = ruleForm;
+      const urlPattern = baseRule.urlPattern || defaultWildcardPattern(picked.url);
       if (kind === "include") {
-        setRuleHost(picked.host);
-        setRuleForm({ ...baseRule, host: picked.host, includeSelector: picked.selector, includeRegion: picked.summary });
-        setRulesMessage(`已选择 ${picked.host} 的正文区域`);
+        setRuleForm({ ...baseRule, urlPattern, includeSelector: picked.selector, includeRegion: picked.summary });
+        setRulesMessage("已选择当前页面的正文区域");
       } else {
-        setRuleHost(picked.host);
         const existing = baseRule.excludeRegions
           || baseRule.excludeSelectors.map((selector) => ({ selector, summary: undefined }));
         const nextRegions = existing.some((region) => region.selector === picked.selector)
@@ -307,11 +362,11 @@ export default function JianXingPage() {
           : [...existing, { selector: picked.selector, summary: picked.summary }];
         setRuleForm({
           ...baseRule,
-          host: picked.host,
+          urlPattern,
           excludeSelectors: nextRegions.map((region) => region.selector),
           excludeRegions: nextRegions,
         });
-        setRulesMessage(`已添加 ${picked.host} 的排除区域`);
+        setRulesMessage("已添加当前页面的排除区域");
       }
     } catch (cause) {
       setRulesError(cause instanceof Error ? cause.message : "区域选择失败");
@@ -329,19 +384,14 @@ export default function JianXingPage() {
   };
 
   const saveClipRule = async () => {
-    const host = normalizeHost(ruleHost || ruleForm.host);
-    if (!/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/i.test(host)) {
-      setRulesError("请输入有效的网站域名");
-      return;
-    }
     if (!clientRef.current || !connected || !extensionConnected) {
       setRulesError("请先连接触界扩展");
       return;
     }
     const nextRule: ClipRule = {
       ...ruleForm,
-      host,
-      urlPattern: ruleForm.urlPattern?.trim() || "",
+      alias: ruleForm.alias?.trim().slice(0, 80) || undefined,
+      urlPattern: ruleForm.urlPattern.trim(),
       urlPatternMode: ruleForm.urlPatternMode === "regex" ? "regex" : "wildcard",
       includeSelector: ruleForm.includeSelector.trim(),
       excludeSelectors: ruleForm.excludeSelectors.map((item) => item.trim()).filter(Boolean),
@@ -353,35 +403,39 @@ export default function JianXingPage() {
         maxCount: Math.max(1, Math.min(50, Math.round(Number(ruleForm.imagePolicy.maxCount) || 20))),
       },
     };
-    if (nextRule.urlPattern) {
-      try {
-        if (nextRule.urlPatternMode === "regex") new RegExp(nextRule.urlPattern);
-      } catch {
-        setRulesError("URL 正则格式无效，请检查括号、反斜杠和量词");
-        return;
-      }
+    if (!nextRule.urlPattern) {
+      setRulesError("请输入 URL 通配符或正则");
+      return;
     }
-    const nextRules = { ...clipRules, [host]: nextRule };
+    try {
+      if (nextRule.urlPatternMode === "regex") new RegExp(nextRule.urlPattern);
+    } catch {
+      setRulesError("URL 正则格式无效，请检查括号、反斜杠和量词");
+      return;
+    }
+    const nextKey = clipRuleKey(nextRule);
+    const nextRules = { ...clipRules };
+    if (ruleKey && ruleKey !== nextKey) delete nextRules[ruleKey];
+    nextRules[nextKey] = nextRule;
     setRulesSaving(true);
     setRulesError("");
     try {
       const savedRules = await clientRef.current.requestClipRules("clip_rules_set", nextRules);
       setClipRules(savedRules);
-      setRuleHost(host);
-      setRuleForm(savedRules[host] ? ruleForEditor(savedRules[host]) : nextRule);
-      setRulesMessage("网站规则已保存到触界扩展");
+      setRuleKey(nextKey);
+      setRuleForm(savedRules[nextKey] ? ruleForEditor(savedRules[nextKey]) : nextRule);
+      setRulesMessage("URL 剪藏规则已保存到触界扩展");
       setRuleDrawerOpen(false);
     } catch (cause) {
-      setRulesError(cause instanceof Error ? cause.message : "保存网站规则失败");
+      setRulesError(cause instanceof Error ? cause.message : "保存 URL 剪藏规则失败");
     } finally {
       setRulesSaving(false);
     }
   };
 
   const deleteClipRule = async () => {
-    const host = normalizeHost(ruleHost);
-    if (!host || !clipRules[host]) {
-      setRulesError("当前网站没有已保存的规则");
+    if (!ruleKey || !clipRules[ruleKey]) {
+      setRulesError("当前 URL 规则尚未保存");
       return;
     }
     if (!clientRef.current || !connected || !extensionConnected) {
@@ -389,19 +443,19 @@ export default function JianXingPage() {
       return;
     }
     const nextRules = { ...clipRules };
-    delete nextRules[host];
+    delete nextRules[ruleKey];
     setRulesSaving(true);
     setRulesError("");
     try {
       const savedRules = await clientRef.current.requestClipRules("clip_rules_set", nextRules);
       setClipRules(savedRules);
-      const nextHost = Object.keys(savedRules).sort()[0] || "";
-      setRuleHost(nextHost);
-      setRuleForm(savedRules[nextHost] ? ruleForEditor(savedRules[nextHost]) : emptyRule(nextHost));
-      setRulesMessage("网站规则已删除");
+      const nextKey = Object.keys(savedRules).sort()[0] || "";
+      setRuleKey(nextKey);
+      setRuleForm(savedRules[nextKey] ? ruleForEditor(savedRules[nextKey]) : emptyRule());
+      setRulesMessage("URL 剪藏规则已删除");
       setRuleDrawerOpen(false);
     } catch (cause) {
-      setRulesError(cause instanceof Error ? cause.message : "删除网站规则失败");
+      setRulesError(cause instanceof Error ? cause.message : "删除 URL 剪藏规则失败");
     } finally {
       setRulesSaving(false);
     }
@@ -555,7 +609,9 @@ export default function JianXingPage() {
       title="触界"
       description="连接当前 Chrome，在本机使用见行操作网页，或通过剪藏采集内容。"
       contentClassName="gap-4 pt-5"
+      slot={<Button size="xs" variant="ghost" onClick={() => setGuideOpen(true)}><BookOpen className="h-4 w-4" />使用指南</Button>}
     >
+      <JianXingGuideDrawer open={guideOpen} onClose={() => setGuideOpen(false)} />
       {error ? <Alert variant="danger" title="操作失败">{error}</Alert> : null}
       {visibleOperation ? <Alert variant={status.operationOk === false ? "danger" : "info"} title="见行浏览器状态">{visibleOperation}{status.operationError ? `：${status.operationError}` : ""}</Alert> : null}
       <Card padding="sm" className="space-y-3">
@@ -619,9 +675,9 @@ export default function JianXingPage() {
         <Card padding="md" className="flex min-h-0 flex-1 flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-1.5">
-              <h2 className="text-heading-2 text-text-primary">网站规则</h2>
-              <Tooltip text="只对已配置的网站生效，未配置网站继续使用默认提取。" placement="top">
-                <span aria-label="网站规则说明" className="cursor-help text-icon-secondary">
+            <h2 className="text-heading-2 text-text-primary">URL 剪藏规则</h2>
+              <Tooltip text="按完整 URL 的通配符或正则匹配；多个规则同时命中时使用约束最具体的一条。" placement="top">
+                <span aria-label="URL 剪藏规则说明" className="cursor-help text-icon-secondary">
                   <CircleHelp className="h-3.5 w-3.5" />
                 </span>
               </Tooltip>
@@ -645,11 +701,11 @@ export default function JianXingPage() {
           {rulesMessage ? <Alert variant="success" title="规则状态">{rulesMessage}</Alert> : null}
           <div className="min-h-0 flex-1 overflow-hidden rounded-ui-control border border-border">
             <Table
-              data={configuredSiteRows}
-              columns={configuredSiteColumns}
+              data={configuredRuleRows}
+              columns={configuredRuleColumns}
               compact
               stickyHeader
-              emptyState={<span className="text-xs text-text-tertiary">暂无网站规则</span>}
+              emptyState={<span className="text-xs text-text-tertiary">暂无 URL 剪藏规则</span>}
               className="h-full rounded-none border-0 shadow-none"
             />
           </div>
@@ -658,7 +714,7 @@ export default function JianXingPage() {
       <ClipRuleDrawer
         open={ruleDrawerOpen}
         onClose={() => setRuleDrawerOpen(false)}
-        ruleHost={ruleHost}
+        ruleKey={ruleKey}
         ruleForm={ruleForm}
         clipRules={clipRules}
         rulesSaving={rulesSaving}
@@ -666,11 +722,6 @@ export default function JianXingPage() {
         extensionConnected={extensionConnected}
         rulesError={rulesError}
         rulesMessage={rulesMessage}
-        onRuleHostChange={(value) => {
-          setRuleHost(value);
-          const normalizedHost = normalizeHost(value);
-          if (!clipRules[normalizedHost]) setRuleForm(emptyRule(normalizedHost));
-        }}
         onRuleFormChange={updateRuleForm}
         onPickRuleRegion={(kind) => void pickRuleRegion(kind)}
         onRemoveExcludeRegion={removeExcludeRegion}

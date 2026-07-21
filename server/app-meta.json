@@ -38,11 +38,11 @@
         {
           "version": "0.7.1",
           "commit": {
-            "hash": "5bc5c70131d9dc18f8f75a918b0ea2c7585c84f5",
-            "shortHash": "5bc5c70",
-            "message": "feat: complete evolving knowledge and JianXing integration",
-            "author": "Tomz",
-            "date": "2026-07-19T07:51:58+08:00"
+            "hash": "46f1208afe0fe536f25f0adeb17841b0db580697",
+            "shortHash": "46f1208",
+            "message": "test: verify automatic extension-connected status",
+            "author": "DangJingtao",
+            "date": "2026-07-21T05:29:09+08:00"
           }
         },
         {

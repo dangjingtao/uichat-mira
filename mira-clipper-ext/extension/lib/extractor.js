@@ -256,8 +256,8 @@
     }
 
     if (urls.length < maxCount) {
-      for (const source of imageRoot.querySelectorAll('source[srcset], img[srcset]')) {
-        const candidate = largestSrcsetUrl(source.getAttribute('srcset'));
+      for (const source of imageRoot.querySelectorAll('source[srcset], img[srcset], source[data-srcset], img[data-srcset], source[data-lazy-srcset], img[data-lazy-srcset]')) {
+        const candidate = imageSourceUrl(source);
         addImage(candidate, source);
         if (urls.length >= maxCount) break;
       }
@@ -344,10 +344,19 @@
   }
 
   function imageSourceUrl(image) {
-    const candidate = image.currentSrc || [
-      'src', 'data-src', 'data-original', 'data-lazy-src', 'data-url',
+    const directCandidate = [
+      'data-original', 'data-original-src', 'data-src', 'data-lazy-src',
+      'data-lazy', 'data-zoom-image', 'data-full-src', 'data-url',
     ].map((attribute) => image.getAttribute(attribute)).find(Boolean);
-    return candidate ? resolveUrl(candidate) : largestSrcsetUrl(image.getAttribute('srcset'));
+    if (directCandidate) return resolveUrl(directCandidate);
+
+    const srcsetCandidate = [
+      'data-srcset', 'data-lazy-srcset', 'srcset',
+    ].map((attribute) => largestSrcsetUrl(image.getAttribute(attribute))).find(Boolean);
+    if (srcsetCandidate) return resolveUrl(srcsetCandidate);
+
+    const candidate = image.currentSrc || image.getAttribute('src');
+    return candidate ? resolveUrl(candidate) : '';
   }
 
   function applyImagePolicy(sourceRoot, clonedRoot, imagePolicy, excludeSelectors) {
