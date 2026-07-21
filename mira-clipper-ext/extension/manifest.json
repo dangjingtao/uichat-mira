@@ -1,22 +1,50 @@
 {
   "manifest_version": 3,
-  "name": "Mira Clipper",
-  "version": "1.0.0",
-  "description": "将网页剪藏到你的 Mira 个人工作台",
+  "name": "触界",
+  "version": "0.7.1",
+  "description": "连接 Mira，操作网页并支持用户主动剪藏",
   "permissions": [
     "activeTab",
+    "tabs",
+    "tabGroups",
+    "sidePanel",
+    "nativeMessaging",
     "storage",
     "scripting",
     "contextMenus",
-    "identity"
+    "identity",
+    "downloads"
   ],
   "host_permissions": [
+    "<all_urls>",
     "http://localhost:*/",
     "http://127.0.0.1:*/"
   ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["lib/clip-rules.js", "lib/extractor.js", "content/content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
   "action": {
-    "default_popup": "popup/popup.html",
-    "default_title": "剪藏当前页面到 Mira"
+    "default_title": "打开触界",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "popup/popup.html"
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
   },
   "background": {
     "service_worker": "background.js"
@@ -27,7 +55,7 @@
         "default": "Ctrl+Shift+S",
         "mac": "Command+Shift+S"
       },
-      "description": "打开 Mira Clipper"
+      "description": "打开触界"
     }
   },
   "options_page": "options/options.html"

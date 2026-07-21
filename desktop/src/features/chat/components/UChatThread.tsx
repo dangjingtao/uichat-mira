@@ -269,7 +269,9 @@ export default function UChatThread() {
   const handleUpdateThreadKnowledgeBase = async (nextKnowledgeBaseId: string | null) => {
     if (!activeThreadId || !activeThread) return;
     await runtime.updateThread(activeThreadId, {
-      metadata: nextKnowledgeBaseId ? { knowledgeBaseId: nextKnowledgeBaseId } : { knowledgeBaseId: null },
+      metadata: {
+        knowledgeBaseId: nextKnowledgeBaseId,
+      },
     });
     await runtime.refreshThread(activeThreadId);
   };
@@ -354,7 +356,7 @@ export default function UChatThread() {
         metadata: {
           ...((activeThread?.metadata ?? {}) as Record<string, unknown>),
           roleId,
-          ...(activeKnowledgeBaseId ? {} : { imageEnabled: true }),
+          ...(!hasKnowledgeBase ? { imageEnabled: true } : {}),
         },
       });
       await runtime.refreshThread(activeThreadId);

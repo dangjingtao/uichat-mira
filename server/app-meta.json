@@ -33,16 +33,16 @@
       }
     ],
     "git": {
-      "branch": "codex/pi-agent-loop-mvp",
+      "branch": "codex/feature-from-test-20260717",
       "versions": [
         {
           "version": "0.7.1",
           "commit": {
-            "hash": "a3c116875528ed024827510d543e889fe5767c67",
-            "shortHash": "a3c1168",
-            "message": "test(runtime): allow inline language and npm command forms",
+            "hash": "46f1208afe0fe536f25f0adeb17841b0db580697",
+            "shortHash": "46f1208",
+            "message": "test: verify automatic extension-connected status",
             "author": "DangJingtao",
-            "date": "2026-07-18T07:07:07+08:00"
+            "date": "2026-07-21T05:29:09+08:00"
           }
         },
         {

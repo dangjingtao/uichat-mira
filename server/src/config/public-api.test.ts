@@ -33,4 +33,9 @@ describe("public api auth exemptions", () => {
     expect(isAuthExemptPath("/doc")).toBe(false);
     expect(isAuthExemptPath("/settings/docs")).toBe(false);
   });
+
+  it("exempts the WebBridge handshake path for message-level authentication", () => {
+    expect(isAuthExemptPath("/webbridge")).toBe(true);
+    expect(isAuthExemptPath("/webbridge/other")).toBe(false);
+  });
 });

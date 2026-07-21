@@ -5,11 +5,10 @@ import axios, {
   InternalAxiosRequestConfig,
   AxiosError,
 } from "axios";
-import { getSession, clearSessionFromStorage } from "./sessionStorage";
-import {
-  getApiBaseUrl,
-  isDesktopShell,
-} from "@/shared/platform/desktopRuntime";
+import { getSession, notifyAuthRequired } from "./sessionStorage";
+import { getApiBaseUrl } from "@/shared/platform/desktopRuntime";
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
 
 // ==================== 类型定义 ====================
 
@@ -56,15 +55,6 @@ export class ApiError extends Error {
   }
 }
 
-function redirectToLogin() {
-  if (isDesktopShell()) {
-    window.location.hash = "#/login";
-    return;
-  }
-
-  window.location.href = "/login";
-}
-
 // ==================== 响应拦截器 ====================
 
 // 处理成功响应
@@ -80,8 +70,7 @@ function handleSuccessResponse<T>(
 
   // 处理特定错误码
   if (apiError.code === ErrorCodes.UNAUTHORIZED) {
-    clearSessionFromStorage();
-    redirectToLogin();
+    notifyAuthRequired(apiError.message);
   }
 
   throw apiError;
@@ -108,8 +97,7 @@ function handleErrorResponse(error: unknown): never {
 
     // 处理特定错误码
     if (apiError.code === ErrorCodes.UNAUTHORIZED) {
-      clearSessionFromStorage();
-      redirectToLogin();
+      notifyAuthRequired(apiError.message);
     }
 
     throw apiError;
@@ -125,7 +113,7 @@ const createApiClient = () => {
   // 创建原生 axios 实例
   const client = axios.create({
     baseURL: getApiBaseUrl(),
-    timeout: 30000,
+    timeout: DEFAULT_REQUEST_TIMEOUT_MS,
     headers: {
       "Content-Type": "application/json",
     },

@@ -25,6 +25,18 @@ export interface ComputerUseRuntimeState {
   version?: string;
   message?: string;
   checkedAt: string;
+  details?: {
+    strategy?: "managed" | "system" | "download";
+    source?: "managed" | "system";
+    executablePath?: string;
+    inspectedCandidates?: Array<{
+      source: "managed" | "system";
+      channel: "chromium" | "chrome" | "edge";
+      executablePath: string;
+      version: string;
+      installedAt: string;
+    }>;
+  };
 }
 
 export interface ComputerUseModelState {
@@ -99,6 +111,10 @@ export interface ComputerUseAssertionInput {
 
 export async function getComputerUseDebuggerStatus(): Promise<ComputerUseDebuggerStatus> {
   return get<ComputerUseDebuggerStatus>(`${BASE}/debugger/status`);
+}
+
+export async function installComputerUseRuntime(force = false): Promise<void> {
+  await post(`${BASE}/runtime/install`, { force });
 }
 
 export async function runComputerUseTask(input: {

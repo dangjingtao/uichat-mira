@@ -121,6 +121,7 @@ Related:
 ### 集成
 
 - `microapp/README.md`
+- `microapp/jianxing-webbridge-debug-status.md`
 - `microapp/tts-studio-runtime-notes.md`
 - `integrations/wecom-admin-setup-checklist.md`
 - `integrations/wecom-cloudflare-worker-poc.md`

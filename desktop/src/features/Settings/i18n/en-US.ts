@@ -103,6 +103,16 @@ const settingsPending = {
         smartRobotEntry: "Smart robot entry",
       },
       studioEntries: {
+        jianXing: {
+          title: "触界",
+          description: "Connect to the current Chrome session to inspect, browse, act on pages, and handle file operations locally.",
+          actions: { open: "Open 触界" },
+        },
+        notion: {
+          title: "Notion",
+          description: "Connect a Notion workspace for page search, database queries, content archiving, and knowledge sync.",
+          actions: { open: "Open Notion" },
+        },
         newsHub: {
           title: "News Hub",
           description: "Bring no-key tech news sources into one local news table and expose a direct entry for browsing, searching, and further use.",
@@ -145,11 +155,11 @@ const settingsPending = {
           },
         },
         evolvingKnowledge: {
-          title: "Evolving Knowledge",
+          title: "Insights",
           description:
             "A multimedia knowledge capture and AI self-organization system. Capture web pages, images, audio, and video; AI automatically rewrites, tags, discovers concept connections, and cross-time insights.",
           actions: {
-            open: "Open evolving knowledge",
+            open: "Open Insights",
           },
         },
         codeGraph: {
@@ -1139,6 +1149,7 @@ const settingsPending = {
       },
       computerUseDebugger: {
         page: { miniTitle: "Computer Use Debugger", title: "Computer Use Debugger", description: "Inspect structured browser sessions and tool results." },
+        tabs: { playwright: "Playwright" },
         runtime: { ready: "Runtime ready", not_installed: "Runtime unavailable", downloading: "Runtime downloading", broken: "Runtime broken" },
         model: { unavailable: "Model: Not connected", connected: "Model connected", unavailableTitle: "Model Run unavailable" },
         runConfig: { title: "Run Config", runtime: "Runtime", url: "Initial URL", allowedDomains: "Allowed domains", timeout: "Timeout", snapshot: "Snapshot limit", approvalPolicy: "Approval policy" },
@@ -1146,7 +1157,8 @@ const settingsPending = {
         manual: { title: "Manual Debug", action: "Action", ref: "Element ref", value: "URL / value", assertion: "Assertion", expected: "Expected" },
         feedback: { title: "Execution Feedback", events: "Events", json: "JSON", empty: "No invocations yet.", approval: "Approval", toolArgs: "Tool args", artifacts: "Artifacts", evidence: "Evidence", result: "Result" },
         modelRun: { title: "AgentTaskModel", run: "Run model", result: "Model Run Result" },
-        actions: { newSession: "New Session", inspect: "Inspect", execute: "Execute Action", assert: "Assert", approve: "Approve Action", reject: "Reject Action", stop: "Stop", reset: "Reset", openGuide: "User guide" },
+        actions: { newSession: "New Session", inspect: "Inspect", execute: "Execute Action", assert: "Assert", approve: "Approve Action", reject: "Reject Action", stop: "Stop", reset: "Reset", openGuide: "User guide", installRuntime: "Download browser runtime" },
+        runtimeCard: { title: "Browser Runtime", description: "Manage the browser environment used by Computer Use for web tasks.", status: "Current status", managed: "Managed Chromium", system: "System browser", detected: "Detected", notDetected: "Not detected", path: "Current executable", pathEmpty: "Executable path is not resolved", reinstallTitle: "Confirm managed Chromium re-download", reinstallDescription: "Managed Chromium is already installed. Continuing will verify and replace the current managed browser files.", systemBrowserTitle: "Confirm managed Chromium download", systemBrowserDescription: "A system browser is available. Continuing will also download a separate browser managed by the app.", confirmDownload: "Continue download", cancel: "Cancel" },
         errors: { title: "Debugger error", requestFailed: "Request failed" },
         common: { emptyValue: "-" },
         runtimeOptions: { managed: "Managed Chromium", system: "System browser" },

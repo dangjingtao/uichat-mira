@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 import {
+  AUTH_REQUIRED_EVENT,
   clearSessionFromStorage,
   getSession,
+  notifyAuthRequired,
   readSessionFromStorage,
   writeSessionToStorage,
 } from "../sessionStorage";
@@ -50,5 +52,20 @@ describe("sessionStorage", () => {
   it("getSession is an alias for readSessionFromStorage", () => {
     writeSessionToStorage(validSession);
     expect(getSession()).toEqual(readSessionFromStorage());
+  });
+
+  it("dispatches auth-required without clearing storage", () => {
+    const listener = vi.fn();
+    writeSessionToStorage(validSession);
+    globalThis.addEventListener(AUTH_REQUIRED_EVENT, listener);
+
+    notifyAuthRequired("unauthorized");
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect((listener.mock.calls[0][0] as CustomEvent).detail).toEqual({
+      message: "unauthorized",
+    });
+    expect(readSessionFromStorage()).toEqual(validSession);
+    globalThis.removeEventListener(AUTH_REQUIRED_EVENT, listener);
   });
 });

@@ -68,5 +68,6 @@ describe("EvaluationCenter", () => {
         screen.getByText("settings.evaluation.center.empty"),
       ).toBeInTheDocument();
     });
+    expect(screen.getByRole("table")).toBeInTheDocument();
   });
 });

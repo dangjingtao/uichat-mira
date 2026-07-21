@@ -44,4 +44,22 @@ describe("NavigationCardTabs", () => {
 
     expect(handleChange).not.toHaveBeenCalled();
   });
+
+  it("supports a transparent active tab style", () => {
+    render(
+      <NavigationCardTabs
+        tabs={tabs}
+        value="chat"
+        onChange={() => {}}
+        activeTabStyle="plain"
+      />,
+    );
+
+    expect(screen.getByRole("tab", { name: "对话工作台" })).toHaveClass(
+      "data-[state=active]:bg-transparent",
+      "data-[state=active]:shadow-none",
+      "data-[state=active]:after:bg-surface-primary",
+      "data-[state=active]:after:h-0.5",
+    );
+  });
 });

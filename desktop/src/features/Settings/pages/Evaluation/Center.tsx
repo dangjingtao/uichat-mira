@@ -390,13 +390,20 @@ export default function EvaluationCenter() {
             <div className="flex h-full items-center justify-center rounded-ui-panel border border-dashed border-border bg-surface-secondary text-sm text-text-secondary">
               {t("settings.evaluation.center.loading")}
             </div>
-          ) : filteredRuns.length > 0 ? (
+          ) : (
             <div className="min-h-0 h-full overflow-hidden rounded-ui-panel border border-border bg-surface-primary">
               <div className="flex h-full min-h-0 flex-col">
                 <div className="min-h-0 flex-1 overflow-auto">
                   <Table
                     data={filteredRuns}
                     columns={columns}
+                    emptyState={
+                      <div className="flex min-h-[320px] items-center justify-center text-sm text-text-secondary">
+                        {runs.length === 0
+                          ? t("settings.evaluation.center.empty")
+                          : t("settings.evaluation.center.noMatch")}
+                      </div>
+                    }
                     rowSelection={{
                       selectedRowIds: selectedRunIds,
                       onSelectedRowIdsChange: setSelectedRunIds,
@@ -409,17 +416,13 @@ export default function EvaluationCenter() {
                     className="rounded-none border-0 shadow-none"
                   />
                 </div>
-                <div className="flex shrink-0 items-center justify-between border-t border-border px-3 py-1.5 text-body-small text-sm text-text-secondary">
-                  <div>共 {filteredRuns.length} 条记录</div>
-                  <div>已选 {selectedRunIds.length} 条</div>
-                </div>
+                {filteredRuns.length > 0 ? (
+                  <div className="flex shrink-0 items-center justify-between border-t border-border px-3 py-1.5 text-body-small text-sm text-text-secondary">
+                    <div>共 {filteredRuns.length} 条记录</div>
+                    <div>已选 {selectedRunIds.length} 条</div>
+                  </div>
+                ) : null}
               </div>
-            </div>
-          ) : (
-            <div className="flex h-full items-center justify-center rounded-ui-panel border border-dashed border-border bg-surface-secondary text-sm text-text-secondary">
-              {runs.length === 0
-                ? t("settings.evaluation.center.empty")
-                : t("settings.evaluation.center.noMatch")}
             </div>
           )}
         </div>

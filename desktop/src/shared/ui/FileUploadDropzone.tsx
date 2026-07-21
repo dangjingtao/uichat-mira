@@ -1,7 +1,6 @@
 import { CloudUpload } from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
-import Card from "./Card";
 
 interface FileUploadDropzoneProps {
   onSelectFiles: (files: FileList | null) => void;
@@ -70,8 +69,7 @@ export function FileUploadDropzone({
         </div>
         <div className="min-w-0">
           <div className="text-sm font-medium text-text-primary">
-            {t("ui.fileUploadDropzone.dragAndDrop")}
-            <span className="ml-1 text-primary">
+            <span className="text-primary">
               {t("ui.fileUploadDropzone.selectFile")}
             </span>
           </div>

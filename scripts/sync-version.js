@@ -12,9 +12,21 @@ const packagePaths = [
   path.join(rootDir, "desktop", "package.json"),
   path.join(rootDir, "server", "package.json"),
   path.join(rootDir, "packages", "core", "package.json"),
+  path.join(rootDir, "mira-clipper-ext", "package.json"),
 ];
 const tauriConfigPath = path.join(rootDir, "tauri", "tauri.conf.json");
 const tauriCargoPath = path.join(rootDir, "tauri", "Cargo.toml");
+const extensionManifestPath = path.join(
+  rootDir,
+  "mira-clipper-ext",
+  "extension",
+  "manifest.json",
+);
+const rootExtensionManifestPath = path.join(
+  rootDir,
+  "mira-clipper-ext",
+  "manifest.json",
+);
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf-8"));
@@ -91,5 +103,17 @@ if (fs.existsSync(tauriConfigPath)) {
 }
 
 syncCargoTomlVersion(tauriCargoPath, version);
+
+for (const manifestPath of [extensionManifestPath, rootExtensionManifestPath]) {
+  if (!fs.existsSync(manifestPath)) continue;
+  const extensionManifest = readJson(manifestPath);
+  if (extensionManifest.version === version) {
+    console.log(`Already up to date: ${manifestPath}`);
+  } else {
+    extensionManifest.version = version;
+    writeJson(manifestPath, extensionManifest);
+    console.log(`Updated ${manifestPath}`);
+  }
+}
 
 console.log("Version sync complete.");

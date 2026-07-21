@@ -63,10 +63,12 @@ import chatRagRoute from "@/routes/chat-rag";
 import ragRuntimeRoute from "@/routes/rag-runtime/index.js";
 import evaluationRoute from "@/routes/evaluation/index.js";
 import integrationsRoute from "@/routes/integrations/index.js";
+import notionRoute from "@/routes/microapps/notion.js";
 import microappsRoute from "@/routes/microapps/index.js";
 import wecomRoute from "@/routes/integrations/wecom.js";
 import agentRoute from "@/agent/routes.js";
 import mcpRoutes from "@/mcp/routes.js";
+import webbridgeRoute from "@/routes/webbridge.js";
 import {
   initializeExternalMcpDatabase,
   registerAllExternalMcpCapabilities,
@@ -81,6 +83,9 @@ import { agentRunRepository } from "@/db/repositories/agent-run.repository.js";
 import { integrationCapabilitiesRepository } from "@/db/repositories/integration-capabilities.repository.js";
 import { integrationCapabilityMicroAppsRepository } from "@/db/repositories/integration-capability-micro-apps.repository.js";
 import { integrationInstancesRepository } from "@/db/repositories/integration-instances.repository.js";
+import { notionConnectionRepository } from "@/db/repositories/notion-connection.repository.js";
+import { notionAccessPointsRepository } from "@/db/repositories/notion-access-points.repository.js";
+import { notionActivitiesRepository } from "@/db/repositories/notion-activities.repository.js";
 import { mailAccountsRepository } from "@/db/repositories/mail-accounts.repository.js";
 import { mailFoldersRepository } from "@/db/repositories/mail-folders.repository.js";
 import { mailMessagesRepository } from "@/db/repositories/mail-messages.repository.js";
@@ -267,7 +272,6 @@ const computerUseBrowserService = new BrowserService(computerUseBrowserSessions)
 for (const tool of createComputerUseBrowserTools(computerUseBrowserService, { sessionManager: computerUseBrowserSessions })) {
   registerCapability(tool);
 }
-
 const nowIso = () => new Date().toISOString();
 
 const toComputerUseRuntimeState = (
@@ -559,13 +563,8 @@ const computerUseRuntimeService = {
   async getRuntimeState() {
     return toComputerUseRuntimeState(nowIso());
   },
-  async installRuntime(request: {
-    version: string;
-    archiveUrl: string;
-    executableRelativePath: string;
-    expectedSha256?: string;
-  }) {
-    await computerUseRuntimeManager.installManagedRuntime(request);
+  async installRuntime(request?: { force?: boolean }) {
+    await computerUseRuntimeManager.installManagedRuntime(undefined, request);
     return toComputerUseRuntimeState(nowIso());
   },
 };
@@ -812,6 +811,7 @@ const setupRoutes = async () => {
   await app.register(ragRuntimeRoute);
   await app.register(evaluationRoute);
   await app.register(integrationsRoute);
+  await app.register(notionRoute);
   await app.register(microappsRoute, {
     imageGenerationService,
     comfyUiStudioService,
@@ -827,6 +827,7 @@ const setupRoutes = async () => {
   await app.register(wecomRoute);
   await app.register(agentRoute);
   await app.register(mcpRoutes);
+  await app.register(webbridgeRoute);
 };
 
 const setupDatabase = async () => {
@@ -869,6 +870,9 @@ const setupDatabase = async () => {
   wecomSettingsRepository.initialize();
   generalSettingsRepository.initialize();
   integrationInstancesRepository.initialize();
+  notionConnectionRepository.initialize();
+  notionAccessPointsRepository.initialize();
+  notionActivitiesRepository.initialize();
   integrationCapabilitiesRepository.initialize();
   microAppsRepository.initialize();
   evolvingKnowledgeRepository.initialize();

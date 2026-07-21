@@ -78,7 +78,7 @@ export default function RoleSettings() {
   return (
     <>
       <SettingsPageLayout
-        miniTitle={globalT("settings.navigation.roles")}
+        miniTitle={t("page.miniTitle")}
         title={t("page.title")}
         description={t("page.description")}
         contentClassName="pt-6"

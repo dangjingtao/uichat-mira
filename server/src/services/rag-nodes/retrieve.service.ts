@@ -17,6 +17,7 @@ const RRF_K = 60;
 
 export interface RetrieveInput {
   question?: string;
+  userId?: number;
   embedding: number[];
   embeddingDimensions?: number;
   embeddingModel?: string;
@@ -37,6 +38,19 @@ export interface RetrievedChunk {
   rawScore?: number;
   matchType?: RetrieveMatchType;
   hitModes?: RetrieveHitMode[];
+  citation?: {
+    sourceType: string;
+    sourceId: string;
+    captureId: string | null;
+    evidenceUnitId: string | null;
+    topicId: string | null;
+    viewpointVersionId: string | null;
+    references: Array<{
+      captureId: string | null;
+      evidenceUnitId: string | null;
+      sourceLocator?: Record<string, unknown>;
+    }>;
+  };
 }
 
 export interface RetrieveOutput {

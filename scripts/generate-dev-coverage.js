@@ -57,7 +57,7 @@ function generateOfficialReports() {
   });
 }
 
-function syncReportsToBackend() {
+function syncReportsToBackend({ force = false } = {}) {
   console.log("[dev:coverage] Syncing official reports to backend static directories...");
 
   for (const target of reportTargets) {
@@ -65,6 +65,13 @@ function syncReportsToBackend() {
       throw new Error(
         `Missing ${target.scope} official report artifacts. Run node scripts/generate-dev-coverage.js --test first.`,
       );
+    }
+
+    if (!force && reportExists(target.targetDir)) {
+      console.log(
+        `[dev:coverage] Reusing existing ${target.scope} backend report directory: ${target.targetDir}`,
+      );
+      continue;
     }
 
     copyReports(target.sourceDir, target.targetDir, target.scope);
@@ -93,7 +100,7 @@ function main() {
     );
   }
 
-  syncReportsToBackend();
+  syncReportsToBackend({ force: shouldGenerate || shouldForce });
   console.log("[dev:coverage] Stable test reports are ready for development.");
 }
 

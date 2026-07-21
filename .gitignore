@@ -8,6 +8,8 @@ dist/
 .DS_Store
 coverage/
 .artifacts/
+.keys/
+mira-clipper-ext/.keys/
 .test-artifact/
 .local-runtimes/
 .local-models/

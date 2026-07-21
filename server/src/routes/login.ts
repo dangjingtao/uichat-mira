@@ -7,6 +7,7 @@ import {
   INVALID_REQUEST_PAYLOAD_MESSAGE,
 } from "@/utils/index.js";
 import { badRequest, routeHandler, unauthorized } from "@/utils/route-errors.js";
+import CONFIG from "@/config/index.js";
 
 type LoginBody = {
   username: string;
@@ -74,7 +75,7 @@ const loginRoute: FastifyPluginAsync = async (app) => {
           tokenType: "Bearer",
           token,
           user: found,
-          expiresIn: "8h",
+          expiresIn: CONFIG.JWT_EXPIRES_IN,
         },
         "Login successful",
       );

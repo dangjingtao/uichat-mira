@@ -234,6 +234,7 @@ export class ComputerUseRuntimeManager {
 
   async installManagedRuntime(
     request?: BrowserRuntimeDownloadRequest,
+    options?: { force?: boolean },
   ): Promise<BrowserRuntimeRecord> {
     const config = this.managedRuntimeConfig;
     if (
@@ -258,7 +259,7 @@ export class ComputerUseRuntimeManager {
     }
 
     const existing = this.inspectManagedRuntime();
-    if (existing) {
+    if (existing && !options?.force) {
       return existing;
     }
 

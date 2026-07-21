@@ -1198,6 +1198,9 @@ export const threads = sqliteTable(
     imageEnabled: integer("image_enabled", { mode: "boolean" })
       .notNull()
       .default(false),
+    evolvingKnowledgeEnabled: integer("evolving_knowledge_enabled", { mode: "boolean" })
+      .notNull()
+      .default(false),
     contextSummary: text("context_summary"),
     contextSummaryUpdatedAt: text("context_summary_updated_at"),
     status: text("status", { enum: THREAD_STATUS_VALUES })
@@ -1380,10 +1383,10 @@ export const knowledgeCaptures = sqliteTable(
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
     contentType: text("content_type", {
-      enum: ["text", "image"],
+      enum: ["webpage"],
     })
       .notNull()
-      .default("text"),
+      .default("webpage"),
     rawContent: text("raw_content").notNull().default(""),
     rewrittenSummary: text("rewritten_summary").notNull().default(""),
     aiTagsJson: text("ai_tags_json").notNull().default("[]"),
@@ -1452,6 +1455,36 @@ export const knowledgeAttachments = sqliteTable(
 export type KnowledgeAttachment = typeof knowledgeAttachments.$inferSelect;
 export type NewKnowledgeAttachment = typeof knowledgeAttachments.$inferInsert;
 
+export const knowledgeEvidenceUnits = sqliteTable(
+  "knowledge_evidence_units",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    captureId: text("capture_id")
+      .notNull()
+      .references(() => knowledgeCaptures.id, { onDelete: "cascade" }),
+    unitType: text("unit_type", { enum: ["text"] })
+      .notNull()
+      .default("text"),
+    content: text("content").notNull().default(""),
+    sourceLocatorJson: text("source_locator_json").notNull().default("{}"),
+    extractionMethod: text("extraction_method").notNull().default("capture"),
+    processingVersion: text("processing_version").notNull().default("v1"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    captureIdx: index("idx_knowledge_evidence_units_capture").on(table.captureId),
+    userIdx: index("idx_knowledge_evidence_units_user_id").on(table.userId),
+  }),
+);
+
+export type KnowledgeEvidenceUnit = typeof knowledgeEvidenceUnits.$inferSelect;
+export type NewKnowledgeEvidenceUnit = typeof knowledgeEvidenceUnits.$inferInsert;
+
 export const knowledgeTagsEvolution = sqliteTable(
   "knowledge_tags_evolution",
   {
@@ -1497,6 +1530,9 @@ export const knowledgeRelations = sqliteTable(
     }).notNull(),
     confidence: real("confidence").notNull().default(0.5),
     aiReasoning: text("ai_reasoning").notNull().default(""),
+    evidenceUnitIdsJson: text("evidence_unit_ids_json")
+      .notNull()
+      .default("[]"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
@@ -1542,6 +1578,9 @@ export const knowledgeInsights = sqliteTable(
       .notNull()
       .default(false),
     confidence: real("confidence").notNull().default(0.5),
+    evidenceUnitIdsJson: text("evidence_unit_ids_json")
+      .notNull()
+      .default("[]"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
@@ -1561,3 +1600,390 @@ export const knowledgeInsights = sqliteTable(
 
 export type KnowledgeInsight = typeof knowledgeInsights.$inferSelect;
 export type NewKnowledgeInsight = typeof knowledgeInsights.$inferInsert;
+
+export const knowledgeMaintenanceRuns = sqliteTable(
+  "knowledge_maintenance_runs",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    runType: text("run_type").notNull().default("rebuild"),
+    status: text("status", {
+      enum: ["running", "completed", "failed"],
+    })
+      .notNull()
+      .default("running"),
+    scopeJson: text("scope_json").notNull().default("{}"),
+    capturesScanned: integer("captures_scanned").notNull().default(0),
+    relationsCreated: integer("relations_created").notNull().default(0),
+    insightsCreated: integer("insights_created").notNull().default(0),
+    errorMessage: text("error_message"),
+    startedAt: text("started_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    completedAt: text("completed_at"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    userIdx: index("idx_knowledge_maintenance_runs_user_id").on(table.userId),
+    statusIdx: index("idx_knowledge_maintenance_runs_status").on(table.status),
+    createdAtIdx: index("idx_knowledge_maintenance_runs_created_at").on(
+      table.createdAt,
+    ),
+  }),
+);
+
+export type KnowledgeMaintenanceRun = typeof knowledgeMaintenanceRuns.$inferSelect;
+export type NewKnowledgeMaintenanceRun = typeof knowledgeMaintenanceRuns.$inferInsert;
+
+export const knowledgeQueryLogs = sqliteTable(
+  "knowledge_query_logs",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    query: text("query").notNull().default(""),
+    intent: text("intent").notNull().default("mixed"),
+    resultCount: integer("result_count").notNull().default(0),
+    sourceIdsJson: text("source_ids_json").notNull().default("[]"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    userIdx: index("idx_knowledge_query_logs_user_id").on(table.userId),
+    createdAtIdx: index("idx_knowledge_query_logs_created_at").on(table.createdAt),
+  }),
+);
+
+export type KnowledgeQueryLog = typeof knowledgeQueryLogs.$inferSelect;
+export type NewKnowledgeQueryLog = typeof knowledgeQueryLogs.$inferInsert;
+
+export const knowledgeConcepts = sqliteTable(
+  "knowledge_concepts",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    canonicalName: text("canonical_name").notNull(),
+    displayName: text("display_name").notNull(),
+    aliasesJson: text("aliases_json").notNull().default("[]"),
+    status: text("status", { enum: ["active", "merged", "hidden"] })
+      .notNull()
+      .default("active"),
+    mergedIntoConceptId: text("merged_into_concept_id"),
+    firstSeenAt: text("first_seen_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    lastSeenAt: text("last_seen_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    sourceCount: integer("source_count").notNull().default(0),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    userCanonicalIdx: uniqueIndex("idx_knowledge_concepts_user_canonical").on(
+      table.userId,
+      table.canonicalName,
+    ),
+    userIdx: index("idx_knowledge_concepts_user_id").on(table.userId),
+    statusIdx: index("idx_knowledge_concepts_status").on(table.status),
+  }),
+);
+
+export type KnowledgeConcept = typeof knowledgeConcepts.$inferSelect;
+export type NewKnowledgeConcept = typeof knowledgeConcepts.$inferInsert;
+
+export const knowledgeConceptEvidence = sqliteTable(
+  "knowledge_concept_evidence",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    conceptId: text("concept_id")
+      .notNull()
+      .references(() => knowledgeConcepts.id, { onDelete: "cascade" }),
+    captureId: text("capture_id")
+      .notNull()
+      .references(() => knowledgeCaptures.id, { onDelete: "cascade" }),
+    evidenceUnitId: text("evidence_unit_id").references(
+      () => knowledgeEvidenceUnits.id,
+      { onDelete: "set null" },
+    ),
+    mentionText: text("mention_text").notNull(),
+    mentionType: text("mention_type", { enum: ["tag", "entity", "manual"] })
+      .notNull()
+      .default("tag"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    conceptIdx: index("idx_knowledge_concept_evidence_concept").on(table.conceptId),
+    captureIdx: index("idx_knowledge_concept_evidence_capture").on(table.captureId),
+    uniqueMentionIdx: uniqueIndex("idx_knowledge_concept_evidence_unique_mention").on(
+      table.conceptId,
+      table.captureId,
+      table.mentionText,
+      table.mentionType,
+    ),
+  }),
+);
+
+export type KnowledgeConceptEvidence = typeof knowledgeConceptEvidence.$inferSelect;
+export type NewKnowledgeConceptEvidence = typeof knowledgeConceptEvidence.$inferInsert;
+
+export const knowledgeConceptEdges = sqliteTable(
+  "knowledge_concept_edges",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    sourceConceptId: text("source_concept_id")
+      .notNull()
+      .references(() => knowledgeConcepts.id, { onDelete: "cascade" }),
+    targetConceptId: text("target_concept_id")
+      .notNull()
+      .references(() => knowledgeConcepts.id, { onDelete: "cascade" }),
+    relationType: text("relation_type", {
+      enum: ["related", "part_of", "contradicts", "evolves", "references"],
+    }).notNull(),
+    confidence: real("confidence").notNull().default(0.5),
+    evidenceUnitIdsJson: text("evidence_unit_ids_json")
+      .notNull()
+      .default("[]"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    sourceIdx: index("idx_knowledge_concept_edges_source").on(table.sourceConceptId),
+    targetIdx: index("idx_knowledge_concept_edges_target").on(table.targetConceptId),
+    uniqueEdgeIdx: uniqueIndex("idx_knowledge_concept_edges_unique").on(
+      table.userId,
+      table.sourceConceptId,
+      table.targetConceptId,
+      table.relationType,
+    ),
+  }),
+);
+
+export type KnowledgeConceptEdge = typeof knowledgeConceptEdges.$inferSelect;
+export type NewKnowledgeConceptEdge = typeof knowledgeConceptEdges.$inferInsert;
+
+export const knowledgeTopics = sqliteTable(
+  "knowledge_topics",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    conceptId: text("concept_id").references(() => knowledgeConcepts.id, {
+      onDelete: "set null",
+    }),
+    name: text("name").notNull(),
+    summary: text("summary").notNull().default(""),
+    pendingQuestionsJson: text("pending_questions_json")
+      .notNull()
+      .default("[]"),
+    status: text("status", { enum: ["active", "stale", "archived"] })
+      .notNull()
+      .default("active"),
+    currentVersion: integer("current_version").notNull().default(0),
+    sourceCount: integer("source_count").notNull().default(0),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    userNameIdx: uniqueIndex("idx_knowledge_topics_user_name").on(
+      table.userId,
+      table.name,
+    ),
+    conceptIdx: index("idx_knowledge_topics_concept").on(table.conceptId),
+    statusIdx: index("idx_knowledge_topics_status").on(table.status),
+  }),
+);
+
+export type KnowledgeTopic = typeof knowledgeTopics.$inferSelect;
+export type NewKnowledgeTopic = typeof knowledgeTopics.$inferInsert;
+
+export const knowledgeTopicEvidence = sqliteTable(
+  "knowledge_topic_evidence",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    topicId: text("topic_id")
+      .notNull()
+      .references(() => knowledgeTopics.id, { onDelete: "cascade" }),
+    captureId: text("capture_id").references(() => knowledgeCaptures.id, {
+      onDelete: "cascade",
+    }),
+    evidenceUnitId: text("evidence_unit_id").references(
+      () => knowledgeEvidenceUnits.id,
+      { onDelete: "set null" },
+    ),
+    insightId: text("insight_id").references(() => knowledgeInsights.id, {
+      onDelete: "set null",
+    }),
+    evidenceRole: text("evidence_role", {
+      enum: ["supports", "opposes", "context"],
+    })
+      .notNull()
+      .default("context"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    topicIdx: index("idx_knowledge_topic_evidence_topic").on(table.topicId),
+    captureIdx: index("idx_knowledge_topic_evidence_capture").on(table.captureId),
+    uniqueEvidenceIdx: uniqueIndex("idx_knowledge_topic_evidence_unique").on(
+      table.topicId,
+      table.captureId,
+      table.evidenceUnitId,
+      table.insightId,
+      table.evidenceRole,
+    ),
+  }),
+);
+
+export type KnowledgeTopicEvidence = typeof knowledgeTopicEvidence.$inferSelect;
+export type NewKnowledgeTopicEvidence = typeof knowledgeTopicEvidence.$inferInsert;
+
+export const knowledgeViewpoints = sqliteTable(
+  "knowledge_viewpoints",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    topicId: text("topic_id").references(() => knowledgeTopics.id, {
+      onDelete: "set null",
+    }),
+    title: text("title").notNull(),
+    statement: text("statement").notNull().default(""),
+    status: text("status", {
+      enum: ["draft", "active", "needs_review", "revised", "split", "retired", "rejected"],
+    })
+      .notNull()
+      .default("draft"),
+    currentVersionId: text("current_version_id"),
+    confidence: real("confidence").notNull().default(0.5),
+    userConfirmed: integer("user_confirmed", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    userIdx: index("idx_knowledge_viewpoints_user_id").on(table.userId),
+    topicIdx: index("idx_knowledge_viewpoints_topic").on(table.topicId),
+    statusIdx: index("idx_knowledge_viewpoints_status").on(table.status),
+  }),
+);
+
+export type KnowledgeViewpoint = typeof knowledgeViewpoints.$inferSelect;
+export type NewKnowledgeViewpoint = typeof knowledgeViewpoints.$inferInsert;
+
+export const knowledgeViewpointVersions = sqliteTable(
+  "knowledge_viewpoint_versions",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    viewpointId: text("viewpoint_id")
+      .notNull()
+      .references(() => knowledgeViewpoints.id, { onDelete: "cascade" }),
+    versionNumber: integer("version_number").notNull(),
+    statement: text("statement").notNull(),
+    changeType: text("change_type", {
+      enum: ["formed", "strengthened", "revised", "split", "retired"],
+    }).notNull(),
+    triggerReason: text("trigger_reason").notNull().default(""),
+    inputScopeJson: text("input_scope_json").notNull().default("{}"),
+    schemaVersion: text("schema_version").notNull().default("phase4-v1"),
+    modelInfoJson: text("model_info_json").notNull().default("{}"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    viewpointVersionIdx: uniqueIndex("idx_knowledge_viewpoint_versions_unique").on(
+      table.viewpointId,
+      table.versionNumber,
+    ),
+    userIdx: index("idx_knowledge_viewpoint_versions_user_id").on(table.userId),
+  }),
+);
+
+export type KnowledgeViewpointVersion = typeof knowledgeViewpointVersions.$inferSelect;
+export type NewKnowledgeViewpointVersion = typeof knowledgeViewpointVersions.$inferInsert;
+
+export const knowledgeViewpointEvidence = sqliteTable(
+  "knowledge_viewpoint_evidence",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    viewpointVersionId: text("viewpoint_version_id")
+      .notNull()
+      .references(() => knowledgeViewpointVersions.id, { onDelete: "cascade" }),
+    captureId: text("capture_id").references(() => knowledgeCaptures.id, {
+      onDelete: "cascade",
+    }),
+    evidenceUnitId: text("evidence_unit_id").references(
+      () => knowledgeEvidenceUnits.id,
+      { onDelete: "set null" },
+    ),
+    insightId: text("insight_id").references(() => knowledgeInsights.id, {
+      onDelete: "set null",
+    }),
+    stance: text("stance", { enum: ["supports", "opposes", "context"] })
+      .notNull()
+      .default("context"),
+    locatorJson: text("locator_json").notNull().default("{}"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    versionIdx: index("idx_knowledge_viewpoint_evidence_version").on(
+      table.viewpointVersionId,
+    ),
+    uniqueEvidenceIdx: uniqueIndex("idx_knowledge_viewpoint_evidence_unique").on(
+      table.viewpointVersionId,
+      table.captureId,
+      table.evidenceUnitId,
+      table.insightId,
+      table.stance,
+    ),
+  }),
+);
+
+export type KnowledgeViewpointEvidence = typeof knowledgeViewpointEvidence.$inferSelect;
+export type NewKnowledgeViewpointEvidence = typeof knowledgeViewpointEvidence.$inferInsert;

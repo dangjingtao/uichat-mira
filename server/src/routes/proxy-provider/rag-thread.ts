@@ -37,6 +37,7 @@ export const toPersistedRagSources = (sources: RetrievedChunk[]) =>
     content: source.content,
     ...(source.matchType ? { matchType: source.matchType } : {}),
     ...(source.hitModes ? { hitModes: source.hitModes } : {}),
+    ...(source.citation ? { citation: source.citation } : {}),
   }));
 
 /** Extract the latest user question and history from normalized chat messages. */

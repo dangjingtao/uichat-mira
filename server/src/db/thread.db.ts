@@ -25,6 +25,7 @@ const createThreadTables = () => {
       knowledge_base_id TEXT REFERENCES knowledge_bases(id) ON DELETE CASCADE,
       role_id TEXT REFERENCES roles(id) ON DELETE SET NULL,
       agent_enabled INTEGER NOT NULL DEFAULT 0 CHECK (agent_enabled IN (0, 1)),
+      evolving_knowledge_enabled INTEGER NOT NULL DEFAULT 0 CHECK (evolving_knowledge_enabled IN (0, 1)),
       context_summary TEXT,
       context_summary_updated_at TEXT,
       status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived', 'deleted')),
@@ -257,6 +258,11 @@ const rebuildThreadsTableForWorkspaceSupport = () => {
     "threads",
     "agent_enabled",
   );
+  const hasEvolvingKnowledgeEnabledColumn = hasSqliteColumn(
+    sqlite,
+    "threads",
+    "evolving_knowledge_enabled",
+  );
   const hasContextSummaryColumn = hasSqliteColumn(
     sqlite,
     "threads",
@@ -284,6 +290,7 @@ const rebuildThreadsTableForWorkspaceSupport = () => {
         knowledge_base_id TEXT REFERENCES knowledge_bases(id) ON DELETE CASCADE,
         role_id TEXT REFERENCES roles(id) ON DELETE SET NULL,
         agent_enabled INTEGER NOT NULL DEFAULT 0 CHECK (agent_enabled IN (0, 1)),
+        evolving_knowledge_enabled INTEGER NOT NULL DEFAULT 0 CHECK (evolving_knowledge_enabled IN (0, 1)),
         context_summary TEXT,
         context_summary_updated_at TEXT,
         status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived', 'deleted')),
@@ -302,6 +309,7 @@ const rebuildThreadsTableForWorkspaceSupport = () => {
         knowledge_base_id,
         role_id,
         agent_enabled,
+        evolving_knowledge_enabled,
         context_summary,
         context_summary_updated_at,
         status,
@@ -317,6 +325,7 @@ const rebuildThreadsTableForWorkspaceSupport = () => {
         ${hasKnowledgeBaseColumn ? "knowledge_base_id" : "NULL"},
         ${hasRoleIdColumn ? "role_id" : "NULL"},
         ${hasAgentEnabledColumn ? "COALESCE(agent_enabled, 0)" : "0"},
+        ${hasEvolvingKnowledgeEnabledColumn ? "COALESCE(evolving_knowledge_enabled, 0)" : "0"},
         ${hasContextSummaryColumn ? "context_summary" : "NULL"},
         ${hasContextSummaryUpdatedAtColumn ? "context_summary_updated_at" : "NULL"},
         status,
@@ -411,6 +420,9 @@ const ensureThreadAgentEnabledColumn = () => {
   }
   if (!hasSqliteColumn(sqlite, "threads", "image_enabled")) {
     sqlite.exec("ALTER TABLE threads ADD COLUMN image_enabled INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!hasSqliteColumn(sqlite, "threads", "evolving_knowledge_enabled")) {
+    sqlite.exec("ALTER TABLE threads ADD COLUMN evolving_knowledge_enabled INTEGER NOT NULL DEFAULT 0");
   }
 };
 
@@ -554,5 +566,10 @@ export const getThreadDatabaseHealth = () => ({
     getSqlite(),
     "threads",
     "agent_enabled",
+  ),
+  hasEvolvingKnowledgeEnabledColumn: hasSqliteColumn(
+    getSqlite(),
+    "threads",
+    "evolving_knowledge_enabled",
   ),
 });

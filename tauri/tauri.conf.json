@@ -5,7 +5,7 @@
   "identifier": "com.tomz.uichat",
   "build": {
     "beforeDevCommand": "pnpm internal:dev:tauri:services",
-    "devUrl": "http://localhost:5173",
+    "devUrl": "http://localhost:5273",
     "beforeBuildCommand": "pnpm internal:prepare:tauri",
     "frontendDist": "../.artifacts/desktop/dist"
   },
@@ -35,6 +35,7 @@
     "resources": [
       "resources/runtime.config.cjs",
       "resources/server",
+      "resources/browser-extension",
       "resources/node-runtime",
       "resources/micro-apps/tts/piper",
       "resources/model-packs",

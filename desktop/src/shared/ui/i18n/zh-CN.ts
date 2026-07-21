@@ -12,7 +12,6 @@ const ui = {
       routeErrorTitle: "页面加载失败",
     },
     fileUploadDropzone: {
-      dragAndDrop: "拖拽文件或文件夹到此，或者",
       selectFile: "选择文件",
     },
     fileListItem: {

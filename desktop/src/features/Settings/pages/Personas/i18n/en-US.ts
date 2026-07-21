@@ -1,5 +1,6 @@
 const roleTranslations = {
   page: {
+    miniTitle: "Roles",
     title: "Roles",
     description: "Turn roles into a role design workbench.",
   },

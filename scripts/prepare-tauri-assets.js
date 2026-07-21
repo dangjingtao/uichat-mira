@@ -40,6 +40,11 @@ const tauriPiperRuntimeDir = path.join(
   "tts",
   "piper",
 );
+const browserExtensionArtifactsRoot = path.join(artifactsRoot, "browser-extension");
+const tauriBrowserExtensionDir = path.join(
+  tauriResourcesRoot,
+  "browser-extension",
+);
 const nodeRuntimeDest = path.join(nodeRuntimeDir, path.basename(process.execPath));
 const runtimeConfigDest = path.join(tauriResourcesRoot, "runtime.config.cjs");
 
@@ -68,10 +73,19 @@ if (!fs.existsSync(serverBundleArtifactsRoot)) {
 if (!fs.existsSync(runtimeConfigArtifactsPath)) {
   throw new Error(`Missing staged runtime config: ${runtimeConfigArtifactsPath}`);
 }
+if (!fs.existsSync(path.join(browserExtensionArtifactsRoot, "Chujie.crx"))) {
+  throw new Error(`Missing staged browser extension: ${browserExtensionArtifactsRoot}`);
+}
+if (!fs.existsSync(path.join(browserExtensionArtifactsRoot, "native", "MiraWebBridgeHost.exe"))) {
+  throw new Error(`Missing staged Native Messaging host: ${browserExtensionArtifactsRoot}`);
+}
 
 fs.rmSync(tauriResourcesRoot, { recursive: true, force: true });
 fs.mkdirSync(tauriResourcesRoot, { recursive: true });
 fs.cpSync(serverBundleArtifactsRoot, tauriServerDir, { recursive: true });
+fs.cpSync(browserExtensionArtifactsRoot, tauriBrowserExtensionDir, {
+  recursive: true,
+});
 fs.mkdirSync(path.join(tauriResourcesRoot, "model-packs"), { recursive: true });
 fs.mkdirSync(path.join(tauriResourcesRoot, "model-runtime"), { recursive: true });
 

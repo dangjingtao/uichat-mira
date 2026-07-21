@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, shell } = require("electron");
 const path = require("path");
 const fs = require("fs");
-const { spawn } = require("child_process");
+const { spawn, execFileSync } = require("child_process");
 
 let mainWindow;
 let backendProcess;
@@ -9,6 +9,17 @@ const BACKEND_START_TIMEOUT_MS = 15000;
 const BACKEND_START_POLL_INTERVAL_MS = 300;
 
 const isDev = !app.isPackaged;
+
+function configureDevChromiumPaths() {
+  if (!isDev) return;
+
+  // 每个开发实例使用独立的 Chromium 临时目录，避免旧 Electron 进程锁住 cache/session 数据导致新窗口白屏。
+  const devSessionRoot = path.join(app.getPath("temp"), `uichat-mira-electron-${process.pid}`);
+  app.setPath("cache", path.join(devSessionRoot, "cache"));
+  app.setPath("sessionData", path.join(devSessionRoot, "session"));
+}
+
+configureDevChromiumPaths();
 const runtimeConfig = loadRuntimeConfig();
 
 function loadRuntimeConfig() {
@@ -125,9 +136,17 @@ function createWindow() {
     mainWindow = null;
   });
 
+  mainWindow.webContents.on("render-process-gone", (_event, details) => {
+    console.error("Renderer process exited:", details);
+  });
+
+  mainWindow.webContents.on("unresponsive", () => {
+    console.error("Renderer became unresponsive");
+  });
+
   if (isDev) {
     void mainWindow
-      .loadURL("http://localhost:5173")
+      .loadURL("http://localhost:5273")
       .then(() => {
         mainWindow?.webContents.openDevTools({ mode: "detach" });
       })
@@ -155,6 +174,155 @@ ipcMain.handle("desktop:open-external", async (_event, url) => {
 
   await shell.openExternal(trimmedUrl);
   return true;
+});
+
+function getBrowserExtensionSourcePath() {
+  return isDev
+    ? path.join(__dirname, "..", "mira-clipper-ext", "dist", "dev", "Chujie.crx")
+    : path.join(process.resourcesPath, "browser-extension", "Chujie.crx");
+}
+
+function getNativeHostSourcePath() {
+  return isDev
+    ? path.join(__dirname, "..", "mira-clipper-ext", "dist", "native", "MiraWebBridgeHost.exe")
+    : path.join(process.resourcesPath, "browser-extension", "native", "MiraWebBridgeHost.exe");
+}
+
+const NATIVE_MESSAGING_HOST_NAME = "com.tomz.uichat.webbridge";
+const NATIVE_MESSAGING_REGISTRY_KEY = `HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${NATIVE_MESSAGING_HOST_NAME}`;
+const NATIVE_MESSAGING_ALLOWED_ORIGINS = [
+  // Development unpacked extension signed by mira-clipper-dev.pem.
+  "chrome-extension://omdcdmcedejkenmjmkepgpinnehhmfkj/",
+  // Production CRX signed by mira-clipper-prod.pem.
+  "chrome-extension://dfmdfjipkdhegdgojlhkmlehnanljppg/",
+];
+
+function getNativeHostManifestPath() {
+  return path.join(app.getPath("userData"), "native-host", `${NATIVE_MESSAGING_HOST_NAME}.json`);
+}
+
+function isSameWindowsPath(left, right) {
+  return path.resolve(left).toLowerCase() === path.resolve(right).toLowerCase();
+}
+
+function getRegisteredNativeHostManifestPath() {
+  try {
+    const output = execFileSync("reg.exe", ["QUERY", NATIVE_MESSAGING_REGISTRY_KEY, "/ve"], {
+      windowsHide: true,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const registryLine = output.split(/\r?\n/).find((line) => line.includes("REG_SZ"));
+    if (!registryLine) return "";
+    return registryLine.slice(registryLine.indexOf("REG_SZ") + "REG_SZ".length).trim();
+  } catch {
+    return "";
+  }
+}
+
+function getNativeMessagingHostStatus() {
+  if (process.platform !== "win32") {
+    return { status: "unsupported", installed: false, reason: "Native Messaging 当前仅支持 Windows" };
+  }
+
+  const manifestPath = getNativeHostManifestPath();
+  const registeredManifestPath = getRegisteredNativeHostManifestPath();
+  const manifestExists = fs.existsSync(manifestPath);
+
+  if (!registeredManifestPath && !manifestExists) {
+    return { status: "not_installed", installed: false };
+  }
+  if (!registeredManifestPath) {
+    return { status: "repair_needed", installed: false, reason: "Chrome Native 注册项缺失" };
+  }
+  if (!isSameWindowsPath(registeredManifestPath, manifestPath)) {
+    return { status: "repair_needed", installed: false, reason: "Chrome 注册项未指向当前 Mira" };
+  }
+  if (!manifestExists) {
+    return { status: "repair_needed", installed: false, reason: "Native manifest 文件缺失" };
+  }
+
+  let manifest;
+  try {
+    manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  } catch {
+    return { status: "repair_needed", installed: false, reason: "Native manifest 无法读取" };
+  }
+
+  const hostPath = typeof manifest.path === "string" ? manifest.path : "";
+  const hostScriptPath = hostPath ? path.join(path.dirname(hostPath), "host.mjs") : "";
+  const allowedOrigins = Array.isArray(manifest.allowed_origins) ? manifest.allowed_origins : [];
+  if (manifest.name !== NATIVE_MESSAGING_HOST_NAME || manifest.type !== "stdio" || NATIVE_MESSAGING_ALLOWED_ORIGINS.some((origin) => !allowedOrigins.includes(origin))) {
+    return { status: "repair_needed", installed: false, reason: "Native manifest 配置不匹配" };
+  }
+  if (!hostPath || !fs.existsSync(hostPath) || !fs.existsSync(hostScriptPath)) {
+    return { status: "repair_needed", installed: false, reason: "Native Host 文件缺失" };
+  }
+  if (!isSameWindowsPath(hostPath, getNativeHostSourcePath())) {
+    return { status: "repair_needed", installed: false, reason: "Native Host 需要更新" };
+  }
+
+  return { status: "installed", installed: true };
+}
+
+function installNativeMessagingHost() {
+  if (process.platform !== "win32") throw new Error("Native Messaging 当前仅支持 Windows");
+  const sourcePath = getNativeHostSourcePath();
+  if (!fs.existsSync(sourcePath)) throw new Error(`Native Messaging Host 未打包：${sourcePath}`);
+  const hostPath = sourcePath;
+  const manifestPath = getNativeHostManifestPath();
+  const hostScriptPath = path.join(path.dirname(sourcePath), "host.mjs");
+  if (!fs.existsSync(hostScriptPath)) throw new Error(`Native Messaging Host script 未打包：${hostScriptPath}`);
+  fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+  fs.writeFileSync(manifestPath, JSON.stringify({
+    name: NATIVE_MESSAGING_HOST_NAME,
+    description: "触界 Native Messaging Host",
+    path: hostPath,
+    type: "stdio",
+    allowed_origins: NATIVE_MESSAGING_ALLOWED_ORIGINS,
+  }, null, 2));
+  execFileSync("reg.exe", ["ADD", NATIVE_MESSAGING_REGISTRY_KEY, "/ve", "/t", "REG_SZ", "/d", manifestPath, "/f"], { windowsHide: true });
+  return { installed: true, hostPath, manifestPath, version: "0.7.1" };
+}
+
+ipcMain.handle("desktop:install-native-host", () => installNativeMessagingHost());
+ipcMain.handle("desktop:get-native-host-status", () => getNativeMessagingHostStatus());
+
+function uninstallNativeMessagingHost() {
+  if (process.platform !== "win32") throw new Error("Native Messaging 当前仅支持 Windows");
+  const manifestPath = getNativeHostManifestPath();
+  try {
+    execFileSync("reg.exe", ["DELETE", NATIVE_MESSAGING_REGISTRY_KEY, "/f"], { windowsHide: true, stdio: "ignore" });
+  } catch {
+    // 注册项不存在时，解除注册仍然视为成功。
+  }
+  if (fs.existsSync(manifestPath)) fs.rmSync(manifestPath, { force: true });
+  return { uninstalled: true, manifestPath };
+}
+
+ipcMain.handle("desktop:uninstall-native-host", () => uninstallNativeMessagingHost());
+
+function getAvailableDownloadPath() {
+  const downloadsDir = app.getPath("downloads");
+  const baseName = "Chujie";
+  let candidate = path.join(downloadsDir, `${baseName}.crx`);
+  let suffix = 1;
+  while (fs.existsSync(candidate)) {
+    candidate = path.join(downloadsDir, `${baseName} (${suffix}).crx`);
+    suffix += 1;
+  }
+  return candidate;
+}
+
+ipcMain.handle("desktop:download-browser-extension", async () => {
+  const sourcePath = getBrowserExtensionSourcePath();
+  if (!fs.existsSync(sourcePath)) {
+    throw new Error(`Browser extension package not found: ${sourcePath}`);
+  }
+
+  const destinationPath = getAvailableDownloadPath();
+  fs.copyFileSync(sourcePath, destinationPath);
+  return destinationPath;
 });
 
 async function startBackend() {

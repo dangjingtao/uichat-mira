@@ -24,7 +24,7 @@ export default defineConfig({
   base: "/docs/",
   server: {
     host: "127.0.0.1",
-    port: 4180,
+    port: 4280,
     strictPort: true,
   },
 });

@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 #[cfg(not(debug_assertions))]
 use std::process::Command;
 #[cfg(all(windows, not(debug_assertions)))]
@@ -9,12 +9,12 @@ use std::os::windows::process::CommandExt;
 use std::sync::Mutex;
 use std::sync::OnceLock;
 #[cfg(not(debug_assertions))]
-use std::path::Path;
 use uuid::Uuid;
 use regex::Regex;
 use serde_json::Value;
+use tauri::Manager;
 #[cfg(not(debug_assertions))]
-use tauri::{Manager, RunEvent, WindowEvent};
+use tauri::{RunEvent, WindowEvent};
 
 #[cfg(not(debug_assertions))]
 struct BackendProcess(Mutex<Option<std::process::Child>>);
@@ -363,6 +363,56 @@ fn get_backend_url_command() -> String {
     get_backend_url()
 }
 
+fn get_browser_extension_source_path() -> PathBuf {
+    #[cfg(debug_assertions)]
+    {
+        return PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("mira-clipper-ext")
+            .join("dist")
+            .join("dev")
+            .join("Chujie.crx");
+    }
+
+    #[cfg(not(debug_assertions))]
+    {
+        get_packaged_resources_root()
+            .join("browser-extension")
+            .join("Chujie.crx")
+    }
+}
+
+fn available_download_path(downloads_dir: &Path) -> PathBuf {
+    let base_name = "Chujie";
+    let mut candidate = downloads_dir.join(format!("{base_name}.crx"));
+    let mut suffix = 1;
+    while candidate.exists() {
+        candidate = downloads_dir.join(format!("{base_name} ({suffix}).crx"));
+        suffix += 1;
+    }
+    candidate
+}
+
+#[tauri::command]
+fn download_browser_extension_command(app: tauri::AppHandle) -> Result<String, String> {
+    let source_path = get_browser_extension_source_path();
+    if !source_path.exists() {
+        return Err(format!("Browser extension package not found: {:?}", source_path));
+    }
+
+    let downloads_dir = app
+        .path()
+        .download_dir()
+        .map_err(|error| format!("Failed to resolve Downloads directory: {error}"))?;
+    std::fs::create_dir_all(&downloads_dir)
+        .map_err(|error| format!("Failed to create Downloads directory: {error}"))?;
+    let destination_path = available_download_path(&downloads_dir);
+    std::fs::copy(&source_path, &destination_path)
+        .map_err(|error| format!("Failed to download browser extension: {error}"))?;
+
+    Ok(destination_path.to_string_lossy().into_owned())
+}
+
 #[tauri::command]
 async fn check_backend_health_command(token: Option<String>) -> Result<HealthCheckResult, String> {
     check_backend_health(token).await
@@ -431,6 +481,205 @@ fn find_node_executable() -> PathBuf {
     get_packaged_resources_root().join("node-runtime").join("node.exe")
 }
 
+fn get_native_host_source_path() -> PathBuf {
+    #[cfg(debug_assertions)]
+    {
+        return PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("mira-clipper-ext")
+            .join("dist")
+            .join("native")
+            .join("MiraWebBridgeHost.exe");
+    }
+
+    #[cfg(not(debug_assertions))]
+    {
+        get_packaged_resources_root()
+            .join("browser-extension")
+            .join("native")
+            .join("MiraWebBridgeHost.exe")
+    }
+}
+
+const NATIVE_MESSAGING_HOST_NAME: &str = "com.tomz.uichat.webbridge";
+const NATIVE_MESSAGING_REGISTRY_KEY: &str = "HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.tomz.uichat.webbridge";
+const NATIVE_MESSAGING_ALLOWED_ORIGIN: &str = "chrome-extension://gmgdbphkmkdedfabchklghghdcpjepoc/";
+
+fn native_paths_equal(left: &Path, right: &Path) -> bool {
+    left.to_string_lossy().eq_ignore_ascii_case(&right.to_string_lossy())
+}
+
+#[cfg(windows)]
+fn get_registered_native_host_manifest_path() -> Option<PathBuf> {
+    let output = std::process::Command::new("reg.exe")
+        .args(["QUERY", NATIVE_MESSAGING_REGISTRY_KEY, "/ve"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .find_map(|line| line.find("REG_SZ").map(|index| line[index + "REG_SZ".len()..].trim().to_string()))
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+
+#[tauri::command]
+fn get_native_messaging_host_status_command<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<serde_json::Value, String> {
+    #[cfg(not(windows))]
+    {
+        let _ = app;
+        return Ok(serde_json::json!({
+            "status": "unsupported",
+            "installed": false,
+            "reason": "Native Messaging 当前仅支持 Windows"
+        }));
+    }
+
+    #[cfg(windows)]
+    {
+        let manifest_path = app
+            .path()
+            .app_local_data_dir()
+            .map_err(|error| format!("Failed to resolve app data directory: {error}"))?
+            .join("native-host")
+            .join(format!("{NATIVE_MESSAGING_HOST_NAME}.json"));
+        let registered_manifest_path = get_registered_native_host_manifest_path();
+        let manifest_exists = manifest_path.exists();
+
+        if registered_manifest_path.is_none() && !manifest_exists {
+            return Ok(serde_json::json!({ "status": "not_installed", "installed": false }));
+        }
+        let Some(registered_manifest_path) = registered_manifest_path else {
+            return Ok(serde_json::json!({ "status": "repair_needed", "installed": false, "reason": "Chrome Native 注册项缺失" }));
+        };
+        if !native_paths_equal(&registered_manifest_path, &manifest_path) {
+            return Ok(serde_json::json!({ "status": "repair_needed", "installed": false, "reason": "Chrome 注册项未指向当前 Mira" }));
+        }
+        if !manifest_exists {
+            return Ok(serde_json::json!({ "status": "repair_needed", "installed": false, "reason": "Native manifest 文件缺失" }));
+        }
+
+        let manifest: serde_json::Value = match std::fs::read_to_string(&manifest_path)
+            .ok()
+            .and_then(|content| serde_json::from_str(&content).ok()) {
+            Some(manifest) => manifest,
+            None => return Ok(serde_json::json!({ "status": "repair_needed", "installed": false, "reason": "Native manifest 无法读取" })),
+        };
+        let host_path = manifest.get("path").and_then(|value| value.as_str()).map(PathBuf::from);
+        let allowed_origin_matches = manifest
+            .get("allowed_origins")
+            .and_then(|value| value.as_array())
+            .map(|origins| origins.iter().any(|origin| origin.as_str() == Some(NATIVE_MESSAGING_ALLOWED_ORIGIN)))
+            .unwrap_or(false);
+        if manifest.get("name").and_then(|value| value.as_str()) != Some(NATIVE_MESSAGING_HOST_NAME)
+            || manifest.get("type").and_then(|value| value.as_str()) != Some("stdio")
+            || !allowed_origin_matches {
+            return Ok(serde_json::json!({ "status": "repair_needed", "installed": false, "reason": "Native manifest 配置不匹配" }));
+        }
+        let Some(host_path) = host_path else {
+            return Ok(serde_json::json!({ "status": "repair_needed", "installed": false, "reason": "Native Host 文件缺失" }));
+        };
+        let host_script_path = host_path.parent().map(|path| path.join("host.mjs"));
+        let host_script_exists = host_script_path.as_ref().map(|path| path.exists()).unwrap_or(false);
+        if !host_path.exists() || !host_script_exists {
+            return Ok(serde_json::json!({ "status": "repair_needed", "installed": false, "reason": "Native Host 文件缺失" }));
+        }
+        if !native_paths_equal(&host_path, &get_native_host_source_path()) {
+            return Ok(serde_json::json!({ "status": "repair_needed", "installed": false, "reason": "Native Host 需要更新" }));
+        }
+
+        return Ok(serde_json::json!({ "status": "installed", "installed": true }));
+    }
+}
+
+#[tauri::command]
+fn install_native_messaging_host_command<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<serde_json::Value, String> {
+    #[cfg(not(windows))]
+    {
+        let _ = app;
+        return Err("Native Messaging 当前仅支持 Windows".to_string());
+    }
+
+    #[cfg(windows)]
+    {
+        let source_path = get_native_host_source_path();
+        if !source_path.exists() {
+            return Err(format!("Native Messaging Host 未打包: {:?}", source_path));
+        }
+
+        let host_dir = app
+            .path()
+            .app_local_data_dir()
+            .map_err(|error| format!("Failed to resolve app data directory: {error}"))?
+            .join("native-host");
+        std::fs::create_dir_all(&host_dir)
+            .map_err(|error| format!("Failed to create Native Host directory: {error}"))?;
+        let manifest_path = host_dir.join(format!("{NATIVE_MESSAGING_HOST_NAME}.json"));
+        let host_path = source_path;
+
+        let manifest = serde_json::json!({
+            "name": NATIVE_MESSAGING_HOST_NAME,
+            "description": "触界 Native Messaging Host",
+            "path": host_path,
+            "type": "stdio",
+            "allowed_origins": [NATIVE_MESSAGING_ALLOWED_ORIGIN]
+        });
+        std::fs::write(&manifest_path, serde_json::to_vec_pretty(&manifest).map_err(|error| error.to_string())?)
+            .map_err(|error| format!("Failed to write Native Messaging manifest: {error}"))?;
+
+        let status = std::process::Command::new("reg.exe")
+            .args(["ADD", NATIVE_MESSAGING_REGISTRY_KEY, "/ve", "/t", "REG_SZ", "/d"])
+            .arg(&manifest_path)
+            .arg("/f")
+            .status()
+            .map_err(|error| format!("Failed to register Native Messaging Host: {error}"))?;
+        if !status.success() {
+            return Err(format!("reg.exe 注册 Native Messaging Host 失败: {status}"));
+        }
+
+        return Ok(serde_json::json!({
+            "installed": true,
+            "hostPath": host_path,
+            "manifestPath": manifest_path,
+            "version": "0.7.1"
+        }));
+    }
+}
+
+#[tauri::command]
+fn uninstall_native_messaging_host_command<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<serde_json::Value, String> {
+    #[cfg(not(windows))]
+    {
+        let _ = app;
+        return Err("Native Messaging 当前仅支持 Windows".to_string());
+    }
+
+    #[cfg(windows)]
+    {
+        let manifest_path = app
+            .path()
+            .app_local_data_dir()
+            .map_err(|error| format!("Failed to resolve app data directory: {error}"))?
+            .join("native-host")
+            .join(format!("{NATIVE_MESSAGING_HOST_NAME}.json"));
+        let status = std::process::Command::new("reg.exe")
+            .args(["DELETE", NATIVE_MESSAGING_REGISTRY_KEY, "/f"])
+            .status()
+            .map_err(|error| format!("Failed to unregister Native Messaging Host: {error}"))?;
+        if !status.success() && manifest_path.exists() {
+            return Err(format!("reg.exe 注销 Native Messaging Host 失败: {status}"));
+        }
+        if manifest_path.exists() {
+            std::fs::remove_file(&manifest_path)
+                .map_err(|error| format!("Failed to remove Native Messaging manifest: {error}"))?;
+        }
+        return Ok(serde_json::json!({ "uninstalled": true, "manifestPath": manifest_path }));
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -444,6 +693,10 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             get_backend_url_command,
+            download_browser_extension_command,
+            get_native_messaging_host_status_command,
+            install_native_messaging_host_command,
+            uninstall_native_messaging_host_command,
             check_backend_health_command,
             check_database_health_command
         ]);

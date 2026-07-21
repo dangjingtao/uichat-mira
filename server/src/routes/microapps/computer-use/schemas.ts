@@ -335,14 +335,14 @@ const cancelTaskBodySchema = {
 
 const installRuntimeBodySchema = {
   type: "object",
-  required: ["version", "archiveUrl", "executableRelativePath"],
   additionalProperties: false,
-  properties: {
-    version: { type: "string" },
-    archiveUrl: { type: "string", minLength: 1 },
-    executableRelativePath: { type: "string", minLength: 1 },
-    expectedSha256: { type: "string" },
-  },
+    properties: {
+      version: { type: "string" },
+      archiveUrl: { type: "string", minLength: 1 },
+      executableRelativePath: { type: "string", minLength: 1 },
+      expectedSha256: { type: "string" },
+      force: { type: "boolean" },
+    },
 } as const;
 
 export const computerUseRouteSchemas = {

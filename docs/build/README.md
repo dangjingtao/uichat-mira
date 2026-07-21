@@ -222,6 +222,19 @@ resources/runtime.config.cjs
 resources/node-runtime/node.exe resources/server/server.cjs
 ```
 
+## 触界浏览器扩展产物
+
+浏览器扩展的产品名为“触界”，包含“见行”和“剪藏”两项能力。开发版和生产版分别通过以下命令生成：
+
+```bash
+pnpm --dir mira-clipper-ext dev
+pnpm --dir mira-clipper-ext prod
+```
+
+桌面端打包和用户下载统一使用 `Chujie.crx`，ZIP 产物使用 `Chujie.zip`。Electron、Tauri 和 shared desktop artifacts 必须引用相同文件名。
+
+改名不改变扩展身份：签名密钥路径、Chrome 扩展 ID、Native Host 注册名和 `MiraWebBridgeHost.exe` 文件名保持稳定，确保已有安装可以继续升级和连接。
+
 ## Shared Desktop Artifacts 流程
 
 入口脚本：

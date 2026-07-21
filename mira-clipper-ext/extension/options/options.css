@@ -38,9 +38,22 @@ body {
   padding: 0 20px;
 }
 
+.brand-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.brand-header img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
 h1 {
   font-size: 22px;
-  margin: 0 0 24px;
+  margin: 0;
 }
 
 .field {
@@ -73,17 +86,6 @@ input[type="text"]:focus {
   margin: 6px 0 0;
   font-size: 12px;
   color: var(--muted);
-}
-
-.code-login {
-  display: flex;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.code-login input {
-  min-width: 0;
-  flex: 1;
 }
 
 button {

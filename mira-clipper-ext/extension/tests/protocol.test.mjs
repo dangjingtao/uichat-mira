@@ -6,6 +6,11 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const extensionRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 
 describe('POST /microapps/evolving-knowledge/captures 请求体契约', () => {
   it('扩展应提交洞见捕获所需字段', () => {
@@ -13,7 +18,7 @@ describe('POST /microapps/evolving-knowledge/captures 请求体契约', () => {
       sourceUrl: 'https://example.com/article',
       title: '标题',
       favicon: 'https://example.com/favicon.ico',
-      contentType: 'text',
+      contentType: 'webpage',
       rawContent: '# 标题\n\n正文内容',
       metadata: {
         selectedText: '选中文字',
@@ -29,7 +34,7 @@ describe('POST /microapps/evolving-knowledge/captures 请求体契约', () => {
 
     assert.ok(typeof payload.sourceUrl === 'string' && payload.sourceUrl.length > 0);
     assert.ok(typeof payload.title === 'string' && payload.title.length > 0);
-    assert.equal(payload.contentType, 'text');
+    assert.equal(payload.contentType, 'webpage');
     assert.ok(typeof payload.rawContent === 'string');
     assert.ok(typeof payload.favicon === 'string');
     assert.ok(Array.isArray(payload.metadata.userTags));
@@ -39,7 +44,7 @@ describe('POST /microapps/evolving-knowledge/captures 请求体契约', () => {
     const payload = {
       sourceUrl: 'https://example.com',
       title: '标题',
-      contentType: 'text',
+      contentType: 'webpage',
       rawContent: '正文',
     };
 
@@ -53,7 +58,7 @@ describe('POST /microapps/evolving-knowledge/captures 请求体契约', () => {
   });
 });
 
-describe('Popup 状态机输出', () => {
+describe('Side Panel 剪藏状态机输出', () => {
   const states = ['LOADING', 'READY', 'SAVING', 'SUCCESS', 'ERROR'];
 
   it('应支持 5 个状态', () => {
@@ -65,8 +70,71 @@ describe('Popup 状态机输出', () => {
     assert.ok(true); // 文档约束，运行时验证在 popup.js 中
   });
 
-  it('SUCCESS 状态应自动关闭 popup', () => {
-    // 契约：SUCCESS 后 1.5s 内关闭
+  it('SUCCESS 状态应保留侧栏并显示成功状态', () => {
+    // 契约：侧栏不因保存成功被关闭，用户可以继续使用
     assert.ok(true); // 文档约束，运行时验证在 popup.js 中
+  });
+});
+
+describe('剪藏模式和 AI 开关', () => {
+  it('扩展应区分整页、选中文字和单图片剪藏', async () => {
+    const [background, content, popup] = await Promise.all([
+      readFile(join(extensionRoot, 'background.js'), 'utf8'),
+      readFile(join(extensionRoot, 'content/content.js'), 'utf8'),
+      readFile(join(extensionRoot, 'popup/popup.js'), 'utf8'),
+    ]);
+
+    assert.match(background, /captureMode: 'image'/);
+    assert.match(background, /captureMode: 'selection'/);
+    assert.match(content, /captureMode === 'image'/);
+    assert.match(content, /captureMode === 'selection'/);
+    assert.match(popup, /captureMode: pendingCapture\?\.captureMode \|\| 'auto'/);
+    assert.match(popup, /rawHtml: els\.saveBtn\.dataset\.captureMode === 'page'/);
+  });
+
+  it('保存时应按规则数量逐张本地化图片，不传递聚合 base64 数据', async () => {
+    const [content, popup, extractor, service] = await Promise.all([
+      readFile(join(extensionRoot, 'content/content.js'), 'utf8'),
+      readFile(join(extensionRoot, 'popup/popup.js'), 'utf8'),
+      readFile(join(extensionRoot, 'lib/extractor.js'), 'utf8'),
+      readFile(join(extensionRoot, '../../server/src/microapps/evolving-knowledge/index.ts'), 'utf8'),
+    ]);
+
+    assert.match(content, /MIRA_CAPTURE_IMAGES/);
+    assert.match(content, /IMAGE_CAPTURE_CONCURRENCY = 3/);
+    assert.match(content, /uploadCapturedImage/);
+    assert.doesNotMatch(content, /imageUrls\.slice\(0, 10\)/);
+    assert.match(popup, /MIRA_CAPTURE_IMAGES/);
+    assert.doesNotMatch(popup, /imageDataUrls/);
+    assert.match(extractor, /data-srcset/);
+    assert.match(extractor, /data-zoom-image/);
+    assert.doesNotMatch(service, /attachments\.slice\(0, 10\)/);
+  });
+
+  it('AI 摘要和关联重建必须由两个独立开关控制', async () => {
+    const html = await readFile(join(extensionRoot, 'popup/popup.html'), 'utf8');
+    const source = await readFile(join(extensionRoot, 'popup/popup.js'), 'utf8');
+
+    assert.match(html, /id="processAi"/);
+    assert.match(html, /生成 AI 摘要、标签和实体/);
+    assert.match(html, /id="rebuildKnowledge"/);
+    assert.match(html, /重建关联与洞见/);
+    assert.match(source, /processAi: els\.processAi\.checked/);
+    assert.match(source, /rebuild: els\.rebuildKnowledge\.checked/);
+    assert.match(source, /if \(els\.rebuildKnowledge\.checked\)/);
+  });
+
+  it('侧栏只显示经过 URL 规则排序后命中的别名', async () => {
+    const [rules, content, popup] = await Promise.all([
+      readFile(join(extensionRoot, 'lib/clip-rules.js'), 'utf8'),
+      readFile(join(extensionRoot, 'content/content.js'), 'utf8'),
+      readFile(join(extensionRoot, 'popup/popup.js'), 'utf8'),
+    ]);
+
+    assert.match(rules, /function ruleSpecificity/);
+    assert.match(rules, /function getRule\(rules, url\)/);
+    assert.match(rules, /if \(!urlPattern\) return null/);
+    assert.match(content, /matchedRuleAlias/);
+    assert.match(popup, /已应用剪藏规则\$\{ruleName\}/);
   });
 });

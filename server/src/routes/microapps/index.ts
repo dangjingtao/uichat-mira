@@ -12,7 +12,6 @@ import type {
   ComputerUseRuntimeState,
   ComputerUseTask,
 } from "@/microapps/computer-use/index.js";
-import type { BrowserRuntimeDownloadRequest } from "@/microapps/computer-use/runtime/types.js";
 import {
   ImageGenerationJobNotFoundError,
   ImageGenerationProviderNotFoundError,
@@ -111,9 +110,7 @@ export type ComputerUseRouteService = {
 
 export type ComputerUseRuntimeRouteService = {
   getRuntimeState(): Promise<ComputerUseRuntimeState>;
-  installRuntime(
-    request: BrowserRuntimeDownloadRequest,
-  ): Promise<ComputerUseRuntimeState>;
+  installRuntime(request?: { force?: boolean }): Promise<ComputerUseRuntimeState>;
 };
 
 export type MailCenterRouteService = ReturnType<typeof createMailCenterService>;

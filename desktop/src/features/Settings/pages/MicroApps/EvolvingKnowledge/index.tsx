@@ -1,9 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Copy,
   FileText,
-  Image,
-  KeyRound,
   Search,
   Sparkles,
   X,
@@ -11,17 +8,17 @@ import {
   Clock,
   ChevronLeft,
   ChevronRight,
+  ArrowUpRight,
   Lightbulb,
   Trash2,
   Link2,
   Pin,
-  ShieldCheck,
+  RefreshCw,
 } from "lucide-react";
 import MicroAppPageLayout from "../components/MicroAppPageLayout";
 import Badge from "@/shared/ui/Badge";
-import { Button, Modal, Result, Skeleton } from "@/shared/ui";
+import { Button, Drawer, MarkdownText, Modal, Result, Skeleton } from "@/shared/ui";
 import { message } from "@/shared/ui/Message";
-import { ApiError, post } from "@/shared/lib/request";
 import {
   listCaptures,
   listInsights,
@@ -30,19 +27,25 @@ import {
   deleteCapture,
   searchCaptures,
   getCaptureRelations,
+  getCapture,
+  rebuildKnowledge,
   type KnowledgeCapture,
   type KnowledgeInsight,
   type KnowledgeRelation,
 } from "@/shared/api/evolvingKnowledge";
+import { resolveAttachmentUrl } from "@/shared/api/attachments";
+
+const resolveCaptureMarkdown = (content: string) =>
+  content.replace(/(!\[[^\]]*\]\()((?:\/attachments\/)[^\s)]+)(\))/g, (_match, prefix, url, suffix) =>
+    `${prefix}${resolveAttachmentUrl(url)}${suffix}`,
+  );
 
 const contentTypeIcons: Record<string, React.ReactNode> = {
-  text: <FileText className="h-4 w-4" />,
-  image: <Image className="h-4 w-4" />,
+  webpage: <FileText className="h-4 w-4" />,
 };
 
 const contentTypeLabels: Record<string, string> = {
-  text: "文本",
-  image: "图片",
+  webpage: "网页",
 };
 
 const insightTypeConfig: Record<
@@ -74,6 +77,7 @@ const insightTypeConfig: Record<
 export default function EvolvingKnowledgeStudioPage() {
   const [loading, setLoading] = useState(true);
   const [captures, setCaptures] = useState<KnowledgeCapture[]>([]);
+  const latestCaptureIdRef = useRef<string | null>(null);
   const [insights, setInsights] = useState<KnowledgeInsight[]>([]);
   const [stats, setStats] = useState<{
     totalCaptures: number;
@@ -83,8 +87,11 @@ export default function EvolvingKnowledgeStudioPage() {
     topTags: Array<{ tagName: string; usageCount: number }>;
   } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [featuredInsightIndex, setFeaturedInsightIndex] = useState(0);
+  const [selectedInsight, setSelectedInsight] = useState<KnowledgeInsight | null>(null);
+  const [selectedCapture, setSelectedCapture] = useState<KnowledgeCapture | null>(null);
+  const [insightDetailCapture, setInsightDetailCapture] = useState<KnowledgeCapture | null>(null);
+  const [insightDetailLoading, setInsightDetailLoading] = useState(false);
   const [pinnedInsightIds, setPinnedInsightIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -93,9 +100,7 @@ export default function EvolvingKnowledgeStudioPage() {
     Record<string, KnowledgeRelation[]>
   >({});
   const [relationsLoadingId, setRelationsLoadingId] = useState<string | null>(null);
-  const [extensionCode, setExtensionCode] = useState("");
-  const [extensionCodeLoading, setExtensionCodeLoading] = useState(false);
-  const [extensionModalOpen, setExtensionModalOpen] = useState(false);
+  const [rebuilding, setRebuilding] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -106,6 +111,7 @@ export default function EvolvingKnowledgeStudioPage() {
         getStats(),
       ]);
       setCaptures(capturesRes ?? []);
+      latestCaptureIdRef.current = capturesRes?.[0]?.id ?? null;
       setInsights(insightsRes ?? []);
       setStats(statsRes);
     } catch (error) {
@@ -117,38 +123,76 @@ export default function EvolvingKnowledgeStudioPage() {
     }
   };
 
-  const generateExtensionCode = async () => {
-    setExtensionCodeLoading(true);
-    try {
-      const result = await post<{ code: string }>(
-        "/oauth/extension/authorization-code",
-      );
-      setExtensionCode(result.code);
-      message.success("授权码已生成，5 分钟内有效且只能使用一次");
-    } catch (error) {
-      message.error(error instanceof ApiError ? error.message : "生成授权码失败");
-    } finally {
-      setExtensionCodeLoading(false);
-    }
-  };
-
-  const copyExtensionCode = async () => {
-    if (!extensionCode) return;
-    await navigator.clipboard.writeText(extensionCode);
-    message.success("授权码已复制");
-  };
-
   useEffect(() => {
     void load();
   }, []);
 
-  const filteredCaptures = useMemo(() => {
-    let result = captures;
-    if (activeFilter) {
-      result = result.filter((c) => c.contentType === activeFilter);
+  const handleRebuild = async () => {
+    setRebuilding(true);
+    try {
+      const batchSize = 25;
+      let offset = 0;
+      let capturesScanned = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const result = await rebuildKnowledge({ limit: batchSize, offset });
+        capturesScanned += result.capturesScanned;
+        offset = result.nextOffset;
+        hasMore = result.hasMore;
+      }
+
+      message.success(`重建完成，已扫描 ${capturesScanned} 条捕获`);
+      await load();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "重建失败");
+    } finally {
+      setRebuilding(false);
     }
-    return result;
-  }, [captures, activeFilter]);
+  };
+
+  useEffect(() => {
+    let refreshInFlight = false;
+
+    const refreshWhenChanged = async () => {
+      if (document.hidden || refreshInFlight) return;
+      refreshInFlight = true;
+      try {
+        const nextCaptures = await listCaptures({ limit: 50 });
+        const nextLatestCaptureId = nextCaptures?.[0]?.id ?? null;
+        if (nextLatestCaptureId === latestCaptureIdRef.current) return;
+
+        latestCaptureIdRef.current = nextLatestCaptureId;
+        setCaptures(nextCaptures ?? []);
+        const [nextInsights, nextStats] = await Promise.all([
+          listInsights(),
+          getStats(),
+        ]);
+        setInsights(nextInsights ?? []);
+        setStats(nextStats);
+      } catch {
+        // 后台静默刷新失败不打断当前页面，下一轮继续检查。
+      } finally {
+        refreshInFlight = false;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) void refreshWhenChanged();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    const timer = window.setInterval(() => void refreshWhenChanged(), 5000);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const filteredCaptures = useMemo(() => {
+    return captures;
+  }, [captures]);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
@@ -189,6 +233,33 @@ export default function EvolvingKnowledgeStudioPage() {
     });
   };
 
+  const openInsightDetails = async (insight: KnowledgeInsight) => {
+    setSelectedCapture(null);
+    setSelectedInsight(insight);
+    setInsightDetailCapture(null);
+    if (!insight.triggerCaptureId) return;
+
+    setInsightDetailLoading(true);
+    try {
+      const capture = await getCapture(insight.triggerCaptureId);
+      setInsightDetailCapture(capture);
+    } catch {
+      message.error("洞见来源加载失败");
+    } finally {
+      setInsightDetailLoading(false);
+    }
+  };
+
+  const openCaptureDetails = (capture: KnowledgeCapture) => {
+    setSelectedInsight(null);
+    setSelectedCapture(capture);
+  };
+
+  const closeDetails = () => {
+    setSelectedInsight(null);
+    setSelectedCapture(null);
+  };
+
   const toggleCaptureRelations = async (captureId: string) => {
     if (expandedCaptureId === captureId) {
       setExpandedCaptureId(null);
@@ -218,14 +289,20 @@ export default function EvolvingKnowledgeStudioPage() {
     [insights, pinnedInsightIds],
   );
 
-  const handleDeleteCapture = async (id: string) => {
-    try {
-      await deleteCapture(id);
-      setCaptures((prev) => prev.filter((c) => c.id !== id));
-      message.success("已删除");
-    } catch {
-      message.error("删除失败");
-    }
+  const handleDeleteCapture = (capture: KnowledgeCapture) => {
+    Modal.confirm({
+      title: "删除捕获内容",
+      description: `删除“${capture.title || "无标题"}”后，原文、附件和相关派生数据都会被永久移除，此操作不可恢复。`,
+      tone: "danger",
+      confirmText: "确认删除",
+      cancelText: "取消",
+      loadingText: "删除中...",
+      onConfirm: async () => {
+        await deleteCapture(capture.id);
+        message.success("已删除");
+        await load();
+      },
+    });
   };
 
   const featuredInsight = visibleInsights.length
@@ -236,17 +313,17 @@ export default function EvolvingKnowledgeStudioPage() {
   return (
     <>
       <MicroAppPageLayout
-        miniTitle="智识进化库"
-        title="智识进化库"
-        description="多媒体知识捕获与 AI 自我整理。捕获内容后，AI 自动重写、标签、发现概念关联与跨时间洞见。"
+        miniTitle="洞见"
+        title="洞见"
+        description="多媒体知识捕获。默认只保存原文和图片；勾选后才生成 AI 摘要、标签和实体，关联与洞见需要单独触发。"
         slot={
           <Button
-            variant="secondary"
             size="sm"
-            onClick={() => setExtensionModalOpen(true)}
+            disabled={rebuilding}
+            onClick={() => void handleRebuild()}
           >
-            <KeyRound className="h-4 w-4" />
-            浏览器扩展授权
+            <RefreshCw className={rebuilding ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+            {rebuilding ? "重建中..." : "手动重建"}
           </Button>
         }
         contentClassName="h-full min-h-0 space-y-6 pt-6"
@@ -295,8 +372,14 @@ export default function EvolvingKnowledgeStudioPage() {
               </button>
             </div>
           </div>
-          <h2 className="max-w-2xl text-xl font-semibold leading-snug text-text-inverted">{featuredInsight.title}</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-text-inverted/65">{featuredInsight.description}</p>
+          <button
+            type="button"
+            onClick={() => void openInsightDetails(featuredInsight)}
+            className="block max-w-2xl text-left"
+          >
+            <h2 className="text-xl font-semibold leading-snug text-text-inverted">{featuredInsight.title}</h2>
+            <p className="mt-2 text-sm leading-relaxed text-text-inverted/65">{featuredInsight.description}</p>
+          </button>
           <div className="mt-5 flex items-center justify-between gap-3">
             <div className="flex items-center gap-1">
               {visibleInsights.map((insight, index) => (
@@ -310,6 +393,14 @@ export default function EvolvingKnowledgeStudioPage() {
               ))}
             </div>
             <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => void openInsightDetails(featuredInsight)}
+                className="inline-flex items-center gap-1 rounded-ui-control px-2 py-1 text-xs text-text-inverted/70 hover:bg-white/10 hover:text-text-inverted"
+              >
+                查看详情
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </button>
               <button
                 type="button"
                 aria-label={pinnedInsightIds.has(featuredInsight.id) ? "取消置顶洞见" : "置顶洞见"}
@@ -354,26 +445,17 @@ export default function EvolvingKnowledgeStudioPage() {
                 className="h-10 w-full rounded-ui-control border border-border bg-surface-secondary pl-9 pr-4 text-sm text-text-primary placeholder:text-text-tertiary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20"
               />
             </div>
-            <Button variant="primary" size="sm" onClick={() => void handleSearch()}>
-              搜索
-            </Button>
           </div>
           <div className="flex flex-wrap gap-2">
-            {(["text", "image"] as const).map((type) => (
-              <button
+            {(["webpage"] as const).map((type) => (
+              <span
                 key={type}
-                type="button"
-                onClick={() => setActiveFilter((prev) => (prev === type ? null : type))}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                  activeFilter === type
-                    ? "border border-text-primary bg-text-primary text-text-inverted"
-                    : "border border-border bg-transparent text-text-secondary hover:bg-surface-secondary"
-                }`}
+                className="inline-flex items-center gap-1.5 rounded-full border border-text-primary bg-text-primary px-3 py-1.5 text-xs font-medium text-text-inverted"
               >
                 {contentTypeIcons[type]}
                 {contentTypeLabels[type]}
                 {stats?.byContentType[type] ? ` (${stats.byContentType[type]})` : ""}
-              </button>
+              </span>
             ))}
           </div>
         </div>
@@ -419,7 +501,7 @@ export default function EvolvingKnowledgeStudioPage() {
                       <button
                         type="button"
                         aria-label="删除捕获"
-                        onClick={() => void handleDeleteCapture(capture.id)}
+                        onClick={() => handleDeleteCapture(capture)}
                         className="shrink-0 text-text-tertiary opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -464,6 +546,15 @@ export default function EvolvingKnowledgeStudioPage() {
                       {expandedCaptureId === capture.id ? "收起关联" : "查看关联"}
                     </button>
 
+                    <button
+                      type="button"
+                      onClick={() => openCaptureDetails(capture)}
+                      className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+                    >
+                      <ArrowUpRight className="h-3.5 w-3.5" />
+                      查看详情
+                    </button>
+
                     {expandedCaptureId === capture.id && (
                       <div className="space-y-2 border-l-2 border-primary/20 pl-3">
                         {relationsLoadingId === capture.id ? (
@@ -498,58 +589,84 @@ export default function EvolvingKnowledgeStudioPage() {
       </div>
       </MicroAppPageLayout>
 
-      <Modal
-        open={extensionModalOpen}
-        title="浏览器扩展授权"
-        width={560}
-        onClose={() => setExtensionModalOpen(false)}
-        footer={
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setExtensionModalOpen(false)}
-          >
-            关闭
-          </Button>
+      <Drawer
+        open={selectedInsight !== null || selectedCapture !== null}
+        onClose={closeDetails}
+        width={720}
+        closeLabel="关闭详情"
+        closeMaskLabel="关闭详情"
+        header={
+          selectedInsight ? (
+            <div className="space-y-1">
+              <div className="text-xs text-text-tertiary">
+                {insightTypeConfig[selectedInsight.insightType]?.label ?? selectedInsight.insightType}
+                {" · "}
+                置信度 {(selectedInsight.confidence * 100).toFixed(0)}%
+              </div>
+              <div className="text-base font-semibold text-text-primary">{selectedInsight.title}</div>
+            </div>
+          ) : selectedCapture ? (
+            <div className="space-y-1">
+              <div className="text-xs text-text-tertiary">网页 · {new Date(selectedCapture.capturedAt).toLocaleDateString("zh-CN")}</div>
+              <div className="truncate text-base font-semibold text-text-primary">{selectedCapture.title || "无标题"}</div>
+            </div>
+          ) : null
         }
       >
-        <div className="space-y-4">
-          <div className="flex items-start gap-3">
-            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-text-secondary" />
-            <p className="text-sm leading-6 text-text-secondary">
-              使用 Mira Clipper 捕获网页文本和图片。生成一次性授权码后，粘贴到扩展的授权入口即可连接。
-            </p>
+        {selectedInsight ? (
+          <div className="space-y-6">
+            <section>
+              <div className="mb-2 text-sm font-medium text-text-primary">洞见</div>
+              <MarkdownText className="text-sm leading-7">
+                {selectedInsight.description}
+              </MarkdownText>
+            </section>
+
+            <section className="border-t border-border pt-5">
+              <div className="mb-3 text-sm font-medium text-text-primary">来源内容</div>
+              {insightDetailLoading ? (
+                <Skeleton.Text lines={5} />
+              ) : insightDetailCapture ? (
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-sm font-medium text-text-primary">{insightDetailCapture.title}</div>
+                    <a
+                      href={insightDetailCapture.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 block truncate text-xs text-text-tertiary hover:text-primary hover:underline"
+                    >
+                      {insightDetailCapture.sourceUrl}
+                    </a>
+                  </div>
+                  <MarkdownText className="text-sm leading-7">
+                    {resolveCaptureMarkdown(insightDetailCapture.rawContent)}
+                  </MarkdownText>
+                </div>
+              ) : (
+                <p className="text-sm text-text-tertiary">暂无来源内容</p>
+              )}
+            </section>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              size="sm"
-              disabled={extensionCodeLoading}
-              onClick={() => void generateExtensionCode()}
-            >
-              <KeyRound className="h-4 w-4" />
-              {extensionCodeLoading ? "生成中..." : "生成授权码"}
-            </Button>
-            {extensionCode ? (
-              <>
-                <code className="rounded-ui-control border border-border bg-surface-secondary px-3 py-2 text-sm font-semibold tracking-[0.16em] text-text-primary">
-                  {extensionCode}
-                </code>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void copyExtensionCode()}
-                >
-                  <Copy className="h-4 w-4" />
-                  复制
-                </Button>
-              </>
-            ) : null}
+        ) : selectedCapture ? (
+          <div className="space-y-4">
+            <div>
+              <a
+                href={selectedCapture.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block truncate text-xs text-text-tertiary hover:text-primary hover:underline"
+              >
+                {selectedCapture.sourceUrl}
+              </a>
+            </div>
+            <MarkdownText className="text-sm leading-7">
+              {resolveCaptureMarkdown(selectedCapture.rawContent)}
+            </MarkdownText>
           </div>
-          <p className="text-xs leading-5 text-text-tertiary">
-            授权码 5 分钟内有效且只能使用一次。生成后打开 Mira Clipper，在授权码输入框中粘贴并确认。
-          </p>
-        </div>
-      </Modal>
+        ) : null}
+      </Drawer>
+
     </>
   );
 }
