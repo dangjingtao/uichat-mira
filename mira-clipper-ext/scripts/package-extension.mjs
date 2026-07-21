@@ -2,9 +2,11 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import crx3 from "crx3";
+import loadLocalEnv from "../../scripts/load-local-env.cjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const extensionRoot = path.resolve(scriptDir, "..");
+loadLocalEnv(path.resolve(extensionRoot, ".."));
 const sourceRoot = path.join(extensionRoot, "extension");
 const modeArgIndex = process.argv.indexOf("--mode");
 const mode = modeArgIndex >= 0 ? process.argv[modeArgIndex + 1] : "dev";
@@ -22,8 +24,14 @@ const zipPath = path.join(outputRoot, "Chujie.zip");
 const manifestPath = path.join(sourceRoot, "manifest.json");
 
 await fs.access(manifestPath);
+try {
+  await fs.access(keyPath);
+} catch {
+  throw new Error(
+    `CRX signing key not found: ${keyPath}. Set MIRA_CLIPPER_CRX_KEY_PATH in the project .env or provide the mode-specific key under mira-clipper-ext/.keys.`,
+  );
+}
 await fs.mkdir(outputRoot, { recursive: true });
-await fs.mkdir(path.dirname(keyPath), { recursive: true });
 
 await crx3([manifestPath], {
   keyPath,

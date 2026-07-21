@@ -203,6 +203,8 @@ Rerank 不从 `chatAdapter` 推断能力。当前只有明确声明 `rerankAdapt
 
 而不是每来一个 provider 都复制一套分支。
 
+当前的火山引擎 Code Plan / Agent Plan 属于 OpenAI-compatible 请求族，但 Ark 的模型发现和 base URL 需要独立适配，因此由 `server/src/services/ark-plan-adapter.ts` 负责 endpoint 解析。它们使用独立 connection template，但运行时 `providerCode` 统一保持为 `volcengine`。
+
 ## 推荐接入顺序
 
 建议以后新增服务商都按下面顺序处理：

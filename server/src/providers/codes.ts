@@ -9,6 +9,8 @@ export const PROVIDER_CODE_VALUES = [
 
 export const PROVIDER_TEMPLATE_CODE_VALUES = [
   ...PROVIDER_CODE_VALUES,
+  "volcengine-code-plan",
+  "volcengine-agent-plan",
   "openai-compatible-custom",
 ] as const;
 

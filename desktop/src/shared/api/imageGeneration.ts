@@ -178,6 +178,9 @@ export function getImageGenerationRealtimeUrl(generationId: string) {
   }
 
   const protocol = globalThis.window?.location?.protocol === "https:" ? "wss:" : "ws:";
-  const host = globalThis.window?.location?.host ?? "127.0.0.1:5173";
+  const host = globalThis.window?.location?.host;
+  if (!host) {
+    throw new Error("Unable to resolve the desktop renderer host");
+  }
   return `${protocol}//${host}${normalizedBase}${routePath}?token=${encodeURIComponent(token)}`;
 }

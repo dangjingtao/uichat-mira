@@ -21,6 +21,7 @@ import {
   PROVIDER_CODE_ENUM,
 } from "@/providers/catalog.js";
 import { listCloudflareModels } from "@/services/cloudflare-provider.js";
+import { createArkPlanAdapter } from "@/services/ark-plan-adapter.js";
 import { listOpenAICompatibleModels } from "@/services/openai-compatible-provider.js";
 import { decryptSecret, encryptSecret } from "@/utils/crypto.js";
 import {
@@ -168,6 +169,18 @@ const listProviderModels = async (
     return listCloudflareModels(baseUrl, apiKey);
   }
 
+  if (
+    templateCode === "volcengine-code-plan" ||
+    templateCode === "volcengine-agent-plan"
+  ) {
+    return createArkPlanAdapter({
+      service:
+        templateCode === "volcengine-code-plan" ? "code-plan" : "agent-plan",
+      baseUrl,
+      apiKey,
+    }).listModels();
+  }
+
   return listOpenAICompatibleModels(baseUrl, apiKey);
 };
 
@@ -309,6 +322,8 @@ export const providerSettingsService = {
       "google",
       "cloudflare",
       "volcengine",
+      "volcengine-code-plan",
+      "volcengine-agent-plan",
       "openai-compatible-custom",
     ];
 

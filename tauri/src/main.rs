@@ -177,7 +177,9 @@ fn runtime_config_candidates() -> Vec<PathBuf> {
 fn parse_runtime_config(contents: &str) -> Result<RuntimeConfig, String> {
     let host_regex = Regex::new(r#"host\s*:\s*"([^"]+)""#)
         .map_err(|error| format!("Failed to compile host regex: {}", error))?;
-    let port_regex = Regex::new(r#"port\s*:\s*(\d+)"#)
+    let port_regex = Regex::new(
+        r#"backend\s*:\s*\{[\s\S]*?port\s*:\s*(?:readPort\("[^"]+"\s*,\s*)?(\d+)"#,
+    )
         .map_err(|error| format!("Failed to compile port regex: {}", error))?;
 
     let backend_host = host_regex
@@ -740,4 +742,27 @@ pub fn run() {
 
 fn main() {
     run()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_runtime_config;
+
+    #[test]
+    fn parses_environment_backed_backend_port() {
+        let config = parse_runtime_config(
+            r#"
+              module.exports = {
+                backend: {
+                  host: "127.0.0.1",
+                  port: readPort("UI_CHAT_BACKEND_PORT", 8787),
+                },
+              };
+            "#,
+        )
+        .expect("runtime config should parse");
+
+        assert_eq!(config.backend_host, "127.0.0.1");
+        assert_eq!(config.backend_port, 8787);
+    }
 }

@@ -146,7 +146,7 @@ function createWindow() {
 
   if (isDev) {
     void mainWindow
-      .loadURL("http://localhost:5273")
+      .loadURL(`http://localhost:${runtimeConfig.dev.desktopPort}`)
       .then(() => {
         mainWindow?.webContents.openDevTools({ mode: "detach" });
       })

@@ -33,7 +33,7 @@ const providerCapabilitiesSchema = {
     },
     embeddingAdapter: {
       type: "string",
-      enum: ["ollama", "openai-compatible", "cloudflare"],
+      enum: ["ollama", "openai-compatible", "cloudflare", "none"],
       description:
         "Embedding adapter protocol declared by the provider catalog.",
     },

@@ -1,6 +1,7 @@
 import { Ollama } from "ollama";
 
 import { getProviderDefinition } from "@/providers/catalog.js";
+import { resolveArkPlanBaseUrl } from "@/services/ark-plan-adapter.js";
 import { createOpenAICompatibleClient } from "@/services/openai-compatible-provider.js";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
 import { assertOllamaModelAvailable, resolveAgentTaskProvider } from "./resolution.js";
@@ -31,6 +32,18 @@ const toTextOnlyMessages = (messages: NormalizedChatMessage[]) =>
     content: message.content,
   }));
 
+const resolveStructuredOutputBaseUrl = (resolved: ReturnType<typeof resolveAgentTaskProvider>) => {
+  if (resolved.providerTemplateCode === "volcengine-code-plan") {
+    return resolveArkPlanBaseUrl("code-plan", resolved.baseUrl);
+  }
+
+  if (resolved.providerTemplateCode === "volcengine-agent-plan") {
+    return resolveArkPlanBaseUrl("agent-plan", resolved.baseUrl);
+  }
+
+  return resolved.baseUrl;
+};
+
 const buildOpenAICompatibleStructuredRequest = (
   input: TaskStructuredOutputInput,
   stream: boolean,
@@ -60,7 +73,10 @@ const generateOpenAICompatibleStructuredOutput = async <T>(
   input: TaskStructuredOutputInput,
 ) => {
   const { resolved, request } = buildOpenAICompatibleStructuredRequest(input, false);
-  const client = createOpenAICompatibleClient(resolved.baseUrl, resolved.apiKey);
+  const client = createOpenAICompatibleClient(
+    resolveStructuredOutputBaseUrl(resolved),
+    resolved.apiKey,
+  );
   const response = (await client.chat.completions.create(request as any)) as any;
   const content = response.choices?.[0]?.message?.content ?? "";
   return parseStructuredJson<T>(content);
@@ -70,7 +86,10 @@ const streamOpenAICompatibleStructuredOutputText = async function* (
   input: TaskStructuredOutputInput,
 ): AsyncGenerator<string> {
   const { resolved, request } = buildOpenAICompatibleStructuredRequest(input, true);
-  const client = createOpenAICompatibleClient(resolved.baseUrl, resolved.apiKey);
+  const client = createOpenAICompatibleClient(
+    resolveStructuredOutputBaseUrl(resolved),
+    resolved.apiKey,
+  );
   const response = (await client.chat.completions.create(request as any)) as any;
   let sawText = false;
 

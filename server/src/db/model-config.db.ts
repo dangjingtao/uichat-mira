@@ -90,6 +90,17 @@ const tableSupportsAllProviderCodes = (
   return tableSqlContainsAllValues(sqlite, tableName, PROVIDER_CODE_VALUES);
 };
 
+const tableSupportsAllProviderTemplateCodes = (
+  sqlite: ReturnType<typeof getSqlite>,
+  tableName: string,
+) => {
+  return tableSqlContainsAllValues(
+    sqlite,
+    tableName,
+    PROVIDER_TEMPLATE_CODE_VALUES,
+  );
+};
+
 const recreateModelConfigTablesForCurrentRoles = (
   sqlite: ReturnType<typeof getSqlite>,
 ) => {
@@ -242,23 +253,36 @@ const migrateProviderConnectionTables = (sqlite: ReturnType<typeof getSqlite>) =
     name: string;
     pk: number;
   }>;
+  const hasConnectionId = connectionColumns.some((column) => column.name === "id");
   const providerConnectionsNeedsRebuild =
     connectionColumns.length > 0 &&
-    (!connectionColumns.some((column) => column.name === "id") ||
+    (!hasConnectionId ||
       connectionColumns.some(
         (column) => column.name === "provider_code" && column.pk === 1,
       ) ||
-      !tableSupportsAllProviderCodes(sqlite, "provider_connections"));
+      !tableSupportsAllProviderCodes(sqlite, "provider_connections") ||
+      !tableSupportsAllProviderTemplateCodes(sqlite, "provider_connections"));
 
   if (providerConnectionsNeedsRebuild) {
-    sqlite.exec("BEGIN");
+    const foreignKeysEnabled = sqlite.pragma("foreign_keys", {
+      simple: true,
+    }) as number;
+
+    if (foreignKeysEnabled) {
+      sqlite.exec("PRAGMA foreign_keys = OFF");
+    }
 
     try {
-      sqlite.exec(`
-        DROP INDEX IF EXISTS idx_provider_connections_status;
-        ALTER TABLE provider_connections RENAME TO provider_connections_legacy;
+      sqlite.exec("BEGIN");
 
-        CREATE TABLE provider_connections (
+      try {
+        sqlite.exec(`
+        DROP INDEX IF EXISTS idx_provider_connections_status;
+        DROP INDEX IF EXISTS idx_provider_connections_template;
+        DROP INDEX IF EXISTS idx_provider_connections_provider_code_unique;
+        DROP INDEX IF EXISTS idx_provider_connections_provider_code;
+
+        CREATE TABLE provider_connections_new (
           id TEXT PRIMARY KEY,
           template_code TEXT NOT NULL CHECK (template_code IN (${providerTemplateCodeSqlValues})),
           provider_code TEXT CHECK (provider_code IN (${providerCodeSqlValues})),
@@ -274,7 +298,39 @@ const migrateProviderConnectionTables = (sqlite: ReturnType<typeof getSqlite>) =
           updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
 
-        INSERT INTO provider_connections (
+        ${
+          hasConnectionId
+            ? `INSERT INTO provider_connections_new (
+          id,
+          template_code,
+          provider_code,
+          display_name,
+          base_url,
+          api_key_encrypted,
+          is_system,
+          is_enabled,
+          status,
+          last_error,
+          last_synced_at,
+          created_at,
+          updated_at
+        )
+        SELECT
+          id,
+          template_code,
+          provider_code,
+          display_name,
+          base_url,
+          api_key_encrypted,
+          is_system,
+          is_enabled,
+          status,
+          last_error,
+          last_synced_at,
+          created_at,
+          updated_at
+        FROM provider_connections;`
+            : `INSERT INTO provider_connections_new (
           id,
           template_code,
           provider_code,
@@ -303,15 +359,23 @@ const migrateProviderConnectionTables = (sqlite: ReturnType<typeof getSqlite>) =
           last_synced_at,
           created_at,
           updated_at
-        FROM provider_connections_legacy;
+        FROM provider_connections;
+        `
+        }
 
-        DROP TABLE provider_connections_legacy;
+        DROP TABLE provider_connections;
+        ALTER TABLE provider_connections_new RENAME TO provider_connections;
       `);
 
-      sqlite.exec("COMMIT");
-    } catch (error) {
-      sqlite.exec("ROLLBACK");
-      throw error;
+        sqlite.exec("COMMIT");
+      } catch (error) {
+        sqlite.exec("ROLLBACK");
+        throw error;
+      }
+    } finally {
+      if (foreignKeysEnabled) {
+        sqlite.exec("PRAGMA foreign_keys = ON");
+      }
     }
   }
 
@@ -320,9 +384,10 @@ const migrateProviderConnectionTables = (sqlite: ReturnType<typeof getSqlite>) =
   }>;
   const providerModelsNeedsRebuild =
     providerModelColumns.length > 0 &&
-    (!providerModelColumns.some(
-      (column) => column.name === "provider_connection_id",
-    ) ||
+    (providerConnectionsNeedsRebuild ||
+      !providerModelColumns.some(
+        (column) => column.name === "provider_connection_id",
+      ) ||
       !tableSupportsAllProviderCodes(sqlite, "provider_models"));
 
   if (providerModelsNeedsRebuild) {
@@ -461,7 +526,8 @@ export const initializeModelConfigDatabase = (): void => {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_model_param_templates_type_key ON model_param_templates(model_type, param_key);
       CREATE INDEX IF NOT EXISTS idx_provider_connections_status ON provider_connections(status);
       CREATE INDEX IF NOT EXISTS idx_provider_connections_template ON provider_connections(template_code);
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_provider_connections_provider_code_unique ON provider_connections(provider_code) WHERE provider_code IS NOT NULL;
+      DROP INDEX IF EXISTS idx_provider_connections_provider_code_unique;
+      CREATE INDEX IF NOT EXISTS idx_provider_connections_provider_code ON provider_connections(provider_code);
       CREATE INDEX IF NOT EXISTS idx_provider_models_connection ON provider_models(provider_connection_id);
       CREATE INDEX IF NOT EXISTS idx_provider_models_provider_code ON provider_models(provider_code);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_provider_models_connection_remote ON provider_models(provider_connection_id, remote_model_id);

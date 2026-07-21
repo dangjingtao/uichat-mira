@@ -6,7 +6,7 @@
   "description": "Static documentation site for the project docs.",
   "scripts": {
     "build:index": "node ./scripts/build-docs-index.mjs",
-    "dev": "pnpm build:index && vite --host 127.0.0.1 --port 4280",
+    "dev": "pnpm build:index && vite --host 127.0.0.1",
     "build": "pnpm build:index && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

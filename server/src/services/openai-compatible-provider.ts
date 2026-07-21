@@ -8,6 +8,7 @@ import {
   isCloudflareBaseUrl,
   normalizeCloudflareOpenAICompatibleBaseUrl,
 } from "@/services/cloudflare-provider.js";
+import { resolveArkPlanModelsUrl } from "@/services/ark-plan-adapter.js";
 
 export type OpenAICompatibleContentPart =
   | {
@@ -50,7 +51,6 @@ type StoredProxySettings = {
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 const GOOGLE_OPENAI_COMPATIBLE_BASE_URL =
   "https://generativelanguage.googleapis.com/v1beta/openai";
-const VOLCENGINE_ARK_PLAN_PATH_PATTERN = /^\/api\/plan\/(v\d+)$/i;
 
 const isGoogleGenerativeLanguageBaseUrl = (baseUrl: string) => {
   const normalized = trimTrailingSlash(baseUrl.trim()).toLowerCase();
@@ -89,26 +89,6 @@ export const buildSocks5ProxyUrl = (settings: StoredProxySettings) => {
       : "";
 
   return `socks5://${auth}${host}:${port}`;
-};
-
-const resolveVolcengineArkCodingBaseUrl = (baseUrl: string) => {
-  const normalized = trimTrailingSlash(baseUrl.trim());
-
-  try {
-    const url = new URL(normalized);
-    const match = url.pathname.match(VOLCENGINE_ARK_PLAN_PATH_PATTERN);
-    if (!match) {
-      return null;
-    }
-
-    if (!/^ark\..+\.volces\.com$/i.test(url.hostname)) {
-      return null;
-    }
-
-    return `${url.origin}/api/coding/${match[1]}`;
-  } catch {
-    return null;
-  }
 };
 
 const toWebResponse = async (response: Awaited<ReturnType<typeof fetch>>) => {
@@ -179,14 +159,9 @@ export const createOpenAICompatibleChatUrl = (baseUrl: string) =>
 export const createOpenAICompatibleEmbeddingsUrl = (baseUrl: string) =>
   `${normalizeOpenAICompatibleBaseUrl(baseUrl)}/embeddings`;
 
-export const createOpenAICompatibleModelsUrl = (baseUrl: string) => {
-  const volcengineCodingBaseUrl = resolveVolcengineArkCodingBaseUrl(baseUrl);
-  if (volcengineCodingBaseUrl) {
-    return `${volcengineCodingBaseUrl}/models`;
-  }
-
-  return `${normalizeOpenAICompatibleBaseUrl(baseUrl)}/models`;
-};
+export const createOpenAICompatibleModelsUrl = (baseUrl: string) =>
+  resolveArkPlanModelsUrl(baseUrl) ??
+  `${normalizeOpenAICompatibleBaseUrl(baseUrl)}/models`;
 
 const toModelMessages = (
   messages: OpenAICompatibleChatMessage[],

@@ -18,7 +18,7 @@ export const PROVIDER_LABELS: Record<BuiltinProviderCode, string> = {
   openai: "OpenAI",
   google: "Google Gemini",
   cloudflare: "Cloudflare",
-  volcengine: "OpenAI兼容服务商",
+  volcengine: "火山引擎",
 };
 
 export const getProviderLabel = (providerCode: ProviderCode) =>

@@ -4,7 +4,6 @@ const fs = require("fs");
 const { spawn, spawnSync } = require("child_process");
 const { pathToFileURL } = require("url");
 
-const DESKTOP_PORT = 5173;
 const STARTUP_TIMEOUT_MS = 60000;
 const childProcesses = [];
 let isShuttingDown = false;
@@ -206,6 +205,7 @@ async function main() {
   const runtimeConfig = loadRuntimeConfig();
   const backendHost = runtimeConfig.backend.host;
   const backendPort = runtimeConfig.backend.port;
+  const desktopPort = runtimeConfig.dev.desktopPort;
   const backendHealthUrl = `http://${backendHost}:${backendPort}/health`;
   const workspaceRoot = path.resolve(__dirname, "..");
   const serverDir = path.join(workspaceRoot, "server");
@@ -220,8 +220,8 @@ async function main() {
   ]);
 
   const desktopAlreadyRunning =
-    (await isTcpPortOpen("localhost", DESKTOP_PORT)) ||
-    (await isTcpPortOpen("127.0.0.1", DESKTOP_PORT));
+    (await isTcpPortOpen("localhost", desktopPort)) ||
+    (await isTcpPortOpen("127.0.0.1", desktopPort));
   const backendAlreadyHealthy = await isBackendHealthy(backendHealthUrl);
 
   const waiters = [];
@@ -242,14 +242,14 @@ async function main() {
   }
 
   if (desktopAlreadyRunning) {
-    console.log(`Reusing existing desktop dev server on tcp://localhost:${DESKTOP_PORT}`);
+    console.log(`Reusing existing desktop dev server on tcp://localhost:${desktopPort}`);
   } else {
     console.log("Starting desktop dev server...");
     waiters.push(
       spawnManagedProcess("desktop", desktopDir, "pnpm dev", {
         readyWhen: (_text, combined) =>
-          combined.includes(`http://localhost:${DESKTOP_PORT}/`) ||
-          combined.includes(`http://127.0.0.1:${DESKTOP_PORT}/`),
+          combined.includes(`http://localhost:${desktopPort}/`) ||
+          combined.includes(`http://127.0.0.1:${desktopPort}/`),
       }),
     );
   }

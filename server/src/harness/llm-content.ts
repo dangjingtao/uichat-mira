@@ -93,7 +93,7 @@ const projectValue = (
   primaryArrayPath?: string,
 ): unknown => {
   if (value === primaryArray) {
-    return `[${primaryArray.length} item(s) projected separately from ${primaryArrayPath || "root"}]`;
+    return `[${primaryArray!.length} item(s) projected separately from ${primaryArrayPath || "root"}]`;
   }
 
   if (value === null || typeof value === "boolean" || typeof value === "number") {
@@ -193,7 +193,7 @@ const serializeProjectedValue = (
   stats: ProjectionStats,
   primaryArray?: unknown[],
   primaryArrayPath?: string,
-) => {
+): string => {
   try {
     const projected = projectValue(
       value,
@@ -295,8 +295,8 @@ const serializeCollectionFairly = (
     collectionItemCount: candidate.value.length,
     originalCharCount:
       metadataRaw.length +
-      selectedItems.reduce(
-        (sum, item) => sum + serializeProjectedValue(item, {
+      selectedItems.reduce<number>(
+        (sum: number, item: unknown) => sum + serializeProjectedValue(item, {
           omittedArrayItems: 0,
           omittedObjectKeys: 0,
           structuralTruncation: false,

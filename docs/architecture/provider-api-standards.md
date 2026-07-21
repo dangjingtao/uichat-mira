@@ -39,6 +39,10 @@ Last verified: 2026-06-24
 - `lmstudio`：本地 OpenAI-compatible server API
 - `ollama`：Ollama 原生 API，加上它的 OpenAI-compatible endpoint
 - `volcengine`：除非某条路由明确写了不同契约，否则默认按 OpenAI-compatible request / response shape 理解
+- `volcengine-code-plan`：火山引擎下的 Code Plan 连接模板，使用 Ark Coding Plan 的 OpenAI-compatible endpoint；模型列表使用 `/api/coding/vN`
+- `volcengine-agent-plan`：火山引擎下的 Agent Plan 连接模板，聊天使用 `/api/plan/vN`，模型列表复用已验证的 `/api/coding/vN/models` 目录请求
+
+两个 Plan 连接的 `providerCode` 都是 `volcengine`，通过不同的 `templateCode` 和 `providerConnectionId` 保存配置与模型绑定。两者都只承接文本模型角色，不作为 embedding、rerank 或生图服务商。
 
 ## 使用原则
 

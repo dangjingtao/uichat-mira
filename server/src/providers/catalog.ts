@@ -19,7 +19,8 @@ export type ProviderChatAdapter = "ollama" | "openai-compatible";
 export type ProviderEmbeddingAdapter =
   | "ollama"
   | "openai-compatible"
-  | "cloudflare";
+  | "cloudflare"
+  | "none";
 export type ProviderRerankAdapter = "openai-compatible" | "none";
 export type ProviderImageAdapter = "openai-images" | "none";
 
@@ -41,6 +42,7 @@ export interface ProviderDefinition {
   embeddingAdapter: ProviderEmbeddingAdapter;
   rerankAdapter: ProviderRerankAdapter;
   imageAdapter: ProviderImageAdapter;
+  supportedRoles?: ModelType[];
   callableModelIdPrefix?: string;
 }
 
@@ -102,13 +104,35 @@ export const PROVIDER_DEFINITIONS = {
   },
   volcengine: {
     code: "volcengine",
-    displayName: "OpenAI兼容服务商",
+    displayName: "火山引擎",
     defaultBaseUrl: "http://localhost:9997",
     syncAdapter: "openai-compatible",
     chatAdapter: "openai-compatible",
     embeddingAdapter: "openai-compatible",
     rerankAdapter: "openai-compatible",
     imageAdapter: "openai-images",
+  },
+  "volcengine-code-plan": {
+    code: "volcengine-code-plan",
+    displayName: "火山引擎 Code Plan",
+    defaultBaseUrl: "https://ark.cn-beijing.volces.com/api/coding/v3",
+    syncAdapter: "openai-compatible",
+    chatAdapter: "openai-compatible",
+    embeddingAdapter: "none",
+    rerankAdapter: "none",
+    imageAdapter: "none",
+    supportedRoles: ["llm", "task", "agentTask", "evaluation"],
+  },
+  "volcengine-agent-plan": {
+    code: "volcengine-agent-plan",
+    displayName: "火山引擎 Agent Plan",
+    defaultBaseUrl: "https://ark.cn-beijing.volces.com/api/plan/v3",
+    syncAdapter: "openai-compatible",
+    chatAdapter: "openai-compatible",
+    embeddingAdapter: "none",
+    rerankAdapter: "none",
+    imageAdapter: "none",
+    supportedRoles: ["llm", "task", "agentTask", "evaluation"],
   },
   "openai-compatible-custom": {
     code: "openai-compatible-custom",
@@ -122,13 +146,29 @@ export const PROVIDER_DEFINITIONS = {
   },
 } satisfies Record<ProviderTemplateCode, ProviderDefinition>;
 
-export const DEFAULT_PROVIDER_CONNECTIONS = PROVIDER_CODE_ENUM.map((code) => ({
-  id: code,
-  templateCode: code,
-  providerCode: code,
-  displayName: PROVIDER_DEFINITIONS[code].displayName,
-  baseUrl: PROVIDER_DEFINITIONS[code].defaultBaseUrl,
-})) as Array<{
+export const DEFAULT_PROVIDER_CONNECTIONS = [
+  ...PROVIDER_CODE_ENUM.map((code) => ({
+    id: code,
+    templateCode: code,
+    providerCode: code,
+    displayName: PROVIDER_DEFINITIONS[code].displayName,
+    baseUrl: PROVIDER_DEFINITIONS[code].defaultBaseUrl,
+  })),
+  {
+    id: "volcengine-code-plan",
+    templateCode: "volcengine-code-plan",
+    providerCode: "volcengine",
+    displayName: PROVIDER_DEFINITIONS["volcengine-code-plan"].displayName,
+    baseUrl: PROVIDER_DEFINITIONS["volcengine-code-plan"].defaultBaseUrl,
+  },
+  {
+    id: "volcengine-agent-plan",
+    templateCode: "volcengine-agent-plan",
+    providerCode: "volcengine",
+    displayName: PROVIDER_DEFINITIONS["volcengine-agent-plan"].displayName,
+    baseUrl: PROVIDER_DEFINITIONS["volcengine-agent-plan"].defaultBaseUrl,
+  },
+] as Array<{
   id: string;
   templateCode: ProviderTemplateCode;
   providerCode: ProviderCode;
@@ -166,14 +206,16 @@ export const getProviderCapabilities = (
   providerCode: ProviderTemplateCode,
 ): ProviderCapabilitySummary => {
   const definition = getProviderTemplateDefinition(providerCode);
-  const supportsRoles: ModelType[] = [
-    "llm",
-    "task",
-    "agentTask",
-    "evaluation",
-    "embedding",
-    "voice",
-  ];
+  const supportsRoles: ModelType[] = definition.supportedRoles
+    ? [...definition.supportedRoles]
+    : [
+        "llm",
+        "task",
+        "agentTask",
+        "evaluation",
+        "embedding",
+        "voice",
+      ];
 
   if (definition.rerankAdapter !== "none") {
     supportsRoles.push("rerank");

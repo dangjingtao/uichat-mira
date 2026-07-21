@@ -25,3 +25,31 @@ test("image-generation capability is declared independently from chat compatibil
   assert.equal(supportsRoleForProvider("volcengine", "imageGeneration"), true);
   assert.equal(supportsRoleForProvider("cloudflare", "imageGeneration"), false);
 });
+
+test("Volcengine Plan templates expose separate services under one provider", () => {
+  assert.equal(
+    getProviderDefinition("volcengine-code-plan").displayName,
+    "火山引擎 Code Plan",
+  );
+  assert.equal(
+    getProviderDefinition("volcengine-agent-plan").displayName,
+    "火山引擎 Agent Plan",
+  );
+  assert.equal(
+    getProviderDefinition("volcengine-code-plan").embeddingAdapter,
+    "none",
+  );
+  assert.equal(
+    getProviderDefinition("volcengine-agent-plan").embeddingAdapter,
+    "none",
+  );
+  assert.equal(supportsRoleForProvider("volcengine-code-plan", "task"), true);
+  assert.equal(
+    supportsRoleForProvider("volcengine-agent-plan", "agentTask"),
+    true,
+  );
+  assert.equal(
+    supportsRoleForProvider("volcengine-code-plan", "embedding"),
+    false,
+  );
+});

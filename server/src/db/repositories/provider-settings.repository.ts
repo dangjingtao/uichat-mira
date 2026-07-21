@@ -29,6 +29,11 @@ export const providerConnectionRepository = {
   },
 
   findByCode(providerCode: ProviderCode): ProviderConnection | undefined {
+    const legacySystemConnection = this.findById(providerCode);
+    if (legacySystemConnection?.providerCode === providerCode) {
+      return legacySystemConnection;
+    }
+
     const db = getDb();
     return db
       .select()
@@ -83,7 +88,9 @@ export const providerConnectionRepository = {
   upsertSystemConnection(
     data: Omit<NewProviderConnection, "createdAt" | "updatedAt"> & { id: string },
   ): ProviderConnection {
-    const existing = this.findById(data.id) ?? this.findByCode(data.providerCode!);
+    const existing =
+      this.findById(data.id) ??
+      (data.id === data.providerCode ? this.findByCode(data.providerCode!) : undefined);
 
     if (existing) {
       return (

@@ -5,7 +5,6 @@
   "identifier": "com.tomz.uichat",
   "build": {
     "beforeDevCommand": "pnpm internal:dev:tauri:services",
-    "devUrl": "http://localhost:5273",
     "beforeBuildCommand": "pnpm internal:prepare:tauri",
     "frontendDist": "../.artifacts/desktop/dist"
   },

@@ -6,6 +6,7 @@ import {
   streamOpenAICompatibleChat,
 } from "@/services/openai-compatible-provider.js";
 import { getProviderDefinition } from "@/providers/catalog.js";
+import { resolveArkPlanBaseUrl } from "@/services/ark-plan-adapter.js";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
 import { providerAttachmentResolver } from "./attachment-resolver.js";
 import {
@@ -29,12 +30,24 @@ const isOllamaThinkParam = (
   value === "medium" ||
   value === "high";
 
+const resolveChatBaseUrl = (resolved: ProviderResolution) => {
+  if (resolved.providerTemplateCode === "volcengine-code-plan") {
+    return resolveArkPlanBaseUrl("code-plan", resolved.baseUrl);
+  }
+
+  if (resolved.providerTemplateCode === "volcengine-agent-plan") {
+    return resolveArkPlanBaseUrl("agent-plan", resolved.baseUrl);
+  }
+
+  return resolved.baseUrl;
+};
+
 const getChatInvocationUrl = (resolved: ProviderResolution) => {
   switch (getProviderDefinition(resolved.providerCode).chatAdapter) {
     case "ollama":
       return `${resolved.baseUrl.replace(/\/+$/, "")}/api/chat`;
     case "openai-compatible":
-      return createOpenAICompatibleChatUrl(resolved.baseUrl);
+      return createOpenAICompatibleChatUrl(resolveChatBaseUrl(resolved));
     default:
       throw new Error(`Unsupported provider "${resolved.providerCode}"`);
   }
@@ -221,7 +234,7 @@ export const openAICompatibleChatAdapter: ChatProviderAdapter = {
     }
 
     yield* streamOpenAICompatibleChat({
-      baseUrl: resolved.baseUrl,
+      baseUrl: resolveChatBaseUrl(resolved),
       apiKey: resolved.apiKey,
       model: resolved.model,
       messages: openAiMessages,

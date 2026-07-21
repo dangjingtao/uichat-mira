@@ -11,7 +11,7 @@ type MarkdownTextProps = Omit<ComponentProps<typeof Streamdown>, "children"> & {
 };
 
 const defaultMarkdownClassName =
-  "max-w-none break-words text-text-primary [&_*]:border-cloudy-4/70 " +
+  "min-w-0 w-full max-w-none break-words [overflow-wrap:anywhere] text-text-primary [&_*]:border-cloudy-4/70 " +
   "[&_a]:text-text-primary [&_a]:underline [&_a]:decoration-cloudy-5 [&_a]:underline-offset-4 " +
   "[&_p]:leading-7 [&_p]:text-text-primary " +
   "[&_li]:text-text-primary [&_blockquote]:text-text-secondary";

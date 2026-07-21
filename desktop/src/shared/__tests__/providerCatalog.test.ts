@@ -25,7 +25,7 @@ describe("providerCatalog", () => {
   it("PROVIDER_LABELS 映射正确", () => {
     expect(PROVIDER_LABELS.ollama).toBe("Ollama");
     expect(PROVIDER_LABELS.openai).toBe("OpenAI");
-    expect(PROVIDER_LABELS.volcengine).toBe("OpenAI兼容服务商");
+    expect(PROVIDER_LABELS.volcengine).toBe("火山引擎");
   });
 
   it("getProviderLabel 返回对应标签", () => {

@@ -45,7 +45,7 @@ export function UChatAssistantAvatar({
 // UChatUserBubbleShell wraps user messages with the current house style.
 export function UChatUserBubbleShell({ children }: PropsWithChildren) {
   return (
-    <div className="flex max-w-[min(100%,32rem)] flex-col items-end rounded-[14px] bg-surface-secondary px-4 py-2.5 text-[15px] leading-[1.7] text-text-primary transition-colors duration-150 xl:max-w-[min(100%,34rem)]">
+    <div className="flex min-w-0 max-w-[min(100%,32rem)] flex-col items-end rounded-[14px] bg-surface-secondary px-4 py-2.5 text-[15px] leading-[1.7] text-text-primary transition-colors duration-150 xl:max-w-[min(100%,34rem)]">
       {children}
     </div>
   );
@@ -57,7 +57,7 @@ export function UChatAssistantBubbleShell({ children }: PropsWithChildren) {
   return (
     <div
       data-uchat-assistant-bubble="true"
-      className="block w-full rounded-[14px] bg-[linear-gradient(180deg,rgba(var(--color-surface-primary),0.56)_0%,rgba(var(--color-surface-primary),0.32)_100%)] px-1 py-2.5 text-[15px] leading-[1.72] text-text-primary"
+      className="block min-w-0 max-w-full w-full rounded-[14px] bg-[linear-gradient(180deg,rgba(var(--color-surface-primary),0.56)_0%,rgba(var(--color-surface-primary),0.32)_100%)] px-1 py-2.5 text-[15px] leading-[1.72] text-text-primary"
     >
       {children}
     </div>

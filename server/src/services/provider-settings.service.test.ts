@@ -6,6 +6,7 @@ import { getSqlite, resetDatabaseClients } from "@/db/index.js";
 import { initializeModelConfigDatabase } from "@/db/model-config.db";
 import {
   modelConfigRepository,
+  providerConnectionRepository,
   providerModelRepository,
 } from "@/db/repositories";
 import { modelConfigService } from "./model-config.service.js";
@@ -22,6 +23,47 @@ const testDbPath = createTimestampedTestArtifactPath(
 
 const legacyDb = new Database(testDbPath);
 legacyDb.exec(`
+  CREATE TABLE provider_connections (
+    id TEXT PRIMARY KEY,
+    template_code TEXT NOT NULL CHECK (template_code IN ('ollama', 'lmstudio', 'openai', 'google', 'cloudflare', 'volcengine', 'openai-compatible-custom')),
+    provider_code TEXT CHECK (provider_code IN ('ollama', 'lmstudio', 'openai', 'google', 'cloudflare', 'volcengine')),
+    display_name TEXT NOT NULL,
+    base_url TEXT NOT NULL DEFAULT '',
+    api_key_encrypted TEXT,
+    is_system INTEGER NOT NULL DEFAULT 0,
+    is_enabled INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL DEFAULT 'idle',
+    last_error TEXT,
+    last_synced_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE UNIQUE INDEX idx_provider_connections_provider_code_unique
+  ON provider_connections(provider_code)
+  WHERE provider_code IS NOT NULL;
+
+  INSERT INTO provider_connections (
+    id,
+    template_code,
+    provider_code,
+    display_name,
+    base_url,
+    is_system
+  ) VALUES (
+    'existing-custom-provider',
+    'openai-compatible-custom',
+    NULL,
+    'Existing Custom Provider',
+    'https://custom.example.com/v1',
+    0
+  );
+
+  CREATE TABLE provider_connection_reference_probe (
+    id TEXT PRIMARY KEY,
+    provider_connection_id TEXT REFERENCES provider_connections(id)
+  );
+
   CREATE TABLE model_configs (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL CHECK (type IN ('llm', 'embedding', 'rerank', 'task', 'evaluation')),
@@ -90,12 +132,23 @@ test("initializeModelConfigDatabase upgrades legacy model-role tables and seeds 
       "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'model_param_templates'",
     )
     .get() as { sql?: string } | undefined;
+  const providerConnectionSql = sqlite
+    .prepare(
+      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'provider_connections'",
+    )
+    .get() as { sql?: string } | undefined;
+  const providerReferenceForeignKeys = sqlite
+    .prepare("PRAGMA foreign_key_list(provider_connection_reference_probe)")
+    .all() as Array<{ table: string }>;
 
   assert.ok(modelConfigSql?.sql?.includes("'agentTask'"));
   assert.ok(modelConfigSql?.sql?.includes("'imageGeneration'"));
   assert.ok(modelConfigSql?.sql?.includes("'google'"));
   assert.ok(templateSql?.sql?.includes("'agentTask'"));
   assert.ok(templateSql?.sql?.includes("'imageGeneration'"));
+  assert.ok(providerConnectionSql?.sql?.includes("'volcengine-code-plan'"));
+  assert.ok(providerConnectionSql?.sql?.includes("'volcengine-agent-plan'"));
+  assert.equal(providerReferenceForeignKeys[0]?.table, "provider_connections");
 
   const agentTaskConfig = modelConfigRepository.findDefaultByType("agentTask");
   const imageGenerationConfig =
@@ -119,6 +172,17 @@ test("initializeModelConfigDatabase upgrades legacy model-role tables and seeds 
   const paramTemplates = modelConfigService.getParamTemplates();
   assert.equal(paramTemplates.agentTask.length, 6);
   assert.equal(paramTemplates.imageGeneration.length, 1);
+
+  const codePlan = providerConnectionRepository.findById("volcengine-code-plan");
+  const agentPlan = providerConnectionRepository.findById("volcengine-agent-plan");
+  const existingCustom = providerConnectionRepository.findById(
+    "existing-custom-provider",
+  );
+  assert.equal(codePlan?.templateCode, "volcengine-code-plan");
+  assert.equal(agentPlan?.templateCode, "volcengine-agent-plan");
+  assert.equal(codePlan?.providerCode, "volcengine");
+  assert.equal(agentPlan?.providerCode, "volcengine");
+  assert.equal(existingCustom?.displayName, "Existing Custom Provider");
 });
 
 test("initializeModelConfigDatabase upgrades legacy provider_code constraint so google role binding can persist", () => {
@@ -195,6 +259,23 @@ test("provider settings expose image adapter capability for openai", () => {
 
   assert.equal(detail.provider.capabilities.imageAdapter, "openai-images");
   assert.ok(detail.provider.capabilities.supportsRoles.includes("imageGeneration"));
+});
+
+test("provider settings expose independent Ark Plan templates", () => {
+  const templates = providerSettingsService.listProviderTemplates();
+  const codePlan = templates.find(
+    (template) => template.code === "volcengine-code-plan",
+  );
+  const agentPlan = templates.find(
+    (template) => template.code === "volcengine-agent-plan",
+  );
+
+  assert.equal(codePlan?.displayName, "火山引擎 Code Plan");
+  assert.equal(agentPlan?.displayName, "火山引擎 Agent Plan");
+  assert.equal(codePlan?.capabilities.embeddingAdapter, "none");
+  assert.equal(agentPlan?.capabilities.embeddingAdapter, "none");
+  assert.equal(codePlan?.isCustomTemplate, false);
+  assert.equal(agentPlan?.isCustomTemplate, false);
 });
 
 test("custom openai-compatible provider exposes image adapter capability", () => {

@@ -188,11 +188,9 @@ export const providerConnections = sqliteTable(
       table.status,
     ),
     templateIdx: index("idx_provider_connections_template").on(table.templateCode),
-    legacyProviderCodeUniqueIdx: uniqueIndex(
-      "idx_provider_connections_provider_code_unique",
-    )
-      .on(table.providerCode)
-      .where(sql`${table.providerCode} IS NOT NULL`),
+    providerCodeIdx: index("idx_provider_connections_provider_code").on(
+      table.providerCode,
+    ),
   }),
 );
 

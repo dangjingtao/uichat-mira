@@ -97,9 +97,28 @@ function copyPackage(packageName) {
     throw new Error(`Cannot find package ${packageName} at ${source}`);
   }
 
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
   fs.rmSync(destination, { recursive: true, force: true });
   fs.cpSync(source, destination, { recursive: true, dereference: true });
   console.log(`Copied native package ${packageName}`);
+}
+
+function copyPackageTree(packageName, copied = new Set()) {
+  if (copied.has(packageName)) {
+    return;
+  }
+
+  copied.add(packageName);
+  const source = resolveInstalledPackageSource(packageName);
+  if (!source) {
+    throw new Error(`Cannot find installed package ${packageName}`);
+  }
+
+  copyPackage(packageName);
+  const packageJson = readPackageJson(source);
+  for (const dependencyName of Object.keys(packageJson.dependencies ?? {})) {
+    copyPackageTree(dependencyName, copied);
+  }
 }
 
 function writeBackendPackageJson() {
@@ -119,7 +138,9 @@ function writeBackendPackageJson() {
     type: "commonjs",
     dependencies: {
       "better-sqlite3": serverPackage.dependencies["better-sqlite3"],
+      jsdom: serverPackage.dependencies.jsdom,
       "playwright-core": serverPackage.dependencies["playwright-core"],
+      sharp: serverPackage.dependencies.sharp,
       "sqlite-vec": serverPackage.dependencies["sqlite-vec"],
       bindings: "^1.5.0",
       "file-uri-to-path": "^1.0.0",
@@ -148,12 +169,24 @@ build({
   format: "cjs",
   outfile: path.join(outputDir, "server.cjs"),
   absWorkingDir: __dirname,
-  external: ["better-sqlite3", "playwright-core", "sqlite-vec"],
+  external: [
+    "better-sqlite3",
+    "jsdom",
+    "playwright-core",
+    "sharp",
+    "sqlite-vec",
+  ],
 })
   .then(() => {
     console.log("Server bundle completed, copying native modules...");
     copyPackage("better-sqlite3");
+    copyPackageTree("jsdom");
     copyPackage("playwright-core");
+    copyPackage("sharp");
+    copyPackage("detect-libc");
+    copyPackage("semver");
+    copyPackage("@img/colour");
+    copyPackage("@img/sharp-win32-x64");
     copyPackage("sqlite-vec");
     copyPackage("sqlite-vec-windows-x64");
     copyPackage("bindings");
