@@ -194,7 +194,7 @@ const NATIVE_MESSAGING_ALLOWED_ORIGINS = [
   // Development unpacked extension signed by mira-clipper-dev.pem.
   "chrome-extension://omdcdmcedejkenmjmkepgpinnehhmfkj/",
   // Production CRX signed by mira-clipper-prod.pem.
-  "chrome-extension://dfmdfjipkdhegdgojlhkmlehnanljppg/",
+  "chrome-extension://nmoaglalgogogfaednbhpfadmdlpelag/",
 ];
 
 function getNativeHostManifestPath() {

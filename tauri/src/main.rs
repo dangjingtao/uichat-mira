@@ -505,7 +505,12 @@ fn get_native_host_source_path() -> PathBuf {
 
 const NATIVE_MESSAGING_HOST_NAME: &str = "com.tomz.uichat.webbridge";
 const NATIVE_MESSAGING_REGISTRY_KEY: &str = "HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.tomz.uichat.webbridge";
-const NATIVE_MESSAGING_ALLOWED_ORIGIN: &str = "chrome-extension://gmgdbphkmkdedfabchklghghdcpjepoc/";
+const NATIVE_MESSAGING_ALLOWED_ORIGINS: &[&str] = &[
+    // Development unpacked extension signed by mira-clipper-dev.pem.
+    "chrome-extension://omdcdmcedejkenmjmkepgpinnehhmfkj/",
+    // Production CRX signed by mira-clipper-prod.pem.
+    "chrome-extension://nmoaglalgogogfaednbhpfadmdlpelag/",
+];
 
 fn native_paths_equal(left: &Path, right: &Path) -> bool {
     left.to_string_lossy().eq_ignore_ascii_case(&right.to_string_lossy())
@@ -571,14 +576,16 @@ fn get_native_messaging_host_status_command<R: tauri::Runtime>(app: tauri::AppHa
             None => return Ok(serde_json::json!({ "status": "repair_needed", "installed": false, "reason": "Native manifest 无法读取" })),
         };
         let host_path = manifest.get("path").and_then(|value| value.as_str()).map(PathBuf::from);
-        let allowed_origin_matches = manifest
+        let allowed_origins_match = manifest
             .get("allowed_origins")
             .and_then(|value| value.as_array())
-            .map(|origins| origins.iter().any(|origin| origin.as_str() == Some(NATIVE_MESSAGING_ALLOWED_ORIGIN)))
+            .map(|origins| NATIVE_MESSAGING_ALLOWED_ORIGINS.iter().all(|allowed_origin| {
+                origins.iter().any(|origin| origin.as_str() == Some(*allowed_origin))
+            }))
             .unwrap_or(false);
         if manifest.get("name").and_then(|value| value.as_str()) != Some(NATIVE_MESSAGING_HOST_NAME)
             || manifest.get("type").and_then(|value| value.as_str()) != Some("stdio")
-            || !allowed_origin_matches {
+            || !allowed_origins_match {
             return Ok(serde_json::json!({ "status": "repair_needed", "installed": false, "reason": "Native manifest 配置不匹配" }));
         }
         let Some(host_path) = host_path else {
@@ -627,7 +634,7 @@ fn install_native_messaging_host_command<R: tauri::Runtime>(app: tauri::AppHandl
             "description": "触界 Native Messaging Host",
             "path": host_path,
             "type": "stdio",
-            "allowed_origins": [NATIVE_MESSAGING_ALLOWED_ORIGIN]
+            "allowed_origins": NATIVE_MESSAGING_ALLOWED_ORIGINS
         });
         std::fs::write(&manifest_path, serde_json::to_vec_pretty(&manifest).map_err(|error| error.to_string())?)
             .map_err(|error| format!("Failed to write Native Messaging manifest: {error}"))?;
