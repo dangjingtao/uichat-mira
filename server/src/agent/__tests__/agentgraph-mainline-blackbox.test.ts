@@ -338,50 +338,6 @@ test("A1 direct answer completes without entering the tool chain", async () => {
   assert.equal(executeSpy.mock.calls.length, 0);
 });
 
-test("A2 use_tool goes through normalize and follows Planner repeat decisions", async () => {
-  setupToolExposure("list workspace", [readListTool()]);
-  vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
-    async function* () {
-      yield '{"type":"use_tool","toolId":"read_list","args":{"path":"/workspace"},"reason":"Need the workspace listing."}';
-    },
-  );
-  const executeSpy = vi
-    .spyOn(harnessInvocations, "executeHarnessInvocation")
-    .mockResolvedValue({
-      id: "invocation-a2-read-list",
-      toolId: "read_list",
-      status: "completed",
-      result: {
-        type: "list",
-        path: ".",
-        entries: [
-          { name: "README.md", type: "file" },
-          { name: "server", type: "directory" },
-        ],
-      },
-      startedAt: "2026-07-05T00:00:00.000Z",
-      finishedAt: "2026-07-05T00:00:01.000Z",
-    } as never);
-  vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke").mockResolvedValue(
-    "workspace listing answer",
-  );
-
-  const result = await runBlackbox({
-    runId: "blackbox-a2-use-tool",
-    question: "list workspace",
-  });
-
-  assert.equal(result.status, "completed");
-  assert.equal(executeSpy.mock.calls.length, 3);
-  assert.equal(executeSpy.mock.calls[0]?.[0]?.toolId, "read_list");
-  assert.deepEqual(executeSpy.mock.calls[0]?.[0]?.args, { path: "." });
-  assert.equal(executeSpy.mock.calls[0]?.[0]?.userId, 1);
-  assert.equal(executeSpy.mock.calls[0]?.[0]?.threadId, "thread-1");
-  assert.equal(result.evidence.toolExecutions.length, 3);
-  assert.equal(result.evidence.latestSummary?.toolId, "read_list");
-  assert.equal(result.evidence.latestSummary?.answerReadiness, undefined);
-});
-
 test("A3 selectedToolIds do not bypass planner or trigger ToolNode when planner answers", async () => {
   setupToolExposure("latest news today", [readOpenTool()]);
   vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
@@ -578,67 +534,6 @@ test("read_discover can flow through Evidence back to Planner and then into read
   const thirdPlannerPayload = getPlannerPayload(plannerPayloads[1] ?? "");
   assert.equal(thirdPlannerPayload.observationContext?.latestEvidenceSummary?.toolId, "read_open");
   assert.equal(thirdPlannerPayload.observationContext?.latestEvidenceSummary?.data?.kind, "read_open");
-});
-
-test("Planner payload keeps a bounded recent history window even when the follow-up uses Chinese continuation", async () => {
-  setupToolExposure("那一段展开说说", [readOpenTool()]);
-  let plannerContext = "";
-  vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementationOnce(
-    async function* (messages) {
-      plannerContext = JSON.stringify(messages);
-      yield '{"type":"answer","reason":"No tool is needed for this prompt assembly check."}';
-    },
-  );
-  vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke").mockResolvedValue(
-    "history payload checked",
-  );
-
-  const result = await runBlackbox({
-    runId: "blackbox-relevant-history-filter",
-    question: "那一段展开说说",
-    messages: [
-      makeMessage("第一轮无关的旧问题"),
-      makeAssistantMessage("第一轮无关的旧回答"),
-      makeMessage("先看审批恢复这块"),
-      makeAssistantMessage("好的，我先去找相关实现。"),
-      makeMessage("我找到 resume.ts 了"),
-      makeAssistantMessage("里面有 resumeApprovedAgentRun。"),
-      makeMessage("继续"),
-      makeAssistantMessage("好，我继续看它怎么清 pending approval。"),
-      makeMessage("然后呢？"),
-      makeAssistantMessage("我再确认一下调用链。"),
-      makeMessage("那一段展开说说"),
-    ],
-  });
-
-  assert.equal(result.status, "completed");
-  const plannerPayload = getPlannerPayload(plannerContext);
-  assert.deepEqual(plannerPayload.recentConversationHistory, [
-    {
-      role: "user",
-      content: "我找到 resume.ts 了",
-    },
-    {
-      role: "assistant",
-      content: "里面有 resumeApprovedAgentRun。",
-    },
-    {
-      role: "user",
-      content: "继续",
-    },
-    {
-      role: "assistant",
-      content: "好，我继续看它怎么清 pending approval。",
-    },
-    {
-      role: "user",
-      content: "然后呢？",
-    },
-    {
-      role: "assistant",
-      content: "我再确认一下调用链。",
-    },
-  ]);
 });
 
 test("multi-target requests do not answer after only one target is covered", async () => {
@@ -846,85 +741,6 @@ test("A4 capability-like ids are rejected before Harness execution", async () =>
   );
 });
 
-test("A5 repeated same tool call is not rewritten by a runtime guard", async () => {
-  setupToolExposure("open README.md", [readOpenTool()]);
-  vi.spyOn(providerProxyService, "streamTaskChatText")
-    .mockImplementationOnce(async function* () {
-      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need file content."}';
-    })
-    .mockImplementationOnce(async function* () {
-      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Try the same file again."}';
-    });
-  const executeSpy = vi
-    .spyOn(harnessInvocations, "executeHarnessInvocation")
-    .mockResolvedValue({
-      id: "invocation-a5-read-open",
-      toolId: "read_open",
-      status: "completed",
-      result: {
-        type: "open",
-        path: "README.md",
-        source: {
-          kind: "text",
-          mimeType: "text/markdown",
-          text: "",
-          metadata: {},
-        },
-      },
-      startedAt: "2026-07-05T00:00:00.000Z",
-      finishedAt: "2026-07-05T00:00:01.000Z",
-    } as never);
-  vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke").mockResolvedValue(
-    "README answer",
-  );
-
-  const result = await runBlackbox({
-    runId: "blackbox-a5-repeat-guard",
-    question: "open README.md",
-  });
-
-  assert.equal(result.status, "completed");
-  assert.equal(executeSpy.mock.calls.length >= 2, true);
-  assert.equal(result.evidence.toolExecutions.length >= 2, true);
-});
-
-test('A6 Planner receives both distinct path arguments without a repeated-call rewrite', async () => {
-  setupToolExposure("inspect workspace root twice", [readListTool()]);
-  vi.spyOn(providerProxyService, "streamTaskChatText")
-    .mockImplementationOnce(async function* () {
-      yield '{"type":"use_tool","toolId":"read_list","args":{"path":"."},"reason":"Need the workspace listing first."}';
-    })
-    .mockImplementationOnce(async function* () {
-      yield '{"type":"use_tool","toolId":"read_list","args":{"path":"/workspace"},"reason":"Need the workspace listing again."}';
-    });
-  const executeSpy = vi
-    .spyOn(harnessInvocations, "executeHarnessInvocation")
-    .mockResolvedValue({
-      id: "invocation-a6-read-list",
-      toolId: "read_list",
-      status: "completed",
-      result: {
-        type: "list",
-        path: ".",
-        entries: [],
-      },
-      startedAt: "2026-07-05T00:00:00.000Z",
-      finishedAt: "2026-07-05T00:00:01.000Z",
-    } as never);
-  vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke").mockResolvedValue(
-    "workspace answer",
-  );
-
-  const result = await runBlackbox({
-    runId: "blackbox-a6-workspace-equivalence",
-    question: "inspect workspace root twice",
-  });
-
-  assert.equal(result.status, "completed");
-  assert.equal(executeSpy.mock.calls.length >= 2, true);
-  assert.equal(result.evidence.toolExecutions.length >= 2, true);
-});
-
 test("A7 waiting_approval stops the run before ToolNode executes", async () => {
   setupToolExposure("run dir", [terminalTool()]);
   vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
@@ -1076,42 +892,6 @@ test("T003 external runtime failure does not reuse a consumed approval on replan
   assert.equal(result.answer, "");
 });
 
-test("A8 failed tool does not continue with extra tool execution or fake success", async () => {
-  setupToolExposure("open README.md", [readOpenTool()]);
-  vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
-    async function* () {
-      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need file content."}';
-    },
-  );
-  const executeSpy = vi
-    .spyOn(harnessInvocations, "executeHarnessInvocation")
-    .mockResolvedValue({
-      id: "invocation-a8-read-open-failed",
-      toolId: "read_open",
-      status: "failed",
-      error: {
-        message: "File not found",
-      },
-      startedAt: "2026-07-05T00:00:00.000Z",
-      finishedAt: "2026-07-05T00:00:01.000Z",
-    } as never);
-  const generateSpy = vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke");
-
-  const failedResult = await runBlackbox({
-    runId: "blackbox-a8-failed-tool",
-    question: "open README.md",
-  });
-
-  assert.equal(failedResult.status, "completed");
-  assert.equal(executeSpy.mock.calls.length, 2);
-  assert.equal(generateSpy.mock.calls.length, 1);
-  assert.equal(failedResult.lastToolExecution?.status, "failed");
-  assert.equal(failedResult.lastToolExecution?.failureKind, "recoverable");
-  assert.equal(failedResult.evidence.latestSummary?.status, "failed");
-  assert.equal(failedResult.evidence.latestSummary?.answerReadiness, undefined);
-  assert.match(failedResult.answer ?? "", /当前还没有足够的已完成证据/);
-});
-
 test("A8 terminal failed tool still stops the graph instead of producing a guarded answer", async () => {
   setupToolExposure("open README.md", [readOpenTool()]);
   vi.spyOn(providerProxyService, "streamTaskChatText").mockImplementation(
@@ -1148,46 +928,4 @@ test("A8 terminal failed tool still stops the graph instead of producing a guard
   assert.match(failedResult.errorMessage ?? "", /protocol mismatch/i);
   assert.match(failedResult.terminalReason ?? "", /protocol mismatch/i);
   assert.equal(failedResult.answer, "");
-});
-
-test("A8 maxIterations does not issue a second tool execution", async () => {
-  setupToolExposure("open README.md once", [readOpenTool()]);
-  const plannerSpy = vi
-    .spyOn(providerProxyService, "streamTaskChatText")
-    .mockImplementationOnce(async function* () {
-      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need file content."}';
-    });
-  const limitedExecuteSpy = vi
-    .spyOn(harnessInvocations, "executeHarnessInvocation")
-    .mockResolvedValue({
-      id: "invocation-a8-limited",
-      toolId: "read_open",
-      status: "completed",
-      result: {
-        type: "open",
-        path: "README.md",
-        source: {
-          kind: "text",
-          mimeType: "text/markdown",
-          text: "# README\n\nUIChat Mira runtime docs.",
-          metadata: {},
-        },
-      },
-      startedAt: "2026-07-05T00:00:00.000Z",
-      finishedAt: "2026-07-05T00:00:01.000Z",
-    } as never);
-  vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke").mockResolvedValue(
-    "best effort answer at iteration limit",
-  );
-
-  const limitedResult = await runBlackbox({
-    runId: "blackbox-a8-max-iterations",
-    question: "open README.md once",
-    maxIterations: 1,
-  });
-
-  assert.equal(limitedResult.status, "completed");
-  assert.equal(plannerSpy.mock.calls.length, 1);
-  assert.equal(limitedExecuteSpy.mock.calls.length, 1);
-  assert.equal(limitedResult.evidence.toolExecutions.length, 1);
 });

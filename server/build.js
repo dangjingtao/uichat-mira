@@ -37,6 +37,7 @@ function copyToolsDir() {
 function copyStaticDir() {
   const staticSource = path.join(__dirname, "static");
   const staticDest = path.join(outputDir, "static");
+  const swaggerUiPackageSource = resolveInstalledPackageSource("@fastify/swagger-ui");
   const brandingLogoSource = path.join(
     projectRoot,
     "desktop",
@@ -56,7 +57,17 @@ function copyStaticDir() {
     throw new Error(`Missing branding logo: ${brandingLogoSource}`);
   }
 
+  if (!swaggerUiPackageSource) {
+    throw new Error("Cannot find installed package for @fastify/swagger-ui");
+  }
+
+  const swaggerUiLogoSource = path.join(swaggerUiPackageSource, "logo.svg");
+  if (!fs.existsSync(swaggerUiLogoSource)) {
+    throw new Error(`Missing Swagger UI logo: ${swaggerUiLogoSource}`);
+  }
+
   fs.copyFileSync(brandingLogoSource, path.join(staticDest, "logo.png"));
+  fs.copyFileSync(swaggerUiLogoSource, path.join(staticDest, "logo.svg"));
   console.log(`Copied static assets: ${staticDest}`);
 }
 

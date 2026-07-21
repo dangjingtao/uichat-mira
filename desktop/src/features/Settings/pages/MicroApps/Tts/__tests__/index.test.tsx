@@ -15,6 +15,11 @@ const apiMocks = vi.hoisted(() => ({
   updateTtsProvider: vi.fn(),
 }));
 
+const providerConfigMocks = vi.hoisted(() => ({
+  get: vi.fn(),
+  save: vi.fn(),
+}));
+
 const storeMocks = vi.hoisted(() => ({
   deleteStoredGptSovitsRefAudio: vi.fn(),
   listStoredGptSovitsRefAudios: vi.fn(),
@@ -36,6 +41,11 @@ vi.mock("@/shared/api/tts", () => ({
   getTtsOverview: apiMocks.getTtsOverview,
   getTtsVoices: apiMocks.getTtsVoices,
   updateTtsProvider: apiMocks.updateTtsProvider,
+}));
+
+vi.mock("@/shared/api/modelSettings", () => ({
+  getMicroAppProviderConfig: providerConfigMocks.get,
+  saveMicroAppProviderConfig: providerConfigMocks.save,
 }));
 
 vi.mock("../gptSovitsRefAudioStore", () => ({
@@ -350,6 +360,8 @@ describe("TtsStudioPage", () => {
     apiMocks.getTtsOverview.mockReset();
     apiMocks.getTtsVoices.mockReset();
     apiMocks.updateTtsProvider.mockReset();
+    providerConfigMocks.get.mockReset();
+    providerConfigMocks.save.mockReset();
     storeMocks.deleteStoredGptSovitsRefAudio.mockReset();
     storeMocks.listStoredGptSovitsRefAudios.mockReset();
     storeMocks.saveStoredGptSovitsRefAudio.mockReset();
@@ -372,6 +384,15 @@ describe("TtsStudioPage", () => {
         modelName: "gpt-4o-mini-tts",
         errorMessage: null,
       },
+    });
+    providerConfigMocks.get.mockResolvedValue(null);
+    providerConfigMocks.save.mockResolvedValue({
+      app: "tts",
+      kind: "volcengine",
+      baseUrl: "https://openspeech.bytedance.com/api/v3/tts",
+      apiKey: "test-api-key",
+      modelId: "seed-tts-2.0",
+      updatedAt: "2026-07-10T09:00:00.000Z",
     });
     storeMocks.listStoredGptSovitsRefAudios.mockResolvedValue([]);
     URL.revokeObjectURL = vi.fn();
@@ -539,6 +560,8 @@ describe("TtsStudioPage", () => {
       expect(apiMocks.getApiProviderCatalog).toHaveBeenCalledTimes(1);
     });
 
+    expect(screen.getAllByRole("button", { name: "保存配置" })).toHaveLength(1);
+
     fireEvent.click(screen.getByRole("button", { name: "开始合成" }));
 
     await waitFor(() => {
@@ -551,6 +574,57 @@ describe("TtsStudioPage", () => {
           speed: 1,
         }),
       );
+    });
+  });
+
+  it("saves both API provider configurations from the single save entry", async () => {
+    apiMocks.getTtsOverview.mockResolvedValue({
+      providers,
+      recentJobs: [],
+    });
+    apiMocks.updateTtsProvider.mockResolvedValue({});
+    providerConfigMocks.get.mockResolvedValue({
+      app: "tts",
+      kind: "volcengine",
+      baseUrl: "https://openspeech.bytedance.com/api/v3/tts",
+      apiKey: "test-api-key",
+      modelId: "seed-tts-2.0",
+      updatedAt: "2026-07-10T09:00:00.000Z",
+    });
+
+    render(<TtsStudioPage />);
+
+    await waitFor(() => {
+      expect(apiMocks.getTtsOverview).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "API服务商" }));
+
+    await waitFor(() => {
+      expect(apiMocks.getApiProviderCatalog).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
+
+    await waitFor(() => {
+      expect(providerConfigMocks.save).toHaveBeenCalledWith("tts", {
+        kind: "volcengine",
+        baseUrl: "https://openspeech.bytedance.com/api/v3/tts",
+        apiKey: "test-api-key",
+        modelId: "seed-tts-2.0",
+      });
+      expect(apiMocks.updateTtsProvider).toHaveBeenCalledWith(
+        "api_provider",
+        expect.objectContaining({
+          displayName: "API服务商",
+          config: expect.objectContaining({
+            voice: "alloy",
+            responseFormat: "mp3",
+            speed: 1,
+          }),
+        }),
+      );
+      expect(providerConfigMocks.get).toHaveBeenCalledTimes(2);
     });
   });
 

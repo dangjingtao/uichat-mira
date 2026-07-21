@@ -96,15 +96,13 @@ describe("ModelSettings", () => {
     };
     await onConfirm();
 
-    expect(resetProviderRoleModelMock).toHaveBeenCalledTimes(8);
+    expect(resetProviderRoleModelMock).toHaveBeenCalledTimes(6);
     expect(resetProviderRoleModelMock).toHaveBeenCalledWith("llm");
     expect(resetProviderRoleModelMock).toHaveBeenCalledWith("embedding");
     expect(resetProviderRoleModelMock).toHaveBeenCalledWith("rerank");
     expect(resetProviderRoleModelMock).toHaveBeenCalledWith("task");
     expect(resetProviderRoleModelMock).toHaveBeenCalledWith("agentTask");
     expect(resetProviderRoleModelMock).toHaveBeenCalledWith("evaluation");
-    expect(resetProviderRoleModelMock).toHaveBeenCalledWith("imageGeneration");
-    expect(resetProviderRoleModelMock).toHaveBeenCalledWith("voice");
     await waitFor(() => {
       expect(messageSuccess).toHaveBeenCalledWith(
         "settings.model.resetModal.success",

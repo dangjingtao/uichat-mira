@@ -337,14 +337,23 @@ const PlatformConfigModal = forwardRef<
           getProviderTemplates(),
         ]);
         setProviderTemplates(nextTemplates);
+        const availableProviders = selectionRole
+          ? nextProviders.filter((provider) =>
+              provider.capabilities.supportsRoles.includes(selectionRole),
+            )
+          : nextProviders;
         const initialProvider = !hasResolvedInitialProvider
-          ? nextProviders.find((item) => item.code === preferredInitialProviderCode)
+          ? availableProviders.find(
+              (item) => item.code === preferredInitialProviderCode,
+            )
               ?.code ??
-            nextProviders.find((item) => item.code === selectedProviderCode)?.code ??
-            nextProviders[0]?.code ??
+            availableProviders.find((item) => item.code === selectedProviderCode)
+              ?.code ??
+            availableProviders[0]?.code ??
             DEFAULT_PROVIDER_CODE
-          : nextProviders.find((item) => item.code === selectedProviderCode)?.code ??
-            nextProviders[0]?.code ??
+          : availableProviders.find((item) => item.code === selectedProviderCode)
+              ?.code ??
+            availableProviders[0]?.code ??
             DEFAULT_PROVIDER_CODE;
         setSelectedProviderCode(initialProvider);
         if (!hasResolvedInitialProvider) {
@@ -370,16 +379,20 @@ const PlatformConfigModal = forwardRef<
 
   const filteredProviders = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
-    if (!normalizedQuery) {
-      return providers;
-    }
+    const roleProviders = selectionRole
+      ? providers.filter((provider) =>
+          provider.capabilities.supportsRoles.includes(selectionRole),
+        )
+      : providers;
 
-    return providers.filter((provider) =>
+    if (!normalizedQuery) return roleProviders;
+
+    return roleProviders.filter((provider) =>
       [provider.displayName, provider.code, provider.baseUrl].some((value) =>
         value.toLowerCase().includes(normalizedQuery),
       ),
     );
-  }, [providers, searchQuery]);
+  }, [providers, searchQuery, selectionRole]);
 
   const customProviderTemplate = useMemo(
     () =>

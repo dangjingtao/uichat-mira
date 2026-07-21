@@ -27,6 +27,7 @@ import {
 import { message } from "@/shared/ui/Message";
 import { ApiError, ErrorCodes } from "@/shared/lib/request";
 import MicroAppPageLayout from "../components/MicroAppPageLayout";
+import MicroAppProviderEditor from "../components/MicroAppProviderEditor";
 import {
   getApiProviderCatalog,
   createGptSovitsSynthesis,
@@ -45,6 +46,10 @@ import {
   type TtsSynthesisJobRecord,
   type TtsVoiceSummary,
 } from "@/shared/api/tts";
+import {
+  getMicroAppProviderConfig,
+  saveMicroAppProviderConfig,
+} from "@/shared/api/modelSettings";
 import {
   deleteStoredGptSovitsRefAudio,
   listStoredGptSovitsRefAudios,
@@ -267,6 +272,16 @@ export default function TtsStudioPage() {
   const [gptCatalog, setGptCatalog] = useState<GptSovitsCatalog | null>(null);
   const [apiProviderCatalog, setApiProviderCatalog] =
     useState<ApiProviderCatalog | null>(null);
+  const voiceProviders = [
+    { id: "volcengine", displayName: "火山引擎" },
+    { id: "openai-compatible", displayName: "OpenAI 兼容" },
+  ];
+  const [voiceDraft, setVoiceDraft] = useState({
+    providerId: "",
+    baseUrl: "",
+    apiKey: "",
+    modelId: "",
+  });
   const [gptForm, setGptForm] = useState<GptSovitsFormState>({
     promptText: "",
     text: "你好，这里是 UIChat Mira 的 GPT-SoVITS 微应用调试页。",
@@ -497,6 +512,20 @@ export default function TtsStudioPage() {
     try {
       const result = await getApiProviderCatalog();
       setApiProviderCatalog(result.catalog);
+      setApiProviderCatalogLoading(false);
+      try {
+        const saved = await getMicroAppProviderConfig("tts");
+        if (saved) {
+          setVoiceDraft({
+            providerId: saved.kind,
+            baseUrl: saved.baseUrl,
+            apiKey: saved.apiKey,
+            modelId: saved.modelId,
+          });
+        }
+      } catch {
+        // The micro-app config is optional until the user saves it.
+      }
     } catch (error) {
       setApiProviderCatalog(null);
       message.error(
@@ -506,6 +535,11 @@ export default function TtsStudioPage() {
       setApiProviderCatalogLoading(false);
     }
   };
+
+  const canSaveVoiceProviderConfig =
+    Boolean(voiceDraft.providerId) &&
+    Boolean(voiceDraft.baseUrl.trim()) &&
+    Boolean(voiceDraft.modelId.trim());
 
   useEffect(() => {
     void loadOverview();
@@ -845,6 +879,14 @@ export default function TtsStudioPage() {
 
     setSavingProviderId("api_provider");
     try {
+      if (canSaveVoiceProviderConfig) {
+        await saveMicroAppProviderConfig("tts", {
+          kind: voiceDraft.providerId as "volcengine" | "openai-compatible",
+          baseUrl: voiceDraft.baseUrl,
+          apiKey: voiceDraft.apiKey,
+          modelId: voiceDraft.modelId,
+        });
+      }
       await updateTtsProvider("api_provider", {
         ...(apiProviderSavePayload ?? {
           enabled: true,
@@ -1501,6 +1543,39 @@ export default function TtsStudioPage() {
                                 </Alert>
                               ) : null}
 
+                              <MicroAppProviderEditor
+                                providers={voiceProviders}
+                                providerId={voiceDraft.providerId}
+                                baseUrl={voiceDraft.baseUrl}
+                                apiKey={voiceDraft.apiKey}
+                                modelId={voiceDraft.modelId}
+                                onProviderChange={(providerId) =>
+                                  setVoiceDraft((current) => ({
+                                    ...current,
+                                    providerId,
+                                  }))
+                                }
+                                onBaseUrlChange={(baseUrl) =>
+                                  setVoiceDraft((current) => ({
+                                    ...current,
+                                    baseUrl,
+                                  }))
+                                }
+                                onApiKeyChange={(apiKey) =>
+                                  setVoiceDraft((current) => ({
+                                    ...current,
+                                    apiKey,
+                                  }))
+                                }
+                                onModelIdChange={(modelId) =>
+                                  setVoiceDraft((current) => ({
+                                    ...current,
+                                    modelId,
+                                  }))
+                                }
+                                showSave={false}
+                              />
+
                               <TextInput
                                 label="显示名称"
                                 value={selectedApiDraft.displayName}
@@ -1512,44 +1587,6 @@ export default function TtsStudioPage() {
                                   )
                                 }
                                 disabled={Boolean(savingProviderId)}
-                              />
-
-                              <TextInput
-                                label="当前 Provider"
-                                value={
-                                  apiProviderCatalog?.providerDisplayName ?? ""
-                                }
-                                onChange={() => undefined}
-                                disabled
-                                placeholder={
-                                  apiProviderCatalogLoading
-                                    ? "加载中..."
-                                    : "未绑定 voice 模型"
-                                }
-                              />
-
-                              <TextInput
-                                label="服务地址"
-                                value={apiProviderCatalog?.baseUrl ?? ""}
-                                onChange={() => undefined}
-                                disabled
-                                placeholder={
-                                  apiProviderCatalogLoading
-                                    ? "加载中..."
-                                    : "未绑定 voice 模型"
-                                }
-                              />
-
-                              <TextInput
-                                label="当前模型"
-                                value={apiProviderCatalog?.modelName ?? ""}
-                                onChange={() => undefined}
-                                disabled
-                                placeholder={
-                                  apiProviderCatalogLoading
-                                    ? "加载中..."
-                                    : "未绑定 voice 模型"
-                                }
                               />
 
                               <TextInput
@@ -1620,7 +1657,8 @@ export default function TtsStudioPage() {
                               variant="primary"
                               onClick={() => void saveApiProvider()}
                               disabled={
-                                Boolean(savingProviderId) || !isApiProviderDirty
+                                Boolean(savingProviderId) ||
+                                (!isApiProviderDirty && !canSaveVoiceProviderConfig)
                               }
                               className="w-full"
                             >

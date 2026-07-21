@@ -33,16 +33,16 @@
       }
     ],
     "git": {
-      "branch": "dev",
+      "branch": "codex/rescue-dev-20260721",
       "versions": [
         {
           "version": "0.7.1",
           "commit": {
-            "hash": "fa21af7b81e06d8c3fbeda7fe6f9af61404139d6",
-            "shortHash": "fa21af7",
-            "message": "merge: integrate feature-from-test into dev",
+            "hash": "546817fe617d99c896489c899591658e65ff4ccc",
+            "shortHash": "546817f",
+            "message": "rescue: preserve post-crash workspace",
             "author": "Tomz",
-            "date": "2026-07-21T08:28:16+08:00"
+            "date": "2026-07-21T10:28:47+08:00"
           }
         },
         {

@@ -111,9 +111,10 @@ describe("DefaultModelCard", () => {
     expect(screen.queryByText("Chat")).not.toBeInTheDocument();
     expect(screen.getByText("AgentTask Model")).toBeInTheDocument();
     expect(screen.getByText("AgentTask subtitle")).toBeInTheDocument();
-    expect(screen.getByText("Image Generation Model")).toBeInTheDocument();
+    expect(screen.queryByText("Image Generation Model")).not.toBeInTheDocument();
+    expect(screen.queryByText("Voice Model")).not.toBeInTheDocument();
     expect(screen.getByText("LLM")).toBeInTheDocument();
     expect(screen.queryByText("Managed")).not.toBeInTheDocument();
-    expect(screen.getAllByLabelText("Not configured")).toHaveLength(5);
+    expect(screen.getAllByLabelText("Not configured")).toHaveLength(4);
   });
 });

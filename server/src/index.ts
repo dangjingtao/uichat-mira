@@ -101,18 +101,12 @@ import { ttsProviderConfigsRepository } from "@/db/repositories/tts-provider-con
 import { ttsSynthesisJobsRepository } from "@/db/repositories/tts-synthesis-jobs.repository.js";
 import { chatMediaRepository } from "@/db/repositories/chat-media.repository.js";
 import { imageGenerationJobsRepository } from "@/db/repositories/image-generation-jobs.repository.js";
+import { microAppProviderConfigsRepository } from "@/db/repositories/micro-app-provider-configs.repository.js";
 import { chatMediaService } from "@/services/chat-media.service.js";
 import { managedMediaCleanupService } from "@/services/managed-media-cleanup.service.js";
 import { microAppCapabilityBindingsRepository } from "@/db/repositories/micro-app-capability-bindings.repository.js";
 import { ttsRefAudiosRepository } from "@/db/repositories/tts-ref-audios.repository.js";
 import { ttsRefAudioBindingsRepository } from "@/db/repositories/tts-ref-audio-bindings.repository.js";
-import {
-  modelConfigRepository,
-  providerConnectionRepository,
-} from "@/db/repositories/index.js";
-import type { ProviderCode } from "@/db/schema.js";
-import { decryptSecret } from "@/utils/crypto.js";
-import { getProviderCapabilities } from "@/providers/catalog.js";
 import { resolveAgentTaskProvider } from "@/services/provider-proxy.service/resolution.js";
 import { initializeVectorStore } from "@/db";
 import CONFIG from "@/config";
@@ -186,42 +180,16 @@ app.setErrorHandler(sendRouteError);
 
 const createImageGenerationAdapterRegistry = () => {
   const resolveConfiguredImageProvider = (providerId: string) => {
-    const defaultImageConfig = modelConfigRepository.findDefaultByType(
-      "imageGeneration",
-    );
-    const defaultConnection = defaultImageConfig?.providerConnectionId
-      ? providerConnectionRepository.findById(defaultImageConfig.providerConnectionId)
-      : undefined;
-    const targetConnection =
-      providerConnectionRepository.findById(providerId) ??
-      providerConnectionRepository.findByCode(providerId as ProviderCode) ??
-      (providerId === "openai_images" || providerId === "api_provider"
-        ? defaultConnection
-        : undefined);
-
-    if (!targetConnection) {
-      return null;
+    const microAppConfig = microAppProviderConfigsRepository.get("image_generation");
+    if (microAppConfig && (providerId === "openai_images" || providerId === "api_provider")) {
+      return {
+        baseUrl: microAppConfig.baseUrl,
+        apiKey: microAppConfig.apiKey,
+        defaultModel: microAppConfig.modelId,
+      };
     }
 
-    const capabilities = getProviderCapabilities(targetConnection.templateCode);
-    if (capabilities.imageAdapter !== "openai-images") {
-      return null;
-    }
-
-    const apiKey = decryptSecret(targetConnection.apiKeyEncrypted).trim();
-    if (!apiKey) {
-      return null;
-    }
-
-    return {
-      baseUrl: targetConnection.baseUrl,
-      apiKey,
-      defaultModel:
-        defaultImageConfig &&
-        defaultImageConfig.providerConnectionId === targetConnection.id
-          ? defaultImageConfig.remoteModelId ?? undefined
-          : undefined,
-    };
+    return null;
   };
 
   return {
@@ -887,6 +855,7 @@ const setupDatabase = async () => {
   ttsSynthesisJobsRepository.initialize();
   chatMediaRepository.initialize();
   imageGenerationJobsRepository.initialize();
+  microAppProviderConfigsRepository.initialize();
   microAppCapabilityBindingsRepository.initialize();
   ttsRefAudiosRepository.initialize();
   ttsRefAudioBindingsRepository.initialize();

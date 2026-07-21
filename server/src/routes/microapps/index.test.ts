@@ -492,6 +492,68 @@ const createToken = () => {
   });
 };
 
+test("microapps provider config routes save and reload TTS configuration", async () => {
+  const app = await createApp({
+    async createGeneration() {
+      return createTestJob();
+    },
+    async getGeneration() {
+      return createTestJob();
+    },
+  });
+  const token = createToken();
+  const payload = {
+    kind: "volcengine",
+    baseUrl: "https://openspeech.bytedance.com/api/v3/tts",
+    apiKey: "test-api-key",
+    modelId: "seed-tts-2.0",
+  } as const;
+
+  const saveResponse = await app.inject({
+    method: "PUT",
+    url: "/microapps/provider-config/tts",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    payload,
+  });
+
+  assert.equal(saveResponse.statusCode, 200, saveResponse.body);
+  assert.equal(saveResponse.json().data.kind, payload.kind);
+  assert.equal(saveResponse.json().data.modelId, payload.modelId);
+
+  const getResponse = await app.inject({
+    method: "GET",
+    url: "/microapps/provider-config/tts",
+    headers: { authorization: `Bearer ${token}` },
+  });
+
+  assert.equal(getResponse.statusCode, 200, getResponse.body);
+  assert.equal(getResponse.json().data.baseUrl, payload.baseUrl);
+  assert.equal(getResponse.json().data.apiKey, payload.apiKey);
+
+  const imageSaveResponse = await app.inject({
+    method: "PUT",
+    url: "/microapps/provider-config/image_generation",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    payload: {
+      ...payload,
+      kind: "openai-compatible",
+      modelId: "gpt-image-1",
+    },
+  });
+
+  assert.equal(imageSaveResponse.statusCode, 200, imageSaveResponse.body);
+  assert.equal(imageSaveResponse.json().data.app, "image_generation");
+  assert.equal(imageSaveResponse.json().data.modelId, "gpt-image-1");
+
+  await app.close();
+});
+
 test("microapps image generation routes create and query jobs", async () => {
   const createdJob = createTestJob();
   const service: ImageGenerationRouteService = {

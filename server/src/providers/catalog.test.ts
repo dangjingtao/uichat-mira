@@ -52,4 +52,24 @@ test("Volcengine Plan templates expose separate services under one provider", ()
     supportsRoleForProvider("volcengine-code-plan", "embedding"),
     false,
   );
+  assert.equal(
+    getProviderDefinition("volcengine-code-plan").imageAdapter,
+    "none",
+  );
+  assert.equal(
+    getProviderDefinition("volcengine-agent-plan").imageAdapter,
+    "none",
+  );
+  assert.equal(
+    supportsRoleForProvider("volcengine-code-plan", "voice"),
+    false,
+  );
+  assert.equal(
+    supportsRoleForProvider("volcengine-agent-plan", "voice"),
+    false,
+  );
+  assert.equal(
+    supportsRoleForProvider("volcengine", "voice"),
+    true,
+  );
 });

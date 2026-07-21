@@ -987,7 +987,7 @@ const enUS = {
       resetModal: {
         title: "Confirm Reset Default Models",
         description:
-          "This will clear the default bindings for LLM, Embedding, Rerank, Task, AgentTask, Evaluation, Image Generation, and Voice, and restore default parameters.",
+          "This will clear the default bindings for LLM, Embedding, Rerank, Task, AgentTask, and Evaluation, and restore default parameters. Configure image and voice models in their micro-apps.",
         warning:
           "This operation will affect the default model selection for current conversations and knowledge bases.",
         success: "Default models have been reset",

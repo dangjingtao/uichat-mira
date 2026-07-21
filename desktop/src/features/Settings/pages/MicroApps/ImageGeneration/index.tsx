@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { ImageIcon, Workflow } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
-  getProviderDetail,
-  getRoleModelConfigs,
+  getMicroAppProviderConfig,
+  saveMicroAppProviderConfig,
 } from "@/shared/api/modelSettings";
 import Badge from "@/shared/ui/Badge";
 import Card from "@/shared/ui/Card";
@@ -157,6 +157,17 @@ export default function ImageGenerationStudioPage({
     null,
   );
   const [apiProviderLoading, setApiProviderLoading] = useState(false);
+  const imageProviders = [
+    { id: "volcengine", displayName: "火山引擎" },
+    { id: "openai-compatible", displayName: "OpenAI 兼容" },
+  ];
+  const [imageDraft, setImageDraft] = useState({
+    providerId: "",
+    baseUrl: "",
+    apiKey: "",
+    modelId: "",
+  });
+  const [imageDraftSaving, setImageDraftSaving] = useState(false);
 
   const currentConnection = connections[0] ?? null;
   const connectionStatus: ComfyUiConnectionStatus =
@@ -192,40 +203,42 @@ export default function ImageGenerationStudioPage({
   const reloadApiProviderConfig = async () => {
     setApiProviderLoading(true);
     try {
-      const roleConfigs = await getRoleModelConfigs();
-      const imageConfig =
-        roleConfigs.find((config) => config.type === "imageGeneration") ?? null;
-
-      if (!imageConfig?.providerConnectionId || !imageConfig.remoteModelId) {
+      const saved = await getMicroAppProviderConfig("image_generation");
+      if (!saved) {
         setApiProvider(null);
         return;
       }
 
-      const modelId = imageConfig.remoteModelId;
-      const detail = await getProviderDetail(imageConfig.providerConnectionId);
-      setApiProvider({
-        providerConnectionId: detail.provider.id,
-        providerDisplayName: detail.provider.displayName,
-        providerCode: detail.provider.providerCode,
-        providerTemplateCode: detail.provider.templateCode,
-        baseUrl: detail.provider.baseUrl,
+      const modelId = saved.modelId;
+      setImageDraft({
+        providerId: saved.kind,
+        baseUrl: saved.baseUrl,
+        apiKey: saved.apiKey,
         modelId,
-        status: detail.provider.status,
-        hasApiKey: detail.provider.hasApiKey,
+      });
+      setApiProvider({
+        providerConnectionId: "image_generation",
+        providerDisplayName: saved.kind === "volcengine" ? "火山引擎" : "OpenAI 兼容",
+        providerCode: saved.kind,
+        providerTemplateCode: saved.kind,
+        baseUrl: saved.baseUrl,
+        modelId,
+        status: "connected",
+        hasApiKey: Boolean(saved.apiKey),
       });
       state.setPromptForm((current) => ({
         ...current,
         model: modelId,
         size:
           requiresLargeVolcengineImageSize({
-            providerConnectionId: detail.provider.id,
-            providerDisplayName: detail.provider.displayName,
-            providerCode: detail.provider.providerCode,
-            providerTemplateCode: detail.provider.templateCode,
-            baseUrl: detail.provider.baseUrl,
+            providerConnectionId: "image_generation",
+            providerDisplayName: saved.kind === "volcengine" ? "火山引擎" : "OpenAI 兼容",
+            providerCode: saved.kind,
+            providerTemplateCode: saved.kind,
+            baseUrl: saved.baseUrl,
             modelId,
-            status: detail.provider.status,
-            hasApiKey: detail.provider.hasApiKey,
+            status: "connected",
+            hasApiKey: Boolean(saved.apiKey),
           }) && parseImageSize(current.size)
           ? (parseImageSize(current.size)!.width *
               parseImageSize(current.size)!.height <
@@ -238,6 +251,21 @@ export default function ImageGenerationStudioPage({
       setApiProvider(null);
     } finally {
       setApiProviderLoading(false);
+    }
+  };
+
+  const saveImageProviderConfig = async () => {
+    setImageDraftSaving(true);
+    try {
+      await saveMicroAppProviderConfig("image_generation", {
+        kind: imageDraft.providerId as "volcengine" | "openai-compatible",
+        baseUrl: imageDraft.baseUrl,
+        apiKey: imageDraft.apiKey,
+        modelId: imageDraft.modelId,
+      });
+      await reloadApiProviderConfig();
+    } finally {
+      setImageDraftSaving(false);
     }
   };
 
@@ -459,7 +487,9 @@ export default function ImageGenerationStudioPage({
   const handleSubmit = () => {
     if (activeTab !== "comfyui" || !selectedFlow) {
       void state.submit({
-        providerId: apiProvider?.providerConnectionId,
+        // The connection id is used for config persistence; the execution
+        // service expects the registered adapter id.
+        providerId: apiProvider ? "openai_images" : undefined,
         model: apiProvider?.modelId,
       });
       return;
@@ -571,6 +601,13 @@ export default function ImageGenerationStudioPage({
                 <ApiProviderStatusCard
                   provider={apiProvider}
                   loading={apiProviderLoading}
+                  providers={imageProviders}
+                  draft={imageDraft}
+                  saving={imageDraftSaving}
+                  onDraftChange={(patch) =>
+                    setImageDraft((current) => ({ ...current, ...patch }))
+                  }
+                  onSave={() => void saveImageProviderConfig()}
                 />
                 <ApiExecutionInputCard
                   value={state.promptForm}

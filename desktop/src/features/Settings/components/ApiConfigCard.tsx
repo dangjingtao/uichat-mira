@@ -199,7 +199,9 @@ const ApiConfigCard: React.FC<ApiConfigCardProps> = ({
 
         {!hideRoleActions ? (
           <div className="flex flex-wrap gap-1.5">
-            {ASSIGNABLE_ROLES.map(({ role, labelKey }) => (
+            {ASSIGNABLE_ROLES.filter(({ role }) =>
+              detail.provider.capabilities.supportsRoles.includes(role),
+            ).map(({ role, labelKey }) => (
               <Button
                 key={role}
                 size="small"

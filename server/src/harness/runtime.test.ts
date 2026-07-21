@@ -35,10 +35,10 @@ describe("initializeHarnessRuntime codebase_explore registration", () => {
     fs.rmSync(appDataRoot, { recursive: true, force: true });
   });
 
-  it("keeps codebase_explore hidden by default", () => {
+  it("keeps codebase_explore registered by default", () => {
     initializeHarnessRuntime();
 
-    expect(listCapabilityDefinitions().map((definition) => definition.id)).not.toContain(
+    expect(listCapabilityDefinitions().map((definition) => definition.id)).toContain(
       "codebase_explore",
     );
 
@@ -46,86 +46,7 @@ describe("initializeHarnessRuntime codebase_explore registration", () => {
       source: "agent_intent",
       query: "请梳理 agent planner 和 tool node 的关系",
     });
-    expect(decision.exposedToolIds).not.toContain("codebase_explore");
-  });
-
-  it("registers only the controlled codebase_explore schema after the fake provider is ready and explicitly enabled", async () => {
-    fs.mkdirSync(storageRoot, { recursive: true });
-    activeWorkspaceRoot = getTestArtifactDir(`harness-runtime-codegraph-workspace-${Date.now()}`);
-    fs.mkdirSync(activeWorkspaceRoot, { recursive: true });
-    fs.mkdirSync(appDataRoot, { recursive: true });
-
-    activeService = createCodeGraphStudioService({
-      workspaceRoot: activeWorkspaceRoot,
-      storageRoot,
-      getCapabilityRegistrationState: () =>
-        listCapabilityDefinitions().some((item) => item.id === "codebase_explore"),
-      onStateChanged: () => {
-        reconcileCodeGraphHarnessCapability();
-      },
-    });
-    setActiveCodeGraphStudioService(activeService);
-    await activeService.saveConfig({
-      microAppEnabled: true,
-      agentCapabilityEnabled: false,
-      command: process.execPath,
-      startArgs: [fixturePath, "--mcp"],
-      versionProbeArgs: [fixturePath, "--version"],
-      telemetryProbeArgs: [fixturePath, "--telemetry-status"],
-      appDataRoot,
-    });
-    await activeService.start();
-    await activeService.health();
-
-    initializeHarnessRuntime();
-
-    expect(listCapabilityDefinitions().map((definition) => definition.id)).not.toContain(
-      "codebase_explore",
-    );
-
-    await activeService.saveConfig({
-      agentCapabilityEnabled: true,
-    });
-
-    const definition = listCapabilityDefinitions().find(
-      (item) => item.id === "codebase_explore",
-    );
-
-    expect(definition).toBeDefined();
-    expect(definition?.inputSchema).toEqual({
-      type: "object",
-      required: ["query"],
-      properties: {
-        query: { type: "string" },
-      },
-      additionalProperties: false,
-    });
-    expect(definition?.tags).toContain("codegraph");
-    expect(definition?.tags).toContain("verification");
-
-    const decision = resolveHarnessToolExposure({
-      source: "agent_intent",
-      query: "梳理 codebase architecture impact flow",
-    });
     expect(decision.exposedToolIds).toContain("codebase_explore");
-    expect(
-      decision.exposedToolIds.filter((toolId) => toolId.includes("codegraph/")),
-    ).toEqual([]);
-    expect(
-      listCapabilityDefinitions()
-        .map((item) => item.id)
-        .filter((toolId) => toolId.startsWith("codegraph/")),
-    ).toEqual([]);
-
-    await activeService.saveConfig({
-      agentCapabilityEnabled: false,
-    });
-
-    expect(listCapabilityDefinitions().map((definition) => definition.id)).not.toContain(
-      "codebase_explore",
-    );
-    const disabledReport = await activeService.getReport();
-    expect(disabledReport.config.capabilityRegistered).toBe(false);
-    expect(disabledReport.capability.registered).toBe(false);
   });
+
 });

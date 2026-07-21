@@ -941,7 +941,7 @@ const zhCN = {
       resetModal: {
         title: "确认重置默认模型",
         description:
-          "将清空 LLM、Embedding、Rerank、Task、AgentTask、评测模型、生图模型和语音模型的默认绑定，并恢复默认参数。",
+          "将清空 LLM、Embedding、Rerank、Task、AgentTask 和评测模型的默认绑定，并恢复默认参数。生图和语音请在对应微应用中配置。",
         warning: "该操作会影响当前对话与知识库的默认模型选择。",
         success: "默认模型已重置",
         failed: "重置失败",

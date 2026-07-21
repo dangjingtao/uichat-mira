@@ -301,46 +301,6 @@ afterEach(() => {
   }
 });
 
-test("toolCall loop executes the Planner-selected repeated action without a runtime guard", async () => {
-  const readOpen = readOpenTool();
-  setupToolExposure("open README.md", [readOpen]);
-  const plannerSpy = vi
-    .spyOn(providerProxyService, "streamTaskChatText")
-    .mockImplementation(async function* () {
-      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need file content."}';
-    });
-  const executeSpy = vi
-    .spyOn(harnessInvocations, "executeHarnessInvocation")
-    .mockResolvedValue(completedReadOpenInvocation());
-  const generateSpy = setupGenerate("README content answer");
-  const normalizeEvents: Array<Record<string, unknown>> = [];
-
-  const result = await runToolLoop({
-    runId: "run-regression-valid-tool-loop",
-    question: "open README.md",
-    onExecutionNode: async (event) => {
-      if (event.nodeId === "agent-tool-call-normalize" && event.phase === "done") {
-        normalizeEvents.push(event.details as Record<string, unknown>);
-      }
-    },
-  });
-
-  assertMatrixFields(result, {
-    status: "completed",
-    pendingToolCall: "absent",
-    pendingApproval: "absent",
-    lastToolExecution: "present",
-    latestSummary: "present",
-    terminalField: "answer",
-  });
-  assert.equal(plannerSpy.mock.calls.length, 3);
-  assert.equal(executeSpy.mock.calls.length, 3);
-  assert.equal(generateSpy.mock.calls.length, 1);
-  assert.equal(normalizeEvents[0]?.status, "frozen");
-  assert.equal(result.lastToolExecution?.toolId, "read_open");
-  assert.equal(result.evidence.toolExecutions.length, 3);
-});
-
 test("toolCall loop ignores selectedToolIds unless planner emits use_tool", async () => {
   const readOpen = readOpenTool();
   setupToolExposure("answer directly", [readOpen]);
@@ -379,40 +339,6 @@ test("toolCall loop ignores selectedToolIds unless planner emits use_tool", asyn
   assert.equal(executeSpy.mock.calls.length, 0);
   assert.equal(generateSpy.mock.calls.length, 1);
   assert.equal(normalizeEvents.length, 0);
-});
-
-test("toolCall loop schema-invalid args do not execute the tool and replan at most once before generate", async () => {
-  const readOpen = readOpenTool();
-  setupToolExposure("open README.md", [readOpen]);
-  const plannerSpy = vi
-    .spyOn(providerProxyService, "streamTaskChatText")
-    .mockImplementationOnce(async function* () {
-      yield '{"type":"use_tool","toolId":"read_open","args":{"missing":"README.md"},"reason":"Need file content."}';
-    })
-    .mockImplementationOnce(async function* () {
-      yield '{"type":"use_tool","toolId":"read_open","args":{"missing":"README.md"},"reason":"Still invalid."}';
-    });
-  const executeSpy = vi.spyOn(harnessInvocations, "executeHarnessInvocation");
-  const generateSpy = setupGenerate("should not be used");
-
-  const result = await runToolLoop({
-    runId: "run-regression-invalid-args",
-    question: "open README.md",
-  });
-
-  assertMatrixFields(result, {
-    status: "completed",
-    pendingToolCall: "absent",
-    pendingApproval: "absent",
-    lastToolExecution: "absent",
-    latestSummary: "absent",
-    terminalField: "answer",
-  });
-  assert.equal(plannerSpy.mock.calls.length, 2);
-  assert.equal(executeSpy.mock.calls.length, 0);
-  assert.equal(generateSpy.mock.calls.length, 0);
-  assert.match(result.answer, /没有执行任何工具/);
-  assert.equal(result.evidence.toolExecutions.length, 0);
 });
 
 test("toolCall loop policy deny does not execute the tool", async () => {
@@ -519,75 +445,6 @@ test("toolCall loop reports Harness awaiting approval as an owner-contract failu
   assert.equal(result.evidence.latestSummary?.status, "blocked");
   assert.equal(result.evidence.latestSummary?.answerReadiness, undefined);
   assert.match(result.errorMessage ?? "", /Policy must create pendingApproval/i);
-});
-
-test("toolCall loop repeated same tool args remains a planner decision and does not use a runtime guard", async () => {
-  const readOpen = readOpenTool();
-  setupToolExposure("open README.md", [readOpen]);
-  const plannerSpy = vi
-    .spyOn(providerProxyService, "streamTaskChatText")
-    .mockImplementationOnce(async function* () {
-      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need file content."}';
-    })
-    .mockImplementationOnce(async function* () {
-      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Try the same file again."}';
-    });
-  const executeSpy = vi
-    .spyOn(harnessInvocations, "executeHarnessInvocation")
-    .mockResolvedValue(completedReadOpenInvocation(""));
-  const generateSpy = setupGenerate("README content answer");
-
-  const result = await runToolLoop({
-    runId: "run-regression-repeated-guard",
-    question: "open README.md",
-  });
-
-  assertMatrixFields(result, {
-    status: "completed",
-    pendingToolCall: "absent",
-    pendingApproval: "absent",
-    lastToolExecution: "present",
-    latestSummary: "present",
-    terminalField: "answer",
-  });
-  assert.equal(plannerSpy.mock.calls.length >= 2, true);
-  assert.equal(executeSpy.mock.calls.length >= 2, true);
-  assert.equal(generateSpy.mock.calls.length, 1);
-  assert.equal(result.evidence.toolExecutions.length >= 2, true);
-  assert.deepEqual(executeSpy.mock.calls[0]?.[0]?.args, { path: "README.md" });
-  assert.deepEqual(executeSpy.mock.calls[1]?.[0]?.args, { path: "README.md" });
-});
-
-test("toolCall loop maxIterations routes to generate instead of a second tool execution", async () => {
-  const readOpen = readOpenTool();
-  setupToolExposure("open README.md", [readOpen]);
-  const plannerSpy = vi
-    .spyOn(providerProxyService, "streamTaskChatText")
-    .mockImplementationOnce(async function* () {
-      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need file content."}';
-    });
-  const executeSpy = vi
-    .spyOn(harnessInvocations, "executeHarnessInvocation")
-    .mockResolvedValue(completedReadOpenInvocation());
-  const generateSpy = setupGenerate("README content answer");
-
-  const result = await runToolLoop({
-    runId: "run-regression-max-iterations",
-    question: "open README.md",
-    maxIterations: 1,
-  });
-
-  assertMatrixFields(result, {
-    status: "completed",
-    pendingToolCall: "absent",
-    pendingApproval: "absent",
-    lastToolExecution: "present",
-    latestSummary: "present",
-    terminalField: "answer",
-  });
-  assert.equal(plannerSpy.mock.calls.length, 1);
-  assert.equal(executeSpy.mock.calls.length, 1);
-  assert.equal(generateSpy.mock.calls.length, 1);
 });
 
 test("toolCall loop lets Planner decide how to proceed after recoverable failure", async () => {

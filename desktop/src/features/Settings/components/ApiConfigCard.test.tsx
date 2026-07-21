@@ -126,7 +126,7 @@ void i18n.use(initReactI18next).init({
 });
 
 describe("ApiConfigCard", () => {
-  it("shows assignment actions for agentTask and imageGeneration", async () => {
+  it("shows only assignment actions declared by provider capabilities", async () => {
     const user = userEvent.setup();
     const onSetDefaultRole = vi.fn();
 
@@ -149,14 +149,12 @@ describe("ApiConfigCard", () => {
     await user.click(
       screen.getByRole("button", { name: "Set as Default AgentTask" }),
     );
-    await user.click(
-      screen.getByRole("button", {
+    expect(onSetDefaultRole).toHaveBeenNthCalledWith(1, "agentTask");
+    expect(
+      screen.queryByRole("button", {
         name: "Set as Default Image Generation Model",
       }),
-    );
-
-    expect(onSetDefaultRole).toHaveBeenNthCalledWith(1, "agentTask");
-    expect(onSetDefaultRole).toHaveBeenNthCalledWith(2, "imageGeneration");
+    ).not.toBeInTheDocument();
   });
 
   it("shows capability badges and grouped role summaries", () => {

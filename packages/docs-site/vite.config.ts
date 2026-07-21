@@ -11,9 +11,6 @@ function docsIndexAutoBuildPlugin() {
 
   return {
     name: "docs-index-auto-build",
-    buildStart() {
-      writeDocsIndex();
-    },
     configureServer() {
       if (!hasGeneratedForServe) {
         writeDocsIndex();

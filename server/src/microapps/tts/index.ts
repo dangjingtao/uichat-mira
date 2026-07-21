@@ -5,6 +5,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { modelConfigRepository } from "@/db/repositories/model-config.repository.js";
 import { providerConnectionRepository } from "@/db/repositories/provider-settings.repository.js";
+import { microAppProviderConfigsRepository } from "@/db/repositories/micro-app-provider-configs.repository.js";
 import { ttsRefAudiosRepository } from "@/db/repositories/tts-ref-audios.repository.js";
 import { ttsRefAudioBindingsRepository } from "@/db/repositories/tts-ref-audio-bindings.repository.js";
 import {
@@ -905,24 +906,22 @@ const synthesizeWithPiper = async (
 
 const resolveApiProviderCatalog = (): ApiProviderCatalog => {
   try {
-    const resolved = resolveProviderForRole("voice");
-    const connection =
-      providerConnectionRepository.findById(resolved.providerConnectionId) ?? null;
-    const modelConfig = modelConfigRepository.findDefaultByType("voice");
-    const supported = isSupportedApiVoiceProvider(resolved.providerCode);
-    const providerDisplayName =
-      connection?.displayName || getProviderDefinition(resolved.providerCode).displayName;
+    const configured = microAppProviderConfigsRepository.get("tts");
+    if (!configured) throw new Error("TTS 微应用尚未配置服务商。");
+    const providerCode = configured.kind === "volcengine" ? "volcengine" : "openai-compatible";
+    const supported = true;
+    const providerDisplayName = configured.kind === "volcengine" ? "火山引擎" : "OpenAI 兼容";
 
     return {
       configured: true,
       supported,
-      providerConnectionId: resolved.providerConnectionId,
+      providerConnectionId: null,
       providerDisplayName,
-      providerCode: resolved.providerCode,
-      providerTemplateCode: resolved.providerTemplateCode,
-      baseUrl: resolved.baseUrl,
-      modelId: resolved.model,
-      modelName: modelConfig?.name?.trim() || resolved.model,
+      providerCode,
+      providerTemplateCode: configured.kind,
+      baseUrl: configured.baseUrl,
+      modelId: configured.modelId,
+      modelName: configured.modelId,
       errorMessage: supported
         ? null
         : `${providerDisplayName} 当前没有接入可用于 TTS Studio 的语音合成协议。请把 voice 模型切到支持 OpenAI / OpenAI-compatible speech 的服务商。`,
@@ -954,7 +953,15 @@ const synthesizeWithApiProviderVoice = async (
     );
   }
 
-  const resolved = resolveProviderForRole("voice");
+  const configured = microAppProviderConfigsRepository.get("tts");
+  if (!configured) throw new Error("TTS 微应用尚未配置服务商。");
+  const resolved = {
+    providerCode: configured.kind === "volcengine" ? "volcengine" : "openai-compatible",
+    providerTemplateCode: configured.kind,
+    baseUrl: configured.baseUrl,
+    model: configured.modelId,
+    apiKey: configured.apiKey,
+  };
   const savedConfig = getApiProviderVoiceConfig(providerConfig.config);
   const voice = (request.voice ?? "").trim() || savedConfig.voice;
   const responseFormat =

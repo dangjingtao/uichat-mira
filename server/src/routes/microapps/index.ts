@@ -38,6 +38,7 @@ import ttsRoutes from "./tts/index.js";
 import { imageGenerationRouteSchemas } from "./schemas.js";
 import { microAppCapabilityService } from "@/services/micro-app-capability.service.js";
 import type { MicroAppProviderId } from "@/db/repositories/micro-app-capability-bindings.repository.js";
+import { microAppProviderConfigsRepository } from "@/db/repositories/micro-app-provider-configs.repository.js";
 
 export type ImageGenerationRouteService = {
   createGeneration(request: ImageGenerationCreateRequest): Promise<ImageGenerationJob>;
@@ -228,6 +229,24 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
       .code(401)
       .send(errorResponse("Invalid auth token", ErrorCodes.UNAUTHORIZED));
   });
+
+  app.get<{ Params: { app: "image_generation" | "tts" } }>(
+    "/microapps/provider-config/:app",
+    async (request) =>
+      success(
+        microAppProviderConfigsRepository.get(request.params.app),
+        "Micro-app provider config loaded",
+      ),
+  );
+  app.put<{
+    Params: { app: "image_generation" | "tts" };
+    Body: { kind: "volcengine" | "openai-compatible"; baseUrl: string; apiKey: string; modelId: string };
+  }>("/microapps/provider-config/:app", async (request) =>
+    success(
+      microAppProviderConfigsRepository.upsert(request.params.app, request.body),
+      "Micro-app provider config saved",
+    ),
+  );
 
   const imageGenerationService = options.imageGenerationService;
   const comfyUiStudioService = options.comfyUiStudioService;

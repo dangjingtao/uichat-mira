@@ -171,3 +171,24 @@ export async function resetProviderRoleModel(
 ): Promise<RoleModelConfig> {
   return put<RoleModelConfig>(`/providers/reset-model/${role}`, {});
 }
+
+export type MicroAppProviderKind = "volcengine" | "openai-compatible";
+export type MicroAppProviderConfig = {
+  app: "image_generation" | "tts";
+  kind: MicroAppProviderKind;
+  baseUrl: string;
+  apiKey: string;
+  modelId: string;
+  updatedAt: string;
+};
+
+export function getMicroAppProviderConfig(app: MicroAppProviderConfig["app"]) {
+  return get<MicroAppProviderConfig | null>(`/microapps/provider-config/${app}`);
+}
+
+export function saveMicroAppProviderConfig(
+  app: MicroAppProviderConfig["app"],
+  config: Omit<MicroAppProviderConfig, "app" | "updatedAt">,
+) {
+  return put<MicroAppProviderConfig>(`/microapps/provider-config/${app}`, config);
+}

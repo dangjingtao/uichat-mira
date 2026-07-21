@@ -210,8 +210,10 @@ test("provider settings detail surfaces agentTask and imageGeneration assignment
       isActive: true,
       syncedAt: "2026-07-06T10:00:00.000Z",
     },
+  ]);
+  providerModelRepository.replaceForProvider("openai", [
     {
-      providerCode: "ollama",
+      providerCode: "openai",
       remoteModelId: "flux-image",
       modelName: "flux-image",
       rawPayloadJson: JSON.stringify({ name: "flux-image" }),
@@ -222,34 +224,35 @@ test("provider settings detail surfaces agentTask and imageGeneration assignment
 
   providerSettingsService.selectRoleModel("ollama", "agentTask", "qwen-agent");
   providerSettingsService.selectRoleModel(
-    "ollama",
+    "openai",
     "imageGeneration",
     "flux-image",
   );
 
-  const detail = providerSettingsService.getProviderDetail("ollama");
+  const ollamaDetail = providerSettingsService.getProviderDetail("ollama");
+  const openAiDetail = providerSettingsService.getProviderDetail("openai");
   const summaries = providerSettingsService.getProviderSummaries();
   const ollamaSummary = summaries.find((item) => item.code === "ollama");
 
-  assert.deepEqual(detail.assignments.agentTask, {
+  assert.deepEqual(ollamaDetail.assignments.agentTask, {
     providerCode: "ollama",
     providerConnectionId: "ollama",
     providerTemplateCode: "ollama",
     remoteModelId: "qwen-agent",
     modelName: "qwen-agent",
   });
-  assert.deepEqual(detail.assignments.imageGeneration, {
-    providerCode: "ollama",
-    providerConnectionId: "ollama",
-    providerTemplateCode: "ollama",
+  assert.deepEqual(openAiDetail.assignments.imageGeneration, {
+    providerCode: "openai",
+    providerConnectionId: "openai",
+    providerTemplateCode: "openai",
     remoteModelId: "flux-image",
     modelName: "flux-image",
   });
-  assert.equal(detail.provider.capabilities.imageAdapter, "none");
-  assert.ok(detail.provider.capabilities.supportsRoles.includes("agentTask"));
+  assert.equal(openAiDetail.provider.capabilities.imageAdapter, "openai-images");
+  assert.ok(ollamaDetail.provider.capabilities.supportsRoles.includes("agentTask"));
   assert.equal(
-    detail.provider.capabilities.supportsRoles.includes("imageGeneration"),
-    false,
+    openAiDetail.provider.capabilities.supportsRoles.includes("imageGeneration"),
+    true,
   );
   assert.equal(ollamaSummary?.capabilities.imageAdapter, "none");
 });
@@ -276,6 +279,27 @@ test("provider settings expose independent Ark Plan templates", () => {
   assert.equal(agentPlan?.capabilities.embeddingAdapter, "none");
   assert.equal(codePlan?.isCustomTemplate, false);
   assert.equal(agentPlan?.isCustomTemplate, false);
+});
+
+test("Ark Plan connections cannot be bound to voice or image roles", () => {
+  assert.throws(
+    () =>
+      providerSettingsService.selectRoleModel(
+        "volcengine-agent-plan",
+        "voice",
+        "doubao-seed-2-0-lite",
+      ),
+    /does not support the voice role/,
+  );
+  assert.throws(
+    () =>
+      providerSettingsService.selectRoleModel(
+        "volcengine-code-plan",
+        "imageGeneration",
+        "doubao-seedream-4-0",
+      ),
+    /does not support the imageGeneration role/,
+  );
 });
 
 test("custom openai-compatible provider exposes image adapter capability", () => {

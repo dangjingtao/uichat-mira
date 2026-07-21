@@ -19,6 +19,7 @@ import {
   getProviderCapabilities,
   getProviderTemplateDefinition,
   PROVIDER_CODE_ENUM,
+  supportsRoleForProvider,
 } from "@/providers/catalog.js";
 import { listCloudflareModels } from "@/services/cloudflare-provider.js";
 import { createArkPlanAdapter } from "@/services/ark-plan-adapter.js";
@@ -525,6 +526,13 @@ export const providerSettingsService = {
       apiKey?: string;
     },
   ) {
+    const connection = requireConnection(providerId);
+    if (!supportsRoleForProvider(connection.templateCode, role)) {
+      throw new Error(
+        `Provider ${connection.displayName} does not support the ${role} role.`,
+      );
+    }
+
     if (
       connectionPayload &&
       (typeof connectionPayload.baseUrl === "string" ||
@@ -538,7 +546,6 @@ export const providerSettingsService = {
       });
     }
 
-    const connection = requireConnection(providerId);
     const normalizedRemoteModelId = remoteModelId.trim();
     if (!normalizedRemoteModelId) {
       throw new Error(PROVIDER_MODEL_NOT_FOUND_MESSAGE);

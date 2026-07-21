@@ -28,8 +28,6 @@ export default function ModelSettings() {
             resetProviderRoleModel("task"),
             resetProviderRoleModel("agentTask"),
             resetProviderRoleModel("evaluation"),
-            resetProviderRoleModel("imageGeneration"),
-            resetProviderRoleModel("voice"),
           ]);
           await refresh();
           message.success(t("settings.model.resetModal.success"));

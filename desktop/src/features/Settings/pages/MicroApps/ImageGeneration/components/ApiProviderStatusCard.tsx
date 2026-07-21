@@ -1,5 +1,6 @@
 import { ImageIcon } from "lucide-react";
 import Card from "@/shared/ui/Card";
+import MicroAppProviderEditor from "../../components/MicroAppProviderEditor";
 
 export interface ApiImageProviderSummary {
   providerConnectionId: string;
@@ -20,11 +21,26 @@ export type ApiImageSizeOption = {
 interface ApiProviderStatusCardProps {
   provider: ApiImageProviderSummary | null;
   loading: boolean;
+  providers: Array<{ id: string; displayName: string }>;
+  draft: {
+    providerId: string;
+    baseUrl: string;
+    apiKey: string;
+    modelId: string;
+  };
+  saving: boolean;
+  onDraftChange: (patch: Partial<ApiProviderStatusCardProps["draft"]>) => void;
+  onSave: () => void;
 }
 
 export default function ApiProviderStatusCard({
   provider,
   loading,
+  providers,
+  draft,
+  saving,
+  onDraftChange,
+  onSave,
 }: ApiProviderStatusCardProps) {
   return (
     <Card className="space-y-4">
@@ -71,6 +87,19 @@ export default function ApiProviderStatusCard({
           </div>
         </div>
       )}
+      <MicroAppProviderEditor
+        providers={providers}
+        providerId={draft.providerId}
+        baseUrl={draft.baseUrl}
+        apiKey={draft.apiKey}
+        modelId={draft.modelId}
+        saving={saving}
+        onProviderChange={(providerId) => onDraftChange({ providerId })}
+        onBaseUrlChange={(baseUrl) => onDraftChange({ baseUrl })}
+        onApiKeyChange={(apiKey) => onDraftChange({ apiKey })}
+        onModelIdChange={(modelId) => onDraftChange({ modelId })}
+        onSave={onSave}
+      />
     </Card>
   );
 }

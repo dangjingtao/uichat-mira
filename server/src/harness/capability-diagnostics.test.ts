@@ -196,7 +196,7 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
     ]);
     expect(result.retrievalError).toBeUndefined();
     expect(result.exposureReasons).toContain(
-      "All eligible tools are exposed because the eligible set is at most 20 tools.",
+      "All public tools are exposed because the tool set is at most 20 tools.",
     );
     expect(rerankSpy).not.toHaveBeenCalled();
   });
@@ -285,7 +285,7 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
     ]);
     expect(result.blockedCapabilityIds).not.toContain("web_search");
     expect(result.exposureReasons).toContain(
-      "All eligible tools are exposed because the eligible set is at most 20 tools.",
+      "All public tools are exposed because the tool set is at most 20 tools.",
     );
     expect(result.toolCandidates[0]).toMatchObject({ toolId: "read_open" });
   });
@@ -300,7 +300,7 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
       expectedExposedToolIds: ["read_open", "web_search"],
       expectedBlockedCapabilityIds: ["external_fake_tool"],
       expectedReason:
-        "All eligible tools are exposed because the eligible set is at most 20 tools.",
+      "All public tools are exposed because the tool set is at most 20 tools.",
       expectedTopToolId: "read_open",
     },
     {
@@ -309,10 +309,10 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
       source: "chat_surface" as const,
       tools: [readOpenTool, webSearchTool, terminalSessionTool, externalFakeTool],
       rerankOrder: ["web_research", "read_open"],
-      expectedExposedToolIds: ["read_open", "web_search"],
-      expectedBlockedCapabilityIds: ["terminal_session", "external_fake_tool"],
+      expectedExposedToolIds: ["read_open", "web_search", "terminal_session"],
+      expectedBlockedCapabilityIds: ["external_fake_tool"],
       expectedReason:
-        "Chat-visible tool surface is restricted to safe built-in domains.",
+        "All public tools are exposed because the tool set is at most 20 tools.",
       expectedTopToolId: "read_open",
     },
     {
@@ -324,7 +324,7 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
       expectedExposedToolIds: ["terminal_session"],
       expectedBlockedCapabilityIds: ["external_fake_tool"],
       expectedReason:
-        "All eligible tools are exposed because the eligible set is at most 20 tools.",
+        "All public tools are exposed because the tool set is at most 20 tools.",
       expectedTopToolId: "terminal_session",
     },
     {
@@ -350,7 +350,7 @@ describe("resolveHarnessCapabilityDiagnostics", () => {
       expectedExposedToolIds: ["terminal_session"],
       expectedBlockedCapabilityIds: ["external_fake_tool"],
       expectedReason:
-        "All eligible tools are exposed because the eligible set is at most 20 tools.",
+        "All public tools are exposed because the tool set is at most 20 tools.",
       expectedTopToolId: "terminal_session",
     },
   ])(

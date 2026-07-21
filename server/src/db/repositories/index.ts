@@ -28,6 +28,7 @@ export * from "./tts-ref-audios.repository";
 export * from "./tts-ref-audio-bindings.repository";
 export * from "./chat-media.repository";
 export * from "./image-generation-jobs.repository";
+export * from "./micro-app-provider-configs.repository";
 export * from "./notion-connection.repository";
 export * from "./notion-access-points.repository";
 export * from "./notion-activities.repository";

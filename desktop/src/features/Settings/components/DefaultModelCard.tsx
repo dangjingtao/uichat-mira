@@ -105,18 +105,6 @@ const DefaultModelCard = forwardRef<DefaultModelCardRef, DefaultModelCardProps>(
             config={configMap.rerank}
             onUpdated={handleConfigUpdated}
           />
-          <ModelConfig
-            modelType="imageGeneration"
-            config={configMap.imageGeneration}
-            onUpdated={handleConfigUpdated}
-            readOnly
-          />
-          <ModelConfig
-            modelType="voice"
-            config={configMap.voice}
-            onUpdated={handleConfigUpdated}
-            readOnly
-          />
         </div>
 
         {loading ? (
