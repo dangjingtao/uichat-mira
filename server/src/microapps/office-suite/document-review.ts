@@ -173,10 +173,63 @@ const addCommentAnchor = (documentXml: string, input: {
     `<w:commentRangeStart w:id="${input.commentId}"/>`,
     buildRun(input.targetText, run.runProperties),
     `<w:commentRangeEnd w:id="${input.commentId}"/>`,
-    `<w:r><w:commentReference w:id="${input.commentId}"/></w:r>`,
+    `<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="${input.commentId}"/></w:r>`,
     buildRun(after, run.runProperties),
   ].join("");
   return replaceRun(documentXml, run, replacement);
+};
+
+const SETTINGS_BEFORE_TRACK_REVISIONS = [
+  "writeProtection",
+  "view",
+  "zoom",
+  "removePersonalInformation",
+  "removeDateAndTime",
+  "doNotDisplayPageBoundaries",
+  "displayBackgroundShape",
+  "printPostScriptOverText",
+  "printFractionalCharacterWidth",
+  "printFormsData",
+  "embedTrueTypeFonts",
+  "embedSystemFonts",
+  "saveSubsetFonts",
+  "saveFormsData",
+  "mirrorMargins",
+  "alignBordersAndEdges",
+  "bordersDoNotSurroundHeader",
+  "bordersDoNotSurroundFooter",
+  "gutterAtTop",
+  "hideSpellingErrors",
+  "hideGrammaticalErrors",
+  "activeWritingStyle",
+  "proofState",
+  "formsDesign",
+  "attachedTemplate",
+  "linkStyles",
+  "stylePaneFormatFilter",
+  "stylePaneSortMethod",
+  "documentType",
+  "mailMerge",
+  "revisionView",
+] as const;
+
+const resolveTrackRevisionsInsertIndex = (settingsXml: string) => {
+  let lastEnd = -1;
+  for (const tag of SETTINGS_BEFORE_TRACK_REVISIONS) {
+    const pattern = new RegExp(`<w:${tag}\\b[^>]*(?:\\/>|>[\\s\\S]*?<\\/w:${tag}>)`, "g");
+    for (const match of settingsXml.matchAll(pattern)) {
+      if (match.index !== undefined) {
+        lastEnd = Math.max(lastEnd, match.index + match[0].length);
+      }
+    }
+  }
+  if (lastEnd >= 0) return lastEnd;
+
+  const rootOpen = settingsXml.match(/<w:settings\b[^>]*>/);
+  if (rootOpen?.index !== undefined) {
+    return rootOpen.index + rootOpen[0].length;
+  }
+  throw new Error("Invalid DOCX settings XML");
 };
 
 const ensureTrackRevisions = (archive: AdmZip) => {
@@ -186,9 +239,8 @@ const ensureTrackRevisions = (archive: AdmZip) => {
   }
   const settingsXml = settingsEntry.getData().toString("utf8");
   if (/<w:trackRevisions\b/.test(settingsXml)) return;
-  const closeIndex = settingsXml.lastIndexOf("</w:settings>");
-  if (closeIndex < 0) throw new Error("Invalid DOCX settings XML");
-  const updated = `${settingsXml.slice(0, closeIndex)}<w:trackRevisions/>${settingsXml.slice(closeIndex)}`;
+  const insertIndex = resolveTrackRevisionsInsertIndex(settingsXml);
+  const updated = `${settingsXml.slice(0, insertIndex)}<w:trackRevisions/>${settingsXml.slice(insertIndex)}`;
   archive.updateFile("word/settings.xml", Buffer.from(updated, "utf8"));
 };
 
