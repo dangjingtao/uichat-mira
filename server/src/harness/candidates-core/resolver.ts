@@ -170,7 +170,6 @@ export const resolveHarnessToolCandidatesForTurn = async (
       const reranked = await rerankHarnessCapabilityMatches({
         query: input.query,
         matches,
-        hasEmbeddingSignal: Boolean(queryEmbedding && documentEmbeddings.length > 0),
       });
       matches = reranked.matches;
       rerankModel = reranked.rerankModel;
@@ -183,7 +182,11 @@ export const resolveHarnessToolCandidatesForTurn = async (
     expandHarnessToolCandidates({
       matches,
       definitions: visibleDefinitions,
-    }).sort((left, right) => right.finalScore - left.finalScore),
+    }).sort(
+      (left, right) =>
+        right.rerankScore - left.rerankScore ||
+        right.embeddingScore - left.embeddingScore,
+    ),
   );
 
   // Every public definition has a fallback capability profile, but fill any

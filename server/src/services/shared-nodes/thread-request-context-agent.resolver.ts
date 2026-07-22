@@ -52,6 +52,7 @@ export const resolveAgentContext: RequestContextResolver = ({ thread }) => {
     message: {
       role: "system",
       content: buildAgentPromptContent(thread.executionEnvironment),
+      requestContextScope: "agent-execution",
     },
     executionNode: {
       nodeId: "request-context-agent",

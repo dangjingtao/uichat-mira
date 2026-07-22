@@ -38,11 +38,11 @@
         {
           "version": "0.99.0",
           "commit": {
-            "hash": "7be77795db32264b16af964537798e47f696ca45",
-            "shortHash": "7be7779",
-            "message": "ci: stabilize desktop release packaging",
-            "author": "DangJingtao",
-            "date": "2026-07-22T11:38:11+08:00"
+            "hash": "e0c1dc3d4347adc15c70834cb29634f4595d7d38",
+            "shortHash": "e0c1dc3",
+            "message": "feat: sync dev workspace updates",
+            "author": "Tomz",
+            "date": "2026-07-22T17:41:44+08:00"
           }
         },
         {

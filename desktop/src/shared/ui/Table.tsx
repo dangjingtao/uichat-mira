@@ -31,6 +31,7 @@ type Props<T> = {
   compact?: boolean;
   emptyState?: React.ReactNode;
   getRowProps?: (row: Row<T>) => React.HTMLAttributes<HTMLTableRowElement>;
+  scrollRef?: React.RefObject<HTMLDivElement>;
   rowSelection?: {
     selectedRowIds: string[];
     onSelectedRowIdsChange: (rowIds: string[]) => void;
@@ -129,9 +130,11 @@ export function MinimalTable<T extends object>({
   compact = false,
   emptyState,
   getRowProps,
+  scrollRef: externalScrollRef,
   rowSelection,
 }: Props<T>) {
-  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const internalScrollRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = externalScrollRef ?? internalScrollRef;
   const [showLeftShadow, setShowLeftShadow] = useState(false);
   const [showRightShadow, setShowRightShadow] = useState(false);
 

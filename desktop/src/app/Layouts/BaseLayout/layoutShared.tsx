@@ -38,7 +38,7 @@ export function WorkspaceShell({
       className="w-full min-w-0"
       style={{
         display: "grid",
-        gridTemplateColumns: "240px 1fr",
+        gridTemplateColumns: "256px 1fr",
         height: "100dvh",
       }}
     >
@@ -102,7 +102,7 @@ export function SettingsNavigation() {
         {t("common.actions.backToChat")}
       </NavLink>
 
-      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+      <div className="stable-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
         {orderedGroups.map((group, index) => {
           const items = groupedItems.get(group) ?? [];
 

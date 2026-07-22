@@ -18,7 +18,7 @@ type ChatWorkspaceGroup = {
 const THREAD_TITLE_MAX_CHARS = 7;
 
 const threadMenuButtonClassName =
-  "mr-0.5 flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-[8px] border border-transparent bg-transparent text-text-secondary transition-all duration-150 hover:bg-surface-secondary/70 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20";
+  "mr-0.5 flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-[8px] border border-transparent bg-transparent text-text-secondary transition-all duration-150 hover:bg-surface-secondary/70 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 data-[state=open]:opacity-100";
 
 const threadTitleButtonClassName =
   "flex min-w-0 flex-1 overflow-hidden text-left focus-visible:outline-none";
@@ -32,6 +32,75 @@ const formatThreadTitle = (title: string) => {
 
   return `${chars.slice(0, THREAD_TITLE_MAX_CHARS).join("")}...`;
 };
+
+function ThreadActionsMenu({
+  threadId,
+  isActive,
+  capabilities,
+  onArchiveThread,
+  onDeleteThread,
+}: {
+  threadId: string;
+  isActive: boolean;
+  capabilities: {
+    archiveThread?: boolean;
+    deleteThread?: boolean;
+  };
+  onArchiveThread: (threadId: string) => void | Promise<void>;
+  onDeleteThread: (threadId: string) => void | Promise<void>;
+}) {
+  const { t } = useTranslation();
+
+  if (!capabilities.archiveThread && !capabilities.deleteThread) {
+    return null;
+  }
+
+  return (
+    <DropdownMenu
+      trigger={
+        <button
+          type="button"
+          aria-label={t("common.actions.more")}
+          className={`${threadMenuButtonClassName} ${
+            isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          }`}
+        >
+          <MoreHorizontal className="size-4" />
+        </button>
+      }
+      items={[
+        ...(capabilities.archiveThread
+          ? [
+              {
+                id: "archive",
+                label: t("chat.sidebar.archive"),
+              },
+            ]
+          : []),
+        ...(capabilities.deleteThread
+          ? [
+              {
+                id: "delete",
+                label: t("chat.sidebar.delete"),
+                tone: "danger" as const,
+              },
+            ]
+          : []),
+      ]}
+      onSelect={(item) => {
+        if (item.id === "archive") {
+          void onArchiveThread(threadId);
+          return;
+        }
+        if (item.id === "delete") {
+          void onDeleteThread(threadId);
+        }
+      }}
+      align="end"
+      sideOffset={4}
+    />
+  );
+}
 
 // UChatSidebarView is the pure presentational sidebar for thread creation,
 // selection, archiving, and deletion.
@@ -70,7 +139,6 @@ export function UChatSidebarView({
   onDeleteThread: (threadId: string) => void | Promise<void>;
 }) {
   const { t } = useTranslation();
-  const [openMenuThreadId, setOpenMenuThreadId] = useState<string | null>(null);
   const [collapsedWorkspaceIds, setCollapsedWorkspaceIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -263,7 +331,6 @@ export function UChatSidebarView({
                       <div className="space-y-0.5 pb-0.5">
                       {workspace.threads.map((thread) => {
                         const isActive = thread.id === activeThreadId;
-                        const isMenuOpen = openMenuThreadId === thread.id;
 
                         return (
                           <div
@@ -277,7 +344,6 @@ export function UChatSidebarView({
                             <button
                               type="button"
                               onClick={() => {
-                                setOpenMenuThreadId(null);
                                 void onSelectThread(thread.id);
                               }}
                               className={`${threadTitleButtonClassName} px-3 py-2 pr-10`}
@@ -291,53 +357,13 @@ export function UChatSidebarView({
                               </span>
                             </button>
                             <div className="absolute right-1 top-1/2 z-10 -translate-y-1/2 shrink-0">
-                              {(capabilities.archiveThread || capabilities.deleteThread) ? (
-                                <div className="relative">
-                                  <button
-                                    type="button"
-                                    aria-label={t("common.actions.more")}
-                                    onClick={() =>
-                                      setOpenMenuThreadId((current) =>
-                                        current === thread.id ? null : thread.id,
-                                      )
-                                    }
-                                    className={`${threadMenuButtonClassName} ${
-                                      isMenuOpen || isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                                    }`}
-                                  >
-                                    <MoreHorizontal className="size-4" />
-                                  </button>
-
-                                  {isMenuOpen ? (
-                                    <div className="absolute right-0 top-[calc(100%+0.25rem)] z-[140] min-w-[128px] rounded-[10px] border border-border bg-surface-elevated p-1 shadow-shadow-md">
-                                      {capabilities.archiveThread ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setOpenMenuThreadId(null);
-                                            void onArchiveThread(thread.id);
-                                          }}
-                                          className="flex w-full cursor-pointer items-center rounded-[8px] px-2.5 py-1.5 text-sm text-text-primary transition-colors duration-150 hover:bg-surface-secondary"
-                                        >
-                                          {t("chat.sidebar.archive")}
-                                        </button>
-                                      ) : null}
-                                      {capabilities.deleteThread ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setOpenMenuThreadId(null);
-                                            void onDeleteThread(thread.id);
-                                          }}
-                                          className="flex w-full cursor-pointer items-center rounded-[8px] px-2.5 py-1.5 text-sm text-danger-text transition-colors duration-150 hover:bg-danger-soft"
-                                        >
-                                          {t("chat.sidebar.delete")}
-                                        </button>
-                                      ) : null}
-                                    </div>
-                                  ) : null}
-                                </div>
-                              ) : null}
+                              <ThreadActionsMenu
+                                threadId={thread.id}
+                                isActive={isActive}
+                                capabilities={capabilities}
+                                onArchiveThread={onArchiveThread}
+                                onDeleteThread={onDeleteThread}
+                              />
                             </div>
                           </div>
                         );
@@ -384,7 +410,6 @@ export function UChatSidebarView({
 
             {visibleThreads.map((thread) => {
               const isActive = thread.id === activeThreadId;
-              const isMenuOpen = openMenuThreadId === thread.id;
 
               return (
                 <div
@@ -398,7 +423,6 @@ export function UChatSidebarView({
                   <button
                     type="button"
                     onClick={() => {
-                      setOpenMenuThreadId(null);
                       void onSelectThread(thread.id);
                     }}
                     className={`${threadTitleButtonClassName} px-4 py-2 pr-11`}
@@ -413,53 +437,13 @@ export function UChatSidebarView({
                   </button>
 
                   <div className="absolute right-1 top-1/2 z-10 -translate-y-1/2 shrink-0">
-                    {(capabilities.archiveThread || capabilities.deleteThread) ? (
-                      <div className="relative">
-                        <button
-                          type="button"
-                          aria-label={t("common.actions.more")}
-                          onClick={() =>
-                            setOpenMenuThreadId((current) =>
-                              current === thread.id ? null : thread.id,
-                            )
-                          }
-                          className={`${threadMenuButtonClassName} ${
-                            isMenuOpen || isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                          }`}
-                        >
-                          <MoreHorizontal className="size-4" />
-                        </button>
-
-                        {isMenuOpen ? (
-                          <div className="absolute right-0 top-[calc(100%+0.25rem)] z-[140] min-w-[128px] rounded-[10px] border border-border bg-surface-elevated p-1 shadow-shadow-md">
-                            {capabilities.archiveThread ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setOpenMenuThreadId(null);
-                                  void onArchiveThread(thread.id);
-                                }}
-                                className="flex w-full cursor-pointer items-center rounded-[8px] px-2.5 py-1.5 text-sm text-text-primary transition-colors duration-150 hover:bg-surface-secondary"
-                              >
-                                {t("chat.sidebar.archive")}
-                              </button>
-                            ) : null}
-                            {capabilities.deleteThread ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setOpenMenuThreadId(null);
-                                  void onDeleteThread(thread.id);
-                                }}
-                                className="flex w-full cursor-pointer items-center rounded-[8px] px-2.5 py-1.5 text-sm text-danger-text transition-colors duration-150 hover:bg-danger-soft"
-                              >
-                                {t("chat.sidebar.delete")}
-                              </button>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
+                    <ThreadActionsMenu
+                      threadId={thread.id}
+                      isActive={isActive}
+                      capabilities={capabilities}
+                      onArchiveThread={onArchiveThread}
+                      onDeleteThread={onDeleteThread}
+                    />
                   </div>
                 </div>
               );

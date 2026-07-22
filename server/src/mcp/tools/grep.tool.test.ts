@@ -27,6 +27,7 @@ describe("grep tool", () => {
   });
 
   it("searches workspace content through the read locate runtime", async () => {
+    const artifactMetadata: Array<Record<string, unknown> | undefined> = [];
     const result = await grepTool.execute({
       invocationId: "grep-1",
       args: {
@@ -51,6 +52,7 @@ describe("grep tool", () => {
       }),
       pushEvent() {},
       addArtifact(artifact) {
+        artifactMetadata.push(artifact.metadata);
         return { id: "artifact-1", ...artifact };
       },
     });
@@ -68,6 +70,33 @@ describe("grep tool", () => {
         path: "src/planner.ts",
         matchType: "content",
       }),
+    ]);
+    expect(artifactMetadata[0]).toEqual(
+      expect.objectContaining({
+        provider: "node-content-scan",
+        providers: ["node-content-scan"],
+      }),
+    );
+  });
+
+  it("keeps the existing Planner-facing input contract", () => {
+    expect(grepTool.definition.inputSchema).toEqual(
+      expect.objectContaining({
+        required: ["pattern"],
+        additionalProperties: false,
+        properties: expect.objectContaining({
+          pattern: { type: "string" },
+          root: { type: "string" },
+          extensions: { type: "array", items: { type: "string" } },
+          maxResults: { type: "integer", minimum: 1, maximum: 100 },
+        }),
+      }),
+    );
+    expect(Object.keys(grepTool.definition.inputSchema.properties ?? {})).toEqual([
+      "pattern",
+      "root",
+      "extensions",
+      "maxResults",
     ]);
   });
 

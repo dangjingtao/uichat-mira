@@ -124,6 +124,14 @@ Tauri Windows 打包：
 pnpm package:tauri:win
 ```
 
+仅验证 Tauri 壳层和资源打包、需要显式跳过发布测试报告时：
+
+```bash
+pnpm package:tauri:win:notest
+```
+
+免测试命令不会跳过前端、后端、文档和运行时资源构建，不作为正式发布测试通过的替代。
+
 ## 发布建议流程
 
 1. 更新版本号

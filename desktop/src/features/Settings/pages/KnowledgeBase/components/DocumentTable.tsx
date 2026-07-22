@@ -10,9 +10,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { FileIcon } from "@/shared/ui/FileIcon";
-import IconButton from "@/shared/ui/IconButton";
+import DropdownMenu from "@/shared/ui/DropdownMenu";
 import Skeleton from "@/shared/ui/Skeleton";
-import { StatusIndicator } from "@/shared/ui/StatusIndicator";
 import Switch from "@/shared/ui/Switch";
 import Table from "@/shared/ui/Table";
 import type { ColumnMeta } from "@/shared/ui/Table";
@@ -26,8 +25,6 @@ type DocumentTableProps = {
   sortOrder: "asc" | "desc";
   onToggleSort: (key: DocumentSortKey) => void;
   togglingDocumentIds: string[];
-  openActionMenuId: string | null;
-  onOpenActionMenuChange: (id: string | null) => void;
   onToggleDocumentEnabled: (document: DocumentRow) => void;
   onRebuildIndex: (document: DocumentRow) => void;
   onDeleteDocument: (document: DocumentRow) => void;
@@ -38,31 +35,25 @@ type DocumentTableProps = {
   loading?: boolean;
 };
 
-function getIndexStatusLabel(
+function getIndexStatusNotice(
   t: ReturnType<typeof useTranslation>["t"],
   document: DocumentRow,
 ) {
-  if (document.syncState === "indexing") {
+  if (document.indexStatus === "failed") {
     return {
-      indicator: "unknown" as const,
+      label: t("settings.knowledgeBase.status.failed"),
+      className: "text-danger-text",
+    };
+  }
+
+  if (document.indexStatus === "processing") {
+    return {
       label: t("settings.knowledgeBase.status.processing"),
       className: "text-warning",
     };
   }
 
-  if (document.availability === "enabled") {
-    return {
-      indicator: "running" as const,
-      label: t("settings.knowledgeBase.status.enabled"),
-      className: "text-success",
-    };
-  }
-
-  return {
-    indicator: "stopped" as const,
-    label: t("settings.knowledgeBase.status.disabled"),
-    className: "text-text-secondary",
-  };
+  return null;
 }
 
 export default function DocumentTable({
@@ -73,8 +64,6 @@ export default function DocumentTable({
   sortOrder,
   onToggleSort,
   togglingDocumentIds,
-  openActionMenuId,
-  onOpenActionMenuChange,
   onToggleDocumentEnabled,
   onRebuildIndex,
   onDeleteDocument,
@@ -105,18 +94,16 @@ export default function DocumentTable({
     () => [
       {
         accessorKey: "name",
-        size: 200,
-        minSize: 200,
-        maxSize: 200,
+        size: 300,
         meta: {
-          width: 200,
+          width: "30%",
           sticky: "left",
           ellipsisTooltip: true,
         } satisfies ColumnMeta<DocumentRow>,
         header: () => (
           <button
             type="button"
-            className={`inline-flex items-center gap-1 text-[11px] font-medium tracking-[0.02em] ${
+            className={`inline-flex items-center gap-1 text-xs font-medium tracking-[0.02em] ${
               sortBy === "name" ? "text-text-primary" : "text-text-tertiary"
             }`}
             onClick={() => onToggleSort("name")}
@@ -127,14 +114,22 @@ export default function DocumentTable({
         ),
         sortingFn: "alphanumeric",
         cell: ({ row }) => (
-          <div className="flex min-w-0 max-w-[200px] items-center gap-2">
+          <div className="flex min-w-0 w-full items-center gap-2">
             <FileIcon
               extension={row.original.type}
               className="h-4 w-4 shrink-0"
             />
-            <div className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-medium text-text-primary">
+            <button
+              type="button"
+              className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-left font-medium text-text-primary transition-colors hover:text-primary hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+              onClick={(event) => {
+                event.stopPropagation();
+                onGoToDetail(row.original);
+              }}
+              onDoubleClick={(event) => event.stopPropagation()}
+            >
               {row.original.name}
-            </div>
+            </button>
           </div>
         ),
       },
@@ -143,7 +138,7 @@ export default function DocumentTable({
         header: () => (
           <button
             type="button"
-            className={`inline-flex items-center gap-1 text-[11px] font-medium tracking-[0.02em] ${
+            className={`inline-flex items-center gap-1 text-xs font-medium tracking-[0.02em] ${
               sortBy === "updatedAt"
                 ? "text-text-primary"
                 : "text-text-tertiary"
@@ -155,33 +150,48 @@ export default function DocumentTable({
           </button>
         ),
         size: 96,
+        meta: {
+          mono: true,
+          muted: true,
+        } satisfies ColumnMeta<DocumentRow>,
       },
       {
         id: "status",
         header: () => (
-          <button
-            type="button"
-            className={`inline-flex items-center gap-1 text-[11px] font-medium tracking-[0.02em] ${
-              sortBy === "status" ? "text-text-primary" : "text-text-tertiary"
-            }`}
-            onClick={() => onToggleSort("status")}
-          >
+          <div className="text-xs font-medium tracking-[0.02em] text-text-tertiary">
             {t("settings.knowledgeBase.table.status")}
-            {renderSortIcon("status")}
-          </button>
+          </div>
         ),
-        size: 112,
+        size: 144,
         cell: ({ row }) => {
-          const status = getIndexStatusLabel(t, row.original);
+          const statusNotice = getIndexStatusNotice(t, row.original);
 
           return (
-            <div className="inline-flex items-center gap-1.5 rounded-sm px-1.5 py-0.5">
-              <StatusIndicator status={status.indicator} size="sm" />
-              <span
-                className={`text-[12px] font-medium leading-5 ${status.className}`}
-              >
-                {status.label}
-              </span>
+            <div
+              className="inline-flex items-center gap-2"
+              onClick={(event) => event.stopPropagation()}
+              onDoubleClick={(event) => event.stopPropagation()}
+            >
+              <Switch
+                checked={row.original.enabled}
+                onChange={() => {
+                  onToggleDocumentEnabled(row.original);
+                }}
+                disabled={togglingDocumentIds.includes(row.original.id)}
+                size="sm"
+                ariaLabel={
+                  row.original.enabled
+                    ? t("settings.knowledgeBase.actions.disableDocument")
+                    : t("settings.knowledgeBase.actions.enableDocument")
+                }
+              />
+              {statusNotice ? (
+                <span
+                  className={`text-xs font-medium leading-5 ${statusNotice.className}`}
+                >
+                  {statusNotice.label}
+                </span>
+              ) : null}
             </div>
           );
         },
@@ -189,11 +199,14 @@ export default function DocumentTable({
       {
         id: "actions",
         header: () => (
-          <div className="text-center text-[11px] font-medium tracking-[0.02em] text-text-tertiary">
+          <div className="text-right text-xs font-medium tracking-[0.02em] text-text-tertiary">
             {t("settings.knowledgeBase.table.actions")}
           </div>
         ),
-        size: 88,
+        size: 56,
+        meta: {
+          align: "right",
+        } satisfies ColumnMeta<DocumentRow>,
         cell: ({ row }) => (
           <div
             className="relative flex items-center justify-end gap-1"
@@ -201,80 +214,54 @@ export default function DocumentTable({
             onDoubleClick={(event) => event.stopPropagation()}
             data-kb-action-menu
           >
-            <Switch
-              checked={row.original.enabled}
-              onChange={() => {
-                onToggleDocumentEnabled(row.original);
-              }}
-              disabled={togglingDocumentIds.includes(row.original.id)}
-              size="sm"
-              ariaLabel={
-                row.original.enabled
-                  ? t("settings.knowledgeBase.actions.disableDocument")
-                  : t("settings.knowledgeBase.actions.enableDocument")
+            <DropdownMenu
+              align="end"
+              sideOffset={4}
+              trigger={
+                <button
+                  type="button"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-transparent bg-transparent p-0 text-text-secondary transition-all duration-150 hover:bg-surface-secondary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary"
+                  aria-label={t(
+                    "settings.knowledgeBase.filters.moreActionsAria",
+                    { name: row.original.name },
+                  )}
+                >
+                  <Ellipsis className="h-4 w-4" />
+                </button>
               }
-            />
-            <div className="relative" data-kb-action-menu>
-              <IconButton
-                className="h-7 w-7 rounded-sm"
-                onClick={() =>
-                  onOpenActionMenuChange(
-                    openActionMenuId === row.original.id
-                      ? null
-                      : row.original.id,
-                  )
+              items={[
+                {
+                  id: "rebuild",
+                  label: t("settings.knowledgeBase.actions.rebuildIndex"),
+                  leadingIcon: <RotateCcw className="h-4 w-4" />,
+                },
+                {
+                  id: "delete",
+                  label: t("common.actions.delete"),
+                  leadingIcon: <Trash2 className="h-4 w-4" />,
+                  tone: "danger",
+                },
+              ]}
+              onSelect={(item) => {
+                if (item.id === "rebuild") {
+                  onRebuildIndex(row.original);
+                  return;
                 }
-                ariaLabel={t("settings.knowledgeBase.filters.moreActionsAria", {
-                  name: row.original.name,
-                })}
-              >
-                <Ellipsis className="h-4 w-4" />
-              </IconButton>
-
-              <div
-                className={`absolute right-0 top-full z-20 mt-2 min-w-[150px] rounded-md border border-border bg-surface-elevated p-1 shadow-shadow-md transition-all duration-150 ${
-                  openActionMenuId === row.original.id
-                    ? "visible opacity-100"
-                    : "invisible pointer-events-none opacity-0"
-                }`}
-                data-kb-action-menu
-              >
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-surface-secondary"
-                  onClick={() => {
-                    onOpenActionMenuChange(null);
-                    onRebuildIndex(row.original);
-                  }}
-                >
-                  <RotateCcw className="h-4 w-4 text-icon-secondary" />
-                  {t("settings.knowledgeBase.actions.rebuildIndex")}
-                </button>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-sm text-danger-text transition-colors hover:bg-danger-soft"
-                  onClick={() => {
-                    onOpenActionMenuChange(null);
-                    onDeleteDocument(row.original);
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  {t("common.actions.delete")}
-                </button>
-              </div>
-            </div>
+                if (item.id === "delete") {
+                  onDeleteDocument(row.original);
+                }
+              }}
+            />
           </div>
         ),
       },
     ],
     [
-      openActionMenuId,
       sortBy,
       sortOrder,
       t,
       togglingDocumentIds,
       onToggleSort,
-      onOpenActionMenuChange,
       onToggleDocumentEnabled,
       onRebuildIndex,
       onDeleteDocument,
@@ -283,10 +270,10 @@ export default function DocumentTable({
   );
 
   return (
-    <div ref={tableScrollRef} className="min-h-0 flex-1 overflow-auto">
+    <div className="min-h-0 flex-1 overflow-hidden">
       {loading ? (
         <div className="min-h-full bg-surface-primary">
-          <div className="grid grid-cols-[32px_minmax(200px,1.4fr)_96px_112px_88px] items-center gap-0 border-b border-border px-3 py-2">
+          <div className="grid grid-cols-[32px_30%_96px_144px_56px] items-center gap-0 border-b border-border px-3 py-2">
             <Skeleton height={12} width={14} />
             <Skeleton height={12} width={72} />
             <Skeleton height={12} width={52} />
@@ -297,7 +284,7 @@ export default function DocumentTable({
             {Array.from({ length: 8 }).map((_, index) => (
               <div
                 key={index}
-                className="grid grid-cols-[32px_minmax(200px,1.4fr)_96px_112px_88px] items-center gap-0 border-b border-border/70 py-3 last:border-b-0"
+                className="grid grid-cols-[32px_30%_96px_144px_56px] items-center gap-0 border-b border-border/70 py-3 last:border-b-0"
               >
                 <Skeleton height={14} width={14} />
                 <div className="flex min-w-0 items-center gap-2">
@@ -310,11 +297,9 @@ export default function DocumentTable({
                 </div>
                 <Skeleton height={14} width={54} />
                 <div className="flex items-center gap-2">
-                  <Skeleton.Circle size={8} />
-                  <Skeleton height={14} width={48} />
-                </div>
-                <div className="flex items-center justify-end gap-2">
                   <Skeleton height={20} width={30} className="rounded-full" />
+                </div>
+                <div className="flex items-center justify-end">
                   <Skeleton height={28} width={28} />
                 </div>
               </div>
@@ -337,6 +322,7 @@ export default function DocumentTable({
           stickyHeader
           className="rounded-none border-0 shadow-none"
           emptyState={emptyState}
+          scrollRef={tableScrollRef}
           getRowProps={(row) => ({
             onDoubleClick: () => onGoToDetail(row.original),
           })}

@@ -168,6 +168,11 @@ const toSystemMessage = (content: string): NormalizedChatMessage => ({
   parts: [{ type: "text", text: content }],
 });
 
+const getGenerateRequestContextMessages = (state: AgentNodeState) =>
+  (state.requestContextMessages ?? []).filter(
+    (message) => message.requestContextScope !== "agent-execution",
+  );
+
 const buildGenerateMessages = (
   state: AgentNodeState,
 ): NormalizedChatMessage[] => {
@@ -175,7 +180,7 @@ const buildGenerateMessages = (
   const retrievalContext = buildRetrievalContext(state);
 
   return [
-    ...(state.requestContextMessages ?? []),
+    ...getGenerateRequestContextMessages(state),
     ...buildGenerateInstructionMessages(state),
     ...(toolContext ? [toSystemMessage(toolContext)] : []),
     ...(retrievalContext ? [toSystemMessage(retrievalContext)] : []),
@@ -188,7 +193,7 @@ const buildGenerateContextBudget = (state: AgentNodeState) =>
     policy: state.knowledgeBaseId ? "rag-chat" : "plain-chat",
     roleType: "llm",
     sections: {
-      prefaceMessages: state.requestContextMessages,
+      prefaceMessages: getGenerateRequestContextMessages(state),
       instructionMessages: buildGenerateInstructionMessages(state),
       payloads: [],
       historyMessages: state.messages.slice(0, -1),

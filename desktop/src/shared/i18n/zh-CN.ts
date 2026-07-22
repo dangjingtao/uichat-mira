@@ -147,6 +147,7 @@ const zhCN = {
         processing: "处理中",
         enabled: "可用",
         disabled: "停用",
+        failed: "索引失败",
       },
       detail: {
         notFoundTitle: "未找到对应文档",

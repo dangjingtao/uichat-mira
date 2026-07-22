@@ -55,7 +55,8 @@ const createResolution = (
   apiKey: "secret-key",
   model: "ark-code-latest",
   modelConfigId: `${providerTemplateCode}-model`,
-  params: { temperature: 0.1 },
+  // The Ark agentTask adapter must override any model-level thinking setting.
+  params: { temperature: 0.1, thinking: true },
 });
 
 const createJsonResponse = (body: unknown, init: ResponseInit = {}) =>
@@ -98,6 +99,7 @@ describe("Ark Plan structured output adapter", () => {
       assert.equal(requestBody.stream, false);
       assert.equal(requestBody.model, "ark-code-latest");
       assert.equal(requestBody.temperature, 0.1);
+      assert.deepEqual(requestBody.thinking, { type: "disabled" });
       assert.deepEqual(requestBody.response_format, {
         type: "json_schema",
         json_schema: {

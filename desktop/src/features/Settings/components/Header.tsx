@@ -27,7 +27,7 @@ export default function Header({
             </p>
           ) : null}
         </div>
-        {slot ? <div className="shrink-0 self-start sm:ml-auto">{slot}</div> : null}
+        {slot ? <div className="shrink-0 self-end sm:ml-auto">{slot}</div> : null}
       </div>
       <Divider />
     </div>

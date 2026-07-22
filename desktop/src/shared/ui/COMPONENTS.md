@@ -932,6 +932,21 @@ message.destroy();
 - `shared/uchat/ui/*` 是当前共享的 uchat 展示组件层
 - legacy `components/Thread/*` 已从当前桌面主实现中移除
 
+### Chat 设计 token
+
+UChat 的排版与密度已从组件中的任意值抽到 `styles.css` 的 `--chat-*` CSS token，并由 `tailwind.config.cjs` 暴露为 `text-chat-*`、`leading-chat-*`、`p/m/gap-chat-*`、`h/w-chat-*` 与 `rounded-chat-bubble` 等语义类。
+
+当前 token 覆盖：
+
+- 用户与助手正文的字号、行高
+- Markdown 段落行高、标题字号与行高、块/标题/列表间距
+- 消息行和气泡内边距、气泡圆角
+- 助手头像尺寸、顶部偏移和消息内容间距
+- 消息操作按钮尺寸、顶部偏移、按钮间距和左侧缩进
+- 执行轨迹字号、行高、顶部与底部间距
+
+当前使用紧凑密度预设：消息正文 `14px`，Markdown 段落行高 `24px`，消息行、气泡、头像、操作栏和轨迹间距同步缩小。后续调整继续只修改 `--chat-*` token，并按 `ui-design-guidelines-tailwind.md` 的 Chat / Thread 回归范围验证；不要在 UChat 组件内重新引入局部任意值。
+
 ## 更新说明
 
 当修改或新增共享组件时，请同时更新：

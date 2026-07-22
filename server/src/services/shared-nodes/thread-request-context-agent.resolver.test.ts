@@ -33,4 +33,18 @@ describe("resolveAgentContext", () => {
 
     assert.equal(context, null);
   });
+
+  it("marks the agent prompt as execution-only request context", () => {
+    const context = resolveAgentContext({
+      thread: {
+        roleId: null,
+        contextSummary: null,
+        contextSummaryUpdatedAt: null,
+        agentEnabled: true,
+      },
+      userId: 1,
+    });
+
+    assert.equal(context?.message?.requestContextScope, "agent-execution");
+  });
 });

@@ -4,7 +4,6 @@ import type { ResolvedHarnessCapabilityMatch } from "./types.js";
 export const rerankHarnessCapabilityMatches = async (input: {
   query: string;
   matches: ResolvedHarnessCapabilityMatch[];
-  hasEmbeddingSignal: boolean;
 }) => {
   if (input.matches.length === 0) {
     return {
@@ -42,17 +41,18 @@ export const rerankHarnessCapabilityMatches = async (input: {
   const matches = input.matches
     .map((match) => {
       const rerankScore = rerankMap.get(match.capabilityId) ?? 0;
-      const finalScore = input.hasEmbeddingSignal
-        ? match.embeddingScore * 0.8 + rerankScore * 0.2
-        : rerankScore;
 
       return {
         ...match,
         rerankScore,
-        finalScore,
+        finalScore: rerankScore,
       };
     })
-    .sort((left, right) => right.finalScore - left.finalScore);
+    .sort(
+      (left, right) =>
+        right.rerankScore - left.rerankScore ||
+        right.embeddingScore - left.embeddingScore,
+    );
 
   return {
     matches,

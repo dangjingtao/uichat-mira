@@ -156,6 +156,7 @@ const enUS = {
         processing: "Processing",
         enabled: "Available",
         disabled: "Disabled",
+        failed: "Index failed",
       },
       detail: {
         notFoundTitle: "Document Not Found",

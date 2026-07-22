@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: agent-runtime
-Last verified: 2026-07-18
+Last verified: 2026-07-22
 Layer: wiki
 Module: Agent Runtime / Harness
 Feature: AgentGraphProtocol
@@ -169,6 +169,78 @@ Harness Tool Exposure 只回答：
 
 它不决定最终执行哪个工具。
 
+职责边界：
+
+- Harness 的 `PrepareContext -> candidate resolver` 负责生成本轮 `toolExposure`。
+- `toolExposure` 是 Planner 当前可见工具集合和工具元数据的唯一运行时真相源。
+- Planner 不暴露工具、不计算候选排名；Planner 只从 `toolExposure` 中选择下一步是否使用某个具体 tool id。
+- capability profile、embedding 与 rerank 都是 Harness 内部的上下文压缩机制，不得直接生成 `pendingToolCall`。
+
+### 当前暴露流程
+
+```text
+Harness Registry
+  -> eligibility / public exposure
+  -> eligible concrete tool definitions
+  -> <= 20：全部暴露
+  -> > 20：capability profiles
+           -> embedding 全量召回
+           -> reranker 最终排序
+           -> embedding 仅用于 rerank 同分排序
+           -> 展开为 concrete tools
+           -> toolId 去重
+           -> 取前 20
+  -> state.toolExposure
+  -> Planner
+```
+
+当前查询文本由 `prepareContextNode` 确定：
+
+```ts
+getLatestUserQuestion(state.messages) || state.goal.text
+```
+
+这意味着排序使用本轮最新用户问题；它不会自动把更早消息重新拼成一个完整任务描述。
+
+### 不超过 20 个工具
+
+当 eligible concrete tools 数量不超过 `20`：
+
+- Harness 全部暴露，不运行 embedding 或 rerank。
+- 用户措辞、`topK`、`maxTools`、`minScore` 不会缩小 Planner 可见工具面。
+- 工具顺序不构成 Planner 的执行决定。
+
+### 超过 20 个工具
+
+当 eligible concrete tools 数量超过 `20`：
+
+1. Harness 先把 concrete tools 归入 capability profiles；没有预定义 profile 的工具使用一工具一 profile 的 fallback profile。
+2. capability 文档与查询文本一起进入本地 embedding，余弦相似度写入 `embeddingScore`。
+3. 当前实现把全部 capability matches 交给本地 reranker，不在 rerank 前按 `topK` 截断。
+4. `rerankScore` 决定最终顺序；不再使用 `0.8 * embeddingScore + 0.2 * rerankScore`。
+5. `rerankScore` 相同时，使用 `embeddingScore` 降序作为稳定排序依据。
+6. 排序后的 capability 展开为其 `supportingToolIds`，具体工具继承 capability 的 rerank 与 embedding 分数。
+7. 具体工具再次按 rerank、embedding 排序，按 `toolId` 去重，最后取前 `20` 写入 `toolExposure`。
+
+当前没有：
+
+- `ruleScore` 加分；该字段当前为 `0`。
+- `minScore` 阈值淘汰。
+- 给 `terminal_session` 或其他核心工具保留固定名额。
+- Planner 二次补选或改写 Harness 排名。
+
+`topK` 当前只限制诊断结果中的 `topCandidates` 数量，不改变 Planner 最终可见的 `20` 个工具。
+
+### 退化路径
+
+- 查询为空或没有 capability profile：按 eligible tool definition 的稳定顺序取前 `20`。
+- embedding 调用失败：按 eligible tool definition 的稳定顺序取前 `20`，并返回 retrieval error 诊断。
+- reranker 调用失败：保留 embedding 排序。
+- reranker 没有返回某个 capability 的分数：该 capability 的 `rerankScore` 记为 `0`，再由 embedding 处理同分顺序。
+- 展开后如果出现未排名的 public tool：按稳定顺序补入，再统一截取前 `20`。
+
+这些退化路径只保证工具面可构造，不保证任何指定工具必然进入前 `20`。关键工具是否需要固定暴露资格属于 Tool Exposure Policy，不属于分数校准。
+
 不得恢复为执行入口的对象：
 
 - capability id
@@ -180,6 +252,17 @@ Harness Tool Exposure 只回答：
 - UI 选中状态
 
 真实执行永远从 frozen `pendingToolCall` 开始。
+
+### Code Anchors
+
+- `server/src/agent/nodes/prepare-context.ts`
+- `server/src/agent/intent/embedding-capability-matcher.ts`
+- `server/src/harness/exposure-core/resolver.ts`
+- `server/src/harness/candidates-core/resolver.ts`
+- `server/src/harness/candidates-core/rerank.ts`
+- `server/src/harness/candidates-core/expand-tool-candidates.ts`
+- `server/src/harness/profiles/resolver.ts`
+- `server/src/agent/intent/capability-documents.ts`
 
 ## frozen `pendingToolCall`
 

@@ -36,7 +36,9 @@ import type {
   ChatThreadContextTag,
 } from "../core";
 import ImagePreviewOverlay from "@/shared/ui/ImagePreviewOverlay";
-import chatStartLogo from "@/assets/branding/chat-start-logo.png";
+import chatStartLogoLight from "@/assets/branding/chat-start-logo-light.png";
+import chatStartLogoDark from "@/assets/branding/chat-start-logo-dark.png";
+import { useThemePreferences } from "@/app/providers/ThemeProvider";
 import MarkdownText from "@/shared/ui/MarkdownText";
 import Badge from "@/shared/ui/Badge";
 import DropdownMenu from "@/shared/ui/DropdownMenu";
@@ -90,7 +92,10 @@ const contentColumnClassName =
   "mx-auto flex w-full flex-1 flex-col px-4 pb-[12.5rem] pt-4 sm:px-6 lg:px-8";
 
 const actionButtonClassName =
-  "inline-flex h-7 w-7 items-center justify-center rounded-full border border-border/70 bg-surface-primary/92 text-text-secondary transition-colors hover:border-border hover:bg-surface-primary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20";
+  "inline-flex h-chat-action w-chat-action items-center justify-center rounded-full border border-border/70 bg-surface-primary/92 text-text-secondary transition-colors hover:border-border hover:bg-surface-primary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20";
+
+const messageMarkdownClassName =
+  "space-y-chat-markdown-block text-chat-message [&_h1]:mb-chat-markdown-heading-bottom [&_h1]:mt-chat-markdown-heading-top [&_h1]:text-chat-markdown-h1 [&_h2]:mb-chat-markdown-heading-bottom [&_h2]:mt-chat-markdown-heading-top [&_h2]:text-chat-markdown-h2 [&_h3]:mb-chat-markdown-heading-bottom [&_h3]:mt-chat-markdown-heading-top [&_h3]:text-chat-markdown-h3 [&_h4]:mb-chat-markdown-heading-bottom [&_h4]:mt-chat-markdown-heading-top [&_h4]:text-chat-markdown-h4 [&_h5]:mb-chat-markdown-heading-bottom [&_h5]:mt-chat-markdown-heading-top [&_h5]:text-chat-markdown-h5 [&_h6]:mb-chat-markdown-heading-bottom [&_h6]:mt-chat-markdown-heading-top [&_h6]:text-chat-markdown-h6 [&_li]:py-chat-markdown-list-item-y [&_p]:leading-chat-markdown-paragraph";
 
 type ImagePreviewState = {
   src: string;
@@ -259,7 +264,7 @@ function MessagePartContent({
             visibleText ? (
               <MarkdownText
                 isAnimating={isStreamingText}
-                className="text-[15px]"
+                className={messageMarkdownClassName}
               >
                 {visibleText}
               </MarkdownText>
@@ -377,6 +382,8 @@ export function UChatThreadView({
   slots?: UChatThreadSlots;
 }) {
   const { t } = useTranslation();
+  const { themeMode } = useThemePreferences();
+  const chatStartLogo = themeMode === "dark" ? chatStartLogoDark : chatStartLogoLight;
   const isRunning = runStatus.type === "running";
   const isHydratingPersistedThread =
     activeThreadId !== null && threadStatus === "loading" && messages.length === 0;
@@ -825,7 +832,7 @@ function UChatMessageRow({
 
     if (isEditingThisMessage && editingUserMessage) {
       return (
-        <div className="group flex justify-end px-0 py-2 sm:py-2.5">
+        <div className="group flex justify-end px-0 py-chat-message-row-y sm:py-chat-message-row-y-sm">
           <div
             className={`flex ${userBubbleWidthClassName} w-full max-w-[min(100%,34rem)] flex-col items-end`}
           >
@@ -851,7 +858,7 @@ function UChatMessageRow({
     }
 
     return (
-      <div className="group flex justify-end px-0 py-2 sm:py-2.5">
+      <div className="group flex justify-end px-0 py-chat-message-row-y sm:py-chat-message-row-y-sm">
         <div className={`flex ${userBubbleWidthClassName} flex-col items-end`}>
           <UChatUserBubbleShell>
             {textAndMediaParts.map((part, index) => (
@@ -865,10 +872,10 @@ function UChatMessageRow({
               />
             ))}
           </UChatUserBubbleShell>
-          <div className=" transition-all duration-150 opacity-0 group-hover:opacity-100 group-hover:flex group-hover:items-center group-hover:gap-2">
+          <div className=" transition-all duration-150 opacity-0 group-hover:opacity-100 group-hover:flex group-hover:items-center group-hover:gap-chat-action-gap">
             <button
               type="button"
-              className="mt-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border/70 bg-surface-primary/92 text-text-secondary transition-colors hover:border-border hover:bg-surface-primary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+              className="mt-chat-action-top inline-flex h-chat-action w-chat-action items-center justify-center rounded-full border border-border/70 bg-surface-primary/92 text-text-secondary transition-colors hover:border-border hover:bg-surface-primary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
               onClick={() => {
                 const content = textAndMediaParts
                   .filter(
@@ -897,7 +904,7 @@ function UChatMessageRow({
             {onEditUserMessage ? (
               <button
                 type="button"
-                className="mt-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border/70 bg-surface-primary/92 text-text-secondary transition-colors hover:border-border hover:bg-surface-primary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+                className="mt-chat-action-top inline-flex h-chat-action w-chat-action items-center justify-center rounded-full border border-border/70 bg-surface-primary/92 text-text-secondary transition-colors hover:border-border hover:bg-surface-primary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
                 onClick={() => {
                   const content = textAndMediaParts
                     .filter(
@@ -923,8 +930,8 @@ function UChatMessageRow({
   }
 
   return (
-    <div className="group flex justify-start px-0 py-2 sm:py-2.5">
-      <div className="flex w-full items-start gap-3">
+    <div className="group flex justify-start px-0 py-chat-message-row-y sm:py-chat-message-row-y-sm">
+      <div className="flex w-full items-start gap-chat-avatar-gap">
         <UChatAssistantAvatar
           src={assistantAvatarSrc}
           name={assistantDisplayName}
@@ -1013,7 +1020,7 @@ function UChatMessageRow({
             ) : null}
           </UChatAssistantBubbleShell>
 
-          <div className="mt-1 flex items-center gap-2 pl-1">
+          <div className="mt-chat-action-top flex items-center gap-chat-action-gap pl-chat-action-left">
             {MessageExtensions ? (
               <MessageExtensions
                 message={message}

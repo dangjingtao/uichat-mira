@@ -428,6 +428,30 @@
 - 不用逐词透明度动画替代流式节奏控制；传输结束不能使尚未显示的整段正文瞬间跳满
 - 分支、重试、编辑等多轮能力默认以轻量版本模型呈现，不把树结构直接暴露给普通用户
 
+### 15.1 Chat 排版与密度 token
+
+聊天正文、Markdown 层级、消息行、气泡、头像、操作栏和执行轨迹使用独立的 `chat-*` token。原始值定义在 `desktop/src/styles.css`，Tailwind 语义类定义在 `desktop/tailwind.config.cjs`。当前采用适合中文长回复的紧凑密度预设。
+
+| 类别 | CSS token | Tailwind 类 | 当前值 / 等价旧类 |
+| --- | --- | --- | --- |
+| 助手正文 | `--chat-font-size-message`、`--chat-line-height-assistant` | `text-chat-message-assistant` | `14px / 1.64` |
+| 用户正文 | `--chat-font-size-message`、`--chat-line-height-user` | `text-chat-message-user` | `14px / 1.6` |
+| Markdown 正文字号 | `--chat-font-size-message` | `text-chat-message` | `14px`，行高继续继承所属消息角色 |
+| Markdown 段落 | `--chat-line-height-markdown-paragraph` | `leading-chat-markdown-paragraph` | `24px` |
+| Markdown 标题 | `--chat-font-size-markdown-h1~h6` 与对应行高 | `text-chat-markdown-h1~h6` | `24px` 到 `12px` |
+| Markdown 块间距 | `--chat-space-markdown-*` | `space-y-chat-markdown-block`、`mt/mb-chat-markdown-heading-*`、`py-chat-markdown-list-item-y` | `12px`、`18px / 6px`、`2px` |
+| 消息行 | `--chat-space-message-row-y*` | `py-chat-message-row-y`、`sm:py-chat-message-row-y-sm` | `6px / 8px` |
+| 气泡 | `--chat-space-*-bubble-*`、`--chat-radius-bubble` | `px/py-chat-*-bubble-*`、`rounded-chat-bubble` | 助手/用户横向 `4px / 14px`，纵向 `8px`，圆角 `12px` |
+| 头像 | `--chat-size-avatar`、`--chat-space-avatar-*` | `h/w-chat-avatar`、`mt-chat-avatar-top`、`gap-chat-avatar-gap` | `32px`、`8px`、`10px` |
+| 操作栏 | `--chat-size-action`、`--chat-space-action-*` | `h/w-chat-action`、`mt/gap/pl-chat-action-*` | `26px`、`2px / 6px / 4px` |
+| 执行轨迹 | `--chat-font-size-trace`、`--chat-line-height-trace`、`--chat-space-trace-*` | `text-chat-trace`、`mt/pb-chat-trace-*` | `13px / 18px`、`12px / 6px` |
+
+约束：
+
+- 调整聊天密度时优先修改 token，不在 UChat 组件内重新写任意值。
+- `MarkdownText` 的全局默认排版保持独立；聊天页通过 UChat 传入 `chat-*` 类，不能让聊天密度修改影响知识页等其他 Markdown 消费方。
+- 同一批 token 调整数值前必须做聊天长文、短消息、附件、执行轨迹和小屏宽度的视觉回归。
+
 ## 16. Composer Pattern
 
 Composer 是 AI 产品的主舞台，默认遵守：

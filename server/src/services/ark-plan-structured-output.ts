@@ -102,6 +102,11 @@ const requestArkPlanStructuredOutputText = async (
     // Buffering one complete response ensures fallback happens before Planner
     // receives a partial JSON object.
     stream: false,
+    // Ark Plan requires the Thinking object shape instead of a boolean. Planner
+    // agentTask decisions must stay non-thinking so reasoning text cannot leak
+    // into the schema-constrained decision. Remove only if Ark changes this
+    // request contract and the replacement is verified on both Plan endpoints.
+    thinking: { type: "disabled" },
     response_format: {
       type: "json_schema",
       json_schema: {

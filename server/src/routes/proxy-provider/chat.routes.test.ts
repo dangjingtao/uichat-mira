@@ -151,7 +151,8 @@ test("resolveChatToolSurface respects custom allowlist and maxTools trimming", (
   });
 
   assert.equal(toolSurface.length, 2);
-  assert.deepEqual(new Set(toolSurface.map((tool) => tool.id)), new Set(["read_list", "read_open"]));
+  assert.deepEqual(new Set(toolSurface.map((tool) => tool.id)), new Set(["read_open", "web_search"]));
+  assert.ok(toolSurface.every((tool) => tool.id !== "read_list"));
   assert.ok(toolSurface.every((tool) => tool.id !== "terminal_session"));
 });
 
@@ -1568,6 +1569,10 @@ test("POST /proxy/chat/default passes thread requestContextMessages into createA
     assert.match(
       capturedAgentInput?.requestContextMessages?.[2]?.content ?? "",
       /智能体模式|当前执行平台：/,
+    );
+    assert.equal(
+      capturedAgentInput?.requestContextMessages?.[2]?.requestContextScope,
+      "agent-execution",
     );
   } finally {
     providerProxyService.createPersistedChatStream = originalPersistedStream;

@@ -156,6 +156,7 @@ describe("threadRequestContextNode", () => {
     expect(context.messages[1]?.content).toContain("线程摘要");
     expect(context.messages[2]?.content).toContain("长期记忆");
     expect(context.messages[3]?.content).toContain("智能体模式");
+    expect(context.messages[3]?.requestContextScope).toBe("agent-execution");
   });
 
   it("appends agent context after role and summary when enabled", () => {
@@ -193,5 +194,6 @@ describe("threadRequestContextNode", () => {
 
     expect(context.messages).toHaveLength(3);
     expect(context.messages[2]?.content).toContain("智能体模式");
+    expect(context.messages[2]?.requestContextScope).toBe("agent-execution");
   });
 });

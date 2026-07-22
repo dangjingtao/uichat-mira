@@ -205,14 +205,14 @@ export function UChatExecutionTrace({
     approvalTraceState === "running" || runningCount > 0;
 
   return (
-    <div data-uchat-execution-trace="true" className="mt-4">
-      <div className="border-b border-border/60 pb-2 transition-[border-color] duration-200">
+    <div data-uchat-execution-trace="true" className="mt-chat-trace-top">
+      <div className="border-b border-border/60 pb-chat-trace-bottom transition-[border-color] duration-200">
         <button
           type="button"
           onClick={() => setExpanded((value) => !value)}
           className="flex w-full items-center gap-2 text-left transition-colors duration-150 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
         >
-          <div className="min-w-0 flex flex-1 items-center gap-2 overflow-hidden text-sm">
+          <div className="min-w-0 flex flex-1 items-center gap-2 overflow-hidden text-chat-trace">
             <p className="min-w-0 truncate text-text-secondary">{summary}</p>
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2">

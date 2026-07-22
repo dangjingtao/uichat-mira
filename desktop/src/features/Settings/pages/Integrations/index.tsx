@@ -103,26 +103,25 @@ const capabilityIcon = (type: string) => {
 };
 
 const capabilityLabel = (type: string) => {
-  if (type === "wecom.smart_robot") return "智能机器人";
-  if (type === "wecom.webhook_robot") return "Webhook 机器人";
-  return type;
+  if (type === "wecom.smart_robot") return "integrationsPage.capability.smartRobot";
+  if (type === "wecom.webhook_robot") return "integrationsPage.capability.webhookRobot";
+  return "integrationsPage.capability.thirdParty";
 };
 
 const capabilityDescription = (type: string) => {
-  if (type === "wecom.smart_robot") return "接收群聊 @ 和单聊消息，并把问题送入企业集成能力链路。";
-  if (type === "wecom.webhook_robot") return "从聊天或流程里主动推送通知到企业微信群。";
-  return "第三方接入能力。";
+  if (type === "wecom.smart_robot") return "integrationsPage.capability.smartRobotDescription";
+  if (type === "wecom.webhook_robot") return "integrationsPage.capability.webhookRobotDescription";
+  return "integrationsPage.capability.thirdPartyDescription";
 };
 
 const supportsRuntimeStatus = (type: string) => type === "wecom.smart_robot";
 
 const capabilityStatusLabel = (status?: IntegrationCapabilityStatus["status"]) => {
-  if (status === "connected") return "运行中";
-  if (status === "connecting") return "连接中";
-  if (status === "error") return "异常";
-  if (status === "stopped") return "已停止";
-  if (status === "idle") return "待配置";
-  return "待配置";
+  if (status === "connected") return "integrationsPage.capability.running";
+  if (status === "connecting") return "integrationsPage.capability.connecting";
+  if (status === "error") return "integrationsPage.capability.error";
+  if (status === "stopped") return "integrationsPage.capability.stopped";
+  return "integrationsPage.capability.pending";
 };
 
 const runtimeStatusTone = (status?: IntegrationCapabilityStatus["status"]) => {
@@ -139,7 +138,7 @@ const instanceHealth = (
   statuses: Record<string, IntegrationCapabilityStatus | null>,
 ) => {
   if (!instance.enabled) {
-    return { label: "已停用", tone: "muted" as const };
+    return { label: "integrationsPage.capability.instanceDisabled", tone: "muted" as const };
   }
 
   const statusList = instanceCapabilities
@@ -147,18 +146,18 @@ const instanceHealth = (
     .filter(Boolean);
 
   if (statusList.some((status) => status === "error")) {
-    return { label: "异常", tone: "danger" as const };
+    return { label: "integrationsPage.capability.error", tone: "danger" as const };
   }
   if (statusList.some((status) => status === "connecting")) {
-    return { label: "连接中", tone: "warning" as const };
+    return { label: "integrationsPage.capability.connecting", tone: "warning" as const };
   }
   if (statusList.some((status) => status === "connected")) {
-    return { label: "可用", tone: "success" as const };
+    return { label: "integrationsPage.capability.available", tone: "success" as const };
   }
   if (instanceCapabilities.length === 0) {
-    return { label: "未配置", tone: "warning" as const };
+    return { label: "integrationsPage.capability.unavailable", tone: "warning" as const };
   }
-  return { label: "待完善", tone: "warning" as const };
+  return { label: "integrationsPage.capability.incomplete", tone: "warning" as const };
 };
 
 export default function IntegrationsSettings() {
@@ -180,7 +179,7 @@ export default function IntegrationsSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testingCapabilityId, setTestingCapabilityId] = useState<string>("");
-  const [testMessage, setTestMessage] = useState("这是一条企业微信测试消息。");
+  const [testMessage, setTestMessage] = useState(() => t("integrationsPage.messages.defaultTestMessage"));
   const [testFormat, setTestFormat] = useState<"markdown" | "text">("markdown");
   const [mentionAll, setMentionAll] = useState(false);
   const [instanceDraft, setInstanceDraft] = useState<InstanceDraft | null>(null);
@@ -188,11 +187,11 @@ export default function IntegrationsSettings() {
 
   const platformTabs = useMemo<PlatformTab[]>(
     () => [
-      { code: "wecom", label: "企业微信" },
-      { code: "lark", label: "飞书", planned: true },
-      { code: "dingtalk", label: "钉钉", planned: true },
+      { code: "wecom", label: t("integrationsPage.platform.wecom") },
+      { code: "lark", label: t("integrationsPage.platform.lark"), planned: true },
+      { code: "dingtalk", label: t("integrationsPage.platform.dingtalk"), planned: true },
     ],
-    [],
+    [t],
   );
 
   const filteredInstances = activeProvider === "wecom" ? instances : [];
@@ -216,8 +215,10 @@ export default function IntegrationsSettings() {
   const currentCapabilityDraft = currentCapability ? capabilityDrafts[currentCapability.id] ?? null : null;
   const currentHealth = currentInstance
     ? instanceHealth(currentInstance, currentCapabilities, statuses)
-    : { label: "未配置", tone: "warning" as const };
-  const primaryMethod = currentCapabilities[0] ? capabilityLabel(currentCapabilities[0].type) : "未设置";
+    : { label: "integrationsPage.capability.unavailable", tone: "warning" as const };
+  const primaryMethod = currentCapabilities[0]
+    ? t(capabilityLabel(currentCapabilities[0].type))
+    : t("integrationsPage.capability.primaryUnset");
   const availableMicroApps = currentCapability
     ? microApps.filter(
         (item) =>
@@ -351,7 +352,7 @@ export default function IntegrationsSettings() {
         activeCapabilityId,
       );
     } catch (error) {
-      message.error(error instanceof Error ? error.message : t("settings.integrations.messages.loadFailed"));
+      message.error(error instanceof Error ? error.message : t("integrationsPage.messages.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -383,10 +384,10 @@ export default function IntegrationsSettings() {
         externalTenantId: instanceDraft.externalTenantId.trim() || null,
         enabled: instanceDraft.enabled,
       });
-      message.success(t("settings.integrations.messages.instanceSaved"));
+      message.success(t("integrationsPage.messages.instanceSaved"));
       await load();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : t("settings.integrations.messages.instanceSaveFailed"));
+      message.error(error instanceof Error ? error.message : t("integrationsPage.messages.instanceSaveFailed"));
     } finally {
       setSaving(false);
     }
@@ -405,7 +406,7 @@ export default function IntegrationsSettings() {
         return value === undefined || value === null || String(value).trim() === "";
       });
       if (missingRequiredField) {
-        message.error(`请先填写${missingRequiredField.label}`);
+      message.error(t("integrationsPage.messages.missingField", { field: missingRequiredField.label }));
         return;
       }
     }
@@ -447,10 +448,10 @@ export default function IntegrationsSettings() {
         });
       }
 
-      message.success(t("settings.integrations.messages.capabilitySaved"));
+      message.success(t("integrationsPage.messages.capabilitySaved"));
       await load();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : t("settings.integrations.messages.capabilitySaveFailed"));
+      message.error(error instanceof Error ? error.message : t("integrationsPage.messages.capabilitySaveFailed"));
     } finally {
       setSaving(false);
     }
@@ -475,9 +476,9 @@ export default function IntegrationsSettings() {
     try {
       await startIntegrationCapability(capabilityId);
       await refreshCapabilityStatus(capabilityId);
-      message.success("智能机器人已启动");
+      message.success(t("integrationsPage.messages.capabilityStarted"));
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "启动失败");
+      message.error(error instanceof Error ? error.message : t("integrationsPage.messages.capabilityStartFailed"));
     } finally {
       setSaving(false);
     }
@@ -488,9 +489,9 @@ export default function IntegrationsSettings() {
     try {
       await stopIntegrationCapability(capabilityId);
       await refreshCapabilityStatus(capabilityId);
-      message.success("智能机器人已停止");
+      message.success(t("integrationsPage.messages.capabilityStopped"));
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "停止失败");
+      message.error(error instanceof Error ? error.message : t("integrationsPage.messages.capabilityStopFailed"));
     } finally {
       setSaving(false);
     }
@@ -504,9 +505,9 @@ export default function IntegrationsSettings() {
         format: testFormat,
         mentionAll,
       });
-      message.success(t("settings.wecom.messages.testMessageSent"));
+      message.success(t("integrationsPage.messages.testMessageSent"));
     } catch (error) {
-      message.error(error instanceof ApiError ? error.message : t("settings.wecom.messages.testMessageFailed"));
+      message.error(error instanceof ApiError ? error.message : t("integrationsPage.messages.testMessageFailed"));
     } finally {
       setTestingCapabilityId("");
     }
@@ -514,14 +515,14 @@ export default function IntegrationsSettings() {
 
   return (
     <SettingsPageLayout
-      miniTitle={t("settings.integrations.page.miniTitle")}
-      title={t("settings.integrations.page.title")}
-      description={t("settings.integrations.page.description")}
+      miniTitle={t("integrationsPage.page.miniTitle")}
+      title={t("integrationsPage.page.title")}
+      description={t("integrationsPage.page.description")}
       slot={
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
             <RefreshCcw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            {t("settings.integrations.actions.refresh")}
+            {t("integrationsPage.actions.refresh")}
           </Button>
         </div>
       }
@@ -533,7 +534,7 @@ export default function IntegrationsSettings() {
           label: (
             <span className="inline-flex items-center gap-2">
               <span>{tab.label}</span>
-              {tab.planned ? <Badge variant="muted" size="sm">规划中</Badge> : null}
+              {tab.planned ? <Badge variant="muted" size="sm">{t("integrationsPage.platform.planned")}</Badge> : null}
             </span>
           ),
         }))}
@@ -544,9 +545,9 @@ export default function IntegrationsSettings() {
       {activeProvider !== "wecom" ? (
         <Alert
           variant="info"
-          title={`${platformTabs.find((item) => item.code === activeProvider)?.label ?? ""}规划中`}
+          title={t("integrationsPage.platform.plannedTitle", { platform: platformTabs.find((item) => item.code === activeProvider)?.label ?? "" })}
         >
-          当前这一页先聚焦企业微信，飞书和钉钉后续会沿用同一套轻量接入面板。
+          {t("integrationsPage.platform.plannedDescription")}
         </Alert>
       ) : null}
 
@@ -598,8 +599,8 @@ export default function IntegrationsSettings() {
       ) : null}
 
       {activeProvider === "wecom" && !loading && !currentInstance ? (
-        <Alert variant="info" title={t("settings.integrations.empty.title")}>
-          {t("settings.integrations.empty.description")}
+        <Alert variant="info" title={t("integrationsPage.empty.title")}>
+          {t("integrationsPage.empty.description")}
         </Alert>
       ) : null}
 
@@ -610,46 +611,46 @@ export default function IntegrationsSettings() {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <div className="text-xs font-semibold uppercase tracking-[0.12em] text-text-tertiary">
-                    当前接入
+                    {t("integrationsPage.overview.current")}
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
                     <h3 className="text-2xl font-semibold text-text-primary">
-                      {currentInstance.name || t("settings.integrations.instance.unnamed")}
+                      {currentInstance.name || t("integrationsPage.overview.unnamedInstance")}
                     </h3>
                     <Badge variant={currentHealth.tone} size="sm">
-                      {currentHealth.label}
+                      {t(currentHealth.label)}
                     </Badge>
                   </div>
                   <p className="max-w-2xl text-sm leading-6 text-text-secondary">
-                    管理本地企业平台接入。完成配置后，可在聊天、自动化流程和机器人回复链路中使用。
+                    {t("integrationsPage.overview.description")}
                   </p>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div className="space-y-1">
                     <div className="text-xs font-semibold uppercase tracking-[0.08em] text-text-tertiary">
-                      平台
+                      {t("integrationsPage.overview.platform")}
                     </div>
-                    <div className="text-sm font-medium text-text-primary">企业微信</div>
+                    <div className="text-sm font-medium text-text-primary">{t("integrationsPage.platform.wecom")}</div>
                   </div>
                   <div className="space-y-1">
                     <div className="text-xs font-semibold uppercase tracking-[0.08em] text-text-tertiary">
-                      当前主要方式
+                      {t("integrationsPage.overview.primaryMethod")}
                     </div>
                     <div className="text-sm font-medium text-text-primary">{primaryMethod}</div>
                   </div>
                   <div className="space-y-1">
                     <div className="text-xs font-semibold uppercase tracking-[0.08em] text-text-tertiary">
-                      已接入方式
+                      {t("integrationsPage.overview.connectedMethods")}
                     </div>
-                    <div className="text-sm font-medium text-text-primary">{currentCapabilities.length} 项</div>
+                    <div className="text-sm font-medium text-text-primary">{t("integrationsPage.overview.count", { count: currentCapabilities.length })}</div>
                   </div>
                 </div>
               </div>
 
               <div className="flex shrink-0 flex-wrap gap-2">
                 <Button variant="primary" onClick={() => openCurrentDrawer("basic")}>
-                  配置接入
+                  {t("integrationsPage.actions.configure")}
                 </Button>
               </div>
             </div>
@@ -658,9 +659,9 @@ export default function IntegrationsSettings() {
           <section className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-base font-semibold text-text-primary">接入方式</h3>
+                <h3 className="text-base font-semibold text-text-primary">{t("integrationsPage.overview.methodsTitle")}</h3>
                 <p className="mt-1 text-sm text-text-secondary">
-                  这里列出当前企业微信接入下真正可用的方式，点击后在右侧完成配置或调试。
+                  {t("integrationsPage.overview.methodsDescription")}
                 </p>
               </div>
             </div>
@@ -690,25 +691,25 @@ export default function IntegrationsSettings() {
                         <div className="min-w-0 space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <div className="text-base font-semibold text-text-primary">
-                              {capabilityLabel(capability.type)}
+                              {t(capabilityLabel(capability.type))}
                             </div>
                             <Badge variant={runtimeStatusTone(runtime?.status)} size="sm">
-                              {capabilityStatusLabel(runtime?.status)}
+                              {t(capabilityStatusLabel(runtime?.status))}
                             </Badge>
                           </div>
-                          <div className="text-sm text-text-secondary">{capabilityDescription(capability.type)}</div>
+                          <div className="text-sm text-text-secondary">{t(capabilityDescription(capability.type))}</div>
                           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-tertiary">
-                            <span>{draft?.enabled ? "已启用" : "未启用"}</span>
+                            <span>{draft?.enabled ? t("integrationsPage.overview.enabled") : t("integrationsPage.overview.disabled")}</span>
                             {capability.type === "wecom.smart_robot" ? (
-                              <span>{boundMicroApp ? `微应用：${boundMicroApp.name}` : "未绑定微应用"}</span>
+                              <span>{boundMicroApp ? t("integrationsPage.overview.microApp", { name: boundMicroApp.name }) : t("integrationsPage.overview.unboundMicroApp")}</span>
                             ) : null}
-                            {runtime?.lastError ? <span className="text-danger">最近异常：{runtime.lastError}</span> : null}
+                            {runtime?.lastError ? <span className="text-danger">{t("integrationsPage.overview.recentError", { error: runtime.lastError })}</span> : null}
                           </div>
                         </div>
                       </div>
 
                       <div className="inline-flex items-center gap-1 self-end text-sm font-medium text-primary lg:self-center">
-                        配置
+                        {t("integrationsPage.actions.configureShort")}
                         <ChevronRight className="h-4 w-4" />
                       </div>
                     </div>
@@ -724,57 +725,57 @@ export default function IntegrationsSettings() {
         open={guideOpen}
         onClose={() => setGuideOpen(false)}
         width={480}
-        closeLabel="关闭接入说明"
-        closeMaskLabel="关闭接入说明"
+        closeLabel={t("integrationsPage.guide.close")}
+        closeMaskLabel={t("integrationsPage.guide.close")}
         header={
           <div className="space-y-1">
-            <div className="text-xs uppercase tracking-wide text-text-tertiary">企业微信</div>
-            <div className="text-base font-semibold text-text-primary">如何接入企业微信</div>
+            <div className="text-xs uppercase tracking-wide text-text-tertiary">{t("integrationsPage.guide.eyebrow")}</div>
+            <div className="text-base font-semibold text-text-primary">{t("integrationsPage.guide.title")}</div>
             <div className="text-sm leading-6 text-text-secondary">
-              这一页只说明本地应用当前支持的两种接法，以及各自该填什么配置。
+              {t("integrationsPage.guide.description")}
             </div>
           </div>
         }
       >
         <div className="space-y-3">
           <div className="rounded-ui-control border border-dashed border-border px-4 py-3 text-xs leading-6 text-text-tertiary">
-            当前建议先把企业微信看成两个能力：智能机器人负责问答入口，Webhook 机器人负责主动通知。
+            {t("integrationsPage.guide.intro")}
           </div>
 
           <GuideSection
             icon={<Sparkles className="h-4 w-4 text-icon-secondary" />}
-            title="先决定你要接哪种方式"
-            body="如果你希望别人 @ 机器人后进入知识库问答，请配置智能机器人；如果你只是想从 Chat 或流程里主动把结果发到企业微信群，请配置 Webhook 机器人。两者不是一回事。"
+            title={t("integrationsPage.guide.chooseTitle")}
+            body={t("integrationsPage.guide.chooseBody")}
           />
           <GuideSection
             icon={<Bot className="h-4 w-4 text-icon-secondary" />}
-            title="智能机器人怎么配"
-            body="去企业微信管理后台创建智能机器人，选择 API 模式和长连接方式，拿到 Bot ID 和 Secret。然后回到这里，在“智能机器人”里填写 Bot ID、Secret 和回复模式；知识库绑定改到“微应用 -> 知识库调用”里配置。"
+            title={t("integrationsPage.guide.smartTitle")}
+            body={t("integrationsPage.guide.smartBody")}
           />
           <GuideSection
             icon={<Webhook className="h-4 w-4 text-icon-secondary" />}
-            title="Webhook 机器人怎么配"
-            body="去企业微信群添加机器人，拿到 Webhook URL；如果群机器人配置了签名，再一并填写 Webhook Secret。保存后可以在“状态与调试”里直接发一条测试消息。"
+            title={t("integrationsPage.guide.webhookTitle")}
+            body={t("integrationsPage.guide.webhookBody")}
           />
           <GuideSection
             icon={<Search className="h-4 w-4 text-icon-secondary" />}
-            title="接入后的验证顺序"
-            body="智能机器人先验证能否成功启动，再到企业微信里 @ 它发一条简单消息；Webhook 机器人则直接用测试消息验证。建议先用短文本验证，不要一开始就用复杂问题。"
+            title={t("integrationsPage.guide.verifyTitle")}
+            body={t("integrationsPage.guide.verifyBody")}
           />
           <GuideSection
             icon={<PlugZap className="h-4 w-4 text-icon-secondary" />}
-            title="接入完成后怎么用"
-            body="智能机器人是外部问答入口，别人 @ 它时会走本地知识库；Webhook 机器人是主动通知出口，后续会从 Chat 或自动化流程里调用，不是靠别人 @ 它。"
+            title={t("integrationsPage.guide.usageTitle")}
+            body={t("integrationsPage.guide.usageBody")}
           />
           <GuideSection
             icon={<CircleAlert className="h-4 w-4 text-icon-secondary" />}
-            title="当前能力边界"
-            body="智能机器人只能处理企业微信已经投递到本地服务的消息。若企业微信平台侧未投递、被拦截或被内容治理命中，本地应用无法补救，也不会收到任何入站日志。"
+            title={t("integrationsPage.guide.boundaryTitle")}
+            body={t("integrationsPage.guide.boundaryBody")}
           />
           <GuideSection
             icon={<ExternalLink className="h-4 w-4 text-icon-secondary" />}
-            title="本地应用为什么不讲 OAuth"
-            body="因为我们当前主线不是网页授权绑定。本地桌面应用没有天然公网回调域名，第一阶段先聚焦机器人链路；自建应用、OAuth 和组织能力扩展属于后续能力。"
+            title={t("integrationsPage.guide.oauthTitle")}
+            body={t("integrationsPage.guide.oauthBody")}
           />
         </div>
       </Drawer>
@@ -787,20 +788,20 @@ export default function IntegrationsSettings() {
           currentInstance ? (
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.12em] text-text-tertiary">企业微信</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.12em] text-text-tertiary">{t("integrationsPage.platform.wecom")}</span>
                 <Badge variant={currentHealth.tone} size="sm">
-                  {currentHealth.label}
+                  {t(currentHealth.label)}
                 </Badge>
               </div>
               <div className="text-lg font-semibold text-text-primary">
                 {drawerTab === "basic"
-                  ? currentInstance.name || t("settings.integrations.instance.unnamed")
-                  : capabilityLabel(currentCapability?.type ?? "")}
+                  ? currentInstance.name || t("integrationsPage.overview.unnamedInstance")
+                  : t(capabilityLabel(currentCapability?.type ?? ""))}
               </div>
               <div className="text-sm text-text-secondary">
                 {drawerTab === "basic"
-                  ? "当前接入的基础信息"
-                  : "配置当前接入方式，并在需要时做最小调试"}
+                  ? t("integrationsPage.drawer.basicDescription")
+                  : t("integrationsPage.drawer.capabilityDescription")}
               </div>
             </div>
           ) : null
@@ -810,8 +811,8 @@ export default function IntegrationsSettings() {
         {drawerTab !== "basic" ? (
           <NavigationCardTabs
             tabs={[
-              { value: "caps", label: "接入方式", icon: <Bot className="h-4 w-4" /> },
-              { value: "debug", label: "状态与调试", icon: <Database className="h-4 w-4" /> },
+              { value: "caps", label: t("integrationsPage.drawer.capabilityTab"), icon: <Bot className="h-4 w-4" /> },
+              { value: "debug", label: t("integrationsPage.drawer.debugTab"), icon: <Database className="h-4 w-4" /> },
             ]}
             value={drawerTab}
             onChange={(value) => setDrawerTab(value as "caps" | "debug")}
@@ -822,9 +823,9 @@ export default function IntegrationsSettings() {
           <div className="space-y-5">
             <div className="flex items-center justify-between rounded-ui-panel border border-border bg-surface-secondary/30 px-4 py-3">
               <div className="space-y-1">
-                <div className="text-sm font-medium text-text-primary">启用当前接入</div>
+                <div className="text-sm font-medium text-text-primary">{t("integrationsPage.drawer.enableInstance")}</div>
                 <div className="text-xs text-text-tertiary">
-                  关闭后，这个企业微信接入及其下属方式都会停止对外提供服务。
+                  {t("integrationsPage.drawer.enableInstanceDescription")}
                 </div>
               </div>
               <Switch
@@ -833,35 +834,35 @@ export default function IntegrationsSettings() {
                   setInstanceDraft((current) => (current ? { ...current, enabled: !current.enabled } : current))
                 }
                 disabled={saving}
-                ariaLabel="启用当前接入"
+                ariaLabel={t("integrationsPage.drawer.enableInstance")}
               />
             </div>
 
             <div className="grid gap-4">
               <TextInput
-                label="接入名称"
+                label={t("integrationsPage.drawer.instanceName")}
                 value={instanceDraft.name}
                 onChange={(value) => setInstanceDraft((current) => (current ? { ...current, name: value } : current))}
                 disabled={saving}
               />
               <TextInput
-                label="企业标识"
+                label={t("integrationsPage.drawer.tenantId")}
                 value={instanceDraft.externalTenantId}
                 onChange={(value) =>
                   setInstanceDraft((current) => (current ? { ...current, externalTenantId: value } : current))
                 }
-                placeholder="可填写企业 ID / 租户标识，便于区分"
+                placeholder={t("integrationsPage.drawer.tenantPlaceholder")}
                 disabled={saving}
               />
             </div>
 
             <div className="rounded-ui-panel border border-border bg-surface-secondary/20 px-4 py-3 text-sm text-text-secondary">
-              这里仅配置实例本身的信息。具体能力如智能机器人、Webhook 机器人，请回到接入方式列表后分别进入配置。
+              {t("integrationsPage.drawer.instanceInfo")}
             </div>
 
             <div className="flex justify-end">
               <Button variant="primary" onClick={() => void saveInstance()} disabled={saving}>
-                保存基础配置
+                {t("integrationsPage.actions.saveBasic")}
               </Button>
             </div>
           </div>
@@ -873,20 +874,20 @@ export default function IntegrationsSettings() {
               <div className="rounded-ui-panel border border-border bg-surface-secondary/20 px-4 py-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="text-sm font-medium text-text-primary">
-                    {capabilityLabel(currentCapabilityDraft.type)}
+                    {t(capabilityLabel(currentCapabilityDraft.type))}
                   </div>
                   <Badge variant={runtimeStatusTone(statuses[currentCapabilityDraft.id]?.status)} size="sm">
-                    {capabilityStatusLabel(statuses[currentCapabilityDraft.id]?.status)}
+                    {t(capabilityStatusLabel(statuses[currentCapabilityDraft.id]?.status))}
                   </Badge>
                 </div>
                 <p className="mt-1 text-sm text-text-secondary">
-                  {capabilityDescription(currentCapabilityDraft.type)}
+                  {t(capabilityDescription(currentCapabilityDraft.type))}
                 </p>
               </div>
 
               <div className="grid gap-4">
                 <TextInput
-                  label="显示名称"
+                  label={t("integrationsPage.drawer.displayName")}
                   value={currentCapabilityDraft.name}
                   onChange={(value) =>
                     setCapabilityDrafts((current) => ({
@@ -900,7 +901,7 @@ export default function IntegrationsSettings() {
                 {currentCapabilityDraft.type === "wecom.smart_robot" ? (
                   <>
                     <TextInput
-                      label="Bot ID"
+                      label={t("integrationsPage.drawer.botId")}
                       value={currentCapabilityDraft.botId}
                       onChange={(value) =>
                         setCapabilityDrafts((current) => ({
@@ -911,7 +912,7 @@ export default function IntegrationsSettings() {
                       disabled={saving}
                     />
                     <TextInput
-                      label="Secret"
+                      label={t("integrationsPage.drawer.secret")}
                       value={currentCapabilityDraft.secret}
                       onChange={(value) =>
                         setCapabilityDrafts((current) => ({
@@ -919,12 +920,12 @@ export default function IntegrationsSettings() {
                           [currentCapabilityDraft.id]: { ...current[currentCapabilityDraft.id], secret: value },
                         }))
                       }
-                      placeholder="留空表示保持当前 secret"
+                      placeholder={t("integrationsPage.drawer.secretPlaceholder")}
                       type="password"
                       disabled={saving}
                     />
                     <Select
-                      label="回复模式"
+                      label={t("integrationsPage.drawer.replyMode")}
                       value={currentCapabilityDraft.replyMode}
                       onChange={(value) =>
                         setCapabilityDrafts((current) => ({
@@ -944,15 +945,15 @@ export default function IntegrationsSettings() {
 
                     <div className="rounded-ui-panel border border-border bg-surface-secondary/20 px-4 py-4">
                       <div className="space-y-1">
-                        <div className="text-sm font-medium text-text-primary">绑定微应用</div>
+                        <div className="text-sm font-medium text-text-primary">{t("integrationsPage.drawer.bindMicroApp")}</div>
                         <div className="text-xs leading-5 text-text-tertiary">
-                          一个智能机器人接入点只绑定一个微应用。选择后，系统会按该微应用声明的配置协议渲染表单。
+                          {t("integrationsPage.drawer.bindDescription")}
                         </div>
                       </div>
 
                       <div className="mt-4 grid gap-4">
                         <Select
-                          label="微应用"
+                          label={t("integrationsPage.drawer.microApp")}
                           value={currentCapabilityDraft.microAppId}
                           onChange={(value) =>
                             setCapabilityDrafts((current) => ({
@@ -967,7 +968,7 @@ export default function IntegrationsSettings() {
                             }))
                           }
                           options={[
-                            { value: "", label: "暂不绑定微应用" },
+                            { value: "", label: t("integrationsPage.drawer.noMicroApp") },
                             ...availableMicroApps.map((item) => ({
                               value: item.id,
                               label: item.name,
@@ -1001,7 +1002,7 @@ export default function IntegrationsSettings() {
                                 options={[
                                   {
                                     value: "",
-                                    label: field.required ? "请选择知识库" : "暂不绑定知识库",
+                                    label: field.required ? t("integrationsPage.drawer.selectKnowledgeBase") : t("integrationsPage.drawer.noKnowledgeBase"),
                                   },
                                   ...knowledgeBases.map((item) => ({
                                     value: item.id,
@@ -1046,7 +1047,7 @@ export default function IntegrationsSettings() {
                           },
                         }))
                       }
-                      placeholder="留空表示保持当前 secret"
+                      placeholder={t("integrationsPage.drawer.secretPlaceholder")}
                       type="password"
                       disabled={saving}
                     />
@@ -1056,8 +1057,8 @@ export default function IntegrationsSettings() {
 
               <div className="flex items-center justify-between rounded-ui-panel border border-border bg-surface-secondary/20 px-4 py-3">
                 <div className="space-y-1">
-                  <div className="text-sm font-medium text-text-primary">启用此方式</div>
-                  <div className="text-xs text-text-tertiary">关闭后，该方式不会被聊天或自动化流程使用。</div>
+                  <div className="text-sm font-medium text-text-primary">{t("integrationsPage.drawer.enableCapability")}</div>
+                  <div className="text-xs text-text-tertiary">{t("integrationsPage.drawer.enableCapabilityDescription")}</div>
                 </div>
                 <Switch
                   checked={currentCapabilityDraft.enabled}
@@ -1071,7 +1072,7 @@ export default function IntegrationsSettings() {
                     }))
                   }
                   disabled={saving}
-                  ariaLabel="启用此方式"
+                  ariaLabel={t("integrationsPage.drawer.enableCapability")}
                 />
               </div>
 
@@ -1081,13 +1082,13 @@ export default function IntegrationsSettings() {
                   onClick={() => void saveCapability(currentCapabilityDraft.id)}
                   disabled={saving}
                 >
-                  保存接入方式
+                  {t("integrationsPage.actions.saveCapability")}
                 </Button>
               </div>
             </div>
           ) : (
-            <Alert variant="info" title="暂无接入方式">
-              当前接入下还没有可配置的方式。
+            <Alert variant="info" title={t("integrationsPage.drawer.noCapabilities")}>
+              {t("integrationsPage.drawer.noCapabilitiesDescription")}
             </Alert>
           )
         ) : null}
@@ -1097,23 +1098,23 @@ export default function IntegrationsSettings() {
             <div className="space-y-5">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-ui-panel border border-border bg-surface-secondary/20 px-4 py-3">
-                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-text-tertiary">运行状态</div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-text-tertiary">{t("integrationsPage.drawer.runtimeStatus")}</div>
                   <div className="mt-1 text-sm font-medium text-text-primary">
-                    {capabilityStatusLabel(statuses[currentCapabilityDraft.id]?.status)}
+                    {t(capabilityStatusLabel(statuses[currentCapabilityDraft.id]?.status))}
                   </div>
                 </div>
                 <div className="rounded-ui-panel border border-border bg-surface-secondary/20 px-4 py-3">
-                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-text-tertiary">最近错误</div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-text-tertiary">{t("integrationsPage.drawer.recentError")}</div>
                   <div className="mt-1 text-sm font-medium text-text-primary">
-                    {statuses[currentCapabilityDraft.id]?.lastError || "无"}
+                    {statuses[currentCapabilityDraft.id]?.lastError || t("integrationsPage.drawer.noError")}
                   </div>
                 </div>
               </div>
 
               {currentCapabilityDraft.type === "wecom.smart_robot" ? (
                 <div className="space-y-4">
-                  <Alert variant="info" title="智能机器人调试">
-                    这里先只保留连接态调试。真正的问答链路建议直接在企业微信里 @ 机器人验证。
+                  <Alert variant="info" title={t("integrationsPage.drawer.smartRobotDebug")}>
+                    {t("integrationsPage.drawer.smartRobotDebugDescription")}
                   </Alert>
                   <div className="flex gap-2">
                     <Button
@@ -1125,7 +1126,7 @@ export default function IntegrationsSettings() {
                         statuses[currentCapabilityDraft.id]?.status === "connecting"
                       }
                     >
-                      启动
+                      {t("integrationsPage.actions.start")}
                     </Button>
                     <Button
                       variant="outline"
@@ -1136,7 +1137,7 @@ export default function IntegrationsSettings() {
                         statuses[currentCapabilityDraft.id]?.status === "idle"
                       }
                     >
-                      停止
+                      {t("integrationsPage.actions.stop")}
                     </Button>
                   </div>
                 </div>
@@ -1145,7 +1146,7 @@ export default function IntegrationsSettings() {
               {currentCapabilityDraft.type === "wecom.webhook_robot" ? (
                 <div className="space-y-4">
                   <TextArea
-                    label="消息内容"
+                    label={t("integrationsPage.drawer.messageContent")}
                     value={testMessage}
                     onChange={setTestMessage}
                     rows={6}
@@ -1153,7 +1154,7 @@ export default function IntegrationsSettings() {
                   />
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Select
-                      label="消息格式"
+                      label={t("integrationsPage.drawer.messageFormat")}
                       value={testFormat}
                       onChange={(value) => setTestFormat(value === "text" ? "text" : "markdown")}
                       options={[
@@ -1163,13 +1164,13 @@ export default function IntegrationsSettings() {
                     />
                     <div className="flex items-center justify-between rounded-ui-panel border border-border bg-surface-secondary/20 px-4 py-3">
                       <div>
-                        <div className="text-sm font-medium text-text-primary">提醒全员</div>
-                        <div className="text-xs text-text-tertiary">@all 仍有已知问题，先保留入口。</div>
+                        <div className="text-sm font-medium text-text-primary">{t("integrationsPage.drawer.mentionAll")}</div>
+                        <div className="text-xs text-text-tertiary">{t("integrationsPage.drawer.mentionAllDescription")}</div>
                       </div>
                       <Switch
                         checked={mentionAll}
                         onChange={() => setMentionAll((current) => !current)}
-                        ariaLabel="提醒全员"
+                        ariaLabel={t("integrationsPage.drawer.mentionAll")}
                       />
                     </div>
                   </div>
@@ -1179,14 +1180,14 @@ export default function IntegrationsSettings() {
                       onClick={() => void sendTest(currentCapabilityDraft.id)}
                       disabled={testingCapabilityId === currentCapabilityDraft.id}
                     >
-                      发送测试消息
+                      {t("integrationsPage.actions.sendTest")}
                     </Button>
                   </div>
                 </div>
               ) : null}
 
               {statuses[currentCapabilityDraft.id]?.lastError ? (
-                <Alert variant="warning" title="最近一次运行异常">
+                <Alert variant="warning" title={t("integrationsPage.drawer.latestError")}>
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                     <span>{statuses[currentCapabilityDraft.id]?.lastError}</span>
@@ -1195,8 +1196,8 @@ export default function IntegrationsSettings() {
               ) : null}
             </div>
           ) : (
-            <Alert variant="info" title="暂无可调试对象">
-              请先配置一个接入方式。
+            <Alert variant="info" title={t("integrationsPage.drawer.noDebugTarget")}>
+              {t("integrationsPage.drawer.noDebugTargetDescription")}
             </Alert>
           )
         ) : null}

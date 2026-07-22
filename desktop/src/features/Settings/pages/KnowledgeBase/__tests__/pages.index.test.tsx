@@ -8,7 +8,10 @@ vi.mock("react-router-dom", () => ({
 }));
 
 vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string, params?: Record<string, unknown>) =>
+      params ? `${key}:${JSON.stringify(params)}` : key,
+  }),
 }));
 
 let embeddingConnected = true;
@@ -19,6 +22,7 @@ vi.mock("../hooks/useKnowledgeBase", () => ({
       id: "kb1",
       name: "KB One",
       documentCount: 2,
+      enabledDocumentCount: 1,
       totalChunkCount: 10,
       isSystem: false,
       metadata: { persona: "", scenario: "", tags: [] },
@@ -33,8 +37,6 @@ vi.mock("../hooks/useKnowledgeBase", () => ({
     setSearchText: vi.fn(),
     knowledgeBaseSearchText: "",
     setKnowledgeBaseSearchText: vi.fn(),
-    openActionMenuId: null,
-    setOpenActionMenuId: vi.fn(),
     sortBy: "updatedAt",
     sortOrder: "desc",
     togglingDocumentIds: [],
@@ -95,6 +97,16 @@ describe("KnowledgeBaseSettings page", () => {
     expect(screen.getByTestId("layout")).toBeInTheDocument();
     expect(screen.getByTestId("toolbar")).toBeInTheDocument();
     expect(screen.getByTestId("table")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'settings.knowledgeBase.table.summary:{"total":2,"visible":0}',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'settings.knowledgeBase.table.stats:{"enabled":1,"chunks":10}',
+      ),
+    ).toBeInTheDocument();
   });
 
   it("shows notice when embedding is disconnected", () => {

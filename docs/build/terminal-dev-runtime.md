@@ -97,7 +97,9 @@ system PATH
 
 它不修改全局 PATH、不写注册表，也不需要管理员权限。即使调用者提供命令级 PATH override，Mira runtime 仍在该 PATH 前面。
 
-运行时读取 manifest，并以 executable SHA-256 检查 bundled 命令。组件状态分为 `bundled`、`system`、`unavailable`，同时写入子进程环境变量 `UI_CHAT_TERMINAL_RUNTIME_COMPONENTS`。bundled 文件缺失或校验失败时，对应共享 PATH 目录会被整体移除，避免 shell 继续命中损坏文件；系统 PATH 仍可提供对应命令，两者都没有时状态为 `unavailable`。`rg` capability 探测也使用同一解析结果。
+运行时读取 manifest，并以 executable SHA-256 检查 bundled 命令。组件状态分为 `bundled`、`system`、`unavailable`，同时写入子进程环境变量 `UI_CHAT_TERMINAL_RUNTIME_COMPONENTS`。bundled 文件缺失或校验失败时，对应共享 PATH 目录会被整体移除，避免 shell 继续命中损坏文件；系统 PATH 仍可提供对应命令，两者都没有时状态为 `unavailable`。`rg` capability 探测与实际内容搜索都使用同一解析结果和 executable path。
+
+现有 `grep` 与 read content locate 共用内部 ripgrep provider：优先 `bundled-ripgrep`，bundled 缺失或完整性校验失败时由 Terminal Dev Runtime resolver 选择 `system-ripgrep`，两者都不可用或执行失败时使用 `node-content-scan`。实际 provider 会写入搜索结果 artifact metadata；这不会新增 Planner-facing Tool，也不改变现有 grep/read Tool Contract。
 
 Electron 在 bundled Node 缺失时保留现有 Electron-as-Node fallback。Tauri 先使用 bundled Node，再查找系统 `node.exe`，都不存在时返回明确错误。
 

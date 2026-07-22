@@ -38,8 +38,6 @@ export default function KnowledgeBaseSettings() {
     setSearchText,
     knowledgeBaseSearchText,
     setKnowledgeBaseSearchText,
-    openActionMenuId,
-    setOpenActionMenuId,
     sortBy,
     sortOrder,
     togglingDocumentIds,
@@ -451,8 +449,6 @@ export default function KnowledgeBaseSettings() {
                   sortOrder={sortOrder}
                   onToggleSort={toggleSort}
                   togglingDocumentIds={togglingDocumentIds}
-                  openActionMenuId={openActionMenuId}
-                  onOpenActionMenuChange={setOpenActionMenuId}
                   onToggleDocumentEnabled={onToggleDocumentEnabled}
                   onRebuildIndex={confirmRebuildIndex}
                   onDeleteDocument={confirmDeleteDocument}
@@ -463,16 +459,21 @@ export default function KnowledgeBaseSettings() {
                   loading={loading}
                 />
 
-                <div className="flex shrink-0 items-center justify-between border-t border-border px-3 py-1.5 text-body-small text-sm text-text-secondary">
+                <div className="flex shrink-0 items-center justify-between border-t border-border px-3 py-1.5 text-xs text-text-secondary">
                   <div>
-                    {t("settings.knowledgeBase.table.filesCount", {
-                      count:
+                    {t("settings.knowledgeBase.table.summary", {
+                      total:
                         knowledgeBase?.documentCount ?? visibleDocuments.length,
+                      visible: visibleDocuments.length,
                     })}
                   </div>
                   <div>
-                    {t("settings.knowledgeBase.table.totalChunks", {
-                      count: knowledgeBase?.totalChunkCount ?? 0,
+                    {t("settings.knowledgeBase.table.stats", {
+                      enabled:
+                        knowledgeBase?.enabledDocumentCount ??
+                        visibleDocuments.filter((document) => document.enabled)
+                          .length,
+                      chunks: knowledgeBase?.totalChunkCount ?? 0,
                     })}
                   </div>
                 </div>

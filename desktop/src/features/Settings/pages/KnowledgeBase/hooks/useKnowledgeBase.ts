@@ -55,12 +55,13 @@ export function useKnowledgeBase() {
   const [searchText, setSearchText] = useState("");
   const [debouncedSearchText, setDebouncedSearchText] = useState("");
   const [knowledgeBaseSearchText, setKnowledgeBaseSearchText] = useState("");
-  const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<DocumentSortKey>("updatedAt");
   const [sortOrder, setSortOrder] = useState<DocumentSortOrder>("desc");
   const [togglingDocumentIds, setTogglingDocumentIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const tableScrollRef = useRef<HTMLDivElement>(null);
+  const knowledgeBaseRequestIdRef = useRef(0);
+  const documentsRequestIdRef = useRef(0);
   const { modelAccessStatus, refresh: refreshRoleModelConfigs } =
     useRoleModelConfigs();
 
@@ -77,8 +78,13 @@ export function useKnowledgeBase() {
   }, [knowledgeBases, searchParams]);
 
   const loadKnowledgeBase = useCallback(async (id: string) => {
+    const requestId = knowledgeBaseRequestIdRef.current + 1;
+    knowledgeBaseRequestIdRef.current = requestId;
     const data = await getKnowledgeBaseById(id);
-    setKnowledgeBase(data);
+
+    if (requestId === knowledgeBaseRequestIdRef.current) {
+      setKnowledgeBase(data);
+    }
   }, []);
 
   const loadKnowledgeBases = useCallback(async () => {
@@ -88,6 +94,9 @@ export function useKnowledgeBase() {
   }, []);
 
   const loadDocuments = useCallback(async () => {
+    const requestId = documentsRequestIdRef.current + 1;
+    documentsRequestIdRef.current = requestId;
+
     if (!selectedKnowledgeBaseId) {
       setDocuments([]);
       setSelectedDocumentIds([]);
@@ -116,6 +125,10 @@ export function useKnowledgeBase() {
       });
       const rows = data.map(toDocumentRow);
 
+      if (requestId !== documentsRequestIdRef.current) {
+        return;
+      }
+
       if (sortBy === "name") {
         rows.sort((left, right) =>
           sortOrder === "asc"
@@ -141,7 +154,9 @@ export function useKnowledgeBase() {
         current.filter((id) => rows.some((row) => row.id === id)),
       );
     } finally {
-      setLoading(false);
+      if (requestId === documentsRequestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [debouncedSearchText, filter, selectedKnowledgeBaseId, sortBy, sortOrder]);
 
@@ -170,6 +185,7 @@ export function useKnowledgeBase() {
 
   useEffect(() => {
     if (!selectedKnowledgeBaseId) {
+      knowledgeBaseRequestIdRef.current += 1;
       setKnowledgeBase(null);
       return;
     }
@@ -238,7 +254,6 @@ export function useKnowledgeBase() {
     setSearchText("");
     setDebouncedSearchText("");
     setSelectedDocumentIds([]);
-    setOpenActionMenuId(null);
     setSortBy("updatedAt");
     setSortOrder("desc");
   }, []);
@@ -341,8 +356,6 @@ export function useKnowledgeBase() {
     setDebouncedSearchText,
     knowledgeBaseSearchText,
     setKnowledgeBaseSearchText,
-    openActionMenuId,
-    setOpenActionMenuId,
     sortBy,
     setSortBy,
     sortOrder,

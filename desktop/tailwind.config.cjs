@@ -120,6 +120,70 @@ module.exports = {
         "space-6": "24px",
         "space-8": "32px",
         "space-10": "40px",
+        "chat-message-row-y": "var(--chat-space-message-row-y)",
+        "chat-message-row-y-sm": "var(--chat-space-message-row-y-sm)",
+        "chat-bubble-y": "var(--chat-space-bubble-y)",
+        "chat-user-bubble-x": "var(--chat-space-user-bubble-x)",
+        "chat-assistant-bubble-x": "var(--chat-space-assistant-bubble-x)",
+        "chat-avatar-gap": "var(--chat-space-avatar-gap)",
+        "chat-avatar-top": "var(--chat-space-avatar-top)",
+        "chat-avatar": "var(--chat-size-avatar)",
+        "chat-action": "var(--chat-size-action)",
+        "chat-action-top": "var(--chat-space-action-top)",
+        "chat-action-gap": "var(--chat-space-action-gap)",
+        "chat-action-left": "var(--chat-space-action-left)",
+        "chat-trace-top": "var(--chat-space-trace-top)",
+        "chat-trace-bottom": "var(--chat-space-trace-bottom)",
+        "chat-markdown-block": "var(--chat-space-markdown-block)",
+        "chat-markdown-heading-top":
+          "var(--chat-space-markdown-heading-top)",
+        "chat-markdown-heading-bottom":
+          "var(--chat-space-markdown-heading-bottom)",
+        "chat-markdown-list-item-y":
+          "var(--chat-space-markdown-list-item-y)",
+      },
+      fontSize: {
+        "chat-message": "var(--chat-font-size-message)",
+        "chat-message-assistant": [
+          "var(--chat-font-size-message)",
+          { lineHeight: "var(--chat-line-height-assistant)" },
+        ],
+        "chat-message-user": [
+          "var(--chat-font-size-message)",
+          { lineHeight: "var(--chat-line-height-user)" },
+        ],
+        "chat-trace": [
+          "var(--chat-font-size-trace)",
+          { lineHeight: "var(--chat-line-height-trace)" },
+        ],
+        "chat-markdown-h1": [
+          "var(--chat-font-size-markdown-h1)",
+          { lineHeight: "var(--chat-line-height-markdown-h1)" },
+        ],
+        "chat-markdown-h2": [
+          "var(--chat-font-size-markdown-h2)",
+          { lineHeight: "var(--chat-line-height-markdown-h2)" },
+        ],
+        "chat-markdown-h3": [
+          "var(--chat-font-size-markdown-h3)",
+          { lineHeight: "var(--chat-line-height-markdown-h3)" },
+        ],
+        "chat-markdown-h4": [
+          "var(--chat-font-size-markdown-h4)",
+          { lineHeight: "var(--chat-line-height-markdown-h4)" },
+        ],
+        "chat-markdown-h5": [
+          "var(--chat-font-size-markdown-h5)",
+          { lineHeight: "var(--chat-line-height-markdown-h5)" },
+        ],
+        "chat-markdown-h6": [
+          "var(--chat-font-size-markdown-h6)",
+          { lineHeight: "var(--chat-line-height-markdown-h6)" },
+        ],
+      },
+      lineHeight: {
+        "chat-markdown-paragraph":
+          "var(--chat-line-height-markdown-paragraph)",
       },
       borderRadius: {
         "ui-control": "8px",
@@ -131,6 +195,7 @@ module.exports = {
         "radius-md": "10px",
         "radius-lg": "14px",
         "radius-xl": "18px",
+        "chat-bubble": "var(--chat-radius-bubble)",
         pill: "9999px",
       },
       boxShadow: {

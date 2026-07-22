@@ -113,6 +113,54 @@ describe("UChatSidebarView", () => {
     expect(onDeleteWorkspace).toHaveBeenCalledWith("workspace-1");
   });
 
+  it("renders workspace thread actions in a portal outside clipped sidebar containers", async () => {
+    const user = userEvent.setup();
+    const onArchiveThread = vi.fn();
+
+    const { container } = render(
+      <I18nextProvider i18n={i18n}>
+        <UChatSidebarView
+          threads={[]}
+          activeThreadId="thread-1"
+          threadListStatus="ready"
+          capabilities={{ archiveThread: true, deleteThread: true }}
+          workspaceGroups={[
+            {
+              id: "workspace-1",
+              name: "Project Alpha",
+              threads: [
+                {
+                  id: "thread-1",
+                  title: "Thread A",
+                  updatedAt: "2026-01-01T00:00:00.000Z",
+                },
+              ],
+            },
+          ]}
+          onCreateThread={() => {}}
+          onSelectThread={() => {}}
+          onArchiveThread={onArchiveThread}
+          onDeleteThread={() => {}}
+        />
+      </I18nextProvider>,
+    );
+
+    const threadRow = screen
+      .getByRole("button", { name: "Thread ..." })
+      .closest(".group");
+    const moreButton = threadRow?.querySelector('button[aria-label="More"]');
+
+    await user.click(moreButton as HTMLButtonElement);
+
+    const menu = screen.getByRole("menu");
+    const archiveItem = screen.getByRole("menuitem", { name: "Archive" });
+    expect(container.contains(menu)).toBe(false);
+    expect(screen.getAllByRole("menu")).toHaveLength(1);
+
+    await user.click(archiveItem);
+    expect(onArchiveThread).toHaveBeenCalledWith("thread-1");
+  });
+
   it("restores archive and delete actions for history thread dropdown", async () => {
     const user = userEvent.setup();
     const onArchiveThread = vi.fn();
@@ -146,11 +194,11 @@ describe("UChatSidebarView", () => {
     expect(historyMoreButton).toBeInTheDocument();
 
     await user.click(historyMoreButton as HTMLButtonElement);
-    await user.click(screen.getByRole("button", { name: "Archive" }));
+    await user.click(screen.getByRole("menuitem", { name: "Archive" }));
     expect(onArchiveThread).toHaveBeenCalledWith("thread-1");
 
     await user.click(historyMoreButton as HTMLButtonElement);
-    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete" }));
     expect(onDeleteThread).toHaveBeenCalledWith("thread-1");
   });
 

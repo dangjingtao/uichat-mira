@@ -15,6 +15,8 @@ import codeGraphZh from "@/features/Settings/pages/MicroApps/CodeGraph/i18n/zh-C
 import codeGraphEn from "@/features/Settings/pages/MicroApps/CodeGraph/i18n/en-US";
 import jianXingZh from "@/features/Settings/pages/MicroApps/JianXing/i18n/zh-CN";
 import jianXingEn from "@/features/Settings/pages/MicroApps/JianXing/i18n/en-US";
+import integrationsZh from "@/features/Settings/pages/Integrations/i18n/zh-CN";
+import integrationsEn from "@/features/Settings/pages/Integrations/i18n/en-US";
 
 /* ── App & shared UI i18n shards ──────────────────────────── */
 import appZh from "@/app/i18n/zh-CN";
@@ -64,6 +66,7 @@ const shards = {
     settingsPendingZh,
     codeGraphZh,
     jianXingZh,
+    integrationsZh,
     appZh,
     uiZh,
   ],
@@ -73,6 +76,7 @@ const shards = {
     settingsPendingEn,
     codeGraphEn,
     jianXingEn,
+    integrationsEn,
     appEn,
     uiEn,
   ],

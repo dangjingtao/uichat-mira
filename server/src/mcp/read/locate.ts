@@ -1,10 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 import fg from "fast-glob";
 import type { McpExecutionEnvironment } from "../core/definitions.js";
 import { mcpBadRequest, mcpInternalError } from "../core/errors.js";
 import { getWorkspaceRoot, resolveWorkspacePath } from "../workspace.js";
+import {
+  searchWithRipgrep,
+  type RipgrepProviderDependencies,
+  type RipgrepSearchProvider,
+} from "./ripgrep-provider.js";
 import type { ReadLocateMatch, ReadLocateResult } from "./types.js";
 
 export type ReadLocateArgs = {
@@ -19,6 +23,36 @@ type LocateProviderCapability = McpExecutionEnvironment["read"]["capabilities"][
 
 const DEFAULT_LIMIT = 20;
 const PREVIEW_MAX_LENGTH = 120;
+const DEFAULT_NODE_CONTENT_IGNORES = [
+  "**/.git/**",
+  "**/node_modules/**",
+  "**/dist/**",
+  "**/build/**",
+  "**/release/**",
+  "**/.artifacts/**",
+  "**/coverage/**",
+  "**/target/**",
+];
+
+export type ReadLocateProvider =
+  | "fast-glob"
+  | RipgrepSearchProvider
+  | "node-content-scan"
+  | "unavailable";
+
+export type ReadLocateDiagnostics = {
+  provider: ReadLocateProvider;
+  providers: ReadLocateProvider[];
+  attempts: Array<{
+    provider: ReadLocateProvider;
+    status: "success" | "failed" | "unavailable";
+    reason?: string;
+  }>;
+};
+
+export type ReadLocateDependencies = {
+  ripgrep?: RipgrepProviderDependencies;
+};
 
 const assertEnvironment = (environment?: McpExecutionEnvironment) => {
   if (!environment || environment.source !== "harness") {
@@ -92,6 +126,42 @@ const buildPathPatterns = (query: string) => {
   return [`**/*${escaped}*`];
 };
 
+const loadNodeContentIgnorePatterns = (workspaceRoot: string) => {
+  const gitignorePath = path.join(workspaceRoot, ".gitignore");
+  if (!fs.existsSync(gitignorePath)) {
+    return DEFAULT_NODE_CONTENT_IGNORES;
+  }
+
+  const gitignorePatterns = fs
+    .readFileSync(gitignorePath, "utf-8")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#") && !line.startsWith("!"))
+    .flatMap((line) => {
+      const normalized = line.replace(/\\/g, "/").replace(/^\//, "");
+      if (!normalized) return [];
+      if (normalized.endsWith("/")) {
+        return [`**/${normalized}**`];
+      }
+      if (normalized.includes("/")) {
+        return [normalized, `**/${normalized}`];
+      }
+      return [`**/${normalized}`, `**/${normalized}/**`];
+    });
+
+  return [...DEFAULT_NODE_CONTENT_IGNORES, ...gitignorePatterns];
+};
+
+const buildNodeContentMatcher = (query: string) => {
+  const flags = query.toLocaleLowerCase() === query ? "iu" : "u";
+  try {
+    return new RegExp(query, flags);
+  } catch {
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(escaped, flags);
+  }
+};
+
 const locateByPath = async ({
   query,
   workspaceRoot,
@@ -125,76 +195,6 @@ const locateByPath = async ({
     }));
 };
 
-const locateByRipgrep = ({
-  query,
-  workspaceRoot,
-  basePath,
-  extensions,
-  limit,
-  provider,
-}: {
-  query: string;
-  workspaceRoot: string;
-  basePath: string;
-  extensions: string[];
-  limit: number;
-  provider: LocateProviderCapability;
-}): ReadLocateMatch[] => {
-  const extensionGlobs = extensions.flatMap((extension) => ["-g", `*${extension}`]);
-  const command = [
-    "--json",
-    "--line-number",
-    "--column",
-    "--max-count",
-    String(limit),
-    ...extensionGlobs,
-    query,
-    basePath,
-  ];
-  const result = spawnSync("rg", command, {
-    encoding: "utf-8",
-    windowsHide: true,
-  });
-
-  if (result.error) {
-    throw mcpInternalError("ripgrep locate provider failed", { cause: result.error });
-  }
-
-  if (result.status !== 0 && result.status !== 1) {
-    throw mcpInternalError(`ripgrep exited with status ${result.status}`);
-  }
-
-  const matches: ReadLocateMatch[] = [];
-  for (const line of result.stdout.split(/\r?\n/)) {
-    if (!line.trim()) {
-      continue;
-    }
-
-    const payload = JSON.parse(line) as Record<string, any>;
-    if (payload.type !== "match") {
-      continue;
-    }
-
-    const data = payload.data;
-    const absolutePath = String(data.path.text);
-    const relativePath = normalizeRelativePath(path.relative(workspaceRoot, absolutePath));
-
-    matches.push({
-      path: relativePath,
-      matchType: "content",
-      line: Number(data.line_number),
-      column: Number(data.submatches?.[0]?.start ?? 0) + 1,
-      preview: shortenPreview(String(data.lines.text)),
-    });
-
-    if (matches.length >= limit) {
-      break;
-    }
-  }
-
-  return matches;
-};
-
 const locateByNodeContentScan = ({
   query,
   workspaceRoot,
@@ -213,11 +213,12 @@ const locateByNodeContentScan = ({
   const entries = fg.sync(["**/*"], {
     cwd: basePath,
     onlyFiles: true,
-    dot: true,
+    dot: false,
     unique: true,
     suppressErrors: true,
+    ignore: loadNodeContentIgnorePatterns(workspaceRoot),
   });
-  const loweredQuery = query.toLowerCase();
+  const matcher = buildNodeContentMatcher(query);
   const matches: ReadLocateMatch[] = [];
 
   for (const entry of entries) {
@@ -231,28 +232,36 @@ const locateByNodeContentScan = ({
       continue;
     }
 
-    const buffer = fs.readFileSync(absolutePath);
+    let buffer: Buffer;
+    try {
+      buffer = fs.readFileSync(absolutePath);
+    } catch {
+      continue;
+    }
     if (buffer.includes(0)) {
       continue;
     }
 
     const content = buffer.toString("utf-8");
-    const matchIndex = content.toLowerCase().indexOf(loweredQuery);
-    if (matchIndex < 0) {
-      continue;
+    const lines = content.split(/\r?\n/);
+    let matchedLine = -1;
+    let matchIndex = -1;
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+      const match = matcher.exec(lines[lineIndex] ?? "");
+      if (match) {
+        matchedLine = lineIndex;
+        matchIndex = match.index;
+        break;
+      }
     }
-
-    const prefix = content.slice(0, matchIndex);
-    const line = prefix.split(/\r?\n/).length;
-    const lineText = content.split(/\r?\n/)[line - 1] ?? "";
-    const column = matchIndex - prefix.lastIndexOf("\n");
+    if (matchedLine < 0) continue;
 
     matches.push({
       path: relativePath,
       matchType: "content",
-      line,
-      column,
-      preview: shortenPreview(lineText),
+      line: matchedLine + 1,
+      column: matchIndex + 1,
+      preview: shortenPreview(lines[matchedLine] ?? ""),
     });
   }
 
@@ -289,9 +298,10 @@ export const describeLocatePlan = (
   };
 };
 
-export const executeReadLocate = async (
+export const executeReadLocateWithDiagnostics = async (
   environment: McpExecutionEnvironment | undefined,
   rawArgs: Record<string, unknown>,
+  dependencies: ReadLocateDependencies = {},
 ) => {
   const harnessEnvironment = assertEnvironment(environment);
   const query = typeof rawArgs.query === "string" ? rawArgs.query.trim() : "";
@@ -323,19 +333,10 @@ export const executeReadLocate = async (
     return true;
   });
 
-  const plan = describeLocatePlan(harnessEnvironment, {
-    query,
-    path: typeof rawArgs.path === "string" ? rawArgs.path : undefined,
-    searchMode,
-    extensions,
-    limit,
-  });
-  if (plan.chain.length > 0) {
-    // Keep the progress text capability-level only; provider names stay internal.
-    void plan;
-  }
-
   const matches = new Map<string, ReadLocateMatch>();
+  const providers: ReadLocateProvider[] = [];
+  const attempts: ReadLocateDiagnostics["attempts"] = [];
+  let contentProviderResolved = false;
 
   for (const capability of selected) {
     let nextMatches: ReadLocateMatch[] = [];
@@ -349,16 +350,29 @@ export const executeReadLocate = async (
         limit: providerLimit,
         provider: capability,
       });
+      providers.push("fast-glob");
+      attempts.push({ provider: "fast-glob", status: "success" });
     } else if (capability.id === "ripgrep-locate") {
-      nextMatches = locateByRipgrep({
+      if (contentProviderResolved) continue;
+      const ripgrep = searchWithRipgrep({
         query,
         workspaceRoot: scope.workspaceRoot,
         basePath: scope.basePath,
         extensions,
         limit: providerLimit,
-        provider: capability,
+      }, dependencies.ripgrep);
+      attempts.push({
+        provider: ripgrep.provider ?? "unavailable",
+        status: ripgrep.status,
+        ...(ripgrep.status === "success" ? {} : { reason: ripgrep.reason }),
       });
+      if (ripgrep.status === "success") {
+        nextMatches = ripgrep.matches;
+        providers.push(ripgrep.provider);
+        contentProviderResolved = true;
+      }
     } else if (capability.id === "node-content-scan-locate") {
+      if (contentProviderResolved) continue;
       nextMatches = locateByNodeContentScan({
         query,
         workspaceRoot: scope.workspaceRoot,
@@ -367,6 +381,9 @@ export const executeReadLocate = async (
         limit: providerLimit,
         provider: capability,
       });
+      providers.push("node-content-scan");
+      attempts.push({ provider: "node-content-scan", status: "success" });
+      contentProviderResolved = true;
     }
 
     for (const match of nextMatches) {
@@ -393,5 +410,22 @@ export const executeReadLocate = async (
     hasMore: allMatches.length > limit,
     truncated: allMatches.length > limit,
   };
-  return result;
+  const contentProvider = providers.find((provider) =>
+    provider === "bundled-ripgrep" ||
+    provider === "system-ripgrep" ||
+    provider === "node-content-scan"
+  );
+  return {
+    result,
+    diagnostics: {
+      provider: contentProvider ?? providers[0] ?? "unavailable",
+      providers,
+      attempts,
+    } satisfies ReadLocateDiagnostics,
+  };
 };
+
+export const executeReadLocate = async (
+  environment: McpExecutionEnvironment | undefined,
+  rawArgs: Record<string, unknown>,
+) => (await executeReadLocateWithDiagnostics(environment, rawArgs)).result;

@@ -108,23 +108,25 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
       embeddingModelConfigId: "test-embedding-config",
       embeddings: [
         [1, 0],
-        ...Array.from({ length: 20 }, () => [0, 1]),
-        [1, 0],
+        ...Array.from({ length: 20 }, () => [1, 0]),
+        [0, 1],
       ],
     });
-    vi.spyOn(rerank, "executeLocalRerank").mockImplementation(async ({ candidates }) => ({
-      rerankedCandidates: candidates
-        .map((candidate) => ({
-          id: candidate.id,
-          text: candidate.text,
-          score: candidate.id === "tail_target_tool" ? 1 : 0.1,
-          probability: candidate.id === "tail_target_tool" ? 0.99 : 0.1,
-          rank: candidate.id === "tail_target_tool" ? 1 : 2,
-        }))
-        .sort((left, right) => right.probability - left.probability),
-      rerankModel: "test-rerank",
-      rerankModelConfigId: "test-rerank-config",
-    }));
+    const rerankSpy = vi
+      .spyOn(rerank, "executeLocalRerank")
+      .mockImplementation(async ({ candidates }) => ({
+        rerankedCandidates: candidates
+          .map((candidate) => ({
+            id: candidate.id,
+            text: candidate.text,
+            score: candidate.id === "tail_target_tool" ? 1 : 0.1,
+            probability: candidate.id === "tail_target_tool" ? 0.99 : 0.1,
+            rank: candidate.id === "tail_target_tool" ? 1 : 2,
+          }))
+          .sort((left, right) => right.probability - left.probability),
+        rerankModel: "test-rerank",
+        rerankModelConfigId: "test-rerank-config",
+      }));
 
     const result = await resolveHarnessToolCandidatesForTurn({
       query: "target",
@@ -136,11 +138,50 @@ describe("resolveHarnessToolCandidatesForTurn", () => {
 
     expect(result.toolCandidates).toHaveLength(20);
     expect(result.toolExposure.exposedToolIds).toHaveLength(20);
+    expect(rerankSpy.mock.calls[0]?.[0].candidates).toHaveLength(21);
     expect(result.toolCandidates[0]?.toolId).toBe("tail_target_tool");
+    expect(result.toolCandidates[0]?.finalScore).toBe(0.99);
     expect(result.toolExposure.exposedToolIds).toContain("tail_target_tool");
     expect(result.toolExposure.reason).toContain(
       "Public tool set exceeds 20; Harness ranks the available tools for this turn and exposes the top 20. No additional semantic or runtime policy filtering is applied here.",
     );
+  });
+
+  it("uses embedding score only to break equal rerank scores", async () => {
+    for (let index = 0; index < 20; index += 1) {
+      registerCapability(createEligibleTool(`tie_noise_tool_${index}`));
+    }
+    registerCapability(createEligibleTool("embedding_tiebreak_tool"));
+
+    vi.spyOn(embedding, "executeLocalEmbedding").mockResolvedValue({
+      embeddingModel: "test-embedding",
+      embeddingModelConfigId: "test-embedding-config",
+      embeddings: [
+        [1, 0],
+        ...Array.from({ length: 20 }, () => [0, 1]),
+        [1, 0],
+      ],
+    });
+    vi.spyOn(rerank, "executeLocalRerank").mockImplementation(async ({ candidates }) => ({
+      rerankedCandidates: candidates.map((candidate, index) => ({
+        id: candidate.id,
+        text: candidate.text,
+        score: 0,
+        probability: 0.5,
+        rank: index + 1,
+      })),
+      rerankModel: "test-rerank",
+      rerankModelConfigId: "test-rerank-config",
+    }));
+
+    const result = await resolveHarnessToolCandidatesForTurn({
+      query: "embedding tiebreak",
+      source: "agent_intent",
+    });
+
+    expect(result.toolCandidates[0]?.toolId).toBe("embedding_tiebreak_tool");
+    expect(result.toolCandidates[0]?.rerankScore).toBe(0.5);
+    expect(result.toolCandidates[0]?.embeddingScore).toBe(1);
   });
 
   it.each([21, 50])(

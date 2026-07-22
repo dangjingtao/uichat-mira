@@ -18,6 +18,7 @@ export type RequestContextThread = {
 export type RequestContextMessage = {
   role: "system";
   content: string;
+  requestContextScope?: "agent-execution";
 };
 
 export type RequestContextExecutionNode = {

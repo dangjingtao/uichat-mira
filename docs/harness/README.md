@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: runtime
-Last verified: 2026-07-18
+Last verified: 2026-07-22
 Layer: wiki
 Module: Harness
 Feature: Overview
@@ -132,6 +132,8 @@ Harness 参与其中的方式：
 
 ## 当前 Tool Exposure 真相
 
+完整合同以 [AgentGraph 与 Harness 当前协议：Tool Exposure 与真实执行入口](agentgraph-harness-protocol.md#tool-exposure-与真实执行入口) 为准。
+
 `resolveHarnessToolCandidatesForTurn(...)` 返回的是：
 
 - `toolCandidates`
@@ -140,7 +142,16 @@ Harness 参与其中的方式：
 
 当前 eligible 工具面不会因为用户措辞弱或 recall 失败就被静默缩成一个“选中工具”。
 
-当候选集合较小，所有 eligible tools 可以完整暴露给 Planner；候选集合较大时，recall 只服务上下文压缩与排序，不能建立影子执行决策。
+当前暴露规则：
+
+- eligible concrete tools 不超过 `20`：全部暴露，不运行语义排名。
+- eligible concrete tools 超过 `20`：先按 capability profile 做 embedding 全量召回，再由 reranker 决定最终顺序；rerank 同分时才使用 embedding 排序。
+- capability 展开为具体 tool id、去重后取前 `20`，写入 `state.toolExposure`。
+- Planner 不计算排名、不暴露工具，只消费 `state.toolExposure` 并决定下一步。
+- reranker 失败时保留 embedding 顺序；embedding 失败或查询为空时按稳定顺序取前 `20`。
+- 当前没有核心工具固定名额，也没有 `minScore` 阈值淘汰。
+
+Recall 与 rerank 只服务 Planner 上下文压缩和排序，不能建立独立于 Planner 的执行决定。
 
 ## Approval 与 Workspace Boundary
 

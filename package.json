@@ -44,6 +44,7 @@
     "docs:build": "pnpm --filter @ui-chat-mira/docs-site build",
     "package:electron:win": "node scripts/build-dist.js",
     "package:tauri:win": "node scripts/build-tauri-dist.js",
+    "package:tauri:win:notest": "node scripts/build-tauri-dist.js --notest",
     "clean:artifacts": "node scripts/cleanup-artifacts.js",
     "check:no-db-in-index": "node scripts/check-no-db-in-index.js",
     "check": "pnpm -r --workspace-concurrency=1 typecheck",

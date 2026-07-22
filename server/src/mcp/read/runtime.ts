@@ -14,7 +14,7 @@ import {
   readStructuredDocument,
   sliceExtractedText,
 } from "../document-readers.js";
-import { executeReadLocate, describeLocatePlan } from "./locate.js";
+import { executeReadLocateWithDiagnostics, describeLocatePlan } from "./locate.js";
 import { resolveWorkspacePath } from "../workspace.js";
 import type { ReadListResult, ReadOpenResult, ReadSelection } from "./types.js";
 
@@ -173,7 +173,8 @@ export const executeReadLocateRuntime = async ({
     message: `Locate plan: ${plan.chain.map((step) => step.id).join(" -> ")}`,
   });
 
-  const result = await executeReadLocate(harnessEnvironment, args);
+  const execution = await executeReadLocateWithDiagnostics(harnessEnvironment, args);
+  const result = execution.result;
   return {
     contents: result,
     artifacts: [
@@ -185,6 +186,9 @@ export const executeReadLocateRuntime = async ({
           scope: result.scope,
           query: result.query,
           searchMode: result.searchMode,
+          provider: execution.diagnostics.provider,
+          providers: execution.diagnostics.providers,
+          providerAttempts: execution.diagnostics.attempts,
         },
       }),
     ],

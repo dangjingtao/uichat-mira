@@ -59,6 +59,11 @@ export type NormalizedChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
   parts?: NormalizedChatMessagePart[];
+  /**
+   * Internal request-context routing metadata. Provider adapters intentionally
+   * project only role/content/parts, so this field never enters provider payloads.
+   */
+  requestContextScope?: "agent-execution";
 };
 
 export const getNormalizedMessageText = (

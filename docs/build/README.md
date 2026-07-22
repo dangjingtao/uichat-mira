@@ -601,6 +601,14 @@ scripts/build-tauri-dist.js
 7. 清理 `.artifacts/`。
 8. 按 `RELEASE_KEEP_COUNT` 清理旧 release 目录。
 
+本地需要验证 Tauri 壳层与完整资源打包、但服务端测试报告生成暂时不可用时，可显式运行：
+
+```bash
+pnpm package:tauri:win:notest
+```
+
+该命令仅跳过前端和服务端的发布测试报告生成，仍会执行前端、后端、文档、Node runtime、Terminal Dev Runtime、Piper runtime 和 Tauri bundle 构建。正式发布仍应使用 `pnpm package:tauri:win`，并先处理测试失败。
+
 Tauri 在构建前通过 `beforeBuildCommand` 或相关准备链路复用：
 
 ```text
