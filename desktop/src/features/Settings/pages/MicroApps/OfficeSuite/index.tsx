@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  Download,
   FileSpreadsheet,
   FileText,
   Presentation,
@@ -11,6 +12,7 @@ import Card from "@/shared/ui/Card";
 import { Button } from "@/shared/ui";
 import { message } from "@/shared/ui/Message";
 import {
+  createOfficeSample,
   inspectOfficeFile,
   type OfficeSuiteFileKind,
   type OfficeSuiteInspection,
@@ -41,6 +43,12 @@ export default function OfficeSuitePage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [inspection, setInspection] = useState<OfficeSuiteInspection | null>(null);
   const [inspecting, setInspecting] = useState(false);
+  const [creatingKind, setCreatingKind] = useState<OfficeSuiteFileKind | null>(null);
+  const [lastCreated, setLastCreated] = useState<{
+    kind: OfficeSuiteFileKind;
+    fileName: string;
+    byteSize: number;
+  } | null>(null);
 
   const selectedExtension = useMemo(() => {
     if (!selectedFile) return "";
@@ -73,6 +81,32 @@ export default function OfficeSuitePage() {
       message.error(error instanceof Error ? error.message : "文件读取失败");
     } finally {
       setInspecting(false);
+    }
+  };
+
+  const runCreate = async (kind: OfficeSuiteFileKind) => {
+    setCreatingKind(kind);
+    try {
+      const artifact = await createOfficeSample(kind);
+      const url = window.URL.createObjectURL(artifact.blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = artifact.fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 100);
+
+      setLastCreated({
+        kind,
+        fileName: artifact.fileName,
+        byteSize: artifact.blob.size,
+      });
+      message.success(`${kindMeta[kind].label} 测试产物已生成`);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "Office 文件生成失败");
+    } finally {
+      setCreatingKind(null);
     }
   };
 
@@ -109,9 +143,50 @@ export default function OfficeSuitePage() {
           <Card className="p-5">
             <div className="space-y-4">
               <div>
+                <h2 className="text-base font-semibold text-text-primary">创建测试产物</h2>
+                <p className="mt-1 text-sm leading-6 text-text-secondary">
+                  直接调用三类 Office Runtime 的主生成库，验证 Create → 下载链路。生成后的文件可以再上传到下方做 Inspect 回读。
+                </p>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                {(Object.entries(kindMeta) as [OfficeSuiteFileKind, (typeof kindMeta)[OfficeSuiteFileKind]][]).map(
+                  ([kind, meta]) => {
+                    const Icon = meta.icon;
+                    const isCreating = creatingKind === kind;
+                    return (
+                      <Button
+                        key={kind}
+                        variant="outline"
+                        size="md"
+                        disabled={creatingKind !== null}
+                        onClick={() => void runCreate(kind)}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {isCreating ? "正在生成…" : `生成 ${meta.label}`}
+                      </Button>
+                    );
+                  },
+                )}
+              </div>
+
+              {lastCreated ? (
+                <div className="flex flex-wrap items-center gap-2 rounded-ui-panel border border-border bg-surface-secondary/20 px-4 py-3 text-sm">
+                  <Download className="h-4 w-4 text-primary" />
+                  <Badge variant="success">生成成功</Badge>
+                  <span className="font-medium text-text-primary">{lastCreated.fileName}</span>
+                  <span className="text-text-tertiary">{formatBytes(lastCreated.byteSize)}</span>
+                </div>
+              ) : null}
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <div className="space-y-4">
+              <div>
                 <h2 className="text-base font-semibold text-text-primary">文件输入</h2>
                 <p className="mt-1 text-sm leading-6 text-text-secondary">
-                  第一阶段先把“文件进来 → 识别结构 → 返回可检查结果”跑稳。
+                  选择已有文件，或把上方刚生成的测试产物重新上传，验证文件识别和结构读取。
                 </p>
               </div>
 
@@ -212,7 +287,7 @@ export default function OfficeSuitePage() {
                         <div className="text-sm font-medium text-text-primary">{meta.label}</div>
                         <div className="mt-0.5 truncate text-xs text-text-tertiary">{meta.runtime}</div>
                       </div>
-                      <Badge variant="success">解析就绪</Badge>
+                      <Badge variant="success">Inspect + Create</Badge>
                     </div>
                   );
                 },
@@ -224,8 +299,8 @@ export default function OfficeSuitePage() {
             <div className="text-sm font-semibold text-text-primary">当前边界</div>
             <div className="mt-3 space-y-2 text-xs leading-5 text-text-secondary">
               <p>文枢现在是 Office Runtime 的调试和验证窗口。</p>
+              <p>当前只验证 Inspect 和 Create 主链路，还没有进入通用 Modify / Export 合同。</p>
               <p>不嵌 Chat，不提前实现 Skill Runtime，也不把 set_cell / add_slide 之类原子操作暴露给 Agent。</p>
-              <p>后续 Skill 成形后，再消费这里稳定下来的文件处理能力。</p>
             </div>
           </Card>
         </aside>
