@@ -82,7 +82,7 @@ const PPTX_SKILL: ActiveSkillContext = {
   id: "pptx",
   name: "PPTX",
   description:
-    "Create PowerPoint presentations from a structured PPTD-like presentation AST with themes, positioned elements and mandatory layout validation.",
+    "Create a normal-length PowerPoint presentation from a structured PPTD-like presentation AST with themes, positioned elements and mandatory layout validation.",
   primaryToolIds: ["read_discover", "read_open", "office_presentation"],
   instructions: [
     "Use office_presentation for presentation creation/validation/inspection. Do not expose add_slide/add_text/add_chart or raw OOXML actions as Agent tools.",
@@ -90,7 +90,6 @@ const PPTX_SKILL: ActiveSkillContext = {
     "Validate the complete presentation before creation. Blocking out-of-bounds errors must be fixed; overflow/occlusion warnings must be reviewed rather than ignored blindly.",
     "Keep slide content concise and presentation-native. Do not paste document paragraphs into slides without designing hierarchy and layout.",
     "The current WenShu PPT skill creates new presentations and inspects PPTX; it does not promise lossless arbitrary editing of existing PPTX files.",
-    "For long decks, organize content in sections and generate the complete deck before final validation rather than validating/delivering slide-by-slide.",
     "After create, inspect the generated PPTX and require accepted Evidence before declaring completion.",
   ],
   completionCriteria: [
@@ -98,6 +97,29 @@ const PPTX_SKILL: ActiveSkillContext = {
     "The generated PPTX exists at the requested workspace path and can be inspected/read.",
     "Slide count and requested content structure match the user's task.",
     "No unresolved blocking layout errors remain; important warnings have been addressed or explicitly reported.",
+  ],
+};
+
+const PPTX_SWARM_SKILL: ActiveSkillContext = {
+  id: "pptx-swarm",
+  name: "PPTX Swarm",
+  description:
+    "Create long (20+ slide) or multiple PowerPoint presentations using the same WenShu structured presentation runtime with batch-first planning, unified validation and delivery.",
+  primaryToolIds: ["read_discover", "read_open", "office_presentation"],
+  instructions: [
+    "Use pptx-swarm semantics only for long presentations (20+ slides) or batch creation of multiple presentations; otherwise use the normal pptx Skill.",
+    "The Parent Agent remains the only control loop. Do not create a nested Skill Agent loop merely to imitate another implementation's swarm architecture.",
+    "Complete the visual direction, outline and every presentation spec before starting final conversion/delivery.",
+    "For multiple presentations, generate all complete specs first, validate the complete batch next, then create and inspect all outputs. Never create/check/deliver presentation 1 before presentation 2's spec exists.",
+    "Use office_presentation operation=create_batch when several deck specs are ready together. Each batch item contains outputPath and spec.",
+    "For a single long deck, use the same structured AST and create flow after the entire 20+ slide deck has been planned and validated.",
+    "Do not expose slide/page primitives as Agent tools and do not claim arbitrary lossless modification of existing PPTX files.",
+  ],
+  completionCriteria: [
+    "All requested deck specs are complete before conversion begins.",
+    "Every deck passes blocking validation before any batch delivery is considered complete.",
+    "All requested PPTX artifacts exist and can be inspected.",
+    "The complete batch/long deck has the requested slide counts/content sections and no unresolved blocking layout errors.",
   ],
 };
 
@@ -120,6 +142,19 @@ const patterns: Array<{ skill: ActiveSkillContext; pattern: RegExp }> = [
   },
 ];
 
+const presentationPattern =
+  /(?:\.pptx?\b|application\/vnd\.openxmlformats-officedocument\.presentationml\.presentation|power\s*point|\bppt\b|幻灯片|演示文稿|路演稿)/i;
+const batchPresentationPattern =
+  /(?:多个|多份|批量|一批|batch|multiple)\s*(?:份|个)?\s*(?:ppt|pptx|演示文稿|presentation)?/i;
+const longPresentationPattern = /(?:长篇|长deck|long\s+deck|大型演示)/i;
+
+const isSwarmPresentationRequest = (text: string) => {
+  if (!presentationPattern.test(text)) return false;
+  if (batchPresentationPattern.test(text) || longPresentationPattern.test(text)) return true;
+  const counts = [...text.matchAll(/(\d{1,3})\s*(?:页|slides?|张)(?:\s*(?:ppt|pptx|幻灯片))?/gi)];
+  return counts.some((match) => Number(match[1]) >= 20);
+};
+
 const describeMessageForSkillResolution = (message: NormalizedChatMessage) => {
   const attachmentMetadata = (message.parts ?? [])
     .flatMap((part) => {
@@ -140,26 +175,30 @@ const getLatestUserSemanticText = (messages?: NormalizedChatMessage[]) => {
   return "";
 };
 
+const resolveFromText = (text: string) => {
+  if (isSwarmPresentationRequest(text)) return PPTX_SWARM_SKILL;
+  for (const candidate of patterns) {
+    if (candidate.pattern.test(text)) return candidate.skill;
+  }
+  return null;
+};
+
 export const resolveActiveSkillContext = (input: {
   question: string;
   messages?: NormalizedChatMessage[];
 }): ActiveSkillContext | null => {
   // Prefer the current user turn and its attachment metadata. This avoids an old
-  // DOCX/PDF in conversation history hijacking a new explicit spreadsheet/PPT task.
+  // document in conversation history hijacking a new explicit task.
   const current = `${input.question}\n${getLatestUserSemanticText(input.messages)}`;
-  for (const candidate of patterns) {
-    if (candidate.pattern.test(current)) return candidate.skill;
-  }
+  const currentSkill = resolveFromText(current);
+  if (currentSkill) return currentSkill;
 
   const recent = (input.messages ?? [])
     .filter((message) => message.role === "user" || message.role === "assistant")
     .slice(-4)
     .map(describeMessageForSkillResolution)
     .join("\n");
-  for (const candidate of patterns) {
-    if (candidate.pattern.test(recent)) return candidate.skill;
-  }
-  return null;
+  return resolveFromText(recent);
 };
 
 export const listBuiltInSkillContexts = (): ActiveSkillContext[] => [
@@ -167,4 +206,5 @@ export const listBuiltInSkillContexts = (): ActiveSkillContext[] => [
   PDF_SKILL,
   XLSX_SKILL,
   PPTX_SKILL,
+  PPTX_SWARM_SKILL,
 ];
