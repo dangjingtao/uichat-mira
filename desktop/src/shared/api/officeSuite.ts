@@ -137,8 +137,9 @@ export async function createWordReviewCopy(
 
   const formData = new FormData();
   formData.append("file", file);
-  const route = params.size
-    ? `${OFFICE_SUITE_WORD_REVIEW_ROUTE}?${params.toString()}`
+  const query = params.toString();
+  const route = query
+    ? `${OFFICE_SUITE_WORD_REVIEW_ROUTE}?${query}`
     : OFFICE_SUITE_WORD_REVIEW_ROUTE;
   const response = await client.post<Blob>(route, formData, {
     responseType: "blob",
