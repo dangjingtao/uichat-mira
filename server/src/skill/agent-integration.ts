@@ -24,16 +24,17 @@ const SKILL_MARKER_PREFIX = "skill-runtime:";
 const SKILL_CRITERION_PREFIX = "[Skill:";
 const SKILL_REMAINING_PREFIX = "Active Skill:";
 
-/**
- * Base Harness exposure before Skill narrowing. It is run-scoped and rebuilt on
- * every prepareContext (including approval resume), so it never becomes a
- * second durable source of tool truth.
- */
-const baseToolExposureByRunId = new Map<string, AgentToolExposureState>();
+type AgentNodeStateWithToolExposureConstraint = AgentNodeState & {
+  toolExposureAllowlist?: string[];
+};
 
 const unique = (values: string[]) =>
   values.filter((value, index, items) => value && items.indexOf(value) === index);
 
+/**
+ * Defense-in-depth intersection for already-built exposure values. The primary
+ * constraint is applied inside Harness candidate resolution before ranking.
+ */
 export const filterToolExposureForSkill = (
   toolExposure: AgentToolExposureState,
   frame: SkillRuntimeFrame | undefined,
@@ -86,6 +87,7 @@ export const decorateTaskFrameWithSkill = (
     semanticContext: skill.semanticContext,
     qualityCriteria: skill.qualityCriteria,
   };
+  const skillStillActive = skill.status === "running" || skill.status === "waiting";
 
   return {
     ...clean,
@@ -104,12 +106,32 @@ export const decorateTaskFrameWithSkill = (
         (criterion) => `[Skill:${skill.skillId}] ${criterion}`,
       ),
     ]),
-    remainingWork: unique([
-      ...(clean.remainingWork ?? []),
-      `${SKILL_REMAINING_PREFIX} ${skill.name} (${skill.status}${
-        skill.stage ? ` / ${skill.stage}` : ""
-      })`,
-    ]),
+    remainingWork: skillStillActive
+      ? unique([
+          ...(clean.remainingWork ?? []),
+          `${SKILL_REMAINING_PREFIX} ${skill.name} (${skill.status}${
+            skill.stage ? ` / ${skill.stage}` : ""
+          })`,
+        ])
+      : clean.remainingWork,
+  };
+};
+
+const prepareHarnessExposureForSkill = async (
+  state: AgentNodeState,
+  frame: SkillRuntimeFrame | undefined,
+  emit?: EmitAgentExecutionNode,
+) => {
+  const constrainedState: AgentNodeStateWithToolExposureConstraint = {
+    ...state,
+    toolExposureAllowlist: frame?.allowedToolIds,
+  };
+  const patch = await basePrepareContextNode(constrainedState, emit);
+  return {
+    ...patch,
+    toolExposure: patch.toolExposure
+      ? filterToolExposureForSkill(patch.toolExposure, frame)
+      : patch.toolExposure,
   };
 };
 
@@ -125,15 +147,8 @@ export const skillAwarePrepareContextNode = async (
     currentTaskFrame: state.currentTaskFrame,
   });
 
-  const patch = await basePrepareContextNode(state, emit);
   const skillFrame = getActiveSkillRuntimeFrameForRun(state.runId);
-  const baseExposure = patch.toolExposure ?? state.toolExposure;
-  if (baseExposure) {
-    baseToolExposureByRunId.set(state.runId, baseExposure);
-  }
-  const toolExposure = baseExposure
-    ? filterToolExposureForSkill(baseExposure, skillFrame)
-    : baseExposure;
+  const patch = await prepareHarnessExposureForSkill(state, skillFrame, emit);
 
   if (skillFrame) {
     await emitStepNode(emit, {
@@ -150,15 +165,12 @@ export const skillAwarePrepareContextNode = async (
         skillStatus: skillFrame.status,
         skillStage: skillFrame.stage ?? null,
         allowedToolIds: skillFrame.allowedToolIds,
-        exposedToolIds: toolExposure?.exposedTools ?? [],
+        exposedToolIds: patch.toolExposure?.exposedTools ?? [],
       },
     });
   }
 
-  return {
-    ...patch,
-    toolExposure,
-  };
+  return patch;
 };
 
 export const skillAwareNextActionPlannerNode = async (
@@ -193,15 +205,15 @@ export const skillAwareEvidenceNode = async (
       state.pendingToolExecution ||
       state.pendingRetrievalEvidence,
   );
-  const patch = await baseEvidenceNode(state, emit);
+  const evidencePatch = await baseEvidenceNode(state, emit);
 
   if (!hadPendingEvidence || !getActiveSkillRuntimeFrameForRun(state.runId)) {
-    return patch;
+    return evidencePatch;
   }
 
   const acceptedState: AgentNodeState = {
     ...state,
-    ...patch,
+    ...evidencePatch,
   };
   const evidence = acceptedState.evidence;
   const updated = await reduceSkillAfterAcceptedEvidence({
@@ -212,41 +224,45 @@ export const skillAwareEvidenceNode = async (
       latestToolExecution: evidence?.toolExecutions.at(-1),
     },
   });
-  const skillFrame = getLatestSkillRuntimeFrameForRun(state.runId);
+  const latestFrame = getLatestSkillRuntimeFrameForRun(state.runId);
   const activeFrame = getActiveSkillRuntimeFrameForRun(state.runId);
-  const baseExposure = baseToolExposureByRunId.get(state.runId);
-  const toolExposure = baseExposure
-    ? filterToolExposureForSkill(baseExposure, activeFrame)
-    : patch.toolExposure;
 
-  if (updated && skillFrame) {
+  // A Skill stage may change its legal tool set after every accepted Evidence.
+  // Re-enter the same Harness exposure construction path with the new runtime
+  // constraint instead of maintaining a second Skill-owned tool list for Planner.
+  // When the Skill reaches a terminal state, activeFrame is undefined and this
+  // rebuild restores the normal parent-Agent Harness exposure.
+  const exposurePatch = await prepareHarnessExposureForSkill(
+    acceptedState,
+    activeFrame,
+    undefined,
+  );
+
+  if (updated && latestFrame) {
     await emitStepNode(emit, {
       runId: state.runId,
       nodeId: "agent-skill-runtime",
       nodeType: "reason",
       phase: "done",
       label: "推进技能",
-      summary: `Skill 状态已更新：${skillFrame.name}`,
+      summary: `Skill 状态已更新：${latestFrame.name}`,
       details: {
-        skillId: skillFrame.skillId,
-        skillVersion: skillFrame.skillVersion,
-        skillInstanceId: skillFrame.skillInstanceId,
-        skillStatus: skillFrame.status,
-        skillStage: skillFrame.stage ?? null,
+        skillId: latestFrame.skillId,
+        skillVersion: latestFrame.skillVersion,
+        skillInstanceId: latestFrame.skillInstanceId,
+        skillStatus: latestFrame.status,
+        skillStage: latestFrame.stage ?? null,
         checkpointSequence: updated.checkpoint.sequence,
         allowedToolIds: activeFrame?.allowedToolIds ?? [],
-        exposedToolIds: toolExposure?.exposedTools ?? [],
+        exposedToolIds: exposurePatch.toolExposure?.exposedTools ?? [],
         error: updated.error ?? null,
       },
     });
   }
 
   return {
-    ...patch,
-    toolExposure,
+    ...evidencePatch,
+    toolIntent: exposurePatch.toolIntent,
+    toolExposure: exposurePatch.toolExposure,
   };
-};
-
-export const clearSkillAgentIntegrationForTests = () => {
-  baseToolExposureByRunId.clear();
 };
