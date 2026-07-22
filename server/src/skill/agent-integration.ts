@@ -5,6 +5,7 @@ import type {
 } from "@/agent/node-runtime";
 import { emitStepNode } from "@/agent/node-runtime";
 import { evidenceNode as baseEvidenceNode } from "@/agent/nodes/evidence";
+import { harnessAwareToolNode as baseHarnessAwareToolNode } from "@/agent/nodes/harness-tool-result";
 import { prepareContextNode as basePrepareContextNode } from "@/agent/nodes/prepare-context";
 import { getLatestUserQuestion } from "@/agent/nodes/shared";
 import { nextActionPlannerNode as baseNextActionPlannerNode } from "@/agent/planner/node";
@@ -16,6 +17,7 @@ import {
   ensureSkillResolvedForRun,
   getActiveSkillRuntimeFrameForRun,
   getLatestSkillRuntimeFrameForRun,
+  getSkillTraceMetadataForRun,
   reduceSkillAfterAcceptedEvidence,
 } from "./runtime";
 import type { SkillRuntimeFrame } from "./types";
@@ -135,6 +137,29 @@ const prepareHarnessExposureForSkill = async (
   };
 };
 
+const createSkillTraceEmitter = (
+  runId: string,
+  emit?: EmitAgentExecutionNode,
+): EmitAgentExecutionNode | undefined => {
+  if (!emit) {
+    return undefined;
+  }
+  return async (event) => {
+    const skillMeta = getSkillTraceMetadataForRun(runId);
+    await emit({
+      ...event,
+      ...(skillMeta
+        ? {
+            details: {
+              ...(event.details ?? {}),
+              ...skillMeta,
+            },
+          }
+        : {}),
+    });
+  };
+};
+
 export const skillAwarePrepareContextNode = async (
   state: AgentNodeState,
   emit?: EmitAgentExecutionNode,
@@ -195,6 +220,12 @@ export const skillAwareNextActionPlannerNode = async (
     ),
   };
 };
+
+export const skillAwareToolNode = async (
+  state: AgentNodeState,
+  emit?: EmitAgentExecutionNode,
+): Promise<Partial<AgentNodeState>> =>
+  baseHarnessAwareToolNode(state, createSkillTraceEmitter(state.runId, emit));
 
 export const skillAwareEvidenceNode = async (
   state: AgentNodeState,
