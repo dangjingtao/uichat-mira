@@ -929,7 +929,7 @@ async function sendPageMessage(tabId, message) {
 }
 
 async function executeWebBridgeTool(tool, params) {
-  if (tool === 'expert.detect' || tool === 'expert.bind' || tool === 'expert.send_message') {
+  if (tool === 'expert.connect' || tool === 'expert.send_message') {
     return executeExpertTool(tool, params);
   }
   if (!['look', 'browse', 'act', 'transfer'].includes(tool)) {
@@ -951,19 +951,42 @@ async function executeExpertTool(tool, params) {
       bridgeError: bridgeError('EXPERT_PROVIDER_UNSUPPORTED', '当前仅支持 ChatGPT 专家', null, false),
     });
   }
-  if (!Number.isInteger(params.tabId)) {
-    throw Object.assign(new Error('问策请求缺少 tabId'), {
-      bridgeError: bridgeError('EXPERT_TAB_REQUIRED', '问策请求缺少有效的浏览器标签页', null, false),
-    });
-  }
-  const response = await sendPageMessage(params.tabId, {
+  const tabId = await resolveExpertTabId(tool, params.tabId);
+  const response = await sendPageMessage(tabId, {
     type: 'WEBBRIDGE_EXPERT',
     provider: params.provider,
     command: tool.slice('expert.'.length),
     sessionRef: params.sessionRef,
     message: params.message,
   });
-  return response?.result || response;
+  const result = response?.result || response;
+  return tool === 'expert.connect' && result && typeof result === 'object'
+    ? { ...result, tabId }
+    : result;
+}
+
+async function resolveExpertTabId(tool, requestedTabId) {
+  if (Number.isInteger(requestedTabId) && requestedTabId > 0) {
+    try {
+      const tab = await chrome.tabs.get(requestedTabId);
+      if (tab?.id && /^https:\/\/(chatgpt\.com|chat\.openai\.com)\//i.test(tab.url || '')) return tab.id;
+    } catch (_) {
+      // A closed or restored tab gets a new Chrome tab id.
+    }
+  }
+  if (tool !== 'expert.connect') {
+    throw Object.assign(new Error('已绑定的 ChatGPT 标签页已失效，请重新绑定'), {
+      bridgeError: bridgeError('EXPERT_TAB_EXPIRED', '已绑定的 ChatGPT 标签页已失效，请重新绑定', 'retry', true),
+    });
+  }
+
+  const tab = await chrome.tabs.create({ url: 'https://chatgpt.com/', active: true });
+  if (!Number.isInteger(tab.id)) {
+    throw Object.assign(new Error('无法打开 ChatGPT 标签页'), {
+      bridgeError: bridgeError('CHATGPT_TAB_UNAVAILABLE', '无法打开 ChatGPT 标签页', 'retry', true),
+    });
+  }
+  return tab.id;
 }
 
 async function executeLook(tabId, params) {

@@ -38,11 +38,11 @@
         {
           "version": "0.99.0",
           "commit": {
-            "hash": "e0c1dc3d4347adc15c70834cb29634f4595d7d38",
-            "shortHash": "e0c1dc3",
-            "message": "feat: sync dev workspace updates",
-            "author": "Tomz",
-            "date": "2026-07-22T17:41:44+08:00"
+            "hash": "ac35eebad7ea28f13ea2dd8b4893b824cbcdeb62",
+            "shortHash": "ac35eeb",
+            "message": "fix: stabilize ChatGPT expert sending",
+            "author": "DangJingtao",
+            "date": "2026-07-23T00:34:41+08:00"
           }
         },
         {

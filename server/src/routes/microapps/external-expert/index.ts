@@ -30,18 +30,14 @@ const externalExpertRoutes: FastifyPluginAsync<RouteOptions> = async (app, optio
     }),
   );
 
-  app.post<{ Params: { id: string }; Body: { tabId?: number } }>(
-    "/microapps/external-experts/:id/bind-tab",
-    routeHandler("Failed to bind external expert tab", async (request) => {
+  app.post<{ Params: { id: string } }>(
+    "/microapps/external-experts/:id/connect",
+    routeHandler("Failed to connect external expert", async (request) => {
       const params = request.params as { id: string };
-      const body = request.body as { tabId?: number };
-      if (!Number.isInteger(body?.tabId)) throw badRequest("tabId 必须是有效的浏览器标签页 ID");
-      const tabId = body.tabId as number;
-      return success(await service.bind({
+      return success(await service.connect({
         userId: request.authUser!.id,
         expertId: params.id,
-        tabId,
-      }), "External expert bound");
+      }), "External expert connected");
     }),
   );
 

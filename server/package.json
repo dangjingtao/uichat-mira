@@ -71,6 +71,7 @@
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",
     "@types/better-sqlite3": "^7.6.13",
+    "@types/exceljs": "1.3.2",
     "@types/jsdom": "^28.0.3",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.7.6",

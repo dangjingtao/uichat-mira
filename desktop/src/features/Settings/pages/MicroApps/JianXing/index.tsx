@@ -453,14 +453,6 @@ export default function JianXingPage() {
     }
   };
 
-  const listBrowserTabs = async () => {
-    const response = await clientRef.current?.request("look", { mode: "tabs" });
-    const tabs = response && typeof response === "object" && Array.isArray((response as { tabs?: unknown[] }).tabs)
-      ? (response as { tabs: Array<{ tabId: number; title: string; url: string; active?: boolean }> }).tabs
-      : [];
-    return tabs;
-  };
-
   const buildParams = (): Record<string, unknown> => {
     if (mode === "look") {
       if (action === "page") return { mode: action, include: ["text", "interactive"] };
@@ -631,7 +623,7 @@ export default function JianXingPage() {
         className="w-full"
       />
       {workspaceTab === "expert" ? (
-        <ExpertPanel extensionConnected={extensionConnected} listTabs={listBrowserTabs} />
+        <ExpertPanel extensionConnected={extensionConnected} />
       ) : workspaceTab === "jianxing" ? (
         <div className="grid min-h-0 gap-4 md:grid-cols-2">
           <Card padding="md" className="space-y-4">

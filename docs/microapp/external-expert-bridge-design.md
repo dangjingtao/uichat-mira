@@ -53,7 +53,7 @@ MVP 只需要四个动作：
 
 ```text
 创建专家
-  -> 绑定一个已登录的网页 Tab
+  -> 建立一个新的已登录网页会话
   -> 发送咨询消息
   -> 获取回复
 ```
@@ -78,7 +78,7 @@ Mira 保存专家配置和外部线程标识；浏览器保存登录态和真实
 `ExpertService` 负责：
 
 - 创建和读取专家定义
-- 绑定或解除网页 Tab
+- 建立或断开网页运行时连接
 - 调用 Provider
 - 将回复返回给当前 Mira 调用方
 - 保存外部线程标识和最近状态
@@ -127,9 +127,9 @@ type ExpertProvider = {
     accountLabel?: string;
   }>;
 
-  bind(input: {
-    tabId: number;
-  }): Promise<ExternalSessionRef>;
+  connect(): Promise<{
+    accountLabel?: string;
+  }>;
 
   sendMessage(input: {
     tabId: number;
@@ -144,7 +144,7 @@ type ExpertProvider = {
 
 `ExternalSessionRef` 由 Provider 解释。ChatGPT 可以使用会话 ID，Kimi 或 DeepSeek 可以使用 URL 或 Provider 自己维护的状态引用。Mira 不假设它一定是正规 API ID。
 
-`bind` 表示将当前网页上已经存在且可用的外部线程绑定给 Mira 专家，不表示创建外部线程。以后如果需要创建新外部线程，再增加独立的 `createConversation` 合同。
+`connect` 表示打开一个新的 Provider 网页会话并建立运行时连接，不复用用户已有的外部线程。首次发送消息后，Provider 再返回真实的 `ExternalSessionRef`。
 
 Provider 接口不包含：
 
@@ -160,8 +160,7 @@ Provider 接口不包含：
 建议新增专用工具名：
 
 ```text
-expert.detect
-expert.bind
+expert.connect
 expert.send_message
 ```
 
@@ -173,11 +172,6 @@ expert.send_message
   "tool": "expert.send_message",
   "params": {
     "provider": "chatgpt",
-    "tabId": 123,
-    "sessionRef": {
-      "kind": "conversation_id",
-      "value": "conversation-id"
-    },
     "message": "请从产品设计角度评估这个方案"
   }
 }
@@ -227,12 +221,14 @@ type ExpertRuntimeBinding = {
 };
 ```
 
-`tabId` 只存在于运行时绑定中，不是专家的持久身份。浏览器重启、Tab 关闭或 Tab 恢复后，Mira 专家仍然保留；用户只需重新为它绑定一个当前可用的 Tab。
+`tabId` 只存在于运行时连接中，不是专家的持久身份。连接时扩展总是新开 ChatGPT Tab；浏览器重启、Tab 关闭或 Tab 恢复后，Mira 专家仍然保留，但需要重新建立连接。
 
 持久关系是一对一的 MVP 约束：
 
 - 一个 Mira 专家绑定一个 Provider
-- 一个 Mira 专家最多绑定一个 `ExternalSessionRef`
+- 一个 Mira 专家最多保留一个自动创建的 `ExternalSessionRef`
+
+连接时不复用用户已有 ChatGPT Tab 或外部线程。ChatGPT Adapter 调用 ChatGPT.js 的新建对话能力；首次咨询发送后，才持久化真实 `conversation_id`。
 
 外部线程上下文由 ChatGPT/Kimi/DeepSeek 自己维护。Mira 只保存 `ExternalSessionRef`，不保存完整外部消息历史。
 
@@ -268,7 +264,7 @@ ExpertBridge
 ### 必须支持
 
 1. 创建专家：名称、Provider。
-2. 绑定网页会话：选择一个目标 Tab，检查是否已登录，并记录 `ExternalSessionRef`。
+2. 建立网页连接：扩展新开 ChatGPT Tab，检查网络和登录状态，并创建空白对话。
 3. 发送咨询消息：发送一条普通文本消息。
 4. 获取回复：返回本次消息对应的、已经完成的 assistant 回复。
 
@@ -276,7 +272,7 @@ ExpertBridge
 
 ```text
 POST /experts
-POST /experts/:id/bind-tab
+POST /experts/:id/connect
 POST /experts/:id/consult
 ```
 

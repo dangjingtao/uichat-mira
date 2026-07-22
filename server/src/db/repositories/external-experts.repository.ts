@@ -110,6 +110,21 @@ export const externalExpertsRepository = {
     return this.getById(input.id, input.userId);
   },
 
+  updateConnection(input: {
+    id: string;
+    userId: number;
+    accountLabel?: string;
+    status: ExternalExpertStatus;
+  }) {
+    ensureTable();
+    getSqlite().prepare(`
+      UPDATE external_experts
+      SET account_label = ?, status = ?, updated_at = datetime('now')
+      WHERE id = ? AND user_id = ?
+    `).run(input.accountLabel || null, input.status, input.id, input.userId);
+    return this.getById(input.id, input.userId);
+  },
+
   updateStatus(id: string, userId: number, status: ExternalExpertStatus) {
     ensureTable();
     getSqlite().prepare("UPDATE external_experts SET status = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?").run(status, id, userId);

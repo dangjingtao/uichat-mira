@@ -22,8 +22,8 @@ export const listExternalExperts = () => get<ExternalExpert[]>("/microapps/exter
 export const createExternalExpert = (input: { name: string; provider: ExternalExpertProvider }) =>
   post<ExternalExpert>("/microapps/external-experts", input);
 
-export const bindExternalExpert = (id: string, tabId: number) =>
-  post<ExternalExpert>(`/microapps/external-experts/${encodeURIComponent(id)}/bind-tab`, { tabId });
+export const connectExternalExpert = (id: string) =>
+  post<ExternalExpert>(`/microapps/external-experts/${encodeURIComponent(id)}/connect`, {});
 
 export const consultExternalExpert = (id: string, message: string) =>
   post<{ provider: ExternalExpertProvider; sessionRef?: ExternalSessionRef; reply: string }>(

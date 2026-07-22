@@ -98,7 +98,7 @@ const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
 
   app.post<{ Body: { kind?: OfficeSuiteFileKind } }>(
     "/microapps/office-suite/create",
-    routeHandler("Failed to create Office sample", async (request, reply) => {
+    routeHandler<{ Body: { kind?: OfficeSuiteFileKind } }>("Failed to create Office sample", async (request, reply) => {
       const kind = request.body?.kind;
       if (!kind || !OFFICE_KINDS.includes(kind)) {
         throw badRequest("请选择要创建的 Office 文件类型");

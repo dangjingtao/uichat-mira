@@ -95,7 +95,7 @@ export const patchSpreadsheetWorkbook = async (
   input: SpreadsheetPatchInput,
 ): Promise<SpreadsheetPatchArtifact> => {
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(input.buffer);
+  await workbook.xlsx.load(input.buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
 
   const modifiedSheets = new Set<string>();
 

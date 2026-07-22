@@ -179,10 +179,10 @@ const createPowerPointSample = async (): Promise<OfficeSuiteCreatedArtifact> => 
   });
   tableSlide.addTable(
     [
-      ["模块", "Inspect", "Create", "Modify"],
-      ["Word", "Ready", "Ready", "Basic"],
-      ["Excel", "Ready", "Ready", "Basic"],
-      ["PowerPoint", "Ready", "Ready", "Not promised"],
+      [{ text: "模块" }, { text: "Inspect" }, { text: "Create" }, { text: "Modify" }],
+      [{ text: "Word" }, { text: "Ready" }, { text: "Ready" }, { text: "Basic" }],
+      [{ text: "Excel" }, { text: "Ready" }, { text: "Ready" }, { text: "Basic" }],
+      [{ text: "PowerPoint" }, { text: "Ready" }, { text: "Ready" }, { text: "Not promised" }],
     ],
     {
       x: 0.8,

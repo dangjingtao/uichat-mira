@@ -1,0 +1,18 @@
+{
+  "files.watcherExclude": {
+    "**/tauri/target/**": true,
+    "**/.test-artifact/**": true,
+    "**/release/**": true,
+    "**/.local-runtimes/**": true,
+    "**/.local-models/**": true,
+    "**/node_modules/**": true
+  },
+  "search.exclude": {
+    "**/tauri/target/**": true,
+    "**/.test-artifact/**": true,
+    "**/release/**": true,
+    "**/.local-runtimes/**": true,
+    "**/.local-models/**": true,
+    "**/node_modules/**": true
+  }
+}

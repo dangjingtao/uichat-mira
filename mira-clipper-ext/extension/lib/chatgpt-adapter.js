@@ -73,14 +73,15 @@
     };
   }
 
-  async function bind() {
+  async function connect() {
     const chatgpt = await getChatGPT();
     const detected = await detect();
     if (!detected.loggedIn) throw error('CHATGPT_LOGIN_REQUIRED', '请先在当前 ChatGPT 页面完成登录');
-    const conversationId = await getActiveConversationId(chatgpt);
-    if (!conversationId) throw error('CHATGPT_THREAD_UNAVAILABLE', '请先打开一个已有的 ChatGPT 对话线程');
+    if (typeof chatgpt.startNewChat !== 'function') throw error('CHATGPT_NEW_THREAD_UNAVAILABLE', '当前 ChatGPT.js 不支持新建对话');
+    await chatgpt.startNewChat();
+    await new Promise((resolve) => setTimeout(resolve, 500));
     return {
-      sessionRef: { kind: 'conversation_id', value: conversationId },
+      sessionRef: { kind: 'provider_state', value: window.location.href || 'new-chat' },
       accountLabel: detected.accountLabel,
     };
   }
@@ -167,13 +168,20 @@
   async function sendMessage(sessionRef, message) {
     const chatgpt = await getChatGPT();
     const currentId = await getActiveConversationId(chatgpt);
-    if (!currentId || sessionRef?.kind !== 'conversation_id' || sessionRef.value !== currentId) {
+    const isNewConversation = !sessionRef || sessionRef.kind === 'provider_state';
+    if (isNewConversation && currentId) throw error('CHATGPT_THREAD_UNAVAILABLE', '新专家连接未处于空白 ChatGPT 对话');
+    if (!isNewConversation && (!currentId || sessionRef.kind !== 'conversation_id' || sessionRef.value !== currentId)) {
       throw error('CHATGPT_THREAD_UNAVAILABLE', '当前标签页不是已绑定的 ChatGPT 对话线程');
     }
     if (!message.trim()) throw error('CHATGPT_MESSAGE_EMPTY', '咨询内容不能为空');
+    await chatgpt.isIdle(LIBRARY_TIMEOUT_MS);
 
     const libraryReply = await sendViaLibrary(chatgpt, message);
-    if (libraryReply !== null) return { reply: libraryReply, sessionRef };
+    const updatedConversationId = await getActiveConversationId(chatgpt);
+    const updatedSessionRef = updatedConversationId
+      ? { kind: 'conversation_id', value: updatedConversationId }
+      : sessionRef;
+    if (libraryReply !== null) return { reply: libraryReply, sessionRef: updatedSessionRef };
 
     // Compatibility fallback for older chatgpt.js builds. Do not retry this path after
     // askAndGetReply() has started, because that could duplicate an already-sent prompt.
@@ -182,8 +190,8 @@
     if (idle === false) throw error('CHATGPT_RESPONSE_TIMEOUT', '等待 ChatGPT 回复完成超时');
     const normalizedReply = await readLatestReply(chatgpt);
     if (!normalizedReply) throw error('CHATGPT_EMPTY_REPLY', 'ChatGPT 没有返回有效回复');
-    return { reply: normalizedReply, sessionRef };
+    return { reply: normalizedReply, sessionRef: updatedSessionRef };
   }
 
-  window.MiraChatGPTAdapter = { detect, bind, sendMessage };
+  window.MiraChatGPTAdapter = { detect, connect, sendMessage };
 })();

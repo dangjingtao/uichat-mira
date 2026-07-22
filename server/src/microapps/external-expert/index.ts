@@ -23,7 +23,7 @@ const assertProvider = (provider: string): ExternalExpertProvider => {
 
 const invoke = (input: {
   userId: number;
-  tool: "expert.detect" | "expert.bind" | "expert.send_message";
+  tool: "expert.connect" | "expert.send_message";
   params: Record<string, unknown>;
 }) => invokeWebBridge(input);
 
@@ -51,31 +51,21 @@ export const createExternalExpertService = () => {
       });
     },
 
-    async bind(input: { userId: number; expertId: string; tabId: number }) {
+    async connect(input: { userId: number; expertId: string }) {
       const expert = getExpert(input.expertId, input.userId);
-      const detected = await invoke({
-        userId: input.userId,
-        tool: "expert.detect",
-        params: { provider: expert.provider, tabId: input.tabId },
-      }) as { loggedIn?: boolean; accountLabel?: string };
-      if (!detected?.loggedIn) {
-        externalExpertsRepository.updateStatus(expert.id, input.userId, "expired");
-        throw new Error("外部专家网页未登录或当前页面不可用");
-      }
       const result = await invoke({
         userId: input.userId,
-        tool: "expert.bind",
-        params: { provider: expert.provider, tabId: input.tabId },
-      }) as { sessionRef?: ExternalSessionRef; accountLabel?: string };
-      if (!result?.sessionRef?.kind || !result.sessionRef.value) {
-        throw new Error("外部专家网页未返回有效会话引用");
+        tool: "expert.connect",
+        params: { provider: expert.provider },
+      }) as { accountLabel?: string; tabId?: number };
+      if (typeof result.tabId !== "number" || !Number.isInteger(result.tabId)) {
+        throw new Error("触界未返回有效的 ChatGPT 标签页");
       }
-      runtimeBindings.set(expert.id, input.tabId);
-      return externalExpertsRepository.updateBinding({
+      runtimeBindings.set(expert.id, result.tabId);
+      return externalExpertsRepository.updateConnection({
         id: expert.id,
         userId: input.userId,
-        externalSessionRef: result.sessionRef,
-        accountLabel: result.accountLabel || detected.accountLabel,
+        accountLabel: result.accountLabel,
         status: "ready",
       });
     },
