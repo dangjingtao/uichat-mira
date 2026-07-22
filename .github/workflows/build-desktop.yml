@@ -95,7 +95,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: electron-${{ matrix.platform }}
-          path: release/**/electron/*Setup*.exe
+          path: |
+            release/**/electron/*Setup*.exe
+            release/**/electron/*Setup*.exe.blockmap
           if-no-files-found: error
           retention-days: 3
 
@@ -172,7 +174,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tauri-windows
-          path: release/**/tauri/msi/*.msi
+          path: |
+            release/**/tauri/msi/*.msi
+            release/**/tauri/nsis/*setup.exe
           if-no-files-found: error
           retention-days: 3
 
