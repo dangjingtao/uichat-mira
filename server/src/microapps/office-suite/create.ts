@@ -158,7 +158,6 @@ const createPowerPointSample = async (): Promise<OfficeSuiteCreatedArtifact> => 
       w: 10.8,
       h: 1.4,
       fontSize: 16,
-      breakLine: false,
       margin: 0,
     },
   );
