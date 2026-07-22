@@ -13,6 +13,7 @@ import {
   LibraryBig,
   ListChecks,
   PanelsTopLeft,
+  Sparkles,
   ShieldCheck,
   Wrench,
   UserRoundPen,
@@ -50,6 +51,7 @@ import EvolvingKnowledgeStudioPage from "@/features/Settings/pages/MicroApps/Evo
 import NotionMicroAppPage from "@/features/Settings/pages/MicroApps/Notion";
 import JianXingPage from "@/features/Settings/pages/MicroApps/JianXing";
 import OfficeSuitePage from "@/features/Settings/pages/MicroApps/OfficeSuite";
+import SkillsSettings from "@/features/Settings/pages/Skills";
 
 export type SettingsNavGroup =
   | "general"
@@ -113,6 +115,11 @@ const settingsRouteTree: SettingsRouteConfig[] = [
     path: "roles",
     element: <RoleSettings />,
     nav: { labelKey: "settings.navigation.roles", icon: UserRoundPen, group: "app", order: 10 },
+  },
+  {
+    path: "skills",
+    element: <SkillsSettings />,
+    nav: { labelKey: "settings.navigation.skills", icon: Sparkles, group: "app", order: 12 },
   },
   {
     path: "micro-apps",

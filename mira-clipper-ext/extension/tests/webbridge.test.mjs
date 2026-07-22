@@ -59,10 +59,17 @@ describe('WebBridge tool surface', () => {
     const source = await readExtensionFile('lib/chatgpt-adapter.js');
     assert.match(source, /textarea\[aria-label\]/);
     assert.match(source, /button\[data-testid="send-button"\]/);
-    assert.match(source, /dispatchEvent\(new Event\('input'/);
+    assert.match(source, /new InputEvent\('beforeinput'/);
+    assert.match(source, /dispatchEvent\(new InputEvent\('input'/);
     assert.match(source, /button\.click\(\)/);
-    assert.match(source, /CHATGPT_SEND_FAILED/);
-    assert.match(source, /chatgpt\.isIdle\(LIBRARY_TIMEOUT_MS\)/);
+    assert.match(source, /SEND_NOT_CONFIRMED/);
+    assert.match(source, /INPUT_NOT_ACCEPTED|SEND_BUTTON_NOT_READY|SEND_TRIGGER_FAILED/);
+    assert.match(source, /waitForResponseCompletion/);
+    assert.match(source, /assistantMessages=/);
+    assert.match(source, /getFromDOM\?\.\('last'\)/);
+    assert.match(source, /COMPOSER_SETTLE_MS/);
+    assert.match(source, /assistantTextBefore/);
+    assert.match(source, /getChatData failed/);
   });
 
   it('requires a valid JWT and Mira readiness before browser-side operations', async () => {

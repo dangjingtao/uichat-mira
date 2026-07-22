@@ -65,6 +65,7 @@ const zhCN = {
       developmentGroup: "开发",
       persona: "角色",
       roles: "角色",
+      skills: "技能",
       personas: "角色",
       evaluationCenter: "知识评测中心",
       development: "开发",

@@ -5,11 +5,13 @@
   const CHATGPT_HOSTS = new Set(['chatgpt.com', 'chat.openai.com']);
   const LIBRARY_TIMEOUT_MS = 15000;
   const SEND_CONFIRM_TIMEOUT_MS = 8000;
+  const COMPOSER_SETTLE_MS = 350;
   const RESPONSE_TIMEOUT_MS = 110000;
   let libraryPromise = null;
 
-  function error(code, message) {
-    return Object.assign(new Error(message), { code });
+  function error(code, message, diagnostics) {
+    const detail = diagnostics ? ` [${diagnostics}]` : '';
+    return Object.assign(new Error(`${message}${detail}`), { code, diagnostics });
   }
 
   function isChatGPTPage() {
@@ -90,6 +92,15 @@
     return String(value || '').replace(/\u00a0/g, ' ').replace(/\r\n/g, '\n').trim();
   }
 
+  function composerType(composer) {
+    if (composer instanceof HTMLTextAreaElement) return 'textarea';
+    if (composer instanceof HTMLInputElement) return 'input';
+    if (composer instanceof HTMLElement && composer.isContentEditable) {
+      return composer.getAttribute('contenteditable') === 'plaintext-only' ? 'plaintext-contenteditable' : 'contenteditable';
+    }
+    return composer?.tagName?.toLowerCase() || 'unknown';
+  }
+
   function readComposerValue(composer) {
     if (composer instanceof HTMLTextAreaElement || composer instanceof HTMLInputElement) {
       return composer.value || '';
@@ -105,24 +116,88 @@
     return rect.width > 0 && rect.height > 0;
   }
 
-  function findSendButton(chatgpt, composer) {
+  function isUsableSendButton(button) {
+    return button instanceof HTMLButtonElement
+      && isVisibleElement(button)
+      && !button.disabled
+      && !button.hasAttribute('disabled')
+      && button.getAttribute('aria-disabled') !== 'true';
+  }
+
+  function buttonBelongsToComposer(button, composer) {
+    if (!button || !composer) return false;
+    const form = composer.closest?.('form');
+    if (form) return button.form === form || form.contains(button);
+
+    let scope = composer;
+    for (let level = 0; scope && level < 6; level += 1, scope = scope.parentElement) {
+      if (scope.contains(button)) return true;
+    }
+    return false;
+  }
+
+  function findSendButtonCandidate(chatgpt, composer) {
     const form = composer?.closest?.('form');
-    const candidates = [
-      form?.querySelector?.('button[data-testid="send-button"]'),
-      document.querySelector('button[data-testid="send-button"]'),
-      chatgpt.getSendButton?.(),
+    const formButtons = form
+      ? Array.from(form.querySelectorAll('button[data-testid="send-button"]'))
+      : [];
+    const libraryButton = chatgpt.getSendButton?.();
+    const candidates = [...formButtons, libraryButton];
+    return candidates.find((button) => button instanceof HTMLButtonElement && buttonBelongsToComposer(button, composer)) || null;
+  }
+
+  function findSendButton(chatgpt, composer) {
+    const button = findSendButtonCandidate(chatgpt, composer);
+    return isUsableSendButton(button) ? button : null;
+  }
+
+  function readGeneratingState(chatgpt) {
+    const stopButton = chatgpt.getStopButton?.()
+      || document.querySelector('button[data-testid="stop-button"]');
+    return Boolean(stopButton && isVisibleElement(stopButton));
+  }
+
+  function describeSendState({ composer, button, promptCountBefore, promptCountAfter, conversationIdBefore, conversationIdAfter, chatgpt, message }) {
+    const composerText = normalizeText(readComposerValue(composer));
+    const expectedText = normalizeText(message || '');
+    const state = [
+      `composerType=${composerType(composer)}`,
+      `composerConnected=${Boolean(composer?.isConnected)}`,
+      `composerTextMatches=${expectedText ? composerText === expectedText : 'unknown'}`,
+      `composerEmpty=${!composerText}`,
+      `sendButton=${Boolean(button)}`,
+      `sendButtonDisabled=${button ? Boolean(button.disabled || button.hasAttribute('disabled')) : 'unknown'}`,
+      `sendButtonAriaDisabled=${button?.getAttribute?.('aria-disabled') || 'unknown'}`,
+      `userMessages=${promptCountBefore}->${promptCountAfter}`,
+      `conversation=${conversationIdBefore || 'none'}->${conversationIdAfter || 'none'}`,
+      `generating=${readGeneratingState(chatgpt)}`,
     ];
-    return candidates.find((button) => button instanceof HTMLButtonElement && isVisibleElement(button)) || null;
+    const detail = state.join(',');
+    console.warn(`[MiraChatGPTAdapter] ${detail}`);
+    return detail;
   }
 
   async function setComposerValue(composer, message) {
-    composer.focus?.();
+    if (!composer?.isConnected || !isVisibleElement(composer)) {
+      throw error('INPUT_NOT_ACCEPTED', 'ChatGPT 输入框不可用', `composerType=${composerType(composer)},composerConnected=${Boolean(composer?.isConnected)}`);
+    }
+    composer.focus();
 
     if (composer instanceof HTMLTextAreaElement || composer instanceof HTMLInputElement) {
       const prototype = composer instanceof HTMLTextAreaElement
         ? HTMLTextAreaElement.prototype
         : HTMLInputElement.prototype;
       const valueSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+      const beforeInput = new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        inputType: 'insertText',
+        data: message,
+      });
+      if (!composer.dispatchEvent(beforeInput)) {
+        throw error('INPUT_NOT_ACCEPTED', 'ChatGPT 编辑器拒绝了输入', `composerType=${composerType(composer)}`);
+      }
       if (valueSetter) valueSetter.call(composer, message);
       else composer.value = message;
       composer.dispatchEvent(new InputEvent('input', {
@@ -139,24 +214,28 @@
       selection?.removeAllRanges();
       selection?.addRange(range);
 
-      let inserted = false;
-      try {
-        inserted = document.execCommand('insertText', false, message) === true;
-      } catch (_) {
-        inserted = false;
+      const beforeInput = new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        inputType: 'insertText',
+        data: message,
+      });
+      if (!composer.dispatchEvent(beforeInput)) {
+        throw error('INPUT_NOT_ACCEPTED', 'ChatGPT 编辑器拒绝了输入', `composerType=${composerType(composer)}`);
       }
 
-      if (!inserted || normalizeText(readComposerValue(composer)) !== normalizeText(message)) {
-        composer.replaceChildren(document.createTextNode(message));
-        composer.dispatchEvent(new InputEvent('input', {
-          bubbles: true,
-          composed: true,
-          inputType: 'insertText',
-          data: message,
-        }));
+      try {
+        document.execCommand('insertText', false, message);
+      } catch (cause) {
+        throw error('INPUT_NOT_ACCEPTED', `ChatGPT 原生编辑输入失败：${cause?.message || '未知错误'}`, `composerType=${composerType(composer)}`);
+      }
+
+      if (normalizeText(readComposerValue(composer)) !== normalizeText(message)) {
+        throw error('INPUT_NOT_ACCEPTED', 'ChatGPT 编辑器没有接受输入', `composerType=${composerType(composer)},composerTextMatches=false`);
       }
     } else {
-      throw error('CHATGPT_INPUT_UNAVAILABLE', 'ChatGPT 输入框类型不可用');
+      throw error('INPUT_NOT_ACCEPTED', 'ChatGPT 输入框类型不可用', `composerType=${composerType(composer)}`);
     }
 
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -165,65 +244,199 @@
   async function waitForComposerReady(chatgpt, composer, message) {
     const expected = normalizeText(message);
     const deadline = Date.now() + SEND_CONFIRM_TIMEOUT_MS;
+    let stableSince = 0;
+    let stableButton = null;
     while (Date.now() < deadline) {
       const actual = normalizeText(readComposerValue(composer));
       const button = findSendButton(chatgpt, composer);
-      if (
-        actual === expected
-        && button
-        && !button.disabled
-        && !button.hasAttribute('disabled')
-        && button.getAttribute('aria-disabled') !== 'true'
-      ) {
-        return button;
+      if (actual !== expected) {
+        stableSince = 0;
+        stableButton = null;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        continue;
+      }
+      if (button) {
+        if (stableButton !== button) {
+          stableButton = button;
+          stableSince = Date.now();
+        } else if (Date.now() - stableSince >= COMPOSER_SETTLE_MS) {
+          return button;
+        }
+      } else {
+        stableSince = 0;
+        stableButton = null;
       }
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    throw error('CHATGPT_SEND_UNAVAILABLE', 'ChatGPT 输入状态未就绪或发送按钮不可用');
+    const button = findSendButtonCandidate(chatgpt, composer);
+    const diagnostics = describeSendState({
+      composer,
+      button,
+      promptCountBefore: sentPromptCount(),
+      promptCountAfter: sentPromptCount(),
+      conversationIdBefore: getConversationIdFromUrl(),
+      conversationIdAfter: getConversationIdFromUrl(),
+      chatgpt,
+      message,
+    });
+    if (!button) throw error('SEND_BUTTON_NOT_READY', 'ChatGPT 当前输入框的发送按钮不可用', diagnostics);
+    throw error('INPUT_NOT_ACCEPTED', 'ChatGPT 编辑器没有确认输入已接受', diagnostics);
   }
 
   function sentPromptCount() {
     return document.querySelectorAll('[data-message-author-role="user"]').length;
   }
 
-  async function waitForSendConfirmation(composer, message, promptCountBefore) {
+  function assistantMessageElements() {
+    return Array.from(document.querySelectorAll('[data-message-author-role="assistant"]'));
+  }
+
+  function latestAssistantDomText() {
+    const messages = assistantMessageElements();
+    return normalizeText(messages[messages.length - 1]?.innerText || '');
+  }
+
+  function responseDiagnostics({ assistantCountBefore, assistantCountAfter, conversationIdBefore, conversationIdAfter, chatgpt }) {
+    const detail = [
+      `assistantMessages=${assistantCountBefore}->${assistantCountAfter}`,
+      `assistantTextLength=${latestAssistantDomText().length}`,
+      `conversation=${conversationIdBefore || 'none'}->${conversationIdAfter || 'none'}`,
+      `generating=${readGeneratingState(chatgpt)}`,
+    ].join(',');
+    console.warn(`[MiraChatGPTAdapter] ${detail}`);
+    return detail;
+  }
+
+  async function waitForResponseCompletion(chatgpt, assistantCountBefore, assistantTextBefore, conversationIdBefore) {
+    const deadline = Date.now() + RESPONSE_TIMEOUT_MS;
+    let previousText = '';
+    let stableSince = 0;
+
+    while (Date.now() < deadline) {
+      const assistantCountAfter = assistantMessageElements().length;
+      const latestText = latestAssistantDomText();
+      const generating = readGeneratingState(chatgpt);
+      const hasNewAssistant = assistantCountAfter > assistantCountBefore
+        || (Boolean(latestText) && latestText !== assistantTextBefore);
+
+      if (hasNewAssistant && latestText) {
+        if (latestText !== previousText) {
+          previousText = latestText;
+          stableSince = Date.now();
+        } else if (!generating && Date.now() - stableSince >= 700) {
+          return latestText;
+        }
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+
+    throw error(
+      'RESPONSE_TIMEOUT',
+      '等待 ChatGPT 回复完成超时',
+      responseDiagnostics({
+        assistantCountBefore,
+        assistantCountAfter: assistantMessageElements().length,
+        conversationIdBefore,
+        conversationIdAfter: getConversationIdFromUrl(),
+        chatgpt,
+      }),
+    );
+  }
+
+  async function waitForSendConfirmation(chatgpt, composer, message, promptCountBefore, conversationIdBefore) {
     const expected = normalizeText(message);
     const deadline = Date.now() + SEND_CONFIRM_TIMEOUT_MS;
     while (Date.now() < deadline) {
       const prompts = document.querySelectorAll('[data-message-author-role="user"]');
       const latestPrompt = normalizeText(prompts[prompts.length - 1]?.innerText || '');
-      if (prompts.length > promptCountBefore && latestPrompt === expected) return true;
+      const conversationIdAfter = getConversationIdFromUrl();
+      if (prompts.length > promptCountBefore && latestPrompt === expected) return { confirmed: true };
 
       const composerCleared = !normalizeText(readComposerValue(composer));
-      if (composerCleared && getConversationIdFromUrl()) return true;
+      const generating = readGeneratingState(chatgpt);
+      if (composerCleared && (prompts.length > promptCountBefore || conversationIdAfter !== conversationIdBefore || generating)) {
+        return { confirmed: true };
+      }
       await new Promise((resolve) => setTimeout(resolve, 120));
     }
-    return false;
+    return {
+      confirmed: false,
+      diagnostics: describeSendState({
+        composer,
+        button: findSendButtonCandidate(chatgpt, composer),
+        promptCountBefore,
+        promptCountAfter: sentPromptCount(),
+        conversationIdBefore,
+        conversationIdAfter: getConversationIdFromUrl(),
+        chatgpt,
+        message,
+      }),
+    };
   }
 
   async function sendThroughCurrentComposer(chatgpt, message) {
     const composer = getComposer(chatgpt);
-    if (!composer) throw error('CHATGPT_INPUT_UNAVAILABLE', 'ChatGPT 输入框不可用');
+    if (!composer) throw error('INPUT_NOT_ACCEPTED', 'ChatGPT 输入框不可用', 'composerType=unknown,composerConnected=false');
 
     const promptCountBefore = sentPromptCount();
+    const conversationIdBefore = getConversationIdFromUrl();
     await setComposerValue(composer, message);
     let button = await waitForComposerReady(chatgpt, composer, message);
-    button.click();
+    try {
+      button.click();
+    } catch (cause) {
+      const diagnostics = describeSendState({
+        composer,
+        button,
+        promptCountBefore,
+        promptCountAfter: sentPromptCount(),
+        conversationIdBefore,
+        conversationIdAfter: getConversationIdFromUrl(),
+        chatgpt,
+        message,
+      });
+      throw error('SEND_TRIGGER_FAILED', `ChatGPT 发送按钮触发失败：${cause?.message || '未知错误'}`, diagnostics);
+    }
 
-    if (await waitForSendConfirmation(composer, message, promptCountBefore)) return;
+    const firstAttempt = await waitForSendConfirmation(chatgpt, composer, message, promptCountBefore, conversationIdBefore);
+    if (firstAttempt.confirmed) return;
 
     // A click that leaves the exact prompt untouched did not submit. Retry once
     // through the current form submit path, but never retry after the composer clears.
-    if (normalizeText(readComposerValue(composer)) === normalizeText(message)) {
+    const noEvidenceOfSend = sentPromptCount() === promptCountBefore
+      && getConversationIdFromUrl() === conversationIdBefore
+      && normalizeText(readComposerValue(composer)) === normalizeText(message)
+      && !readGeneratingState(chatgpt);
+    if (noEvidenceOfSend) {
       button = findSendButton(chatgpt, composer);
-      const form = composer.closest?.('form');
-      if (button && form instanceof HTMLFormElement && typeof form.requestSubmit === 'function') {
-        form.requestSubmit(button);
-        if (await waitForSendConfirmation(composer, message, promptCountBefore)) return;
+      const fallbackSubmit = () => {
+        composer.focus();
+        button.click();
+      };
+      if (button) {
+        try {
+          fallbackSubmit();
+        } catch (cause) {
+          const diagnostics = describeSendState({
+            composer,
+            button,
+            promptCountBefore,
+            promptCountAfter: sentPromptCount(),
+            conversationIdBefore,
+            conversationIdAfter: getConversationIdFromUrl(),
+            chatgpt,
+            message,
+          });
+          throw error('SEND_TRIGGER_FAILED', `ChatGPT 备用发送失败：${cause?.message || '未知错误'}`, diagnostics);
+        }
+        const retry = await waitForSendConfirmation(chatgpt, composer, message, promptCountBefore, conversationIdBefore);
+        if (retry.confirmed) return;
+        throw error('SEND_NOT_CONFIRMED', 'ChatGPT 未确认本轮咨询已发送', retry.diagnostics);
       }
     }
 
-    throw error('CHATGPT_SEND_FAILED', 'ChatGPT 未确认本次咨询已发送');
+    throw error('SEND_NOT_CONFIRMED', 'ChatGPT 未确认本轮咨询已发送', firstAttempt.diagnostics);
   }
 
   function normalizeReply(reply) {
@@ -231,8 +444,29 @@
   }
 
   async function readLatestReply(chatgpt) {
-    const reply = await chatgpt.getChatData('active', 'msg', 'chatgpt', 'latest');
-    return normalizeReply(reply) || normalizeReply(await chatgpt.getLastResponse?.());
+    let reply = '';
+    try {
+      reply = normalizeReply(
+        await chatgpt.response?.getFromDOM?.('last')
+          || await chatgpt.getResponseFromDOM?.('last'),
+      );
+    } catch (cause) {
+      console.warn(`[MiraChatGPTAdapter] ChatGPT.js DOM response read failed: ${cause?.message || 'unknown'}`);
+    }
+    if (reply) return reply;
+    try {
+      reply = normalizeReply(await chatgpt.getChatData('active', 'msg', 'chatgpt', 'latest'));
+    } catch (cause) {
+      console.warn(`[MiraChatGPTAdapter] ChatGPT.js getChatData failed: ${cause?.message || 'unknown'}`);
+    }
+    if (!reply) {
+      try {
+        reply = normalizeReply(await chatgpt.getLastResponse?.());
+      } catch (cause) {
+        console.warn(`[MiraChatGPTAdapter] ChatGPT.js getLastResponse failed: ${cause?.message || 'unknown'}`);
+      }
+    }
+    return reply || latestAssistantDomText();
   }
 
   async function sendMessage(sessionRef, message) {
@@ -244,11 +478,11 @@
       throw error('CHATGPT_THREAD_UNAVAILABLE', '当前标签页不是已绑定的 ChatGPT 对话线程');
     }
     if (!message.trim()) throw error('CHATGPT_MESSAGE_EMPTY', '咨询内容不能为空');
-    await chatgpt.isIdle(LIBRARY_TIMEOUT_MS);
-
+    const assistantCountBefore = assistantMessageElements().length;
+    const assistantTextBefore = latestAssistantDomText();
+    const conversationIdBefore = getConversationIdFromUrl();
     await sendThroughCurrentComposer(chatgpt, message);
-    const idle = await chatgpt.isIdle(RESPONSE_TIMEOUT_MS);
-    if (idle === false) throw error('CHATGPT_RESPONSE_TIMEOUT', '等待 ChatGPT 回复完成超时');
+    await waitForResponseCompletion(chatgpt, assistantCountBefore, assistantTextBefore, conversationIdBefore);
     const updatedConversationId = await getActiveConversationId();
     const updatedSessionRef = updatedConversationId
       ? { kind: 'conversation_id', value: updatedConversationId }
