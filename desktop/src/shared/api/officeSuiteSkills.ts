@@ -36,7 +36,11 @@ export type WenshuSkillPackageDefinition = {
   };
   runtimeCapabilities: string[];
   packageFiles: string[];
-  agentIntegration: {
+  contextIntegration: {
+    status: "ready";
+    mode: "progressive-disclosure";
+  };
+  statefulRuntime: {
     status: "deferred";
     reason: string;
     requiredContracts: string[];
