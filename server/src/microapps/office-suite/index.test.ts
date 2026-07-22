@@ -61,9 +61,13 @@ describe("WenShu Office Runtime", () => {
       ?.getData()
       .toString("utf8");
     expect(documentXml).toBeTruthy();
-    expect(documentXml?.lastIndexOf("文枢 Word Modify 验证")).toBeLessThan(
-      documentXml?.lastIndexOf("<w:sectPr") ?? Number.MAX_SAFE_INTEGER,
-    );
+
+    const appendedIndex = documentXml?.lastIndexOf("文枢 Word Modify 验证") ?? -1;
+    const sectionIndex = documentXml?.lastIndexOf("<w:sectPr") ?? -1;
+    expect(appendedIndex).toBeGreaterThan(-1);
+    if (sectionIndex >= 0) {
+      expect(appendedIndex).toBeLessThan(sectionIndex);
+    }
   });
 
   it("modifies an existing xlsx into a new verification copy", async () => {
@@ -105,18 +109,21 @@ describe("WenShu Office Runtime", () => {
       mimeType: artifact.mimeType,
       buffer: artifact.buffer,
     });
-    const slides = inspection.structure.slides as Array<{ index: number }>;
+    const slides = inspection.structure.slides as Array<{
+      index: number;
+      images: number;
+      tables: number;
+    }>;
+    const totals = inspection.structure.totals as {
+      images: number;
+      tables: number;
+    };
 
     expect(slides.length).toBeGreaterThanOrEqual(3);
     expect(Number(inspection.structure.media)).toBeGreaterThanOrEqual(1);
-
-    const archive = new AdmZip(artifact.buffer);
-    const slideXml = archive
-      .getEntries()
-      .filter((entry) => /^ppt\/slides\/slide\d+\.xml$/.test(entry.entryName))
-      .map((entry) => entry.getData().toString("utf8"))
-      .join("\n");
-
-    expect(slideXml).toContain("<a:tbl>");
+    expect(totals.images).toBeGreaterThanOrEqual(1);
+    expect(totals.tables).toBeGreaterThanOrEqual(1);
+    expect(slides.some((slide) => slide.images > 0)).toBe(true);
+    expect(slides.some((slide) => slide.tables > 0)).toBe(true);
   });
 });
