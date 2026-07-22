@@ -73,12 +73,18 @@ const persistRuntimeOutput = (input: {
   runtimeInput: AgentRun["runtimeInput"];
   output: AgentGraphOutput;
 }) => {
-  if (!input.runtimeInput) {
+  const latestRuntimeInput =
+    agentRunStore.get(input.runId)?.runtimeInput ?? input.runtimeInput;
+  if (!latestRuntimeInput) {
     return;
   }
 
+  // Runtime extensions such as Skill may update runtimeInput while the Agent is
+  // running. Always checkpoint from the latest stored runtimeInput so final
+  // Agent persistence cannot overwrite those updates with the stale start-of-run
+  // snapshot.
   agentRunStore.update(input.runId, {
-    runtimeInput: persistAgentRuntimeCheckpoint(input.runtimeInput, input.output),
+    runtimeInput: persistAgentRuntimeCheckpoint(latestRuntimeInput, input.output),
   });
 };
 
