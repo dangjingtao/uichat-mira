@@ -2,7 +2,7 @@
 
 Status: Planned
 Owner: integrations / knowledge-base / runtime
-Last verified: 2026-07-02
+Last verified: 2026-07-23
 Layer: raw-source
 Module: MicroAPP
 Feature: MicroAppRuntime
@@ -12,6 +12,8 @@ Related:
   - ../integrations/third-party-integration-architecture.md
   - ../integrations/third-party-integration-consumption-model.md
   - ../integrations/wecom-microapp-interface-design.md
+  - office-runtime-task-contract.md
+  - office-suite-microapp-design.md
   - image-generation-microapp-poc.md
   - media-capability-packaging-design.md
   - computer-use-microapp-poc.md
@@ -144,6 +146,7 @@ Related:
 - `mail_center`
 - `image_generation`
 - `computer_use`
+- `office_suite`（文枢）
 
 ## 当前绑定关系
 
@@ -263,8 +266,25 @@ Platform
 - 接收外部文档或消息源
 - 进入知识库导入流程
 
+### `office_suite` / 文枢
+
+作用：
+
+- 统一承接 Word / Excel / PowerPoint 文件处理任务
+- 产品上保持一个微应用，内部保持三个 Office 领域 Runtime
+- 当前桌面入口主要用于调试和验证
+- 当前任务级 Runtime 合同见 `office-runtime-task-contract.md`
+- 未来 Skill 只消费稳定 Runtime 合同，不直接依赖底层 Office SDK
+
+当前实现边界与未来方向见：
+
+- `office-runtime-task-contract.md`
+- `office-suite-microapp-design.md`
+
 ## 当前活跃文档
 
+- `office-runtime-task-contract.md`
+- `office-suite-microapp-design.md`
 - `media-capability-packaging-design.md`
 - `image-generation-microapp-poc.md`
 - `computer-use-microapp-poc.md`
@@ -338,115 +358,3 @@ Platform
 为了避免重新做成平台后台，前端应该遵守下面这条心智：
 
 - 用户在企业集成页里配置的是“接入实例”和“入口”
-- 用户为某个入口选择它绑定的 `MicroAPP`
-- 用户在“接入点绑定微应用”时填写业务参数
-
-所以：
-
-- `知识库调用` 不应继续伪装成“机器人内部一个字段”
-- 它应作为独立 `MicroAPP` 出现
-
-## 对后端的设计约束
-
-后端后续实现时，应至少拆出两层接口：
-
-### AccessPoint Adapter
-
-负责：
-
-- 平台鉴权
-- 事件接收
-- 消息标准化
-- 回复投递
-
-### MicroAPP Runtime
-
-负责：
-
-- 业务入参校验
-- 工作流执行
-- 输出标准化
-
-两层之间通过内部标准请求对象通信，而不是直接传平台原始 payload。
-
-## 当前落地形态
-
-第一版代码已经按下面的物理结构收口：
-
-- `server/src/microapps/`
-  - 放微应用运行时与具体微应用实现
-- `server/src/integrations/wecom/`
-  - 只保留企微入口适配与消息收发
-
-当前第一个真正落地的 `MicroAPP` 是：
-
-- `knowledge_query`
-
-也就是说：
-
-- 企微智能机器人不再直接内嵌知识库调用逻辑
-- 它先解析自己绑定的 `MicroAPP`
-- 再由 `MicroAPP Runtime` 去执行 `knowledge_query`
-
-## 当前持久化模型
-
-为了让 `MicroAPP` 不只是代码概念，当前已经增加两张主表：
-
-### `micro_app_definitions`
-
-表示一个可绑定、可执行的微应用定义。
-
-当前核心字段包括：
-
-- `id`
-- `type`
-- `name`
-- `description`
-- `supported_access_points_json`
-- `binding_schema_json`
-- `runtime_key`
-- `enabled`
-
-### `integration_capability_micro_app_bindings`
-
-表示“某个接入点能力当前绑定哪个微应用定义，以及这次绑定填写了什么配置”。
-
-当前核心字段包括：
-
-- `capability_id`
-- `micro_app_definition_id`
-- `binding_config_json_encrypted`
-- `enabled`
-
-这层关系就是：
-
-- 一个接入方式绑定一个 `MicroAPP`
-
-在数据库里的实际投影。
-
-## 和企业微信文档的关系
-
-企业微信相关设计不再单独定义“知识库调用是什么”。
-
-企业微信文档只需要回答：
-
-- 企业微信有哪些 `AccessPoint`
-- 哪些 `AccessPoint` 能绑定哪些 `MicroAPP`
-- 它们之间的接口适配如何设计
-
-详见：
-
-- `../integrations/wecom-microapp-interface-design.md`
-
-## 当前阶段最重要的落地判断
-
-现在先不要把 `MicroAPP` 做成大而全平台。
-
-第一阶段只需要立住这四件事：
-
-1. `MicroAPP` 是顶级产品模块，不再是接入点内部字段。
-2. `knowledge_query` 从概念上独立于 `wecom.smart_robot`。
-3. 一个接入方式绑定一个 `MicroAPP`。
-4. 接入点必须声明自己支持哪些 `MicroAPP`。
-
-做到这四条，后面无论扩企微还是飞书，系统都不会再次退回“机器人配置页思维”。
