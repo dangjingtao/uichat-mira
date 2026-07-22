@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileArchive, FileSpreadsheet, FileText, Play, Presentation, RefreshCw, Upload } from "lucide-react";
+import {
+  FileArchive,
+  FileSpreadsheet,
+  FileText,
+  Play,
+  Presentation,
+  RefreshCw,
+  Upload,
+} from "lucide-react";
 import Badge from "@/shared/ui/Badge";
 import Card from "@/shared/ui/Card";
 import { Button } from "@/shared/ui";
@@ -46,7 +54,7 @@ const examples: Record<WenshuSkillDomain, Record<string, unknown>> = {
       pageNumbers: true,
       blocks: [
         { type: "heading1", text: "能力验证" },
-        { type: "paragraph", text: "这是一份由文枢 PDF Skill Runtime 生成的验证文档。" },
+        { type: "paragraph", text: "这是一份由文枢 PDF Domain Runtime 生成的验证文档。" },
         {
           type: "table",
           rows: [
@@ -77,7 +85,13 @@ const examples: Record<WenshuSkillDomain, Record<string, unknown>> = {
               type: "column",
               title: "Revenue",
               anchor: "E2",
-              data: { minCol: 2, maxCol: 3, minRow: 1, maxRow: 2, titlesFromData: true },
+              data: {
+                minCol: 2,
+                maxCol: 3,
+                minRow: 1,
+                maxRow: 2,
+                titlesFromData: true,
+              },
               categories: { minCol: 1, maxCol: 1, minRow: 2, maxRow: 2 },
             },
           ],
@@ -93,7 +107,12 @@ const examples: Record<WenshuSkillDomain, Record<string, unknown>> = {
       theme: {
         colors: { primary: "#C15F3C", ink: "#24211F", surface: "#F6F1EA" },
         textStyles: {
-          title: { fontFamily: "Microsoft YaHei", fontSize: 32, bold: true, color: "$ink" },
+          title: {
+            fontFamily: "Microsoft YaHei",
+            fontSize: 32,
+            bold: true,
+            color: "$ink",
+          },
           body: { fontFamily: "Microsoft YaHei", fontSize: 18, color: "$ink" },
         },
       },
@@ -111,7 +130,10 @@ const examples: Record<WenshuSkillDomain, Record<string, unknown>> = {
               id: "body",
               elementType: "text",
               bounds: [64, 170, 650, 120],
-              content: { style: "$body", text: "结构化 AST → 校验 → PPTX，可编辑文本、形状、表格和图表。" },
+              content: {
+                style: "$body",
+                text: "结构化 AST → 校验 → PPTX，可编辑文本、形状、表格和图表。",
+              },
             },
           ],
         },
@@ -200,11 +222,11 @@ export default function SkillRuntimePanel() {
         message.success(`${response.fileName} 已生成`);
       } else {
         setResult(response.data);
-        message.success("Skill Runtime 执行完成");
+        message.success("Domain Runtime 执行完成");
       }
       void loadStatus();
     } catch (error) {
-      const detail = error instanceof Error ? error.message : "Skill Runtime 执行失败";
+      const detail = error instanceof Error ? error.message : "Domain Runtime 执行失败";
       setResult({ error: detail });
       message.error(detail);
     } finally {
@@ -218,20 +240,23 @@ export default function SkillRuntimePanel() {
     <Card className="p-5">
       <div className="space-y-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="flex h-9 w-9 items-center justify-center rounded-ui-control bg-primary/10 text-primary">
-                <FileArchive className="h-4 w-4" />
-              </span>
-              <div>
-                <h2 className="text-base font-semibold text-text-primary">Skill Runtime 全能力工作台</h2>
-                <p className="mt-1 text-sm text-text-secondary">
-                  PDF / Excel / PPT 使用系统开发小套件 Python；这里直接跑完整任务合同，不拆成原子工具。
-                </p>
-              </div>
+          <div className="flex items-center gap-2">
+            <span className="flex h-9 w-9 items-center justify-center rounded-ui-control bg-primary/10 text-primary">
+              <FileArchive className="h-4 w-4" />
+            </span>
+            <div>
+              <h2 className="text-base font-semibold text-text-primary">文枢增强 Runtime 工作台</h2>
+              <p className="mt-1 text-sm text-text-secondary">
+                PDF / Excel / PPT 使用系统开发小套件 Python；这里验证确定性 Domain Runtime，不代表正式 Agent Skill Runtime。
+              </p>
             </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => void loadStatus()} disabled={statusLoading}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void loadStatus()}
+            disabled={statusLoading}
+          >
             <RefreshCw className={`mr-1 h-4 w-4 ${statusLoading ? "animate-spin" : ""}`} />
             刷新 Runtime
           </Button>
@@ -254,7 +279,9 @@ export default function SkillRuntimePanel() {
               >
                 <DomainIcon className="h-4 w-4" />
                 {domainMeta[item].label}
-                <span className={`h-2 w-2 rounded-full ${itemStatus?.available ? "bg-success" : "bg-warning"}`} />
+                <span
+                  className={`h-2 w-2 rounded-full ${itemStatus?.available ? "bg-success" : "bg-warning"}`}
+                />
               </button>
             );
           })}
@@ -263,8 +290,12 @@ export default function SkillRuntimePanel() {
         <div className="rounded-ui-control border border-border-primary bg-surface-secondary/40 p-3 text-sm">
           <div className="flex flex-wrap items-center gap-2">
             <Icon className="h-4 w-4 text-primary" />
-            <span className="font-medium text-text-primary">{domainMeta[domain].label} Runtime</span>
-            {runtime?.available ? <Badge variant="muted">Ready</Badge> : <Badge variant="warning">Needs dependency</Badge>}
+            <span className="font-medium text-text-primary">{domainMeta[domain].label} Domain Runtime</span>
+            {runtime?.available ? (
+              <Badge variant="muted">Ready</Badge>
+            ) : (
+              <Badge variant="warning">Needs dependency</Badge>
+            )}
           </div>
           <div className="mt-2 text-xs leading-5 text-text-secondary">
             <div>Python: {runtime?.python || "检测中…"}</div>
@@ -310,7 +341,9 @@ export default function SkillRuntimePanel() {
               {files.length > 0 ? (
                 <div className="mt-2 max-h-28 space-y-1 overflow-auto text-xs text-text-secondary">
                   {files.map((file) => (
-                    <div key={`${file.name}-${file.size}`} className="truncate">{file.name}</div>
+                    <div key={`${file.name}-${file.size}`} className="truncate">
+                      {file.name}
+                    </div>
                   ))}
                 </div>
               ) : null}
@@ -318,7 +351,7 @@ export default function SkillRuntimePanel() {
 
             <Button className="w-full" onClick={() => void run()} disabled={running}>
               <Play className="mr-1 h-4 w-4" />
-              {running ? "执行中…" : "执行 Skill Task"}
+              {running ? "执行中…" : "执行 Runtime Task"}
             </Button>
 
             <div>
