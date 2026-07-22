@@ -2,14 +2,16 @@
 
 Status: Current
 Owner: chat / runtime / docs
-Last verified: 2026-07-22
+Last verified: 2026-07-23
 Layer: raw-source
 Module: SKILL
 Feature: SkillSystem
 Doc Type: overview
 Canonical: true
 Related:
+  - ./skill-context-design.md
   - ./skill-runtime-design.md
+  - ./skill-package-runtime-contract.md
   - ../harness/agentgraph-harness-protocol.md
   - ../tooling-runtime/harness-runtime-design.md
   - ../tooling-runtime/tools-protocol.md
@@ -17,184 +19,457 @@ Related:
 
 ## 单点真相范围
 
-这页定义当前项目里 `Skill` 的正式产品和运行时边界。
+这页定义 Mira 当前 `Skill` 的正式产品边界与总体架构。
 
 核心定义：
 
-> `Skill = 内部状态 + 多工具编排 + 业务语义封装`。
+> **Skill 是一个通过渐进式披露，向 Agent 动态注入领域知识、执行策略和能力使用说明的可复用上下文能力包。**
 
-这一定义自 `2026-07-22` 起替代此前“记忆型工作动作 / skill-driven memory”方向。
+Skill 的核心不是独立 Tool，也不是必须拥有状态机。
 
-详细运行时设计见：
+基础 Skill 通过：
 
-- `skill-runtime-design.md`
+```text
+Manifest
++ SKILL.md
++ optional Resources
++ dynamic SkillContext
+```
+
+让 Agent 在当前任务里知道：
+
+```text
+这类事情应该怎么做
+```
+
+而现有 Harness / ToolExposure 继续回答：
+
+```text
+当前到底能做什么
+```
+
+需要内部状态、多阶段业务约束、Evidence reducer、checkpoint / resume 的复杂能力，可以选择接入 `Stateful Skill Runtime`。该高级层不是 Skill 的入场门槛。
+
+详细设计：
+
+- `skill-context-design.md`：基础 Skill 的 Scanner / Matcher / Loader / Progressive Disclosure / SkillContext；
+- `skill-runtime-design.md`：可选 Stateful Skill Runtime；
+- `skill-package-runtime-contract.md`：Skill Package 与可选 Runtime Pack 的分发 / 安装边界。
+
+---
 
 ## 当前结论
 
-`Skill` 是一个有生命周期的业务能力单元。
+Mira 的 Skill 体系分成两层：
 
-它同时具备三部分：
+```text
+Base Skill
+= Progressive Disclosure + Dynamic SkillContext
 
-1. **内部状态**：维护当前任务阶段、资源引用、中间结果、产物、checkpoint、错误与恢复状态。
-2. **多工具编排**：组合 Harness / MCP / Runtime 已有工具完成一个完整业务目标。
-3. **业务语义封装**：向 Agent 提供高层业务目标、领域规则、质量标准和完成条件，而不是把一长串底层工具直接推给上层处理。
+Optional Stateful Skill Runtime
+= SkillInstance + State/Stage + Evidence Reducer + Lifecycle
+```
 
-层级：
+它们是同一 Skill 体系的两个能力层次，不是两套互斥实现。
+
+### Base Skill
+
+适合大多数领域能力：
+
+- DOCX 处理规则
+- PDF 处理规则
+- Excel 建模规范
+- PPT 生成规范
+- Web Search 策略
+- Code Review 方法
+
+它不要求：
+
+```text
+SkillInstance
+state machine
+checkpoint
+resume
+Evidence reducer
+```
+
+### Stateful Skill Runtime
+
+只在业务确实需要跨步骤保存业务状态和恢复语义时启用，例如：
+
+- 多阶段合同审阅
+- 大型代码迁移
+- 可恢复发布流程
+- 复杂三表 / DCF 项目
+- 长篇 / 批量演示项目
+
+---
+
+## Skill 的四层视图
+
+严格来说，前三层是“渐进式披露”，第四层是执行边界：
+
+```text
+L0 Manifest
+   ↓ match
+L1 SKILL.md
+   ↓ on demand
+L2 Reference / Template / Example
+   ↓ execute
+Execution Boundary
+Tool / MCP / Script / Runtime
+```
+
+### L0 — Manifest
+
+启动时只保留轻量信息：
+
+- id
+- name
+- description
+- version
+- entry
+- optional source / license / runtimeRequirements
+
+Manifest 用于发现与匹配，不加载正文。
+
+### L1 — SKILL.md
+
+命中当前任务后动态加载。
+
+主要包含：
+
+- Routing
+- 领域规则
+- 执行策略
+- 能力边界
+- Quality Rules
+- Completion Criteria
+- 可继续读取的 Resource URI
+
+### L2 — Resource
+
+Reference / Template / Example 默认只建立清单，按需读取。
+
+示例：
+
+```text
+skill://xlsx/references/DCF_SKILL.md
+skill://docx/references/office-runtime-reference.md
+skill://pptx/references/pptx-swarm.md
+```
+
+### Execution Boundary
+
+Tool / MCP / Script / Runtime 是真实执行能力，不属于 DisclosureLevel。
+
+Skill 可以声明或依赖它们，但：
+
+- SkillScanner 不执行；
+- SkillLoader 不执行；
+- SkillContext 不授予权限；
+- 真实执行仍走现有 Harness / Policy / Sandbox / Runtime 合同。
+
+---
+
+## 核心关系
 
 ```text
 Agent
-  ↓
-Skill
-  ↓
-Tool / MCP / Runtime
+├─ SkillContext
+│   └─ 这类事情应该怎么做
+│
+└─ ToolExposure
+    └─ 当前能做什么
 ```
 
-- `Tool`：原子执行能力。
-- `Skill`：有状态的业务能力。
-- `Agent`：目标理解、能力选择和跨 Skill / Tool 协调。
+两个真相源必须分开。
+
+```text
+state.toolExposure
+= Planner 可见工具面的唯一真相
+
+currentTaskFrame.skillContext
+= 当前任务的领域语义上下文
+```
+
+SkillContext 可以告诉 Agent 某个 Tool / Runtime 应该如何使用，但不能因为 Skill 命中就把不可用 Tool push 进 `state.toolExposure`。
+
+---
 
 ## Skill 不是什么
 
 Skill 不是：
 
-- 一组纯 Prompt 文件
-- 一个固定 `A -> B -> C` Workflow
-- 一个 MCP server 包装
 - 一个 Tool alias
 - 一个新的 Agent
 - 一个独立 Planner
-- 一个长期 Memory 系统
-- 一个新的 Harness / approval / sandbox / trace runtime
+- 一个第二 Agent Loop
+- 一个新的 Harness
+- 一个新的 approval / sandbox / trace runtime
+- 一个必须存在的状态机
+- 一个固定 `A -> B -> C` Workflow
+- 一个把所有 references 一次性塞进 Prompt 的大文本包
 
-Skill 可以包含 Prompt，也可以调用 Memory，但它们都不等于 Skill 本身。
+Skill 可以包含 Prompt、Reference、Template、Example、Script，也可以依赖 Tool / MCP / Runtime，但这些都不改变它作为动态上下文能力包的核心性质。
 
-## Code 与 Prompt 的分工
+---
 
-### Code / Runtime
-
-负责“必须正确”的部分：
-
-- 能做什么
-- 怎么执行
-- 状态机和合法迁移
-- 工具调用边界
-- 参数校验
-- 权限与 side effect 边界
-- checkpoint
-- cancel / resume
-- 错误处理和恢复
-- artifact / state 持久化
-
-### Prompt / Semantic Policy
-
-负责“需要理解和判断”的部分：
-
-- 什么时候做
-- 为什么做
-- 模糊业务目标怎么理解
-- 多个合法动作中怎么选
-- 怎样才算做得好
-- 当前结果是否满足业务质量标准
-
-原则：
-
-> 必须正确的东西写代码；需要理解和判断的东西交给模型。
-
-## 和相邻模块的边界
-
-### Skill vs Tool
-
-`Tool` 是单个执行能力，例如：
-
-- `read_open`
-- `edit_file`
-- `web_search`
-- `terminal_session`
-
-Skill 可以组合多个 Tool，并在多步执行期间维护自己的业务状态。
+## Skill vs Tool
 
 一句话：
 
-- Tool = 原子动作
-- Skill = 有状态的业务能力
-
-### Skill vs Agent
-
-Agent 负责用户总目标和跨能力决策。
-
-Skill 只负责自己业务域内的状态、语义和多工具业务约束。
-
-Skill 可以多步运行，但不拥有第二套 Agent Loop。
-
-当前原则：
-
 ```text
-Parent Agent Loop 是唯一控制循环
-Skill Runtime 是被它驱动的有状态业务层
+Tool = 能做什么
+Skill = 做这类事情时应该怎么想、怎么做
 ```
 
-### Skill vs Workflow
+Tool 是真实执行能力。
 
-Workflow 更适合表达固定、确定流程。
+Skill 是语义与方法层。
 
-Skill 允许：
+两者互补，不竞争。
 
-- 代码提供稳定骨架
-- state 限定合法动作
-- 模型根据业务语义选择局部路径
+Skill 不复制 Tool schema，也不复制 Harness Registry。
 
-所以 Skill 可以包含确定性流程节点，但不能被缩减成一张死流程图。
+---
 
-### Skill vs MCP
+## Skill vs Agent
+
+Agent 负责：
+
+- 理解用户总目标；
+- 选择 / 切换业务能力；
+- 跨 Skill / Tool 协调；
+- 在真实 ToolExposure 中决定下一步。
+
+Skill 提供：
+
+- 领域语义；
+- Routing；
+- 方法规则；
+- 质量标准；
+- 完成标准；
+- 可按需读取的资源入口。
+
+Stateful Skill Runtime 可以增加业务状态，但仍不拥有第二 Agent Loop。
+
+---
+
+## Skill vs Workflow
+
+Workflow 适合固定、确定流程。
+
+基础 Skill 更像：
+
+```text
+领域说明书 + 动态上下文
+```
+
+它告诉 Agent：
+
+- 什么情况下走哪类路径；
+- 哪些规则不能违反；
+- 哪些资源可以进一步读取；
+- 怎样算完成得好。
+
+如果复杂业务需要确定性状态迁移，可以在 Stateful Skill Runtime 中增加 stage / reducer / checkpoint，但不要求所有 Skill 都变成 Workflow。
+
+---
+
+## Skill vs MCP
 
 MCP 是能力接入协议。
 
-Skill 可以调用 MCP Tool，但：
+Skill 可以引用 / 依赖 MCP Tool，但：
 
-- 不复制 MCP Registry
-- 不复制连接和鉴权
-- 不自己执行 MCP 协议
-- 仍然通过现有 Harness / MCP Runtime 使用能力
+- 不复制 MCP Registry；
+- 不复制连接和鉴权；
+- 不自己执行 MCP 协议；
+- 真实调用仍通过现有 Harness / MCP Runtime。
 
-### Skill vs Memory
+---
 
-Memory 是长期信息对象或外部上下文能力。
+## Skill vs Memory
 
-Skill 的内部状态不是长期 Memory。
+基础 SkillContext 不是长期 Memory。
 
 ```text
-Skill State
-= 服务于一次 Skill instance 的运行状态
+SkillContext
+= 当前任务需要的领域策略与已披露资源
 
 Memory
-= 可跨任务、跨实例继续使用的长期信息
+= 可跨任务 / 跨实例长期复用的信息
 ```
 
-Skill 可以显式读取或写入 Memory，但 Memory 不属于 Skill 的基础定义。
+Skill 可以读取 Memory，但 Memory 不属于 Skill 基础定义。
 
-### Skill vs MicroAPP
+Stateful Skill Runtime 的内部 state 也不等于长期 Memory。
+
+---
+
+## Skill vs MicroAPP
 
 MicroAPP 是产品入口和独立业务模块形态，可能包含 UI、平台接入和 Runtime。
 
-Skill 是 Agent 可调用的业务能力单元。
+Skill 是 Agent 的动态上下文能力包，也可以与 MicroAPP 共用同一 Domain Runtime。
 
 例如：
 
 ```text
-Office MicroAPP
-  提供 Office runtime / UI / debug surface
+WenShu MicroAPP
+  -> UI / Domain Runtime / Debug / Verification
 
-Office Skill
-  封装“合同审阅”“文档整理”“PPT 美化”等 Agent 业务能力
+DOCX Skill
+  -> Routing / Rules / Completion / References
 ```
 
 MicroAPP 不自动等于 Skill，Skill 也不要求必须有 MicroAPP。
 
-## 当前 Agent Runtime 不变量
+---
 
-Skill V1 必须建立在当前 AgentGraph / Harness 合同上。
+## Skill Package 与 Runtime Pack
 
-当前默认主循环仍是：
+Skill Package 是发现 / 展示 / 分发单位：
+
+```text
+SKILL.md
+references/
+templates/
+examples/
+scripts/
+metadata
+```
+
+Runtime Pack 是可选安装的执行依赖。
+
+安装 Runtime Pack：
+
+- 可以让某些执行能力从 unavailable 变成 available；
+- 不自动注入 SkillContext；
+- 不自动扩大 `state.toolExposure`；
+- 不创建 SkillInstance。
+
+详见 `skill-package-runtime-contract.md`。
+
+---
+
+## 基础 Skill 核心模块
+
+```text
+SkillScanner
+    ↓
+SkillRegistry
+    ↓
+SkillMatcher
+    ↓
+SkillLoader
+    ↓
+DisclosurePlan
+    ↓
+SkillContext
+    ↓
+Prepare Context / currentTaskFrame
+    ↓
+Planner
+```
+
+### SkillScanner
+
+只发现 Skill 并解析轻量 Manifest。
+
+不加载正文、不加载 reference 内容、不执行 script。
+
+### SkillRegistry
+
+管理可发现 / 可用 Skill Manifest。
+
+不管理 Tool，不复制 Harness Registry。
+
+### SkillMatcher
+
+V1 匹配优先级：
+
+```text
+0. explicit trigger
+1. attachment / MIME / extension deterministic match
+2. exact semantic hint
+3. lightweight semantic match
+4. embedding / task model fallback
+```
+
+V1 自动注入只选择一个 `primary Skill`。
+
+`secondary` 只作为候选 / trace，不默认一起加载。
+
+### SkillLoader
+
+负责：
+
+- 加载命中的 SKILL.md；
+- 列出 Skill Resource；
+- 按稳定 URI 读取指定 Resource；
+- 做 IO cache。
+
+Loader 的 cache 不是 Skill 生命周期。
+
+### DisclosurePlan
+
+每个任务准备阶段重新计算当前应该披露什么。
+
+基础 Skill 不建立：
+
+```text
+idle -> matched -> active -> released
+```
+
+这种隐藏 lifecycle state machine。
+
+需要 lifecycle 的业务交给 Stateful Skill Runtime。
+
+---
+
+## Reference 按需披露
+
+Reference 默认不全量注入。
+
+正确模型：
+
+```text
+用户任务
+  ↓
+命中 Manifest
+  ↓
+注入 SKILL.md
+  ↓
+SKILL.md 指向 skill:// Resource URI
+  ↓
+Agent 当前确实需要
+  ↓
+按需读取 Resource
+```
+
+例如：
+
+```text
+“做一个 DCF Excel”
+→ xlsx/SKILL.md
+→ skill://xlsx/references/DCF_SKILL.md
+→ only when needed
+```
+
+避免：
+
+```text
+命中 xlsx
+→ 三表 + DCF + Comps + 所有模板全部塞入上下文
+```
+
+---
+
+## 与 AgentGraph / Harness 的稳定边界
+
+当前默认主循环仍然是：
 
 ```text
 Planner
@@ -205,205 +480,141 @@ Planner
   -> Planner
 ```
 
-Skill 不能破坏这些规则：
+基础 Skill Context 不改变这条链。
 
-1. V1 不新增 `use_skill` Planner action。
-2. `state.toolExposure` 仍是 Planner 可见工具面的唯一运行时真相源。
-3. 真实执行仍从 frozen `pendingToolCall` 开始。
-4. Tool / Retrieve 结果必须先进入 Evidence。
-5. Skill 只能基于已接受 Evidence 推进业务状态。
-6. Policy / ToolNode / Harness 不因 Skill 重写。
-7. Skill 不恢复 `capabilityIntent.selectedToolIds` 等旧执行入口。
+必须保持：
 
-## Skill Runtime 自己拥有的部分
+1. V1 不新增 `use_skill` Planner action；
+2. `state.toolExposure` 仍是 Planner 工具面的唯一真相；
+3. 真实执行仍从 frozen `pendingToolCall` 开始；
+4. Policy / ToolNode / Harness 不因 Skill Context 重写；
+5. SkillContext 不生成 `pendingToolCall`；
+6. Skill 命中不扩大 ToolExposure；
+7. Parent Agent Loop 始终是唯一控制循环。
 
-Skill Runtime 只新增 Skill 必须拥有的业务层能力：
-
-- SkillDefinition registry
-- SkillResolver / activation context
-- SkillInstance
-- internal state
-- semantic policy
-- stage / completion criteria
-- tool constraints
-- state reducer / lifecycle
-- checkpoint
-- cancel / resume
-- version binding
-
-其余全部复用现有系统：
+推荐集成：
 
 ```text
-Planner / Agent     -> 现有 Agent 主循环
-Normalize / Policy  -> 现有冻结与审批合同
-ToolNode / Harness  -> 真实 Tool invocation
-Evidence            -> 真实结果进入累计证据
-MCP                 -> 外部能力接入
-Observability       -> 现有 trace / artifact
+Prepare Context
+│
+├─ Tool preparation
+│    -> state.toolExposure
+│
+└─ Skill preparation
+     -> primary Skill
+     -> SKILL.md
+     -> Resource manifest
+     -> currentTaskFrame.skillContext
+
+        ↓
+      Planner
 ```
 
-Skill 不允许另起一套平行基础设施。
+Harness 不应该变成 Skill PromptAssembler。
 
-## 多工具编排原则
+---
 
-Skill 不写死单一路径，也不自己绕过 Planner 直接执行工具。
+## Optional Stateful Skill Runtime
 
-推荐模型：
+旧设计中：
 
 ```text
-业务目标
-  ↓
-Skill State
-  ↓
-当前 stage + 业务语义 + completion criteria
-  ↓
-Skill tool constraints
-  ↓
-Harness 生成唯一 state.toolExposure
-  ↓
-Planner 选择现有 nextAction
-  ↓
-Normalize -> Policy -> Tool
-  ↓
-Evidence
-  ↓
-Skill 根据已接受 Evidence 更新 State
-  ↓
-下一轮 Planner
+Skill = 内部状态 + 多工具编排 + 业务语义封装
 ```
 
-Skill 可以定义硬约束，例如：
+现在调整为：
 
-- 保存前必须完成必要校验
-- 某阶段只能使用特定工具
-- 某类 side effect 必须经过 approval
-- 某些 completion criteria 未满足时不能视为整个业务完成
+> 这是 **Stateful Skill Runtime** 的能力模型，不再是所有 Skill 的最低定义。
 
-但“用户真实想要什么”“几个合法动作下一步选哪个”“质量是否足够”等判断仍交给模型。
-
-这就是 Skill 的多工具编排：
-
-> 代码维护业务状态和合法边界，业务语义指导 Agent 在现有工具执行链中动态推进多个 Tool。
-
-## Skill 选择与激活
-
-V1 不把 Skill 伪装成 Tool，也不新增 Planner 执行动作。
-
-Skill 选择属于 context / capability preparation：
+Stateful Skill Runtime 可以增加：
 
 ```text
-用户目标 / currentTaskFrame
-  ↓
-SkillResolver
-  ↓
-active SkillInstance
-  ↓
-业务语义进入 currentTaskFrame
-  ↓
-工具约束参与 Harness exposure 构造
-  ↓
-最终 state.toolExposure
-  ↓
-Planner
+SkillDefinition
+SkillInstance
+state / stage
+Evidence reducer
+completion evaluation
+checkpoint / resume
+stage-specific tool constraints
+version binding
 ```
 
-SkillResolver 只决定当前业务是否进入某个 Skill 上下文，不生成 `pendingToolCall`。
+只有业务确实需要这些能力时才启用。
 
-V1 建议同一时刻只保留一个 active SkillInstance，不支持嵌套 Skill 调 Skill。
-跨 Skill 任务仍由 Parent Agent 顺序协调。
+它仍然必须：
 
-## 内部状态原则
+- 复用 Parent Agent Loop；
+- 复用 ToolExposure；
+- 复用 Normalize / Policy / ToolNode / Evidence；
+- 不拥有第二套 Tool Registry；
+- 不通过 Skill 扩大权限。
 
-SkillInstance 的状态只保存恢复业务执行真正需要的信息。
+详细设计见 `skill-runtime-design.md`。
 
-典型内容：
+---
 
-- 当前 stage
-- input / resource refs
-- 已确认中间结果
-- pending changes
-- artifact refs
-- checkpoint
-- error / recovery marker
-
-不应默认把这些全部塞进 state：
-
-- 完整聊天历史
-- 全量 Tool Result
-- 全量 execution trace
-- 大文件内容
-
-它们继续由现有上下文、Evidence、trace、artifact 或文件系统承载，Skill 保存最小状态和引用。
-
-## 第一类适合 Skill 的业务
-
-Skill 最适合“需要多个工具协作，并且执行过程中需要保留业务状态”的任务。
-
-例如：
-
-- Office 文档整理
-- 合同审阅
-- PPT 美化
-- 代码库迁移
-- 发布流程
-- 数据分析与报告生成
-
-一个 `office_document_edit` Skill 可能使用：
+## 当前 WenShu 首批验证对象
 
 ```text
-inspect_document
-read_content
-render_preview
-edit_content
-verify_document
-save_document
+docx
+xlsx
+pdf
+pptx
 ```
 
-实际顺序根据文档状态和用户目标动态变化，而不是固定 Workflow。
+它们现在都可以被称为真正的 Skill，因为已经具备领域 SKILL.md / Resource / Runtime 依赖关系。
+
+基础 Skill 是否成立，不再以“是否有 SkillInstance / reducer”为判断标准。
+
+### DOCX
+
+- 内置 Domain Runtime；
+- SKILL.md 动态注入；
+- `office-runtime-reference.md` 按需披露；
+- 不要求 Python Runtime Pack。
+
+### XLSX / PDF / PPTX
+
+- Skill Package 可发现；
+- `wenshu-office` Runtime Pack 可选安装；
+- SkillContext 与 Runtime 安装状态分离；
+- 未安装 Runtime 时仍可发现 Skill，但真实执行必须报告 unavailable。
+
+---
+
+## V1 实现顺序
+
+```text
+1. Canonical 文档定稿
+2. SkillScanner + SkillRegistry
+3. SkillMatcher
+4. SkillLoader
+5. SKILL.md 动态 SkillContext 注入
+6. stable skill:// Resource URI
+7. Reference 按需披露
+8. DOCX / XLSX / PDF / PPTX 跑通
+9. 观察匹配、token、trace、披露质量
+10. 最后用真实复杂业务验证 Stateful Skill Runtime
+```
+
+不要先造通用状态机，再寻找业务去套。
+
+---
 
 ## 当前硬规则
 
-1. `Skill = 内部状态 + 多工具编排 + 业务语义封装` 是当前唯一正式定义。
-2. Skill 不拥有独立 Agent Loop。
-3. Skill 不替代 Planner / Normalize / Policy / ToolNode / Evidence / Harness。
-4. V1 不新增 `use_skill` Planner action。
-5. Tool 执行必须复用现有 Agent -> Harness 主链。
-6. `state.toolExposure` 仍是 Planner 工具面的唯一真相源。
-7. Skill 不能扩大 Tool 原有权限，只能收窄业务阶段允许能力。
-8. Skill state 与长期 Memory 分离。
-9. 代码负责确定性和硬边界，Prompt 负责业务理解和概率性判断。
-10. 运行中的 SkillInstance 固定绑定 Skill version，不热切换定义。
-11. V1 不建设 Skill Marketplace、Workflow DSL、Nested Skill Agent 或通用 state migration framework。
-12. 旧 memory-skill 设计不再驱动实现。
-
-## 已废弃的旧设计
-
-以下内容属于上一版 Skill 思路，不再作为当前实现依据：
-
-- `skill-memory-poc.md`
-- `roadmap.md` 中的 memory skill card 路线
-- `catalog/` 下 `save_thread_memory` / `save_preference` / `save_decision` 卡片
-- `schema/skill-card.schema.md` 旧 card schema
-- `eval/` 下旧 memory skill 评估用例
-
-这些旧文件已标记为 `Historical` / `Canonical: false`。
-当前真相源只有本页和 `skill-runtime-design.md`。
-
-## 推荐阅读顺序
-
-1. `README.md`
-2. `skill-runtime-design.md`
-3. `../harness/agentgraph-harness-protocol.md`
-4. `../tooling-runtime/harness-runtime-design.md`
-5. `../tooling-runtime/tools-protocol.md`
-6. `../development/agent-observability.md`
-
-## Code Anchors
-
-当前接入必须优先对齐：
-
-- `server/src/agent/nodes/prepare-context.ts`
-- `server/src/harness/exposure-core/resolver.ts`
-- `docs/harness/agentgraph-harness-protocol.md`
-
-Skill Runtime 的最终源码目录在实现任务批准后再确定，不在总纲里提前制造新结构。
+1. **Skill 本体 = 渐进式披露的动态上下文能力包。**
+2. Skill 的核心职责是向当前任务注入“这类事情应该怎么做”。
+3. `state.toolExposure` 继续回答“当前能做什么”，两者不可合并成第二工具真相。
+4. Skill 不伪装成 Tool，不新增 `use_skill` Planner action。
+5. Skill 命中不得主动扩大 Harness ToolExposure。
+6. V1 自动注入最多一个 primary Skill；secondary 默认只是候选。
+7. Reference 默认按需读取，不全量注入。
+8. Tool / MCP / Script / Runtime 是执行边界，不是 DisclosureLevel。
+9. Skill 可以声明或依赖执行能力，但不能凭声明获得权限或真实可用性。
+10. 基础 Skill 不要求 SkillInstance / state machine / reducer / checkpoint。
+11. Stateful Skill Runtime 是可选高级层，不是 Skill 的入场门槛。
+12. Parent Agent Loop 始终是唯一控制循环。
+13. Normalize / Policy / ToolNode / Evidence / Harness 现有合同不因基础 Skill Context 重写。
+14. Skill Package / Runtime Pack 的安装状态与 SkillContext 激活状态必须分离。
+15. 当前详细实现以 `skill-context-design.md` 和 `skill-runtime-design.md` 各自负责的层为真相源。
