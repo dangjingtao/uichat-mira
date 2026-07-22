@@ -64,8 +64,32 @@ description: Create, modify and validate Excel workbooks through Mira WenShu.
 # Completion
 
 产物存在且可读；要求的公式、工作表、格式和图表存在；重计算准备完成；验证没有未解决的阻塞错误；外部数据有来源；财务模型检查已完成。`,
-    files: ["SKILL.md", "runtime/xlsx_runtime.py", "runtime/xlsx_finalize.py", "runtime/xlsx_tools.py", "LICENSE.txt"],
+    files: [
+      "SKILL.md",
+      "reference/3_statement_model.md",
+      "reference/DCF_SKILL.md",
+      "reference/COMPS_SKILL.md",
+      "runtime/xlsx_runtime.py",
+      "runtime/xlsx_finalize.py",
+      "runtime/xlsx_tools.py",
+      "LICENSE.txt",
+    ],
     fileContents: {
+      "reference/3_statement_model.md": `# Three-Statement Model Reference
+
+三表模型要求 Income Statement / Balance Sheet / Cash Flow 全程公式联动。历史映射先与披露数据对账，再进入预测；现金流期末现金必须与资产负债表现金逐期一致；留存收益滚动必须对账，并保留可见的 Balance Check。
+
+只允许历史原始值、用户输入和明确假设硬编码。预测、滚动、分配和派生结果必须保留为 Excel 公式。`,
+      "reference/DCF_SKILL.md": `# DCF Modeling Reference
+
+核心链路：经营预测 → EBIT → NOPAT → UFCF → WACC → 显性期折现 → Terminal Value → Enterprise Value → Equity Value → implied share price。
+
+WACC、终值假设和 EV-to-Equity bridge 必须可见；估值计算保持公式联动；需要时提供 WACC / terminal growth 或 exit multiple 敏感性分析；外部市场数据必须保留来源。`,
+      "reference/COMPS_SKILL.md": `# Comparable Companies Reference
+
+建立有选择逻辑的 peer set，保留市场数据来源、日期和口径，使用一致的经营指标计算 EV/Revenue、EV/EBITDA、P/E 等适用倍数。
+
+倍数、统计区间和 implied valuation 保持 Excel 公式；异常值或排除项显式说明，不静默删除；Sources 中保留真实来源 URL。`,
       "runtime/xlsx_runtime.py": runtimeSource("server/tools/wenshu/xlsx/xlsx_runtime.py", "Excel 工作簿 create / modify / inspect / verify 的确定性执行层。"),
       "runtime/xlsx_finalize.py": runtimeSource("server/tools/wenshu/xlsx/xlsx_finalize.py", "负责真实 OOXML metadata、计算属性和新建工作簿视图的 finalize。"),
       "runtime/xlsx_tools.py": runtimeSource("server/tools/wenshu/xlsx/xlsx_tools.py", "复用并保留许可声明的 XLSX 辅助实现，用于重计算准备与校验。"),
