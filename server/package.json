@@ -42,6 +42,7 @@
     "docx": "^9.7.1",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
+    "exceljs": "^4.4.0",
     "fast-glob": "^3.3.3",
     "fastify": "^4.28.1",
     "iconv-lite": "^0.7.2",
