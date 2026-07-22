@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: docs
-Last verified: 2026-07-22
+Last verified: 2026-07-23
 Layer: schema
 Module: Docs
 Feature: DocsSystem
@@ -122,6 +122,7 @@ Related:
 ### 集成
 
 - `microapp/README.md`
+- `microapp/office-runtime-task-contract.md`（文枢 Office Runtime 当前任务合同）
 - `microapp/office-suite-microapp-design.md`
 - `microapp/jianxing-webbridge-debug-status.md`
 - `microapp/tts-studio-runtime-notes.md`
