@@ -71,8 +71,8 @@ Related:
 
 ### SKILL
 
-- `skill/README.md`
-- `skill/skill-memory-poc.md`
+- `skill/README.md`（Skill 当前定义与边界）
+- `skill/skill-runtime-design.md`（Skill Runtime V1 设计）
 
 ### 对话
 
@@ -129,6 +129,10 @@ Related:
 - `integrations/wecom-cloudflare-worker-poc.md`
 - `integrations/enterprise-wecom-implementation-checklist.md`
 - `integrations/enterprise-wecom-integration-poc.md`
+- `integrations/wecom-chat-tool-integration-plan.md`
+- `integrations/wecom-mcp-wrapper-design.md`
+- `integrations/wecom-vs-lark-integration-selection.md`
+- `integrations/enterprise-wecom-integration-poc.md`
 - `integrations/wecom-microapp-interface-design.md`
 - `integrations/wecom-instance-capability-design.md`
 - `integrations/wecom-instance-capability-implementation-checklist.md`
@@ -138,9 +142,6 @@ Related:
 - `integrations/third-party-integration-architecture.md`
 - `integrations/third-party-integration-frontend-design.md`
 - `integrations/third-party-integration-consumption-model.md`
-- `integrations/wecom-chat-tool-integration-plan.md`
-- `integrations/wecom-mcp-wrapper-design.md`
-- `integrations/wecom-vs-lark-integration-selection.md`
 
 ### 工具运行时
 
@@ -198,7 +199,7 @@ Related:
 ## 目录说明
 
 - `microapp/`：微应用模块定义、接入点绑定关系、跨平台业务工作流边界
-- `skill/`：skill 模块定义、skill 与 memory 的产品边界、skill-driven memory POC
+- `skill/`：Skill 当前定义、内部状态、多工具编排、业务语义封装与 Skill Runtime 设计
 - `architecture/`：运行时边界、API 契约、实现边界
 - `build/`：构建、打包、release 产物与测试报告入包规则
 - `platform/`：桌面壳层与平台运行环境
