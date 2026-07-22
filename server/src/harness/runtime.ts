@@ -12,9 +12,6 @@ import { editFileTool } from "../mcp/tools/edit-file.tool.js";
 import { grepTool } from "../mcp/tools/grep.tool.js";
 import { newsSearchTool } from "../mcp/tools/news-search.tool.js";
 import { officeDocumentTool } from "../mcp/tools/office-document.tool.js";
-import { officePdfTool } from "../mcp/tools/office-pdf.tool.js";
-import { officePresentationTool } from "../mcp/tools/office-presentation.tool.js";
-import { officeSpreadsheetTool } from "../mcp/tools/office-spreadsheet.tool.js";
 import { readExtractTool } from "../mcp/tools/read-extract.tool.js";
 import { readListTool } from "../mcp/tools/read-list.tool.js";
 import { readLocateTool } from "../mcp/tools/read-locate.tool.js";
@@ -52,16 +49,16 @@ export const initializeHarnessRuntime = () => {
   registerCapability(readSliceTool);
   registerCapability(readTool);
 
-  // Public Edit contract: direct file actions plus one high-level capability per WenShu domain.
-  // Office atomic SDK operations stay behind these task-level tools.
   registerCapability(writeFileTool);
   registerCapability(replaceBlockTool);
   registerCapability(deletePathTool);
   registerCapability(movePathTool);
   registerCapability(officeDocumentTool);
-  registerCapability(officePdfTool);
-  registerCapability(officeSpreadsheetTool);
-  registerCapability(officePresentationTool);
+
+  // WenShu PDF/XLSX/PPT task-level runtimes are currently MicroAPP capability
+  // surfaces only. They are intentionally not registered into Harness until the
+  // formal Skill Runtime contract (SkillInstance/state/reducer/stage constraints)
+  // is implemented and can narrow, rather than expand, canonical toolExposure.
 
   // Compatibility-only implementations for persisted/legacy invocations.
   // Exposure policy keeps these out of the Agent-visible edit surface.
