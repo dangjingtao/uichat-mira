@@ -7,7 +7,7 @@ Layer: raw-source
 Module: SKILL
 Feature: SkillPackageDistribution
 Doc Type: current-contract
-Canonical: true
+Canonical: false
 Related:
   - ./README.md
   - ./skill-runtime-design.md
@@ -15,7 +15,7 @@ Related:
 
 ## Purpose
 
-本合同定义 **Skill 展示/分发包** 与 **可选 Runtime Pack** 的边界。
+本合同定义 **Skill 展示/分发包** 与 **可选 Runtime Pack** 的当前实现边界；它是上位 Skill 合同的实现补充，不与 `README.md` / `skill-runtime-design.md` 形成并列真相源。
 
 它不改变正式 Skill Runtime 的核心定义：
 
