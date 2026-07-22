@@ -6,8 +6,9 @@ import {
   writeJsonFile,
 } from "./python-runtime.js";
 
-const getData = (result: { result: { status: string; data?: unknown; [key: string]: unknown } }) =>
-  result.result.data ?? result.result;
+const getData = (result: {
+  result: { status: string; data?: unknown; [key: string]: unknown };
+}) => result.result.data ?? result.result;
 
 export const executePdfSkillRuntime = async (input: {
   operation:
@@ -54,7 +55,10 @@ export const executePdfSkillRuntime = async (input: {
       args.push("--data", dataPath);
     }
     const result = await runWenshuPython({
-      script: "pdf/pdf_runtime.py",
+      script:
+        input.operation === "create"
+          ? "pdf/pdf_create_runtime.py"
+          : "pdf/pdf_runtime.py",
       args,
       timeoutMs: 180_000,
     });
