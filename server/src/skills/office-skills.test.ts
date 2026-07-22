@@ -18,11 +18,12 @@ const attachmentMessage = (filename: string, mimeType: string) => [
 ];
 
 describe("WenShu built-in skills", () => {
-  it("registers all four document skills", () => {
+  it("registers document skills including pptx swarm semantics", () => {
     expect(listBuiltInSkillContexts().map((skill) => skill.id).sort()).toEqual([
       "docx",
       "pdf",
       "pptx",
+      "pptx-swarm",
       "xlsx",
     ]);
   });
@@ -39,10 +40,21 @@ describe("WenShu built-in skills", () => {
     expect(skill?.primaryToolIds).toContain("office_spreadsheet");
   });
 
-  it("routes presentation intent to the task-level presentation capability", () => {
+  it("routes a normal presentation to pptx", () => {
     const skill = resolveActiveSkillContext({ question: "做一份 12 页路演 PPT" });
     expect(skill?.id).toBe("pptx");
     expect(skill?.primaryToolIds).toContain("office_presentation");
+  });
+
+  it("routes a 20+ slide presentation to pptx-swarm semantics", () => {
+    const skill = resolveActiveSkillContext({ question: "做一份 30 页 PPT 路演稿" });
+    expect(skill?.id).toBe("pptx-swarm");
+    expect(skill?.primaryToolIds).toContain("office_presentation");
+  });
+
+  it("routes batch presentation creation to pptx-swarm semantics", () => {
+    const skill = resolveActiveSkillContext({ question: "批量做 3 份 PPT 演示文稿" });
+    expect(skill?.id).toBe("pptx-swarm");
   });
 
   it("activates PDF from attachment metadata", () => {
