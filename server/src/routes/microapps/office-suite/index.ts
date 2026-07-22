@@ -2,6 +2,7 @@ import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import type {
   OfficeRuntimeArtifact,
   OfficeRuntimeTaskResult,
+  OfficeRuntimeWordReviewRequest,
 } from "@/microapps/office-suite/contract.js";
 import { DOCUMENT_VERIFICATION_PARAGRAPHS } from "@/microapps/office-suite/document.js";
 import type { OfficeSuiteFileKind } from "@/microapps/office-suite/index.js";
@@ -12,6 +13,15 @@ import { badRequest, routeHandler } from "@/utils/route-errors.js";
 
 const MAX_OFFICE_FILE_BYTES = 50 * 1024 * 1024;
 const OFFICE_KINDS: OfficeSuiteFileKind[] = ["word", "excel", "powerpoint"];
+
+type WordReviewQuery = {
+  author?: string;
+  commentTarget?: string;
+  commentText?: string;
+  insertAfter?: string;
+  insertText?: string;
+  deleteTarget?: string;
+};
 
 const requireCompleted = (
   result: OfficeRuntimeTaskResult,
@@ -54,6 +64,42 @@ const sendArtifact = (
   reply.header("X-Office-Task-Duration-Ms", String(result.durationMs));
   reply.type(artifact.mimeType);
   return reply.send(artifact.buffer);
+};
+
+const buildWordReviewRequest = (query: WordReviewQuery): OfficeRuntimeWordReviewRequest => {
+  const request: OfficeRuntimeWordReviewRequest = {
+    type: "review",
+    author: query.author?.trim() || undefined,
+  };
+
+  const commentTarget = query.commentTarget?.trim();
+  const commentText = query.commentText?.trim();
+  if (commentTarget || commentText) {
+    if (!commentTarget || !commentText) {
+      throw badRequest("批注需要同时提供 commentTarget 和 commentText");
+    }
+    request.comments = [{ targetText: commentTarget, text: commentText }];
+  }
+
+  const insertAfter = query.insertAfter?.trim();
+  const insertText = query.insertText;
+  if (insertAfter || insertText) {
+    if (!insertAfter || !insertText) {
+      throw badRequest("修订插入需要同时提供 insertAfter 和 insertText");
+    }
+    request.insertions = [{ afterText: insertAfter, text: insertText }];
+  }
+
+  const deleteTarget = query.deleteTarget?.trim();
+  if (deleteTarget) {
+    request.deletions = [{ targetText: deleteTarget }];
+  }
+
+  if (!request.comments?.length && !request.insertions?.length && !request.deletions?.length) {
+    throw badRequest("至少提供一项批注、修订插入或修订删除操作");
+  }
+
+  return request;
 };
 
 const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
@@ -158,6 +204,48 @@ const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
 
       return sendArtifact(reply, result, requireArtifact(result));
     }),
+  );
+
+  app.post<{ Querystring: WordReviewQuery }>(
+    "/microapps/office-suite/document/review-copy",
+    routeHandler<{ Querystring: WordReviewQuery }>(
+      "Failed to review Word document",
+      async (request, reply) => {
+        const upload = await request.file({
+          limits: {
+            files: 1,
+            fileSize: MAX_OFFICE_FILE_BYTES,
+          },
+        });
+
+        if (!upload) {
+          throw badRequest("请选择一个 .docx 文件");
+        }
+        if (!upload.filename.toLowerCase().endsWith(".docx")) {
+          throw badRequest("Word 审阅当前仅支持 .docx 文件");
+        }
+
+        const buffer = await upload.toBuffer();
+        if (buffer.byteLength === 0) {
+          throw badRequest("文件内容为空");
+        }
+
+        const result = requireCompleted(
+          await executeOfficeRuntimeTask({
+            operation: "modify",
+            kind: "word",
+            input: {
+              fileName: upload.filename,
+              mimeType: upload.mimetype,
+              buffer,
+            },
+            request: buildWordReviewRequest(request.query),
+          }),
+        );
+
+        return sendArtifact(reply, result, requireArtifact(result));
+      },
+    ),
   );
 
   app.post(
