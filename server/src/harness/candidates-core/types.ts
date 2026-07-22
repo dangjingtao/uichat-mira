@@ -43,7 +43,6 @@ export interface HarnessToolExposure {
   blockedCapabilityReasons: Record<string, string>;
 }
 
-
 export interface ResolveHarnessToolCandidatesForTurnInput {
   query: string;
   source?: HarnessTurnSource;
@@ -52,6 +51,8 @@ export interface ResolveHarnessToolCandidatesForTurnInput {
   minScore?: number;
   allowExternal?: boolean;
   allowedExternalToolIds?: string[];
+  /** Runtime-owned upper bound, such as the maximum tool set of an active Skill. */
+  allowedToolIds?: string[];
   sandboxProfiles?: Partial<Record<McpSandboxProfile, boolean>>;
 }
 
