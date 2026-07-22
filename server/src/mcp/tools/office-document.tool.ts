@@ -148,7 +148,13 @@ export const officeDocumentTool: McpToolImplementation = {
                 type: "array",
                 items: {
                   type: "array",
-                  items: { type: ["string", "number", "boolean", "null"] },
+                  items: {
+                    oneOf: [
+                      { type: "string" },
+                      { type: "number" },
+                      { type: "boolean" },
+                    ],
+                  },
                 },
               },
             },
