@@ -43,7 +43,6 @@ export interface HarnessToolExposure {
   blockedCapabilityReasons: Record<string, string>;
 }
 
-
 export interface ResolveHarnessToolCandidatesForTurnInput {
   query: string;
   source?: HarnessTurnSource;
@@ -52,6 +51,12 @@ export interface ResolveHarnessToolCandidatesForTurnInput {
   minScore?: number;
   allowExternal?: boolean;
   allowedExternalToolIds?: string[];
+  /**
+   * Optional caller-owned runtime narrowing applied after Harness eligibility
+   * and before ranking/context-budget selection. It can only reduce the public
+   * tool surface; it never makes an otherwise ineligible tool available.
+   */
+  allowedToolIds?: string[];
   sandboxProfiles?: Partial<Record<McpSandboxProfile, boolean>>;
 }
 
