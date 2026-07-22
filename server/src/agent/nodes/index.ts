@@ -4,7 +4,7 @@
  * `*Node` 导出继续服务旧 LangGraph 和现有外部适配；
  * 语义命名导出供 Pi-loop 直接调用，避免把内部职责继续绑定为图节点。
  *
- * Skill Runtime 通过薄适配层包裹 prepare / planner / evidence 三个语义点，
+ * Skill Runtime 通过薄适配层包裹 prepare / planner / tool / evidence 语义点，
  * 不改变 Planner -> Normalize -> Policy -> Tool -> Evidence -> Planner 主合同。
  */
 export { createAgentGoal } from "./goal-plan";
@@ -14,6 +14,7 @@ export { prepareContextNode as basePrepareContextNode } from "./prepare-context"
 export {
   skillAwarePrepareContextNode as prepareContextNode,
   skillAwareNextActionPlannerNode as nextActionPlannerNode,
+  skillAwareToolNode as toolNode,
   skillAwareEvidenceNode as evidenceNode,
   skillAwareEvidenceNode as appendPendingEvidence,
 } from "@/skill/agent-integration";
@@ -50,7 +51,7 @@ export {
 } from "./tool-call-normalize";
 export { toolNode as baseToolNode } from "./tool-node";
 export {
-  harnessAwareToolNode as toolNode,
+  harnessAwareToolNode as baseHarnessAwareToolNode,
   attachHarnessLlmContentToExecution,
   type AgentToolExecutionWithLlmContent,
 } from "./harness-tool-result";
