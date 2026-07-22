@@ -45,22 +45,40 @@ export const resolveHarnessToolCandidatesForTurn = async (
     sandboxProfiles: input.sandboxProfiles,
   });
 
+  // Runtime callers may narrow the already-eligible public surface (for example,
+  // a Skill stage). Apply that constraint before the 20-tool ranking budget so
+  // the runtime constraint participates in the one real Harness exposure path.
+  // This filter can never make an ineligible tool visible.
+  const runtimeAllowlist = input.allowedToolIds
+    ? new Set(input.allowedToolIds)
+    : undefined;
+  const visibleDefinitions = runtimeAllowlist
+    ? exposureDecision.exposedDefinitions.filter((definition) =>
+        runtimeAllowlist.has(definition.id),
+      )
+    : exposureDecision.exposedDefinitions;
+  const runtimeConstraintReason = runtimeAllowlist
+    ? [
+        `Runtime tool constraint narrowed eligible public tools to ${visibleDefinitions.length} definition(s) before ranking.`,
+      ]
+    : [];
+
   // Registered public tools are available to Planner. Harness does not infer
   // task phases, domains, browser intent, sandbox suitability, terminal need,
   // or semantic relevance to hide them. Ranking is only used when the public
-  // tool set exceeds the 20-tool context budget.
-  const visibleDefinitions = exposureDecision.exposedDefinitions;
+  // tool set exceeds the 20-tool context budget. Runtime allowlists above are
+  // explicit caller constraints, not Harness semantic inference.
   const initialToolExposure: HarnessToolExposure = {
     exposedToolIds: visibleDefinitions.map((definition) => definition.id),
     exposedDefinitions: visibleDefinitions,
-    reason: exposureDecision.reason,
+    reason: [...exposureDecision.reason, ...runtimeConstraintReason],
     blockedCapabilityIds: exposureDecision.blockedCapabilityIds,
     blockedCapabilityReasons: exposureDecision.blockedCapabilityReasons,
   };
 
   if (visibleDefinitions.length <= MAX_PLANNER_TOOLS) {
     const exposureReason =
-      "All public tools are exposed because the tool set is at most 20 tools.";
+      "All eligible runtime-constrained public tools are exposed because the tool set is at most 20 tools.";
     const toolCandidates = exposeAllHarnessToolCandidates({
       definitions: visibleDefinitions,
       reason: exposureReason,
@@ -210,13 +228,13 @@ export const resolveHarnessToolCandidatesForTurn = async (
     .filter((definition): definition is NonNullable<typeof definition> => Boolean(definition));
 
   const rankingReason =
-    "Public tool set exceeds 20; Harness ranks the available tools for this turn and exposes the top 20. No additional semantic or runtime policy filtering is applied here.";
+    "Public tool set exceeds 20; Harness ranks the available runtime-constrained tools for this turn and exposes the top 20. No additional semantic or runtime policy filtering is applied here.";
   const toolExposure: HarnessToolExposure = {
     exposedToolIds: exposedDefinitions.map((definition) => definition.id),
     exposedDefinitions,
-    reason: [...exposureDecision.reason, rankingReason],
-    blockedCapabilityIds: exposureDecision.blockedCapabilityIds,
-    blockedCapabilityReasons: exposureDecision.blockedCapabilityReasons,
+    reason: [...initialToolExposure.reason, rankingReason],
+    blockedCapabilityIds: initialToolExposure.blockedCapabilityIds,
+    blockedCapabilityReasons: initialToolExposure.blockedCapabilityReasons,
   };
 
   return {
