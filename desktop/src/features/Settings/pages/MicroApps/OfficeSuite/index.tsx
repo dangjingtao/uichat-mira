@@ -17,7 +17,7 @@ import {
 } from "@/shared/api/officeSuite";
 import MicroAppPageLayout from "../components/MicroAppPageLayout";
 
-const ACCEPTED_EXTENSIONS = ".docx,.xlsx,.xls,.pptx";
+const ACCEPTED_EXTENSIONS = ".docx,.xlsx,.pptx";
 
 const kindMeta: Record<
   OfficeSuiteFileKind,
@@ -51,8 +51,8 @@ export default function OfficeSuitePage() {
   const chooseFile = (file?: File | null) => {
     if (!file) return;
     const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
-    if (![".docx", ".xlsx", ".xls", ".pptx"].includes(extension)) {
-      message.warning("文枢当前只接受 Word、Excel 和 PowerPoint 文件");
+    if (![".docx", ".xlsx", ".pptx"].includes(extension)) {
+      message.warning("文枢当前只接受 .docx、.xlsx 和 .pptx 文件");
       return;
     }
     setSelectedFile(file);
@@ -138,7 +138,7 @@ export default function OfficeSuitePage() {
                   <div className="mt-1 text-xs text-text-tertiary">
                     {selectedFile
                       ? `${selectedExtension} · ${formatBytes(selectedFile.size)}`
-                      : "支持 .docx / .xlsx / .xls / .pptx"}
+                      : "支持 .docx / .xlsx / .pptx"}
                   </div>
                 </div>
               </button>
@@ -212,7 +212,7 @@ export default function OfficeSuitePage() {
                         <div className="text-sm font-medium text-text-primary">{meta.label}</div>
                         <div className="mt-0.5 truncate text-xs text-text-tertiary">{meta.runtime}</div>
                       </div>
-                      <Badge variant="success">已接入</Badge>
+                      <Badge variant="success">解析就绪</Badge>
                     </div>
                   );
                 },
