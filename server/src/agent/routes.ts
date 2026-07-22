@@ -3,6 +3,7 @@ import { requireAuth } from "@/db/auth.db";
 import { routeHandler } from "@/utils/route-errors";
 import { success } from "@/utils/index";
 import { successEnvelope, errorEnvelope } from "@/routes/schema-helpers";
+import { cancelSkillForRun } from "@/skill/runtime";
 import { agentRunStore } from "./run-store";
 import { notFound } from "@/utils/route-errors";
 import type { AgentRun } from "./types";
@@ -178,6 +179,10 @@ const registerAgentRoutes: FastifyPluginAsync = async (app: FastifyInstance) => 
         throw notFound("Agent run not found");
       }
 
+      cancelSkillForRun(
+        visibleRun.id,
+        "Skill cancelled because the user rejected the pending approval request.",
+      );
       const next = agentRunStore.complete(visibleRun.id, {
         status: "blocked",
         pendingApproval: undefined,
@@ -223,6 +228,7 @@ const registerAgentRoutes: FastifyPluginAsync = async (app: FastifyInstance) => 
         throw notFound("Agent run not found");
       }
 
+      cancelSkillForRun(visibleRun.id, "Skill cancelled with the parent Agent run.");
       const next = agentRunStore.complete(visibleRun.id, {
         status: "cancelled",
         pendingApproval: undefined,
