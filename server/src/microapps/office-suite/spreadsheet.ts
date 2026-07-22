@@ -1,14 +1,8 @@
 import path from "node:path";
 import ExcelJS from "exceljs";
+import type { OfficeRuntimeSpreadsheetCellPatch } from "./contract.js";
 
-export type SpreadsheetCellPatch = {
-  sheetName: string;
-  cell: string;
-  value?: string | number | boolean | null;
-  formula?: string;
-  bold?: boolean;
-  numberFormat?: string;
-};
+export type SpreadsheetCellPatch = OfficeRuntimeSpreadsheetCellPatch;
 
 export type SpreadsheetPatchInput = {
   fileName: string;
@@ -24,6 +18,69 @@ export type SpreadsheetPatchArtifact = {
   modifiedSheets: string[];
   modifiedCells: number;
 };
+
+export const SPREADSHEET_VERIFICATION_PATCHES: SpreadsheetCellPatch[] = [
+  {
+    sheetName: "文枢验证",
+    cell: "A1",
+    value: "文枢 Excel Modify 验证",
+    bold: true,
+  },
+  {
+    sheetName: "文枢验证",
+    cell: "A2",
+    value: "原文件未覆盖，此工作表写入到新的 XLSX 产物。",
+  },
+  {
+    sheetName: "文枢验证",
+    cell: "A4",
+    value: "项目",
+    bold: true,
+  },
+  {
+    sheetName: "文枢验证",
+    cell: "B4",
+    value: "数量",
+    bold: true,
+  },
+  {
+    sheetName: "文枢验证",
+    cell: "A5",
+    value: "Inspect",
+  },
+  {
+    sheetName: "文枢验证",
+    cell: "B5",
+    value: 1,
+  },
+  {
+    sheetName: "文枢验证",
+    cell: "A6",
+    value: "Create",
+  },
+  {
+    sheetName: "文枢验证",
+    cell: "B6",
+    value: 1,
+  },
+  {
+    sheetName: "文枢验证",
+    cell: "A7",
+    value: "Modify",
+  },
+  {
+    sheetName: "文枢验证",
+    cell: "B7",
+    value: 1,
+  },
+  {
+    sheetName: "文枢验证",
+    cell: "B8",
+    formula: "SUM(B5:B7)",
+    bold: true,
+    numberFormat: "0",
+  },
+];
 
 const EXCEL_MIME =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -88,66 +145,5 @@ export const createSpreadsheetVerificationCopy = async (input: {
 }): Promise<SpreadsheetPatchArtifact> =>
   patchSpreadsheetWorkbook({
     ...input,
-    patches: [
-      {
-        sheetName: "文枢验证",
-        cell: "A1",
-        value: "文枢 Excel Modify 验证",
-        bold: true,
-      },
-      {
-        sheetName: "文枢验证",
-        cell: "A2",
-        value: "原文件未覆盖，此工作表写入到新的 XLSX 产物。",
-      },
-      {
-        sheetName: "文枢验证",
-        cell: "A4",
-        value: "项目",
-        bold: true,
-      },
-      {
-        sheetName: "文枢验证",
-        cell: "B4",
-        value: "数量",
-        bold: true,
-      },
-      {
-        sheetName: "文枢验证",
-        cell: "A5",
-        value: "Inspect",
-      },
-      {
-        sheetName: "文枢验证",
-        cell: "B5",
-        value: 1,
-      },
-      {
-        sheetName: "文枢验证",
-        cell: "A6",
-        value: "Create",
-      },
-      {
-        sheetName: "文枢验证",
-        cell: "B6",
-        value: 1,
-      },
-      {
-        sheetName: "文枢验证",
-        cell: "A7",
-        value: "Modify",
-      },
-      {
-        sheetName: "文枢验证",
-        cell: "B7",
-        value: 1,
-      },
-      {
-        sheetName: "文枢验证",
-        cell: "B8",
-        formula: "SUM(B5:B7)",
-        bold: true,
-        numberFormat: "0",
-      },
-    ],
+    patches: SPREADSHEET_VERIFICATION_PATCHES,
   });

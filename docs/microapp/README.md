@@ -2,7 +2,7 @@
 
 Status: Planned
 Owner: integrations / knowledge-base / runtime
-Last verified: 2026-07-02
+Last verified: 2026-07-23
 Layer: raw-source
 Module: MicroAPP
 Feature: MicroAppRuntime
@@ -12,6 +12,8 @@ Related:
   - ../integrations/third-party-integration-architecture.md
   - ../integrations/third-party-integration-consumption-model.md
   - ../integrations/wecom-microapp-interface-design.md
+  - office-runtime-task-contract.md
+  - office-suite-microapp-design.md
   - image-generation-microapp-poc.md
   - media-capability-packaging-design.md
   - computer-use-microapp-poc.md
@@ -144,6 +146,7 @@ Related:
 - `mail_center`
 - `image_generation`
 - `computer_use`
+- `office_suite`（文枢）
 
 ## 当前绑定关系
 
@@ -263,8 +266,25 @@ Platform
 - 接收外部文档或消息源
 - 进入知识库导入流程
 
+### `office_suite` / 文枢
+
+作用：
+
+- 统一承接 Word / Excel / PowerPoint 文件处理任务
+- 产品上保持一个微应用，内部保持三个 Office 领域 Runtime
+- 当前桌面入口主要用于调试和验证
+- 当前任务级 Runtime 合同见 `office-runtime-task-contract.md`
+- 未来 Skill 只消费稳定 Runtime 合同，不直接依赖底层 Office SDK
+
+当前实现边界与未来方向见：
+
+- `office-runtime-task-contract.md`
+- `office-suite-microapp-design.md`
+
 ## 当前活跃文档
 
+- `office-runtime-task-contract.md`
+- `office-suite-microapp-design.md`
 - `media-capability-packaging-design.md`
 - `image-generation-microapp-poc.md`
 - `computer-use-microapp-poc.md`
