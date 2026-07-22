@@ -78,7 +78,7 @@ export const resolveHarnessToolCandidatesForTurn = async (
 
   if (visibleDefinitions.length <= MAX_PLANNER_TOOLS) {
     const exposureReason =
-      "All eligible runtime-constrained public tools are exposed because the tool set is at most 20 tools.";
+      "All public tools are exposed because the tool set is at most 20 tools.";
     const toolCandidates = exposeAllHarnessToolCandidates({
       definitions: visibleDefinitions,
       reason: exposureReason,
@@ -228,7 +228,7 @@ export const resolveHarnessToolCandidatesForTurn = async (
     .filter((definition): definition is NonNullable<typeof definition> => Boolean(definition));
 
   const rankingReason =
-    "Public tool set exceeds 20; Harness ranks the available runtime-constrained tools for this turn and exposes the top 20. No additional semantic or runtime policy filtering is applied here.";
+    "Public tool set exceeds 20; Harness ranks the available tools for this turn and exposes the top 20. No additional semantic or runtime policy filtering is applied here.";
   const toolExposure: HarnessToolExposure = {
     exposedToolIds: exposedDefinitions.map((definition) => definition.id),
     exposedDefinitions,
