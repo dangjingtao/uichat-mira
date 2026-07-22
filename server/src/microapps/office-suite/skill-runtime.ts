@@ -91,8 +91,9 @@ export const executeSpreadsheetSkillRuntime = async (input: {
     const args = [input.operation];
     if (input.inputPath) args.push("--input", input.inputPath);
     if (input.outputPath) args.push("--output", input.outputPath);
+    let specPath: string | undefined;
     if (input.spec) {
-      const specPath = path.join(tempDir, "spec.json");
+      specPath = path.join(tempDir, "spec.json");
       writeJsonFile(specPath, input.spec);
       args.push("--spec", specPath);
     }
@@ -101,6 +102,30 @@ export const executeSpreadsheetSkillRuntime = async (input: {
       args,
       timeoutMs: 180_000,
     });
+
+    if (
+      (input.operation === "create" || input.operation === "modify") &&
+      input.outputPath &&
+      specPath
+    ) {
+      const finalized = await runWenshuPython({
+        script: "xlsx/xlsx_finalize.py",
+        args: [
+          "--input",
+          input.outputPath,
+          "--spec",
+          specPath,
+          "--mode",
+          input.operation,
+        ],
+        timeoutMs: 180_000,
+      });
+      return {
+        runtime: getData(result),
+        finalize: getData(finalized),
+      };
+    }
+
     return getData(result);
   });
 
