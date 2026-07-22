@@ -3,8 +3,10 @@ import type {
   OfficeRuntimeArtifact,
   OfficeRuntimeTaskResult,
 } from "@/microapps/office-suite/contract.js";
+import { DOCUMENT_VERIFICATION_PARAGRAPHS } from "@/microapps/office-suite/document.js";
 import type { OfficeSuiteFileKind } from "@/microapps/office-suite/index.js";
 import { executeOfficeRuntimeTask } from "@/microapps/office-suite/runtime.js";
+import { SPREADSHEET_VERIFICATION_PATCHES } from "@/microapps/office-suite/spreadsheet.js";
 import { success } from "@/utils/index.js";
 import { badRequest, routeHandler } from "@/utils/route-errors.js";
 
@@ -13,17 +15,17 @@ const OFFICE_KINDS: OfficeSuiteFileKind[] = ["word", "excel", "powerpoint"];
 
 const requireCompleted = (
   result: OfficeRuntimeTaskResult,
-  invalidMessage?: string,
+  unsupportedMessage?: string,
 ) => {
   if (result.status === "completed") {
     return result;
   }
 
-  if (
-    result.error.code === "INVALID_TASK_INPUT" ||
-    result.error.code === "UNSUPPORTED_FILE_TYPE"
-  ) {
-    throw badRequest(invalidMessage ?? result.error.message);
+  if (result.error.code === "UNSUPPORTED_FILE_TYPE") {
+    throw badRequest(unsupportedMessage ?? result.error.message);
+  }
+  if (result.error.code === "INVALID_TASK_INPUT") {
+    throw badRequest(result.error.message);
   }
 
   throw new Error(result.error.message);
@@ -70,6 +72,10 @@ const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const buffer = await upload.toBuffer();
+      if (buffer.byteLength === 0) {
+        throw badRequest("文件内容为空");
+      }
+
       const result = requireCompleted(
         await executeOfficeRuntimeTask({
           operation: "inspect",
@@ -130,6 +136,10 @@ const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const buffer = await upload.toBuffer();
+      if (buffer.byteLength === 0) {
+        throw badRequest("文件内容为空");
+      }
+
       const result = requireCompleted(
         await executeOfficeRuntimeTask({
           operation: "modify",
@@ -141,15 +151,7 @@ const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
           },
           request: {
             type: "append-paragraphs",
-            paragraphs: [
-              {
-                text: "文枢 Word Modify 验证",
-                bold: true,
-              },
-              {
-                text: "这段内容由 Mira 文枢追加到现有 DOCX 的新副本中，原文件未被覆盖。",
-              },
-            ],
+            paragraphs: DOCUMENT_VERIFICATION_PARAGRAPHS,
           },
         }),
       );
@@ -176,6 +178,10 @@ const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const buffer = await upload.toBuffer();
+      if (buffer.byteLength === 0) {
+        throw badRequest("文件内容为空");
+      }
+
       const result = requireCompleted(
         await executeOfficeRuntimeTask({
           operation: "modify",
@@ -187,34 +193,7 @@ const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
           },
           request: {
             type: "patch-cells",
-            patches: [
-              {
-                sheetName: "文枢验证",
-                cell: "A1",
-                value: "文枢 Excel Modify 验证",
-                bold: true,
-              },
-              {
-                sheetName: "文枢验证",
-                cell: "A2",
-                value: "原文件未覆盖，此工作表写入到新的 XLSX 产物。",
-              },
-              { sheetName: "文枢验证", cell: "A4", value: "项目", bold: true },
-              { sheetName: "文枢验证", cell: "B4", value: "数量", bold: true },
-              { sheetName: "文枢验证", cell: "A5", value: "Inspect" },
-              { sheetName: "文枢验证", cell: "B5", value: 1 },
-              { sheetName: "文枢验证", cell: "A6", value: "Create" },
-              { sheetName: "文枢验证", cell: "B6", value: 1 },
-              { sheetName: "文枢验证", cell: "A7", value: "Modify" },
-              { sheetName: "文枢验证", cell: "B7", value: 1 },
-              {
-                sheetName: "文枢验证",
-                cell: "B8",
-                formula: "SUM(B5:B7)",
-                bold: true,
-                numberFormat: "0",
-              },
-            ],
+            patches: SPREADSHEET_VERIFICATION_PATCHES,
           },
         }),
       );
