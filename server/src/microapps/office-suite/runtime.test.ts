@@ -26,15 +26,18 @@ describe("WenShu Office Runtime task contract", () => {
     }
     const artifact = created.artifacts[0];
     expect(artifact).toBeDefined();
+    if (!artifact) {
+      throw new Error("Create task completed without an artifact");
+    }
 
     const inspected = await executeOfficeRuntimeTask({
       taskId: "task-inspect-word",
       operation: "inspect",
       input: {
         artifactRef: "artifact://word/generated",
-        fileName: artifact!.fileName,
-        mimeType: artifact!.mimeType,
-        buffer: artifact!.buffer,
+        fileName: artifact.fileName,
+        mimeType: artifact.mimeType,
+        buffer: artifact.buffer,
       },
     });
 
@@ -42,8 +45,11 @@ describe("WenShu Office Runtime task contract", () => {
     expect(inspected.operation).toBe("inspect");
     expect(inspected.kind).toBe("word");
     expect(inspected.input?.artifactRef).toBe("artifact://word/generated");
-    expect(inspected.inspection?.previewText).toContain("文枢");
     expect(inspected.artifacts).toHaveLength(0);
+    if (inspected.status !== "completed") {
+      throw new Error(inspected.error.message);
+    }
+    expect(inspected.inspection?.previewText).toContain("文枢");
   });
 
   it("modifies Word and Excel through task-level requests", async () => {
@@ -62,8 +68,11 @@ describe("WenShu Office Runtime task contract", () => {
       throw new Error("Failed to prepare Office Runtime test artifacts");
     }
 
-    const wordArtifact = wordSource.artifacts[0]!;
-    const excelArtifact = excelSource.artifacts[0]!;
+    const wordArtifact = wordSource.artifacts[0];
+    const excelArtifact = excelSource.artifacts[0];
+    if (!wordArtifact || !excelArtifact) {
+      throw new Error("Create task completed without test artifacts");
+    }
 
     const wordModified = await executeOfficeRuntimeTask({
       operation: "modify",
