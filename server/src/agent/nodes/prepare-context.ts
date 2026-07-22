@@ -1,8 +1,9 @@
 /**
- * 上下文准备节点：收集线程消息、可用工具和策略允许的自动工具列表。
+ * 上下文准备节点：收集线程消息、可用工具、策略允许的自动工具列表和按需 Skill 语义。
  */
 import { reconcileCodeGraphHarnessCapability } from "@/harness/codegraph-capability";
 import { listCapabilityDefinitions } from "@/harness/registry";
+import { prepareSkillContext, type SkillContext } from "@/skills/context/index.js";
 import { evaluateAgentToolPolicy } from "../policy";
 import { emitStepNode } from "../node-runtime";
 import type { AgentNodeState, EmitAgentExecutionNode } from "../node-runtime";
@@ -28,6 +29,22 @@ const toAgentToolExposureState = (
   })),
 });
 
+type SkillAwareTaskFrame = NonNullable<AgentNodeState["currentTaskFrame"]> & {
+  skillContext?: SkillContext;
+};
+
+const withSkillContext = (
+  frame: AgentNodeState["currentTaskFrame"],
+  skillContext: SkillContext | undefined,
+): AgentNodeState["currentTaskFrame"] => {
+  if (!frame) return frame;
+  const { skillContext: _previousSkillContext, ...baseFrame } = frame as SkillAwareTaskFrame;
+  return {
+    ...baseFrame,
+    ...(skillContext ? { skillContext } : {}),
+  } as SkillAwareTaskFrame;
+};
+
 export const prepareContextNode = async (
   state: AgentNodeState,
   emit?: EmitAgentExecutionNode,
@@ -38,7 +55,7 @@ export const prepareContextNode = async (
     nodeType: "reason",
     phase: "start",
     label: "准备上下文",
-    summary: "正在读取线程上下文和可用工具",
+    summary: "正在读取线程上下文、可用工具和任务 Skill",
   });
 
   reconcileCodeGraphHarnessCapability();
@@ -53,9 +70,14 @@ export const prepareContextNode = async (
     config: state.intentConfig,
   });
 
-  // Skill packages are currently a product/distribution surface only. Until the
-  // formal Skill Runtime owns SkillInstance/state/reducer/stage constraints,
-  // packages must not inject semantics or expand Planner-visible tools here.
+  // SkillContext is semantic guidance only. It never registers tools and never
+  // expands the canonical Planner-visible toolExposure produced by Harness.
+  const skillContext = await prepareSkillContext({
+    query,
+    messages: state.messages,
+  });
+  const currentTaskFrame = withSkillContext(state.currentTaskFrame, skillContext);
+
   const toolExposure = toAgentToolExposureState(
     [...matcherResult.toolExposure.exposedToolIds],
     [...matcherResult.toolExposure.exposedDefinitions],
@@ -75,14 +97,21 @@ export const prepareContextNode = async (
       autoAllowedTools,
       exposedToolCount: toolExposure.exposedTools.length,
       exposedToolIds: toolExposure.exposedTools,
-      skillPackageIntegration: "deferred-until-formal-skill-runtime",
+      activeSkillId: skillContext?.primary?.id ?? null,
+      activeSkillVersion: skillContext?.primary?.version ?? null,
+      skillMatchSource: skillContext?.match?.source ?? null,
+      skillResourceCount: skillContext?.resources.length ?? 0,
+      disclosedSkillResourceCount: skillContext?.disclosedResources.length ?? 0,
+      skillToolExposureMutation: false,
       codebaseExploreExposed: toolExposure.exposedTools.includes("codebase_explore"),
-      currentTaskFrameWriter: "prepareContextNode reads the initialized task frame only",
+      currentTaskFrameWriter:
+        "prepareContextNode only attaches semantic skillContext; Planner remains the sole writer of goal/subtask/completion inference",
     },
   });
 
   return {
     toolIntent,
     toolExposure,
+    currentTaskFrame,
   };
 };
