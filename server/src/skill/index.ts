@@ -26,6 +26,7 @@ export {
   skillAwareEvidenceNode,
   skillAwareNextActionPlannerNode,
   skillAwarePrepareContextNode,
+  skillAwareToolNode,
 } from "./agent-integration";
 
 export type {
