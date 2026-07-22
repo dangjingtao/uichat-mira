@@ -9,6 +9,9 @@ import type {
   SkillRuntimeFrame,
 } from "./types";
 
+const isTerminalSkillStatus = (status: SkillInstance["status"]) =>
+  status === "completed" || status === "failed" || status === "cancelled";
+
 const buildEvidenceDelta = (
   instance: SkillInstance,
   evidence: AgentEvidencePayload | undefined,
@@ -87,7 +90,7 @@ export const resolveSkillRuntime = (input: {
       existing.skillId,
       existing.skillVersion,
     );
-    if (!registration || existing.status === "cancelled") {
+    if (!registration || isTerminalSkillStatus(existing.status)) {
       return undefined;
     }
     return {
@@ -122,8 +125,10 @@ export const resolveSkillRuntime = (input: {
     input: skillInput,
     state,
   });
+  const initialFrame = toRuntimeFrame(registration, instance);
   const running = skillInstanceStore.update(instance.id, {
     status: "running",
+    stage: initialFrame.stage,
   });
 
   return {
@@ -138,7 +143,7 @@ export const reduceActiveSkillFromEvidence = (input: {
   evidence?: AgentEvidencePayload;
 }) => {
   const instance = skillInstanceStore.getByRunId(input.runId);
-  if (!instance || instance.status === "cancelled" || instance.status === "failed") {
+  if (!instance || isTerminalSkillStatus(instance.status)) {
     return undefined;
   }
 
@@ -164,6 +169,10 @@ export const reduceActiveSkillFromEvidence = (input: {
     instance,
     definition: registration.definition,
   });
+  const nextFrame = toRuntimeFrame(registration, {
+    ...instance,
+    state,
+  });
   const evaluation = registration.adapter.evaluate({
     state,
     instance,
@@ -180,13 +189,16 @@ export const reduceActiveSkillFromEvidence = (input: {
     case "completed":
       return skillInstanceStore.update(instance.id, {
         state,
+        stage: nextFrame.stage,
         status: "completed",
         output: evaluation.output,
+        error: undefined,
         evidenceCursor,
       });
     case "waiting":
       return skillInstanceStore.update(instance.id, {
         state,
+        stage: nextFrame.stage,
         status: "waiting",
         error: evaluation.reason,
         evidenceCursor,
@@ -194,6 +206,7 @@ export const reduceActiveSkillFromEvidence = (input: {
     case "failed":
       return skillInstanceStore.update(instance.id, {
         state,
+        stage: nextFrame.stage,
         status: "failed",
         error: evaluation.reason,
         evidenceCursor,
@@ -202,6 +215,7 @@ export const reduceActiveSkillFromEvidence = (input: {
     default:
       return skillInstanceStore.update(instance.id, {
         state,
+        stage: nextFrame.stage,
         status: "running",
         error: undefined,
         evidenceCursor,
@@ -211,7 +225,7 @@ export const reduceActiveSkillFromEvidence = (input: {
 
 export const getActiveSkillRuntimeFrame = (runId: string) => {
   const instance = skillInstanceStore.getByRunId(runId);
-  if (!instance || instance.status === "cancelled" || instance.status === "failed") {
+  if (!instance || isTerminalSkillStatus(instance.status)) {
     return undefined;
   }
   const registration = skillRegistry.get(instance.skillId, instance.skillVersion);
@@ -220,7 +234,7 @@ export const getActiveSkillRuntimeFrame = (runId: string) => {
 
 export const cancelSkillInstance = (runId: string) => {
   const instance = skillInstanceStore.getByRunId(runId);
-  return instance
+  return instance && !isTerminalSkillStatus(instance.status)
     ? skillInstanceStore.update(instance.id, { status: "cancelled" })
-    : undefined;
+    : instance;
 };
