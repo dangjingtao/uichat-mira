@@ -1,4 +1,4 @@
-export type BuiltInSkillPackageId = "pdf" | "xlsx" | "pptx";
+export type BuiltInSkillPackageId = "docx" | "pdf" | "xlsx" | "pptx";
 
 export type BuiltInSkillPackageDefinition = {
   id: BuiltInSkillPackageId;
@@ -7,7 +7,8 @@ export type BuiltInSkillPackageDefinition = {
   source: string;
   category: string;
   description: string;
-  runtimePack: {
+  bundled?: boolean;
+  runtimePack?: {
     id: "wenshu-office";
     version: string;
     required: true;
@@ -21,16 +22,52 @@ export type BuiltInSkillPackageDefinition = {
   };
 };
 
+const AGENT_INTEGRATION_REQUIREMENTS = [
+  "SkillDefinition version binding",
+  "SkillInstance state/stage",
+  "Evidence-driven reducer",
+  "stage-specific tool constraints",
+  "completion criteria evaluation",
+] as const;
+
+const deferredAgentIntegration = () => ({
+  status: "deferred" as const,
+  reason: "The formal Skill Runtime lifecycle is not implemented yet.",
+  requiredContracts: [...AGENT_INTEGRATION_REQUIREMENTS],
+});
+
 /**
  * These are installable/discoverable Skill packages, not active SkillInstances.
  *
- * A package may contain SKILL.md, references and runtime scripts, but installing
- * it only makes deterministic domain runtime dependencies available. It does
- * not create Skill state, inject Planner semantics, or register/expand Harness
+ * A package may contain SKILL.md, references and runtime implementation metadata.
+ * Bundled packages can use capabilities already shipped with Mira; installable
+ * packages can additionally depend on an optional Runtime Pack. Neither form
+ * creates Skill state, injects Planner semantics, or registers/expands Harness
  * tools. Formal Agent integration waits for the Skill Runtime contract:
  * SkillDefinition + SkillInstance + state reducer + stage-specific constraints.
  */
 const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
+  {
+    id: "docx",
+    version: "1.0.0",
+    name: "Word 文档处理",
+    source: "Mira WenShu",
+    category: "办公效率",
+    description:
+      "创建和审阅 Word DOCX：结构化文档生成、非破坏性副本、原生批注与 Track Changes 修订，并保留复杂文档的安全编辑边界。",
+    bundled: true,
+    runtimeCapabilities: ["office_document"],
+    packageFiles: [
+      "SKILL.md",
+      "references/office-runtime-reference.md",
+      "runtime/create.ts",
+      "runtime/document-review.ts",
+      "runtime/document.ts",
+      "runtime/runtime.ts",
+      "runtime/contract.ts",
+    ],
+    agentIntegration: deferredAgentIntegration(),
+  },
   {
     id: "xlsx",
     version: "1.0.0",
@@ -51,17 +88,7 @@ const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
       "runtime/xlsx_tools.py",
       "LICENSE.txt",
     ],
-    agentIntegration: {
-      status: "deferred",
-      reason: "The formal Skill Runtime lifecycle is not implemented yet.",
-      requiredContracts: [
-        "SkillDefinition version binding",
-        "SkillInstance state/stage",
-        "Evidence-driven reducer",
-        "stage-specific tool constraints",
-        "completion criteria evaluation",
-      ],
-    },
+    agentIntegration: deferredAgentIntegration(),
   },
   {
     id: "pdf",
@@ -78,17 +105,7 @@ const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
       "runtime/pdf_create_runtime.py",
       "runtime/pdf_runtime.py",
     ],
-    agentIntegration: {
-      status: "deferred",
-      reason: "The formal Skill Runtime lifecycle is not implemented yet.",
-      requiredContracts: [
-        "SkillDefinition version binding",
-        "SkillInstance state/stage",
-        "Evidence-driven reducer",
-        "stage-specific tool constraints",
-        "completion criteria evaluation",
-      ],
-    },
+    agentIntegration: deferredAgentIntegration(),
   },
   {
     id: "pptx",
@@ -105,24 +122,14 @@ const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
       "reference/pptx-swarm.md",
       "runtime/pptx_runtime.py",
     ],
-    agentIntegration: {
-      status: "deferred",
-      reason: "The formal Skill Runtime lifecycle is not implemented yet.",
-      requiredContracts: [
-        "SkillDefinition version binding",
-        "SkillInstance state/stage",
-        "Evidence-driven reducer",
-        "stage-specific tool constraints",
-        "completion criteria evaluation",
-      ],
-    },
+    agentIntegration: deferredAgentIntegration(),
   },
 ];
 
 export const listBuiltInSkillPackages = (): BuiltInSkillPackageDefinition[] =>
   BUILT_IN_SKILL_PACKAGES.map((definition) => ({
     ...definition,
-    runtimePack: { ...definition.runtimePack },
+    ...(definition.runtimePack ? { runtimePack: { ...definition.runtimePack } } : {}),
     runtimeCapabilities: [...definition.runtimeCapabilities],
     packageFiles: [...definition.packageFiles],
     agentIntegration: {
