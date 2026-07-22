@@ -1,14 +1,8 @@
 import path from "node:path";
 import ExcelJS from "exceljs";
+import type { OfficeRuntimeSpreadsheetCellPatch } from "./contract.js";
 
-export type SpreadsheetCellPatch = {
-  sheetName: string;
-  cell: string;
-  value?: string | number | boolean | null;
-  formula?: string;
-  bold?: boolean;
-  numberFormat?: string;
-};
+export type SpreadsheetCellPatch = OfficeRuntimeSpreadsheetCellPatch;
 
 export type SpreadsheetPatchInput = {
   fileName: string;
