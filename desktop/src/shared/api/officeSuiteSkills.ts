@@ -7,6 +7,7 @@ const PACK_STATUS_ROUTE = "/microapps/office-suite/capability-pack/status";
 const PACK_INSTALL_ROUTE = "/microapps/office-suite/capability-pack/install";
 
 export type WenshuSkillDomain = "pdf" | "xlsx" | "pptx";
+export type WenshuSkillPackageId = "docx" | WenshuSkillDomain;
 
 export type WenshuCapabilityPackStatus = {
   id: "wenshu-office";
@@ -21,13 +22,14 @@ export type WenshuCapabilityPackStatus = {
 };
 
 export type WenshuSkillPackageDefinition = {
-  id: WenshuSkillDomain;
+  id: WenshuSkillPackageId;
   version: string;
   name: string;
   source: string;
   category: string;
   description: string;
-  runtimePack: {
+  bundled?: boolean;
+  runtimePack?: {
     id: "wenshu-office";
     version: string;
     required: true;
