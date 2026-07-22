@@ -3,16 +3,11 @@ import {
   getWenshuCapabilityPackStatus,
   installWenshuCapabilityPack,
 } from "@/microapps/office-suite/capability-pack.js";
-import { activateWenshuOfficePackPythonPath } from "@/microapps/office-suite/runtime-pack-paths.js";
 import { listBuiltInSkillPackages } from "@/skills/registry.js";
 import { success } from "@/utils/index.js";
 import { routeHandler } from "@/utils/route-errors.js";
 
 export const registerWenshuCapabilityPackRoutes = async (app: FastifyInstance) => {
-  // Safe even before installation. Once the managed pack exists, all WenShu
-  // Python subprocesses inherit this path without mutating the user's Python.
-  activateWenshuOfficePackPythonPath();
-
   app.get(
     "/microapps/office-suite/skills/catalog",
     routeHandler("Failed to list WenShu Skill packages", async () =>
@@ -35,10 +30,8 @@ export const registerWenshuCapabilityPackRoutes = async (app: FastifyInstance) =
 
   app.post(
     "/microapps/office-suite/capability-pack/install",
-    routeHandler("Failed to install WenShu capability pack", async () => {
-      const pack = await installWenshuCapabilityPack();
-      activateWenshuOfficePackPythonPath();
-      return success(pack, "WenShu capability pack installed");
-    }),
+    routeHandler("Failed to install WenShu capability pack", async () =>
+      success(await installWenshuCapabilityPack(), "WenShu capability pack installed"),
+    ),
   );
 };
