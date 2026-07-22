@@ -18,5 +18,8 @@
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@kudoai/chatgpt.js": "^4.15.1"
   }
 }

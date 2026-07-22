@@ -90,6 +90,8 @@ export const toWebBridgeInvocationError = (
 const PROTOCOL_VERSION = 1;
 const MIN_EXTENSION_VERSION = "0.7.1";
 const HELLO_TIMEOUT_MS = 5000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+const EXPERT_REQUEST_TIMEOUT_MS = 125_000;
 const clients = new Map<string, WebBridgeClient>();
 const pending = new Map<string, PendingRequest>();
 const extensionClients = new Map<number, WebBridgeClient>();
@@ -156,16 +158,17 @@ export const invokeWebBridge = (input: {
   const pendingRequest: PendingRequest = { userId: input.userId, originalId: id, resolve, reject };
   pending.set(relayId, pendingRequest);
   send(extensionClient, { version: PROTOCOL_VERSION, type: "request", id: relayId, tool: input.tool, params: input.params });
+  const isExpertRequest = input.tool.startsWith("expert.");
   const timer = setTimeout(() => {
     if (pending.delete(relayId)) {
       reject(new WebBridgeInvocationError({
-        code: "ACTION_TIMEOUT",
-        message: "触界浏览器操作超时",
+        code: isExpertRequest ? "CHATGPT_RESPONSE_TIMEOUT" : "ACTION_TIMEOUT",
+        message: isExpertRequest ? "等待外部专家回复超时" : "触界浏览器操作超时",
         retryable: true,
-        suggestedAction: "重新观察当前页面状态后再决定是否重试",
+        suggestedAction: isExpertRequest ? "确认外部网页仍在生成回复后再重试" : "重新观察当前页面状态后再决定是否重试",
       }));
     }
-  }, 30_000);
+  }, isExpertRequest ? EXPERT_REQUEST_TIMEOUT_MS : DEFAULT_REQUEST_TIMEOUT_MS);
   pendingRequest.timer = timer;
   const abort = () => {
     clearTimeout(timer);

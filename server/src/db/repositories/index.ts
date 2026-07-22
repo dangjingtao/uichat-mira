@@ -32,3 +32,4 @@ export * from "./micro-app-provider-configs.repository";
 export * from "./notion-connection.repository";
 export * from "./notion-access-points.repository";
 export * from "./notion-activities.repository";
+export * from "./external-experts.repository";

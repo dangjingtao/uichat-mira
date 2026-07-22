@@ -86,10 +86,18 @@ describe('manifest.json', () => {
     )));
   });
 
+  it('应暴露本地 ChatGPT.js 资源给页面适配器', () => {
+    assert.deepEqual(manifest.web_accessible_resources, [{
+      resources: ['lib/chatgpt.min.js'],
+      matches: ['<all_urls>'],
+    }]);
+  });
+
   it('应在页面脚本加载规则模块后再加载提取器', () => {
     assert.deepEqual(manifest.content_scripts?.[0]?.js, [
       'lib/clip-rules.js',
       'lib/extractor.js',
+      'lib/chatgpt-adapter.js',
       'content/content.js',
     ]);
   });

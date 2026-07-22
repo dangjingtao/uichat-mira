@@ -10,9 +10,10 @@ import { WebBridgeClient, WebBridgeRequestError, type ClipRule, type ClipRules, 
 import MicroAppPageLayout from "../components/MicroAppPageLayout";
 import ClipRuleDrawer from "./components/ClipRuleDrawer";
 import JianXingGuideDrawer from "./components/JianXingGuideDrawer";
+import ExpertPanel from "./components/ExpertPanel";
 
 type Mode = "look" | "browse" | "act" | "transfer";
-type WorkspaceTab = "jianxing" | "clipper";
+type WorkspaceTab = "jianxing" | "clipper" | "expert";
 type ConfiguredRuleRow = {
   key: string;
   alias: string;
@@ -25,7 +26,7 @@ type ConfiguredRuleRow = {
 };
 type ToolResult = Record<string, unknown>;
 
-const workspaceTabs: WorkspaceTab[] = ["jianxing", "clipper"];
+const workspaceTabs: WorkspaceTab[] = ["jianxing", "clipper", "expert"];
 
 const modeDefinitions: Array<{ id: Mode; icon: typeof Eye }> = [
   { id: "look", icon: Eye },
@@ -452,6 +453,14 @@ export default function JianXingPage() {
     }
   };
 
+  const listBrowserTabs = async () => {
+    const response = await clientRef.current?.request("look", { mode: "tabs" });
+    const tabs = response && typeof response === "object" && Array.isArray((response as { tabs?: unknown[] }).tabs)
+      ? (response as { tabs: Array<{ tabId: number; title: string; url: string; active?: boolean }> }).tabs
+      : [];
+    return tabs;
+  };
+
   const buildParams = (): Record<string, unknown> => {
     if (mode === "look") {
       if (action === "page") return { mode: action, include: ["text", "interactive"] };
@@ -621,7 +630,9 @@ export default function JianXingPage() {
         activeTabStyle="plain"
         className="w-full"
       />
-      {workspaceTab === "jianxing" ? (
+      {workspaceTab === "expert" ? (
+        <ExpertPanel extensionConnected={extensionConnected} listTabs={listBrowserTabs} />
+      ) : workspaceTab === "jianxing" ? (
         <div className="grid min-h-0 gap-4 md:grid-cols-2">
           <Card padding="md" className="space-y-4">
             <div className="flex items-start justify-between gap-3"><div><h2 className="text-heading-2 text-text-primary">{modes.find((item) => item.id === mode)?.label} · {t("settings.microApps.jianXing.fields.parameters")}</h2><p className="mt-1 text-sm text-text-secondary">{t("settings.microApps.jianXing.fields.parametersHint")}</p></div><Badge variant="neutral">{t("settings.microApps.jianXing.connection.local")}</Badge></div>

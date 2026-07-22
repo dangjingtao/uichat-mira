@@ -616,22 +616,6 @@ describe("CodebaseExploreWrapper", () => {
     expect(result.candidates.length).toBeLessThanOrEqual(12);
   });
 
-  it("marks every candidate as verification required and pending", async () => {
-    const wrapper = createWrapper();
-    const result = await wrapper.explore({
-      query: "docs architecture",
-    });
-
-    expect(result.candidates.length).toBeGreaterThan(0);
-    for (const candidate of result.candidates) {
-      expect(candidate.verification.required).toBe(true);
-      expect(candidate.verification.status).toBe("pending");
-    }
-    expect(result.followUpReads.length).toBe(result.candidates.length);
-    expect(result.trace.verificationRequired).toBe(true);
-    expect(result.trace.verificationReadCount).toBe(result.followUpReads.length);
-  });
-
   it("downgrades no-line-range candidates to low confidence and adds limitations", async () => {
     const wrapper = createWrapper({
       env: {

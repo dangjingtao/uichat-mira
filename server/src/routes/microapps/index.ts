@@ -26,12 +26,14 @@ import {
   type ImageGenerationJob,
 } from "@/microapps/image-generation/index.js";
 import type { EvolvingKnowledgeService } from "@/microapps/evolving-knowledge/index.js";
+import type { ExternalExpertService } from "@/microapps/external-expert/index.js";
 import { success } from "@/utils/index.js";
 import { badRequest, notFound, routeHandler } from "@/utils/route-errors.js";
 import computerUseRoutes from "./computer-use/index.js";
 import type { ComputerUseDebuggerService } from "./computer-use/debugger-service.js";
 import codeGraphRoutes from "./codegraph/index.js";
 import evolvingKnowledgeRoutes from "./evolving-knowledge/index.js";
+import externalExpertRoutes from "./external-expert/index.js";
 import mailCenterRoutes from "./mail-center/index.js";
 import newsHubRoutes from "./news-hub/index.js";
 import officeSuiteRoutes from "./office-suite/index.js";
@@ -129,6 +131,7 @@ type MicroappsRouteOptions = {
   newsHubService?: NewsHubRouteService;
   ttsService?: TtsService;
   evolvingKnowledgeService?: EvolvingKnowledgeService;
+  externalExpertService?: ExternalExpertService;
 };
 
 export type CodeGraphStudioRouteService = CodeGraphStudioService;
@@ -299,6 +302,7 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
     );
   }
   const evolvingKnowledgeService = options.evolvingKnowledgeService;
+  const externalExpertService = options.externalExpertService;
 
   app.get(
     "/microapps/capabilities",
@@ -628,6 +632,9 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
     await app.register(evolvingKnowledgeRoutes, {
       service: evolvingKnowledgeService,
     });
+  }
+  if (externalExpertService) {
+    await app.register(externalExpertRoutes, { service: externalExpertService });
   }
 };
 

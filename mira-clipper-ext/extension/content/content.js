@@ -712,6 +712,19 @@
         ok: false,
         error: { code: error.code || 'UPLOAD_FAILED', message: error.message },
       }));
+    } else if (request?.type === 'WEBBRIDGE_EXPERT') {
+      const adapter = request.provider === 'chatgpt' ? window.MiraChatGPTAdapter : null;
+      if (!adapter) {
+        sendResponse({ ok: false, error: { code: 'EXPERT_PROVIDER_UNSUPPORTED', message: '当前页面未加载支持的外部专家适配器' } });
+      } else if (request.command === 'detect') {
+        adapter.detect().then((result) => sendResponse({ ok: true, result })).catch((error) => sendResponse({ ok: false, error: { code: error.code || 'EXPERT_DETECT_FAILED', message: error.message } }));
+      } else if (request.command === 'bind') {
+        adapter.bind().then((result) => sendResponse({ ok: true, result })).catch((error) => sendResponse({ ok: false, error: { code: error.code || 'EXPERT_BIND_FAILED', message: error.message } }));
+      } else if (request.command === 'send_message') {
+        adapter.sendMessage(request.sessionRef, String(request.message || '')).then((result) => sendResponse({ ok: true, result })).catch((error) => sendResponse({ ok: false, error: { code: error.code || 'EXPERT_SEND_FAILED', message: error.message } }));
+      } else {
+        sendResponse({ ok: false, error: { code: 'EXPERT_COMMAND_UNSUPPORTED', message: '不支持的外部专家操作' } });
+      }
     } else if (request?.type === 'WEBBRIDGE_ACT') {
       actOnPage(request).then(sendResponse).catch((error) => sendResponse({
         ok: false,

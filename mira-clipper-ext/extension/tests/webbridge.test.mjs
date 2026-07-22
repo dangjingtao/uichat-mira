@@ -55,6 +55,16 @@ describe('WebBridge tool surface', () => {
     assert.match(source, /protocolVersion/);
   });
 
+  it('uses the current ChatGPT textarea and confirms the message was sent', async () => {
+    const source = await readExtensionFile('lib/chatgpt-adapter.js');
+    assert.match(source, /textarea\[aria-label\]/);
+    assert.match(source, /button\[data-testid="send-button"\]/);
+    assert.match(source, /dispatchEvent\(new Event\('input'/);
+    assert.match(source, /button\.click\(\)/);
+    assert.match(source, /CHATGPT_SEND_FAILED/);
+    assert.match(source, /chatgpt\.isIdle\(LIBRARY_TIMEOUT_MS\)/);
+  });
+
   it('requires a valid JWT and Mira readiness before browser-side operations', async () => {
     const source = await readExtensionFile('background.js');
     assert.match(source, /isAccessTokenInvalid\(accessToken\)/);
@@ -81,7 +91,7 @@ describe('WebBridge tool surface', () => {
     assert.match(content, /WEBBRIDGE_CLIP_REGION_PICK/);
     assert.match(content, /startClipRegionPicker/);
     assert.match(content, /buildStableSelector/);
-    assert.match(background, /capabilities: \['look', 'browse', 'act', 'transfer', 'clip_rules'\]/);
+    assert.match(background, /capabilities: \['look', 'browse', 'act', 'transfer', 'clip_rules', 'external_expert'\]/);
     assert.match(background, /chrome\.storage\.sync\.set\(\{ clipRules \}\)/);
     assert.match(server, /clip_rules_get/);
     assert.match(server, /client\.role === "ui"/);

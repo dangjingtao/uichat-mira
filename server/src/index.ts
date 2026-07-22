@@ -43,6 +43,7 @@ import {
 } from "@/microapps/codegraph/index.js";
 import { createTtsService } from "@/microapps/tts/index.js";
 import { createEvolvingKnowledgeService } from "@/microapps/evolving-knowledge/index.js";
+import { createExternalExpertService } from "@/microapps/external-expert/index.js";
 import healthRoute from "@/routes/health";
 import appMetaRoute from "@/routes/app-meta";
 import dbHealthRoute from "@/routes/dbHealth";
@@ -81,6 +82,7 @@ import { initializeRoleDatabase } from "@/db/role.db";
 import { initializeThreadDatabase } from "@/db/thread.db";
 import { agentRunRepository } from "@/db/repositories/agent-run.repository.js";
 import { integrationCapabilitiesRepository } from "@/db/repositories/integration-capabilities.repository.js";
+import { externalExpertsRepository } from "@/db/repositories/external-experts.repository.js";
 import { integrationCapabilityMicroAppsRepository } from "@/db/repositories/integration-capability-micro-apps.repository.js";
 import { integrationInstancesRepository } from "@/db/repositories/integration-instances.repository.js";
 import { notionConnectionRepository } from "@/db/repositories/notion-connection.repository.js";
@@ -551,6 +553,7 @@ const ttsService = createTtsService({ artifactRoot: ttsArtifactRoot });
 chatMediaService.configureRoots({ imageGenerationRoot: imageGenerationArtifactRoot, ttsRoot: ttsArtifactRoot });
 managedMediaCleanupService.configureRoots({ imageGenerationRoot: imageGenerationArtifactRoot, ttsRoot: ttsArtifactRoot });
 const evolvingKnowledgeService = createEvolvingKnowledgeService();
+const externalExpertService = createExternalExpertService();
 
 const setupPlugins = async () => {
   const appMeta = getAppMeta();
@@ -791,6 +794,7 @@ const setupRoutes = async () => {
     newsHubService,
     ttsService,
     evolvingKnowledgeService,
+    externalExpertService,
   });
   await app.register(wecomRoute);
   await app.register(agentRoute);
@@ -860,6 +864,7 @@ const setupDatabase = async () => {
   ttsRefAudiosRepository.initialize();
   ttsRefAudioBindingsRepository.initialize();
   computerUseRepository.initialize();
+  externalExpertsRepository.initialize();
   migrateLegacyMicroAppBindings();
   initializeExternalMcpDatabase();
   registerAllExternalMcpCapabilities();

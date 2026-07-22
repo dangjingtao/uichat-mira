@@ -9,6 +9,7 @@ const CAPTURE_MENU_ID = 'mira-clipper-capture';
 const WEBBRIDGE_PROTOCOL_VERSION = 1;
 const WEBBRIDGE_PATH = '/webbridge';
 const WEBBRIDGE_REQUEST_TIMEOUT_MS = 30000;
+const WEBBRIDGE_EXPERT_TIMEOUT_MS = 125000;
 const WEBBRIDGE_KEEPALIVE_INTERVAL_MS = 20000;
 
 function normalizeClipRules(value) {
@@ -585,7 +586,7 @@ async function connectWebBridge() {
         });
         scheduleWebBridgeReconnect();
       });
-      nativeSocket.send(JSON.stringify({ version: 1, protocolVersion: WEBBRIDGE_PROTOCOL_VERSION, type: 'hello', client: 'mira-webbridge-extension', extensionName: '触界', extensionVersion: EXTENSION_VERSION, backendUrl: config.backendUrl, accessToken: config.accessToken, transport: config.transport, capabilities: ['look', 'browse', 'act', 'transfer', 'clip_rules'], tools: WEBBRIDGE_TOOL_DEFINITIONS }));
+      nativeSocket.send(JSON.stringify({ version: 1, protocolVersion: WEBBRIDGE_PROTOCOL_VERSION, type: 'hello', client: 'mira-webbridge-extension', extensionName: '触界', extensionVersion: EXTENSION_VERSION, backendUrl: config.backendUrl, accessToken: config.accessToken, transport: config.transport, capabilities: ['look', 'browse', 'act', 'transfer', 'clip_rules', 'external_expert'], tools: WEBBRIDGE_TOOL_DEFINITIONS }));
       return;
     } catch (error) {
       publishWebBridgeStatus('error', {
@@ -615,7 +616,7 @@ async function connectWebBridge() {
       extensionVersion: EXTENSION_VERSION,
       accessToken: config.accessToken || undefined,
       transport: config.transport,
-      capabilities: ['look', 'browse', 'act', 'transfer', 'clip_rules'],
+      capabilities: ['look', 'browse', 'act', 'transfer', 'clip_rules', 'external_expert'],
       tools: WEBBRIDGE_TOOL_DEFINITIONS,
     }));
     publishWebBridgeStatus('connecting', { transport: 'websocket', message: '正在完成触界 WebSocket 握手' });
@@ -831,20 +832,23 @@ async function handleWebBridgeMessage(socket, rawMessage) {
 
   try {
     await ensureWebBridgeOperationReady();
-    const operation = describeOperation(request.tool, request.params || {});
-    const tabId = await getAuthorizedTabId();
-    await ensureVisibleControl(tabId, operation);
+    const isExpertTool = typeof request.tool === 'string' && request.tool.startsWith('expert.');
+    const operation = isExpertTool ? '问策' : describeOperation(request.tool, request.params || {});
+    const requestedTabId = Number(request.params?.tabId);
+    const tabId = isExpertTool && Number.isInteger(requestedTabId) ? requestedTabId : await getAuthorizedTabId();
+    if (!isExpertTool) await ensureVisibleControl(tabId, operation);
     const result = await withTimeout(
-      executeWebBridgeTool(request.tool, request.params || {}),
-      WEBBRIDGE_REQUEST_TIMEOUT_MS,
-      'ACTION_TIMEOUT',
+      executeWebBridgeTool(request.tool, { ...(request.params || {}), tabId }),
+      isExpertTool ? WEBBRIDGE_EXPERT_TIMEOUT_MS : WEBBRIDGE_REQUEST_TIMEOUT_MS,
+      isExpertTool ? 'CHATGPT_RESPONSE_TIMEOUT' : 'ACTION_TIMEOUT',
     );
-    await finishVisibleControl(tabId, operation, true);
+    if (!isExpertTool) await finishVisibleControl(tabId, operation, true);
     sendWebBridgeResponse(socket, request.id, { ok: true, result });
   } catch (error) {
-    const operation = describeOperation(request.tool, request.params || {});
-    if (Number.isInteger(webBridge.activeTabId)) await finishVisibleControl(webBridge.activeTabId, operation, false, error.message || '浏览器操作失败');
-    const normalized = error?.bridgeError || bridgeError('ACTION_FAILED', error.message || '浏览器操作失败', null, false);
+    const isExpertTool = typeof request.tool === 'string' && request.tool.startsWith('expert.');
+    const operation = isExpertTool ? '问策' : describeOperation(request.tool, request.params || {});
+    if (!isExpertTool && Number.isInteger(webBridge.activeTabId)) await finishVisibleControl(webBridge.activeTabId, operation, false, error.message || '浏览器操作失败');
+    const normalized = error?.bridgeError || bridgeError(error?.code || 'ACTION_FAILED', error.message || '浏览器操作失败', null, false);
     sendWebBridgeResponse(socket, request.id, normalized);
   }
 }
@@ -888,6 +892,10 @@ async function ensurePageBridge(tabId) {
     });
     await chrome.scripting.executeScript({
       target: { tabId },
+      files: [`${extensionAssetPrefix}lib/chatgpt-adapter.js`],
+    });
+    await chrome.scripting.executeScript({
+      target: { tabId },
       files: [`${extensionAssetPrefix}content/content.js`],
     });
   } catch (error) {
@@ -921,6 +929,9 @@ async function sendPageMessage(tabId, message) {
 }
 
 async function executeWebBridgeTool(tool, params) {
+  if (tool === 'expert.detect' || tool === 'expert.bind' || tool === 'expert.send_message') {
+    return executeExpertTool(tool, params);
+  }
   if (!['look', 'browse', 'act', 'transfer'].includes(tool)) {
     throw Object.assign(new Error(`不支持的工具：${tool}`), {
       bridgeError: bridgeError('UNSUPPORTED_TOOL', `不支持的工具：${tool}`, null, false),
@@ -932,6 +943,27 @@ async function executeWebBridgeTool(tool, params) {
   if (tool === 'browse') return executeBrowse(tabId, params);
   if (tool === 'act') return executeAct(tabId, params);
   return executeTransfer(tabId, params);
+}
+
+async function executeExpertTool(tool, params) {
+  if (params.provider !== 'chatgpt') {
+    throw Object.assign(new Error(`当前仅支持 ChatGPT 专家：${params.provider || 'unknown'}`), {
+      bridgeError: bridgeError('EXPERT_PROVIDER_UNSUPPORTED', '当前仅支持 ChatGPT 专家', null, false),
+    });
+  }
+  if (!Number.isInteger(params.tabId)) {
+    throw Object.assign(new Error('问策请求缺少 tabId'), {
+      bridgeError: bridgeError('EXPERT_TAB_REQUIRED', '问策请求缺少有效的浏览器标签页', null, false),
+    });
+  }
+  const response = await sendPageMessage(params.tabId, {
+    type: 'WEBBRIDGE_EXPERT',
+    provider: params.provider,
+    command: tool.slice('expert.'.length),
+    sessionRef: params.sessionRef,
+    message: params.message,
+  });
+  return response?.result || response;
 }
 
 async function executeLook(tabId, params) {

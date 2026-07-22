@@ -29,10 +29,17 @@
       "js": [
         "extension/lib/clip-rules.js",
         "extension/lib/extractor.js",
+        "extension/lib/chatgpt-adapter.js",
         "extension/content/content.js"
       ],
       "run_at": "document_idle",
       "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["extension/lib/chatgpt.min.js"],
+      "matches": ["<all_urls>"]
     }
   ],
   "action": {

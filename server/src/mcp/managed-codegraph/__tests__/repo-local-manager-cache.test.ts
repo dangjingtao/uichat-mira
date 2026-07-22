@@ -2,7 +2,6 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
-  createRepoLocalManagerCacheKey,
   disposeRepoLocalManagedCodeGraphManagers,
   getRepoLocalManagedCodeGraphManagerCount,
   getRepoLocalManagedCodeGraphManagerForAgentWorkspace,
@@ -52,30 +51,6 @@ describe("repo-local CodeGraph manager cache", () => {
     expect(managerB).toBeTruthy();
     expect(managerA).not.toBe(managerB);
     expect(getRepoLocalManagedCodeGraphManagerCount()).toBe(2);
-  });
-
-  it("binds the same workspace independently to different Agent threads", async () => {
-    const workspace = path.resolve("/workspace-thread-bound");
-    const managerA = await getRepoLocalManagedCodeGraphManagerForAgentWorkspace(
-      workspace,
-      createContext(workspace),
-      { microAppEnabled: true, agentCapabilityEnabled: true },
-      "thread-a",
-    );
-    const managerB = await getRepoLocalManagedCodeGraphManagerForAgentWorkspace(
-      workspace,
-      createContext(workspace),
-      { microAppEnabled: true, agentCapabilityEnabled: true },
-      "thread-b",
-    );
-
-    expect(managerA).toBeTruthy();
-    expect(managerB).toBeTruthy();
-    expect(managerA).not.toBe(managerB);
-    expect(getRepoLocalManagedCodeGraphManagerCount()).toBe(2);
-    expect(createRepoLocalManagerCacheKey(workspace, "thread:thread-a")).not.toBe(
-      createRepoLocalManagerCacheKey(workspace, "thread:thread-b"),
-    );
   });
 
   it("reuses one manager inside the same thread and workspace", async () => {

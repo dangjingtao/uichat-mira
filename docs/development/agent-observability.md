@@ -1,7 +1,7 @@
 ---
 status: current
 owner: agent-runtime
-last_verified: 2026-07-18
+last_verified: 2026-07-22
 layer: raw-source
 module: Agent Runtime
 feature: AgentObservability
@@ -119,6 +119,14 @@ agent.graph.run
 
 因此 UI 中的“思考下一步”是**公开决策说明**，不是模型私有推理转储。
 
+Pi Loop 的 Planner 计划和上下文也有明确的观测边界：
+
+- `planList` 只记录 `{id, text, done}`，不是执行记忆；
+- 连续 Loop Context 汇总已进入 Evidence 的 canonical 结果和累计语义动作账本，账本会合并重复目标并受字符预算限制；
+- 原生结构化输出的部分 JSON 只能产生公开 `reason` 流，不会产生可执行工具调用；
+- 原生流已经产生 delta 后，不会再与另一条独立 JSON 流拼接；
+- 诊断 trace 不能通过读取工程记忆文件来恢复 Agent 状态。
+
 ## 4. 本地启动 Phoenix
 
 推荐 Docker：
@@ -232,7 +240,7 @@ resume execution node
   -> ...
 ```
 
-恢复时不会重新根据自然语言制造工具参数，而是继续消费 frozen `pendingToolCall`。
+恢复时先校验 `toolId / toolCallId / inputHash` 并重新执行 Policy，不会重新根据自然语言制造工具参数；只有 frozen `pendingToolCall` 执行并写入 Evidence 后，才继续进入 Planner。
 
 ## 7. 普通模式字段
 

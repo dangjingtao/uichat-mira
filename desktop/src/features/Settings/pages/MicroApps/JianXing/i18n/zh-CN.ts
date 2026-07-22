@@ -11,7 +11,7 @@ const jianXingZh = {
           connectionTitle: "确认连接状态", connectionBody: "“等待扩展”表示 Mira 已就绪，正在等待 Chrome 扩展接入；只有显示“扩展已连接”后，见行和剪藏规则同步才可使用。",
           usageTitle: "使用见行与剪藏", usageBody: "见行先用“看”读取页面和元素引用，再执行翻页、点击、填写或传输。剪藏用于用户主动采集；网站规则只影响对应网站的正文和图片提取。",
         },
-        tabs: { jianxing: "见行", clipper: "剪藏" },
+        tabs: { jianxing: "见行", clipper: "剪藏", expert: "问策" },
         modes: { look: "看", browse: "翻", act: "点", transfer: "传", lookDescription: "读取当前页面状态和稳定元素引用", browseDescription: "打开、返回、刷新、滚动和等待", actDescription: "点击、填写、选择和发送按键", transferDescription: "上传文件或获取下载结果" },
         actions: { snapshot: "页面快照", page: "页面信息", tabs: "标签页列表", element: "元素详情", screenshot: "页面截图", open: "当前页打开网址", new: "新开标签页", switch: "切换标签页", close: "关闭标签页", back: "后退", forward: "前进", reload: "刷新", scroll: "滚动", scrollTo: "滚动到元素", paginate: "翻页", wait: "等待", click: "点击", hover: "悬停", drag: "拖拽", fill: "填写", select: "选择", press: "按键", dialog: "处理弹窗", upload: "上传文件", download: "获取下载" },
         connection: { chrome: "Chrome 连接", extensionConnected: "扩展已连接", waitingExtension: "等待扩展", disconnected: "未连接", download: "下载插件", downloading: "下载中…", authorize: "浏览器扩展授权", disconnect: "断开", connect: "连接", supportedRegion: "支持区域点选", unsupportedRegion: "未报告区域点选", unknown: "未知", nativeInstall: "安装 Native", nativeInstalling: "安装中…", nativeCheck: "正在检查…", nativeUnavailable: "Native 不可用", nativeRepair: "修复 Native", nativeInstalled: "Native 已安装", nativeNeedsRepair: "Native 需修复", nativeNotInstalled: "Native 未安装", unregister: "解除注册", local: "本机", extensionVersion: "扩展 v{{version}}" },
