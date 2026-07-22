@@ -31,6 +31,34 @@ export type OfficeRuntimeSpreadsheetCellPatch = {
   numberFormat?: string;
 };
 
+export type OfficeRuntimeWordReviewComment = {
+  /** Exact visible text used as a localized anchor in a simple Word text run. */
+  targetText: string;
+  text: string;
+  author?: string;
+};
+
+export type OfficeRuntimeWordTrackedInsertion = {
+  /** Insert the revision immediately after this exact visible text anchor. */
+  afterText: string;
+  text: string;
+  author?: string;
+};
+
+export type OfficeRuntimeWordTrackedDeletion = {
+  /** Mark this exact visible text as a tracked deletion without accepting it. */
+  targetText: string;
+  author?: string;
+};
+
+export type OfficeRuntimeWordReviewRequest = {
+  type: "review";
+  author?: string;
+  comments?: OfficeRuntimeWordReviewComment[];
+  insertions?: OfficeRuntimeWordTrackedInsertion[];
+  deletions?: OfficeRuntimeWordTrackedDeletion[];
+};
+
 type OfficeRuntimeTaskBase = {
   contractVersion?: OfficeRuntimeContractVersion;
   taskId?: string;
@@ -58,10 +86,12 @@ export type OfficeRuntimeModifyWordTask = OfficeRuntimeTaskBase & {
   operation: "modify";
   kind: "word";
   input: OfficeRuntimeFileInput;
-  request: {
-    type: "append-paragraphs";
-    paragraphs: OfficeRuntimeParagraph[];
-  };
+  request:
+    | {
+        type: "append-paragraphs";
+        paragraphs: OfficeRuntimeParagraph[];
+      }
+    | OfficeRuntimeWordReviewRequest;
 };
 
 export type OfficeRuntimeModifyExcelTask = OfficeRuntimeTaskBase & {
