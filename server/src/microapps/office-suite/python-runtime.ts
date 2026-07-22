@@ -68,13 +68,11 @@ const tryParseJson = (value: string): PythonJsonResult | null => {
 };
 
 const parseJsonResult = (stdout: string, stderr: string): PythonJsonResult => {
-  // Prefer a complete JSON payload first (some vendor helpers pretty-print it).
   for (const stream of [stdout, stderr]) {
     const whole = tryParseJson(stream);
     if (whole) return whole;
   }
 
-  // Most WenShu runtimes emit one compact JSON object as their final line.
   for (const stream of [stdout, stderr]) {
     const lines = stream.trim().split(/\r?\n/).reverse().filter(Boolean);
     for (const line of lines) {
@@ -83,9 +81,10 @@ const parseJsonResult = (stdout: string, stderr: string): PythonJsonResult => {
     }
   }
 
-  // Last fallback: locate the final multi-line JSON object in noisy command output.
   for (const stream of [stdout, stderr]) {
-    const starts = [...stream.matchAll(/\{/g)].map((match) => match.index ?? -1).reverse();
+    const starts = [...stream.matchAll(/\{/g)]
+      .map((match) => match.index ?? -1)
+      .reverse();
     for (const start of starts) {
       if (start < 0) continue;
       const parsed = tryParseJson(stream.slice(start));
@@ -94,7 +93,9 @@ const parseJsonResult = (stdout: string, stderr: string): PythonJsonResult => {
   }
 
   throw new Error(
-    `WenShu Python runtime returned no JSON result.${stderr.trim() ? ` stderr: ${stderr.trim().slice(-2000)}` : ""}`,
+    `WenShu Python runtime returned no JSON result.${
+      stderr.trim() ? ` stderr: ${stderr.trim().slice(-2000)}` : ""
+    }`,
   );
 };
 
@@ -208,7 +209,17 @@ export const writeJsonFile = (filePath: string, value: unknown) => {
 export const probeWenshuPythonRuntime = async () => {
   const python = resolveSystemDevelopmentPython();
   const checks = [
-    { id: "pdf", modules: ["reportlab", "pdfplumber", "pikepdf", "markdown2", "xhtml2pdf"] },
+    {
+      id: "pdf",
+      modules: [
+        "reportlab",
+        "matplotlib",
+        "pdfplumber",
+        "pikepdf",
+        "markdown2",
+        "xhtml2pdf",
+      ],
+    },
     { id: "xlsx", modules: ["openpyxl"] },
     { id: "pptx", modules: ["pptx", "PIL"] },
   ] as const;
@@ -231,7 +242,11 @@ export const probeWenshuPythonRuntime = async () => {
           ].join("\n");
           const child = spawn(python, ["-c", code], {
             windowsHide: true,
-            env: { ...process.env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" },
+            env: {
+              ...process.env,
+              PYTHONUTF8: "1",
+              PYTHONIOENCODING: "utf-8",
+            },
             stdio: ["ignore", "pipe", "pipe"],
           });
           let stdout = "";
@@ -264,7 +279,9 @@ export const probeWenshuPythonRuntime = async () => {
           child.on("close", (codeValue) => {
             try {
               const parsed = JSON.parse(stdout.trim()) as { missing?: string[] };
-              const missing = Array.isArray(parsed.missing) ? parsed.missing : [...check.modules];
+              const missing = Array.isArray(parsed.missing)
+                ? parsed.missing
+                : [...check.modules];
               done({
                 id: check.id,
                 available: codeValue === 0 && missing.length === 0,
