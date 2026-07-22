@@ -1,62 +1,91 @@
-# DOCX Skill — WenShu Runtime Reference
+# DOCX Skill Package — WenShu Runtime Reference
 
-This reference documents the runtime surface consumed by Mira's `docx` Skill.
+This reference documents the deterministic DOCX runtime surface bundled with Mira WenShu.
 
-## Task-level capability
+It does **not** declare a live formal SkillInstance or a Planner-visible Skill tool contract.
 
-The Agent-visible write surface is a single capability:
+## Runtime ownership
+
+Current implementation:
 
 ```text
-office_document
+server/src/microapps/office-suite/
+  contract.ts
+  create.ts
+  document.ts
+  document-review.ts
+  runtime.ts
 ```
 
-It delegates to `executeOfficeRuntimeTask()` and does not expose the underlying `docx`, OOXML, ZIP, or XML implementation as Planner tools.
+A task-level `office_document` implementation also exists in the codebase, but the bundled DOCX Skill Package itself does not automatically activate or expand Harness exposure.
 
 ## Create
 
-Required:
+Structured DOCX creation is implemented with `docx@9`.
 
-- `operation: "create"`
-- `outputPath`: workspace-relative `.docx`
+Supported high-level document structure currently includes:
 
-Optional:
+- optional document title;
+- paragraphs;
+- semantic paragraph styles: `title | heading1 | heading2 | heading3 | body`;
+- current run-level bold flag;
+- simple tables using rows/cells;
+- native `.docx` output.
 
-- `title`
-- `paragraphs[]`
-  - `text`
-  - `style`: `title | heading1 | heading2 | heading3 | body`
-  - `bold`
-- `tables[]`
-  - `rows: string[][]`
-
-The output is written inside the active workspace and emitted as a document artifact.
+The output is returned through the common Office Runtime artifact contract.
 
 ## Review
 
-Required:
+Existing DOCX review is non-destructive by default.
 
-- `operation: "review"`
-- `inputPath`: workspace-relative existing `.docx`
-- `targetText`: exact visible text anchor
-- at least one of `commentText` or `replacementText`
+Supported native Word semantics:
 
-Optional:
+- comments anchored to exact visible text;
+- `comments.xml` creation when required;
+- document relationship and content-type wiring for comments;
+- comment range start/end and comment reference nodes;
+- `w:trackRevisions` enablement in `settings.xml`;
+- tracked insertions using `w:ins`;
+- tracked deletions using `w:del` + `w:delText`;
+- output to a distinct `.docx` copy.
 
-- `outputPath`; defaults to `<source>-wenshu.docx`
-- `author`; defaults to `Mira`
+## Append-copy helper
 
-Behavior:
+`document.ts` retains a package-level append-paragraph helper used by the Office Runtime verification surface.
 
-- `commentText` creates a native Word comment anchored to the target text.
-- `replacementText` creates a tracked deletion for the target text and a tracked insertion for the replacement.
-- the source file is never overwritten.
+It inserts paragraphs before terminal `w:sectPr` when present and writes a new DOCX artifact rather than overwriting the source.
+
+This is a deterministic runtime helper, not a general arbitrary editing API.
 
 ## Current editing boundary
 
-The current review runtime intentionally accepts only exact text that can be localized inside a simple Word text run. It refuses lossy rewriting when the target is embedded in a complex run or unsupported structure.
+The review engine intentionally accepts only exact text that can be localized inside a simple Word text run.
+
+It refuses a rewrite when the target run contains unsupported extra structure that could be lost by reconstructing the run.
+
+Examples of structures that must not be claimed as generally lossless today include complex fields, drawings, or other compound OOXML runs that cannot be safely localized by the current implementation.
 
 This is a safety boundary, not a claim of complete arbitrary DOCX editing.
 
+## Formal Skill Runtime boundary
+
+The DOCX Skill Package is bundled, but formal Agent Skill integration remains deferred until the shared Skill Runtime contract provides:
+
+- versioned `SkillDefinition`;
+- active `SkillInstance`;
+- state/stage;
+- accepted-Evidence-driven reducer;
+- stage-specific tool constraints;
+- completion evaluation and lifecycle/version truth.
+
+When integrated, Skill constraints may only narrow already Harness-eligible tools. The Skill must not push tools into canonical `toolExposure` merely because DOCX semantics were selected.
+
 ## Verification
 
-After create or review, the Skill should use the normal Read capability to open the output and confirm the requested content/structure before finalizing the task.
+After create or review, the deterministic operation should verify that:
+
+- the output artifact exists;
+- the DOCX remains readable;
+- requested content/comment/revision semantics are present;
+- review output is distinct from the source;
+- unsupported complex edits fail explicitly rather than silently degrading content.
