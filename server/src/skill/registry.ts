@@ -9,10 +9,10 @@ const latestVersionBySkillId = new Map<string, string>();
 
 const registrationKey = (skillId: string, version: string) => `${skillId}@${version}`;
 
-export const registerSkill = (
-  registration: SkillRegistration,
+export const registerSkill = <State, Input, Output>(
+  registration: SkillRegistration<State, Input, Output>,
   options?: { replace?: boolean },
-) => {
+): SkillRegistration<State, Input, Output> => {
   const { id, version } = registration.definition;
   if (!id.trim()) {
     throw new Error("Skill definition id is required.");
@@ -26,7 +26,7 @@ export const registerSkill = (
     throw new Error(`Skill already registered: ${key}`);
   }
 
-  registrations.set(key, registration);
+  registrations.set(key, registration as unknown as SkillRegistration);
   latestVersionBySkillId.set(id, version);
   return registration;
 };
