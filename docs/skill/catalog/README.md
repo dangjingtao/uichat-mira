@@ -1,75 +1,30 @@
-# Skill Catalog
+# Skill Catalog（旧版，已废弃）
 
-Status: Current
+Status: Historical
 Owner: docs / chat / runtime
-Last verified: 2026-07-06
+Last verified: 2026-07-22
 Layer: raw-source
 Module: SKILL
 Feature: SkillCatalog
-Doc Type: index
-Canonical: true
+Doc Type: historical
+Canonical: false
 Related:
   - ../README.md
-  - ../schema/skill-card.schema.md
-  - ../roadmap.md
+  - ../skill-runtime-design.md
 
-## 单点真相范围
+## 状态
 
-这页是 `docs/skill/catalog/` 的入口索引。
+本目录中的 `save_thread_memory`、`save_preference`、`save_decision` 等旧 skill card 属于上一版 memory-skill POC。
 
-它只负责回答：
+它们已于 `2026-07-22` 停止作为当前 Skill 定义、实现输入和评审合同。
 
-- 当前有哪些 skill card
-- 它们的稳定 id 是什么
-- 文件 slug 是什么
-- 当前处于哪个阶段
+当前正式定义：
 
-它不负责：
+> `Skill = 内部状态 + 多工具编排 + 业务语义封装`。
 
-- runtime 实现
-- DB schema
-- AgentGraph / Harness / MCP 设计
-
-## 当前阶段
-
-当前 catalog 只覆盖 `docs-only Phase 0`。
-
-这表示：
-
-- skill card 已经可评审
-- 触发边界和写回对象已经定义
-- 但还没有进入 runtime 实现
-
-## 命名规则
-
-- 文件名使用 kebab-case：`<file-slug>.skill.md`
-- card 内部稳定 id 使用 snake_case：`<skill_id>`
-- `file slug` 和 `skill id` 不是同一个字段
-
-例如：
-
-- file slug: `save-thread-memory`
-- filename: `save-thread-memory.skill.md`
-- skill id: `save_thread_memory`
-
-## Catalog
-
-| Title | Skill ID | File Slug | Trigger Mode | Phase | Card |
-| --- | --- | --- | --- | --- | --- |
-| 保存线程记忆 | `save_thread_memory` | `save-thread-memory` | `explicit` | `Phase 0` | [save-thread-memory.skill.md](save-thread-memory.skill.md) |
-| 保存偏好 | `save_preference` | `save-preference` | `suggested-with-confirmation` | `Phase 0` | [save-preference.skill.md](save-preference.skill.md) |
-| 保存决策 | `save_decision` | `save-decision` | `suggested-with-confirmation` | `Phase 0` | [save-decision.skill.md](save-decision.skill.md) |
-
-## 使用方式
-
-建议阅读顺序：
+当前真相源：
 
 1. `../README.md`
-2. `../schema/skill-card.schema.md`
-3. 当前 catalog 中的具体 skill card
-4. `../eval/*.md`
-5. `../roadmap.md`
+2. `../skill-runtime-design.md`
 
-## 当前结论
-
-当前 catalog 的作用是把第一批记忆型 skill card 收成统一入口，方便评审、对比和后续演进，不把它提前升级成 runtime 注册表。
+旧卡片仅保留历史参考意义；不要以其 trigger mode、memory writeback、Phase 0 或旧 card schema 推导新 Skill Runtime。
