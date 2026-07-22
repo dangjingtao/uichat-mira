@@ -14,6 +14,7 @@ import { message } from "@/shared/ui/Message";
 import {
   createExcelVerificationCopy,
   createOfficeSample,
+  createWordVerificationCopy,
   inspectOfficeFile,
   type OfficeSuiteCreatedDownload,
   type OfficeSuiteFileKind,
@@ -58,6 +59,7 @@ export default function OfficeSuitePage() {
   const [inspection, setInspection] = useState<OfficeSuiteInspection | null>(null);
   const [inspecting, setInspecting] = useState(false);
   const [creatingKind, setCreatingKind] = useState<OfficeSuiteFileKind | null>(null);
+  const [modifyingWord, setModifyingWord] = useState(false);
   const [modifyingExcel, setModifyingExcel] = useState(false);
   const [lastCreated, setLastCreated] = useState<{
     kind: OfficeSuiteFileKind;
@@ -74,6 +76,8 @@ export default function OfficeSuitePage() {
     const index = selectedFile.name.lastIndexOf(".");
     return index >= 0 ? selectedFile.name.slice(index).toLowerCase() : "";
   }, [selectedFile]);
+
+  const modifying = modifyingWord || modifyingExcel;
 
   const chooseFile = (file?: File | null) => {
     if (!file) return;
@@ -119,6 +123,28 @@ export default function OfficeSuitePage() {
       message.error(error instanceof Error ? error.message : "Office 文件生成失败");
     } finally {
       setCreatingKind(null);
+    }
+  };
+
+  const runWordModify = async () => {
+    if (!selectedFile || selectedExtension !== ".docx") {
+      message.warning("请先选择一个 .docx 文件");
+      return;
+    }
+
+    setModifyingWord(true);
+    try {
+      const artifact = await createWordVerificationCopy(selectedFile);
+      downloadArtifact(artifact);
+      setLastModified({
+        fileName: artifact.fileName,
+        byteSize: artifact.blob.size,
+      });
+      message.success("Word 修改副本已生成，原文件未覆盖");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "Word 修改失败");
+    } finally {
+      setModifyingWord(false);
     }
   };
 
@@ -193,7 +219,7 @@ export default function OfficeSuitePage() {
                         key={kind}
                         variant="outline"
                         size="md"
-                        disabled={creatingKind !== null || modifyingExcel}
+                        disabled={creatingKind !== null || modifying}
                         onClick={() => void runCreate(kind)}
                       >
                         <Icon className="h-4 w-4" />
@@ -220,7 +246,7 @@ export default function OfficeSuitePage() {
               <div>
                 <h2 className="text-base font-semibold text-text-primary">文件输入与修改验证</h2>
                 <p className="mt-1 text-sm leading-6 text-text-secondary">
-                  选择已有文件做 Inspect；选择 XLSX 时还可以生成一个非破坏性的修改副本，验证单元格、公式和基础样式写回。
+                  选择已有文件做 Inspect；DOCX 和 XLSX 可以生成非破坏性的修改副本，验证已有文件的写回链路。
                 </p>
               </div>
 
@@ -253,11 +279,22 @@ export default function OfficeSuitePage() {
               </button>
 
               <div className="flex flex-wrap justify-end gap-3">
+                {selectedExtension === ".docx" ? (
+                  <Button
+                    variant="outline"
+                    size="md"
+                    disabled={!selectedFile || modifying || inspecting || creatingKind !== null}
+                    onClick={() => void runWordModify()}
+                  >
+                    <FileText className="h-4 w-4" />
+                    {modifyingWord ? "正在修改…" : "生成 Word 修改副本"}
+                  </Button>
+                ) : null}
                 {selectedExtension === ".xlsx" ? (
                   <Button
                     variant="outline"
                     size="md"
-                    disabled={!selectedFile || modifyingExcel || inspecting || creatingKind !== null}
+                    disabled={!selectedFile || modifying || inspecting || creatingKind !== null}
                     onClick={() => void runExcelModify()}
                   >
                     <FileSpreadsheet className="h-4 w-4" />
@@ -267,7 +304,7 @@ export default function OfficeSuitePage() {
                 <Button
                   variant="primary"
                   size="md"
-                  disabled={!selectedFile || inspecting || modifyingExcel}
+                  disabled={!selectedFile || inspecting || modifying}
                   onClick={() => void runInspection()}
                 >
                   {inspecting ? "正在读取…" : "读取文件结构"}
@@ -342,7 +379,7 @@ export default function OfficeSuitePage() {
                         <div className="mt-0.5 truncate text-xs text-text-tertiary">{meta.runtime}</div>
                       </div>
                       <Badge variant="success">
-                        {kind === "excel" ? "Inspect + Create + Modify" : "Inspect + Create"}
+                        {kind === "powerpoint" ? "Inspect + Create" : "Inspect + Create + Modify"}
                       </Badge>
                     </div>
                   );
@@ -355,7 +392,7 @@ export default function OfficeSuitePage() {
             <div className="text-sm font-semibold text-text-primary">当前边界</div>
             <div className="mt-3 space-y-2 text-xs leading-5 text-text-secondary">
               <p>文枢现在是 Office Runtime 的调试和验证窗口。</p>
-              <p>Excel 已进入基础 Modify 验证；Word 修改和更完整的 PowerPoint 生成仍按后续刀次推进。</p>
+              <p>Word 和 Excel 已进入基础 Modify 验证；PowerPoint 当前聚焦创建和生成，不承诺任意既有 PPT 的无损修改。</p>
               <p>不嵌 Chat，不提前实现 Skill Runtime，也不把 set_cell / add_slide 之类原子操作暴露给 Agent。</p>
             </div>
           </Card>
