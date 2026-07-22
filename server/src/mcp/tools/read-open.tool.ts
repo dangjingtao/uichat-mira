@@ -8,6 +8,15 @@ import type { ReadOpenResult, ReadSelection } from "../read/types.js";
 import { emitArtifacts } from "./artifact-utils.js";
 
 const SKILL_RESOURCE_PREFIX = "skill://";
+const NORMALIZED_SKILL_RESOURCE_PREFIX = "skill:/";
+
+const canonicalizeSkillResourceUri = (value: string) => {
+  if (value.startsWith(SKILL_RESOURCE_PREFIX)) return value;
+  if (value.startsWith(NORMALIZED_SKILL_RESOURCE_PREFIX)) {
+    return `${SKILL_RESOURCE_PREFIX}${value.slice(NORMALIZED_SKILL_RESOURCE_PREFIX.length)}`;
+  }
+  return null;
+};
 
 const parseSelection = (value: unknown): ReadSelection | undefined => {
   if (value === undefined) return undefined;
@@ -144,10 +153,11 @@ export const readOpenTool: McpToolImplementation = {
       throw mcpBadRequest("path is required");
     }
     const normalizedPath = pathValue.trim();
+    const skillResourceUri = canonicalizeSkillResourceUri(normalizedPath);
 
-    const result = normalizedPath.startsWith(SKILL_RESOURCE_PREFIX)
+    const result = skillResourceUri
       ? await executeSkillResourceOpen({
-          uri: normalizedPath,
+          uri: skillResourceUri,
           selection: context.args.selection,
           pushEvent: context.pushEvent,
         })
