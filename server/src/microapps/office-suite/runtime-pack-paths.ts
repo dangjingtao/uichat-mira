@@ -22,17 +22,6 @@ export const resolveWenshuOfficePackRoot = () =>
 export const resolveWenshuOfficeSitePackages = () =>
   path.join(resolveWenshuOfficePackRoot(), "site-packages");
 
-export const activateWenshuOfficePackPythonPath = () => {
-  const sitePackages = resolveWenshuOfficeSitePackages();
-  const entries = (process.env.PYTHONPATH ?? "")
-    .split(path.delimiter)
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-  if (!entries.includes(sitePackages)) entries.unshift(sitePackages);
-  process.env.PYTHONPATH = entries.join(path.delimiter);
-  return sitePackages;
-};
-
 export const buildWenshuPythonEnv = (
   sitePackages = resolveWenshuOfficeSitePackages(),
 ): NodeJS.ProcessEnv => {
