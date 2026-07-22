@@ -1,10 +1,10 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import {
   FileSpreadsheet,
   FileText,
   Presentation,
+  Sparkles,
   Upload,
-  WandSparkles,
 } from "lucide-react";
 import Badge from "@/shared/ui/Badge";
 import Card from "@/shared/ui/Card";
@@ -88,7 +88,7 @@ export default function OfficeSuitePage() {
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className="flex h-10 w-10 items-center justify-center rounded-ui-control bg-surface-primary text-primary shadow-shadow-sm">
-                <WandSparkles className="h-5 w-5" />
+                <Sparkles className="h-5 w-5" />
               </span>
               <div>
                 <div className="font-serif text-lg font-semibold text-text-primary">Office Runtime</div>
@@ -234,7 +234,7 @@ export default function OfficeSuitePage() {
   );
 }
 
-function ResultBlock({ title, children }: { title: string; children: React.ReactNode }) {
+function ResultBlock({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="min-w-0 rounded-ui-panel border border-border bg-surface-secondary/20 p-4">
       <div className="mb-3 text-xs font-medium text-text-tertiary">{title}</div>
