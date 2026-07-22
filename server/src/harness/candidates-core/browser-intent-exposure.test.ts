@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { McpToolImplementation } from "../../mcp/core/definitions.js";
 import {
@@ -6,6 +6,26 @@ import {
   registerCapability,
 } from "../registry.js";
 import { resolveHarnessToolCandidatesForTurn } from "./resolver.js";
+
+const { executeLocalEmbeddingMock, rerankMock } = vi.hoisted(() => ({
+  executeLocalEmbeddingMock: vi.fn(),
+  rerankMock: vi.fn(),
+}));
+
+vi.mock("@/services/internal-capabilities/local-embedding.js", () => ({
+  executeLocalEmbedding: executeLocalEmbeddingMock,
+}));
+
+vi.mock("./rerank.js", () => ({
+  rerankHarnessCapabilityMatches: rerankMock,
+}));
+
+const testEmbedding = (text: string) => [
+  /browser|chrome|webpage|网页|页面|后台/iu.test(text) ? 1 : 0,
+  /attached|current-browser|already-connected|authenticated-session|当前|已登录/iu.test(text) ? 1 : 0,
+  /edit|write|workspace|保存|写入|工作区/iu.test(text) ? 1 : 0,
+  /terminal|shell|终端/iu.test(text) ? 1 : 0,
+];
 
 const createTool = (input: {
   id: string;
@@ -46,6 +66,13 @@ const createTool = (input: {
 describe("browser-intent Harness candidate exposure", () => {
   beforeEach(() => {
     clearHarnessRegistry();
+    executeLocalEmbeddingMock.mockImplementation(
+      async ({ texts }: { texts: string[] }) => ({
+        embeddings: texts.map(testEmbedding),
+        embeddingModel: "controlled-test-embedding",
+      }),
+    );
+    rerankMock.mockImplementation(async ({ matches }) => ({ matches }));
 
     registerCapability(
       createTool({
@@ -77,6 +104,32 @@ describe("browser-intent Harness candidate exposure", () => {
         networkAccess: true,
       }),
     );
+    for (const id of [
+      "browser_attached_look",
+      "browser_attached_browse",
+      "browser_attached_act",
+      "browser_attached_transfer",
+    ]) {
+      registerCapability(
+        createTool({
+          id,
+          domain: "browser_action",
+          tags: [
+            "browser",
+            "attached-browser",
+            "current-browser",
+            "authenticated-session",
+            "chrome",
+            "当前浏览器",
+            "已登录",
+          ],
+          sideEffect: id === "browser_attached_look" ? "none" : "network",
+          requiresApproval:
+            id === "browser_attached_act" || id === "browser_attached_transfer",
+          networkAccess: true,
+        }),
+      );
+    }
     registerCapability(
       createTool({
         id: "write_file",
@@ -96,9 +149,21 @@ describe("browser-intent Harness candidate exposure", () => {
         longRunning: true,
       }),
     );
+    for (let index = 0; index < 13; index += 1) {
+      registerCapability(
+        createTool({
+          id: `unrelated_tool_${index}`,
+          domain: "terminal",
+          tags: ["unrelated"],
+          sideEffect: "none",
+          requiresApproval: false,
+        }),
+      );
+    }
   });
 
   afterEach(() => {
+    vi.clearAllMocks();
     clearHarnessRegistry();
   });
 
@@ -119,6 +184,45 @@ describe("browser-intent Harness candidate exposure", () => {
     );
     expect(result.toolExposure.reason).not.toContain(
       "Browser intent is isolated to the Computer Use browser tool set.",
+    );
+  });
+
+  it("exposes Attached Browser for the user's current Chrome page", async () => {
+    const result = await resolveHarnessToolCandidatesForTurn({
+      source: "agent_intent",
+      query: "看看我现在 Chrome 打开的这个页面",
+    });
+
+    expect(result.toolExposure.exposedToolIds).toEqual(
+      expect.arrayContaining([
+        "browser_attached_look",
+        "browser_attached_browse",
+        "browser_attached_act",
+        "browser_attached_transfer",
+      ]),
+    );
+    expect(result.toolCandidates.map((candidate) => candidate.toolId)).toEqual(
+      expect.arrayContaining([
+        "browser_attached_look",
+        "browser_attached_browse",
+        "browser_attached_act",
+        "browser_attached_transfer",
+      ]),
+    );
+  });
+
+  it("retains Edit exposure for an attached-browser and workspace compound task", async () => {
+    const result = await resolveHarnessToolCandidatesForTurn({
+      source: "agent_intent",
+      query: "读取我当前已登录后台的数据，然后写入工作区 Markdown",
+    });
+
+    expect(result.toolExposure.exposedToolIds).toEqual(
+      expect.arrayContaining([
+        "browser_attached_look",
+        "browser_attached_act",
+        "write_file",
+      ]),
     );
   });
 });

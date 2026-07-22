@@ -12,6 +12,7 @@ const INTERNAL_PROFILE_BLUEPRINTS: Array<{
   actionProfileId?: string;
   actionProfileTitle?: string;
   actionProfileDescription?: string;
+  workbench?: HarnessCapabilityProfile["workbench"];
 }> = [
   {
     id: "workspace_lookup",
@@ -65,11 +66,50 @@ const INTERNAL_PROFILE_BLUEPRINTS: Array<{
   {
     id: "browser_computer_use",
     title: "Browser Computer Use",
-    description: "Inspect and operate an explicitly scoped managed browser session, returning structured page evidence.",
+    description: "Inspect and operate an isolated Playwright automation session in a Mira-managed browser, returning structured page evidence.",
     domain: "browser_action",
-    tags: ["browser", "website", "webpage", "page", "open", "visit", "navigate", "title", "inspect", "computer-use", "网页", "页面", "打开", "访问"],
+    tags: ["browser", "managed-browser", "mira-managed-browser", "isolated-session", "automation-session", "playwright", "website", "webpage", "page", "open", "visit", "navigate", "title", "inspect", "computer-use", "网页", "页面", "打开", "访问"],
     preferredToolId: "browser_observe",
     supportingToolIds: ["browser_observe", "browser_act", "browser_assert"],
+    workbench: {
+      label: "Computer Use",
+      description: "Playwright / Managed Browser 浏览器自动化工具。",
+      order: 50,
+      icon: "mouse-pointer",
+    },
+  },
+  {
+    id: "browser_attached",
+    title: "Attached Browser",
+    description:
+      "Observe and operate the user's already-connected browser, including existing tabs and authenticated web sessions.",
+    domain: "browser_action",
+    tags: [
+      "browser",
+      "attached-browser",
+      "current-browser",
+      "existing-tab",
+      "authenticated-session",
+      "chrome",
+      "webpage",
+      "网页",
+      "当前页面",
+      "当前浏览器",
+      "已登录",
+    ],
+    preferredToolId: "browser_attached_look",
+    supportingToolIds: [
+      "browser_attached_look",
+      "browser_attached_browse",
+      "browser_attached_act",
+      "browser_attached_transfer",
+    ],
+    workbench: {
+      label: "触界",
+      description: "通过 Chrome Extension 操作用户已连接的真实浏览器。",
+      order: 60,
+      icon: "globe",
+    },
   },
   {
     id: "news_research",
@@ -141,6 +181,7 @@ export const resolveHarnessCapabilityProfiles = (
       tags: blueprint.tags,
       preferredToolId: blueprint.preferredToolId,
       supportingToolIds: matchedToolIds,
+      ...(blueprint.workbench ? { workbench: blueprint.workbench } : {}),
       ...(blueprint.actionProfileId
         ? {
             actionProfileId: blueprint.actionProfileId,

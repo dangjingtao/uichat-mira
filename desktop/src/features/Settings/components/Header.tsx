@@ -18,7 +18,9 @@ export default function Header({
       </div>
       <div className="flex w-full items-start gap-3 sm:gap-4">
         <div className="min-w-0 flex-1 space-y-1">
-          <h3 className="text-xl font-semibold text-text-primary">{title}</h3>
+          <h3 className="font-serif text-xl font-bold text-text-primary">
+            {title}
+          </h3>
           {description ? (
             <p className="max-w-2xl text-sm leading-6 text-text-secondary">
               {description}

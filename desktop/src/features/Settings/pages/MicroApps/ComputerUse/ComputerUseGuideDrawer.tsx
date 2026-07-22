@@ -2,6 +2,7 @@ import { BookOpen, CircleAlert, Cog, PlayCircle, ShieldCheck } from "lucide-reac
 import Drawer from "@/shared/ui/Drawer";
 
 export type ComputerUseGuideLabels = {
+  brandName: string;
   title: string;
   intro: string;
   capabilityTitle: string;
@@ -41,7 +42,7 @@ export default function ComputerUseGuideDrawer({ open, onClose, labels }: { open
       closeMaskLabel={labels.close}
       header={
         <div className="space-y-1">
-          <div className="text-xs uppercase tracking-wide text-text-tertiary">Computer Use</div>
+          <div className="text-xs uppercase tracking-wide text-text-tertiary">{labels.brandName}</div>
           <div className="text-base font-semibold text-text-primary">{labels.title}</div>
           <div className="text-sm leading-6 text-text-secondary">{labels.intro}</div>
         </div>

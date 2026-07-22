@@ -37,6 +37,56 @@ type PendingRequest = {
   timer?: ReturnType<typeof setTimeout>;
 };
 
+export type WebBridgeInvocationErrorDetail = {
+  code: string;
+  message: string;
+  retryable: boolean;
+  suggestedAction?: string | null;
+};
+
+export class WebBridgeInvocationError extends Error {
+  readonly code: string;
+  readonly retryable: boolean;
+  readonly suggestedAction?: string | null;
+
+  constructor(detail: WebBridgeInvocationErrorDetail) {
+    super(detail.message);
+    this.name = "WebBridgeInvocationError";
+    this.code = detail.code;
+    this.retryable = detail.retryable;
+    if (detail.suggestedAction !== undefined) {
+      this.suggestedAction = detail.suggestedAction;
+    }
+  }
+}
+
+export const toWebBridgeInvocationError = (
+  value: unknown,
+  fallback: WebBridgeInvocationErrorDetail,
+) => {
+  if (!value || typeof value !== "object") {
+    return new WebBridgeInvocationError(fallback);
+  }
+
+  const detail = value as Record<string, unknown>;
+  return new WebBridgeInvocationError({
+    code: typeof detail.code === "string" && detail.code
+      ? detail.code
+      : fallback.code,
+    message: typeof detail.message === "string" && detail.message
+      ? detail.message
+      : fallback.message,
+    retryable: typeof detail.retryable === "boolean"
+      ? detail.retryable
+      : fallback.retryable,
+    ...(typeof detail.suggestedAction === "string" || detail.suggestedAction === null
+      ? { suggestedAction: detail.suggestedAction }
+      : fallback.suggestedAction === undefined
+        ? {}
+        : { suggestedAction: fallback.suggestedAction }),
+  });
+};
+
 const PROTOCOL_VERSION = 1;
 const MIN_EXTENSION_VERSION = "0.7.1";
 const HELLO_TIMEOUT_MS = 5000;
@@ -83,8 +133,22 @@ export const invokeWebBridge = (input: {
   signal?: AbortSignal;
 }) => new Promise<unknown>((resolve, reject) => {
   const extensionClient = extensionClients.get(input.userId);
-  if (!extensionClient) {
-    reject(new Error("触界扩展尚未连接"));
+  if (!extensionClient || extensionClient.socket.readyState !== 1) {
+    reject(new WebBridgeInvocationError({
+      code: "BRIDGE_DISCONNECTED",
+      message: "触界扩展尚未连接",
+      retryable: true,
+      suggestedAction: "连接触界 Chrome 扩展后重试",
+    }));
+    return;
+  }
+  if (input.signal?.aborted) {
+    reject(new WebBridgeInvocationError({
+      code: "ACTION_ABORTED",
+      message: "触界浏览器操作已取消",
+      retryable: false,
+      suggestedAction: null,
+    }));
     return;
   }
   const id = `server_${crypto.randomUUID()}`;
@@ -93,12 +157,26 @@ export const invokeWebBridge = (input: {
   pending.set(relayId, pendingRequest);
   send(extensionClient, { version: PROTOCOL_VERSION, type: "request", id: relayId, tool: input.tool, params: input.params });
   const timer = setTimeout(() => {
-    if (pending.delete(relayId)) reject(new Error("见行浏览器操作超时"));
+    if (pending.delete(relayId)) {
+      reject(new WebBridgeInvocationError({
+        code: "ACTION_TIMEOUT",
+        message: "触界浏览器操作超时",
+        retryable: true,
+        suggestedAction: "重新观察当前页面状态后再决定是否重试",
+      }));
+    }
   }, 30_000);
   pendingRequest.timer = timer;
   const abort = () => {
     clearTimeout(timer);
-    if (pending.delete(relayId)) reject(new Error("见行浏览器操作已取消"));
+    if (pending.delete(relayId)) {
+      reject(new WebBridgeInvocationError({
+        code: "ACTION_ABORTED",
+        message: "触界浏览器操作已取消",
+        retryable: false,
+        suggestedAction: null,
+      }));
+    }
   };
   input.signal?.addEventListener("abort", abort, { once: true });
 });
@@ -276,7 +354,11 @@ const attachWebBridgeClient = (socket: WebBridgeSocket) => {
         send(request.client, { ...message, id: request.originalId, version: PROTOCOL_VERSION });
       } else if (message.ok === false) {
         if (request.timer) clearTimeout(request.timer);
-        request.reject?.(new Error(String((message.error as Record<string, unknown> | undefined)?.message ?? "见行浏览器操作失败")));
+        request.reject?.(toWebBridgeInvocationError(message.error, {
+          code: "WEBBRIDGE_INVOCATION_FAILED",
+          message: "触界浏览器操作失败",
+          retryable: false,
+        }));
       } else {
         if (request.timer) clearTimeout(request.timer);
         request.resolve?.(message.result);
@@ -303,7 +385,12 @@ const attachWebBridgeClient = (socket: WebBridgeSocket) => {
           sendError(request.client, request.originalId, "BRIDGE_DISCONNECTED", "触界扩展已断开");
         } else if (!request.client) {
           if (request.timer) clearTimeout(request.timer);
-          request.reject?.(new Error("触界扩展已断开"));
+          request.reject?.(new WebBridgeInvocationError({
+            code: "BRIDGE_DISCONNECTED",
+            message: "触界扩展已断开",
+            retryable: true,
+            suggestedAction: "重新连接触界 Chrome 扩展后重试",
+          }));
         }
       }
     }

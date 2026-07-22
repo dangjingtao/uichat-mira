@@ -579,6 +579,34 @@ test("uchat runtime creates a new thread on first send when no thread is active"
   assert.equal(thread?.messages[1]?.role, "assistant");
 });
 
+test("uchat runtime ignores a repeated send while the first send is preparing", async () => {
+  let createThreadCalls = 0;
+  let runCalls = 0;
+
+  const runtime = new ChatRuntime({
+    repository: createRepositoryStub({
+      onCreateThread: () => {
+        createThreadCalls += 1;
+      },
+    }),
+    runDriver: {
+      async run(_context, onEvent) {
+        runCalls += 1;
+        await onEvent({ type: "message:finish" });
+        await onEvent({ type: "run:finish" });
+      },
+    },
+  });
+
+  runtime.enterWelcomeState();
+  runtime.setComposerText("send once");
+
+  await Promise.all([runtime.send(), runtime.send()]);
+
+  assert.equal(createThreadCalls, 1);
+  assert.equal(runCalls, 1);
+});
+
 test("uchat runtime creates the thread only after welcome-state send", async () => {
   let createThreadCalls = 0;
   let getThreadCalls = 0;

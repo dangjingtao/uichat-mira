@@ -45,9 +45,10 @@ export type McpToolDefinition = {
     longRunning?: boolean;
   };
   workbench?: {
-    domainLabel: string;
-    domainDescription: string;
-    domainOrder: number;
+    groupId: string;
+    groupLabel: string;
+    groupDescription: string;
+    groupOrder: number;
     icon: string;
     defaultArgs?: Record<string, unknown>;
   };

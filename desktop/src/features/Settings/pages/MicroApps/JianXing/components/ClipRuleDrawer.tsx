@@ -1,4 +1,5 @@
 import { Focus, Plus, Save, Trash2, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Alert, Button, Drawer, IconButton, NumberInput, Select, Switch, TextInput } from "@/shared/ui";
 import type { ClipRule, ClipRules } from "@/shared/api/webbridge";
 
@@ -37,6 +38,8 @@ export default function ClipRuleDrawer({
   onDelete,
   onSave,
 }: ClipRuleDrawerProps) {
+  const { t } = useTranslation();
+  const key = (name: string) => `settings.microApps.jianXing.rulesDrawer.${name}`;
   const hasSavedRule = Boolean(clipRules[ruleKey]);
 
   return (
@@ -44,102 +47,102 @@ export default function ClipRuleDrawer({
       open={open}
       onClose={onClose}
       width={620}
-      closeLabel="关闭规则编辑"
-      closeMaskLabel="关闭规则编辑"
+      closeLabel={t(key("close"))}
+      closeMaskLabel={t(key("close"))}
       header={
         <div>
           <div className="text-sm font-semibold text-text-primary">
-            {hasSavedRule ? "编辑 URL 剪藏规则" : "新增 URL 剪藏规则"}
+            {hasSavedRule ? t(key("editTitle")) : t(key("addTitle"))}
           </div>
           <div className="mt-1 text-xs text-text-secondary">
-            配置 URL 匹配、网页正文、排除区域和图片提取条件
+            {t(key("description"))}
           </div>
         </div>
       }
       footer={
         <>
           <Button size="sm" variant="danger-ghost" onClick={onDelete} disabled={rulesSaving || !hasSavedRule}>
-            <Trash2 className="h-4 w-4" />删除规则
+            <Trash2 className="h-4 w-4" />{t(key("delete"))}
           </Button>
           <Button size="sm" variant="primary" onClick={onSave} disabled={rulesSaving || !extensionConnected}>
-            <Save className="h-4 w-4" />{rulesSaving ? "保存中…" : "保存 URL 规则"}
+            <Save className="h-4 w-4" />{rulesSaving ? t(key("saving")) : t(key("save"))}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
-        {rulesError ? <Alert variant="danger" title="规则同步失败">{rulesError}</Alert> : null}
-        {rulesMessage ? <Alert variant="success" title="规则状态">{rulesMessage}</Alert> : null}
+        {rulesError ? <Alert variant="danger" title={t(key("syncFailed"))}>{rulesError}</Alert> : null}
+        {rulesMessage ? <Alert variant="success" title={t(key("status"))}>{rulesMessage}</Alert> : null}
 
         <TextInput
-          label="网站别名（可选）"
+          label={t(key("alias"))}
           value={ruleForm.alias || ""}
           onChange={(value) => onRuleFormChange({ alias: value })}
-          placeholder="例如 产品帮助中心"
+          placeholder={t(key("aliasPlaceholder"))}
           compact
         />
         <TextInput
-          label="URL 匹配规则"
+          label={t(key("urlPattern"))}
           value={ruleForm.urlPattern}
           onChange={(value) => onRuleFormChange({ urlPattern: value })}
-          placeholder={ruleForm.urlPatternMode === "regex" ? "例如 ^https://example\\.com/article/.*" : "例如 https://example.com/article/*"}
+          placeholder={ruleForm.urlPatternMode === "regex" ? t(key("regexPlaceholder")) : t(key("wildcardPlaceholder"))}
           compact
         />
         <Select
-          label="匹配方式"
+          label={t(key("matchMode"))}
           value={ruleForm.urlPatternMode || "wildcard"}
           onChange={(value) => onRuleFormChange({ urlPatternMode: value as "wildcard" | "regex" })}
-          options={[{ value: "wildcard", label: "通配符" }, { value: "regex", label: "正则" }]}
+          options={[{ value: "wildcard", label: t(key("wildcard")) }, { value: "regex", label: t(key("regex")) }]}
         />
         <p className="text-xs leading-5 text-text-tertiary">
-          必填。通配符中 `*` 匹配任意长度文本，`?` 匹配一个字符；正则模式填写 JavaScript 正则表达式，不填写标志。多个规则命中同一页面时，扩展使用约束最具体的一条。
+          {t(key("matchHelp"))}
         </p>
 
         <div className="flex items-center justify-between rounded-ui-control border border-border bg-surface-secondary px-3 py-2">
           <div>
-            <div className="text-sm font-medium text-text-primary">启用当前规则</div>
-            <div className="text-xs text-text-tertiary">停用后当前 URL 范围回到默认提取</div>
+            <div className="text-sm font-medium text-text-primary">{t(key("enabled"))}</div>
+            <div className="text-xs text-text-tertiary">{t(key("disabledHint"))}</div>
           </div>
-          <Switch checked={ruleForm.enabled} onChange={() => onRuleFormChange({ enabled: !ruleForm.enabled })} ariaLabel="启用当前 URL 规则" size="sm" />
+          <Switch checked={ruleForm.enabled} onChange={() => onRuleFormChange({ enabled: !ruleForm.enabled })} ariaLabel={t(key("enabledAria"))} size="sm" />
         </div>
 
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-xs font-medium text-text-secondary">正文区域</span>
+            <span className="text-xs font-medium text-text-secondary">{t(key("includeRegion"))}</span>
             <Button size="xs" variant="outline" onClick={() => onPickRuleRegion("include")} disabled={regionPicking !== null || !extensionConnected}>
-              <Focus className="h-4 w-4" />{regionPicking === "include" ? "等待点选…" : ruleForm.includeSelector ? "重新选择" : "选择正文区域"}
+              <Focus className="h-4 w-4" />{regionPicking === "include" ? t(key("picking")) : ruleForm.includeSelector ? t(key("reselect")) : t(key("selectInclude"))}
             </Button>
           </div>
           <div className="min-h-16 rounded-ui-control border border-border bg-surface-secondary px-3 py-2">
             {ruleForm.includeRegion ? <>
               <div className="text-sm font-medium text-text-primary">{ruleForm.includeRegion.tag} · {ruleForm.includeRegion.elementCount} 个元素 · {ruleForm.includeRegion.imageCount} 张图片</div>
-              <p className="mt-1 line-clamp-2 text-xs text-text-tertiary">{ruleForm.includeRegion.text || "所选区域没有可预览文字"}</p>
-            </> : ruleForm.includeSelector ? <p className="text-sm text-text-secondary">此规则来自旧版配置，请重新点选正文区域以生成可读摘要。</p> : <p className="text-sm text-text-tertiary">尚未选择，保存后该网站仍使用默认正文判断。</p>}
+              <p className="mt-1 line-clamp-2 text-xs text-text-tertiary">{ruleForm.includeRegion.text || t(key("noPreview"))}</p>
+            </> : ruleForm.includeSelector ? <p className="text-sm text-text-secondary">{t(key("legacyRegion"))}</p> : <p className="text-sm text-text-tertiary">{t(key("emptyInclude"))}</p>}
           </div>
         </div>
 
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-xs font-medium text-text-secondary">排除区域</span>
+            <span className="text-xs font-medium text-text-secondary">{t(key("excludeRegion"))}</span>
             <Button size="xs" variant="outline" onClick={() => onPickRuleRegion("exclude")} disabled={regionPicking !== null || !extensionConnected}>
-              <Plus className="h-4 w-4" />{regionPicking === "exclude" ? "等待点选…" : "添加排除区域"}
+              <Plus className="h-4 w-4" />{regionPicking === "exclude" ? t(key("picking")) : t(key("addExclude"))}
             </Button>
           </div>
           <div className="space-y-1.5 rounded-ui-control border border-border bg-surface-secondary p-2">
             {(ruleForm.excludeRegions || ruleForm.excludeSelectors.map((selector) => ({ selector, summary: undefined }))).map((region, index) => (
               <div key={region.selector} className="flex items-start gap-2 rounded-ui-control bg-surface-primary px-2.5 py-2">
-                <div className="min-w-0 flex-1"><div className="text-xs font-medium text-text-primary">排除区域 {index + 1} · {region.summary?.tag || "网页区域"}</div><p className="mt-0.5 truncate text-xs text-text-tertiary">{region.summary?.text || "已选择网页区域"}</p></div>
-                <IconButton size="xs" ariaLabel={`删除排除区域 ${index + 1}`} onClick={() => onRemoveExcludeRegion(region.selector)}><X className="h-3.5 w-3.5" /></IconButton>
+                <div className="min-w-0 flex-1"><div className="text-xs font-medium text-text-primary">{t(key("excludeItem"), { index: index + 1, tag: region.summary?.tag || t(key("webRegion")) })}</div><p className="mt-0.5 truncate text-xs text-text-tertiary">{region.summary?.text || t(key("selectedRegion"))}</p></div>
+                <IconButton size="xs" ariaLabel={t(key("deleteExclude"), { index: index + 1 })} onClick={() => onRemoveExcludeRegion(region.selector)}><X className="h-3.5 w-3.5" /></IconButton>
               </div>
             ))}
-            {!(ruleForm.excludeRegions || ruleForm.excludeSelectors.map((selector) => ({ selector, summary: undefined }))).length ? <p className="px-1 py-2 text-xs text-text-tertiary">没有排除区域</p> : null}
+            {!(ruleForm.excludeRegions || ruleForm.excludeSelectors.map((selector) => ({ selector, summary: undefined }))).length ? <p className="px-1 py-2 text-xs text-text-tertiary">{t(key("noExclude"))}</p> : null}
           </div>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <NumberInput label="图片最小宽度" value={ruleForm.imagePolicy.minWidth} onChange={(value) => onRuleFormChange({ imagePolicy: { ...ruleForm.imagePolicy, minWidth: value } })} compact />
-          <NumberInput label="图片最小高度" value={ruleForm.imagePolicy.minHeight} onChange={(value) => onRuleFormChange({ imagePolicy: { ...ruleForm.imagePolicy, minHeight: value } })} compact />
-          <NumberInput label="图片数量上限" value={ruleForm.imagePolicy.maxCount} onChange={(value) => onRuleFormChange({ imagePolicy: { ...ruleForm.imagePolicy, maxCount: value } })} compact />
+          <NumberInput label={t(key("minWidth"))} value={ruleForm.imagePolicy.minWidth} onChange={(value) => onRuleFormChange({ imagePolicy: { ...ruleForm.imagePolicy, minWidth: value } })} compact />
+          <NumberInput label={t(key("minHeight"))} value={ruleForm.imagePolicy.minHeight} onChange={(value) => onRuleFormChange({ imagePolicy: { ...ruleForm.imagePolicy, minHeight: value } })} compact />
+          <NumberInput label={t(key("maxCount"))} value={ruleForm.imagePolicy.maxCount} onChange={(value) => onRuleFormChange({ imagePolicy: { ...ruleForm.imagePolicy, maxCount: value } })} compact />
         </div>
       </div>
     </Drawer>

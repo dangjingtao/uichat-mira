@@ -20,6 +20,7 @@ Related:
 - 根目录 `package.json` 的 `version` 是唯一版本来源。
 - `electron/package.json`、`desktop/package.json`、`server/package.json`、`packages/core/package.json`、`tauri/tauri.conf.json` 和 `tauri/Cargo.toml` 都应与根版本保持一致。
 - Windows 打包产物目录会自动带上当前版本号和构建时间戳。
+- GitHub Actions 的桌面构建和发布规则以 `../build/README.md` 与 `.github/workflows/build-desktop.yml` 为准。
 
 ## 版本来源
 
@@ -117,10 +118,10 @@ Windows 打包：
 pnpm package:electron:win
 ```
 
-macOS 打包：
+Tauri Windows 打包：
 
 ```bash
-pnpm package:electron:mac
+pnpm package:tauri:win
 ```
 
 ## 发布建议流程
@@ -128,8 +129,8 @@ pnpm package:electron:mac
 1. 更新版本号
 2. 运行 `pnpm check`
 3. 运行 `pnpm build`
-4. 运行 `pnpm package:electron:win`
-5. 验证最新 release 目录中的安装包和 `win-unpacked` 产物
+4. 按需运行目标桌面打包命令；不要为了普通代码变更重复完整打包
+5. 标签发布由 `.github/workflows/build-desktop.yml` 生成 GitHub Release，并把四个最终桌面安装文件同步到 R2 的 `mira/latest/`
 
 ## 说明
 

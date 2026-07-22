@@ -7,7 +7,7 @@ import "@/shared/i18n";
 import i18n from "@/shared/i18n";
 import { UChatThreadView } from "./UChatThreadView";
 import type { ChatMessage } from "../core";
-import { getChatMediaPreviewUrl } from "@/shared/api/thread";
+import type { UChatMessageExtensionProps } from "./UChatThreadSlots";
 
 vi.mock("@/app/providers/ThemeProvider", () => ({
   useThemePreferences: () => ({
@@ -17,12 +17,6 @@ vi.mock("@/app/providers/ThemeProvider", () => ({
     setThemeMode: () => {},
     themePresets: [],
   }),
-}));
-
-vi.mock("@/shared/api/thread", () => ({
-  getChatMediaPreviewUrl: vi.fn(async (_threadId: string, mediaId: string) =>
-    `blob:http://localhost/${mediaId}`,
-  ),
 }));
 
 const baseAssistantMessage = (
@@ -38,6 +32,17 @@ const baseAssistantMessage = (
   metadata: overrides.metadata,
   toolTrace: overrides.toolTrace,
   errorMessage: overrides.errorMessage,
+});
+
+const baseUserMessage = (overrides: Partial<ChatMessage> = {}): ChatMessage => ({
+  id: overrides.id ?? "user-1",
+  threadId: overrides.threadId ?? "thread-1",
+  role: "user",
+  parts: overrides.parts ?? [{ type: "text", text: "question" }],
+  createdAt: overrides.createdAt ?? "2025-01-01T00:00:00.000Z",
+  parentId: overrides.parentId ?? null,
+  status: overrides.status ?? "complete",
+  metadata: overrides.metadata,
 });
 
 test("UChatThreadView hides legacy tool trace card when execution trace parts exist", () => {
@@ -95,16 +100,24 @@ test("UChatThreadView hides legacy tool trace card when execution trace parts ex
   assert.equal(screen.queryByText("Tool Calls"), null);
 });
 
-test("UChatThreadView renders generated image below assistant text and gates image action", async () => {
-  const onRequestImage = vi.fn(() => Promise.resolve());
-  const { rerender } = render(
+test("UChatThreadView mounts named message extensions in content and action positions", () => {
+  function TestMessageExtensions({
+    message,
+    placement,
+  }: UChatMessageExtensionProps) {
+    return (
+      <span data-testid={`message-extension-${placement}`}>
+        {message.id}:{placement}
+      </span>
+    );
+  }
+
+  render(
     <UChatThreadView
       activeThreadId="thread-1"
       title="Thread"
       badges={[]}
-      messages={[baseAssistantMessage({
-        metadata: { media: { image: { status: "succeeded", mediaId: "image-1" } } },
-      })]}
+      messages={[baseAssistantMessage()]}
       composer={{ text: "", attachments: [] }}
       runStatus={{ type: "idle" }}
       threadStatus="ready"
@@ -118,106 +131,99 @@ test("UChatThreadView renders generated image below assistant text and gates ima
       onComposerAction={() => {}}
       threadContextTags={[]}
       resolveAttachmentSource={(value) => value}
-      onRequestImage={onRequestImage}
-      showImageAction
+      slots={{ MessageExtensions: TestMessageExtensions }}
     />,
   );
 
-  await waitFor(() => assert.ok(screen.getByRole("img", { name: /generated image|生成的图片/i })));
   const answer = screen.getByText("answer");
-  const image = screen.getByRole("img", { name: /generated image|生成的图片/i });
-  assert.ok(answer.compareDocumentPosition(image) & Node.DOCUMENT_POSITION_FOLLOWING);
-  fireEvent.click(screen.getByRole("button", { name: /generate image|生成图片/i }));
-  assert.equal(onRequestImage.mock.calls.length, 1);
-
-  rerender(
-    <UChatThreadView
-      activeThreadId="thread-1"
-      title="Thread"
-      badges={[]}
-      messages={[baseAssistantMessage({ metadata: { media: { image: { status: "failed" } } } })]}
-      composer={{ text: "", attachments: [] }}
-      runStatus={{ type: "idle" }}
-      threadStatus="ready"
-      capabilities={{ composerActions: [], messagePresentation: {} }}
-      hasKnowledgeBase
-      placeholder="Type"
-      isSendDisabled={false}
-      onComposerTextChange={() => {}}
-      onComposerAttachmentsChange={() => {}}
-      onSend={() => {}}
-      onComposerAction={() => {}}
-      threadContextTags={[]}
-      resolveAttachmentSource={(value) => value}
-      onRequestImage={onRequestImage}
-      showImageAction={false}
-    />,
+  const contentExtension = screen.getByTestId("message-extension-content");
+  assert.ok(
+    answer.compareDocumentPosition(contentExtension) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
   );
-  assert.equal(screen.queryByRole("button", { name: /generate image|生成图片|retry|重试/i }), null);
+  assert.equal(
+    screen.getByTestId("message-extension-actions").textContent,
+    "assistant-1:actions",
+  );
 });
 
-test("UChatThreadView requests TTS when a message has no completed audio", async () => {
-  const onRequestTts = vi.fn(() => Promise.resolve());
+test("UChatThreadView keeps attachments functional in the compact user message editor", async () => {
+  const onEditUserMessage = vi.fn();
   render(
     <UChatThreadView
       activeThreadId="thread-1"
       title="Thread"
       badges={[]}
-      messages={[baseAssistantMessage()]}
+      messages={[
+        baseUserMessage({
+          parts: [
+            { type: "text", text: "question" },
+            {
+              type: "image",
+              source: "/attachments/diagram.png",
+              name: "diagram.png",
+              mimeType: "image/png",
+              assetId: "image-1",
+            },
+            {
+              type: "file",
+              source: "/attachments/report.pdf",
+              name: "report.pdf",
+              mimeType: "application/pdf",
+              assetId: "file-1",
+            },
+          ],
+        }),
+      ]}
       composer={{ text: "", attachments: [] }}
       runStatus={{ type: "idle" }}
       threadStatus="ready"
       capabilities={{ composerActions: [], messagePresentation: {} }}
-      hasKnowledgeBase
+      hasKnowledgeBase={false}
       placeholder="Type"
       isSendDisabled={false}
       onComposerTextChange={() => {}}
       onComposerAttachmentsChange={() => {}}
       onSend={() => {}}
+      onEditUserMessage={onEditUserMessage}
       onComposerAction={() => {}}
       threadContextTags={[]}
       resolveAttachmentSource={(value) => value}
-      onRequestTts={onRequestTts}
     />,
   );
 
-  fireEvent.click(screen.getByRole("button", { name: /play assistant audio|播放助手音频/i }));
-  await waitFor(() => assert.equal(onRequestTts.mock.calls.length, 1));
-});
+  fireEvent.click(screen.getByRole("button", { name: "Edit" }));
 
-test("UChatThreadView regenerates TTS when a succeeded media file is unavailable", async () => {
-  const onRequestTts = vi.fn(() => Promise.resolve());
-  const getPreviewUrl = vi.mocked(getChatMediaPreviewUrl);
-  getPreviewUrl.mockRejectedValue(new Error("media not found"));
-
-  render(
-    <UChatThreadView
-      activeThreadId="thread-1"
-      title="Thread"
-      badges={[]}
-      messages={[baseAssistantMessage({
-        metadata: { media: { tts: { status: "succeeded", mediaId: "audio-1" } } },
-      })]}
-      composer={{ text: "", attachments: [] }}
-      runStatus={{ type: "idle" }}
-      threadStatus="ready"
-      capabilities={{ composerActions: [], messagePresentation: {} }}
-      hasKnowledgeBase
-      placeholder="Type"
-      isSendDisabled={false}
-      onComposerTextChange={() => {}}
-      onComposerAttachmentsChange={() => {}}
-      onSend={() => {}}
-      onComposerAction={() => {}}
-      threadContextTags={[]}
-      resolveAttachmentSource={(value) => value}
-      onRequestTts={onRequestTts}
-    />,
+  const editor = screen.getByPlaceholderText("Edit");
+  assert.equal(editor.getAttribute("rows"), "1");
+  fireEvent.change(editor, {
+    target: { value: "first line\nsecond line\nthird line" },
+  });
+  assert.equal(
+    (editor as HTMLTextAreaElement).value,
+    "first line\nsecond line\nthird line",
   );
+  assert.ok(screen.getByRole("img", { name: "diagram.png" }));
+  assert.ok(screen.getByText("report.pdf"));
+  assert.ok(screen.getByRole("button", { name: "Reset" }));
+  assert.ok(screen.getByRole("button", { name: "Cancel" }));
 
-  fireEvent.click(screen.getByRole("button", { name: /play assistant audio|播放助手音频/i }));
-  await waitFor(() => assert.equal(onRequestTts.mock.calls.length, 1));
-  getPreviewUrl.mockImplementation(async (_threadId, mediaId) => `blob:http://localhost/${mediaId}`);
+  fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+  assert.equal(screen.queryByRole("img", { name: "diagram.png" }), null);
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+  await waitFor(() => {
+    assert.equal(onEditUserMessage.mock.calls.length, 1);
+  });
+  const submittedParts = onEditUserMessage.mock.calls[0]?.[2] as
+    | ChatMessage["parts"]
+    | undefined;
+  assert.deepEqual(submittedParts?.[0], {
+    type: "text",
+    text: "first line\nsecond line\nthird line",
+  });
+  assert.equal(submittedParts?.some((part) => part.type === "image"), false);
+  assert.equal(submittedParts?.some((part) => part.type === "file"), true);
 });
 
 test("UChatThreadView shows loading skeleton instead of welcome hero while hydrating a persisted thread", () => {
@@ -314,7 +320,6 @@ test("UChatThreadView still shows legacy tool trace card when no execution trace
 
 test("UChatThreadView calls onAgentSend when the Agent button is clicked", () => {
   const onAgentSend = vi.fn();
-  const onToggleAgentEnabled = vi.fn();
 
   render(
     <UChatThreadView
@@ -332,13 +337,13 @@ test("UChatThreadView calls onAgentSend when the Agent button is clicked", () =>
       onComposerTextChange={() => {}}
       onComposerAttachmentsChange={() => {}}
       onSend={() => {}}
-      agentEnabled
-      onAgentSend={onAgentSend}
-      onToggleAgentEnabled={onToggleAgentEnabled}
-      agentToggleAvailability={{ enabled: true }}
-      agentAvailability={{ enabled: true }}
-      onApproveAgentRun={() => {}}
-      onRejectAgentRun={() => {}}
+      agent={{
+        enabled: true,
+        submissionAvailability: { enabled: true },
+        onSubmit: onAgentSend,
+        onApprove: () => {},
+        onReject: () => {},
+      }}
       onComposerAction={() => {}}
       threadContextTags={[]}
       resolveAttachmentSource={(value) => value}
@@ -347,13 +352,50 @@ test("UChatThreadView calls onAgentSend when the Agent button is clicked", () =>
 
   fireEvent.click(screen.getByRole("button", { name: "Run in Agent mode" }));
   assert.equal(onAgentSend.mock.calls.length, 1);
-  assert.equal(onToggleAgentEnabled.mock.calls.length, 0);
+});
+
+test("UChatThreadView renders Agent mode through the composer tools slot", () => {
+  render(
+    <UChatThreadView
+      activeThreadId="thread-1"
+      title="Thread"
+      badges={[]}
+      messages={[]}
+      composer={{ text: "hello", attachments: [] }}
+      runStatus={{ type: "idle" }}
+      threadStatus="ready"
+      capabilities={{ composerActions: [], messagePresentation: {} }}
+      hasKnowledgeBase={false}
+      placeholder="Type"
+      isSendDisabled={false}
+      onComposerTextChange={() => {}}
+      onComposerAttachmentsChange={() => {}}
+      onSend={() => {}}
+      agent={{
+        enabled: false,
+        toggleAvailability: { enabled: true },
+        onToggle: () => {},
+      }}
+      onComposerAction={() => {}}
+      threadContextTags={[]}
+      resolveAttachmentSource={(value) => value}
+      slots={{
+        ComposerTools: () => <span>Additional composer tool</span>,
+      }}
+    />,
+  );
+
+  const toggle = screen.getByRole("button", { name: "Enable Agent" });
+  const additionalTool = screen.getByText("Additional composer tool");
+  const composerSurface = screen.getByRole("textbox").parentElement;
+  assert.ok(composerSurface);
+  assert.equal(composerSurface.contains(toggle), true);
+  assert.equal(composerSurface.contains(additionalTool), true);
 });
 
 test("UChatThreadView disables send arrow when Agent is enabled but workspace is unavailable", () => {
   const onAgentSend = vi.fn();
   const onSend = vi.fn();
-  const onToggleAgentEnabled = vi.fn();
 
   render(
     <UChatThreadView
@@ -371,18 +413,15 @@ test("UChatThreadView disables send arrow when Agent is enabled but workspace is
       onComposerTextChange={() => {}}
       onComposerAttachmentsChange={() => {}}
       onSend={onSend}
-      agentEnabled
-      onAgentSend={onAgentSend}
-      onToggleAgentEnabled={onToggleAgentEnabled}
-      agentToggleAvailability={{
-        enabled: false,
-        disabledReason: "Bind a workspace before using Agent.",
-      }}
-      onApproveAgentRun={() => {}}
-      onRejectAgentRun={() => {}}
-      agentAvailability={{
-        enabled: false,
-        disabledReason: "Bind a workspace before using Agent.",
+      agent={{
+        enabled: true,
+        onSubmit: onAgentSend,
+        onApprove: () => {},
+        onReject: () => {},
+        submissionAvailability: {
+          enabled: false,
+          disabledReason: "Bind a workspace before using Agent.",
+        },
       }}
       onComposerAction={() => {}}
       threadContextTags={[]}
@@ -397,13 +436,11 @@ test("UChatThreadView disables send arrow when Agent is enabled but workspace is
   fireEvent.click(button);
   assert.equal(onAgentSend.mock.calls.length, 0);
   assert.equal(onSend.mock.calls.length, 0);
-  assert.equal(onToggleAgentEnabled.mock.calls.length, 0);
 });
 
 test("UChatThreadView keeps normal send enabled when Agent toggle is off", () => {
   const onAgentSend = vi.fn();
   const onSend = vi.fn();
-  const onToggleAgentEnabled = vi.fn();
 
   render(
     <UChatThreadView
@@ -421,18 +458,15 @@ test("UChatThreadView keeps normal send enabled when Agent toggle is off", () =>
       onComposerTextChange={() => {}}
       onComposerAttachmentsChange={() => {}}
       onSend={onSend}
-      agentEnabled={false}
-      onAgentSend={onAgentSend}
-      onToggleAgentEnabled={onToggleAgentEnabled}
-      agentToggleAvailability={{
+      agent={{
         enabled: false,
-        disabledReason: "Bind a workspace before using Agent.",
-      }}
-      onApproveAgentRun={() => {}}
-      onRejectAgentRun={() => {}}
-      agentAvailability={{
-        enabled: false,
-        disabledReason: "Bind a workspace before using Agent.",
+        onSubmit: onAgentSend,
+        onApprove: () => {},
+        onReject: () => {},
+        submissionAvailability: {
+          enabled: false,
+          disabledReason: "Bind a workspace before using Agent.",
+        },
       }}
       onComposerAction={() => {}}
       threadContextTags={[]}
@@ -447,12 +481,9 @@ test("UChatThreadView keeps normal send enabled when Agent toggle is off", () =>
   fireEvent.click(button);
   assert.equal(onSend.mock.calls.length, 1);
   assert.equal(onAgentSend.mock.calls.length, 0);
-  assert.equal(onToggleAgentEnabled.mock.calls.length, 0);
 });
 
-test("UChatThreadView calls the real Agent toggle handler", () => {
-  const onToggleAgentEnabled = vi.fn();
-
+test("UChatThreadView renders the ComposerTools slot", () => {
   render(
     <UChatThreadView
       activeThreadId="thread-1"
@@ -469,67 +500,16 @@ test("UChatThreadView calls the real Agent toggle handler", () => {
       onComposerTextChange={() => {}}
       onComposerAttachmentsChange={() => {}}
       onSend={() => {}}
-      agentEnabled={false}
-      onToggleAgentEnabled={onToggleAgentEnabled}
-      agentToggleAvailability={{
-        enabled: true,
-      }}
-      agentAvailability={{
-        enabled: true,
-      }}
-      onApproveAgentRun={() => {}}
-      onRejectAgentRun={() => {}}
       onComposerAction={() => {}}
       threadContextTags={[]}
       resolveAttachmentSource={(value) => value}
+      slots={{
+        ComposerTools: () => <span>Injected composer tools</span>,
+      }}
     />,
   );
 
-  fireEvent.click(screen.getByRole("button", { name: "Enable Agent" }));
-  assert.equal(onToggleAgentEnabled.mock.calls.length, 1);
-});
-
-test("UChatThreadView disables enabling Agent when workspace is unavailable", () => {
-  const onToggleAgentEnabled = vi.fn();
-
-  render(
-    <UChatThreadView
-      activeThreadId={null}
-      title="Thread"
-      badges={[]}
-      messages={[]}
-      composer={{ text: "hello", attachments: [] }}
-      runStatus={{ type: "idle" }}
-      threadStatus="ready"
-      capabilities={{ composerActions: [], messagePresentation: {} }}
-      hasKnowledgeBase={false}
-      placeholder="Type"
-      isSendDisabled={false}
-      onComposerTextChange={() => {}}
-      onComposerAttachmentsChange={() => {}}
-      onSend={() => {}}
-      agentEnabled={false}
-      onToggleAgentEnabled={onToggleAgentEnabled}
-      agentToggleAvailability={{
-        enabled: false,
-        disabledReason: "Bind a workspace before using Agent.",
-      }}
-      agentAvailability={{
-        enabled: false,
-        disabledReason: "Bind a workspace before using Agent.",
-      }}
-      onApproveAgentRun={() => {}}
-      onRejectAgentRun={() => {}}
-      onComposerAction={() => {}}
-      threadContextTags={[]}
-      resolveAttachmentSource={(value) => value}
-    />,
-  );
-
-  const button = screen.getByRole("button", { name: "Enable Agent" });
-  assert.equal(button.hasAttribute("disabled"), true);
-  fireEvent.click(button);
-  assert.equal(onToggleAgentEnabled.mock.calls.length, 0);
+  assert.ok(screen.getByText("Injected composer tools"));
 });
 
 test("UChatThreadView exposes workspace submenu actions from composer menu", async () => {
@@ -614,8 +594,6 @@ test("UChatThreadView renders blocked agent status", () => {
       onComposerTextChange={() => {}}
       onComposerAttachmentsChange={() => {}}
       onSend={() => {}}
-      onApproveAgentRun={() => {}}
-      onRejectAgentRun={() => {}}
       onComposerAction={() => {}}
       threadContextTags={[]}
       resolveAttachmentSource={(value) => value}
@@ -652,8 +630,6 @@ test("UChatThreadView renders failed agent status when failure card is not prese
       onComposerTextChange={() => {}}
       onComposerAttachmentsChange={() => {}}
       onSend={() => {}}
-      onApproveAgentRun={() => {}}
-      onRejectAgentRun={() => {}}
       onComposerAction={() => {}}
       threadContextTags={[]}
       resolveAttachmentSource={(value) => value}
@@ -691,12 +667,10 @@ test("UChatThreadView shows agent running copy for streaming agent reply", () =>
       onComposerTextChange={() => {}}
       onComposerAttachmentsChange={() => {}}
       onSend={() => {}}
-      onApproveAgentRun={() => {}}
-      onRejectAgentRun={() => {}}
+      agent={{ enabled: true, running: true }}
       onComposerAction={() => {}}
       threadContextTags={[]}
       resolveAttachmentSource={(value) => value}
-      isAgentRunning
     />,
   );
 
@@ -735,8 +709,11 @@ test("UChatThreadView shows approve and reject actions for waiting approval agen
       onComposerTextChange={() => {}}
       onComposerAttachmentsChange={() => {}}
       onSend={() => {}}
-      onApproveAgentRun={onApproveAgentRun}
-      onRejectAgentRun={() => Promise.resolve()}
+      agent={{
+        enabled: true,
+        onApprove: onApproveAgentRun,
+        onReject: () => Promise.resolve(),
+      }}
       onComposerAction={() => {}}
       threadContextTags={[]}
       resolveAttachmentSource={(value) => value}
@@ -779,8 +756,11 @@ test("UChatThreadView calls approve action for waiting approval agent messages",
       onComposerTextChange={() => {}}
       onComposerAttachmentsChange={() => {}}
       onSend={() => {}}
-      onApproveAgentRun={onApproveAgentRun}
-      onRejectAgentRun={() => Promise.resolve()}
+      agent={{
+        enabled: true,
+        onApprove: onApproveAgentRun,
+        onReject: () => Promise.resolve(),
+      }}
       onComposerAction={() => {}}
       threadContextTags={[]}
       resolveAttachmentSource={(value) => value}
@@ -828,8 +808,11 @@ test("UChatThreadView calls reject action for waiting approval agent messages", 
       onComposerTextChange={() => {}}
       onComposerAttachmentsChange={() => {}}
       onSend={() => {}}
-      onApproveAgentRun={() => Promise.resolve()}
-      onRejectAgentRun={onRejectAgentRun}
+      agent={{
+        enabled: true,
+        onApprove: () => Promise.resolve(),
+        onReject: onRejectAgentRun,
+      }}
       onComposerAction={() => {}}
       threadContextTags={[]}
       resolveAttachmentSource={(value) => value}
@@ -879,8 +862,11 @@ test("UChatThreadView shows inline error and re-enables buttons when approval fa
       onComposerTextChange={() => {}}
       onComposerAttachmentsChange={() => {}}
       onSend={() => {}}
-      onApproveAgentRun={onApproveAgentRun}
-      onRejectAgentRun={() => Promise.resolve()}
+      agent={{
+        enabled: true,
+        onApprove: onApproveAgentRun,
+        onReject: () => Promise.resolve(),
+      }}
       onComposerAction={() => {}}
       threadContextTags={[]}
       resolveAttachmentSource={(value) => value}

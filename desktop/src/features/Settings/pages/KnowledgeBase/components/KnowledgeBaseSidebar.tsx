@@ -122,7 +122,7 @@ export default function KnowledgeBaseSidebar({
                 onClick={() => onSelectKnowledgeBase(item.id)}
                 className={`group flex w-full items-start gap-2 rounded-lg border px-3 py-2 text-left transition-all duration-150 ${
                   isActive
-                    ? "border-primary/25 bg-primary/10 text-primary"
+                    ? "border-primary/30 bg-primary/5 text-text-primary"
                     : "border-transparent text-text-secondary hover:bg-surface-secondary hover:text-text-primary"
                 }`}
               >
@@ -131,7 +131,7 @@ export default function KnowledgeBaseSidebar({
                     <span
                       className={`truncate text-sm font-medium ${
                         isActive
-                          ? "text-primary"
+                          ? "text-text-primary"
                           : "text-text-primary group-hover:text-text-primary"
                       }`}
                     >
@@ -140,7 +140,7 @@ export default function KnowledgeBaseSidebar({
                     <span
                       className={`ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md px-1.5 text-[10px] font-medium tabular-nums transition-colors ${
                         isActive
-                          ? "bg-primary/15 text-primary"
+                          ? "bg-primary/10 text-primary"
                           : "bg-surface-secondary text-text-tertiary group-hover:bg-surface-primary"
                       }`}
                     >
@@ -150,7 +150,7 @@ export default function KnowledgeBaseSidebar({
                   {updatedAtLabel ? (
                     <div
                       className={`mt-0.5 truncate text-[11px] leading-4 tabular-nums ${
-                        isActive ? "text-primary/70" : "text-text-tertiary"
+                        isActive ? "text-text-secondary" : "text-text-tertiary"
                       }`}
                     >
                       {updatedAtLabel}

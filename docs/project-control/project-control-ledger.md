@@ -1,7 +1,7 @@
 ---
 status: current
 owner: project-owner
-last_verified: 2026-07-09
+last_verified: 2026-07-22
 layer: project-control
 module: ProjectControl
 feature: ProjectControlLedger
@@ -34,7 +34,7 @@ related:
 | --- | --- | --- | --- | --- |
 | Project Control Governance | `IN_PROGRESS` | 建立唯一总控制台账，停止多 workboard 争抢当前真相 | [governance-principles.md](governance-principles.md) | 本文件建立后，其他 workboard 只作为证据来源 |
 | Harness Context System | `DONE` | Context Read Bench 已验收通过，补齐真实读取压测 | [harness_context_T001](tasks/harness_context_T001-context-read-plan-dsl.md), [harness_context_T002](tasks/harness_context_T002-context-read-bench.md) | T001、T002 已 DONE；整仓检查仍有任务外 typecheck 阻断 |
-| AgentGraph / Agent V1.5 | `READY_FOR_REVIEW` | 主链合同、弱模型防线、审批恢复、evidence grounded answer | [agent-nodes-workboard.md](agent-nodes-workboard.md), `agent_node_T001-T017` | 旧专项 workboard 存在状态冲突，见下方 Agent Nodes Index |
+| AgentGraph / Agent V1.5 | `READY_FOR_REVIEW` | T044 已实现 contextual follow-up、`ask_user` 确定性交付与内部 tool-call 文本泄漏防护 | [agent_node_T044](tasks/agent_node_T044-contextual-followup-ask-user-protocol-guard.md), [agent-nodes-workboard.md](agent-nodes-workboard.md) | 定向回归、server typecheck、`pnpm check` 已通过；等待 owner smoke 与正式评审 |
 | Agent V1.5 Stabilization 8-Card Package | `TODO` | 登记 T01-T08 施工任务卡，按依赖顺序推进 Agent V1.5 稳定化 | [Agent V1.5 Index](#agent-v15-stabilization-index), [T01](tasks/agent_v15_T01-state-ssot.md) | 8 张任务卡已纳入当前总台账；施工卡状态统一为 `TODO`，尚未开始实现 |
 | Harness / Sandbox | `READY_FOR_REVIEW` | 候选排序、sandbox direct contract、artifact/output contract；L1 workspace sandbox runner 已通过，跨层 diagnostics 闭环已补专门回归并通过 `pnpm check` | [T-010](tasks/T-010-harness-candidate-ordering.md), [T-011](tasks/T-011-sandbox-contract-direct-bench.md), [T-012](tasks/T-012-l1-workspace-sandbox-runner.md), [T-013](tasks/T-013-sandbox-artifact-output-contract.md), [T-014](tasks/T-014-cross-layer-diagnostics-closure.md) | T-012、T-013、T-014 已 DONE，其余仍按各自任务状态处理 |
 | Deep Agents Spike | `IN_PROGRESS` | `T-DeepAgents-02` 已整改为诚实 baseline：fake wiring 与 real selector quality 已拆开；当前 real selector baseline 因缺少环境配置而 `SKIPPED`，`T-03` 保持阻塞 | [T-DeepAgents-01](tasks/T-DeepAgents-01-deepagents-js-spike.md), [T-DeepAgents-02](tasks/T-DeepAgents-02-selector-middleware-baseline.md) | 独立 spike package，`T-01` 已形成条件通过结论；`T-02` 当前结论是 middleware wiring 通过、middleware extractability 部分成立，但 real selector quality 仍未证明 |
@@ -42,6 +42,7 @@ related:
 | Codebase Understanding Docs | `IN_PROGRESS` | `code_T015` 已把 repo pollution 风险固定成刚性阻断；`code_T016` 已把 blocked-safe 状态做成 owner 可理解的前端工作台；`code_T017` 现已把微应用配置、owner 显式授权、Harness capability reconcile 和 Fake Provider E2E 验证接成闭环，但真实 `CodeGraph 1.3.0` 仍保持 blocked | [code_T001](tasks/code_T001-codebase-understanding-consensus-doc-integration.md), [code_T002](tasks/code_T002-codebase-engine-benchmark.md), [code_T003](tasks/code_T003-codegraph-managed-mcp-spike.md), [code_T004](tasks/code_T004-codebase-engine-abstraction.md), [code_T006](tasks/code_T006-codegraph-benchmark-spike.md), [code_T007](tasks/code_T007-codegraph-wrapper-contract.md), [code_T008](tasks/code_T008-codegraph-managed-mcp-runtime-implementation-plan.md), [code_T009](tasks/code_T009-codegraph-managed-mcp-runtime-spike.md), [code_T010](tasks/code_T010-codebase-explore-wrapper-runtime.md), [code_T011](tasks/code_T011-codegraph-verification-bridge.md), [code_T012](tasks/code_T012-codegraph-trace-diagnostics.md), [code_T013](tasks/code_T013-codegraph-controlled-planner-exposure.md), [code_T014](tasks/code_T014-codegraph-real-provider-smoke.md), [code_T015](tasks/code_T015-codegraph-external-index-root-repo-pollution-control.md), [code_T016](tasks/code_T016-codegraph-studio-desktop-ux-polish.md), [code_T017](tasks/code_T017-codegraph-microapp-controlled-capability-wiring.md), [code_T014 report](reviews/code_T014-codegraph-real-provider-smoke-report.md), [code_T015 report](reviews/code_T015-codegraph-external-index-root-report.md), [review](reviews/codebase-understanding-docs-review-index.md), [codegraph benchmark spike](reviews/codegraph-benchmark-spike.md), [code_T009 review](reviews/code_T009-codegraph-managed-mcp-runtime-spike-review.md), [code_T010 review](reviews/code_T010-codebase-explore-wrapper-runtime-review.md), [code_T011 review](reviews/code_T011-codegraph-verification-bridge-review.md), [code_T012 review](reviews/code_T012-codegraph-trace-diagnostics-review.md), [code_T013 review](reviews/code_T013-codegraph-controlled-planner-exposure-review.md), [code_T014 review](reviews/code_T014-codegraph-real-provider-smoke-review.md), [TD-T016-01](decisions/TD-T016-01-microapp-definition-reconcile-gap.md) | 默认不启用 `codebase_explore`；不允许把 blocked 写成 pass；真实 provider 仍保持 blocked；Fake Provider 仅用于端到端验证；`micro_app_definitions` 旧记录回填仍依赖 seed reconcile |
 | Agent Runtime T29-T33 Task Pack | `TODO` | 登记 `server` 测试全绿、failed tool 路径合同、terminal 结果语义、结构化 failure code、核心工具 summary contract 五个任务包 | [agent-runtime-t29-t33-ledger.md](../tooling-runtime/agent-runtime-t29-t33-ledger.md), [agent_node_T029](tasks/agent_node_T029-server-test-report-green.md), [agent_node_T030](tasks/agent_node_T030-failed-tool-path-contract.md), [agent_node_T031](tasks/agent_node_T031-terminal-result-semantics.md), [agent_node_T032](tasks/agent_node_T032-structured-failure-code.md), [agent_node_T033](tasks/agent_node_T033-core-tool-summary-contracts.md) | 已完成仓库内正式登记；当前只新增任务卡和专项台账，未开始实现 |
 | MCP Agent Job Release | `IN_PROGRESS` | 外部 MCP 市场应用接入 Agent 的资格、候选暴露与黑盒调用闭环；按 T001 → T002 → T003 顺序审查 | [mcp_agent_T001](tasks/mcp_agent_T001-external-mcp-agent-eligibility.md), [mcp_agent_T002](tasks/mcp_agent_T002-external-mcp-agent-exposure-and-selection.md), [mcp_agent_T003](tasks/mcp_agent_T003-external-mcp-agent-invocation-blackbox.md) | T001、T002 已通过本地主审查；T003 进入下一阶段审查 |
+| Attached Browser Integration | `READY_FOR_REVIEW` | T001 Runtime 接入与 T002 Tool Workbench capability ownership 分组均已待评审 | [browser_attached_T001](tasks/browser_attached_T001-harness-capability-integration.md), [browser_attached_T002](tasks/browser_attached_T002-tool-workbench-capability-grouping.md) | T002 已显示 `Computer Use 3` 与 `触界 4`，产品文案已改为“产品能力组”；触界四 tab 的独立 Electron 切换实测仍待补 |
 | Agent Phase 1 | `ARCHIVED_DONE` | Agent MVP 主链历史归档 | [agent-phase-1-2-archive-decision.md](phase-conclusions/agent-phase-1-2-archive-decision.md), [agent-phase-1-checklist.md](../chat/agent-phase-1-checklist.md) | 一期完成归档；剩余增强项转后续 |
 | Agent Phase 2 | `ARCHIVED_PARTIAL_SUPERSEDED` | 可用闭环阶段部分归档，后续由 Agent V1.5 / 老三期接管 | [agent-phase-1-2-archive-decision.md](phase-conclusions/agent-phase-1-2-archive-decision.md), [agent-phase-2-checklist.md](../chat/agent-phase-2-checklist.md) | 不按完成归档；未完成项不得口头升级为 DONE |
 | Phase-1 Remediation | `DONE_WITH_HISTORY` | 早期 P0/P1/P2 缺陷整改 | [agent-workboard.md](agent-workboard.md), `T-001-T008` | 仅作为历史证据，不再作为当前项目台账；阶段口径见 Agent Phase 1 |
@@ -75,6 +76,7 @@ related:
 | [agent_node_T041](tasks/agent_node_T041-toolselect-coverage-aware-routing.md) | `DONE` | AgentGraph | `ToolSelect Coverage-Aware Routing` 已完成：`effectiveQuery` 固定输出 original query / review context / remaining coverage / preferred next action 四段，matcher 与 selector 共同围绕剩余缺口选工具；定向回归 27/27 通过，`pnpm check` 已通过 |
 | [agent_node_T042](tasks/agent_node_T042-recovery-replan-coverage-contract.md) | `DONE` | AgentGraph | `Recovery / Replan Coverage Contract` 已完成：正式施工卡已回填，recoverable / terminal / repeated guard / recovery exhausted 合同已用定向回归固化；`coverage-state`、planner、graph 与 terminal failure 定向回归 8 条通过，`pnpm check` 已通过 |
 | [agent_node_T043](tasks/agent_node_T043-coverage-driven-blackbox-regression-suite.md) | `DONE` | AgentGraph | `Coverage-driven Blackbox Regression Suite` 已完成：补齐 single-target `read_locate` answer、`read_locate -> read_open` bridge、双文件内容任务必须全量完成后才 answer 的近黑盒回归；定向图测试 3 条通过，`pnpm check` 已通过 |
+| [agent_node_T044](tasks/agent_node_T044-contextual-followup-ask-user-protocol-guard.md) | `READY_FOR_REVIEW` | AgentGraph | 三项最小整改及自动回归已完成；等待 owner smoke A/B 和正式评审 |
 | [core_tools_T008](tasks/core_tools_T008-read-locate-keyword-preview.md) | `READY_FOR_REVIEW` | Core Tools | 评审 read locate preview |
 | [core_tools_T011](tasks/core_tools_T011-selector-create-file-prefers-edit.md) | `READY_FOR_REVIEW` | Core Tools | 评审 create-file selector 策略 |
 | [core_tools_T017](tasks/core_tools_T017-web-search-artifact-sensitive-field-scrubbing.md) | `READY_FOR_REVIEW` | Core Tools | 评审敏感字段清理 |
@@ -90,6 +92,8 @@ related:
 | [mcp_agent_T001](tasks/mcp_agent_T001-external-mcp-agent-eligibility.md) | `DONE` | MCP Agent / Eligibility | 本地主审查通过；定向测试、两端 typecheck 与 `pnpm check` 均通过 |
 | [mcp_agent_T002](tasks/mcp_agent_T002-external-mcp-agent-exposure-and-selection.md) | `DONE` | MCP Agent / Exposure and Selection | 本地主审查通过；真实 eligibility matcher 接线、allowlist/disabled/stale 过滤、task model、Tool Guard、topK/maxTools 和四态 diagnostics 已有证据；定向测试 190/190，`pnpm check` 通过 |
 | [mcp_agent_T003](tasks/mcp_agent_T003-external-mcp-agent-invocation-blackbox.md) | `BLOCKED` | MCP Agent / Invocation Blackbox | 任务卡原始 `task_state: BLOCKED_BY_T002`；T002 通过后进入审查；要求完整黑盒和真实前台 smoke |
+| [browser_attached_T001](tasks/browser_attached_T001-harness-capability-integration.md) | `READY_FOR_REVIEW` | Harness / Attached Browser | 自动验证通过；等待 owner 明确请求评审，真实扩展 look → act → look 与 stale / timeout / auth 集成证据仍缺失 |
+| [browser_attached_T002](tasks/browser_attached_T002-tool-workbench-capability-grouping.md) | `READY_FOR_REVIEW` | Tool Workbench / Capability Grouping | Capability ownership 投影、前端 group 分组和产品组文案已实现；自动验证和 3/4 UI 展示通过，触界四 tab 的独立 Electron 切换实测待补 |
 | [T-012](tasks/T-012-l1-workspace-sandbox-runner.md) | `DONE` | Harness / Sandbox | Review 02 已通过：L1 workspace sandbox runner |
 | [T-009](tasks/T-009-test-report-json-consolidation.md) | `PROPOSED` | Evidence Hygiene | 决定是否进入执行队列 |
 | [harness_context_T002](tasks/harness_context_T002-context-read-bench.md) | `DONE` | Harness Context | 已验收通过；保留任务外 typecheck 阻断记录 |
@@ -203,6 +207,7 @@ related:
 | [agent_node_T041](tasks/agent_node_T041-toolselect-coverage-aware-routing.md) | `DONE` | `DONE` | 已加固 `toolSelectNode` 的 coverage-aware `effectiveQuery` 结构与 preferred next action 路由提示；matcher / selector 共同使用增强 query，`resolvedToolIntent.query` 仍保持原始用户语义 |
 | [agent_node_T042](tasks/agent_node_T042-recovery-replan-coverage-contract.md) | `DONE` | `DONE` | 已把误建的评审卡覆盖回正式施工卡；当前运行时代码无需追加修改，主要补的是 T042 相关图测试口径和正式任务证据，少量其他旧测试仍按 task-model 调用次数计数，后续可单独整理 |
 | [agent_node_T043](tasks/agent_node_T043-coverage-driven-blackbox-regression-suite.md) | `DONE` | `DONE` | 已补齐 T043 最容易回归的近黑盒闸门：单目标 locate 可回答、locate 后仍要内容时必须转 `read_open`、README.md / AGENTS.md 双文件内容任务必须全量完成后才 answer；当前不改运行时代码，只补正式任务卡、台账和图测试证据 |
+| [agent_node_T044](tasks/agent_node_T044-contextual-followup-ask-user-protocol-guard.md) | `READY_FOR_REVIEW` | `READY_FOR_REVIEW` | Planner contextual follow-up、deterministic ask_user、narrow protocol leak guard 已实现并通过定向回归；待 owner smoke / 正式评审 |
 
 ## Agent V1.5 Stabilization Index
 
@@ -298,6 +303,8 @@ related:
 | [T-014](tasks/T-014-cross-layer-diagnostics-closure.md) | `DONE` | cross-layer diagnostics closure（dedicated regression + evidence/generate fix） |
 | [T-DeepAgents-01](tasks/T-DeepAgents-01-deepagents-js-spike.md) | `READY_FOR_REVIEW` | deepagents 独立集成验证已完成，结论是“有条件通过”，不进入现有 Harness 主线 |
 | [T-DeepAgents-02](tasks/T-DeepAgents-02-selector-middleware-baseline.md) | `READY_FOR_REVIEW` | baseline 已整改为诚实口径：middleware wiring 通过，real selector baseline 在当前环境 `SKIPPED`，selector quality `NOT PROVEN`，不进入现有 Harness 主线 |
+| [browser_attached_T001](tasks/browser_attached_T001-harness-capability-integration.md) | `READY_FOR_REVIEW` | Attached Browser Harness integration；代码与自动验证已提交，真实 Chrome 主链证据待补 |
+| [browser_attached_T002](tasks/browser_attached_T002-tool-workbench-capability-grouping.md) | `READY_FOR_REVIEW` | Tool Workbench 已按 capability ownership 拆分 `Computer Use 3` 与 `触界 4`；domain 仍为 runtime governance 分类 |
 
 ## Technical Debt Index
 

@@ -29,7 +29,10 @@ import {
 } from "@/shared/api/thread";
 import { getBuiltinAvatarPack16Options } from "@/shared/avatars";
 import { getDesktopRuntime } from "@/shared/platform/desktopRuntime";
-import { UChatThreadView } from "@/shared/uchat/ui";
+import {
+  UChatThreadView,
+  type UChatThreadSlots,
+} from "@/shared/uchat/ui";
 import type { ChatComposerAction, ChatThreadContextTag } from "@/shared/uchat/core";
 import { Modal, SearchSelectModal, message, TextInput, Button } from "@/shared/ui";
 import {
@@ -45,6 +48,14 @@ import {
   generateChatMessageImage,
   synthesizeChatMessageTts,
 } from "../adapters/chatMediaOrchestration";
+import {
+  DesktopChatMessageExtensions,
+  DesktopChatMessageExtensionsProvider,
+} from "./DesktopChatMessageExtensions";
+
+const desktopChatThreadSlots = {
+  MessageExtensions: DesktopChatMessageExtensions,
+} satisfies UChatThreadSlots;
 
 const modelBadgeMeta = {
   llm: { label: "LLM", icon: EthernetPort },
@@ -542,60 +553,76 @@ export default function UChatThread() {
 
   return (
     <>
-      <UChatThreadView
-        activeThreadId={activeThreadId}
-        title={
-          activeThread?.title ||
-          (messages.length === 0 ? t("chat.thread.header.newConversation") : t("chat.thread.header.untitledConversation"))
-        }
-        badges={modelBadges}
-        messages={messages}
-        composer={composer}
-        runStatus={runStatus}
-        threadStatus={threadStatus}
-        capabilities={capabilities}
-        hasKnowledgeBase={hasKnowledgeBase}
-        placeholder={placeholder}
-        isSendDisabled={isSendDisabled}
-        onComposerTextChange={(value) => runtime.setComposerText(value)}
-        onComposerAttachmentsChange={(files) => runtime.setComposerAttachments(files)}
-        onComposerAttachmentsAppend={(files) => runtime.appendComposerAttachments(files)}
-        onComposerAttachmentRemove={(attachmentId) => runtime.removeComposerAttachment(attachmentId)}
-        onSend={() => runtime.send()}
-        onAgentSend={handleAgentSend}
-        onApproveAgentRun={handleApproveAgentRun}
-        onRejectAgentRun={handleRejectAgentRun}
-        onCancelSend={() => runtime.cancelSend()}
-        onRegenerate={(messageId) => runtime.regenerate(messageId)}
-        onEditUserMessage={(messageId, text, parts) => runtime.editUserMessage(messageId, text, parts)}
-        onComposerAction={handleComposerAction}
-        threadContextTags={threadContextTags}
-        onRemoveThreadContextTag={handleRemoveThreadContextTag}
-        resolveAttachmentSource={resolveAttachmentSource}
-        assistantAvatarSrc={activeRoleAvatarSrc}
-        assistantDisplayName={activeRole?.name}
-        assistantTypingLabel={assistantTypingLabel}
-        isAgentRunning={isAgentRunning}
-        agentEnabled={isAgentEnabled}
-        agentToggleAvailability={{
-          enabled: hasWorkspaceBound,
-          disabledReason: !hasWorkspaceBound
-            ? t("chat.thread.agent.workspaceRequired")
-            : undefined,
-        }}
-        agentAvailability={{
-          enabled: canRunAgent,
-          disabledReason: !hasWorkspaceBound
-            ? t("chat.thread.agent.workspaceRequired")
-            : !isAgentEnabled
-              ? t("chat.thread.agent.enableFirst")
-              : undefined,
-        }}
-        onToggleAgentEnabled={handleToggleAgentEnabled}
+      <DesktopChatMessageExtensionsProvider
         onRequestTts={handleRequestTts}
         onRequestImage={showImageAction ? handleRequestImage : undefined}
         showImageAction={showImageAction}
-      />
+      >
+        <UChatThreadView
+          activeThreadId={activeThreadId}
+          title={
+            activeThread?.title ||
+            (messages.length === 0
+              ? t("chat.thread.header.newConversation")
+              : t("chat.thread.header.untitledConversation"))
+          }
+          badges={modelBadges}
+          messages={messages}
+          composer={composer}
+          runStatus={runStatus}
+          threadStatus={threadStatus}
+          capabilities={capabilities}
+          hasKnowledgeBase={hasKnowledgeBase}
+          placeholder={placeholder}
+          isSendDisabled={isSendDisabled}
+          onComposerTextChange={(value) => runtime.setComposerText(value)}
+          onComposerAttachmentsChange={(files) =>
+            runtime.setComposerAttachments(files)
+          }
+          onComposerAttachmentsAppend={(files) =>
+            runtime.appendComposerAttachments(files)
+          }
+          onComposerAttachmentRemove={(attachmentId) =>
+            runtime.removeComposerAttachment(attachmentId)
+          }
+          onSend={() => runtime.send()}
+          onCancelSend={() => runtime.cancelSend()}
+          onRegenerate={(messageId) => runtime.regenerate(messageId)}
+          onEditUserMessage={(messageId, text, parts) =>
+            runtime.editUserMessage(messageId, text, parts)
+          }
+          onComposerAction={handleComposerAction}
+          threadContextTags={threadContextTags}
+          onRemoveThreadContextTag={handleRemoveThreadContextTag}
+          resolveAttachmentSource={resolveAttachmentSource}
+          assistantAvatarSrc={activeRoleAvatarSrc}
+          assistantDisplayName={activeRole?.name}
+          assistantTypingLabel={assistantTypingLabel}
+          agent={{
+            enabled: isAgentEnabled,
+            running: isAgentRunning,
+            toggleAvailability: {
+              enabled: hasWorkspaceBound,
+              disabledReason: !hasWorkspaceBound
+                ? t("chat.thread.agent.workspaceRequired")
+                : undefined,
+            },
+            submissionAvailability: {
+              enabled: canRunAgent,
+              disabledReason: !hasWorkspaceBound
+                ? t("chat.thread.agent.workspaceRequired")
+                : !isAgentEnabled
+                  ? t("chat.thread.agent.enableFirst")
+                  : undefined,
+            },
+            onToggle: handleToggleAgentEnabled,
+            onSubmit: handleAgentSend,
+            onApprove: handleApproveAgentRun,
+            onReject: handleRejectAgentRun,
+          }}
+          slots={desktopChatThreadSlots}
+        />
+      </DesktopChatMessageExtensionsProvider>
 
       <SearchSelectModal<RoleSummary[]>
         open={isRolePickerOpen}

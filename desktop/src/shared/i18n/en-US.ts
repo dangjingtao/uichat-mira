@@ -611,6 +611,9 @@ const enUS = {
       account: {
         changePassword: "Change Password",
       },
+      developmentEnvironment: {
+        title: "Development Environment Kit",
+      },
       proxy: {
         title: "SOCKS5 Proxy",
         description: "Leave host or port empty to keep the proxy disabled.",

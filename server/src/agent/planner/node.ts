@@ -415,9 +415,16 @@ export const nextActionPlannerNode = async (
     plannerVisibleTaskFrame,
     updatedPlannerTaskFrame,
   );
+  const hasPriorConversationTurn =
+    state.messages.filter(
+      (message) => message.role === "user" || message.role === "assistant",
+    ).length > 1;
   const plannedTaskFrame = applyPlannerTaskPlan(
     plannerTaskFrame,
     plannerTaskPlanUpdate,
+    {
+      projectTaskSemantics: hasPriorConversationTurn,
+    },
   );
   const nextPlanDiagnostics = getPlannerTaskPlanDiagnostics(plannedTaskFrame);
 
@@ -478,6 +485,7 @@ export const nextActionPlannerNode = async (
         observationContext.accumulatedActionLedger.repeatedSemanticActions,
       ...nextPlanDiagnostics,
       planUpdated: Boolean(plannerTaskPlanUpdate),
+      boundedConversationHistoryAvailable: hasPriorConversationTurn,
       planRevisionReason: plannerTaskPlanUpdate?.revisionReason ?? null,
       rawOutputPreview: rawOutput ? toPreview(rawOutput) : undefined,
       sanitizedOutputPreview: sanitizedOutput ? toPreview(sanitizedOutput) : undefined,

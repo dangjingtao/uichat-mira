@@ -23,6 +23,8 @@ extraResources:
     to: runtime.config.cjs
   - from: ./node-runtime
     to: node-runtime
+  - from: ./terminal-runtime
+    to: terminal-runtime
   - from: ./micro-apps/tts/piper
     to: micro-apps/tts/piper
     filter:

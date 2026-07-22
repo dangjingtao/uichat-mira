@@ -139,6 +139,8 @@ const chatPending = {
       },
       actions: {
         copy: "Copy",
+        copySuccess: "Copied",
+        copyFailed: "Copy failed, please try again",
         edit: "Edit",
         regenerate: "Regenerate",
         previousBranch: "Previous branch",

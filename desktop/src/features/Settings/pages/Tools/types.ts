@@ -5,10 +5,10 @@ import type {
   McpWorkspaceSelection,
 } from "@/shared/api/tools";
 
-export type ToolWorkbenchDomain = McpToolDefinition["domain"];
+export type ToolWorkbenchGroupId = string;
 
-export type ToolDomainSummary = {
-  id: ToolWorkbenchDomain;
+export type ToolGroupSummary = {
+  id: ToolWorkbenchGroupId;
   label: string;
   description: string;
   count: number;
@@ -18,11 +18,11 @@ export type ToolDomainSummary = {
 
 export type WorkbenchToolDefinition = McpToolDefinition & {
   source: "internal";
-  domain: ToolWorkbenchDomain;
+  workbench: NonNullable<McpToolDefinition["workbench"]>;
 };
 
 export type ToolsWorkbenchState = {
-  activeDomain: ToolWorkbenchDomain;
+  activeGroupId: ToolWorkbenchGroupId;
   selectedToolId: string | null;
   argsDraft: string;
   isRunning: boolean;

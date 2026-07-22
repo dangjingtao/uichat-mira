@@ -102,7 +102,7 @@ test("different attempt keys keep repeated semantic nodes visible", () => {
 
   fireEvent.click(screen.getByRole("button"));
   assert.ok(screen.getByText("第一轮动作"));
-  assert.ok(screen.getByText("第二轮动作"));
+  assert.ok(screen.getAllByText("第二轮动作").length >= 1);
 });
 
 const completedStep = (

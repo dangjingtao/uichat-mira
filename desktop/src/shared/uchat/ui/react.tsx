@@ -1,6 +1,8 @@
 import {
   createContext,
   useContext,
+  useEffect,
+  useRef,
   type ReactNode,
 } from "react";
 import { useStore } from "zustand";
@@ -10,6 +12,62 @@ import type { ChatRuntime } from "../core/runtime";
 // React bindings are intentionally separate from uchat core so the runtime can
 // stay framework-agnostic and still be convenient for React consumers.
 const UChatRuntimeContext = createContext<ChatRuntime | null>(null);
+
+export type UChatApplicationStateProviderProps = {
+  sessionKey: string | number;
+  createRuntime: () => ChatRuntime;
+  disposeRuntime?: (runtime: ChatRuntime) => void;
+  children: ReactNode;
+};
+
+function UChatApplicationStateScope({
+  createRuntime,
+  disposeRuntime,
+  children,
+}: Omit<UChatApplicationStateProviderProps, "sessionKey">) {
+  const runtimeRef = useRef<ChatRuntime | null>(null);
+  const disposeRuntimeRef = useRef(disposeRuntime);
+  disposeRuntimeRef.current = disposeRuntime;
+
+  if (!runtimeRef.current) {
+    runtimeRef.current = createRuntime();
+  }
+
+  const runtime = runtimeRef.current;
+
+  useEffect(
+    () => () => {
+      disposeRuntimeRef.current?.(runtime);
+    },
+    [runtime],
+  );
+
+  return (
+    <UChatRuntimeProvider runtime={runtime}>{children}</UChatRuntimeProvider>
+  );
+}
+
+// UChatApplicationStateProvider owns one runtime for one application session.
+// App integrations inject adapters through createRuntime without coupling UChat
+// to authentication, routing, transport, or product-specific state.
+export function UChatApplicationStateProvider({
+  sessionKey,
+  createRuntime,
+  disposeRuntime,
+  children,
+}: UChatApplicationStateProviderProps) {
+  const scopeKey = `${typeof sessionKey}:${String(sessionKey)}`;
+
+  return (
+    <UChatApplicationStateScope
+      key={scopeKey}
+      createRuntime={createRuntime}
+      disposeRuntime={disposeRuntime}
+    >
+      {children}
+    </UChatApplicationStateScope>
+  );
+}
 
 // UChatRuntimeProvider exposes a ChatRuntime instance to React consumers.
 export function UChatRuntimeProvider({

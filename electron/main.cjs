@@ -377,6 +377,7 @@ async function startBackend() {
       SETTINGS_SECRET: settingsSecret,
       UI_CHAT_ALLOW_DEFAULT_BOOTSTRAP: "1",
       UI_CHAT_BACKEND_URL: getBackendUrl(),
+      UI_CHAT_DESKTOP_RESOURCES_ROOT: process.resourcesPath,
       UI_CHAT_DATABASE_DIR: dataDir,
       UI_CHAT_LOG_DIR: logDir,
       LOCAL_MODEL_RESOURCE_ROOT: localModelResourceRoot,

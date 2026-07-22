@@ -8,6 +8,7 @@ import BaseLayout from "@/app/Layouts/BaseLayout";
 import HomePage from "@/features/dashboard/pages/HomePage";
 import { RouteErrorBoundary } from "@/shared/ui/ErrorBoundary";
 import { settingsRoutes } from "@/app/routes/settingsRoutes";
+import { ChatApplicationStateBoundary } from "@/app/ChatApplicationStateBoundary";
 
 export const router = createHashRouter([
   {
@@ -18,15 +19,20 @@ export const router = createHashRouter([
       {
         element: <RequireAuth />,
         children: [
-          { index: true, element: <HomePage /> },
           {
-            path: "chat",
-            element: <BaseLayout />,
-          },
-          {
-            path: "settings",
-            element: <BaseLayout />,
-            children: settingsRoutes,
+            element: <ChatApplicationStateBoundary />,
+            children: [
+              { index: true, element: <HomePage /> },
+              {
+                path: "chat",
+                element: <BaseLayout />,
+              },
+              {
+                path: "settings",
+                element: <BaseLayout />,
+                children: settingsRoutes,
+              },
+            ],
           },
         ],
       },

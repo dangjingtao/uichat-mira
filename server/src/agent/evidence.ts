@@ -678,6 +678,16 @@ export const createToolExecutionEvidenceSummary = (input: {
     });
   }
   if (input.execution.status === "failed") {
+    const invocationError = (
+      input.execution as AgentToolExecutionResult & {
+        invocationError?: {
+          code: string;
+          message: string;
+          retryable: boolean;
+          suggestedAction?: string | null;
+        };
+      }
+    ).invocationError;
     return baseSummary({
       execution: input.execution,
       evidenceIndex: input.evidenceIndex,
@@ -687,6 +697,15 @@ export const createToolExecutionEvidenceSummary = (input: {
         `toolId=${input.execution.toolId}`,
         `failureKind=${input.execution.failureKind ?? "recoverable"}`,
         ...(input.execution.failureCode ? [`failureCode=${input.execution.failureCode}`] : []),
+        ...(invocationError
+          ? [
+              `errorCode=${invocationError.code}`,
+              `retryable=${invocationError.retryable}`,
+              ...(invocationError.suggestedAction
+                ? [`suggestedAction=${invocationError.suggestedAction}`]
+                : []),
+            ]
+          : []),
       ],
       error: input.execution.errorMessage,
       gaps: [
@@ -694,6 +713,19 @@ export const createToolExecutionEvidenceSummary = (input: {
           ? "Execution stopped after a terminal failure."
           : "A successful or adjusted execution result is still missing.",
       ],
+      ...(invocationError
+        ? {
+            data: {
+              kind: "structured_tool_error",
+              code: invocationError.code,
+              message: invocationError.message,
+              retryable: invocationError.retryable,
+              ...(invocationError.suggestedAction === undefined
+                ? {}
+                : { suggestedAction: invocationError.suggestedAction }),
+            },
+          }
+        : {}),
     });
   }
   return summarizeToolResult(input.execution, input.evidenceIndex);

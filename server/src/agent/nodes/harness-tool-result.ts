@@ -2,6 +2,8 @@ import {
   projectHarnessResultForLlm,
   type HarnessLlmContent,
 } from "@/harness/llm-content";
+import { getHarnessInvocation } from "@/harness/invocations";
+import type { McpStructuredInvocationErrorDetail } from "@/mcp/core/definitions";
 import type {
   AgentNodeState,
   EmitAgentExecutionNode,
@@ -11,22 +13,46 @@ import { toolNode as baseToolNode } from "./tool-node";
 
 export type AgentToolExecutionWithLlmContent = AgentToolExecutionResult & {
   llmContent?: HarnessLlmContent;
+  invocationError?: McpStructuredInvocationErrorDetail;
 };
 
 export const attachHarnessLlmContentToExecution = (
   execution: AgentToolExecutionResult | undefined,
 ): AgentToolExecutionWithLlmContent | undefined => {
-  if (!execution || execution.status !== "completed") {
+  if (!execution) {
     return execution;
   }
 
-  const existing = (execution as AgentToolExecutionWithLlmContent).llmContent;
-  if (existing) {
-    return execution as AgentToolExecutionWithLlmContent;
+  let enriched = execution as AgentToolExecutionWithLlmContent;
+  if (execution.status === "completed" && !enriched.llmContent) {
+    const llmContent = projectHarnessResultForLlm(execution.result);
+    if (llmContent) {
+      enriched = { ...enriched, llmContent };
+    }
   }
 
-  const llmContent = projectHarnessResultForLlm(execution.result);
-  return llmContent ? { ...execution, llmContent } : execution;
+  if (execution.status === "failed" && execution.invocationId) {
+    const error = getHarnessInvocation(execution.invocationId)?.error;
+    if (
+      error &&
+      typeof error.code === "string" &&
+      typeof error.retryable === "boolean"
+    ) {
+      enriched = {
+        ...enriched,
+        invocationError: {
+          code: error.code,
+          message: error.message,
+          retryable: error.retryable,
+          ...(error.suggestedAction === undefined
+            ? {}
+            : { suggestedAction: error.suggestedAction }),
+        },
+      };
+    }
+  }
+
+  return enriched;
 };
 
 export const harnessAwareToolNode = async (

@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import type { McpExecutionEnvironment } from "../mcp/core/definitions.js";
 import { getWorkspaceSelection } from "../mcp/workspace.js";
+import { resolveTerminalRuntimeExecutable } from "../mcp/terminal/dev-runtime.js";
 
 export interface HarnessToolConfig {
   web_search?: {
@@ -18,7 +19,13 @@ const detectRipgrepAvailability = () => {
     return cachedRipgrepAvailability;
   }
 
-  const result = spawnSync("rg", ["--version"], {
+  const resolution = resolveTerminalRuntimeExecutable("ripgrep");
+  if (resolution.source === "unavailable" || !resolution.executablePath) {
+    cachedRipgrepAvailability = false;
+    return cachedRipgrepAvailability;
+  }
+
+  const result = spawnSync(resolution.executablePath, ["--version"], {
     encoding: "utf-8",
     windowsHide: true,
   });

@@ -72,7 +72,7 @@ export function UChatWelcomeEmptyState({
       badge={
         <div className="inline-flex w-fit items-center gap-2 rounded-full border border-border/70 bg-surface-secondary/88 px-3 py-1 text-xs font-medium text-text-secondary">
           <Sparkles className="h-3.5 w-3.5" />
-          <span>{appPackageMeta.displayName}</span>
+          <span className="font-serif font-semibold">{appPackageMeta.displayName}</span>
         </div>
       }
       title={

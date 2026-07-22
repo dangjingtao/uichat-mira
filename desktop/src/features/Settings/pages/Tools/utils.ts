@@ -1,17 +1,17 @@
 import type { McpArtifact, McpToolDefinition } from "@/shared/api/tools";
-import type { ToolWorkbenchDomain } from "./types";
+import type { ToolWorkbenchGroupId, WorkbenchToolDefinition } from "./types";
 
-export const getToolDomains = (tools: McpToolDefinition[]): ToolWorkbenchDomain[] =>
-  [...new Set(tools.map((tool) => tool.domain))].sort((left, right) => {
-    const leftTool = tools.find((tool) => tool.domain === left);
-    const rightTool = tools.find((tool) => tool.domain === right);
-    return (leftTool?.workbench?.domainOrder ?? Number.MAX_SAFE_INTEGER) -
-      (rightTool?.workbench?.domainOrder ?? Number.MAX_SAFE_INTEGER) ||
+export const getToolGroups = (tools: WorkbenchToolDefinition[]): ToolWorkbenchGroupId[] =>
+  [...new Set(tools.map((tool) => tool.workbench.groupId))].sort((left, right) => {
+    const leftTool = tools.find((tool) => tool.workbench.groupId === left);
+    const rightTool = tools.find((tool) => tool.workbench.groupId === right);
+    return (leftTool?.workbench.groupOrder ?? Number.MAX_SAFE_INTEGER) -
+      (rightTool?.workbench.groupOrder ?? Number.MAX_SAFE_INTEGER) ||
       left.localeCompare(right, undefined, { numeric: true });
   });
 
-export const formatToolDomain = (domain: string) =>
-  domain
+export const formatToolGroup = (groupId: string) =>
+  groupId
     .split(/[._-]+/u)
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))

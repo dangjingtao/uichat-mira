@@ -36,6 +36,13 @@ export type McpInvocationFailureCode =
   | "cancelled"
   | "unknown";
 
+export interface McpStructuredInvocationErrorDetail {
+  code: string;
+  message: string;
+  retryable: boolean;
+  suggestedAction?: string | null;
+}
+
 export type McpTraceSpanKind =
   | "invocation"
   | "permission_check"
@@ -178,9 +185,10 @@ export interface McpToolDefinition {
   tags: string[];
   capabilities: McpCapabilityMetadata;
   workbench?: {
-    domainLabel: string;
-    domainDescription: string;
-    domainOrder: number;
+    groupId: string;
+    groupLabel: string;
+    groupDescription: string;
+    groupOrder: number;
     icon: string;
     defaultArgs?: Record<string, unknown>;
   };
@@ -222,6 +230,9 @@ export interface McpInvocationRecord {
   error?: {
     message: string;
     failureCode?: McpInvocationFailureCode;
+    code?: McpStructuredInvocationErrorDetail["code"];
+    retryable?: McpStructuredInvocationErrorDetail["retryable"];
+    suggestedAction?: McpStructuredInvocationErrorDetail["suggestedAction"];
   };
   approval?: {
     required: true;

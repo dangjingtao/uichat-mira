@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 import loadLocalEnv from "./load-local-env.cjs";
+import { stageTerminalDevRuntime } from "./terminal-runtime-staging.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,7 +12,6 @@ loadLocalEnv(projectRoot);
 const artifactsRoot = path.join(projectRoot, ".artifacts");
 const desktopArtifactsRoot = path.join(artifactsRoot, "desktop", "dist");
 const serverBundleArtifactsRoot = path.join(artifactsRoot, "server-bundle");
-const nodeRuntimeArtifactsRoot = path.join(artifactsRoot, "node-runtime");
 const piperRuntimeArtifactsRoot = path.join(
   artifactsRoot,
   "micro-apps",
@@ -28,6 +28,7 @@ const onnxRuntimeWebDistRoot = path.join(
 const tauriResourcesRoot = path.join(projectRoot, "tauri", "resources");
 const tauriServerDir = path.join(tauriResourcesRoot, "server");
 const nodeRuntimeDir = path.join(tauriResourcesRoot, "node-runtime");
+const terminalRuntimeDir = path.join(tauriResourcesRoot, "terminal-runtime");
 const tauriModelPacksDir = path.join(tauriResourcesRoot, "model-packs");
 const tauriModelRuntimeDir = path.join(
   tauriResourcesRoot,
@@ -89,11 +90,10 @@ fs.cpSync(browserExtensionArtifactsRoot, tauriBrowserExtensionDir, {
 fs.mkdirSync(path.join(tauriResourcesRoot, "model-packs"), { recursive: true });
 fs.mkdirSync(path.join(tauriResourcesRoot, "model-runtime"), { recursive: true });
 
-fs.mkdirSync(nodeRuntimeDir, { recursive: true });
-fs.copyFileSync(
-  path.join(nodeRuntimeArtifactsRoot, path.basename(process.execPath)),
-  nodeRuntimeDest,
-);
+stageTerminalDevRuntime({
+  artifactsRoot,
+  destinationRoot: tauriResourcesRoot,
+});
 fs.copyFileSync(runtimeConfigArtifactsPath, runtimeConfigDest);
 fs.cpSync(piperRuntimeArtifactsRoot, tauriPiperRuntimeDir, { recursive: true });
 if (fs.existsSync(localModelDistRoot)) {
@@ -109,6 +109,7 @@ if (fs.existsSync(localModelDistRoot)) {
 
 console.log(`Prepared Tauri server assets: ${tauriServerDir}`);
 console.log(`Copied Node runtime for Tauri: ${nodeRuntimeDest}`);
+console.log(`Copied Terminal Dev Runtime for Tauri: ${terminalRuntimeDir}`);
 console.log(`Copied runtime config for Tauri: ${runtimeConfigDest}`);
 console.log(`Prepared Tauri Piper runtime: ${tauriPiperRuntimeDir}`);
 console.log("Tauri desktop assets are ready.");

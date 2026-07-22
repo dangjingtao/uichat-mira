@@ -1,11 +1,17 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import {
   AlertCircle,
   ArrowUp,
-  Bot,
   Copy,
   FileUp,
   Folder,
@@ -18,9 +24,6 @@ import {
   UserRound,
   Square,
   X,
-  LoaderCircle,
-  Volume2,
-  Image as ImageIcon,
 } from "lucide-react";
 import type {
   ChatComposerAction,
@@ -34,37 +37,51 @@ import type {
 } from "../core";
 import ImagePreviewOverlay from "@/shared/ui/ImagePreviewOverlay";
 import chatStartLogo from "@/assets/branding/chat-start-logo.png";
-import { getChatMediaPreviewUrl } from "@/shared/api/thread";
 import MarkdownText from "@/shared/ui/MarkdownText";
 import Badge from "@/shared/ui/Badge";
 import DropdownMenu from "@/shared/ui/DropdownMenu";
 import Tooltip from "@/shared/ui/Tooltip";
 import { Button, Skeleton } from "@/shared/ui";
+import StreamingTextRenderer from "@/shared/ui/StreamingTextRenderer";
 import { copyTextToClipboard } from "@/shared/lib/clipboard";
 import { message as uiMessage } from "@/shared/ui/Message";
 import {
-  getExecutionFailurePresentation,
-  getExecutionProgressFromRenderableParts,
   getVisibleExecutionSources,
-  toUChatRenderableParts,
   type UChatExecutionProgressDetail,
   type UChatExecutionSourceDetail,
 } from "./executionParsers";
-import type { RagNodeLike, RagSourceLike } from "./ragTypes";
+import type { RagSourceLike } from "./ragTypes";
 import {
   UChatAssistantAvatar,
   UChatAssistantBubbleShell,
   UChatUserBubbleShell,
 } from "./UChatMessageBubbleShells";
 import { UChatExecutionTrace } from "./UChatExecutionTrace";
+import {
+  resolveUChatAgentSubmission,
+  resolveUChatTypingLabel,
+  UChatAgentComposerTools,
+  type UChatAgentUIController,
+} from "./UChatAgentControls";
+import { UChatAgentMessageStatus } from "./UChatAgentMessageStatus";
+import { useUChatMessageTrace } from "./UChatMessageTrace";
 import { UChatRagProgressDetailDrawer } from "./UChatRagProgressDetailDrawer";
 import { UChatRagSourceDetailDrawer } from "./UChatRagSourceDetailDrawer";
 import { UChatThreadHeader } from "./UChatThreadHeader";
 import { UChatToolTrace } from "./UChatToolTrace";
 import { UChatWelcomeEmptyState } from "./UChatWelcomeEmptyState";
+import type { UChatThreadSlots } from "./UChatThreadSlots";
 
 const shellClassName =
   "relative flex h-full min-h-0 flex-col overflow-hidden bg-surface-secondary text-text-primary";
+
+const resolveMessagePresentationKey = (
+  message: ChatMessage,
+  messageIndex: number,
+) =>
+  message.role === "assistant" && message.parentId
+    ? `${message.threadId}:assistant:${message.parentId}:${messageIndex}`
+    : message.id;
 
 const backdropOrbsClassName =
   "pointer-events-none absolute inset-0 overflow-hidden";
@@ -219,19 +236,37 @@ function UChatThreadLoadingSkeleton() {
 function MessagePartContent({
   part,
   preferMarkdownForText,
+  isStreamingText = false,
   resolveAttachmentSource,
   onPreviewImage,
   onLoadMedia,
 }: {
   part: ChatMessagePart;
   preferMarkdownForText: boolean;
+  isStreamingText?: boolean;
   resolveAttachmentSource: (value: string) => string;
   onPreviewImage: (value: ImagePreviewState) => void;
   onLoadMedia?: () => void;
 }) {
   if (part.type === "text") {
     if (preferMarkdownForText) {
-      return <MarkdownText className="text-[15px]">{part.text}</MarkdownText>;
+      return (
+        <StreamingTextRenderer
+          text={part.text}
+          isStreaming={isStreamingText}
+        >
+          {(visibleText) =>
+            visibleText ? (
+              <MarkdownText
+                isAnimating={isStreamingText}
+                className="text-[15px]"
+              >
+                {visibleText}
+              </MarkdownText>
+            ) : null
+          }
+        </StreamingTextRenderer>
+      );
     }
 
     return <p className="whitespace-pre-wrap break-words">{part.text}</p>;
@@ -289,9 +324,6 @@ export function UChatThreadView({
   onComposerAttachmentsAppend,
   onComposerAttachmentRemove,
   onSend,
-  onAgentSend,
-  onApproveAgentRun,
-  onRejectAgentRun,
   onCancelSend,
   onRegenerate,
   onEditUserMessage,
@@ -302,14 +334,8 @@ export function UChatThreadView({
   assistantAvatarSrc,
   assistantDisplayName,
   assistantTypingLabel,
-  isAgentRunning,
-  agentEnabled,
-  agentToggleAvailability,
-  agentAvailability,
-  onToggleAgentEnabled,
-  onRequestTts,
-  onRequestImage,
-  showImageAction,
+  agent,
+  slots,
 }: {
   activeThreadId: string | null;
   title: string;
@@ -331,9 +357,6 @@ export function UChatThreadView({
   onComposerAttachmentsAppend?: (files: File[]) => void | Promise<void>;
   onComposerAttachmentRemove?: (attachmentId: string) => void | Promise<void>;
   onSend: () => void | Promise<void>;
-  onAgentSend?: () => void | Promise<void>;
-  onApproveAgentRun?: (runId: string) => void | Promise<void>;
-  onRejectAgentRun?: (runId: string) => void | Promise<void>;
   onCancelSend?: () => void | Promise<void>;
   onRegenerate?: (messageId: string) => void | Promise<void>;
   onEditUserMessage?: (
@@ -350,20 +373,8 @@ export function UChatThreadView({
   assistantAvatarSrc?: string | null;
   assistantDisplayName?: string;
   assistantTypingLabel?: string;
-  isAgentRunning?: boolean;
-  agentEnabled?: boolean;
-  agentToggleAvailability?: {
-    enabled: boolean;
-    disabledReason?: string;
-  };
-  agentAvailability?: {
-    enabled: boolean;
-    disabledReason?: string;
-  };
-  onToggleAgentEnabled?: () => void | Promise<void>;
-  onRequestTts?: (message: ChatMessage) => void | Promise<void>;
-  onRequestImage?: (message: ChatMessage) => void | Promise<void>;
-  showImageAction?: boolean;
+  agent?: UChatAgentUIController;
+  slots?: UChatThreadSlots;
 }) {
   const { t } = useTranslation();
   const isRunning = runStatus.type === "running";
@@ -378,14 +389,6 @@ export function UChatThreadView({
     useState<UChatExecutionProgressDetail | null>(null);
   const [selectedRagSourceDetail, setSelectedRagSourceDetail] =
     useState<UChatExecutionSourceDetail | null>(null);
-  const [agentRunActionState, setAgentRunActionState] = useState<{
-    runId: string;
-    action: "approve" | "reject";
-  } | null>(null);
-  const [agentRunActionError, setAgentRunActionError] = useState<{
-    runId: string;
-    message: string;
-  } | null>(null);
   const [editingUserMessage, setEditingUserMessage] = useState<{
     id: string;
     draftText: string;
@@ -393,22 +396,49 @@ export function UChatThreadView({
   } | null>(null);
   const messagePresentation = capabilities.messagePresentation ?? {};
   const scrollViewportRef = useRef<HTMLDivElement | null>(null);
+  const scrollFrameRef = useRef<number | null>(null);
   const shouldStickToBottomRef = useRef(true);
   const isRunningRef = useRef(isRunning);
+  const agentSubmission = resolveUChatAgentSubmission({
+    controller: agent,
+    isSendDisabled,
+    onSend,
+  });
 
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     const viewport = scrollViewportRef.current;
     if (!viewport) {
       return;
     }
 
     viewport.scrollTop = viewport.scrollHeight;
-  };
+  }, []);
 
-  const requestScrollToBottom = () => {
+  const scheduleScrollToBottom = useCallback(() => {
+    if (scrollFrameRef.current !== null) {
+      return;
+    }
+
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      scrollToBottom();
+    });
+  }, [scrollToBottom]);
+
+  const requestScrollToBottom = useCallback(() => {
     shouldStickToBottomRef.current = true;
-    scrollToBottom();
-  };
+    scheduleScrollToBottom();
+  }, [scheduleScrollToBottom]);
+
+  useEffect(
+    () => () => {
+      if (scrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollFrameRef.current);
+        scrollFrameRef.current = null;
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     const viewport = scrollViewportRef.current;
@@ -434,7 +464,6 @@ export function UChatThreadView({
   useEffect(() => {
     setSelectedRagProgressDetail(null);
     setSelectedRagSourceDetail(null);
-    setAgentRunActionError(null);
   }, [activeThreadId]);
 
   useEffect(() => {
@@ -443,8 +472,8 @@ export function UChatThreadView({
       return;
     }
 
-    scrollToBottom();
-  }, [activeThreadId, messages, runStatus.type]);
+    scheduleScrollToBottom();
+  }, [activeThreadId, messages, runStatus.type, scheduleScrollToBottom]);
 
   return (
     <div className="w-full">
@@ -482,22 +511,27 @@ export function UChatThreadView({
                         <UChatThreadLoadingSkeleton />
                       ) : null}
 
-                      {messages.map((message) => (
-                      <UChatMessageRow
-                          key={message.id}
+                      {messages.map((message, messageIndex) => (
+                        <UChatMessageRow
+                          key={resolveMessagePresentationKey(
+                            message,
+                            messageIndex,
+                          )}
+                          presentationKey={resolveMessagePresentationKey(
+                            message,
+                            messageIndex,
+                          )}
                           message={message}
                           isRunning={isRunning}
                           assistantAvatarSrc={assistantAvatarSrc}
                           assistantDisplayName={assistantDisplayName}
                           assistantTypingLabel={assistantTypingLabel}
-                          isAgentRunning={isAgentRunning}
+                          agent={agent}
                           editingUserMessage={editingUserMessage}
                           messagePresentation={messagePresentation}
                           resolveAttachmentSource={resolveAttachmentSource}
                           onRequestScrollToBottom={requestScrollToBottom}
-                          onRequestTts={onRequestTts}
-                          onRequestImage={onRequestImage}
-                          showImageAction={showImageAction === true}
+                          slots={slots}
                           onPreviewImage={setImagePreview}
                           onOpenProgressDetail={(detail) => {
                             setSelectedRagSourceDetail(null);
@@ -508,12 +542,6 @@ export function UChatThreadView({
                             setSelectedRagSourceDetail(detail);
                           }}
                           onRegenerate={onRegenerate}
-                          onApproveAgentRun={onApproveAgentRun}
-                          onRejectAgentRun={onRejectAgentRun}
-                          agentRunActionState={agentRunActionState}
-                          onAgentRunActionStateChange={setAgentRunActionState}
-                          agentRunActionError={agentRunActionError}
-                          onAgentRunActionErrorChange={setAgentRunActionError}
                           onEditUserMessage={onEditUserMessage}
                           onRequestEditUserMessage={(messageId, text) => {
                             setEditingUserMessage({
@@ -645,25 +673,27 @@ export function UChatThreadView({
                           composerActions={capabilities.composerActions ?? []}
                           threadContextTags={threadContextTags}
                           isRunning={isRunning}
-                          isSendDisabled={isSendDisabled}
-                          agentEnabled={agentEnabled}
-                          agentToggleAvailability={agentToggleAvailability}
-                          agentAvailability={agentAvailability}
+                          submitDisabled={agentSubmission.disabled}
+                          submitDisabledReason={
+                            agentSubmission.disabledReason
+                          }
+                          submitLabel={
+                            agentSubmission.mode === "agent"
+                              ? t("chat.thread.agent.run")
+                              : t("chat.thread.actions.send")
+                          }
+                          composerTools={
+                            <UChatAgentComposerTools
+                              controller={agent}
+                              Extension={slots?.ComposerTools}
+                            />
+                          }
                           onComposerAction={onComposerAction}
                           onRemoveThreadContextTag={onRemoveThreadContextTag}
-                          onToggleAgentEnabled={onToggleAgentEnabled}
-                          onSend={() => {
+                          onSubmit={() => {
                             requestScrollToBottom();
-                            return onSend();
+                            return agentSubmission.submit();
                           }}
-                          onAgentSend={
-                            onAgentSend
-                              ? () => {
-                                  requestScrollToBottom();
-                                  return onAgentSend();
-                                }
-                              : undefined
-                          }
                           onCancelSend={onCancelSend}
                           onComposerAttachmentsChange={
                             onComposerAttachmentsChange
@@ -699,189 +729,16 @@ export function UChatThreadView({
   );
 }
 
-type ChatMediaEntry = {
-  status?: "queued" | "running" | "succeeded" | "failed";
-  mediaId?: string;
-  errorMessage?: string;
-};
-
-const revokeObjectUrl = (value: string | null) => {
-  if (value && typeof URL.revokeObjectURL === "function") {
-    URL.revokeObjectURL(value);
-  }
-};
-
-function ChatMediaOutput({
-  threadId,
-  message,
-  onPreviewImage,
-  onRequestImage,
-}: {
-  threadId: string;
-  message: ChatMessage;
-  onPreviewImage: (value: ImagePreviewState) => void;
-  onRequestImage?: (message: ChatMessage) => void | Promise<void>;
-}) {
-  const { t } = useTranslation();
-  const media = message.metadata?.media as
-    | { image?: ChatMediaEntry; tts?: ChatMediaEntry }
-    | undefined;
-  const image = media?.image;
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [imageLoading, setImageLoading] = useState(false);
-  const [imageError, setImageError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let disposed = false;
-    let objectUrl: string | null = null;
-    setImageUrl(null);
-    setImageError(null);
-    if (image?.status === "succeeded" && image.mediaId) {
-      setImageLoading(true);
-      void getChatMediaPreviewUrl(threadId, image.mediaId).then((url) => {
-        if (disposed) revokeObjectUrl(url);
-        else { objectUrl = url; setImageUrl(url); }
-      }).catch((error) => {
-        if (!disposed) {
-          setImageError(error instanceof Error ? error.message : t("chat.thread.media.loadFailed"));
-        }
-      }).finally(() => {
-        if (!disposed) setImageLoading(false);
-      });
-    } else setImageLoading(false);
-    return () => { disposed = true; revokeObjectUrl(objectUrl); };
-  }, [image?.mediaId, image?.status, t, threadId]);
-
-  if (!image) return null;
-
-  return (
-    <div className="mt-3 space-y-2">
-      {image?.status === "queued" || image?.status === "running" || imageLoading ? (
-        <div className="inline-flex items-center gap-2 text-xs text-text-secondary">
-          <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-          {t("chat.thread.media.imageGenerating")}
-        </div>
-      ) : null}
-      {image?.status === "failed" || imageError ? (
-        <div className="flex flex-wrap items-center gap-2 text-xs text-danger-text">
-          <span>{t("chat.thread.media.imageFailed")}: {image.errorMessage ?? imageError}</span>
-          {onRequestImage ? (
-            <button type="button" className="font-medium underline underline-offset-2" onClick={() => void onRequestImage(message)}>
-              {t("chat.thread.media.retry")}
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-      {imageUrl ? <button type="button" className="block max-w-[min(100%,22rem)] overflow-hidden rounded-[14px] border border-border/70" onClick={() => onPreviewImage({ src: imageUrl })} aria-label={t("chat.thread.media.previewImage")}><img src={imageUrl} alt={t("chat.thread.media.generatedImage")} className="block max-h-[18rem] w-full object-contain" /></button> : null}
-    </div>
-  );
-}
-
-function ChatMediaAudioAction({
-  threadId,
-  message,
-  onRequestTts,
-}: {
-  threadId: string;
-  message: ChatMessage;
-  onRequestTts?: (message: ChatMessage) => void | Promise<void>;
-}) {
-  const { t } = useTranslation();
-  const tts = (message.metadata?.media as { tts?: ChatMediaEntry } | undefined)?.tts;
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [audioError, setAudioError] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  useEffect(() => {
-    let disposed = false;
-    let objectUrl: string | null = null;
-    setAudioError(null);
-    if (tts?.status === "succeeded" && tts.mediaId) {
-      void getChatMediaPreviewUrl(threadId, tts.mediaId).then((url) => {
-        if (disposed) revokeObjectUrl(url);
-        else {
-          objectUrl = url;
-          setAudioUrl(url);
-          const audio = audioRef.current;
-          if (audio) {
-            audio.src = url;
-            audio.load();
-          }
-        }
-      }).catch((error) => {
-        if (!disposed) {
-          setAudioUrl(null);
-          setAudioError(error instanceof Error ? error.message : t("chat.thread.media.audioLoadFailed"));
-        }
-      });
-    } else setAudioUrl(null);
-    return () => { disposed = true; revokeObjectUrl(objectUrl); };
-  }, [threadId, t, tts?.mediaId, tts?.status]);
-
-  const play = async () => {
-    setBusy(true);
-    setAudioError(null);
-    try {
-      let playableUrl = audioUrl;
-      if (!playableUrl && tts?.status === "succeeded" && tts.mediaId) {
-        playableUrl = await getChatMediaPreviewUrl(threadId, tts.mediaId);
-        setAudioUrl(playableUrl);
-      }
-      if (playableUrl) {
-        const audio = audioRef.current ?? new Audio(playableUrl);
-        if (audio.src !== playableUrl) {
-          audio.src = playableUrl;
-          audio.load();
-        }
-        await audio.play();
-      } else if (onRequestTts) {
-        await onRequestTts(message);
-      }
-    } catch (error) {
-      if (tts?.status === "succeeded" && tts.mediaId && onRequestTts) {
-        setAudioUrl(null);
-        try {
-          await onRequestTts(message);
-          return;
-        } catch (regenerationError) {
-          setAudioError(
-            regenerationError instanceof Error
-              ? regenerationError.message
-              : t("chat.thread.media.audioPlayFailed"),
-          );
-        }
-      } else {
-        setAudioError(
-          error instanceof Error
-            ? error.message
-            : t("chat.thread.media.audioPlayFailed"),
-        );
-      }
-    } finally { setBusy(false); }
-  };
-
-  return (
-    <span className="inline-flex items-center gap-1">
-      <audio ref={audioRef} preload="auto" aria-hidden="true" />
-      <button type="button" className={actionButtonClassName} onClick={() => void play()} disabled={busy || tts?.status === "running"} aria-label={t("chat.thread.media.playAudio")} title={t("chat.thread.media.playAudio")}>
-        {busy || tts?.status === "running" ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Volume2 className="h-3.5 w-3.5" />}
-      </button>
-      {tts?.status === "failed" ? <span className="text-xs text-danger-text">{t("chat.thread.media.audioFailed")}: {tts.errorMessage ?? t("chat.thread.media.unknownError")}</span> : null}
-      {audioError ? <span className="text-xs text-danger-text">{t("chat.thread.media.audioPlayFailed")}: {audioError}</span> : null}
-    </span>
-  );
-}
-
 // UChatMessageRow renders either a user or assistant message row from the
 // canonical message model.
 function UChatMessageRow({
+  presentationKey,
   message,
   isRunning,
   assistantAvatarSrc,
   assistantDisplayName,
   assistantTypingLabel,
-  isAgentRunning,
+  agent,
   editingUserMessage,
   messagePresentation,
   resolveAttachmentSource,
@@ -889,28 +746,21 @@ function UChatMessageRow({
   onOpenProgressDetail,
   onOpenSourceDetail,
   onRegenerate,
-  onApproveAgentRun,
-  onRejectAgentRun,
-  agentRunActionState,
-  onAgentRunActionStateChange,
-  agentRunActionError,
-  onAgentRunActionErrorChange,
   onEditUserMessage,
   onRequestEditUserMessage,
   onUpdateEditUserMessage,
   onResetEditUserMessage,
   onCancelEditUserMessage,
   onRequestScrollToBottom,
-  onRequestTts,
-  onRequestImage,
-  showImageAction,
+  slots,
 }: {
+  presentationKey: string;
   message: ChatMessage;
   isRunning: boolean;
   assistantAvatarSrc?: string | null;
   assistantDisplayName?: string;
   assistantTypingLabel?: string;
-  isAgentRunning?: boolean;
+  agent?: UChatAgentUIController;
   editingUserMessage: {
     id: string;
     draftText: string;
@@ -922,22 +772,6 @@ function UChatMessageRow({
   onOpenProgressDetail: (detail: UChatExecutionProgressDetail) => void;
   onOpenSourceDetail: (detail: UChatExecutionSourceDetail) => void;
   onRegenerate?: (messageId: string) => void | Promise<void>;
-  onApproveAgentRun?: (runId: string) => void | Promise<void>;
-  onRejectAgentRun?: (runId: string) => void | Promise<void>;
-  agentRunActionState: {
-    runId: string;
-    action: "approve" | "reject";
-  } | null;
-  onAgentRunActionStateChange: (
-    state: { runId: string; action: "approve" | "reject" } | null,
-  ) => void;
-  agentRunActionError: {
-    runId: string;
-    message: string;
-  } | null;
-  onAgentRunActionErrorChange: (
-    state: { runId: string; message: string } | null,
-  ) => void;
   onEditUserMessage?: (
     messageId: string,
     text: string,
@@ -948,18 +782,10 @@ function UChatMessageRow({
   onResetEditUserMessage?: (messageId: string) => void;
   onCancelEditUserMessage?: () => void;
   onRequestScrollToBottom: () => void;
-  onRequestTts?: (message: ChatMessage) => void | Promise<void>;
-  onRequestImage?: (message: ChatMessage) => void | Promise<void>;
-  showImageAction: boolean;
+  slots?: UChatThreadSlots;
 }) {
   const { t } = useTranslation();
-  const ragProgress = useMemo(
-    () =>
-      getExecutionProgressFromRenderableParts(
-        toUChatRenderableParts(message),
-      ) as RagNodeLike[],
-    [message],
-  );
+  const messageTrace = useUChatMessageTrace(message);
   const metadataSources = Array.isArray(
     message.metadata?.rag &&
       typeof message.metadata.rag === "object" &&
@@ -970,68 +796,14 @@ function UChatMessageRow({
     ? (((message.metadata?.rag as { sources?: unknown }).sources ??
         []) as RagSourceLike[])
     : [];
-  const sources = getVisibleExecutionSources(metadataSources, ragProgress);
+  const sources = getVisibleExecutionSources(metadataSources, messageTrace.steps);
   const textAndMediaParts = useMemo(
     () => collapseDisplayParts(message.parts),
     [message.parts],
   );
-  const failurePresentation =
-    message.status === "error"
-    ? getExecutionFailurePresentation(ragProgress, message.errorMessage)
-      : null;
+  const failurePresentation = messageTrace.failurePresentation;
   const toolTraceEntries = message.toolTrace ?? [];
-  const agentMetadata =
-    message.metadata?.agent &&
-    typeof message.metadata.agent === "object" &&
-    !Array.isArray(message.metadata.agent)
-      ? (message.metadata.agent as {
-          status?: "waiting_approval" | "blocked" | "completed" | "failed";
-          runId?: string;
-          pendingApproval?: { toolId?: string; reason?: string };
-          blockedReason?: string | null;
-          terminalReason?: string | null;
-          errorMessage?: string | null;
-        })
-      : null;
-  const agentStatusTone =
-    agentMetadata?.status === "blocked"
-      ? {
-          containerClassName: "border border-rose-200 bg-rose-50 text-rose-700",
-          detailClassName: "text-rose-700/90",
-        }
-      : agentMetadata?.status === "failed"
-        ? {
-            containerClassName:
-              "border border-amber-200 bg-amber-50 text-amber-700",
-            detailClassName: "text-amber-700/90",
-          }
-        : {
-            containerClassName: "border border-sky-200 bg-sky-50 text-sky-700",
-            detailClassName: "text-sky-700/90",
-          };
-  const hasExecutionTrace = ragProgress.length > 0;
-  const isApprovingAgentRun =
-    typeof agentRunActionState?.runId === "string" &&
-    agentRunActionState.runId === agentMetadata?.runId &&
-    agentRunActionState.action === "approve";
-  const isRejectingAgentRun =
-    typeof agentRunActionState?.runId === "string" &&
-    agentRunActionState.runId === agentMetadata?.runId &&
-    agentRunActionState.action === "reject";
-  const agentRunInlineError =
-    typeof agentRunActionError?.runId === "string" &&
-    agentRunActionError.runId === agentMetadata?.runId
-      ? agentRunActionError.message
-      : null;
-  const mediaMetadata =
-    message.metadata?.media &&
-    typeof message.metadata.media === "object" &&
-    !Array.isArray(message.metadata.media)
-      ? (message.metadata.media as { image?: ChatMediaEntry })
-      : undefined;
-  const imageMedia = mediaMetadata?.image;
-  const imageActionRunning =
-    imageMedia?.status === "queued" || imageMedia?.status === "running";
+  const hasExecutionTrace = messageTrace.hasTrace;
   const preferMarkdownForText =
     messagePresentation.preferMarkdownForText !== false;
   const assistantBubbleWidthClassName = resolveBubbleWidthClassName(
@@ -1040,17 +812,13 @@ function UChatMessageRow({
   const userBubbleWidthClassName = resolveBubbleWidthClassName(
     messagePresentation.userMaxWidth,
   );
-  const [imageActionPending, setImageActionPending] = useState(false);
-  const requestImage = async () => {
-    if (!onRequestImage) return;
-    setImageActionPending(true);
-    try {
-      await onRequestImage(message);
-    } finally {
-      setImageActionPending(false);
-    }
-  };
-  const isImageActionRunning = imageActionPending || imageActionRunning;
+  const MessageExtensions = slots?.MessageExtensions;
+  const assistantContentParts =
+    message.role === "assistant" &&
+    message.status === "streaming" &&
+    textAndMediaParts.length === 0
+      ? ([{ type: "text", text: "" }] satisfies ChatMessagePart[])
+      : textAndMediaParts;
 
   if (message.role === "user") {
     const isEditingThisMessage = editingUserMessage?.id === message.id;
@@ -1088,7 +856,7 @@ function UChatMessageRow({
           <UChatUserBubbleShell>
             {textAndMediaParts.map((part, index) => (
               <MessagePartContent
-                key={`${message.id}-${part.type}-${index}`}
+                key={`${presentationKey}-${part.type}-${index}`}
                 part={part}
                 preferMarkdownForText={preferMarkdownForText}
                 resolveAttachmentSource={resolveAttachmentSource}
@@ -1164,7 +932,7 @@ function UChatMessageRow({
         <div className={`min-w-0 ${assistantBubbleWidthClassName}`}>
           <UChatExecutionTrace
             messageId={message.id}
-            steps={ragProgress}
+            steps={messageTrace.steps}
             onOpenDetail={onOpenProgressDetail}
           />
           <UChatAssistantBubbleShell>
@@ -1185,30 +953,36 @@ function UChatMessageRow({
                   />
                 </span>
                 <span>
-                  {isAgentRunning
-                    ? t("chat.thread.agent.running")
-                    : assistantTypingLabel ?? t("chat.thread.assistantTyping")}
+                  {resolveUChatTypingLabel({
+                    controller: agent,
+                    agentRunningLabel: t("chat.thread.agent.running"),
+                    assistantTypingLabel:
+                      assistantTypingLabel ?? t("chat.thread.assistantTyping"),
+                  })}
                 </span>
               </div>
             ) : null}
 
-            {textAndMediaParts.map((part, index) => (
+            {assistantContentParts.map((part, index) => (
               <MessagePartContent
-                key={`${message.id}-${part.type}-${index}`}
+                key={`${presentationKey}-${part.type}-${index}`}
                 part={part}
                 preferMarkdownForText={preferMarkdownForText}
+                isStreamingText={message.status === "streaming" && isRunning}
                 resolveAttachmentSource={resolveAttachmentSource}
                 onPreviewImage={onPreviewImage}
                 onLoadMedia={onRequestScrollToBottom}
               />
             ))}
 
-            <ChatMediaOutput
-              threadId={message.threadId}
-              message={message}
-              onPreviewImage={onPreviewImage}
-              onRequestImage={showImageAction ? requestImage : undefined}
-            />
+            {MessageExtensions ? (
+              <MessageExtensions
+                message={message}
+                placement="content"
+                onPreviewImage={(src) => onPreviewImage({ src })}
+                onRequestLayout={onRequestScrollToBottom}
+              />
+            ) : null}
 
             {failurePresentation ? (
               <div
@@ -1228,111 +1002,11 @@ function UChatMessageRow({
               </div>
             ) : null}
 
-            {agentMetadata?.status === "waiting_approval" ||
-            agentMetadata?.status === "blocked" ||
-            (agentMetadata?.status === "failed" && !failurePresentation) ? (
-              <div
-                className={`inline-flex max-w-full items-start gap-2 rounded-2xl px-3 py-2.5 text-sm ${agentStatusTone.containerClassName}`}
-              >
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                <div className="min-w-0">
-                  <div className="font-medium">
-                    {agentMetadata.status === "blocked"
-                      ? t("chat.thread.agent.blockedTitle")
-                      : agentMetadata.status === "failed"
-                        ? t("chat.thread.agent.failedTitle")
-                        : t("chat.thread.agent.waitingApprovalTitle")}
-                  </div>
-                  <div
-                    className={`mt-1 break-words text-xs ${agentStatusTone.detailClassName}`}
-                  >
-                    {agentMetadata.status === "blocked"
-                      ? agentMetadata.blockedReason ??
-                        agentMetadata.errorMessage ??
-                        t("chat.thread.agent.blockedDetail")
-                      : agentMetadata.status === "failed"
-                        ? agentMetadata.errorMessage ??
-                          t("chat.thread.agent.failedDetail")
-                        : agentMetadata.pendingApproval?.reason ??
-                          t("chat.thread.agent.waitingApprovalDetail")}
-                  </div>
-                  {agentMetadata.status === "waiting_approval" &&
-                  typeof agentMetadata.runId === "string" ? (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        className="min-w-[4.5rem] justify-center"
-                        disabled={isApprovingAgentRun || isRejectingAgentRun}
-                        onClick={() => {
-                          onAgentRunActionErrorChange(null);
-                          onAgentRunActionStateChange({
-                            runId: agentMetadata.runId as string,
-                            action: "approve",
-                          });
-                          void Promise.resolve(
-                            onApproveAgentRun?.(agentMetadata.runId as string),
-                          )
-                            .catch((error) => {
-                              onAgentRunActionErrorChange({
-                                runId: agentMetadata.runId as string,
-                                message:
-                                  error instanceof Error
-                                    ? error.message
-                                    : t("chat.thread.agent.approveFailed"),
-                              });
-                            })
-                            .finally(() => {
-                              onAgentRunActionStateChange(null);
-                            });
-                        }}
-                      >
-                        {isApprovingAgentRun
-                          ? t("chat.thread.agent.approving")
-                          : t("common.actions.approve")}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="min-w-[4.5rem] justify-center"
-                        disabled={isApprovingAgentRun || isRejectingAgentRun}
-                        onClick={() => {
-                          onAgentRunActionErrorChange(null);
-                          onAgentRunActionStateChange({
-                            runId: agentMetadata.runId as string,
-                            action: "reject",
-                          });
-                          void Promise.resolve(
-                            onRejectAgentRun?.(agentMetadata.runId as string),
-                          )
-                            .catch((error) => {
-                              onAgentRunActionErrorChange({
-                                runId: agentMetadata.runId as string,
-                                message:
-                                  error instanceof Error
-                                    ? error.message
-                                    : t("chat.thread.agent.rejectFailed"),
-                              });
-                            })
-                            .finally(() => {
-                              onAgentRunActionStateChange(null);
-                            });
-                        }}
-                      >
-                        {isRejectingAgentRun
-                          ? t("chat.thread.agent.rejecting")
-                          : t("common.actions.reject")}
-                      </Button>
-                    </div>
-                  ) : null}
-                  {agentRunInlineError ? (
-                    <div className="mt-2 break-words text-xs text-rose-700/90">
-                      {agentRunInlineError}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
+            <UChatAgentMessageStatus
+              message={message}
+              hideFailedStatus={Boolean(failurePresentation)}
+              controller={agent}
+            />
 
             {toolTraceEntries.length > 0 && !hasExecutionTrace ? (
               <UChatToolTrace entries={toolTraceEntries} />
@@ -1340,26 +1014,13 @@ function UChatMessageRow({
           </UChatAssistantBubbleShell>
 
           <div className="mt-1 flex items-center gap-2 pl-1">
-            <ChatMediaAudioAction
-              threadId={message.threadId}
-              message={message}
-              onRequestTts={onRequestTts}
-            />
-            {showImageAction && onRequestImage ? (
-              <button
-                type="button"
-                className={actionButtonClassName}
-                onClick={() => void requestImage()}
-                disabled={isImageActionRunning}
-                aria-label={t("chat.thread.media.generateImage")}
-                title={t("chat.thread.media.generateImage")}
-              >
-                {isImageActionRunning ? (
-                  <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <ImageIcon className="h-3.5 w-3.5" />
-                )}
-              </button>
+            {MessageExtensions ? (
+              <MessageExtensions
+                message={message}
+                placement="actions"
+                onPreviewImage={(src) => onPreviewImage({ src })}
+                onRequestLayout={onRequestScrollToBottom}
+              />
             ) : null}
             <button
               type="button"
@@ -1443,6 +1104,7 @@ function InlineUserMessageEditor({
   onReset: () => void;
 }) {
   const { t } = useTranslation();
+  const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const [removedAttachmentKeys, setRemovedAttachmentKeys] = useState<Set<string>>(
     () => new Set(),
   );
@@ -1466,6 +1128,16 @@ function InlineUserMessageEditor({
     setRemovedAttachmentKeys(new Set());
   }, [parts, value]);
 
+  useLayoutEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    editor.style.height = "auto";
+    const contentHeight = Math.max(44, Math.min(editor.scrollHeight, 192));
+    editor.style.height = `${contentHeight}px`;
+    editor.style.overflowY = editor.scrollHeight > 192 ? "auto" : "hidden";
+  }, [value]);
+
   const nextParts = buildEditedUserMessageParts(
     parts,
     value,
@@ -1473,10 +1145,11 @@ function InlineUserMessageEditor({
   );
 
   return (
-    <div className="w-full rounded-[24px] border border-border/80 bg-surface-primary/96 p-3 shadow-shadow-sm">
-      <div className="space-y-3">
-        <div className="rounded-[14px] border border-primary/20 bg-surface-secondary/40 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]">
+    <div className="w-full rounded-ui-panel border border-border/80 bg-surface-secondary/85 p-2 shadow-shadow-sm">
+      <div className="space-y-2">
+        <div className="rounded-ui-control border border-border bg-surface-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
           <textarea
+            ref={editorRef}
             value={value}
             onChange={(event) => onChange(event.target.value)}
             onKeyDown={(event) => {
@@ -1490,16 +1163,16 @@ function InlineUserMessageEditor({
                 void onSubmit(nextParts);
               }
             }}
-            rows={4}
-            className="min-h-[104px] w-full resize-none rounded-[12px] border-0 bg-transparent px-3 py-2.5 text-[15px] leading-6 text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-0"
+            rows={1}
+            className="min-h-[44px] max-h-48 w-full resize-none rounded-ui-control border-0 bg-transparent px-3 py-2 text-[14px] leading-5 text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-0"
             placeholder={t("chat.thread.actions.edit")}
             autoFocus
           />
         </div>
-        <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           {visibleAttachmentParts.length > 0 ? (
-            <div className="min-w-0 bg-surface-secondary/40 p-2">
-              <div className="flex flex-wrap gap-2">
+            <div className="min-w-0 flex-1 rounded-ui-control border border-border/60 bg-surface-primary/75 p-1.5">
+              <div className="flex flex-wrap gap-1.5">
                 {visibleImageAttachmentParts.map((part, index) => {
                   const imageUrl = resolveAttachmentSource(part.source);
                   const attachmentKey = `${part.type}-${index}`;
@@ -1507,7 +1180,7 @@ function InlineUserMessageEditor({
                   return (
                     <div
                       key={attachmentKey}
-                      className="group relative h-12 w-12 overflow-hidden rounded-[10px] border border-border/60 bg-surface-primary shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
+                      className="group relative h-10 w-10 overflow-hidden rounded-ui-control border border-border/60 bg-surface-primary shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
                     >
                       <img
                         src={imageUrl}
@@ -1540,24 +1213,24 @@ function InlineUserMessageEditor({
                 })}
 
                 {visibleFileAttachmentParts.map((part, index) => (
-                    <div
-                      key={`${part.type}-${index}`}
-                      className="inline-flex min-w-[8.5rem] max-w-full items-center gap-2 rounded-[12px] border border-border/60 bg-surface-primary px-3 py-2 text-sm text-text-secondary"
-                    >
-                      <FileUp className="h-4 w-4 shrink-0" />
-                      <span className="block truncate">{part.name}</span>
-                    </div>
-                  ))}
+                  <div
+                    key={`${part.type}-${index}`}
+                    className="inline-flex min-w-[8.5rem] max-w-full items-center gap-2 rounded-ui-control border border-border/60 bg-surface-primary px-2.5 py-1.5 text-xs text-text-secondary"
+                  >
+                    <FileUp className="h-4 w-4 shrink-0" />
+                    <span className="block truncate">{part.name}</span>
+                  </div>
+                ))}
               </div>
             </div>
           ) : (
             <div />
           )}
-          <div className="flex flex-shrink-0 items-center gap-2">
+          <div className="flex flex-shrink-0 items-center gap-1.5">
             <Button
               variant="ghost"
               size="sm"
-              className="min-w-[5.25rem] justify-center"
+              className="min-w-[4.5rem] justify-center"
               onClick={onReset}
             >
               {t("common.actions.reset")}
@@ -1565,7 +1238,7 @@ function InlineUserMessageEditor({
             <Button
               variant="secondary"
               size="sm"
-              className="min-w-[5.25rem] justify-center"
+              className="min-w-[4.5rem] justify-center"
               onClick={onCancel}
             >
               {t("common.actions.cancel")}
@@ -1573,7 +1246,7 @@ function InlineUserMessageEditor({
             <Button
               variant="primary"
               size="sm"
-              className="min-w-[5.25rem] justify-center"
+              className="min-w-[4.5rem] justify-center"
               onClick={() => void onSubmit(nextParts)}
             >
               {t("common.actions.save")}
@@ -1591,38 +1264,28 @@ function UChatComposerActions({
   composerActions,
   threadContextTags,
   isRunning,
-  isSendDisabled,
-  agentEnabled,
-  agentToggleAvailability,
-  agentAvailability,
+  submitDisabled,
+  submitDisabledReason,
+  submitLabel,
+  composerTools,
   onComposerAction,
   onRemoveThreadContextTag,
-  onToggleAgentEnabled,
-  onSend,
-  onAgentSend,
+  onSubmit,
   onCancelSend,
   onComposerAttachmentsChange,
 }: {
   composerActions: ChatComposerAction[];
   threadContextTags: ChatThreadContextTag[];
   isRunning: boolean;
-  isSendDisabled: boolean;
-  agentEnabled?: boolean;
-  agentToggleAvailability?: {
-    enabled: boolean;
-    disabledReason?: string;
-  };
-  agentAvailability?: {
-    enabled: boolean;
-    disabledReason?: string;
-  };
+  submitDisabled: boolean;
+  submitDisabledReason?: string;
+  submitLabel: string;
   onComposerAction: (action: ChatComposerAction) => void | Promise<void>;
   onRemoveThreadContextTag?: (
     tag: ChatThreadContextTag,
   ) => void | Promise<void>;
-  onToggleAgentEnabled?: () => void | Promise<void>;
-  onSend: () => void | Promise<void>;
-  onAgentSend?: () => void | Promise<void>;
+  composerTools?: React.ReactNode;
+  onSubmit: () => void | Promise<void>;
   onCancelSend?: () => void | Promise<void>;
   onComposerAttachmentsChange: (files: File[]) => void;
 }) {
@@ -1630,8 +1293,9 @@ function UChatComposerActions({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [pendingAttachmentAction, setPendingAttachmentAction] =
     useState<ChatComposerAction | null>(null);
-  const isAgentToggleDisabled =
-    agentEnabled !== true && agentToggleAvailability?.enabled === false;
+  const primaryActionLabel = isRunning
+    ? t("chat.thread.composer.cancelGeneration")
+    : submitLabel;
 
   const handleAction = (action: ChatComposerAction) => {
     if (action.disabled) {
@@ -1711,37 +1375,7 @@ function UChatComposerActions({
             }
           />
         ) : null}
-        {onToggleAgentEnabled ? (
-          <button
-            type="button"
-            disabled={isAgentToggleDisabled}
-            onClick={() => {
-              void onToggleAgentEnabled();
-            }}
-            className={`inline-flex h-8 items-center gap-2 rounded-full border px-3 text-xs transition-colors ${
-              agentEnabled
-                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                : "border-border/70 bg-surface-primary/90 text-text-secondary"
-            } disabled:cursor-not-allowed disabled:opacity-50`}
-            aria-pressed={agentEnabled ? "true" : "false"}
-            title={
-              isAgentToggleDisabled
-                ? agentToggleAvailability?.disabledReason ??
-                  t("chat.thread.agent.toggleOn")
-                : agentEnabled
-                  ? t("chat.thread.agent.toggleOff")
-                  : t("chat.thread.agent.toggleOn")
-            }
-            aria-label={
-              agentEnabled
-                ? t("chat.thread.agent.toggleOff")
-                : t("chat.thread.agent.toggleOn")
-            }
-          >
-            <Bot className="h-3.5 w-3.5" />
-            <span>Agent</span>
-          </button>
-        ) : null}
+        {composerTools}
 
         {threadContextTags.map((tag) => (
           <Tooltip key={tag.id} text={tag.tooltip ?? tag.label} placement="top">
@@ -1796,47 +1430,23 @@ function UChatComposerActions({
 
       <div className="flex flex-wrap items-center gap-2.5">
         <Tooltip
-          text={
-            !isRunning && agentEnabled && agentAvailability?.enabled === false
-              ? agentAvailability.disabledReason ?? ""
-              : ""
-          }
+          text={!isRunning ? submitDisabledReason ?? "" : ""}
           placement="top"
         >
           <button
             type="button"
-            disabled={
-              !isRunning &&
-              (isSendDisabled || (agentEnabled && agentAvailability?.enabled === false))
-            }
+            disabled={!isRunning && submitDisabled}
             onClick={() => {
               if (isRunning) {
                 void onCancelSend?.();
                 return;
               }
 
-              if (agentEnabled && onAgentSend) {
-                void onAgentSend();
-                return;
-              }
-
-              void onSend();
+              void onSubmit();
             }}
             className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-ink text-text-inverted transition-all duration-150 hover:scale-[1.02] hover:bg-ink/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label={
-              isRunning
-                ? t("chat.thread.composer.cancelGeneration")
-                : agentEnabled
-                  ? t("chat.thread.agent.run")
-                  : t("chat.thread.actions.send")
-            }
-            title={
-              isRunning
-                ? t("chat.thread.composer.cancelGeneration")
-                : agentEnabled
-                  ? t("chat.thread.agent.run")
-                  : t("chat.thread.actions.send")
-            }
+            aria-label={primaryActionLabel}
+            title={primaryActionLabel}
           >
             {isRunning ? (
               <Square className="h-3.5 w-3.5 fill-current" />

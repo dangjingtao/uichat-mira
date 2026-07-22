@@ -4,6 +4,7 @@ import type {
   McpExecutionEnvironment,
   McpInvocationFailureCode,
   McpInvocationRecord,
+  McpStructuredInvocationErrorDetail,
   McpStreamEvent,
   McpStreamEventInput,
   McpToolExecutionResult,
@@ -33,7 +34,34 @@ import { validateInvocationArgs } from "./schema.js";
 import { redactExternalMcpValue } from "../external-redaction.js";
 import { computerUseRepository } from "@/db/repositories/computer-use/repository.js";
 
-const isComputerUseInvocation = (toolId: string) => toolId.startsWith("browser_");
+const COMPUTER_USE_TOOL_IDS = new Set([
+  "browser_observe",
+  "browser_act",
+  "browser_assert",
+]);
+const isComputerUseInvocation = (toolId: string) =>
+  COMPUTER_USE_TOOL_IDS.has(toolId);
+
+const getStructuredInvocationError = (
+  error: unknown,
+): Omit<McpStructuredInvocationErrorDetail, "message"> | undefined => {
+  if (!error || typeof error !== "object") {
+    return undefined;
+  }
+
+  const value = error as Record<string, unknown>;
+  if (typeof value.code !== "string" || typeof value.retryable !== "boolean") {
+    return undefined;
+  }
+
+  return {
+    code: value.code,
+    retryable: value.retryable,
+    ...(typeof value.suggestedAction === "string" || value.suggestedAction === null
+      ? { suggestedAction: value.suggestedAction }
+      : {}),
+  };
+};
 const persistComputerUseInvocation = (record: McpInvocationRecord) => {
   if (!isComputerUseInvocation(record.toolId) || !process.env.DATABASE_URL) return;
   try { computerUseRepository.persistInvocation(record); } catch { /* database initialization is completed by server startup */ }
@@ -369,10 +397,12 @@ export const executeInvocation = async (
       message: safeMessage,
       signal,
     });
+    const structuredError = getStructuredInvocationError(error);
     record.status = signal.aborted ? "cancelled" : "failed";
     record.error = {
       message,
       failureCode,
+      ...structuredError,
     };
     record.finishedAt = new Date().toISOString();
     invocationSpan.end({
@@ -381,6 +411,7 @@ export const executeInvocation = async (
         status: record.status,
         message: safeMessage,
         failureCode,
+        ...(structuredError ?? {}),
       },
     });
     finishInvocationTrace(invocationId);

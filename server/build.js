@@ -1,4 +1,5 @@
 import { build } from "esbuild";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -132,6 +133,26 @@ function copyPackageTree(packageName, copied = new Set()) {
   }
 }
 
+function pruneNodePtyRuntime() {
+  const packageRoot = path.join(outputNodeModules, "node-pty");
+  const prebuildsRoot = path.join(packageRoot, "prebuilds");
+  for (const entry of fs.readdirSync(prebuildsRoot, { withFileTypes: true })) {
+    if (entry.isDirectory() && entry.name !== "win32-x64") {
+      fs.rmSync(path.join(prebuildsRoot, entry.name), { recursive: true, force: true });
+    }
+  }
+
+  for (const directory of ["deps", "scripts", "src", "third_party", "typings"]) {
+    fs.rmSync(path.join(packageRoot, directory), { recursive: true, force: true });
+  }
+  for (const entry of fs.readdirSync(path.join(prebuildsRoot, "win32-x64"))) {
+    if (entry.endsWith(".pdb")) {
+      fs.rmSync(path.join(prebuildsRoot, "win32-x64", entry), { force: true });
+    }
+  }
+  console.log("Pruned node-pty to the Windows x64 runtime files");
+}
+
 function writeBackendPackageJson() {
   const serverPackage = readPackageJson(__dirname);
   const sqliteVecPackageSource = resolveInstalledPackageSource("sqlite-vec");
@@ -153,6 +174,7 @@ function writeBackendPackageJson() {
       "playwright-core": serverPackage.dependencies["playwright-core"],
       sharp: serverPackage.dependencies.sharp,
       "sqlite-vec": serverPackage.dependencies["sqlite-vec"],
+      "node-pty": serverPackage.dependencies["node-pty"],
       bindings: "^1.5.0",
       "file-uri-to-path": "^1.0.0",
       ...(sqliteVecPackage?.optionalDependencies ?? {}),
@@ -186,6 +208,7 @@ build({
     "playwright-core",
     "sharp",
     "sqlite-vec",
+    "node-pty",
   ],
 })
   .then(() => {
@@ -200,8 +223,15 @@ build({
     copyPackage("@img/sharp-win32-x64");
     copyPackage("sqlite-vec");
     copyPackage("sqlite-vec-windows-x64");
+    copyPackageTree("node-pty");
+    pruneNodePtyRuntime();
     copyPackage("bindings");
     copyPackage("file-uri-to-path");
+    execFileSync(process.execPath, ["-e", "require('node-pty')"], {
+      cwd: outputDir,
+      stdio: "inherit",
+    });
+    console.log("Verified staged node-pty can load with the build Node runtime");
     console.log("Server build completed successfully");
   })
   .catch((err) => {

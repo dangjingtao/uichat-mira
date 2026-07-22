@@ -15,4 +15,10 @@ export interface HarnessCapabilityProfile {
   actionProfileId?: string;
   actionProfileTitle?: string;
   actionProfileDescription?: string;
+  workbench?: {
+    label: string;
+    description: string;
+    order: number;
+    icon: string;
+  };
 }

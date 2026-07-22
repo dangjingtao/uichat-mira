@@ -104,11 +104,6 @@ const settingsPending = {
         smartRobotEntry: "智能机器人入口",
       },
       studioEntries: {
-        jianXing: {
-          title: "触界",
-          description: "连接当前 Chrome，在本机查看页面、翻页、点击、填写和处理文件操作。",
-          actions: { open: "进入触界" },
-        },
         notion: {
           title: "Notion",
           description: "连接 Notion 工作区，管理页面检索、数据库查询、内容归档与知识库同步入口。",
@@ -136,7 +131,7 @@ const settingsPending = {
           },
         },
         computerUse: {
-          title: "Computer Use Studio",
+          title: "智控",
           description: "这是浏览器任务工作台，用来统一查看计划、审批、执行进度和证据回放。",
           actions: {
             open: "进入工作区",
@@ -1019,13 +1014,13 @@ const settingsPending = {
       },
       computerUseStudio: {
         page: {
-          miniTitle: "Computer Use Studio",
-          title: "Computer Use Studio",
+          miniTitle: "智控",
+          title: "智控",
           description: "这是微应用设置区里的浏览器任务工作台，用来查看计划、审批、执行状态和证据回放。",
         },
         header: {
           miniTitle: "浏览器任务工作台",
-          title: "Computer Use Studio",
+          title: "智控",
           description: "这一页是受控浏览器任务工作台，不伪装成聊天框。它会明确展示运行时是否就绪、任务进度、审批暂停点和执行证据。",
         },
         status: {
@@ -1079,7 +1074,7 @@ const settingsPending = {
         },
         runtimeGuide: {
           title: "需要先准备浏览器运行时",
-          description: "Computer Use Studio 只有在浏览器运行时就绪后才能真正执行浏览器任务。",
+          description: "智控只有在浏览器运行时就绪后才能真正执行浏览器任务。",
           configMissing: "当前构建还没有提供可直接发起安装的受管运行时下载元数据，所以页面里暂时不能直接开始安装。",
           why: {
             title: "为什么现在会卡住",
@@ -1144,7 +1139,7 @@ const settingsPending = {
         },
       },
       computerUseDebugger: {
-        page: { miniTitle: "Computer Use Debugger", title: "Computer Use Debugger", description: "查看结构化浏览器 session 和工具执行结果。" },
+        page: { miniTitle: "智控", title: "智控", description: "查看结构化浏览器 session 和工具执行结果。" },
         tabs: { playwright: "Playwright" },
         runtime: { ready: "运行时已就绪", not_installed: "运行时不可用", downloading: "运行时下载中", broken: "运行时异常" },
         model: { unavailable: "模型：未连接", connected: "模型已连接", unavailableTitle: "Model Run 不可用" },
@@ -1154,7 +1149,7 @@ const settingsPending = {
         feedback: { title: "执行反馈", events: "事件", json: "JSON", empty: "还没有 invocation。", approval: "审批", toolArgs: "工具参数", artifacts: "产物", evidence: "证据", result: "结果" },
         modelRun: { title: "AgentTaskModel", run: "运行模型", result: "模型运行结果" },
         actions: { newSession: "新建 Session", inspect: "检查", execute: "执行动作", assert: "断言", approve: "批准动作", reject: "拒绝动作", stop: "停止", reset: "重置", openGuide: "使用说明", installRuntime: "下载浏览器运行时" },
-        runtimeCard: { title: "浏览器运行时", description: "管理 Computer Use 执行网页任务所使用的浏览器环境。", status: "当前状态", managed: "内置 Chromium", system: "系统浏览器", detected: "已检测", notDetected: "未检测到", path: "当前可执行文件", pathEmpty: "尚未解析可执行文件", reinstallTitle: "确认重新下载内置 Chromium", reinstallDescription: "已检测到内置 Chromium。继续下载会重新校验并替换当前内置浏览器文件。", systemBrowserTitle: "确认下载内置 Chromium", systemBrowserDescription: "当前环境已检测到系统浏览器。继续后仍会额外下载一份由应用管理的内置 Chromium。", confirmDownload: "继续下载", cancel: "取消" },
+        runtimeCard: { title: "浏览器运行时", description: "管理智控执行网页任务所使用的浏览器环境。", status: "当前状态", managed: "内置 Chromium", system: "系统浏览器", detected: "已检测", notDetected: "未检测到", path: "当前可执行文件", pathEmpty: "尚未解析可执行文件", reinstallTitle: "确认重新下载内置 Chromium", reinstallDescription: "已检测到内置 Chromium。继续下载会重新校验并替换当前内置浏览器文件。", systemBrowserTitle: "确认下载内置 Chromium", systemBrowserDescription: "当前环境已检测到系统浏览器。继续后仍会额外下载一份由应用管理的内置 Chromium。", confirmDownload: "继续下载", cancel: "取消" },
         errors: { title: "Debugger 错误", requestFailed: "请求失败" },
         common: { emptyValue: "-" },
         runtimeOptions: { managed: "Managed Chromium", system: "系统浏览器" },
@@ -1163,7 +1158,7 @@ const settingsPending = {
         actionOptions: { navigate: "导航", click: "点击", type: "输入", select: "选择", press: "按键", scroll: "滚动", wait: "等待" },
         assertionOptions: { title: "标题", url: "URL", text: "文本", visible: "可见性", value: "值" },
         status: { idle: "空闲", running: "运行中", failed: "失败", succeeded: "成功", awaiting_approval: "等待审批", cancelled: "已取消", pending: "处理中" },
-        guide: { title: "Computer Use 使用说明", intro: "Computer Use 通过受控浏览器完成可观察、可审批、可回放的网页操作。", capabilityTitle: "能力介绍", capabilityBody: "支持创建浏览器会话、读取页面结构和截图、执行导航与页面动作、进行页面断言，并为每次调用保留 invocation、trace 和 evidence。", environmentTitle: "环境配置", environmentBody: "运行时优先使用受管 Chromium；请填写初始 URL 和允许的域名。域名范围限制导航边界，审批策略决定写入动作是否需要人工确认。", setupTitle: "开始前准备", setupBody: "确认浏览器运行时已就绪，并连接可用的 AgentTaskModel。没有模型时仍可使用手动调试，但不能运行模型任务。", stepsTitle: "使用方法", stepsBody: "先新建 Session，再点击检查获取页面快照和 ref。选择动作并填写参数后执行；完成审批后继续观察，最后使用断言核对页面结果。", approvalTitle: "审批与反馈", approvalBody: "写入动作会进入等待审批状态。批准后才会执行，拒绝会留下明确的取消结果。右侧执行反馈可查看工具参数、状态、产物和证据。", boundaryTitle: "使用边界", boundaryBody: "当前能力面向受控浏览器网页操作，不包含宿主桌面控制、凭据托管、插件接管或 CAPTCHA 绕过。", close: "关闭使用说明" },
+        guide: { brandName: "智控", title: "智控使用说明", intro: "智控通过受控浏览器完成可观察、可审批、可回放的网页操作。", capabilityTitle: "能力介绍", capabilityBody: "支持创建浏览器会话、读取页面结构和截图、执行导航与页面动作、进行页面断言，并为每次调用保留 invocation、trace 和 evidence。", environmentTitle: "环境配置", environmentBody: "运行时优先使用受管 Chromium；请填写初始 URL 和允许的域名。域名范围限制导航边界，审批策略决定写入动作是否需要人工确认。", setupTitle: "开始前准备", setupBody: "确认浏览器运行时已就绪，并连接可用的 AgentTaskModel。没有模型时仍可使用手动调试，但不能运行模型任务。", stepsTitle: "使用方法", stepsBody: "先新建 Session，再点击检查获取页面快照和 ref。选择动作并填写参数后执行；完成审批后继续观察，最后使用断言核对页面结果。", approvalTitle: "审批与反馈", approvalBody: "写入动作会进入等待审批状态。批准后才会执行，拒绝会留下明确的取消结果。右侧执行反馈可查看工具参数、状态、产物和证据。", boundaryTitle: "使用边界", boundaryBody: "当前能力面向受控浏览器网页操作，不包含宿主桌面控制、凭据托管、插件接管或 CAPTCHA 绕过。", close: "关闭使用说明" },
       },
     },
     tools: {
@@ -1171,7 +1166,7 @@ const settingsPending = {
       miniTitle: "Tools",
       title: "工具",
       description:
-        "按能力域组织内部核心 Tool 工作台，用于调试和观察 Tool 调用流。",
+        "按产品能力组组织内部核心 Tool 工作台，用于调试和观察 Tool 调用流。",
       domains: {
         read: {
           label: "阅读",
@@ -1211,8 +1206,8 @@ const settingsPending = {
       package: {
         title: "工具包",
         description:
-          "当前能力域下的工具以 tab 方式组织，切换后直接执行对应工具。",
-        empty: "当前能力域下还没有工具。",
+          "当前产品能力组下的工具以 tab 方式组织，切换后直接执行对应工具。",
+        empty: "当前产品能力组下还没有工具。",
         config: "参数配置",
         argsModalTitle: "工具参数配置",
         argsModalDescription:

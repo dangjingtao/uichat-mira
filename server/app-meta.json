@@ -1,6 +1,6 @@
 {
   "name": "ui-chat-mira",
-  "version": "0.7.1",
+  "version": "0.99.0",
   "author": "Tomz Dang <dangjingtao@gmail.com>",
   "description": "An intelligent agent cabin that starts with a chat and returns to your side.",
   "repository": {
@@ -33,8 +33,28 @@
       }
     ],
     "git": {
-      "branch": "codex/rescue-dev-20260721",
+      "branch": "dev",
       "versions": [
+        {
+          "version": "0.99.0",
+          "commit": {
+            "hash": "7be77795db32264b16af964537798e47f696ca45",
+            "shortHash": "7be7779",
+            "message": "ci: stabilize desktop release packaging",
+            "author": "DangJingtao",
+            "date": "2026-07-22T11:38:11+08:00"
+          }
+        },
+        {
+          "version": "0.98.0",
+          "commit": {
+            "hash": "ba8918758dcf4ad88211e1223bbcb9fe19afb03b",
+            "shortHash": "ba89187",
+            "message": "ci: publish four desktop release assets",
+            "author": "Tomz",
+            "date": "2026-07-22T11:26:04+08:00"
+          }
+        },
         {
           "version": "0.7.1",
           "commit": {

@@ -272,7 +272,7 @@ function LoginPage() {
                     />
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="pt-0.5 text-[15px] font-medium tracking-[-0.02em] text-text-primary">
+                    <span className="font-serif pt-0.5 text-[15px] font-semibold tracking-[-0.02em] text-text-primary">
                       {(appMeta.displayName || appPackageMeta.displayName).toLowerCase()}
                     </span>
                     <span className="text-[11px] text-text-tertiary">

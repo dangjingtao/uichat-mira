@@ -4,17 +4,6 @@ import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useRoleModelConfigs } from "@/app/providers/RoleModelConfigProvider";
 import { useChatKnowledgeBaseState } from "@/features/chat/core/knowledgeBaseState";
-import { AppChatRuntimeProvider } from "@/features/chat/core/runtime";
-
-export function ChatRuntimeProvider({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <AppChatRuntimeProvider>{children}</AppChatRuntimeProvider>
-  );
-}
 
 /**
  * Refresh model config when returning to chat so runtime gating stays in sync

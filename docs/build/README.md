@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: build
-Last verified: 2026-06-28
+Last verified: 2026-07-22
 Layer: raw-source
 Module: Build
 Feature: Packaging
@@ -11,6 +11,7 @@ Canonical: true
 Related:
   - ../../README.md
   - local-model-packaging.md
+  - terminal-dev-runtime.md
   - ../developments/release-management.md
   - ../platform/tauri.md
   - ../../scripts/build-dist.js
@@ -30,6 +31,7 @@ Related:
 - release 输出目录和保留策略
 - 本地模型包和 WASM runtime 资源入包规则
 - Piper Windows 运行时入包规则
+- Terminal Dev Runtime 的固定版本、PATH、staging 与分层验证规则
 - 当前平台兼容边界
 - 后续改造方向
 
@@ -60,6 +62,48 @@ pnpm clean:artifacts
 ```bash
 pnpm version:sync
 ```
+
+## GitHub Actions 发布流程
+
+当前唯一的桌面发布工作流是 `.github/workflows/build-desktop.yml`。
+
+触发条件：`main`、`master`、`dev` 分支 push；`v*` 标签 push；GitHub Actions 手动运行；以及面向 `main`、`master` 的 Pull Request。
+
+Windows 构建分为两个独立 job，并行执行：
+
+1. Electron job 安装根 workspace 依赖和 `mira-clipper-ext` 的 npm 依赖，执行扩展签名配置、类型检查、本地模型准备和 `node scripts/build-dist.js win`。
+2. Tauri job 安装 Rust，执行同样的扩展签名、类型检查和本地模型准备，再执行 `pnpm package:tauri:win`。
+3. 两个 job 都成功后，标签构建才进入 Release job。
+
+GitHub Actions 只上传最终桌面安装文件，不上传 `win-unpacked`、调试配置或整个 release 目录：
+
+| 平台 | Release 资产 |
+| --- | --- |
+| Electron | `*Setup*.exe`、对应 `.exe.blockmap` |
+| Tauri | `msi/*.msi`、`nsis/*setup.exe` |
+| GitHub 自动生成 | Source code (`.zip`、`.tar.gz`) |
+
+上传到 GitHub Release 前，artifact 会被展平并加上来源前缀，避免 Electron 和 Tauri 同名文件冲突。Actions artifact 只保留 3 天；GitHub Release 负责保存历史版本。
+
+### Cloudflare R2 当前版本分发
+
+标签构建的 Release job 还会把同一批四个桌面安装文件上传到 Cloudflare R2：
+
+```text
+mira/latest/
+```
+
+R2 只作为当前版本分发源，不保存历史 Release。每次成功发布使用 `--delete` 同步并覆盖 `latest`，旧的 `mira/previous/` 会先清理。R2 所需 GitHub Secrets 为：
+
+```text
+R2_ACCOUNT_ID
+R2_ACCESS_KEY_ID
+R2_SECRET_ACCESS_KEY
+R2_BUCKET
+R2_PUBLIC_BASE_URL
+```
+
+R2 公开地址格式为 `${R2_PUBLIC_BASE_URL}/mira/latest/<asset-name>`。只有 `v*` 标签构建会创建 GitHub Release 并上传 R2；普通分支构建只验证打包流程并保存短期 Actions artifacts。
 
 ## 本地模型资源
 
@@ -125,6 +169,12 @@ pnpm prepare:piper-runtime
 - 具体样例和技术债说明见：
   - `../microapp/tts-studio-runtime-notes.md`
   - `../developments/defect-log.md`
+
+## Terminal Dev Runtime
+
+Node/npm/npx、MinGit、uv、ripgrep 的固定版本、checksum、共享 Electron/Tauri staging、终端 PATH 与低资源 smoke 规则见：
+
+- `terminal-dev-runtime.md`
 
 ## Release 构建原则
 
@@ -205,6 +255,7 @@ Electron staged app 位于：
   backend/
   icons/
   node-runtime/
+  terminal-runtime/
 ```
 
 最终 Electron 包中：
@@ -213,6 +264,7 @@ Electron staged app 位于：
 resources/app.asar
 resources/server
 resources/node-runtime
+resources/terminal-runtime
 resources/runtime.config.cjs
 ```
 
@@ -291,7 +343,7 @@ scripts/prepare-desktop-artifacts.js
    .artifacts/server-bundle/docs-site/
    ```
 
-9. 复制 renderer dist、icons、runtime config、当前 Node runtime。
+9. 准备并复制 renderer dist、icons、runtime config、固定 Node/npm/npx 和 Terminal Dev Runtime。
 10. 组装 `.artifacts/electron-app`。
 
 ## Backend Bundle 流程
@@ -325,13 +377,14 @@ server/build.js
   docs-site/
 ```
 
-`server.cjs` 由 esbuild 打包。`better-sqlite3` 和 `sqlite-vec` 等 native 包不进入 bundle，而是复制到 `node_modules/`。
+`server.cjs` 由 esbuild 打包。`better-sqlite3`、`sqlite-vec` 和 `node-pty` 等 native 包不进入 bundle，而是复制到 `node_modules/`。
 
 当前 native module 复制逻辑是 Windows-first：
 
 - `better-sqlite3`
 - `sqlite-vec`
 - `sqlite-vec-windows-x64`
+- `node-pty`（只保留 Windows x64 runtime，构建时执行加载校验）
 - `bindings`
 - `file-uri-to-path`
 
@@ -565,6 +618,7 @@ pnpm internal:prepare:desktop-artifacts
 ```text
 tauri/resources/server/
 tauri/resources/node-runtime/
+tauri/resources/terminal-runtime/
 tauri/resources/runtime.config.cjs
 ```
 

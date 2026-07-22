@@ -15,15 +15,15 @@ import {
   type McpToolDefinition,
 } from "@/shared/api/tools";
 import type {
-  ToolDomainSummary,
-  ToolWorkbenchDomain,
+  ToolGroupSummary,
+  ToolWorkbenchGroupId,
   WorkbenchToolDefinition,
 } from "../types";
 import {
   buildToolDraft,
   findPrimaryArtifact,
-  getToolDomains,
-  formatToolDomain,
+  getToolGroups,
+  formatToolGroup,
   getTerminalResultSummary,
 } from "../utils";
 const WEB_SEARCH_DEFAULT_MAX_RESULTS = 4;
@@ -42,7 +42,7 @@ const defaultWebSearchConfig: WebSearchConfig = {
 };
 
 const isWorkbenchTool = (tool: McpToolDefinition): tool is WorkbenchToolDefinition =>
-  tool.source === "internal";
+  tool.source === "internal" && Boolean(tool.workbench?.groupId);
 
 const normalizeWebSearchMaxResults = (value: unknown) => {
   if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -57,7 +57,7 @@ const normalizeWebSearchMaxResults = (value: unknown) => {
 
 export function useToolsWorkbench() {
   const { t } = useTranslation();
-  const [activeDomain, setActiveDomain] = useState<ToolWorkbenchDomain | null>(null);
+  const [activeGroupId, setActiveGroupId] = useState<ToolWorkbenchGroupId | null>(null);
   const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
   const [argsDraft, setArgsDraft] = useState("{}");
   const [tools, setTools] = useState<WorkbenchToolDefinition[]>([]);
@@ -114,7 +114,7 @@ export function useToolsWorkbench() {
         const nextSelectedTool = sortedTools[0] ?? null;
         if (nextSelectedTool) {
           setSelectedToolId(nextSelectedTool.id);
-          setActiveDomain(nextSelectedTool.domain);
+          setActiveGroupId(nextSelectedTool.workbench.groupId);
           setArgsDraft(buildToolDraft(nextSelectedTool));
         }
       } catch (error) {
@@ -145,32 +145,32 @@ export function useToolsWorkbench() {
 
   const groupedTools = useMemo(
     () =>
-      getToolDomains(tools).map((domain) => ({
-        domain,
-        tools: tools.filter((tool) => tool.domain === domain),
+      getToolGroups(tools).map((groupId) => ({
+        groupId,
+        tools: tools.filter((tool) => tool.workbench.groupId === groupId),
       })),
     [tools],
   );
 
-  const domainSummaries = useMemo<ToolDomainSummary[]>(
+  const groupSummaries = useMemo<ToolGroupSummary[]>(
     () =>
-      groupedTools.map(({ domain, tools: domainTools }) => {
-        const metadata = domainTools[0]?.workbench;
+      groupedTools.map(({ groupId, tools: groupTools }) => {
+        const metadata = groupTools[0]?.workbench;
         return {
-          id: domain,
-          count: domainTools.length,
-          label: metadata?.domainLabel ?? formatToolDomain(domain),
-          description: metadata?.domainDescription ?? `${domainTools.length} tool(s) in this capability domain.`,
-          order: metadata?.domainOrder ?? Number.MAX_SAFE_INTEGER,
+          id: groupId,
+          count: groupTools.length,
+          label: metadata?.groupLabel ?? formatToolGroup(groupId),
+          description: metadata?.groupDescription ?? "",
+          order: metadata?.groupOrder ?? Number.MAX_SAFE_INTEGER,
           icon: metadata?.icon ?? "wrench",
         };
       }),
-    [groupedTools, t],
+    [groupedTools],
   );
 
   const filteredTools = useMemo(
-    () => tools.filter((tool) => tool.domain === activeDomain),
-    [activeDomain, tools],
+    () => tools.filter((tool) => tool.workbench.groupId === activeGroupId),
+    [activeGroupId, tools],
   );
 
   const primaryArtifact = useMemo(() => findPrimaryArtifact(artifacts), [artifacts]);
@@ -212,7 +212,7 @@ export function useToolsWorkbench() {
 
   const selectTool = (tool: WorkbenchToolDefinition) => {
     setSelectedToolId(tool.id);
-    setActiveDomain(tool.domain);
+    setActiveGroupId(tool.workbench.groupId);
     setArgsDraft(buildToolDraft(tool));
     resetRunState();
   };
@@ -297,9 +297,9 @@ export function useToolsWorkbench() {
     }
   };
 
-  const selectDomain = (domain: ToolWorkbenchDomain) => {
-    setActiveDomain(domain);
-    const nextTool = tools.find((tool) => tool.domain === domain) ?? null;
+  const selectGroup = (groupId: ToolWorkbenchGroupId) => {
+    setActiveGroupId(groupId);
+    const nextTool = tools.find((tool) => tool.workbench.groupId === groupId) ?? null;
     if (nextTool) {
       setSelectedToolId(nextTool.id);
       setArgsDraft(buildToolDraft(nextTool));
@@ -311,10 +311,10 @@ export function useToolsWorkbench() {
   };
 
   return {
-    activeDomain,
+    activeGroupId,
     argsDraft,
     artifacts,
-    domainSummaries,
+    groupSummaries,
     events,
     filteredTools,
     groupedTools,
@@ -342,7 +342,7 @@ export function useToolsWorkbench() {
     setWebSearchConfig,
     setWorkspaceRootInput,
     runSelectedTool,
-    selectDomain,
+    selectGroup,
     selectTool,
     updateWorkspaceRoot,
     saveWebSearchConfig: async () => {

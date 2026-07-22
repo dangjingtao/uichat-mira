@@ -21,6 +21,8 @@ export { FullPageStatus } from "./FullPageStatus";
 export { default as ImagePreviewOverlay } from "./ImagePreviewOverlay";
 export { default as MarkdownEditor } from "./MarkdownEditor";
 export { default as MarkdownText } from "./MarkdownText";
+export { default as StreamingTextRenderer } from "./StreamingTextRenderer";
+export type { StreamingTextRendererProps } from "./StreamingTextRenderer";
 export { default as MicroFrontend } from "./MicroFrontend";
 export { default as CoverageReportPanel } from "./CoverageReportPanel";
 export { default as NavigationCardTabs } from "./NavigationCardTabs";

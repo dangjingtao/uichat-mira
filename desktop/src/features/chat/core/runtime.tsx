@@ -9,7 +9,7 @@ import {
 } from "react";
 import { ChatRuntime } from "@/shared/uchat/core";
 import {
-  UChatRuntimeProvider,
+  UChatApplicationStateProvider,
   useUChatRuntime,
   useUChatSelector,
 } from "@/shared/uchat/ui";
@@ -52,7 +52,8 @@ type ChatThreadDraftStateValue = {
 const ChatThreadDraftStateContext =
   createContext<ChatThreadDraftStateValue | null>(null);
 
-const ACTIVE_THREAD_STORAGE_KEY = "rag-demo-chat-active-thread-id";
+const activeThreadStorageKey = (sessionKey: string | number) =>
+  `rag-demo-chat-active-thread-id:${String(sessionKey)}`;
 
 const desktopRuntimeBaseCapabilities = {
   renameThread: true,
@@ -107,53 +108,15 @@ export const createStableAppChatRuntime = (
     },
   });
 
-// AppChatRuntimeProvider wires the protocol-agnostic runtime to the current
-// desktop app adapters and exposes it through React context.
-export function AppChatRuntimeProvider({
-  children,
+function AppChatRuntimeEffects({
+  sessionKey,
 }: {
-  children: ReactNode;
+  sessionKey: string | number;
 }) {
-  const { knowledgeBases } = useChatKnowledgeBaseState();
-  const [draftKnowledgeBaseId, setDraftKnowledgeBaseId] = useState<string | null>(
-    null,
-  );
-  const [draftRoleId, setDraftRoleId] = useState<string | null>(null);
-  const [draftAgentEnabled, setDraftAgentEnabled] = useState(false);
-  const [draftTtsEnabled, setDraftTtsEnabled] = useState(false);
-  const [draftImageEnabled, setDraftImageEnabled] = useState(false);
-  const [draftWorkspaceId, setDraftWorkspaceId] = useState<string | null>(null);
-  const draftWorkspaceIdRef = useRef<string | null>(draftWorkspaceId);
-  const draftKnowledgeBaseIdRef = useRef<string | null>(draftKnowledgeBaseId);
-  const draftRoleIdRef = useRef<string | null>(draftRoleId);
-  const draftAgentEnabledRef = useRef<boolean>(draftAgentEnabled);
-  const draftTtsEnabledRef = useRef<boolean>(draftTtsEnabled);
-  const draftImageEnabledRef = useRef<boolean>(draftImageEnabled);
+  const runtime = useChatRuntime();
   const hasBootstrappedActiveThreadRef = useRef(false);
-  draftWorkspaceIdRef.current = draftWorkspaceId;
-  draftKnowledgeBaseIdRef.current = draftKnowledgeBaseId;
-  draftRoleIdRef.current = draftRoleId;
-  draftAgentEnabledRef.current = draftAgentEnabled;
-  draftTtsEnabledRef.current = draftTtsEnabled;
-  draftImageEnabledRef.current = draftImageEnabled;
-  const runtimeRef = useRef<ChatRuntime | null>(null);
+  const storageKey = activeThreadStorageKey(sessionKey);
 
-  if (!runtimeRef.current) {
-    runtimeRef.current = createStableAppChatRuntime(() => ({
-      workspaceId: draftWorkspaceIdRef.current,
-      knowledgeBaseId: draftKnowledgeBaseIdRef.current,
-      roleId: draftRoleIdRef.current,
-      agentEnabled: draftAgentEnabledRef.current,
-      ttsEnabled: draftTtsEnabledRef.current,
-      imageEnabled: draftImageEnabledRef.current,
-    }));
-  }
-
-  const runtime = runtimeRef.current;
-
-  // Persist only the currently selected persisted thread id. Refresh should
-  // restore the active thread surface, including role / KB request context,
-  // but welcome draft state remains ephemeral by design.
   useEffect(() => {
     return runtime.store.subscribe((state) => {
       if (!hasBootstrappedActiveThreadRef.current) {
@@ -161,25 +124,20 @@ export function AppChatRuntimeProvider({
       }
 
       if (state.activeThreadId) {
-        globalThis.localStorage.setItem(
-          ACTIVE_THREAD_STORAGE_KEY,
-          state.activeThreadId,
-        );
+        globalThis.localStorage.setItem(storageKey, state.activeThreadId);
         return;
       }
 
-      globalThis.localStorage.removeItem(ACTIVE_THREAD_STORAGE_KEY);
+      globalThis.localStorage.removeItem(storageKey);
     });
-  }, [runtime]);
+  }, [runtime, storageKey]);
 
-  // Bootstrap the thread list once the provider mounts.
   useEffect(() => {
     let cancelled = false;
 
     const bootstrap = async () => {
-      const persistedActiveThreadId = globalThis.localStorage.getItem(
-        ACTIVE_THREAD_STORAGE_KEY,
-      );
+      const persistedActiveThreadId =
+        globalThis.localStorage.getItem(storageKey);
       const threads = await runtime.loadThreads();
       if (cancelled) {
         return;
@@ -190,7 +148,7 @@ export function AppChatRuntimeProvider({
       }
 
       if (!threads.some((thread) => thread.id === persistedActiveThreadId)) {
-        globalThis.localStorage.removeItem(ACTIVE_THREAD_STORAGE_KEY);
+        globalThis.localStorage.removeItem(storageKey);
         hasBootstrappedActiveThreadRef.current = true;
         return;
       }
@@ -204,7 +162,7 @@ export function AppChatRuntimeProvider({
     return () => {
       cancelled = true;
     };
-  }, [runtime]);
+  }, [runtime, storageKey]);
 
   useEffect(() => {
     const handleThreadsCleaned = () => {
@@ -247,8 +205,15 @@ export function AppChatRuntimeProvider({
     };
   }, [runtime]);
 
-  // Knowledge base availability affects only UI-facing composer actions. The
-  // runtime instance must stay stable so thread state survives chat re-entry.
+  return null;
+}
+
+// ChatRuntimeKnowledgeBaseBinding maps app-owned knowledge-base availability
+// into generic UChat capabilities without making UChat import app modules.
+export function ChatRuntimeKnowledgeBaseBinding() {
+  const runtime = useChatRuntime();
+  const { knowledgeBases } = useChatKnowledgeBaseState();
+
   useEffect(() => {
     runtime.setCapabilities({
       ...runtime.getState().capabilities,
@@ -259,6 +224,54 @@ export function AppChatRuntimeProvider({
     });
   }, [knowledgeBases, runtime]);
 
+  return null;
+}
+
+// AppChatRuntimeProvider wires the protocol-agnostic runtime to the current
+// desktop app adapters and exposes it through React context.
+export function AppChatRuntimeProvider({
+  sessionKey,
+  children,
+}: {
+  sessionKey: string | number;
+  children: ReactNode;
+}) {
+  const scopeKey = `${typeof sessionKey}:${String(sessionKey)}`;
+
+  return (
+    <AppChatRuntimeScope key={scopeKey} sessionKey={sessionKey}>
+      {children}
+    </AppChatRuntimeScope>
+  );
+}
+
+function AppChatRuntimeScope({
+  sessionKey,
+  children,
+}: {
+  sessionKey: string | number;
+  children: ReactNode;
+}) {
+  const [draftKnowledgeBaseId, setDraftKnowledgeBaseId] = useState<string | null>(
+    null,
+  );
+  const [draftRoleId, setDraftRoleId] = useState<string | null>(null);
+  const [draftAgentEnabled, setDraftAgentEnabled] = useState(false);
+  const [draftTtsEnabled, setDraftTtsEnabled] = useState(false);
+  const [draftImageEnabled, setDraftImageEnabled] = useState(false);
+  const [draftWorkspaceId, setDraftWorkspaceId] = useState<string | null>(null);
+  const draftWorkspaceIdRef = useRef<string | null>(draftWorkspaceId);
+  const draftKnowledgeBaseIdRef = useRef<string | null>(draftKnowledgeBaseId);
+  const draftRoleIdRef = useRef<string | null>(draftRoleId);
+  const draftAgentEnabledRef = useRef<boolean>(draftAgentEnabled);
+  const draftTtsEnabledRef = useRef<boolean>(draftTtsEnabled);
+  const draftImageEnabledRef = useRef<boolean>(draftImageEnabled);
+  draftWorkspaceIdRef.current = draftWorkspaceId;
+  draftKnowledgeBaseIdRef.current = draftKnowledgeBaseId;
+  draftRoleIdRef.current = draftRoleId;
+  draftAgentEnabledRef.current = draftAgentEnabled;
+  draftTtsEnabledRef.current = draftTtsEnabled;
+  draftImageEnabledRef.current = draftImageEnabled;
   const draftState = useMemo<ChatThreadDraftStateValue>(
     () => ({
       draftKnowledgeBaseId,
@@ -282,12 +295,35 @@ export function AppChatRuntimeProvider({
         setDraftImageEnabled(false);
       },
     }),
-    [draftAgentEnabled, draftImageEnabled, draftKnowledgeBaseId, draftRoleId, draftTtsEnabled, draftWorkspaceId],
+    [
+      draftAgentEnabled,
+      draftImageEnabled,
+      draftKnowledgeBaseId,
+      draftRoleId,
+      draftTtsEnabled,
+      draftWorkspaceId,
+    ],
   );
 
   return (
     <ChatThreadDraftStateContext.Provider value={draftState}>
-      <UChatRuntimeProvider runtime={runtime}>{children}</UChatRuntimeProvider>
+      <UChatApplicationStateProvider
+        sessionKey={sessionKey}
+        createRuntime={() =>
+          createStableAppChatRuntime(() => ({
+            workspaceId: draftWorkspaceIdRef.current,
+            knowledgeBaseId: draftKnowledgeBaseIdRef.current,
+            roleId: draftRoleIdRef.current,
+            agentEnabled: draftAgentEnabledRef.current,
+            ttsEnabled: draftTtsEnabledRef.current,
+            imageEnabled: draftImageEnabledRef.current,
+          }))
+        }
+        disposeRuntime={(runtime) => runtime.cancelSend()}
+      >
+        <AppChatRuntimeEffects sessionKey={sessionKey} />
+        {children}
+      </UChatApplicationStateProvider>
     </ChatThreadDraftStateContext.Provider>
   );
 }

@@ -444,12 +444,9 @@ fn start_backend_process(
         return Err(format!("Backend server not found at {:?}", server_path));
     }
 
-    let node_exe = find_node_executable();
-    if !node_exe.exists() {
-        return Err(format!("Bundled node runtime not found at {:?}", node_exe));
-    }
+    let (node_exe, node_source) = find_node_executable()?;
 
-    println!("Starting backend with node: {:?}", node_exe);
+    println!("Starting backend with {} node: {:?}", node_source, node_exe);
     println!("Server path: {:?}", server_path);
     println!("Working directory: {:?}", cwd);
 
@@ -464,6 +461,7 @@ fn start_backend_process(
         .env("SETTINGS_SECRET", settings_secret)
         .env("UI_CHAT_ALLOW_DEFAULT_BOOTSTRAP", "1")
         .env("UI_CHAT_BACKEND_URL", get_backend_url())
+        .env("UI_CHAT_DESKTOP_RESOURCES_ROOT", &resources_root)
         .env("UI_CHAT_DATABASE_DIR", data_dir)
         .env("UI_CHAT_LOG_DIR", log_dir)
         .env("LOCAL_MODEL_RESOURCE_ROOT", local_model_resource_root)
@@ -479,8 +477,37 @@ fn start_backend_process(
 }
 
 #[cfg(not(debug_assertions))]
-fn find_node_executable() -> PathBuf {
-    get_packaged_resources_root().join("node-runtime").join("node.exe")
+fn find_node_executable() -> Result<(PathBuf, &'static str), String> {
+    let bundled = get_packaged_resources_root()
+        .join("node-runtime")
+        .join("node.exe");
+    if bundled.exists() {
+        return Ok((bundled, "bundled"));
+    }
+
+    let output = Command::new("where.exe")
+        .arg("node.exe")
+        .output()
+        .map_err(|error| {
+            format!("Bundled node is unavailable and system node discovery failed: {error}")
+        })?;
+    if output.status.success() {
+        if let Some(candidate) = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .map(str::trim)
+            .find(|line| !line.is_empty())
+        {
+            let system_node = PathBuf::from(candidate);
+            if system_node.exists() {
+                return Ok((system_node, "system fallback"));
+            }
+        }
+    }
+
+    Err(format!(
+        "Node runtime is unavailable: bundled runtime is missing at {:?}, and node.exe was not found on the system PATH",
+        bundled
+    ))
 }
 
 fn get_native_host_source_path() -> PathBuf {

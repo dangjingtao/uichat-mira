@@ -45,7 +45,7 @@ function Sidebar({
         className={`flex items-center text-base font-semibold bg-surface-tertiary px-4 py-4`}
       >
         <img src={logoIcon} alt="Logo" className="mr-2.5 inline-block h-8" />
-        <span className="text-text-primary font-semibold">
+        <span className="font-serif font-semibold text-text-primary">
           {appPackageMeta.displayName}
         </span>
       </div>

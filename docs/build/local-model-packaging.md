@@ -134,7 +134,7 @@ userData/models/
 
 - Electron：Windows runner 执行 `node scripts/build-dist.js win`
 - Tauri：Windows runner 执行 `pnpm package:tauri:win`
-- 最终上传 `release/**/electron/**/*` 和 `release/**/tauri/**/*`
+- 最终只上传 Electron 安装程序及其 `.blockmap`，以及 Tauri 的 MSI 和 NSIS 安装程序；不会上传 `win-unpacked` 或其他目录细节
 
 因此 GitHub 构建环境必须被视为干净 checkout：
 

@@ -90,6 +90,14 @@ current-contract
 
 - `uchat-agent-ui-assessment.md`
 
+### UChat UI 规划
+
+- `uchat-ui-slot-design.md`（筹划中；尚未批准实施）
+
+### UChat 应用状态
+
+- `uchat-application-state-lifecycle-design.md`（当前合同与实施记录）
+
 ### UChat Governance
 
 - `uchat-governance/README.md`

@@ -1,9 +1,27 @@
 // @vitest-environment jsdom
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import MarkdownText from "../MarkdownText";
 
+const streamdownPropsSpy = vi.hoisted(() => vi.fn());
+
+vi.mock("streamdown", () => ({
+  Streamdown: ({ children, className, ...props }: {
+    children?: string;
+    className?: string;
+    animated?: boolean;
+    isAnimating?: boolean;
+  }) => {
+    streamdownPropsSpy({ children, className, ...props });
+    return <div className={className}>{children}</div>;
+  },
+}));
+
 describe("MarkdownText", () => {
+  beforeEach(() => {
+    streamdownPropsSpy.mockClear();
+  });
+
   it("renders children", () => {
     render(<MarkdownText>hello world</MarkdownText>);
     expect(screen.getByText("hello world")).toBeInTheDocument();
@@ -25,5 +43,29 @@ describe("MarkdownText", () => {
       <MarkdownText className="custom-class">text</MarkdownText>,
     );
     expect(container.firstChild).toHaveClass("custom-class");
+  });
+
+  it("forwards streaming animation state", () => {
+    render(
+      <MarkdownText animated isAnimating>
+        streaming
+      </MarkdownText>,
+    );
+
+    expect(streamdownPropsSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        animated: true,
+        isAnimating: true,
+        children: "streaming",
+      }),
+    );
+  });
+
+  it("does not rerender unchanged markdown", () => {
+    const { rerender } = render(<MarkdownText>stable</MarkdownText>);
+
+    rerender(<MarkdownText>stable</MarkdownText>);
+
+    expect(streamdownPropsSpy).toHaveBeenCalledTimes(1);
   });
 });

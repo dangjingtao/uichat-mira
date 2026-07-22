@@ -98,6 +98,7 @@ Related:
 ### 平台
 
 - `build/README.md`
+- `build/terminal-dev-runtime.md`
 - `build/local-model-packaging.md`
 - `platform/tauri.md`
 - `platform/tauri-setup.md`

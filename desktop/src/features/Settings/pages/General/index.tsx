@@ -23,6 +23,7 @@ import { Select } from "@/shared/ui/Select";
 import Switch from "@/shared/ui/Switch";
 import SettingsNotice from "../../components/SettingsNotice";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
+import DevelopmentEnvironmentSuiteCard from "./DevelopmentEnvironmentSuiteCard";
 
 type PasswordFormState = {
   currentPassword: string;
@@ -550,6 +551,8 @@ export default function General() {
           </div>
         </div>
       </Card>
+
+      <DevelopmentEnvironmentSuiteCard />
 
       <Card className="space-y-3">
         <div className="flex items-center gap-2">

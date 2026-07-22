@@ -229,6 +229,7 @@ export class ChatRuntime {
   readonly createId: () => string;
   readonly now: () => string;
   private currentRunController: AbortController | null = null;
+  private isSendPreparing = false;
 
   constructor(options: ChatRuntimeOptions) {
     this.store = createChatRuntimeStore();
@@ -550,7 +551,10 @@ export class ChatRuntime {
   }
 
   // Sends the current composer draft through the configured run driver.
-  private async sendInternal(overrides: SendOverrides = {}) {
+  private async sendInternal(
+    overrides: SendOverrides = {},
+    onRunStarted?: () => void,
+  ) {
     await this.uploadComposerAttachments();
     const parts = overrides.userParts ?? buildOutgoingUserParts(this.getState().composer);
     if (parts.length === 0) {
@@ -617,6 +621,7 @@ export class ChatRuntime {
     this.store.getState().setRunStatus({ type: "running" });
 
     this.currentRunController = new AbortController();
+    onRunStarted?.();
     try {
       let streamErrorMessage: string | null = null;
       await this.runDriver.run(
@@ -793,9 +798,25 @@ export class ChatRuntime {
   }
 
   async send(options?: SendOverrides["runOptions"]) {
-    await this.sendInternal({
-      ...(options ? { runOptions: options } : {}),
-    });
+    if (this.isSendPreparing || this.currentRunController) {
+      return;
+    }
+
+    this.isSendPreparing = true;
+    const releasePreparationLock = () => {
+      this.isSendPreparing = false;
+    };
+
+    try {
+      await this.sendInternal(
+        {
+          ...(options ? { runOptions: options } : {}),
+        },
+        releasePreparationLock,
+      );
+    } finally {
+      releasePreparationLock();
+    }
   }
 
   async regenerate(messageId: string) {

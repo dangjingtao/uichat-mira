@@ -5,6 +5,7 @@ import {
   createPiAgentLoop,
   type PiAgentLoopNodes,
 } from "../pi-loop";
+import { generateNode } from "../nodes/generate";
 import type {
   AgentGraphInput,
   AgentNextAction,
@@ -89,6 +90,7 @@ const createFakeNodes = (input: {
   calls: string[];
   plannerActions: AgentNextAction[];
   requireApproval?: boolean;
+  useRealGenerate?: boolean;
 }): PiAgentLoopNodes => {
   let plannerIndex = 0;
   let toolIndex = 0;
@@ -225,9 +227,17 @@ const createFakeNodes = (input: {
       };
     },
 
-    generate: async () => {
+    generate: async (state) => {
       input.calls.push("generate");
-      return { answer: "Compound task completed." };
+      if (input.useRealGenerate) {
+        return generateNode(state);
+      }
+      return {
+        answer:
+          state.nextAction?.type === "ask_user"
+            ? state.nextAction.question
+            : "Compound task completed.",
+      };
     },
 
     evaluate: async () => {
@@ -322,4 +332,212 @@ test("Pi runtime pauses for approval without executing or generating", async () 
     "policy",
     "approval",
   ]);
+});
+
+test("Pi runtime returns retrieval evidence to the planner before answering", async () => {
+  const calls: string[] = [];
+  const loop = createPiAgentLoop(
+    createFakeNodes({
+      calls,
+      plannerActions: [
+        {
+          type: "retrieve",
+          query: "current pnpm command",
+          reason: "The answer requires workspace evidence.",
+        },
+        {
+          type: "answer",
+          reason: "The retrieval evidence is sufficient.",
+        },
+      ],
+    }),
+  );
+
+  const output = await loop.run(createInput({
+    goal: createAgentGoal("Find the current pnpm command."),
+    messages: [
+      {
+        role: "user",
+        content: "Find the current pnpm command.",
+        parts: [{ type: "text", text: "Find the current pnpm command." }],
+      },
+    ],
+  }));
+
+  assert.equal(output.status, "completed");
+  assert.equal(output.answer, "Compound task completed.");
+  assert.deepEqual(calls, [
+    "prepare",
+    "planner",
+    "retrieve",
+    "evidence",
+    "planner",
+    "generate",
+    "evaluate",
+  ]);
+});
+
+test("Pi runtime turns normalization failures into an error without policy or tool execution", async () => {
+  const calls: string[] = [];
+  const nodes = createFakeNodes({
+    calls,
+    plannerActions: [
+      {
+        type: "use_tool",
+        toolId: "read_open",
+        args: { path: "README.md" },
+        reason: "Read the requested file.",
+      },
+    ],
+  });
+  const loop = createPiAgentLoop({
+    ...nodes,
+    normalizeToolCall: async () => {
+      calls.push("normalize");
+      return {
+        errorMessage: "args.path must be a string.",
+        errorSourceNodeId: "toolCallNormalize",
+      };
+    },
+  });
+
+  const output = await loop.run(createInput());
+
+  assert.equal(output.status, "failed");
+  assert.equal(output.errorMessage, "args.path must be a string.");
+  assert.deepEqual(calls, ["prepare", "planner", "normalize", "error"]);
+});
+
+test("Pi runtime resumes a frozen pending tool call before asking the planner for the next action", async () => {
+  const calls: string[] = [];
+  const pendingToolCall = createPendingToolCall(
+    {
+      type: "use_tool",
+      toolId: "read_open",
+      args: { path: "README.md" },
+      reason: "Resume the approved file read.",
+    },
+    1,
+  );
+  const loop = createPiAgentLoop(
+    createFakeNodes({
+      calls,
+      plannerActions: [
+        {
+          type: "answer",
+          reason: "The resumed tool result is available.",
+        },
+      ],
+    }),
+  );
+
+  const output = await loop.run(createInput({ pendingToolCall }));
+
+  assert.equal(output.status, "completed");
+  assert.equal(output.evidence.toolExecutions.length, 1);
+  assert.deepEqual(calls, [
+    "prepare",
+    "policy",
+    "tool",
+    "evidence",
+    "planner",
+    "generate",
+    "evaluate",
+  ]);
+});
+
+test("Pi runtime follows a contextual attached-browser use_tool action through real loop routing", async () => {
+  const calls: string[] = [];
+  const loop = createPiAgentLoop(
+    createFakeNodes({
+      calls,
+      plannerActions: [
+        {
+          type: "use_tool",
+          toolId: "browser_attached_browse",
+          args: { url: "http://localhost:5173/#/login" },
+          reason: "Continue the uniquely identified login task from conversation context.",
+        },
+        {
+          type: "answer",
+          reason: "The fake attached-browser execution is available for verification.",
+        },
+      ],
+    }),
+  );
+
+  const output = await loop.run(
+    createInput({
+      goal: createAgentGoal("Use the attached browser capability to proceed."),
+      messages: [
+        {
+          role: "user",
+          content: "Log into http://localhost:5173/#/login.",
+          parts: [{ type: "text", text: "Log into http://localhost:5173/#/login." }],
+        },
+        {
+          role: "assistant",
+          content: "The login task is pending and has not been executed.",
+          parts: [{ type: "text", text: "The login task is pending and has not been executed." }],
+        },
+        {
+          role: "user",
+          content: "Use the attached browser capability to proceed.",
+          parts: [{ type: "text", text: "Use the attached browser capability to proceed." }],
+        },
+      ],
+    }),
+  );
+
+  assert.equal(output.status, "completed");
+  assert.equal(output.evidence.toolExecutions.length, 1);
+  assert.equal(output.evidence.toolExecutions[0]?.toolId, "browser_attached_browse");
+  assert.deepEqual(calls, [
+    "prepare",
+    "planner",
+    "normalize",
+    "policy",
+    "tool",
+    "evidence",
+    "planner",
+    "generate",
+    "evaluate",
+  ]);
+});
+
+test("Pi runtime ask_user path returns the Planner question without tool execution", async () => {
+  const calls: string[] = [];
+  const plannerQuestion = "Which page and operation should I handle?";
+  const loop = createPiAgentLoop(
+    createFakeNodes({
+      calls,
+      useRealGenerate: true,
+      plannerActions: [
+        {
+          type: "ask_user",
+          question: plannerQuestion,
+          reason: "The bounded history does not identify a unique task.",
+        },
+      ],
+    }),
+  );
+
+  const output = await loop.run(
+    createInput({
+      goal: createAgentGoal("Please handle this with the attached browser."),
+      messages: [
+        {
+          role: "user",
+          content: "Please handle this with the attached browser.",
+          parts: [{ type: "text", text: "Please handle this with the attached browser." }],
+        },
+      ],
+    }),
+  );
+
+  assert.equal(output.status, "completed");
+  assert.equal(output.answer, plannerQuestion);
+  assert.equal(output.pendingToolCall, undefined);
+  assert.equal(output.evidence.toolExecutions.length, 0);
+  assert.deepEqual(calls, ["prepare", "planner", "generate", "evaluate"]);
 });

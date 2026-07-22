@@ -4,6 +4,15 @@
 
 @layer base {
   @font-face {
+    font-family: "Cormorant Garamond";
+    src: url("./shared/fonts/Cormorant_Garamond/CormorantGaramond-Latin-500.woff2")
+      format("woff2");
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+  }
+
+  @font-face {
     font-family: "IBM Plex Sans";
     src: url("./shared/fonts/IBM_Plex_Sans/IBMPlexSans-VariableFont_wdth,wght.ttf")
       format("truetype");
@@ -63,8 +72,8 @@
       "Microsoft YaHei", ui-sans-serif, system-ui, -apple-system,
       BlinkMacSystemFont, "Segoe UI", sans-serif;
     --font-serif:
-      "Source Han Serif CN", "Source Han Serif", "Noto Serif SC", ui-serif,
-      Georgia, serif;
+      "Cormorant Garamond", "Source Han Serif CN", "Source Han Serif",
+      "Noto Serif SC", ui-serif, Georgia, serif;
     --font-mono:
       "Geist Mono", ui-monospace, SFMono-Regular, "SF Mono", Consolas,
       "Liberation Mono", Menlo, monospace;

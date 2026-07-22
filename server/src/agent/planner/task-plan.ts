@@ -170,12 +170,18 @@ export const parsePlannerTaskPlanUpdate = parsePlannerTaskPlanPatch;
 export const applyPlannerTaskPlanPatch = (
   frame: CurrentTaskFrame | undefined,
   patch: PlannerTaskPlanPatch | undefined,
+  options?: {
+    projectTaskSemantics?: boolean;
+  },
 ): CurrentTaskFrame | undefined => {
   if (!frame) {
     return frame;
   }
 
   const previousItems = getCurrentPlanList(frame);
+  if (!patch && previousItems.length === 0) {
+    return frame;
+  }
   const itemsById = new Map(previousItems.map((item) => [item.id, { ...item }]));
 
   for (const item of patch?.addItems ?? []) {
@@ -198,9 +204,27 @@ export const applyPlannerTaskPlanPatch = (
   const planList = [...itemsById.values()];
   const current = planList.find((item) => !item.done);
   const remainingWork = planList.filter((item) => !item.done).map((item) => item.text);
+  const plannerAddedSemanticItems = (patch?.addItems ?? [])
+    .map((item) => item.text.trim())
+    .filter(Boolean);
+  const plannerOwnedCriteria = planList
+    .map((item) => item.text.trim())
+    .filter(Boolean);
+  const plannerOwnedGoal =
+    plannerOwnedCriteria.length === 1
+      ? plannerOwnedCriteria[0]
+      : plannerOwnedCriteria.join("；");
 
   return {
     ...frame,
+    ...(options?.projectTaskSemantics !== false &&
+    plannerAddedSemanticItems.length > 0 &&
+    plannerOwnedGoal
+      ? {
+          currentGoal: plannerOwnedGoal,
+          completionCriteria: plannerOwnedCriteria,
+        }
+      : {}),
     ...(current
       ? { currentSubtask: current.text }
       : planList.length > 0
@@ -384,6 +408,9 @@ export const withPlannerTaskPlanContract = (
     "planList is a lightweight runtime-owned todo list. It is navigation, not memory.",
     "Each item is only {id, text, done}. Tool results, facts, evidence, and reasoning stay in Continuous Agent Loop Context.",
     "For a genuinely multi-step task, create a short semantic plan on the first turn. For a trivial one-step task, planPatch may be omitted.",
+    "When the current request depends on bounded recent conversation history, each added item's text must preserve the complete inherited semantic objective or completion requirement, not merely the latest authorization or method instruction.",
+    "Refer to user-provided secrets as already supplied; never copy secret values into plan item text.",
+    "The runtime projects newly added semantic plan items into currentTaskFrame.currentGoal and completionCriteria, so include every requirement that must remain visible to later Planner iterations.",
     "The runtime owns existing item identity and order. Never return a full replacement plan and never rewrite an existing item's text.",
     "Return top-level planPatch only when the todo list changes.",
     'planPatch schema: {"addItems":[{"id":"P1","text":"semantic subgoal"}],"completeIds":["P1"]}',

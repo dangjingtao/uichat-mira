@@ -3,10 +3,11 @@ import {
   buildToolDraft,
   compactJson,
   findPrimaryArtifact,
-  getToolDomains,
+  getToolGroups,
   getTerminalResultSummary,
 } from "./utils";
 import type { McpArtifact, McpToolDefinition } from "@/shared/api/tools";
+import type { WorkbenchToolDefinition } from "./types";
 
 const createArtifact = (kind: McpArtifact["kind"]): McpArtifact => ({
   id: `${kind}-1`,
@@ -14,7 +15,11 @@ const createArtifact = (kind: McpArtifact["kind"]): McpArtifact => ({
   title: kind,
 });
 
-const createTool = (id: McpToolDefinition["id"]): McpToolDefinition => ({
+const createTool = (
+  id: McpToolDefinition["id"],
+  groupId = "read",
+  groupOrder = 10,
+): WorkbenchToolDefinition => ({
   id,
   title: id,
   description: "",
@@ -27,15 +32,22 @@ const createTool = (id: McpToolDefinition["id"]): McpToolDefinition => ({
     sideEffect: "none",
     requiresApproval: false,
   },
+  workbench: {
+    groupId,
+    groupLabel: groupId,
+    groupDescription: groupId,
+    groupOrder,
+    icon: "wrench",
+  },
 });
 
-describe("getToolDomains", () => {
-  it("derives unique domains from the backend tool list", () => {
-    expect(getToolDomains([
-      createTool("a"),
-      { ...createTool("b"), domain: "custom_domain" },
-      { ...createTool("c"), domain: "read" },
-    ])).toEqual(["custom_domain", "read"]);
+describe("getToolGroups", () => {
+  it("keeps different product groups separate when their runtime domain is the same", () => {
+    expect(getToolGroups([
+      createTool("browser_observe", "browser_computer_use", 50),
+      createTool("browser_attached_look", "browser_attached", 60),
+      createTool("browser_act", "browser_computer_use", 50),
+    ])).toEqual(["browser_computer_use", "browser_attached"]);
   });
 });
 

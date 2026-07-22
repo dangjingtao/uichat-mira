@@ -103,11 +103,6 @@ const settingsPending = {
         smartRobotEntry: "Smart robot entry",
       },
       studioEntries: {
-        jianXing: {
-          title: "触界",
-          description: "Connect to the current Chrome session to inspect, browse, act on pages, and handle file operations locally.",
-          actions: { open: "Open 触界" },
-        },
         notion: {
           title: "Notion",
           description: "Connect a Notion workspace for page search, database queries, content archiving, and knowledge sync.",
@@ -128,7 +123,7 @@ const settingsPending = {
           },
         },
         computerUse: {
-          title: "Computer Use Studio",
+          title: "Computer Use",
           description: "A browser task workspace for reviewing plans, approvals, execution progress, and evidence playback in one place.",
           actions: {
             open: "Open Studio",
@@ -1023,13 +1018,13 @@ const settingsPending = {
       },
       computerUseStudio: {
         page: {
-          miniTitle: "Computer Use Studio",
-          title: "Computer Use Studio",
+          miniTitle: "Computer Use",
+          title: "Computer Use",
           description: "A dedicated browser-task workspace inside Micro Apps settings for plan review, approval, execution, and evidence playback.",
         },
         header: {
           miniTitle: "Browser Task Workspace",
-          title: "Computer Use Studio",
+          title: "Computer Use",
           description: "This page is a controlled browser task studio. It shows runtime readiness, task progress, approval pauses, and evidence without pretending to be a chat box.",
         },
         status: {
@@ -1083,7 +1078,7 @@ const settingsPending = {
         },
         runtimeGuide: {
           title: "Browser runtime is required",
-          description: "Computer Use Studio needs a browser runtime before it can execute browser tasks.",
+          description: "Computer Use needs a browser runtime before it can execute browser tasks.",
           configMissing: "This build does not yet provide the managed runtime download metadata required to start installation from the page itself.",
           why: {
             title: "Why it is blocked",
@@ -1148,7 +1143,7 @@ const settingsPending = {
         },
       },
       computerUseDebugger: {
-        page: { miniTitle: "Computer Use Debugger", title: "Computer Use Debugger", description: "Inspect structured browser sessions and tool results." },
+        page: { miniTitle: "Computer Use", title: "Computer Use", description: "Inspect structured browser sessions and tool results." },
         tabs: { playwright: "Playwright" },
         runtime: { ready: "Runtime ready", not_installed: "Runtime unavailable", downloading: "Runtime downloading", broken: "Runtime broken" },
         model: { unavailable: "Model: Not connected", connected: "Model connected", unavailableTitle: "Model Run unavailable" },
@@ -1167,14 +1162,14 @@ const settingsPending = {
         actionOptions: { navigate: "Navigate", click: "Click", type: "Type", select: "Select", press: "Press", scroll: "Scroll", wait: "Wait" },
         assertionOptions: { title: "Title", url: "URL", text: "Text", visible: "Visibility", value: "Value" },
         status: { idle: "Idle", running: "Running", failed: "Failed", succeeded: "Succeeded", awaiting_approval: "Awaiting approval", cancelled: "Cancelled", pending: "Pending" },
-        guide: { title: "Computer Use user guide", intro: "Computer Use uses a controlled browser to perform observable, reviewable, and replayable web actions.", capabilityTitle: "Capabilities", capabilityBody: "Create browser sessions, inspect page structure and screenshots, perform navigation and page actions, validate page state, and retain invocation, trace, and evidence records for every call.", environmentTitle: "Environment configuration", environmentBody: "Managed Chromium is the preferred runtime. Provide an initial URL and allowed domains. The domain scope limits navigation, while the approval policy controls whether write actions require human confirmation.", setupTitle: "Before you start", setupBody: "Make sure the browser runtime is ready and AgentTaskModel is connected. Manual debugging remains available without a model, but model tasks cannot run.", stepsTitle: "How to use it", stepsBody: "Create a Session, then click Inspect to obtain the page snapshot and refs. Choose an action, provide its parameters, and execute it. After approval, inspect again and use an assertion to verify the result.", approvalTitle: "Approval and feedback", approvalBody: "Write actions enter an approval state. They run only after approval; rejection leaves an explicit cancelled result. The feedback panel shows tool arguments, status, artifacts, and evidence.", boundaryTitle: "Product boundaries", boundaryBody: "This capability is for controlled browser web actions. It does not include host desktop control, credential storage, browser extension takeover, or CAPTCHA bypass.", close: "Close user guide" },
+        guide: { brandName: "Computer Use", title: "Computer Use user guide", intro: "Computer Use uses a controlled browser to perform observable, reviewable, and replayable web actions.", capabilityTitle: "Capabilities", capabilityBody: "Create browser sessions, inspect page structure and screenshots, perform navigation and page actions, validate page state, and retain invocation, trace, and evidence records for every call.", environmentTitle: "Environment configuration", environmentBody: "Managed Chromium is the preferred runtime. Provide an initial URL and allowed domains. The domain scope limits navigation, while the approval policy controls whether write actions require human confirmation.", setupTitle: "Before you start", setupBody: "Make sure the browser runtime is ready and AgentTaskModel is connected. Manual debugging remains available without a model, but model tasks cannot run.", stepsTitle: "How to use it", stepsBody: "Create a Session, then click Inspect to obtain the page snapshot and refs. Choose an action, provide its parameters, and execute it. After approval, inspect again and use an assertion to verify the result.", approvalTitle: "Approval and feedback", approvalBody: "Write actions enter an approval state. They run only after approval; rejection leaves an explicit cancelled result. The feedback panel shows tool arguments, status, artifacts, and evidence.", boundaryTitle: "Product boundaries", boundaryBody: "This capability is for controlled browser web actions. It does not include host desktop control, credential storage, browser extension takeover, or CAPTCHA bypass.", close: "Close user guide" },
       },
     },
     tools: {
       miniTitle: "Tools",
       title: "Tools",
       description:
-        "Organize internal core Tools by capability domain and inspect their invocation stream.",
+        "Organize internal core Tools by product capability group and inspect their invocation stream.",
       domains: {
         read: {
           label: "Read",
@@ -1218,8 +1213,8 @@ const settingsPending = {
       package: {
         title: "Tool Package",
         description:
-          "Tools in the current capability domain are organized as tabs. Switch tabs to run a different tool in the package.",
-        empty: "No tools are available in the current capability domain.",
+          "Tools in the current product capability group are organized as tabs. Switch tabs to run a different tool in the package.",
+        empty: "No tools are available in the current product capability group.",
         config: "Args",
         argsModalTitle: "Tool Args",
         argsModalDescription:

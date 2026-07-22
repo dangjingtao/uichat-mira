@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { BookOpen, Circle, CircleHelp, Copy, Download, Eye, ExternalLink, FileDown, FileUp, Globe2, KeyRound, MousePointer2, Pencil, Plus, PlugZap, RefreshCw, RotateCcw, Send, ShieldCheck } from "lucide-react";
 import { Alert, Badge, Button, Card, FileUploadDropzone, IconButton, Modal, NavigationCardTabs, Select, Table, TextInput, Tooltip } from "@/shared/ui";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -24,52 +25,20 @@ type ConfiguredRuleRow = {
 };
 type ToolResult = Record<string, unknown>;
 
-const workspaceTabs: Array<{ value: WorkspaceTab; label: string }> = [
-  { value: "jianxing", label: "见行" },
-  { value: "clipper", label: "剪藏" },
+const workspaceTabs: WorkspaceTab[] = ["jianxing", "clipper"];
+
+const modeDefinitions: Array<{ id: Mode; icon: typeof Eye }> = [
+  { id: "look", icon: Eye },
+  { id: "browse", icon: Globe2 },
+  { id: "act", icon: MousePointer2 },
+  { id: "transfer", icon: FileUp },
 ];
 
-const modes: Array<{ id: Mode; label: string; description: string; icon: typeof Eye }> = [
-  { id: "look", label: "看", description: "读取当前页面状态和稳定元素引用", icon: Eye },
-  { id: "browse", label: "翻", description: "打开、返回、刷新、滚动和等待", icon: Globe2 },
-  { id: "act", label: "点", description: "点击、填写、选择和发送按键", icon: MousePointer2 },
-  { id: "transfer", label: "传", description: "上传文件或获取下载结果", icon: FileUp },
-];
-
-const actions: Record<Mode, Array<{ value: string; label: string }>> = {
-  look: [
-    { value: "snapshot", label: "页面快照" },
-    { value: "page", label: "页面信息" },
-    { value: "tabs", label: "标签页列表" },
-    { value: "element", label: "元素详情" },
-    { value: "screenshot", label: "页面截图" },
-  ],
-  browse: [
-    { value: "open", label: "当前页打开网址" },
-    { value: "new", label: "新开标签页" },
-    { value: "switch", label: "切换标签页" },
-    { value: "close", label: "关闭标签页" },
-    { value: "back", label: "后退" },
-    { value: "forward", label: "前进" },
-    { value: "reload", label: "刷新" },
-    { value: "scroll", label: "滚动" },
-    { value: "scrollTo", label: "滚动到元素" },
-    { value: "paginate", label: "翻页" },
-    { value: "wait", label: "等待" },
-  ],
-  act: [
-    { value: "click", label: "点击" },
-    { value: "hover", label: "悬停" },
-    { value: "drag", label: "拖拽" },
-    { value: "fill", label: "填写" },
-    { value: "select", label: "选择" },
-    { value: "press", label: "按键" },
-    { value: "dialog", label: "处理弹窗" },
-  ],
-  transfer: [
-    { value: "upload", label: "上传文件" },
-    { value: "download", label: "获取下载" },
-  ],
+const actionDefinitions: Record<Mode, string[]> = {
+  look: ["snapshot", "page", "tabs", "element", "screenshot"],
+  browse: ["open", "new", "switch", "close", "back", "forward", "reload", "scroll", "scrollTo", "paginate", "wait"],
+  act: ["click", "hover", "drag", "fill", "select", "press", "dialog"],
+  transfer: ["upload", "download"],
 };
 
 const jsonText = (value: unknown) => JSON.stringify(value, null, 2);
@@ -100,6 +69,10 @@ const defaultWildcardPattern = (url: string) => {
 };
 
 export default function JianXingPage() {
+  const { t } = useTranslation();
+  const modes = useMemo(() => modeDefinitions.map((item) => ({ ...item, label: t(`settings.microApps.jianXing.modes.${item.id}`), description: t(`settings.microApps.jianXing.modes.${item.id}Description`) })), [t]);
+  const actions = useMemo(() => Object.fromEntries(Object.entries(actionDefinitions).map(([key, values]) => [key, values.map((value) => ({ value, label: t(`settings.microApps.jianXing.actions.${value}`) }))])) as Record<Mode, Array<{ value: string; label: string }>>, [t]);
+  const tabItems = useMemo(() => workspaceTabs.map((value) => ({ value, label: t(`settings.microApps.jianXing.tabs.${value}`) })), [t]);
   const clientRef = useRef<WebBridgeClient | null>(null);
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("jianxing");
   const [mode, setMode] = useState<Mode>("look");
@@ -139,7 +112,7 @@ export default function JianXingPage() {
       const nextStatus: NativeMessagingHostStatus = {
         status: "repair_needed",
         installed: false,
-        reason: cause instanceof Error ? cause.message : "无法读取 Native Messaging 状态",
+        reason: cause instanceof Error ? cause.message : t("settings.microApps.jianXing.messages.nativeReadFailed"),
       };
       setNativeHostStatus(nextStatus);
       return nextStatus;
@@ -168,44 +141,44 @@ export default function JianXingPage() {
       if (event.source !== window || event.origin !== window.location.origin) return;
       if (event.data?.source !== "mira-webbridge-extension" || event.data?.type !== "WEBBRIDGE_OPEN_AUTHORIZATION_PAGE_RESULT") return;
       if (event.data.ok === false) {
-        setError(String(event.data.message || "无法打开触界授权页，请重新加载扩展"));
+        setError(String(event.data.message || t("settings.microApps.jianXing.messages.openAuthFailed")));
       }
     };
 
     window.addEventListener("message", handleExtensionMessage);
     return () => window.removeEventListener("message", handleExtensionMessage);
-  }, []);
+  }, [t]);
 
   const connected = status.status === "connected";
   const extensionConnected = status.extensionConnected === true;
   const nativeHostInstalled = nativeHostStatus?.status === "installed";
   const nativeHostRepairNeeded = nativeHostStatus?.status === "repair_needed";
   const nativeHostActionLabel = nativeHostLoading
-    ? "安装中…"
+    ? t("settings.microApps.jianXing.connection.nativeInstalling")
     : nativeHostChecking
-      ? "正在检查…"
+      ? t("settings.microApps.jianXing.connection.nativeCheck")
       : nativeHostStatus?.status === "unsupported"
-        ? "Native 不可用"
+        ? t("settings.microApps.jianXing.connection.nativeUnavailable")
         : nativeHostInstalled || nativeHostRepairNeeded
-          ? "修复 Native"
-          : "安装 Native";
+          ? t("settings.microApps.jianXing.connection.nativeRepair")
+          : t("settings.microApps.jianXing.connection.nativeInstall");
   const nativeHostStatusLabel = nativeHostChecking
-    ? "正在检查 Native"
+    ? t("settings.microApps.jianXing.connection.nativeCheck")
     : nativeHostStatus?.status === "installed"
-      ? "Native 已安装"
+      ? t("settings.microApps.jianXing.connection.nativeInstalled")
       : nativeHostStatus?.status === "repair_needed"
-        ? "Native 需修复"
+        ? t("settings.microApps.jianXing.connection.nativeNeedsRepair")
         : nativeHostStatus?.status === "unsupported"
-          ? "Native 不可用"
-          : "Native 未安装";
-  const visibleOperation = status.event === "started" ? `正在操作 Chrome：${status.operation || "浏览器页面"}` : status.event === "finished" ? `${status.operationOk === false ? "操作失败" : "已完成"}${status.operation ? `：${status.operation}` : ""}` : "";
+          ? t("settings.microApps.jianXing.connection.nativeUnavailable")
+          : t("settings.microApps.jianXing.connection.nativeNotInstalled");
+  const visibleOperation = status.event === "started" ? t("settings.microApps.jianXing.operation.started", { operation: status.operation || t("settings.microApps.jianXing.operation.browserPage") }) : status.event === "finished" ? `${status.operationOk === false ? t("settings.microApps.jianXing.operation.failed") : t("settings.microApps.jianXing.operation.completed")}${status.operation ? `：${status.operation}` : ""}` : "";
   const isLook = mode === "look";
   const needsRef = action === "element" || ["click", "hover", "fill", "select", "scrollTo", "paginate", "switch", "close"].includes(action);
   const isFileUpload = mode === "transfer" && action === "upload";
 
   const loadClipRules = async () => {
     if (!clientRef.current || !connected || !extensionConnected) {
-      setRulesError("请先连接触界扩展");
+      setRulesError(t("settings.microApps.jianXing.messages.connectExtension"));
       return;
     }
     setRulesLoading(true);
@@ -216,9 +189,9 @@ export default function JianXingPage() {
       const selectedKey = nextRules[ruleKey] ? ruleKey : Object.keys(nextRules).sort()[0] || "";
       setRuleKey(selectedKey);
       setRuleForm(nextRules[selectedKey] ? ruleForEditor(nextRules[selectedKey]) : emptyRule());
-      setRulesMessage("URL 剪藏规则已从触界扩展加载");
+      setRulesMessage(t("settings.microApps.jianXing.messages.rulesLoaded"));
     } catch (cause) {
-      setRulesError(cause instanceof Error ? cause.message : "无法读取 URL 剪藏规则");
+      setRulesError(cause instanceof Error ? cause.message : t("settings.microApps.jianXing.messages.rulesReadFailed"));
     } finally {
       setRulesLoading(false);
     }
@@ -269,65 +242,65 @@ export default function JianXingPage() {
   const configuredRuleColumns = useMemo<ColumnDef<ConfiguredRuleRow>[]>(
     () => [
       {
-        header: "别名",
+        header: t("settings.microApps.jianXing.rules.alias"),
         accessorKey: "alias",
         meta: { width: 160, ellipsisTooltip: true },
         cell: ({ row }) => (
           <span className={`block truncate text-sm font-medium ${row.original.alias ? "text-text-primary" : "text-text-tertiary"}`}>
-            {row.original.alias || "未命名"}
+            {row.original.alias || t("settings.microApps.jianXing.rules.unnamed")}
           </span>
         ),
       },
       {
-        header: "网址匹配",
+        header: t("settings.microApps.jianXing.rules.urlPattern"),
         id: "urlPattern",
         meta: { width: 320, ellipsisTooltip: true },
         cell: ({ row }) => (
           <div className="flex min-w-0 items-center gap-2">
-            <span className="shrink-0 text-xs text-text-tertiary">{row.original.urlPatternMode === "regex" ? "正则" : "通配"}</span>
+            <span className="shrink-0 text-xs text-text-tertiary">{row.original.urlPatternMode === "regex" ? t("settings.microApps.jianXing.rules.regex") : t("settings.microApps.jianXing.rules.wildcard")}</span>
             <span className="truncate font-mono text-xs text-text-secondary">{row.original.urlPattern}</span>
           </div>
         ),
       },
       {
-        header: "正文",
+        header: t("settings.microApps.jianXing.rules.content"),
         id: "content",
         meta: { width: 120, ellipsisTooltip: true },
         cell: ({ row }) => (
           <span className="text-xs text-text-secondary">
-            {row.original.includeRegion ? `已点选 · ${row.original.includeRegion.tag}` : row.original.includeSelector ? "已配置区域" : "默认提取"}
+            {row.original.includeRegion ? t("settings.microApps.jianXing.rules.selected", { tag: row.original.includeRegion.tag }) : row.original.includeSelector ? t("settings.microApps.jianXing.rules.configured") : t("settings.microApps.jianXing.rules.defaultExtract")}
           </span>
         ),
       },
       {
-        header: "图片",
+        header: t("settings.microApps.jianXing.rules.images"),
         id: "images",
         meta: { width: 140, nowrap: true },
         cell: ({ row }) => (
           <span className="text-xs text-text-secondary">
-            ≥ {row.original.imagePolicy.minWidth} × {row.original.imagePolicy.minHeight} · {row.original.imagePolicy.maxCount} 张
+            ≥ {row.original.imagePolicy.minWidth} × {row.original.imagePolicy.minHeight} · {t("settings.microApps.jianXing.rules.imageCount", { count: row.original.imagePolicy.maxCount })}
           </span>
         ),
       },
       {
-        header: "状态",
+        header: t("settings.microApps.jianXing.rules.status"),
         accessorKey: "enabled",
         meta: { width: 72, align: "center" },
         cell: ({ row }) => (
           <Badge variant={row.original.enabled ? "success" : "muted"}>
-            {row.original.enabled ? "已启用" : "已停用"}
+            {row.original.enabled ? t("settings.microApps.jianXing.rules.enabled") : t("settings.microApps.jianXing.rules.disabled")}
           </Badge>
         ),
       },
       {
-        header: "操作",
+        header: t("settings.microApps.jianXing.rules.actions"),
         id: "actions",
         meta: { width: 64, align: "center" },
         cell: ({ row }) => (
-          <Tooltip text="编辑规则" placement="top">
+          <Tooltip text={t("settings.microApps.jianXing.rules.edit")} placement="top">
             <IconButton
               size="xs"
-              ariaLabel={`编辑 ${row.original.alias || row.original.urlPattern} 规则`}
+              ariaLabel={t("settings.microApps.jianXing.rules.editAria", { name: row.original.alias || row.original.urlPattern })}
               onClick={() => openRuleEditor(row.original.key)}
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -341,19 +314,19 @@ export default function JianXingPage() {
 
   const pickRuleRegion = async (kind: "include" | "exclude") => {
     if (!clientRef.current || !connected || !extensionConnected) {
-      setRulesError("请先连接触界扩展");
+      setRulesError(t("settings.microApps.jianXing.messages.connectExtension"));
       return;
     }
     setRegionPicking(kind);
     setRulesError("");
-    setRulesMessage(kind === "include" ? "请在 Chrome 中点击正文区域" : "请在 Chrome 中点击要排除的区域");
+    setRulesMessage(t(`settings.microApps.jianXing.messages.${kind === "include" ? "regionIncludePrompt" : "regionExcludePrompt"}`));
     try {
       const picked = await clientRef.current.pickClipRegion(kind);
       const baseRule = ruleForm;
       const urlPattern = baseRule.urlPattern || defaultWildcardPattern(picked.url);
       if (kind === "include") {
         setRuleForm({ ...baseRule, urlPattern, includeSelector: picked.selector, includeRegion: picked.summary });
-        setRulesMessage("已选择当前页面的正文区域");
+        setRulesMessage(t("settings.microApps.jianXing.messages.regionIncluded"));
       } else {
         const existing = baseRule.excludeRegions
           || baseRule.excludeSelectors.map((selector) => ({ selector, summary: undefined }));
@@ -366,10 +339,10 @@ export default function JianXingPage() {
           excludeSelectors: nextRegions.map((region) => region.selector),
           excludeRegions: nextRegions,
         });
-        setRulesMessage("已添加当前页面的排除区域");
+        setRulesMessage(t("settings.microApps.jianXing.messages.regionExcluded"));
       }
     } catch (cause) {
-      setRulesError(cause instanceof Error ? cause.message : "区域选择失败");
+      setRulesError(cause instanceof Error ? cause.message : t("settings.microApps.jianXing.messages.regionFailed"));
       setRulesMessage("");
     } finally {
       setRegionPicking(null);
@@ -385,7 +358,7 @@ export default function JianXingPage() {
 
   const saveClipRule = async () => {
     if (!clientRef.current || !connected || !extensionConnected) {
-      setRulesError("请先连接触界扩展");
+      setRulesError(t("settings.microApps.jianXing.messages.connectExtension"));
       return;
     }
     const nextRule: ClipRule = {
@@ -404,13 +377,13 @@ export default function JianXingPage() {
       },
     };
     if (!nextRule.urlPattern) {
-      setRulesError("请输入 URL 通配符或正则");
+      setRulesError(t("settings.microApps.jianXing.messages.urlRequired"));
       return;
     }
     try {
       if (nextRule.urlPatternMode === "regex") new RegExp(nextRule.urlPattern);
     } catch {
-      setRulesError("URL 正则格式无效，请检查括号、反斜杠和量词");
+      setRulesError(t("settings.microApps.jianXing.messages.invalidRegex"));
       return;
     }
     const nextKey = clipRuleKey(nextRule);
@@ -424,10 +397,10 @@ export default function JianXingPage() {
       setClipRules(savedRules);
       setRuleKey(nextKey);
       setRuleForm(savedRules[nextKey] ? ruleForEditor(savedRules[nextKey]) : nextRule);
-      setRulesMessage("URL 剪藏规则已保存到触界扩展");
+      setRulesMessage(t("settings.microApps.jianXing.messages.rulesSaved"));
       setRuleDrawerOpen(false);
     } catch (cause) {
-      setRulesError(cause instanceof Error ? cause.message : "保存 URL 剪藏规则失败");
+      setRulesError(cause instanceof Error ? cause.message : t("settings.microApps.jianXing.messages.rulesSaveFailed"));
     } finally {
       setRulesSaving(false);
     }
@@ -435,11 +408,11 @@ export default function JianXingPage() {
 
   const deleteClipRule = async () => {
     if (!ruleKey || !clipRules[ruleKey]) {
-      setRulesError("当前 URL 规则尚未保存");
+      setRulesError(t("settings.microApps.jianXing.messages.ruleNotSaved"));
       return;
     }
     if (!clientRef.current || !connected || !extensionConnected) {
-      setRulesError("请先连接触界扩展");
+      setRulesError(t("settings.microApps.jianXing.messages.connectExtension"));
       return;
     }
     const nextRules = { ...clipRules };
@@ -452,10 +425,10 @@ export default function JianXingPage() {
       const nextKey = Object.keys(savedRules).sort()[0] || "";
       setRuleKey(nextKey);
       setRuleForm(savedRules[nextKey] ? ruleForEditor(savedRules[nextKey]) : emptyRule());
-      setRulesMessage("URL 剪藏规则已删除");
+      setRulesMessage(t("settings.microApps.jianXing.messages.rulesDeleted"));
       setRuleDrawerOpen(false);
     } catch (cause) {
-      setRulesError(cause instanceof Error ? cause.message : "删除 URL 剪藏规则失败");
+      setRulesError(cause instanceof Error ? cause.message : t("settings.microApps.jianXing.messages.rulesDeleteFailed"));
     } finally {
       setRulesSaving(false);
     }
@@ -475,7 +448,7 @@ export default function JianXingPage() {
       setError("");
       await clientRef.current?.connect();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "无法连接触界服务");
+      setError(cause instanceof Error ? cause.message : t("settings.microApps.jianXing.messages.connectFailed"));
     }
   };
 
@@ -515,7 +488,7 @@ export default function JianXingPage() {
       setResult((response && typeof response === "object" ? response : { value: response }) as ToolResult);
     } catch (cause) {
       if (cause instanceof WebBridgeRequestError) setError(`${cause.code}: ${cause.message}`);
-      else setError(cause instanceof Error ? cause.message : "浏览器操作失败");
+      else setError(cause instanceof Error ? cause.message : t("settings.microApps.jianXing.messages.browserFailed"));
     } finally {
       setBusy(false);
     }
@@ -538,9 +511,9 @@ export default function JianXingPage() {
         type: "WEBBRIDGE_OPEN_AUTHORIZATION_PAGE",
         requestId: `authorize_${Date.now()}`,
       }, window.location.origin);
-      message.success("授权码已生成，5 分钟内有效且只能使用一次");
+      message.success(t("settings.microApps.jianXing.messages.codeGenerated"));
     } catch (cause) {
-      message.error(cause instanceof ApiError ? cause.message : "生成授权码失败");
+      message.error(cause instanceof ApiError ? cause.message : t("settings.microApps.jianXing.messages.codeGenerateFailed"));
     } finally {
       setExtensionCodeLoading(false);
     }
@@ -557,16 +530,16 @@ export default function JianXingPage() {
   const copyExtensionCode = async () => {
     if (!extensionCode) return;
     await navigator.clipboard.writeText(extensionCode);
-    message.success("授权码已复制");
+    message.success(t("settings.microApps.jianXing.messages.codeCopied"));
   };
 
   const handleDownloadExtension = async () => {
     setExtensionDownloadLoading(true);
     try {
       await downloadBrowserExtension();
-      message.success("Mira Clipper 已下载到系统下载目录");
+      message.success(t("settings.microApps.jianXing.messages.extensionDownloaded"));
     } catch (cause) {
-      message.error(cause instanceof Error ? cause.message : "插件下载失败");
+      message.error(cause instanceof Error ? cause.message : t("settings.microApps.jianXing.messages.extensionDownloadFailed"));
     } finally {
       setExtensionDownloadLoading(false);
     }
@@ -578,12 +551,12 @@ export default function JianXingPage() {
       await installNativeMessagingHost();
       const nextStatus = await refreshNativeHostStatus();
       if (nextStatus.status === "installed") {
-        message.success("Native Messaging 连接组件已安装");
+        message.success(t("settings.microApps.jianXing.messages.nativeInstalled"));
       } else {
-        message.warning(nextStatus.reason || "Native Messaging 安装后仍需修复");
+        message.warning(nextStatus.reason || t("settings.microApps.jianXing.messages.nativeNeedsRepair"));
       }
     } catch (cause) {
-      message.error(cause instanceof Error ? cause.message : "Native Messaging 安装失败");
+      message.error(cause instanceof Error ? cause.message : t("settings.microApps.jianXing.messages.nativeInstallFailed"));
     } finally {
       setNativeHostLoading(false);
     }
@@ -595,9 +568,9 @@ export default function JianXingPage() {
       await uninstallNativeMessagingHost();
       await refreshNativeHostStatus();
       clientRef.current?.close();
-      message.success("Native Messaging 已解除注册");
+      message.success(t("settings.microApps.jianXing.messages.nativeUnregistered"));
     } catch (cause) {
-      message.error(cause instanceof Error ? cause.message : "Native Messaging 解除注册失败");
+      message.error(cause instanceof Error ? cause.message : t("settings.microApps.jianXing.messages.nativeUnregisterFailed"));
     } finally {
       setNativeHostLoading(false);
     }
@@ -605,44 +578,44 @@ export default function JianXingPage() {
 
   return (
     <MicroAppPageLayout
-      miniTitle="触界"
-      title="触界"
-      description="连接当前 Chrome，在本机使用见行操作网页，或通过剪藏采集内容。"
+      miniTitle={t("settings.microApps.jianXing.page.miniTitle")}
+      title={t("settings.microApps.jianXing.page.title")}
+      description={t("settings.microApps.jianXing.page.description")}
       contentClassName="gap-4 pt-5"
-      slot={<Button size="xs" variant="ghost" onClick={() => setGuideOpen(true)}><BookOpen className="h-4 w-4" />使用指南</Button>}
+      slot={<Button size="xs" variant="ghost" onClick={() => setGuideOpen(true)}><BookOpen className="h-4 w-4" />{t("settings.microApps.jianXing.page.guide")}</Button>}
     >
       <JianXingGuideDrawer open={guideOpen} onClose={() => setGuideOpen(false)} />
-      {error ? <Alert variant="danger" title="操作失败">{error}</Alert> : null}
-      {visibleOperation ? <Alert variant={status.operationOk === false ? "danger" : "info"} title="见行浏览器状态">{visibleOperation}{status.operationError ? `：${status.operationError}` : ""}</Alert> : null}
+      {error ? <Alert variant="danger" title={t("settings.microApps.jianXing.operation.error")}>{error}</Alert> : null}
+      {visibleOperation ? <Alert variant={status.operationOk === false ? "danger" : "info"} title={t("settings.microApps.jianXing.operation.status")}>{visibleOperation}{status.operationError ? `：${status.operationError}` : ""}</Alert> : null}
       <Card padding="sm" className="space-y-3">
         <div className="flex items-center gap-2">
-          <div className="text-sm font-medium text-text-primary">Chrome 连接</div>
+          <div className="text-sm font-medium text-text-primary">{t("settings.microApps.jianXing.connection.chrome")}</div>
           <Badge variant={extensionConnected ? "success" : "warning"}>
             <Circle className="mr-1 inline h-2 w-2 fill-current" />
-            {extensionConnected ? "扩展已连接" : connected ? "等待扩展" : "未连接"}
+            {extensionConnected ? t("settings.microApps.jianXing.connection.extensionConnected") : connected ? t("settings.microApps.jianXing.connection.waitingExtension") : t("settings.microApps.jianXing.connection.disconnected")}
           </Badge>
           <Badge variant={nativeHostInstalled ? "success" : nativeHostRepairNeeded ? "warning" : "neutral"}>{nativeHostStatusLabel}</Badge>
         </div>
         <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
           <Button size="xs" variant="outline" onClick={() => void handleDownloadExtension()} disabled={extensionDownloadLoading}>
-            <Download className="h-4 w-4" />{extensionDownloadLoading ? "下载中…" : "下载插件"}
+            <Download className="h-4 w-4" />{extensionDownloadLoading ? t("settings.microApps.jianXing.connection.downloading") : t("settings.microApps.jianXing.connection.download")}
           </Button>
           <Button size="xs" variant="outline" onClick={() => void handleInstallNativeHost()} disabled={nativeHostLoading || nativeHostChecking || nativeHostStatus?.status === "unsupported"}>
             <PlugZap className="h-4 w-4" />{nativeHostActionLabel}
           </Button>
-          {nativeHostStatus && nativeHostStatus.status !== "not_installed" && nativeHostStatus.status !== "unsupported" ? <Button size="xs" variant="ghost" onClick={() => void handleUninstallNativeHost()} disabled={nativeHostLoading || nativeHostChecking}>解除注册</Button> : null}
+          {nativeHostStatus && nativeHostStatus.status !== "not_installed" && nativeHostStatus.status !== "unsupported" ? <Button size="xs" variant="ghost" onClick={() => void handleUninstallNativeHost()} disabled={nativeHostLoading || nativeHostChecking}>{t("settings.microApps.jianXing.connection.unregister")}</Button> : null}
           <Button size="xs" variant="secondary" onClick={() => setExtensionModalOpen(true)}>
-            <KeyRound className="h-4 w-4" />浏览器扩展授权
+            <KeyRound className="h-4 w-4" />{t("settings.microApps.jianXing.connection.authorize")}
           </Button>
           <Button size="xs" variant="outline" onClick={() => (connected ? clientRef.current?.close() : void connect())}>
-            <PlugZap className="h-4 w-4" />{connected ? "断开" : "连接"}
+            <PlugZap className="h-4 w-4" />{connected ? t("settings.microApps.jianXing.connection.disconnect") : t("settings.microApps.jianXing.connection.connect")}
           </Button>
           {nativeHostStatus?.reason ? <span className="text-xs text-text-tertiary">{nativeHostStatus.reason}</span> : null}
-          {extensionConnected ? <span className="text-xs text-text-tertiary">扩展 v{status.extensionVersion || "未知"} · {status.capabilities?.includes("clip_rules") ? "支持区域点选" : "未报告区域点选"}</span> : null}
+          {extensionConnected ? <span className="text-xs text-text-tertiary">{t("settings.microApps.jianXing.connection.extensionVersion", { version: status.extensionVersion || t("settings.microApps.jianXing.connection.unknown") })} · {status.capabilities?.includes("clip_rules") ? t("settings.microApps.jianXing.connection.supportedRegion") : t("settings.microApps.jianXing.connection.unsupportedRegion")}</span> : null}
         </div>
       </Card>
       <NavigationCardTabs<WorkspaceTab>
-        tabs={workspaceTabs}
+        tabs={tabItems}
         value={workspaceTab}
         onChange={setWorkspaceTab}
         activeTabStyle="plain"
@@ -651,33 +624,33 @@ export default function JianXingPage() {
       {workspaceTab === "jianxing" ? (
         <div className="grid min-h-0 gap-4 md:grid-cols-2">
           <Card padding="md" className="space-y-4">
-            <div className="flex items-start justify-between gap-3"><div><h2 className="text-heading-2 text-text-primary">{modes.find((item) => item.id === mode)?.label} · 参数</h2><p className="mt-1 text-sm text-text-secondary">先读取页面，再使用快照中的稳定引用执行操作。</p></div><Badge variant="neutral">本机</Badge></div>
+            <div className="flex items-start justify-between gap-3"><div><h2 className="text-heading-2 text-text-primary">{modes.find((item) => item.id === mode)?.label} · {t("settings.microApps.jianXing.fields.parameters")}</h2><p className="mt-1 text-sm text-text-secondary">{t("settings.microApps.jianXing.fields.parametersHint")}</p></div><Badge variant="neutral">{t("settings.microApps.jianXing.connection.local")}</Badge></div>
             <div className="grid gap-2 sm:grid-cols-2">{modes.map((item) => <button key={item.id} type="button" onClick={() => changeMode(item.id)} className={`rounded-ui-control border px-3 py-2 text-left text-sm ${mode === item.id ? "border-primary bg-primary/5 font-medium" : "border-border text-text-secondary hover:bg-surface-secondary"}`}>{item.label} <span className="ml-1 text-xs text-text-tertiary">{item.id}</span></button>)}</div>
-            <Select label="操作方式" value={action} onChange={setAction} options={actions[mode]} />
-            {needsRef ? <TextInput label="元素引用 ref" value={ref} onChange={setRef} placeholder="例如 e17" /> : null}
+            <Select label={t("settings.microApps.jianXing.fields.operation")} value={action} onChange={setAction} options={actions[mode]} />
+            {needsRef ? <TextInput label={t("settings.microApps.jianXing.fields.ref")} value={ref} onChange={setRef} placeholder={t("settings.microApps.jianXing.fields.refPlaceholder")} /> : null}
             {isFileUpload ? (
               <div className="space-y-1">
-                <div className="text-sm text-text-secondary">文件</div>
+                <div className="text-sm text-text-secondary">{t("settings.microApps.jianXing.fields.file")}</div>
                 <FileUploadDropzone
                   onSelectFiles={(files) => onFileChange(files?.[0])}
                   maxCount={1}
-                  helperText={file?.name || "请选择一个文件"}
+                  helperText={file?.name || t("settings.microApps.jianXing.fields.filePlaceholder")}
                 />
               </div>
             ) : null}
-            {!isLook && !isFileUpload && !["back", "forward", "reload", "paginate", "scrollTo", "switch", "close"].includes(action) ? <TextInput label={action === "open" || action === "new" ? "网址" : action === "scroll" ? "滚动距离（px）" : action === "wait" ? "等待时间（ms）" : action === "drag" ? "起点 ref, 终点 ref" : action === "download" ? "下载地址" : "参数值"} value={value} onChange={setValue} placeholder="填写参数" /> : null}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3"><span className="text-xs text-text-tertiary">{extensionConnected ? "请求将在本机 Native Messaging 通道中发送" : "请在 Chrome 中完成触界扩展授权，连接后才能发送请求"}</span><Button variant="primary" onClick={() => void run()} disabled={busy || !extensionConnected || (isFileUpload && !file)}><Send className="h-4 w-4" />{busy ? "执行中…" : isLook ? "观察页面" : "发送操作"}</Button></div>
+            {!isLook && !isFileUpload && !["back", "forward", "reload", "paginate", "scrollTo", "switch", "close"].includes(action) ? <TextInput label={action === "open" || action === "new" ? t("settings.microApps.jianXing.fields.url") : action === "scroll" ? t("settings.microApps.jianXing.fields.scrollAmount") : action === "wait" ? t("settings.microApps.jianXing.fields.waitTime") : action === "drag" ? t("settings.microApps.jianXing.fields.dragRefs") : action === "download" ? t("settings.microApps.jianXing.fields.downloadUrl") : t("settings.microApps.jianXing.fields.value")} value={value} onChange={setValue} placeholder={t("settings.microApps.jianXing.fields.valuePlaceholder")} /> : null}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3"><span className="text-xs text-text-tertiary">{extensionConnected ? t("settings.microApps.jianXing.fields.sendViaNative") : t("settings.microApps.jianXing.fields.authorizeFirst")}</span><Button variant="primary" onClick={() => void run()} disabled={busy || !extensionConnected || (isFileUpload && !file)}><Send className="h-4 w-4" />{busy ? t("settings.microApps.jianXing.fields.run") : isLook ? t("settings.microApps.jianXing.fields.observe") : t("settings.microApps.jianXing.fields.send")}</Button></div>
           </Card>
 
-          <Card padding="md" className="space-y-3"><div className="flex items-center justify-between"><h2 className="text-heading-2 text-text-primary">页面结果</h2><Button size="xs" variant="ghost" onClick={() => { setResult(null); setError(""); }}><RotateCcw className="h-4 w-4" />清空</Button></div><div className="rounded-ui-control border border-border bg-surface-secondary p-3"><div className="text-xs text-text-tertiary">当前连接</div><div className="mt-2 text-sm font-medium text-text-primary">{extensionConnected ? "触界扩展已连接" : connected ? "等待扩展连接" : "未连接"}</div><div className="mt-1 font-mono text-xs text-text-tertiary">{status.status}</div></div>{result ? <div className="space-y-3"><pre className="max-h-[520px] overflow-auto rounded-ui-control border border-border bg-surface-secondary p-3 font-mono text-xs leading-5 text-text-secondary">{jsonText(result)}</pre>{typeof result.dataUrl === "string" ? <img src={result.dataUrl} alt="页面截图" className="max-h-64 w-full rounded-ui-control border border-border object-contain" /> : null}</div> : <div className="flex min-h-40 flex-col items-center justify-center text-center text-sm text-text-tertiary"><Eye className="mb-2 h-5 w-5" />还没有页面结果</div>}<div className="border-t border-border pt-3 text-xs text-text-tertiary"><div className="flex items-center gap-2"><FileDown className="h-4 w-4" />结果仅通过本机连接通道传递</div></div></Card>
+          <Card padding="md" className="space-y-3"><div className="flex items-center justify-between"><h2 className="text-heading-2 text-text-primary">{t("settings.microApps.jianXing.result.title")}</h2><Button size="xs" variant="ghost" onClick={() => { setResult(null); setError(""); }}><RotateCcw className="h-4 w-4" />{t("settings.microApps.jianXing.result.clear")}</Button></div><div className="rounded-ui-control border border-border bg-surface-secondary p-3"><div className="text-xs text-text-tertiary">{t("settings.microApps.jianXing.result.currentConnection")}</div><div className="mt-2 text-sm font-medium text-text-primary">{extensionConnected ? t("settings.microApps.jianXing.connection.extensionConnected") : connected ? t("settings.microApps.jianXing.connection.waitingExtension") : t("settings.microApps.jianXing.connection.disconnected")}</div><div className="mt-1 font-mono text-xs text-text-tertiary">{status.status}</div></div>{result ? <div className="space-y-3"><pre className="max-h-[520px] overflow-auto rounded-ui-control border border-border bg-surface-secondary p-3 font-mono text-xs leading-5 text-text-secondary">{jsonText(result)}</pre>{typeof result.dataUrl === "string" ? <img src={result.dataUrl} alt={t("settings.microApps.jianXing.result.screenshot")} className="max-h-64 w-full rounded-ui-control border border-border object-contain" /> : null}</div> : <div className="flex min-h-40 flex-col items-center justify-center text-center text-sm text-text-tertiary"><Eye className="mb-2 h-5 w-5" />{t("settings.microApps.jianXing.result.noResult")}</div>}<div className="border-t border-border pt-3 text-xs text-text-tertiary"><div className="flex items-center gap-2"><FileDown className="h-4 w-4" />{t("settings.microApps.jianXing.result.localOnly")}</div></div></Card>
         </div>
       ) : (
         <Card padding="md" className="flex min-h-0 flex-1 flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-1.5">
-            <h2 className="text-heading-2 text-text-primary">URL 剪藏规则</h2>
-              <Tooltip text="按完整 URL 的通配符或正则匹配；多个规则同时命中时使用约束最具体的一条。" placement="top">
-                <span aria-label="URL 剪藏规则说明" className="cursor-help text-icon-secondary">
+            <h2 className="text-heading-2 text-text-primary">{t("settings.microApps.jianXing.clipper.title")}</h2>
+              <Tooltip text={t("settings.microApps.jianXing.clipper.help")} placement="top">
+                <span aria-label={t("settings.microApps.jianXing.clipper.help")} className="cursor-help text-icon-secondary">
                   <CircleHelp className="h-3.5 w-3.5" />
                 </span>
               </Tooltip>
@@ -690,22 +663,22 @@ export default function JianXingPage() {
                 disabled={rulesLoading}
               >
                 <RefreshCw className={`h-4 w-4 ${rulesLoading ? "animate-spin" : ""}`} />
-                {rulesLoading ? "刷新中…" : "刷新规则"}
+                {rulesLoading ? t("settings.microApps.jianXing.clipper.refreshing") : t("settings.microApps.jianXing.clipper.refresh")}
               </Button>
               <Button size="sm" onClick={openNewRuleDrawer}>
-                <Plus className="h-4 w-4" />新增规则
+                <Plus className="h-4 w-4" />{t("settings.microApps.jianXing.clipper.add")}
               </Button>
             </div>
           </div>
-          {rulesError ? <Alert variant="danger" title="规则刷新失败">{rulesError}</Alert> : null}
-          {rulesMessage ? <Alert variant="success" title="规则状态">{rulesMessage}</Alert> : null}
+          {rulesError ? <Alert variant="danger" title={t("settings.microApps.jianXing.clipper.refreshFailed")}>{rulesError}</Alert> : null}
+          {rulesMessage ? <Alert variant="success" title={t("settings.microApps.jianXing.clipper.status")}>{rulesMessage}</Alert> : null}
           <div className="min-h-0 flex-1 overflow-hidden rounded-ui-control border border-border">
             <Table
               data={configuredRuleRows}
               columns={configuredRuleColumns}
               compact
               stickyHeader
-              emptyState={<span className="text-xs text-text-tertiary">暂无 URL 剪藏规则</span>}
+              emptyState={<span className="text-xs text-text-tertiary">{t("settings.microApps.jianXing.clipper.empty")}</span>}
               className="h-full rounded-none border-0 shadow-none"
             />
           </div>
@@ -730,27 +703,27 @@ export default function JianXingPage() {
       />
       <Modal
         open={extensionModalOpen}
-        title="浏览器扩展授权"
+        title={t("settings.microApps.jianXing.auth.title")}
         width={560}
         onClose={() => setExtensionModalOpen(false)}
-        footer={<Button variant="secondary" size="sm" onClick={() => setExtensionModalOpen(false)}>关闭</Button>}
+        footer={<Button variant="secondary" size="sm" onClick={() => setExtensionModalOpen(false)}>{t("settings.microApps.jianXing.auth.close")}</Button>}
       >
         <div className="space-y-4">
           <div className="flex items-start gap-3">
             <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-text-secondary" />
-            <p className="text-sm leading-6 text-text-secondary">生成一次性授权码后，触界扩展会自动打开授权页；如果 Chrome 没有切到授权页，点击工具栏中的触界图标即可进入。</p>
+            <p className="text-sm leading-6 text-text-secondary">{t("settings.microApps.jianXing.auth.intro")}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" disabled={extensionCodeLoading} onClick={() => void generateExtensionCode()}>
-              <KeyRound className="h-4 w-4" />{extensionCodeLoading ? "生成中..." : "生成授权码"}
+              <KeyRound className="h-4 w-4" />{extensionCodeLoading ? t("settings.microApps.jianXing.auth.generating") : t("settings.microApps.jianXing.auth.generate")}
             </Button>
             {extensionCode ? <>
               <code className="rounded-ui-control border border-border bg-surface-secondary px-3 py-2 text-sm font-semibold tracking-[0.16em] text-text-primary">{extensionCode}</code>
-              <Button variant="ghost" size="sm" onClick={() => void copyExtensionCode()}><Copy className="h-4 w-4" />复制</Button>
-              <Button variant="ghost" size="sm" onClick={openExtensionAuthorizationPage}><ExternalLink className="h-4 w-4" />打开授权页</Button>
+              <Button variant="ghost" size="sm" onClick={() => void copyExtensionCode()}><Copy className="h-4 w-4" />{t("settings.microApps.jianXing.auth.copy")}</Button>
+              <Button variant="ghost" size="sm" onClick={openExtensionAuthorizationPage}><ExternalLink className="h-4 w-4" />{t("settings.microApps.jianXing.auth.open")}</Button>
             </> : null}
           </div>
-          <p className="text-xs leading-5 text-text-tertiary">授权码 5 分钟内有效且只能使用一次。生成后切到 Chrome 的触界授权页，粘贴并点击“授权并连接”；授权成功后扩展会自动连接 Mira，无需再手动点击连接。</p>
+          <p className="text-xs leading-5 text-text-tertiary">{t("settings.microApps.jianXing.auth.expiry")}</p>
         </div>
       </Modal>
     </MicroAppPageLayout>

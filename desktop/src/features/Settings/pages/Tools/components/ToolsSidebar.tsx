@@ -1,10 +1,10 @@
 import { FileSearch, Globe, MousePointerClick, PencilLine, SquareTerminal, Wrench } from "lucide-react";
 import Badge from "@/shared/ui/Badge";
 import { UChatOverflowTooltip } from "@/shared/uchat/ui/UChatOverflowTooltip";
-import type { ToolDomainSummary, ToolWorkbenchDomain } from "../types";
-import { formatToolDomain } from "../utils";
+import type { ToolGroupSummary, ToolWorkbenchGroupId } from "../types";
+import { formatToolGroup } from "../utils";
 
-const domainIcons: Record<string, typeof FileSearch> = {
+const groupIcons: Record<string, typeof FileSearch> = {
   "file-search": FileSearch,
   pencil: PencilLine,
   globe: Globe,
@@ -14,28 +14,28 @@ const domainIcons: Record<string, typeof FileSearch> = {
 };
 
 type ToolsSidebarProps = {
-  activeDomain: ToolWorkbenchDomain | null;
-  summaries: ToolDomainSummary[];
-  onSelectDomain: (domain: ToolWorkbenchDomain) => void;
+  activeGroupId: ToolWorkbenchGroupId | null;
+  summaries: ToolGroupSummary[];
+  onSelectGroup: (groupId: ToolWorkbenchGroupId) => void;
 };
 
 export default function ToolsSidebar({
-  activeDomain,
+  activeGroupId,
   summaries,
-  onSelectDomain,
+  onSelectGroup,
 }: ToolsSidebarProps) {
   return (
     <div className="stable-scrollbar flex min-h-0 flex-col gap-3 overflow-y-auto border-r border-border pr-4">
       <div className="space-y-2 pb-2">
         {summaries.map((summary) => {
-          const Icon = domainIcons[summary.icon] ?? Wrench;
-          const isActive = summary.id === activeDomain;
+          const Icon = groupIcons[summary.icon] ?? Wrench;
+          const isActive = summary.id === activeGroupId;
 
           return (
             <button
               key={summary.id}
               type="button"
-              onClick={() => onSelectDomain(summary.id)}
+              onClick={() => onSelectGroup(summary.id)}
               className={`flex h-[84px] w-full items-start gap-3 overflow-hidden rounded-ui-control border px-3 py-2 text-left transition-colors ${
                 isActive
                   ? "border-primary/30 bg-primary/5"
@@ -52,11 +52,11 @@ export default function ToolsSidebar({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <UChatOverflowTooltip
-                    text={summary.label || formatToolDomain(summary.id)}
+                    text={summary.label || formatToolGroup(summary.id)}
                     placement="right"
                   >
                     <div className="min-w-0 flex-1 truncate text-sm font-medium text-text-primary">
-                      {summary.label || formatToolDomain(summary.id)}
+                      {summary.label || formatToolGroup(summary.id)}
                     </div>
                   </UChatOverflowTooltip>
                   <Badge variant="muted">{summary.count}</Badge>

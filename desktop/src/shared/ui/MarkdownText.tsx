@@ -2,7 +2,7 @@ import { Streamdown } from "streamdown";
 import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
-import type { ComponentProps } from "react";
+import { memo, type ComponentProps } from "react";
 // import "katex/dist/katex.min.css";
 
 type MarkdownTextProps = Omit<ComponentProps<typeof Streamdown>, "children"> & {
@@ -16,25 +16,30 @@ const defaultMarkdownClassName =
   "[&_p]:leading-7 [&_p]:text-text-primary " +
   "[&_li]:text-text-primary [&_blockquote]:text-text-secondary";
 
+const basicPlugins = {};
+const fullPlugins = { code, math, mermaid };
+
 // MarkdownText uses Streamdown directly so markdown rendering stays independent
 // from any chat-runtime-specific wrappers.
-const MarkdownText = ({
+const MarkdownText = memo(function MarkdownText({
   children = "",
   className,
   features = "full",
   ...rest
-}: MarkdownTextProps) => (
-  <Streamdown
-    plugins={features === "basic" ? {} : { code, math, mermaid }}
-    className={
-      className
-        ? `${defaultMarkdownClassName} ${className}`
-        : defaultMarkdownClassName
-    }
-    {...rest}
-  >
-    {children}
-  </Streamdown>
-);
+}: MarkdownTextProps) {
+  return (
+    <Streamdown
+      plugins={features === "basic" ? basicPlugins : fullPlugins}
+      className={
+        className
+          ? `${defaultMarkdownClassName} ${className}`
+          : defaultMarkdownClassName
+      }
+      {...rest}
+    >
+      {children}
+    </Streamdown>
+  );
+});
 
 export default MarkdownText;

@@ -40,6 +40,7 @@
 - `SegmentedTabs`
 - `StatusIndicator`
 - `StepIndicator`
+- `StreamingTextRenderer`
 - `Switch`
 - `TabCard`
 - `Table`
@@ -555,6 +556,27 @@ message.destroy();
 ## Markdown / Long-form Content
 
 用于聊天长回复、知识说明、评测结果摘要、工具调用结果说明等文档型内容。
+
+## StreamingTextRenderer
+
+用于把持续增长的完整文本转换为按帧追赶的可见文本，不自行添加 DOM 容器，也不绑定 Markdown、聊天状态或传输协议。
+
+### Props
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `text` | `string` | - | 调用方持有的完整文本 |
+| `isStreaming` | `boolean` | `false` | 是否启用按帧追赶；关闭时立即显示完整文本 |
+| `children` | `(visibleText: string) => ReactNode` | - | 使用当前可见文本完成实际渲染 |
+
+### 行为约束
+
+- 第一批流式文本立即显示一个短前缀；如果首批就是整段答案，其余内容仍进入显示节奏控制
+- 使用中文区域的 Unicode 字素边界，不能截断 emoji 或组合字符
+- 积压量越大，每帧追赶越多；不得使用固定的缓慢打字机速度
+- 传输结束后继续完成已有显示队列；文本发生非追加替换或用户启用减少动态效果时，立即显示完整文本
+- 组件只控制显示前缀，不得接管 canonical message、持久化内容或 SSE 分片
+- Markdown 等具体内容渲染器由 `children` 注入，避免在共享组件中耦合聊天业务
 
 ## MarkdownEditor
 

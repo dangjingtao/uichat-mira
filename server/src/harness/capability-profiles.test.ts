@@ -1,5 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { resolveHarnessCapabilityProfiles } from "./capability-profiles.js";
+import type { McpToolDefinition } from "../mcp/core/definitions.js";
+
+const createDefinition = (
+  id: string,
+  domain: McpToolDefinition["domain"] = "browser_action",
+): McpToolDefinition => ({
+  id,
+  title: id,
+  description: id,
+  domain,
+  source: "internal",
+  mode: "sync",
+  inputSchema: {},
+  tags: ["browser"],
+  capabilities: {
+    sideEffect: "none",
+    requiresApproval: false,
+  },
+});
 
 describe("resolveHarnessCapabilityProfiles", () => {
   it("groups read family tools under one workspace capability profile", () => {
@@ -177,6 +196,79 @@ describe("resolveHarnessCapabilityProfiles", () => {
         expect.objectContaining({ id: "news_research", preferredToolId: "news_search" }),
         expect.objectContaining({ id: "mail_reading", preferredToolId: "mail_query" }),
       ]),
+    );
+  });
+
+  it("keeps Attached Browser and managed Playwright Computer Use as isolated profiles", () => {
+    const profiles = resolveHarnessCapabilityProfiles([
+      createDefinition("browser_observe"),
+      createDefinition("browser_act"),
+      createDefinition("browser_assert"),
+      createDefinition("browser_attached_look"),
+      createDefinition("browser_attached_browse"),
+      createDefinition("browser_attached_act"),
+      createDefinition("browser_attached_transfer"),
+    ]);
+
+    const computerUse = profiles.find(
+      (profile) => profile.id === "browser_computer_use",
+    );
+    const attached = profiles.find(
+      (profile) => profile.id === "browser_attached",
+    );
+
+    expect(computerUse).toEqual(
+      expect.objectContaining({
+        preferredToolId: "browser_observe",
+        supportingToolIds: ["browser_observe", "browser_act", "browser_assert"],
+        workbench: {
+          label: "Computer Use",
+          description: expect.any(String),
+          order: 50,
+          icon: "mouse-pointer",
+        },
+      }),
+    );
+    expect(computerUse?.description).toMatch(/isolated Playwright.*Mira-managed/i);
+    expect(computerUse?.tags).toEqual(
+      expect.arrayContaining(["managed-browser", "isolated-session", "playwright"]),
+    );
+
+    expect(attached).toEqual(
+      expect.objectContaining({
+        id: "browser_attached",
+        title: "Attached Browser",
+        domain: "browser_action",
+        source: "internal",
+        preferredToolId: "browser_attached_look",
+        supportingToolIds: [
+          "browser_attached_look",
+          "browser_attached_browse",
+          "browser_attached_act",
+          "browser_attached_transfer",
+        ],
+        workbench: {
+          label: "触界",
+          description: expect.any(String),
+          order: 60,
+          icon: "globe",
+        },
+      }),
+    );
+    expect(attached?.tags).toEqual(
+      expect.arrayContaining([
+        "attached-browser",
+        "current-browser",
+        "authenticated-session",
+        "当前浏览器",
+        "已登录",
+      ]),
+    );
+    expect(attached?.supportingToolIds).not.toEqual(
+      expect.arrayContaining(["browser_observe", "browser_act", "browser_assert"]),
+    );
+    expect(computerUse?.supportingToolIds).not.toEqual(
+      expect.arrayContaining(["browser_attached_look"]),
     );
   });
 });

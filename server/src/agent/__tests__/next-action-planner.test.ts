@@ -771,6 +771,174 @@ test("nextActionPlannerNode returns answer action from task model JSON", async (
   }
 });
 
+test("nextActionPlannerNode resolves a contextual follow-up through bounded history and planPatch", async () => {
+  let plannerMessages: Array<{ content: string }> = [];
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* (messages) {
+      plannerMessages = messages as Array<{ content: string }>;
+      yield JSON.stringify({
+        type: "use_tool",
+        toolId: "browser_attached_browse",
+        args: { url: "http://localhost:5173/#/login" },
+        reason: "The bounded history identifies the pending login task and the attached browser is authorized.",
+        planPatch: {
+          addItems: [
+            {
+              id: "P1",
+              text: "Log into http://localhost:5173/#/login with the credentials supplied in the conversation",
+            },
+            {
+              id: "P2",
+              text: "Verify that the local page reached the authenticated state",
+            },
+          ],
+          completeIds: [],
+        },
+      });
+    });
+
+  try {
+    const currentRequest = "Use the attached browser capability to proceed.";
+    const patch = await nextActionPlannerNode(
+      createState({
+        goal: {
+          id: "goal-follow-up",
+          text: currentRequest,
+          successCriteria: [currentRequest],
+          constraints: ["safe"],
+          riskLevel: "medium",
+        },
+        question: currentRequest,
+        messages: [
+          {
+            role: "user",
+            content:
+              "Log into http://localhost:5173/#/login with username test-user and the password I supplied.",
+            parts: [],
+          },
+          {
+            role: "assistant",
+            content: "I have the target and credentials, but have not executed the login.",
+            parts: [],
+          },
+          {
+            role: "user",
+            content: currentRequest,
+            parts: [],
+          },
+        ],
+        currentTaskFrame: {
+          currentGoal: currentRequest,
+          currentSubtask: "Determine the next action.",
+          confirmedObjects: [],
+          completionCriteria: [currentRequest],
+        },
+        toolExposure: {
+          exposedTools: ["browser_attached_browse"],
+          toolMeta: [
+            {
+              toolId: "browser_attached_browse",
+              title: "Attached Browser Browse",
+              description: "Navigate the user's attached browser.",
+              inputSchema: {
+                type: "object",
+                properties: { url: { type: "string" } },
+                required: ["url"],
+                additionalProperties: false,
+              },
+              domain: "browser_action",
+              source: "internal",
+              tags: ["browser"],
+              capabilities: {
+                sideEffect: "external",
+                requiresApproval: false,
+              },
+            },
+          ],
+        },
+      }),
+    );
+
+    assert.deepEqual(patch.nextAction, {
+      type: "use_tool",
+      toolId: "browser_attached_browse",
+      args: { url: "http://localhost:5173/#/login" },
+      reason:
+        "The bounded history identifies the pending login task and the attached browser is authorized.",
+    });
+    assert.match(patch.currentTaskFrame?.currentGoal ?? "", /Log into http:\/\/localhost:5173/);
+    assert.match(patch.currentTaskFrame?.currentGoal ?? "", /authenticated state/);
+    assert.deepEqual(patch.currentTaskFrame?.completionCriteria, [
+      "Log into http://localhost:5173/#/login with the credentials supplied in the conversation",
+      "Verify that the local page reached the authenticated state",
+    ]);
+
+    const joinedPrompt = plannerMessages.map((message) => message.content).join("\n");
+    assert.match(joinedPrompt, /currentUserRequest/);
+    assert.match(joinedPrompt, /recentConversationHistory/);
+    assert.match(joinedPrompt, /test-user/);
+    assert.match(joinedPrompt, /bounded recent conversation history/i);
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("nextActionPlannerNode keeps a standalone first-turn goal authoritative when creating a plan", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield JSON.stringify({
+        type: "use_tool",
+        toolId: "read_open",
+        args: { path: "README.md" },
+        reason: "Read the requested file.",
+        planPatch: {
+          addItems: [
+            { id: "P1", text: "Open README.md" },
+            { id: "P2", text: "Summarize the runtime section" },
+          ],
+          completeIds: [],
+        },
+      });
+    });
+
+  try {
+    const question = "Read README.md and summarize its runtime section.";
+    const patch = await nextActionPlannerNode(
+      createState({
+        goal: {
+          id: "goal-standalone",
+          text: question,
+          successCriteria: [question],
+          constraints: ["safe"],
+          riskLevel: "low",
+        },
+        question,
+        messages: [
+          {
+            role: "user",
+            content: question,
+            parts: [],
+          },
+        ],
+        currentTaskFrame: {
+          currentGoal: question,
+          currentSubtask: "Determine the next action.",
+          confirmedObjects: [],
+          completionCriteria: [question],
+        },
+      }),
+    );
+
+    assert.equal(patch.currentTaskFrame?.currentGoal, question);
+    assert.deepEqual(patch.currentTaskFrame?.completionCriteria, [question]);
+    assert.equal(patch.currentTaskFrame?.currentSubtask, "Open README.md");
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
 test("parseNextActionPlannerOutput accepts fenced JSON output", () => {
   assert.deepEqual(
     parseNextActionPlannerOutput(

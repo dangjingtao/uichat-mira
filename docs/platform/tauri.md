@@ -29,7 +29,9 @@ Related:
 
 这篇文档说明当前项目如何用 Tauri 作为 Electron 之外的另一套桌面壳层来构建应用。
 
-Tauri 和 Electron 预期共享根目录 `.artifacts/` 下同一批 staged build inputs，主要包括前端生产包、后端 bundle、图标、runtime config 和打包时使用的 Node runtime。
+Tauri 和 Electron 预期共享根目录 `.artifacts/` 下同一批 staged build inputs，主要包括前端生产包、后端 bundle、图标、runtime config、Node/npm/npx runtime 和 Terminal Dev Runtime（MinGit、uv、ripgrep）。
+
+Terminal Dev Runtime 的下载、checksum、manifest 与复制校验由共享脚本负责。Tauri 不维护另一套 downloader 或 PATH 逻辑；生产态只把 resources 根目录传给 Backend。详见 `../build/terminal-dev-runtime.md`。
 
 ## 当前定位
 

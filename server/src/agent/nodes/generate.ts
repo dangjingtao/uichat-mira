@@ -35,6 +35,66 @@ const safeStringify = (value: unknown) => {
   }
 };
 
+type ProtocolLeakReason =
+  | "function_calls_xml"
+  | "invoke_xml"
+  | "pending_tool_call_envelope"
+  | "tool_call_json_envelope";
+
+const unwrapJsonCodeFence = (value: string) => {
+  const match = /^\s*```(?:json)?\s*([\s\S]*?)\s*```\s*$/i.exec(value);
+  return match?.[1] ?? value;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const isExplicitToolCallJsonEnvelope = (value: unknown) => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  if (isRecord(value.pendingToolCall)) {
+    return true;
+  }
+
+  if (isRecord(value.function_call) || Array.isArray(value.tool_calls)) {
+    return true;
+  }
+
+  const hasToolId = typeof value.toolId === "string" && value.toolId.trim().length > 0;
+  const hasArgs = isRecord(value.args);
+  return (value.type === "use_tool" && (hasToolId || hasArgs)) || (hasToolId && hasArgs);
+};
+
+const detectProtocolLeak = (answer: string): ProtocolLeakReason | undefined => {
+  if (/<\/?function_calls?\b[^>]*>/i.test(answer)) {
+    return "function_calls_xml";
+  }
+  if (/<\/?invoke\b[^>]*>/i.test(answer)) {
+    return "invoke_xml";
+  }
+  if (/\bpendingToolCall\s*[:=]\s*\{/i.test(answer)) {
+    return "pending_tool_call_envelope";
+  }
+
+  try {
+    const parsed = JSON.parse(unwrapJsonCodeFence(answer));
+    if (isExplicitToolCallJsonEnvelope(parsed)) {
+      return isRecord(parsed) && isRecord(parsed.pendingToolCall)
+        ? "pending_tool_call_envelope"
+        : "tool_call_json_envelope";
+    }
+  } catch {
+    // Only complete JSON envelopes are inspected here. Natural-language output is untouched.
+  }
+
+  return undefined;
+};
+
+const PROTOCOL_LEAK_FALLBACK =
+  "本轮模型生成了内部工具调用格式，已阻止其显示。这段文本没有触发新的工具执行，请重试。";
+
 const buildGenerateInstructionMessages = (
   state: AgentNodeState,
 ): NormalizedChatMessage[] => [
@@ -171,8 +231,46 @@ export const generateNode = async (
     nodeType: "generate",
     phase: "start",
     label: "生成回答",
-    summary: "正在生成 Agent 最终回答",
+    summary:
+      state.nextAction?.type === "ask_user"
+        ? "正在交付 Planner 澄清问题"
+        : "正在生成 Agent 最终回答",
   });
+
+  if (state.nextAction?.type === "ask_user") {
+    const answer = state.nextAction.question;
+    const observation = createObservation({
+      runId: state.runId,
+      stepId: "generate",
+      status: "ok",
+      facts: [
+        "Delivered the Planner ask_user question deterministically without invoking the answer model.",
+      ],
+    });
+
+    await emitStepNode(emit, {
+      runId: state.runId,
+      nodeId: "agent-generate",
+      nodeType: "generate",
+      phase: "done",
+      label: "生成回答",
+      summary: "已向用户交付 Planner 澄清问题",
+      details: {
+        answerLength: Array.from(answer).length,
+        answerSource: "planner_ask_user_question",
+        deterministicAskUser: true,
+        modelInvoked: false,
+        protocolGuardTriggered: false,
+      },
+    });
+
+    return {
+      answer,
+      observations: [...(state.observations ?? []), observation],
+      schemaReplanDiagnostics: undefined,
+      generatedAnswerEmptyFallback: false,
+    };
+  }
 
   const budget = buildGenerateContextBudget(state);
   const generationMessages = buildGenerateMessages(state);
@@ -217,6 +315,46 @@ export const generateNode = async (
       errorMessage,
       errorSourceNodeId: "agent-generate",
       contextBudget: budget.audit,
+    };
+  }
+
+  const protocolLeakReason = detectProtocolLeak(answer);
+  if (protocolLeakReason) {
+    const observation = createObservation({
+      runId: state.runId,
+      stepId: "generate",
+      status: "partial",
+      facts: [
+        "Blocked an internal tool-call protocol envelope from the user-facing answer; the envelope did not trigger tool execution.",
+      ],
+    });
+
+    await emitStepNode(emit, {
+      runId: state.runId,
+      nodeId: "agent-generate",
+      nodeType: "generate",
+      phase: "done",
+      label: "生成回答",
+      summary: "已阻止内部工具调用协议文本显示",
+      details: {
+        answerLength: Array.from(PROTOCOL_LEAK_FALLBACK).length,
+        invocation: generationInvocation,
+        contextBudget: budget.audit,
+        messageCount: generationMessages.length,
+        outputGuardTriggered: true,
+        outputGuardReason: protocolLeakReason,
+        protocolGuardTriggered: true,
+        modelInvoked: true,
+        generatedAnswerEmptyFallback: false,
+      },
+    });
+
+    return {
+      answer: PROTOCOL_LEAK_FALLBACK,
+      observations: [...(state.observations ?? []), observation],
+      contextBudget: budget.audit,
+      schemaReplanDiagnostics: undefined,
+      generatedAnswerEmptyFallback: false,
     };
   }
 
@@ -273,6 +411,8 @@ export const generateNode = async (
       invocation: generationInvocation,
       contextBudget: budget.audit,
       messageCount: generationMessages.length,
+      outputGuardTriggered: false,
+      protocolGuardTriggered: false,
       generatedAnswerEmptyFallback: false,
     },
   });

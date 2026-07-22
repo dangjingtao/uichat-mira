@@ -1,6 +1,11 @@
 import { Ollama } from "ollama";
 
 import { getProviderDefinition } from "@/providers/catalog.js";
+import {
+  generateArkPlanStructuredOutput,
+  isArkPlanStructuredOutputProvider,
+  streamArkPlanStructuredOutputText,
+} from "@/services/ark-plan-structured-output.js";
 import { resolveArkPlanBaseUrl } from "@/services/ark-plan-adapter.js";
 import { createOpenAICompatibleClient } from "@/services/openai-compatible-provider.js";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
@@ -189,6 +194,11 @@ export const streamTaskStructuredOutputText = (
   input: TaskStructuredOutputInput,
 ): AsyncGenerator<string> => {
   const resolved = resolveAgentTaskProvider("default");
+
+  if (isArkPlanStructuredOutputProvider(resolved)) {
+    return streamArkPlanStructuredOutputText(resolved, input);
+  }
+
   const adapter = getProviderDefinition(resolved.providerCode).chatAdapter;
 
   switch (adapter) {
@@ -211,6 +221,11 @@ export const generateTaskStructuredOutput = async <T>(
   input: TaskStructuredOutputInput,
 ): Promise<T> => {
   const resolved = resolveAgentTaskProvider("default");
+
+  if (isArkPlanStructuredOutputProvider(resolved)) {
+    return await generateArkPlanStructuredOutput<T>(resolved, input);
+  }
+
   const adapter = getProviderDefinition(resolved.providerCode).chatAdapter;
 
   switch (adapter) {

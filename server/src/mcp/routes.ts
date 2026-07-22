@@ -729,8 +729,9 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     routeHandler("Failed to list MCP tools", async (request) => {
+      const internalDefinitions = listInternalCapabilityDefinitions();
       if (!request.query.query && !request.query.source) {
-        return success(listInternalCapabilityDefinitions().map(withWorkbenchMetadata));
+        return success(withWorkbenchMetadata(internalDefinitions));
       }
 
       const decision = resolveHarnessToolExposure({
@@ -738,9 +739,10 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
         query: request.query.query,
       });
       return success(
-        decision.exposedDefinitions
-          .filter((definition) => definition.source === "internal")
-          .map(withWorkbenchMetadata),
+        withWorkbenchMetadata(
+          decision.exposedDefinitions.filter((definition) => definition.source === "internal"),
+          internalDefinitions,
+        ),
       );
     }),
   );

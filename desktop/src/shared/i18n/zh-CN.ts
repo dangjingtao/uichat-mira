@@ -580,6 +580,9 @@ const zhCN = {
       account: {
         changePassword: "修改密码",
       },
+      developmentEnvironment: {
+        title: "开发环境套件",
+      },
       proxy: {
         title: "SOCKS5 代理",
         description: "留空 Host 或 Port，就表示当前不启用代理。",

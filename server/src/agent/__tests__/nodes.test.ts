@@ -222,7 +222,7 @@ test("createToolExecutionEvidenceSummary limits read_discover candidatePaths to 
   }
 });
 
-test("generateNode rewrites tool-style output into a natural read_list answer grounded in evidence", async () => {
+test("generateNode blocks function_calls protocol text without treating it as execution", async () => {
   const state = createBaseState("看看当前 workspace 有哪些文件");
   state.evidence = {
     observations: [],
@@ -288,12 +288,105 @@ test("generateNode rewrites tool-style output into a natural read_list answer gr
   });
 
   assert.equal(invokeSpy.mock.calls.length, 1);
-  assert.match(result.answer ?? "", /README\.md/);
+  assert.match(result.answer ?? "", /内部工具调用格式/);
+  assert.match(result.answer ?? "", /没有触发新的工具执行/);
   assert.doesNotMatch(result.answer ?? "", /toolId|function_calls|pendingToolCall/i);
   const generateDoneEvent = executionEvents.find(
     (event) => event.nodeId === "agent-generate" && event.phase === "done",
   );
   assert.equal(generateDoneEvent?.details?.outputGuardTriggered, true);
+  assert.equal(generateDoneEvent?.details?.protocolGuardTriggered, true);
+  assert.equal(generateDoneEvent?.details?.outputGuardReason, "function_calls_xml");
+});
+
+test("generateNode returns the Planner ask_user question verbatim without invoking the answer model", async () => {
+  const state = createBaseState("请用触界帮我处理一下。");
+  const plannerQuestion = "请说明要处理的页面地址和具体操作。";
+  state.nextAction = {
+    type: "ask_user",
+    question: plannerQuestion,
+    reason: "The concrete target and operation are missing.",
+  };
+  const invokeSpy = vi.spyOn(providerProxyService, "generateTextForRole");
+  const executionEvents: Array<{
+    nodeId: string;
+    phase: string;
+    details?: Record<string, unknown>;
+  }> = [];
+
+  const result = await generateNode(state, async (event) => {
+    executionEvents.push({
+      nodeId: event.nodeId,
+      phase: event.phase,
+      details:
+        event.details && typeof event.details === "object"
+          ? (event.details as Record<string, unknown>)
+          : undefined,
+    });
+  });
+
+  assert.equal(result.answer, plannerQuestion);
+  assert.equal(invokeSpy.mock.calls.length, 0);
+  assert.equal(result.evidence, undefined);
+  assert.equal(result.pendingToolCall, undefined);
+  assert.equal(result.lastToolExecution, undefined);
+  assert.doesNotMatch(result.answer ?? "", /已执行|function_calls|pendingToolCall/i);
+  const generateDoneEvent = executionEvents.find(
+    (event) => event.nodeId === "agent-generate" && event.phase === "done",
+  );
+  assert.equal(generateDoneEvent?.details?.answerSource, "planner_ask_user_question");
+  assert.equal(generateDoneEvent?.details?.modelInvoked, false);
+});
+
+test.each([
+  ["invoke XML", '<invoke name="browser_attached_look"></invoke>', "invoke_xml"],
+  [
+    "pendingToolCall JSON",
+    '{"pendingToolCall":{"toolId":"browser_attached_look","args":{}}}',
+    "pending_tool_call_envelope",
+  ],
+  [
+    "tool-call JSON",
+    '{"type":"use_tool","toolId":"browser_attached_look","args":{},"reason":"inspect"}',
+    "tool_call_json_envelope",
+  ],
+])("generateNode blocks %s protocol envelopes", async (_label, modelAnswer, expectedReason) => {
+  const state = createBaseState("查看当前页面");
+  const invokeSpy = vi
+    .spyOn(providerProxyService, "generateTextForRole")
+    .mockResolvedValue(modelAnswer);
+  const executionEvents: Array<{ details?: Record<string, unknown> }> = [];
+
+  const result = await generateNode(state, async (event) => {
+    executionEvents.push({
+      details:
+        event.details && typeof event.details === "object"
+          ? (event.details as Record<string, unknown>)
+          : undefined,
+    });
+  });
+
+  assert.equal(invokeSpy.mock.calls.length, 1);
+  assert.match(result.answer ?? "", /没有触发新的工具执行/);
+  assert.doesNotMatch(result.answer ?? "", /<invoke|pendingToolCall|browser_attached_look|use_tool/i);
+  assert.equal(
+    executionEvents.find((event) => event.details?.protocolGuardTriggered)?.details
+      ?.outputGuardReason,
+    expectedReason,
+  );
+});
+
+test("generateNode does not block valid natural language that discusses tool use", async () => {
+  const state = createBaseState("说明接下来如何操作");
+  const naturalAnswer =
+    "我可以使用页面观察工具读取当前状态；真正执行前仍会遵守现有审批流程。";
+  vi.spyOn(providerProxyService, "generateTextForRole").mockResolvedValue(
+    naturalAnswer,
+  );
+
+  const result = await generateNode(state);
+
+  assert.equal(result.answer, naturalAnswer);
 });
 
 test("generateNode gives generic non-empty structured results to the model and does not answer as empty", async () => {

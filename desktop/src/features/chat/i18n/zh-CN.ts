@@ -136,6 +136,8 @@ const chatPending = {
       },
       actions: {
         copy: "复制",
+        copySuccess: "已复制",
+        copyFailed: "复制失败，请重试",
         edit: "编辑",
         regenerate: "重新生成",
         previousBranch: "上一分支",

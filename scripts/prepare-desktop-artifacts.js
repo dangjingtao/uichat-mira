@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import loadLocalEnv from "./load-local-env.cjs";
+import { stageTerminalDevRuntime } from "./terminal-runtime-staging.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,7 +18,6 @@ const runtimeConfigArtifactsPath = path.join(
   artifactsRoot,
   "runtime.config.cjs",
 );
-const nodeRuntimeArtifactsRoot = path.join(artifactsRoot, "node-runtime");
 const browserExtensionArtifactsRoot = path.join(artifactsRoot, "browser-extension");
 const piperRuntimeArtifactsRoot = path.join(
   artifactsRoot,
@@ -163,6 +163,7 @@ if (skipTests) {
 execSync("pnpm internal:build:desktop", { cwd: projectRoot, stdio: "inherit" });
 execSync("pnpm internal:build:server", { cwd: projectRoot, stdio: "inherit" });
 execSync("pnpm docs:build", { cwd: projectRoot, stdio: "inherit" });
+execSync("pnpm prepare:terminal-runtime", { cwd: projectRoot, stdio: "inherit" });
 execSync("pnpm prepare:piper-runtime", { cwd: projectRoot, stdio: "inherit" });
 
 if (!fs.existsSync(serverBundleArtifactsRoot)) {
@@ -219,14 +220,6 @@ copyPath(
   "production Native Messaging host script",
 );
 
-fs.mkdirSync(nodeRuntimeArtifactsRoot, { recursive: true });
-const nodeRuntimeDest = path.join(
-  nodeRuntimeArtifactsRoot,
-  path.basename(process.execPath),
-);
-fs.copyFileSync(process.execPath, nodeRuntimeDest);
-console.log(`Copied Node runtime: ${nodeRuntimeDest}`);
-
 removeDir(electronArtifactsRoot, "old staged Electron app");
 fs.mkdirSync(electronArtifactsRoot, { recursive: true });
 copyPath(
@@ -275,11 +268,10 @@ copyPath(
   path.join(electronArtifactsRoot, "browser-extension"),
   "staged browser extension",
 );
-copyPath(
-  nodeRuntimeArtifactsRoot,
-  path.join(electronArtifactsRoot, "node-runtime"),
-  "staged Node runtime",
-);
+stageTerminalDevRuntime({
+  artifactsRoot,
+  destinationRoot: electronArtifactsRoot,
+});
 copyPath(
   piperRuntimeArtifactsRoot,
   path.join(electronArtifactsRoot, "micro-apps", "tts", "piper"),

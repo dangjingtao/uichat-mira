@@ -15,6 +15,7 @@ import {
   createWindowsJobCommandArgs,
   getWindowsJobMarker,
 } from "./windows-job-object.js";
+import { resolveTerminalDevRuntimeEnvironment } from "./dev-runtime.js";
 
 export interface HostShellProfile {
   shell: string;
@@ -184,11 +185,13 @@ export const resolveHostCwd = (input: {
 };
 
 export const resolveHostEnv = (overrides?: Record<string, string>) =>
-  Object.fromEntries(
+  resolveTerminalDevRuntimeEnvironment(
+    Object.fromEntries(
     Object.entries({
       ...process.env,
       ...(overrides ?? {}),
     }).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+    ),
   );
 
 const normalizeOutputLimitBytes = (value?: number) => {

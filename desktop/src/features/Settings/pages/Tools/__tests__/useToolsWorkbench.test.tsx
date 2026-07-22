@@ -66,6 +66,13 @@ describe("useToolsWorkbench", () => {
           requiresApproval: false,
           networkAccess: true,
         },
+        workbench: {
+          groupId: "web_search",
+          groupLabel: "网络搜索",
+          groupDescription: "网络搜索工具。",
+          groupOrder: 30,
+          icon: "globe",
+        },
       },
     ]);
     getMcpWorkspaceSelectionMock.mockResolvedValue({
@@ -157,5 +164,72 @@ describe("useToolsWorkbench", () => {
     expect(executeMcpInvocationStreamMock.mock.calls[0]?.[0]).toMatchObject({
       toolId: "web_search",
     });
+  });
+
+  it("groups and filters tools by capability ownership instead of runtime domain", async () => {
+    const createBrowserTool = (
+      id: string,
+      groupId: string,
+      groupLabel: string,
+      groupOrder: number,
+    ) => ({
+      id,
+      title: id,
+      description: "",
+      domain: "browser_action",
+      source: "internal",
+      mode: "sync",
+      inputSchema: {},
+      tags: [],
+      capabilities: {
+        sideEffect: "none",
+        requiresApproval: false,
+      },
+      workbench: {
+        groupId,
+        groupLabel,
+        groupDescription: groupLabel,
+        groupOrder,
+        icon: "mouse-pointer",
+      },
+    });
+    getMcpToolsMock.mockResolvedValueOnce([
+      createBrowserTool("browser_observe", "browser_computer_use", "Computer Use", 50),
+      createBrowserTool("browser_act", "browser_computer_use", "Computer Use", 50),
+      createBrowserTool("browser_assert", "browser_computer_use", "Computer Use", 50),
+      createBrowserTool("browser_attached_look", "browser_attached", "触界", 60),
+      createBrowserTool("browser_attached_browse", "browser_attached", "触界", 60),
+      createBrowserTool("browser_attached_act", "browser_attached", "触界", 60),
+      createBrowserTool("browser_attached_transfer", "browser_attached", "触界", 60),
+    ]);
+
+    const useToolsWorkbench = await importHook();
+    const { result } = renderHook(() => useToolsWorkbench());
+
+    await waitFor(() => {
+      expect(result.current.tools).toHaveLength(7);
+    }, { timeout: 3000 });
+
+    expect(result.current.groupSummaries).toEqual([
+      expect.objectContaining({ id: "browser_computer_use", label: "Computer Use", count: 3 }),
+      expect.objectContaining({ id: "browser_attached", label: "触界", count: 4 }),
+    ]);
+    expect(result.current.filteredTools.map((tool) => tool.id).sort()).toEqual([
+      "browser_act",
+      "browser_assert",
+      "browser_observe",
+    ]);
+
+    act(() => {
+      result.current.selectGroup("browser_attached");
+    });
+
+    expect(result.current.activeGroupId).toBe("browser_attached");
+    expect(result.current.filteredTools.map((tool) => tool.id).sort()).toEqual([
+      "browser_attached_act",
+      "browser_attached_browse",
+      "browser_attached_look",
+      "browser_attached_transfer",
+    ]);
   });
 });

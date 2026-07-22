@@ -196,6 +196,11 @@ describe("UChatThread", () => {
 
     const button = screen.getByRole("button", { name: "Enable Agent" });
     assert.equal(button.hasAttribute("disabled"), false);
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      assert.deepEqual(setDraftAgentEnabledMock.mock.calls[0], [true]);
+    });
   });
 
   test("welcome state falls back to normal send when agent toggle is off", async () => {

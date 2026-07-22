@@ -4,7 +4,11 @@ import { PassThrough } from "node:stream";
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import mcpRoutes from "./routes.js";
-import { clearHarnessRegistry, getCapabilityImplementation } from "../harness/registry.js";
+import {
+  clearHarnessRegistry,
+  getCapabilityImplementation,
+  registerCapability,
+} from "../harness/registry.js";
 import { clearHarnessInvocations } from "../harness/invocations.js";
 import { resetHarnessRuntime } from "./bootstrap.js";
 import { clearWorkspaceSelection } from "./workspace.js";
@@ -20,6 +24,13 @@ import { resolveWecomConfig } from "@/integrations/wecom/config.js";
 import {
   createTimestampedTestArtifactPath,
 } from "@/test-support/artifacts.js";
+import { createComputerUseBrowserTools } from "./tools/browser-tools.tool.js";
+import {
+  browserAttachedActTool,
+  browserAttachedBrowseTool,
+  browserAttachedLookTool,
+  browserAttachedTransferTool,
+} from "./tools/browser-attached.tool.js";
 
 type StdioMockHandler = (request: {
   method?: string;
@@ -155,6 +166,17 @@ describe("mcp routes", () => {
 
   it("lists tools/resources and streams invocation events", async () => {
     fs.writeFileSync(path.join(tempRoot, "a.txt"), "hello");
+    createComputerUseBrowserTools({
+      observe: async () => ({ ok: true }),
+      act: async () => ({ ok: true }),
+      assert: async () => ({ ok: true }),
+    } as never).forEach(registerCapability);
+    [
+      browserAttachedLookTool,
+      browserAttachedBrowseTool,
+      browserAttachedActTool,
+      browserAttachedTransferTool,
+    ].forEach(registerCapability);
 
     const app = Fastify({
       logger: getLoggerConfig(),
@@ -190,20 +212,52 @@ describe("mcp routes", () => {
     const readTool = (toolsResponse.json() as {
       data: Array<{
         id: string;
+        domain: string;
         workbench?: {
-          domainLabel: string;
-          domainDescription: string;
-          domainOrder: number;
+          groupId: string;
+          groupLabel: string;
+          groupDescription: string;
+          groupOrder: number;
           icon: string;
           defaultArgs?: Record<string, unknown>;
         };
       }>;
     }).data.find((tool) => tool.id === "read_open");
     expect(readTool?.workbench).toMatchObject({
-      domainLabel: "阅读",
-      domainOrder: 10,
+      groupId: "read",
+      groupLabel: "阅读",
+      groupOrder: 10,
       icon: "file-search",
     });
+
+    const browserTools = (toolsResponse.json() as {
+      data: Array<{
+        id: string;
+        domain: string;
+        workbench?: { groupId: string };
+      }>;
+    }).data.filter((tool) => tool.domain === "browser_action");
+    expect(
+      browserTools
+        .filter((tool) => tool.workbench?.groupId === "browser_computer_use")
+        .map((tool) => tool.id)
+        .sort(),
+    ).toEqual(
+      ["browser_act", "browser_assert", "browser_observe"],
+    );
+    expect(
+      browserTools
+        .filter((tool) => tool.workbench?.groupId === "browser_attached")
+        .map((tool) => tool.id)
+        .sort(),
+    ).toEqual(
+      [
+        "browser_attached_act",
+        "browser_attached_browse",
+        "browser_attached_look",
+        "browser_attached_transfer",
+      ],
+    );
 
     const resourceReadResponse = await app.inject({
       method: "POST",

@@ -25,9 +25,9 @@ export default function ToolsSettings() {
     >
       <div className="grid h-full min-h-0 grid-cols-[260px_minmax(0,1fr)] gap-4 overflow-hidden">
         <ToolsSidebar
-          activeDomain={workbench.activeDomain}
-          summaries={workbench.domainSummaries}
-          onSelectDomain={workbench.selectDomain}
+          activeGroupId={workbench.activeGroupId}
+          summaries={workbench.groupSummaries}
+          onSelectGroup={workbench.selectGroup}
         />
 
         <div className="grid min-h-0 h-full grid-rows-[auto_minmax(0,1fr)] gap-4 overflow-hidden">

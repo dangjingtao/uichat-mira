@@ -79,9 +79,12 @@ UIChat.exe
   ├─ Electron main process
   ├─ preload bridge
   └─ bundled Node backend
+       └─ terminal_session -> bundled Terminal Dev Runtime + system PATH fallback
 ```
 
 Tauri 形态下同样复用前端构建产物和 backend bundle，只是壳层实现不同。
+
+Electron 和 Tauri 还共享同一批 `node-runtime/` 与 `terminal-runtime/` staging 输入。桌面壳层只把 resources 根目录传给 Backend；终端 PATH 的组件校验、优先顺序和 system fallback 由 Backend 统一处理，不进入 renderer 或 preload 合同。详见 `../build/terminal-dev-runtime.md`。
 
 ## 当前稳定边界
 

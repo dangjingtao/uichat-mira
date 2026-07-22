@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2.0.0",
   "productName": "UIChat Mira",
-  "version": "0.98.0",
+  "version": "0.99.0",
   "identifier": "com.tomz.uichat",
   "build": {
     "beforeDevCommand": "pnpm internal:dev:tauri:services",
@@ -36,6 +36,7 @@
       "resources/server",
       "resources/browser-extension",
       "resources/node-runtime",
+      "resources/terminal-runtime",
       "resources/micro-apps/tts/piper",
       "resources/model-packs",
       "resources/model-runtime"
