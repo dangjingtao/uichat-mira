@@ -1,4 +1,4 @@
-import { createOfficeSample } from "./create.js";
+import { createOfficeSample, createWordDocument } from "./create.js";
 import { reviewDocument } from "./document-review.js";
 import { appendDocumentParagraphs } from "./document.js";
 import {
@@ -76,8 +76,23 @@ const validateTask = (task: OfficeRuntimeTask) => {
   }
 
   if (task.operation === "create") {
-    if (task.request.type !== "verification-sample") {
-      throw new Error(`Unsupported create request: ${task.request.type}`);
+    if (task.request.type === "verification-sample") {
+      return;
+    }
+    if (task.kind !== "word") {
+      throw new Error("Structured document create is currently supported only for Word");
+    }
+    const contentCount =
+      (task.request.title?.trim() ? 1 : 0) +
+      (task.request.paragraphs?.length ?? 0) +
+      (task.request.tables?.length ?? 0);
+    if (contentCount === 0) {
+      throw new Error("Word document create requires a title, paragraph, or table");
+    }
+    for (const table of task.request.tables ?? []) {
+      if (table.rows.length === 0 || table.rows.some((row) => row.length === 0)) {
+        throw new Error("Word document tables require non-empty rows and cells");
+      }
     }
     return;
   }
@@ -159,7 +174,10 @@ export const executeOfficeRuntimeTask = async (
     }
 
     if (task.operation === "create") {
-      const created = await createOfficeSample(task.kind);
+      const created =
+        task.request.type === "document"
+          ? await createWordDocument(task.request)
+          : await createOfficeSample(task.kind);
       return {
         contractVersion: OFFICE_RUNTIME_CONTRACT_VERSION,
         taskId: task.taskId,
