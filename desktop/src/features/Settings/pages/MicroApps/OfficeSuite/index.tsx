@@ -14,6 +14,7 @@ import { message } from "@/shared/ui/Message";
 import {
   createExcelVerificationCopy,
   createOfficeSample,
+  createWordReviewCopy,
   createWordVerificationCopy,
   inspectOfficeFile,
   type OfficeSuiteCreatedDownload,
@@ -72,7 +73,11 @@ export default function OfficeSuitePage() {
   const [inspecting, setInspecting] = useState(false);
   const [creatingKind, setCreatingKind] = useState<OfficeSuiteFileKind | null>(null);
   const [modifyingWord, setModifyingWord] = useState(false);
+  const [reviewingWord, setReviewingWord] = useState(false);
   const [modifyingExcel, setModifyingExcel] = useState(false);
+  const [wordReviewTarget, setWordReviewTarget] = useState("");
+  const [wordReviewComment, setWordReviewComment] = useState("");
+  const [wordReviewReplacement, setWordReviewReplacement] = useState("");
   const [lastCreated, setLastCreated] = useState<{
     kind: OfficeSuiteFileKind;
     fileName: string;
@@ -90,7 +95,7 @@ export default function OfficeSuitePage() {
     return index >= 0 ? selectedFile.name.slice(index).toLowerCase() : "";
   }, [selectedFile]);
 
-  const modifying = modifyingWord || modifyingExcel;
+  const modifying = modifyingWord || reviewingWord || modifyingExcel;
   const busy = inspecting || modifying || creatingKind !== null;
 
   const chooseFile = (file?: File | null) => {
@@ -103,6 +108,9 @@ export default function OfficeSuitePage() {
     setSelectedFile(file);
     setInspection(null);
     setLastModified(null);
+    setWordReviewTarget("");
+    setWordReviewComment("");
+    setWordReviewReplacement("");
   };
 
   const runInspection = async () => {
@@ -207,6 +215,65 @@ export default function OfficeSuitePage() {
       message.error(detail);
     } finally {
       setModifyingWord(false);
+    }
+  };
+
+  const runWordReview = async () => {
+    if (!selectedFile || selectedExtension !== ".docx") {
+      message.warning("请先选择一个 .docx 文件");
+      return;
+    }
+
+    const targetText = wordReviewTarget.trim();
+    const commentText = wordReviewComment.trim();
+    const hasReplacement = wordReviewReplacement.trim().length > 0;
+    if (!targetText) {
+      message.warning("请填写要定位的目标文本");
+      return;
+    }
+    if (!commentText && !hasReplacement) {
+      message.warning("请至少填写批注或建议替换文本");
+      return;
+    }
+
+    const startedAt = performance.now();
+    setReviewingWord(true);
+    try {
+      const artifact = await createWordReviewCopy(selectedFile, {
+        author: "Mira",
+        comment: commentText
+          ? { targetText, text: commentText }
+          : undefined,
+        insertion: hasReplacement
+          ? { afterText: targetText, text: wordReviewReplacement }
+          : undefined,
+        deletion: hasReplacement ? { targetText } : undefined,
+      });
+      downloadArtifact(artifact);
+      setLastModified({
+        fileName: artifact.fileName,
+        byteSize: artifact.blob.size,
+      });
+      setRecentOperation({
+        label: "Review Word",
+        status: "success",
+        durationMs: Math.round(performance.now() - startedAt),
+        fileName: artifact.fileName,
+        byteSize: artifact.blob.size,
+      });
+      message.success("Word 审阅副本已生成，批注和修订保留在新文件中");
+    } catch (error) {
+      const detail = errorMessage(error, "Word 审阅失败");
+      setRecentOperation({
+        label: "Review Word",
+        status: "error",
+        durationMs: Math.round(performance.now() - startedAt),
+        fileName: selectedFile.name,
+        error: detail,
+      });
+      message.error(detail);
+    } finally {
+      setReviewingWord(false);
     }
   };
 
@@ -324,7 +391,7 @@ export default function OfficeSuitePage() {
               <div>
                 <h2 className="text-base font-semibold text-text-primary">文件输入与修改验证</h2>
                 <p className="mt-1 text-sm leading-6 text-text-secondary">
-                  选择已有文件做 Inspect；DOCX 和 XLSX 可以生成非破坏性的修改副本，验证已有文件的写回链路。
+                  选择已有文件做 Inspect；DOCX 和 XLSX 可以生成非破坏性的修改副本。DOCX 还可以验证原生批注与 Track Changes 修订。
                 </p>
               </div>
 
@@ -388,6 +455,62 @@ export default function OfficeSuitePage() {
                   {inspecting ? "正在读取…" : "读取文件结构"}
                 </Button>
               </div>
+
+              {selectedExtension === ".docx" ? (
+                <div className="space-y-3 rounded-ui-panel border border-border bg-surface-secondary/20 p-4">
+                  <div>
+                    <div className="text-sm font-semibold text-text-primary">Word 审阅验证</div>
+                    <p className="mt-1 text-xs leading-5 text-text-tertiary">
+                      使用精确文本锚点添加 Word 原生批注；填写建议替换文本时，会生成 Track Changes 删除 + 插入修订。
+                    </p>
+                  </div>
+                  <div className="grid gap-3 lg:grid-cols-3">
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-medium text-text-secondary">目标文本</span>
+                      <input
+                        value={wordReviewTarget}
+                        onChange={(event) => setWordReviewTarget(event.target.value)}
+                        placeholder="原文中可精确定位的一段文字"
+                        className="h-10 w-full rounded-ui-control border border-border bg-surface-primary px-3 text-sm text-text-primary outline-none transition-colors placeholder:text-text-tertiary focus:border-primary/60"
+                      />
+                    </label>
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-medium text-text-secondary">批注（可选）</span>
+                      <input
+                        value={wordReviewComment}
+                        onChange={(event) => setWordReviewComment(event.target.value)}
+                        placeholder="给这段文字添加批注"
+                        className="h-10 w-full rounded-ui-control border border-border bg-surface-primary px-3 text-sm text-text-primary outline-none transition-colors placeholder:text-text-tertiary focus:border-primary/60"
+                      />
+                    </label>
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-medium text-text-secondary">建议替换为（可选）</span>
+                      <input
+                        value={wordReviewReplacement}
+                        onChange={(event) => setWordReviewReplacement(event.target.value)}
+                        placeholder="生成删除 + 插入修订"
+                        className="h-10 w-full rounded-ui-control border border-border bg-surface-primary px-3 text-sm text-text-primary outline-none transition-colors placeholder:text-text-tertiary focus:border-primary/60"
+                      />
+                    </label>
+                  </div>
+                  <div className="flex justify-end">
+                    <Button
+                      variant="outline"
+                      size="md"
+                      disabled={
+                        !selectedFile ||
+                        busy ||
+                        !wordReviewTarget.trim() ||
+                        (!wordReviewComment.trim() && !wordReviewReplacement.trim())
+                      }
+                      onClick={() => void runWordReview()}
+                    >
+                      <FileText className="h-4 w-4" />
+                      {reviewingWord ? "正在生成审阅副本…" : "生成 Word 审阅副本"}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
 
               {lastModified ? (
                 <div className="flex flex-wrap items-center gap-2 rounded-ui-panel border border-border bg-surface-secondary/20 px-4 py-3 text-sm">
@@ -459,7 +582,9 @@ export default function OfficeSuitePage() {
                       <Badge variant="success">
                         {kind === "powerpoint"
                           ? "Inspect + Rich Create"
-                          : "Inspect + Create + Modify"}
+                          : kind === "word"
+                            ? "Inspect + Create + Modify + Review"
+                            : "Inspect + Create + Modify"}
                       </Badge>
                     </div>
                   );
@@ -496,7 +621,8 @@ export default function OfficeSuitePage() {
             <div className="text-sm font-semibold text-text-primary">当前边界</div>
             <div className="mt-3 space-y-2 text-xs leading-5 text-text-secondary">
               <p>文枢现在是 Office Runtime 的调试和验证窗口。</p>
-              <p>Word 和 Excel 已进入基础 Modify 验证；PowerPoint 已验证多页、文本、图片与表格生成，不承诺任意既有 PPT 的无损修改。</p>
+              <p>Word 已进入基础 Modify 与 Review 批注/修订验证；Excel 已进入基础 Modify；PowerPoint 已验证多页、文本、图片与表格生成，不承诺任意既有 PPT 的无损修改。</p>
+              <p>Word Review 当前只对可安全定位的简单文本 run 做精确编辑；复杂 run 会明确失败，不做有损重写。</p>
               <p>不嵌 Chat，不提前实现 Skill Runtime，也不把 set_cell / add_slide 之类原子操作暴露给 Agent。</p>
             </div>
           </Card>
