@@ -25,7 +25,12 @@ type AgentRunPersistence = {
     patch: Partial<Omit<AgentRun, "id" | "createdAt" | "status">> & {
       status: Extract<
         AgentRun["status"],
-        "completed" | "failed" | "blocked" | "cancelled" | "waiting_approval"
+        | "completed"
+        | "failed"
+        | "blocked"
+        | "cancelled"
+        | "waiting_approval"
+        | "waiting_user"
       >;
     },
   ) => void;
@@ -158,7 +163,12 @@ export class InMemoryAgentRunStore implements AgentRunStore {
     patch: Partial<Omit<AgentRun, "id" | "createdAt" | "status">> & {
       status: Extract<
         AgentRun["status"],
-        "completed" | "failed" | "blocked" | "cancelled" | "waiting_approval"
+        | "completed"
+        | "failed"
+        | "blocked"
+        | "cancelled"
+        | "waiting_approval"
+        | "waiting_user"
       >;
     },
   ): AgentRun {

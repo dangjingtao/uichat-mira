@@ -12,6 +12,11 @@ export type PlannerStructuredDecisionEnvelope = {
   toolId: string | null;
   args: Record<string, unknown> | null;
   question: string | null;
+  completionProof: Array<{
+    criterion: string;
+    evidenceRefs: string[];
+  }>;
+  unresolvedGaps: string[];
   planPatch: PlannerStructuredPlanPatch;
 };
 
@@ -136,6 +141,28 @@ export const buildPlannerStructuredOutputJsonSchema = (
         : { type: "null" },
     args: buildToolArgsSchema(toolExposure),
     question: nullableSchema({ type: "string" }),
+    completionProof: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          criterion: { type: "string" },
+          evidenceRefs: {
+            type: "array",
+            items: {
+              type: "string",
+              pattern: "^(tool|retrieval|observation):[0-9]+$",
+            },
+          },
+        },
+        required: ["criterion", "evidenceRefs"],
+        additionalProperties: false,
+      },
+    },
+    unresolvedGaps: {
+      type: "array",
+      items: { type: "string" },
+    },
     planPatch: {
       type: "object",
       properties: {
@@ -167,6 +194,8 @@ export const buildPlannerStructuredOutputJsonSchema = (
     "toolId",
     "args",
     "question",
+    "completionProof",
+    "unresolvedGaps",
     "planPatch",
   ],
   additionalProperties: false,
@@ -231,6 +260,14 @@ export const normalizePlannerStructuredDecision = (
   }
   if (envelope.question !== null) {
     decision.question = envelope.question;
+  }
+  if (envelope.type === "answer") {
+    decision.completionProof = Array.isArray(envelope.completionProof)
+      ? envelope.completionProof
+      : [];
+    decision.unresolvedGaps = Array.isArray(envelope.unresolvedGaps)
+      ? envelope.unresolvedGaps
+      : [];
   }
 
   const addItems = Array.isArray(envelope.planPatch?.addItems)

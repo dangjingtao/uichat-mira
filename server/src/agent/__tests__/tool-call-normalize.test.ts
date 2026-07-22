@@ -632,6 +632,10 @@ test("toolCallNormalizeNode returns empty result for non-use_tool nextAction", a
       nextAction: {
         type: "answer",
         reason: "Enough evidence.",
+        completionProof: [
+          { criterion: "answer the user", evidenceRefs: [] },
+        ],
+        unresolvedGaps: [],
       },
     }),
   );

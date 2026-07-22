@@ -72,7 +72,9 @@ test("Planner returns a legal action with its toolId and args unchanged", async 
 });
 
 test("list and locate evidence do not cause an automatic read_open action", async () => {
-  const stream = mockPlanner('{"type":"answer","reason":"Use the evidence provided."}');
+  const stream = mockPlanner(
+    '{"type":"answer","reason":"Use the evidence provided.","completionProof":[{"criterion":"answer","evidenceRefs":["tool:0","tool:1"]}],"unresolvedGaps":[]}',
+  );
   const evidence = {
     observations: [],
     retrievals: [],
@@ -103,7 +105,15 @@ test("list and locate evidence do not cause an automatic read_open action", asyn
     assert.deepEqual(patch.nextAction, {
       type: "answer",
       reason: "Use the evidence provided.",
+      completionProof: [
+        {
+          criterion: "answer",
+          evidenceRefs: ["tool:0", "tool:1"],
+        },
+      ],
+      unresolvedGaps: [],
     });
+    assert.deepEqual(patch.finalizationPacket, patch.nextAction);
   } finally {
     stream.mockRestore();
   }

@@ -9,6 +9,15 @@ export const mapGraphStateToOutput = (
   state: AgentGraphStateType,
 ): AgentGraphOutputWithRuntimeState => {
   const answer = state.answer?.trim() ?? "";
+  const status: AgentGraphOutput["status"] = state.pendingApproval
+    ? "waiting_approval"
+    : state.errorMessage
+      ? "failed"
+      : state.terminalReason === "waiting_user"
+        ? "waiting_user"
+        : state.terminalReason === "completed"
+          ? "completed"
+          : "blocked";
   return {
     answer,
     observations: state.observations ?? [],
@@ -28,6 +37,7 @@ export const mapGraphStateToOutput = (
     approvedInvocations: state.approvedInvocations,
     lastToolExecution: state.lastToolExecution,
     currentTaskFrame: state.currentTaskFrame,
+    finalizationPacket: state.finalizationPacket,
     blockedReason: state.blockedReason,
     terminalReason:
       state.terminalReason ??
@@ -37,21 +47,11 @@ export const mapGraphStateToOutput = (
           ? "failed_error"
           : state.blockedReason
             ? "blocked"
-            : answer
-              ? "completed"
-              : "blocked"),
+            : "blocked_missing_planner_terminal_decision"),
     contextBudget: state.contextBudget,
     errorMessage: state.errorMessage,
     errorSourceNodeId: state.errorSourceNodeId,
-    status: state.pendingApproval
-      ? "waiting_approval"
-      : state.errorMessage
-        ? "failed"
-        : state.blockedReason
-          ? "blocked"
-          : answer
-            ? "completed"
-            : "blocked",
+    status,
     iterationCount: state.iterationCount,
   };
 };

@@ -1,8 +1,8 @@
 # UIChat Mira Agent Runtime / Tooling SSOT
 
-> Status: current truth for `dev` after the 2026-07-21 working thread.
+> Status: current truth for `dev` after the 2026-07-22 working thread.
 >
-> Scope: Agent-visible tools, Harness exposure/ranking, approval boundaries, CodeGraph runtime ownership, Planner public narration, and provider compatibility.
+> Scope: Agent-visible tools, Harness exposure/ranking, approval boundaries, CodeGraph runtime ownership, Planner terminal ownership and public narration, Generate handoff, and provider compatibility.
 >
 > When older task cards, screenshots, chat history, or notes conflict with this file, this file wins until implementation and this file are updated together.
 
@@ -283,8 +283,28 @@ query
 toolId
 args
 question
+completionProof
+unresolvedGaps
 planPatch
 ```
+
+For `type: "answer"`, Planner must also submit a finalization packet:
+
+```json
+{
+  "type": "answer",
+  "reason": "Why the task is complete",
+  "completionProof": [
+    {
+      "criterion": "A concrete completion criterion",
+      "evidenceRefs": ["tool:0", "retrieval:1", "observation:2"]
+    }
+  ],
+  "unresolvedGaps": []
+}
+```
+
+The reference values come from the exact Evidence catalog supplied to Planner. The runtime validates that every reference exists and freezes the packet before Generate runs. A missing reference, empty proof, or non-empty `unresolvedGaps` makes the Planner decision invalid.
 
 Supported native structured paths stream JSON deltas so public `reason` narration can update while the decision is being generated.
 
@@ -307,6 +327,31 @@ Partial structured output may update public narration, but partial decisions are
 If native structured streaming fails before emitting any native delta, fallback may be used. If partial native JSON has already been emitted, a second independent JSON stream must not be concatenated onto it.
 
 Strict-schema synthetic `null` values for optional tool arguments are normalized back to omitted optional fields before Harness schema validation.
+
+### 5.1 Planner is the only semantic termination authority
+
+The terminal chain is:
+
+```text
+Evidence
+-> Planner decision
+-> validate and freeze finalization packet
+-> Generate renders only cited Evidence
+-> Evaluate checks delivery only
+-> output status comes from the Planner terminal type
+```
+
+- `answer` may become `completed` only after Generate successfully delivers it.
+- `ask_user` is delivered deterministically and becomes `waiting_user`.
+- `error` becomes a failure/blocking result through the error path.
+- `use_tool` and `retrieve` must continue the loop.
+- Schema-replan exhaustion, recoverable tool-failure exhaustion, and non-allow policy outcomes must not jump directly to Generate; they return to Planner or the explicit error path.
+
+Generate does not decide whether the task is complete. Its input contains the user goal/history budget, the frozen finalization packet, and only the Evidence records named by `completionProof.evidenceRefs`. Agent-execution tool instructions are excluded from Generate, and Generate cannot execute or simulate a tool call.
+
+Evaluate does not reassess Evidence completeness. It checks only whether the Planner terminal decision was delivered as a valid user-facing answer. A non-empty answer by itself is never evidence of completion, and the output mapper must not infer `completed` from answer text.
+
+If Generate emits an internal tool-call envelope or an empty response, delivery fails. That output neither executes a tool nor changes the Planner decision into a successful completion.
 
 ## 6. Provider compatibility boundary
 
@@ -346,6 +391,10 @@ A Cloudflare-hosted protocol gateway was discussed as an architectural option bu
 16. Do not trust CodeGraph candidates as Evidence until workspace source verification succeeds.
 17. Do not expose raw CodeGraph native tools to Planner.
 18. Do not execute partial Planner structured output.
+19. Keep Planner as the only semantic task-termination authority.
+20. Require and validate a frozen finalization packet for every Planner `answer`.
+21. Give Generate only the Evidence explicitly cited by the finalization packet; do not expose Agent tool instructions there.
+22. Keep Evaluate limited to delivery validation, and never infer completion from non-empty answer text.
 
 ## 8. Current validation notes
 
@@ -362,6 +411,9 @@ Implemented on `dev` in this working thread:
 - CodeGraph Agent runtime ownership changed to workspace-scoped reuse independent of Studio debug workspace.
 - Fake CodeGraph canned candidates removed; fixture candidates require explicit injection.
 - Planner native structured output streams public narration while preserving complete-decision validation.
+- Planner `answer` now carries a validated, frozen finalization packet with exact Evidence references.
+- Generate now uses a dedicated context budget and only materializes the packet's cited Evidence.
+- Evaluate now validates delivery only; task status is no longer inferred from non-empty answer text.
 
 Still requires real-environment verification:
 

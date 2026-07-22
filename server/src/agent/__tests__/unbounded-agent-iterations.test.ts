@@ -49,7 +49,7 @@ test("nextActionPlannerNode still invokes the task model after the legacy iterat
   const streamSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementation(async function* () {
-      yield '{"type":"answer","reason":"The accumulated evidence now covers the task."}';
+      yield '{"type":"answer","reason":"The accumulated evidence now covers the task.","completionProof":[{"criterion":"complete the task","evidenceRefs":[]}],"unresolvedGaps":[]}';
     });
 
   try {
@@ -59,7 +59,15 @@ test("nextActionPlannerNode still invokes the task model after the legacy iterat
     assert.deepEqual(patch.nextAction, {
       type: "answer",
       reason: "The accumulated evidence now covers the task.",
+      completionProof: [
+        {
+          criterion: "complete the task",
+          evidenceRefs: [],
+        },
+      ],
+      unresolvedGaps: [],
     });
+    assert.deepEqual(patch.finalizationPacket, patch.nextAction);
     assert.equal(patch.errorMessage, undefined);
   } finally {
     streamSpy.mockRestore();
@@ -87,6 +95,13 @@ test("Pi loop can continue beyond maxIterations until Planner chooses answer", a
         nextAction: {
           type: "answer" as const,
           reason: "The task is complete.",
+          completionProof: [
+            {
+              criterion: "collect enough evidence",
+              evidenceRefs: [],
+            },
+          ],
+          unresolvedGaps: [],
         },
       };
     },
@@ -129,4 +144,77 @@ test("Pi loop can continue beyond maxIterations until Planner chooses answer", a
   assert.equal(output.answer, "done");
   assert.equal(output.status, "completed");
   assert.notEqual(output.terminalReason, "planner_turn_limit");
+});
+
+test("Pi loop never enters Generate after schema replan exhaustion without a Planner terminal decision", async () => {
+  let plannerCalls = 0;
+  let generateCalls = 0;
+  const noOp = async () => ({});
+  const semantics: PiAgentLoopSemantics = {
+    prepareContext: noOp,
+    planner: async () => {
+      plannerCalls += 1;
+      if (plannerCalls === 1) {
+        return {
+          nextAction: {
+            type: "use_tool" as const,
+            toolId: "read_open",
+            args: { missing: "README.md" },
+            reason: "Try the requested read.",
+          },
+        };
+      }
+      return {
+        nextAction: {
+          type: "error" as const,
+          reason: "Recovery is exhausted.",
+        },
+      };
+    },
+    normalizeAndFreeze: async () => ({
+      schemaReplanDiagnostics: {
+        schemaError: "args.path is required",
+        toolId: "read_open",
+        attemptCount: 2,
+      },
+    }),
+    evaluatePolicy: noOp,
+    pauseForApproval: noOp,
+    retrieve: noOp,
+    executeTool: noOp,
+    appendEvidence: noOp,
+    generate: async () => {
+      generateCalls += 1;
+      return { answer: "Generate must not be reached." };
+    },
+    finalize: noOp,
+    finishWithError: async () => ({
+      errorMessage: "Recovery is exhausted.",
+      terminalReason: "planner_error",
+    }),
+  };
+
+  const output = await createPiAgentLoop(semantics).run({
+    runId: "run-schema-replan-terminal-truth",
+    threadId: "thread-schema-replan-terminal-truth",
+    userId: 1,
+    goal: {
+      id: "goal-schema-replan-terminal-truth",
+      text: "read README.md",
+      successCriteria: ["read README.md"],
+      constraints: [],
+      riskLevel: "low",
+    },
+    messages: [
+      {
+        role: "user",
+        content: "read README.md",
+        parts: [{ type: "text", text: "read README.md" }],
+      },
+    ],
+  });
+
+  assert.equal(plannerCalls, 2);
+  assert.equal(generateCalls, 0);
+  assert.equal(output.status, "failed");
 });

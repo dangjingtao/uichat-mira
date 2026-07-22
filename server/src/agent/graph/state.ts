@@ -10,6 +10,7 @@ import type { AgentIntentEmbeddingConfig, ToolIntentResult } from "../intent/ind
 import type {
   AgentGraphInput,
   AgentGraphOutput,
+  AgentFinalizationPacket,
   AgentGoal,
   AgentNextAction,
   AgentObservation,
@@ -39,6 +40,7 @@ export const AgentGraphStateAnnotation = Annotation.Root({
   toolIntent: Annotation<ToolIntentResult | undefined>,
   toolExposure: Annotation<AgentToolExposureState | undefined>,
   nextAction: Annotation<AgentNextAction | undefined>,
+  finalizationPacket: Annotation<AgentFinalizationPacket | undefined>,
   pendingApproval: Annotation<AgentGraphOutput["pendingApproval"] | undefined>,
   policyDecision: Annotation<AgentGraphOutput["policyDecision"] | undefined>,
   pendingToolCall: Annotation<AgentGraphOutput["pendingToolCall"] | undefined>,
@@ -131,6 +133,7 @@ export const createInitialAgentGraphState = (
     toolExposure: undefined,
     pendingToolCall: input.pendingToolCall,
     nextAction: undefined,
+    finalizationPacket: checkpointInput.finalizationPacket,
     lastToolExecution: checkpointInput.lastToolExecution,
     pendingEvidenceObservation: undefined,
     pendingToolExecution: undefined,

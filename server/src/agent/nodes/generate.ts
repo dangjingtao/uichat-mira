@@ -10,6 +10,7 @@ import { providerProxyService } from "@/services/provider-proxy.service/index";
 import { contextBudgetService } from "@/services/context-budget/index";
 import { agentGenerateTextRunnable } from "../runnables";
 import { getEvidencePayload } from "../evidence";
+import { materializeFinalizationEvidence } from "../finalization";
 import { emitStepNode } from "../node-runtime";
 import {
   createObservation,
@@ -19,21 +20,6 @@ import type {
   AgentNodeState,
   EmitAgentExecutionNode,
 } from "../node-runtime";
-
-const CONTEXT_PREVIEW_LIMIT = 48_000;
-
-const clipText = (value: string, limit: number) =>
-  value.length <= limit
-    ? value
-    : `${value.slice(0, Math.max(0, limit - 48)).trimEnd()}\n...[context clipped]`;
-
-const safeStringify = (value: unknown) => {
-  try {
-    return JSON.stringify(value, null, 2) ?? "";
-  } catch {
-    return "[unserializable]";
-  }
-};
 
 type ProtocolLeakReason =
   | "function_calls_xml"
@@ -92,9 +78,6 @@ const detectProtocolLeak = (answer: string): ProtocolLeakReason | undefined => {
   return undefined;
 };
 
-const PROTOCOL_LEAK_FALLBACK =
-  "本轮模型生成了内部工具调用格式，已阻止其显示。这段文本没有触发新的工具执行，请重试。";
-
 const buildGenerateInstructionMessages = (
   state: AgentNodeState,
 ): NormalizedChatMessage[] => [
@@ -102,100 +85,43 @@ const buildGenerateInstructionMessages = (
     role: "system",
     content: [
       "你现在处于 Agent 的最终回答阶段，不是 Planner。",
+      "Planner 已经完成唯一的任务完成判断。你只能依据 FINALIZATION PACKET 和其引用的 EVIDENCE REF 组织用户回答。",
       "请直接面向用户回答，不要输出 nextAction、toolId、args、pendingToolCall、function_calls 或其他内部协议。",
-      "优先使用本轮 Agent 已实际执行得到的真实工具结果、检索结果和连续运行上下文。",
-      "Evidence summary 只是辅助描述，不是第二套事实裁判：真实 execution.status=completed 和真实 tool result 不得因为 summary.status=partial/generic/truncated 而被当成不存在。",
-      "若真实结果本身明确包含失败、超时、截断、审批等待或不可读信息，请按结果本身如实说明，不要编造。",
-      state.pendingApproval
-        ? "当前仍有工具等待审批；只能说明审批状态，不能假装该工具已经执行。"
-        : "当前没有审批等待时，请基于已有真实结果正常回答，不要额外自我否定。",
+      "不要自行选择未引用证据，不要重新判断任务是否完成，不要发起或模拟工具调用。",
+      "若引用证据明确包含失败、超时、截断或不可读信息，请按证据本身如实说明，不要编造。",
+      `FINALIZATION PACKET:\n${JSON.stringify(state.finalizationPacket, null, 2)}`,
     ].join("\n"),
     parts: [],
   },
 ];
-
-const buildToolSummaryContext = (state: AgentNodeState) => {
-  const evidence = getEvidencePayload(state);
-  const executions = evidence.toolExecutions;
-  if (executions.length === 0) {
-    return undefined;
-  }
-
-  const text = [
-    "AGENT TOOL EXECUTION RECORDS",
-    "These are compact execution records. Canonical tool result payloads may also be present in the surrounding runtime context.",
-    ...executions.map((execution, index) =>
-      [
-        `#${index + 1}`,
-        `toolId=${execution.toolId}`,
-        `executionStatus=${execution.status}`,
-        `args=${safeStringify(execution.args)}`,
-        execution.errorMessage ? `error=${execution.errorMessage}` : "",
-        execution.summary ? `summary=${safeStringify(execution.summary)}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    ),
-  ].join("\n\n");
-
-  return clipText(text, CONTEXT_PREVIEW_LIMIT);
-};
-
-const buildRetrievalContext = (state: AgentNodeState) => {
-  const evidence = getEvidencePayload(state);
-  if (evidence.retrievals.length === 0) {
-    return undefined;
-  }
-
-  const text = [
-    "AGENT RETRIEVAL RESULTS",
-    ...evidence.retrievals.map((retrieval, index) =>
-      [
-        `#${index + 1} query=${retrieval.query}`,
-        ...retrieval.chunks.map(
-          (chunk) => `${chunk.documentName}\n${chunk.content}`,
-        ),
-      ].join("\n\n"),
-    ),
-  ].join("\n\n");
-
-  return clipText(text, CONTEXT_PREVIEW_LIMIT);
-};
-
-const toSystemMessage = (content: string): NormalizedChatMessage => ({
-  role: "system",
-  content,
-  parts: [{ type: "text", text: content }],
-});
 
 const getGenerateRequestContextMessages = (state: AgentNodeState) =>
   (state.requestContextMessages ?? []).filter(
     (message) => message.requestContextScope !== "agent-execution",
   );
 
-const buildGenerateMessages = (
+const buildGenerateContextBudget = (
   state: AgentNodeState,
-): NormalizedChatMessage[] => {
-  const toolContext = buildToolSummaryContext(state);
-  const retrievalContext = buildRetrievalContext(state);
-
-  return [
-    ...getGenerateRequestContextMessages(state),
-    ...buildGenerateInstructionMessages(state),
-    ...(toolContext ? [toSystemMessage(toolContext)] : []),
-    ...(retrievalContext ? [toSystemMessage(retrievalContext)] : []),
-    ...state.messages,
-  ];
-};
-
-const buildGenerateContextBudget = (state: AgentNodeState) =>
+  evidenceMessages: NormalizedChatMessage[],
+  invocation: ReturnType<typeof providerProxyService.describeChatInvocation>,
+) =>
   contextBudgetService.pack({
-    policy: state.knowledgeBaseId ? "rag-chat" : "plain-chat",
+    policy: "agent-generate",
     roleType: "llm",
+    providerCode: invocation.providerCode,
+    model: invocation.model,
+    params: {
+      ...invocation.params,
+      ...(state.params ?? {}),
+    },
     sections: {
       prefaceMessages: getGenerateRequestContextMessages(state),
       instructionMessages: buildGenerateInstructionMessages(state),
-      payloads: [],
+      payloads: evidenceMessages.map((message, index) => ({
+        id: `finalization-evidence-${index}`,
+        messages: [message],
+        metadata: { source: "planner_finalization" },
+      })),
       historyMessages: state.messages.slice(0, -1),
       latestUserMessage: {
         role: "user",
@@ -203,28 +129,6 @@ const buildGenerateContextBudget = (state: AgentNodeState) =>
       },
     },
   });
-
-const buildEmptyAnswerFallback = (state: AgentNodeState) => {
-  const evidence = getEvidencePayload(state);
-  const latestRetrieval = evidence.retrievals.at(-1);
-  const firstChunk = latestRetrieval?.chunks[0];
-  if (firstChunk?.content?.trim()) {
-    return `模型没有生成有效回答。当前至少有这条真实检索结果可用：${firstChunk.documentName}：${clipText(firstChunk.content.trim(), 600)}`;
-  }
-
-  const latestCompletedTool = [...evidence.toolExecutions]
-    .reverse()
-    .find((execution) => execution.status === "completed");
-  if (latestCompletedTool) {
-    const findings = latestCompletedTool.summary?.keyFindings?.filter(Boolean) ?? [];
-    if (findings.length > 0) {
-      return `模型没有生成有效回答。工具已实际执行完成，当前可用结果摘要：${findings.join("；")}`;
-    }
-    return "模型没有生成有效回答，但本轮工具已经实际执行完成。请重试生成回答。";
-  }
-
-  return "模型没有生成有效回答，请重试。";
-};
 
 export const generateNode = async (
   state: AgentNodeState,
@@ -277,8 +181,45 @@ export const generateNode = async (
     };
   }
 
-  const budget = buildGenerateContextBudget(state);
-  const generationMessages = buildGenerateMessages(state);
+  if (state.nextAction?.type !== "answer" || !state.finalizationPacket) {
+    const errorMessage =
+      "Generate requires a frozen Planner answer finalization packet.";
+    return {
+      errorMessage,
+      errorSourceNodeId: "agent-generate",
+      blockedReason: errorMessage,
+    };
+  }
+
+  const materializedEvidence = materializeFinalizationEvidence({
+    packet: state.finalizationPacket,
+    evidence: getEvidencePayload(state),
+  });
+  if (materializedEvidence.missingRefs.length > 0) {
+    const errorMessage = `Generate could not resolve Planner Evidence references: ${materializedEvidence.missingRefs.join(", ")}`;
+    return {
+      errorMessage,
+      errorSourceNodeId: "agent-generate",
+      blockedReason: errorMessage,
+    };
+  }
+
+  const invocationResolution = providerProxyService.describeChatInvocation(
+    "default",
+    [
+      ...buildGenerateInstructionMessages(state),
+      {
+        role: "user",
+        content: getLatestUserQuestion(state.messages) || state.goal.text,
+      },
+    ],
+  );
+  const budget = buildGenerateContextBudget(
+    state,
+    materializedEvidence.messages,
+    invocationResolution,
+  );
+  const generationMessages = budget.messages;
   const generationInvocation = providerProxyService.describeChatInvocation(
     "default",
     generationMessages,
@@ -325,10 +266,12 @@ export const generateNode = async (
 
   const protocolLeakReason = detectProtocolLeak(answer);
   if (protocolLeakReason) {
+    const errorMessage =
+      "Generation model returned an internal tool-call protocol instead of a user answer.";
     const observation = createObservation({
       runId: state.runId,
       stepId: "generate",
-      status: "partial",
+      status: "failed",
       facts: [
         "Blocked an internal tool-call protocol envelope from the user-facing answer; the envelope did not trigger tool execution.",
       ],
@@ -338,11 +281,11 @@ export const generateNode = async (
       runId: state.runId,
       nodeId: "agent-generate",
       nodeType: "generate",
-      phase: "done",
+      phase: "error",
       label: "生成回答",
-      summary: "已阻止内部工具调用协议文本显示",
+      summary: "Generation LLM 返回了内部工具调用协议，回答交付失败",
       details: {
-        answerLength: Array.from(PROTOCOL_LEAK_FALLBACK).length,
+        answerLength: 0,
         invocation: generationInvocation,
         contextBudget: budget.audit,
         messageCount: generationMessages.length,
@@ -355,30 +298,31 @@ export const generateNode = async (
     });
 
     return {
-      answer: PROTOCOL_LEAK_FALLBACK,
       observations: [...(state.observations ?? []), observation],
       contextBudget: budget.audit,
-      schemaReplanDiagnostics: undefined,
-      generatedAnswerEmptyFallback: false,
+      errorMessage,
+      errorSourceNodeId: "agent-generate",
+      blockedReason: errorMessage,
     };
   }
 
   if (!answer.trim()) {
-    const fallbackAnswer = buildEmptyAnswerFallback(state);
+    const errorMessage = "Generation model returned an empty user answer.";
     const observation = createObservation({
       runId: state.runId,
       stepId: "generate",
-      status: "partial",
-      facts: ["Generated answer was empty; a minimal fallback was returned."],
+      status: "failed",
+      facts: ["Generation model returned an empty user answer."],
+      errorMessage,
     });
 
     await emitStepNode(emit, {
       runId: state.runId,
       nodeId: "agent-generate",
       nodeType: "generate",
-      phase: "done",
+      phase: "error",
       label: "生成回答",
-      summary: "模型回答为空，已返回最小保底回答",
+      summary: "Generation LLM 回答为空，回答交付失败",
       details: {
         answerLength: 0,
         invocation: generationInvocation,
@@ -389,11 +333,11 @@ export const generateNode = async (
     });
 
     return {
-      answer: fallbackAnswer,
       observations: [...(state.observations ?? []), observation],
       contextBudget: budget.audit,
-      schemaReplanDiagnostics: undefined,
-      generatedAnswerEmptyFallback: true,
+      errorMessage,
+      errorSourceNodeId: "agent-generate",
+      blockedReason: errorMessage,
     };
   }
 

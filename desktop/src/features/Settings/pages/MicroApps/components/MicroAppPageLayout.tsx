@@ -54,7 +54,7 @@ export default function MicroAppPageLayout({
                 >
                   <ArrowLeft className="h-4.5 w-4.5" />
                 </button>
-                <h3 className="text-xl font-semibold text-text-primary">{title}</h3>
+                <h3 className="font-serif text-xl font-semibold text-text-primary">{title}</h3>
               </div>
               {description ? (
                 <p className="max-w-2xl text-sm leading-6 text-text-secondary">

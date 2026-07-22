@@ -1,12 +1,9 @@
 /**
- * 评估节点：检查 Agent 最终回答是否基于真实证据，并生成评估观察。
+ * 评估节点：只检查 Planner 终止决定是否成功交付。
+ * 是否完成任务由 Planner 独占判断；本节点不得重新做语义完成判断。
  */
-import { getEvidencePayload } from "../evidence";
 import { emitStepNode } from "../node-runtime";
-import {
-  answerClaimsUnverifiedObservation,
-  createObservation,
-} from "./shared";
+import { createObservation } from "./shared";
 import type { AgentNodeState, EmitAgentExecutionNode } from "../node-runtime";
 
 export const evaluateNode = async (
@@ -14,14 +11,12 @@ export const evaluateNode = async (
   emit?: EmitAgentExecutionNode,
 ): Promise<Partial<AgentNodeState>> => {
   const answer = state.answer?.trim() ?? "";
-  const evidence = getEvidencePayload(state);
-  const hasCompletedToolEvidence = evidence.toolExecutions.some(
-    (execution) => execution.status === "completed" && typeof execution.result !== "undefined",
-  );
-  const hasRetrievalEvidence = evidence.retrievals.some(
-    (retrieval) => retrieval.chunkCount > 0,
-  );
-  const hasGroundingEvidence = hasCompletedToolEvidence || hasRetrievalEvidence;
+  const plannerTerminalType =
+    state.nextAction?.type === "answer" || state.nextAction?.type === "ask_user"
+      ? state.nextAction.type
+      : undefined;
+  const hasRequiredFinalization =
+    plannerTerminalType === "ask_user" || Boolean(state.finalizationPacket);
   await emitStepNode(emit, {
     runId: state.runId,
     nodeId: "agent-evaluate",
@@ -31,14 +26,14 @@ export const evaluateNode = async (
     summary: "正在检查 Agent 执行结果",
   });
 
-  const ok =
-    answer.length > 0 &&
-    !(answerClaimsUnverifiedObservation(answer) && !hasGroundingEvidence);
+  const ok = answer.length > 0 && Boolean(plannerTerminalType) && hasRequiredFinalization;
   const blockedReason =
     answer.length === 0
-      ? "Agent run did not produce an answer."
-      : answerClaimsUnverifiedObservation(answer) && !hasGroundingEvidence
-        ? "Agent answer claimed external or workspace observations without grounded evidence."
+      ? "Planner terminal decision was not delivered as a user answer."
+      : !plannerTerminalType
+        ? "Evaluate received no Planner terminal decision."
+        : !hasRequiredFinalization
+          ? "Planner answer finalization packet is missing."
         : undefined;
   const observation = createObservation({
     runId: state.runId,
@@ -46,7 +41,7 @@ export const evaluateNode = async (
     status: ok ? "ok" : "failed",
     facts: [
       ok
-        ? "Agent run produced a final answer."
+        ? `Planner ${plannerTerminalType} decision was delivered successfully.`
         : blockedReason ?? "Agent evaluation failed.",
     ],
     ...(ok || !blockedReason ? {} : { errorMessage: blockedReason }),
@@ -58,11 +53,14 @@ export const evaluateNode = async (
     nodeType: "evaluate",
     phase: ok ? "done" : "error",
     label: "检查结果",
-    summary: ok ? "Agent 执行已完成" : "Agent 结果未通过证据检查",
+    summary: ok
+      ? plannerTerminalType === "ask_user"
+        ? "Planner 澄清问题已交付，等待用户输入"
+        : "Planner 最终回答决定已成功交付"
+      : "Planner 终止决定未能成功交付",
     details: {
-      hasCompletedToolEvidence,
-      hasRetrievalEvidence,
-      hasGroundingEvidence,
+      plannerTerminalType: plannerTerminalType ?? null,
+      hasRequiredFinalization,
       blockedReason: blockedReason ?? null,
     },
   });
@@ -70,11 +68,15 @@ export const evaluateNode = async (
   return {
     observations: [...(state.observations ?? []), observation],
     ...(ok
-      ? { terminalReason: "completed" }
+      ? {
+          terminalReason:
+            plannerTerminalType === "ask_user" ? "waiting_user" : "completed",
+        }
       : {
           blockedReason,
-          terminalReason:
-            answer.length === 0 ? "blocked_no_answer" : "blocked_grounding_check",
+          errorMessage: blockedReason,
+          errorSourceNodeId: "agent-evaluate",
+          terminalReason: "failed_delivery",
         }),
   };
 };

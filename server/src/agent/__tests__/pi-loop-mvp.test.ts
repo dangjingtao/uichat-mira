@@ -176,24 +176,31 @@ test("planner receives accumulated execution history and continues after read st
   }
   assert.equal(result.nextAction.toolId, "edit_file");
 
-  const payload = JSON.parse(capturedMessages.at(-1)?.content ?? "{}") as {
-    completionContract?: { originalGoal?: string; completionCriteria?: string[] };
-    observationContext?: {
-      executionHistory?: Array<{ toolId?: string }>;
-      evidenceHistory?: Array<{ actionTaken?: string }>;
-    };
-  };
+  const payloads = capturedMessages
+    .map((message) => {
+      try {
+        return JSON.parse(message.content) as {
+          completionContract?: { originalGoal?: string; completionCriteria?: string[] };
+          continuousAgentContextInjected?: boolean;
+        };
+      } catch {
+        return undefined;
+      }
+    })
+    .filter(Boolean);
+  const completionPayload = payloads.find(
+    (candidate) => candidate?.completionContract?.originalGoal,
+  );
+  const continuousContext = capturedMessages.find((message) =>
+    message.content.includes("CONTINUOUS AGENT LOOP CONTEXT"),
+  )?.content ?? "";
 
-  assert.equal(payload.completionContract?.originalGoal, compoundRequest);
-  assert.equal(payload.observationContext?.executionHistory?.length, 2);
-  assert.deepEqual(
-    payload.observationContext?.executionHistory?.map((item) => item.toolId),
-    ["read_open", "read_open"],
-  );
-  assert.deepEqual(
-    payload.observationContext?.evidenceHistory?.map((item) => item.actionTaken),
-    ["Opened file README.md.", "Opened file package.json."],
-  );
+  assert.equal(completionPayload?.completionContract?.originalGoal, compoundRequest);
+  assert.equal(completionPayload?.continuousAgentContextInjected, true);
+  assert.match(continuousContext, /TURN 1[\s\S]*read_open[\s\S]*README\.md/);
+  assert.match(continuousContext, /TURN 2[\s\S]*read_open[\s\S]*package\.json/);
+  assert.match(continuousContext, /Opened file README\.md\./);
+  assert.match(continuousContext, /Opened file package\.json\./);
   assert.equal(
     result.currentTaskFrame?.coveredProgress?.includes("Opened file README.md."),
     true,

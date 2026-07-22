@@ -15,7 +15,13 @@ import type { AssistantExecutionNodeEvent } from "@/services/chat-stream-events"
 const buildAssistantMetadata = (input: {
   runId: string;
   traceId: string;
-  status: "running" | "completed" | "failed" | "blocked" | "waiting_approval";
+  status:
+    | "running"
+    | "completed"
+    | "failed"
+    | "blocked"
+    | "waiting_approval"
+    | "waiting_user";
   pendingApproval?: {
     id: string;
     stepId: string;
@@ -178,7 +184,13 @@ export const persistAgentAssistantState = (input: {
     assistantMessageId?: string;
     assistantParentId?: string | null;
   };
-  status: "running" | "completed" | "failed" | "blocked" | "waiting_approval";
+  status:
+    | "running"
+    | "completed"
+    | "failed"
+    | "blocked"
+    | "waiting_approval"
+    | "waiting_user";
   content: string;
   pendingApproval?: AgentApprovalRequest;
   blockedReason?: string;
@@ -402,6 +414,7 @@ const executePreparedApprovedAgentRunResume = async (
     contextBudget: output.contextBudget,
     blockedReason: output.blockedReason,
     terminalReason: output.terminalReason,
+    finalizationPacket: output.finalizationPacket,
     approvedInvocations: output.approvedInvocations ?? approvedInvocations,
     // Resume output follows the same compatibility rule: no execution may be
     // derived from selectedToolId.

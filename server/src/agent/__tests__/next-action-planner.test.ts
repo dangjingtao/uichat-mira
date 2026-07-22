@@ -622,7 +622,10 @@ test("buildNextActionPlannerMessages only uses toolExposure as the planner-visib
     maxIterations: 3,
   });
 
-  const payload = JSON.parse(String(messages[1]?.content ?? "{}")) as {
+  const payloadMessage = messages.find((message) =>
+    String(message.content).includes('"recentConversationHistory"'),
+  );
+  const payload = JSON.parse(String(payloadMessage?.content ?? "{}")) as {
     toolExposure: {
       exposedTools: string[];
       toolMeta: Array<{ toolId: string }>;
@@ -724,6 +727,22 @@ test("buildNextActionPlannerMessages keeps a bounded recent user and assistant h
   assert.deepEqual(payload.recentConversationHistory, [
     {
       role: "user",
+      content: "第一轮无关的旧问题",
+    },
+    {
+      role: "assistant",
+      content: "第一轮无关的旧回答",
+    },
+    {
+      role: "user",
+      content: "先看审批恢复这块",
+    },
+    {
+      role: "assistant",
+      content: "好的，我先去找相关实现。",
+    },
+    {
+      role: "user",
       content: "我找到 resume.ts 了",
     },
     {
@@ -753,7 +772,7 @@ test("nextActionPlannerNode returns answer action from task model JSON", async (
   const streamSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementation(async function* () {
-      yield '{"type":"answer","reason":"Evidence is already sufficient."}';
+      yield '{"type":"answer","reason":"Evidence is already sufficient.","completionProof":[{"criterion":"answer the user","evidenceRefs":[]}],"unresolvedGaps":[]}';
 
     });
 
@@ -763,6 +782,18 @@ test("nextActionPlannerNode returns answer action from task model JSON", async (
       nextAction: {
         type: "answer",
         reason: "Evidence is already sufficient.",
+        completionProof: [
+          { criterion: "answer the user", evidenceRefs: [] },
+        ],
+        unresolvedGaps: [],
+      },
+      finalizationPacket: {
+        type: "answer",
+        reason: "Evidence is already sufficient.",
+        completionProof: [
+          { criterion: "answer the user", evidenceRefs: [] },
+        ],
+        unresolvedGaps: [],
       },
     });
     assert.equal(streamSpy.mock.calls.length, 1);
@@ -942,11 +973,13 @@ test("nextActionPlannerNode keeps a standalone first-turn goal authoritative whe
 test("parseNextActionPlannerOutput accepts fenced JSON output", () => {
   assert.deepEqual(
     parseNextActionPlannerOutput(
-      '```json\n{"type":"answer","reason":"Evidence is already sufficient."}\n```',
+      '```json\n{"type":"answer","reason":"Evidence is already sufficient.","completionProof":[{"criterion":"answer the user","evidenceRefs":[]}],"unresolvedGaps":[]}\n```',
     ),
     {
       type: "answer",
       reason: "Evidence is already sufficient.",
+      completionProof: [{ criterion: "answer the user", evidenceRefs: [] }],
+      unresolvedGaps: [],
     },
   );
 });
@@ -986,11 +1019,13 @@ test("parseNextActionPlannerOutput accepts think-prefixed JSON output", () => {
 test("parseNextActionPlannerOutput accepts think-prefixed answer JSON output", () => {
   assert.deepEqual(
     parseNextActionPlannerOutput(
-      '<think>Evidence is enough.</think>\n{"type":"answer","reason":"Evidence is already sufficient."}',
+      '<think>Evidence is enough.</think>\n{"type":"answer","reason":"Evidence is already sufficient.","completionProof":[{"criterion":"answer the user","evidenceRefs":[]}],"unresolvedGaps":[]}',
     ),
     {
       type: "answer",
       reason: "Evidence is already sufficient.",
+      completionProof: [{ criterion: "answer the user", evidenceRefs: [] }],
+      unresolvedGaps: [],
     },
   );
 });
@@ -1040,14 +1075,8 @@ test("parseNextActionPlannerOutput defaults reason for retrieve output", () => {
   );
 });
 
-test("parseNextActionPlannerOutput defaults reason for answer output", () => {
-  assert.deepEqual(
-    parseNextActionPlannerOutput('{"type":"answer"}'),
-    {
-      type: "answer",
-      reason: "Planner selected final answer.",
-    },
-  );
+test("parseNextActionPlannerOutput rejects answer output without completion proof", () => {
+  assert.equal(parseNextActionPlannerOutput('{"type":"answer"}'), null);
 });
 
 test("parseNextActionPlannerOutput accepts ask_user output and defaults the reason", () => {
@@ -1162,8 +1191,9 @@ test("nextActionPlannerNode uses bounded replan prompt when schema diagnostics e
 
     const plannerMessages = streamSpy.mock.calls[0]?.[0] ?? [];
     assert.match(String(plannerMessages[0]?.content ?? ""), /bounded replan/i);
-    assert.match(String(plannerMessages[1]?.content ?? ""), /args\.limit is not allowed/);
-    assert.match(String(plannerMessages[1]?.content ?? ""), /allowedTools/);
+    const plannerPrompt = plannerMessages.map((message) => message.content).join("\n");
+    assert.match(plannerPrompt, /args\.limit is not allowed/);
+    assert.match(plannerPrompt, /allowedTools/);
   } finally {
     streamSpy.mockRestore();
   }
@@ -1375,7 +1405,7 @@ test("nextActionPlannerNode keeps missing-reason use_tool output as a valid acti
     assert.ok(doneEvent);
     assert.deepEqual(
       (doneEvent?.details as Record<string, unknown>)?.parseWarnings,
-      ["missing_reason_defaulted"],
+      ["missing_reason_defaulted", "planner_task_plan_missing_on_initial_turn"],
     );
     assert.equal(
       (doneEvent?.details as Record<string, unknown>)?.parseErrorReason,
@@ -1431,7 +1461,7 @@ test("nextActionPlannerNode prompt allows ask_user output and includes progressi
   const streamSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementation(async function* () {
-      yield '{"type":"answer","reason":"Enough evidence."}';
+      yield '{"type":"answer","reason":"Enough evidence.","completionProof":[{"criterion":"answer the user","evidenceRefs":[]}],"unresolvedGaps":[]}';
     });
 
   try {
@@ -1514,7 +1544,10 @@ test("nextActionPlannerNode bounded replan prompt includes ask_user and recovery
       String(plannerMessages[0]?.content ?? ""),
       /改参数、换工具、ask_user，或在确实无法继续时输出明确终局/,
     );
-    assert.match(String(plannerMessages[1]?.content ?? ""), /remainingRecoveryAttempts/);
+    assert.match(
+      plannerMessages.map((message) => message.content).join("\n"),
+      /remainingRecoveryAttempts/,
+    );
   } finally {
     streamSpy.mockRestore();
   }
@@ -1837,7 +1870,10 @@ test("nextActionPlannerNode writes missing_reason_defaulted warning into structu
 
   assert.ok(debugLine);
   assert.equal(debugLine?.selectedActionType, "retrieve");
-  assert.deepEqual(debugLine?.parseWarnings, ["missing_reason_defaulted"]);
+  assert.deepEqual(debugLine?.parseWarnings, [
+    "missing_reason_defaulted",
+    "planner_task_plan_missing_on_initial_turn",
+  ]);
   assert.equal(debugLine?.parseErrorReason, undefined);
   assert.equal(
     debugLine?.reason,
@@ -1925,8 +1961,12 @@ test("nextActionPlannerNode falls back when task model returns schema-invalid us
   }
 });
 
-test("nextActionPlannerNode falls back without calling task model when iteration budget is exhausted", async () => {
-  const streamSpy = vi.spyOn(providerProxyService, "streamTaskChatText");
+test("nextActionPlannerNode keeps calling the task model beyond the legacy iteration budget", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"ask_user","question":"Which file should I inspect?","reason":"The target is missing."}';
+    });
 
   try {
     const patch = await nextActionPlannerNode(
@@ -1937,14 +1977,12 @@ test("nextActionPlannerNode falls back without calling task model when iteration
     );
     assert.deepEqual(patch, {
       nextAction: {
-        type: "error",
-        reason: "Planner reached the iteration limit and must stop.",
+        type: "ask_user",
+        question: "Which file should I inspect?",
+        reason: "The target is missing.",
       },
-      errorMessage: "Planner reached the iteration limit and must stop.",
-      blockedReason: "Planner reached the iteration limit and must stop.",
-      errorSourceNodeId: "agent-next-action-planner",
     });
-    assert.equal(streamSpy.mock.calls.length, 0);
+    assert.equal(streamSpy.mock.calls.length, 1);
   } finally {
     streamSpy.mockRestore();
   }
@@ -2021,10 +2059,11 @@ test("nextActionPlannerNode writes decision trace and includes prompt context fo
 
     assert.equal(streamSpy.mock.calls.length, 1);
     const plannerMessages = streamSpy.mock.calls[0]?.[0] ?? [];
-    assert.equal(plannerMessages.length, 2);
-    assert.match(String(plannerMessages[1]?.content ?? ""), /"toolExposure"/);
-    assert.match(String(plannerMessages[1]?.content ?? ""), /"exposedTools"/);
-    assert.doesNotMatch(String(plannerMessages[1]?.content ?? ""), /"plan"/);
+    assert.equal(plannerMessages.length, 3);
+    const plannerPrompt = plannerMessages.map((message) => message.content).join("\n");
+    assert.match(plannerPrompt, /"toolExposure"/);
+    assert.match(plannerPrompt, /"exposedTools"/);
+    assert.doesNotMatch(plannerPrompt, /"plan"/);
 
     const doneEvent = events.find(
       (event) =>
@@ -2149,16 +2188,17 @@ test("task model can select an exposed projected MCP capability", async () => {
   }
 });
 
-test("nextActionPlannerNode only writes nextAction in its state patch", async () => {
+test("nextActionPlannerNode writes the answer action and frozen finalization packet", async () => {
   const streamSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementation(async function* () {
-      yield '{"type":"answer","reason":"Enough evidence."}';
+      yield '{"type":"answer","reason":"Enough evidence.","completionProof":[{"criterion":"answer the user","evidenceRefs":[]}],"unresolvedGaps":[]}';
     });
 
   try {
     const patch = await nextActionPlannerNode(createState());
-    assert.deepEqual(Object.keys(patch), ["nextAction"]);
+    assert.deepEqual(Object.keys(patch), ["nextAction", "finalizationPacket"]);
+    assert.deepEqual(patch.finalizationPacket, patch.nextAction);
   } finally {
     streamSpy.mockRestore();
   }

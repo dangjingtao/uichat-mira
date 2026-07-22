@@ -72,6 +72,7 @@ export const createAndRunAgent = async (
       contextBudget: output.contextBudget,
       blockedReason: output.blockedReason,
       terminalReason: output.terminalReason,
+      finalizationPacket: output.finalizationPacket,
       // Execution must still be derived from pendingToolCall, not this field.
       selectedToolId: output.selectedToolId ?? output.pendingApproval?.toolId,
       pendingToolCall: output.pendingToolCall,

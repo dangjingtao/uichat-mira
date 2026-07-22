@@ -143,6 +143,28 @@ export interface AgentEvidencePayload {
   latestSummary?: AgentEvidenceSummary;
 }
 
+export type AgentEvidenceReference =
+  | `tool:${number}`
+  | `retrieval:${number}`
+  | `observation:${number}`;
+
+export interface AgentCompletionProof {
+  criterion: string;
+  evidenceRefs: AgentEvidenceReference[];
+}
+
+/**
+ * Frozen semantic handoff from Planner to Generate.
+ * Planner owns the completion decision; Generate may only render this decision
+ * from the explicitly referenced Evidence records.
+ */
+export interface AgentFinalizationPacket {
+  type: "answer";
+  reason: string;
+  completionProof: AgentCompletionProof[];
+  unresolvedGaps: string[];
+}
+
 export interface AgentReadListEvidenceData {
   kind: "read_list";
   path: string;
@@ -324,10 +346,7 @@ export interface AgentEvidenceSummary {
 }
 
 export type AgentNextAction =
-  | {
-      type: "answer";
-      reason: string;
-    }
+  | AgentFinalizationPacket
   | {
       type: "retrieve";
       query: string;
@@ -434,6 +453,12 @@ export interface PlannerObservationContext {
   currentTaskFrame?: CurrentTaskFrame;
   latestObservation?: AgentExecutionObservation;
   recentObservations: AgentExecutionObservation[];
+  evidenceCatalog: Array<{
+    ref: AgentEvidenceReference;
+    source: "tool" | "retrieval" | "observation";
+    status: string;
+    label: string;
+  }>;
   latestEvidenceSummary?: AgentEvidenceSummary;
   latestToolCall?: {
     toolId: string;
@@ -477,6 +502,7 @@ export interface AgentRun {
   lastToolExecution?: AgentToolExecutionResult;
   evidence?: AgentEvidencePayload;
   currentTaskFrame?: CurrentTaskFrame;
+  finalizationPacket?: AgentFinalizationPacket;
   assistantMessageId?: string;
   assistantParentId?: string | null;
   runtimeInput?: Pick<
@@ -517,7 +543,12 @@ export interface AgentRunStore {
     patch: Partial<Omit<AgentRun, "id" | "createdAt" | "status">> & {
       status: Extract<
         AgentRun["status"],
-        "completed" | "failed" | "blocked" | "cancelled" | "waiting_approval"
+        | "completed"
+        | "failed"
+        | "blocked"
+        | "cancelled"
+        | "waiting_approval"
+        | "waiting_user"
       >;
     },
   ): AgentRun;
@@ -547,6 +578,7 @@ export interface AgentGraphInput {
   selectedToolId?: string;
   pendingToolCall?: AgentToolCallRequest;
   currentTaskFrame?: CurrentTaskFrame;
+  finalizationPacket?: AgentFinalizationPacket;
   maxIterations?: number;
   onExecutionNode?: (
     event: AssistantExecutionNodeEvent,
@@ -571,6 +603,7 @@ export interface AgentGraphOutput {
   approvedInvocations?: AgentApprovedInvocation[];
   lastToolExecution?: AgentToolExecutionResult;
   currentTaskFrame?: CurrentTaskFrame;
+  finalizationPacket?: AgentFinalizationPacket;
   blockedReason?: string;
   terminalReason?: string;
   errorMessage?: string;
@@ -578,6 +611,6 @@ export interface AgentGraphOutput {
   contextBudget?: ContextBudgetAudit;
   status: Extract<
     AgentRunStatus,
-    "completed" | "failed" | "blocked" | "waiting_approval"
+    "completed" | "failed" | "blocked" | "waiting_approval" | "waiting_user"
   >;
 }

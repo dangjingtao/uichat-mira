@@ -124,6 +124,11 @@ export const createHarnessAwareGenerateNode = (
   generate: GenerateNodeHandler = baseGenerateNode,
 ): GenerateNodeHandler =>
   async (state, emit) => {
+    // Planner finalization references are the only evidence selection contract
+    // for final answers. Do not prepend the legacy all-tools projection.
+    if (state.finalizationPacket) {
+      return generate(state, emit);
+    }
     const contextText = buildHarnessGenerateContextText(
       state.evidence?.toolExecutions ?? [],
     );

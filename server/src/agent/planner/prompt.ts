@@ -225,7 +225,7 @@ export const buildNextActionPlannerMessages = (input: {
         "当你从有限历史继承任务语义时，planPatch.addItems 的 text 必须写出完整的语义目标和必要完成条件，不能只记录本轮的授权或方式说明；敏感值只需表述为已由用户提供，不要复制到计划文本；若工具和参数已经齐备，应在同一决策中直接选择 use_tool。",
         "你必须只输出 JSON，不要输出解释性自然语言，不要输出 Markdown，不要输出代码块。",
         "允许输出的 JSON 只有五种：",
-        '{"type":"answer","reason":"..."}',
+        '{"type":"answer","reason":"...","completionProof":[{"criterion":"...","evidenceRefs":["tool:0"]}],"unresolvedGaps":[]}',
         '{"type":"retrieve","query":"...","reason":"..."}',
         '{"type":"use_tool","toolId":"...","args":{},"reason":"..."}',
         '{"type":"ask_user","question":"...","reason":"..."}',
@@ -252,6 +252,9 @@ export const buildNextActionPlannerMessages = (input: {
         "如果相同 toolId 和 args 已经有成功 evidence 且没有新 gap，通常应复用证据而不是重复调用。",
         "任何 answer 都必须基于累计 Evidence，不能编造工具执行、检索结果或文件事实。",
         "选择 answer 时，reason 必须逐项说明 completionCriteria 如何被累计 executionHistory/evidenceHistory 覆盖；存在未覆盖项就必须继续行动。",
+        "选择 answer 时必须输出 completionProof；每项包含 criterion 和 evidenceRefs。evidenceRefs 只能逐字使用 observationContext.evidenceCatalog 中存在的 ref。",
+        "如果某项完成条件只依赖用户原始请求而不依赖执行证据，该项 evidenceRefs 可以为空数组；不得伪造 Evidence ref。",
+        "选择 answer 时 unresolvedGaps 必须是空数组；只要仍有 gap，就必须继续行动、ask_user 或 error。",
         "Evidence 只记录工具、检索和策略事实；是否回答、继续、检索或询问用户，必须由 Planner 自主决定。",
         ...buildProgressionRules({
           observationContext: input.observationContext,

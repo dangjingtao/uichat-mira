@@ -11,6 +11,7 @@ export {
   summarizeToolExecutionWaitingApproval,
 } from "./trace";
 import { getEvidencePayload, getLatestEvidenceSummary } from "./evidence";
+import { buildPlannerEvidenceCatalog } from "./finalization";
 import { buildPlannerRecoveryContext } from "./recovery";
 import type {
   AgentIntentEmbeddingConfig,
@@ -22,6 +23,7 @@ import type {
   AgentEvidencePayload,
   AgentExecutionObservation,
   AgentEvidenceSummary,
+  AgentFinalizationPacket,
   AgentGoal,
   AgentNextAction,
   AgentObservation,
@@ -70,6 +72,7 @@ export interface AgentNodeState {
   toolIntent?: ToolIntentResult;
   toolExposure?: AgentToolExposureState;
   nextAction?: AgentNextAction;
+  finalizationPacket?: AgentFinalizationPacket;
   answer?: string;
   retrievedChunks?: RetrievedChunk[];
   observations?: AgentObservation[];
@@ -508,6 +511,7 @@ export const buildPlannerObservationContext = (
     currentTaskFrame: state.currentTaskFrame,
     latestObservation,
     recentObservations,
+    evidenceCatalog: buildPlannerEvidenceCatalog(evidence),
     latestEvidenceSummary,
     latestToolCall: latestToolExecution
       ? {

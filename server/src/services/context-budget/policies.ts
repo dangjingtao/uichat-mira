@@ -66,6 +66,23 @@ export const getContextBudgetPolicy = (input: {
     };
   }
 
+  if (input.name === "agent-generate") {
+    const reservedOutputTokens = resolveReservedOutputTokens(input.params, 2048);
+    const usableInputTokens = Math.max(
+      modelContextTokens - reservedOutputTokens,
+      0,
+    );
+    return {
+      name: input.name,
+      modelContextTokens,
+      reservedOutputTokens,
+      prefaceMaxTokens: Math.min(1600, Math.floor(usableInputTokens * 0.15)),
+      instructionMaxTokens: Math.min(2400, Math.floor(usableInputTokens * 0.2)),
+      payloadMaxTokens: Math.min(32_000, Math.floor(usableInputTokens * 0.5)),
+      historyMaxTokens: Math.min(6000, Math.floor(usableInputTokens * 0.15)),
+    };
+  }
+
   return {
     name: input.name,
     modelContextTokens,

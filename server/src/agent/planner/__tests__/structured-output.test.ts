@@ -44,6 +44,8 @@ describe("planner structured output", () => {
       "toolId",
       "args",
       "question",
+      "completionProof",
+      "unresolvedGaps",
       "planPatch",
     ]);
 
@@ -74,6 +76,8 @@ describe("planner structured output", () => {
         startLine: null,
       },
       question: null,
+      completionProof: [],
+      unresolvedGaps: [],
       planPatch: {
         addItems: [],
         completeIds: [],
@@ -99,6 +103,13 @@ describe("planner structured output", () => {
       toolId: null,
       args: null,
       question: null,
+      completionProof: [
+        {
+          criterion: "Confirm the call chain",
+          evidenceRefs: [],
+        },
+      ],
+      unresolvedGaps: [],
       planPatch: {
         addItems: [{ id: "P1", text: "Confirm the call chain" }],
         completeIds: ["P1"],
@@ -108,6 +119,13 @@ describe("planner structured output", () => {
     expect(normalizePlannerStructuredDecision(envelope, exposure)).toEqual({
       type: "answer",
       reason: "All requested work is complete.",
+      completionProof: [
+        {
+          criterion: "Confirm the call chain",
+          evidenceRefs: [],
+        },
+      ],
+      unresolvedGaps: [],
       planPatch: {
         addItems: [{ id: "P1", text: "Confirm the call chain" }],
         completeIds: ["P1"],

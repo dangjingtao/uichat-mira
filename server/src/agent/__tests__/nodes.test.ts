@@ -6,6 +6,7 @@ import * as intentMatcherModule from "../intent/embedding-capability-matcher";
 import { createToolExecutionEvidenceSummary } from "../evidence";
 import { generateNode } from "../nodes/index";
 import type { AgentNodeState } from "../node-runtime";
+import type { AgentEvidenceReference } from "../types";
 
 const baseGoal = {
   id: "goal-1",
@@ -27,20 +28,43 @@ const makeMessage = (content: string) => ({
   content,
   parts: [{ type: "text" as const, text: content }],
 });
-const createBaseState = (message: string): AgentNodeState => ({
-  runId: "run-1",
-  threadId: "thread-1",
-  userId: 1,
-  goal: { ...baseGoal, text: message },
-  plan: basePlan,
-  messages: [makeMessage(message)],
-  observations: [],
-  evidence: {
+const setPlannerAnswer = (
+  state: AgentNodeState,
+  evidenceRefs: AgentEvidenceReference[] = [],
+) => {
+  const packet = {
+    type: "answer" as const,
+    reason: "Planner decided the request is ready for final delivery.",
+    completionProof: [
+      { criterion: "return an answer", evidenceRefs },
+    ],
+    unresolvedGaps: [],
+  };
+  state.nextAction = packet;
+  state.finalizationPacket = packet;
+};
+
+const createBaseState = (message: string): AgentNodeState => {
+  const state: AgentNodeState = {
+    runId: "run-1",
+    threadId: "thread-1",
+    userId: 1,
+    goal: { ...baseGoal, text: message },
+    plan: basePlan,
+    messages: [makeMessage(message)],
     observations: [],
-    toolExecutions: [],
-    retrievals: [],
-  },
-});
+    evidence: {
+      observations: [],
+      toolExecutions: [],
+      retrievals: [],
+    },
+  };
+  setPlannerAnswer(state);
+  return state;
+};
+
+const citeFirstTool = (state: AgentNodeState) =>
+  setPlannerAnswer(state, ["tool:0"]);
 
 vi.spyOn(contextBudgetService, "pack").mockImplementation((input) => ({
   messages: [
@@ -266,6 +290,7 @@ test("generateNode blocks function_calls protocol text without treating it as ex
     retrievals: [],
   };
   state.evidence.latestSummary = state.evidence.toolExecutions[0]?.summary;
+  citeFirstTool(state);
 
   const invokeSpy = vi
     .spyOn(providerProxyService, "generateTextForRole")
@@ -288,15 +313,14 @@ test("generateNode blocks function_calls protocol text without treating it as ex
   });
 
   assert.equal(invokeSpy.mock.calls.length, 1);
-  assert.match(result.answer ?? "", /内部工具调用格式/);
-  assert.match(result.answer ?? "", /没有触发新的工具执行/);
-  assert.doesNotMatch(result.answer ?? "", /toolId|function_calls|pendingToolCall/i);
-  const generateDoneEvent = executionEvents.find(
-    (event) => event.nodeId === "agent-generate" && event.phase === "done",
+  assert.equal(result.answer, undefined);
+  assert.match(result.errorMessage ?? "", /internal tool-call protocol/i);
+  const generateErrorEvent = executionEvents.find(
+    (event) => event.nodeId === "agent-generate" && event.phase === "error",
   );
-  assert.equal(generateDoneEvent?.details?.outputGuardTriggered, true);
-  assert.equal(generateDoneEvent?.details?.protocolGuardTriggered, true);
-  assert.equal(generateDoneEvent?.details?.outputGuardReason, "function_calls_xml");
+  assert.equal(generateErrorEvent?.details?.outputGuardTriggered, true);
+  assert.equal(generateErrorEvent?.details?.protocolGuardTriggered, true);
+  assert.equal(generateErrorEvent?.details?.outputGuardReason, "function_calls_xml");
 });
 
 test("generateNode returns the Planner ask_user question verbatim without invoking the answer model", async () => {
@@ -367,8 +391,8 @@ test.each([
   });
 
   assert.equal(invokeSpy.mock.calls.length, 1);
-  assert.match(result.answer ?? "", /没有触发新的工具执行/);
-  assert.doesNotMatch(result.answer ?? "", /<invoke|pendingToolCall|browser_attached_look|use_tool/i);
+  assert.equal(result.answer, undefined);
+  assert.match(result.errorMessage ?? "", /internal tool-call protocol/i);
   assert.equal(
     executionEvents.find((event) => event.details?.protocolGuardTriggered)?.details
       ?.outputGuardReason,
@@ -410,6 +434,7 @@ test("generateNode gives generic non-empty structured results to the model and d
     retrievals: [],
     latestSummary: summary,
   };
+  citeFirstTool(state);
   let capturedMessages: Array<{ content: string }> = [];
   const invokeSpy = vi.spyOn(providerProxyService, "generateTextForRole").mockImplementation(
     async (_role, messages) => {
@@ -422,7 +447,7 @@ test("generateNode gives generic non-empty structured results to the model and d
   const evidencePrompt = capturedMessages.map((message) => message.content).join("\n");
 
   assert.equal(invokeSpy.mock.calls.length, 1);
-  assert.match(evidencePrompt, /structuredPreview/);
+  assert.match(evidencePrompt, /generic_structured/);
   assert.match(evidencePrompt, /Project Alpha/);
   assert.match(evidencePrompt, /total=2/);
   assert.doesNotMatch(evidencePrompt, /没有数据/);
@@ -467,6 +492,7 @@ test("generateNode includes browser_observe page fields in the answer context", 
     retrievals: [],
     latestSummary: summary,
   };
+  citeFirstTool(state);
   const invokeSpy = vi.spyOn(providerProxyService, "generateTextForRole").mockImplementation(
     async (_role, messages) => {
       const content = (messages as Array<{ content: string }>).map((message) => message.content).join("\n");
@@ -482,7 +508,7 @@ test("generateNode includes browser_observe page fields in the answer context", 
   assert.match(result.answer ?? "", /Example Domain content/);
 });
 
-test("generateNode rewrites pseudo-execution wording into a grounded read_open summary", async () => {
+test("generateNode does not semantically rewrite ordinary model text", async () => {
   const state = createBaseState("打开 README.md 看看内容");
   state.evidence = {
     observations: [],
@@ -521,6 +547,7 @@ test("generateNode rewrites pseudo-execution wording into a grounded read_open s
     retrievals: [],
   };
   state.evidence.latestSummary = state.evidence.toolExecutions[0]?.summary;
+  citeFirstTool(state);
 
   vi.spyOn(providerProxyService, "generateTextForRole").mockResolvedValue(
     "我将调用 read_open 来打开 README.md。",
@@ -528,9 +555,7 @@ test("generateNode rewrites pseudo-execution wording into a grounded read_open s
 
   const result = await generateNode(state);
 
-  assert.match(result.answer ?? "", /README\.md/);
-  assert.match(result.answer ?? "", /UIChat Mira/);
-  assert.doesNotMatch(result.answer ?? "", /我将调用|read_open/);
+  assert.equal(result.answer, "我将调用 read_open 来打开 README.md。");
 });
 
 test("createToolExecutionEvidenceSummary marks applied edit_file replacement as a real mutation", () => {
@@ -608,7 +633,7 @@ test("createToolExecutionEvidenceSummary maps workspace_mutation delete to compl
   }
 });
 
-test("generateNode keeps read_list fallback at directory-overview scope when file content is still missing", async () => {
+test("generateNode treats a tool protocol after incomplete evidence as delivery failure", async () => {
   const state = createBaseState("README.md 里写了什么？");
   state.evidence = {
     observations: [],
@@ -649,6 +674,7 @@ test("generateNode keeps read_list fallback at directory-overview scope when fil
     retrievals: [],
   };
   state.evidence.latestSummary = state.evidence.toolExecutions[0]?.summary;
+  citeFirstTool(state);
 
   vi.spyOn(providerProxyService, "generateTextForRole").mockResolvedValue(
     "<function_calls>{\"toolId\":\"read_open\"}</function_calls>",
@@ -656,10 +682,11 @@ test("generateNode keeps read_list fallback at directory-overview scope when fil
 
   const result = await generateNode(state);
 
-  assert.match(result.answer ?? "", /README\.md/);
+  assert.equal(result.answer, undefined);
+  assert.match(result.errorMessage ?? "", /internal tool-call protocol/i);
 });
 
-test("generateNode keeps edit_file dry-run fallback at preview scope instead of claiming the file changed", async () => {
+test("generateNode treats a tool protocol after dry-run evidence as delivery failure", async () => {
   const state = createBaseState("把 notes.txt 改成新内容");
   state.evidence = {
     observations: [],
@@ -708,6 +735,7 @@ test("generateNode keeps edit_file dry-run fallback at preview scope instead of 
     retrievals: [],
   };
   state.evidence.latestSummary = state.evidence.toolExecutions[0]?.summary;
+  citeFirstTool(state);
 
   vi.spyOn(providerProxyService, "generateTextForRole").mockResolvedValue(
     "<function_calls>{\"toolId\":\"edit_file\"}</function_calls>",
@@ -715,11 +743,11 @@ test("generateNode keeps edit_file dry-run fallback at preview scope instead of 
 
   const result = await generateNode(state);
 
-  assert.match(result.answer ?? "", /预览证据|还没有真实写入/);
-  assert.doesNotMatch(result.answer ?? "", /已实际创建|已实际修改|已经修改/);
+  assert.equal(result.answer, undefined);
+  assert.match(result.errorMessage ?? "", /internal tool-call protocol/i);
 });
 
-test("generateNode can summarize a real edit_file replacement after action profile mapping", async () => {
+test("generateNode treats a tool protocol after mutation evidence as delivery failure", async () => {
   const state = createBaseState("把 notes.txt 里的 old 替换成 new");
   state.evidence = {
     observations: [],
@@ -778,6 +806,7 @@ test("generateNode can summarize a real edit_file replacement after action profi
     retrievals: [],
   };
   state.evidence.latestSummary = state.evidence.toolExecutions[0]?.summary;
+  citeFirstTool(state);
 
   vi.spyOn(providerProxyService, "generateTextForRole").mockResolvedValue(
     "<function_calls>{\"toolId\":\"edit_file\"}</function_calls>",
@@ -785,11 +814,11 @@ test("generateNode can summarize a real edit_file replacement after action profi
 
   const result = await generateNode(state);
 
-  assert.match(result.answer ?? "", /已实际修改 notes\.txt|完成了指定内容替换/);
-  assert.doesNotMatch(result.answer ?? "", /预览|还没有真实写入/);
+  assert.equal(result.answer, undefined);
+  assert.match(result.errorMessage ?? "", /internal tool-call protocol/i);
 });
 
-test("generateNode refuses to pretend garbled terminal text was understood", async () => {
+test("generateNode leaves semantic wording to the model after Planner finalization", async () => {
   const state = createBaseState("执行命令看看中文输出");
   state.evidence = {
     observations: [],
@@ -839,6 +868,7 @@ test("generateNode refuses to pretend garbled terminal text was understood", asy
     retrievals: [],
   };
   state.evidence.latestSummary = state.evidence.toolExecutions[0]?.summary;
+  citeFirstTool(state);
 
   vi.spyOn(providerProxyService, "generateTextForRole").mockResolvedValue(
     "命令输出说明 README 主要在介绍 UIChat Mira。",
@@ -846,13 +876,10 @@ test("generateNode refuses to pretend garbled terminal text was understood", asy
 
   const result = await generateNode(state);
 
-  assert.match(result.answer ?? "", /已执行完成/);
-  assert.match(result.answer ?? "", /输出证据当前不可可靠解读|garbled|不可|不能|不可靠/);
-  assert.doesNotMatch(result.answer ?? "", /README 主要在介绍 UIChat Mira/);
-  assert.doesNotMatch(result.answer ?? "", /没有形成稳定完成结果/);
+  assert.equal(result.answer, "命令输出说明 README 主要在介绍 UIChat Mira。");
 });
 
-test("generateNode preserves real terminal evidence quality flags", async () => {
+test("terminal evidence quality flags remain available to Generate without output rewriting", async () => {
   const state = createBaseState("执行命令并说明中文输出是否可读");
   const execution = {
     toolCallId: "tool-call-real-terminal-evidence",
@@ -884,6 +911,7 @@ test("generateNode preserves real terminal evidence quality flags", async () => 
     retrievals: [],
     latestSummary: summary,
   };
+  citeFirstTool(state);
 
   vi.spyOn(providerProxyService, "generateTextForRole").mockResolvedValue(
     "命令输出说明 README 主要在介绍 UIChat Mira。",
@@ -896,11 +924,10 @@ test("generateNode preserves real terminal evidence quality flags", async () => 
     assert.equal(summary.data.commandSucceeded, "true");
     assert.equal(summary.data.outputInterpretable, false);
   }
-  assert.match(result.answer ?? "", /输出证据当前不可可靠解读|不可|不可靠/);
-  assert.doesNotMatch(result.answer ?? "", /README 主要在介绍 UIChat Mira/);
+  assert.equal(result.answer, "命令输出说明 README 主要在介绍 UIChat Mira。");
 });
 
-test("generateNode does not let non-zero exitCode terminal evidence be rewritten as task success", async () => {
+test("Generate does not become a second semantic judge over non-zero exit evidence", async () => {
   const state = createBaseState("执行 pnpm test 并告诉我结果");
   state.evidence = {
     observations: [],
@@ -954,6 +981,7 @@ test("generateNode does not let non-zero exitCode terminal evidence be rewritten
     retrievals: [],
   };
   state.evidence.latestSummary = state.evidence.toolExecutions[0]?.summary;
+  citeFirstTool(state);
 
   vi.spyOn(providerProxyService, "generateTextForRole").mockResolvedValue(
     "测试已通过，修复成功。",
@@ -961,11 +989,10 @@ test("generateNode does not let non-zero exitCode terminal evidence be rewritten
 
   const result = await generateNode(state);
 
-  assert.match(result.answer ?? "", /退出码是 1|命令执行失败/);
-  assert.doesNotMatch(result.answer ?? "", /测试已通过|修复成功/);
+  assert.equal(result.answer, "测试已通过，修复成功。");
 });
 
-test("generateNode strips bare tool id leakage from read_open completed evidence", async () => {
+test("Generate only blocks protocol envelopes, not ordinary text containing a tool id", async () => {
   const state = createBaseState("打开 README.md 看看内容");
   state.evidence = {
     observations: [],
@@ -1004,6 +1031,7 @@ test("generateNode strips bare tool id leakage from read_open completed evidence
     retrievals: [],
   };
   state.evidence.latestSummary = state.evidence.toolExecutions[0]?.summary;
+  citeFirstTool(state);
 
   vi.spyOn(providerProxyService, "generateTextForRole").mockResolvedValue(
     "read_open completed, README.md says UIChat Mira is a local-first desktop workspace.",
@@ -1011,12 +1039,13 @@ test("generateNode strips bare tool id leakage from read_open completed evidence
 
   const result = await generateNode(state);
 
-  assert.match(result.answer ?? "", /README\.md/);
-  assert.match(result.answer ?? "", /UIChat Mira/);
-  assert.doesNotMatch(result.answer ?? "", /read_open completed|read_open/);
+  assert.equal(
+    result.answer,
+    "read_open completed, README.md says UIChat Mira is a local-first desktop workspace.",
+  );
 });
 
-test("generateNode returns deterministic fallback when model answer is empty but completed evidence exists", async () => {
+test("generateNode fails delivery when model answer is empty despite completed evidence", async () => {
   const state = createBaseState("打开 README.md 看看内容");
   state.evidence = {
     observations: [],
@@ -1055,32 +1084,27 @@ test("generateNode returns deterministic fallback when model answer is empty but
     retrievals: [],
   };
   state.evidence.latestSummary = state.evidence.toolExecutions[0]?.summary;
+  citeFirstTool(state);
 
   vi.spyOn(providerProxyService, "generateTextForRole").mockResolvedValue("");
 
   const result = await generateNode(state);
 
-  assert.match(result.answer ?? "", /模型没有生成有效回答/);
-  assert.match(result.answer ?? "", /README\.md/);
-  assert.equal(result.generatedAnswerEmptyFallback, true);
-  assert.equal(result.errorMessage, undefined);
+  assert.equal(result.answer, undefined);
+  assert.match(result.errorMessage ?? "", /empty user answer/i);
 });
 
-test("generateNode returns deterministic fallback when model answer is empty and no evidence exists", async () => {
+test("generateNode fails delivery when model answer is empty and no evidence exists", async () => {
   const state = createBaseState("README.md 的 Runtime 一节具体列了哪些运行组件？");
   vi.spyOn(providerProxyService, "generateTextForRole").mockResolvedValue("");
 
   const result = await generateNode(state);
 
-  assert.equal(
-    result.answer,
-    "模型没有生成有效回答，而且当前也没有可用证据可供总结。",
-  );
-  assert.equal(result.generatedAnswerEmptyFallback, true);
-  assert.equal(result.errorMessage, undefined);
+  assert.equal(result.answer, undefined);
+  assert.match(result.errorMessage ?? "", /empty user answer/i);
 });
 
-test("generateNode returns schema-safe fallback without calling the model after bounded replan is exhausted", async () => {
+test("generateNode refuses to run without a Planner answer finalization packet", async () => {
   const state = createBaseState("README.md 的 Runtime 一节具体列了哪些运行组件？请基于文件内容回答。");
   state.schemaReplanDiagnostics = {
     schemaError: "args.limit is not allowed",
@@ -1096,12 +1120,16 @@ test("generateNode returns schema-safe fallback without calling the model after 
     },
     attemptCount: 2,
   };
+  state.nextAction = {
+    type: "error",
+    reason: "Planner schema replan budget was exhausted.",
+  };
+  state.finalizationPacket = undefined;
   const invokeSpy = vi.spyOn(providerProxyService, "generateTextForRole");
 
   const result = await generateNode(state);
 
   assert.equal(invokeSpy.mock.calls.length, 0);
-  assert.match(result.answer ?? "", /工具参数不符合要求/);
-  assert.match(result.answer ?? "", /args\.limit is not allowed/);
-  assert.equal(result.errorMessage, undefined);
+  assert.equal(result.answer, undefined);
+  assert.match(result.errorMessage ?? "", /frozen Planner answer finalization packet/i);
 });

@@ -10,6 +10,17 @@ afterEach(() => {
 });
 
 test("Generate excludes only agent-execution request context", async () => {
+  const finalizationPacket = {
+    type: "answer" as const,
+    reason: "The requested result is ready.",
+    completionProof: [
+      {
+        criterion: "return an answer",
+        evidenceRefs: [],
+      },
+    ],
+    unresolvedGaps: [],
+  };
   const state: AgentNodeState = {
     runId: "run-generate-context",
     threadId: "thread-generate-context",
@@ -49,14 +60,23 @@ test("Generate excludes only agent-execution request context", async () => {
       toolExecutions: [],
       retrievals: [],
     },
+    nextAction: finalizationPacket,
+    finalizationPacket,
   };
   let generationMessages: Array<{ content: string }> = [];
   let budgetPrefaceMessages: Array<{ content: string }> = [];
 
   vi.spyOn(contextBudgetService, "pack").mockImplementation((input) => {
     budgetPrefaceMessages = input.sections.prefaceMessages ?? [];
+    const messages = [
+      ...(input.sections.prefaceMessages ?? []),
+      ...(input.sections.instructionMessages ?? []),
+      ...(input.sections.payloads ?? []).flatMap((payload) => payload.messages),
+      ...(input.sections.historyMessages ?? []),
+      input.sections.latestUserMessage,
+    ];
     return {
-      messages: [],
+      messages,
       payloads: [],
       audit: {
         policy: input.policy,

@@ -1,5 +1,4 @@
 import { END } from "@langchain/langgraph";
-import { buildPlannerRecoveryContext } from "../recovery";
 import type { AgentGraphStateType } from "./state";
 
 const hasFrozenPendingToolCall = (
@@ -43,7 +42,7 @@ export const routeAfterNextAction = (state: AgentGraphStateType) => {
     case "use_tool":
       return "toolCallNormalize";
     case "error":
-      return state.schemaReplanDiagnostics ? "generate" : "error";
+      return "error";
     default:
       return "error";
   }
@@ -55,9 +54,7 @@ export const routeAfterToolCallNormalize = (state: AgentGraphStateType) => {
   }
 
   if (state.schemaReplanDiagnostics) {
-    return state.schemaReplanDiagnostics.attemptCount <= 1
-      ? "nextActionPlanner"
-      : "generate";
+    return "nextActionPlanner";
   }
 
   if (!state.pendingToolCall) {
@@ -84,7 +81,7 @@ export const routeAfterPolicy = (state: AgentGraphStateType) => {
     return "tool";
   }
 
-  return "generate";
+  return "error";
 };
 
 export const routeAfterTool = (state: AgentGraphStateType) => {
@@ -116,15 +113,6 @@ export const routeAfterRetrieve = (state: AgentGraphStateType) => {
 export const routeAfterEvidence = (state: AgentGraphStateType) => {
   if (state.errorMessage) {
     return "error";
-  }
-
-  const recovery = buildPlannerRecoveryContext(state);
-  if (
-    state.lastToolExecution?.status === "failed" &&
-    recovery.source === "tool_failure" &&
-    recovery.exhausted
-  ) {
-    return "generate";
   }
 
   return "nextActionPlanner";

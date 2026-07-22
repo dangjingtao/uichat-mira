@@ -20,7 +20,6 @@ import {
   runWithAgentNodeSpan,
   runWithAgentRunSpan,
 } from "../observability";
-import { buildPlannerRecoveryContext } from "../recovery";
 import type {
   AgentGraphInput,
   AgentGraphOutput,
@@ -155,20 +154,6 @@ const runStep = async (input: {
   }
 };
 
-const shouldGenerateAfterRecoverableFailure = (
-  state: AgentGraphStateType,
-) => {
-  if (
-    state.lastToolExecution?.status !== "failed" ||
-    state.lastToolExecution.failureKind === "terminal"
-  ) {
-    return false;
-  }
-
-  const recovery = buildPlannerRecoveryContext(state);
-  return recovery.source === "tool_failure" && recovery.exhausted;
-};
-
 const createPiAgentLoopRunner = (steps: PiAgentLoopSemantics) => {
   const finishRunWithError = async (
     state: AgentGraphStateType,
@@ -256,7 +241,11 @@ const createPiAgentLoopRunner = (steps: PiAgentLoopSemantics) => {
       return finishRunWithError(state, emit);
     }
     if (state.policyDecision?.type !== "allow") {
-      return finishRunWithAnswer(state, emit);
+      mergeStatePatch(state, {
+        errorMessage: "Policy did not allow the frozen Planner tool call.",
+        errorSourceNodeId: "policyStep",
+      });
+      return finishRunWithError(state, emit);
     }
 
     await runStep({
@@ -272,9 +261,6 @@ const createPiAgentLoopRunner = (steps: PiAgentLoopSemantics) => {
 
     await commitPendingEvidence(state, emit);
 
-    if (shouldGenerateAfterRecoverableFailure(state)) {
-      return finishRunWithAnswer(state, emit);
-    }
     if (state.errorMessage) {
       return finishRunWithError(state, emit);
     }
@@ -351,10 +337,7 @@ const createPiAgentLoopRunner = (steps: PiAgentLoopSemantics) => {
                 return finishRunWithError(state, emit);
               }
               if (state.schemaReplanDiagnostics) {
-                if (state.schemaReplanDiagnostics.attemptCount <= 1) {
-                  continue;
-                }
-                return finishRunWithAnswer(state, emit);
+                continue;
               }
               if (!state.pendingToolCall) {
                 mergeStatePatch(state, {

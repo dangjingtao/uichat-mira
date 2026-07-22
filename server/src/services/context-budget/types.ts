@@ -1,6 +1,10 @@
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
 
-export type ContextBudgetPolicyName = "plain-chat" | "rag-chat" | "task-chat";
+export type ContextBudgetPolicyName =
+  | "plain-chat"
+  | "rag-chat"
+  | "task-chat"
+  | "agent-generate";
 
 export interface ContextBudgetPolicy {
   name: ContextBudgetPolicyName;

@@ -63,6 +63,10 @@ test("Pi-loop runs through semantic step contract without legacy node fields", a
         nextAction: {
           type: "answer" as const,
           reason: "The request can be answered directly.",
+          completionProof: [
+            { criterion: "return a direct answer", evidenceRefs: [] },
+          ],
+          unresolvedGaps: [],
         },
       };
     },

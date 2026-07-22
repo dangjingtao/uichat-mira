@@ -1,4 +1,4 @@
-import type { AgentNextAction } from "../types";
+import type { AgentEvidenceReference, AgentNextAction } from "../types";
 
 const stripThinkBlocks = (value: string) =>
   value.replace(/^\s*(?:<think\b[^>]*>[\s\S]*?<\/think>\s*)+/i, "").trim();
@@ -40,6 +40,37 @@ export type PlannerOutputParseResult = {
 };
 
 const MISSING_REASON_DEFAULTED_WARNING = "missing_reason_defaulted";
+const EVIDENCE_REFERENCE_PATTERN = /^(tool|retrieval|observation):\d+$/;
+
+const parseCompletionProof = (value: unknown) => {
+  if (!Array.isArray(value) || value.length === 0) {
+    return null;
+  }
+
+  const result: Array<{
+    criterion: string;
+    evidenceRefs: AgentEvidenceReference[];
+  }> = [];
+  for (const item of value) {
+    if (
+      !isPlainObject(item) ||
+      typeof item.criterion !== "string" ||
+      !item.criterion.trim() ||
+      !Array.isArray(item.evidenceRefs) ||
+      !item.evidenceRefs.every(
+        (ref): ref is AgentEvidenceReference =>
+          typeof ref === "string" && EVIDENCE_REFERENCE_PATTERN.test(ref),
+      )
+    ) {
+      return null;
+    }
+    result.push({
+      criterion: item.criterion.trim(),
+      evidenceRefs: [...new Set(item.evidenceRefs)],
+    });
+  }
+  return result;
+};
 
 const getDefaultPlannerReason = (
   type: AgentNextAction["type"],
@@ -142,16 +173,57 @@ const parseNextActionPlannerObject = (
 
   switch (parsed.type) {
     case "answer":
+      {
+        const completionProof = parseCompletionProof(parsed.completionProof);
+        if (!completionProof) {
+          return {
+            action: null,
+            sanitizedOutput: "",
+            parseErrorReason:
+              'Planner "answer" action must include a non-empty valid "completionProof" array.',
+            parseWarnings: [],
+            rawDecision: parsed,
+          };
+        }
+        if (
+          !Array.isArray(parsed.unresolvedGaps) ||
+          !parsed.unresolvedGaps.every((gap) => typeof gap === "string")
+        ) {
+          return {
+            action: null,
+            sanitizedOutput: "",
+            parseErrorReason:
+              'Planner "answer" action must include a string array "unresolvedGaps" field.',
+            parseWarnings: [],
+            rawDecision: parsed,
+          };
+        }
+        const unresolvedGaps = parsed.unresolvedGaps
+          .map((gap) => gap.trim())
+          .filter(Boolean);
+        if (unresolvedGaps.length > 0) {
+          return {
+            action: null,
+            sanitizedOutput: "",
+            parseErrorReason:
+              'Planner "answer" action cannot contain unresolved gaps.',
+            parseWarnings: [],
+            rawDecision: parsed,
+          };
+        }
       return {
         action: {
           type: "answer",
           reason,
+          completionProof,
+          unresolvedGaps,
         },
         sanitizedOutput: "",
         parseErrorReason: null,
         parseWarnings,
         rawDecision: parsed,
       };
+      }
     case "retrieve":
       if (typeof parsed.query !== "string" || !parsed.query.trim()) {
         return {

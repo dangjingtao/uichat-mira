@@ -307,7 +307,7 @@ test("toolCall loop ignores selectedToolIds unless planner emits use_tool", asyn
   const plannerSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
     .mockImplementation(async function* () {
-      yield '{"type":"answer","reason":"No tool is needed."}';
+      yield '{"type":"answer","reason":"No tool is needed.","completionProof":[{"criterion":"answer directly","evidenceRefs":[]}],"unresolvedGaps":[]}';
     });
   const executeSpy = vi.spyOn(harnessInvocations, "executeHarnessInvocation");
   const generateSpy = setupGenerate("direct answer");
@@ -455,7 +455,7 @@ test("toolCall loop lets Planner decide how to proceed after recoverable failure
       yield '{"type":"use_tool","toolId":"read_open","args":{"path":"README.md"},"reason":"Need file content."}';
     })
     .mockImplementationOnce(async function* () {
-      yield '{"type":"answer","reason":"There is still no completed evidence to answer from."}';
+      yield '{"type":"answer","reason":"There is still no completed evidence to answer from.","completionProof":[{"criterion":"report the failed read","evidenceRefs":["tool:0"]}],"unresolvedGaps":[]}';
     });
   const executeSpy = vi
     .spyOn(harnessInvocations, "executeHarnessInvocation")
@@ -546,7 +546,7 @@ test("toolCall loop timedOut tool evidence is not marked answer-ready", async ()
       yield '{"type":"use_tool","toolId":"terminal_session","args":{"command":"pwd"},"reason":"Need command output."}';
     })
     .mockImplementationOnce(async function* () {
-      yield '{"type":"answer","reason":"Timeout evidence is not enough for a grounded command result."}';
+      yield '{"type":"answer","reason":"Timeout evidence is not enough for a grounded command result.","completionProof":[{"criterion":"report the command outcome","evidenceRefs":["tool:0"]}],"unresolvedGaps":[]}';
     });
   vi.spyOn(policyModule, "evaluateAgentToolPolicy").mockReturnValue({
     type: "allow",

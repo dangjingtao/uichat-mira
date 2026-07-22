@@ -1,5 +1,6 @@
 import type {
   AgentEvidencePayload,
+  AgentFinalizationPacket,
   AgentGraphInput,
   AgentGraphOutput,
   AgentObservation,
@@ -16,6 +17,7 @@ export interface AgentRuntimeCheckpoint {
   retrievedChunks?: RetrievedChunk[];
   lastToolExecution?: AgentToolExecutionResult;
   iterationCount?: number;
+  finalizationPacket?: AgentFinalizationPacket;
 }
 
 type PersistedRuntimeInput = NonNullable<AgentRun["runtimeInput"]>;
@@ -51,6 +53,8 @@ export const applyAgentRuntimeCheckpoint = (
       explicitInput.lastToolExecution ?? checkpoint?.lastToolExecution,
     iterationCount:
       explicitInput.iterationCount ?? checkpoint?.iterationCount,
+    finalizationPacket:
+      explicitInput.finalizationPacket ?? checkpoint?.finalizationPacket,
   };
 };
 
@@ -84,6 +88,7 @@ export const persistAgentRuntimeCheckpoint = (
       lastToolExecution: output.lastToolExecution,
       iterationCount:
         checkpointOutput.iterationCount ?? derivedIterationCount,
+      finalizationPacket: output.finalizationPacket,
     },
   };
 };

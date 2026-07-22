@@ -5,11 +5,20 @@ import { providerProxyService } from "@/services/provider-proxy.service/index";
 import { generateNode } from "../nodes/index";
 import type { AgentNodeState } from "../node-runtime";
 
-const makeState = (): AgentNodeState => ({
-  runId: "run-mail-query",
-  threadId: "thread-mail-query",
-  userId: 1,
-  goal: {
+const makeState = (): AgentNodeState => {
+  const finalizationPacket = {
+    type: "answer" as const,
+    reason: "The mail result covers the requested summary.",
+    completionProof: [
+      { criterion: "summarize noteworthy recent email", evidenceRefs: ["tool:0" as const] },
+    ],
+    unresolvedGaps: [],
+  };
+  return {
+    runId: "run-mail-query",
+    threadId: "thread-mail-query",
+    userId: 1,
+    goal: {
     id: "goal-mail-query",
     text: "我最近邮件有啥值得关注的",
     successCriteria: ["summarize noteworthy recent email"],
@@ -24,7 +33,7 @@ const makeState = (): AgentNodeState => ({
     },
   ],
   observations: [],
-  evidence: {
+    evidence: {
     observations: [],
     retrievals: [],
     toolExecutions: [
@@ -61,11 +70,20 @@ const makeState = (): AgentNodeState => ({
         finishedAt: "2026-07-19T00:00:01.000Z",
       },
     ],
-  },
-});
+    },
+    nextAction: finalizationPacket,
+    finalizationPacket,
+  };
+};
 
 vi.spyOn(contextBudgetService, "pack").mockImplementation((input) => ({
-  messages: [],
+  messages: [
+    ...(input.sections.prefaceMessages ?? []),
+    ...(input.sections.instructionMessages ?? []),
+    ...(input.sections.payloads ?? []).flatMap((payload) => payload.messages),
+    ...(input.sections.historyMessages ?? []),
+    input.sections.latestUserMessage,
+  ],
   payloads: [],
   audit: {
     policy: input.policy,

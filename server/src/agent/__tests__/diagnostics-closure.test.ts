@@ -17,6 +17,10 @@ import { nextActionPlannerNode } from "../planner/node";
 import { toolCallNormalizeNode } from "../nodes/tool-call-normalize";
 import { generateNode } from "../nodes/generate";
 
+vi.mock("@/mcp/external", () => ({
+  resolveAgentEligibleExternalMcpCapabilities: vi.fn(() => []),
+}));
+
 const baseGoal = {
   id: "goal-1",
   text: "answer the user",
@@ -341,7 +345,7 @@ test("diagnostics closure records planner and normalize reasons when the selecte
   assert.match(String(normalizeEvents[0]?.reason ?? ""), /not exposed/i);
 });
 
-test("diagnostics closure keeps schema invalid bounded replan visible through normalize and generate", async () => {
+test("diagnostics closure keeps schema invalid bounded replan out of Generate", async () => {
   const readOpen = readOpenTool();
   setupToolExposure("open README.md", [readOpen]);
   vi.spyOn(providerProxyService, "streamTaskChatText")
@@ -378,12 +382,12 @@ test("diagnostics closure keeps schema invalid bounded replan visible through no
     },
   });
 
-  assert.equal(result.status, "completed");
-  assert.match(result.answer, /没有执行任何工具/);
+  assert.equal(result.status, "failed");
+  assert.equal(result.answer, "");
   assert.equal(normalizeErrors.length >= 2, true);
   assert.equal(normalizeErrors[0]?.schemaReplanEligible, true);
   assert.equal(normalizeErrors[0]?.schemaReplanAttemptCount, 1);
-  assert.equal(generateEvents.at(-1)?.schemaSafeErrorFallback, true);
+  assert.equal(generateEvents.length, 0);
 });
 
 test("diagnostics closure records runtime timedOut evidence as not answer-ready", async () => {
@@ -394,7 +398,7 @@ test("diagnostics closure records runtime timedOut evidence as not answer-ready"
       yield '{"type":"use_tool","toolId":"terminal_session","args":{"command":"pwd"},"reason":"Need command output."}';
     })
     .mockImplementationOnce(async function* () {
-      yield '{"type":"answer","reason":"Timeout evidence is not enough for a grounded command result."}';
+      yield '{"type":"answer","reason":"Timeout evidence is not enough for a grounded command result.","completionProof":[{"criterion":"report the command outcome","evidenceRefs":["tool:0"]}],"unresolvedGaps":[]}';
     });
   vi.spyOn(policyModule, "evaluateAgentToolPolicy").mockReturnValue({
     type: "allow",
@@ -469,12 +473,20 @@ test("diagnostics closure records runtime timedOut evidence as not answer-ready"
   );
 });
 
-test("diagnostics closure keeps generate grounded when the model fabricates observations without completed evidence", async () => {
+test("Generate does not replace Planner's semantic decision with a second evidence judgment", async () => {
   vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke").mockResolvedValue(
     "当前 workspace 下有 README.md、docs、server，我已经查看过它们的内容。",
   );
 
   const generateEvents: Array<Record<string, unknown>> = [];
+  const finalizationPacket = {
+    type: "answer" as const,
+    reason: "Planner decided the direct answer criterion is covered.",
+    completionProof: [
+      { criterion: "answer the user's question directly", evidenceRefs: [] },
+    ],
+    unresolvedGaps: [],
+  };
   const patch = await generateNode(
     {
       runId: "run-diagnostics-generate-guard",
@@ -494,6 +506,8 @@ test("diagnostics closure keeps generate grounded when the model fabricates obse
         toolExecutions: [],
       },
       observations: [],
+      nextAction: finalizationPacket,
+      finalizationPacket,
     },
     async (event) => {
       if (event.nodeId === "agent-generate" && event.phase === "done") {
@@ -502,13 +516,9 @@ test("diagnostics closure keeps generate grounded when the model fabricates obse
     },
   );
 
-  assert.match(
-    patch.answer ?? "",
-    /当前还没有足够的已完成证据|不能声称自己已经查看过/u,
+  assert.equal(
+    patch.answer,
+    "当前 workspace 下有 README.md、docs、server，我已经查看过它们的内容。",
   );
-  assert.equal(generateEvents.at(-1)?.outputGuardTriggered, true);
-  assert.match(
-    String(generateEvents.at(-1)?.outputGuardReason ?? ""),
-    /without completed evidence/i,
-  );
+  assert.equal(generateEvents.at(-1)?.outputGuardTriggered, false);
 });

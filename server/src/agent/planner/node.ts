@@ -1,8 +1,9 @@
 import { providerProxyService } from "@/services/provider-proxy.service/index";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol";
 import { writeStructuredLog } from "@/logger";
-import type { AgentNextAction } from "../types";
-import { getLatestEvidenceSummary } from "../evidence";
+import type { AgentFinalizationPacket, AgentNextAction } from "../types";
+import { getEvidencePayload, getLatestEvidenceSummary } from "../evidence";
+import { validateAndFreezeFinalizationPacket } from "../finalization";
 import {
   buildExecutionObservationView,
   buildPlannerObservationContext,
@@ -305,6 +306,7 @@ export const nextActionPlannerNode = async (
   });
 
   let nextAction: AgentNextAction | undefined;
+  let finalizationPacket: AgentFinalizationPacket | undefined;
   let plannerTaskPlanUpdate: PlannerTaskPlanUpdate | undefined;
   let rawOutput = "";
   let sanitizedOutput = "";
@@ -387,6 +389,18 @@ export const nextActionPlannerNode = async (
       sanitizedOutput = initialPlannerDecision.sanitizedOutput;
       parseErrorReason = initialPlannerDecision.parseErrorReason;
       parseWarnings = initialPlannerDecision.parseWarnings;
+      if (nextAction.type === "answer") {
+        const validation = validateAndFreezeFinalizationPacket({
+          action: nextAction,
+          evidence: getEvidencePayload(plannerState),
+        });
+        if ("error" in validation) {
+          nextAction = toNextActionFallback(validation.error);
+          parseErrorReason = validation.error;
+        } else {
+          finalizationPacket = validation.packet;
+        }
+      }
       if (!plannerTaskPlanUpdate && currentPlanDiagnostics.planItemCount === 0) {
         parseWarnings = [
           ...(parseWarnings ?? []),
@@ -495,12 +509,15 @@ export const nextActionPlannerNode = async (
       schemaReplanError: observationContext.recovery.schemaError ?? null,
       pendingApprovalActive,
       recoveryExhausted,
+      finalizationEvidenceRefs:
+        finalizationPacket?.completionProof.flatMap((proof) => proof.evidenceRefs) ?? [],
       allowedActionTypes: [...ALLOWED_ACTION_TYPES],
     },
   });
 
   return {
     ...(nextAction ? { nextAction } : {}),
+    ...(finalizationPacket ? { finalizationPacket } : {}),
     ...(plannedTaskFrame ? { currentTaskFrame: plannedTaskFrame } : {}),
     ...(nextAction?.type === "error" && observationContext.recovery.schemaError
       ? {

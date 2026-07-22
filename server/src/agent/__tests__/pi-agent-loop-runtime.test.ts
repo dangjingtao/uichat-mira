@@ -125,7 +125,9 @@ const createFakeNodes = (input: {
       const action = input.plannerActions[plannerIndex];
       plannerIndex += 1;
       return action
-        ? { nextAction: action }
+        ? action.type === "answer"
+          ? { nextAction: action, finalizationPacket: action }
+          : { nextAction: action }
         : {
             nextAction: {
               type: "error" as const,
@@ -275,6 +277,10 @@ test("Pi runtime loops tool results back into the planner until answer", async (
         {
           type: "answer",
           reason: "All fake completion criteria are covered.",
+          completionProof: [
+            { criterion: "compare both files", evidenceRefs: ["tool:0", "tool:1"] },
+          ],
+          unresolvedGaps: [],
         },
       ],
     }),
@@ -348,6 +354,10 @@ test("Pi runtime returns retrieval evidence to the planner before answering", as
         {
           type: "answer",
           reason: "The retrieval evidence is sufficient.",
+          completionProof: [
+            { criterion: "find the command", evidenceRefs: ["retrieval:0"] },
+          ],
+          unresolvedGaps: [],
         },
       ],
     }),
@@ -426,6 +436,10 @@ test("Pi runtime resumes a frozen pending tool call before asking the planner fo
         {
           type: "answer",
           reason: "The resumed tool result is available.",
+          completionProof: [
+            { criterion: "use the resumed result", evidenceRefs: ["tool:0"] },
+          ],
+          unresolvedGaps: [],
         },
       ],
     }),
@@ -461,6 +475,10 @@ test("Pi runtime follows a contextual attached-browser use_tool action through r
         {
           type: "answer",
           reason: "The fake attached-browser execution is available for verification.",
+          completionProof: [
+            { criterion: "verify the browser task", evidenceRefs: ["tool:0"] },
+          ],
+          unresolvedGaps: [],
         },
       ],
     }),

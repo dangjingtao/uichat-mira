@@ -418,7 +418,7 @@ export const withPlannerTaskPlanContract = (
     "Mark an item complete only after the continuous action/result context shows that semantic subgoal is actually done.",
     "nextAction should advance the current unfinished item. Append a new item only when execution reveals genuinely new required work.",
     "There is NO implicit engineering-memory-file feature. Do NOT open ENGINEERING_MEMORY.md, MEMORY.md, or similar files merely to remember prior work or recover Agent state.",
-    "The earlier no-extra-fields rule has exactly one exception: top-level planPatch. The canonical action type remains answer/retrieve/use_tool/ask_user/error.",
+    "The earlier no-extra-fields rule allows top-level planPatch, plus completionProof and unresolvedGaps on answer. The canonical action type remains answer/retrieve/use_tool/ask_user/error.",
   ].join("\n");
 
   const firstSystemIndex = messages.findIndex((message) => message.role === "system");
