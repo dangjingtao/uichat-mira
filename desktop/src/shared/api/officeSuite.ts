@@ -1,4 +1,4 @@
-import { client, post } from "@/shared/lib/request";
+import { client, post, type AxiosResponse } from "@/shared/lib/request";
 
 const OFFICE_SUITE_INSPECT_ROUTE = "/microapps/office-suite/inspect";
 const OFFICE_SUITE_CREATE_ROUTE = "/microapps/office-suite/create";
@@ -37,27 +37,16 @@ const parseAttachmentFileName = (contentDisposition: unknown) => {
 };
 
 const toDownload = (
-  response: { data: Blob; headers: Record<string, unknown> },
+  response: AxiosResponse<Blob>,
   kind: OfficeSuiteFileKind,
   fallbackFileName: string,
-): OfficeSuiteCreatedDownload => {
-  const blob =
-    response.data instanceof Blob
-      ? response.data
-      : new Blob([response.data], {
-          type: String(
-            response.headers["content-type"] || "application/octet-stream",
-          ),
-        });
-
-  return {
-    kind,
-    fileName:
-      parseAttachmentFileName(response.headers["content-disposition"]) ||
-      fallbackFileName,
-    blob,
-  };
-};
+): OfficeSuiteCreatedDownload => ({
+  kind,
+  fileName:
+    parseAttachmentFileName(response.headers["content-disposition"]) ||
+    fallbackFileName,
+  blob: response.data,
+});
 
 export async function inspectOfficeFile(file: File): Promise<OfficeSuiteInspection> {
   const formData = new FormData();
