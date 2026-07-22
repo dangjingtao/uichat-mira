@@ -6,8 +6,6 @@ const WORD_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const WORD_NS =
   "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-const PACKAGE_REL_NS =
-  "http://schemas.openxmlformats.org/package/2006/relationships";
 const COMMENTS_REL_TYPE =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
 const COMMENTS_CONTENT_TYPE =
@@ -34,7 +32,7 @@ const escapeXml = (value: string) =>
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
+    .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
 
 const decodeXml = (value: string) =>
@@ -81,7 +79,7 @@ const findEditableRun = (documentXml: string, targetText: string): EditableRun =
       .trim();
     if (stripped) {
       throw new Error(
-        `Word review target \"${targetText}\" is inside a complex run; refusing a lossy rewrite`,
+        `Word review target "${targetText}" is inside a complex run; refusing a lossy rewrite`,
       );
     }
 
@@ -111,10 +109,12 @@ const nextNumericId = (xml: string, pattern: RegExp) => {
 
 const ensureCommentsPart = (archive: AdmZip) => {
   const existing = archive.getEntry("word/comments.xml");
-  if (existing) return existing.getData().toString("utf8");
-
-  const commentsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:comments xmlns:w="${WORD_NS}"></w:comments>`;
-  archive.addFile("word/comments.xml", Buffer.from(commentsXml, "utf8"));
+  const commentsXml = existing
+    ? existing.getData().toString("utf8")
+    : `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:comments xmlns:w="${WORD_NS}"></w:comments>`;
+  if (!existing) {
+    archive.addFile("word/comments.xml", Buffer.from(commentsXml, "utf8"));
+  }
 
   const relsEntry = archive.getEntry("word/_rels/document.xml.rels");
   if (!relsEntry) {
