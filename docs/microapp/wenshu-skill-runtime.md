@@ -1,79 +1,210 @@
-# 文枢 Skill Package / Domain Runtime 当前实现
+# 文枢 Skill / Domain Runtime 当前实现
 
 Status: Current
 Owner: chat / runtime / microapp
 Last verified: 2026-07-23
 Layer: raw-source
 Module: MicroAPP / SKILL
-Feature: WenShuCapabilityFoundation
+Feature: WenShuSkillContext
 Doc Type: current-contract
 Canonical: true
 Related:
   - ./office-runtime-task-contract.md
   - ./wenshu-pptx-swarm.md
   - ../skill/README.md
+  - ../skill/skill-context-design.md
   - ../skill/skill-runtime-design.md
-  - ../skill/skill-package-runtime-pack-contract.md
+  - ../skill/skill-package-runtime-contract.md
 
 ## Purpose
 
-本页描述文枢 **当前已经落地的能力底座**。
+本页描述文枢当前已经落地的四个基础 Skill、可选 Runtime Pack、Domain Runtime，以及它们与 Agent / Harness 的真实边界。
 
-必须避免旧表述：
+基础 Skill 的当前定义以 `docs/skill/README.md` 和 `docs/skill/skill-context-design.md` 为准：
 
-> 当前 PDF / XLSX / PPTX 实现不是完整 Formal Skill Runtime。
+> **Skill 本体是通过渐进式披露向 Agent 动态注入领域知识、执行策略和能力使用说明的可复用上下文能力包。**
 
-当前实际层级：
+`SkillInstance / state / reducer / checkpoint` 属于可选的 Stateful Skill Runtime，不是 DOCX / XLSX / PDF / PPTX 成为 Skill 的入场门槛。
+
+## 当前层级
 
 ```text
 WenShu MicroAPP
-  ├─ Basic Office Runtime
-  │    └─ DOCX / XLSX / PPTX 基础 inspect/create/modify 验证
+  ├─ Skills
+  │    ├─ docx   (bundled)
+  │    ├─ xlsx   (optional runtime pack)
+  │    ├─ pdf    (optional runtime pack)
+  │    └─ pptx   (optional runtime pack)
   │
-  ├─ Skill Packages
-  │    ├─ pdf
-  │    ├─ xlsx
-  │    └─ pptx
+  ├─ SkillContext
+  │    └─ Manifest -> SKILL.md -> Reference on demand
   │
   ├─ Optional Runtime Pack
   │    └─ wenshu-office@1.0.0
   │
   └─ Domain Runtime
+       ├─ DOCX Runtime
        ├─ PDF Runtime
        ├─ Spreadsheet Runtime
        └─ Presentation Runtime
 ```
 
-正式 Skill Runtime 仍按 `docs/skill/skill-runtime-design.md` 实现：
+这里必须区分：
 
 ```text
-SkillDefinition
-+ SkillInstance
-+ internal state / stage
-+ Evidence reducer
-+ stage-specific tool constraints
-+ completion criteria
+SkillContext
+= 这类事情应该怎么做
+
+ToolExposure
+= 当前 Agent 真正能调用什么
+```
+
+Skill 命中不会把新的 Tool push 进 `state.toolExposure`。
+
+## Progressive Disclosure
+
+当前基础链：
+
+```text
+L0 Manifest
+  -> match one primary Skill
+L1 SKILL.md
+  -> inject into currentTaskFrame.skillContext
+L2 Reference / Resource
+  -> disclose selectively or read by skill:// URI
+Execution
+  -> existing Tool / MCP / Runtime path
+```
+
+实现：
+
+```text
+server/src/skills/context/types.ts
+server/src/skills/context/scanner.ts
+server/src/skills/context/matcher.ts
+server/src/skills/context/loader.ts
+server/src/skills/context/provider.ts
+server/src/agent/nodes/prepare-context.ts
+```
+
+### L0 Manifest
+
+`SkillScanner` 只读取 `SKILL.md` 文件头的 bounded frontmatter window，不在扫描阶段加载正文和 references。
+
+### L1 SKILL.md
+
+当前任务命中一个 primary Skill 后，`SkillLoader` 才加载该 Skill 的正文。
+
+V1 自动激活最多一个 primary Skill。Secondary 只保留为候选/trace，不默认同时注入多个 Skill 正文。
+
+### L2 Reference
+
+Reference 默认只列元数据和稳定 URI，例如：
+
+```text
+skill://xlsx/reference/DCF_SKILL.md
+skill://docx/references/office-runtime-reference.md
+skill://pptx/reference/pptx-swarm.md
+```
+
+`read_open` 支持只读 `skill://` virtual resource，不新增 `skill_read` 工具。
+
+当前还提供少量确定性预披露：
+
+- XLSX DCF / 三表 / Comps 根据明确任务语义只加载对应 reference；
+- 20+ 页或批量 PPTX 只加载 `pptx-swarm` reference。
+
+这不是全量 reference 注入。
+
+## Skill Matching
+
+V1 匹配优先级：
+
+```text
+0. explicit trigger
+   $docx / /skill:docx
+
+1. deterministic resource match
+   filename / extension / MIME / latest attachment
+
+2. exact semantic hint
+   DCF Excel / PDF merge / PowerPoint / DOCX review
+
+3. lightweight semantic match
+   name / known domain terms
+
+4. embedding / task model
+   reserved for ambiguous cases
+```
+
+附件类型的确定性证据优先于模糊文本。
+
+例如：
+
+```text
+user: "帮我审一下这个"
+attachment: contract.docx
+-> primary Skill = docx
 ```
 
 ## Skill Package 展示
 
-Skills 页面为 PDF / XLSX / PPTX 提供独立展示区，展示：
+Skills 页面当前展示四个文枢 Skill：
+
+```text
+docx
+xlsx
+pdf
+pptx
+```
+
+展示内容包括：
 
 - 名称 / 来源 / 分类 / 描述；
-- `SKILL.md` 业务方法；
-- runtime / reference 文件结构；
-- 是否已安装 Runtime Pack；
+- `SKILL.md`；
+- references / runtime 文件结构；
+- Runtime Pack 状态；
 - 「去使用」入口。
 
-当前定义：
+定义：
 
 ```text
 server/src/skills/registry.ts
 ```
 
-这里的 registry 是 **Package Definition registry**，不是 active SkillInstance registry。
+该 registry 是 Package/Manifest metadata source，不是 Tool Registry。
 
-安装一个 Package 不会自动激活 Agent Skill。
+当前状态字段明确拆开：
+
+```text
+contextIntegration.status = ready
+contextIntegration.mode = progressive-disclosure
+
+statefulRuntime.status = deferred
+```
+
+## DOCX
+
+DOCX 为 bundled Skill，不依赖 `wenshu-office` Python Pack。
+
+核心能力：
+
+- `docx@9` 结构化创建；
+- 非破坏性新副本；
+- Word native comments；
+- `trackRevisions`；
+- `w:ins / w:del / w:delText`；
+- 复杂 run 无法安全局部修改时拒绝有损重写。
+
+主要实现：
+
+```text
+server/src/microapps/office-suite/create.ts
+server/src/microapps/office-suite/document-review.ts
+server/src/microapps/office-suite/document.ts
+server/src/microapps/office-suite/runtime.ts
+server/src/skills/docx/
+```
 
 ## Runtime Pack
 
@@ -83,84 +214,46 @@ PDF / XLSX / PPTX 共用：
 wenshu-office@1.0.0
 ```
 
-原因：三个领域共享 Python 和公共第三方依赖，拆成三个包会重复下载和重复维护。
-
 点击「去使用」时：
 
 ```text
-检查 wenshu-office
-  ├─ installed -> 进入文枢
+check pack
+  ├─ installed -> enter WenShu
   └─ not installed
-       -> system devkit Python -m pip download/install
+       -> system devkit Python -m pip install
        -> staging site-packages
        -> module probe
-       -> 写 manifest
-       -> 原子替换正式 pack 目录
-       -> 进入文枢
+       -> manifest
+       -> atomic replace
+       -> enter WenShu
 ```
 
-Python 解释器复用系统开发小套件，不打包第二套 Python。
+原则：
 
-第三方依赖安装到 Mira 受管目录，不安装到用户全局 Python。
+- 复用系统开发小套件 Python；
+- 不打包第二套 Python；
+- 第三方依赖安装在 Mira-managed runtime-pack；
+- 不污染用户全局 Python；
+- 安装 Runtime Pack 不等于获得 Agent 权限。
 
 实现：
-
-- `server/src/microapps/office-suite/capability-pack.ts`
-- `server/src/microapps/office-suite/runtime-pack-paths.ts`
-- `server/tools/wenshu/requirements.txt`
-
-路由：
 
 ```text
-GET  /microapps/office-suite/skills/catalog
-GET  /microapps/office-suite/capability-pack/status
-POST /microapps/office-suite/capability-pack/install
+server/src/microapps/office-suite/capability-pack.ts
+server/src/microapps/office-suite/runtime-pack-paths.ts
+server/tools/wenshu/requirements.txt
 ```
 
-## Python Runtime
-
-系统开发小套件 Python 解析顺序保持：
-
-1. `MIRA_SYSTEM_DEVKIT_PYTHON`
-2. `MIRA_DEVKIT_PYTHON`
-3. `UI_CHAT_DEVKIT_PYTHON`
-4. `UI_CHAT_PYTHON_BIN`
-5. 开发环境 fallback：Windows `python` / POSIX `python3`
-
-`wenshu-office/<version>/site-packages` 通过受管 `PYTHONPATH` 提供给文枢 Python 子进程。
-
-当前依赖覆盖：
-
-- PDF：ReportLab / matplotlib / pdfplumber / pikepdf / markdown2 / xhtml2pdf
-- XLSX：openpyxl；`formulas` 可作为可选 recalculation provider
-- PPTX：python-pptx / Pillow
-
 ## PDF Domain Runtime
-
-实现：
 
 ```text
 server/tools/wenshu/pdf/pdf_create_runtime.py
 server/tools/wenshu/pdf/pdf_runtime.py
 ```
 
-当前能力：
-
-- structured PDF create
-- dynamic TOC
-- heading / paragraph / table / image
-- chart / equation / code / references
-- header / footer / page number
-- Markdown -> PDF
-- text/table/image extraction
-- form info/fill
-- merge/split
-- rotate/crop
-- metadata get/set
+当前能力：structured create、dynamic TOC、heading/paragraph/table/image/chart/equation/code/reference、header/footer/page number、Markdown conversion、text/table/image extraction、forms、merge/split、rotate/crop、metadata。
 
 ## XLSX Domain Runtime
-
-实现：
 
 ```text
 server/tools/wenshu/xlsx/xlsx_runtime.py
@@ -168,21 +261,9 @@ server/tools/wenshu/xlsx/xlsx_finalize.py
 server/tools/wenshu/xlsx/xlsx_tools.py
 ```
 
-当前能力：
+当前能力：create / modify / inspect / recalc / verify、公式、样式、图表、named ranges、Sources、metadata，以及 three-statement / DCF / comps 业务语义。
 
-- create / modify / inspect / recalc / verify
-- formulas
-- style / number format
-- dimensions / merges / freeze panes
-- comments / hyperlinks
-- conditional formatting
-- charts
-- named ranges
-- Sources citations
-- workbook metadata finalize
-- finance semantics：three-statement / DCF / comps
-
-`xlsx_tools.py` 的许可文件保留在：
+`xlsx_tools.py` 的许可文件保留：
 
 ```text
 server/tools/wenshu/xlsx/LICENSE.txt
@@ -190,125 +271,127 @@ server/tools/wenshu/xlsx/LICENSE.txt
 
 ## PPTX Domain Runtime
 
-实现：
-
 ```text
 server/tools/wenshu/pptx/pptx_runtime.py
 ```
 
-当前能力：
+当前能力：structured AST、validate、create、inspect、text/shape/image/icon/table/chart、create_batch。
 
-- structured PPTD-like AST
-- validate
-- create
-- inspect
-- text / shape / image / icon / table / chart
-- editable native PowerPoint objects where supported
-- create_batch for long/multiple decks
-
-用户提供的原 PPT 包引用 `kimi_ppt_dsl` converter，但未包含该转换引擎源码/许可，因此文枢使用独立实现，不复制缺失 converter。
+用户提供的原 PPT 包引用未提供源码/许可的 `kimi_ppt_dsl` converter；文枢保持独立实现，不复制该缺失 converter。
 
 当前不承诺任意复杂既有 PPTX 的无损修改。
 
-## PPTX Swarm 语义
-
-20+ 页或多份批量演示：
-
-```text
-complete all specs
-  -> validate all
-  -> create all
-  -> inspect all
-  -> deliver batch
-```
-
-这只是业务执行语义。
-
-**不新增 Nested Agent Loop。Parent Agent 仍是唯一控制循环。**
-
-## MicroAPP Workbench
-
-文枢保留完整 Domain Runtime 调试/验证工作台：
-
-```text
-GET  /microapps/office-suite/runtime/status
-POST /microapps/office-suite/skill-task?domain=pdf|xlsx|pptx
-```
-
-支持：
-
-- Python 依赖状态
-- JSON task
-- 文件上传
-- PDF 多文件处理
-- 单产物下载
-- 多产物 ZIP
-- PPT batch create
-
-这套工作台是 Runtime 验证面，不等于 Agent Skill Runtime。
-
 ## Agent / Harness 当前状态
 
-PDF / XLSX / PPTX 当前 **不通过 Skill Package 自动接入 Harness**。
+### 已接入：SkillContext
 
-特别禁止旧实现：
+`prepare-context` 现在会：
 
 ```text
-SkillResolver 命中
-  -> 直接把 office_* push 进 toolExposure
+current user task / attachment
+-> SkillScanner / Registry
+-> SkillMatcher
+-> primary Skill
+-> SkillLoader
+-> progressive disclosure
+-> currentTaskFrame.skillContext
+-> Planner context
 ```
 
-原因：这会违反正式 Skill 合同“只能收窄、不能扩大 Harness eligible tools”的规则。
+这条链只注入语义，不改变 `state.toolExposure`。
 
-当前 `prepare-context` 不注入 WenShu Package 语义，Harness bootstrap 也不注册 PDF / XLSX / PPTX 三个文枢 task-level capability。
+Trace 会记录：
 
-对应实现文件可以继续存在，供未来正式 Skill Runtime 接线和测试复用。
+- activeSkillId / version；
+- match source；
+- resource count；
+- disclosed resource count；
+- `skillToolExposureMutation=false`。
 
-## 正式 Skill Runtime 接线条件
+### 未接入：PDF / XLSX / PPTX Tool 自动扩权
 
-满足以下条件后，可以立即接 Agent / Harness：
+当前仍明确禁止：
 
-1. versioned SkillDefinition；
-2. active SkillInstance；
-3. state / stage；
-4. accepted Evidence 驱动 reducer；
-5. stage-specific allowedToolIds；
-6. completion criteria evaluation；
-7. lifecycle/version binding。
+```text
+Skill 命中
+-> 直接把 office_pdf / office_spreadsheet / office_presentation push 进 toolExposure
+```
 
-届时必须遵守：
+这些 Domain Runtime 可以先通过 MicroAPP 使用；未来是否作为 Agent Tool 暴露，仍必须由 Harness 自身的 capability eligibility / registry / policy 决定，而不是由 SkillContext 决定。
+
+DOCX 的现有 `office_document` 是否可见，同样以 Harness 当前真实 ToolExposure 为准，不由 DOCX Skill 强行加入。
+
+## Optional Stateful Skill Runtime
+
+只有真实复杂业务需要持久业务状态时，才选择性接入：
+
+```text
+SkillDefinition
+SkillInstance
+state / stage
+Evidence reducer
+completion evaluation
+checkpoint / resume
+stage-specific tool constraints
+```
+
+例如长期可恢复合同审阅、大型三表模型、复杂发布流程等。
+
+它不是基础 Skill 的入场门槛。
+
+若启用 stage-specific tool constraints，仍必须满足：
 
 ```text
 Harness eligible tools
-  ∩ Skill current allowedToolIds
+  ∩ Stateful Skill allowedToolIds
   ∩ Policy / environment
   -> state.toolExposure
-  -> Planner
 ```
 
-Tool 调用仍走：
+Tool 调用主链始终不变：
 
 ```text
 Planner -> Normalize -> Policy -> Tool -> Evidence
 ```
 
+## Build / Distribution
+
+Server bundle 会把：
+
+```text
+server/src/skills/**/*.{md,txt,json,yaml,yml}
+```
+
+复制到：
+
+```text
+<server-bundle>/skills/
+```
+
+因此 packaged app 中仍可执行 Manifest scan / SKILL.md load / Reference disclosure，不依赖开发源码目录存在。
+
 ## Hard Rules
 
-1. Skill Package 不等于 Formal Skill Runtime。
-2. Runtime Pack 安装不等于 Agent 激活。
-3. PDF / XLSX / PPTX 当前先通过 MicroAPP 使用和验证。
-4. Runtime Pack 不污染用户全局 Python。
-5. Domain Runtime 不拆成几十个 Agent 原子工具。
-6. 正式 Skill Runtime 接线前不得通过 Package selection 扩大 `toolExposure`。
-7. 当前上位真相源仍是 `docs/skill/README.md` 与 `docs/skill/skill-runtime-design.md`。
+1. DOCX / XLSX / PDF / PPTX 都是基础 Skill。
+2. Skill 本体是渐进式披露的动态上下文能力包。
+3. Runtime Pack 安装不等于 Agent 权限。
+4. SkillContext 不扩大 `state.toolExposure`。
+5. V1 自动注入最多一个 primary Skill。
+6. Reference 默认按需披露，不全量灌入 Prompt。
+7. Tool / MCP / Script / Runtime 是执行边界，不是 DisclosureLevel。
+8. Domain Runtime 不拆成几十个 Agent 原子工具。
+9. Stateful Skill Runtime 是可选高级层，不是 Skill 入场门槛。
+10. Parent Agent Loop 始终是唯一控制循环。
 
 ## Code Anchors
 
 - `desktop/src/features/Settings/pages/Skills/`
 - `server/src/skills/registry.ts`
+- `server/src/skills/context/`
+- `server/src/agent/nodes/prepare-context.ts`
+- `server/src/mcp/tools/read-open.tool.ts`
 - `server/src/microapps/office-suite/capability-pack.ts`
 - `server/src/microapps/office-suite/runtime-pack-paths.ts`
 - `server/src/routes/microapps/office-suite/capability-pack.ts`
 - `server/src/routes/microapps/office-suite/skill-task.ts`
-- `server/src/microapps/office-suite/skill-runtime.ts`
 - `server/tools/wenshu/`
