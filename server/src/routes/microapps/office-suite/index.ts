@@ -28,11 +28,17 @@ const requireCompleted = (
   result: OfficeRuntimeTaskResult,
   unsupportedMessage?: string,
 ) => {
-  if (result.status === "completed") return result;
+  if (result.status === "completed") {
+    return result;
+  }
+
   if (result.error.code === "UNSUPPORTED_FILE_TYPE") {
     throw badRequest(unsupportedMessage ?? result.error.message);
   }
-  if (result.error.code === "INVALID_TASK_INPUT") throw badRequest(result.error.message);
+  if (result.error.code === "INVALID_TASK_INPUT") {
+    throw badRequest(result.error.message);
+  }
+
   throw new Error(result.error.message);
 };
 
@@ -40,7 +46,9 @@ const requireArtifact = (
   result: ReturnType<typeof requireCompleted>,
 ): OfficeRuntimeArtifact => {
   const artifact = result.artifacts[0];
-  if (!artifact) throw new Error("Office Runtime task completed without an artifact");
+  if (!artifact) {
+    throw new Error("Office Runtime task completed without an artifact");
+  }
   return artifact;
 };
 
@@ -64,46 +72,75 @@ const buildWordReviewRequest = (query: WordReviewQuery): OfficeRuntimeWordReview
     type: "review",
     author: query.author?.trim() || undefined,
   };
+
   const commentTarget = query.commentTarget?.trim();
   const commentText = query.commentText?.trim();
   if (commentTarget || commentText) {
-    if (!commentTarget || !commentText) throw badRequest("批注需要同时提供 commentTarget 和 commentText");
+    if (!commentTarget || !commentText) {
+      throw badRequest("批注需要同时提供 commentTarget 和 commentText");
+    }
     request.comments = [{ targetText: commentTarget, text: commentText }];
   }
+
   const insertAfter = query.insertAfter?.trim();
   const insertText = query.insertText;
   if (insertAfter || insertText) {
-    if (!insertAfter || !insertText) throw badRequest("修订插入需要同时提供 insertAfter 和 insertText");
+    if (!insertAfter || !insertText) {
+      throw badRequest("修订插入需要同时提供 insertAfter 和 insertText");
+    }
     request.insertions = [{ afterText: insertAfter, text: insertText }];
   }
+
   const deleteTarget = query.deleteTarget?.trim();
-  if (deleteTarget) request.deletions = [{ targetText: deleteTarget }];
+  if (deleteTarget) {
+    request.deletions = [{ targetText: deleteTarget }];
+  }
+
   if (!request.comments?.length && !request.insertions?.length && !request.deletions?.length) {
     throw badRequest("至少提供一项批注、修订插入或修订删除操作");
   }
+
   return request;
 };
 
 const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
-  // Full PDF/XLSX/PPT skill-runtime workbench lives beside the legacy/basic
-  // Office Runtime verification routes so WenShu remains one micro-app.
   await registerOfficeSkillWorkbenchRoutes(app);
 
   app.post(
     "/microapps/office-suite/inspect",
     routeHandler("Failed to inspect Office document", async (request) => {
-      const upload = await request.file({ limits: { files: 1, fileSize: MAX_OFFICE_FILE_BYTES } });
-      if (!upload) throw badRequest("请选择一个 Office 文件");
+      const upload = await request.file({
+        limits: {
+          files: 1,
+          fileSize: MAX_OFFICE_FILE_BYTES,
+        },
+      });
+
+      if (!upload) {
+        throw badRequest("请选择一个 Office 文件");
+      }
+
       const buffer = await upload.toBuffer();
-      if (buffer.byteLength === 0) throw badRequest("文件内容为空");
+      if (buffer.byteLength === 0) {
+        throw badRequest("文件内容为空");
+      }
+
       const result = requireCompleted(
         await executeOfficeRuntimeTask({
           operation: "inspect",
-          input: { fileName: upload.filename, mimeType: upload.mimetype, buffer },
+          input: {
+            fileName: upload.filename,
+            mimeType: upload.mimetype,
+            buffer,
+          },
         }),
-        "当前基础 Office Inspect 仅支持 .docx、.xlsx 和 .pptx；PDF 请使用 Skill Runtime 工作台",
+        "当前基础 Inspect 仅支持 .docx、.xlsx 和 .pptx；PDF 请使用 Skill Runtime 工作台",
       );
-      if (!result.inspection) throw new Error("Office Runtime inspect task completed without inspection data");
+
+      if (!result.inspection) {
+        throw new Error("Office Runtime inspect task completed without inspection data");
+      }
+
       return success(result.inspection, "Office document inspected");
     }),
   );
@@ -112,10 +149,20 @@ const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
     "/microapps/office-suite/create",
     routeHandler<{ Body: { kind?: OfficeSuiteFileKind } }>("Failed to create Office sample", async (request, reply) => {
       const kind = request.body?.kind;
-      if (!kind || !OFFICE_KINDS.includes(kind)) throw badRequest("请选择要创建的 Office 文件类型");
+      if (!kind || !OFFICE_KINDS.includes(kind)) {
+        throw badRequest("请选择要创建的 Office 文件类型");
+      }
+
       const result = requireCompleted(
-        await executeOfficeRuntimeTask({ operation: "create", kind, request: { type: "verification-sample" } }),
+        await executeOfficeRuntimeTask({
+          operation: "create",
+          kind,
+          request: {
+            type: "verification-sample",
+          },
+        }),
       );
+
       return sendArtifact(reply, result, requireArtifact(result));
     }),
   );
@@ -123,19 +170,41 @@ const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/microapps/office-suite/document/verification-copy",
     routeHandler("Failed to modify Word document", async (request, reply) => {
-      const upload = await request.file({ limits: { files: 1, fileSize: MAX_OFFICE_FILE_BYTES } });
-      if (!upload) throw badRequest("请选择一个 .docx 文件");
-      if (!upload.filename.toLowerCase().endsWith(".docx")) throw badRequest("Word 修改验证当前仅支持 .docx 文件");
+      const upload = await request.file({
+        limits: {
+          files: 1,
+          fileSize: MAX_OFFICE_FILE_BYTES,
+        },
+      });
+
+      if (!upload) {
+        throw badRequest("请选择一个 .docx 文件");
+      }
+      if (!upload.filename.toLowerCase().endsWith(".docx")) {
+        throw badRequest("Word 修改验证当前仅支持 .docx 文件");
+      }
+
       const buffer = await upload.toBuffer();
-      if (buffer.byteLength === 0) throw badRequest("文件内容为空");
+      if (buffer.byteLength === 0) {
+        throw badRequest("文件内容为空");
+      }
+
       const result = requireCompleted(
         await executeOfficeRuntimeTask({
           operation: "modify",
           kind: "word",
-          input: { fileName: upload.filename, mimeType: upload.mimetype, buffer },
-          request: { type: "append-paragraphs", paragraphs: DOCUMENT_VERIFICATION_PARAGRAPHS },
+          input: {
+            fileName: upload.filename,
+            mimeType: upload.mimetype,
+            buffer,
+          },
+          request: {
+            type: "append-paragraphs",
+            paragraphs: DOCUMENT_VERIFICATION_PARAGRAPHS,
+          },
         }),
       );
+
       return sendArtifact(reply, result, requireArtifact(result));
     }),
   );
@@ -145,19 +214,38 @@ const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
     routeHandler<{ Querystring: WordReviewQuery }>(
       "Failed to review Word document",
       async (request, reply) => {
-        const upload = await request.file({ limits: { files: 1, fileSize: MAX_OFFICE_FILE_BYTES } });
-        if (!upload) throw badRequest("请选择一个 .docx 文件");
-        if (!upload.filename.toLowerCase().endsWith(".docx")) throw badRequest("Word 审阅当前仅支持 .docx 文件");
+        const upload = await request.file({
+          limits: {
+            files: 1,
+            fileSize: MAX_OFFICE_FILE_BYTES,
+          },
+        });
+
+        if (!upload) {
+          throw badRequest("请选择一个 .docx 文件");
+        }
+        if (!upload.filename.toLowerCase().endsWith(".docx")) {
+          throw badRequest("Word 审阅当前仅支持 .docx 文件");
+        }
+
         const buffer = await upload.toBuffer();
-        if (buffer.byteLength === 0) throw badRequest("文件内容为空");
+        if (buffer.byteLength === 0) {
+          throw badRequest("文件内容为空");
+        }
+
         const result = requireCompleted(
           await executeOfficeRuntimeTask({
             operation: "modify",
             kind: "word",
-            input: { fileName: upload.filename, mimeType: upload.mimetype, buffer },
+            input: {
+              fileName: upload.filename,
+              mimeType: upload.mimetype,
+              buffer,
+            },
             request: buildWordReviewRequest(request.query),
           }),
         );
+
         return sendArtifact(reply, result, requireArtifact(result));
       },
     ),
@@ -166,19 +254,41 @@ const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/microapps/office-suite/spreadsheet/verification-copy",
     routeHandler("Failed to modify Excel workbook", async (request, reply) => {
-      const upload = await request.file({ limits: { files: 1, fileSize: MAX_OFFICE_FILE_BYTES } });
-      if (!upload) throw badRequest("请选择一个 .xlsx 文件");
-      if (!upload.filename.toLowerCase().endsWith(".xlsx")) throw badRequest("Excel 修改验证当前仅支持 .xlsx 文件");
+      const upload = await request.file({
+        limits: {
+          files: 1,
+          fileSize: MAX_OFFICE_FILE_BYTES,
+        },
+      });
+
+      if (!upload) {
+        throw badRequest("请选择一个 .xlsx 文件");
+      }
+      if (!upload.filename.toLowerCase().endsWith(".xlsx")) {
+        throw badRequest("Excel 修改验证当前仅支持 .xlsx 文件");
+      }
+
       const buffer = await upload.toBuffer();
-      if (buffer.byteLength === 0) throw badRequest("文件内容为空");
+      if (buffer.byteLength === 0) {
+        throw badRequest("文件内容为空");
+      }
+
       const result = requireCompleted(
         await executeOfficeRuntimeTask({
           operation: "modify",
           kind: "excel",
-          input: { fileName: upload.filename, mimeType: upload.mimetype, buffer },
-          request: { type: "patch-cells", patches: SPREADSHEET_VERIFICATION_PATCHES },
+          input: {
+            fileName: upload.filename,
+            mimeType: upload.mimetype,
+            buffer,
+          },
+          request: {
+            type: "patch-cells",
+            patches: SPREADSHEET_VERIFICATION_PATCHES,
+          },
         }),
       );
+
       return sendArtifact(reply, result, requireArtifact(result));
     }),
   );
