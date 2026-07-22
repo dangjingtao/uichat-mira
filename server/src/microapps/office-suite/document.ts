@@ -25,6 +25,15 @@ const buildOutputFileName = (fileName: string) => {
   return `${baseName}-wenshu.docx`;
 };
 
+const resolveBodyInsertIndex = (documentXml: string, bodyCloseIndex: number) => {
+  const bodyContent = documentXml.slice(0, bodyCloseIndex);
+  const sectionProperties = bodyContent.match(
+    /<w:sectPr(?:\s[^>]*)?(?:\/>|>[\s\S]*?<\/w:sectPr>)\s*$/,
+  );
+
+  return sectionProperties?.index ?? bodyCloseIndex;
+};
+
 export const appendDocumentParagraphs = (input: {
   fileName: string;
   buffer: Buffer;
@@ -48,8 +57,9 @@ export const appendDocumentParagraphs = (input: {
       return `<w:p><w:r>${runProperties}<w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r></w:p>`;
     })
     .join("");
+  const insertIndex = resolveBodyInsertIndex(documentXml, bodyCloseIndex);
 
-  const updatedXml = `${documentXml.slice(0, bodyCloseIndex)}${appendedXml}${documentXml.slice(bodyCloseIndex)}`;
+  const updatedXml = `${documentXml.slice(0, insertIndex)}${appendedXml}${documentXml.slice(insertIndex)}`;
   archive.updateFile("word/document.xml", Buffer.from(updatedXml, "utf8"));
 
   return {
