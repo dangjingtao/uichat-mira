@@ -34,6 +34,7 @@ import codeGraphRoutes from "./codegraph/index.js";
 import evolvingKnowledgeRoutes from "./evolving-knowledge/index.js";
 import mailCenterRoutes from "./mail-center/index.js";
 import newsHubRoutes from "./news-hub/index.js";
+import officeSuiteRoutes from "./office-suite/index.js";
 import ttsRoutes from "./tts/index.js";
 import { imageGenerationRouteSchemas } from "./schemas.js";
 import { microAppCapabilityService } from "@/services/micro-app-capability.service.js";
@@ -421,7 +422,6 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
             type: "job",
             generation: toGenerationResponse(job),
           });
-
           const progress = imageGenerationService.getProgressSnapshot?.(generationId);
           if (progress) {
             sendEvent({
@@ -433,7 +433,6 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
         .catch(() => {
           connection.socket.close(1011, "Failed to load generation");
         });
-
       connection.socket.on("close", () => {
         unsubscribe?.();
       });
@@ -606,6 +605,7 @@ const microappsRoute: FastifyPluginAsync<MicroappsRouteOptions> = async (
     }),
   );
 
+  await app.register(officeSuiteRoutes);
   await app.register(computerUseRoutes, {
     computerUseService,
     computerUseRuntimeService,
