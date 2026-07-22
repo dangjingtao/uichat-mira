@@ -25,6 +25,8 @@ export const cosineSimilarity = (left: number[], right: number[]) => {
 export const matchToolCandidatesByEmbedding = async (input: {
   query: string;
   config?: AgentIntentEmbeddingConfig;
+  /** Explicit runtime narrowing, such as the current Skill stage tool boundary. */
+  allowedToolIds?: string[];
 }): Promise<ToolIntentResult> => {
   const eligibleExternalToolIds = resolveAgentEligibleExternalMcpCapabilities().map(
     (definition) => definition.id,
@@ -36,6 +38,7 @@ export const matchToolCandidatesByEmbedding = async (input: {
     minScore: input.config?.minScore,
     allowExternal: true,
     allowedExternalToolIds: eligibleExternalToolIds,
+    allowedToolIds: input.allowedToolIds,
   });
   const topK = Math.max(1, input.config?.topK ?? 10);
   const topCandidates: ToolIntentCandidate[] = (candidateResolution.toolCandidates ?? [])
