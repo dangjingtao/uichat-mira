@@ -9,6 +9,7 @@ import {
   getEvidenceCounts,
   getLatestEvidenceSummary,
 } from "../evidence";
+import { reduceActiveSkillFromEvidence } from "@/skill/runtime";
 import { emitStepNode, getTraceAttemptMeta } from "../node-runtime";
 import type { AgentNodeState, EmitAgentExecutionNode } from "../node-runtime";
 
@@ -57,6 +58,11 @@ export const evidenceNode = async (
   }
 
   const evidence = nextState.evidence;
+  const skillInstance = reduceActiveSkillFromEvidence({
+    runId: state.runId,
+    evidence,
+  });
+
   await emitStepNode(emit, {
     runId: state.runId,
     nodeId: "agent-evidence",
@@ -68,6 +74,15 @@ export const evidenceNode = async (
     details: {
       evidenceCounts: getEvidenceCounts({ evidence }),
       latestEvidenceSummary: getLatestEvidenceSummary({ evidence }),
+      activeSkill: skillInstance
+        ? {
+            skillId: skillInstance.skillId,
+            skillVersion: skillInstance.skillVersion,
+            skillInstanceId: skillInstance.id,
+            status: skillInstance.status,
+            stage: skillInstance.stage ?? null,
+          }
+        : null,
     },
   });
 
