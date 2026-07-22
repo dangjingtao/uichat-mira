@@ -75,13 +75,17 @@ const inspectWordDocument = (
   const tableCount = (documentXml.match(/<w:tbl(?:\s|>)/g) ?? []).length;
   const mediaCount = archive
     .getEntries()
-    .filter((entry) => entry.entryName.startsWith("word/media/") && !entry.isDirectory).length;
+    .filter(
+      (entry) => entry.entryName.startsWith("word/media/") && !entry.isDirectory,
+    ).length;
 
   return {
     kind: "word",
     fileName: input.fileName,
     extension,
-    mimeType: input.mimeType || "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    mimeType:
+      input.mimeType ||
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     byteSize: input.buffer.byteLength,
     summary: `${paragraphs.length} 个文本段落 · ${tableCount} 个表格 · ${mediaCount} 个媒体资源`,
     previewText: clipPreview(paragraphs.join("\n\n")),
@@ -89,8 +93,12 @@ const inspectWordDocument = (
       paragraphs: paragraphs.length,
       tables: tableCount,
       media: mediaCount,
-      hasHeaders: archive.getEntries().some((entry) => /^word\/header\d+\.xml$/.test(entry.entryName)),
-      hasFooters: archive.getEntries().some((entry) => /^word\/footer\d+\.xml$/.test(entry.entryName)),
+      hasHeaders: archive
+        .getEntries()
+        .some((entry) => /^word\/header\d+\.xml$/.test(entry.entryName)),
+      hasFooters: archive
+        .getEntries()
+        .some((entry) => /^word\/footer\d+\.xml$/.test(entry.entryName)),
     },
   };
 };
@@ -132,14 +140,21 @@ const inspectExcelWorkbook = (
     : [];
   const previewText = previewRows
     .slice(0, 20)
-    .map((row) => row.slice(0, 12).map((cell) => String(cell ?? "")).join("\t"))
+    .map((row) =>
+      row
+        .slice(0, 12)
+        .map((cell) => String(cell ?? ""))
+        .join("\t"),
+    )
     .join("\n");
 
   return {
     kind: "excel",
     fileName: input.fileName,
     extension,
-    mimeType: input.mimeType || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    mimeType:
+      input.mimeType ||
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     byteSize: input.buffer.byteLength,
     summary: `${sheets.length} 个工作表 · ${sheets.reduce((total, sheet) => total + sheet.rows, 0)} 行数据范围`,
     previewText: clipPreview(previewText),
@@ -157,11 +172,10 @@ const inspectPowerPointPresentation = (
   const archive = new AdmZip(input.buffer);
   const slideEntries = archive
     .getEntries()
-    .map((entry) => {
+    .flatMap((entry) => {
       const match = entry.entryName.match(/^ppt\/slides\/slide(\d+)\.xml$/);
-      return match ? { entry, index: Number(match[1]) } : null;
+      return match ? [{ entry, index: Number(match[1]) }] : [];
     })
-    .filter((value): value is { entry: ReturnType<AdmZip["getEntries"]>[number]; index: number } => Boolean(value))
     .sort((left, right) => left.index - right.index);
 
   if (slideEntries.length === 0) {
@@ -179,13 +193,17 @@ const inspectPowerPointPresentation = (
   });
   const mediaCount = archive
     .getEntries()
-    .filter((entry) => entry.entryName.startsWith("ppt/media/") && !entry.isDirectory).length;
+    .filter(
+      (entry) => entry.entryName.startsWith("ppt/media/") && !entry.isDirectory,
+    ).length;
 
   return {
     kind: "powerpoint",
     fileName: input.fileName,
     extension,
-    mimeType: input.mimeType || "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    mimeType:
+      input.mimeType ||
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     byteSize: input.buffer.byteLength,
     summary: `${slides.length} 页幻灯片 · ${mediaCount} 个媒体资源`,
     previewText: clipPreview(
@@ -203,7 +221,9 @@ const inspectPowerPointPresentation = (
       media: mediaCount,
       notes: archive
         .getEntries()
-        .filter((entry) => /^ppt\/notesSlides\/notesSlide\d+\.xml$/.test(entry.entryName)).length,
+        .filter((entry) =>
+          /^ppt\/notesSlides\/notesSlide\d+\.xml$/.test(entry.entryName),
+        ).length,
     },
   };
 };
