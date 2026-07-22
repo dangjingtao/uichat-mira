@@ -11,6 +11,7 @@ import {
 import { editFileTool } from "../mcp/tools/edit-file.tool.js";
 import { grepTool } from "../mcp/tools/grep.tool.js";
 import { newsSearchTool } from "../mcp/tools/news-search.tool.js";
+import { officeDocumentTool } from "../mcp/tools/office-document.tool.js";
 import { readExtractTool } from "../mcp/tools/read-extract.tool.js";
 import { readListTool } from "../mcp/tools/read-list.tool.js";
 import { readLocateTool } from "../mcp/tools/read-locate.tool.js";
@@ -48,11 +49,12 @@ export const initializeHarnessRuntime = () => {
   registerCapability(readSliceTool);
   registerCapability(readTool);
 
-  // Public Edit contract: four direct actions.
+  // Public Edit contract: four direct actions plus one task-level Office capability.
   registerCapability(writeFileTool);
   registerCapability(replaceBlockTool);
   registerCapability(deletePathTool);
   registerCapability(movePathTool);
+  registerCapability(officeDocumentTool);
 
   // Compatibility-only implementations for persisted/legacy invocations.
   // Exposure policy keeps these out of the Agent-visible edit surface.
