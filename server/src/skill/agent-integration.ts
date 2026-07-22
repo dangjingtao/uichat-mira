@@ -164,7 +164,7 @@ export const skillAwarePrepareContextNode = async (
   state: AgentNodeState,
   emit?: EmitAgentExecutionNode,
 ): Promise<Partial<AgentNodeState>> => {
-  await ensureSkillResolvedForRun({
+  const resolvedInstance = await ensureSkillResolvedForRun({
     runId: state.runId,
     goalText: state.goal.text,
     latestUserText: getLatestUserQuestion(state.messages),
@@ -173,6 +173,11 @@ export const skillAwarePrepareContextNode = async (
   });
 
   const skillFrame = getActiveSkillRuntimeFrameForRun(state.runId);
+  if (resolvedInstance && !skillFrame) {
+    throw new Error(
+      `Active Skill definition is unavailable: ${resolvedInstance.skillId}@${resolvedInstance.skillVersion}`,
+    );
+  }
   const patch = await prepareHarnessExposureForSkill(state, skillFrame, emit);
 
   if (skillFrame) {
