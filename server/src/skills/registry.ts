@@ -43,6 +43,9 @@ const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
     runtimeCapabilities: ["office_spreadsheet"],
     packageFiles: [
       "SKILL.md",
+      "reference/3_statement_model.md",
+      "reference/DCF_SKILL.md",
+      "reference/COMPS_SKILL.md",
       "runtime/xlsx_runtime.py",
       "runtime/xlsx_finalize.py",
       "runtime/xlsx_tools.py",
