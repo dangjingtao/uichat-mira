@@ -5,6 +5,7 @@ import {
   type OfficeSuiteFileKind,
 } from "@/microapps/office-suite/index.js";
 import { createOfficeSample } from "@/microapps/office-suite/create.js";
+import { createDocumentVerificationCopy } from "@/microapps/office-suite/document.js";
 import { createSpreadsheetVerificationCopy } from "@/microapps/office-suite/spreadsheet.js";
 import { success } from "@/utils/index.js";
 import { badRequest, routeHandler } from "@/utils/route-errors.js";
@@ -67,6 +68,45 @@ const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
         `attachment; filename="${artifact.fileName}"`,
       );
       reply.header("X-Office-Artifact-Kind", artifact.kind);
+      reply.type(artifact.mimeType);
+      return reply.send(artifact.buffer);
+    }),
+  );
+
+  app.post(
+    "/microapps/office-suite/document/verification-copy",
+    routeHandler("Failed to modify Word document", async (request, reply) => {
+      const upload = await request.file({
+        limits: {
+          files: 1,
+          fileSize: MAX_OFFICE_FILE_BYTES,
+        },
+      });
+
+      if (!upload) {
+        throw badRequest("请选择一个 .docx 文件");
+      }
+      if (!upload.filename.toLowerCase().endsWith(".docx")) {
+        throw badRequest("Word 修改验证当前仅支持 .docx 文件");
+      }
+
+      const buffer = await upload.toBuffer();
+      if (buffer.byteLength === 0) {
+        throw badRequest("文件内容为空");
+      }
+
+      const artifact = createDocumentVerificationCopy({
+        fileName: upload.filename,
+        buffer,
+      });
+
+      reply.header("Cache-Control", "no-store");
+      reply.header(
+        "Content-Disposition",
+        `attachment; filename="${artifact.fileName}"`,
+      );
+      reply.header("X-Office-Artifact-Kind", "word");
+      reply.header("X-Office-Operation", "modify");
       reply.type(artifact.mimeType);
       return reply.send(artifact.buffer);
     }),
