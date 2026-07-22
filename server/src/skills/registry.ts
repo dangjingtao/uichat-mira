@@ -34,9 +34,23 @@ const DOCX_SKILL: ActiveSkillContext = {
 };
 
 const strongDocxPattern =
-  /(?:\.docx\b|\bdocx\b|microsoft\s+word|word\s*文档|word文档|track\s*changes|修订模式|批注)/i;
-const weakDocumentPattern = /(?:文档|合同|报告)/i;
-const documentActionPattern = /(?:创建|生成|写一份|编辑|修改|审阅|校对|批改|排版|导出|做成)/i;
+  /(?:\.docx\b|\bdocx\b|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document|microsoft\s+word|word\s*文档|word文档|track\s*changes|修订模式|批注)/i;
+
+const describeMessageForSkillResolution = (message: NormalizedChatMessage) => {
+  const attachmentMetadata = (message.parts ?? [])
+    .flatMap((part) => {
+      if (part.type === "file") {
+        return [part.filename, part.mimeType];
+      }
+      if (part.type === "image" && part.filename) {
+        return [part.filename, part.mediaType ?? ""];
+      }
+      return [];
+    })
+    .filter(Boolean)
+    .join(" ");
+  return [message.content, attachmentMetadata].filter(Boolean).join(" ");
+};
 
 const collectRecentSemanticText = (
   question: string,
@@ -45,7 +59,7 @@ const collectRecentSemanticText = (
   const history = (messages ?? [])
     .filter((message) => message.role === "user" || message.role === "assistant")
     .slice(-6)
-    .map((message) => message.content)
+    .map(describeMessageForSkillResolution)
     .join("\n");
   return `${history}\n${question}`;
 };
@@ -55,16 +69,7 @@ export const resolveActiveSkillContext = (input: {
   messages?: NormalizedChatMessage[];
 }): ActiveSkillContext | null => {
   const semanticText = collectRecentSemanticText(input.question, input.messages);
-  if (strongDocxPattern.test(semanticText)) {
-    return DOCX_SKILL;
-  }
-  if (
-    weakDocumentPattern.test(semanticText) &&
-    documentActionPattern.test(semanticText)
-  ) {
-    return DOCX_SKILL;
-  }
-  return null;
+  return strongDocxPattern.test(semanticText) ? DOCX_SKILL : null;
 };
 
 export const listBuiltInSkillContexts = (): ActiveSkillContext[] => [DOCX_SKILL];
