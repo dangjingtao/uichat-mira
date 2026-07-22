@@ -42,10 +42,6 @@ export const prepareContextNode = async (
     summary: "正在读取线程上下文和可用工具",
   });
 
-  // Dynamic microapp capabilities must be reconciled against the latest owner
-  // configuration before the registry snapshot for this Agent run is frozen.
-  // This keeps Planner exposure truthful without introducing a selector or
-  // bypassing the normal Harness registry/exposure path.
   reconcileCodeGraphHarnessCapability();
 
   const toolDefinitions = listCapabilityDefinitions();
@@ -75,9 +71,15 @@ export const prepareContextNode = async (
     }
   }
 
+  // Skill semantics belong on its high-level business capability, not on Read
+  // primitives. Planner still consumes one canonical toolExposure and there is
+  // no second tool list or use_skill action.
+  const activeSkillBusinessToolIds = new Set(
+    activeSkill?.primaryToolIds.filter((toolId) => toolId.startsWith("office_")) ?? [],
+  );
   const skillAwareDefinitions = activeSkill
     ? exposedDefinitions.map((definition) =>
-        definition.id === "office_document"
+        activeSkillBusinessToolIds.has(definition.id)
           ? {
               ...definition,
               description: [
@@ -92,10 +94,7 @@ export const prepareContextNode = async (
       )
     : exposedDefinitions;
 
-  const toolExposure = toAgentToolExposureState(
-    exposedToolIds,
-    skillAwareDefinitions,
-  );
+  const toolExposure = toAgentToolExposureState(exposedToolIds, skillAwareDefinitions);
   const toolIntent = matcherResult;
 
   await emitStepNode(emit, {
@@ -112,6 +111,7 @@ export const prepareContextNode = async (
       exposedToolCount: toolExposure.exposedTools.length,
       exposedToolIds: toolExposure.exposedTools,
       activeSkillId: activeSkill?.id ?? null,
+      activeSkillBusinessToolIds: [...activeSkillBusinessToolIds],
       codebaseExploreExposed: toolExposure.exposedTools.includes("codebase_explore"),
       currentTaskFrameWriter: "prepareContextNode reads the initialized task frame only",
     },
