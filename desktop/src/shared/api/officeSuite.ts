@@ -28,8 +28,8 @@ const defaultFileName: Record<OfficeSuiteFileKind, string> = {
   powerpoint: "wenshu-powerpoint-sample.pptx",
 };
 
-const parseAttachmentFileName = (contentDisposition?: string) => {
-  if (!contentDisposition) return null;
+const parseAttachmentFileName = (contentDisposition: unknown) => {
+  if (typeof contentDisposition !== "string") return null;
   const match = contentDisposition.match(/filename="?([^";]+)"?/i);
   return match?.[1]?.trim() || null;
 };
@@ -58,7 +58,9 @@ export async function createOfficeSample(
     response.data instanceof Blob
       ? response.data
       : new Blob([response.data], {
-          type: response.headers["content-type"] || "application/octet-stream",
+          type: String(
+            response.headers["content-type"] || "application/octet-stream",
+          ),
         });
 
   return {
