@@ -22,6 +22,7 @@ import {
   type OfficeSuiteInspection,
 } from "@/shared/api/officeSuite";
 import MicroAppPageLayout from "../components/MicroAppPageLayout";
+import SkillRuntimePanel from "./components/SkillRuntimePanel";
 
 const ACCEPTED_EXTENSIONS = ".docx,.xlsx,.pptx";
 
@@ -32,15 +33,6 @@ const kindMeta: Record<
   word: { label: "Word", icon: FileText, runtime: "docx + OOXML" },
   excel: { label: "Excel", icon: FileSpreadsheet, runtime: "xlsx + exceljs" },
   powerpoint: { label: "PowerPoint", icon: Presentation, runtime: "pptxgenjs + OOXML" },
-};
-
-type OperationRecord = {
-  label: string;
-  status: "success" | "error";
-  durationMs: number;
-  fileName?: string;
-  byteSize?: number;
-  error?: string;
 };
 
 const formatBytes = (bytes: number) => {
@@ -78,16 +70,11 @@ export default function OfficeSuitePage() {
   const [wordReviewTarget, setWordReviewTarget] = useState("");
   const [wordReviewComment, setWordReviewComment] = useState("");
   const [wordReviewReplacement, setWordReviewReplacement] = useState("");
-  const [lastCreated, setLastCreated] = useState<{
-    kind: OfficeSuiteFileKind;
+  const [lastArtifact, setLastArtifact] = useState<{
+    label: string;
     fileName: string;
     byteSize: number;
   } | null>(null);
-  const [lastModified, setLastModified] = useState<{
-    fileName: string;
-    byteSize: number;
-  } | null>(null);
-  const [recentOperation, setRecentOperation] = useState<OperationRecord | null>(null);
 
   const selectedExtension = useMemo(() => {
     if (!selectedFile) return "";
@@ -95,19 +82,23 @@ export default function OfficeSuitePage() {
     return index >= 0 ? selectedFile.name.slice(index).toLowerCase() : "";
   }, [selectedFile]);
 
-  const modifying = modifyingWord || reviewingWord || modifyingExcel;
-  const busy = inspecting || modifying || creatingKind !== null;
+  const busy =
+    inspecting ||
+    modifyingWord ||
+    reviewingWord ||
+    modifyingExcel ||
+    creatingKind !== null;
 
   const chooseFile = (file?: File | null) => {
     if (!file) return;
     const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
     if (![".docx", ".xlsx", ".pptx"].includes(extension)) {
-      message.warning("文枢当前只接受 .docx、.xlsx 和 .pptx 文件");
+      message.warning("基础 Office Runtime 只接受 .docx、.xlsx 和 .pptx；PDF 请使用上方 Skill Runtime");
       return;
     }
     setSelectedFile(file);
     setInspection(null);
-    setLastModified(null);
+    setLastArtifact(null);
     setWordReviewTarget("");
     setWordReviewComment("");
     setWordReviewReplacement("");
@@ -118,198 +109,91 @@ export default function OfficeSuitePage() {
       message.warning("请先选择一个 Office 文件");
       return;
     }
-
-    const startedAt = performance.now();
     setInspecting(true);
     try {
-      const result = await inspectOfficeFile(selectedFile);
-      setInspection(result);
-      setRecentOperation({
-        label: `Inspect ${kindMeta[result.kind].label}`,
-        status: "success",
-        durationMs: Math.round(performance.now() - startedAt),
-        fileName: selectedFile.name,
-        byteSize: selectedFile.size,
-      });
+      setInspection(await inspectOfficeFile(selectedFile));
       message.success("文件结构读取完成");
     } catch (error) {
-      const detail = errorMessage(error, "文件读取失败");
-      setRecentOperation({
-        label: "Inspect",
-        status: "error",
-        durationMs: Math.round(performance.now() - startedAt),
-        fileName: selectedFile.name,
-        error: detail,
-      });
-      message.error(detail);
+      message.error(errorMessage(error, "文件读取失败"));
     } finally {
       setInspecting(false);
     }
   };
 
   const runCreate = async (kind: OfficeSuiteFileKind) => {
-    const startedAt = performance.now();
     setCreatingKind(kind);
     try {
       const artifact = await createOfficeSample(kind);
       downloadArtifact(artifact);
-      setLastCreated({
-        kind,
-        fileName: artifact.fileName,
-        byteSize: artifact.blob.size,
-      });
-      setRecentOperation({
-        label: `Create ${kindMeta[kind].label}`,
-        status: "success",
-        durationMs: Math.round(performance.now() - startedAt),
+      setLastArtifact({
+        label: `${kindMeta[kind].label} 测试产物`,
         fileName: artifact.fileName,
         byteSize: artifact.blob.size,
       });
       message.success(`${kindMeta[kind].label} 测试产物已生成`);
     } catch (error) {
-      const detail = errorMessage(error, "Office 文件生成失败");
-      setRecentOperation({
-        label: `Create ${kindMeta[kind].label}`,
-        status: "error",
-        durationMs: Math.round(performance.now() - startedAt),
-        error: detail,
-      });
-      message.error(detail);
+      message.error(errorMessage(error, "Office 文件生成失败"));
     } finally {
       setCreatingKind(null);
     }
   };
 
   const runWordModify = async () => {
-    if (!selectedFile || selectedExtension !== ".docx") {
-      message.warning("请先选择一个 .docx 文件");
-      return;
-    }
-
-    const startedAt = performance.now();
+    if (!selectedFile || selectedExtension !== ".docx") return;
     setModifyingWord(true);
     try {
       const artifact = await createWordVerificationCopy(selectedFile);
       downloadArtifact(artifact);
-      setLastModified({
-        fileName: artifact.fileName,
-        byteSize: artifact.blob.size,
-      });
-      setRecentOperation({
-        label: "Modify Word",
-        status: "success",
-        durationMs: Math.round(performance.now() - startedAt),
-        fileName: artifact.fileName,
-        byteSize: artifact.blob.size,
-      });
+      setLastArtifact({ label: "Word 修改副本", fileName: artifact.fileName, byteSize: artifact.blob.size });
       message.success("Word 修改副本已生成，原文件未覆盖");
     } catch (error) {
-      const detail = errorMessage(error, "Word 修改失败");
-      setRecentOperation({
-        label: "Modify Word",
-        status: "error",
-        durationMs: Math.round(performance.now() - startedAt),
-        fileName: selectedFile.name,
-        error: detail,
-      });
-      message.error(detail);
+      message.error(errorMessage(error, "Word 修改失败"));
     } finally {
       setModifyingWord(false);
     }
   };
 
   const runWordReview = async () => {
-    if (!selectedFile || selectedExtension !== ".docx") {
-      message.warning("请先选择一个 .docx 文件");
-      return;
-    }
-
+    if (!selectedFile || selectedExtension !== ".docx") return;
     const targetText = wordReviewTarget.trim();
     const commentText = wordReviewComment.trim();
-    const hasReplacement = wordReviewReplacement.trim().length > 0;
+    const replacementText = wordReviewReplacement.trim();
     if (!targetText) {
       message.warning("请填写要定位的目标文本");
       return;
     }
-    if (!commentText && !hasReplacement) {
+    if (!commentText && !replacementText) {
       message.warning("请至少填写批注或建议替换文本");
       return;
     }
-
-    const startedAt = performance.now();
     setReviewingWord(true);
     try {
       const artifact = await createWordReviewCopy(selectedFile, {
         author: "Mira",
-        comment: commentText
-          ? { targetText, text: commentText }
-          : undefined,
-        insertion: hasReplacement
-          ? { afterText: targetText, text: wordReviewReplacement }
-          : undefined,
-        deletion: hasReplacement ? { targetText } : undefined,
+        comment: commentText ? { targetText, text: commentText } : undefined,
+        insertion: replacementText ? { afterText: targetText, text: replacementText } : undefined,
+        deletion: replacementText ? { targetText } : undefined,
       });
       downloadArtifact(artifact);
-      setLastModified({
-        fileName: artifact.fileName,
-        byteSize: artifact.blob.size,
-      });
-      setRecentOperation({
-        label: "Review Word",
-        status: "success",
-        durationMs: Math.round(performance.now() - startedAt),
-        fileName: artifact.fileName,
-        byteSize: artifact.blob.size,
-      });
-      message.success("Word 审阅副本已生成，批注和修订保留在新文件中");
+      setLastArtifact({ label: "Word 审阅副本", fileName: artifact.fileName, byteSize: artifact.blob.size });
+      message.success("Word 审阅副本已生成");
     } catch (error) {
-      const detail = errorMessage(error, "Word 审阅失败");
-      setRecentOperation({
-        label: "Review Word",
-        status: "error",
-        durationMs: Math.round(performance.now() - startedAt),
-        fileName: selectedFile.name,
-        error: detail,
-      });
-      message.error(detail);
+      message.error(errorMessage(error, "Word 审阅失败"));
     } finally {
       setReviewingWord(false);
     }
   };
 
   const runExcelModify = async () => {
-    if (!selectedFile || selectedExtension !== ".xlsx") {
-      message.warning("请先选择一个 .xlsx 文件");
-      return;
-    }
-
-    const startedAt = performance.now();
+    if (!selectedFile || selectedExtension !== ".xlsx") return;
     setModifyingExcel(true);
     try {
       const artifact = await createExcelVerificationCopy(selectedFile);
       downloadArtifact(artifact);
-      setLastModified({
-        fileName: artifact.fileName,
-        byteSize: artifact.blob.size,
-      });
-      setRecentOperation({
-        label: "Modify Excel",
-        status: "success",
-        durationMs: Math.round(performance.now() - startedAt),
-        fileName: artifact.fileName,
-        byteSize: artifact.blob.size,
-      });
+      setLastArtifact({ label: "Excel 修改副本", fileName: artifact.fileName, byteSize: artifact.blob.size });
       message.success("Excel 修改副本已生成，原文件未覆盖");
     } catch (error) {
-      const detail = errorMessage(error, "Excel 修改失败");
-      setRecentOperation({
-        label: "Modify Excel",
-        status: "error",
-        durationMs: Math.round(performance.now() - startedAt),
-        fileName: selectedFile.name,
-        error: detail,
-      });
-      message.error(detail);
+      message.error(errorMessage(error, "Excel 修改失败"));
     } finally {
       setModifyingExcel(false);
     }
@@ -319,314 +203,182 @@ export default function OfficeSuitePage() {
     <MicroAppPageLayout
       miniTitle="MicroAPP"
       title="文枢"
-      description="Word、Excel 与 PowerPoint 的本地处理工作台。当前用于验证 Office Runtime，不在这里重复实现一套 Chat。"
+      description="DOCX、PDF、Excel 与 PowerPoint 的本地文档能力工作台。Skill 负责业务语义，文枢 Runtime 负责确定性生成、处理与验证。"
       contentClassName="space-y-5 pt-5"
     >
       <Card className="border-primary/20 bg-primary/5 p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="flex h-10 w-10 items-center justify-center rounded-ui-control bg-surface-primary text-primary shadow-shadow-sm">
-                <Sparkles className="h-5 w-5" />
-              </span>
-              <div>
-                <div className="font-serif text-lg font-semibold text-text-primary">Office Runtime</div>
-                <div className="text-sm text-text-secondary">一个微应用，内部保持三类文件处理边界。</div>
-              </div>
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-ui-control bg-surface-primary text-primary shadow-shadow-sm">
+              <Sparkles className="h-5 w-5" />
+            </span>
+            <div>
+              <div className="font-serif text-lg font-semibold text-text-primary">WenShu Runtime</div>
+              <div className="text-sm text-text-secondary">一个微应用，四类 Skill；Python 统一复用系统开发小套件。</div>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <Badge variant="muted">本地优先</Badge>
-            <Badge variant="muted">不注册原子 Harness 能力</Badge>
-            <Badge variant="warning">调试阶段</Badge>
+            <Badge variant="muted">Task-level Tools</Badge>
+            <Badge variant="muted">不暴露 Office 原子操作</Badge>
           </div>
         </div>
       </Card>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="space-y-5">
-          <Card className="p-5">
-            <div className="space-y-4">
-              <div>
-                <h2 className="text-base font-semibold text-text-primary">创建测试产物</h2>
-                <p className="mt-1 text-sm leading-6 text-text-secondary">
-                  直接调用三类 Office Runtime 的主生成库，验证 Create → 下载链路。生成后的文件可以再上传到下方做 Inspect 回读。
-                </p>
-              </div>
+      <SkillRuntimePanel />
 
-              <div className="grid gap-3 md:grid-cols-3">
-                {(Object.entries(kindMeta) as [OfficeSuiteFileKind, (typeof kindMeta)[OfficeSuiteFileKind]][]).map(
-                  ([kind, meta]) => {
-                    const Icon = meta.icon;
-                    const isCreating = creatingKind === kind;
-                    return (
-                      <Button
-                        key={kind}
-                        variant="outline"
-                        size="md"
-                        disabled={busy}
-                        onClick={() => void runCreate(kind)}
-                      >
-                        <Icon className="h-4 w-4" />
-                        {isCreating ? "正在生成…" : `生成 ${meta.label}`}
-                      </Button>
-                    );
-                  },
-                )}
-              </div>
-
-              {lastCreated ? (
-                <div className="flex flex-wrap items-center gap-2 rounded-ui-panel border border-border bg-surface-secondary/20 px-4 py-3 text-sm">
-                  <Download className="h-4 w-4 text-primary" />
-                  <Badge variant="success">生成成功</Badge>
-                  <span className="font-medium text-text-primary">{lastCreated.fileName}</span>
-                  <span className="text-text-tertiary">{formatBytes(lastCreated.byteSize)}</span>
-                </div>
-              ) : null}
-            </div>
-          </Card>
-
-          <Card className="p-5">
-            <div className="space-y-4">
-              <div>
-                <h2 className="text-base font-semibold text-text-primary">文件输入与修改验证</h2>
-                <p className="mt-1 text-sm leading-6 text-text-secondary">
-                  选择已有文件做 Inspect；DOCX 和 XLSX 可以生成非破坏性的修改副本。DOCX 还可以验证原生批注与 Track Changes 修订。
-                </p>
-              </div>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={ACCEPTED_EXTENSIONS}
-                className="hidden"
-                onChange={(event) => chooseFile(event.target.files?.[0])}
-              />
-
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex min-h-40 w-full flex-col items-center justify-center gap-3 rounded-ui-panel border border-dashed border-border bg-surface-secondary/20 px-5 py-8 text-center transition-colors hover:border-primary/40 hover:bg-primary/5"
-              >
-                <span className="flex h-11 w-11 items-center justify-center rounded-ui-control bg-primary/10 text-primary">
-                  <Upload className="h-5 w-5" />
-                </span>
-                <div>
-                  <div className="text-sm font-medium text-text-primary">
-                    {selectedFile ? selectedFile.name : "选择 Office 文件"}
-                  </div>
-                  <div className="mt-1 text-xs text-text-tertiary">
-                    {selectedFile
-                      ? `${selectedExtension} · ${formatBytes(selectedFile.size)}`
-                      : "支持 .docx / .xlsx / .pptx"}
-                  </div>
-                </div>
-              </button>
-
-              <div className="flex flex-wrap justify-end gap-3">
-                {selectedExtension === ".docx" ? (
+      <Card className="p-5">
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-base font-semibold text-text-primary">基础 Office Runtime 兼容验证</h2>
+            <p className="mt-1 text-sm leading-6 text-text-secondary">
+              保留原来的 DOCX / XLSX / PPTX 基础链路，用于回归旧 Runtime。正式 PDF、Excel 与 PPT Skill 能力以上方全能力工作台和 Agent Skill 为准。
+            </p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            {(Object.entries(kindMeta) as [OfficeSuiteFileKind, (typeof kindMeta)[OfficeSuiteFileKind]][]).map(
+              ([kind, meta]) => {
+                const Icon = meta.icon;
+                return (
                   <Button
+                    key={kind}
                     variant="outline"
                     size="md"
-                    disabled={!selectedFile || busy}
-                    onClick={() => void runWordModify()}
+                    disabled={busy}
+                    onClick={() => void runCreate(kind)}
                   >
-                    <FileText className="h-4 w-4" />
-                    {modifyingWord ? "正在修改…" : "生成 Word 修改副本"}
+                    <Icon className="h-4 w-4" />
+                    {creatingKind === kind ? "正在生成…" : `生成 ${meta.label} 测试产物`}
                   </Button>
-                ) : null}
-                {selectedExtension === ".xlsx" ? (
-                  <Button
-                    variant="outline"
-                    size="md"
-                    disabled={!selectedFile || busy}
-                    onClick={() => void runExcelModify()}
-                  >
-                    <FileSpreadsheet className="h-4 w-4" />
-                    {modifyingExcel ? "正在修改…" : "生成 Excel 修改副本"}
-                  </Button>
-                ) : null}
-                <Button
-                  variant="primary"
-                  size="md"
-                  disabled={!selectedFile || busy}
-                  onClick={() => void runInspection()}
-                >
-                  {inspecting ? "正在读取…" : "读取文件结构"}
-                </Button>
-              </div>
-
-              {selectedExtension === ".docx" ? (
-                <div className="space-y-3 rounded-ui-panel border border-border bg-surface-secondary/20 p-4">
-                  <div>
-                    <div className="text-sm font-semibold text-text-primary">Word 审阅验证</div>
-                    <p className="mt-1 text-xs leading-5 text-text-tertiary">
-                      使用精确文本锚点添加 Word 原生批注；填写建议替换文本时，会生成 Track Changes 删除 + 插入修订。
-                    </p>
-                  </div>
-                  <div className="grid gap-3 lg:grid-cols-3">
-                    <label className="space-y-1.5">
-                      <span className="text-xs font-medium text-text-secondary">目标文本</span>
-                      <input
-                        value={wordReviewTarget}
-                        onChange={(event) => setWordReviewTarget(event.target.value)}
-                        placeholder="原文中可精确定位的一段文字"
-                        className="h-10 w-full rounded-ui-control border border-border bg-surface-primary px-3 text-sm text-text-primary outline-none transition-colors placeholder:text-text-tertiary focus:border-primary/60"
-                      />
-                    </label>
-                    <label className="space-y-1.5">
-                      <span className="text-xs font-medium text-text-secondary">批注（可选）</span>
-                      <input
-                        value={wordReviewComment}
-                        onChange={(event) => setWordReviewComment(event.target.value)}
-                        placeholder="给这段文字添加批注"
-                        className="h-10 w-full rounded-ui-control border border-border bg-surface-primary px-3 text-sm text-text-primary outline-none transition-colors placeholder:text-text-tertiary focus:border-primary/60"
-                      />
-                    </label>
-                    <label className="space-y-1.5">
-                      <span className="text-xs font-medium text-text-secondary">建议替换为（可选）</span>
-                      <input
-                        value={wordReviewReplacement}
-                        onChange={(event) => setWordReviewReplacement(event.target.value)}
-                        placeholder="生成删除 + 插入修订"
-                        className="h-10 w-full rounded-ui-control border border-border bg-surface-primary px-3 text-sm text-text-primary outline-none transition-colors placeholder:text-text-tertiary focus:border-primary/60"
-                      />
-                    </label>
-                  </div>
-                  <div className="flex justify-end">
-                    <Button
-                      variant="outline"
-                      size="md"
-                      disabled={
-                        !selectedFile ||
-                        busy ||
-                        !wordReviewTarget.trim() ||
-                        (!wordReviewComment.trim() && !wordReviewReplacement.trim())
-                      }
-                      onClick={() => void runWordReview()}
-                    >
-                      <FileText className="h-4 w-4" />
-                      {reviewingWord ? "正在生成审阅副本…" : "生成 Word 审阅副本"}
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-
-              {lastModified ? (
-                <div className="flex flex-wrap items-center gap-2 rounded-ui-panel border border-border bg-surface-secondary/20 px-4 py-3 text-sm">
-                  <Download className="h-4 w-4 text-primary" />
-                  <Badge variant="success">修改副本已生成</Badge>
-                  <span className="font-medium text-text-primary">{lastModified.fileName}</span>
-                  <span className="text-text-tertiary">{formatBytes(lastModified.byteSize)}</span>
-                </div>
-              ) : null}
+                );
+              },
+            )}
+          </div>
+          {lastArtifact ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-ui-panel border border-border bg-surface-secondary/20 px-4 py-3 text-sm">
+              <Download className="h-4 w-4 text-primary" />
+              <Badge variant="success">{lastArtifact.label}</Badge>
+              <span className="font-medium text-text-primary">{lastArtifact.fileName}</span>
+              <span className="text-text-tertiary">{formatBytes(lastArtifact.byteSize)}</span>
             </div>
-          </Card>
-
-          <Card className="p-5">
-            <div className="space-y-4">
-              <div>
-                <h2 className="text-base font-semibold text-text-primary">检查结果</h2>
-                <p className="mt-1 text-sm text-text-secondary">这里展示 Runtime 返回的结构摘要，不做完整 Office 编辑器。</p>
-              </div>
-
-              {!inspection ? (
-                <div className="rounded-ui-panel border border-border bg-surface-secondary/20 px-4 py-10 text-center text-sm text-text-tertiary">
-                  选择文件并执行读取后，这里会显示结构、文本摘要和解析结果。
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="success">解析成功</Badge>
-                    <Badge variant="neutral">{kindMeta[inspection.kind].label}</Badge>
-                    <span className="text-sm text-text-secondary">{inspection.summary}</span>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <ResultBlock title="结构">
-                      <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs leading-5 text-text-secondary">
-                        {prettyJson(inspection.structure)}
-                      </pre>
-                    </ResultBlock>
-                    <ResultBlock title="内容预览">
-                      <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs leading-5 text-text-secondary">
-                        {inspection.previewText || "没有可预览文本"}
-                      </pre>
-                    </ResultBlock>
-                  </div>
-                </div>
-              )}
-            </div>
-          </Card>
+          ) : null}
         </div>
+      </Card>
 
-        <aside className="space-y-5">
-          <Card className="p-4">
-            <div className="mb-3 text-sm font-semibold text-text-primary">Runtime 状态</div>
-            <div className="space-y-2">
-              {(Object.entries(kindMeta) as [OfficeSuiteFileKind, (typeof kindMeta)[OfficeSuiteFileKind]][]).map(
-                ([kind, meta]) => {
-                  const Icon = meta.icon;
-                  return (
-                    <div
-                      key={kind}
-                      className="flex items-center gap-3 rounded-ui-control border border-border bg-surface-primary px-3 py-3"
-                    >
-                      <span className="flex h-8 w-8 items-center justify-center rounded-ui-control bg-primary/10 text-primary">
-                        <Icon className="h-4 w-4" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium text-text-primary">{meta.label}</div>
-                        <div className="mt-0.5 truncate text-xs text-text-tertiary">{meta.runtime}</div>
-                      </div>
-                      <Badge variant="success">
-                        {kind === "powerpoint"
-                          ? "Inspect + Rich Create"
-                          : kind === "word"
-                            ? "Inspect + Create + Modify + Review"
-                            : "Inspect + Create + Modify"}
-                      </Badge>
-                    </div>
-                  );
-                },
-              )}
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Card className="p-5">
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-text-primary">已有 Office 文件</h2>
+              <p className="mt-1 text-sm leading-6 text-text-secondary">
+                Inspect DOCX/XLSX/PPTX；Word 可验证副本修改和 Review，Excel 可验证基础修改副本。
+              </p>
             </div>
-          </Card>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPTED_EXTENSIONS}
+              className="hidden"
+              onChange={(event) => chooseFile(event.target.files?.[0])}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex min-h-32 w-full flex-col items-center justify-center gap-3 rounded-ui-panel border border-dashed border-border bg-surface-secondary/20 px-5 py-6 text-center transition-colors hover:border-primary/40 hover:bg-primary/5"
+            >
+              <Upload className="h-5 w-5 text-primary" />
+              <div className="text-sm font-medium text-text-primary">
+                {selectedFile ? selectedFile.name : "选择 .docx / .xlsx / .pptx"}
+              </div>
+              {selectedFile ? (
+                <div className="text-xs text-text-tertiary">{selectedExtension} · {formatBytes(selectedFile.size)}</div>
+              ) : null}
+            </button>
+            <div className="flex flex-wrap justify-end gap-2">
+              {selectedExtension === ".docx" ? (
+                <Button variant="outline" size="md" disabled={busy} onClick={() => void runWordModify()}>
+                  {modifyingWord ? "修改中…" : "Word 修改副本"}
+                </Button>
+              ) : null}
+              {selectedExtension === ".xlsx" ? (
+                <Button variant="outline" size="md" disabled={busy} onClick={() => void runExcelModify()}>
+                  {modifyingExcel ? "修改中…" : "Excel 修改副本"}
+                </Button>
+              ) : null}
+              <Button variant="primary" size="md" disabled={!selectedFile || busy} onClick={() => void runInspection()}>
+                {inspecting ? "读取中…" : "读取文件结构"}
+              </Button>
+            </div>
 
-          <Card className="p-4">
-            <div className="text-sm font-semibold text-text-primary">最近操作</div>
-            {!recentOperation ? (
-              <div className="mt-3 text-xs leading-5 text-text-tertiary">尚未执行操作。</div>
-            ) : (
-              <div className="mt-3 space-y-2 text-xs leading-5 text-text-secondary">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={recentOperation.status === "success" ? "success" : "danger"}>
-                    {recentOperation.status === "success" ? "成功" : "失败"}
-                  </Badge>
-                  <span className="font-medium text-text-primary">{recentOperation.label}</span>
+            {selectedExtension === ".docx" ? (
+              <div className="space-y-3 rounded-ui-panel border border-border bg-surface-secondary/20 p-4">
+                <div className="text-sm font-semibold text-text-primary">Word Review</div>
+                <input
+                  value={wordReviewTarget}
+                  onChange={(event) => setWordReviewTarget(event.target.value)}
+                  placeholder="精确目标文本"
+                  className="h-10 w-full rounded-ui-control border border-border bg-surface-primary px-3 text-sm text-text-primary outline-none focus:border-primary/60"
+                />
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input
+                    value={wordReviewComment}
+                    onChange={(event) => setWordReviewComment(event.target.value)}
+                    placeholder="原生批注（可选）"
+                    className="h-10 w-full rounded-ui-control border border-border bg-surface-primary px-3 text-sm text-text-primary outline-none focus:border-primary/60"
+                  />
+                  <input
+                    value={wordReviewReplacement}
+                    onChange={(event) => setWordReviewReplacement(event.target.value)}
+                    placeholder="Track Changes 建议替换（可选）"
+                    className="h-10 w-full rounded-ui-control border border-border bg-surface-primary px-3 text-sm text-text-primary outline-none focus:border-primary/60"
+                  />
                 </div>
-                <div>耗时：{recentOperation.durationMs} ms</div>
-                {recentOperation.fileName ? <div className="break-all">文件：{recentOperation.fileName}</div> : null}
-                {recentOperation.byteSize !== undefined ? (
-                  <div>大小：{formatBytes(recentOperation.byteSize)}</div>
-                ) : null}
-                {recentOperation.error ? (
-                  <div className="break-words text-danger">错误：{recentOperation.error}</div>
-                ) : null}
+                <div className="flex justify-end">
+                  <Button
+                    variant="outline"
+                    size="md"
+                    disabled={busy || !wordReviewTarget.trim() || (!wordReviewComment.trim() && !wordReviewReplacement.trim())}
+                    onClick={() => void runWordReview()}
+                  >
+                    {reviewingWord ? "生成中…" : "生成审阅副本"}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-text-primary">基础 Inspect 结果</h2>
+              <p className="mt-1 text-sm text-text-secondary">旧 Office Runtime 的结构摘要与内容预览。</p>
+            </div>
+            {!inspection ? (
+              <div className="rounded-ui-panel border border-border bg-surface-secondary/20 px-4 py-12 text-center text-sm text-text-tertiary">
+                选择文件并读取后显示结果。
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="success">解析成功</Badge>
+                  <Badge variant="neutral">{kindMeta[inspection.kind].label}</Badge>
+                  <span className="text-sm text-text-secondary">{inspection.summary}</span>
+                </div>
+                <ResultBlock title="结构">
+                  <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs leading-5 text-text-secondary">
+                    {prettyJson(inspection.structure)}
+                  </pre>
+                </ResultBlock>
+                <ResultBlock title="内容预览">
+                  <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs leading-5 text-text-secondary">
+                    {inspection.previewText || "没有可预览文本"}
+                  </pre>
+                </ResultBlock>
               </div>
             )}
-          </Card>
-
-          <Card className="p-4">
-            <div className="text-sm font-semibold text-text-primary">当前边界</div>
-            <div className="mt-3 space-y-2 text-xs leading-5 text-text-secondary">
-              <p>文枢现在是 Office Runtime 的调试和验证窗口。</p>
-              <p>Word 已进入基础 Modify 与 Review 批注/修订验证；Excel 已进入基础 Modify；PowerPoint 已验证多页、文本、图片与表格生成，不承诺任意既有 PPT 的无损修改。</p>
-              <p>Word Review 当前只对可安全定位的简单文本 run 做精确编辑；复杂 run 会明确失败，不做有损重写。</p>
-              <p>不嵌 Chat，不提前实现 Skill Runtime，也不把 set_cell / add_slide 之类原子操作暴露给 Agent。</p>
-            </div>
-          </Card>
-        </aside>
+          </div>
+        </Card>
       </div>
     </MicroAppPageLayout>
   );
