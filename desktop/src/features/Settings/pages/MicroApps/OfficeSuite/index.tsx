@@ -33,6 +33,15 @@ const kindMeta: Record<
   powerpoint: { label: "PowerPoint", icon: Presentation, runtime: "pptxgenjs + OOXML" },
 };
 
+type OperationRecord = {
+  label: string;
+  status: "success" | "error";
+  durationMs: number;
+  fileName?: string;
+  byteSize?: number;
+  error?: string;
+};
+
 const formatBytes = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -53,6 +62,9 @@ const downloadArtifact = (artifact: OfficeSuiteCreatedDownload) => {
   window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 };
 
+const errorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
+
 export default function OfficeSuitePage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -70,6 +82,7 @@ export default function OfficeSuitePage() {
     fileName: string;
     byteSize: number;
   } | null>(null);
+  const [recentOperation, setRecentOperation] = useState<OperationRecord | null>(null);
 
   const selectedExtension = useMemo(() => {
     if (!selectedFile) return "";
@@ -78,6 +91,7 @@ export default function OfficeSuitePage() {
   }, [selectedFile]);
 
   const modifying = modifyingWord || modifyingExcel;
+  const busy = inspecting || modifying || creatingKind !== null;
 
   const chooseFile = (file?: File | null) => {
     if (!file) return;
@@ -96,19 +110,37 @@ export default function OfficeSuitePage() {
       message.warning("请先选择一个 Office 文件");
       return;
     }
+
+    const startedAt = performance.now();
     setInspecting(true);
     try {
       const result = await inspectOfficeFile(selectedFile);
       setInspection(result);
+      setRecentOperation({
+        label: `Inspect ${kindMeta[result.kind].label}`,
+        status: "success",
+        durationMs: Math.round(performance.now() - startedAt),
+        fileName: selectedFile.name,
+        byteSize: selectedFile.size,
+      });
       message.success("文件结构读取完成");
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "文件读取失败");
+      const detail = errorMessage(error, "文件读取失败");
+      setRecentOperation({
+        label: "Inspect",
+        status: "error",
+        durationMs: Math.round(performance.now() - startedAt),
+        fileName: selectedFile.name,
+        error: detail,
+      });
+      message.error(detail);
     } finally {
       setInspecting(false);
     }
   };
 
   const runCreate = async (kind: OfficeSuiteFileKind) => {
+    const startedAt = performance.now();
     setCreatingKind(kind);
     try {
       const artifact = await createOfficeSample(kind);
@@ -118,9 +150,23 @@ export default function OfficeSuitePage() {
         fileName: artifact.fileName,
         byteSize: artifact.blob.size,
       });
+      setRecentOperation({
+        label: `Create ${kindMeta[kind].label}`,
+        status: "success",
+        durationMs: Math.round(performance.now() - startedAt),
+        fileName: artifact.fileName,
+        byteSize: artifact.blob.size,
+      });
       message.success(`${kindMeta[kind].label} 测试产物已生成`);
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "Office 文件生成失败");
+      const detail = errorMessage(error, "Office 文件生成失败");
+      setRecentOperation({
+        label: `Create ${kindMeta[kind].label}`,
+        status: "error",
+        durationMs: Math.round(performance.now() - startedAt),
+        error: detail,
+      });
+      message.error(detail);
     } finally {
       setCreatingKind(null);
     }
@@ -132,6 +178,7 @@ export default function OfficeSuitePage() {
       return;
     }
 
+    const startedAt = performance.now();
     setModifyingWord(true);
     try {
       const artifact = await createWordVerificationCopy(selectedFile);
@@ -140,9 +187,24 @@ export default function OfficeSuitePage() {
         fileName: artifact.fileName,
         byteSize: artifact.blob.size,
       });
+      setRecentOperation({
+        label: "Modify Word",
+        status: "success",
+        durationMs: Math.round(performance.now() - startedAt),
+        fileName: artifact.fileName,
+        byteSize: artifact.blob.size,
+      });
       message.success("Word 修改副本已生成，原文件未覆盖");
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "Word 修改失败");
+      const detail = errorMessage(error, "Word 修改失败");
+      setRecentOperation({
+        label: "Modify Word",
+        status: "error",
+        durationMs: Math.round(performance.now() - startedAt),
+        fileName: selectedFile.name,
+        error: detail,
+      });
+      message.error(detail);
     } finally {
       setModifyingWord(false);
     }
@@ -154,6 +216,7 @@ export default function OfficeSuitePage() {
       return;
     }
 
+    const startedAt = performance.now();
     setModifyingExcel(true);
     try {
       const artifact = await createExcelVerificationCopy(selectedFile);
@@ -162,9 +225,24 @@ export default function OfficeSuitePage() {
         fileName: artifact.fileName,
         byteSize: artifact.blob.size,
       });
+      setRecentOperation({
+        label: "Modify Excel",
+        status: "success",
+        durationMs: Math.round(performance.now() - startedAt),
+        fileName: artifact.fileName,
+        byteSize: artifact.blob.size,
+      });
       message.success("Excel 修改副本已生成，原文件未覆盖");
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "Excel 修改失败");
+      const detail = errorMessage(error, "Excel 修改失败");
+      setRecentOperation({
+        label: "Modify Excel",
+        status: "error",
+        durationMs: Math.round(performance.now() - startedAt),
+        fileName: selectedFile.name,
+        error: detail,
+      });
+      message.error(detail);
     } finally {
       setModifyingExcel(false);
     }
@@ -219,7 +297,7 @@ export default function OfficeSuitePage() {
                         key={kind}
                         variant="outline"
                         size="md"
-                        disabled={creatingKind !== null || modifying}
+                        disabled={busy}
                         onClick={() => void runCreate(kind)}
                       >
                         <Icon className="h-4 w-4" />
@@ -283,7 +361,7 @@ export default function OfficeSuitePage() {
                   <Button
                     variant="outline"
                     size="md"
-                    disabled={!selectedFile || modifying || inspecting || creatingKind !== null}
+                    disabled={!selectedFile || busy}
                     onClick={() => void runWordModify()}
                   >
                     <FileText className="h-4 w-4" />
@@ -294,7 +372,7 @@ export default function OfficeSuitePage() {
                   <Button
                     variant="outline"
                     size="md"
-                    disabled={!selectedFile || modifying || inspecting || creatingKind !== null}
+                    disabled={!selectedFile || busy}
                     onClick={() => void runExcelModify()}
                   >
                     <FileSpreadsheet className="h-4 w-4" />
@@ -304,7 +382,7 @@ export default function OfficeSuitePage() {
                 <Button
                   variant="primary"
                   size="md"
-                  disabled={!selectedFile || inspecting || modifying}
+                  disabled={!selectedFile || busy}
                   onClick={() => void runInspection()}
                 >
                   {inspecting ? "正在读取…" : "读取文件结构"}
@@ -379,7 +457,9 @@ export default function OfficeSuitePage() {
                         <div className="mt-0.5 truncate text-xs text-text-tertiary">{meta.runtime}</div>
                       </div>
                       <Badge variant="success">
-                        {kind === "powerpoint" ? "Inspect + Create" : "Inspect + Create + Modify"}
+                        {kind === "powerpoint"
+                          ? "Inspect + Rich Create"
+                          : "Inspect + Create + Modify"}
                       </Badge>
                     </div>
                   );
@@ -389,10 +469,34 @@ export default function OfficeSuitePage() {
           </Card>
 
           <Card className="p-4">
+            <div className="text-sm font-semibold text-text-primary">最近操作</div>
+            {!recentOperation ? (
+              <div className="mt-3 text-xs leading-5 text-text-tertiary">尚未执行操作。</div>
+            ) : (
+              <div className="mt-3 space-y-2 text-xs leading-5 text-text-secondary">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={recentOperation.status === "success" ? "success" : "danger"}>
+                    {recentOperation.status === "success" ? "成功" : "失败"}
+                  </Badge>
+                  <span className="font-medium text-text-primary">{recentOperation.label}</span>
+                </div>
+                <div>耗时：{recentOperation.durationMs} ms</div>
+                {recentOperation.fileName ? <div className="break-all">文件：{recentOperation.fileName}</div> : null}
+                {recentOperation.byteSize !== undefined ? (
+                  <div>大小：{formatBytes(recentOperation.byteSize)}</div>
+                ) : null}
+                {recentOperation.error ? (
+                  <div className="break-words text-danger">错误：{recentOperation.error}</div>
+                ) : null}
+              </div>
+            )}
+          </Card>
+
+          <Card className="p-4">
             <div className="text-sm font-semibold text-text-primary">当前边界</div>
             <div className="mt-3 space-y-2 text-xs leading-5 text-text-secondary">
               <p>文枢现在是 Office Runtime 的调试和验证窗口。</p>
-              <p>Word 和 Excel 已进入基础 Modify 验证；PowerPoint 当前聚焦创建和生成，不承诺任意既有 PPT 的无损修改。</p>
+              <p>Word 和 Excel 已进入基础 Modify 验证；PowerPoint 已验证多页、文本、图片与表格生成，不承诺任意既有 PPT 的无损修改。</p>
               <p>不嵌 Chat，不提前实现 Skill Runtime，也不把 set_cell / add_slide 之类原子操作暴露给 Agent。</p>
             </div>
           </Card>
