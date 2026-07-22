@@ -12,6 +12,30 @@ describe("docx skill", () => {
     expect(skill?.primaryToolIds).toContain("office_document");
   });
 
+  it("activates when DOCX exists only in attachment metadata", () => {
+    const skill = resolveActiveSkillContext({
+      question: "帮我审一下这个",
+      messages: [
+        {
+          role: "user",
+          content: "帮我审一下这个",
+          parts: [
+            { type: "text", text: "帮我审一下这个" },
+            {
+              type: "file",
+              filename: "合同终稿.docx",
+              mimeType:
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              data: "data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,AA==",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(skill?.id).toBe("docx");
+  });
+
   it("does not activate for unrelated code work", () => {
     const skill = resolveActiveSkillContext({
       question: "帮我修复这个 TypeScript 编译错误",
