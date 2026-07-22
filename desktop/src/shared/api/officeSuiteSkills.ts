@@ -1,9 +1,50 @@
-import { client, get } from "@/shared/lib/request";
+import { client, get, post } from "@/shared/lib/request";
 
 const STATUS_ROUTE = "/microapps/office-suite/runtime/status";
 const TASK_ROUTE = "/microapps/office-suite/skill-task";
+const CATALOG_ROUTE = "/microapps/office-suite/skills/catalog";
+const PACK_STATUS_ROUTE = "/microapps/office-suite/capability-pack/status";
+const PACK_INSTALL_ROUTE = "/microapps/office-suite/capability-pack/install";
 
 export type WenshuSkillDomain = "pdf" | "xlsx" | "pptx";
+
+export type WenshuCapabilityPackStatus = {
+  id: "wenshu-office";
+  version: string;
+  installed: boolean;
+  installRoot: string;
+  sitePackages: string;
+  python: string;
+  requiredModules: string[];
+  missing: string[];
+  error?: string;
+};
+
+export type WenshuSkillPackageDefinition = {
+  id: WenshuSkillDomain;
+  version: string;
+  name: string;
+  source: string;
+  category: string;
+  description: string;
+  runtimePack: {
+    id: "wenshu-office";
+    version: string;
+    required: true;
+  };
+  runtimeCapabilities: string[];
+  packageFiles: string[];
+  agentIntegration: {
+    status: "deferred";
+    reason: string;
+    requiredContracts: string[];
+  };
+};
+
+export type WenshuSkillCatalog = {
+  skills: WenshuSkillPackageDefinition[];
+  pack: WenshuCapabilityPackStatus;
+};
 
 export type WenshuRuntimeStatus = {
   runtimes: Array<{
@@ -35,6 +76,14 @@ const parseAttachmentFileName = (contentDisposition: unknown) => {
 
 export const getWenshuRuntimeStatus = () => get<WenshuRuntimeStatus>(STATUS_ROUTE);
 
+export const getWenshuSkillCatalog = () => get<WenshuSkillCatalog>(CATALOG_ROUTE);
+
+export const getWenshuCapabilityPackStatus = () =>
+  get<WenshuCapabilityPackStatus>(PACK_STATUS_ROUTE);
+
+export const installWenshuCapabilityPack = () =>
+  post<WenshuCapabilityPackStatus>(PACK_INSTALL_ROUTE, {}, { timeout: 0 });
+
 export const runWenshuSkillTask = async (
   domain: WenshuSkillDomain,
   task: Record<string, unknown>,
@@ -52,7 +101,7 @@ export const runWenshuSkillTask = async (
   if (mimeType.includes("application/json")) {
     const text = await response.data.text();
     const payload = JSON.parse(text) as { success?: boolean; data?: unknown; message?: string };
-    if (payload.success === false) throw new Error(payload.message || "文枢 Skill Runtime 执行失败");
+    if (payload.success === false) throw new Error(payload.message || "文枢 Runtime 执行失败");
     return { type: "json", data: payload.data ?? payload };
   }
 
