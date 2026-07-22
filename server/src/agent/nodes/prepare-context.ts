@@ -75,9 +75,26 @@ export const prepareContextNode = async (
     }
   }
 
+  const skillAwareDefinitions = activeSkill
+    ? exposedDefinitions.map((definition) =>
+        definition.id === "office_document"
+          ? {
+              ...definition,
+              description: [
+                definition.description,
+                `Active Skill: ${activeSkill.id} (${activeSkill.name}).`,
+                ...activeSkill.instructions,
+                "Skill completion criteria:",
+                ...activeSkill.completionCriteria.map((criterion) => `- ${criterion}`),
+              ].join("\n"),
+            }
+          : definition,
+      )
+    : exposedDefinitions;
+
   const toolExposure = toAgentToolExposureState(
     exposedToolIds,
-    exposedDefinitions,
+    skillAwareDefinitions,
   );
   const toolIntent = matcherResult;
 
