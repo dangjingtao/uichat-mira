@@ -3,6 +3,12 @@ import { describe, expect, it } from "vitest";
 import { OFFICE_RUNTIME_CONTRACT_VERSION } from "./contract.js";
 import { executeOfficeRuntimeTask } from "./runtime.js";
 
+const readZipText = (archive: AdmZip, entryName: string) => {
+  const entry = archive.getEntry(entryName);
+  if (!entry) throw new Error(`Missing ZIP entry: ${entryName}`);
+  return entry.getData().toString("utf8");
+};
+
 describe("WenShu Office Runtime task contract", () => {
   it("creates an artifact and re-inspects it through the same task executor", async () => {
     const created = await executeOfficeRuntimeTask({
@@ -172,9 +178,9 @@ describe("WenShu Office Runtime task contract", () => {
     }
 
     const archive = new AdmZip(reviewed.artifacts[0].buffer);
-    const documentXml = archive.readAsText("word/document.xml");
-    const commentsXml = archive.readAsText("word/comments.xml");
-    const settingsXml = archive.readAsText("word/settings.xml");
+    const documentXml = readZipText(archive, "word/document.xml");
+    const commentsXml = readZipText(archive, "word/comments.xml");
+    const settingsXml = readZipText(archive, "word/settings.xml");
 
     expect(documentXml).toContain("<w:commentRangeStart");
     expect(documentXml).toContain("<w:commentReference");
