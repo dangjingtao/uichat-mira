@@ -2,6 +2,8 @@ import { client, post } from "@/shared/lib/request";
 
 const OFFICE_SUITE_INSPECT_ROUTE = "/microapps/office-suite/inspect";
 const OFFICE_SUITE_CREATE_ROUTE = "/microapps/office-suite/create";
+const OFFICE_SUITE_EXCEL_VERIFY_ROUTE =
+  "/microapps/office-suite/spreadsheet/verification-copy";
 
 export type OfficeSuiteFileKind = "word" | "excel" | "powerpoint";
 
@@ -34,6 +36,29 @@ const parseAttachmentFileName = (contentDisposition: unknown) => {
   return match?.[1]?.trim() || null;
 };
 
+const toDownload = (
+  response: { data: Blob; headers: Record<string, unknown> },
+  kind: OfficeSuiteFileKind,
+  fallbackFileName: string,
+): OfficeSuiteCreatedDownload => {
+  const blob =
+    response.data instanceof Blob
+      ? response.data
+      : new Blob([response.data], {
+          type: String(
+            response.headers["content-type"] || "application/octet-stream",
+          ),
+        });
+
+  return {
+    kind,
+    fileName:
+      parseAttachmentFileName(response.headers["content-disposition"]) ||
+      fallbackFileName,
+    blob,
+  };
+};
+
 export async function inspectOfficeFile(file: File): Promise<OfficeSuiteInspection> {
   const formData = new FormData();
   formData.append("file", file);
@@ -54,20 +79,23 @@ export async function createOfficeSample(
     },
   );
 
-  const blob =
-    response.data instanceof Blob
-      ? response.data
-      : new Blob([response.data], {
-          type: String(
-            response.headers["content-type"] || "application/octet-stream",
-          ),
-        });
+  return toDownload(response, kind, defaultFileName[kind]);
+}
 
-  return {
-    kind,
-    fileName:
-      parseAttachmentFileName(response.headers["content-disposition"]) ||
-      defaultFileName[kind],
-    blob,
-  };
+export async function createExcelVerificationCopy(
+  file: File,
+): Promise<OfficeSuiteCreatedDownload> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await client.post<Blob>(
+    OFFICE_SUITE_EXCEL_VERIFY_ROUTE,
+    formData,
+    {
+      responseType: "blob",
+      timeout: 0,
+    },
+  );
+
+  const baseName = file.name.replace(/\.xlsx$/i, "") || "workbook";
+  return toDownload(response, "excel", `${baseName}-wenshu.xlsx`);
 }
