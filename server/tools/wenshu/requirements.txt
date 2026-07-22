@@ -1,0 +1,13 @@
+# Install these into Mira's system development-kit Python environment.
+# WenShu intentionally does not bundle a second Python runtime.
+reportlab>=4.0
+matplotlib>=3.8
+pdfplumber>=0.11
+pikepdf>=9.0
+markdown2>=2.5
+xhtml2pdf>=0.2.17
+openpyxl>=3.1
+python-pptx>=0.6.21
+Pillow>=10.0
+# Optional spreadsheet recalculation provider used by xlsx_tools.py:
+# formulas>=1.2

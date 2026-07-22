@@ -22,6 +22,7 @@ import {
   type OfficeSuiteInspection,
 } from "@/shared/api/officeSuite";
 import MicroAppPageLayout from "../components/MicroAppPageLayout";
+import SkillRuntimePanel from "./components/SkillRuntimePanel";
 
 const ACCEPTED_EXTENSIONS = ".docx,.xlsx,.pptx";
 
@@ -319,7 +320,7 @@ export default function OfficeSuitePage() {
     <MicroAppPageLayout
       miniTitle="MicroAPP"
       title="文枢"
-      description="Word、Excel 与 PowerPoint 的本地处理工作台。当前用于验证 Office Runtime，不在这里重复实现一套 Chat。"
+      description="Word、PDF、Excel 与 PowerPoint 的本地处理工作台。当前用于验证 Office / Skill Runtime，不在这里重复实现一套 Chat。"
       contentClassName="space-y-5 pt-5"
     >
       <Card className="border-primary/20 bg-primary/5 p-5">
@@ -331,7 +332,7 @@ export default function OfficeSuitePage() {
               </span>
               <div>
                 <div className="font-serif text-lg font-semibold text-text-primary">Office Runtime</div>
-                <div className="text-sm text-text-secondary">一个微应用，内部保持三类文件处理边界。</div>
+                <div className="text-sm text-text-secondary">一个微应用，内部保持四类文档 Skill / Runtime 边界。</div>
               </div>
             </div>
           </div>
@@ -342,6 +343,8 @@ export default function OfficeSuitePage() {
           </div>
         </div>
       </Card>
+
+      <SkillRuntimePanel />
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-5">
@@ -620,10 +623,10 @@ export default function OfficeSuitePage() {
           <Card className="p-4">
             <div className="text-sm font-semibold text-text-primary">当前边界</div>
             <div className="mt-3 space-y-2 text-xs leading-5 text-text-secondary">
-              <p>文枢现在是 Office Runtime 的调试和验证窗口。</p>
-              <p>Word 已进入基础 Modify 与 Review 批注/修订验证；Excel 已进入基础 Modify；PowerPoint 已验证多页、文本、图片与表格生成，不承诺任意既有 PPT 的无损修改。</p>
+              <p>文枢现在同时提供完整 Skill Runtime 工作台和原有 Office Runtime 调试验证面。</p>
+              <p>Word 已进入基础 Modify 与 Review 批注/修订验证；PDF / Excel / PowerPoint 的完整 Skill 能力由上方任务级工作台与对应 office_* 能力承载。</p>
               <p>Word Review 当前只对可安全定位的简单文本 run 做精确编辑；复杂 run 会明确失败，不做有损重写。</p>
-              <p>不嵌 Chat，不提前实现 Skill Runtime，也不把 set_cell / add_slide 之类原子操作暴露给 Agent。</p>
+              <p>不嵌 Chat；Skill 只暴露任务级 office_* 能力，不把 set_cell / add_slide 之类原子操作暴露给 Agent。</p>
             </div>
           </Card>
         </aside>

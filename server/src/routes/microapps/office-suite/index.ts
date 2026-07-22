@@ -10,6 +10,7 @@ import { executeOfficeRuntimeTask } from "@/microapps/office-suite/runtime.js";
 import { SPREADSHEET_VERIFICATION_PATCHES } from "@/microapps/office-suite/spreadsheet.js";
 import { success } from "@/utils/index.js";
 import { badRequest, routeHandler } from "@/utils/route-errors.js";
+import { registerOfficeSkillWorkbenchRoutes } from "./skill-task.js";
 
 const MAX_OFFICE_FILE_BYTES = 50 * 1024 * 1024;
 const OFFICE_KINDS: OfficeSuiteFileKind[] = ["word", "excel", "powerpoint"];
@@ -103,6 +104,8 @@ const buildWordReviewRequest = (query: WordReviewQuery): OfficeRuntimeWordReview
 };
 
 const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
+  await registerOfficeSkillWorkbenchRoutes(app);
+
   app.post(
     "/microapps/office-suite/inspect",
     routeHandler("Failed to inspect Office document", async (request) => {
@@ -131,7 +134,7 @@ const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
             buffer,
           },
         }),
-        "当前仅支持 .docx、.xlsx 和 .pptx 文件",
+        "当前基础 Inspect 仅支持 .docx、.xlsx 和 .pptx；PDF 请使用 Skill Runtime 工作台",
       );
 
       if (!result.inspection) {
