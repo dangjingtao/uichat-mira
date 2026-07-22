@@ -12,8 +12,10 @@ import Card from "@/shared/ui/Card";
 import { Button } from "@/shared/ui";
 import { message } from "@/shared/ui/Message";
 import {
+  createExcelVerificationCopy,
   createOfficeSample,
   inspectOfficeFile,
+  type OfficeSuiteCreatedDownload,
   type OfficeSuiteFileKind,
   type OfficeSuiteInspection,
 } from "@/shared/api/officeSuite";
@@ -38,14 +40,31 @@ const formatBytes = (bytes: number) => {
 
 const prettyJson = (value: unknown) => JSON.stringify(value, null, 2);
 
+const downloadArtifact = (artifact: OfficeSuiteCreatedDownload) => {
+  const url = window.URL.createObjectURL(artifact.blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = artifact.fileName;
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+};
+
 export default function OfficeSuitePage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [inspection, setInspection] = useState<OfficeSuiteInspection | null>(null);
   const [inspecting, setInspecting] = useState(false);
   const [creatingKind, setCreatingKind] = useState<OfficeSuiteFileKind | null>(null);
+  const [modifyingExcel, setModifyingExcel] = useState(false);
   const [lastCreated, setLastCreated] = useState<{
     kind: OfficeSuiteFileKind;
+    fileName: string;
+    byteSize: number;
+  } | null>(null);
+  const [lastModified, setLastModified] = useState<{
     fileName: string;
     byteSize: number;
   } | null>(null);
@@ -65,6 +84,7 @@ export default function OfficeSuitePage() {
     }
     setSelectedFile(file);
     setInspection(null);
+    setLastModified(null);
   };
 
   const runInspection = async () => {
@@ -88,15 +108,7 @@ export default function OfficeSuitePage() {
     setCreatingKind(kind);
     try {
       const artifact = await createOfficeSample(kind);
-      const url = window.URL.createObjectURL(artifact.blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = artifact.fileName;
-      document.body.appendChild(anchor);
-      anchor.click();
-      document.body.removeChild(anchor);
-      window.setTimeout(() => window.URL.revokeObjectURL(url), 100);
-
+      downloadArtifact(artifact);
       setLastCreated({
         kind,
         fileName: artifact.fileName,
@@ -107,6 +119,28 @@ export default function OfficeSuitePage() {
       message.error(error instanceof Error ? error.message : "Office 文件生成失败");
     } finally {
       setCreatingKind(null);
+    }
+  };
+
+  const runExcelModify = async () => {
+    if (!selectedFile || selectedExtension !== ".xlsx") {
+      message.warning("请先选择一个 .xlsx 文件");
+      return;
+    }
+
+    setModifyingExcel(true);
+    try {
+      const artifact = await createExcelVerificationCopy(selectedFile);
+      downloadArtifact(artifact);
+      setLastModified({
+        fileName: artifact.fileName,
+        byteSize: artifact.blob.size,
+      });
+      message.success("Excel 修改副本已生成，原文件未覆盖");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "Excel 修改失败");
+    } finally {
+      setModifyingExcel(false);
     }
   };
 
@@ -159,7 +193,7 @@ export default function OfficeSuitePage() {
                         key={kind}
                         variant="outline"
                         size="md"
-                        disabled={creatingKind !== null}
+                        disabled={creatingKind !== null || modifyingExcel}
                         onClick={() => void runCreate(kind)}
                       >
                         <Icon className="h-4 w-4" />
@@ -184,9 +218,9 @@ export default function OfficeSuitePage() {
           <Card className="p-5">
             <div className="space-y-4">
               <div>
-                <h2 className="text-base font-semibold text-text-primary">文件输入</h2>
+                <h2 className="text-base font-semibold text-text-primary">文件输入与修改验证</h2>
                 <p className="mt-1 text-sm leading-6 text-text-secondary">
-                  选择已有文件，或把上方刚生成的测试产物重新上传，验证文件识别和结构读取。
+                  选择已有文件做 Inspect；选择 XLSX 时还可以生成一个非破坏性的修改副本，验证单元格、公式和基础样式写回。
                 </p>
               </div>
 
@@ -218,16 +252,36 @@ export default function OfficeSuitePage() {
                 </div>
               </button>
 
-              <div className="flex justify-end">
+              <div className="flex flex-wrap justify-end gap-3">
+                {selectedExtension === ".xlsx" ? (
+                  <Button
+                    variant="outline"
+                    size="md"
+                    disabled={!selectedFile || modifyingExcel || inspecting || creatingKind !== null}
+                    onClick={() => void runExcelModify()}
+                  >
+                    <FileSpreadsheet className="h-4 w-4" />
+                    {modifyingExcel ? "正在修改…" : "生成 Excel 修改副本"}
+                  </Button>
+                ) : null}
                 <Button
                   variant="primary"
                   size="md"
-                  disabled={!selectedFile || inspecting}
+                  disabled={!selectedFile || inspecting || modifyingExcel}
                   onClick={() => void runInspection()}
                 >
                   {inspecting ? "正在读取…" : "读取文件结构"}
                 </Button>
               </div>
+
+              {lastModified ? (
+                <div className="flex flex-wrap items-center gap-2 rounded-ui-panel border border-border bg-surface-secondary/20 px-4 py-3 text-sm">
+                  <Download className="h-4 w-4 text-primary" />
+                  <Badge variant="success">修改副本已生成</Badge>
+                  <span className="font-medium text-text-primary">{lastModified.fileName}</span>
+                  <span className="text-text-tertiary">{formatBytes(lastModified.byteSize)}</span>
+                </div>
+              ) : null}
             </div>
           </Card>
 
@@ -287,7 +341,9 @@ export default function OfficeSuitePage() {
                         <div className="text-sm font-medium text-text-primary">{meta.label}</div>
                         <div className="mt-0.5 truncate text-xs text-text-tertiary">{meta.runtime}</div>
                       </div>
-                      <Badge variant="success">Inspect + Create</Badge>
+                      <Badge variant="success">
+                        {kind === "excel" ? "Inspect + Create + Modify" : "Inspect + Create"}
+                      </Badge>
                     </div>
                   );
                 },
@@ -299,7 +355,7 @@ export default function OfficeSuitePage() {
             <div className="text-sm font-semibold text-text-primary">当前边界</div>
             <div className="mt-3 space-y-2 text-xs leading-5 text-text-secondary">
               <p>文枢现在是 Office Runtime 的调试和验证窗口。</p>
-              <p>当前只验证 Inspect 和 Create 主链路，还没有进入通用 Modify / Export 合同。</p>
+              <p>Excel 已进入基础 Modify 验证；Word 修改和更完整的 PowerPoint 生成仍按后续刀次推进。</p>
               <p>不嵌 Chat，不提前实现 Skill Runtime，也不把 set_cell / add_slide 之类原子操作暴露给 Agent。</p>
             </div>
           </Card>
