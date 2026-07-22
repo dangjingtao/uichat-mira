@@ -129,10 +129,6 @@ Related:
 - `integrations/wecom-cloudflare-worker-poc.md`
 - `integrations/enterprise-wecom-implementation-checklist.md`
 - `integrations/enterprise-wecom-integration-poc.md`
-- `integrations/wecom-chat-tool-integration-plan.md`
-- `integrations/wecom-mcp-wrapper-design.md`
-- `integrations/wecom-vs-lark-integration-selection.md`
-- `integrations/enterprise-wecom-integration-poc.md`
 - `integrations/wecom-microapp-interface-design.md`
 - `integrations/wecom-instance-capability-design.md`
 - `integrations/wecom-instance-capability-implementation-checklist.md`
@@ -142,6 +138,9 @@ Related:
 - `integrations/third-party-integration-architecture.md`
 - `integrations/third-party-integration-frontend-design.md`
 - `integrations/third-party-integration-consumption-model.md`
+- `integrations/wecom-chat-tool-integration-plan.md`
+- `integrations/wecom-mcp-wrapper-design.md`
+- `integrations/wecom-vs-lark-integration-selection.md`
 
 ### 工具运行时
 
