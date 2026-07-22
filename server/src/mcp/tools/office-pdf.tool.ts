@@ -54,6 +54,27 @@ const resolveOutputPdf = (value: string) => {
   return resolveWorkspaceWritePath(value);
 };
 
+const preparePdfCreateSpec = (value: Record<string, unknown>) => {
+  const spec = structuredClone(value);
+  const blocks = Array.isArray(spec.blocks) ? spec.blocks : [];
+  for (const blockValue of blocks) {
+    if (!blockValue || typeof blockValue !== "object" || Array.isArray(blockValue)) {
+      continue;
+    }
+    const block = blockValue as Record<string, unknown>;
+    if (String(block.type ?? "").toLowerCase() !== "image") {
+      continue;
+    }
+    const source = requireString(block.src, "spec.blocks[].src");
+    const resolved = resolveWorkspacePath(source);
+    if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+      throw mcpBadRequest(`PDF image source does not exist: ${source}`);
+    }
+    block.src = resolved;
+  }
+  return spec;
+};
+
 const summarize = (value: unknown) => {
   try {
     return JSON.stringify(value).slice(0, 4000);
@@ -80,7 +101,7 @@ export const officePdfTool: McpToolImplementation = {
     id: "office_pdf",
     title: "Office PDF",
     description:
-      "Task-level PDF capability used by the pdf Skill. Create PDFs; convert Markdown; extract text/tables/images; inspect/fill forms; merge/split/rotate/crop pages; and get/set metadata.",
+      "Task-level PDF capability used by the pdf Skill. Create professional PDFs with headings/TOC/tables/images/charts/equations/code/header/footer; convert Markdown; extract text/tables/images; inspect/fill forms; merge/split/rotate/crop pages; and get/set metadata.",
     domain: "edit",
     source: "internal",
     mode: "sync",
@@ -112,9 +133,19 @@ export const officePdfTool: McpToolImplementation = {
           items: { type: "string" },
           description: "Workspace-relative PDF paths for merge.",
         },
-        outputPath: { type: "string", description: "Workspace-relative output PDF path." },
-        outputDir: { type: "string", description: "Workspace-relative output directory for split/image extraction." },
-        spec: { type: "object", description: "Structured PDF creation specification." },
+        outputPath: {
+          type: "string",
+          description: "Workspace-relative output PDF path.",
+        },
+        outputDir: {
+          type: "string",
+          description: "Workspace-relative output directory for split/image extraction.",
+        },
+        spec: {
+          type: "object",
+          description:
+            "Structured PDF creation specification. Local image block src values must be workspace-relative paths.",
+        },
         data: { type: "object", description: "Form values or metadata key/value data." },
         pages: { type: "string", description: "1-based page selection such as 1,3-5." },
         degrees: { type: "integer" },
@@ -142,8 +173,12 @@ export const officePdfTool: McpToolImplementation = {
     if (operation === "create") {
       const outputPath = requireString(context.args.outputPath, "outputPath");
       const resolvedOutput = resolveOutputPdf(outputPath);
-      const spec = requireObject(context.args.spec, "spec");
-      const result = await executePdfSkillRuntime({ operation: "create", outputPath: resolvedOutput, spec });
+      const spec = preparePdfCreateSpec(requireObject(context.args.spec, "spec"));
+      const result = await executePdfSkillRuntime({
+        operation: "create",
+        outputPath: resolvedOutput,
+        spec,
+      });
       addPdfArtifact(context, outputPath, { officeOperation: operation });
       return {
         result: { operation, outputPath, runtime: result },
@@ -170,13 +205,24 @@ export const officePdfTool: McpToolImplementation = {
         inputPaths: inputPaths.map((item) => item.resolved),
         outputPath: resolvedOutput,
       });
-      addPdfArtifact(context, outputPath, { officeOperation: operation, sources: inputPaths.map((item) => item.inputPath) });
+      addPdfArtifact(context, outputPath, {
+        officeOperation: operation,
+        sources: inputPaths.map((item) => item.inputPath),
+      });
       return {
-        result: { operation, inputPaths: inputPaths.map((item) => item.inputPath), outputPath, runtime: result },
+        result: {
+          operation,
+          inputPaths: inputPaths.map((item) => item.inputPath),
+          outputPath,
+          runtime: result,
+        },
         evidence: {
           status: "completed",
           actionTaken: `Merged ${inputPaths.length} PDFs into ${outputPath}`,
-          facts: [`Output: ${outputPath}`, `Sources: ${inputPaths.map((item) => item.inputPath).join(", ")}`],
+          facts: [
+            `Output: ${outputPath}`,
+            `Sources: ${inputPaths.map((item) => item.inputPath).join(", ")}`,
+          ],
           data: { kind: "office_pdf", operation, outputPath },
         },
       };
@@ -190,8 +236,15 @@ export const officePdfTool: McpToolImplementation = {
       }
       const outputPath = requireString(context.args.outputPath, "outputPath");
       const resolvedOutput = resolveOutputPdf(outputPath);
-      const result = await executePdfSkillRuntime({ operation: "md2pdf", inputPath: resolvedInput, outputPath: resolvedOutput });
-      addPdfArtifact(context, outputPath, { officeOperation: operation, sourcePath: inputPath });
+      const result = await executePdfSkillRuntime({
+        operation: "md2pdf",
+        inputPath: resolvedInput,
+        outputPath: resolvedOutput,
+      });
+      addPdfArtifact(context, outputPath, {
+        officeOperation: operation,
+        sourcePath: inputPath,
+      });
       return {
         result: { operation, inputPath, outputPath, runtime: result },
         evidence: {
@@ -207,7 +260,11 @@ export const officePdfTool: McpToolImplementation = {
 
     if (["extract_text", "extract_tables", "form_info", "meta_get"].includes(operation)) {
       const result = await executePdfSkillRuntime({
-        operation: operation as "extract_text" | "extract_tables" | "form_info" | "meta_get",
+        operation: operation as
+          | "extract_text"
+          | "extract_tables"
+          | "form_info"
+          | "meta_get",
         inputPath: resolved,
         pages,
       });
@@ -223,9 +280,11 @@ export const officePdfTool: McpToolImplementation = {
     }
 
     if (operation === "extract_images" || operation === "split") {
-      const defaultDir = `${inputPath.slice(0, -4)}-${operation === "split" ? "split" : "images"}`;
+      const defaultDir = `${inputPath.slice(0, -4)}-${
+        operation === "split" ? "split" : "images"
+      }`;
       const outputDir = optionalString(context.args.outputDir) ?? defaultDir;
-      const resolvedOutputDir = resolveWorkspacePath(outputDir);
+      const resolvedOutputDir = resolveWorkspaceWritePath(outputDir);
       fs.mkdirSync(resolvedOutputDir, { recursive: true });
       const result = await executePdfSkillRuntime({
         operation,
@@ -241,16 +300,36 @@ export const officePdfTool: McpToolImplementation = {
           kind: operation === "split" ? "document" : "image",
           title: fileName,
           ...(operation === "split" ? { mimeType: PDF_MIME } : {}),
-          metadata: { path: relativePath, officeOperation: operation, sourcePath: inputPath },
+          metadata: {
+            path: relativePath,
+            officeOperation: operation,
+            sourcePath: inputPath,
+          },
         });
       }
       return {
-        result: { operation, inputPath, outputDir, files: outputFiles, runtime: result },
+        result: {
+          operation,
+          inputPath,
+          outputDir,
+          files: outputFiles,
+          runtime: result,
+        },
         evidence: {
           status: "completed",
           actionTaken: `${operation} from ${inputPath} into ${outputDir}`,
-          facts: [`Source: ${inputPath}`, `Output directory: ${outputDir}`, `Files: ${outputFiles.length}`],
-          data: { kind: "office_pdf", operation, inputPath, outputDir, fileCount: outputFiles.length },
+          facts: [
+            `Source: ${inputPath}`,
+            `Output directory: ${outputDir}`,
+            `Files: ${outputFiles.length}`,
+          ],
+          data: {
+            kind: "office_pdf",
+            operation,
+            inputPath,
+            outputDir,
+            fileCount: outputFiles.length,
+          },
         },
       };
     }
@@ -265,28 +344,65 @@ export const officePdfTool: McpToolImplementation = {
 
     let result: unknown;
     if (operation === "form_fill") {
-      result = await executePdfSkillRuntime({ operation, inputPath: resolved, outputPath: resolvedOutput, data: requireObject(context.args.data, "data") });
+      result = await executePdfSkillRuntime({
+        operation,
+        inputPath: resolved,
+        outputPath: resolvedOutput,
+        data: requireObject(context.args.data, "data"),
+      });
     } else if (operation === "rotate") {
-      if (!Number.isInteger(context.args.degrees)) throw mcpBadRequest("degrees must be an integer");
-      result = await executePdfSkillRuntime({ operation, inputPath: resolved, outputPath: resolvedOutput, degrees: context.args.degrees as number, pages });
+      if (!Number.isInteger(context.args.degrees)) {
+        throw mcpBadRequest("degrees must be an integer");
+      }
+      result = await executePdfSkillRuntime({
+        operation,
+        inputPath: resolved,
+        outputPath: resolvedOutput,
+        degrees: context.args.degrees as number,
+        pages,
+      });
     } else if (operation === "crop") {
-      if (!Array.isArray(context.args.box) || context.args.box.length !== 4 || context.args.box.some((value) => typeof value !== "number" || !Number.isFinite(value))) {
+      if (
+        !Array.isArray(context.args.box) ||
+        context.args.box.length !== 4 ||
+        context.args.box.some(
+          (value) => typeof value !== "number" || !Number.isFinite(value),
+        )
+      ) {
         throw mcpBadRequest("box must be [x0,y0,x1,y1]");
       }
-      result = await executePdfSkillRuntime({ operation, inputPath: resolved, outputPath: resolvedOutput, box: context.args.box as number[], pages });
+      result = await executePdfSkillRuntime({
+        operation,
+        inputPath: resolved,
+        outputPath: resolvedOutput,
+        box: context.args.box as number[],
+        pages,
+      });
     } else if (operation === "meta_set") {
-      result = await executePdfSkillRuntime({ operation, inputPath: resolved, outputPath: resolvedOutput, data: requireObject(context.args.data, "data") });
+      result = await executePdfSkillRuntime({
+        operation,
+        inputPath: resolved,
+        outputPath: resolvedOutput,
+        data: requireObject(context.args.data, "data"),
+      });
     } else {
       throw mcpBadRequest(`Unsupported office_pdf operation: ${operation}`);
     }
 
-    addPdfArtifact(context, outputPath, { officeOperation: operation, sourcePath: inputPath });
+    addPdfArtifact(context, outputPath, {
+      officeOperation: operation,
+      sourcePath: inputPath,
+    });
     return {
       result: { operation, inputPath, outputPath, runtime: result },
       evidence: {
         status: "completed",
         actionTaken: `${operation} on ${inputPath} and wrote ${outputPath}`,
-        facts: [`Source: ${inputPath}`, `Output: ${outputPath}`, `Runtime: ${summarize(result)}`],
+        facts: [
+          `Source: ${inputPath}`,
+          `Output: ${outputPath}`,
+          `Runtime: ${summarize(result)}`,
+        ],
         data: { kind: "office_pdf", operation, inputPath, outputPath },
       },
     };
