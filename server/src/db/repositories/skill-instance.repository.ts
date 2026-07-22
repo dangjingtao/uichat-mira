@@ -1,4 +1,5 @@
 import { getSqlite } from "@/db";
+import { initializeSkillDatabase } from "@/db/skill.db";
 import type { SkillInstance } from "@/skill/types";
 
 const serializeJson = (value: unknown) => JSON.stringify(value);
@@ -32,6 +33,8 @@ type SkillInstanceRow = {
   updated_at: string;
 };
 
+const ensureInitialized = () => initializeSkillDatabase();
+
 const rowToInstance = (row: SkillInstanceRow): SkillInstance => ({
   id: row.id,
   runId: row.run_id,
@@ -56,13 +59,16 @@ const rowToInstance = (row: SkillInstanceRow): SkillInstance => ({
   updatedAt: row.updated_at,
 });
 
-const getRow = (where: "id" | "run_id", value: string) =>
-  getSqlite()
+const getRow = (where: "id" | "run_id", value: string) => {
+  ensureInitialized();
+  return getSqlite()
     .prepare(`SELECT * FROM skill_instances WHERE ${where} = ? LIMIT 1`)
     .get(value) as SkillInstanceRow | undefined;
+};
 
 export const skillInstanceRepository = {
   create(instance: SkillInstance) {
+    ensureInitialized();
     getSqlite()
       .prepare(`
         INSERT INTO skill_instances (
@@ -117,6 +123,7 @@ export const skillInstanceRepository = {
       updatedAt: new Date().toISOString(),
     };
 
+    ensureInitialized();
     getSqlite()
       .prepare(`
         UPDATE skill_instances SET
@@ -148,6 +155,7 @@ export const skillInstanceRepository = {
   },
 
   clear() {
+    ensureInitialized();
     getSqlite().prepare("DELETE FROM skill_instances").run();
   },
 };
