@@ -11,12 +11,12 @@ Choose the route from the user's real input and desired output. Do not treat eve
 
 Use this route when the user provides an existing `.docx` and wants it reviewed or changed while preserving the original document as the foundation.
 
-1. Read the document first with the normal Read capability when the exact target text or document context is not already known.
+1. Read the document first with the public Read capability when the exact target text or document context is not already known.
 2. Use `office_document` with `operation=review` for supported edits:
    - native Word comments anchored to exact visible text;
    - suggested replacements represented as Track Changes deletion + insertion;
    - non-destructive output to a new `.docx`.
-3. Re-open the generated output with Read before declaring the task complete.
+3. Re-open the generated output with `read_open` before declaring the task complete.
 
 Do not use `edit_file`, raw ZIP surgery, or arbitrary XML replacement on `.docx` binaries.
 
@@ -24,7 +24,7 @@ Current safe editing boundary: review anchors must resolve to exact visible text
 
 ## Route B — DOCX used only as a content source
 
-If the `.docx` is only reference material and its formatting does not matter, use normal Read tools (`read_open` / `read_extract`) to obtain the needed content.
+If the `.docx` is only reference material and its formatting does not matter, use the normal public Read surface (`read_discover` when discovery is needed, then `read_open`) to obtain the needed content.
 
 Do not create a modified DOCX unless the user actually requested a document artifact.
 
@@ -39,7 +39,7 @@ Describe the document using high-level structure:
 - simple tables expressed as rows and cells;
 - an explicit workspace-relative `.docx` output path.
 
-After creation, re-open the output with Read and verify that the requested title/content structure exists.
+After creation, re-open the output with `read_open` and verify that the requested title/content structure exists.
 
 # Part 2: Execution
 
