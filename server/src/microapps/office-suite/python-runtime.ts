@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { buildWenshuPythonEnv } from "./runtime-pack-paths.js";
 
 type PythonJsonResult = {
   status: string;
@@ -119,11 +120,7 @@ export const runWenshuPython = async (input: {
     const child = spawn(python, [script, ...input.args], {
       cwd: input.cwd,
       windowsHide: true,
-      env: {
-        ...process.env,
-        PYTHONUTF8: "1",
-        PYTHONIOENCODING: "utf-8",
-      },
+      env: buildWenshuPythonEnv(),
       stdio: ["ignore", "pipe", "pipe"],
     });
 
@@ -242,11 +239,7 @@ export const probeWenshuPythonRuntime = async () => {
           ].join("\n");
           const child = spawn(python, ["-c", code], {
             windowsHide: true,
-            env: {
-              ...process.env,
-              PYTHONUTF8: "1",
-              PYTHONIOENCODING: "utf-8",
-            },
+            env: buildWenshuPythonEnv(),
             stdio: ["ignore", "pipe", "pipe"],
           });
           let stdout = "";
