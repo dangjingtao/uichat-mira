@@ -9,6 +9,14 @@ import type { AgentNodeState, EmitAgentExecutionNode } from "../node-runtime";
 import { matchToolCandidatesByEmbedding } from "../intent/embedding-capability-matcher";
 import { getLatestUserQuestion } from "./shared";
 
+type AgentNodeStateWithToolExposureConstraint = AgentNodeState & {
+  /** Transient runtime narrowing. It is not an AgentGraph persistence contract. */
+  toolExposureAllowlist?: string[];
+};
+
+const getToolExposureAllowlist = (state: AgentNodeState) =>
+  (state as AgentNodeStateWithToolExposureConstraint).toolExposureAllowlist;
+
 const toAgentToolExposureState = (
   exposedToolIds: string[],
   exposedDefinitions: Array<
@@ -52,10 +60,11 @@ export const prepareContextNode = async (
     .filter((definition) => evaluateAgentToolPolicy(definition).type === "allow")
     .map((definition) => definition.id);
   const query = getLatestUserQuestion(state.messages) || state.goal.text;
+  const toolExposureAllowlist = getToolExposureAllowlist(state);
   const matcherResult = await matchToolCandidatesByEmbedding({
     query,
     config: state.intentConfig,
-    allowedToolIds: state.toolExposureAllowlist,
+    allowedToolIds: toolExposureAllowlist,
   });
   const toolExposure = toAgentToolExposureState(
     matcherResult.toolExposure.exposedToolIds,
@@ -74,7 +83,7 @@ export const prepareContextNode = async (
       messageCount: state.messages.length,
       requestContextCount: state.requestContextMessages?.length ?? 0,
       autoAllowedTools,
-      runtimeToolConstraint: state.toolExposureAllowlist ?? null,
+      runtimeToolConstraint: toolExposureAllowlist ?? null,
       exposedToolCount: toolExposure.exposedTools.length,
       exposedToolIds: toolExposure.exposedTools,
       codebaseExploreExposed: toolExposure.exposedTools.includes("codebase_explore"),
