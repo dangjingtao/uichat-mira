@@ -1,12 +1,27 @@
 import path from "node:path";
 import AdmZip from "adm-zip";
 
+export type DocumentParagraphAppend = {
+  text: string;
+  bold?: boolean;
+};
+
 export type DocumentAppendArtifact = {
   fileName: string;
   mimeType: string;
   buffer: Buffer;
   summary: string;
 };
+
+export const DOCUMENT_VERIFICATION_PARAGRAPHS: DocumentParagraphAppend[] = [
+  {
+    text: "文枢 Word Modify 验证",
+    bold: true,
+  },
+  {
+    text: "这段内容由 Mira 文枢追加到现有 DOCX 的新副本中，原文件未被覆盖。",
+  },
+];
 
 const WORD_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -37,7 +52,7 @@ const resolveBodyInsertIndex = (documentXml: string, bodyCloseIndex: number) => 
 export const appendDocumentParagraphs = (input: {
   fileName: string;
   buffer: Buffer;
-  paragraphs: Array<{ text: string; bold?: boolean }>;
+  paragraphs: DocumentParagraphAppend[];
 }): DocumentAppendArtifact => {
   const archive = new AdmZip(input.buffer);
   const documentEntry = archive.getEntry("word/document.xml");
@@ -76,13 +91,5 @@ export const createDocumentVerificationCopy = (input: {
 }): DocumentAppendArtifact =>
   appendDocumentParagraphs({
     ...input,
-    paragraphs: [
-      {
-        text: "文枢 Word Modify 验证",
-        bold: true,
-      },
-      {
-        text: "这段内容由 Mira 文枢追加到现有 DOCX 的新副本中，原文件未被覆盖。",
-      },
-    ],
+    paragraphs: DOCUMENT_VERIFICATION_PARAGRAPHS,
   });
