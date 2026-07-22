@@ -54,7 +54,9 @@ const createWordSample = async (): Promise<OfficeSuiteCreatedArtifact> => {
               new TableRow({
                 children: [
                   new TableCell({ children: [new Paragraph("Word Create")] }),
-                  new TableCell({ children: [new Paragraph("Ready for verification")] }),
+                  new TableCell({
+                    children: [new Paragraph("Ready for verification")],
+                  }),
                 ],
               }),
             ],
@@ -125,6 +127,20 @@ const toNodeBuffer = (output: unknown): Buffer => {
   throw new Error("PowerPoint generation did not return a Node binary buffer");
 };
 
+const buildPowerPointSampleImage = () => {
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 1200 600">
+      <rect width="1200" height="600" rx="48" fill="#F7F4EF"/>
+      <circle cx="220" cy="300" r="120" fill="#D97745" opacity="0.92"/>
+      <rect x="420" y="170" width="560" height="72" rx="18" fill="#2F2A26" opacity="0.9"/>
+      <rect x="420" y="285" width="430" height="46" rx="14" fill="#7A716A" opacity="0.65"/>
+      <rect x="420" y="370" width="330" height="46" rx="14" fill="#7A716A" opacity="0.42"/>
+      <text x="220" y="322" text-anchor="middle" font-family="Arial, sans-serif" font-size="74" font-weight="700" fill="#FFFFFF">M</text>
+    </svg>
+  `.trim();
+  return `data:image/svg+xml;base64,${Buffer.from(svg, "utf8").toString("base64")}`;
+};
+
 const createPowerPointSample = async (): Promise<OfficeSuiteCreatedArtifact> => {
   const presentation = new PptxGenJS();
   presentation.layout = "LAYOUT_WIDE";
@@ -132,30 +148,89 @@ const createPowerPointSample = async (): Promise<OfficeSuiteCreatedArtifact> => 
   presentation.subject = "用于验证文枢 PowerPoint Create 链路";
   presentation.title = "文枢 Office Runtime 测试演示文稿";
 
-  const slide = presentation.addSlide();
-  slide.addText("文枢", {
+  const titleSlide = presentation.addSlide();
+  titleSlide.addText("文枢", {
     x: 0.8,
-    y: 0.7,
+    y: 0.75,
     w: 11.7,
-    h: 0.6,
-    fontSize: 28,
+    h: 0.7,
+    fontSize: 32,
     bold: true,
+    margin: 0,
   });
-  slide.addText("Office Runtime · PowerPoint Create 链路测试", {
+  titleSlide.addText("Office Runtime · PowerPoint Create 链路测试", {
     x: 0.8,
-    y: 1.55,
+    y: 1.7,
     w: 11.7,
-    h: 0.45,
-    fontSize: 18,
+    h: 0.5,
+    fontSize: 20,
+    margin: 0,
   });
-  slide.addText(
-    "这个文件由 Mira 的文枢微应用通过 PptxGenJS 生成。\n下载后可重新上传到文枢，验证 PPTX 的 Inspect → Create → Inspect 闭环。",
+  titleSlide.addText(
+    "多页 · 文本 · 图片 · 表格结构\n生成后可重新上传到文枢执行 Inspect 回读。",
     {
       x: 0.8,
-      y: 2.35,
-      w: 10.8,
-      h: 1.4,
+      y: 2.65,
+      w: 8.5,
+      h: 1.2,
       fontSize: 16,
+      margin: 0,
+    },
+  );
+
+  const tableSlide = presentation.addSlide();
+  tableSlide.addText("Runtime 验证矩阵", {
+    x: 0.8,
+    y: 0.55,
+    w: 11.7,
+    h: 0.55,
+    fontSize: 26,
+    bold: true,
+    margin: 0,
+  });
+  tableSlide.addTable(
+    [
+      ["模块", "Inspect", "Create", "Modify"],
+      ["Word", "Ready", "Ready", "Basic"],
+      ["Excel", "Ready", "Ready", "Basic"],
+      ["PowerPoint", "Ready", "Ready", "Not promised"],
+    ],
+    {
+      x: 0.8,
+      y: 1.45,
+      w: 10.8,
+      h: 3.35,
+      border: { type: "solid", pt: 1, color: "CFC8C0" },
+      fontSize: 16,
+      margin: 0.08,
+    },
+  );
+
+  const imageSlide = presentation.addSlide();
+  imageSlide.addText("图片资源验证", {
+    x: 0.8,
+    y: 0.55,
+    w: 11.7,
+    h: 0.55,
+    fontSize: 26,
+    bold: true,
+    margin: 0,
+  });
+  imageSlide.addImage({
+    data: buildPowerPointSampleImage(),
+    x: 0.8,
+    y: 1.45,
+    w: 6.6,
+    h: 3.3,
+  });
+  imageSlide.addText(
+    "这张内嵌 SVG 图片用于验证 PPTX 的媒体资源写入与再次解析，不依赖外部文件或网络。",
+    {
+      x: 7.8,
+      y: 1.7,
+      w: 4.6,
+      h: 1.8,
+      fontSize: 17,
       margin: 0,
     },
   );
@@ -166,7 +241,7 @@ const createPowerPointSample = async (): Promise<OfficeSuiteCreatedArtifact> => 
     fileName: "wenshu-powerpoint-sample.pptx",
     mimeType:
       "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    summary: "使用 PptxGenJS 生成包含标题和正文的 PPTX 测试产物。",
+    summary: "使用 PptxGenJS 生成包含多页、文本、表格和图片的 PPTX 测试产物。",
     buffer: toNodeBuffer(output),
   };
 };
