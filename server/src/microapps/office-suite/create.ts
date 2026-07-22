@@ -112,9 +112,7 @@ const createExcelSample = async (): Promise<OfficeSuiteCreatedArtifact> => {
   };
 };
 
-const toNodeBuffer = (
-  output: string | ArrayBuffer | Blob | Buffer | Uint8Array,
-): Buffer => {
+const toNodeBuffer = (output: unknown): Buffer => {
   if (Buffer.isBuffer(output)) {
     return output;
   }
