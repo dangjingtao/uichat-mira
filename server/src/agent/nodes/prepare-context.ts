@@ -3,6 +3,7 @@
  */
 import { reconcileCodeGraphHarnessCapability } from "@/harness/codegraph-capability";
 import { listCapabilityDefinitions } from "@/harness/registry";
+import { getActiveSkillRuntimeFrame } from "@/skill/runtime";
 import { evaluateAgentToolPolicy } from "../policy";
 import { emitStepNode } from "../node-runtime";
 import type { AgentNodeState, EmitAgentExecutionNode } from "../node-runtime";
@@ -56,9 +57,19 @@ export const prepareContextNode = async (
     query,
     config: state.intentConfig,
   });
+  const activeSkill = getActiveSkillRuntimeFrame(state.runId);
+  const skillAllowedToolIds = activeSkill
+    ? new Set(activeSkill.allowedToolIds)
+    : undefined;
+  const exposedDefinitions = skillAllowedToolIds
+    ? matcherResult.toolExposure.exposedDefinitions.filter((definition) =>
+        skillAllowedToolIds.has(definition.id),
+      )
+    : matcherResult.toolExposure.exposedDefinitions;
+  const exposedToolIds = exposedDefinitions.map((definition) => definition.id);
   const toolExposure = toAgentToolExposureState(
-    matcherResult.toolExposure.exposedToolIds,
-    matcherResult.toolExposure.exposedDefinitions,
+    exposedToolIds,
+    exposedDefinitions,
   );
   const toolIntent = matcherResult;
 
@@ -77,6 +88,15 @@ export const prepareContextNode = async (
       exposedToolIds: toolExposure.exposedTools,
       codebaseExploreExposed: toolExposure.exposedTools.includes("codebase_explore"),
       currentTaskFrameWriter: "prepareContextNode reads the initialized task frame only",
+      activeSkill: activeSkill
+        ? {
+            skillId: activeSkill.skillId,
+            skillVersion: activeSkill.skillVersion,
+            skillInstanceId: activeSkill.skillInstanceId,
+            stage: activeSkill.stage ?? null,
+            allowedToolIds: activeSkill.allowedToolIds,
+          }
+        : null,
     },
   });
 
