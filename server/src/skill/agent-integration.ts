@@ -24,6 +24,13 @@ const SKILL_MARKER_PREFIX = "skill-runtime:";
 const SKILL_CRITERION_PREFIX = "[Skill:";
 const SKILL_REMAINING_PREFIX = "Active Skill:";
 
+/**
+ * Base Harness exposure before Skill narrowing. It is run-scoped and rebuilt on
+ * every prepareContext (including approval resume), so it never becomes a
+ * second durable source of tool truth.
+ */
+const baseToolExposureByRunId = new Map<string, AgentToolExposureState>();
+
 const unique = (values: string[]) =>
   values.filter((value, index, items) => value && items.indexOf(value) === index);
 
@@ -121,6 +128,9 @@ export const skillAwarePrepareContextNode = async (
   const patch = await basePrepareContextNode(state, emit);
   const skillFrame = getActiveSkillRuntimeFrameForRun(state.runId);
   const baseExposure = patch.toolExposure ?? state.toolExposure;
+  if (baseExposure) {
+    baseToolExposureByRunId.set(state.runId, baseExposure);
+  }
   const toolExposure = baseExposure
     ? filterToolExposureForSkill(baseExposure, skillFrame)
     : baseExposure;
@@ -203,6 +213,11 @@ export const skillAwareEvidenceNode = async (
     },
   });
   const skillFrame = getLatestSkillRuntimeFrameForRun(state.runId);
+  const activeFrame = getActiveSkillRuntimeFrameForRun(state.runId);
+  const baseExposure = baseToolExposureByRunId.get(state.runId);
+  const toolExposure = baseExposure
+    ? filterToolExposureForSkill(baseExposure, activeFrame)
+    : patch.toolExposure;
 
   if (updated && skillFrame) {
     await emitStepNode(emit, {
@@ -219,10 +234,19 @@ export const skillAwareEvidenceNode = async (
         skillStatus: skillFrame.status,
         skillStage: skillFrame.stage ?? null,
         checkpointSequence: updated.checkpoint.sequence,
+        allowedToolIds: activeFrame?.allowedToolIds ?? [],
+        exposedToolIds: toolExposure?.exposedTools ?? [],
         error: updated.error ?? null,
       },
     });
   }
 
-  return patch;
+  return {
+    ...patch,
+    toolExposure,
+  };
+};
+
+export const clearSkillAgentIntegrationForTests = () => {
+  baseToolExposureByRunId.clear();
 };
