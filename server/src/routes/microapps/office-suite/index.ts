@@ -39,7 +39,7 @@ const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
         );
       } catch (error) {
         if (error instanceof UnsupportedOfficeFileError) {
-          throw badRequest("当前仅支持 .docx、.xlsx、.xls 和 .pptx 文件", {
+          throw badRequest("当前仅支持 .docx、.xlsx 和 .pptx 文件", {
             cause: error,
           });
         }
