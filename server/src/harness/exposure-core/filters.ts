@@ -38,6 +38,12 @@ export const getDefinitionBlockReason = (
     return "Legacy edit wrapper is not part of the public Edit contract.";
   }
 
+  // A runtime boundary (for example an active Skill) may narrow the already
+  // public surface. It never overrides the normal Harness visibility rules.
+  if (input?.allowedToolIds && !input.allowedToolIds.includes(definition.id)) {
+    return "Capability is outside the caller-provided runtime tool boundary.";
+  }
+
   // External MCP exposure follows the user's explicit Agent Access switch only.
   // Harness does not apply semantic, domain, sandbox, browser, or terminal heuristics.
   if (definition.source === "external") {
