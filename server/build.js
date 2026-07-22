@@ -35,6 +35,26 @@ function copyToolsDir() {
   console.log(`Copied built-in tools: ${toolsDest}`);
 }
 
+function copySkillsDir() {
+  const skillsSource = path.join(__dirname, "src", "skills");
+  const skillsDest = path.join(outputDir, "skills");
+
+  if (!fs.existsSync(skillsSource)) {
+    return;
+  }
+
+  fs.cpSync(skillsSource, skillsDest, {
+    recursive: true,
+    dereference: true,
+    filter: (source) => {
+      if (fs.statSync(source).isDirectory()) return true;
+      const extension = path.extname(source).toLowerCase();
+      return [".md", ".txt", ".json", ".yaml", ".yml"].includes(extension);
+    },
+  });
+  console.log(`Copied built-in Skill resources: ${skillsDest}`);
+}
+
 function copyStaticDir() {
   const staticSource = path.join(__dirname, "static");
   const staticDest = path.join(outputDir, "static");
@@ -78,7 +98,6 @@ function resolveInstalledPackageSource(packageName) {
     packageName,
     "package.json",
   );
-
   if (fs.existsSync(virtualPackageJson)) {
     return path.dirname(fs.realpathSync(virtualPackageJson));
   }
@@ -145,6 +164,7 @@ function pruneNodePtyRuntime() {
   for (const directory of ["deps", "scripts", "src", "third_party", "typings"]) {
     fs.rmSync(path.join(packageRoot, directory), { recursive: true, force: true });
   }
+
   for (const entry of fs.readdirSync(path.join(prebuildsRoot, "win32-x64"))) {
     if (entry.endsWith(".pdb")) {
       fs.rmSync(path.join(prebuildsRoot, "win32-x64", entry), { force: true });
@@ -193,6 +213,7 @@ fs.mkdirSync(outputNodeModules, { recursive: true });
 writeBackendPackageJson();
 writeAppMetaJson();
 copyToolsDir();
+copySkillsDir();
 copyStaticDir();
 
 build({
