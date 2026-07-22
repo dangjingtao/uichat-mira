@@ -15,14 +15,18 @@ export type BuiltInSkillPackageDefinition = {
   };
   runtimeCapabilities: string[];
   packageFiles: string[];
-  agentIntegration: {
+  contextIntegration: {
+    status: "ready";
+    mode: "progressive-disclosure";
+  };
+  statefulRuntime: {
     status: "deferred";
     reason: string;
     requiredContracts: string[];
   };
 };
 
-const AGENT_INTEGRATION_REQUIREMENTS = [
+const STATEFUL_RUNTIME_REQUIREMENTS = [
   "SkillDefinition version binding",
   "SkillInstance state/stage",
   "Evidence-driven reducer",
@@ -30,21 +34,28 @@ const AGENT_INTEGRATION_REQUIREMENTS = [
   "completion criteria evaluation",
 ] as const;
 
-const deferredAgentIntegration = () => ({
+const progressiveContextIntegration = () => ({
+  status: "ready" as const,
+  mode: "progressive-disclosure" as const,
+});
+
+const deferredStatefulRuntime = () => ({
   status: "deferred" as const,
-  reason: "The formal Skill Runtime lifecycle is not implemented yet.",
-  requiredContracts: [...AGENT_INTEGRATION_REQUIREMENTS],
+  reason:
+    "Basic SkillContext is available now; optional Stateful Skill Runtime is deferred until a real business workflow needs lifecycle/state/reducer contracts.",
+  requiredContracts: [...STATEFUL_RUNTIME_REQUIREMENTS],
 });
 
 /**
- * These are installable/discoverable Skill packages, not active SkillInstances.
+ * Built-in Skill packages are context/distribution packages, not Tool aliases.
  *
- * A package may contain SKILL.md, references and runtime implementation metadata.
- * Bundled packages can use capabilities already shipped with Mira; installable
- * packages can additionally depend on an optional Runtime Pack. Neither form
- * creates Skill state, injects Planner semantics, or registers/expands Harness
- * tools. Formal Agent integration waits for the Skill Runtime contract:
- * SkillDefinition + SkillInstance + state reducer + stage-specific constraints.
+ * A package may contain SKILL.md, references and runtime dependency metadata.
+ * The basic Skill system may discover a package, match one primary Skill and
+ * inject its semantic context progressively without creating SkillInstance.
+ *
+ * Runtime Pack installation and SkillContext injection never register or expand
+ * Harness toolExposure. Optional Stateful Skill Runtime remains a separate,
+ * higher-level contract for workflows that truly need lifecycle/state/reducers.
  */
 const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
   {
@@ -66,7 +77,8 @@ const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
       "runtime/runtime.ts",
       "runtime/contract.ts",
     ],
-    agentIntegration: deferredAgentIntegration(),
+    contextIntegration: progressiveContextIntegration(),
+    statefulRuntime: deferredStatefulRuntime(),
   },
   {
     id: "xlsx",
@@ -88,7 +100,8 @@ const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
       "runtime/xlsx_tools.py",
       "LICENSE.txt",
     ],
-    agentIntegration: deferredAgentIntegration(),
+    contextIntegration: progressiveContextIntegration(),
+    statefulRuntime: deferredStatefulRuntime(),
   },
   {
     id: "pdf",
@@ -105,7 +118,8 @@ const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
       "runtime/pdf_create_runtime.py",
       "runtime/pdf_runtime.py",
     ],
-    agentIntegration: deferredAgentIntegration(),
+    contextIntegration: progressiveContextIntegration(),
+    statefulRuntime: deferredStatefulRuntime(),
   },
   {
     id: "pptx",
@@ -122,7 +136,8 @@ const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
       "reference/pptx-swarm.md",
       "runtime/pptx_runtime.py",
     ],
-    agentIntegration: deferredAgentIntegration(),
+    contextIntegration: progressiveContextIntegration(),
+    statefulRuntime: deferredStatefulRuntime(),
   },
 ];
 
@@ -132,9 +147,10 @@ export const listBuiltInSkillPackages = (): BuiltInSkillPackageDefinition[] =>
     ...(definition.runtimePack ? { runtimePack: { ...definition.runtimePack } } : {}),
     runtimeCapabilities: [...definition.runtimeCapabilities],
     packageFiles: [...definition.packageFiles],
-    agentIntegration: {
-      ...definition.agentIntegration,
-      requiredContracts: [...definition.agentIntegration.requiredContracts],
+    contextIntegration: { ...definition.contextIntegration },
+    statefulRuntime: {
+      ...definition.statefulRuntime,
+      requiredContracts: [...definition.statefulRuntime.requiredContracts],
     },
   }));
 
