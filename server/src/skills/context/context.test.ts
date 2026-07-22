@@ -4,6 +4,8 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { SkillLoader } from "./loader.js";
 import { SkillMatcher } from "./matcher.js";
+import { SkillContextProvider } from "./provider.js";
+import { SkillRegistry, type SkillScanner } from "./scanner.js";
 import type { SkillManifest } from "./types.js";
 
 const manifests: SkillManifest[] = [
@@ -136,5 +138,46 @@ describe("SkillLoader", () => {
 
     const loaded = await loader.loadResource({ manifest, resource: resources[0]! });
     expect(loaded.content).toContain("formula-linked");
+  });
+});
+
+describe("SkillContextProvider", () => {
+  it("discloses only the DCF reference for a DCF task", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "mira-skill-provider-"));
+    tempDirs.push(root);
+    const skillRoot = path.join(root, "xlsx");
+    await fs.mkdir(path.join(skillRoot, "reference"), { recursive: true });
+    await fs.writeFile(
+      path.join(skillRoot, "SKILL.md"),
+      "---\nname: xlsx\ndescription: spreadsheet\n---\n# Routing\nUse workbook formulas and read references only when needed.",
+      "utf8",
+    );
+    await fs.writeFile(path.join(skillRoot, "reference", "DCF_SKILL.md"), "# DCF\nDCF rules", "utf8");
+    await fs.writeFile(path.join(skillRoot, "reference", "COMPS_SKILL.md"), "# Comps\nComps rules", "utf8");
+    await fs.writeFile(path.join(skillRoot, "reference", "3_statement_model.md"), "# Three statement\n3S rules", "utf8");
+
+    const manifest: SkillManifest = {
+      id: "xlsx",
+      name: "Excel 处理",
+      description: "spreadsheet",
+      version: "1.0.0",
+      entry: path.join(skillRoot, "SKILL.md"),
+    };
+    const scanner = {
+      scan: async () => [manifest],
+    } as unknown as SkillScanner;
+    const registry = new SkillRegistry(scanner);
+    const provider = new SkillContextProvider(registry, new SkillMatcher(), new SkillLoader());
+
+    const context = await provider.prepare({
+      query: "做一个 DCF Excel 模型",
+      messages: [{ role: "user", content: "做一个 DCF Excel 模型" }],
+    });
+
+    expect(context?.primary?.id).toBe("xlsx");
+    expect(context?.resources).toHaveLength(3);
+    expect(context?.disclosedResources).toHaveLength(1);
+    expect(context?.disclosedResources[0]?.uri).toBe("skill://xlsx/reference/DCF_SKILL.md");
+    expect(context?.disclosedResources[0]?.content).toContain("DCF rules");
   });
 });
