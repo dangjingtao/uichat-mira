@@ -10,6 +10,7 @@ import { executeOfficeRuntimeTask } from "@/microapps/office-suite/runtime.js";
 import { SPREADSHEET_VERIFICATION_PATCHES } from "@/microapps/office-suite/spreadsheet.js";
 import { success } from "@/utils/index.js";
 import { badRequest, routeHandler } from "@/utils/route-errors.js";
+import { registerWenshuCapabilityPackRoutes } from "./capability-pack.js";
 import { registerOfficeSkillWorkbenchRoutes } from "./skill-task.js";
 
 const MAX_OFFICE_FILE_BYTES = 50 * 1024 * 1024;
@@ -104,6 +105,7 @@ const buildWordReviewRequest = (query: WordReviewQuery): OfficeRuntimeWordReview
 };
 
 const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
+  await registerWenshuCapabilityPackRoutes(app);
   await registerOfficeSkillWorkbenchRoutes(app);
 
   app.post(
