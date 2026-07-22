@@ -22,6 +22,24 @@ export type OfficeRuntimeParagraph = {
   bold?: boolean;
 };
 
+export type OfficeRuntimeWordCreateParagraph = {
+  text: string;
+  style?: "title" | "heading1" | "heading2" | "heading3" | "body";
+  bold?: boolean;
+};
+
+export type OfficeRuntimeWordCreateTable = {
+  rows: string[][];
+};
+
+export type OfficeRuntimeWordCreateRequest = {
+  type: "document";
+  fileName?: string;
+  title?: string;
+  paragraphs?: OfficeRuntimeWordCreateParagraph[];
+  tables?: OfficeRuntimeWordCreateTable[];
+};
+
 export type OfficeRuntimeSpreadsheetCellPatch = {
   sheetName: string;
   cell: string;
@@ -72,14 +90,11 @@ export type OfficeRuntimeInspectTask = OfficeRuntimeTaskBase & {
 export type OfficeRuntimeCreateTask = OfficeRuntimeTaskBase & {
   operation: "create";
   kind: OfficeSuiteFileKind;
-  /**
-   * V1 currently exposes only the verified baseline generator through the task
-   * contract. New create modes should extend this union instead of leaking SDK
-   * calls into Skill or UI consumers.
-   */
-  request: {
-    type: "verification-sample";
-  };
+  request:
+    | {
+        type: "verification-sample";
+      }
+    | OfficeRuntimeWordCreateRequest;
 };
 
 export type OfficeRuntimeModifyWordTask = OfficeRuntimeTaskBase & {
