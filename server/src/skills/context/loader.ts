@@ -1,3 +1,4 @@
+import type { Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type {
@@ -35,7 +36,7 @@ const inferResourceKind = (relativePath: string): SkillResourceKind | null => {
 
 const walkFiles = async (root: string, current = ""): Promise<string[]> => {
   const directory = path.join(root, current);
-  let entries: Awaited<ReturnType<typeof fs.readdir>>;
+  let entries: Dirent[];
   try {
     entries = await fs.readdir(directory, { withFileTypes: true });
   } catch {
