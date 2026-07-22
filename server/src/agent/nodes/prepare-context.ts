@@ -3,7 +3,6 @@
  */
 import { reconcileCodeGraphHarnessCapability } from "@/harness/codegraph-capability";
 import { listCapabilityDefinitions } from "@/harness/registry";
-import { resolveActiveSkillContext } from "@/skills/registry.js";
 import { evaluateAgentToolPolicy } from "../policy";
 import { emitStepNode } from "../node-runtime";
 import type { AgentNodeState, EmitAgentExecutionNode } from "../node-runtime";
@@ -49,52 +48,18 @@ export const prepareContextNode = async (
     .filter((definition) => evaluateAgentToolPolicy(definition).type === "allow")
     .map((definition) => definition.id);
   const query = getLatestUserQuestion(state.messages) || state.goal.text;
-  const activeSkill = resolveActiveSkillContext({
-    question: query,
-    messages: state.messages,
-  });
   const matcherResult = await matchToolCandidatesByEmbedding({
     query,
     config: state.intentConfig,
   });
 
-  const exposedToolIds = [...matcherResult.toolExposure.exposedToolIds];
-  const exposedDefinitions = [...matcherResult.toolExposure.exposedDefinitions];
-  if (activeSkill) {
-    for (const toolId of activeSkill.primaryToolIds) {
-      if (exposedToolIds.includes(toolId)) continue;
-      const definition = toolDefinitions.find((candidate) => candidate.id === toolId);
-      if (!definition) continue;
-      if (evaluateAgentToolPolicy(definition).type === "deny") continue;
-      exposedToolIds.push(toolId);
-      exposedDefinitions.push(definition);
-    }
-  }
-
-  // Skill semantics belong on its high-level business capability, not on Read
-  // primitives. Planner still consumes one canonical toolExposure and there is
-  // no second tool list or use_skill action.
-  const activeSkillBusinessToolIds = new Set(
-    activeSkill?.primaryToolIds.filter((toolId) => toolId.startsWith("office_")) ?? [],
+  // Skill packages are currently a product/distribution surface only. Until the
+  // formal Skill Runtime owns SkillInstance/state/reducer/stage constraints,
+  // packages must not inject semantics or expand Planner-visible tools here.
+  const toolExposure = toAgentToolExposureState(
+    [...matcherResult.toolExposure.exposedToolIds],
+    [...matcherResult.toolExposure.exposedDefinitions],
   );
-  const skillAwareDefinitions = activeSkill
-    ? exposedDefinitions.map((definition) =>
-        activeSkillBusinessToolIds.has(definition.id)
-          ? {
-              ...definition,
-              description: [
-                definition.description,
-                `Active Skill: ${activeSkill.id} (${activeSkill.name}).`,
-                ...activeSkill.instructions,
-                "Skill completion criteria:",
-                ...activeSkill.completionCriteria.map((criterion) => `- ${criterion}`),
-              ].join("\n"),
-            }
-          : definition,
-      )
-    : exposedDefinitions;
-
-  const toolExposure = toAgentToolExposureState(exposedToolIds, skillAwareDefinitions);
   const toolIntent = matcherResult;
 
   await emitStepNode(emit, {
@@ -110,8 +75,7 @@ export const prepareContextNode = async (
       autoAllowedTools,
       exposedToolCount: toolExposure.exposedTools.length,
       exposedToolIds: toolExposure.exposedTools,
-      activeSkillId: activeSkill?.id ?? null,
-      activeSkillBusinessToolIds: [...activeSkillBusinessToolIds],
+      skillPackageIntegration: "deferred-until-formal-skill-runtime",
       codebaseExploreExposed: toolExposure.exposedTools.includes("codebase_explore"),
       currentTaskFrameWriter: "prepareContextNode reads the initialized task frame only",
     },
