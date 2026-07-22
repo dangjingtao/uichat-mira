@@ -2,7 +2,7 @@ name: Build Desktop Apps
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, dev]
     tags: ['v*']
   pull_request:
     branches: [main, master]
@@ -61,6 +61,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Sync package versions
+        run: pnpm version:sync
 
       - name: Install clipper extension dependencies
         run: npm ci --prefix mira-clipper-ext --ignore-scripts
@@ -130,6 +133,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Sync package versions
+        run: pnpm version:sync
 
       - name: Install clipper extension dependencies
         run: npm ci --prefix mira-clipper-ext --ignore-scripts
@@ -201,44 +207,59 @@ jobs:
             prefix=$(basename "$dir")
             find "$dir" -type f | while read -r file; do
               relative_path="${file#"$dir"}"
-              safe_name=$(printf '%s' "$relative_path" | tr '/\' '__')
+              safe_name=$(printf '%s' "$relative_path" | tr '/' '_')
               cp "$file" "dist/${prefix}_${safe_name}"
             done
           done
           ls -la dist/
-
-      - name: Upload release assets to Cloudflare R2
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
-          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
-        run: |
-          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          latest_prefix="mira/latest"
-          previous_prefix="mira/previous"
-
-          aws s3 rm "s3://${R2_BUCKET}/${previous_prefix}/" \
-            --recursive \
-            --endpoint-url "$endpoint" \
-            --only-show-errors
-          aws s3 sync "s3://${R2_BUCKET}/${latest_prefix}/" "s3://${R2_BUCKET}/${previous_prefix}/" \
-            --endpoint-url "$endpoint" \
-            --only-show-errors
-          aws s3 sync dist/ "s3://${R2_BUCKET}/${latest_prefix}/" \
-            --delete \
-            --endpoint-url "$endpoint" \
-            --only-show-errors
-          public_base="${R2_PUBLIC_BASE_URL%/}"
-          {
-            echo "### Cloudflare R2"
-            echo "Uploaded current release assets to: ${public_base}/${latest_prefix}/"
-            echo "Previous release assets: ${public_base}/${previous_prefix}/"
-          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*
           generate_release_notes: true
+
+      - name: Upload release assets to Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_RETRY_MODE: standard
+          AWS_MAX_ATTEMPTS: 5
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+        run: |
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          latest_prefix="mira/latest"
+          legacy_previous_prefix="mira/previous"
+
+          # R2 仅保留 latest。清掉旧 previous，避免长期占空间。
+          aws s3 rm "s3://${R2_BUCKET}/${legacy_previous_prefix}/" \
+            --recursive \
+            --endpoint-url "$endpoint" \
+            --only-show-errors || true
+
+          # 只从本地 dist 同步到 latest，避免 R2 -> R2 复制触发
+          # Cloudflare R2 未实现的 GetObjectTagging API。
+          for attempt in 1 2 3; do
+            if aws s3 sync dist/ "s3://${R2_BUCKET}/${latest_prefix}/" \
+              --delete \
+              --endpoint-url "$endpoint" \
+              --only-show-errors; then
+              break
+            fi
+
+            if [ "$attempt" -eq 3 ]; then
+              echo "R2 upload failed after ${attempt} attempts." >&2
+              exit 1
+            fi
+
+            sleep $((attempt * 10))
+          done
+
+          public_base="${R2_PUBLIC_BASE_URL%/}"
+          {
+            echo "### Cloudflare R2"
+            echo "Uploaded current release assets to: ${public_base}/${latest_prefix}/"
+            echo "Retention: latest release only"
+          } >> "$GITHUB_STEP_SUMMARY"
