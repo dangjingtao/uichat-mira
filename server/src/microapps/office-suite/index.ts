@@ -236,7 +236,7 @@ export const inspectOfficeDocument = (
   if (extension === ".docx") {
     return inspectWordDocument(input, extension);
   }
-  if (extension === ".xlsx" || extension === ".xls") {
+  if (extension === ".xlsx") {
     return inspectExcelWorkbook(input, extension);
   }
   if (extension === ".pptx") {
