@@ -55,6 +55,7 @@ export const prepareContextNode = async (
   const matcherResult = await matchToolCandidatesByEmbedding({
     query,
     config: state.intentConfig,
+    allowedToolIds: state.toolExposureAllowlist,
   });
   const toolExposure = toAgentToolExposureState(
     matcherResult.toolExposure.exposedToolIds,
@@ -73,6 +74,7 @@ export const prepareContextNode = async (
       messageCount: state.messages.length,
       requestContextCount: state.requestContextMessages?.length ?? 0,
       autoAllowedTools,
+      runtimeToolConstraint: state.toolExposureAllowlist ?? null,
       exposedToolCount: toolExposure.exposedTools.length,
       exposedToolIds: toolExposure.exposedTools,
       codebaseExploreExposed: toolExposure.exposedTools.includes("codebase_explore"),
