@@ -1,5 +1,6 @@
-# Install these into Mira's system development-kit Python environment.
-# WenShu intentionally does not bundle a second Python runtime.
+# Installed on demand into Mira's managed `wenshu-office` runtime pack.
+# The system development-kit Python is reused as the interpreter; these packages
+# are not installed into the user's global Python environment.
 reportlab>=4.0
 matplotlib>=3.8
 pdfplumber>=0.11
