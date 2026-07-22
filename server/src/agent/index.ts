@@ -1,8 +1,11 @@
 import { runAgentRuntime } from "./runtime";
 import { createAgentGoal } from "./nodes/index";
+import { createInitialCurrentTaskFrame } from "./node-runtime";
 import { agentRunStore, configureAgentRunPersistence } from "./run-store";
-import type { AgentGraphInput } from "./types";
+import type { AgentGraphInput, CurrentTaskFrame } from "./types";
 import { agentRunRepository } from "@/db/repositories/agent-run.repository";
+import { configureDefaultSkillPersistence } from "@/skill/persistence";
+import { resolveSkillRuntime } from "@/skill/runtime";
 
 configureAgentRunPersistence({
   create: (run) => {
@@ -13,6 +16,46 @@ configureAgentRunPersistence({
   addObservation: agentRunRepository.addObservation.bind(agentRunRepository),
   complete: agentRunRepository.complete.bind(agentRunRepository),
 });
+configureDefaultSkillPersistence();
+
+type SkillAwareTaskFrame = CurrentTaskFrame & {
+  skill?: {
+    id: string;
+    version: string;
+    instanceId: string;
+    stage?: string;
+    semanticContext: string;
+    qualityCriteria: string;
+  };
+};
+
+const buildSkillAwareTaskFrame = (input: {
+  baseFrame: CurrentTaskFrame;
+  skillRuntime?: ReturnType<typeof resolveSkillRuntime>;
+}): CurrentTaskFrame => {
+  if (!input.skillRuntime) {
+    return input.baseFrame;
+  }
+
+  const frame = input.skillRuntime.frame;
+  return {
+    ...input.baseFrame,
+    completionCriteria: [
+      ...new Set([
+        ...input.baseFrame.completionCriteria,
+        ...frame.completionCriteria,
+      ]),
+    ],
+    skill: {
+      id: frame.skillId,
+      version: frame.skillVersion,
+      instanceId: frame.skillInstanceId,
+      stage: frame.stage,
+      semanticContext: frame.semanticContext,
+      qualityCriteria: frame.qualityCriteria,
+    },
+  } as SkillAwareTaskFrame;
+};
 
 export const createAndRunAgent = async (
   input: Omit<AgentGraphInput, "runId" | "goal"> & {
@@ -42,11 +85,33 @@ export const createAndRunAgent = async (
     status: "running",
   });
 
+  const skillRuntime = resolveSkillRuntime({
+    runId: run.id,
+    threadId: input.threadId,
+    userId: input.userId,
+    goalText: goal.text,
+    messages: input.messages,
+    params: input.params,
+  });
+  const baseTaskFrame =
+    input.currentTaskFrame ??
+    createInitialCurrentTaskFrame({
+      goal,
+      messages: input.messages,
+      workspaceRoot: input.workspaceRoot,
+      knowledgeBaseId: input.knowledgeBaseId,
+    });
+  const currentTaskFrame = buildSkillAwareTaskFrame({
+    baseFrame: baseTaskFrame,
+    skillRuntime,
+  });
+
   try {
     const output = await runAgentRuntime({
       ...input,
       runId: run.id,
       goal,
+      currentTaskFrame,
       approvedInvocations: [],
     });
 
