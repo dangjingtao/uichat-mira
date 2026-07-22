@@ -1,10 +1,8 @@
 import path from "node:path";
 import AdmZip from "adm-zip";
+import type { OfficeRuntimeParagraph } from "./contract.js";
 
-export type DocumentParagraphAppend = {
-  text: string;
-  bold?: boolean;
-};
+export type DocumentParagraphAppend = OfficeRuntimeParagraph;
 
 export type DocumentAppendArtifact = {
   fileName: string;
