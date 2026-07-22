@@ -55,6 +55,7 @@ export type SkillDisclosurePlan = {
 };
 
 export type SkillContext = {
+  instruction: string;
   primary?: {
     id: string;
     version: string;
