@@ -2,287 +2,344 @@
 
 Status: Current
 Owner: chat / runtime / docs
-Last verified: 2026-07-06
+Last verified: 2026-07-22
 Layer: raw-source
 Module: SKILL
 Feature: SkillSystem
 Doc Type: overview
 Canonical: true
 Related:
-  - ../tooling-runtime/read-skill-design.md
+  - ./skill-runtime-design.md
+  - ../harness/agentgraph-harness-protocol.md
+  - ../tooling-runtime/harness-runtime-design.md
   - ../tooling-runtime/tools-protocol.md
-  - ../chat/agent-runtime-design.md
-  - ./skill-memory-poc.md
-  - ./catalog/README.md
-  - ./roadmap.md
+  - ../development/agent-observability.md
 
 ## 单点真相范围
 
-这页只回答一件事：
+这页定义当前项目里 `Skill` 的正式产品和运行时边界。
 
-当前项目语境里，`SKILL` 到底是什么，它和 `Tool`、`MCP`、`MicroAPP`、`Memory` 的边界是什么。
+核心定义：
 
-它覆盖：
+> `Skill = 内部状态 + 多工具编排 + 业务语义封装`。
 
-- `SKILL` 的正式产品定义
-- `SKILL` 与 `Tool / MCP / MicroAPP / Memory` 的边界
-- 当前项目为什么适合先做 `SKILL`
-- `SKILL` 在当前代码结构里的挂载点
+这一定义自 `2026-07-22` 起替代此前“记忆型工作动作 / skill-driven memory”方向。
 
-它不覆盖：
+详细运行时设计见：
 
-- 某个具体 skill 的完整提示词
-- 某个外部平台的接入细节
-- durable memory 的最终数据模型
+- `skill-runtime-design.md`
 
-## 结论先说
+## 当前结论
 
-`SKILL` 不是：
+`Skill` 是一个有生命周期的业务能力单元。
 
-- 一个外部 MCP server
-- 一个 Harness tool
-- 一个企业集成微应用
-- 一个直接暴露给用户的插件市场条目
+它同时具备三部分：
 
-`SKILL` 是：
+1. **内部状态**：维护当前任务阶段、资源引用、中间结果、产物、checkpoint、错误与恢复状态。
+2. **多工具编排**：组合 Harness / MCP / Runtime 已有工具完成一个完整业务目标。
+3. **业务语义封装**：向 Agent 暴露高层业务能力和领域判断，而不是把一长串底层工具直接推给上层处理。
 
-> 一段可复用、可观察、可组合的工作动作定义。
+层级：
 
-它解决的是：
+```text
+Agent
+  ↓
+Skill
+  ↓
+Tool / MCP / Runtime
+```
 
-- 什么时候做一次工作动作
-- 动作读取哪些上下文
-- 动作写回什么结果
-- 结果是否进入后续上下文
+- `Tool`：原子执行能力。
+- `Skill`：有状态的业务能力。
+- `Agent`：目标理解、能力选择和跨 Skill / Tool 协调。
+
+## Skill 不是什么
+
+Skill 不是：
+
+- 一组纯 Prompt 文件
+- 一个固定 `A -> B -> C` Workflow
+- 一个 MCP server 包装
+- 一个 Tool alias
+- 一个新的 Agent
+- 一个独立 Planner
+- 一个长期 Memory 系统
+- 一个新的 Harness / approval / sandbox / trace runtime
+
+Skill 可以包含 Prompt，也可以调用 Memory，但它们都不等于 Skill 本身。
+
+## Code 与 Prompt 的分工
+
+Skill 内部明确区分确定性代码和概率性模型语义。
+
+### Code / Runtime
+
+负责“必须正确”的部分：
+
+- 能做什么
+- 怎么执行
+- 状态机和合法迁移
+- 工具调用边界
+- 参数校验
+- 权限与 side effect 边界
+- checkpoint
+- cancel / resume
+- 错误处理和恢复
+- artifact / state 持久化
+
+### Prompt / Semantic Policy
+
+负责“需要理解和判断”的部分：
+
+- 什么时候做
+- 为什么做
+- 模糊业务目标怎么理解
+- 多个合法动作中怎么选
+- 怎样才算做得好
+- 当前结果是否满足业务质量标准
+
+原则：
+
+> 必须正确的东西写代码；需要理解和判断的东西交给模型。
 
 ## 和相邻模块的边界
 
-### `SKILL` vs `Tool`
+### Skill vs Tool
 
-`Tool` 是执行器。
+`Tool` 是单个执行能力。
 
 例如：
 
 - `read_open`
-- `read_locate`
+- `edit_file`
 - `web_search`
 - `terminal_session`
 
-`SKILL` 不是直接执行器，而是：
-
-- 对一个任务动作的编排定义
-- 决定是否需要调用一个或多个 tool
-- 决定执行后如何整理结果
+Skill 可以组合多个 Tool，并在多步执行期间维护自己的业务状态。
 
 一句话：
 
-- `Tool` 回答“怎么执行”
-- `SKILL` 回答“为什么现在要做这步，以及结果怎么沉淀”
+- Tool = 原子动作
+- Skill = 有状态的业务能力
 
-### `SKILL` vs `MCP`
+### Skill vs Agent
 
-`MCP` 是能力暴露和接入协议。
+Agent 负责用户总目标和跨能力决策。
 
-它解决：
+Skill 只负责自己业务域内的状态、语义和工具组合。
 
-- 外部 server 怎么被发现
-- tool / resource 怎么被调用
+Skill 可以多步运行，但不拥有第二套 Agent Loop。
 
-`SKILL` 不等于 MCP，也不应该退化成 MCP 市场包装。
+当前原则：
 
-一句话：
+```text
+Parent Agent Loop 是唯一控制循环
+Skill Runtime 是被它驱动的有状态业务层
+```
 
-- `MCP` 是能力接线层
-- `SKILL` 是产品动作层
+### Skill vs Workflow
 
-### `SKILL` vs `MicroAPP`
+Workflow 更适合表达固定、确定流程。
 
-`MicroAPP` 当前属于企业集成域里的业务工作流单元。
+Skill 允许：
 
-它偏向：
+- 代码提供稳定骨架
+- state 限定合法动作
+- 模型根据业务语义选择局部路径
 
-- 平台入口绑定
-- 标准化外部请求
-- 集成场景下的业务工作流
+所以 Skill 可以包含确定性流程节点，但不能被缩减成一张死流程图。
 
-`SKILL` 偏向：
+### Skill vs MCP
 
-- 个人工作副驾
-- chat / topic / memory 里的工作动作
-- 面向单个用户的持续工作动作
+MCP 是能力接入协议。
 
-一句话：
+Skill 可以调用 MCP Tool，但：
 
-- `MicroAPP` 更像外部入口消费的业务单元
-- `SKILL` 更像助手内部复用的工作动作单元
+- 不复制 MCP Registry
+- 不复制连接和鉴权
+- 不自己执行 MCP 协议
+- 仍然通过现有 Harness / MCP runtime 使用能力
 
-### `SKILL` vs `Memory`
+### Skill vs Memory
 
-`Memory` 是沉淀出来的对象或上下文。
+Memory 是长期信息对象或外部上下文能力。
+
+Skill 的内部状态不是长期 Memory。
+
+区别：
+
+```text
+Skill State
+= 服务于一次 Skill instance 的运行状态
+
+Memory
+= 可跨任务、跨实例继续使用的长期信息
+```
+
+Skill 可以显式读取或写入 Memory，但 Memory 不属于 Skill 的基础定义。
+
+### Skill vs MicroAPP
+
+MicroAPP 是产品入口和独立业务模块形态，可能包含 UI、平台接入和 Runtime。
+
+Skill 是 Agent 可调用的业务能力单元。
+
+两者可以配合：
+
+```text
+Office MicroAPP
+  提供 Office runtime / UI / debug surface
+
+Office Skill
+  封装“合同审阅”“文档整理”“PPT 美化”等 Agent 业务能力
+```
+
+MicroAPP 不自动等于 Skill，Skill 也不要求必须有 MicroAPP。
+
+## 当前运行时边界
+
+Skill Runtime 只新增 Skill 自己必须拥有的部分：
+
+- SkillDefinition registry
+- SkillInstance
+- internal state
+- semantic policy
+- allowed tool surface
+- state reducer / lifecycle
+- checkpoint
+- cancel / resume
+- version binding
+
+其余全部复用现有系统：
+
+```text
+Planner / Agent     -> 继续使用现有 Agent 主循环
+Policy              -> 继续负责执行策略和 approval 边界
+ToolNode             -> 继续执行 frozen tool call
+Harness              -> 继续负责真实 Tool invocation
+MCP                  -> 继续负责外部能力接入
+Observability        -> 继续使用现有 trace / artifact 体系
+```
+
+Skill 不允许另起一套平行基础设施。
+
+## 多工具编排原则
+
+Skill 不写死单一路径。
+
+推荐模型：
+
+```text
+业务目标
+  ↓
+Skill State
+  ↓
+合法工具集合 + 业务语义
+  ↓
+Agent / 模型选择下一步
+  ↓
+Policy -> ToolNode -> Harness
+  ↓
+Tool Result / Evidence
+  ↓
+Skill 更新 State
+```
+
+Skill 可以定义硬约束，例如：
+
+- 保存前必须完成必要校验
+- 某阶段只能使用特定工具
+- 某类 side effect 必须经过 approval
+
+但“用户真实想要什么”“几个合法动作下一步选哪个”“质量是否足够”等判断仍交给模型。
+
+## 内部状态原则
+
+SkillInstance 的状态只保存恢复业务执行真正需要的信息。
+
+典型内容：
+
+- 当前 stage
+- 输入 / resource refs
+- 已确认中间结果
+- pending actions / changes
+- artifact refs
+- checkpoint
+- error / recovery marker
+
+不应默认把这些全部塞进 state：
+
+- 完整聊天历史
+- 全量 Tool Result
+- 全量 execution trace
+- 大文件内容
+
+它们应继续由现有上下文、trace、artifact 或文件系统承载，Skill 保存引用。
+
+## 第一类适合 Skill 的业务
+
+Skill 最适合“需要多个工具协作，并且执行过程中需要保留业务状态”的任务。
 
 例如：
 
-- 线程摘要
-- 长期偏好
-- 主题状态
-- 决策记录
+- Office 文档整理
+- 合同审阅
+- PPT 美化
+- 代码库迁移
+- 发布流程
+- 数据分析与报告生成
 
-`SKILL` 不是记忆本体，但可以制造、更新、回放记忆。
-
-一句话：
-
-- `Memory` 是结果对象
-- `SKILL` 是产出和使用这些对象的动作机制
-
-## 当前项目为什么要先做 `SKILL`
-
-当前代码状态下，项目已经具备三类基础：
-
-1. Agent runtime
-2. Harness tools / MCP
-3. thread request-only context 注入链
-
-但项目还没有完整的 durable memory 对象层，也没有独立 skill runtime。
-
-因此当前最稳的路径不是直接做“大记忆系统”，而是：
-
-1. 先定义几类高价值 skill
-2. 让 skill 读写现有 thread / agent / summary 结构
-3. 再从这些行为里反推出真正需要的数据结构
-
-## 当前代码挂载点
-
-当前 `SKILL` 最现实的挂载点有四处：
-
-### 1. request-only context
-
-现有链路已经固定为：
+一个 `office_document_edit` Skill 可能：
 
 ```text
-Role -> Summary -> Memory -> Agent
+inspect_document
+read_content
+render_preview
+edit_content
+verify_document
+save_document
 ```
 
-相关代码：
+但实际顺序根据文档状态和用户目标动态变化，而不是固定 Workflow。
 
-- `server/src/services/shared-nodes/thread-request-context.node.ts`
-- `server/src/services/shared-nodes/thread-request-context-memory.resolver.ts`
+## 当前硬规则
 
-这意味着：
+1. `Skill = 内部状态 + 多工具编排 + 业务语义封装` 是当前唯一正式定义。
+2. Skill 不拥有独立 Agent Loop。
+3. Skill 不替代 Planner / Policy / ToolNode / Harness。
+4. Tool 执行必须复用现有 Harness / MCP / Runtime。
+5. Skill 不能扩大 Tool 原有权限。
+6. Skill state 与长期 Memory 分离。
+7. 代码负责确定性和硬边界，Prompt 负责业务理解和概率性判断。
+8. V1 不建设 Skill Marketplace、Workflow DSL 或通用 state migration framework。
+9. 运行中的 SkillInstance 固定绑定 Skill version，不热切换定义。
+10. 旧 memory-skill 设计不再驱动实现。
 
-- skill 的结果可以先落成 thread-level context
-- 然后通过 request-only system message 注入到模型请求
+## 已废弃的旧设计
 
-### 2. Agent execution trace
+以下内容属于上一版 Skill 思路，不再作为当前实现依据：
 
-现有 Agent graph 与 execution trace 已经能展示：
+- `skill-memory-poc.md`
+- `roadmap.md` 中的 memory skill card 路线
+- `catalog/` 下 `save_thread_memory` / `save_preference` / `save_decision` 卡片
+- `schema/skill-card.schema.md` 旧 card schema
+- `eval/` 下旧 memory skill 评估用例
 
-- `plan`
-- `reason`
-- `tool`
-- `approval`
-- `memory`
-- `generate`
-
-相关代码：
-
-- `server/src/agent/graph/build-graph.ts`
-- `desktop/src/shared/uchat/ui/executionParsers.ts`
-
-这意味着：
-
-- skill 执行结果可以被做成可观察动作
-- 不必先造一套新的 UI 协议
-
-### 3. thread summary 样板
-
-现有线程摘要已经形成：
-
-- 生成
-- 持久化
-- request-only 注入
-- UI 编辑
-
-相关代码：
-
-- `server/src/services/shared-nodes/thread-context-summary.node.ts`
-- `server/src/services/thread.service.ts`
-- `desktop/src/features/chat/components/ThreadContextSummaryModalContent.tsx`
-
-这意味着：
-
-- 第一批 skill 完全可以复用这条整理路径
-
-### 4. Harness tool surface
-
-现有 tools 已经可通过 Harness 统一调用：
-
-- `read_*`
-- `web_search`
-- `terminal_session`
-- 其它 internal / external MCP tools
-
-相关代码：
-
-- `server/src/harness/registry.ts`
-- `server/src/mcp/routes.ts`
-
-这意味着：
-
-- skill 不必自己重复发明执行器
-
-## 第一批建议的 skill 类型
-
-当前最值得尝试的不是外部平台 skill，而是记忆型工作 skill：
-
-- `session_summarize`
-- `save_preference`
-- `save_decision`
-- `resume_topic`
-- `attach_artifact`
-
-这些 skill 的共同点是：
-
-- 输入边界清楚
-- 对个人工作副驾价值直接
-- 可以复用现有 agent / thread / request-context 主链
-- 能自然长出记忆对象层
-
-当前 docs-only 基础数据 POC 先只正式整理这 3 张卡：
-
-- `save_thread_memory`
-- `save_preference`
-- `save_decision`
-
-## 当前阶段的硬规则
-
-1. 先不要把 `SKILL` 做成插件市场。
-2. 先不要把 `SKILL` 直接等同于 MCP server。
-3. 先不要把 `SKILL` 和企业集成 `MicroAPP` 混成一个模块。
-4. 第一批 `SKILL` 优先面向“沉淀、回放、续接上下文”，不要优先做平台连接。
-5. 第一批 `SKILL` 的写回对象必须可见、可编辑、可删除，不能静默写黑盒长期记忆。
-6. 当前任务只到 `docs-only Phase 0`，不把 catalog、schema、eval 文档直接等同于 runtime 方案批准。
-
-## 当前文档入口
-
-- `catalog/README.md`：第一批 skill card 入口索引
-- `schema/skill-card.schema.md`：skill card 最小结构合同
-- `skill-memory-poc.md`：当前 POC 的范围与限制
-- `roadmap.md`：`Phase 0` 到 `Phase 4` 的演进路线
-- `eval/`：选择与边界评估用例
+即使旧文件仍保留历史内容，也必须以本页和 `skill-runtime-design.md` 为当前真相源。
 
 ## 推荐阅读顺序
 
-1. `./skill-memory-poc.md`
-2. `./catalog/README.md`
-3. `./roadmap.md`
-4. `../chat/agent-runtime-design.md`
+1. `README.md`
+2. `skill-runtime-design.md`
+3. `../harness/agentgraph-harness-protocol.md`
+4. `../tooling-runtime/harness-runtime-design.md`
 5. `../tooling-runtime/tools-protocol.md`
-6. `../microapp/README.md`
+6. `../development/agent-observability.md`
 
-## 当前结论
+## Code Anchors
 
-`SKILL` 现在最适合被定义成：
+- `server/src/agent/graph/build-graph.ts`
+- `server/src/harness/registry.ts`
+- `server/src/mcp/routes.ts`
 
-- 产品上：助手内部的工作动作单元
-- 代码上：站在 agent、thread context、tools 之上的一层轻编排
-- 演进上：从 skill 行为慢慢长出真正的 memory 结构，而不是反过来
+Skill Runtime 的最终源码目录在实现任务批准后再确定，不在总纲里提前制造新结构。
