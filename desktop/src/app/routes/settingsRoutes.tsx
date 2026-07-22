@@ -49,6 +49,7 @@ import CodeGraphStudioPage from "@/features/Settings/pages/MicroApps/CodeGraph";
 import EvolvingKnowledgeStudioPage from "@/features/Settings/pages/MicroApps/EvolvingKnowledge";
 import NotionMicroAppPage from "@/features/Settings/pages/MicroApps/Notion";
 import JianXingPage from "@/features/Settings/pages/MicroApps/JianXing";
+import OfficeSuitePage from "@/features/Settings/pages/MicroApps/OfficeSuite";
 
 export type SettingsNavGroup =
   | "general"
@@ -131,6 +132,10 @@ const settingsRouteTree: SettingsRouteConfig[] = [
       {
         path: "notion",
         element: <NotionMicroAppPage />,
+      },
+      {
+        path: "office-suite",
+        element: <OfficeSuitePage />,
       },
       {
         path: ":appId",
