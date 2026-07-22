@@ -127,19 +127,8 @@ const toNodeBuffer = (output: unknown): Buffer => {
   throw new Error("PowerPoint generation did not return a Node binary buffer");
 };
 
-const buildPowerPointSampleImage = () => {
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 1200 600">
-      <rect width="1200" height="600" rx="48" fill="#F7F4EF"/>
-      <circle cx="220" cy="300" r="120" fill="#D97745" opacity="0.92"/>
-      <rect x="420" y="170" width="560" height="72" rx="18" fill="#2F2A26" opacity="0.9"/>
-      <rect x="420" y="285" width="430" height="46" rx="14" fill="#7A716A" opacity="0.65"/>
-      <rect x="420" y="370" width="330" height="46" rx="14" fill="#7A716A" opacity="0.42"/>
-      <text x="220" y="322" text-anchor="middle" font-family="Arial, sans-serif" font-size="74" font-weight="700" fill="#FFFFFF">M</text>
-    </svg>
-  `.trim();
-  return `data:image/svg+xml;base64,${Buffer.from(svg, "utf8").toString("base64")}`;
-};
+const POWERPOINT_SAMPLE_PNG =
+  "image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAQCAIAAAD4YuoOAAAAJ0lEQVR42mO4We6KB+lrqVGIGEYtGPEWfP/ynkI0asGoBaMW0MECAFpdsiJns2fbAAAAAElFTkSuQmCC";
 
 const createPowerPointSample = async (): Promise<OfficeSuiteCreatedArtifact> => {
   const presentation = new PptxGenJS();
@@ -217,14 +206,14 @@ const createPowerPointSample = async (): Promise<OfficeSuiteCreatedArtifact> => 
     margin: 0,
   });
   imageSlide.addImage({
-    data: buildPowerPointSampleImage(),
+    data: POWERPOINT_SAMPLE_PNG,
     x: 0.8,
     y: 1.45,
     w: 6.6,
     h: 3.3,
   });
   imageSlide.addText(
-    "这张内嵌 SVG 图片用于验证 PPTX 的媒体资源写入与再次解析，不依赖外部文件或网络。",
+    "这张内嵌 PNG 图片用于验证 PPTX 的媒体资源写入与再次解析，不依赖外部文件或网络。",
     {
       x: 7.8,
       y: 1.7,
