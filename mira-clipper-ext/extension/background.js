@@ -876,6 +876,7 @@ async function getAuthorizedTabId() {
 async function ensurePageBridge(tabId) {
   try {
     await chrome.tabs.sendMessage(tabId, { type: 'WEBBRIDGE_PING' });
+    await ensureChatGPTLibrary(tabId);
     return;
   } catch (_) {
     // Navigation and reload destroy the content script. Reinstall it before retrying.
@@ -890,6 +891,7 @@ async function ensurePageBridge(tabId) {
       target: { tabId },
       files: [`${extensionAssetPrefix}lib/extractor.js`],
     });
+    await ensureChatGPTLibrary(tabId);
     await chrome.scripting.executeScript({
       target: { tabId },
       files: [`${extensionAssetPrefix}lib/chatgpt-adapter.js`],
@@ -901,6 +903,26 @@ async function ensurePageBridge(tabId) {
   } catch (error) {
     throw Object.assign(new Error(`无法注入页面桥接：${error.message || '当前页面不允许操作'}`), {
       bridgeError: bridgeError('PAGE_BRIDGE_UNAVAILABLE', `无法注入页面桥接：${error.message || '当前页面不允许操作'}`, 'open_extension', true),
+    });
+  }
+}
+
+async function ensureChatGPTLibrary(tabId) {
+  const tab = await chrome.tabs.get(tabId);
+  if (!/^https:\/\/(chatgpt\.com|chat\.openai\.com)\//i.test(tab.url || '')) return;
+  const [{ result: loaded }] = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: () => Boolean(globalThis.chatgpt),
+  });
+  if (loaded) return;
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: [`${extensionAssetPrefix}lib/chatgpt.min.js`],
+    });
+  } catch (cause) {
+    throw Object.assign(new Error(`ChatGPT.js 注入失败：${cause?.message || '未知错误'}`), {
+      bridgeError: bridgeError('CHATGPT_LIBRARY_UNAVAILABLE', `ChatGPT.js 注入失败：${cause?.message || '未知错误'}`, 'retry', true),
     });
   }
 }

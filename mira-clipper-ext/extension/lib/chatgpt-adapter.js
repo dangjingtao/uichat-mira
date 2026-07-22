@@ -12,18 +12,6 @@
     return Object.assign(new Error(message), { code });
   }
 
-  function withTimeout(promise, timeoutMs, code, message) {
-    let timer = null;
-    return Promise.race([
-      promise,
-      new Promise((_, reject) => {
-        timer = setTimeout(() => reject(error(code, message)), timeoutMs);
-      }),
-    ]).finally(() => {
-      if (timer) clearTimeout(timer);
-    });
-  }
-
   function isChatGPTPage() {
     return CHATGPT_HOSTS.has(window.location.hostname);
   }
@@ -53,13 +41,18 @@
 
   async function getActiveConversationId(chatgpt) {
     const urlId = getConversationIdFromUrl();
-    try {
-      const activeId = await chatgpt.getChatData('active', 'id');
-      if (typeof activeId === 'string' && activeId) return activeId;
-    } catch (_) {
-      // URL remains the provider-specific fallback when page data is still settling.
-    }
+    // ChatGPT.js resolves "active" to the first history item on the blank
+    // composer route. That is not the conversation currently shown in the tab.
     return urlId;
+  }
+
+  async function waitForNewChatReady(chatgpt) {
+    const deadline = Date.now() + LIBRARY_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      if (!getConversationIdFromUrl() && getComposer(chatgpt)) return;
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+    throw error('CHATGPT_NEW_THREAD_UNAVAILABLE', 'ChatGPT 新对话页面尚未就绪');
   }
 
   async function detect() {
@@ -79,7 +72,7 @@
     if (!detected.loggedIn) throw error('CHATGPT_LOGIN_REQUIRED', '请先在当前 ChatGPT 页面完成登录');
     if (typeof chatgpt.startNewChat !== 'function') throw error('CHATGPT_NEW_THREAD_UNAVAILABLE', '当前 ChatGPT.js 不支持新建对话');
     await chatgpt.startNewChat();
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await waitForNewChatReady(chatgpt);
     return {
       sessionRef: { kind: 'provider_state', value: window.location.href || 'new-chat' },
       accountLabel: detected.accountLabel,
@@ -151,20 +144,6 @@
     return normalizeReply(reply) || normalizeReply(await chatgpt.getLastResponse?.());
   }
 
-  async function sendViaLibrary(chatgpt, message) {
-    if (typeof chatgpt.askAndGetReply !== 'function') return null;
-
-    const reply = await withTimeout(
-      Promise.resolve().then(() => chatgpt.askAndGetReply(message)),
-      RESPONSE_TIMEOUT_MS,
-      'CHATGPT_RESPONSE_TIMEOUT',
-      '等待 ChatGPT 回复完成超时',
-    );
-    const normalizedReply = normalizeReply(reply);
-    if (!normalizedReply) throw error('CHATGPT_EMPTY_REPLY', 'ChatGPT 没有返回有效回复');
-    return normalizedReply;
-  }
-
   async function sendMessage(sessionRef, message) {
     const chatgpt = await getChatGPT();
     const currentId = await getActiveConversationId(chatgpt);
@@ -176,18 +155,16 @@
     if (!message.trim()) throw error('CHATGPT_MESSAGE_EMPTY', '咨询内容不能为空');
     await chatgpt.isIdle(LIBRARY_TIMEOUT_MS);
 
-    const libraryReply = await sendViaLibrary(chatgpt, message);
+    // The current chatgpt.js send()/askAndGetReply() implementation still
+    // targets the old paragraph-based composer. Use its page-state APIs, but
+    // dispatch through the current textarea and send button ourselves.
+    await sendThroughCurrentComposer(chatgpt, message);
+    const idle = await chatgpt.isIdle(RESPONSE_TIMEOUT_MS);
+    if (idle === false) throw error('CHATGPT_RESPONSE_TIMEOUT', '等待 ChatGPT 回复完成超时');
     const updatedConversationId = await getActiveConversationId(chatgpt);
     const updatedSessionRef = updatedConversationId
       ? { kind: 'conversation_id', value: updatedConversationId }
       : sessionRef;
-    if (libraryReply !== null) return { reply: libraryReply, sessionRef: updatedSessionRef };
-
-    // Compatibility fallback for older chatgpt.js builds. Do not retry this path after
-    // askAndGetReply() has started, because that could duplicate an already-sent prompt.
-    await sendThroughCurrentComposer(chatgpt, message);
-    const idle = await chatgpt.isIdle(RESPONSE_TIMEOUT_MS);
-    if (idle === false) throw error('CHATGPT_RESPONSE_TIMEOUT', '等待 ChatGPT 回复完成超时');
     const normalizedReply = await readLatestReply(chatgpt);
     if (!normalizedReply) throw error('CHATGPT_EMPTY_REPLY', 'ChatGPT 没有返回有效回复');
     return { reply: normalizedReply, sessionRef: updatedSessionRef };

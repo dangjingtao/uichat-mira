@@ -119,7 +119,7 @@ export const externalExpertsRepository = {
     ensureTable();
     getSqlite().prepare(`
       UPDATE external_experts
-      SET account_label = ?, status = ?, updated_at = datetime('now')
+      SET external_session_ref_json = NULL, account_label = ?, status = ?, updated_at = datetime('now')
       WHERE id = ? AND user_id = ?
     `).run(input.accountLabel || null, input.status, input.id, input.userId);
     return this.getById(input.id, input.userId);

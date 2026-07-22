@@ -44,10 +44,13 @@ export const createExternalExpertService = () => {
     create(input: { userId: number; name: string; provider: string }) {
       const name = input.name.trim();
       if (!name) throw new Error("专家名称不能为空");
+      const provider = assertProvider(input.provider);
+      const existing = externalExpertsRepository.listByUser(input.userId).find((expert) => expert.provider === provider);
+      if (existing) return existing;
       return externalExpertsRepository.create({
         userId: input.userId,
         name: name.slice(0, 80),
-        provider: assertProvider(input.provider),
+        provider,
       });
     },
 

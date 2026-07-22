@@ -19,8 +19,8 @@ export type ExternalExpert = {
 
 export const listExternalExperts = () => get<ExternalExpert[]>("/microapps/external-experts");
 
-export const createExternalExpert = (input: { name: string; provider: ExternalExpertProvider }) =>
-  post<ExternalExpert>("/microapps/external-experts", input);
+export const ensureExternalExpert = (provider: ExternalExpertProvider) =>
+  post<ExternalExpert>("/microapps/external-experts", { name: `${provider} 专家`, provider });
 
 export const connectExternalExpert = (id: string) =>
   post<ExternalExpert>(`/microapps/external-experts/${encodeURIComponent(id)}/connect`, {});
