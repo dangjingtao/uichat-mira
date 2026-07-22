@@ -1,4 +1,5 @@
 import { createOfficeSample } from "./create.js";
+import { reviewDocument } from "./document-review.js";
 import { appendDocumentParagraphs } from "./document.js";
 import {
   OFFICE_RUNTIME_CONTRACT_VERSION,
@@ -85,10 +86,40 @@ const validateTask = (task: OfficeRuntimeTask) => {
     throw new Error("Modify task requires a non-empty Office file");
   }
 
-  if (task.kind === "word" && task.request.paragraphs.length === 0) {
-    throw new Error("Word modify task requires at least one paragraph");
+  if (task.kind === "word") {
+    if (task.request.type === "append-paragraphs") {
+      if (task.request.paragraphs.length === 0) {
+        throw new Error("Word modify task requires at least one paragraph");
+      }
+      return;
+    }
+
+    const reviewActionCount =
+      (task.request.comments?.length ?? 0) +
+      (task.request.insertions?.length ?? 0) +
+      (task.request.deletions?.length ?? 0);
+    if (reviewActionCount === 0) {
+      throw new Error("Word review task requires at least one review action");
+    }
+    for (const comment of task.request.comments ?? []) {
+      if (!comment.targetText.trim() || !comment.text.trim()) {
+        throw new Error("Word review comments require targetText and text");
+      }
+    }
+    for (const insertion of task.request.insertions ?? []) {
+      if (!insertion.afterText.trim() || !insertion.text) {
+        throw new Error("Word tracked insertions require afterText and text");
+      }
+    }
+    for (const deletion of task.request.deletions ?? []) {
+      if (!deletion.targetText.trim()) {
+        throw new Error("Word tracked deletions require targetText");
+      }
+    }
+    return;
   }
-  if (task.kind === "excel" && task.request.patches.length === 0) {
+
+  if (task.request.patches.length === 0) {
     throw new Error("Excel modify task requires at least one cell patch");
   }
 };
@@ -150,11 +181,18 @@ export const executeOfficeRuntimeTask = async (
     }
 
     if (task.kind === "word") {
-      const modified = appendDocumentParagraphs({
-        fileName: task.input.fileName,
-        buffer: task.input.buffer,
-        paragraphs: task.request.paragraphs,
-      });
+      const modified =
+        task.request.type === "append-paragraphs"
+          ? appendDocumentParagraphs({
+              fileName: task.input.fileName,
+              buffer: task.input.buffer,
+              paragraphs: task.request.paragraphs,
+            })
+          : reviewDocument({
+              fileName: task.input.fileName,
+              buffer: task.input.buffer,
+              request: task.request,
+            });
       return {
         contractVersion: OFFICE_RUNTIME_CONTRACT_VERSION,
         taskId: task.taskId,
@@ -172,7 +210,7 @@ export const executeOfficeRuntimeTask = async (
             buffer: modified.buffer,
           }),
         ],
-        warnings: [],
+        warnings: "warnings" in modified ? modified.warnings : [],
       };
     }
 
