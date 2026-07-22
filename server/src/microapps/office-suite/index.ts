@@ -189,6 +189,10 @@ const inspectPowerPointPresentation = (
       index,
       text: texts.join(" "),
       textItems: texts.length,
+      shapes: (xml.match(/<p:sp(?:\s|>)/g) ?? []).length,
+      images: (xml.match(/<p:pic(?:\s|>)/g) ?? []).length,
+      tables: (xml.match(/<a:tbl(?:\s|>)/g) ?? []).length,
+      charts: (xml.match(/<c:chart(?:\s|>)/g) ?? []).length,
     };
   });
   const mediaCount = archive
@@ -196,6 +200,15 @@ const inspectPowerPointPresentation = (
     .filter(
       (entry) => entry.entryName.startsWith("ppt/media/") && !entry.isDirectory,
     ).length;
+  const totals = slides.reduce(
+    (current, slide) => ({
+      shapes: current.shapes + slide.shapes,
+      images: current.images + slide.images,
+      tables: current.tables + slide.tables,
+      charts: current.charts + slide.charts,
+    }),
+    { shapes: 0, images: 0, tables: 0, charts: 0 },
+  );
 
   return {
     kind: "powerpoint",
@@ -205,7 +218,7 @@ const inspectPowerPointPresentation = (
       input.mimeType ||
       "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     byteSize: input.buffer.byteLength,
-    summary: `${slides.length} 页幻灯片 · ${mediaCount} 个媒体资源`,
+    summary: `${slides.length} 页幻灯片 · ${totals.images} 个图片对象 · ${totals.tables} 个表格 · ${mediaCount} 个媒体资源`,
     previewText: clipPreview(
       slides
         .map((slide) => `# ${slide.index}\n${slide.text}`)
@@ -216,8 +229,13 @@ const inspectPowerPointPresentation = (
       slides: slides.map((slide) => ({
         index: slide.index,
         textItems: slide.textItems,
+        shapes: slide.shapes,
+        images: slide.images,
+        tables: slide.tables,
+        charts: slide.charts,
         textPreview: clipPreview(slide.text, 240),
       })),
+      totals,
       media: mediaCount,
       notes: archive
         .getEntries()
