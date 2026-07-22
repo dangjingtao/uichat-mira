@@ -1,3 +1,4 @@
+import AdmZip from "adm-zip";
 import { describe, expect, it } from "vitest";
 import { OFFICE_RUNTIME_CONTRACT_VERSION } from "./contract.js";
 import { executeOfficeRuntimeTask } from "./runtime.js";
@@ -118,6 +119,70 @@ describe("WenShu Office Runtime task contract", () => {
     expect(excelModified.operation).toBe("modify");
     expect(excelModified.kind).toBe("excel");
     expect(excelModified.artifacts[0]?.fileName).toContain("-wenshu.xlsx");
+  });
+
+  it("adds Word comments and tracked revisions through the review request", async () => {
+    const source = await executeOfficeRuntimeTask({
+      operation: "create",
+      kind: "word",
+      request: { type: "verification-sample" },
+    });
+    if (source.status !== "completed" || !source.artifacts[0]) {
+      throw new Error("Failed to prepare Word review source artifact");
+    }
+
+    const artifact = source.artifacts[0];
+    const reviewed = await executeOfficeRuntimeTask({
+      taskId: "task-word-review",
+      operation: "modify",
+      kind: "word",
+      input: {
+        fileName: artifact.fileName,
+        mimeType: artifact.mimeType,
+        buffer: artifact.buffer,
+      },
+      request: {
+        type: "review",
+        author: "Mira",
+        comments: [
+          {
+            targetText: "文枢",
+            text: "这是文枢 Word Review Runtime 的批注验证。",
+          },
+        ],
+        insertions: [
+          {
+            afterText: "Office Runtime",
+            text: " · Review",
+          },
+        ],
+        deletions: [
+          {
+            targetText: "再次读取",
+          },
+        ],
+      },
+    });
+
+    expect(reviewed.status).toBe("completed");
+    expect(reviewed.kind).toBe("word");
+    expect(reviewed.artifacts).toHaveLength(1);
+    if (reviewed.status !== "completed" || !reviewed.artifacts[0]) {
+      throw new Error("Word review task did not return an artifact");
+    }
+
+    const archive = new AdmZip(reviewed.artifacts[0].buffer);
+    const documentXml = archive.readAsText("word/document.xml");
+    const commentsXml = archive.readAsText("word/comments.xml");
+    const settingsXml = archive.readAsText("word/settings.xml");
+
+    expect(documentXml).toContain("<w:commentRangeStart");
+    expect(documentXml).toContain("<w:commentReference");
+    expect(documentXml).toContain("<w:ins");
+    expect(documentXml).toContain("<w:del");
+    expect(documentXml).toContain("<w:delText");
+    expect(commentsXml).toContain("Word Review Runtime");
+    expect(settingsXml).toContain("<w:trackRevisions");
   });
 
   it("returns stable failure results instead of leaking execution exceptions", async () => {
