@@ -4,6 +4,8 @@ const OFFICE_SUITE_INSPECT_ROUTE = "/microapps/office-suite/inspect";
 const OFFICE_SUITE_CREATE_ROUTE = "/microapps/office-suite/create";
 const OFFICE_SUITE_WORD_VERIFY_ROUTE =
   "/microapps/office-suite/document/verification-copy";
+const OFFICE_SUITE_WORD_REVIEW_ROUTE =
+  "/microapps/office-suite/document/review-copy";
 const OFFICE_SUITE_EXCEL_VERIFY_ROUTE =
   "/microapps/office-suite/spreadsheet/verification-copy";
 
@@ -24,6 +26,21 @@ export type OfficeSuiteCreatedDownload = {
   kind: OfficeSuiteFileKind;
   fileName: string;
   blob: Blob;
+};
+
+export type OfficeSuiteWordReviewInput = {
+  author?: string;
+  comment?: {
+    targetText: string;
+    text: string;
+  };
+  insertion?: {
+    afterText: string;
+    text: string;
+  };
+  deletion?: {
+    targetText: string;
+  };
 };
 
 const defaultFileName: Record<OfficeSuiteFileKind, string> = {
@@ -98,6 +115,37 @@ export async function createWordVerificationCopy(
     "word",
     `${baseName}-wenshu.docx`,
   );
+}
+
+export async function createWordReviewCopy(
+  file: File,
+  input: OfficeSuiteWordReviewInput,
+): Promise<OfficeSuiteCreatedDownload> {
+  const params = new URLSearchParams();
+  if (input.author?.trim()) params.set("author", input.author.trim());
+  if (input.comment) {
+    params.set("commentTarget", input.comment.targetText);
+    params.set("commentText", input.comment.text);
+  }
+  if (input.insertion) {
+    params.set("insertAfter", input.insertion.afterText);
+    params.set("insertText", input.insertion.text);
+  }
+  if (input.deletion) {
+    params.set("deleteTarget", input.deletion.targetText);
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+  const route = params.size
+    ? `${OFFICE_SUITE_WORD_REVIEW_ROUTE}?${params.toString()}`
+    : OFFICE_SUITE_WORD_REVIEW_ROUTE;
+  const response = await client.post<Blob>(route, formData, {
+    responseType: "blob",
+    timeout: 0,
+  });
+  const baseName = file.name.replace(/\.docx$/i, "") || "document";
+  return toDownload(response, "word", `${baseName}-wenshu.docx`);
 }
 
 export async function createExcelVerificationCopy(
