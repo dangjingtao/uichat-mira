@@ -1,17 +1,58 @@
-import type { FastifyPluginAsync } from "fastify";
-import {
-  inspectOfficeDocument,
-  UnsupportedOfficeFileError,
-  type OfficeSuiteFileKind,
-} from "@/microapps/office-suite/index.js";
-import { createOfficeSample } from "@/microapps/office-suite/create.js";
-import { createDocumentVerificationCopy } from "@/microapps/office-suite/document.js";
-import { createSpreadsheetVerificationCopy } from "@/microapps/office-suite/spreadsheet.js";
+import type { FastifyPluginAsync, FastifyReply } from "fastify";
+import type {
+  OfficeRuntimeArtifact,
+  OfficeRuntimeTaskResult,
+} from "@/microapps/office-suite/contract.js";
+import type { OfficeSuiteFileKind } from "@/microapps/office-suite/index.js";
+import { executeOfficeRuntimeTask } from "@/microapps/office-suite/runtime.js";
 import { success } from "@/utils/index.js";
 import { badRequest, routeHandler } from "@/utils/route-errors.js";
 
 const MAX_OFFICE_FILE_BYTES = 50 * 1024 * 1024;
 const OFFICE_KINDS: OfficeSuiteFileKind[] = ["word", "excel", "powerpoint"];
+
+const requireCompleted = (
+  result: OfficeRuntimeTaskResult,
+  invalidMessage?: string,
+) => {
+  if (result.status === "completed") {
+    return result;
+  }
+
+  if (
+    result.error.code === "INVALID_TASK_INPUT" ||
+    result.error.code === "UNSUPPORTED_FILE_TYPE"
+  ) {
+    throw badRequest(invalidMessage ?? result.error.message);
+  }
+
+  throw new Error(result.error.message);
+};
+
+const requireArtifact = (
+  result: ReturnType<typeof requireCompleted>,
+): OfficeRuntimeArtifact => {
+  const artifact = result.artifacts[0];
+  if (!artifact) {
+    throw new Error("Office Runtime task completed without an artifact");
+  }
+  return artifact;
+};
+
+const sendArtifact = (
+  reply: FastifyReply,
+  result: ReturnType<typeof requireCompleted>,
+  artifact: OfficeRuntimeArtifact,
+) => {
+  reply.header("Cache-Control", "no-store");
+  reply.header("Content-Disposition", `attachment; filename="${artifact.fileName}"`);
+  reply.header("X-Office-Contract-Version", result.contractVersion);
+  reply.header("X-Office-Artifact-Kind", artifact.kind);
+  reply.header("X-Office-Operation", result.operation);
+  reply.header("X-Office-Task-Duration-Ms", String(result.durationMs));
+  reply.type(artifact.mimeType);
+  return reply.send(artifact.buffer);
+};
 
 const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
   app.post(
@@ -29,27 +70,23 @@ const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const buffer = await upload.toBuffer();
-      if (buffer.byteLength === 0) {
-        throw badRequest("文件内容为空");
-      }
-
-      try {
-        return success(
-          inspectOfficeDocument({
+      const result = requireCompleted(
+        await executeOfficeRuntimeTask({
+          operation: "inspect",
+          input: {
             fileName: upload.filename,
             mimeType: upload.mimetype,
             buffer,
-          }),
-          "Office document inspected",
-        );
-      } catch (error) {
-        if (error instanceof UnsupportedOfficeFileError) {
-          throw badRequest("当前仅支持 .docx、.xlsx 和 .pptx 文件", {
-            cause: error,
-          });
-        }
-        throw error;
+          },
+        }),
+        "当前仅支持 .docx、.xlsx 和 .pptx 文件",
+      );
+
+      if (!result.inspection) {
+        throw new Error("Office Runtime inspect task completed without inspection data");
       }
+
+      return success(result.inspection, "Office document inspected");
     }),
   );
 
@@ -61,15 +98,17 @@ const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
         throw badRequest("请选择要创建的 Office 文件类型");
       }
 
-      const artifact = await createOfficeSample(kind);
-      reply.header("Cache-Control", "no-store");
-      reply.header(
-        "Content-Disposition",
-        `attachment; filename="${artifact.fileName}"`,
+      const result = requireCompleted(
+        await executeOfficeRuntimeTask({
+          operation: "create",
+          kind,
+          request: {
+            type: "verification-sample",
+          },
+        }),
       );
-      reply.header("X-Office-Artifact-Kind", artifact.kind);
-      reply.type(artifact.mimeType);
-      return reply.send(artifact.buffer);
+
+      return sendArtifact(reply, result, requireArtifact(result));
     }),
   );
 
@@ -91,24 +130,31 @@ const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const buffer = await upload.toBuffer();
-      if (buffer.byteLength === 0) {
-        throw badRequest("文件内容为空");
-      }
-
-      const artifact = createDocumentVerificationCopy({
-        fileName: upload.filename,
-        buffer,
-      });
-
-      reply.header("Cache-Control", "no-store");
-      reply.header(
-        "Content-Disposition",
-        `attachment; filename="${artifact.fileName}"`,
+      const result = requireCompleted(
+        await executeOfficeRuntimeTask({
+          operation: "modify",
+          kind: "word",
+          input: {
+            fileName: upload.filename,
+            mimeType: upload.mimetype,
+            buffer,
+          },
+          request: {
+            type: "append-paragraphs",
+            paragraphs: [
+              {
+                text: "文枢 Word Modify 验证",
+                bold: true,
+              },
+              {
+                text: "这段内容由 Mira 文枢追加到现有 DOCX 的新副本中，原文件未被覆盖。",
+              },
+            ],
+          },
+        }),
       );
-      reply.header("X-Office-Artifact-Kind", "word");
-      reply.header("X-Office-Operation", "modify");
-      reply.type(artifact.mimeType);
-      return reply.send(artifact.buffer);
+
+      return sendArtifact(reply, result, requireArtifact(result));
     }),
   );
 
@@ -130,24 +176,50 @@ const officeSuiteRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const buffer = await upload.toBuffer();
-      if (buffer.byteLength === 0) {
-        throw badRequest("文件内容为空");
-      }
-
-      const artifact = await createSpreadsheetVerificationCopy({
-        fileName: upload.filename,
-        buffer,
-      });
-
-      reply.header("Cache-Control", "no-store");
-      reply.header(
-        "Content-Disposition",
-        `attachment; filename="${artifact.fileName}"`,
+      const result = requireCompleted(
+        await executeOfficeRuntimeTask({
+          operation: "modify",
+          kind: "excel",
+          input: {
+            fileName: upload.filename,
+            mimeType: upload.mimetype,
+            buffer,
+          },
+          request: {
+            type: "patch-cells",
+            patches: [
+              {
+                sheetName: "文枢验证",
+                cell: "A1",
+                value: "文枢 Excel Modify 验证",
+                bold: true,
+              },
+              {
+                sheetName: "文枢验证",
+                cell: "A2",
+                value: "原文件未覆盖，此工作表写入到新的 XLSX 产物。",
+              },
+              { sheetName: "文枢验证", cell: "A4", value: "项目", bold: true },
+              { sheetName: "文枢验证", cell: "B4", value: "数量", bold: true },
+              { sheetName: "文枢验证", cell: "A5", value: "Inspect" },
+              { sheetName: "文枢验证", cell: "B5", value: 1 },
+              { sheetName: "文枢验证", cell: "A6", value: "Create" },
+              { sheetName: "文枢验证", cell: "B6", value: 1 },
+              { sheetName: "文枢验证", cell: "A7", value: "Modify" },
+              { sheetName: "文枢验证", cell: "B7", value: 1 },
+              {
+                sheetName: "文枢验证",
+                cell: "B8",
+                formula: "SUM(B5:B7)",
+                bold: true,
+                numberFormat: "0",
+              },
+            ],
+          },
+        }),
       );
-      reply.header("X-Office-Artifact-Kind", "excel");
-      reply.header("X-Office-Operation", "modify");
-      reply.type(artifact.mimeType);
-      return reply.send(artifact.buffer);
+
+      return sendArtifact(reply, result, requireArtifact(result));
     }),
   );
 };
