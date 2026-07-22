@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowRight, AudioLines, BookOpen, Boxes, BrainCircuit, Image, Mail, MonitorSmartphone, Newspaper, PlugZap, Settings, StickyNote } from "lucide-react";
+import { ArrowRight, AudioLines, BookOpen, Boxes, BrainCircuit, FileText, Image, Mail, MonitorSmartphone, Newspaper, PlugZap, Settings, StickyNote } from "lucide-react";
 import { Link } from "react-router-dom";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import Alert from "@/shared/ui/Alert";
@@ -36,6 +36,14 @@ const featuredStudioEntries = [
     key: "notion",
     route: "/settings/micro-apps/notion",
     capability: undefined,
+  },
+  {
+    key: "officeSuite",
+    route: "/settings/micro-apps/office-suite",
+    capability: undefined,
+    title: "文枢",
+    description: "Word、Excel 与 PowerPoint 的本地处理与调试工作台。",
+    actionLabel: "打开",
   },
   {
     key: "evolvingKnowledge",
@@ -77,6 +85,7 @@ const featuredStudioEntries = [
 const featuredStudioIcons = {
   jianXing: PlugZap,
   notion: StickyNote,
+  officeSuite: FileText,
   evolvingKnowledge: BrainCircuit,
   newsHub: Newspaper,
   mailCenter: Mail,
@@ -194,6 +203,11 @@ export default function MicroAppsSettings() {
           const capabilityName = capability
             ? t(`settings.microApps.capabilityBinding.capabilityNames.${capability}`)
             : "";
+          const entryTitle = "title" in entry ? entry.title : t(`${key}.title`);
+          const entryDescription =
+            "description" in entry ? entry.description : t(`${key}.description`);
+          const actionLabel =
+            "actionLabel" in entry ? entry.actionLabel : t(`${key}.actions.open`);
 
           return (
             <Card key={entry.route} className="border-border bg-primary/5 p-5">
@@ -208,11 +222,11 @@ export default function MicroAppsSettings() {
                         <EntryIcon className="h-4.5 w-4.5" />
                       </span>
                       <div className="text-base font-semibold text-text-primary">
-                        {t(`${key}.title`)}
+                        {entryTitle}
                       </div>
                     </div>
                     <div className="text-sm leading-6 text-text-secondary">
-                      {t(`${key}.description`)}
+                      {entryDescription}
                     </div>
                   </div>
                 </div>
@@ -222,7 +236,7 @@ export default function MicroAppsSettings() {
                     to={entry.route}
                     className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-ui-control border border-primary/20 bg-transparent px-4 text-sm font-medium text-primary transition-all duration-150 ease-out hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary"
                   >
-                    {t(`${key}.actions.open`)}
+                    {actionLabel}
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                   {capability ? (
