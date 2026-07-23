@@ -234,7 +234,8 @@ check pack
 - 不打包第二套 Python；
 - 第三方依赖安装在 Mira-managed runtime-pack；
 - 不污染用户全局 Python；
-- 安装 Runtime Pack 不等于获得 Agent 权限。
+- 安装 Runtime Pack 不等于激活 SkillContext 或获得额外权限；
+- 成功安装后会改变环境真实 capability eligibility，Harness 独立 reconciliation 决定对应 Tool 是否进入 registry。
 
 实现：
 
@@ -300,26 +301,112 @@ current user task / attachment
 
 这条链只注入语义，不改变 `state.toolExposure`。
 
-Trace 会记录：
-
-- activeSkillId / version；
-- match source；
-- resource count；
-- disclosed resource count；
-- `skillToolExposureMutation=false`。
-
-### 未接入：PDF / XLSX / PPTX Tool 自动扩权
-
-当前仍明确禁止：
+独立 Trace 节点：
 
 ```text
-Skill 命中
--> 直接把 office_pdf / office_spreadsheet / office_presentation push 进 toolExposure
+技能上下文
 ```
 
-这些 Domain Runtime 可以先通过 MicroAPP 使用；未来是否作为 Agent Tool 暴露，仍必须由 Harness 自身的 capability eligibility / registry / policy 决定，而不是由 SkillContext 决定。
+会明确记录：
 
-DOCX 的现有 `office_document` 是否可见，同样以 Harness 当前真实 ToolExposure 为准，不由 DOCX Skill 强行加入。
+- matched / not_matched；
+- primary Skill id / name / version；
+- match source / reason / score；
+- available resource URIs；
+- disclosed resource URIs；
+- `toolExposureMutation=false`。
+
+因此 Skill 是否生效不再依赖模型行为推断。
+
+### 已接入：环境驱动的 Office execution capability reconciliation
+
+DOCX：
+
+```text
+office_document
+```
+
+是内置 Node / OOXML 能力，按现有 Harness 注册与 matcher / Policy 决定是否进入本轮 `state.toolExposure`。
+
+PDF / XLSX / PPTX：
+
+```text
+office_pdf
+office_spreadsheet
+office_presentation
+```
+
+由 `wenshu-office` Runtime Pack 的真实 readiness 独立控制：
+
+```text
+verified pack unavailable
+  -> 三个 optional capability 不在 Harness registry
+
+verified pack available
+  -> Harness reconciliation 注册三个 optional capability
+  -> capability matcher / Policy 决定本轮是否进入 state.toolExposure
+```
+
+实现：
+
+```text
+server/src/harness/wenshu-office-capability.ts
+server/src/harness/runtime.ts
+server/src/agent/nodes/prepare-context.ts
+```
+
+`prepare-context` 每轮在 Tool matching 之前进行一次低成本 reconciliation，因此用户安装 Runtime Pack 后不要求为了 Tool 可见性重启 Server。
+
+这里必须保持：
+
+```text
+Skill match
+!= Tool registration
+!= Tool exposure
+```
+
+例如：
+
+```text
+"帮我做一个 DCF Excel 模型"
+  -> xlsx SkillContext matched
+  -> DCF reference disclosed
+
+同时，独立地：
+  wenshu-office ready
+  -> office_spreadsheet eligible in Harness registry
+  -> matcher / Policy 决定是否 exposed
+```
+
+SkillContext 从不强行加入 `office_spreadsheet`。
+
+### 当前执行闭环
+
+文枢基础 Skill V1 当前形成：
+
+```text
+SkillScanner / Registry
+  -> Matcher
+  -> SKILL.md
+  -> selective Reference disclosure
+  -> SkillContext
+  -> Planner
+
+Environment / Runtime Pack
+  -> Harness capability reconciliation
+  -> capability matcher / Policy
+  -> state.toolExposure
+  -> Planner
+
+Planner
+  -> Normalize
+  -> Policy
+  -> ToolNode
+  -> Evidence
+  -> Planner
+```
+
+认知层和执行层在 Planner 汇合，但保持两个独立真相源。
 
 ## Optional Stateful Skill Runtime
 
@@ -337,61 +424,4 @@ stage-specific tool constraints
 
 例如长期可恢复合同审阅、大型三表模型、复杂发布流程等。
 
-它不是基础 Skill 的入场门槛。
-
-若启用 stage-specific tool constraints，仍必须满足：
-
-```text
-Harness eligible tools
-  ∩ Stateful Skill allowedToolIds
-  ∩ Policy / environment
-  -> state.toolExposure
-```
-
-Tool 调用主链始终不变：
-
-```text
-Planner -> Normalize -> Policy -> Tool -> Evidence
-```
-
-## Build / Distribution
-
-Server bundle 会把：
-
-```text
-server/src/skills/**/*.{md,txt,json,yaml,yml}
-```
-
-复制到：
-
-```text
-<server-bundle>/skills/
-```
-
-因此 packaged app 中仍可执行 Manifest scan / SKILL.md load / Reference disclosure，不依赖开发源码目录存在。
-
-## Hard Rules
-
-1. DOCX / XLSX / PDF / PPTX 都是基础 Skill。
-2. Skill 本体是渐进式披露的动态上下文能力包。
-3. Runtime Pack 安装不等于 Agent 权限。
-4. SkillContext 不扩大 `state.toolExposure`。
-5. V1 自动注入最多一个 primary Skill。
-6. Reference 默认按需披露，不全量灌入 Prompt。
-7. Tool / MCP / Script / Runtime 是执行边界，不是 DisclosureLevel。
-8. Domain Runtime 不拆成几十个 Agent 原子工具。
-9. Stateful Skill Runtime 是可选高级层，不是 Skill 入场门槛。
-10. Parent Agent Loop 始终是唯一控制循环。
-
-## Code Anchors
-
-- `desktop/src/features/Settings/pages/Skills/`
-- `server/src/skills/registry.ts`
-- `server/src/skills/context/`
-- `server/src/agent/nodes/prepare-context.ts`
-- `server/src/mcp/tools/read-open.tool.ts`
-- `server/src/microapps/office-suite/capability-pack.ts`
-- `server/src/microapps/office-suite/runtime-pack-paths.ts`
-- `server/src/routes/microapps/office-suite/capability-pack.ts`
-- `server/src/routes/microapps/office-suite/skill-task.ts`
-- `server/tools/wenshu/`
+它不是基础 Skill 的入场门槛，也不是当前基础 Skill V1 的未完成项。
