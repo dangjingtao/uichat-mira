@@ -56,6 +56,11 @@ const getCurrentTaskFrameGoalText = (input: {
   return latestQuestion || input.goal.text;
 };
 
+const getCurrentTaskFrameGlobalGoalText = (input: {
+  frame?: CurrentTaskFrame;
+  goal: AgentGoal;
+}) => input.frame?.globalGoal?.trim() || input.goal.text;
+
 export interface AgentNodeState {
   runId: string;
   threadId: string;
@@ -357,6 +362,7 @@ export const createInitialCurrentTaskFrame = (input: {
   }
 
   return {
+    globalGoal: input.goal.text,
     currentGoal,
     currentSubtask: "Prepare context and determine the next action.",
     currentBlocker: undefined,
@@ -389,6 +395,10 @@ const buildCurrentTaskFrameCoverageView = (input: {
   latestQuestion?: string;
   latestEvidenceSummary?: AgentEvidenceSummary;
 }) => {
+  const globalGoal = getCurrentTaskFrameGlobalGoalText({
+    frame: input.frame,
+    goal: input.goal,
+  });
   const currentGoal = getCurrentTaskFrameGoalText({
     goal: input.goal,
     latestQuestion: input.latestQuestion,
@@ -398,7 +408,7 @@ const buildCurrentTaskFrameCoverageView = (input: {
       ? [...input.frame.completionCriteria]
       : input.goal.successCriteria.length > 0
         ? [...input.goal.successCriteria]
-        : [currentGoal];
+        : [globalGoal];
   const latestEvidenceSummary = input.latestEvidenceSummary;
   const coveredProgress = [
     ...(latestEvidenceSummary
@@ -416,6 +426,7 @@ const buildCurrentTaskFrameCoverageView = (input: {
     .slice(0, 5);
 
   return {
+    globalGoal,
     currentGoal,
     completionCriteria,
     coveredProgress,
@@ -442,6 +453,7 @@ export const refreshCurrentTaskFrameFromEvidence = (input: {
 
   return {
     ...input.frame,
+    globalGoal: coverageView.globalGoal,
     currentGoal: coverageView.currentGoal,
     completionCriteria: coverageView.completionCriteria,
     coveredProgress:
@@ -475,6 +487,7 @@ export const updateCurrentTaskFrameFromPlanner = (input: {
 
   return {
     ...input.frame,
+    globalGoal: coverageView.globalGoal,
     currentGoal: coverageView.currentGoal,
     currentSubtask: getPlannerSubtask(input.nextAction),
     completionCriteria: coverageView.completionCriteria,
