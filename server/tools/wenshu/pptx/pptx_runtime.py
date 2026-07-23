@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import html
 import io
 import json
 import lzma
@@ -16,10 +17,27 @@ import shutil
 import sys
 import tarfile
 import tempfile
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
 from pptx import Presentation
+
+
+class _TextExtractor(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.parts: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        self.parts.append(data)
+
+
+def _normalize_text(value: str) -> str:
+    parser = _TextExtractor()
+    parser.feed(value)
+    parser.close()
+    return " ".join(html.unescape("".join(parser.parts)).split())
 
 
 def emit(payload: dict[str, Any], code: int = 0) -> None:
@@ -202,7 +220,7 @@ def _expected_texts(spec: dict[str, Any]) -> list[str]:
                 continue
             content = element.get("content")
             if isinstance(content, dict) and isinstance(content.get("text"), str):
-                text = content["text"].strip()
+                text = _normalize_text(content["text"])
                 if text:
                     texts.append(text)
     return texts
@@ -229,7 +247,7 @@ def create_presentation(spec: dict[str, Any], output: str) -> dict[str, Any]:
                 f"PPTX verification failed: expected {len(entry['pages'])} slides, got {inspection['slideCount']}"
             )
         expected_texts = _expected_texts(spec)
-        actual_text = "\n".join(str(slide["text"]) for slide in inspection["slides"])
+        actual_text = _normalize_text("\n".join(str(slide["text"]) for slide in inspection["slides"]))
         missing_texts = [text for text in expected_texts if text not in actual_text]
         if missing_texts:
             preview = ", ".join(repr(text[:80]) for text in missing_texts[:3])
