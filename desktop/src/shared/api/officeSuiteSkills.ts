@@ -3,11 +3,12 @@ import { client, get, post } from "@/shared/lib/request";
 const STATUS_ROUTE = "/microapps/office-suite/runtime/status";
 const TASK_ROUTE = "/microapps/office-suite/skill-task";
 const CATALOG_ROUTE = "/microapps/office-suite/skills/catalog";
+const IMPORT_ROUTE = "/microapps/office-suite/skills/import";
 const PACK_STATUS_ROUTE = "/microapps/office-suite/capability-pack/status";
 const PACK_INSTALL_ROUTE = "/microapps/office-suite/capability-pack/install";
 
 export type WenshuSkillDomain = "pdf" | "xlsx" | "pptx";
-export type WenshuSkillPackageId = "docx" | WenshuSkillDomain;
+export type WenshuSkillPackageId = string;
 
 export type WenshuCapabilityPackStatus = {
   id: "wenshu-office";
@@ -36,6 +37,8 @@ export type WenshuSkillPackageDefinition = {
   };
   runtimeCapabilities: string[];
   packageFiles: string[];
+  content?: string;
+  fileContents?: Record<string, string>;
   contextIntegration: {
     status: "ready";
     mode: "progressive-disclosure";
@@ -50,6 +53,17 @@ export type WenshuSkillPackageDefinition = {
 export type WenshuSkillCatalog = {
   skills: WenshuSkillPackageDefinition[];
   pack: WenshuCapabilityPackStatus;
+};
+
+export type ImportedMarkdownSkill = {
+  id: string;
+  name: string;
+  version: string;
+  source: string;
+  category: string;
+  description: string;
+  entry: string;
+  content: string;
 };
 
 export type WenshuRuntimeStatus = {
@@ -83,6 +97,17 @@ const parseAttachmentFileName = (contentDisposition: unknown) => {
 export const getWenshuRuntimeStatus = () => get<WenshuRuntimeStatus>(STATUS_ROUTE);
 
 export const getWenshuSkillCatalog = () => get<WenshuSkillCatalog>(CATALOG_ROUTE);
+
+export const importMarkdownSkill = async (file: File) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await client.post<{ success: true; data: ImportedMarkdownSkill }>(
+    IMPORT_ROUTE,
+    formData,
+  );
+  if (!response.data.success) throw new Error("Markdown Skill 导入失败");
+  return response.data.data;
+};
 
 export const getWenshuCapabilityPackStatus = () =>
   get<WenshuCapabilityPackStatus>(PACK_STATUS_ROUTE);
