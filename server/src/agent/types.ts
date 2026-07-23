@@ -394,6 +394,12 @@ export interface CurrentTaskFrameConfirmedObject {
  * Generate/Evaluate nodes are read-only.
  */
 export interface CurrentTaskFrame {
+  /**
+   * Stable top-level task objective. Runtime hydrates this from AgentGoal.text and
+   * never derives it from a follow-up user reply or a mutable plan item.
+   * Optional only for compatibility with task frames persisted before this field existed.
+   */
+  globalGoal?: string;
   currentGoal: string;
   currentSubtask?: string;
   currentBlocker?: string;
