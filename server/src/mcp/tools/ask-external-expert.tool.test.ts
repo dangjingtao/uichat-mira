@@ -31,57 +31,51 @@ afterEach(() => {
 });
 
 describe("ask_external_expert", () => {
-  it("returns only the high-level provider conversation contract", async () => {
+  it("accepts only a question and keeps connection details internal", async () => {
     const ask = vi.fn().mockResolvedValue({
       answer: "建议先验证数据来源。",
-      provider: "chatgpt",
-      conversationId: "conversation-1",
       status: "completed",
       latencyMs: 123,
     });
     const tool = createAskExternalExpertTool({ ask });
 
     const output = await tool.execute(context({
-      action: "ask",
-      provider: "chatgpt",
       question: "请给建议。",
-      conversation: "new",
     }));
 
     expect(ask).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 7,
-        action: "ask",
-        provider: "chatgpt",
         question: "请给建议。",
-        conversation: "new",
       }),
     );
     expect(output).toEqual({
       result: {
         answer: "建议先验证数据来源。",
-        provider: "chatgpt",
-        conversationId: "conversation-1",
         status: "completed",
         latencyMs: 123,
       },
       evidence: expect.objectContaining({
         facts: expect.arrayContaining([
           "tool=ask_external_expert",
-          "provider=chatgpt",
-          "conversationId=conversation-1",
+          "status=completed",
         ]),
         data: expect.objectContaining({ answer: "建议先验证数据来源。" }),
       }),
     });
+    expect(tool.definition.inputSchema).toMatchObject({
+      required: ["question"],
+      properties: { question: expect.any(Object) },
+      additionalProperties: false,
+    });
+    expect(tool.definition.inputSchema.properties).not.toHaveProperty("provider");
+    expect(tool.definition.inputSchema.properties).not.toHaveProperty("conversation");
   });
 
   it("passes the provider result through Harness and into Agent Evidence", async () => {
     const tool = createAskExternalExpertTool({
       ask: vi.fn().mockResolvedValue({
         answer: "外部专家回复。",
-        provider: "chatgpt",
-        conversationId: "conversation-2",
         status: "completed",
         latencyMs: 88,
       }),
@@ -91,8 +85,6 @@ describe("ask_external_expert", () => {
     const invocation = await executeHarnessInvocation({
       toolId: "ask_external_expert",
       args: {
-        action: "ask",
-        provider: "chatgpt",
         question: "问题",
       },
       userId: 7,
@@ -102,7 +94,6 @@ describe("ask_external_expert", () => {
     expect(invocation.result).toEqual(
       expect.objectContaining({
         answer: "外部专家回复。",
-        conversationId: "conversation-2",
       }),
     );
     expect(invocation.evidence?.data).toEqual(
@@ -126,7 +117,6 @@ describe("ask_external_expert", () => {
     expect(evidence.data).toEqual(
       expect.objectContaining({
         answer: "外部专家回复。",
-        provider: "chatgpt",
       }),
     );
     expect(evidence.facts).toEqual(

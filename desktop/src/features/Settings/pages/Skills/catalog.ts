@@ -1,4 +1,4 @@
-export type SkillIconKind = "spreadsheet" | "pdf" | "word" | "presentation" | "code";
+export type SkillIconKind = "spreadsheet" | "pdf" | "word" | "presentation" | "markdown";
 
 export type SkillPresentation = {
   id: string;
@@ -264,7 +264,7 @@ description: Create PowerPoint presentations through Mira WenShu using a structu
     source: "Mira 社区",
     category: "学术研究",
     description: "把零散研究资料整理成结构化摘要，快速提炼论点、证据和待验证问题。",
-    icon: "code",
+    icon: "markdown",
     content: "该社区技能仍为展示条目，尚未安装。",
     files: ["SKILL.md", "templates/research-note.md"],
     fileContents: {

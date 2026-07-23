@@ -340,6 +340,7 @@ export function UChatThreadView({
   assistantDisplayName,
   assistantTypingLabel,
   agent,
+  composerSuggestion,
   slots,
 }: {
   activeThreadId: string | null;
@@ -379,6 +380,8 @@ export function UChatThreadView({
   assistantDisplayName?: string;
   assistantTypingLabel?: string;
   agent?: UChatAgentUIController;
+  /** Optional app-owned composer content rendered beneath the text input. */
+  composerSuggestion?: React.ReactNode;
   slots?: UChatThreadSlots;
 }) {
   const { t } = useTranslation();
@@ -675,6 +678,10 @@ export function UChatThreadView({
                           rows={3}
                           disabled={isSendDisabled}
                         />
+
+                        {composerSuggestion ? (
+                          <div className="px-3 pb-1">{composerSuggestion}</div>
+                        ) : null}
 
                         <UChatComposerActions
                           composerActions={capabilities.composerActions ?? []}

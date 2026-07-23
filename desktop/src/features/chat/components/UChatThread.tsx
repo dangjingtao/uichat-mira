@@ -52,6 +52,10 @@ import {
   DesktopChatMessageExtensions,
   DesktopChatMessageExtensionsProvider,
 } from "./DesktopChatMessageExtensions";
+import {
+  AgentSkillComposerSuggestion,
+  insertExplicitSkill,
+} from "./AgentSkillComposerSuggestion";
 
 const desktopChatThreadSlots = {
   MessageExtensions: DesktopChatMessageExtensions,
@@ -620,6 +624,16 @@ export default function UChatThread() {
             onApprove: handleApproveAgentRun,
             onReject: handleRejectAgentRun,
           }}
+          composerSuggestion={
+            isAgentEnabled ? (
+              <AgentSkillComposerSuggestion
+                text={composer.text}
+                onSelect={(skillId) =>
+                  runtime.setComposerText(insertExplicitSkill(composer.text, skillId))
+                }
+              />
+            ) : undefined
+          }
           slots={desktopChatThreadSlots}
         />
       </DesktopChatMessageExtensionsProvider>

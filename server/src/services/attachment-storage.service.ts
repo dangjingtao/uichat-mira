@@ -56,6 +56,9 @@ const getExtension = (mimeType: string, fileName?: string) => {
   }
 
   const fromName = fileName ? path.extname(fileName).toLowerCase() : "";
+  if (!fromName && fileName && path.basename(fileName).startsWith(".")) {
+    return path.basename(fileName).toLowerCase();
+  }
   return fromName && /^[a-z0-9.]+$/i.test(fromName) ? fromName : ".bin";
 };
 

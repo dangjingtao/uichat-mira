@@ -159,6 +159,10 @@ const summarizeSkillTrace = (skillContext: SkillContext | undefined) => {
 
   const source = skillContext.match?.source ?? "unknown";
   const disclosedCount = skillContext.disclosedResources.length;
+  if (source === "explicit") {
+    return `已应用技能：${skillContext.primary.name}（${skillContext.primary.id}），披露 ${disclosedCount} 个参考资源`;
+  }
+
   return `已识别 ${skillContext.primary.name}（${skillContext.primary.id}），${source} 匹配，披露 ${disclosedCount} 个参考资源`;
 };
 
@@ -219,7 +223,7 @@ export const prepareContextNode = async (
     nodeId: "agent-skill-context",
     nodeType: "reason",
     phase: "done",
-    label: "技能上下文",
+    label: skillContext?.match?.source === "explicit" ? "应用技能" : "技能上下文",
     summary: summarizeSkillTrace(skillContext),
     details: {
       query,

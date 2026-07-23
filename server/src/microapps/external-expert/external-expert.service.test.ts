@@ -61,9 +61,9 @@ const createRepository = (initial?: Partial<ExternalExpert>) => {
 };
 
 describe("ExternalExpertService.ask", () => {
-  it("creates one provider expert, opens a new conversation, and returns high-level advice", async () => {
+  it("uses the internally configured expert and appends bounded Mira context", async () => {
     const { repository } = createRepository();
-    const invokeWebBridge = vi.fn(async (input: { tool: string }) =>
+    const invokeWebBridge = vi.fn(async (input: { tool: string; params: { message?: string } }) =>
       input.tool === "expert.connect"
         ? { tabId: 42, accountLabel: "ChatGPT" }
         : {
@@ -72,23 +72,25 @@ describe("ExternalExpertService.ask", () => {
             sessionRef: { kind: "conversation_id" as const, value: "conversation-1" },
           },
     );
-    const service = createExternalExpertService({ repository, invokeWebBridge });
+    const resolveThreadContext = vi.fn(() => "当前任务：评估方案风险。");
+    const service = createExternalExpertService({
+      repository,
+      invokeWebBridge,
+      resolveThreadContext,
+    });
 
     const result = await service.ask({
       userId: 7,
-      provider: "chatgpt",
-      action: "ask",
-      conversation: "new",
       question: "请给出一个风险判断。",
+      threadId: "thread-1",
     });
 
     expect(result).toEqual({
       answer: "先验证关键假设。",
-      provider: "chatgpt",
-      conversationId: "conversation-1",
       status: "completed",
       latencyMs: expect.any(Number),
     });
+    expect(resolveThreadContext).toHaveBeenCalledWith({ userId: 7, threadId: "thread-1" });
     expect(repository.create).not.toHaveBeenCalled();
     expect(invokeWebBridge.mock.calls.map(([call]) => call.tool)).toEqual([
       "expert.connect",
@@ -99,50 +101,52 @@ describe("ExternalExpertService.ask", () => {
         params: expect.objectContaining({
           provider: "chatgpt",
           tabId: 42,
-          message: "请给出一个风险判断。",
+          message: [
+            "[Mira consultation context]",
+            "当前任务：评估方案风险。",
+            "[End Mira consultation context]",
+            "",
+            "Question:",
+            "请给出一个风险判断。",
+          ].join("\n"),
         }),
       }),
     );
   });
 
-  it("continues only the currently bound conversation", async () => {
-    const { repository } = createRepository({
-      externalSessionRef: { kind: "conversation_id", value: "conversation-1" },
-      status: "ready",
-    });
-    const invokeWebBridge = vi.fn(async (input: { tool: string }) =>
-      input.tool === "expert.send_message"
-        ? { reply: "继续建议。", sessionRef: { kind: "conversation_id" as const, value: "conversation-1" } }
-        : { tabId: 42 },
+  it("reuses the current runtime connection without exposing its conversation", async () => {
+    const { repository } = createRepository();
+    const invokeWebBridge = vi.fn(async (input: { tool: string; params: { message?: string } }) =>
+      input.tool === "expert.connect"
+        ? { tabId: 42 }
+        : {
+            reply: "继续建议。",
+            sessionRef: { kind: "conversation_id" as const, value: "conversation-1" },
+          },
     );
-    const service = createExternalExpertService({ repository, invokeWebBridge });
-
-    await expect(service.ask({
-      userId: 7,
-      provider: "chatgpt",
-      action: "continue",
-      conversation: { conversationId: "conversation-1" },
-      question: "继续分析。",
-    })).rejects.toMatchObject({ code: "EXPERT_CONNECTION_UNAVAILABLE" });
-    expect(invokeWebBridge).not.toHaveBeenCalled();
-  });
-
-  it("rejects a mismatched conversation before touching WebBridge", async () => {
-    const { repository } = createRepository({
-      externalSessionRef: { kind: "conversation_id", value: "conversation-1" },
-      status: "ready",
+    const service = createExternalExpertService({
+      repository,
+      invokeWebBridge,
+      resolveThreadContext: () => "当前任务背景。",
     });
-    const invokeWebBridge = vi.fn();
-    const service = createExternalExpertService({ repository, invokeWebBridge });
 
-    await expect(service.ask({
+    await service.ask({
       userId: 7,
-      provider: "chatgpt",
-      action: "continue",
-      conversation: { conversationId: "conversation-other" },
-      question: "不要发送。",
-    })).rejects.toMatchObject({ code: "CONVERSATION_MISMATCH" });
-    expect(invokeWebBridge).not.toHaveBeenCalled();
+      question: "第一问。",
+      threadId: "thread-1",
+    });
+    await service.ask({
+      userId: 7,
+      question: "第二问。",
+      threadId: "thread-1",
+    });
+
+    expect(invokeWebBridge.mock.calls.filter(([call]) => call.tool === "expert.connect")).toHaveLength(1);
+    expect(invokeWebBridge.mock.calls.filter(([call]) => call.tool === "expert.send_message")).toHaveLength(2);
+    expect(invokeWebBridge.mock.calls[1]?.[0].params.message).toContain(
+      "[Mira consultation context]",
+    );
+    expect(invokeWebBridge.mock.calls[2]?.[0].params.message).toBe("第二问。");
   });
 
   it("does not retry an uncertain send", async () => {
@@ -161,8 +165,6 @@ describe("ExternalExpertService.ask", () => {
 
     await expect(service.ask({
       userId: 7,
-      provider: "chatgpt",
-      action: "new_conversation",
       question: "只允许一次发送。",
     })).rejects.toMatchObject({ code: "SEND_NOT_CONFIRMED" });
     expect(invokeWebBridge.mock.calls.filter(([call]) => call.tool === "expert.send_message")).toHaveLength(1);

@@ -9,6 +9,12 @@ import type {
 
 type FilePart = Extract<NormalizedChatMessagePart, { type: "file" }>;
 
+export const chatFileContextNode = {
+  process(input: { text: string }) {
+    return input.text;
+  },
+};
+
 const getAttachmentFileName = (source: string) => {
   if (!attachmentStorageService.isInternalAttachmentUrl(source)) {
     return null;
@@ -18,7 +24,7 @@ const getAttachmentFileName = (source: string) => {
   return decodeURIComponent(parsed.pathname.slice("/attachments/".length));
 };
 
-const resolveFileText = async (part: FilePart) => {
+export const parseChatFilePart = async (part: FilePart) => {
   const fileName = getAttachmentFileName(part.data);
   if (!fileName) {
     throw new Error(`File attachment is not managed by the local parser: ${part.filename}`);
@@ -30,20 +36,15 @@ const resolveFileText = async (part: FilePart) => {
     filePath,
   );
 
-  return processParsedFile({
+  return chatFileContextNode.process({
     text: [
-    `[文件: ${part.filename}]`,
-    `[类型: ${part.mimeType}]`,
-    parsed.text,
-    `[文件结束: ${part.filename}]`,
+      `[文件: ${part.filename}]`,
+      `[类型: ${part.mimeType}]`,
+      parsed.text,
+      `[文件结束: ${part.filename}]`,
     ].join("\n"),
   });
 };
-
-// The first file-context node deliberately preserves the parser output. It is
-// a replaceable boundary for future file-aware processing without changing
-// upload, persistence, or provider contracts.
-const processParsedFile = (input: { text: string }) => input.text;
 
 export const resolveMessagesForGenerate = async (
   messages: NormalizedChatMessage[],
@@ -65,7 +66,7 @@ export const resolveMessagesForGenerate = async (
   const fileContext = await Promise.all(
     latestUserMessage.parts
       .filter((part): part is FilePart => part.type === "file")
-      .map(resolveFileText),
+      .map(parseChatFilePart),
   );
 
   const textPart = fileContext.join("\n\n");
@@ -73,9 +74,22 @@ export const resolveMessagesForGenerate = async (
     .filter((part) => part.type !== "file")
     .concat({ type: "text", text: textPart });
 
-  return messages.map((message, index) =>
-    index === latestUserIndex ? { ...message, content: nextParts.filter((part) => part.type === "text").map((part) => part.text).join("\n"), parts: nextParts } : message,
-  );
+  return messages.map((message, index) => {
+    if (index !== latestUserIndex) {
+      return message;
+    }
+
+    return {
+      ...message,
+      content: nextParts
+        .filter((part): part is Extract<NormalizedChatMessagePart, { type: "text" }> =>
+          part.type === "text",
+        )
+        .map((part) => part.text)
+        .join("\n"),
+      parts: nextParts,
+    };
+  });
 };
 
 export const removeFileAttachmentsFromParts = (parts: unknown) => {
@@ -98,4 +112,35 @@ export const removeFileAttachmentsFromParts = (parts: unknown) => {
       attachmentStorageService.removeSync(fileName);
     }
   }
+};
+
+export const removeFileAttachmentsRemovedFromParts = (
+  previousParts: unknown,
+  nextParts: unknown,
+) => {
+  const retainedSources = new Set(
+    Array.isArray(nextParts)
+      ? nextParts.flatMap((part) => {
+          if (!part || typeof part !== "object" || (part as { type?: unknown }).type !== "file") {
+            return [];
+          }
+          const source = (part as { data?: unknown }).data;
+          return typeof source === "string" ? [source] : [];
+        })
+      : [],
+  );
+
+  if (!Array.isArray(previousParts)) {
+    return;
+  }
+
+  removeFileAttachmentsFromParts(
+    previousParts.filter((part) => {
+      if (!part || typeof part !== "object" || (part as { type?: unknown }).type !== "file") {
+        return false;
+      }
+      const source = (part as { data?: unknown }).data;
+      return typeof source === "string" && !retainedSources.has(source);
+    }),
+  );
 };

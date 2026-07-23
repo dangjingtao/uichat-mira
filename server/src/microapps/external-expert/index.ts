@@ -1,5 +1,6 @@
 import { externalExpertsRepository, type ExternalExpertProvider } from "@/db/repositories/external-experts.repository.js";
 import { invokeWebBridge, WebBridgeInvocationError } from "@/routes/webbridge.js";
+import { threadService } from "@/services/thread.service.js";
 
 export type ExternalSessionRef = {
   kind: "conversation_id" | "url" | "provider_state";
@@ -12,17 +13,9 @@ export type ExpertReply = {
   reply: string;
 };
 
-export type ExternalExpertAction = "ask" | "continue" | "new_conversation";
-
-export type ExternalExpertConversation =
-  | "new"
-  | { conversationId: string };
-
-export type ExternalExpertConsultation = {
+export type ExternalExpertAdvice = {
   answer: string;
-  provider: ExternalExpertProvider;
-  conversationId: string | null;
-  status: "completed" | "ready";
+  status: "completed";
   latencyMs: number;
 };
 
@@ -48,6 +41,9 @@ export class ExternalExpertServiceError extends Error {
 }
 
 const PROVIDERS = new Set<ExternalExpertProvider>(["chatgpt", "kimi", "deepseek"]);
+const DEFAULT_AGENT_PROVIDER: ExternalExpertProvider = "chatgpt";
+const MAX_AGENT_QUESTION_CHARS = 8_000;
+const MAX_AGENT_CONTEXT_CHARS = 3_000;
 
 const assertProvider = (provider: unknown): ExternalExpertProvider => {
   if (!PROVIDERS.has(provider as ExternalExpertProvider)) {
@@ -69,6 +65,34 @@ export type ExternalExpertRepository = Pick<
 export type ExternalExpertServiceDependencies = {
   repository?: ExternalExpertRepository;
   invokeWebBridge?: typeof invokeWebBridge;
+  resolveThreadContext?: (input: {
+    userId: number;
+    threadId?: string;
+  }) => string | null | undefined;
+};
+
+const resolveDefaultThreadContext = (input: {
+  userId: number;
+  threadId?: string;
+}) => {
+  if (!input.threadId) return null;
+  return threadService.getThreadSummaryById(input.threadId, input.userId)?.contextSummary;
+};
+
+const normalizeThreadContext = (context?: string | null) =>
+  context?.trim().slice(0, MAX_AGENT_CONTEXT_CHARS) || null;
+
+const buildExpertMessage = (input: { question: string; context?: string | null }) => {
+  const context = normalizeThreadContext(input.context);
+  if (!context) return input.question;
+  return [
+    "[Mira consultation context]",
+    context,
+    "[End Mira consultation context]",
+    "",
+    "Question:",
+    input.question,
+  ].join("\n");
 };
 
 const invoke = (
@@ -86,7 +110,10 @@ export const createExternalExpertService = (
 ) => {
   const repository = dependencies.repository ?? externalExpertsRepository;
   const bridge = dependencies.invokeWebBridge ?? invokeWebBridge;
+  const resolveThreadContext =
+    dependencies.resolveThreadContext ?? resolveDefaultThreadContext;
   const runtimeBindings = new Map<string, number>();
+  const appliedThreadContexts = new Map<string, string>();
 
   const getExpert = (id: string, userId: number) => {
     const expert = repository.getById(id, userId);
@@ -129,6 +156,7 @@ export const createExternalExpertService = (
       });
     }
     runtimeBindings.set(expert.id, result.tabId);
+    appliedThreadContexts.delete(expert.id);
     return repository.updateConnection({
       id: expert.id,
       userId: input.userId,
@@ -188,24 +216,13 @@ export const createExternalExpertService = (
 
   const ask = async (input: {
     userId: number;
-    provider: string;
-    action: ExternalExpertAction;
-    question?: string;
-    conversation?: ExternalExpertConversation;
+    question: string;
+    threadId?: string;
     signal?: AbortSignal;
-  }): Promise<ExternalExpertConsultation> => {
+  }): Promise<ExternalExpertAdvice> => {
     const startedAt = Date.now();
-    const provider = assertProvider(input.provider);
-    if (!["ask", "continue", "new_conversation"].includes(input.action)) {
-      throw new ExternalExpertServiceError({
-        code: "EXTERNAL_EXPERT_ACTION_UNSUPPORTED",
-        message: `不支持的外部专家动作：${String(input.action)}`,
-        retryable: false,
-        suggestedAction: "使用 ask、continue 或 new_conversation",
-      });
-    }
-    const question = typeof input.question === "string" ? input.question.trim() : "";
-    if (!question && input.action !== "new_conversation") {
+    const question = input.question.trim();
+    if (!question) {
       throw new ExternalExpertServiceError({
         code: "EXTERNAL_EXPERT_QUESTION_REQUIRED",
         message: "ask_external_expert 需要 question",
@@ -213,71 +230,20 @@ export const createExternalExpertService = (
         suggestedAction: "提供要咨询外部专家的问题",
       });
     }
-    const expert = getOrCreateExpert({ userId: input.userId, provider });
-    const conversation = input.conversation;
-    const requestedConversationId =
-      conversation && typeof conversation === "object"
-        ? typeof conversation.conversationId === "string" && conversation.conversationId.trim()
-          ? conversation.conversationId.trim()
-          : undefined
-        : undefined;
-
-    if (conversation && typeof conversation === "object" && !requestedConversationId) {
+    if (question.length > MAX_AGENT_QUESTION_CHARS) {
       throw new ExternalExpertServiceError({
-        code: "CONVERSATION_MISMATCH",
-        message: "conversation.conversationId 不能为空",
+        code: "EXTERNAL_EXPERT_QUESTION_TOO_LONG",
+        message: `咨询内容不能超过 ${MAX_AGENT_QUESTION_CHARS} 个字符`,
         retryable: false,
-        suggestedAction: "传入有效的外部专家 conversationId，或使用 new",
+        suggestedAction: "缩短问题后重新咨询",
       });
     }
 
-    if (conversation === "new" && input.action === "continue") {
-      throw new ExternalExpertServiceError({
-        code: "CONVERSATION_MISMATCH",
-        message: "continue 必须指定已有的外部专家会话",
-        retryable: false,
-        suggestedAction: "改用 new_conversation 建立新的外部专家会话",
-      });
-    }
-    if (input.action === "continue" && !requestedConversationId) {
-      throw new ExternalExpertServiceError({
-        code: "CONVERSATION_MISMATCH",
-        message: "continue 必须指定 conversation.conversationId",
-        retryable: false,
-        suggestedAction: "传入已有的外部专家 conversationId",
-      });
-    }
-    if (input.action === "new_conversation" && requestedConversationId) {
-      throw new ExternalExpertServiceError({
-        code: "CONVERSATION_MISMATCH",
-        message: "new_conversation 不能指定已有的 conversationId",
-        retryable: false,
-        suggestedAction: "移除已有 conversationId，或改用 continue",
-      });
-    }
-
-    const mustCreateNewConversation =
-      input.action === "new_conversation" || conversation === "new";
-    if (mustCreateNewConversation) {
-      await connect({
-        userId: input.userId,
-        expertId: expert.id,
-        signal: input.signal,
-      });
-    } else if (requestedConversationId) {
-      const current = repository.getById(expert.id, input.userId);
-      if (!current?.externalSessionRef || current.externalSessionRef.value !== requestedConversationId) {
-        throw new ExternalExpertServiceError({
-          code: "CONVERSATION_MISMATCH",
-          message: "请求的外部专家会话与当前专家绑定不一致",
-          retryable: false,
-          suggestedAction: "使用当前 conversationId，或改用 new_conversation",
-        });
-      }
-    } else if (runtimeBindings.get(expert.id) === undefined) {
-      // Agent requests have no separate UI connect step. When no live runtime
-      // binding exists, ask starts a fresh provider page rather than reviving
-      // an old tab or thread.
+    const expert = getOrCreateExpert({
+      userId: input.userId,
+      provider: DEFAULT_AGENT_PROVIDER,
+    });
+    if (runtimeBindings.get(expert.id) === undefined) {
       await connect({
         userId: input.userId,
         expertId: expert.id,
@@ -285,27 +251,26 @@ export const createExternalExpertService = (
       });
     }
 
-    if (!question) {
-      return {
-        answer: "",
-        provider,
-        conversationId: null,
-        status: "ready",
-        latencyMs: Date.now() - startedAt,
-      };
-    }
-
+    const threadContext = normalizeThreadContext(resolveThreadContext({
+      userId: input.userId,
+      threadId: input.threadId,
+    }));
+    const appendContext =
+      threadContext && appliedThreadContexts.get(expert.id) !== threadContext;
     const reply = await consult({
       userId: input.userId,
       expertId: expert.id,
-      message: question,
+      message: buildExpertMessage({
+        question,
+        context: appendContext ? threadContext : null,
+      }),
       signal: input.signal,
     });
-    const current = repository.getById(expert.id, input.userId);
+    if (appendContext) {
+      appliedThreadContexts.set(expert.id, threadContext);
+    }
     return {
       answer: reply.reply,
-      provider,
-      conversationId: reply.sessionRef?.value ?? current?.externalSessionRef?.value ?? null,
       status: "completed",
       latencyMs: Date.now() - startedAt,
     };

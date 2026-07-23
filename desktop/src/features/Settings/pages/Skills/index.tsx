@@ -5,7 +5,6 @@ import {
   Check,
   ChevronRight,
   File,
-  FileCode2,
   FileSpreadsheet,
   FileText,
   Folder,
@@ -36,7 +35,7 @@ const iconConfig = {
   pdf: { Icon: FileText, className: "bg-red-50 text-red-400" },
   word: { Icon: FileText, className: "bg-blue-50 text-blue-500" },
   presentation: { Icon: Presentation, className: "bg-violet-50 text-violet-500" },
-  code: { Icon: FileCode2, className: "bg-violet-50 text-violet-500" },
+  markdown: { Icon: FileText, className: "bg-surface-secondary text-text-tertiary" },
 };
 
 const parseMarkdownDocument = (content: string) => {
@@ -110,7 +109,7 @@ export default function SkillsSettings() {
               ? "word"
               : definition.id === "pptx"
                 ? "presentation"
-                : "code";
+                : "markdown";
         return {
           id: definition.id,
           name: definition.name,

@@ -13,12 +13,22 @@ const { attachmentStorageRoot, attachmentStorageService } = await import(
 const { resolveMessagesForGenerate } = await import(
   "./chat-file-context.service.js"
 );
+const { chatFileContextNode } = await import("./chat-file-context.service.js");
+const { removeFileAttachmentsRemovedFromParts } = await import(
+  "./chat-file-context.service.js"
+);
 
 afterEach(async () => {
   await fs.rm(attachmentStorageRoot, { recursive: true, force: true });
 });
 
 describe("chat file context", () => {
+  it("keeps the first context node as an identity transform", () => {
+    expect(chatFileContextNode.process({ text: "original content" })).toBe(
+      "original content",
+    );
+  });
+
   it("replaces the latest user file part with its complete parsed text for generation", async () => {
     const uploaded = await attachmentStorageService.save({
       buffer: Buffer.from("first line\nsecond line", "utf8"),
@@ -51,5 +61,30 @@ describe("chat file context", () => {
       .join("\n");
     expect(text).toContain("[文件: notes.txt]");
     expect(text).toContain("first line\nsecond line");
+  });
+
+  it("does not delete a file that remains attached when message metadata changes", async () => {
+    const uploaded = await attachmentStorageService.save({
+      buffer: Buffer.from("keep me", "utf8"),
+      mimeType: "text/plain",
+      originalName: "keep.txt",
+    });
+    const parts = [
+      {
+        type: "file",
+        filename: "keep.txt",
+        data: uploaded.url,
+        fileId: uploaded.id,
+        mimeType: uploaded.contentType,
+      },
+    ];
+
+    removeFileAttachmentsRemovedFromParts(parts, parts);
+    await expect(attachmentStorageService.read(uploaded.fileName)).resolves.toBeTruthy();
+
+    removeFileAttachmentsRemovedFromParts(parts, []);
+    await expect(attachmentStorageService.read(uploaded.fileName)).rejects.toMatchObject({
+      code: "ENOENT",
+    });
   });
 });

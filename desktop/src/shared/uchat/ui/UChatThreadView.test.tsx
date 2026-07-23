@@ -512,6 +512,34 @@ test("UChatThreadView renders the ComposerTools slot", () => {
   assert.ok(screen.getByText("Injected composer tools"));
 });
 
+test("UChatThreadView renders app-owned composer suggestions beneath the input", () => {
+  render(
+    <UChatThreadView
+      activeThreadId="thread-1"
+      title="Thread"
+      badges={[]}
+      messages={[]}
+      composer={{ text: "$", attachments: [] }}
+      runStatus={{ type: "idle" }}
+      threadStatus="ready"
+      capabilities={{ composerActions: [], messagePresentation: {} }}
+      hasKnowledgeBase={false}
+      placeholder="Type"
+      isSendDisabled={false}
+      onComposerTextChange={() => {}}
+      onComposerAttachmentsChange={() => {}}
+      onSend={() => {}}
+      onComposerAction={() => {}}
+      threadContextTags={[]}
+      resolveAttachmentSource={(value) => value}
+      composerSuggestion={<span>Agent skill suggestions</span>}
+    />,
+  );
+
+  const composerSurface = screen.getByRole("textbox").parentElement;
+  assert.ok(composerSurface?.contains(screen.getByText("Agent skill suggestions")));
+});
+
 test("UChatThreadView exposes workspace submenu actions from composer menu", async () => {
   const user = userEvent.setup();
 

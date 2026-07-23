@@ -11,7 +11,10 @@ import { threadContextSummaryNode } from "@/services/shared-nodes/thread-context
 import { isValidWorkspaceRootPath } from "@/services/workspace-path-validation.js";
 import { THREAD_ACCESS_ERROR_MESSAGE } from "@/utils/errors.js";
 import { chatMediaService } from "@/services/chat-media.service.js";
-import { removeFileAttachmentsFromParts } from "@/services/chat-file-context.service.js";
+import {
+  removeFileAttachmentsFromParts,
+  removeFileAttachmentsRemovedFromParts,
+} from "@/services/chat-file-context.service.js";
 
 export interface ThreadResponse {
   id: string;
@@ -769,7 +772,10 @@ export const threadService = {
         if (mediaCleanup.failed > 0) {
           throw new Error(`Failed to remove ${mediaCleanup.failed} media record(s): ${mediaCleanup.errors.map((item) => item.mediaId).join(", ")}`);
         }
-        removeFileAttachmentsFromParts(parsePartsJson(existing.partsJson));
+        removeFileAttachmentsRemovedFromParts(
+          parsePartsJson(existing.partsJson),
+          input.parts,
+        );
         const updated = messageRepository.updateById(existing.id, {
           role: input.role,
           content: normalizedContent,

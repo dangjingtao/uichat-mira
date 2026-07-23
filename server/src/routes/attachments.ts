@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { getAuthUserFromRequest } from "@/db/auth.db.js";
 import { attachmentStorageService } from "@/services/attachment-storage.service.js";
+import { parseChatFilePart } from "@/services/chat-file-context.service.js";
 import { success } from "@/utils/index.js";
 import { badRequest, routeHandler, unauthorized } from "@/utils/route-errors.js";
 
@@ -120,6 +121,25 @@ export default async function attachmentRoute(app: FastifyInstance) {
         mimeType,
         originalName: upload.filename,
       });
+
+      if (!isImageUpload(mimeType, upload.filename)) {
+        try {
+          await parseChatFilePart({
+            type: "file",
+            filename: upload.filename,
+            data: saved.url,
+            fileId: saved.id,
+            mimeType: saved.contentType,
+          });
+        } catch (error) {
+          await attachmentStorageService.remove(saved.fileName);
+          throw badRequest(
+            error instanceof Error
+              ? `Failed to parse file: ${error.message}`
+              : "Failed to parse file",
+          );
+        }
+      }
 
       return success(saved, "Attachment uploaded");
     }),

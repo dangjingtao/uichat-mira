@@ -104,6 +104,7 @@ Related:
 
 - Agent 是 UChat 内建业务，由 UChat 提供稳定的模式、提交和消息状态表达
 - `UChatAgentModeControl` 通过 composer 工具插槽渲染模式开关，工作空间可用性和切换意图由宿主通过 UChat 合同传入
+- 宿主可通过 `UChatThreadView` 的 `composerSuggestion` 在输入框内插入应用自有的候选项；该节点不携带业务语义。本项目仅在 Agent 启用时用它展示 `$` Skill 候选列表
 - `UChatAgentUIController` 是 UChat 界面层统一的 Agent 状态与操作合同，包含模式、运行态、两类可用性以及切换、提交、审批和拒绝意图
 - `UChatThreadView` 只接收一个可选的 `agent` 控制对象，不再分别接收多个 Agent 状态和回调属性
 - 输入组件只渲染通用 `composerTools` 节点，不包含 Agent 状态判断或切换实现
