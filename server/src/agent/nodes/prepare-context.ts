@@ -31,19 +31,81 @@ const toAgentToolExposureState = (
   })),
 });
 
-type SkillAwareTaskFrame = NonNullable<AgentNodeState["currentTaskFrame"]> & {
-  skillContext?: SkillContext;
+type SkillRuntimeRequirement = {
+  kind: "user_input";
+  description: string;
+  requiredFor: string;
 };
 
-const withSkillContext = (
+type SkillRuntimeProjection = {
+  skillId: string;
+  sessionId: string;
+  phase: string;
+  status: "running" | "interrupted" | "completed";
+  flowCompleted: boolean;
+  deliveryReady: boolean;
+  round?: number;
+  maxRounds?: number;
+  requirements: SkillRuntimeRequirement[];
+};
+
+type SkillAwareTaskFrame = NonNullable<AgentNodeState["currentTaskFrame"]> & {
+  skillContext?: SkillContext;
+  skillRuntime?: SkillRuntimeProjection;
+};
+
+const toSkillRuntimeProjection = (
+  directive: ReturnType<typeof readSkillDirectiveFromRequestContext>,
+): SkillRuntimeProjection | undefined => {
+  if (!directive) return undefined;
+
+  const requirementDescription = directive.question?.trim();
+  const requirements: SkillRuntimeRequirement[] =
+    directive.requiredAction === "ask_user" && requirementDescription
+      ? [
+          {
+            kind: "user_input",
+            description: requirementDescription,
+            requiredFor: `${directive.skillId}:${directive.phase}`,
+          },
+        ]
+      : [];
+
+  const status: SkillRuntimeProjection["status"] =
+    directive.deliveryReady || directive.flowCompleted
+      ? "completed"
+      : requirements.length > 0
+        ? "interrupted"
+        : "running";
+
+  return {
+    skillId: directive.skillId,
+    sessionId: directive.sessionId,
+    phase: directive.phase,
+    status,
+    flowCompleted: directive.flowCompleted,
+    deliveryReady: directive.deliveryReady,
+    ...(directive.round !== undefined ? { round: directive.round } : {}),
+    ...(directive.maxRounds !== undefined ? { maxRounds: directive.maxRounds } : {}),
+    requirements,
+  };
+};
+
+const withSkillRuntimeContext = (
   frame: AgentNodeState["currentTaskFrame"],
   skillContext: SkillContext | undefined,
+  skillRuntime: SkillRuntimeProjection | undefined,
 ): AgentNodeState["currentTaskFrame"] => {
   if (!frame) return frame;
-  const { skillContext: _previousSkillContext, ...baseFrame } = frame as SkillAwareTaskFrame;
+  const {
+    skillContext: _previousSkillContext,
+    skillRuntime: _previousSkillRuntime,
+    ...baseFrame
+  } = frame as SkillAwareTaskFrame;
   return {
     ...baseFrame,
     ...(skillContext ? { skillContext } : {}),
+    ...(skillRuntime ? { skillRuntime } : {}),
   } as SkillAwareTaskFrame;
 };
 
@@ -131,13 +193,18 @@ export const prepareContextNode = async (
 
   // SkillContext is semantic guidance only. It never registers tools and never
   // expands the canonical Planner-visible toolExposure produced by Harness.
-  // An active conversation flow pins its own Skill for semantic continuity only;
-  // runtime work already happened before AgentGraph and is never executed here.
+  // A stateful flow contributes only a bounded runtime projection; Planner keeps
+  // ownership of ask_user, tool choice, global completion and final answer.
   const skillContext = await prepareSkillContext({
     query: skillDirective ? `$${skillDirective.skillId} ${query}` : query,
     messages: state.messages,
   });
-  const currentTaskFrame = withSkillContext(state.currentTaskFrame, skillContext);
+  const skillRuntime = toSkillRuntimeProjection(skillDirective);
+  const currentTaskFrame = withSkillRuntimeContext(
+    state.currentTaskFrame,
+    skillContext,
+    skillRuntime,
+  );
 
   const toolExposure = toAgentToolExposureState(
     [...matcherResult.toolExposure.exposedToolIds],
@@ -156,13 +223,16 @@ export const prepareContextNode = async (
     summary: summarizeSkillTrace(skillContext),
     details: {
       query,
-      activeSkillFlow: skillDirective
+      activeSkillFlow: skillRuntime
         ? {
-            skillId: skillDirective.skillId,
-            phase: skillDirective.phase,
-            flowCompleted: skillDirective.flowCompleted,
-            round: skillDirective.round ?? null,
-            maxRounds: skillDirective.maxRounds ?? null,
+            skillId: skillRuntime.skillId,
+            phase: skillRuntime.phase,
+            status: skillRuntime.status,
+            flowCompleted: skillRuntime.flowCompleted,
+            deliveryReady: skillRuntime.deliveryReady,
+            requirementCount: skillRuntime.requirements.length,
+            round: skillRuntime.round ?? null,
+            maxRounds: skillRuntime.maxRounds ?? null,
           }
         : null,
       skillContext: toSkillTraceDetails(skillContext),
@@ -184,8 +254,11 @@ export const prepareContextNode = async (
       exposedToolIds: toolExposure.exposedTools,
       activeSkillId: skillContext?.primary?.id ?? null,
       activeSkillVersion: skillContext?.primary?.version ?? null,
-      activeSkillFlowPhase: skillDirective?.phase ?? null,
-      activeSkillFlowCompleted: skillDirective?.flowCompleted ?? null,
+      activeSkillFlowPhase: skillRuntime?.phase ?? null,
+      activeSkillFlowStatus: skillRuntime?.status ?? null,
+      activeSkillFlowCompleted: skillRuntime?.flowCompleted ?? null,
+      activeSkillDeliveryReady: skillRuntime?.deliveryReady ?? null,
+      activeSkillRequirementCount: skillRuntime?.requirements.length ?? 0,
       skillMatchSource: skillContext?.match?.source ?? null,
       skillResourceCount: skillContext?.resources.length ?? 0,
       disclosedSkillResourceCount: skillContext?.disclosedResources.length ?? 0,
@@ -194,7 +267,7 @@ export const prepareContextNode = async (
       wenshuRegisteredCapabilityIds: wenshuCapabilityState.registeredCapabilityIds,
       codebaseExploreExposed: toolExposure.exposedTools.includes("codebase_explore"),
       currentTaskFrameWriter:
-        "prepareContextNode only attaches semantic skillContext; Planner remains the sole writer of goal/subtask/completion inference",
+        "prepareContextNode attaches SkillContext and a bounded Skill runtime projection; Planner remains the sole writer of goal/subtask/completion inference",
     },
   });
 
