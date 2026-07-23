@@ -3,6 +3,7 @@
  */
 import { reconcileCodeGraphHarnessCapability } from "@/harness/codegraph-capability";
 import { listCapabilityDefinitions } from "@/harness/registry";
+import { reconcileWenshuOfficeHarnessCapabilities } from "@/harness/wenshu-office-capability";
 import { prepareSkillContext, type SkillContext } from "@/skills/context/index.js";
 import { evaluateAgentToolPolicy } from "../policy";
 import { emitStepNode } from "../node-runtime";
@@ -112,6 +113,7 @@ export const prepareContextNode = async (
   });
 
   reconcileCodeGraphHarnessCapability();
+  const wenshuCapabilityState = reconcileWenshuOfficeHarnessCapabilities();
 
   const toolDefinitions = listCapabilityDefinitions();
   const autoAllowedTools = toolDefinitions
@@ -171,6 +173,8 @@ export const prepareContextNode = async (
       skillResourceCount: skillContext?.resources.length ?? 0,
       disclosedSkillResourceCount: skillContext?.disclosedResources.length ?? 0,
       skillToolExposureMutation: false,
+      wenshuRuntimePackAvailable: wenshuCapabilityState.runtimePackAvailable,
+      wenshuRegisteredCapabilityIds: wenshuCapabilityState.registeredCapabilityIds,
       codebaseExploreExposed: toolExposure.exposedTools.includes("codebase_explore"),
       currentTaskFrameWriter:
         "prepareContextNode only attaches semantic skillContext; Planner remains the sole writer of goal/subtask/completion inference",
