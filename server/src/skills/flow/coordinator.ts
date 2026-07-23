@@ -123,31 +123,6 @@ export const prepareSkillConversationFlow = async (input: {
     };
   }
 
-  // A completed handoff may need to be delivered again after a retry or a
-  // follow-up such as “生成报告”. Reuse the persisted deterministic delivery
-  // when this turn still matches the same flow instead of falling through to a
-  // static SkillContext-only path where Planner cannot access the runtime state.
-  if (
-    session?.status === "ready" &&
-    session.lastDirective?.flowCompleted &&
-    session.lastDirective.delivery?.content
-  ) {
-    const matched = await prepareSkillContext({
-      query: input.query,
-      messages: input.messages,
-    });
-    const matchedSkillId = matched?.primary?.id;
-    if (
-      matchedSkillId === session.skillId ||
-      matchedSkillId === session.lastDirective.skillId
-    ) {
-      return {
-        directive: session.lastDirective,
-        activeSkillId: session.lastDirective.skillId,
-      };
-    }
-  }
-
   let runtime =
     session &&
     (session.status === "collecting" || session.status === "final_confirmation")
