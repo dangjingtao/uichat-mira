@@ -154,7 +154,7 @@ describe("SkillLoader", () => {
 });
 
 describe("SkillContextProvider", () => {
-  it("discloses only the DCF reference for a DCF task", async () => {
+  const createXlsxProvider = async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "mira-skill-provider-"));
     tempDirs.push(root);
     const skillRoot = path.join(root, "xlsx");
@@ -179,8 +179,11 @@ describe("SkillContextProvider", () => {
       scan: async () => [manifest],
     } as unknown as SkillScanner;
     const registry = new SkillRegistry(scanner);
-    const provider = new SkillContextProvider(registry, new SkillMatcher(), new SkillLoader());
+    return new SkillContextProvider(registry, new SkillMatcher(), new SkillLoader());
+  };
 
+  it("discloses only the DCF reference for a DCF task", async () => {
+    const provider = await createXlsxProvider();
     const context = await provider.prepare({
       query: "做一个 DCF Excel 模型",
       messages: [{ role: "user", content: "做一个 DCF Excel 模型" }],
@@ -191,5 +194,45 @@ describe("SkillContextProvider", () => {
     expect(context?.disclosedResources).toHaveLength(1);
     expect(context?.disclosedResources[0]?.uri).toBe("skill://xlsx/reference/DCF_SKILL.md");
     expect(context?.disclosedResources[0]?.content).toContain("DCF rules");
+  });
+
+  it("inherits the prior primary Skill across a clarification reply and keeps its reference context", async () => {
+    const provider = await createXlsxProvider();
+    const currentQuery = "用一家虚拟科技公司，历史 3 年，预测 5 年，其余参数用合理默认值";
+    const context = await provider.prepare({
+      query: currentQuery,
+      messages: [
+        { role: "user", content: "帮我做一个 DCF Excel 模型" },
+        {
+          role: "assistant",
+          content: "可以。为了构建模型，请提供目标公司、历史数据范围、预测期和关键假设。",
+        },
+        { role: "user", content: currentQuery },
+      ],
+    });
+
+    expect(context?.primary?.id).toBe("xlsx");
+    expect(context?.match?.source).toBe("continuation");
+    expect(context?.disclosedResources.map((resource) => resource.uri)).toEqual([
+      "skill://xlsx/reference/DCF_SKILL.md",
+    ]);
+  });
+
+  it("does not inherit a stale Skill when the user starts a different task", async () => {
+    const provider = await createXlsxProvider();
+    const currentQuery = "帮我写一封邮件给老板说明明天请假";
+    const context = await provider.prepare({
+      query: currentQuery,
+      messages: [
+        { role: "user", content: "帮我做一个 DCF Excel 模型" },
+        {
+          role: "assistant",
+          content: "可以。为了构建模型，请提供目标公司、历史数据范围、预测期和关键假设。",
+        },
+        { role: "user", content: currentQuery },
+      ],
+    });
+
+    expect(context).toBeUndefined();
   });
 });
