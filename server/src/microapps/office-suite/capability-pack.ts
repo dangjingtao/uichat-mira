@@ -40,6 +40,28 @@ export type WenshuCapabilityPackStatus = {
   error?: string;
 };
 
+/**
+ * Fast synchronous readiness marker for Harness reconciliation.
+ *
+ * The manifest is written only after staging dependencies pass the module probe,
+ * then the staging directory is atomically promoted into the managed pack root.
+ * This is intentionally a cheap environment signal, not a replacement for the
+ * full async health probe exposed by getWenshuCapabilityPackStatus().
+ */
+export const isWenshuCapabilityPackProvisioned = () => {
+  const installRoot = resolveWenshuOfficePackRoot();
+  const manifestPath = path.join(installRoot, MANIFEST_FILE);
+  const sitePackages = resolveWenshuOfficeSitePackages();
+  try {
+    return (
+      fs.statSync(manifestPath).isFile() &&
+      fs.statSync(sitePackages).isDirectory()
+    );
+  } catch {
+    return false;
+  }
+};
+
 const probeModules = async (sitePackages: string) => {
   const python = resolveSystemDevelopmentPython();
   const code = [
