@@ -1,10 +1,14 @@
 import crypto from "node:crypto";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
 import { prepareSkillContext } from "../context/index.js";
-import { getSkillConversationFlowRuntime } from "./registry.js";
+import {
+  getSkillConversationFlowRuntime,
+  getSkillDirectiveHandoffRuntime,
+} from "./registry.js";
 import { getSkillFlowSession, saveSkillFlowSession } from "./state-store.js";
 import type {
   SkillDirective,
+  SkillFlowRuntimeResult,
   StoredSkillFlowSession,
 } from "./types.js";
 
@@ -49,6 +53,22 @@ const withProcessedMessage = (
   updatedAt: new Date().toISOString(),
 });
 
+const executeBoundedHandoff = async (
+  result: SkillFlowRuntimeResult,
+): Promise<SkillFlowRuntimeResult> => {
+  const targetSkillId = result.directive.next?.targetSkillId;
+  if (!result.directive.flowCompleted || !targetSkillId) return result;
+
+  const handoffRuntime = getSkillDirectiveHandoffRuntime(targetSkillId);
+  if (!handoffRuntime) return result;
+
+  return handoffRuntime.execute({
+    session: result.session,
+    sourceDirective: result.directive,
+    args: result.directive.next?.args ?? {},
+  });
+};
+
 export type PreparedSkillConversationFlow = {
   directive: SkillDirective;
   activeSkillId: string;
@@ -73,7 +93,7 @@ export const prepareSkillConversationFlow = async (input: {
   ) {
     return {
       directive: session.lastDirective,
-      activeSkillId: session.skillId,
+      activeSkillId: session.lastDirective.skillId,
     };
   }
 
@@ -104,7 +124,7 @@ export const prepareSkillConversationFlow = async (input: {
     });
   }
 
-  const result = await runtime.processTurn({
+  const conversationResult = await runtime.processTurn({
     session,
     threadId: input.threadId,
     userId: input.userId,
@@ -112,6 +132,7 @@ export const prepareSkillConversationFlow = async (input: {
     query: input.query,
     messages: input.messages,
   });
+  const result = await executeBoundedHandoff(conversationResult);
   const persistedSession = withProcessedMessage(
     result.session,
     input.userMessageId,
@@ -121,7 +142,7 @@ export const prepareSkillConversationFlow = async (input: {
 
   return {
     directive: result.directive,
-    activeSkillId: runtime.skillId,
+    activeSkillId: result.directive.skillId,
     requestContextMessages: result.requestContextMessages,
   };
 };
