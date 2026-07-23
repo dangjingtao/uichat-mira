@@ -41,6 +41,11 @@ export interface AssistantExecutionNodeEvent {
   environment?: Record<string, unknown>;
 }
 
+export interface AssistantDataPartEvent {
+  name: string;
+  value: unknown;
+}
+
 const DEFAULT_TEXT_ID = "text-1";
 
 export const defaultAssistantStreamUsage: AssistantStreamUsage = {
@@ -96,6 +101,12 @@ export const assistantExecutionNodeChunk = (
 ): string =>
   toAssistantSseChunk({
     type: "data-execution-node",
+    data: event,
+  });
+
+export const assistantDataPartChunk = (event: AssistantDataPartEvent): string =>
+  toAssistantSseChunk({
+    type: "data-message-part",
     data: event,
   });
 
