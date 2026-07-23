@@ -424,6 +424,10 @@
 ### 通用 Props
 
 - `labelHelp`：可选说明文本，会在 label 旁以 Tooltip 问号图标展示；用于避免业务页手写重复 label 和说明图标
+- `compact`：紧凑输入样式，适合工具栏、筛选器和窄布局
+- `autoFocus`：挂载后自动聚焦输入框
+- `ariaLabel`：没有可见 label 时的可访问名称
+- `onBlur`：输入框失去焦点时的回调
 
 ### 色彩约束
 

@@ -11,6 +11,7 @@ import { threadContextSummaryNode } from "@/services/shared-nodes/thread-context
 import { isValidWorkspaceRootPath } from "@/services/workspace-path-validation.js";
 import { THREAD_ACCESS_ERROR_MESSAGE } from "@/utils/errors.js";
 import { chatMediaService } from "@/services/chat-media.service.js";
+import { removeFileAttachmentsFromParts } from "@/services/chat-file-context.service.js";
 
 export interface ThreadResponse {
   id: string;
@@ -173,6 +174,7 @@ const pruneThreadTail = (
     }
 
     messageRepository.deleteById(message.id);
+    removeFileAttachmentsFromParts(parsePartsJson(message.partsJson));
     chatMediaService.removeForMessages([message.id]);
   }
 };
@@ -662,6 +664,9 @@ export const threadService = {
     if (mediaCleanup.failed > 0) {
       throw new Error(`Failed to remove ${mediaCleanup.failed} media record(s): ${mediaCleanup.errors.map((item) => item.mediaId).join(", ")}`);
     }
+    for (const message of messageRepository.listByThread(id)) {
+      removeFileAttachmentsFromParts(parsePartsJson(message.partsJson));
+    }
     return threadRepository.deleteById(id);
   },
 
@@ -764,6 +769,7 @@ export const threadService = {
         if (mediaCleanup.failed > 0) {
           throw new Error(`Failed to remove ${mediaCleanup.failed} media record(s): ${mediaCleanup.errors.map((item) => item.mediaId).join(", ")}`);
         }
+        removeFileAttachmentsFromParts(parsePartsJson(existing.partsJson));
         const updated = messageRepository.updateById(existing.id, {
           role: input.role,
           content: normalizedContent,
@@ -896,6 +902,7 @@ export const threadService = {
     if (mediaCleanup.failed > 0) {
       throw new Error(`Failed to remove ${mediaCleanup.failed} media record(s): ${mediaCleanup.errors.map((item) => item.mediaId).join(", ")}`);
     }
+    removeFileAttachmentsFromParts(parsePartsJson(message.partsJson));
     const deleted = messageRepository.deleteById(id);
     if (deleted) {
       threadRepository.updateById(message.threadId, {});

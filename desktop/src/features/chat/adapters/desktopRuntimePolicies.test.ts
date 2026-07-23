@@ -199,6 +199,15 @@ test("desktop composer actions keep knowledge base picker visible even when no k
       { id: "workspace-actions", disabled: false },
     ],
   );
+
+  assert.deepEqual(actions[0], {
+    id: "upload-image",
+    kind: "attachment",
+    label: "Add image or file",
+    title: "Add image or file",
+    accept: ".png,.jpg,.jpeg,.webp,.gif,.bmp,.avif,.txt,.md,.markdown,.csv,.tsv,.json,.jsonl,.yaml,.yml,.xml,.ini,.conf,.cfg,.env,.html,.css,.scss,.less,.log,.js,.jsx,.mjs,.cjs,.ts,.tsx,.py,.java,.kt,.go,.rs,.sh,.bash,.zsh,.ps1,.bat,.cmd,.sql,.toml,.properties,.gitignore,.npmrc,.editorconfig,.pdf,.docx,.pptx,.xlsx",
+    multiple: true,
+  });
 });
 
 test("desktop composer actions enable the knowledge base picker when data exists", () => {

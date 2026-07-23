@@ -6,10 +6,21 @@ import { badRequest, routeHandler, unauthorized } from "@/utils/route-errors.js"
 
 const MAX_CHAT_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const IMAGE_EXTENSIONS = new Set([".webp", ".png", ".jpg", ".jpeg", ".gif"]);
+const CHAT_FILE_EXTENSIONS = new Set([
+  ".txt", ".md", ".markdown", ".csv", ".tsv", ".json", ".jsonl",
+  ".yaml", ".yml", ".xml", ".ini", ".conf", ".cfg", ".env", ".html",
+  ".css", ".scss", ".less", ".log", ".js", ".jsx", ".mjs", ".cjs", ".ts",
+  ".tsx", ".py", ".java", ".kt", ".go", ".rs", ".sh", ".bash", ".zsh",
+  ".ps1", ".bat", ".cmd", ".sql", ".toml", ".properties",
+  ".gitignore", ".npmrc", ".editorconfig", ".pdf", ".docx", ".pptx", ".xlsx",
+]);
 
 const isImageUpload = (mimeType: string, fileName: string) =>
   mimeType.startsWith("image/") ||
   IMAGE_EXTENSIONS.has(fileName.slice(fileName.lastIndexOf(".")).toLowerCase());
+
+const isChatFileUpload = (fileName: string) =>
+  CHAT_FILE_EXTENSIONS.has(fileName.slice(fileName.lastIndexOf(".")).toLowerCase());
 
 export default async function attachmentRoute(app: FastifyInstance) {
   app.post(
@@ -28,8 +39,9 @@ export default async function attachmentRoute(app: FastifyInstance) {
               success: { type: "boolean", const: true },
               data: {
                 type: "object",
-                required: ["url", "fileName", "contentType", "size"],
+                required: ["id", "url", "fileName", "contentType", "size"],
                 properties: {
+                  id: { type: "string", description: "Attachment identifier." },
                   url: { type: "string", description: "Public attachment URL." },
                   fileName: { type: "string", description: "Stored file name." },
                   contentType: { type: "string", description: "Detected MIME type." },
@@ -99,8 +111,8 @@ export default async function attachmentRoute(app: FastifyInstance) {
       const buffer = await upload.toBuffer();
       const mimeType = upload.mimetype || "application/octet-stream";
 
-      if (!isImageUpload(mimeType, upload.filename)) {
-        throw badRequest("Only image attachments are supported currently");
+      if (!isImageUpload(mimeType, upload.filename) && !isChatFileUpload(upload.filename)) {
+        throw badRequest("This file type is not supported for chat upload");
       }
 
       const saved = await attachmentStorageService.save({

@@ -38,11 +38,11 @@
         {
           "version": "0.99.0",
           "commit": {
-            "hash": "ac35eebad7ea28f13ea2dd8b4893b824cbcdeb62",
-            "shortHash": "ac35eeb",
-            "message": "fix: stabilize ChatGPT expert sending",
-            "author": "DangJingtao",
-            "date": "2026-07-23T00:34:41+08:00"
+            "hash": "e9ab28d61a93f28310cb7b1d4c58744dfeae5101",
+            "shortHash": "e9ab28d",
+            "message": "merge: sync remote dev skill catalog",
+            "author": "Tomz",
+            "date": "2026-07-23T10:56:59+08:00"
           }
         },
         {

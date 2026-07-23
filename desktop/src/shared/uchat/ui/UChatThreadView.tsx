@@ -1426,9 +1426,11 @@ function UChatComposerActions({
           multiple={pendingAttachmentAction?.multiple ?? true}
           className="hidden"
           onChange={(event) => {
-            const files = Array.from(event.target.files ?? []).filter(
-              isImageFile,
-            );
+            const selectedFiles = Array.from(event.target.files ?? []);
+            const files =
+              pendingAttachmentAction?.attachmentKind === "image"
+                ? selectedFiles.filter(isImageFile)
+                : selectedFiles;
             onComposerAttachmentsChange(files);
             event.currentTarget.value = "";
           }}

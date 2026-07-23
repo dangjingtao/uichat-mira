@@ -17,7 +17,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { Button, Card, IconButton, MarkdownText, Result, Skeleton } from "@/shared/ui";
+import { Button, Card, IconButton, MarkdownText, Result, Skeleton, TextInput } from "@/shared/ui";
 import { ModalShell } from "@/shared/ui/Modal";
 import {
   getWenshuSkillCatalog,
@@ -248,7 +248,17 @@ export default function SkillsSettings() {
               {importingSkill ? <LoaderCircle size={14} className="animate-spin" /> : <Upload size={14} />}
               {importingSkill ? "生成中…" : "导入 Markdown"}
             </Button>
-            {searchOpen ? <input autoFocus aria-label="搜索技能" placeholder="搜索技能" value={query} onChange={(event) => setQuery(event.target.value)} className="h-9 w-40 rounded-ui-control border border-border bg-surface-primary px-3 text-xs text-text-primary outline-none focus:border-text-tertiary" /> : <IconButton ariaLabel="搜索技能" size="sm" styleType="filled" onClick={() => setSearchOpen(true)}><Search size={17} /></IconButton>}
+            <div
+              className={`h-8 shrink-0 overflow-hidden transition-[width] duration-200 ease-out ${searchOpen ? "w-40" : "w-8"}`}
+            >
+              {searchOpen ? (
+                <TextInput autoFocus ariaLabel="搜索技能" compact placeholder="搜索技能" value={query} onChange={setQuery} onBlur={() => setSearchOpen(false)} />
+              ) : (
+                <IconButton ariaLabel="搜索技能" size="sm" styleType="filled" onClick={() => setSearchOpen(true)}>
+                  <Search size={17} />
+                </IconButton>
+              )}
+            </div>
           </div>
 
           {catalogLoading ? (

@@ -25,6 +25,7 @@ import {
   createOpenAICompatibleRerankUrl,
 } from "@/services/openai-compatible-provider.js";
 import { getProviderDefinition } from "@/providers/catalog.js";
+import { resolveMessagesForGenerate } from "@/services/chat-file-context.service.js";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
 import {
   describeResolvedChatInvocation,
@@ -529,8 +530,11 @@ export const providerProxyService = {
       });
     }
 
+    const providerMessages =
+      roleType === "llm" ? await resolveMessagesForGenerate(messages) : messages;
+
     let output = "";
-    for await (const delta of streamResolvedChat(resolved, messages)) {
+    for await (const delta of streamResolvedChat(resolved, providerMessages)) {
       output += delta;
     }
 

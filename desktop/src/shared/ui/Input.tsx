@@ -137,6 +137,7 @@ interface TextInputProps {
   value: string;
   onChange: (value: string) => void;
   onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
+  onBlur?: React.FocusEventHandler<HTMLInputElement>;
   placeholder?: string;
   disabled?: boolean;
   error?: string;
@@ -145,6 +146,8 @@ interface TextInputProps {
   compact?: boolean;
   labelHelp?: string;
   autoComplete?: string;
+  autoFocus?: boolean;
+  ariaLabel?: string;
 }
 
 export const TextInput: React.FC<TextInputProps> = ({
@@ -152,6 +155,7 @@ export const TextInput: React.FC<TextInputProps> = ({
   value,
   onChange,
   onKeyDown,
+  onBlur,
   placeholder,
   disabled,
   error,
@@ -160,6 +164,8 @@ export const TextInput: React.FC<TextInputProps> = ({
   compact,
   labelHelp,
   autoComplete = "off",
+  autoFocus,
+  ariaLabel,
 }) => {
   const inputId = useId();
   const describedById = error ? `${inputId}-error` : undefined;
@@ -181,9 +187,12 @@ export const TextInput: React.FC<TextInputProps> = ({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
+        onBlur={onBlur}
         placeholder={placeholder}
         disabled={disabled}
+        autoFocus={autoFocus}
         autoComplete={autoComplete}
+        aria-label={ariaLabel}
         aria-invalid={Boolean(error)}
         aria-describedby={describedById}
         className={`

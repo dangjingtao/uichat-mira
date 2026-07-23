@@ -65,6 +65,30 @@ describe("TextInput", () => {
       "username",
     );
   });
+
+  it("supports autofocus", () => {
+    render(<TextInput value="" onChange={() => {}} autoFocus />);
+    expect(screen.getByRole("textbox")).toHaveFocus();
+  });
+
+  it("supports an accessible label without a visible label", () => {
+    render(<TextInput value="" onChange={() => {}} ariaLabel="Search" />);
+    expect(screen.getByRole("textbox", { name: "Search" })).toBeInTheDocument();
+  });
+
+  it("calls onBlur when focus leaves the input", async () => {
+    const handleBlur = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <>
+        <TextInput value="" onChange={() => {}} onBlur={handleBlur} />
+        <button type="button">Elsewhere</button>
+      </>,
+    );
+    await user.click(screen.getByRole("textbox"));
+    await user.click(screen.getByRole("button", { name: "Elsewhere" }));
+    expect(handleBlur).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("NumberInput", () => {

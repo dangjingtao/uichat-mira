@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
 import CONFIG from "@/config/index.js";
@@ -16,6 +17,22 @@ const EXTENSION_MIME_MAP: Record<string, string> = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".gif": "image/gif",
+  ".txt": "text/plain",
+  ".md": "text/markdown",
+  ".markdown": "text/markdown",
+  ".csv": "text/csv",
+  ".tsv": "text/tab-separated-values",
+  ".json": "application/json",
+  ".jsonl": "application/jsonl",
+  ".yaml": "application/yaml",
+  ".yml": "application/yaml",
+  ".xml": "application/xml",
+  ".html": "text/html",
+  ".log": "text/plain",
+  ".pdf": "application/pdf",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 };
 
 const WEBP_CONVERTIBLE_MIME_TYPES = new Set([
@@ -86,6 +103,7 @@ const getSafeAttachmentPath = (fileName: string) => {
 };
 
 export const attachmentStorageService = {
+  root: attachmentRoot,
   async save(input: {
     buffer: Buffer;
     mimeType: string;
@@ -124,6 +142,16 @@ export const attachmentStorageService = {
       buffer,
       contentType: getContentType(safeName),
     };
+  },
+
+  async remove(fileName: string) {
+    const filePath = getSafeAttachmentPath(fileName);
+    await fs.rm(filePath, { force: true });
+  },
+
+  removeSync(fileName: string) {
+    const filePath = getSafeAttachmentPath(fileName);
+    fsSync.rmSync(filePath, { force: true });
   },
 
   isInternalAttachmentUrl(url: string) {
