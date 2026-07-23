@@ -1,3 +1,4 @@
+import { writeStructuredLog } from "@/logger";
 import { collectTaskModelText } from "@/services/task-model.service.js";
 import {
   normalizeFertilityDimension,
@@ -5,12 +6,20 @@ import {
   type FertilityAssessmentState,
   type FertilityDimension,
 } from "../fertility-assessment/runtime.js";
+import { renderHtmlReportToPdf } from "../flow/html-to-pdf.js";
+import {
+  resolveSkillReportPdfPath,
+  writeSkillReportHtml,
+} from "../flow/report-files.js";
 import { toSkillFlowStateRef } from "../flow/state-store.js";
 import type {
   SkillDirective,
   SkillDirectiveHandoffRuntime,
   StoredSkillFlowSession,
 } from "../flow/types.js";
+
+const REPORT_TITLE = "两个人的备孕全景报告";
+const REPORT_PDF_FILENAME = `${REPORT_TITLE}.pdf`;
 
 const FEMALE_DIMENSIONS = [
   ["female_endometrium", "子宫内膜与宫腔"],
@@ -91,8 +100,6 @@ const dimensionPrompt = (dimensionPairs: ReadonlyArray<readonly [string, string]
 每项结构：{id,score,confidence,dataCompleteness,evidence,strengths,concerns,missingEvidence,interpretation,actions:{selfCare,discussWithClinician,testsToConsider}}`;
 
 const completeDimensions = async (state: FertilityAssessmentState) => {
-  // Final report refreshes every dimension from the final fact set. Interview
-  // dimensions are useful drafts, but later answers may change their evidence.
   const dimensions: Record<string, FertilityDimension> = { ...state.dimensions };
 
   for (let index = 0; index < ALL_DIMENSIONS.length; index += 2) {
@@ -107,7 +114,11 @@ const completeDimensions = async (state: FertilityAssessmentState) => {
             parts: [],
           },
         ],
-        { maxTokens: 1200, temperature: 0 },
+        {
+          maxTokens: 1200,
+          temperature: 0,
+          purpose: `fertility-report-dimensions:${batch.map(([id]) => id).join(",")}`,
+        },
       );
       const parsed = JSON.parse(unwrapJsonFence(output).trim()) as unknown;
       if (!Array.isArray(parsed)) continue;
@@ -121,8 +132,8 @@ const completeDimensions = async (state: FertilityAssessmentState) => {
         }
       }
     } catch {
-      // Keep any interview draft for this dimension. Missing dimensions are
-      // represented explicitly after all bounded calls finish.
+      // Keep any interview draft. One failed bounded subcall must not lose the
+      // whole report; missing dimensions are represented explicitly below.
     }
   }
 
@@ -170,7 +181,7 @@ const buildSummary = async (state: FertilityAssessmentState) => {
             parts: [],
           },
         ],
-        { maxTokens: 700, temperature: 0 },
+        { maxTokens: 700, temperature: 0, purpose: "fertility-report-summary" },
       ),
     );
     return {
@@ -242,7 +253,7 @@ const renderMarkdownReport = (state: FertilityAssessmentState) => {
     (item): item is FertilityDimension => Boolean(item),
   );
 
-  return `# 两个人的备孕全景报告
+  return `# ${REPORT_TITLE}
 
 > 生成时间：${generatedAt}
 > 本报告基于当前对话中用户主动提供的信息生成，未核验原始检查单，仅用于健康教育、信息整理和就诊准备，不构成诊断、处方或替代生殖专科医生的医疗决策。
@@ -289,14 +300,118 @@ ${renderList(state.contradictions)}
 const escapeHtml = (value: string) =>
   value.replace(/[&<>"']/g, (char) => HTML_ESCAPES[char] ?? char);
 
-const renderHtmlReport = (state: FertilityAssessmentState) => {
-  const cards = ALL_DIMENSIONS.map(([id, label]) => {
-    const item = state.dimensions[id];
-    if (!item) return "";
-    return `<section class="dimension"><div class="dimension-head"><h3>${escapeHtml(label)}</h3><span>${escapeHtml(formatScore(item.score))}</span></div><div class="meta">置信度 ${escapeHtml(item.confidence)} · 资料完整度 ${Math.round(item.dataCompleteness * 100)}%</div><p>${escapeHtml(item.interpretation || "当前信息不足，暂不做进一步解释。")}</p></section>`;
-  }).join("\n");
+const renderHtmlList = (items: unknown, empty = "暂无足够信息") => {
+  const values = uniqueStrings(items, 12);
+  if (values.length === 0) return `<div class="empty">${escapeHtml(empty)}</div>`;
+  return `<ul>${values.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+};
 
-  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>两个人的备孕全景报告</title><style>body{margin:0;background:#f5f3ef;color:#282522;font-family:Inter,"Noto Sans SC",system-ui,sans-serif}.page{max-width:960px;margin:36px auto;background:white;padding:52px;border-radius:24px;box-shadow:0 18px 60px rgba(49,41,34,.08)}h1{font-size:34px;margin:0 0 8px}.sub{color:#766e67;margin-bottom:32px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.dimension{border:1px solid #e7e0d9;border-radius:16px;padding:18px}.dimension-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.dimension-head h3{font-size:17px;margin:0}.dimension-head span{white-space:nowrap;font-weight:650}.meta{font-size:12px;color:#8a8179;margin:8px 0 12px}.dimension p{line-height:1.7;margin:0;color:#514a45}.note{margin-top:28px;padding:18px;border-radius:14px;background:#faf7f2;color:#665e57;line-height:1.7}@media(max-width:720px){.page{margin:0;padding:28px;border-radius:0}.grid{grid-template-columns:1fr}}@media print{body{background:white}.page{box-shadow:none;margin:0;max-width:none}}</style></head><body><main class="page"><h1>两个人的备孕全景报告</h1><div class="sub">基于对话信息生成 · 健康教育 / 信息整理 / 就诊准备</div><div class="grid">${cards}</div><div class="note">本报告未核验原始检查单，不构成诊断、处方或替代生殖专科医生的医疗决策。维度分数仅用于阅读和优先级排序，不代表怀孕概率。</div></main></body></html>`;
+const renderEvidenceList = (dimension: FertilityDimension) => {
+  const values = dimension.evidence
+    .map((item) =>
+      isRecord(item) && typeof item.fact === "string" ? item.fact.trim() : "",
+    )
+    .filter(Boolean)
+    .slice(0, 10);
+  return renderHtmlList(values, "当前没有足够的可引用依据");
+};
+
+const renderSummaryCard = (title: string, items: unknown, tone: string) =>
+  `<section class="summary-card ${tone}"><h3>${escapeHtml(title)}</h3>${renderHtmlList(items)}</section>`;
+
+const renderDimensionHtml = (dimension: FertilityDimension) => {
+  const completeness = Math.round(dimension.dataCompleteness * 100);
+  const scoreText = formatScore(dimension.score);
+  return `<article class="dimension-card">
+    <div class="dimension-title-row">
+      <div><div class="eyebrow">${escapeHtml(dimension.id)}</div><h3>${escapeHtml(dimensionLabel(dimension.id))}</h3></div>
+      <div class="score-pill">${escapeHtml(scoreText)}</div>
+    </div>
+    <div class="dimension-meta"><span>置信度 ${escapeHtml(dimension.confidence)}</span><span>资料完整度 ${completeness}%</span></div>
+    <div class="completeness"><span style="width:${completeness}%"></span></div>
+    <p class="interpretation">${escapeHtml(dimension.interpretation || "当前信息不足，暂不做进一步解释。")}</p>
+    <div class="detail-grid">
+      <section><h4>已有依据</h4>${renderEvidenceList(dimension)}</section>
+      <section><h4>需要关注</h4>${renderHtmlList(dimension.concerns)}</section>
+      <section><h4>还缺什么</h4>${renderHtmlList(dimension.missingEvidence)}</section>
+      <section><h4>可以自己先做</h4>${renderHtmlList(dimension.actions.selfCare)}</section>
+      <section><h4>与医生讨论</h4>${renderHtmlList(dimension.actions.discussWithClinician)}</section>
+      <section><h4>可讨论的检查</h4>${renderHtmlList(dimension.actions.testsToConsider)}</section>
+    </div>
+  </article>`;
+};
+
+const renderHtmlReport = (state: FertilityAssessmentState, generatedAt: string) => {
+  const female = FEMALE_DIMENSIONS.map(([id]) => state.dimensions[id]).filter(
+    (item): item is FertilityDimension => Boolean(item),
+  );
+  const male = MALE_DIMENSIONS.map(([id]) => state.dimensions[id]).filter(
+    (item): item is FertilityDimension => Boolean(item),
+  );
+
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${REPORT_TITLE}</title>
+<style>
+  :root{color-scheme:light;--ink:#282522;--muted:#756e67;--line:#e7e0d9;--soft:#f7f3ed;--paper:#fff;--accent:#b8663b;--good:#edf5ef;--warn:#fff4e8;--cool:#eef2f5}
+  *{box-sizing:border-box} html{background:#f3efe9} body{margin:0;color:var(--ink);font-family:Inter,"Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;background:#f3efe9;line-height:1.65}
+  .report{max-width:1040px;margin:28px auto;background:var(--paper);border:1px solid rgba(80,67,55,.08);border-radius:24px;box-shadow:0 18px 70px rgba(49,41,34,.09);overflow:hidden}
+  .cover{padding:54px 58px 44px;background:linear-gradient(135deg,#fffaf4 0%,#fff 56%,#f7efe8 100%);border-bottom:1px solid var(--line)}
+  .brand{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);font-weight:700}.cover h1{font-size:38px;line-height:1.2;margin:12px 0 10px;letter-spacing:-.02em}.subtitle{color:var(--muted);font-size:15px}.notice{margin-top:28px;padding:16px 18px;background:rgba(255,255,255,.72);border:1px solid var(--line);border-radius:14px;color:#655d56;font-size:13px}
+  .section{padding:38px 58px}.section+.section{border-top:1px solid var(--line)}.section-head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:20px}.section-head h2{margin:0;font-size:25px}.section-head p{margin:0;color:var(--muted);font-size:13px}
+  .summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.summary-card{padding:18px 20px;border-radius:16px;border:1px solid var(--line);background:#fff}.summary-card h3{font-size:15px;margin:0 0 10px}.summary-card.good{background:var(--good)}.summary-card.warn{background:var(--warn)}.summary-card.cool{background:var(--cool)}.summary-card.soft{background:var(--soft)}
+  ul{margin:0;padding-left:19px}li{margin:5px 0}.empty{color:#978f88;font-size:13px}.dimensions{display:grid;grid-template-columns:1fr;gap:16px}.dimension-card{border:1px solid var(--line);border-radius:18px;padding:22px;background:#fff;break-inside:avoid;page-break-inside:avoid}.dimension-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}.dimension-title-row h3{margin:2px 0 0;font-size:19px}.eyebrow{font-size:10px;color:#9a9189;letter-spacing:.08em}.score-pill{padding:7px 11px;border-radius:999px;background:#f6eee7;color:#754425;font-size:12px;font-weight:700;white-space:nowrap}.dimension-meta{display:flex;gap:18px;margin:13px 0 7px;color:var(--muted);font-size:12px}.completeness{height:6px;background:#eee9e4;border-radius:999px;overflow:hidden}.completeness span{display:block;height:100%;background:#b77752;border-radius:999px}.interpretation{margin:17px 0;color:#4c4641}.detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.detail-grid section{background:#faf8f5;border:1px solid #eee9e4;border-radius:13px;padding:13px 15px}.detail-grid h4{font-size:12px;margin:0 0 7px;color:#625a53}.detail-grid ul,.detail-grid .empty{font-size:12px}
+  .gap-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.gap-card{border:1px solid var(--line);border-radius:14px;padding:16px;background:#faf8f5}.gap-card h3{margin:0 0 10px;font-size:14px}.footer{padding:24px 58px 36px;color:#817970;font-size:11px;border-top:1px solid var(--line);background:#faf8f5}
+  @media(max-width:760px){html,body{background:#fff}.report{margin:0;border:0;border-radius:0;box-shadow:none}.cover,.section{padding:28px 22px}.cover h1{font-size:30px}.summary-grid,.detail-grid,.gap-grid{grid-template-columns:1fr}.dimension-title-row{flex-direction:column}.footer{padding:22px}}
+  @page{size:A4;margin:10mm}.page-break{break-before:page;page-break-before:always}
+  @media print{html,body{background:#fff}.report{max-width:none;margin:0;border:0;border-radius:0;box-shadow:none}.cover,.section{padding-left:0;padding-right:0}.cover{padding-top:4mm}.dimension-card{box-shadow:none}.summary-card,.dimension-card,.gap-card{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+</style>
+</head>
+<body>
+<main class="report">
+  <header class="cover">
+    <div class="brand">MIRA · FERTILITY OVERVIEW</div>
+    <h1>${REPORT_TITLE}</h1>
+    <div class="subtitle">夫妻备孕信息画像 · 营养与生活方式整理 · 就诊准备</div>
+    <div class="notice">生成时间：${escapeHtml(generatedAt)}。本报告仅基于本次对话中用户主动提供的信息；当前 Mira 未核验原始化验单或影像资料。报告用于健康教育、信息整理和就诊准备，不构成诊断、处方或替代生殖专科医生的医疗决策。</div>
+  </header>
+
+  <section class="section">
+    <div class="section-head"><h2>先看结论</h2><p>优先看方向，不把分数误解为怀孕概率</p></div>
+    <div class="summary-grid">
+      ${renderSummaryCard("当前优势", state.summary?.strengths, "good")}
+      ${renderSummaryCard("当前优先事项", state.summary?.priorities, "warn")}
+      ${renderSummaryCard("下次就诊最值得问", state.summary?.visitPrep, "cool")}
+      ${renderSummaryCard("生活方式优先级", state.summary?.lifestyleFocus, "soft")}
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><h2>女方十维画像</h2><p>状态分 + 置信度 + 数据完整度</p></div>
+    <div class="dimensions">${female.map(renderDimensionHtml).join("")}</div>
+  </section>
+
+  <section class="section page-break">
+    <div class="section-head"><h2>男方十维画像</h2><p>与女方采用完全一致的字段结构</p></div>
+    <div class="dimensions">${male.map(renderDimensionHtml).join("")}</div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><h2>资料缺口与不确定项</h2><p>不知道，比编一个答案更有价值</p></div>
+    <div class="gap-grid">
+      <section class="gap-card"><h3>关键缺口</h3>${renderHtmlList(state.missingCriticalFields)}</section>
+      <section class="gap-card"><h3>尚未确认</h3>${renderHtmlList(state.uncertainties)}</section>
+      <section class="gap-card"><h3>前后可能矛盾</h3>${renderHtmlList(state.contradictions)}</section>
+    </div>
+  </section>
+
+  <footer class="footer">维度状态分仅用于阅读与优先级排序，不代表怀孕概率。AMH/AFC 主要用于理解卵巢储备与促排反应背景，不能单独等同卵子质量或自然受孕概率。出现异常出血、剧烈腹痛、严重感染症状、妊娠相关急症或其他紧急情况时，应及时线下就医。</footer>
+</main>
+</body>
+</html>`;
 };
 
 const withUpdatedState = (
@@ -335,12 +450,33 @@ export const fertilityReportRuntime: SkillDirectiveHandoffRuntime = {
       summary,
     };
     const generatedAt = new Date().toISOString();
+    const html = renderHtmlReport(reportState, generatedAt);
     const report = {
       markdown: renderMarkdownReport(reportState),
-      html: renderHtmlReport(reportState),
+      html,
       generatedAt,
     };
     reportState.report = report;
+
+    await writeSkillReportHtml(session.sessionId, html);
+
+    let pdfAvailable = false;
+    let pdfError: string | undefined;
+    try {
+      await renderHtmlReportToPdf({
+        html,
+        outputPath: resolveSkillReportPdfPath(session.sessionId),
+      });
+      pdfAvailable = true;
+    } catch (error) {
+      pdfError = error instanceof Error ? error.message : String(error);
+      writeStructuredLog("warn", {
+        scope: "fertility-report",
+        event: "pdf-render-failed",
+        sessionId: session.sessionId,
+        error: pdfError,
+      });
+    }
 
     const nextSession = withUpdatedState(session, reportState);
     const directive: SkillDirective = {
@@ -357,13 +493,23 @@ export const fertilityReportRuntime: SkillDirectiveHandoffRuntime = {
         args: {
           assessmentRef: stateRef,
           reportType: args.reportType ?? "couple",
-          format: args.format ?? "markdown",
+          format: "inline_html",
           htmlAvailable: true,
+          pdfAvailable,
         },
       },
       delivery: {
-        kind: "markdown",
-        content: report.markdown,
+        kind: "inline_html",
+        content: pdfAvailable
+          ? "备孕全景报告已经生成。下面可以直接阅读，也可以保存 PDF。"
+          : "备孕全景报告已经生成，行内报告可以直接阅读；本机暂时无法完成 PDF 转换。",
+        inlineHtml: html,
+        reportTitle: REPORT_TITLE,
+        pdf: {
+          available: pdfAvailable,
+          fileName: REPORT_PDF_FILENAME,
+          ...(pdfError ? { error: pdfError } : {}),
+        },
       },
     };
 
