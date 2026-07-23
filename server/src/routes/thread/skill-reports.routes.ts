@@ -10,6 +10,19 @@ import {
 } from "@/skills/flow/report-files.js";
 import { notFound, routeHandler } from "@/utils/route-errors.js";
 
+const hasPersistedReportMarker = (input: {
+  threadId: string;
+  sessionId: string;
+  userId: number;
+}) => {
+  const markerPrefix = `<!--mira-skill-report:${input.sessionId}:`;
+  return threadService
+    .getMessages(input.threadId, input.userId)
+    .some((message) =>
+      message.role === "assistant" && message.content.includes(markerPrefix),
+    );
+};
+
 const ensureOwnedReportSession = async (input: {
   threadId: string;
   sessionId: string;
@@ -26,21 +39,21 @@ const ensureOwnedReportSession = async (input: {
     return manifest;
   }
 
-  // First access after report generation can backfill ownership from the active
-  // flow. The inline report immediately performs this authenticated request, so
-  // later Skill runs may replace active state without invalidating this report.
   const session = await getSkillFlowSession({
     threadId: input.threadId,
     userId: input.userId,
   });
-  if (!session || session.sessionId !== input.sessionId) {
+  const activeSessionOwnsReport = session?.sessionId === input.sessionId;
+  const persistedMessageOwnsReport = hasPersistedReportMarker(input);
+
+  if (!activeSessionOwnsReport && !persistedMessageOwnsReport) {
     throw notFound("Skill report not found");
   }
 
   const created = {
-    sessionId: session.sessionId,
-    threadId: session.threadId,
-    userId: session.userId,
+    sessionId: input.sessionId,
+    threadId: input.threadId,
+    userId: input.userId,
     title: "两个人的备孕全景报告",
     createdAt: new Date().toISOString(),
   };
