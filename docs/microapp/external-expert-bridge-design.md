@@ -297,17 +297,22 @@ mira-clipper-ext/extension/experts/
 ExpertBridge
   -> ChatGPTAdapter
     -> chatGPT.js 页面状态能力
-    -> 当前 ChatGPT DOM 输入框 / 发送按钮
+    -> background.js CDP transport
+       -> Runtime / Input / Page
+       -> 当前 ChatGPT 页面
 ```
 
 当前 Adapter 的行为：
 
 - 使用 `isLoaded()` 检查页面是否就绪。
 - 使用 `startNewChat()` 打开新的空白对话，不复用已有线程。
-- 使用当前 `textarea` 和发送按钮发出消息。
+- 发送路径使用 `chrome.debugger` 连接目标 Tab，通过 CDP `Runtime`、`Input` 和 `Page` 完成后台输入与提交。
+- CDP 发送不调用 `chrome.tabs.update(active: true)`、`chrome.windows.update(focused: true)` 或页面激活逻辑；目标 Tab 可以保持后台状态。
+- DOM Adapter 只保留页面连接检测和状态读取，不再承担发送 fallback。
 - 使用 `isIdle()` 等待本轮生成结束，再使用 `getChatData()` 读取完整回复。
 - 只从当前 URL 的 `/c/<conversation_id>` 读取会话 ID，避免把历史列表第一条误判成当前线程。
-- 不使用当前 ChatGPT.js 仍依赖旧 `<p>` 输入结构的 `askAndGetReply()` 发送路径。
+- 不使用当前 ChatGPT.js 仍依赖旧 `<p>` 输入结构的 `askAndGetReply()` 发送路径；ChatGPT.js 继续用于页面加载、新建对话、生成状态和回复读取。
+- 发送必须得到明确 ACK。`SEND_NOT_CONFIRMED`、响应超时、会话不匹配等错误直接返回，不因状态不确定自动重发。
 
 新增 Kimi 或 DeepSeek 时，只增加对应 Adapter 并注册 Provider ID，不修改 `ExpertService` 的业务流程。
 
@@ -325,8 +330,9 @@ ExpertBridge
 建议的 Mira API：
 
 ```text
-POST /experts/:id/connect
-POST /experts/:id/consult
+POST /microapps/external-experts
+POST /microapps/external-experts/:id/connect
+POST /microapps/external-experts/:id/consult
 ```
 
 咨询请求：
@@ -360,8 +366,86 @@ POST /experts/:id/consult
 - 不做多专家路由和自动选择。
 - 不做外部线程历史导入。
 - 不做 Mira 与外部线程的双向同步。
-- 不做后台静默发送。
-- 不新增权限、审批或授权系统。
+- 不做通用浏览器后台 Agent；问策只通过已验证的 ChatGPT CDP 链路发送专家咨询。
+- 不新增权限、审批或授权系统；Agent 调用继续沿用现有 Harness/Policy 行为，当前网络副作用可能进入既有审批流程。
+
+## 7. Agent 接入契约
+
+External Expert 作为 Mira 的一个高层 Harness 工具注册，工具 ID 为：
+
+```text
+ask_external_expert
+```
+
+Planner 只看到 Provider、业务动作、问题和会话引用，不看到 Tab、CDP、DOM、焦点或发送按钮。
+
+输入契约：
+
+```ts
+type AskExternalExpertInput = {
+  action: "ask" | "continue" | "new_conversation";
+  provider: "chatgpt" | "kimi" | "deepseek";
+  question?: string;
+  conversation?:
+    | "new"
+    | {
+        conversationId: string;
+      };
+};
+```
+
+业务动作语义：
+
+- `ask`：使用当前运行中的专家会话；没有运行时连接时建立新的网页连接。传入 `conversation: "new"` 时强制新建会话。
+- `continue`：继续指定的 `conversationId`。该会话必须与当前专家持久引用一致，且当前进程中仍有运行时连接；不会恢复旧 Tab 或旧线程。
+- `new_conversation`：每次都新建 Provider 网页 Tab 和空白会话。可以只建立连接，也可以同时发送 `question`。
+
+当 `new_conversation` 不带 `question` 时，返回 `status: "ready"`，此时外部 conversation 尚未产生真实 ID；首次发送成功后才会返回 `conversationId`。
+
+工具结果契约：
+
+```ts
+type AskExternalExpertResult = {
+  answer: string;
+  provider: "chatgpt" | "kimi" | "deepseek";
+  conversationId: string | null;
+  status: "completed" | "ready";
+  latencyMs: number;
+};
+```
+
+调用链保持现有 Agent Graph：
+
+```text
+Planner
+  -> Normalize
+  -> Policy
+  -> ToolNode
+  -> ask_external_expert
+  -> ExternalExpertService.ask
+  -> expert.connect / expert.send_message
+  -> 现有 WebBridge
+  -> 触界扩展 CDP Adapter
+  -> 外部专家网页
+  -> Tool Result / Evidence
+  -> Planner
+  -> Generate 或继续调用其他能力
+```
+
+External Expert 回复只作为 Tool Result 和 Evidence 返回，不能直接绕过 Planner 成为 Mira 最终回答。Evidence 的 `data` 保留上述结果，`facts` 至少记录 Provider、状态、conversationId 和耗时。
+
+错误沿用 Harness 的失败封装，并保留 WebBridge 的结构化字段：
+
+```ts
+{
+  code: string;
+  message: string;
+  retryable: boolean;
+  suggestedAction?: string | null;
+}
+```
+
+例如 `SEND_NOT_CONFIRMED`、`BRIDGE_DISCONNECTED`、响应超时和 `CONVERSATION_MISMATCH` 不会被吞掉。发送状态不确定时，External Expert service 不自动重复调用 `expert.send_message`。
 
 ## Code Anchors
 
@@ -373,6 +457,10 @@ POST /experts/:id/consult
 - `mira-clipper-ext/extension/background.js`
 - `mira-clipper-ext/extension/content/content.js`
 - `mira-clipper-ext/native-host/host.mjs`
+- `server/src/harness/runtime.ts`
+- `server/src/harness/profiles/resolver.ts`
+- `server/src/mcp/tools/ask-external-expert.tool.ts`
+- `server/src/microapps/external-expert/index.ts`
 
 ## 当前状态
 
@@ -380,10 +468,21 @@ POST /experts/:id/consult
 
 - ChatGPT Provider Adapter 已实现，使用扩展内置 ChatGPT.js 和当前 ChatGPT 页面能力。
 - 专家创建、Provider 单例约束、Tab 运行时绑定、创建新空白对话、单条咨询和完整回复返回已接入。
+- `ask_external_expert` 已注册到 Harness，并通过共享的 `externalExpertService` 复用现有 Provider 单例和运行时绑定。
+- Agent 工具结果已接入现有 ToolNode/Evidence 流程，外部回复不会直接替代 Mira 的 Planner/Generate。
 - `expert.connect` 已实现页面运行时就绪检查，但 **Provider 级握手尚未实现**：没有握手 token、独立连接 ID、双向心跳或自动恢复协议。
 - `expert.connect` 成功不代表外部 conversation 已创建；首次成功发送后才持久化 `conversation_id`。
-- 当前发送动作不走 ChatGPT.js 的 `askAndGetReply()`，因为该版本对当前 textarea DOM 不兼容；发送由适配器直接操作当前输入框和发送按钮，页面状态及回复读取仍由 ChatGPT.js 提供。
+- 当前发送动作不走 ChatGPT.js 的 `askAndGetReply()`，因为该版本对当前 textarea DOM 不兼容；发送由 `background.js` 的 CDP 路径完成，页面状态及回复读取仍由 ChatGPT.js 提供。
 - Kimi、DeepSeek 仅保留 Provider 类型，尚未实现 Adapter。
+
+### Agent 接入验证状态
+
+- External Expert service 单元测试：通过。
+- `ask_external_expert` Harness/Evidence 集成测试：通过。
+- `SEND_NOT_CONFIRMED` 单次发送错误路径测试：通过，未自动重发。
+- Harness runtime、能力检索和现有 Policy 回归测试：通过。
+- `pnpm typecheck`：被既有 Office Suite 类型错误阻断，本次未修改这些无关错误。
+- 真实 Agent 冒烟已确认 Planner 能识别并冻结 `ask_external_expert`；执行阶段因触界扩展未连接到当前后端返回 `BRIDGE_DISCONNECTED`，因此不能宣称真实 ChatGPT 闭环已在本次 Agent 接入中完成。
 
 ### 握手未实现的边界
 

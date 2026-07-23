@@ -10,6 +10,7 @@ import {
   DEFAULT_IMAGE_GENERATION_PARAMS,
   DEFAULT_VOICE_PARAMS,
   DEFAULT_ROLE_CONFIGS,
+  MANAGED_AGENT_TASK_PARAMS,
   MANAGED_TASK_PARAMS,
   PARAM_TEMPLATES,
 } from "@/services/model-config.defaults.js";
@@ -631,7 +632,7 @@ export const initializeModelConfigDatabase = (): void => {
 
     if (agentTaskDefault && existingAgentTask) {
       const currentAgentTaskParams = parseParams(existingAgentTask.params);
-      const needsUpdate = Object.entries(MANAGED_TASK_PARAMS).some(
+      const needsUpdate = Object.entries(MANAGED_AGENT_TASK_PARAMS).some(
         ([key, value]) => currentAgentTaskParams[key] !== value,
       );
 
@@ -639,7 +640,7 @@ export const initializeModelConfigDatabase = (): void => {
         modelConfigRepository.updateDefault("agentTask", {
           params: JSON.stringify({
             ...currentAgentTaskParams,
-            ...MANAGED_TASK_PARAMS,
+            ...MANAGED_AGENT_TASK_PARAMS,
           }),
           providerConnectionId: existingAgentTask.providerConnectionId ?? null,
         });

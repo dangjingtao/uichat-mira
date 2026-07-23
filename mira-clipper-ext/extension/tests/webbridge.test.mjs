@@ -98,9 +98,11 @@ describe('WebBridge tool surface', () => {
     const pageMessage = functionSource(source, 'sendPageMessage');
     const cdpSend = functionSource(source, 'sendChatGPTMessageViaCdp');
     const cdpOperation = functionSource(source, 'runChatGPTCdpOperation');
+    const cdpFocus = functionSource(source, 'focusAndSelectChatGPTComposer');
     const cdpClick = functionSource(source, 'clickChatGPTSendButtonViaCdp');
     const cdpEnter = functionSource(source, 'pressChatGPTEnterViaCdp');
-    const expertPath = [executor, resolver, pageBridge, pageMessage, cdpSend, cdpOperation, cdpClick, cdpEnter].join('\n');
+    const cdpInsert = functionSource(source, 'insertChatGPTComposerTextViaCdp');
+    const expertPath = [executor, resolver, pageBridge, pageMessage, cdpSend, cdpOperation, cdpFocus, cdpClick, cdpEnter, cdpInsert].join('\n');
 
     assert.doesNotMatch(source, /sendExpertPageMessageInForeground/);
     assert.match(handler, /isExpertTool[\s\S]*?requestedTabId[\s\S]*?: await getAuthorizedTabId\(\)/);
@@ -109,7 +111,20 @@ describe('WebBridge tool surface', () => {
     assert.doesNotMatch(cdpSend, /sendPageMessage\(/);
     assert.match(cdpOperation, /chrome\.debugger\.attach\(\{ tabId \}, CHATGPT_CDP_PROTOCOL_VERSION\)/);
     assert.match(cdpOperation, /chrome\.debugger\.detach\(\{ tabId \}\)/);
-    assert.match(cdpSend, /'Input\.insertText'/);
+    assert.match(cdpOperation, /'Page\.setWebLifecycleState', \{ state: 'active' \}/);
+    assert.match(cdpOperation, /'Emulation\.setFocusEmulationEnabled', \{ enabled: true \}/);
+    assert.match(cdpOperation, /'Emulation\.setFocusEmulationEnabled', \{ enabled: false \}/);
+    assert.match(cdpSend, /insertChatGPTComposerTextViaCdp\(tabId, message\)/);
+    assert.match(cdpSend, /CHATGPT_CDP_LONG_INPUT_SETTLE_MS/);
+    assert.match(cdpSend, /setTimeout\(resolve, inputSettleMs\)/);
+    assert.match(cdpInsert, /\.split\('\\n'\)/);
+    assert.match(cdpInsert, /modifiers: 8/);
+    assert.match(cdpInsert, /'Input\.insertText'/);
+    assert.match(cdpInsert, /'Input\.dispatchKeyEvent'/);
+    assert.match(cdpFocus, /CHATGPT_CDP_FOCUS_TIMEOUT_MS/);
+    assert.match(cdpFocus, /composer\.contains\(selection\.anchorNode\)/);
+    assert.match(cdpFocus, /CHATGPT_CDP_FOCUS_RETRY_MS/);
+    assert.match(cdpSend, /chatGPTCdpTextMatches\(state\.composerText, message\)/);
     assert.match(cdpClick, /'Input\.dispatchMouseEvent'/);
     assert.match(cdpEnter, /'Input\.dispatchKeyEvent'/);
     assert.match(cdpSend, /isChatGPTSendAcknowledged/);
@@ -118,6 +133,7 @@ describe('WebBridge tool surface', () => {
     assert.doesNotMatch(expertPath, /chrome\.tabs\.update\([\s\S]*?active:\s*true/);
     assert.doesNotMatch(expertPath, /chrome\.windows\.update\([\s\S]*?focused:\s*true/);
     assert.doesNotMatch(expertPath, /chrome\.tabs\.highlight\(/);
+    assert.doesNotMatch(expertPath, /Page\.bringToFront/);
     assert.match(expertPath, /targetChatGPTTabId/);
     assert.match(expertPath, /activate: false/);
     assert.match(expertPath, /focus: false/);

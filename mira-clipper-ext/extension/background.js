@@ -12,9 +12,14 @@ const WEBBRIDGE_REQUEST_TIMEOUT_MS = 30000;
 const WEBBRIDGE_EXPERT_TIMEOUT_MS = 125000;
 const WEBBRIDGE_KEEPALIVE_INTERVAL_MS = 20000;
 const CHATGPT_CDP_PROTOCOL_VERSION = '1.3';
+const CHATGPT_CDP_COMMAND_TIMEOUT_MS = 5000;
 const CHATGPT_CDP_SEND_CONFIRM_TIMEOUT_MS = 10000;
 const CHATGPT_CDP_RESPONSE_TIMEOUT_MS = 110000;
 const CHATGPT_CDP_POLL_INTERVAL_MS = 250;
+const CHATGPT_CDP_FOCUS_TIMEOUT_MS = 2000;
+const CHATGPT_CDP_FOCUS_RETRY_MS = 100;
+const CHATGPT_CDP_LONG_INPUT_THRESHOLD = 1000;
+const CHATGPT_CDP_LONG_INPUT_SETTLE_MS = 800;
 const expertCdpTabs = new Set();
 
 function normalizeClipRules(value) {
@@ -968,7 +973,14 @@ function chatGPTCdpError(code, message, diagnostics, retryable = true) {
 }
 
 function normalizeCdpText(value) {
-  return String(value || '').replace(/\u00a0/g, ' ').replace(/\r\n/g, '\n').trim();
+  return String(value || '').replace(/\u00a0/g, ' ').replace(/\u200b/g, '').replace(/\r\n/g, '\n').trim();
+}
+
+function chatGPTCdpTextMatches(actual, expected) {
+  const normalizedActual = normalizeCdpText(actual);
+  const normalizedExpected = normalizeCdpText(expected);
+  if (normalizedActual === normalizedExpected) return true;
+  return normalizedActual.replace(/\s+/g, ' ') === normalizedExpected.replace(/\s+/g, ' ');
 }
 
 function describeChatGPTCdpState(state, expectedMessage, beforeState) {
@@ -977,10 +989,18 @@ function describeChatGPTCdpState(state, expectedMessage, beforeState) {
     `visibility=${state.visibility || 'unknown'}`,
     `documentHasFocus=${Boolean(state.documentHasFocus)}`,
     `composerType=${state.composerType || 'unknown'}`,
+    `composerId=${state.composerId || 'none'}`,
+    `composerRole=${state.composerRole || 'none'}`,
     `composerConnected=${Boolean(state.composerConnected)}`,
-    `composerTextMatches=${normalizeCdpText(state.composerText) === normalizeCdpText(expectedMessage)}`,
+    `composerTextMatches=${chatGPTCdpTextMatches(state.composerText, expectedMessage)}`,
+    `composerTextLength=${normalizeCdpText(state.composerText).length}`,
+    `expectedTextLength=${normalizeCdpText(expectedMessage).length}`,
     `composerEmpty=${!normalizeCdpText(state.composerText)}`,
+    `formExists=${Boolean(state.formExists)}`,
+    `formButtons=${state.formButtonCount ?? 'unknown'}`,
     `sendButton=${Boolean(state.sendButtonExists)}`,
+    `sendButtonTestId=${state.sendButtonTestId || 'none'}`,
+    `sendButtonType=${state.sendButtonType || 'none'}`,
     `sendButtonDisabled=${Boolean(state.sendButtonDisabled)}`,
     `sendButtonAriaDisabled=${state.sendButtonAriaDisabled || 'unknown'}`,
     `userMessages=${beforeState?.userCount ?? 'unknown'}->${state.userCount ?? 'unknown'}`,
@@ -991,7 +1011,24 @@ function describeChatGPTCdpState(state, expectedMessage, beforeState) {
 }
 
 async function sendChatGPTCdpCommand(tabId, method, params = {}) {
-  return chrome.debugger.sendCommand({ tabId }, method, params);
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      reject(chatGPTCdpError(
+        'CHATGPT_CDP_COMMAND_TIMEOUT',
+        'ChatGPT CDP 命令超时',
+        `method=${method},tabId=${tabId}`,
+      ));
+    }, CHATGPT_CDP_COMMAND_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([
+      chrome.debugger.sendCommand({ tabId }, method, params),
+      timeout,
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function readChatGPTCdpState(tabId) {
@@ -1016,7 +1053,13 @@ async function readChatGPTCdpState(tabId) {
         || document.querySelector('textarea[data-testid="prompt-textarea"]')
         || document.querySelector('[contenteditable="true"][data-testid="prompt-textarea"]');
       const form = composer?.closest?.('form');
-      const sendButton = form?.querySelector?.('button[data-testid="send-button"]') || null;
+      const formButtons = form ? Array.from(form.querySelectorAll('button')) : [];
+      const sendButton = form?.querySelector?.('button[data-testid="send-button"]')
+        || formButtons.find((button) => {
+          const label = (button.getAttribute('aria-label') || '').toLowerCase();
+          return button.type === 'submit' && (label.includes('send') || label.includes('\u53d1\u9001'));
+        })
+        || null;
       const sendRect = sendButton?.getBoundingClientRect?.();
       const userMessages = Array.from(document.querySelectorAll('[data-message-author-role="user"]'));
       const assistantMessages = Array.from(document.querySelectorAll('[data-message-author-role="assistant"]'));
@@ -1034,9 +1077,15 @@ async function readChatGPTCdpState(tabId) {
             : composer?.isContentEditable
               ? 'contenteditable'
               : composer?.tagName?.toLowerCase() || 'unknown',
+        composerId: composer?.id || '',
+        composerRole: composer?.getAttribute?.('role') || '',
         composerConnected: Boolean(composer?.isConnected),
         composerText: textOf(composer),
+        formExists: Boolean(form?.isConnected),
+        formButtonCount: formButtons.length,
         sendButtonExists: Boolean(sendButton?.isConnected),
+        sendButtonTestId: sendButton?.getAttribute?.('data-testid') || '',
+        sendButtonType: sendButton?.getAttribute?.('type') || '',
         sendButtonDisabled: Boolean(sendButton?.disabled || sendButton?.hasAttribute?.('disabled')),
         sendButtonAriaDisabled: sendButton?.getAttribute?.('aria-disabled') || '',
         sendButtonVisible: isVisible(sendButton),
@@ -1077,52 +1126,82 @@ async function waitForChatGPTCdpState(tabId, predicate, timeoutMs) {
 }
 
 async function focusAndSelectChatGPTComposer(tabId) {
-  const response = await sendChatGPTCdpCommand(tabId, 'Runtime.evaluate', {
-    expression: `(() => {
-      const composer = document.querySelector('#prompt-textarea')
-        || document.querySelector('textarea[data-testid="prompt-textarea"]')
-        || document.querySelector('[contenteditable="true"][data-testid="prompt-textarea"]');
-      if (!composer?.isConnected) return { ok: false, reason: 'composer_missing' };
-      composer.focus({ preventScroll: true });
-      if (composer instanceof HTMLTextAreaElement || composer instanceof HTMLInputElement) {
-        composer.select();
-      } else {
-        const selection = getSelection();
-        const range = document.createRange();
-        range.selectNodeContents(composer);
-        selection?.removeAllRanges();
-        selection?.addRange(range);
-      }
-      return { ok: true, activeElementMatches: document.activeElement === composer };
-    })()`,
-    returnByValue: true,
-  });
-  const result = response?.result?.value;
-  if (!result?.ok || !result.activeElementMatches) {
-    throw chatGPTCdpError('INPUT_NOT_ACCEPTED', 'CDP 未能聚焦 ChatGPT 输入框', `reason=${result?.reason || 'focus_failed'}`);
+  const deadline = Date.now() + CHATGPT_CDP_FOCUS_TIMEOUT_MS;
+  let result = null;
+  while (Date.now() < deadline) {
+    const response = await sendChatGPTCdpCommand(tabId, 'Runtime.evaluate', {
+      expression: `(() => {
+        const composer = document.querySelector('#prompt-textarea')
+          || document.querySelector('textarea[data-testid="prompt-textarea"]')
+          || document.querySelector('[contenteditable="true"][data-testid="prompt-textarea"]');
+        if (!composer?.isConnected) return { ok: false, reason: 'composer_missing' };
+        composer.focus({ preventScroll: true });
+        let selectionInside = false;
+        if (composer instanceof HTMLTextAreaElement || composer instanceof HTMLInputElement) {
+          composer.select();
+        } else {
+          const selection = getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(composer);
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+          selectionInside = Boolean(selection?.anchorNode && composer.contains(selection.anchorNode));
+        }
+        const activeElement = document.activeElement;
+        const activeElementMatches = activeElement === composer || Boolean(activeElement && composer.contains(activeElement));
+        return {
+          ok: activeElementMatches || selectionInside,
+          activeElementMatches,
+          selectionInside,
+          activeElementTag: activeElement?.tagName?.toLowerCase() || 'none',
+          activeElementId: activeElement?.id || '',
+        };
+      })()`,
+      returnByValue: true,
+    });
+    result = response?.result?.value;
+    if (result?.ok) return;
+    await new Promise((resolve) => setTimeout(resolve, CHATGPT_CDP_FOCUS_RETRY_MS));
   }
+  throw chatGPTCdpError(
+    'INPUT_NOT_ACCEPTED',
+    'CDP 未能聚焦 ChatGPT 输入框',
+    [
+      `reason=${result?.reason || 'focus_failed'}`,
+      `activeElement=${result?.activeElementTag || 'unknown'}#${result?.activeElementId || ''}`,
+      `selectionInside=${Boolean(result?.selectionInside)}`,
+    ].join(','),
+  );
 }
 
 async function clickChatGPTSendButtonViaCdp(tabId, center) {
   if (!center || !Number.isFinite(center.x) || !Number.isFinite(center.y)) {
     throw chatGPTCdpError('SEND_BUTTON_NOT_READY', 'ChatGPT 发送按钮位置不可用', 'sendButtonCenter=false');
   }
-  await sendChatGPTCdpCommand(tabId, 'Input.dispatchMouseEvent', {
-    type: 'mousePressed',
-    x: center.x,
-    y: center.y,
-    button: 'left',
-    buttons: 1,
-    clickCount: 1,
-  });
-  await sendChatGPTCdpCommand(tabId, 'Input.dispatchMouseEvent', {
-    type: 'mouseReleased',
-    x: center.x,
-    y: center.y,
-    button: 'left',
-    buttons: 0,
-    clickCount: 1,
-  });
+  try {
+    await sendChatGPTCdpCommand(tabId, 'Input.dispatchMouseEvent', {
+      type: 'mousePressed',
+      x: center.x,
+      y: center.y,
+      button: 'left',
+      buttons: 1,
+      clickCount: 1,
+    });
+    await sendChatGPTCdpCommand(tabId, 'Input.dispatchMouseEvent', {
+      type: 'mouseReleased',
+      x: center.x,
+      y: center.y,
+      button: 'left',
+      buttons: 0,
+      clickCount: 1,
+    });
+  } catch (error) {
+    throw chatGPTCdpError(
+      'SEND_TRIGGER_FAILED',
+      'ChatGPT CDP 点击发送失败',
+      `cause=${error?.message || 'unknown'}`,
+    );
+  }
 }
 
 async function pressChatGPTEnterViaCdp(tabId) {
@@ -1136,9 +1215,30 @@ async function pressChatGPTEnterViaCdp(tabId) {
   await sendChatGPTCdpCommand(tabId, 'Input.dispatchKeyEvent', { type: 'keyUp', ...key });
 }
 
+async function insertChatGPTComposerTextViaCdp(tabId, message) {
+  const lines = String(message).replace(/\r\n?/g, '\n').split('\n');
+  const lineBreakKey = {
+    key: 'Enter',
+    code: 'Enter',
+    windowsVirtualKeyCode: 13,
+    nativeVirtualKeyCode: 13,
+    modifiers: 8,
+  };
+  for (let index = 0; index < lines.length; index += 1) {
+    if (lines[index]) {
+      await sendChatGPTCdpCommand(tabId, 'Input.insertText', { text: lines[index] });
+    }
+    if (index < lines.length - 1) {
+      await sendChatGPTCdpCommand(tabId, 'Input.dispatchKeyEvent', { type: 'rawKeyDown', ...lineBreakKey });
+      await sendChatGPTCdpCommand(tabId, 'Input.dispatchKeyEvent', { type: 'keyUp', ...lineBreakKey });
+    }
+  }
+  return { lineCount: lines.length };
+}
+
 function isChatGPTSendAcknowledged(state, beforeState, expectedMessage) {
   const userMessageAdded = state.userCount > beforeState.userCount
-    && normalizeCdpText(state.latestUserText) === normalizeCdpText(expectedMessage);
+    && chatGPTCdpTextMatches(state.latestUserText, expectedMessage);
   const composerCleared = !normalizeCdpText(state.composerText);
   const sendProgressed = state.userCount > beforeState.userCount
     || state.conversationId !== beforeState.conversationId
@@ -1182,11 +1282,24 @@ async function runChatGPTCdpOperation(tabId, operation) {
   }
   expertCdpTabs.add(tabId);
   let attached = false;
+  let focusEmulationEnabled = false;
   try {
     await chrome.debugger.attach({ tabId }, CHATGPT_CDP_PROTOCOL_VERSION);
     attached = true;
     console.info('[WebBridge][expert][cdp]', { phase: 'attached', tabId, activate: false, focus: false });
+    await sendChatGPTCdpCommand(tabId, 'Page.enable');
+    await sendChatGPTCdpCommand(tabId, 'Page.setWebLifecycleState', { state: 'active' });
+    await sendChatGPTCdpCommand(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: true });
+    focusEmulationEnabled = true;
     await sendChatGPTCdpCommand(tabId, 'Runtime.enable');
+    console.info('[WebBridge][expert][cdp]', {
+      phase: 'target_ready',
+      tabId,
+      lifecycleState: 'active',
+      focusEmulation: true,
+      activate: false,
+      focus: false,
+    });
     return await operation();
   } catch (error) {
     if (error?.bridgeError) throw error;
@@ -1194,6 +1307,17 @@ async function runChatGPTCdpOperation(tabId, operation) {
     throw chatGPTCdpError(code, attached ? 'ChatGPT CDP 操作失败' : '无法连接 ChatGPT 调试目标', `cause=${error?.message || 'unknown'}`);
   } finally {
     if (attached) {
+      if (focusEmulationEnabled) {
+        try {
+          await sendChatGPTCdpCommand(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: false });
+        } catch (error) {
+          console.warn('[WebBridge][expert][cdp]', {
+            phase: 'focus_emulation_reset_failed',
+            tabId,
+            cause: error?.message || 'unknown',
+          });
+        }
+      }
       try {
         await chrome.debugger.detach({ tabId });
         console.info('[WebBridge][expert][cdp]', { phase: 'detached', tabId, activate: false, focus: false });
@@ -1210,9 +1334,15 @@ async function sendChatGPTMessageViaCdp(tabId, params) {
   if (!message.trim()) throw chatGPTCdpError('CHATGPT_MESSAGE_EMPTY', '咨询内容不能为空', null, false);
 
   return runChatGPTCdpOperation(tabId, async () => {
-    const beforeState = await readChatGPTCdpState(tabId);
-    if (!beforeState?.composerConnected) {
-      throw chatGPTCdpError('INPUT_NOT_ACCEPTED', 'ChatGPT 输入框不可用', describeChatGPTCdpState(beforeState, message, beforeState));
+    const initial = await waitForChatGPTCdpState(
+      tabId,
+      (state) => state.composerConnected && state.formExists,
+      CHATGPT_CDP_SEND_CONFIRM_TIMEOUT_MS,
+    );
+    const beforeState = initial.state;
+    if (!initial.matched) {
+      const diagnostics = `${describeChatGPTCdpState(beforeState, message, beforeState)},lastCdpError=${initial.error?.message || 'none'}`;
+      throw chatGPTCdpError('INPUT_NOT_ACCEPTED', 'ChatGPT 输入框不可用', diagnostics);
     }
     const sessionRef = params.sessionRef;
     const isNewConversation = !sessionRef || sessionRef.kind === 'provider_state';
@@ -1228,10 +1358,25 @@ async function sendChatGPTMessageViaCdp(tabId, params) {
     }
 
     await focusAndSelectChatGPTComposer(tabId);
-    await sendChatGPTCdpCommand(tabId, 'Input.insertText', { text: message });
+    const inserted = await insertChatGPTComposerTextViaCdp(tabId, message);
+    const inputSettleMs = message.length >= CHATGPT_CDP_LONG_INPUT_THRESHOLD
+      ? CHATGPT_CDP_LONG_INPUT_SETTLE_MS
+      : 0;
+    if (inputSettleMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, inputSettleMs));
+    }
+    console.info('[WebBridge][expert][cdp]', {
+      phase: 'input_dispatched',
+      tabId,
+      messageLength: message.length,
+      lineCount: inserted.lineCount,
+      inputSettleMs,
+      activate: false,
+      focus: false,
+    });
     const ready = await waitForChatGPTCdpState(
       tabId,
-      (state) => normalizeCdpText(state.composerText) === normalizeCdpText(message)
+      (state) => chatGPTCdpTextMatches(state.composerText, message)
         && state.sendButtonExists
         && state.sendButtonVisible
         && !state.sendButtonDisabled
@@ -1267,7 +1412,7 @@ async function sendChatGPTMessageViaCdp(tabId, params) {
       const noEvidenceOfSend = state
         && state.userCount === beforeState.userCount
         && state.conversationId === beforeState.conversationId
-        && normalizeCdpText(state.composerText) === normalizeCdpText(message)
+        && chatGPTCdpTextMatches(state.composerText, message)
         && !state.generating;
       if (!noEvidenceOfSend) {
         const diagnostics = `${describeChatGPTCdpState(state, message, beforeState)},lastCdpError=${acknowledgement.error?.message || 'none'}`;

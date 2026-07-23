@@ -25,9 +25,14 @@ export const MANAGED_TASK_PARAMS = {
   temperature: 0,
   topP: 1,
   topK: 20,
-  maxTokens: 128,
+  maxTokens: 4096,
   frequencyPenalty: 0,
   presencePenalty: 0,
+} as const;
+
+export const MANAGED_AGENT_TASK_PARAMS = {
+  ...MANAGED_TASK_PARAMS,
+  maxTokens: 12288,
 } as const;
 
 export const DEFAULT_IMAGE_GENERATION_PARAMS = {
@@ -76,7 +81,7 @@ export const DEFAULT_ROLE_CONFIGS: DefaultRoleConfig[] = [
     name: "",
     providerCode: null,
     remoteModelId: null,
-    params: { ...MANAGED_TASK_PARAMS },
+    params: { ...MANAGED_AGENT_TASK_PARAMS },
   },
   {
     type: "embedding",
@@ -224,7 +229,7 @@ export const PARAM_TEMPLATES: ParamTemplateSeed[] = [
     param_type: "number",
     step: null,
     options: null,
-    default_value: 128,
+    default_value: 12288,
   },
   {
     model_type: "agentTask",
@@ -269,7 +274,7 @@ export const PARAM_TEMPLATES: ParamTemplateSeed[] = [
     param_type: "number",
     step: null,
     options: null,
-    default_value: 128,
+    default_value: 4096,
   },
   {
     model_type: "task",

@@ -112,6 +112,25 @@ const INTERNAL_PROFILE_BLUEPRINTS: Array<{
     },
   },
   {
+    id: "external_expert",
+    title: "External Expert",
+    description:
+      "Ask a user's signed-in ChatGPT, Kimi, or DeepSeek web expert for advice and return the reply as evidence for Mira.",
+    domain: "external_expert",
+    tags: [
+      "external-expert",
+      "expert-advice",
+      "consult",
+      "chatgpt",
+      "kimi",
+      "deepseek",
+      "问策",
+      "专家",
+    ],
+    preferredToolId: "ask_external_expert",
+    supportingToolIds: ["ask_external_expert"],
+  },
+  {
     id: "news_research",
     title: "News Research",
     description: "Search the locally collected News Hub cache from configured news feeds and sources.",

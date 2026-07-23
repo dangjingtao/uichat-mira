@@ -150,17 +150,28 @@ test("initializeModelConfigDatabase upgrades legacy model-role tables and seeds 
   assert.ok(providerConnectionSql?.sql?.includes("'volcengine-agent-plan'"));
   assert.equal(providerReferenceForeignKeys[0]?.table, "provider_connections");
 
+  const taskConfig = modelConfigRepository.findDefaultByType("task");
   const agentTaskConfig = modelConfigRepository.findDefaultByType("agentTask");
   const imageGenerationConfig =
     modelConfigRepository.findDefaultByType("imageGeneration");
+  assert.ok(taskConfig);
   assert.ok(agentTaskConfig);
   assert.ok(imageGenerationConfig);
+  assert.deepEqual(taskConfig ? JSON.parse(taskConfig.params) : null, {
+    enabled: true,
+    temperature: 0,
+    topP: 1,
+    topK: 20,
+    maxTokens: 4096,
+    frequencyPenalty: 0,
+    presencePenalty: 0,
+  });
   assert.deepEqual(agentTaskConfig ? JSON.parse(agentTaskConfig.params) : null, {
     enabled: true,
     temperature: 0,
     topP: 1,
     topK: 20,
-    maxTokens: 128,
+    maxTokens: 12288,
     frequencyPenalty: 0,
     presencePenalty: 0,
   });

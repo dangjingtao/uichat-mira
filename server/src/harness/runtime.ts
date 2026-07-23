@@ -24,6 +24,7 @@ import { webSearchTool } from "../mcp/tools/web-search.tool.js";
 import { mailQueryTool } from "../mcp/tools/mail-query.tool.js";
 import { workspaceMutationTool } from "../mcp/tools/workspace-mutation.tool.js";
 import { createBrowserAttachedTools } from "../mcp/tools/browser-attached.tool.js";
+import { askExternalExpertTool } from "../mcp/tools/ask-external-expert.tool.js";
 import {
   initializeExternalMcpDatabase,
   registerAllExternalMcpCapabilities,
@@ -72,6 +73,7 @@ export const initializeHarnessRuntime = () => {
   for (const tool of createBrowserAttachedTools()) {
     registerCapability(tool);
   }
+  registerCapability(askExternalExpertTool);
   reconcileCodeGraphHarnessCapability();
   // External MCP persistence is optional at bootstrap time. Some callers
   // (notably route-level tests and early app startup before DB wiring) only

@@ -43,7 +43,7 @@ import {
 } from "@/microapps/codegraph/index.js";
 import { createTtsService } from "@/microapps/tts/index.js";
 import { createEvolvingKnowledgeService } from "@/microapps/evolving-knowledge/index.js";
-import { createExternalExpertService } from "@/microapps/external-expert/index.js";
+import { externalExpertService } from "@/microapps/external-expert/index.js";
 import healthRoute from "@/routes/health";
 import appMetaRoute from "@/routes/app-meta";
 import dbHealthRoute from "@/routes/dbHealth";
@@ -553,8 +553,6 @@ const ttsService = createTtsService({ artifactRoot: ttsArtifactRoot });
 chatMediaService.configureRoots({ imageGenerationRoot: imageGenerationArtifactRoot, ttsRoot: ttsArtifactRoot });
 managedMediaCleanupService.configureRoots({ imageGenerationRoot: imageGenerationArtifactRoot, ttsRoot: ttsArtifactRoot });
 const evolvingKnowledgeService = createEvolvingKnowledgeService();
-const externalExpertService = createExternalExpertService();
-
 const setupPlugins = async () => {
   const appMeta = getAppMeta();
 
