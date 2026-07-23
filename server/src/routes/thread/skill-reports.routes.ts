@@ -3,8 +3,10 @@ import type { FastifyInstance } from "fastify";
 import { threadService } from "@/services/thread.service.js";
 import { getSkillFlowSession } from "@/skills/flow/state-store.js";
 import {
+  readSkillReportManifest,
   resolveSkillReportHtmlPath,
   resolveSkillReportPdfPath,
+  writeSkillReportManifest,
 } from "@/skills/flow/report-files.js";
 import { notFound, routeHandler } from "@/utils/route-errors.js";
 
@@ -16,6 +18,17 @@ const ensureOwnedReportSession = async (input: {
   const thread = threadService.getThreadSummaryById(input.threadId, input.userId);
   if (!thread) throw notFound("Thread not found");
 
+  const manifest = await readSkillReportManifest(input.sessionId);
+  if (manifest) {
+    if (manifest.threadId !== input.threadId || manifest.userId !== input.userId) {
+      throw notFound("Skill report not found");
+    }
+    return manifest;
+  }
+
+  // First access after report generation can backfill ownership from the active
+  // flow. The inline report immediately performs this authenticated request, so
+  // later Skill runs may replace active state without invalidating this report.
   const session = await getSkillFlowSession({
     threadId: input.threadId,
     userId: input.userId,
@@ -23,7 +36,16 @@ const ensureOwnedReportSession = async (input: {
   if (!session || session.sessionId !== input.sessionId) {
     throw notFound("Skill report not found");
   }
-  return session;
+
+  const created = {
+    sessionId: session.sessionId,
+    threadId: session.threadId,
+    userId: session.userId,
+    title: "两个人的备孕全景报告",
+    createdAt: new Date().toISOString(),
+  };
+  await writeSkillReportManifest(created);
+  return created;
 };
 
 export const registerThreadSkillReportRoutes = async (app: FastifyInstance) => {
