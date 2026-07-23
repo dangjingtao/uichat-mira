@@ -5,7 +5,11 @@ import {
   getSkillConversationFlowRuntime,
   getSkillDirectiveHandoffRuntime,
 } from "./registry.js";
-import { getSkillFlowSession, saveSkillFlowSession } from "./state-store.js";
+import {
+  clearSkillFlowSession,
+  getSkillFlowSession,
+  saveSkillFlowSession,
+} from "./state-store.js";
 import type {
   SkillDirective,
   SkillFlowRuntimeResult,
@@ -13,6 +17,9 @@ import type {
 } from "./types.js";
 
 const MAX_PROCESSED_MESSAGE_IDS = 64;
+const FLOW_CANCEL_PATTERN =
+  /(?:取消|停止|结束|退出|不做了|算了).{0,8}(?:评估|访谈|调查|这个流程)|^(?:取消|停止|结束|退出)$/i;
+const EXPLICIT_SKILL_PATTERN = /(?:^|\s)(?:\$|\/skill:)([a-z0-9_-]+)/i;
 
 const createSession = (input: {
   threadId: string;
@@ -87,6 +94,21 @@ export const prepareSkillConversationFlow = async (input: {
     userId: input.userId,
   });
 
+  if (session && FLOW_CANCEL_PATTERN.test(input.query.trim())) {
+    await clearSkillFlowSession({ threadId: input.threadId, userId: input.userId });
+    return undefined;
+  }
+
+  const explicitSkillId = EXPLICIT_SKILL_PATTERN.exec(input.query)?.[1];
+  if (
+    session &&
+    explicitSkillId &&
+    explicitSkillId.toLowerCase() !== session.skillId.toLowerCase()
+  ) {
+    await clearSkillFlowSession({ threadId: input.threadId, userId: input.userId });
+    session = null;
+  }
+
   if (
     session?.lastDirective &&
     session.processedMessageIds.includes(input.userMessageId)
@@ -123,6 +145,8 @@ export const prepareSkillConversationFlow = async (input: {
       state: runtime.createInitialState(),
     });
   }
+
+  if (!session) return undefined;
 
   const conversationResult = await runtime.processTurn({
     session,
