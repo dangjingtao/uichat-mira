@@ -4,12 +4,15 @@ import {
   type HarnessLlmContent,
 } from "@/harness/llm-content";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol";
-import type {
-  AgentNodeState,
-  EmitAgentExecutionNode,
+import { readSkillDeliveryFromRequestContext } from "@/skills/flow/context.js";
+import {
+  emitStepNode,
+  type AgentNodeState,
+  type EmitAgentExecutionNode,
 } from "../node-runtime";
 import type { AgentToolExecutionResult } from "../types";
 import type { AgentToolExecutionWithLlmContent } from "./harness-tool-result";
+import { createObservation } from "./shared";
 import { generateNode as baseGenerateNode } from "./generate";
 
 const HARNESS_GENERATE_CONTEXT_CHAR_LIMIT = 48_000;
@@ -120,10 +123,65 @@ export type GenerateNodeHandler = (
   emit?: EmitAgentExecutionNode,
 ) => Promise<Partial<AgentNodeState>>;
 
+const deliverSkillRuntimeContent = async (
+  state: AgentNodeState,
+  emit: EmitAgentExecutionNode | undefined,
+) => {
+  if (state.nextAction?.type !== "answer" || !state.finalizationPacket) {
+    return null;
+  }
+  const delivery = readSkillDeliveryFromRequestContext(state.requestContextMessages);
+  if (!delivery) return null;
+
+  await emitStepNode(emit, {
+    runId: state.runId,
+    nodeId: "agent-generate",
+    nodeType: "generate",
+    phase: "start",
+    label: "生成回答",
+    summary: "正在交付 Skill Runtime 已完成的结构化报告",
+  });
+
+  const observation = createObservation({
+    runId: state.runId,
+    stepId: "generate",
+    status: "ok",
+    facts: [
+      `Delivered deterministic Skill Runtime content (${delivery.kind}), length=${Array.from(delivery.content).length}.`,
+    ],
+  });
+
+  await emitStepNode(emit, {
+    runId: state.runId,
+    nodeId: "agent-generate",
+    nodeType: "generate",
+    phase: "done",
+    label: "生成回答",
+    summary: "已交付 Skill Runtime 报告",
+    details: {
+      answerLength: Array.from(delivery.content).length,
+      answerSource: "skill_runtime_delivery",
+      deliveryKind: delivery.kind,
+      deterministicDelivery: true,
+      modelInvoked: false,
+    },
+  });
+
+  return {
+    answer: delivery.content,
+    observations: [...(state.observations ?? []), observation],
+    generatedAnswerEmptyFallback: false,
+    schemaReplanDiagnostics: undefined,
+  } satisfies Partial<AgentNodeState>;
+};
+
 export const createHarnessAwareGenerateNode = (
   generate: GenerateNodeHandler = baseGenerateNode,
 ): GenerateNodeHandler =>
   async (state, emit) => {
+    const skillDelivery = await deliverSkillRuntimeContent(state, emit);
+    if (skillDelivery) return skillDelivery;
+
     // Planner finalization references are the only evidence selection contract
     // for final answers. Do not prepend the legacy all-tools projection.
     if (state.finalizationPacket) {

@@ -5,6 +5,7 @@ import { reconcileCodeGraphHarnessCapability } from "@/harness/codegraph-capabil
 import { listCapabilityDefinitions } from "@/harness/registry";
 import { reconcileWenshuOfficeHarnessCapabilities } from "@/harness/wenshu-office-capability";
 import { prepareSkillContext, type SkillContext } from "@/skills/context/index.js";
+import { readSkillDirectiveFromRequestContext } from "@/skills/flow/context.js";
 import { evaluateAgentToolPolicy } from "../policy";
 import { emitStepNode } from "../node-runtime";
 import type { AgentNodeState, EmitAgentExecutionNode } from "../node-runtime";
@@ -124,11 +125,16 @@ export const prepareContextNode = async (
     query,
     config: state.intentConfig,
   });
+  const skillDirective = readSkillDirectiveFromRequestContext(
+    state.requestContextMessages,
+  );
 
   // SkillContext is semantic guidance only. It never registers tools and never
   // expands the canonical Planner-visible toolExposure produced by Harness.
+  // An active conversation flow pins its own Skill for semantic continuity only;
+  // runtime work already happened before AgentGraph and is never executed here.
   const skillContext = await prepareSkillContext({
-    query,
+    query: skillDirective ? `$${skillDirective.skillId} ${query}` : query,
     messages: state.messages,
   });
   const currentTaskFrame = withSkillContext(state.currentTaskFrame, skillContext);
@@ -150,6 +156,15 @@ export const prepareContextNode = async (
     summary: summarizeSkillTrace(skillContext),
     details: {
       query,
+      activeSkillFlow: skillDirective
+        ? {
+            skillId: skillDirective.skillId,
+            phase: skillDirective.phase,
+            flowCompleted: skillDirective.flowCompleted,
+            round: skillDirective.round ?? null,
+            maxRounds: skillDirective.maxRounds ?? null,
+          }
+        : null,
       skillContext: toSkillTraceDetails(skillContext),
     },
   });
@@ -169,6 +184,8 @@ export const prepareContextNode = async (
       exposedToolIds: toolExposure.exposedTools,
       activeSkillId: skillContext?.primary?.id ?? null,
       activeSkillVersion: skillContext?.primary?.version ?? null,
+      activeSkillFlowPhase: skillDirective?.phase ?? null,
+      activeSkillFlowCompleted: skillDirective?.flowCompleted ?? null,
       skillMatchSource: skillContext?.match?.source ?? null,
       skillResourceCount: skillContext?.resources.length ?? 0,
       disclosedSkillResourceCount: skillContext?.disclosedResources.length ?? 0,

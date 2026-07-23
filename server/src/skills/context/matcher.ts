@@ -44,6 +44,20 @@ const SEMANTIC_HINTS: Record<string, Array<{ pattern: RegExp; weight: number; la
     { pattern: /\bpptx?\b|powerpoint/i, weight: 0.92, label: "PowerPoint/PPTX" },
     { pattern: /幻灯片|演示文稿|路演.*(?:ppt|演示)|deck\b/i, weight: 0.82, label: "presentation" },
   ],
+  "fertility-assessment": [
+    {
+      pattern: /备孕.*(?:评估|分析|报告)|生育力.*(?:评估|分析|报告)|夫妻.*备孕|试管.*(?:复盘|评估|报告)/i,
+      weight: 0.96,
+      label: "fertility assessment",
+    },
+  ],
+  "fertility-report": [
+    {
+      pattern: /备孕.*(?:全景)?报告|生育力.*报告/i,
+      weight: 0.84,
+      label: "fertility report",
+    },
+  ],
 };
 
 const normalizeId = (value: string) => value.trim().toLowerCase();

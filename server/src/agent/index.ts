@@ -3,6 +3,8 @@ import { createAgentGoal } from "./nodes/index";
 import { agentRunStore, configureAgentRunPersistence } from "./run-store";
 import type { AgentGraphInput } from "./types";
 import { agentRunRepository } from "@/db/repositories/agent-run.repository";
+import { prepareSkillConversationFlow } from "@/skills/flow/coordinator.js";
+import { buildSkillFlowRequestContextMessages } from "@/skills/flow/context.js";
 
 configureAgentRunPersistence({
   create: (run) => {
@@ -17,11 +19,37 @@ configureAgentRunPersistence({
 export const createAndRunAgent = async (
   input: Omit<AgentGraphInput, "runId" | "goal"> & {
     goalText: string;
+    userMessageId?: string;
     assistantMessageId?: string;
     assistantParentId?: string | null;
   },
 ) => {
   const goal = createAgentGoal(input.goalText);
+  const latestUserMessage = [...input.messages]
+    .reverse()
+    .find((message) => message.role === "user");
+  const flowUserMessageId =
+    input.userMessageId ?? input.assistantParentId ?? latestUserMessage?.id;
+  const preparedSkillFlow =
+    flowUserMessageId && latestUserMessage
+      ? await prepareSkillConversationFlow({
+          threadId: input.threadId,
+          userId: input.userId,
+          userMessageId: flowUserMessageId,
+          query: latestUserMessage.content.trim() || input.goalText,
+          messages: input.messages,
+        })
+      : undefined;
+  const mergedRequestContextMessages = [
+    ...(input.requestContextMessages ?? []),
+    ...buildSkillFlowRequestContextMessages(preparedSkillFlow?.directive),
+    ...(preparedSkillFlow?.requestContextMessages ?? []),
+  ];
+  const requestContextMessages =
+    mergedRequestContextMessages.length > 0
+      ? mergedRequestContextMessages
+      : undefined;
+
   const run = agentRunStore.create({
     threadId: input.threadId,
     userId: input.userId,
@@ -30,7 +58,7 @@ export const createAndRunAgent = async (
     assistantParentId: input.assistantParentId,
     runtimeInput: {
       messages: input.messages,
-      requestContextMessages: input.requestContextMessages,
+      requestContextMessages,
       params: input.params,
       knowledgeBaseId: input.knowledgeBaseId,
       intentConfig: input.intentConfig,
@@ -45,6 +73,7 @@ export const createAndRunAgent = async (
   try {
     const output = await runAgentRuntime({
       ...input,
+      requestContextMessages,
       runId: run.id,
       goal,
       approvedInvocations: [],

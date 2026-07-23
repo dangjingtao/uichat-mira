@@ -1,0 +1,83 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import { resolveSkillFlowStateRoot } from "./state-store.js";
+
+const SAFE_SESSION_ID = /^[a-zA-Z0-9_-]{8,128}$/;
+
+const requireSafeSessionId = (sessionId: string) => {
+  const normalized = sessionId.trim();
+  if (!SAFE_SESSION_ID.test(normalized)) {
+    throw new Error("Invalid Skill report session id");
+  }
+  return normalized;
+};
+
+export type SkillReportManifest = {
+  sessionId: string;
+  threadId: string;
+  userId: number;
+  title: string;
+  createdAt: string;
+};
+
+export const resolveSkillReportRoot = () =>
+  path.join(resolveSkillFlowStateRoot(), "reports");
+
+export const resolveSkillReportHtmlPath = (sessionId: string) =>
+  path.join(resolveSkillReportRoot(), `${requireSafeSessionId(sessionId)}.html`);
+
+export const resolveSkillReportPdfPath = (sessionId: string) =>
+  path.join(resolveSkillReportRoot(), `${requireSafeSessionId(sessionId)}.pdf`);
+
+const resolveSkillReportManifestPath = (sessionId: string) =>
+  path.join(resolveSkillReportRoot(), `${requireSafeSessionId(sessionId)}.json`);
+
+export const writeSkillReportHtml = async (sessionId: string, html: string) => {
+  const outputPath = resolveSkillReportHtmlPath(sessionId);
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+  await fs.writeFile(outputPath, html, "utf8");
+  return outputPath;
+};
+
+export const writeSkillReportManifest = async (
+  manifest: SkillReportManifest,
+) => {
+  const outputPath = resolveSkillReportManifestPath(manifest.sessionId);
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+  await fs.writeFile(outputPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  return outputPath;
+};
+
+export const readSkillReportManifest = async (
+  sessionId: string,
+): Promise<SkillReportManifest | null> => {
+  try {
+    const parsed = JSON.parse(
+      await fs.readFile(resolveSkillReportManifestPath(sessionId), "utf8"),
+    ) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const value = parsed as Record<string, unknown>;
+    if (
+      value.sessionId !== sessionId ||
+      typeof value.threadId !== "string" ||
+      typeof value.userId !== "number" ||
+      typeof value.title !== "string" ||
+      typeof value.createdAt !== "string"
+    ) {
+      return null;
+    }
+    return value as SkillReportManifest;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+};
+
+export const hasSkillReportPdf = async (sessionId: string) => {
+  try {
+    return (await fs.stat(resolveSkillReportPdfPath(sessionId))).isFile();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
+};

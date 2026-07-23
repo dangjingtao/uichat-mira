@@ -18,15 +18,19 @@ const defaultMarkdownClassName =
 
 const basicPlugins = {};
 const fullPlugins = { code, math, mermaid };
+const INTERNAL_SKILL_REPORT_MARKER =
+  /<!--mira-skill-report:[a-zA-Z0-9_-]+:(?:pdf|html)-->/g;
 
 // MarkdownText uses Streamdown directly so markdown rendering stays independent
-// from any chat-runtime-specific wrappers.
+// from any chat-runtime-specific wrappers. Internal transport markers are
+// stripped before markdown rendering and are consumed by message extensions.
 const MarkdownText = memo(function MarkdownText({
   children = "",
   className,
   features = "full",
   ...rest
 }: MarkdownTextProps) {
+  const visibleChildren = children.replace(INTERNAL_SKILL_REPORT_MARKER, "").trimEnd();
   return (
     <Streamdown
       plugins={features === "basic" ? basicPlugins : fullPlugins}
@@ -37,7 +41,7 @@ const MarkdownText = memo(function MarkdownText({
       }
       {...rest}
     >
-      {children}
+      {visibleChildren}
     </Streamdown>
   );
 });
