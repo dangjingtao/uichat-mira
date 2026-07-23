@@ -2,7 +2,7 @@ import os from "node:os";
 import path from "node:path";
 
 export const WENSHU_OFFICE_PACK_ID = "wenshu-office";
-export const WENSHU_OFFICE_PACK_VERSION = "1.0.0";
+export const WENSHU_OFFICE_PACK_VERSION = "1.1.0";
 
 export const resolveRuntimePacksRoot = () => {
   const configured = process.env.MIRA_RUNTIME_PACKS_DIR?.trim();
