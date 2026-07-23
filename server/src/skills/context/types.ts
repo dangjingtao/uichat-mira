@@ -33,7 +33,8 @@ export type SkillMatchSource =
   | "resource"
   | "exact"
   | "semantic"
-  | "embedding";
+  | "embedding"
+  | "continuation";
 
 export type SkillMatchCandidate = {
   skillId: string;
