@@ -19,7 +19,7 @@ export type SkillDirective = {
   stateRef?: string;
   /**
    * Internal deterministic delivery payload. It is intentionally excluded from
-   * Planner prompt serialization; Planner only sees the compact directive.
+   * Planner prompt serialization; Planner only sees whether delivery is ready.
    */
   delivery?: {
     kind: "markdown" | "inline_html";
@@ -34,6 +34,11 @@ export type SkillDirective = {
       error?: string;
     };
   };
+};
+
+export type PlannerSkillDirective = Omit<SkillDirective, "delivery"> & {
+  /** Planner-visible fact only; the delivery body remains private to Generate. */
+  deliveryReady: boolean;
 };
 
 export type StoredSkillFlowSession = {
@@ -85,8 +90,13 @@ export type SkillDirectiveHandoffRuntime = {
   }): Promise<SkillFlowRuntimeResult>;
 };
 
-export const toPlannerSkillDirective = (directive: SkillDirective | undefined) => {
+export const toPlannerSkillDirective = (
+  directive: SkillDirective | undefined,
+): PlannerSkillDirective | undefined => {
   if (!directive) return undefined;
-  const { delivery: _delivery, ...plannerDirective } = directive;
-  return plannerDirective;
+  const { delivery, ...plannerDirective } = directive;
+  return {
+    ...plannerDirective,
+    deliveryReady: Boolean(delivery?.content),
+  };
 };
