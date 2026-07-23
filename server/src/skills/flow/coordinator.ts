@@ -18,7 +18,7 @@ import type {
 
 const MAX_PROCESSED_MESSAGE_IDS = 64;
 const FLOW_CANCEL_PATTERN =
-  /(?:取消|停止|结束|退出|不做了|算了).{0,8}(?:评估|访谈|调查|这个流程)|^(?:取消|停止|结束|退出)$/i;
+  /(?:取消|停止|结束|退出|不做了|算了).{0,8}(?:评估|访谈|调查|这个流程)|^(?:取消|停止|结束|退出|不做了|算了)\s*[。.!！]?\s*$|^(?:换个话题|新话题|另外问|顺便问)/i;
 const EXPLICIT_SKILL_PATTERN = /(?:^|\s)(?:\$|\/skill:)([a-z0-9_-]+)/i;
 
 const createSession = (input: {
