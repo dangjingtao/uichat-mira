@@ -1,5 +1,4 @@
-import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
-import { providerProxyService } from "@/services/provider-proxy.service/index.js";
+import { collectTaskModelText } from "@/services/task-model.service.js";
 import {
   normalizeFertilityDimension,
   toFertilityAssessmentState,
@@ -62,14 +61,6 @@ const parseJsonObject = (value: string): Record<string, unknown> => {
   return parsed;
 };
 
-const collectTaskText = async (messages: NormalizedChatMessage[]) => {
-  let output = "";
-  for await (const delta of providerProxyService.streamTaskChatText(messages)) {
-    output += delta;
-  }
-  return output.trim();
-};
-
 const uniqueStrings = (values: unknown, limit = 12) =>
   Array.isArray(values)
     ? [
@@ -100,20 +91,24 @@ const dimensionPrompt = (dimensionPairs: ReadonlyArray<readonly [string, string]
 每项结构：{id,score,confidence,dataCompleteness,evidence,strengths,concerns,missingEvidence,interpretation,actions:{selfCare,discussWithClinician,testsToConsider}}`;
 
 const completeDimensions = async (state: FertilityAssessmentState) => {
+  // Final report refreshes every dimension from the final fact set. Interview
+  // dimensions are useful drafts, but later answers may change their evidence.
   const dimensions: Record<string, FertilityDimension> = { ...state.dimensions };
-  const pending = ALL_DIMENSIONS.filter(([id]) => !dimensions[id]);
 
-  for (let index = 0; index < pending.length; index += 2) {
-    const batch = pending.slice(index, index + 2);
+  for (let index = 0; index < ALL_DIMENSIONS.length; index += 2) {
+    const batch = ALL_DIMENSIONS.slice(index, index + 2);
     try {
-      const output = await collectTaskText([
-        { role: "system", content: dimensionPrompt(batch), parts: [] },
-        {
-          role: "user",
-          content: JSON.stringify({ facts: state.facts }, null, 2),
-          parts: [],
-        },
-      ]);
+      const output = await collectTaskModelText(
+        [
+          { role: "system", content: dimensionPrompt(batch), parts: [] },
+          {
+            role: "user",
+            content: JSON.stringify({ facts: state.facts }, null, 2),
+            parts: [],
+          },
+        ],
+        { maxTokens: 1200, temperature: 0 },
+      );
       const parsed = JSON.parse(unwrapJsonFence(output).trim()) as unknown;
       if (!Array.isArray(parsed)) continue;
       for (const candidate of parsed) {
@@ -126,8 +121,8 @@ const completeDimensions = async (state: FertilityAssessmentState) => {
         }
       }
     } catch {
-      // One failed 1~2 dimension TaskModel call must not invalidate the whole
-      // assessment. Missing dimensions are represented explicitly below.
+      // Keep any interview draft for this dimension. Missing dimensions are
+      // represented explicitly after all bounded calls finish.
     }
   }
 
@@ -157,23 +152,26 @@ const completeDimensions = async (state: FertilityAssessmentState) => {
 const buildSummary = async (state: FertilityAssessmentState) => {
   try {
     const parsed = parseJsonObject(
-      await collectTaskText([
-        {
-          role: "system",
-          content:
-            "你是 Mira 备孕全景报告的汇总 TaskModel。只返回 JSON：{strengths:string[],priorities:string[],visitPrep:string[],lifestyleFocus:string[]}。每组最多6条。只根据给定 facts 和 dimensions；不诊断、不处方、不写个体化药物或补充剂剂量。把需要医疗决策的内容写成与生殖科/男科医生讨论的问题。",
-          parts: [],
-        },
-        {
-          role: "user",
-          content: JSON.stringify(
-            { facts: state.facts, dimensions: state.dimensions },
-            null,
-            2,
-          ),
-          parts: [],
-        },
-      ]),
+      await collectTaskModelText(
+        [
+          {
+            role: "system",
+            content:
+              "你是 Mira 备孕全景报告的汇总 TaskModel。只返回 JSON：{strengths:string[],priorities:string[],visitPrep:string[],lifestyleFocus:string[]}。每组最多6条。只根据给定 facts 和 dimensions；不诊断、不处方、不写个体化药物或补充剂剂量。把需要医疗决策的内容写成与生殖科/男科医生讨论的问题。",
+            parts: [],
+          },
+          {
+            role: "user",
+            content: JSON.stringify(
+              { facts: state.facts, dimensions: state.dimensions },
+              null,
+              2,
+            ),
+            parts: [],
+          },
+        ],
+        { maxTokens: 700, temperature: 0 },
+      ),
     );
     return {
       strengths: uniqueStrings(parsed.strengths, 6),
@@ -337,11 +335,12 @@ export const fertilityReportRuntime: SkillDirectiveHandoffRuntime = {
       summary,
     };
     const generatedAt = new Date().toISOString();
-    reportState.report = {
+    const report = {
       markdown: renderMarkdownReport(reportState),
       html: renderHtmlReport(reportState),
       generatedAt,
     };
+    reportState.report = report;
 
     const nextSession = withUpdatedState(session, reportState);
     const directive: SkillDirective = {
@@ -364,7 +363,7 @@ export const fertilityReportRuntime: SkillDirectiveHandoffRuntime = {
       },
       delivery: {
         kind: "markdown",
-        content: reportState.report.markdown,
+        content: report.markdown,
       },
     };
 
