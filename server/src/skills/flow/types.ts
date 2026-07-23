@@ -66,6 +66,16 @@ export type SkillConversationFlowRuntime = {
   processTurn(input: SkillFlowRuntimeInput): Promise<SkillFlowRuntimeResult>;
 };
 
+export type SkillDirectiveHandoffRuntime = {
+  skillId: string;
+  version: string;
+  execute(input: {
+    session: StoredSkillFlowSession;
+    sourceDirective: SkillDirective;
+    args: Record<string, unknown>;
+  }): Promise<SkillFlowRuntimeResult>;
+};
+
 export const toPlannerSkillDirective = (directive: SkillDirective | undefined) => {
   if (!directive) return undefined;
   const { delivery: _delivery, ...plannerDirective } = directive;
