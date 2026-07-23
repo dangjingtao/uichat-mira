@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { nextActionPlannerNode } from "@/agent/nodes/next-action-planner.js";
 import { fertilityAssessmentRuntime } from "../fertility-assessment/runtime.js";
 import {
   buildSkillFlowRequestContextMessages,
@@ -67,6 +68,9 @@ describe("Skill conversation flow", () => {
       kind: "markdown",
       content: "# report\nprivate rendered body",
     });
+    expect(messages.every((message) => message.requestContextScope === "agent-execution")).toBe(
+      true,
+    );
   });
 
   it("starts an activation-only fertility request with a natural first question", async () => {
@@ -97,6 +101,59 @@ describe("Skill conversation flow", () => {
     });
     expect(result.directive.question).toContain("记得多少说多少");
     expect(result.session.round).toBe(0);
+  });
+
+  it("lets the Planner semantic step obey an ask_user directive without replanning", async () => {
+    const requestContextMessages = buildSkillFlowRequestContextMessages({
+      skillId: "fertility-assessment",
+      sessionId: "session-1",
+      phase: "collecting",
+      flowCompleted: false,
+      round: 2,
+      maxRounds: 10,
+      requiredAction: "ask_user",
+      question: "男方有没有做过精液常规？记得多少说多少。",
+    });
+
+    const result = await nextActionPlannerNode({
+      runId: "run-1",
+      threadId: "thread-1",
+      userId: 1,
+      goal: {
+        id: "goal-1",
+        text: "继续备孕评估",
+        successCriteria: ["完成备孕评估"],
+        constraints: [],
+        riskLevel: "low",
+      },
+      messages: [
+        {
+          id: "message-2",
+          role: "user",
+          content: "AMH 1.2，去年做过一次取卵。",
+          parts: [],
+        },
+      ],
+      requestContextMessages,
+      currentTaskFrame: {
+        currentGoal: "继续备孕评估",
+        confirmedObjects: [],
+        completionCriteria: ["完成备孕评估"],
+      },
+      observations: [],
+      evidence: {
+        observations: [],
+        toolExecutions: [],
+        retrievals: [],
+      },
+    });
+
+    expect(result.nextAction).toEqual(
+      expect.objectContaining({
+        type: "ask_user",
+        question: "男方有没有做过精液常规？记得多少说多少。",
+      }),
+    );
   });
 
   it("persists and replaces one thread flow state without duplicating files", async () => {
