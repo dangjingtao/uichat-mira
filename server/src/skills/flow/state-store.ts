@@ -4,7 +4,7 @@ import path from "node:path";
 import { resolveUserSkillsRoot } from "../context/scanner.js";
 import type { StoredSkillFlowSession } from "./types.js";
 
-const resolveSkillFlowStateRoot = () => {
+export const resolveSkillFlowStateRoot = () => {
   const configured = process.env.MIRA_SKILL_FLOW_STATE_ROOT?.trim();
   if (configured) return path.resolve(configured);
   return path.join(path.dirname(resolveUserSkillsRoot()), "skill-flow-state");
