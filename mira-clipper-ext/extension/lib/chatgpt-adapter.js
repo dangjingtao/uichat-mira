@@ -171,6 +171,8 @@
       `userMessages=${promptCountBefore}->${promptCountAfter}`,
       `conversation=${conversationIdBefore || 'none'}->${conversationIdAfter || 'none'}`,
       `generating=${readGeneratingState(chatgpt)}`,
+      `visibility=${document.visibilityState}`,
+      `documentHasFocus=${document.hasFocus()}`,
     ];
     const detail = state.join(',');
     console.warn(`[MiraChatGPTAdapter] ${detail}`);
@@ -238,7 +240,7 @@
       throw error('INPUT_NOT_ACCEPTED', 'ChatGPT 输入框类型不可用', `composerType=${composerType(composer)}`);
     }
 
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    // Background tabs pause animation frames; waitForComposerReady provides timer-based settling.
   }
 
   async function waitForComposerReady(chatgpt, composer, message) {
@@ -410,11 +412,12 @@
       && !readGeneratingState(chatgpt);
     if (noEvidenceOfSend) {
       button = findSendButton(chatgpt, composer);
+      const form = composer.closest?.('form');
       const fallbackSubmit = () => {
         composer.focus();
-        button.click();
+        form.requestSubmit(button);
       };
-      if (button) {
+      if (button && form instanceof HTMLFormElement && typeof form.requestSubmit === 'function') {
         try {
           fallbackSubmit();
         } catch (cause) {

@@ -40,7 +40,7 @@ describe('manifest.json', () => {
   });
 
   it('应声明持续页面操作所需权限', () => {
-    const required = ['activeTab', 'storage', 'scripting', 'contextMenus', 'identity', 'sidePanel'];
+    const required = ['activeTab', 'storage', 'scripting', 'contextMenus', 'identity', 'sidePanel', 'debugger'];
     const perms = manifest.permissions || [];
     for (const p of required) {
       assert.ok(perms.includes(p), `缺少权限: ${p}`);

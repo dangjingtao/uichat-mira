@@ -15,6 +15,19 @@ async function readExtensionFile(relativePath) {
   return readFile(join(extensionRoot, relativePath), 'utf8');
 }
 
+function functionSource(source, name) {
+  const start = source.indexOf(`async function ${name}(`);
+  assert.notEqual(start, -1, `Missing function ${name}`);
+  const bodyStart = source.indexOf('{', start);
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    if (source[index] === '{') depth += 1;
+    if (source[index] === '}') depth -= 1;
+    if (depth === 0) return source.slice(start, index + 1);
+  }
+  assert.fail(`Unterminated function ${name}`);
+}
+
 describe('WebBridge tool surface', () => {
   it('exposes four intent-level tools', async () => {
     const source = await readExtensionFile('background.js');
@@ -62,6 +75,8 @@ describe('WebBridge tool surface', () => {
     assert.match(source, /new InputEvent\('beforeinput'/);
     assert.match(source, /dispatchEvent\(new InputEvent\('input'/);
     assert.match(source, /button\.click\(\)/);
+    assert.match(source, /form\.requestSubmit\(button\)/);
+    assert.doesNotMatch(source, /requestAnimationFrame/);
     assert.match(source, /SEND_NOT_CONFIRMED/);
     assert.match(source, /INPUT_NOT_ACCEPTED|SEND_BUTTON_NOT_READY|SEND_TRIGGER_FAILED/);
     assert.match(source, /waitForResponseCompletion/);
@@ -70,6 +85,42 @@ describe('WebBridge tool surface', () => {
     assert.match(source, /COMPOSER_SETTLE_MS/);
     assert.match(source, /assistantTextBefore/);
     assert.match(source, /getChatData failed/);
+    assert.match(source, /visibility=\$\{document\.visibilityState\}/);
+    assert.match(source, /documentHasFocus=\$\{document\.hasFocus\(\)\}/);
+  });
+
+  it('does not foreground Chrome for expert messages', async () => {
+    const source = await readExtensionFile('background.js');
+    const handler = functionSource(source, 'handleWebBridgeMessage');
+    const executor = functionSource(source, 'executeExpertTool');
+    const resolver = functionSource(source, 'resolveExpertTabId');
+    const pageBridge = functionSource(source, 'ensurePageBridge');
+    const pageMessage = functionSource(source, 'sendPageMessage');
+    const cdpSend = functionSource(source, 'sendChatGPTMessageViaCdp');
+    const cdpOperation = functionSource(source, 'runChatGPTCdpOperation');
+    const cdpClick = functionSource(source, 'clickChatGPTSendButtonViaCdp');
+    const cdpEnter = functionSource(source, 'pressChatGPTEnterViaCdp');
+    const expertPath = [executor, resolver, pageBridge, pageMessage, cdpSend, cdpOperation, cdpClick, cdpEnter].join('\n');
+
+    assert.doesNotMatch(source, /sendExpertPageMessageInForeground/);
+    assert.match(handler, /isExpertTool[\s\S]*?requestedTabId[\s\S]*?: await getAuthorizedTabId\(\)/);
+    assert.match(handler, /if \(!isExpertTool\) await ensureVisibleControl\(tabId, operation\)/);
+    assert.match(executor, /tool === 'expert\.send_message'[\s\S]*?sendChatGPTMessageViaCdp\(tabId, params\)/);
+    assert.doesNotMatch(cdpSend, /sendPageMessage\(/);
+    assert.match(cdpOperation, /chrome\.debugger\.attach\(\{ tabId \}, CHATGPT_CDP_PROTOCOL_VERSION\)/);
+    assert.match(cdpOperation, /chrome\.debugger\.detach\(\{ tabId \}\)/);
+    assert.match(cdpSend, /'Input\.insertText'/);
+    assert.match(cdpClick, /'Input\.dispatchMouseEvent'/);
+    assert.match(cdpEnter, /'Input\.dispatchKeyEvent'/);
+    assert.match(cdpSend, /isChatGPTSendAcknowledged/);
+    assert.match(cdpSend, /waitForChatGPTReplyViaCdp/);
+    assert.match(resolver, /chrome\.tabs\.create\(\{ url: 'https:\/\/chatgpt\.com\/', active: false \}\)/);
+    assert.doesNotMatch(expertPath, /chrome\.tabs\.update\([\s\S]*?active:\s*true/);
+    assert.doesNotMatch(expertPath, /chrome\.windows\.update\([\s\S]*?focused:\s*true/);
+    assert.doesNotMatch(expertPath, /chrome\.tabs\.highlight\(/);
+    assert.match(expertPath, /targetChatGPTTabId/);
+    assert.match(expertPath, /activate: false/);
+    assert.match(expertPath, /focus: false/);
   });
 
   it('requires a valid JWT and Mira readiness before browser-side operations', async () => {
@@ -199,7 +250,7 @@ describe('WebBridge tool surface', () => {
 });
 
 describe('WebBridge permission boundary', () => {
-  it('allows downloads without enabling debugger access', async () => {
+  it('allows debugger access for CDP-backed expert sends', async () => {
     const manifests = await Promise.all([
       readFile(join(extensionRoot, '../manifest.json'), 'utf8'),
       readFile(join(extensionRoot, 'manifest.json'), 'utf8'),
@@ -209,7 +260,7 @@ describe('WebBridge permission boundary', () => {
       const manifest = JSON.parse(raw);
       assert.ok(manifest.permissions.includes('downloads'));
       assert.ok(manifest.permissions.includes('nativeMessaging'));
-      assert.ok(!manifest.permissions.includes('debugger'));
+      assert.ok(manifest.permissions.includes('debugger'));
     }
   });
 });

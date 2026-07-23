@@ -13,7 +13,8 @@
     "scripting",
     "contextMenus",
     "identity",
-    "downloads"
+    "downloads",
+    "debugger"
   ],
   "host_permissions": [
     "<all_urls>",

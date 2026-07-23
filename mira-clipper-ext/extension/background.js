@@ -11,6 +11,11 @@ const WEBBRIDGE_PATH = '/webbridge';
 const WEBBRIDGE_REQUEST_TIMEOUT_MS = 30000;
 const WEBBRIDGE_EXPERT_TIMEOUT_MS = 125000;
 const WEBBRIDGE_KEEPALIVE_INTERVAL_MS = 20000;
+const CHATGPT_CDP_PROTOCOL_VERSION = '1.3';
+const CHATGPT_CDP_SEND_CONFIRM_TIMEOUT_MS = 10000;
+const CHATGPT_CDP_RESPONSE_TIMEOUT_MS = 110000;
+const CHATGPT_CDP_POLL_INTERVAL_MS = 250;
+const expertCdpTabs = new Set();
 
 function normalizeClipRules(value) {
   return self.MiraClipRules?.normalizeRules(value) || {};
@@ -835,7 +840,9 @@ async function handleWebBridgeMessage(socket, rawMessage) {
     const isExpertTool = typeof request.tool === 'string' && request.tool.startsWith('expert.');
     const operation = isExpertTool ? '问策' : describeOperation(request.tool, request.params || {});
     const requestedTabId = Number(request.params?.tabId);
-    const tabId = isExpertTool && Number.isInteger(requestedTabId) ? requestedTabId : await getAuthorizedTabId();
+    const tabId = isExpertTool
+      ? (Number.isInteger(requestedTabId) ? requestedTabId : undefined)
+      : await getAuthorizedTabId();
     if (!isExpertTool) await ensureVisibleControl(tabId, operation);
     const result = await withTimeout(
       executeWebBridgeTool(request.tool, { ...(request.params || {}), tabId }),
@@ -950,6 +957,364 @@ async function sendPageMessage(tabId, message) {
   }
 }
 
+function chatGPTCdpError(code, message, diagnostics, retryable = true) {
+  const detail = diagnostics ? ` [${diagnostics}]` : '';
+  const fullMessage = `${message}${detail}`;
+  return Object.assign(new Error(fullMessage), {
+    code,
+    diagnostics,
+    bridgeError: bridgeError(code, fullMessage, 'retry', retryable),
+  });
+}
+
+function normalizeCdpText(value) {
+  return String(value || '').replace(/\u00a0/g, ' ').replace(/\r\n/g, '\n').trim();
+}
+
+function describeChatGPTCdpState(state, expectedMessage, beforeState) {
+  if (!state) return 'state=unavailable';
+  return [
+    `visibility=${state.visibility || 'unknown'}`,
+    `documentHasFocus=${Boolean(state.documentHasFocus)}`,
+    `composerType=${state.composerType || 'unknown'}`,
+    `composerConnected=${Boolean(state.composerConnected)}`,
+    `composerTextMatches=${normalizeCdpText(state.composerText) === normalizeCdpText(expectedMessage)}`,
+    `composerEmpty=${!normalizeCdpText(state.composerText)}`,
+    `sendButton=${Boolean(state.sendButtonExists)}`,
+    `sendButtonDisabled=${Boolean(state.sendButtonDisabled)}`,
+    `sendButtonAriaDisabled=${state.sendButtonAriaDisabled || 'unknown'}`,
+    `userMessages=${beforeState?.userCount ?? 'unknown'}->${state.userCount ?? 'unknown'}`,
+    `assistantMessages=${beforeState?.assistantCount ?? 'unknown'}->${state.assistantCount ?? 'unknown'}`,
+    `conversation=${beforeState?.conversationId || 'none'}->${state.conversationId || 'none'}`,
+    `generating=${Boolean(state.generating)}`,
+  ].join(',');
+}
+
+async function sendChatGPTCdpCommand(tabId, method, params = {}) {
+  return chrome.debugger.sendCommand({ tabId }, method, params);
+}
+
+async function readChatGPTCdpState(tabId) {
+  const response = await sendChatGPTCdpCommand(tabId, 'Runtime.evaluate', {
+    expression: `(() => {
+      const isVisible = (element) => {
+        if (!(element instanceof Element) || !element.isConnected) return false;
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return style.display !== 'none'
+          && style.visibility !== 'hidden'
+          && style.pointerEvents !== 'none'
+          && rect.width > 0
+          && rect.height > 0;
+      };
+      const textOf = (element) => {
+        if (!element) return '';
+        if (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) return element.value || '';
+        return element.innerText || element.textContent || '';
+      };
+      const composer = document.querySelector('#prompt-textarea')
+        || document.querySelector('textarea[data-testid="prompt-textarea"]')
+        || document.querySelector('[contenteditable="true"][data-testid="prompt-textarea"]');
+      const form = composer?.closest?.('form');
+      const sendButton = form?.querySelector?.('button[data-testid="send-button"]') || null;
+      const sendRect = sendButton?.getBoundingClientRect?.();
+      const userMessages = Array.from(document.querySelectorAll('[data-message-author-role="user"]'));
+      const assistantMessages = Array.from(document.querySelectorAll('[data-message-author-role="assistant"]'));
+      const stopButton = document.querySelector('button[data-testid="stop-button"]');
+      const match = location.pathname.match(/^\\/c\\/([^/?#]+)/);
+      return {
+        url: location.href,
+        conversationId: match ? decodeURIComponent(match[1]) : '',
+        visibility: document.visibilityState,
+        documentHasFocus: document.hasFocus(),
+        composerType: composer instanceof HTMLTextAreaElement
+          ? 'textarea'
+          : composer instanceof HTMLInputElement
+            ? 'input'
+            : composer?.isContentEditable
+              ? 'contenteditable'
+              : composer?.tagName?.toLowerCase() || 'unknown',
+        composerConnected: Boolean(composer?.isConnected),
+        composerText: textOf(composer),
+        sendButtonExists: Boolean(sendButton?.isConnected),
+        sendButtonDisabled: Boolean(sendButton?.disabled || sendButton?.hasAttribute?.('disabled')),
+        sendButtonAriaDisabled: sendButton?.getAttribute?.('aria-disabled') || '',
+        sendButtonVisible: isVisible(sendButton),
+        sendButtonCenter: sendRect && sendRect.width > 0 && sendRect.height > 0
+          ? { x: sendRect.left + sendRect.width / 2, y: sendRect.top + sendRect.height / 2 }
+          : null,
+        generating: isVisible(stopButton),
+        userCount: userMessages.length,
+        latestUserText: textOf(userMessages[userMessages.length - 1]),
+        assistantCount: assistantMessages.length,
+        latestAssistantText: textOf(assistantMessages[assistantMessages.length - 1]),
+      };
+    })()`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (response?.exceptionDetails) {
+    throw new Error(response.exceptionDetails.text || 'ChatGPT 页面状态读取失败');
+  }
+  return response?.result?.value || null;
+}
+
+async function waitForChatGPTCdpState(tabId, predicate, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  let lastState = null;
+  let lastError = null;
+  while (Date.now() < deadline) {
+    try {
+      lastState = await readChatGPTCdpState(tabId);
+      lastError = null;
+      if (lastState && predicate(lastState)) return { matched: true, state: lastState, error: null };
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, CHATGPT_CDP_POLL_INTERVAL_MS));
+  }
+  return { matched: false, state: lastState, error: lastError };
+}
+
+async function focusAndSelectChatGPTComposer(tabId) {
+  const response = await sendChatGPTCdpCommand(tabId, 'Runtime.evaluate', {
+    expression: `(() => {
+      const composer = document.querySelector('#prompt-textarea')
+        || document.querySelector('textarea[data-testid="prompt-textarea"]')
+        || document.querySelector('[contenteditable="true"][data-testid="prompt-textarea"]');
+      if (!composer?.isConnected) return { ok: false, reason: 'composer_missing' };
+      composer.focus({ preventScroll: true });
+      if (composer instanceof HTMLTextAreaElement || composer instanceof HTMLInputElement) {
+        composer.select();
+      } else {
+        const selection = getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(composer);
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+      }
+      return { ok: true, activeElementMatches: document.activeElement === composer };
+    })()`,
+    returnByValue: true,
+  });
+  const result = response?.result?.value;
+  if (!result?.ok || !result.activeElementMatches) {
+    throw chatGPTCdpError('INPUT_NOT_ACCEPTED', 'CDP 未能聚焦 ChatGPT 输入框', `reason=${result?.reason || 'focus_failed'}`);
+  }
+}
+
+async function clickChatGPTSendButtonViaCdp(tabId, center) {
+  if (!center || !Number.isFinite(center.x) || !Number.isFinite(center.y)) {
+    throw chatGPTCdpError('SEND_BUTTON_NOT_READY', 'ChatGPT 发送按钮位置不可用', 'sendButtonCenter=false');
+  }
+  await sendChatGPTCdpCommand(tabId, 'Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    x: center.x,
+    y: center.y,
+    button: 'left',
+    buttons: 1,
+    clickCount: 1,
+  });
+  await sendChatGPTCdpCommand(tabId, 'Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    x: center.x,
+    y: center.y,
+    button: 'left',
+    buttons: 0,
+    clickCount: 1,
+  });
+}
+
+async function pressChatGPTEnterViaCdp(tabId) {
+  const key = {
+    key: 'Enter',
+    code: 'Enter',
+    windowsVirtualKeyCode: 13,
+    nativeVirtualKeyCode: 13,
+  };
+  await sendChatGPTCdpCommand(tabId, 'Input.dispatchKeyEvent', { type: 'rawKeyDown', ...key });
+  await sendChatGPTCdpCommand(tabId, 'Input.dispatchKeyEvent', { type: 'keyUp', ...key });
+}
+
+function isChatGPTSendAcknowledged(state, beforeState, expectedMessage) {
+  const userMessageAdded = state.userCount > beforeState.userCount
+    && normalizeCdpText(state.latestUserText) === normalizeCdpText(expectedMessage);
+  const composerCleared = !normalizeCdpText(state.composerText);
+  const sendProgressed = state.userCount > beforeState.userCount
+    || state.conversationId !== beforeState.conversationId
+    || state.generating;
+  return userMessageAdded || (composerCleared && sendProgressed);
+}
+
+async function waitForChatGPTReplyViaCdp(tabId, beforeState) {
+  const deadline = Date.now() + CHATGPT_CDP_RESPONSE_TIMEOUT_MS;
+  let previousText = '';
+  let stableSince = 0;
+  let lastState = null;
+  let lastError = null;
+  while (Date.now() < deadline) {
+    try {
+      lastState = await readChatGPTCdpState(tabId);
+      lastError = null;
+      const latestText = normalizeCdpText(lastState.latestAssistantText);
+      const hasNewAssistant = lastState.assistantCount > beforeState.assistantCount
+        || (latestText && latestText !== normalizeCdpText(beforeState.latestAssistantText));
+      if (hasNewAssistant && latestText) {
+        if (latestText !== previousText) {
+          previousText = latestText;
+          stableSince = Date.now();
+        } else if (!lastState.generating && Date.now() - stableSince >= 1000) {
+          return { reply: latestText, state: lastState };
+        }
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, CHATGPT_CDP_POLL_INTERVAL_MS));
+  }
+  const diagnostics = `${describeChatGPTCdpState(lastState, '', beforeState)},lastCdpError=${lastError?.message || 'none'}`;
+  throw chatGPTCdpError('RESPONSE_TIMEOUT', '等待 ChatGPT 回复完成超时', diagnostics);
+}
+
+async function runChatGPTCdpOperation(tabId, operation) {
+  if (expertCdpTabs.has(tabId)) {
+    throw chatGPTCdpError('CHATGPT_CDP_BUSY', 'ChatGPT 专家正在处理上一条咨询', `tabId=${tabId}`);
+  }
+  expertCdpTabs.add(tabId);
+  let attached = false;
+  try {
+    await chrome.debugger.attach({ tabId }, CHATGPT_CDP_PROTOCOL_VERSION);
+    attached = true;
+    console.info('[WebBridge][expert][cdp]', { phase: 'attached', tabId, activate: false, focus: false });
+    await sendChatGPTCdpCommand(tabId, 'Runtime.enable');
+    return await operation();
+  } catch (error) {
+    if (error?.bridgeError) throw error;
+    const code = attached ? 'CHATGPT_CDP_FAILED' : 'CHATGPT_CDP_ATTACH_FAILED';
+    throw chatGPTCdpError(code, attached ? 'ChatGPT CDP 操作失败' : '无法连接 ChatGPT 调试目标', `cause=${error?.message || 'unknown'}`);
+  } finally {
+    if (attached) {
+      try {
+        await chrome.debugger.detach({ tabId });
+        console.info('[WebBridge][expert][cdp]', { phase: 'detached', tabId, activate: false, focus: false });
+      } catch (error) {
+        console.warn('[WebBridge][expert][cdp]', { phase: 'detach_failed', tabId, cause: error?.message || 'unknown' });
+      }
+    }
+    expertCdpTabs.delete(tabId);
+  }
+}
+
+async function sendChatGPTMessageViaCdp(tabId, params) {
+  const message = typeof params.message === 'string' ? params.message : '';
+  if (!message.trim()) throw chatGPTCdpError('CHATGPT_MESSAGE_EMPTY', '咨询内容不能为空', null, false);
+
+  return runChatGPTCdpOperation(tabId, async () => {
+    const beforeState = await readChatGPTCdpState(tabId);
+    if (!beforeState?.composerConnected) {
+      throw chatGPTCdpError('INPUT_NOT_ACCEPTED', 'ChatGPT 输入框不可用', describeChatGPTCdpState(beforeState, message, beforeState));
+    }
+    const sessionRef = params.sessionRef;
+    const isNewConversation = !sessionRef || sessionRef.kind === 'provider_state';
+    if (isNewConversation && beforeState.conversationId) {
+      throw chatGPTCdpError('CHATGPT_THREAD_UNAVAILABLE', '新专家连接未处于空白 ChatGPT 对话', describeChatGPTCdpState(beforeState, message, beforeState), false);
+    }
+    if (!isNewConversation && (
+      !beforeState.conversationId
+      || sessionRef.kind !== 'conversation_id'
+      || sessionRef.value !== beforeState.conversationId
+    )) {
+      throw chatGPTCdpError('CHATGPT_THREAD_UNAVAILABLE', '当前标签页不是已绑定的 ChatGPT 对话线程', describeChatGPTCdpState(beforeState, message, beforeState), false);
+    }
+
+    await focusAndSelectChatGPTComposer(tabId);
+    await sendChatGPTCdpCommand(tabId, 'Input.insertText', { text: message });
+    const ready = await waitForChatGPTCdpState(
+      tabId,
+      (state) => normalizeCdpText(state.composerText) === normalizeCdpText(message)
+        && state.sendButtonExists
+        && state.sendButtonVisible
+        && !state.sendButtonDisabled
+        && state.sendButtonAriaDisabled !== 'true',
+      CHATGPT_CDP_SEND_CONFIRM_TIMEOUT_MS,
+    );
+    if (!ready.matched) {
+      const diagnostics = `${describeChatGPTCdpState(ready.state, message, beforeState)},lastCdpError=${ready.error?.message || 'none'}`;
+      throw chatGPTCdpError(
+        ready.state?.sendButtonExists ? 'INPUT_NOT_ACCEPTED' : 'SEND_BUTTON_NOT_READY',
+        'ChatGPT 没有接受 CDP 输入或发送按钮未就绪',
+        diagnostics,
+      );
+    }
+    console.info('[WebBridge][expert][cdp]', {
+      phase: 'input_ready',
+      tabId,
+      visibility: ready.state.visibility,
+      documentHasFocus: ready.state.documentHasFocus,
+      composerType: ready.state.composerType,
+      activate: false,
+      focus: false,
+    });
+
+    await clickChatGPTSendButtonViaCdp(tabId, ready.state.sendButtonCenter);
+    let acknowledgement = await waitForChatGPTCdpState(
+      tabId,
+      (state) => isChatGPTSendAcknowledged(state, beforeState, message),
+      CHATGPT_CDP_SEND_CONFIRM_TIMEOUT_MS,
+    );
+    if (!acknowledgement.matched) {
+      const state = acknowledgement.state;
+      const noEvidenceOfSend = state
+        && state.userCount === beforeState.userCount
+        && state.conversationId === beforeState.conversationId
+        && normalizeCdpText(state.composerText) === normalizeCdpText(message)
+        && !state.generating;
+      if (!noEvidenceOfSend) {
+        const diagnostics = `${describeChatGPTCdpState(state, message, beforeState)},lastCdpError=${acknowledgement.error?.message || 'none'}`;
+        throw chatGPTCdpError('SEND_NOT_CONFIRMED', 'ChatGPT 未确认本轮咨询已发送', diagnostics);
+      }
+      await focusAndSelectChatGPTComposer(tabId);
+      await pressChatGPTEnterViaCdp(tabId);
+      acknowledgement = await waitForChatGPTCdpState(
+        tabId,
+        (nextState) => isChatGPTSendAcknowledged(nextState, beforeState, message),
+        CHATGPT_CDP_SEND_CONFIRM_TIMEOUT_MS,
+      );
+      if (!acknowledgement.matched) {
+        const diagnostics = `${describeChatGPTCdpState(acknowledgement.state, message, beforeState)},lastCdpError=${acknowledgement.error?.message || 'none'}`;
+        throw chatGPTCdpError('SEND_NOT_CONFIRMED', 'ChatGPT 未确认 CDP 备用发送', diagnostics);
+      }
+    }
+    console.info('[WebBridge][expert][cdp]', {
+      phase: 'send_acknowledged',
+      tabId,
+      userMessagesBefore: beforeState.userCount,
+      userMessagesAfter: acknowledgement.state.userCount,
+      conversationBefore: beforeState.conversationId || null,
+      conversationAfter: acknowledgement.state.conversationId || null,
+      activate: false,
+      focus: false,
+    });
+
+    const completed = await waitForChatGPTReplyViaCdp(tabId, beforeState);
+    console.info('[WebBridge][expert][cdp]', {
+      phase: 'reply_complete',
+      tabId,
+      assistantMessagesBefore: beforeState.assistantCount,
+      assistantMessagesAfter: completed.state.assistantCount,
+      replyLength: completed.reply.length,
+      activate: false,
+      focus: false,
+    });
+    return {
+      reply: completed.reply,
+      sessionRef: completed.state.conversationId
+        ? { kind: 'conversation_id', value: completed.state.conversationId }
+        : sessionRef,
+    };
+  });
+}
+
 async function executeWebBridgeTool(tool, params) {
   if (tool === 'expert.connect' || tool === 'expert.send_message') {
     return executeExpertTool(tool, params);
@@ -974,13 +1339,41 @@ async function executeExpertTool(tool, params) {
     });
   }
   const tabId = await resolveExpertTabId(tool, params.tabId);
-  const response = await sendPageMessage(tabId, {
-    type: 'WEBBRIDGE_EXPERT',
-    provider: params.provider,
-    command: tool.slice('expert.'.length),
-    sessionRef: params.sessionRef,
-    message: params.message,
+  const readActiveTabId = async () => {
+    const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    return Number.isInteger(activeTab?.id) ? activeTab.id : null;
+  };
+  console.info('[WebBridge][expert]', {
+    phase: 'before',
+    function: 'executeExpertTool',
+    tool,
+    activeTabId: await readActiveTabId(),
+    targetChatGPTTabId: tabId,
+    activate: false,
+    focus: false,
   });
+  let response;
+  try {
+    response = tool === 'expert.send_message'
+      ? await sendChatGPTMessageViaCdp(tabId, params)
+      : await sendPageMessage(tabId, {
+        type: 'WEBBRIDGE_EXPERT',
+        provider: params.provider,
+        command: tool.slice('expert.'.length),
+        sessionRef: params.sessionRef,
+        message: params.message,
+      });
+  } finally {
+    console.info('[WebBridge][expert]', {
+      phase: 'after',
+      function: 'executeExpertTool',
+      tool,
+      activeTabId: await readActiveTabId(),
+      targetChatGPTTabId: tabId,
+      activate: false,
+      focus: false,
+    });
+  }
   const result = response?.result || response;
   return tool === 'expert.connect' && result && typeof result === 'object'
     ? { ...result, tabId }
@@ -1002,7 +1395,17 @@ async function resolveExpertTabId(tool, requestedTabId) {
     });
   }
 
-  const tab = await chrome.tabs.create({ url: 'https://chatgpt.com/', active: true });
+  const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  console.info('[WebBridge][expert]', {
+    phase: 'create',
+    function: 'resolveExpertTabId',
+    tool,
+    activeTabId: Number.isInteger(activeTab?.id) ? activeTab.id : null,
+    targetChatGPTTabId: null,
+    activate: false,
+    focus: false,
+  });
+  const tab = await chrome.tabs.create({ url: 'https://chatgpt.com/', active: false });
   if (!Number.isInteger(tab.id)) {
     throw Object.assign(new Error('无法打开 ChatGPT 标签页'), {
       bridgeError: bridgeError('CHATGPT_TAB_UNAVAILABLE', '无法打开 ChatGPT 标签页', 'retry', true),

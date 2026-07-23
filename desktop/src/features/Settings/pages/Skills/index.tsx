@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import {
   Check,
   ChevronRight,
@@ -15,7 +16,7 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { Badge, Button, Card, IconButton, Result } from "@/shared/ui";
+import { Button, Card, IconButton, MarkdownText, Result, Skeleton } from "@/shared/ui";
 import { ModalShell } from "@/shared/ui/Modal";
 import {
   getWenshuSkillCatalog,
@@ -35,6 +36,35 @@ const iconConfig = {
   code: { Icon: FileCode2, className: "bg-violet-50 text-violet-500" },
 };
 
+const parseMarkdownDocument = (content: string) => {
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  if (lines[0]?.trim() !== "---") return { body: content, metadata: [] as Array<[string, unknown]> };
+
+  const closingIndex = lines.findIndex((line, index) => index > 0 && line.trim() === "---");
+  if (closingIndex === -1) return { body: content, metadata: [] as Array<[string, unknown]> };
+
+  try {
+    const parsed = parseYaml(lines.slice(1, closingIndex).join("\n")) as unknown;
+    const metadata = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? Object.entries(parsed as Record<string, unknown>)
+      : [];
+
+    return {
+      body: lines.slice(closingIndex + 1).join("\n").trimStart(),
+      metadata,
+    };
+  } catch {
+    return { body: content, metadata: [] as Array<[string, unknown]> };
+  }
+};
+
+const formatMetadataValue = (value: unknown) => {
+  if (value === null || value === undefined) return "-";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return stringifyYaml(value).trim();
+};
+
 export default function SkillsSettings() {
   const navigate = useNavigate();
   const [activeCategory, setActiveCategory] = useState("已添加");
@@ -44,34 +74,65 @@ export default function SkillsSettings() {
   const [notice, setNotice] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<WenshuSkillCatalog | null>(null);
   const [installingSkillId, setInstallingSkillId] = useState<string | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void getWenshuSkillCatalog()
-      .then(setCatalog)
-      .catch(() => {
-        // Keep the catalog page usable if the local backend is still starting.
-      });
+  const loadCatalog = useCallback(async () => {
+    setCatalogLoading(true);
+    setCatalogError(null);
+    try {
+      setCatalog(await getWenshuSkillCatalog());
+    } catch (error) {
+      setCatalogError(error instanceof Error ? error.message : "技能目录加载失败");
+    } finally {
+      setCatalogLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    void loadCatalog();
+  }, [loadCatalog]);
+
   const skills = useMemo(
-    () => skillPresentations.map((presentation) => {
-      const definition = catalog?.skills.find((candidate) => candidate.id === presentation.id);
-      if (!definition) return presentation;
+    () => catalog?.skills.map((definition) => {
+      const presentation = skillPresentations.find((candidate) => candidate.id === definition.id);
+      if (!presentation) {
+        return {
+          id: definition.id,
+          name: definition.name,
+          source: definition.source,
+          category: definition.category,
+          description: definition.description,
+          icon: definition.id === "xlsx" ? "spreadsheet" : definition.id === "pdf" ? "pdf" : definition.id === "docx" ? "word" : "presentation",
+          bundled: definition.bundled,
+          runtimePack: definition.runtimePack?.id,
+          usePath: "/settings/micro-apps/office-suite",
+          content: `# ${definition.name}\n\n${definition.description}`,
+          files: definition.packageFiles,
+          fileContents: {},
+        } satisfies SkillPresentation;
+      }
       return {
         ...presentation,
         name: definition.name,
         source: definition.source,
         category: definition.category,
         description: definition.description,
+        bundled: definition.bundled,
+        runtimePack: definition.runtimePack?.id,
         files: definition.packageFiles,
       };
-    }),
+    }) ?? [],
     [catalog],
   );
 
   const isInstalled = (skill: SkillPresentation) =>
     Boolean(skill.bundled) ||
-    (skill.runtimePack === "wenshu-office" && Boolean(catalog?.pack.installed));
+    (skill.runtimePack === "wenshu-office" && Boolean(
+      catalog?.pack.installed &&
+      catalog.pack.missing.length === 0 &&
+      !catalog.pack.error,
+    ));
 
   const visibleSkills = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -90,12 +151,16 @@ export default function SkillsSettings() {
   };
 
   const useSkill = async (skill: SkillPresentation) => {
-    if (skill.runtimePack === "wenshu-office" && !catalog?.pack.installed) {
+    if (skill.runtimePack === "wenshu-office" && !isInstalled(skill)) {
       setInstallingSkillId(skill.id);
       showNotice("正在下载并安装文枢增强能力包…");
       try {
         const pack = await installWenshuCapabilityPack();
         setCatalog((current) => current ? { ...current, pack } : current);
+        if (!pack.installed || pack.missing.length > 0 || pack.error) {
+          showNotice(pack.error || "本地依赖未完整安装");
+          return;
+        }
         if (!catalog) {
           const refreshed = await getWenshuSkillCatalog();
           setCatalog(refreshed);
@@ -140,7 +205,11 @@ export default function SkillsSettings() {
             {searchOpen ? <input autoFocus aria-label="搜索技能" placeholder="搜索技能" value={query} onChange={(event) => setQuery(event.target.value)} className="h-9 w-40 rounded-ui-control border border-border bg-surface-primary px-3 text-xs text-text-primary outline-none focus:border-text-tertiary" /> : <IconButton ariaLabel="搜索技能" size="sm" styleType="filled" onClick={() => setSearchOpen(true)}><Search size={17} /></IconButton>}
           </div>
 
-          {visibleSkills.length ? (
+          {catalogLoading ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2"><Skeleton.Card showAvatar /><Skeleton.Card showAvatar /><Skeleton.Card showAvatar /></div>
+          ) : catalogError ? (
+            <Result variant="danger" size="sm" title="技能目录加载失败" description={catalogError} action={<Button size="sm" variant="secondary" onClick={() => void loadCatalog()}>重新加载</Button>} />
+          ) : visibleSkills.length ? (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {visibleSkills.map((skill) => (
                 <SkillCard
@@ -166,7 +235,6 @@ export default function SkillsSettings() {
           packMissing={selectedSkill.runtimePack === "wenshu-office" ? catalog?.pack.missing ?? [] : []}
           onClose={() => setSelectedSkill(null)}
           onUse={() => void useSkill(selectedSkill)}
-          onAction={showNotice}
         />
       ) : null}
     </>
@@ -183,7 +251,7 @@ function SkillCard({ skill, installed, onOpen }: { skill: SkillPresentation; ins
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h4 className="truncate text-sm font-semibold text-text-primary">{skill.name}</h4>
-              {installed ? <Badge variant="success">已添加</Badge> : null}
+              <span className={`text-xs ${installed ? "text-success-text" : "text-text-tertiary"}`}>{installed ? "已添加" : "未添加"}</span>
             </div>
             <p className="mt-1 text-xs text-text-tertiary">来自 {skill.source}</p>
           </div>
@@ -202,7 +270,6 @@ function SkillDetail({
   packMissing,
   onClose,
   onUse,
-  onAction,
 }: {
   skill: SkillPresentation;
   installed: boolean;
@@ -210,7 +277,6 @@ function SkillDetail({
   packMissing: string[];
   onClose: () => void;
   onUse: () => void;
-  onAction: (message: string) => void;
 }) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(["reference", "runtime", "scripts", "templates"]));
   const [selectedFile, setSelectedFile] = useState("SKILL.md");
@@ -227,7 +293,14 @@ function SkillDetail({
   });
   const selectedContent = selectedFile === "SKILL.md"
     ? skill.content
-    : skill.fileContents[selectedFile] ?? `# ${selectedFile}\n\n该文件属于「${skill.name}」技能包，当前展示区只公开其包结构与运行时归属。`;
+    : skill.fileContents[selectedFile];
+  const extension = selectedFile.split(".").pop()?.toLowerCase() ?? "";
+  const isMarkdownFile = extension === "md";
+  const isSourceCodeFile = ["ts", "tsx", "js", "jsx", "py"].includes(extension);
+  const markdownDocument = selectedContent && isMarkdownFile
+    ? parseMarkdownDocument(selectedContent)
+    : { body: selectedContent ?? "", metadata: [] as Array<[string, unknown]> };
+  const previewContent = markdownDocument.body;
 
   return (
     <ModalShell
@@ -237,30 +310,41 @@ function SkillDetail({
       height="calc(100vh - 32px)"
       showCloseButton={false}
       footer={null}
-      bodyClassName="p-0"
-      title={<div className="flex items-center gap-3"><span>{skill.name}</span>{installed ? <Badge variant="success">已添加</Badge> : null}<div className="ml-auto flex items-center gap-1"><Button size="xs" variant="secondary" onClick={onUse} disabled={installing}>{installing ? <LoaderCircle size={14} className="animate-spin" /> : <Check size={14} />}{installing ? "安装中…" : "去使用"}</Button><IconButton ariaLabel="关闭" size="sm" onClick={onClose}><X size={18} /></IconButton></div></div>}
+      bodyClassName="flex overflow-hidden p-0"
+      title={<div className="flex w-full min-w-0 items-center gap-3"><span className="truncate">{skill.name}</span><span className={`text-xs ${installed ? "text-success-text" : "text-text-tertiary"}`}>{installed ? "已添加" : "未添加"}</span><div className="ml-auto flex shrink-0 items-center gap-1"><Button size="xs" variant="secondary" onClick={onUse} disabled={installing}>{installing ? <LoaderCircle size={14} className="animate-spin" /> : <Check size={14} />}{installing ? "安装中…" : "去使用"}</Button><IconButton ariaLabel="关闭" size="sm" onClick={onClose}><X size={18} /></IconButton></div></div>}
     >
-      <div className="grid min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)]">
-        <aside className="stable-scrollbar overflow-y-auto border-r border-border p-4">
+      <div className="grid h-full min-h-0 w-full grid-cols-[280px_minmax(0,1fr)]">
+        <aside className="stable-scrollbar min-h-0 overflow-y-auto border-r border-border px-5 py-5">
           <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-text-tertiary">关于</p>
           <p className="mt-3 px-2 text-xs leading-6 text-text-secondary">{skill.description}</p>
           <p className="mt-5 border-t border-border px-2 pt-4 text-xs text-text-secondary">来自 {skill.source}</p>
-          {skill.runtimePack ? <div className="mt-4 rounded-ui-control bg-surface-secondary/50 px-3 py-2 text-[11px] leading-5 text-text-secondary">{installed ? "文枢增强能力包已安装。" : "首次使用会下载文枢增强能力包。"}{packMissing.length ? ` 当前缺少：${packMissing.join(", ")}` : ""}</div> : null}
+          {skill.runtimePack && !installed ? <p className="mt-4 px-2 text-[11px] leading-5 text-text-secondary">本地依赖尚未完整安装，首次使用时会执行安装。{packMissing.length ? ` 当前缺少：${packMissing.join(", ")}` : ""}</p> : null}
           <div className="mt-5 border-t border-border pt-4">
             <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-text-tertiary">文件</p>
             <div className="mt-2 space-y-0.5">
               {rootFiles.map((file) => <FileTreeRow key={file} label={file} selected={selectedFile === file} onClick={() => setSelectedFile(file)} />)}
-              {folderEntries.map(({ folder, files }) => <div key={folder}><Button type="button" size="xs" variant="ghost" onClick={() => toggleFolder(folder)} className="w-full justify-start gap-1.5">{expandedFolders.has(folder) ? <FolderOpen size={14} className="text-text-tertiary" /> : <Folder size={14} className="text-text-tertiary" />}<span className="truncate">{folder}</span><ChevronRight size={13} className={`ml-auto transition-transform ${expandedFolders.has(folder) ? "rotate-90" : ""}`} /></Button>{expandedFolders.has(folder) ? <div className="ml-3 border-l border-border pl-2">{files.map((file) => { const fullPath = `${folder}/${file}`; return <FileTreeRow key={fullPath} label={file} selected={selectedFile === fullPath} onClick={() => setSelectedFile(fullPath)} />; })}</div> : null}</div>)}
+              {folderEntries.map(({ folder, files }) => <div key={folder}><Button type="button" size="xs" variant="ghost" onClick={() => toggleFolder(folder)} className="w-full !justify-start gap-1.5 text-left">{expandedFolders.has(folder) ? <FolderOpen size={14} className="shrink-0 text-text-tertiary" /> : <Folder size={14} className="shrink-0 text-text-tertiary" />}<span className="min-w-0 flex-1 truncate">{folder}</span><ChevronRight size={13} className={`ml-auto shrink-0 transition-transform ${expandedFolders.has(folder) ? "rotate-90" : ""}`} /></Button>{expandedFolders.has(folder) ? <div className="ml-3 border-l border-border pl-2">{files.map((file) => { const fullPath = `${folder}/${file}`; return <FileTreeRow key={fullPath} label={file} selected={selectedFile === fullPath} onClick={() => setSelectedFile(fullPath)} />; })}</div> : null}</div>)}
             </div>
           </div>
         </aside>
-        <main className="stable-scrollbar overflow-y-auto p-6">
-          <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-semibold text-text-primary">{selectedFile}</h3><IconButton ariaLabel="复制内容" size="sm" onClick={() => void navigator.clipboard.writeText(selectedContent).then(() => onAction("已复制内容"))}><FileText size={16} /></IconButton></div>
-          <Card variant="subtle" padding="lg">
-            <p className="whitespace-pre-wrap text-sm leading-7 text-text-secondary">{selectedContent}</p>
-            <h4 className="mt-8 text-lg font-semibold text-text-primary">使用说明</h4>
-            <p className="mt-3 text-sm leading-7 text-text-secondary">{skill.runtimePack ? "选择“去使用”时，如果文枢增强能力包尚未安装，会先下载到 Mira 自己的受管 Runtime Pack 目录。安装只启用本地执行依赖；正式 SkillInstance / state reducer / stage tool constraints 完成前，不自动接入 Agent / Harness。" : "选择“去使用”后进入该技能对应的产品入口。"}</p>
-          </Card>
+        <main className="flex min-h-0 min-w-0 flex-col">
+          <div className="flex h-14 shrink-0 items-center border-b border-border px-6"><h3 className="truncate text-lg font-semibold text-text-primary">{selectedFile}</h3></div>
+          <div className="stable-scrollbar min-h-0 flex-1 overflow-y-auto">
+            <div className="mx-auto w-full max-w-[760px] px-6 py-6">
+              {isSourceCodeFile ? (
+                <Result size="sm" title="接口未提供文件内容" description="当前技能目录接口只返回文件列表，无法预览该源码文件。" />
+              ) : isMarkdownFile && (previewContent || markdownDocument.metadata.length > 0) ? (
+                <>
+                  {markdownDocument.metadata.length > 0 ? <dl className="mb-6 grid grid-cols-[96px_minmax(0,1fr)] gap-x-4 gap-y-2 border-b border-border pb-5 text-sm">{markdownDocument.metadata.map(([key, value]) => <div key={key} className="contents"><dt className="font-mono text-xs leading-6 text-text-tertiary">{key}</dt><dd className="min-w-0 whitespace-pre-wrap leading-6 text-text-secondary">{formatMetadataValue(value)}</dd></div>)}</dl> : null}
+                  {previewContent ? <MarkdownText features="basic" className="[&_h1]:mt-7 [&_h1:first-child]:mt-0 [&_h1]:text-xl [&_h1]:font-semibold [&_h1]:leading-8 [&_h1]:tracking-normal [&_h2]:mt-6 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:tracking-normal [&_h3]:mt-5 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:tracking-normal">{previewContent}</MarkdownText> : null}
+                </>
+              ) : previewContent ? (
+                <pre className="whitespace-pre-wrap font-mono text-xs leading-6 text-text-primary">{previewContent}</pre>
+              ) : (
+                <Result size="sm" title="暂无预览内容" description="当前接口未返回该文件的内容。" />
+              )}
+            </div>
+          </div>
         </main>
       </div>
     </ModalShell>
@@ -268,5 +352,5 @@ function SkillDetail({
 }
 
 function FileTreeRow({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
-  return <Button type="button" size="xs" variant={selected ? "secondary" : "ghost"} onClick={onClick} className="w-full justify-start"><File size={14} className="shrink-0 text-text-tertiary" /><span className="truncate">{label}</span></Button>;
+  return <Button type="button" size="xs" variant={selected ? "secondary" : "ghost"} onClick={onClick} className="w-full !justify-start text-left"><File size={14} className="shrink-0 text-text-tertiary" /><span className="min-w-0 flex-1 truncate">{label}</span></Button>;
 }
