@@ -1,0 +1,86 @@
+{
+  "entry": {
+    "title": "Mira WenShu minimal PPTD deck",
+    "size": [1280, 720],
+    "theme": {
+      "colors": {
+        "primary": "#C15F3C",
+        "text": "#1F2937",
+        "muted": "#6B7280",
+        "surface": "#FFF8F3"
+      },
+      "textStyles": {
+        "title": {
+          "fontSize": 40,
+          "fontFamily": "Arial, Microsoft YaHei",
+          "color": "$text",
+          "lineHeight": 1.1
+        },
+        "body": {
+          "fontSize": 22,
+          "fontFamily": "Arial, Microsoft YaHei",
+          "color": "$text",
+          "lineHeight": 1.35
+        }
+      },
+      "tableStyles": {}
+    },
+    "pages": ["pages/01.page"]
+  },
+  "pageFiles": {
+    "pages/01.page": {
+      "pageType": "content",
+      "background": {
+        "type": "solid",
+        "color": "#FFFFFF"
+      },
+      "elements": [
+        {
+          "elementType": "shape",
+          "elementId": "accent-panel",
+          "bounds": [64, 64, 1152, 592],
+          "shapeName": "roundRect",
+          "fill": {
+            "type": "solid",
+            "color": "$surface"
+          },
+          "border": {
+            "style": "solid",
+            "width": 1,
+            "color": "#F3D5C6"
+          }
+        },
+        {
+          "elementType": "text",
+          "elementId": "title",
+          "bounds": [112, 108, 950, 96],
+          "content": {
+            "text": "Mira 文枢：原生 PPTD 烟测",
+            "style": "$title",
+            "align": ["left", "middle"]
+          }
+        },
+        {
+          "elementType": "text",
+          "elementId": "body",
+          "bounds": [112, 228, 940, 180],
+          "content": {
+            "text": "这段<strong>中文</strong>必须真实写入 PowerPoint，并保持为可编辑文本。",
+            "style": "$body",
+            "align": ["left", "top"]
+          }
+        },
+        {
+          "elementType": "icon",
+          "elementId": "rocket",
+          "bounds": [1060, 110, 88, 88],
+          "iconName": "fas:rocket",
+          "fill": {
+            "type": "solid",
+            "color": "$primary"
+          }
+        }
+      ]
+    }
+  }
+}
