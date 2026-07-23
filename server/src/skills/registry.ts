@@ -53,9 +53,10 @@ const deferredStatefulRuntime = () => ({
  * The basic Skill system may discover a package, match one primary Skill and
  * inject its semantic context progressively without creating SkillInstance.
  *
- * Runtime Pack installation and SkillContext injection never register or expand
- * Harness toolExposure. Optional Stateful Skill Runtime remains a separate,
- * higher-level contract for workflows that truly need lifecycle/state/reducers.
+ * SkillContext injection never registers or expands Harness toolExposure.
+ * Execution capabilities are reconciled independently from environment/runtime
+ * readiness; optional Stateful Skill Runtime remains a separate higher-level
+ * contract for workflows that truly need lifecycle/state/reducers.
  */
 const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
   {
