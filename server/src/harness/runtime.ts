@@ -31,6 +31,7 @@ import {
 import { webSearchSettingsRepository } from "@/db/repositories/web-search-settings.repository.js";
 import { reconcileCodeGraphHarnessCapability } from "./codegraph-capability.js";
 import { registerCapability, registerReadableResource } from "./registry.js";
+import { reconcileWenshuOfficeHarnessCapabilities } from "./wenshu-office-capability.js";
 
 let initialized = false;
 
@@ -55,10 +56,9 @@ export const initializeHarnessRuntime = () => {
   registerCapability(movePathTool);
   registerCapability(officeDocumentTool);
 
-  // WenShu PDF/XLSX/PPT task-level runtimes are currently MicroAPP capability
-  // surfaces only. They are intentionally not registered into Harness until the
-  // formal Skill Runtime contract (SkillInstance/state/reducer/stage constraints)
-  // is implemented and can narrow, rather than expand, canonical toolExposure.
+  // Optional PDF/XLSX/PPT capabilities are reconciled from verified local
+  // runtime-pack readiness. Skill matching never controls this registration.
+  reconcileWenshuOfficeHarnessCapabilities();
 
   // Compatibility-only implementations for persisted/legacy invocations.
   // Exposure policy keeps these out of the Agent-visible edit surface.
