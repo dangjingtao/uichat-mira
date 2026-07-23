@@ -7,16 +7,19 @@ import { executePresentationSkillRuntime } from "@/microapps/office-suite/skill-
 
 const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
+type JsonRecord = Record<string, unknown>;
+
+const isRecord = (value: unknown): value is JsonRecord =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
 const requireString = (value: unknown, field: string) => {
   if (typeof value !== "string" || !value.trim()) throw mcpBadRequest(`${field} is required`);
   return value.trim();
 };
 
 const requireSpec = (value: unknown, field = "spec") => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw mcpBadRequest(`${field} must be an object`);
-  }
-  return value as Record<string, unknown>;
+  if (!isRecord(value)) throw mcpBadRequest(`${field} must be an object`);
+  return value;
 };
 
 const summarize = (value: unknown) => {
@@ -36,62 +39,91 @@ const resolveAssetPath = (value: string) => {
   return resolved;
 };
 
-const preparePresentationSpec = (value: Record<string, unknown>) => {
-  const spec = structuredClone(value);
-  const pages = Array.isArray(spec.pages) ? spec.pages : [];
-  for (const pageValue of pages) {
-    if (!pageValue || typeof pageValue !== "object" || Array.isArray(pageValue)) continue;
-    const page = pageValue as Record<string, unknown>;
-    const background = page.background;
-    if (background && typeof background === "object" && !Array.isArray(background)) {
-      const backgroundRecord = background as Record<string, unknown>;
-      if (backgroundRecord.type === "image" && typeof backgroundRecord.src === "string") {
-        backgroundRecord.src = resolveAssetPath(backgroundRecord.src);
-      }
+const resolveImageSource = (value: unknown) => {
+  if (!isRecord(value) || value.type !== "image" || typeof value.src !== "string") return;
+  value.src = resolveAssetPath(value.src);
+};
+
+const resolvePageAssets = (page: JsonRecord) => {
+  resolveImageSource(page.background);
+  const elements = Array.isArray(page.elements) ? page.elements : [];
+  for (const value of elements) {
+    if (!isRecord(value)) continue;
+    const elementType = String(value.elementType ?? "").toLowerCase();
+    if (elementType === "image" && typeof value.src === "string") {
+      value.src = resolveAssetPath(value.src);
     }
-    const elements = Array.isArray(page.elements) ? page.elements : [];
-    for (const elementValue of elements) {
-      if (!elementValue || typeof elementValue !== "object" || Array.isArray(elementValue)) continue;
-      const element = elementValue as Record<string, unknown>;
-      const elementType = String(element.elementType ?? element.type ?? "").toLowerCase();
-      if (elementType !== "image") continue;
-      const content = element.content;
-      if (!content || typeof content !== "object" || Array.isArray(content)) continue;
-      const contentRecord = content as Record<string, unknown>;
-      for (const key of ["src", "path"] as const) {
-        if (typeof contentRecord[key] === "string" && contentRecord[key]) {
-          contentRecord[key] = resolveAssetPath(contentRecord[key] as string);
-          break;
+    resolveImageSource(value.fill);
+    if (elementType === "table" && Array.isArray(value.rows)) {
+      for (const row of value.rows) {
+        if (!Array.isArray(row)) continue;
+        for (const cell of row) {
+          if (isRecord(cell)) resolveImageSource(cell.fill);
         }
       }
+    }
+  }
+};
+
+const preparePresentationSpec = (value: JsonRecord) => {
+  const spec = structuredClone(value);
+  if (!isRecord(spec.entry)) {
+    throw mcpBadRequest("spec.entry must be the native Kimi PPTD root object");
+  }
+  if (!isRecord(spec.pageFiles)) {
+    throw mcpBadRequest("spec.pageFiles must map relative .page paths to page objects");
+  }
+  const pages = spec.entry.pages;
+  if (!Array.isArray(pages) || pages.length === 0 || pages.some((item) => typeof item !== "string")) {
+    throw mcpBadRequest("spec.entry.pages must be a non-empty array of relative .page paths");
+  }
+  const referenced = new Set<string>();
+  for (const item of pages) {
+    const pagePath = (item as string).replace(/\\/g, "/").trim();
+    if (!pagePath.endsWith(".page") || pagePath.startsWith("/") || pagePath.includes("..")) {
+      throw mcpBadRequest(`Invalid PPTD page path: ${item}`);
+    }
+    if (referenced.has(pagePath)) throw mcpBadRequest(`Duplicate PPTD page path: ${pagePath}`);
+    referenced.add(pagePath);
+    const page = spec.pageFiles[pagePath];
+    if (!isRecord(page)) throw mcpBadRequest(`spec.pageFiles is missing ${pagePath}`);
+    resolvePageAssets(page);
+  }
+  for (const pagePath of Object.keys(spec.pageFiles)) {
+    if (!referenced.has(pagePath)) {
+      throw mcpBadRequest(`spec.pageFiles contains an unreferenced page: ${pagePath}`);
     }
   }
   return spec;
 };
 
 const assertNoBlockingValidationErrors = (validation: unknown, label = "Presentation") => {
-  const record =
-    validation && typeof validation === "object" && !Array.isArray(validation)
-      ? (validation as Record<string, unknown>)
-      : {};
+  const record = isRecord(validation) ? validation : {};
   if (typeof record.errors === "number" && record.errors > 0) {
     throw mcpBadRequest(`${label} validation failed with ${record.errors} blocking issue(s)`);
   }
 };
 
-const createOne = async (input: {
-  outputPath: string;
-  spec: Record<string, unknown>;
-}) => {
+const assertFinalInspection = (spec: JsonRecord, inspection: unknown, label: string) => {
+  const entry = isRecord(spec.entry) ? spec.entry : {};
+  const expectedPages = Array.isArray(entry.pages) ? entry.pages.length : 0;
+  const record = isRecord(inspection) ? inspection : {};
+  const actualPages = typeof record.slideCount === "number" ? record.slideCount : undefined;
+  if (actualPages === undefined) {
+    throw mcpBadRequest(`${label} inspection did not return slideCount`);
+  }
+  if (actualPages !== expectedPages) {
+    throw mcpBadRequest(`${label} verification failed: expected ${expectedPages} slides, got ${actualPages}`);
+  }
+};
+
+const createOne = async (input: { outputPath: string; spec: JsonRecord }) => {
   if (!input.outputPath.toLowerCase().endsWith(".pptx")) {
     throw mcpBadRequest("outputPath must be a .pptx file");
   }
   const resolvedOutput = resolveWorkspaceWritePath(input.outputPath);
   const preparedSpec = preparePresentationSpec(input.spec);
-  const validation = await executePresentationSkillRuntime({
-    operation: "validate",
-    spec: preparedSpec,
-  });
+  const validation = await executePresentationSkillRuntime({ operation: "validate", spec: preparedSpec });
   assertNoBlockingValidationErrors(validation, input.outputPath);
   const created = await executePresentationSkillRuntime({
     operation: "create",
@@ -102,15 +134,39 @@ const createOne = async (input: {
     operation: "inspect",
     inputPath: resolvedOutput,
   });
+  assertFinalInspection(preparedSpec, inspection, input.outputPath);
   return { outputPath: input.outputPath, validation, created, inspection };
 };
+
+const nativePptdSpecSchema = () => ({
+  type: "object",
+  required: ["entry", "pageFiles"],
+  properties: {
+    entry: {
+      type: "object",
+      required: ["pages"],
+      description: "Native Kimi .pptd root: title, size, theme and relative .page references.",
+      properties: {
+        title: { type: "string" },
+        size: { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2 },
+        theme: { type: "object" },
+        pages: { type: "array", minItems: 1, items: { type: "string" } },
+      },
+    },
+    pageFiles: {
+      type: "object",
+      description:
+        "Map each entry.pages path to its native Kimi .page object. Text elements must use content.text.",
+    },
+  },
+});
 
 export const officePresentationTool: McpToolImplementation = {
   definition: {
     id: "office_presentation",
     title: "Office Presentation",
     description:
-      "Task-level PPTX capability used by the pptx and pptx-swarm Skills. Validate/create one structured presentation, create a batch of long/multiple presentations after all specs are ready, or inspect PPTX output. Uses a PPTD-like structured AST with editable native text/shapes/tables/charts.",
+      "Task-level PPTX capability backed by Kimi's original multi-file PPTD checker/parser/renderer. Validate or create a native {entry,pageFiles} project, create a prepared batch, or inspect final PPTX output. Creation fails when final slide count or requested text is missing.",
     domain: "edit",
     source: "internal",
     mode: "sync",
@@ -118,48 +174,23 @@ export const officePresentationTool: McpToolImplementation = {
       type: "object",
       required: ["operation"],
       properties: {
-        operation: {
-          type: "string",
-          enum: ["create", "create_batch", "validate", "inspect"],
-        },
-        inputPath: {
-          type: "string",
-          description: "Workspace-relative .pptx path for inspect.",
-        },
-        outputPath: {
-          type: "string",
-          description: "Workspace-relative .pptx output path for create.",
-        },
-        spec: {
-          type: "object",
-          description:
-            "PPTD-like presentation AST: size [w,h], theme colors/textStyles, pages, and positioned elements. Elements: text, shape, image, icon, table, chart. Bounds are [x,y,w,h] with 1 unit = 1 point. Local image paths must be workspace-relative; data URIs are allowed.",
-        },
+        operation: { type: "string", enum: ["create", "create_batch", "validate", "inspect"] },
+        inputPath: { type: "string", description: "Workspace-relative .pptx path for inspect." },
+        outputPath: { type: "string", description: "Workspace-relative .pptx output path for create." },
+        spec: nativePptdSpecSchema(),
         presentations: {
           type: "array",
           description:
-            "For create_batch: all presentation specs must be supplied before execution. Each item contains outputPath and spec.",
+            "For create_batch: all native PPTD projects must be supplied before execution. Each item contains outputPath and spec.",
           items: {
             type: "object",
             required: ["outputPath", "spec"],
-            properties: {
-              outputPath: { type: "string" },
-              spec: { type: "object" },
-            },
+            properties: { outputPath: { type: "string" }, spec: nativePptdSpecSchema() },
           },
         },
       },
     },
-    tags: [
-      "office",
-      "powerpoint",
-      "ppt",
-      "pptx",
-      "slides",
-      "presentation",
-      "skill",
-      "swarm",
-    ],
+    tags: ["office", "powerpoint", "ppt", "pptx", "slides", "presentation", "skill", "swarm"],
     capabilities: {
       sideEffect: "local-write",
       requiresApproval: true,
@@ -177,7 +208,7 @@ export const officePresentationTool: McpToolImplementation = {
         result: { operation, validation },
         evidence: {
           status: "completed",
-          actionTaken: "Validated presentation specification",
+          actionTaken: "Validated native Kimi PPTD project",
           facts: [`Validation: ${summarize(validation)}`],
           data: { kind: "office_presentation", operation, validation },
         },
@@ -186,17 +217,12 @@ export const officePresentationTool: McpToolImplementation = {
 
     if (operation === "inspect") {
       const inputPath = requireString(context.args.inputPath, "inputPath");
-      if (!inputPath.toLowerCase().endsWith(".pptx")) {
-        throw mcpBadRequest("inputPath must be a .pptx file");
-      }
+      if (!inputPath.toLowerCase().endsWith(".pptx")) throw mcpBadRequest("inputPath must be a .pptx file");
       const resolvedInput = resolveWorkspacePath(inputPath);
       if (!fs.existsSync(resolvedInput) || !fs.statSync(resolvedInput).isFile()) {
         throw mcpBadRequest(`inputPath does not exist: ${inputPath}`);
       }
-      const inspection = await executePresentationSkillRuntime({
-        operation: "inspect",
-        inputPath: resolvedInput,
-      });
+      const inspection = await executePresentationSkillRuntime({ operation: "inspect", inputPath: resolvedInput });
       return {
         result: { operation, inputPath, inspection },
         evidence: {
@@ -213,34 +239,25 @@ export const officePresentationTool: McpToolImplementation = {
         throw mcpBadRequest("create_batch requires a non-empty presentations array");
       }
       const entries = context.args.presentations.map((value, index) => {
-        if (!value || typeof value !== "object" || Array.isArray(value)) {
-          throw mcpBadRequest(`presentations[${index}] must be an object`);
-        }
-        const entry = value as Record<string, unknown>;
-        const outputPath = requireString(entry.outputPath, `presentations[${index}].outputPath`);
-        const spec = preparePresentationSpec(
-          requireSpec(entry.spec, `presentations[${index}].spec`),
-        );
+        if (!isRecord(value)) throw mcpBadRequest(`presentations[${index}] must be an object`);
+        const outputPath = requireString(value.outputPath, `presentations[${index}].outputPath`);
+        const spec = preparePresentationSpec(requireSpec(value.spec, `presentations[${index}].spec`));
         return { outputPath, spec };
       });
 
-      // Swarm contract: all deck specs exist first, then validate all, then create all.
-      const validations = [] as Array<{ outputPath: string; validation: unknown }>;
+      const validations: Array<{ outputPath: string; validation: unknown }> = [];
       for (const entry of entries) {
-        const validation = await executePresentationSkillRuntime({
-          operation: "validate",
-          spec: entry.spec,
-        });
+        const validation = await executePresentationSkillRuntime({ operation: "validate", spec: entry.spec });
         assertNoBlockingValidationErrors(validation, entry.outputPath);
         validations.push({ outputPath: entry.outputPath, validation });
       }
 
-      const outputs = [] as Array<{
+      const outputs: Array<{
         outputPath: string;
         validation: unknown;
         created: unknown;
         inspection: unknown;
-      }>;
+      }> = [];
       for (let index = 0; index < entries.length; index += 1) {
         const entry = entries[index]!;
         if (!entry.outputPath.toLowerCase().endsWith(".pptx")) {
@@ -256,6 +273,7 @@ export const officePresentationTool: McpToolImplementation = {
           operation: "inspect",
           inputPath: resolvedOutput,
         });
+        assertFinalInspection(entry.spec, inspection, entry.outputPath);
         const validation = validations[index]!.validation;
         outputs.push({ outputPath: entry.outputPath, validation, created, inspection });
         context.addArtifact({
@@ -275,7 +293,7 @@ export const officePresentationTool: McpToolImplementation = {
         result: { operation, count: outputs.length, outputs },
         evidence: {
           status: "completed",
-          actionTaken: `Created ${outputs.length} presentations after validating the complete batch`,
+          actionTaken: `Created and verified ${outputs.length} presentations`,
           facts: outputs.map((item) => `Output: ${item.outputPath}`),
           data: {
             kind: "office_presentation",
@@ -292,10 +310,7 @@ export const officePresentationTool: McpToolImplementation = {
     }
 
     const outputPath = requireString(context.args.outputPath, "outputPath");
-    const result = await createOne({
-      outputPath,
-      spec: requireSpec(context.args.spec),
-    });
+    const result = await createOne({ outputPath, spec: requireSpec(context.args.spec) });
     context.addArtifact({
       kind: "document",
       title: path.basename(outputPath),
@@ -311,7 +326,7 @@ export const officePresentationTool: McpToolImplementation = {
       result: { operation, ...result },
       evidence: {
         status: "completed",
-        actionTaken: `Created presentation at ${outputPath}`,
+        actionTaken: `Created and verified presentation at ${outputPath}`,
         facts: [
           `Output: ${outputPath}`,
           `Validation: ${summarize(result.validation)}`,
