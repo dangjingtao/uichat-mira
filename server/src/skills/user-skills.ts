@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { resolveUserSkillsRoot } from "./context/scanner.js";
@@ -61,13 +62,14 @@ const deriveDescription = (body: string, title: string) => {
 };
 
 const slugify = (value: string) => {
-  const slug = value
-    .normalize("NFKC")
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}_-]+/gu, "-")
+  const normalized = value.normalize("NFKC").toLowerCase();
+  const slug = normalized
+    .replace(/[^a-z0-9_-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 64);
-  return slug || `skill-${Date.now().toString(36)}`;
+  if (slug) return slug;
+  const digest = createHash("sha1").update(normalized).digest("hex").slice(0, 8);
+  return `skill-${digest}`;
 };
 
 const yamlValue = (value: string) => JSON.stringify(value);
