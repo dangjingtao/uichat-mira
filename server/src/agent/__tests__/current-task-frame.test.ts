@@ -68,6 +68,7 @@ test("createInitialAgentGraphState initializes the runtime-minimum currentTaskFr
 
   assert.equal("selectedToolId" in state, false);
   assert.deepEqual(state.currentTaskFrame, {
+    globalGoal: "inspect docs",
     currentGoal: "inspect docs",
     currentSubtask: "Prepare context and determine the next action.",
     currentBlocker: undefined,
@@ -76,7 +77,7 @@ test("createInitialAgentGraphState initializes the runtime-minimum currentTaskFr
   });
 });
 
-test("createInitialAgentGraphState prefers the latest user question over goal text when initializing currentTaskFrame", () => {
+test("createInitialAgentGraphState keeps globalGoal stable while currentGoal follows the latest user question", () => {
   const state = createInitialAgentGraphState({
     runId: "run-1",
     threadId: "thread-1",
@@ -103,6 +104,7 @@ test("createInitialAgentGraphState prefers the latest user question over goal te
     ],
   });
 
+  assert.equal(state.currentTaskFrame?.globalGoal, "historic goal text");
   assert.equal(
     state.currentTaskFrame?.currentGoal,
     "Please inspect docs/README.md",
@@ -144,6 +146,7 @@ test("prepareContextNode keeps the initialized currentTaskFrame unchanged", asyn
   assert.deepEqual(patch.toolExposure?.exposedTools, []);
   assert.equal(patch.toolIntent?.query, "inspect docs");
   assert.deepEqual(initialState.currentTaskFrame, {
+    globalGoal: "inspect docs",
     currentGoal: "inspect docs",
     currentSubtask: "Prepare context and determine the next action.",
     currentBlocker: undefined,
@@ -199,7 +202,6 @@ test("prepareContextNode initializes runtime toolExposure independently from too
         },
       ],
     });
-
     const conflictingState = createBaseState({
       ...patch,
       toolIntent: {
