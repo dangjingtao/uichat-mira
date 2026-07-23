@@ -1,3 +1,4 @@
+import type { Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { getDefaultSkillRegistry } from "./context/scanner.js";
@@ -11,7 +12,7 @@ const listRelativeFiles = async (root: string) => {
   const files: string[] = [];
   const walk = async (dir: string) => {
     if (files.length >= MAX_CATALOG_FILES) return;
-    let entries: Awaited<ReturnType<typeof fs.readdir>>;
+    let entries: Dirent[];
     try {
       entries = await fs.readdir(dir, { withFileTypes: true });
     } catch {
