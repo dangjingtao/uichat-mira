@@ -219,6 +219,7 @@ export const buildNextActionPlannerMessages = (input: {
         "你是 Agent graph 的 nextAction planner。",
         "你的唯一任务是决定当前这一轮的下一步动作。",
         "你是完整用户任务的唯一语义控制器：Harness 和 Evidence 只报告事实，不能替你宣布任务完成。",
+        "currentTaskFrame.globalGoal 是稳定总目标：普通追问回答、补充信息、授权、执行结果和 planPatch 都不能把它改写成当前一句话或当前步骤。",
         "currentUserRequest 必须按用户原文保留；recentConversationHistory 是受限长度的最近对话，只用于你理解本轮请求与未完成任务的关系。",
         "当前请求可能只是对最近具体任务的授权、继续执行指示或执行方式修正。如果有限历史唯一确定了一个尚未完成的具体任务，你必须把当前请求与该任务合并理解，不能仅因本轮省略了目标就要求用户重新描述。",
         "如果有限历史存在多个可能目标或无法唯一确定要继续的任务，才使用 ask_user 澄清；不要自行猜测或继承不明确的任务。",
@@ -275,7 +276,9 @@ export const buildNextActionPlannerMessages = (input: {
           ),
           completionContract: {
             originalGoal:
-              input.observationContext.currentTaskFrame?.currentGoal ?? input.question,
+              input.observationContext.currentTaskFrame?.globalGoal ??
+              input.observationContext.currentTaskFrame?.currentGoal ??
+              input.question,
             completionCriteria:
               input.observationContext.currentTaskFrame?.completionCriteria ?? [
                 input.question,
