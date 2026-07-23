@@ -23,7 +23,16 @@ export type SkillDirective = {
    */
   delivery?: {
     kind: "markdown" | "inline_html";
+    /** Short text fallback delivered as the assistant text answer. */
     content: string;
+    /** Deterministic HTML report rendered from the same structured state. */
+    inlineHtml?: string;
+    reportTitle?: string;
+    pdf?: {
+      available: boolean;
+      fileName: string;
+      error?: string;
+    };
   };
 };
 
