@@ -98,15 +98,10 @@ export const getWenshuRuntimeStatus = () => get<WenshuRuntimeStatus>(STATUS_ROUT
 
 export const getWenshuSkillCatalog = () => get<WenshuSkillCatalog>(CATALOG_ROUTE);
 
-export const importMarkdownSkill = async (file: File) => {
+export const importMarkdownSkill = (file: File) => {
   const formData = new FormData();
   formData.append("file", file);
-  const response = await client.post<{ success: true; data: ImportedMarkdownSkill }>(
-    IMPORT_ROUTE,
-    formData,
-  );
-  if (!response.data.success) throw new Error("Markdown Skill 导入失败");
-  return response.data.data;
+  return post<ImportedMarkdownSkill>(IMPORT_ROUTE, formData);
 };
 
 export const getWenshuCapabilityPackStatus = () =>
