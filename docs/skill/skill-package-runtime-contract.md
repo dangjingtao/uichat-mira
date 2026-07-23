@@ -89,18 +89,20 @@ wenshu-office
 安装 Runtime Pack：
 
 - 可以使某些 Domain Runtime 从 unavailable 变成 available；
+- 可以改变 **environment capability eligibility**，由 Harness 独立 reconciliation 决定预声明 Tool 是否注册；
 - 不等于 SkillContext 被激活；
 - 不创建 SkillInstance；
 - 不新增 `use_skill` action；
-- 不自动注册或扩大 Harness `toolExposure`；
+- 不因为某个 Skill 命中而直接 push Tool 进 `state.toolExposure`；
 - 不拥有 approval / sandbox / trace 权力。
 
-因此三个状态必须分离：
+因此四个状态必须分离：
 
 ```text
 Skill Package installed / bundled
 SkillContext active for current task
 Runtime Pack available
+Harness execution capability eligible
 ```
 
 它们不是同一个布尔值。
@@ -156,6 +158,8 @@ broken / repair-needed
 ```
 
 具体根目录允许由 `MIRA_RUNTIME_PACKS_DIR` 覆盖。
+
+`manifest.json` 只在 staging 依赖通过模块校验后写入，因此 Harness 可以使用“manifest + site-packages 存在”作为低成本 readiness marker；完整健康检查仍由异步 module probe 负责。
 
 ---
 
@@ -218,21 +222,45 @@ Skill match
 
 基础 SkillContext 可以接入 Agent，但不拥有 Harness 工具面。
 
-必须保持：
+当前两条独立链：
 
 ```text
-Harness / environment
-  -> state.toolExposure
+Runtime Pack / environment readiness
+  ↓
+Harness capability reconciliation
+  ↓
+Harness eligible capabilities
+  ↓ matcher / Policy
+state.toolExposure
 
-SkillMatcher / Loader
-  -> SkillContext
+SkillScanner / Registry / Matcher / Loader
+  ↓
+SkillContext
+  ↓
+currentTaskFrame / Planner context
 ```
 
-SkillContext 可以说明某个 Tool / Runtime 应该怎么用，但：
+文枢当前规则：
 
-- 不 push 新 Tool 进 `state.toolExposure`；
-- 不让 Runtime Pack 安装自动变成 Agent Tool 注册；
-- 不绕过 Policy / Approval / Sandbox。
+```text
+docx runtime built-in
+  -> office_document 可作为正常 Harness capability
+
+wenshu-office verified ready
+  -> office_pdf / office_spreadsheet / office_presentation
+     才进入 Harness capability registry
+
+wenshu-office unavailable
+  -> 上述三个 capability 从 registry 撤出
+```
+
+必须注意：
+
+- **Skill 命中不参与 Tool 注册决策**；
+- SkillContext 不 push 新 Tool 进 `state.toolExposure`；
+- Runtime Pack readiness 只改变环境真实可用性，不绕过 capability matcher / Policy / Approval / Sandbox；
+- 安装完成后，下一次上下文准备可通过环境 reconciliation 看到新能力，不需要创建 SkillInstance；
+- Runtime Pack 被移除后，同一 reconciliation 会撤掉对应可选 capability。
 
 如果后续 Stateful Skill Runtime 需要 stage-specific tool constraints，则逻辑仍是：
 
@@ -267,6 +295,16 @@ SkillContext 也不要求必须经过 MicroAPP 才能工作。
 
 ## Current Implementation Anchors
 
+Skill Context：
+
+- `server/src/skills/context/scanner.ts`
+- `server/src/skills/context/matcher.ts`
+- `server/src/skills/context/loader.ts`
+- `server/src/skills/context/index.ts`
+- `server/src/agent/nodes/prepare-context.ts`
+
+Package / Runtime Pack：
+
 - `server/src/skills/registry.ts`
 - `server/src/microapps/office-suite/capability-pack.ts`
 - `server/src/microapps/office-suite/runtime-pack-paths.ts`
@@ -274,9 +312,15 @@ SkillContext 也不要求必须经过 MicroAPP 才能工作。
 - `server/tools/wenshu/requirements.txt`
 - `desktop/src/features/Settings/pages/Skills/`
 
-这些锚点当前主要覆盖 Package Catalog / Runtime Pack 安装与文枢 Domain Runtime。
+Harness execution eligibility：
 
-基础 `SkillScanner / SkillMatcher / SkillLoader / SkillContext` 的正式实现以 `skill-context-design.md` 为目标合同，尚未因为本文件而自动视为已完成。
+- `server/src/harness/wenshu-office-capability.ts`
+- `server/src/harness/runtime.ts`
+- `server/src/agent/nodes/prepare-context.ts`
+
+当前基础 `SkillScanner / SkillRegistry / SkillMatcher / SkillLoader / SkillContext` 已按 `skill-context-design.md` 落地首版，并以 DOCX / XLSX / PDF / PPTX 作为 V1 验证对象。
+
+Stateful Skill Runtime 仍是可选后续层，当前不视为基础 Skill V1 的未完成项。
 
 ---
 
@@ -285,10 +329,11 @@ SkillContext 也不要求必须经过 MicroAPP 才能工作。
 1. Skill Package 是真正的 Skill 分发单位，但安装 Package 不等于当前任务已激活 SkillContext。
 2. Runtime Pack 是执行依赖，不是 Skill 本体。
 3. Runtime Pack 安装不创建 SkillInstance。
-4. Runtime Pack 安装不得扩大 Harness 权限或工具面。
-5. 基础 SkillContext 可以在没有 Stateful Skill Runtime 的情况下工作。
-6. 未安装 Runtime 时，Skill 可以被发现 / 匹配，但真实执行能力必须诚实报告 unavailable。
-7. 第三方 Python 依赖不污染用户全局 Python。
-8. 安装失败不留下 installed 真值。
-9. Stateful Skill Runtime 是可选高级层。
-10. 上位真相源为 `README.md`、`skill-context-design.md` 和 `skill-runtime-design.md` 各自负责的边界。
+4. SkillContext 命中不得注册 Tool 或扩大 `state.toolExposure`。
+5. Runtime Pack readiness 可以改变预声明执行能力的环境 eligibility，但必须由 Harness 独立 reconciliation 完成，并继续服从 matcher / Policy / Approval / Sandbox。
+6. 基础 SkillContext 可以在没有 Stateful Skill Runtime 的情况下工作。
+7. 未安装 Runtime 时，Skill 可以被发现 / 匹配，但真实执行能力必须诚实 unavailable。
+8. 第三方 Python 依赖不污染用户全局 Python。
+9. 安装失败不留下 installed 真值。
+10. Stateful Skill Runtime 是可选高级层。
+11. 上位真相源为 `README.md`、`skill-context-design.md` 和 `skill-runtime-design.md` 各自负责的边界。
