@@ -5,6 +5,7 @@ export type SkillManifest = {
   version: string;
   entry: string;
   source?: string;
+  category?: string;
   license?: string;
   runtimeRequirements?: string[];
 };
