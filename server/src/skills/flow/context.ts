@@ -3,6 +3,16 @@ import { toPlannerSkillDirective, type SkillDirective } from "./types.js";
 
 const DIRECTIVE_PREFIX = "MIRA_SKILL_DIRECTIVE_V1:";
 const DELIVERY_PREFIX = "MIRA_SKILL_DELIVERY_V1:";
+const REPORT_MARKER_PREFIX = "mira-skill-report";
+
+const toDeliveryContent = (directive: SkillDirective) => {
+  const delivery = directive.delivery;
+  if (!delivery) return "";
+  if (!delivery.inlineHtml) return delivery.content;
+
+  const pdfState = delivery.pdf?.available ? "pdf" : "html";
+  return `${delivery.content}\n\n<!--${REPORT_MARKER_PREFIX}:${directive.sessionId}:${pdfState}-->`;
+};
 
 export const buildSkillFlowRequestContextMessages = (
   directive: SkillDirective | undefined,
@@ -23,7 +33,7 @@ export const buildSkillFlowRequestContextMessages = (
       role: "system",
       content: `${DELIVERY_PREFIX}${JSON.stringify({
         kind: directive.delivery.kind,
-        content: directive.delivery.content,
+        content: toDeliveryContent(directive),
       })}`,
       parts: [],
       // Deterministic Skill delivery is consumed by the Generate wrapper itself.
