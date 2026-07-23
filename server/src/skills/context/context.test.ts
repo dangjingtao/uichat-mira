@@ -87,6 +87,18 @@ describe("SkillMatcher", () => {
     expect(result.primary?.score).toBeGreaterThanOrEqual(0.9);
   });
 
+  it("matches long presentation requests to pptx as the single primary Skill", () => {
+    const matcher = new SkillMatcher();
+    const result = matcher.match({
+      query: "帮我做一份 30 页融资路演 PPT",
+      manifests,
+      messages: [{ role: "user", content: "帮我做一份 30 页融资路演 PPT" }],
+    });
+
+    expect(result.primary?.skillId).toBe("pptx");
+    expect(result.primary?.score).toBeGreaterThanOrEqual(0.9);
+  });
+
   it("gives explicit triggers highest priority", () => {
     const matcher = new SkillMatcher();
     const result = matcher.match({
