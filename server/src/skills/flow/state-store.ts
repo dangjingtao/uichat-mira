@@ -40,7 +40,19 @@ export const saveSkillFlowSession = async (session: StoredSkillFlowSession) => {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tempPath, `${JSON.stringify(session, null, 2)}\n`, "utf8");
-  await fs.rename(tempPath, filePath);
+  try {
+    await fs.rename(tempPath, filePath);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== "EEXIST" && code !== "EPERM") {
+      await fs.rm(tempPath, { force: true });
+      throw error;
+    }
+    // Some Windows filesystems refuse rename-over-existing. Keep the normal
+    // atomic rename path everywhere else and use a bounded replacement fallback.
+    await fs.rm(filePath, { force: true });
+    await fs.rename(tempPath, filePath);
+  }
   return filePath;
 };
 
