@@ -67,7 +67,11 @@ const executeBoundedHandoff = async (
   if (!result.directive.flowCompleted || !targetSkillId) return result;
 
   const handoffRuntime = getSkillDirectiveHandoffRuntime(targetSkillId);
-  if (!handoffRuntime) return result;
+  if (!handoffRuntime) {
+    throw new Error(
+      `Skill directive requested unavailable handoff runtime: ${targetSkillId}`,
+    );
+  }
 
   return handoffRuntime.execute({
     session: result.session,
