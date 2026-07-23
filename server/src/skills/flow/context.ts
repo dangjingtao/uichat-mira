@@ -1,5 +1,9 @@
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
-import { toPlannerSkillDirective, type SkillDirective } from "./types.js";
+import {
+  toPlannerSkillDirective,
+  type PlannerSkillDirective,
+  type SkillDirective,
+} from "./types.js";
 
 const DIRECTIVE_PREFIX = "MIRA_SKILL_DIRECTIVE_V1:";
 const DELIVERY_PREFIX = "MIRA_SKILL_DELIVERY_V1:";
@@ -47,7 +51,7 @@ export const buildSkillFlowRequestContextMessages = (
 
 export const readSkillDirectiveFromRequestContext = (
   messages: NormalizedChatMessage[] | undefined,
-): SkillDirective | undefined => {
+): PlannerSkillDirective | undefined => {
   const message = [...(messages ?? [])]
     .reverse()
     .find((item) => item.role === "system" && item.content.startsWith(DIRECTIVE_PREFIX));
@@ -55,7 +59,7 @@ export const readSkillDirectiveFromRequestContext = (
   try {
     const parsed = JSON.parse(message.content.slice(DIRECTIVE_PREFIX.length)) as unknown;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
-    const value = parsed as SkillDirective;
+    const value = parsed as PlannerSkillDirective;
     return typeof value.skillId === "string" && typeof value.phase === "string"
       ? value
       : undefined;
