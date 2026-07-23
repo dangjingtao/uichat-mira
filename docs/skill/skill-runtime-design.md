@@ -1,8 +1,9 @@
 # Stateful Skill Runtime 设计
 
 Status: Planned
+Protocol: V1 Settled
 Owner: chat / runtime
-Last verified: 2026-07-23
+Last verified: 2026-07-24
 Layer: raw-source
 Module: SKILL
 Feature: StatefulSkillRuntime
@@ -17,67 +18,134 @@ Related:
   - ../tooling-runtime/tools-protocol.md
   - ../development/agent-observability.md
 
-## Purpose
+## 0. 本页结论
 
-这页定义 Mira **可选 Stateful Skill Runtime** 的运行时边界。
+本页只定义 **可选 Stateful Skill Runtime**，不改变 Base Skill 的正式定义：
 
-它不是所有 Skill 的最低实现门槛。
+> **Base Skill 是通过渐进式披露，向 Agent 注入领域知识、执行策略和能力使用说明的上下文能力包。**
 
-基础 Skill 的正式定义见 `README.md` 与 `skill-context-design.md`：
+当一个 Skill 需要跨轮维护业务状态、恢复执行、生成确定性产物，或在执行中发现缺失条件时，才接入 Stateful Skill Runtime。
 
-> **Skill 本体 = 渐进式披露的动态上下文能力包。**
+V1 的核心边界：
 
-当某个 Skill 的真实业务需要跨多步执行维护内部状态、阶段、恢复、Evidence reduction 或 stage-specific tool constraints 时，才接入本页定义的 Stateful Skill Runtime。
+1. **Parent Agent Loop 始终是唯一主流程。**
+2. **Planner 始终拥有用户对话控制权。**
+3. Skill 可以报告“我缺什么”，但不能直接向用户追问。
+4. Skill 内部需要 TaskModel 时，可以通过受治理接口直接调用，不需要向 Planner 申请。
+5. Skill 不直接执行 Harness Tool / MCP，不生成 `pendingToolCall`，不绕过 Policy / Approval / Sandbox。
+6. Skill 的完整业务状态留在 Skill Runtime Store；Planner 只看到小型运行投影和结构化执行结果。
+7. V1 不新增第二 Agent Loop，不新增 `use_skill` Planner action，不支持 nested Skill / cross-Skill handoff。
 
-因此：
+一句话：
 
-```text
-Base Skill
-= Manifest + SKILL.md + Resources + Dynamic SkillContext
-
-Optional Stateful Skill Runtime
-= SkillDefinition + SkillInstance + State/Stage + Reducer + Lifecycle
-```
-
-这不是两种互斥架构，而是同一 Skill 体系的基础层与高级层。
+> **Skill 是可中断、可恢复的业务执行单元；Planner 决定问不问、继续不继续、何时结束。**
 
 ---
 
-## When To Use Stateful Runtime
+## 1. 为什么需要 Stateful Runtime
 
 适合：
 
-- 任务跨多个 Agent / Tool turn 才能完成；
-- 必须可靠记住当前业务阶段；
-- 某些阶段允许的工具不同；
-- 需要从 accepted Evidence 推进业务状态；
+- 任务跨多个用户轮或执行步骤才能完成；
+- 必须可靠记住业务阶段和已确认数据；
 - 需要 checkpoint / resume / cancel；
-- 需要强 completion criteria，不能仅靠模型一句“完成了”；
-- 失败后需要明确恢复点。
+- 需要确定性报告、结构化输出或 artifact；
+- 执行过程中会发现缺失输入或依赖；
+- 需要强 completion truth，不能只依赖模型一句“完成了”；
+- 需要在 Evidence 到达后更新业务状态。
 
-不适合为了“让一个东西叫 Skill”而强行引入。
+不适合：
 
-以下通常只需要基础 SkillContext：
+- DOCX / PDF / XLSX / PPTX 的普通使用说明；
+- 搜索策略；
+- 简单代码审查规则；
+- 只需要 SKILL.md + Reference 的单轮任务。
 
-- DOCX 使用说明；
-- PDF 路由规则；
-- Excel 建模规范；
-- PPT 设计规范；
-- Web Search 方法；
-- 简单代码审查策略。
+这些继续使用 Base SkillContext。
 
 ---
 
-## Current Runtime Constraints
+## 2. 三层上下文，不造万能 Skill ctx
 
-Stateful Skill Runtime 必须建立在当前 AgentGraph / Harness 合同上，而不是重新设计 Agent 主循环。
-
-当前稳定主线：
+Mira 不给 Skill 复制一套完整 Agent Context。
 
 ```text
-AgentRun
-  -> AgentGraph facade
-  -> Planner
+Agent shared context
+├─ CurrentTaskFrame
+│  └─ 全局目标、当前任务、完成条件、进度与剩余工作
+├─ SkillContext
+│  └─ 当前领域应该怎么做
+├─ SkillRuntimeProjection
+│  └─ 当前 Stateful Skill 做到哪、刚返回了什么
+├─ Evidence / Observation
+│  └─ 工具、检索和 Skill 执行的真实结果
+└─ Conversation
+   └─ 用户与 Agent 对话
+```
+
+### 2.1 CurrentTaskFrame
+
+由 Planner 负责解释和维护任务语义：
+
+```text
+globalGoal
+currentGoal
+currentSubtask
+currentBlocker
+completionCriteria
+coveredProgress
+remainingWork
+confirmedObjects
+```
+
+Skill 不直接改写 `globalGoal / completionCriteria / remainingWork`。
+
+### 2.2 SkillContext
+
+Base Skill 的渐进披露结果：
+
+```text
+instruction
+primary body
+resources
+disclosedResources
+match metadata
+```
+
+它回答：
+
+```text
+这类事情应该怎么做
+```
+
+### 2.3 SkillRuntimeProjection
+
+Stateful Runtime 给 Planner 的最小事实投影，不包含完整业务 state：
+
+```ts
+type SkillRuntimeProjection = {
+  skillId: string
+  skillVersion: string
+  instanceId: string
+  status: "running" | "interrupted" | "completed" | "failed" | "cancelled"
+  stage?: string
+  stateRef?: string
+  latestResult?: SkillExecutionResult
+}
+```
+
+推荐放在独立 Agent runtime state，并通过 `PlannerObservationContext` 暴露给 Planner。
+
+不要把完整 Skill state 塞进 `CurrentTaskFrame`，也不要让 Planner 去 workspace 找 Skill state。
+
+---
+
+## 3. 唯一主流程
+
+当前 Pi-loop 保持不变：
+
+```text
+Planner
   -> Normalize
   -> Policy
   -> Tool / Retrieve
@@ -87,549 +155,646 @@ AgentRun
   -> Finalize
 ```
 
-必须保持：
+Stateful Skill Runtime 只增加一个 **bounded execution bridge**，不是第二循环。
 
-1. Planner 仍只输出现有 `nextAction`，不新增 `use_skill` action；
-2. `state.toolExposure` 仍是 Planner 可见工具面的唯一运行时真相源；
-3. 真实工具执行仍从 frozen `pendingToolCall` 开始；
-4. Policy / ToolNode / Harness 不因 Stateful Skill Runtime 改写；
-5. Tool / Retrieve 的真实结果必须先进入 Evidence；
-6. Skill reducer 只消费 accepted Evidence；
-7. Stateful Skill Runtime 不拥有第二 Agent Loop；
-8. Skill 不得恢复旧 `capabilityIntent.selectedToolIds` 等执行入口。
-
----
-
-## Core Model
+### 3.1 用户轮入口
 
 ```text
-Base SkillContext
-  ↓ provides domain semantics
-
-Optional Stateful Skill Runtime
-  ↓ adds deterministic business state/lifecycle
-
-Parent Agent
-  ↓ decides nextAction
-
-Harness / ToolExposure
-  ↓ real eligible capabilities
-
-Tool / MCP / Runtime
-  ↓ execution
-
-Evidence
-  ↓ accepted result
-
-Stateful Skill reducer
-  ↓ update state/stage
-
-Next Planner turn
-```
-
-Stateful Runtime 增加的是：
-
-```text
-可靠业务状态
-+ 合法阶段边界
-+ Evidence 驱动的状态推进
-+ completion truth
-+ recovery truth
-```
-
-它不增加第二套 Agent。
-
----
-
-## Core Objects
-
-### 1. SkillDefinition
-
-`SkillDefinition` 是版本化的高级运行定义。
-
-概念合同：
-
-```ts
-type SkillDefinition = {
-  id: string
-  version: string
-  name: string
-  description: string
-
-  inputSchema: unknown
-  outputSchema: unknown
-  stateSchema: unknown
-
-  semantics: {
-    purpose: string
-    usageGuidance: string
-    decisionPolicy: string
-    qualityCriteria: string
-    completionCriteria: string
-  }
-
-  toolPolicy: {
-    allowedToolIds: string[]
-  }
-
-  permissionRequirements?: unknown
-}
-```
-
-注意：
-
-- 这是概念合同，不提前拍死最终数据库 schema；
-- `allowedToolIds` 只表达 Skill 最大工具边界；
-- 不复制 Harness Registry；
-- Tool 参数 schema 仍以 Tool / Harness 为真相源；
-- MCP 连接、鉴权、执行协议不放进 SkillDefinition。
-
-### 2. SkillRuntimeAdapter
-
-```ts
-type SkillRuntimeAdapter<State, Input, Output> = {
-  initialize(input: Input): State
-
-  getRuntimeFrame(state: State): {
-    stage?: string
-    semanticContext: string
-    allowedToolIds: string[]
-    completionCriteria: string
-  }
-
-  reduceEvidence(state: State, evidence: unknown): State
-
-  evaluate(state: State):
-    | { status: "running" }
-    | { status: "waiting"; reason: string }
-    | { status: "completed"; output: Output }
-    | { status: "failed"; reason: string }
-}
-```
-
-职责：
-
-- 初始化业务状态；
-- 生成当前阶段的确定性运行边界；
-- 消费 accepted Evidence；
-- 更新状态；
-- 判断 running / waiting / completed / failed。
-
-不负责：
-
-- 直接调用 LLM 形成独立循环；
-- 直接执行 Tool；
-- 生成 frozen `pendingToolCall`；
-- 绕过 Planner / Policy / ToolNode。
-
-### 3. SkillInstance
-
-一次有状态业务执行产生一个实例：
-
-```ts
-type SkillInstance = {
-  id: string
-  skillId: string
-  skillVersion: string
-
-  status:
-    | "created"
-    | "running"
-    | "waiting"
-    | "completed"
-    | "failed"
-    | "cancelled"
-
-  stage?: string
-
-  input: unknown
-  state: unknown
-  output?: unknown
-
-  artifactRefs: string[]
-  checkpointRef?: string
-  error?: unknown
-}
-```
-
-State 只保存恢复业务执行真正需要的最小真相：
-
-- 当前 stage；
-- 输入 / resource refs；
-- 已确认关键中间结果；
-- pending changes；
-- artifact refs；
-- retry / recovery marker；
-- checkpoint。
-
-不复制：
-
-- 完整聊天历史；
-- 全量 Tool Result；
-- 全量 trace；
-- 大文件正文。
-
----
-
-## SkillRegistry / Runtime Registry
-
-基础 Skill Manifest Registry 与 Stateful Runtime Definition Registry 可以共享发现入口，但概念上要区分：
-
-```text
-Skill Manifest
-= 基础 Skill 可发现信息
-
-SkillDefinition
-= Stateful Runtime 的版本化执行合同
-```
-
-不是每个 Manifest 都必须存在 SkillDefinition。
-
-最小 Definition Registry 职责：
-
-```text
-register
-get(skillId, version?)
-listAvailable
-resolveVersion
-```
-
-它不管理 Tool，也不复制 Harness Registry。
-
----
-
-## Activation
-
-基础 SkillContext 可以先被命中并注入。
-
-只有当前业务确实需要 Stateful Runtime，并且该 Skill 存在已注册 Definition / Adapter 时，才创建或恢复 SkillInstance。
-
-概念链路：
-
-```text
-Prepare Context
-  -> match Base Skill
-  -> load SKILL.md / SkillContext
-  -> decide whether stateful runtime is required
-  -> optional load/create SkillInstance
-  -> optional runtime frame
-  -> tool constraint participates in exposure construction
-  -> final state.toolExposure
+User turn
+  -> Prepare Context
+  -> 匹配 / 恢复 active Stateful Skill
+  -> SkillExecutionBridge 执行一次有界 Skill step
+  -> SkillExecutionResult
+  -> Observation / PlannerObservationContext
   -> Planner
 ```
 
-Stateful Runtime 激活不是 Planner 的新 action。
-
-V1 建议同一时刻最多一个 active SkillInstance。
-
-跨 Skill 任务由 Parent Agent 顺序协调，不支持 nested Skill calling Skill。
-
----
-
-## Tool Exposure Integration
-
-Stateful Skill Runtime 不拥有第二套 ToolExposure。
-
-逻辑关系：
-
-```text
-Harness eligible tools
-  ∩ active Skill current allowedToolIds
-  ∩ Policy / environment
-  -> Harness exposure resolver
-  -> state.toolExposure
-  -> Planner
-```
-
-必须保持：
-
-- Planner 只读 `state.toolExposure`；
-- Skill toolPolicy 只能收窄，不能扩大；
-- Skill 不把自己的 tool list 直接塞给 Planner；
-- Runtime Pack 安装不自动注册 Tool；
-- SkillDefinition 声明某 Tool 不代表该 Tool 当前真实可用。
-
-如果 Skill 需要 MCP Tool：
-
-- 仍由现有 MCP / Harness Registry 提供；
-- Skill 只引用稳定 capability / tool id；
-- 不复制连接、鉴权和执行协议。
-
----
-
-## Evidence-Driven State Reduction
-
-唯一正确顺序：
+### 3.2 Evidence 到达后
 
 ```text
 Tool / Retrieve
-  ↓
-Evidence
-  ↓ accepted
-SkillRuntimeAdapter.reduceEvidence()
-  ↓
-SkillInstance state/stage
-  ↓
-next Planner turn
+  -> Evidence accepted
+  -> active Skill reducer 消费相关 Evidence
+  -> SkillExecutionBridge 再执行一次有界 step
+  -> SkillExecutionResult
+  -> Planner
 ```
 
-禁止：
+Bridge 只负责：
 
-```text
-Tool
-  -> Skill 私下消费结果
-  -> 再决定要不要写 Evidence
+- 找到或恢复 active SkillInstance；
+- 调用一次 Runtime；
+- 保存 state；
+- 把结果转换为 Planner 可见的结构化事实。
+
+Bridge 不负责：
+
+- 决定是否追问用户；
+- 决定主任务是否完成；
+- 选择下一个 Harness Tool；
+- 代替 Planner 编排多轮任务。
+
+---
+
+## 4. Skill 执行结果协议
+
+所有 Stateful Skill 必须返回统一结果：
+
+```ts
+type SkillExecutionResult<Output = unknown> =
+  | {
+      status: "completed"
+      output: Output
+      stateRef?: string
+      artifactRefs?: string[]
+      facts?: string[]
+    }
+  | {
+      status: "interrupted"
+      reason:
+        | "missing_requirement"
+        | "waiting_for_evidence"
+        | "recoverable_dependency"
+      requirements: SkillRequirement[]
+      resumeToken: string
+      stateRef?: string
+      partialOutput?: unknown
+      facts?: string[]
+    }
+  | {
+      status: "failed"
+      recoverable: boolean
+      error: string
+      stateRef?: string
+      facts?: string[]
+    }
+```
+
+Requirement 只描述业务事实：
+
+```ts
+type SkillRequirement = {
+  id: string
+  kind: "user_input" | "evidence" | "resource" | "capability"
+  description: string
+  requiredFor: string
+  acceptedFormats?: string[]
+  alternatives?: string[]
+}
+```
+
+禁止出现：
+
+```ts
+requiredAction: "ask_user"
+question: "请问……"
+nextAction: "use_tool"
+pendingToolCall: {...}
 ```
 
 原因：
 
-> Evidence 是真实结果进入 Agent 业务判断的公共真相层。
-
-Stateful Skill 只能基于 accepted Evidence 推进。
+> Skill 能判断自己的业务输入是否缺失，但不能决定这个缺失是否阻塞用户的全局目标。
 
 ---
 
-## Runtime Frame
+## 5. 追问权只属于 Planner
 
-`getRuntimeFrame()` 输出的是当前阶段约束，不是第二 System Prompt。
+正确链路：
 
-概念：
+```text
+Skill 执行
+  -> interrupted(requirements)
+  -> Agent Loop 提交 Planner
+  -> Planner 结合 globalGoal / completionCriteria / remainingWork 判断
+       ├─ 阻塞主线
+       │   -> nextAction = ask_user
+       ├─ 当前不阻塞
+       │   -> 写入 remainingWork
+       │   -> 继续其他 Tool / Retrieve / Skill-independent 工作
+       └─ 可降级交付
+           -> 明确缺口与影响
+           -> 继续完成可完成部分
+```
+
+“稍后补问”在 V1 中不代表后台并行对话。
+
+它只表示：
+
+```text
+Planner 暂不打断用户
+-> 将 requirement 留在 remainingWork
+-> 在最终交付前或合适节点再次评估
+```
+
+### 5.1 用户回答后的恢复
+
+```text
+用户回答
+  -> 新一轮 AgentRun
+  -> 外层根据 active instance / resumeToken 恢复 Skill
+  -> Skill 消费本轮输入并更新自己的业务 state
+  -> SkillExecutionResult
+  -> Planner 更新 CurrentTaskFrame
+```
+
+Planner 不直接修改 Skill 的领域 state。
+
+Planner 只负责：
+
+- 判断这轮回答是否用于恢复 active Skill；
+- 维护主任务进度；
+- 决定下一步动作。
+
+---
+
+## 6. Skill 内部 LLM 调用
+
+Stateful Skill Runtime 可以在一次 bounded step 内，直接调用受治理的 TaskModel 接口。
+
+推荐合同：
 
 ```ts
-type SkillRuntimeFrame = {
-  stage?: string
-  semanticContext: string
-  allowedToolIds: string[]
-  completionCriteria: string
+type SkillRuntimeContext = {
+  taskModel: {
+    invoke<T>(input: {
+      purpose: string
+      messages: NormalizedChatMessage[]
+      outputSchema?: unknown
+      modelClass?: "task" | "reasoning" | "vision"
+      temperature?: number
+      maxTokens?: number
+    }): Promise<T>
+  }
 }
 ```
 
-它应与基础 `SkillContext` 合并进入 `currentTaskFrame` 的语义上下文，而不是让 Harness 负责 Prompt 拼接。
+职责分工：
 
 ```text
-Base SkillContext
-+ optional Stateful Runtime Frame
-        ↓
-currentTaskFrame
-        ↓
+Skill Runtime
+-> 决定 purpose / prompt / schema / modelClass / temperature / maxTokens
+
+Model Gateway
+-> 决定实际 Provider / Model
+-> 执行权限、预算、重试、超时、审计和 telemetry
+
 Planner
+-> 不参与 Skill 内部这次推理
 ```
 
-工具面仍单独走 Harness exposure。
+禁止：
+
+- 在 SKILL.md 中发明 `<llm_call>` 等可执行文本协议；
+- 让主模型输出特殊 XML，再由 Loop 猜测执行；
+- Skill 绕过统一 Model Gateway 直连 Provider；
+- Skill 自行选择未经允许的具体 Provider / Model；
+- 用内部 LLM 调用形成第二 Agent Loop。
+
+内部 LLM 调用属于 Skill Runtime 的实现步骤，不是用户对话动作。
 
 ---
 
-## Completion
+## 7. Tool / MCP / Evidence 边界
 
-基础 Skill 的 Completion Criteria 可以只是语义指导。
+Skill 内部 TaskModel 调用和外部 Tool 执行必须分开理解。
 
-Stateful Runtime 则可以把关键完成条件提升为确定性业务真相。
+### 7.1 Skill 可以直接做
 
-例如：
+- 读取和更新自己的最小业务 state；
+- 调用受治理 TaskModel；
+- 执行纯函数校验、归一化、渲染；
+- 生成结构化中间结果；
+- 生成确定性文本 / HTML ViewModel；
+- 返回 completed / interrupted / failed。
+
+### 7.2 Skill 不可以直接做
+
+- 创建 frozen `pendingToolCall`；
+- 直接执行 Harness Tool / MCP；
+- 绕过 Policy / Approval；
+- 私下消费 Tool Result 后再决定是否写 Evidence；
+- 扩大 `state.toolExposure`。
+
+需要外部能力时：
 
 ```text
-contract_review
-stage=verify
-
-must have:
-- output artifact exists
-- requested comments present
-- requested revisions present
-- source preserved
+Skill
+-> interrupted(requirement.kind = capability | evidence | resource)
+-> Planner
+-> use_tool / retrieve
+-> Normalize / Policy / ToolNode
+-> Evidence
+-> Skill reducer
+-> Planner
 ```
 
-`evaluate(state)` 决定业务实例是否：
-
-```text
-running
-waiting
-completed
-failed
-```
-
-但最终 Agent Generate / Finalize 仍走现有主链。
+Evidence 仍是外部执行结果进入 Agent 业务判断的公共真相层。
 
 ---
 
-## Checkpoint / Resume / Cancel
+## 8. SkillInstance 与状态存储
 
-只有真实需要恢复语义的 Skill 才实现。
-
-最小持久化接口可以是：
-
-```text
-create
-get
-update
-checkpoint
-complete
-fail
-cancel
+```ts
+type SkillInstance<State = unknown, Output = unknown> = {
+  id: string
+  threadId: string
+  userId: number
+  skillId: string
+  skillVersion: string
+  status: "running" | "interrupted" | "completed" | "failed" | "cancelled"
+  stage?: string
+  state: State
+  output?: Output
+  artifactRefs: string[]
+  activeResumeToken?: string
+  createdAt: string
+  updatedAt: string
+}
 ```
+
+State 只保存恢复业务执行需要的最小真相：
+
+- 当前 stage；
+- 已确认结构化事实；
+- 缺失要求；
+- 已接受的关键 Evidence refs；
+- 产物引用；
+- 恢复标记。
+
+禁止复制：
+
+- 完整聊天历史；
+- 全量 Tool Result；
+- 全量 Trace；
+- 大文件正文；
+- CurrentTaskFrame 的完整副本。
+
+### 8.1 stateRef
+
+`stateRef` 是 Runtime 内部的不透明引用。
 
 规则：
 
-- SkillInstance 绑定明确 skillVersion；
-- resume 不自动升级 Definition 版本；
-- checkpoint 保存恢复所需最小状态和引用；
-- cancel 不绕过既有 Tool / process 清理合同；
-- 大文件和完整 trace 不复制进 checkpoint。
+- Planner 不解析 stateRef；
+- Planner 不根据 stateRef 去 workspace 搜文件；
+- Runtime Store 必须能根据 active instance 或 ref 恢复 state；
+- `resumeToken` 必须绑定 instance 和最近一次 interruption，防止旧回复重复恢复。
+
+V1 可以继续按 `(threadId, userId)` 维护 active instance 索引，但实例真相必须有稳定 `instanceId`。
 
 ---
 
-## Permission / Approval / Sandbox
+## 9. Activation
 
-Stateful Skill Runtime 不拥有权限提升能力。
+Base SkillContext 先完成匹配与披露。
+
+只有同时满足以下条件时才激活 Stateful Runtime：
+
+1. 当前 primary Skill 明确绑定 Runtime；
+2. 当前请求属于该 Runtime 的业务入口，或存在可恢复 active instance；
+3. Runtime version 可用；
+4. 没有明确的新任务 / 取消 / Skill 切换。
+
+概念链：
 
 ```text
-Skill says operation is needed
-≠
-operation is permitted
+Prepare Context
+  -> match Base Skill
+  -> load SkillContext
+  -> resolve optional Runtime binding
+  -> create / restore SkillInstance
+  -> bounded SkillExecutionBridge
+  -> SkillRuntimeProjection
+  -> Planner
 ```
 
-真实权限仍由：
-
-```text
-Harness capability eligibility
-Policy
-Approval
-Sandbox / workspace boundary
-Environment
-```
-
-决定。
-
-Skill 可以声明 `permissionRequirements` 作为业务需求元数据，但不能自行授予。
+V1 同一时刻最多一个 active Stateful SkillInstance。
 
 ---
 
-## Observability
+## 10. V1 不做 cross-Skill handoff
 
-Stateful Skill trace 建议附加：
+V1 不允许：
+
+```text
+Skill A
+-> next.targetSkillId = Skill B
+-> Coordinator 自动接管并执行 B
+```
+
+这会让 Coordinator 逐渐成为第二套调度器。
+
+Stateful Skill 可以调用自己包内的普通 Runtime 模块，例如：
+
+```text
+assessment runtime
+-> internal report builder
+-> HTML renderer
+-> PDF converter
+```
+
+这些是一个 Skill 的内部实现，不是 nested Skill。
+
+跨 Skill 的任务协调仍属于 Parent Planner；V1 在未引入正式 Planner Skill invocation contract 前，不实现自动 cross-Skill handoff。
+
+---
+
+## 11. Fertility Bug 定位与迁移决定
+
+### 11.1 已确认事实
+
+当前实现中：
+
+- 评估数据已经保存在 `StoredSkillFlowSession.state`；
+- fertility report runtime 可以直接读取 `session.state`；
+- 正常 report runtime 不需要去 workspace 找 assessment JSON；
+- Pi-loop 没有被 `maxIterations=8` 强制停止。
+
+失败路径是：
+
+```text
+fertility-report 的 SKILL.md 被普通 Matcher 命中
+-> Planner 看到了“必须有完成态 assessment state”的说明
+-> 但本轮没有真实 Skill Runtime 执行结果
+-> Planner 无法访问完整 Skill state
+-> 错误地去 workspace 搜 assessment JSON / schema
+-> 找不到后提前 answer
+```
+
+所以该 bug 不是：
+
+- Context token 不足；
+- Pi-loop 预算不足；
+- report renderer 不会读取 state；
+- Planner 应该多搜几轮。
+
+根因是：
+
+> **静态 SkillContext 被曝光了，但对应 Stateful Runtime 没有作为可执行单元向 Agent Loop 返回统一结果。**
+
+### 11.2 V1 迁移决定
+
+`fertility-assessment` 作为一个 Stateful Skill Runtime，内部阶段至少包括：
+
+```text
+collect
+-> final-confirmation
+-> report-generation
+-> delivery
+```
+
+`fertility-report` 调整为该 Runtime 包内的 report builder / renderer，不再作为可被普通 Matcher 单独命中的顶层 Skill。
+
+报告生成阶段：
+
+```text
+fertility runtime
+-> 直接读取自己的 state
+-> 内部调用 TaskModel 补齐维度 / summary
+-> 确定性生成 Markdown / HTML / PDF
+-> SkillExecutionResult.completed(output + artifactRefs)
+-> Planner
+-> Generate / deterministic delivery
+```
+
+缺失信息阶段：
+
+```text
+fertility runtime
+-> SkillExecutionResult.interrupted(requirements)
+-> Planner 决定 ask_user 或降级继续
+```
+
+不再返回：
+
+```text
+requiredAction = ask_user
+question = "……"
+next.targetSkillId = fertility-report
+```
+
+---
+
+## 12. Planner 合同
+
+Planner 必须收到：
+
+```text
+CurrentTaskFrame
++ SkillContext
++ active SkillRuntimeProjection
++ latest SkillExecutionResult
++ Evidence / execution history
+```
+
+Planner 规则：
+
+1. `interrupted` 不等于必须追问；结合 `globalGoal` 判断。
+2. 只有 Planner 可以输出 `ask_user`。
+3. `completed` 只证明 Skill 自己的业务执行完成，不自动证明全局任务完成。
+4. Planner 仍需核对全局 `completionCriteria`。
+5. `failed(recoverable=true)` 可以重试、换路径或降级。
+6. `failed(recoverable=false)` 决定 error 或诚实交付部分结果。
+7. Planner 不解析完整 Skill state，不重写 Skill 领域 state。
+8. Planner 不去 workspace 猜测 Stateful Skill 内部数据位置。
+
+---
+
+## 13. Generate / Delivery
+
+Skill completed output 可以包含：
+
+```ts
+type SkillCompletedOutput = {
+  summary?: string
+  structuredData?: unknown
+  delivery?: {
+    kind: "text" | "markdown" | "inline_html"
+    content: string
+  }
+  artifactRefs?: string[]
+}
+```
+
+Planner 决定全局可以回答后：
+
+- deterministic delivery 可以直接交付；
+- 普通结构化输出可以作为 finalization evidence；
+- Generate 不重新执行 Skill；
+- Generate 不重新判断 Skill 是否完成；
+- PDF 失败不能吞掉已成功生成的 HTML / Markdown。
+
+---
+
+## 14. Observability
+
+至少记录：
 
 ```text
 skillId
 skillVersion
 skillInstanceId
-skillStage
+stage
+status
+executionAttempt
+stateRef
+resumeTokenCreated / consumed
+result.status
+requirement ids / kinds
+internalTaskModel purpose / modelClass / token / latency / cost
+reduced Evidence refs
+artifactRefs
 ```
 
-用于解释：
+Trace 必须能回答：
 
-- 为什么当前 ToolExposure 被收窄；
-- 当前业务处于哪个阶段；
-- 哪条 Evidence 推进了 state；
-- 为什么 completed / waiting / failed。
+- Skill 为什么被激活；
+- 本轮 Skill 实际执行了吗；
+- 是 completed / interrupted / failed；
+- 缺了什么；
+- Planner 为什么决定问或不问；
+- 哪次用户回复恢复了哪个 instance；
+- 报告从哪份 state 生成；
+- 内部 TaskModel 调用了几次、花了多少。
 
-不要为 Skill 重做一套独立 trace runtime。
+不要从 Planner 文本风格猜 Skill 是否执行。
 
 ---
 
-## Example: Contract Review
+## 15. 施工顺序
 
-基础层：
+### T1：落统一合同
 
-```text
-docx Manifest
-  ↓
-docx/SKILL.md
-  ↓
-Routing / review rules / completion guidance
-```
-
-如果只是一次简单批注任务，可能完全不需要 Stateful Runtime。
-
-复杂长合同审阅才可能升级：
+新增或收口：
 
 ```text
+SkillExecutionResult
+SkillRequirement
+SkillRuntimeContext
+SkillRuntimeProjection
 SkillInstance
-stage=inspect
-  ↓
-read / inspect
-  ↓ Evidence
-stage=analyze
-  ↓
-analysis / reference disclosure
-  ↓
-stage=edit
-  ↓
-office_document / runtime
-  ↓ Evidence
-stage=verify
-  ↓
-read back / artifact verification
-  ↓ Evidence
-completed
+SkillExecutionBridge
 ```
 
-这说明：
+弃用当前控制型字段：
 
-> Stateful Runtime 是按业务复杂度升级，而不是因为文件扩展名叫 `.docx` 就自动创建状态机。
+```text
+SkillDirective.requiredAction
+SkillDirective.question
+SkillDirective.next.targetSkillId
+```
+
+保留兼容层时，只能做旧数据读取，不得继续作为新主链真相。
+
+### T2：Planner 接收 Skill execution observation
+
+- `PlannerObservationContext` 增加 active runtime projection；
+- 增加 latest Skill execution result；
+- Planner prompt 明确：只有 Planner 可 ask_user；
+- `interrupted` 由 Planner 评估是否阻塞；
+- 非阻塞 requirement 进入 `remainingWork`。
+
+### T3：实现 bounded SkillExecutionBridge
+
+- 用户轮入口执行一次；
+- Evidence accepted 后执行一次；
+- 负责 create / restore / save instance；
+- 不含 while-loop；
+- 不决定 nextAction。
+
+### T4：迁移 fertility
+
+- 合并 assessment + report 为一个 Stateful Runtime；
+- report builder 变为内部模块；
+- 不再顶层匹配 `fertility-report`；
+- 内部 TaskModel 改走 `SkillRuntimeContext.taskModel`；
+- 缺失信息返回 `interrupted(requirements)`；
+- 报告返回 `completed(output/artifactRefs)`。
+
+### T5：Resume 与持久化
+
+- active instance 索引；
+- 稳定 instanceId；
+- bounded resumeToken；
+- 防重复消费 userMessageId；
+- cancel / switch task 清理。
+
+### T6：删除旧旁路
+
+删除或下线：
+
+- Flow Runtime 直接生成用户问题；
+- Coordinator 自动 cross-Skill handoff；
+- `stateRef` 被当作 Planner 可读文件地址；
+- 顶层 `fertility-report` 普通 Matcher 路径。
 
 ---
 
-## Example: Finance Model
+## 16. 验收标准
 
-`xlsx` 基础 Skill 可以直接提供：
+### 架构验收
 
-- formula-linked rules；
-- source citation rules；
-- DCF / three-statement reference URI；
-- validation guidance。
+1. Parent Pi-loop 仍是唯一循环。
+2. 没有新增 `use_skill` Planner action。
+3. Skill 不直接输出用户问题。
+4. 只有 Planner 输出 `ask_user`。
+5. Skill 内部 TaskModel 可直接调用，但全部经过 Model Gateway 治理和审计。
+6. Skill 不扩张 ToolExposure，不绕过 Policy / Approval。
+7. 完整 Skill state 不进入 Planner prompt。
+8. Skill execution 结果以结构化 Observation / projection 进入 Planner。
 
-只有当任务需要长时间、多阶段、可恢复建模时，再创建 Stateful Runtime：
+### Fertility 回归验收
 
-```text
-collect-data
-→ normalize
-→ historical-reconcile
-→ forecast
-→ valuation
-→ verify
-→ deliver
-```
+1. 用户说“做一份备孕全景报告”后进入同一个 fertility Stateful Runtime。
+2. 缺信息时，Skill trace 显示 `interrupted(requirements)`。
+3. 用户看到的问题来自 Planner `ask_user`，不是 Skill directive.question。
+4. 用户回答后恢复同一个 instance，不创建第二个评估。
+5. 最终确认后直接从 instance state 生成报告。
+6. Planner 不再搜索 workspace 中的 assessment JSON / schema。
+7. HTML 报告成功时，即使 PDF 转换失败也正常交付。
+8. 报告完成后 Planner 根据全局 completion criteria 决定最终 answer。
+9. Trace 可串起 state、内部 TaskModel 调用、报告产物与最终交付。
 
-每个阶段可以收窄 allowedToolIds，并由 Evidence 推进。
+### 非阻塞缺口验收
 
----
-
-## V1 Scope
-
-Stateful Skill Runtime V1 不应先做成“大而全框架”。
-
-建议只有在基础 Skill Context V1 跑通后，再选择一个真实复杂业务做最小验证：
-
-```text
-1 SkillDefinition
-1 SkillRuntimeAdapter
-1 active SkillInstance
-minimal persistence
-Evidence reducer
-stage-specific tool narrowing
-completion evaluation
-```
-
-先证明：
-
-```text
-stateful layer 确实解决了基础 SkillContext 解决不了的问题
-```
-
-再扩展 marketplace / nesting / orchestration 等能力。
+1. Skill 返回非关键 requirement 时，Planner 可以不立刻追问。
+2. requirement 被记录进 `remainingWork`。
+3. Agent 可以继续完成不依赖该信息的下游工作。
+4. 最终交付前 Planner 再评估是否需要补问或明确降级影响。
 
 ---
 
-## Hard Rules
+## 17. V1 明确不做
 
-1. Stateful Skill Runtime 是可选高级层，不是 Skill 的最低定义。
-2. 基础 SkillContext 可以独立成立并工作。
-3. 不新增第二 Agent Loop。
-4. 不新增 `use_skill` Planner action。
-5. `state.toolExposure` 始终是 Planner 工具面的唯一真相。
-6. Stateful Skill tool constraints 只能收窄，不能扩大 Harness 能力。
-7. Tool / Retrieve 结果必须先进入 Evidence，再推进 Skill state。
-8. SkillInstance 只保存业务恢复所需最小状态与引用。
-9. Runtime Pack 安装、SkillContext 激活、SkillInstance 激活是三个不同概念。
-10. Permission / Approval / Sandbox / Tool Registry 继续复用现有体系。
-11. Parent Agent 始终负责总目标和跨 Skill 协调。
-12. 只有真实业务复杂度需要时才引入 state / stage / reducer / checkpoint。
+- 多个并行 active SkillInstance；
+- nested Skill；
+- Coordinator 自动 cross-Skill handoff；
+- 后台异步向用户提问；
+- Skill 自选任意具体 Provider / Model；
+- SKILL.md 可执行 `<llm_call>` 协议；
+- 第二套 Tool Registry / ToolExposure；
+- 第二 Agent Loop；
+- 为所有 Base Skill 强制创建 state machine；
+- marketplace / remote runtime / distributed checkpoint。
+
+---
+
+## 18. Hard Rules
+
+1. Base Skill 与 Stateful Runtime 是同一体系的基础层与可选增强层。
+2. Parent Agent Loop 始终是唯一控制循环。
+3. Planner 始终拥有用户对话控制权。
+4. Skill 只能报告 requirement，不能直接向用户提问。
+5. Planner 判断 requirement 是否阻塞全局任务。
+6. Skill 只更新自己的业务 state；Planner 只维护主任务语义。
+7. Skill 内部 TaskModel 直接走受治理 Runtime Context，不经过 Planner 申请。
+8. Skill 不通过 SKILL.md 发明可执行 LLM 协议。
+9. Skill 不直接执行 Harness Tool / MCP，不生成 pendingToolCall。
+10. 外部执行结果必须先进入 Evidence，再推进 Skill state。
+11. Skill execution 必须返回 completed / interrupted / failed 结构化结果。
+12. 完整 Skill state 不进入 Planner prompt。
+13. `stateRef` 不得诱导 Planner 去 workspace 查找内部状态。
+14. V1 不支持 nested Skill 或自动 cross-Skill handoff。
+15. fertility report 是 fertility Stateful Runtime 的内部阶段，不是独立顶层入口 Skill。
+16. `maxIterations` 与 Skill 业务轮次、缺失条件和追问判断无关。
