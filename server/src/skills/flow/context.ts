@@ -26,6 +26,9 @@ export const buildSkillFlowRequestContextMessages = (
         content: directive.delivery.content,
       })}`,
       parts: [],
+      // Deterministic Skill delivery is consumed by the Generate wrapper itself.
+      // It must not be packed into the normal answer-model prompt again.
+      requestContextScope: "agent-execution",
     });
   }
 
