@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { getBuiltInSkillPackage } from "../registry.js";
 import type { SkillManifest } from "./types.js";
@@ -50,8 +51,21 @@ const readFrontmatterWindow = async (filePath: string) => {
   }
 };
 
-const unique = <T>(values: Array<T | null | undefined>): T[] =>
-  values.filter((value): value is T => value !== null && value !== undefined);
+const unique = (values: Array<string | null | undefined>): string[] => [
+  ...new Set(values.filter((value): value is string => Boolean(value))),
+];
+
+export const resolveUserSkillsRoot = () => {
+  const configured = process.env.MIRA_USER_SKILLS_ROOT?.trim();
+  if (configured) return path.resolve(configured);
+
+  if (process.platform === "win32") {
+    const localAppData = process.env.LOCALAPPDATA?.trim() || process.env.APPDATA?.trim();
+    if (localAppData) return path.join(localAppData, "UIChat Mira", "skills");
+  }
+
+  return path.join(os.homedir(), ".local", "share", "uichat-mira", "skills");
+};
 
 export const resolveSkillRootCandidates = () => {
   const configured = process.env.MIRA_SKILLS_ROOT?.trim();
@@ -59,6 +73,7 @@ export const resolveSkillRootCandidates = () => {
 
   return unique([
     configured ? path.resolve(configured) : null,
+    resolveUserSkillsRoot(),
     entryDir ? path.join(entryDir, "skills") : null,
     path.join(process.cwd(), "src", "skills"),
     path.join(process.cwd(), "server", "src", "skills"),
@@ -94,18 +109,30 @@ export class SkillScanner {
 
         const frontmatter = parseFrontmatter(manifestWindow);
         const fallback = getBuiltInSkillPackage(entry.name);
-        const id = String(frontmatter.name || fallback?.id || entry.name).trim();
+        const id = String(frontmatter.id || frontmatter.name || fallback?.id || entry.name).trim();
         if (!id || seen.has(id)) continue;
 
         seen.add(id);
         manifests.push({
           id,
-          name: fallback?.name ?? id,
+          name: String(
+            frontmatter.displayName ||
+              frontmatter.title ||
+              fallback?.name ||
+              frontmatter.name ||
+              id,
+          ).trim(),
           description:
             String(frontmatter.description || fallback?.description || "").trim() || id,
           version: String(frontmatter.version || fallback?.version || "1.0.0"),
           entry: skillFile,
-          ...(fallback?.source ? { source: fallback.source } : {}),
+          ...(frontmatter.source || fallback?.source
+            ? { source: String(frontmatter.source || fallback?.source).trim() }
+            : {}),
+          ...(frontmatter.category || fallback?.category
+            ? { category: String(frontmatter.category || fallback?.category).trim() }
+            : {}),
+          ...(frontmatter.license ? { license: String(frontmatter.license).trim() } : {}),
           ...(fallback?.runtimePack
             ? { runtimeRequirements: [`${fallback.runtimePack.id}@${fallback.runtimePack.version}`] }
             : {}),
