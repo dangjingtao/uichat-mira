@@ -1,5 +1,4 @@
-import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
-import { providerProxyService } from "@/services/provider-proxy.service/index.js";
+import { collectTaskModelText } from "@/services/task-model.service.js";
 import type {
   SkillConversationFlowRuntime,
   SkillDirective,
@@ -14,7 +13,31 @@ const FIRST_QUESTION =
 const FINAL_CONFIRMATION_QUESTION =
   "我基本了解完整了。还有什么你觉得很重要、但我一直没问到的吗？没有的话直接告诉我“没有了”就可以。";
 
-const SAFE_OBJECT_KEYS = new Set(["__proto__", "prototype", "constructor"]);
+export const FERTILITY_DIMENSION_IDS = [
+  "female_endometrium",
+  "female_hormonal_balance",
+  "female_oocyte_context",
+  "female_ovarian_reserve",
+  "female_metabolic_health",
+  "female_immune_context",
+  "female_pelvic_environment",
+  "female_nutrition",
+  "female_lifestyle",
+  "female_sleep_stress",
+  "male_dna_integrity",
+  "male_morphology",
+  "male_motility",
+  "male_concentration",
+  "male_semen_volume",
+  "male_hormonal_balance",
+  "male_inflammation",
+  "male_nutrition",
+  "male_lifestyle",
+  "male_sleep_stress",
+] as const;
+
+const ALLOWED_DIMENSION_IDS = new Set<string>(FERTILITY_DIMENSION_IDS);
+const UNSAFE_OBJECT_KEYS = new Set(["__proto__", "prototype", "constructor"]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -30,21 +53,13 @@ const parseJsonObject = (value: string): Record<string, unknown> => {
   return parsed;
 };
 
-const collectTaskText = async (messages: NormalizedChatMessage[]) => {
-  let output = "";
-  for await (const delta of providerProxyService.streamTaskChatText(messages)) {
-    output += delta;
-  }
-  return output.trim();
-};
-
 const mergeRecord = (
   base: Record<string, unknown>,
   patch: Record<string, unknown>,
 ): Record<string, unknown> => {
   const next: Record<string, unknown> = { ...base };
   for (const [key, value] of Object.entries(patch)) {
-    if (SAFE_OBJECT_KEYS.has(key)) continue;
+    if (UNSAFE_OBJECT_KEYS.has(key)) continue;
     if (isRecord(value) && isRecord(next[key])) {
       next[key] = mergeRecord(next[key] as Record<string, unknown>, value);
     } else {
@@ -89,7 +104,6 @@ export type FertilityAssessmentState = {
   uncertainties: string[];
   contradictions: string[];
   dimensions: Record<string, FertilityDimension>;
-  rawTurnNotes: string[];
   summary?: {
     strengths: string[];
     priorities: string[];
@@ -106,7 +120,10 @@ export type FertilityAssessmentState = {
 export const normalizeFertilityDimension = (
   value: unknown,
 ): FertilityDimension | null => {
-  if (!isRecord(value) || typeof value.id !== "string" || !value.id.trim()) return null;
+  if (!isRecord(value) || typeof value.id !== "string") return null;
+  const id = value.id.trim();
+  if (!ALLOWED_DIMENSION_IDS.has(id)) return null;
+
   const score =
     typeof value.score === "number" && Number.isFinite(value.score)
       ? Math.max(0, Math.min(10, value.score))
@@ -121,8 +138,9 @@ export const normalizeFertilityDimension = (
       ? Math.max(0, Math.min(1, value.dataCompleteness))
       : 0;
   const actions = isRecord(value.actions) ? value.actions : {};
+
   return {
-    id: value.id.trim(),
+    id,
     score,
     confidence,
     dataCompleteness,
@@ -145,9 +163,9 @@ export const toFertilityAssessmentState = (
 ): FertilityAssessmentState => {
   const dimensions: Record<string, FertilityDimension> = {};
   if (isRecord(value.dimensions)) {
-    for (const [id, candidate] of Object.entries(value.dimensions)) {
+    for (const candidate of Object.values(value.dimensions)) {
       const normalized = normalizeFertilityDimension(candidate);
-      if (normalized) dimensions[id] = normalized;
+      if (normalized) dimensions[normalized.id] = normalized;
     }
   }
 
@@ -157,7 +175,6 @@ export const toFertilityAssessmentState = (
     uncertainties: uniqueStrings(value.uncertainties),
     contradictions: uniqueStrings(value.contradictions),
     dimensions,
-    rawTurnNotes: uniqueStrings(value.rawTurnNotes, 30),
     ...(isRecord(value.summary)
       ? {
           summary: {
@@ -200,11 +217,12 @@ const analysisSystemPrompt = `你是 Mira 的备孕/生育力信息整理 TaskMo
 2. factsPatch 只写本轮明确得到或可安全归一化的事实；不确定内容放 uncertainties。
 3. 用户口述化验值一律视为 user_reported，不假装已核验原始报告。
 4. 每次最多更新 2 个 dimensions；信息不足时 score 必须为 null，不要制造“精确生育概率”。
-5. AMH/AFC 主要反映卵巢储备/促排反应背景，不能单独等同卵子质量或自然受孕概率。
-6. 不做疾病诊断，不给处方药方案，不给个体化药物/保健品剂量；建议分 selfCare / discussWithClinician / testsToConsider。
-7. 不把免疫、凝血、精子 DNA 碎片等检查当作所有人的常规必查项；没有明确指征时标记为需医生判断。
-8. nextQuestion 只问一轮里最值得问的一组相关信息，语言自然，不要像表格审讯。
-9. readyForFinalConfirmation 只有在继续追问的边际价值已经较低时才为 true。
+5. 允许的 dimension id 只有：${FERTILITY_DIMENSION_IDS.join(", ")}。
+6. AMH/AFC 主要反映卵巢储备/促排反应背景，不能单独等同卵子质量或自然受孕概率。
+7. 不做疾病诊断，不给处方药方案，不给个体化药物/保健品剂量；建议分 selfCare / discussWithClinician / testsToConsider。
+8. 不把免疫、凝血、精子 DNA 碎片等检查当作所有人的常规必查项；没有明确指征时标记为需医生判断。
+9. nextQuestion 只问一轮里最值得问的一组相关信息，语言自然，不要像表格审讯。
+10. readyForFinalConfirmation 只有在继续追问的边际价值已经较低时才为 true。
 
 输出结构：
 {
@@ -214,7 +232,7 @@ const analysisSystemPrompt = `你是 Mira 的备孕/生育力信息整理 TaskMo
   "contradictions": [],
   "dimensionUpdates": [
     {
-      "id": "dimension_id",
+      "id": "允许的dimension_id",
       "score": null,
       "confidence": "low|medium|high",
       "dataCompleteness": 0.0,
@@ -236,28 +254,31 @@ const analyzeTurn = async (input: {
   round: number;
 }) => {
   const parsed = parseJsonObject(
-    await collectTaskText([
-      { role: "system", content: analysisSystemPrompt, parts: [] },
-      {
-        role: "user",
-        content: JSON.stringify(
-          {
-            round: input.round,
-            currentAssessment: {
-              facts: input.state.facts,
-              missingCriticalFields: input.state.missingCriticalFields,
-              uncertainties: input.state.uncertainties,
-              contradictions: input.state.contradictions,
-              completedDimensionIds: Object.keys(input.state.dimensions),
+    await collectTaskModelText(
+      [
+        { role: "system", content: analysisSystemPrompt, parts: [] },
+        {
+          role: "user",
+          content: JSON.stringify(
+            {
+              round: input.round,
+              currentAssessment: {
+                facts: input.state.facts,
+                missingCriticalFields: input.state.missingCriticalFields,
+                uncertainties: input.state.uncertainties,
+                contradictions: input.state.contradictions,
+                completedDimensionIds: Object.keys(input.state.dimensions),
+              },
+              userAnswer: input.query,
             },
-            userAnswer: input.query,
-          },
-          null,
-          2,
-        ),
-        parts: [],
-      },
-    ]),
+            null,
+            2,
+          ),
+          parts: [],
+        },
+      ],
+      { maxTokens: 1200, temperature: 0 },
+    ),
   );
 
   return {
@@ -309,7 +330,6 @@ export const fertilityAssessmentRuntime: SkillConversationFlowRuntime = {
     uncertainties: [],
     contradictions: [],
     dimensions: {},
-    rawTurnNotes: [],
   }),
 
   async processTurn(input: SkillFlowRuntimeInput): Promise<SkillFlowRuntimeResult> {
@@ -364,7 +384,6 @@ export const fertilityAssessmentRuntime: SkillConversationFlowRuntime = {
       uncertainties: analysis.uncertainties,
       contradictions: analysis.contradictions,
       dimensions,
-      rawTurnNotes: [...currentState.rawTurnNotes, input.query].slice(-30),
     };
 
     if (input.session.status === "final_confirmation") {
