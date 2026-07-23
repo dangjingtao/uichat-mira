@@ -2,7 +2,7 @@
 id: fertility-report
 name: fertility-report
 displayName: 备孕全景报告
-description: 根据已完成的结构化备孕评估状态生成字段一致的夫妻报告；内容由统一 ViewModel 驱动，可用于 Markdown、行内 HTML 或后续 PDF 输出。
+description: 根据已完成的结构化备孕评估状态生成字段一致的夫妻报告；同一份结构化状态渲染为行内 HTML，并由该 HTML 打印转换为 PDF。
 version: 1.0.0
 source: Mira Lab
 category: 健康
@@ -55,11 +55,17 @@ actions.testsToConsider
 ```text
 assessment JSON
 → Report ViewModel
-→ Markdown / inline HTML
-→ optional PDF
+→ deterministic inline HTML
+→ Chromium / Edge print-to-PDF
 ```
 
-禁止让 LLM 分别独立生成 HTML 和 PDF 两套内容，以免字段和结论漂移。
+行内 HTML 是报告的视觉单点真相。
+
+PDF 必须直接从同一份 HTML 转换，不允许让 LLM 再独立写一次 PDF 内容，以免字段、结论和版式语义漂移。
+
+HTML 在聊天中以 sandboxed iframe 行内展示；PDF 作为同一报告的可下载打印版本。
+
+如果本机 PDF 转换环境暂不可用，HTML 报告仍必须正常交付，并明确标记 PDF 暂不可用，不得因此丢失整份报告。
 
 ## Medical safety
 
