@@ -10,6 +10,10 @@ import {
   readSkillDirectiveFromRequestContext,
 } from "./context.js";
 import {
+  readSkillReportManifest,
+  writeSkillReportManifest,
+} from "./report-files.js";
+import {
   getSkillFlowSession,
   saveSkillFlowSession,
 } from "./state-store.js";
@@ -71,6 +75,28 @@ describe("Skill conversation flow", () => {
     expect(messages.every((message) => message.requestContextScope === "agent-execution")).toBe(
       true,
     );
+  });
+
+  it("adds a compact hidden marker for inline report delivery instead of embedding html", () => {
+    const messages = buildSkillFlowRequestContextMessages({
+      skillId: "fertility-report",
+      sessionId: "report-session-1",
+      phase: "ready",
+      flowCompleted: true,
+      delivery: {
+        kind: "inline_html",
+        content: "报告已生成",
+        inlineHtml: "<!doctype html><html><body>private html</body></html>",
+        pdf: { available: true, fileName: "report.pdf" },
+      },
+    });
+
+    const delivery = readSkillDeliveryFromRequestContext(messages);
+    expect(delivery?.content).toContain("报告已生成");
+    expect(delivery?.content).toContain(
+      "<!--mira-skill-report:report-session-1:pdf-->",
+    );
+    expect(delivery?.content).not.toContain("private html");
   });
 
   it("starts an activation-only fertility request with a natural first question", async () => {
@@ -178,5 +204,32 @@ describe("Skill conversation flow", () => {
     expect(loaded?.round).toBe(2);
     expect(files.filter((file) => file.endsWith(".json"))).toHaveLength(1);
     expect(files.filter((file) => file.endsWith(".tmp"))).toHaveLength(0);
+  });
+
+  it("persists report ownership independently from the active flow state", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "mira-skill-report-"));
+    tempDirs.push(root);
+    process.env.MIRA_SKILL_FLOW_STATE_ROOT = root;
+
+    await writeSkillReportManifest({
+      sessionId: "report-session-1",
+      threadId: "thread-1",
+      userId: 7,
+      title: "两个人的备孕全景报告",
+      createdAt: "2026-07-23T02:00:00.000Z",
+    });
+
+    await saveSkillFlowSession({
+      ...createSession(),
+      sessionId: "different-session",
+      threadId: "thread-1",
+      userId: 7,
+    });
+
+    await expect(readSkillReportManifest("report-session-1")).resolves.toMatchObject({
+      sessionId: "report-session-1",
+      threadId: "thread-1",
+      userId: 7,
+    });
   });
 });
