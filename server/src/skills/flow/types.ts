@@ -2,6 +2,29 @@ import type { NormalizedChatMessage } from "@/services/provider-proxy.message-pr
 
 export type SkillDirectivePhase = "collecting" | "final_confirmation" | "ready";
 
+export type SkillRequirementKind =
+  | "user_input"
+  | "evidence"
+  | "resource"
+  | "capability";
+
+export type SkillRequirement = {
+  id: string;
+  kind: SkillRequirementKind;
+  description: string;
+  requiredFor: string;
+  acceptedFormats?: string[];
+  alternatives?: string[];
+};
+
+export type SkillInterruption = {
+  reason:
+    | "missing_requirement"
+    | "waiting_for_evidence"
+    | "recoverable_dependency";
+  requirements: SkillRequirement[];
+};
+
 export type SkillDirective = {
   skillId: string;
   sessionId: string;
@@ -9,7 +32,14 @@ export type SkillDirective = {
   flowCompleted: boolean;
   round?: number;
   maxRounds?: number;
+  /**
+   * Structured execution interruption. It reports missing external conditions
+   * only; Planner remains the sole owner of ask_user and user-facing wording.
+   */
+  interruption?: SkillInterruption;
+  /** @deprecated Read-only compatibility for sessions persisted before interruption. */
   requiredAction?: "ask_user";
+  /** @deprecated Read-only compatibility for sessions persisted before interruption. */
   question?: string;
   next?: {
     intent: string;
