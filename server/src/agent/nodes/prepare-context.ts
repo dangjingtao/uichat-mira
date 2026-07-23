@@ -45,6 +45,59 @@ const withSkillContext = (
   } as SkillAwareTaskFrame;
 };
 
+const toSkillTraceDetails = (skillContext: SkillContext | undefined) => {
+  if (!skillContext?.primary) {
+    return {
+      status: "not_matched",
+      primary: null,
+      match: null,
+      disclosure: {
+        skillBodyLoaded: false,
+        availableResourceCount: 0,
+        availableResourceUris: [],
+        disclosedResourceCount: 0,
+        disclosedResourceUris: [],
+      },
+      toolExposureMutation: false,
+    };
+  }
+
+  return {
+    status: "matched",
+    primary: {
+      id: skillContext.primary.id,
+      name: skillContext.primary.name,
+      version: skillContext.primary.version,
+    },
+    match: skillContext.match
+      ? {
+          source: skillContext.match.source,
+          reason: skillContext.match.reason,
+          score: skillContext.match.score,
+          secondarySkillIds: [...skillContext.match.secondarySkillIds],
+        }
+      : null,
+    disclosure: {
+      skillBodyLoaded: true,
+      availableResourceCount: skillContext.resources.length,
+      availableResourceUris: skillContext.resources.map((resource) => resource.uri),
+      disclosedResourceCount: skillContext.disclosedResources.length,
+      disclosedResourceUris: skillContext.disclosedResources.map((resource) => resource.uri),
+    },
+    toolExposureMutation: false,
+  };
+};
+
+const summarizeSkillTrace = (skillContext: SkillContext | undefined) => {
+  if (!skillContext?.primary) {
+    return "未识别到匹配 Skill，本轮不注入 SkillContext";
+  }
+
+  const source = skillContext.match?.source ?? "unknown";
+  const disclosedCount = skillContext.disclosedResources.length;
+  return `已识别 ${skillContext.primary.name}（${skillContext.primary.id}），${source} 匹配，披露 ${disclosedCount} 个参考资源`;
+};
+
 export const prepareContextNode = async (
   state: AgentNodeState,
   emit?: EmitAgentExecutionNode,
@@ -83,6 +136,21 @@ export const prepareContextNode = async (
     [...matcherResult.toolExposure.exposedDefinitions],
   );
   const toolIntent = matcherResult;
+
+  // Skill matching/disclosure is a first-class observable event. Do not force
+  // operators to infer Skill activation from model behavior or buried fields.
+  await emitStepNode(emit, {
+    runId: state.runId,
+    nodeId: "agent-skill-context",
+    nodeType: "reason",
+    phase: "done",
+    label: "技能上下文",
+    summary: summarizeSkillTrace(skillContext),
+    details: {
+      query,
+      skillContext: toSkillTraceDetails(skillContext),
+    },
+  });
 
   await emitStepNode(emit, {
     runId: state.runId,
