@@ -2,17 +2,21 @@ import { describe, expect, it } from "vitest";
 import { getBuiltInSkillPackage, listBuiltInSkillPackages } from "./registry.js";
 
 describe("WenShu built-in Skill packages", () => {
-  it("publishes the three installable WenShu Office packages", () => {
+  it("publishes the four WenShu Office Skill packages", () => {
     expect(listBuiltInSkillPackages().map((skill) => skill.id).sort()).toEqual([
+      "docx",
       "pdf",
       "pptx",
       "xlsx",
     ]);
   });
 
-  it("binds all three packages to the shared optional WenShu runtime pack", () => {
-    for (const skill of listBuiltInSkillPackages()) {
-      expect(skill.runtimePack).toEqual({
+  it("keeps DOCX bundled and binds the three Python-backed packages to the shared optional runtime pack", () => {
+    expect(getBuiltInSkillPackage("docx")?.bundled).toBe(true);
+    expect(getBuiltInSkillPackage("docx")?.runtimePack).toBeUndefined();
+
+    for (const id of ["pdf", "pptx", "xlsx"] as const) {
+      expect(getBuiltInSkillPackage(id)?.runtimePack).toEqual({
         id: "wenshu-office",
         version: "1.0.0",
         required: true,
@@ -20,16 +24,21 @@ describe("WenShu built-in Skill packages", () => {
     }
   });
 
-  it("keeps Agent/Harness integration explicitly deferred", () => {
+  it("marks progressive SkillContext integration ready without requiring Stateful Skill Runtime", () => {
     for (const skill of listBuiltInSkillPackages()) {
-      expect(skill.agentIntegration.status).toBe("deferred");
-      expect(skill.agentIntegration.requiredContracts).toContain("SkillInstance state/stage");
-      expect(skill.agentIntegration.requiredContracts).toContain("Evidence-driven reducer");
-      expect(skill.agentIntegration.requiredContracts).toContain("stage-specific tool constraints");
+      expect(skill.contextIntegration).toEqual({
+        status: "ready",
+        mode: "progressive-disclosure",
+      });
+      expect(skill.statefulRuntime.status).toBe("deferred");
+      expect(skill.statefulRuntime.requiredContracts).toContain("SkillInstance state/stage");
+      expect(skill.statefulRuntime.requiredContracts).toContain("Evidence-driven reducer");
+      expect(skill.statefulRuntime.requiredContracts).toContain("stage-specific tool constraints");
     }
   });
 
-  it("keeps task-level runtime capability identity without registering it as a Skill action", () => {
+  it("declares task-level execution capabilities without turning them into Skill actions", () => {
+    expect(getBuiltInSkillPackage("docx")?.runtimeCapabilities).toEqual(["office_document"]);
     expect(getBuiltInSkillPackage("pdf")?.runtimeCapabilities).toEqual(["office_pdf"]);
     expect(getBuiltInSkillPackage("xlsx")?.runtimeCapabilities).toEqual(["office_spreadsheet"]);
     expect(getBuiltInSkillPackage("pptx")?.runtimeCapabilities).toEqual(["office_presentation"]);
