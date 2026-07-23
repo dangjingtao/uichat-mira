@@ -28,12 +28,14 @@ export const createAndRunAgent = async (
   const latestUserMessage = [...input.messages]
     .reverse()
     .find((message) => message.role === "user");
+  const flowUserMessageId =
+    input.userMessageId ?? input.assistantParentId ?? latestUserMessage?.id;
   const preparedSkillFlow =
-    input.userMessageId && latestUserMessage
+    flowUserMessageId && latestUserMessage
       ? await prepareSkillConversationFlow({
           threadId: input.threadId,
           userId: input.userId,
-          userMessageId: input.userMessageId,
+          userMessageId: flowUserMessageId,
           query: latestUserMessage.content.trim() || input.goalText,
           messages: input.messages,
         })
