@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import { getChatMediaPreviewUrl } from "@/shared/api/thread";
 import type { ChatMessage } from "@/shared/uchat/core";
 import type { UChatMessageExtensionProps } from "@/shared/uchat/ui";
+import { SkillReportOutput } from "./SkillReportOutput";
 
 const actionButtonClassName =
   "inline-flex h-7 w-7 items-center justify-center rounded-full border border-border/70 bg-surface-primary/92 text-text-secondary transition-colors hover:border-border hover:bg-surface-primary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20";
@@ -388,10 +389,13 @@ export function DesktopChatMessageExtensions({
 }: UChatMessageExtensionProps) {
   if (placement === "content") {
     return (
-      <ChatMediaOutput
-        message={message}
-        onPreviewImage={onPreviewImage}
-      />
+      <>
+        <ChatMediaOutput
+          message={message}
+          onPreviewImage={onPreviewImage}
+        />
+        <SkillReportOutput message={message} />
+      </>
     );
   }
 
