@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import {
@@ -14,12 +14,14 @@ import {
   MoreHorizontal,
   Presentation,
   Search,
+  Upload,
   X,
 } from "lucide-react";
 import { Button, Card, IconButton, MarkdownText, Result, Skeleton } from "@/shared/ui";
 import { ModalShell } from "@/shared/ui/Modal";
 import {
   getWenshuSkillCatalog,
+  importMarkdownSkill,
   installWenshuCapabilityPack,
   type WenshuSkillCatalog,
 } from "@/shared/api/officeSuiteSkills";
@@ -27,6 +29,7 @@ import SettingsPageLayout from "../../components/SettingsPageLayout";
 import { skillPresentations, type SkillPresentation } from "./catalog";
 
 const categories = ["已添加", "精选技能", "办公效率", "商业金融", "内容创作", "学术研究", "营销增长", "工程研发"];
+const OFFICE_SKILL_IDS = new Set(["docx", "xlsx", "pdf", "pptx"]);
 
 const iconConfig = {
   spreadsheet: { Icon: FileSpreadsheet, className: "bg-emerald-50 text-emerald-500" },
@@ -67,6 +70,7 @@ const formatMetadataValue = (value: unknown) => {
 
 export default function SkillsSettings() {
   const navigate = useNavigate();
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const [activeCategory, setActiveCategory] = useState("已添加");
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -74,6 +78,7 @@ export default function SkillsSettings() {
   const [notice, setNotice] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<WenshuSkillCatalog | null>(null);
   const [installingSkillId, setInstallingSkillId] = useState<string | null>(null);
+  const [importingSkill, setImportingSkill] = useState(false);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
 
@@ -97,19 +102,28 @@ export default function SkillsSettings() {
     () => catalog?.skills.map((definition) => {
       const presentation = skillPresentations.find((candidate) => candidate.id === definition.id);
       if (!presentation) {
+        const icon = definition.id === "xlsx"
+          ? "spreadsheet"
+          : definition.id === "pdf"
+            ? "pdf"
+            : definition.id === "docx"
+              ? "word"
+              : definition.id === "pptx"
+                ? "presentation"
+                : "code";
         return {
           id: definition.id,
           name: definition.name,
           source: definition.source,
           category: definition.category,
           description: definition.description,
-          icon: definition.id === "xlsx" ? "spreadsheet" : definition.id === "pdf" ? "pdf" : definition.id === "docx" ? "word" : "presentation",
+          icon,
           bundled: definition.bundled,
           runtimePack: definition.runtimePack?.id,
-          usePath: "/settings/micro-apps/office-suite",
-          content: `# ${definition.name}\n\n${definition.description}`,
+          usePath: OFFICE_SKILL_IDS.has(definition.id) ? "/settings/micro-apps/office-suite" : undefined,
+          content: definition.content || `# ${definition.name}\n\n${definition.description}`,
           files: definition.packageFiles,
-          fileContents: {},
+          fileContents: definition.fileContents || {},
         } satisfies SkillPresentation;
       }
       return {
@@ -120,7 +134,9 @@ export default function SkillsSettings() {
         description: definition.description,
         bundled: definition.bundled,
         runtimePack: definition.runtimePack?.id,
+        content: definition.content || presentation.content,
         files: definition.packageFiles,
+        fileContents: { ...presentation.fileContents, ...(definition.fileContents || {}) },
       };
     }) ?? [],
     [catalog],
@@ -148,6 +164,22 @@ export default function SkillsSettings() {
   const showNotice = (message: string) => {
     setNotice(message);
     window.setTimeout(() => setNotice(null), 2600);
+  };
+
+  const handleImport = async (file: File) => {
+    setImportingSkill(true);
+    try {
+      const imported = await importMarkdownSkill(file);
+      await loadCatalog();
+      setActiveCategory("已添加");
+      setQuery("");
+      showNotice(`「${imported.name}」已生成并添加，可在聊天中用 $${imported.id} 触发`);
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "Markdown Skill 导入失败");
+    } finally {
+      setImportingSkill(false);
+      if (importInputRef.current) importInputRef.current.value = "";
+    }
   };
 
   const useSkill = async (skill: SkillPresentation) => {
@@ -179,7 +211,7 @@ export default function SkillsSettings() {
       navigate(skill.usePath);
       return;
     }
-    showNotice(`「${skill.name}」暂未配置使用入口`);
+    showNotice(`已添加。可在聊天中使用 $${skill.id} 显式触发「${skill.name}」`);
   };
 
   return (
@@ -202,6 +234,20 @@ export default function SkillsSettings() {
               </div>
             </div>
 
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".md,text/markdown,text/plain"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void handleImport(file);
+              }}
+            />
+            <Button size="xs" variant="secondary" disabled={importingSkill} onClick={() => importInputRef.current?.click()}>
+              {importingSkill ? <LoaderCircle size={14} className="animate-spin" /> : <Upload size={14} />}
+              {importingSkill ? "生成中…" : "导入 Markdown"}
+            </Button>
             {searchOpen ? <input autoFocus aria-label="搜索技能" placeholder="搜索技能" value={query} onChange={(event) => setQuery(event.target.value)} className="h-9 w-40 rounded-ui-control border border-border bg-surface-primary px-3 text-xs text-text-primary outline-none focus:border-text-tertiary" /> : <IconButton ariaLabel="搜索技能" size="sm" styleType="filled" onClick={() => setSearchOpen(true)}><Search size={17} /></IconButton>}
           </div>
 
