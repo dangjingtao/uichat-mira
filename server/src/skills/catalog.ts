@@ -184,6 +184,11 @@ const isPathWithin = (root: string, target: string) => {
 const parseBoolean = (value: string | undefined) =>
   Boolean(value && ["true", "1", "yes", "on"].includes(value.trim().toLowerCase()));
 
+const parseRuntimeRequirements = (value: string | undefined) =>
+  value
+    ? value.split(",").map((item) => item.trim()).filter(Boolean)
+    : [];
+
 const resolveOrigin = (manifest: SkillManifest): SkillPackageOrigin => {
   if (getBuiltInSkillPackage(manifest.id)) return "built-in";
   return isPathWithin(resolveUserSkillsRoot(), manifest.entry) ? "user" : "external";
@@ -192,6 +197,11 @@ const resolveOrigin = (manifest: SkillManifest): SkillPackageOrigin => {
 const toSummary = async (manifest: SkillManifest): Promise<SkillCatalogSummary> => {
   const builtIn = getBuiltInSkillPackage(manifest.id);
   const metadata = builtIn?.featured ? {} : await readFrontmatterMetadata(manifest.entry);
+  const runtimeRequirements = manifest.runtimeRequirements
+    ? [...manifest.runtimeRequirements]
+    : builtIn?.runtimePack
+      ? [`${builtIn.runtimePack.id}@${builtIn.runtimePack.version}`]
+      : parseRuntimeRequirements(metadata.runtimeRequirements || metadata.runtime);
   return {
     id: manifest.id,
     version: manifest.version,
@@ -200,14 +210,10 @@ const toSummary = async (manifest: SkillManifest): Promise<SkillCatalogSummary> 
     category: manifest.category || builtIn?.category || "其他",
     description: manifest.description,
     origin: resolveOrigin(manifest),
-    packageStatus: builtIn?.bundled ? "bundled" : "installed",
+    packageStatus: builtIn ? "bundled" : "installed",
     featured: builtIn?.featured ?? parseBoolean(metadata.featured),
     ...(manifest.license || builtIn?.license ? { license: manifest.license || builtIn?.license } : {}),
-    runtimeRequirements: manifest.runtimeRequirements
-      ? [...manifest.runtimeRequirements]
-      : builtIn?.runtimePack
-        ? [`${builtIn.runtimePack.id}@${builtIn.runtimePack.version}`]
-        : [],
+    runtimeRequirements,
   };
 };
 
