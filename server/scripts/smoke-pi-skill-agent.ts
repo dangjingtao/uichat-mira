@@ -108,7 +108,6 @@ const main = async () => {
   const cli = parseArgs();
   fs.mkdirSync(cli.workspace, { recursive: true });
   process.env.MIRA_AGENT_RUNTIME = "pi_loop";
-  process.env.MIRA_SKILL_AGENT_RUNTIME = "pi-core";
 
   const profile = getSkillAgentExecutionProfile(cli.skill);
   if (!profile) return fail(`No Pi Skill execution profile for ${cli.skill}`);
