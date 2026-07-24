@@ -81,6 +81,13 @@ export interface LegacyAgentToolCallRequest {
   args: Record<string, unknown>;
   inputHash: string;
   source: "planner_selection" | "llm_tool_call";
+  /**
+   * Compatibility marker for frozen invocations owned by a forked Skill Agent.
+   * They participate in the existing approval persistence/resume contract but
+   * must never be executed through the Parent Harness tool path.
+   */
+  origin?: "skill_agent";
+  skillId?: string;
   createdAt: string;
 }
 
