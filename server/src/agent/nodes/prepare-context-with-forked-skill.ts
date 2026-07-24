@@ -7,6 +7,44 @@ import { evidenceNode } from "./evidence.js";
 import { forkedSkillAgentNode } from "./forked-skill-agent.js";
 import { prepareContextNode as basePrepareContextNode } from "./prepare-context.js";
 
+const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+
+const readDelegatedResult = (state: {
+  summary?: { data?: unknown };
+}) => {
+  const data = asRecord(state.summary?.data);
+  const preview = asRecord(data?.preview);
+  const status = typeof preview?.status === "string" ? preview.status : undefined;
+  const requirements = Array.isArray(preview?.requirements)
+    ? preview.requirements
+        .map((item) => asRecord(item))
+        .filter((item): item is Record<string, unknown> => Boolean(item))
+    : [];
+  return { status, requirements };
+};
+
+const buildNeedsInputQuestion = (
+  requirements: Record<string, unknown>[],
+): string => {
+  const questions = requirements
+    .map((requirement) => {
+      const description =
+        typeof requirement.description === "string"
+          ? requirement.description.trim()
+          : "";
+      return description;
+    })
+    .filter(Boolean);
+
+  if (questions.length === 0) {
+    return "还需要一项必要信息才能继续完成这个任务。请补充缺失的信息。";
+  }
+  return questions.join("\n");
+};
+
 /**
  * Compatibility wrapper for the forked Skill Agent pilot.
  *
@@ -40,11 +78,37 @@ export const prepareContextWithForkedSkillAgentNode = async (
     ...delegated,
     ...evidence,
   };
+  const delegatedResult = readDelegatedResult(delegatedObservation);
 
-  // Approval and recoverable/insufficient paths remain Parent-governed. The Pi
-  // loop will pause immediately when pendingApproval is present; otherwise the
-  // Main Planner may recover from partial/recoverable evidence.
-  if (delegatedObservation.status === "partial" || delegatedObservation.status === "failed") {
+  // Approval is Parent-governed and wins over needs_input. The Pi loop pauses
+  // immediately on pendingApproval, preserving the frozen exact invocation.
+  if (delegated.pendingApproval) {
+    return committed;
+  }
+
+  // needs_input is a terminal handoff from the delegated executor, not an
+  // invitation for Main Planner to take construction ownership back. Route it
+  // directly into the existing Parent ask_user / waiting_user finalization path.
+  if (
+    delegatedObservation.status === "partial" &&
+    delegatedResult.status === "needs_input"
+  ) {
+    return {
+      ...committed,
+      nextAction: {
+        type: "ask_user",
+        question: buildNeedsInputQuestion(delegatedResult.requirements),
+        reason:
+          "Forked Skill Agent reached a governed needs_input boundary; Parent must ask for the missing information before replaying delegated execution.",
+      },
+    };
+  }
+
+  // insufficient_evidence and recoverable failure remain Parent recovery paths.
+  if (
+    delegatedObservation.status === "partial" ||
+    delegatedObservation.status === "failed"
+  ) {
     return committed;
   }
 
