@@ -31,7 +31,9 @@ const summarize = (value: unknown) => {
 };
 
 const resolveAssetPath = (value: string) => {
-  if (value.startsWith("data:")) return value;
+  if (value.startsWith("data:")) {
+    throw mcpBadRequest("Presentation data URI assets are not supported; use a workspace file");
+  }
   const resolved = resolveWorkspacePath(value);
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
     throw mcpBadRequest(`Presentation asset does not exist: ${value}`);
@@ -110,13 +112,12 @@ const createOne = async (input: { outputPath: string; spec: JsonRecord }) => {
   }
   const resolvedOutput = resolveWorkspaceWritePath(input.outputPath);
   const preparedSpec = preparePresentationSpec(input.spec);
-  const validation = await executePresentationSkillRuntime({ operation: "validate", spec: preparedSpec });
-  assertNoBlockingValidationErrors(validation, input.outputPath);
   const created = await executePresentationSkillRuntime({
     operation: "create",
     outputPath: resolvedOutput,
     spec: preparedSpec,
   });
+  const validation = isRecord(created) ? created.validation : undefined;
   return { outputPath: input.outputPath, validation, created };
 };
 
