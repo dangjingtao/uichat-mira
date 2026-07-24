@@ -3,7 +3,6 @@ import { del, get, post, put } from "@/shared/lib/request";
 const SKILLS_ROUTE = "/skills";
 
 export type SkillPackageOrigin = "built-in" | "user" | "external";
-export type SkillPackageStatus = "bundled" | "installed";
 export type SkillRuntimeStatus =
   | "not-required"
   | "not-installed"
@@ -26,7 +25,6 @@ export type SkillCatalogItem = {
   category: string;
   description: string;
   origin: SkillPackageOrigin;
-  packageStatus: SkillPackageStatus;
   featured: boolean;
   license?: string;
   runtimeRequirements: string[];
