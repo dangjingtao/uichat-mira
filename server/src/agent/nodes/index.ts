@@ -7,7 +7,10 @@
 export { createAgentGoal } from "./goal-plan";
 export { getLatestUserQuestion } from "./shared";
 
-export { prepareContextNode } from "./prepare-context";
+export { prepareContextNode as basePrepareContextNode } from "./prepare-context";
+export {
+  prepareContextWithForkedSkillAgentNode as prepareContextNode,
+} from "./prepare-context-with-forked-skill";
 export {
   approvalNode,
   approvalNode as pauseForApproval,
