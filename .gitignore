@@ -29,12 +29,6 @@ dist-packages/
 .coverage.*
 htmlcov/
 
-# Generated test and coverage reports
-desktop/test-report/
-server/test-report/
-server/server-coverage/
-server/client-coverage/
-
 .local-runtimes/
 .local-models/
 apps/desktop/release/
