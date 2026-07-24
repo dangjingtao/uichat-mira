@@ -1,4 +1,3 @@
-
 // 导出所有 API 模块
 export * from "./auth";
 export * from "./wecom";
@@ -12,3 +11,4 @@ export * from "./mailCenter";
 export * from "./newsHub";
 export * from "./tts";
 export * from "./evolvingKnowledge";
+export * from "./skills";
