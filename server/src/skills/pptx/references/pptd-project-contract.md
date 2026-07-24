@@ -109,18 +109,15 @@ Known page types:
 
 `elements` are rendered in array order. Later elements are above earlier elements, so backgrounds and containers should normally appear before their text.
 
-## Shared element fields
+## Positioned element fields
 
-All positioned elements use:
+Every positioned element uses:
 
 ```json
 {
   "elementType": "text",
   "elementId": "unique-id-on-page",
-  "bounds": [80, 80, 600, 120],
-  "rotation": 0,
-  "opacity": 1,
-  "flip": [false, false]
+  "bounds": [80, 80, 600, 120]
 }
 ```
 
@@ -130,7 +127,8 @@ Rules:
 - `bounds` is `[x, y, width, height]` in canvas units.
 - Width and height must be positive.
 - Keep elements within the slide canvas unless the visual effect is intentional and the checker permits it.
-- `opacity` is in `[0, 1]`.
+
+Transform fields are element-specific, not universally shared. `rotation`, `opacity`, and `flip` are supported only by element families whose renderer explicitly implements them. Do not apply those fields to `table` or `chart` in the current protocol; they are not rendered.
 
 ## Fill, border and shadow
 
@@ -164,6 +162,8 @@ Image fill:
   "opacity": 1
 }
 ```
+
+Image sources must resolve to real workspace files before rendering. The current renderer does not accept data URIs.
 
 Border:
 
