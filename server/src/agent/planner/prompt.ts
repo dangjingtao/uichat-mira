@@ -1,3 +1,4 @@
+import { ConversationTrimmer } from "@/services/conversation-trimmer.js";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol";
 import type {
   AgentToolExposureState,
@@ -59,9 +60,6 @@ const getRemainingRecoveryAttempts = (observationContext: PlannerObservationCont
 const PLANNER_HISTORY_LIMIT = 12;
 const PLANNER_HISTORY_ITEM_CHAR_LIMIT = 700;
 
-const trimText = (value: string, limit: number) =>
-  value.length <= limit ? value : `${value.slice(0, Math.max(0, limit - 1))}…`;
-
 const buildRelevantConversationHistory = (
   messages: NormalizedChatMessage[] | undefined,
   currentRequest: string,
@@ -74,19 +72,18 @@ const buildRelevantConversationHistory = (
     .filter((message) => message.role === "user" || message.role === "assistant")
     .map((message) => ({
       role: message.role,
-      content: trimText(message.content, PLANNER_HISTORY_ITEM_CHAR_LIMIT),
+      content: ConversationTrimmer.trimText(
+        message.content,
+        PLANNER_HISTORY_ITEM_CHAR_LIMIT,
+      ),
     }))
     .filter(
       (message) =>
         !(message.role === "user" && message.content.trim() === currentRequest.trim()),
-    )
-    .slice(-PLANNER_HISTORY_LIMIT)
-    .map((message) => ({
-      role: message.role,
-      content: message.content,
-    }));
+    );
+  const recent = ConversationTrimmer.take(filtered, PLANNER_HISTORY_LIMIT, "tail");
 
-  return filtered.length > 0 ? filtered : undefined;
+  return recent.length > 0 ? recent : undefined;
 };
 
 const buildProgressionRules = (input: {
