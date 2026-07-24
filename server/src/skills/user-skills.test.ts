@@ -132,17 +132,29 @@ describe("Markdown Skill import", () => {
     await expect(fs.stat(legacyDir)).rejects.toThrow();
   });
 
-  it("deletes only packages inside the managed user Skill root", async () => {
+  it("physically deletes user packages, preserves shared categories, then removes empty category folders", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "mira-user-skills-"));
     tempDirs.push(root);
     process.env.MIRA_USER_SKILLS_ROOT = root;
 
-    const imported = await importMarkdownSkill({
+    const first = await importMarkdownSkill({
       fileName: "delete-me.md",
       content: "# Delete Me\n\nTemporary Skill.",
     });
-    await deleteUserSkill(imported.entry);
-    await expect(fs.stat(path.dirname(imported.entry))).rejects.toThrow();
+    const second = await importMarkdownSkill({
+      fileName: "keep-until-last.md",
+      content: "# Keep Until Last\n\nTemporary Skill.",
+    });
+    const categoryDir = path.join(root, "内容创作");
+
+    await deleteUserSkill(first.entry);
+    await expect(fs.stat(path.dirname(first.entry))).rejects.toThrow();
+    await expect(fs.stat(categoryDir)).resolves.toBeDefined();
+    await expect(fs.stat(path.dirname(second.entry))).resolves.toBeDefined();
+
+    await deleteUserSkill(second.entry);
+    await expect(fs.stat(path.dirname(second.entry))).rejects.toThrow();
+    await expect(fs.stat(categoryDir)).rejects.toThrow();
 
     const outside = path.join(os.tmpdir(), "SKILL.md");
     await expect(updateUserSkill(outside, { name: "Nope" })).rejects.toThrow(
